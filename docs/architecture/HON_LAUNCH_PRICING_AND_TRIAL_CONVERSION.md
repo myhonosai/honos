@@ -44,7 +44,7 @@ These finalized prices and duration are business direction, not an approved tria
 
 ## What A1 actually implements
 
-- `packages/contracts/src/saas-introductory-pricing.ts`: closed, copied/frozen **internal** schedule terms and explicit acknowledgement-intention validator. Only four recurring payment arrangements; explicit USD minor-unit initial/future amounts; 12 monthly or one annual introductory paid period; no stacking or promotion-reset instruction. A business-reference factory represents the owner's prices without creating/publishing offers.
+- `packages/contracts/src/saas-introductory-pricing.ts`: closed, copied/frozen **internal** schedule terms and explicit acknowledgement-intention validator. Only four recurring payment arrangements; explicit USD minor-unit initial/future amounts; 12 monthly or one annual introductory paid period; no stacking or promotion-reset instruction. A business-reference factory represents the owner's prices without creating/publishing offers. (This contract describes the original 12-period/1-period introduction, which the 2026-11-09 owner decision superseded with founder pricing kept while subscribed; the code is unchanged by this doc update.)
 - `packages/domain/src/saas-introductory-pricing.ts`: side-effect-free hypothetical period-price and savings previews. All previews keep purchasing/payment/access unavailable. An ordinal supplied to this function is NOT an authoritative payment count. No event reducer, official balance, payment transition or entitlement decision exists here.
 - Contract/API compatibility tests: v1 offer and checkout validators reject scheduled-price fields and acknowledgement/payment claims rather than silently dropping them. No adapter maps this contract into a flat-price v1 checkout. Existing v1 historical types, cancellation and receipts stay unchanged.
 - Existing draft-safe CI runs repository tests/check/build, current 178-file migration validation, all 37 PostgreSQL proofs and 10 guarded commercial rehearsals. No migration or checksum-manifest change is needed or made.
@@ -87,8 +87,8 @@ Persist schedule commitment and append-only paid-period facts, uniquely bound to
 
 | Situation | Required future behavior |
 | --- | --- |
-| Monthly paid periods 1–12 / 13 onward | 19920 / 24900, both accepted before purchase |
-| Founder annual paid period 1 / 2 onward | 149400 / 209700, not half of standard annual |
+| Founder monthly while subscribed / after cancellation or lapse past grace | 19920 / 24900, both accepted before purchase (owner decision 2026-11-09) |
+| Founder annual while subscribed / after cancellation or lapse past grace | 149400 / 209700, not half of standard annual (owner decision 2026-11-09) |
 | Standard annual | Exactly accepted 209700; no 30% recomputation |
 | Failed renewal | No paid-period increment, no invented receipt; keep recoverable payment/access state |
 | Duplicate or delayed/out-of-order webhook | Reuse unique canonical payment/period facts; retry pending dependencies, no double invoice/evidence or premature phase advance |

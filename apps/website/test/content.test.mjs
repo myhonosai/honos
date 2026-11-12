@@ -130,7 +130,9 @@ test('presents online family tuition payments as coming soon, not available', ()
   assert.doesNotMatch(faq, /goes straight/i);
 });
 
-test('the yearly saving label is true for both plans', () => {
-  assert.doesNotMatch(html, /about 30% less/);
-  assert.match(html, /save 30% or more/);
+test('yearly savings are stated per plan and never rounded up to a false figure', () => {
+  // $2,097 vs 12 x $249 = 29.82%; $1,494 vs 12 x $199.20 = 37.5%.
+  assert.doesNotMatch(html, /30% or more|save 30%|30% off/i);
+  assert.match(html, /\$2,097 a year, about 30% less than paying monthly/);
+  assert.match(html, /\$1,494 a year, about 37% less than paying monthly/);
 });
