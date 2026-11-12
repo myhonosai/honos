@@ -7,9 +7,21 @@ import {
   type DraftInvoiceReceipt, type InvoiceReceipt, type PreparedInvoiceCommand,
 } from './invoice-workbench-http';
 import styles from './attendance-workbench.module.css';
+import { InvoicePickers, amountToMinor, endOfSchoolDay, formatMinor } from './invoice-pickers';
 
-type Fields = { organizationId: string; schoolId: string; billingAccountId: string; membershipId: string; currency: string; subtotalMinor: string; dueAt: string };
-const EMPTY: Fields = { organizationId: '', schoolId: '', billingAccountId: '', membershipId: '', currency: '', subtotalMinor: '', dueAt: '' };
+type Fields = { organizationId: string; schoolId: string; billingAccountId: string; membershipId: string; currency: string; subtotalMinor: string; dueAt: string; amountText: string; dueDate: string };
+const EMPTY: Fields = { organizationId: '', schoolId: '', billingAccountId: '', membershipId: '', currency: '', subtotalMinor: '', dueAt: '', amountText: '', dueDate: '' };
+export type InvoiceShellScope = Readonly<{ organizationId: string; schoolId: string }>;
+
+/** With a shell school, the school comes from the shell and the currency defaults to USD; a pick made at another school is dropped. */
+export function shellInvoiceFields(fields: Fields, shellScope: InvoiceShellScope | null): Fields {
+  if (!shellScope) return fields;
+  const moved = fields.schoolId !== '' && fields.schoolId.toLowerCase() !== shellScope.schoolId.toLowerCase();
+  const currency = fields.currency || 'USD';
+  // The amount is typed in the currency's own units, so it is re-derived whenever the currency changes.
+  return { ...fields, organizationId: shellScope.organizationId, schoolId: shellScope.schoolId, currency, subtotalMinor: amountToMinor(fields.amountText, currency) ?? 'invalid',
+    ...(moved ? { billingAccountId: '', membershipId: '', dueAt: '', dueDate: '' } : {}) };
+}
 const ID_LABELS = { organizationId: 'Organization UUID', schoolId: 'School UUID', billingAccountId: 'Known billing account UUID', membershipId: 'Known linked membership UUID (optional)' };
 function input(fields: Fields): CreateInvoiceDraftInput {
   if (!/^(0|[1-9]\d{0,9})$/.test(fields.subtotalMinor)) throw new Error('A bounded minor-unit integer is required.');
@@ -17,8 +29,9 @@ function input(fields: Fields): CreateInvoiceDraftInput {
     currency: fields.currency as Iso4217Currency, subtotalMinor: Number(fields.subtotalMinor), dueAt: fields.dueAt };
 }
 
-export function InvoiceWorkbench(): React.ReactElement {
-  const [fields, setFields] = useState<Fields>(EMPTY);
+export function InvoiceWorkbench({ shellScope = null }: { shellScope?: InvoiceShellScope | null } = {}): React.ReactElement {
+  const [rawFields, setFields] = useState<Fields>(EMPTY);
+  const fields = shellInvoiceFields(rawFields, shellScope);
   const [createConfirmed, setCreateConfirmed] = useState(false);
   const [issueConfirmed, setIssueConfirmed] = useState(false);
   const [attempted, setAttempted] = useState(false);
@@ -94,21 +107,27 @@ export function InvoiceWorkbench(): React.ReactElement {
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">Staff dashboard</a><a href="/staff/command-center">Command Center</a></nav>
     <header><p>HON / DIRECT-HUMAN BILLING</p><h1>Human invoice workbench</h1>
-      <p>Create one canonical DRAFT invoice, then separately confirm issuance of only its verified in-memory receipt. This page starts blank and idle: no invoice/account/payer/membership directory, list, search or current-status read.</p>
+      <p>Create one canonical DRAFT invoice, then separately confirm issuance of only its verified in-memory receipt. {shellScope ? 'Choose who the invoice is for from your school’s memberships, then enter the amount and due date. No invoice list or current-status read is shown.' : 'This page starts blank and idle: no invoice/account/payer/membership directory, list, search or current-status read.'}</p>
     </header>
     <aside><strong>Invoice record only — issuing is not delivery or collection.</strong>
       <p>Neither command creates payment authorization or a payment attempt, checkout or card capture, a recurring schedule, provider execution or reconciliation, a financial adjustment, refund, credit or discount, an agreement, a membership change, communications, schedule or attendance changes, or any provider, AI, Action Engine or automation effect.</p>
       <p>Exact known IDs are untrusted selectors, not authority. Existing current human scope, permissions <code>billing.invoice.create</code> / <code>billing.invoice.issue</code>, entitlement, tenant RLS, billing-account currency and linked-membership checks remain decisive. Issuance independently rechecks the current DRAFT state and returned version.</p>
     </aside>
     <section aria-labelledby="invoice-create"><h2 id="invoice-create">Create one DRAFT invoice</h2>
-      <p>Use only IDs already known through an authorized staff workflow. Total, discount, status, version and audit attribution are server-owned. There is no invoice-ID entry or historic issue action.</p>
+      <p>{shellScope ? 'Choosing a membership fills its billing account and links the membership.' : 'Use only IDs already known through an authorized staff workflow.'} Total, discount, status, version and audit attribution are server-owned. There is no invoice-ID entry or historic issue action.</p>
       <form onSubmit={create}><fieldset disabled={busy}>
-        <div className={styles.scopeGrid}>{(Object.keys(ID_LABELS) as (keyof typeof ID_LABELS)[]).map(name =>
+        {shellScope ? <div className={styles.scopeGrid}>
+          <InvoicePickers scope={shellScope} membershipId={fields.membershipId} amount={fields.amountText} currency={fields.currency} dueDate={fields.dueDate} disabled={busy}
+            onPick={item => edit(() => setFields({ ...fields, billingAccountId: item.billingAccountId, membershipId: item.membershipId }))}
+            onAmount={text => edit(() => setFields({ ...fields, amountText: text }))}
+            onDueDate={(date, zone) => edit(() => setFields({ ...fields, dueDate: date, dueAt: endOfSchoolDay(date, zone) ?? '' }))}/>
+          <label>Currency<input name="currency" required autoComplete="off" spellCheck={false} maxLength={3} value={fields.currency} onChange={event => edit(() => setFields({ ...fields, currency: event.target.value }))} /></label>
+        </div> : <div className={styles.scopeGrid}>{(Object.keys(ID_LABELS) as (keyof typeof ID_LABELS)[]).map(name =>
           <label key={name}>{ID_LABELS[name]}<input name={name} required={name !== 'membershipId'} autoComplete="off" spellCheck={false} maxLength={36} value={fields[name]} onChange={event => edit(() => setFields({ ...fields, [name]: event.target.value }))} /></label>)}
           <label>ISO 4217 currency<input name="currency" required autoComplete="off" spellCheck={false} maxLength={3} placeholder="USD" value={fields.currency} onChange={event => edit(() => setFields({ ...fields, currency: event.target.value }))} /></label>
           <label>Subtotal (minor-unit integer)<input name="subtotalMinor" required autoComplete="off" inputMode="numeric" maxLength={10} placeholder="0–2147483647" value={fields.subtotalMinor} onChange={event => edit(() => setFields({ ...fields, subtotalMinor: event.target.value }))} /></label>
           <label>Due at (ISO timestamp with timezone)<input name="dueAt" required autoComplete="off" spellCheck={false} maxLength={40} placeholder="2030-05-01T09:15:30-07:00" value={fields.dueAt} onChange={event => edit(() => setFields({ ...fields, dueAt: event.target.value }))} /></label>
-        </div>
+        </div>}
         <label className={styles.check}><input name="createConfirmed" type="checkbox" checked={createConfirmed} disabled={!valid || attempted} onChange={event => setCreateConfirmed(event.target.checked)} />I explicitly confirm creation of this exact DRAFT invoice only, not issuance.</label>
         <div className={styles.actions}><button type="submit" disabled={!valid || !createConfirmed || attempted}>Create DRAFT invoice</button><button type="button" onClick={discard}>Discard inputs / start over</button></div>
       </fieldset></form>
@@ -124,6 +143,7 @@ export function InvoiceWorkbench(): React.ReactElement {
         <dt>Invoice UUID</dt><dd>{receipt.invoice.id}</dd>
         <dt>Billing account UUID</dt><dd>{receipt.invoice.billingAccountId}</dd>
         {receipt.invoice.membershipId && <><dt>Linked membership UUID</dt><dd>{receipt.invoice.membershipId}</dd></>}
+        <dt>Returned total</dt><dd>{formatMinor(receipt.invoice.totalMinor, receipt.invoice.currency)}</dd>
         <dt>Returned currency</dt><dd>{receipt.invoice.currency}</dd>
         <dt>Returned subtotal (minor units)</dt><dd>{receipt.invoice.subtotalMinor}</dd>
         <dt>Returned discount (minor units)</dt><dd>{receipt.invoice.discountMinor}</dd>
