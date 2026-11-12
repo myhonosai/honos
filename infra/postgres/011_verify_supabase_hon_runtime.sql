@@ -2810,6 +2810,37 @@ DO $$ DECLARE t text; safe boolean; expected record; r text; BEGIN
     END LOOP;
   END LOOP;
 END $$;
+
+-- A2 0277 Creative Studio avatar videos: exact posture of the private table and the three runtime entry points.
+DO $$ DECLARE t text; safe boolean; expected record; r text; BEGIN
+  FOR t IN SELECT unnest(ARRAY['creative_avatar_videos']) LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity
+      AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime'
+      AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl WHERE acl.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped AND acl.grantee<>c.relowner)
+    INTO safe FROM pg_class c JOIN pg_roles owner_role ON owner_role.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Creative Studio avatar video private table: %',t; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES
+    ('hon.guard_creative_avatar_generation()',false,true,'v'),
+    ('hon.creative_avatar_video_json(hon.creative_avatar_videos)',false,false,'s'),
+    ('hon.creative_avatar_video_fingerprint(uuid,jsonb)',false,false,'i'),
+    ('hon.create_creative_avatar_video(text,uuid,jsonb,jsonb,uuid,uuid,uuid)',true,true,'v'),
+    ('hon.read_creative_avatar_videos(text,uuid)',true,true,'v'),
+    ('hon.read_creative_avatar_video(text,uuid,uuid)',true,true,'v')
+  ) AS x(signature,runtime_execute,security_definer,volatility) LOOP
+    SELECT p.prosecdef=expected.security_definer AND p.provolatile=expected.volatility AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[]
+      AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime'
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=expected.runtime_execute
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl WHERE acl.grantee<>p.proowner AND (acl.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT expected.runtime_execute OR acl.is_grantable OR acl.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner_role ON owner_role.oid=p.proowner WHERE p.oid=expected.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Creative Studio avatar video function: %',expected.signature; END IF;
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+      IF has_function_privilege(r,expected.signature,'EXECUTE') THEN RAISE EXCEPTION 'Creative Studio avatar video function exposed to %: %',r,expected.signature; END IF;
+    END LOOP;
+  END LOOP;
+END $$;
 -- End Creative Studio generations exact verification.
 
 -- School membership list exact verification (0220, U6): one read-only definer projection, runtime EXECUTE only.

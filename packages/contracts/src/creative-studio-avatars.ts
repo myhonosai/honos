@@ -5,7 +5,7 @@
 // without touching the avatar. No provider identity, model, cost or HQ note is ever part of a school view.
 import { championsDrift as drift, championsExactKeys as exactKeys, championsInvalid as invalid, championsIsTimestamp as isTimestamp,
   championsIsUuid as isUuid, championsRecord as record } from './champions-club.js';
-import { CREATIVE_STUDIO_PROVIDER_STATES, isCreativePrompt, validateCreativeGeneration, type CreativeGeneration, type CreativeGenerationStatus,
+import { CREATIVE_GENERATION_FORMATS, CREATIVE_STUDIO_PROVIDER_STATES, isCreativePrompt, validateCreativeGeneration, type CreativeGeneration, type CreativeGenerationFormat, type CreativeGenerationStatus,
   type CreativeStudioProviderState } from './creative-studio.js';
 import { validateSaasCreativeBalance, type SaasCreativeBalance } from './saas-creative-wallet.js';
 
@@ -88,4 +88,55 @@ export function validateCreativeAvatarReceipt(value: unknown): CreativeAvatarRec
   if (typeof r.replayed !== 'boolean') drift();
   validateCreativeAvatar(r.avatar); validateSaasCreativeBalance(r.balance);
   return r as unknown as CreativeAvatarReceipt;
+}
+
+// ---------- A2 avatar videos (migration 0277) ----------
+// An avatar video is one of the school's READY avatars speaking a script, made by ONE CS1 generation of the HQ-priced
+// operation avatar.video (VIDEO, one unit per second). The script is the generation's prompt.
+export const CREATIVE_AVATAR_VIDEO_OPERATION = 'avatar.video';
+/** Limits shared by the database (0277) and the API. */
+export const CREATIVE_AVATAR_VIDEO_LIMITS = { minSeconds: 5, maxSeconds: 60, listLimit: 50 } as const;
+
+export interface CreativeAvatarVideoInput { avatarId: string; script: string; seconds: number; format: CreativeGenerationFormat }
+export interface CreativeAvatarVideo {
+  videoId: string; schoolId: string; avatarId: string; script: string; seconds: number; format: CreativeGenerationFormat;
+  status: CreativeAvatarStatus; createdAt: string;
+  /** The video's generation (credits, status, result metadata). */
+  generation: CreativeGeneration;
+}
+export interface CreativeAvatarVideoRecords { videos: CreativeAvatarVideo[]; limit: 50 }
+export interface CreativeAvatarVideoReceipt { video: CreativeAvatarVideo; balance: SaasCreativeBalance; replayed: boolean }
+
+const isSeconds = (v: unknown) => typeof v === 'number' && Number.isInteger(v) && v >= CREATIVE_AVATAR_VIDEO_LIMITS.minSeconds && v <= CREATIVE_AVATAR_VIDEO_LIMITS.maxSeconds;
+
+export function validateCreativeAvatarVideoInput(value: unknown): CreativeAvatarVideoInput {
+  const input = record(value, invalid); exactKeys(input, ['avatarId', 'script', 'seconds', 'format'], invalid);
+  if (!isUuid(input.avatarId) || !isCreativePrompt(input.script) || !isSeconds(input.seconds) || !has(CREATIVE_GENERATION_FORMATS, input.format)) invalid();
+  return { avatarId: input.avatarId as string, script: input.script as string, seconds: input.seconds as number, format: input.format as CreativeGenerationFormat };
+}
+
+export function validateCreativeAvatarVideo(value: unknown): CreativeAvatarVideo {
+  const v = record(value, drift);
+  exactKeys(v, ['videoId', 'schoolId', 'avatarId', 'script', 'seconds', 'format', 'status', 'createdAt', 'generation'], drift);
+  if (!isUuid(v.videoId) || !isUuid(v.schoolId) || !isUuid(v.avatarId) || !isCreativePrompt(v.script) || !isSeconds(v.seconds)
+    || !has(CREATIVE_GENERATION_FORMATS, v.format) || !has(CREATIVE_AVATAR_STATUSES, v.status) || !isTimestamp(v.createdAt)) drift();
+  const g = validateCreativeGeneration(v.generation);
+  if (g.schoolId !== v.schoolId || g.operationCode !== CREATIVE_AVATAR_VIDEO_OPERATION || g.mediaKind !== 'VIDEO' || g.units !== v.seconds || g.format !== v.format
+    || g.prompt !== v.script || g.createdAt !== v.createdAt || creativeAvatarStatus(g.status) !== v.status) drift();
+  return v as unknown as CreativeAvatarVideo;
+}
+/** The database read (0277): one school's newest avatar videos. */
+export function validateCreativeAvatarVideoRecords(value: unknown): CreativeAvatarVideoRecords {
+  const r = record(value, drift); exactKeys(r, ['videos', 'limit'], drift);
+  if (r.limit !== CREATIVE_AVATAR_VIDEO_LIMITS.listLimit || !Array.isArray(r.videos) || r.videos.length > CREATIVE_AVATAR_VIDEO_LIMITS.listLimit) drift();
+  const list = (r.videos as unknown[]).map(validateCreativeAvatarVideo);
+  if (new Set(list.map(v => v.videoId)).size !== list.length || new Set(list.map(v => v.schoolId)).size > 1) drift();
+  for (let i = 1; i < list.length; i++) if (Date.parse(list[i - 1]!.createdAt) < Date.parse(list[i]!.createdAt)) drift();
+  return r as unknown as CreativeAvatarVideoRecords;
+}
+export function validateCreativeAvatarVideoReceipt(value: unknown): CreativeAvatarVideoReceipt {
+  const r = record(value, drift); exactKeys(r, ['video', 'balance', 'replayed'], drift);
+  if (typeof r.replayed !== 'boolean') drift();
+  validateCreativeAvatarVideo(r.video); validateSaasCreativeBalance(r.balance);
+  return r as unknown as CreativeAvatarVideoReceipt;
 }

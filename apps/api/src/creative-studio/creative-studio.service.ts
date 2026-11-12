@@ -1,7 +1,8 @@
 import { BadRequestException, ConflictException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
-  CREATIVE_ASSET_MEDIA_TYPES, CREATIVE_AVATAR_OPERATION, CREATIVE_GENERATION_LIMITS, saasUuid, validateCreativeAvatar, validateCreativeAvatarInput,
+  CREATIVE_ASSET_MEDIA_TYPES, CREATIVE_AVATAR_OPERATION, CREATIVE_AVATAR_VIDEO_OPERATION, validateCreativeAvatarVideo, validateCreativeAvatarVideoInput,
+  validateCreativeAvatarVideoReceipt, validateCreativeAvatarVideoRecords, type CreativeAvatarVideo, type CreativeAvatarVideoReceipt, type CreativeAvatarVideoRecords, CREATIVE_GENERATION_LIMITS, saasUuid, validateCreativeAvatar, validateCreativeAvatarInput,
   validateCreativeAvatarReceipt, validateCreativeAvatarRecords, validateCreativeGeneration, validateCreativeGenerationInput,
   validateCreativeGenerationReceipt, validateCreativeGenerationRecords, validateCreativeStudioAvatarList, validateCreativeStudioGenerationList,
   type CreativeAvatar, type CreativeAvatarReceipt, type CreativeGeneration, type CreativeGenerationReceipt, type CreativeStudioAvatarList,
@@ -118,6 +119,44 @@ export class CreativeStudioService {
     }
     const recorded = await this.record(subject, g.generationId, await this.invoke(g, route, { name: input.name, style: input.style }));
     return this.avatarReceipt(subject, school, created.avatar.avatarId, recorded, false);
+  }
+
+  // ---------- A2 avatar videos (0277): one video = one generation of avatar.video for a READY avatar ----------
+  async listAvatarVideos(subject: string, schoolId: unknown): Promise<CreativeAvatarVideoRecords> {
+    const school = parse(() => saasUuid(schoolId));
+    return this.billing.call('readCreativeAvatarVideos', [subject, school], validateCreativeAvatarVideoRecords);
+  }
+
+  async readAvatarVideo(subject: string, schoolId: unknown, videoId: unknown): Promise<CreativeAvatarVideo> {
+    const [school, video] = parse(() => [saasUuid(schoolId), saasUuid(videoId)] as const);
+    return this.billing.call('readCreativeAvatarVideo', [subject, school, video], validateCreativeAvatarVideo);
+  }
+
+  /** Create -> one provider call with the avatar's look and the script -> record -> read the video back. Same key = same video. */
+  async createAvatarVideo(subject: string, schoolId: unknown, body: unknown, key: unknown): Promise<CreativeAvatarVideoReceipt> {
+    const [school, input, idempotencyKey] = parse(() => [saasUuid(schoolId), validateCreativeAvatarVideoInput(body), saasUuid(key)] as const);
+    const route: CreativeProviderRoute | null = this.connected() ? this.provider.route(CREATIVE_AVATAR_VIDEO_OPERATION) : null;
+    if (!route) throw new ServiceUnavailableException({ code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
+    // The presenter's look, read under the requester's exact-school authority before anything is reserved (avatars are
+    // immutable). The database create re-checks that the avatar is this school's and READY.
+    const avatar = await this.billing.call('readCreativeAvatar', [subject, school, input.avatarId], validateCreativeAvatar);
+    const created = await this.billing.call('createCreativeAvatarVideo',
+      [subject, school, JSON.stringify(input), JSON.stringify({ providerId: route.providerId, modelCode: route.modelCode }), idempotencyKey, randomUUID(), randomUUID()],
+      validateCreativeAvatarVideoReceipt);
+    const g = created.video.generation;
+    if (g.status !== 'GENERATING') return created;
+    if (created.replayed) {
+      const settled = await this.recoverInterrupted(subject, { generation: g, balance: created.balance, replayed: true });
+      return settled.generation.status === 'GENERATING' ? created : this.videoReceipt(subject, school, created.video.videoId, settled, true);
+    }
+    const recorded = await this.record(subject, g.generationId,
+      await this.invoke(g, route, { name: avatar.name, style: avatar.style, description: avatar.description }));
+    return this.videoReceipt(subject, school, created.video.videoId, recorded, false);
+  }
+
+  private async videoReceipt(subject: string, school: string, videoId: string, recorded: CreativeGenerationReceipt, replayed: boolean): Promise<CreativeAvatarVideoReceipt> {
+    const video = await this.billing.call('readCreativeAvatarVideo', [subject, school, videoId], validateCreativeAvatarVideo);
+    return { video, balance: recorded.balance, replayed };
   }
 
   private async avatarReceipt(subject: string, school: string, avatarId: string, recorded: CreativeGenerationReceipt, replayed: boolean): Promise<CreativeAvatarReceipt> {

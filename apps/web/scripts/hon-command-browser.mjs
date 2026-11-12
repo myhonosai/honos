@@ -221,7 +221,8 @@ const creativeWallet = () => ({ schoolId: scope.schoolId, walletVersion: 3, prog
   rates: { rateVersionId: id(310), rateVersion: 1, termsReference: 'synthetic-terms-v1', publishedAt: iso(-200), rates: [
     { operationCode: 'image.standard', mediaKind: 'IMAGE', displayName: 'Standard image', billingUnit: 'IMAGE', creditsPerUnit: 40, maxUnitsPerRequest: 4, rateBasis: 'PROVISIONAL' },
     { operationCode: 'video.short_clip', mediaKind: 'VIDEO', displayName: 'Short promo video', billingUnit: 'VIDEO_SECOND', creditsPerUnit: 60, maxUnitsPerRequest: 15, rateBasis: 'PROVISIONAL' },
-    { operationCode: 'avatar.create', mediaKind: 'IMAGE', displayName: 'AI avatar', billingUnit: 'REQUEST', creditsPerUnit: 100, maxUnitsPerRequest: 1, rateBasis: 'PROVISIONAL' }] },
+    { operationCode: 'avatar.create', mediaKind: 'IMAGE', displayName: 'AI avatar', billingUnit: 'REQUEST', creditsPerUnit: 100, maxUnitsPerRequest: 1, rateBasis: 'PROVISIONAL' },
+    { operationCode: 'avatar.video', mediaKind: 'VIDEO', displayName: 'AI avatar video', billingUnit: 'VIDEO_SECOND', creditsPerUnit: 50, maxUnitsPerRequest: 60, rateBasis: 'PROVISIONAL' }] },
   packages: [['STARTER', 3000, 0, 3000], ['GROWTH', 6000, 1200, 6000], ['CREATOR', 12000, 4800, 12000]].map(([packageCode, base, bonus, price]) => ({ packageCode, packageVersion: 1, baseCredits: base, bonusCredits: bonus, totalCredits: base + bonus, priceMinor: price, currency: 'usd' })),
   agentConversationsDeductCredits: false, paymentsActive: false });
 // Creative Studio generations (CS1, synthetic). provider: NOT_CONNECTED unless a check connects it.
@@ -236,6 +237,14 @@ const creativeAvatar = (body, n) => {
     prompt: body.description, status: 'SUCCEEDED', failureReason: null, reservedCredits: 100, chargedCredits: 100, createdAt, completedAt: createdAt,
     assets: [{ assetId: id(780 + n), ordinal: 1, mediaType: 'image/png', width: 1080, height: 1920, durationSeconds: null, origin: 'SYNTHETIC' }] };
   return { avatarId: id(740 + n), schoolId: scope.schoolId, name: body.name, style: body.style, description: body.description, status: 'READY', createdAt, generation };
+};
+// A2 (0277) avatar videos: each video carries its avatar.video generation (per second). replies: 'ok', 'unknown', 'notReady'.
+const videosFake = { items: [], posts: [], replies: [], byKey: new Map() };
+const creativeVideo = (body, n) => {
+  const createdAt = iso(n), generation = { generationId: id(800 + n), schoolId: scope.schoolId, operationCode: 'avatar.video', mediaKind: 'VIDEO', units: body.seconds, format: body.format,
+    prompt: body.script, status: 'SUCCEEDED', failureReason: null, reservedCredits: 50 * body.seconds, chargedCredits: 50 * body.seconds, createdAt, completedAt: createdAt,
+    assets: [{ assetId: id(820 + n), ordinal: 1, mediaType: 'video/mp4', width: 1920, height: 1080, durationSeconds: body.seconds, origin: 'SYNTHETIC' }] };
+  return { videoId: id(840 + n), schoolId: scope.schoolId, avatarId: body.avatarId, script: body.script, seconds: body.seconds, format: body.format, status: 'READY', createdAt, generation };
 };
 const creativeGeneration = (body, n) => ({ generationId: id(700 + n), schoolId: scope.schoolId, operationCode: body.operationCode, mediaKind: 'IMAGE', units: body.units,
   format: body.format, prompt: body.prompt, status: 'SUCCEEDED', failureReason: null, reservedCredits: 40 * body.units, chargedCredits: 40 * body.units,
@@ -312,6 +321,20 @@ async function api(route) {
     const a = creativeAvatar(body, avatarsFake.items.length + 1);
     avatarsFake.items = [a, ...avatarsFake.items]; avatarsFake.byKey.set(idem, a);
     return json(route, 200, { data: { avatar: a, balance: creativeWallet().balance, replayed: false } });
+  }
+  if (path === `/api/v1/schools/${scope.schoolId}/creative-studio/avatar-videos`) {
+    if (method === 'GET') return json(route, 200, { data: { videos: videosFake.items, limit: 50 } });
+    const request = route.request(), idem = request.headers()['idempotency-key'];
+    videosFake.posts.push({ key: idem, command: request.headers()['x-hon-human-command'], body: request.postData() });
+    const next = videosFake.replies.shift() ?? 'ok';
+    if (next === 'unknown') return json(route, 503, { code: 'SAAS_UNAVAILABLE' });
+    if (next === 'notReady') return json(route, 422, { code: 'CREATIVE_AVATAR_NOT_READY' });
+    if (creative.provider !== 'CONNECTED') return json(route, 503, { code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
+    const body = JSON.parse(request.postData() ?? '{}'), prior = videosFake.byKey.get(idem);
+    if (prior) return json(route, 200, { data: { video: prior, balance: creativeWallet().balance, replayed: true } });
+    const v = creativeVideo(body, videosFake.items.length + 1);
+    videosFake.items = [v, ...videosFake.items]; videosFake.byKey.set(idem, v);
+    return json(route, 200, { data: { video: v, balance: creativeWallet().balance, replayed: false } });
   }
   if (path === `/api/v1/schools/${scope.schoolId}/creative-credits`) {
     assert.equal(method, 'GET', 'Creative Studio only reads the wallet');
@@ -2124,6 +2147,40 @@ for (const [name, viewport] of [['desktop-1440', { width: 1440, height: 900 }], 
     await axe(page, `creative-studio-avatar-${name}`);
     await shot(page, `creative-studio-avatar-done-${name}`, true);
     creative.provider = 'NOT_CONNECTED'; creative.items = []; avatarsFake.items = [];
+    await ctx.close();
+  });
+}
+for (const [name, viewport] of [['desktop-1440', { width: 1440, height: 900 }], ['phone-390', { width: 390, height: 844 }]]) {
+  await check(`Creative Studio avatar videos ${name}: a ready avatar speaks a script; a lost answer replays the same request once`, async () => {
+    studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: [], byKey: new Map(), gate: null });
+    const kim = creativeAvatar({ name: 'Master Kim', style: 'REALISTIC', description: 'Friendly taekwondo master in a black dobok' }, 1);
+    Object.assign(avatarsFake, { items: [kim], posts: [], replies: [], byKey: new Map() });
+    Object.assign(videosFake, { items: [], posts: [], replies: ['unknown', 'ok'], byKey: new Map() });
+    const { ctx, page } = await creativeStudio(viewport);
+    const card = page.locator('article[aria-labelledby="creative-avatar-videos-title"]');
+    await page.locator('article[aria-labelledby="creative-avatar-videos-title"][data-avatar-video-state="OPEN"]').waitFor();
+    assert.equal(await page.locator('section[aria-labelledby="creative-studio-title"] select option[value="avatar.video"]').count(), 0, 'the generic form never offers avatar.video');
+    await card.getByLabel('What your avatar says').fill('Hi, I am Master Kim. Join our free trial class this Saturday!');
+    await card.getByLabel(/Length in seconds/).fill('10');
+    await card.getByLabel('Landscape').check();
+    assert.ok(await card.getByText('Uses 500 credits. You have 11,640 available.').isVisible());
+    await shot(page, `creative-studio-avatar-video-form-${name}`);
+    await card.getByRole('button', { name: 'Make video' }).click();
+    await card.getByText(/We could not confirm whether this request went through/).waitFor();
+    assert.equal(await card.getByLabel('What your avatar says').isDisabled(), true, 'locked while the outcome is unknown');
+    await card.getByRole('button', { name: 'Check again' }).click();
+    await card.getByText('Done. The result is listed below.').waitFor();
+    await card.getByText('Presented by Master Kim').waitFor();
+    assert.equal(videosFake.posts.length, 2);
+    assert.equal(videosFake.posts[0].key, videosFake.posts[1].key, 'Check again reuses the idempotency key');
+    assert.equal(videosFake.posts[0].body, videosFake.posts[1].body);
+    assert.equal(videosFake.posts[0].command, 'saas-creative-avatar-video-create');
+    assert.deepEqual(JSON.parse(videosFake.posts[0].body), { avatarId: kim.avatarId, script: 'Hi, I am Master Kim. Join our free trial class this Saturday!', seconds: 10, format: 'LANDSCAPE' });
+    assert.equal(creative.posts.length + avatarsFake.posts.length, 0, 'the video never goes through the generic or avatar route');
+    await noOverflow(page, `creative-studio-avatar-video-${name}`);
+    await axe(page, `creative-studio-avatar-video-${name}`);
+    await shot(page, `creative-studio-avatar-video-done-${name}`, true);
+    creative.provider = 'NOT_CONNECTED'; creative.items = []; avatarsFake.items = []; videosFake.items = [];
     await ctx.close();
   });
 }

@@ -2190,6 +2190,29 @@ DO $$ DECLARE r text; c text; f text; BEGIN
   END IF;
 END $$;
 
+-- A2 0277 Creative Studio avatar videos (one video = one CS1 generation of avatar.video): private deny-all table, private
+-- helpers (the replaced deferred avatar-generation guard stays private), three fixed runtime entry points.
+DO $$ DECLARE r text; c text; f text; BEGIN
+  IF to_regprocedure('hon.create_creative_avatar_video(text,uuid,jsonb,jsonb,uuid,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply A2 migration 0277 first'; END IF;
+  ALTER TABLE hon.creative_avatar_videos ENABLE ROW LEVEL SECURITY; ALTER TABLE hon.creative_avatar_videos FORCE ROW LEVEL SECURITY;
+  REVOKE ALL ON hon.creative_avatar_videos FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON hon.creative_avatar_videos FROM %I',r); END LOOP;
+  FOR c IN SELECT attname FROM pg_attribute WHERE attrelid='hon.creative_avatar_videos'::regclass AND attnum>0 AND NOT attisdropped LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.creative_avatar_videos FROM PUBLIC',c);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.creative_avatar_videos FROM %I',c,r); END LOOP;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace
+      AND p.proname IN ('guard_creative_avatar_generation','creative_avatar_video_json','creative_avatar_video_fingerprint',
+        'create_creative_avatar_video','read_creative_avatar_videos','read_creative_avatar_video') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.create_creative_avatar_video(text,uuid,jsonb,jsonb,uuid,uuid,uuid), hon.read_creative_avatar_videos(text,uuid),
+      hon.read_creative_avatar_video(text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
 -- 0204 (provisional) school staff invitations: private custody tables, internal helpers, three fixed runtime entry points.
 DO $$ DECLARE t text; r text; f text; c text; BEGIN
   FOREACH t IN ARRAY ARRAY['school_staff_invitations','school_staff_account_events'] LOOP
