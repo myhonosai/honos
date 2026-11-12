@@ -42,6 +42,12 @@ GRANT EXECUTE ON FUNCTION hon.claim_communication_deliveries(text[], integer, in
 GRANT EXECUTE ON FUNCTION hon.reconcile_expired_communication_leases(integer) TO hon_communication_worker;
 GRANT EXECUTE ON FUNCTION hon.record_communication_send_result(uuid, uuid, text, text, text, text, integer, text, text, integer) TO hon_communication_worker;
 GRANT EXECUTE ON FUNCTION hon.record_communication_provider_event(text, text, text, uuid, text, timestamptz, bigint) TO hon_communication_worker;
+-- 0248 inbound STOP/START/HELP (when applied).
+DO $$ BEGIN
+  IF to_regprocedure('hon.record_inbound_text_keyword(text,text,text,text,timestamptz)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.record_inbound_text_keyword(text, text, text, text, timestamptz) TO hon_communication_worker;
+  END IF;
+END $$;
 
 -- HQ-COMM 0281: the same worker delivers HQ messages through its own four fixed functions, when 0281 is applied.
 DO $$

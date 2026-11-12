@@ -124,7 +124,7 @@ function harness({ begun, agentScope = { organizationId: ORG, schoolId: SCHOOL, 
   const calls = [];
   const turnId = begun?.turnId ?? ID();
   const receipt = { turnId, conversationId: ID(), status: 'DELEGATING', reason: null, delegatedAgentKeys: ['marcus'], actionRequestIds: [], workItemIds: [], invocationId: null, reply: null, replyDetail: null,
-    ...(['claire', 'alex', 'jordan', 'lena'].includes(begun?.agentKey) ? { status: 'COMPLETED', delegatedAgentKeys: [begun.agentKey], workItemIds: [ID()], invocationId: ID(), reply: 'Recorded facts: 12 active students.',
+    ...(['claire', 'alex', 'jordan', 'lena', 'maya'].includes(begun?.agentKey) ? { status: 'COMPLETED', delegatedAgentKeys: [begun.agentKey], workItemIds: [ID()], invocationId: ID(), reply: 'Recorded facts: 12 active students.',
       replyDetail: { mode: 'DETAILED', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [] } } : {}),
     ...(begun?.agentKey === 'hon' ? { status: 'COMPLETED', delegatedAgentKeys: [], workItemIds: [ID()], invocationId: ID(), reply: 'Two trials are booked tomorrow.',
       replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [] } } : {}) };
@@ -307,8 +307,8 @@ test('K2 Claire contract and service: an analyst turn is answered like HON, neve
 });
 
 test('0260 Alex, Jordan and Lena: analysis turns answered like Claire, never drafts, sent to the reply service', async () => {
-  assert.deepEqual(contracts.HON_ANALYST_AGENTS, ['claire', 'alex', 'jordan', 'lena']);
-  assert.deepEqual(contracts.AI_TEAM_READY_AGENTS.slice(-3), [['alex', 'GENERAL_MANAGEMENT', 15], ['jordan', 'OPERATIONS', 15], ['lena', 'CREATIVE_COMMERCE', 15]]);
+  assert.deepEqual(contracts.HON_ANALYST_AGENTS, ['claire', 'alex', 'jordan', 'lena', 'maya']);
+  assert.deepEqual(contracts.AI_TEAM_READY_AGENTS.slice(-4, -1), [['alex', 'GENERAL_MANAGEMENT', 15], ['jordan', 'OPERATIONS', 15], ['lena', 'CREATIVE_COMMERCE', 15]]);
   const detail = { mode: 'DETAILED', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [] };
   for (const agentKey of ['alex', 'jordan', 'lena']) {
     assert.deepEqual(contracts.validateHonTurnRequest({ text: 'What should we look at?', delegation: { agentKey } }), { text: 'What should we look at?', delegation: { agentKey } });
@@ -329,4 +329,24 @@ test('0260 Alex, Jordan and Lena: analysis turns answered like Claire, never dra
     agents: ['claire', 'alex', 'jordan', 'lena'].map((agentKey) => ({ agentKey, authorized: true, spendDecision: 'ALLOWED', route: 'CONFIGURED', providerRuntime: 'READY', available: keys.includes(agentKey) })) });
   assert.deepEqual(ready(['jordan', 'lena']).availableAnalystKeys, ['jordan', 'lena']);
   assert.deepEqual([ready(['alex']).businessPerformance, ready(['claire']).businessPerformance], [false, true]);
+});
+
+test('0284 Maya: a question about one at-risk membership, answered like the other analysts, never a draft', async () => {
+  assert.deepEqual(contracts.AI_TEAM_READY_AGENTS.at(-1), ['maya', 'RETENTION', 15]);
+  const membershipId = ID();
+  assert.deepEqual(contracts.validateHonTurnRequest({ text: 'Why is this student at risk?', delegation: { agentKey: 'maya', membershipId: membershipId.toUpperCase() } }),
+    { text: 'Why is this student at risk?', delegation: { agentKey: 'maya', membershipId } });
+  for (const bad of [{ text: 'x', delegation: { agentKey: 'maya' } }, { text: 'x', delegation: { agentKey: 'maya', membershipId: 'nope' } },
+    { text: 'x', delegation: { agentKey: 'maya', membershipId, leadId: ID() } }, { text: '  ', delegation: { agentKey: 'maya', membershipId } },
+    { text: 'x', delegation: { agentKey: 'maya', membershipId }, fromSuggestionTurnId: ID() }, { text: 'x', delegation: { agentKey: 'maya', membershipId }, replyMode: 'DETAILED' },
+    { text: 'x', delegation: { agentKey: 'alex', membershipId } }]) assert.throws(() => contracts.validateHonTurnRequest(bad), JSON.stringify(bad));
+  const turnId = ID();
+  const h = harness({ begun: { turnId, agentKey: 'maya', delegation: null, handOff: true } });
+  const out = await h.service.sendTurn(scope, ID(), { text: 'Why is this student at risk?', delegation: { agentKey: 'maya', membershipId } }, ID());
+  assert.equal(h.calls.find((c) => c[0] === 'reply:run')[2], turnId, 'Maya goes to the reply service');
+  assert.ok(!h.calls.some((c) => c[0].startsWith('submit') || c[0].startsWith('scope:')), 'Maya is not a draft specialist');
+  assert.equal(out.status, 'COMPLETED');
+  const ready = contracts.composeHonConversationReadiness({ completeEntitlement: true, asOf: T,
+    agents: [{ agentKey: 'maya', authorized: true, spendDecision: 'ALLOWED', route: 'CONFIGURED', providerRuntime: 'READY', available: true }] });
+  assert.deepEqual(ready.availableAnalystKeys, ['maya']);
 });

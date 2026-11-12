@@ -25,7 +25,7 @@ export const HON_ANALYST_AGENT = 'claire' as const;
  * 0260: the read-only analysis specialists. Claire (Business Performance), Alex (general management), Jordan (operations)
  * and Lena (creative & commerce) all answer in text from the school's own aggregate facts; none drafts or changes anything.
  */
-export const HON_ANALYST_AGENTS = ['claire', 'alex', 'jordan', 'lena'] as const;
+export const HON_ANALYST_AGENTS = ['claire', 'alex', 'jordan', 'lena', 'maya'] as const;
 export type HonAnalystAgentKey = typeof HON_ANALYST_AGENTS[number];
 export const isHonAnalystAgent = (v: unknown): v is HonAnalystAgentKey => (HON_ANALYST_AGENTS as readonly unknown[]).includes(v);
 /** K2c: who a HON answer may suggest (closed set; capability-filtered by the server): the delegates, and Claire. */
@@ -69,7 +69,9 @@ export type HonDelegation =
   | { agentKey: 'marcus'; campaignId: string }
   | { agentKey: 'kai'; curriculumId: string }
   /** An analysis specialist's question is the turn's text (at most HON_REPLY_LIMITS.questionCharacters); no target. */
-  | { agentKey: HonAnalystAgentKey }
+  | { agentKey: Exclude<HonAnalystAgentKey, 'maya'> }
+  /** 0284: Maya answers about one at-risk membership of this school (the 0259 list); no other target. */
+  | { agentKey: 'maya'; membershipId: string }
   | { agentKey: 'chad'; leadId: string; expectedLeadVersion: number; purpose: FollowUpDraftPurpose };
 /**
  * HON reply modes (owner decision 2026-11-06 16:10Z). The human chooses the mode; the server never upgrades one. Both
@@ -202,9 +204,13 @@ export function validateHonTurnRequest(value: unknown): HonTurnRequest {
   const d = record(r.delegation, invalid);
   if (isHonAnalystAgent(d.agentKey)) {
     // An analysis specialist's question needs text. K2c: only Claire may confirm HON's suggestion (fromSuggestionTurnId);
-    // the other specialists are not in HON's suggestion set.
-    exactKeys(d, ['agentKey'], invalid);
+    // the other specialists are not in HON's suggestion set. 0284: Maya names one membership.
+    exactKeys(d, d.agentKey === 'maya' ? ['agentKey', 'membershipId'] : ['agentKey'], invalid);
     if ((d.agentKey !== HON_ANALYST_AGENT && 'fromSuggestionTurnId' in r) || !marketingSafeText(r.text, HON_REPLY_LIMITS.questionCharacters) || (r.text as string).trim().length === 0) invalid();
+    if (d.agentKey === 'maya') {
+      if (!isUuid(d.membershipId)) invalid();
+      return { text: r.text as string, delegation: { agentKey: 'maya', membershipId: (d.membershipId as string).toLowerCase() } };
+    }
     return { text: r.text as string, delegation: { agentKey: d.agentKey }, ...(d.agentKey === HON_ANALYST_AGENT ? from : {}) };
   }
   if (!isAgent(d.agentKey) || !marketingSafeText(r.text, HON_TURN_TEXT_LIMITS[d.agentKey])) invalid();

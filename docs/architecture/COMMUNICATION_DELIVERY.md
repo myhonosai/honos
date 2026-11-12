@@ -28,9 +28,9 @@ through signed webhooks. All of it is testable with deterministic fakes.
 |---|---|---|
 | 1 | Delivery records, provider receipts, recipient opt-out, worker role, dispatcher with a deterministic fake provider, school delivery read | 0243 |
 | 2 | Twilio SendGrid email adapter (sandbox mode) and signed Event Webhook | none planned |
-| 3 | Twilio Messaging adapter: piece counter, MMS for long texts, status callbacks, STOP/START/HELP | ask coordinator |
-| 4 | Missed-call text-back | ask coordinator |
-| 5 | Zernio per-school lead intake (signed webhook → CRM lead with source) | ask coordinator |
+| 3 | Twilio Messaging adapter: piece counter, MMS for long texts, status callbacks, STOP/START/HELP, school sending numbers | 0248 |
+| 4 | Missed-call text-back | 0249 |
+| 5 | Zernio per-school lead intake (signed webhook → CRM lead with source) | 0250 |
 
 ## 4. PR 1 design (0243)
 
@@ -110,6 +110,25 @@ receipt timeline. No address, no provider IDs, no cost.
 - **Zernio leads (PR 5):** signed webhook per installation, routed only through a verified school
   connection and form mapping (Phase 2A design), creating a CRM lead with source `ZERNIO_META` or
   `ZERNIO_GOOGLE` through the existing lead-create path. Unknown or ambiguous routing is rejected.
+
+## 5a. Texting as built (0248)
+
+- `hon.school_text_senders`: one Twilio Messaging Service + number per school, set or disabled only by a human
+  HON HQ owner (`POST /v1/hq/saas/schools/:schoolId/text-sender`, same human-command guard as other HQ
+  commands). Recording a number buys nothing. A text from a school without an ACTIVE sender waits as
+  `SENDER_NOT_READY`; the claim returns the sender's service SID for the send.
+- v1 uses one HON Twilio account (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`); per-school subaccounts are a
+  later step because callback signatures are per account. READY also needs an https `HON_PUBLIC_API_ORIGIN`
+  (status callback URL) and `HON_SMS_SEND_APPROVED=true`.
+- The Messaging Service must have the MMS converter and Smart Encoding on. HON never changes a Twilio service, so
+  the HQ owner must send `mmsConverterConfirmed: true` to make a sender ACTIVE (API 400
+  `MMS_CONVERTER_NOT_CONFIRMED`; the table also refuses ACTIVE without it). HON smart-encodes the body itself,
+  records predicted sent-as (3+ pieces → MMS) and Twilio's reported piece count, and refuses over 1,600 characters.
+- `POST /v1/communications/webhooks/twilio/status` and `/twilio/inbound`: form posts verified with
+  X-Twilio-Signature over `HON_PUBLIC_API_ORIGIN` + fixed path + sorted parameters, and the AccountSid must match.
+  Inbound is routed only by the receiving ACTIVE number to one school; only exact STOP/START/HELP words are
+  stored (`hon.inbound_text_keywords`, without the sender's number). START re-opens only an opt-out the person
+  made themselves (source RECIPIENT). Replies come from Twilio Advanced Opt-Out; HON answers empty TwiML.
 
 ## 6. Who pays for texting (open, Decision 4)
 
