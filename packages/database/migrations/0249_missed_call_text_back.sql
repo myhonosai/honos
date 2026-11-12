@@ -199,19 +199,44 @@ BEGIN
 END $$;
 
 -- School staff list of recent missed calls (newest first) to call back. Caller numbers are shown to the school only.
-CREATE FUNCTION hon.read_school_missed_calls(p_limit integer) RETURNS jsonb
-LANGUAGE sql STABLE SECURITY INVOKER SET search_path = pg_catalog, hon AS $$
+-- B6A: a definer read that resolves the signed-in staff member's scope for exactly this school with
+-- communication.message.read and requires the organization's entitlement to be ACTIVE and in effect (the 0172 test),
+-- so staff at a suspended, lapsed or not-yet-started school read nothing. Rows are filtered to that school before
+-- ORDER BY and LIMIT, and the scope is resolved again after the read (a grant revoked mid-read returns nothing).
+CREATE FUNCTION hon.read_school_missed_calls(p_subject text, p_school uuid, p_limit integer) RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
+DECLARE
+  v_scope record;
+  v_again record;
+  v_result jsonb;
+BEGIN
+  SELECT s.principal_id, s.organization_id, s.school_id INTO v_scope
+  FROM hon.resolve_authorized_scope(p_subject, p_school, 'communication.message.read') s
+  WHERE EXISTS (SELECT 1 FROM hon.organization_entitlements e WHERE e.organization_id = s.organization_id AND e.status = 'ACTIVE'
+    AND e.effective_from <= clock_timestamp() AND (e.effective_until IS NULL OR e.effective_until > clock_timestamp()));
+  IF v_scope.school_id IS NULL OR v_scope.school_id IS DISTINCT FROM p_school THEN
+    RAISE EXCEPTION 'MISSED_CALLS_FORBIDDEN' USING ERRCODE = '42501';
+  END IF;
   SELECT coalesce(jsonb_agg(jsonb_build_object('id', m.id, 'callerE164', m.caller_e164, 'dialStatus', m.dial_status,
-    'textBack', m.text_back_status, 'receivedAt', m.received_at) ORDER BY m.received_at DESC, m.id DESC), '[]'::jsonb)
-  FROM (SELECT * FROM hon.missed_calls ORDER BY received_at DESC, id DESC LIMIT least(greatest(coalesce(p_limit, 50), 1), 100)) m
-$$;
+    'textBack', m.text_back_status, 'receivedAt', m.received_at) ORDER BY m.received_at DESC, m.id DESC), '[]'::jsonb) INTO v_result
+  FROM (SELECT * FROM hon.missed_calls c WHERE c.organization_id = v_scope.organization_id AND c.school_id = v_scope.school_id
+    ORDER BY c.received_at DESC, c.id DESC LIMIT least(greatest(coalesce(p_limit, 50), 1), 100)) m;
+  SELECT s.principal_id, s.organization_id, s.school_id INTO v_again
+  FROM hon.resolve_authorized_scope(p_subject, p_school, 'communication.message.read') s
+  WHERE EXISTS (SELECT 1 FROM hon.organization_entitlements e WHERE e.organization_id = s.organization_id AND e.status = 'ACTIVE'
+    AND e.effective_from <= clock_timestamp() AND (e.effective_until IS NULL OR e.effective_until > clock_timestamp()));
+  IF v_again.principal_id IS DISTINCT FROM v_scope.principal_id OR v_again.organization_id IS DISTINCT FROM v_scope.organization_id THEN
+    RAISE EXCEPTION 'MISSED_CALLS_FORBIDDEN' USING ERRCODE = '42501';
+  END IF;
+  RETURN v_result;
+END $$;
 
 REVOKE ALL ON FUNCTION hon.set_school_missed_call_settings_from_hq(text, uuid, text, boolean, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.read_missed_call_route(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.record_missed_call(text, text, text, text, timestamptz) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.claim_missed_call_text_backs(integer, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.record_missed_call_text_back_result(uuid, uuid, text, text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION hon.read_school_missed_calls(integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION hon.read_school_missed_calls(text, uuid, integer) FROM PUBLIC;
 DO $$
 DECLARE r text;
 BEGIN
@@ -221,8 +246,7 @@ BEGIN
       || 'hon.claim_missed_call_text_backs(integer, integer), hon.record_missed_call_text_back_result(uuid, uuid, text, text) FROM %I', r);
   END LOOP;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
-    GRANT SELECT ON TABLE hon.missed_calls TO hon_runtime;
-    GRANT EXECUTE ON FUNCTION hon.set_school_missed_call_settings_from_hq(text, uuid, text, boolean, integer), hon.read_school_missed_calls(integer) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.set_school_missed_call_settings_from_hq(text, uuid, text, boolean, integer), hon.read_school_missed_calls(text, uuid, integer) TO hon_runtime;
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_communication_worker') THEN
     GRANT EXECUTE ON FUNCTION hon.read_missed_call_route(text), hon.record_missed_call(text, text, text, text, timestamptz),

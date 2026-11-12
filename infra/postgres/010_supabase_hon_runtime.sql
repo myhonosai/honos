@@ -3015,13 +3015,12 @@ DO $$ DECLARE r text; BEGIN
   END IF;
 END $$;
 
--- 0249 missed-call text-back: school staff read their missed calls through forced RLS and the invoker list;
+-- 0249 missed-call text-back: school staff read their missed calls only through the entitlement-gated definer list;
 -- the runtime calls only the HQ-owner settings command. Routing, recording and text-back are worker-only (013).
 DO $$ DECLARE r text; f text; BEGIN
   IF to_regprocedure('hon.record_missed_call(text,text,text,text,timestamptz)') IS NULL THEN RAISE EXCEPTION 'Apply missed-call migration 0249 first'; END IF;
   REVOKE ALL ON TABLE hon.missed_calls FROM hon_runtime;
-  GRANT SELECT ON TABLE hon.missed_calls TO hon_runtime;
-  GRANT EXECUTE ON FUNCTION hon.set_school_missed_call_settings_from_hq(text,uuid,text,boolean,integer), hon.read_school_missed_calls(integer) TO hon_runtime;
+  GRANT EXECUTE ON FUNCTION hon.set_school_missed_call_settings_from_hq(text,uuid,text,boolean,integer), hon.read_school_missed_calls(text,uuid,integer) TO hon_runtime;
   FOREACH f IN ARRAY ARRAY['hon.read_missed_call_route(text)','hon.record_missed_call(text,text,text,text,timestamptz)',
     'hon.claim_missed_call_text_backs(integer,integer)','hon.record_missed_call_text_back_result(uuid,uuid,text,text)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM PUBLIC, hon_runtime';

@@ -37,7 +37,7 @@ const dayZone = zones.find((zone) => hourIn(zone) >= 10 && hourIn(zone) <= 18);
 const nightZone = zones.find((zone) => hourIn(zone) >= 23 || hourIn(zone) <= 5);
 if (!dayZone || !nightZone) throw new Error('No suitable day/night time zones for the quiet-hours proof.');
 
-const ids = Object.fromEntries(['org', 'schoolA', 'schoolB', 'schoolC', 'user', 'principal', 'hqUser', 'hqPrincipal'].map((key) => [key, randomUUID()]));
+const ids = Object.fromEntries(['org', 'schoolA', 'schoolB', 'schoolC', 'user', 'principal', 'hqUser', 'hqPrincipal', 'role', 'readerUser', 'readerPrincipal'].map((key) => [key, randomUUID()]));
 const person = {};
 const message = {};
 
@@ -82,8 +82,12 @@ async function cleanup() {
     await admin.query('DELETE FROM hon.hq_operator_grants WHERE principal_id = $1', [ids.hqPrincipal]);
     await admin.query('DELETE FROM hon.communication_consents WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.people WHERE organization_id = $1', [ids.org]);
-    await admin.query('DELETE FROM hon.principals WHERE id = ANY($1::uuid[])', [[ids.principal, ids.hqPrincipal]]);
-    await admin.query('DELETE FROM hon.users WHERE id = ANY($1::uuid[])', [[ids.user, ids.hqUser]]);
+    await admin.query('DELETE FROM hon.principal_role_grants WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.role_permissions WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.roles WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.organization_entitlements WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.principals WHERE id = ANY($1::uuid[])', [[ids.principal, ids.hqPrincipal, ids.readerPrincipal]]);
+    await admin.query('DELETE FROM hon.users WHERE id = ANY($1::uuid[])', [[ids.user, ids.hqUser, ids.readerUser]]);
     await admin.query('DELETE FROM hon.schools WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.organizations WHERE id = $1', [ids.org]);
     await admin.query('COMMIT');
@@ -514,13 +518,27 @@ try {
   } else {
     console.log('Missed-call text-back sending skipped: the day zone left sending hours during the run.');
   }
-  await runtime.query('BEGIN');
-  await runtime.query("SELECT set_config('app.hon_organization_id', $1, true), set_config('app.hon_school_id', $2, true)", [ids.org, ids.schoolA]);
-  const listA = (await runtime.query('SELECT hon.read_school_missed_calls(100) AS data')).rows[0].data;
-  await runtime.query('ROLLBACK');
+  // B6A: the school list is a definer read for signed-in staff with communication.message.read at an entitled school.
+  const reader = `missed-reader-${ids.readerUser}`;
+  await admin.query("INSERT INTO hon.users (id, external_subject, email, display_name) VALUES ($1, $2, 'reader@example.test', 'Reader')", [ids.readerUser, reader]);
+  await admin.query("INSERT INTO hon.principals (id, principal_type, user_id, display_name) VALUES ($1, 'HUMAN_USER', $2, 'Reader')", [ids.readerPrincipal, ids.readerUser]);
+  await admin.query("INSERT INTO hon.roles (id, organization_id, code, name, is_system_role) VALUES ($1, $2, 'FRONT_DESK', 'Front desk', false)", [ids.role, ids.org]);
+  await admin.query("INSERT INTO hon.role_permissions (role_id, organization_id, permission_code) VALUES ($1, $2, 'communication.message.read')", [ids.role, ids.org]);
+  await admin.query("INSERT INTO hon.principal_role_grants (organization_id, school_id, principal_id, role_id, granted_by_principal_id, effective_from) VALUES ($1, $2, $3, $4, $3, clock_timestamp() - interval '1 hour')",
+    [ids.org, ids.schoolA, ids.readerPrincipal, ids.role]);
+  const list = async (school, subject = reader) => (await runtime.query('SELECT hon.read_school_missed_calls($1, $2, 100) AS data', [subject, school])).rows[0].data;
+  await expectError('42501', () => list(ids.schoolA), 'staff at a school without an entitlement in effect read no missed calls');
+  await admin.query("INSERT INTO hon.organization_entitlements (organization_id, tier, status, effective_from) VALUES ($1, 'COMPLETE', 'SUSPENDED', now() - interval '1 day')", [ids.org]);
+  await expectError('42501', () => list(ids.schoolA), 'staff at a suspended school read no missed calls');
+  await admin.query("UPDATE hon.organization_entitlements SET status = 'ACTIVE', effective_until = now() - interval '1 minute' WHERE organization_id = $1", [ids.org]);
+  await expectError('42501', () => list(ids.schoolA), 'staff at a school whose entitlement lapsed read no missed calls');
+  await admin.query("UPDATE hon.organization_entitlements SET effective_until = NULL WHERE organization_id = $1", [ids.org]);
+  const listA = await list(ids.schoolA);
   check(listA.length > 0 && listA.every((row) => row.callerE164 !== '+15555550301' && row.callerE164 !== '+15555550302'), 'school A staff see only their own missed calls');
   check(Object.keys(listA[0]).sort().join() === 'callerE164,dialStatus,id,receivedAt,textBack', 'the school list carries no provider ids or lease data');
-  check((await runtime.query('SELECT hon.read_school_missed_calls(100) AS data')).rows[0].data.length === 0, 'no tenant context sees no missed calls');
+  await expectError('42501', () => list(ids.schoolB), 'school A staff cannot read another school\'s missed calls');
+  await expectError('42501', () => list(ids.schoolA, `delivery-${ids.user}`), 'staff without communication.message.read read no missed calls');
+  await expectError('42501', () => runtime.query('SELECT count(*) FROM hon.missed_calls'), 'the runtime cannot read the missed-call table directly');
 
   console.log(`PASS: communication delivery integrity (${passed} checks; day zone ${dayZone}, night zone ${nightZone}).`);
 } finally {

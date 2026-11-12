@@ -97,7 +97,7 @@ export class SchoolMissedCallHqController {
 
 export interface MissedCallView { id: string; callerE164: string; dialStatus: string; textBack: string; receivedAt: string }
 
-/** 0249: the school's recent missed calls to call back (communication.message.read), newest first, through forced RLS. */
+/** 0249: the school's recent missed calls to call back (communication.message.read), newest first, through the entitlement-gated definer read. */
 @Controller('organizations/:organizationId/schools/:schoolId/communications/missed-calls')
 @UseGuards(HonIdentityGuard)
 export class SchoolMissedCallsController {
@@ -120,7 +120,12 @@ export class SchoolMissedCallsController {
     }
     const data = await this.database.withTenantTransaction({
       organizationId: scope.organizationId, schoolId: scope.schoolId, principalId: scope.principalId, principalType: 'HUMAN_USER', requestId: randomUUID(),
-    }, async (client) => (await client.query<{ data: MissedCallView[] }>('SELECT hon.read_school_missed_calls($1) AS data', [size])).rows[0]?.data ?? []);
+    }, async (client) => (await client.query<{ data: MissedCallView[] }>('SELECT hon.read_school_missed_calls($1, $2::uuid, $3) AS data',
+      [identity.externalSubject, scope.schoolId, size])).rows[0]?.data ?? []).catch((error: unknown) => {
+      // The definer read refuses a school whose entitlement is not in effect (B6A) or a scope revoked mid-read.
+      if ((error as { code?: string } | null)?.code === '42501') throw new ForbiddenException('HON missed calls are not available for this school.');
+      throw error;
+    });
     return { data };
   }
 }

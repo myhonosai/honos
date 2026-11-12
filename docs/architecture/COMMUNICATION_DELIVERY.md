@@ -147,6 +147,15 @@ receipt timeline. No address, no provider IDs, no cost.
   `HON_SMS_SEND_APPROVED` switch as other texts, without a status callback.
 - School staff read their recent missed calls to call back with `communication.message.read`
   (`GET /v1/organizations/:org/schools/:school/communications/missed-calls`): caller, dial outcome, text-back state, time.
+  The list is a definer read (`hon.read_school_missed_calls(subject, school, limit)`) that also requires the
+  organization's entitlement to be ACTIVE and in effect, so staff at a suspended, lapsed or not-yet-started school read
+  nothing (403); the runtime has no direct access to `hon.missed_calls`.
+- `canceled` (the caller hung up before the forwarding phone answered) counts as missed and gets a text-back, the same as
+  `no-answer` and `busy`.
+- A STOP texted from a number the school has no person record for is not stored in HON (0248 keywords need a school
+  number match and record against the school's people). Blocking further texts to that number relies on Twilio's own
+  opt-out handling on the Messaging Service (Advanced Opt-Out or the default STOP list), which must stay on; this is on
+  the pre-launch review list.
 
 ## 6. Who pays for texting (open, Decision 4)
 
