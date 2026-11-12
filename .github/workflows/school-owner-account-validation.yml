@@ -21,6 +21,9 @@ on:
       - 'apps/web/src/app/account/**'
       - 'apps/web/src/app/hq/school-owner-invitations/**'
       - 'apps/web/test/owner-invitations.test.tsx'
+      - 'apps/web/src/components/hon-os-start/**'
+      - 'apps/web/test/hon-os-start*.test.tsx'
+      - 'apps/web/scripts/hon-os-start-browser.mjs'
       - 'apps/web/next.config.ts'
       - 'apps/web/src/server/web-startup.ts'
       - 'apps/web/test/web-startup.test.ts'
@@ -127,6 +130,8 @@ jobs:
       - name: Actual application with signed synthetic contract fixtures
         id: browser
         run: pnpm --filter @hon/web exec node scripts/school-owner-invitations-browser.mjs
+      - name: Actual application public sign-up and free-trial start with signed synthetic contract fixtures
+        run: pnpm --filter @hon/web exec node scripts/hon-os-start-browser.mjs
       - name: Actual built web startup and authentication safety
         run: pnpm --filter @hon/web exec node scripts/web-startup-verification.mjs
       - name: Retain private screenshots and sanitized browser report
