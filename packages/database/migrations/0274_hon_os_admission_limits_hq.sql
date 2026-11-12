@@ -35,8 +35,9 @@ CREATE TABLE hon.hon_os_admission_limit_versions (
   CHECK (signups_per_hour<=signups_per_day AND trials_per_hour<=trials_per_day),
   -- An HQ change carries its actor, key and reason; an owner-recorded version (the default, or a recovery) carries none.
   CHECK ((actor_principal_id IS NULL AND idempotency_key IS NULL) OR (actor_principal_id IS NOT NULL AND idempotency_key IS NOT NULL AND reason IS NOT NULL)),
-  UNIQUE (actor_principal_id, idempotency_key),
-  FOREIGN KEY (actor_principal_id, idempotency_key) REFERENCES hon.saas_requests(actor_principal_id, idempotency_key)
+  -- Linked to its saas_request by the insert guard and the deferred evidence check, not a foreign key, so request cleanup in
+  -- disposable proofs is never blocked by an immutable version row.
+  UNIQUE (actor_principal_id, idempotency_key)
 );
 INSERT INTO hon.hon_os_admission_limit_versions(version,signups_per_hour,signups_per_day,trials_per_hour,trials_per_day,reason,recorded_at)
   SELECT 1,signups_per_hour,signups_per_day,trials_per_hour,trials_per_day,'Default limits from migration 0273',recorded_at FROM hon.hon_os_admission_limits;

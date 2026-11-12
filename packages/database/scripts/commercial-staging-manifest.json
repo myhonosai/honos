@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "18002b6613561b22ae3271be5eed2a26ee6392ce7904e64c7588908f356b5165",
+  "chainSha256": "fdb672154dbaa5b7ee2fbae191b6ac7ffcef07156f1f976f21b46072feb35696",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -288,7 +288,7 @@
     },
     {
       "file": "0274_hon_os_admission_limits_hq.sql",
-      "sha256": "d4a60adbda62a6ede252f517ae92ce0baa27cec23774f379d4196aa8684eeb23"
+      "sha256": "3f9b0d3a909005f190517ef193167ff0fca3032fa6ea35ed418d58dd6ce92adc"
     }
   ]
 }
