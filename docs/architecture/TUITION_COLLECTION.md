@@ -199,3 +199,22 @@ later piece, together with promo codes and the sibling-discount display (P4).
   Idempotency-Key and the `school_checkout.page.save` human-command header).
 - **Evidence:** `pnpm --filter @hon/database db:test-school-checkout-pages` (CI: `run-db-proofs.sh`), 94 checks over signed
   HTTP; `apps/api/test/school-checkout.test.cjs`.
+
+## 10. Piece 9b as built: checkout settings page for staff
+
+Status: source only, not deployed. Web only, over the 0269 routes; no migration and no API change.
+
+- **Page:** `/staff/billing/checkout-pages` (Billing menu, "Checkout pages"; EN/KO/ES menu label), protected, dynamic,
+  noindex, no-referrer. Tabs for the enrollment checkout and the tuition payment page.
+- **Editing:** plans from the school catalog (add, remove, move up or down; unavailable plans cannot be added and are
+  flagged if already shown), add-ons (name, amount typed as dollars and cents, required or optional), questions (short
+  answer, pick one with 2-10 choices, checkbox; required or optional), waiver on or off, receipt note, thank-you message.
+  One language switch (English, Korean, Spanish) changes which text every field edits; English is required, and an empty
+  Korean or Spanish text is left out so families see English.
+- **Saving:** Save as draft or Save and publish. Problems are listed in plain words and block the save; the contract
+  validator is the final check before the request. The request carries the version from the last verified read; a
+  version conflict keeps the staff edits and re-reads, so staff choose Save again or Discard changes. An unknown result
+  keeps the exact request and key for Try again. Every answer is followed by a fresh read.
+- **Privacy:** blur or a hidden tab hides the page but keeps unsaved edits in memory; a school change or session end drops
+  them. Nothing is kept in browser storage.
+- **Evidence:** `apps/web/test/school-checkout-ui.test.tsx` (9 tests).
