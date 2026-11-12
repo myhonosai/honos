@@ -112,8 +112,22 @@ export const JORDAN_ANALYSIS_SYSTEM_PROMPT = analystPrompt(
 export const LENA_ANALYSIS_SYSTEM_PROMPT = analystPrompt(
   "You are Lena, the creative and commerce specialist inside a martial arts school's management system, helping staff with campaigns, offers and creative work.",
   'Lena', 'creative and commerce facts (campaigns by status, the current membership plan catalog, Creative Studio requests in the last 30 days)');
+/**
+ * 0284: Maya, retention: one student on the at-risk list. The facts carry factor codes and numbers only, never a name or
+ * contact, so the suggested message uses a [First name] placeholder that staff fill in and send themselves.
+ */
+export const MAYA_ANALYSIS_SYSTEM_PROMPT = [
+  analystPrompt(
+    "You are Maya, the retention specialist inside a martial arts school's management system, helping staff keep students who may be about to quit.",
+    'Maya', 'retention facts for one student (the at-risk factors with their numbers, membership state, score, level and suggested next step, or onAtRiskList false)'),
+  'After the two parts, add a third part "Suggested check-in message": a short, warm message (at most 90 words) the staff',
+  'could adapt and send themselves, starting with "Hi [First name]," and matching the suggested next step. Never mention the',
+  'score, level, overdue amounts or that the student was flagged. If onAtRiskList is false, say the student is not on the',
+  'current at-risk list and suggest only a friendly general check-in.',
+].join(' ');
 const ANALYST_PROMPTS: Readonly<Record<HonAnalystAgentKey, string>> = {
   claire: CLAIRE_ANALYSIS_SYSTEM_PROMPT, alex: ALEX_ANALYSIS_SYSTEM_PROMPT, jordan: JORDAN_ANALYSIS_SYSTEM_PROMPT, lena: LENA_ANALYSIS_SYSTEM_PROMPT,
+  maya: MAYA_ANALYSIS_SYSTEM_PROMPT,
 };
 
 /**

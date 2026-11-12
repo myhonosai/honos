@@ -250,6 +250,7 @@
     "0272_hon_os_trial_ai_credit_fixes.sql": "5f78a9ca625bf7459231ff6d8efde3f96630dfed1dd2d6d6736fd83a0e565e62",
     "0273_hon_os_signup_abuse_protection.sql": "ef53fe56e765f926a0868bc6f2a86c8e6106ec0667ec971ea1889e3147836887",
     "0274_hon_os_admission_limits_hq.sql": "3f9b0d3a909005f190517ef193167ff0fca3032fa6ea35ed418d58dd6ce92adc",
-    "0278_ai_team_readiness_reconcile.sql": "f29d606e7ab0e1273d5ae41f2eeb105f14b3eb0fa930fcd194a5ad2439c5362e"
+    "0278_ai_team_readiness_reconcile.sql": "f29d606e7ab0e1273d5ae41f2eeb105f14b3eb0fa930fcd194a5ad2439c5362e",
+    "0284_maya_retention_answers.sql": "8518211375aa88c5e8ddf4bb2881d63bd437e4c19b84925b6cdd5af6c1eddaba"
   }
 }
