@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "452b259bce002a6ce21111bd45d6e3efbaa8fec7e1e2fe27afc7379e8cfc0a4f",
+  "chainSha256": "3d201a608905bf16aceed1eac3026cd7d9d1ca076016c7ef603394e15bce9df8",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -217,6 +217,10 @@
     {
       "file": "0236_crm_school_clock.sql",
       "sha256": "a2afddbb3fe92a127e246af79bb168c1083678c4a689ea7e2f0a4f06a2b3d213"
+    },
+    {
+      "file": "0237_hon_os_paid_review_queue.sql",
+      "sha256": "9f8815ee94473a4fc07e1bf79cf9a5dd6b5031d30289e9520d5f37ceb590d8db"
     },
     {
       "file": "0239_recurring_class_series.sql",

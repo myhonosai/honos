@@ -3,7 +3,7 @@
 // HON-bills-schools records,
 // separate from school-to-family billing.
 // Private deny-all tables reachable only through fixed functions.
-export const saasBillingTables = ['saas_subscription_generations','saas_billing_lifecycle_policy','saas_schedule_bindings','saas_schedule_provider_events','saas_schedule_paid_periods','saas_schedule_reconciliations','saas_price_schedules','saas_price_acceptances','saas_policy_decisions','saas_catalog_versions','saas_catalog_plans','saas_catalog_offers','saas_founder_reservations',
+export const saasBillingTables = ['saas_subscription_generations','saas_billing_lifecycle_policy','saas_schedule_bindings','saas_schedule_provider_events','saas_schedule_paid_periods','saas_schedule_reconciliations','saas_paid_review_resolutions','saas_price_schedules','saas_price_acceptances','saas_policy_decisions','saas_catalog_versions','saas_catalog_plans','saas_catalog_offers','saas_founder_reservations',
  'saas_subscriptions','saas_subscription_history','saas_requests','saas_audit','saas_outbox',
  'saas_policy_records','saas_invoice_sequences','saas_invoices','saas_invoice_lines','saas_payment_evidence',
  'saas_credit_program','saas_provider_cost_evidence','saas_pricing_versions','saas_operation_prices','saas_credit_allowances',
@@ -64,6 +64,18 @@ export const saasBillingFunctions = [
  ['hon.saas_schedule_access_json(uuid)',false,false],
  ['hon.saas_schedule_activate_access(uuid,uuid,timestamp with time zone)',false,false],
  ['hon.retry_saas_schedule_access(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ // 0237 HON OS schedule billing piece 3: HQ review queue for held payments and refunds; v1 founder/lifetime stop
+ ['hon.guard_saas_hon_os_v1_offer_kind()',false,false],
+ ['hon.guard_saas_paid_review_resolutions()',false,true],
+ ['hon.saas_paid_review_items(text,uuid)',false,false],
+ ['hon.saas_paid_review_reviewed_count(uuid)',false,false],
+ ['hon.saas_paid_review_open(text,uuid)',false,false],
+ ['hon.guard_saas_checkout_refund_recorded()',false,true],
+ ['hon.saas_paid_review_resolution_json(hon.saas_paid_review_resolutions)',false,false],
+ ['hon.saas_paid_review_item_json(text,uuid)',false,false],
+ ['hon.read_saas_paid_reviews(text,text)',true,true],
+ ['hon.resolve_saas_paid_review(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.verify_saas_paid_review_refund(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.saas_price_usd(integer)',false,false],
  ['hon.saas_price_content(uuid,uuid)',false,false],
  ['hon.saas_price_schedule_json(hon.saas_price_schedules)',false,false],
@@ -372,6 +384,9 @@ const crossTriggers = [
  ['saas_schedule_bindings','saas_schedule_binding_authority',7,'guard_saas_schedule_binding_insert'],
  ['saas_schedule_bindings','saas_schedule_binding_evidence',21,'verify_saas_schedule_binding_evidence'],
  ['saas_checkout_sessions','saas_schedule_lifecycle_exclusion',7,'guard_saas_schedule_lifecycle_exclusion'],
+ // 0237: no new HON OS v1 founder/lifetime checkout; a held v1 payment with a recorded refund is never activated.
+ ['saas_checkout_sessions','saas_hon_os_v1_offer_kind',7,'guard_saas_hon_os_v1_offer_kind'],
+ ['saas_checkout_sessions','saas_checkout_refund_recorded',19,'guard_saas_checkout_refund_recorded'],
  ['saas_subscriptions','saas_schedule_lifecycle_exclusion',7,'guard_saas_schedule_lifecycle_exclusion'],
  ['saas_access_states','saas_schedule_lifecycle_exclusion',7,'guard_saas_schedule_lifecycle_exclusion'],
  ['saas_access_exceptions','saas_schedule_lifecycle_exclusion',7,'guard_saas_schedule_lifecycle_exclusion'],
@@ -418,6 +433,7 @@ export async function verifySaasBillingSecurity(client, runtime) {
    : table === 'saas_invoice_lines' ? ['guard_saas_invoice_lines','saas_invoice_lines_rows',31]
    : table === 'saas_operation_prices' ? ['guard_saas_operation_prices','saas_operation_prices_rows',31]
    : table === 'saas_schedule_bindings' ? ['guard_saas_schedule_bindings','saas_guarded',27]
+   : table === 'saas_paid_review_resolutions' ? ['guard_saas_paid_review_resolutions','saas_paid_review_rows',31]
    : paymentTables.includes(table) ? ['guard_saas_payments','saas_guarded',27]
    : table === 'saas_access_states' ? ['guard_saas_access','saas_guarded',27]
    : table === 'saas_access_exceptions' ? ['guard_saas_access_exceptions','saas_guarded',27]

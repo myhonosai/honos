@@ -2440,6 +2440,24 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.retry_saas_schedule_access(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
+-- 0237 HON OS schedule billing piece 3 (HQ review queue for held payments and refunds). Runs after every broader
+-- revocation above: restore only the HQ queue read, the refund-owed record and the refund verification. The items,
+-- open/reviewed probes, JSON helpers and guards stay unreachable.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['read_saas_paid_reviews(text,text)','resolve_saas_paid_review(text,jsonb,uuid,uuid,uuid)',
+    'verify_saas_paid_review_refund(text,uuid,jsonb,uuid,uuid,uuid)','saas_paid_review_items(text,uuid)','saas_paid_review_reviewed_count(uuid)',
+    'saas_paid_review_open(text,uuid)','saas_paid_review_resolution_json(hon.saas_paid_review_resolutions)','saas_paid_review_item_json(text,uuid)',
+    'guard_saas_hon_os_v1_offer_kind()','guard_saas_paid_review_resolutions()','guard_saas_checkout_refund_recorded()'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_saas_paid_reviews(text,text),hon.resolve_saas_paid_review(text,jsonb,uuid,uuid,uuid),
+      hon.verify_saas_paid_review_refund(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
 
 -- B-HQ-2 0232 (proposed) HQ support records: no table privileges; three commands and three reads are the only runtime boundary.
 DO $$ DECLARE r text; t text; BEGIN
