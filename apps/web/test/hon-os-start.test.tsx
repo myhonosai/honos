@@ -3,8 +3,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SIGNUP_CONFIRMATION, SIGNUP_HUMAN_COMMAND, TRIAL_CONFIRMATION, TRIAL_HUMAN_COMMAND, validateSignupInput, validateTrialStartInput } from '@hon/contracts';
 import { HonOsStart } from '../src/components/hon-os-start/workbench';
 import { startRequest } from '../src/components/hon-os-start/http';
+import { START_COPY, instant } from '../src/components/hon-os-start/copy';
 
-const hooks = vi.hoisted(() => ({ values: [] as any[], cursor: 0, effects: [] as (() => void)[] }));
+const hooks = vi.hoisted(() => ({ values: [] as any[], cursor: 0, effects: [] as (() => void)[], language: 'en', locale: 'en-US' }));
+vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ preferences: { language: hooks.language }, formattingLocale: hooks.locale }) }));
 vi.mock('react', async () => {
   const a = await vi.importActual<typeof import('react')>('react');
   return { ...a,
@@ -37,7 +39,7 @@ function fill() {
   inputs.filter(e => e.props.type !== 'checkbox').forEach((e, i) => e.props.onChange({ target: { value: values[i] } }));
   inputs.filter(e => e.props.type === 'checkbox').forEach(e => e.props.onChange({ target: { checked: true } }));
 }
-beforeEach(() => { hooks.values = []; hooks.cursor = 0; hooks.effects = []; vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', new EventTarget()); });
+beforeEach(() => { hooks.language = 'en'; hooks.locale = 'en-US'; hooks.values = []; hooks.cursor = 0; hooks.effects = []; vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', new EventTarget()); });
 afterEach(() => { for (const v of hooks.values) v?.cleanup?.(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 it('reads nothing until the owner asks; then only their own identity, sign-up and trial status', async () => {
@@ -126,4 +128,40 @@ it('session invalidation hides the loaded account; server text never reaches the
 it('a response that claims more than the contract allows is refused, not shown', async () => {
   vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupDone)).mockResolvedValueOnce(ok({ trialStatus: 'TEST_MODE', schoolId: uuid(3), available: { ...offer, automaticCharge: true }, trial: null }));
   click('Check my account'); await settle(); expect(find('Start free trial')).toBeUndefined(); expect(nodes(render()).some(e => e.type === 'fieldset')).toBe(false);
+});
+
+it('every language has the same fixed copy for every server code, and the page renders in Korean and Spanish', async () => {
+  const keys = Object.keys(START_COPY.en.codes).sort();
+  for (const lang of ['ko', 'es'] as const) {
+    expect(Object.keys(START_COPY[lang].codes).sort()).toEqual(keys);
+    expect(Object.keys(START_COPY[lang]).sort()).toEqual(Object.keys(START_COPY.en).sort());
+  }
+  hooks.language = 'ko'; hooks.locale = 'ko-KR';
+  vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(ok({ signupStatus: 'CLOSED', terms: null, eligibility: 'ELIGIBLE', registration: null }));
+  expect(text(render())).toContain('HON OS에서 도장 시작하기'); click('내 계정 확인'); await settle();
+  expect(text(render())).toContain('셀프 가입은 아직 열리지 않았습니다'); expect(find('다시 확인')).toBeDefined();
+  hooks.language = 'es'; hooks.locale = 'es-ES'; expect(text(render())).toContain('El registro por cuenta propia aún no está abierto'); expect(find('Comprobar de nuevo')).toBeDefined();
+});
+
+it('switching language re-renders the status line in the new language, not the old one', async () => {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(fail(429, 'ACCOUNT_RATE_LIMITED'));
+  click('Check my account'); await settle(); expect(text(render())).toContain('Please wait up to a minute');
+  hooks.language = 'es'; expect(text(render())).toContain('Espere hasta un minuto'); expect(text(render())).not.toContain('Please wait');
+});
+
+it('trial and credit instants show date, time and the school time zone by name', async () => {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupDone)).mockResolvedValueOnce(ok({ trialStatus: 'TEST_MODE', schoolId: uuid(3), available: null, trial: trialRow }));
+  click('Check my account'); await settle(); const t = text(render());
+  // 10:00 UTC is 5:00 AM in New York (EST) on both dates.
+  expect(t).toContain('November 12, 2026 at 5:00 AM EST'); expect(t).toContain('November 26, 2026 at 5:00 AM EST'); expect(t).toContain('November 19, 2026 at 5:00 AM EST');
+  expect(instant('2026-11-12T10:00:00.000Z', 'en-US', 'Asia/Seoul')).toContain('7:00 PM GMT+9');
+  expect(instant('2026-11-12T10:00:00.000Z', 'en-US', 'Not/AZone')).toMatch(/2026/);
+});
+
+it('the legal terms wording is an explicit placeholder on the sign-up form and the trial offer', async () => {
+  const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupOpen));
+  click('Check my account'); await settle();
+  expect(nodes(render()).some(e => e.props['data-start-legal-pending'])).toBe(true); expect(text(render())).toContain('final legal terms are still being prepared');
+  hooks.values = []; f.mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupDone)).mockResolvedValueOnce(ok({ trialStatus: 'TEST_MODE', schoolId: uuid(3), available: offer, trial: null }));
+  click('Check my account'); await settle(); expect(nodes(render()).some(e => e.props['data-start-trial-terms-pending'])).toBe(true);
 });
