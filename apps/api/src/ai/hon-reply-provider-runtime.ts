@@ -1,6 +1,6 @@
 import {
-  HON_DELEGATE_AGENTS, HON_REPLY_LIMITS, HON_REPLY_MAX_FOLLOW_UPS, HON_REPLY_MAX_SOURCES, HON_REPLY_MAX_STEPS, HON_REPLY_MODES, HON_REPLY_MAX_SUGGESTIONS, HON_REPLY_SOURCE_KEYS,
-  isHonAiTone, isHonAnalystAgent, isHqHonAgent, isHonReplyFollowUp, isHonReplySourceKey, type HonAiTone, type HonAnalystAgentKey, type HonDelegateAgentKey, type HonReplyMode, type HonReplySourceKey, type HqHonAgentKey,
+  HON_SUGGESTED_AGENTS, HON_REPLY_LIMITS, HON_REPLY_MAX_FOLLOW_UPS, HON_REPLY_MAX_SOURCES, HON_REPLY_MAX_STEPS, HON_REPLY_MODES, HON_REPLY_MAX_SUGGESTIONS, HON_REPLY_SOURCE_KEYS,
+  isHonAiTone, isHonAnalystAgent, isHqHonAgent, isHonReplyFollowUp, isHonReplySourceKey, type HonAiTone, type HonAnalystAgentKey, type HonSuggestedAgentKey, type HonReplyMode, type HonReplySourceKey, type HqHonAgentKey,
 } from '@hon/contracts';
 
 export const HON_REPLY_PROVIDER_RUNTIME = Symbol('HON_REPLY_PROVIDER_RUNTIME');
@@ -25,7 +25,7 @@ export interface HonReplyInvocation {
  */
 /** followUps / sources (0254): "Ask next" questions and the fact areas the answer names. Presentation data only. */
 export interface HonReplyResult {
-  reply: string; inputTokens: number; outputTokens: number; providerCostMicrounits: number; truncated: boolean; suggestions: HonDelegateAgentKey[];
+  reply: string; inputTokens: number; outputTokens: number; providerCostMicrounits: number; truncated: boolean; suggestions: HonSuggestedAgentKey[];
   followUps: string[]; sources: HonReplySourceKey[];
 }
 
@@ -56,9 +56,10 @@ export const HON_REPLY_SYSTEM_PROMPT = [
   'You cannot take any action. Never claim that anything was sent, scheduled, saved, charged, enrolled or changed.',
   'When work is needed, suggest asking Marcus (marketing drafts), Chad (lead follow-up drafts) or Kai, the teaching and curriculum',
   'assistant (class preparation from published curriculum), in this conversation; their drafts always wait for a human review.',
-  'Claire is the business performance specialist; never call Claire a teaching assistant.',
-  'Only when one or more of Marcus, Chad or Kai could do work for this request, end the answer with one last line exactly',
-  'in the form "SUGGEST: marcus, kai" naming up to three of marcus, chad and kai; otherwise never write a SUGGEST line.',
+  'Claire is the business performance specialist (a read-only analysis of the school\'s performance numbers, such as revenue,',
+  'trial conversion, attendance and unanswered inquiries); never call Claire a teaching assistant.',
+  'Only when one or more of Marcus, Chad, Kai or Claire could help with this request, end the answer with one last line exactly',
+  'in the form "SUGGEST: marcus, claire" naming up to three of marcus, chad, kai and claire; otherwise never write a SUGGEST line.',
   'When the facts include a group, the person asked you to summarize the recorded outcomes of specialist work they confirmed:',
   'first list each recorded outcome under "Recorded facts" exactly as the facts give it, then give your view under "HON\'s view";',
   'never claim a draft, result or status the facts do not show.',
@@ -115,8 +116,22 @@ export const JORDAN_ANALYSIS_SYSTEM_PROMPT = analystPrompt(
 export const LENA_ANALYSIS_SYSTEM_PROMPT = analystPrompt(
   "You are Lena, the creative and commerce specialist inside a martial arts school's management system, helping staff with campaigns, offers and creative work.",
   'Lena', 'creative and commerce facts (campaigns by status, the current membership plan catalog, Creative Studio requests in the last 30 days)');
+/**
+ * 0284: Maya, retention: one student on the at-risk list. The facts carry factor codes and numbers only, never a name or
+ * contact, so the suggested message uses a [First name] placeholder that staff fill in and send themselves.
+ */
+export const MAYA_ANALYSIS_SYSTEM_PROMPT = [
+  analystPrompt(
+    "You are Maya, the retention specialist inside a martial arts school's management system, helping staff keep students who may be about to quit.",
+    'Maya', 'retention facts for one student (the at-risk factors with their numbers, membership state, score, level and suggested next step, or onAtRiskList false)'),
+  'After the two parts, add a third part "Suggested check-in message": a short, warm message (at most 90 words) the staff',
+  'could adapt and send themselves, starting with "Hi [First name]," and matching the suggested next step. Never mention the',
+  'score, level, overdue amounts or that the student was flagged. If onAtRiskList is false, say the student is not on the',
+  'current at-risk list and suggest only a friendly general check-in.',
+].join(' ');
 const ANALYST_PROMPTS: Readonly<Record<HonAnalystAgentKey, string>> = {
   claire: CLAIRE_ANALYSIS_SYSTEM_PROMPT, alex: ALEX_ANALYSIS_SYSTEM_PROMPT, jordan: JORDAN_ANALYSIS_SYSTEM_PROMPT, lena: LENA_ANALYSIS_SYSTEM_PROMPT,
+  maya: MAYA_ANALYSIS_SYSTEM_PROMPT,
 };
 
 /**
@@ -174,18 +189,18 @@ export function honReplySystemPrompt(mode: HonReplyMode, step: number, specialis
 const SUGGEST_LINE = /^SUGGEST:(.*)$/i;
 /**
  * Splits an optional final "SUGGEST: a, b" line from the model's answer. The line is always removed from the shown text;
- * only names from the closed delegate set are kept (deduplicated, at most HON_REPLY_MAX_SUGGESTIONS, in order). Anything
+ * only names from the closed suggestion set (the delegates and Claire) are kept (deduplicated, at most HON_REPLY_MAX_SUGGESTIONS, in order). Anything
  * else on the line is dropped. A SUGGEST line anywhere but last is ordinary text and suggests nothing.
  */
-export function splitHonReplySuggestions(text: string): { reply: string; suggestions: HonDelegateAgentKey[] } {
+export function splitHonReplySuggestions(text: string): { reply: string; suggestions: HonSuggestedAgentKey[] } {
   const lines = text.trimEnd().split('\n');
   const last = lines[lines.length - 1]?.trim() ?? '';
   const match = SUGGEST_LINE.exec(last);
   if (!match) return { reply: text.trim(), suggestions: [] };
-  const suggestions: HonDelegateAgentKey[] = [];
+  const suggestions: HonSuggestedAgentKey[] = [];
   for (const raw of match[1]!.split(',')) {
     const key = raw.trim().toLowerCase();
-    if ((HON_DELEGATE_AGENTS as readonly string[]).includes(key) && !suggestions.includes(key as HonDelegateAgentKey) && suggestions.length < HON_REPLY_MAX_SUGGESTIONS) suggestions.push(key as HonDelegateAgentKey);
+    if ((HON_SUGGESTED_AGENTS as readonly string[]).includes(key) && !suggestions.includes(key as HonSuggestedAgentKey) && suggestions.length < HON_REPLY_MAX_SUGGESTIONS) suggestions.push(key as HonSuggestedAgentKey);
   }
   return { reply: lines.slice(0, -1).join('\n').trim(), suggestions };
 }
@@ -196,7 +211,7 @@ const TRAILER_LINE = /^(SUGGEST|ASK|SOURCES):(.*)$/i;
  * seen yet (SUGGEST for HON only; ASK and SOURCES for HON and Claire). The first other line, or a repeated kind, ends the
  * trailer: everything above it is ordinary answer text. Items are filtered to the closed rules; bad ones are dropped.
  */
-export function splitHonReplyTrailers(text: string, specialist: HonReplySpecialist): { reply: string; suggestions: HonDelegateAgentKey[]; followUps: string[]; sources: HonReplySourceKey[] } {
+export function splitHonReplyTrailers(text: string, specialist: HonReplySpecialist): { reply: string; suggestions: HonSuggestedAgentKey[]; followUps: string[]; sources: HonReplySourceKey[] } {
   const lines = text.trimEnd().split('\n');
   const found = new Map<string, string>();
   while (lines.length > 0) {
@@ -276,7 +291,8 @@ export class OpenRouterHonReplyRuntime implements HonReplyProviderRuntime {
       // A cut-off answer never carries suggestions (its last line may be incomplete); an answer that was only a SUGGEST line is unverified.
       // Claire never suggests: her text is kept whole (a SUGGEST-shaped line is ordinary text and suggests nothing).
       // 0254: a cut-off answer is kept whole (no follow-ups or sources either); Claire may give ASK and SOURCES lines only.
-      const split = finish === 'length' ? { reply, suggestions: [] as HonDelegateAgentKey[], followUps: [] as string[], sources: [] as HonReplySourceKey[] }
+      // HQ HON (0263) passes 'hq_hon', which never suggests a school agent.
+      const split = finish === 'length' ? { reply, suggestions: [] as HonSuggestedAgentKey[], followUps: [] as string[], sources: [] as HonReplySourceKey[] }
         : splitHonReplyTrailers(reply, input.specialist);
       if (split.reply.length < 1) throw new Error('UNVERIFIED');
       return { reply: split.reply, inputTokens: prompt, outputTokens: completion, providerCostMicrounits: Math.ceil(Number((cost * 1_000_000).toFixed(6))), truncated: finish === 'length',

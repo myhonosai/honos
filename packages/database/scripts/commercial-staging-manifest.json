@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "c22fead88f42efffa9606f6d1cf4e3759fc7029863bdfe02057f82a5e12af495",
+  "chainSha256": "3e5b793fd04d9d5205e01e2d38ebfde4ead40c5455b5e8dfecc189d3bcb71edd",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -235,6 +235,10 @@
       "sha256": "e1e8b8c8ef510a39b3aab1dd9168fe3b60006f4ccd66ebe18c7a127f77e90777"
     },
     {
+      "file": "0243_communication_delivery_receipts.sql",
+      "sha256": "0a94b2a8b94a1caf2622215318474e142eeb0faeb3ebbbc5fb2a771974c14a9f"
+    },
+    {
       "file": "0246_hon_os_trial_runtime.sql",
       "sha256": "d3a1bd35203bb465946bf316291b53d245e348777790e7e4491f62753a742f07"
     },
@@ -291,6 +295,10 @@
       "sha256": "5199d3cb6478f1508eac8316f649c021244d77e757a2ae66b06d8215428e713c"
     },
     {
+      "file": "0266_hon_suggests_claire.sql",
+      "sha256": "31213924c77fe44df684d1544d4f99e4fa9fc045aae91a1dc54f52f65e31fd2a"
+    },
+    {
       "file": "0267_hq_usage_claire_attribution.sql",
       "sha256": "00b679d61d39febf7adee22105cbdfe4ecd95423b6b423064f3a6c09f3905861"
     },
@@ -313,6 +321,10 @@
     {
       "file": "0278_ai_team_readiness_reconcile.sql",
       "sha256": "f29d606e7ab0e1273d5ae41f2eeb105f14b3eb0fa930fcd194a5ad2439c5362e"
+    },
+    {
+      "file": "0284_maya_retention_answers.sql",
+      "sha256": "8518211375aa88c5e8ddf4bb2881d63bd437e4c19b84925b6cdd5af6c1eddaba"
     }
   ]
 }
