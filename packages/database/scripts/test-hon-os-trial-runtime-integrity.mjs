@@ -62,7 +62,7 @@ try{
   for(const p of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'])assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[runtime.username,'hon.'+t,p]))[0].ok,false,t+':'+p);
  }
  const fns=await q("SELECT p.oid,p.proname,p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname IN ('hon_os_trial_open','hon_os_trial_live','hon_os_trial_json','hon_os_trial_campaign_offer','start_hon_os_trial','read_hon_os_trial','guard_hon_os_trial_checkout','ai_spend_allowed','ai_trial_funding_available','ai_org_ceiling')");
- assert.equal(fns.length,10);
+ assert.equal(fns.length,11); // 0288 adds the school-explicit ai_spend_allowed(org,school,at,class) overload (also internal, SECURITY DEFINER)
  for(const f of fns){const entry=['start_hon_os_trial','read_hon_os_trial'].includes(f.proname);
   assert.equal(f.prosecdef,entry||f.proname==='ai_spend_allowed',f.proname);assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entry,f.proname);}
  assert.equal((await q('SELECT status FROM hon.hon_os_trial_program'))[0].status,'CLOSED');
