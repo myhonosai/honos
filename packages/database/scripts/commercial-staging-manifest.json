@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "0448cfd18194b2094aaad5a3755ebc72161d52b43f2e1437e0126b759be3cd5c",
+  "chainSha256": "3e5b793fd04d9d5205e01e2d38ebfde4ead40c5455b5e8dfecc189d3bcb71edd",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -285,6 +285,14 @@
     {
       "file": "0261_school_event_booking.sql",
       "sha256": "3a8bfc78de0a42c61a59f3ff182bbbd792b68251223af6a68a89906f1848d675"
+    },
+    {
+      "file": "0263_hq_hon_conversation.sql",
+      "sha256": "1adef62d0a5af2388977da5fc979dac83efc4bd8a7d0a39feefe7cc554721d9c"
+    },
+    {
+      "file": "0264_hq_hon_executives.sql",
+      "sha256": "5199d3cb6478f1508eac8316f649c021244d77e757a2ae66b06d8215428e713c"
     },
     {
       "file": "0266_hon_suggests_claire.sql",
