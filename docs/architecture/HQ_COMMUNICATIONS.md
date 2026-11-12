@@ -169,9 +169,10 @@ A waits for #223 (0243) and SendGrid to be on main, because it reuses the worker
 ## 7. Owner decisions
 
 1. v1 recipients: DECIDED 2026-11-11 22:14Z, owners plus HON prospects (§4.8).
-2. Must-receive notices: may `BILLING` and `ACCOUNT` emails go to an owner who opted out of HQ emails? (Recommended
-   yes, as service messages; texts never ignore opt-out.)
-3. Who pays for HQ texting: HON (recommended; it is HON's own messaging, never billed to the school).
+2. Must-receive notices: DECIDED 2026-11-12 15:16Z, yes. `BILLING` and `ACCOUNT` emails still go to an owner who
+   opted out of HQ email; `SUPPORT` and `ONBOARDING` email honor the opt-out, and texts never ignore it.
+3. Who pays for HQ texting: DECIDED 2026-11-12 15:16Z, HON. HQ texts use HON's own sender, never a school's texting
+   allowance or credits.
 
 ## 8. Plan for PR A (0281)
 

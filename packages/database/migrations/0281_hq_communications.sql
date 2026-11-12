@@ -645,7 +645,10 @@ BEGIN
     ELSIF v_delivery.attempt_count >= 5 THEN v_fail := 'RETRIES_EXHAUSTED';
     ELSIF NOT EXISTS (SELECT 1 FROM hon.hq_message_owner_recipients(v_delivery.school_id) r WHERE r.principal_id = v_delivery.recipient_principal_id) THEN
       v_fail := 'RECIPIENT_REMOVED';
+    -- An email opt-out does not stop BILLING or ACCOUNT notices (owner decision 2026-11-12): they are required notices about the
+    -- school's own HON account. Support and onboarding email, and every text, honor the opt-out.
     ELSIF EXISTS (SELECT 1 FROM hon.hq_contact_preferences c WHERE c.user_id = v_user AND c.channel = v_delivery.channel AND c.status = 'OPTED_OUT')
+        AND NOT (v_delivery.channel = 'EMAIL' AND v_message.purpose IN ('BILLING','ACCOUNT'))
       -- Texts also need the person's own HQ texting opt-in (recorded by 0282 after they confirm their phone).
       OR (v_delivery.channel = 'SMS' AND NOT EXISTS (SELECT 1 FROM hon.hq_contact_preferences c WHERE c.user_id = v_user
         AND c.channel = 'SMS' AND c.status = 'OPTED_IN')) THEN

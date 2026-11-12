@@ -212,16 +212,24 @@ try {
   const reset = await setSender('hqOwner', emailSender);
   ok(reset.sender.senderId !== setEmail.sender.senderId, 'a new sender row after retirement');
   await admin.query("UPDATE hon.hq_message_deliveries SET next_attempt_at=now() WHERE message_id=$1", [billing.message.messageId]);
-  // owner2 opts out of HQ email; owner1 receives.
+  // owner2 opts out of HQ email. A BILLING (or ACCOUNT) notice still reaches them (owner decision 2026-11-12); SUPPORT does not.
   await admin.query("INSERT INTO hon.hq_contact_preferences(user_id,channel,status,source,captured_at) VALUES($1,'EMAIL','OPTED_OUT','RECIPIENT',clock_timestamp())", [humans.owner2.user]);
   claimed = await claim(['EMAIL']);
-  eq(claimed.length, 1, 'one delivery leased');
+  eq(claimed.map((r) => r.recipient_address).sort(), [humans.owner1.email, humans.owner2.email].sort(), 'a BILLING email reaches an owner who opted out of HQ email');
+  const billLease2 = claimed.find((r) => r.recipient_address === humans.owner2.email);
+  claimed = claimed.filter((r) => r.recipient_address === humans.owner1.email);
   eq([claimed[0].recipient_address, claimed[0].sender_ref, claimed[0].sender_name, claimed[0].content],
     [humans.owner1.email, 'hello@hon.example', 'HON OS', 'Your invoice is ready.'], 'claim returns the owner address and the HQ sender, in memory only');
-  const after = await deliveries(billing.message.messageId);
-  eq(after.find((r) => r.recipient_principal_id === P('owner2')).status, 'SUPPRESSED', 'opted-out owner is suppressed');
-  eq(after.find((r) => r.recipient_principal_id === P('owner2')).failure_code, 'CONSENT_MISSING', 'with CONSENT_MISSING');
+  eq(await record(billLease2, 'ACCEPTED', { providerMessageId: 'fake-hq-1b', sentAs: 'EMAIL' }), { status: 'ACCEPTED', accepted: true }, 'opted-out owner billing notice accepted');
   eq((await claim(['EMAIL'])).length, 0, 'a leased delivery is not leased twice');
+  const supportNote = await create('supportOp', msgInput({ content: 'Support update.' }));
+  await queue('supportOp', supportNote.message.messageId, 1);
+  const supportLeases = await claim(['EMAIL']);
+  eq(supportLeases.map((r) => r.recipient_address), [humans.owner1.email], 'a SUPPORT email skips the opted-out owner');
+  const after = await deliveries(supportNote.message.messageId);
+  eq(after.find((r) => r.recipient_principal_id === P('owner2')).status, 'SUPPRESSED', 'opted-out owner is suppressed for SUPPORT');
+  eq(after.find((r) => r.recipient_principal_id === P('owner2')).failure_code, 'CONSENT_MISSING', 'with CONSENT_MISSING');
+  eq(await record(supportLeases[0], 'ACCEPTED', { providerMessageId: 'fake-hq-1c', sentAs: 'EMAIL' }), { status: 'ACCEPTED', accepted: true }, 'support email accepted');
 
   // ---------- 6. results and receipts ----------
   const lease = claimed[0];

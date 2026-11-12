@@ -250,6 +250,6 @@
     "0273_hon_os_signup_abuse_protection.sql": "ef53fe56e765f926a0868bc6f2a86c8e6106ec0667ec971ea1889e3147836887",
     "0274_hon_os_admission_limits_hq.sql": "3f9b0d3a909005f190517ef193167ff0fca3032fa6ea35ed418d58dd6ce92adc",
     "0278_ai_team_readiness_reconcile.sql": "f29d606e7ab0e1273d5ae41f2eeb105f14b3eb0fa930fcd194a5ad2439c5362e",
-    "0281_hq_communications.sql": "b180eb4987f8e3ee07df797aa0a3324b45ea09d8fb8ebead82075ed471e65fac"
+    "0281_hq_communications.sql": "0bab5c668cc9ac4fbfb510deb8a21f173360b09a6ab561b52d3ef94bf7d34ed1"
   }
 }
