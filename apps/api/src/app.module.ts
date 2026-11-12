@@ -129,6 +129,9 @@ import {
   SchoolPayDefaultHumanUiGuard, SchoolPayDisconnectHumanUiGuard, SchoolPayFinishHumanUiGuard, SchoolPayOnboardingLinkHumanUiGuard,
   SchoolPayReadHumanUiGuard, SchoolPayRefreshHumanUiGuard, SchoolPayStartHumanUiGuard,
 } from './school-payments/school-payment-human-ui.guard.js';
+import { SchoolCheckoutController } from './school-checkout/school-checkout.controller.js';
+import { SchoolCheckoutService } from './school-checkout/school-checkout.service.js';
+import { SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard } from './school-checkout/school-checkout-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
 import { BillingAccountService } from './billing/billing-account.service.js';
 import { BillingAccountHumanUiGuard } from './billing/billing-account-human-ui.guard.js';
@@ -411,6 +414,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     StudentImportController,
     TuitionPaymentController,
     SchoolPaymentController,
+    SchoolCheckoutController,
     SchoolMembershipListController,
     CrmSchoolClockController,
     CrmSessionSchoolClockController,
@@ -560,6 +564,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     { provide: SCHOOL_PAYMENT_ADAPTERS, useFactory: () => schoolPaymentAdaptersFromEnvironment() },
     SchoolPayReadHumanUiGuard, SchoolPayStartHumanUiGuard, SchoolPayOnboardingLinkHumanUiGuard, SchoolPayFinishHumanUiGuard,
     SchoolPayRefreshHumanUiGuard, SchoolPayDefaultHumanUiGuard, SchoolPayDisconnectHumanUiGuard,
+    SchoolCheckoutService, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,
     CrmSchoolClockService,
