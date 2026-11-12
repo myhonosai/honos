@@ -72,14 +72,16 @@ export function HqFounderBilling({ api = founderBillingApi }: { api?: FounderBil
   const [read, setRead] = useState<FounderBillingRead>({ state: 'LOADING' });
   const [revision, setRevision] = useState(0);
   const owned = useRef(true);
+  const inFlight = useRef<AbortController | null>(null);
   useEffect(() => {
-    const end = () => setRead({ state: 'SESSION' });
+    // A session that ended elsewhere wins over a load still in flight: that load can never resolve to READY.
+    const end = () => { owned.current = false; inFlight.current?.abort(); setRead({ state: 'SESSION' }); };
     window.addEventListener(HON_SESSION_INVALIDATED_EVENT, end);
     return () => window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, end);
   }, []);
   useEffect(() => {
-    const controller = new AbortController(); owned.current = true; setRead({ state: 'LOADING' });
-    api.load(controller.signal, () => owned.current).then((view) => setRead({ state: 'READY', view }),
+    const controller = new AbortController(); inFlight.current = controller; owned.current = true; setRead({ state: 'LOADING' });
+    api.load(controller.signal, () => owned.current).then((view) => { if (!controller.signal.aborted) setRead({ state: 'READY', view }); },
       (error: unknown) => { if (!controller.signal.aborted) setRead({ state: error instanceof FounderBillingError ? error.kind : 'UNAVAILABLE' }); });
     return () => { owned.current = false; controller.abort(); };
   }, [api, revision]);
