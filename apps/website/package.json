@@ -1,0 +1,11 @@
+{
+  "name": "@hon/website",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test \"test/*.test.mjs\"",
+    "preview": "node scripts/build.mjs && python3 -m http.server 4173 --directory dist"
+  }
+}
