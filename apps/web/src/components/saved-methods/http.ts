@@ -9,7 +9,7 @@ import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 import { safeOnboardingUrl } from '../payment-processors/http';
 
 /**
- * A payer's saved cards and bank accounts (B-TUI-2 piece 3, 0265), test mode only. Reads send no Idempotency-Key; each
+ * A payer's saved cards and bank accounts (B-TUI-2 piece 3, 0290), test mode only. Reads send no Idempotency-Key; each
  * command sends its own X-HON-Human-Command and an Idempotency-Key. The server decides every permission, version and
  * state again, and gets the saved card from the provider itself. No card number ever passes through HON; HON takes no fee.
  */
