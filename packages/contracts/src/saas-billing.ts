@@ -110,6 +110,8 @@ export const SAAS_COMMANDS = {
   openCreativeWindow: 'saas-creative-window-open',
   createCreativeTopupPurchase: 'saas-creative-topup-purchase',
   createCreativeGeneration: 'saas-creative-generation-create',
+  // A1 (0276): Creative Studio avatars.
+  createCreativeAvatar: 'saas-creative-avatar-create',
   // B-HQ-2 (0232): HQ support records; same values as HQ_SUPPORT_COMMANDS.
   openSupportCase: 'hq-support-case-open',
   addSupportNote: 'hq-support-case-note',
@@ -121,6 +123,10 @@ export const SAAS_COMMANDS = {
   createHqCreativeGeneration: 'hq-creative-generation-create',
   setHqCreativeBudget: 'hq-creative-budget-set',
   resolveHqCreativeGeneration: 'hq-creative-generation-resolve',
+  // B1 (0263): HQ Ask HON and the HQ AI text budget.
+  askHqHon: 'hq-hon-ask',
+  setHqHonBudget: 'hq-hon-budget-set',
+  resolveHqHonTurn: 'hq-hon-turn-resolve',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 
