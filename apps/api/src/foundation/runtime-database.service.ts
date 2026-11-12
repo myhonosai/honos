@@ -165,6 +165,10 @@ const SAAS_BILLING_CALLS = {
   recordCreativeGenerationResult: { sql: 'SELECT hon.record_creative_generation_result($1,$2::uuid,$3::jsonb) AS data', arity: 3, readOnly: false },
   readCreativeGenerations: { sql: 'SELECT hon.read_creative_generations($1,$2::uuid) AS data', arity: 2, readOnly: true },
   readCreativeGeneration: { sql: 'SELECT hon.read_creative_generation($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
+  // A1 (0276): Creative Studio avatars, each made by one CS1 generation (recorded with recordCreativeGenerationResult).
+  createCreativeAvatar: { sql: 'SELECT hon.create_creative_avatar($1,$2::uuid,$3::jsonb,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
+  readCreativeAvatars: { sql: 'SELECT hon.read_creative_avatars($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readCreativeAvatar: { sql: 'SELECT hon.read_creative_avatar($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
   // B4: refund guarantee records and Champions reward application (no refund execution, payout or prize).
   readRefundEligibility: { sql: 'SELECT hon.read_saas_refund_eligibility_from_hq($1,$2::uuid,$3::timestamptz) AS data', arity: 3, readOnly: true },
   readRefundRequests: { sql: 'SELECT hon.read_saas_refund_requests_from_hq($1,$2) AS data', arity: 2, readOnly: true },
