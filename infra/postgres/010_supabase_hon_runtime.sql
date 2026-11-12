@@ -2901,3 +2901,27 @@ DO $$ DECLARE t text; r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.set_hon_os_admission_limits(text,jsonb,uuid,uuid,uuid),hon.record_hon_os_admission_refusal(text),hon.read_hon_os_admission_status(text) TO hon_runtime;
   END IF;
 END $$;
+
+-- B-SCH-3 0261 sale-day and event slot booking: four private forced-RLS tables, private helpers and eight runtime entry points
+-- (five staff, three public). The runtime has no table privilege.
+DO $$ DECLARE r text; t text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['school_events','school_event_slots','school_event_bookings','school_event_rates'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.school_event_text_ok(text,integer,integer)','hon.guard_school_event()','hon.guard_school_event_booking()',
+    'hon.school_event_slot_taken(uuid)','hon.school_event_json(hon.school_events)','hon.school_event_booking_json(hon.school_event_bookings)',
+    'hon.school_event_input(jsonb)','hon.school_event_command_finish(text,text,uuid,jsonb,text,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)',
+    'hon.save_school_event(text,uuid,jsonb,text,uuid,uuid)','hon.set_school_event_status(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.set_school_event_booking_status(text,uuid,jsonb,text,uuid,uuid)','hon.read_school_events(text)','hon.read_school_event(text,uuid)',
+    'hon.take_school_event_rate(uuid,text,integer)','hon.public_school_event(text)','hon.read_public_school_event(text)',
+    'hon.school_event_booking_input(jsonb)','hon.book_public_school_event(text,jsonb,text)','hon.cancel_public_school_event_booking(text,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.save_school_event(text,uuid,jsonb,text,uuid,uuid),hon.set_school_event_status(text,uuid,jsonb,text,uuid,uuid),
+      hon.set_school_event_booking_status(text,uuid,jsonb,text,uuid,uuid),hon.read_school_events(text),hon.read_school_event(text,uuid),
+      hon.read_public_school_event(text),hon.book_public_school_event(text,jsonb,text),hon.cancel_public_school_event_booking(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;

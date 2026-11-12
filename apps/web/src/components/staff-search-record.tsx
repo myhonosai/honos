@@ -25,7 +25,7 @@ export function StaffSearchRecord({ organizationId, schoolId, kind, entityId }: 
     void read(); return () => abort.abort();
   }, [organizationId, schoolId, kind, entityId]);
   return <main className={styles.page}>
-    <nav aria-label="Staff navigation"><a href="/staff/search">Back to staff search</a><a href="/core">HON Core</a><a href="/auth/login">Sign in</a></nav>
+    <nav aria-label="Staff navigation"><a href="/staff/search">Back to staff search</a><a href="/staff/dashboard">School dashboard</a><a href="/auth/login">Sign in</a></nav>
     <header><p className={styles.eyebrow}>STAFF / SCOPED RECORD</p><h1>One record.<br />One school.</h1><p>Access is checked again when this page opens. This is a redacted search record, not an expanded profile or action surface.</p></header>
     <section aria-live="polite" aria-busy={!result && !error}>
       {error ? <p role="alert" className={styles.error}>{error}</p> : result ? <article className={styles.card}><p className={styles.eyebrow}>{KIND_LABEL[result.kind]}</p><h2>{result.title}</h2><p>{result.subtitle}</p></article> : <p>Verifying staff access and reading this record…</p>}

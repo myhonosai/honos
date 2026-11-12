@@ -100,7 +100,7 @@ export function LeadSourcesIntakeMonitor(): React.ReactElement {
 
   return <main className={classes} data-monitor-state={state} data-presentation={presentation}>
     <nav className={styles.nav} aria-label={copy.staffNavigation}>
-      <a href="/core">{copy.navCore}</a><a href="/staff/marketing/forms">{copy.navForms}</a><a href="/staff/crm/leads">{copy.navLeads}</a><a href="/staff/marketing/campaigns">{copy.navCampaigns}</a><a href="/staff/migration/leads">{copy.navImports}</a><a href="/staff/leads/assistant">{copy.navChad}</a><a href="/auth/login">{copy.signIn}</a>
+      <a href="/staff/dashboard">{copy.navCore}</a><a href="/staff/marketing/forms">{copy.navForms}</a><a href="/staff/crm/leads">{copy.navLeads}</a><a href="/staff/marketing/campaigns">{copy.navCampaigns}</a><a href="/staff/migration/leads">{copy.navImports}</a><a href="/staff/leads/assistant">{copy.navChad}</a><a href="/auth/login">{copy.signIn}</a>
     </nav>
 
     <header className={styles.hero}>
