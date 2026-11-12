@@ -26,10 +26,11 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'crm', titleKey: 'navCrm', routes: [r('/staff/crm', 'routeLeadsHome'), r('/staff/crm/leads', 'routeLeads', true), r('/staff/crm/journey', 'routeJourney', true), r('/staff/crm/follow-ups', 'routeFollowUps'),
     r('/staff/crm/trials', 'routeTrials', true), r('/staff/crm/lead-memberships', 'routeLeadMemberships'), r('/staff/migration/leads', 'routeLeadImport')] },
   { key: 'students', titleKey: 'navStudents', routes: [r('/staff/search', 'routeStudentSearch'), r('/staff/people', 'routePeople'), r('/staff/family-access', 'routeFamilyAccess', true),
-    r('/staff/students/achievements', 'routeAchievements'), r('/staff/retention/review', 'routeRetention')] },
+    r('/staff/students/achievements', 'routeAchievements'), r('/staff/retention/review', 'routeRetention'), r('/staff/migration/students', 'routeStudentImport')] },
   { key: 'billing', titleKey: 'navBilling', routes: [r('/staff/memberships', 'routeMembershipList'), r('/staff/billing/memberships', 'routeMemberships'), r('/staff/billing/membership-plans', 'routePlans'),
-    r('/staff/billing/membership-dates', 'routeDates'), r('/staff/billing/membership-changes', 'routeChanges'), r('/staff/billing/renewals', 'routeRenewals'), r('/staff/billing/invoices', 'routeInvoices')] },
-  { key: 'classes', titleKey: 'navClasses', routes: [r('/staff/schedule', 'routeRosters'), r('/staff/schedule/sessions', 'routeSessions'), r('/staff/schedule/bookings', 'routeBookings'),
+    r('/staff/billing/membership-dates', 'routeDates'), r('/staff/billing/membership-changes', 'routeChanges'), r('/staff/billing/renewals', 'routeRenewals'), r('/staff/billing/invoices', 'routeInvoices'), r('/staff/billing/receivables', 'routeReceivables'),
+    r('/staff/billing/payment-processors', 'routePaymentProcessors')] },
+  { key: 'classes', titleKey: 'navClasses', routes: [r('/staff/schedule', 'routeRosters'), r('/staff/schedule/sessions', 'routeSessions'), r('/staff/schedule/timetable', 'routeTimetable'), r('/staff/schedule/bookings', 'routeBookings'),
     r('/staff/classpass', 'routeClassPass', true), r('/staff/kiosk', 'routeKiosk')] },
   { key: 'attendance', titleKey: 'navAttendance', routes: [r('/staff/attendance', 'routeAttendance', true), r('/staff/attendance/planned-absences', 'routePlannedAbsences'),
     r('/staff/curriculum/library', 'routeCurriculumLibrary'), r('/staff/curriculum/progress', 'routeProgress'), r('/staff/testing/registrations', 'routeTesting'),
@@ -44,7 +45,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/roles', 'routeRoles'), r('/staff/team/availability', 'routeAvailability'), r('/staff/instructor-qualifications', 'routeQualifications'),
     r('/staff/documents', 'routeDocuments'), r('/staff/voice', 'routeVoice')] },
   { key: 'settings', titleKey: 'navSettings', routes: [r('/staff/account-status', 'routeAccount'), r('/staff/owners', 'routeOwners'), r('/staff/subscription', 'routeSubscription'),
-    r('/staff/launch', 'routeLaunch'), r('/settings/language-region', 'routeLanguage')] },
+    r('/staff/launch', 'routeLaunch'), r('/staff/founder-setup', 'routeFounderSetup'), r('/settings/language-region', 'routeLanguage')] },
 ];
 
 /** Reached from a workflow, never from primary navigation. */

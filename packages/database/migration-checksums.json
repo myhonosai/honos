@@ -218,9 +218,27 @@
     "0223_school_ownership_handoff.sql": "ade3ff7f22464c12caeb52983af398b7c17b6c2f950a9ed5a30f0164ff6f9e31",
     "0224_membership_pause_cancel_refund.sql": "f3bcbeae379890b4fb8e0418b9bffcb2933edc3db7453ed5bc48f972c4e66ae2",
     "0225_hq_school_detail.sql": "f0c4ae400b1785b0df8793bdefe477d3624a27bb86dcfbf95db3a12e3d9bcb79",
+    "0226_school_student_csv_import.sql": "536b8ccf5b42a982142871b00a92b39a5038560f8f7075e6f65b99d5760f0952",
+    "0227_campaign_reads_school_id.sql": "32a2a1d3f5a59b53dd472222a1eddeb39a4e38b9c1001c81fd724ff7993bd4a1",
     "0228_hon_group_summary.sql": "dac3557a4cab512c9c4ca6b59646f401689b7e58e88ad02804f08d33f43f12db",
     "0229_claire_business_performance.sql": "f318322679ffb9e5594ddd7d088d38cb3b4c9e42fc6d36592ea18793bce58dac",
     "0230_hon_os_schedule_billing.sql": "78b1acc5af70cc71f8156b93398127e4fedfd5ea7f31cee9655383fe31383e41",
-    "0235_hon_os_schedule_paid_access.sql": "b91466751b4e17fa4870372517e5dda0f671dde2b3bf644c8cedd5e1d7964916"
+    "0235_hon_os_schedule_paid_access.sql": "b91466751b4e17fa4870372517e5dda0f671dde2b3bf644c8cedd5e1d7964916",
+    "0231_membership_pause_rolling_year.sql": "97bcb50f32def69d43da7ca9fa497c8d5b291393a33060d788cd7209c77867bc",
+    "0232_hq_support_cases.sql": "8f3decac8ed134e1deae12e239b8c1b9398506ae7d0b654fda6f42139165aedf",
+    "0236_crm_school_clock.sql": "a2afddbb3fe92a127e246af79bb168c1083678c4a689ea7e2f0a4f06a2b3d213",
+    "0239_recurring_class_series.sql": "13ff43e331e0019b8cd0fc2cbf485fce84a79c2cba89fa177f46b858c50a9b95",
+    "0240_tuition_payment_records.sql": "750e56c78e8f74b91b5f7225e9a05ff4f1ab80a62dac823a7abb5fa6f1ddf233",
+    "0251_class_series_ongoing.sql": "90532172b977efee9e3947d261f0ac20387a987cec14e7afeb4cf3d725e324e8",
+    "0252_hq_marketing_campaigns.sql": "91e2b7833e4e0c040468fd2c94e375b559631d82951beb95772f95e3817d86a7",
+    "0253_hq_creative_studio.sql": "9836f75224774349ac271864a3a9f83ebbb099cb90ab13d7a746c1684ff34d90",
+    "0254_hon_reply_follow_ups_and_sources.sql": "8ec55653207d7dd060468f1fa11173a3ea382a3d284d6f7ffc8d28487bbf3f42",
+    "0255_hon_school_notes.sql": "311b606d7c0fb06e43daee215f181418e7e47a47cf9069cab3da327ffa1cb23c",
+    "0256_hon_school_tone.sql": "d9066ce79b17801845b4561cb3cbf1dc201db602edeab050e4cb6886b832818f",
+    "0257_school_weekly_briefing.sql": "1e2ab22ae912fdc417dafb8cf6ddd10569d09aa89b93c5cc12c4fa2957e501e9",
+    "0258_school_payment_connections.sql": "bcbfedb05f739ba99872aa5467236cb050c2c078f53daa804681821c75f76a17",
+    "0267_hq_usage_claire_attribution.sql": "00b679d61d39febf7adee22105cbdfe4ecd95423b6b423064f3a6c09f3905861",
+    "0241_hon_os_public_signup.sql": "e1e8b8c8ef510a39b3aab1dd9168fe3b60006f4ccd66ebe18c7a127f77e90777",
+    "0246_hon_os_trial_runtime.sql": "d3a1bd35203bb465946bf316291b53d245e348777790e7e4491f62753a742f07"
   }
 }

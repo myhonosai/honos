@@ -7,6 +7,7 @@
     "ai_usage_ledger",
     "chad_follow_up_invocations",
     "hon_reply_invocations",
+    "hq_creative_generations",
     "marketing_ai_invocations",
     "saas_creative_reservations",
     "saas_credit_reservations",
@@ -76,11 +77,13 @@
     "hon.ai_org_ceiling(uuid,timestamp with time zone)"
   ],
   "spendReferences": [
+    "hon.ai_org_ceiling(uuid,timestamp with time zone)",
     "hon.ai_org_committed_credits(uuid,timestamp with time zone)",
     "hon.ai_spend_reserve_guard()",
     "hon.ai_stamp_hold_origin()",
     "hon.ai_unknown_receipt(hon.ai_unknown_resolutions,boolean)",
     "hon.command_saas_credit_allowance(text,jsonb,uuid,uuid,uuid)",
+    "hon.create_hq_creative_generation(text,jsonb,jsonb,uuid)",
     "hon.creative_generation_json(hon.creative_generations)",
     "hon.estimate_saas_premium_operation(text,uuid,text,integer)",
     "hon.fail_chad_follow_up_invocation(text,uuid,text,text)",
@@ -91,6 +94,9 @@
     "hon.guard_marketing_invocation()",
     "hon.guard_saas_credits()",
     "hon.guard_teaching_assistant()",
+    "hon.hon_os_trial_json(hon.hon_os_trial_enrollments)",
+    "hon.hq_creative_budget_json(date)",
+    "hon.hq_creative_generation_json(hon.hq_creative_generations)",
     "hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)",
     "hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)",
     "hon.prepare_hon_reply(text,uuid,uuid,boolean)",
@@ -125,6 +131,7 @@
     "hon.saas_current_allowance(uuid,uuid,timestamp with time zone)",
     "hon.saas_record_provider_usage(hon.saas_credit_reservations,uuid,bigint,bigint,bigint)",
     "hon.saas_record_thresholds(uuid,timestamp with time zone)",
+    "hon.set_hq_creative_budget(text,jsonb,uuid)",
     "hon.set_saas_credit_program(text,jsonb,uuid,uuid,uuid)",
     "hon.settle_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)"
   ],
@@ -132,8 +139,10 @@
     "hon.decide_saas_trial_policy(text,jsonb,uuid,uuid,uuid)",
     "hon.draft_saas_trial_campaign(text,jsonb,uuid,uuid,uuid)",
     "hon.guard_saas_trial_insert()",
+    "hon.hon_os_trial_campaign_offer(uuid,timestamp with time zone)",
     "hon.propose_saas_trial_policy(text,jsonb,uuid,uuid,uuid)",
     "hon.publish_saas_trial_campaign(text,uuid,jsonb,uuid,uuid,uuid)",
+    "hon.read_hon_os_trial(text)",
     "hon.read_saas_trial_campaign(text,uuid)",
     "hon.read_saas_trial_governance(text)",
     "hon.saas_trial_preview(uuid)",
@@ -302,6 +311,13 @@
       "delete": false,
       "truncate": false
     },
+    "hq_creative_generations": {
+      "select": false,
+      "insert": false,
+      "update": false,
+      "delete": false,
+      "truncate": false
+    },
     "marketing_ai_invocations": {
       "select": false,
       "insert": false,
@@ -347,6 +363,10 @@
       "ai_spend_reserve_guard_insert",
       "ai_spend_start_guard",
       "zz_ai_hold_origin"
+    ],
+    "hq_creative_generations": [
+      "guarded",
+      "no_truncate"
     ],
     "marketing_ai_invocations": [
       "ai_spend_reserve_guard",

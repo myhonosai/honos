@@ -8,6 +8,7 @@ import type { HqPlatformOverview } from '@hon/contracts';
 import { HqOverviewAccessError, loadHqOverview } from '../hq-overview-http';
 import { HQ_ART, HQ_NAV, HQ_NAV_GROUPS, HQ_VIEWS, hqGroupContains, hqPageLabel, type HqArt, type HqView } from './catalog';
 import { HqIcon } from './icon';
+import { SignOutButton } from '../auth/sign-out-button';
 import { HonAssistant } from './assistant';
 import styles from './hq-modern.module.css';
 
@@ -98,7 +99,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
         </details>;
       })}
     </nav>
-    <footer className={styles.railFooter}><span className={styles.ownerAvatar} aria-hidden="true">{t("HQ")}</span><span>{t("HQ workspace")}</span><Link href="/auth/login">{t("Account")}</Link></footer>
+    <footer className={styles.railFooter}><span className={styles.ownerAvatar} aria-hidden="true">{t("HQ")}</span><span>{t("HQ workspace")}</span><SignOutButton label={t("Sign out")} className={styles.signOut}/></footer>
   </>;
 
   return <div className={styles.shell} data-view={view} data-art={art} data-motion={!reducedMotion && ambientMotion ? 'on' : 'off'}>

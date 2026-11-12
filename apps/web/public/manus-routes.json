@@ -14,7 +14,7 @@
     },
     {
       "path": "/",
-      "title": "HON Complete | AI Command Center"
+      "title": "HON OS | Sign in"
     },
     {
       "path": "/hq",
@@ -47,6 +47,10 @@
     {
       "path": "/hq/ai-providers",
       "title": "HON HQ | AI Provider Control"
+    },
+    {
+      "path": "/hq/creative-credits",
+      "title": "HON HQ | Creative Credits"
     },
     {
       "path": "/hq/integrations/zernio",
@@ -105,6 +109,10 @@
       "title": "HON | Lead Migration Center"
     },
     {
+      "path": "/staff/migration/students",
+      "title": "HON | Import students"
+    },
+    {
       "path": "/staff/planning/revenue",
       "title": "HON | Human Revenue Planning"
     },
@@ -155,6 +163,10 @@
     {
       "path": "/staff/schedule/sessions",
       "title": "HON | Bounded Class Sessions"
+    },
+    {
+      "path": "/staff/schedule/timetable",
+      "title": "HON | Weekly timetable"
     },
     {
       "path": "/staff/schedule/sessions/create",
@@ -215,6 +227,14 @@
     {
       "path": "/staff/billing/membership-changes",
       "title": "HON | Pause, cancel & refunds"
+    },
+    {
+      "path": "/staff/billing/receivables",
+      "title": "HON | Tuition balances"
+    },
+    {
+      "path": "/staff/billing/payment-processors",
+      "title": "HON | Payment processors"
     },
     {
       "path": "/staff/champions-club",
@@ -389,6 +409,10 @@
       "title": "HON HQ | Contests"
     },
     {
+      "path": "/hq/growth/contests/:contestId",
+      "title": "HON HQ | Contest"
+    },
+    {
       "path": "/hq/growth/founder-campaigns",
       "title": "HON HQ | Founder Campaigns"
     },
@@ -413,6 +437,18 @@
       "title": "HON HQ | Support"
     },
     {
+      "path": "/hq/marketing",
+      "title": "HON HQ | Marketing & Creative"
+    },
+    {
+      "path": "/hq/marketing/creative",
+      "title": "HON HQ | Creative Studio"
+    },
+    {
+      "path": "/hq/support/:caseId",
+      "title": "HON HQ | Support case"
+    },
+    {
       "path": "/hq/growth/champions-club/schools",
       "title": "HON HQ | School referrals"
     },
@@ -423,6 +459,10 @@
     {
       "path": "/hq/revenue/invoices/:invoiceId",
       "title": "HON HQ | Invoice detail"
+    },
+    {
+      "path": "/hq/revenue/trials",
+      "title": "HON HQ | Free Trials"
     },
     {
       "path": "/staff/subscription",
@@ -447,6 +487,10 @@
     {
       "path": "/reference/classic-dashboard",
       "title": "HON Classic | School Dashboard (reference)"
+    },
+    {
+      "path": "/reference/complete",
+      "title": "HON Complete | Design reference"
     },
     {
       "path": "/account/owner-invitation",
@@ -479,6 +523,14 @@
     {
       "path": "/account/family-invitation",
       "title": "HON OS | Family invitation"
+    },
+    {
+      "path": "/staff/founder-setup",
+      "title": "HON OS | Founder Setup"
+    },
+    {
+      "path": "/hq/founder-setup",
+      "title": "HON HQ | Founder Setup"
     }
   ]
 }
