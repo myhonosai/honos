@@ -66,10 +66,14 @@ export async function shippedPosture(client, migrationEvidence) {
     assert.equal(trialRecords[table],0,'Shipped posture must contain no synthetic trial proposal, approval or publication.');
   }
   const pricingRecords={};
-  for(const table of ['saas_subscription_generations','saas_price_schedules','saas_price_acceptances']){
+  for(const table of ['saas_subscription_generations','saas_schedule_bindings','saas_schedule_provider_events','saas_schedule_paid_periods','saas_schedule_reconciliations','saas_price_schedules','saas_price_acceptances']){
     pricingRecords[table]=(await client.query('SELECT count(*)::int n FROM hon.'+table)).rows[0].n;
-    assert.equal(pricingRecords[table],0,'Shipped posture must contain no synthetic price schedules or acceptance.');
+    assert.equal(pricingRecords[table],0,'Shipped posture must contain no synthetic Commercial A2/B1/B2 record.');
   }
+  // 0230 ships exactly one owner policy row (OD-4: 7-day unpaid window), with no in-product approver.
+  pricingRecords.saas_billing_lifecycle_policy=(await client.query("SELECT count(*)::int n FROM hon.saas_billing_lifecycle_policy WHERE policy_id=1 AND version=1 AND unpaid_window_minutes=10080 AND approved_by_principal_id IS NULL")).rows[0].n;
+  assert.equal(pricingRecords.saas_billing_lifecycle_policy,1,'Shipped posture must contain only the OD-4 lifecycle policy row.');
+  assert.equal((await client.query('SELECT count(*)::int n FROM hon.saas_billing_lifecycle_policy')).rows[0].n,1,'Shipped posture must contain only the OD-4 lifecycle policy row.');
   return { programs, records, terms, constraints, counts, decisions, trialProgram, trialRecords, pricingRecords,
     policyGap: 'PAID_ACCESS_PROPOSED; TERMS_V1_IMMUTABLE_PROPOSED_ONLY; EXCEPTION_APPROVAL_GATE_ENFORCED; NO_EXCEPTION_POLICY_APPROVED' };
 }

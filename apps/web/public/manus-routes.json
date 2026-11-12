@@ -237,6 +237,10 @@
       "title": "HON | Payment processors"
     },
     {
+      "path": "/staff/billing/checkout-pages",
+      "title": "HON | Checkout pages"
+    },
+    {
       "path": "/staff/champions-club",
       "title": "HON | Champions Club"
     },
@@ -465,6 +469,10 @@
       "title": "HON HQ | Free Trials"
     },
     {
+      "path": "/hq/revenue/sign-up-limits",
+      "title": "HON HQ | Sign-up Limits"
+    },
+    {
       "path": "/staff/subscription",
       "title": "HON OS | School subscription"
     },
@@ -495,6 +503,10 @@
     {
       "path": "/account/owner-invitation",
       "title": "HON OS | Owner invitation"
+    },
+    {
+      "path": "/account/start",
+      "title": "HON OS | Start your school"
     },
     {
       "path": "/account/staff-invitation",

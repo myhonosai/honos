@@ -8,7 +8,9 @@ Chad is a **Complete-tier, direct-human staff** assistant that may prepare one s
 - the observed `expectedLeadVersion`; and
 - a closed purpose: `INTRODUCTION`, `CHECK_IN`, `TRIAL_REMINDER`, or `REENGAGEMENT`.
 
-There is intentionally no lead directory, contact lookup, actor/school/provider/model/tier selector, free-form prompt, arbitrary HTTP/SQL/tool surface, or credential input. The prepared provider request contains only server-derived non-identifying current lead metadata and a purpose code; it never passes contact addresses or names.
+There is intentionally no contact lookup, actor/school/provider/model/tier selector, free-form prompt, arbitrary HTTP/SQL/tool surface, or credential input. The prepared provider request contains only server-derived non-identifying current lead metadata and a purpose code; it never passes contact addresses or names.
+
+**Lead picker (owner decision, 2026-11-12).** With a verified shell school, the page lists that school's `OPEN` leads by name through the existing CRM lead list read (`crm.lead.read`, the same read and projection the Leads page uses), so staff choose a lead instead of typing its UUID and version. Choosing only fills `leadId` and `expectedLeadVersion`; names stay in the browser and are never part of the Chad request, and every server re-check above is unchanged. A pick made at another school is dropped when the shell school changes. Without a verified shell school, the page keeps the original ID and version inputs and lists nothing.
 
 ## Authority and lifecycle
 
@@ -24,6 +26,6 @@ Neither request, planning, result recording, review, approval, nor denial can se
 
 ## Validation
 
-Focused API coverage injects a rejecting transport and proves the absent paid-call gate makes **zero external calls**, while rejecting provider/tool/recipient/consent/schedule selectors and unsafe content. The no-index `/staff/leads/assistant` UI uses fixed same-origin requests, displays configuration/blocked/unknown/review/no-delivery states, and does not enumerate leads.
+Focused API coverage injects a rejecting transport and proves the absent paid-call gate makes **zero external calls**, while rejecting provider/tool/recipient/consent/schedule selectors and unsafe content. The no-index `/staff/leads/assistant` UI uses fixed same-origin requests, displays configuration/blocked/unknown/review/no-delivery states, and enumerates leads only through the existing CRM lead list read for the verified shell school.
 
 **Limits:** the local fixture suite has not been executed in this change; no remote/Supabase migration, provider call, paid-call approval, or external delivery was performed. Semantic PII classification is not provided—staff are instructed not to enter personal/private data—and an actual outbound communications/consent/receipt workflow remains separate future work.
