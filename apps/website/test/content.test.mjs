@@ -117,3 +117,20 @@ test('has the basics a public page needs', () => {
     assert.ok(existsSync(join(src, file)), `${file} exists`);
   }
 });
+
+test('presents online family tuition payments as coming soon, not available', () => {
+  const pay = html.match(/<section id="payments"[\s\S]*?<\/section>/)?.[0];
+  assert.ok(pay, 'payments section exists');
+  assert.doesNotMatch(pay, /Families pay you directly/);
+  assert.match(pay, /<li class="later">Online tuition payments from families[^<]*<em>soon/);
+  assert.match(pay.match(/<div class="card paycard"[\s\S]*?<\/div>\s*<\/div>\s*<\/section>/)?.[0] ?? '', /coming soon/i, 'diagram card is labelled coming soon');
+  assert.match(pay, /Record cash, check and card-terminal payments/);
+  const faq = html.match(/<summary>Does HON take a cut of my tuition\?<\/summary><p>([^<]*)<\/p>/)?.[1] ?? '';
+  assert.match(faq, /coming soon/i);
+  assert.doesNotMatch(faq, /goes straight/i);
+});
+
+test('the yearly saving label is true for both plans', () => {
+  assert.doesNotMatch(html, /about 30% less/);
+  assert.match(html, /save 30% or more/);
+});

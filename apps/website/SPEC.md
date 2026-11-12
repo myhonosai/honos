@@ -26,6 +26,12 @@ Source of truth for every claim: `/mnt/project-files/website/HON_OS_WEBSITE_SUMM
 - Hosting: a Render static site, only with David's OK. `render.yaml` is not changed in W1.
 - Analytics, cookie banner, social links (no accounts named yet).
 
+## Before going live
+
+- David confirms the source and licence of the five photos (one shows a child) and they are recorded here.
+- Self-host the fonts instead of loading them from Google Fonts.
+- Online family tuition payments stay "coming soon" until family checkout is built.
+
 ## Must never appear (checked by tests)
 
 - Old plans or prices: Core, Complete, Essential, $149, lifetime plans.

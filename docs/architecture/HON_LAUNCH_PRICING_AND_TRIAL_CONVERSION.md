@@ -6,16 +6,18 @@ The latest owner instruction supersedes older NEW-sale tier/lifetime proposals i
 
 ## Final launch intent (not a published configuration)
 
+> **Updated by owner decision 2026-11-09:** founder pricing is recurring for as long as the school stays subscribed (no 12-month or one-year limit); a founder school that cancels, or lapses past the 7-day grace period, returns at the standard $249/month or $2,097/year. The founder rows below reflect that decision; the original 12-period/1-period introduction is superseded.
+
 One product **HON OS**, with the former Complete-level capability policy. CORE/COMPLETE trial profiles are internal controls, not public product choices.
 
 | Arrangement | Initial USD minor units | Introductory paid periods | Subsequent USD minor units |
 | --- | ---: | ---: | ---: |
 | Standard monthly | 24900 | 0 | 24900/month |
 | Standard annual | 209700 | 0 | 209700/year |
-| Founder monthly | 19920 | 12 monthly periods | 24900/month from paid period 13 |
-| Founder annual | 149400 | 1 annual period | 209700/year from paid period 2 |
+| Founder monthly | 19920 | every paid period while subscribed | 19920/month while subscribed; 24900/month after cancellation or a lapse past grace |
+| Founder annual | 149400 | every paid period while subscribed | 149400/year while subscribed; 209700/year after cancellation or a lapse past grace |
 
-Annual comparison reference: **24900 × 12 = 298800**. Founder year one is 50% below that reference, not 50% below 209700. Standard annual saves **89100**, approximately **29.82%**; **209700 is authoritative**, never replaced with a computed 30%-discount price (209160). Monthly introduction is 20%. No stacking. First 50 eligible paying organizations share one founder allocation pool; a trial is not a founder allocation. No new lifetime sales. The proposed customer trial is 14 days with no automatic purchase, charge or subscription activation.
+Annual comparison reference: **24900 × 12 = 298800**. Founder annual is 50% below that reference, not 50% below 209700. Standard annual saves **89100**, approximately **29.82%**; **209700 is authoritative**, never replaced with a computed 30%-discount price (209160). Founder monthly is 20% below standard monthly. No stacking. First 50 eligible paying organizations share one founder allocation pool; a trial is not a founder allocation. No new lifetime sales. The proposed customer trial is 14 days with no automatic purchase, charge or subscription activation.
 
 These finalized prices and duration are business direction, not an approved trial-policy database record, published offers, paid access or spending authority. HQ still configures future versioned prices/windows within separately approved rules. No price/policy is seeded by A1.
 
