@@ -99,6 +99,18 @@ const SAAS_BILLING_CALLS = {
   recordSubscriptionGeneration: { sql: 'SELECT hon.record_saas_subscription_generation($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   readSubscriptionGeneration: { sql: 'SELECT hon.read_saas_subscription_generation($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
   readSubscriptionGenerationHq: { sql: 'SELECT hon.read_saas_subscription_generation_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  startScheduleBinding: { sql: 'SELECT hon.start_saas_schedule_binding($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  recordScheduleBindingObservation: { sql: 'SELECT hon.record_saas_schedule_binding_observation($1::uuid,$2::jsonb,$3::uuid,$4::uuid) AS data', arity: 4, readOnly: false },
+  recordScheduleBindingReconciliation: { sql: 'SELECT hon.record_saas_schedule_binding_reconciliation($1::uuid,$2::jsonb) AS data', arity: 2, readOnly: false },
+  recordScheduleBindingExpiry: { sql: 'SELECT hon.record_saas_schedule_binding_expiry($1::uuid,$2::jsonb) AS data', arity: 2, readOnly: false },
+  retryScheduleAccess: { sql: 'SELECT hon.retry_saas_schedule_access($1::text,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readPaidReviews: { sql: 'SELECT hon.read_saas_paid_reviews($1::text,$2::text) AS data', arity: 2, readOnly: true },
+  resolvePaidReview: { sql: 'SELECT hon.resolve_saas_paid_review($1::text,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  verifyPaidReviewRefund: { sql: 'SELECT hon.verify_saas_paid_review_refund($1::text,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  cancelScheduleBinding: { sql: 'SELECT hon.cancel_saas_schedule_binding($1::text,$2::uuid,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
+  readScheduleBinding: { sql: 'SELECT hon.read_saas_schedule_binding($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
+  readScheduleBindingHq: { sql: 'SELECT hon.read_saas_schedule_binding_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  ingestScheduleEvidence: { sql: 'SELECT hon.ingest_saas_schedule_evidence($1::jsonb,$2) AS data', arity: 2, readOnly: false },
   recordPriceSchedule: { sql: 'SELECT hon.record_saas_price_schedule($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   readPriceSchedule: { sql: 'SELECT hon.read_saas_price_schedule($1,$2::uuid) AS data', arity: 2, readOnly: true },
   previewPriceAcceptance: { sql: 'SELECT hon.preview_saas_price_acceptance($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
@@ -1258,6 +1270,26 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
     return this.callFixedSubjectFunction({...call,readOnly:false},params,'ACCOUNT_UNAVAILABLE');
+  }
+
+  async callHonOsSignup(operation: 'register'|'read', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      register: {sql: 'SELECT hon.register_hon_os_school($1,$2,$3::jsonb,$4::uuid) data',arity:4,readOnly:false},
+      read: {sql: 'SELECT hon.read_hon_os_registration($1) data',arity:1,readOnly:true},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
+    return this.callFixedSubjectFunction({sql:call.sql,readOnly:call.readOnly},params,'ACCOUNT_UNAVAILABLE');
+  }
+
+  async callHonOsTrial(operation: 'start'|'read', params: readonly string[]): Promise<unknown> {
+    const calls = {
+      start: {sql: 'SELECT hon.start_hon_os_trial($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      read: {sql: 'SELECT hon.read_hon_os_trial($1) data',arity:1,readOnly:true},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
+    return this.callFixedSubjectFunction({sql:call.sql,readOnly:call.readOnly},params,'ACCOUNT_UNAVAILABLE');
   }
 
   async callSchoolFamilyAccount(operation: 'invite'|'revoke'|'end'|'accept'|'list', params: readonly (string|null)[]): Promise<unknown> {

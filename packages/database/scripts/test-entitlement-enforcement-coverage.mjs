@@ -37,6 +37,8 @@ function args(f,k,target=k){
 }
 // Reviewed: open to a suspended school on purpose. B6A keeps billing recovery and settings available.
 const OPEN_BY_DESIGN={
+ 'hon.read_hon_os_registration(text)':'account identity (B-ID-5 0241): the signed-in owner sees the sign-up program, current terms and their own REGISTERED school before any access exists; read only, grants nothing',
+ 'hon.read_hon_os_trial(text)':'account identity (D11-B 0246): the registered owner sees the trial program, the public trial they may start and their own trial before any access exists; read only, grants nothing',
  'hon.read_school_ownership(text,uuid)':'account identity (B-ID-4 0223): a school owner sees co-owners, the primary owner and ownership notices, read only, even while the school is suspended or not yet paid',
  'hon.read_saas_school_billing_account(text,uuid)':'billing recovery: the school sees why access is unavailable and what it owes',
  'hon.read_saas_school_access_standing(text,uuid)':'billing recovery: the owner sees the payment issue, grace end, owner CRM read-only window or CRM lock (read only)',

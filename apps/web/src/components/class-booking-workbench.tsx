@@ -8,6 +8,7 @@ import {
   type ClassBookingKnownIds, type ClassBookingWorkbenchResult, type PreparedClassBooking,
 } from './class-booking-workbench-http';
 import { exactClassBookingSelectorPrefill, type ClassBookingSelectorPrefill } from './class-booking-selector-prefill';
+import { ClassBookingPickers, type BookingScope } from './class-booking-pickers';
 import styles from './attendance-workbench.module.css';
 
 const EMPTY_IDS: ClassBookingKnownIds = { organizationId: '', schoolId: '', sessionId: '', studentProfileId: '' };
@@ -21,9 +22,18 @@ function initialIds(prefill: unknown): ClassBookingKnownIds {
   return { organizationId: selectors?.organizationId ?? '', schoolId: selectors?.schoolId ?? '', sessionId: selectors?.sessionId ?? '', studentProfileId: '' };
 }
 
+/** With a shell school, the school comes from the shell; a class or student picked at another school is dropped. */
+export function shellBookingIds(rawIds: ClassBookingKnownIds, shellScope: BookingScope | null): ClassBookingKnownIds {
+  if (!shellScope) return rawIds;
+  const moved = rawIds.schoolId !== '' && rawIds.schoolId.toLowerCase() !== shellScope.schoolId.toLowerCase();
+  return { organizationId: shellScope.organizationId, schoolId: shellScope.schoolId, sessionId: moved ? '' : rawIds.sessionId, studentProfileId: moved ? '' : rawIds.studentProfileId };
+}
+
 /** Conventional canonical booking only; IDs are untrusted selectors, not authority. */
-export function ClassBookingWorkbench({ initialPrefill }: { initialPrefill?: unknown } = {}): React.ReactElement {
-  const [ids, setIds] = useState<ClassBookingKnownIds>(initialIds(initialPrefill));
+export function ClassBookingWorkbench({ initialPrefill, shellScope = null }: { initialPrefill?: unknown; shellScope?: BookingScope | null } = {}): React.ReactElement {
+  const [rawIds, setIds] = useState<ClassBookingKnownIds>(initialIds(initialPrefill));
+  // With a shell-verified school, the school selectors come from the shell and staff pick the class and student by name.
+  const ids = shellBookingIds(rawIds, shellScope);
   const [bookingKind, setBookingKind] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -101,7 +111,9 @@ export function ClassBookingWorkbench({ initialPrefill }: { initialPrefill?: unk
     <section aria-labelledby="booking-command"><h2 id="booking-command">Exact-known-ID booking command</h2>
       <p>Use already-known organization, current school, class session and student profile UUIDs. A closed handoff may prefill only exact organization, school and class-session UUID selectors; student profile remains blank, booking kind remains unselected, and confirmation remains required. No other query selector is accepted. A booking kind is intent only, not an eligibility or makeup approval decision.</p>
       <form onSubmit={submit}><fieldset disabled={busy}>
-        <div className={styles.scopeGrid}>{(Object.keys(ID_LABELS) as (keyof ClassBookingKnownIds)[]).map(field =>
+        <div className={styles.scopeGrid}>{shellScope ? <ClassBookingPickers scope={shellScope} sessionId={ids.sessionId} studentProfileId={ids.studentProfileId} disabled={busy}
+            onSession={value => edit(() => setIds({ ...ids, sessionId: value }))} onStudent={value => edit(() => setIds({ ...ids, studentProfileId: value }))}/>
+          : (Object.keys(ID_LABELS) as (keyof ClassBookingKnownIds)[]).map(field =>
           <label key={field}>{ID_LABELS[field]}<input name={field} required autoComplete="off" spellCheck={false} maxLength={36} value={ids[field]} onChange={event => edit(() => setIds({ ...ids, [field]: event.target.value }))} /></label>)}
           <label>Booking kind<select name="bookingKind" required value={bookingKind} onChange={event => edit(() => setBookingKind(event.target.value))}>
             <option value="">Choose a booking kind</option>{MANUAL_CLASS_BOOKING_KINDS.map(kind => <option key={kind} value={kind}>{kind}</option>)}
