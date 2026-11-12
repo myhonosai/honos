@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { SchoolMembershipListItem } from '@hon/contracts';
-import { InvoicePickersView, dollarsToMinor, endOfSchoolDay, invoicePickLabel, loadInvoiceableMemberships } from '../src/components/invoice-pickers';
+import { InvoicePickersView, amountToMinor, currencyDigits, formatMinor, endOfSchoolDay, invoicePickLabel, loadInvoiceableMemberships } from '../src/components/invoice-pickers';
 import { InvoiceWorkbench, shellInvoiceFields } from '../src/components/invoice-workbench';
 import { MembershipListError, type MembershipListApi } from '../src/components/membership-list/http';
 import { id, scope } from './account-status-fixtures';
@@ -15,11 +15,18 @@ const member = (n: number, over: Partial<SchoolMembershipListItem> = {}): School
   currentPeriod: null, legacyStoredTerm: { termStartedAt: null, termEndsAt: null }, createdAt: '2026-11-10T18:00:00.000Z', ...over } as SchoolMembershipListItem);
 const page = (items: SchoolMembershipListItem[], nextCursor: string | null = null) => ({ items, nextCursor, schoolTimezone: 'America/Los_Angeles', localToday: '2026-11-11' });
 
-it('turns dollars and cents into minor units and refuses anything else', () => {
-  expect(dollarsToMinor('49')).toBe('4900');
-  expect(dollarsToMinor('49.5')).toBe('4950');
-  expect(dollarsToMinor(' 0.05 ')).toBe('5');
-  for (const bad of ['', '-1', '49.555', '1e3', '$49', '123456789', '49.']) expect(dollarsToMinor(bad)).toBeNull();
+it('turns a typed amount into minor units using the currency\'s own decimal places', () => {
+  expect(amountToMinor('49', 'USD')).toBe('4900');
+  expect(amountToMinor('49.5', 'USD')).toBe('4950');
+  expect(amountToMinor(' 0.05 ', 'USD')).toBe('5');
+  expect(amountToMinor('49000', 'KRW')).toBe('49000');
+  expect(amountToMinor('49000', 'JPY')).toBe('49000');
+  expect(amountToMinor('1.5', 'KRW')).toBeNull();
+  expect(amountToMinor('1.234', 'KWD')).toBe('1234');
+  expect([currencyDigits('USD'), currencyDigits('KRW'), currencyDigits('KWD'), currencyDigits('usd'), currencyDigits('ZZZ1')]).toEqual([2, 0, 3, null, null]);
+  for (const bad of ['', '-1', '49.555', '1e3', '$49', '123456789', '49.', '21474837']) expect(amountToMinor(bad, 'USD')).toBeNull();
+  expect(amountToMinor('49', 'KR')).toBeNull();
+  expect([formatMinor(4900, 'USD'), formatMinor(49000, 'KRW'), formatMinor(5, 'usd')]).toEqual(['$49.00', '₩49,000', '5 usd minor units']);
 });
 
 it('makes the due date the end of that day in the school timezone', () => {
@@ -52,7 +59,7 @@ it('labels choices by person, plan and state and shows plain states, never an ID
 
 it('with a shell school the workbench shows pickers instead of UUID, minor-unit and timestamp boxes', () => {
   const html = renderToStaticMarkup(<InvoiceWorkbench shellScope={scope}/>);
-  expect(html).toContain('Amount (dollars and cents)');
+  expect(html).toContain('Amount (USD)');
   expect(html).toContain('Due date');
   expect(html).not.toMatch(/Organization UUID|School UUID|billing account UUID|minor-unit integer|ISO timestamp/);
   expect(renderToStaticMarkup(<InvoiceWorkbench/>)).toContain('Organization UUID');
@@ -66,4 +73,8 @@ it('takes the school from the shell, defaults USD and drops a pick made at anoth
   const other = { organizationId: scope.organizationId, schoolId: id(999) };
   expect(shellInvoiceFields(picked, other)).toMatchObject({ schoolId: id(999), billingAccountId: '', membershipId: '', dueAt: '', dueDate: '', subtotalMinor: '4900' });
   expect(shellInvoiceFields(picked, null)).toEqual(picked);
+  // Changing the currency re-derives the minor units from the typed amount instead of keeping dollars-times-100.
+  expect(shellInvoiceFields({ ...picked, currency: 'KRW', amountText: '49000' }, scope).subtotalMinor).toBe('49000');
+  expect(shellInvoiceFields({ ...picked, currency: 'KRW' }, scope).subtotalMinor).toBe('49');
+  expect(shellInvoiceFields({ ...picked, currency: 'KRW', amountText: '49.50' }, scope).subtotalMinor).toBe('invalid');
 });

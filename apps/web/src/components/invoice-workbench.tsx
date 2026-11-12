@@ -7,7 +7,7 @@ import {
   type DraftInvoiceReceipt, type InvoiceReceipt, type PreparedInvoiceCommand,
 } from './invoice-workbench-http';
 import styles from './attendance-workbench.module.css';
-import { InvoicePickers, dollarsToMinor, endOfSchoolDay } from './invoice-pickers';
+import { InvoicePickers, amountToMinor, endOfSchoolDay, formatMinor } from './invoice-pickers';
 
 type Fields = { organizationId: string; schoolId: string; billingAccountId: string; membershipId: string; currency: string; subtotalMinor: string; dueAt: string; amountText: string; dueDate: string };
 const EMPTY: Fields = { organizationId: '', schoolId: '', billingAccountId: '', membershipId: '', currency: '', subtotalMinor: '', dueAt: '', amountText: '', dueDate: '' };
@@ -17,7 +17,9 @@ export type InvoiceShellScope = Readonly<{ organizationId: string; schoolId: str
 export function shellInvoiceFields(fields: Fields, shellScope: InvoiceShellScope | null): Fields {
   if (!shellScope) return fields;
   const moved = fields.schoolId !== '' && fields.schoolId.toLowerCase() !== shellScope.schoolId.toLowerCase();
-  return { ...fields, organizationId: shellScope.organizationId, schoolId: shellScope.schoolId, currency: fields.currency || 'USD',
+  const currency = fields.currency || 'USD';
+  // The amount is typed in the currency's own units, so it is re-derived whenever the currency changes.
+  return { ...fields, organizationId: shellScope.organizationId, schoolId: shellScope.schoolId, currency, subtotalMinor: amountToMinor(fields.amountText, currency) ?? 'invalid',
     ...(moved ? { billingAccountId: '', membershipId: '', dueAt: '', dueDate: '' } : {}) };
 }
 const ID_LABELS = { organizationId: 'Organization UUID', schoolId: 'School UUID', billingAccountId: 'Known billing account UUID', membershipId: 'Known linked membership UUID (optional)' };
@@ -115,9 +117,9 @@ export function InvoiceWorkbench({ shellScope = null }: { shellScope?: InvoiceSh
       <p>{shellScope ? 'Choosing a membership fills its billing account and links the membership.' : 'Use only IDs already known through an authorized staff workflow.'} Total, discount, status, version and audit attribution are server-owned. There is no invoice-ID entry or historic issue action.</p>
       <form onSubmit={create}><fieldset disabled={busy}>
         {shellScope ? <div className={styles.scopeGrid}>
-          <InvoicePickers scope={shellScope} membershipId={fields.membershipId} amount={fields.amountText} dueDate={fields.dueDate} disabled={busy}
+          <InvoicePickers scope={shellScope} membershipId={fields.membershipId} amount={fields.amountText} currency={fields.currency} dueDate={fields.dueDate} disabled={busy}
             onPick={item => edit(() => setFields({ ...fields, billingAccountId: item.billingAccountId, membershipId: item.membershipId }))}
-            onAmount={text => edit(() => setFields({ ...fields, amountText: text, subtotalMinor: dollarsToMinor(text) ?? 'invalid' }))}
+            onAmount={text => edit(() => setFields({ ...fields, amountText: text }))}
             onDueDate={(date, zone) => edit(() => setFields({ ...fields, dueDate: date, dueAt: endOfSchoolDay(date, zone) ?? '' }))}/>
           <label>Currency<input name="currency" required autoComplete="off" spellCheck={false} maxLength={3} value={fields.currency} onChange={event => edit(() => setFields({ ...fields, currency: event.target.value }))} /></label>
         </div> : <div className={styles.scopeGrid}>{(Object.keys(ID_LABELS) as (keyof typeof ID_LABELS)[]).map(name =>
@@ -141,6 +143,7 @@ export function InvoiceWorkbench({ shellScope = null }: { shellScope?: InvoiceSh
         <dt>Invoice UUID</dt><dd>{receipt.invoice.id}</dd>
         <dt>Billing account UUID</dt><dd>{receipt.invoice.billingAccountId}</dd>
         {receipt.invoice.membershipId && <><dt>Linked membership UUID</dt><dd>{receipt.invoice.membershipId}</dd></>}
+        <dt>Returned total</dt><dd>{formatMinor(receipt.invoice.totalMinor, receipt.invoice.currency)}</dd>
         <dt>Returned currency</dt><dd>{receipt.invoice.currency}</dd>
         <dt>Returned subtotal (minor units)</dt><dd>{receipt.invoice.subtotalMinor}</dd>
         <dt>Returned discount (minor units)</dt><dd>{receipt.invoice.discountMinor}</dd>
