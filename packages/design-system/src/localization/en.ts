@@ -1,9 +1,11 @@
 import { pricingOperationsEn } from './pricing-operations.js';
 import { pricingEn } from './pricing-offers.js';
+import { honOsPricesEn } from './hon-os-prices.js';
 import { zernioEn } from './zernio.js';
 export const en = {
   ...zernioEn,
   ...pricingEn,
+  ...honOsPricesEn,
   ...pricingOperationsEn,
   " · Deterministic simulator, not Stripe sandbox": " · Deterministic simulator, not Stripe sandbox",
   " · Reservation recorded": " · Reservation recorded",
@@ -160,6 +162,10 @@ export const en = {
   "Founder Campaigns": "Founder Campaigns",
   "Founder availability and school eligibility have not been verified.": "Founder availability and school eligibility have not been verified.",
   "Founder campaigns": "Founder campaigns",
+  "Earlier one-time purchase; no longer sold": "Earlier one-time purchase; no longer sold",
+  "Founder pricing is limited to the first 50 eligible schools. A spot is counted only when a school’s first payment is verified, so the limit is not the number of spots left. Founder lifetime is no longer sold; earlier lifetime purchases are unchanged.": "Founder pricing is limited to the first 50 eligible schools. A spot is counted only when a school's first payment is verified, so the limit is not the number of spots left. Founder lifetime is no longer sold; earlier lifetime purchases are unchanged.",
+  "Founder limits: {total} organizations · {monthly} monthly. Limits are not remaining inventory.": "Founder limits: {total} organizations · {monthly} monthly. Limits are not remaining inventory.",
+  "Founder availability: monthly {monthly}. HON rechecks eligibility and reservation at checkout.": "Founder availability: monthly {monthly}. HON rechecks eligibility and reservation at checkout.",
   "Founder lifetime": "Founder lifetime",
   "Founder monthly": "Founder monthly",
   "Founder status": "Founder status",
@@ -499,7 +505,7 @@ export const en = {
   "status.ACTIVE": "ACTIVE",
   "status.INACTIVE": "INACTIVE",
   "status.NONE": "NONE",
-  "Both plans include all three views. Capability inclusion describes the approved plan catalog; it does not mean every integration or AI job is operational. No new Essential or annual subscriptions are offered.": "Both plans include all three views. Capability inclusion describes the approved plan catalog; it does not mean every integration or AI job is operational. No new Essential or annual subscriptions are offered.",
+  "Both plans include all three views. Capability inclusion describes the approved plan catalog; it does not mean every integration or AI job is operational. No new Essential subscriptions are offered.": "Both plans include all three views. Capability inclusion describes the approved plan catalog; it does not mean every integration or AI job is operational. No new Essential subscriptions are offered.",
   "Eligibility is rechecked at checkout. Test mode only; no live charge. Published legal/tax policies are required before a live launch.": "Eligibility is rechecked at checkout. Test mode only; no live charge. Published legal/tax policies are required before a live launch.",
   "The reported tier and subscription plan differ. Contact HON support; this page cannot change either record.": "The reported tier and subscription plan differ. Contact HON support; this page cannot change either record.",
   "Unavailable here. HON must confirm effective access separately; payment does not activate features or clear a suspension.": "Unavailable here. HON must confirm effective access separately; payment does not activate features or clear a suspension.",

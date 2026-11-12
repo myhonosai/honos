@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { HQ_HON_AGENTS, SAAS_COMMANDS } from '@hon/contracts';
-import { hqHonApi, hqHonAskError } from '../src/components/hq-hon/http';
+import { hqHonApi, hqHonAskError, hqHonBudgetError } from '../src/components/hq-hon/http';
 import { HqHonPanelView, type HqHonPanelViewProps } from '../src/components/hq-hon/hq-hon-panel';
 import { HQ_HON_COPY_TABLES, hqHonText } from '../src/components/hq-hon/copy';
 import { MarketingError } from '../src/components/hq-marketing/http';
@@ -67,7 +67,7 @@ it('maps only definitive refusals; anything else is UNKNOWN so a retry keeps the
 });
 
 const props = (patch: Partial<HqHonPanelViewProps> = {}): HqHonPanelViewProps => ({ agentKey: 'mia', name: 'Mia', language: 'en', number: n => String(n),
-  state: { kind: 'READY', view: conv() as never }, question: '', mode: 'STANDARD', outcome: null, onQuestion: () => {}, onMode: () => {}, onAsk: () => {}, onRefresh: () => {}, ...patch });
+  state: { kind: 'READY', view: conv() as never }, question: '', mode: 'STANDARD', outcome: null, onQuestion: () => {}, onMode: () => {}, onAsk: () => {}, onRefresh: () => {}, budgetOutcome: null, onBudget: () => {}, ...patch });
 
 it('offers the question only when the server lists the agent and a provider is connected', () => {
   const html = renderToStaticMarkup(<HqHonPanelView {...props()}/>);
@@ -109,4 +109,39 @@ it('has every phrase in en, ko and es, and the workspace mounts the panel for ea
   expect([...HQ_HON_AGENTS]).toEqual(['hon', 'chase', 'mia', 'ethan', 'olivia', 'ryan', 'sophia']);
   const panel = readFileSync('src/components/hq-hon/hq-hon-panel.tsx', 'utf8');
   expect(panel).not.toMatch(/localStorage|sessionStorage|providerId|modelId/);
+});
+
+it('sets the HQ AI text budget with the owner command marker; the receipt must match the period and cap', async () => {
+  const receipt = { budget: budget({ creditCap: 500, availableCredits: 470, version: 2 }), replayed: false };
+  const f = stub(json({ data: receipt }));
+  const input = { periodStart: '2026-11-01', creditCap: 500, expectedVersion: 1, reason: 'Room for executive questions' };
+  expect((await hqHonApi.setBudget(input, id(8), new AbortController().signal, yes)).budget.creditCap).toBe(500);
+  const [path, init] = call(f);
+  expect(path).toBe('/api/v1/hq/hon/budget');
+  expect(init.method).toBe('POST');
+  expect(init.headers).toMatchObject({ 'X-HON-Human-Command': SAAS_COMMANDS.setHqHonBudget, 'Idempotency-Key': id(8) });
+  expect(JSON.parse(String(init.body))).toEqual(input);
+  stub(json({ data: { ...receipt, budget: budget({ creditCap: 400, availableCredits: 370, version: 2 }) } }));
+  await expect(hqHonApi.setBudget(input, id(8), new AbortController().signal, yes)).rejects.toMatchObject({ kind: 'UNKNOWN' });
+  await expect(hqHonApi.setBudget({ ...input, reason: 'x' }, id(8), new AbortController().signal, yes)).rejects.toMatchObject({ kind: 'INVALID' });
+  for (const code of ['HQ_HON_PERIOD_NOT_ALLOWED', 'HQ_HON_BUDGET_NO_CHANGE', 'HQ_HON_CAP_BELOW_USE']) expect(hqHonBudgetError(422, code).kind).toBe('REFUSED');
+  expect(hqHonBudgetError(409, 'SAAS_VERSION_CONFLICT').kind).toBe('CHANGED');
+  expect(hqHonBudgetError(409, 'IDEMPOTENCY_KEY_REUSED').kind).toBe('KEY_REUSED');
+  expect(hqHonBudgetError(403, 'SAAS_FORBIDDEN').kind).toBe('DENIED');
+  expect(hqHonBudgetError(500, null).kind).toBe('UNKNOWN');
+  expect(hqHonBudgetError(422, 'HQ_HON_BUDGET_EXHAUSTED').kind).toBe('UNKNOWN');
+});
+
+it('offers the budget form to the HQ owner only, and says setting it spends nothing', () => {
+  const owner = { kind: 'READY' as const, view: conv({ viewer: { ...viewer, isOwner: true } }) as never };
+  const html = renderToStaticMarkup(<HqHonPanelView {...props({ state: owner })}/>);
+  expect(html).toContain('data-hq-hon-budget-form'); expect(html).toContain('Set this month');
+  expect(html).toContain('does not connect a provider or spend anything');
+  expect(renderToStaticMarkup(<HqHonPanelView {...props()}/>)).not.toContain('data-hq-hon-budget-form');
+  const saved = renderToStaticMarkup(<HqHonPanelView {...props({ state: owner, budgetOutcome: { kind: 'DONE' } })}/>);
+  expect(saved).toContain('Budget saved.');
+  const refused = renderToStaticMarkup(<HqHonPanelView {...props({ state: owner, budgetOutcome: { kind: 'ERROR', error: new MarketingError('REFUSED', 'HQ_HON_CAP_BELOW_USE') } })}/>);
+  expect(refused).toContain('Not saved: the cap is below what this month has already used or holds.');
+  const sending = renderToStaticMarkup(<HqHonPanelView {...props({ state: owner, budgetOutcome: { kind: 'SENDING' } })}/>);
+  expect(sending).toMatch(/data-hq-hon-budget-form=""[^]*?<fieldset disabled="">/);
 });

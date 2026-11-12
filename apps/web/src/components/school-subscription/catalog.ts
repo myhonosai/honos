@@ -1,12 +1,15 @@
 import { PUBLIC_PLAN_CATALOG, type PublicPlanTier } from '@hon/config';
-import { SAAS_OWNER_APPROVED_DRAFT, SAAS_PLAN_CAPABILITIES, type SaasOfferKind } from '@hon/contracts';
+import { HON_OS_LAUNCH_PRICING_REFERENCE, SAAS_OWNER_APPROVED_DRAFT, SAAS_PLAN_CAPABILITIES, SAAS_SCHEDULED_OFFER_KINDS, type SaasFounderSchoolAvailability, type SaasFounderUnavailableReason, type SaasHonOsSchoolOfferView, type SaasOfferKind } from '@hon/contracts';
 
 /** Display metadata only. Never an available offer, price quote, entitlement or credit grant. */
 export const OFFER_CHOICES: readonly { kind: SaasOfferKind; label: string; description: string }[] = [
   { kind: 'REGULAR_MONTHLY', label: 'Regular monthly', description: 'Billed monthly' },
   { kind: 'FOUNDER_MONTHLY', label: 'Founder monthly', description: 'Eligibility and availability required' },
-  { kind: 'FOUNDER_LIFETIME', label: 'Founder lifetime', description: 'One-time purchase, subject to eligibility' },
+  { kind: 'FOUNDER_LIFETIME', label: 'Founder lifetime', description: 'Earlier one-time purchase; no longer sold' },
 ];
+/** Offers a school may still pick on this page. Founder lifetime stays above only to label earlier purchases. */
+export const SELLABLE_OFFER_CHOICES = OFFER_CHOICES.filter((entry) => entry.kind !== 'FOUNDER_LIFETIME');
+const sellable = (kind: SaasOfferKind) => SELLABLE_OFFER_CHOICES.some((entry) => entry.kind === kind);
 
 const LABELS: Record<string, { label: string; note?: string }> = {
   'crm.families_students_prospects': { label: 'Families, students & prospect CRM' },
@@ -55,9 +58,46 @@ export type SelectionEvent = { type: 'PLAN'; tier: PublicPlanTier } | { type: 'O
 export function selectPlan(state: PlanSelection, event: SelectionEvent): PlanSelection {
   switch (event.type) {
     case 'PLAN': planDisplay(event.tier, state.offer); return { ...state, tier: event.tier, reviewing: false, acknowledged: false };
-    case 'OFFER': planDisplay(state.tier, event.offer); return { ...state, offer: event.offer, reviewing: false, acknowledged: false };
+    case 'OFFER': if (!sellable(event.offer)) return state; planDisplay(state.tier, event.offer); return { ...state, offer: event.offer, reviewing: false, acknowledged: false };
     case 'REVIEW': return { ...state, reviewing: true, acknowledged: false };
     case 'EDIT': return { ...state, reviewing: false, acknowledged: false };
     case 'ACKNOWLEDGE': return { ...state, acknowledged: state.reviewing && event.checked };
   }
+}
+
+/** One row per HON OS schedule price. Server prices win; otherwise the owner-approved launch price, labelled as such. */
+export type HonOsPriceKind = typeof SAAS_SCHEDULED_OFFER_KINDS[number];
+export type HonOsPriceRow = {
+  kind: HonOsPriceKind; founder: boolean; annual: boolean; priceMinor: number; standardPriceMinor: number;
+  source: 'SERVER_OFFER' | 'LAUNCH_REFERENCE' | 'NOT_ON_SALE';
+  founderSpot: { state: 'AVAILABLE' | 'UNAVAILABLE' | 'UNVERIFIED'; reason: SaasFounderUnavailableReason | null } | null;
+};
+export const HON_OS_PRICE_LABELS: Record<HonOsPriceKind, string> = {
+  REGULAR_MONTHLY: 'Standard monthly', REGULAR_ANNUAL: 'Standard annual', FOUNDER_MONTHLY: 'Founder monthly', FOUNDER_ANNUAL: 'Founder annual',
+};
+export const FOUNDER_REASON_COPY: Record<SaasFounderUnavailableReason, string> = {
+  FOUNDER_TERMS_NOT_LOCKED: 'Founder terms are not published yet.',
+  FOUNDER_ALREADY_USED: 'Your organization has already used its founder spot.',
+  FOUNDER_SOLD_OUT: 'All 50 founder spots are taken.',
+  FOUNDER_SET_LIMIT_REACHED: 'Founder sales for this offer set are closed.',
+  FOUNDER_OFFER_LIMIT_REACHED: 'This founder offer has reached its sale limit.',
+};
+export function honOsPriceRows(offers: SaasHonOsSchoolOfferView | null, founder: SaasFounderSchoolAvailability | null): HonOsPriceRow[] {
+  const p = HON_OS_LAUNCH_PRICING_REFERENCE;
+  return SAAS_SCHEDULED_OFFER_KINDS.map((kind) => {
+    const isFounder = kind.startsWith('FOUNDER_'), annual = kind.endsWith('_ANNUAL');
+    const standard = annual ? p.standardAnnualPriceMinor : p.monthlyListPriceMinor;
+    const reference = isFounder ? (annual ? p.founderAnnualPriceMinor : p.founderMonthlyPriceMinor) : standard;
+    const server = offers?.offers.find((o) => o.offerKind === kind);
+    const spot = isFounder ? founder?.offers.find((o) => o.offerKind === kind) : undefined;
+    return {
+      kind, founder: isFounder, annual, priceMinor: server?.priceMinor ?? reference,
+      standardPriceMinor: spot?.standardPriceMinor ?? standard,
+      // A published offer set that leaves a kind out means that price is not on sale now (e.g. founder sales closed).
+      source: server ? 'SERVER_OFFER' : offers && offers.offerSetVersion !== null ? 'NOT_ON_SALE' : 'LAUNCH_REFERENCE',
+      founderSpot: !isFounder ? null : spot ? { state: spot.available ? 'AVAILABLE' : 'UNAVAILABLE', reason: spot.reason }
+        : founder?.organizationUsedFounderSpot ? { state: 'UNAVAILABLE', reason: 'FOUNDER_ALREADY_USED' }
+        : founder && founder.pool.remaining === 0 ? { state: 'UNAVAILABLE', reason: 'FOUNDER_SOLD_OUT' } : { state: 'UNVERIFIED', reason: null },
+    };
+  });
 }
