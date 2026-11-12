@@ -19,4 +19,4 @@ Languages: English is `src/index.html`; Korean and Spanish are built into `dist/
 
 Editing copy: the source of truth is the project's website summary (`HON_OS_WEBSITE_SUMMARY.md`). Anything not built on `main` stays marked "soon" or "coming soon"; the tests in `test/content.test.mjs` hold the list of things the page must never say.
 
-Hosting is not set up. When David approves, a Render static site would use build command `pnpm install --frozen-lockfile && pnpm --filter @hon/website build` and publish directory `apps/website/dist`. `render.yaml` is intentionally unchanged.
+Hosting is not set up. The Render static-site setup, ready for David's OK, is in [HOSTING.md](HOSTING.md). `render.yaml` is intentionally unchanged.
