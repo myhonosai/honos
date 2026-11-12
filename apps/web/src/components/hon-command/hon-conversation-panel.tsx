@@ -19,11 +19,11 @@ import {
 import styles from './hon-conversation.module.css';
 
 // A 'claire' turn is Claire, Business Performance (K2); legacy claire teaching turns are already presented as 'kai' by the server.
-const AGENT_NAME: Record<string, string> = { hon: 'HON', marcus: 'Marcus', claire: 'Claire', kai: 'Kai', chad: 'Chad', alex: 'Alex', jordan: 'Jordan', lena: 'Lena', HUMAN: 'You' };
+const AGENT_NAME: Record<string, string> = { hon: 'HON', marcus: 'Marcus', claire: 'Claire', kai: 'Kai', chad: 'Chad', alex: 'Alex', jordan: 'Jordan', lena: 'Lena', maya: 'Maya', HUMAN: 'You' };
 /** Who answers a typed question: HON, or one read-only analysis specialist (only when readiness says it can). */
-export type HonComposerAsk = 'hon' | HonAnalystAgentKey;
+export type HonComposerAsk = 'hon' | Exclude<HonAnalystAgentKey, 'maya'>;
 /** Each analysis specialist's label and what it reads (0260; Claire K2). */
-export const ANALYST_CHOICE: Readonly<Record<HonAnalystAgentKey, { label: string; note: string }>> = {
+export const ANALYST_CHOICE: Readonly<Record<Exclude<HonAnalystAgentKey, 'maya'>, { label: string; note: string }>> = {
   claire: { label: 'Claire, Business Performance', note: 'Claire reads this school’s performance numbers (revenue, trial conversion, attendance, unanswered inquiries) and gives one detailed answer: the recorded facts, then her view. She never drafts, sends or changes anything. Included in HON OS; nothing is charged.' },
   alex: { label: 'Alex, General Management', note: 'Alex reads this school’s overall numbers (Command Center, plus classes and campaigns when your role includes them) and gives one detailed answer: the recorded facts, then what to focus on. He never drafts, sends or changes anything. Included in HON OS; nothing is charged.' },
   jordan: { label: 'Jordan, Operations', note: 'Jordan reads this school’s class schedule for the next 7 days, attendance for the last 30 days and planned absences awaiting review, and gives one detailed answer: the recorded facts, then his view. He never schedules, sends or changes anything. Included in HON OS; nothing is charged.' },
@@ -35,9 +35,11 @@ export function composerTurnRequest(text: string, ask: HonComposerAsk, mode: Hon
 }
 const askName = (ask: HonComposerAsk) => AGENT_NAME[ask] ?? 'HON';
 /** The analysis specialists readiness offers now (Claire through businessPerformance, the others through availableAnalystKeys). */
-export function offeredAnalysts(readiness: HonConversationReadiness | null): HonAnalystAgentKey[] {
+// 0284: Maya answers about one at-risk student, so she is asked from that student's row on the at-risk list, not here.
+export function offeredAnalysts(readiness: HonConversationReadiness | null): Exclude<HonAnalystAgentKey, 'maya'>[] {
   if (!readiness) return [];
-  return HON_ANALYST_AGENTS.filter((k) => (k === 'claire' ? readiness.businessPerformance === true : (readiness.availableAnalystKeys ?? []).includes(k)));
+  return HON_ANALYST_AGENTS.filter((k): k is Exclude<HonAnalystAgentKey, 'maya'> => k !== 'maya'
+    && (k === 'claire' ? readiness.businessPerformance === true : (readiness.availableAnalystKeys ?? []).includes(k)));
 }
 const FAILURE: Record<HonConversationFailure, string> = {
   SESSION: 'Your session ended. Sign in again.',

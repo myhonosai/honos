@@ -7,7 +7,7 @@ const agent = (agentKey: string, name: string, credits: number, over: Record<str
 const readinessFixture = (over: Record<string, unknown> = {}) => ({
   organizationId: A, schoolId: B, completeEntitlement: true, agentBudget: null, asOf: '2026-11-06T10:00:00.000Z', honConversation: { contract: true },
   agents: [agent('marcus', 'MARKETING', 6), agent('kai', 'TEACHING', 6), agent('chad', 'CHAD_FOLLOW_UP', 3), agent('hon', 'HON_REPLY', 10), agent('claire', 'BUSINESS_PERFORMANCE', 15),
-    agent('alex', 'GENERAL_MANAGEMENT', 15), agent('jordan', 'OPERATIONS', 15), agent('lena', 'CREATIVE_COMMERCE', 15)], ...over,
+    agent('alex', 'GENERAL_MANAGEMENT', 15), agent('jordan', 'OPERATIONS', 15), agent('lena', 'CREATIVE_COMMERCE', 15), agent('maya', 'RETENTION', 15)], ...over,
 });
 const envelope = (data: unknown) => ({ data, meta: { requestId: 'r', correlationId: 'r' } });
 
@@ -21,7 +21,7 @@ describe('AI team readiness client', () => {
   });
 
   it('accepts the exact contract for the requested school only', () => {
-    expect(verifyAiTeamReadiness(envelope(readinessFixture()), A, B).agents.map(item => item.agentKey)).toEqual(['marcus', 'kai', 'chad', 'hon', 'claire', 'alex', 'jordan', 'lena']);
+    expect(verifyAiTeamReadiness(envelope(readinessFixture()), A, B).agents.map(item => item.agentKey)).toEqual(['marcus', 'kai', 'chad', 'hon', 'claire', 'alex', 'jordan', 'lena', 'maya']);
     expect(() => verifyAiTeamReadiness(envelope(readinessFixture({ schoolId: C })), A, B)).toThrow();
     expect(() => verifyAiTeamReadiness({ data: readinessFixture() }, A, B)).toThrow();
     expect(() => verifyAiTeamReadiness(envelope({ ...readinessFixture(), extra: 1 }), A, B)).toThrow();
