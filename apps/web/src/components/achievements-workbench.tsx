@@ -64,7 +64,7 @@ export function AchievementsWorkbench() {
   const canRetry = scope && pending && scope.school === pending.school && scope.student === pending.student && (pending.mutation.op === 'DEFINITION' ? access?.canManageDefinitions : access?.canRecordAwards);
   function describe(d: AchievementDefinition) { return <><h3>{d.name}</h3><p>{d.category} · {d.ageBand.replaceAll('_', ' ')} · {d.visualToken ?? 'No visual token'} · Version {d.version} · {d.status}</p><p className={s.body}>{d.description || 'No description provided.'}</p></>; }
   return <main className={s.page}>
-    <nav><Link href="/core">School workspace</Link><Link href="/parent/achievements">Separate family recognition view</Link></nav>
+    <nav><Link href="/staff/dashboard">School workspace</Link><Link href="/parent/achievements">Separate family recognition view</Link></nav>
     <header><p>HON / HUMAN STUDENT RECOGNITION</p><h1>Recognize effort. Keep judgment human.</h1><p>School-owned achievements and explicit instructor or staff decisions. Available on Essential, Core and Complete.</p></header>
     <aside>{ACHIEVEMENT_HELP}</aside>
     <section><h2>Known school and student</h2><label>School UUID<input value={school} onChange={e => { changed(); setSchool(e.target.value); }}/></label><label>Known student profile UUID (optional for definitions)<input value={student} onChange={e => { changed(); setStudent(e.target.value); }}/></label><button disabled={busy} onClick={() => void load()}>Load current permissions and records</button><p>Use an already-known school and student record. These selectors are not authorization; there is no student directory here.</p></section>

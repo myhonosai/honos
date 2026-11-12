@@ -38,7 +38,7 @@ test('never shows retired plans or prices', () => {
 
 test('makes no claim the owner has not approved yet', () => {
   for (const bad of [
-    /money[- ]back/i, /30[- ]day/i, /refund/i, /free months?/i, /available now/i,
+    /free months?/i, /available now/i, /\b\d+ (videos|images|avatars)\b/i, /\$15\b/,
     /\b\d[\d,]* (schools|students|members) (use|trust|run)/i, /texts? (a|per) month/i,
     /payment processor of our own|hon pay\b/i,
   ]) {
@@ -57,7 +57,7 @@ test('marks unfinished AI specialists coming soon and the rest as launching', ()
 });
 
 test('marks features that are not built as coming soon', () => {
-  for (const soon of [/Autopay[^<]*<em>soon/, /AI images and video<em>soon/, /lead ads[^<]*<em>soon/i, /Rewards for every school you refer[^<]*<em>soon/, /Event and sale-day slot booking<em>soon/]) {
+  for (const soon of [/Autopay[^<]*<em>soon/, /AI images and video<em>soon/, /lead ads[^<]*<em>soon/i, /Earn rewards for every school you refer[^<]*<em>soon/, /Event and sale-day slot booking<em>soon/]) {
     assert.match(html, soon);
   }
 });
@@ -136,4 +136,29 @@ test('yearly savings are stated per plan and never rounded up to a false figure'
   assert.doesNotMatch(html, /30% or more|save 30%|30% off/i);
   assert.match(html, /\$2,097 a year, about 30% less than paying monthly/);
   assert.match(html, /\$1,494 a year, about 37% less than paying monthly/);
+});
+
+test('states the 30-day money-back guarantee exactly as David decided (2026-11-12)', () => {
+  const g = html.match(/<div class="card guarantee"[\s\S]*?<\/div>/)?.[0] ?? '';
+  assert.match(g, /30-day money-back guarantee/);
+  assert.match(g, /first payment/);
+  assert.match(g, /monthly or yearly/);
+  assert.match(g, /within 30 days/);
+  assert.match(g, /founder spot isn't returned/);
+  assert.doesNotMatch(text, /refund (any|every|all)|money back any time|no questions asked/i);
+});
+
+test('the trial includes the AI team and Creative Studio, with no promised counts', () => {
+  assert.match(text, /Try the full AI team and Creative Studio free for 14 days\./);
+});
+
+test('texting is unlimited and shown as coming soon; nothing else is called unlimited', () => {
+  assert.match(html, /<li class="later">Unlimited texting included<em>soon<\/em><\/li>/);
+  const unlimited = [...text.matchAll(/unlimited[^.]*/gi)].map((m) => m[0]);
+  for (const u of unlimited) assert.match(u, /^Unlimited texting included/i, `only texting is unlimited: "${u}"`);
+});
+
+test('Champions Club rewards use the general wording only', () => {
+  assert.match(html, /<li class="later">Earn rewards for every school you refer, details coming soon<em>soon<\/em><\/li>/);
+  assert.doesNotMatch(text, /\$100|free month|welcome credit/i);
 });
