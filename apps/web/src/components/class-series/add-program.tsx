@@ -1,6 +1,7 @@
 'use client';
 import React, { useRef, useState } from 'react';
-import { reportConfirmedSessionInvalidation } from '../session-invalidation';
+import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT, reportConfirmedSessionInvalidation } from '../session-invalidation';
+import { onShellPrivacyEvent } from '../school-shell/privacy';
 import styles from '../membership-changes/membership-changes.module.css';
 
 /**
@@ -96,7 +97,7 @@ export function programText(language: string, key: Key, vars: Readonly<Record<st
   return table[key].replace(/\{(\w+)\}/g, (_, v: string) => vars[v] ?? '');
 }
 
-type Status = Readonly<{ kind: 'IDLE' | 'SENDING' }> | Readonly<{ kind: 'DONE'; name: string }> | Readonly<{ kind: AddProgramErrorKind }>;
+export type Status = Readonly<{ kind: 'IDLE' | 'SENDING' }> | Readonly<{ kind: 'DONE'; name: string }> | Readonly<{ kind: AddProgramErrorKind }>;
 const keep = (kind: AddProgramErrorKind) => kind === 'UNKNOWN' || kind === 'RATE';
 
 export function AddProgramView({ language, open, status, locked, canRetry, onOpen, onClose, onSubmit, onTryAgain }: {
@@ -121,43 +122,67 @@ export function AddProgramView({ language, open, status, locked, canRetry, onOpe
   </div>;
 }
 
-/** Holds the form, the send and the kept retry. onAdded tells the page to read the series (and its programs) again. */
+/**
+ * The send and the kept retry, outside React so it can be tested directly. submit() starts one request (refused while one is
+ * kept or sending); tryAgain() resends the kept request with the same key; drop() forgets it (privacy event, session end,
+ * school change) so a late answer is ignored and nothing is sent again.
+ */
+export class AddProgramFlow {
+  private pending: { key: string; name: string; scope: ProgramScope } | null = null;
+  private sending = false;
+  constructor(private readonly api: Pick<ProgramApi, 'create'>, private readonly onState: (status: Status, kept: boolean) => void,
+    private readonly newKey: () => string = () => globalThis.crypto.randomUUID()) {}
+  get busy(): boolean { return this.sending || this.pending !== null; }
+  submit(text: string, scope: ProgramScope): Promise<void> {
+    if (this.busy) return Promise.resolve();
+    const name = programName(text);
+    if (!name) { this.onState({ kind: 'INVALID' }, false); return Promise.resolve(); }
+    this.pending = { key: this.newKey(), name, scope };
+    return this.send();
+  }
+  tryAgain(): Promise<void> { return this.send(); }
+  drop(): void { this.pending = null; this.onState({ kind: 'IDLE' }, false); }
+  private async send(): Promise<void> {
+    const request = this.pending;
+    if (!request || this.sending) return;
+    this.sending = true; this.onState({ kind: 'SENDING' }, false);
+    let next: Status, stay = false;
+    try {
+      const made = await this.api.create(request.scope, request.name, request.key, AbortSignal.timeout(30000), () => this.pending === request);
+      next = { kind: 'DONE', name: made.name };
+    } catch (error) {
+      const kind = error instanceof AddProgramError ? error.kind : 'UNKNOWN';
+      stay = keep(kind); next = { kind };
+    } finally { this.sending = false; }
+    if (this.pending !== request) return;
+    if (!stay) this.pending = null;
+    this.onState(next, stay);
+  }
+}
+
+/** Holds the form and the flow. onAdded tells the page to read the series (and its programs) again. */
 export function AddProgram({ language, scope, locked, onAdded, api = programApi }: {
   language: string; scope: ProgramScope; locked: boolean; onAdded: () => void; api?: ProgramApi;
 }): React.ReactElement {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: 'IDLE' });
   const [kept, setKept] = useState(false);
-  const pending = useRef<{ key: string; name: string; scope: ProgramScope } | null>(null), sending = useRef(false), mounted = useRef(true);
-  React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; pending.current = null; }; }, []);
-  // The page keys this by school, so a different school mounts a fresh one: a kept request is never sent at another school.
-  const shownKept = kept && pending.current !== null;
-
-  const send = async () => {
-    const request = pending.current;
-    if (!request || sending.current) return;
-    sending.current = true; setStatus({ kind: 'SENDING' });
-    let next: Status, stay = false;
-    try {
-      const made = await api.create(request.scope, request.name, request.key, AbortSignal.timeout(30000), () => mounted.current && pending.current === request);
-      next = { kind: 'DONE', name: made.name };
-    } catch (error) {
-      const kind = error instanceof AddProgramError ? error.kind : 'UNKNOWN';
-      stay = keep(kind); next = { kind };
-    } finally { sending.current = false; }
-    if (pending.current !== request || !mounted.current) return;
-    if (!stay) pending.current = null;
-    setKept(stay); setStatus(next);
-    if (next.kind === 'DONE') { setOpen(false); onAdded(); }
-  };
-  return <AddProgramView language={language} open={open} status={status} locked={locked} canRetry={shownKept}
-    onOpen={() => { setOpen(true); setStatus({ kind: 'IDLE' }); }} onClose={() => { if (!sending.current) setOpen(false); }}
-    onTryAgain={() => { void send(); }}
-    onSubmit={(text) => {
-      if (locked || sending.current || pending.current) return;
-      const name = programName(text);
-      if (!name) { setStatus({ kind: 'INVALID' }); return; }
-      pending.current = { key: globalThis.crypto.randomUUID(), name, scope };
-      void send();
-    }}/>;
+  const added = useRef(onAdded); added.current = onAdded;
+  const flow = useRef<AddProgramFlow | null>(null);
+  if (!flow.current) flow.current = new AddProgramFlow(api, (next, stay) => {
+    setStatus(next); setKept(stay);
+    if (next.kind === 'DONE') { setOpen(false); added.current(); }
+  });
+  // The page keys this by school, so another school mounts a fresh flow. Blur, a hidden tab, page hide, a session end or a
+  // school change drop the kept request too, as the page drops its own, so nothing is resent after the person leaves.
+  React.useEffect(() => {
+    const current = flow.current;
+    const off = onShellPrivacyEvent(() => { current?.drop(); setOpen(false); }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]);
+    return () => { off(); current?.drop(); };
+  }, []);
+  const sending = status.kind === 'SENDING';
+  return <AddProgramView language={language} open={open} status={status} locked={locked} canRetry={kept}
+    onOpen={() => { setOpen(true); setStatus({ kind: 'IDLE' }); }} onClose={() => { if (!sending) setOpen(false); }}
+    onTryAgain={() => { void flow.current?.tryAgain(); }}
+    onSubmit={(text) => { if (!locked) void flow.current?.submit(text, scope); }}/>;
 }
