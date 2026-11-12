@@ -170,3 +170,50 @@ export function validateSaasScheduleEvidenceReceipt(value: unknown): SaasSchedul
     || r.checkoutAvailable !== false || r.billingEnabled !== false) drift();
   return r as unknown as SaasScheduleEvidenceReceipt;
 }
+
+/** Piece 2 (0235): the access outcome of a binding, reported beside (never derived from) its billing status. */
+export interface SaasScheduleBindingAccess {
+  accessActivation: 'APPLIED' | 'NEEDS_REVIEW' | 'NOT_ATTEMPTED';
+  reason: string | null;
+  /** End of the latest verified paid period (APPLIED only). */
+  paidThrough: string | null;
+  /** paidThrough plus the owner-approved 7-day grace: when access lapses if no renewal is verified (APPLIED only). */
+  accessUntil: string | null;
+}
+export interface SaasScheduleBindingView extends SaasScheduleBinding { access: SaasScheduleBindingAccess }
+export interface SaasScheduleAccessRetryInput { expectedBindingVersion: number }
+export interface SaasScheduleAccessRetryReceipt { bindingId: string; access: SaasScheduleBindingAccess & { accessGranted: boolean }; replayed: boolean }
+
+function validateBindingAccess(value: unknown, withGranted: boolean): SaasScheduleBindingAccess & { accessGranted?: boolean } {
+  const a = record(value, drift);
+  keys(a, withGranted ? ['accessActivation','reason','paidThrough','accessUntil','accessGranted'] : ['accessActivation','reason','paidThrough','accessUntil'], drift);
+  const applied = a.accessActivation === 'APPLIED';
+  if (!['APPLIED','NEEDS_REVIEW','NOT_ATTEMPTED'].includes(a.accessActivation as string)
+    || (a.accessActivation === 'NEEDS_REVIEW') !== (typeof a.reason === 'string' && /^[A-Z_]{3,80}$/.test(a.reason)) || (a.accessActivation !== 'NEEDS_REVIEW' && a.reason !== null)
+    || (applied ? !(timestamp(a.paidThrough) && timestamp(a.accessUntil) && Date.parse(a.accessUntil as string) > Date.parse(a.paidThrough as string))
+      : (a.paidThrough !== null || a.accessUntil !== null))
+    || (withGranted && (typeof a.accessGranted !== 'boolean' || (a.accessGranted && !applied)))) drift();
+  return a as unknown as SaasScheduleBindingAccess & { accessGranted?: boolean };
+}
+
+export function validateSaasScheduleBindingView(value: unknown): SaasScheduleBindingView {
+  const r = record(value, drift);
+  const { access, ...binding } = r;
+  const checked = validateSaasScheduleBinding(binding);
+  const a = validateBindingAccess(access, false);
+  // Access can only have been applied after billing became ACTIVE; a review never relabels the billing status.
+  if (a.accessActivation === 'APPLIED' && checked.status !== 'ACTIVE' && checked.status !== 'NEEDS_REVIEW') drift();
+  return { ...checked, access: a };
+}
+
+export function validateSaasScheduleAccessRetryInput(value: unknown): SaasScheduleAccessRetryInput {
+  const r = record(value, drift); keys(r, ['expectedBindingVersion'], drift);
+  if (!integer(r.expectedBindingVersion, 1, 999999999)) drift();
+  return Object.freeze({ expectedBindingVersion: r.expectedBindingVersion as number });
+}
+
+export function validateSaasScheduleAccessRetryReceipt(value: unknown): SaasScheduleAccessRetryReceipt {
+  const r = record(value, drift); keys(r, ['bindingId','access','replayed'], drift);
+  if (!uuid(r.bindingId) || typeof r.replayed !== 'boolean') drift();
+  return { bindingId: r.bindingId as string, access: validateBindingAccess(r.access, true) as SaasScheduleAccessRetryReceipt['access'], replayed: r.replayed as boolean };
+}

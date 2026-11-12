@@ -38,8 +38,8 @@ test('network target policy accepts only canonical loopback PostgreSQL, includin
   for (const args of [[443, 'example.test'], [5432, 'database.internal'], [{ port: 5432, host: '127.0.0.2' }], [{ path: '/tmp/other.sock' }], [{ port: 3000, host: 'localhost' }]]) assert(!postgresTarget(args));
 });
 test('entire reviewed migration chain and every 0181–0267 checksum are pinned', async () => {
-  const actual = await readMigrationEvidence(); assert.equal(actual.targets.length, 66); assert.equal(actual.entries.at(-1).file.slice(0, 4), '0267');
-  assert.equal(actual.entries.length, 238);
+  const actual = await readMigrationEvidence(); assert.equal(actual.targets.length, 67); assert.equal(actual.entries.at(-1).file.slice(0, 4), '0267');
+  assert.equal(actual.entries.length, 239);
   assert.deepEqual(actual.targets.slice(-2).map(t => t.file.slice(0, 4)), ['0258', '0267']);
   const changed = structuredClone(actual.entries); changed[0].sha256 = '0'.repeat(64);
   assert.throws(() => validateMigrationEvidence(changed, actual));
@@ -57,6 +57,23 @@ test('canonical runtime ACL restores only the eight fixed 0230 schedule-billing 
   assert.deepEqual([...new Set(found)].sort(), [...expected].sort(), '0230 grant list must contain exactly the eight fixed procedures');
   for (const forbidden of ['saas_schedule_requirements', 'saas_schedule_binding_json', 'saas_schedule_binding_available', 'saas_org_billing_conflict', 'saas_schedule_after_paid_period', 'saas_schedule_after_binding_terminal', 'saas_schedule_binding_transition', 'guard_saas_schedule', 'verify_saas_schedule_binding_evidence', 'saas_billing_lifecycle_policy', 'PUBLIC', 'anon', 'authenticated', 'service_role']) assert.doesNotMatch(grant, new RegExp(forbidden));
   assert.match(block, /REVOKE ALL ON FUNCTION hon\.'\|\|f\|\|' FROM PUBLIC/);
+});
+test('canonical runtime ACL restores only the 0235 HQ-owner access retry after the global SaaS revoke', async () => {
+  const acl = await readFile(new URL('../../../infra/postgres/010_supabase_hon_runtime.sql', import.meta.url), 'utf8');
+  const start = acl.indexOf('-- 0235 HON OS schedule billing piece 2');
+  assert(start > acl.indexOf('-- 0230 HON OS schedule billing piece 1.'), '0235 grant must follow the 0230 block and the global SaaS revoke');
+  const block = acl.slice(start, acl.indexOf('END $$;', start) + 'END $$;'.length);
+  const grant = block.slice(block.indexOf('GRANT EXECUTE'), block.indexOf('TO hon_runtime;') + 'TO hon_runtime;'.length);
+  assert.deepEqual([...grant.matchAll(/hon\.([a-z_]+\([^)]*\))/g)].map(m => m[1]), ['retry_saas_schedule_access(text,uuid,jsonb,uuid,uuid,uuid)']);
+  for (const helper of ['saas_schedule_access_grace()', 'saas_schedule_access_json(uuid)', 'saas_schedule_activate_access(uuid,uuid,timestamp with time zone)']) assert(block.includes("'" + helper + "'"), helper + ' is revoked');
+});
+test('0235 access activation keeps billing and access separate and never shortens a paid window', async () => {
+  const migration = await readFile(new URL('../migrations/0235_hon_os_schedule_paid_access.sql', import.meta.url), 'utf8');
+  assert.match(migration, /WHEN NOT hon\.saas_access_program_active\(\) THEN 'ACCESS_PROGRAM_INACTIVE'/);
+  assert.match(migration, /NEW\.paid_through > OLD\.paid_through/);
+  assert.match(migration, /SELECT interval '7 days'/);
+  assert.match(migration, /require_saas_hq_actor\(p_subject, true\)/);
+  assert.doesNotMatch(migration, /hon\.saas_credit|hon\.saas_creative/);
 });
 test('Commercial B2 disposable proof resolves its deterministic provider fixture from the API package', () => {
   const apiRequire = createRequire(new URL('../../../apps/api/package.json', import.meta.url));

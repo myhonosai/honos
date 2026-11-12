@@ -29,4 +29,8 @@ export class SaasScheduleBindingHqController {
   constructor(private readonly schedules: SaasScheduleBillingService) {}
   @Get(':bindingId') @UseGuards(SaasReadGuard)
   read(@Req() r: HonRequest,@Param('bindingId') binding: string) { return this.schedules.readHq(subject(r),binding).then(data => ({data})); }
+  @Post(':bindingId/access-retry') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.retryScheduleAccess)
+  retryAccess(@Req() r: HonRequest,@Param('bindingId') binding: string,@Body() body: unknown,@Headers('idempotency-key') key: string | undefined) {
+    return this.schedules.retryAccess(subject(r),binding,body,key).then(data => ({data}));
+  }
 }

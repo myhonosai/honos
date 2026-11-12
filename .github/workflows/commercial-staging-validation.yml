@@ -17,6 +17,7 @@ on:
       - 'packages/database/migrations/0188_*'
       - 'packages/database/migrations/0189_*'
       - 'packages/database/migrations/0230_*'
+      - 'packages/database/migrations/0235_*'
       - 'packages/database/scripts/*subscription-generation*'
       - 'packages/database/scripts/*schedule-billing*'
       - 'packages/database/scripts/saas-billing-security.mjs'
