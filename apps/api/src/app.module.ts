@@ -140,9 +140,13 @@ import {
   SchoolPayReadHumanUiGuard, SchoolPayRefreshHumanUiGuard, SchoolPayStartHumanUiGuard,
   SchoolPayExpiringReadHumanUiGuard, SchoolPayMethodDefaultHumanUiGuard, SchoolPayMethodFinishHumanUiGuard, SchoolPayMethodRemoveHumanUiGuard,
   SchoolPayMethodSetupHumanUiGuard, SchoolPayMethodsReadHumanUiGuard,
+  SchoolPayAutopayCancelHumanUiGuard, SchoolPayAutopayCycleHumanUiGuard, SchoolPayAutopayEnrollHumanUiGuard, SchoolPayAutopayMethodHumanUiGuard,
+  SchoolPayAutopayReadHumanUiGuard, SchoolPayAutopayStateHumanUiGuard, SchoolPayDiscountReadHumanUiGuard, SchoolPayDiscountSetHumanUiGuard,
 } from './school-payments/school-payment-human-ui.guard.js';
 import { SchoolPayMethodController } from './school-payments/school-pay-method.controller.js';
 import { SchoolPayMethodService } from './school-payments/school-pay-method.service.js';
+import { SchoolPayAutopayController } from './school-payments/school-pay-autopay.controller.js';
+import { SchoolPayAutopayService } from './school-payments/school-pay-autopay.service.js';
 import { SchoolCheckoutController } from './school-checkout/school-checkout.controller.js';
 import { SchoolCheckoutService } from './school-checkout/school-checkout.service.js';
 import { SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard } from './school-checkout/school-checkout-human-ui.guard.js';
@@ -467,6 +471,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     TuitionPaymentController,
     SchoolPaymentController,
     SchoolPayMethodController,
+    SchoolPayAutopayController,
     SchoolCheckoutController,
     MayaAtRiskController,
     SchoolBrandingController,
@@ -641,12 +646,15 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     TuitionPaymentService,
     SchoolPaymentService,
     SchoolPayMethodService,
+    SchoolPayAutopayService,
     { provide: SCHOOL_PAYMENT_ADAPTERS, useFactory: () => schoolPaymentAdaptersFromEnvironment() },
     { provide: SCHOOL_PAYMENT_VAULT, useFactory: () => schoolPaymentVaultForProcess() },
     SchoolPayReadHumanUiGuard, SchoolPayStartHumanUiGuard, SchoolPayOnboardingLinkHumanUiGuard, SchoolPayFinishHumanUiGuard,
     SchoolPayRefreshHumanUiGuard, SchoolPayDefaultHumanUiGuard, SchoolPayDisconnectHumanUiGuard,
     SchoolPayMethodsReadHumanUiGuard, SchoolPayExpiringReadHumanUiGuard, SchoolPayMethodSetupHumanUiGuard, SchoolPayMethodFinishHumanUiGuard,
     SchoolPayMethodDefaultHumanUiGuard, SchoolPayMethodRemoveHumanUiGuard,
+    SchoolPayAutopayReadHumanUiGuard, SchoolPayDiscountReadHumanUiGuard, SchoolPayDiscountSetHumanUiGuard, SchoolPayAutopayEnrollHumanUiGuard,
+    SchoolPayAutopayMethodHumanUiGuard, SchoolPayAutopayStateHumanUiGuard, SchoolPayAutopayCancelHumanUiGuard, SchoolPayAutopayCycleHumanUiGuard,
     SchoolCheckoutService, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard,
     MayaAtRiskService,
     MayaAtRiskReadHumanUiGuard,

@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "685739ce84f4e6428e24715988fb94b49f94f413129d5c31d5b9613889be5b5d",
+  "chainSha256": "d66ab77b991d153e9cd7df8c40ff3a56c9dc3bee69b22216dc74e8484451a249",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -405,6 +405,10 @@
     {
       "file": "0321_school_payer_saved_methods.sql",
       "sha256": "5de27cdfc04af16d057dc62da3d11fdc02e4106dbbcbcefcc6460edf8cc6c4fc"
+    },
+    {
+      "file": "0322_school_pay_autopay_sibling_discounts.sql",
+      "sha256": "33963ff9eea5c9f7cdd8e809adac456a3e43f8050900bc6352d622bb99203c84"
     }
   ]
 }
