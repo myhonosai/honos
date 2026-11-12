@@ -48,6 +48,8 @@ async function read<T>(path: string, validate: (value: unknown) => T, signal: Ab
 export function commandErrorFor(status: number, code: string | null): FounderBillingError {
   if (status === 403) return new FounderBillingError('DENIED', code);
   if (status === 400) return new FounderBillingError('INVALID', code);
+  // The database refused before any write (every error rolls back): the item or resolution is no longer there.
+  if (status === 404) return new FounderBillingError('CHANGED', code);
   if (status === 409 && code === 'SAAS_VERSION_CONFLICT') return new FounderBillingError('CHANGED', code);
   if (status === 409 && code === 'IDEMPOTENCY_KEY_REUSED') return new FounderBillingError('INVALID', code);
   if (status === 422 && code !== null) return new FounderBillingError('REFUSED', code);

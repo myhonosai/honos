@@ -93,6 +93,7 @@ it('keeps the retry key only when the outcome is unknown, and maps refusals befo
   expect(commandErrorFor(403, null).kind).toBe('DENIED');
   expect(commandErrorFor(409, 'SAAS_VERSION_CONFLICT').kind).toBe('CHANGED');
   expect(commandErrorFor(422, 'SAAS_REFUND_EVIDENCE_MISSING')).toMatchObject({ kind: 'REFUSED', code: 'SAAS_REFUND_EVIDENCE_MISSING' });
+  expect(commandErrorFor(404, 'SAAS_UNAVAILABLE').kind).toBe('CHANGED');
   expect(commandErrorFor(409, 'SAAS_OUTCOME_UNKNOWN').kind).toBe('UNKNOWN');
   expect(commandErrorFor(503, null).kind).toBe('UNKNOWN');
   expect(keepForRetry(new FounderBillingError('UNKNOWN'))).toBe(true);

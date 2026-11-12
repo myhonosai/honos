@@ -180,5 +180,5 @@ export function HqFounderBilling({ api = founderBillingApi }: { api?: FounderBil
     }, () => { if (!controller.signal.aborted) setMoreState('The next page could not be loaded. Refresh to start again.'); });
   }, [api, cursor]);
   return <FounderBillingScreen read={read} onRefresh={refresh} more={more?.items ?? []} cursor={cursor} onMore={loadMore} moreState={moreState}
-    renderActions={(item) => <ReviewActions item={item} api={api} onChanged={refresh}/>}/>;
+    renderActions={(item) => <ReviewActions key={`${item.subjectId}:${item.openResolution?.resolutionId ?? 'open'}:${item.openResolution?.status ?? ''}`} item={item} api={api} onChanged={refresh}/>}/>;
 }
