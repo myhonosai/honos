@@ -237,6 +237,10 @@
       "title": "HON | Payment processors"
     },
     {
+      "path": "/staff/billing/checkout-pages",
+      "title": "HON | Checkout pages"
+    },
+    {
       "path": "/staff/champions-club",
       "title": "HON | Champions Club"
     },
