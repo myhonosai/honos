@@ -1298,7 +1298,8 @@ try {
   const r0 = await makeOrg('inv-23');
   const before = await counts(), calls0 = Object.values(fakes).reduce((n, f) => n + f.calls, 0);
   const base = await ready(r0);
-  assert.deepEqual(base.agents.map((a) => [a.agentKey, a.available, a.route, a.spendDecision]), [['marcus', true, 'CONFIGURED', 'ALLOWED'], ['kai', true, 'CONFIGURED', 'ALLOWED'], ['chad', true, 'CONFIGURED', 'ALLOWED'], ['hon', true, 'CONFIGURED', 'ALLOWED'], ['claire', true, 'CONFIGURED', 'ALLOWED']], JSON.stringify(base));
+  assert.deepEqual(base.agents.map((a) => [a.agentKey, a.available, a.route, a.spendDecision]), [['marcus', true, 'CONFIGURED', 'ALLOWED'], ['kai', true, 'CONFIGURED', 'ALLOWED'], ['chad', true, 'CONFIGURED', 'ALLOWED'], ['hon', true, 'CONFIGURED', 'ALLOWED'], ['claire', true, 'CONFIGURED', 'ALLOWED'],
+    ['alex', true, 'CONFIGURED', 'ALLOWED'], ['jordan', true, 'CONFIGURED', 'ALLOWED'], ['lena', true, 'CONFIGURED', 'ALLOWED']], JSON.stringify(base));
   assert.deepEqual([base.organizationId, base.schoolId, base.completeEntitlement, base.agentBudget.ceilingCredits], [r0.id, r0.school, true, 12000]);
   assert.deepEqual(await counts(), before, 'readiness writes nothing');
   assert.equal(Object.values(fakes).reduce((n, f) => n + f.calls, 0), calls0, 'readiness never reaches a provider');
@@ -1331,6 +1332,8 @@ try {
       assert(readiness === null || readiness.hon.available === (affected !== ALL), `hon ${label}: ${JSON.stringify(readiness?.hon)}`);
       // K2: Claire (Business Performance) follows the whole-school gates plus reporting.view, never the teaching permission.
       assert(readiness === null || readiness['claire-bp'].available === (affected !== ALL), `claire-bp ${label}: ${JSON.stringify(readiness?.['claire-bp'])}`);
+      // 0260: Alex, Jordan and Lena follow the whole-school gates plus their own capability, never the teaching permission.
+      for (const k of ['alex', 'jordan', 'lena']) assert(readiness === null || readiness[k].available === (affected !== ALL), `${k} ${label}: ${JSON.stringify(readiness?.[k])}`);
     } finally { await restore(); }
   }
   assert.deepEqual(byKey(await ready(r0)).claire.available, true, 'restored');
@@ -1338,12 +1341,13 @@ try {
   await setUsed(r0, 11996);
   const near = byKey(await ready(r0));
   assert.deepEqual([near.marcus.blockedBy, near.claire.blockedBy, near.chad.available, near.hon.blockedBy, near['claire-bp'].blockedBy], ['ORGANIZATION_AI_BUDGET_REACHED', 'ORGANIZATION_AI_BUDGET_REACHED', true, 'ORGANIZATION_AI_BUDGET_REACHED', 'ORGANIZATION_AI_BUDGET_REACHED'], JSON.stringify(near));
+  assert.deepEqual([near.alex.blockedBy, near.jordan.blockedBy, near.lena.blockedBy], Array(3).fill('ORGANIZATION_AI_BUDGET_REACHED'), '0260: the same 15-credit estimate as Claire');
   // The real request is refused too (the planner's budget denial surfaces as a BLOCKED request with no provider call).
   assert.match(await expectRefused('marcus', r0, {}, 'INV-23 budget'), /^BLOCKED_/, 'the real request agrees');
   const pauseIn = { action: 'PAUSE', organizationId: r0.id, spendClass: 'AGENT_INFERENCE', reason: 'Disposable synthetic AI-0 readiness pause' };
   const pause = await settle(admin.query('SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) r', [hq.subject, JSON.stringify(pauseIn), K()]));
   assert.equal(pause.value?.rows[0].r.status, 'ACTIVE', JSON.stringify(pause.error?.message));
-  assert.deepEqual(Object.values(byKey(await ready(r0))).map((a) => a.blockedBy), ['AI_PAUSED_BY_HQ', 'AI_PAUSED_BY_HQ', 'AI_PAUSED_BY_HQ', 'AI_PAUSED_BY_HQ', 'AI_PAUSED_BY_HQ']);
+  assert.deepEqual(Object.values(byKey(await ready(r0))).map((a) => a.blockedBy), Array(8).fill('AI_PAUSED_BY_HQ'));
   seen.pause = 'AI_PAUSED_BY_HQ';
   // Only the direct human of this transaction, in the human UI, may read readiness.
   for (const [patch, label] of [[{ source: 'AI' }, 'AI source'], [{ delegatedByPrincipalId: r0.principal }, 'delegated']]) {
@@ -2119,7 +2123,7 @@ try {
   assert.deepEqual(readiness.availableAgentKeys, ['marcus', 'kai', 'chad']);
   const team = (await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data;
   // K2: 'claire' is now the Business Performance analyst, listed separately from Kai.
-  assert.deepEqual(team.agents.map((a) => [a.agentKey, a.agent]), [['marcus', 'MARKETING'], ['kai', 'TEACHING'], ['chad', 'CHAD_FOLLOW_UP'], ['hon', 'HON_REPLY'], ['claire', 'BUSINESS_PERFORMANCE']]);
+  assert.deepEqual(team.agents.map((a) => [a.agentKey, a.agent]), [['marcus', 'MARKETING'], ['kai', 'TEACHING'], ['chad', 'CHAD_FOLLOW_UP'], ['hon', 'HON_REPLY'], ['claire', 'BUSINESS_PERFORMANCE'], ['alex', 'GENERAL_MANAGEMENT'], ['jordan', 'OPERATIONS'], ['lena', 'CREATIVE_COMMERCE']]);
   // 5. Without teaching.assistant.use, Kai is refused before any provider call (teaching-only permission boundary unchanged).
   await admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='teaching.assistant.use'", [o.role]);
   const n = fakes.claire.calls;
@@ -2220,7 +2224,12 @@ try {
   // 1. The owner (every capability) may plan each working agent; profile-only agents are never plannable.
   for (const agentKey of ['hon', 'marcus', 'chad']) assert.equal(await plan(agentKey), 'PLANNED', `${agentKey} plannable by an owner`);
   assert.equal(await plan('kai', 'DRAFT_TEACHING'), 'PLANNED', 'kai plannable for teaching by an owner');
-  for (const agentKey of ['alex', 'maya', 'jordan', 'lena', 'eian']) assert.equal(await plan(agentKey), 'PERMISSION_DENIED', `${agentKey} has no working backend and is never planned`);
+  for (const agentKey of ['maya', 'eian']) assert.equal(await plan(agentKey), 'PERMISSION_DENIED', `${agentKey} has no working backend and is never planned`);
+  // 0260: Alex, Jordan and Lena are plannable for analysis only, each with its own capability; never for teaching.
+  for (const agentKey of ['alex', 'jordan', 'lena']) {
+    assert.equal(await plan(agentKey), 'PLANNED', `${agentKey} plannable for analysis by an owner`);
+    assert.notEqual(await plan(agentKey, 'DRAFT_TEACHING'), 'PLANNED', `${agentKey} is never planned for teaching`);
+  }
   // K2 (0229): Claire (Business Performance) is plannable for analysis only, with reporting.view; never for teaching.
   assert.equal(await plan('claire'), 'PLANNED', 'claire plannable for analysis by an owner');
   assert.notEqual(await plan('claire', 'DRAFT_TEACHING'), 'PLANNED', 'claire is never planned for teaching');
@@ -2302,7 +2311,7 @@ try {
     raceEvidence.push(label);
   }
   for (const f of ['ai_agent_capability_permission(text)', 'require_ai_agent_capability(text)', 'hold_and_recheck_ai_planning_authority(text)']) assert.equal((await row(`SELECT has_function_privilege($1,'hon.${f}','EXECUTE') s`, [runtimeRole])).s, false, `${f}: internal helper`);
-  pass('INV-27', `0212: the planner requires each agent's own capability (hon ai.invocation.plan, kai teaching.assistant.use, marcus marketing.assistant.use, chad crm.assistant.follow_up_draft); profile-only agents (alex, maya, jordan, lena, eian, claire) are never planned; the reviewed teaching-staff preset (CUSTOM_TEACHING_STAFF) is staff-assignable, excludes CRM/people/billing/reporting/marketing/approval, and is created through StaffRoleService and granted to a separate instructor; the instructor plans and uses Kai, is refused for Marcus, Chad and profile-only agents before any provider call, and gets HON answers without school business facts; authority is re-held and re-checked after the planner waits (pg_locks-observed ${raceEvidence.join(', ')}: refused, no plan/audit/outbox/idempotency effect)`);
+  pass('INV-27', `0212: the planner requires each agent's own capability (hon ai.invocation.plan, kai teaching.assistant.use, marcus marketing.assistant.use, chad crm.assistant.follow_up_draft); profile-only agents (maya, eian) are never planned (0260: alex, jordan and lena are planned for ANALYZE only); the reviewed teaching-staff preset (CUSTOM_TEACHING_STAFF) is staff-assignable, excludes CRM/people/billing/reporting/marketing/approval, and is created through StaffRoleService and granted to a separate instructor; the instructor plans and uses Kai, is refused for Marcus, Chad and profile-only agents before any provider call, and gets HON answers without school business facts; authority is re-held and re-checked after the planner waits (pg_locks-observed ${raceEvidence.join(', ')}: refused, no plan/audit/outbox/idempotency effect)`);
   }
 
   // ---- INV-28 (C3a, 0214): HON suggests specialists; suggestions are data, filtered by live capability, and run nothing ----
@@ -3033,6 +3042,136 @@ try {
   assert.equal((await settle(admin.query('UPDATE hon.school_briefing_settings SET send_hour=3 WHERE school_id=$1', [o.school]))).error?.code, '23514');
   assert.equal((await settle(admin.query('UPDATE hon.school_briefing_subscriptions SET sms_enabled=true WHERE school_id=$1', [o.school]))).error?.code, '23514', 'SMS is reserved for 0258');
   pass('INV-35', '0257: the weekly briefing is off by default, switched on and timed only by the owner (ai.school_briefing.manage), subscribed by email for oneself only with reporting.view (always possible to turn off), previewed from Command Center counts with no AI call and no names, audited without addresses, idempotent by key, and reachable only through four runtime entry points; SMS stays reserved for 0258');
+  }
+
+  // ---- INV-36 (0260): Alex, Jordan and Lena answer as read-only analysis specialists from their own facts ----
+  {
+  const o = await makeOrg('inv-36');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const code = async (p) => { const r = await settle(p); return r.error?.getResponse?.().code ?? r.error?.code ?? r.error?.message ?? 'OK'; };
+  const turnsOf = async (id) => (await row('SELECT count(*)::int n FROM hon.hon_conversation_turns WHERE conversation_id=$1', [id])).n;
+  const drop = (perm) => admin.query('DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code=$2', [o.role, perm]);
+  const add = (perm) => admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3)', [o.role, o.id, perm]);
+  const CAP = { alex: 'reporting.view', jordan: 'schedule.session.manage', lena: 'marketing.campaign.read' };
+  // Synthetic aggregate facts: one scheduled class tomorrow with no instructor, one cancelled, one active campaign ending soon.
+  const program = K();
+  await admin.query("INSERT INTO hon.programs(id,organization_id,school_id,name,status) VALUES($1,$2,$3,'AI-0 synthetic program','SCHEDULED')", [program, o.id, o.school]);
+  await admin.query("INSERT INTO hon.class_sessions(organization_id,school_id,program_id,name,starts_at,ends_at,capacity,booking_policy) VALUES($1,$2,$3,'Synthetic class',clock_timestamp()+interval '1 day',clock_timestamp()+interval '1 day 1 hour',12,'WALK_IN')", [o.id, o.school, program]);
+  await admin.query("INSERT INTO hon.class_sessions(organization_id,school_id,program_id,name,starts_at,ends_at,capacity,booking_policy,status,cancellation_reason) VALUES($1,$2,$3,'Synthetic cancelled',clock_timestamp()+interval '2 days',clock_timestamp()+interval '2 days 1 hour',8,'WALK_IN','CANCELLED','Synthetic')", [o.id, o.school, program]);
+  // (makeOrg already saved one DRAFT campaign; this one is activated through the guarded DRAFT -> ACTIVE path.)
+  const camp = (await campaigns.save(context(o), null, { expectedVersion: 0, code: 'AI0INV36', name: 'Synthetic campaign', goal: 'Introduce beginner classes', offerLabel: '', channel: 'EMAIL',
+    startsAt: new Date(Date.now() + 3_600_000).toISOString(), endsAt: new Date(Date.now() + 5 * 86_400_000).toISOString(), plannedBudgetMinor: 0, currency: 'USD' })).campaign;
+  assert.equal((await campaigns.status(context(o), camp.id, { expectedVersion: camp.version, status: 'ACTIVE' })).campaign.status, 'ACTIVE');
+  const conv = await hon.create(scope, { title: 'Ask the team' }, K());
+  const ask = (agentKey, text = 'What should we look at this week?', key = K()) => hon.sendTurn(scope, conv.id, { text, delegation: { agentKey } }, key);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  await hon.sendTurn(scope, conv.id, { text: 'Earlier question for HON.', delegation: null }, K());
+  const answered = {};
+  for (const agent of ['alex', 'jordan', 'lena']) {
+    // 1. One call each, planned as <agent>/ANALYZE (DETAILED budgets), own facts and the question only; resend replays.
+    const before = { hon: fakes.hon.calls, specialists: fakes.marcus.calls + fakes.claire.calls + fakes.chad.calls };
+    const key = K();
+    const a = await ask(agent, `Question for ${agent}?`, key);
+    assert.deepEqual([a.status, a.delegatedAgentKeys, a.reply, a.replyDetail.mode, a.replyDetail.step, a.replyDetail.canContinue, a.replyDetail.suggestions],
+      ['COMPLETED', [agent], fakes.hon.reply, 'DETAILED', 1, false, []], `${agent}: ${JSON.stringify(a)}`);
+    assert.deepEqual([fakes.hon.calls - before.hon, fakes.marcus.calls + fakes.claire.calls + fakes.chad.calls - before.specialists], [1, 0], `${agent}: one analysis call, no draft specialist`);
+    const input = fakes.hon.inputs.at(-1);
+    assert.deepEqual([input.specialist, input.replyMode, input.step, input.question], [agent, 'DETAILED', 1, `Question for ${agent}?`]);
+    const facts = JSON.parse(input.facts);
+    assert.deepEqual(Object.keys(facts), ['school'], `${agent}: own facts only, no conversation history or notes`);
+    answered[agent] = { turn: a, facts: facts.school };
+    const rec = await row(`SELECT r.specialist, r.used_reporting, r.source_permissions, p.agent_key, p.task_class, t.agent_key AS turn_agent FROM hon.hon_reply_invocations r
+      JOIN hon.ai_invocation_plans p ON p.id = r.plan_id JOIN hon.hon_conversation_turns t ON t.id = r.turn_id WHERE r.turn_id=$1`, [a.turnId]);
+    const perms = agent === 'alex' ? ['reporting.view', 'schedule.session.manage', 'marketing.campaign.read'] : [CAP[agent]];
+    assert.deepEqual(rec, { specialist: agent, used_reporting: agent === 'alex', source_permissions: perms, agent_key: agent, task_class: 'ANALYZE', turn_agent: agent });
+    assert.deepEqual(await ask(agent, `Question for ${agent}?`, key), a, `${agent}: resend replays`);
+    assert.equal(fakes.hon.calls - before.hon, 1, `${agent}: no second call`);
+  }
+  // The facts are aggregate counts from this school only (no names, people or payment rows).
+  const ops = answered.jordan.facts;
+  assert.deepEqual([ops.availability, ops.next7Days.scheduledSessions, ops.next7Days.cancelledSessions, ops.next7Days.totalCapacity, ops.next7Days.sessionsWithoutInstructor, ops.next7Days.bookedSeats],
+    ['AVAILABLE', 1, 1, 12, 1, 0], JSON.stringify(ops));
+  const com = answered.lena.facts;
+  assert.deepEqual([com.availability, com.campaigns.active, com.campaigns.activeEndingWithin14Days, com.membershipPlans.available, com.creativeStudioLast30Days.requests],
+    ['AVAILABLE', 1, 1, 0, 0], JSON.stringify(com));
+  assert.equal(com.campaigns.draft, 1, 'the makeOrg draft campaign');
+  assert.deepEqual(Object.keys(answered.alex.facts).sort(), ['commandCenter', 'creativeCommerce', 'operations']);
+  assert.deepEqual([answered.alex.facts.operations, answered.alex.facts.creativeCommerce], [ops, com], 'Alex sees the same sections when he holds their permissions');
+  assert.doesNotMatch(JSON.stringify([ops, com]), /Synthetic class|Synthetic campaign|AI0INV36/, 'no record names leave the database');
+  // HON's next answer sees each turn as that specialist's, never with their answer text.
+  await hon.sendTurn(scope, conv.id, { text: 'And what next?', delegation: null }, K());
+  assert.deepEqual(JSON.parse(fakes.hon.inputs.at(-1).facts).history.map((h) => h.delegatedTo ?? null).slice(-3), ['alex', 'jordan', 'lena']);
+  assert.ok(JSON.parse(fakes.hon.inputs.at(-1).facts).history.slice(-3).every((h) => !('answer' in h)), 'no specialist text reaches HON');
+  // 2. Without the capability each one is refused at begin and nothing is recorded.
+  for (const agent of ['alex', 'jordan', 'lena']) {
+    await drop(CAP[agent]);
+    const n = await turnsOf(conv.id);
+    try { assert.equal(await code(ask(agent)), 'HON_CONVERSATION_FORBIDDEN', `${agent} without ${CAP[agent]}`); } finally { await add(CAP[agent]); }
+    assert.equal(await turnsOf(conv.id), n, `${agent}: refused before any turn`);
+  }
+  // 3. Alex without the operations or commerce permission: those sections are NOT_AUTHORIZED and not depended on.
+  await drop('schedule.session.manage');
+  try {
+    const a = await ask('alex', 'Whole-school view without operations?');
+    assert.equal(a.status, 'COMPLETED');
+    const f = JSON.parse(fakes.hon.inputs.at(-1).facts).school;
+    assert.deepEqual([f.operations, f.creativeCommerce.availability], [{ availability: 'NOT_AUTHORIZED' }, 'AVAILABLE']);
+    assert.deepEqual((await row('SELECT source_permissions FROM hon.hon_reply_invocations WHERE turn_id=$1', [a.turnId])).source_permissions, ['reporting.view', 'marketing.campaign.read']);
+  } finally { await add('schedule.session.manage'); }
+  // 4. A lapse between begin and prepare: BLOCKED, nothing reserved, no call.
+  for (const agent of ['jordan', 'lena']) {
+    const begun = await tenant(context(o), (c) => c.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4) d', [o.subject, conv.id, JSON.stringify({ text: 'Lapse?', delegation: { agentKey: agent } }), K()]));
+    const turnId = begun.rows[0].d.turnId;
+    const ref = (await tenant(context(o), (c) => c.query('SELECT hon.hon_reply_planning_reference($1,$2::uuid) d', [o.subject, turnId]))).rows[0].d;
+    assert.deepEqual([ref.agentKey, ref.limits.replyMode, ref.limits.taskClass], [agent, 'DETAILED', 'ANALYZE']);
+    const lim = ref.limits;
+    const planned = await plans.plan({ ...context(o), idempotencyKey: ref.invocationId }, ref.workItemId, { expectedVersion: ref.workVersion, expectedState: 'READY', agentKey: agent, modality: 'TEXT', taskClass: lim.taskClass, inputBudget: lim.inputBudget, outputBudget: lim.outputBudget, maxProviderCostMicrounits: lim.maxProviderCostMicrounits });
+    await drop(CAP[agent]);
+    const calls = fakes.hon.calls;
+    let prepared;
+    try {
+      prepared = await tenant(context(o), async (c) => { await c.query("SELECT set_config('app.hon_external_subject',$1,true)", [o.subject]); return (await c.query('SELECT hon.prepare_hon_reply($1,$2::uuid,$3::uuid,true) d', [o.subject, turnId, planned.plan.id])).rows[0].d; });
+    } finally { await add(CAP[agent]); }
+    const r = await row('SELECT status, reason, reserved_credits FROM hon.hon_reply_invocations WHERE turn_id=$1', [turnId]);
+    assert.deepEqual([prepared, r.status, r.reason, r.reserved_credits, fakes.hon.calls - calls], [null, 'BLOCKED', 'SOURCE_ACCESS_REFUSED', 0, 0], agent);
+  }
+  // 5. A lapse after completion conceals the answer (each permission the facts used); usage evidence stays.
+  for (const [agent, perm] of [['jordan', 'schedule.session.manage'], ['lena', 'marketing.campaign.read'], ['alex', 'reporting.view'], ['alex', 'schedule.session.manage']]) {
+    await drop(perm);
+    try {
+      const hidden = (await hon.read(scope, conv.id)).turns.find((t) => t.turnId === answered[agent].turn.turnId && t.role === agent);
+      assert.deepEqual([hidden.text, hidden.reason], [null, 'RESULT_CONCEALED'], `${agent} without ${perm}`);
+    } finally { await add(perm); }
+    assert.ok((await row('SELECT usage_id FROM hon.hon_reply_invocations WHERE turn_id=$1', [answered[agent].turn.turnId])).usage_id, 'usage evidence stays');
+  }
+  assert.equal((await hon.read(scope, conv.id)).turns.find((t) => t.turnId === answered.jordan.turn.turnId && t.role === 'jordan').text, fakes.hon.reply, 'shown again once restored');
+  // 6. Never continued, confirmed from a suggestion, given a target, or empty.
+  for (const [bad, expected] of [[{ text: 'x', delegation: { agentKey: 'jordan' }, fromSuggestionTurnId: answered.jordan.turn.turnId }, 'HON_SUGGESTION_NOT_CONFIRMABLE'],
+    [{ text: 'Continue', delegation: null, continueTurnId: answered.lena.turn.turnId }, 'HON_REPLY_NOT_CONTINUABLE'],
+    [{ text: 'Plan it', delegation: { agentKey: 'lena', campaignId: K() } }, 'HON_DELEGATION_REQUIRED'],
+    [{ text: '  ', delegation: { agentKey: 'alex' } }, 'INVALID_HON_TURN']]) {
+    assert.equal((await settle(tenant(context(o), (c) => c.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4)', [o.subject, conv.id, JSON.stringify(bad), K()])))).error?.message, expected, JSON.stringify(bad));
+  }
+  // 7. Table and planner rules.
+  assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET reply_mode='STANDARD' WHERE turn_id=$1", [answered.jordan.turn.turnId]))).error?.code ?? 'OK', '23514');
+  assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{marcus}' WHERE turn_id=$1", [answered.lena.turn.turnId]))).error?.code ?? 'OK', '23514');
+  assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET source_permissions='{billing.membership.read}' WHERE turn_id=$1", [answered.alex.turn.turnId]))).error?.code ?? 'OK', '23514');
+  assert.deepEqual((await row("SELECT hon.ai_agent_capability_permission('alex') a, hon.ai_agent_capability_permission('jordan') j, hon.ai_agent_capability_permission('lena') l")), { a: 'reporting.view', j: 'schedule.session.manage', l: 'marketing.campaign.read' });
+  assert.equal((await row("SELECT count(*)::int n FROM pg_constraint WHERE conname='ai_invocation_plans_specialists_analysis_only' AND convalidated")).n, 1);
+  for (const f of ['hon_school_operations_facts(uuid,uuid,timestamptz)', 'hon_school_creative_commerce_facts(uuid,uuid,timestamptz)', 'read_specialist_school_facts(text,text,uuid,uuid)']) {
+    assert.equal((await row(`SELECT has_function_privilege($1, 'hon.${f}', 'EXECUTE') x`, [runtimeRole])).x, false, `${f} is internal`);
+  }
+  // 8. Readiness lists each with its own capability.
+  const ready = (await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data.agents;
+  assert.deepEqual(ready.filter((x) => ['alex', 'jordan', 'lena'].includes(x.agentKey)).map((x) => [x.agentKey, x.agent, x.authorized, x.requestCredits]),
+    [['alex', 'GENERAL_MANAGEMENT', true, 15], ['jordan', 'OPERATIONS', true, 15], ['lena', 'CREATIVE_COMMERCE', true, 15]]);
+  await drop('schedule.session.manage');
+  try {
+    const r8 = (await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data.agents;
+    assert.deepEqual(['alex', 'jordan', 'lena'].map((k) => r8.find((x) => x.agentKey === k).blockedBy), [null, 'NOT_AUTHORIZED', null]);
+  } finally { await add('schedule.session.manage'); }
+  pass('INV-36', "0260: Alex (general management, reporting.view), Jordan (operations, schedule.session.manage) and Lena (creative & commerce, marketing.campaign.read) each answer a question in text from their own aggregate school facts (planned as <agent>/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays; no record names); Alex's operations and commerce sections follow those permissions; each is refused at begin without its capability (nothing recorded) and blocked in prepare on a lapse (nothing reserved or sent); answers are concealed when any permission their facts used lapses while usage evidence stays; HON sees their turns without their text; never continued, confirmed from suggestions or given a target; rows are single DETAILED analyses, source permissions are a closed set, plans are ANALYZE only, the fact readers are internal; readiness lists GENERAL_MANAGEMENT, OPERATIONS and CREATIVE_COMMERCE gated on each capability");
   }
 
   // ---- INV-32 (R1, 0287): routing by task class through the HQ task profile ----

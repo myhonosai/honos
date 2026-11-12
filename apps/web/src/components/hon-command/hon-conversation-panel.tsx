@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  HON_REPLY_CONCEALED_REASON, HON_REPLY_LIMITS, type FollowUpDraftPurpose, type HonConversationReadiness, type HonConversationSummary,
+  HON_ANALYST_AGENTS, HON_REPLY_CONCEALED_REASON, HON_REPLY_LIMITS, isHonAnalystAgent, type HonAnalystAgentKey, type FollowUpDraftPurpose, type HonConversationReadiness, type HonConversationSummary,
   type HonConversationThread, type HonConversationTurn, type HonDelegateAgentKey, type HonOrchestration, type HonReplyMode, type HonTurnReceipt, type HonTurnRequest,
   HON_REPLY_SOURCE_LABELS,
 } from '@hon/contracts';
@@ -19,14 +19,26 @@ import {
 import styles from './hon-conversation.module.css';
 
 // A 'claire' turn is Claire, Business Performance (K2); legacy claire teaching turns are already presented as 'kai' by the server.
-const AGENT_NAME: Record<string, string> = { hon: 'HON', marcus: 'Marcus', claire: 'Claire', kai: 'Kai', chad: 'Chad', HUMAN: 'You' };
-/** Who answers a typed question: HON, or Claire's read-only Business Performance analysis (only when readiness says she can). */
-export type HonComposerAsk = 'hon' | 'claire';
-/** The exact turn the composer sends. A Claire question is a bare delegation: the server fixes it to one detailed answer. */
+const AGENT_NAME: Record<string, string> = { hon: 'HON', marcus: 'Marcus', claire: 'Claire', kai: 'Kai', chad: 'Chad', alex: 'Alex', jordan: 'Jordan', lena: 'Lena', HUMAN: 'You' };
+/** Who answers a typed question: HON, or one read-only analysis specialist (only when readiness says it can). */
+export type HonComposerAsk = 'hon' | HonAnalystAgentKey;
+/** Each analysis specialist's label and what it reads (0260; Claire K2). */
+export const ANALYST_CHOICE: Readonly<Record<HonAnalystAgentKey, { label: string; note: string }>> = {
+  claire: { label: 'Claire, Business Performance', note: 'Claire reads this school’s performance numbers (revenue, trial conversion, attendance, unanswered inquiries) and gives one detailed answer: the recorded facts, then her view. She never drafts, sends or changes anything. Included in HON OS; nothing is charged.' },
+  alex: { label: 'Alex, General Management', note: 'Alex reads this school’s overall numbers (Command Center, plus classes and campaigns when your role includes them) and gives one detailed answer: the recorded facts, then what to focus on. He never drafts, sends or changes anything. Included in HON OS; nothing is charged.' },
+  jordan: { label: 'Jordan, Operations', note: 'Jordan reads this school’s class schedule for the next 7 days, attendance for the last 30 days and planned absences awaiting review, and gives one detailed answer: the recorded facts, then his view. He never schedules, sends or changes anything. Included in HON OS; nothing is charged.' },
+  lena: { label: 'Lena, Creative & Commerce', note: 'Lena reads this school’s campaigns, membership plan catalog and Creative Studio requests, and gives one detailed answer: the recorded facts, then her ideas. She never publishes, sends or changes anything. Included in HON OS; nothing is charged.' },
+};
+/** The exact turn the composer sends. An analysis question is a bare delegation: the server fixes it to one detailed answer. */
 export function composerTurnRequest(text: string, ask: HonComposerAsk, mode: HonReplyMode): HonTurnRequest {
-  return ask === 'claire' ? { text, delegation: { agentKey: 'claire' } } : { text, delegation: null, replyMode: mode };
+  return isHonAnalystAgent(ask) ? { text, delegation: { agentKey: ask } } : { text, delegation: null, replyMode: mode };
 }
-const askName = (ask: HonComposerAsk) => ask === 'claire' ? 'Claire' : 'HON';
+const askName = (ask: HonComposerAsk) => AGENT_NAME[ask] ?? 'HON';
+/** The analysis specialists readiness offers now (Claire through businessPerformance, the others through availableAnalystKeys). */
+export function offeredAnalysts(readiness: HonConversationReadiness | null): HonAnalystAgentKey[] {
+  if (!readiness) return [];
+  return HON_ANALYST_AGENTS.filter((k) => (k === 'claire' ? readiness.businessPerformance === true : (readiness.availableAnalystKeys ?? []).includes(k)));
+}
 const FAILURE: Record<HonConversationFailure, string> = {
   SESSION: 'Your session ended. Sign in again.',
   FORBIDDEN: 'This account cannot use HON at this school. Nothing was sent.',
@@ -87,7 +99,7 @@ export type HonConversationViewProps = {
   presentation: 'panel' | 'full'; phase: ConversationPhase; readiness: HonConversationReadiness | null; conversations: HonConversationSummary[];
   thread: HonConversationThread | null; threadPhase: 'NONE' | 'LOADING' | 'READY' | HonConversationFailure; pending: Pending | null;
   draft: string; mode: HonReplyMode;
-  /** Who answers; shown as a choice only when readiness.businessPerformance is true, otherwise always HON. */
+  /** Who answers; shown as a choice only for analysis specialists readiness offers, otherwise always HON. */
   ask: HonComposerAsk; onAsk(ask: HonComposerAsk): void;
   /** C3a grouped confirmations of this thread's HON answers, by source turn id (lower case). */
   groups: ReadonlyMap<string, HonOrchestration>; groupPhase: GroupPhase; confirm: SuggestionConfirm | null;
@@ -235,8 +247,9 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
   const suggestLocked = pending !== null && (pending.state === 'SENDING' || pending.state === 'UNKNOWN');
   const available = readiness?.availableAgentKeys ?? [];
   const canAsk = phase === 'READY' && readiness?.honReply === true && !locked;
-  const claireOffered = readiness?.businessPerformance === true;
-  const ask: HonComposerAsk = claireOffered && props.ask === 'claire' ? 'claire' : 'hon';
+  const offered = offeredAnalysts(readiness);
+  const ask: HonComposerAsk = props.ask !== 'hon' && offered.includes(props.ask) ? props.ask : 'hon';
+  const analyst = ask !== 'hon';
   const id = `hon-ask-${props.presentation}`;
   const left = HON_REPLY_LIMITS.questionCharacters - props.draft.length;
   return <section className={styles.conversation} aria-labelledby={`${id}-title`} data-hon-conversation={phase} data-presentation={props.presentation}>
@@ -272,7 +285,7 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
             {turn.role === 'hon' ? <Suggestions turn={turn} group={props.groups.get(turn.turnId.toLowerCase())} groupPhase={props.groupPhase} available={available} locked={suggestLocked}
               canSummarize={canAsk && !suggestLocked} onSummarize={props.onSummarize}
               confirm={props.confirm} onSuggest={props.onSuggest} onConfirmChange={props.onConfirmChange} onConfirmSend={props.onConfirmSend} onConfirmCancel={props.onConfirmCancel} /> : null}
-            {turn.role === 'hon' || turn.role === 'claire' ? <FollowUps turn={turn} locked={!canAsk || locked} onPick={(question) => {
+            {turn.role === 'hon' || isHonAnalystAgent(turn.role) ? <FollowUps turn={turn} locked={!canAsk || locked} onPick={(question) => {
               props.onDraft(question);
               if (typeof document !== 'undefined') document.getElementById(`${id}-text`)?.focus();
             }} /> : null}
@@ -280,19 +293,20 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
         </ol> : null}
         {thread === null && props.threadPhase === 'NONE' ? <p className={styles.note}>Ask about leads, trials, memberships, attendance or what to do next. Your first message starts a new conversation.</p> : null}
         <form className={styles.composer} onSubmit={(event) => { event.preventDefault(); if (canAsk && props.draft.trim()) props.onSend(); }}>
-          {claireOffered ? <fieldset className={styles.modes} disabled={!canAsk}><legend>Who answers</legend>
-            {(['hon', 'claire'] as const).map((who) => <label key={who}><input type="radio" name={`${id}-ask`} value={who} checked={ask === who} onChange={() => props.onAsk(who)} />{who === 'hon' ? 'HON' : 'Claire, Business Performance'}</label>)}
+          {offered.length > 0 ? <fieldset className={styles.modes} disabled={!canAsk}><legend>Who answers</legend>
+            {(['hon', ...offered] as const).map((who) => <label key={who}><input type="radio" name={`${id}-ask`} value={who} checked={ask === who} onChange={() => props.onAsk(who)} />{who === 'hon' ? 'HON' : ANALYST_CHOICE[who].label}</label>)}
           </fieldset> : null}
           <label htmlFor={`${id}-text`}>Message {askName(ask)}</label>
           <textarea id={`${id}-text`} rows={props.presentation === 'full' ? 3 : 2} maxLength={HON_REPLY_LIMITS.questionCharacters} value={props.draft} disabled={!canAsk}
             onChange={(event) => props.onDraft(event.target.value)} aria-describedby={`${id}-help`} placeholder={canAsk ? 'How can I help you today?' : 'HON is not available right now'} />
           <div className={styles.composerRow}>
-            <fieldset className={styles.modes} disabled={!canAsk || ask === 'claire'}><legend>Answer</legend>
-              {(['STANDARD', 'DETAILED'] as const).map((mode) => <label key={mode}><input type="radio" name={`${id}-mode`} checked={(ask === 'claire' ? 'DETAILED' : props.mode) === mode} onChange={() => props.onMode(mode)} />{mode === 'STANDARD' ? 'Quick' : 'Detailed'}</label>)}
+            <fieldset className={styles.modes} disabled={!canAsk || analyst}><legend>Answer</legend>
+              {(['STANDARD', 'DETAILED'] as const).map((mode) => <label key={mode}><input type="radio" name={`${id}-mode`} checked={(analyst ? 'DETAILED' : props.mode) === mode} onChange={() => props.onMode(mode)} />{mode === 'STANDARD' ? 'Quick' : 'Detailed'}</label>)}
             </fieldset>
             <button type="submit" disabled={!canAsk || props.draft.trim().length === 0}>Send</button>
           </div>
-          {ask === 'claire' ? <p className={styles.note} data-claire-note="">Claire reads this school’s performance numbers (revenue, trial conversion, attendance, unanswered inquiries) and gives one detailed answer: the recorded facts, then her view. She never drafts, sends or changes anything. Included in HON OS; nothing is charged.</p> : null}
+          {ask === 'claire' ? <p className={styles.note} data-claire-note="">{ANALYST_CHOICE.claire.note}</p> : null}
+          {analyst && ask !== 'claire' ? <p className={styles.note} data-analyst-note={ask}>{ANALYST_CHOICE[ask].note}</p> : null}
           <p id={`${id}-help`} className={styles.meta}>{left.toLocaleString()} characters left. Don’t include passwords, card numbers or medical details.</p>
         </form>
       </div>
@@ -432,8 +446,8 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   const send = () => {
     const text = draft.trim();
     if (!text || concealed.current) return;
-    // Claire only while the latest readiness offers her; otherwise the question goes to HON exactly as before.
-    const who: HonComposerAsk = ask === 'claire' && readiness?.businessPerformance === true ? 'claire' : 'hon';
+    // An analysis specialist only while the latest readiness offers it; otherwise the question goes to HON exactly as before.
+    const who: HonComposerAsk = ask !== 'hon' && offeredAnalysts(readiness).includes(ask) ? ask : 'hon';
     try {
       if (thread) {
         openId.current = thread.id;

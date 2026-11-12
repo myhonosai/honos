@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "7807750328ece79bef14e703d235afd93c21dbc241c4827e0b52b2cc2342c297",
+  "chainSha256": "c2b919df43922ca0e23868d23f51270b957a1e9aee4b2420435d79ada7c77f67",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -271,6 +271,14 @@
       "sha256": "bcbfedb05f739ba99872aa5467236cb050c2c078f53daa804681821c75f76a17"
     },
     {
+      "file": "0259_maya_at_risk_students.sql",
+      "sha256": "6b8267f54f694799c387fdf34b8848a6d8bf041161095d9e00e171587c32293c"
+    },
+    {
+      "file": "0260_hon_analysis_specialists.sql",
+      "sha256": "01177f4f95e03cf451500d8063dcc690d3b9f9e4bcf625be727260a9fcd0d410"
+    },
+    {
       "file": "0261_school_event_booking.sql",
       "sha256": "3a8bfc78de0a42c61a59f3ff182bbbd792b68251223af6a68a89906f1848d675"
     },
@@ -293,6 +301,10 @@
     {
       "file": "0274_hon_os_admission_limits_hq.sql",
       "sha256": "3f9b0d3a909005f190517ef193167ff0fca3032fa6ea35ed418d58dd6ce92adc"
+    },
+    {
+      "file": "0278_ai_team_readiness_reconcile.sql",
+      "sha256": "f29d606e7ab0e1273d5ae41f2eeb105f14b3eb0fa930fcd194a5ad2439c5362e"
     },
     {
       "file": "0287_ai_task_class_routing.sql",
