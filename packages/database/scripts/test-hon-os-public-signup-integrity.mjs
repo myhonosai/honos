@@ -164,6 +164,34 @@ try{
  await assert.rejects(()=>q("INSERT INTO hon.hon_os_signup_terms_versions(version,status,title,document_digest,recorded_at) VALUES(2,'OWNER_APPROVED','x',$1,clock_timestamp())",['a'.repeat(64)]),e=>e.code==='23514');
  pass('closing the program between the writes and commit aborts the whole sign-up; registrations and terms are append-only; no approved-terms status exists yet');
 
+ // 10 (0273). Abuse protection held in the database: disposable email domains and global admission limits.
+ for(const t of ['hon_os_admission_limits','hon_os_signup_blocked_email_domains']){
+  const c=(await q('SELECT relrowsecurity rls,relforcerowsecurity forced FROM pg_class WHERE oid=$1::regclass',['hon.'+t]))[0];assert(c.rls&&c.forced,t);
+  for(const p of ['SELECT','INSERT','UPDATE','DELETE'])assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[runtime.username,'hon.'+t,p]))[0].ok,false,t+':'+p);
+ }
+ await assert.rejects(()=>q('DELETE FROM hon.hon_os_admission_limits'),e=>/ADMISSION_LIMITS_IMMUTABLE/.test(e.message));
+ await assert.rejects(()=>q('UPDATE hon.hon_os_admission_limits SET signups_per_hour=0'),e=>e.code==='23514');
+ const limits=(await q('SELECT *,recorded_at::text rec FROM hon.hon_os_admission_limits'))[0];
+ assert.deepEqual([limits.signups_per_hour,limits.signups_per_day,limits.trials_per_hour,limits.trials_per_day],[30,200,30,200]);
+ const at=(label,domain)=>({...person(label),email:label+'-'+K()+'@'+domain});
+ for(const domain of ['mailinator.com','inbox.yopmail.com','MAILDROP.CC'])await denied(()=>send('account/sign-up',{identity:at('throwaway',domain),body:form()}),409,'SIGNUP_EMAIL_DOMAIN_NOT_ACCEPTED');
+ assert.equal((await q("SELECT hon.hon_os_email_domain_blocked('owner@notmailinator.com') a,hon.hon_os_email_domain_blocked('owner@mailinator.com.example.invalid') b"))[0].a,false);
+ const setLimits=(hour,day)=>q('UPDATE hon.hon_os_admission_limits SET signups_per_hour=$1,signups_per_day=$2',[hour,day]);
+ const recent=async span=>Number((await q(`SELECT count(*) n FROM hon.hon_os_school_registrations WHERE registered_at>clock_timestamp()-interval '${span}'`))[0].n);
+ try{
+  await setLimits(Math.max(1,await recent('1 hour')),Math.max(1,await recent('1 day')));
+  if(await recent('1 hour')>0)await denied(()=>send('account/sign-up',{identity:person('over-hour'),body:form()}),409,'SIGNUP_CAPACITY_REACHED');
+  await setLimits(1,Math.max(1,await recent('1 day')));
+  if(await recent('1 day')>0)await denied(()=>send('account/sign-up',{identity:person('over-day'),body:form()}),409,'SIGNUP_CAPACITY_REACHED');
+  // One seat left, five different people at once: exactly one school is created.
+  const n=await recent('1 hour');await setLimits(n+1,Math.max(n+1,await recent('1 day')+1));
+  const rush=await Promise.all(Array.from({length:5},(_,i)=>send('account/sign-up',{identity:person('rush'+i),body:form()})));
+  assert.equal(rush.filter(r=>r.status===200).length,1,JSON.stringify(rush.map(r=>[r.status,r.body.code])));
+  assert(rush.filter(r=>r.status!==200).every(r=>(r.status===409&&r.body.code==='SIGNUP_CAPACITY_REACHED')||(r.status===503&&r.body.code==='SIGNUP_BUSY')));
+  assert.equal(await recent('1 hour'),n+1);
+ }finally{await q('UPDATE hon.hon_os_admission_limits SET signups_per_hour=$1,signups_per_day=$2,recorded_at=$3::timestamptz',[limits.signups_per_hour,limits.signups_per_day,limits.rec]);}
+ pass('0273: a verified email at a listed throwaway domain (or its subdomain) is refused with no effects; hourly and daily admission limits refuse new schools with no effects; five people racing for the last seat create exactly one school; limits are migration-owner only');
+
  assert.deepEqual(await snapshot(),baseline);
  pass('no billing, access-state, credit, AI, CRM, trial or outbox table changed: identity, school, OWNER grant and registration only');
  console.log(`PASS: HON OS public sign-up (${groups} groups)`);

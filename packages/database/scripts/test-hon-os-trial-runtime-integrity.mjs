@@ -269,6 +269,18 @@ try{
  assert.match(await body('ai_org_open_agent_holds'),/marketing_ai_invocations/,'the fixture replacement rolled back');
  pass('0272: campaign cost cap counts open holds at their plan maximum (no plan = whole cap); HQ usage and readiness show the trial credits left; lost holds from an earlier month inside the trial still use trial credits'+(crossesMonth?'':' (month-crossing case not reachable today; window arithmetic checked)'));
 
+ // 0273. Global trial admission limit, enforced on the enrollment insert under one admission lock (any writer).
+ const tl=(await q('SELECT trials_per_hour h,trials_per_day d,recorded_at::text rec FROM hon.hon_os_admission_limits'))[0];assert.deepEqual([tl.h,tl.d],[30,200]);
+ const gus=await register('gus');
+ try{
+  const hourCount=Number((await q("SELECT count(*) n FROM hon.hon_os_trial_enrollments WHERE starts_at>clock_timestamp()-interval '1 hour'"))[0].n);assert(hourCount>0);
+  await q('UPDATE hon.hon_os_admission_limits SET trials_per_hour=$1',[hourCount]);
+  await admin.query('BEGIN');
+  try{await assert.rejects(()=>enroll(gus,{daysAgo:0}),e=>e.message==='TRIAL_CAPACITY_REACHED'&&e.code==='23514');}finally{await admin.query('ROLLBACK');}
+  assert.equal((await q('SELECT count(*) n FROM hon.hon_os_trial_enrollments WHERE organization_id=$1',[gus.reg.organizationId]))[0].n,'0');
+ }finally{await q('UPDATE hon.hon_os_admission_limits SET trials_per_hour=$1,trials_per_day=$2,recorded_at=$3::timestamptz',[tl.h,tl.d,tl.rec]);}
+ pass('0273: once the hourly trial admission limit is reached, no further trial can be enrolled by any path');
+
  // 4 (0272). A replay is a read of the owner's own receipt: once their owner grant is revoked it is refused.
  const anaGrant=(await q('SELECT owner_grant_id g FROM hon.hon_os_school_registrations WHERE id=$1',[ana.reg.registrationId]))[0].g;
  await q('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=principal_id WHERE id=$1',[anaGrant]);

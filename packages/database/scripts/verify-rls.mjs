@@ -88,7 +88,7 @@ const expectedRlsTables = [
   ...saasBillingTables,
   ...creativeStudioTables,
   ...schoolAccountTables,
-  'hon_os_signup_program', 'hon_os_signup_terms_versions', 'hon_os_school_registrations', 'hon_os_trial_program', 'hon_os_trial_enrollments',
+  'hon_os_signup_program', 'hon_os_signup_terms_versions', 'hon_os_school_registrations', 'hon_os_trial_program', 'hon_os_trial_enrollments', 'hon_os_admission_limits', 'hon_os_signup_blocked_email_domains',
   ...languagePreferenceTables,
   'membership_renewal_reviews', 'membership_renewal_versions', 'membership_renewal_requests',
   'crm_follow_ups', 'crm_follow_up_versions', 'crm_follow_up_requests',
