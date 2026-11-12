@@ -3267,6 +3267,29 @@ DO $$ DECLARE safe boolean; BEGIN
 END $$;
 -- End school invoice list exact verification.
 
+-- Missed-call text-back exact verification (B-COM-1 0249): a private forced-RLS table the runtime cannot touch, one
+-- entitlement-gated definer read and the HQ-owner settings command for the runtime, and worker-only routing/recording.
+DO $$ DECLARE f text; runtime oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'); BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.missed_calls'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR has_table_privilege('hon_runtime','hon.missed_calls','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+    RAISE EXCEPTION 'Unsafe missed-call table posture'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.read_school_missed_calls(text,uuid,integer)','hon.set_school_missed_call_settings_from_hq(text,uuid,text,boolean,integer)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef
+        AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND p.proowner<>runtime AND (owner.rolsuper OR owner.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (a.grantee<>runtime OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe missed-call runtime function: %',f; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc x WHERE x.pronamespace='hon'::regnamespace AND x.proname='read_school_missed_calls')<>1 THEN
+    RAISE EXCEPTION 'Unexpected missed-call read overload'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.read_missed_call_route(text)','hon.record_missed_call(text,text,text,text,timestamptz)',
+    'hon.claim_missed_call_text_backs(integer,integer)','hon.record_missed_call_text_back_result(uuid,uuid,text,text)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') THEN RAISE EXCEPTION 'Runtime can run missed-call worker function: %',f; END IF;
+  END LOOP;
+END $$;
+-- End missed-call text-back exact verification.
+
 -- School page branding exact verification (B-SCH-3 0285): two private forced-RLS tables, the guards, private validators
 -- and helpers, three runtime entry points and the permission.
 DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN

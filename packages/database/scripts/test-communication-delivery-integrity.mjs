@@ -1,6 +1,7 @@
 // 0243 communication delivery and provider receipts: worker claim/lease/record, quiet hours, consent and
 // address re-checks at send time, retry backoff and exhaustion, lease expiry and late results as UNKNOWN,
-// idempotent forward-only receipts, recipient opt-out, forced RLS reads and exact role boundaries.
+// idempotent forward-only receipts, recipient opt-out, forced RLS reads and exact role boundaries; 0248 school
+// senders and STOP/START/HELP; 0249 missed-call routing and one text-back per caller per day.
 import pg from 'pg';
 import { randomUUID } from 'node:crypto';
 
@@ -36,7 +37,7 @@ const dayZone = zones.find((zone) => hourIn(zone) >= 10 && hourIn(zone) <= 18);
 const nightZone = zones.find((zone) => hourIn(zone) >= 23 || hourIn(zone) <= 5);
 if (!dayZone || !nightZone) throw new Error('No suitable day/night time zones for the quiet-hours proof.');
 
-const ids = Object.fromEntries(['org', 'schoolA', 'schoolB', 'schoolC', 'user', 'principal', 'hqUser', 'hqPrincipal'].map((key) => [key, randomUUID()]));
+const ids = Object.fromEntries(['org', 'schoolA', 'schoolB', 'schoolC', 'user', 'principal', 'hqUser', 'hqPrincipal', 'role', 'readerUser', 'readerPrincipal'].map((key) => [key, randomUUID()]));
 const person = {};
 const message = {};
 
@@ -76,12 +77,17 @@ async function cleanup() {
     await admin.query('DELETE FROM hon.audit_events WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.communication_messages WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.inbound_text_keywords WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.missed_calls WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.school_text_senders WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.hq_operator_grants WHERE principal_id = $1', [ids.hqPrincipal]);
     await admin.query('DELETE FROM hon.communication_consents WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.people WHERE organization_id = $1', [ids.org]);
-    await admin.query('DELETE FROM hon.principals WHERE id = ANY($1::uuid[])', [[ids.principal, ids.hqPrincipal]]);
-    await admin.query('DELETE FROM hon.users WHERE id = ANY($1::uuid[])', [[ids.user, ids.hqUser]]);
+    await admin.query('DELETE FROM hon.principal_role_grants WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.role_permissions WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.roles WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.organization_entitlements WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.principals WHERE id = ANY($1::uuid[])', [[ids.principal, ids.hqPrincipal, ids.readerPrincipal]]);
+    await admin.query('DELETE FROM hon.users WHERE id = ANY($1::uuid[])', [[ids.user, ids.hqUser, ids.readerUser]]);
     await admin.query('DELETE FROM hon.schools WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.organizations WHERE id = $1', [ids.org]);
     await admin.query('COMMIT');
@@ -398,6 +404,141 @@ try {
     console.log('Twilio end-to-end skipped: the day zone left sending hours during the run.');
   }
   await twWorker.onModuleDestroy();
+
+  // 15. 0249 missed calls: HQ-owner settings, signed routing, one reply per caller per day, opt-outs, quiet hours, lease rules, RLS.
+  const senderVersion = async (school) => (await admin.query('SELECT version FROM hon.school_text_senders WHERE school_id = $1', [school])).rows[0].version;
+  const setMissed = (school, forward, on, version) => runtime.query('SELECT hon.set_school_missed_call_settings_from_hq($1,$2,$3,$4,$5) AS data', [`hq-${ids.hqUser}`, school, forward, on, version]);
+  await expectError('42501', () => runtime.query('SELECT hon.set_school_missed_call_settings_from_hq($1,$2,NULL,true,1)', [`delivery-${ids.user}`, ids.schoolA]), 'school staff cannot change missed-call settings');
+  await expectError('22023', async () => setMissed(ids.schoolA, '+15555559001', true, await senderVersion(ids.schoolA)), 'a school number cannot forward to itself');
+  await expectError('40001', () => setMissed(ids.schoolA, '+15555550199', true, 999), 'a stale settings version conflicts');
+  await expectError('P0002', () => setMissed(randomUUID(), '+15555550199', true, 1), 'a school without a sender has no missed-call settings');
+  const settings = (await setMissed(ids.schoolA, '+15555550199', true, await senderVersion(ids.schoolA))).rows[0].data;
+  check(settings.forwardSet === true && settings.missedCallTextBack === true && !JSON.stringify(settings).includes('5555550199'), 'the HQ owner turns on forwarding and text-back; the answer carries no phone number');
+  check((await admin.query("SELECT count(*)::int AS n FROM hon.audit_events WHERE action_code = 'communication.missed_call_settings.set' AND school_id = $1", [ids.schoolA])).rows[0].n === 1, 'missed-call settings are audited');
+  await setMissed(ids.schoolB, null, true, await senderVersion(ids.schoolB));
+  const route = async (to) => (await worker.query('SELECT * FROM hon.read_missed_call_route($1)', [to])).rows[0];
+  check((await route('+15555559001')).routed && (await route('+15555559001')).forward_phone_e164 === '+15555550199', 'a call to school A forwards to the school phone');
+  check((await route('+15555559002')).routed && (await route('+15555559002')).forward_phone_e164 === null, 'school B has no forwarding phone');
+  check(!(await route('+15555559003')).routed && !(await route('+15555558888')).routed, 'a DISABLED or unknown number is not routed');
+  await expectError('42501', () => runtime.query("SELECT * FROM hon.read_missed_call_route('+15555559001')"), 'runtime cannot read call routing');
+  await expectError('42501', () => runtime.query("SELECT * FROM hon.record_missed_call('+15555559001','+15555550201',$1,'busy',now())", [`CA${'0'.repeat(32)}`]), 'runtime cannot record missed calls');
+  await expectError('42501', () => worker.query('SELECT 1 FROM hon.missed_calls LIMIT 1'), 'worker cannot read missed calls directly');
+  let callN = 0;
+  const callId = () => `CA${(++callN).toString(16).padStart(32, '0')}`;
+  const missed = async (to, from, status = 'no-answer', sidValue = callId(), at = new Date().toISOString()) =>
+    ({ sid: sidValue, ...(await worker.query('SELECT * FROM hon.record_missed_call($1,$2,$3,$4,$5)', [to, from, sidValue, status, at])).rows[0] });
+  const first = await missed('+15555559001', '+15555550201');
+  check(first.outcome === 'RECORDED' && first.text_back_status === 'PENDING', 'an unanswered call to school A queues one text-back');
+  check((await missed('+15555559001', '+15555550201', 'no-answer', first.sid)).outcome === 'REPLAYED', 'a redelivered call result is a replay');
+  check((await missed('+15555559001', '+15555550201', 'busy')).text_back_status === 'RECENTLY_SENT', 'a second missed call from the same caller within a day gets no second text');
+  await consent('ada', ids.schoolA, 'SMS', 'OPTED_OUT');
+  check((await missed('+15555559001', '+15555550101')).text_back_status === 'OPTED_OUT', 'a caller who opted out of school texts gets no text-back');
+  check((await missed('+15555558888', '+15555550201')).outcome === 'UNROUTED', 'a call to an unknown number is not recorded');
+  await expectError('22023', () => missed('+15555559001', '+15555550209', 'completed'), 'an answered call is not a missed call');
+  await expectError('22023', () => missed('+15555559001', '+15555550209', 'busy', callId(), new Date(Date.now() - 2 * 86_400_000).toISOString()), 'a call older than a day is refused');
+  await expectError('23514', () => missed('+15555559001', '+15555550209', 'busy', 'CA-not-a-sid'), 'a malformed call id is refused');
+  const twoDays = await missed('+15555559002', '+15555550301');
+  check(twoDays.text_back_status === 'PENDING', 'school B with no forwarding phone still records the missed call');
+  const claimCalls = async (lease = 60) => (await worker.query('SELECT * FROM hon.claim_missed_call_text_backs(100, $1)', [lease])).rows.filter((row) => row.organization_id === ids.org);
+  const callRow = async (sidValue) => (await admin.query('SELECT * FROM hon.missed_calls WHERE provider_call_id = $1', [sidValue])).rows[0];
+  const callResult = async (row, outcome, providerId = null) => (await worker.query('SELECT * FROM hon.record_missed_call_text_back_result($1,$2,$3,$4)', [row.missed_call_id, row.lease_token, outcome, providerId])).rows[0];
+  if (hourIn(dayZone) >= 10 && hourIn(dayZone) <= 19) {
+    const leased = await claimCalls();
+    const mine = leased.find((row) => row.caller_e164 === '+15555550201');
+    check(leased.length === 1 && mine?.school_name === 'Day School' && mine.language === 'en' && mine.sender_service_id === sid(1) && mine.attempt === 1, 'only the day school text-back is leased, with school name, language and sender');
+    const night = await callRow(twoDays.sid);
+    check(night.text_back_status === 'PENDING' && night.next_attempt_at > new Date(), 'the night school text-back waits for 08:00 local');
+    check((await callResult(mine, 'ACCEPTED', `SM${'f'.repeat(32)}`)).text_back_status === 'ACCEPTED', 'an accepted text-back is recorded');
+    check((await callResult(mine, 'ACCEPTED', `SM${'f'.repeat(32)}`)).accepted === false, 'a replayed result on a finished text-back is refused');
+    const retry = await missed('+15555559001', '+15555550202');
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      await admin.query('UPDATE hon.missed_calls SET next_attempt_at = now() WHERE provider_call_id = $1', [retry.sid]);
+      const row = (await claimCalls()).find((r) => r.caller_e164 === '+15555550202');
+      check(row?.attempt === attempt, `text-back attempt ${attempt} is leased`);
+      const result = await callResult(row, 'RETRYABLE');
+      check(result.text_back_status === (attempt < 3 ? 'PENDING' : 'FAILED'), attempt < 3 ? 'a retryable failure waits with backoff' : 'the third retryable failure ends as FAILED');
+    }
+    const lost = await missed('+15555559001', '+15555550203');
+    const lostRow = (await claimCalls(15)).find((r) => r.caller_e164 === '+15555550203');
+    await admin.query("UPDATE hon.missed_calls SET lease_expires_at = now() - interval '1 second' WHERE provider_call_id = $1", [lost.sid]);
+    await claimCalls();
+    check((await callRow(lost.sid)).text_back_status === 'UNKNOWN', 'an expired lease becomes UNKNOWN and is not sent again');
+    check((await callResult(lostRow, 'ACCEPTED', `SM${'e'.repeat(32)}`)).accepted === false && (await callRow(lost.sid)).text_back_status === 'UNKNOWN', 'a late result after the lease expired is refused');
+    check((await missed('+15555559001', '+15555550203')).text_back_status === 'RECENTLY_SENT', 'an UNKNOWN text-back still counts as sent today');
+    const consentLater = await missed('+15555559001', '+15555550204');
+    await addPerson('caller204', ids.schoolA, null, '+15555550204');
+    await consent('caller204', ids.schoolA, 'SMS', 'OPTED_OUT');
+    await claimCalls();
+    check((await callRow(consentLater.sid)).text_back_status === 'OPTED_OUT', 'an opt-out recorded after the call is re-checked before sending');
+    const switched = await missed('+15555559001', '+15555550205');
+    await setMissed(ids.schoolA, '+15555550199', false, await senderVersion(ids.schoolA));
+    await claimCalls();
+    check((await callRow(switched.sid)).text_back_status === 'OFF', 'turning text-back off stops a waiting reply');
+    check((await missed('+15555559001', '+15555550206')).text_back_status === 'OFF', 'with text-back off a missed call is only recorded');
+    await setMissed(ids.schoolA, '+15555550199', true, await senderVersion(ids.schoolA));
+
+    // API end to end: signed voice webhooks through the controller, then the text-back dispatcher through the fake provider.
+    const { MissedCallTextBackDispatcher, missedCallTextBackBody } = await import('../../../apps/api/dist/communication/delivery/missed-call-text-back.js');
+    const callWorker = new CommunicationWorkerDatabase();
+    const voiceEnv = { ...twEnv() };
+    const priorEnv = { HON_PUBLIC_API_ORIGIN: process.env.HON_PUBLIC_API_ORIGIN };
+    process.env.HON_PUBLIC_API_ORIGIN = voiceEnv.HON_PUBLIC_API_ORIGIN;
+    try {
+      const voiceController = new CommunicationWebhookController(callWorker, new SendGridEventWebhookVerifier(() => ({})), new TwilioWebhookVerifier(() => voiceEnv));
+      const signedVoice = (path, fields) => {
+        const params = new URLSearchParams({ AccountSid: `AC${'c'.repeat(32)}`, ...fields });
+        const data = [...new Set(params.keys())].sort().reduce((acc, name) => acc + name + params.get(name), `https://api.hon.example${path}`);
+        return { body: Buffer.from(params.toString()), signature: createHmac('sha1', 'test-token').update(data).digest('base64') };
+      };
+      const apiCall = callId();
+      const ring = signedVoice('/v1/communications/webhooks/twilio/voice', { CallSid: apiCall, From: '+15555550207', To: '+15555559001' });
+      const answer = await voiceController.twilioVoice({ body: ring.body }, ring.signature);
+      check(answer.includes('<Number>+15555550199</Number>') && answer.includes('action="https://api.hon.example/v1/communications/webhooks/twilio/voice-result"'), 'a signed call to school A is forwarded to the school phone');
+      const unknown = signedVoice('/v1/communications/webhooks/twilio/voice', { CallSid: callId(), From: '+15555550207', To: '+15555558888' });
+      check((await voiceController.twilioVoice({ body: unknown.body }, unknown.signature)).includes('<Reject/>'), 'a call to an unknown number is rejected');
+      const noForward = signedVoice('/v1/communications/webhooks/twilio/voice', { CallSid: callId(), From: '+15555550302', To: '+15555559002' });
+      check((await voiceController.twilioVoice({ body: noForward.body }, noForward.signature)).includes('<Hangup/>'), 'school B without a forwarding phone hangs up');
+      check((await admin.query("SELECT count(*)::int AS n FROM hon.missed_calls WHERE caller_e164 = '+15555550302' AND dial_status = 'no-forward'")).rows[0].n === 1, 'and records the call as missed');
+      const result = signedVoice('/v1/communications/webhooks/twilio/voice-result', { CallSid: apiCall, From: '+15555550207', To: '+15555559001', DialCallStatus: 'no-answer' });
+      await voiceController.twilioVoiceResult({ body: result.body }, result.signature);
+      check((await callRow(apiCall))?.text_back_status === 'PENDING', 'a signed no-answer result records the missed call');
+      let forgedVoice = false;
+      try { await voiceController.twilioVoiceResult({ body: result.body }, 'AAAAAAAAAAAAAAAAAAAAAAAAAAA='); } catch (error) { forgedVoice = error?.getStatus?.() === 400; }
+      check(forgedVoice, 'an unsigned call result is refused');
+      const fakeSms = new FakeCommunicationProvider('SMS', fakeEnv);
+      check((await new MissedCallTextBackDispatcher(callWorker, [new FakeCommunicationProvider('SMS', () => ({}))]).runOnce()).claimed === 0, 'no READY text provider means no text-back is claimed');
+      const sentBack = await new MissedCallTextBackDispatcher(callWorker, [fakeSms]).runOnce(100);
+      const apiRow = await callRow(apiCall);
+      check(sentBack.accepted >= 1 && apiRow.text_back_status === 'ACCEPTED' && apiRow.provider_message_id === `fake-${apiRow.id}-1`, 'the dispatcher sends the text-back through the fake provider and records it');
+      check(fakeSms.sent.some((sent) => sent.deliveryId === apiRow.id && sent.content === missedCallTextBackBody('en', 'Day School')), 'the text-back carries the fixed school wording with STOP');
+    } finally {
+      if (priorEnv.HON_PUBLIC_API_ORIGIN === undefined) delete process.env.HON_PUBLIC_API_ORIGIN; else process.env.HON_PUBLIC_API_ORIGIN = priorEnv.HON_PUBLIC_API_ORIGIN;
+      await callWorker.onModuleDestroy();
+    }
+  } else {
+    console.log('Missed-call text-back sending skipped: the day zone left sending hours during the run.');
+  }
+  // B6A: the school list is a definer read for signed-in staff with communication.message.read at an entitled school.
+  const reader = `missed-reader-${ids.readerUser}`;
+  await admin.query("INSERT INTO hon.users (id, external_subject, email, display_name) VALUES ($1, $2, 'reader@example.test', 'Reader')", [ids.readerUser, reader]);
+  await admin.query("INSERT INTO hon.principals (id, principal_type, user_id, display_name) VALUES ($1, 'HUMAN_USER', $2, 'Reader')", [ids.readerPrincipal, ids.readerUser]);
+  await admin.query("INSERT INTO hon.roles (id, organization_id, code, name, is_system_role) VALUES ($1, $2, 'FRONT_DESK', 'Front desk', false)", [ids.role, ids.org]);
+  await admin.query("INSERT INTO hon.role_permissions (role_id, organization_id, permission_code) VALUES ($1, $2, 'communication.message.read')", [ids.role, ids.org]);
+  await admin.query("INSERT INTO hon.principal_role_grants (organization_id, school_id, principal_id, role_id, granted_by_principal_id, effective_from) VALUES ($1, $2, $3, $4, $3, clock_timestamp() - interval '1 hour')",
+    [ids.org, ids.schoolA, ids.readerPrincipal, ids.role]);
+  const list = async (school, subject = reader) => (await runtime.query('SELECT hon.read_school_missed_calls($1, $2, 100) AS data', [subject, school])).rows[0].data;
+  await expectError('42501', () => list(ids.schoolA), 'staff at a school without an entitlement in effect read no missed calls');
+  await admin.query("INSERT INTO hon.organization_entitlements (organization_id, tier, status, effective_from) VALUES ($1, 'COMPLETE', 'SUSPENDED', now() - interval '1 day')", [ids.org]);
+  await expectError('42501', () => list(ids.schoolA), 'staff at a suspended school read no missed calls');
+  await admin.query("UPDATE hon.organization_entitlements SET status = 'ACTIVE', effective_until = now() - interval '1 minute' WHERE organization_id = $1", [ids.org]);
+  await expectError('42501', () => list(ids.schoolA), 'staff at a school whose entitlement lapsed read no missed calls');
+  await admin.query("UPDATE hon.organization_entitlements SET effective_until = NULL WHERE organization_id = $1", [ids.org]);
+  const listA = await list(ids.schoolA);
+  check(listA.length > 0 && listA.every((row) => row.callerE164 !== '+15555550301' && row.callerE164 !== '+15555550302'), 'school A staff see only their own missed calls');
+  check(Object.keys(listA[0]).sort().join() === 'callerE164,dialStatus,id,receivedAt,textBack', 'the school list carries no provider ids or lease data');
+  await expectError('42501', () => list(ids.schoolB), 'school A staff cannot read another school\'s missed calls');
+  await expectError('42501', () => list(ids.schoolA, `delivery-${ids.user}`), 'staff without communication.message.read read no missed calls');
+  await expectError('42501', () => runtime.query('SELECT count(*) FROM hon.missed_calls'), 'the runtime cannot read the missed-call table directly');
 
   console.log(`PASS: communication delivery integrity (${passed} checks; day zone ${dayZone}, night zone ${nightZone}).`);
 } finally {

@@ -26,6 +26,8 @@ export interface CommunicationSendRequest {
   /** SMS (0248): the school's ACTIVE sender number and Messaging Service. */
   senderAddress?: string | undefined;
   senderServiceId?: string | undefined;
+  /** 0249: false for a missed-call text-back, which has no delivery row for a status callback to resolve. */
+  statusCallback?: boolean | undefined;
 }
 
 export interface CommunicationSendAccepted {

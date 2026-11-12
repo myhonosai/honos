@@ -4,13 +4,16 @@ import {
 import { raw, type NextFunction, type Request, type Response } from 'express';
 import { COMMUNICATION_WORKER_STORE, type CommunicationWorkerStore, type VerifiedProviderReceipt } from './communication-worker-database.js';
 import { SendGridEventWebhookVerifier, SendGridWebhookError } from './sendgrid-email-provider.js';
-import { TWILIO_INBOUND_PATH, TWILIO_STATUS_PATH, TwilioWebhookError, TwilioWebhookVerifier } from './twilio-text-provider.js';
+import {
+  TWILIO_INBOUND_PATH, TWILIO_STATUS_PATH, TWILIO_VOICE_PATH, TWILIO_VOICE_RESULT_PATH, TwilioWebhookError, TwilioWebhookVerifier, twilioPublicOrigin,
+} from './twilio-text-provider.js';
+import { EMPTY_VOICE_TWIML, REJECT_VOICE_TWIML, voiceForwardTwiml } from './missed-call-text-back.js';
 
 const inboundLog = new Logger('CommunicationInboundText');
 
 export const COMMUNICATION_WEBHOOK_PREFIX = /^\/v1\/communications\/webhooks(?:\/|$)/i;
 const JSON_PATHS = new Set(['/v1/communications/webhooks/sendgrid']);
-const FORM_PATHS = new Set([TWILIO_STATUS_PATH, TWILIO_INBOUND_PATH]);
+const FORM_PATHS = new Set([TWILIO_STATUS_PATH, TWILIO_INBOUND_PATH, TWILIO_VOICE_PATH, TWILIO_VOICE_RESULT_PATH]);
 export const COMMUNICATION_WEBHOOK_PATHS = new Set([...JSON_PATHS, ...FORM_PATHS]);
 export const SENDGRID_EVENT_VERIFIER = Symbol('SENDGRID_EVENT_VERIFIER');
 export const TWILIO_WEBHOOK_VERIFIER = Symbol('TWILIO_WEBHOOK_VERIFIER');
@@ -98,6 +101,47 @@ export class CommunicationWebhookController {
       throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' });
     }
     return EMPTY_TWIML;
+  }
+
+  /**
+   * 0249 incoming call to a school number: forward to the school's own phone, or, with no forwarding phone,
+   * record the call as missed and hang up. A number that is not an ACTIVE school sender is rejected.
+   */
+  @Post('twilio/voice') @HttpCode(200) @Header('content-type', 'text/xml; charset=utf-8')
+  async twilioVoice(@Req() req: Request, @Headers('x-twilio-signature') signature: string | undefined): Promise<string> {
+    if (!Buffer.isBuffer(req.body)) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+    let call;
+    try { call = this.twilio.voice(req.body, signature); }
+    catch (error) { throw twilioError(error); }
+    const origin = twilioPublicOrigin(process.env);
+    if (!this.store.isConfigured() || !this.store.readMissedCallRoute || !this.store.recordMissedCall || !origin) {
+      throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
+    }
+    try {
+      const route = await this.store.readMissedCallRoute(call.to);
+      if (!route.routed) return REJECT_VOICE_TWIML;
+      if (route.forwardPhoneE164) return voiceForwardTwiml(route.forwardPhoneE164, origin);
+      if (call.from) {
+        await this.store.recordMissedCall({ to: call.to, from: call.from, callSid: call.callSid, dialStatus: 'no-forward', receivedAt: new Date().toISOString() });
+      }
+      return EMPTY_VOICE_TWIML;
+    } catch {
+      throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' });
+    }
+  }
+
+  /** 0249 forwarded-leg outcome: an unanswered, busy, failed or canceled call is recorded as missed. */
+  @Post('twilio/voice-result') @HttpCode(200) @Header('content-type', 'text/xml; charset=utf-8')
+  async twilioVoiceResult(@Req() req: Request, @Headers('x-twilio-signature') signature: string | undefined): Promise<string> {
+    if (!Buffer.isBuffer(req.body)) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+    let missed;
+    try { missed = this.twilio.voiceResult(req.body, signature); }
+    catch (error) { throw twilioError(error); }
+    if (!missed) return EMPTY_VOICE_TWIML;
+    if (!this.store.isConfigured() || !this.store.recordMissedCall) throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
+    try { await this.store.recordMissedCall(missed); }
+    catch { throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' }); }
+    return EMPTY_VOICE_TWIML;
   }
 
   @Post('sendgrid') @HttpCode(200)

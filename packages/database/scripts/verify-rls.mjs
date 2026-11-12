@@ -131,6 +131,7 @@ const expectedRlsTables = [
   'communication_delivery_events',
   'school_text_senders',
   'inbound_text_keywords',
+  'missed_calls',
   'crm_activities',
   'crm_appointments',
   'crm_lead_registration_conversions',
