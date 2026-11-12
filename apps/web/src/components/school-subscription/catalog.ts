@@ -5,7 +5,7 @@ import { HON_OS_LAUNCH_PRICING_REFERENCE, SAAS_OWNER_APPROVED_DRAFT, SAAS_PLAN_C
 export const OFFER_CHOICES: readonly { kind: SaasOfferKind; label: string; description: string }[] = [
   { kind: 'REGULAR_MONTHLY', label: 'Regular monthly', description: 'Billed monthly' },
   { kind: 'FOUNDER_MONTHLY', label: 'Founder monthly', description: 'Eligibility and availability required' },
-  { kind: 'FOUNDER_LIFETIME', label: 'Founder lifetime', description: 'Earlier one-time purchase; no longer sold' },
+  { kind: 'FOUNDER_LIFETIME', label: 'Founder lifetime', description: 'One-time purchase; offered only when HQ publishes it' },
 ];
 /** Offers a school may still pick on this page. Founder lifetime stays above only to label earlier purchases. */
 export const SELLABLE_OFFER_CHOICES = OFFER_CHOICES.filter((entry) => entry.kind !== 'FOUNDER_LIFETIME');
@@ -112,8 +112,8 @@ export const ONE_TIME_ELIGIBILITY_COPY: Record<SaasHonOsSchoolOfferEligibility, 
   NOT_ELIGIBLE_EXISTING_SUBSCRIPTION: 'Not available while your organization has a HON OS subscription.',
   NOT_ELIGIBLE_PRIOR_PURCHASE: 'Not available because of an earlier purchase.',
   NOT_ELIGIBLE_ENTITLEMENT: 'Not available for your organization’s current access.',
-  CHECKOUT_IN_PROGRESS: 'A checkout is already in progress for your organization.',
-  SOLD_OUT: 'Sold out.', FOUNDER_SOLD_OUT: 'All founder spots are taken.',
+  CHECKOUT_IN_PROGRESS: 'Not available while another sign-up for your organization is in progress.',
+  SOLD_OUT: 'Sold out.', FOUNDER_SOLD_OUT: 'Not available now.',
   NOT_AVAILABLE_TERMS: 'Not available until its terms are published.', NOT_AVAILABLE: 'Not available now.',
 };
 export function honOsOneTimeRows(offers: SaasHonOsSchoolOfferView | null): HonOsOneTimeRow[] {

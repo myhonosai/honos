@@ -1,4 +1,5 @@
 import React from 'react';
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HON_OS_PRODUCT, HON_OS_LAUNCH_PRICING_REFERENCE } from '@hon/contracts';
@@ -91,6 +92,11 @@ describe('/staff/subscription HON OS standard and founder prices', () => {
     expect(Object.keys(ONE_TIME_ELIGIBILITY_COPY)).toHaveLength(9);
     const html = renderToStaticMarkup(<ul><HonOsOneTimeCard row={rows[0]!}/><HonOsOneTimeCard row={rows[1]!}/></ul>);
     for (const s of ['HON OS lifetime', '$3,576', 'one-time', 'Paid once. It does not renew.', 'Refund window: 30 days.', 'Lifetime checkout is not open yet.', 'Sold out.', 'Server-returned offer']) expect(html).toContain(s);
+    expect(ONE_TIME_ELIGIBILITY_COPY.CHECKOUT_IN_PROGRESS).not.toMatch(/checkout/i);
+    expect(ONE_TIME_ELIGIBILITY_COPY.FOUNDER_SOLD_OUT).not.toMatch(/founder spot/i);
+    const faq = readFileSync('src/components/school-subscription/subscription.tsx', 'utf8');
+    expect(faq).toContain('A lifetime offer is shown only when HQ publishes one, with its own sale limit; it does not use the 50 founder spots.');
+    expect(faq).not.toContain('no longer sold');
     expect(html.match(/Refund window/g)).toHaveLength(1);
     expect(html).not.toMatch(/<form|<button|type="submit"/);
     expect(renderToStaticMarkup(<HonOsPrices account={null}/>)).not.toContain('data-kind="ONE_TIME"');
