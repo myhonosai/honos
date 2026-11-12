@@ -2,6 +2,10 @@
 import type { Language } from '@hon/design-system';
 
 const en = {
+  setBudget: 'Set this month\'s HQ AI text budget', capLabel: 'Credit cap for this month', capHelp: 'A whole number. Setting the cap does not connect a provider or spend anything: it only limits what questions may reserve.',
+  reasonLabel: 'Reason (3 to 300 characters)', saveBudget: 'Save budget', savingBudget: 'Saving…', budgetSaved: 'Budget saved.', budgetNotSaved: 'Not saved: {reason}',
+  budgetHistory: 'Budget changes', budgetHistoryRow: '{month}: {cap} credits by {name} ({reason})',
+  HQ_HON_PERIOD_NOT_ALLOWED: 'only this month can be set.', HQ_HON_BUDGET_NO_CHANGE: 'the cap is already that amount.', HQ_HON_CAP_BELOW_USE: 'the cap is below what this month has already used or holds.',
   askTitle: 'Ask {name}', askIntro: '{name} answers from aggregate HQ numbers only. No school, person or record is shown to the AI. Answers are suggestions: nothing is sent, changed or charged.',
   question: 'Your question', questionHelp: '1 to 2,000 characters.', mode: 'Answer length', STANDARD: 'Standard (10 credits)', DETAILED: 'Detailed (15 credits)',
   ask: 'Ask', asking: 'Asking…', loading: 'Reading HQ Ask HON…', unavailable: 'HQ Ask HON could not be read. Nothing is shown.',
@@ -21,6 +25,10 @@ const en = {
 };
 type Copy = typeof en;
 const ko: Copy = {
+  setBudget: '이번 달 HQ AI 텍스트 예산 설정', capLabel: '이번 달 크레딧 한도', capHelp: '정수로 입력하세요. 한도를 정해도 제공자가 연결되거나 비용이 쓰이지 않습니다. 질문이 예약할 수 있는 양만 제한합니다.',
+  reasonLabel: '사유 (3~300자)', saveBudget: '예산 저장', savingBudget: '저장 중…', budgetSaved: '예산이 저장되었습니다.', budgetNotSaved: '저장하지 않음: {reason}',
+  budgetHistory: '예산 변경 기록', budgetHistoryRow: '{month}: {cap} 크레딧, {name} ({reason})',
+  HQ_HON_PERIOD_NOT_ALLOWED: '이번 달만 설정할 수 있습니다.', HQ_HON_BUDGET_NO_CHANGE: '이미 같은 한도입니다.', HQ_HON_CAP_BELOW_USE: '한도가 이번 달 사용 또는 보류된 양보다 적습니다.',
   askTitle: '{name}에게 질문', askIntro: '{name}은(는) HQ 집계 수치만으로 답합니다. 학교, 사람, 기록은 AI에 보이지 않습니다. 답변은 제안일 뿐이며 아무것도 보내거나 바꾸거나 청구하지 않습니다.',
   question: '질문', questionHelp: '1~2,000자.', mode: '답변 길이', STANDARD: '기본 (10 크레딧)', DETAILED: '자세히 (15 크레딧)',
   ask: '질문하기', asking: '질문 중…', loading: 'HQ Ask HON을 읽는 중…', unavailable: 'HQ Ask HON을 읽을 수 없습니다. 아무것도 표시하지 않습니다.',
@@ -39,6 +47,10 @@ const ko: Copy = {
   HQ_HON_PROVIDER_NOT_CONNECTED: 'AI 제공자가 연결되지 않았습니다.', refresh: '새로고침',
 };
 const es: Copy = {
+  setBudget: 'Fijar el presupuesto de texto de IA de HQ de este mes', capLabel: 'Límite de créditos de este mes', capHelp: 'Un número entero. Fijar el límite no conecta ningún proveedor ni gasta nada: solo limita lo que pueden reservar las preguntas.',
+  reasonLabel: 'Motivo (de 3 a 300 caracteres)', saveBudget: 'Guardar presupuesto', savingBudget: 'Guardando…', budgetSaved: 'Presupuesto guardado.', budgetNotSaved: 'No se guardó: {reason}',
+  budgetHistory: 'Cambios de presupuesto', budgetHistoryRow: '{month}: {cap} créditos por {name} ({reason})',
+  HQ_HON_PERIOD_NOT_ALLOWED: 'solo se puede fijar el mes actual.', HQ_HON_BUDGET_NO_CHANGE: 'el límite ya es esa cantidad.', HQ_HON_CAP_BELOW_USE: 'el límite es menor que lo ya usado o retenido este mes.',
   askTitle: 'Preguntar a {name}', askIntro: '{name} responde solo con cifras agregadas de HQ. La IA no ve ninguna escuela, persona ni registro. Las respuestas son sugerencias: no se envía, cambia ni cobra nada.',
   question: 'Tu pregunta', questionHelp: 'De 1 a 2.000 caracteres.', mode: 'Extensión de la respuesta', STANDARD: 'Estándar (10 créditos)', DETAILED: 'Detallada (15 créditos)',
   ask: 'Preguntar', asking: 'Preguntando…', loading: 'Leyendo HQ Ask HON…', unavailable: 'No se pudo leer HQ Ask HON. No se muestra nada.',
