@@ -25,9 +25,9 @@ const summary = (patch = {}) => ({ pending: 0, accepted: 0, delivered: 0, suppre
 const msg = (patch = {}) => ({ messageId: U(), organizationId: U(), organizationDisplayName: 'Fixture Dojo', schoolId: U(), schoolDisplayName: 'Main',
   purpose: 'SUPPORT', channel: 'EMAIL', content: 'Your link was reset.', supportCaseId: null, status: 'DRAFT', recipientCount: 0, createdBy: person(),
   createdAt: T, queuedAt: null, cancelledAt: null, updatedAt: T, version: 1, deliverySummary: summary(), ...patch });
-const sender = (patch = {}) => ({ senderId: U(), channel: 'EMAIL', status: 'ACTIVE', emailFrom: 'hello@hon.example', emailDisplayName: 'HON OS', smsServiceSid: null,
+const sender = (patch = {}) => ({ senderId: U(), channel: 'EMAIL', status: 'ACTIVE', emailFrom: 'hello@hon.example', emailDisplayName: 'HON OS', smsServiceSid: null, smsReplyNumber: null,
   a2pState: null, mmsConverterConfirmed: null, createdBy: person(), createdAt: T, version: 1, ...patch });
-const smsSender = (patch = {}) => sender({ channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: SID, a2pState: 'PENDING', mmsConverterConfirmed: true, ...patch });
+const smsSender = (patch = {}) => sender({ channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: SID, smsReplyNumber: '+15555550123', a2pState: 'PENDING', mmsConverterConfirmed: true, ...patch });
 const view = (patch = {}) => ({ senders: { EMAIL: sender(), SMS: null }, messages: [msg()], limit: 50, nextCursor: null,
   viewer: { ...person(), purposes: ['ACCOUNT', 'SUPPORT'], canManageSenders: false }, asOf: T2, ...patch });
 const delivery = (patch = {}) => ({ deliveryId: U(), recipient: person('Owner'), status: 'PENDING', holdReason: null, attempt: 0, provider: null, sentAs: null,
@@ -40,15 +40,16 @@ test('contracts: HQ communication command values match the SaaS command table', 
 });
 
 test('contracts: a text sender is a Messaging Service with MMS Converter confirmed, never a bare phone number', () => {
-  const sms = { channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: SID, a2pState: 'PENDING', mmsConverterConfirmed: true };
+  const sms = { channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: SID, smsReplyNumber: '+15555550123', a2pState: 'PENDING', mmsConverterConfirmed: true };
   assert.deepEqual(contracts.validateHqSenderSetInput(sms), sms);
   for (const bad of [{ ...sms, mmsConverterConfirmed: false }, { ...sms, mmsConverterConfirmed: null }, { ...sms, smsServiceSid: '+15555550100' },
-    { ...sms, smsServiceSid: 'PN' + '0'.repeat(32) }, { ...sms, a2pState: 'DONE' }, { ...sms, emailFrom: 'a@b.co' }, { ...sms, extra: 1 }])
+    { ...sms, smsServiceSid: 'PN' + '0'.repeat(32) }, { ...sms, a2pState: 'DONE' }, { ...sms, emailFrom: 'a@b.co' }, { ...sms, extra: 1 },
+    { ...sms, smsReplyNumber: null }, { ...sms, smsReplyNumber: '5555550123' }])
     assert.throws(() => contracts.validateHqSenderSetInput(bad), JSON.stringify(bad));
-  const email = { channel: 'EMAIL', emailFrom: 'hello@hon.example', emailDisplayName: 'HON OS', smsServiceSid: null, a2pState: null, mmsConverterConfirmed: null };
+  const email = { channel: 'EMAIL', emailFrom: 'hello@hon.example', emailDisplayName: 'HON OS', smsServiceSid: null, smsReplyNumber: null, a2pState: null, mmsConverterConfirmed: null };
   assert.deepEqual(contracts.validateHqSenderSetInput(email), email);
   for (const bad of [{ ...email, emailFrom: 'Hello@HON.example' }, { ...email, emailFrom: 'nope' }, { ...email, emailDisplayName: ' HON' },
-    { ...email, emailDisplayName: 'HON <x>' }, { ...email, smsServiceSid: SID }, { ...email, channel: 'VOICE' }])
+    { ...email, emailDisplayName: 'HON <x>' }, { ...email, smsServiceSid: SID }, { ...email, smsReplyNumber: '+15555550123' }, { ...email, channel: 'VOICE' }])
     assert.throws(() => contracts.validateHqSenderSetInput(bad), JSON.stringify(bad));
 });
 
@@ -132,7 +133,7 @@ test('HTTP: reads and commands forward only the verified subject, the path id, t
     reply = () => ({ operation: 'QUEUE', message: m, replayed: false });
     assert.equal((await send(`${base}/hq/communications/messages/${m.messageId}/queue`, { method: 'POST', headers: command('hq-message-queue', key), body: JSON.stringify({ expectedVersion: 1 }) })).status, 200);
     assert.deepEqual(calls.at(-1), ['queueHqMessage', ['verified-human', m.messageId, JSON.stringify({ expectedVersion: 1 }), key]]);
-    const smsIn = { channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: SID, a2pState: 'PENDING', mmsConverterConfirmed: true };
+    const smsIn = { channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: SID, smsReplyNumber: '+15555550123', a2pState: 'PENDING', mmsConverterConfirmed: true };
     reply = () => ({ operation: 'SENDER_SET', sender: smsSender(), replayed: false });
     assert.equal((await send(`${base}/hq/communications/senders`, { method: 'POST', headers: command('hq-communication-sender-set', key), body: JSON.stringify(smsIn) })).status, 200);
     assert.deepEqual(calls.at(-1), ['setHqCommunicationSender', ['verified-human', JSON.stringify(smsIn), key]]);

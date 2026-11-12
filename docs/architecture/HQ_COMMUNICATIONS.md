@@ -43,7 +43,9 @@ inbound replies routed to HQ support (STOP/START/HELP are handled), attachments 
 
 - EMAIL: from address and display name ("HON OS"), the SendGrid domain-authentication state as HQ recorded it.
 - SMS: the HQ Twilio Messaging Service SID (`^MG[0-9a-f]{32}$`), the A2P campaign state as HQ recorded it, and
-  `mms_converter_confirmed` (true required for READY).
+  `mms_converter_confirmed` (true required for READY), plus the public reply number in that service (E.164). The reply
+  number is only shown to people so they know where to text a confirmation code, STOP or HELP; inbound texts are matched
+  by the Messaging Service SID, never by this number.
 - Only the HQ owner (`HON_HQ_OWNER`) sets or retires a sender, by human command, with audit and outbox rows.
 - A channel is READY only when its sender is ACTIVE and the provider switch is on (`HON_EMAIL_SEND_APPROVED`,
   `HON_SMS_SEND_APPROVED`, same as schools). Otherwise HQ can draft and queue, and the delivery waits with

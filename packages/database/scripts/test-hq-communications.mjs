@@ -140,12 +140,15 @@ try {
   await admin.query('COMMIT');
 
   // ---------- 1. sender ----------
-  const emailSender = { channel: 'EMAIL', emailFrom: 'hello@hon.example', emailDisplayName: 'HON OS', smsServiceSid: null, a2pState: null, mmsConverterConfirmed: null };
-  const smsSender = { channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: 'MG' + '0123456789abcdef'.repeat(2), a2pState: 'PENDING', mmsConverterConfirmed: true };
+  const emailSender = { channel: 'EMAIL', emailFrom: 'hello@hon.example', emailDisplayName: 'HON OS', smsServiceSid: null, smsReplyNumber: null, a2pState: null, mmsConverterConfirmed: null };
+  const smsSender = { channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: 'MG' + '0123456789abcdef'.repeat(2), smsReplyNumber: '+15555550123', a2pState: 'PENDING', mmsConverterConfirmed: true };
   for (const who of ['supportOp', 'billingOp', 'exOwner', 'owner1', 'dashOnly']) await refuse('42501', () => setSender(who, emailSender), `${who} cannot set the sender`);
   await refuse('22023', () => setSender('hqOwner', { ...smsSender, mmsConverterConfirmed: false }), 'SMS sender needs MMS Converter confirmed');
   await refuse('22023', () => setSender('hqOwner', { ...smsSender, smsServiceSid: '+15555550100' }), 'SMS sender needs a Messaging Service SID, not a phone number');
   await refuse('22023', () => setSender('hqOwner', { ...emailSender, emailFrom: 'not-an-email' }), 'email sender needs an address');
+  await refuse('22023', () => setSender('hqOwner', { ...smsSender, smsReplyNumber: null }), 'SMS sender needs the public number people text');
+  await refuse('22023', () => setSender('hqOwner', { ...smsSender, smsReplyNumber: '5555550123' }), 'SMS reply number must be E.164');
+  await refuse('22023', () => setSender('hqOwner', { ...emailSender, smsReplyNumber: '+15555550123' }), 'email sender carries no reply number');
   await refuse('22023', () => setSender('hqOwner', { ...emailSender, smsServiceSid: smsSender.smsServiceSid }), 'email sender carries no SID');
   const senderKey = K();
   const setEmail = await setSender('hqOwner', emailSender, senderKey);

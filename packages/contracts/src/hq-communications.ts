@@ -34,13 +34,14 @@ const uuid = (v: unknown): string => (isUuid(v) ? (v as string).toLowerCase() : 
 const version = (v: unknown): number => (isInt(v, 1, 999_999_999) ? v as number : invalid());
 const EMAIL = /^[a-z0-9._%+-]{1,64}@[a-z0-9.-]{1,180}\.[a-z]{2,24}$/;
 const SERVICE_SID = /^MG[0-9a-f]{32}$/;
+const PHONE = /^\+[1-9][0-9]{7,14}$/;
 
 /** The longest content allowed for a channel. */
 export function hqMessageMaxLength(channel: HqMessageChannel): number { return channel === 'SMS' ? HQ_MESSAGE_SMS_MAX : HQ_MESSAGE_EMAIL_MAX; }
 
 // ---------- inputs ----------
 export interface HqSenderSetInput {
-  channel: HqMessageChannel; emailFrom: string | null; emailDisplayName: string | null; smsServiceSid: string | null;
+  channel: HqMessageChannel; emailFrom: string | null; emailDisplayName: string | null; smsServiceSid: string | null; smsReplyNumber: string | null;
   a2pState: HqSenderA2pState | null; mmsConverterConfirmed: true | null;
 }
 export interface HqMessageCreateInput {
@@ -49,13 +50,13 @@ export interface HqMessageCreateInput {
 export interface HqMessageVersionInput { expectedVersion: number }
 
 export function validateHqSenderSetInput(value: unknown): HqSenderSetInput {
-  const r = record(value, invalid); exactKeys(r, ['channel', 'emailFrom', 'emailDisplayName', 'smsServiceSid', 'a2pState', 'mmsConverterConfirmed'], invalid);
+  const r = record(value, invalid); exactKeys(r, ['channel', 'emailFrom', 'emailDisplayName', 'smsServiceSid', 'smsReplyNumber', 'a2pState', 'mmsConverterConfirmed'], invalid);
   if (r.channel === 'EMAIL') {
     if (typeof r.emailFrom !== 'string' || !EMAIL.test(r.emailFrom) || !text(r.emailDisplayName, 1, 80) || /[<>]/.test(r.emailDisplayName)
-      || r.smsServiceSid !== null || r.a2pState !== null || r.mmsConverterConfirmed !== null) invalid();
+      || r.smsServiceSid !== null || r.smsReplyNumber !== null || r.a2pState !== null || r.mmsConverterConfirmed !== null) invalid();
   } else if (r.channel === 'SMS') {
     // A bare phone number is never a sender: texts go through a Messaging Service with MMS Converter on.
-    if (typeof r.smsServiceSid !== 'string' || !SERVICE_SID.test(r.smsServiceSid) || !has(HQ_SENDER_A2P_STATES, r.a2pState)
+    if (typeof r.smsServiceSid !== 'string' || !SERVICE_SID.test(r.smsServiceSid) || typeof r.smsReplyNumber !== 'string' || !PHONE.test(r.smsReplyNumber) || !has(HQ_SENDER_A2P_STATES, r.a2pState)
       || r.mmsConverterConfirmed !== true || r.emailFrom !== null || r.emailDisplayName !== null) invalid();
   } else invalid();
   return r as unknown as HqSenderSetInput;
@@ -96,7 +97,7 @@ export function validateHqCommunicationsQuery(value: unknown): HqCommunicationsQ
 export interface HqCommunicationPerson { principalId: string; displayName: string }
 export interface HqCommunicationSender {
   senderId: string; channel: HqMessageChannel; status: 'ACTIVE' | 'RETIRED'; emailFrom: string | null; emailDisplayName: string | null;
-  smsServiceSid: string | null; a2pState: HqSenderA2pState | null; mmsConverterConfirmed: boolean | null; createdBy: HqCommunicationPerson;
+  smsServiceSid: string | null; smsReplyNumber: string | null; a2pState: HqSenderA2pState | null; mmsConverterConfirmed: boolean | null; createdBy: HqCommunicationPerson;
   createdAt: string; version: number;
 }
 export interface HqMessageDeliverySummary { pending: number; accepted: number; delivered: number; suppressed: number; failed: number; unknown: number }
@@ -129,13 +130,13 @@ function person(value: unknown): HqCommunicationPerson {
 }
 function sender(value: unknown): HqCommunicationSender {
   const s = record(value, drift);
-  exactKeys(s, ['senderId', 'channel', 'status', 'emailFrom', 'emailDisplayName', 'smsServiceSid', 'a2pState', 'mmsConverterConfirmed', 'createdBy', 'createdAt', 'version'], drift);
+  exactKeys(s, ['senderId', 'channel', 'status', 'emailFrom', 'emailDisplayName', 'smsServiceSid', 'smsReplyNumber', 'a2pState', 'mmsConverterConfirmed', 'createdBy', 'createdAt', 'version'], drift);
   if (!isUuid(s.senderId) || !has(['ACTIVE', 'RETIRED'], s.status) || !isTimestamp(s.createdAt) || !isInt(s.version, 1, 999_999_999)) drift();
   if (s.channel === 'EMAIL') {
-    if (typeof s.emailFrom !== 'string' || !EMAIL.test(s.emailFrom) || !label(s.emailDisplayName, 80) || s.smsServiceSid !== null
+    if (typeof s.emailFrom !== 'string' || !EMAIL.test(s.emailFrom) || !label(s.emailDisplayName, 80) || s.smsServiceSid !== null || s.smsReplyNumber !== null
       || s.a2pState !== null || s.mmsConverterConfirmed !== null) drift();
   } else if (s.channel === 'SMS') {
-    if (typeof s.smsServiceSid !== 'string' || !SERVICE_SID.test(s.smsServiceSid) || !has(HQ_SENDER_A2P_STATES, s.a2pState)
+    if (typeof s.smsServiceSid !== 'string' || !SERVICE_SID.test(s.smsServiceSid) || typeof s.smsReplyNumber !== 'string' || !PHONE.test(s.smsReplyNumber) || !has(HQ_SENDER_A2P_STATES, s.a2pState)
       || s.mmsConverterConfirmed !== true || s.emailFrom !== null || s.emailDisplayName !== null) drift();
   } else drift();
   person(s.createdBy);
