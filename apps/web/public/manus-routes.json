@@ -401,6 +401,14 @@
       "title": "HON HQ | Approvals"
     },
     {
+      "path": "/hq/communications",
+      "title": "HON HQ | Texts and email"
+    },
+    {
+      "path": "/hq/communications/:messageId",
+      "title": "HON HQ | HQ message"
+    },
+    {
       "path": "/hq/executives/:executive",
       "title": "HON HQ | :Executive"
     },

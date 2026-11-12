@@ -54,6 +54,7 @@ export const HQ_NAV = [
   { path: '/hq/marketing', title: 'Marketing & Creative', icon: 'target' },
   { path: '/hq/approvals', title: 'Approvals', icon: 'check' },
   { path: '/hq/support', title: 'Support', icon: 'support' },
+  { path: '/hq/communications', title: 'Texts & Email', icon: 'support' },
 ] as const;
 type HqNavLink = { readonly path: string; readonly title: string; readonly icon: string };
 export type HqNavGroup = { readonly key: 'schools' | 'revenue' | 'ai' | 'growth'; readonly title: string; readonly icon: string; readonly overview?: HqNavLink; readonly children: readonly HqNavLink[] };
@@ -85,6 +86,7 @@ export function hqPageLabel(path: string): string {
   if (path === '/hq/growth/champions-club/schools') return 'School referrals';
   if (/^\/hq\/schools\/[0-9a-f-]{36}$/i.test(path)) return 'School detail';
   if (/^\/hq\/support\/[0-9a-f-]{36}$/i.test(path)) return 'Support case';
+  if (/^\/hq\/communications\/[0-9a-f-]{36}$/i.test(path)) return 'HQ message';
   if (/^\/hq\/growth\/contests\/[0-9a-f-]{36}$/i.test(path)) return 'Contest detail';
   if (path === '/hq/revenue') return 'Revenue';
   const fixed = [...HQ_REVENUE, ...HQ_AI, ...HQ_GROWTH, ...HQ_NAV, ...HQ_SCHOOLS].find((item) => item.path === path);
