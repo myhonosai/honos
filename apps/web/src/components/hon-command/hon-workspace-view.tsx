@@ -85,6 +85,7 @@ function PortraitImage({ agent, size = 'md', source }: { agent: Pick<HonCommandA
 export function AvailabilityBadge({ agent, compact = false }: { agent: HonCommandAgent; compact?: boolean }): React.ReactElement {
   return agent.availability === 'GOVERNED_DRAFTS'
     ? <span className={styles.badge} data-tone="ready">{compact ? 'Drafts · approval' : 'Drafts · approval required'}</span>
+    : agent.availability === 'ANSWERS' ? <span className={styles.badge} data-tone="ready">{compact ? 'Answers · read only' : 'Answers questions · read only'}</span>
     : <span className={styles.badge} data-tone="planned">{compact ? 'Planned' : 'Planned · not yet available'}</span>;
 }
 
