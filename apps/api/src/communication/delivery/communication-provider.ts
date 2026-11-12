@@ -23,6 +23,9 @@ export interface CommunicationSendRequest {
    * briefing) and HQ (HQ messages) are tagged so the school receipt webhooks acknowledge and ignore them.
    */
   purpose?: 'SCHOOL' | 'INTERNAL' | 'HQ';
+  /** SMS (0248): the school's ACTIVE sender number and Messaging Service. */
+  senderAddress?: string | undefined;
+  senderServiceId?: string | undefined;
 }
 
 export interface CommunicationSendAccepted {
@@ -35,9 +38,9 @@ export interface CommunicationSendAccepted {
 export type CommunicationSendFailureCode = 'PROVIDER_REJECTED' | 'INVALID_ADDRESS' | 'PROVIDER_FAILED';
 
 /**
- * RETRYABLE: the provider certainly did not take the message (connection refused, 429, 5xx before
- * acceptance). FAILED: permanently refused. UNKNOWN: the provider may have taken it (timeout, lost
- * response); never retried automatically.
+ * RETRYABLE: the provider certainly did not take the message (connection refused, 429, missing
+ * credentials). FAILED: permanently refused. UNKNOWN: the provider may have taken it (timeout, lost
+ * response, or a 5xx, which can follow acceptance); never retried automatically.
  */
 export class CommunicationProviderError extends Error {
   constructor(
