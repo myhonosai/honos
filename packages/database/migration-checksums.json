@@ -240,6 +240,7 @@
     "0258_school_payment_connections.sql": "bcbfedb05f739ba99872aa5467236cb050c2c078f53daa804681821c75f76a17",
     "0267_hq_usage_claire_attribution.sql": "00b679d61d39febf7adee22105cbdfe4ecd95423b6b423064f3a6c09f3905861",
     "0241_hon_os_public_signup.sql": "e1e8b8c8ef510a39b3aab1dd9168fe3b60006f4ccd66ebe18c7a127f77e90777",
-    "0246_hon_os_trial_runtime.sql": "d3a1bd35203bb465946bf316291b53d245e348777790e7e4491f62753a742f07"
+    "0246_hon_os_trial_runtime.sql": "d3a1bd35203bb465946bf316291b53d245e348777790e7e4491f62753a742f07",
+    "0272_hon_os_trial_ai_credit_fixes.sql": "5f78a9ca625bf7459231ff6d8efde3f96630dfed1dd2d6d6736fd83a0e565e62"
   }
 }

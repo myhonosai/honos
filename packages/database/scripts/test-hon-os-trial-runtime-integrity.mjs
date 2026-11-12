@@ -230,6 +230,51 @@ try{
  assert.equal(await ai(cai.reg.organizationId),'AI_TRIAL_FUNDING_NOT_APPROVED');assert.equal(await room(cai.reg.organizationId),0);
  pass('after its 14 days a trial reads TRIAL_ENDED, opens no gated feature and no AI, and cannot be restarted; a newer entitlement version reads SUPERSEDED; a trial without an HQ budget has no AI');
 
+ // 0272 review fixes. Open holds come from four agent tables with deep foreign keys, so the arithmetic is proven by
+ // replacing hon.ai_org_open_agent_holds with a fixture table inside a rolled-back transaction (DDL is transactional);
+ // the real function is checked to read exactly the four tables ai_org_committed_credits reads.
+ const body=name=>q("SELECT pg_get_functiondef(p.oid) d FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname=$1",[name]).then(r=>r[0].d);
+ const holdTables=d=>[...d.matchAll(/hon\.([a-z_]+_invocations)\b/g)].map(m=>m[1]).filter((t,i,a)=>a.indexOf(t)===i).sort();
+ assert.deepEqual(holdTables(await body('ai_org_open_agent_holds')),holdTables(await body('ai_org_committed_credits')));
+ assert.equal(holdTables(await body('ai_org_open_agent_holds')).length,4);
+ assert.deepEqual(await q('SELECT * FROM hon.ai_org_open_agent_holds($1)',[ana.reg.organizationId]),[]);
+ for(const reader of ['read_ai_school_usage_from_hq','read_ai_team_readiness'])assert.match(await body(reader),/ai_org_display_ceiling/,reader);
+ const display=async(org,at='clock_timestamp()')=>Number((await q(`SELECT hon.ai_org_display_ceiling($1,${at}) c`,[org]))[0].c);
+ assert.equal(await display(ana.reg.organizationId),100,'HQ sees the trial credits left, not the per-request minimum');assert.equal(await room(ana.reg.organizationId),10);
+ assert.equal(await display(eli.reg.organizationId),12000);assert.equal(await display(ana.reg.organizationId,startsAt+"+interval '7 days'"),0);
+ const fay=await register('fay');await enroll(fay,{daysAgo:13,aiBudget:{...budget,creditExpiryDays:14}});
+ const fayStart=(await q('SELECT starts_at::text s FROM hon.hon_os_trial_enrollments WHERE organization_id=$1',[fay.reg.organizationId]))[0].s;
+ const crossesMonth=(await q("SELECT date_trunc('month',$1::timestamptz AT TIME ZONE 'UTC')<>date_trunc('month',clock_timestamp() AT TIME ZONE 'UTC') x",[fayStart]))[0].x;
+ await admin.query('BEGIN');
+ try{
+  await q('CREATE TEMP TABLE fx_holds(org uuid,held_at timestamptz,status text,reserved_credits bigint,max_provider_cost_microunits bigint) ON COMMIT DROP');
+  await q(`CREATE OR REPLACE FUNCTION hon.ai_org_open_agent_holds(p_org uuid) RETURNS TABLE(held_at timestamptz,status text,reserved_credits bigint,max_provider_cost_microunits bigint)
+    LANGUAGE sql STABLE SET search_path=pg_catalog,hon,pg_temp AS $f$ SELECT held_at,status,reserved_credits,max_provider_cost_microunits FROM pg_temp.fx_holds WHERE org=p_org $f$`);
+  const hold=(who,{at='clock_timestamp()',status='SENDING',credits=10,cost=null}={})=>q(`INSERT INTO pg_temp.fx_holds VALUES($1,${at},$2,$3,$4)`,[who.reg.organizationId,status,credits,cost]);
+  // 1. A hold in flight counts at its plan's maximum cost toward the campaign cap; with no plan it counts as the whole cap.
+  await spend(ben,0,600*10000);assert.equal(await room(ana.reg.organizationId),10,'6 of 10 USD used: still room');
+  await hold(ben,{cost:400*10000});assert.equal(await room(ana.reg.organizationId),0,'6 USD used + 4 USD in flight reaches the 10 USD cap');
+  assert.equal(await display(ana.reg.organizationId),0);
+  await q('DELETE FROM pg_temp.fx_holds');await hold(ben,{status:'UNKNOWN',cost:null});assert.equal(await room(ana.reg.organizationId),0,'a lost outcome without a plan counts as the whole cap');
+  await q('DELETE FROM pg_temp.fx_holds');await hold(ben,{at:"clock_timestamp()-interval '30 days'",cost:400*10000});assert.equal(await room(ana.reg.organizationId),10,'a hold from before that school\'s trial does not count');
+  await q('DELETE FROM pg_temp.fx_holds');
+  // 3. A lost hold from before this month (but inside the trial) still uses trial credits; one from before the trial does not.
+  assert.equal(await display(fay.reg.organizationId),100);
+  await hold(fay,{at:`'${fayStart}'::timestamptz+interval '1 hour'`,status:'UNKNOWN',credits:30,cost:1});
+  await hold(fay,{at:`'${fayStart}'::timestamptz-interval '1 hour'`,status:'UNKNOWN',credits:7,cost:1});
+  const lost=(await q("SELECT count(*) n FROM pg_temp.fx_holds f WHERE org=$1 AND NOT hon.ai_hold_counts(f.status,f.held_at,hon.ai_spend_window($1,clock_timestamp()),clock_timestamp())",[fay.reg.organizationId]))[0].n;
+  assert.equal(Number(lost),crossesMonth?2:0);
+  assert.equal(await display(fay.reg.organizationId),crossesMonth?70:100,'30 credits held and lost last month leave 70 (the hold from before the trial is not trial usage)');
+ }finally{await admin.query('ROLLBACK');}
+ assert.match(await body('ai_org_open_agent_holds'),/marketing_ai_invocations/,'the fixture replacement rolled back');
+ pass('0272: campaign cost cap counts open holds at their plan maximum (no plan = whole cap); HQ usage and readiness show the trial credits left; lost holds from an earlier month inside the trial still use trial credits'+(crossesMonth?'':' (month-crossing case not reachable today; window arithmetic checked)'));
+
+ // 4 (0272). A replay is a read of the owner's own receipt: once their owner grant is revoked it is refused.
+ const anaGrant=(await q('SELECT owner_grant_id g FROM hon.hon_os_school_registrations WHERE id=$1',[ana.reg.registrationId]))[0].g;
+ await q('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=principal_id WHERE id=$1',[anaGrant]);
+ await denied(()=>send('account/trial',{identity:ana,body:form(ana),key}),403,'ACCOUNT_FORBIDDEN');
+ pass('0272: replaying a start with the same key after the owner grant was revoked is refused (no receipt returned)');
+
  assert.deepEqual(await snapshot(),baseline);
  const end=await counts();for(const t of ['saas_access_states','saas_subscriptions','saas_checkout_sessions','saas_credit_allowances','saas_access_exceptions'])assert.equal(end[t],guarded[t],t);
  pass('no billing, access-state, credit, AI, CRM or outbox table changed: entitlement windows, trial evidence and request receipts only');

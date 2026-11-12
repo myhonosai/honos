@@ -43,20 +43,27 @@ campaign provider-cost cap.
 - `hon.ai_trial_funding_available` (0195 hook, replaced here) is true only for `AGENT_INFERENCE`, while the trial owns
   the entitlement, has a budget and `now < starts_at + creditExpiryDays`. `CREATIVE_MEDIA` is never trial-funded
   (Creative Studio stays wallet-only), so a trial school is refused as `AI_TRIAL_FUNDING_NOT_APPROVED` for media.
-- `hon.ai_org_ceiling` (0194, replaced here) is what every agent prepare already compares `committed + estimate` against
-  under the `ai.budget:<org>` lock. For a school whose entitlement a trial owns it is 0 unless funded now; when funded it
-  is the least of 12000, credits remaining since the trial started, today's (UTC) daily cap, committed + per-request cap,
-  and 0 once the campaign's agent provider cost reached its cap (1 USD minor unit = 10000 microunits). Every other
-  organization keeps 12000. The HQ usage and readiness screens show this ceiling.
+- `hon.ai_org_ceiling` (0194, replaced in 0246 and 0272) is what every agent prepare already compares
+  `committed + estimate` against under the `ai.budget:<org>` lock. For a school whose entitlement a trial owns it is 0
+  unless funded now; when funded it is the least of 12000, the trial credits left, today's (UTC) daily cap and
+  committed + per-request cap (`hon.ai_trial_ceiling_terms`). Trial credits left = credits − usage since the trial
+  started before this window − lost (UNKNOWN or stale) holds taken since the trial started that no longer count in this
+  window (0272, so a lost hold from an earlier month still uses trial credits). Every other organization keeps 12000.
+- Campaign cost cap (0272): the ceiling is 0 for every school in the campaign once the campaign's agent provider cost
+  in the ledger **plus every open hold** of its schools (taken since that school's trial started, at the plan's maximum
+  provider cost; a hold without a plan counts as the whole cap) reaches the cap (1 USD minor unit = 10000 microunits).
+- What HQ sees (0272): the HQ per-school usage read and the AI team readiness budget show
+  `hon.ai_org_display_ceiling`, the trial credits left for a trial school, not the per-request minimum. Per-agent
+  availability in readiness still uses the decision ceiling.
 - Promotional and internal: nothing is charged, sold, deducted from a wallet or carried over after the trial.
 
 Note for HQ: agent estimates today are up to 10 credits per request (HON reply), so a per-request cap below 10 refuses
-those requests. The campaign cost cap is checked per school under its own budget lock; schools deciding at the same
-instant can each still finish one request (at most the per-request cap) past it.
+those requests. The campaign cost cap is checked per school under its own budget lock, so schools deciding at the same
+instant can each still start one request (at most its plan's maximum cost) past it; once their holds exist, they count.
 
 ## Evidence
 
-`test-hon-os-trial-runtime-integrity.mjs` (11 groups, real signed sessions → Nest → runtime SQL) runs last on the
+`test-hon-os-trial-runtime-integrity.mjs` (13 groups, real signed sessions → Nest → runtime SQL) runs last on the
 champions-club fixture because it records a newer synthetic trial approval.
 
 ## Open items
@@ -64,6 +71,7 @@ champions-club fixture because it records a newer synthetic trial approval.
 - Pre-launch risk: trial AI spends real provider money once providers are live; review the default campaign budget
   and cost cap before any LIVE program.
 - Conversion to paid (trial → checkout → PAYMENT_ACTIVE) waits for billing pieces (#205, 0235) and the 0230 binding path.
+- A start replay re-checks the owner's live grant before returning the receipt (0272).
 - Legal trial terms are not written; the campaign `termsReference` is HQ metadata only.
 - From #220 review: 0241 line 149 comment says "current or ended" access blocks sign-up, but only current access does
   (P3-1); no audit/outbox event for sign-up or trial start yet (P3-2); abuse controls before any LIVE program (P3-3).
