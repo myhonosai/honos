@@ -72,7 +72,9 @@ const MUST_ENFORCE=['hon.issue_champions_referral_code(text,uuid,uuid,uuid,uuid)
  'hon.resolve_teaching_assistant_scope(text)','hon.resolve_testing_certificate_scope(text,uuid)','hon.resolve_testing_scorecard_scope(text,uuid)',
  // Formerly recorded gaps, gated in 0172.
  'hon.resolve_achievement_scope(text,uuid)','hon.resolve_current_staff_reporting_scope(text)','hon.resolve_follow_up_scope(text)',
- 'hon.resolve_human_work_scope(text)','hon.resolve_teaching_studio_scope(text,uuid)','hon.resolve_testing_registration_review_scopes(text)'];
+ 'hon.resolve_human_work_scope(text)','hon.resolve_teaching_studio_scope(text,uuid)','hon.resolve_testing_registration_review_scopes(text)',
+ // 0249: school missed-call list (caller numbers) for staff with communication.message.read.
+ 'hon.read_school_missed_calls(text,uuid,integer)'];
 
 async function call(f,k,target=k){
  const a=args(f,k,target);
