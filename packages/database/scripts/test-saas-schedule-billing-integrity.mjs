@@ -25,10 +25,10 @@ const {DeterministicScheduleProvider}=apiRequire('./test/fixtures/subscription-s
 const database=new RuntimeDatabaseService(),billing=new SaasBillingService(database),pricing=new SaasPriceAcceptanceService(billing),generations=new SaasSubscriptionGenerationService(billing),access=new SaasSchoolBillingService(billing),onboarding=new HqOnboardingService(database);
 const provider=new DeterministicScheduleProvider(),schedules=new SaasScheduleBillingService(billing,provider),payments=new SaasPaymentsService(billing,database,{});
 const client=u=>new pg.Client({connectionString:u.toString(),ssl:false}),admin=client(owner),restricted=client(runtime);
-const humans=Object.fromEntries(['hq','school','other','staff','ai','d7','d9','race','cancel','iv'].map(k=>[k,{id:K(),user:K(),subject:'b2-'+K()}]));
+const humans=Object.fromEntries(['hq','school','other','staff','ai','d7','d9','race','cancel','iv','pa','pb','pc'].map(k=>[k,{id:K(),user:K(),subject:'b2-'+K()}]));
 const H=k=>humans[k].subject,org={id:K(),school:K(),second:K(),role:K()},foreign={id:K(),school:K(),role:K()};
 // The shipped OD-4 policy row is migration data: never deleted by fixture cleanup.
-const tables=['saas_schedule_reconciliations','saas_schedule_paid_periods','saas_schedule_provider_events','saas_schedule_bindings','saas_access_transitions','saas_access_states','saas_subscription_generations','saas_price_acceptances','saas_price_schedules'];
+const tables=['saas_access_transitions','saas_access_states','saas_schedule_reconciliations','saas_schedule_paid_periods','saas_schedule_provider_events','saas_schedule_bindings','saas_subscription_generations','saas_price_acceptances','saas_price_schedules'];
 const row=async(q,p)=>(await admin.query(q,p)).rows[0];let groups=0;const passed=s=>console.log('PASS 0230 '+(++groups)+': '+s);
 const deny=(work,status,code)=>assert.rejects(Promise.resolve().then(work),e=>{assert.equal(e.getStatus?.(),status,e.stack);if(code)assert.equal(e.getResponse().code,code);return true;});
 const sqlDeny=(work,code)=>assert.rejects(work,e=>{assert.equal(e.code,code,e.stack);return true;});
@@ -53,8 +53,8 @@ async function setAccessProgram(active){
   } catch(e) { await admin.query('ROLLBACK'); throw e; }
 }
 const STUB_HOOK="CREATE OR REPLACE FUNCTION hon.saas_schedule_after_paid_period(p_binding uuid,p_period uuid,p_at timestamptz) RETURNS jsonb LANGUAGE sql VOLATILE SET search_path=pg_catalog,hon AS $f$ SELECT jsonb_build_object('accessActivation','NOT_ATTEMPTED','accessGranted',false) $f$";
-// Restores the shipped piece-1 stub body exactly (its ACL is preserved by CREATE OR REPLACE).
-const restoreHook=()=>admin.query(STUB_HOOK);
+// Groups 1-5 prove the 0230 seam against the piece-1 stub; group 6 restores the shipped 0235 hook (ACL kept by CREATE OR REPLACE).
+const restoreHook=()=>admin.query(STUB_HOOK);let shippedHook=null;
 async function withUserTriggersDisabled(names,work){
   await admin.query('BEGIN');
   try {
@@ -84,6 +84,9 @@ try {
   assert.deepEqual(await row("SELECT status,mutations_enabled FROM hon.saas_access_program"),{status:'INACTIVE',mutations_enabled:false});
   assert.equal((await row("SELECT pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conname='saas_access_program_status_check'")).definition,STATUS_CHECK);
   await verifySaasBillingSecurity(admin,'hon_champions_runtime');
+  shippedHook=(await row("SELECT pg_get_functiondef('hon.saas_schedule_after_paid_period(uuid,uuid,timestamptz)'::regprocedure) d")).d;
+  assert.match(shippedHook,/saas_schedule_activate_access/,'0235 hook is installed');
+  await restoreHook();
   await admin.query('BEGIN');
   for(const[k,h]of Object.entries(humans)) {
     await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$3,'B2 SYNTHETIC')",[h.user,h.subject,h.user+'@example.test']);
@@ -202,7 +205,10 @@ try {
   await deny(()=>schedules.start(H('d7'),d7.schoolId,d9Input,K()),404,'SAAS_UNAVAILABLE');
   assert.equal(provider.calls,3,'duplicate and cross-organization requests do not contact the adapter');
   await deny(()=>schedules.start(H('school'),org.second,input,K()),403,'SAAS_FORBIDDEN');await deny(()=>schedules.read(H('other'),foreign.school,binding.bindingId),404,'SAAS_UNAVAILABLE');
-  assert.deepEqual(await schedules.read(H('staff'),org.school,binding.bindingId),binding);assert.deepEqual(await schedules.readHq(H('hq'),binding.bindingId),binding);
+  const notAttempted={accessActivation:'NOT_ATTEMPTED',reason:null,paidThrough:null,accessUntil:null};
+  for(const view of [await schedules.read(H('staff'),org.school,binding.bindingId),await schedules.readHq(H('hq'),binding.bindingId)]){
+    const {access:viewAccess,...billingView}=view;assert.deepEqual(billingView,binding);assert.deepEqual(viewAccess,notAttempted);
+  }
 
   // The reverse D9 writer and B2 use the same organization key. A waiting state may win and B2 then succeeds;
   // a B2 intent may win and the later D9 write is an explicit no-effect lifecycle conflict. No race activates access.
@@ -413,12 +419,116 @@ try {
   assert.equal((await row('SELECT status FROM hon.saas_access_program')).status,'INACTIVE');
   assert.equal((await row("SELECT count(*)::int n FROM hon.saas_access_transitions WHERE kind='FIRST_PAYMENT_ACTIVATION'")).n,0);
   passed('lifecycle: provider-confirmed void, 7-day owner-window unpaid expiry and no-cost purchaser cancel before first payment are terminal and release the organization; late money after terminal is stored for review and blocks a new lifecycle; money evidence blocks expiry; transitions are closed and audited');
+  // ---------- 0235 piece 2: the shipped access hook switches access on after the first verified payment ----------
+  await admin.query(shippedHook);
+  const accessOrgs={};
+  await setAccessProgram(true);
+  try {
+    for(const k of ['pa','pb','pc']) accessOrgs[k]=(await admin.query('SELECT hon.initialize_saas_hon_os_school_account($1,$2::jsonb,$3,$4,$5) receipt',[
+      H(k),JSON.stringify({legalName:'B2 '+k+' Fixture LLC',displayName:'B2 '+k+' Fixture',schoolName:'B2 '+k+' Main',schoolSlug:'b2-'+k+'-'+K().slice(0,8),timezone:'UTC'}),K(),K(),K()])).rows[0].receipt;
+  } finally { await setAccessProgram(false); }
+  const bindFor=async k=>{const g=await prepareGeneration(k,accessOrgs[k].schoolId);
+    return (await schedules.start(H(k),accessOrgs[k].schoolId,{generationId:g.generationId,generationDigest:g.generationDigest,confirmation:contracts.SAAS_SCHEDULE_BINDING_CONFIRMATION},K())).binding;};
+  const paB=await bindFor('pa'),pbB=await bindFor('pb'),pcB=await bindFor('pc');
+  // Calendar-month paid periods (0230 reviews any other length): the first started an hour ago (day of month <= 28).
+  const DAY=86_400_000,GRACE=7*DAY,iso=ms=>new Date(ms).toISOString();
+  const addMonths=(ms,n)=>{const d=new Date(ms);d.setUTCMonth(d.getUTCMonth()+n);return d.getTime();};
+  let t0=Date.now()-3_600_000;while(new Date(t0).getUTCDate()>28)t0-=DAY;
+  const P=i=>[addMonths(t0,i),addMonths(t0,i+1)];
+  const pay=(b,[s,e])=>baseEvent(evt(),price,iso(s),iso(e),b);
+  const ent=id=>row('SELECT tier::text,status::text,effective_from,effective_until,version FROM hon.organization_entitlements WHERE organization_id=$1',[id]);
+  const st=id=>row('SELECT state,reason,activation_source,binding_id,first_paid_period_id,paid_through,checkout_id,subscription_id FROM hon.saas_access_states WHERE organization_id=$1',[id]);
+  const inEffect=async id=>(await row('SELECT hon.saas_entitlement_json($1) j',[id])).j.inEffect;
+  const transitions=async b=>(await admin.query('SELECT kind,outcome,reason FROM hon.saas_access_transitions WHERE binding_id=$1 ORDER BY occurred_at,kind,outcome',[b])).rows.map(r=>[r.kind,r.outcome,r.reason].join(':'));
+  const paOrg=accessOrgs.pa.organizationId,pbOrg=accessOrgs.pb.organizationId,pcOrg=accessOrgs.pc.organizationId;
+  const paEntBefore=await ent(paOrg);assert.deepEqual([paEntBefore.status,(await st(paOrg)).state],['SUSPENDED','AWAITING_FIRST_PAYMENT']);
+  // Shipped posture (program INACTIVE): the payment is kept and billing becomes ACTIVE; access lands in HQ review, unchanged.
+  const pa1=await ingest(pay(paB,P(0)));
+  assert.deepEqual([pa1.outcome,pa1.billingStatus,pa1.access],['APPLIED','ACTIVE',{accessActivation:'NEEDS_REVIEW',accessGranted:false,reason:'ACCESS_PROGRAM_INACTIVE'}]);
+  assert.deepEqual(await ent(paOrg),paEntBefore);assert.equal((await st(paOrg)).state,'AWAITING_FIRST_PAYMENT');assert.equal(await inEffect(paOrg),false);
+  const paView=await schedules.readHq(H('hq'),paB.bindingId);
+  assert.deepEqual([paView.status,paView.access],['ACTIVE',{accessActivation:'NEEDS_REVIEW',reason:'ACCESS_PROGRAM_INACTIVE',paidThrough:null,accessUntil:null}]);
+  assert.deepEqual((await schedules.read(H('pa'),accessOrgs.pa.schoolId,paB.bindingId)).access,paView.access,'school sees the same access outcome');
+  // A renewal paid while the review is open still counts as money and waits for the retry.
+  const pa2=await ingest(pay(paB,P(1)));
+  assert.deepEqual([pa2.outcome,pa2.qualifyingPaidPeriodCount,pa2.access],['APPLIED',2,{accessActivation:'NEEDS_REVIEW',accessGranted:false,reason:'ACTIVATION_PENDING'}]);
+  const retryBody={expectedBindingVersion:paView.version};
+  await deny(()=>schedules.retryAccess(H('hq'),paB.bindingId,retryBody,K()),422,'SAAS_ACCESS_NOT_ACTIVE');
+  await deny(()=>schedules.retryAccess(H('pa'),paB.bindingId,retryBody,K()),403);
+  await deny(()=>schedules.retryAccess(H('hq'),paB.bindingId,{expectedBindingVersion:paView.version,extra:true},K()),400,'INVALID_SAAS_INPUT');
+  assert.equal(await inEffect(paOrg),false);
+  await setAccessProgram(true);
+  try {
+    await deny(()=>schedules.retryAccess(H('hq'),paB.bindingId,{expectedBindingVersion:paView.version+1},K()),409);
+    await deny(()=>schedules.retryAccess(H('hq'),pbB.bindingId,{expectedBindingVersion:pbB.version},K()),422,'SAAS_ACCESS_NOT_RETRYABLE');
+    // HQ-owner retry activates on the period in effect, then applies the renewal paid while waiting.
+    const retryKey=K(),retried=await schedules.retryAccess(H('hq'),paB.bindingId,retryBody,retryKey);
+    assert.deepEqual([retried.bindingId,retried.access.accessActivation,retried.access.accessGranted,retried.access.reason],[paB.bindingId,'APPLIED',true,null]);
+    assert.equal(Date.parse(retried.access.paidThrough),P(1)[1]);assert.equal(Date.parse(retried.access.accessUntil),P(1)[1]+GRACE);
+    assert.equal(retried.replayed,false);assert.deepEqual(await schedules.retryAccess(H('hq'),paB.bindingId,retryBody,retryKey),{...retried,replayed:true},'exact-key replay');
+    await deny(()=>schedules.retryAccess(H('hq'),paB.bindingId,retryBody,K()),422,'SAAS_ACCESS_NOT_RETRYABLE');
+    const paEnt=await ent(paOrg),paSt=await st(paOrg);
+    assert.deepEqual([paEnt.tier,paEnt.status,paEnt.effective_from.getTime(),paEnt.effective_until.getTime(),paEnt.version],['COMPLETE','ACTIVE',P(0)[0],P(1)[1]+GRACE,paEntBefore.version+2]);
+    assert.deepEqual([paSt.state,paSt.reason,paSt.activation_source,paSt.binding_id,paSt.paid_through.getTime(),paSt.checkout_id,paSt.subscription_id],
+      ['PAYMENT_ACTIVE','FIRST_PAYMENT_VERIFIED','SCHEDULE_BINDING',paB.bindingId,P(1)[1],null,null]);
+    assert.equal(paSt.first_paid_period_id,(await row('SELECT id FROM hon.saas_schedule_paid_periods WHERE binding_id=$1 AND covered_starts_at=$2',[paB.bindingId,new Date(P(0)[0])])).id);
+    assert.equal(await inEffect(paOrg),true);
+    assert.deepEqual(await transitions(paB.bindingId),['SCHEDULE_FIRST_PAYMENT_ACTIVATION:NEEDS_REVIEW:ACCESS_PROGRAM_INACTIVE','SCHEDULE_FIRST_PAYMENT_ACTIVATION:APPLIED:FIRST_PAYMENT_VERIFIED','SCHEDULE_RENEWAL_EXTENSION:APPLIED:RENEWAL_PAYMENT_VERIFIED']);
+    assert.equal((await row("SELECT count(*)::int n FROM hon.saas_audit WHERE action_code='saas.access.retry' AND actor_principal_id=$1 AND organization_id=$2",[humans.hq.id,paOrg])).n,1,'retry is audited once');
+    assert.deepEqual((await schedules.read(H('pa'),accessOrgs.pa.schoolId,paB.bindingId)).access,{accessActivation:'APPLIED',reason:null,paidThrough:retried.access.paidThrough,accessUntil:retried.access.accessUntil});
+    // Renewal extends; replay and a late earlier period change nothing; a gap after the window lapses goes to review.
+    const pa3Event=pay(paB,P(2)),pa3=await ingest(pa3Event);
+    assert.deepEqual([pa3.outcome,pa3.qualifyingPaidPeriodCount,pa3.access],['APPLIED',3,{accessActivation:'EXTENDED',accessGranted:true}]);
+    assert.deepEqual(await ingest(pa3Event),pa3);
+    assert.equal((await ent(paOrg)).effective_until.getTime(),P(2)[1]+GRACE);assert.equal((await st(paOrg)).paid_through.getTime(),P(2)[1]);
+    const early=await ingest(pay(paB,P(-1)));
+    assert.deepEqual([early.outcome,early.access],['APPLIED',{accessActivation:'NOT_ATTEMPTED',accessGranted:false,reason:'ALREADY_COVERED'}]);
+    const gapStart=P(3)[0]+GRACE+DAY,gap=await ingest(pay(paB,[gapStart,addMonths(gapStart,1)]));
+    assert.deepEqual([gap.outcome,gap.access],['APPLIED',{accessActivation:'NEEDS_REVIEW',accessGranted:false,reason:'PAID_PERIOD_GAP'}]);
+    assert.equal((await ent(paOrg)).effective_until.getTime(),P(2)[1]+GRACE,'neither a late period nor a gap moves the window');
+    assert.equal((await row("SELECT count(*)::int n FROM hon.saas_access_transitions WHERE binding_id=$1 AND outcome='APPLIED'",[paB.bindingId])).n,3,'one applied transition per paid period');
+    // Access windows only move forward, and the schedule source cannot be rewritten, even by the owner.
+    for(const q of ["UPDATE hon.saas_access_states SET paid_through=paid_through-interval '1 day',version=version+1 WHERE organization_id=$1",
+      "UPDATE hon.saas_access_states SET binding_id=NULL,version=version+1 WHERE organization_id=$1",
+      "UPDATE hon.saas_access_states SET state='AWAITING_FIRST_PAYMENT',reason='AWAITING_INITIAL_PAYMENT',version=version+1 WHERE organization_id=$1",
+      "DELETE FROM hon.saas_access_states WHERE organization_id=$1"]){await admin.query('BEGIN');await sqlDeny(admin.query(q,[paOrg]),'42501');await admin.query('ROLLBACK');}
+
+    // Program active: the first payment activates directly, once, even under concurrent duplicate delivery.
+    const pb1=pay(pbB,P(0)),pb1Digest=await digest(pb1);
+    const pbReceipts=await Promise.all([schedules.ingestVerifiedTestEvidence(pb1,pb1Digest),schedules.ingestVerifiedTestEvidence(pb1,pb1Digest)]);
+    assert.deepEqual(pbReceipts[0],pbReceipts[1]);assert.deepEqual([pbReceipts[0].billingStatus,pbReceipts[0].access],['ACTIVE',{accessActivation:'APPLIED',accessGranted:true}]);
+    assert.deepEqual(await transitions(pbB.bindingId),['SCHEDULE_FIRST_PAYMENT_ACTIVATION:APPLIED:FIRST_PAYMENT_VERIFIED']);
+    assert.equal(await inEffect(pbOrg),true);assert.equal((await ent(pbOrg)).effective_until.getTime(),P(0)[1]+GRACE);
+    // Without a renewal, access lapses by time alone (no job): once the window is past, the entitlement is out of effect.
+    await admin.query("UPDATE hon.organization_entitlements SET effective_until=clock_timestamp()-interval '1 second' WHERE organization_id=$1",[pbOrg]);
+    assert.equal(await inEffect(pbOrg),false);
+
+    // An unexpected error inside activation rolls back to its own savepoint: payment kept, access unchanged, review recorded.
+    const pcEntBefore=await ent(pcOrg);
+    await admin.query("CREATE FUNCTION hon.b2_fixture_fail_entitlement() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN RAISE EXCEPTION 'synthetic entitlement failure'; END $f$");
+    await admin.query(`CREATE TRIGGER b2_fixture_fail BEFORE UPDATE ON hon.organization_entitlements FOR EACH ROW WHEN (OLD.organization_id='${pcOrg}') EXECUTE FUNCTION hon.b2_fixture_fail_entitlement()`);
+    let pc1;
+    try { pc1=await ingest(pay(pcB,P(0))); }
+    finally { await admin.query('DROP TRIGGER b2_fixture_fail ON hon.organization_entitlements');await admin.query('DROP FUNCTION hon.b2_fixture_fail_entitlement()'); }
+    assert.deepEqual([pc1.outcome,pc1.billingStatus,pc1.qualifyingPaidPeriodCount,pc1.access],['APPLIED','ACTIVE',1,{accessActivation:'NEEDS_REVIEW',accessGranted:false,reason:'ACCESS_ACTIVATION_ERROR'}]);
+    assert.deepEqual(await ent(pcOrg),pcEntBefore);assert.equal((await st(pcOrg)).state,'AWAITING_FIRST_PAYMENT');
+    const pcView=await schedules.readHq(H('hq'),pcB.bindingId);
+    const pcRetried=await schedules.retryAccess(H('hq'),pcB.bindingId,{expectedBindingVersion:pcView.version},K());
+    assert.deepEqual([pcRetried.access.accessActivation,pcRetried.access.accessGranted,await inEffect(pcOrg)],['APPLIED',true,true]);
+  } finally { await setAccessProgram(false); }
+  // Paid access switched off after activation: a renewal is kept as money but never extends the window; HQ reviews it.
+  const pcUntil=(await ent(pcOrg)).effective_until.getTime(),pc2=await ingest(pay(pcB,P(1)));
+  assert.deepEqual([pc2.outcome,pc2.qualifyingPaidPeriodCount,pc2.access],['APPLIED',2,{accessActivation:'NEEDS_REVIEW',accessGranted:false,reason:'ACCESS_PROGRAM_INACTIVE'}]);
+  assert.equal((await ent(pcOrg)).effective_until.getTime(),pcUntil);
+  assert.deepEqual(await row("SELECT status,mutations_enabled FROM hon.saas_access_program"),{status:'INACTIVE',mutations_enabled:false});
+  assert.equal((await row("SELECT pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conname='saas_access_program_status_check'")).definition,STATUS_CHECK);
+  passed('0235 access: the first verified payment switches on COMPLETE access for the paid period plus the 7-day grace (program INACTIVE -> HQ review, payment kept); HQ-owner retry, renewal extension, no shortening, gap review, concurrent single activation, time lapse, and savepoint isolation');
   for(const q of ['SELECT * FROM hon.saas_schedule_bindings','UPDATE hon.saas_schedule_bindings SET id=id','DELETE FROM hon.saas_schedule_provider_events','INSERT INTO hon.saas_schedule_paid_periods SELECT * FROM hon.saas_schedule_paid_periods LIMIT 1'])await sqlDeny(restricted.query(q),'42501');
   await verifySaasBillingSecurity(admin,'hon_champions_runtime');
   passed('forced RLS/private tables/functions and immutable evidence remain enforced for the restricted runtime');
-  console.log(`PASS: HON OS schedule billing (0230) ${groups} scenario groups; deterministic fake only; no Stripe network, charge, invoice issuance, checkout, entitlement, trial, credits, or deployment.`);
+  console.log(`PASS: HON OS schedule billing (0230 + 0235) ${groups} scenario groups; deterministic fake only; no Stripe network, charge, invoice issuance, checkout, trial, credits, or deployment; access is switched on only inside the disposable fixture with the program briefly ACTIVE.`);
 } finally {
   await Promise.allSettled([admin.query('ROLLBACK'),restricted.query('ROLLBACK')]);
-  try { await restoreHook(); await setAccessProgram(false); await cleanup(); }
+  try { if(shippedHook)await admin.query(shippedHook); await setAccessProgram(false); await cleanup(); }
   finally { await Promise.allSettled([admin.end(),restricted.end()]); }
 }

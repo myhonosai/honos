@@ -50,6 +50,7 @@ export const SAAS_COMMANDS = {
   recordSubscriptionGeneration: 'saas-subscription-generation-record',
   startScheduleBinding: 'saas-schedule-binding-start',
   cancelScheduleBinding: 'saas-schedule-binding-cancel',
+  retryScheduleAccess: 'saas-schedule-access-retry',
   recordPriceSchedule: 'saas-price-schedule-record',
   acceptPriceSchedule: 'saas-price-schedule-accept',
   proposeTrialPolicy: 'saas-trial-policy-propose',

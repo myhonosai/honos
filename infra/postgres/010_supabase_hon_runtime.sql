@@ -2425,6 +2425,21 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.read_saas_schedule_binding(text,uuid,uuid),hon.read_saas_schedule_binding_from_hq(text,uuid),hon.ingest_saas_schedule_evidence(jsonb,text) TO hon_runtime;
   END IF;
 END $$;
+-- 0235 HON OS schedule billing piece 2 (access after the first verified payment). Runs after every broader revocation
+-- above: restore only the HQ-owner access retry (the two reads are restored by the 0230 block). The activation, the
+-- access hook, the grace interval and the access read helper stay unreachable.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['retry_saas_schedule_access(text,uuid,jsonb,uuid,uuid,uuid)','saas_schedule_access_grace()',
+    'saas_schedule_access_json(uuid)','saas_schedule_activate_access(uuid,uuid,timestamp with time zone)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.retry_saas_schedule_access(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
 
 -- B-HQ-2 0232 (proposed) HQ support records: no table privileges; three commands and three reads are the only runtime boundary.
 DO $$ DECLARE r text; t text; BEGIN

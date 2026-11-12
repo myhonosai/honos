@@ -497,6 +497,10 @@
       "title": "HON OS | Owner invitation"
     },
     {
+      "path": "/account/start",
+      "title": "HON OS | Start your school"
+    },
+    {
       "path": "/account/staff-invitation",
       "title": "HON OS | Accept staff invitation"
     },
