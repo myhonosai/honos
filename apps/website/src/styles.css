@@ -291,3 +291,7 @@ footer{padding-block:28px 48px;border-top:1px solid var(--line);background:rgba(
 @media (max-width:560px){.nav-right .lang{display:none}}
 html[lang="ko"] h1,html[lang="ko"] h2,html[lang="ko"] h3{word-break:keep-all;letter-spacing:-.02em}
 html[lang="ko"] p,html[lang="ko"] li{word-break:keep-all}
+.guarantee{margin-top:14px;padding:22px 26px;display:grid;grid-template-columns:auto 1fr;gap:6px 24px;align-items:baseline;border-color:color-mix(in srgb,var(--accent) 35%,transparent)}
+.guarantee b{font-weight:500;font-size:15px}
+.guarantee p{color:var(--muted);font-size:14px}
+@media (max-width:760px){.guarantee{grid-template-columns:1fr}}

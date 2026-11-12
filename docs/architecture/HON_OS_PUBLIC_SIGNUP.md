@@ -68,13 +68,21 @@ Self-hosted, in the database, no captcha or paid service, and no IP address stor
 - Verified email at a listed disposable domain (or a subdomain of one) is refused as `SIGNUP_EMAIL_DOMAIN_NOT_ACCEPTED`
   with no effects (`hon.hon_os_signup_blocked_email_domains`, seeded with well-known throwaway mail services; the
   migration owner can add rows).
-- Global admission limits (`hon.hon_os_admission_limits`, migration owner only): at most 30 new registrations and 30
-  trial starts per rolling hour, 200 of each per rolling day. Counted under one admission lock per kind at insert, so a
-  burst cannot overshoot; a refusal (`SIGNUP_CAPACITY_REACHED`, `TRIAL_CAPACITY_REACHED`) writes nothing and can be
-  retried later.
+- Global admission limits: at most N new registrations and N trial starts per rolling hour and per rolling day (defaults
+  30 and 200 each). Counted under one admission lock per kind at insert, so a burst cannot overshoot; a refusal
+  (`SIGNUP_CAPACITY_REACHED`, `TRIAL_CAPACITY_REACHED`) writes nothing and can be retried later.
+- 0274 HQ control (`/hq/revenue/sign-up-limits`, API `GET /v1/hq/admission`, `POST /v1/hq/admission/limits`):
+  - Limits are append-only versions (`hon.hon_os_admission_limit_versions`); the latest is in force from the next request.
+    Version 1 is the 0273 default. The HQ owner records a new version with a reason (expected version, idempotency key,
+    `saas_audit` + `saas_outbox` evidence); HQ billing readers can only read. The migration owner can still append an
+    owner-recorded version for recovery.
+  - Cap hits: a refusal rolls back its own transaction, so the API records it afterwards in a separate one
+    (`record_hon_os_admission_refusal`). The database counts it per kind per UTC hour only while the limit is actually
+    reached, so a caller cannot invent a hit. HQ sees usage now against each limit, whether it is full, and refusals per
+    hour for 7 days.
 - Already in place: IdP-verified email, one school per identity, one trial per organization, campaign capacity, the
   per-subject API rate limit and same-origin human-command checks.
-- Follow-ups: an HQ screen to change the limits and the domain list; IdP-side bot protection (the identity provider's own
+- Follow-ups: an HQ screen for the domain list; IdP-side bot protection (the identity provider's own
   sign-up challenge) is configured outside HON when David opens sign-up.
 
 ### Acceptance tests (proof `test-hon-os-public-signup-integrity.mjs`, real signed sessions → Nest → runtime SQL)
