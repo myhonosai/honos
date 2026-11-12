@@ -132,7 +132,11 @@ import { SCHOOL_PAYMENT_ADAPTERS, schoolPaymentAdaptersFromEnvironment } from '.
 import {
   SchoolPayDefaultHumanUiGuard, SchoolPayDisconnectHumanUiGuard, SchoolPayFinishHumanUiGuard, SchoolPayOnboardingLinkHumanUiGuard,
   SchoolPayReadHumanUiGuard, SchoolPayRefreshHumanUiGuard, SchoolPayStartHumanUiGuard,
+  SchoolPayExpiringReadHumanUiGuard, SchoolPayMethodDefaultHumanUiGuard, SchoolPayMethodFinishHumanUiGuard, SchoolPayMethodRemoveHumanUiGuard,
+  SchoolPayMethodSetupHumanUiGuard, SchoolPayMethodsReadHumanUiGuard,
 } from './school-payments/school-payment-human-ui.guard.js';
+import { SchoolPayMethodController } from './school-payments/school-pay-method.controller.js';
+import { SchoolPayMethodService } from './school-payments/school-pay-method.service.js';
 import { SchoolCheckoutController } from './school-checkout/school-checkout.controller.js';
 import { SchoolCheckoutService } from './school-checkout/school-checkout.service.js';
 import { SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard } from './school-checkout/school-checkout-human-ui.guard.js';
@@ -419,6 +423,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     StudentImportController,
     TuitionPaymentController,
     SchoolPaymentController,
+    SchoolPayMethodController,
     SchoolCheckoutController,
     SchoolMembershipListController,
     CrmSchoolClockController,
@@ -566,9 +571,12 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSeriesReadHumanUiGuard,
     TuitionPaymentService,
     SchoolPaymentService,
+    SchoolPayMethodService,
     { provide: SCHOOL_PAYMENT_ADAPTERS, useFactory: () => schoolPaymentAdaptersFromEnvironment() },
     SchoolPayReadHumanUiGuard, SchoolPayStartHumanUiGuard, SchoolPayOnboardingLinkHumanUiGuard, SchoolPayFinishHumanUiGuard,
     SchoolPayRefreshHumanUiGuard, SchoolPayDefaultHumanUiGuard, SchoolPayDisconnectHumanUiGuard,
+    SchoolPayMethodsReadHumanUiGuard, SchoolPayExpiringReadHumanUiGuard, SchoolPayMethodSetupHumanUiGuard, SchoolPayMethodFinishHumanUiGuard,
+    SchoolPayMethodDefaultHumanUiGuard, SchoolPayMethodRemoveHumanUiGuard,
     SchoolCheckoutService, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,

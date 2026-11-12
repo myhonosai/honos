@@ -33,9 +33,9 @@ import type { MembershipLifecycleContext } from '../billing/membership.service.j
 import { SCHOOL_PAYMENT_ADAPTERS, SchoolPaymentProviderError, type SchoolPaymentAdapter } from './school-payment-adapter.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const HUMAN_SETTINGS = "SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_external_subject',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)";
-const READ_LIMITS = "SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0";
-const WRITE_LIMITS = "SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0";
+export const HUMAN_SETTINGS = "SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_external_subject',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)";
+export const READ_LIMITS = "SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0";
+export const WRITE_LIMITS = "SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0";
 const CONNECTED: readonly SchoolPayConnectionState[] = ['CONNECTED_RESTRICTED', 'CONNECTED_ACTIVE', 'REAUTHORIZATION_REQUIRED'];
 
 // Exact 0258 error codes; every unknown database failure is unavailable, never success.
@@ -55,9 +55,12 @@ const ERRORS: Record<string, (code: string) => HttpException> = {
   IDEMPOTENCY_KEY_REUSED: code => new ConflictException({ code, detail: 'The idempotency key was already used for a different command.' }),
   IDEMPOTENCY_IN_PROGRESS: code => new ConflictException({ code, detail: 'The matching command is being processed.' }),
 };
-function translate(error: unknown, forbidden: string): never {
+function translate(error: unknown, forbidden: string): never { return translateSchoolPayError(error, forbidden, ERRORS); }
+/** Shared by the school payment services: exact known codes, provider outcomes, and unavailable for anything else. */
+export function translateSchoolPayError(error: unknown, forbidden: string, errors: Record<string, (code: string) => HttpException>): never {
   if (error instanceof HttpException) throw error;
   if (error instanceof SchoolPaymentProviderError) {
+    if (error.reason === 'SETUP_INCOMPLETE') throw new ConflictException({ code: 'SCHOOL_PAY_SETUP_INCOMPLETE', detail: 'The card or bank account was not saved on the provider page yet.' });
     if (error.reason === 'NOT_CONFIGURED') throw new ServiceUnavailableException({ code: 'SCHOOL_PAY_PROVIDER_NOT_CONFIGURED', detail: 'This payment provider is not set up in this environment.' });
     if (error.outcome === 'UNKNOWN') throw new ServiceUnavailableException({ code: 'SCHOOL_PAY_PROVIDER_UNKNOWN', detail: 'The payment provider did not answer. Try again.' });
     if (error.outcome === 'FAILED') throw new BadGatewayException({ code: 'SCHOOL_PAY_PROVIDER_REJECTED', detail: 'The payment provider refused the request.' });
@@ -65,7 +68,7 @@ function translate(error: unknown, forbidden: string): never {
   }
   const sqlState = (error as { code?: string })?.code ?? '';
   const message = (error as { message?: string })?.message ?? '';
-  const known = ERRORS[message];
+  const known = errors[message];
   if (known && ['22023', '42501', 'P0002', '40001', '23505'].includes(sqlState)) throw known(message);
   if (sqlState === '42501') throw new ForbiddenException({ code: forbidden });
   if (['40001', '40P01', '55P03', '23505'].includes(sqlState)) throw new ConflictException({ code: 'SCHOOL_PAY_CONFLICT' });
