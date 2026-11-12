@@ -158,6 +158,8 @@ const expectedRlsTables = [
   'school_pay_connection_events',
   'school_checkout_pages',
   'school_checkout_page_versions',
+  'school_page_branding',
+  'school_page_branding_versions',
   'crm_leads',
   'crm_lead_attributions',
   'crm_pipeline_stages',

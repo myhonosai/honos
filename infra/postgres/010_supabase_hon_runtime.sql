@@ -2839,6 +2839,33 @@ DO $$ DECLARE r text; t text; col text; f text; BEGIN
   END IF;
 END $$;
 
+-- B-SCH-3 part 3a 0268 school page branding: two private forced-RLS tables reached only through three runtime entry points
+-- (staff read and save, public display read); guards, validators and helpers are private.
+DO $$ DECLARE r text; t text; col text; f text; BEGIN
+  IF to_regclass('hon.school_page_branding') IS NULL THEN RAISE EXCEPTION 'Apply migration 0268 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.school_page_branding','hon.school_page_branding_versions'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid=t::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON %s FROM PUBLIC',col,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+        EXECUTE format('REVOKE ALL (%I) ON %s FROM %I',col,t,r);
+      END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.school_branding_image_ok(text)','hon.school_branding_input_ok(jsonb)','hon.guard_school_page_branding()','hon.require_school_branding_actor(text)','hon.school_page_branding_json(hon.school_page_branding)','hon.read_school_page_branding(text)','hon.save_school_page_branding(text,jsonb,text,uuid,uuid)','hon.read_public_school_branding(uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_page_branding(text),hon.save_school_page_branding(text,jsonb,text,uuid,uuid),hon.read_public_school_branding(uuid) TO hon_runtime;
+  END IF;
+END $$;
+
 -- D11-B 0246 HON OS free trial: two private forced-RLS tables; starting a trial and its read are the only runtime entry
 -- points. The trial program row has no runtime write path (TEST_MODE only by the migration owner of a test database).
 DO $$ DECLARE t text; r text; f text; c text; BEGIN
