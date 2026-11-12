@@ -1,10 +1,12 @@
 import {
-  BadRequestException, Controller, Header, Headers, HttpCode, Inject, Post, Req, ServiceUnavailableException,
+  BadRequestException, Controller, Header, Headers, HttpCode, Inject, Logger, Post, Req, ServiceUnavailableException,
 } from '@nestjs/common';
 import { raw, type NextFunction, type Request, type Response } from 'express';
 import { COMMUNICATION_WORKER_STORE, type CommunicationWorkerStore, type VerifiedProviderReceipt } from './communication-worker-database.js';
 import { SendGridEventWebhookVerifier, SendGridWebhookError } from './sendgrid-email-provider.js';
 import { TWILIO_INBOUND_PATH, TWILIO_STATUS_PATH, TwilioWebhookError, TwilioWebhookVerifier } from './twilio-text-provider.js';
+
+const inboundLog = new Logger('CommunicationInboundText');
 
 export const COMMUNICATION_WEBHOOK_PREFIX = /^\/v1\/communications\/webhooks(?:\/|$)/i;
 const JSON_PATHS = new Set(['/v1/communications/webhooks/sendgrid']);
@@ -89,7 +91,12 @@ export class CommunicationWebhookController {
     if (!keyword) return EMPTY_TWIML;
     if (!this.store.isConfigured() || !this.store.recordInboundKeyword) throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
     try { await this.store.recordInboundKeyword(keyword); }
-    catch { throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' }); }
+    catch {
+      // Twilio does not retry inbound webhooks: log the message id (never the phone numbers) so an operator can
+      // reconcile a lost STOP from the Twilio message log.
+      inboundLog.warn(`Inbound ${keyword.keyword} not recorded; reconcile Twilio message ${keyword.providerMessageId}.`);
+      throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' });
+    }
     return EMPTY_TWIML;
   }
 

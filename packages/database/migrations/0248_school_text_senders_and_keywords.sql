@@ -88,6 +88,8 @@ BEGIN
   VALUES (s.organization_id, s.id, actor, 'HON_HQ', 'communication.text_sender.set', 'SCHOOL_TEXT_SENDER', next.id,
     CASE WHEN prior.id IS NULL THEN NULL ELSE jsonb_build_object('phone', prior.phone_e164, 'status', prior.status, 'version', prior.version) END,
     jsonb_build_object('phone', next.phone_e164, 'status', next.status, 'mmsConverterConfirmed', next.mms_converter_confirmed, 'version', next.version), 'SUCCEEDED', req, req, now());
+  -- Authority is checked again after the lock and the write, so a grant that ended meanwhile aborts the change.
+  PERFORM hon.require_saas_hq_actor(p_subject, true);
   RETURN jsonb_build_object('schoolId', next.school_id, 'phoneE164', next.phone_e164, 'status', next.status, 'mmsConverterConfirmed', next.mms_converter_confirmed,
     'version', next.version, 'updatedAt', next.updated_at);
 END $$;
@@ -267,8 +269,9 @@ BEGIN
     FROM hon.inbound_text_keywords k JOIN hon.schools s ON s.id = k.school_id WHERE k.provider_message_id = p_provider_message_id;
     RETURN NEXT; RETURN;
   END IF;
-  SELECT * INTO v_sender FROM hon.school_text_senders sender WHERE sender.phone_e164 = p_to_e164 AND sender.status = 'ACTIVE';
-  IF v_sender.id IS NULL THEN outcome := 'UNROUTED'; school_name := NULL; consents_changed := 0; RETURN NEXT; RETURN; END IF;
+  -- STOP is honored for any recorded school number, even a DISABLED one; START and HELP need an ACTIVE sender.
+  SELECT * INTO v_sender FROM hon.school_text_senders sender WHERE sender.phone_e164 = p_to_e164;
+  IF v_sender.id IS NULL OR (v_sender.status <> 'ACTIVE' AND p_keyword <> 'STOP') THEN outcome := 'UNROUTED'; school_name := NULL; consents_changed := 0; RETURN NEXT; RETURN; END IF;
   SELECT s.name INTO v_school_name FROM hon.schools s WHERE s.id = v_sender.school_id;
 
   FOR v_person IN

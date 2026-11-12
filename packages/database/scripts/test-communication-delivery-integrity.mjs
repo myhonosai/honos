@@ -360,8 +360,9 @@ try {
   await consent('ada', ids.schoolA, 'SMS', 'OPTED_OUT'); // staff-recorded opt-out (source STAFF)
   check((await keyword('+15555559001', '+15555550101', 'START', 'a4')).consents_changed === 0 && (await smsConsent('ada')).status === 'OPTED_OUT', 'START never re-opens a staff-recorded opt-out');
   check((await keyword('+15555559999', '+15555550101', 'STOP', 'a5')).outcome === 'UNROUTED', 'a keyword to an unknown number is UNROUTED');
-  check((await keyword('+15555559003', '+15555550105', 'STOP', 'a6')).outcome === 'UNROUTED', 'a keyword to a DISABLED number is UNROUTED');
-  check((await admin.query('SELECT count(*)::int AS n FROM hon.inbound_text_keywords WHERE organization_id = $1', [ids.org])).rows[0].n === 4, 'only routed keywords are stored, without the sender number');
+  check((await keyword('+15555559003', '+15555550105', 'START', 'a6')).outcome === 'UNROUTED', 'START or HELP to a DISABLED number is UNROUTED');
+  check((await keyword('+15555559003', '+15555550105', 'STOP', 'a7')).outcome === 'RECORDED', 'STOP to a DISABLED number is still honored and recorded');
+  check((await admin.query('SELECT count(*)::int AS n FROM hon.inbound_text_keywords WHERE organization_id = $1', [ids.org])).rows[0].n === 5, 'only routed keywords are stored, without the sender number');
   await expectError('42501', () => runtime.query("SELECT * FROM hon.record_inbound_text_keyword('+15555559001','+15555550101','STOP',$1,now())", [`SM${'b'.repeat(32)}`]), 'runtime cannot record inbound keywords');
 
   // 14. Twilio end to end with a stub transport and signed callbacks through the controller.
