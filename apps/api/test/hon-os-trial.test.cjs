@@ -55,8 +55,10 @@ test('database refusals map to closed codes; business refusals keep their own co
    ['23514','TRIAL_CAMPAIGN_UNAVAILABLE',409,'TRIAL_CAMPAIGN_UNAVAILABLE'],['23514','TRIAL_CAMPAIGN_FULL',409,'TRIAL_CAMPAIGN_FULL'],['23514','TRIAL_NOT_ELIGIBLE',409,'TRIAL_NOT_ELIGIBLE'],
    ['23505','TRIAL_KEY_REUSED',409,'TRIAL_KEY_REUSED'],['23514','TRIAL_CAPACITY_REACHED',409,'TRIAL_CAPACITY_REACHED'],['23514','SECRET SQL',409,'ACCOUNT_CONFLICT'],['42501','TRIAL_FORBIDDEN',403,'ACCOUNT_FORBIDDEN'],['55P03','SECRET',503,'TRIAL_BUSY'],
    ['22023','SECRET',400,'ACCOUNT_INPUT_INVALID'],['40001','SECRET',409,'ACCOUNT_CONFLICT'],['XX000','TRIAL_CLOSED',503,'ACCOUNT_UNAVAILABLE']]){
-  const service=new HonOsTrialService({callHonOsTrial:async()=>{throw Object.assign(new Error(message),{code});}});
+  const recorded=[],service=new HonOsTrialService({callHonOsTrial:async()=>{throw Object.assign(new Error(message),{code});}},{recordRefusal:async kind=>{recorded.push(kind);}});
   await assert.rejects(()=>service.start(req,input,randomUUID()),e=>e.status===status&&e.getResponse().code===closed&&!JSON.stringify(e.getResponse()).includes('SECRET'));
+  // 0274: only a capacity refusal is passed on for HQ to see.
+  assert.deepEqual(recorded,closed==='TRIAL_CAPACITY_REACHED'?['TRIAL']:[]);
  }
 });
 test('status read passes only the session subject and validates the closed response',async()=>{

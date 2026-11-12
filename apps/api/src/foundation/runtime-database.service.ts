@@ -1292,6 +1292,18 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return this.callFixedSubjectFunction({sql:call.sql,readOnly:call.readOnly},params,'ACCOUNT_UNAVAILABLE');
   }
 
+  /** 0274 admission limits: HQ read, HQ owner change, and the post-refusal cap-hit record (its own transaction). */
+  async callHonOsAdmission(operation: 'read'|'set'|'refused', params: readonly string[]): Promise<unknown> {
+    const calls = {
+      read: {sql: 'SELECT hon.read_hon_os_admission_status($1) data',arity:1,readOnly:true},
+      set: {sql: 'SELECT hon.set_hon_os_admission_limits($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) data',arity:5,readOnly:false},
+      refused: {sql: 'SELECT hon.record_hon_os_admission_refusal($1) data',arity:1,readOnly:false},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ADMISSION_UNAVAILABLE');
+    return this.callFixedSubjectFunction({sql:call.sql,readOnly:call.readOnly},params,'ADMISSION_UNAVAILABLE');
+  }
+
   async callSchoolFamilyAccount(operation: 'invite'|'revoke'|'end'|'accept'|'list', params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
       invite: {sql: "SELECT hon.manage_school_family_access_invitation($1,'INVITE',$2::jsonb,$3::uuid) data",arity:3},

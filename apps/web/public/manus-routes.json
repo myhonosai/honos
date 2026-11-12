@@ -469,6 +469,10 @@
       "title": "HON HQ | Free Trials"
     },
     {
+      "path": "/hq/revenue/sign-up-limits",
+      "title": "HON HQ | Sign-up Limits"
+    },
+    {
       "path": "/staff/subscription",
       "title": "HON OS | School subscription"
     },

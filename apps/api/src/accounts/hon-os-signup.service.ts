@@ -4,6 +4,7 @@ import { cookieValue, HON_SESSION_COOKIE, sessionConfig, verifySession } from '@
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { SchoolAccountRateLimit } from './school-account-rate-limit.js';
+import { HonOsAdmissionService } from '../hon-os-admission/hon-os-admission.service.js';
 
 // Business refusals the owner can act on. Anything else is redacted to a closed code by SQLSTATE.
 const CONFLICTS = new Set(['SIGNUP_CLOSED', 'SIGNUP_ALREADY_REGISTERED', 'SIGNUP_TERMS_CHANGED', 'SIGNUP_REVIEW_REQUIRED', 'SIGNUP_OWNER_NOT_ELIGIBLE', 'SIGNUP_KEY_REUSED', 'SIGNUP_EMAIL_DOMAIN_NOT_ACCEPTED', 'SIGNUP_CAPACITY_REACHED']);
@@ -11,7 +12,7 @@ const CONFLICTS = new Set(['SIGNUP_CLOSED', 'SIGNUP_ALREADY_REGISTERED', 'SIGNUP
 @Injectable()
 export class HonOsSignupService {
   private readonly rateLimit = new SchoolAccountRateLimit();
-  constructor(private readonly database: RuntimeDatabaseService) {}
+  constructor(private readonly database: RuntimeDatabaseService, private readonly admission: HonOsAdmissionService) {}
   private admit(req: HonRequest, operation: 'accept' | 'list') {
     const wait = this.rateLimit.admit(req.honIdentity!.externalSubject, operation);
     if (wait) {
@@ -23,7 +24,11 @@ export class HonOsSignupService {
     try { return await this.database.callHonOsSignup(operation, args); }
     catch (e) {
       const { code, message } = e as { code?: string; message?: string };
-      if (message && CONFLICTS.has(message) && ['55000', '23505', '23514'].includes(code ?? '')) throw new ConflictException({ code: message });
+      if (message && CONFLICTS.has(message) && ['55000', '23505', '23514'].includes(code ?? '')) {
+        // The refusal rolled back; HQ sees the cap hit through a separate record (0274).
+        if (message === 'SIGNUP_CAPACITY_REACHED') await this.admission.recordRefusal('SIGNUP');
+        throw new ConflictException({ code: message });
+      }
       if (code === '42501') throw new ForbiddenException({ code: 'ACCOUNT_FORBIDDEN' });
       if (code === 'P0002') throw new HttpException({ code: 'ACCOUNT_UNAVAILABLE' }, 404);
       if (code === '23505' || code === '40001' || code === '23514') throw new ConflictException({ code: 'ACCOUNT_CONFLICT' });
