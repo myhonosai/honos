@@ -3,12 +3,13 @@ BEGIN;
 -- 0281 HQ texting and email to school owners (HQ-COMM PR A, docs/architecture/HQ_COMMUNICATIONS.md). HON HQ writes one
 -- message to the current owners of one school about SUPPORT, BILLING, ONBOARDING or ACCOUNT matters; a human HQ person
 -- drafts, queues or cancels it, with the HQ permission of its purpose. Only the HQ owner sets or retires the HQ sender
--- (one email from-address, one Twilio Messaging Service SID with MMS Converter confirmed). The 0243 communication worker
+-- (one email from-address; one Twilio Messaging Service SID with MMS Converter confirmed and the public number people
+-- text back). The 0243 communication worker
 -- delivers through four fixed functions of its own; HQ never reads a recipient address and no address, body copy,
 -- credential or raw provider payload is stored outside the message itself. Nothing here sends a message by itself:
 -- delivery needs the worker, a READY provider and the deployment send switches (HON_EMAIL_SEND_APPROVED,
--- HON_SMS_SEND_APPROVED). Texts go to confirmed phones only, which arrive with 0282; until then SMS deliveries are
--- suppressed with ADDRESS_MISSING.
+-- HON_SMS_SEND_APPROVED). Texts go only to a person who turned HQ texts on themselves (OPTED_IN SMS preference) and has a
+-- confirmed phone, which arrive with 0282: until then SMS deliveries are suppressed with CONSENT_MISSING.
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND (rolsuper OR rolbypassrls)
@@ -32,6 +33,8 @@ CREATE TABLE hon.hq_communication_senders (
   email_from text CHECK (email_from ~ '^[a-z0-9._%+-]{1,64}@[a-z0-9.-]{1,180}\.[a-z]{2,24}$'),
   email_display_name text CHECK (email_display_name = btrim(email_display_name) AND length(email_display_name) BETWEEN 1 AND 80),
   sms_service_sid text CHECK (sms_service_sid ~ '^MG[0-9a-f]{32}$'),
+  -- The public number people text (codes, STOP, HELP). Inbound texts are matched by the Messaging Service SID, not this.
+  sms_reply_number text CHECK (sms_reply_number ~ '^\+[1-9][0-9]{7,14}$'),
   a2p_state text CHECK (a2p_state IN ('NOT_REGISTERED','PENDING','REGISTERED_SERVICE','REGISTERED_MARKETING')),
   mms_converter_confirmed boolean,
   created_by uuid NOT NULL REFERENCES hon.principals(id),
@@ -39,10 +42,10 @@ CREATE TABLE hon.hq_communication_senders (
   retired_by uuid REFERENCES hon.principals(id),
   retired_at timestamptz,
   version integer NOT NULL DEFAULT 1 CHECK (version > 0),
-  CHECK (channel <> 'EMAIL' OR (email_from IS NOT NULL AND email_display_name IS NOT NULL AND sms_service_sid IS NULL
+  CHECK (channel <> 'EMAIL' OR (email_from IS NOT NULL AND email_display_name IS NOT NULL AND sms_service_sid IS NULL AND sms_reply_number IS NULL
     AND a2p_state IS NULL AND mms_converter_confirmed IS NULL)),
   -- Long texts go out as one MMS only when the Messaging Service has MMS Converter on, so it is required.
-  CHECK (channel <> 'SMS' OR (sms_service_sid IS NOT NULL AND a2p_state IS NOT NULL AND mms_converter_confirmed IS TRUE
+  CHECK (channel <> 'SMS' OR (sms_service_sid IS NOT NULL AND sms_reply_number IS NOT NULL AND a2p_state IS NOT NULL AND mms_converter_confirmed IS TRUE
     AND email_from IS NULL AND email_display_name IS NULL)),
   CHECK ((status = 'RETIRED') = (retired_at IS NOT NULL AND retired_by IS NOT NULL))
 );
@@ -264,7 +267,7 @@ $$;
 CREATE FUNCTION hon.hq_communication_sender_json(s hon.hq_communication_senders) RETURNS jsonb
 LANGUAGE sql STABLE SET search_path = pg_catalog, hon AS $$
   SELECT CASE WHEN s.id IS NULL THEN NULL ELSE jsonb_build_object('senderId', s.id, 'channel', s.channel, 'status', s.status,
-    'emailFrom', s.email_from, 'emailDisplayName', s.email_display_name, 'smsServiceSid', s.sms_service_sid, 'a2pState', s.a2p_state,
+    'emailFrom', s.email_from, 'emailDisplayName', s.email_display_name, 'smsServiceSid', s.sms_service_sid, 'smsReplyNumber', s.sms_reply_number, 'a2pState', s.a2p_state,
     'mmsConverterConfirmed', s.mms_converter_confirmed, 'createdBy', hon.hq_communication_person_json(s.created_by),
     'createdAt', hon.saas_ts(s.created_at), 'version', s.version) END
 $$;
@@ -376,13 +379,13 @@ BEGIN
 END $$;
 
 -- ---------- sender commands (HQ owner only) ----------
--- SET: {channel, emailFrom, emailDisplayName, smsServiceSid, a2pState, mmsConverterConfirmed}
+-- SET: {channel, emailFrom, emailDisplayName, smsServiceSid, smsReplyNumber, a2pState, mmsConverterConfirmed}
 CREATE FUNCTION hon.set_hq_communication_sender(p_subject text, p_input jsonb, p_key uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
 DECLARE actor uuid; replay jsonb; s hon.hq_communication_senders%ROWTYPE; fp text; at timestamptz := clock_timestamp(); result jsonb; ch text;
 BEGIN
   actor := hon.require_hq_communication_actor(p_subject, 'OWNER');
-  PERFORM hon.hq_communication_keys(p_input, ARRAY['a2pState','channel','emailDisplayName','emailFrom','mmsConverterConfirmed','smsServiceSid']);
+  PERFORM hon.hq_communication_keys(p_input, ARRAY['a2pState','channel','emailDisplayName','emailFrom','mmsConverterConfirmed','smsReplyNumber','smsServiceSid']);
   ch := p_input->>'channel';
   IF jsonb_typeof(p_input->'channel') IS DISTINCT FROM 'string' OR ch NOT IN ('EMAIL','SMS') THEN
     RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE = '22023';
@@ -392,11 +395,12 @@ BEGIN
       OR jsonb_typeof(p_input->'emailDisplayName') IS DISTINCT FROM 'string'
       OR (p_input->>'emailDisplayName') <> btrim(p_input->>'emailDisplayName') OR length(p_input->>'emailDisplayName') NOT BETWEEN 1 AND 80
       OR (p_input->>'emailDisplayName') ~ '[[:cntrl:]<>]'
-      OR jsonb_typeof(p_input->'smsServiceSid') <> 'null' OR jsonb_typeof(p_input->'a2pState') <> 'null'
+      OR jsonb_typeof(p_input->'smsServiceSid') <> 'null' OR jsonb_typeof(p_input->'smsReplyNumber') <> 'null' OR jsonb_typeof(p_input->'a2pState') <> 'null'
       OR jsonb_typeof(p_input->'mmsConverterConfirmed') <> 'null') THEN
     RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE = '22023';
   END IF;
   IF ch = 'SMS' AND (jsonb_typeof(p_input->'smsServiceSid') IS DISTINCT FROM 'string' OR (p_input->>'smsServiceSid') !~ '^MG[0-9a-f]{32}$'
+      OR jsonb_typeof(p_input->'smsReplyNumber') IS DISTINCT FROM 'string' OR (p_input->>'smsReplyNumber') !~ '^\+[1-9][0-9]{7,14}$'
       OR jsonb_typeof(p_input->'a2pState') IS DISTINCT FROM 'string'
       OR (p_input->>'a2pState') NOT IN ('NOT_REGISTERED','PENDING','REGISTERED_SERVICE','REGISTERED_MARKETING')
       OR (p_input->'mmsConverterConfirmed') IS DISTINCT FROM 'true'::jsonb
@@ -410,9 +414,9 @@ BEGIN
   IF EXISTS (SELECT 1 FROM hon.hq_communication_senders WHERE channel = ch AND status = 'ACTIVE') THEN
     RAISE EXCEPTION 'HQ_SENDER_EXISTS' USING ERRCODE = '23514';
   END IF;
-  INSERT INTO hon.hq_communication_senders (channel, status, email_from, email_display_name, sms_service_sid, a2p_state,
+  INSERT INTO hon.hq_communication_senders (channel, status, email_from, email_display_name, sms_service_sid, sms_reply_number, a2p_state,
     mms_converter_confirmed, created_by, created_at)
-  VALUES (ch, 'ACTIVE', p_input->>'emailFrom', p_input->>'emailDisplayName', p_input->>'smsServiceSid', p_input->>'a2pState',
+  VALUES (ch, 'ACTIVE', p_input->>'emailFrom', p_input->>'emailDisplayName', p_input->>'smsServiceSid', p_input->>'smsReplyNumber', p_input->>'a2pState',
     CASE WHEN ch = 'SMS' THEN true END, actor, at)
   RETURNING * INTO s;
   result := jsonb_build_object('operation', 'SENDER_SET', 'sender', hon.hq_communication_sender_json(s));
