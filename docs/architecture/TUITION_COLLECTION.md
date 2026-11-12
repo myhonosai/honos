@@ -378,3 +378,22 @@ Status: source only, not deployed, test mode only, on the in-process simulators 
   saving a Square card needs the Web Payments SDK on a HON page plus the seller's vaulted token, a later piece.
 - **Evidence:** `packages/database/scripts/test-school-pay-methods-integrity.mjs` (188 checks over signed HTTP);
   `apps/api/test/school-payments.test.cjs` (0321 contract, simulator and route tests).
+
+## 14. Piece 3-web as built: saved payment methods page for staff
+
+- **Page:** `/staff/billing/saved-payment-methods` (Billing menu, "Saved payment methods"), dynamic, noindex,
+  `no-referrer`, behind the verified web session. The page holds no school or payer id of its own; it uses the shell's
+  verified school, and the API decides every permission (`school_pay.method.manage` to change, the read permission to see).
+- **Payer picker:** payers come from the existing membership list read (one option per billing account, named from its
+  participants); a `?payer=` link opens one directly, and the expiring list links to each payer.
+- **Adding:** staff choose the processor connection and card or US bank account (bank only where the connection can
+  debit), and the payer ticks the consent text, which names the school (`card-on-file-v1` or `ach-mandate-v1`). The page
+  then opens the processor's hosted page. A replayed start answers with no link, and the page says to start again.
+- **Return:** the query (`payer`, `setup`, `state`) is read once and removed from the address bar at once; the one-time
+  state is kept only in memory, never in storage, and is sent only when staff choose Finish saving. A session end, a
+  school change or picking another payer drops it; blur or a hidden tab hides the page but keeps it.
+- **Commands:** each sends its own `X-HON-Human-Command` and `Idempotency-Key`; an unknown or rate-limited outcome keeps
+  the exact request and key in memory for Try again. Every answer is followed by a fresh read. Remove needs a reason and
+  says plainly when the processor did not confirm the detach.
+- **Evidence:** `apps/web/test/saved-methods-ui.test.tsx` (http shape and verification, refusal mapping, query cleaning,
+  body building, view states, page and menu wiring).

@@ -249,6 +249,10 @@
       "title": "HON | Checkout pages"
     },
     {
+      "path": "/staff/billing/saved-payment-methods",
+      "title": "HON | Saved payment methods"
+    },
+    {
       "path": "/staff/retention/at-risk",
       "title": "HON | Students at risk"
     },
@@ -534,7 +538,7 @@
     },
     {
       "path": "/hq/pricing-offers",
-      "title": "HON HQ | Pricing & Offers \u00b7 Design review"
+      "title": "HON HQ | Pricing & Offers · Design review"
     },
     {
       "path": "/reference/classic-dashboard",
