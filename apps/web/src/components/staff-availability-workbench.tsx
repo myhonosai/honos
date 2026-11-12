@@ -34,7 +34,7 @@ export function StaffAvailabilityWorkbench(): React.ReactElement {
   const lifecycle = (kind: StaffRevisionKind, d: Draft, set: (d: Draft) => void) => <div className={styles.dates}><label>{kind === 'AVAILABILITY' ? 'Availability' : 'Qualification metadata'} effective from (school-local date)<input type="date" min="2000-01-01" max="2099-12-31" required value={d.effectiveFrom} onChange={e => set({ ...d, effectiveFrom: e.target.value })} /></label><label>Optional exclusive end date<input type="date" min="2000-01-01" max="2099-12-31" value={d.endsOn} onChange={e => set({ ...d, endsOn: e.target.value })} /></label></div>;
   const submit = (kind: StaffRevisionKind) => (e: FormEvent) => { e.preventDefault(); void run(() => save(kind, false)); };
   return <main className={styles.page}>
-    <nav><a href="/core">HON Core</a><a href="/staff/roles">Staff role permissions</a><a href="/auth/login">Sign in</a></nav>
+    <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/roles">Staff role permissions</a><a href="/auth/login">Sign in</a></nav>
     <header><p>HUMAN TEAM / PLANNING FOUNDATION</p><h1>Staff availability &amp; qualifications</h1><p>Own weekly windows or one already-known school staff member. Available in Essential, Core and Complete without an upgrade gate.</p></header>
     <aside><strong>No scheduling or employment decisions.</strong><p>{STAFF_AVAILABILITY_HELP}</p></aside>
     {error && <p className={styles.error} role="alert">{error}</p>}{notice && <p className={styles.notice} role="status">{notice}</p>}

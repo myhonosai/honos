@@ -41,6 +41,19 @@ describe('HQ command stage: chibi portraits', () => {
     for (const executive of HQ_EXECUTIVES) expect(html).toContain(`/hq-assets/chibi/${executive.executiveKey}.webp`);
   });
 
+  it('gives every executive their own anime portrait instead of a pending placeholder', () => {
+    state.art = 'anime';
+    HQ_EXECUTIVES.forEach((executive, index) => {
+      const html = renderToStaticMarkup(<ExecutivePortrait index={index} executiveKey={executive.executiveKey} name={executive.displayName}/>);
+      expect(html).toContain(`/hq-assets/anime/${executive.executiveKey}.webp`);
+      expect(html).toContain(`${executive.displayName}, Anime portrait`);
+      expect(html).not.toMatch(/artwork pending/i);
+      expect(existsSync(new URL(`../public/hq-assets/anime/${executive.executiveKey}.webp`, import.meta.url))).toBe(true);
+    });
+    const dashboard = renderToStaticMarkup(<HqModernDashboard/>);
+    for (const executive of HQ_EXECUTIVES) expect(dashboard).toContain(`/hq-assets/anime/${executive.executiveKey}.webp`);
+  });
+
   it('leaves the realistic portraits on the approved sprite', () => {
     state.art = 'realistic';
     const html = renderToStaticMarkup(<ExecutivePortrait index={0} executiveKey="chase" name="Chase"/>);
