@@ -21,7 +21,13 @@ export type HonDelegateAgentKey = typeof HON_DELEGATE_AGENTS[number];
  * K1 legacy 'claire' teaching alias is retired: { agentKey: 'claire', curriculumId } is refused; teaching is 'kai' only.
  */
 export const HON_ANALYST_AGENT = 'claire' as const;
-export type HonAnalystAgentKey = typeof HON_ANALYST_AGENT;
+/**
+ * 0260: the read-only analysis specialists. Claire (Business Performance), Alex (general management), Jordan (operations)
+ * and Lena (creative & commerce) all answer in text from the school's own aggregate facts; none drafts or changes anything.
+ */
+export const HON_ANALYST_AGENTS = ['claire', 'alex', 'jordan', 'lena'] as const;
+export type HonAnalystAgentKey = typeof HON_ANALYST_AGENTS[number];
+export const isHonAnalystAgent = (v: unknown): v is HonAnalystAgentKey => (HON_ANALYST_AGENTS as readonly unknown[]).includes(v);
 /** At most this many specialists HON may suggest for one answer. A suggestion is never run without the human confirming it. */
 export const HON_REPLY_MAX_SUGGESTIONS = 3;
 /**
@@ -59,8 +65,8 @@ export const HON_TURN_TEXT_LIMITS: Readonly<Record<HonDelegateAgentKey, number>>
 export type HonDelegation =
   | { agentKey: 'marcus'; campaignId: string }
   | { agentKey: 'kai'; curriculumId: string }
-  /** Claire's question is the turn's text (at most HON_REPLY_LIMITS.questionCharacters); no target. */
-  | { agentKey: typeof HON_ANALYST_AGENT }
+  /** An analysis specialist's question is the turn's text (at most HON_REPLY_LIMITS.questionCharacters); no target. */
+  | { agentKey: HonAnalystAgentKey }
   | { agentKey: 'chad'; leadId: string; expectedLeadVersion: number; purpose: FollowUpDraftPurpose };
 /**
  * HON reply modes (owner decision 2026-11-06 16:10Z). The human chooses the mode; the server never upgrades one. Both
@@ -128,7 +134,9 @@ export interface HonConversationReadiness {
   /** True when a question to HON would be admitted now (authorized, spend allowed, routed, runtime ready, budget left). */
   honReply: boolean;
   /** K2: true when a question to Claire (Business Performance) would be admitted now (reporting.view and the same gates). */
-  businessPerformance: boolean; asOf: string;
+  businessPerformance: boolean;
+  /** 0260: the analysis specialists a question would be admitted for now (each needs its own capability and the same gates). */
+  availableAnalystKeys: HonAnalystAgentKey[]; asOf: string;
 }
 
 const fail = (code: string) => (): never => { throw new Error(code); };
@@ -188,11 +196,11 @@ export function validateHonTurnRequest(value: unknown): HonTurnRequest {
   if ('fromSuggestionTurnId' in r && !isUuid(r.fromSuggestionTurnId)) invalid();
   const from = 'fromSuggestionTurnId' in r ? { fromSuggestionTurnId: r.fromSuggestionTurnId as string } : {};
   const d = record(r.delegation, invalid);
-  if (d.agentKey === HON_ANALYST_AGENT) {
-    // Claire is never confirmed from a HON suggestion in this slice, and her question needs text.
+  if (isHonAnalystAgent(d.agentKey)) {
+    // An analysis specialist is never confirmed from a HON suggestion in this slice, and its question needs text.
     exactKeys(d, ['agentKey'], invalid);
     if ('fromSuggestionTurnId' in r || !marketingSafeText(r.text, HON_REPLY_LIMITS.questionCharacters) || (r.text as string).trim().length === 0) invalid();
-    return { text: r.text as string, delegation: { agentKey: HON_ANALYST_AGENT } };
+    return { text: r.text as string, delegation: { agentKey: d.agentKey } };
   }
   if (!isAgent(d.agentKey) || !marketingSafeText(r.text, HON_TURN_TEXT_LIMITS[d.agentKey])) invalid();
   const text = r.text as string;
@@ -222,8 +230,8 @@ export function validateHonConversationThread(value: unknown): HonConversationTh
     if (human ? (t.role !== 'HUMAN' || typeof t.text !== 'string' || t.reason !== null || refs.workItemId !== null || refs.actionRequestId !== null || refs.invocationId !== null)
       : ((r.turns[i - 1] as HonConversationTurn).turnId !== t.turnId
         // A specialist's draft never appears here; HON's own reply appears only when COMPLETED, with no Action Center link.
-        || (t.role === HON_REPLY_ROLE || t.role === HON_ANALYST_AGENT ? (refs.actionRequestId !== null || (t.status === 'COMPLETED' ? !completedText(t.text, t.reason) : t.text !== null)
-            || !(t.role === HON_ANALYST_AGENT ? isAnalystDetail : isReplyDetail)(t.replyDetail, t.status === 'COMPLETED')
+        || (t.role === HON_REPLY_ROLE || isHonAnalystAgent(t.role) ? (refs.actionRequestId !== null || (t.status === 'COMPLETED' ? !completedText(t.text, t.reason) : t.text !== null)
+            || !(isHonAnalystAgent(t.role) ? isAnalystDetail : isReplyDetail)(t.replyDetail, t.status === 'COMPLETED')
             || (t.reason === CONCEALED && ((t.replyDetail as HonReplyDetail).canContinue || (t.replyDetail as HonReplyDetail).suggestions.length > 0
               || (t.replyDetail as HonReplyDetail).followUps.length > 0 || (t.replyDetail as HonReplyDetail).sources.length > 0)))
           : (!isAgent(t.role) || t.text !== null || t.replyDetail !== null)))) drift();
@@ -236,14 +244,14 @@ export function validateHonTurnReceipt(value: unknown): HonTurnReceipt {
   const r = record(value, drift);
   exactKeys(r, ['turnId', 'conversationId', 'status', 'reason', 'delegatedAgentKeys', 'actionRequestIds', 'workItemIds', 'invocationId', 'reply', 'replyDetail'], drift);
   if (!isUuid(r.turnId) || !isUuid(r.conversationId) || !isStatus(r.status) || r.status === 'READY' || !isReason(r.reason) || !uuidOrNull(r.invocationId)
-    || !Array.isArray(r.delegatedAgentKeys) || r.delegatedAgentKeys.length > 1 || !r.delegatedAgentKeys.every((k) => isAgent(k) || k === HON_ANALYST_AGENT)
+    || !Array.isArray(r.delegatedAgentKeys) || r.delegatedAgentKeys.length > 1 || !r.delegatedAgentKeys.every((k) => isAgent(k) || isHonAnalystAgent(k))
     || !Array.isArray(r.actionRequestIds) || r.actionRequestIds.length > 1 || !r.actionRequestIds.every(isUuid)
     || !Array.isArray(r.workItemIds) || r.workItemIds.length > 1 || !r.workItemIds.every(isUuid)) drift();
   // An approval is claimed only with its Action Center reference.
   if (r.status === 'AWAITING_APPROVAL' && (r.actionRequestIds as unknown[]).length !== 1) drift();
   // A question to HON (no delegate) or to Claire has no approval; its reply is present exactly when COMPLETED. A draft
   // delegation has no reply.
-  const analyst = (r.delegatedAgentKeys as unknown[])[0] === HON_ANALYST_AGENT;
+  const analyst = isHonAnalystAgent((r.delegatedAgentKeys as unknown[])[0]);
   if ((r.delegatedAgentKeys as unknown[]).length === 0 || analyst
     ? ((r.actionRequestIds as unknown[]).length !== 0 || r.status === 'AWAITING_APPROVAL' || (r.status === 'COMPLETED' ? !completedText(r.reply, r.reason) : r.reply !== null)
       || !(analyst ? isAnalystDetail : isReplyDetail)(r.replyDetail, r.status === 'COMPLETED')
@@ -269,6 +277,7 @@ export function composeHonConversationReadiness(team: {
     availableAgentKeys: agents.filter((a) => a.available).map((a) => a.agentKey as HonDelegateAgentKey),
     honReply: hon?.available === true,
     businessPerformance: claire?.available === true,
+    availableAnalystKeys: HON_ANALYST_AGENTS.filter((k) => team.agents.some((a) => a.agentKey === k && a.available)),
     asOf: team.asOf,
   };
 }
