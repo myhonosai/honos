@@ -1,6 +1,6 @@
-# AI task routing by task class (R1, migration 0242)
+# AI task routing by task class (R1, migration 0287)
 
-Status: built (0242). Spec + plan for build step 1 of `AI_MODEL_AND_CONNECTION_PLAN.md` §6. Test providers only. No real provider call, no new
+Status: built (0287). Spec + plan for build step 1 of `AI_MODEL_AND_CONNECTION_PLAN.md` §6. Test providers only. No real provider call, no new
 provider, no change to S4 spend controls, budgets or the per-call $0.08 ceiling.
 
 ## Problem
@@ -56,6 +56,6 @@ prepare/record functions, provider runtimes, plan summary shape, customer-visibl
    Claire uses `BUSINESS_PERFORMANCE`; default ineligible (inactive, unhealthy cost, privacy, provider not allowed) uses the
    first eligible fallback and records `PROFILE_FALLBACK`; no eligible candidate and two active profiles give
    `NO_ELIGIBLE_ROUTE` and no provider call; inactive or expired profile falls back to legacy order; advanced is never used.
-2. Migration 0242: category function, constraint extensions, plan columns, `hq_ai_validate_write` lists, `plan_ai_invocation`.
+2. Migration 0287: category function, constraint extensions, plan columns, `hq_ai_validate_write` lists, `plan_ai_invocation`.
 3. Contracts/domain: `AI_TASK_PROFILE_AGENT_KEYS`, four new categories; unit tests for the validator.
 4. Pin checksums, staging manifest and ceiling; run AI-0, `pnpm test`, `pnpm check`, `pnpm build`.

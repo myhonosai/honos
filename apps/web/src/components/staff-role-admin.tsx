@@ -42,7 +42,7 @@ export function StaffRoleAdmin(): React.ReactElement {
     finally { setBusy(false); }
   }
   return <main className={styles.page}>
-    <nav><a href="/core">HON Core</a><a href="/staff/team/availability">Staff availability</a><a href="/staff/team/invitations">Staff invitations</a><a href="/staff/automation/rules">Automation configuration</a><a href="/auth/login">Sign in</a></nav>
+    <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/team/availability">Staff availability</a><a href="/staff/team/invitations">Staff invitations</a><a href="/staff/automation/rules">Automation configuration</a><a href="/auth/login">Sign in</a></nav>
     <header><p>HUMAN STAFF ADMINISTRATION</p><h1>Roles, with clear boundaries.</h1><p>Create a school-scoped custom role, grant an existing permitted role to a registered human, or end one grant. Every change is permission-checked and evidenced.</p></header>
     <aside>Not an invitation or directory. Use identifiers already verified through your authorized onboarding process. OWNER, HQ, platform and system roles are protected. No payroll, employment decisions, messaging, AI or external delivery occurs.</aside>
     <form onSubmit={submit}>

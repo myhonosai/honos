@@ -1,5 +1,5 @@
 BEGIN;
--- 0244 (R2): per-school internal AI cost ceiling and single-school pause (AI_MODEL_AND_CONNECTION_PLAN.md §3, §6.3).
+-- 0288 (R2): per-school internal AI cost ceiling and single-school pause (AI_MODEL_AND_CONNECTION_PLAN.md §3, §6.3).
 -- Spec: docs/architecture/AI_SCHOOL_COST_CEILING.md. Internal HON cost only: never a customer balance or credits.
 -- - Each school has an internal monthly ceiling on agent-inference provider cost: $15 (15,000,000 micro-USD) by
 --   default, HQ-owner editable per school. Cost = verified provider cost in the ledger for the budget window plus, for
@@ -111,9 +111,9 @@ BEGIN
   RETURN NULL;
 END $$;
 
--- 0195 organization/platform decision, unchanged, under a new name.
+-- Organization/platform decision: the current (0246, trial-aware) body, unchanged, under a new name.
 CREATE FUNCTION hon.ai_org_spend_allowed(p_org uuid, p_at timestamptz, p_class text) RETURNS text LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-DECLARE s hon.saas_access_states%ROWTYPE; e hon.organization_entitlements%ROWTYPE; in_effect boolean;
+DECLARE s hon.saas_access_states%ROWTYPE; e hon.organization_entitlements%ROWTYPE; in_effect boolean; tr hon.hon_os_trial_enrollments%ROWTYPE;
 BEGIN
   IF p_org IS NULL OR p_class NOT IN ('AGENT_INFERENCE','CREATIVE_MEDIA','HQ_INTERNAL') THEN RETURN 'AI_ACCESS_UNKNOWN_STATE'; END IF;
   -- 0. HQ emergency pause (organization or platform; this class or all) comes before everything.
@@ -121,14 +121,25 @@ BEGIN
              AND p.spend_class IN (p_class, 'ALL')) THEN RETURN 'AI_PAUSED_BY_HQ'; END IF;
   -- 1a. Owner-approved promotional AI access (hook only; returns none until approved).
   IF hon.ai_promotional_access(p_org, p_at, p_class) THEN RETURN NULL; END IF;
-  -- 1. A live HQ access exception that currently owns the entitlement grants no AI (AI-D1 = A). Exception schools
-  --    have no access-state row, so this must come before the legacy rule.
+  -- 1. A live HQ access exception that currently owns the entitlement grants no AI (AI-D1 = A).
   IF hon.saas_access_exception_live(p_org) THEN RETURN 'AI_EXCEPTION_NO_AI'; END IF;
   SELECT * INTO s FROM hon.saas_access_states WHERE organization_id = p_org;
-  -- 7. Legacy: no access-state row and no live exception: unchanged (the existing gate decides).
-  IF NOT FOUND THEN RETURN NULL; END IF;
   SELECT * INTO e FROM hon.organization_entitlements WHERE organization_id = p_org;
-  in_effect := FOUND AND e.status = 'ACTIVE' AND e.effective_from <= p_at AND (e.effective_until IS NULL OR e.effective_until > p_at);
+  in_effect := e.organization_id IS NOT NULL AND e.status = 'ACTIVE' AND e.effective_from <= p_at AND (e.effective_until IS NULL OR e.effective_until > p_at);
+  IF s.organization_id IS NULL THEN
+    -- 2. 0246: a free trial that owns the entitlement goes through the trial-funding hook (its HQ-set AI credit);
+    --    a trial whose window passed, or a self-registered school with no trial, has no paid AI.
+    SELECT * INTO tr FROM hon.hon_os_trial_enrollments WHERE organization_id = p_org;
+    IF tr.id IS NOT NULL AND e.version = tr.granted_entitlement_version THEN
+      RETURN hon.ai_access_state_decision(CASE WHEN hon.hon_os_trial_live(p_org, p_at) THEN 'TRIAL_ACTIVE' ELSE 'TRIAL_ENDED' END,
+        in_effect, hon.ai_trial_funding_available(p_org, p_at, p_class));
+    END IF;
+    IF tr.id IS NULL AND EXISTS (SELECT 1 FROM hon.hon_os_school_registrations g WHERE g.organization_id = p_org) THEN
+      RETURN hon.ai_access_state_decision('REGISTERED', in_effect, false);
+    END IF;
+    -- 7. Legacy: no access-state row, no exception, no trial: unchanged (the existing gate decides).
+    RETURN NULL;
+  END IF;
   RETURN hon.ai_access_state_decision(s.state, in_effect, hon.ai_trial_funding_available(p_org, p_at, p_class));
 END $$;
 

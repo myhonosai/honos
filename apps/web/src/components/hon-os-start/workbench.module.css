@@ -1,0 +1,12 @@
+.page { box-sizing: border-box; max-width: 980px; margin: 24px auto; padding: clamp(16px,4vw,32px); border:1px solid #34566d; border-radius:16px; background:#071525; color:#edf6ff; overflow-wrap:anywhere; }
+.page h1 { font-size:clamp(28px,5vw,44px); }
+.page p { line-height:1.6; }
+.page a { color:#9cece1; }
+.page fieldset { border:0; padding:0; min-width:0; }
+.page label { display:block; margin:16px 0; }
+.page input:not([type=checkbox]),.page select { display:block;box-sizing:border-box;max-width:100%;width:100%;padding:12px;margin-top:8px;background:#10283b;color:#edf6ff;border:1px solid #83dadd;border-radius:8px; }
+.page button { min-height:44px;padding:10px 16px;margin:8px 8px 8px 0;max-width:100%;border:1px solid #83dadd;border-radius:8px;background:#12364a;color:#edf6ff;cursor:pointer; }
+.page button:disabled { opacity:.55;cursor:not-allowed; }
+.page :focus-visible { outline:3px solid #8be1d8;outline-offset:3px; }
+.notice,.page aside { padding:16px;border:1px solid #83dadd;border-radius:8px; }
+@media(max-width:600px){.page{margin:12px;}.page button{width:100%;}.page ul{padding-left:16px;}}

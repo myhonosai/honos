@@ -46,7 +46,7 @@ export function PlannedAbsenceReviewWorkbench(): React.ReactElement {
     } finally { if (generation.current === token) { running.current = false; controller.current = null; setBusy(false); } }
   }
   return <main className={styles.page}>
-    <nav aria-label="Staff navigation"><a href="/staff/attendance">Attendance workbench</a><a href="/core">HON Core</a><a href="/auth/login">Sign in</a></nav>
+    <nav aria-label="Staff navigation"><a href="/staff/attendance">Attendance workbench</a><a href="/staff/dashboard">School dashboard</a><a href="/auth/login">Sign in</a></nav>
     <header><p>DIRECT HUMAN STAFF / PLANNED ABSENCE REVIEW</p><h1>Planned absence review</h1><p>One current server-authorized school, with <code>schedule.planned_absence.review</code> and active entitlement. At most 50 currently SUBMITTED requests, oldest submitted first. There is no directory, history, count, export or school selector.</p></header>
     <aside className={styles.warning}><strong>Decision record only.</strong><p>Approval or decline does not change attendance, booking, makeup, messages, provider, payment, AI, Action Engine or automation state. Parent history remains its redacted recorded status and timestamp view; neither reviewer identity nor private review note is sent to parents.</p></aside>
     {error && <p role="alert" className={styles.error}>{error}</p>}{notice && <p role="status" className={styles.notice}>{notice}</p>}

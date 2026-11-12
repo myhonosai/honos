@@ -3,8 +3,8 @@ import React, { useRef, useState, type FormEvent } from 'react';
 import { AUTOMATION_RULE_HELP, type AutomationRule, type AutomationRuleInput, type AutomationRuleList, type AutomationEvaluationPlan, type AutomationTrigger } from '@hon/contracts';
 import { automationFingerprint, automationRuleInput, loadAutomationRules, saveAutomationRule, dryRunAutomationRule, readAutomationRuleVersion } from './automation-rules-http';
 import styles from './staff-availability-workbench.module.css';
-const DEFAULT_TRIGGER: AutomationTrigger = 'LEAD_CREATED';
-export function automationRuleTriggerPrefill(value: unknown): AutomationTrigger { return value === 'LEAD_CREATED' || value === 'TRIAL_NO_SHOW' ? value : DEFAULT_TRIGGER; }
+import { AUTOMATION_RULE_DEFAULT_TRIGGER as DEFAULT_TRIGGER } from './automation-rules-prefill';
+export { automationRuleTriggerPrefill } from './automation-rules-prefill';
 export function automationRuleInitialDraft(triggerKind: AutomationTrigger = DEFAULT_TRIGGER): AutomationRuleInput { return { expectedVersion: 0, name: '', enabled: false, triggerKind, conditions: { source: 'ANY', minimumAggregateVersion: 1 }, proposal: { kind: 'MANUAL_REVIEW_TEMPLATE', category: triggerKind === 'LEAD_CREATED' ? 'LEAD_TRIAGE' : 'TRIAL_ATTENDANCE_REVIEW', priority: 'NORMAL' }, posture: { authority: 'NONE', approval: 'HUMAN_REVIEW_REQUIRED' }, schedule: { mode: 'MANUAL_ONLY', effectiveFrom: '', endsOn: null, cooldownMinutes: 0 } }; }
 export function AutomationRulesWorkbench({ initialTrigger = DEFAULT_TRIGGER }: { initialTrigger?: AutomationTrigger } = {}): React.ReactElement {
   const [context, setContext] = useState<AutomationRuleList | null>(null), [selected, setSelected] = useState<AutomationRule | null>(null), [draft, setDraft] = useState<AutomationRuleInput>(() => automationRuleInitialDraft(initialTrigger));
@@ -27,7 +27,7 @@ export function AutomationRulesWorkbench({ initialTrigger = DEFAULT_TRIGGER }: {
     const p = await dryRunAutomationRule(selected.ruleId, { expectedVersion: selected.version, event: { synthetic: true, triggerKind: eventKind, schemaVersion: 1, aggregateVersion: Number(eventVersion), source: eventSource }, simulation: { localDate: date, minutesSincePriorPlan: elapsed === '' ? null : Number(elapsed) } }); setPlan(p);
   }); }
   return <main className={styles.page}>
-    <nav><a href="/core">HON Core</a><a href="/staff/team/availability">Staff availability</a><a href="/auth/login">Sign in</a></nav>
+    <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/team/availability">Staff availability</a><a href="/auth/login">Sign in</a></nav>
     <header><p>HUMAN CONFIGURATION · ESSENTIAL / CORE / COMPLETE</p><h1>Automation rule configuration</h1><p>Configuration only; no execution</p></header>
     <aside><strong>No scheduler, subscription or worker</strong><p>{AUTOMATION_RULE_HELP}</p><p>Exact permissions: automation.rule.read, automation.rule.manage and automation.rule.dry_run. Parent, HQ, public and AI authority cannot access this surface.</p></aside>
     <button disabled={busy} onClick={load}>Load authorized school rules</button>

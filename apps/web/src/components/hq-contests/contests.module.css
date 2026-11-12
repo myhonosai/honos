@@ -1,0 +1,13 @@
+.choice { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.form .choice input, .choice input { width: auto; min-height: 0; margin: 0; accent-color: var(--hon-accent, #8de3d8); }
+.group { display: grid; gap: 8px; min-width: 0; margin: 0; padding: 10px; border: 1px solid #2a4560; border-radius: 10px; }
+.group legend { padding: 0 4px; font-size: 13px; font-weight: 800; }
+.prize { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; min-width: 0; margin: 0; padding: 10px; border: 1px solid #2a4560; border-radius: 10px; }
+.prize legend { padding: 0 4px; font-size: 13px; font-weight: 800; }
+.scroll { max-height: 14rem; overflow-y: auto; display: grid; gap: 4px; }
+.table { overflow-x: auto; }
+.table table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table th, .table td { padding: 6px 8px; border-bottom: 1px solid #22394f; text-align: left; vertical-align: top; }
+.inline { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.inline > div { display: grid; gap: 4px; min-width: 10rem; flex: 1 1 10rem; }
+@media (max-width: 700px) { .prize { grid-template-columns: minmax(0, 1fr); } }

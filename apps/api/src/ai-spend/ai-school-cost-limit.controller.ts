@@ -14,7 +14,7 @@ function parse<T>(work: () => T): T {
 }
 
 /**
- * R2 (0244) per-school internal AI cost ceiling and single-school pause. HON's internal provider cost for the included
+ * R2 (0288) per-school internal AI cost ceiling and single-school pause. HON's internal provider cost for the included
  * AI team, never a customer balance. The database alone decides authority: a human HQ owner may change a school's
  * ceiling or pause it, HQ billing staff may read, everyone else is refused.
  */

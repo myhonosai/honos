@@ -1,4 +1,4 @@
-// R2 (0244) per-school internal AI cost ceiling and single-school pause. HQ only. This is HON's internal provider cost
+// R2 (0288) per-school internal AI cost ceiling and single-school pause. HQ only. This is HON's internal provider cost
 // for the included AI team, never a customer balance, credits or a charge. The database decides authority: a human HQ
 // owner may change a school's ceiling or pause it; HQ billing staff may read.
 import { championsDrift as drift, championsExactKeys as exactKeys, championsInvalid as invalid, championsIsTimestamp as isTimestamp,

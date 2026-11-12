@@ -6,7 +6,11 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import {
   composeHonConversationReadiness, validateHonConversationCreate, validateHonConversationSummary, validateHonConversationThread, validateHonOrchestrationList, type HonOrchestrationList,
-  validateHonTurnReceipt, validateHonTurnRequest, type HonConversationPage, type HonDelegateAgentKey, type HonTurnReceipt,
+  validateHonTurnReceipt, validateHonTurnRequest, validateHonSchoolNoteInput, validateHonSchoolNoteReceipt, validateHonSchoolNotes,
+  validateHonSchoolTone, validateHonSchoolToneInput, validateHonSchoolToneReceipt, type HonSchoolTone, type HonSchoolToneReceipt,
+  validateSchoolBriefing, validateSchoolBriefingPreview, validateSchoolBriefingReceipt, validateSchoolBriefingSettingsInput, validateMySchoolBriefingInput,
+  type SchoolBriefing, type SchoolBriefingPreview, type SchoolBriefingReceipt,
+  type HonSchoolNoteReceipt, type HonSchoolNotes, type HonConversationPage, type HonDelegateAgentKey, type HonTurnReceipt,
 } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
@@ -80,7 +84,7 @@ export class HonConversationService {
     private readonly reply: HonReplyService,
   ) {}
 
-  private async transaction<T>(scope: Scope, work: (client: PoolClient) => Promise<T>, readOnly = false): Promise<T> {
+  private async transaction<T>(scope: Scope, work: (client: PoolClient) => Promise<T>, readOnly = false, notes = false): Promise<T> {
     const requestId = randomUUID();
     try {
       const run = async (client: PoolClient) => {
@@ -90,7 +94,12 @@ export class HonConversationService {
       };
       const context = { organizationId: scope.organizationId, schoolId: scope.schoolId, principalId: scope.principalId, principalType: 'HUMAN_USER' as const, requestId };
       return readOnly ? await this.database.withTenantReadOnlyTransaction(context, run) : await this.database.withTenantTransaction(context, run);
-    } catch (error) { return boundaryError(error); }
+    } catch (error) {
+      // 0255: the per-school note limits are not a full conversation.
+      if (notes && (error as { code?: string }).code === '23514') throw new ConflictException({ code: 'HON_SCHOOL_NOTES_FULL', detail: 'At most 20 notes and 2,000 characters per school. Delete a note first.' });
+      if (notes && (error as { code?: string }).code === 'P0002') throw new NotFoundException({ code: 'HON_SCHOOL_NOTE_NOT_FOUND' });
+      return boundaryError(error);
+    }
   }
 
   async readiness(scope: Scope) {
@@ -147,6 +156,64 @@ export class HonConversationService {
       if (failure) await this.transaction(scope, async (client) => { await client.query('SELECT hon.fail_hon_turn($1,$2::uuid,$3)', [scope.externalSubject, begun.turnId, failure]); });
     }
     return this.receipt(scope, begun.turnId);
+  }
+
+  /** 0255 What HON remembers: every HON user reads the school's notes; the database decides who may manage them. */
+  async schoolNotes(scope: Scope): Promise<HonSchoolNotes> {
+    const data = await this.transaction(scope, async (client) => (await client.query<{ data: unknown }>('SELECT hon.read_hon_school_notes($1) data', [scope.externalSubject])).rows[0]!.data);
+    try { return validateHonSchoolNotes(data); } catch { throw new ServiceUnavailableException({ code: 'HON_CONVERSATION_UNAVAILABLE' }); }
+  }
+  async noteCommand(scope: Scope, operation: 'add' | 'delete', input: unknown, key: string | undefined): Promise<HonSchoolNoteReceipt> {
+    if (typeof key !== 'string' || !UUID.test(key)) throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED' });
+    let body: Record<string, string>;
+    if (operation === 'add') {
+      try { body = validateHonSchoolNoteInput(input); } catch { throw new BadRequestException({ code: 'INVALID_HON_SCHOOL_NOTE', detail: 'Notes are about the school, never about a student, family or staff member: no emails, phone numbers or links.' }); }
+    } else body = input as { noteId: string };
+    // The request id is the transaction's own (app.hon_request_id); the database checks they match.
+    const sql = operation === 'add'
+      ? "SELECT hon.add_hon_school_note($1,$2::jsonb,$3,current_setting('app.hon_request_id')::uuid,current_setting('app.hon_request_id')::uuid) data"
+      : "SELECT hon.delete_hon_school_note($1,$2::jsonb,$3,current_setting('app.hon_request_id')::uuid,current_setting('app.hon_request_id')::uuid) data";
+    const data = await this.transaction(scope, async (client) => (await client.query<{ data: unknown }>(sql, [scope.externalSubject, JSON.stringify(body), key])).rows[0]!.data, false, true);
+    try { return validateHonSchoolNoteReceipt(data); } catch { throw new ServiceUnavailableException({ code: 'HON_CONVERSATION_UNAVAILABLE' }); }
+  }
+
+  /** 0256 HON tone per school: HON and Kai users read it; only the owner (ai.school_tone.manage) changes it. */
+  async schoolTone(scope: Scope): Promise<HonSchoolTone> {
+    const data = await this.transaction(scope, async (client) => (await client.query<{ data: unknown }>('SELECT hon.read_hon_school_tone($1) data', [scope.externalSubject])).rows[0]!.data);
+    try { return validateHonSchoolTone(data); } catch { throw new ServiceUnavailableException({ code: 'HON_CONVERSATION_UNAVAILABLE' }); }
+  }
+  async setTone(scope: Scope, input: unknown, key: string | undefined): Promise<HonSchoolToneReceipt> {
+    if (typeof key !== 'string' || !UUID.test(key)) throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED' });
+    let body: { tone: string };
+    try { body = validateHonSchoolToneInput(input); } catch { throw new BadRequestException({ code: 'INVALID_HON_SCHOOL_TONE' }); }
+    const data = await this.transaction(scope, async (client) => (await client.query<{ data: unknown }>(
+      "SELECT hon.set_hon_school_tone($1,$2::jsonb,$3,current_setting('app.hon_request_id')::uuid,current_setting('app.hon_request_id')::uuid) data",
+      [scope.externalSubject, JSON.stringify(body), key])).rows[0]!.data);
+    try { return validateHonSchoolToneReceipt(data); } catch { throw new ServiceUnavailableException({ code: 'HON_CONVERSATION_UNAVAILABLE' }); }
+  }
+
+  /**
+   * 0257 weekly briefing, part 1: the owner's on/off and hour (ai.school_briefing.manage), "Email me" for oneself
+   * (on needs reporting.view), and a preview built from the Command Center. Nothing is sent here.
+   */
+  async schoolBriefing(scope: Scope): Promise<SchoolBriefing> {
+    const data = await this.transaction(scope, async (client) => (await client.query<{ data: unknown }>('SELECT hon.read_school_briefing($1) data', [scope.externalSubject])).rows[0]!.data);
+    try { return validateSchoolBriefing(data); } catch { throw new ServiceUnavailableException({ code: 'HON_CONVERSATION_UNAVAILABLE' }); }
+  }
+  async schoolBriefingPreview(scope: Scope): Promise<SchoolBriefingPreview> {
+    const data = await this.transaction(scope, async (client) => (await client.query<{ data: unknown }>('SELECT hon.read_school_briefing_preview($1) data', [scope.externalSubject])).rows[0]!.data);
+    try { return validateSchoolBriefingPreview(data); } catch { throw new ServiceUnavailableException({ code: 'HON_CONVERSATION_UNAVAILABLE' }); }
+  }
+  async briefingCommand(scope: Scope, kind: 'settings' | 'me', input: unknown, key: string | undefined): Promise<SchoolBriefingReceipt> {
+    if (typeof key !== 'string' || !UUID.test(key)) throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED' });
+    let body: unknown;
+    try { body = kind === 'settings' ? validateSchoolBriefingSettingsInput(input) : validateMySchoolBriefingInput(input); }
+    catch { throw new BadRequestException({ code: 'INVALID_SCHOOL_BRIEFING', detail: kind === 'settings' ? 'Send enabled (true or false) and a send hour from 6 to 11.' : 'Send email (true or false).' }); }
+    const sql = kind === 'settings'
+      ? "SELECT hon.set_school_briefing_settings($1,$2::jsonb,$3,current_setting('app.hon_request_id')::uuid,current_setting('app.hon_request_id')::uuid) data"
+      : "SELECT hon.set_my_school_briefing($1,$2::jsonb,$3,current_setting('app.hon_request_id')::uuid,current_setting('app.hon_request_id')::uuid) data";
+    const data = await this.transaction(scope, async (client) => (await client.query<{ data: unknown }>(sql, [scope.externalSubject, JSON.stringify(body), key])).rows[0]!.data);
+    try { return validateSchoolBriefingReceipt(data); } catch { throw new ServiceUnavailableException({ code: 'HON_CONVERSATION_UNAVAILABLE' }); }
   }
 
   private async receipt(scope: Scope, turnId: string): Promise<HonTurnReceipt> {
@@ -215,5 +282,43 @@ export class HonConversationController {
   @Header('Cache-Control', 'private, no-store') @Post('conversations/:conversationId/turns') @HttpCode(200)
   async send(@Req() req: HonRequest, @Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Param('conversationId', new ParseUUIDPipe()) id: string, @Body() input: unknown, @Headers('idempotency-key') key: string | undefined, @Query() query: Record<string, unknown>) {
     this.noQuery(query); return { data: await this.conversations.sendTurn(await this.scope(req, org, school), id, input, key) };
+  }
+  @Header('Cache-Control', 'private, no-store') @Get('tone')
+  async tone(@Req() req: HonRequest, @Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Query() query: Record<string, unknown>) {
+    this.noQuery(query); return { data: await this.conversations.schoolTone(await this.scope(req, org, school)) };
+  }
+  @Header('Cache-Control', 'private, no-store') @Post('tone') @HttpCode(200)
+  async setTone(@Req() req: HonRequest, @Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Body() input: unknown, @Headers('idempotency-key') key: string | undefined, @Query() query: Record<string, unknown>) {
+    this.noQuery(query); return { data: await this.conversations.setTone(await this.scope(req, org, school), input, key) };
+  }
+  @Header('Cache-Control', 'private, no-store') @Get('briefing')
+  async briefing(@Req() req: HonRequest, @Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Query() query: Record<string, unknown>) {
+    this.noQuery(query); return { data: await this.conversations.schoolBriefing(await this.scope(req, org, school)) };
+  }
+  @Header('Cache-Control', 'private, no-store') @Get('briefing/preview')
+  async briefingPreview(@Req() req: HonRequest, @Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Query() query: Record<string, unknown>) {
+    this.noQuery(query); return { data: await this.conversations.schoolBriefingPreview(await this.scope(req, org, school)) };
+  }
+  @Header('Cache-Control', 'private, no-store') @Post('briefing/settings') @HttpCode(200)
+  async setBriefingSettings(@Req() req: HonRequest, @Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Body() input: unknown, @Headers('idempotency-key') key: string | undefined, @Query() query: Record<string, unknown>) {
+    this.noQuery(query); return { data: await this.conversations.briefingCommand(await this.scope(req, org, school), 'settings', input, key) };
+  }
+  @Header('Cache-Control', 'private, no-store') @Post('briefing/me') @HttpCode(200)
+  async setMyBriefing(@Req() req: HonRequest, @Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Body() input: unknown, @Headers('idempotency-key') key: string | undefined, @Query() query: Record<string, unknown>) {
+    this.noQuery(query); return { data: await this.conversations.briefingCommand(await this.scope(req, org, school), 'me', input, key) };
+  }
+  @Header('Cache-Control', 'private, no-store') @Get('school-notes')
+  async schoolNotes(@Req() req: HonRequest, @Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Query() query: Record<string, unknown>) {
+    this.noQuery(query); return { data: await this.conversations.schoolNotes(await this.scope(req, org, school)) };
+  }
+  @Header('Cache-Control', 'private, no-store') @Post('school-notes') @HttpCode(200)
+  async addNote(@Req() req: HonRequest, @Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Body() input: unknown, @Headers('idempotency-key') key: string | undefined, @Query() query: Record<string, unknown>) {
+    this.noQuery(query); return { data: await this.conversations.noteCommand(await this.scope(req, org, school), 'add', input, key) };
+  }
+  @Header('Cache-Control', 'private, no-store') @Post('school-notes/:noteId/delete') @HttpCode(200)
+  async deleteNote(@Req() req: HonRequest, @Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Param('noteId', new ParseUUIDPipe()) noteId: string, @Body() input: unknown, @Headers('idempotency-key') key: string | undefined, @Query() query: Record<string, unknown>) {
+    this.noQuery(query);
+    if (input !== undefined && input !== null && (typeof input !== 'object' || Object.keys(input as object).length > 0)) throw new BadRequestException({ code: 'INVALID_HON_SCHOOL_NOTE' });
+    return { data: await this.conversations.noteCommand(await this.scope(req, org, school), 'delete', { noteId: noteId.toLowerCase() }, key) };
   }
 }

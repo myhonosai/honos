@@ -46,7 +46,7 @@ export function PublicFormWorkbench() {
     void run(() => mutate(selected ? `${base}/${selected.id}/configuration` : base, { expectedVersion: selected?.version ?? 0, title, description, pipelineId, pipelineStageId: stageId, campaignId: campaignId || null, optionalFields: optional }));
   }
   return <main className={styles.page}>
-    <nav><a href="/core">HON Core</a><a href="/staff/marketing/campaigns">Campaign plans</a><a href="/auth/login">Sign in</a></nav>
+    <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/marketing/campaigns">Campaign plans</a><a href="/auth/login">Sign in</a></nav>
     <header><p>HUMAN SCHOOL MARKETING / PUBLIC INTAKE</p><h1>Published lead forms</h1><p>Essential, Core and Complete. Your verified session determines one exact authorized school.</p></header>
     <aside><strong>Intake only, not messaging permission.</strong> Each valid new enquiry creates a new CRM lead; exact bounded retries are deduplicated. Never merges a matching contact, opts in to communication, sends a message, spends, invokes AI or executes payments/actions. Disable before changing a published form. Only vetted optional choices are available; this is not a website builder.</aside>
     {error && <p role="alert" className={styles.error}>{error}</p>}{notice && <p role="status">{notice}</p>}

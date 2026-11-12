@@ -74,6 +74,9 @@ importers:
       '@types/pg':
         specifier: ^8.11.10
         version: 8.23.1
+      js-yaml:
+        specifier: 4.3.2
+        version: 4.3.2
       ts-node:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@22.20.5)(typescript@5.9.3)
@@ -123,6 +126,8 @@ importers:
       vitest:
         specifier: ^3.0.5
         version: 3.2.7(@types/node@22.20.5)(terser@5.51.2)
+
+  apps/website: {}
 
   packages/auth:
     dependencies:

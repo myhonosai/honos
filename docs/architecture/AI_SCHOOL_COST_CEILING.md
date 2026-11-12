@@ -1,6 +1,6 @@
-# Per-school internal AI cost ceiling and single-school pause (R2, migration 0244)
+# Per-school internal AI cost ceiling and single-school pause (R2, migration 0288)
 
-Status: built (0244). Build step 2 of `AI_MODEL_AND_CONNECTION_PLAN.md` §6. Test providers only. No real provider call, no new
+Status: built (0288). Build step 2 of `AI_MODEL_AND_CONNECTION_PLAN.md` §6. Test providers only. No real provider call, no new
 provider, no change to the org-level S4 controls (access decision, budget lock, HQ pause, UNKNOWN handling) or the per-call
 $0.08 ceiling.
 
@@ -21,7 +21,7 @@ cannot pause one school's AI without pausing the whole organization.
    parallel calls cannot overshoot.
 3. **Levels** (`hon.ai_school_cost_level`): `NORMAL`, `WARNING_75` (≥ 75%), `WARNING_90` (≥ 90%), `CEILING_REACHED` (≥ 100%).
    The contracts copy (`aiSchoolCostLevel`) uses the same integer thresholds, and the API refuses a read whose level disagrees.
-4. **Decision.** `hon.ai_spend_allowed` = the org decision (the 0195 body, now `hon.ai_org_spend_allowed`) and then the school
+4. **Decision.** `hon.ai_spend_allowed` = the org decision (the current trial-aware 0246 body, now `hon.ai_org_spend_allowed`) and then the school
    decision for `hon.current_school_id()`. A paused school is refused for every spend class except `HQ_INTERNAL`. At or over
    the ceiling, `AGENT_INFERENCE` is refused. Both refusals reuse `AI_PAUSED_BY_HQ`, so the closed reason enums, HON's reply
    path and the team readiness screen stay valid. Other schools in the same organization are not affected.
@@ -70,6 +70,6 @@ stops getting new `AGENT_INFERENCE` calls until HQ raises its ceiling or the mon
    refused; other org unaffected; readiness shows `AI_PAUSED_BY_HQ`; hold counts at plan max; reserve guard refuses at 0;
    pause covers `CREATIVE_MEDIA` but not `HQ_INTERNAL`; command authority, version, input, unknown school, replay, key reuse,
    immutable log; runtime ACL.
-2. Migration 0244.
+2. Migration 0288.
 3. Contracts (`ai-school-cost-limit.ts`), runtime operations, API controller and HTTP test.
 4. Pin checksums, staging manifest and ceiling, runtime grants; run AI-0, `pnpm test`, `pnpm check`, `pnpm build`.

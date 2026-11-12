@@ -99,6 +99,18 @@ const SAAS_BILLING_CALLS = {
   recordSubscriptionGeneration: { sql: 'SELECT hon.record_saas_subscription_generation($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   readSubscriptionGeneration: { sql: 'SELECT hon.read_saas_subscription_generation($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
   readSubscriptionGenerationHq: { sql: 'SELECT hon.read_saas_subscription_generation_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  startScheduleBinding: { sql: 'SELECT hon.start_saas_schedule_binding($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  recordScheduleBindingObservation: { sql: 'SELECT hon.record_saas_schedule_binding_observation($1::uuid,$2::jsonb,$3::uuid,$4::uuid) AS data', arity: 4, readOnly: false },
+  recordScheduleBindingReconciliation: { sql: 'SELECT hon.record_saas_schedule_binding_reconciliation($1::uuid,$2::jsonb) AS data', arity: 2, readOnly: false },
+  recordScheduleBindingExpiry: { sql: 'SELECT hon.record_saas_schedule_binding_expiry($1::uuid,$2::jsonb) AS data', arity: 2, readOnly: false },
+  retryScheduleAccess: { sql: 'SELECT hon.retry_saas_schedule_access($1::text,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readPaidReviews: { sql: 'SELECT hon.read_saas_paid_reviews($1::text,$2::text) AS data', arity: 2, readOnly: true },
+  resolvePaidReview: { sql: 'SELECT hon.resolve_saas_paid_review($1::text,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  verifyPaidReviewRefund: { sql: 'SELECT hon.verify_saas_paid_review_refund($1::text,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  cancelScheduleBinding: { sql: 'SELECT hon.cancel_saas_schedule_binding($1::text,$2::uuid,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
+  readScheduleBinding: { sql: 'SELECT hon.read_saas_schedule_binding($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
+  readScheduleBindingHq: { sql: 'SELECT hon.read_saas_schedule_binding_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  ingestScheduleEvidence: { sql: 'SELECT hon.ingest_saas_schedule_evidence($1::jsonb,$2) AS data', arity: 2, readOnly: false },
   recordPriceSchedule: { sql: 'SELECT hon.record_saas_price_schedule($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   readPriceSchedule: { sql: 'SELECT hon.read_saas_price_schedule($1,$2::uuid) AS data', arity: 2, readOnly: true },
   previewPriceAcceptance: { sql: 'SELECT hon.preview_saas_price_acceptance($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
@@ -192,7 +204,7 @@ const SAAS_BILLING_CALLS = {
   recordAiLateProviderExpense: { sql: 'SELECT hon.record_ai_late_provider_expense($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
   readAiSpendPauses: { sql: 'SELECT hon.read_ai_spend_pauses_from_hq($1) AS data', arity: 1, readOnly: true },
   commandAiSpendPause: { sql: 'SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
-  // R2 (0244): per-school internal AI cost ceiling and single-school pause (HQ only).
+  // R2 (0288): per-school internal AI cost ceiling and single-school pause (HQ only).
   readAiSchoolCostLimits: { sql: 'SELECT hon.read_ai_school_cost_limits_from_hq($1) AS data', arity: 1, readOnly: true },
   commandAiSchoolCostLimit: { sql: 'SELECT hon.command_ai_school_cost_limit($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readAccessExceptions: { sql: 'SELECT hon.read_saas_access_exceptions_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
@@ -212,6 +224,25 @@ const SAAS_BILLING_CALLS = {
   readAccessOverview: { sql: 'SELECT hon.read_saas_access_overview_from_hq($1,$2,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },
   // C-HQ-3 (0225): read-only HQ detail of one school; names, statuses and counts only.
   readHqSchoolDetail: { sql: 'SELECT hon.read_hq_school_detail_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  // B-HQ-2 (0232): HQ support records. Reads are read-only; the three commands write only support rows.
+  readSupportCases: { sql: 'SELECT hon.read_hq_support_cases($1,$2,$3::uuid,$4::timestamptz,$5::uuid,$6::integer) AS data', arity: 6, readOnly: true },
+  readSupportCase: { sql: 'SELECT hon.read_hq_support_case($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readSupportSchools: { sql: 'SELECT hon.read_hq_support_schools($1) AS data', arity: 1, readOnly: true },
+  openSupportCase: { sql: 'SELECT hon.open_hq_support_case($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  addSupportNote: { sql: 'SELECT hon.add_hq_support_note($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  changeSupportCase: { sql: 'SELECT hon.change_hq_support_case($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  // M1 (0252): HQ marketing campaigns. Reads are read-only; the three commands write only HQ campaign rows.
+  readMarketingCampaigns: { sql: 'SELECT hon.read_hq_marketing_campaigns($1,$2,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },
+  readMarketingCampaign: { sql: 'SELECT hon.read_hq_marketing_campaign($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  createMarketingCampaign: { sql: 'SELECT hon.create_hq_marketing_campaign($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  updateMarketingCampaign: { sql: 'SELECT hon.update_hq_marketing_campaign($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  setMarketingCampaignStatus: { sql: 'SELECT hon.set_hq_marketing_campaign_status($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  readHqCreativeStudio: { sql: 'SELECT hon.read_hq_creative_studio($1) AS data', arity: 1, readOnly: true },
+  readHqCreativeGeneration: { sql: 'SELECT hon.read_hq_creative_generation($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  setHqCreativeBudget: { sql: 'SELECT hon.set_hq_creative_budget($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  createHqCreativeGeneration: { sql: 'SELECT hon.create_hq_creative_generation($1,$2::jsonb,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  recordHqCreativeGenerationResult: { sql: 'SELECT hon.record_hq_creative_generation_result($1,$2::uuid,$3::jsonb) AS data', arity: 3, readOnly: false },
+  resolveHqCreativeGeneration: { sql: 'SELECT hon.resolve_hq_creative_generation($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   decideExceptionPolicy: { sql: 'SELECT hon.decide_saas_exception_policy($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   // HON OS commercial offers (0181): HQ Pricing & Offers and the school purchaser discovery read; no checkout connection.
   readOfferManagement: { sql: 'SELECT hon.read_saas_offer_management_from_hq($1) AS data', arity: 1, readOnly: true },
@@ -519,6 +550,26 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       await client.query('COMMIT');
       return result.rows[0]!.result;
     } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
+  /** B-SCH-3 (0261): the three fixed public event calls, one short transaction each, no tenant settings. */
+  async runPublicEventCall(statement: string, values: unknown[]): Promise<unknown> {
+    if (![
+      'SELECT hon.read_public_school_event($1) AS data',
+      'SELECT hon.book_public_school_event($1,$2::jsonb,$3) AS data',
+      'SELECT hon.cancel_public_school_event_booking($1,$2::jsonb) AS data',
+    ].includes(statement)) throw new Error('Unknown public event call.');
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>(statement, values);
+      await client.query('COMMIT');
+      if (result.rows.length !== 1) throw new Error('Unverified public event call.');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
     finally { client.release(); }
   }
 
@@ -1242,6 +1293,38 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
     return this.callFixedSubjectFunction({...call,readOnly:false},params,'ACCOUNT_UNAVAILABLE');
+  }
+
+  async callHonOsSignup(operation: 'register'|'read', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      register: {sql: 'SELECT hon.register_hon_os_school($1,$2,$3::jsonb,$4::uuid) data',arity:4,readOnly:false},
+      read: {sql: 'SELECT hon.read_hon_os_registration($1) data',arity:1,readOnly:true},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
+    return this.callFixedSubjectFunction({sql:call.sql,readOnly:call.readOnly},params,'ACCOUNT_UNAVAILABLE');
+  }
+
+  async callHonOsTrial(operation: 'start'|'read', params: readonly string[]): Promise<unknown> {
+    const calls = {
+      start: {sql: 'SELECT hon.start_hon_os_trial($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      read: {sql: 'SELECT hon.read_hon_os_trial($1) data',arity:1,readOnly:true},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
+    return this.callFixedSubjectFunction({sql:call.sql,readOnly:call.readOnly},params,'ACCOUNT_UNAVAILABLE');
+  }
+
+  /** 0274 admission limits: HQ read, HQ owner change, and the post-refusal cap-hit record (its own transaction). */
+  async callHonOsAdmission(operation: 'read'|'set'|'refused', params: readonly string[]): Promise<unknown> {
+    const calls = {
+      read: {sql: 'SELECT hon.read_hon_os_admission_status($1) data',arity:1,readOnly:true},
+      set: {sql: 'SELECT hon.set_hon_os_admission_limits($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) data',arity:5,readOnly:false},
+      refused: {sql: 'SELECT hon.record_hon_os_admission_refusal($1) data',arity:1,readOnly:false},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ADMISSION_UNAVAILABLE');
+    return this.callFixedSubjectFunction({sql:call.sql,readOnly:call.readOnly},params,'ADMISSION_UNAVAILABLE');
   }
 
   async callSchoolFamilyAccount(operation: 'invite'|'revoke'|'end'|'accept'|'list', params: readonly (string|null)[]): Promise<unknown> {

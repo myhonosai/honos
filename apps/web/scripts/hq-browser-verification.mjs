@@ -306,11 +306,10 @@ try {
       }
       const art = page.getByRole('group', { name: 'AI portrait style' });
       await art.getByRole('button', { name: 'Chibi', exact: true }).click();
-      assert.equal(await page.getByRole('img', { name: /chibi portrait$/ }).count(), 6);
+      assert.equal(await page.getByRole('img', { name: /Chibi portrait$/i }).count(), 6);
       if (label === 'desktop') await screenshot(page, 'desktop-chibi');
       await art.getByRole('button', { name: 'Anime', exact: true }).click();
-      await page.getByRole('status').filter({ hasText: 'Anime portraits are awaiting approved artwork' }).waitFor();
-      assert.equal(await page.getByRole('img', { name: /Anime artwork pending$/ }).count(), 6);
+      assert.equal(await page.getByRole('img', { name: /, Anime portrait$/ }).count(), 6);
       await art.getByRole('button', { name: 'Realistic', exact: true }).click();
     });
     await check(`${label}: dashboard accessibility`, () => accessibility(page, `${label}-dashboard`));
@@ -380,9 +379,7 @@ try {
         await rail.getByRole('link', { name: 'Referral Contests', exact: true }).click();
       }
       await page.waitForURL('**/hq/growth/contests');
-      await page.getByRole('group', { name: 'Contest lifecycle preview' }).getByRole('button', { name: 'Launch', exact: true }).click();
-      await page.getByRole('heading', { name: 'Launch — planned', exact: true }).waitFor();
-      assert(await page.getByRole('button', { name: 'Launch competition — unavailable', exact: true }).isDisabled());
+      await page.locator('[data-hq-contests]').getByRole('heading', { name: 'Referral contests', exact: true }).waitFor();
       await noOverflow(page, `${label} growth`);
       if (label === 'desktop' || label === 'mobile') await screenshot(page, `${label}-growth-contests`);
     });

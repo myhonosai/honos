@@ -65,9 +65,7 @@ describe('HQ Modern foundation', () => {
       expect(html).toContain('Unavailable');
       expect(html).toContain('No service is called');
     }
-    const contest = renderToStaticMarkup(<HqPlannedPage pagePath="/hq/growth/contests"/>);
-    expect(contest).toContain('Workflow preview');
-    expect(contest).toContain('disabled=""');
+    expect(Object.keys(HQ_PLANNED)).not.toContain('/hq/growth/contests');
   });
 
   it('keeps every executive workspace unavailable rather than inventing histories or recommendations', () => {
