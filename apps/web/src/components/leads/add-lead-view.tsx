@@ -38,7 +38,7 @@ export function AddLeadView(props: AddLeadViewProps): React.ReactElement | null 
       <input id={id} type={type} autoComplete={autoComplete} maxLength={max} value={form[key]} disabled={locked} onChange={(e) => props.onField?.(key, e.target.value)} {...extra}/></div>;
   return <article className={styles.card} aria-labelledby="leads-add-title" data-testid="leads-add">
     <div className={styles.cardHead}><h2 id="leads-add-title">{t('addTitle')}</h2>
-      <button type="button" className={styles.secondary} disabled={busy} onClick={() => props.onOpen?.(false)}>{t('close')}</button></div>
+      <button type="button" className={styles.secondary} disabled={locked} onClick={() => props.onOpen?.(false)}>{t('close')}</button></div>
     {saved}
     <form className={styles.addForm} noValidate onSubmit={(e) => { e.preventDefault(); if (!locked) props.onSave?.(); }}>
       {field('givenName', ids.given, 'givenName', 'text', 'given-name', 120)}

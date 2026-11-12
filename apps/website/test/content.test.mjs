@@ -1,0 +1,139 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const src = join(root, 'src');
+const html = readFileSync(join(src, 'index.html'), 'utf8');
+const text = html
+  .replace(/<script[\s\S]*?<\/script>/g, ' ')
+  .replace(/<style[\s\S]*?<\/style>/g, ' ')
+  .replace(/<[^>]+>/g, ' ')
+  .replace(/&amp;/g, '&')
+  .replace(/\s+/g, ' ');
+
+/** Returns the markup of the element carrying data-agent="name". */
+function agentCard(name) {
+  const m = html.match(new RegExp(`<article[^>]*data-agent="${name}"[^>]*>[\\s\\S]*?</article>`));
+  assert.ok(m, `card for ${name} is on the page`);
+  return m[0];
+}
+
+test('shows the owner-approved prices', () => {
+  for (const price of ['$249', '$2,097', '$199.20', '$1,494', '$30', '$60', '$120', '12,000']) {
+    assert.ok(html.includes(price), `${price} is on the page`);
+  }
+  assert.match(text, /14-day free trial/i);
+  assert.match(text, /no automatic charge/i);
+  assert.match(text, /standard price/i, 'says a cancelled founder school returns at the standard price');
+});
+
+test('never shows retired plans or prices', () => {
+  for (const bad of [/\$149\b/, /\bCore\b/, /\bComplete\b/, /\bEssential\b/, /lifetime/i]) {
+    assert.doesNotMatch(text, bad);
+  }
+});
+
+test('makes no claim the owner has not approved yet', () => {
+  for (const bad of [
+    /money[- ]back/i, /30[- ]day/i, /refund/i, /free months?/i, /available now/i,
+    /\b\d[\d,]* (schools|students|members) (use|trust|run)/i, /texts? (a|per) month/i,
+    /payment processor of our own|hon pay\b/i,
+  ]) {
+    assert.doesNotMatch(text, bad, `page must not say ${bad}`);
+  }
+});
+
+test('marks unfinished AI specialists coming soon and the rest as launching', () => {
+  for (const name of ['maya', 'alex', 'jordan', 'lena']) {
+    assert.match(agentCard(name), /coming soon/i, `${name} is coming soon`);
+  }
+  for (const name of ['chad', 'marcus', 'claire', 'kai']) {
+    assert.match(agentCard(name), /at launch/i, `${name} is shown at launch, not as live`);
+  }
+  assert.match(agentCard('hon'), /launching with hon os/i);
+});
+
+test('marks features that are not built as coming soon', () => {
+  for (const soon of [/Autopay[^<]*<em>soon/, /AI images and video<em>soon/, /lead ads[^<]*<em>soon/i, /Rewards for every school you refer[^<]*<em>soon/, /Event and sale-day slot booking<em>soon/]) {
+    assert.match(html, soon);
+  }
+});
+
+test('collects no data: no forms and no email boxes', () => {
+  assert.doesNotMatch(html, /<form\b/i);
+  assert.doesNotMatch(html, /<input\b/i);
+});
+
+test('drops the design-review controls', () => {
+  assert.doesNotMatch(html, /data-accent|class="switch"|Design direction/);
+});
+
+test('every link to the app goes through the build placeholder to an allowed page', () => {
+  const appLinks = [...html.matchAll(/href="(\{\{APP_URL\}\}[^"]*)"/g)].map((m) => m[1]);
+  assert.ok(appLinks.length >= 3, 'has start and sign-in links');
+  for (const link of appLinks) {
+    assert.ok(['{{APP_URL}}/account/start', '{{APP_URL}}/auth/login'].includes(link), `${link} is allowed`);
+  }
+  assert.ok(appLinks.includes('{{APP_URL}}/account/start'));
+  assert.ok(appLinks.includes('{{APP_URL}}/auth/login'));
+  assert.doesNotMatch(html, /(href|src)="(https?:)?\/\//, 'loads nothing from other hosts (fonts are self-hosted)');
+  assert.doesNotMatch(html, /href="\/pricing"|\/pricing"/, 'never links the old pricing page');
+});
+
+test('every in-page anchor points at an element that exists', () => {
+  const ids = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+  for (const [, id] of html.matchAll(/href="#([^"]*)"/g)) {
+    assert.ok(id && ids.has(id), `#${id} exists`);
+  }
+});
+
+test('every image exists and has alt text', () => {
+  const imgs = [...html.matchAll(/<img\b[^>]*>/g)].map((m) => m[0]);
+  assert.ok(imgs.length >= 5);
+  for (const img of imgs) {
+    const srcAttr = img.match(/src="([^"]+)"/)?.[1];
+    assert.ok(srcAttr && !srcAttr.startsWith('data:'), 'image is a file, not inline data');
+    assert.ok(existsSync(join(src, srcAttr.replace(/^\//, ''))), `${srcAttr} exists`);
+    assert.match(img, /\salt="[^"]*"/, `${srcAttr} has alt`);
+    assert.match(img, /\swidth="\d+"\s[^>]*height="\d+"|\sheight="\d+"\s[^>]*width="\d+"/, `${srcAttr} has a size`);
+  }
+});
+
+test('has the basics a public page needs', () => {
+  assert.match(html, /^<!doctype html>/i);
+  assert.match(html, /<html lang="en">/);
+  assert.match(html, /<meta name="viewport"/);
+  assert.match(html, /<title>HON OS[^<]*<\/title>/);
+  assert.match(html, /<meta name="description" content="[^"]{40,}"/);
+  assert.match(html, /<meta name="robots" content="\{\{ROBOTS\}\}"/);
+  for (const file of ['/fonts/geist-latin-400-normal.woff2']) assert.ok(existsSync(join(src, file)), `${file} exists`);
+  for (const face of readFileSync(join(src, 'styles.css'), 'utf8').matchAll(/url\("\/(fonts\/[^"]+)"\)/g)) {
+    assert.ok(existsSync(join(src, face[1])), `${face[1]} exists`);
+  }
+  for (const file of ['styles.css', 'site.js', 'flow.js', 'favicon.svg']) {
+    assert.ok(html.includes(file), `${file} is referenced`);
+    assert.ok(existsSync(join(src, file)), `${file} exists`);
+  }
+});
+
+test('presents online family tuition payments as coming soon, not available', () => {
+  const pay = html.match(/<section id="payments"[\s\S]*?<\/section>/)?.[0];
+  assert.ok(pay, 'payments section exists');
+  assert.doesNotMatch(pay, /Families pay you directly/);
+  assert.match(pay, /<li class="later">Online tuition payments from families[^<]*<em>soon/);
+  assert.match(pay.match(/<div class="card paycard"[\s\S]*?<\/div>\s*<\/div>\s*<\/section>/)?.[0] ?? '', /coming soon/i, 'diagram card is labelled coming soon');
+  assert.match(pay, /Record cash, check and card-terminal payments/);
+  const faq = html.match(/<summary>Does HON take a cut of my tuition\?<\/summary><p>([^<]*)<\/p>/)?.[1] ?? '';
+  assert.match(faq, /coming soon/i);
+  assert.doesNotMatch(faq, /goes straight/i);
+});
+
+test('yearly savings are stated per plan and never rounded up to a false figure', () => {
+  // $2,097 vs 12 x $249 = 29.82%; $1,494 vs 12 x $199.20 = 37.5%.
+  assert.doesNotMatch(html, /30% or more|save 30%|30% off/i);
+  assert.match(html, /\$2,097 a year, about 30% less than paying monthly/);
+  assert.match(html, /\$1,494 a year, about 37% less than paying monthly/);
+});

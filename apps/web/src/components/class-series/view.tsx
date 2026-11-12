@@ -2,6 +2,7 @@ import React from 'react';
 import { CLASS_SERIES_BOOKING_POLICIES, CLASS_SERIES_FILL_DAYS, type ClassSeries, type ClassSeriesBookingPolicy, type ClassSeriesSessionEffect, type SchoolClassSeries, type TimetableSession, type WeeklyTimetable } from '@hon/contracts';
 import type { SeriesAction, SeriesErrorKind } from './http';
 import { seriesText, type SeriesKey } from './copy';
+import { programText } from './add-program';
 import styles from '../membership-changes/membership-changes.module.css';
 
 export type SeriesForm = null | Readonly<{ kind: 'create' }> | Readonly<{ kind: 'revise' | 'end' | 'fill' | 'ongoing'; seriesId: string }>;
@@ -14,6 +15,8 @@ export type ClassSeriesViewProps = Readonly<{
   language: string; waiting: boolean; concealed: boolean; hasSchool: boolean;
   week: ReadState<WeeklyTimetable>; series: ReadState<SchoolClassSeries>; form: SeriesForm; outcome: SeriesOutcome; locked: boolean; canRetry: boolean;
   topUp?: TopUpState | undefined;
+  /** The add-a-program control, shown under the series once they are read (the page supplies it; the server checks program.manage). */
+  addProgram?: React.ReactNode;
   onWeek?: ((weekOf: string | null) => void) | undefined; onRefresh?: (() => void) | undefined; onOpen?: ((form: SeriesForm) => void) | undefined;
   onClose?: (() => void) | undefined; onSubmit?: ((action: SeriesAction, fields: SeriesFields) => void) | undefined; onTryAgain?: (() => void) | undefined;
 }>;
@@ -95,7 +98,8 @@ function SeriesList({ p }: { p: ClassSeriesViewProps }) {
         {p.topUp?.state === 'SENDING' ? <p className={styles.meta} role="status" data-testid="series-top-up">{t('topUpSending')}</p>
           : p.topUp?.state === 'DONE' && p.topUp.created > 0 ? <p className={styles.meta} role="status" data-testid="series-top-up">{count(t, p.topUp.created, 'topUpDone1', 'topUpDoneN')}</p>
           : p.topUp?.state === 'FAILED' ? <p className={styles.warnText} role="status" data-testid="series-top-up">{t('topUpFailed')}</p> : null}
-        {list.read.programs.length === 0 ? <p className={styles.meta}>{t('needProgram')}</p> : null}
+        {list.read.programs.length === 0 ? <p className={styles.meta}>{t('needProgram')}</p>
+          : <p className={styles.meta} data-testid="series-programs">{programText(p.language, 'list', { names: list.read.programs.map((x) => x.name).join(', ') })}</p>}
         {list.read.series.length === 0 ? <p className={styles.meta}>{t('noSeries')}</p> : <ul className={styles.list}>
           {list.read.series.map((s) => <li key={s.seriesId} data-testid={`series-${s.seriesId}`}>
             <strong>{s.name}</strong>{s.ongoing && s.status === 'ACTIVE' ? ` · ${t('ongoingTag')}` : ''} · {t('pattern', { days: weekdaysText(s.weekdays, p.language), time: s.localStartTime, n: s.durationMinutes })}{s.roomName ? ` · ${s.roomName}` : ''} · {t('capacity', { n: s.capacity })} · {t(s.bookingPolicy)}
@@ -111,6 +115,7 @@ function SeriesList({ p }: { p: ClassSeriesViewProps }) {
           </li>)}
         </ul>}
       </>}
+    {list.state === 'READY' || list.state === 'LOADING' ? p.addProgram ?? null : null}
   </article>;
 }
 

@@ -13,6 +13,8 @@ export type StageChoice = Readonly<{ pipelineId: string; stageId: string; label:
 export type LeadForm = Readonly<{ givenName: string; familyName: string; email: string; phone: string }>;
 export type LeadFormProblem = 'nameMissing' | 'emailInvalid' | 'phoneInvalid' | 'stageMissing';
 const JSON_TYPE = /^application\/json(?:\s*;|$)/i;
+/** The server answered the starter command with a definite refusal (not an unknown outcome): its key must not be resent. */
+export class StarterRefusedError extends Error { constructor() { super('STARTER_REFUSED'); } }
 
 function bad(): never { throw new LeadsError('UNAVAILABLE'); }
 function uuid(value: unknown): asserts value is string { if (typeof value !== 'string' || !CRM_LEAD_CREATE_UUID.test(value)) bad(); }
@@ -74,6 +76,7 @@ async function setUpStarter(scope: LeadsScope, key: string): Promise<PipelineOpt
     response = await fetch(path, { method: 'POST', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'Idempotency-Key': key, 'X-HON-Human-Command': 'crm-pipeline-starter' }, body: '{}' });
   } catch { bad(); }
+  if (response.status >= 400 && response.status < 500 && response.status !== 401 && response.status !== 403) throw new StarterRefusedError();
   const parsed = await body(response, [200, 201], () => true);
   return verifyPipeline(parsed.data);
 }
