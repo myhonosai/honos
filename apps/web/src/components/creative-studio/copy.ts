@@ -1,5 +1,13 @@
 /** Creative Studio wording (en / ko / es). Creative credits are for images and video only; the AI team never uses them. */
 const en = {
+  AVATAR: 'Avatar', avatarsTitle: 'Avatars', avatarsIntro: 'Your school’s own AI presenter: one consistent character you can reuse in your marketing.',
+  avatarName: 'Avatar name', avatarStyle: 'Look', REALISTIC: 'Realistic', ILLUSTRATED: 'Illustrated', CHIBI: 'Cute (chibi)',
+  avatarDescribe: 'Describe how your avatar looks', avatarHelp: 'Up to {n} characters, for example clothing, age range, hair and mood. Do not include private student or family details.',
+  avatarButton: 'Create avatar', avatarNotPriced: 'Avatars are not available yet because HQ has not set their price.',
+  avatarNotConnected: 'Avatar creation is not connected yet. Nothing can be created here and nothing is charged.', avatarBlocked: 'Creating an avatar is not available for your school right now.',
+  avatarsNone: 'Your school has no avatars yet.', avatarsUnavailable: 'Your avatars could not be loaded.', avatarCount: '{n} of {max} avatars',
+  avCREATING: 'Creating', avREADY: 'Ready', avUNDER_REVIEW: 'Held for HQ review', avNOT_CREATED: 'Not created',
+  reasonNotPriced: 'HQ has not set a price for this yet', reasonAvatarLimit: 'your school already has 12 avatars', reasonAvatarRate: 'avatar pricing is not set up correctly',
   title: 'Creative Studio', intro: 'Images and video for your school’s marketing. Creative Studio uses your school’s creative credits. Conversations with HON and the AI team never use them.',
   createTitle: 'Create', createStatus: 'Not connected yet',
   createNote: 'Image and video creation is not connected yet. HON has not connected a creative provider, so nothing can be created here and nothing is charged.',
@@ -35,6 +43,14 @@ const en = {
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
+  AVATAR: '아바타', avatarsTitle: '아바타', avatarsIntro: '도장만의 AI 진행자입니다. 마케팅에 계속 쓸 수 있는 하나의 일관된 캐릭터입니다.',
+  avatarName: '아바타 이름', avatarStyle: '스타일', REALISTIC: '실사', ILLUSTRATED: '일러스트', CHIBI: '귀여운 (치비)',
+  avatarDescribe: '아바타의 모습을 설명하세요', avatarHelp: '최대 {n}자. 예: 복장, 연령대, 머리 모양, 분위기. 학생이나 가족의 개인정보는 넣지 마세요.',
+  avatarButton: '아바타 만들기', avatarNotPriced: 'HQ가 아직 가격을 정하지 않아 아바타를 사용할 수 없습니다.',
+  avatarNotConnected: '아바타 만들기는 아직 연결되지 않았습니다. 여기서는 아무것도 만들 수 없으며 요금도 청구되지 않습니다.', avatarBlocked: '지금은 도장에서 아바타를 만들 수 없습니다.',
+  avatarsNone: '도장에 아직 아바타가 없습니다.', avatarsUnavailable: '아바타를 불러올 수 없습니다.', avatarCount: '아바타 {n}/{max}개',
+  avCREATING: '만드는 중', avREADY: '사용 가능', avUNDER_REVIEW: 'HQ 검토 중 보류', avNOT_CREATED: '만들어지지 않음',
+  reasonNotPriced: 'HQ가 아직 가격을 정하지 않았습니다', reasonAvatarLimit: '도장에 이미 아바타가 12개 있습니다', reasonAvatarRate: '아바타 가격 설정이 올바르지 않습니다',
   title: '크리에이티브 스튜디오', intro: '도장 마케팅용 이미지와 동영상입니다. 크리에이티브 스튜디오는 도장의 크리에이티브 크레딧을 사용합니다. HON 및 AI 팀과의 대화는 이 크레딧을 사용하지 않습니다.',
   createTitle: '만들기', createStatus: '아직 연결되지 않음',
   createNote: '이미지와 동영상 생성은 아직 연결되지 않았습니다. HON이 크리에이티브 제공업체를 연결하지 않았으므로 여기서는 아무것도 만들 수 없으며 요금도 청구되지 않습니다.',
@@ -69,6 +85,14 @@ const ko: Record<Key, string> = {
   unavailable: '크리에이티브 크레딧을 읽거나 확인할 수 없습니다. 숫자를 표시하지 않습니다.', refresh: '새로 고침',
 };
 const es: Record<Key, string> = {
+  AVATAR: 'Avatar', avatarsTitle: 'Avatares', avatarsIntro: 'El presentador de IA propio de tu escuela: un personaje constante que puedes reutilizar en tu marketing.',
+  avatarName: 'Nombre del avatar', avatarStyle: 'Estilo', REALISTIC: 'Realista', ILLUSTRATED: 'Ilustrado', CHIBI: 'Tierno (chibi)',
+  avatarDescribe: 'Describe cómo se ve tu avatar', avatarHelp: 'Hasta {n} caracteres, por ejemplo ropa, edad aproximada, cabello y estado de ánimo. No incluyas datos privados de alumnos o familias.',
+  avatarButton: 'Crear avatar', avatarNotPriced: 'Los avatares aún no están disponibles porque HQ no ha fijado su precio.',
+  avatarNotConnected: 'La creación de avatares aún no está conectada. Aquí no se puede crear nada y no se cobra nada.', avatarBlocked: 'Crear un avatar no está disponible para tu escuela ahora.',
+  avatarsNone: 'Tu escuela aún no tiene avatares.', avatarsUnavailable: 'No se pudieron cargar tus avatares.', avatarCount: '{n} de {max} avatares',
+  avCREATING: 'Creando', avREADY: 'Listo', avUNDER_REVIEW: 'Reservado para revisión de HQ', avNOT_CREATED: 'No creado',
+  reasonNotPriced: 'HQ aún no ha fijado un precio para esto', reasonAvatarLimit: 'tu escuela ya tiene 12 avatares', reasonAvatarRate: 'el precio del avatar no está bien configurado',
   title: 'Estudio creativo', intro: 'Imágenes y video para el marketing de tu escuela. El Estudio creativo usa los créditos creativos de tu escuela. Las conversaciones con HON y el equipo de IA nunca los usan.',
   createTitle: 'Crear', createStatus: 'Aún no conectado',
   createNote: 'La creación de imágenes y video aún no está conectada. HON no ha conectado un proveedor creativo, así que aquí no se puede crear nada y no se cobra nada.',
