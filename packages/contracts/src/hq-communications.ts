@@ -237,3 +237,75 @@ export function hqTextPieces(content: string): HqTextPieces {
   const pieces = units === 0 ? 0 : units <= single ? 1 : Math.ceil(units / multi);
   return { characters: chars.length, encoding: gsm ? 'GSM-7' : 'UCS-2', pieces, asMms: pieces >= 3 };
 }
+
+// ---------- the person's own phone for texts from HON HQ (0282) ----------
+export const HQ_CONTACT_COMMANDS = { startPhone: 'hq-contact-phone-start', setTexting: 'hq-contact-texting', removePhone: 'hq-contact-phone-remove' } as const;
+export const HQ_CONTACT_PHONE_STATUSES = ['REMOVED', 'PENDING', 'CONFIRMED'] as const;
+export type HqContactPhoneStatus = typeof HQ_CONTACT_PHONE_STATUSES[number];
+const E164 = /^\+[1-9][0-9]{7,14}$/;
+export interface HqContact {
+  status: HqContactPhoneStatus; phone: string | null; codeExpiresAt: string | null; codeExpired: boolean; wrongCodes: number; codesLeftToday: number;
+  confirmedAt: string | null; textingOn: boolean; version: number; hqNumber: { ready: true; a2pState: HqSenderA2pState | null } | null;
+}
+export interface HqContactView { contact: HqContact; asOf: string }
+export interface HqContactReceipt { operation: 'PHONE_START' | 'TEXTING' | 'PHONE_REMOVE'; contact: HqContact; replayed: boolean; code?: string | null }
+export interface HqContactPhoneStartInput { phone: string; expectedVersion: number }
+export interface HqContactTextingInput { enabled: boolean; expectedVersion: number }
+
+/** A US/Canada 10-digit number or any E.164 number, as E.164; null when it is not one. */
+export function normalizeHqContactPhone(value: string): string | null {
+  const digits = value.replace(/[\s().-]/g, '');
+  const e164 = /^[0-9]{10}$/.test(digits) ? `+1${digits}` : /^1[0-9]{10}$/.test(digits) ? `+${digits}` : digits;
+  return E164.test(e164) ? e164 : null;
+}
+export function validateHqContactPhoneStartInput(value: unknown): HqContactPhoneStartInput {
+  const r = record(value, invalid); exactKeys(r, ['phone', 'expectedVersion'], invalid);
+  if (typeof r.phone !== 'string' || !E164.test(r.phone) || !isInt(r.expectedVersion, 0, 999_999_999)) invalid();
+  return { phone: r.phone as string, expectedVersion: r.expectedVersion as number };
+}
+export function validateHqContactTextingInput(value: unknown): HqContactTextingInput {
+  const r = record(value, invalid); exactKeys(r, ['enabled', 'expectedVersion'], invalid);
+  if (typeof r.enabled !== 'boolean') invalid();
+  return { enabled: r.enabled as boolean, expectedVersion: version(r.expectedVersion) };
+}
+function contact(value: unknown): HqContact {
+  const c = record(value, drift);
+  exactKeys(c, ['status', 'phone', 'codeExpiresAt', 'codeExpired', 'wrongCodes', 'codesLeftToday', 'confirmedAt', 'textingOn', 'version', 'hqNumber'], drift);
+  if (!has(HQ_CONTACT_PHONE_STATUSES, c.status) || !nullable(c.phone, (p: unknown): p is string => typeof p === 'string' && E164.test(p))
+    || (c.status === 'REMOVED') !== (c.phone === null) || !nullable(c.codeExpiresAt, isTimestamp) || (c.status === 'PENDING') !== (c.codeExpiresAt !== null)
+    || typeof c.codeExpired !== 'boolean' || (c.codeExpired && c.status !== 'PENDING') || !isInt(c.wrongCodes, 0, 5) || !isInt(c.codesLeftToday, 0, 5)
+    || !nullable(c.confirmedAt, isTimestamp) || (c.status === 'CONFIRMED') !== (c.confirmedAt !== null) || typeof c.textingOn !== 'boolean'
+    || (c.textingOn && c.status !== 'CONFIRMED') || !isInt(c.version, 0, 999_999_999)) drift();
+  if (c.hqNumber !== null) {
+    const n = record(c.hqNumber, drift); exactKeys(n, ['ready', 'a2pState'], drift);
+    if (n.ready !== true || !nullable(n.a2pState, (s: unknown): s is string => has(HQ_SENDER_A2P_STATES, s))) drift();
+  }
+  return c as unknown as HqContact;
+}
+export function validateHqContactView(value: unknown): HqContactView {
+  const r = record(value, drift); exactKeys(r, ['contact', 'asOf'], drift);
+  contact(r.contact); if (!isTimestamp(r.asOf)) drift();
+  return r as unknown as HqContactView;
+}
+export function validateHqContactReceipt(value: unknown): HqContactReceipt {
+  const r = record(value, drift);
+  if (r.operation === 'PHONE_START') exactKeys(r, ['operation', 'contact', 'code', 'replayed'], drift);
+  else exactKeys(r, ['operation', 'contact', 'replayed'], drift);
+  if (!has(['PHONE_START', 'TEXTING', 'PHONE_REMOVE'], r.operation) || typeof r.replayed !== 'boolean') drift();
+  const c = contact(r.contact);
+  if (r.operation === 'PHONE_START' && (c.status !== 'PENDING' || (r.replayed ? r.code !== null : !(typeof r.code === 'string' && /^[0-9]{6}$/.test(r.code))))) drift();
+  if (r.operation === 'PHONE_REMOVE' && c.status !== 'REMOVED') drift();
+  if (r.operation === 'TEXTING' && c.status !== 'CONFIRMED') drift();
+  return r as unknown as HqContactReceipt;
+}
+
+/** What the HQ number answers an inbound text with (0282 `reply`). Fixed wording; the webhook sends it as the reply. */
+export const HQ_INBOUND_REPLY_KINDS = ['STOPPED', 'STARTED', 'HELP', 'CONFIRMED', 'CODE_WRONG'] as const;
+export type HqInboundReplyKind = typeof HQ_INBOUND_REPLY_KINDS[number];
+export const HQ_INBOUND_REPLIES: Readonly<Record<HqInboundReplyKind, string>> = {
+  STOPPED: 'HON OS: You will no longer get texts from HON HQ. Reply START to turn them back on.',
+  STARTED: 'HON OS: Texts from HON HQ are back on. Msg & data rates may apply. Reply STOP to stop, HELP for help.',
+  HELP: 'HON OS: account and support texts from HON HQ. Msg frequency varies. Msg & data rates may apply. Reply STOP to stop. Help: support@myhonos.ai',
+  CONFIRMED: 'HON OS: Your number is confirmed for texts from HON HQ. Msg & data rates may apply. Reply STOP to stop, HELP for help.',
+  CODE_WRONG: 'HON OS: That code did not match. Check the code on your HON OS account page, or start again there.',
+};

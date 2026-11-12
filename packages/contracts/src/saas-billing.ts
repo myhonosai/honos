@@ -137,6 +137,9 @@ export const SAAS_COMMANDS = {
   createHqMessage: 'hq-message-create',
   queueHqMessage: 'hq-message-queue',
   cancelHqMessage: 'hq-message-cancel',
+  startMyHqPhone: 'hq-contact-phone-start',
+  setMyHqTexting: 'hq-contact-texting',
+  removeMyHqPhone: 'hq-contact-phone-remove',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 

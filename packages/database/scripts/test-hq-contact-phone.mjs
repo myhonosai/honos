@@ -115,7 +115,8 @@ try {
 
   // ---------- 1. no HQ number yet ----------
   let view = await mine('owner1');
-  eq([view.contact.status, view.contact.phone, view.contact.textingOn, view.contact.version, view.contact.hqNumber], ['REMOVED', null, false, 0, null], 'nothing set up');
+  eq(view.contact, { status: 'REMOVED', phone: null, codeExpiresAt: null, codeExpired: false, wrongCodes: 0, codesLeftToday: 5, confirmedAt: null,
+    textingOn: false, version: 0, hqNumber: null }, 'nothing set up');
   await refuse('23514', () => start('owner1', PHONE1, 0), 'no HQ number, no code', 'HQ_TEXTING_UNAVAILABLE');
   await refuse('42501', () => call('read_my_hq_contact', ['nobody-' + randomUUID()]), 'unknown subject refused');
   await call('set_hq_communication_sender', [H('hqOwner'), JSON.stringify({ channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: SID,

@@ -128,7 +128,7 @@ LANGUAGE sql STABLE SET search_path = pg_catalog, hon AS $$
   SELECT jsonb_build_object(
     'status', coalesce(ph.status, 'REMOVED'), 'phone', ph.phone_e164,
     'codeExpiresAt', CASE WHEN ph.status = 'PENDING' THEN hon.saas_ts(ph.code_expires_at) END,
-    'codeExpired', ph.status = 'PENDING' AND ph.code_expires_at <= clock_timestamp(),
+    'codeExpired', coalesce(ph.status = 'PENDING' AND ph.code_expires_at <= clock_timestamp(), false),
     'wrongCodes', coalesce(ph.wrong_codes, 0), 'codesLeftToday',
       5 - CASE WHEN ph.codes_issued_on = (clock_timestamp() AT TIME ZONE 'UTC')::date THEN ph.codes_issued ELSE 0 END,
     'confirmedAt', CASE WHEN ph.status = 'CONFIRMED' THEN hon.saas_ts(ph.confirmed_at) END,

@@ -252,6 +252,10 @@ const SAAS_BILLING_CALLS = {
   createHqMessage: { sql: 'SELECT hon.create_hq_message($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   queueHqMessage: { sql: 'SELECT hon.queue_hq_message($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   cancelHqMessage: { sql: 'SELECT hon.cancel_hq_message($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  readMyHqContact: { sql: 'SELECT hon.read_my_hq_contact($1) AS data', arity: 1, readOnly: true },
+  startMyHqPhone: { sql: 'SELECT hon.start_my_hq_phone($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  setMyHqTexting: { sql: 'SELECT hon.set_my_hq_texting($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  removeMyHqPhone: { sql: 'SELECT hon.remove_my_hq_phone($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   addSupportNote: { sql: 'SELECT hon.add_hq_support_note($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   changeSupportCase: { sql: 'SELECT hon.change_hq_support_case($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   // M1 (0252): HQ marketing campaigns. Reads are read-only; the three commands write only HQ campaign rows.

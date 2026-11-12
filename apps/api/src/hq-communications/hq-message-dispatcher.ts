@@ -1,5 +1,6 @@
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Pool } from 'pg';
+import { HQ_INBOUND_REPLIES, HQ_INBOUND_REPLY_KINDS, type HqInboundReplyKind } from '@hon/contracts';
 import { runtimePoolOptions } from '../foundation/runtime-pool-options.js';
 import { emitTelemetry } from '../observability/telemetry.js';
 import {
@@ -41,6 +42,10 @@ export interface HqMessageWorkerStore {
   claim(channels: DeliverableChannel[], limit: number, leaseSeconds: number): Promise<ClaimedHqMessageDelivery[]>;
   recordResult(deliveryId: string, leaseToken: string, result: CommunicationSendResult): Promise<{ status: string; accepted: boolean }>;
 }
+
+/** One inbound text to the HQ number, as the webhook verified it. The body is classified in the database, never stored. */
+export interface HqInboundText { provider: 'FAKE' | 'TWILIO'; eventId: string; from: string; toService: string; body: string; receivedAt: string }
+export interface HqInboundOutcome { outcome: string; reply: HqInboundReplyKind | null; replyText: string | null; replayed: boolean }
 export const HQ_MESSAGE_WORKER_STORE = Symbol('HQ_MESSAGE_WORKER_STORE');
 
 const SEND_TIMEOUT_MS = 20_000;
@@ -85,6 +90,18 @@ export class HqMessageWorkerDatabase implements HqMessageWorkerStore, OnModuleDe
       deliveryId: r.delivery_id, leaseToken: r.lease_token, organizationId: r.organization_id, schoolId: r.school_id, messageId: r.message_id,
       channel: r.channel, recipientAddress: r.recipient_address, content: r.content, senderRef: r.sender_ref, senderName: r.sender_name, attempt: r.attempt,
     }));
+  }
+
+  /**
+   * 0282 seam for the Twilio inbound webhook (comms thread): records STOP / START / HELP or a confirmation code sent to the
+   * HQ Messaging Service, once per provider event, and returns the fixed reply to send back.
+   */
+  async recordInbound(text: HqInboundText): Promise<HqInboundOutcome> {
+    const row = (await this.query<{ outcome: string; reply: string | null; replayed: boolean }>(
+      'SELECT * FROM hon.record_hq_inbound_text($1, $2, $3, $4, $5, $6)', [text.provider, text.eventId, text.from, text.toService, text.body, text.receivedAt]))[0];
+    if (!row) throw new Error('HQ_INBOUND_NOT_RECORDED');
+    const reply = (HQ_INBOUND_REPLY_KINDS as readonly string[]).includes(row.reply ?? '') ? row.reply as HqInboundReplyKind : null;
+    return { outcome: row.outcome, reply, replyText: reply ? HQ_INBOUND_REPLIES[reply] : null, replayed: row.replayed };
   }
 
   async recordResult(deliveryId: string, leaseToken: string, result: CommunicationSendResult) {
