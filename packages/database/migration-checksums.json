@@ -243,6 +243,7 @@
     "0246_hon_os_trial_runtime.sql": "d3a1bd35203bb465946bf316291b53d245e348777790e7e4491f62753a742f07",
     "0269_school_checkout_pages.sql": "5e1f3c7ee71db95fd5c75b360cb8a834b6de0a41d0caa479e1caa938e3a8627d",
     "0272_hon_os_trial_ai_credit_fixes.sql": "5f78a9ca625bf7459231ff6d8efde3f96630dfed1dd2d6d6736fd83a0e565e62",
-    "0273_hon_os_signup_abuse_protection.sql": "ef53fe56e765f926a0868bc6f2a86c8e6106ec0667ec971ea1889e3147836887"
+    "0273_hon_os_signup_abuse_protection.sql": "ef53fe56e765f926a0868bc6f2a86c8e6106ec0667ec971ea1889e3147836887",
+    "0274_hon_os_admission_limits_hq.sql": "d4a60adbda62a6ede252f517ae92ce0baa27cec23774f379d4196aa8684eeb23"
   }
 }
