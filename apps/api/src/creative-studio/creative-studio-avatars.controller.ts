@@ -32,3 +32,25 @@ export class CreativeStudioAvatarsController {
     return { data: await this.studio.createAvatar(subject(req), schoolId, body, key) };
   }
 }
+
+/**
+ * A2 Creative Studio avatar videos (0277): one of the school's READY avatars speaks a script, as one generation priced by
+ * the HQ rate avatar.video (per second) and paid from that school's creative wallet. Same exact-school rules as avatars.
+ */
+@Controller('schools/:schoolId/creative-studio/avatar-videos')
+@UseGuards(HonIdentityGuard)
+export class CreativeStudioAvatarVideosController {
+  constructor(private readonly studio: CreativeStudioService) {}
+  @Get() @UseGuards(SaasReadGuard)
+  async list(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
+    return { data: await this.studio.listAvatarVideos(subject(req), schoolId) };
+  }
+  @Get(':videoId') @UseGuards(SaasReadGuard)
+  async read(@Req() req: HonRequest, @Param('schoolId') schoolId: string, @Param('videoId') videoId: string) {
+    return { data: await this.studio.readAvatarVideo(subject(req), schoolId, videoId) };
+  }
+  @Post() @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.createCreativeAvatarVideo)
+  async create(@Req() req: HonRequest, @Param('schoolId') schoolId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.studio.createAvatarVideo(subject(req), schoolId, body, key) };
+  }
+}

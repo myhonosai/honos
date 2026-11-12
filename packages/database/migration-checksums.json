@@ -255,6 +255,7 @@
     "0263_hq_hon_conversation.sql": "1adef62d0a5af2388977da5fc979dac83efc4bd8a7d0a39feefe7cc554721d9c",
     "0264_hq_hon_executives.sql": "5199d3cb6478f1508eac8316f649c021244d77e757a2ae66b06d8215428e713c",
     "0280_school_invoice_list.sql": "ce54010d93d988fd9ea096e3c87a1aaaebced068a60e17eb786644044707292d",
-    "0276_creative_studio_avatars.sql": "38beda9afb3542ca65a4a4e6a91ed4288dfdb8025b90e6245435d04f0a51e934"
+    "0276_creative_studio_avatars.sql": "38beda9afb3542ca65a4a4e6a91ed4288dfdb8025b90e6245435d04f0a51e934",
+    "0277_creative_studio_avatar_videos.sql": "291d3e809eeadbb112ad603705d7fffa72f2aa826564e377b32f314ec43aeb74"
   }
 }

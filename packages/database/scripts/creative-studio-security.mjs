@@ -4,7 +4,9 @@
 // security proof (test-hq-creative-studio.mjs) and is excluded from this school inventory.
 // A1 (0276) adds creative_avatars: one avatar per avatar.create generation, three runtime entry points, a private
 // SECURITY DEFINER deferred guard that refuses an avatar.* generation without its avatar at commit.
-export const creativeStudioTables = ['creative_generations', 'creative_generation_assets', 'creative_avatars'];
+// A2 (0277) adds creative_avatar_videos (one avatar.video generation each, three runtime entry points) and replaces that
+// guard's body so each avatar.* operation needs its own record and any other avatar.* operation is refused.
+export const creativeStudioTables = ['creative_generations', 'creative_generation_assets', 'creative_avatars', 'creative_avatar_videos'];
 // [signature, runtime may execute, SECURITY DEFINER]
 export const creativeStudioFunctions = [
   ['hon.creative_prompt_ok(text)', false, false],
@@ -22,6 +24,11 @@ export const creativeStudioFunctions = [
   ['hon.create_creative_avatar(text,uuid,jsonb,jsonb,uuid,uuid,uuid)', true, true],
   ['hon.read_creative_avatars(text,uuid)', true, true],
   ['hon.read_creative_avatar(text,uuid,uuid)', true, true],
+  ['hon.creative_avatar_video_json(hon.creative_avatar_videos)', false, false],
+  ['hon.creative_avatar_video_fingerprint(uuid,jsonb)', false, false],
+  ['hon.create_creative_avatar_video(text,uuid,jsonb,jsonb,uuid,uuid,uuid)', true, true],
+  ['hon.read_creative_avatar_videos(text,uuid)', true, true],
+  ['hon.read_creative_avatar_video(text,uuid,uuid)', true, true],
 ];
 const triggers = [
   ['creative_generations', 'creative_generation_guarded', 27, 'guard_creative_generation'],
@@ -31,6 +38,8 @@ const triggers = [
   ['creative_generations', 'creative_generation_avatar_required', 5, 'guard_creative_avatar_generation'],
   ['creative_avatars', 'creative_avatar_immutable', 27, 'guard_saas_evidence'],
   ['creative_avatars', 'creative_avatar_no_truncate', 34, 'guard_saas_evidence'],
+  ['creative_avatar_videos', 'creative_avatar_video_immutable', 27, 'guard_saas_evidence'],
+  ['creative_avatar_videos', 'creative_avatar_video_no_truncate', 34, 'guard_saas_evidence'],
 ];
 export async function verifyCreativeStudioSecurity(client, runtime) {
   if (!/^hon_[a-z_]+$/.test(runtime)) throw new Error('Unsafe Creative Studio runtime role.');
