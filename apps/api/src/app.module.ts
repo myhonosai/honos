@@ -52,6 +52,7 @@ import { HonReplyService } from './hon-conversation/hon-reply.service.js';
 import { CREATIVE_PROVIDER_RUNTIME, UnconfiguredCreativeProviderRuntime } from './creative-studio/creative-provider-runtime.js';
 import { CreativeStudioService } from './creative-studio/creative-studio.service.js';
 import { CreativeStudioController } from './creative-studio/creative-studio.controller.js';
+import { CreativeStudioAvatarsController } from './creative-studio/creative-studio-avatars.controller.js';
 import { TeachingAssistantController, TeachingAssistantHumanUiGuard } from './teaching-assistant/teaching-assistant.controller.js';
 import { TeachingAssistantService } from './teaching-assistant/teaching-assistant.service.js';
 import { CLAIRE_PROVIDER_RUNTIME, OpenRouterClaireRuntime } from './ai/claire-provider-runtime.js';
@@ -140,6 +141,9 @@ import { SchoolCheckoutService } from './school-checkout/school-checkout.service
 import { SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard } from './school-checkout/school-checkout-human-ui.guard.js';
 import { MayaAtRiskController, MayaAtRiskReadHumanUiGuard } from './maya/maya-at-risk.controller.js';
 import { MayaAtRiskService } from './maya/maya-at-risk.service.js';
+import { SchoolBrandingController } from './school-branding/school-branding.controller.js';
+import { SchoolBrandingService } from './school-branding/school-branding.service.js';
+import { SchoolBrandingReadHumanUiGuard, SchoolBrandingSaveHumanUiGuard } from './school-branding/school-branding-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
 import { BillingAccountService } from './billing/billing-account.service.js';
 import { BillingAccountHumanUiGuard } from './billing/billing-account-human-ui.guard.js';
@@ -260,7 +264,9 @@ import { FakeCommunicationProvider } from './communication/delivery/fake-communi
 import { COMMUNICATION_WORKER_STORE, CommunicationWorkerDatabase } from './communication/delivery/communication-worker-database.js';
 import { CommunicationDispatcher, CommunicationDispatchScheduler } from './communication/delivery/communication-dispatcher.js';
 import { SendGridEmailProvider, SendGridEventWebhookVerifier } from './communication/delivery/sendgrid-email-provider.js';
-import { CommunicationWebhookController, SENDGRID_EVENT_VERIFIER } from './communication/delivery/communication-webhook.controller.js';
+import { CommunicationWebhookController, SENDGRID_EVENT_VERIFIER, TWILIO_WEBHOOK_VERIFIER } from './communication/delivery/communication-webhook.controller.js';
+import { TwilioTextProvider, TwilioWebhookVerifier } from './communication/delivery/twilio-text-provider.js';
+import { SchoolTextSenderHqController } from './communication/delivery/school-text-sender.controller.js';
 import { HqAiProviderController } from './hq/hq-ai-provider.controller.js';
 import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
 import { ZernioIntegrationController, ZernioHumanUiGuard } from './integrations/zernio.controller.js';
@@ -438,6 +444,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPaymentController,
     SchoolCheckoutController,
     MayaAtRiskController,
+    SchoolBrandingController,
     SchoolMembershipListController,
     CrmSchoolClockController,
     CrmSessionSchoolClockController,
@@ -456,7 +463,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     A2pPreparationController,
     HqEntitlementController,
     ChampionsSchoolController, ChampionsHqController,
-    SaasSubscriptionGenerationHqController, HqHonController, SaasSubscriptionGenerationSchoolController, SaasScheduleBindingHqController, SaasScheduleBindingSchoolController, SaasPaidReviewHqController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, CommunicationWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqSupportController, HqMarketingController, HqCreativeController, AiSpendPauseHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
+    SaasSubscriptionGenerationHqController, HqHonController, SaasSubscriptionGenerationSchoolController, SaasScheduleBindingHqController, SaasScheduleBindingSchoolController, SaasPaidReviewHqController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, CreativeStudioAvatarsController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, CommunicationWebhookController, SchoolTextSenderHqController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqSupportController, HqMarketingController, HqCreativeController, AiSpendPauseHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [BookableStudentsService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard,
@@ -558,7 +565,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     CommunicationWorkerDatabase,
     { provide: COMMUNICATION_WORKER_STORE, useExisting: CommunicationWorkerDatabase },
     // Real adapters (SendGrid, Twilio) are listed before the fakes; each is READY only behind its own approval flag.
-    { provide: COMMUNICATION_PROVIDER_ADAPTERS, useFactory: () => [new SendGridEmailProvider(), new FakeCommunicationProvider('EMAIL'), new FakeCommunicationProvider('SMS')] },
+    { provide: COMMUNICATION_PROVIDER_ADAPTERS, useFactory: () => [new SendGridEmailProvider(), new TwilioTextProvider(), new FakeCommunicationProvider('EMAIL'), new FakeCommunicationProvider('SMS')] },
+    { provide: TWILIO_WEBHOOK_VERIFIER, useFactory: () => new TwilioWebhookVerifier() },
     { provide: SENDGRID_EVENT_VERIFIER, useFactory: () => new SendGridEventWebhookVerifier() },
     CommunicationDispatcher,
     CommunicationDispatchScheduler,
@@ -602,6 +610,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolCheckoutService, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard,
     MayaAtRiskService,
     MayaAtRiskReadHumanUiGuard,
+    SchoolBrandingService, SchoolBrandingReadHumanUiGuard, SchoolBrandingSaveHumanUiGuard,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,
     CrmSchoolClockService,

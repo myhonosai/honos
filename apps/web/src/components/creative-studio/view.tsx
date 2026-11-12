@@ -1,9 +1,10 @@
 import React from 'react';
 import { accountValue } from '../account-status/copy';
 import { studioEntryText, studioText, type StudioKey } from './copy';
-import type { CreateOutcome, GenerationsState, StudioRate, StudioState, StudioWallet } from './model';
+import type { AvatarsState, CreateOutcome, GenerationsState, StudioRate, StudioState, StudioWallet } from './model';
 import { CreatePanel, GenerationsPanel } from './create';
-import type { CreativeGeneration, CreativeGenerationInput } from '@hon/contracts';
+import { AvatarsPanel } from './avatars';
+import type { CreativeAvatar, CreativeAvatarInput, CreativeGeneration, CreativeGenerationInput } from '@hon/contracts';
 import styles from './creative-studio.module.css';
 
 export type CreativeStudioViewProps = Readonly<{
@@ -12,12 +13,16 @@ export type CreativeStudioViewProps = Readonly<{
   generations?: GenerationsState; outcome?: CreateOutcome; locked?: boolean | undefined;
   hidePrompt?: ((g: CreativeGeneration) => boolean) | undefined;
   onCreate?: ((input: CreativeGenerationInput) => void) | undefined; onCheckAgain?: (() => void) | undefined;
+  /** A1 (0276) avatars: the read, this tab's avatar request outcome and lock. */
+  avatars?: AvatarsState; avatarOutcome?: CreateOutcome; avatarLocked?: boolean | undefined; hideAvatarText?: ((a: CreativeAvatar) => boolean) | undefined;
+  onCreateAvatar?: ((input: CreativeAvatarInput) => void) | undefined; onCheckAvatarAgain?: (() => void) | undefined;
 }>;
 
 const UNIT: Record<StudioRate['billingUnit'], StudioKey> = { IMAGE: 'perImage', VIDEO_SECOND: 'perSecond', REQUEST: 'perRequest' };
 
 /** Pure view. Every number comes from the school's wallet read; generation is shown as not connected. */
-export function CreativeStudioView({ language, waiting, concealed, hasSchool, studio, onRefresh, generations = { state: 'UNAVAILABLE' }, outcome = null, locked = false, hidePrompt, onCreate, onCheckAgain }: CreativeStudioViewProps): React.ReactElement {
+export function CreativeStudioView({ language, waiting, concealed, hasSchool, studio, onRefresh, generations = { state: 'UNAVAILABLE' }, outcome = null, locked = false, hidePrompt, onCreate, onCheckAgain,
+  avatars = { state: 'UNAVAILABLE' }, avatarOutcome = null, avatarLocked = false, hideAvatarText, onCreateAvatar, onCheckAvatarAgain }: CreativeStudioViewProps): React.ReactElement {
   const t = (key: StudioKey, vars?: Record<string, string>) => studioText(language, key, vars);
   const number = (n: number) => new Intl.NumberFormat(language).format(n);
   const notice = waiting ? t('waiting') : concealed ? t('concealed') : !hasSchool ? t('noSchool')
@@ -31,6 +36,8 @@ export function CreativeStudioView({ language, waiting, concealed, hasSchool, st
     </header>
     <CreatePanel language={language} wallet={wallet} generations={visible ? generations : { state: 'UNAVAILABLE' }} outcome={visible ? outcome : null} locked={locked}
       onCreate={onCreate} onCheckAgain={onCheckAgain}/>
+    <AvatarsPanel language={language} wallet={wallet} avatars={visible ? avatars : { state: 'UNAVAILABLE' }} showList={!!wallet} outcome={visible ? avatarOutcome : null} locked={avatarLocked}
+      hideText={hideAvatarText} onCreate={onCreateAvatar} onCheckAgain={onCheckAvatarAgain}/>
     {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
     {wallet ? <WalletCards wallet={wallet} language={language} t={t} number={number}/> : null}
     {wallet ? <GenerationsPanel language={language} generations={generations} hidePrompt={hidePrompt}/> : null}

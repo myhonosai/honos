@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "0f7a3c52a37e35cff7b2c11447397031ab96566ed6f9ee2568782b0b8dfb37d5",
+  "chainSha256": "9fa1eff11d1bdf86dd9d6280542842022b570e3f4f36a7694d46bd986966e386",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -243,6 +243,10 @@
       "sha256": "d3a1bd35203bb465946bf316291b53d245e348777790e7e4491f62753a742f07"
     },
     {
+      "file": "0248_school_text_senders_and_keywords.sql",
+      "sha256": "0dec705df1cbdf169b5dbdf52b97cdf7933159bfffac3d95d368a0dd1b2149de"
+    },
+    {
       "file": "0251_class_series_ongoing.sql",
       "sha256": "90532172b977efee9e3947d261f0ac20387a987cec14e7afeb4cf3d725e324e8"
     },
@@ -319,6 +323,10 @@
       "sha256": "3f9b0d3a909005f190517ef193167ff0fca3032fa6ea35ed418d58dd6ce92adc"
     },
     {
+      "file": "0276_creative_studio_avatars.sql",
+      "sha256": "38beda9afb3542ca65a4a4e6a91ed4288dfdb8025b90e6245435d04f0a51e934"
+    },
+    {
       "file": "0278_ai_team_readiness_reconcile.sql",
       "sha256": "f29d606e7ab0e1273d5ae41f2eeb105f14b3eb0fa930fcd194a5ad2439c5362e"
     },
@@ -329,6 +337,10 @@
     {
       "file": "0284_maya_retention_answers.sql",
       "sha256": "8518211375aa88c5e8ddf4bb2881d63bd437e4c19b84925b6cdd5af6c1eddaba"
+    },
+    {
+      "file": "0285_school_page_branding.sql",
+      "sha256": "4cb98a54593a817a4f604a1ef2087c8d4cab4abd5031e7455e392c3a8dd9157f"
     },
     {
       "file": "0304_hq_hon_schedule_billing_facts.sql",

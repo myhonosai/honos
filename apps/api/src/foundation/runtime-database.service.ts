@@ -165,6 +165,10 @@ const SAAS_BILLING_CALLS = {
   recordCreativeGenerationResult: { sql: 'SELECT hon.record_creative_generation_result($1,$2::uuid,$3::jsonb) AS data', arity: 3, readOnly: false },
   readCreativeGenerations: { sql: 'SELECT hon.read_creative_generations($1,$2::uuid) AS data', arity: 2, readOnly: true },
   readCreativeGeneration: { sql: 'SELECT hon.read_creative_generation($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
+  // A1 (0276): Creative Studio avatars, each made by one CS1 generation (recorded with recordCreativeGenerationResult).
+  createCreativeAvatar: { sql: 'SELECT hon.create_creative_avatar($1,$2::uuid,$3::jsonb,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
+  readCreativeAvatars: { sql: 'SELECT hon.read_creative_avatars($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readCreativeAvatar: { sql: 'SELECT hon.read_creative_avatar($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
   // B4: refund guarantee records and Champions reward application (no refund execution, payout or prize).
   readRefundEligibility: { sql: 'SELECT hon.read_saas_refund_eligibility_from_hq($1,$2::uuid,$3::timestamptz) AS data', arity: 3, readOnly: true },
   readRefundRequests: { sql: 'SELECT hon.read_saas_refund_requests_from_hq($1,$2) AS data', arity: 2, readOnly: true },
@@ -220,6 +224,8 @@ const SAAS_BILLING_CALLS = {
   // B-HQ-1 (0219): read-only HQ overview of every organization's access standing; writes nothing.
   readAccessOverview: { sql: 'SELECT hon.read_saas_access_overview_from_hq($1,$2,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },
   // C-HQ-3 (0225): read-only HQ detail of one school; names, statuses and counts only.
+  // 0248: the HQ owner sets or disables a school's Twilio sending number; nothing is bought or sent.
+  setSchoolTextSender: { sql: 'SELECT hon.set_school_text_sender_from_hq($1,$2::uuid,$3,$4,$5,$6::boolean,$7::integer) AS data', arity: 7, readOnly: false },
   readHqSchoolDetail: { sql: 'SELECT hon.read_hq_school_detail_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   // B-HQ-2 (0232): HQ support records. Reads are read-only; the three commands write only support rows.
   readSupportCases: { sql: 'SELECT hon.read_hq_support_cases($1,$2,$3::uuid,$4::timestamptz,$5::uuid,$6::integer) AS data', arity: 6, readOnly: true },
