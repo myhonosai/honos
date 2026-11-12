@@ -1,6 +1,6 @@
 BEGIN;
 
--- B-TUI-2 piece 3 (0265, reserved by the coordinator 2026-11-11): payers and their saved payment methods with the school's
+-- B-TUI-2 piece 3 (0290; reserved as 0265 on 2026-11-11, renumbered by the coordinator 2026-11-12): payers and their saved payment methods with the school's
 -- own payment processor (TEST mode only). Spec: docs/architecture/TUITION_COLLECTION.md section 11.
 --   M1  The payer is an existing hon.billing_accounts row. A payer gets one provider customer per school connection; the
 --       customer reference is set once and never changes.
@@ -581,13 +581,13 @@ BEGIN
 END $$;
 
 COMMENT ON TABLE hon.school_pay_customers IS
-'0265 one provider customer per payer (billing account) and school connection; reference set once. Holds no card, token or secret. Private.';
+'0290 one provider customer per payer (billing account) and school connection; reference set once. Holds no card, token or secret. Private.';
 COMMENT ON TABLE hon.school_pay_method_setups IS
-'0265 hosted setup sessions for saving a payer''s card or bank account: one-time state hash, one hour lifetime, superseded by a newer one. Private.';
+'0290 hosted setup sessions for saving a payer''s card or bank account: one-time state hash, one hour lifetime, superseded by a newer one. Private.';
 COMMENT ON TABLE hon.school_pay_methods IS
-'0265 saved payer methods from provider observations: provider reference, brand, last four, card expiry and consent version only; never a card number or secret. Private.';
+'0290 saved payer methods from provider observations: provider reference, brand, last four, card expiry and consent version only; never a card number or secret. Private.';
 COMMENT ON TABLE hon.school_pay_method_events IS
-'0265 append-only history of every saved-method command. Private.';
+'0290 append-only history of every saved-method command. Private.';
 COMMENT ON FUNCTION hon.read_school_pay_payer_methods(text,uuid) IS
 'Direct HUMAN_UI read of one payer''s saved methods, pending setups and the connections that can take one (school_pay.method.manage or school_pay.read). No DML.';
 COMMENT ON FUNCTION hon.read_school_pay_expiring_methods(text) IS

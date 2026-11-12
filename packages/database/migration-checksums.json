@@ -245,6 +245,7 @@
     "0272_hon_os_trial_ai_credit_fixes.sql": "5f78a9ca625bf7459231ff6d8efde3f96630dfed1dd2d6d6736fd83a0e565e62",
     "0273_hon_os_signup_abuse_protection.sql": "ef53fe56e765f926a0868bc6f2a86c8e6106ec0667ec971ea1889e3147836887",
     "0274_hon_os_admission_limits_hq.sql": "3f9b0d3a909005f190517ef193167ff0fca3032fa6ea35ed418d58dd6ce92adc",
-    "0265_school_payer_saved_methods.sql": "c8c9564ee9956f7e98333ddde1c694babb3fdbc1de3cc2771d906ee25ae1305f"
+    "0261_school_event_booking.sql": "3a8bfc78de0a42c61a59f3ff182bbbd792b68251223af6a68a89906f1848d675",
+    "0290_school_payer_saved_methods.sql": "433130a03a3293e15a8a93c5dc43f507c4ce15edeef9f33e986cc5555ab31842"
   }
 }

@@ -31,7 +31,7 @@ export class SchoolPayDisconnectHumanUiGuard extends MembershipActivationHumanUi
   protected override readonly command: string = 'school_pay.connection.disconnect';
 }
 
-/** B-TUI-2 (0265): saved payment methods, one browser command per call. */
+/** B-TUI-2 (0290): saved payment methods, one browser command per call. */
 @Injectable()
 export class SchoolPayMethodsReadHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'school_pay.methods.read';

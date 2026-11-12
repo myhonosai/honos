@@ -30,16 +30,16 @@ export interface SchoolPaymentAdapter {
   retrieveStatus(input: { accountRef: string }): Promise<SchoolPayObservation>;
   /** Revoke HON's access to the school's account; the school's own account and objects stay. */
   disconnect(input: { accountRef: string }): Promise<void>;
-  /** 0265: the payer's customer on the school's account (created once; an existing reference is returned as is). */
+  /** 0290: the payer's customer on the school's account (created once; an existing reference is returned as is). */
   ensureCustomer(input: { accountRef: string; billingAccountId: string; customerRef: string | null }): Promise<{ customerRef: string }>;
   /**
-   * 0265: a hosted page where the payer enters a card or bank account (Stripe SetupIntent / Checkout setup mode, Square Web
+   * 0290: a hosted page where the payer enters a card or bank account (Stripe SetupIntent / Checkout setup mode, Square Web
    * Payments SDK card on file) that returns to `returnUrl` with `state`. The card number never reaches HON.
    */
   beginMethodSetup(input: { accountRef: string; customerRef: string; setupId: string; methodKinds: readonly SchoolPayMethodKind[]; state: string; returnUrl: string }): Promise<{ setupRef: string; setupUrl: string }>;
-  /** 0265: authenticated retrieval of the saved method of one setup; never derived from a browser return. */
+  /** 0290: authenticated retrieval of the saved method of one setup; never derived from a browser return. */
   retrieveMethodSetup(input: { accountRef: string; customerRef: string; setupRef: string }): Promise<SchoolPayMethodObservation>;
-  /** 0265: detach a removed method from the payer's customer at the provider. */
+  /** 0290: detach a removed method from the payer's customer at the provider. */
   detachMethod(input: { accountRef: string; methodRef: string }): Promise<void>;
 }
 

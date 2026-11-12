@@ -24,7 +24,7 @@ function definedFields(input: object): Record<string, unknown> {
 }
 
 /**
- * B-TUI-2 piece 3 (0265): a payer's saved cards and bank accounts at the school's own processor, test mode only. Route
+ * B-TUI-2 piece 3 (0290): a payer's saved cards and bank accounts at the school's own processor, test mode only. Route
  * identifiers are never authority: the guarded boundary resolves the route scope from the verified session, and each
  * protected database function re-proves the direct human subject and the live school-scoped permission. No charge,
  * card number, token secret, message or automation is reachable from these routes, and HON takes no fee.

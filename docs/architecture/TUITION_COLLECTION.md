@@ -219,7 +219,7 @@ Status: source only, not deployed. Web only, over the 0269 routes; no migration 
   them. Nothing is kept in browser storage.
 - **Evidence:** `apps/web/test/school-checkout-ui.test.tsx` (9 tests).
 
-## 11. Piece 3 as built (0265): a payer's saved cards and bank accounts
+## 11. Piece 3 as built (0290): a payer's saved cards and bank accounts
 
 Status: source only, not deployed, test mode only, on the in-process simulators (no real Stripe or Square call yet; piece
 2 adds the sandbox adapters with test keys the owner enters). No charge, autopay or message; HON takes no fee.
@@ -246,4 +246,4 @@ Status: source only, not deployed, test mode only, on the in-process simulators 
 - **Known limits:** a disconnected connection's saved methods stay ACTIVE in HON but cannot be used (autopay, piece 4,
   checks the connection); card expiry updates from the provider come with webhooks (pieces 5 and 6).
 - **Evidence:** `packages/database/scripts/test-school-pay-methods-integrity.mjs` (188 checks over signed HTTP);
-  `apps/api/test/school-payments.test.cjs` (0265 contract, simulator and route tests).
+  `apps/api/test/school-payments.test.cjs` (0290 contract, simulator and route tests).

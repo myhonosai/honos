@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "5b7f31648edb29786a38b19754eab26ef935834c1faee5e8200b5a1c81219d8c",
+  "chainSha256": "165520ad654ceb6d2d06ddee7fcfcc035af0796a62373813e0edf277eaeb2628",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -271,8 +271,8 @@
       "sha256": "bcbfedb05f739ba99872aa5467236cb050c2c078f53daa804681821c75f76a17"
     },
     {
-      "file": "0265_school_payer_saved_methods.sql",
-      "sha256": "c8c9564ee9956f7e98333ddde1c694babb3fdbc1de3cc2771d906ee25ae1305f"
+      "file": "0261_school_event_booking.sql",
+      "sha256": "3a8bfc78de0a42c61a59f3ff182bbbd792b68251223af6a68a89906f1848d675"
     },
     {
       "file": "0267_hq_usage_claire_attribution.sql",
@@ -293,6 +293,10 @@
     {
       "file": "0274_hon_os_admission_limits_hq.sql",
       "sha256": "3f9b0d3a909005f190517ef193167ff0fca3032fa6ea35ed418d58dd6ce92adc"
+    },
+    {
+      "file": "0290_school_payer_saved_methods.sql",
+      "sha256": "433130a03a3293e15a8a93c5dc43f507c4ce15edeef9f33e986cc5555ab31842"
     }
   ]
 }
