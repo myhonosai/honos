@@ -61,7 +61,7 @@ A production build refuses to start, logging only stable codes, when:
 - Per-transaction `statement_timeout='5s'` and `lock_timeout='3s'` are already set inside each runtime transaction (existing code, unchanged).
 - Idle-client errors (database or pooler restart) are now handled: the pool discards the client and logs `database.idle_client_error` instead of crashing the process (previously an unhandled `'error'` event).
 - `SIGTERM` closes the pool (Nest shutdown hooks are now enabled), so rolling deploys drain cleanly.
-- Readiness: `GET /v1/health/ready` checks the runtime role posture and runs `SELECT 1`; use it as the platform health check. `GET /v1/health` is liveness only.
+- Readiness: `GET /v1/health/ready` checks the runtime role posture and runs `SELECT 1`; use it as the platform health check. `GET /v1/health` is liveness only. It answers 503 `PERSISTENCE_NOT_CONFIGURED` for missing/invalid configuration or an unsafe role, and 503 `PERSISTENCE_UNAVAILABLE` when the database cannot be reached or its certificate is not trusted (the cause is logged as `database.readiness_probe_failed`, never returned).
 - The migration runner uses the **direct** connection (or Session Pooler). It takes a session advisory lock, so it must not use the transaction pooler (port 6543).
 
 ## Rollout (staged; each step needs owner authorization)

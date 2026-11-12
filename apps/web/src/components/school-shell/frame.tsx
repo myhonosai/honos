@@ -6,6 +6,7 @@ import type { OperationalSchoolScope } from '../operational-navigation';
 import { SCHOOL_SHELL_MOBILE, SCHOOL_SHELL_NAV, schoolShellActiveItem, schoolShellActiveRoute, schoolShellHref } from './catalog';
 import { shellText, type ShellKey } from './copy';
 import { ShellIcon } from './icons';
+import { SignOutButton } from '../auth/sign-out-button';
 import styles from './shell.module.css';
 
 export type ShellViewState = 'LOCAL' | 'SAVING' | 'SAVED' | 'ERROR';
@@ -64,6 +65,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
     <footer className={styles.railFoot}>
       <a href="/settings/language-region">{t('account')}</a>
       <a href="/hq">{t('hq')}</a>
+      <SignOutButton label={t('signOut')} className={styles.signOut} />
     </footer>
   </>;
 
@@ -83,6 +85,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
           <ul>{item.routes.slice(1, 5).map(route => <li key={route.href}><a href={schoolShellHref(route, verified)} onClick={() => onMenu(false)}>{t(route.titleKey)}</a></li>)}</ul>
         </li>)}
       </ul>
+      <footer className={styles.menuFoot}><SignOutButton label={t('signOut')} className={styles.signOut} /></footer>
     </div>}
     <div className={styles.workspace} inert={modal}>
       <header className={styles.topbar}>

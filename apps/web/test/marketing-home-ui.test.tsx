@@ -2,7 +2,7 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { CampaignFunnel, CampaignSummary } from '@hon/contracts';
+import type { CampaignFunnel, CampaignReadSummary } from '@hon/contracts';
 import { MARKETING_LANGUAGES, marketingText } from '../src/components/marketing-home/copy';
 import { MarketingError, funnelWindow, marketingApi, verifyCampaignList, verifyFunnel } from '../src/components/marketing-home/http';
 import { MarketingView, campaignsFor, type MarketingViewProps } from '../src/components/marketing-home/view';
@@ -14,9 +14,10 @@ beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 const at = '2026-11-05T12:00:00.000Z';
-const campaign = (n: number, over: Partial<CampaignSummary> = {}): CampaignSummary => ({ id: id(60 + n), version: 2, code: `SPRING-${n}`, name: `Spring open house ${n}`,
+const SCHOOL = id(2);
+const campaign = (n: number, over: Partial<CampaignReadSummary> = {}): CampaignReadSummary => ({ id: id(60 + n), schoolId: SCHOOL, version: 2, code: `SPRING-${n}`, name: `Spring open house ${n}`,
   goal: 'Fill the Saturday kids class', offerLabel: 'Free first week', channel: 'EVENT', status: 'ACTIVE', startsAt: '2026-11-01T00:00:00.000Z', endsAt: '2026-11-30T00:00:00.000Z',
-  plannedBudgetMinor: 25000, currency: 'USD', createdAt: at, updatedAt: at, planningOnly: true, ...over } as CampaignSummary);
+  plannedBudgetMinor: 25000, currency: 'USD', createdAt: at, updatedAt: at, planningOnly: true, ...over } as CampaignReadSummary);
 const NOW = Date.parse('2026-11-08T12:00:30.500Z');
 const win = funnelWindow(NOW);
 const funnel = (over: Record<string, unknown> = {}): CampaignFunnel => ({ campaign: campaign(1), from: win.from, to: win.to, asOf: at, leads: 9, trialLeads: 4,
@@ -35,42 +36,47 @@ it('the funnel window is the last 30 days in whole UTC seconds, ending a minute 
 
 it('reads campaigns and one funnel at the fixed same-origin paths with no body and no school selector', async () => {
   const f = stub(json({ data: [campaign(1)], meta: { requestId: 'r' } }));
-  await expect(marketingApi.campaigns(signal(), () => true)).resolves.toHaveLength(1);
+  await expect(marketingApi.campaigns(SCHOOL, signal(), () => true)).resolves.toHaveLength(1);
   const [path, init] = f.mock.calls[0] as unknown as [string, RequestInit];
   expect(path).toBe('/api/v1/marketing/campaigns');
   expect(init).toMatchObject({ method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error' });
   expect(init.body).toBeUndefined();
   const g = stub(json({ data: funnel(), meta: {} }));
-  await expect(marketingApi.funnel(id(61).toUpperCase(), signal(), () => true, NOW)).resolves.toMatchObject({ leads: 9 });
+  await expect(marketingApi.funnel(SCHOOL, id(61).toUpperCase(), signal(), () => true, NOW)).resolves.toMatchObject({ leads: 9 });
   expect((g.mock.calls[0] as unknown as [string])[0]).toBe(`/api/v1/marketing/campaigns/${id(61)}/funnel?${new URLSearchParams(win)}`);
-  await expect(marketingApi.funnel('not-a-uuid', signal(), () => true, NOW)).rejects.toMatchObject({ kind: 'UNAVAILABLE' });
+  await expect(marketingApi.funnel(SCHOOL, 'not-a-uuid', signal(), () => true, NOW)).rejects.toMatchObject({ kind: 'UNAVAILABLE' });
 });
 
 it('drift, duplicates, a mismatched funnel and failures are unavailable or denied, never an empty list or zero counts', async () => {
-  expect(() => verifyCampaignList([campaign(1), campaign(1)])).toThrow();
-  expect(() => verifyCampaignList([{ ...campaign(1), planningOnly: false }])).toThrow();
-  expect(() => verifyCampaignList([{ ...campaign(1), extra: 1 }])).toThrow();
-  expect(() => verifyCampaignList([{ ...campaign(1), status: 'LIVE' }])).toThrow();
+  expect(() => verifyCampaignList([campaign(1), campaign(1)], SCHOOL)).toThrow();
+  expect(() => verifyCampaignList([{ ...campaign(1), planningOnly: false }], SCHOOL)).toThrow();
+  expect(() => verifyCampaignList([{ ...campaign(1), extra: 1 }], SCHOOL)).toThrow();
+  expect(() => verifyCampaignList([{ ...campaign(1), status: 'LIVE' }], SCHOOL)).toThrow();
+  // 0227: every campaign must name the school this page shows.
+  expect(verifyCampaignList([campaign(1)], SCHOOL.toUpperCase())).toHaveLength(1);
+  expect(() => verifyCampaignList([campaign(1, { schoolId: id(3) })], SCHOOL)).toThrow();
+  expect(() => verifyCampaignList([(({ schoolId: _s, ...rest }) => rest)(campaign(1))], SCHOOL)).toThrow();
+  expect(() => verifyFunnel(funnel({ campaign: campaign(1, { schoolId: id(3) }) }), SCHOOL, id(61), win.from, win.to)).toThrow();
   for (const over of [{ campaign: campaign(2) }, { from: '2026-10-01T00:00:00.000Z' }, { enrollmentLinkage: 'LINKED' }, { wonLeads: 9, lostLeads: 1 },
     { trialLeads: 10 }, { completedTrialAppointments: 6 }, { leads: -1 }, { revenue: 5 }]) {
-    expect(() => verifyFunnel(funnel(over), id(61), win.from, win.to)).toThrow();
+    expect(() => verifyFunnel(funnel(over), SCHOOL, id(61), win.from, win.to)).toThrow();
   }
   for (const [response, kind] of [[json({ data: [campaign(1)] }), 'UNAVAILABLE'], [json({}, 500), 'UNAVAILABLE'], [json({ code: 'FORBIDDEN' }, 403), 'DENIED'],
     [new Response('<html>', { status: 200, headers: { 'Content-Type': 'text/html' } }), 'UNAVAILABLE']] as const) {
     stub(response);
-    await expect(marketingApi.campaigns(signal(), () => true)).rejects.toMatchObject({ kind });
+    await expect(marketingApi.campaigns(SCHOOL, signal(), () => true)).rejects.toMatchObject({ kind });
   }
 });
 
 it('a 401 for a retired read never ends the session; a current one does', async () => {
   const seen = vi.fn(); (window as unknown as EventTarget).addEventListener(HON_SESSION_INVALIDATED_EVENT, seen);
   stub(json({ code: 'SIGN_IN_REQUIRED' }, 401));
-  await expect(marketingApi.campaigns(signal(), () => false)).rejects.toBeInstanceOf(MarketingError);
+  await expect(marketingApi.campaigns(SCHOOL, signal(), () => false)).rejects.toBeInstanceOf(MarketingError);
   stub(json({ code: 'SIGN_IN_REQUIRED' }, 401));
-  await expect(marketingApi.funnel(id(61), signal(), () => false, NOW)).rejects.toMatchObject({ kind: 'SESSION' });
+  await expect(marketingApi.funnel(SCHOOL, id(61), signal(), () => false, NOW)).rejects.toMatchObject({ kind: 'SESSION' });
   expect(seen).not.toHaveBeenCalled();
   stub(json({ code: 'SIGN_IN_REQUIRED' }, 401));
-  await expect(marketingApi.campaigns(signal(), () => true)).rejects.toMatchObject({ kind: 'SESSION' });
+  await expect(marketingApi.campaigns(SCHOOL, signal(), () => true)).rejects.toMatchObject({ kind: 'SESSION' });
   expect(seen).toHaveBeenCalledTimes(1);
 });
 

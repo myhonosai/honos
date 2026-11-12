@@ -54,7 +54,7 @@ CI is verification only. It never deploys, never uses repository secrets, never 
 
 ## Safety controls
 
-- **Triggers:** pull requests targeting `main` (opened, updated, reopened, marked ready) and manual **Run workflow**. Draft PRs are skipped. A PR whose **entire** diff is docs (`docs/**`, `*.md`) is skipped. GitHub evaluates the filter against the whole PR, so a docs-only push to a PR that also changes code still runs CI. **No schedule. No push-to-main trigger** until the owner approves the minutes (see below).
+- **Triggers:** pull requests targeting `main` (opened, updated, reopened, marked ready), **every push to `main`** (each merged PR, B-OPS-1), and manual **Run workflow**. Draft PRs are skipped. A PR or push whose **entire** diff is docs (`docs/**`, `*.md`) is skipped. GitHub evaluates the filter against the whole PR, so a docs-only push to a PR that also changes code still runs CI. A newer push to `main` cancels the older `main` run, so the latest `main` is always the one proven. **No schedule.** `.github/scripts/ci-triggers.test.mjs` pins this policy.
 - **Permissions:** `contents: read` only; checkout does not persist the token.
 - **Patched Node.js only:** every workflow pins `node-version` to an exact patched release (currently `22.23.4`, the 22.x line of the [2026-10-21 Node.js security releases](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases)). The step right after `actions/setup-node` runs [`.github/scripts/verify-node-runtime.mjs`](../.github/scripts/verify-node-runtime.mjs) `--expect 22.23.4`, which fails the job if the runtime that actually executes differs from the pin, is not a supported line (22.x, 24.x, 26.x), or predates that line's latest security release. On a new Node.js security release, raise `MINIMUM_PATCHED` and every workflow pin in the same PR. Locally: `pnpm verify:node-runtime`.
 - **Concurrency:** a newer push to the same PR cancels the older run.
@@ -72,7 +72,7 @@ These are **estimates**, not billing data. Check **GitHub → Settings → Billi
 | 100 PR runs / month | ~600 minutes |
 | GitHub Free private-repo allowance | 2,000 Linux minutes / month (Pro and Team plans include more) |
 
-**Why push-to-main is off:** `main` currently receives many direct commits per day (for example, 29 on 2026-10-17). At ~6 minutes each, running CI on every push could use roughly 4,000–5,500 minutes per month, beyond the Free allowance. Options for the owner:
+**Push-to-main (B-OPS-1, enabled).** Since 2026-11 every change reaches `main` through a reviewed PR (squash merge), typically 5–30 merges a day: about 30–180 extra billed minutes a day if each run completes, fewer when a newer merge cancels an older run. That can approach or exceed the Free allowance in busy months; check Billing and set a spending limit. Earlier note, kept for history: **Why push-to-main was off:** `main` currently receives many direct commits per day (for example, 29 on 2026-10-17). At ~6 minutes each, running CI on every push could use roughly 4,000–5,500 minutes per month, beyond the Free allowance. Options for the owner:
 
 1. Keep CI on PRs only (current) and move agent work to PRs.
 2. Add `push: branches: [main]` once the plan's minutes are confirmed; superseded runs are already cancelled.

@@ -1,7 +1,7 @@
 /** Leads screen wording (en / ko / es). */
 const en = {
   title: 'Leads', intro: 'Every lead at your school in one place: who is new, who needs a follow-up, and which trials are booked.',
-  readOnly: 'This page shows leads only. Changes happen in the CRM journey and follow-ups, which check your access again.',
+  readOnly: 'You can add a lead here. Other changes happen in the CRM journey and follow-ups, which check your access again.',
   refresh: 'Refresh', tabsLabel: 'Lead status', OPEN: 'Open', WON: 'Won', LOST: 'Lost', ARCHIVED: 'Archived', ALL: 'All',
   filterLabel: 'Filter the shown leads by name or email', listTitle: 'Leads at this school', listLoading: 'Reading leads…',
   listDenied: 'Your access does not include CRM leads at this school. Nothing is shown.', listUnavailable: 'Leads could not be loaded. Nothing is shown.',
@@ -18,7 +18,7 @@ const en = {
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
   title: '문의', intro: '학교의 모든 문의를 한곳에서: 새 문의, 후속 연락이 필요한 문의, 예약된 체험 수업.',
-  readOnly: '이 페이지는 문의를 보여 주기만 합니다. 변경은 CRM 여정과 후속 연락에서 하며, 그곳에서 권한을 다시 확인합니다.',
+  readOnly: '여기서 문의를 추가할 수 있습니다. 다른 변경은 CRM 여정과 후속 연락에서 하며, 그곳에서 권한을 다시 확인합니다.',
   refresh: '새로 고침', tabsLabel: '문의 상태', OPEN: '진행 중', WON: '등록', LOST: '종료', ARCHIVED: '보관', ALL: '전체',
   filterLabel: '표시된 문의를 이름이나 이메일로 거르기', listTitle: '이 학교의 문의', listLoading: '문의를 읽는 중…',
   listDenied: '이 학교의 CRM 문의에 대한 권한이 없습니다. 아무것도 표시되지 않습니다.', listUnavailable: '문의를 불러올 수 없습니다. 아무것도 표시되지 않습니다.',
@@ -34,7 +34,7 @@ const ko: Record<Key, string> = {
 };
 const es: Record<Key, string> = {
   title: 'Prospectos', intro: 'Todos los prospectos de tu escuela en un lugar: quién es nuevo, quién necesita seguimiento y qué clases de prueba están reservadas.',
-  readOnly: 'Esta página solo muestra prospectos. Los cambios se hacen en el recorrido de CRM y en los seguimientos, que vuelven a comprobar tu acceso.',
+  readOnly: 'Aquí puedes agregar un prospecto. Los demás cambios se hacen en el recorrido de CRM y en los seguimientos, que vuelven a comprobar tu acceso.',
   refresh: 'Actualizar', tabsLabel: 'Estado del prospecto', OPEN: 'Abiertos', WON: 'Ganados', LOST: 'Perdidos', ARCHIVED: 'Archivados', ALL: 'Todos',
   filterLabel: 'Filtra los prospectos mostrados por nombre o correo', listTitle: 'Prospectos de esta escuela', listLoading: 'Leyendo prospectos…',
   listDenied: 'Tu acceso no incluye los prospectos de CRM de esta escuela. No se muestra nada.', listUnavailable: 'No se pudieron cargar los prospectos. No se muestra nada.',

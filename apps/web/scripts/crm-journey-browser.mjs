@@ -28,6 +28,8 @@ const api=createServer(async(r,s)=>{
  if(r.url==='/v1/staff/current-reporting-school'){send(200,{state:'RESOLVED',...scope},false);return;}
  // The school shell's own reads are not this journey's CRM reads.
  if(isSchoolShellRead(r.method,(r.url??'').split('?')[0])){report.shellReads=(report.shellReads??0)+1;send(404);return;}
+ // B-CRM-3: the school clock read names the zone for time entry; it is not one of this journey's CRM reads. UTC keeps every instant identical.
+ if(r.method==='GET'&&r.url===`/v1/organizations/${id(1)}/schools/${id(2)}/crm/school-clock`){report.clockReads=(report.clockReads??0)+1;send(200,{schoolId:id(2),schoolTimezone:'UTC',localToday:new Date().toISOString().slice(0,10),asOf:new Date().toISOString()},'read');return;}
  state.reads+=r.method==='GET'?1:0;
  if(state.deny){send(403);return;}
  if(r.method==='GET'&&r.url===`/v1/organizations/${id(1)}/schools/${id(2)}/crm/leads?limit=50`){send(200,state.empty?[]:state.withSecondLead?[lead(),otherLead()]:[lead()]);return;}
