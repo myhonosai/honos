@@ -161,6 +161,7 @@
     "db:test-tuition-payments": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-tuition-payment-integrity.mjs",
     "db:test-school-payment-connections": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-payment-connections-integrity.mjs",
     "db:test-school-checkout-pages": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-checkout-pages-integrity.mjs",
+    "db:test-maya-at-risk": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-maya-at-risk-integrity.mjs",
     "db:test-crm-close-proof-target": "node scripts/test-crm-close-proof-target.mjs"
   },
   "dependencies": {
