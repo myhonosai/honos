@@ -52,3 +52,10 @@ it('the campaign page asks for days and a budget in the currency, not UTC instan
   expect(html).toContain('Planned budget (USD, not actual spend)');
   expect(html).not.toMatch(/Start UTC|End UTC|minor units, not actual spend|YYYY-MM-DDTHH/);
 });
+
+it('New campaign plan clears the typed budget along with the form', async () => {
+  const { readFileSync } = await import('node:fs');
+  const source = readFileSync('src/components/campaign-workbench.tsx', 'utf8');
+  expect(source).toMatch(/setForm\(blank\);setBudget\(''\);\}\}>New campaign plan/);
+  expect(source).toContain('formatMinor(saved.plannedBudgetMinor,saved.currency)');
+});
