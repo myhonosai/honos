@@ -1,4 +1,5 @@
-import { accountClosed, saasUuid, validateCreativeAvatarInput, validateCreativeAvatarReceipt, validateCreativeGenerationInput, validateCreativeGenerationReceipt,
+import { accountClosed, saasUuid, validateCreativeAvatarInput, validateCreativeAvatarReceipt, validateCreativeAvatarVideoInput, validateCreativeAvatarVideoReceipt,
+  validateCreativeAvatarVideoRecords, type CreativeAvatarVideoInput, type CreativeAvatarVideoReceipt, type CreativeAvatarVideoRecords, validateCreativeGenerationInput, validateCreativeGenerationReceipt,
   validateCreativeStudioAvatarList, validateCreativeStudioGenerationList, type CreativeAvatarInput, type CreativeAvatarReceipt, type CreativeGenerationInput,
   type CreativeGenerationReceipt, type CreativeStudioAvatarList, type CreativeStudioGenerationList } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
@@ -20,6 +21,7 @@ export class CreativeGenerationError extends Error {
 }
 export const CREATIVE_GENERATION_COMMAND = 'saas-creative-generation-create';
 export const CREATIVE_AVATAR_COMMAND = 'saas-creative-avatar-create';
+export const CREATIVE_AVATAR_VIDEO_COMMAND = 'saas-creative-avatar-video-create';
 /**
  * Only these answers prove the request was refused before anything was accepted. Every other 409 or 422 (including an
  * unrecognized or missing code, or a conflict raised while recording a provider result) leaves the outcome unknown.
@@ -33,8 +35,12 @@ const isRuleRefusal = (code: string | null) => code !== null && PRE_ACCEPTANCE_R
 /** Avatars (0276) are also refused before anything is reserved when HQ has not priced them, the rate is not an image, or the school has 12. */
 const AVATAR_REFUSALS = new Set([...PRE_ACCEPTANCE_REFUSALS, 'SAAS_OPERATION_NOT_PRICED', 'CREATIVE_AVATAR_RATE_INVALID', 'CREATIVE_AVATAR_LIMIT_REACHED']);
 
+/** Avatar videos (0277) are refused before anything is reserved when HQ has not priced them, the rate is not a video, or the avatar is not ready. */
+const VIDEO_REFUSALS = new Set([...PRE_ACCEPTANCE_REFUSALS, 'SAAS_OPERATION_NOT_PRICED', 'CREATIVE_AVATAR_RATE_INVALID', 'CREATIVE_AVATAR_NOT_READY']);
+
 const generationsPath = (schoolId: string) => `/api/v1/schools/${saasUuid(schoolId).toLowerCase()}/creative-studio/generations`;
 const avatarsPath = (schoolId: string) => `/api/v1/schools/${saasUuid(schoolId).toLowerCase()}/creative-studio/avatars`;
+const videosPath = (schoolId: string) => `/api/v1/schools/${saasUuid(schoolId).toLowerCase()}/creative-studio/avatar-videos`;
 const json = /^application\/json(?:\s*;|$)/i;
 
 async function body(response: Response): Promise<unknown> {
@@ -128,6 +134,51 @@ export async function createCreativeAvatar(schoolId: string, input: CreativeAvat
     const receipt = validateCreativeAvatarReceipt(accountClosed(await response.json(), ['data']).data);
     const a = receipt.avatar;
     if (a.schoolId !== schoolId.toLowerCase() || a.name !== request.name || a.style !== request.style || a.description !== request.description) throw new Error('mismatch');
+    return receipt;
+  } catch { throw new CreativeGenerationError('UNKNOWN'); }
+}
+
+// ---------- A2 avatar videos (0277): a READY avatar speaks a script; same closed, keyed, fail-unknown handling ----------
+export async function listCreativeAvatarVideos(schoolId: string, signal: AbortSignal): Promise<CreativeAvatarVideoRecords> {
+  const response = await fetch(videosPath(schoolId), { method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
+    referrerPolicy: 'no-referrer', headers: { Accept: 'application/json' }, signal });
+  if (response.status === 401) { reportConfirmedSessionInvalidation(); throw new CreativeGenerationError('SESSION'); }
+  if (response.status === 403) throw new CreativeGenerationError('DENIED', codeOf(await body(response)));
+  if (response.status !== 200) throw new CreativeGenerationError('UNKNOWN', codeOf(await body(response)));
+  try {
+    const list = validateCreativeAvatarVideoRecords(accountClosed(await response.json(), ['data']).data);
+    if (list.videos.some(v => v.schoolId !== schoolId.toLowerCase())) throw new Error('school');
+    return list;
+  } catch { throw new CreativeGenerationError('UNKNOWN'); }
+}
+
+export function prepareCreativeAvatarVideo(input: CreativeAvatarVideoInput): CreativeAvatarVideoInput {
+  try { return validateCreativeAvatarVideoInput(input); } catch { throw new CreativeGenerationError('INVALID', 'INVALID_SAAS_INPUT'); }
+}
+
+/** One avatar video attempt. Repeating it with the same key and input never makes a second video or charge. */
+export async function createCreativeAvatarVideo(schoolId: string, input: CreativeAvatarVideoInput, idempotencyKey: string, signal: AbortSignal): Promise<CreativeAvatarVideoReceipt> {
+  const path = videosPath(schoolId), key = saasUuid(idempotencyKey).toLowerCase(), request = prepareCreativeAvatarVideo(input);
+  let response: Response;
+  try {
+    response = await fetch(path, { method: 'POST', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-HON-Human-Command': CREATIVE_AVATAR_VIDEO_COMMAND, 'Idempotency-Key': key },
+      body: JSON.stringify(request), signal });
+  } catch { throw new CreativeGenerationError('UNKNOWN'); }
+  const code = response.status === 200 ? null : codeOf(await body(response));
+  if (response.status === 401) { reportConfirmedSessionInvalidation(); throw new CreativeGenerationError('SESSION'); }
+  if (response.status === 403) throw new CreativeGenerationError('DENIED', code);
+  // 400 (not accepted) and 404 (school or avatar not found) are answered before anything is reserved.
+  if (response.status === 400 || response.status === 404) throw new CreativeGenerationError('INVALID', code);
+  if (response.status === 422) throw new CreativeGenerationError(code !== null && VIDEO_REFUSALS.has(code) ? 'REFUSED' : 'UNKNOWN', code);
+  if (response.status === 409) throw new CreativeGenerationError(code !== null && DEFINITIVE_CONFLICTS.has(code) ? 'INVALID' : 'UNKNOWN', code);
+  if (response.status === 503 && code === 'CREATIVE_PROVIDER_NOT_CONNECTED') throw new CreativeGenerationError('NOT_CONNECTED', code);
+  if (response.status !== 200) throw new CreativeGenerationError('UNKNOWN', code);
+  try {
+    const receipt = validateCreativeAvatarVideoReceipt(accountClosed(await response.json(), ['data']).data);
+    const v = receipt.video;
+    if (v.schoolId !== schoolId.toLowerCase() || v.avatarId !== request.avatarId.toLowerCase() || v.script !== request.script || v.seconds !== request.seconds
+      || v.format !== request.format) throw new Error('mismatch');
     return receipt;
   } catch { throw new CreativeGenerationError('UNKNOWN'); }
 }

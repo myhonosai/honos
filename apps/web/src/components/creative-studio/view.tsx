@@ -1,10 +1,11 @@
 import React from 'react';
 import { accountValue } from '../account-status/copy';
 import { studioEntryText, studioText, type StudioKey } from './copy';
-import type { AvatarsState, CreateOutcome, GenerationsState, StudioRate, StudioState, StudioWallet } from './model';
+import type { AvatarsState, VideosState, CreateOutcome, GenerationsState, StudioRate, StudioState, StudioWallet } from './model';
 import { CreatePanel, GenerationsPanel } from './create';
 import { AvatarsPanel } from './avatars';
-import type { CreativeAvatar, CreativeAvatarInput, CreativeGeneration, CreativeGenerationInput } from '@hon/contracts';
+import { AvatarVideosPanel } from './avatar-videos';
+import type { CreativeAvatar, CreativeAvatarInput, CreativeAvatarVideo, CreativeAvatarVideoInput, CreativeGeneration, CreativeGenerationInput } from '@hon/contracts';
 import styles from './creative-studio.module.css';
 
 export type CreativeStudioViewProps = Readonly<{
@@ -16,13 +17,17 @@ export type CreativeStudioViewProps = Readonly<{
   /** A1 (0276) avatars: the read, this tab's avatar request outcome and lock. */
   avatars?: AvatarsState; avatarOutcome?: CreateOutcome; avatarLocked?: boolean | undefined; hideAvatarText?: ((a: CreativeAvatar) => boolean) | undefined;
   onCreateAvatar?: ((input: CreativeAvatarInput) => void) | undefined; onCheckAvatarAgain?: (() => void) | undefined;
+  /** A2 (0277) talking avatar videos: the read, this tab's video request outcome and lock. */
+  videos?: VideosState; videoOutcome?: CreateOutcome; videoLocked?: boolean | undefined; hideVideoText?: ((v: CreativeAvatarVideo) => boolean) | undefined;
+  onCreateVideo?: ((input: CreativeAvatarVideoInput) => void) | undefined; onCheckVideoAgain?: (() => void) | undefined;
 }>;
 
 const UNIT: Record<StudioRate['billingUnit'], StudioKey> = { IMAGE: 'perImage', VIDEO_SECOND: 'perSecond', REQUEST: 'perRequest' };
 
 /** Pure view. Every number comes from the school's wallet read; generation is shown as not connected. */
 export function CreativeStudioView({ language, waiting, concealed, hasSchool, studio, onRefresh, generations = { state: 'UNAVAILABLE' }, outcome = null, locked = false, hidePrompt, onCreate, onCheckAgain,
-  avatars = { state: 'UNAVAILABLE' }, avatarOutcome = null, avatarLocked = false, hideAvatarText, onCreateAvatar, onCheckAvatarAgain }: CreativeStudioViewProps): React.ReactElement {
+  avatars = { state: 'UNAVAILABLE' }, avatarOutcome = null, avatarLocked = false, hideAvatarText, onCreateAvatar, onCheckAvatarAgain,
+  videos = { state: 'UNAVAILABLE' }, videoOutcome = null, videoLocked = false, hideVideoText, onCreateVideo, onCheckVideoAgain }: CreativeStudioViewProps): React.ReactElement {
   const t = (key: StudioKey, vars?: Record<string, string>) => studioText(language, key, vars);
   const number = (n: number) => new Intl.NumberFormat(language).format(n);
   const notice = waiting ? t('waiting') : concealed ? t('concealed') : !hasSchool ? t('noSchool')
@@ -38,6 +43,8 @@ export function CreativeStudioView({ language, waiting, concealed, hasSchool, st
       onCreate={onCreate} onCheckAgain={onCheckAgain}/>
     <AvatarsPanel language={language} wallet={wallet} avatars={visible ? avatars : { state: 'UNAVAILABLE' }} showList={!!wallet} outcome={visible ? avatarOutcome : null} locked={avatarLocked}
       hideText={hideAvatarText} onCreate={onCreateAvatar} onCheckAgain={onCheckAvatarAgain}/>
+    <AvatarVideosPanel language={language} wallet={wallet} avatars={visible ? avatars : { state: 'UNAVAILABLE' }} videos={visible ? videos : { state: 'UNAVAILABLE' }} showList={!!wallet}
+      outcome={visible ? videoOutcome : null} locked={videoLocked} hideText={hideVideoText} onCreate={onCreateVideo} onCheckAgain={onCheckVideoAgain}/>
     {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
     {wallet ? <WalletCards wallet={wallet} language={language} t={t} number={number}/> : null}
     {wallet ? <GenerationsPanel language={language} generations={generations} hidePrompt={hidePrompt}/> : null}

@@ -300,7 +300,7 @@ try{
  const cur=(await hon.conversation(H('owner'))).budget;
  await hon.setBudget(H('owner'),budgetIn({creditCap:cur.usedCredits+cur.heldCredits+200,expectedVersion:cur.version,reason:'Room for the executive checks'}),K());
  const shapes={chase:['hqCreativeBudget','hqMarketingCampaigns'],mia:['hqSupportCases'],ethan:['hqAiPlatform','hqAiTextBudget','hqCreativeBudget'],
-  olivia:['hqAiTextBudget','note','saasInvoices','saasRefundRequests'],ryan:['note','saasAccessStates','saasSubscriptions'],sophia:['hqOnboardingRequests','organizations','saasAccessExceptions']};
+  olivia:['hqAiTextBudget','note','saasInvoices','saasRefundRequests','saasSchedulePaidPeriods'],ryan:['note','saasAccessStates','saasScheduleBindings','saasSubscriptions'],sophia:['hqOnboardingRequests','organizations','saasAccessExceptions']};
  const perms={chase:'hq.marketing.read',mia:'hq.support.manage',ethan:'hq.billing.manage',olivia:'hq.billing.manage',ryan:'hq.billing.manage',sophia:'hq.onboarding.manage'};
  for(const agentKey of EXEC){
   const n=provider.calls.length,r=await hon.ask(H('owner'),ask({agentKey,question:`What should HQ know from ${agentKey} today?`}),K());
@@ -316,6 +316,26 @@ try{
    assert.deepEqual(Object.keys(facts.hqSupportCases.byStatus).sort(),['CLOSED','OPEN','RESOLVED','WAITING_ON_SCHOOL']);
   }
   if(agentKey==='ethan')assert.equal(facts.hqAiPlatform.providerConnections.OPENROUTER,'HEALTHY');
+  // 0304: Ryan and Olivia count HON OS schedule billing too, matched against independent reads of the same tables.
+  if(agentKey==='ryan'){
+   const want=await row(`SELECT count(*) FILTER (WHERE status='ACTIVE')::int active,
+     count(*) FILTER (WHERE status='ACTIVE' AND requirements->>'billingInterval'='ANNUAL')::int annual,
+     coalesce(sum((requirements->>'lockedPriceMinor')::bigint) FILTER (WHERE status='ACTIVE' AND requirements->>'billingInterval'='ANNUAL'),0)::int annual_minor,
+     coalesce(sum((requirements->>'lockedPriceMinor')::bigint) FILTER (WHERE status='ACTIVE' AND requirements->>'billingInterval'='MONTHLY'),0)::int monthly_minor
+     FROM hon.saas_schedule_bindings`);
+   const b=facts.saasScheduleBindings;
+   assert.deepEqual(Object.keys(b.byStatus).sort(),['ACTIVE','BOUND_TEST_ONLY','CANCELLED_BEFORE_PAYMENT','EXPIRED_UNPAID','NEEDS_REVIEW','PENDING_PROVIDER_BINDING','VOIDED_PROVIDER_FAILED']);
+   assert.deepEqual([b.byStatus.ACTIVE,b.activeByInterval.ANNUAL,b.activeAnnualListMinor,b.activeMonthlyListMinor],[want.active,want.annual,want.annual_minor,want.monthly_minor]);
+   const src=await row(`SELECT count(*) FILTER (WHERE state='PAYMENT_ACTIVE' AND activation_source='SCHEDULE_BINDING')::int sched,
+     count(*) FILTER (WHERE state='PAYMENT_ACTIVE' AND activation_source IS NULL)::int v1 FROM hon.saas_access_states`);
+   assert.deepEqual(facts.saasAccessStates.paymentActiveBySource,{V1_CHECKOUT:src.v1,SCHEDULE_BINDING:src.sched});
+   assert.deepEqual(Object.keys(facts.saasAccessStates.byState).sort(),['AWAITING_FIRST_PAYMENT','PAYMENT_ACTIVE']);
+  }
+  if(agentKey==='olivia'){
+   const p=facts.saasSchedulePaidPeriods,want=await row(`SELECT count(*)::int n,coalesce(sum(amount_minor),0)::int m FROM hon.saas_schedule_paid_periods
+     WHERE recorded_at>=date_trunc('month',clock_timestamp() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`);
+   assert.deepEqual([p.recordedThisMonth,p.recordedThisMonthMinor,p.recordedThisMonthByInterval.MONTHLY+p.recordedThisMonthByInterval.ANNUAL],[want.n,want.m,want.n]);
+  }
   if(agentKey==='sophia')assert(facts.organizations.total>=1&&facts.organizations.byStatus.ACTIVE>=1);
  }
  // An operator whose billing permission ends keeps the record, but the answer is concealed and the executive is gone.
