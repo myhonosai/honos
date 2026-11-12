@@ -101,7 +101,7 @@ BEGIN
           'byState', hon.hq_hon_counts(ARRAY['AWAITING_FIRST_PAYMENT','PAYMENT_ACTIVE'], array_agg(a.state)),
           'paymentActiveBySource', hon.hq_hon_counts(ARRAY['V1_CHECKOUT','SCHEDULE_BINDING'],
             array_agg(coalesce(a.activation_source, 'V1_CHECKOUT')) FILTER (WHERE a.state = 'PAYMENT_ACTIVE'))) FROM hon.saas_access_states a),
-      'note', 'Charges are not enabled: list prices are recorded plan prices, not collected revenue. Annual list prices are per year, not per month; v1 subscriptions and schedule bindings are separate records of different schools.');
+      'note', 'Charges are not enabled: list prices are recorded plan prices, not collected revenue. Annual list prices are per year, not per month; v1 subscriptions and schedule bindings are separate records that may cover the same school, so never add their counts together.');
   WHEN 'sophia' THEN
     facts := jsonb_build_object(
       'organizations', (SELECT jsonb_build_object('total', count(*),
