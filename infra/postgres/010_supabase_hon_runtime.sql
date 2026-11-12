@@ -3166,3 +3166,17 @@ DO $$ DECLARE t text; r text; BEGIN
     hon.create_hq_message(text,jsonb,uuid), hon.queue_hq_message(text,uuid,jsonb,uuid), hon.cancel_hq_message(text,uuid,jsonb,uuid),
     hon.read_hq_communications(text,uuid,timestamptz,uuid,integer), hon.read_hq_message(text,uuid) TO hon_runtime;
 END $$;
+
+-- HQ-COMM 0282 Texts from HON HQ: a person's own phone. No table privileges; the person's own read and three commands.
+-- The inbound-text function belongs to hon_communication_worker (013) and is never granted to the runtime.
+DO $$ DECLARE t text; r text; BEGIN
+  IF to_regprocedure('hon.start_my_hq_phone(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply HQ contact phone migration 0282 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hq_contact_phones','hq_inbound_texts','hq_contact_requests'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t); EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON FUNCTION hon.record_hq_inbound_text(text,text,text,text,text,timestamptz) FROM hon_runtime;
+  GRANT EXECUTE ON FUNCTION hon.read_my_hq_contact(text), hon.start_my_hq_phone(text,jsonb,uuid), hon.set_my_hq_texting(text,jsonb,uuid),
+    hon.remove_my_hq_phone(text,jsonb,uuid) TO hon_runtime;
+END $$;
