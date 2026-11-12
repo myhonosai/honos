@@ -27,7 +27,7 @@ export function AutomationRulesWorkbench({ initialTrigger = DEFAULT_TRIGGER }: {
     const p = await dryRunAutomationRule(selected.ruleId, { expectedVersion: selected.version, event: { synthetic: true, triggerKind: eventKind, schemaVersion: 1, aggregateVersion: Number(eventVersion), source: eventSource }, simulation: { localDate: date, minutesSincePriorPlan: elapsed === '' ? null : Number(elapsed) } }); setPlan(p);
   }); }
   return <main className={styles.page}>
-    <nav><a href="/core">HON Core</a><a href="/staff/team/availability">Staff availability</a><a href="/auth/login">Sign in</a></nav>
+    <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/team/availability">Staff availability</a><a href="/auth/login">Sign in</a></nav>
     <header><p>HUMAN CONFIGURATION · ESSENTIAL / CORE / COMPLETE</p><h1>Automation rule configuration</h1><p>Configuration only; no execution</p></header>
     <aside><strong>No scheduler, subscription or worker</strong><p>{AUTOMATION_RULE_HELP}</p><p>Exact permissions: automation.rule.read, automation.rule.manage and automation.rule.dry_run. Parent, HQ, public and AI authority cannot access this surface.</p></aside>
     <button disabled={busy} onClick={load}>Load authorized school rules</button>
