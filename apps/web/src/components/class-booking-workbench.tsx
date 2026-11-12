@@ -22,12 +22,18 @@ function initialIds(prefill: unknown): ClassBookingKnownIds {
   return { organizationId: selectors?.organizationId ?? '', schoolId: selectors?.schoolId ?? '', sessionId: selectors?.sessionId ?? '', studentProfileId: '' };
 }
 
+/** With a shell school, the school comes from the shell; a class or student picked at another school is dropped. */
+export function shellBookingIds(rawIds: ClassBookingKnownIds, shellScope: BookingScope | null): ClassBookingKnownIds {
+  if (!shellScope) return rawIds;
+  const moved = rawIds.schoolId !== '' && rawIds.schoolId.toLowerCase() !== shellScope.schoolId.toLowerCase();
+  return { organizationId: shellScope.organizationId, schoolId: shellScope.schoolId, sessionId: moved ? '' : rawIds.sessionId, studentProfileId: moved ? '' : rawIds.studentProfileId };
+}
+
 /** Conventional canonical booking only; IDs are untrusted selectors, not authority. */
 export function ClassBookingWorkbench({ initialPrefill, shellScope = null }: { initialPrefill?: unknown; shellScope?: BookingScope | null } = {}): React.ReactElement {
   const [rawIds, setIds] = useState<ClassBookingKnownIds>(initialIds(initialPrefill));
   // With a shell-verified school, the school selectors come from the shell and staff pick the class and student by name.
-  const ids: ClassBookingKnownIds = shellScope ? { ...rawIds, organizationId: shellScope.organizationId, schoolId: shellScope.schoolId,
-    sessionId: rawIds.schoolId && rawIds.schoolId.toLowerCase() !== shellScope.schoolId.toLowerCase() ? '' : rawIds.sessionId } : rawIds;
+  const ids = shellBookingIds(rawIds, shellScope);
   const [bookingKind, setBookingKind] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);

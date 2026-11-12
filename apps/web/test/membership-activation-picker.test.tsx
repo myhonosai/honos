@@ -5,6 +5,7 @@ import type { SchoolMembershipListItem } from '@hon/contracts';
 import { MembershipPickerView, loadDraftMemberships, pickerLabel, type PickerState } from '../src/components/membership-activation-picker';
 import { activationText } from '../src/components/membership-activation-catalog';
 import { MembershipListError, type MembershipListApi } from '../src/components/membership-list/http';
+import { activationScopeIsStale } from '../src/components/membership-activation-workbench';
 import { id, scope } from './account-status-fixtures';
 
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
@@ -48,4 +49,20 @@ it('has Korean and Spanish wording for every new caption', () => {
     expect(activationText('ko', key as never)).not.toBe(key);
     expect(activationText('es', key as never)).not.toBe(key);
   }
+});
+
+it('follows the DRAFT list cursor so memberships past the first page can be picked, up to a fixed page cap', async () => {
+  const page = vi.fn<MembershipListApi['page']>(async (_s, _f, cursor) => ({ items: [draft(cursor === null ? 1 : Number(cursor))], nextCursor: cursor === null ? '2' : Number(cursor) < 9 ? String(Number(cursor) + 1) : null,
+    schoolTimezone: 'America/Los_Angeles', localToday: '2026-11-11' }));
+  const items = await loadDraftMemberships({ page }, scope, new AbortController().signal, () => true);
+  expect(page.mock.calls.map(call => call[2])).toEqual([null, '2', '3', '4']);
+  expect(items.map(item => item.membershipId)).toEqual([id(301), id(302), id(303), id(304)]);
+});
+
+it('treats a membership chosen at another school as stale once the shell school changes', () => {
+  const other = { organizationId: scope.organizationId, schoolId: id(999) };
+  expect(activationScopeIsStale({ ...scope, membershipId: id(301) }, other)).toBe(true);
+  expect(activationScopeIsStale({ ...scope, membershipId: id(301) }, { organizationId: scope.organizationId, schoolId: scope.schoolId.toUpperCase() })).toBe(false);
+  expect(activationScopeIsStale({ organizationId: '', schoolId: '', membershipId: '' }, other)).toBe(false);
+  expect(activationScopeIsStale({ ...scope, membershipId: id(301) }, null)).toBe(false);
 });

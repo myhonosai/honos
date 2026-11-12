@@ -21,7 +21,8 @@ export class BookableStudentsService {
     const needle = (search ?? '').trim();
     if (needle.length > 120) throw new BadRequestException({ code: 'SEARCH_TOO_LONG', detail: 'Search text is limited to 120 characters.' });
     return this.database.withTenantTransaction(context, async (client) => {
-      // Authority resolved by the controller is re-checked inside the read, so a revoked grant or suspended school reads nothing.
+      // Authority resolved by the controller is re-checked inside the read, so a revoked grant or an inactive school or organization reads nothing.
+      // Like the booking command, this read does not check the B6A paid-access entitlement.
       const current = await client.query<{ principal_id: string; organization_id: string; school_id: string }>(
         'SELECT principal_id, organization_id, school_id FROM hon.resolve_authorized_scope($1, $2::uuid, $3)', [externalSubject, context.schoolId, 'schedule.booking.manage']);
       const again = current.rows[0];
