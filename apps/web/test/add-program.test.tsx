@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { AddProgramError, AddProgramView, programApi, programErrorFor, programName, programText } from '../src/components/class-series/add-program';
+import { AddProgramError, AddProgramFlow, AddProgramView, programApi, programErrorFor, programName, programText } from '../src/components/class-series/add-program';
 import { ClassSeriesView } from '../src/components/class-series/view';
 import { id } from './account-status-fixtures';
 
@@ -88,4 +88,48 @@ it('the series card lists the programs and places the add control under them', (
   const empty = renderToStaticMarkup(<ClassSeriesView {...base} series={{ state: 'READY', read: { ...read, programs: [] } }}/>);
   expect(empty).toContain('Add a program first'); expect(empty).toContain('ADD-SLOT');
   expect(renderToStaticMarkup(<ClassSeriesView {...base} series={{ state: 'DENIED' }}/>)).not.toContain('ADD-SLOT');
+});
+
+it('the flow keeps an unknown result with its key, resends only that, and forgets it on drop', async () => {
+  const keys = [id(81), id(82)];
+  const seen: string[] = [];
+  let answer: () => Promise<{ programId: string; name: string }> = async () => { throw new AddProgramError('UNKNOWN'); };
+  const create = vi.fn(async (_s: unknown, _n: string, _k: string) => answer());
+  const states: { kind: string; kept: boolean }[] = [];
+  const flow = new AddProgramFlow({ create }, (status, kept) => states.push({ kind: status.kind, kept }), () => { const k = keys.shift()!; seen.push(k); return k; });
+  await flow.submit('  Kids ', scope);
+  expect(create).toHaveBeenLastCalledWith(scope, 'Kids', id(81), expect.anything(), expect.any(Function));
+  expect(states.at(-1)).toEqual({ kind: 'UNKNOWN', kept: true });
+  await flow.submit('Other', scope);                       // refused while a request is kept
+  expect(create).toHaveBeenCalledTimes(1);
+  answer = async () => ({ programId, name: 'Kids' });
+  await flow.tryAgain();
+  expect(create).toHaveBeenCalledTimes(2);
+  expect(create.mock.calls[1]?.[2]).toBe(id(81));         // same key
+  expect(states.at(-1)).toEqual({ kind: 'DONE', kept: false });
+  answer = async () => { throw new AddProgramError('UNKNOWN'); };
+  await flow.submit('Teens', scope);
+  expect(create.mock.calls[2]?.[2]).toBe(id(82));
+  flow.drop();
+  expect(states.at(-1)).toEqual({ kind: 'IDLE', kept: false });
+  await flow.tryAgain();                                   // nothing kept any more
+  expect(create).toHaveBeenCalledTimes(3);
+  expect(seen).toEqual([id(81), id(82)]);
+});
+
+it('the flow does not keep a definitive refusal, ignores an answer after drop, and checks the name first', async () => {
+  const states: string[] = [];
+  let release: (v: { programId: string; name: string }) => void = () => {};
+  const create = vi.fn(async () => { throw new AddProgramError('EXISTS'); });
+  const flow = new AddProgramFlow({ create }, (status) => states.push(status.kind), () => key);
+  await flow.submit('Kids', scope);
+  expect(states.at(-1)).toBe('EXISTS'); expect(flow.busy).toBe(false);
+  await flow.submit('   ', scope);
+  expect(states.at(-1)).toBe('INVALID'); expect(create).toHaveBeenCalledTimes(1);
+  create.mockImplementationOnce(() => new Promise((r) => { release = r; }) as never);
+  const sent = flow.submit('Late', scope);
+  flow.drop();
+  release({ programId, name: 'Late' });
+  await sent;
+  expect(states.at(-1)).toBe('IDLE');                      // the late success is not shown
 });
