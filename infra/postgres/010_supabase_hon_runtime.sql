@@ -2810,6 +2810,35 @@ DO $$ DECLARE r text; t text; col text; f text; BEGIN
   END IF;
 END $$;
 
+-- B-TUI-2 piece 9a 0269 school checkout page settings: two private tables reached only through two runtime entry points;
+-- guards, validators and helpers are private.
+DO $$ DECLARE r text; t text; col text; f text; BEGIN
+  IF to_regclass('hon.school_checkout_pages') IS NULL THEN RAISE EXCEPTION 'Apply migration 0269 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.school_checkout_pages','hon.school_checkout_page_versions'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid=t::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON %s FROM PUBLIC',col,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+        EXECUTE format('REVOKE ALL (%I) ON %s FROM %I',col,t,r);
+      END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.checkout_text_ok(jsonb,integer,boolean)','hon.checkout_i18n_ok(jsonb,integer,boolean)','hon.checkout_content_ok(jsonb)',
+    'hon.guard_school_checkout_page()','hon.require_school_checkout_actor(text)','hon.school_checkout_page_json(hon.school_checkout_pages)',
+    'hon.read_school_checkout_pages(text)','hon.save_school_checkout_page(text,jsonb,text,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_checkout_pages(text),hon.save_school_checkout_page(text,jsonb,text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
 -- D11-B 0246 HON OS free trial: two private forced-RLS tables; starting a trial and its read are the only runtime entry
 -- points. The trial program row has no runtime write path (TEST_MODE only by the migration owner of a test database).
 DO $$ DECLARE t text; r text; f text; c text; BEGIN

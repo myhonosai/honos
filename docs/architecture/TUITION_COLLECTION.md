@@ -179,3 +179,23 @@ seven piece 1 routes.
   `SCHOOL_PAY_CONNECTION_STATE` re-reads and shows the connection as connected. Disconnect reports whether the provider
   confirmed the revoke.
 - Evidence: `apps/web/test/payment-processors-ui.test.tsx` (8 tests).
+
+## 9. Piece 9a as built (0269): checkout page settings
+
+Status: source only, not deployed. Nothing is public yet; the family-facing checkout page and its public read come in a
+later piece, together with promo codes and the sibling-discount display (P4).
+
+- **Database:** `school_checkout_pages` (one row per school and kind, `ENROLLMENT` or `TUITION`, `DRAFT` or `PUBLISHED`) and
+  the append-only `school_checkout_page_versions`; private, forced RLS, no runtime privilege. Two runtime entry points:
+  `read_school_checkout_pages` and `save_school_checkout_page` (create with `expectedVersion` 0, then optimistic version).
+- **Content (closed shape, CHECKed in the table):** plans shown in order (up to 20 of this school's catalog plans that are
+  AVAILABLE when saved), add-ons (up to 10, positive minor amounts, required or optional), custom questions (up to 10;
+  text, choice with 2-10 options, or checkbox), an optional waiver, receipt note and thank-you text. Every text is English
+  with optional Korean and Spanish, trimmed, no angle brackets or control characters. A published enrollment page needs
+  at least one plan. Branding is not stored here: it is read from the shared school branding (0268).
+- **Permission:** `school_checkout.manage` (sensitive, staff-assignable, granted to system OWNER roles). HQ, family and
+  parent principals are refused.
+- **API:** `GET` and `POST organizations/:organizationId/schools/:schoolId/payments/checkout-pages` (save needs
+  Idempotency-Key and the `school_checkout.page.save` human-command header).
+- **Evidence:** `pnpm --filter @hon/database db:test-school-checkout-pages` (CI: `run-db-proofs.sh`), 94 checks over signed
+  HTTP; `apps/api/test/school-checkout.test.cjs`.
