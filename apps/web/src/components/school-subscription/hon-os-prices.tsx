@@ -43,7 +43,7 @@ export function HonOsPrices({ account }: { account: SchoolAccount | null }): Rea
           : row.annual ? t("Billed once a year. Renews at the same price.") : t("Billed monthly. Renews at the same price.")}</p>
         {row.founderSpot && <p className={styles.small}>{row.founderSpot.state === 'AVAILABLE' ? t("A founder spot is available for your organization now.")
           : row.founderSpot.reason ? text(FOUNDER_REASON_COPY[row.founderSpot.reason]) : t("Founder availability has not been verified.")}</p>}
-        <p className={styles.small}>USD · {row.source === 'SERVER_OFFER' ? t("Server-returned offer") : t("Owner-approved launch price")}</p>
+        <p className={styles.small}>USD · {row.source === 'SERVER_OFFER' ? t("Server-returned offer") : row.source === 'NOT_ON_SALE' ? t("Not on sale now") : t("Owner-approved launch price")}</p>
       </li>)}
     </ul>
     <p className={styles.small}>{t("Checkout for these prices is not open yet. No payment is taken on this page, and a refund never returns a founder spot.")}</p>

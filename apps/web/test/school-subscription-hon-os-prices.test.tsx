@@ -31,8 +31,12 @@ describe('/staff/subscription HON OS standard and founder prices', () => {
     expect(HON_OS_LAUNCH_PRICING_REFERENCE.standardAnnualPriceMinor).toBe(209700);
   });
   it('uses server prices and founder availability, and never shows a spot as available once used or sold out', () => {
-    const rows = honOsPriceRows({ offers: [{ offerKind: 'REGULAR_ANNUAL', priceMinor: 199900 }] } as never, founder() as never);
+    const rows = honOsPriceRows({ offerSetVersion: 1, offers: [{ offerKind: 'REGULAR_ANNUAL', priceMinor: 199900 }] } as never, founder() as never);
     expect(rows[1]).toMatchObject({ priceMinor: 199900, source: 'SERVER_OFFER' });
+    expect(rows.filter((r) => r.kind !== 'REGULAR_ANNUAL').map((r) => r.source)).toEqual(['NOT_ON_SALE', 'NOT_ON_SALE', 'NOT_ON_SALE']);
+    expect(honOsPriceRows({ offerSetVersion: null, offers: [] } as never, null).every((r) => r.source === 'LAUNCH_REFERENCE')).toBe(true);
+    const closed = honOsPriceRows({ offerSetVersion: 3, offers: [{ offerKind: 'REGULAR_MONTHLY', priceMinor: 24900 }] } as never, null);
+    expect(closed.map((r) => r.source)).toEqual(['SERVER_OFFER', 'NOT_ON_SALE', 'NOT_ON_SALE', 'NOT_ON_SALE']);
     expect(rows[2]!.founderSpot).toEqual({ state: 'AVAILABLE', reason: null });
     expect(rows[3]!.founderSpot).toEqual({ state: 'UNAVAILABLE', reason: 'FOUNDER_OFFER_LIMIT_REACHED' });
     const used = honOsPriceRows(null, founder({ offers: [], organizationUsedFounderSpot: true }) as never);

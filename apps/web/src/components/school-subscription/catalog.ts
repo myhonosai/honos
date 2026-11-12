@@ -66,7 +66,7 @@ export function selectPlan(state: PlanSelection, event: SelectionEvent): PlanSel
 export type HonOsPriceKind = typeof SAAS_SCHEDULED_OFFER_KINDS[number];
 export type HonOsPriceRow = {
   kind: HonOsPriceKind; founder: boolean; annual: boolean; priceMinor: number; standardPriceMinor: number;
-  source: 'SERVER_OFFER' | 'LAUNCH_REFERENCE';
+  source: 'SERVER_OFFER' | 'LAUNCH_REFERENCE' | 'NOT_ON_SALE';
   founderSpot: { state: 'AVAILABLE' | 'UNAVAILABLE' | 'UNVERIFIED'; reason: SaasFounderUnavailableReason | null } | null;
 };
 export const HON_OS_PRICE_LABELS: Record<HonOsPriceKind, string> = {
@@ -90,7 +90,8 @@ export function honOsPriceRows(offers: SaasHonOsSchoolOfferView | null, founder:
     return {
       kind, founder: isFounder, annual, priceMinor: server?.priceMinor ?? reference,
       standardPriceMinor: spot?.standardPriceMinor ?? standard,
-      source: server ? 'SERVER_OFFER' : 'LAUNCH_REFERENCE',
+      // A published offer set that leaves a kind out means that price is not on sale now (e.g. founder sales closed).
+      source: server ? 'SERVER_OFFER' : offers && offers.offerSetVersion !== null ? 'NOT_ON_SALE' : 'LAUNCH_REFERENCE',
       founderSpot: !isFounder ? null : spot ? { state: spot.available ? 'AVAILABLE' : 'UNAVAILABLE', reason: spot.reason }
         : founder?.organizationUsedFounderSpot ? { state: 'UNAVAILABLE', reason: 'FOUNDER_ALREADY_USED' }
         : founder && founder.pool.remaining === 0 ? { state: 'UNAVAILABLE', reason: 'FOUNDER_SOLD_OUT' } : { state: 'UNVERIFIED', reason: null },
