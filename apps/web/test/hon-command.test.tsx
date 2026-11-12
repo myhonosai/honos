@@ -209,8 +209,9 @@ describe('HON workspace presentation', () => {
       const html = view(snapshot, 'team', null, variant);
       expect(html).toContain(`data-variant="${variant}"`);
       for (const agent of HON_COMMAND_ROSTER) { expect(html).toContain(`>${agent.name}<`); expect(html).toContain(agent.title.replace('&', '&amp;')); }
-      // Five planned management employees plus the separate provisional Teaching AI.
-      expect(html.match(/Planned · not yet available/g)).toHaveLength(6);
+      // Maya is still planned, plus the separate provisional Teaching AI; Claire, Alex, Jordan and Lena answer read-only.
+      expect(html.match(/Planned · not yet available/g)).toHaveLength(2);
+      expect(html.match(/Answers questions · read only/g)).toHaveLength(4);
       expect(html.match(/Drafts · approval required/g)).toHaveLength(2);
       expect(html).toContain('1 recent draft');
       for (const fabricated of ['Working now', 'Thinking', 'Online', 'Completed today', 'is ready', 'READY']) expect(html).not.toContain(fabricated);
@@ -305,6 +306,17 @@ describe('HON workspace presentation', () => {
     expect(view(failed, 'suggested')).toContain('role="alert"');
   });
 
+  it('gives each agent card and band button a screen-reader label that matches its visible availability', async () => {
+    const { snapshot } = await loaded();
+    const label = (a: (typeof HON_COMMAND_ROSTER)[number]) => a.availability === 'GOVERNED_DRAFTS' ? 'Governed drafts available with approval'
+      : a.availability === 'ANSWERS' ? 'Answers questions, read only' : 'Planned, not yet available';
+    const band = renderToStaticMarkup(<HonTeamBand scope={scope} variant="modern" />).replaceAll('&amp;', '&'), team = view(snapshot).replaceAll('&amp;', '&');
+    for (const agent of HON_COMMAND_ROSTER) {
+      expect(band).toContain(`${agent.name}, ${agent.title}. ${label(agent)}`);
+      expect(team).toContain(`${agent.name}, ${agent.title}. ${label(agent)}. Open details`);
+    }
+    expect(HON_COMMAND_ROSTER.some(a => a.availability === 'ANSWERS')).toBe(true);
+  });
   it('exposes accessible tabs with roving tabindex', async () => {
     const html = view((await loaded()).snapshot, 'work');
     expect(html).toContain('role="tablist"');

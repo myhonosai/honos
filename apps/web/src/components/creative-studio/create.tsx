@@ -1,12 +1,14 @@
 import React, { useId, useState } from 'react';
-import { CREATIVE_GENERATION_FORMATS, CREATIVE_GENERATION_LIMITS, isCreativePrompt, type CreativeGeneration, type CreativeGenerationFormat, type CreativeGenerationInput } from '@hon/contracts';
+import { CREATIVE_GENERATION_FORMATS, CREATIVE_GENERATION_LIMITS, isCreativeAvatarOperation, isCreativePrompt, type CreativeGeneration, type CreativeGenerationFormat, type CreativeGenerationInput } from '@hon/contracts';
 import { accountValue } from '../account-status/copy';
 import { studioText, type StudioKey } from './copy';
 import type { CreateOutcome, GenerationsState, StudioWallet } from './model';
 import styles from './creative-studio.module.css';
 
 type T = (key: StudioKey, vars?: Record<string, string>) => string;
-const REASONS: Record<string, StudioKey> = { SAAS_CREATIVE_AI_PAUSED_BY_HQ: 'reasonPaused', CREATIVE_TOO_MANY_IN_PROGRESS: 'reasonBusy', SAAS_CREATIVE_RATES_NOT_PUBLISHED: 'reasonRates' };
+const REASONS: Record<string, StudioKey> = { SAAS_CREATIVE_AI_PAUSED_BY_HQ: 'reasonPaused', CREATIVE_TOO_MANY_IN_PROGRESS: 'reasonBusy', SAAS_CREATIVE_RATES_NOT_PUBLISHED: 'reasonRates',
+  SAAS_OPERATION_NOT_PRICED: 'reasonNotPriced', CREATIVE_AVATAR_LIMIT_REACHED: 'reasonAvatarLimit', CREATIVE_AVATAR_RATE_INVALID: 'reasonAvatarRate',
+  CREATIVE_AVATAR_NOT_READY: 'reasonAvatarNotReady' };
 
 export function refusalReason(language: string, code: string | null): string {
   if (code && REASONS[code]) return studioText(language, REASONS[code]!);
@@ -33,6 +35,8 @@ export function outcomeText(language: string, outcome: CreateOutcome): Readonly<
   }
 }
 
+const genericRates = (wallet: StudioWallet) => (wallet.rates ?? []).filter(r => !isCreativeAvatarOperation(r.operationCode));
+
 export type CreatePanelProps = Readonly<{
   language: string; wallet: StudioWallet | null; generations: GenerationsState; outcome: CreateOutcome;
   /** True while this tab holds a create that is sending or unconfirmed: the form stays locked. */
@@ -48,7 +52,8 @@ export type CreatePanelProps = Readonly<{
 export function CreatePanel({ language, wallet, generations, outcome, locked = false, onCreate, onCheckAgain }: CreatePanelProps): React.ReactElement {
   const t: T = (key, vars) => studioText(language, key, vars);
   const connected = generations.state === 'READY' && generations.provider === 'CONNECTED';
-  const usable = connected && wallet && wallet.programActive && wallet.eligible && wallet.rates && wallet.rates.length > 0;
+  // avatar.* rates belong to the Avatars card only (0276); the generic form never offers them.
+  const usable = connected && wallet && wallet.programActive && wallet.eligible && genericRates(wallet).length > 0;
   const status = outcomeText(language, outcome);
   const pending = locked || outcome?.kind === 'SENDING' || outcome?.kind === 'UNKNOWN' || outcome?.kind === 'HIDDEN_PENDING' || outcome?.kind === 'RETRY_BLOCKED';
   return <article className={styles.create} aria-labelledby="creative-create-title" data-create-state={usable ? 'OPEN' : connected ? 'BLOCKED' : 'NOT_CONNECTED'}>
@@ -67,7 +72,7 @@ export function CreatePanel({ language, wallet, generations, outcome, locked = f
 function CreateForm({ language, wallet, disabled, onCreate }: { language: string; wallet: StudioWallet; disabled: boolean; onCreate?: ((input: CreativeGenerationInput) => void) | undefined }) {
   const t: T = (key, vars) => studioText(language, key, vars);
   const number = (n: number) => new Intl.NumberFormat(language).format(n);
-  const id = useId(), rates = wallet.rates ?? [];
+  const id = useId(), rates = genericRates(wallet);
   const [operationCode, setOperation] = useState('');
   const [units, setUnits] = useState(1);
   const [format, setFormat] = useState<CreativeGenerationFormat>('SQUARE');
@@ -118,7 +123,7 @@ export function GenerationsPanel({ language, generations, hidePrompt }: { langua
   return <article className={styles.card} aria-labelledby="creative-generations-title">
     <h2 id="creative-generations-title">{t('generationsTitle')}</h2>
     {generations.state === 'READY' ? generations.items.length ? <ul className={styles.list}>{generations.items.map(g => <li key={g.generationId} data-status={g.status}>
-      <span className={styles.rowMain}><strong>{t(g.mediaKind)}</strong> <small>{t(g.format)}</small>
+      <span className={styles.rowMain}><strong>{t(g.mediaKind)}</strong> <small>{t(g.format)}</small>{isCreativeAvatarOperation(g.operationCode) ? <small> · {t('AVATAR')}</small> : null}
         <span className={styles.status} data-tone={g.status === 'SUCCEEDED' || g.status === 'RESOLVED_CHARGED' ? 'ready' : g.status === 'FAILED' || g.status === 'RESOLVED_NOT_CHARGED' ? 'planned' : 'waiting'}>{t(g.status)}</span></span>
       <span>{credits(g)}</span>
       {hidePrompt?.(g) ? <p className={styles.meta} data-prompt-hidden="">{t('hiddenPrompt')}</p> : <p className={styles.prompt}>{g.prompt}</p>}

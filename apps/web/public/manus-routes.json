@@ -153,6 +153,10 @@
       "title": "School Enquiry Form"
     },
     {
+      "path": "/book/:publicId",
+      "title": "Book a time"
+    },
+    {
       "path": "/staff/team/availability",
       "title": "Human Staff Availability and Qualifications"
     },
@@ -167,6 +171,10 @@
     {
       "path": "/staff/schedule/timetable",
       "title": "HON | Weekly timetable"
+    },
+    {
+      "path": "/staff/schedule/events",
+      "title": "HON | Sale days & events"
     },
     {
       "path": "/staff/schedule/sessions/create",
@@ -239,6 +247,14 @@
     {
       "path": "/staff/billing/checkout-pages",
       "title": "HON | Checkout pages"
+    },
+    {
+      "path": "/staff/retention/at-risk",
+      "title": "HON | Students at risk"
+    },
+    {
+      "path": "/staff/settings/branding",
+      "title": "HON | School branding"
     },
     {
       "path": "/staff/champions-club",
