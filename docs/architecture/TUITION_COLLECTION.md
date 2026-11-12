@@ -63,8 +63,9 @@ payments recorded outside HON, `docs/architecture/TUITION_PAYMENTS.md`).
 | P6 | Family notices | ask | Card-expiry and failed-payment notices through the existing message delivery path (consent and quiet-hours rules apply). |
 | P7 | Paid booking fee | ask | One-time hosted payment linked to a booking, after the free booking feature exists. |
 | P8 | Web screens for P3-P6 | — | Family autopay setup, failed payments, expiring cards. |
+| P9 | Customizable checkout pages (owner, 2026-11-11) | ask | Per-school checkout page for enrollment and tuition. Branding (logo, color, cover image, footer) is one shared school setting owned by the booking thread (0268, `read_public_school_branding`); the checkout only reads it. The checkout owns its content: plans shown and their order, add-ons (uniform, registration fee), promo codes, sibling discount shown clearly, custom fields, waiver/agreement checkbox, receipt and thank-you text, link/QR/embed snippet, EN/KO/ES. Card entry stays in the provider's hosted fields. |
 
-Order: P1 → P1-web → P2 → P3 → P4 → P5 → P6 → P7/P8. P2 can wait on credentials without blocking P3/P4 design, which
+Order: P1 → P1-web → P2 → P3 → P4 → P9 (checkout) → P5 → P6 → P7/P8. P2 can wait on credentials without blocking P3/P4 design, which
 run on the simulators.
 
 ## 5. Piece 1 design (0258)
@@ -159,3 +160,61 @@ Status: source only, not deployed. Test mode only; the API uses in-process simul
   exchange it persists.
 - Replace the simulators with real Stripe Connect test-mode and Square sandbox clients behind the same interface, using
   credentials separate from HON's SaaS Stripe account.
+
+## 8. Piece 1-web as built
+
+Status: source only, not deployed. Staff page `/staff/billing/payment-processors` (Memberships & Billing menu) over the
+seven piece 1 routes.
+
+- One card per provider: connect, continue setup, check status, make default, disconnect (with a reason). Only staff with
+  `school_pay.connection.manage` see the actions; `school_pay.read` sees status only. The account id is shown by its last
+  four characters only.
+- **Provider return:** the page reads `connection`, `state` and `code` once, removes the whole query from the address bar
+  at once (`history.replaceState`), keeps the values in memory only, and sends them only when the owner chooses
+  *Finish connecting*. The page sets `referrer: no-referrer` and every request uses `referrerPolicy: 'no-referrer'`.
+  A session end or a school change drops the kept return; a blur or hidden tab only hides the page.
+- **Leaving HON:** the browser is sent only to an https onboarding URL without credentials (or a loopback URL for the
+  local simulators). A replayed link answer (no URL) asks for a new link.
+- Unknown outcomes keep the exact request and key for *Try again*; a finish retry that answers
+  `SCHOOL_PAY_CONNECTION_STATE` re-reads and shows the connection as connected. Disconnect reports whether the provider
+  confirmed the revoke.
+- Evidence: `apps/web/test/payment-processors-ui.test.tsx` (8 tests).
+
+## 9. Piece 9a as built (0269): checkout page settings
+
+Status: source only, not deployed. Nothing is public yet; the family-facing checkout page and its public read come in a
+later piece, together with promo codes and the sibling-discount display (P4).
+
+- **Database:** `school_checkout_pages` (one row per school and kind, `ENROLLMENT` or `TUITION`, `DRAFT` or `PUBLISHED`) and
+  the append-only `school_checkout_page_versions`; private, forced RLS, no runtime privilege. Two runtime entry points:
+  `read_school_checkout_pages` and `save_school_checkout_page` (create with `expectedVersion` 0, then optimistic version).
+- **Content (closed shape, CHECKed in the table):** plans shown in order (up to 20 of this school's catalog plans that are
+  AVAILABLE when saved), add-ons (up to 10, positive minor amounts, required or optional), custom questions (up to 10;
+  text, choice with 2-10 options, or checkbox), an optional waiver, receipt note and thank-you text. Every text is English
+  with optional Korean and Spanish, trimmed, no angle brackets or control characters. A published enrollment page needs
+  at least one plan. Branding is not stored here: it is read from the shared school branding (0268).
+- **Permission:** `school_checkout.manage` (sensitive, staff-assignable, granted to system OWNER roles). HQ, family and
+  parent principals are refused.
+- **API:** `GET` and `POST organizations/:organizationId/schools/:schoolId/payments/checkout-pages` (save needs
+  Idempotency-Key and the `school_checkout.page.save` human-command header).
+- **Evidence:** `pnpm --filter @hon/database db:test-school-checkout-pages` (CI: `run-db-proofs.sh`), 94 checks over signed
+  HTTP; `apps/api/test/school-checkout.test.cjs`.
+
+## 10. Piece 9b as built: checkout settings page for staff
+
+Status: source only, not deployed. Web only, over the 0269 routes; no migration and no API change.
+
+- **Page:** `/staff/billing/checkout-pages` (Billing menu, "Checkout pages"; EN/KO/ES menu label), protected, dynamic,
+  noindex, no-referrer. Tabs for the enrollment checkout and the tuition payment page.
+- **Editing:** plans from the school catalog (add, remove, move up or down; unavailable plans cannot be added and are
+  flagged if already shown), add-ons (name, amount typed in the currency's own units, such as 25.00 USD or 50000 KRW, required or optional), questions (short
+  answer, pick one with 2-10 choices, checkbox; required or optional), waiver on or off, receipt note, thank-you message.
+  One language switch (English, Korean, Spanish) changes which text every field edits; English is required, and an empty
+  Korean or Spanish text is left out so families see English.
+- **Saving:** Save as draft or Save and publish. Problems are listed in plain words and block the save; the contract
+  validator is the final check before the request. The request carries the version from the last verified read; a
+  version conflict keeps the staff edits and re-reads, so staff choose Save again or Discard changes. An unknown result
+  keeps the exact request and key for Try again. Every answer is followed by a fresh read.
+- **Privacy:** blur or a hidden tab hides the page but keeps unsaved edits in memory; a school change or session end drops
+  them. Nothing is kept in browser storage.
+- **Evidence:** `apps/web/test/school-checkout-ui.test.tsx` (9 tests).

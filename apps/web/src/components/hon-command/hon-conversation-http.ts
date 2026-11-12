@@ -1,5 +1,5 @@
 import {
-  HON_DELEGATE_AGENTS, validateHonConversationCreate, validateHonSchoolNoteInput, validateHonSchoolNoteReceipt, validateHonSchoolNotes,
+  HON_DELEGATE_AGENTS, isHonAnalystAgent, validateHonConversationCreate, validateHonSchoolNoteInput, validateHonSchoolNoteReceipt, validateHonSchoolNotes,
   validateHonSchoolTone, validateHonSchoolToneInput, validateHonSchoolToneReceipt, validateHonConversationSummary, validateHonConversationThread, validateHonTurnReceipt, validateHonTurnRequest,
   type HonConversationPage, type HonConversationReadiness, type HonConversationSummary, type HonConversationThread, type HonTurnReceipt,
   type HonSchoolNoteReceipt, type HonSchoolNotes, type HonAiTone, type HonSchoolTone, type HonSchoolToneReceipt, type HonTurnRequest,
@@ -54,10 +54,13 @@ function closed(value: unknown, keys: readonly string[]): Record<string, unknown
 /** Readiness is composed server-side from AI-R1; any drift means the composer stays closed. */
 export function verifyHonReadiness(envelope: unknown): HonConversationReadiness {
   const root = closed(envelope, ['data', 'meta']);
-  const r = closed(root.data, ['contract', 'providerRoute', 'entitlement', 'authorization', 'availableAgentKeys', 'honReply', 'businessPerformance', 'asOf']);
+  const r = closed(root.data, ['contract', 'providerRoute', 'entitlement', 'authorization', 'availableAgentKeys', 'honReply', 'businessPerformance', 'availableAnalystKeys', 'asOf']);
   if (r.contract !== true || typeof r.providerRoute !== 'boolean' || typeof r.entitlement !== 'boolean' || typeof r.authorization !== 'boolean'
     || typeof r.honReply !== 'boolean' || typeof r.businessPerformance !== 'boolean' || typeof r.asOf !== 'string' || !TIME.test(r.asOf) || !Array.isArray(r.availableAgentKeys)
-    || r.availableAgentKeys.some((key) => !(HON_DELEGATE_AGENTS as readonly unknown[]).includes(key)) || new Set(r.availableAgentKeys).size !== r.availableAgentKeys.length) drift();
+    || r.availableAgentKeys.some((key) => !(HON_DELEGATE_AGENTS as readonly unknown[]).includes(key)) || new Set(r.availableAgentKeys).size !== r.availableAgentKeys.length
+    // 0260: the analysis specialists a question would be admitted for now (closed set, unique; Claire agrees with businessPerformance).
+    || !Array.isArray(r.availableAnalystKeys) || r.availableAnalystKeys.some((key) => !isHonAnalystAgent(key)) || new Set(r.availableAnalystKeys).size !== r.availableAnalystKeys.length
+    || r.availableAnalystKeys.includes('claire') !== r.businessPerformance) drift();
   return r as unknown as HonConversationReadiness;
 }
 

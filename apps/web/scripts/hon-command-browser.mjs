@@ -92,7 +92,7 @@ const approval = (n, actionCode, hours) => ({ id: id(n), actionCode, status: 'AW
 
 // Ask HON conversation fixtures. Default: provider route not activated, so HON cannot answer (the real state today).
 const hon = { reply: false, claire: false, conversations: [], turns: new Map(), queue: [], posts: [], held: null, readinessReads: 0, groups: new Map(), targets: { step: null, gate: null, reads: [] } };
-const honReadiness = () => ({ contract: true, providerRoute: hon.reply, entitlement: true, authorization: true, availableAgentKeys: hon.reply ? ['marcus', 'kai', 'chad'] : [], honReply: hon.reply, businessPerformance: hon.reply && hon.claire, asOf: iso(0) });
+const honReadiness = () => ({ contract: true, providerRoute: hon.reply, entitlement: true, authorization: true, availableAgentKeys: hon.reply ? ['marcus', 'kai', 'chad'] : [], honReply: hon.reply, businessPerformance: hon.reply && hon.claire, availableAnalystKeys: hon.reply && hon.claire ? ['claire'] : [], asOf: iso(0) });
 // C3a: each specialist's own target list (synthetic), and the grouped confirmations by HON answer.
 const honCampaigns = () => [['Spring trial week', 'ACTIVE'], ['Summer camp', 'DRAFT'], ['Old open house', 'ARCHIVED']].map(([name, status], n) => ({ id: id(720 + n), code: `C${n}`, name, goal: 'More trials', offerLabel: '',
   channel: 'EMAIL', startsAt: iso(-100), endsAt: iso(100), plannedBudgetMinor: 0, currency: 'USD', version: 3, status, createdAt: iso(-200), updatedAt: iso(-10), planningOnly: true }));

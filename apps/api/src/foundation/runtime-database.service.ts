@@ -99,6 +99,18 @@ const SAAS_BILLING_CALLS = {
   recordSubscriptionGeneration: { sql: 'SELECT hon.record_saas_subscription_generation($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   readSubscriptionGeneration: { sql: 'SELECT hon.read_saas_subscription_generation($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
   readSubscriptionGenerationHq: { sql: 'SELECT hon.read_saas_subscription_generation_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  startScheduleBinding: { sql: 'SELECT hon.start_saas_schedule_binding($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  recordScheduleBindingObservation: { sql: 'SELECT hon.record_saas_schedule_binding_observation($1::uuid,$2::jsonb,$3::uuid,$4::uuid) AS data', arity: 4, readOnly: false },
+  recordScheduleBindingReconciliation: { sql: 'SELECT hon.record_saas_schedule_binding_reconciliation($1::uuid,$2::jsonb) AS data', arity: 2, readOnly: false },
+  recordScheduleBindingExpiry: { sql: 'SELECT hon.record_saas_schedule_binding_expiry($1::uuid,$2::jsonb) AS data', arity: 2, readOnly: false },
+  retryScheduleAccess: { sql: 'SELECT hon.retry_saas_schedule_access($1::text,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readPaidReviews: { sql: 'SELECT hon.read_saas_paid_reviews($1::text,$2::text) AS data', arity: 2, readOnly: true },
+  resolvePaidReview: { sql: 'SELECT hon.resolve_saas_paid_review($1::text,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  verifyPaidReviewRefund: { sql: 'SELECT hon.verify_saas_paid_review_refund($1::text,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  cancelScheduleBinding: { sql: 'SELECT hon.cancel_saas_schedule_binding($1::text,$2::uuid,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
+  readScheduleBinding: { sql: 'SELECT hon.read_saas_schedule_binding($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
+  readScheduleBindingHq: { sql: 'SELECT hon.read_saas_schedule_binding_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  ingestScheduleEvidence: { sql: 'SELECT hon.ingest_saas_schedule_evidence($1::jsonb,$2) AS data', arity: 2, readOnly: false },
   recordPriceSchedule: { sql: 'SELECT hon.record_saas_price_schedule($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   readPriceSchedule: { sql: 'SELECT hon.read_saas_price_schedule($1,$2::uuid) AS data', arity: 2, readOnly: true },
   previewPriceAcceptance: { sql: 'SELECT hon.preview_saas_price_acceptance($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
@@ -535,6 +547,26 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       await client.query('COMMIT');
       return result.rows[0]!.result;
     } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
+  /** B-SCH-3 (0261): the three fixed public event calls, one short transaction each, no tenant settings. */
+  async runPublicEventCall(statement: string, values: unknown[]): Promise<unknown> {
+    if (![
+      'SELECT hon.read_public_school_event($1) AS data',
+      'SELECT hon.book_public_school_event($1,$2::jsonb,$3) AS data',
+      'SELECT hon.cancel_public_school_event_booking($1,$2::jsonb) AS data',
+    ].includes(statement)) throw new Error('Unknown public event call.');
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>(statement, values);
+      await client.query('COMMIT');
+      if (result.rows.length !== 1) throw new Error('Unverified public event call.');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
     finally { client.release(); }
   }
 
@@ -1258,6 +1290,38 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
     return this.callFixedSubjectFunction({...call,readOnly:false},params,'ACCOUNT_UNAVAILABLE');
+  }
+
+  async callHonOsSignup(operation: 'register'|'read', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      register: {sql: 'SELECT hon.register_hon_os_school($1,$2,$3::jsonb,$4::uuid) data',arity:4,readOnly:false},
+      read: {sql: 'SELECT hon.read_hon_os_registration($1) data',arity:1,readOnly:true},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
+    return this.callFixedSubjectFunction({sql:call.sql,readOnly:call.readOnly},params,'ACCOUNT_UNAVAILABLE');
+  }
+
+  async callHonOsTrial(operation: 'start'|'read', params: readonly string[]): Promise<unknown> {
+    const calls = {
+      start: {sql: 'SELECT hon.start_hon_os_trial($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      read: {sql: 'SELECT hon.read_hon_os_trial($1) data',arity:1,readOnly:true},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
+    return this.callFixedSubjectFunction({sql:call.sql,readOnly:call.readOnly},params,'ACCOUNT_UNAVAILABLE');
+  }
+
+  /** 0274 admission limits: HQ read, HQ owner change, and the post-refusal cap-hit record (its own transaction). */
+  async callHonOsAdmission(operation: 'read'|'set'|'refused', params: readonly string[]): Promise<unknown> {
+    const calls = {
+      read: {sql: 'SELECT hon.read_hon_os_admission_status($1) data',arity:1,readOnly:true},
+      set: {sql: 'SELECT hon.set_hon_os_admission_limits($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) data',arity:5,readOnly:false},
+      refused: {sql: 'SELECT hon.record_hon_os_admission_refusal($1) data',arity:1,readOnly:false},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ADMISSION_UNAVAILABLE');
+    return this.callFixedSubjectFunction({sql:call.sql,readOnly:call.readOnly},params,'ADMISSION_UNAVAILABLE');
   }
 
   async callSchoolFamilyAccount(operation: 'invite'|'revoke'|'end'|'accept'|'list', params: readonly (string|null)[]): Promise<unknown> {

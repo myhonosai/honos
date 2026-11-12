@@ -3086,3 +3086,107 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
     RAISE EXCEPTION 'School payments must stay in test mode'; END IF;
 END $$;
 -- End school payment connections exact verification.
+
+-- School checkout pages exact verification (B-TUI-2 0269): two private forced-RLS tables, the guards, private
+-- validators and helpers, two runtime entry points and the permission.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['hon.school_checkout_pages','hon.school_checkout_page_versions'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=t::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'School checkout table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.checkout_text_ok(jsonb,integer,boolean)',false,false,'search_path=pg_catalog','794543a7922028c125cbb065b54ca97ad1b0b5c56cfa6d9a87e9ff76dd382e12'),
+('hon.checkout_i18n_ok(jsonb,integer,boolean)',false,false,'search_path=pg_catalog, hon','b239d42e6814189094309db1b5ff1e3e85ee668c4f45972413ab88a700462b52'),
+('hon.checkout_content_ok(jsonb)',false,false,'search_path=pg_catalog, hon','d58781d1946c1681ce86e346f610a59e5c4369b223f8ef01d812706e6151723b'),
+('hon.guard_school_checkout_page()',false,false,'search_path=pg_catalog, hon','63a5a8ae76a8592e09e86b0a47741beb44d41b4536012714d3357dc75dd8efe4'),
+('hon.require_school_checkout_actor(text)',true,false,'search_path=pg_catalog, hon','0cf880596410ab036049602a0e90267c5690976b5d10036c1a00a240c97b1988'),
+('hon.school_checkout_page_json(hon.school_checkout_pages)',false,false,'search_path=pg_catalog, hon','39f46e65b834fb8f1137ccfae9ae58d9069a7639e3538af084c420b3c88d68e1'),
+('hon.read_school_checkout_pages(text)',true,true,'search_path=pg_catalog, hon','02f443483ac4bd2750ebf6278e3283f86baf8e58e6715cd9c59134e617731f6d'),
+('hon.save_school_checkout_page(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','2ee3c365baacab116aad18fe0c37eb591db7258d7209c627c1ced7d45d1dcf53')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school checkout function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('school_checkout_pages','school_checkout_page_guard','hon.guard_school_checkout_page()'),
+    ('school_checkout_pages','school_checkout_pages_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('school_checkout_page_versions','school_checkout_page_versions_immutable','hon.guard_membership_activation_evidence()'),
+    ('school_checkout_page_versions','school_checkout_page_versions_no_truncate','hon.guard_membership_activation_evidence()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing school checkout guard: %',expected.name; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='school_checkout.manage' AND is_sensitive AND is_staff_assignable) THEN
+    RAISE EXCEPTION 'school_checkout.manage must exist as a sensitive staff-assignable permission'; END IF;
+END $$;
+-- End school checkout pages exact verification.
+
+-- School event booking exact verification (B-SCH-3 0261): four private forced-RLS tables, private helpers and eight runtime entry points.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOREACH t IN ARRAY ARRAY['school_events','school_event_slots','school_event_bookings','school_event_rates'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class WHERE oid=('hon.'||t)::regclass AND relrowsecurity AND relforcerowsecurity)
+      OR has_table_privilege('hon_runtime',('hon.'||t)::regclass,'SELECT') OR has_table_privilege('hon_runtime',('hon.'||t)::regclass,'INSERT')
+      OR has_table_privilege('hon_runtime',('hon.'||t)::regclass,'UPDATE') OR has_table_privilege('hon_runtime',('hon.'||t)::regclass,'DELETE')
+      OR has_any_column_privilege('hon_runtime',('hon.'||t)::regclass,'SELECT') THEN
+      RAISE EXCEPTION 'hon.% must be private with forced RLS',t; END IF;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM hon.principal_role_grants WHERE principal_id='00000000-0000-4000-8000-000000000261')
+    OR NOT EXISTS(SELECT 1 FROM hon.principals WHERE id='00000000-0000-4000-8000-000000000261' AND principal_type='SYSTEM_SERVICE' AND user_id IS NULL) THEN
+    RAISE EXCEPTION 'The public event booking principal must be a role-free system service'; END IF;
+  FOR f IN SELECT * FROM (VALUES
+('hon.school_event_text_ok(text,integer,integer)',false,false,'search_path=pg_catalog','f9822772a30474ac4e92fe944a1a28e32a9ca01b676aa7fc7c63a84d2d9f86fa'),
+('hon.guard_school_event()',true,false,'search_path=pg_catalog, hon','efb459bf00a5a3ade73094e54be183526dc7472b6c0a3d099b975146b1b2eba8'),
+('hon.guard_school_event_booking()',true,false,'search_path=pg_catalog, hon','5ea50f6450c2c57b9a95de906388d5a3d5182c3ec4ad4577f09f3c1c4ffd25d4'),
+('hon.school_event_slot_taken(uuid)',true,false,'search_path=pg_catalog, hon','93b3a2e5dc77423e797de4c8bf6dfce82879bdcd805ed66c083814c66c865ae8'),
+('hon.school_event_json(hon.school_events)',true,false,'search_path=pg_catalog, hon','03ca019a0b8640faa0e07ee84ae42f27180df99689f5650e06d956a4b3433894'),
+('hon.school_event_booking_json(hon.school_event_bookings)',true,false,'search_path=pg_catalog, hon','9d37b220554cd25a792b7eb2dcc64fee3dbc4dacc3c77590d9a22610d943e5e5'),
+('hon.school_event_input(jsonb)',false,false,'search_path=pg_catalog, hon','d67f94449bf46dce99810a730a52d5da64f5879e5f3a83a9d6273bed3435beb3'),
+('hon.school_event_command_finish(text,text,uuid,jsonb,text,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)',true,false,'search_path=pg_catalog, hon','9d3a79b0be6d24600a6d0314a99b09b9344c0683044aba9d64fc58299be9c78b'),
+('hon.save_school_event(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','013fa779651da9686a50b72ae8c4d288e3afbf40a5c3168cc5cc89233b733224'),
+('hon.set_school_event_status(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','8d50c7429b68acc6b48ef1cefeda2ca32bbb2765449a25ceea31a1f1eda88f10'),
+('hon.set_school_event_booking_status(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','b4fe65d0414303602b3e5ea2acdd3082042e4985cf04ac47245f0887fd0a39af'),
+('hon.read_school_events(text)',true,true,'search_path=pg_catalog, hon','f3c40ab04eb63c9eb65b4b8e52d1af686a76d3c20854fdd33fb496a0e1e65c89'),
+('hon.read_school_event(text,uuid)',true,true,'search_path=pg_catalog, hon','21259a6369d4d9a3f5fe1d4fa013581f70aa2d645a2b918e2edade64820dd058'),
+('hon.take_school_event_rate(uuid,text,integer)',true,false,'search_path=pg_catalog, hon','7da03a0bd5423337c2472edd2fd2337f4ec7d74ee7f3fb6e47e48c709c5c8c67'),
+('hon.public_school_event(text)',true,false,'search_path=pg_catalog, hon','78e99fcbedaea0d1aacbdfa0d67c19dd9cb834a4c3e5cb58df2fd9c4785c3404'),
+('hon.read_public_school_event(text)',true,true,'search_path=pg_catalog, hon','25e00301e7c71ab2ad577e460f589ecbed6336047b8a4fe1efc9d1d79d1f110f'),
+('hon.school_event_booking_input(jsonb)',false,false,'search_path=pg_catalog, hon','ca89ded1d444fe534a16da007c6342cea4c0022511a608bb60c77e17d9fc2b2f'),
+('hon.book_public_school_event(text,jsonb,text)',true,true,'search_path=pg_catalog, hon','ba2d2021193a7798c7b67f91de7c31b6ccb8f97ddbd76eeb07fbee3590894ad1'),
+('hon.cancel_public_school_event_booking(text,jsonb)',true,true,'search_path=pg_catalog, hon','ff635a29f483eb22eaab4154b4796a092f4670fdba5c70027ec57903842c5f74')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school event booking function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End school event booking exact verification.
+
+-- Maya at-risk students exact verification (M1 0259): two private helpers and one read-only runtime entry point.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.require_maya_actor(text,text)',true,false,'search_path=pg_catalog, hon','3ec3ab3ace09cba647c0ef6a7849baca7960f89d64e457893de9cf17fe916151'),
+('hon.maya_reader_sees_tuition(text)',true,false,'search_path=pg_catalog, hon','16334235a565a92419cacb6472b0324fe185928c20bfea2782c93a7235b221af'),
+('hon.read_maya_at_risk_students(text,jsonb)',true,true,'search_path=pg_catalog, hon','fef4486ea9a901293e41231c3ad82a86c002d5bd47e609b22fbac0e78871e3c4')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Maya at-risk function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='retention.review.read' AND is_sensitive AND is_staff_assignable) THEN
+    RAISE EXCEPTION 'retention.review.read must exist as a sensitive staff-assignable permission'; END IF;
+END $$;
+-- End Maya at-risk students exact verification.

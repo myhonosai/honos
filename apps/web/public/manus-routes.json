@@ -153,6 +153,10 @@
       "title": "School Enquiry Form"
     },
     {
+      "path": "/book/:publicId",
+      "title": "Book a time"
+    },
+    {
       "path": "/staff/team/availability",
       "title": "Human Staff Availability and Qualifications"
     },
@@ -167,6 +171,10 @@
     {
       "path": "/staff/schedule/timetable",
       "title": "HON | Weekly timetable"
+    },
+    {
+      "path": "/staff/schedule/events",
+      "title": "HON | Sale days & events"
     },
     {
       "path": "/staff/schedule/sessions/create",
@@ -231,6 +239,18 @@
     {
       "path": "/staff/billing/receivables",
       "title": "HON | Tuition balances"
+    },
+    {
+      "path": "/staff/billing/payment-processors",
+      "title": "HON | Payment processors"
+    },
+    {
+      "path": "/staff/billing/checkout-pages",
+      "title": "HON | Checkout pages"
+    },
+    {
+      "path": "/staff/retention/at-risk",
+      "title": "HON | Students at risk"
     },
     {
       "path": "/staff/champions-club",
@@ -461,6 +481,10 @@
       "title": "HON HQ | Free Trials"
     },
     {
+      "path": "/hq/revenue/sign-up-limits",
+      "title": "HON HQ | Sign-up Limits"
+    },
+    {
       "path": "/staff/subscription",
       "title": "HON OS | School subscription"
     },
@@ -491,6 +515,10 @@
     {
       "path": "/account/owner-invitation",
       "title": "HON OS | Owner invitation"
+    },
+    {
+      "path": "/account/start",
+      "title": "HON OS | Start your school"
     },
     {
       "path": "/account/staff-invitation",

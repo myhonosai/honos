@@ -1,11 +1,11 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { HonConversationThread, HonConversationTurn, HonOrchestration } from '@hon/contracts';
+import type { HonAnalystAgentKey, HonConversationThread, HonConversationTurn, HonOrchestration } from '@hon/contracts';
 import {
   HON_CONVERSATION_API, HON_CONVERSATION_COMMAND, HonConversationError, honConversationBase, prepareConversation, prepareTurn, verifyHonPage, verifyHonReadiness,
 } from '../src/components/hon-command/hon-conversation-http';
-import { FollowUps, HonConversationView, composerTurnRequest, type HonConversationViewProps } from '../src/components/hon-command/hon-conversation-panel';
+import { FollowUps, HonConversationView, composerTurnRequest, offeredAnalysts, type HonConversationViewProps } from '../src/components/hon-command/hon-conversation-panel';
 import { HonWorkspaceView } from '../src/components/hon-command/hon-workspace-view';
 import { initialHonCommandSnapshot } from '../src/components/hon-command/hon-command-data';
 import { honTargetPath } from '../src/components/hon-command/hon-conversation-http';
@@ -19,7 +19,7 @@ const id = (n: number) => `${String(n).repeat(8)}-${String(n).repeat(4)}-4${Stri
 const AT = '2026-11-06T18:00:00.000Z';
 const SCHOOL = { organizationId: id(1), schoolId: id(2) };
 const BASE = `/api/v1/organizations/${id(1)}/schools/${id(2)}/hon`;
-const readiness = (honReply = true) => ({ contract: true as const, providerRoute: honReply, entitlement: true, authorization: true, availableAgentKeys: ['marcus' as const], honReply, businessPerformance: false, asOf: AT });
+const readiness = (honReply = true) => ({ contract: true as const, providerRoute: honReply, entitlement: true, authorization: true, availableAgentKeys: ['marcus' as const], honReply, businessPerformance: false, availableAnalystKeys: [] as HonAnalystAgentKey[], asOf: AT });
 const summary = (n: number, turnCount = 1) => ({ id: id(n), title: `Question ${n}`, createdAt: AT, updatedAt: AT, turnCount, status: 'COMPLETED' as const });
 const human = (turn: number, text: string): HonConversationTurn => ({ turnId: id(turn), role: 'HUMAN', text, createdAt: AT, status: 'COMPLETED', reason: null,
   references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null });
@@ -332,7 +332,7 @@ describe('Ask HON suggestion cards (C3a)', () => {
 });
 
 describe('Ask Claire, Business Performance (K2)', () => {
-  const claireReady = { ...readiness(), businessPerformance: true };
+  const claireReady = { ...readiness(), businessPerformance: true, availableAnalystKeys: ['claire' as const] };
   it('offers Claire only when the server says she can answer here', () => {
     expect(render()).not.toContain('value="claire"');
     const html = render({ readiness: claireReady });
@@ -363,6 +363,41 @@ describe('Ask Claire, Business Performance (K2)', () => {
     expect(composerTurnRequest('Who needs follow-up?', 'hon', 'DETAILED')).toEqual({ text: 'Who needs follow-up?', delegation: null, replyMode: 'DETAILED' });
     const prepared = prepareTurn(SCHOOL, id(5), composerTurnRequest('How are we doing?', 'claire', 'DETAILED'));
     expect(JSON.parse(prepared.body)).toEqual({ text: 'How are we doing?', delegation: { agentKey: 'claire' } });
+  });
+});
+
+describe('Ask Alex, Jordan or Lena (0260)', () => {
+  const teamReady = (keys: HonAnalystAgentKey[]) => ({ ...readiness(), businessPerformance: keys.includes('claire'), availableAnalystKeys: keys });
+  it('offers exactly the specialists the server says can answer here, with HON first', () => {
+    const html = render({ readiness: teamReady(['jordan', 'lena']) });
+    expect(html).toMatch(/<legend>Who answers<\/legend>/);
+    expect(html).toContain('value="jordan"'); expect(html).toContain('value="lena"'); expect(html).not.toContain('value="alex"'); expect(html).not.toContain('value="claire"');
+    expect(html).toContain('Jordan, Operations'); expect(html).toContain('Lena, Creative &amp; Commerce');
+    expect(html.indexOf('value="hon"')).toBeLessThan(html.indexOf('value="jordan"'));
+  });
+  it.each([['alex', 'Alex reads this school’s overall numbers'], ['jordan', 'Jordan reads this school’s class schedule'], ['lena', 'Lena reads this school’s campaigns']] as const)(
+    'a question for %s is one detailed answer and never changes anything', (who, note) => {
+      const html = render({ readiness: teamReady(['alex', 'jordan', 'lena']), ask: who });
+      expect(html).toContain(`Message ${who[0]!.toUpperCase()}${who.slice(1)}`);
+      expect(html).toMatch(/<fieldset[^>]*disabled=""[^>]*><legend>Answer<\/legend>/);
+      expect(html).toContain(note); expect(html).toContain('Included in HON OS; nothing is charged.');
+      expect(composerTurnRequest('What next?', who, 'STANDARD')).toEqual({ text: 'What next?', delegation: { agentKey: who } });
+    });
+  it('falls back to HON when the chosen specialist is no longer offered', () => {
+    const html = render({ readiness: teamReady(['lena']), ask: 'jordan' });
+    expect(html).toContain('Message HON'); expect(html).not.toContain('value="jordan"');
+  });
+  it('shows a Jordan answer under his own name, with follow-ups and no continue control', () => {
+    const answer = reply(6, { role: 'jordan', text: 'Recorded facts: 1 class has no instructor.', references: { workItemId: id(8), actionRequestId: null, invocationId: id(9) } },
+      { mode: 'DETAILED', step: 1, maxSteps: 3, canContinue: false, followUps: ['Who can cover Tuesday?'] });
+    const html = render({ readiness: teamReady(['jordan']), thread: thread([human(6, 'Any gaps?'), answer]), threadPhase: 'READY' });
+    expect(html).toMatch(/<strong>Jordan<\/strong>/); expect(html).toContain('1 class has no instructor'); expect(html).toContain('Who can cover Tuesday?');
+    expect(html).not.toContain('Continue this answer');
+  });
+  it('lists only offered specialists', () => {
+    expect(offeredAnalysts(null)).toEqual([]);
+    expect(offeredAnalysts(teamReady(['claire', 'alex']))).toEqual(['claire', 'alex']);
+    expect(offeredAnalysts({ ...teamReady(['alex']), businessPerformance: true })).toEqual(['claire', 'alex']);
   });
 });
 

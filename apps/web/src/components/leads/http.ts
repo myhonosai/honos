@@ -5,9 +5,9 @@ import { readTrialRecovery, type TrialRecovery } from '../crm-journey/trial-reco
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * U4 Leads: read-only. The school is the one the shell verified; ids are selectors only and the API re-derives the
- * human, school and CRM permission from the signed session. No command is sent from this page: every change happens in
- * the existing CRM flows it links to.
+ * U4 Leads reads. The school is the one the shell verified; ids are selectors only and the API re-derives the
+ * human, school and CRM permission from the signed session. These reads send no command; adding a lead lives in
+ * add-lead.tsx and every other change happens in the existing CRM flows the page links to.
  */
 export type LeadsErrorKind = 'SESSION' | 'DENIED' | 'UNAVAILABLE';
 export class LeadsError extends Error { constructor(readonly kind: LeadsErrorKind) { super(kind); } }

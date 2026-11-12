@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "89e4863ed76ede586e9725f8feea6e47b20fee10758d739ed4520616c3529332",
+  "chainSha256": "7728850e8db05881ce391224aa59f2591c0fa365dd3b41c38001c646d14365f5",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -199,6 +199,10 @@
       "sha256": "f318322679ffb9e5594ddd7d088d38cb3b4c9e42fc6d36592ea18793bce58dac"
     },
     {
+      "file": "0230_hon_os_schedule_billing.sql",
+      "sha256": "78b1acc5af70cc71f8156b93398127e4fedfd5ea7f31cee9655383fe31383e41"
+    },
+    {
       "file": "0231_membership_pause_rolling_year.sql",
       "sha256": "97bcb50f32def69d43da7ca9fa497c8d5b291393a33060d788cd7209c77867bc"
     },
@@ -207,8 +211,16 @@
       "sha256": "8f3decac8ed134e1deae12e239b8c1b9398506ae7d0b654fda6f42139165aedf"
     },
     {
+      "file": "0235_hon_os_schedule_paid_access.sql",
+      "sha256": "b91466751b4e17fa4870372517e5dda0f671dde2b3bf644c8cedd5e1d7964916"
+    },
+    {
       "file": "0236_crm_school_clock.sql",
       "sha256": "a2afddbb3fe92a127e246af79bb168c1083678c4a689ea7e2f0a4f06a2b3d213"
+    },
+    {
+      "file": "0237_hon_os_paid_review_queue.sql",
+      "sha256": "9f8815ee94473a4fc07e1bf79cf9a5dd6b5031d30289e9520d5f37ceb590d8db"
     },
     {
       "file": "0239_recurring_class_series.sql",
@@ -217,6 +229,14 @@
     {
       "file": "0240_tuition_payment_records.sql",
       "sha256": "750e56c78e8f74b91b5f7225e9a05ff4f1ab80a62dac823a7abb5fa6f1ddf233"
+    },
+    {
+      "file": "0241_hon_os_public_signup.sql",
+      "sha256": "e1e8b8c8ef510a39b3aab1dd9168fe3b60006f4ccd66ebe18c7a127f77e90777"
+    },
+    {
+      "file": "0246_hon_os_trial_runtime.sql",
+      "sha256": "d3a1bd35203bb465946bf316291b53d245e348777790e7e4491f62753a742f07"
     },
     {
       "file": "0251_class_series_ongoing.sql",
@@ -251,12 +271,44 @@
       "sha256": "bcbfedb05f739ba99872aa5467236cb050c2c078f53daa804681821c75f76a17"
     },
     {
+      "file": "0259_maya_at_risk_students.sql",
+      "sha256": "6b8267f54f694799c387fdf34b8848a6d8bf041161095d9e00e171587c32293c"
+    },
+    {
+      "file": "0260_hon_analysis_specialists.sql",
+      "sha256": "01177f4f95e03cf451500d8063dcc690d3b9f9e4bcf625be727260a9fcd0d410"
+    },
+    {
+      "file": "0261_school_event_booking.sql",
+      "sha256": "3a8bfc78de0a42c61a59f3ff182bbbd792b68251223af6a68a89906f1848d675"
+    },
+    {
       "file": "0266_hon_suggests_claire.sql",
       "sha256": "31213924c77fe44df684d1544d4f99e4fa9fc045aae91a1dc54f52f65e31fd2a"
     },
     {
       "file": "0267_hq_usage_claire_attribution.sql",
       "sha256": "00b679d61d39febf7adee22105cbdfe4ecd95423b6b423064f3a6c09f3905861"
+    },
+    {
+      "file": "0269_school_checkout_pages.sql",
+      "sha256": "5e1f3c7ee71db95fd5c75b360cb8a834b6de0a41d0caa479e1caa938e3a8627d"
+    },
+    {
+      "file": "0272_hon_os_trial_ai_credit_fixes.sql",
+      "sha256": "5f78a9ca625bf7459231ff6d8efde3f96630dfed1dd2d6d6736fd83a0e565e62"
+    },
+    {
+      "file": "0273_hon_os_signup_abuse_protection.sql",
+      "sha256": "ef53fe56e765f926a0868bc6f2a86c8e6106ec0667ec971ea1889e3147836887"
+    },
+    {
+      "file": "0274_hon_os_admission_limits_hq.sql",
+      "sha256": "3f9b0d3a909005f190517ef193167ff0fca3032fa6ea35ed418d58dd6ce92adc"
+    },
+    {
+      "file": "0278_ai_team_readiness_reconcile.sql",
+      "sha256": "f29d606e7ab0e1273d5ae41f2eeb105f14b3eb0fa930fcd194a5ad2439c5362e"
     }
   ]
 }
