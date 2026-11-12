@@ -27,6 +27,15 @@ export type HqCommunicationSendRequest = CommunicationSendRequest & {
   origin: 'HQ'; senderServiceId?: string | undefined; senderEmail?: string | undefined; senderName: string;
 };
 
+/**
+ * A real provider adapter is used for HQ only once it declares `hqSender: true`, meaning it sends from
+ * `senderServiceId`/`senderEmail` when `origin` is 'HQ'. Until then HQ deliveries for that channel are never claimed,
+ * so an HQ message can never go out from a school's sender. The fake provider sends nothing and needs no declaration.
+ */
+export function adapterSendsAsHq(adapter: CommunicationProviderAdapter): boolean {
+  return adapter.provider === 'FAKE' || (adapter as { readonly hqSender?: unknown }).hqSender === true;
+}
+
 export interface HqMessageWorkerStore {
   isConfigured(): boolean;
   claim(channels: DeliverableChannel[], limit: number, leaseSeconds: number): Promise<ClaimedHqMessageDelivery[]>;
@@ -101,7 +110,7 @@ export class HqMessageDispatcher {
 
   async runOnce(limit = 25): Promise<DispatchSummary> {
     const ready = new Map<DeliverableChannel, CommunicationProviderAdapter>();
-    for (const adapter of this.adapters) if (!ready.has(adapter.channel) && adapter.readiness() === 'READY') ready.set(adapter.channel, adapter);
+    for (const adapter of this.adapters) if (!ready.has(adapter.channel) && adapterSendsAsHq(adapter) && adapter.readiness() === 'READY') ready.set(adapter.channel, adapter);
     const readyChannels = [...ready.keys()].sort();
     const summary: DispatchSummary = { claimed: 0, accepted: 0, retrying: 0, failed: 0, unknown: 0, lateResults: 0, readyChannels };
     if (!readyChannels.length || !this.store.isConfigured()) return summary;
@@ -153,7 +162,10 @@ export class HqMessageDispatchScheduler implements OnModuleInit, OnModuleDestroy
     const raw = process.env.HON_COMMUNICATION_DISPATCH_INTERVAL_SECONDS;
     if (!raw || !process.env.HON_COMMUNICATION_WORKER_DATABASE_URL) return;
     const seconds = Number(raw);
-    if (!Number.isSafeInteger(seconds) || seconds < 15 || seconds > 3600) return;
+    if (!Number.isSafeInteger(seconds) || seconds < 15 || seconds > 3600) {
+      emitTelemetry('error', 'hq_communication.dispatch_interval_invalid', { component: 'hq-communication-dispatch' });
+      return;
+    }
     this.timer = setInterval(() => { void this.tick(); }, seconds * 1000);
     this.timer.unref();
   }

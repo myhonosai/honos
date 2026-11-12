@@ -526,6 +526,9 @@ BEGIN
   PERFORM hon.require_hq_communication_actor(p_subject, m.purpose);
   IF replay IS NOT NULL THEN RETURN replay; END IF;
   IF m.version <> v_expected THEN RAISE EXCEPTION 'SAAS_VERSION_CONFLICT' USING ERRCODE = '40001'; END IF;
+  -- Lock every delivery first (waiting out any claim in flight), then check: a row a worker is moving to
+  -- SENDING is seen as SENDING here, and a claim that starts after this lock skips the locked rows.
+  PERFORM 1 FROM hon.hq_message_deliveries x WHERE x.message_id = m.id ORDER BY x.id FOR UPDATE;
   IF m.status = 'CANCELLED' OR EXISTS (SELECT 1 FROM hon.hq_message_deliveries x WHERE x.message_id = m.id
       AND x.status NOT IN ('PENDING','SUPPRESSED')) THEN
     RAISE EXCEPTION 'HQ_MESSAGE_NOT_CANCELLABLE' USING ERRCODE = '23514';
@@ -555,10 +558,11 @@ BEGIN
   END IF;
   purposes := hon.hq_communication_purposes(actor);
   WITH page AS (
-    SELECT m AS r, m.created_at, m.id FROM hon.hq_messages m
+    SELECT m AS r, date_trunc('milliseconds', m.created_at) AS created_at, m.id FROM hon.hq_messages m
     WHERE m.purpose = ANY(purposes) AND (p_school IS NULL OR m.school_id = p_school)
-      AND (p_cursor_at IS NULL OR (m.created_at, m.id) < (p_cursor_at, p_cursor_id))
-    ORDER BY m.created_at DESC, m.id DESC LIMIT p_limit)
+      -- Order at the millisecond the API shows, so the cursor never skips a row (as in 0203).
+      AND (p_cursor_at IS NULL OR (date_trunc('milliseconds', m.created_at), m.id) < (p_cursor_at, p_cursor_id))
+    ORDER BY date_trunc('milliseconds', m.created_at) DESC, m.id DESC LIMIT p_limit)
   SELECT coalesce(jsonb_agg(hon.hq_message_json(page.r) ORDER BY page.created_at DESC, page.id DESC), '[]'::jsonb), count(*) INTO v_rows, n FROM page;
   IF n = p_limit THEN SELECT * INTO v_last FROM hon.hq_messages WHERE id = (v_rows->(n - 1)->>'messageId')::uuid; END IF;
   result := jsonb_build_object(
@@ -637,7 +641,10 @@ BEGIN
     ELSIF v_delivery.attempt_count >= 5 THEN v_fail := 'RETRIES_EXHAUSTED';
     ELSIF NOT EXISTS (SELECT 1 FROM hon.hq_message_owner_recipients(v_delivery.school_id) r WHERE r.principal_id = v_delivery.recipient_principal_id) THEN
       v_fail := 'RECIPIENT_REMOVED';
-    ELSIF EXISTS (SELECT 1 FROM hon.hq_contact_preferences c WHERE c.user_id = v_user AND c.channel = v_delivery.channel AND c.status = 'OPTED_OUT') THEN
+    ELSIF EXISTS (SELECT 1 FROM hon.hq_contact_preferences c WHERE c.user_id = v_user AND c.channel = v_delivery.channel AND c.status = 'OPTED_OUT')
+      -- Texts also need the person's own HQ texting opt-in (recorded by 0282 after they confirm their phone).
+      OR (v_delivery.channel = 'SMS' AND NOT EXISTS (SELECT 1 FROM hon.hq_contact_preferences c WHERE c.user_id = v_user
+        AND c.channel = 'SMS' AND c.status = 'OPTED_IN')) THEN
       v_fail := 'CONSENT_MISSING';
     ELSE
       v_address := CASE v_delivery.channel WHEN 'EMAIL' THEN (SELECT u.email::text FROM hon.users u WHERE u.id = v_user)

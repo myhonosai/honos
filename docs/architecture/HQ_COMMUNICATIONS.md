@@ -97,8 +97,13 @@ origin, `X-HON-Human-Command`, JSON, `Idempotency-Key`). An AI agent can draft t
 
 ### 4.5 Delivery
 
-The comms thread's dispatcher and `CommunicationProviderAdapter.send` are reused unchanged: HQ deliveries are claimed
-by separate HQ claim/record functions and sent with the HQ sender's `senderServiceId`. Receipts: SendGrid HQ emails
+The comms thread's provider adapters (`CommunicationProviderAdapter.send`) are reused; a small HQ dispatcher
+(`apps/api/src/hq-communications/hq-message-dispatcher.ts`, same lease, timeout and UNKNOWN rules as the school one)
+claims HQ deliveries through separate HQ claim/record functions and hands the adapter `origin: 'HQ'` plus the HQ
+sender's `senderServiceId` (texts) or `senderEmail` (email). A real adapter is used for HQ only once it declares
+`hqSender: true`, meaning it honors those fields; until then HQ deliveries on that channel are never claimed, so an HQ
+message can never go out from a school's sender. Texts also need the person's own HQ texting opt-in (recorded by 0282
+after they confirm their phone); in 0281 alone every HQ text is held back as CONSENT_MISSING. Receipts: SendGrid HQ emails
 carry the internal-purpose `custom_arg` marking them HQ, and the Twilio status callback for HQ sends uses its own path,
 so the webhook handlers look up `hq_message_deliveries` instead of school deliveries. The comms thread fits the
 webhook side.

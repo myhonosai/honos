@@ -163,7 +163,7 @@ function store(claims) {
 test('HQ dispatcher: a long text goes whole through the HQ Messaging Service; email carries the HQ from-address', async () => {
   const s = store([lease(), lease({ channel: 'EMAIL', recipientAddress: 'owner@example.test', content: 'Invoice ready', senderRef: 'hello@hon.example' })]);
   const seen = [];
-  const adapter = (channel) => ({ provider: 'TWILIO', channel, readiness: () => 'READY', send: async (r) => { seen.push(r); return { providerMessageId: `p-${seen.length}`, sentAs: channel === 'SMS' ? 'MMS' : 'EMAIL' }; } });
+  const adapter = (channel) => ({ provider: channel === 'SMS' ? 'TWILIO' : 'SENDGRID', hqSender: true, channel, readiness: () => 'READY', send: async (r) => { seen.push(r); return { providerMessageId: `p-${seen.length}`, sentAs: channel === 'SMS' ? 'MMS' : 'EMAIL' }; } });
   const summary = await new HqMessageDispatcher(s, [adapter('SMS'), adapter('EMAIL')]).runOnce(10);
   assert.deepEqual(s.calls.claim, [{ channels: ['EMAIL', 'SMS'], limit: 10, leaseSeconds: 60 }]);
   assert.equal(summary.accepted, 2);
@@ -178,6 +178,10 @@ test('HQ dispatcher: never claims without a READY adapter; maps provider errors;
   const none = store([lease()]);
   await new HqMessageDispatcher(none, [new FakeCommunicationProvider('SMS', () => ({}))]).runOnce();
   assert.equal(none.calls.claim.length, 0, 'the fake provider is not READY without its flag');
+  const school = store([lease()]);
+  const schoolOnly = { provider: 'TWILIO', channel: 'SMS', readiness: () => 'READY', send: async () => { throw new Error('must not send'); } };
+  const skipped = await new HqMessageDispatcher(school, [schoolOnly]).runOnce();
+  assert.deepEqual([school.calls.claim.length, skipped.readyChannels], [0, []], 'a real adapter that does not declare hqSender is never used for HQ');
   for (const [error, expected] of [[new CommunicationProviderError('RETRYABLE', 'PROVIDER_FAILED', 5), { outcome: 'RETRYABLE', provider: 'FAKE', retryAfterSeconds: 30 }],
     [new CommunicationProviderError('FAILED', 'INVALID_ADDRESS'), { outcome: 'FAILED', provider: 'FAKE', failureCode: 'INVALID_ADDRESS' }],
     [new Error('socket hang up'), { outcome: 'UNKNOWN', provider: 'FAKE' }]]) {

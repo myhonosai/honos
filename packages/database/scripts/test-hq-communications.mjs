@@ -242,8 +242,17 @@ try {
   const smsQueued = await queue('supportOp', smsDraft.message.messageId, 1);
   eq(smsQueued.message.recipientCount, 2, 'SMS queued to both owners');
   claimed = await claim(['SMS']);
+  eq(claimed.length, 0, 'no SMS leased without the owner\'s own HQ texting opt-in');
+  eq((await deliveries(smsDraft.message.messageId)).map((r) => r.failure_code), ['CONSENT_MISSING', 'CONSENT_MISSING'], 'SUPPRESSED with CONSENT_MISSING');
+  // Opted in to texts but no confirmed phone yet (0282 supplies it): still never sent.
+  await admin.query("INSERT INTO hon.hq_contact_preferences (user_id, channel, status, source, captured_at) VALUES ($1,'SMS','OPTED_IN','USER',clock_timestamp())", [humans.owner1.user]);
+  const smsTwo = await create('supportOp', msgInput({ channel: 'SMS', content: 'Short HQ text.' }));
+  await queue('supportOp', smsTwo.message.messageId, 1);
+  claimed = await claim(['SMS']);
   eq(claimed.length, 0, 'no SMS leased without a confirmed phone (0282)');
-  eq((await deliveries(smsDraft.message.messageId)).map((r) => r.failure_code), ['ADDRESS_MISSING', 'ADDRESS_MISSING'], 'SUPPRESSED with ADDRESS_MISSING');
+  const smsTwoRows = await deliveries(smsTwo.message.messageId);
+  eq(smsTwoRows.find((r) => r.recipient_principal_id === P('owner1')).failure_code, 'ADDRESS_MISSING', 'opted-in owner without a phone: ADDRESS_MISSING');
+  eq(smsTwoRows.find((r) => r.recipient_principal_id === P('owner2')).failure_code, 'CONSENT_MISSING', 'owner who never opted in: CONSENT_MISSING');
 
   const onboarding = await queue('hqOwner', ownerMade.message.messageId, 1);
   eq(onboarding.message.recipientCount, 2, 'onboarding message queued');
@@ -262,6 +271,22 @@ try {
   eq(cancelled.message.status, 'CANCELLED', 'queued message cancelled');
   eq((await deliveries(toCancel.message.messageId)).map((r) => [r.status, r.failure_code]), [['SUPPRESSED', 'CANCELLED'], ['SUPPRESSED', 'CANCELLED']], 'its deliveries are suppressed');
   eq((await claim(['EMAIL'])).length, 0, 'cancelled deliveries are never leased');
+
+  // A cancel racing a claim in flight waits for it and then refuses; it never reports CANCELLED over a send.
+  const race = await create('supportOp', msgInput({ content: 'Race me.' }));
+  await queue('supportOp', race.message.messageId, 1);
+  await worker.query('BEGIN');
+  const raced = await claim(['EMAIL']);
+  eq(raced.length, 2, 'claim in flight holds both deliveries');
+  let raceSettled = false;
+  const raceCancel = cancel('supportOp', race.message.messageId, 2).then((v) => ({ ok: v }), (e) => ({ err: e })).finally(() => { raceSettled = true; });
+  await new Promise((r) => setTimeout(r, 300));
+  eq(raceSettled, false, 'cancel waits for the claim in flight');
+  await worker.query('COMMIT');
+  const raceOutcome = await raceCancel;
+  eq([raceOutcome.err?.code, raceOutcome.err?.message], ['23514', 'HQ_MESSAGE_NOT_CANCELLABLE'], 'cancel refuses once the claim committed SENDING');
+  eq((await one(admin, 'SELECT status FROM hon.hq_messages WHERE id=$1', [race.message.messageId])).status, 'QUEUED', 'message stays QUEUED');
+  for (const row of raced) await record(row, 'ACCEPTED', { providerMessageId: `fake-race-${row.delivery_id}`, sentAs: 'EMAIL' });
 
   // ---------- 8. lease expiry and retries ----------
   const lease2 = claimed[0];
