@@ -5,8 +5,11 @@ import { HON_OS_LAUNCH_PRICING_REFERENCE, SAAS_OWNER_APPROVED_DRAFT, SAAS_PLAN_C
 export const OFFER_CHOICES: readonly { kind: SaasOfferKind; label: string; description: string }[] = [
   { kind: 'REGULAR_MONTHLY', label: 'Regular monthly', description: 'Billed monthly' },
   { kind: 'FOUNDER_MONTHLY', label: 'Founder monthly', description: 'Eligibility and availability required' },
-  { kind: 'FOUNDER_LIFETIME', label: 'Founder lifetime', description: 'One-time purchase, subject to eligibility' },
+  { kind: 'FOUNDER_LIFETIME', label: 'Founder lifetime', description: 'Earlier one-time purchase; no longer sold' },
 ];
+/** Offers a school may still pick on this page. Founder lifetime stays above only to label earlier purchases. */
+export const SELLABLE_OFFER_CHOICES = OFFER_CHOICES.filter((entry) => entry.kind !== 'FOUNDER_LIFETIME');
+const sellable = (kind: SaasOfferKind) => SELLABLE_OFFER_CHOICES.some((entry) => entry.kind === kind);
 
 const LABELS: Record<string, { label: string; note?: string }> = {
   'crm.families_students_prospects': { label: 'Families, students & prospect CRM' },
@@ -55,7 +58,7 @@ export type SelectionEvent = { type: 'PLAN'; tier: PublicPlanTier } | { type: 'O
 export function selectPlan(state: PlanSelection, event: SelectionEvent): PlanSelection {
   switch (event.type) {
     case 'PLAN': planDisplay(event.tier, state.offer); return { ...state, tier: event.tier, reviewing: false, acknowledged: false };
-    case 'OFFER': planDisplay(state.tier, event.offer); return { ...state, offer: event.offer, reviewing: false, acknowledged: false };
+    case 'OFFER': if (!sellable(event.offer)) return state; planDisplay(state.tier, event.offer); return { ...state, offer: event.offer, reviewing: false, acknowledged: false };
     case 'REVIEW': return { ...state, reviewing: true, acknowledged: false };
     case 'EDIT': return { ...state, reviewing: false, acknowledged: false };
     case 'ACKNOWLEDGE': return { ...state, acknowledged: state.reviewing && event.checked };
