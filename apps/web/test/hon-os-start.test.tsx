@@ -165,3 +165,20 @@ it('the legal terms wording is an explicit placeholder on the sign-up form and t
   hooks.values = []; f.mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupDone)).mockResolvedValueOnce(ok({ trialStatus: 'TEST_MODE', schoolId: uuid(3), available: offer, trial: null }));
   click('Check my account'); await settle(); expect(nodes(render()).some(e => e.props['data-start-trial-terms-pending'])).toBe(true);
 });
+
+it('abuse-protection refusals have fixed copy in every language and drop the request (nothing was written)', async () => {
+  for (const code of ['SIGNUP_EMAIL_DOMAIN_NOT_ACCEPTED', 'SIGNUP_CAPACITY_REACHED', 'TRIAL_CAPACITY_REACHED'])
+    for (const lang of ['en', 'ko', 'es'] as const) expect(START_COPY[lang].codes[code]).toBeTruthy();
+  const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupOpen));
+  click('Check my account'); await settle(); fill();
+  f.mockResolvedValueOnce(fail(409, 'SIGNUP_EMAIL_DOMAIN_NOT_ACCEPTED')); click('Create my school account'); await settle();
+  expect(text(render())).toContain('temporary email address'); expect(find('Retry exact request')).toBeUndefined();
+  f.mockResolvedValueOnce(fail(409, 'SIGNUP_CAPACITY_REACHED')); click('Create my school account'); await settle();
+  expect(text(render())).toContain('limited number of new schools'); expect(find('Retry exact request')).toBeUndefined();
+});
+
+it('the trial-terms placeholder shows only while the sign-up terms are still a draft', async () => {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(ok({ ...signupDone, terms: null })).mockResolvedValueOnce(ok({ trialStatus: 'TEST_MODE', schoolId: uuid(3), available: offer, trial: null }));
+  click('Check my account'); await settle();
+  expect(nodes(render()).some(e => e.props['data-start-offer'])).toBe(true); expect(nodes(render()).some(e => e.props['data-start-trial-terms-pending'])).toBe(false);
+});

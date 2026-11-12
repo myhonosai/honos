@@ -132,8 +132,8 @@ export function HonOsStart({ sessionSubject }: { sessionSubject: string }) {
           : <div data-start-offer>
             <p><strong>{c.offer(trial.available.name, trial.available.durationDays)}</strong></p>
             <p>{trial.available.aiCredits ? c.offerAi(trial.available.aiCredits.credits, trial.available.aiCredits.dailyCap, trial.available.aiCredits.expiryDays) : c.noAi}</p>
-            {/* Placeholder: the legal free-trial terms wording is David's decision and is not written yet. */}
-            <p className={styles.notice} data-start-trial-terms-pending>{c.trialTermsPending}</p>
+            {/* Placeholder while the sign-up terms are still a draft: the legal free-trial terms wording is David's decision. */}
+            {draft && <p className={styles.notice} data-start-trial-terms-pending>{c.trialTermsPending}</p>}
             <label><input type="checkbox" checked={trialConfirmed} onChange={e => setTrialConfirmed(e.target.checked)} />{c.confirmTrial(trial.available.durationDays)}</label>
             <button type="button" disabled={!trialConfirmed} onClick={() => send('trial', 'account/trial', { schoolId: registration.schoolId, campaignId: trial.available!.campaignId, confirmation: TRIAL_CONFIRMATION })}>{c.startTrial}</button>
           </div>}
