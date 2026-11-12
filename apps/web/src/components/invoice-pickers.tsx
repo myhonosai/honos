@@ -35,13 +35,20 @@ export function currencyDigits(currency: string): number | null {
 }
 
 /** A typed amount in the currency's own units ("49.50" USD, "49000" KRW) to a minor-unit string; null if it does not fit the currency. */
-export function amountToMinor(text: string, currency: string): string | null {
+export function amountToMinor(text: string, currency: string, max = 2147483647): string | null {
   const digits = currencyDigits(currency);
   if (digits === null) return null;
-  const m = (digits > 0 ? new RegExp(`^(\\d{1,8})(?:\\.(\\d{1,${digits}}))?$`) : /^(\d{1,10})$/).exec(text.trim());
+  const m = (digits > 0 ? new RegExp(`^(\\d{1,13})(?:\\.(\\d{1,${digits}}))?$`) : /^(\d{1,13})$/).exec(text.trim());
   if (!m) return null;
   const minor = Number(m[1]) * 10 ** digits + Number((m[2] ?? '').padEnd(digits, '0') || '0');
-  return minor <= 2147483647 ? String(minor) : null;
+  return minor <= max ? String(minor) : null;
+}
+
+/** Minor units back to the plain amount a person types ("1500.00" USD, "49000" KRW); the raw number when the currency is unknown. */
+export function minorToAmountText(minor: number, currency: string): string {
+  const digits = currencyDigits(currency);
+  if (digits === null || digits === 0) return String(minor);
+  return `${Math.floor(minor / 10 ** digits)}.${String(minor % 10 ** digits).padStart(digits, '0')}`;
 }
 
 /** Minor units shown as money in the currency's own decimals ("$49.00", "₩49,000"); the raw code and units when unknown. */
