@@ -14,38 +14,47 @@ const contracts = require('@hon/contracts');
 
 const U = () => randomUUID(), T = '2026-11-01T00:00:00.000Z', T2 = '2026-12-01T00:00:00.000Z';
 const REASON = 'Synthetic school ceiling for a fixture';
-const D = contracts.AI_SCHOOL_DEFAULT_CEILING_MICROS;
+const TD = contracts.AI_SCHOOL_TRIAL_DEFAULT_CEILING_MICROS;
 const input = (patch = {}) => ({ schoolId: U(), ceilingMicros: 10_000_000, paused: false, reason: REASON, expectedVersion: 0, ...patch });
+// A paying school with no HQ record: no ceiling (owner 2026-11-12: conversations are not capped).
 const status = (patch = {}) => {
-  const s = { schoolId: U(), organizationId: U(), schoolName: 'Synthetic Dojo', ceilingMicros: D, defaultCeiling: true, paused: false, reason: null,
-    version: 0, recordedCostMicros: 1_000_000, committedCostMicros: 2_000_000, usedBasisPoints: 1333, level: 'NORMAL', windowStart: T, windowEnd: T2, ...patch };
+  const s = { schoolId: U(), organizationId: U(), schoolName: 'Synthetic Dojo', ceilingMicros: null, defaultCeiling: true, trial: false, paused: false, reason: null,
+    version: 0, recordedCostMicros: 1_000_000, committedCostMicros: 2_000_000, usedBasisPoints: null, level: 'NO_CEILING', windowStart: T, windowEnd: T2, ...patch };
   return s;
 };
+const list = (schools, patch = {}) => ({ schools, trialDefaultCeilingMicros: TD, asOf: T, ...patch });
 
 test('R2 contracts: level thresholds match the database; closed input; consistent status rows', () => {
+  // Owner 2026-11-12: $15 while on the free trial; a paying school has no default ceiling.
+  assert.equal(TD, 15_000_000);
+  assert.equal(contracts.AI_SCHOOL_DEFAULT_CEILING_MICROS, undefined, 'no paying default exists');
   for (const [c, l] of [[0, 'NORMAL'], [11_249_999, 'NORMAL'], [11_250_000, 'WARNING_75'], [13_499_999, 'WARNING_75'], [13_500_000, 'WARNING_90'],
     [14_999_999, 'WARNING_90'], [15_000_000, 'CEILING_REACHED'], [99_000_000, 'CEILING_REACHED']])
-    assert.equal(contracts.aiSchoolCostLevel(c, D), l, String(c));
+    assert.equal(contracts.aiSchoolCostLevel(c, TD), l, String(c));
   assert.equal(contracts.aiSchoolCostLevel(0, 0), 'CEILING_REACHED', 'a zero ceiling is reached at once');
+  assert.equal(contracts.aiSchoolCostLevel(99_000_000_000, null), 'NO_CEILING', 'no ceiling never reaches a level');
   assert.equal(contracts.validateAiSchoolCostLimitInput(input()).ceilingMicros, 10_000_000);
   assert.equal(contracts.validateAiSchoolCostLimitInput(input({ ceilingMicros: 0, paused: true })).paused, true);
   for (const bad of [{ schoolId: 'school' }, { ceilingMicros: -1 }, { ceilingMicros: 1.5 }, { ceilingMicros: 1_000_000_001 }, { ceilingMicros: '15' },
-    { paused: 'yes' }, { reason: 'short' }, { reason: ` ${REASON}` }, { reason: 'x'.repeat(501) }, { expectedVersion: -1 }, { organizationId: U() },
+    { ceilingMicros: null }, { paused: 'yes' }, { reason: 'short' }, { reason: ` ${REASON}` }, { reason: 'x'.repeat(501) }, { expectedVersion: -1 }, { organizationId: U() },
     { updatedBy: U() }, { level: 'NORMAL' }])
     assert.throws(() => contracts.validateAiSchoolCostLimitInput(input(bad)), JSON.stringify(bad));
   const { reason, ...missing } = input(); assert.throws(() => contracts.validateAiSchoolCostLimitInput(missing));
-  const list = contracts.validateAiSchoolCostStatusList({ schools: [status(),
-    status({ ceilingMicros: 10_000_000, defaultCeiling: false, paused: true, reason: REASON, version: 2, committedCostMicros: 9_000_000, level: 'WARNING_90' })],
-    defaultCeilingMicros: D, asOf: T });
-  assert.equal(list.schools.length, 2);
-  for (const bad of [status({ level: 'WARNING_75' }), status({ defaultCeiling: true, version: 1 }), status({ defaultCeiling: true, paused: true }),
+  const ok = contracts.validateAiSchoolCostStatusList(list([status(),
+    status({ trial: true, ceilingMicros: TD, usedBasisPoints: 1333, level: 'NORMAL' }),
+    status({ ceilingMicros: 10_000_000, defaultCeiling: false, paused: true, reason: REASON, version: 2, committedCostMicros: 9_000_000, usedBasisPoints: 9000, level: 'WARNING_90' })]));
+  assert.equal(ok.schools.length, 3);
+  for (const bad of [status({ level: 'NORMAL' }), status({ usedBasisPoints: 0 }), status({ ceilingMicros: TD }), status({ trial: true }),
+    status({ trial: true, ceilingMicros: TD, usedBasisPoints: null, level: 'NORMAL' }), status({ trial: 'no' }),
+    status({ defaultCeiling: true, version: 1 }), status({ defaultCeiling: true, paused: true }),
     status({ defaultCeiling: false, version: 1, reason: null }), status({ recordedCostMicros: 3_000_000 }), status({ windowEnd: T }),
     { ...status(), extra: 1 }, status({ level: 'OVER' })])
-    assert.throws(() => contracts.validateAiSchoolCostStatusList({ schools: [bad], defaultCeilingMicros: D, asOf: T }), JSON.stringify(bad));
+    assert.throws(() => contracts.validateAiSchoolCostStatusList(list([bad])), JSON.stringify(bad));
   const dup = status();
-  assert.throws(() => contracts.validateAiSchoolCostStatusList({ schools: [dup, dup], defaultCeilingMicros: D, asOf: T }), 'duplicate school');
-  assert.throws(() => contracts.validateAiSchoolCostStatusList({ schools: [], defaultCeilingMicros: 1, asOf: T }), 'default ceiling is fixed');
-  assert.throws(() => contracts.validateAiSchoolCostStatusList({ schools: Array.from({ length: 501 }, () => status()), defaultCeilingMicros: D, asOf: T }));
+  assert.throws(() => contracts.validateAiSchoolCostStatusList(list([dup, dup])), 'duplicate school');
+  assert.throws(() => contracts.validateAiSchoolCostStatusList(list([], { trialDefaultCeilingMicros: 1 })), 'trial default is fixed');
+  assert.throws(() => contracts.validateAiSchoolCostStatusList(list([], { defaultCeilingMicros: 30_000_000 })), 'no paying default field');
+  assert.throws(() => contracts.validateAiSchoolCostStatusList(list(Array.from({ length: 501 }, () => status()))));
   const receipt = { schoolId: U(), organizationId: U(), ceilingMicros: 0, paused: true, version: 1, replayed: false };
   assert.equal(contracts.validateAiSchoolCostLimitReceipt(receipt).version, 1);
   for (const bad of [{ version: 0 }, { replayed: undefined }, { extra: 1 }, { organizationId: null }])
@@ -74,8 +83,8 @@ test('HTTP: school AI cost limit is an exact HQ human command; the database deci
   const { app, base } = await appWith(async (operation, params) => {
     calls.push([operation, params]);
     if (next) { const e = new Error(next.message); e.code = next.code; next = null; throw e; }
-    if (operation === 'readAiSchoolCostLimits') return drift ? { schools: [status({ level: 'CEILING_REACHED' })], defaultCeilingMicros: D, asOf: T }
-      : { schools: [status({ schoolId: school })], defaultCeilingMicros: D, asOf: T };
+    if (operation === 'readAiSchoolCostLimits') return drift ? list([status({ level: 'CEILING_REACHED' })])
+      : list([status({ schoolId: school })]);
     if (operation === 'commandAiSchoolCostLimit') { const i = JSON.parse(params[1]); return { schoolId: i.schoolId, organizationId: U(), ceilingMicros: i.ceilingMicros, paused: i.paused, version: i.expectedVersion + 1, replayed: false }; }
     throw new Error('unexpected');
   });

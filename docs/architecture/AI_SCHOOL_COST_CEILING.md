@@ -13,8 +13,13 @@ cannot pause one school's AI without pausing the whole organization.
 
 ## Behaviour
 
-1. **Ceiling.** Each school has a monthly internal ceiling. With no HQ record it is the default, $15 (15,000,000 micro-USD,
-   `hon.ai_school_default_ceiling_micros()`). HQ may set any value from 0 to $1,000.
+1. **Ceiling.** A school may have a monthly internal ceiling. Owner decision 2026-11-12: conversations with the AI team
+   have no cap for a paying school, so with no HQ record a paying school has **no ceiling** (HQ reads `NO_CEILING`). Its
+   creative and heavier work (images, video, websites) is limited by its 12,000 monthly creative credits (0202), which it
+   can top up or wait for next month. While the organization's free trial owns its access (`hon.hon_os_trial_live`,
+   0246) the default is $15 (15,000,000 micro-USD, `hon.ai_school_trial_default_ceiling_micros()`); when the trial ends
+   no default applies. `hon.ai_school_default_ceiling_for(org, at)` picks it. HQ may still set any ceiling from 0 to
+   $1,000 for one school, or pause it, and the HQ read shows `trial` for each school.
 2. **Committed cost** (`hon.ai_school_committed_cost_micros`) for the UTC month (`hon.ai_spend_window`) = recorded
    `AGENT_INFERENCE` provider cost in the ledger for the school, plus every counting hold in the four agent invocation tables
    valued at its plan's `max_provider_cost_microunits` ($1 when a hold has no plan). Holds count at their worst case, so
@@ -61,7 +66,7 @@ cannot pause one school's AI without pausing the whole organization.
 
 ## Deployment note
 
-Once deployed, the $15 default applies to every school without an HQ record. A school already over $15 in the current month
+Once deployed, the $15 default applies to every school on a live trial without an HQ record. A trial school already over $15 in the current month
 stops getting new `AGENT_INFERENCE` calls until HQ raises its ceiling or the month rolls over.
 
 ## Plan (TDD)

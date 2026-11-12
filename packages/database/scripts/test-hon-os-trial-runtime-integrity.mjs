@@ -147,6 +147,14 @@ try{
  // Agent AI is allowed under the HQ-set credit; Creative Studio media never is (wallet only).
  assert.equal(await ai(ana.reg.organizationId),null);assert.equal(await ai(ana.reg.organizationId,'clock_timestamp()','CREATIVE_MEDIA'),'AI_TRIAL_FUNDING_NOT_APPROVED');
  assert.equal(await ai(ben.reg.organizationId),'AI_ACCESS_NOT_PAID');
+ // 0288 (owner 2026-11-12): while the trial owns access the school's internal AI cost ceiling defaults to $15; a school
+ // without a live trial has no default ceiling (paying schools' conversations are not capped). HQ sees which applies.
+ {const list=(await q('SELECT hon.read_ai_school_cost_limits_from_hq($1) r',[hq.subject]))[0].r;
+  assert.equal(list.trialDefaultCeilingMicros,15000000);assert.equal('defaultCeilingMicros' in list,false);
+  const of=id=>list.schools.find(x=>x.schoolId===id);
+  assert.deepEqual([of(ana.reg.schoolId).trial,of(ana.reg.schoolId).ceilingMicros,of(ana.reg.schoolId).defaultCeiling],[true,15000000,true]);
+  assert.deepEqual([of(ben.reg.schoolId).trial,of(ben.reg.schoolId).ceilingMicros,of(ben.reg.schoolId).level],[false,null,'NO_CEILING']);
+  assert.equal((await q('SELECT hon.ai_school_default_ceiling_for($1,clock_timestamp()+interval \'15 days\') n',[ana.reg.organizationId]))[0].n,null,'after the trial window no default applies');}
  // Credits expire after creditExpiryDays (7) while the trial itself runs 14; access ends by the clock at endsAt.
  const startsAt="(SELECT starts_at FROM hon.hon_os_trial_enrollments WHERE organization_id=$1)",endsAt="(SELECT ends_at FROM hon.hon_os_trial_enrollments WHERE organization_id=$1)";
  assert.equal(await ai(ana.reg.organizationId,startsAt+"+interval '7 days'-interval '1 millisecond'"),null);

@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "f2f341894dad1599a25fa711d44252ef5fe2c2898ca0e2038ce53a8e0576247b",
+  "chainSha256": "39d98c6de1c182136b44398ccc67b80aeda4d7bc0e71868e674bb3ae7384b5e6",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -312,7 +312,7 @@
     },
     {
       "file": "0288_ai_school_cost_ceiling.sql",
-      "sha256": "d23a9c63e4d1341216d3d0314370584e3c63892121e7f976639cc84fb54c2376"
+      "sha256": "0f77dfd17d256f21f724c16f3287247b75a94ef657b017d745278fe56165e123"
     }
   ]
 }

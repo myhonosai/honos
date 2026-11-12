@@ -250,6 +250,6 @@
     "0260_hon_analysis_specialists.sql": "01177f4f95e03cf451500d8063dcc690d3b9f9e4bcf625be727260a9fcd0d410",
     "0278_ai_team_readiness_reconcile.sql": "f29d606e7ab0e1273d5ae41f2eeb105f14b3eb0fa930fcd194a5ad2439c5362e",
     "0287_ai_task_class_routing.sql": "eb09bd1fe61ae8d75c91f1151431653faeb4bd16b0472c91f33d0163e38499bd",
-    "0288_ai_school_cost_ceiling.sql": "d23a9c63e4d1341216d3d0314370584e3c63892121e7f976639cc84fb54c2376"
+    "0288_ai_school_cost_ceiling.sql": "0f77dfd17d256f21f724c16f3287247b75a94ef657b017d745278fe56165e123"
   }
 }

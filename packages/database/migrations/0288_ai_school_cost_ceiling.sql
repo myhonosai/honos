@@ -1,8 +1,10 @@
 BEGIN;
 -- 0288 (R2): per-school internal AI cost ceiling and single-school pause (AI_MODEL_AND_CONNECTION_PLAN.md §3, §6.3).
 -- Spec: docs/architecture/AI_SCHOOL_COST_CEILING.md. Internal HON cost only: never a customer balance or credits.
--- - Each school has an internal monthly ceiling on agent-inference provider cost: $15 (15,000,000 micro-USD) by
---   default, HQ-owner editable per school. Cost = verified provider cost in the ledger for the budget window plus, for
+-- - Each school may have an internal monthly ceiling on agent-inference provider cost, HQ-owner editable per school.
+--   Owner 2026-11-12: conversations with the AI team have no cap for a paying school, so a paying school has NO default
+--   ceiling (its creative and heavier work is limited by its 12,000 monthly creative credits, 0202); while its free trial
+--   (0246) owns the organization's access the default is $15 (15,000,000 micro-USD). HQ can still set one or pause. Cost = verified provider cost in the ledger for the budget window plus, for
 --   every agent hold that still counts (hon.ai_hold_counts), its plan's maximum provider cost (fail closed).
 -- - At or above the ceiling new agent AI work for that school is refused before any provider call, exactly like an
 --   HQ pause (reason AI_PAUSED_BY_HQ, so every existing closed reason list and screen stays valid). HQ sees the real
@@ -17,7 +19,11 @@ BEGIN;
 --   reservations (which hold the gate shared until commit) exactly like an organization pause.
 -- - The organization budget lock (0194) and the platform/organization HQ pause (0195) are unchanged and still first.
 
-CREATE FUNCTION hon.ai_school_default_ceiling_micros() RETURNS bigint LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$ SELECT 15000000::bigint $$;
+CREATE FUNCTION hon.ai_school_trial_default_ceiling_micros() RETURNS bigint LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$ SELECT 15000000::bigint $$;
+-- The default for one school at one instant: $15 while the organization's trial owns its access, otherwise none (NULL).
+CREATE FUNCTION hon.ai_school_default_ceiling_for(p_org uuid, p_at timestamptz) RETURNS bigint LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
+  SELECT CASE WHEN hon.hon_os_trial_live(p_org, p_at) THEN hon.ai_school_trial_default_ceiling_micros() END
+$$;
 
 CREATE TABLE hon.ai_school_cost_limits (
   school_id uuid PRIMARY KEY,
@@ -88,9 +94,10 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
            WHERE i.organization_id=p_org AND i.school_id=p_school AND i.reserved_credits>0 AND hon.ai_hold_counts(i.status,i.held_at,w.r,p_at));
 $$;
 
--- Pure level for HQ: basis points of the ceiling used (10000 = 100%).
+-- Pure level for HQ: basis points of the ceiling used (10000 = 100%). No ceiling: NO_CEILING.
 CREATE FUNCTION hon.ai_school_cost_level(p_committed bigint, p_ceiling bigint) RETURNS text LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
-  SELECT CASE WHEN p_committed >= p_ceiling THEN 'CEILING_REACHED'
+  SELECT CASE WHEN p_ceiling IS NULL THEN 'NO_CEILING'
+              WHEN p_committed >= p_ceiling THEN 'CEILING_REACHED'
               WHEN p_committed * 10 >= p_ceiling * 9 THEN 'WARNING_90'
               WHEN p_committed * 4 >= p_ceiling * 3 THEN 'WARNING_75'
               ELSE 'NORMAL' END
@@ -104,8 +111,10 @@ BEGIN
   IF p_school IS NULL OR p_class NOT IN ('AGENT_INFERENCE','CREATIVE_MEDIA') THEN RETURN NULL; END IF;
   SELECT * INTO l FROM hon.ai_school_cost_limits WHERE school_id = p_school AND organization_id = p_org;
   IF FOUND AND l.paused THEN RETURN 'AI_PAUSED_BY_HQ'; END IF;
-  IF p_class = 'AGENT_INFERENCE' AND hon.ai_school_committed_cost_micros(p_org, p_school, p_at)
-       >= coalesce(l.ceiling_micros, hon.ai_school_default_ceiling_micros()) THEN
+  -- No HQ record and no live trial: no ceiling.
+  IF p_class = 'AGENT_INFERENCE' AND coalesce(l.ceiling_micros, hon.ai_school_default_ceiling_for(p_org, p_at)) IS NOT NULL
+     AND hon.ai_school_committed_cost_micros(p_org, p_school, p_at)
+       >= coalesce(l.ceiling_micros, hon.ai_school_default_ceiling_for(p_org, p_at)) THEN
     RETURN 'AI_PAUSED_BY_HQ';
   END IF;
   RETURN NULL;
@@ -252,26 +261,28 @@ END $$;
 CREATE FUNCTION hon.read_ai_school_cost_limits_from_hq(p_subject text) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid := hon.require_saas_hq_actor(p_subject, false); at timestamptz := clock_timestamp();
 BEGIN
-  RETURN jsonb_build_object('schools', coalesce((SELECT jsonb_agg(z.v ORDER BY z.bp DESC, z.school_id) FROM (
-      SELECT x.school_id, CASE WHEN x.ceiling = 0 THEN 10000 ELSE least(x.committed * 10000 / x.ceiling, 1000000) END AS bp,
+  RETURN jsonb_build_object('schools', coalesce((SELECT jsonb_agg(z.v ORDER BY z.bp DESC NULLS LAST, z.committed DESC, z.school_id) FROM (
+      SELECT x.school_id, x.committed, CASE WHEN x.ceiling IS NULL THEN NULL WHEN x.ceiling = 0 THEN 10000 ELSE least(x.committed * 10000 / x.ceiling, 1000000) END AS bp,
         jsonb_build_object('schoolId',x.school_id,'organizationId',x.organization_id,'schoolName',x.name,
-          'ceilingMicros',x.ceiling,'defaultCeiling',x.version = 0,'paused',x.paused,'reason',x.reason,'version',x.version,
+          'ceilingMicros',x.ceiling,'defaultCeiling',x.version = 0,'trial',x.trial,'paused',x.paused,'reason',x.reason,'version',x.version,
           'recordedCostMicros',x.recorded,'committedCostMicros',x.committed,
-          'usedBasisPoints',CASE WHEN x.ceiling = 0 THEN 10000 ELSE least(x.committed * 10000 / x.ceiling, 1000000) END,
+          'usedBasisPoints',CASE WHEN x.ceiling IS NULL THEN NULL WHEN x.ceiling = 0 THEN 10000 ELSE least(x.committed * 10000 / x.ceiling, 1000000) END,
           'level',hon.ai_school_cost_level(x.committed, x.ceiling),
           'windowStart',hon.saas_ts(lower(x.w)),'windowEnd',hon.saas_ts(upper(x.w))) AS v
-      FROM (SELECT s.id AS school_id, s.organization_id, s.name, coalesce(l.ceiling_micros, hon.ai_school_default_ceiling_micros()) AS ceiling,
+      FROM (SELECT s.id AS school_id, s.organization_id, s.name, coalesce(l.ceiling_micros, hon.ai_school_default_ceiling_for(s.organization_id, at)) AS ceiling,
+              hon.hon_os_trial_live(s.organization_id, at) AS trial,
               coalesce(l.paused, false) AS paused, l.reason, coalesce(l.version, 0) AS version, hon.ai_spend_window(s.organization_id, at) AS w,
               hon.ai_school_committed_cost_micros(s.organization_id, s.id, at) AS committed,
               (SELECT coalesce(sum(u.provider_cost_microunits),0) FROM hon.ai_usage_ledger u WHERE u.organization_id=s.organization_id AND u.school_id=s.id
                  AND u.spend_class='AGENT_INFERENCE' AND u.occurred_at >= lower(hon.ai_spend_window(s.organization_id, at)) AND u.occurred_at < upper(hon.ai_spend_window(s.organization_id, at))) AS recorded
             FROM hon.schools s LEFT JOIN hon.ai_school_cost_limits l ON l.school_id = s.id) x
-      ORDER BY 2 DESC, 1 LIMIT 500) z), '[]'::jsonb),
-    'defaultCeilingMicros', hon.ai_school_default_ceiling_micros(), 'asOf', hon.saas_ts(at));
+      ORDER BY 3 DESC NULLS LAST, 2 DESC, 1 LIMIT 500) z), '[]'::jsonb),
+    'trialDefaultCeilingMicros', hon.ai_school_trial_default_ceiling_micros(), 'asOf', hon.saas_ts(at));
 END $$;
 
 DO $$ DECLARE f regprocedure; r text; BEGIN
-  FOREACH f IN ARRAY ARRAY['hon.ai_school_default_ceiling_micros()'::regprocedure, 'hon.guard_ai_school_cost_limit_commands()'::regprocedure,
+  FOREACH f IN ARRAY ARRAY['hon.ai_school_trial_default_ceiling_micros()'::regprocedure,
+    'hon.ai_school_default_ceiling_for(uuid,timestamptz)'::regprocedure, 'hon.guard_ai_school_cost_limit_commands()'::regprocedure,
     'hon.guard_ai_school_cost_limits()'::regprocedure, 'hon.ai_school_committed_cost_micros(uuid,uuid,timestamptz)'::regprocedure,
     'hon.ai_school_cost_level(bigint,bigint)'::regprocedure, 'hon.ai_school_spend_decision(uuid,uuid,timestamptz,text)'::regprocedure,
     'hon.ai_org_spend_allowed(uuid,timestamptz,text)'::regprocedure, 'hon.ai_spend_allowed(uuid,timestamptz,text)'::regprocedure,

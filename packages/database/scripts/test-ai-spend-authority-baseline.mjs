@@ -3292,11 +3292,16 @@ try {
   const command = async (input, key = K(), subject = hq.subject) => (await admin.query(cmdSql, [subject, JSON.stringify(input), key])).rows[0].r;
   const status = async (x = o) => (await row('SELECT hon.read_ai_school_cost_limits_from_hq($1) r', [hq.subject])).r.schools.find((s) => s.schoolId === x.school);
   const errCode = async (p) => { const r = await settle(p); return r.error ? `${r.error.code}:${r.error.message}` : 'OK'; };
-  // 1. Default: $15 ceiling, NORMAL, no record; a question completes and its verified cost (900) is counted.
+  // 1. Default for a paying (non-trial) school: no ceiling (owner 2026-11-12: conversations are not capped), no record;
+  //    a question completes and its verified cost (900) is counted. The $15 trial default is proven in the trial runtime
+  //    proof (it needs a live trial).
   assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null, reserved: 0 });
   assert.equal(await committedCost(), 900);
   let s = await status();
-  assert.deepEqual([s.ceilingMicros, s.defaultCeiling, s.paused, s.version, s.recordedCostMicros, s.committedCostMicros, s.level, s.usedBasisPoints], [15000000, true, false, 0, 900, 900, 'NORMAL', 0]);
+  assert.deepEqual([s.ceilingMicros, s.defaultCeiling, s.paused, s.version, s.recordedCostMicros, s.committedCostMicros, s.level, s.usedBasisPoints], [null, true, false, 0, 900, 900, 'NO_CEILING', null]);
+  assert.equal(s.trial, false);
+  assert.deepEqual((await rows('SELECT hon.ai_school_trial_default_ceiling_micros() t, hon.ai_school_default_ceiling_for($1,clock_timestamp()) o, hon.ai_school_cost_level(999999999,NULL) l', [o.id]))[0],
+    { t: '15000000', o: null, l: 'NO_CEILING' });
   // 2. Levels: 75%, 90%, 100% of the ceiling (pure and as HQ reads them).
   assert.deepEqual((await rows('SELECT hon.ai_school_cost_level(c,1000) l FROM unnest(ARRAY[0,749,750,899,900,999,1000,5000]::bigint[]) c')).map((r) => r.l),
     ['NORMAL', 'NORMAL', 'WARNING_75', 'WARNING_75', 'WARNING_90', 'WARNING_90', 'CEILING_REACHED', 'CEILING_REACHED']);
@@ -3378,7 +3383,7 @@ try {
     'hon.ai_school_cost_level(bigint,bigint)=false', 'hon.ai_school_spend_decision(uuid,uuid,timestamp with time zone,text)=false',
     'hon.command_ai_school_cost_limit(text,jsonb,uuid)=true', 'hon.read_ai_school_cost_limits_from_hq(text)=true']);
   assert.equal((await row("SELECT has_table_privilege($1,'hon.ai_school_cost_limits','SELECT') OR has_table_privilege($1,'hon.ai_school_cost_limit_commands','SELECT') x", [runtimeRole])).x, false);
-  pass('INV-33', 'R2: each school has an internal monthly agent-AI cost ceiling ($15 default, HQ-owner editable, versioned, idempotent, immutable command log) counted as verified ledger cost plus every counting hold at its plan maximum; HQ reads NORMAL/WARNING_75/WARNING_90/CEILING_REACHED per school; at the ceiling new work is refused before any reservation or provider call (HON prepare, specialist begin, readiness, reserve guard) as AI_PAUSED_BY_HQ while other schools are unaffected and a raised ceiling restores it at once; an HQ single-school pause covers agent and creative AI; only the HQ command and read reach the runtime');
+  pass('INV-33', 'R2: each school may have an internal monthly agent-AI cost ceiling (none by default for a paying school, $15 on a live trial, HQ-owner editable, versioned, idempotent, immutable command log) counted as verified ledger cost plus every counting hold at its plan maximum; HQ reads NO_CEILING/NORMAL/WARNING_75/WARNING_90/CEILING_REACHED per school; at the ceiling new work is refused before any reservation or provider call (HON prepare, specialist begin, readiness, reserve guard) as AI_PAUSED_BY_HQ while other schools are unaffected and a raised ceiling restores it at once; an HQ single-school pause covers agent and creative AI; only the HQ command and read reach the runtime');
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
