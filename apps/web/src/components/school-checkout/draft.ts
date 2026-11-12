@@ -2,11 +2,12 @@ import {
   CHECKOUT_LANGUAGES, CHECKOUT_LIMITS, EMPTY_CHECKOUT_CONTENT, checkoutTextOk, validateCheckoutContent,
   type CheckoutContent, type CheckoutFieldKind, type CheckoutLanguage, type CheckoutPage, type CheckoutPageKind, type CheckoutPlanChoice, type CheckoutText,
 } from '@hon/contracts';
+import { amountToMinor, minorToAmountText } from '../invoice-pickers';
 
 /**
  * The editable form of one checkout page (B-TUI-2 piece 9b over 0269). Every text holds all three languages as plain strings;
- * an empty Korean or Spanish text is left out when saved, so the family page falls back to English. Amounts are typed as
- * dollars and cents. Nothing here talks to the network: these are pure steps the page and its tests share.
+ * an empty Korean or Spanish text is left out when saved, so the family page falls back to English. Amounts are typed in the
+ * currency's own units (no cents for KRW, three decimals for KWD). Nothing here talks to the network: these are pure steps the page and its tests share.
  */
 export type TextDraft = Readonly<Record<CheckoutLanguage, string>>;
 export type AddOnDraft = Readonly<{ key: string; label: TextDraft; amount: string; currency: string; required: boolean }>;
@@ -17,27 +18,26 @@ export type CheckoutDraft = Readonly<{
 }>;
 
 export const EMPTY_TEXT: TextDraft = Object.freeze({ en: '', ko: '', es: '' });
-const AMOUNT = /^(\d{1,6})(?:\.(\d{1,2}))?$/;
 const textDraft = (value: CheckoutText | null | undefined): TextDraft => ({ en: value?.en ?? '', ko: value?.ko ?? '', es: value?.es ?? '' });
-const money = (minor: number) => `${Math.floor(minor / 100)}.${String(minor % 100).padStart(2, '0')}`;
 
 /** The draft for a saved page, or an empty one when the school has not saved this kind yet. */
 export function draftFrom(page: CheckoutPage | null): CheckoutDraft {
   const c = page?.content ?? EMPTY_CHECKOUT_CONTENT;
   return {
     planIds: [...c.planIds],
-    addOns: c.addOns.map((a) => ({ key: a.key, label: textDraft(a.label), amount: money(a.amountMinor), currency: a.currency, required: a.required })),
+    addOns: c.addOns.map((a) => ({ key: a.key, label: textDraft(a.label), amount: minorToAmountText(a.amountMinor, a.currency), currency: a.currency, required: a.required })),
     customFields: c.customFields.map((f) => ({ key: f.key, label: textDraft(f.label), kind: f.kind, required: f.required, options: f.options.map(textDraft) })),
     waiverOn: c.waiver !== null, waiver: textDraft(c.waiver?.text), receiptNote: textDraft(c.receiptNote), thankYou: textDraft(c.thankYou),
   };
 }
 
-/** Dollars and cents typed by staff, as minor units; null when it is not a plain amount between 0.01 and 999,999.99. */
-export function amountMinor(value: string): number | null {
-  const m = AMOUNT.exec(value.trim().replace(/^\$/, ''));
-  if (!m) return null;
-  const minor = Number(m[1]) * 100 + Number((m[2] ?? '').padEnd(2, '0'));
-  return minor >= 1 && minor <= 99_999_999 ? minor : null;
+/**
+ * An amount typed in the currency's own units ("25.00" USD, "50000" KRW, "1.250" KWD) as minor units; null when it does not
+ * fit the currency or is outside 1..99,999,999 minor units.
+ */
+export function amountMinor(value: string, currency: string): number | null {
+  const minor = amountToMinor(value, currency, 99_999_999);
+  return minor !== null && Number(minor) >= 1 ? Number(minor) : null;
 }
 
 /** One line: spaces collapsed. Several lines: Windows line ends and trailing spaces removed. Both trimmed. */
@@ -77,7 +77,7 @@ export function draftProblems(draft: CheckoutDraft, kind: CheckoutPageKind, publ
   if (draft.addOns.length > CHECKOUT_LIMITS.addOns) problems.push(`Use at most ${CHECKOUT_LIMITS.addOns} add-ons.`);
   draft.addOns.forEach((a, i) => {
     text(a.label, CHECKOUT_LIMITS.label, false, `Add-on ${i + 1} name`);
-    if (amountMinor(a.amount) === null) problems.push(`Add-on ${i + 1} needs an amount like 25 or 25.00.`);
+    if (amountMinor(a.amount, a.currency) === null) problems.push(`Add-on ${i + 1} needs a plain amount in ${a.currency}, such as ${a.currency === 'USD' ? '25 or 25.00' : 'the price without symbols'}.`);
   });
   if (draft.customFields.length > CHECKOUT_LIMITS.fields) problems.push(`Use at most ${CHECKOUT_LIMITS.fields} questions.`);
   draft.customFields.forEach((f, i) => {
@@ -97,7 +97,7 @@ export function draftProblems(draft: CheckoutDraft, kind: CheckoutPageKind, publ
 export function contentFrom(draft: CheckoutDraft): CheckoutContent {
   return validateCheckoutContent({
     planIds: [...draft.planIds],
-    addOns: draft.addOns.map((a) => ({ key: a.key, label: translated(a.label, false), amountMinor: amountMinor(a.amount), currency: a.currency, required: a.required })),
+    addOns: draft.addOns.map((a) => ({ key: a.key, label: translated(a.label, false), amountMinor: amountMinor(a.amount, a.currency), currency: a.currency, required: a.required })),
     customFields: draft.customFields.map((f) => ({ key: f.key, label: translated(f.label, false), kind: f.kind, required: f.required,
       options: f.kind === 'CHOICE' ? f.options.map((o) => translated(o, false)) : [] })),
     waiver: draft.waiverOn ? { text: translated(draft.waiver, true) } : null,

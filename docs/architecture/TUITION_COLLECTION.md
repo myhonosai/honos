@@ -207,7 +207,7 @@ Status: source only, not deployed. Web only, over the 0269 routes; no migration 
 - **Page:** `/staff/billing/checkout-pages` (Billing menu, "Checkout pages"; EN/KO/ES menu label), protected, dynamic,
   noindex, no-referrer. Tabs for the enrollment checkout and the tuition payment page.
 - **Editing:** plans from the school catalog (add, remove, move up or down; unavailable plans cannot be added and are
-  flagged if already shown), add-ons (name, amount typed as dollars and cents, required or optional), questions (short
+  flagged if already shown), add-ons (name, amount typed in the currency's own units, such as 25.00 USD or 50000 KRW, required or optional), questions (short
   answer, pick one with 2-10 choices, checkbox; required or optional), waiver on or off, receipt note, thank-you message.
   One language switch (English, Korean, Spanish) changes which text every field edits; English is required, and an empty
   Korean or Spanish text is left out so families see English.

@@ -2,6 +2,7 @@ import React from 'react';
 import { CHECKOUT_LIMITS, type CheckoutFieldKind, type CheckoutLanguage, type CheckoutPage, type CheckoutPageKind, type CheckoutPageStatus, type CheckoutPlanChoice, type SchoolCheckoutPages } from '@hon/contracts';
 import type { CheckoutErrorKind } from './http';
 import type { CheckoutDraft, DraftEdit, TextDraft } from './draft';
+import { formatMinor } from '../invoice-pickers';
 import styles from '../membership-changes/membership-changes.module.css';
 
 export type CheckoutListState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; read: SchoolCheckoutPages };
@@ -37,7 +38,6 @@ const OUTCOME_TEXT: Record<NonNullable<CheckoutOutcome>['kind'], string> = {
   UNKNOWN: 'The result is not known yet. Try again sends the exact same save, so nothing happens twice.',
 };
 const instant = (language: string, value: string) => new Date(value).toLocaleString(language, { dateStyle: 'medium', timeStyle: 'short' });
-const price = (language: string, minor: number, currency: string) => (minor / 100).toLocaleString(language, { style: 'currency', currency });
 
 function TextInput({ p, label, value, onChange, max, multiline = false }: { p: SchoolCheckoutViewProps; label: string; value: TextDraft; onChange: (next: TextDraft) => void; max: number; multiline?: boolean }) {
   const l = p.editLanguage;
@@ -51,7 +51,7 @@ function TextInput({ p, label, value, onChange, max, multiline = false }: { p: S
 function Plans({ p, draft, plans }: { p: SchoolCheckoutViewProps; draft: CheckoutDraft; plans: readonly CheckoutPlanChoice[] }) {
   const shown = draft.planIds.map((id) => plans.find((x) => x.planId === id) ?? null);
   const others = plans.filter((x) => x.available && !draft.planIds.includes(x.planId));
-  const describe = (plan: CheckoutPlanChoice) => `${plan.displayName} · ${price(p.language, plan.priceMinor, plan.currency)} ${FREQUENCY_LABEL[plan.billingFrequency] ?? ''}`;
+  const describe = (plan: CheckoutPlanChoice) => `${plan.displayName} · ${formatMinor(plan.priceMinor, plan.currency)} ${FREQUENCY_LABEL[plan.billingFrequency] ?? ''}`;
   return <fieldset className={styles.form} data-testid="checkout-plans"><legend>Plans shown, in order</legend>
     {shown.length === 0 ? <p className={styles.meta}>{p.kind === 'ENROLLMENT' ? 'No plans yet. Choose at least one before publishing.' : 'No plans shown. That is fine for a tuition payment page.'}</p> : null}
     <ol className={styles.list}>{draft.planIds.map((id, i) => {
@@ -78,7 +78,7 @@ function AddOns({ p, draft, currency }: { p: SchoolCheckoutViewProps; draft: Che
     <p className={styles.meta}>Extra items such as a uniform or a registration fee. A required add-on is always added; an optional one the family can tick.</p>
     {draft.addOns.map((a, i) => <div key={a.key} className={styles.card} data-testid="checkout-addon">
       <TextInput p={p} label={`Add-on ${i + 1} name`} value={a.label} max={CHECKOUT_LIMITS.label} onChange={(label) => p.onEdit?.({ type: 'addOn', index: i, patch: { label } })}/>
-      <label className={styles.field}>Amount ({a.currency})<input type="text" inputMode="decimal" value={a.amount} disabled={p.locked} placeholder="25.00"
+      <label className={styles.field}>Amount ({a.currency})<input type="text" inputMode="decimal" value={a.amount} disabled={p.locked} placeholder={a.currency === 'USD' ? '25.00' : ''}
         onChange={(e) => p.onEdit?.({ type: 'addOn', index: i, patch: { amount: e.currentTarget.value } })}/></label>
       <label className={styles.check}><input type="checkbox" checked={a.required} disabled={p.locked} onChange={(e) => p.onEdit?.({ type: 'addOn', index: i, patch: { required: e.currentTarget.checked } })}/> Required</label>
       <button type="button" className={styles.secondary} disabled={p.locked} onClick={() => p.onEdit?.({ type: 'removeAddOn', index: i })}>Remove add-on</button>

@@ -89,8 +89,14 @@ it('round-trips a saved page through the draft, leaves empty translations out an
   expect(draft.addOns[0]).toMatchObject({ amount: '45.00', label: { en: 'Uniform', ko: '도복', es: '' } });
   expect(contentFrom(draft)).toEqual(saved?.content);
   expect(draftFrom(null)).toMatchObject({ planIds: [], addOns: [], waiverOn: false, waiver: EMPTY_TEXT });
-  expect(amountMinor('25')).toBe(2500); expect(amountMinor('$25.5')).toBe(2550); expect(amountMinor('0.01')).toBe(1);
-  for (const bad of ['0', '-5', '1,000', '25.555', 'abc', '']) expect(amountMinor(bad)).toBeNull();
+  expect(amountMinor('25', 'USD')).toBe(2500); expect(amountMinor(' 25.5 ', 'USD')).toBe(2550); expect(amountMinor('0.01', 'USD')).toBe(1);
+  for (const bad of ['0', '-5', '1,000', '25.555', '$25', 'abc', '', '1000000']) expect(amountMinor(bad, 'USD')).toBeNull();
+  // Each currency in its own units: KRW has no minor digits, KWD has three.
+  expect(amountMinor('50000', 'KRW')).toBe(50000); expect(amountMinor('50000.5', 'KRW')).toBeNull();
+  expect(amountMinor('1.250', 'KWD')).toBe(1250); expect(amountMinor('1.2505', 'KWD')).toBeNull();
+  const won = draftFrom(verifySchoolCheckoutPages(pagesRaw({ enrollment: page({ content: content({ addOns: [{ key: 'addon_1', label: { en: 'Uniform' }, amountMinor: 50000, currency: 'KRW', required: true }] }) }) })).enrollment);
+  expect(won.addOns[0]?.amount).toBe('50000');
+  expect(contentFrom(won).addOns[0]?.amountMinor).toBe(50000);
   expect(cleanText('  Big   blue\nbelt ', false)).toBe('Big blue belt');
   expect(cleanText(' Line one  \r\nLine two ', true)).toBe('Line one\nLine two');
   expect(nextKey('addon', ['addon_1', 'addon_3'])).toBe('addon_2');
@@ -126,7 +132,7 @@ it('lists every problem in plain words and builds the save from the verified rea
   d = editDraft(d, { type: 'waiverOn', on: true });
   const problems = draftProblems(d, 'ENROLLMENT', true, r.plans);
   expect(problems).toEqual(expect.arrayContaining(['Choose at least one plan before publishing the enrollment page.', 'Add-on 1 name needs English text.',
-    'Add-on 1 needs an amount like 25 or 25.00.', 'Question 1 needs English text.', 'The waiver needs English text.']));
+    'Add-on 1 needs a plain amount in USD, such as 25 or 25.00.', 'Question 1 needs English text.', 'The waiver needs English text.']));
   expect(draftProblems(editDraft(draftFrom(null), { type: 'plan', planId: planGone, shown: true }), 'TUITION', false, r.plans)).toEqual(['Old Summer Camp is no longer available. Remove it from this page.']);
   expect(draftProblems(editDraft(draftFrom(null), { type: 'text', target: 'thankYou', text: { en: 'Hi <b>', ko: '', es: '' } }), 'TUITION', false, r.plans)[0]).toContain('without < or >');
   expect(draftProblems(draftFrom(null), 'TUITION', true, r.plans)).toEqual([]);
@@ -153,13 +159,16 @@ it('shows the plans in order, the add-ons, questions and texts, and only the pla
   const html = renderToStaticMarkup(<SchoolCheckoutView {...props()}/>);
   expect(html).toContain('HON adds no fee'); expect(html).toContain('Published · version 3');
   expect(html).toContain('Little Dragons · $150.00 monthly');
+  const krw = verifySchoolCheckoutPages(pagesRaw({ enrollment: null, plans: [plan(planA, 'Little Dragons', { priceMinor: 150000, currency: 'KRW' })] }));
+  const wonPage = renderToStaticMarkup(<SchoolCheckoutView {...props({ list: { state: 'READY', read: krw }, draft: draftFrom(null) })}/>);
+  expect(wonPage).toContain('₩150,000'); expect(wonPage).not.toContain('₩1,500');
   expect(html).toContain('Add Adult Kickboxing'); expect(html).not.toContain('Add Old Summer Camp');
   expect(html).toContain('value="Uniform"'); expect(html).toContain('value="45.00"'); expect(html).toContain('Shirt size');
   expect(html).toContain('I agree to the school rules.'); expect(html).toContain('Welcome to the dojang!');
   expect(html).toContain('Save and publish'); expect(html).not.toContain('Discard changes');
   const korean = renderToStaticMarkup(<SchoolCheckoutView {...props({ editLanguage: 'ko' })}/>);
   expect(korean).toContain('value="도복"'); expect(korean).toContain('in 한국어 (Korean), optional');
-  const dirty = renderToStaticMarkup(<SchoolCheckoutView {...props({ dirty: true, problems: ['Add-on 1 needs an amount like 25 or 25.00.'] })}/>);
+  const dirty = renderToStaticMarkup(<SchoolCheckoutView {...props({ dirty: true, problems: ['Add-on 1 needs a plain amount in USD, such as 25 or 25.00.'] })}/>);
   expect(dirty).toContain('you have unsaved changes'); expect(dirty).toContain('Discard changes'); expect(dirty).toContain('Fix these before saving');
   expect(dirty).toMatch(/<button type="button" role="tab"[^>]*disabled=""[^>]*>Tuition payment page/);
   const tuition = renderToStaticMarkup(<SchoolCheckoutView {...props({ kind: 'TUITION', draft: draftFrom(null) })}/>);

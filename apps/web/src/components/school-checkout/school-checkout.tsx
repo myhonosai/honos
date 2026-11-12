@@ -94,10 +94,10 @@ export function SchoolCheckout({ api = checkoutApi }: { api?: CheckoutApi }): Re
     } finally { sending.current = false; }
     if (pending.current?.key === request.key) pending.current = keep ? request : null;
     setLock(pending.current ? 'KEPT' : 'NONE');
+    // A saved page is clean again, even when a privacy event hid the answer: the next read shows what the server now holds.
+    if (next.kind === 'DONE' && mounted.current) { const clean = { ...dirtyRef.current, [request.input.kind]: false }; dirtyRef.current = clean; setDirty(clean); }
     if (shown !== privacy.current || !mounted.current) return;
     setOutcome(next);
-    // A saved page is clean again: the fresh read replaces the draft with what the server now holds.
-    if (next.kind === 'DONE') { const clean = { ...dirtyRef.current, [request.input.kind]: false }; dirtyRef.current = clean; setDirty(clean); }
     if (!keep) setRefresh((n) => n + 1);
   }, [api]);
 
