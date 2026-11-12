@@ -21,6 +21,11 @@ import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT } from 
 import styles from './membership-activation-workbench.module.css';
 
 type Dates = { startDate: string; endDate: string | null };
+/** A membership picked at one shell school is stale after the shell switches school: its review and checks are withheld until a new pick. */
+export function activationScopeIsStale(scope: KnownMembership, shellScope: Readonly<{ organizationId: string; schoolId: string }> | null): boolean {
+  return shellScope !== null && scope.schoolId !== '' && scope.schoolId.toLowerCase() !== shellScope.schoolId.toLowerCase();
+}
+
 export function MembershipActivationWorkbench({ shellScope: shellSchool = null, sessionSubject, initialMembership, initialPresentation = 'modern', onReturnLabel, onReturn, onManageDates }: { sessionSubject?: string; initialMembership?: KnownMembership; initialPresentation?: 'modern' | 'classic' | 'big'; onReturnLabel?: string; onReturn?(): void; onManageDates?(selection: KnownMembership): void; shellScope?: Readonly<{ organizationId: string; schoolId: string }> | null }): React.ReactElement {
   const { preferences, date } = useLocale();
   // The school the shell verified supplies the selectors, so staff pick a membership instead of typing IDs.
@@ -46,6 +51,7 @@ export function MembershipActivationWorkbench({ shellScope: shellSchool = null, 
   const privateArea = useRef<HTMLDivElement | null>(null), sessionOwner = useRef(sessionSubject), restoreAttempt = useRef(0);
   sensitive.current = !!(scope.organizationId || scope.schoolId || scope.membershipId || preview || saved || pending || reading);
   const locked = commandBusy || pending !== null;
+  const stale = activationScopeIsStale(scope, shellScope);
   function resetReview(): void { setSummary(null); setConfirmed(false); setWarnings([]); setOverrideReason(''); setOverrideConfirmed(false); setAdult(false); setDetails(''); setAdjustment(''); }
   function invalidateRead(): void { readEpoch.current++; readAbort.current?.abort(); setReading(false); }
   function conceal(): void {
@@ -214,19 +220,19 @@ export function MembershipActivationWorkbench({ shellScope: shellSchool = null, 
         <form onSubmit={event => { event.preventDefault(); void review(); }}><fieldset disabled={locked}>
           {shellScope ? <MembershipActivationPicker scope={shellScope} value={scope.schoolId.toLowerCase() === shellScope.schoolId.toLowerCase() ? scope.membershipId : ''} disabled={locked}
             refresh={saved ? 1 : 0} t={t} language={preferences.language} onPick={pickMembership}/> : <div className={styles.row}>{(['organizationId', 'schoolId', 'membershipId'] as const).map(key => <label key={key}>{t(key === 'organizationId' ? 'Organization ID' : key === 'schoolId' ? 'School ID' : 'Already-known membership ID')}<input required maxLength={36} autoComplete="off" readOnly={Boolean(initialMembership)} value={scope[key]} onChange={event => editScope(key, event.target.value)} /></label>)}</div>}
-          <button type="submit" disabled={reading || (shellScope !== null && !scope.membershipId)}>{t("Review activation")}</button>
+          <button type="submit" disabled={reading || stale || (shellScope !== null && !scope.membershipId)}>{t("Review activation")}</button>
         </fieldset></form>
       </section>
-      {observed && <section><h2>{t("Current membership observation")}</h2><p>{t(observed.state)} · {t('version {version}', { version: observed.version })}. {t('This live observation is separate from any historical confirmation receipt. ACTIVE alone does not prove current effective dates, payment or agreement.')}</p>
+      {observed && !stale && <section><h2>{t("Current membership observation")}</h2><p>{t(observed.state)} · {t('version {version}', { version: observed.version })}. {t('This live observation is separate from any historical confirmation receipt. ACTIVE alone does not prove current effective dates, payment or agreement.')}</p>
         {onManageDates && observed.state === 'ACTIVE' && <><p>{t('Date history requires a separate authorized read. This handoff carries selectors only and does not change dates.')}</p><button type="button" disabled={locked || reading} onClick={manageDates}>{t('Review membership dates and history')}</button></>}
       </section>}
-      {dates && !saved && <section><h2>{t("Membership dates")}</h2><p>{t("Dates use the school timezone. The end is the last valid membership day. Every valid edit requests a fresh preview and clears all previous acknowledgements.")}</p>
+      {dates && !saved && !stale && <section><h2>{t("Membership dates")}</h2><p>{t("Dates use the school timezone. The end is the last valid membership day. Every valid edit requests a fresh preview and clears all previous acknowledgements.")}</p>
         <fieldset disabled={locked}><div className={styles.row}>
           <label>{t("Start date")}<input type="date" required value={dates.startDate} onChange={event => changeDates({ ...dates, startDate: event.target.value })} /></label>
           <label>{t("Last valid day (inclusive)")}<input type="date" value={dates.endDate ?? ''} onChange={event => changeDates({ ...dates, endDate: event.target.value || null })} /></label>
         </div><p>{t("Leave the last day blank to request an open-ended term. The backend decides whether this plan supports it.")}</p></fieldset>
       </section>}
-      {preview && <section aria-labelledby="activation-review"><h2 id="activation-review" tabIndex={-1} ref={reviewHeading}>{t("Step 1 · Review activation")}</h2>
+      {preview && !stale && <section aria-labelledby="activation-review"><h2 id="activation-review" tabIndex={-1} ref={reviewHeading}>{t("Step 1 · Review activation")}</h2>
         <dl><dt>{t("Student")}</dt><dd>{preview.participantDisplayName ?? t('Name unavailable')}</dd><dt>{t("Membership plan")}</dt><dd>{typeof preview.plan?.terms?.displayName === 'string' ? preview.plan.terms.displayName : preview.planCode} · {preview.planCode}{preview.plan ? ` · ${t('published version {version}', { version: preview.plan.membershipPlanVersion })}` : ''}</dd>
           <dt>{t("Membership source")}</dt><dd>{activationSource(preferences.language, preview.source)}</dd><dt>{t("Current membership status")}</dt><dd>{t(preview.state)} · {t('version {version}', { version: preview.version })}</dd>
           <dt>{t("School timezone")}</dt><dd>{preview.schoolTimezone} · {t('Today:')} {calendar(preview.localToday)}</dd><dt>{t("Suggested start")}</dt><dd>{calendar(preview.suggestedDates.startDate)} · {t(preview.suggestedDates.startBasis.replaceAll('_', ' '))}</dd><dt>{t("Suggested last day (inclusive)")}</dt><dd>{calendar(preview.suggestedDates.endDate)} · {t(preview.suggestedDates.endBasis.replaceAll('_', ' '))}</dd>
@@ -248,7 +254,7 @@ export function MembershipActivationWorkbench({ shellScope: shellSchool = null, 
           <button type="submit" disabled={!preview.canConfirm || preview.warnings.some(w => !warnings.includes(w.code)) || preview.overridableWarnings.some(code => !preview.availableOverrides.includes(code))}>{t("Review final confirmation")}</button>
         </fieldset></form>
       </section>}
-      {summary && preview && <section aria-labelledby="activation-final"><h2 id="activation-final" tabIndex={-1} ref={finalHeading}>{t("Step 2 · Confirm activation")}</h2>
+      {summary && preview && !stale && <section aria-labelledby="activation-final"><h2 id="activation-final" tabIndex={-1} ref={finalHeading}>{t("Step 2 · Confirm activation")}</h2>
         <p>{preview.participantDisplayName ?? t('Name unavailable')} · {preview.planCode} · {activationSource(preferences.language, preview.source)} · {preview.schoolTimezone}</p>{dateSummary(summary.startDate, summary.endDate)}
         <p>{t("Projected effective status:")} <strong>{t(preview.effectiveStatusIfConfirmedNow ?? 'Unavailable')}</strong>. {t('The server will revalidate these exact reviewed facts.')}</p>
         <p>{t("Reason:")} {activationReason(preferences.language, summary.reasonCode)}{summary.reasonText ? ` · ${summary.reasonText}` : ''}</p>{summary.dateAdjustmentReason && <p>{t("Date adjustment:")} {summary.dateAdjustmentReason}</p>}
@@ -262,7 +268,7 @@ export function MembershipActivationWorkbench({ shellScope: shellSchool = null, 
       {pending && <section><h2>{t(commandBusy ? 'Activation request in progress' : 'Activation outcome unknown')}</h2><p>{t("No unverified activation is assumed. The immutable request and original idempotency key remain in memory only. There is no automatic retry.")}</p>
         <button type="button" disabled={commandBusy} onClick={() => void activate(pending)}>{t("Retry exact retained activation")}</button><CrmEnrollmentDiscard disabled={commandBusy} onDiscard={discard} label={t("Discard activation retry")} copy={discardCopy} />
       </section>}
-      {saved && <section aria-labelledby="activation-receipt"><h2 id="activation-receipt">{t("Membership confirmation receipt")}</h2>
+      {saved && !stale && <section aria-labelledby="activation-receipt"><h2 id="activation-receipt">{t("Membership confirmation receipt")}</h2>
         <p>{saved.receipt.effectiveStatusAtActivation === 'SCHEDULED' ? t('Membership confirmed — scheduled to begin {date}.', { date: calendar(saved.receipt.effectivePeriod.startDate) }) : t(saved.receipt.effectiveStatusAtActivation === 'ENDED' ? 'Membership confirmed — its recorded effective period has ended.' : 'Membership confirmed — IN_EFFECT at the recorded confirmation time.')}</p>
         <p>{t('Lifecycle ACTIVE · version {version}', { version: saved.receipt.version })}{saved.replayed ? ` · ${t('idempotent replay')}` : ''}. {t('This is historical confirmation evidence; it is not a new current-state read.')}</p>
         {dateSummary(saved.receipt.effectivePeriod.startDate, saved.receipt.effectivePeriod.endDate)}<p>{t("School timezone:")} {saved.receipt.effectivePeriod.schoolTimezone}. {t('Confirmation recorded:')} {date(saved.receipt.recordedAt)}.</p>
@@ -272,9 +278,9 @@ export function MembershipActivationWorkbench({ shellScope: shellSchool = null, 
         <h3>{t("Requirements not evaluated")}</h3><ul>{saved.receipt.requirementsNotEvaluated.map(item => <li key={item}>{activationRequirement(preferences.language, item)}</li>)}</ul>
         <p>{t("This is not payment, agreement, consent, recurring authorization or financially complete enrollment evidence.")}</p>
       </section>}
-      <section><button type="button" disabled={locked || reading} onClick={() => void observe()}>{t("Check current membership status")}</button>
+      <section><button type="button" disabled={locked || reading || stale} onClick={() => void observe()}>{t("Check current membership status")}</button>
         <p>{t("Current lifecycle observation; effective status, payment and agreement are not verified by this read.")}</p></section>
-      {saved && <section><h2>{t("Continue school operations")}</h2><p>{t("These links do not book a class, record attendance or prove payment.")}</p><a href="/staff/schedule/bookings">{t("Class bookings")}</a><a href="/staff/attendance">{t("Attendance")}</a></section>}
+      {saved && !stale && <section><h2>{t("Continue school operations")}</h2><p>{t("These links do not book a class, record attendance or prove payment.")}</p><a href="/staff/schedule/bookings">{t("Class bookings")}</a><a href="/staff/attendance">{t("Attendance")}</a></section>}
     </div>}
     {reading && <p role="status">{t("Verifying current session, school access and membership facts…")}</p>}
     {error && <p role="alert" className={styles.error}>{t(error)}</p>}

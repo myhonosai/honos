@@ -11,9 +11,19 @@ import { MembershipListError, membershipListApi, type MembershipListApi, type Me
 export type PickerState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; items: readonly SchoolMembershipListItem[] };
 type T = (key: string, vars?: { date?: string }) => string;
 
+/** At most this many list pages are read for the picker; later DRAFTs stay reachable from the membership list. */
+const DRAFT_PAGE_CAP = 4;
+
 export async function loadDraftMemberships(api: Pick<MembershipListApi, 'page'>, scope: MembershipListScope, signal: AbortSignal, owned: Owned): Promise<readonly SchoolMembershipListItem[]> {
-  const page = await api.page(scope, 'DRAFT', null, signal, owned);
-  return page.items;
+  const items: SchoolMembershipListItem[] = [];
+  let cursor: string | null = null;
+  for (let read = 0; read < DRAFT_PAGE_CAP; read++) {
+    const page = await api.page(scope, 'DRAFT', cursor, signal, owned);
+    items.push(...page.items);
+    cursor = page.nextCursor;
+    if (!cursor) break;
+  }
+  return items;
 }
 
 export function pickerLabel(item: SchoolMembershipListItem, language: string, t: T): string {

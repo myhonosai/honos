@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { CurrentSchoolClassSession } from '@hon/contracts';
 import { BookingPickersView, bookableSessions, loadBookableStudents, sessionLabel } from '../src/components/class-booking-pickers';
+import { shellBookingIds } from '../src/components/class-booking-workbench';
 import { id, scope } from './account-status-fixtures';
 
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
@@ -43,4 +44,12 @@ it('renders labelled class and student pickers with no UUID inputs', () => {
   const empty = renderToStaticMarkup(<BookingPickersView language="en" sessions={{ state: 'READY', items: [] }} students={{ state: 'DENIED' }} sessionId="" studentProfileId="" search="" disabled={false}/>);
   expect(empty).toContain('No upcoming classes');
   expect(empty).toContain('does not include booking students');
+});
+
+it('drops the picked class and student when the shell school changes', () => {
+  const picked = { organizationId: scope.organizationId, schoolId: scope.schoolId, sessionId: id(604), studentProfileId: id(700) };
+  expect(shellBookingIds(picked, scope)).toEqual(picked);
+  const other = { organizationId: scope.organizationId, schoolId: id(999) };
+  expect(shellBookingIds(picked, other)).toEqual({ organizationId: scope.organizationId, schoolId: id(999), sessionId: '', studentProfileId: '' });
+  expect(shellBookingIds(picked, null)).toEqual(picked);
 });
