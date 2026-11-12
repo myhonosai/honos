@@ -1,3 +1,10 @@
+@font-face{font-family:"Geist";src:url("/fonts/geist-latin-400-normal.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"Geist";src:url("/fonts/geist-latin-500-normal.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:"Geist";src:url("/fonts/geist-latin-600-normal.woff2") format("woff2");font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:"Geist";src:url("/fonts/geist-latin-700-normal.woff2") format("woff2");font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:"Geist Mono";src:url("/fonts/geist-mono-latin-400-normal.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"Geist Mono";src:url("/fonts/geist-mono-latin-500-normal.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:"Instrument Serif";src:url("/fonts/instrument-serif-latin-400-italic.woff2") format("woff2");font-weight:400;font-style:italic;font-display:swap}
 *,*::before,*::after{box-sizing:border-box}
 html{scroll-padding-top:72px}
 body{margin:0}
@@ -8,7 +15,7 @@ img{max-width:100%;height:auto}
   --bg:#0a0b0a; --surface:#121412; --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
   --fg:#f1f2ee; --muted:#a2a69e; --dim:#686c65;
   --accent:#c8f25a; --accent-2:#62d6c4; --on-accent:#0b0c09;
-  --sans:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI","Noto Sans KR",sans-serif;
+  --sans:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;
   --serif:"Instrument Serif",Georgia,"Times New Roman",serif;
   --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --r-lg:22px; --r-md:14px; --r-sm:10px;
@@ -277,3 +284,10 @@ footer{padding-block:28px 48px;border-top:1px solid var(--line);background:rgba(
 .cta-card .cta-row{margin-top:8px}
 .cta-card .btn:focus-visible{outline-color:#0b0c09}
 @media (max-width:520px){.nav-right .btn:not(.primary){display:none}.nav .btn{padding:10px 14px}}
+.lang{display:flex;gap:2px;padding:3px;border-radius:999px;border:1px solid var(--line-2);font-family:var(--mono);font-size:12px}
+.lang a{padding:5px 9px;border-radius:999px;color:var(--muted)}
+.lang a:hover{color:var(--fg)}
+.lang a[aria-current="page"]{background:rgba(255,255,255,.1);color:var(--fg)}
+@media (max-width:560px){.nav-right .lang{display:none}}
+html[lang="ko"] h1,html[lang="ko"] h2,html[lang="ko"] h3{word-break:keep-all;letter-spacing:-.02em}
+html[lang="ko"] p,html[lang="ko"] li{word-break:keep-all}
