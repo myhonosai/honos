@@ -181,11 +181,26 @@ test('0265 API: six routes under human-UI guards; provider references never reac
     /@Post\('payers\/:billingAccountId\/method-setups\/:setupId\/finish'\)/, /@Post\('payers\/:billingAccountId\/methods\/:methodId\/default'\)/,
     /@Post\('payers\/:billingAccountId\/methods\/:methodId\/remove'\)/]) assert.match(controller, route);
   assert.equal((controller.match(/@UseGuards\(SchoolPay[A-Za-z]+HumanUiGuard\)/g) ?? []).length, 6);
-  assert.match(controller, /accountRef: _a, customerRef, \.\.\.rest/);
+  assert.match(controller, /schoolPayPayerMethodsForBrowser\(data\)/); assert.match(controller, /schoolPaySetupForBrowser\(result\.receipt\.setup\)/);
   const service = fs.readFileSync(path.join(__dirname, '../src/school-payments/school-pay-method.service.ts'), 'utf8');
   for (const fn of ['read_school_pay_payer_methods', 'read_school_pay_expiring_methods', 'start_school_pay_method_setup', 'finish_school_pay_method_setup',
     'set_default_school_pay_method', 'remove_school_pay_method']) assert.match(service, new RegExp(`hon\\.${fn}\\(`));
   assert.doesNotMatch(service + controller, /from '\.\.\/payments\/|PAYMENT_PROVIDER_ADAPTER|STRIPE_TEST_SECRET_KEY|application_fee|app_fee_money|cardNumber|cvc/i);
   const module = fs.readFileSync(path.join(__dirname, '../src/app.module.ts'), 'utf8');
   assert.match(module, /SchoolPayMethodController,/); assert.match(module, /SchoolPayMethodService,/);
+});
+
+test('0265 browser views carry no provider account, customer or setup reference', () => {
+  const full = { billingAccountId: PAYER, canManage: true, platformFee: 'NONE', payerName: 'Avery Family',
+    connections: [{ connectionId: CONN, providerCode: 'STRIPE_CONNECT', displayName: 'Stripe', accountRef: 'acct_sim1234', isDefault: true, storedCard: true, bankDebit: true, customerRef: 'cus_sim1234' }],
+    methods: [method()], setups: [setup()] };
+  const view = contracts.schoolPayPayerMethodsForBrowser(contracts.verifySchoolPayPayerMethods(full, PAYER));
+  assert.doesNotMatch(JSON.stringify(view), /acct_sim|cus_sim|seti_sim/);
+  assert.equal(view.connections[0].hasCustomer, true);
+  assert.deepEqual(contracts.verifySchoolPayPayerMethodsView(JSON.parse(JSON.stringify(view)), PAYER), view);
+  assert.throws(() => contracts.verifySchoolPayPayerMethodsView(full, PAYER), undefined, 'a body with references is refused');
+  assert.throws(() => contracts.verifySchoolPayPayerMethodsView({ ...view, setups: [setup()] }, PAYER), undefined, 'a setup with its reference is refused');
+  const start = { setup: contracts.schoolPaySetupForBrowser(setup()), setupUrl: 'https://checkout.stripe.test/x' };
+  assert.equal(contracts.verifySchoolPaySetupStartView(start, { billingAccountId: PAYER }).setupUrl, 'https://checkout.stripe.test/x');
+  assert.throws(() => contracts.verifySchoolPaySetupStartView({ setup: setup(), setupUrl: null }));
 });

@@ -112,7 +112,7 @@ async function success(run, label) {
   const { status, body, headers, text } = await run();
   assert.equal(status, 200, `${label}: expected 200, got ${status} ${JSON.stringify(body).slice(0, 400)}`);
   ok(headers['cache-control'] === 'private, no-store', `${label}: never cached`);
-  ok(!/cus_sim|SQCUSTSIM|pm_sim|ccof:|acct_sim|MLSIM/.test(text), `${label}: no provider account, customer or method reference reaches the browser`);
+  ok(!/cus_sim|SQCUSTSIM|pm_sim|ccof:|acct_sim|MLSIM|seti_sim|sqsetup_sim/.test(text), `${label}: no provider account, customer, setup or method reference reaches the browser`);
   return body;
 }
 async function refused(run, expectedStatus, expectedCode, label) {
@@ -218,6 +218,8 @@ async function connect(actor, providerCode) {
 const stateOf = (url) => new URL(url).searchParams.get('state');
 const methodRow = async (id) => (await sql('SELECT * FROM hon.school_pay_methods WHERE id=$1', [id])).rows[0];
 const setupRow = async (id) => (await sql('SELECT * FROM hon.school_pay_method_setups WHERE id=$1', [id])).rows[0];
+/** The provider setup reference stays server-side; the proof reads it from the database to steer the simulator. */
+const refOf = async (setup) => (await setupRow(setup.setupId)).provider_setup_ref;
 const CARD = (connectionId) => ({ connectionId, methodKinds: ['CARD'], consentTextVersion: 'card-on-file-v1' });
 
 try {
@@ -264,7 +266,7 @@ try {
   ok(s1.data.setupUrl.startsWith(`${origin}/staff/billing/saved-payment-methods?payer=${P1}&setup=${setup1.setupId}`) && /^[A-Za-z0-9_-]{43}$/.test(state1),
     'the hosted page returns to the staff page with a one-time state');
   ok(setup1.state === 'PENDING' && setup1.version === 1 && setup1.methodKinds.join() === 'CARD' && setup1.consentTextVersion === 'card-on-file-v1'
-    && /^seti_sim[0-9a-f]{16}$/.test(setup1.setupRef) && Date.parse(setup1.expiresAt) - Date.parse(setup1.createdAt) === 3_600_000 && s1.meta.replayed === false, 'pending setup, one hour');
+    && !('setupRef' in setup1) && /^seti_sim[0-9a-f]{16}$/.test(await refOf(setup1)) && Date.parse(setup1.expiresAt) - Date.parse(setup1.createdAt) === 3_600_000 && s1.meta.replayed === false, 'pending setup, one hour');
   const replay1 = await success(() => startSetup(OWN, P1, CARD(stripeConn.connectionId), { key: setupKey }), 'setup replay');
   ok(replay1.meta.replayed === true && replay1.data.setup.setupId === setup1.setupId && replay1.data.setupUrl === null, 'a replay returns the stored setup without a link');
   await refused(() => startSetup(OWN, P1, { ...CARD(stripeConn.connectionId), methodKinds: ['CARD', 'US_BANK_ACCOUNT'] }, { key: setupKey }), 409, 'IDEMPOTENCY_KEY_REUSED', 'the same key for another setup');
@@ -280,9 +282,9 @@ try {
   await refused(() => finishSetup(OWN, P1, setup1.setupId, { expectedVersion: 1, setupState: 'short' }), 400, 'VALIDATION_FAILED', 'malformed setup state');
   await refused(() => finishSetup(OWN, P2, setup1.setupId, { expectedVersion: 1, setupState: state1 }), 404, 'SCHOOL_PAY_SETUP_NOT_FOUND', 'the setup of another payer');
   await refused(() => finishSetup(READER, P1, setup1.setupId, { expectedVersion: 1, setupState: state1 }), 403, undefined, 'reader cannot finish');
-  stripe.setupOutcomes.set(setup1.setupRef, { incomplete: true });
+  stripe.setupOutcomes.set(await refOf(setup1), { incomplete: true });
   await refused(() => finishSetup(OWN, P1, setup1.setupId, { expectedVersion: 1, setupState: state1 }), 409, 'SCHOOL_PAY_SETUP_INCOMPLETE', 'the payer left the provider page without saving');
-  stripe.setupOutcomes.delete(setup1.setupRef);
+  stripe.setupOutcomes.delete(await refOf(setup1));
   const finishKey = randomUUID();
   const f1 = await success(() => finishSetup(OWN, P1, setup1.setupId, { expectedVersion: 1, setupState: state1 }, { key: finishKey }), 'finish Stripe card');
   const m1 = f1.data.method;
@@ -305,19 +307,19 @@ try {
   await refused(() => finishSetup(OWN, P1, older.setup.setupId, { expectedVersion: 1, setupState: stateOf(older.setupUrl) }), 404, 'SCHOOL_PAY_SETUP_NOT_FOUND', 'a superseded setup cannot finish');
   const now = new Date(new Date().toLocaleString('en-US', { timeZone: LA }));
   const thisMonth = { expMonth: now.getMonth() + 1, expYear: now.getFullYear() };
-  stripe.setupOutcomes.set(newer.setup.setupRef, { brand: 'MASTERCARD', last4: '4444', ...thisMonth });
+  stripe.setupOutcomes.set(await refOf(newer.setup), { brand: 'MASTERCARD', last4: '4444', ...thisMonth });
   const m3 = (await success(() => finishSetup(OWN, P1, newer.setup.setupId, { expectedVersion: 1, setupState: stateOf(newer.setupUrl) }), 'finish expiring card')).data.method;
   ok(m3.brand === 'MASTERCARD' && m3.expMonth === thisMonth.expMonth && m3.expYear === thisMonth.expYear, 'Mastercard expiring this month');
   const kindMismatch = (await success(() => startSetup(OWN, P1, CARD(stripeConn.connectionId)), 'start a card-only setup')).data;
-  stripe.setupOutcomes.set(kindMismatch.setup.setupRef, { kind: 'US_BANK_ACCOUNT' });
+  stripe.setupOutcomes.set(await refOf(kindMismatch.setup), { kind: 'US_BANK_ACCOUNT' });
   await refused(() => finishSetup(OWN, P1, kindMismatch.setup.setupId, { expectedVersion: 1, setupState: stateOf(kindMismatch.setupUrl) }), 422, 'SCHOOL_PAY_METHODS_UNAVAILABLE', 'a bank account from a card-only setup');
-  stripe.setupOutcomes.set(kindMismatch.setup.setupRef, { customerRef: 'cus_simsomeoneelse' });
+  stripe.setupOutcomes.set(await refOf(kindMismatch.setup), { customerRef: 'cus_simsomeoneelse' });
   await refused(() => finishSetup(OWN, P1, kindMismatch.setup.setupId, { expectedVersion: 1, setupState: stateOf(kindMismatch.setupUrl) }), 422, 'SCHOOL_PAY_CUSTOMER_MISMATCH', 'a method of another provider customer');
 
   // 5. Square card on file for payer 2 (an expired card), plus an expired setup that cannot finish.
   const q = (await success(() => startSetup(OWN, P2, CARD(squareConn.connectionId)), 'start Square card setup')).data;
-  ok(/^sqsetup_sim[0-9a-f]{16}$/.test(q.setup.setupRef), 'Square setup');
-  square.setupOutcomes.set(q.setup.setupRef, { brand: 'AMEX', last4: '0005', expMonth: 1, expYear: 2024 });
+  ok(/^sqsetup_sim[0-9a-f]{16}$/.test(await refOf(q.setup)), 'Square setup');
+  square.setupOutcomes.set(await refOf(q.setup), { brand: 'AMEX', last4: '0005', expMonth: 1, expYear: 2024 });
   const mq = (await success(() => finishSetup(OWN, P2, q.setup.setupId, { expectedVersion: 1, setupState: stateOf(q.setupUrl) }), 'finish Square card')).data.method;
   ok(mq.brand === 'AMEX' && mq.isDefault === true && mq.connectionId === squareConn.connectionId && (await methodRow(mq.methodId)).provider_method_ref.startsWith('ccof:sim'), 'Square card on file is payer 2 default');
   ok((await sql('SELECT provider_customer_ref FROM hon.school_pay_customers WHERE billing_account_id=$1', [P2])).rows[0].provider_customer_ref.startsWith('SQCUSTSIM'), 'Square customer');

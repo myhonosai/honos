@@ -213,3 +213,47 @@ export function verifySchoolPayMethodRemoval(value: unknown, expect: { methodId:
   if (connectionId !== method.connectionId) invalid();
   return { method, providerMethodRef: matching(row.providerMethodRef, PROVIDER_REF), connectionId };
 }
+
+// Browser views: the API keeps the provider account, customer and setup references to itself.
+export type SchoolPayMethodSetupView = Omit<SchoolPayMethodSetup, 'setupRef'>;
+export type SchoolPayMethodConnectionView = Omit<SchoolPayMethodConnection, 'accountRef' | 'customerRef'> & { hasCustomer: boolean };
+export interface SchoolPayPayerMethodsView extends Omit<SchoolPayPayerMethods, 'connections' | 'setups'> {
+  connections: SchoolPayMethodConnectionView[]; setups: SchoolPayMethodSetupView[];
+}
+export interface SchoolPaySetupStartView { setup: SchoolPayMethodSetupView; setupUrl: string | null }
+const HIDDEN = 'hidden';
+function stripped<T extends object, K extends keyof T>(value: T, keys: readonly K[]): Omit<T, K> {
+  const copy = { ...value };
+  for (const key of keys) delete copy[key];
+  return copy;
+}
+/** Adds placeholders for the hidden references so the full verifier can run, after checking the browser body has none. */
+function withHidden(value: unknown, keys: readonly string[], fill: Record<string, unknown>): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || keys.some(key => key in (value as object))) invalid();
+  return { ...(value as object), ...fill };
+}
+export function schoolPaySetupForBrowser(setup: SchoolPayMethodSetup): SchoolPayMethodSetupView { return stripped(setup, ['setupRef']); }
+export function schoolPayPayerMethodsForBrowser(view: SchoolPayPayerMethods): SchoolPayPayerMethodsView {
+  return { ...view, connections: view.connections.map(c => ({ ...stripped(c, ['accountRef', 'customerRef']), hasCustomer: c.customerRef !== null })),
+    setups: view.setups.map(schoolPaySetupForBrowser) };
+}
+export function verifySchoolPayMethodSetupView(value: unknown, expect: { billingAccountId?: string } = {}): SchoolPayMethodSetupView {
+  return schoolPaySetupForBrowser(verifySchoolPayMethodSetup(withHidden(value, ['setupRef'], { setupRef: HIDDEN }), expect));
+}
+export function verifySchoolPayPayerMethodsView(value: unknown, billingAccountId?: string): SchoolPayPayerMethodsView {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) invalid();
+  const row = value as Record<string, unknown>;
+  if (!Array.isArray(row.connections) || !Array.isArray(row.setups)) invalid();
+  const hasCustomer = row.connections.map(c => { const v = (c as Record<string, unknown> | null)?.hasCustomer; if (typeof v !== 'boolean') invalid(); return v; });
+  const full = verifySchoolPayPayerMethods({ ...row,
+    connections: row.connections.map((c, i) => { const { hasCustomer: _h, ...rest } = c as Record<string, unknown>;
+      return withHidden(rest, ['accountRef', 'customerRef'], { accountRef: HIDDEN, customerRef: hasCustomer[i] ? HIDDEN : null }); }),
+    setups: row.setups.map(s => withHidden(s, ['setupRef'], { setupRef: HIDDEN })) }, billingAccountId);
+  return schoolPayPayerMethodsForBrowser(full);
+}
+export function verifySchoolPaySetupStartView(value: unknown, expect: { billingAccountId?: string; connectionId?: string } = {}): SchoolPaySetupStartView {
+  const row = record(value, ['setup', 'setupUrl']);
+  const { setup } = verifySchoolPaySetupReceipt({ setup: withHidden(row.setup, ['setupRef'], { setupRef: HIDDEN }) }, expect);
+  if (row.setupUrl !== null && (typeof row.setupUrl !== 'string' || row.setupUrl.length > 4000)) invalid();
+  return { setup: schoolPaySetupForBrowser(setup), setupUrl: row.setupUrl as string | null };
+}

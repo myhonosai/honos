@@ -1,5 +1,6 @@
 import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Header, Headers, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Req, ServiceUnavailableException, UseGuards } from '@nestjs/common';
 import { configuredPublicOrigin } from '@hon/auth';
+import { schoolPayPayerMethodsForBrowser, schoolPaySetupForBrowser } from '@hon/contracts';
 import { randomUUID } from 'node:crypto';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
@@ -47,7 +48,7 @@ export class SchoolPayMethodController {
     this.noQuery(request);
     const context = await this.context(request, organizationId, schoolId, READ, '');
     const data = await this.methods.payer(context, billingAccountId);
-    return { data: this.forBrowser(data), meta: { requestId: context.requestId, correlationId: context.correlationId } };
+    return { data: schoolPayPayerMethodsForBrowser(data), meta: { requestId: context.requestId, correlationId: context.correlationId } };
   }
 
   @Get('saved-methods/expiring')
@@ -90,7 +91,7 @@ export class SchoolPayMethodController {
       return url.toString();
     };
     const result = await this.methods.start(context, billingAccountId, definedFields(input), returnUrlFor);
-    return { data: result.receipt, meta: { requestId: context.requestId, correlationId: context.correlationId, replayed: result.replayed } };
+    return { data: { setup: schoolPaySetupForBrowser(result.receipt.setup), setupUrl: result.receipt.setupUrl }, meta: { requestId: context.requestId, correlationId: context.correlationId, replayed: result.replayed } };
   }
 
   @Post('payers/:billingAccountId/method-setups/:setupId/finish')
@@ -148,11 +149,6 @@ export class SchoolPayMethodController {
     const context = await this.context(request, organizationId, schoolId, [MANAGE], this.key(idempotencyKey));
     const result = await this.methods.remove(context, billingAccountId, methodId, definedFields(input));
     return { data: { method: result.receipt.method }, meta: { requestId: context.requestId, correlationId: context.correlationId, replayed: result.replayed, providerDetached: result.receipt.providerDetached } };
-  }
-
-  /** The provider account and customer references are for the API's provider calls only; the browser never needs them. */
-  private forBrowser(data: Awaited<ReturnType<SchoolPayMethodService['payer']>>) {
-    return { ...data, connections: data.connections.map(({ accountRef: _a, customerRef, ...rest }) => ({ ...rest, hasCustomer: customerRef !== null })) };
   }
 
   private noQuery(request: HonRequest): void {
