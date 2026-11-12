@@ -25,6 +25,7 @@ function TrialSummary({ trial, c, at }: { trial: HonOsTrial; c: StartCopy; at: (
     <p><strong>{trial.status === 'TRIAL_ACTIVE' ? c.trialActive : trial.status === 'TRIAL_ENDED' ? c.trialEnded : c.trialReplaced}</strong></p>
     <p>{c.trialDates(trial.durationDays, at(trial.startsAt), at(trial.endsAt))}</p>
     <p>{trial.aiCredits ? c.aiUsage(trial.aiCredits.used, trial.aiCredits.credits, trial.aiCredits.dailyCap, at(trial.aiCredits.expiresAt)) : c.noAi}</p>
+    <p data-start-creative>{trial.creativeCredits ? c.creativeUsage(trial.creativeCredits.available, trial.creativeCredits.credits, at(trial.creativeCredits.expiresAt)) : c.noCreative}</p>
   </div>;
 }
 

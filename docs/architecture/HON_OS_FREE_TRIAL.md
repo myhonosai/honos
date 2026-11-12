@@ -41,8 +41,8 @@ campaign provider-cost cap.
 - `hon.ai_spend_allowed` maps a trial-owned entitlement to `TRIAL_ACTIVE`/`TRIAL_ENDED` and a registered school with no
   trial to `REGISTERED` (`AI_ACCESS_NOT_PAID`).
 - `hon.ai_trial_funding_available` (0195 hook, replaced here) is true only for `AGENT_INFERENCE`, while the trial owns
-  the entitlement, has a budget and `now < starts_at + creditExpiryDays`. `CREATIVE_MEDIA` is never trial-funded
-  (Creative Studio stays wallet-only), so a trial school is refused as `AI_TRIAL_FUNDING_NOT_APPROVED` for media.
+  the entitlement, has a budget and `now < starts_at + creditExpiryDays`. `CREATIVE_MEDIA` was never trial-funded
+  here; 0275 (below) replaces that with the trial's own creative credits.
 - `hon.ai_org_ceiling` (0194, replaced in 0246 and 0272) is what every agent prepare already compares
   `committed + estimate` against under the `ai.budget:<org>` lock. For a school whose entitlement a trial owns it is 0
   unless funded now; when funded it is the least of 12000, the trial credits left, today's (UTC) daily cap and
@@ -60,6 +60,26 @@ campaign provider-cost cap.
 Note for HQ: agent estimates today are up to 10 credits per request (HON reply), so a per-request cap below 10 refuses
 those requests. The campaign cost cap is checked per school under its own budget lock, so schools deciding at the same
 instant can each still start one request (at most its plan's maximum cost) past it; once their holds exist, they count.
+
+## Trial creative credits (0275)
+
+Owner decision 2026-11-12: the free trial includes Creative Studio, worth about $15 of real provider cost per school
+(images, short videos and an avatar try). This supersedes "CREATIVE_MEDIA is never trial-funded" above.
+
+- **Grant:** starting a trial (any path that inserts `hon_os_trial_enrollments`) grants, in the same transaction, one
+  creative lot of kind `TRIAL` in the trial school's own wallet: 1,500 credits (the assumed $0.01 provider cost per
+  credit), expiring exactly when the trial ends. `hon_os_trial_creative_grants` snapshots the credits and the $15 cost
+  stop per trial; `hon_os_trial_creative_policy` holds the amounts in force (migration owner only for now).
+- **Spending:** the normal Creative Studio path (`reserve_saas_creative_credits`) spends it, so images, video and
+  avatars (`avatar.create`, later `avatar.video`) work for a trial school with no extra step, at HQ-published rates.
+  TRIAL lots are spent first. A trial school never gets an included monthly window.
+- **Two stops:** credits (never past 1,500), and real cost: the shared spend decision funds `CREATIVE_MEDIA` only
+  while the trial is live and the creative provider cost recorded for the organization during the trial is below
+  $15. Reservations already held when the cap is reached can still finish (at most one request each).
+- **Gates unchanged:** the trial program stays CLOSED and the creative program INACTIVE; HQ emergency pauses apply.
+- **Receipt:** the trial receipt now says `creativeCreditsIncluded: true` with `creativeCredits` (granted, left now,
+  expiry = trial end). The wallet lists `TRIAL` by kind only for a school that has a trial lot.
+- A trial started before 0275 has no creative lot (no trial exists outside disposable test databases).
 
 ## Evidence
 

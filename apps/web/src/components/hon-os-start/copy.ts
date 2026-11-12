@@ -19,6 +19,7 @@ export type StartCopy = Readonly<{
   trialActive: string; trialEnded: string; trialReplaced: string;
   trialDates: (days: number, from: string, until: string) => string;
   aiUsage: (used: number, credits: number, daily: number, until: string) => string;
+  creativeUsage: (left: number, credits: number, until: string) => string; noCreative: string;
   noAi: string; founderSetup: string;
   trialClosed: string; noOffer: string;
   offer: (name: string, days: number) => string;
@@ -74,12 +75,14 @@ const en: StartCopy = {
   trialStarted: 'Your free trial has started. Continue to Founder Setup to set up your school.',
   trialActive: 'Your free trial is on.', trialEnded: 'Your free trial has ended.', trialReplaced: 'Your free trial was replaced by other access.',
   trialDates: (d, f, u) => `${d} days, from ${f} until ${u}. No charge, and no payment method is needed. Nothing renews automatically.`,
-  aiUsage: (used, c, daily, u) => `AI team: ${used} of ${c} trial credits used, up to ${daily} a day, until ${u}. Creative Studio images and video are not included.`,
+  aiUsage: (used, c, daily, u) => `AI team: ${used} of ${c} trial credits used, up to ${daily} a day, until ${u}.`,
+  creativeUsage: (left, c, u) => `Creative Studio: ${left} of ${c} trial creative credits left for images, video and avatars, until ${u}.`,
+  noCreative: 'This trial does not include Creative Studio.',
   noAi: 'This trial does not include the AI team.', founderSetup: 'Continue to Founder Setup →',
   trialClosed: 'Free trials are not open yet. Your school account is saved; come back when HON opens them.',
   noOffer: 'No free trial is available right now. Check again later.',
   offer: (n, d) => `${n}: ${d} days. No charge, no payment method, nothing renews automatically.`,
-  offerAi: (c, daily, e) => `Includes the AI team with ${c} trial credits (up to ${daily} a day) for the first ${e} days. Creative Studio images and video are not included.`,
+  offerAi: (c, daily, e) => `Includes the AI team with ${c} trial credits (up to ${daily} a day) for the first ${e} days. Creative Studio images, video and avatars come with their own trial credits.`,
   trialTermsPending: 'The free-trial terms are still being prepared and will be shown here before trials open.',
   confirmTrial: d => `Start my ${d}-day free trial now.`, startTrial: 'Start free trial',
 };
@@ -131,12 +134,14 @@ const ko: StartCopy = {
   trialStarted: '무료 체험이 시작되었습니다. 창업자 설정으로 이동하여 도장을 설정하세요.',
   trialActive: '무료 체험 중입니다.', trialEnded: '무료 체험이 끝났습니다.', trialReplaced: '무료 체험이 다른 접근 권한으로 대체되었습니다.',
   trialDates: (d, f, u) => `${d}일, ${f}부터 ${u}까지. 요금이 없고 결제 수단이 필요 없습니다. 자동으로 갱신되지 않습니다.`,
-  aiUsage: (used, c, daily, u) => `AI 팀: 체험 크레딧 ${c} 중 ${used} 사용, 하루 최대 ${daily}, ${u}까지. 크리에이티브 스튜디오 이미지와 동영상은 포함되지 않습니다.`,
+  aiUsage: (used, c, daily, u) => `AI 팀: 체험 크레딧 ${c} 중 ${used} 사용, 하루 최대 ${daily}, ${u}까지.`,
+  creativeUsage: (left, c, u) => `크리에이티브 스튜디오: 이미지, 동영상, 아바타용 체험 크리에이티브 크레딧 ${c} 중 ${left} 남음, ${u}까지.`,
+  noCreative: '이 체험에는 크리에이티브 스튜디오가 포함되지 않습니다.',
   noAi: '이 체험에는 AI 팀이 포함되지 않습니다.', founderSetup: '창업자 설정으로 계속 →',
   trialClosed: '무료 체험은 아직 열리지 않았습니다. 도장 계정은 저장되었습니다. HON이 체험을 열면 다시 오세요.',
   noOffer: '지금은 이용 가능한 무료 체험이 없습니다. 나중에 다시 확인하세요.',
   offer: (n, d) => `${n}: ${d}일. 요금 없음, 결제 수단 없음, 자동 갱신 없음.`,
-  offerAi: (c, daily, e) => `처음 ${e}일 동안 체험 크레딧 ${c}(하루 최대 ${daily})으로 AI 팀이 포함됩니다. 크리에이티브 스튜디오 이미지와 동영상은 포함되지 않습니다.`,
+  offerAi: (c, daily, e) => `처음 ${e}일 동안 체험 크레딧 ${c}(하루 최대 ${daily})으로 AI 팀이 포함됩니다. 크리에이티브 스튜디오 이미지, 동영상, 아바타에는 별도의 체험 크레딧이 제공됩니다.`,
   trialTermsPending: '무료 체험 약관은 준비 중이며 체험이 열리기 전에 여기에 표시됩니다.',
   confirmTrial: d => `지금 ${d}일 무료 체험을 시작합니다.`, startTrial: '무료 체험 시작',
 };
@@ -188,12 +193,14 @@ const es: StartCopy = {
   trialStarted: 'Su prueba gratuita ha comenzado. Continúe a la configuración inicial para preparar su escuela.',
   trialActive: 'Su prueba gratuita está activa.', trialEnded: 'Su prueba gratuita ha terminado.', trialReplaced: 'Su prueba gratuita fue sustituida por otro acceso.',
   trialDates: (d, f, u) => `${d} días, desde ${f} hasta ${u}. Sin cargo y sin método de pago. Nada se renueva automáticamente.`,
-  aiUsage: (used, c, daily, u) => `Equipo de IA: ${used} de ${c} créditos de prueba usados, hasta ${daily} al día, hasta ${u}. No incluye imágenes ni video de Creative Studio.`,
+  aiUsage: (used, c, daily, u) => `Equipo de IA: ${used} de ${c} créditos de prueba usados, hasta ${daily} al día, hasta ${u}.`,
+  creativeUsage: (left, c, u) => `Creative Studio: quedan ${left} de ${c} créditos creativos de prueba para imágenes, video y avatares, hasta ${u}.`,
+  noCreative: 'Esta prueba no incluye Creative Studio.',
   noAi: 'Esta prueba no incluye el equipo de IA.', founderSetup: 'Continuar a la configuración inicial →',
   trialClosed: 'Las pruebas gratuitas aún no están abiertas. La cuenta de su escuela está guardada; vuelva cuando HON las abra.',
   noOffer: 'No hay ninguna prueba gratuita disponible ahora. Vuelva a comprobar más tarde.',
   offer: (n, d) => `${n}: ${d} días. Sin cargo, sin método de pago, nada se renueva automáticamente.`,
-  offerAi: (c, daily, e) => `Incluye el equipo de IA con ${c} créditos de prueba (hasta ${daily} al día) durante los primeros ${e} días. No incluye imágenes ni video de Creative Studio.`,
+  offerAi: (c, daily, e) => `Incluye el equipo de IA con ${c} créditos de prueba (hasta ${daily} al día) durante los primeros ${e} días. Las imágenes, el video y los avatares de Creative Studio tienen sus propios créditos de prueba.`,
   trialTermsPending: 'Los términos de la prueba gratuita aún se están preparando y se mostrarán aquí antes de abrir las pruebas.',
   confirmTrial: d => `Iniciar ahora mi prueba gratuita de ${d} días.`, startTrial: 'Iniciar prueba gratuita',
 };

@@ -42,7 +42,7 @@ const api=createServer(async(r,s)=>{
    send(200,{data:state.registration});return;}
   const input=validateTrialStartInput(JSON.parse(body));assert.deepEqual({schoolId:input.schoolId,campaignId:input.campaignId},{schoolId:ids.schoolId,campaignId:ids.campaignId});
   const start=new Date(),ms=86400000;
-  state.enrollment??=validateHonOsTrial({enrollmentId:ids.enrollmentId,organizationId:ids.organizationId,schoolId:ids.schoolId,campaignId:ids.campaignId,durationDays:14,startsAt:start.toISOString(),endsAt:new Date(+start+14*ms).toISOString(),status:'TRIAL_ACTIVE',automaticCharge:false,paymentMethodRequired:false,aiIncluded:true,aiCredits:{credits:100,dailyCap:20,perRequestCap:10,expiresAt:new Date(+start+7*ms).toISOString(),used:0},creativeCreditsIncluded:false});
+  state.enrollment??=validateHonOsTrial({enrollmentId:ids.enrollmentId,organizationId:ids.organizationId,schoolId:ids.schoolId,campaignId:ids.campaignId,durationDays:14,startsAt:start.toISOString(),endsAt:new Date(+start+14*ms).toISOString(),status:'TRIAL_ACTIVE',automaticCharge:false,paymentMethodRequired:false,aiIncluded:true,aiCredits:{credits:100,dailyCap:20,perRequestCap:10,expiresAt:new Date(+start+7*ms).toISOString(),used:0},creativeCreditsIncluded:false,creativeCredits:null});
   send(200,{data:state.enrollment});return;
  }
  send(404,{code:'NOT_FOUND'});
@@ -96,7 +96,7 @@ try{
   const {page,context}=await open({width:390,height:844});await page.getByRole('heading',{name:title}).waitFor();
   await page.getByRole('button',{name:first,exact:true}).click();await page.getByText(closed,{exact:false}).first().waitFor();await capture(page,language+'-closed');
   state.registration=validateSignupRegistration({registrationId:ids.registrationId,organizationId:ids.organizationId,schoolId:ids.schoolId,schoolName:'Synthetic Dojo',timezone:'America/New_York',registeredAt:'2026-11-12T10:00:00.000Z',lifecycle:'REGISTERED',accessGranted:false,billingActivated:false,aiCreditsGranted:false});
-  state.enrollment=validateHonOsTrial({enrollmentId:ids.enrollmentId,organizationId:ids.organizationId,schoolId:ids.schoolId,campaignId:ids.campaignId,durationDays:14,startsAt:'2026-11-12T10:00:00.000Z',endsAt:'2026-11-26T10:00:00.000Z',status:'TRIAL_ACTIVE',automaticCharge:false,paymentMethodRequired:false,aiIncluded:true,aiCredits:{credits:100,dailyCap:20,perRequestCap:10,expiresAt:'2026-11-19T10:00:00.000Z',used:3},creativeCreditsIncluded:false});
+  state.enrollment=validateHonOsTrial({enrollmentId:ids.enrollmentId,organizationId:ids.organizationId,schoolId:ids.schoolId,campaignId:ids.campaignId,durationDays:14,startsAt:'2026-11-12T10:00:00.000Z',endsAt:'2026-11-26T10:00:00.000Z',status:'TRIAL_ACTIVE',automaticCharge:false,paymentMethodRequired:false,aiIncluded:true,aiCredits:{credits:100,dailyCap:20,perRequestCap:10,expiresAt:'2026-11-19T10:00:00.000Z',used:3},creativeCreditsIncluded:false,creativeCredits:null});
   state.signup='TEST_MODE';state.trial='TEST_MODE';await page.getByRole('button',{name:again,exact:true}).click();await page.getByText(active,{exact:false}).waitFor();
   assert.match(await page.locator('[data-start-trial]').innerText(),/2026/);await capture(page,language+'-trial-started');
   report.checks.push(language+': closed state and trial receipt in the owner language');await context.close();

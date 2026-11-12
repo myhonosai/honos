@@ -32,7 +32,8 @@ const signupOpen = { signupStatus: 'TEST_MODE', terms, eligibility: 'ELIGIBLE', 
 const signupDone = { signupStatus: 'TEST_MODE', terms, eligibility: 'ALREADY_REGISTERED', registration };
 const offer = { campaignId: uuid(4), name: 'Founding schools trial', durationDays: 14, automaticCharge: false, paymentMethodRequired: false, aiIncluded: true, aiCredits: { credits: 100, dailyCap: 20, perRequestCap: 10, expiryDays: 7 } };
 const trialRow = { enrollmentId: uuid(5), organizationId: uuid(2), schoolId: uuid(3), campaignId: uuid(4), durationDays: 14, startsAt: '2026-11-12T10:00:00.000Z', endsAt: '2026-11-26T10:00:00.000Z', status: 'TRIAL_ACTIVE',
-  automaticCharge: false, paymentMethodRequired: false, aiIncluded: true, aiCredits: { credits: 100, dailyCap: 20, perRequestCap: 10, expiresAt: '2026-11-19T10:00:00.000Z', used: 0 }, creativeCreditsIncluded: false };
+  automaticCharge: false, paymentMethodRequired: false, aiIncluded: true, aiCredits: { credits: 100, dailyCap: 20, perRequestCap: 10, expiresAt: '2026-11-19T10:00:00.000Z', used: 0 }, creativeCreditsIncluded: false, creativeCredits: null };
+const trialCreative = { ...trialRow, creativeCreditsIncluded: true, creativeCredits: { credits: 1500, available: 1500, expiresAt: '2026-11-26T10:00:00.000Z' } };
 function fill() {
   const inputs = nodes(render()).filter(e => e.type === 'input');
   const values = ['Synthetic Owner', 'Synthetic Dojo', 'Synthetic Dojo LLC'];
@@ -84,13 +85,15 @@ it('trial start sends only school, campaign and confirmation from the server rea
   const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupDone)).mockResolvedValueOnce(ok({ trialStatus: 'TEST_MODE', schoolId: uuid(3), available: offer, trial: null }));
   click('Check my account'); await settle();
   expect(text(render())).toContain('100 trial credits'); expect(find('Start free trial')!.props.disabled).toBe(true); fill();
-  f.mockResolvedValueOnce(ok(trialRow)).mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupDone)).mockResolvedValueOnce(ok({ trialStatus: 'TEST_MODE', schoolId: uuid(3), available: null, trial: trialRow }));
+  f.mockResolvedValueOnce(ok(trialCreative)).mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupDone)).mockResolvedValueOnce(ok({ trialStatus: 'TEST_MODE', schoolId: uuid(3), available: null, trial: trialCreative }));
   click('Start free trial'); await settle();
   const [path, init] = f.mock.calls[3]!; const body = JSON.parse(init!.body as string);
   expect(path).toBe('/api/v1/account/trial'); expect((init!.headers as Record<string, string>)['X-HON-Human-Command']).toBe(TRIAL_HUMAN_COMMAND);
   expect(validateTrialStartInput(body)).toEqual({ schoolId: uuid(3), campaignId: uuid(4), confirmation: TRIAL_CONFIRMATION }); expect(Object.keys(body).sort()).toEqual(['campaignId', 'confirmation', 'schoolId']);
   const view = render(); expect(nodes(view).some(e => e.props['data-start-trial'])).toBe(true); expect(nodes(view).some(e => e.type === 'a' && e.props.href === '/staff/founder-setup')).toBe(true);
   expect(text(view)).toContain('0 of 100 trial credits');
+  expect(text(view)).toContain('Creative Studio: 1500 of 1500 trial creative credits left for images, video and avatars');
+  expect(text(view)).not.toContain('are not included');
 });
 
 it('a lost response keeps the exact request for an explicit retry with the same key and body; a closed refusal drops it', async () => {

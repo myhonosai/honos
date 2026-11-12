@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "5aad7599499f9d6aa898b65aeda383240b8b3a05c93a5ff180b9c04735676145",
+  "chainSha256": "d677fb956a36bb77eacbfe3472d0a2f8642778ce34fa08a6e76e1e60f0affc78",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -301,6 +301,10 @@
     {
       "file": "0274_hon_os_admission_limits_hq.sql",
       "sha256": "3f9b0d3a909005f190517ef193167ff0fca3032fa6ea35ed418d58dd6ce92adc"
+    },
+    {
+      "file": "0275_hon_os_trial_creative_credits.sql",
+      "sha256": "8016a548983f94f6e2c13b3ba4509dfaa38fbb7d80e1352fd1b2059de583f118"
     },
     {
       "file": "0278_ai_team_readiness_reconcile.sql",

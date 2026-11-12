@@ -23,6 +23,8 @@ const caps = (o: Record<string, unknown>) => {
 };
 
 export interface TrialAiCredits { credits: number; dailyCap: number; perRequestCap: number; expiresAt: string; used: number }
+/** 0275: the trial's own Creative Studio credits (about $15 of provider cost), spent from the school's wallet until the trial ends. */
+export interface TrialCreativeCredits { credits: number; available: number; expiresAt: string }
 export interface TrialOfferAiCredits { credits: number; dailyCap: number; perRequestCap: number; expiryDays: number }
 
 export interface TrialStartInput { schoolId: string; campaignId: string; confirmation: typeof TRIAL_CONFIRMATION }
@@ -36,14 +38,14 @@ export type TrialLifecycle = 'TRIAL_ACTIVE' | 'TRIAL_ENDED' | 'SUPERSEDED';
 export interface HonOsTrial {
   enrollmentId: string; organizationId: string; schoolId: string; campaignId: string; durationDays: number; startsAt: string; endsAt: string;
   status: TrialLifecycle; automaticCharge: false; paymentMethodRequired: false; aiIncluded: boolean; aiCredits: TrialAiCredits | null;
-  creativeCreditsIncluded: false;
+  creativeCreditsIncluded: boolean; creativeCredits: TrialCreativeCredits | null;
 }
 export function validateHonOsTrial(v: unknown): HonOsTrial {
   const o = accountClosed(v, ['enrollmentId', 'organizationId', 'schoolId', 'campaignId', 'durationDays', 'startsAt', 'endsAt', 'status',
-    'automaticCharge', 'paymentMethodRequired', 'aiIncluded', 'aiCredits', 'creativeCreditsIncluded']);
+    'automaticCharge', 'paymentMethodRequired', 'aiIncluded', 'aiCredits', 'creativeCreditsIncluded', 'creativeCredits']);
   if (!DURATIONS.includes(o.durationDays as number) || !['TRIAL_ACTIVE', 'TRIAL_ENDED', 'SUPERSEDED'].includes(String(o.status))
     || o.automaticCharge !== false || o.paymentMethodRequired !== false || typeof o.aiIncluded !== 'boolean'
-    || o.aiIncluded !== (o.aiCredits !== null) || o.creativeCreditsIncluded !== false) throw new Error('ACCOUNT_RESPONSE_INVALID');
+    || o.aiIncluded !== (o.aiCredits !== null) || o.creativeCreditsIncluded !== (o.creativeCredits !== null)) throw new Error('ACCOUNT_RESPONSE_INVALID');
   const startsAt = instant(o.startsAt), endsAt = instant(o.endsAt);
   if (Date.parse(endsAt) - Date.parse(startsAt) !== (o.durationDays as number) * 86_400_000) throw new Error('ACCOUNT_RESPONSE_INVALID');
   let aiCredits: TrialAiCredits | null = null;
@@ -54,9 +56,17 @@ export function validateHonOsTrial(v: unknown): HonOsTrial {
     if (Date.parse(expiresAt) <= Date.parse(startsAt) || Date.parse(expiresAt) > Date.parse(endsAt)) throw new Error('ACCOUNT_RESPONSE_INVALID');
     aiCredits = Object.freeze({ ...caps(a), expiresAt, used: count(a.used, 0, Number.MAX_SAFE_INTEGER) });
   }
+  let creativeCredits: TrialCreativeCredits | null = null;
+  if (o.creativeCredits !== null) {
+    const c = accountClosed(o.creativeCredits, ['credits', 'available', 'expiresAt']);
+    const credits = count(c.credits, 1, 100_000), available = count(c.available, 0, credits), expiresAt = instant(c.expiresAt);
+    // Trial creative credits last exactly as long as the trial.
+    if (expiresAt !== endsAt) throw new Error('ACCOUNT_RESPONSE_INVALID');
+    creativeCredits = Object.freeze({ credits, available, expiresAt });
+  }
   return Object.freeze({ enrollmentId: accountUuid(o.enrollmentId), organizationId: accountUuid(o.organizationId), schoolId: accountUuid(o.schoolId),
     campaignId: accountUuid(o.campaignId), durationDays: o.durationDays as number, startsAt, endsAt, status: o.status as TrialLifecycle,
-    automaticCharge: false, paymentMethodRequired: false, aiIncluded: aiCredits !== null, aiCredits, creativeCreditsIncluded: false });
+    automaticCharge: false, paymentMethodRequired: false, aiIncluded: aiCredits !== null, aiCredits, creativeCreditsIncluded: creativeCredits !== null, creativeCredits });
 }
 
 export interface TrialOffer {

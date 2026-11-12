@@ -21,7 +21,7 @@ const {HonOsTrialController,HonOsTrialHumanGuard}=require('./dist/accounts/hon-o
 const {HonOsAdmissionService}=require('./dist/hon-os-admission/hon-os-admission.service.js');
 const {SaasBillingService}=require('./dist/saas-billing/saas-billing.service.js');
 const {SaasTrialsService}=require('./dist/saas-trials/saas-trials.service.js');
-const {SIGNUP_CONFIRMATION,TRIAL_CONFIRMATION,TRIAL_HUMAN_COMMAND}=require('@hon/contracts');
+const {SIGNUP_CONFIRMATION,TRIAL_CONFIRMATION,TRIAL_HUMAN_COMMAND,validateSaasCreativeSchoolWallet}=require('@hon/contracts');
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false}),blocker=new pg.Client({connectionString:owner.toString(),ssl:false});
 const database=new RuntimeDatabaseService(),trials=new SaasTrialsService(new SaasBillingService(database));let app,groups=0,origin;
 const session={mode:'OIDC',audience:'trial-disposable',secret:createHash('sha256').update(K()).digest('hex')};
@@ -93,7 +93,9 @@ try{
  const module=await Test.createTestingModule({controllers:[HonOsTrialController],providers:[HonOsTrialService,HonOsTrialHumanGuard,HonOsAdmissionService,HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
  app=module.createNestApplication({logger:false});app.setGlobalPrefix('v1');await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;
  const excluded=new Set([...tables,'users','principals','organizations','schools','roles','role_permissions','principal_role_grants','hon_os_school_registrations','hon_os_signup_program','hon_os_trial_program',
-  'hq_operator_grants','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications','saas_requests','saas_audit','saas_outbox']);
+  'hq_operator_grants','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications','saas_requests','saas_audit','saas_outbox',
+  // 0275: a trial grants its own creative lot (wallet, lot, ledger GRANT, grant snapshot); checked by count at the end.
+  'saas_creative_wallets','saas_creative_lots','saas_creative_ledger','hon_os_trial_creative_grants']);
  const others=(await q("SELECT tablename FROM pg_tables WHERE schemaname='hon' ORDER BY tablename")).map(r=>r.tablename).filter(t=>!excluded.has(t));
  const snapshot=async()=>{const out={};for(const t of others){assert.match(t,/^[a-z_0-9]+$/);out[t]=hash(JSON.stringify(await q('SELECT to_jsonb(t)::text r FROM hon.'+t+' t ORDER BY 1')));}return out;};
  const baseline=await snapshot(),guarded=await counts();
@@ -131,7 +133,8 @@ try{
  const trial=ok(await send('account/trial',{identity:ana,body:form(ana),key}));
  assert.equal(trial.status,'TRIAL_ACTIVE');assert.equal(trial.durationDays,14);assert.equal(trial.schoolId,ana.reg.schoolId);assert.equal(trial.campaignId,campaign);
  assert.equal(Date.parse(trial.endsAt)-Date.parse(trial.startsAt),14*DAY);
- for(const k of ['automaticCharge','paymentMethodRequired','creativeCreditsIncluded'])assert.equal(trial[k],false,k);
+ for(const k of ['automaticCharge','paymentMethodRequired'])assert.equal(trial[k],false,k);
+ assert.equal(trial.creativeCreditsIncluded,true);assert.deepEqual(trial.creativeCredits,{credits:1500,available:1500,expiresAt:trial.endsAt});
  assert.equal(trial.aiIncluded,true);assert.equal(Date.parse(trial.aiCredits.expiresAt)-Date.parse(trial.startsAt),7*DAY);
  assert.deepEqual({...trial.aiCredits,expiresAt:undefined},{credits:100,dailyCap:20,perRequestCap:10,expiresAt:undefined,used:0});
  const after=await counts();
@@ -144,16 +147,62 @@ try{
  assert.equal(row.program_status,'TEST_MODE');assert.equal(row.prior_entitlement.status,'SUSPENDED');assert.equal(row.granted_entitlement_version,prior.version+1);assert.equal(row.terms_reference,'HON_OS_TRIAL_SYNTHETIC_TERMS');assert.deepEqual(row.ai_budget,budget);
  assert(await gated(ana.externalSubject)>0,'the trial school can use entitlement-gated school features');
  assert.notEqual((await q('SELECT hon.school_staff_manager($1,$2) m',[ana.externalSubject,ana.reg.schoolId]))[0].m,null);
- // Agent AI is allowed under the HQ-set credit; Creative Studio media never is (wallet only).
- assert.equal(await ai(ana.reg.organizationId),null);assert.equal(await ai(ana.reg.organizationId,'clock_timestamp()','CREATIVE_MEDIA'),'AI_TRIAL_FUNDING_NOT_APPROVED');
+ // Agent AI is allowed under the HQ-set credit; Creative Studio media under the trial's own creative grant (0275).
+ assert.equal(await ai(ana.reg.organizationId),null);assert.equal(await ai(ana.reg.organizationId,'clock_timestamp()','CREATIVE_MEDIA'),null);
  assert.equal(await ai(ben.reg.organizationId),'AI_ACCESS_NOT_PAID');
  // Credits expire after creditExpiryDays (7) while the trial itself runs 14; access ends by the clock at endsAt.
  const startsAt="(SELECT starts_at FROM hon.hon_os_trial_enrollments WHERE organization_id=$1)",endsAt="(SELECT ends_at FROM hon.hon_os_trial_enrollments WHERE organization_id=$1)";
  assert.equal(await ai(ana.reg.organizationId,startsAt+"+interval '7 days'-interval '1 millisecond'"),null);
- assert.equal(await ai(ana.reg.organizationId,startsAt+"+interval '7 days'"),'AI_TRIAL_FUNDING_NOT_APPROVED');assert.equal(await room(ana.reg.organizationId,startsAt+"+interval '7 days'"),0);
- assert.equal(await ai(ana.reg.organizationId,endsAt),'AI_ACCESS_NOT_PAID');assert.equal(await ai(ana.reg.organizationId,endsAt+"-interval '1 millisecond'"),'AI_TRIAL_FUNDING_NOT_APPROVED');
+ assert.equal(await ai(ana.reg.organizationId,startsAt+"+interval '7 days'"),'AI_TRIAL_FUNDING_NOT_APPROVED');assert.equal(await ai(ana.reg.organizationId,startsAt+"+interval '7 days'",'CREATIVE_MEDIA'),null,'creative credits last the whole trial');assert.equal(await room(ana.reg.organizationId,startsAt+"+interval '7 days'"),0);
+ assert.equal(await ai(ana.reg.organizationId,endsAt),'AI_ACCESS_NOT_PAID');assert.equal(await ai(ana.reg.organizationId,endsAt,'CREATIVE_MEDIA'),'AI_ACCESS_NOT_PAID');assert.equal(await ai(ana.reg.organizationId,endsAt+"-interval '1 millisecond'"),'AI_TRIAL_FUNDING_NOT_APPROVED');
  assert.deepEqual((await q(`SELECT hon.hon_os_trial_live($1,${endsAt}) a,hon.hon_os_trial_live($1,${endsAt}-interval '1 millisecond') b`,[ana.reg.organizationId]))[0],{a:false,b:true});
- pass('the trial sets the entitlement to COMPLETE ACTIVE until exactly start + 14 days (gated features open, access ends by the clock); no access state, subscription, checkout, allowance or exception; agent AI allowed under the HQ-set credit until it expires on day 7, Creative Studio media never');
+ pass('the trial sets the entitlement to COMPLETE ACTIVE until exactly start + 14 days (gated features open, access ends by the clock); no access state, subscription, checkout, allowance or exception; agent AI allowed under the HQ-set credit until it expires on day 7, Creative Studio media under its own trial grant until the trial ends');
+
+ // 0275. The trial's own Creative Studio credits: one TRIAL lot per trial, spent through the real wallet reservation path, stopped by credits and by $15 of real cost.
+ {const org=ana.reg.organizationId,school=ana.reg.schoolId,tr=(await q('SELECT * FROM hon.hon_os_trial_enrollments WHERE organization_id=$1',[org]))[0];
+  const g=(await q('SELECT * FROM hon.hon_os_trial_creative_grants WHERE enrollment_id=$1',[tr.id]))[0];
+  assert.deepEqual([g.organization_id,g.school_id,g.credits,g.cost_cap_minor,+g.starts_at,+g.ends_at],[org,school,1500,1500,+tr.starts_at,+tr.ends_at]);
+  const lot=(await q('SELECT * FROM hon.saas_creative_lots WHERE id=$1',[g.lot_id]))[0];
+  assert.deepEqual([lot.lot_kind,lot.credits,lot.school_id,lot.trial_enrollment_id,+lot.expires_at,lot.granted_by_principal_id,lot.subscription_id,lot.adjustment_id],
+   ['TRIAL',1500,school,tr.id,+tr.ends_at,tr.enrolled_by_principal_id,null,null]);
+  assert.deepEqual((await q('SELECT entry_kind k,credits c FROM hon.saas_creative_ledger WHERE lot_id=$1',[g.lot_id])),[{k:'GRANT',c:1500}]);
+  assert.equal((await q('SELECT count(*) n FROM hon.saas_creative_lots WHERE school_id=$1',[ben.reg.schoolId]))[0].n,'0','a school with no trial gets no creative lot');
+  // The real wallet read (closed contract) lists TRIAL after included credits; the creative program is still INACTIVE.
+  const w=(await q('SELECT hon.saas_creative_wallet_json($1,false) w',[school]))[0].w;assert.doesNotThrow(()=>validateSaasCreativeSchoolWallet(w));
+  assert.deepEqual(w.balance.byKind.map(k=>k.kind),['INCLUDED_MONTHLY','TRIAL','ADJUSTMENT','PROMOTIONAL','PURCHASED_TOPUP']);
+  assert.deepEqual([w.balance.availableCredits,w.eligibility.eligible,w.eligibility.reason],[1500,false,'PROGRAM_INACTIVE']);
+  // A forged TRIAL lot without its trial, or without an expiry, is refused by the table.
+  for(const [enr,exp] of [[null,tr.ends_at],[tr.id,null]])await assert.rejects(()=>q("INSERT INTO hon.saas_creative_lots(school_id,organization_id,lot_kind,credits,expires_at,trial_enrollment_id,granted_by_principal_id,granted_at) VALUES($1,$2,'TRIAL',10,$3,$4,$5,clock_timestamp())",[school,org,exp,enr,tr.enrolled_by_principal_id]),e=>e.code==='23514'||e.code==='23505');
+  await assert.rejects(()=>q('UPDATE hon.hon_os_trial_creative_grants SET credits=99999 WHERE enrollment_id=$1',[tr.id]),e=>e.code==='42501');
+  const owner=(await q('SELECT owner_principal_id p FROM hon.hon_os_school_registrations WHERE id=$1',[ana.reg.registrationId]))[0].p;
+  const reserve=(units,code='image.generate')=>admin.query("SELECT hon.reserve_saas_creative_credits($1,$2,$3::jsonb,$4,$5,$6) r",[ana.externalSubject,school,JSON.stringify({operationCode:code,units,providerId:'HIGGSFIELD',modelCode:'synthetic-image-1'}),K(),K(),K()]).then(r=>r.rows[0].r);
+  await admin.query('BEGIN');
+  try{
+   // Disposable only, rolled back: a fixture provider, synthetic provisional rates and the creative program switched on.
+   await admin.query("INSERT INTO hon.hq_ai_provider_connections(provider_id,display_name,state) VALUES('HIGGSFIELD','Fixture provider','DISABLED') ON CONFLICT DO NOTHING");
+   const rv=(await admin.query("INSERT INTO hon.saas_creative_rate_versions(rate_version,status,terms_reference,published_by_principal_id,published_at) VALUES((SELECT coalesce(max(rate_version),0)+1 FROM hon.saas_creative_rate_versions),'PUBLISHED','Synthetic trial fixture rates',$1,clock_timestamp()) RETURNING id",[owner])).rows[0].id;
+   await admin.query("UPDATE hon.saas_creative_rate_versions SET status='RETIRED',retired_at=clock_timestamp() WHERE status='PUBLISHED' AND id<>$1",[rv]).catch(()=>{});
+   await admin.query("INSERT INTO hon.saas_creative_rates(rate_version_id,operation_code,media_kind,display_name,billing_unit,credits_per_unit,max_units_per_request,rate_basis) VALUES($1,'image.generate','IMAGE','AI image','IMAGE',50,20,'PROVISIONAL'),($1,'avatar.create','IMAGE','Avatar','REQUEST',300,1,'PROVISIONAL')",[rv]);
+   await admin.query("UPDATE hon.saas_creative_program SET status='ACTIVE',version=version+1,authorization_reference='Synthetic trial fixture',changed_by_principal_id=$1,changed_at=clock_timestamp()",[owner]);
+   const e=(await admin.query('SELECT hon.saas_creative_eligibility($1,clock_timestamp()) e',[school])).rows[0].e;
+   assert.deepEqual([e.eligible,e.reason,e.subscriptionId,e.window.index,e.window.endsAt],[true,null,null,0,trial.endsAt],'eligible for exactly the trial window, with no subscription');
+   const first=await reserve(20);assert.equal(first.reservation.reservedCredits,1000);assert.equal(first.balance.availableCredits,500);
+   assert.equal((await admin.query("SELECT count(*) n FROM hon.saas_creative_lots WHERE school_id=$1 AND lot_kind='INCLUDED_MONTHLY'",[school])).rows[0].n,'0','no included monthly window for a trial');
+   const avatar=await reserve(1,'avatar.create');assert.equal(avatar.balance.availableCredits,200,'an avatar is paid from the trial lot like any priced operation');
+   await admin.query('SAVEPOINT s');
+   await assert.rejects(()=>reserve(5),e=>e.message==='SAAS_CREDITS_EXHAUSTED');await admin.query('ROLLBACK TO SAVEPOINT s');
+   // $15 of real creative provider cost recorded in the trial stops new creative spending even with credits left.
+   await admin.query("INSERT INTO hon.ai_usage_ledger(organization_id,school_id,provider_code,model_code,modality,customer_credits,provider_cost_microunits,correlation_id,spend_class) VALUES($1,$2,'HIGGSFIELD','synthetic-image-1','IMAGE',0,14999999,$3,'CREATIVE_MEDIA')",[org,school,K()]);
+   assert.equal(await ai(org,'clock_timestamp()','CREATIVE_MEDIA'),null,'just under $15 still funds');
+   await admin.query("INSERT INTO hon.ai_usage_ledger(organization_id,school_id,provider_code,model_code,modality,customer_credits,provider_cost_microunits,correlation_id,spend_class) VALUES($1,$2,'HIGGSFIELD','synthetic-image-1','IMAGE',0,1,$3,'CREATIVE_MEDIA')",[org,school,K()]);
+   assert.equal(await ai(org,'clock_timestamp()','CREATIVE_MEDIA'),'AI_TRIAL_FUNDING_NOT_APPROVED');assert.equal(await ai(org),null,'agent AI keeps its own HQ-set credit');
+   await assert.rejects(()=>reserve(1),e=>e.message==='SAAS_CREATIVE_AI_TRIAL_FUNDING_NOT_APPROVED');await admin.query('ROLLBACK TO SAVEPOINT s');
+   // Once the trial ends nothing is left: the lot expires and the school is no longer eligible.
+   assert.equal((await admin.query('SELECT hon.saas_creative_lot_available(l,t.ends_at) a FROM hon.saas_creative_lots l JOIN hon.hon_os_trial_enrollments t ON t.id=l.trial_enrollment_id WHERE l.id=$1',[g.lot_id])).rows[0].a,0);
+   assert.equal((await admin.query('SELECT hon.saas_creative_eligibility($1,t.ends_at) e FROM hon.hon_os_trial_enrollments t WHERE t.id=$2',[school,tr.id])).rows[0].e.reason,'PAID_ACCESS_REQUIRED');
+  }finally{await admin.query('ROLLBACK');}
+  assert.equal((await q('SELECT count(*) n FROM hon.saas_creative_reservations WHERE school_id=$1',[school]))[0].n,'0','the spending fixture rolled back');}
+ pass('0275: each trial gets its own 1,500-credit TRIAL creative lot ending with the trial (no lot without a trial); the real reservation path spends it (images, avatars), never past the credits, never once $15 of real creative cost is recorded, never after the trial; no included monthly window; agent AI unaffected');
 
  // 5. Replay, key reuse, second trial.
  assert.deepEqual(ok(await send('account/trial',{identity:ana,body:form(ana),key})),trial);
@@ -297,7 +346,10 @@ try{
  pass('0272: replaying a start with the same key after the owner grant was revoked is refused (no receipt returned)');
 
  assert.deepEqual(await snapshot(),baseline);
- const end=await counts();for(const t of ['saas_access_states','saas_subscriptions','saas_checkout_sessions','saas_credit_allowances','saas_access_exceptions'])assert.equal(end[t],guarded[t],t);
+ const end=await counts();
+ {const n=Number((await q('SELECT count(*) n FROM hon.hon_os_trial_enrollments'))[0].n),lots=Number((await q("SELECT count(*) n FROM hon.saas_creative_lots WHERE lot_kind='TRIAL'"))[0].n);
+  assert.equal(lots,n,'exactly one TRIAL creative lot per trial');assert.equal(Number((await q('SELECT count(*) n FROM hon.hon_os_trial_creative_grants'))[0].n),n);
+  assert.equal((await q("SELECT count(*) n FROM hon.saas_creative_lots WHERE lot_kind<>'TRIAL'"))[0].n,'0','no other creative credit was granted');}for(const t of ['saas_access_states','saas_subscriptions','saas_checkout_sessions','saas_credit_allowances','saas_access_exceptions'])assert.equal(end[t],guarded[t],t);
  pass('no billing, access-state, credit, AI, CRM or outbox table changed: entitlement windows, trial evidence and request receipts only');
  console.log(`PASS: HON OS free trial runtime (${groups} groups)`);
 }finally{await setPrograms('CLOSED').catch(()=>{});await app?.close();await Promise.allSettled([admin.end(),restricted.end(),blocker.end()]);}
