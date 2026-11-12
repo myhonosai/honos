@@ -31,7 +31,8 @@ test('C1 contracts: one named specialist with its own target; receipts and threa
   assert.deepEqual(contracts.HON_DELEGATE_AGENTS, ['marcus', 'kai', 'chad'], 'clients see Kai, never claire, as the teaching delegate');
   assert.throws(() => contracts.validateHonTurnRequest({ text: 'x'.repeat(1201), delegation: { agentKey: 'kai', curriculumId } }));
   assert.throws(() => contracts.validateHonTurnRequest({ text: 'Outline', delegation: { agentKey: 'kai', curriculumId, campaignId: curriculumId } }));
-  assert.throws(() => contracts.validateHonTurnRequest({ text: 'Outline', delegation: { agentKey: 'alex' } }), 'profile-only specialists are not delegates');
+  assert.throws(() => contracts.validateHonTurnRequest({ text: 'Outline', delegation: { agentKey: 'maya' } }), 'profile-only specialists are not delegates');
+  assert.throws(() => contracts.validateHonTurnRequest({ text: 'Outline', delegation: { agentKey: 'alex', campaignId: curriculumId } }), '0260: an analysis specialist takes no target');
   assert.equal(contracts.validateHonTurnRequest({ text: 'Note', delegation: { agentKey: 'chad', leadId, expectedLeadVersion: 2, purpose: 'CHECK_IN' } }).delegation.purpose, 'CHECK_IN');
   for (const bad of [{ text: 'hi' }, { text: 'hi', delegation: { agentKey: 'hon' } }, { text: 'hi', delegation: { agentKey: 'marcus', campaignId, extra: 1 } },
     { text: 'x'.repeat(1201), delegation: { agentKey: 'kai', curriculumId } }, { text: 'hi', delegation: { agentKey: 'chad', leadId, expectedLeadVersion: 0, purpose: 'CHECK_IN' } },
@@ -55,7 +56,7 @@ test('C1 contracts: one named specialist with its own target; receipts and threa
   assert.throws(() => contracts.validateHonConversationThread({ ...thread, turns: [thread.turns[0]] }));
   const a = (agentKey, patch = {}) => ({ agentKey, authorized: true, spendDecision: 'ALLOWED', route: 'CONFIGURED', providerRuntime: 'READY', available: true, ...patch });
   assert.deepEqual(contracts.composeHonConversationReadiness({ completeEntitlement: true, asOf: T, agents: [a('marcus'), a('kai', { authorized: false, available: false }), a('chad', { providerRuntime: 'CONFIGURATION_REQUIRED', available: false })] }),
-    { contract: true, authorization: true, entitlement: true, providerRoute: true, availableAgentKeys: ['marcus'], honReply: false, businessPerformance: false, asOf: T });
+    { contract: true, authorization: true, entitlement: true, providerRoute: true, availableAgentKeys: ['marcus'], honReply: false, businessPerformance: false, availableAnalystKeys: [], asOf: T });
   assert.equal(contracts.composeHonConversationReadiness({ completeEntitlement: true, asOf: T, agents: [a('marcus'), a('hon')] }).honReply, true, 'HON reply readiness comes from its own row');
   assert.deepEqual(contracts.composeHonConversationReadiness({ completeEntitlement: true, asOf: T, agents: [a('marcus'), a('hon')] }).availableAgentKeys, ['marcus'], 'HON is not a delegate');
   const paused = contracts.composeHonConversationReadiness({ completeEntitlement: true, asOf: T, agents: ['marcus', 'kai', 'chad'].map((k) => a(k, { spendDecision: 'AI_PAUSED_BY_HQ', available: false })) });
@@ -119,7 +120,7 @@ function harness({ begun, agentScope = { organizationId: ORG, schoolId: SCHOOL, 
   const calls = [];
   const turnId = begun?.turnId ?? ID();
   const receipt = { turnId, conversationId: ID(), status: 'DELEGATING', reason: null, delegatedAgentKeys: ['marcus'], actionRequestIds: [], workItemIds: [], invocationId: null, reply: null, replyDetail: null,
-    ...(begun?.agentKey === 'claire' ? { status: 'COMPLETED', delegatedAgentKeys: ['claire'], workItemIds: [ID()], invocationId: ID(), reply: 'Recorded facts: 12 active students.',
+    ...(['claire', 'alex', 'jordan', 'lena'].includes(begun?.agentKey) ? { status: 'COMPLETED', delegatedAgentKeys: [begun.agentKey], workItemIds: [ID()], invocationId: ID(), reply: 'Recorded facts: 12 active students.',
       replyDetail: { mode: 'DETAILED', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [] } } : {}),
     ...(begun?.agentKey === 'hon' ? { status: 'COMPLETED', delegatedAgentKeys: [], workItemIds: [ID()], invocationId: ID(), reply: 'Two trials are booked tomorrow.',
       replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [] } } : {}) };
@@ -292,10 +293,35 @@ test('K2 Claire contract and service: an analyst turn is answered like HON, neve
   assert.equal(contracts.validateHonConversationThread(thread({ turnId, role: 'claire', text: 'Recorded facts: 12.', createdAt: T, status: 'COMPLETED', reason: null, references: refs, replyDetail: detail })).turns[1].role, 'claire');
   assert.throws(() => contracts.validateHonConversationThread(thread({ turnId, role: 'claire', text: 'x', createdAt: T, status: 'COMPLETED', reason: null, references: refs, replyDetail: null })));
   assert.equal(contracts.composeHonConversationReadiness({ completeEntitlement: true, asOf: T, agents: [{ agentKey: 'claire', authorized: true, spendDecision: 'ALLOWED', route: 'CONFIGURED', providerRuntime: 'READY', available: true }] }).businessPerformance, true);
-  assert.deepEqual(contracts.AI_TEAM_READY_AGENTS.at(-1), ['claire', 'BUSINESS_PERFORMANCE', 15]);
+  assert.deepEqual(contracts.AI_TEAM_READY_AGENTS.at(4), ['claire', 'BUSINESS_PERFORMANCE', 15]);
   const h = harness({ begun: { turnId, agentKey: 'claire', delegation: null, handOff: true } });
   const out = await h.service.sendTurn(scope, ID(), { text: 'How is retention?', delegation: { agentKey: 'claire' } }, ID());
   assert.deepEqual([out.status, out.delegatedAgentKeys], ['COMPLETED', ['claire']]);
   assert.equal(h.calls.find((c) => c[0] === 'reply:run')[2], turnId);
   assert.ok(!h.calls.some((c) => c[0].startsWith('submit') || c[0].startsWith('scope:')), 'Claire is not a draft specialist');
+});
+
+test('0260 Alex, Jordan and Lena: analysis turns answered like Claire, never drafts, sent to the reply service', async () => {
+  assert.deepEqual(contracts.HON_ANALYST_AGENTS, ['claire', 'alex', 'jordan', 'lena']);
+  assert.deepEqual(contracts.AI_TEAM_READY_AGENTS.slice(-3), [['alex', 'GENERAL_MANAGEMENT', 15], ['jordan', 'OPERATIONS', 15], ['lena', 'CREATIVE_COMMERCE', 15]]);
+  const detail = { mode: 'DETAILED', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [] };
+  for (const agentKey of ['alex', 'jordan', 'lena']) {
+    assert.deepEqual(contracts.validateHonTurnRequest({ text: 'What should we look at?', delegation: { agentKey } }), { text: 'What should we look at?', delegation: { agentKey } });
+    for (const bad of [{ text: '  ', delegation: { agentKey } }, { text: 'x', delegation: { agentKey, leadId: ID() } }, { text: 'x', delegation: { agentKey }, fromSuggestionTurnId: ID() },
+      { text: 'x', delegation: { agentKey }, replyMode: 'DETAILED' }]) assert.throws(() => contracts.validateHonTurnRequest(bad), JSON.stringify(bad));
+    const q = { turnId: ID(), conversationId: ID(), status: 'COMPLETED', reason: null, delegatedAgentKeys: [agentKey], actionRequestIds: [], workItemIds: [ID()], invocationId: ID(), reply: 'Recorded facts: 3.', replyDetail: detail };
+    assert.equal(contracts.validateHonTurnReceipt(q).reply, 'Recorded facts: 3.');
+    for (const bad of [{ ...q, replyDetail: { ...detail, mode: 'STANDARD' } }, { ...q, replyDetail: { ...detail, suggestions: ['chad'] } }, { ...q, actionRequestIds: [ID()] }])
+      assert.throws(() => contracts.validateHonTurnReceipt(bad), /INVALID_HON_CONVERSATION_RESPONSE/);
+    const turnId = ID();
+    const h = harness({ begun: { turnId, agentKey, delegation: null, handOff: true } });
+    const out = await h.service.sendTurn(scope, ID(), { text: 'What should we look at?', delegation: { agentKey } }, ID());
+    assert.equal(h.calls.find((c) => c[0] === 'reply:run')[2], turnId, `${agentKey} goes to the reply service`);
+    assert.ok(!h.calls.some((c) => c[0].startsWith('submit') || c[0].startsWith('scope:')), `${agentKey} is not a draft specialist`);
+    assert.equal(out.status, 'COMPLETED');
+  }
+  const ready = (keys) => contracts.composeHonConversationReadiness({ completeEntitlement: true, asOf: T,
+    agents: ['claire', 'alex', 'jordan', 'lena'].map((agentKey) => ({ agentKey, authorized: true, spendDecision: 'ALLOWED', route: 'CONFIGURED', providerRuntime: 'READY', available: keys.includes(agentKey) })) });
+  assert.deepEqual(ready(['jordan', 'lena']).availableAnalystKeys, ['jordan', 'lena']);
+  assert.deepEqual([ready(['alex']).businessPerformance, ready(['claire']).businessPerformance], [false, true]);
 });
