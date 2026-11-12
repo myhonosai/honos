@@ -48,6 +48,8 @@ export const SAAS_PLAN_CAPABILITIES: Record<SaasPlanCode, readonly string[]> = {
 /** Human-command header values, one per command route. */
 export const SAAS_COMMANDS = {
   recordSubscriptionGeneration: 'saas-subscription-generation-record',
+  startScheduleBinding: 'saas-schedule-binding-start',
+  cancelScheduleBinding: 'saas-schedule-binding-cancel',
   recordPriceSchedule: 'saas-price-schedule-record',
   acceptPriceSchedule: 'saas-price-schedule-accept',
   proposeTrialPolicy: 'saas-trial-policy-propose',

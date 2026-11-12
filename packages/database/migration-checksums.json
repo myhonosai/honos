@@ -222,6 +222,7 @@
     "0227_campaign_reads_school_id.sql": "32a2a1d3f5a59b53dd472222a1eddeb39a4e38b9c1001c81fd724ff7993bd4a1",
     "0228_hon_group_summary.sql": "dac3557a4cab512c9c4ca6b59646f401689b7e58e88ad02804f08d33f43f12db",
     "0229_claire_business_performance.sql": "f318322679ffb9e5594ddd7d088d38cb3b4c9e42fc6d36592ea18793bce58dac",
+    "0230_hon_os_schedule_billing.sql": "78b1acc5af70cc71f8156b93398127e4fedfd5ea7f31cee9655383fe31383e41",
     "0231_membership_pause_rolling_year.sql": "97bcb50f32def69d43da7ca9fa497c8d5b291393a33060d788cd7209c77867bc",
     "0232_hq_support_cases.sql": "8f3decac8ed134e1deae12e239b8c1b9398506ae7d0b654fda6f42139165aedf",
     "0236_crm_school_clock.sql": "a2afddbb3fe92a127e246af79bb168c1083678c4a689ea7e2f0a4f06a2b3d213",

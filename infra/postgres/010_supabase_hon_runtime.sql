@@ -2392,7 +2392,6 @@ DO $$ DECLARE r text; col text; t text; f text; BEGIN
       hon.record_membership_refund(text,uuid,jsonb,text,uuid,uuid),hon.read_membership_pauses_and_refunds(text,uuid) TO hon_runtime;
   END IF;
 END $$;
-
 -- C-HQ-3 0225 (proposed) HQ school detail: the HQ read is the only runtime boundary; its counts helper stays internal.
 DO $$ DECLARE r text; f text; BEGIN
   FOREACH f IN ARRAY ARRAY['hq_school_invitation_counts(text,uuid,timestamptz)','read_hq_school_detail_from_hq(text,uuid)'] LOOP
@@ -2402,6 +2401,28 @@ DO $$ DECLARE r text; f text; BEGIN
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.read_hq_school_detail_from_hq(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- 0230 HON OS schedule billing piece 1. Runs after every broader SaaS revocation above: restore only the eight fixed
+-- runtime procedures (school/HQ commands and reads, the observation, the school cancel-before-payment command, the two
+-- privileged worker records and evidence ingest). Tables, the access hooks, the conflict probe and every helper stay unreachable.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['start_saas_schedule_binding(text,uuid,jsonb,uuid,uuid,uuid)','record_saas_schedule_binding_observation(uuid,jsonb,uuid,uuid)',
+    'record_saas_schedule_binding_reconciliation(uuid,jsonb)','record_saas_schedule_binding_expiry(uuid,jsonb)',
+    'cancel_saas_schedule_binding(text,uuid,uuid,jsonb,uuid,uuid,uuid)','read_saas_schedule_binding(text,uuid,uuid)','read_saas_schedule_binding_from_hq(text,uuid)','ingest_saas_schedule_evidence(jsonb,text)',
+    'saas_org_billing_conflict(uuid)','saas_schedule_period_matches(text,timestamp with time zone,timestamp with time zone)','saas_schedule_after_paid_period(uuid,uuid,timestamp with time zone)',
+    'saas_schedule_after_binding_terminal(uuid,timestamp with time zone)',
+    'saas_schedule_binding_transition(hon.saas_schedule_bindings,text,text,text,uuid,timestamp with time zone)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.start_saas_schedule_binding(text,uuid,jsonb,uuid,uuid,uuid),hon.record_saas_schedule_binding_observation(uuid,jsonb,uuid,uuid),
+      hon.record_saas_schedule_binding_reconciliation(uuid,jsonb),hon.record_saas_schedule_binding_expiry(uuid,jsonb),
+      hon.cancel_saas_schedule_binding(text,uuid,uuid,jsonb,uuid,uuid,uuid),
+      hon.read_saas_schedule_binding(text,uuid,uuid),hon.read_saas_schedule_binding_from_hq(text,uuid),hon.ingest_saas_schedule_evidence(jsonb,text) TO hon_runtime;
   END IF;
 END $$;
 
