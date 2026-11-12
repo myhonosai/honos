@@ -209,8 +209,9 @@ describe('HON workspace presentation', () => {
       const html = view(snapshot, 'team', null, variant);
       expect(html).toContain(`data-variant="${variant}"`);
       for (const agent of HON_COMMAND_ROSTER) { expect(html).toContain(`>${agent.name}<`); expect(html).toContain(agent.title.replace('&', '&amp;')); }
-      // Five planned management employees plus the separate provisional Teaching AI.
-      expect(html.match(/Planned · not yet available/g)).toHaveLength(6);
+      // Maya is still planned, plus the separate provisional Teaching AI; Claire, Alex, Jordan and Lena answer read-only.
+      expect(html.match(/Planned · not yet available/g)).toHaveLength(2);
+      expect(html.match(/Answers questions · read only/g)).toHaveLength(4);
       expect(html.match(/Drafts · approval required/g)).toHaveLength(2);
       expect(html).toContain('1 recent draft');
       for (const fabricated of ['Working now', 'Thinking', 'Online', 'Completed today', 'is ready', 'READY']) expect(html).not.toContain(fabricated);
