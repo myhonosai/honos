@@ -4,6 +4,9 @@
 import { cpSync, readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import { localize, markLanguage } from './i18n.mjs';
+
+export const LANGUAGES = ['ko', 'es'];
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -26,10 +29,19 @@ export function buildSite({ outDir = join(root, 'dist'), env = process.env } = {
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
   cpSync(join(root, 'src'), out, { recursive: true });
-  const page = join(out, 'index.html');
-  const html = readFileSync(page, 'utf8').replaceAll('{{APP_URL}}', app).replaceAll('{{ROBOTS}}', robots);
-  if (/\{\{[A-Z_]+\}\}/.test(html)) throw new Error('index.html still has an unfilled {{PLACEHOLDER}}');
-  writeFileSync(page, html);
+  rmSync(join(out, 'i18n'), { recursive: true, force: true });
+  const fill = (html, name) => {
+    const done = html.replaceAll('{{APP_URL}}', app).replaceAll('{{ROBOTS}}', robots);
+    if (/\{\{[A-Z_]+\}\}/.test(done)) throw new Error(`${name} still has an unfilled {{PLACEHOLDER}}`);
+    return done;
+  };
+  const english = readFileSync(join(root, 'src', 'index.html'), 'utf8');
+  writeFileSync(join(out, 'index.html'), fill(markLanguage(english, 'en'), 'index.html'));
+  for (const lang of LANGUAGES) {
+    const dict = JSON.parse(readFileSync(join(root, 'src', 'i18n', `${lang}.json`), 'utf8'));
+    mkdirSync(join(out, lang), { recursive: true });
+    writeFileSync(join(out, lang, 'index.html'), fill(localize(english, dict, lang), `${lang}/index.html`));
+  }
   return { outDir: out, app, robots };
 }
 

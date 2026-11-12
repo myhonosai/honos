@@ -10,11 +10,13 @@
 <meta property="og:title" content="HON OS: the AI-powered OS built to run and grow martial arts schools">
 <meta property="og:description" content="Leads, students, classes, belts, tuition and marketing in one app, with an AI team included.">
 <meta property="og:type" content="website">
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;family=Instrument+Serif:ital@1&amp;family=Noto+Sans+KR:wght@500&amp;display=swap">
-<link rel="stylesheet" href="styles.css">
+<link rel="alternate" hreflang="en" href="/">
+<link rel="alternate" hreflang="ko" href="/ko/">
+<link rel="alternate" hreflang="es" href="/es/">
+<link rel="alternate" hreflang="x-default" href="/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/fonts/geist-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/styles.css">
 </head>
 <body>
 <a class="skip" href="#top">Skip to content</a>
@@ -36,6 +38,7 @@
       <a href="#school">Features</a><a href="#ai-team">AI team</a><a href="#payments">Payments</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a>
     </nav>
     <div class="nav-right">
+      <nav class="lang" aria-label="Language"><a href="/" hreflang="en" lang="en" data-lang="en">EN</a><a href="/ko/" hreflang="ko" lang="ko" data-lang="ko">한국어</a><a href="/es/" hreflang="es" lang="es" data-lang="es">ES</a></nav>
       <a class="btn" href="{{APP_URL}}/auth/login">Sign in</a>
       <a class="btn primary" href="{{APP_URL}}/account/start">Start a new school</a>
     </div>
@@ -47,7 +50,7 @@
   <div class="wrap hero-grid">
     <div>
       <span class="tag"><span class="dot"></span>the operating system for martial arts schools</span>
-      <h1>The AI-powered OS built to run and <em class="s">grow</em> martial arts schools.</h1>
+      <h1 data-t>The AI-powered OS built to run and <em class="s">grow</em> martial arts schools.</h1>
       <p class="lede">One app for your whole school: leads, students, classes, belts, tuition and marketing. Your AI team comes with the subscription.</p>
       <div class="cta-row">
         <a class="btn primary" href="{{APP_URL}}/account/start">Start a new school</a>
@@ -84,7 +87,7 @@
     <div class="sec-head">
       <div>
         <div class="eyebrow"><span class="tag"><span class="dot"></span>run your school</span></div>
-        <h2 class="h2">From first call to <em class="s">black belt.</em></h2>
+        <h2 class="h2" data-t>From first call to <em class="s">black belt.</em></h2>
       </div>
       <p class="lede">Built for martial arts, not adapted from a gym CRM. Belt testing, curriculum and attendance sit next to your leads and memberships.</p>
     </div>
@@ -144,8 +147,8 @@
     </div>
 
     <div class="styles-band">
-      <div class="photo"><img src="assets/karate-instructor.jpg" width="1344" height="752" loading="lazy" decoding="async" alt="A karate instructor holds a stance in a dim dojo lit red"><div class="cap"><p><b>Your ranks, your curriculum.</b> Track forms, techniques and testing requirements per student.</p><span class="tag">curriculum</span></div></div>
-      <div class="photo"><img src="assets/jiu-jitsu-mat.jpg" width="1000" height="1000" loading="lazy" decoding="async" alt="Two jiu-jitsu athletes grappling on a dark mat, seen from above"><div class="cap"><p><b>Every style on one timetable.</b> Striking, grappling, kids and adult programs.</p><span class="tag">timetable</span></div></div>
+      <div class="photo"><img src="/assets/karate-instructor.jpg" width="1344" height="752" loading="lazy" decoding="async" alt="A karate instructor holds a stance in a dim dojo lit red"><div class="cap"><p data-t><b>Your ranks, your curriculum.</b> Track forms, techniques and testing requirements per student.</p><span class="tag">curriculum</span></div></div>
+      <div class="photo"><img src="/assets/jiu-jitsu-mat.jpg" width="1000" height="1000" loading="lazy" decoding="async" alt="Two jiu-jitsu athletes grappling on a dark mat, seen from above"><div class="cap"><p data-t><b>Every style on one timetable.</b> Striking, grappling, kids and adult programs.</p><span class="tag">timetable</span></div></div>
     </div>
   </div>
 </section>
@@ -155,12 +158,12 @@
     <div class="sec-head">
       <div>
         <div class="eyebrow"><span class="tag"><span class="dot"></span>meet your ai team</span></div>
-        <h2 class="h2">An AI team, <em class="s">included.</em></h2>
+        <h2 class="h2" data-t>An AI team, <em class="s">included.</em></h2>
       </div>
       <p class="lede">Ask HON anything in plain language and HON brings in the right specialist. The whole team is part of your subscription. You never pay per message, and chat never uses credits.</p>
     </div>
     <div class="team">
-      <article class="card hon" data-agent="hon">
+      <article class="card hon" data-agent="hon" data-status="launch">
         <span class="av" aria-hidden="true"><svg viewBox="0 0 32 32" width="64" height="64"><use href="#mark"/></svg></span>
         <div><span class="tag"><span class="dot"></span>launching with hon os</span></div>
         <h3>HON</h3>
@@ -168,14 +171,14 @@
         <div class="say"><span class="mono">you ask</span>"Which trial students haven't signed up yet, and what should we send them?"</div>
       </article>
       <div class="crew">
-        <article class="card mate" data-agent="chad"><span class="av">C</span><div class="top"><h4>Chad<small>sales</small></h4><span class="tag"><span class="dot"></span>at launch</span></div><p>Drafts follow-ups for every lead so nobody goes cold.</p></article>
-        <article class="card mate" data-agent="marcus"><span class="av">M</span><div class="top"><h4>Marcus<small>marketing</small></h4><span class="tag"><span class="dot"></span>at launch</span></div><p>Drafts campaigns and posts for your next promotion.</p></article>
-        <article class="card mate" data-agent="claire"><span class="av">C</span><div class="top"><h4>Claire<small>performance</small></h4><span class="tag"><span class="dot"></span>at launch</span></div><p>Reads your numbers and explains them in plain words.</p></article>
-        <article class="card mate" data-agent="kai"><span class="av">K</span><div class="top"><h4>Kai<small>teaching</small></h4><span class="tag"><span class="dot"></span>at launch</span></div><p>Helps instructors pick curriculum. Fuller lesson planning is on the way.</p></article>
-        <article class="card mate later" data-agent="maya"><span class="av alt">M</span><div class="top"><h4>Maya<small>retention</small></h4><span class="tag soon"><span class="dot"></span>coming soon</span></div><p>Flags students at risk of leaving, with reasons and a next step.</p></article>
-        <article class="card mate later" data-agent="alex"><span class="av alt">A</span><div class="top"><h4>Alex<small>management</small></h4><span class="tag soon"><span class="dot"></span>coming soon</span></div><p>General management questions across the school.</p></article>
-        <article class="card mate later" data-agent="jordan"><span class="av alt">J</span><div class="top"><h4>Jordan<small>operations</small></h4><span class="tag soon"><span class="dot"></span>coming soon</span></div><p>Day-to-day operations, from staffing to schedules.</p></article>
-        <article class="card mate later" data-agent="lena"><span class="av alt">L</span><div class="top"><h4>Lena<small>creative</small></h4><span class="tag soon"><span class="dot"></span>coming soon</span></div><p>Creative work and your school's merchandise.</p></article>
+        <article class="card mate" data-agent="chad" data-status="launch"><span class="av">C</span><div class="top"><h4>Chad<small>sales</small></h4><span class="tag"><span class="dot"></span>at launch</span></div><p>Drafts follow-ups for every lead so nobody goes cold.</p></article>
+        <article class="card mate" data-agent="marcus" data-status="launch"><span class="av">M</span><div class="top"><h4>Marcus<small>marketing</small></h4><span class="tag"><span class="dot"></span>at launch</span></div><p>Drafts campaigns and posts for your next promotion.</p></article>
+        <article class="card mate" data-agent="claire" data-status="launch"><span class="av">C</span><div class="top"><h4>Claire<small>performance</small></h4><span class="tag"><span class="dot"></span>at launch</span></div><p>Reads your numbers and explains them in plain words.</p></article>
+        <article class="card mate" data-agent="kai" data-status="launch"><span class="av">K</span><div class="top"><h4>Kai<small>teaching</small></h4><span class="tag"><span class="dot"></span>at launch</span></div><p>Helps instructors pick curriculum. Fuller lesson planning is on the way.</p></article>
+        <article class="card mate later" data-agent="maya" data-status="soon"><span class="av alt">M</span><div class="top"><h4>Maya<small>retention</small></h4><span class="tag soon"><span class="dot"></span>coming soon</span></div><p>Flags students at risk of leaving, with reasons and a next step.</p></article>
+        <article class="card mate later" data-agent="alex" data-status="soon"><span class="av alt">A</span><div class="top"><h4>Alex<small>management</small></h4><span class="tag soon"><span class="dot"></span>coming soon</span></div><p>General management questions across the school.</p></article>
+        <article class="card mate later" data-agent="jordan" data-status="soon"><span class="av alt">J</span><div class="top"><h4>Jordan<small>operations</small></h4><span class="tag soon"><span class="dot"></span>coming soon</span></div><p>Day-to-day operations, from staffing to schedules.</p></article>
+        <article class="card mate later" data-agent="lena" data-status="soon"><span class="av alt">L</span><div class="top"><h4>Lena<small>creative</small></h4><span class="tag soon"><span class="dot"></span>coming soon</span></div><p>Creative work and your school's merchandise.</p></article>
       </div>
     </div>
     <div class="safety">
@@ -191,7 +194,7 @@
   <div class="wrap pay">
     <div>
       <div class="eyebrow"><span class="tag"><span class="dot"></span>get paid your way</span></div>
-      <h2 class="h2">Your tuition, <em class="s">your</em> account.</h2>
+      <h2 class="h2" data-t>Your tuition, <em class="s">your</em> account.</h2>
       <p class="lede" style="margin-top:18px">Connect your own Stripe or Square account. HON takes no fee on the tuition you collect. Online payments from families are coming soon.</p>
       <ul class="ticks" style="margin-top:28px">
         <li>Invoices and unpaid balances in one list</li>
@@ -222,7 +225,7 @@
     <div class="sec-head">
       <div>
         <div class="eyebrow"><span class="tag"><span class="dot"></span>grow</span></div>
-        <h2 class="h2">More students on the <em class="s">mat.</em></h2>
+        <h2 class="h2" data-t>More students on the <em class="s">mat.</em></h2>
       </div>
       <p class="lede">Plan campaigns, reward schools that refer you, and make your own images and video.</p>
     </div>
@@ -252,7 +255,7 @@
     <div class="sec-head">
       <div>
         <div class="eyebrow"><span class="tag"><span class="dot"></span>made for your team</span></div>
-        <h2 class="h2">Pick the screen that fits your <em class="s">front desk.</em></h2>
+        <h2 class="h2" data-t>Pick the screen that fits your <em class="s">front desk.</em></h2>
       </div>
       <p class="lede">Every school chooses one of three interface styles, so a new front-desk hire and a ten-year instructor can both get around.</p>
     </div>
@@ -272,8 +275,8 @@
       <article class="card level"><div class="top"><span class="mono">for owners of more than one school</span><span class="tag soon"><span class="dot"></span>summary today</span></div><h3>Organization page</h3><p>See all your schools together in one summary. Full multi-location management is coming soon.</p></article>
     </div>
     <div class="styles-band" style="grid-template-columns:1fr 1.4fr">
-      <div class="photo"><img src="assets/front-desk.jpg" width="1168" height="880" loading="lazy" decoding="async" alt="A school owner checks a tablet at the front desk in front of a wall of belts"><div class="cap"><p><b>Your front desk.</b> Leads, check-ins and balances on one screen.</p></div></div>
-      <div class="photo"><img src="assets/kids-class.jpg" width="1168" height="880" loading="lazy" decoding="async" alt="An instructor kneels to correct a child's stance during a kids class"><div class="cap"><p><b>Your mat.</b> Instructors get rosters and curriculum, not finances.</p><span class="tag">6:00 pm, kids class</span></div></div>
+      <div class="photo"><img src="/assets/front-desk.jpg" width="1168" height="880" loading="lazy" decoding="async" alt="A school owner checks a tablet at the front desk in front of a wall of belts"><div class="cap"><p data-t><b>Your front desk.</b> Leads, check-ins and balances on one screen.</p></div></div>
+      <div class="photo"><img src="/assets/kids-class.jpg" width="1168" height="880" loading="lazy" decoding="async" alt="An instructor kneels to correct a child's stance during a kids class"><div class="cap"><p data-t><b>Your mat.</b> Instructors get rosters and curriculum, not finances.</p><span class="tag">6:00 pm, kids class</span></div></div>
     </div>
   </div>
 </section>
@@ -283,7 +286,7 @@
     <div class="sec-head">
       <div>
         <div class="eyebrow"><span class="tag"><span class="dot"></span>pricing</span></div>
-        <h2 class="h2">One plan. <em class="s">Everything</em> in it.</h2>
+        <h2 class="h2" data-t>One plan. <em class="s">Everything</em> in it.</h2>
       </div>
       <div>
         <p class="lede" style="margin-bottom:18px">Every feature and the whole AI team, with a 14-day free trial and no automatic charge.</p>
@@ -321,7 +324,7 @@
 <section class="flush">
   <div class="wrap">
     <div class="eyebrow"><span class="tag"><span class="dot"></span>inside hon hq</span></div>
-    <h2 class="h2" style="max-width:20ch">Built to run HON on the same <em class="s">AI</em> we give you.</h2>
+    <h2 class="h2" style="max-width:20ch" data-t>Built to run HON on the same <em class="s">AI</em> we give you.</h2>
     <p class="lede" style="margin-top:18px">HON HQ is our own head office, where we manage HON OS itself, with six AI executives working alongside our team. Like your AI team, they launch with HON OS.</p>
     <div class="execs">
       <div class="card exec"><span class="av">C</span><b>Chase</b><span>growth</span></div>
@@ -338,7 +341,7 @@
   <div class="wrap faq">
     <div>
       <div class="eyebrow"><span class="tag"><span class="dot"></span>faq</span></div>
-      <h2 class="h2">Questions owners <em class="s">ask.</em></h2>
+      <h2 class="h2" data-t>Questions owners <em class="s">ask.</em></h2>
     </div>
     <div>
       <details open><summary>Do I pay for AI messages?</summary><p>No. The AI team is included in your subscription. There are no per-message charges and chatting with HON never uses credits.</p></details>
@@ -353,14 +356,14 @@
 <section id="start" class="flush">
   <div class="wrap final">
     <div class="card brandcard">
-      <img class="beltbg" src="assets/belt-texture.jpg" width="900" height="900" loading="lazy" decoding="async" alt="">
+      <img class="beltbg" src="/assets/belt-texture.jpg" width="900" height="900" loading="lazy" decoding="async" alt="">
       <a class="logo" href="#top"><svg><use href="#mark"/></svg>HON OS</a>
       <p style="font-size:17px;max-width:30ch">The AI-powered operating system built to run and grow martial arts schools.</p>
       <p class="mono" style="margin-top:auto">english / 한국어 / español</p>
     </div>
     <div class="cta-card">
       <span class="mono">founder 50</span>
-      <h2>Be one of the first <em class="s">50</em> schools.</h2>
+      <h2 data-t>Be one of the first <em class="s">50</em> schools.</h2>
       <p>Start with a 14-day free trial and keep $199.20 a month for as long as your school stays subscribed. No automatic charge when the trial ends.</p>
       <div class="cta-row">
         <a class="btn dark" href="{{APP_URL}}/account/start">Start a new school</a>
@@ -385,14 +388,14 @@
         <p style="color:var(--muted);font-size:14px;margin-top:12px;max-width:34ch">One app for your whole school, with an AI team behind you.</p>
       </div>
       <div><h4>product</h4><a href="#school">Features</a><a href="#ai-team">AI team</a><a href="#payments">Payments</a><a href="#pricing">Pricing</a></div>
-      <div><h4>styles</h4><a href="#school">Taekwondo</a><a href="#school">Karate</a><a href="#school">Jiu-jitsu</a><a href="#school">Kickboxing</a></div>
+      <div><h4>language</h4><a href="/" hreflang="en" lang="en" data-lang="en">English</a><a href="/ko/" hreflang="ko" lang="ko" data-lang="ko">한국어</a><a href="/es/" hreflang="es" lang="es" data-lang="es">Español</a></div>
       <div><h4>get started</h4><a href="{{APP_URL}}/account/start">Start a new school</a><a href="{{APP_URL}}/auth/login">Sign in</a><a href="#faq">FAQ</a></div>
     </div>
     <div class="legal mono"><span>&copy; 2026 HON OS. all rights reserved</span><span>built for the people who run the mat</span></div>
   </div>
 </footer>
 
-<script src="flow.js" defer></script>
-<script src="site.js" defer></script>
+<script src="/flow.js" defer></script>
+<script src="/site.js" defer></script>
 </body>
 </html>

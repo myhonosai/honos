@@ -79,10 +79,7 @@ test('every link to the app goes through the build placeholder to an allowed pag
   }
   assert.ok(appLinks.includes('{{APP_URL}}/account/start'));
   assert.ok(appLinks.includes('{{APP_URL}}/auth/login'));
-  const external = [...html.matchAll(/href="(https?:[^"]*)"/g)].map((m) => m[1]);
-  for (const link of external) {
-    assert.match(link, /^https:\/\/fonts\.(googleapis|gstatic)\.com(\/|$)/, `${link} is a font host only`);
-  }
+  assert.doesNotMatch(html, /(href|src)="(https?:)?\/\//, 'loads nothing from other hosts (fonts are self-hosted)');
   assert.doesNotMatch(html, /href="\/pricing"|\/pricing"/, 'never links the old pricing page');
 });
 
@@ -99,7 +96,7 @@ test('every image exists and has alt text', () => {
   for (const img of imgs) {
     const srcAttr = img.match(/src="([^"]+)"/)?.[1];
     assert.ok(srcAttr && !srcAttr.startsWith('data:'), 'image is a file, not inline data');
-    assert.ok(existsSync(join(src, srcAttr)), `${srcAttr} exists`);
+    assert.ok(existsSync(join(src, srcAttr.replace(/^\//, ''))), `${srcAttr} exists`);
     assert.match(img, /\salt="[^"]*"/, `${srcAttr} has alt`);
     assert.match(img, /\swidth="\d+"\s[^>]*height="\d+"|\sheight="\d+"\s[^>]*width="\d+"/, `${srcAttr} has a size`);
   }
@@ -112,6 +109,10 @@ test('has the basics a public page needs', () => {
   assert.match(html, /<title>HON OS[^<]*<\/title>/);
   assert.match(html, /<meta name="description" content="[^"]{40,}"/);
   assert.match(html, /<meta name="robots" content="\{\{ROBOTS\}\}"/);
+  for (const file of ['/fonts/geist-latin-400-normal.woff2']) assert.ok(existsSync(join(src, file)), `${file} exists`);
+  for (const face of readFileSync(join(src, 'styles.css'), 'utf8').matchAll(/url\("\/(fonts\/[^"]+)"\)/g)) {
+    assert.ok(existsSync(join(src, face[1])), `${face[1]} exists`);
+  }
   for (const file of ['styles.css', 'site.js', 'flow.js', 'favicon.svg']) {
     assert.ok(html.includes(file), `${file} is referenced`);
     assert.ok(existsSync(join(src, file)), `${file} exists`);

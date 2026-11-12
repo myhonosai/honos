@@ -20,7 +20,6 @@ Source of truth for every claim: `/mnt/project-files/website/HON_OS_WEBSITE_SUMM
 
 ## Out of scope (later slices)
 
-- Korean and Spanish versions of the site (W2).
 - Privacy policy, terms and contact pages (need owner/legal text).
 - Replacing the app's old `/pricing` page (Core $149 / Complete / lifetime). It must not be linked from the site.
 - Hosting: a Render static site, only with David's OK. `render.yaml` is not changed in W1.
@@ -29,8 +28,14 @@ Source of truth for every claim: `/mnt/project-files/website/HON_OS_WEBSITE_SUMM
 ## Before going live
 
 - David confirms the source and licence of the five photos (one shows a child) and they are recorded here.
-- Self-host the fonts instead of loading them from Google Fonts.
 - Online family tuition payments stay "coming soon" until family checkout is built.
+
+## W2: Korean and Spanish, self-hosted fonts
+
+- `/ko/` and `/es/` are generated at build time from the English page and `src/i18n/ko.json` / `es.json` (English phrase to translation). The build and tests fail if any English phrase lacks a translation or a dictionary entry is stale, so English copy can't change without both translations. Sentences with inline markup are translated whole (`data-t`).
+- A language switcher (header on wider screens, footer everywhere) with `hreflang` alternates. Pages use root paths, so the site is served from the root of its domain.
+- Fonts (Geist, Geist Mono, Instrument Serif, latin subsets, SIL OFL 1.1) are served from `/fonts`; Korean text uses the visitor's system Korean font. The page loads nothing from other hosts.
+- Translations are Claude's and need a native-speaker read before launch, as the summary already notes for Korean and Spanish pricing and legal wording.
 
 ## Must never appear (checked by tests)
 
