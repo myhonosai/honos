@@ -7,7 +7,7 @@ BEGIN;
 -- Maya joins the 0260 analysis specialists (one DETAILED single-step reply, task class ANALYZE, no history, no
 -- suggestions, never continued) through the 0260 plug-in points, plus one typed target:
 -- 1. A delegation { agentKey: 'maya', membershipId } (no other key) is a question about that membership. begin_hon_turn
---    (0260 body plus this branch only) refuses a membership that is not this exact school's; the generic analyst branch
+--    (0266 body plus this branch only) refuses a membership that is not this exact school's; the generic analyst branch
 --    refuses 'maya' without a membershipId. Target: { question, membershipId }.
 -- 2. Capability (0212 binding): retention.review.read, checked by the 0260 turn code at begin, at prepare and in
 --    readiness, like the other specialists.
@@ -152,7 +152,7 @@ DO $$ DECLARE r record; f regprocedure; BEGIN
   END LOOP;
 END $$;
 
--- 0260 body plus the 'maya' delegation branch (see header 1). Grants are kept by CREATE OR REPLACE.
+-- 0266 body (K2c) plus the 'maya' delegation branch (see header 1). Grants are kept by CREATE OR REPLACE.
 CREATE OR REPLACE FUNCTION hon.begin_hon_turn(p_subject text, p_conversation uuid, p_input jsonb, p_key uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid := hon.hon_conversation_actor(p_subject); c hon.hon_conversations%ROWTYPE; t hon.hon_conversation_turns%ROWTYPE;
@@ -273,8 +273,6 @@ BEGIN
         RAISE EXCEPTION 'HON_GROUP_NOT_SUMMARIZABLE' USING ERRCODE = '22023';
       END IF;
     ELSIF hon.hon_analysis_specialist(agent) THEN
-      -- K2/0260: an analysis specialist is never confirmed from a suggestion here (HON's closed suggestion set has none yet).
-      IF p_input ? 'fromSuggestionTurnId' THEN RAISE EXCEPTION 'HON_SUGGESTION_NOT_CONFIRMABLE' USING ERRCODE = '22023'; END IF;
       -- The specialist's capability (0212 binding: Claire and Alex reporting.view, Jordan schedule.session.manage, Lena
       -- marketing.campaign.read), under the same AI planning gate and S4 start guard as HON. Checked before the reply row
       -- and again after it (the work item and reply inserts can wait on locks); a refusal rolls everything back, so no
@@ -282,6 +280,25 @@ BEGIN
       PERFORM hon.require_ai_invocation_plan_access();
       IF NOT hon.principal_has_school_permission(actor, c.organization_id, c.school_id, hon.ai_agent_capability_permission(agent)) THEN
         RAISE EXCEPTION '%', CASE WHEN agent = 'claire' THEN 'CLAIRE_REPORTING_REQUIRED' ELSE 'HON_SPECIALIST_CAPABILITY_REQUIRED' END USING ERRCODE = '42501';
+      END IF;
+      -- K2c: a specialist question confirmed from HON's suggestion joins that answer's group under the same C3a rules:
+      -- this human's own whole COMPLETED HON answer in this conversation, visible now, still suggesting this agent for
+      -- them (capability-filtered, 0214; of the specialists only Claire is in the closed set), and the agent not already
+      -- confirmed from it. Re-validated after every write below.
+      IF p_input ? 'fromSuggestionTurnId' THEN
+        SELECT * INTO src FROM hon.hon_reply_invocations WHERE turn_id = lower(p_input->>'fromSuggestionTurnId')::uuid AND conversation_id = c.id
+          AND organization_id = c.organization_id AND school_id = c.school_id AND requested_by = actor;
+        IF NOT FOUND OR src.status <> 'COMPLETED' OR src.truncated OR src.specialist <> 'hon' OR NOT hon.hon_reply_visible(p_subject, src.turn_id)
+           OR NOT agent = ANY (hon.hon_reply_allowed_suggestions(actor, c.organization_id, c.school_id, src.suggested_agents))
+           OR EXISTS (SELECT 1 FROM hon.hon_orchestrations o JOIN hon.hon_orchestration_members m ON m.orchestration_id = o.id
+                      WHERE o.source_turn_id = src.turn_id AND m.agent_key = agent) THEN
+          RAISE EXCEPTION 'HON_SUGGESTION_NOT_CONFIRMABLE' USING ERRCODE = '22023';
+        END IF;
+        INSERT INTO hon.hon_orchestrations (organization_id, school_id, conversation_id, requested_by, source_turn_id)
+        VALUES (c.organization_id, c.school_id, c.id, actor, src.turn_id) ON CONFLICT (source_turn_id) DO NOTHING;
+        SELECT id INTO STRICT orch FROM hon.hon_orchestrations WHERE source_turn_id = src.turn_id;
+        INSERT INTO hon.hon_orchestration_members (orchestration_id, organization_id, school_id, agent_key, turn_id)
+        VALUES (orch, c.organization_id, c.school_id, agent, t.id);
       END IF;
       INSERT INTO hon.work_items (organization_id, school_id, work_type, status, subject_type, subject_id, payload, correlation_id)
       VALUES (c.organization_id, c.school_id, 'AI_' || (hon.hon_reply_limits('DETAILED')->>'taskClass'), 'READY', 'HON_CONVERSATION_TURN', t.id, '{}',
@@ -293,6 +310,15 @@ BEGIN
       PERFORM hon.require_ai_invocation_plan_access();
       IF NOT hon.principal_has_school_permission(actor, c.organization_id, c.school_id, hon.ai_agent_capability_permission(agent)) THEN
         RAISE EXCEPTION '%', CASE WHEN agent = 'claire' THEN 'CLAIRE_REPORTING_REQUIRED' ELSE 'HON_SPECIALIST_CAPABILITY_REQUIRED' END USING ERRCODE = '42501';
+      END IF;
+      -- K2c: the confirmed source, from a fresh read after every write (group, member, work item and reply rows).
+      IF p_input ? 'fromSuggestionTurnId'
+         AND (NOT EXISTS (SELECT 1 FROM hon.hon_reply_invocations r WHERE r.turn_id = src.turn_id AND r.conversation_id = c.id
+                            AND r.organization_id = c.organization_id AND r.school_id = c.school_id AND r.requested_by = actor
+                            AND r.status = 'COMPLETED' AND NOT r.truncated AND r.specialist = 'hon'
+                            AND agent = ANY (hon.hon_reply_allowed_suggestions(actor, c.organization_id, c.school_id, r.suggested_agents)))
+              OR NOT hon.hon_reply_visible(p_subject, src.turn_id)) THEN
+        RAISE EXCEPTION 'HON_SUGGESTION_NOT_CONFIRMABLE' USING ERRCODE = '22023';
       END IF;
     ELSIF p_input ? 'fromSuggestionTurnId' THEN
       -- C3a: confirm a suggested specialist. The source is this human's own whole, COMPLETED HON answer in this
