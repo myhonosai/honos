@@ -550,6 +550,26 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     finally { client.release(); }
   }
 
+  /** B-SCH-3 (0261): the three fixed public event calls, one short transaction each, no tenant settings. */
+  async runPublicEventCall(statement: string, values: unknown[]): Promise<unknown> {
+    if (![
+      'SELECT hon.read_public_school_event($1) AS data',
+      'SELECT hon.book_public_school_event($1,$2::jsonb,$3) AS data',
+      'SELECT hon.cancel_public_school_event_booking($1,$2::jsonb) AS data',
+    ].includes(statement)) throw new Error('Unknown public event call.');
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>(statement, values);
+      await client.query('COMMIT');
+      if (result.rows.length !== 1) throw new Error('Unverified public event call.');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
+    finally { client.release(); }
+  }
+
   async resolveHumanWorkScope(externalSubject: string): Promise<ResolvedPrincipalScope | undefined> {
     await this.assertRuntimePosture();
     return (await this.getPool().query<ResolvedPrincipalScope>(
