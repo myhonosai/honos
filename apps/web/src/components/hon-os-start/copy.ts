@@ -12,7 +12,7 @@ export type StartCopy = Readonly<{
   step1: string; step2: string;
   registered: (school: string, at: string) => string;
   signupClosed: string; verifiedRequired: string; hasOtherAccess: string; openWorkspace: string; termsUnavailable: string;
-  ownerName: string; schoolName: string; legalName: string; timezone: string;
+  ownerName: string; schoolName: string; legalName: string; timezone: string; chooseZone: string; commonZones: string; allZones: string;
   agree: (title: string, version: number, draft: boolean) => string;
   legalTermsPending: string; createButton: string;
   created: string; trialStarted: string;
@@ -66,7 +66,7 @@ const en: StartCopy = {
   verifiedRequired: 'Sign in with an account whose email address is verified to create a school.',
   hasOtherAccess: 'This account already has HON access.', openWorkspace: 'Open my workspace',
   termsUnavailable: 'Sign-up terms are not available. Check again later.',
-  ownerName: 'Your name', schoolName: 'School name', legalName: 'Legal business name', timezone: 'School time zone',
+  ownerName: 'Your name', schoolName: 'School name', legalName: 'Legal business name', timezone: 'School time zone', chooseZone: 'Choose your school\'s time zone', commonZones: 'Common time zones', allZones: 'All time zones',
   agree: (t, v, d) => `I agree to ${t} (version ${v}${d ? ', a test-only draft' : ''}) and confirm I own or run this school.`,
   legalTermsPending: 'The final legal terms are still being prepared and will be shown here before sign-up opens.',
   createButton: 'Create my school account',
@@ -123,7 +123,7 @@ const ko: StartCopy = {
   verifiedRequired: '도장을 만들려면 이메일 주소가 인증된 계정으로 로그인하세요.',
   hasOtherAccess: '이 계정은 이미 HON 접근 권한이 있습니다.', openWorkspace: '내 업무 공간 열기',
   termsUnavailable: '가입 약관을 불러올 수 없습니다. 나중에 다시 확인하세요.',
-  ownerName: '이름', schoolName: '도장 이름', legalName: '법적 사업자명', timezone: '도장 시간대',
+  ownerName: '이름', schoolName: '도장 이름', legalName: '법적 사업자명', timezone: '도장 시간대', chooseZone: '도장 시간대를 선택하세요', commonZones: '자주 쓰는 시간대', allZones: '모든 시간대',
   agree: (t, v, d) => `${t}(버전 ${v}${d ? ', 테스트 전용 초안' : ''})에 동의하며 이 도장을 소유하거나 운영하고 있음을 확인합니다.`,
   legalTermsPending: '최종 법적 약관은 준비 중이며 가입이 열리기 전에 여기에 표시됩니다.',
   createButton: '내 도장 계정 만들기',
@@ -180,7 +180,7 @@ const es: StartCopy = {
   verifiedRequired: 'Inicie sesión con una cuenta cuyo correo esté verificado para crear una escuela.',
   hasOtherAccess: 'Esta cuenta ya tiene acceso a HON.', openWorkspace: 'Abrir mi espacio de trabajo',
   termsUnavailable: 'Los términos de registro no están disponibles. Vuelva a comprobar más tarde.',
-  ownerName: 'Su nombre', schoolName: 'Nombre de la escuela', legalName: 'Razón social', timezone: 'Zona horaria de la escuela',
+  ownerName: 'Su nombre', schoolName: 'Nombre de la escuela', legalName: 'Razón social', timezone: 'Zona horaria de la escuela', chooseZone: 'Elija la zona horaria de su escuela', commonZones: 'Zonas horarias comunes', allZones: 'Todas las zonas horarias',
   agree: (t, v, d) => `Acepto ${t} (versión ${v}${d ? ', un borrador solo de prueba' : ''}) y confirmo que soy dueño o dirijo esta escuela.`,
   legalTermsPending: 'Los términos legales definitivos aún se están preparando y se mostrarán aquí antes de abrir el registro.',
   createButton: 'Crear la cuenta de mi escuela',
@@ -209,4 +209,22 @@ export function instant(iso: string, locale: string, zone?: string): string {
   const at = new Date(iso);
   if (zone) { try { return new Intl.DateTimeFormat(locale, { ...options, timeZone: zone }).format(at); } catch { /* not a zone this browser knows */ } }
   try { return new Intl.DateTimeFormat(locale, options).format(at); } catch { return new Intl.DateTimeFormat('en-US', options).format(at); }
+}
+
+/** Zones most HON schools use, shown first in the picker (US first). Only zones this browser knows are listed. */
+export const COMMON_ZONES = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Phoenix', 'America/Los_Angeles',
+  'America/Anchorage', 'Pacific/Honolulu', 'America/Toronto', 'America/Mexico_City', 'Europe/London', 'Europe/Madrid', 'Asia/Seoul'] as const;
+
+/** Every IANA zone this browser supports, or the common ones when it cannot list them. */
+export function supportedZones(): string[] {
+  try { const all = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.('timeZone'); if (all?.length) return [...all]; } catch { /* older browser */ }
+  return [...COMMON_ZONES];
+}
+
+/**
+ * The browser's own zone as the default, except UTC-like zones: a school is never really in "UTC", and a device or a
+ * server render reporting it would silently put every class and due date in UTC, so the owner must choose.
+ */
+export function defaultZone(): string {
+  try { const z = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; return /^(UTC|Etc\/.*|GMT|Universal|Zulu)$/.test(z) ? '' : z; } catch { return ''; }
 }

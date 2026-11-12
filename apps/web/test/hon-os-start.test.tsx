@@ -35,9 +35,10 @@ const trialRow = { enrollmentId: uuid(5), organizationId: uuid(2), schoolId: uui
   automaticCharge: false, paymentMethodRequired: false, aiIncluded: true, aiCredits: { credits: 100, dailyCap: 20, perRequestCap: 10, expiresAt: '2026-11-19T10:00:00.000Z', used: 0 }, creativeCreditsIncluded: false };
 function fill() {
   const inputs = nodes(render()).filter(e => e.type === 'input');
-  const values = ['Synthetic Owner', 'Synthetic Dojo', 'Synthetic Dojo LLC', 'America/New_York'];
+  const values = ['Synthetic Owner', 'Synthetic Dojo', 'Synthetic Dojo LLC'];
   inputs.filter(e => e.props.type !== 'checkbox').forEach((e, i) => e.props.onChange({ target: { value: values[i] } }));
   inputs.filter(e => e.props.type === 'checkbox').forEach(e => e.props.onChange({ target: { checked: true } }));
+  nodes(render()).filter(e => e.type === 'select').forEach(e => e.props.onChange({ target: { value: 'America/New_York' } }));
 }
 beforeEach(() => { hooks.language = 'en'; hooks.locale = 'en-US'; hooks.values = []; hooks.cursor = 0; hooks.effects = []; vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', new EventTarget()); });
 afterEach(() => { for (const v of hooks.values) v?.cleanup?.(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -181,4 +182,28 @@ it('the trial-terms placeholder shows only while the sign-up terms are still a d
   vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(ok({ ...signupDone, terms: null })).mockResolvedValueOnce(ok({ trialStatus: 'TEST_MODE', schoolId: uuid(3), available: offer, trial: null }));
   click('Check my account'); await settle();
   expect(nodes(render()).some(e => e.props['data-start-offer'])).toBe(true); expect(nodes(render()).some(e => e.props['data-start-trial-terms-pending'])).toBe(false);
+});
+
+it('the school time zone is a picker that defaults to the browser zone, never to UTC', async () => {
+  const zoneOf = (z: string) => vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({ timeZone: z } as Intl.ResolvedDateTimeFormatOptions);
+  zoneOf('America/Chicago');
+  vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupOpen));
+  click('Check my account'); await settle();
+  const picker = () => nodes(render()).find(e => e.type === 'select')!;
+  expect(picker().props.value).toBe('America/Chicago'); expect(nodes(render()).some(e => e.type === 'input' && e.props.placeholder === 'America/New_York')).toBe(false);
+  const options = nodes(picker()).filter(e => e.type === 'option').map(e => e.props.value);
+  expect(options[0]).toBe(''); expect(options).toContain('America/Los_Angeles'); expect(options).toContain('Asia/Seoul'); expect(options.length).toBeGreaterThan(100);
+  vi.restoreAllMocks(); hooks.values = []; hooks.effects = [];
+  zoneOf('UTC');
+  const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupOpen));
+  click('Check my account'); await settle();
+  expect(picker().props.value).toBe('');
+  const inputs = nodes(render()).filter(e => e.type === 'input');
+  inputs.filter(e => e.props.type !== 'checkbox').forEach((e, i) => e.props.onChange({ target: { value: ['Synthetic Owner', 'Synthetic Dojo', 'Synthetic Dojo LLC'][i] } }));
+  inputs.filter(e => e.props.type === 'checkbox').forEach(e => e.props.onChange({ target: { checked: true } }));
+  expect(find('Create my school account')!.props.disabled).toBe(true);
+  picker().props.onChange({ target: { value: 'America/Denver' } }); expect(find('Create my school account')!.props.disabled).toBe(false);
+  f.mockResolvedValueOnce(ok(registration)).mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupDone)).mockResolvedValueOnce(ok({ trialStatus: 'CLOSED', schoolId: uuid(3), available: null, trial: null }));
+  click('Create my school account'); await settle();
+  expect(JSON.parse(f.mock.calls[2]![1]!.body as string).timezone).toBe('America/Denver');
 });

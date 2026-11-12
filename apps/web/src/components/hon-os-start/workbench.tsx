@@ -6,7 +6,7 @@ import {
 } from '@hon/contracts';
 import { HON_SESSION_INVALIDATED_EVENT, reportConfirmedSessionInvalidation } from '../session-invalidation';
 import { StartError, startRequest, type StartCommand } from './http';
-import { START_COPY, instant, type StartCopy } from './copy';
+import { COMMON_ZONES, START_COPY, defaultZone, instant, supportedZones, type StartCopy } from './copy';
 import { useLocale } from '../localization/provider';
 import styles from './workbench.module.css';
 
@@ -18,7 +18,6 @@ import styles from './workbench.module.css';
 type Message = Readonly<{ say: (c: StartCopy) => string }>;
 const line = (pick: (c: StartCopy) => string): Message => ({ say: pick });
 const fromError = (e: unknown): Message => line(c => e instanceof StartError ? c.codes[e.code] ?? c.fallback : c.fallback);
-const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch { return ''; } };
 type Pending = StartCommand & Readonly<{ kind: 'signup' | 'trial'; identity: string }>;
 
 function TrialSummary({ trial, c, at }: { trial: HonOsTrial; c: StartCopy; at: (iso: string) => string }) {
@@ -33,12 +32,16 @@ export function HonOsStart({ sessionSubject }: { sessionSubject: string }) {
   const { preferences, formattingLocale } = useLocale(), c = START_COPY[preferences.language] ?? START_COPY.en;
   const [phase, setPhase] = useState<'idle' | 'ready'>('idle'), [busy, setBusy] = useState(false), [message, setMessage] = useState<Message | null>(null);
   const [signup, setSignup] = useState<SignupStatus | null>(null), [trial, setTrial] = useState<TrialStatus | null>(null);
-  const [ownerName, setOwnerName] = useState(''), [schoolName, setSchoolName] = useState(''), [legalName, setLegalName] = useState(''), [timezone, setTimezone] = useState(browserZone);
+  const [ownerName, setOwnerName] = useState(''), [schoolName, setSchoolName] = useState(''), [legalName, setLegalName] = useState(''), [timezone, setTimezone] = useState('');
+  // Zones come from the browser after mount (never the server render, whose zone is not the owner's).
+  const [zones, setZones] = useState<string[]>([]);
   const [termsAccepted, setTermsAccepted] = useState(false), [trialConfirmed, setTrialConfirmed] = useState(false), [retry, setRetry] = useState(false);
   const life = useRef({ mounted: false, busy: false, epoch: 0, identity: '' }), pending = useRef<Pending | null>(null), read = useRef<AbortController | null>(null);
 
   useEffect(() => {
     life.current.mounted = true;
+    const zone = defaultZone(), all = supportedZones();
+    setZones(zone && !all.includes(zone) ? [zone, ...all] : all); setTimezone(zone);
     // A signed-out or replaced session hides everything this page loaded; nothing on it is secret beyond the owner's own school.
     const invalidated = () => { life.current.epoch++; read.current?.abort(); pending.current = null; setRetry(false); setPhase('idle'); setSignup(null); setTrial(null); setMessage(line(x => x.codes.SIGN_IN_REQUIRED!)); };
     window.addEventListener(HON_SESSION_INVALIDATED_EVENT, invalidated);
@@ -118,7 +121,11 @@ export function HonOsStart({ sessionSubject }: { sessionSubject: string }) {
           <label>{c.ownerName}<input value={ownerName} maxLength={120} autoComplete="name" onChange={e => setOwnerName(e.target.value)} /></label>
           <label>{c.schoolName}<input value={schoolName} maxLength={120} autoComplete="organization" onChange={e => setSchoolName(e.target.value)} /></label>
           <label>{c.legalName}<input value={legalName} maxLength={120} onChange={e => setLegalName(e.target.value)} /></label>
-          <label>{c.timezone}<input value={timezone} maxLength={64} placeholder="America/New_York" onChange={e => setTimezone(e.target.value)} /></label>
+          <label>{c.timezone}<select value={timezone} data-start-zone onChange={e => setTimezone(e.target.value)}>
+            <option value="">{c.chooseZone}</option>
+            <optgroup label={c.commonZones}>{COMMON_ZONES.filter(z => zones.includes(z)).map(z => <option key={'c' + z} value={z}>{z.replace(/_/g, ' ')}</option>)}</optgroup>
+            <optgroup label={c.allZones}>{zones.map(z => <option key={z} value={z}>{z.replace(/_/g, ' ')}</option>)}</optgroup>
+          </select></label>
           {/* Placeholder: the legal sign-up terms wording is David's decision and is not written yet. */}
           {draft && <p className={styles.notice} data-start-legal-pending>{c.legalTermsPending}</p>}
           <label><input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} />{c.agree(terms.title, terms.version, draft)}</label>
