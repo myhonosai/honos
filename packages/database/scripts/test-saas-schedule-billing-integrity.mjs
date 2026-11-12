@@ -108,10 +108,8 @@ try {
   const set=(await billing.publishOfferSet(H('hq'),offerDraft.set.setId,{expectedRevision:offerDraft.set.revision,previewDigest:offerDraft.preview.previewDigest,approval:contracts.SAAS_HON_OS_OFFER_PUBLISH_APPROVAL},K())).set;
   const offer=set.offers.find(x=>x.offerKind==='REGULAR_MONTHLY');
   const founder=set.offers.find(x=>x.offerKind==='FOUNDER_MONTHLY');
-  const founderSchedule=(await pricing.record(H('hq'),scheduleInput(founder,offer,0),K())).schedule;
-  const founderPreview=await pricing.preview(H('school'),org.school,founderSchedule.scheduleId);
-  assert(founderPreview.blockers.includes('FOUNDER_ALLOCATION_CONTRACT_UNAVAILABLE'));
-  await deny(()=>pricing.accept(H('school'),org.school,acceptanceInput(founderPreview),K()),422,'SAAS_PRICE_ACCEPTANCE_BLOCKED');
+  // 0279: founder step-up terms (renew at the standard offer) are refused; locked founder terms are proven in the founder proof.
+  await deny(()=>pricing.record(H('hq'),scheduleInput(founder,offer,0),K()),422,'SAAS_PRICE_TERMS_UNSUPPORTED');
   const recorded=(await pricing.record(H('hq'),scheduleInput(offer,offer,0),K())).schedule;
   const prepareGeneration=async(who,school)=>{
     const preview=await pricing.preview(H(who),school,recorded.scheduleId);
@@ -240,7 +238,7 @@ try {
   const malformedObservation={identity:'DETERMINISTIC_FAKE',mode:'TEST',outcome:'BOUND',bindingId:binding.bindingId,bindingKey:binding.bindingKey,requirementsDigest:binding.requirementsDigest,
     accountReference:'fake_null_flag_account',subscriptionReference:'fake_null_flag_subscription',scheduleReference:'fake_null_flag_schedule',automaticCalendarTransition:null,automaticCollectionEnabled:null};
   await sqlDeny(restricted.query('SELECT hon.record_saas_schedule_binding_observation($1::uuid,$2::jsonb,$3::uuid,$4::uuid)',[binding.bindingId,malformedObservation,K(),K()]),'22023');
-  passed('exact A2/B1 lineage, explicit founder refusal pending C, TEST simulated binding, malformed-observation refusal, durable recovery, school/HQ isolation, and no checkout/access effect');
+  passed('exact A2/B1 lineage, founder step-up terms refused (0279), TEST simulated binding, malformed-observation refusal, durable recovery, school/HQ isolation, and no checkout/access effect');
   const price=binding.requirements.lockedPriceMinor;
   const evt=()=>'evt_'+K().replaceAll('-','_');
   const baseEvent=(eventId,amountMinor=price,startsAt='2031-01-01T00:00:00.000Z',endsAt='2031-02-01T00:00:00.000Z',b=binding)=>({provider:'STRIPE_SIMULATED',mode:'TEST',eventId,eventType:'invoice.paid',bindingId:b.bindingId,

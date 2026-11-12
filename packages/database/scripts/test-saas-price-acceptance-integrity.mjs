@@ -90,16 +90,19 @@ try{
  const life={...pricingOffers()[0],offerCode:'LIFETIME',offerKind:'LIFETIME',displayName:'Synthetic historical shape only',priceMinor:357600,saleLimit:1,cancellationTiming:null};
  const set=await publish([...pricingOffers(),life]),offers=Object.fromEntries(set.offers.map(o=>[o.offerKind,o])),schedules={};
  for(const kind of c.SAAS_SCHEDULED_OFFER_KINDS){
-  const renewal=offers[kind.endsWith('MONTHLY')?'REGULAR_MONTHLY':'REGULAR_ANNUAL'];
-  schedules[kind]=(await record(offers[kind],renewal)).schedule;
-  assert.deepEqual(schedules[kind].terms,c.proposedHonOsLaunchPriceSchedule(kind));
+  schedules[kind]=(await record(offers[kind],offers[kind])).schedule;
+  assert.deepEqual(schedules[kind].terms,c.honOsLaunchScheduleTerms(kind));
   assert.equal((await pricing.schedule(H('operator'),schedules[kind].scheduleId)).scheduleDigest,schedules[kind].scheduleDigest);
  }
- assert(schedules.FOUNDER_MONTHLY.disclosureText.includes('$199.20 per month for the first 12 qualifying paid monthly periods. Thereafter, $249.00'));
- assert(schedules.FOUNDER_ANNUAL.disclosureText.includes('$1,494.00 for the first annual subscription period. Renews at $2,097.00'));
- assert.equal(schedules.FOUNDER_ANNUAL.terms.monthlyListReferenceMinor*12,298800);passed('exact four schedules, 12 paid monthly periods, one annual period, correct annual comparison and explicit disclosure');
+ assert(schedules.FOUNDER_MONTHLY.disclosureText.startsWith('$199.20 per month for as long as this subscription stays active. If it is canceled, or lapses for more than the 7-day grace period, a new subscription is at the standard price of $249.00 per month.'));
+ assert(schedules.FOUNDER_ANNUAL.disclosureText.startsWith('$1,494.00 per annual subscription period for as long as this subscription stays active. Renews at $1,494.00 annually'));
+ assert(schedules.FOUNDER_ANNUAL.disclosureText.includes('a new subscription is at the standard price of $2,097.00 per year.'));
+ assert.deepEqual([schedules.FOUNDER_ANNUAL.terms.standardPriceMinor,schedules.FOUNDER_ANNUAL.terms.renewalPriceMinor,schedules.FOUNDER_MONTHLY.terms.introductoryPaidPeriods],[209700,149400,0]);
+ passed('exact four schedules; founder price locked while subscribed with the standard return price disclosed; standard terms unchanged');
  await nothing(()=>record(offers.LIFETIME,offers.REGULAR_ANNUAL),422,'SAAS_PRICE_TERMS_UNSUPPORTED');
  await nothing(()=>record(offers.FOUNDER_MONTHLY,offers.REGULAR_ANNUAL,1),422,'SAAS_PRICE_TERMS_UNSUPPORTED');
+ // 0279: a founder offer renews only at its own locked price; the old step-up renewal to the standard offer is refused.
+ await nothing(()=>record(offers.FOUNDER_MONTHLY,offers.REGULAR_MONTHLY,1),422,'SAAS_PRICE_TERMS_UNSUPPORTED');
  const draft=await billing.createOfferSetDraft(H('hq'),{basedOnSetId:null,termsReference:'SYNTHETIC_UNPUBLISHED',founderTotalLimit:50,offers:pricingOffers()},K());
  await nothing(()=>record(draft.set.offers[0],draft.set.offers[0]),422,'SAAS_OFFER_NOT_AVAILABLE');await billing.discardOfferSetDraft(H('hq'),draft.set.setId,{expectedRevision:1},K());
  passed('new lifetime sales, mismatched renewal interval and unpublished offer schedules refused');
@@ -108,10 +111,11 @@ try{
  await nothing(()=>preview(schedules.REGULAR_MONTHLY,'other'),403,'SAAS_FORBIDDEN');
  await nothing(()=>preview(schedules.REGULAR_MONTHLY,'school',org.second),403,'SAAS_FORBIDDEN');
  passed('live human HQ-owner recording; exact-school purchase permission; cross-organization, same-organization ungranted school, expired and AI denied');
- for(const kind of ['FOUNDER_MONTHLY','FOUNDER_ANNUAL']){const p=await preview(schedules[kind]);assert(p.blockers.includes('FOUNDER_ALLOCATION_CONTRACT_UNAVAILABLE'));assert.equal(p.canAcknowledge,false);await nothing(()=>accept(p),422,'SAAS_PRICE_ACCEPTANCE_BLOCKED');}
+ for(const kind of ['FOUNDER_MONTHLY','FOUNDER_ANNUAL']){const p=await preview(schedules[kind]);assert.deepEqual(p.blockers,[]);assert.equal(p.canAcknowledge,true);}
+ assert.equal((await row('SELECT count(*)::int n FROM hon.saas_founder_allocations')).n,0,'a founder preview never counts a spot');
  const p=await preview(schedules.REGULAR_MONTHLY),pAnnual=await preview(schedules.REGULAR_ANNUAL);assert(p.canAcknowledge&&pAnnual.canAcknowledge);await gates();
  for(const patch of [{initialPriceMinor:1},{renewalPriceMinor:1},{discountPercent:50},{discounts:[]},{founderAllocationId:K()},{paid:true},{activate:true},{aiCredits:1},{organizationId:foreign.id}])await nothing(()=>pricing.accept(H('school'),org.school,{...acceptanceInput(p),...patch},K()),400,'INVALID_SAAS_INPUT');
- passed('founder allocation fails closed; no founder slot consumed; closed commands reject price/eligibility/discount/financial/access claims');
+ passed('founder preview shows availability only (no spot counted); closed commands reject price/eligibility/discount/financial/access claims');
  await nothing(()=>pricing.accept(H('school'),org.school,{...acceptanceInput(p),scheduleDigest:'0'.repeat(64)},K()),409,'SAAS_PRICE_PREVIEW_STALE');
  await nothing(()=>pricing.accept(H('school'),org.school,{...acceptanceInput(p),acceptanceDigest:'0'.repeat(64)},K()),409,'SAAS_PRICE_PREVIEW_STALE');
  await nothing(()=>record(offers.REGULAR_MONTHLY,offers.REGULAR_MONTHLY,0),409,'SAAS_VERSION_CONFLICT');
@@ -154,7 +158,7 @@ try{
  await a.query('BEGIN');const winnerKey=K();await sqlAccept(a,acceptanceInput(pr),winnerKey);pid=(await a.query('SELECT pg_backend_pid() p')).rows[0].p;
  pending=settled(billing.stopOfferSales(H('hq'),offers.REGULAR_MONTHLY.offerId,{reasonCode:'OWNER_DISABLED'},K()));await waitFor(pid);await a.query('COMMIT');assert((await pending).value);
  assert.equal((await accept(pr,winnerKey)).replayed,true);await nothing(()=>accept(pr),422,'SAAS_PRICE_ACCEPTANCE_BLOCKED');passed('acceptance-first sales stop waits, original historical receipt survives, new acknowledgement refused');
- const stoppedSchedule=(await record(offers.FOUNDER_ANNUAL,offers.REGULAR_ANNUAL,1)).schedule;
+ const stoppedSchedule=(await record(offers.FOUNDER_ANNUAL,offers.FOUNDER_ANNUAL,1)).schedule;
  // Use a fresh offer set for reverse stop order and historical price changes.
  const next=await publish(pricingOffers({REGULAR_MONTHLY:{priceMinor:30000},REGULAR_ANNUAL:{priceMinor:250000}}));
  assert.deepEqual(await pricing.acceptance(H('school'),org.school,accepted.acceptanceId),accepted);

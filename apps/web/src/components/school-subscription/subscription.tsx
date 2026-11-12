@@ -10,6 +10,7 @@ import styles from './subscription.module.css';
 import { canPurchase, reviewFingerprint } from './http';
 import { useSchoolCheckout } from './use-checkout';
 import { SchoolAccountStatus } from './account';
+import { HonOsPrices } from './hon-os-prices';
 
 const GUIDANCE = [
   { question: 'Which plan fits my school?', answer: 'Core includes conventional school operations and manual or assisted marketing. Complete adds governed AI workforce capabilities. Actual tools remain subject to server authorization, available services and approvals.' },
@@ -91,7 +92,8 @@ export function SchoolSubscription({ returnedFromCheckout = false }: { returnedF
             <div className={styles.allowance}><strong>{SAAS_CREATIVE_MONTHLY_INCLUDED_CREDITS.toLocaleString(formattingLocale)}</strong><span>{t("planned creative credits / month for every paid school")}<br/><small>{t("Not a granted allowance or live balance")}</small></span></div>
           </article>; })}
         </div>
-        <p className={styles.small}>{t("Both plans include all three views. Capability inclusion describes the approved plan catalog; it does not mean every integration or AI job is operational. No new Essential or annual subscriptions are offered.")}</p>
+        <p className={styles.small}>{t("Both plans include all three views. Capability inclusion describes the approved plan catalog; it does not mean every integration or AI job is operational. No new Essential subscriptions are offered.")}</p>
+        <HonOsPrices account={billing.account}/>
       </section>
       <section className={styles.review} aria-labelledby="review-title">
         <div><p className={styles.kicker}>{t("02 / REVIEW YOUR SELECTION")}</p><h2 id="review-title" ref={reviewHeading} tabIndex={-1}>{selection.reviewing ? t("Your subscription summary") : t("A clear choice. No surprises.")}</h2><p>HON {selected.displayName} · {text(selected.offerLabel)}</p><div className={styles.summaryPrice}>{money(selected.priceMinor)} <span>USD {text(selected.intervalLabel)}</span></div>

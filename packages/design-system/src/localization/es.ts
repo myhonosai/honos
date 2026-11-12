@@ -1,10 +1,12 @@
 import { pricingOperationsEs } from './pricing-operations.js';
 import type { TranslationCatalog } from './index.js';
 import { pricingEs } from './pricing-offers.js';
+import { honOsPricesEs } from './hon-os-prices.js';
 import { zernioEs } from './zernio.js';
 export const es = {
   ...zernioEs,
   ...pricingEs,
+  ...honOsPricesEs,
   ...pricingOperationsEs,
   " · Deterministic simulator, not Stripe sandbox": " · Simulador determinista, no sandbox de Stripe",
   " · Reservation recorded": " · Reserva registrada",
@@ -500,7 +502,7 @@ export const es = {
   "status.ACTIVE": "ACTIVO",
   "status.INACTIVE": "INACTIVO",
   "status.NONE": "NINGUNO",
-  "Both plans include all three views. Capability inclusion describes the approved plan catalog; it does not mean every integration or AI job is operational. No new Essential or annual subscriptions are offered.": "Ambos planes incluyen las tres vistas. El catálogo aprobado no significa que cada integración o tarea de IA esté operativa. No se ofrecen nuevas suscripciones Essential ni anuales.",
+  "Both plans include all three views. Capability inclusion describes the approved plan catalog; it does not mean every integration or AI job is operational. No new Essential subscriptions are offered.": "Ambos planes incluyen las tres vistas. El catálogo aprobado no significa que cada integración o tarea de IA esté operativa. No se ofrecen nuevas suscripciones Essential.",
   "Eligibility is rechecked at checkout. Test mode only; no live charge. Published legal/tax policies are required before a live launch.": "La elegibilidad se vuelve a verificar al pagar. Solo modo de prueba, sin cobro real. Se requieren políticas legales y fiscales publicadas antes del lanzamiento real.",
   "The reported tier and subscription plan differ. Contact HON support; this page cannot change either record.": "El nivel informado y el plan de suscripción difieren. Contacta con soporte de HON; esta página no puede cambiar los registros.",
   "Unavailable here. HON must confirm effective access separately; payment does not activate features or clear a suspension.": "No disponible aquí. HON debe confirmar el acceso efectivo por separado; el pago no activa funciones ni levanta una suspensión.",

@@ -1,10 +1,12 @@
 import { pricingOperationsKo } from './pricing-operations.js';
 import type { TranslationCatalog } from './index.js';
 import { pricingKo } from './pricing-offers.js';
+import { honOsPricesKo } from './hon-os-prices.js';
 import { zernioKo } from './zernio.js';
 export const ko = {
   ...zernioKo,
   ...pricingKo,
+  ...honOsPricesKo,
   ...pricingOperationsKo,
   " · Deterministic simulator, not Stripe sandbox": " · 결정적 시뮬레이터이며 Stripe 샌드박스가 아닙니다",
   " · Reservation recorded": " · 예약 기록됨",
@@ -500,7 +502,7 @@ export const ko = {
   "status.ACTIVE": "활성",
   "status.INACTIVE": "비활성",
   "status.NONE": "없음",
-  "Both plans include all three views. Capability inclusion describes the approved plan catalog; it does not mean every integration or AI job is operational. No new Essential or annual subscriptions are offered.": "두 요금제 모두 세 가지 보기를 포함합니다. 기능 포함 표시는 승인된 요금제 카탈로그이며 모든 연동이나 AI 작업이 운영 중이라는 뜻은 아닙니다. 신규 Essential 및 연간 구독은 제공하지 않습니다.",
+  "Both plans include all three views. Capability inclusion describes the approved plan catalog; it does not mean every integration or AI job is operational. No new Essential subscriptions are offered.": "두 요금제 모두 세 가지 보기를 포함합니다. 기능 포함 표시는 승인된 요금제 카탈로그이며 모든 연동이나 AI 작업이 운영 중이라는 뜻은 아닙니다. 신규 Essential 구독은 제공하지 않습니다.",
   "Eligibility is rechecked at checkout. Test mode only; no live charge. Published legal/tax policies are required before a live launch.": "결제 시 자격을 다시 확인합니다. 테스트 모드 전용이며 실제 청구는 없습니다. 실제 출시 전에 법률 및 세금 정책을 게시해야 합니다.",
   "The reported tier and subscription plan differ. Contact HON support; this page cannot change either record.": "보고된 요금제와 구독 요금제가 다릅니다. HON 지원팀에 문의하세요. 이 페이지에서는 두 기록을 변경할 수 없습니다.",
   "Unavailable here. HON must confirm effective access separately; payment does not activate features or clear a suspension.": "여기서는 사용할 수 없습니다. 실제 이용 권한은 HON이 별도로 확인해야 하며 결제로 기능이 활성화되거나 일시 중지가 해제되지 않습니다.",

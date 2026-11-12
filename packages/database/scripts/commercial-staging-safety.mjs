@@ -4,6 +4,7 @@ import { readFile, readdir } from 'node:fs/promises';
 
 export const fixture = Object.freeze({ database: 'hon_champions_validation', owner: 'hon_champions_owner', runtime: 'hon_champions_runtime', marker: 'HON disposable Champions Club validation' });
 export const proofs = Object.freeze([
+  ['test-saas-founder-allocation-integrity.mjs','0279 HON OS founder 50-spot count at the first verified payment, held late payment, refund-then-cancel and immutable spots','synthetic deterministic provider evidence only; no network, checkout, collection, refund execution or credit activation; access switched on only in the disposable fixture'],
   ['test-saas-schedule-billing-integrity.mjs','0230 + 0235 + 0237 HON OS TEST-only schedule binding, locked-price paid-period evidence, billing lifecycle, access after the first verified payment and the HQ review queue for held payments','synthetic deterministic provider evidence only; no network, checkout, collection, trial, or credit activation; access switched on only in the disposable fixture'],
   ['test-saas-subscription-generation-integrity.mjs','0189 Commercial B1 immutable generation lineage and fail-closed provider boundary','synthetic generation intent only; no provider evidence/billing/activation'],
   ['test-saas-price-acceptance-integrity.mjs','0188 Commercial A2 immutable pricing and customer acceptance','synthetic offer publication/acceptance only; no checkout, grants or provider traffic'],
