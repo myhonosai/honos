@@ -259,6 +259,8 @@ import { COMMUNICATION_PROVIDER_ADAPTERS } from './communication/delivery/commun
 import { FakeCommunicationProvider } from './communication/delivery/fake-communication-provider.js';
 import { COMMUNICATION_WORKER_STORE, CommunicationWorkerDatabase } from './communication/delivery/communication-worker-database.js';
 import { CommunicationDispatcher, CommunicationDispatchScheduler } from './communication/delivery/communication-dispatcher.js';
+import { SendGridEmailProvider, SendGridEventWebhookVerifier } from './communication/delivery/sendgrid-email-provider.js';
+import { CommunicationWebhookController, SENDGRID_EVENT_VERIFIER } from './communication/delivery/communication-webhook.controller.js';
 import { HqAiProviderController } from './hq/hq-ai-provider.controller.js';
 import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
 import { ZernioIntegrationController, ZernioHumanUiGuard } from './integrations/zernio.controller.js';
@@ -452,7 +454,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     A2pPreparationController,
     HqEntitlementController,
     ChampionsSchoolController, ChampionsHqController,
-    SaasSubscriptionGenerationHqController, SaasSubscriptionGenerationSchoolController, SaasScheduleBindingHqController, SaasScheduleBindingSchoolController, SaasPaidReviewHqController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqSupportController, HqMarketingController, HqCreativeController, AiSpendPauseHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
+    SaasSubscriptionGenerationHqController, SaasSubscriptionGenerationSchoolController, SaasScheduleBindingHqController, SaasScheduleBindingSchoolController, SaasPaidReviewHqController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, CommunicationWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqSupportController, HqMarketingController, HqCreativeController, AiSpendPauseHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [BookableStudentsService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard,
@@ -554,7 +556,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     CommunicationWorkerDatabase,
     { provide: COMMUNICATION_WORKER_STORE, useExisting: CommunicationWorkerDatabase },
     // Real adapters (SendGrid, Twilio) are listed before the fakes; each is READY only behind its own approval flag.
-    { provide: COMMUNICATION_PROVIDER_ADAPTERS, useFactory: () => [new FakeCommunicationProvider('EMAIL'), new FakeCommunicationProvider('SMS')] },
+    { provide: COMMUNICATION_PROVIDER_ADAPTERS, useFactory: () => [new SendGridEmailProvider(), new FakeCommunicationProvider('EMAIL'), new FakeCommunicationProvider('SMS')] },
+    { provide: SENDGRID_EVENT_VERIFIER, useFactory: () => new SendGridEventWebhookVerifier() },
     CommunicationDispatcher,
     CommunicationDispatchScheduler,
     TestingEventService,

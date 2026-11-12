@@ -17,7 +17,7 @@ function store(claims, status = (result) => ({ ACCEPTED: 'ACCEPTED', RETRYABLE: 
   return {
     calls,
     isConfigured: () => true,
-    claim: async (channels, limit, leaseSeconds) => { calls.claim.push({ channels, limit, leaseSeconds }); return claims; },
+    claim: async (channels, limit, leaseSeconds) => { calls.claim.push({ channels, limit, leaseSeconds }); return claims.splice(0, limit); },
     recordResult: async (id, token, result) => { calls.results.push({ id, token, result }); return { status: status(result), accepted: true }; },
     recordReceipt: async () => { throw new Error('not used'); },
   };
@@ -31,7 +31,12 @@ test('dispatcher claims only channels with a READY adapter and never claims when
   assert.deepEqual(summary.readyChannels, []);
   const some = store([]);
   await new CommunicationDispatcher(some, [adapter('EMAIL', async () => ({})), adapter('SMS', async () => ({}), 'CONFIGURATION_REQUIRED')]).runOnce(10);
-  assert.deepEqual(some.calls.claim, [{ channels: ['EMAIL'], limit: 10, leaseSeconds: 60 }]);
+  assert.deepEqual(some.calls.claim, [{ channels: ['EMAIL'], limit: 2, leaseSeconds: 60 }]);
+  // Batches of two keep every send (20 s timeout each) inside the 60 s lease.
+  const many = store([1, 2, 3, 4, 5].map(() => lease()));
+  const batched = await new CommunicationDispatcher(many, [adapter('EMAIL', async () => ({ providerMessageId: 'sg', sentAs: 'EMAIL' }))]).runOnce(4);
+  assert.deepEqual(many.calls.claim.map((c) => c.limit), [2, 2]);
+  assert.equal(batched.claimed, 4);
 });
 
 test('dispatcher records accepted sends with the provider measurements and the exact lease', async () => {
