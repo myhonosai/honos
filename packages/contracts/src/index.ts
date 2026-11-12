@@ -1029,6 +1029,7 @@ export * from './language-preferences.js';
 export * from './saas-trials.js';
 
 export * from './saas-price-acceptance.js';
+export * from './saas-founder-allocation.js';
 export * from './saas-subscription-generation.js';
 
 export * from './school-owner-invitations.js';

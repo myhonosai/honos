@@ -2458,6 +2458,22 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.verify_saas_paid_review_refund(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
+-- 0279 HON OS schedule billing piece 4 (founder 50-spot count). Runs after every broader revocation above: restore only
+-- the two reads plus the ingest and cancel commands 0279 replaced. Availability helpers, guards and JSON stay unreachable.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['read_saas_founder_pool_from_hq(text)','read_saas_founder_availability_for_school(text,uuid)',
+    'saas_founder_unavailable_reason(uuid,uuid)','saas_schedule_binding_founder_offer(hon.saas_schedule_bindings)','saas_founder_pool_json()',
+    'guard_saas_founder_binding_insert()','guard_saas_founder_allocation_insert()','verify_saas_founder_allocation_evidence()'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_saas_founder_pool_from_hq(text),hon.read_saas_founder_availability_for_school(text,uuid),
+      hon.ingest_saas_schedule_evidence(jsonb,text),hon.cancel_saas_schedule_binding(text,uuid,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
 
 -- B-HQ-2 0232 (proposed) HQ support records: no table privileges; three commands and three reads are the only runtime boundary.
 DO $$ DECLARE r text; t text; BEGIN

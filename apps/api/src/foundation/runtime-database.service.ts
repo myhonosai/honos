@@ -105,6 +105,8 @@ const SAAS_BILLING_CALLS = {
   recordScheduleBindingExpiry: { sql: 'SELECT hon.record_saas_schedule_binding_expiry($1::uuid,$2::jsonb) AS data', arity: 2, readOnly: false },
   retryScheduleAccess: { sql: 'SELECT hon.retry_saas_schedule_access($1::text,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   readPaidReviews: { sql: 'SELECT hon.read_saas_paid_reviews($1::text,$2::text) AS data', arity: 2, readOnly: true },
+  readFounderPoolHq: { sql: 'SELECT hon.read_saas_founder_pool_from_hq($1::text) AS data', arity: 1, readOnly: true },
+  readFounderAvailabilitySchool: { sql: 'SELECT hon.read_saas_founder_availability_for_school($1::text,$2::uuid) AS data', arity: 2, readOnly: true },
   resolvePaidReview: { sql: 'SELECT hon.resolve_saas_paid_review($1::text,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   verifyPaidReviewRefund: { sql: 'SELECT hon.verify_saas_paid_review_refund($1::text,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   cancelScheduleBinding: { sql: 'SELECT hon.cancel_saas_schedule_binding($1::text,$2::uuid,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
