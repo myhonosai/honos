@@ -12,13 +12,17 @@ CREATE TABLE hon.school_text_senders (
   phone_e164 text NOT NULL CHECK (phone_e164 ~ '^\+[1-9][0-9]{7,14}$'),
   messaging_service_sid text NOT NULL CHECK (messaging_service_sid ~ '^MG[0-9a-f]{32}$'),
   status text NOT NULL CHECK (status IN ('ACTIVE', 'DISABLED')),
+  -- Long texts rely on the Messaging Service's MMS Converter (3+ pieces go as one MMS). HON cannot change a
+  -- Twilio service itself, so the HQ owner confirms it is on; a sender cannot be ACTIVE without that.
+  mms_converter_confirmed boolean NOT NULL DEFAULT false,
   set_by_principal_id uuid NOT NULL REFERENCES hon.principals(id) ON DELETE RESTRICT,
   version integer NOT NULL DEFAULT 1 CHECK (version >= 1),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   FOREIGN KEY (school_id, organization_id) REFERENCES hon.schools(id, organization_id) ON DELETE RESTRICT,
   UNIQUE (school_id),
-  UNIQUE (phone_e164)
+  UNIQUE (phone_e164),
+  CONSTRAINT school_text_senders_active_needs_mms_converter CHECK (status <> 'ACTIVE' OR mms_converter_confirmed)
 );
 ALTER TABLE hon.school_text_senders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hon.school_text_senders FORCE ROW LEVEL SECURITY;
@@ -52,35 +56,40 @@ ALTER TABLE hon.communication_deliveries ADD CONSTRAINT communication_deliveries
 
 -- HQ owner sets or disables a school's sender. Human HON HQ owner only; audited in the school's scope.
 CREATE FUNCTION hon.set_school_text_sender_from_hq(
-  p_subject text, p_school uuid, p_phone_e164 text, p_messaging_service_sid text, p_status text, p_expected_version integer
+  p_subject text, p_school uuid, p_phone_e164 text, p_messaging_service_sid text, p_status text, p_mms_converter_confirmed boolean,
+  p_expected_version integer
 ) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
 DECLARE actor uuid; s hon.schools%ROWTYPE; prior hon.school_text_senders; next hon.school_text_senders; req uuid := gen_random_uuid();
 BEGIN
   actor := hon.require_saas_hq_actor(p_subject, true);
-  IF p_school IS NULL OR p_status NOT IN ('ACTIVE', 'DISABLED') OR p_phone_e164 IS NULL OR p_messaging_service_sid IS NULL THEN
+  IF p_school IS NULL OR p_status NOT IN ('ACTIVE', 'DISABLED') OR p_phone_e164 IS NULL OR p_messaging_service_sid IS NULL
+    OR p_mms_converter_confirmed IS NULL THEN
     RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE = '22023';
+  END IF;
+  IF p_status = 'ACTIVE' AND NOT p_mms_converter_confirmed THEN
+    RAISE EXCEPTION 'MMS_CONVERTER_NOT_CONFIRMED' USING ERRCODE = '22023';
   END IF;
   SELECT * INTO s FROM hon.schools WHERE id = p_school;
   IF s.id IS NULL THEN RAISE EXCEPTION 'HQ_SCHOOL_NOT_FOUND' USING ERRCODE = 'P0002'; END IF;
   SELECT * INTO prior FROM hon.school_text_senders WHERE school_id = p_school FOR UPDATE;
   IF prior.id IS NULL THEN
     IF p_expected_version IS NOT NULL THEN RAISE EXCEPTION 'VERSION_CONFLICT' USING ERRCODE = '40001'; END IF;
-    INSERT INTO hon.school_text_senders (organization_id, school_id, phone_e164, messaging_service_sid, status, set_by_principal_id)
-    VALUES (s.organization_id, s.id, p_phone_e164, p_messaging_service_sid, p_status, actor) RETURNING * INTO next;
+    INSERT INTO hon.school_text_senders (organization_id, school_id, phone_e164, messaging_service_sid, status, mms_converter_confirmed, set_by_principal_id)
+    VALUES (s.organization_id, s.id, p_phone_e164, p_messaging_service_sid, p_status, p_mms_converter_confirmed, actor) RETURNING * INTO next;
   ELSE
     IF p_expected_version IS DISTINCT FROM prior.version THEN RAISE EXCEPTION 'VERSION_CONFLICT' USING ERRCODE = '40001'; END IF;
     UPDATE hon.school_text_senders SET phone_e164 = p_phone_e164, messaging_service_sid = p_messaging_service_sid, status = p_status,
-      set_by_principal_id = actor, version = version + 1, updated_at = now()
+      mms_converter_confirmed = p_mms_converter_confirmed, set_by_principal_id = actor, version = version + 1, updated_at = now()
     WHERE id = prior.id RETURNING * INTO next;
   END IF;
   INSERT INTO hon.audit_events (organization_id, school_id, actor_principal_id, source, action_code, entity_type, entity_id,
     prior_state, next_state, result, request_id, correlation_id, occurred_at)
   VALUES (s.organization_id, s.id, actor, 'HON_HQ', 'communication.text_sender.set', 'SCHOOL_TEXT_SENDER', next.id,
     CASE WHEN prior.id IS NULL THEN NULL ELSE jsonb_build_object('phone', prior.phone_e164, 'status', prior.status, 'version', prior.version) END,
-    jsonb_build_object('phone', next.phone_e164, 'status', next.status, 'version', next.version), 'SUCCEEDED', req, req, now());
-  RETURN jsonb_build_object('schoolId', next.school_id, 'phoneE164', next.phone_e164, 'status', next.status, 'version', next.version,
-    'updatedAt', next.updated_at);
+    jsonb_build_object('phone', next.phone_e164, 'status', next.status, 'mmsConverterConfirmed', next.mms_converter_confirmed, 'version', next.version), 'SUCCEEDED', req, req, now());
+  RETURN jsonb_build_object('schoolId', next.school_id, 'phoneE164', next.phone_e164, 'status', next.status, 'mmsConverterConfirmed', next.mms_converter_confirmed,
+    'version', next.version, 'updatedAt', next.updated_at);
 END $$;
 
 -- Claim v2: as 0243, plus SMS needs the school's ACTIVE sender, whose service SID and number are returned for the send.
@@ -303,7 +312,7 @@ BEGIN
   RETURN NEXT;
 END $$;
 
-REVOKE ALL ON FUNCTION hon.set_school_text_sender_from_hq(text, uuid, text, text, text, integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION hon.set_school_text_sender_from_hq(text, uuid, text, text, text, boolean, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.claim_communication_deliveries(text[], integer, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.record_inbound_text_keyword(text, text, text, text, timestamptz) FROM PUBLIC;
 DO $$
@@ -316,7 +325,7 @@ BEGIN
   END LOOP;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
     GRANT SELECT ON TABLE hon.school_text_senders, hon.inbound_text_keywords TO hon_runtime;
-    GRANT EXECUTE ON FUNCTION hon.set_school_text_sender_from_hq(text, uuid, text, text, text, integer) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.set_school_text_sender_from_hq(text, uuid, text, text, text, boolean, integer) TO hon_runtime;
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_communication_worker') THEN
     GRANT EXECUTE ON FUNCTION hon.claim_communication_deliveries(text[], integer, integer),

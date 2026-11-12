@@ -120,7 +120,9 @@ receipt timeline. No address, no provider IDs, no cost.
 - v1 uses one HON Twilio account (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`); per-school subaccounts are a
   later step because callback signatures are per account. READY also needs an https `HON_PUBLIC_API_ORIGIN`
   (status callback URL) and `HON_SMS_SEND_APPROVED=true`.
-- The Messaging Service must have the MMS converter and Smart Encoding on; HON smart-encodes the body itself,
+- The Messaging Service must have the MMS converter and Smart Encoding on. HON never changes a Twilio service, so
+  the HQ owner must send `mmsConverterConfirmed: true` to make a sender ACTIVE (API 400
+  `MMS_CONVERTER_NOT_CONFIRMED`; the table also refuses ACTIVE without it). HON smart-encodes the body itself,
   records predicted sent-as (3+ pieces → MMS) and Twilio's reported piece count, and refuses over 1,600 characters.
 - `POST /v1/communications/webhooks/twilio/status` and `/twilio/inbound`: form posts verified with
   X-Twilio-Signature over `HON_PUBLIC_API_ORIGIN` + fixed path + sorted parameters, and the AccountSid must match.

@@ -12,20 +12,24 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const E164 = /^\+[1-9][0-9]{7,14}$/;
 const SERVICE_SID = /^MG[0-9a-f]{32}$/;
 
-export interface SchoolTextSenderInput { phoneE164: string; messagingServiceSid: string; status: 'ACTIVE' | 'DISABLED'; expectedVersion?: number }
+/** mmsConverterConfirmed: the HQ owner has turned on the Messaging Service's MMS Converter (required for ACTIVE). */
+export interface SchoolTextSenderInput {
+  phoneE164: string; messagingServiceSid: string; status: 'ACTIVE' | 'DISABLED'; mmsConverterConfirmed: boolean; expectedVersion?: number;
+}
 
 export function validateSchoolTextSenderInput(body: unknown): SchoolTextSenderInput {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' });
   const input = body as Record<string, unknown>;
   const keys = Object.keys(input);
-  if (keys.some((key) => !['phoneE164', 'messagingServiceSid', 'status', 'expectedVersion'].includes(key))
+  if (keys.some((key) => !['phoneE164', 'messagingServiceSid', 'status', 'mmsConverterConfirmed', 'expectedVersion'].includes(key))
     || typeof input.phoneE164 !== 'string' || !E164.test(input.phoneE164)
     || typeof input.messagingServiceSid !== 'string' || !SERVICE_SID.test(input.messagingServiceSid)
-    || (input.status !== 'ACTIVE' && input.status !== 'DISABLED')
+    || (input.status !== 'ACTIVE' && input.status !== 'DISABLED') || typeof input.mmsConverterConfirmed !== 'boolean'
     || (input.expectedVersion !== undefined && (!Number.isSafeInteger(input.expectedVersion) || (input.expectedVersion as number) < 1))) {
     throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' });
   }
-  return { phoneE164: input.phoneE164, messagingServiceSid: input.messagingServiceSid, status: input.status,
+  if (input.status === 'ACTIVE' && !input.mmsConverterConfirmed) throw new BadRequestException({ code: 'MMS_CONVERTER_NOT_CONFIRMED' });
+  return { phoneE164: input.phoneE164, messagingServiceSid: input.messagingServiceSid, status: input.status, mmsConverterConfirmed: input.mmsConverterConfirmed,
     ...(input.expectedVersion === undefined ? {} : { expectedVersion: input.expectedVersion as number }) };
 }
 
@@ -45,7 +49,7 @@ export class SchoolTextSenderHqController {
     const input = validateSchoolTextSenderInput(body);
     try {
       const data = await this.database.callSaasBilling('setSchoolTextSender', [req.honIdentity.externalSubject, schoolId, input.phoneE164,
-        input.messagingServiceSid, input.status, input.expectedVersion === undefined ? null : String(input.expectedVersion)]);
+        input.messagingServiceSid, input.status, String(input.mmsConverterConfirmed), input.expectedVersion === undefined ? null : String(input.expectedVersion)]);
       return { data };
     } catch (error) {
       const code = (error as { code?: string })?.code;
@@ -53,6 +57,7 @@ export class SchoolTextSenderHqController {
       if (code === 'P0002') throw new NotFoundException({ code: 'HQ_SCHOOL_NOT_FOUND' });
       if (code === '40001') throw new ConflictException({ code: 'VERSION_CONFLICT' });
       if (code === '23505') throw new ConflictException({ code: 'TEXT_NUMBER_IN_USE' });
+      if (code === '22023' && (error as { message?: string })?.message === 'MMS_CONVERTER_NOT_CONFIRMED') throw new BadRequestException({ code: 'MMS_CONVERTER_NOT_CONFIRMED' });
       if (code === '22023' || code === '23514') throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' });
       throw new ServiceUnavailableException({ code: 'SAAS_UNAVAILABLE' });
     }

@@ -118,9 +118,13 @@ test('Twilio inbound: only exact STOP/START/HELP words are keywords', () => {
 
 test('HQ text sender input is strict', () => {
   const sid = `MG${'a'.repeat(32)}`;
-  assert.deepEqual(validateSchoolTextSenderInput({ phoneE164: '+15555559001', messagingServiceSid: sid, status: 'ACTIVE' }), { phoneE164: '+15555559001', messagingServiceSid: sid, status: 'ACTIVE' });
+  const ok = { phoneE164: '+15555559001', messagingServiceSid: sid, status: 'ACTIVE', mmsConverterConfirmed: true };
+  assert.deepEqual(validateSchoolTextSenderInput(ok), ok);
+  assert.deepEqual(validateSchoolTextSenderInput({ ...ok, status: 'DISABLED', mmsConverterConfirmed: false, expectedVersion: 2 }), { ...ok, status: 'DISABLED', mmsConverterConfirmed: false, expectedVersion: 2 });
+  assert.throws(() => validateSchoolTextSenderInput({ ...ok, mmsConverterConfirmed: false }), (e) => e.getStatus() === 400 && e.getResponse().code === 'MMS_CONVERTER_NOT_CONFIRMED');
+  assert.throws(() => validateSchoolTextSenderInput({ phoneE164: '+15555559001', messagingServiceSid: sid, status: 'ACTIVE' }), (e) => e.getStatus() === 400);
   for (const body of [null, [], { phoneE164: '5555559001', messagingServiceSid: sid, status: 'ACTIVE' }, { phoneE164: '+15555559001', messagingServiceSid: 'MG1', status: 'ACTIVE' },
-    { phoneE164: '+15555559001', messagingServiceSid: sid, status: 'ON' }, { phoneE164: '+15555559001', messagingServiceSid: sid, status: 'ACTIVE', extra: 1 },
+    { phoneE164: '+15555559001', messagingServiceSid: sid, status: 'ON' }, { ...ok, extra: 1 }, { ...ok, mmsConverterConfirmed: 'yes' },
     { phoneE164: '+15555559001', messagingServiceSid: sid, status: 'ACTIVE', expectedVersion: 0 }]) {
     assert.throws(() => validateSchoolTextSenderInput(body), (e) => e.getStatus() === 400);
   }

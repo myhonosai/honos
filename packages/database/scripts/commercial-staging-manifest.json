@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "e7772bb3ec545e26f3d7ceb51b4a868e669a111dd136a0d364470e566849f98a",
+  "chainSha256": "3cc59b57f4b8dcfada7a4f61fee0ef8062dfffc919f69085d60d3695ba4b7e26",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",

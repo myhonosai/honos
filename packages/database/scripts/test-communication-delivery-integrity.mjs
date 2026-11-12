@@ -104,8 +104,8 @@ try {
   await consent('night', ids.schoolB, 'EMAIL', 'OPTED_IN');
   // 0248: each school texts from its own ACTIVE sender.
   const sid = (n) => `MG${String(n).repeat(32).slice(0, 32)}`;
-  await admin.query(`INSERT INTO hon.school_text_senders (organization_id, school_id, phone_e164, messaging_service_sid, status, set_by_principal_id)
-    VALUES ($1,$2,'+15555559001',$3,'ACTIVE',$5), ($1,$4,'+15555559002',$6,'ACTIVE',$5)`, [ids.org, ids.schoolA, sid(1), ids.schoolB, ids.principal, sid(2)]);
+  await admin.query(`INSERT INTO hon.school_text_senders (organization_id, school_id, phone_e164, messaging_service_sid, status, mms_converter_confirmed, set_by_principal_id)
+    VALUES ($1,$2,'+15555559001',$3,'ACTIVE',true,$5), ($1,$4,'+15555559002',$6,'ACTIVE',true,$5)`, [ids.org, ids.schoolA, sid(1), ids.schoolB, ids.principal, sid(2)]);
 
   // 1. Role boundaries.
   await expectError('42501', () => runtime.query("SELECT * FROM hon.claim_communication_deliveries(ARRAY['EMAIL'], 1, 60)"), 'runtime cannot claim deliveries');
@@ -326,15 +326,17 @@ try {
   await queued('noSender', ids.schoolC, 'carl', 'SMS', 'No number yet');
   await claim(['SMS']);
   check((await delivery('noSender')).status === 'PENDING' && (await delivery('noSender')).hold_reason === 'SENDER_NOT_READY', 'a text from a school without an ACTIVE sender waits as SENDER_NOT_READY');
-  await expectError('42501', () => runtime.query("SELECT hon.set_school_text_sender_from_hq($1,$2,'+15555559003',$3,'ACTIVE',NULL)", [`delivery-${ids.user}`, ids.schoolC, sid(3)]), 'a school staff member cannot set a text sender');
+  await expectError('42501', () => runtime.query("SELECT hon.set_school_text_sender_from_hq($1,$2,'+15555559003',$3,'ACTIVE',true,NULL)", [`delivery-${ids.user}`, ids.schoolC, sid(3)]), 'a school staff member cannot set a text sender');
   await admin.query("INSERT INTO hon.users (id, external_subject, email, display_name) VALUES ($1, $2, 'hq@example.test', 'HQ Owner')", [ids.hqUser, `hq-${ids.hqUser}`]);
   await admin.query("INSERT INTO hon.principals (id, principal_type, user_id, display_name) VALUES ($1, 'HUMAN_USER', $2, 'HQ Owner')", [ids.hqPrincipal, ids.hqUser]);
   await admin.query("INSERT INTO hon.hq_operator_grants (principal_id, hq_role) VALUES ($1, 'HON_HQ_OWNER')", [ids.hqPrincipal]);
-  const setSender = (version, phone = '+15555559003', status = 'ACTIVE') => runtime.query('SELECT hon.set_school_text_sender_from_hq($1,$2,$3,$4,$5,$6) AS data', [`hq-${ids.hqUser}`, ids.schoolC, phone, sid(3), status, version]);
+  const setSender = (version, phone = '+15555559003', status = 'ACTIVE', mms = true) => runtime.query('SELECT hon.set_school_text_sender_from_hq($1,$2,$3,$4,$5,$6,$7) AS data', [`hq-${ids.hqUser}`, ids.schoolC, phone, sid(3), status, mms, version]);
+  await expectError('22023', () => setSender(null, '+15555559003', 'ACTIVE', false), 'a sender cannot be ACTIVE until the HQ owner confirms the MMS Converter is on');
+  await expectError('23514', () => admin.query("INSERT INTO hon.school_text_senders (organization_id, school_id, phone_e164, messaging_service_sid, status, set_by_principal_id) VALUES ($1,$2,'+15555559009',$3,'ACTIVE',$4)", [ids.org, ids.schoolC, sid(9), ids.hqPrincipal]), 'the table itself refuses an ACTIVE sender without the MMS Converter confirmed');
   const created = (await setSender(null)).rows[0].data;
-  check(created.status === 'ACTIVE' && created.version === 1 && created.phoneE164 === '+15555559003', 'the HQ owner sets a school text sender');
+  check(created.status === 'ACTIVE' && created.mmsConverterConfirmed === true && created.version === 1 && created.phoneE164 === '+15555559003', 'the HQ owner sets a school text sender');
   await expectError('40001', () => setSender(null), 'a second create without the version conflicts');
-  await expectError('23505', () => runtime.query('SELECT hon.set_school_text_sender_from_hq($1,$2,$3,$4,$5,$6)', [`hq-${ids.hqUser}`, ids.schoolC, '+15555559001', sid(3), 'ACTIVE', 1]), 'another school number cannot be reused');
+  await expectError('23505', () => runtime.query('SELECT hon.set_school_text_sender_from_hq($1,$2,$3,$4,$5,$6,$7)', [`hq-${ids.hqUser}`, ids.schoolC, '+15555559001', sid(3), 'ACTIVE', true, 1]), 'another school number cannot be reused');
   check((await admin.query("SELECT count(*)::int AS n FROM hon.audit_events WHERE action_code = 'communication.text_sender.set' AND school_id = $1", [ids.schoolC])).rows[0].n === 1, 'setting a sender is audited once');
   await admin.query('UPDATE hon.communication_deliveries SET next_attempt_at = now() WHERE message_id = $1', [message.noSender]);
   const released = (await claim(['SMS'])).find((row) => row.message_id === message.noSender);

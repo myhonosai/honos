@@ -2946,10 +2946,10 @@ DO $$ DECLARE r text; BEGIN
   IF to_regprocedure('hon.record_inbound_text_keyword(text,text,text,text,timestamptz)') IS NULL THEN RAISE EXCEPTION 'Apply texting migration 0248 first'; END IF;
   REVOKE ALL ON TABLE hon.school_text_senders, hon.inbound_text_keywords FROM hon_runtime;
   GRANT SELECT ON TABLE hon.school_text_senders, hon.inbound_text_keywords TO hon_runtime;
-  REVOKE ALL ON FUNCTION hon.set_school_text_sender_from_hq(text,uuid,text,text,text,integer) FROM PUBLIC;
-  GRANT EXECUTE ON FUNCTION hon.set_school_text_sender_from_hq(text,uuid,text,text,text,integer) TO hon_runtime;
+  REVOKE ALL ON FUNCTION hon.set_school_text_sender_from_hq(text,uuid,text,text,text,boolean,integer) FROM PUBLIC;
+  GRANT EXECUTE ON FUNCTION hon.set_school_text_sender_from_hq(text,uuid,text,text,text,boolean,integer) TO hon_runtime;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role') LOOP
-    EXECUTE 'REVOKE ALL ON FUNCTION hon.set_school_text_sender_from_hq(text,uuid,text,text,text,integer) FROM '||quote_ident(r);
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.set_school_text_sender_from_hq(text,uuid,text,text,text,boolean,integer) FROM '||quote_ident(r);
   END LOOP;
   REVOKE ALL ON FUNCTION hon.record_inbound_text_keyword(text,text,text,text,timestamptz) FROM PUBLIC, hon_runtime;
   REVOKE ALL ON FUNCTION hon.claim_communication_deliveries(text[],integer,integer) FROM PUBLIC, hon_runtime;
