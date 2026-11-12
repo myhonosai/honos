@@ -1,0 +1,152 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
+import { countTextPieces, smartEncodeText } from '@hon/contracts';
+import {
+  CommunicationProviderError,
+  type CommunicationProviderAdapter,
+  type CommunicationSendAccepted,
+  type CommunicationSendRequest,
+} from './communication-provider.js';
+import type { VerifiedProviderReceipt } from './communication-worker-database.js';
+
+type Env = Record<string, string | undefined>;
+const ACCOUNT_SID = /^AC[0-9a-f]{32}$/;
+const MESSAGE_SID = /^(?:SM|MM)[0-9a-f]{32}$/;
+const SERVICE_SID = /^MG[0-9a-f]{32}$/;
+const E164 = /^\+[1-9][0-9]{7,14}$/;
+export const TWILIO_STATUS_PATH = '/v1/communications/webhooks/twilio/status';
+export const TWILIO_INBOUND_PATH = '/v1/communications/webhooks/twilio/inbound';
+
+function origin(env: Env): string | undefined {
+  const value = env.HON_PUBLIC_API_ORIGIN?.trim();
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.pathname === '/' && !url.search && !url.username ? url.origin : undefined;
+  } catch { return undefined; }
+}
+
+/**
+ * Twilio Messaging adapter. INACTIVE unless TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and an https
+ * HON_PUBLIC_API_ORIGIN are set AND HON_SMS_SEND_APPROVED is exactly 'true'. Each school sends from its own
+ * Messaging Service (0248); the service's MMS converter turns 3+ piece texts into one MMS. The body is smart
+ * encoded first, and texts over 1,600 characters are refused before any call.
+ */
+export class TwilioTextProvider implements CommunicationProviderAdapter {
+  readonly provider = 'TWILIO' as const;
+  readonly channel = 'SMS' as const;
+  constructor(private readonly environment: () => Env = () => process.env, private readonly transport: typeof fetch = fetch) {}
+
+  readiness() {
+    const env = this.environment();
+    return ACCOUNT_SID.test(env.TWILIO_ACCOUNT_SID ?? '') && env.TWILIO_AUTH_TOKEN?.trim() && origin(env) && env.HON_SMS_SEND_APPROVED === 'true'
+      ? 'READY' as const : 'CONFIGURATION_REQUIRED' as const;
+  }
+
+  async send(request: CommunicationSendRequest): Promise<CommunicationSendAccepted> {
+    const env = this.environment();
+    const account = env.TWILIO_ACCOUNT_SID ?? '';
+    const token = env.TWILIO_AUTH_TOKEN?.trim();
+    const base = origin(env);
+    if (this.readiness() !== 'READY' || !token || !base) throw new CommunicationProviderError('RETRYABLE', 'PROVIDER_FAILED', 300);
+    if (!SERVICE_SID.test(request.senderServiceId ?? '')) throw new CommunicationProviderError('RETRYABLE', 'PROVIDER_FAILED', 900);
+    if (!E164.test(request.recipientAddress)) throw new CommunicationProviderError('FAILED', 'INVALID_ADDRESS');
+    const pieces = countTextPieces(request.content);
+    if (pieces.tooLong || pieces.pieces === 0) throw new CommunicationProviderError('FAILED', 'PROVIDER_REJECTED');
+    const form = new URLSearchParams({
+      To: request.recipientAddress, MessagingServiceSid: request.senderServiceId!, Body: smartEncodeText(request.content),
+      StatusCallback: `${base}${TWILIO_STATUS_PATH}`,
+    });
+    let response: Response;
+    try {
+      response = await this.transport(`https://api.twilio.com/2010-04-01/Accounts/${account}/Messages.json`, {
+        method: 'POST',
+        headers: { authorization: `Basic ${Buffer.from(`${account}:${token}`).toString('base64')}`, 'content-type': 'application/x-www-form-urlencoded' },
+        body: form.toString(), redirect: 'error', signal: AbortSignal.timeout(15_000),
+      });
+    } catch (error) {
+      const code = (error as { cause?: { code?: string } })?.cause?.code;
+      if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EAI_AGAIN') throw new CommunicationProviderError('RETRYABLE', 'PROVIDER_FAILED');
+      throw new CommunicationProviderError('UNKNOWN');
+    }
+    if (response.status === 201 || response.status === 200) {
+      let body: { sid?: unknown; num_segments?: unknown } = {};
+      try { body = await response.json() as typeof body; } catch { throw new CommunicationProviderError('UNKNOWN'); }
+      if (typeof body.sid !== 'string' || !MESSAGE_SID.test(body.sid)) throw new CommunicationProviderError('UNKNOWN');
+      const reported = Number(body.num_segments);
+      return { providerMessageId: body.sid, sentAs: pieces.sendAs, encoding: pieces.encoding,
+        segments: Number.isSafeInteger(reported) && reported >= 1 && reported <= 100 ? reported : pieces.pieces };
+    }
+    if (response.status === 429) throw new CommunicationProviderError('RETRYABLE', 'PROVIDER_FAILED', 60);
+    if (response.status === 401 || response.status === 403) throw new CommunicationProviderError('RETRYABLE', 'PROVIDER_FAILED', 900);
+    if (response.status >= 400 && response.status < 500) {
+      let code: unknown;
+      try { code = ((await response.json()) as { code?: unknown }).code; } catch { /* closed codes only */ }
+      throw new CommunicationProviderError('FAILED', code === 21211 || code === 21614 ? 'INVALID_ADDRESS' : 'PROVIDER_REJECTED');
+    }
+    throw new CommunicationProviderError('UNKNOWN');
+  }
+}
+
+export class TwilioWebhookError extends Error {
+  constructor(readonly reason: 'NOT_CONFIGURED' | 'SIGNATURE_INVALID' | 'MALFORMED') { super(reason); }
+}
+
+const STATUS_MAP: Readonly<Record<string, VerifiedProviderReceipt['eventType']>> = {
+  sent: 'SENT', delivered: 'DELIVERED', undelivered: 'UNDELIVERED', failed: 'FAILED',
+};
+const KEYWORDS: Readonly<Record<string, 'STOP' | 'START' | 'HELP'>> = {
+  STOP: 'STOP', STOPALL: 'STOP', UNSUBSCRIBE: 'STOP', CANCEL: 'STOP', END: 'STOP', QUIT: 'STOP', OPTOUT: 'STOP', REVOKE: 'STOP',
+  START: 'START', UNSTOP: 'START', YES: 'START', HELP: 'HELP', INFO: 'HELP',
+};
+
+export interface InboundTextKeyword { to: string; from: string; keyword: 'STOP' | 'START' | 'HELP'; providerMessageId: string; receivedAt: string }
+
+/**
+ * Twilio request signature: base64 HMAC-SHA1 with TWILIO_AUTH_TOKEN over the exact public URL followed by every
+ * POST parameter name and value in name order. The URL is HON_PUBLIC_API_ORIGIN + the fixed path, never a header.
+ */
+export class TwilioWebhookVerifier {
+  constructor(private readonly environment: () => Env = () => process.env, private readonly now: () => number = Date.now) {}
+
+  private params(rawBody: Buffer, path: string, signature: string | undefined): URLSearchParams {
+    const env = this.environment();
+    const token = env.TWILIO_AUTH_TOKEN?.trim();
+    const base = origin(env);
+    if (!token || !base) throw new TwilioWebhookError('NOT_CONFIGURED');
+    let text: string;
+    try { text = new TextDecoder('utf-8', { fatal: true }).decode(rawBody); } catch { throw new TwilioWebhookError('MALFORMED'); }
+    const params = new URLSearchParams(text);
+    const names = [...new Set(params.keys())].sort();
+    if (names.length > 60) throw new TwilioWebhookError('MALFORMED');
+    let data = `${base}${path}`;
+    for (const name of names) for (const value of params.getAll(name)) data += name + value;
+    const expected = createHmac('sha1', token).update(data, 'utf8').digest();
+    const given = Buffer.from(signature ?? '', 'base64');
+    if (!signature || given.length !== expected.length || !timingSafeEqual(given, expected)) throw new TwilioWebhookError('SIGNATURE_INVALID');
+    if (params.get('AccountSid') !== env.TWILIO_ACCOUNT_SID) throw new TwilioWebhookError('SIGNATURE_INVALID');
+    return params;
+  }
+
+  /** A status callback as a receipt, or null for statuses HON does not store (queued, sending, read). */
+  status(rawBody: Buffer, signature: string | undefined): VerifiedProviderReceipt | null {
+    const params = this.params(rawBody, TWILIO_STATUS_PATH, signature);
+    const sid = params.get('MessageSid') ?? '';
+    const status = params.get('MessageStatus') ?? '';
+    if (!MESSAGE_SID.test(sid)) throw new TwilioWebhookError('MALFORMED');
+    const eventType = STATUS_MAP[status];
+    if (!eventType) return null;
+    return { provider: 'TWILIO', providerEventId: `${sid}:${status}`, providerMessageId: sid, eventType, occurredAt: new Date(this.now()).toISOString() };
+  }
+
+  /** An inbound message that is exactly one opt-out, opt-in or help keyword; anything else is null and is not stored. */
+  inbound(rawBody: Buffer, signature: string | undefined): InboundTextKeyword | null {
+    const params = this.params(rawBody, TWILIO_INBOUND_PATH, signature);
+    const sid = params.get('MessageSid') ?? '';
+    const from = params.get('From') ?? '';
+    const to = params.get('To') ?? '';
+    if (!MESSAGE_SID.test(sid) || !E164.test(from) || !E164.test(to)) throw new TwilioWebhookError('MALFORMED');
+    const word = (params.get('Body') ?? '').trim().replace(/[.!]+$/, '').toUpperCase();
+    const keyword = KEYWORDS[word];
+    return keyword ? { to, from, keyword, providerMessageId: sid, receivedAt: new Date(this.now()).toISOString() } : null;
+  }
+}

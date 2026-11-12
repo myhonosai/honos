@@ -2990,6 +2990,21 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 
+-- 0248 school texting numbers: school staff read their sender and inbound keyword records through forced RLS;
+-- the runtime calls only the HQ-owner sender command. Inbound keywords are worker-only (013).
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.record_inbound_text_keyword(text,text,text,text,timestamptz)') IS NULL THEN RAISE EXCEPTION 'Apply texting migration 0248 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_text_senders, hon.inbound_text_keywords FROM hon_runtime;
+  GRANT SELECT ON TABLE hon.school_text_senders, hon.inbound_text_keywords TO hon_runtime;
+  REVOKE ALL ON FUNCTION hon.set_school_text_sender_from_hq(text,uuid,text,text,text,boolean,integer) FROM PUBLIC;
+  GRANT EXECUTE ON FUNCTION hon.set_school_text_sender_from_hq(text,uuid,text,text,text,boolean,integer) TO hon_runtime;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.set_school_text_sender_from_hq(text,uuid,text,text,text,boolean,integer) FROM '||quote_ident(r);
+  END LOOP;
+  REVOKE ALL ON FUNCTION hon.record_inbound_text_keyword(text,text,text,text,timestamptz) FROM PUBLIC, hon_runtime;
+  REVOKE ALL ON FUNCTION hon.claim_communication_deliveries(text[],integer,integer) FROM PUBLIC, hon_runtime;
+END $$;
+
 -- 0263 HQ Ask HON + HQ AI text budget: tables reached only through five runtime entry points; authority, facts, limits
 -- and projections are private.
 DO $$ DECLARE r text; t text; f text; BEGIN

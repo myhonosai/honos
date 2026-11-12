@@ -224,6 +224,8 @@ const SAAS_BILLING_CALLS = {
   // B-HQ-1 (0219): read-only HQ overview of every organization's access standing; writes nothing.
   readAccessOverview: { sql: 'SELECT hon.read_saas_access_overview_from_hq($1,$2,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },
   // C-HQ-3 (0225): read-only HQ detail of one school; names, statuses and counts only.
+  // 0248: the HQ owner sets or disables a school's Twilio sending number; nothing is bought or sent.
+  setSchoolTextSender: { sql: 'SELECT hon.set_school_text_sender_from_hq($1,$2::uuid,$3,$4,$5,$6::boolean,$7::integer) AS data', arity: 7, readOnly: false },
   readHqSchoolDetail: { sql: 'SELECT hon.read_hq_school_detail_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   // B-HQ-2 (0232): HQ support records. Reads are read-only; the three commands write only support rows.
   readSupportCases: { sql: 'SELECT hon.read_hq_support_cases($1,$2,$3::uuid,$4::timestamptz,$5::uuid,$6::integer) AS data', arity: 6, readOnly: true },

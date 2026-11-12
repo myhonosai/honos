@@ -23,6 +23,8 @@ export const membershipRecoveryCopy = {
   draft: ['Review this DRAFT for activation', '이 초안의 활성화 검토', 'Revisar este borrador para activación'],
   back: ['Back to saved memberships', '저장된 회원권으로 돌아가기', 'Volver a las membresías guardadas'],
   crm: ['Return to this lead’s CRM workflow', '이 리드의 CRM 업무 흐름으로 돌아가기', 'Volver al flujo CRM de este lead'],
+  chooseLead: ['Open a lead first, then choose “Membership setup and recovery” on it to see its saved memberships here.', '먼저 리드를 연 다음 “멤버십 설정 및 복구”를 선택하면 저장된 회원권을 여기에서 볼 수 있습니다.', 'Abre primero un lead y elige “Configuración y recuperación de membresía” para ver aquí sus membresías guardadas.'],
+  leads: ['Go to leads', '리드로 이동', 'Ir a leads'],
   crmNote: ['The CRM destination retains only these lead/school selectors and requires a fresh authorized read. Membership IDs are not placed in the URL.', 'CRM 화면에는 리드와 학교 선택값만 전달되며 새 권한 확인 조회가 필요합니다. 회원권 ID는 URL에 포함되지 않습니다.', 'El destino CRM conserva solo los selectores de lead y escuela y exige una consulta autorizada nueva. La URL no incluye IDs de membresía.'],
   hidden: ['Membership information hidden', '회원권 정보 숨김', 'Información de membresía oculta'],
   verify: ['Verify access and resume', '접근 권한 확인 후 계속', 'Verificar acceso y continuar'],
