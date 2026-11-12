@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "9894de9541552fd6ea686b71177b6efb76219a452152e78651cb59fe54a2891a",
+  "chainSha256": "1214ac38cd57d8b7b18503cc419df0bccc6536c66d9a2931543bebe9c9ceacb4",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -269,6 +269,10 @@
     {
       "file": "0258_school_payment_connections.sql",
       "sha256": "bcbfedb05f739ba99872aa5467236cb050c2c078f53daa804681821c75f76a17"
+    },
+    {
+      "file": "0259_maya_at_risk_students.sql",
+      "sha256": "6b8267f54f694799c387fdf34b8848a6d8bf041161095d9e00e171587c32293c"
     },
     {
       "file": "0261_school_event_booking.sql",

@@ -249,6 +249,10 @@
       "title": "HON | Checkout pages"
     },
     {
+      "path": "/staff/retention/at-risk",
+      "title": "HON | Students at risk"
+    },
+    {
       "path": "/staff/champions-club",
       "title": "HON | Champions Club"
     },
