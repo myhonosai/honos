@@ -1,13 +1,16 @@
 import { BadRequestException, ConflictException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
-  CREATIVE_ASSET_MEDIA_TYPES, CREATIVE_GENERATION_LIMITS, saasUuid, validateCreativeGeneration, validateCreativeGenerationInput,
-  validateCreativeGenerationReceipt, validateCreativeGenerationRecords, validateCreativeStudioGenerationList,
-  type CreativeGeneration, type CreativeGenerationReceipt, type CreativeStudioGenerationList,
+  CREATIVE_ASSET_MEDIA_TYPES, CREATIVE_AVATAR_OPERATION, CREATIVE_AVATAR_VIDEO_OPERATION, validateCreativeAvatarVideo, validateCreativeAvatarVideoInput,
+  validateCreativeAvatarVideoReceipt, validateCreativeAvatarVideoRecords, type CreativeAvatarVideo, type CreativeAvatarVideoReceipt, type CreativeAvatarVideoRecords, CREATIVE_GENERATION_LIMITS, saasUuid, validateCreativeAvatar, validateCreativeAvatarInput,
+  validateCreativeAvatarReceipt, validateCreativeAvatarRecords, validateCreativeGeneration, validateCreativeGenerationInput,
+  validateCreativeGenerationReceipt, validateCreativeGenerationRecords, validateCreativeStudioAvatarList, validateCreativeStudioGenerationList,
+  type CreativeAvatar, type CreativeAvatarReceipt, type CreativeGeneration, type CreativeGenerationReceipt, type CreativeStudioAvatarList,
+  type CreativeStudioGenerationList,
 } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
 import {
-  CREATIVE_PROVIDER_RUNTIME, CreativeProviderRuntimeError, type CreativeProviderRoute, type CreativeProviderRuntime, type CreativeResult,
+  CREATIVE_PROVIDER_RUNTIME, CreativeProviderRuntimeError, type CreativeAvatarLook, type CreativeProviderRoute, type CreativeProviderRuntime, type CreativeResult,
 } from './creative-provider-runtime.js';
 
 function parse<T>(work: () => T): T {
@@ -87,10 +90,84 @@ export class CreativeStudioService {
     catch (error) { if (error instanceof ConflictException) return replay; throw error; }
   }
 
-  private async invoke(g: CreativeGeneration, route: CreativeProviderRoute): Promise<Outcome> {
+  // ---------- A1 avatars (0276): one avatar = one generation of avatar.create, recorded by the same CS1 record ----------
+  async listAvatars(subject: string, schoolId: unknown): Promise<CreativeStudioAvatarList> {
+    const school = parse(() => saasUuid(schoolId));
+    const records = await this.billing.call('readCreativeAvatars', [subject, school], validateCreativeAvatarRecords);
+    try { return validateCreativeStudioAvatarList({ provider: this.connected() ? 'CONNECTED' : 'NOT_CONNECTED', ...records }); }
+    catch { throw new ServiceUnavailableException({ code: 'SAAS_UNAVAILABLE' }); }
+  }
+
+  async readAvatar(subject: string, schoolId: unknown, avatarId: unknown): Promise<CreativeAvatar> {
+    const [school, avatar] = parse(() => [saasUuid(schoolId), saasUuid(avatarId)] as const);
+    return this.billing.call('readCreativeAvatar', [subject, school, avatar], validateCreativeAvatar);
+  }
+
+  /** Create -> one provider call with the avatar's look -> record -> read the avatar back. Same key = same avatar, never a second call. */
+  async createAvatar(subject: string, schoolId: unknown, body: unknown, key: unknown): Promise<CreativeAvatarReceipt> {
+    const [school, input, idempotencyKey] = parse(() => [saasUuid(schoolId), validateCreativeAvatarInput(body), saasUuid(key)] as const);
+    const route: CreativeProviderRoute | null = this.connected() ? this.provider.route(CREATIVE_AVATAR_OPERATION) : null;
+    if (!route) throw new ServiceUnavailableException({ code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
+    const created = await this.billing.call('createCreativeAvatar',
+      [subject, school, JSON.stringify(input), JSON.stringify({ providerId: route.providerId, modelCode: route.modelCode }), idempotencyKey, randomUUID(), randomUUID()],
+      validateCreativeAvatarReceipt);
+    const g = created.avatar.generation;
+    if (g.status !== 'GENERATING') return created;
+    if (created.replayed) {
+      const settled = await this.recoverInterrupted(subject, { generation: g, balance: created.balance, replayed: true });
+      return settled.generation.status === 'GENERATING' ? created : this.avatarReceipt(subject, school, created.avatar.avatarId, settled, true);
+    }
+    const recorded = await this.record(subject, g.generationId, await this.invoke(g, route, { name: input.name, style: input.style }));
+    return this.avatarReceipt(subject, school, created.avatar.avatarId, recorded, false);
+  }
+
+  // ---------- A2 avatar videos (0277): one video = one generation of avatar.video for a READY avatar ----------
+  async listAvatarVideos(subject: string, schoolId: unknown): Promise<CreativeAvatarVideoRecords> {
+    const school = parse(() => saasUuid(schoolId));
+    return this.billing.call('readCreativeAvatarVideos', [subject, school], validateCreativeAvatarVideoRecords);
+  }
+
+  async readAvatarVideo(subject: string, schoolId: unknown, videoId: unknown): Promise<CreativeAvatarVideo> {
+    const [school, video] = parse(() => [saasUuid(schoolId), saasUuid(videoId)] as const);
+    return this.billing.call('readCreativeAvatarVideo', [subject, school, video], validateCreativeAvatarVideo);
+  }
+
+  /** Create -> one provider call with the avatar's look and the script -> record -> read the video back. Same key = same video. */
+  async createAvatarVideo(subject: string, schoolId: unknown, body: unknown, key: unknown): Promise<CreativeAvatarVideoReceipt> {
+    const [school, input, idempotencyKey] = parse(() => [saasUuid(schoolId), validateCreativeAvatarVideoInput(body), saasUuid(key)] as const);
+    const route: CreativeProviderRoute | null = this.connected() ? this.provider.route(CREATIVE_AVATAR_VIDEO_OPERATION) : null;
+    if (!route) throw new ServiceUnavailableException({ code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
+    // The presenter's look, read under the requester's exact-school authority before anything is reserved (avatars are
+    // immutable). The database create re-checks that the avatar is this school's and READY.
+    const avatar = await this.billing.call('readCreativeAvatar', [subject, school, input.avatarId], validateCreativeAvatar);
+    const created = await this.billing.call('createCreativeAvatarVideo',
+      [subject, school, JSON.stringify(input), JSON.stringify({ providerId: route.providerId, modelCode: route.modelCode }), idempotencyKey, randomUUID(), randomUUID()],
+      validateCreativeAvatarVideoReceipt);
+    const g = created.video.generation;
+    if (g.status !== 'GENERATING') return created;
+    if (created.replayed) {
+      const settled = await this.recoverInterrupted(subject, { generation: g, balance: created.balance, replayed: true });
+      return settled.generation.status === 'GENERATING' ? created : this.videoReceipt(subject, school, created.video.videoId, settled, true);
+    }
+    const recorded = await this.record(subject, g.generationId,
+      await this.invoke(g, route, { name: avatar.name, style: avatar.style, description: avatar.description }));
+    return this.videoReceipt(subject, school, created.video.videoId, recorded, false);
+  }
+
+  private async videoReceipt(subject: string, school: string, videoId: string, recorded: CreativeGenerationReceipt, replayed: boolean): Promise<CreativeAvatarVideoReceipt> {
+    const video = await this.billing.call('readCreativeAvatarVideo', [subject, school, videoId], validateCreativeAvatarVideo);
+    return { video, balance: recorded.balance, replayed };
+  }
+
+  private async avatarReceipt(subject: string, school: string, avatarId: string, recorded: CreativeGenerationReceipt, replayed: boolean): Promise<CreativeAvatarReceipt> {
+    const avatar = await this.billing.call('readCreativeAvatar', [subject, school, avatarId], validateCreativeAvatar);
+    return { avatar, balance: recorded.balance, replayed };
+  }
+
+  private async invoke(g: CreativeGeneration, route: CreativeProviderRoute, avatar?: CreativeAvatarLook): Promise<Outcome> {
     try {
       const result = await this.provider.generate({ ...route, providerRequestId: g.generationId, operationCode: g.operationCode, mediaKind: g.mediaKind,
-        units: g.units, format: g.format, prompt: g.prompt });
+        units: g.units, format: g.format, prompt: g.prompt, ...(avatar ? { avatar } : {}) });
       return verified(result, g);
     } catch (error) {
       if (error instanceof CreativeProviderRuntimeError && error.outcome === 'PRE_SEND') {
