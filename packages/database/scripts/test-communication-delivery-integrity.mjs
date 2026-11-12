@@ -17,6 +17,9 @@ const local = (url) => {
 const admin = new Client(local(process.env.DATABASE_URL));
 const runtime = new Client(local(process.env.HON_RUNTIME_DATABASE_URL));
 const worker = new Client(local(process.env.HON_COMMUNICATION_WORKER_DATABASE_URL));
+// Second sessions for the 0250 concurrency proofs.
+const runtime2 = new Client(local(process.env.HON_RUNTIME_DATABASE_URL));
+const worker2 = new Client(local(process.env.HON_COMMUNICATION_WORKER_DATABASE_URL));
 
 let passed = 0;
 function check(condition, message) {
@@ -102,7 +105,7 @@ async function cleanup() {
   } catch (error) { await admin.query('ROLLBACK'); throw error; }
 }
 
-await Promise.all([admin.connect(), runtime.connect(), worker.connect()]);
+await Promise.all([admin.connect(), runtime.connect(), worker.connect(), runtime2.connect(), worker2.connect()]);
 try {
   await admin.query("INSERT INTO hon.organizations (id, legal_name, display_name) VALUES ($1, 'Delivery Org', 'Delivery Org')", [ids.org]);
   await admin.query('INSERT INTO hon.schools (id, organization_id, name, slug, timezone) VALUES ($1,$2,$3,$4,$5), ($6,$2,$7,$8,$9)',
@@ -604,6 +607,30 @@ try {
   check((await admin.query("SELECT count(*)::int AS n FROM hon.crm_leads WHERE organization_id = $1 AND source_code = 'ZERNIO_META'", [ids.org])).rows[0].n === 2, 'exactly two Zernio leads exist');
   const zEvidence = (await admin.query("SELECT count(*)::int AS n FROM hon.outbox_events WHERE event_type = 'marketing.zernio.lead_received' AND organization_id = $1", [ids.org])).rows[0].n;
   check(zEvidence === 2, 'each created lead writes one internal outbox event');
+  // 0250 review P3s: two-session proofs for the per-form mapping lock and the per-form hourly limit, and the intake principal.
+  await admin.query("UPDATE hon.organization_entitlements SET status = 'ACTIVE', effective_until = NULL WHERE organization_id = $1", [ids.org]);
+  const mapArgs = (form) => [`hq-${ids.hqUser}`, ids.schoolA, '12345', form, pipe.A, pipe.Aopen, null, 'ACTIVE', null];
+  const mapSql = 'SELECT hon.set_zernio_lead_form_from_hq($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9) AS data';
+  await runtime.query('BEGIN');
+  await runtime.query(mapSql, mapArgs('4242'));
+  const secondMap = runtime2.query(mapSql, mapArgs('4242')).then(() => 'OK', (error) => error.code);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  await runtime.query('COMMIT');
+  check(await secondMap === '40001', 'a concurrent first mapping of the same form by the same school is a version conflict, not another-school');
+  const rateForm = (await admin.query("SELECT id, version FROM hon.zernio_lead_forms WHERE account_id = '12345' AND form_id = '4242'")).rows[0];
+  await admin.query(`INSERT INTO hon.zernio_lead_receipts (organization_id, school_id, form_mapping_id, form_mapping_version, event_id, leadgen_id, outcome)
+    SELECT $1, $2, $3, $4, 'evt_seed_' || n, 'seed' || n, 'INVALID_CONTACT' FROM generate_series(1, 299) n`, [ids.org, ids.schoolA, rateForm.id, rateForm.version]);
+  const leadSql = 'SELECT * FROM hon.record_zernio_lead($1,$2,$3,$4,$5::jsonb,$6::jsonb)';
+  await worker.query('BEGIN');
+  const firstRate = (await worker.query(leadSql, ['evt_r1', '9301', '12345', '4242', JSON.stringify({ full_name: 'Rate One', email: 'r1@example.test' }), '{}'])).rows[0];
+  const secondRate = worker2.query(leadSql, ['evt_r2', '9302', '12345', '4242', JSON.stringify({ full_name: 'Rate Two', email: 'r2@example.test' }), '{}']).then((r) => r.rows[0].outcome);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  await worker.query('COMMIT');
+  check(firstRate.outcome === 'CREATED' && await secondRate === 'RATE_LIMITED', 'two concurrent leads at 299 in the hour: exactly one is created, the other is rate limited (HTTP 429)');
+  await admin.query("UPDATE hon.principals SET is_active = false WHERE id = '00000000-0000-4000-8000-00000000c050'");
+  try {
+    await expectError('55000', () => zlead('evt_p1', '9401', '12345', '888', { first_name: 'Pat', phone: '+15555550333' }), 'an inactive intake principal creates nothing (the webhook answers 503 and Zernio retries)');
+  } finally { await admin.query("UPDATE hon.principals SET is_active = true WHERE id = '00000000-0000-4000-8000-00000000c050'"); }
   await expectError('42501', () => runtime.query('SELECT form_id FROM hon.zernio_lead_forms'), 'the runtime cannot read Zernio form mappings directly');
   await expectError('42501', () => runtime.query('SELECT school_id FROM hon.zernio_lead_receipts'), 'the runtime cannot read Zernio receipts directly');
   const bReceipts = (await admin.query('SELECT r.school_id FROM hon.zernio_lead_receipts r JOIN hon.zernio_lead_forms f ON f.id = r.form_mapping_id WHERE r.organization_id = $1 AND f.form_id = $2', [ids.org, '888'])).rows;
@@ -612,5 +639,5 @@ try {
   console.log(`PASS: communication delivery integrity (${passed} checks; day zone ${dayZone}, night zone ${nightZone}).`);
 } finally {
   await cleanup();
-  await Promise.all([admin.end(), runtime.end(), worker.end()]);
+  await Promise.all([admin.end(), runtime.end(), worker.end(), runtime2.end(), worker2.end()]);
 }

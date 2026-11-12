@@ -87,6 +87,9 @@ BEGIN
   PERFORM 1 FROM hon.crm_pipeline_stages WHERE id = p_pipeline_stage_id AND pipeline_id = p_pipeline_id
     AND organization_id = s.organization_id AND school_id = s.id AND terminal_status IS NULL;
   IF NOT FOUND THEN RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE = '22023'; END IF;
+  -- Serialize mappings of one account + form, so a concurrent first mapping by the same school sees the row and gets
+  -- VERSION_CONFLICT instead of a unique violation.
+  PERFORM pg_advisory_xact_lock(hashtextextended('hon.zernio_lead_form:' || p_account_id || ':' || p_form_id, 0));
   SELECT * INTO prior FROM hon.zernio_lead_forms WHERE account_id = p_account_id AND form_id = p_form_id FOR UPDATE;
   IF prior.id IS NULL THEN
     IF p_expected_version IS NOT NULL THEN RAISE EXCEPTION 'VERSION_CONFLICT' USING ERRCODE = '40001'; END IF;
@@ -153,6 +156,8 @@ BEGIN
       AND st.organization_id = f.organization_id AND st.school_id = f.school_id AND st.terminal_status IS NULL FOR SHARE;
     v_ok := FOUND;
   END IF;
+  -- Serialize the hourly count per form, so concurrent leads cannot each see 299 and all pass.
+  PERFORM pg_advisory_xact_lock(hashtextextended('hon.zernio_lead_rate:' || f.id::text, 0));
   IF (SELECT count(*) FROM hon.zernio_lead_receipts x WHERE x.form_mapping_id = f.id AND x.received_at > now() - interval '1 hour') >= 300 THEN
     outcome := 'RATE_LIMITED'; lead_id := NULL; RETURN NEXT; RETURN;
   END IF;
@@ -180,6 +185,14 @@ BEGIN
     outcome := 'INVALID_CONTACT'; lead_id := NULL; RETURN NEXT; RETURN;
   END IF;
 
+  -- The intake principal must still be the active, grant-free system service (the 0075 public-form rule).
+  PERFORM 1 FROM hon.principals x WHERE x.id = '00000000-0000-4000-8000-00000000c050' AND x.principal_type = 'SYSTEM_SERVICE'
+    AND x.user_id IS NULL AND x.is_active FOR SHARE;
+  IF NOT FOUND OR EXISTS (SELECT 1 FROM hon.principal_role_grants g WHERE g.principal_id = '00000000-0000-4000-8000-00000000c050')
+     OR EXISTS (SELECT 1 FROM hon.hq_operator_grants g WHERE g.principal_id = '00000000-0000-4000-8000-00000000c050')
+     OR EXISTS (SELECT 1 FROM hon.family_access_grants g WHERE g.principal_id = '00000000-0000-4000-8000-00000000c050') THEN
+    RAISE EXCEPTION 'HON Zernio intake principal is unavailable.' USING ERRCODE = '55000';
+  END IF;
   PERFORM set_config('app.hon_organization_id', f.organization_id::text, true), set_config('app.hon_school_id', f.school_id::text, true),
     set_config('app.hon_principal_id', '00000000-0000-4000-8000-00000000c050', true), set_config('app.hon_principal_type', 'SYSTEM_SERVICE', true),
     set_config('app.hon_source', 'INTEGRATION', true), set_config('app.hon_request_id', v_req::text, true),
