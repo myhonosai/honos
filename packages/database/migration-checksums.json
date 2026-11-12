@@ -224,6 +224,7 @@
     "0229_claire_business_performance.sql": "f318322679ffb9e5594ddd7d088d38cb3b4c9e42fc6d36592ea18793bce58dac",
     "0230_hon_os_schedule_billing.sql": "78b1acc5af70cc71f8156b93398127e4fedfd5ea7f31cee9655383fe31383e41",
     "0235_hon_os_schedule_paid_access.sql": "b91466751b4e17fa4870372517e5dda0f671dde2b3bf644c8cedd5e1d7964916",
+    "0237_hon_os_paid_review_queue.sql": "9f8815ee94473a4fc07e1bf79cf9a5dd6b5031d30289e9520d5f37ceb590d8db",
     "0231_membership_pause_rolling_year.sql": "97bcb50f32def69d43da7ca9fa497c8d5b291393a33060d788cd7209c77867bc",
     "0232_hq_support_cases.sql": "8f3decac8ed134e1deae12e239b8c1b9398506ae7d0b654fda6f42139165aedf",
     "0236_crm_school_clock.sql": "a2afddbb3fe92a127e246af79bb168c1083678c4a689ea7e2f0a4f06a2b3d213",

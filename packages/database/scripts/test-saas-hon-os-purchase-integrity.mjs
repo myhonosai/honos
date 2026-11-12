@@ -119,7 +119,11 @@ async function pay(co,expect=['APPLIED','SUBSCRIPTION_ACTIVATED']){
 }
 
 await Promise.all([admin.connect(),restricted.connect()]);
+const v1Gate=on=>admin.query(`ALTER TABLE hon.saas_checkout_sessions ${on?'ENABLE':'DISABLE'} TRIGGER saas_hon_os_v1_offer_kind`);
 try{
+ // 0237 (owner answer 5) refuses every new HON OS v1 founder or lifetime checkout. This proof replays the pre-0237 sales
+ // history: the refusal is proven live where that history first sells one, then set aside in the disposable database
+ // only, and restored (and checked enabled) before the PASS line and in the finally block.
  assert.equal((await admin.query("SELECT shobj_description(oid,'pg_database') m FROM pg_database WHERE datname=current_database()")).rows[0].m,'HON disposable Champions Club validation');
  // ---------- runtime posture: only the school entry point is callable ----------
  for(const sig of ['saas_open_hon_os_checkout(uuid,uuid,uuid,uuid,timestamptz)','saas_activate_hon_os_checkout(uuid,jsonb,timestamptz)','saas_hon_os_refusal(uuid,hon.saas_offer_set_offers,timestamptz)',
@@ -259,6 +263,12 @@ try{
  assert.deepEqual([subA1.currentPeriod.index,new Date(subA1.currentPeriod.endsAt).getTime()],[1,plus24.getTime()]);
 
  // ---------- 6. founder annual without auto-renewal and founder lifetime: one-time payments, no recurring obligation ----------
+ await v1Gate(true);
+ await deny(startOf('FA',V1.OS_FOUNDER_ANNUAL),422,'SAAS_OFFER_REQUIRES_SCHEDULE');
+ await deny(startOf('FA',V1.OS_FOUNDER_LIFETIME),422,'SAAS_OFFER_REQUIRES_SCHEDULE');
+ await deny(startOf('FA',V1.OS_FOUNDER_MONTHLY),422,'SAAS_OFFER_REQUIRES_SCHEDULE');
+ await deny(startOf('FA',V1.OS_LIFETIME),422,'SAAS_OFFER_REQUIRES_SCHEDULE');
+ await v1Gate(false);
  const coFA=await startOf('FA',V1.OS_FOUNDER_ANNUAL);
  assert.deepEqual([coFA.checkout.billingInterval,coFA.purchase.recurringBilling,...form(coFA.checkout.checkoutId)],['ANNUAL','NONE','payment','183000',null,'HON OS — Founder annual']);
  const paidFA=await pay(coFA);
@@ -457,8 +467,11 @@ try{
  try{await admin.query('ALTER TABLE hon.saas_subscriptions DISABLE TRIGGER USER');
   await sqlDeny(admin.query(`UPDATE hon.saas_subscriptions SET accepted_offer=jsonb_set(accepted_offer,'{priceMinor}','100') WHERE organization_id=$1`,[O.M.id]),'23514');}
  finally{await admin.query('ROLLBACK');}
+ await v1Gate(true);
+ assert.equal((await admin.query("SELECT tgenabled FROM pg_trigger WHERE tgrelid='hon.saas_checkout_sessions'::regclass AND tgname='saas_hon_os_v1_offer_kind'")).rows[0].tgenabled,'O','0237 v1 founder/lifetime refusal restored');
  console.log(`PASS: HON OS purchase binding (0182) proof (TEST MODE, SIMULATED Stripe) — six HQ-published offer kinds bought end to end through the real adapter at the exact accepted offer (snapshot + SHA-256 digest on checkout, subscription and invoice); monthly and annual renewals at the accepted price only (period and amount mismatches to review); one-time annual and lifetime purchases with no provider subscription; unpublished, future, stopped, retired, unsupported-terms, ineligible and sold-out offers refused; sale limit and cumulative founder pool atomic under contention, cancellation returns the slot, a founder hold is honored after HQ lowers the cap; entitlement lapse before payment goes to review; a routine price change or closed sales window during an open checkout honors the accepted terms, while explicit stop-sales (including on a retired offer), expiry, amount and recurring mismatches go to HQ review; payment replay and unsigned, tampered or live deliveries refused; refund windows from the accepted offer; refunds and disputes reconciled; price change affects new purchases only; entitlements, legacy records, credits and paid access unchanged.`);
 }finally{
+ await v1Gate(true).catch(()=>{});
  await setLegacySales(admin,false).catch(e=>console.error('RESTORE FAILED',e));
  try{await cleanup();}finally{await Promise.allSettled([admin.end(),restricted.end()]);}
 }
