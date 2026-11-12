@@ -2938,6 +2938,8 @@ DO $$ DECLARE r text; f text; BEGIN
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.read_maya_at_risk_students(text,jsonb) TO hon_runtime;
   END IF;
+END $$;
+
 -- HQ-COMM 0281 HQ texting and email: no table privileges; five commands and two reads are the only runtime boundary.
 -- The delivery worker functions belong to hon_communication_worker (013) and are never granted to the runtime.
 DO $$ DECLARE t text; r text; BEGIN
