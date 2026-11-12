@@ -2167,6 +2167,29 @@ DO $$ DECLARE t text; r text; c text; BEGIN
   END IF;
 END $$;
 
+-- A1 0276 Creative Studio avatars (one avatar = one CS1 generation of avatar.create): private deny-all table, private
+-- helpers (including the deferred avatar-generation guard), three fixed runtime entry points.
+DO $$ DECLARE r text; c text; f text; BEGIN
+  IF to_regprocedure('hon.create_creative_avatar(text,uuid,jsonb,jsonb,uuid,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply A1 migration 0276 first'; END IF;
+  ALTER TABLE hon.creative_avatars ENABLE ROW LEVEL SECURITY; ALTER TABLE hon.creative_avatars FORCE ROW LEVEL SECURITY;
+  REVOKE ALL ON hon.creative_avatars FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON hon.creative_avatars FROM %I',r); END LOOP;
+  FOR c IN SELECT attname FROM pg_attribute WHERE attrelid='hon.creative_avatars'::regclass AND attnum>0 AND NOT attisdropped LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.creative_avatars FROM PUBLIC',c);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.creative_avatars FROM %I',c,r); END LOOP;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace
+      AND p.proname IN ('creative_avatar_name_ok','guard_creative_avatar_generation','creative_avatar_json','creative_avatar_fingerprint',
+        'create_creative_avatar','read_creative_avatars','read_creative_avatar') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.create_creative_avatar(text,uuid,jsonb,jsonb,uuid,uuid,uuid), hon.read_creative_avatars(text,uuid),
+      hon.read_creative_avatar(text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
 -- 0204 (provisional) school staff invitations: private custody tables, internal helpers, three fixed runtime entry points.
 DO $$ DECLARE t text; r text; f text; c text; BEGIN
   FOREACH t IN ARRAY ARRAY['school_staff_invitations','school_staff_account_events'] LOOP
