@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   HON_ANALYST_AGENTS, HON_REPLY_CONCEALED_REASON, HON_REPLY_LIMITS, isHonAnalystAgent, type HonAnalystAgentKey, type FollowUpDraftPurpose, type HonConversationReadiness, type HonConversationSummary,
-  type HonConversationThread, type HonConversationTurn, type HonDelegateAgentKey, type HonOrchestration, type HonReplyMode, type HonTurnReceipt, type HonTurnRequest,
+  type HonConversationThread, type HonConversationTurn, type HonDelegateAgentKey, type HonOrchestration, type HonReplyMode, type HonSuggestedAgentKey, type HonTurnReceipt, type HonTurnRequest,
   HON_REPLY_SOURCE_LABELS,
 } from '@hon/contracts';
 import { HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
@@ -91,7 +91,7 @@ type Pending = { prepared: PreparedHonCommand; kind: 'create' | 'turn'; label: s
   confirm?: ConfirmChoice };
 
 /** What the human chose for one suggestion. Ids are selectors only; the server re-checks the human, school and target. */
-export type ConfirmChoice = Readonly<{ sourceTurnId: string; agent: HonDelegateAgentKey; targetId: string; purpose: FollowUpDraftPurpose | null; text: string }>;
+export type ConfirmChoice = Readonly<{ sourceTurnId: string; agent: HonSuggestedAgentKey; targetId: string; purpose: FollowUpDraftPurpose | null; text: string }>;
 export type SuggestionConfirm = ConfirmChoice & { seq: number; targets: 'LOADING' | HonConversationFailure | readonly HonDelegateTarget[] };
 export type GroupPhase = 'NONE' | 'LOADING' | 'READY' | HonConversationFailure;
 
@@ -103,7 +103,7 @@ export type HonConversationViewProps = {
   ask: HonComposerAsk; onAsk(ask: HonComposerAsk): void;
   /** C3a grouped confirmations of this thread's HON answers, by source turn id (lower case). */
   groups: ReadonlyMap<string, HonOrchestration>; groupPhase: GroupPhase; confirm: SuggestionConfirm | null;
-  onSuggest(sourceTurnId: string, agent: HonDelegateAgentKey): void; onConfirmChange(patch: Partial<ConfirmChoice>): void; onConfirmSend(): void; onConfirmCancel(): void;
+  onSuggest(sourceTurnId: string, agent: HonSuggestedAgentKey): void; onConfirmChange(patch: Partial<ConfirmChoice>): void; onConfirmSend(): void; onConfirmCancel(): void;
   onDraft(text: string): void; onMode(mode: HonReplyMode): void; onSend(): void; onOpen(id: string): void; onNew(): void;
   onContinue(turn: HonConversationTurn): void;
   /** C3b: ask HON (as a new question) to summarize what a finished group of specialists recorded. */
@@ -125,6 +125,20 @@ function ConfirmForm({ confirm, locked, onChange, onSend, onCancel }: {
   const targets = Array.isArray(confirm.targets) ? confirm.targets as readonly HonDelegateTarget[] : null;
   const chosen = targets?.some((target) => target.id === confirm.targetId) ?? false;
   const ready = chosen && confirm.text.trim().length > 0 && confirm.text.length <= limit && (confirm.agent !== 'chad' || confirm.purpose !== null) && !locked;
+  if (confirm.agent === 'claire') {
+    // K2c: Claire takes the person's question only; nothing to choose and nothing drafted.
+    const ask = confirm.text.trim().length > 0 && confirm.text.length <= limit && !locked;
+    return <form className={styles.confirm} aria-label="Ask Claire" data-confirm="claire" onSubmit={(event) => { event.preventDefault(); if (ask) onSend(); }}>
+      <label htmlFor={`${base}-text`}>What should Claire look at?</label>
+      <textarea id={`${base}-text`} rows={2} maxLength={limit} value={confirm.text} disabled={locked} aria-describedby={`${base}-help`} onChange={(event) => onChange({ text: event.target.value })} />
+      <p id={`${base}-help`} className={styles.meta}>{(limit - confirm.text.length).toLocaleString()} characters left. Don’t include passwords, card numbers or medical details.</p>
+      <p className={styles.meta}>Claire reads this school’s performance numbers and answers in text. She never drafts, sends or changes anything. Included in HON OS; nothing here is charged.</p>
+      <div className={styles.actions}>
+        <button type="submit" disabled={!ask}>Send to Claire</button>
+        <button type="button" className={styles.secondary} onClick={onCancel}>Cancel</button>
+      </div>
+    </form>;
+  }
   return <form className={styles.confirm} aria-label={`Ask ${agent.name}`} data-confirm={confirm.agent}
     onSubmit={(event) => { event.preventDefault(); if (ready) onSend(); }}>
     {confirm.targets === 'LOADING' ? <p role="status" className={styles.note}>Loading {agent.target.toLowerCase()} choices for {agent.name}…</p> : null}
@@ -157,7 +171,7 @@ export const SUMMARIZABLE_GROUP: ReadonlySet<HonOrchestration['status']> = new S
 export const SUMMARY_QUESTION = 'Summarize what the specialists I asked recorded, and what I should do next.';
 
 function Suggestions({ turn, group, groupPhase, available, locked, canSummarize, onSummarize, confirm, onSuggest, onConfirmChange, onConfirmSend, onConfirmCancel }: {
-  turn: HonConversationTurn; group: HonOrchestration | undefined; groupPhase: GroupPhase; available: readonly HonDelegateAgentKey[]; locked: boolean;
+  turn: HonConversationTurn; group: HonOrchestration | undefined; groupPhase: GroupPhase; available: readonly HonSuggestedAgentKey[]; locked: boolean;
   canSummarize: boolean; onSummarize: ((sourceTurnId: string) => void) | undefined;
   confirm: SuggestionConfirm | null; onSuggest: HonConversationViewProps['onSuggest']; onConfirmChange: HonConversationViewProps['onConfirmChange'];
   onConfirmSend: () => void; onConfirmCancel: () => void;
@@ -245,7 +259,8 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
   const locked = pending !== null && pending.state === 'SENDING';
   // A specialist request whose outcome is unknown keeps its one exact retry; no second request is offered meanwhile.
   const suggestLocked = pending !== null && (pending.state === 'SENDING' || pending.state === 'UNKNOWN');
-  const available = readiness?.availableAgentKeys ?? [];
+  // The delegates the server says this human may ask, and Claire when readiness offers Business Performance (K2c).
+  const available: readonly HonSuggestedAgentKey[] = [...(readiness?.availableAgentKeys ?? []), ...(readiness?.businessPerformance ? ['claire' as const] : [])];
   const canAsk = phase === 'READY' && readiness?.honReply === true && !locked;
   const offered = offeredAnalysts(readiness);
   const ask: HonComposerAsk = props.ask !== 'hon' && offered.includes(props.ask) ? props.ask : 'hon';
@@ -389,6 +404,8 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   const openConfirm = useCallback((choice: ConfirmChoice) => {
     if (concealed.current || ended.current) return;
     targetRead.current?.abort();
+    // K2c: Claire has no target list to read; her confirmation takes the question only.
+    if (choice.agent === 'claire') { targetRead.current = null; setConfirm({ ...choice, seq: ++confirmSeq.current, targets: [] }); return; }
     const seq = ++confirmSeq.current, shown = privacy.current, abort = new AbortController(); targetRead.current = abort;
     setConfirm({ ...choice, seq, targets: 'LOADING' });
     const owned: Owned = () => mounted.current && seq === confirmSeq.current && shown === privacy.current;
@@ -431,9 +448,9 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   const sendConfirm = () => {
     const current = confirm;
     if (!thread || !current || concealed.current || !Array.isArray(current.targets)) return;
-    const target = (current.targets as readonly HonDelegateTarget[]).find((item) => item.id === current.targetId);
+    const target = current.agent === 'claire' ? null : (current.targets as readonly HonDelegateTarget[]).find((item) => item.id === current.targetId) ?? null;
     const text = current.text.trim();
-    if (!target || !text) return;
+    if ((current.agent !== 'claire' && !target) || !text) return;
     const choice: ConfirmChoice = Object.freeze({ sourceTurnId: current.sourceTurnId, agent: current.agent, targetId: current.targetId, purpose: current.purpose, text: current.text });
     let prepared: PreparedHonCommand;
     try { prepared = prepareTurn(school, thread.id, { text, delegation: suggestionDelegation(current.agent, target, current.purpose), fromSuggestionTurnId: current.sourceTurnId }); }

@@ -162,6 +162,12 @@ async function honApi(route, path, method, prefix) {
     c.turns.push({ turnId, role: 'HUMAN', text: ask.text, createdAt: iso(0), status: 'COMPLETED', reason: null, references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null });
     c.turns.push({ turnId, role: 'claire', text, createdAt: iso(0), status: 'COMPLETED', reason: null, references: { workItemId: id(honSeq += 1), actionRequestId: null, invocationId: id(honSeq += 1) }, replyDetail: detail });
     c.turnCount += 1; c.status = 'COMPLETED';
+    if (ask.fromSuggestionTurnId) {
+      // K2c: a confirmed Claire suggestion joins the answer's group; her member status is her answer's.
+      const byConversation = hon.groups.get(c.id) ?? new Map(); hon.groups.set(c.id, byConversation);
+      const g = byConversation.get(ask.fromSuggestionTurnId) ?? { sourceTurnId: ask.fromSuggestionTurnId, members: [] }; byConversation.set(ask.fromSuggestionTurnId, g);
+      g.members.push({ agentKey: 'claire', turnId, status: 'COMPLETED' });
+    }
     const receipt = { turnId, conversationId: c.id, status: 'COMPLETED', reason: null, delegatedAgentKeys: ['claire'], actionRequestIds: [], workItemIds: [c.turns.at(-1).references.workItemId], invocationId: c.turns.at(-1).references.invocationId, reply: text, replyDetail: detail };
     hon.turns.set(headers['idempotency-key'], receipt);
     return json(route, 200, { data: receipt });
@@ -187,7 +193,7 @@ async function honApi(route, path, method, prefix) {
     if (!g || ask.continueTurnId || !['COMPLETED', 'FAILED', 'PARTIAL'].includes(groupStatus(g.members.map((m) => m.status)))) return json(route, 400, { code: 'HON_GROUP_NOT_SUMMARIZABLE' });
   }
   const long = /long/i.test(ask.text);
-  const suggest = /saturday/i.test(ask.text) ? ['marcus', 'chad', 'kai'] : [];
+  const suggest = /saturday/i.test(ask.text) ? ['marcus', 'chad', 'kai'] : /how are we doing/i.test(ask.text) ? (hon.claire ? ['claire', 'marcus'] : ['marcus']) : [];
   const text = ask.summarizeTurnId ? 'Summary: Marcus recorded a Saturday trial post draft that a human approved. Next, share it with parents this week.' : ask.continueTurnId ? 'Second part: book the two trial follow-ups for Tuesday and confirm the testing date with parents.'
     : long ? 'Here is a detailed plan for this week. First, follow up the three new leads from the weekend…' : 'You have 3 new leads in the last 24 hours and 2 trial appointments tomorrow. I suggest following up the leads first.';
   const detail = ask.continueTurnId ? replyDetail('DETAILED', { step: 2, continuesTurnId: ask.continueTurnId }) : replyDetail(ask.replyMode ?? 'STANDARD', long ? { truncated: true, canContinue: true } : { suggestions: suggest });
@@ -1705,6 +1711,34 @@ for (const [name, viewport, mode_] of [['desktop-1440', { width: 1440, height: 9
     await ctx.close();
   });
 }
+
+await check('Ask HON suggestions (K2c): HON suggests Claire; confirming her sends a question, grouped under the answer', async () => {
+  resetHon(true, true);
+  const { ctx, page, ask } = await fullHon({ width: 1440, height: 900 });
+  await askBox(ask).fill('How are we doing this month?');
+  await ask.getByRole('button', { name: 'Send' }).click();
+  await ask.getByRole('button', { name: 'Ask Claire' }).waitFor();
+  assert.ok(await ask.getByText(/She never drafts, sends or changes anything/).first().isVisible());
+  const posts = hon.posts.length; const reads = hon.targets.reads.length;
+  await ask.getByRole('button', { name: 'Ask Claire' }).click();
+  const form = ask.getByRole('form', { name: 'Ask Claire' });
+  assert.equal(await form.getByRole('button', { name: 'Send to Claire' }).isDisabled(), true);
+  assert.equal(hon.targets.reads.length, reads, 'Claire has no target list to read');
+  await form.getByLabel('What should Claire look at?').fill('Why did trial conversion change?');
+  assert.equal(hon.posts.length, posts, 'nothing is sent before Send');
+  await axe(page, 'ask-hon-suggest-claire');
+  await shot(page, 'ask-hon-suggest-claire-confirm');
+  await form.getByRole('button', { name: 'Send to Claire' }).click();
+  await ask.getByText('Specialists you asked').waitFor();
+  assert.deepEqual(lastBody(), { text: 'Why did trial conversion change?', delegation: { agentKey: 'claire' }, fromSuggestionTurnId: sourceTurn() });
+  await ask.getByText(/Recorded facts: trial conversion is 40%/).waitFor();
+  assert.ok(await ask.locator('[data-orchestration="COMPLETED"]').getByText('Claire', { exact: true }).isVisible());
+  assert.equal(await ask.getByRole('button', { name: 'Ask Claire' }).count(), 0, 'Claire is not offered again from this answer');
+  assert.ok(await ask.getByRole('button', { name: 'Ask Marcus' }).isEnabled());
+  await noOverflow(page, 'ask-hon-suggest-claire-grouped');
+  await shot(page, 'ask-hon-suggest-claire-grouped', true);
+  await ctx.close();
+});
 
 await check('Ask HON suggestions: a refused confirmation reopens the form with what was chosen; nothing is retried', async () => {
   const { ctx, ask } = await suggestedAnswer({ width: 1440, height: 900 });

@@ -94,8 +94,12 @@ receipt timeline. No address, no provider IDs, no cost.
 
 - **Email (PR 2):** SendGrid v3 mail send with `sandbox_mode` on unless `HON_EMAIL_SANDBOX_MODE=false`;
   READY only with `SENDGRID_API_KEY`, `HON_EMAIL_FROM` and `HON_EMAIL_SEND_APPROVED=true`. `custom_args`
-  carry the HON delivery ID. Event Webhook verified with ECDSA P-256 over timestamp + raw body, a 5-minute
-  window, raw-body transport like Stripe's.
+  carry the HON delivery ID, plus `hon_purpose` (`INTERNAL` for staff notices such as the 0257 weekly
+  briefing, `HQ` for HQ messages) when the mail is not a school delivery. The Event Webhook is account-wide,
+  so events with any `hon_purpose` other than `SCHOOL` are acknowledged and ignored here (an HQ receipt
+  handler can claim `HQ` later); otherwise they would find no delivery and make SendGrid retry. Event
+  Webhook verified with ECDSA P-256 over timestamp + raw body, a 10-minute window, raw-body transport
+  like Stripe's.
 - **Texting (PR 3):** shared `countTextPieces(text)` in contracts (GSM-7 vs UCS-2, 160/153 and 70/67),
   used by the composer and the adapter. Three or more pieces send as one MMS (cheaper than three SMS
   pieces at list price). Twilio request signature (HMAC-SHA1) on status callbacks and inbound messages;

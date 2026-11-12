@@ -273,6 +273,43 @@ try {
   check(foreign, 'another school cannot read this school delivery (404)');
   await workerDb.onModuleDestroy();
 
+  // 12. SendGrid end to end with a stub transport (no network): send, then a signed Event Webhook through the controller.
+  const { SendGridEmailProvider, SendGridEventWebhookVerifier } = await import('../../../apps/api/dist/communication/delivery/sendgrid-email-provider.js');
+  const { CommunicationWebhookController } = await import('../../../apps/api/dist/communication/delivery/communication-webhook.controller.js');
+  const { generateKeyPairSync, sign } = await import('node:crypto');
+  await consent('ada', ids.schoolA, 'EMAIL', 'OPTED_IN');
+  await queued('sendgrid', ids.schoolA, 'ada', 'EMAIL', 'Sent through SendGrid');
+  const sgEnv = () => ({ SENDGRID_API_KEY: 'SG.test-only', HON_EMAIL_FROM: 'notices@hon.example', HON_EMAIL_SEND_APPROVED: 'true' });
+  const sgCalls = [];
+  const sendgrid = new SendGridEmailProvider(sgEnv, async (url, init) => { sgCalls.push({ url, body: JSON.parse(init.body) }); return { status: 202, headers: new Headers({ 'x-message-id': `sgmsg${sgCalls.length}` }) }; });
+  const sgWorker = new CommunicationWorkerDatabase();
+  await new CommunicationDispatcher(sgWorker, [sendgrid, new FakeCommunicationProvider('EMAIL', fakeEnv)]).runOnce(100);
+  const sgRow = await delivery('sendgrid');
+  const sgCall = sgCalls.find((call) => call.body.personalizations[0].custom_args.hon_delivery_id === sgRow.id);
+  check(sgRow.status === 'ACCEPTED' && sgRow.provider === 'SENDGRID' && sgCall && sgCall.body.mail_settings.sandbox_mode.enable === true, 'an approved SendGrid adapter wins over the fake and sends in sandbox mode with the HON delivery id');
+  const pair = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+  const verifierEnv = () => ({ SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY: pair.publicKey.export({ format: 'der', type: 'spki' }).toString('base64') });
+  const controller = new CommunicationWebhookController(sgWorker, new SendGridEventWebhookVerifier(verifierEnv));
+  const post = async (events) => {
+    const body = Buffer.from(JSON.stringify(events)); const ts = String(Math.floor(Date.now() / 1000));
+    const signature = sign('sha256', Buffer.concat([Buffer.from(ts), body]), { key: pair.privateKey, dsaEncoding: 'der' }).toString('base64');
+    return controller.sendgridEvents({ body }, signature, ts);
+  };
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const sgEvent = (type, id) => ({ event: type, sg_event_id: id, sg_message_id: `${sgRow.provider_message_id}.filterdrecv-1`, hon_delivery_id: sgRow.id, timestamp: nowSeconds, email: 'ada@example.test' });
+  const posted = await post([sgEvent('processed', 'sg-e1'), sgEvent('delivered', 'sg-e2'), sgEvent('open', 'sg-e3'), sgEvent('unsubscribe', 'sg-e4')]);
+  check(posted.recorded === 3 && posted.ignored === 1, 'a signed SendGrid batch records three receipts and ignores the open');
+  check((await delivery('sendgrid')).status === 'DELIVERED', 'the SendGrid delivered event marks the delivery DELIVERED');
+  check((await admin.query("SELECT status::text, source::text FROM hon.communication_consents WHERE person_id = $1 AND channel = 'EMAIL'", [person.ada])).rows[0].source === 'RECIPIENT', 'the SendGrid unsubscribe records OPTED_OUT from the recipient');
+  check((await post([sgEvent('delivered', 'sg-e2')])).replayed === 1, 'a redelivered SendGrid batch is a replay');
+  let rejected = false;
+  try { await controller.sendgridEvents({ body: Buffer.from('[]') }, 'AAAAAAAAAAAAAAAAAAAAAAAA', String(nowSeconds)); } catch (error) { rejected = error?.getStatus?.() === 400; }
+  check(rejected, 'an unsigned SendGrid batch is refused with 400');
+  let retry = false;
+  try { await post([{ ...sgEvent('delivered', 'sg-e9'), sg_message_id: 'unknownmsg.filter', hon_delivery_id: randomUUID() }]); } catch (error) { retry = error?.getStatus?.() === 503; }
+  check(retry, 'a receipt for an unknown HON delivery asks SendGrid to redeliver (503) and writes nothing');
+  await sgWorker.onModuleDestroy();
+
   console.log(`PASS: communication delivery integrity (${passed} checks; day zone ${dayZone}, night zone ${nightZone}).`);
 } finally {
   await cleanup();

@@ -24,6 +24,8 @@ export interface DispatchSummary {
 
 const SEND_TIMEOUT_MS = 20_000;
 const LEASE_SECONDS = 60;
+/** Claim in small batches so every send of a batch (each bounded by SEND_TIMEOUT_MS) finishes inside its lease. */
+export const DISPATCH_BATCH_SIZE = Math.max(1, Math.floor((LEASE_SECONDS * 1000 - 10_000) / SEND_TIMEOUT_MS));
 
 /**
  * Sends leased deliveries through the one READY adapter per channel, outside any database transaction,
@@ -50,8 +52,16 @@ export class CommunicationDispatcher {
     const readyChannels = [...ready.keys()].sort();
     const summary: DispatchSummary = { claimed: 0, accepted: 0, retrying: 0, failed: 0, unknown: 0, lateResults: 0, readyChannels };
     if (!readyChannels.length || !this.store.isConfigured()) return summary;
-    const claimed = await this.store.claim(readyChannels, limit, LEASE_SECONDS);
-    summary.claimed = claimed.length;
+    while (summary.claimed < limit) {
+      const claimed = await this.store.claim(readyChannels, Math.min(DISPATCH_BATCH_SIZE, limit - summary.claimed), LEASE_SECONDS);
+      if (!claimed.length) break;
+      summary.claimed += claimed.length;
+      await this.sendBatch(claimed, ready, summary);
+    }
+    return summary;
+  }
+
+  private async sendBatch(claimed: Awaited<ReturnType<CommunicationWorkerStore['claim']>>, ready: Map<DeliverableChannel, CommunicationProviderAdapter>, summary: DispatchSummary): Promise<void> {
     for (const delivery of claimed) {
       // Only READY channels are claimed, so the adapter exists.
       const adapter = ready.get(delivery.channel)!;
@@ -77,7 +87,6 @@ export class CommunicationDispatcher {
       else if (recorded.status === 'FAILED') summary.failed += 1;
       else summary.unknown += 1;
     }
-    return summary;
   }
 }
 
