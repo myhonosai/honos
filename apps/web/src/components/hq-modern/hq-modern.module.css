@@ -44,7 +44,6 @@
 .appearance button{min-height:36px;font-size:11px;border-color:transparent;padding:6px 13px}
 .appearance button[aria-pressed=true],.tabBar button[aria-pressed=true]{color:#002234;background:var(--hon-accent-2);border-color:#65e2ff;font-weight:700}
 .appearance>small{margin-left:auto;font-size:10px;color:var(--hon-text-muted)}
-.artNotice{padding:10px 14px;margin-bottom:16px!important;background:#14233b;border:1px solid #304e70;border-radius:8px;font-size:12px}
 .contentLayout{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}
 .withAssistant{grid-template-columns:minmax(0,1fr) 340px}
 .main{outline:none}

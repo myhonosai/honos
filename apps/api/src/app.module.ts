@@ -208,6 +208,9 @@ import { ClassSessionsReadService } from './schedule/class-sessions-read.service
 import { ClassSessionPagesController, ClassSessionPagesHumanUiGuard } from './schedule/class-session-pages.controller.js';
 import { ClassSeriesController } from './schedule/class-series.controller.js';
 import { ClassSeriesService } from './schedule/class-series.service.js';
+import { PublicSchoolEventController, SchoolEventController } from './schedule/school-event.controller.js';
+import { SchoolEventService } from './schedule/school-event.service.js';
+import { SchoolEventBookingStatusHumanUiGuard, SchoolEventReadHumanUiGuard, SchoolEventSaveHumanUiGuard, SchoolEventStatusHumanUiGuard } from './schedule/school-event-human-ui.guard.js';
 import { ClassSeriesCreateHumanUiGuard, ClassSeriesEndHumanUiGuard, ClassSeriesFillHumanUiGuard, ClassSeriesOngoingHumanUiGuard, ClassSeriesReadHumanUiGuard, ClassSeriesReviseHumanUiGuard, ClassSeriesTopUpHumanUiGuard } from './schedule/class-series-human-ui.guard.js';
 import { ClassSessionPagesService } from './schedule/class-session-pages.service.js';
 import { AttendanceController } from './schedule/attendance.controller.js';
@@ -385,6 +388,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSessionsReadController,
     ClassSessionPagesController,
     ClassSeriesController,
+    SchoolEventController,
+    PublicSchoolEventController,
     AttendanceController,
     ClassSessionRosterController,
     AttendancePolicyController,
@@ -562,6 +567,11 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipPauseService,
     StudentImportService,
     ClassSeriesService,
+    SchoolEventService,
+    SchoolEventReadHumanUiGuard,
+    SchoolEventSaveHumanUiGuard,
+    SchoolEventStatusHumanUiGuard,
+    SchoolEventBookingStatusHumanUiGuard,
     ClassSeriesCreateHumanUiGuard,
     ClassSeriesReviseHumanUiGuard,
     ClassSeriesOngoingHumanUiGuard,

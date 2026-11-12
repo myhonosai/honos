@@ -185,7 +185,6 @@
  "Your own referral code": "Tu propio código de referido",
  "A list of the schools you referred": "Una lista de las escuelas que recomendaste",
  "A leaderboard of verified referrals only": "Una clasificación solo con referidos verificados",
- "Rewards for every school you refer, details coming soon": "Recompensas por cada escuela que recomiendes, detalles próximamente",
  "Creative Studio": "Creative Studio",
  "credits every month": "créditos cada mes",
  "Included with every paid plan": "Incluido en todos los planes pagados",
@@ -216,7 +215,6 @@
  "See all your schools together in one summary. Full multi-location management is coming soon.": "Ve todas tus escuelas juntas en un resumen. La gestión completa de varias sedes llegará pronto.",
  "6:00 pm, kids class": "6:00 pm, clase infantil",
  "pricing": "precios",
- "Every feature and the whole AI team, with a 14-day free trial and no automatic charge.": "Todas las funciones y todo el equipo de IA, con una prueba gratis de 14 días y sin cobro automático.",
  "Monthly": "Mensual",
  "Yearly": "Anual",
  "Founder 50": "Founder 50",
@@ -277,5 +275,14 @@
  "Español": "Español",
  "get started": "empezar",
  "&copy; 2026 HON OS. all rights reserved": "&copy; 2026 HON OS. todos los derechos reservados",
- "built for the people who run the mat": "hecho para quienes dirigen el tatami"
+ "built for the people who run the mat": "hecho para quienes dirigen el tatami",
+ "Try the full AI team and Creative Studio free for 14 days. No automatic charge when the trial ends.": "Prueba gratis durante 14 días todo el equipo de IA y Creative Studio. Sin cobro automático al terminar la prueba.",
+ "Earn rewards for every school you refer, details coming soon": "Gana recompensas por cada escuela que recomiendes, detalles próximamente",
+ "Unlimited texting included": "Mensajes de texto ilimitados incluidos",
+ "30-day money-back guarantee": "Garantía de devolución de 30 días",
+ "If HON OS isn't right for you, ask within 30 days of your first payment, monthly or yearly, and we'll refund that payment in full. Your access ends when the refund is made, and a founder spot isn't returned.": "Si HON OS no es para ti, pídelo dentro de los 30 días posteriores a tu primer pago, mensual o anual, y te devolvemos ese pago completo. Tu acceso termina cuando se hace el reembolso y el lugar de fundador no se devuelve.",
+ "Is there a money-back guarantee?": "¿Hay garantía de devolución?",
+ "Yes. Ask within 30 days of your first HON OS payment, monthly or yearly, and we'll refund that payment in full. Access ends when the refund is made, and a founder spot isn't returned.": "Sí. Pídelo dentro de los 30 días posteriores a tu primer pago de HON OS, mensual o anual, y te devolvemos ese pago completo. El acceso termina con el reembolso y el lugar de fundador no se devuelve.",
+ "Is texting included?": "¿Los mensajes de texto están incluidos?",
+ "Yes. Texting is included with no limit. Sending texts is coming soon, once our texting providers are connected.": "Sí. Los mensajes de texto están incluidos sin límite. El envío llegará pronto, cuando conectemos los proveedores de mensajería."
 }
