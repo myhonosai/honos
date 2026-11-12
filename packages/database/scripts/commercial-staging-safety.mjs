@@ -56,9 +56,9 @@ export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 export function validateMigrationEvidence(entries, expected) {
   assert(entries.length && new Set(entries.map(x => x.file.slice(0, 4))).size === entries.length, 'Duplicate migration number.');
   assert(!entries.some(x => /^(0179|0180)_/.test(x.file)), 'Reserved migrations must remain absent.');
-  assert(entries.at(-1).file.startsWith('0274_'), 'Unreviewed migration ceiling.');
+  assert(entries.at(-1).file.startsWith('0281_'), 'Unreviewed migration ceiling.');
   assert.equal(sha256(JSON.stringify(entries)), expected.chainSha256, 'Migration chain differs from the reviewed baseline.');
-  for (const target of expected.targets) assert.deepEqual(entries.find(x => x.file === target.file), target, '0181–0274 checksum mismatch.');
+  for (const target of expected.targets) assert.deepEqual(entries.find(x => x.file === target.file), target, '0181–0281 checksum mismatch.');
   return { count: entries.length, chainSha256: expected.chainSha256, targets: expected.targets, entries };
 }
 export async function readMigrationEvidence() {

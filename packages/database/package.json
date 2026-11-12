@@ -64,6 +64,7 @@
     "db:test-saas-access-exception-hardening": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-access-exception-hardening.mjs",
     "db:test-saas-refunds-rewards": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-refunds-rewards-integrity.mjs",
     "db:test-communication-consents": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-communication-consent-integrity.mjs",
+    "db:test-hq-communications": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-hq-communications.mjs",
     "db:test-communication-delivery": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-communication-delivery-integrity.mjs",
     "db:test-communication-messages": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-communication-message-queue-integrity.mjs",
     "db:test-billing-invoices": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-billing-invoice-draft-integrity.mjs && node scripts/test-billing-invoice-issue-integrity.mjs",
