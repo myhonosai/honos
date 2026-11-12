@@ -120,7 +120,6 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
         <button type="button" className={styles.motionControl} aria-label={t("Ambient motion")} aria-pressed={!reducedMotion && ambientMotion} disabled={reducedMotion} onClick={() => setAmbientMotion((value) => !value)} title={reducedMotion ? t("Motion is off because your device prefers reduced motion") : t("Pause or resume decorative motion")}><HqIcon name={ambientMotion && !reducedMotion ? 'pause' : 'play'} size={14}/><span>{t("Motion")}</span><small>{!reducedMotion && ambientMotion ? t("On") : t("Off")}</small></button>
         <small>{t("Presentation only")}</small>
       </section>
-      {art === 'anime' && <p className={styles.artNotice} role="status">{t("Anime portraits are awaiting approved artwork. Executive identities remain unchanged.")}</p>}
       {access.kind === 'ready' ? <HqContext.Provider value={{ overview: access.overview, art, view, draft, setDraft, openAssistant }}>
         <div className={`${styles.contentLayout} ${assistant ? styles.withAssistant : ''}`}>
           <main id="hq-main" tabIndex={-1} className={styles.main}>{children}</main>
