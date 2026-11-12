@@ -230,7 +230,7 @@ export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject, onMembers
     onMembershipReview({ organizationId: selectors.organizationId, schoolId: selectors.schoolId, membershipId: selectors.membershipId });
   }
   return <main className={styles.page}>
-    <nav aria-label="Staff navigation"><CrmJourneyLink /><a href="/staff/billing/membership-plans">Membership plans</a><a href="/core">HON Core</a><a href="/staff/search">Staff search</a><a href="/staff/crm/follow-ups">CRM follow-ups</a><a href="/staff/crm/trials">Trial appointments</a><a href="/staff/command-center">School Command Center</a><a href="/auth/login">Sign in</a></nav>
+    <nav aria-label="Staff navigation"><CrmJourneyLink /><a href="/staff/billing/membership-plans">Membership plans</a><a href="/staff/dashboard">School dashboard</a><a href="/staff/search">Staff search</a><a href="/staff/crm/follow-ups">CRM follow-ups</a><a href="/staff/crm/trials">Trial appointments</a><a href="/staff/command-center">School Command Center</a><a href="/auth/login">Sign in</a></nav>
     {concealed && <section className={privacyStyles.shield} aria-labelledby="crm-privacy-title" aria-busy={restoring}>
       <h2 id="crm-privacy-title" ref={shieldHeading} tabIndex={-1}>CRM information hidden</h2>
       <p>Focus or session access changed. CRM requests remain only in memory. No command will be resent automatically. Verify current access before revealing information.</p>
