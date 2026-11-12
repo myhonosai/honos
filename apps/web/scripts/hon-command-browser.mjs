@@ -214,7 +214,8 @@ const creativeWallet = () => ({ schoolId: scope.schoolId, walletVersion: 3, prog
     { entryId: id(303), lotId: id(300), lotKind: 'INCLUDED_MONTHLY', entryKind: 'RESERVE', credits: 120, reservationId: null, adjustmentId: null, occurredAt: iso(-1) }],
   rates: { rateVersionId: id(310), rateVersion: 1, termsReference: 'synthetic-terms-v1', publishedAt: iso(-200), rates: [
     { operationCode: 'image.standard', mediaKind: 'IMAGE', displayName: 'Standard image', billingUnit: 'IMAGE', creditsPerUnit: 40, maxUnitsPerRequest: 4, rateBasis: 'PROVISIONAL' },
-    { operationCode: 'video.short_clip', mediaKind: 'VIDEO', displayName: 'Short promo video', billingUnit: 'VIDEO_SECOND', creditsPerUnit: 60, maxUnitsPerRequest: 15, rateBasis: 'PROVISIONAL' }] },
+    { operationCode: 'video.short_clip', mediaKind: 'VIDEO', displayName: 'Short promo video', billingUnit: 'VIDEO_SECOND', creditsPerUnit: 60, maxUnitsPerRequest: 15, rateBasis: 'PROVISIONAL' },
+    { operationCode: 'avatar.create', mediaKind: 'IMAGE', displayName: 'AI avatar', billingUnit: 'REQUEST', creditsPerUnit: 100, maxUnitsPerRequest: 1, rateBasis: 'PROVISIONAL' }] },
   packages: [['STARTER', 3000, 0, 3000], ['GROWTH', 6000, 1200, 6000], ['CREATOR', 12000, 4800, 12000]].map(([packageCode, base, bonus, price]) => ({ packageCode, packageVersion: 1, baseCredits: base, bonusCredits: bonus, totalCredits: base + bonus, priceMinor: price, currency: 'usd' })),
   agentConversationsDeductCredits: false, paymentsActive: false });
 // Creative Studio generations (CS1, synthetic). provider: NOT_CONNECTED unless a check connects it.
@@ -222,6 +223,14 @@ const creativeWallet = () => ({ schoolId: scope.schoolId, walletVersion: 3, prog
 // 'notConnected' (503 CREATIVE_PROVIDER_NOT_CONNECTED), 'denied' (403), 'transition' (409 SAAS_TRANSITION_NOT_ALLOWED).
 // gate: when set, the next POST waits for it before answering (a create still in flight).
 const creative = { provider: 'NOT_CONNECTED', items: [], posts: [], replies: [], byKey: new Map(), gate: null };
+// A1 (0276) avatars: the same provider flag; each avatar carries its avatar.create generation.
+const avatarsFake = { items: [], posts: [], replies: [], byKey: new Map() };
+const creativeAvatar = (body, n) => {
+  const createdAt = iso(n), generation = { generationId: id(760 + n), schoolId: scope.schoolId, operationCode: 'avatar.create', mediaKind: 'IMAGE', units: 1, format: 'PORTRAIT',
+    prompt: body.description, status: 'SUCCEEDED', failureReason: null, reservedCredits: 100, chargedCredits: 100, createdAt, completedAt: createdAt,
+    assets: [{ assetId: id(780 + n), ordinal: 1, mediaType: 'image/png', width: 1080, height: 1920, durationSeconds: null, origin: 'SYNTHETIC' }] };
+  return { avatarId: id(740 + n), schoolId: scope.schoolId, name: body.name, style: body.style, description: body.description, status: 'READY', createdAt, generation };
+};
 const creativeGeneration = (body, n) => ({ generationId: id(700 + n), schoolId: scope.schoolId, operationCode: body.operationCode, mediaKind: 'IMAGE', units: body.units,
   format: body.format, prompt: body.prompt, status: 'SUCCEEDED', failureReason: null, reservedCredits: 40 * body.units, chargedCredits: 40 * body.units,
   createdAt: iso(0), completedAt: iso(0), assets: Array.from({ length: body.units }, (_, i) => ({ assetId: id(720 + n * 10 + i), ordinal: i + 1, mediaType: 'image/png', width: 1080, height: 1080, durationSeconds: null, origin: 'SYNTHETIC' })) });
@@ -283,6 +292,20 @@ async function api(route) {
     }
     creative.items = [g, ...creative.items];
     return json(route, 200, { data: { generation: g, balance: creativeWallet().balance, replayed: false } });
+  }
+  if (path === `/api/v1/schools/${scope.schoolId}/creative-studio/avatars`) {
+    if (method === 'GET') return json(route, 200, { data: { provider: creative.provider, avatars: avatarsFake.items, limit: 50 } });
+    const request = route.request(), idem = request.headers()['idempotency-key'];
+    avatarsFake.posts.push({ key: idem, command: request.headers()['x-hon-human-command'], body: request.postData() });
+    const next = avatarsFake.replies.shift() ?? 'ok';
+    if (next === 'unknown') return json(route, 503, { code: 'SAAS_UNAVAILABLE' });
+    if (next === 'limit') return json(route, 422, { code: 'CREATIVE_AVATAR_LIMIT_REACHED' });
+    if (creative.provider !== 'CONNECTED') return json(route, 503, { code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
+    const body = JSON.parse(request.postData() ?? '{}'), prior = avatarsFake.byKey.get(idem);
+    if (prior) return json(route, 200, { data: { avatar: prior, balance: creativeWallet().balance, replayed: true } });
+    const a = creativeAvatar(body, avatarsFake.items.length + 1);
+    avatarsFake.items = [a, ...avatarsFake.items]; avatarsFake.byKey.set(idem, a);
+    return json(route, 200, { data: { avatar: a, balance: creativeWallet().balance, replayed: false } });
   }
   if (path === `/api/v1/schools/${scope.schoolId}/creative-credits`) {
     assert.equal(method, 'GET', 'Creative Studio only reads the wallet');
@@ -1885,7 +1908,8 @@ for (const [name, viewport, mode_] of [['desktop-1440', { width: 1440, height: 9
     const section = page.locator('section[aria-labelledby="creative-studio-title"]');
     await section.getByTestId('creative-available').waitFor();
     assert.equal(await section.getByTestId('creative-available').innerText(), '11,640');
-    assert.ok(await section.getByText('Not connected yet', { exact: true }).isVisible());
+    assert.ok(await section.getByText('Not connected yet', { exact: true }).first().isVisible());
+    assert.ok(await section.getByText('Avatar creation is not connected yet. Nothing can be created here and nothing is charged.').isVisible());
     assert.ok(await section.getByText('Standard image').isVisible());
     assert.ok(await section.getByText('Buying top-ups is not connected yet. No card is charged.').isVisible());
     assert.equal(await section.locator('textarea, input, select, form').count(), 0, 'no inert creation controls');
@@ -2037,13 +2061,45 @@ await check('Creative Studio: a Refresh while a create is in flight still shows 
   creative.provider = 'NOT_CONNECTED'; creative.items = [];
   await ctx.close();
 });
+for (const [name, viewport] of [['desktop-1440', { width: 1440, height: 900 }], ['phone-390', { width: 390, height: 844 }]]) {
+  await check(`Creative Studio avatars ${name}: create an avatar from the Avatars card; a lost answer replays the same request once`, async () => {
+    studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: [], byKey: new Map(), gate: null });
+    Object.assign(avatarsFake, { items: [], posts: [], replies: ['unknown', 'ok'], byKey: new Map() });
+    const { ctx, page } = await creativeStudio(viewport);
+    const card = page.locator('article[aria-labelledby="creative-avatars-title"]');
+    await page.locator('article[aria-labelledby="creative-avatars-title"][data-avatar-state="OPEN"]').waitFor();
+    assert.equal(await page.locator('section[aria-labelledby="creative-studio-title"] select option[value="avatar.create"]').count(), 0, 'the generic form never offers avatar.create');
+    await card.getByLabel('Avatar name').fill('Master Kim');
+    await card.getByLabel('Illustrated').check();
+    await card.getByLabel('Describe how your avatar looks').fill('Friendly taekwondo master in a black dobok, warm smile');
+    assert.ok(await card.getByText('Uses 100 credits. You have 11,640 available.').isVisible());
+    await shot(page, `creative-studio-avatar-form-${name}`);
+    await card.getByRole('button', { name: 'Create avatar' }).click();
+    await card.getByText(/We could not confirm whether this request went through/).waitFor();
+    assert.equal(await card.getByLabel('Avatar name').isDisabled(), true, 'locked while the outcome is unknown');
+    await card.getByRole('button', { name: 'Check again' }).click();
+    await card.getByText('Done. The result is listed below.').waitFor();
+    await card.getByText('Master Kim').waitFor();
+    assert.equal(avatarsFake.posts.length, 2);
+    assert.equal(avatarsFake.posts[0].key, avatarsFake.posts[1].key, 'Check again reuses the idempotency key');
+    assert.equal(avatarsFake.posts[0].body, avatarsFake.posts[1].body);
+    assert.equal(avatarsFake.posts[0].command, 'saas-creative-avatar-create');
+    assert.deepEqual(JSON.parse(avatarsFake.posts[0].body), { name: 'Master Kim', style: 'ILLUSTRATED', description: 'Friendly taekwondo master in a black dobok, warm smile' });
+    assert.equal(creative.posts.length, 0, 'the avatar never goes through the generic generation route');
+    await noOverflow(page, `creative-studio-avatar-${name}`);
+    await axe(page, `creative-studio-avatar-${name}`);
+    await shot(page, `creative-studio-avatar-done-${name}`, true);
+    creative.provider = 'NOT_CONNECTED'; creative.items = []; avatarsFake.items = [];
+    await ctx.close();
+  });
+}
 await check('Creative Studio: a refused wallet read shows no numbers', async () => {
   studio = 'denied';
   const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
   const section = page.locator('section[aria-labelledby="creative-studio-title"]');
   await section.getByText(/does not include creative credits/).waitFor();
   assert.equal(await section.getByTestId('creative-available').count(), 0);
-  assert.ok(await section.getByText('Not connected yet', { exact: true }).isVisible());
+  assert.ok(await section.getByText('Not connected yet', { exact: true }).first().isVisible());
   await shot(page, 'creative-studio-denied');
   studio = 'ready';
   await ctx.close();

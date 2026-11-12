@@ -1,13 +1,14 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { CreativeGeneration, CreativeGenerationInput, CreativeGenerationReceipt, CreativeStudioGenerationList } from '@hon/contracts';
+import type { CreativeAvatar, CreativeAvatarInput, CreativeAvatarReceipt, CreativeGeneration, CreativeGenerationInput, CreativeGenerationReceipt, CreativeStudioAvatarList,
+  CreativeStudioGenerationList } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { AccountStatusError, readSchoolCreativeWallet } from '../account-status/http';
-import { CreativeGenerationError, createCreativeGeneration, listCreativeGenerations } from './generation-http';
-import { studioWallet, type CreateLock, type CreateOutcome, type GenerationsState, type StudioState, type StudioWallet } from './model';
+import { CreativeGenerationError, createCreativeAvatar, createCreativeGeneration, listCreativeAvatars, listCreativeGenerations } from './generation-http';
+import { studioWallet, type AvatarsState, type CreateLock, type CreateOutcome, type GenerationsState, type StudioState, type StudioWallet } from './model';
 import { CreativeStudioView } from './view';
 
 type Scope = Readonly<{ organizationId: string; schoolId: string }>;
@@ -15,12 +16,17 @@ export type CreativeStudioApi = {
   wallet(scope: Scope, signal: AbortSignal): Promise<StudioWallet>;
   generations(scope: Scope, signal: AbortSignal): Promise<CreativeStudioGenerationList>;
   create(scope: Scope, input: CreativeGenerationInput, idempotencyKey: string, signal: AbortSignal): Promise<CreativeGenerationReceipt>;
+  /** A1 (0276) avatars: optional so older test doubles keep working; without them the Avatars card says it is unavailable. */
+  avatars?(scope: Scope, signal: AbortSignal): Promise<CreativeStudioAvatarList>;
+  createAvatar?(scope: Scope, input: CreativeAvatarInput, idempotencyKey: string, signal: AbortSignal): Promise<CreativeAvatarReceipt>;
 };
 /** The wallet and generation reads plus the one closed create command. The server authorizes the exact school for each. */
 export const CREATIVE_STUDIO_API: CreativeStudioApi = {
   wallet: async (scope, signal) => studioWallet(await readSchoolCreativeWallet(scope, signal)),
   generations: (scope, signal) => listCreativeGenerations(scope.schoolId, signal),
   create: (scope, input, key, signal) => createCreativeGeneration(scope.schoolId, input, key, signal),
+  avatars: (scope, signal) => listCreativeAvatars(scope.schoolId, signal),
+  createAvatar: (scope, input, key, signal) => createCreativeAvatar(scope.schoolId, input, key, signal),
 };
 
 /**
@@ -28,6 +34,7 @@ export const CREATIVE_STUDIO_API: CreativeStudioApi = {
  * unresolved: an attempt already ended without a known outcome, so a later refusal is about the retry, not the request.
  */
 type Pending = Readonly<{ schoolId: string; key: string; input: CreativeGenerationInput; unresolved: boolean }>;
+type PendingAvatar = Readonly<{ schoolId: string; key: string; input: CreativeAvatarInput; unresolved: boolean }>;
 const newKey = () => globalThis.crypto.randomUUID();
 
 export function outcomeFromReceipt(receipt: CreativeGenerationReceipt): CreateOutcome {
@@ -54,6 +61,18 @@ export function outcomeFromAttempt(error: unknown, unresolved: boolean): Readonl
   }
 }
 
+/** An avatar receipt as a create outcome: the avatar's status follows its creation generation. */
+export function outcomeFromAvatarReceipt(receipt: CreativeAvatarReceipt): CreateOutcome {
+  return outcomeFromReceipt({ generation: receipt.avatar.generation, balance: receipt.balance, replayed: receipt.replayed });
+}
+/** Avatars (and their creation generations) that may be this tab's unconfirmed avatar request: no text is shown for them. */
+export function matchesPendingAvatar(request: Readonly<{ input: CreativeAvatarInput }> | null, a: Readonly<{ name: string; style: string; description: string }>): boolean {
+  return !!request && a.name === request.input.name && a.style === request.input.style && a.description === request.input.description;
+}
+export function matchesPendingAvatarGeneration(request: Readonly<{ input: CreativeAvatarInput }> | null, g: CreativeGeneration): boolean {
+  return !!request && g.operationCode === 'avatar.create' && g.prompt === request.input.description;
+}
+
 /** Rows that may be this tab's unconfirmed request: the list shows their status and credits, never their text. */
 export function matchesPending(request: Readonly<{ input: CreativeGenerationInput }> | null, g: CreativeGeneration): boolean {
   return !!request && g.operationCode === request.input.operationCode && g.units === request.input.units
@@ -74,6 +93,11 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
   const [outcome, setOutcome] = useState<CreateOutcome>(null);
   // Survives a conceal: the form stays locked while a request is sending or unconfirmed, whatever is on screen.
   const [lock, setLock] = useState<CreateLock>('NONE');
+  const [avatars, setAvatars] = useState<AvatarsState>({ state: 'LOADING' });
+  const [avatarOutcome, setAvatarOutcome] = useState<CreateOutcome>(null);
+  const [avatarLock, setAvatarLock] = useState<CreateLock>('NONE');
+  const pendingAvatar = useRef<PendingAvatar | null>(null);
+  const sendingAvatar = useRef(false);
   const [refresh, setRefresh] = useState(0);
   const generation = useRef(0);
   // Advances only when the page is concealed (blur, hidden tab, school change, session end), never on a read Refresh,
@@ -85,20 +109,24 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
 
   useEffect(() => onShellPrivacyEvent(() => {
     concealShellPrivateNow(); generation.current++; privacy.current++; loadedSchool.current = null;
-    setStudio({ state: 'LOADING' }); setGenerations({ state: 'LOADING' }); setOutcome(null);
+    setStudio({ state: 'LOADING' }); setGenerations({ state: 'LOADING' }); setOutcome(null); setAvatars({ state: 'LOADING' }); setAvatarOutcome(null);
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), []);
 
   useEffect(() => {
     const current = ++generation.current;
     const school = selection ? selection.schoolId.toLowerCase() : null;
     // A Refresh of the same school keeps what is shown (and any draft in the form) until the new reads answer.
-    if (school === null || school !== loadedSchool.current) { setStudio({ state: 'LOADING' }); setGenerations({ state: 'LOADING' }); }
+    if (school === null || school !== loadedSchool.current) { setStudio({ state: 'LOADING' }); setGenerations({ state: 'LOADING' }); setAvatars({ state: 'LOADING' }); }
     loadedSchool.current = school;
     if (!selection) return;
     const scope = { organizationId: selection.organizationId, schoolId: selection.schoolId };
     if (pending.current && pending.current.schoolId !== scope.schoolId.toLowerCase()) {
       pending.current = null;
       if (!sending.current) setLock('NONE');
+    }
+    if (pendingAvatar.current && pendingAvatar.current.schoolId !== scope.schoolId.toLowerCase()) {
+      pendingAvatar.current = null;
+      if (!sendingAvatar.current) setAvatarLock('NONE');
     }
     const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
     api.wallet(scope, signal).then(
@@ -107,6 +135,10 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
     api.generations(scope, signal).then(
       list => { if (current === generation.current) setGenerations({ state: 'READY', provider: list.provider, items: list.generations }); },
       error => { if (current === generation.current) setGenerations({ state: error instanceof CreativeGenerationError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
+    if (api.avatars) api.avatars(scope, signal).then(
+      list => { if (current === generation.current) setAvatars({ state: 'READY', provider: list.provider, items: list.avatars }); },
+      error => { if (current === generation.current) setAvatars({ state: error instanceof CreativeGenerationError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
+    else setAvatars({ state: 'UNAVAILABLE' });
     return () => { abort.abort(); };
   }, [selection?.organizationId, selection?.schoolId, api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -139,14 +171,42 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
     void send();
   }, [send, lock, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
   const onCheckAgain = useCallback(() => { void send(); }, [send]);
+
+  // A1 avatars: the same rules as a generation. Only a known outcome releases the request; anything else keeps its key.
+  const sendAvatar = useCallback(async () => {
+    const request = pendingAvatar.current;
+    if (!request || sendingAvatar.current || !selection || selection.schoolId.toLowerCase() !== request.schoolId || !api.createAvatar) return;
+    sendingAvatar.current = true; const shown = privacy.current;
+    setAvatarLock('SENDING'); setAvatarOutcome({ kind: 'SENDING' });
+    let next: CreateOutcome, release: boolean;
+    try {
+      const receipt = await api.createAvatar({ organizationId: selection.organizationId, schoolId: request.schoolId }, request.input, request.key, AbortSignal.timeout(180000));
+      next = outcomeFromAvatarReceipt(receipt); release = next?.kind !== 'UNKNOWN';
+    } catch (error) { ({ outcome: next, release } = outcomeFromAttempt(error, request.unresolved)); }
+    finally { sendingAvatar.current = false; }
+    if (pendingAvatar.current?.key === request.key) pendingAvatar.current = release ? null : { ...request, unresolved: true };
+    setAvatarLock(pendingAvatar.current ? 'UNRESOLVED' : 'NONE');
+    if (next?.kind === 'DONE' || next?.kind === 'HELD' || next?.kind === 'FAILED') setRefresh(value => value + 1);
+    if (shown !== privacy.current) { setAvatarOutcome(prior => prior?.kind === 'SENDING' ? null : prior); return; }
+    setAvatarOutcome(next);
+  }, [api, selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onCreateAvatar = useCallback((input: CreativeAvatarInput) => {
+    if (pendingAvatar.current || sendingAvatar.current || avatarLock !== 'NONE' || !selection) return;
+    pendingAvatar.current = { schoolId: selection.schoolId.toLowerCase(), key: newKey(), input, unresolved: false };
+    void sendAvatar();
+  }, [sendAvatar, avatarLock, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onCheckAvatarAgain = useCallback(() => { void sendAvatar(); }, [sendAvatar]);
+  const shownAvatarOutcome: CreateOutcome = avatarOutcome ?? (avatarLock === 'SENDING' ? { kind: 'SENDING' } : avatarLock === 'UNRESOLVED' ? { kind: 'HIDDEN_PENDING' } : null);
+  const hideAvatarText = useCallback((a: CreativeAvatar) => matchesPendingAvatar(pendingAvatar.current, a), [avatarLock]); // eslint-disable-line react-hooks/exhaustive-deps
   const onRefresh = useCallback(() => setRefresh(value => value + 1), []);
   // After a conceal the shown outcome is gone, but a locked request still says it is waiting (without what it was).
   const shownOutcome: CreateOutcome = outcome ?? (lock === 'SENDING' ? { kind: 'SENDING' } : lock === 'UNRESOLVED' ? { kind: 'HIDDEN_PENDING' } : null);
-  const hidePrompt = useCallback((g: CreativeGeneration) => matchesPending(pending.current, g), [lock]); // eslint-disable-line react-hooks/exhaustive-deps
+  const hidePrompt = useCallback((g: CreativeGeneration) => matchesPending(pending.current, g) || matchesPendingAvatarGeneration(pendingAvatar.current, g), [lock, avatarLock]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyed by the shell phase: a concealed node is replaced, never un-hidden in place.
   return <div key={shell.phase} data-shell-private="">
     <CreativeStudioView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
-      hasSchool={selection !== null} studio={studio} onRefresh={onRefresh} generations={generations} outcome={shownOutcome} locked={lock !== 'NONE'} hidePrompt={hidePrompt} onCreate={onCreate} onCheckAgain={onCheckAgain}/>
+      hasSchool={selection !== null} studio={studio} onRefresh={onRefresh} generations={generations} outcome={shownOutcome} locked={lock !== 'NONE'} hidePrompt={hidePrompt} onCreate={onCreate} onCheckAgain={onCheckAgain}
+      avatars={avatars} avatarOutcome={shownAvatarOutcome} avatarLocked={avatarLock !== 'NONE'} hideAvatarText={hideAvatarText} onCreateAvatar={onCreateAvatar} onCheckAvatarAgain={onCheckAvatarAgain}/>
   </div>;
 }
