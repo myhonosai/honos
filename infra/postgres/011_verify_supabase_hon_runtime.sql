@@ -3171,7 +3171,7 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
 END $$;
 -- End school event booking exact verification.
 
--- School page branding exact verification (B-SCH-3 0268): two private forced-RLS tables, the guards, private validators
+-- School page branding exact verification (B-SCH-3 0285): two private forced-RLS tables, the guards, private validators
 -- and helpers, three runtime entry points and the permission.
 DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   FOREACH t IN ARRAY ARRAY['hon.school_page_branding','hon.school_page_branding_versions'] LOOP

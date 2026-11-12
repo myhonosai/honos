@@ -2839,10 +2839,10 @@ DO $$ DECLARE r text; t text; col text; f text; BEGIN
   END IF;
 END $$;
 
--- B-SCH-3 part 3a 0268 school page branding: two private forced-RLS tables reached only through three runtime entry points
+-- B-SCH-3 part 3a 0285 school page branding: two private forced-RLS tables reached only through three runtime entry points
 -- (staff read and save, public display read); guards, validators and helpers are private.
 DO $$ DECLARE r text; t text; col text; f text; BEGIN
-  IF to_regclass('hon.school_page_branding') IS NULL THEN RAISE EXCEPTION 'Apply migration 0268 first'; END IF;
+  IF to_regclass('hon.school_page_branding') IS NULL THEN RAISE EXCEPTION 'Apply migration 0285 first'; END IF;
   FOREACH t IN ARRAY ARRAY['hon.school_page_branding','hon.school_page_branding_versions'] LOOP
     EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP

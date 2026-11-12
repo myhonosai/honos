@@ -9,7 +9,7 @@ import { brandingFrom, draftFrom, draftProblems, sameDraft, saveInput } from '..
 import { SchoolBrandingView, type SchoolBrandingViewProps } from '../src/components/school-branding/view';
 import { id } from './account-status-fixtures';
 
-// 0268: a school owner sets the logo, color, cover photo and contact line its booking and checkout pages show.
+// 0285: a school owner sets the logo, color, cover photo and contact line its booking and checkout pages show.
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 

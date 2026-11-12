@@ -15,7 +15,7 @@ function definedFields(input: object): Record<string, unknown> {
 }
 
 /**
- * 0268: the school's shared page branding (logo, accent color, cover photo, contact line) shown on its booking and checkout
+ * 0285: the school's shared page branding (logo, accent color, cover photo, contact line) shown on its booking and checkout
  * pages. Route identifiers are never authority: the guarded boundary resolves the route scope from the verified session, and
  * each protected database function re-proves the direct human subject and the live school_branding.manage permission.
  * Nothing here is public, uploads a file or fetches an image.

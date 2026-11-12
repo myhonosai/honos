@@ -246,6 +246,6 @@
     "0273_hon_os_signup_abuse_protection.sql": "ef53fe56e765f926a0868bc6f2a86c8e6106ec0667ec971ea1889e3147836887",
     "0274_hon_os_admission_limits_hq.sql": "3f9b0d3a909005f190517ef193167ff0fca3032fa6ea35ed418d58dd6ce92adc",
     "0261_school_event_booking.sql": "3a8bfc78de0a42c61a59f3ff182bbbd792b68251223af6a68a89906f1848d675",
-    "0268_school_page_branding.sql": "88d0033a082cb86cbf3cf97750515d92a4661a011d593fa7dfa1f99cf47e0f52"
+    "0285_school_page_branding.sql": "4cb98a54593a817a4f604a1ef2087c8d4cab4abd5031e7455e392c3a8dd9157f"
   }
 }

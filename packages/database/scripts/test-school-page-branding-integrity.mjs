@@ -1,5 +1,5 @@
 /**
- * School page branding proof (0268) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global
+ * School page branding proof (0285) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global
  * ValidationPipe + HonExceptionFilter -> SchoolBrandingController -> protected definer functions on the restricted runtime
  * role with forced RLS), plus the public display read on the runtime role, on the guarded disposable CRM-close fixture only.
  * Synthetic data; nothing uploads or fetches an image, takes a payment or sends a message.
@@ -314,9 +314,9 @@ try {
     await assert.rejects(runtime.query(`SELECT * FROM hon.${table} LIMIT 1`), /permission denied/); checks += 1;
   }
   await assert.rejects(runtime.query("SELECT hon.read_school_page_branding('x')"), /SCHOOL_BRANDING_FORBIDDEN/); checks += 1;
-  // The deployment verifier's 0268 section (infra/postgres/011) passes against this database with its runtime role.
+  // The deployment verifier's 0285 section (infra/postgres/011) passes against this database with its runtime role.
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const begin = '-- School page branding exact verification (B-SCH-3 0268)', end = '-- End school page branding exact verification.';
+    const begin = '-- School page branding exact verification (B-SCH-3 0285)', end = '-- End school page branding exact verification.';
     const section = verify.split(begin)[1]?.split(end)[0];
     ok(section, begin);
     await sql(section.replace(/^[^\n]*\n[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
@@ -325,7 +325,7 @@ try {
   ok((await sql('SELECT (SELECT count(*) FROM hon.payment_attempts WHERE organization_id=ANY($1::uuid[])) + (SELECT count(*) FROM hon.invoices WHERE organization_id=ANY($1::uuid[])) n',
     [[ids.organization, ids.otherOrganization]])).rows[0].n === '0', 'no payment attempt or invoice was created');
 
-  console.log(`PASS: school page branding (0268): ${checks} checks.`);
+  console.log(`PASS: school page branding (0285): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

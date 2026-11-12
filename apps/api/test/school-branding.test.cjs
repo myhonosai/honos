@@ -4,10 +4,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const contracts = require('@hon/contracts');
 
-// 0268: shared school page branding; the database validates the same rules again.
+// 0285: shared school page branding; the database validates the same rules again.
 const branding = (patch = {}) => ({ logoUrl: 'https://cdn.example.com/logo.png', coverUrl: null, accentColor: '#c81e1e', contactLine: 'Call us at 555-0100', ...patch });
 
-test('0268 save input is closed and keeps every allowed value exactly', () => {
+test('0285 save input is closed and keeps every allowed value exactly', () => {
   const input = contracts.validateSaveSchoolBrandingInput({ branding: branding(), expectedVersion: 0 });
   assert.deepEqual(input, { branding: branding(), expectedVersion: 0 });
   assert.deepEqual(contracts.validateSaveSchoolBrandingInput({ branding: contracts.EMPTY_SCHOOL_BRANDING, expectedVersion: 4 }).branding, contracts.EMPTY_SCHOOL_BRANDING);
@@ -33,7 +33,7 @@ test('0268 save input is closed and keeps every allowed value exactly', () => {
   assert.throws(() => contracts.validateSaveSchoolBrandingInput({ branding: branding(), expectedVersion: 0, extra: 1 }));
 });
 
-test('0268 read, receipt and public verifiers', () => {
+test('0285 read, receipt and public verifiers', () => {
   const saved = { ...branding(), version: 2, updatedAt: '2026-11-12T02:00:00.000Z' };
   assert.equal(contracts.verifySchoolBrandingRead({ branding: saved }).branding.version, 2);
   const empty = { ...contracts.EMPTY_SCHOOL_BRANDING, version: 0, updatedAt: null };
@@ -48,7 +48,7 @@ test('0268 read, receipt and public verifiers', () => {
   assert.throws(() => contracts.verifyPublicSchoolBranding({ ...saved, schoolName: 'x', schoolId: '11111111-1111-4111-8111-111111111111' }));
 });
 
-test('0268 API: two routes under their own human-UI guards; nothing public, no upload or fetch', () => {
+test('0285 API: two routes under their own human-UI guards; nothing public, no upload or fetch', () => {
   const dir = path.join(__dirname, '../src/school-branding');
   const controller = fs.readFileSync(path.join(dir, 'school-branding.controller.ts'), 'utf8');
   assert.match(controller, /@Controller\('organizations\/:organizationId\/schools\/:schoolId\/settings\/branding'\)/);

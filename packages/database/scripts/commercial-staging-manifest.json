@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "449adb56f28fe0b04b2a0c1693757ad561d6c33f3ae5c4c3ff1b4e4ef71ab91d",
+  "chainSha256": "d0168aeaef7e1616e2700fe2234d21c7afcce05b85819f302655413b4cbeaa43",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -279,10 +279,6 @@
       "sha256": "00b679d61d39febf7adee22105cbdfe4ecd95423b6b423064f3a6c09f3905861"
     },
     {
-      "file": "0268_school_page_branding.sql",
-      "sha256": "88d0033a082cb86cbf3cf97750515d92a4661a011d593fa7dfa1f99cf47e0f52"
-    },
-    {
       "file": "0269_school_checkout_pages.sql",
       "sha256": "5e1f3c7ee71db95fd5c75b360cb8a834b6de0a41d0caa479e1caa938e3a8627d"
     },
@@ -297,6 +293,10 @@
     {
       "file": "0274_hon_os_admission_limits_hq.sql",
       "sha256": "3f9b0d3a909005f190517ef193167ff0fca3032fa6ea35ed418d58dd6ce92adc"
+    },
+    {
+      "file": "0285_school_page_branding.sql",
+      "sha256": "4cb98a54593a817a4f604a1ef2087c8d4cab4abd5031e7455e392c3a8dd9157f"
     }
   ]
 }

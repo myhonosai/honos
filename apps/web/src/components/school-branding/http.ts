@@ -5,7 +5,7 @@ import {
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * The school's shared page branding (0268): logo, accent color, cover photo and one contact line, shown on its booking and
+ * The school's shared page branding (0285): logo, accent color, cover photo and one contact line, shown on its booking and
  * checkout pages. The read sends no Idempotency-Key; the save sends its own X-HON-Human-Command and an Idempotency-Key. The
  * server decides the permission and the version again. Images are https links only: nothing here uploads or fetches a file.
  */

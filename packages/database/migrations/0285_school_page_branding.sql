@@ -1,6 +1,6 @@
 BEGIN;
 
--- B-SCH-3 part 3a (0268, reserved by the coordinator 2026-11-11): shared per-school branding for every public school page.
+-- B-SCH-3 part 3a (0285, renumbered from 0268 by the coordinator 2026-11-12): shared per-school branding for every public school page.
 -- Owner request (David, 2026-11-11): "I need schedular and checkout pages customizable"; owner choice "Branded pages".
 -- Spec: docs/architecture/SCHOOL_PAGE_BRANDING.md.
 --   B1  One branding row per school: an optional logo image, an optional cover image, an optional accent color and an

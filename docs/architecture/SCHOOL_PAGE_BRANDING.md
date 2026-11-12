@@ -1,4 +1,4 @@
-# School page branding (0268)
+# School page branding (0285)
 
 Owner decision 2026-11-12 ("Branded pages"): a school sets its logo, accent color, cover photo and one contact line once,
 and every family-facing page the school publishes (event and booking links, enrollment and tuition checkout) shows them.
@@ -17,7 +17,7 @@ Per page, the school writes its own text, questions, waiver and thank-you messag
 HON stores the links only. It never uploads, copies, fetches, proxies or checks the images. Family pages load them with
 `referrerPolicy="no-referrer"`; any page that shows a value checks it with the same contract validator first.
 
-## Database (migration 0268)
+## Database (migration 0285)
 
 - Permission `school_branding.manage` (sensitive, staff-assignable), granted to every system OWNER role.
 - `hon.school_page_branding` (one row per school, `version` starts at 1 and goes up by exactly 1 per save, never deleted or

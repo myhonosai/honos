@@ -1,5 +1,5 @@
 /**
- * 0268: shared school page branding (owner decision 2026-11-12, "Branded pages"): a logo, an accent color, a cover photo
+ * 0285: shared school page branding (owner decision 2026-11-12, "Branded pages"): a logo, an accent color, a cover photo
  * and one contact line, set once per school and shown on its booking and checkout pages. Not a layout or page builder.
  * The database validates every rule here again.
  */

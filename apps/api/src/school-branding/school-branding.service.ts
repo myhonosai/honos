@@ -10,7 +10,7 @@ const HUMAN_SETTINGS = "SELECT set_config('app.hon_source','HUMAN_UI',true),set_
 const READ_LIMITS = "SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0";
 const WRITE_LIMITS = "SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0";
 
-// Exact 0268 error codes; every unknown database failure is unavailable, never success.
+// Exact 0285 error codes; every unknown database failure is unavailable, never success.
 const ERRORS: Record<string, (code: string) => HttpException> = {
   VALIDATION_FAILED: code => new BadRequestException({ code }),
   SCHOOL_BRANDING_FORBIDDEN: code => new ForbiddenException({ code }),
@@ -31,7 +31,7 @@ function translate(error: unknown): never {
 }
 
 /**
- * 0268: the school's shared page branding. Each read and save is one protected definer call that re-proves the direct human
+ * 0285: the school's shared page branding. Each read and save is one protected definer call that re-proves the direct human
  * subject and the live school_branding.manage permission. Images are https references only: nothing here uploads, fetches or
  * proxies an image, and nothing is public.
  */

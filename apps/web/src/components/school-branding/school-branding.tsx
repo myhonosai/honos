@@ -14,7 +14,7 @@ type Pending = Readonly<{ key: string; scope: BrandingScope; input: SaveSchoolBr
 type Lock = 'NONE' | 'SENDING' | 'KEPT';
 
 /**
- * School branding (0268). A school owner sets the logo, accent color, cover photo and contact line that the school's booking
+ * School branding (0285). A school owner sets the logo, accent color, cover photo and contact line that the school's booking
  * and checkout pages show. Unsaved edits stay in memory only; blur or a hidden tab hides the page but keeps them, while a
  * school change or a session end drops them. Every save answer is followed by a fresh read.
  */
