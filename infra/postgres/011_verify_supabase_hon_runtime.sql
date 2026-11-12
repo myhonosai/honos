@@ -2922,6 +2922,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 END $$;
 -- End CRM school clock exact verification.
 
+-- 0251 replaced the bodies of hon.class_series_json, hon.read_school_class_series and hon.revise_class_series (ongoing switch, topUpDue, new weekdays of ongoing series filled); their hashes below are the 0251 bodies.
 -- Recurring class series exact verification (B-SCH-1 0239): private forced-RLS series and occurrence tables, the series guard,
 -- private helpers, six runtime entry points; the runtime still has no UPDATE on hon.class_sessions.
 DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
@@ -2935,16 +2936,16 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_class_series()',true,false,'search_path=pg_catalog, hon','25279023919d330ac968de1abea2faed15b8d1241c3fe6bc8ca0497f37f1d9e2'),
 ('hon.require_class_series_actor(text)',true,false,'search_path=pg_catalog, hon','a91ef014ce4bb04d732d405ba53b5a0ec1be10267fe2efac6b5f504cdafec2bf'),
-('hon.class_series_json(hon.class_series)',true,false,'search_path=pg_catalog, hon','e884a7c10d007dc49c61648d36fc1299804e6aae680d37486662626fd1e20dee'),
+('hon.class_series_json(hon.class_series)',true,false,'search_path=pg_catalog, hon','ac63ec1bc183d40534a4623df595d4bb46b110f717861b58f08a281b372c82a8'),
 ('hon.class_series_pattern(jsonb,boolean)',false,false,'search_path=pg_catalog, hon','30abf7a726b2fb7c8c970b56b50a25be4239743474107f8954977279d0193bf5'),
 ('hon.class_series_command_begin(text,text,text)',true,false,'search_path=pg_catalog, hon','7119e94378413589f6e0fc87777f10405147e5556cd4b047b0d38ce6e0b45944'),
 ('hon.class_series_command_finish(text,text,uuid,jsonb,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)',true,false,'search_path=pg_catalog, hon','3fba076d7585bdac91002f2dc9ecf156debb50a5680d5899571361a1e99f902d'),
 ('hon.class_series_apply_future(hon.class_series,text)',true,false,'search_path=pg_catalog, hon','f5b76af7d5a086421461f3419d828fc1c2554221a32e613c1162bd771459f62f'),
 ('hon.create_class_series(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','789071319d0903f962db946b683d9ee520d88739a0cc3e4f1742f0d0c44ddeab'),
-('hon.revise_class_series(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','25f291e00be4a866c10d5c867b9e30227fe50bbdfe8be7a5f47f73d7ccfad3b9'),
+('hon.revise_class_series(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','59d84e1b8134dc6d6d2d637f64128640f91cb56d6c0f5013fcbb324366cf20d4'),
 ('hon.end_class_series(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','874b8ab2922b59f0bca68e24a7dd87bb1955d023c790f1a8ec6ae5e4f9d6422c'),
 ('hon.fill_class_series(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','e06f110fa778c3c253a5a3e2b9451c5f70d4b114149cd74f252fb9d8a1935194'),
-('hon.read_school_class_series(text)',true,true,'search_path=pg_catalog, hon','a05c7180c5a3a1db1b605582efd6406af2f9efe3b83f1aaf423228e6f977a261'),
+('hon.read_school_class_series(text)',true,true,'search_path=pg_catalog, hon','12784704f06184407d4ebbfc478d84b769de7ec4683316ff57c8caa35ad4d4ea'),
 ('hon.read_school_weekly_timetable(text,jsonb)',true,true,'search_path=pg_catalog, hon','2ff7caf2c9a791b2d6a037be4a01c75016b564c197935add272f296fba936351')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
@@ -3009,3 +3010,79 @@ DO $$ DECLARE f record; safe boolean; expected record; BEGIN
   IF has_table_privilege('hon_runtime','hon.invoices','DELETE') THEN RAISE EXCEPTION 'Runtime must not delete invoices'; END IF;
 END $$;
 -- End tuition payment records exact verification.
+
+-- Ongoing class series exact verification (B-SCH-2 0251): the private ongoing column, one private helper and two runtime entry points.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  IF EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a JOIN pg_class c ON c.oid=x.attrelid
+      WHERE x.attrelid='hon.class_series'::regclass AND x.attname='ongoing' AND a.grantee<>c.relowner)
+    OR NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='hon.class_series'::regclass AND attname='ongoing' AND atttypid='boolean'::regtype AND attnotnull) THEN
+    RAISE EXCEPTION 'hon.class_series.ongoing must be a private NOT NULL boolean'; END IF;
+  FOR f IN SELECT * FROM (VALUES
+('hon.class_series_fill_dates(hon.class_series,date,date)',true,false,'search_path=pg_catalog, hon','7c320407a1bd2b05a7ca45c6d6bbc98182435abffb558f2f3079f58f1ae66a93'),
+('hon.set_class_series_ongoing(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','f34de3665727e1ec473ba75a72a3cc8e877bf4d5c67f4f0323554ffc3298462a'),
+('hon.top_up_class_series(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','c7f36b277c3d47143b9c55c5e66658c270f895af9ef43d5ab3dc1c433ce851b3')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe ongoing class series function: %',f.signature; END IF;
+  END LOOP;
+  IF has_any_column_privilege('hon_runtime','hon.class_sessions','UPDATE') THEN RAISE EXCEPTION 'Runtime must not update class sessions'; END IF;
+END $$;
+-- End ongoing class series exact verification.
+
+-- School payment connections exact verification (B-TUI-2 0258): three private forced-RLS tables, the guards, private
+-- helpers, six runtime entry points, the two permissions, and a provider registry that is never live.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['hon.school_pay_providers','hon.school_pay_connections','hon.school_pay_connection_events'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=t::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'School payment table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.school_pay_capabilities_ok(jsonb)',false,false,'search_path=pg_catalog','06a760116cb31bccc05b5744c9210282eb237e712fabe5f52f05f8407bfef560'),
+('hon.guard_school_pay_connection()',true,false,'search_path=pg_catalog, hon','ca63878ec37b758f1d03999ea64391e15baee8e2107fb134938c2bbd3f61f987'),
+('hon.require_school_pay_actor(text,text)',true,false,'search_path=pg_catalog, hon','794c66b32329aaf58e0e080b7c570dcc5da5417c5726f27736ac16f455ec0cbc'),
+('hon.require_school_pay_reader(text)',true,false,'search_path=pg_catalog, hon','0ea5164d4d234bd7a49b554e845bde508b33b625269775ff95b937f3038d7d17'),
+('hon.school_pay_connection_json(hon.school_pay_connections)',false,false,'search_path=pg_catalog, hon','ab503fa6fd4fe382b20297b7196994be0626cd18386ba292ef1d728c121d2281'),
+('hon.school_pay_observation_ok(jsonb)',false,false,'search_path=pg_catalog','b964d6192f817194e55427229f4bba83823a1bafa46d6561aadb7b46875f5e56'),
+('hon.school_pay_command_begin(text,text,text)',true,false,'search_path=pg_catalog, hon','e95e4aa612d5d559bf697d88de741613bccb8d4a7091fafcd0af757319601f2f'),
+('hon.school_pay_command_finish(text,text,uuid,hon.school_pay_connections,text,text,jsonb,uuid,uuid)',true,false,'search_path=pg_catalog, hon','4bd3be705f3b545199162e3b3437fc0d0e991c9f2575c567781f8e0e68a197ef'),
+('hon.school_pay_args_ok(text,uuid,jsonb,text,uuid,uuid,text[],text[])',false,false,'search_path=pg_catalog, hon','de2fd29c891b6550fa38d055fc046a198d1c9e90be6b7347b199a385e57c5a9d'),
+('hon.school_pay_lock_connection(uuid,integer)',true,false,'search_path=pg_catalog, hon','a2a7b57ba3db0605bac9e56315c2c300e91d90e848c5dc04176191f5a6df2e8b'),
+('hon.read_school_payment_processors(text)',true,true,'search_path=pg_catalog, hon','570a2dcb17443ca85f921c9cd7bfc84fef59ab9ecbc4a46e0146272d0241947f'),
+('hon.start_school_payment_connection(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','08bc907fdba773452a52dea4977c3d6f4f46753e3fe6d1f8faacf5d4f99034e1'),
+('hon.set_school_payment_onboarding_link(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','5b51f613baddd3aa63ccf87e0313148504fa95cc8734571c6a5facba00ead5d4'),
+('hon.school_pay_account_free(hon.school_pay_connections,text)',true,false,'search_path=pg_catalog, hon','f627e5dad741d24228353041e0ed631389c20812877999e35d02db8fc6f2c903'),
+('hon.record_school_payment_status(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','036f9097a1a7abc30565f89227c1fb012a4c5ce3f4ddc1b0a9dcc03a8c84aebf'),
+('hon.set_default_school_payment_connection(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','598bae115bdef41b7cecf8cac40812cde870101b706027964ff8801f1bfef9a6'),
+('hon.disconnect_school_payment_connection(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','b0419db95c9ce42f9f615543b8bafa8ca92f9eaae475f377e8b1716df918816d')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school payment function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('school_pay_connections','school_pay_connection_guard','hon.guard_school_pay_connection()'),
+    ('school_pay_connections','school_pay_connections_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('school_pay_connection_events','school_pay_connection_events_immutable','hon.guard_membership_activation_evidence()'),
+    ('school_pay_connection_events','school_pay_connection_events_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('school_pay_providers','school_pay_providers_immutable','hon.guard_membership_activation_evidence()'),
+    ('school_pay_providers','school_pay_providers_no_truncate','hon.guard_membership_activation_evidence()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing school payment guard: %',expected.name; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM hon.permissions WHERE code IN ('school_pay.connection.manage','school_pay.read') AND is_sensitive AND is_staff_assignable)<>2 THEN
+    RAISE EXCEPTION 'school_pay permissions must exist as sensitive staff-assignable permissions'; END IF;
+  IF EXISTS(SELECT 1 FROM hon.school_pay_providers WHERE live_allowed) OR EXISTS(SELECT 1 FROM hon.school_pay_connections WHERE mode<>'TEST') THEN
+    RAISE EXCEPTION 'School payments must stay in test mode'; END IF;
+END $$;
+-- End school payment connections exact verification.

@@ -14,7 +14,7 @@
     },
     {
       "path": "/",
-      "title": "HON Complete | AI Command Center"
+      "title": "HON OS | Sign in"
     },
     {
       "path": "/hq",
@@ -233,6 +233,10 @@
       "title": "HON | Tuition balances"
     },
     {
+      "path": "/staff/billing/payment-processors",
+      "title": "HON | Payment processors"
+    },
+    {
       "path": "/staff/champions-club",
       "title": "HON | Champions Club"
     },
@@ -433,6 +437,14 @@
       "title": "HON HQ | Support"
     },
     {
+      "path": "/hq/marketing",
+      "title": "HON HQ | Marketing & Creative"
+    },
+    {
+      "path": "/hq/marketing/creative",
+      "title": "HON HQ | Creative Studio"
+    },
+    {
       "path": "/hq/support/:caseId",
       "title": "HON HQ | Support case"
     },
@@ -475,6 +487,10 @@
     {
       "path": "/reference/classic-dashboard",
       "title": "HON Classic | School Dashboard (reference)"
+    },
+    {
+      "path": "/reference/complete",
+      "title": "HON Complete | Design reference"
     },
     {
       "path": "/account/owner-invitation",

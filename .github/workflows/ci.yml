@@ -49,6 +49,7 @@ jobs:
           node .github/scripts/verify-node-runtime.mjs --expect 22.23.4
           node --test .github/scripts/verify-node-runtime.test.mjs
           node --test .github/scripts/ci-triggers.test.mjs
+          node --test .github/scripts/database-migrate-workflow.test.mjs
       - name: Install dependencies (lockfile only)
         run: pnpm install --frozen-lockfile
       - name: pnpm test

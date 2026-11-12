@@ -197,6 +197,7 @@ export const ko = {
   "HQ support cases and escalations are not available. This interface does not grant school access or impersonation.": "HQ 지원 사례와 에스컬레이션을 사용할 수 없습니다. 이 화면은 학교 접근이나 사용자 가장 권한을 부여하지 않습니다.",
   "HQ unavailable": "HQ 사용 불가",
   "HQ workspace": "HQ 작업 공간",
+  "Sign out": "로그아웃",
   "Home": "홈",
   "How can HON help here?": "HON이 무엇을 도와드릴까요?",
   "How can HON help today?": "오늘 HON이 무엇을 도와드릴까요?",

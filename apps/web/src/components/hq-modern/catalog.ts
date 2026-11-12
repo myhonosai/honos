@@ -50,6 +50,7 @@ export const HQ_NAV = [
   { path: '/hq/revenue', title: 'Revenue', icon: 'chart' },
   { path: '/hq/executives', title: 'AI', icon: 'team' },
   { path: '/hq/growth', title: 'Growth & Referrals', icon: 'growth' },
+  { path: '/hq/marketing', title: 'Marketing & Creative', icon: 'target' },
   { path: '/hq/approvals', title: 'Approvals', icon: 'check' },
   { path: '/hq/support', title: 'Support', icon: 'support' },
 ] as const;

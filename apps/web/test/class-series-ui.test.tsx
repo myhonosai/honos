@@ -21,8 +21,8 @@ const signal = () => new AbortController().signal;
 const fails = async (p: Promise<unknown>) => { try { await p; } catch (e) { return e as SeriesError; } throw new Error('expected a failure'); };
 const series = (over: Record<string, unknown> = {}) => ({ seriesId, programId, name: 'Adult Karate', roomName: 'Main mat', capacity: 20, bookingPolicy: 'OPTIONAL_BOOKING',
   weekdays: [1, 3], localStartTime: '18:00', durationMinutes: 60, startsOn: '2026-11-09', endsOn: null, generatedThrough: '2026-12-06', status: 'ACTIVE', endReason: null,
-  version: 2, futureSessions: 8, createdAt: '2026-11-09T08:00:00.000Z', ...over });
-const listRaw = (over: Record<string, unknown> = {}) => ({ localToday: '2026-11-09', timezone: 'America/Los_Angeles', fillLimit: '2027-02-01', series: [series()],
+  version: 2, ongoing: false, futureSessions: 8, createdAt: '2026-11-09T08:00:00.000Z', ...over });
+const listRaw = (over: Record<string, unknown> = {}) => ({ localToday: '2026-11-09', timezone: 'America/Los_Angeles', fillLimit: '2027-02-01', topUpDue: false, series: [series()],
   programs: [{ programId, name: 'Adult Karate' }], ...over });
 const session = (over: Record<string, unknown> = {}) => ({ sessionId, seriesId, name: 'Adult Karate', roomName: 'Main mat', startsAt: '2026-11-12T02:00:00.000Z',
   endsAt: '2026-11-12T03:00:00.000Z', localDate: '2026-11-11', localStart: '18:00', localEnd: '19:00', capacity: 20, bookingPolicy: 'OPTIONAL_BOOKING', status: 'SCHEDULED', booked: 3, ...over });
@@ -170,4 +170,82 @@ it('is a protected dynamic noindex page in the classes menu and the route manife
   expect(SCHOOL_SHELL_NAV.find((n) => n.key === 'classes')?.routes.some((r) => r.href === '/staff/schedule/timetable')).toBe(true);
   const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
   expect(manifest.routes.filter((r: { path: string }) => r.path === '/staff/schedule/timetable')).toEqual([{ path: '/staff/schedule/timetable', title: 'HON | Weekly timetable' }]);
+});
+
+it('shows the timetable and series page in Korean and Spanish, with dates in that language and no English left behind', () => {
+  const ko = renderToStaticMarkup(<ClassSeriesView {...props({ language: 'ko' })}/>);
+  expect(ko).toContain('주간 시간표');
+  expect(ko).toContain('(오늘)');
+  expect(ko).toContain('3/20명 예약');
+  expect(ko).toContain('월, 수 18:00, 60분');
+  expect(ko).toContain('최대 12주 후');
+  expect(ko).toContain('예정된 수업 8개');
+  expect(ko).not.toMatch(/Weekly timetable|booked|upcoming|No classes|Refresh/);
+  const es = renderToStaticMarkup(<ClassSeriesView {...props({ language: 'es-MX', form: { kind: 'fill', seriesId } })}/>);
+  expect(es).toContain('Horario semanal');
+  expect(es).toContain('(hoy)');
+  expect(es).toContain('3/20 reservadas');
+  expect(es).toContain('lun, mié a las 18:00 durante 60 min');
+  expect(es).toContain('como máximo 12 semanas por adelantado');
+  expect(es).not.toMatch(/Weekly timetable|booked|upcoming|Create through|Refresh/);
+  expect(effectText('revise', { created: 0, updated: 1, cancelled: 2, keptBooked: 1, skippedDates: [] }, 'es'))
+    .toBe('Guardado. 1 sesión actualizada; 2 sesiones sin reservas canceladas; 1 sesión con reservas se mantuvo igual. La página se volvió a leer del servidor.');
+  expect(effectText('fill', { created: 0, updated: 0, cancelled: 0, keptBooked: 0, skippedDates: [] }, 'ko')).toBe('저장했습니다. 새로 만들 수업이 없었습니다. 서버에서 페이지를 다시 읽었습니다.');
+  const unknownKo = renderToStaticMarkup(<ClassSeriesView {...props({ language: 'ko', outcome: { kind: 'TOO_FAR', action: 'fill' } })}/>);
+  expect(unknownKo).toContain('최대 12주 후까지');
+});
+
+it('ongoing series (0251): the switch and the top-up are their own commands, and the page shows both plainly', async () => {
+  const f = stub(json({ data: { series: series({ ongoing: true, version: 3 }), sessions: { ...effect, created: 24 } }, meta: { ...meta, replayed: false } }));
+  await expect(classSeriesApi.send(scope, { action: 'ongoing', seriesId, input: { expectedVersion: 2, ongoing: true } }, key, signal(), () => true))
+    .resolves.toMatchObject({ series: { ongoing: true }, sessions: { created: 24 } });
+  let [path, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+  expect(path).toBe(`/api/v1/organizations/${org}/schools/${school}/schedule/class-series/${seriesId}/ongoing`);
+  expect(init).toMatchObject({ method: 'POST', headers: { 'X-HON-Human-Command': 'schedule.series.ongoing', 'Idempotency-Key': key } });
+  expect(JSON.parse(String(init.body))).toEqual({ expectedVersion: 2, ongoing: true });
+  const g = stub(json({ data: { series: 1, created: 2, skippedDates: [] }, meta: { ...meta, replayed: false } }));
+  await expect(classSeriesApi.topUp(scope, key, signal(), () => true)).resolves.toEqual({ series: 1, created: 2, skippedDates: [] });
+  [path, init] = g.mock.calls[0] as unknown as [string, RequestInit];
+  expect(path).toBe(`/api/v1/organizations/${org}/schools/${school}/schedule/class-series/top-up`);
+  expect(init).toMatchObject({ method: 'POST', headers: { 'X-HON-Human-Command': 'schedule.series.top_up', 'Idempotency-Key': key } });
+  expect(JSON.parse(String(init.body))).toEqual({});
+  stub(json({ data: { series: 1, created: 2, skippedDates: [], extra: true }, meta }));
+  expect((await fails(classSeriesApi.topUp(scope, key, signal(), () => true))).kind).toBe('UNKNOWN');
+  stub(json({ data: listRaw({ topUpDue: 'yes' }), meta }));
+  expect((await fails(classSeriesApi.list(scope, signal(), () => true))).kind).toBe('UNKNOWN');
+
+  // The switch flips what the verified read showed, at its version.
+  expect(seriesBody('ongoing', {}, listRaw() as never, seriesId)).toEqual({ action: 'ongoing', seriesId, input: { expectedVersion: 2, ongoing: true } });
+  expect(seriesBody('ongoing', {}, listRaw({ series: [series({ ongoing: true })] }) as never, seriesId)).toEqual({ action: 'ongoing', seriesId, input: { expectedVersion: 2, ongoing: false } });
+
+  const off = renderToStaticMarkup(<ClassSeriesView {...props()}/>);
+  expect(off).toContain('Make ongoing');
+  expect(off).toContain('An ongoing series fills itself');
+  expect(off).not.toContain('Adult Karate</strong> · ongoing');
+  const on = renderToStaticMarkup(<ClassSeriesView {...props({ series: { state: 'READY', read: listRaw({ series: [series({ ongoing: true })] }) as never } })}/>);
+  expect(on).toContain('Adult Karate</strong> · ongoing');
+  expect(on).toContain('Stop ongoing');
+  const form = renderToStaticMarkup(<ClassSeriesView {...props({ form: { kind: 'ongoing', seriesId } })}/>);
+  expect(form).toContain('Make the series ongoing: Adult Karate');
+  expect(form).toContain('up to 12 weeks ahead now');
+  expect(form).toContain('Nothing contacts families or charges anyone');
+  const stop = renderToStaticMarkup(<ClassSeriesView {...props({ form: { kind: 'ongoing', seriesId }, series: { state: 'READY', read: listRaw({ series: [series({ ongoing: true })] }) as never } })}/>);
+  expect(stop).toContain('Every session already created stays as it is');
+  expect(renderToStaticMarkup(<ClassSeriesView {...props({ topUp: { state: 'SENDING' } })}/>)).toContain('Creating the next sessions of ongoing classes');
+  expect(renderToStaticMarkup(<ClassSeriesView {...props({ topUp: { state: 'DONE', created: 3 } })}/>)).toContain('3 new sessions were created for ongoing classes.');
+  expect(renderToStaticMarkup(<ClassSeriesView {...props({ topUp: { state: 'DONE', created: 0 } })}/>)).not.toContain('series-top-up');
+  expect(renderToStaticMarkup(<ClassSeriesView {...props({ topUp: { state: 'FAILED' } })}/>)).toContain('tried again the next time this page opens');
+  expect(renderToStaticMarkup(<ClassSeriesView {...props({ language: 'ko', topUp: { state: 'DONE', created: 1 } })}/>)).toContain('새 수업 1개를 만들었습니다');
+  expect(renderToStaticMarkup(<ClassSeriesView {...props({ language: 'es', topUp: { state: 'DONE', created: 1 } })}/>)).toContain('Se creó 1 sesión nueva');
+});
+
+it('every copy key has the same {placeholders} in English, Korean and Spanish', () => {
+  const source = readFileSync(new URL('../src/components/class-series/copy.ts', import.meta.url), 'utf8');
+  const block = (name: string) => source.split(`const ${name}`)[1]!.split('\n};')[0]!;
+  const keys = (text: string) => new Map([...text.matchAll(/(\w+): '((?:[^'\\]|\\.)*)'/g)].map((m) => [m[1]!, [...m[2]!.matchAll(/\{(\w+)\}/g)].map((x) => x[1]).sort().join(',')]));
+  const en = keys(block('en')), ko = keys(block('ko')), es = keys(block('es'));
+  expect(en.size).toBeGreaterThan(100);
+  expect([...ko.keys()].sort()).toEqual([...en.keys()].sort());
+  expect([...es.keys()].sort()).toEqual([...en.keys()].sort());
+  for (const [key, vars] of en) { expect(ko.get(key), key).toBe(vars); expect(es.get(key), key).toBe(vars); }
 });

@@ -1,15 +1,16 @@
 import {
-  validateCreateClassSeriesInput, validateEndClassSeriesInput, validateFillClassSeriesInput, validateReviseClassSeriesInput, validateTimetableQuery,
-  verifyClassSeriesReceipt, verifySchoolClassSeries, verifyWeeklyTimetable,
-  type ClassSeriesReceipt, type CreateClassSeriesInput, type EndClassSeriesInput, type FillClassSeriesInput, type ReviseClassSeriesInput,
-  type SchoolClassSeries, type WeeklyTimetable,
+  validateCreateClassSeriesInput, validateEndClassSeriesInput, validateFillClassSeriesInput, validateReviseClassSeriesInput, validateSetClassSeriesOngoingInput,
+  validateTimetableQuery, validateTopUpClassSeriesInput, verifyClassSeriesReceipt, verifyClassSeriesTopUpReceipt, verifySchoolClassSeries, verifyWeeklyTimetable,
+  type ClassSeriesReceipt, type ClassSeriesTopUpReceipt, type CreateClassSeriesInput, type EndClassSeriesInput, type FillClassSeriesInput, type ReviseClassSeriesInput,
+  type SchoolClassSeries, type SetClassSeriesOngoingInput, type WeeklyTimetable,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
  * Recurring classes (B-SCH-1, 0239). Reads send no Idempotency-Key; each command sends its own X-HON-Human-Command and an
  * Idempotency-Key, so one command can never be replayed as another. The server decides every permission, version and date
- * again. Sessions are created only by an explicit fill; nothing here runs on a timer, contacts anyone, or charges.
+ * again. Sessions are created by an explicit fill, by switching a series to ongoing, or by the page's top-up of due ongoing
+ * series (0251) when a manager opens it; nothing here runs on a timer, contacts anyone, or charges.
  */
 export type SeriesErrorKind =
   /** Session ended. */ 'SESSION'
@@ -25,14 +26,15 @@ export type SeriesErrorKind =
 export class SeriesError extends Error { constructor(readonly kind: SeriesErrorKind, readonly code: string | null = null) { super(kind); } }
 export type Owned = () => boolean;
 export type SeriesScope = Readonly<{ organizationId: string; schoolId: string }>;
-export type SeriesAction = 'create' | 'revise' | 'end' | 'fill';
+export type SeriesAction = 'create' | 'revise' | 'end' | 'fill' | 'ongoing';
 
 const RESPONSE_MAX = 1_000_000;
 const JSON_TYPE = /^application\/json(?:\s*;|$)/i;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const SERIES_COMMANDS: Readonly<Record<SeriesAction, string>> = {
-  create: 'schedule.series.create', revise: 'schedule.series.revise', end: 'schedule.series.end', fill: 'schedule.series.fill',
+  create: 'schedule.series.create', revise: 'schedule.series.revise', end: 'schedule.series.end', fill: 'schedule.series.fill', ongoing: 'schedule.series.ongoing',
 };
+export const SERIES_TOP_UP_COMMAND = 'schedule.series.top_up';
 
 const codeOf = (v: unknown): string | null => v && typeof v === 'object' && !Array.isArray(v) && typeof (v as { code?: unknown }).code === 'string' ? (v as { code: string }).code : null;
 function data(value: unknown): unknown {
@@ -80,21 +82,23 @@ async function read<T>(path: string, verify: (v: unknown) => T, signal: AbortSig
   if (answer.status !== 200) throw seriesErrorFor(answer.status, codeOf(answer.value));
   try { return verify(data(answer.value)); } catch { throw new SeriesError('UNKNOWN'); }
 }
-async function command(path: string, name: string, body: unknown, key: string, seriesId: string | undefined, signal: AbortSignal, owned: Owned): Promise<ClassSeriesReceipt> {
+async function command<T>(path: string, name: string, body: unknown, key: string, verify: (v: unknown) => T, signal: AbortSignal, owned: Owned): Promise<T> {
   if (typeof key !== 'string' || !UUID.test(key)) throw new SeriesError('INVALID');
   let answer: { status: number; value: unknown };
   try { answer = await exchange(path, signal, owned, { name, body: JSON.stringify(body), key }); }
   catch (error) { if (error instanceof SeriesError) throw error; throw new SeriesError('UNKNOWN'); }
   if (answer.status !== 200) throw seriesErrorFor(answer.status, codeOf(answer.value));
-  try { return verifyClassSeriesReceipt(data(answer.value), seriesId === undefined ? {} : { seriesId }); } catch { throw new SeriesError('UNKNOWN'); }
+  try { return verify(data(answer.value)); } catch { throw new SeriesError('UNKNOWN'); }
 }
+const receiptFor = (seriesId: string | undefined) => (v: unknown) => verifyClassSeriesReceipt(v, seriesId === undefined ? {} : { seriesId });
 function checked<T>(validate: () => T): T { try { return validate(); } catch { throw new SeriesError('INVALID'); } }
 
 export type SeriesBody =
   | Readonly<{ action: 'create'; input: CreateClassSeriesInput }>
   | Readonly<{ action: 'revise'; seriesId: string; input: ReviseClassSeriesInput }>
   | Readonly<{ action: 'end'; seriesId: string; input: EndClassSeriesInput }>
-  | Readonly<{ action: 'fill'; seriesId: string; input: FillClassSeriesInput }>;
+  | Readonly<{ action: 'fill'; seriesId: string; input: FillClassSeriesInput }>
+  | Readonly<{ action: 'ongoing'; seriesId: string; input: SetClassSeriesOngoingInput }>;
 
 export const classSeriesApi = {
   /** The school's class series and programs (schedule.session.manage). */
@@ -109,14 +113,20 @@ export const classSeriesApi = {
       return read(`${base(scope)}/timetable${search}`, (v) => verifyWeeklyTimetable(v, query), signal, owned);
     });
   },
-  /** Create, revise, end or fill a series. Each body is validated again here before it is sent. */
+  /** Create, revise, end, fill or switch a series to ongoing. Each body is validated again here before it is sent. */
   async send(scope: SeriesScope, body: SeriesBody, key: string, signal: AbortSignal, owned: Owned): Promise<ClassSeriesReceipt> {
     const name = SERIES_COMMANDS[body.action];
-    if (body.action === 'create') return command(`${base(scope)}/class-series`, name, checked(() => validateCreateClassSeriesInput(body.input)), key, undefined, signal, owned);
+    if (body.action === 'create') return command(`${base(scope)}/class-series`, name, checked(() => validateCreateClassSeriesInput(body.input)), key, receiptFor(undefined), signal, owned);
     const path = `${base(scope)}/class-series/${id(body.seriesId)}/${body.action}`;
     const input = checked(() => body.action === 'revise' ? validateReviseClassSeriesInput(body.input)
-      : body.action === 'end' ? validateEndClassSeriesInput(body.input) : validateFillClassSeriesInput(body.input));
-    return command(path, name, input, key, body.seriesId, signal, owned);
+      : body.action === 'end' ? validateEndClassSeriesInput(body.input) : body.action === 'ongoing' ? validateSetClassSeriesOngoingInput(body.input)
+      : validateFillClassSeriesInput(body.input));
+    return command(path, name, input, key, receiptFor(body.seriesId), signal, owned);
+  },
+  /** Top up the school's due ongoing series to 12 weeks ahead (schedule.session.manage). Safe to send again with a new key. */
+  topUp(scope: SeriesScope, key: string, signal: AbortSignal, owned: Owned): Promise<ClassSeriesTopUpReceipt> {
+    return Promise.resolve().then(() => command(`${base(scope)}/class-series/top-up`, SERIES_TOP_UP_COMMAND, checked(() => validateTopUpClassSeriesInput({})), key,
+      verifyClassSeriesTopUpReceipt, signal, owned));
   },
 };
 export type ClassSeriesApi = typeof classSeriesApi;

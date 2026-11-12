@@ -77,3 +77,9 @@
 .confirm select, .confirm textarea { width: 100%; min-width: 0; min-height: var(--hon-target, 44px); box-sizing: border-box; border: 1px solid #3b5269; border-radius: 10px; padding: 9px 10px; background: #0a1625; color: #eef6fc; font: inherit; }
 .confirm textarea { resize: vertical; }
 .confirm select:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
+.followUps { display: grid; gap: 6px; margin-top: 8px; }
+.followUpList { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.followUpList button { text-align: left; white-space: normal; }
+.notesList { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.notesList li { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; color: #d4e2ef; font-size: 14px; line-height: 1.5; }
+.notesList li span { overflow-wrap: anywhere; }

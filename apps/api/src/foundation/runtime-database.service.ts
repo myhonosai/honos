@@ -224,6 +224,18 @@ const SAAS_BILLING_CALLS = {
   openSupportCase: { sql: 'SELECT hon.open_hq_support_case($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   addSupportNote: { sql: 'SELECT hon.add_hq_support_note($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   changeSupportCase: { sql: 'SELECT hon.change_hq_support_case($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  // M1 (0252): HQ marketing campaigns. Reads are read-only; the three commands write only HQ campaign rows.
+  readMarketingCampaigns: { sql: 'SELECT hon.read_hq_marketing_campaigns($1,$2,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },
+  readMarketingCampaign: { sql: 'SELECT hon.read_hq_marketing_campaign($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  createMarketingCampaign: { sql: 'SELECT hon.create_hq_marketing_campaign($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  updateMarketingCampaign: { sql: 'SELECT hon.update_hq_marketing_campaign($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  setMarketingCampaignStatus: { sql: 'SELECT hon.set_hq_marketing_campaign_status($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  readHqCreativeStudio: { sql: 'SELECT hon.read_hq_creative_studio($1) AS data', arity: 1, readOnly: true },
+  readHqCreativeGeneration: { sql: 'SELECT hon.read_hq_creative_generation($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  setHqCreativeBudget: { sql: 'SELECT hon.set_hq_creative_budget($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  createHqCreativeGeneration: { sql: 'SELECT hon.create_hq_creative_generation($1,$2::jsonb,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  recordHqCreativeGenerationResult: { sql: 'SELECT hon.record_hq_creative_generation_result($1,$2::uuid,$3::jsonb) AS data', arity: 3, readOnly: false },
+  resolveHqCreativeGeneration: { sql: 'SELECT hon.resolve_hq_creative_generation($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   decideExceptionPolicy: { sql: 'SELECT hon.decide_saas_exception_policy($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   // HON OS commercial offers (0181): HQ Pricing & Offers and the school purchaser discovery read; no checkout connection.
   readOfferManagement: { sql: 'SELECT hon.read_saas_offer_management_from_hq($1) AS data', arity: 1, readOnly: true },
@@ -1254,6 +1266,26 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
     return this.callFixedSubjectFunction({...call,readOnly:false},params,'ACCOUNT_UNAVAILABLE');
+  }
+
+  async callHonOsSignup(operation: 'register'|'read', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      register: {sql: 'SELECT hon.register_hon_os_school($1,$2,$3::jsonb,$4::uuid) data',arity:4,readOnly:false},
+      read: {sql: 'SELECT hon.read_hon_os_registration($1) data',arity:1,readOnly:true},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
+    return this.callFixedSubjectFunction({sql:call.sql,readOnly:call.readOnly},params,'ACCOUNT_UNAVAILABLE');
+  }
+
+  async callHonOsTrial(operation: 'start'|'read', params: readonly string[]): Promise<unknown> {
+    const calls = {
+      start: {sql: 'SELECT hon.start_hon_os_trial($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      read: {sql: 'SELECT hon.read_hon_os_trial($1) data',arity:1,readOnly:true},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
+    return this.callFixedSubjectFunction({sql:call.sql,readOnly:call.readOnly},params,'ACCOUNT_UNAVAILABLE');
   }
 
   async callSchoolFamilyAccount(operation: 'invite'|'revoke'|'end'|'accept'|'list', params: readonly (string|null)[]): Promise<unknown> {

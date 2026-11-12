@@ -111,7 +111,7 @@ async function honTargets(route, kind) {
   if (kind === 'kai') return json(route, 200, { data: honCurricula() });
   return json(route, 200, { data: honLeads(), meta: { requestId: 'synthetic' } });
 }
-const replyDetail = (mode = 'STANDARD', over = {}) => ({ mode, step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], ...over });
+const replyDetail = (mode = 'STANDARD', over = {}) => ({ mode, step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [], ...over });
 let honSeq = 700;
 async function honApi(route, path, method, prefix) {
   const base = `${prefix}/hon`;
@@ -124,6 +124,10 @@ async function honApi(route, path, method, prefix) {
     const items = [...(hon.groups.get(grouped[1]) ?? new Map()).values()].map((g) => ({ sourceTurnId: g.sourceTurnId, status: groupStatus(g.members.map((m) => m.status)), members: g.members }));
     return json(route, 200, { data: { items } });
   }
+  // 0255: the full workspace also reads what HON remembers (synthetic school fact, no person data).
+  if (path === `${base}/school-notes` && method === 'GET') return json(route, 200, { data: { notes: [{ id: id(690), text: 'We close the first week of August.', createdAt: iso(0) }], canManage: true, limits: { maxNotes: 20, maxCharacters: 2000, noteCharacters: 200 } } });
+  if (path === `${base}/tone` && method === 'GET') return json(route, 200, { data: { tone: 'STANDARD', canManage: true, updatedAt: null } });
+  if (path === `${base}/briefing` && method === 'GET') return json(route, 200, { data: { enabled: false, sendHour: 8, canManage: true, me: { email: false, canSubscribe: true } } });
   if (method !== 'POST') return json(route, 404, { code: 'NOT_FOUND' });
   const request = route.request();
   const headers = request.headers();

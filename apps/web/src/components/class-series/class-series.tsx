@@ -1,7 +1,7 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  validateCreateClassSeriesInput, validateEndClassSeriesInput, validateFillClassSeriesInput, validateReviseClassSeriesInput,
+  validateCreateClassSeriesInput, validateEndClassSeriesInput, validateFillClassSeriesInput, validateReviseClassSeriesInput, validateSetClassSeriesOngoingInput,
   type ClassSeriesBookingPolicy, type ClassSeriesPattern, type SchoolClassSeries, type WeeklyTimetable,
 } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
@@ -9,7 +9,7 @@ import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { SeriesError, classSeriesApi, keepForRetry, type ClassSeriesApi, type SeriesAction, type SeriesBody, type SeriesErrorKind, type SeriesScope } from './http';
-import { ClassSeriesView, addDays, type ReadState, type SeriesFields, type SeriesForm, type SeriesOutcome } from './view';
+import { ClassSeriesView, addDays, type ReadState, type SeriesFields, type SeriesForm, type SeriesOutcome, type TopUpState } from './view';
 
 /** A command whose outcome is not known: the exact request and key, in memory only, so Try again replays it (the server returns the first receipt). */
 type Pending = Readonly<{ key: string; scope: SeriesScope; body: SeriesBody }>;
@@ -57,6 +57,8 @@ export function seriesBody(action: SeriesAction, fields: SeriesFields, read: Sch
     if (!DATE.test(lastDate) || lastDate < addDays(read.localToday, -1)) throw new SeriesError('INVALID');
     return { action, seriesId: series.seriesId, input: validateEndClassSeriesInput({ expectedVersion, lastDate, reason: (fields.reason ?? '').trim() }) };
   }
+  // The switch flips what the last verified read showed; the server refuses it if the series changed since.
+  if (action === 'ongoing') return { action, seriesId: series.seriesId, input: validateSetClassSeriesOngoingInput({ expectedVersion, ongoing: !series.ongoing }) };
   const throughDate = (fields.throughDate ?? '').trim();
   if (!DATE.test(throughDate) || throughDate < read.localToday || throughDate > read.fillLimit) throw new SeriesError('TOO_FAR');
   return { action, seriesId: series.seriesId, input: validateFillClassSeriesInput({ expectedVersion, throughDate }) };
@@ -64,7 +66,8 @@ export function seriesBody(action: SeriesAction, fields: SeriesFields, read: Sch
 
 /**
  * Weekly timetable and recurring class series (B-SCH-1, 0239). Readers see one school week; managers also see the school's
- * series and can create, change, end or fill one. Blur, a hidden tab, page hide, a school change or a session end hide the page
+ * series and can create, change, end, fill or switch one to ongoing. When the series read says a top-up is due, the page sends
+ * one top-up of the school's ongoing series (0251) once per school while it is open, then reads again. Blur, a hidden tab, page hide, a school change or a session end hide the page
  * at once, retire every read and drop any kept command. Every command answer is followed by fresh reads: the server, not this
  * tab, says what changed. Nothing here contacts anyone or charges.
  */
@@ -82,11 +85,13 @@ export function ClassSeriesPage({ api = classSeriesApi }: { api?: ClassSeriesApi
   const [refresh, setRefresh] = useState(0);
   const gen = useRef({ week: 0, series: 0 }), privacy = useRef(0), mounted = useRef(false), lastSchool = useRef<string | null>(null);
   const pending = useRef<Pending | null>(null), sending = useRef(false);
+  const [topUp, setTopUp] = useState<TopUpState>({ state: 'IDLE' });
+  const toppedUp = useRef<string | null>(null);
   const retire = () => { gen.current.week++; gen.current.series++; };
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; privacy.current++; retire(); pending.current = null; }; }, []);
 
   useEffect(() => onShellPrivacyEvent(() => {
-    concealShellPrivateNow(); retire(); privacy.current++; pending.current = null;
+    concealShellPrivateNow(); retire(); privacy.current++; pending.current = null; toppedUp.current = null; setTopUp({ state: 'IDLE' });
     setLock(sending.current ? 'SENDING' : 'NONE'); setForm(null); setOutcome(null);
     setWeek({ state: 'LOADING' }); setSeries({ state: 'LOADING' });
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), []);
@@ -94,7 +99,7 @@ export function ClassSeriesPage({ api = classSeriesApi }: { api?: ClassSeriesApi
   // Another school starts clean: nothing chosen at one school carries over to the next.
   const school = schoolId ? schoolId.toLowerCase() : null;
   useEffect(() => {
-    if (school !== null && lastSchool.current !== null && school !== lastSchool.current) { setWeekOf(null); setForm(null); setOutcome(null); }
+    if (school !== null && lastSchool.current !== null && school !== lastSchool.current) { setWeekOf(null); setForm(null); setOutcome(null); setTopUp({ state: 'IDLE' }); }
     if (school !== null) lastSchool.current = school;
   }, [school]);
 
@@ -121,6 +126,19 @@ export function ClassSeriesPage({ api = classSeriesApi }: { api?: ClassSeriesApi
       (error) => { if (owned() && !abort.signal.aborted) setSeries(readState(error)); });
     return () => { abort.abort(); };
   }, [api, orgId, schoolId, refresh]);
+
+  // At most one top-up per school while the page is open: a failure is shown and left for the next visit, never looped.
+  useEffect(() => {
+    if (series.state !== 'READY' || !series.read.topUpDue || !orgId || !schoolId || lock !== 'NONE' || sending.current) return;
+    const at = schoolId.toLowerCase();
+    if (toppedUp.current === at) return;
+    toppedUp.current = at;
+    const shown = privacy.current, owned = () => mounted.current && shown === privacy.current;
+    setTopUp({ state: 'SENDING' });
+    api.topUp({ organizationId: orgId, schoolId }, globalThis.crypto.randomUUID(), AbortSignal.timeout(30000), owned).then(
+      (receipt) => { if (owned()) { setTopUp({ state: 'DONE', created: receipt.created }); setRefresh((n) => n + 1); } },
+      () => { if (owned()) setTopUp({ state: 'FAILED' }); });
+  }, [api, orgId, schoolId, series, lock]);
 
   const send = useCallback(async () => {
     const request = pending.current;
@@ -162,7 +180,8 @@ export function ClassSeriesPage({ api = classSeriesApi }: { api?: ClassSeriesApi
   // Keyed by the shell phase: a concealed node is replaced, never un-hidden in place.
   return <div key={shell.phase} data-shell-private="">
     <ClassSeriesView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
-      hasSchool={!!schoolId} week={week} series={series} form={form} outcome={outcome} locked={lock !== 'NONE'} canRetry={lock === 'KEPT'}
+      hasSchool={!!schoolId} week={week} series={series} form={form} outcome={outcome} locked={lock !== 'NONE' || topUp.state === 'SENDING'} canRetry={lock === 'KEPT'}
+      topUp={topUp}
       onWeek={onWeek} onRefresh={onRefresh} onOpen={onOpen} onClose={onClose} onSubmit={onSubmit} onTryAgain={onTryAgain}/>
   </div>;
 }

@@ -196,6 +196,7 @@ export const en = {
   "HQ support cases and escalations are not available. This interface does not grant school access or impersonation.": "HQ support cases and escalations are not available. This interface does not grant school access or impersonation.",
   "HQ unavailable": "HQ unavailable",
   "HQ workspace": "HQ workspace",
+  "Sign out": "Sign out",
   "Home": "Home",
   "How can HON help here?": "How can HON help here?",
   "How can HON help today?": "How can HON help today?",

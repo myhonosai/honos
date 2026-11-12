@@ -3,8 +3,8 @@ import React, { useRef, useState, type FormEvent } from 'react';
 import { AUTOMATION_RULE_HELP, type AutomationRule, type AutomationRuleInput, type AutomationRuleList, type AutomationEvaluationPlan, type AutomationTrigger } from '@hon/contracts';
 import { automationFingerprint, automationRuleInput, loadAutomationRules, saveAutomationRule, dryRunAutomationRule, readAutomationRuleVersion } from './automation-rules-http';
 import styles from './staff-availability-workbench.module.css';
-const DEFAULT_TRIGGER: AutomationTrigger = 'LEAD_CREATED';
-export function automationRuleTriggerPrefill(value: unknown): AutomationTrigger { return value === 'LEAD_CREATED' || value === 'TRIAL_NO_SHOW' ? value : DEFAULT_TRIGGER; }
+import { AUTOMATION_RULE_DEFAULT_TRIGGER as DEFAULT_TRIGGER } from './automation-rules-prefill';
+export { automationRuleTriggerPrefill } from './automation-rules-prefill';
 export function automationRuleInitialDraft(triggerKind: AutomationTrigger = DEFAULT_TRIGGER): AutomationRuleInput { return { expectedVersion: 0, name: '', enabled: false, triggerKind, conditions: { source: 'ANY', minimumAggregateVersion: 1 }, proposal: { kind: 'MANUAL_REVIEW_TEMPLATE', category: triggerKind === 'LEAD_CREATED' ? 'LEAD_TRIAGE' : 'TRIAL_ATTENDANCE_REVIEW', priority: 'NORMAL' }, posture: { authority: 'NONE', approval: 'HUMAN_REVIEW_REQUIRED' }, schedule: { mode: 'MANUAL_ONLY', effectiveFrom: '', endsOn: null, cooldownMinutes: 0 } }; }
 export function AutomationRulesWorkbench({ initialTrigger = DEFAULT_TRIGGER }: { initialTrigger?: AutomationTrigger } = {}): React.ReactElement {
   const [context, setContext] = useState<AutomationRuleList | null>(null), [selected, setSelected] = useState<AutomationRule | null>(null), [draft, setDraft] = useState<AutomationRuleInput>(() => automationRuleInitialDraft(initialTrigger));

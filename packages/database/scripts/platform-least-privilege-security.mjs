@@ -36,7 +36,9 @@ export async function verifyPlatformLeastPrivilege(client) {
         AND (has_table_privilege($1, c.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
           OR has_any_column_privilege($1, c.oid, 'SELECT,INSERT,UPDATE,REFERENCES')))::int AS relations,
       (SELECT count(*) FROM pg_class c WHERE c.relnamespace = 'hon'::regnamespace AND c.relkind = 'S'
-        AND has_sequence_privilege($1, c.oid, 'USAGE,SELECT,UPDATE'))::int AS sequences,
+        -- CASE keeps the planner from calling has_sequence_privilege on non-sequences (PostgreSQL 17
+        -- may evaluate it before the relkind filter and fail with "... is not a sequence").
+        AND CASE WHEN c.relkind = 'S' THEN has_sequence_privilege($1, c.oid, 'USAGE,SELECT,UPDATE') ELSE false END)::int AS sequences,
       (SELECT count(*) FROM pg_proc p WHERE p.pronamespace = 'hon'::regnamespace AND has_function_privilege($1, p.oid, 'EXECUTE'))::int AS functions`, [rolname])).rows[0];
     if (access.schema_access || access.relations || access.sequences || access.functions) {
       throw new Error(`Client role ${rolname} must not reach schema hon (schema ${access.schema_access}, relations ${access.relations}, sequences ${access.sequences}, functions ${access.functions}).`);
