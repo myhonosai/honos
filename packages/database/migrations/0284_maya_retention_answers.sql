@@ -85,7 +85,7 @@ $$;
 CREATE FUNCTION hon.read_specialist_school_facts(p_subject text, p_agent text, p_org uuid, p_school uuid, p_target jsonb) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid := hon.hon_conversation_actor(p_subject); at timestamptz := clock_timestamp(); perms text[] := '{}'; f jsonb;
-  ops boolean; commerce boolean; m uuid; page jsonb; row_ jsonb; after_ text; n integer := 0; tuition text;
+  ops boolean; commerce boolean; m uuid; page jsonb; row_ jsonb; after_ text; tuition text;
 BEGIN
   IF p_org IS DISTINCT FROM hon.current_organization_id() OR p_school IS DISTINCT FROM hon.current_school_id()
      OR NOT hon.hon_analysis_specialist(p_agent) OR p_agent = 'claire'
@@ -106,11 +106,11 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM hon.memberships x WHERE x.id = m AND x.organization_id = p_org AND x.school_id = p_school) THEN
       RAISE EXCEPTION 'HON_SPECIALIST_CAPABILITY_REQUIRED' USING ERRCODE = '42501';
     END IF;
+    -- Every page is read until the student is found or the list ends, so a student anywhere on a long list is exact.
     LOOP
       page := hon.read_maya_at_risk_students(p_subject, CASE WHEN after_ IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('after', after_) END);
       SELECT x INTO row_ FROM jsonb_array_elements(page->'items') x WHERE (x->>'membershipId')::uuid = m;
-      n := n + 1;
-      EXIT WHEN row_ IS NOT NULL OR page->>'nextAfter' IS NULL OR n >= 40;
+      EXIT WHEN row_ IS NOT NULL OR page->>'nextAfter' IS NULL;
       after_ := page->>'nextAfter';
     END LOOP;
     f := jsonb_build_object('asOf', page->'asOf', 'localToday', page->'localToday', 'tuitionChecked', page->'tuitionChecked',

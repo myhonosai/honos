@@ -3186,13 +3186,13 @@ try {
   const add = (perm) => admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3)', [o.role, o.id, perm]);
   // Synthetic students (fixture rows only; triggers off while seeding): Quinn joined 20 days ago and never attended
   // (LONG_ABSENCE 30, on the list); Riley joined today (not on the list). Another organization's membership for refusals.
-  const seed = async (org, school, given, started) => {
+  const seed = async (org, school, given, started, ends = '4800 hours') => {
     const person = K(), account = K(), membership = K();
     await admin.query("INSERT INTO hon.people(id,organization_id,school_id,given_name,family_name,email,phone_e164) VALUES($1,$2,$3,$4,'Synthetic','maya-ai0@example.test','+15550000001')", [person, org, school, given]);
     await admin.query('INSERT INTO hon.student_profiles(organization_id,school_id,person_id) VALUES($1,$2,$3)', [org, school, person]);
     await admin.query('INSERT INTO hon.billing_accounts(id,organization_id,school_id,responsible_person_id) VALUES($1,$2,$3,$4)', [account, org, school, person]);
     await admin.query(`INSERT INTO hon.memberships(id,organization_id,school_id,billing_account_id,participant_person_id,plan_code,state,term_started_at,term_ends_at)
-      VALUES($1,$2,$3,$4,$5,'MONTHLY','ACTIVE',clock_timestamp()-$6::interval,clock_timestamp()+interval '4800 hours')`, [membership, org, school, account, person, started]);
+      VALUES($1,$2,$3,$4,$5,'MONTHLY','ACTIVE',clock_timestamp()-$6::interval,clock_timestamp()+$7::interval)`, [membership, org, school, account, person, started, ends]);
     return membership;
   };
   const other = await makeOrg('inv-37-other');
@@ -3224,6 +3224,16 @@ try {
   // 2. A student who is not on the list: Maya is told so (no factors).
   await ask(riley);
   assert.deepEqual(JSON.parse(fakes.hon.inputs.at(-1).facts).school.student, { onAtRiskList: false });
+  // 2b. A student past the first page (50 rows): 55 synthetic students who never attended and whose term ends in 10 days (50 points) rank ahead of Quinn,
+  // and Maya still reads Quinn's own row.
+  await admin.query('BEGIN'); await admin.query('ALTER TABLE hon.memberships DISABLE TRIGGER USER');
+  const ahead = [];
+  for (let i = 0; i < 55; i++) ahead.push(await seed(o.id, o.school, `Ahead${i}`, '960 hours', '240 hours'));
+  await admin.query('ALTER TABLE hon.memberships ENABLE TRIGGER USER'); await admin.query('COMMIT');
+  await ask(ahead[0]);
+  assert.equal(JSON.parse(fakes.hon.inputs.at(-1).facts).school.student.score, 50, '55 students outrank Quinn (30), so Quinn is past the 50-row first page: ' + fakes.hon.inputs.at(-1).facts);
+  await ask(quinn);
+  assert.deepEqual([JSON.parse(fakes.hon.inputs.at(-1).facts).school.student.onAtRiskList, JSON.parse(fakes.hon.inputs.at(-1).facts).school.student.score], [true, 30], 'found on a later page');
   // 3. Another organization's membership, a random id, no membershipId or an extra key are refused at begin; nothing recorded.
   for (const [bad, expected] of [[{ text: 'x', delegation: { agentKey: 'maya', membershipId: foreign } }, 'INVALID_HON_TURN'],
     [{ text: 'x', delegation: { agentKey: 'maya', membershipId: K() } }, 'INVALID_HON_TURN'],
@@ -3278,7 +3288,7 @@ try {
   await drop('retention.review.read');
   try { assert.equal((await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data.agents.find((x) => x.agentKey === 'maya').blockedBy, 'NOT_AUTHORIZED'); }
   finally { await add('retention.review.read'); }
-  pass('INV-37', "0284: Maya answers one question about one at-risk membership of this exact school from that student's 0259 row only (factor codes and numbers, state, score, level, step; no name or contact), planned as maya/ANALYZE with the fixed DETAILED budgets, one call, resend replays; a student off the list is reported as onAtRiskList false; another organization's or an unknown membership, a missing or extra target key, empty text and a suggestion confirmation are refused at begin with nothing recorded; without retention.review.read she is refused at begin, blocked in prepare (nothing reserved or sent) and her answer is concealed, as it is when the tuition permission her facts used lapses; source permissions are a closed set, plans are ANALYZE only, both fact readers are internal; readiness lists RETENTION gated on the capability");
+  pass('INV-37', "0284: Maya answers one question about one at-risk membership of this exact school from that student's 0259 row only (factor codes and numbers, state, score, level, step; no name or contact), planned as maya/ANALYZE with the fixed DETAILED budgets, one call, resend replays; a student off the list is reported as onAtRiskList false and a student past the first page is still found; another organization's or an unknown membership, a missing or extra target key, empty text and a suggestion confirmation are refused at begin with nothing recorded; without retention.review.read she is refused at begin, blocked in prepare (nothing reserved or sent) and her answer is concealed, as it is when the tuition permission her facts used lapses; source permissions are a closed set, plans are ANALYZE only, both fact readers are internal; readiness lists RETENTION gated on the capability");
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
