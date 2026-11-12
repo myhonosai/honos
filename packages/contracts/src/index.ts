@@ -1041,6 +1041,7 @@ export * from './hon-conversation.js';
 export * from './school-staff-invitations.js';
 export * from './hon-os-signup.js';
 export * from './hon-os-trial.js';
+export * from './hon-os-admission.js';
 export * from './school-family-access-invitations.js';
 export * from './school-person-records.js';
 export * from './membership-pauses.js';

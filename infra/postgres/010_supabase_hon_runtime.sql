@@ -2863,6 +2863,24 @@ DO $$ DECLARE t text; r text; f text; c text; BEGIN
   END IF;
 END $$;
 
+-- 0274 HON OS admission limits: two private forced-RLS tables; the HQ read, the HQ owner change and the post-refusal
+-- record are the only runtime entry points. The database re-checks HQ authority and the limit in force on every call.
+DO $$ DECLARE t text; r text; f text; BEGIN
+  IF to_regprocedure('hon.set_hon_os_admission_limits(text,jsonb,uuid,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply admission limits migration 0274 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon_os_admission_limit_versions','hon_os_admission_refusals'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t); EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['set_hon_os_admission_limits(text,jsonb,uuid,uuid,uuid)','record_hon_os_admission_refusal(text)','read_hon_os_admission_status(text)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.set_hon_os_admission_limits(text,jsonb,uuid,uuid,uuid),hon.record_hon_os_admission_refusal(text),hon.read_hon_os_admission_status(text) TO hon_runtime;
+  END IF;
+END $$;
+
 -- 0259 Maya at-risk students (M1, read-only): one runtime entry point; the actor and tuition helpers are private.
 DO $$ DECLARE r text; f text; BEGIN
   IF to_regprocedure('hon.read_maya_at_risk_students(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0259 first'; END IF;
