@@ -44,7 +44,7 @@ export function WorkItemsWorkbench(): React.ReactElement {
   async function save(e:FormEvent) { e.preventDefault(); await run(()=>submit(selected?'UPDATE':'CREATE',selected?.workItemId??null,draft)); }
   function resetFilter() { setContext(null); setSelected(null); setDraft(initial()); }
   return <main className={styles.page}>
-    <nav><a href="/core">HON Core</a><a href="/complete">Complete</a><a href="/staff/search">Staff search</a><a href="/auth/login">Sign in</a></nav>
+    <nav><a href="/staff/dashboard">School dashboard</a><a href="/complete">Complete</a><a href="/staff/search">Staff search</a><a href="/auth/login">Sign in</a></nav>
     <header><p>HUMAN WORK · ESSENTIAL / CORE / COMPLETE</p><h1>Work items</h1><p>A clear next step. A durable human record.</p></header>
     <aside><strong>Human work, not an AI execution queue.</strong><p>{HUMAN_WORK_HELP}</p><p>Exact school work_item.manage for team detail/revisions/assignment; work_item.self_manage for current-assignee state updates. work_item.create for self/unassigned creation and creator visibility. No identity directory. Avoid personal/contact data or raw AI prompts in titles and descriptions.</p></aside>
     <section><h2>Authorized school queue</h2><div className={styles.row}>

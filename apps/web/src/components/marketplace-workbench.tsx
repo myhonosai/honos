@@ -55,7 +55,7 @@ export function MarketplaceWorkbench() {
   }
   function describe(a: MarketplaceAsset) { return <><h3>{a.title}</h3><p>{a.assetKind} · {a.category} · Version {a.version} · {a.status}</p><p>Target module: {a.targetModule}</p><p>Required permissions for any separately reviewed future use: {a.requiredPermissions.join(', ')}. These grant no authority.</p><p className={s.body}>{a.previewText}</p><p>Release notes: {a.releaseNotes}</p></>; }
   return <main className={s.page}>
-    <nav><Link href="/community">Community membership and opt-in</Link><Link href="/core">School workspace</Link></nav>
+    <nav><Link href="/community">Community membership and opt-in</Link><Link href="/staff/dashboard">School workspace</Link></nav>
     <header><p>HON / VERIFIED HUMAN MARKETPLACE</p><h1>Blueprints, not installations</h1><p>Browse and save for review only. No purchase, installation or automation.</p></header>
     <aside>{MARKETPLACE_HELP}</aside>
     <section><h2>Current school access</h2><label>School UUID<input value={school} onChange={e => { ++generation.current; setSchool(e.target.value); clear(); setPending(null); setBusy(false); setError(''); setNotice(''); }}/></label><button disabled={busy} onClick={() => void load()}>Load current access</button><p>A school selector is not authority. Community membership and organization/profile opt-in must already be enabled.</p></section>
