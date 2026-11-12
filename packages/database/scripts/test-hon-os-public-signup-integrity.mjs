@@ -16,7 +16,9 @@ const {RuntimeDatabaseService}=require('./dist/foundation/runtime-database.servi
 const {HonIdentityService}=require('./dist/foundation/hon-identity.service.js');
 const {HonOsSignupService}=require('./dist/accounts/hon-os-signup.service.js');
 const {HonOsSignupController,HonOsSignupHumanGuard}=require('./dist/accounts/hon-os-signup.controller.js');
-const {SIGNUP_CONFIRMATION,SIGNUP_HUMAN_COMMAND}=require('@hon/contracts');
+const {HonOsAdmissionService}=require('./dist/hon-os-admission/hon-os-admission.service.js');
+const {HonOsAdmissionHqController,HonOsAdmissionHumanGuard}=require('./dist/hon-os-admission/hon-os-admission.controller.js');
+const {SIGNUP_CONFIRMATION,SIGNUP_HUMAN_COMMAND,ADMISSION_LIMITS_COMMAND}=require('@hon/contracts');
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false}),blocker=new pg.Client({connectionString:owner.toString(),ssl:false});
 const database=new RuntimeDatabaseService();let app,groups=0,origin;
 const session={mode:'OIDC',audience:'signup-disposable',secret:randomBytes(32).toString('hex')};
@@ -57,9 +59,9 @@ try{
  terms=(await q('SELECT id FROM hon.hon_os_signup_terms_versions ORDER BY version DESC LIMIT 1'))[0].id;
  pass('forced deny-all RLS on three new tables; runtime executes exactly two entry points; 0183 initializer stays private; program seeded CLOSED with no LIVE value');
 
- const module=await Test.createTestingModule({controllers:[HonOsSignupController],providers:[HonOsSignupService,HonOsSignupHumanGuard,HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
+ const module=await Test.createTestingModule({controllers:[HonOsSignupController,HonOsAdmissionHqController],providers:[HonOsSignupService,HonOsSignupHumanGuard,HonOsAdmissionService,HonOsAdmissionHumanGuard,HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
  app=module.createNestApplication({logger:false});app.setGlobalPrefix('v1');await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;
- const excluded=new Set([...tables,'hon_os_signup_program','hq_operator_grants','families','family_access_grants']);
+ const excluded=new Set([...tables,'hon_os_signup_program','hq_operator_grants','families','family_access_grants','hon_os_admission_limit_versions','hon_os_admission_refusals']);
  const others=(await q("SELECT tablename FROM pg_tables WHERE schemaname='hon' ORDER BY tablename")).map(r=>r.tablename).filter(t=>!excluded.has(t));
  const snapshot=async()=>{const out={};for(const t of others){assert.match(t,/^[a-z_0-9]+$/);out[t]=hash(JSON.stringify(await q('SELECT to_jsonb(t)::text r FROM hon.'+t+' t ORDER BY 1')));}return out;};const baseline=await snapshot();
 
@@ -164,35 +166,88 @@ try{
  await assert.rejects(()=>q("INSERT INTO hon.hon_os_signup_terms_versions(version,status,title,document_digest,recorded_at) VALUES(2,'OWNER_APPROVED','x',$1,clock_timestamp())",['a'.repeat(64)]),e=>e.code==='23514');
  pass('closing the program between the writes and commit aborts the whole sign-up; registrations and terms are append-only; no approved-terms status exists yet');
 
- // 10 (0273). Abuse protection held in the database: disposable email domains and global admission limits.
- for(const t of ['hon_os_admission_limits','hon_os_signup_blocked_email_domains']){
+ // 10 (0273, limits versioned in 0274). Abuse protection held in the database: disposable email domains and global admission limits.
+ for(const t of ['hon_os_admission_limit_versions','hon_os_admission_refusals','hon_os_signup_blocked_email_domains']){
   const c=(await q('SELECT relrowsecurity rls,relforcerowsecurity forced FROM pg_class WHERE oid=$1::regclass',['hon.'+t]))[0];assert(c.rls&&c.forced,t);
   for(const p of ['SELECT','INSERT','UPDATE','DELETE'])assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[runtime.username,'hon.'+t,p]))[0].ok,false,t+':'+p);
  }
- await assert.rejects(()=>q('DELETE FROM hon.hon_os_admission_limits'),e=>/ADMISSION_LIMITS_IMMUTABLE/.test(e.message));
- await assert.rejects(()=>q('UPDATE hon.hon_os_admission_limits SET signups_per_hour=0'),e=>e.code==='23514');
- const limits=(await q('SELECT *,recorded_at::text rec FROM hon.hon_os_admission_limits'))[0];
- assert.deepEqual([limits.signups_per_hour,limits.signups_per_day,limits.trials_per_hour,limits.trials_per_day],[30,200,30,200]);
+ assert.equal((await q("SELECT to_regclass('hon.hon_os_admission_limits') t"))[0].t,null);
+ await assert.rejects(()=>q('DELETE FROM hon.hon_os_admission_limit_versions'),e=>e.code==='42501'||/IMMUTABLE/.test(e.message));
+ await assert.rejects(()=>q('UPDATE hon.hon_os_admission_limit_versions SET signups_per_hour=1'),e=>e.code==='42501'||/IMMUTABLE/.test(e.message));
+ const first=(await q('SELECT * FROM hon.hon_os_admission_limit_versions ORDER BY version'))[0];
+ assert.deepEqual([first.version,first.signups_per_hour,first.signups_per_day,first.trials_per_hour,first.trials_per_day,first.actor_principal_id],[1,30,200,30,200,null]);
+ const latest=async()=>(await q('SELECT * FROM hon.hon_os_admission_limit_versions ORDER BY version DESC LIMIT 1'))[0];
+ const original=await latest();
  const at=(label,domain)=>({...person(label),email:label+'-'+K()+'@'+domain});
  for(const domain of ['mailinator.com','inbox.yopmail.com','MAILDROP.CC'])await denied(()=>send('account/sign-up',{identity:at('throwaway',domain),body:form()}),409,'SIGNUP_EMAIL_DOMAIN_NOT_ACCEPTED');
  assert.equal((await q("SELECT hon.hon_os_email_domain_blocked('owner@notmailinator.com') a,hon.hon_os_email_domain_blocked('owner@mailinator.com.example.invalid') b"))[0].a,false);
- const setLimits=(hour,day)=>q('UPDATE hon.hon_os_admission_limits SET signups_per_hour=$1,signups_per_day=$2',[hour,day]);
+ // The migration owner may append an owner-recorded version (no actor); a version must be exactly the next one.
+ const setLimits=async(hour,day)=>{const v=(await latest()).version+1;await q('INSERT INTO hon.hon_os_admission_limit_versions(version,signups_per_hour,signups_per_day,trials_per_hour,trials_per_day) VALUES($1,$2,$3,$4,$5)',[v,hour,day,original.trials_per_hour,original.trials_per_day]);};
+ await assert.rejects(()=>q('INSERT INTO hon.hon_os_admission_limit_versions(version,signups_per_hour,signups_per_day,trials_per_hour,trials_per_day) VALUES($1,5,5,5,5)',[original.version+5]),e=>e.code==='40001');
  const recent=async span=>Number((await q(`SELECT count(*) n FROM hon.hon_os_school_registrations WHERE registered_at>clock_timestamp()-interval '${span}'`))[0].n);
+ const refused=async()=>Number((await q("SELECT coalesce(sum(refused_count),0) n FROM hon.hon_os_admission_refusals WHERE kind='SIGNUP'"))[0].n);
+ const refusedBefore=await refused();let capRefusals=0;
  try{
   await setLimits(Math.max(1,await recent('1 hour')),Math.max(1,await recent('1 day')));
-  if(await recent('1 hour')>0)await denied(()=>send('account/sign-up',{identity:person('over-hour'),body:form()}),409,'SIGNUP_CAPACITY_REACHED');
+  if(await recent('1 hour')>0){await denied(()=>send('account/sign-up',{identity:person('over-hour'),body:form()}),409,'SIGNUP_CAPACITY_REACHED');capRefusals++;}
   await setLimits(1,Math.max(1,await recent('1 day')));
-  if(await recent('1 day')>0)await denied(()=>send('account/sign-up',{identity:person('over-day'),body:form()}),409,'SIGNUP_CAPACITY_REACHED');
+  if(await recent('1 day')>0){await denied(()=>send('account/sign-up',{identity:person('over-day'),body:form()}),409,'SIGNUP_CAPACITY_REACHED');capRefusals++;}
+  // 0274: every capacity refusal is counted for HQ, in its own transaction, under the hour it happened.
+  assert(capRefusals>0);assert.equal(await refused(),refusedBefore+capRefusals);
+  // A record while the limit is NOT reached is ignored, so a runtime caller cannot invent a cap hit.
+  await setLimits(10000,100000);
+  assert.equal((await restricted.query("SELECT hon.record_hon_os_admission_refusal('SIGNUP') r")).rows[0].r,false);assert.equal(await refused(),refusedBefore+capRefusals);
+  await assert.rejects(()=>restricted.query("SELECT hon.record_hon_os_admission_refusal('OTHER')"),e=>e.code==='22023');
   // One seat left, five different people at once: exactly one school is created.
   const n=await recent('1 hour');await setLimits(n+1,Math.max(n+1,await recent('1 day')+1));
   const rush=await Promise.all(Array.from({length:5},(_,i)=>send('account/sign-up',{identity:person('rush'+i),body:form()})));
   assert.equal(rush.filter(r=>r.status===200).length,1,JSON.stringify(rush.map(r=>[r.status,r.body.code])));
   assert(rush.filter(r=>r.status!==200).every(r=>(r.status===409&&r.body.code==='SIGNUP_CAPACITY_REACHED')||(r.status===503&&r.body.code==='SIGNUP_BUSY')));
   assert.equal(await recent('1 hour'),n+1);
- }finally{await q('UPDATE hon.hon_os_admission_limits SET signups_per_hour=$1,signups_per_day=$2,recorded_at=$3::timestamptz',[limits.signups_per_hour,limits.signups_per_day,limits.rec]);}
- pass('0273: a verified email at a listed throwaway domain (or its subdomain) is refused with no effects; hourly and daily admission limits refuse new schools with no effects; five people racing for the last seat create exactly one school; limits are migration-owner only');
+ }finally{await setLimits(original.signups_per_hour,original.signups_per_day);}
+ pass('0273/0274: a verified email at a listed throwaway domain (or its subdomain) is refused with no effects; the latest limit version refuses new schools hourly and daily with no effects and each refusal is counted for HQ; a record is ignored while the limit is not reached; five people racing for the last seat create exactly one school; versions are append-only and in order');
 
  assert.deepEqual(await snapshot(),baseline);
  pass('no billing, access-state, credit, AI, CRM, trial or outbox table changed: identity, school, OWNER grant and registration only');
+
+ // 12 (0274). HQ sees the limits, usage and cap hits; only the HQ owner changes the limits, idempotently, with history and audit.
+ const hqSend=(identity,{body,key,method='POST'}={})=>send('hq/admission'+(method==='POST'?'/limits':''),{identity,body,key,method,headers:method==='POST'?{'x-hon-human-command':ADMISSION_LIMITS_COMMAND}:{}});
+ const view=ok(await hqSend(hqPerson,{method:'GET'}));
+ const current=await latest();
+ assert.equal(view.limits.version,current.version);assert.equal(view.limits.signupsPerHour,current.signups_per_hour);assert.equal(view.limits.recordedBy,'MIGRATION_OWNER');
+ assert.equal(view.history[0].version,current.version);assert(view.history.length>=2&&view.history.length<=50);assert.equal(view.programs.signup,'TEST_MODE');
+ assert.equal(view.usage.signups.lastHour,await recent('1 hour'));assert.equal(view.usage.signups.full,view.usage.signups.lastHour>=current.signups_per_hour||view.usage.signups.lastDay>=current.signups_per_day);
+ assert(view.refusals.some(r=>r.kind==='SIGNUP'&&r.count>=capRefusals));assert(view.blockedEmailDomains>=36);
+ const operatorPerson=person('hq-billing'),operatorP=await human(operatorPerson,'Synthetic HQ billing');
+ await q("INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from) VALUES($1,'HON_HQ_OPERATOR',ARRAY['hq.billing.manage'],clock_timestamp()-interval '1 day')",[operatorP]);
+ assert.equal(ok(await hqSend(operatorPerson,{method:'GET'})).limits.version,current.version);
+ for(const who of [person('nobody'),staffPerson,dana])assert.equal((await hqSend(who,{method:'GET'})).status,403);
+ const change={expectedVersion:current.version,signupsPerHour:12,signupsPerDay:150,trialsPerHour:8,trialsPerDay:90,reason:'Synthetic: tighten limits before opening'};
+ const audits=async()=>Number((await q("SELECT count(*) n FROM hon.saas_audit WHERE action_code='saas.admission.limits_set'"))[0].n);
+ const auditBefore=await audits();
+ for(const who of [operatorPerson,staffPerson,person('nobody')]){const r=await hqSend(who,{body:change,key:K()});assert.equal(r.status,403,JSON.stringify(r.body));}
+ for(const bad of [{...change,signupsPerHour:151},{...change,trialsPerDay:0},{...change,reason:'short'},{...change,extra:1},{...change,signupsPerHour:'12'}])assert.equal((await hqSend(hqPerson,{body:bad,key:K()})).status,400);
+ assert.equal((await hqSend(hqPerson,{body:{...change,expectedVersion:current.version-1},key:K()})).status,409);
+ const noHeader=await send('hq/admission/limits',{identity:hqPerson,body:change,key:K()});assert.equal(noHeader.status,403);
+ assert.equal((await latest()).version,current.version);assert.equal(await audits(),auditBefore);
+ const changeKey=K(),made=ok(await hqSend(hqPerson,{body:change,key:changeKey}));
+ assert.equal(made.replayed,false);assert.equal(made.limits.version,current.version+1);assert.equal(made.limits.recordedBy,'HQ_OWNER');assert.equal(made.limits.actorPrincipalId,hqP);
+ assert.deepEqual([made.limits.signupsPerHour,made.limits.signupsPerDay,made.limits.trialsPerHour,made.limits.trialsPerDay,made.limits.reason],[12,150,8,90,change.reason]);
+ const again=ok(await hqSend(hqPerson,{body:change,key:changeKey}));assert.equal(again.replayed,true);assert.equal(again.limits.versionId,made.limits.versionId);
+ assert.equal((await hqSend(hqPerson,{body:{...change,signupsPerHour:13},key:changeKey})).status,409);
+ assert.equal(await audits(),auditBefore+1);
+ assert.equal((await q("SELECT count(*) n FROM hon.saas_outbox o JOIN hon.saas_audit a ON a.id=o.audit_id WHERE a.action_code='saas.admission.limits_set' AND o.event_type='saas.admission.limits_set' AND a.entity_id=$1",[made.limits.versionId]))[0].n,'1');
+ const changed=ok(await hqSend(hqPerson,{method:'GET'}));assert.equal(changed.limits.versionId,made.limits.versionId);assert.equal(changed.history[1].version,current.version);
+ assert.equal(changed.usage.signups.perHour,12);assert.equal(changed.usage.trials.perDay,90);
+ // The admission trigger uses the new version at once.
+ const used=await recent('1 hour');
+ if(used>=12)await denied(()=>send('account/sign-up',{identity:person('after-change'),body:form()}),409,'SIGNUP_CAPACITY_REACHED');
+ // An HQ version can only come through the command: a direct insert naming an actor is refused without its request.
+ await assert.rejects(()=>q('INSERT INTO hon.hon_os_admission_limit_versions(version,signups_per_hour,signups_per_day,trials_per_hour,trials_per_day,reason,actor_principal_id,idempotency_key) VALUES($1,1,1,1,1,$2,$3,$4)',[made.limits.version+1,'Synthetic forged change',hqP,K()]),e=>/ADMISSION_EVIDENCE_REQUIRED|foreign key/.test(e.message));
+ // Runtime executes exactly the three entry points.
+ for(const [f,want] of [['set_hon_os_admission_limits(text,jsonb,uuid,uuid,uuid)',true],['record_hon_os_admission_refusal(text)',true],['read_hon_os_admission_status(text)',true],['hon_os_admission_usage(text,timestamp with time zone)',false],['hon_os_admission_limits_now()',false],['guard_hon_os_admission_limit_insert()',false]])
+  assert.equal((await q('SELECT has_function_privilege($1,$2,$3) ok',[runtime.username,'hon.'+f,'EXECUTE']))[0].ok,want,f);
+ await setLimits(original.signups_per_hour,original.signups_per_day);
+ pass('0274: HQ owner and HQ billing reader see limits, history, usage and cap hits; only the HQ owner changes limits (expected version, idempotent replay, key reuse refused, audit + outbox); the new version applies at once; no forged HQ version; runtime executes three entry points');
  console.log(`PASS: HON OS public sign-up (${groups} groups)`);
 }finally{await setProgram('CLOSED').catch(()=>{});await app?.close();await Promise.allSettled([admin.end(),restricted.end(),blocker.end()]);}

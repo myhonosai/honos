@@ -8,6 +8,8 @@ import { HonOsSignupController, HonOsSignupHumanGuard } from './accounts/hon-os-
 import { HonOsSignupService } from './accounts/hon-os-signup.service.js';
 import { HonOsTrialController, HonOsTrialHumanGuard } from './accounts/hon-os-trial.controller.js';
 import { HonOsTrialService } from './accounts/hon-os-trial.service.js';
+import { HonOsAdmissionHqController, HonOsAdmissionHumanGuard } from './hon-os-admission/hon-os-admission.controller.js';
+import { HonOsAdmissionService } from './hon-os-admission/hon-os-admission.service.js';
 import { SchoolFamilyAccessInvitationController, SchoolFamilyAccountHumanGuard } from './accounts/school-family-access-invitation.controller.js';
 import { SchoolFamilyAccessInvitationService } from './accounts/school-family-access-invitation.service.js';
 import { SaasSubscriptionGenerationService } from './saas-pricing/saas-subscription-generation.service.js';
@@ -136,6 +138,8 @@ import {
 import { SchoolCheckoutController } from './school-checkout/school-checkout.controller.js';
 import { SchoolCheckoutService } from './school-checkout/school-checkout.service.js';
 import { SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard } from './school-checkout/school-checkout-human-ui.guard.js';
+import { MayaAtRiskController, MayaAtRiskReadHumanUiGuard } from './maya/maya-at-risk.controller.js';
+import { MayaAtRiskService } from './maya/maya-at-risk.service.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
 import { BillingAccountService } from './billing/billing-account.service.js';
 import { BillingAccountHumanUiGuard } from './billing/billing-account-human-ui.guard.js';
@@ -326,7 +330,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
 
 @Module({
   imports: [ClassPassModule, KioskModule],
-  controllers: [HonOsSignupController,HonOsTrialController,SchoolOwnerInvitationController,SchoolOwnershipController,SchoolStaffInvitationController,SchoolFamilyAccessInvitationController,OwnerLaunchController,
+  controllers: [HonOsSignupController,HonOsTrialController,HonOsAdmissionHqController,SchoolOwnerInvitationController,SchoolOwnershipController,SchoolStaffInvitationController,SchoolFamilyAccessInvitationController,OwnerLaunchController,
     CurrentStaffReportingSchoolController,
     StaffCurriculumLibraryController, ParentCurriculumLibraryController,
     AchievementsController, ParentAchievementsController,
@@ -420,6 +424,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     TuitionPaymentController,
     SchoolPaymentController,
     SchoolCheckoutController,
+    MayaAtRiskController,
     SchoolMembershipListController,
     CrmSchoolClockController,
     CrmSessionSchoolClockController,
@@ -441,7 +446,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SaasSubscriptionGenerationHqController, SaasSubscriptionGenerationSchoolController, SaasScheduleBindingHqController, SaasScheduleBindingSchoolController, SaasPaidReviewHqController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqSupportController, HqMarketingController, HqCreativeController, AiSpendPauseHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
-  providers: [BookableStudentsService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard,
+  providers: [BookableStudentsService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard,
     SaasSubscriptionGenerationService, SaasScheduleBillingService, SaasPaidReviewService, SaasPriceAcceptanceService, SaasTrialsService, OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
     CurrentStaffReportingSchoolNoStoreGuard,
     CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard,
@@ -570,6 +575,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPayReadHumanUiGuard, SchoolPayStartHumanUiGuard, SchoolPayOnboardingLinkHumanUiGuard, SchoolPayFinishHumanUiGuard,
     SchoolPayRefreshHumanUiGuard, SchoolPayDefaultHumanUiGuard, SchoolPayDisconnectHumanUiGuard,
     SchoolCheckoutService, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard,
+    MayaAtRiskService,
+    MayaAtRiskReadHumanUiGuard,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,
     CrmSchoolClockService,
