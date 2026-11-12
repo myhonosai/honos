@@ -2964,3 +2964,15 @@ DO $$ DECLARE r text; t text; f text; BEGIN
       hon.resolve_hq_hon_turn(text,uuid,jsonb,uuid), hon.read_hq_hon_conversation(text) TO hon_runtime;
   END IF;
 END $$;
+
+-- B-TUI-1b 0280 school invoice list: one read-only runtime entry point; it reuses the 0240 private tuition helpers.
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.read_school_invoices(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0280 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.read_school_invoices(text,jsonb) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION hon.read_school_invoices(text,jsonb) FROM %I',r);
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_invoices(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;

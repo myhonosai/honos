@@ -1,0 +1,16 @@
+/* Light card matching the invoice workbench page (attendance-workbench.module.css). */
+.card { max-width: 1150px; margin: 24px auto 80px; box-sizing: border-box; background: white; border: 1px solid #dce3ee; border-radius: 12px; padding: 24px; box-shadow: 0 5px 18px #17223806; color: #172238; font-family: Inter, sans-serif; }
+.card h2 { font-size: 21px; margin: 0; }
+.cardHead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 7px; font-size: 13px; font-weight: 600; }
+.field select { padding: 11px 12px; border: 1px solid #b9c6da; border-radius: 6px; min-height: 44px; color: #172238; background: #fff; font: inherit; }
+.meta { color: #3f516d; font-size: 13px; line-height: 1.6; margin: 10px 0; }
+.warnText { background: #fff0ed; color: #92351f; border: 1px solid #efc1b6; padding: 12px 14px; border-radius: 8px; }
+.list { list-style: none; padding: 0; margin: 16px 0 0; display: grid; gap: 10px; }
+.list li { display: grid; gap: 4px; padding: 14px 16px; background: #f6f8fc; border: 1px solid #e3e9f3; border-radius: 8px; overflow-wrap: anywhere; }
+.list li .meta { margin: 0; }
+.card button { background: #245ac4; border: 1px solid #245ac4; color: white; border-radius: 7px; padding: 11px 16px; min-height: 44px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.card button:disabled { opacity: .5; cursor: not-allowed; }
+.card button:focus-visible, .field select:focus-visible { outline: 3px solid #76a5ff; outline-offset: 3px; }
+@media (max-width: 720px) { .card { margin: 16px 14px 50px; padding: 18px; } .card button { width: 100%; } }
