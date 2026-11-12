@@ -60,9 +60,10 @@ weekly hours and stays open until the school pauses it.
 ## Plan
 
 1. **PR 1: database, contracts, API.** Migration `0286_school_booking_types.sql` adds three tables:
-   `school_booking_types` (+ `_versions`), `school_booking_type_bookings` and `school_booking_type_rates`.
+   `school_booking_types`, `school_booking_type_bookings` and `school_booking_type_rates`. Each edit moves the version by 1 and
+   writes an audit event; the booking row keeps its own copy of the questions and the waiver hash.
    - Staff functions: `read_school_booking_types`, `save_school_booking_type`, `set_school_booking_type_status`,
-     `read_school_booking_type_bookings` and `set_school_booking_type_booking_status`.
+     `read_school_booking_type` (one type with its upcoming bookings) and `set_school_booking_type_booking_status`.
    - Public functions: `read_public_school_booking_type` (returns the times and the 0285 branding), `book_public_school_booking_type`
      and `cancel_public_school_booking_type_booking`.
    - Contracts go in `school-booking-types.ts`.

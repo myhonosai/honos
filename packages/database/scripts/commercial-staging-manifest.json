@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "39cdcbd6489591efa12e9f920bf20e16fc7f5d5300bb8911857115a445f1ad09",
+  "chainSha256": "9f8e7110fc71911a8cc7c8c034a4273856a3a1fd6aff981b2210e2ba56a6aabb",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -341,6 +341,10 @@
     {
       "file": "0285_school_page_branding.sql",
       "sha256": "4cb98a54593a817a4f604a1ef2087c8d4cab4abd5031e7455e392c3a8dd9157f"
+    },
+    {
+      "file": "0286_school_booking_types.sql",
+      "sha256": "c29503fa5753959310c649eaf3e131f30c4c63b60d4d1c599015108c1ad6721f"
     }
   ]
 }

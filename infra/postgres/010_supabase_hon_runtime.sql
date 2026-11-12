@@ -3041,3 +3041,22 @@ DO $$ DECLARE r text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_school_invoices(text,jsonb) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0286 school booking types: three private forced-RLS tables, private helpers and eight runtime entry points
+-- (five staff, three public). The runtime has no table privilege.
+DO $$ DECLARE r text; t text; f text; BEGIN
+  IF to_regclass('hon.school_booking_types') IS NULL THEN RAISE EXCEPTION 'Apply migration 0286 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['school_booking_types','school_booking_type_bookings','school_booking_type_rates'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.school_booking_text_ok(text,integer)','hon.guard_school_booking_type()','hon.guard_school_booking_type_booking()','hon.school_booking_type_utc(timestamp with time zone)','hon.school_booking_type_taken(uuid,timestamp with time zone)','hon.school_booking_type_times(hon.school_booking_types,text,integer)','hon.school_booking_type_time_ok(hon.school_booking_types,text,timestamp with time zone)','hon.school_booking_type_json(hon.school_booking_types)','hon.school_booking_type_booking_json(hon.school_booking_type_bookings)','hon.school_booking_type_input(jsonb)','hon.school_booking_type_command_finish(text,text,uuid,jsonb,text,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)','hon.save_school_booking_type(text,uuid,jsonb,text,uuid,uuid)','hon.set_school_booking_type_status(text,uuid,jsonb,text,uuid,uuid)','hon.set_school_booking_type_booking_status(text,uuid,jsonb,text,uuid,uuid)','hon.read_school_booking_types(text)','hon.read_school_booking_type(text,uuid)','hon.take_school_booking_type_rate(uuid,text,integer)','hon.public_school_booking_type(text)','hon.read_public_school_booking_type(text)','hon.school_booking_type_booking_input(hon.school_booking_types,jsonb)','hon.book_public_school_booking_type(text,jsonb,text)','hon.cancel_public_school_booking_type_booking(text,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.save_school_booking_type(text,uuid,jsonb,text,uuid,uuid),hon.set_school_booking_type_status(text,uuid,jsonb,text,uuid,uuid),
+      hon.set_school_booking_type_booking_status(text,uuid,jsonb,text,uuid,uuid),hon.read_school_booking_types(text),hon.read_school_booking_type(text,uuid),
+      hon.read_public_school_booking_type(text),hon.book_public_school_booking_type(text,jsonb,text),hon.cancel_public_school_booking_type_booking(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;

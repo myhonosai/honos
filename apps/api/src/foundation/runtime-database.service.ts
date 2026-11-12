@@ -567,6 +567,9 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT hon.read_public_school_event($1) AS data',
       'SELECT hon.book_public_school_event($1,$2::jsonb,$3) AS data',
       'SELECT hon.cancel_public_school_event_booking($1,$2::jsonb) AS data',
+      'SELECT hon.read_public_school_booking_type($1) AS data',
+      'SELECT hon.book_public_school_booking_type($1,$2::jsonb,$3) AS data',
+      'SELECT hon.cancel_public_school_booking_type_booking($1,$2::jsonb) AS data',
     ].includes(statement)) throw new Error('Unknown public event call.');
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
