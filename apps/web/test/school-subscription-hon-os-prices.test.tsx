@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HON_OS_PRODUCT, HON_OS_LAUNCH_PRICING_REFERENCE } from '@hon/contracts';
 import { loadHonOsPrices } from '../src/components/school-subscription/http';
 import { honOsPriceRows, FOUNDER_REASON_COPY } from '../src/components/school-subscription/catalog';
-import { HonOsPrices } from '../src/components/school-subscription/hon-os-prices';
+import { HonOsPriceCard, HonOsPrices } from '../src/components/school-subscription/hon-os-prices';
 import { SchoolSubscription } from '../src/components/school-subscription/subscription';
 import { checkoutId, schoolContext } from '../scripts/fixtures/school-checkout.mjs';
 
@@ -72,6 +72,9 @@ describe('/staff/subscription HON OS standard and founder prices', () => {
     for (const s of ['Standard monthly', 'Standard annual', 'Founder monthly', 'Founder annual', '$249', '$2,097', '$199.20', '$1,494', '/ year',
       '7-day grace period', 'Owner-approved launch price', 'Checkout for these prices is not open yet']) expect(html).toContain(s);
     expect(html).not.toContain('Server-returned offer');
+    const [standard, , founderMonthly] = honOsPriceRows({ offerSetVersion: 2, offers: [] } as never, null);
+    const closedFounder = renderToStaticMarkup(<HonOsPriceCard row={founderMonthly!}/>), closedStandard = renderToStaticMarkup(<HonOsPriceCard row={standard!}/>);
+    expect(closedFounder).not.toContain('$199.20'); expect(closedStandard).not.toContain('$249'); expect(closedFounder).toContain('Not on sale now');
     const page = renderToStaticMarkup(<SchoolSubscription/>);
     expect(page).toContain('hon-os-prices-title'); expect(page).not.toContain('No new Essential or annual');
   });

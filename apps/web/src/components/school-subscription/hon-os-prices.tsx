@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { SAAS_FOUNDER_POOL_CAPACITY } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
-import { FOUNDER_REASON_COPY, HON_OS_PRICE_LABELS, honOsPriceRows } from './catalog';
+import { FOUNDER_REASON_COPY, HON_OS_PRICE_LABELS, honOsPriceRows, type HonOsPriceRow } from './catalog';
 import { loadHonOsPrices, type HonOsPriceReads, type SchoolAccount } from './http';
 import styles from './subscription.module.css';
 
@@ -35,17 +35,24 @@ export function HonOsPrices({ account }: { account: SchoolAccount | null }): Rea
       : pool ? t("Founder spots: {remaining} of {capacity} left. A spot is counted only when the first payment is verified; choosing a plan does not reserve one.", { remaining: number(pool.remaining), capacity: number(SAAS_FOUNDER_POOL_CAPACITY) })
       : t("Founder spot availability could not be verified.")}</p>
     <ul className={styles.honOsPriceList}>
-      {rows.map((row) => <li key={row.kind} className={row.founder ? styles.founderPrice : undefined} data-kind={row.kind}>
-        <h3>{text(HON_OS_PRICE_LABELS[row.kind])}</h3>
-        <div className={styles.price}><strong>{money(row.priceMinor)}</strong><span>{row.annual ? t("/ year") : t("/ month")}</span></div>
-        <p className={styles.small}>{row.founder
-          ? t("Locked for as long as your school stays subscribed. After a cancellation, or a lapse past the 7-day grace period, a new subscription is {standard}.", { standard: money(row.standardPriceMinor) })
-          : row.annual ? t("Billed once a year. Renews at the same price.") : t("Billed monthly. Renews at the same price.")}</p>
-        {row.founderSpot && <p className={styles.small}>{row.founderSpot.state === 'AVAILABLE' ? t("A founder spot is available for your organization now.")
-          : row.founderSpot.reason ? text(FOUNDER_REASON_COPY[row.founderSpot.reason]) : t("Founder availability has not been verified.")}</p>}
-        <p className={styles.small}>USD · {row.source === 'SERVER_OFFER' ? t("Server-returned offer") : row.source === 'NOT_ON_SALE' ? t("Not on sale now") : t("Owner-approved launch price")}</p>
-      </li>)}
+      {rows.map((row) => <HonOsPriceCard key={row.kind} row={row}/>)}
     </ul>
     <p className={styles.small}>{t("Checkout for these prices is not open yet. No payment is taken on this page, and a refund never returns a founder spot.")}</p>
   </section>;
+}
+
+/** One price card. A kind the published offer set leaves out shows no price figure at all. */
+export function HonOsPriceCard({ row }: { row: HonOsPriceRow }): React.ReactElement {
+  const { t, text, money } = useLocale();
+  return <li className={row.founder ? styles.founderPrice : undefined} data-kind={row.kind}>
+    <h3>{text(HON_OS_PRICE_LABELS[row.kind])}</h3>
+    {row.source === 'NOT_ON_SALE' ? <div className={styles.price}><strong>{t("Not on sale now")}</strong></div>
+      : <div className={styles.price}><strong>{money(row.priceMinor)}</strong><span>{row.annual ? t("/ year") : t("/ month")}</span></div>}
+    <p className={styles.small}>{row.founder
+      ? t("Locked for as long as your school stays subscribed. After a cancellation, or a lapse past the 7-day grace period, a new subscription is {standard}.", { standard: money(row.standardPriceMinor) })
+      : row.annual ? t("Billed once a year. Renews at the same price.") : t("Billed monthly. Renews at the same price.")}</p>
+    {row.founderSpot && <p className={styles.small}>{row.founderSpot.state === 'AVAILABLE' ? t("A founder spot is available for your organization now.")
+      : row.founderSpot.reason ? text(FOUNDER_REASON_COPY[row.founderSpot.reason]) : t("Founder availability has not been verified.")}</p>}
+    <p className={styles.small}>USD · {row.source === 'SERVER_OFFER' ? t("Server-returned offer") : row.source === 'NOT_ON_SALE' ? t("Not on sale now") : t("Owner-approved launch price")}</p>
+  </li>;
 }
