@@ -306,11 +306,10 @@ try {
       }
       const art = page.getByRole('group', { name: 'AI portrait style' });
       await art.getByRole('button', { name: 'Chibi', exact: true }).click();
-      assert.equal(await page.getByRole('img', { name: /chibi portrait$/ }).count(), 6);
+      assert.equal(await page.getByRole('img', { name: /Chibi portrait$/i }).count(), 6);
       if (label === 'desktop') await screenshot(page, 'desktop-chibi');
       await art.getByRole('button', { name: 'Anime', exact: true }).click();
-      await page.getByRole('status').filter({ hasText: 'Anime portraits are awaiting approved artwork' }).waitFor();
-      assert.equal(await page.getByRole('img', { name: /Anime artwork pending$/ }).count(), 6);
+      assert.equal(await page.getByRole('img', { name: /, Anime portrait$/ }).count(), 6);
       await art.getByRole('button', { name: 'Realistic', exact: true }).click();
     });
     await check(`${label}: dashboard accessibility`, () => accessibility(page, `${label}-dashboard`));
