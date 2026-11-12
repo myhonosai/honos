@@ -76,7 +76,7 @@ it('offers the question only when the server lists the agent and a provider is c
   const notMine = renderToStaticMarkup(<HqHonPanelView {...props({ agentKey: 'ryan', name: 'Ryan' })}/>);
   expect(notMine).not.toContain('<textarea'); expect(notMine).toContain('cannot ask Ryan'); expect(notMine).toContain('No questions to Ryan yet.');
   const off = renderToStaticMarkup(<HqHonPanelView {...props({ state: { kind: 'READY', view: conv({ provider: 'NOT_CONNECTED' }) as never } })}/>);
-  expect(off).not.toContain('<textarea'); expect(off).toContain('approval first');
+  expect(off).not.toContain('<textarea'); expect(off).toContain('approval first'); expect(off).not.toContain('David');
   const noCap = renderToStaticMarkup(<HqHonPanelView {...props({ state: { kind: 'READY', view: conv({ budget: budget({ creditCap: null, availableCredits: 0, version: null, setBy: null, setAt: null }) }) as never } })}/>);
   expect(noCap).toContain('No HQ AI text budget is set');
 });
@@ -90,6 +90,13 @@ it('never shows a concealed answer, shows each status, and never names a provide
   expect(html).not.toMatch(/OPENROUTER|fixture\/model|schoolId|organizationId/);
   const refused = renderToStaticMarkup(<HqHonPanelView {...props({ outcome: { kind: 'ERROR', error: new MarketingError('REFUSED', 'HQ_HON_BUDGET_EXHAUSTED') } })}/>);
   expect(refused).toContain('Not asked: the monthly budget is used up.');
+  // A replayed receipt shows the turn's own status, never "Answered." for a turn that is not ANSWERED.
+  const held = renderToStaticMarkup(<HqHonPanelView {...props({ outcome: { kind: 'DONE', status: 'UNDER_REVIEW' } })}/>);
+  expect(held).toContain('Held for HQ owner review'); expect(held).not.toContain('<p>Answered.</p>');
+  expect(renderToStaticMarkup(<HqHonPanelView {...props({ outcome: { kind: 'DONE', status: 'ANSWERED' } })}/>)).toContain('<p>Answered.</p>');
+  // After an unconfirmed result, Ask stays off until a refresh, so an edited question cannot ask twice.
+  const unknown = renderToStaticMarkup(<HqHonPanelView {...props({ question: 'Edited question', outcome: { kind: 'ERROR', error: new MarketingError('UNKNOWN') } })}/>);
+  expect(unknown).toMatch(/<button type="submit" disabled="">/); expect(unknown).toContain('Refresh before asking again');
   for (const s of ['LOADING', 'DENIED', 'UNAVAILABLE'] as const) expect(renderToStaticMarkup(<HqHonPanelView {...props({ state: { kind: s } })}/>)).not.toContain('<textarea');
 });
 
