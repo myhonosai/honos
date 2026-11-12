@@ -1,6 +1,6 @@
 BEGIN;
 
--- 0242 (R1): routing by task class. The planner reads the single active, effective HQ task profile for the planned agent
+-- 0287 (R1): routing by task class. The planner reads the single active, effective HQ task profile for the planned agent
 -- and a code-owned task category on the school's TEXT policy: its DEFAULT, else the first eligible FALLBACK (never
 -- ADVANCED), inside the profile's cost ceiling, provider list, capabilities and privacy controls. No profile keeps the
 -- legacy policy order; a profile without an eligible candidate, or two active profiles, refuse the route. The chosen
@@ -175,7 +175,7 @@ DECLARE
   v_choice record; v_plan_id uuid; v_hash text; v_existing hon.idempotency_records%ROWTYPE;
   v_response jsonb; v_payload jsonb; v_units integer; v_credits integer; v_used numeric;
   v_denial text; v_risk text; v_replay_id text; v_replay jsonb; v_found boolean;
-  -- 0242: routing by task class through the single active HQ task profile for this agent and code-owned category.
+  -- 0287: routing by task class through the single active HQ task profile for this agent and code-owned category.
   v_category text; v_profiles integer := 0; v_profile hon.hq_ai_task_profiles%ROWTYPE;
 BEGIN
   PERFORM hon.require_ai_invocation_plan_access();

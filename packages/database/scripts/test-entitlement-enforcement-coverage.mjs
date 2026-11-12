@@ -37,6 +37,8 @@ function args(f,k,target=k){
 }
 // Reviewed: open to a suspended school on purpose. B6A keeps billing recovery and settings available.
 const OPEN_BY_DESIGN={
+ 'hon.read_hon_os_registration(text)':'account identity (B-ID-5 0241): the signed-in owner sees the sign-up program, current terms and their own REGISTERED school before any access exists; read only, grants nothing',
+ 'hon.read_hon_os_trial(text)':'account identity (D11-B 0246): the registered owner sees the trial program, the public trial they may start and their own trial before any access exists; read only, grants nothing',
  'hon.read_school_ownership(text,uuid)':'account identity (B-ID-4 0223): a school owner sees co-owners, the primary owner and ownership notices, read only, even while the school is suspended or not yet paid',
  'hon.read_saas_school_billing_account(text,uuid)':'billing recovery: the school sees why access is unavailable and what it owes',
  'hon.read_saas_school_access_standing(text,uuid)':'billing recovery: the owner sees the payment issue, grace end, owner CRM read-only window or CRM lock (read only)',
@@ -46,6 +48,8 @@ const OPEN_BY_DESIGN={
  'hon.read_school_language_default(text,uuid)':'interface setting; grants nothing',
  'hon.submit_public_form(text,jsonb,text)':'public intake route (owner: keep public routes available); B6B decides suspended-school intake',
  'hon.submit_kiosk_handoff(text,text)':'public kiosk route; B6B decides suspended-school behaviour',
+ 'hon.book_public_school_event(text,jsonb,text)':'public event booking link (0261), same rule as submit_public_form; B6B decides suspended-school intake',
+ 'hon.cancel_public_school_event_booking(text,jsonb)':'family cancels their own event booking (0261); must keep working for a suspended school',
  'hon.chad_follow_up_draft_is_current(uuid,jsonb)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.crm_lead_target_is_current(uuid,uuid)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.marketing_action_is_current(uuid,jsonb)':'boolean predicate over ids; returns no data and grants nothing',

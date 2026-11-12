@@ -19,6 +19,8 @@ export type LeadsViewProps = Readonly<{
   tab: LeadTab; list: ListState; filter: string; selectedId: string | null; trials: TrialState;
   onTab?: ((tab: LeadTab) => void) | undefined; onFilter?: ((value: string) => void) | undefined; onOpen?: ((leadId: string) => void) | undefined;
   onRefresh?: (() => void) | undefined; onReloadTrials?: (() => void) | undefined;
+  /** First-lead setup and the add-a-lead form, shown once the school is verified. */
+  addLead?: React.ReactNode;
 }>;
 
 const when = (language: string, value: string, time = true) => new Date(value).toLocaleString(language, time ? { dateStyle: 'medium', timeStyle: 'short' } : { dateStyle: 'medium' });
@@ -44,6 +46,7 @@ export function LeadsView(props: LeadsViewProps): React.ReactElement {
     {notice === null && scope ? <>
       <nav className={styles.tabs} aria-label={t('tabsLabel')}>{LEAD_TABS.map((value) =>
         <button key={value} type="button" className={styles.tab} aria-pressed={tab === value} onClick={() => onTab?.(value)}>{t(value)}</button>)}</nav>
+      {props.addLead ?? null}
       <div className={styles.layout}>
         <article className={styles.card} aria-labelledby="leads-list-title">
           <div className={styles.cardHead}><h2 id="leads-list-title">{t('listTitle')}</h2>

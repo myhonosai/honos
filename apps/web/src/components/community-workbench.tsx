@@ -39,7 +39,7 @@ export function CommunityWorkbench(): React.ReactElement {
   function save(e: FormEvent) { e.preventDefault(); void run(() => submit({ op: 'CONTENT', id: selected?.id ?? null, input: draft })); }
   const participating = !!profile?.enabled && !!profile.organizationEnabled;
   return <main className={styles.page}>
-    <nav><a href="/community/marketplace">Descriptive marketplace · review only</a><a href="/core">HON Core</a><a href="/auth/login">Sign in</a></nav>
+    <nav><a href="/community/marketplace">Descriptive marketplace · review only</a><a href="/staff/dashboard">School dashboard</a><a href="/auth/login">Sign in</a></nav>
     <header><p>HUMAN OWNER NETWORK · ESSENTIAL / CORE / COMPLETE</p><h1>HON Community</h1><p>A private space for verified school owners and operators to exchange general practice, not school records.</p></header>
     <aside><strong>Member-only published discussions. Never public.</strong><p>{COMMUNITY_HELP}</p><p>Organization consent and your display-name profile are separate opt-ins. Opting out hides your contributions from members; saved private history is retained. Revocation hides your content and denies access. No personal contact directory or arbitrary HQ reader.</p></aside>
     <section><h2>Current verified membership</h2><form onSubmit={access}><label>Already-known school ID<input required disabled={busy} value={school} onChange={e => { setSchool(e.target.value); clearAll(); }} placeholder="School UUID · no school directory"/></label><button disabled={busy}>Check / refresh current access</button></form><p>A school ID selects existing authority; it never grants access. Manual owner/operator verification must be completed by a trusted administrator.</p></section>

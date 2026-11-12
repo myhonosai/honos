@@ -140,8 +140,10 @@ let providerCalls = 0;
 function fakeProvider(ErrorType, draft) {
   const provider = { calls: 0, mode: 'RESULT', held: [] };
   provider.readiness = () => 'READY';
-  provider.generate = async () => {
-    provider.calls += 1; providerCalls += 1;
+  // 0256: each input is kept so a proof can see what the server sent (for Kai: the school's tone).
+  provider.inputs = [];
+  provider.generate = async (input) => {
+    provider.calls += 1; providerCalls += 1; provider.inputs.push(input);
     if (provider.mode === 'HOLD') return new Promise((resolve, reject) => provider.held.push({ resolve, reject }));
     if (provider.mode === 'UNKNOWN') throw new ErrorType('UNKNOWN', 'PROVIDER_UNKNOWN');
     if (provider.mode === 'FAILED') throw new ErrorType('FAILED', 'PROVIDER_REJECTED');
@@ -163,7 +165,10 @@ function fakeHonProvider() {
   const provider = { calls: 0, mode: 'RESULT', held: [], inputs: [], ready: 'READY', reply: 'Focus on the two trials booked for tomorrow and review new leads.' };
   // suggestions (C3a): what the model's closing SUGGEST line named, already parsed to the closed delegate set.
   provider.suggestions = [];
-  const result = () => ({ reply: provider.reply, inputTokens: 300, outputTokens: 120, providerCostMicrounits: 900, truncated: false, suggestions: [...provider.suggestions] });
+  // followUps / sources (0254): the closing ASK and SOURCES lines, already parsed to their closed rules.
+  provider.followUps = []; provider.sources = [];
+  const result = () => ({ reply: provider.reply, inputTokens: 300, outputTokens: 120, providerCostMicrounits: 900, truncated: false, suggestions: [...provider.suggestions],
+    followUps: [...provider.followUps], sources: [...provider.sources] });
   provider.readiness = () => provider.ready;
   provider.generate = async (input) => {
     provider.calls += 1; providerCalls += 1; provider.inputs.push(input);
@@ -172,7 +177,7 @@ function fakeHonProvider() {
     if (provider.mode === 'FAILED') throw new HonReplyProviderRuntimeError('FAILED', 'PROVIDER_REJECTED');
     if (provider.mode === 'OVER') return { ...result(), outputTokens: 5000 };
     // Stopped at the plan's output limit with verified usage (finish_reason 'length').
-    if (provider.mode === 'TRUNCATED') return { ...result(), reply: `${provider.reply} Part ${provider.calls} continues`, outputTokens: input.outputBudget, truncated: true, suggestions: [] };
+    if (provider.mode === 'TRUNCATED') return { ...result(), reply: `${provider.reply} Part ${provider.calls} continues`, outputTokens: input.outputBudget, truncated: true, suggestions: [], followUps: [], sources: [] };
     return result();
   };
   provider.complete = () => { for (const h of provider.held.splice(0)) h.resolve(result()); };
@@ -1807,7 +1812,7 @@ try {
   // STANDARD (default): SUMMARIZE route, 8000/1500 tokens, the owner's $0.08 ceiling; 10 credits reserved, settled to 1.
   assert.deepEqual([i1.status, i1.reserved_credits, i1.agent_key, i1.task_class, i1.work_type, i1.input_budget, i1.output_budget, Number(i1.max_provider_cost_microunits), i1.customer_credit_estimate, i1.reply_mode, i1.step, i1.truncated],
     ['COMPLETED', 0, 'hon', 'SUMMARIZE', 'AI_SUMMARIZE', 8000, 1500, 80000, 10, 'STANDARD', 1, false]);
-  assert.deepEqual(r1.replyDetail, { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [] });
+  assert.deepEqual(r1.replyDetail, { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [] });
   assert.match(i1.context_digest, /^[a-f0-9]{64}$/);
   const l1 = await row('SELECT customer_credits::int c, provider_cost_microunits::int cost, spend_class, school_id FROM hon.ai_usage_ledger WHERE id=$1 AND source_invocation_id=$2', [i1.usage_id, i1.id]);
   assert.deepEqual([l1.c, l1.cost, l1.spend_class, l1.school_id], [1, 900, 'AGENT_INFERENCE', o.school], 'one AGENT_INFERENCE ledger row at the provider-reported cost; a short answer settles to 1 credit, not the 10 reserved');
@@ -1905,7 +1910,7 @@ try {
   const di1 = await reply(d1.turnId);
   assert.deepEqual([d1.status, di1.task_class, di1.work_type, di1.input_budget, di1.output_budget, Number(di1.max_provider_cost_microunits), di1.customer_credit_estimate, di1.reserved_credits],
     ['COMPLETED', 'ANALYZE', 'AI_ANALYZE', 11000, 4000, 80000, 15, 0], JSON.stringify(d1));
-  assert.deepEqual(d1.replyDetail, { mode: 'DETAILED', step: 1, maxSteps: 3, truncated: true, canContinue: true, continuesTurnId: null, suggestions: [] });
+  assert.deepEqual(d1.replyDetail, { mode: 'DETAILED', step: 1, maxSteps: 3, truncated: true, canContinue: true, continuesTurnId: null, suggestions: [], followUps: [], sources: [] });
   assert.equal((await row('SELECT customer_credits::int c FROM hon.ai_usage_ledger WHERE id=$1', [di1.usage_id])).c, 5, 'settled to ceil((300+4000)/1000), not the 15 reserved');
   assert.deepEqual([fakes.hon.inputs.at(-1).replyMode, fakes.hon.inputs.at(-1).outputBudget], ['DETAILED', 4000]);
   // Mode and continuation belong to questions only; a continuation keeps its answer's mode; a full answer is not continued.
@@ -1914,13 +1919,13 @@ try {
   assert.equal(await code(hon.sendTurn(scope, conv.id, { text: 'Draft it', delegation: { agentKey: 'chad', leadId: o.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' }, replyMode: 'DETAILED' }, K())), 'INVALID_HON_TURN');
   assert.equal((await settle(tenant(context(o), (c) => c.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4)', [o.subject, conv.id, JSON.stringify({ text: 'x', delegation: { agentKey: 'chad', leadId: o.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' }, replyMode: 'DETAILED' }), K()])))).error?.code, '22023', 'the database refuses a reply mode on a delegation too');
   const d2 = await hon.sendTurn(scope, conv.id, { text: 'Continue', delegation: null, continueTurnId: d1.turnId }, K());
-  assert.deepEqual(d2.replyDetail, { mode: 'DETAILED', step: 2, maxSteps: 3, truncated: true, canContinue: true, continuesTurnId: d1.turnId, suggestions: [] });
+  assert.deepEqual(d2.replyDetail, { mode: 'DETAILED', step: 2, maxSteps: 3, truncated: true, canContinue: true, continuesTurnId: d1.turnId, suggestions: [], followUps: [], sources: [] });
   const cont = JSON.parse(fakes.hon.inputs.at(-1).facts).continuation;
   assert.deepEqual([cont.step, cont.maxSteps, cont.originalQuestion, cont.previousAnswerEnd, fakes.hon.inputs.at(-1).step], [2, 3, 'Give me a detailed enrollment growth analysis.', d1.reply.slice(-2500), 2]);
   assert.equal((await hon.receipt(scope, d1.turnId)).replyDetail.canContinue, false, 'an answer is continued once');
   assert.equal(await code(hon.sendTurn(scope, conv.id, { text: 'Continue again', delegation: null, continueTurnId: d1.turnId }, K())), 'HON_REPLY_NOT_CONTINUABLE');
   const d3 = await hon.sendTurn(scope, conv.id, { text: 'Continue', delegation: null, continueTurnId: d2.turnId }, K());
-  assert.deepEqual(d3.replyDetail, { mode: 'DETAILED', step: 3, maxSteps: 3, truncated: true, canContinue: false, continuesTurnId: d2.turnId, suggestions: [] }, 'still cut off at the last step: shown as incomplete, no further step');
+  assert.deepEqual(d3.replyDetail, { mode: 'DETAILED', step: 3, maxSteps: 3, truncated: true, canContinue: false, continuesTurnId: d2.turnId, suggestions: [], followUps: [], sources: [] }, 'still cut off at the last step: shown as incomplete, no further step');
   const n4c = fakes.hon.calls;
   assert.equal(await code(hon.sendTurn(scope, conv.id, { text: 'Continue', delegation: null, continueTurnId: d3.turnId }, K())), 'HON_REPLY_NOT_CONTINUABLE');
   assert.deepEqual([fakes.hon.calls - n4c, fakes.hon.calls - n4b.calls, (await ledgerRows(o)) - n4b.ledger], [0, 3, 3], 'three bounded steps, three calls, three ledger rows');
@@ -2704,10 +2709,333 @@ try {
   await dropRep();
   assert.equal((await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data.agents.find((x) => x.agentKey === 'claire').blockedBy, 'NOT_AUTHORIZED');
   await addRep();
-  pass('INV-31', "K2: Claire (Business Performance) answers a question in text from the school's aggregate metrics only (planned as claire/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays); she needs reporting.view at begin (refused, nothing recorded, also when it lapses while the reply row write waits) and in prepare (a lapse reserves and calls nothing); her answer is concealed when reporting.view lapses while usage evidence stays; HON sees her turn as Claire's without her text; the legacy 'claire' teaching alias is refused; Claire answers are never continued, summarized from or confirmed as suggestions; rows are single DETAILED analyses without suggestions and 'claire' plans are ANALYZE only; readiness lists BUSINESS_PERFORMANCE gated on reporting.view");
+  // 8. HQ usage (0267): Claire's calls count under BUSINESS_PERFORMANCE, never HON_REPLY, including a late provider
+  //    expense recorded after an HQ write-off of her UNKNOWN call; a HON answer in the same school stays HON_REPLY.
+  {
+    const usageOf = async () => (await row('SELECT hon.read_ai_school_usage_from_hq($1,$2::timestamptz,$3::timestamptz) r',
+      [hq.subject, new Date(Date.now() - 86_400_000).toISOString(), new Date(Date.now() + 3_600_000).toISOString()])).r.schools.find((x) => x.schoolId === o.school);
+    const claireLedger = (await row("SELECT count(*)::int n FROM hon.ai_usage_ledger u JOIN hon.hon_reply_invocations i ON i.id = u.source_invocation_id WHERE i.specialist='claire' AND u.organization_id=$1", [o.id])).n;
+    assert.ok(claireLedger >= 1);
+    const honLedger = (await row("SELECT count(*)::int n FROM hon.ai_usage_ledger u JOIN hon.hon_reply_invocations i ON i.id = u.source_invocation_id WHERE i.specialist='hon' AND u.organization_id=$1", [o.id])).n;
+    let by = (await usageOf()).byClass.AGENT_INFERENCE.byAgent;
+    assert.deepEqual([by.BUSINESS_PERFORMANCE?.entries, by.HON_REPLY?.entries ?? 0], [claireLedger, honLedger], JSON.stringify(by));
+    fakes.hon.mode = 'UNKNOWN';
+    let lostTurn;
+    try { lostTurn = await claire('Usage attribution probe'); } finally { fakes.hon.mode = 'RESULT'; }
+    assert.equal(lostTurn.status, 'UNKNOWN', JSON.stringify(lostTurn));
+    const lost = await row('SELECT id FROM hon.hon_reply_invocations WHERE turn_id=$1', [lostTurn.turnId]);
+    const off = await settle(admin.query('SELECT hon.resolve_ai_unknown_invocation($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) r',
+      [hq.subject, 'HON_REPLY', lost.id, JSON.stringify({ decision: 'WRITE_OFF', reason: 'Synthetic AI-0 K2 provider lookup unavailable', evidence: { estimatedProviderCostMicrounits: 700 } }), K(), K(), K()]));
+    assert.ok(off.value, off.error?.message);
+    const lateRec = await settle(admin.query('SELECT hon.record_ai_late_provider_expense($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) r',
+      [hq.subject, 'HON_REPLY', lost.id, JSON.stringify({ reason: 'Provider usage export showed the actual charge', evidence: { providerGenerationId: 'gen-ai0-claire-late', inputTokens: 900, outputTokens: 400, providerCostMicrounits: 650 } }), K(), K(), K()]));
+    assert.ok(lateRec.value, lateRec.error?.message);
+    by = (await usageOf()).byClass.AGENT_INFERENCE.byAgent;
+    assert.deepEqual([by.BUSINESS_PERFORMANCE?.entries, by.BUSINESS_PERFORMANCE?.writeOffEntries, by.BUSINESS_PERFORMANCE?.lateProviderExpenseEntries,
+      by.BUSINESS_PERFORMANCE?.lateProviderCostMicrounits, by.HON_REPLY?.entries ?? 0, by.HON_REPLY?.lateProviderExpenseEntries ?? 0], [claireLedger + 1, 1, 1, 650, honLedger, 0], JSON.stringify(by));
+    const honAnswer = await hon.sendTurn(scope, conv.id, { text: 'And overall?', delegation: null }, K());
+    assert.equal(honAnswer.status, 'COMPLETED', JSON.stringify(honAnswer));
+    by = (await usageOf()).byClass.AGENT_INFERENCE.byAgent;
+    assert.deepEqual([by.BUSINESS_PERFORMANCE?.entries, by.HON_REPLY?.entries], [claireLedger + 1, honLedger + 1], 'a HON answer stays HON_REPLY');
+  }
+  pass('INV-31', "K2: Claire (Business Performance) answers a question in text from the school's aggregate metrics only (planned as claire/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays); she needs reporting.view at begin (refused, nothing recorded, also when it lapses while the reply row write waits) and in prepare (a lapse reserves and calls nothing); her answer is concealed when reporting.view lapses while usage evidence stays; HON sees her turn as Claire's without her text; the legacy 'claire' teaching alias is refused; Claire answers are never continued, summarized from or confirmed as suggestions; rows are single DETAILED analyses without suggestions and 'claire' plans are ANALYZE only; readiness lists BUSINESS_PERFORMANCE gated on reporting.view; HQ usage counts her calls (and a late provider expense after an HQ write-off) under BUSINESS_PERFORMANCE, never HON_REPLY");
   }
 
-  // ---- INV-32 (R1, 0242): routing by task class through the HQ task profile ----
+  // ---- INV-32 (0254): "Ask next" follow-ups and "Based on" sources are presentation data only ----
+  {
+  const o = await makeOrg('inv-32');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const conv = await hon.create(scope, { title: 'Follow-ups' }, K());
+  const ask = (text, extra = {}) => hon.sendTurn(scope, conv.id, { text, delegation: null, ...extra }, K());
+  const stored = async (turnId) => row('SELECT follow_up_questions f, available_sources a, cited_sources c FROM hon.hon_reply_invocations WHERE turn_id=$1', [turnId]);
+  const dropRep = () => admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='reporting.view'", [o.role]);
+  const addRep = () => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'reporting.view')", [o.role, o.id]);
+  const set = (f, src) => { fakes.hon.followUps = f; fakes.hon.sources = src; };
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const metricKeys = ['newLeads24h', 'upcomingTrials24h', 'upcomingTestingEvents30d', 'pendingActionApprovals', 'outstandingWorkItems', 'membershipTermsEnding30d', 'paidInvoicesCreated30d'];
+  // 1. First question: the server records the fact areas it sent (AVAILABLE metrics only, no conversation yet) and keeps only
+  //    cited areas among them; follow-ups are stored and shown on the receipt and after reload.
+  const usageBefore = Number((await row('SELECT coalesce(sum(customer_credits),0) n FROM hon.ai_usage_ledger WHERE organization_id=$1', [o.id])).n);
+  const callsBefore = fakes.hon.calls;
+  set(['Who should call the new leads?', 'How many trials are booked?'], ['revenue', 'newLeads24h', 'conversation']);
+  const r1 = await ask('How are leads?');
+  const s1 = await stored(r1.turnId);
+  assert.deepEqual([r1.status, r1.replyDetail.followUps, r1.replyDetail.sources], ['COMPLETED', ['Who should call the new leads?', 'How many trials are booked?'], ['newLeads24h']], JSON.stringify(r1));
+  assert.deepEqual([s1.a, s1.c], [metricKeys, ['newLeads24h']], 'only AVAILABLE metrics sent; UNAVAILABLE revenue and absent conversation are never cited');
+  assert.deepEqual((await hon.read(scope, conv.id)).turns.at(-1).replyDetail.followUps, ['Who should call the new leads?', 'How many trials are booked?'], 'persisted');
+  // Presentation data only: one provider call, the usual usage row, nothing else runs.
+  assert.equal(fakes.hon.calls - callsBefore, 1);
+  assert.equal(Number((await row('SELECT coalesce(sum(customer_credits),0) n FROM hon.ai_usage_ledger WHERE organization_id=$1', [o.id])).n) - usageBefore, 1, 'same usage as any answer');
+  // 2. A later question sent the earlier conversation: it may be cited.
+  set([], ['conversation', 'upcomingTrials24h']);
+  const r2 = await ask('And what about trials?');
+  assert.deepEqual([r2.replyDetail.followUps, r2.replyDetail.sources, (await stored(r2.turnId)).a], [[], ['conversation', 'upcomingTrials24h'], [...metricKeys, 'conversation']]);
+  // 3. A concealed answer shows neither (stored evidence unchanged).
+  await dropRep();
+  const hidden = await hon.receipt(scope, r1.turnId);
+  assert.deepEqual([hidden.reason, hidden.replyDetail.followUps, hidden.replyDetail.sources, (await stored(r1.turnId)).c], ['RESULT_CONCEALED', [], [], ['newLeads24h']]);
+  // Without reporting.view no metrics are sent: a new answer can cite only the conversation.
+  set(['Anything else?'], ['newLeads24h', 'conversation']);
+  const r3 = await ask('What should I do today?');
+  assert.deepEqual([r3.replyDetail.sources, (await stored(r3.turnId)).a], [['conversation'], ['conversation']]);
+  await addRep();
+  // 4. A cut-off answer keeps none, and the table refuses them on it; cited must be a subset of available; bad text refused.
+  fakes.hon.mode = 'TRUNCATED'; set(['More?'], ['newLeads24h']);
+  const r4 = await ask('Write the full plan.', { replyMode: 'DETAILED' });
+  fakes.hon.mode = 'RESULT';
+  assert.deepEqual([r4.replyDetail.truncated, r4.replyDetail.followUps, r4.replyDetail.sources], [true, [], []]);
+  for (const [sql, args, why] of [
+    ["UPDATE hon.hon_reply_invocations SET follow_up_questions='{\"More please?\"}' WHERE turn_id=$1", [r4.turnId], 'no follow-ups on a cut-off answer'],
+    ["UPDATE hon.hon_reply_invocations SET cited_sources='{newLeads24h}' WHERE turn_id=$1", [r4.turnId], 'no sources on a cut-off answer'],
+    ["UPDATE hon.hon_reply_invocations SET cited_sources='{revenue}' WHERE turn_id=$1", [r1.turnId], 'cited must have been sent'],
+    ["UPDATE hon.hon_reply_invocations SET available_sources='{website}' WHERE turn_id=$1", [r1.turnId], 'closed source set'],
+    ["UPDATE hon.hon_reply_invocations SET follow_up_questions=ARRAY['a','b','c','d']||'{}'::text[] WHERE turn_id=$1", [r2.turnId], 'at most three'],
+    ["UPDATE hon.hon_reply_invocations SET follow_up_questions=ARRAY[E'Line\\nbreak?'] WHERE turn_id=$1", [r2.turnId], 'no newline'],
+  ]) assert.equal((await settle(admin.query(sql, args))).error?.code, '23514', why);
+  // 5. The database refuses malformed values from the API before any write.
+  fakes.hon.mode = 'HOLD';
+  const pending = settle(ask('Hold for malformed follow-ups.'));
+  for (const end = Date.now() + 15000; !(await row("SELECT count(*)::int n FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).n; await sleep(20)) assert.ok(Date.now() < end, 'reply never reached SENDING');
+  const sending = (await row("SELECT turn_id FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).turn_id;
+  const base = { reply: 'x', inputTokens: 1, outputTokens: 1, providerCostMicrounits: 0 };
+  const record = (result) => settle(tenant(context(o), (client) => client.query('SELECT hon.record_hon_reply_result($1,$2::uuid,$3::jsonb)', [o.subject, sending, JSON.stringify({ ...base, ...result })])));
+  // Wrong shapes are refused: a list of more than three, a non-array, a non-string item; unknown, repeated or too many sources.
+  for (const bad of [{ followUps: 'Why?' }, { followUps: ['a', 'b', 'c', 'd'].map((x) => `${x} question?`) }, { followUps: [1] }, { followUps: [null] },
+    { sources: ['website'] }, { sources: ['revenue', 'revenue'] }, { sources: 'revenue' },
+    { sources: ['newLeads24h', 'upcomingTrials24h', 'revenue', 'trialConversion', 'conversation', 'specialistResults'] }]) {
+    assert.equal((await record(bad)).error?.code, '22023', `${JSON.stringify(bad)} refused`);
+  }
+  // Items that fail the text rule are hints, not evidence: dropped (never raised), so the answer and its usage are kept.
+  // Lengths count code points and C1 controls fail, as in the API.
+  const kept = await record({ followUps: ['\u{1F600}?', 'Next\u0085step?', 'Good question?'], sources: ['pendingActionApprovals'] });
+  assert.equal(kept.error, undefined, String(kept.error));
+  fakes.hon.complete(); fakes.hon.mode = 'RESULT';
+  await pending; // The provider's late result finds the row already recorded: nothing is recorded twice.
+  const s5 = await stored(sending);
+  assert.deepEqual([s5.f, s5.c], [['Good question?'], ['pendingActionApprovals']]);
+  const r5 = await hon.receipt(scope, sending);
+  assert.deepEqual([r5.status, r5.replyDetail.followUps, r5.replyDetail.sources], ['COMPLETED', ['Good question?'], ['pendingActionApprovals']], JSON.stringify(r5));
+  assert.equal((await row('SELECT count(*)::int n FROM hon.ai_usage_ledger WHERE source_invocation_id=(SELECT id FROM hon.hon_reply_invocations WHERE turn_id=$1)', [sending])).n, 1, 'one usage row');
+  // The table refuses an invalid or repeated item written any other way.
+  for (const bad of ['{"Hi"}', '{"Same?","Same?"}', `{"Next\u0085step?"}`]) {
+    assert.equal((await settle(admin.query('UPDATE hon.hon_reply_invocations SET follow_up_questions=$2::text[] WHERE turn_id=$1', [sending, bad]))).error?.code, '23514', bad);
+  }
+  // 6. Claire may give follow-ups and cite metrics (never the conversation she is not sent).
+  set(['What changed this month?'], ['conversation', 'outstandingWorkItems']);
+  const c1 = await hon.sendTurn(scope, conv.id, { text: 'How is the school doing?', delegation: { agentKey: 'claire' } }, K());
+  assert.deepEqual([c1.status, c1.replyDetail.followUps, c1.replyDetail.sources, c1.replyDetail.suggestions], ['COMPLETED', ['What changed this month?'], ['outstandingWorkItems'], []], JSON.stringify(c1));
+  set([], []);
+  pass('INV-32', '0254: follow-up questions (at most three, bounded plain text, unique) and cited sources (closed set, at most five, only fact areas the server recorded as sent: AVAILABLE metrics, the earlier conversation, group results) are stored with a whole answer only, shown only on a visible COMPLETED answer (concealed and cut-off answers show none; the table refuses others), malformed values are refused before any write, Claire may give them (no suggestions), and they add no provider call or usage beyond the answer');
+  }
+
+  // ---- INV-33 (0255): What HON remembers: school notes are saved on purpose, visible to every HON user, erasable ----
+  {
+  const o = await makeOrg('inv-33');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const call = (fn, input, key = K()) => { const c = context(o); return tenant(c, (client) => client.query(`SELECT hon.${fn}($1,$2::jsonb,$3,$4::uuid,$5::uuid) r`, [o.subject, JSON.stringify(input), key, c.requestId, c.correlationId])).then((r) => r.rows[0].r); };
+  const read = () => tenant(context(o), (client) => client.query('SELECT hon.read_hon_school_notes($1) r', [o.subject])).then((r) => r.rows[0].r);
+  const code = async (p) => (await settle(p)).error?.code ?? 'OK';
+  const drop = (c) => admin.query('DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code=$2', [o.role, c]);
+  const add = (c) => admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [o.role, o.id, c]);
+  const perm = await row("SELECT is_sensitive, is_staff_assignable FROM hon.permissions WHERE code='ai.school_notes.manage'");
+  assert.deepEqual([perm.is_sensitive, perm.is_staff_assignable], [false, true], 'staff-assignable permission');
+  // 1. A note is saved, listed for HON users, and replayed by key; a reused key with other input is refused.
+  const key = K();
+  const a = await call('add_hon_school_note', { text: 'We close the first week of August.' }, key);
+  assert.deepEqual([a.replayed, a.record.note.text], [false, 'We close the first week of August.'], JSON.stringify(a));
+  assert.equal((await call('add_hon_school_note', { text: 'We close the first week of August.' }, key)).replayed, true);
+  assert.equal(await code(call('add_hon_school_note', { text: 'Something else entirely.' }, key)), '23505');
+  const r1 = await read();
+  assert.deepEqual([r1.notes.map((n) => n.text), r1.canManage, r1.limits], [['We close the first week of August.'], true, { maxNotes: 20, maxCharacters: 2000, noteCharacters: 200 }]);
+  // 2. Never about a person, never a link: refused before any write.
+  const before = (await row('SELECT count(*)::int n FROM hon.hon_school_notes WHERE organization_id=$1', [o.id])).n;
+  for (const input of [{ text: 'Email coach@example.test for help' }, { text: 'Call 555 123 4567 after six' }, { text: 'Ring (555)123-4567' }, { text: 'See https://example.test' },
+    { text: 'Visit www.example.test' }, { text: 'Use <b>bold</b>' }, { text: 'ab' }, { text: 'x'.repeat(201) }, { text: 'Two\nlines here' }, { text: ' padded note ' }, { text: 7 }, { text: 'ok note', extra: 1 }, {}]) {
+    assert.equal(await code(call('add_hon_school_note', input)), '22023', JSON.stringify(input));
+  }
+  assert.equal((await row('SELECT count(*)::int n FROM hon.hon_school_notes WHERE organization_id=$1', [o.id])).n, before, 'nothing stored');
+  // The rule is the contract's character for character: code points, C1 controls, line separators, Unicode spaces.
+  for (const [text, ok] of [['\u{1F600}'.repeat(200), true], ['\u{1F600}'.repeat(201), false], ['Caf\u00e9 hours are 9 to 5.', true], ['Next\u0085step here', false],
+    ['\u00a0padded note', false], ['padded note\u3000', false], ['Line\u2028break', false], ['555\u00a0123\u00a04567 is the line', false], ['mail a@b\u00a0x', false]]) {
+    assert.equal((await row('SELECT hon.hon_school_note_ok($1) ok', [text])).ok, ok, JSON.stringify(text));
+  }
+  // 3. HON's context carries the notes (newest first) and may cite them; Claire's does not.
+  await call('add_hon_school_note', { text: 'Kids classes are 45 minutes long.' });
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = []; fakes.hon.followUps = []; fakes.hon.sources = ['schoolNotes'];
+  const conv = await hon.create(scope, { title: 'Summer' }, K());
+  const t1 = await hon.sendTurn(scope, conv.id, { text: 'When are we closed?', delegation: null }, K());
+  assert.deepEqual(JSON.parse(fakes.hon.inputs.at(-1).facts).schoolNotes, ['Kids classes are 45 minutes long.', 'We close the first week of August.']);
+  assert.deepEqual(t1.replyDetail.sources, ['schoolNotes']);
+  await hon.sendTurn(scope, conv.id, { text: 'How is the school doing?', delegation: { agentKey: 'claire' } }, K());
+  assert.equal(JSON.parse(fakes.hon.inputs.at(-1).facts).schoolNotes, undefined, 'Claire gets metrics only');
+  // 4. Deleting erases the text at once (evidence keeps ids and times); HON no longer sees it; audit never holds text.
+  const del = await call('delete_hon_school_note', { noteId: a.record.note.id });
+  assert.deepEqual([del.replayed, del.record.noteId, del.record.deleted], [false, a.record.note.id, true]);
+  const gone = await row('SELECT body, deleted_at IS NOT NULL d, deleted_by FROM hon.hon_school_notes WHERE id=$1', [a.record.note.id]);
+  assert.deepEqual([gone.body, gone.d, gone.deleted_by], [null, true, o.principal]);
+  assert.equal(await code(call('delete_hon_school_note', { noteId: a.record.note.id })), 'P0002', 'already deleted');
+  assert.equal(await code(call('delete_hon_school_note', { noteId: K() })), 'P0002');
+  assert.deepEqual((await read()).notes.map((n) => n.text), ['Kids classes are 45 minutes long.']);
+  fakes.hon.sources = [];
+  await hon.sendTurn(scope, conv.id, { text: 'Anything else?', delegation: null }, K());
+  assert.deepEqual(JSON.parse(fakes.hon.inputs.at(-1).facts).schoolNotes, ['Kids classes are 45 minutes long.']);
+  const leaked = (await row("SELECT count(*)::int n FROM hon.audit_events WHERE organization_id=$1 AND (coalesce(next_state::text,'') LIKE '%August%' OR coalesce(next_state::text,'') LIKE '%45 minutes%')", [o.id])).n;
+  const outboxLeak = (await row("SELECT count(*)::int n FROM hon.outbox_events WHERE organization_id=$1 AND (payload::text LIKE '%August%' OR payload::text LIKE '%45 minutes%')", [o.id])).n;
+  assert.deepEqual([leaked, outboxLeak], [0, 0], 'ids only in audit and outbox');
+  assert.equal((await row("SELECT count(*)::int n FROM hon.audit_events WHERE organization_id=$1 AND action_code LIKE 'hon.school_note.%'", [o.id])).n, 3);
+  // 5. Limits: at most 20 notes and 2,000 characters per school.
+  for (let i = (await read()).notes.length; i < 20; i++) await call('add_hon_school_note', { text: `Note number ${String.fromCharCode(65 + i)} for the school.` });
+  assert.equal(await code(call('add_hon_school_note', { text: 'One note too many.' })), '23514', 'at most 20');
+  for (const n of (await read()).notes) await call('delete_hon_school_note', { noteId: n.id });
+  for (let i = 0; i < 10; i++) await call('add_hon_school_note', { text: `${String.fromCharCode(65 + i)}${'a'.repeat(199)}` });
+  assert.equal(await code(call('add_hon_school_note', { text: 'Too long now.' })), '23514', 'at most 2000 characters');
+  // 6. Authority: manage needs ai.school_notes.manage; reading needs HON (ai.invocation.plan) or manage.
+  await drop('ai.school_notes.manage');
+  assert.equal(await code(call('add_hon_school_note', { text: 'Not allowed here.' })), '42501');
+  assert.equal(await code(call('delete_hon_school_note', { noteId: (await read()).notes[0].id })), '42501');
+  assert.equal((await read()).canManage, false);
+  await drop('ai.invocation.plan');
+  assert.equal(await code(read()), '42501');
+  await add('ai.invocation.plan'); await add('ai.school_notes.manage');
+  // 7. The tables are reached only through the three entry points; rows are never removed or rewritten except the erase.
+  for (const t of ['hon_school_notes', 'hon_school_note_requests']) assert.equal((await row("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE') p", [runtimeRole, `hon.${t}`])).p, false, t);
+  for (const f of ['hon.read_hon_school_notes(text)', 'hon.add_hon_school_note(text,jsonb,text,uuid,uuid)', 'hon.delete_hon_school_note(text,jsonb,text,uuid,uuid)']) {
+    assert.equal((await row("SELECT has_function_privilege($1,$2,'EXECUTE') p", [runtimeRole, f])).p, true, f);
+  }
+  const live = (await read()).notes[0].id;
+  assert.equal((await settle(admin.query('DELETE FROM hon.hon_school_notes WHERE id=$1', [live]))).error?.code, '42501');
+  assert.equal((await settle(admin.query("UPDATE hon.hon_school_notes SET body='Changed text here' WHERE id=$1", [live]))).error?.code, '42501');
+  pass('INV-33', "0255: school notes are saved only by a human with ai.school_notes.manage (staff-assignable), listed for every HON user at the school, idempotent by key, refused when they look like a person's contact, a link or markup, limited to 20 notes and 2,000 characters, given to HON's context newest first and citable as schoolNotes (never to Claire), erased on delete (evidence keeps ids and times), audited and announced by id only, and reachable only through three runtime entry points");
+  }
+
+  // ---- INV-34 (0256): HON tone per school: the owner picks a closed key; HON and Kai receive it; Claire does not ----
+  {
+  const o = await makeOrg('inv-34');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const set = (input, key = K()) => { const c = context(o); return tenant(c, (client) => client.query('SELECT hon.set_hon_school_tone($1,$2::jsonb,$3,$4::uuid,$5::uuid) r', [o.subject, JSON.stringify(input), key, c.requestId, c.correlationId])).then((r) => r.rows[0].r); };
+  const read = () => tenant(context(o), (client) => client.query('SELECT hon.read_hon_school_tone($1) r', [o.subject])).then((r) => r.rows[0].r);
+  const code = async (p) => (await settle(p)).error?.code ?? 'OK';
+  const drop = (c) => admin.query('DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code=$2', [o.role, c]);
+  const add = (c) => admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [o.role, o.id, c]);
+  const perm = await row("SELECT is_sensitive, is_staff_assignable FROM hon.permissions WHERE code='ai.school_tone.manage'");
+  assert.deepEqual([perm.is_sensitive, perm.is_staff_assignable], [false, false], 'owner-only permission');
+  // 1. Default STANDARD; HON receives STANDARD.
+  assert.deepEqual(await read(), { tone: 'STANDARD', canManage: true, updatedAt: null });
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = []; fakes.hon.followUps = []; fakes.hon.sources = [];
+  const conv = await hon.create(scope, { title: 'Tone' }, K());
+  await hon.sendTurn(scope, conv.id, { text: 'How are leads?', delegation: null }, K());
+  assert.equal(fakes.hon.inputs.at(-1).tone, 'STANDARD');
+  // 2. Set, replay by key, reused key refused, same tone again is a no-op receipt; closed input only.
+  const key = K();
+  assert.deepEqual(await set({ tone: 'FRIENDLY_COACH' }, key), { tone: 'FRIENDLY_COACH', previousTone: 'STANDARD', replayed: false });
+  assert.deepEqual(await set({ tone: 'FRIENDLY_COACH' }, key), { tone: 'FRIENDLY_COACH', previousTone: 'STANDARD', replayed: true });
+  assert.equal(await code(set({ tone: 'FORMAL' }, key)), '23505');
+  assert.deepEqual(await set({ tone: 'FRIENDLY_COACH' }), { tone: 'FRIENDLY_COACH', previousTone: 'FRIENDLY_COACH', replayed: false });
+  for (const input of [{ tone: 'friendly_coach' }, { tone: 'PIRATE' }, { tone: 'FORMAL', extra: 1 }, {}, { tone: 7 }]) assert.equal(await code(set(input)), '22023', JSON.stringify(input));
+  const r1 = await read();
+  assert.deepEqual([r1.tone, r1.canManage, typeof r1.updatedAt], ['FRIENDLY_COACH', true, 'string']);
+  // 3. HON and Kai receive the school's tone; Claire's analysis does not carry one.
+  await hon.sendTurn(scope, conv.id, { text: 'How are trials?', delegation: null }, K());
+  assert.equal(fakes.hon.inputs.at(-1).tone, 'FRIENDLY_COACH');
+  await hon.sendTurn(scope, conv.id, { text: 'How is the school doing?', delegation: { agentKey: 'claire' } }, K());
+  assert.equal(fakes.hon.inputs.at(-1).specialist, 'claire');
+  assert.equal(fakes.hon.inputs.at(-1).tone, undefined, 'Claire keeps her own voice');
+  fakes.claire.mode = 'RESULT';
+  const nKai = fakes.claire.inputs.length;
+  await agents.claire.service.submit(context(o), agents.claire.input(o));
+  assert.equal(fakes.claire.inputs.length, nKai + 1, 'Kai called once');
+  assert.equal(fakes.claire.inputs.at(-1).tone, 'FRIENDLY_COACH');
+  // 4. Audit carries the keys only; the outbox is internal only.
+  const audits = (await admin.query("SELECT next_state FROM hon.audit_events WHERE organization_id=$1 AND action_code='hon.school_tone.set' ORDER BY occurred_at", [o.id])).rows;
+  assert.deepEqual(audits.map((a) => a.next_state), [{ tone: 'FRIENDLY_COACH', previousTone: 'STANDARD' }, { tone: 'FRIENDLY_COACH', previousTone: 'FRIENDLY_COACH' }]);
+  assert.equal((await row("SELECT count(*)::int n FROM hon.outbox_events WHERE organization_id=$1 AND event_type='hon.school_tone.set' AND payload->>'internalOnly'='true'", [o.id])).n, 2);
+  // 5. Authority: setting needs ai.school_tone.manage; reading needs HON, Kai or manage.
+  await drop('ai.school_tone.manage');
+  assert.equal(await code(set({ tone: 'FORMAL' })), '42501');
+  assert.equal((await read()).canManage, false);
+  await drop('ai.invocation.plan');
+  assert.equal((await read()).tone, 'FRIENDLY_COACH', 'Kai users read it');
+  await drop('teaching.assistant.use');
+  assert.equal(await code(read()), '42501');
+  await add('ai.invocation.plan'); await add('teaching.assistant.use'); await add('ai.school_tone.manage');
+  // 6. Grants: runtime reaches the tables only through the three entry points; rows are never removed.
+  for (const t of ['hon_school_tones', 'hon_school_tone_requests']) assert.equal((await row("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE') p", [runtimeRole, `hon.${t}`])).p, false, t);
+  for (const f of ['hon.read_hon_school_tone(text)', 'hon.set_hon_school_tone(text,jsonb,text,uuid,uuid)', 'hon.hon_ai_tone()']) assert.equal((await row("SELECT has_function_privilege($1,$2,'EXECUTE') p", [runtimeRole, f])).p, true, f);
+  assert.equal((await settle(admin.query('DELETE FROM hon.hon_school_tones WHERE school_id=$1', [o.school]))).error?.code, '42501');
+  assert.equal((await settle(admin.query('DELETE FROM hon.hon_school_tone_requests WHERE school_id=$1', [o.school]))).error?.code, '42501');
+  assert.equal((await settle(admin.query("UPDATE hon.hon_school_tones SET tone='PIRATE' WHERE school_id=$1", [o.school]))).error?.code, '23514');
+  pass('INV-34', "0256: each school's tone is a closed key (Standard by default) set only by a human with the owner-only ai.school_tone.manage, idempotent by key, audited with keys only, read by HON, Kai or manage users, sent to HON and Kai (never Claire), and reachable only through three runtime entry points");
+  }
+
+  // ---- INV-35 (0257): weekly briefing part 1: off by default, owner switch, "email me" for oneself, preview, no AI ----
+  {
+  const o = await makeOrg('inv-35');
+  const call = (fn, input, key = K()) => { const c = context(o); return tenant(c, (client) => client.query(`SELECT hon.${fn}($1,$2::jsonb,$3,$4::uuid,$5::uuid) r`, [o.subject, JSON.stringify(input), key, c.requestId, c.correlationId])).then((r) => r.rows[0].r); };
+  const read = () => tenant(context(o), (client) => client.query('SELECT hon.read_school_briefing($1) r', [o.subject])).then((r) => r.rows[0].r);
+  const preview = () => tenant(context(o), (client) => client.query('SELECT hon.read_school_briefing_preview($1) r', [o.subject])).then((r) => r.rows[0].r);
+  const code = async (p) => (await settle(p)).error?.code ?? 'OK';
+  const drop = (c) => admin.query('DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code=$2', [o.role, c]);
+  const add = (c) => admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [o.role, o.id, c]);
+  const perm = await row("SELECT is_sensitive, is_staff_assignable FROM hon.permissions WHERE code='ai.school_briefing.manage'");
+  assert.deepEqual([perm.is_sensitive, perm.is_staff_assignable], [false, false], 'owner-only permission');
+  const calls0 = providerCalls;
+  // 1. Off by default; nobody is subscribed.
+  assert.deepEqual(await read(), { enabled: false, sendHour: 8, canManage: true, me: { email: false, canSubscribe: true } });
+  // 2. Owner switch: replay by key, reused key refused, closed input.
+  const key = K();
+  const on = await call('set_school_briefing_settings', { enabled: true, sendHour: 7 }, key);
+  assert.deepEqual([on.replayed, on.record.enabled, on.record.sendHour], [false, true, 7]);
+  assert.equal((await call('set_school_briefing_settings', { enabled: true, sendHour: 7 }, key)).replayed, true);
+  assert.equal(await code(call('set_school_briefing_settings', { enabled: false, sendHour: 7 }, key)), '23505');
+  for (const input of [{ enabled: true, sendHour: 5 }, { enabled: true, sendHour: 12 }, { enabled: 'yes', sendHour: 8 }, { enabled: true }, { enabled: true, sendHour: 8, extra: 1 }, { enabled: true, sendHour: 8.5 }]) {
+    assert.equal(await code(call('set_school_briefing_settings', input)), '22023', JSON.stringify(input));
+  }
+  // 3. Email me: for oneself only, closed input, replay.
+  const me = await call('set_my_school_briefing', { email: true });
+  assert.deepEqual(me.record.me, { email: true, canSubscribe: true });
+  for (const input of [{ email: 'yes' }, { email: true, sms: true }, { sms: true }, {}]) assert.equal(await code(call('set_my_school_briefing', input)), '22023', JSON.stringify(input));
+  assert.equal((await row('SELECT count(*)::int n FROM hon.school_briefing_subscriptions WHERE organization_id=$1 AND email_enabled', [o.id])).n, 1);
+  // 4. Preview: fixed template over Command Center counts, the school name, how to stop; no provider call.
+  const pv = await preview();
+  assert.equal(pv.subject, 'HON weekly briefing: AI-0 synthetic school');
+  assert.match(pv.text, /^New leads in the last 24 hours: \d+$/m);
+  assert.match(pv.text, /Unanswered inquiries: not available yet/);
+  assert.match(pv.text, /turn off "Email me" under Weekly briefing/);
+  assert.doesNotMatch(pv.text, /Synthetic Lead|synthetic-lead@example\.test/, 'counts only, never names or addresses');
+  assert.equal(providerCalls, calls0, 'no AI call');
+  // 5. Audit and outbox carry values only (no address); the outbox is internal only.
+  const audits = (await admin.query("SELECT action_code, next_state FROM hon.audit_events WHERE organization_id=$1 AND action_code LIKE 'hon.school_briefing.%' ORDER BY occurred_at", [o.id])).rows;
+  assert.deepEqual(audits.map((a) => a.action_code), ['hon.school_briefing.settings', 'hon.school_briefing.me']);
+  assert.doesNotMatch(JSON.stringify(audits), /@example\.test/);
+  assert.equal((await row("SELECT count(*)::int n FROM hon.outbox_events WHERE organization_id=$1 AND event_type LIKE 'hon.school_briefing.%' AND payload->>'internalOnly'='true'", [o.id])).n, 2);
+  // 6. Authority: settings need the owner permission; email me and the preview need reporting.view.
+  await drop('ai.school_briefing.manage');
+  assert.equal(await code(call('set_school_briefing_settings', { enabled: false, sendHour: 8 })), '42501');
+  assert.equal((await read()).canManage, false);
+  await drop('reporting.view');
+  assert.deepEqual((await read()).me, { email: true, canSubscribe: false });
+  assert.equal(await code(call('set_my_school_briefing', { email: true })), '42501');
+  assert.equal(await code(preview()), '42501');
+  assert.equal((await call('set_my_school_briefing', { email: false })).record.me.email, false, 'anyone may always turn their own email off');
+  await drop('ai.invocation.plan');
+  assert.equal(await code(read()), '42501');
+  await add('ai.invocation.plan'); await add('reporting.view'); await add('ai.school_briefing.manage');
+  // 7. Grants and guards: four runtime entry points (plus the read), tables never removed, values checked.
+  for (const t of ['school_briefing_settings', 'school_briefing_subscriptions', 'school_briefing_requests']) assert.equal((await row("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE') p", [runtimeRole, `hon.${t}`])).p, false, t);
+  for (const f of ['hon.read_school_briefing(text)', 'hon.read_school_briefing_preview(text)', 'hon.set_school_briefing_settings(text,jsonb,text,uuid,uuid)', 'hon.set_my_school_briefing(text,jsonb,text,uuid,uuid)']) {
+    assert.equal((await row("SELECT has_function_privilege($1,$2,'EXECUTE') p", [runtimeRole, f])).p, true, f);
+  }
+  assert.equal((await row("SELECT has_function_privilege($1,'hon.school_briefing_email(jsonb,text)','EXECUTE') p", [runtimeRole])).p, false);
+  assert.equal((await settle(admin.query('DELETE FROM hon.school_briefing_settings WHERE school_id=$1', [o.school]))).error?.code, '42501');
+  assert.equal((await settle(admin.query('UPDATE hon.school_briefing_settings SET send_hour=3 WHERE school_id=$1', [o.school]))).error?.code, '23514');
+  assert.equal((await settle(admin.query('UPDATE hon.school_briefing_subscriptions SET sms_enabled=true WHERE school_id=$1', [o.school]))).error?.code, '23514', 'SMS is reserved for 0258');
+  pass('INV-35', '0257: the weekly briefing is off by default, switched on and timed only by the owner (ai.school_briefing.manage), subscribed by email for oneself only with reporting.view (always possible to turn off), previewed from Command Center counts with no AI call and no names, audited without addresses, idempotent by key, and reachable only through four runtime entry points; SMS stays reserved for 0258');
+  }
+
+  // ---- INV-32 (R1, 0287): routing by task class through the HQ task profile ----
   {
   const o = await makeOrg('inv-32');
   const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };

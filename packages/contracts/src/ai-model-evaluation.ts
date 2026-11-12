@@ -22,7 +22,7 @@ export const AI_MODEL_EVALUATION_TASK_CATEGORIES = Object.freeze([
   'COMMAND_CENTER',
   'WORKFLOW_PLANNING',
   'SIMPLE_CLASSIFICATION',
-  // R1 (0242) routing categories: HON Standard/Detailed, Claire business performance, Kai teaching.
+  // R1 (0287) routing categories: HON Standard/Detailed, Claire business performance, Kai teaching.
   'HON_STANDARD',
   'HON_DETAILED',
   'BUSINESS_PERFORMANCE',

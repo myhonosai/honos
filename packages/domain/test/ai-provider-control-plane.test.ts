@@ -156,7 +156,7 @@ describe('HQ reviewed task-profile validation and pure selection', () => {
       expect(() => validateAiControlPlaneWrite('TASK_PROFILE', { ...profile, privacyControls })).toThrow();
     }
   });
-  it('R1 (0242): accepts HON and Kai routing profiles and the new task categories, nothing else', () => {
+  it('R1 (0287): accepts HON and Kai routing profiles and the new task categories, nothing else', () => {
     for (const [agentKey, taskCategory] of [['hon', 'HON_STANDARD'], ['hon', 'HON_DETAILED'], ['claire', 'BUSINESS_PERFORMANCE'], ['kai', 'KAI_TEACHING']] as const) {
       expect(validateAiControlPlaneWrite('TASK_PROFILE', { ...profile, agentKey, taskCategory })).toMatchObject({ agentKey, taskCategory });
     }
