@@ -90,7 +90,7 @@ describe('/staff/subscription HON OS standard and founder prices', () => {
     expect(honOsOneTimeRows(null)).toEqual([]); expect(honOsOneTimeRows({ offerSetVersion: null, offers: [] } as never)).toEqual([]);
     expect(Object.keys(ONE_TIME_ELIGIBILITY_COPY)).toHaveLength(9);
     const html = renderToStaticMarkup(<ul><HonOsOneTimeCard row={rows[0]!}/><HonOsOneTimeCard row={rows[1]!}/></ul>);
-    for (const s of ['HON OS lifetime', '$3,576', 'one-time', 'Paid once. It does not renew.', 'Refund window: 30 days.', 'Available to your organization now.', 'Sold out.', 'Server-returned offer']) expect(html).toContain(s);
+    for (const s of ['HON OS lifetime', '$3,576', 'one-time', 'Paid once. It does not renew.', 'Refund window: 30 days.', 'Lifetime checkout is not open yet.', 'Sold out.', 'Server-returned offer']) expect(html).toContain(s);
     expect(html.match(/Refund window/g)).toHaveLength(1);
     expect(html).not.toMatch(/<form|<button|type="submit"/);
     expect(renderToStaticMarkup(<HonOsPrices account={null}/>)).not.toContain('data-kind="ONE_TIME"');

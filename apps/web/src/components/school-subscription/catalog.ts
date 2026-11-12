@@ -108,7 +108,7 @@ export type HonOsOneTimeRow = {
   available: boolean; eligibility: SaasHonOsSchoolOfferEligibility;
 };
 export const ONE_TIME_ELIGIBILITY_COPY: Record<SaasHonOsSchoolOfferEligibility, string> = {
-  ELIGIBLE: 'Available to your organization now.',
+  ELIGIBLE: 'Your organization meets this offer’s terms. Lifetime checkout is not open yet.',
   NOT_ELIGIBLE_EXISTING_SUBSCRIPTION: 'Not available while your organization has a HON OS subscription.',
   NOT_ELIGIBLE_PRIOR_PURCHASE: 'Not available because of an earlier purchase.',
   NOT_ELIGIBLE_ENTITLEMENT: 'Not available for your organization’s current access.',
