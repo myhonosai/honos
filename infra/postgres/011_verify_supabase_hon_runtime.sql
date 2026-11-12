@@ -2841,6 +2841,46 @@ DO $$ DECLARE t text; safe boolean; expected record; r text; BEGIN
     END LOOP;
   END LOOP;
 END $$;
+-- A3 0305 Creative Studio photo avatars: exact posture of the four private tables and the five runtime entry points.
+DO $$ DECLARE t text; safe boolean; expected record; r text; BEGIN
+  FOR t IN SELECT unnest(ARRAY['creative_avatar_photo_consents','creative_avatar_photos','creative_avatar_photo_withdrawals','creative_avatar_photo_links']) LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity
+      AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime'
+      AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl WHERE acl.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped AND acl.grantee<>c.relowner)
+    INTO safe FROM pg_class c JOIN pg_roles owner_role ON owner_role.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Creative Studio photo avatar private table: %',t; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES
+    ('hon.creative_photo_signature_ok(text)',false,false,'i'),
+    ('hon.creative_photo_bytes_ok(text,bytea)',false,false,'i'),
+    ('hon.guard_creative_avatar_photo()',false,false,'v'),
+    ('hon.creative_photo_principal(text)',false,true,'v'),
+    ('hon.creative_photo_subject_live(uuid,uuid,uuid)',false,true,'v'),
+    ('hon.creative_photo_consent_live(uuid)',false,true,'v'),
+    ('hon.creative_avatar_withdrawn(uuid)',false,true,'v'),
+    ('hon.creative_generation_withdrawn(uuid)',false,true,'v'),
+    ('hon.creative_photo_consent_json(hon.creative_avatar_photo_consents,uuid)',false,true,'v'),
+    ('hon.creative_photo_fingerprint(uuid,jsonb,text)',false,false,'i'),
+    ('hon.upload_creative_avatar_photo(text,uuid,jsonb,text,uuid)',true,true,'v'),
+    ('hon.read_creative_avatar_photos(text,uuid)',true,true,'v'),
+    ('hon.read_creative_avatar_photo_image(text,uuid,uuid)',true,true,'v'),
+    ('hon.delete_creative_avatar_photo(text,uuid,uuid)',true,true,'v'),
+    ('hon.creative_photo_avatar_fingerprint(uuid,jsonb)',false,false,'i'),
+    ('hon.create_creative_photo_avatar(text,uuid,jsonb,jsonb,uuid,uuid,uuid)',true,true,'v')
+  ) AS x(signature,runtime_execute,security_definer,volatility) LOOP
+    SELECT p.prosecdef=expected.security_definer AND p.provolatile=expected.volatility AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[]
+      AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime'
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=expected.runtime_execute
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl WHERE acl.grantee<>p.proowner AND (acl.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT expected.runtime_execute OR acl.is_grantable OR acl.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner_role ON owner_role.oid=p.proowner WHERE p.oid=expected.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Creative Studio photo avatar function: %',expected.signature; END IF;
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+      IF has_function_privilege(r,expected.signature,'EXECUTE') THEN RAISE EXCEPTION 'Creative Studio photo avatar function exposed to %: %',r,expected.signature; END IF;
+    END LOOP;
+  END LOOP;
+END $$;
 -- End Creative Studio generations exact verification.
 
 -- School membership list exact verification (0220, U6): one read-only definer projection, runtime EXECUTE only.

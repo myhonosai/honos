@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Headers, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Headers, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { SAAS_COMMANDS } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
@@ -52,5 +52,37 @@ export class CreativeStudioAvatarVideosController {
   @Post() @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.createCreativeAvatarVideo)
   async create(@Req() req: HonRequest, @Param('schoolId') schoolId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
     return { data: await this.studio.createAvatarVideo(subject(req), schoolId, body, key) };
+  }
+}
+
+/**
+ * A3 Creative Studio photo avatars (0305): an adult staff member's own photo, with signed likeness consent. Uploading and
+ * making the avatar need the school staff actor; only the person in the photo can see the image; the person (or a live
+ * school owner) can delete it at any time, which erases the image and withdraws the avatar and its videos.
+ */
+@Controller('schools/:schoolId/creative-studio/avatar-photos')
+@UseGuards(HonIdentityGuard)
+export class CreativeStudioAvatarPhotosController {
+  constructor(private readonly studio: CreativeStudioService) {}
+  @Get() @UseGuards(SaasReadGuard)
+  async list(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
+    return { data: await this.studio.listPhotos(subject(req), schoolId) };
+  }
+  @Get(':consentId/image') @UseGuards(SaasReadGuard)
+  async image(@Req() req: HonRequest, @Param('schoolId') schoolId: string, @Param('consentId') consentId: string) {
+    return { data: await this.studio.readPhotoImage(subject(req), schoolId, consentId) };
+  }
+  @Post() @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.uploadCreativeAvatarPhoto)
+  async upload(@Req() req: HonRequest, @Param('schoolId') schoolId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.studio.uploadPhoto(subject(req), schoolId, body, key) };
+  }
+  @Post('avatars') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.createCreativePhotoAvatar)
+  async createAvatar(@Req() req: HonRequest, @Param('schoolId') schoolId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.studio.createPhotoAvatar(subject(req), schoolId, body, key) };
+  }
+  @Post(':consentId/delete') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.deleteCreativeAvatarPhoto)
+  async remove(@Req() req: HonRequest, @Param('schoolId') schoolId: string, @Param('consentId') consentId: string, @Body() body: unknown) {
+    if (body === null || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length) throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' });
+    return { data: await this.studio.deletePhoto(subject(req), schoolId, consentId) };
   }
 }

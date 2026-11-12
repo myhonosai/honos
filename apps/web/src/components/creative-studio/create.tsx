@@ -8,7 +8,7 @@ import styles from './creative-studio.module.css';
 type T = (key: StudioKey, vars?: Record<string, string>) => string;
 const REASONS: Record<string, StudioKey> = { SAAS_CREATIVE_AI_PAUSED_BY_HQ: 'reasonPaused', CREATIVE_TOO_MANY_IN_PROGRESS: 'reasonBusy', SAAS_CREATIVE_RATES_NOT_PUBLISHED: 'reasonRates',
   SAAS_OPERATION_NOT_PRICED: 'reasonNotPriced', CREATIVE_AVATAR_LIMIT_REACHED: 'reasonAvatarLimit', CREATIVE_AVATAR_RATE_INVALID: 'reasonAvatarRate',
-  CREATIVE_AVATAR_NOT_READY: 'reasonAvatarNotReady' };
+  CREATIVE_AVATAR_NOT_READY: 'reasonAvatarNotReady', CREATIVE_AVATAR_WITHDRAWN: 'reasonAvatarWithdrawn' };
 
 export function refusalReason(language: string, code: string | null): string {
   if (code && REASONS[code]) return studioText(language, REASONS[code]!);

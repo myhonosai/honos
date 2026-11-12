@@ -1,5 +1,7 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { CREATIVE_PHOTO_AVATAR_DESCRIPTION, type CreativePhotoAvatarInput, type CreativePhotoDeleted, type CreativePhotoImage, type CreativePhotoReceipt, type CreativePhotoRecords,
+  type CreativePhotoUploadInput } from '@hon/contracts';
 import type { CreativeAvatar, CreativeAvatarInput, CreativeAvatarReceipt, CreativeAvatarVideo, CreativeAvatarVideoInput, CreativeAvatarVideoReceipt, CreativeAvatarVideoRecords, CreativeGeneration, CreativeGenerationInput, CreativeGenerationReceipt, CreativeStudioAvatarList,
   CreativeStudioGenerationList } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
@@ -7,9 +9,9 @@ import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { AccountStatusError, readSchoolCreativeWallet } from '../account-status/http';
-import { CreativeGenerationError, createCreativeAvatar, createCreativeAvatarVideo, createCreativeGeneration, listCreativeAvatarVideos, listCreativeAvatars,
-  listCreativeGenerations } from './generation-http';
-import { studioWallet, type AvatarsState, type VideosState, type CreateLock, type CreateOutcome, type GenerationsState, type StudioState, type StudioWallet } from './model';
+import { CreativeGenerationError, createCreativeAvatar, createCreativeAvatarVideo, createCreativeGeneration, createCreativePhotoAvatar, deleteCreativeAvatarPhoto,
+  listCreativeAvatarPhotos, listCreativeAvatarVideos, listCreativeAvatars, listCreativeGenerations, readCreativeAvatarPhotoImage, uploadCreativeAvatarPhoto } from './generation-http';
+import { studioWallet, type PhotoOutcome, type PhotosState, type AvatarsState, type VideosState, type CreateLock, type CreateOutcome, type GenerationsState, type StudioState, type StudioWallet } from './model';
 import { CreativeStudioView } from './view';
 
 type Scope = Readonly<{ organizationId: string; schoolId: string }>;
@@ -23,6 +25,12 @@ export type CreativeStudioApi = {
   /** A2 (0277) talking avatar videos: optional for the same reason. */
   videos?(scope: Scope, signal: AbortSignal): Promise<CreativeAvatarVideoRecords>;
   createVideo?(scope: Scope, input: CreativeAvatarVideoInput, idempotencyKey: string, signal: AbortSignal): Promise<CreativeAvatarVideoReceipt>;
+  /** A3 (0305) photo avatars: optional for the same reason. */
+  photos?(scope: Scope, signal: AbortSignal): Promise<CreativePhotoRecords>;
+  photoImage?(scope: Scope, consentId: string, signal: AbortSignal): Promise<CreativePhotoImage>;
+  uploadPhoto?(scope: Scope, input: CreativePhotoUploadInput, idempotencyKey: string, signal: AbortSignal): Promise<CreativePhotoReceipt>;
+  deletePhoto?(scope: Scope, consentId: string, signal: AbortSignal): Promise<CreativePhotoDeleted>;
+  createPhotoAvatar?(scope: Scope, input: CreativePhotoAvatarInput, idempotencyKey: string, signal: AbortSignal): Promise<CreativeAvatarReceipt>;
 };
 /** The wallet and generation reads plus the one closed create command. The server authorizes the exact school for each. */
 export const CREATIVE_STUDIO_API: CreativeStudioApi = {
@@ -33,6 +41,11 @@ export const CREATIVE_STUDIO_API: CreativeStudioApi = {
   createAvatar: (scope, input, key, signal) => createCreativeAvatar(scope.schoolId, input, key, signal),
   videos: (scope, signal) => listCreativeAvatarVideos(scope.schoolId, signal),
   createVideo: (scope, input, key, signal) => createCreativeAvatarVideo(scope.schoolId, input, key, signal),
+  photos: (scope, signal) => listCreativeAvatarPhotos(scope.schoolId, signal),
+  photoImage: (scope, consentId, signal) => readCreativeAvatarPhotoImage(scope.schoolId, consentId, signal),
+  uploadPhoto: (scope, input, key, signal) => uploadCreativeAvatarPhoto(scope.schoolId, input, key, signal),
+  deletePhoto: (scope, consentId, signal) => deleteCreativeAvatarPhoto(scope.schoolId, consentId, signal),
+  createPhotoAvatar: (scope, input, key, signal) => createCreativePhotoAvatar(scope.schoolId, input, key, signal),
 };
 
 /**
@@ -42,6 +55,8 @@ export const CREATIVE_STUDIO_API: CreativeStudioApi = {
 type Pending = Readonly<{ schoolId: string; key: string; input: CreativeGenerationInput; unresolved: boolean }>;
 type PendingAvatar = Readonly<{ schoolId: string; key: string; input: CreativeAvatarInput; unresolved: boolean }>;
 type PendingVideo = Readonly<{ schoolId: string; key: string; input: CreativeAvatarVideoInput; unresolved: boolean }>;
+type PendingUpload = Readonly<{ schoolId: string; key: string; input: CreativePhotoUploadInput }>;
+type PendingPhotoAvatar = Readonly<{ schoolId: string; key: string; input: CreativePhotoAvatarInput; unresolved: boolean }>;
 const newKey = () => globalThis.crypto.randomUUID();
 
 export function outcomeFromReceipt(receipt: CreativeGenerationReceipt): CreateOutcome {
@@ -92,6 +107,20 @@ export function matchesPendingVideoGeneration(request: Readonly<{ input: Creativ
   return !!request && g.operationCode === 'avatar.video' && g.prompt === request.input.script && g.units === request.input.seconds && g.format === request.input.format;
 }
 
+/** Photo avatars that may be this tab's unconfirmed photo avatar request: their name is not shown. */
+export function matchesPendingPhotoAvatar(request: Readonly<{ input: CreativePhotoAvatarInput }> | null, a: Readonly<{ name: string; style: string; description: string }>): boolean {
+  return !!request && a.name === request.input.name && a.style === request.input.style && a.description === CREATIVE_PHOTO_AVATAR_DESCRIPTION;
+}
+/**
+ * What a photo save attempt means. Only an unknown outcome keeps the photo and its key for "Check again"; a refusal stores
+ * nothing, and a repeated save can at worst replace the person's own earlier photo, never charge anything.
+ */
+export function photoSaveOutcome(error: unknown): Readonly<{ outcome: PhotoOutcome; release: boolean }> {
+  if (error instanceof CreativeGenerationError && error.kind === 'INVALID') return { outcome: { kind: 'SAVE_INVALID' }, release: true };
+  if (error instanceof CreativeGenerationError && error.kind === 'DENIED') return { outcome: { kind: 'DENIED' }, release: true };
+  return { outcome: { kind: 'SAVE_UNKNOWN' }, release: false };
+}
+
 /** Rows that may be this tab's unconfirmed request: the list shows their status and credits, never their text. */
 export function matchesPending(request: Readonly<{ input: CreativeGenerationInput }> | null, g: CreativeGeneration): boolean {
   return !!request && g.operationCode === request.input.operationCode && g.units === request.input.units
@@ -122,6 +151,17 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
   const [videoLock, setVideoLock] = useState<CreateLock>('NONE');
   const pendingVideo = useRef<PendingVideo | null>(null);
   const sendingVideo = useRef(false);
+  const [photos, setPhotos] = useState<PhotosState>({ state: 'LOADING' });
+  const [photoImage, setPhotoImage] = useState<string | null>(null);
+  const [photoOutcome, setPhotoOutcome] = useState<PhotoOutcome>(null);
+  const [uploadLock, setUploadLock] = useState<CreateLock>('NONE');
+  const pendingUpload = useRef<PendingUpload | null>(null);
+  const sendingUpload = useRef(false);
+  const [photoDeleting, setPhotoDeleting] = useState(false);
+  const [photoAvatarOutcome, setPhotoAvatarOutcome] = useState<CreateOutcome>(null);
+  const [photoAvatarLock, setPhotoAvatarLock] = useState<CreateLock>('NONE');
+  const pendingPhotoAvatar = useRef<PendingPhotoAvatar | null>(null);
+  const sendingPhotoAvatar = useRef(false);
   const [refresh, setRefresh] = useState(0);
   const generation = useRef(0);
   // Advances only when the page is concealed (blur, hidden tab, school change, session end), never on a read Refresh,
@@ -135,13 +175,14 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
     concealShellPrivateNow(); generation.current++; privacy.current++; loadedSchool.current = null;
     setStudio({ state: 'LOADING' }); setGenerations({ state: 'LOADING' }); setOutcome(null); setAvatars({ state: 'LOADING' }); setAvatarOutcome(null);
     setVideos({ state: 'LOADING' }); setVideoOutcome(null);
+    setPhotos({ state: 'LOADING' }); setPhotoImage(null); setPhotoOutcome(null); setPhotoAvatarOutcome(null);
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), []);
 
   useEffect(() => {
     const current = ++generation.current;
     const school = selection ? selection.schoolId.toLowerCase() : null;
     // A Refresh of the same school keeps what is shown (and any draft in the form) until the new reads answer.
-    if (school === null || school !== loadedSchool.current) { setStudio({ state: 'LOADING' }); setGenerations({ state: 'LOADING' }); setAvatars({ state: 'LOADING' }); setVideos({ state: 'LOADING' }); }
+    if (school === null || school !== loadedSchool.current) { setStudio({ state: 'LOADING' }); setGenerations({ state: 'LOADING' }); setAvatars({ state: 'LOADING' }); setVideos({ state: 'LOADING' }); setPhotos({ state: 'LOADING' }); setPhotoImage(null); }
     loadedSchool.current = school;
     if (!selection) return;
     const scope = { organizationId: selection.organizationId, schoolId: selection.schoolId };
@@ -156,6 +197,14 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
     if (pendingVideo.current && pendingVideo.current.schoolId !== scope.schoolId.toLowerCase()) {
       pendingVideo.current = null;
       if (!sendingVideo.current) setVideoLock('NONE');
+    }
+    if (pendingUpload.current && pendingUpload.current.schoolId !== scope.schoolId.toLowerCase()) {
+      pendingUpload.current = null;
+      if (!sendingUpload.current) setUploadLock('NONE');
+    }
+    if (pendingPhotoAvatar.current && pendingPhotoAvatar.current.schoolId !== scope.schoolId.toLowerCase()) {
+      pendingPhotoAvatar.current = null;
+      if (!sendingPhotoAvatar.current) setPhotoAvatarLock('NONE');
     }
     const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
     api.wallet(scope, signal).then(
@@ -172,6 +221,19 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
       list => { if (current === generation.current) setVideos({ state: 'READY', items: list.videos }); },
       error => { if (current === generation.current) setVideos({ state: error instanceof CreativeGenerationError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
     else setVideos({ state: 'UNAVAILABLE' });
+    if (api.photos) api.photos(scope, signal).then(
+      list => {
+        if (current !== generation.current) return;
+        setPhotos({ state: 'READY', items: list.photos, canManageAll: list.canManageAll });
+        // Only the person's own active photo is ever read back, and only to show it to them.
+        const mine = list.photos.find(p => p.mine && p.status === 'ACTIVE');
+        if (!mine || !api.photoImage) { setPhotoImage(null); return; }
+        api.photoImage(scope, mine.consentId, signal).then(
+          image => { if (current === generation.current) setPhotoImage(`data:${image.contentType};base64,${image.photo}`); },
+          () => { if (current === generation.current) setPhotoImage(null); });
+      },
+      error => { if (current === generation.current) setPhotos({ state: error instanceof CreativeGenerationError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
+    else setPhotos({ state: 'UNAVAILABLE' });
     return () => { abort.abort(); };
   }, [selection?.organizationId, selection?.schoolId, api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -230,7 +292,8 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
   }, [sendAvatar, avatarLock, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
   const onCheckAvatarAgain = useCallback(() => { void sendAvatar(); }, [sendAvatar]);
   const shownAvatarOutcome: CreateOutcome = avatarOutcome ?? (avatarLock === 'SENDING' ? { kind: 'SENDING' } : avatarLock === 'UNRESOLVED' ? { kind: 'HIDDEN_PENDING' } : null);
-  const hideAvatarText = useCallback((a: CreativeAvatar) => matchesPendingAvatar(pendingAvatar.current, a), [avatarLock]); // eslint-disable-line react-hooks/exhaustive-deps
+  const hideAvatarText = useCallback((a: CreativeAvatar) => matchesPendingAvatar(pendingAvatar.current, a) || matchesPendingPhotoAvatar(pendingPhotoAvatar.current, a),
+    [avatarLock, photoAvatarLock]); // eslint-disable-line react-hooks/exhaustive-deps
   // A2 avatar videos: the same rules again. Only a known outcome releases the request; anything else keeps its key.
   const sendVideo = useCallback(async () => {
     const request = pendingVideo.current;
@@ -257,6 +320,69 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
   const onCheckVideoAgain = useCallback(() => { void sendVideo(); }, [sendVideo]);
   const shownVideoOutcome: CreateOutcome = videoOutcome ?? (videoLock === 'SENDING' ? { kind: 'SENDING' } : videoLock === 'UNRESOLVED' ? { kind: 'HIDDEN_PENDING' } : null);
   const hideVideoText = useCallback((v: CreativeAvatarVideo) => matchesPendingVideo(pendingVideo.current, v), [videoLock]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A3 photo save: the signed consent and the photo, kept with one key until the outcome is known (never in storage).
+  const sendUpload = useCallback(async () => {
+    const request = pendingUpload.current;
+    if (!request || sendingUpload.current || !selection || selection.schoolId.toLowerCase() !== request.schoolId || !api.uploadPhoto) return;
+    sendingUpload.current = true; const shown = privacy.current;
+    setUploadLock('SENDING'); setPhotoOutcome({ kind: 'SAVING' });
+    let next: PhotoOutcome, release: boolean;
+    try {
+      await api.uploadPhoto({ organizationId: selection.organizationId, schoolId: request.schoolId }, request.input, request.key, AbortSignal.timeout(60000));
+      next = { kind: 'SAVED' }; release = true;
+    } catch (error) { ({ outcome: next, release } = photoSaveOutcome(error)); }
+    finally { sendingUpload.current = false; }
+    if (pendingUpload.current?.key === request.key && release) pendingUpload.current = null;
+    setUploadLock(pendingUpload.current ? 'UNRESOLVED' : 'NONE');
+    if (next?.kind === 'SAVED') setRefresh(value => value + 1);
+    if (shown !== privacy.current) { setPhotoOutcome(prior => prior?.kind === 'SAVING' ? null : prior); return; }
+    setPhotoOutcome(next);
+  }, [api, selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onSavePhoto = useCallback((input: CreativePhotoUploadInput) => {
+    if (pendingUpload.current || sendingUpload.current || uploadLock !== 'NONE' || !selection) return;
+    pendingUpload.current = { schoolId: selection.schoolId.toLowerCase(), key: newKey(), input };
+    void sendUpload();
+  }, [sendUpload, uploadLock, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onCheckPhotoSave = useCallback(() => { void sendUpload(); }, [sendUpload]);
+  // Deleting is always allowed to the person in the photo (and a live school owner) and is safe to repeat.
+  const onDeletePhoto = useCallback(async (consentId: string) => {
+    if (photoDeleting || !selection || !api.deletePhoto) return;
+    const shown = privacy.current;
+    setPhotoDeleting(true); setPhotoOutcome({ kind: 'DELETING' });
+    let next: PhotoOutcome;
+    try { await api.deletePhoto({ organizationId: selection.organizationId, schoolId: selection.schoolId }, consentId, AbortSignal.timeout(60000)); next = { kind: 'DELETED' }; }
+    catch (error) { next = error instanceof CreativeGenerationError && error.kind === 'DENIED' ? { kind: 'DENIED' } : { kind: 'DELETE_UNKNOWN' }; }
+    finally { setPhotoDeleting(false); }
+    setRefresh(value => value + 1);
+    if (shown !== privacy.current) { setPhotoOutcome(prior => prior?.kind === 'DELETING' ? null : prior); return; }
+    setPhotoOutcome(next);
+  }, [api, photoDeleting, selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A3 photo avatar: the same rules as an avatar. Only a known outcome releases the request; anything else keeps its key.
+  const sendPhotoAvatar = useCallback(async () => {
+    const request = pendingPhotoAvatar.current;
+    if (!request || sendingPhotoAvatar.current || !selection || selection.schoolId.toLowerCase() !== request.schoolId || !api.createPhotoAvatar) return;
+    sendingPhotoAvatar.current = true; const shown = privacy.current;
+    setPhotoAvatarLock('SENDING'); setPhotoAvatarOutcome({ kind: 'SENDING' });
+    let next: CreateOutcome, release: boolean;
+    try {
+      const receipt = await api.createPhotoAvatar({ organizationId: selection.organizationId, schoolId: request.schoolId }, request.input, request.key, AbortSignal.timeout(180000));
+      next = outcomeFromAvatarReceipt(receipt); release = next?.kind !== 'UNKNOWN';
+    } catch (error) { ({ outcome: next, release } = outcomeFromAttempt(error, request.unresolved)); }
+    finally { sendingPhotoAvatar.current = false; }
+    if (pendingPhotoAvatar.current?.key === request.key) pendingPhotoAvatar.current = release ? null : { ...request, unresolved: true };
+    setPhotoAvatarLock(pendingPhotoAvatar.current ? 'UNRESOLVED' : 'NONE');
+    if (next?.kind === 'DONE' || next?.kind === 'HELD' || next?.kind === 'FAILED') setRefresh(value => value + 1);
+    if (shown !== privacy.current) { setPhotoAvatarOutcome(prior => prior?.kind === 'SENDING' ? null : prior); return; }
+    setPhotoAvatarOutcome(next);
+  }, [api, selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onCreatePhotoAvatar = useCallback((input: CreativePhotoAvatarInput) => {
+    if (pendingPhotoAvatar.current || sendingPhotoAvatar.current || photoAvatarLock !== 'NONE' || !selection) return;
+    pendingPhotoAvatar.current = { schoolId: selection.schoolId.toLowerCase(), key: newKey(), input, unresolved: false };
+    void sendPhotoAvatar();
+  }, [sendPhotoAvatar, photoAvatarLock, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onCheckPhotoAvatarAgain = useCallback(() => { void sendPhotoAvatar(); }, [sendPhotoAvatar]);
+  const shownPhotoAvatarOutcome: CreateOutcome = photoAvatarOutcome ?? (photoAvatarLock === 'SENDING' ? { kind: 'SENDING' } : photoAvatarLock === 'UNRESOLVED' ? { kind: 'HIDDEN_PENDING' } : null);
+  const shownPhotoOutcome: PhotoOutcome = photoOutcome ?? (uploadLock === 'SENDING' ? { kind: 'SAVING' } : uploadLock === 'UNRESOLVED' ? { kind: 'SAVE_UNKNOWN' } : null);
   const onRefresh = useCallback(() => setRefresh(value => value + 1), []);
   // After a conceal the shown outcome is gone, but a locked request still says it is waiting (without what it was).
   const shownOutcome: CreateOutcome = outcome ?? (lock === 'SENDING' ? { kind: 'SENDING' } : lock === 'UNRESOLVED' ? { kind: 'HIDDEN_PENDING' } : null);
@@ -268,6 +394,9 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
     <CreativeStudioView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       hasSchool={selection !== null} studio={studio} onRefresh={onRefresh} generations={generations} outcome={shownOutcome} locked={lock !== 'NONE'} hidePrompt={hidePrompt} onCreate={onCreate} onCheckAgain={onCheckAgain}
       avatars={avatars} avatarOutcome={shownAvatarOutcome} avatarLocked={avatarLock !== 'NONE'} hideAvatarText={hideAvatarText} onCreateAvatar={onCreateAvatar} onCheckAvatarAgain={onCheckAvatarAgain}
-      videos={videos} videoOutcome={shownVideoOutcome} videoLocked={videoLock !== 'NONE'} hideVideoText={hideVideoText} onCreateVideo={onCreateVideo} onCheckVideoAgain={onCheckVideoAgain}/>
+      videos={videos} videoOutcome={shownVideoOutcome} videoLocked={videoLock !== 'NONE'} hideVideoText={hideVideoText} onCreateVideo={onCreateVideo} onCheckVideoAgain={onCheckVideoAgain}
+      photos={photos} photoImage={photoImage} photoOutcome={shownPhotoOutcome} photoSaveLocked={uploadLock !== 'NONE'} photoDeleting={photoDeleting}
+      photoAvatarOutcome={shownPhotoAvatarOutcome} photoAvatarLocked={photoAvatarLock !== 'NONE'} onSavePhoto={onSavePhoto} onCheckPhotoSave={onCheckPhotoSave}
+      onDeletePhoto={consentId => { void onDeletePhoto(consentId); }} onCreatePhotoAvatar={onCreatePhotoAvatar} onCheckPhotoAvatarAgain={onCheckPhotoAvatarAgain}/>
   </div>;
 }
