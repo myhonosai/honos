@@ -45,7 +45,7 @@ export function validateAdmissionLimitsInput(v: unknown): AdmissionLimitsInput {
 
 function limits(v: unknown): AdmissionLimits {
   const o = closed(v, ['versionId', 'version', 'signupsPerHour', 'signupsPerDay', 'trialsPerHour', 'trialsPerDay', 'reason', 'recordedBy', 'actorPrincipalId', 'recordedAt']);
-  const recordedBy = o.recordedBy === 'MIGRATION_OWNER' || o.recordedBy === 'HQ_OWNER' ? o.recordedBy : bad();
+  const recordedBy: AdmissionLimits['recordedBy'] = o.recordedBy === 'MIGRATION_OWNER' || o.recordedBy === 'HQ_OWNER' ? o.recordedBy : bad();
   const actor = o.actorPrincipalId === null ? null : id(o.actorPrincipalId);
   if ((recordedBy === 'HQ_OWNER') !== (actor !== null)) bad();
   const reason = o.reason === null ? null : reasonText(o.reason);
@@ -67,12 +67,13 @@ function usage(v: unknown): AdmissionUsage {
 }
 function refusal(v: unknown): AdmissionRefusalHour {
   const o = closed(v, ['kind', 'hourStart', 'count', 'firstAt', 'lastAt']);
-  const out = { kind: o.kind === 'SIGNUP' || o.kind === 'TRIAL' ? o.kind : bad(), hourStart: instant(o.hourStart), count: int(o.count, 1, 2_000_000_000), firstAt: instant(o.firstAt), lastAt: instant(o.lastAt) };
+  const kind: AdmissionRefusalHour['kind'] = o.kind === 'SIGNUP' || o.kind === 'TRIAL' ? o.kind : bad();
+  const out = { kind, hourStart: instant(o.hourStart), count: int(o.count, 1, 2_000_000_000), firstAt: instant(o.firstAt), lastAt: instant(o.lastAt) };
   const hour = Date.parse(out.hourStart), first = Date.parse(out.firstAt), last = Date.parse(out.lastAt);
   if (hour % 3_600_000 !== 0 || first < hour || last < first || last >= hour + 3_600_000) bad();
   return Object.freeze(out);
 }
-const status = (v: unknown) => (v === 'CLOSED' || v === 'TEST_MODE' ? v : bad());
+const status = (v: unknown): 'CLOSED' | 'TEST_MODE' => (v === 'CLOSED' || v === 'TEST_MODE' ? v : bad());
 
 export function validateAdmissionStatus(v: unknown): AdmissionStatus {
   const o = closed(v, ['limits', 'history', 'historyHasMore', 'usage', 'refusals', 'programs', 'blockedEmailDomains', 'asOf']);
