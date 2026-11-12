@@ -1,5 +1,5 @@
 import React from 'react';
-import { ClassBookingWorkbench } from '../../../../components/class-booking-workbench';
+import { ClassBookingEntry } from '../../../../components/class-booking-entry';
 import { exactClassBookingSelectorPrefill } from '../../../../components/class-booking-selector-prefill';
 
 // The existing /staff layout verifies the signed session; the canonical API
@@ -11,5 +11,5 @@ type StaffClassBookingsPageProps = { searchParams: Promise<Record<string, unknow
 
 export default async function StaffClassBookingsPage({ searchParams }: StaffClassBookingsPageProps) {
   const query = await searchParams;
-  return <ClassBookingWorkbench initialPrefill={exactClassBookingSelectorPrefill(query)} />;
+  return <ClassBookingEntry initialPrefill={exactClassBookingSelectorPrefill(query)} />;
 }
