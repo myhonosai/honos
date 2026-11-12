@@ -219,7 +219,6 @@ BEGIN
     EXECUTE format('REVOKE ALL ON FUNCTION hon.record_zernio_lead(text, text, text, text, jsonb, jsonb) FROM %I', r);
   END LOOP;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
-    GRANT SELECT ON TABLE hon.zernio_lead_forms, hon.zernio_lead_receipts TO hon_runtime;
     GRANT EXECUTE ON FUNCTION hon.set_zernio_lead_form_from_hq(text, uuid, text, text, uuid, uuid, jsonb, text, integer) TO hon_runtime;
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_communication_worker') THEN

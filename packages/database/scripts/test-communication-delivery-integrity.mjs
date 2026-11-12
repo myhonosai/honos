@@ -94,7 +94,6 @@ async function cleanup() {
     await admin.query('DELETE FROM hon.principal_role_grants WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.role_permissions WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.roles WHERE organization_id = $1', [ids.org]);
-    await admin.query('DELETE FROM hon.organization_entitlements WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.principals WHERE id = ANY($1::uuid[])', [[ids.principal, ids.hqPrincipal, ids.readerPrincipal]]);
     await admin.query('DELETE FROM hon.users WHERE id = ANY($1::uuid[])', [[ids.user, ids.hqUser, ids.readerUser]]);
     await admin.query('DELETE FROM hon.schools WHERE organization_id = $1', [ids.org]);
@@ -557,7 +556,8 @@ try {
     await admin.query("INSERT INTO hon.crm_pipeline_stages (id, organization_id, school_id, pipeline_id, name, position, terminal_status) VALUES ($1,$2,$3,$4,'New',1,NULL), ($5,$2,$3,$4,'Won',2,'WON')",
       [pipe[`${key}open`], ids.org, school, pipe[key], pipe[`${key}won`]]);
   }
-  await admin.query("INSERT INTO hon.organization_entitlements (organization_id, tier, status, effective_from) VALUES ($1,'CORE','ACTIVE',clock_timestamp() - interval '1 day')", [ids.org]);
+  // The missed-call section above left the organization's entitlement ACTIVE and in effect; intake uses CORE.
+  await admin.query("UPDATE hon.organization_entitlements SET tier = 'CORE', status = 'ACTIVE', effective_until = NULL WHERE organization_id = $1", [ids.org]);
   const mapForm = (school, account, form, stageKey, status = 'ACTIVE', version = null, fieldMap = null) =>
     runtime.query('SELECT hon.set_zernio_lead_form_from_hq($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9) AS data',
       [`hq-${ids.hqUser}`, school, account, form, pipe[stageKey[0]], pipe[stageKey], fieldMap === null ? null : JSON.stringify(fieldMap), status, version]).then((r) => r.rows[0].data);
@@ -604,12 +604,10 @@ try {
   check((await admin.query("SELECT count(*)::int AS n FROM hon.crm_leads WHERE organization_id = $1 AND source_code = 'ZERNIO_META'", [ids.org])).rows[0].n === 2, 'exactly two Zernio leads exist');
   const zEvidence = (await admin.query("SELECT count(*)::int AS n FROM hon.outbox_events WHERE event_type = 'marketing.zernio.lead_received' AND organization_id = $1", [ids.org])).rows[0].n;
   check(zEvidence === 2, 'each created lead writes one internal outbox event');
-  await runtime.query('BEGIN');
-  await runtime.query("SELECT set_config('app.hon_organization_id', $1, true), set_config('app.hon_school_id', $2, true)", [ids.org, ids.schoolB]);
-  const bForms = (await runtime.query('SELECT form_id FROM hon.zernio_lead_forms')).rows.map((r) => r.form_id);
-  const bReceipts = (await runtime.query('SELECT school_id FROM hon.zernio_lead_receipts')).rows;
-  await runtime.query('ROLLBACK');
-  check(bForms.join() === '888' && bReceipts.length === 1 && bReceipts[0].school_id === ids.schoolB, 'school B staff see only their own form mapping and receipt');
+  await expectError('42501', () => runtime.query('SELECT form_id FROM hon.zernio_lead_forms'), 'the runtime cannot read Zernio form mappings directly');
+  await expectError('42501', () => runtime.query('SELECT school_id FROM hon.zernio_lead_receipts'), 'the runtime cannot read Zernio receipts directly');
+  const bReceipts = (await admin.query('SELECT r.school_id FROM hon.zernio_lead_receipts r JOIN hon.zernio_lead_forms f ON f.id = r.form_mapping_id WHERE r.organization_id = $1 AND f.form_id = $2', [ids.org, '888'])).rows;
+  check(bReceipts.length === 1 && bReceipts[0].school_id === ids.schoolB, "school B's form records its receipt against school B only");
 
   console.log(`PASS: communication delivery integrity (${passed} checks; day zone ${dayZone}, night zone ${nightZone}).`);
 } finally {

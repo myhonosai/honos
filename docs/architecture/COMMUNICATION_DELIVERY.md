@@ -173,6 +173,8 @@ receipt timeline. No address, no provider IDs, no cost.
   source `ZERNIO_META` and attribution holding only form and ad ids; records no message consent. An unmapped form answers 422
   (Zernio keeps it in its dead-letter queue for redelivery once HQ maps the form); over 300 leads per form per hour
   answers 429 (retried). Receipts keep ids and the outcome only, never answers or the raw payload.
+- The runtime has no access to `hon.zernio_lead_forms` or `hon.zernio_lead_receipts`; a later school or HQ screen that
+  lists mappings or receipts must add an entitlement-gated definer read (the 0249 missed-call pattern).
 
 ## 6. Who pays for texting (open, Decision 4)
 
