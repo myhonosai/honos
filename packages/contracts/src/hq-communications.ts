@@ -223,6 +223,12 @@ const GSM_EXTENDED = '^{}\\[~]|€\f';
  * would take. Twilio's MMS Converter sends anything over three pieces as one MMS, so `asMms` tells the writer the message
  * still arrives whole. This only guides the counter on screen; the database enforces the 1,600-character limit. */
 export interface HqTextPieces { characters: number; encoding: 'GSM-7' | 'UCS-2'; pieces: number; asMms: boolean }
+/** A US/Canada 10-digit number or any E.164 number, as E.164; null when it is not one. */
+export function normalizeHqPhone(value: string): string | null {
+  const digits = value.replace(/[\s().-]/g, '');
+  const e164 = /^[0-9]{10}$/.test(digits) ? `+1${digits}` : /^1[0-9]{10}$/.test(digits) ? `+${digits}` : digits;
+  return PHONE.test(e164) ? e164 : null;
+}
 export function hqTextPieces(content: string): HqTextPieces {
   const chars = [...content];
   const gsm = chars.every((c) => GSM_BASIC.includes(c) || GSM_EXTENDED.includes(c));

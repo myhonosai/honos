@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { HQ_MESSAGE_CHANNELS, HQ_SENDER_A2P_STATES, hqMessageMaxLength, hqTextPieces, type HqCommunicationSender, type HqCommunicationsView, type HqMessage,
+import { HQ_MESSAGE_CHANNELS, HQ_SENDER_A2P_STATES, hqMessageMaxLength, hqTextPieces, normalizeHqPhone, type HqCommunicationSender, type HqCommunicationsView, type HqMessage,
   type HqMessageChannel, type HqMessageCreateInput, type HqMessageDetail, type HqMessagePurpose, type HqSenderSetInput } from '@hon/contracts';
 import { commsCodeKey, commsText, type CommsKey } from './copy';
 import type { CommsOutcome } from './model';
@@ -13,7 +13,7 @@ const statusTone = (s: HqMessage['status']) => s === 'DRAFT' ? 'waiting' : s ===
 /** Where the compose form points: ids from the page link. The server confirms the school and the owners on save. */
 export type ComposeTarget = Readonly<{ organizationId: string; schoolId: string; supportCaseId: string | null }>;
 export type ComposeDraft = Readonly<{ purpose: string; channel: string; content: string }>;
-export type SenderDraft = Readonly<{ channel: HqMessageChannel; emailFrom: string; emailDisplayName: string; smsServiceSid: string; a2pState: string; mms: boolean }>;
+export type SenderDraft = Readonly<{ channel: HqMessageChannel; emailFrom: string; emailDisplayName: string; smsServiceSid: string; smsReplyNumber: string; a2pState: string; mms: boolean }>;
 
 /** The person's message as a closed request, or null when it is not one. Content is trimmed, never shortened. */
 export function createInputFrom(draft: ComposeDraft, target: ComposeTarget | null, purposes: readonly HqMessagePurpose[]): HqMessageCreateInput | null {
@@ -27,11 +27,11 @@ export function senderInputFrom(d: SenderDraft): HqSenderSetInput | null {
   if (d.channel === 'EMAIL') {
     const emailFrom = d.emailFrom.trim().toLowerCase(), emailDisplayName = d.emailDisplayName.trim();
     if (!emailFrom || !emailDisplayName) return null;
-    return { channel: 'EMAIL', emailFrom, emailDisplayName, smsServiceSid: null, a2pState: null, mmsConverterConfirmed: null };
+    return { channel: 'EMAIL', emailFrom, emailDisplayName, smsServiceSid: null, smsReplyNumber: null, a2pState: null, mmsConverterConfirmed: null };
   }
-  const sid = d.smsServiceSid.trim();
-  if (!/^MG[0-9a-fA-F]{32}$/.test(sid) || !d.mms || !(HQ_SENDER_A2P_STATES as readonly string[]).includes(d.a2pState)) return null;
-  return { channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: `MG${sid.slice(2).toLowerCase()}`, a2pState: d.a2pState as HqSenderSetInput['a2pState'],
+  const sid = d.smsServiceSid.trim(), reply = normalizeHqPhone(d.smsReplyNumber.trim());
+  if (!/^MG[0-9a-fA-F]{32}$/.test(sid) || reply === null || !d.mms || !(HQ_SENDER_A2P_STATES as readonly string[]).includes(d.a2pState)) return null;
+  return { channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: `MG${sid.slice(2).toLowerCase()}`, smsReplyNumber: reply, a2pState: d.a2pState as HqSenderSetInput['a2pState'],
     mmsConverterConfirmed: true };
 }
 
@@ -96,7 +96,7 @@ function SenderCard({ language, channel, sender, owner, locked, onSet, onRetire 
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const f = new FormData(event.currentTarget), v = (k: string) => String(f.get(k) ?? '');
-    onSet({ channel, emailFrom: v('emailFrom'), emailDisplayName: v('emailDisplayName'), smsServiceSid: v('smsServiceSid'), a2pState: v('a2pState'), mms: f.get('mms') === 'yes' });
+    onSet({ channel, emailFrom: v('emailFrom'), emailDisplayName: v('emailDisplayName'), smsServiceSid: v('smsServiceSid'), smsReplyNumber: v('smsReplyNumber'), a2pState: v('a2pState'), mms: f.get('mms') === 'yes' });
   };
   const id = `hq-comms-sender-${channel.toLowerCase()}`;
   return <article className={styles.card} aria-labelledby={id} data-comms-sender={channel}>
@@ -104,7 +104,7 @@ function SenderCard({ language, channel, sender, owner, locked, onSet, onRetire 
       <span className={styles.status} data-tone={sender ? 'ready' : 'waiting'}>{sender ? '✓' : '—'}</span></div>
     <p className={styles.meta}>{!sender ? t('senderNone') : channel === 'EMAIL'
       ? t('senderEmail', { name: sender.emailDisplayName ?? '', email: sender.emailFrom ?? '' })
-      : t('senderSms', { sid: sender.smsServiceSid ?? '', a2p: t(sender.a2pState ?? 'NOT_REGISTERED') })}</p>
+      : t('senderSms', { sid: sender.smsServiceSid ?? '', number: sender.smsReplyNumber ?? '', a2p: t(sender.a2pState ?? 'NOT_REGISTERED') })}</p>
     {owner && sender && <div className={styles.actions}><button type="button" className={styles.danger} disabled={locked} onClick={() => onRetire(sender)}>{t('retire')}</button></div>}
     {owner && !sender && <form className={styles.form} onSubmit={submit} data-comms-form={`sender-${channel}`}>
       <fieldset className={styles.fields} disabled={locked}>{channel === 'EMAIL' ? <>
@@ -114,6 +114,9 @@ function SenderCard({ language, channel, sender, owner, locked, onSet, onRetire 
         <label htmlFor={`${id}-sid`}>{t('smsServiceSid')}</label>
         <input id={`${id}-sid`} name="smsServiceSid" required pattern="MG[0-9a-fA-F]{32}" autoComplete="off" aria-describedby={`${id}-sid-help`}/>
         <p id={`${id}-sid-help`} className={styles.meta}>{t('smsSidHelp')}</p>
+        <label htmlFor={`${id}-reply`}>{t('smsReplyNumber')}</label>
+        <input id={`${id}-reply`} name="smsReplyNumber" type="tel" required autoComplete="off" aria-describedby={`${id}-reply-help`}/>
+        <p id={`${id}-reply-help`} className={styles.meta}>{t('smsReplyHelp')}</p>
         <label htmlFor={`${id}-a2p`}>{t('a2pState')}</label>
         <select id={`${id}-a2p`} name="a2pState" defaultValue="NOT_REGISTERED">{HQ_SENDER_A2P_STATES.map(s => <option key={s} value={s}>{t(s)}</option>)}</select>
         <label><input type="checkbox" name="mms" value="yes" required/> {t('mmsConfirm')}</label>

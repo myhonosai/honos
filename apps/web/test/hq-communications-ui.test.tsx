@@ -23,7 +23,7 @@ const msg = (patch: Record<string, unknown> = {}) => ({ messageId: id(1), organi
   schoolDisplayName: 'Synthetic Academy', purpose: 'SUPPORT', channel: 'EMAIL', content: 'Your sign-in link was reset.', supportCaseId: null, status: 'DRAFT',
   recipientCount: 0, createdBy: agent, createdAt: T, queuedAt: null, cancelledAt: null, updatedAt: T, version: 1, deliverySummary: summary, ...patch });
 const sender = (patch: Record<string, unknown> = {}) => ({ senderId: id(20), channel: 'EMAIL', status: 'ACTIVE', emailFrom: 'hello@hon.example', emailDisplayName: 'HON OS',
-  smsServiceSid: null, a2pState: null, mmsConverterConfirmed: null, createdBy: agent, createdAt: T, version: 1, ...patch });
+  smsServiceSid: null, smsReplyNumber: null, a2pState: null, mmsConverterConfirmed: null, createdBy: agent, createdAt: T, version: 1, ...patch });
 const viewRaw = (patch: Record<string, unknown> = {}) => ({ senders: { EMAIL: sender(), SMS: null }, messages: [msg()], limit: 25, nextCursor: null,
   viewer: { ...agent, purposes: ['ACCOUNT', 'SUPPORT'], canManageSenders: false }, asOf: T2, ...patch });
 const delivery = (patch: Record<string, unknown> = {}) => ({ deliveryId: id(30), recipient: { principalId: id(31), displayName: 'Synthetic Owner' }, status: 'PENDING',
@@ -124,12 +124,13 @@ it('builds closed requests from the forms: only purposes held, content trimmed a
   expect(createInputFrom({ purpose: 'BILLING', channel: 'EMAIL', content: 'Hi' }, target, ['SUPPORT'])).toBeNull();
   expect(createInputFrom({ purpose: 'SUPPORT', channel: 'EMAIL', content: '   ' }, target, ['SUPPORT'])).toBeNull();
   expect(createInputFrom({ purpose: 'SUPPORT', channel: 'EMAIL', content: 'Hi' }, null, ['SUPPORT'])).toBeNull();
-  const sms = { channel: 'SMS' as const, emailFrom: '', emailDisplayName: '', smsServiceSid: SID.toUpperCase().replace(/^MG/, 'MG'), a2pState: 'PENDING', mms: true };
-  expect(senderInputFrom(sms)).toEqual({ channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: SID, a2pState: 'PENDING', mmsConverterConfirmed: true });
+  const sms = { channel: 'SMS' as const, emailFrom: '', emailDisplayName: '', smsServiceSid: SID.toUpperCase().replace(/^MG/, 'MG'), smsReplyNumber: '(555) 555-0123', a2pState: 'PENDING', mms: true };
+  expect(senderInputFrom(sms)).toEqual({ channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: SID, smsReplyNumber: '+15555550123', a2pState: 'PENDING', mmsConverterConfirmed: true });
+  expect(senderInputFrom({ ...sms, smsReplyNumber: '555-0123' })).toBeNull();
   expect(senderInputFrom({ ...sms, mms: false })).toBeNull();
   expect(senderInputFrom({ ...sms, smsServiceSid: 'PN' + SID.slice(2) })).toBeNull();
-  expect(senderInputFrom({ channel: 'EMAIL', emailFrom: ' Hello@HON.example ', emailDisplayName: ' HON OS ', smsServiceSid: '', a2pState: '', mms: false }))
-    .toEqual({ channel: 'EMAIL', emailFrom: 'hello@hon.example', emailDisplayName: 'HON OS', smsServiceSid: null, a2pState: null, mmsConverterConfirmed: null });
+  expect(senderInputFrom({ channel: 'EMAIL', emailFrom: ' Hello@HON.example ', emailDisplayName: ' HON OS ', smsServiceSid: '', smsReplyNumber: '', a2pState: '', mms: false }))
+    .toEqual({ channel: 'EMAIL', emailFrom: 'hello@hon.example', emailDisplayName: 'HON OS', smsServiceSid: null, smsReplyNumber: null, a2pState: null, mmsConverterConfirmed: null });
 });
 
 const listProps = (patch: Partial<CommsListViewProps> = {}): CommsListViewProps => {
