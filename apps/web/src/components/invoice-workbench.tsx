@@ -107,14 +107,14 @@ export function InvoiceWorkbench({ shellScope = null }: { shellScope?: InvoiceSh
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">Staff dashboard</a><a href="/staff/command-center">Command Center</a></nav>
     <header><p>HON / DIRECT-HUMAN BILLING</p><h1>Human invoice workbench</h1>
-      <p>Create one canonical DRAFT invoice, then separately confirm issuance of only its verified in-memory receipt. {shellScope ? 'Choose who the invoice is for from your school’s memberships, then enter the amount and due date. No invoice list or current-status read is shown.' : 'This page starts blank and idle: no invoice/account/payer/membership directory, list, search or current-status read.'}</p>
+      <p>Create one canonical DRAFT invoice, then separately confirm issuance of only its verified in-memory receipt. {shellScope ? 'Choose who the invoice is for from your school’s memberships, then enter the amount and due date. Every invoice of this school, including drafts that still need issuing, is listed below.' : 'This page starts blank and idle: no invoice/account/payer/membership directory, list, search or current-status read.'}</p>
     </header>
     <aside><strong>Invoice record only — issuing is not delivery or collection.</strong>
       <p>Neither command creates payment authorization or a payment attempt, checkout or card capture, a recurring schedule, provider execution or reconciliation, a financial adjustment, refund, credit or discount, an agreement, a membership change, communications, schedule or attendance changes, or any provider, AI, Action Engine or automation effect.</p>
       <p>Exact known IDs are untrusted selectors, not authority. Existing current human scope, permissions <code>billing.invoice.create</code> / <code>billing.invoice.issue</code>, entitlement, tenant RLS, billing-account currency and linked-membership checks remain decisive. Issuance independently rechecks the current DRAFT state and returned version.</p>
     </aside>
     <section aria-labelledby="invoice-create"><h2 id="invoice-create">Create one DRAFT invoice</h2>
-      <p>{shellScope ? 'Choosing a membership fills its billing account and links the membership.' : 'Use only IDs already known through an authorized staff workflow.'} Total, discount, status, version and audit attribution are server-owned. There is no invoice-ID entry or historic issue action.</p>
+      <p>{shellScope ? 'Choosing a membership fills its billing account and links the membership.' : 'Use only IDs already known through an authorized staff workflow.'} Total, discount, status, version and audit attribution are server-owned. Earlier drafts are in the school's invoice list below, where they can be issued.</p>
       <form onSubmit={create}><fieldset disabled={busy}>
         {shellScope ? <div className={styles.scopeGrid}>
           <InvoicePickers scope={shellScope} membershipId={fields.membershipId} amount={fields.amountText} currency={fields.currency} dueDate={fields.dueDate} disabled={busy}
@@ -133,7 +133,7 @@ export function InvoiceWorkbench({ shellScope = null }: { shellScope?: InvoiceSh
       </fieldset></form>
       {busy && <p role="status">Verifying the exact human invoice command…</p>}
       {error && <p role="alert" className={styles.error}>{error}</p>}
-      {retry && <div className={styles.warning}><strong>Outcome uncertain — no receipt is assumed.</strong><p>Only the exact {retry.operation === 'CREATE' ? 'draft-create' : 'issue'} path, body and idempotency key remain in memory. Nothing retries automatically. An input edit, discard or reload removes this retry but cannot undo a command that may already have succeeded. Seek authorized staff review before a different attempt; this page cannot find or issue historic invoices.</p><button type="button" disabled={busy} onClick={() => retryExact(retry)}>Retry exact unchanged invoice command</button></div>}
+      {retry && <div className={styles.warning}><strong>Outcome uncertain — no receipt is assumed.</strong><p>Only the exact {retry.operation === 'CREATE' ? 'draft-create' : 'issue'} path, body and idempotency key remain in memory. Nothing retries automatically. An input edit, discard or reload removes this retry but cannot undo a command that may already have succeeded. Seek authorized staff review before a different attempt; the school's invoice list below shows whether it was created or issued.</p><button type="button" disabled={busy} onClick={() => retryExact(retry)}>Retry exact unchanged invoice command</button></div>}
       {!receipt && !busy && <p className={styles.empty}>No verified invoice receipt is shown.</p>}
     </section>
     {receipt && <section aria-label="Returned invoice receipt" className={styles.record}>

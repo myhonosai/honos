@@ -1,0 +1,120 @@
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Pool } from 'pg';
+import { runtimePoolOptions } from '../../foundation/runtime-pool-options.js';
+import type { CommunicationProviderName, DeliverableChannel } from './communication-provider.js';
+
+export interface ClaimedCommunicationDelivery {
+  deliveryId: string;
+  leaseToken: string;
+  organizationId: string;
+  schoolId: string;
+  messageId: string;
+  channel: DeliverableChannel;
+  recipientAddress: string;
+  content: string;
+  schoolName: string;
+  attempt: number;
+}
+
+export interface CommunicationSendResult {
+  outcome: 'ACCEPTED' | 'RETRYABLE' | 'FAILED' | 'UNKNOWN';
+  provider: CommunicationProviderName;
+  providerMessageId?: string | undefined;
+  sentAs?: 'EMAIL' | 'SMS' | 'MMS' | undefined;
+  segments?: number | undefined;
+  encoding?: 'GSM7' | 'UCS2' | undefined;
+  failureCode?: string | undefined;
+  retryAfterSeconds?: number | undefined;
+}
+
+export interface VerifiedProviderReceipt {
+  provider: CommunicationProviderName;
+  providerEventId: string;
+  providerMessageId: string;
+  honDeliveryId?: string | undefined;
+  eventType: 'SENT' | 'DELIVERED' | 'DEFERRED' | 'BOUNCED' | 'DROPPED' | 'UNDELIVERED' | 'FAILED' | 'UNSUBSCRIBED' | 'SPAM_REPORT';
+  occurredAt: string;
+  providerCostMicrounits?: number | undefined;
+}
+
+export interface CommunicationWorkerStore {
+  isConfigured(): boolean;
+  claim(channels: DeliverableChannel[], limit: number, leaseSeconds: number): Promise<ClaimedCommunicationDelivery[]>;
+  recordResult(deliveryId: string, leaseToken: string, result: CommunicationSendResult): Promise<{ status: string; accepted: boolean }>;
+  recordReceipt(receipt: VerifiedProviderReceipt): Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNMATCHED'; deliveryStatus: string | null }>;
+}
+
+export const COMMUNICATION_WORKER_STORE = Symbol('COMMUNICATION_WORKER_STORE');
+
+/**
+ * Connects as hon_communication_worker (HON_COMMUNICATION_WORKER_DATABASE_URL), never as the runtime or
+ * migration role. The role can only execute the four 0243 worker functions; it is refused if it is a
+ * superuser, bypasses RLS, or is the runtime login.
+ */
+@Injectable()
+export class CommunicationWorkerDatabase implements CommunicationWorkerStore, OnModuleDestroy {
+  private pool: Pool | undefined;
+  private posture: Promise<void> | undefined;
+
+  isConfigured(): boolean {
+    return Boolean(process.env.HON_COMMUNICATION_WORKER_DATABASE_URL);
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    await this.pool?.end();
+    this.pool = undefined;
+  }
+
+  private getPool(): Pool {
+    const url = process.env.HON_COMMUNICATION_WORKER_DATABASE_URL;
+    if (!url) throw new Error('COMMUNICATION_WORKER_NOT_CONFIGURED');
+    if (process.env.HON_RUNTIME_DATABASE_URL === url || process.env.DATABASE_URL === url) throw new Error('COMMUNICATION_WORKER_ROLE_UNSAFE');
+    if (!this.pool) {
+      const pool = new Pool({ ...runtimePoolOptions(url), max: 2, application_name: 'hon-communication-worker' });
+      pool.on('error', () => undefined); // the pool discards a broken idle client
+      this.pool = pool;
+    }
+    return this.pool;
+  }
+
+  private async query<T extends object>(sql: string, values: unknown[]): Promise<T[]> {
+    const pool = this.getPool();
+    this.posture ??= (async () => {
+      const role = (await pool.query<{ rolsuper: boolean; rolbypassrls: boolean; rolinherit: boolean }>(
+        'SELECT rolsuper, rolbypassrls, rolinherit FROM pg_roles WHERE rolname = current_user')).rows[0];
+      if (!role || role.rolsuper || role.rolbypassrls || role.rolinherit) throw new Error('COMMUNICATION_WORKER_ROLE_UNSAFE');
+    })();
+    try { await this.posture; } catch (error) { this.posture = undefined; throw error; }
+    return (await pool.query<T>(sql, values)).rows;
+  }
+
+  async claim(channels: DeliverableChannel[], limit: number, leaseSeconds: number): Promise<ClaimedCommunicationDelivery[]> {
+    const rows = await this.query<{
+      delivery_id: string; lease_token: string; organization_id: string; school_id: string; message_id: string; channel: DeliverableChannel;
+      recipient_address: string; content: string; school_name: string; attempt: number;
+    }>('SELECT * FROM hon.claim_communication_deliveries($1::text[], $2, $3)', [channels, limit, leaseSeconds]);
+    return rows.map((row) => ({
+      deliveryId: row.delivery_id, leaseToken: row.lease_token, organizationId: row.organization_id, schoolId: row.school_id,
+      messageId: row.message_id, channel: row.channel, recipientAddress: row.recipient_address, content: row.content,
+      schoolName: row.school_name, attempt: row.attempt,
+    }));
+  }
+
+  async recordResult(deliveryId: string, leaseToken: string, result: CommunicationSendResult) {
+    const row = (await this.query<{ status: string; accepted: boolean }>(
+      'SELECT * FROM hon.record_communication_send_result($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
+      [deliveryId, leaseToken, result.outcome, result.provider, result.providerMessageId ?? null, result.sentAs ?? null,
+        result.segments ?? null, result.encoding ?? null, result.failureCode ?? null, result.retryAfterSeconds ?? null]))[0];
+    if (!row) throw new Error('COMMUNICATION_RESULT_NOT_RECORDED');
+    return row;
+  }
+
+  async recordReceipt(receipt: VerifiedProviderReceipt) {
+    const row = (await this.query<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNMATCHED'; delivery_status: string | null }>(
+      'SELECT * FROM hon.record_communication_provider_event($1, $2, $3, $4, $5, $6, $7)',
+      [receipt.provider, receipt.providerEventId, receipt.providerMessageId, receipt.honDeliveryId ?? null, receipt.eventType,
+        receipt.occurredAt, receipt.providerCostMicrounits ?? null]))[0];
+    if (!row) throw new Error('COMMUNICATION_RECEIPT_NOT_RECORDED');
+    return { outcome: row.outcome, deliveryStatus: row.delivery_status };
+  }
+}
