@@ -3,8 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HON_OS_PRODUCT, HON_OS_LAUNCH_PRICING_REFERENCE } from '@hon/contracts';
 import { loadHonOsPrices } from '../src/components/school-subscription/http';
-import { honOsPriceRows, FOUNDER_REASON_COPY } from '../src/components/school-subscription/catalog';
-import { HonOsPriceCard, HonOsPrices } from '../src/components/school-subscription/hon-os-prices';
+import { honOsOneTimeRows, honOsPriceRows, FOUNDER_REASON_COPY, ONE_TIME_ELIGIBILITY_COPY } from '../src/components/school-subscription/catalog';
+import { HonOsOneTimeCard, HonOsPriceCard, HonOsPrices } from '../src/components/school-subscription/hon-os-prices';
 import { SchoolSubscription } from '../src/components/school-subscription/subscription';
 import { checkoutId, schoolContext } from '../scripts/fixtures/school-checkout.mjs';
 
@@ -77,5 +77,22 @@ describe('/staff/subscription HON OS standard and founder prices', () => {
     expect(closedFounder).not.toContain('$199.20'); expect(closedStandard).not.toContain('$249'); expect(closedFounder).toContain('Not on sale now');
     const page = renderToStaticMarkup(<SchoolSubscription/>);
     expect(page).toContain('hon-os-prices-title'); expect(page).not.toContain('No new Essential or annual');
+  });
+  it('shows a lifetime offer HQ published, from the server only, and never a launch-reference lifetime price', () => {
+    const lifetime = { offerCode: 'HON_OS_LIFETIME', offerKind: 'LIFETIME', billingInterval: 'ONE_TIME', founder: false, displayName: 'HON OS lifetime',
+      priceMinor: 357600, refundWindowDays: 30, eligibility: 'ELIGIBLE' };
+    const view = { offerSetVersion: 4, offers: [{ offerKind: 'REGULAR_MONTHLY', billingInterval: 'MONTHLY', priceMinor: 24900 }, lifetime,
+      { ...lifetime, offerCode: 'HON_OS_FOUNDER_LIFETIME', offerKind: 'FOUNDER_LIFETIME', founder: true, displayName: 'Founder lifetime', refundWindowDays: null, eligibility: 'SOLD_OUT' }] };
+    const rows = honOsOneTimeRows(view as never);
+    expect(rows).toEqual([
+      { offerCode: 'HON_OS_LIFETIME', displayName: 'HON OS lifetime', founder: false, priceMinor: 357600, refundWindowDays: 30, available: true, eligibility: 'ELIGIBLE' },
+      { offerCode: 'HON_OS_FOUNDER_LIFETIME', displayName: 'Founder lifetime', founder: true, priceMinor: 357600, refundWindowDays: null, available: false, eligibility: 'SOLD_OUT' }]);
+    expect(honOsOneTimeRows(null)).toEqual([]); expect(honOsOneTimeRows({ offerSetVersion: null, offers: [] } as never)).toEqual([]);
+    expect(Object.keys(ONE_TIME_ELIGIBILITY_COPY)).toHaveLength(9);
+    const html = renderToStaticMarkup(<ul><HonOsOneTimeCard row={rows[0]!}/><HonOsOneTimeCard row={rows[1]!}/></ul>);
+    for (const s of ['HON OS lifetime', '$3,576', 'one-time', 'Paid once. It does not renew.', 'Refund window: 30 days.', 'Available to your organization now.', 'Sold out.', 'Server-returned offer']) expect(html).toContain(s);
+    expect(html.match(/Refund window/g)).toHaveLength(1);
+    expect(html).not.toMatch(/<form|<button|type="submit"/);
+    expect(renderToStaticMarkup(<HonOsPrices account={null}/>)).not.toContain('data-kind="ONE_TIME"');
   });
 });
