@@ -3171,6 +3171,26 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
 END $$;
 -- End school event booking exact verification.
 
+-- Maya at-risk students exact verification (M1 0259): two private helpers and one read-only runtime entry point.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.require_maya_actor(text,text)',true,false,'search_path=pg_catalog, hon','3ec3ab3ace09cba647c0ef6a7849baca7960f89d64e457893de9cf17fe916151'),
+('hon.maya_reader_sees_tuition(text)',true,false,'search_path=pg_catalog, hon','16334235a565a92419cacb6472b0324fe185928c20bfea2782c93a7235b221af'),
+('hon.read_maya_at_risk_students(text,jsonb)',true,true,'search_path=pg_catalog, hon','fef4486ea9a901293e41231c3ad82a86c002d5bd47e609b22fbac0e78871e3c4')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Maya at-risk function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='retention.review.read' AND is_sensitive AND is_staff_assignable) THEN
+    RAISE EXCEPTION 'retention.review.read must exist as a sensitive staff-assignable permission'; END IF;
+END $$;
+-- End Maya at-risk students exact verification.
+
 -- School page branding exact verification (B-SCH-3 0285): two private forced-RLS tables, the guards, private validators
 -- and helpers, three runtime entry points and the permission.
 DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN

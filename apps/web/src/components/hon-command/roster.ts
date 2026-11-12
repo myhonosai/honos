@@ -12,7 +12,8 @@ import { HON_AI_TEAM, type HonAiTeamId, type HonInterfaceTheme } from '@hon/desi
  */
 
 export type HonCapabilityState = 'AVAILABLE' | 'BACKEND_REQUIRED';
-export type HonAgentAvailability = 'GOVERNED_DRAFTS' | 'PLANNED';
+/** ANSWERS (K2, 0260): a read-only analysis specialist answering questions in Ask HON; it never drafts or acts. */
+export type HonAgentAvailability = 'GOVERNED_DRAFTS' | 'ANSWERS' | 'PLANNED';
 
 export interface HonCapability {
   readonly label: string;
@@ -48,23 +49,24 @@ export interface HonCommandAgent {
 type Definition = Omit<HonCommandAgent, 'name' | 'title' | 'signal' | 'color' | 'portrait'>;
 
 const PLANNED_APPROVAL = 'No AI work is available yet. When a governed contract exists, consequential work will still require a qualified human approval in Action Center.';
+const ANSWER_APPROVAL = 'Answers only: it reads this school’s own aggregate numbers and gives the recorded facts and a view. It never drafts, sends, schedules, charges or changes anything; any next step is yours to take.';
 const DRAFT_APPROVAL = 'Every draft becomes a CONFIRM proposal. A different qualified human must approve the exact payload in Action Center; approval never sends, publishes or delivers anything.';
 
 const DEFINITIONS: readonly Definition[] = [
   {
     id: 'alex',
     purpose: 'Owner’s right hand and coordinator of the AI management team.',
-    availability: 'PLANNED',
+    availability: 'ANSWERS',
     capabilities: [
+      { label: 'Whole-school view and weekly priorities from verified facts (Ask HON → Alex)', state: 'AVAILABLE' },
       { label: 'Coordinate and delegate work across the team', state: 'BACKEND_REQUIRED' },
-      { label: 'Daily school briefing from verified Command Center facts', state: 'BACKEND_REQUIRED' },
     ],
     workflows: [
       { label: 'School Command Center', href: '/staff/command-center' },
       { label: 'Human approvals', href: '/staff/action-center/approvals' },
       { label: 'Human work items', href: '/staff/work' },
     ],
-    approval: PLANNED_APPROVAL,
+    approval: ANSWER_APPROVAL,
     workspace: null,
     draftWorkKey: null,
   },
@@ -123,9 +125,9 @@ const DEFINITIONS: readonly Definition[] = [
   {
     id: 'jordan',
     purpose: 'School operations, schedules, tasks and operational coordination.',
-    availability: 'PLANNED',
+    availability: 'ANSWERS',
     capabilities: [
-      { label: 'Schedule and staffing coordination', state: 'BACKEND_REQUIRED' },
+      { label: 'Class schedule, capacity, instructor coverage and attendance analysis (Ask HON → Jordan)', state: 'AVAILABLE' },
       { label: 'Operational task follow-through', state: 'BACKEND_REQUIRED' },
     ],
     workflows: [
@@ -133,24 +135,24 @@ const DEFINITIONS: readonly Definition[] = [
       { label: 'Team availability', href: '/staff/team/availability' },
       { label: 'Human work items', href: '/staff/work' },
     ],
-    approval: PLANNED_APPROVAL,
+    approval: ANSWER_APPROVAL,
     workspace: null,
     draftWorkKey: null,
   },
   {
     id: 'claire',
     purpose: 'Reporting, business intelligence, performance analysis and recommendations.',
-    availability: 'PLANNED',
+    availability: 'ANSWERS',
     capabilities: [
-      { label: 'Business performance analysis and KPI reporting', state: 'BACKEND_REQUIRED' },
-      { label: 'Recommendations from verified school metrics', state: 'BACKEND_REQUIRED' },
+      { label: 'Business performance analysis from verified school metrics (Ask HON → Claire)', state: 'AVAILABLE' },
+      { label: 'KPI reports and dashboards', state: 'BACKEND_REQUIRED' },
     ],
     workflows: [
       { label: 'Operations dashboard', href: '/staff/dashboard' },
       { label: 'School health score', href: '/staff/health-score' },
       { label: 'Revenue planning', href: '/staff/planning/revenue' },
     ],
-    approval: PLANNED_APPROVAL,
+    approval: ANSWER_APPROVAL,
     workspace: null,
     // Deliberately null: historical `claire`-keyed records are teaching drafts.
     draftWorkKey: null,
@@ -158,16 +160,16 @@ const DEFINITIONS: readonly Definition[] = [
   {
     id: 'lena',
     purpose: 'Creative assets, campaigns, merchandise concepts and commerce presentation.',
-    availability: 'PLANNED',
+    availability: 'ANSWERS',
     capabilities: [
-      { label: 'Creative asset concepts', state: 'BACKEND_REQUIRED' },
-      { label: 'Merchandise and commerce presentation', state: 'BACKEND_REQUIRED' },
+      { label: 'Campaign, plan catalog and Creative Studio analysis (Ask HON → Lena)', state: 'AVAILABLE' },
+      { label: 'Merchandise and commerce presentation drafts', state: 'BACKEND_REQUIRED' },
     ],
     workflows: [
       { label: 'Campaigns', href: '/staff/marketing/campaigns' },
       { label: 'Membership plans', href: '/staff/billing/membership-plans' },
     ],
-    approval: PLANNED_APPROVAL,
+    approval: ANSWER_APPROVAL,
     workspace: null,
     draftWorkKey: null,
   },

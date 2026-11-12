@@ -1056,4 +1056,5 @@ export * from './school-events.js';
 export * from './tuition-payments.js';
 export * from './school-payments.js';
 export * from './school-checkout.js';
+export * from './maya-at-risk.js';
 export * from './school-branding.js';

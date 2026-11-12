@@ -21,7 +21,7 @@ const en = {
   routeAttendance: 'Attendance', routeRosters: 'Class rosters', routeSessions: 'Class schedule', routeTimetable: 'Weekly timetable', routeEvents: 'Sale days & events', routePlannedAbsences: 'Planned absences', routeClassPass: 'ClassPass & walk-in', routeKiosk: 'Check-in kiosk',
   routeChampions: 'Champions Club', routeMarketingHome: 'Marketing overview', routeCampaigns: 'Campaign planner', routeForms: 'Lead forms', routeIntake: 'Lead intake', routeCreativeStudio: 'Creative Studio', routeMarketingAssistant: 'Marcus marketing assistant', routeRevenuePlanning: 'Revenue planning',
   routeVoice: 'Voice', routeDocuments: 'Documents',
-  routeHon: 'HON workspace', routeAiWork: 'AI drafts', routeKai: 'Kai teaching assistant', routeTeachingStudio: 'Teaching studio', routeCurriculumLibrary: 'Curriculum library',
+  routeHon: 'HON workspace', routeAiWork: 'AI drafts', routeKai: 'Kai teaching assistant', routeMayaAtRisk: 'Maya: students at risk', routeTeachingStudio: 'Teaching studio', routeCurriculumLibrary: 'Curriculum library',
   routeApprovals: 'Action Center', routeWork: 'Work', routeAutomation: 'Automation rules',
   routeTeam: 'Team & invitations', routeRoles: 'Roles', routeAvailability: 'Availability', routeQualifications: 'Instructor qualifications', routeAccount: 'Account & usage', routeOwners: 'School owners', routeSubscription: 'HON subscription', routeLaunch: 'School launch', routeFounderSetup: 'Founder Setup guide',
 } as const;
@@ -48,7 +48,7 @@ const ko: Record<ShellKey, string> = {
   routeAttendance: '출석', routeRosters: '수업 명단', routeSessions: '수업 일정', routeTimetable: '주간 시간표', routeEvents: '세일 데이 및 행사', routePlannedAbsences: '예정된 결석', routeClassPass: 'ClassPass 및 워크인', routeKiosk: '출석 키오스크',
   routeChampions: '챔피언스 클럽', routeMarketingHome: '마케팅 개요', routeCampaigns: '캠페인 플래너', routeForms: '문의 양식', routeIntake: '문의 접수', routeCreativeStudio: '크리에이티브 스튜디오', routeMarketingAssistant: 'Marcus 마케팅 도우미', routeRevenuePlanning: '매출 계획',
   routeVoice: '음성', routeDocuments: '문서',
-  routeHon: 'HON 업무 공간', routeAiWork: 'AI 초안', routeKai: 'Kai 교육 도우미', routeTeachingStudio: '교육 스튜디오', routeCurriculumLibrary: '커리큘럼 라이브러리',
+  routeHon: 'HON 업무 공간', routeAiWork: 'AI 초안', routeKai: 'Kai 교육 도우미', routeMayaAtRisk: 'Maya: 이탈 위험 학생', routeTeachingStudio: '교육 스튜디오', routeCurriculumLibrary: '커리큘럼 라이브러리',
   routeApprovals: '액션 센터', routeWork: '업무 목록', routeAutomation: '자동화 규칙',
   routeTeam: '팀 및 초대', routeRoles: '역할', routeAvailability: '근무 가능 시간', routeQualifications: '사범 자격', routeAccount: '계정 및 사용량', routeOwners: '도장 소유자', routeSubscription: 'HON 구독', routeLaunch: '도장 개설', routeFounderSetup: '창업 설정 가이드',
 };
@@ -74,7 +74,7 @@ const es: Record<ShellKey, string> = {
   routeAttendance: 'Asistencia', routeRosters: 'Listas de clase', routeSessions: 'Horario de clases', routeTimetable: 'Horario semanal', routeEvents: 'Días de venta y eventos', routePlannedAbsences: 'Ausencias previstas', routeClassPass: 'ClassPass y visitas', routeKiosk: 'Quiosco de entrada',
   routeChampions: 'Champions Club', routeMarketingHome: 'Resumen de marketing', routeCampaigns: 'Planificador de campañas', routeForms: 'Formularios', routeIntake: 'Entrada de prospectos', routeCreativeStudio: 'Estudio creativo', routeMarketingAssistant: 'Asistente de marketing Marcus', routeRevenuePlanning: 'Planificación de ingresos',
   routeVoice: 'Voz', routeDocuments: 'Documentos',
-  routeHon: 'Espacio HON', routeAiWork: 'Borradores de IA', routeKai: 'Asistente de enseñanza Kai', routeTeachingStudio: 'Estudio de enseñanza', routeCurriculumLibrary: 'Biblioteca del plan de estudios',
+  routeHon: 'Espacio HON', routeAiWork: 'Borradores de IA', routeKai: 'Asistente de enseñanza Kai', routeMayaAtRisk: 'Maya: alumnos en riesgo', routeTeachingStudio: 'Estudio de enseñanza', routeCurriculumLibrary: 'Biblioteca del plan de estudios',
   routeApprovals: 'Centro de acciones', routeWork: 'Trabajo', routeAutomation: 'Reglas de automatización',
   routeTeam: 'Equipo e invitaciones', routeRoles: 'Roles', routeAvailability: 'Disponibilidad', routeQualifications: 'Certificaciones de instructores', routeAccount: 'Cuenta y uso', routeOwners: 'Propietarios de la escuela', routeSubscription: 'Suscripción HON', routeLaunch: 'Apertura de la escuela', routeFounderSetup: 'Guía de configuración inicial',
 };
