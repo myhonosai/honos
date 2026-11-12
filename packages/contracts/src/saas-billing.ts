@@ -122,6 +122,10 @@ export const SAAS_COMMANDS = {
   createHqCreativeGeneration: 'hq-creative-generation-create',
   setHqCreativeBudget: 'hq-creative-budget-set',
   resolveHqCreativeGeneration: 'hq-creative-generation-resolve',
+  // B1 (0263): HQ Ask HON and the HQ AI text budget.
+  askHqHon: 'hq-hon-ask',
+  setHqHonBudget: 'hq-hon-budget-set',
+  resolveHqHonTurn: 'hq-hon-turn-resolve',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 

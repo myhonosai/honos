@@ -2954,3 +2954,40 @@ DO $$ DECLARE r text; BEGIN
   REVOKE ALL ON FUNCTION hon.record_inbound_text_keyword(text,text,text,text,timestamptz) FROM PUBLIC, hon_runtime;
   REVOKE ALL ON FUNCTION hon.claim_communication_deliveries(text[],integer,integer) FROM PUBLIC, hon_runtime;
 END $$;
+
+-- 0263 HQ Ask HON + HQ AI text budget: tables reached only through five runtime entry points; authority, facts, limits
+-- and projections are private.
+DO $$ DECLARE r text; t text; f text; BEGIN
+  IF to_regclass('hon.hq_hon_turns') IS NULL THEN RAISE EXCEPTION 'Apply migration 0263 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hq_hon_budget_periods','hq_hon_budget_changes','hq_hon_turns','hq_hon_requests'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC', t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I', t, r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['guard_hq_hon_record()','guard_hq_hon_evidence()','hq_hon_permission_held(uuid,text)','hq_hon_owner_eligible(uuid)',
+    'require_hq_hon_actor(text,boolean)','hq_hon_agent_permission(text)','hq_hon_agent_facts(text,text)','hq_hon_period(timestamptz)',
+    'hq_hon_lock_period(date)','hq_hon_mode_limits(text)','hq_hon_budget_json(date)','hq_hon_turn_json(hon.hq_hon_turns,uuid)',
+    'hq_hon_claim(uuid,uuid,text,text)','hq_hon_text(jsonb,text,integer,integer)','hq_hon_expected(jsonb)',
+    'set_hq_hon_budget(text,jsonb,uuid)','ask_hq_hon(text,jsonb,uuid)','record_hq_hon_result(text,uuid,jsonb)',
+    'resolve_hq_hon_turn(text,uuid,jsonb,uuid)','read_hq_hon_conversation(text)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.set_hq_hon_budget(text,jsonb,uuid), hon.ask_hq_hon(text,jsonb,uuid), hon.record_hq_hon_result(text,uuid,jsonb),
+      hon.resolve_hq_hon_turn(text,uuid,jsonb,uuid), hon.read_hq_hon_conversation(text) TO hon_runtime;
+  END IF;
+END $$;
+
+-- B-TUI-1b 0280 school invoice list: one read-only runtime entry point; it reuses the 0240 private tuition helpers.
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.read_school_invoices(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0280 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.read_school_invoices(text,jsonb) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION hon.read_school_invoices(text,jsonb) FROM %I',r);
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_invoices(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;

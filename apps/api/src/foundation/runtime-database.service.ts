@@ -242,6 +242,11 @@ const SAAS_BILLING_CALLS = {
   createHqCreativeGeneration: { sql: 'SELECT hon.create_hq_creative_generation($1,$2::jsonb,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   recordHqCreativeGenerationResult: { sql: 'SELECT hon.record_hq_creative_generation_result($1,$2::uuid,$3::jsonb) AS data', arity: 3, readOnly: false },
   resolveHqCreativeGeneration: { sql: 'SELECT hon.resolve_hq_creative_generation($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  readHqHonConversation: { sql: 'SELECT hon.read_hq_hon_conversation($1) AS data', arity: 1, readOnly: true },
+  setHqHonBudget: { sql: 'SELECT hon.set_hq_hon_budget($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  askHqHon: { sql: 'SELECT hon.ask_hq_hon($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  recordHqHonResult: { sql: 'SELECT hon.record_hq_hon_result($1,$2::uuid,$3::jsonb) AS data', arity: 3, readOnly: false },
+  resolveHqHonTurn: { sql: 'SELECT hon.resolve_hq_hon_turn($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   decideExceptionPolicy: { sql: 'SELECT hon.decide_saas_exception_policy($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   // HON OS commercial offers (0181): HQ Pricing & Offers and the school purchaser discovery read; no checkout connection.
   readOfferManagement: { sql: 'SELECT hon.read_saas_offer_management_from_hq($1) AS data', arity: 1, readOnly: true },
