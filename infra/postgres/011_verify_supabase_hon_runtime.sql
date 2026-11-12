@@ -2778,6 +2778,69 @@ DO $$ DECLARE t text; safe boolean; expected record; r text; BEGIN
     END LOOP;
   END LOOP;
 END $$;
+
+-- A1 0276 Creative Studio avatars: exact posture of the private table and the three runtime entry points.
+DO $$ DECLARE t text; safe boolean; expected record; r text; BEGIN
+  FOR t IN SELECT unnest(ARRAY['creative_avatars']) LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity
+      AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime'
+      AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl WHERE acl.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped AND acl.grantee<>c.relowner)
+    INTO safe FROM pg_class c JOIN pg_roles owner_role ON owner_role.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Creative Studio avatar private table: %',t; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES
+    ('hon.creative_avatar_name_ok(text)',false,false,'i'),
+    ('hon.guard_creative_avatar_generation()',false,true,'v'),
+    ('hon.creative_avatar_json(hon.creative_avatars)',false,false,'s'),
+    ('hon.creative_avatar_fingerprint(uuid,jsonb)',false,false,'i'),
+    ('hon.create_creative_avatar(text,uuid,jsonb,jsonb,uuid,uuid,uuid)',true,true,'v'),
+    ('hon.read_creative_avatars(text,uuid)',true,true,'v'),
+    ('hon.read_creative_avatar(text,uuid,uuid)',true,true,'v')
+  ) AS x(signature,runtime_execute,security_definer,volatility) LOOP
+    SELECT p.prosecdef=expected.security_definer AND p.provolatile=expected.volatility AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[]
+      AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime'
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=expected.runtime_execute
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl WHERE acl.grantee<>p.proowner AND (acl.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT expected.runtime_execute OR acl.is_grantable OR acl.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner_role ON owner_role.oid=p.proowner WHERE p.oid=expected.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Creative Studio avatar function: %',expected.signature; END IF;
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+      IF has_function_privilege(r,expected.signature,'EXECUTE') THEN RAISE EXCEPTION 'Creative Studio avatar function exposed to %: %',r,expected.signature; END IF;
+    END LOOP;
+  END LOOP;
+END $$;
+
+-- A2 0277 Creative Studio avatar videos: exact posture of the private table and the three runtime entry points.
+DO $$ DECLARE t text; safe boolean; expected record; r text; BEGIN
+  FOR t IN SELECT unnest(ARRAY['creative_avatar_videos']) LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity
+      AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime'
+      AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl WHERE acl.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped AND acl.grantee<>c.relowner)
+    INTO safe FROM pg_class c JOIN pg_roles owner_role ON owner_role.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Creative Studio avatar video private table: %',t; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES
+    ('hon.guard_creative_avatar_generation()',false,true,'v'),
+    ('hon.creative_avatar_video_json(hon.creative_avatar_videos)',false,false,'s'),
+    ('hon.creative_avatar_video_fingerprint(uuid,jsonb)',false,false,'i'),
+    ('hon.create_creative_avatar_video(text,uuid,jsonb,jsonb,uuid,uuid,uuid)',true,true,'v'),
+    ('hon.read_creative_avatar_videos(text,uuid)',true,true,'v'),
+    ('hon.read_creative_avatar_video(text,uuid,uuid)',true,true,'v')
+  ) AS x(signature,runtime_execute,security_definer,volatility) LOOP
+    SELECT p.prosecdef=expected.security_definer AND p.provolatile=expected.volatility AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[]
+      AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime'
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=expected.runtime_execute
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl WHERE acl.grantee<>p.proowner AND (acl.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT expected.runtime_execute OR acl.is_grantable OR acl.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner_role ON owner_role.oid=p.proowner WHERE p.oid=expected.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Creative Studio avatar video function: %',expected.signature; END IF;
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+      IF has_function_privilege(r,expected.signature,'EXECUTE') THEN RAISE EXCEPTION 'Creative Studio avatar video function exposed to %: %',r,expected.signature; END IF;
+    END LOOP;
+  END LOOP;
+END $$;
 -- End Creative Studio generations exact verification.
 
 -- School membership list exact verification (0220, U6): one read-only definer projection, runtime EXECUTE only.
@@ -3170,3 +3233,99 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
   END LOOP;
 END $$;
 -- End school event booking exact verification.
+
+-- Maya at-risk students exact verification (M1 0259): two private helpers and one read-only runtime entry point.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.require_maya_actor(text,text)',true,false,'search_path=pg_catalog, hon','3ec3ab3ace09cba647c0ef6a7849baca7960f89d64e457893de9cf17fe916151'),
+('hon.maya_reader_sees_tuition(text)',true,false,'search_path=pg_catalog, hon','16334235a565a92419cacb6472b0324fe185928c20bfea2782c93a7235b221af'),
+('hon.read_maya_at_risk_students(text,jsonb)',true,true,'search_path=pg_catalog, hon','fef4486ea9a901293e41231c3ad82a86c002d5bd47e609b22fbac0e78871e3c4')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Maya at-risk function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='retention.review.read' AND is_sensitive AND is_staff_assignable) THEN
+    RAISE EXCEPTION 'retention.review.read must exist as a sensitive staff-assignable permission'; END IF;
+END $$;
+-- End Maya at-risk students exact verification.
+
+-- School invoice list exact verification (B-TUI-1b 0280): one definer read-only runtime entry point, exact body.
+DO $$ DECLARE safe boolean; BEGIN
+  SELECT p.prosecdef AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND (owner.rolsuper OR owner.rolbypassrls)
+    AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+    AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='cb1fbb5c9d43b79c8991a892a2bff687edb37c2b60f456d9e0c300d80e2acb35'
+    AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+    AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+      WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+  INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid='hon.read_school_invoices(text,jsonb)'::regprocedure;
+  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school invoice list function'; END IF;
+END $$;
+-- End school invoice list exact verification.
+
+-- Missed-call text-back exact verification (B-COM-1 0249): a private forced-RLS table the runtime cannot touch, one
+-- entitlement-gated definer read and the HQ-owner settings command for the runtime, and worker-only routing/recording.
+DO $$ DECLARE f text; runtime oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'); BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.missed_calls'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR has_table_privilege('hon_runtime','hon.missed_calls','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+    RAISE EXCEPTION 'Unsafe missed-call table posture'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.read_school_missed_calls(text,uuid,integer)','hon.set_school_missed_call_settings_from_hq(text,uuid,text,boolean,integer)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef
+        AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND p.proowner<>runtime AND (owner.rolsuper OR owner.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (a.grantee<>runtime OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe missed-call runtime function: %',f; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc x WHERE x.pronamespace='hon'::regnamespace AND x.proname='read_school_missed_calls')<>1 THEN
+    RAISE EXCEPTION 'Unexpected missed-call read overload'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.read_missed_call_route(text)','hon.record_missed_call(text,text,text,text,timestamptz)',
+    'hon.claim_missed_call_text_backs(integer,integer)','hon.record_missed_call_text_back_result(uuid,uuid,text,text)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') THEN RAISE EXCEPTION 'Runtime can run missed-call worker function: %',f; END IF;
+  END LOOP;
+END $$;
+-- End missed-call text-back exact verification.
+
+-- School page branding exact verification (B-SCH-3 0285): two private forced-RLS tables, the guards, private validators
+-- and helpers, three runtime entry points and the permission.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['hon.school_page_branding','hon.school_page_branding_versions'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=t::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'School branding table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.school_branding_image_ok(text)',false,false,'search_path=pg_catalog','b10e7b2fced41045b95b6ab3843d662dc31192978ec596c23922071faa482d62'),
+('hon.school_branding_input_ok(jsonb)',false,false,'search_path=pg_catalog, hon','053a6c6f5c424e4bbe5dcdbdfe8e696d652884514bc1562f34c3705426678882'),
+('hon.guard_school_page_branding()',false,false,'search_path=pg_catalog, hon','4069df59a225f8552d5f3580bc20e0bf8f597d6a4a8532094e9ba05e485323f4'),
+('hon.require_school_branding_actor(text)',true,false,'search_path=pg_catalog, hon','c40bd4f620b7673b7fe6853ca22fb8712ae5c4a0c27e2fc3ac369c20af3fb4a0'),
+('hon.school_page_branding_json(hon.school_page_branding)',false,false,'search_path=pg_catalog, hon','2b75779f3aa2a4fddf7b26cbca03e922a752effa694a3653ec0bba0b3551810d'),
+('hon.read_school_page_branding(text)',true,true,'search_path=pg_catalog, hon','7a0f8422ee144c7c90df29e63b9160255d052ea64d193e2a199b84568a0273c7'),
+('hon.save_school_page_branding(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','71b8e89c1975c7d3f9d3d6a2cc6a1d1787438579d6ead5d2667c22f6c62134f4'),
+('hon.read_public_school_branding(uuid)',true,true,'search_path=pg_catalog, hon','92c9b82ee4ff86f509546c2bb441a6f63144a88de8f2adefab0385368a84ea63')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school branding function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('school_page_branding','school_page_branding_guard','hon.guard_school_page_branding()'),
+    ('school_page_branding','school_page_branding_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('school_page_branding_versions','school_page_branding_versions_immutable','hon.guard_membership_activation_evidence()'),
+    ('school_page_branding_versions','school_page_branding_versions_no_truncate','hon.guard_membership_activation_evidence()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing school branding guard: %',expected.name; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='school_branding.manage' AND is_sensitive AND is_staff_assignable) THEN
+    RAISE EXCEPTION 'school_branding.manage must exist as a sensitive staff-assignable permission'; END IF;
+END $$;
+-- End school page branding exact verification.

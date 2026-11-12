@@ -82,9 +82,16 @@ function PortraitImage({ agent, size = 'md', source }: { agent: Pick<HonCommandA
   </span>;
 }
 
+/** The screen-reader wording for an agent's availability; matches the visible badge. */
+export function availabilityLabel(agent: Pick<HonCommandAgent, 'availability'>): string {
+  return agent.availability === 'GOVERNED_DRAFTS' ? 'Governed drafts available with approval'
+    : agent.availability === 'ANSWERS' ? 'Answers questions, read only' : 'Planned, not yet available';
+}
+
 export function AvailabilityBadge({ agent, compact = false }: { agent: HonCommandAgent; compact?: boolean }): React.ReactElement {
   return agent.availability === 'GOVERNED_DRAFTS'
     ? <span className={styles.badge} data-tone="ready">{compact ? 'Drafts · approval' : 'Drafts · approval required'}</span>
+    : agent.availability === 'ANSWERS' ? <span className={styles.badge} data-tone="ready">{compact ? 'Answers · read only' : 'Answers questions · read only'}</span>
     : <span className={styles.badge} data-tone="planned">{compact ? 'Planned' : 'Planned · not yet available'}</span>;
 }
 
@@ -129,7 +136,7 @@ function TeamGrid({ snapshot, variant, onSelectAgent }: { snapshot: HonCommandSn
     {HON_COMMAND_ROSTER.map((agent) => {
       const count = draftCount(snapshot, agent);
       return <li key={agent.id}>
-        <button type="button" className={styles.agentCard} style={{ '--agent': agent.color } as React.CSSProperties} onClick={() => onSelectAgent?.(agent.id)} aria-label={`${agent.name}, ${agent.title}. ${agent.availability === 'GOVERNED_DRAFTS' ? 'Governed drafts available with approval' : 'Planned, not yet available'}. Open details`}>
+        <button type="button" className={styles.agentCard} style={{ '--agent': agent.color } as React.CSSProperties} onClick={() => onSelectAgent?.(agent.id)} aria-label={`${agent.name}, ${agent.title}. ${availabilityLabel(agent)}. Open details`}>
           <AgentPortrait agent={agent} />
           <span className={styles.agentText}>
             <strong>{agent.name}</strong>

@@ -596,6 +596,35 @@ try {
   await admin.query('BEGIN READ ONLY');assert.equal(await conflictOf(org.id),'PAID_NEEDS_REVIEW');await admin.query('COMMIT');
   passed('0237 HQ review queue: every held schedule payment listed for HQ with its blocker; HQ-owner refund obligation (no provider action), partial refund refused, verified full refund clears the hold, concurrent single verification, a parked billing plan carries on and a never-paid plan goes back to waiting; later money reopens; records closed');
   for(const q of ['SELECT * FROM hon.saas_schedule_bindings','UPDATE hon.saas_schedule_bindings SET id=id','DELETE FROM hon.saas_schedule_provider_events','INSERT INTO hon.saas_schedule_paid_periods SELECT * FROM hon.saas_schedule_paid_periods LIMIT 1'])await sqlDeny(restricted.query(q),'42501');
+  // 0304: HQ's Ryan and Olivia count these schedule bindings and verified paid periods (aggregates only, no identity).
+  const ryan=(await row("SELECT hon.hq_hon_agent_facts('proof','ryan') f")).f,olivia=(await row("SELECT hon.hq_hon_agent_facts('proof','olivia') f")).f;
+  const sb=await row(`SELECT count(*) FILTER (WHERE status='ACTIVE')::int active,count(*) FILTER (WHERE status='BOUND_TEST_ONLY')::int bound,
+    count(*) FILTER (WHERE status='ACTIVE' AND requirements->>'billingInterval'='MONTHLY')::int monthly,
+    count(*) FILTER (WHERE status='ACTIVE' AND requirements->>'billingInterval'='ANNUAL')::int annual,
+    coalesce(sum((requirements->>'lockedPriceMinor')::bigint) FILTER (WHERE status='ACTIVE' AND requirements->>'billingInterval'='MONTHLY'),0)::int monthly_minor,
+    coalesce(sum((requirements->>'lockedPriceMinor')::bigint) FILTER (WHERE status='ACTIVE' AND requirements->>'billingInterval'='ANNUAL'),0)::int annual_minor
+    FROM hon.saas_schedule_bindings`);
+assert(sb.active>=1,'the fixture holds an ACTIVE binding');
+  assert.deepEqual([ryan.saasScheduleBindings.byStatus.ACTIVE,ryan.saasScheduleBindings.byStatus.BOUND_TEST_ONLY,ryan.saasScheduleBindings.activeByInterval,
+    ryan.saasScheduleBindings.activeMonthlyListMinor,ryan.saasScheduleBindings.activeAnnualListMinor],
+    [sb.active,sb.bound,{MONTHLY:sb.monthly,ANNUAL:sb.annual},sb.monthly_minor,sb.annual_minor]);
+  const pp=await row(`SELECT count(*)::int n,coalesce(sum(amount_minor),0)::int m FROM hon.saas_schedule_paid_periods
+    WHERE recorded_at>=date_trunc('month',clock_timestamp() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`);
+  assert(pp.n>=1,'the fixture recorded verified paid periods this month');
+  assert.deepEqual([olivia.saasSchedulePaidPeriods.recordedThisMonth,olivia.saasSchedulePaidPeriods.recordedThisMonthMinor],[pp.n,pp.m]);
+  const ids=(await row(`SELECT coalesce(array_agg(id::text)||array_agg(organization_id::text)||array_agg(school_id::text)||array_agg(provider_subscription_reference) FILTER (WHERE provider_subscription_reference IS NOT NULL),'{}') a FROM hon.saas_schedule_bindings`)).a;
+  for(const id of ids.filter(Boolean))assert(!JSON.stringify([ryan,olivia]).includes(id),'executive facts carry no binding, organization, school or provider reference');
+  // The annual branch: one ACTIVE binding relabelled ANNUAL inside a rolled-back transaction (guards off only there) moves
+  // its locked price from the monthly total to the annual total; the two are never added together.
+  await admin.query('BEGIN');
+  try {
+    await admin.query('ALTER TABLE hon.saas_schedule_bindings DISABLE TRIGGER USER');
+    const one=await row("UPDATE hon.saas_schedule_bindings SET requirements=jsonb_set(requirements,'{billingInterval}','\"ANNUAL\"') WHERE id=(SELECT id FROM hon.saas_schedule_bindings WHERE status='ACTIVE' ORDER BY id LIMIT 1) RETURNING (requirements->>'lockedPriceMinor')::int price");
+    const annual=(await row("SELECT hon.hq_hon_agent_facts('proof','ryan') f")).f.saasScheduleBindings;
+    assert.deepEqual([annual.activeByInterval,annual.activeAnnualListMinor,annual.activeMonthlyListMinor],
+      [{MONTHLY:sb.monthly-1,ANNUAL:sb.annual+1},sb.annual_minor+one.price,sb.monthly_minor-one.price]);
+  } finally { await admin.query('ROLLBACK'); }
+  passed('0304 HQ executive facts: Ryan counts schedule bindings by status and interval with monthly and annual list totals kept apart; Olivia counts this month\'s verified paid periods; no identity');
   await verifySaasBillingSecurity(admin,'hon_champions_runtime');
   passed('forced RLS/private tables/functions and immutable evidence remain enforced for the restricted runtime');
   console.log(`PASS: HON OS schedule billing (0230 + 0235 + 0237) ${groups} scenario groups; deterministic fake only; no Stripe network, charge, invoice issuance, checkout, trial, credits, or deployment; access is switched on only inside the disposable fixture with the program briefly ACTIVE.`);
