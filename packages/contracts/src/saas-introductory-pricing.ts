@@ -91,3 +91,74 @@ export function validateSaasPriceScheduleAcknowledgementInput(value: unknown): S
     || r.confirmation !== SAAS_PRICE_SCHEDULE_CONFIRMATION) invalid();
   return Object.freeze({ scheduleDigest: r.scheduleDigest as string, confirmation: SAAS_PRICE_SCHEDULE_CONFIRMATION });
 }
+
+/** Piece 4 (0279): founder terms locked while subscribed (owner policy 2026-11-09). The founder price is both the first
+ * and every renewal price for as long as the subscription stays active; after a cancellation or a lapse past the grace
+ * period a new subscription is at the standard price. A founder spot is counted only at the first verified payment.
+ * Version 1 founder (step-up) terms stay valid as history only; they can never be accepted. */
+export const SAAS_FOUNDER_OFFER_KINDS = Object.freeze(['FOUNDER_MONTHLY', 'FOUNDER_ANNUAL'] as const);
+export type SaasFounderOfferKind = typeof SAAS_FOUNDER_OFFER_KINDS[number];
+export interface SaasFounderLockedTermsV2 {
+  readonly schemaVersion: 2;
+  readonly productCode: 'HON_OS';
+  readonly currency: 'USD';
+  readonly offerKind: SaasFounderOfferKind;
+  readonly billingInterval: 'MONTHLY' | 'ANNUAL';
+  readonly initialPriceMinor: number;
+  readonly introductoryPaidPeriods: 0;
+  readonly renewalPriceMinor: number;
+  readonly monthlyListReferenceMinor: number;
+  readonly renewalPriceRule: 'FIXED_ACCEPTED_SCHEDULE';
+  readonly periodCountingRule: 'DISTINCT_VERIFIED_PAID_PERIODS';
+  readonly discountStacking: 'FORBIDDEN';
+  readonly promotionReuse: 'REQUIRES_ORGANIZATION_PROMOTION_HISTORY';
+  readonly existingCustomerPrices: 'UNCHANGED';
+  readonly standardPriceMinor: number;
+  readonly founderPriceRule: 'LOCKED_WHILE_SUBSCRIBED';
+  readonly returnPriceRule: 'STANDARD_PRICE_AFTER_CANCEL_OR_LAPSE';
+  readonly founderSpotRule: 'ONE_PER_ORGANIZATION_COUNTED_AT_FIRST_VERIFIED_PAYMENT';
+}
+export type SaasPriceScheduleTerms = SaasPriceScheduleTermsV1 | SaasFounderLockedTermsV2;
+const FOUNDER_TERM_KEYS = [...TERM_KEYS, 'standardPriceMinor', 'founderPriceRule', 'returnPriceRule', 'founderSpotRule'] as const;
+
+export function validateSaasFounderLockedTermsV2(value: unknown): SaasFounderLockedTermsV2 {
+  const r = record(value, invalid);
+  keys(r, FOUNDER_TERM_KEYS, invalid);
+  if (r.schemaVersion !== 2 || r.productCode !== 'HON_OS' || r.currency !== 'USD'
+    || !SAAS_FOUNDER_OFFER_KINDS.includes(r.offerKind as SaasFounderOfferKind)
+    || !money(r.initialPriceMinor) || !money(r.renewalPriceMinor) || !money(r.monthlyListReferenceMinor) || !money(r.standardPriceMinor)
+    || r.introductoryPaidPeriods !== 0 || r.initialPriceMinor !== r.renewalPriceMinor
+    || (r.initialPriceMinor as number) >= (r.standardPriceMinor as number)
+    || r.billingInterval !== (String(r.offerKind).endsWith('_ANNUAL') ? 'ANNUAL' : 'MONTHLY')
+    || (r.billingInterval === 'MONTHLY' && r.standardPriceMinor !== r.monthlyListReferenceMinor)
+    || r.renewalPriceRule !== 'FIXED_ACCEPTED_SCHEDULE' || r.periodCountingRule !== 'DISTINCT_VERIFIED_PAID_PERIODS'
+    || r.discountStacking !== 'FORBIDDEN' || r.promotionReuse !== 'REQUIRES_ORGANIZATION_PROMOTION_HISTORY'
+    || r.existingCustomerPrices !== 'UNCHANGED' || r.founderPriceRule !== 'LOCKED_WHILE_SUBSCRIBED'
+    || r.returnPriceRule !== 'STANDARD_PRICE_AFTER_CANCEL_OR_LAPSE'
+    || r.founderSpotRule !== 'ONE_PER_ORGANIZATION_COUNTED_AT_FIRST_VERIFIED_PAYMENT') invalid();
+  return Object.freeze(Object.fromEntries(FOUNDER_TERM_KEYS.map(k => [k, r[k]]))) as unknown as SaasFounderLockedTermsV2;
+}
+
+/** Any recorded schedule's terms: version 1 (regular, or historical step-up founder) or version 2 (locked founder). */
+export function validateSaasPriceScheduleTerms(value: unknown): SaasPriceScheduleTerms {
+  const r = record(value, invalid);
+  return r.schemaVersion === 2 ? validateSaasFounderLockedTermsV2(r) : validateSaasPriceScheduleTermsV1(r);
+}
+export const saasFounderTermsLocked = (t: SaasPriceScheduleTerms): t is SaasFounderLockedTermsV2 => t.schemaVersion === 2;
+
+/** The terms a schedule recorded today carries for the proposed launch prices: regular terms are unchanged (v1),
+ * founder terms are locked (v2). Explicit design input only; never a seed. */
+export function honOsLaunchScheduleTerms(kind: unknown): SaasPriceScheduleTerms {
+  if (!SAAS_SCHEDULED_OFFER_KINDS.includes(kind as SaasScheduledOfferKind)) invalid();
+  const k = kind as SaasScheduledOfferKind, p = HON_OS_LAUNCH_PRICING_REFERENCE;
+  if (!k.startsWith('FOUNDER_')) return proposedHonOsLaunchPriceSchedule(k);
+  const annual = k.endsWith('_ANNUAL'), price = annual ? p.founderAnnualPriceMinor : p.founderMonthlyPriceMinor;
+  return validateSaasFounderLockedTermsV2({
+    schemaVersion: 2, productCode: 'HON_OS', currency: 'USD', offerKind: k, billingInterval: annual ? 'ANNUAL' : 'MONTHLY',
+    initialPriceMinor: price, introductoryPaidPeriods: 0, renewalPriceMinor: price, monthlyListReferenceMinor: p.monthlyListPriceMinor,
+    renewalPriceRule: 'FIXED_ACCEPTED_SCHEDULE', periodCountingRule: 'DISTINCT_VERIFIED_PAID_PERIODS', discountStacking: 'FORBIDDEN',
+    promotionReuse: 'REQUIRES_ORGANIZATION_PROMOTION_HISTORY', existingCustomerPrices: 'UNCHANGED',
+    standardPriceMinor: annual ? p.standardAnnualPriceMinor : p.monthlyListPriceMinor, founderPriceRule: 'LOCKED_WHILE_SUBSCRIBED',
+    returnPriceRule: 'STANDARD_PRICE_AFTER_CANCEL_OR_LAPSE', founderSpotRule: 'ONE_PER_ORGANIZATION_COUNTED_AT_FIRST_VERIFIED_PAYMENT',
+  });
+}
