@@ -40,7 +40,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/marketing/intake', 'routeIntake'), r('/staff/creative-studio', 'routeCreativeStudio')] },
   { key: 'referrals', titleKey: 'navReferrals', routes: [r('/staff/champions-club', 'routeChampions')] },
   { key: 'community', titleKey: 'navCommunity', routes: [r('/community', 'routeCommunity'), r('/community/marketplace', 'routeMarketplace')] },
-  { key: 'analytics', titleKey: 'navAnalytics', routes: [r('/staff/health-score', 'routeHealthScore'), r('/staff/planning/revenue', 'routeRevenuePlanning')] },
+  { key: 'analytics', titleKey: 'navAnalytics', routes: [r('/staff/reports', 'routeSchoolReports'), r('/staff/health-score', 'routeHealthScore'), r('/staff/planning/revenue', 'routeRevenuePlanning')] },
   { key: 'staff', titleKey: 'navStaff', routes: [r('/staff/work', 'routeWork'), r('/staff/automation/rules', 'routeAutomation'), r('/staff/team/invitations', 'routeTeam', true),
     r('/staff/roles', 'routeRoles'), r('/staff/team/availability', 'routeAvailability'), r('/staff/instructor-qualifications', 'routeQualifications'),
     r('/staff/documents', 'routeDocuments'), r('/staff/voice', 'routeVoice')] },

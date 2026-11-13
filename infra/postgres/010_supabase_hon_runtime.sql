@@ -3273,3 +3273,19 @@ DO $$ DECLARE r text; f text; BEGIN
     END LOOP;
   END LOOP;
 END $$;
+
+-- R1 0331 school reports: one read-only runtime entry point; the actor check and the period builder are private. The
+-- runtime gains no table privilege.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.read_school_reports(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0331 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.require_school_reports_actor(text)','hon.school_report_periods(uuid,uuid,text,integer,timestamptz)',
+    'hon.read_school_reports(text,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_reports(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;
