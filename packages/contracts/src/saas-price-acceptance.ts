@@ -17,14 +17,14 @@ export interface SaasPriceSchedule {
   scheduleId: string; version: number; offerId: string; offerSetId: string; offerSetVersion: number; offerSetRevision: number;
   renewalOfferId: string; terms: SaasPriceScheduleTerms; acceptedOffer: Readonly<Record<string, unknown>>; acceptedOfferDigest: string;
   disclosureVersion: typeof SAAS_PRICE_DISCLOSURE_VERSION; disclosureLanguage: 'en'; disclosureText: string; termsReference: string;
-  refundTerms: { termsReference: string; windowDays: number }; cancellationTerms: { termsReference: string; timing: 'END_OF_PAID_PERIOD' };
+  refundTerms: { termsReference: string; windowDays: number }; cancellationTerms: { termsReference: string; timing: 'END_OF_PAID_PERIOD' | null };
   scheduleDigest: string; actorPrincipalId: string; recordedAt: string; providerBinding: 'UNAVAILABLE_COMMERCIAL_B'; billingEnabled: false;
 }
-/** Founder blockers (0279) describe availability now; they are never a promise of a spot. A spot is counted only at the
+/** Founder blockers (0279) and LIFETIME_SOLD_OUT (0306) describe availability now; they are never a promise of a spot. A spot is counted only at the
  * first verified payment, so FOUNDER_* blockers can appear later than an acceptance. */
 export const SAAS_PRICE_ACCEPTANCE_BLOCKERS = ['SCHEDULE_CHANGED','OFFER_NOT_AVAILABLE','SCHEDULE_SUPERSEDED',
   'FOUNDER_TERMS_NOT_LOCKED','FOUNDER_ALREADY_USED','FOUNDER_SOLD_OUT','FOUNDER_SET_LIMIT_REACHED','FOUNDER_OFFER_LIMIT_REACHED',
-  'ALREADY_ACCEPTED'] as const;
+  'ALREADY_ACCEPTED','LIFETIME_SOLD_OUT'] as const;
 export interface SaasPriceAcceptancePreview {
   organizationId: string; schoolId: string; schedule: SaasPriceSchedule; acceptanceDigest: string; canAcknowledge: boolean;
   blockers: typeof SAAS_PRICE_ACCEPTANCE_BLOCKERS[number][]; purchaseAvailable: false; paymentAuthorized: false; accessGranted: false; asOf: string;
@@ -70,7 +70,8 @@ export function validateSaasPriceSchedule(value: unknown): SaasPriceSchedule {
     || !digest(r.acceptedOfferDigest) || !digest(r.scheduleDigest) || !timestamp(r.recordedAt)
     || r.disclosureVersion !== SAAS_PRICE_DISCLOSURE_VERSION || r.disclosureLanguage !== 'en' || !text(r.disclosureText, 10, 1000)
     || !text(r.termsReference) || refund.termsReference !== r.termsReference || cancel.termsReference !== r.termsReference
-    || !integer(refund.windowDays, 0, 365) || cancel.timing !== 'END_OF_PAID_PERIOD'
+    // A one-time (lifetime, 0306) offer has no cancellation timing; every recurring offer ends at the paid period's end.
+    || !integer(refund.windowDays, 0, 365) || cancel.timing !== (terms.billingInterval === 'ONE_TIME' ? null : 'END_OF_PAID_PERIOD')
     || r.providerBinding !== 'UNAVAILABLE_COMMERCIAL_B' || r.billingEnabled !== false
     || a.offerId !== r.offerId || a.offerSetId !== r.offerSetId || a.offerSetVersion !== r.offerSetVersion
     || a.productCode !== 'HON_OS' || a.planCode !== 'COMPLETE' || a.capabilityPolicyVersion !== 1 || !digest(a.approvedPreviewDigest)
@@ -95,7 +96,7 @@ export function validateSaasPriceAcceptance(value: unknown): SaasPriceAcceptance
   const s = validateSaasPriceSchedule(r.schedule);
   if (![r.acceptanceId,r.organizationId,r.schoolId,r.actorPrincipalId,r.idempotencyKey].every(uuid) || !digest(r.acceptanceDigest)
     || r.scheduleDigest !== s.scheduleDigest || r.disclosureVersion !== s.disclosureVersion || r.disclosureText !== s.disclosureText
-    || r.confirmation !== SAAS_PRICE_SCHEDULE_CONFIRMATION || r.founderAllocationId !== null || (s.terms.offerKind.startsWith('FOUNDER_') && s.terms.schemaVersion !== 2)
+    || r.confirmation !== SAAS_PRICE_SCHEDULE_CONFIRMATION || r.founderAllocationId !== null || (s.terms.offerKind.startsWith('FOUNDER_') && s.terms.schemaVersion !== (s.terms.billingInterval === 'ONE_TIME' ? 3 : 2))
     || !timestamp(r.acceptedAt) || r.paymentStatus !== 'NOT_AUTHORIZED' || r.subscriptionStatus !== 'NOT_CREATED'
     || r.accessGranted !== false || r.paidPeriodEvidence !== 'NOT_IMPLEMENTED_COMMERCIAL_B') drift();
   return r as unknown as SaasPriceAcceptance;

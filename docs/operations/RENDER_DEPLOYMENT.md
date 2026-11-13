@@ -64,6 +64,20 @@ services. Rotating it signs everyone out.
 Related: `DATABASE_TLS_AND_CONNECTIONS.md` (TLS, pooler sizing, startup codes),
 `BACKUP_RESTORE_AND_RECOVERY.md` (migrations, rollback, restore), `MONITORING_AND_ALERTING.md`.
 
+## Provider webhooks go through hon-web
+
+`hon-api` has no public URL, so Stripe, SendGrid, Zernio and Twilio reach it only through the `hon-web`
+rewrite `https://<public web host>/api/v1/...` -> `hon-api` `/v1/...`. The rewrite passes request bodies and
+signature headers through unchanged (checked locally with `next start`), and the destination comes from
+`HON_API_BASE_URL` at **build** time (above), so a wrong or missing value at build silently sends webhooks
+to the default `127.0.0.1:3001`. Check `apps/web/.next/routes-manifest.json` after a build if in doubt.
+
+- Provider dashboards: every webhook URL is `https://<public web host>/api/v1/<path>`, e.g.
+  `/api/v1/payments/webhooks/stripe`, `/api/v1/communications/webhooks/sendgrid`,
+  `/api/v1/communications/webhooks/zernio`, `/api/v1/communications/webhooks/twilio/{status,hq-status,inbound,voice}`.
+- Twilio signs the exact URL it calls, so when Twilio is set up (owner approval), `hon-api` needs
+  `HON_PUBLIC_API_ORIGIN=https://<public web host>/api` (exact form, no trailing path beyond `/api`).
+
 ## Not verified until the first staging deploy
 
 - pnpm through corepack on Render's Node build image.
