@@ -4,6 +4,7 @@
 import { cpSync, readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 import { localize, markLanguage } from './i18n.mjs';
 
 export const LANGUAGES = ['ko', 'es'];
@@ -22,6 +23,27 @@ export function appOrigin(value) {
   return url.origin;
 }
 
+/** First 10 hex characters of the file's SHA-256: changes whenever the file changes. */
+function contentVersion(file) {
+  return createHash('sha256').update(readFileSync(file)).digest('hex').slice(0, 10);
+}
+
+/**
+ * Adds ?v=<content hash> to the font URLs in the built CSS and to the CSS, script and font URLs in a page,
+ * so the host can tell browsers to keep these files for a year and a new deploy still reaches everyone.
+ */
+function versionCss(out) {
+  const cssPath = join(out, 'styles.css');
+  const css = readFileSync(cssPath, 'utf8').replace(/url\("\/(fonts\/[^"?]+)"\)/g,
+    (_, font) => `url("/${font}?v=${contentVersion(join(out, font))}")`);
+  writeFileSync(cssPath, css);
+}
+
+function versionPage(html, out) {
+  return html.replace(/(href|src)="\/((?:fonts\/[^"?]+\.woff2)|styles\.css|site\.js|flow\.js)"/g,
+    (_, attr, file) => `${attr}="/${file}?v=${contentVersion(join(out, file))}"`);
+}
+
 export function buildSite({ outDir = join(root, 'dist'), env = process.env } = {}) {
   const app = appOrigin(env.HON_WEBSITE_APP_URL);
   const robots = env.HON_WEBSITE_INDEXABLE === '1' ? 'index, follow' : 'noindex, nofollow';
@@ -30,8 +52,9 @@ export function buildSite({ outDir = join(root, 'dist'), env = process.env } = {
   mkdirSync(out, { recursive: true });
   cpSync(join(root, 'src'), out, { recursive: true });
   rmSync(join(out, 'i18n'), { recursive: true, force: true });
+  versionCss(out);
   const fill = (html, name) => {
-    const done = html.replaceAll('{{APP_URL}}', app).replaceAll('{{ROBOTS}}', robots);
+    const done = versionPage(html.replaceAll('{{APP_URL}}', app).replaceAll('{{ROBOTS}}', robots), out);
     if (/\{\{[A-Z_]+\}\}/.test(done)) throw new Error(`${name} still has an unfilled {{PLACEHOLDER}}`);
     return done;
   };
