@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "c95e7e5024c6210a91d474e5a994fcc6be25b0cdc6b933da5f42dc37ec0e268d",
+  "chainSha256": "afa781e7fc77851ce78006959cb3b5b39e2e1452a4bdeb2c37864f632794b5a5",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -387,6 +387,10 @@
       "sha256": "32bc6ea5821c7f36b819db74a407e6466a3712d3700f513d1cd0d55d254e7365"
     },
     {
+      "file": "0306_hon_os_lifetime_purchase.sql",
+      "sha256": "e953952706c8f078f0e95dbaadffb357d4560e990422f7c1daac9e0405f0f491"
+    },
+    {
       "file": "0308_hq_plan_promotions.sql",
       "sha256": "13ddea1cc69c6ee892e775a333a1eb6bd4eb74f5e96c16c13d4cc45380d394bb"
     },
@@ -399,8 +403,16 @@
       "sha256": "42194542aa26affc6ce836fd06fbce0210d30a7ed79989d6182b966c50a2bf56"
     },
     {
+      "file": "0321_school_payer_saved_methods.sql",
+      "sha256": "5de27cdfc04af16d057dc62da3d11fdc02e4106dbbcbcefcc6460edf8cc6c4fc"
+    },
+    {
       "file": "0326_hq_business_numbers.sql",
       "sha256": "3578cb98353a3d7e3f53af4ebc75e9f725971e32d538f79f070ce02a97edec8d"
+    },
+    {
+      "file": "0327_hq_school_health.sql",
+      "sha256": "444c4cb9c52e514aa3336280d20c7442a3878c12144800a9f719d59e6b2575e5"
     }
   ]
 }

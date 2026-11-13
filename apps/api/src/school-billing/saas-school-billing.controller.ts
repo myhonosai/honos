@@ -81,6 +81,15 @@ export class HqBusinessNumbersController {
 @UseGuards(HonIdentityGuard)
 export class HqSchoolDetailController {
   constructor(private readonly reads: SaasSchoolBillingService) {}
+  /** B-HQ-2b: schools that may need help (advisory signals). Declared before :schoolId. */
+  @Get('needing-attention') @UseGuards(SaasReadGuard) @SaasReadQuery(['limit'])
+  async attention(@Req() req: HonRequest, @Query() query: Record<string, unknown>) {
+    return { data: await this.reads.readHqSchoolsNeedingAttention(subject(req), query) };
+  }
+  @Get(':schoolId/health') @UseGuards(SaasReadGuard)
+  async health(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
+    return { data: await this.reads.readHqSchoolHealth(subject(req), schoolId) };
+  }
   @Get(':schoolId') @UseGuards(SaasReadGuard)
   async detail(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
     return { data: await this.reads.readHqSchoolDetail(subject(req), schoolId) };

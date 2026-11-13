@@ -344,3 +344,56 @@ Status: source only, not deployed. Test/sandbox only.
   are not yet kept, so rotating the single vault key strands stored credentials until reconnect), two disconnects of
   connections sharing one Square merchant that race can both skip the provider revoke (no lock across connections yet),
   and the Manus final review (live-money/credential item).
+
+## 13. Piece 3 as built (0321): a payer's saved cards and bank accounts
+
+Status: source only, not deployed, test mode only, on the in-process simulators (no real Stripe or Square call yet; piece
+2 adds the sandbox adapters with test keys the owner enters). No charge, autopay or message; HON takes no fee.
+
+- **Permission:** `school_pay.method.manage` (sensitive, staff-assignable, granted to OWNER) saves, chooses the default
+  for, or removes a method; `school_pay.read` or the manage permission reads. Live direct-human authority at the route
+  school is re-checked before and after every command, as in 0258.
+- **Data (private, forced RLS, no runtime table privilege):** `school_pay_customers` (one provider customer per payer and
+  connection, set once), `school_pay_method_setups` (hosted setup: one-time state kept only as SHA-256, one hour, newer
+  replaces older, recently completed listed for one hour so a retried finish replays), `school_pay_methods` (provider
+  reference, kind CARD or US_BANK_ACCOUNT, brand, last four, card expiry, consent text version, ACTIVE or REMOVED, one
+  default per payer), `school_pay_method_events` (append-only history). No card number, bank number, CVC or token
+  secret exists anywhere in HON.
+- **Flow:** staff pick a connection and method kinds and show the payer the consent text (its version is recorded). The
+  API creates the payer's provider customer once, then a hosted setup page (Stripe SetupIntent or Checkout setup mode;
+  Square Web Payments SDK card on file) that returns to `/staff/billing/saved-payment-methods?payer=..&setup=..&state=..`.
+  On return the API retrieves the saved method from the provider with its own credentials (never from the browser),
+  then records it; the payer's first method becomes the default. Square takes cards only.
+- **Routes** (`/v1/organizations/:org/schools/:school/payments/...`, human-UI guards, no-store): `GET
+  payers/:billingAccountId/methods`, `GET saved-methods/expiring` (expired or expiring this or next school month),
+  `POST payers/:id/method-setups`, `POST payers/:id/method-setups/:setupId/finish`, `POST payers/:id/methods/:methodId/default`,
+  `POST payers/:id/methods/:methodId/remove` (reason required; the provider detach is reported as `providerDetached`).
+  Provider account, customer and method references stay in the API and never reach the browser.
+- **Known limits:** a disconnected connection's saved methods stay ACTIVE in HON but cannot be used (autopay, piece 4,
+  checks the connection); card expiry updates from the provider come with webhooks (pieces 5 and 6).
+- **Real sandboxes (after piece 2, 0320):** the Stripe Connect test adapter saves methods for real: the customer and a
+  Checkout session in setup mode are created on the school's own account (`Stripe-Account`), each with an idempotency key
+  (so a retry never leaves an orphan customer or setup), and the saved card or bank account is read back with the platform
+  key. Square's sandbox adapter refuses saved-method calls before sending anything (`SCHOOL_PAY_PROVIDER_NOT_CONFIGURED`):
+  saving a Square card needs the Web Payments SDK on a HON page plus the seller's vaulted token, a later piece.
+- **Evidence:** `packages/database/scripts/test-school-pay-methods-integrity.mjs` (188 checks over signed HTTP);
+  `apps/api/test/school-payments.test.cjs` (0321 contract, simulator and route tests).
+
+## 14. Piece 3-web as built: saved payment methods page for staff
+
+- **Page:** `/staff/billing/saved-payment-methods` (Billing menu, "Saved payment methods"), dynamic, noindex,
+  `no-referrer`, behind the verified web session. The page holds no school or payer id of its own; it uses the shell's
+  verified school, and the API decides every permission (`school_pay.method.manage` to change, the read permission to see).
+- **Payer picker:** payers come from the existing membership list read (one option per billing account, named from its
+  participants); a `?payer=` link opens one directly, and the expiring list links to each payer.
+- **Adding:** staff choose the processor connection and card or US bank account (bank only where the connection can
+  debit), and the payer ticks the consent text, which names the school (`card-on-file-v1` or `ach-mandate-v1`). The page
+  then opens the processor's hosted page. A replayed start answers with no link, and the page says to start again.
+- **Return:** the query (`payer`, `setup`, `state`) is read once and removed from the address bar at once; the one-time
+  state is kept only in memory, never in storage, and is sent only when staff choose Finish saving. A session end, a
+  school change or picking another payer drops it; blur or a hidden tab hides the page but keeps it.
+- **Commands:** each sends its own `X-HON-Human-Command` and `Idempotency-Key`; an unknown or rate-limited outcome keeps
+  the exact request and key in memory for Try again. Every answer is followed by a fresh read. Remove needs a reason and
+  says plainly when the processor did not confirm the detach.
+- **Evidence:** `apps/web/test/saved-methods-ui.test.tsx` (http shape and verification, refusal mapping, query cleaning,
+  body building, view states, page and menu wiring).

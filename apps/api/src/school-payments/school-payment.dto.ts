@@ -16,3 +16,18 @@ export class DisconnectSchoolPayDto {
   @Allow() expectedVersion?: unknown;
   @Allow() reason?: unknown;
 }
+
+/** 0321 saved payment method commands; closed-validated by the shared contract validators in the service. */
+export class StartSchoolPayMethodSetupDto {
+  @Allow() connectionId?: unknown;
+  @Allow() methodKinds?: unknown;
+  @Allow() consentTextVersion?: unknown;
+}
+export class FinishSchoolPayMethodSetupDto {
+  @Allow() expectedVersion?: unknown;
+  @Allow() setupState?: unknown;
+}
+export class RemoveSchoolPayMethodDto {
+  @Allow() expectedVersion?: unknown;
+  @Allow() reason?: unknown;
+}

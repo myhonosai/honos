@@ -6,7 +6,7 @@ import {
   validateSaasAccessExceptionRevokeReceipt, validateSaasAccessExceptionsView, validateSaasAccessAwaitReceipt, validateSaasAccessReadiness, validateSaasAccessRetryInput,
   validateSaasAccessRetryReceipt, validateSaasOrganizationAccessView, validateSaasSchoolAccessStanding, validateSaasSchoolBillingAccount, validateSaasSchoolInvoiceDetail, validateSaasSchoolInvoicePage,
   validateSaasSchoolInvoiceQuery,
-  validateSaasExceptionPolicyDecisionInput, validateSaasAccessOverview, validateSaasAccessOverviewQuery, validateHqSchoolDetail, validateHqBusinessNumbers, validateHqBusinessQuery, validateSaasExceptionPolicyReceipt, validateSaasExceptionPolicyView,
+  validateSaasExceptionPolicyDecisionInput, validateSaasAccessOverview, validateSaasAccessOverviewQuery, validateHqSchoolDetail, validateHqBusinessNumbers, validateHqBusinessQuery, validateHqSchoolHealth, validateHqSchoolsNeedingAttention, validateHqAttentionQuery, validateSaasExceptionPolicyReceipt, validateSaasExceptionPolicyView,
 } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
 
@@ -68,6 +68,18 @@ export class SaasSchoolBillingService {
   async readHqSchoolDetail(subject: string, schoolId: unknown) {
     const school = parse(() => saasUuid(schoolId));
     return this.billing.call('readHqSchoolDetail', [subject, school], validateHqSchoolDetail);
+  }
+  /** B-HQ-2b: one school's activity counts and advisory signals (HQ owner, billing operator or support staff). */
+  async readHqSchoolHealth(subject: string, schoolId: unknown) {
+    const school = parse(() => saasUuid(schoolId));
+    const view = await this.billing.call('readHqSchoolHealth', [subject, school], validateHqSchoolHealth);
+    if (view.schoolId.toLowerCase() !== school.toLowerCase()) throw new ServiceUnavailableException({ code: 'SAAS_UNAVAILABLE' });
+    return view;
+  }
+  /** B-HQ-2b: active schools with at least one health signal, most signals first. */
+  async readHqSchoolsNeedingAttention(subject: string, query: unknown) {
+    const q = parse(() => validateHqAttentionQuery(query));
+    return this.billing.call('readHqSchoolsNeedingAttention', [subject, String(q.limit)], validateHqSchoolsNeedingAttention);
   }
   /** B-HQ-3: HON's own contracted recurring revenue at list price plus monthly school, sign-up and trial flows. */
   async readHqBusinessNumbers(subject: string, query: unknown) {
