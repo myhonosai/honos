@@ -273,6 +273,7 @@
     "0310_ai_org_agent_ceiling_removed.sql": "3427f3424c2e61ed9b12e5a8d8c0ac02b431fcbe7c14c7ab110d293ab08802bc",
     "0320_school_payment_credential_vault.sql": "42194542aa26affc6ce836fd06fbce0210d30a7ed79989d6182b966c50a2bf56",
     "0306_hon_os_lifetime_purchase.sql": "e953952706c8f078f0e95dbaadffb357d4560e990422f7c1daac9e0405f0f491",
+    "0321_school_payer_saved_methods.sql": "5de27cdfc04af16d057dc62da3d11fdc02e4106dbbcbcefcc6460edf8cc6c4fc",
     "0309_hon_os_lifetime_refund_ends_access.sql": "810a648cf0c9faec1f458e841b2710d609982d6f911674c57cc352687c6e562c"
   }
 }
