@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { SAAS_FOUNDER_POOL_CAPACITY } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
-import { FOUNDER_REASON_COPY, HON_OS_PRICE_LABELS, honOsPriceRows, type HonOsPriceRow } from './catalog';
+import { FOUNDER_REASON_COPY, HON_OS_PRICE_LABELS, honOsOneTimeRows, honOsPriceRows, ONE_TIME_ELIGIBILITY_COPY, type HonOsOneTimeRow, type HonOsPriceRow } from './catalog';
 import { loadHonOsPrices, type HonOsPriceReads, type SchoolAccount } from './http';
 import styles from './subscription.module.css';
 
@@ -25,6 +25,7 @@ export function HonOsPrices({ account }: { account: SchoolAccount | null }): Rea
   // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the verified school changes
   }, [schoolId]);
   const rows = honOsPriceRows(reads?.offers ?? null, reads?.founder ?? null);
+  const oneTime = honOsOneTimeRows(reads?.offers ?? null);
   const pool = reads?.founder?.pool ?? null;
   return <section className={styles.honOsPrices} aria-labelledby="hon-os-prices-title">
     <p className={styles.kicker}>{t("HON OS PRICES")}</p>
@@ -36,6 +37,7 @@ export function HonOsPrices({ account }: { account: SchoolAccount | null }): Rea
       : t("Founder spot availability could not be verified.")}</p>
     <ul className={styles.honOsPriceList}>
       {rows.map((row) => <HonOsPriceCard key={row.kind} row={row}/>)}
+      {oneTime.map((row) => <HonOsOneTimeCard key={row.offerCode} row={row}/>)}
     </ul>
     <p className={styles.small}>{t("Checkout for these prices is not open yet. No payment is taken on this page, and a refund never returns a founder spot.")}</p>
   </section>;
@@ -54,5 +56,17 @@ export function HonOsPriceCard({ row }: { row: HonOsPriceRow }): React.ReactElem
     {row.founderSpot && <p className={styles.small}>{row.founderSpot.state === 'AVAILABLE' ? t("A founder spot is available for your organization now.")
       : row.founderSpot.reason ? text(FOUNDER_REASON_COPY[row.founderSpot.reason]) : t("Founder availability has not been verified.")}</p>}
     <p className={styles.small}>USD · {row.source === 'SERVER_OFFER' ? t("Server-returned offer") : row.source === 'NOT_ON_SALE' ? t("Not on sale now") : t("Owner-approved launch price")}</p>
+  </li>;
+}
+
+/** A one-time offer HQ published (for example a lifetime plan). Its name and price come from the server only. */
+export function HonOsOneTimeCard({ row }: { row: HonOsOneTimeRow }): React.ReactElement {
+  const { t, text, money, number } = useLocale();
+  return <li className={row.founder ? styles.founderPrice : undefined} data-kind="ONE_TIME" data-offer={row.offerCode}>
+    <h3>{row.displayName}</h3>
+    <div className={styles.price}><strong>{money(row.priceMinor)}</strong><span>{t("one-time")}</span></div>
+    <p className={styles.small}>{t("Paid once. It does not renew.")}{row.refundWindowDays !== null ? ` ${t("Refund window: {days} days.", { days: number(row.refundWindowDays) })}` : ''}</p>
+    <p className={styles.small}>{text(ONE_TIME_ELIGIBILITY_COPY[row.eligibility])}</p>
+    <p className={styles.small}>USD · {t("Server-returned offer")}</p>
   </li>;
 }
