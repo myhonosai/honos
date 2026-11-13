@@ -102,9 +102,11 @@ try {
         assert(await stageButton.evaluate(el => el === document.activeElement), 'Live feedback must not steal focus');
         assert.equal(await stageButton.getAttribute('aria-current'), 'step');
         const card = rootGuide.locator('section[aria-labelledby="founder-current-step"]');
-        const destinations = { 2: [['openRoles','/staff/roles']], 3: [['openLaunch','/staff/launch'],['openSchedule','/staff/schedule/sessions']], 4: [['openCrm','/staff/crm/leads'],['openPlans','/staff/billing/membership-plans'],['openImport','/staff/migration/leads']], 5: [['openHon','/staff/hon']], 6: [['openSubscription','/staff/subscription']] };
+        const destinations = { 2: [['openInvites','/staff/team/invitations'],['openFamilyAccess','/staff/family-access'],['openRoles','/staff/roles']], 3: [['openLaunch','/staff/launch'],['openSchedule','/staff/schedule/sessions']], 4: [['openCrm','/staff/crm/leads'],['openPlans','/staff/billing/membership-plans'],['openImport','/staff/migration/leads'],['openStudentImport','/staff/migration/students']], 5: [['openHon','/staff/hon']], 6: [['openSubscription','/staff/subscription']] };
         for (const [key, href] of destinations[stage] ?? []) assert.equal(await card.getByRole('link', { name: t(language, key) + ' →', exact: true }).getAttribute('href'), href);
-        if (stage === 1 || stage === 2) assert(await card.getByRole('button', { name: t(language, 'unsupported'), exact: true }).isDisabled());
+        if (stage === 1) assert(await card.getByRole('button', { name: t(language, 'unsupported'), exact: true }).isDisabled());
+        // Step 3 (staff and family access) now links to the real invitation and family access pages instead of a disabled button.
+        if (stage === 2) assert.equal(await card.getByRole('button', { name: t(language, 'unsupported'), exact: true }).count(), 0);
         if (stage === 6) assert(await card.getByText(t(language, 'reviewNote'), { exact: true }).isVisible());
         if (stage === 7) assert(await rootGuide.getByRole('button', { name: t(language, 'submit'), exact: true }).isDisabled());
         assert.equal(await rootGuide.locator('[data-founder-status]').getAttribute('role'), 'status');

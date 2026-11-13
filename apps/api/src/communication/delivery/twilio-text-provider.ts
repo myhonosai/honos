@@ -26,12 +26,24 @@ export function twilioPublicOrigin(env: Env): string | undefined {
   return origin(env);
 }
 
+const BASE_PATH = /^(?:\/[A-Za-z0-9._~-]+)*$/;
+
+/**
+ * The public https base URL Twilio calls, with no trailing slash: an origin (`https://api.example`) or an origin plus a
+ * fixed path prefix when the API is reached through the web app's rewrite (`https://app.example/api`, which hon-web
+ * forwards to the private API's `/v1/...`). Webhook URLs and signatures are this base + the fixed `/v1/...` path.
+ * Anything not already in that exact canonical form (query, fragment, credentials, `..`, encoded characters, a port
+ * other than the default) is refused, so the signed URL is always exactly what the operator configured.
+ */
 function origin(env: Env): string | undefined {
-  const value = env.HON_PUBLIC_API_ORIGIN?.trim();
+  const value = env.HON_PUBLIC_API_ORIGIN?.trim().replace(/\/$/, '');
   if (!value) return undefined;
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && url.pathname === '/' && !url.search && !url.username ? url.origin : undefined;
+    const path = url.pathname === '/' ? '' : url.pathname;
+    const base = `${url.origin}${path}`;
+    return url.protocol === 'https:' && !url.port && !url.search && !url.hash && !url.username && !url.password
+      && BASE_PATH.test(path) && !path.split('/').some((part) => part === '.' || part === '..') && base === value ? base : undefined;
   } catch { return undefined; }
 }
 
@@ -118,7 +130,8 @@ export interface InboundTextKeyword { to: string; from: string; keyword: 'STOP' 
 
 /**
  * Twilio request signature: base64 HMAC-SHA1 with TWILIO_AUTH_TOKEN over the exact public URL followed by every
- * POST parameter name and value in name order. The URL is HON_PUBLIC_API_ORIGIN + the fixed path, never a header.
+ * POST parameter name and value in name order. The URL is the HON_PUBLIC_API_ORIGIN base (origin plus any fixed path
+ * prefix, such as hon-web's /api) + the fixed path, never a request header.
  */
 export class TwilioWebhookVerifier {
   constructor(private readonly environment: () => Env = () => process.env, private readonly now: () => number = Date.now) {}
