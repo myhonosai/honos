@@ -325,6 +325,10 @@
       "title": "HON | School Health Score"
     },
     {
+      "path": "/staff/reports",
+      "title": "HON | School reports"
+    },
+    {
       "path": "/staff/teaching-studio",
       "title": "HON | Human Teaching Studio"
     },

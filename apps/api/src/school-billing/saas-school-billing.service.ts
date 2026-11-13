@@ -6,7 +6,7 @@ import {
   validateSaasAccessExceptionRevokeReceipt, validateSaasAccessExceptionsView, validateSaasAccessAwaitReceipt, validateSaasAccessReadiness, validateSaasAccessRetryInput,
   validateSaasAccessRetryReceipt, validateSaasOrganizationAccessView, validateSaasSchoolAccessStanding, validateSaasSchoolBillingAccount, validateSaasSchoolInvoiceDetail, validateSaasSchoolInvoicePage,
   validateSaasSchoolInvoiceQuery,
-  validateSaasExceptionPolicyDecisionInput, validateSaasAccessOverview, validateSaasAccessOverviewQuery, validateHqSchoolDetail, validateHqSchoolHealth, validateHqSchoolsNeedingAttention, validateHqAttentionQuery, validateSaasExceptionPolicyReceipt, validateSaasExceptionPolicyView,
+  validateSaasExceptionPolicyDecisionInput, validateSaasAccessOverview, validateSaasAccessOverviewQuery, validateHqSchoolDetail, validateHqBusinessNumbers, validateHqBusinessQuery, validateHqSchoolHealth, validateHqSchoolsNeedingAttention, validateHqAttentionQuery, validateSaasExceptionPolicyReceipt, validateSaasExceptionPolicyView,
 } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
 
@@ -80,6 +80,13 @@ export class SaasSchoolBillingService {
   async readHqSchoolsNeedingAttention(subject: string, query: unknown) {
     const q = parse(() => validateHqAttentionQuery(query));
     return this.billing.call('readHqSchoolsNeedingAttention', [subject, String(q.limit)], validateHqSchoolsNeedingAttention);
+  }
+  /** B-HQ-3: HON's own contracted recurring revenue at list price plus monthly school, sign-up and trial flows. */
+  async readHqBusinessNumbers(subject: string, query: unknown) {
+    const q = parse(() => validateHqBusinessQuery(query));
+    const view = await this.billing.call('readHqBusinessNumbers', [subject, String(q.months)], validateHqBusinessNumbers);
+    if (view.monthsRequested !== q.months) throw new ServiceUnavailableException({ code: 'SAAS_UNAVAILABLE' });
+    return view;
   }
   // D9: HQ-owner access exceptions. The database enforces the HQ-owner authority, eligibility and window cap.
   async readExceptionPolicy(subject: string) {
