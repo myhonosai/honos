@@ -131,6 +131,12 @@ export const SAAS_COMMANDS = {
   askHqHon: 'hq-hon-ask',
   setHqHonBudget: 'hq-hon-budget-set',
   resolveHqHonTurn: 'hq-hon-turn-resolve',
+  // HQ-COMM (0281): HQ texting and email; same values as HQ_COMMUNICATION_COMMANDS.
+  setHqCommunicationSender: 'hq-communication-sender-set',
+  retireHqCommunicationSender: 'hq-communication-sender-retire',
+  createHqMessage: 'hq-message-create',
+  queueHqMessage: 'hq-message-queue',
+  cancelHqMessage: 'hq-message-cancel',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 

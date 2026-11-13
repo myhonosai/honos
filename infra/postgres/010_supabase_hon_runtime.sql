@@ -3149,3 +3149,20 @@ DO $$ DECLARE r text; t text; f text; BEGIN
       hon.read_public_school_booking_type(text),hon.book_public_school_booking_type(text,jsonb,text),hon.cancel_public_school_booking_type_booking(text,jsonb) TO hon_runtime;
   END IF;
 END $$;
+
+-- HQ-COMM 0281 HQ texting and email: no table privileges; five commands and two reads are the only runtime boundary.
+-- The delivery worker functions belong to hon_communication_worker (013) and are never granted to the runtime.
+DO $$ DECLARE t text; r text; BEGIN
+  IF to_regprocedure('hon.create_hq_message(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply HQ communications migration 0281 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hq_communication_senders','hq_messages','hq_message_deliveries','hq_message_delivery_events','hq_contact_preferences','hq_communication_requests'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t); EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON FUNCTION hon.reconcile_expired_hq_message_leases(integer), hon.claim_hq_message_deliveries(text[],integer,integer),
+    hon.record_hq_message_send_result(uuid,uuid,text,text,text,text,integer,text,text,integer),
+    hon.record_hq_message_provider_event(text,text,text,uuid,text,timestamptz,bigint) FROM hon_runtime;
+  GRANT EXECUTE ON FUNCTION hon.set_hq_communication_sender(text,jsonb,uuid), hon.retire_hq_communication_sender(text,uuid,uuid),
+    hon.create_hq_message(text,jsonb,uuid), hon.queue_hq_message(text,uuid,jsonb,uuid), hon.cancel_hq_message(text,uuid,jsonb,uuid),
+    hon.read_hq_communications(text,uuid,timestamptz,uuid,integer), hon.read_hq_message(text,uuid) TO hon_runtime;
+END $$;
