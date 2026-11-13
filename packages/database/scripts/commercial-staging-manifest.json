@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "03407423ffc91029772fc3156bba08cd9f873ae2bcfd3f19397f3bd721bb2b18",
+  "chainSha256": "b4bb754889ba2cbf2c5477fbdd564ef023eab59e223503ae3c40318569c98adf",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -385,6 +385,10 @@
     {
       "file": "0308_hq_plan_promotions.sql",
       "sha256": "13ddea1cc69c6ee892e775a333a1eb6bd4eb74f5e96c16c13d4cc45380d394bb"
+    },
+    {
+      "file": "0320_school_payment_credential_vault.sql",
+      "sha256": "42194542aa26affc6ce836fd06fbce0210d30a7ed79989d6182b966c50a2bf56"
     }
   ]
 }

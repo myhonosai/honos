@@ -134,6 +134,7 @@ import { TuitionPaymentService } from './billing/tuition-payment.service.js';
 import { SchoolPaymentController } from './school-payments/school-payment.controller.js';
 import { SchoolPaymentService } from './school-payments/school-payment.service.js';
 import { SCHOOL_PAYMENT_ADAPTERS, schoolPaymentAdaptersFromEnvironment } from './school-payments/school-payment-adapter.js';
+import { SCHOOL_PAYMENT_VAULT, schoolPaymentVaultForProcess } from './school-payments/school-payment-vault.js';
 import {
   SchoolPayDefaultHumanUiGuard, SchoolPayDisconnectHumanUiGuard, SchoolPayFinishHumanUiGuard, SchoolPayOnboardingLinkHumanUiGuard,
   SchoolPayReadHumanUiGuard, SchoolPayRefreshHumanUiGuard, SchoolPayStartHumanUiGuard,
@@ -633,6 +634,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     TuitionPaymentService,
     SchoolPaymentService,
     { provide: SCHOOL_PAYMENT_ADAPTERS, useFactory: () => schoolPaymentAdaptersFromEnvironment() },
+    { provide: SCHOOL_PAYMENT_VAULT, useFactory: () => schoolPaymentVaultForProcess() },
     SchoolPayReadHumanUiGuard, SchoolPayStartHumanUiGuard, SchoolPayOnboardingLinkHumanUiGuard, SchoolPayFinishHumanUiGuard,
     SchoolPayRefreshHumanUiGuard, SchoolPayDefaultHumanUiGuard, SchoolPayDisconnectHumanUiGuard,
     SchoolCheckoutService, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard,

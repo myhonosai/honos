@@ -3150,6 +3150,52 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 END $$;
 -- End school payment connections exact verification.
 
+-- School payment credential vault exact verification (B-TUI-2 0320): two private forced-RLS tables, the guards, the
+-- deferred credential check, private validators, four runtime entry points, and only Square keeping credentials.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['hon.school_pay_provider_credentials','hon.school_pay_credentials'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=t::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'School payment credential table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.check_school_pay_connection_credential()',true,false,'search_path=pg_catalog, hon','e663c7c09c9cc07f08067abe73c173ab2253fb46f78dd3372549a78945f7c29e'),
+('hon.check_school_payment_onboarding_state(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','ebf82596ef482e4ddff48b996dee8d5b4a13c43d30756054aa7baa328c290360'),
+('hon.destroy_school_pay_credential_on_end()',true,false,'search_path=pg_catalog, hon','57381575d521f64bc8b417cbeb4db137bfb9b797e05896bbe5ba32d802d4d979'),
+('hon.guard_school_pay_credential()',true,false,'search_path=pg_catalog, hon','e894b487e8aa3743383855a4cbeee4c93c7869c498ac7bca080376caeb9db0cf'),
+('hon.read_school_payment_account_use(text,uuid)',true,true,'search_path=pg_catalog, hon','22503521f3534da4ee9d96355eafa293640c61e37f483a0592fe856c1aa0c994'),
+('hon.read_school_payment_credential(text,uuid)',true,true,'search_path=pg_catalog, hon','4f7f42f6fe935be36f03f58c2b7cf4c66ae7ecc24427e7e700bfcbd427021d48'),
+('hon.record_school_payment_status_with_credential(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','77f450a3afd747a9e29643cfbfe32b0c58d1198773f520c3950c61e9fdae64bd'),
+('hon.school_pay_credential_input_ok(jsonb)',false,false,'search_path=pg_catalog','1e0d04634f74c29427f869d446417a4d61bac646956b947d287fd578cd27352f')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school payment credential function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('school_pay_credentials','school_pay_credential_guard','hon.guard_school_pay_credential()'),
+    ('school_pay_credentials','school_pay_credentials_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('school_pay_provider_credentials','school_pay_provider_credentials_immutable','hon.guard_membership_activation_evidence()'),
+    ('school_pay_provider_credentials','school_pay_provider_credentials_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('school_pay_connections','school_pay_connection_credential_destroy','hon.destroy_school_pay_credential_on_end()'),
+    ('school_pay_connections','school_pay_connection_credential_check','hon.check_school_pay_connection_credential()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O') THEN
+      RAISE EXCEPTION 'Missing school payment credential guard: %',expected.name; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.school_pay_connections'::regclass AND tgname='school_pay_connection_credential_check' AND tgdeferrable AND tginitdeferred) THEN
+    RAISE EXCEPTION 'The school payment credential check must be deferred to commit'; END IF;
+  IF (SELECT string_agg(provider_code||':'||credential_kind,',' ORDER BY provider_code) FROM hon.school_pay_provider_credentials) IS DISTINCT FROM 'SQUARE:OAUTH_TOKENS' THEN
+    RAISE EXCEPTION 'Only Square keeps school payment credentials'; END IF;
+  IF EXISTS(SELECT 1 FROM hon.school_pay_credentials k JOIN hon.school_pay_connections c ON c.id=k.connection_id WHERE c.ended_at IS NOT NULL AND k.destroyed_at IS NULL) THEN
+    RAISE EXCEPTION 'An ended school payment connection still holds a credential'; END IF;
+END $$;
+-- End school payment credential vault exact verification.
+
 -- School checkout pages exact verification (B-TUI-2 0269): two private forced-RLS tables, the guards, private
 -- validators and helpers, two runtime entry points and the permission.
 DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN

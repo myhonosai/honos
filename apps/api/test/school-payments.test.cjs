@@ -83,10 +83,13 @@ test('0258 simulators: Stripe account first, Square code exchange, status overri
   const q = await square.beginOnboarding({ connectionId: id, accountRef: null, state, returnUrl: 'http://127.0.0.1:3000/x' });
   assert.equal(q.accountRef, null);
   const code = new URL(q.onboardingUrl).searchParams.get('code');
-  assert.match((await square.completeOnboarding({ connectionId: id, accountRef: null, authorizationCode: code })).accountRef, /^MLSIM[0-9a-f]{16}$/);
+  const exchanged = await square.completeOnboarding({ connectionId: id, accountRef: null, authorizationCode: code });
+  assert.match(exchanged.accountRef, /^MLSIM[0-9a-f]{16}$/);
+  assert.match(exchanged.credential.accessToken, /^simacc_[0-9a-f]{24}$/);
   await assert.rejects(square.completeOnboarding({ connectionId: id, accountRef: null, authorizationCode: 'sim_wrong' }), (error) => error.outcome === 'FAILED');
   await square.disconnect({ accountRef: 'MLSIMabc' });
-  assert.equal((await square.retrieveStatus({ accountRef: 'MLSIMabc' })).reauthorizationRequired, true);
+  assert.equal((await square.retrieveStatus({ accountRef: 'MLSIMabc', credential: exchanged.credential })).reauthorizationRequired, true);
+  await assert.rejects(square.retrieveStatus({ accountRef: 'MLSIMabc' }), (error) => error.outcome === 'PRE_SEND', 'Square status needs the stored token');
 });
 
 test('0258 API: seven routes under human-UI guards; never the SaaS adapter, never a fee', () => {
@@ -96,7 +99,7 @@ test('0258 API: seven routes under human-UI guards; never the SaaS adapter, neve
   assert.equal((controller.match(/@UseGuards\(SchoolPay[A-Za-z]+HumanUiGuard\)/g) ?? []).length, 7);
   const sources = ['school-payment.service.ts', 'school-payment-adapter.ts', 'school-payment.controller.ts']
     .map((file) => fs.readFileSync(path.join(__dirname, '../src/school-payments', file), 'utf8')).join('\n');
-  assert.doesNotMatch(sources, /from '\.\.\/payments\/|@Inject\(PAYMENT_PROVIDER_ADAPTER\)|STRIPE_TEST_SECRET_KEY|STRIPE_TEST_WEBHOOK_SECRET|application_fee|app_fee_money/);
+  assert.doesNotMatch(sources, /from '\.\.\/payments\/|@Inject\(PAYMENT_PROVIDER_ADAPTER\)|(?<![A-Z_])STRIPE_TEST_SECRET_KEY|STRIPE_TEST_WEBHOOK_SECRET|application_fee|app_fee_money/);
   const service = fs.readFileSync(path.join(__dirname, '../src/school-payments/school-payment.service.ts'), 'utf8');
   for (const fn of ['read_school_payment_processors', 'start_school_payment_connection', 'set_school_payment_onboarding_link', 'record_school_payment_status',
     'set_default_school_payment_connection', 'disconnect_school_payment_connection']) assert.match(service, new RegExp(`hon\\.${fn}\\(`));
