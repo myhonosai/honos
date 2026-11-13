@@ -8,7 +8,7 @@ export const SAAS_SCHEDULE_BINDING_CONFIRMATION = 'BIND_TEST_ONLY_SCHEDULE_NO_CO
 export const SAAS_SCHEDULE_BINDING_STATUSES = ['PENDING_PROVIDER_BINDING','BOUND_TEST_ONLY','ACTIVE','NEEDS_REVIEW','EXPIRED_UNPAID','VOIDED_PROVIDER_FAILED','CANCELLED_BEFORE_PAYMENT'] as const;
 export type SaasScheduleBindingStatus = typeof SAAS_SCHEDULE_BINDING_STATUSES[number];
 export const SAAS_SCHEDULE_BINDING_REASONS = ['BINDING_REQUESTED','BINDING_OBSERVED_TEST_ONLY','FIRST_PAYMENT_VERIFIED','PROVIDER_CONFIRMED_NOT_CREATED',
-  'PROVIDER_TERMS_MISMATCH','UNPAID_WINDOW_ELAPSED','AMOUNT_MISMATCH','OVERLAPPING_COVERED_PERIOD','REVERSAL_REVIEW_REQUIRED','UNLINKED_REVERSAL','PURCHASER_CANCELLED_BEFORE_PAYMENT','PERIOD_INTERVAL_MISMATCH','REVIEW_REFUND_VERIFIED','FOUNDER_SPOT_UNAVAILABLE'] as const;
+  'PROVIDER_TERMS_MISMATCH','UNPAID_WINDOW_ELAPSED','AMOUNT_MISMATCH','OVERLAPPING_COVERED_PERIOD','REVERSAL_REVIEW_REQUIRED','UNLINKED_REVERSAL','PURCHASER_CANCELLED_BEFORE_PAYMENT','PERIOD_INTERVAL_MISMATCH','REVIEW_REFUND_VERIFIED','FOUNDER_SPOT_UNAVAILABLE','LIFETIME_SALE_LIMIT_REACHED'] as const;
 export type SaasScheduleBindingReason = typeof SAAS_SCHEDULE_BINDING_REASONS[number];
 export type SaasScheduleEvidenceOutcome = 'APPLIED' | 'ALREADY_APPLIED' | 'ATTEMPT_FAILED' | 'NEEDS_REVIEW';
 export type SaasScheduleAccessActivation = 'APPLIED' | 'EXTENDED' | 'NEEDS_REVIEW' | 'NOT_ATTEMPTED';
@@ -38,12 +38,14 @@ export interface SaasScheduleRequirements {
   disclosureText: string;
   termsReference: string;
   refundTerms: { termsReference: string; windowDays: number };
-  cancellationTerms: { termsReference: string; timing: 'END_OF_PAID_PERIOD' };
-  /** The single price every qualifying payment must equal, locked at acceptance for as long as the school stays subscribed. */
+  /** Null only for a one-time (lifetime) purchase, which has nothing to cancel. */
+  cancellationTerms: { termsReference: string; timing: 'END_OF_PAID_PERIOD' | null };
+  /** The single price every qualifying payment must equal, locked at acceptance for as long as the school stays subscribed
+   * (or, for ONE_TIME, the one lifetime payment). */
   lockedPriceMinor: number;
   currency: 'USD';
-  billingInterval: 'MONTHLY' | 'ANNUAL';
-  priceRule: 'LOCKED_WHILE_SUBSCRIBED';
+  billingInterval: 'MONTHLY' | 'ANNUAL' | 'ONE_TIME';
+  priceRule: 'LOCKED_WHILE_SUBSCRIBED' | 'ONE_TIME_PURCHASE';
   periodCountingRule: 'DISTINCT_VERIFIED_PAID_PERIODS';
   automaticCalendarTransition: false;
   automaticCollectionEnabled: false;
@@ -122,9 +124,10 @@ export function validateSaasScheduleRequirements(value: unknown): SaasScheduleRe
     || ![r.generationDigest,r.acceptanceDigest,r.scheduleDigest,r.acceptedOfferDigest].every(digest)
     || !integer(r.offerSetVersion, 1, 999999999) || !text(r.disclosureVersion, 1, 100) || !text(r.disclosureText, 10, 1000)
     || !text(r.termsReference, 1, 200) || refund.termsReference !== r.termsReference || !integer(refund.windowDays, 0, 365)
-    || cancellation.termsReference !== r.termsReference || cancellation.timing !== 'END_OF_PAID_PERIOD'
-    || !integer(r.lockedPriceMinor, 100, 10000000) || r.priceRule !== 'LOCKED_WHILE_SUBSCRIBED'
-    || r.currency !== 'USD' || !['MONTHLY','ANNUAL'].includes(r.billingInterval as string)
+    || cancellation.termsReference !== r.termsReference
+    || !integer(r.lockedPriceMinor, 100, 10000000) || r.currency !== 'USD' || !['MONTHLY','ANNUAL','ONE_TIME'].includes(r.billingInterval as string)
+    || (r.billingInterval === 'ONE_TIME' ? cancellation.timing !== null || r.priceRule !== 'ONE_TIME_PURCHASE'
+      : cancellation.timing !== 'END_OF_PAID_PERIOD' || r.priceRule !== 'LOCKED_WHILE_SUBSCRIBED')
     || r.periodCountingRule !== 'DISTINCT_VERIFIED_PAID_PERIODS' || r.automaticCalendarTransition !== false || r.automaticCollectionEnabled !== false) drift();
   return r as unknown as SaasScheduleRequirements;
 }
@@ -175,23 +178,26 @@ export function validateSaasScheduleEvidenceReceipt(value: unknown): SaasSchedul
 export interface SaasScheduleBindingAccess {
   accessActivation: 'APPLIED' | 'NEEDS_REVIEW' | 'NOT_ATTEMPTED';
   reason: string | null;
-  /** End of the latest verified paid period (APPLIED only). */
+  /** End of the latest verified paid period (APPLIED only; null for a lifetime purchase, which never ends by time). */
   paidThrough: string | null;
-  /** paidThrough plus the owner-approved 7-day grace: when access lapses if no renewal is verified (APPLIED only). */
+  /** paidThrough plus the owner-approved 7-day grace: when access lapses if no renewal is verified (APPLIED only; null for
+   * a lifetime purchase). */
   accessUntil: string | null;
 }
 export interface SaasScheduleBindingView extends SaasScheduleBinding { access: SaasScheduleBindingAccess }
 export interface SaasScheduleAccessRetryInput { expectedBindingVersion: number }
 export interface SaasScheduleAccessRetryReceipt { bindingId: string; access: SaasScheduleBindingAccess & { accessGranted: boolean }; replayed: boolean }
 
-function validateBindingAccess(value: unknown, withGranted: boolean): SaasScheduleBindingAccess & { accessGranted?: boolean } {
+/** `lifetime`: true for a ONE_TIME binding, false for a recurring one, undefined when the caller cannot tell (retry receipt). */
+function validateBindingAccess(value: unknown, withGranted: boolean, lifetime?: boolean): SaasScheduleBindingAccess & { accessGranted?: boolean } {
   const a = record(value, drift);
   keys(a, withGranted ? ['accessActivation','reason','paidThrough','accessUntil','accessGranted'] : ['accessActivation','reason','paidThrough','accessUntil'], drift);
   const applied = a.accessActivation === 'APPLIED';
+  const timed = timestamp(a.paidThrough) && timestamp(a.accessUntil) && Date.parse(a.accessUntil as string) > Date.parse(a.paidThrough as string);
+  const openEnded = a.paidThrough === null && a.accessUntil === null;
   if (!['APPLIED','NEEDS_REVIEW','NOT_ATTEMPTED'].includes(a.accessActivation as string)
     || (a.accessActivation === 'NEEDS_REVIEW') !== (typeof a.reason === 'string' && /^[A-Z_]{3,80}$/.test(a.reason)) || (a.accessActivation !== 'NEEDS_REVIEW' && a.reason !== null)
-    || (applied ? !(timestamp(a.paidThrough) && timestamp(a.accessUntil) && Date.parse(a.accessUntil as string) > Date.parse(a.paidThrough as string))
-      : (a.paidThrough !== null || a.accessUntil !== null))
+    || (applied ? !(lifetime === true ? openEnded : lifetime === false ? timed : timed || openEnded) : !openEnded)
     || (withGranted && (typeof a.accessGranted !== 'boolean' || (a.accessGranted && !applied)))) drift();
   return a as unknown as SaasScheduleBindingAccess & { accessGranted?: boolean };
 }
@@ -200,7 +206,7 @@ export function validateSaasScheduleBindingView(value: unknown): SaasScheduleBin
   const r = record(value, drift);
   const { access, ...binding } = r;
   const checked = validateSaasScheduleBinding(binding);
-  const a = validateBindingAccess(access, false);
+  const a = validateBindingAccess(access, false, checked.requirements.billingInterval === 'ONE_TIME');
   // Access can only have been applied after billing became ACTIVE; a review never relabels the billing status.
   if (a.accessActivation === 'APPLIED' && checked.status !== 'ACTIVE' && checked.status !== 'NEEDS_REVIEW') drift();
   return { ...checked, access: a };

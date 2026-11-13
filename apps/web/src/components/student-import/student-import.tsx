@@ -1,10 +1,11 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { StudentImportMappingTarget } from '@hon/contracts';
+import { STUDENT_IMPORT_MAX_COLUMNS, type StudentImportMappingTarget } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
+import { parseCsv, keepColumns } from '../import-columns';
 import { ImportError, csvHeaders, csvTooLarge, guessMapping, keepForRetry, studentImportApi, type ImportErrorKind, type ImportScope, type StudentImportApi } from './http';
 import { StudentImportView, unsavedDecisions, type Choice, type DetailState, type ImportAction, type ImportOutcome, type ListState, type UploadState } from './view';
 
@@ -123,7 +124,10 @@ export function StudentImport({ api = studentImportApi }: { api?: StudentImportA
     file.text().then((text) => {
       if (!mounted.current || current !== gen.current.file || shown !== privacy.current) return;
       if (csvTooLarge(text)) { setUpload({ phase: 'FILE_ERROR', problem: 'TOO_LARGE' }); return; }
-      const headers = csvHeaders(text);
+      // Exports from other software often have more columns than an import takes; those still load, and only the
+      // matched columns are staged (see onStage).
+      const rows = parseCsv(text), first = rows?.[0];
+      const headers = first && first.length > STUDENT_IMPORT_MAX_COLUMNS && new Set(first).size === first.length && first.every((h) => h.trim() && h.length <= 80) ? first : csvHeaders(text);
       if (!headers) { setUpload({ phase: 'FILE_ERROR', problem: 'UNREADABLE' }); return; }
       setUpload({ phase: 'MAPPING', fileName: file.name.slice(0, 120), csv: text, headers, mapping: guessMapping(headers) });
     }, () => { if (mounted.current && current === gen.current.file) setUpload({ phase: 'FILE_ERROR', problem: 'UNREADABLE' }); });
@@ -134,7 +138,10 @@ export function StudentImport({ api = studentImportApi }: { api?: StudentImportA
   const onCancelUpload = useCallback(() => { if (lock === 'NONE') { gen.current.file++; setUpload({ phase: 'NONE' }); } }, [lock]);
   const onStage = useCallback(() => {
     if (upload.phase !== 'MAPPING') return;
-    start('stage', null, { csv: upload.csv, mapping: { ...upload.mapping } });
+    if (upload.headers.length <= STUDENT_IMPORT_MAX_COLUMNS) { start('stage', null, { csv: upload.csv, mapping: { ...upload.mapping } }); return; }
+    const kept = upload.headers.filter((h) => upload.mapping[h] !== 'ignore'), rows = parseCsv(upload.csv);
+    if (!rows || kept.length > STUDENT_IMPORT_MAX_COLUMNS) return;
+    start('stage', null, { csv: keepColumns(rows, kept), mapping: Object.fromEntries(kept.map((h) => [h, upload.mapping[h]!])) });
   }, [upload, start]);
 
   const onOpen = useCallback((batchId: string | null) => {

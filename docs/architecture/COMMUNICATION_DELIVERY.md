@@ -126,6 +126,14 @@ receipt timeline. No address, no provider IDs, no cost.
   records predicted sent-as (3+ pieces → MMS) and Twilio's reported piece count, and refuses over 1,600 characters.
 - `POST /v1/communications/webhooks/twilio/status` and `/twilio/inbound`: form posts verified with
   X-Twilio-Signature over `HON_PUBLIC_API_ORIGIN` + fixed path + sorted parameters, and the AccountSid must match.
+  `HON_PUBLIC_API_ORIGIN` is the public https base Twilio calls. hon-api is a private Render service, so providers
+  reach it only through hon-web's rewrite (`/api/v1/:path*` to the API's `/v1/:path*`); set it to
+  `https://app.<domain>/api`. Callback URLs (status, HQ status, voice-result) and signature checks then use that base.
+  Only an exact canonical https base is accepted: no query, fragment, credentials, port, `..` or encoded characters.
+  The rewrite was checked locally (`next start`) to pass webhook bodies byte-for-byte (900 KB random, chunked,
+  content-encoding kept) with the Stripe, SendGrid, Zernio and Twilio signature headers, so the raw-body checks
+  for Stripe, SendGrid and Zernio need no change. `HON_API_BASE_URL` is read when hon-web is built (Next stores
+  rewrites in the build), so it must be set at build time on Render.
   Inbound is routed only by the receiving ACTIVE number to one school; only exact STOP/START/HELP words are
   stored (`hon.inbound_text_keywords`, without the sender's number). START re-opens only an opt-out the person
   made themselves (source RECIPIENT). Replies come from Twilio Advanced Opt-Out; HON answers empty TwiML.
