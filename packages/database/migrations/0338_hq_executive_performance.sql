@@ -36,8 +36,11 @@ BEGIN
       'asOf', hon.saas_ts(at))
     INTO result
   FROM hon.hq_hon_turns t WHERE t.period_start = period AND t.agent_key = p_agent;
-  -- Authority after the read, as the other HQ HON reads do.
-  PERFORM hon.require_hq_hon_actor(p_subject, false);
+  -- Authority after the read, as the other HQ HON reads do, including the agent's own permission.
+  actor := hon.require_hq_hon_actor(p_subject, false);
+  IF NOT hon.hq_hon_permission_held(actor, hon.hq_hon_agent_permission(p_agent)) THEN
+    RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE = '42501';
+  END IF;
   RETURN result;
 END $$;
 
