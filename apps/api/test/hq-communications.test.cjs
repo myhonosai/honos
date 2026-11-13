@@ -153,7 +153,7 @@ test('HTTP: reads and commands forward only the verified subject, the path id, t
 });
 
 const lease = (over = {}) => ({ deliveryId: U(), leaseToken: U(), organizationId: U(), schoolId: U(), messageId: U(), channel: 'SMS',
-  recipientAddress: '+15555550101', content: '안녕하세요 '.repeat(200).trim(), senderRef: SID, senderName: 'HON OS', attempt: 1, ...over });
+  recipientAddress: '+15555550101', content: '안녕하세요 '.repeat(200).trim(), senderRef: SID, senderName: 'HON OS', attempt: 1, purpose: 'SUPPORT', ...over });
 function store(claims) {
   const calls = { claim: [], results: [] };
   return { calls, isConfigured: () => true,
@@ -173,6 +173,19 @@ test('HQ dispatcher: a long text goes whole through the HQ Messaging Service; em
   assert.deepEqual([sms.origin, sms.senderServiceId, sms.senderEmail, sms.schoolName], ['HQ', SID, undefined, 'HON OS']);
   assert.deepEqual([email.senderEmail, email.senderServiceId], ['hello@hon.example', undefined]);
   assert.equal(s.calls.results[0].result.sentAs, 'MMS');
+});
+
+test('HQ dispatcher: the claimed purpose reaches the adapter, so only BILLING and ACCOUNT email skip SendGrid unsubscribe handling', async () => {
+  const { SendGridEmailProvider } = require('../dist/communication/delivery/sendgrid-email-provider.js');
+  const purposes = ['BILLING', 'ACCOUNT', 'SUPPORT', 'ONBOARDING'];
+  const s = store(purposes.map((purpose) => lease({ channel: 'EMAIL', recipientAddress: 'owner@example.test', content: 'Notice', senderRef: 'hello@hon.example', purpose })));
+  const seen = [];
+  const spy = { provider: 'SENDGRID', hqSender: true, channel: 'EMAIL', readiness: () => 'READY', send: async (r) => { seen.push(r); return { providerMessageId: `p-${seen.length}`, sentAs: 'EMAIL' }; } };
+  await new HqMessageDispatcher(s, [spy]).runOnce(10);
+  assert.deepEqual(seen.map((r) => r.hqPurpose), purposes, 'each request carries the claimed purpose');
+  const sendgrid = new SendGridEmailProvider(() => ({}));
+  assert.deepEqual(seen.map((r) => sendgrid.requestBody(r).mail_settings.bypass_unsubscribe_management?.enable ?? false), [true, true, false, false],
+    'a BILLING or ACCOUNT delivery reaches SendGrid as a required notice; SUPPORT and ONBOARDING keep unsubscribe handling');
 });
 
 test('HQ dispatcher: never claims without a READY adapter; maps provider errors; unexpected errors are UNKNOWN', async () => {

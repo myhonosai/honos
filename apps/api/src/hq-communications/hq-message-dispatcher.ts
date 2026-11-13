@@ -14,9 +14,12 @@ import type { CommunicationSendResult, VerifiedProviderReceipt } from '../commun
 import type { DispatchSummary } from '../communication/delivery/communication-dispatcher.js';
 
 /** One leased HQ delivery: the address and body exist only in memory for this one send. */
+export type HqDeliveryPurpose = 'SUPPORT' | 'BILLING' | 'ONBOARDING' | 'ACCOUNT';
 export interface ClaimedHqMessageDelivery {
   deliveryId: string; leaseToken: string; organizationId: string; schoolId: string; messageId: string; channel: DeliverableChannel;
   recipientAddress: string; content: string; senderRef: string; senderName: string; attempt: number;
+  /** The message purpose (0282 claim). BILLING and ACCOUNT email are required notices. */
+  purpose: HqDeliveryPurpose;
 }
 
 /**
@@ -86,11 +89,12 @@ export class HqMessageWorkerDatabase implements HqMessageWorkerStore, OnModuleDe
   async claim(channels: DeliverableChannel[], limit: number, leaseSeconds: number): Promise<ClaimedHqMessageDelivery[]> {
     const rows = await this.query<{
       delivery_id: string; lease_token: string; organization_id: string; school_id: string; message_id: string; channel: DeliverableChannel;
-      recipient_address: string; content: string; sender_ref: string; sender_name: string; attempt: number;
+      recipient_address: string; content: string; sender_ref: string; sender_name: string; attempt: number; purpose: HqDeliveryPurpose;
     }>('SELECT * FROM hon.claim_hq_message_deliveries($1::text[], $2, $3)', [channels, limit, leaseSeconds]);
     return rows.map((r) => ({
       deliveryId: r.delivery_id, leaseToken: r.lease_token, organizationId: r.organization_id, schoolId: r.school_id, messageId: r.message_id,
       channel: r.channel, recipientAddress: r.recipient_address, content: r.content, senderRef: r.sender_ref, senderName: r.sender_name, attempt: r.attempt,
+      purpose: r.purpose,
     }));
   }
 
@@ -149,6 +153,7 @@ export class HqMessageDispatcher {
       const request: HqCommunicationSendRequest = {
         deliveryId: d.deliveryId, messageId: d.messageId, organizationId: d.organizationId, schoolId: d.schoolId, channel: d.channel,
         recipientAddress: d.recipientAddress, content: d.content, schoolName: d.senderName, attempt: d.attempt, origin: 'HQ', senderName: d.senderName,
+        hqPurpose: d.purpose,
         ...(d.channel === 'SMS' ? { senderServiceId: d.senderRef } : { senderEmail: d.senderRef }),
       };
       let result: CommunicationSendResult;
