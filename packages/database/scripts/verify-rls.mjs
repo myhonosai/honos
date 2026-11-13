@@ -166,6 +166,8 @@ const expectedRlsTables = [
   'school_pay_providers',
   'school_pay_connections',
   'school_pay_connection_events',
+  'school_pay_provider_credentials',
+  'school_pay_credentials',
   'school_checkout_pages',
   'school_checkout_page_versions',
   'school_page_branding',

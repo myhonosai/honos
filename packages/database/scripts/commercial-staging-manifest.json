@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "bd2601f1b8d46c5a9360d05bc84c3cf3a4df9c49b2be0090c01314383beeda99",
+  "chainSha256": "73838ecb91893050cab03fdfcedbf68fc90cc74cf2550985149b62d63afceee1",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -393,6 +393,10 @@
     {
       "file": "0310_ai_org_agent_ceiling_removed.sql",
       "sha256": "3427f3424c2e61ed9b12e5a8d8c0ac02b431fcbe7c14c7ab110d293ab08802bc"
+    },
+    {
+      "file": "0320_school_payment_credential_vault.sql",
+      "sha256": "42194542aa26affc6ce836fd06fbce0210d30a7ed79989d6182b966c50a2bf56"
     }
   ]
 }

@@ -2927,6 +2927,38 @@ DO $$ DECLARE r text; t text; col text; f text; BEGIN
   END IF;
 END $$;
 
+-- B-TUI-2 piece 2 0320 school payment credential vault (test/sandbox only): two private tables reached only through four
+-- runtime entry points; guards and validators are private. The runtime never reads or writes a credential row directly.
+DO $$ DECLARE r text; t text; col text; f text; BEGIN
+  IF to_regclass('hon.school_pay_credentials') IS NULL THEN RAISE EXCEPTION 'Apply migration 0320 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.school_pay_provider_credentials','hon.school_pay_credentials'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid=t::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON %s FROM PUBLIC',col,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+        EXECUTE format('REVOKE ALL (%I) ON %s FROM %I',col,t,r);
+      END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_school_pay_credential()','hon.destroy_school_pay_credential_on_end()','hon.check_school_pay_connection_credential()',
+    'hon.school_pay_credential_input_ok(jsonb)','hon.check_school_payment_onboarding_state(text,uuid,jsonb)',
+    'hon.record_school_payment_status_with_credential(text,uuid,jsonb,text,uuid,uuid)','hon.read_school_payment_credential(text,uuid)',
+    'hon.read_school_payment_account_use(text,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.check_school_payment_onboarding_state(text,uuid,jsonb),
+      hon.record_school_payment_status_with_credential(text,uuid,jsonb,text,uuid,uuid),hon.read_school_payment_credential(text,uuid),
+      hon.read_school_payment_account_use(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
 -- B-TUI-2 piece 9a 0269 school checkout page settings: two private tables reached only through two runtime entry points;
 -- guards, validators and helpers are private.
 DO $$ DECLARE r text; t text; col text; f text; BEGIN
