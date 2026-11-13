@@ -145,7 +145,15 @@ try{
  assert.equal(ok(await send(base(a)+'/students/'+twinA+'/attendance',{identity:a})).totalVisits,0);
  assert.deepEqual(await live(a),before);
  d=await detail(a,ok(await stage(a,'ATTENDANCE',attRows.slice(0,2),attMap)).id);assert.deepEqual(d.rows[0].errors,['row:ALREADY_IMPORTED']);
- pass('attendance rows match only exact names at this school, birth date narrows twins, unknown and ambiguous rows cannot import, finalize writes imported history only (no session, booking or attendance record), totals read back, and a re-import is flagged');
+ // Two batches staged from the same new rows: only the first finalize imports them; the second is STALE and writes nothing.
+ const newRows=[attHead,['Mina','Park','','2025-11-01','2','']];
+ const [x1,x2]=[ok(await stage(a,'ATTENDANCE',newRows,attMap)),ok(await stage(a,'ATTENDANCE',newRows,attMap))];
+ for(const x of [x1,x2])assert.equal(x.validCount,1);
+ const y1=ok(await decide(a,x1.id,1,[{index:1,choice:'IMPORT'}])),y2=ok(await decide(a,x2.id,1,[{index:1,choice:'IMPORT'}]));
+ const racing=await Promise.all([finalize(a,x1.id,y1.version,[1]),finalize(a,x2.id,y2.version,[1])]);
+ assert.deepEqual(racing.map(x=>x.status).sort(),[200,409]);assert.equal(racing.find(x=>x.status===409).body.code,'HISTORY_IMPORT_STALE');
+ assert.equal(ok(await send(base(a)+'/students/'+solo+'/attendance',{identity:a})).totalVisits,45);
+ pass('attendance rows match only exact names at this school, birth date narrows twins, unknown and ambiguous rows cannot import, finalize writes imported history only (no session, booking or attendance record), totals read back, a re-import is flagged, and two concurrent finalizes of the same visits import them once');
 
  // 4. Authority: class import also needs schedule permission; other schools, delegation, a wrong command and lost access are refused.
  await q("DELETE FROM hon.role_permissions WHERE organization_id=$1 AND permission_code='schedule.session.manage'",[b.org]);

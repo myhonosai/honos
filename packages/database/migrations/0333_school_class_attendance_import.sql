@@ -511,6 +511,10 @@ BEGIN
     entity:=series; entity_type:='CLASS_SERIES';
     payload:=jsonb_build_object('batchId',p_batch,'rowIndex',p_row,'programId',program,'seriesId',series,'internalOnly',true);
   ELSE
+    -- Re-checked at finalize: another batch may have imported the same visit since staging.
+    IF EXISTS(SELECT 1 FROM hon.imported_attendance_history h WHERE h.organization_id=org AND h.school_id=school AND h.student_profile_id=r.matched_profile_id
+        AND h.attended_on=hon.history_import_date(n->>'attendedOn') AND lower(coalesce(h.class_name,''))=lower(n->>'className')) THEN
+      RAISE EXCEPTION 'HISTORY_IMPORT_STALE' USING ERRCODE='40001'; END IF;
     INSERT INTO hon.imported_attendance_history(organization_id,school_id,student_profile_id,attended_on,visit_count,class_name,batch_id,row_index)
       VALUES(org,school,r.matched_profile_id,hon.history_import_date(n->>'attendedOn'),(n->>'visits')::integer,nullif(n->>'className',''),p_batch,p_row)
       RETURNING id INTO hist;
@@ -548,8 +552,9 @@ BEGIN
   SELECT coalesce(jsonb_agg(x ORDER BY (x#>>'{}')::integer),'[]'::jsonb) INTO sel FROM jsonb_array_elements(p_input->'selectedIndices') x;
   IF sel<>expected OR EXISTS(SELECT 1 FROM hon.history_import_rows WHERE batch_id=b.id AND choice IS NULL) THEN
     RAISE EXCEPTION 'HISTORY_IMPORT_SELECTION_REQUIRED' USING ERRCODE='40001'; END IF;
-  -- One class import at a time per school, so two batches cannot both schedule the same class name.
-  IF v_kind='CLASSES' THEN PERFORM pg_advisory_xact_lock(hashtextextended('hon.history_import.classes:'||school::text,0)); END IF;
+  -- One finalize of each kind at a time per school, so two batches cannot both schedule the same class or both import
+  -- the same visits; each row is then re-checked against what is already there.
+  PERFORM pg_advisory_xact_lock(hashtextextended('hon.history_import.'||lower(v_kind)||':'||school::text,0));
   FOR idx IN SELECT row_index FROM hon.history_import_rows WHERE batch_id=b.id AND choice='IMPORT' ORDER BY row_index LOOP
     PERFORM hon.apply_history_import_row(b.id,v_kind,idx,s.actor,p_request,p_correlation);
   END LOOP;

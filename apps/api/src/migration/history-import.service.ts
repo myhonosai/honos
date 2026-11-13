@@ -41,7 +41,7 @@ const WRITE_LIMITS = "SET LOCAL statement_timeout='30s'; SET LOCAL lock_timeout=
 const ERRORS: Record<string, (code: string) => HttpException> = {
   HISTORY_IMPORT_INVALID: code => new BadRequestException({ code, detail: 'Use a UTF-8 CSV and map every column once, including the required fields for this kind of import.' }),
   HISTORY_IMPORT_FORBIDDEN: code => new ForbiddenException({ code, detail: 'Live import permission at this school (and schedule permission for classes) and an active subscription are required.' }),
-  HISTORY_IMPORT_STALE: code => new ConflictException({ code, detail: 'A class in this import was scheduled since it was staged. Stage the file again.' }),
+  HISTORY_IMPORT_STALE: code => new ConflictException({ code, detail: 'A class or visit in this import was added since it was staged. Stage the file again.' }),
   HISTORY_IMPORT_NOT_FOUND: code => new NotFoundException({ code }),
   HISTORY_IMPORT_ROW_NOT_IMPORTABLE: code => new BadRequestException({ code, detail: 'A row with problems can only be skipped, and an imported row cannot change.' }),
   HISTORY_IMPORT_SELECTION_REQUIRED: code => new ConflictException({ code, detail: 'Decide every row, then confirm exactly the rows marked to import.' }),
