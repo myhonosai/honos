@@ -2520,6 +2520,20 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.ingest_saas_schedule_evidence(jsonb,text),hon.cancel_saas_schedule_binding(text,uuid,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
+-- 0306 HON OS lifetime purchase. Runs after every broader revocation above: restore only the ingest command 0306
+-- replaced. Availability helpers and guards stay unreachable.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['saas_lifetime_unavailable_reason(uuid)','saas_schedule_binding_lifetime_offer(hon.saas_schedule_bindings)',
+    'guard_saas_lifetime_binding_insert()','guard_saas_lifetime_sale_insert()','verify_saas_lifetime_sale_evidence()'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.ingest_saas_schedule_evidence(jsonb,text) TO hon_runtime;
+  END IF;
+END $$;
 
 -- B-HQ-2 0232 (proposed) HQ support records: no table privileges; three commands and three reads are the only runtime boundary.
 DO $$ DECLARE r text; t text; BEGIN
