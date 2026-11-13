@@ -672,8 +672,8 @@ try {
     'guard_membership_pause', 'pause_school_membership', 'read_crm_adult_membership_draft_confirmation', 'read_crm_adult_membership_preparation',
     'read_crm_guardian_child_enrollment', 'read_crm_lead_memberships', 'read_crm_lead_registration_recovery', 'read_maya_at_risk_students', 'read_membership_date_confirmation_queue', 'read_membership_date_history', 'read_membership_pauses_and_refunds',
     'read_owner_launch_membership_draft', 'read_parent_billing_view', 'read_parent_testing_status',
-    'read_retention_review_signals', 'read_school_command_center', 'read_school_health_score', 'read_school_membership_list', 'read_school_membership_status_summary', 'read_specialist_school_facts', 'record_membership_refund', 'record_retention_attention_alert',
-    'renewal_membership_facts', 'resolve_retention_attention_alert', 'resume_school_membership', 'revenue_plan_snapshot', 'revise_membership_dates']);
+    'read_retention_review_signals', 'read_school_command_center', 'read_school_health_score', 'read_school_membership_list', 'read_school_membership_status_summary', 'read_school_reports', 'read_specialist_school_facts', 'record_membership_refund', 'record_retention_attention_alert',
+    'renewal_membership_facts', 'resolve_retention_attention_alert', 'resume_school_membership', 'revenue_plan_snapshot', 'revise_membership_dates', 'school_report_periods']);
   // 0220 (U6) read_school_membership_list is a read-only school list: no booking, check-in or benefit path.
   // 0224 pause, resume, refund-record and pause-history paths and the pause guard: FROZEN is not ACTIVE, so a pause
   // removes benefits rather than granting one; none books, checks in or grants a benefit.
@@ -683,11 +683,14 @@ try {
   // 0284 (Maya M2) begin_hon_turn and read_specialist_school_facts only check that a Maya question's membership belongs to
   // this school (an existence test); neither books, checks in or grants a benefit. begin_hon_turn matches the attendance
   // pattern only through Chad's 'CHECK_IN' follow-up purpose text.
+  // 0331 (R1) read_school_reports and school_report_periods are read-only aggregate reports: they count memberships (not
+  // drafts) by term dates and recorded cancellations and count attendance marks; they book, check in and grant nothing.
   // 0259 (Maya M1) read_maya_at_risk_students is a read-only retention signal: it books, checks in and grants nothing,
   // and reads only ACTIVE, FROZEN and CANCELLATION_PENDING memberships (no DRAFT); a SCHEDULED (future-dated) ACTIVE
   // membership can at most appear as a staff-only list row, which grants no benefit.
   assert.deepEqual((await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' AND prosrc ~* '(class_bookings|attendance_records|class_pass|kiosk|check_in)' ORDER BY 1")).map((r) => r.proname),
-    ['acknowledge_retention_review_evidence', 'begin_hon_turn', 'read_maya_at_risk_students', 'read_retention_review_signals', 'read_school_health_score', 'record_retention_attention_alert']);
+    ['acknowledge_retention_review_evidence', 'begin_hon_turn', 'read_maya_at_risk_students', 'read_retention_review_signals', 'read_school_health_score', 'record_retention_attention_alert',
+      'school_report_periods']);
   assert.equal((await sql("SELECT count(*)::int n FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' AND prosrc ~* '(INSERT\\s+INTO|UPDATE)\\s+(hon\\.)?(class_bookings|attendance_records|class_pass\\w*|kiosk\\w*|check_in\\w*)'"))[0].n, 0);
   assert.equal((await sql("SELECT count(*)::int n FROM pg_views WHERE definition ~* '\\mmemberships\\M'"))[0].n, 0);
   const apiRoot = new URL('../../../apps/api/src/', import.meta.url);
