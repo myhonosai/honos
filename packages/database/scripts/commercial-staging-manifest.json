@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "3b012738f89201257e150e585530a46a4c81c6aade1c295de96c7006267f08b4",
+  "chainSha256": "05015d6bd2b948f7cee6120c1201d735fac4b835c59f40e8a8a542ccd9a7863a",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -393,6 +393,10 @@
     {
       "file": "0308_hq_plan_promotions.sql",
       "sha256": "13ddea1cc69c6ee892e775a333a1eb6bd4eb74f5e96c16c13d4cc45380d394bb"
+    },
+    {
+      "file": "0309_hon_os_lifetime_refund_ends_access.sql",
+      "sha256": "810a648cf0c9faec1f458e841b2710d609982d6f911674c57cc352687c6e562c"
     },
     {
       "file": "0310_ai_org_agent_ceiling_removed.sql",

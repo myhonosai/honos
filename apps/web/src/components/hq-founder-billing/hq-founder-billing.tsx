@@ -9,7 +9,8 @@ export type FounderBillingRead = { state: 'LOADING' } | { state: 'READY'; view: 
 const usd = (minor: number) => `$${(minor / 100).toLocaleString('en-US', { minimumFractionDigits: minor % 100 === 0 ? 0 : 2, maximumFractionDigits: 2 })}`;
 const utc = (iso: string | null) => iso === null ? 'Not recorded' : `${new Date(iso).toLocaleString('en-US', { timeZone: 'UTC' })} UTC`;
 const OFFER: Record<string, string> = { FOUNDER_MONTHLY: 'Founder monthly', FOUNDER_ANNUAL: 'Founder annual' };
-const REASON: Record<string, string> = { FOUNDER_SPOT_UNAVAILABLE: 'Paid after all 50 founder spots were taken', LIFETIME_SALE_LIMIT_REACHED: 'Paid after the lifetime offer’s sale limit was reached' };
+const REASON: Record<string, string> = { FOUNDER_SPOT_UNAVAILABLE: 'Paid after all 50 founder spots were taken', LIFETIME_SALE_LIMIT_REACHED: 'Paid after the lifetime offer’s sale limit was reached',
+  LIFETIME_REFUND_IN_WINDOW: 'Paid after this lifetime plan was refunded and ended' };
 const BLOCKER: Record<string, string> = {
   NO_HELD_PAYMENT: 'No held payment is recorded', HELD_PAYMENT_CONFLICT: 'Held payments conflict; needs a provider follow-up',
   DISPUTE_POLICY_REQUIRED: 'A dispute needs an owner policy', REVERSAL_POLICY_REQUIRED: 'A reversal needs an owner policy',
