@@ -198,7 +198,10 @@ BEGIN
       custom_discipline=EXCLUDED.custom_discipline,goals=EXCLUDED.goals,path=EXCLUDED.path,previous_software=EXCLUDED.previous_software,
       previous_software_other=EXCLUDED.previous_software_other,import_wishes=EXCLUDED.import_wishes,skipped_steps=EXCLUDED.skipped_steps,
       updated_by_principal_id=EXCLUDED.updated_by_principal_id,updated_at=clock_timestamp()
+    -- Two first saves can both find no row; only the one whose expected version still holds may write.
+    WHERE t.version=expected
     RETURNING * INTO p;
+  IF p.organization_id IS NULL THEN RAISE EXCEPTION 'VERSION_CONFLICT' USING ERRCODE='40001'; END IF;
   result:=hon.school_onboarding_profile_json(p);
   -- Identifier-only evidence: the answers stay in the profile row, not in audit or outbox payloads.
   INSERT INTO hon.audit_events(organization_id,school_id,actor_principal_id,source,action_code,entity_type,entity_id,next_state,result,request_id,correlation_id)
