@@ -31,7 +31,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/billing/membership-dates', 'routeDates'), r('/staff/billing/membership-changes', 'routeChanges'), r('/staff/billing/renewals', 'routeRenewals'), r('/staff/billing/invoices', 'routeInvoices'), r('/staff/billing/receivables', 'routeReceivables'),
     r('/staff/billing/payment-processors', 'routePaymentProcessors'), r('/staff/billing/checkout-pages', 'routeCheckoutPages')] },
   { key: 'classes', titleKey: 'navClasses', routes: [r('/staff/schedule', 'routeRosters'), r('/staff/schedule/sessions', 'routeSessions'), r('/staff/schedule/timetable', 'routeTimetable'), r('/staff/schedule/events', 'routeEvents'), r('/staff/schedule/bookings', 'routeBookings'),
-    r('/staff/classpass', 'routeClassPass', true), r('/staff/kiosk', 'routeKiosk')] },
+    r('/staff/classpass', 'routeClassPass', true), r('/staff/kiosk', 'routeKiosk'), r('/staff/migration/classes', 'routeHistoryImport')] },
   { key: 'attendance', titleKey: 'navAttendance', routes: [r('/staff/attendance', 'routeAttendance', true), r('/staff/attendance/planned-absences', 'routePlannedAbsences'),
     r('/staff/curriculum/library', 'routeCurriculumLibrary'), r('/staff/curriculum/progress', 'routeProgress'), r('/staff/testing/registrations', 'routeTesting'),
     r('/staff/testing/readiness', 'routeReadiness'), r('/staff/testing/scorecards', 'routeScorecards'), r('/staff/testing/promotion-decisions', 'routePromotions'),
