@@ -163,6 +163,8 @@ const expectedRlsTables = [
   'student_import_requests',
   'school_onboarding_profiles',
   'school_onboarding_requests',
+  'school_support_requests',
+  'school_support_commands',
   'class_series',
   'class_series_occurrences',
   'invoice_payment_records',

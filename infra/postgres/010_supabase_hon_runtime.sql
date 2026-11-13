@@ -3446,3 +3446,13 @@ DO $$ DECLARE r text; BEGIN
   END LOOP;
   GRANT EXECUTE ON FUNCTION hon.save_school_onboarding(text,jsonb,text,uuid,uuid), hon.read_school_onboarding(text) TO hon_runtime;
 END $$;
+-- 0335 school support requests: exactly three runtime entry points, no table privilege.
+DO $$ DECLARE r text; BEGIN
+  IF to_regclass('hon.school_support_requests') IS NULL THEN RAISE EXCEPTION 'Apply migration 0335 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_support_requests, hon.school_support_commands FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_support_requests, hon.school_support_commands FROM '||quote_ident(r);
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.submit_school_support_request(text,jsonb,text,uuid,uuid), hon.add_school_support_message(text,uuid,jsonb,text,uuid,uuid),
+    hon.read_school_support_requests(text) TO hon_runtime;
+END $$;
