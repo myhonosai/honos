@@ -3281,6 +3281,101 @@ try {
   pass('INV-36', "0260: Alex (general management, reporting.view), Jordan (operations, schedule.session.manage) and Lena (creative & commerce, marketing.campaign.read) each answer a question in text from their own aggregate school facts (planned as <agent>/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays; no record names); Alex's operations and commerce sections follow those permissions; each is refused at begin without its capability (nothing recorded) and blocked in prepare on a lapse (nothing reserved or sent); answers are concealed when any permission their facts used lapses while usage evidence stays; HON sees their turns without their text; never continued, confirmed from suggestions or given a target; rows are single DETAILED analyses, source permissions are a closed set, plans are ANALYZE only, the fact readers are internal; readiness lists GENERAL_MANAGEMENT, OPERATIONS and CREATIVE_COMMERCE gated on each capability");
   }
 
+  // ---- INV-32 (R1, 0287): routing by task class through the HQ task profile ----
+  {
+  const o = await makeOrg('inv-32');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const conv = await hon.create(scope, { title: 'Routing' }, K());
+  // Five synthetic catalog models on this school's policy only (ordinals after the shared baseline model at 0).
+  const m = {};
+  for (const [name, cost, privacy] of [['standard', 1, []], ['detailed', 3, []], ['fallback', 1, ['NO_TRAINING', 'ZERO_RETENTION']], ['advanced', 1, []], ['business', 2, []]]) {
+    m[name] = K();
+    await admin.query("INSERT INTO hon.hq_ai_model_catalog(catalog_id,provider_id,model_id,display_name,capabilities,modalities,privacy_controls,active,minimum_tier,unit_cost_micros,cost_unit,effective_from) VALUES($1,'OPENROUTER',$2,'AI-0 routing model',ARRAY['TEXT'],ARRAY['TEXT'],$3,true,'COMPLETE',$4,'TOKEN','2020-01-01')", [m[name], `test/${name}`, privacy, cost]);
+    await admin.query('INSERT INTO hon.hq_ai_routing_candidates(policy_id,ordinal,catalog_id) VALUES($1,(SELECT max(ordinal)+1 FROM hon.hq_ai_routing_candidates WHERE policy_id=$1),$2)', [o.policy, m[name]]);
+  }
+  const profile = async (agentKey, taskCategory, defaultId, fallbacks = [], advanced = null, patch = {}) => {
+    const id = K();
+    const p = { maxCostMicros: 80000, allowedProviderIds: ['OPENROUTER'], privacyControls: [], active: true, from: '2020-01-01', until: null, ...patch };
+    await admin.query(`INSERT INTO hon.hq_ai_task_profiles(profile_id,routing_policy_id,agent_key,task_category,cost_unit,active,max_cost_micros,required_capabilities,required_modalities,allowed_provider_ids,privacy_controls,timeout_category,retry_category,effective_from,effective_until)
+      VALUES($1,$2,$3,$4,'TOKEN',$5,$6,ARRAY['TEXT'],ARRAY['TEXT'],$7,$8,'STANDARD','NONE',$9,$10)`, [id, o.policy, agentKey, taskCategory, p.active, p.maxCostMicros, p.allowedProviderIds, p.privacyControls, p.from, p.until]);
+    const cands = [['DEFAULT', 0, defaultId], ...fallbacks.map((f, i) => ['FALLBACK', i + 1, f]), ...(advanced ? [['ADVANCED', 0, advanced]] : [])];
+    for (const [selection, ordinal, catalogId] of cands) await admin.query('INSERT INTO hon.hq_ai_task_profile_candidates(profile_id,routing_policy_id,selection,ordinal,catalog_id) VALUES($1,$2,$3,$4,$5)', [id, o.policy, selection, ordinal, catalogId]);
+    return id;
+  };
+  const dropProfiles = async () => { await admin.query('DELETE FROM hon.hq_ai_task_profile_candidates WHERE routing_policy_id=$1', [o.policy]); await admin.query('DELETE FROM hon.hq_ai_task_profiles WHERE routing_policy_id=$1', [o.policy]); };
+  const routed = async (turn) => row(`SELECT p.model_id, p.route_selection, p.task_profile_id, p.task_profile_version, r.status, r.reason FROM hon.hon_reply_invocations r
+    LEFT JOIN hon.ai_invocation_plans p ON p.id = r.plan_id WHERE r.turn_id=$1`, [turn.turnId]);
+  const ask = async (replyMode = 'STANDARD', extra = {}) => routed(await hon.sendTurn(scope, conv.id, { text: `Routing question ${K()}`, delegation: null, replyMode, ...extra }, K()));
+  const callsBefore = fakes.hon.calls;
+  // 1. No task profile: the legacy policy order (shared baseline model at ordinal 0), recorded as POLICY_ORDER.
+  assert.deepEqual(await ask(), { model_id: 'approved/ai0-baseline', route_selection: 'POLICY_ORDER', task_profile_id: null, task_profile_version: null, status: 'COMPLETED', reason: null });
+  // 2. HON Standard and HON Detailed each use their own profile's default.
+  const std = await profile('hon', 'HON_STANDARD', m.standard, [m.fallback], m.advanced);
+  const det = await profile('hon', 'HON_DETAILED', m.detailed, [m.standard]);
+  assert.deepEqual(await ask('STANDARD'), { model_id: 'test/standard', route_selection: 'PROFILE_DEFAULT', task_profile_id: std, task_profile_version: 1, status: 'COMPLETED', reason: null });
+  assert.deepEqual(await ask('DETAILED'), { model_id: 'test/detailed', route_selection: 'PROFILE_DEFAULT', task_profile_id: det, task_profile_version: 1, status: 'COMPLETED', reason: null });
+  // 3. Claire's analysis routes by BUSINESS_PERFORMANCE, not by HON's Detailed profile.
+  const bp = await profile('claire', 'BUSINESS_PERFORMANCE', m.business);
+  assert.deepEqual(await routed(await hon.sendTurn(scope, conv.id, { text: 'How is retention?', delegation: { agentKey: 'claire' } }, K())),
+    { model_id: 'test/business', route_selection: 'PROFILE_DEFAULT', task_profile_id: bp, task_profile_version: 1, status: 'COMPLETED', reason: null });
+  // 4. Default ineligible -> the first eligible fallback (never the advanced model, never the policy order).
+  const fallbackCases = [
+    ['default catalog inactive', () => admin.query('UPDATE hon.hq_ai_model_catalog SET active=false WHERE catalog_id=$1', [m.standard]), () => admin.query('UPDATE hon.hq_ai_model_catalog SET active=true WHERE catalog_id=$1', [m.standard])],
+    ['default over the profile cost ceiling', () => admin.query('UPDATE hon.hq_ai_model_catalog SET unit_cost_micros=9 WHERE catalog_id=$1', [m.standard]), () => admin.query('UPDATE hon.hq_ai_model_catalog SET unit_cost_micros=1 WHERE catalog_id=$1', [m.standard])],
+    ['default lacks a required privacy control', () => admin.query("UPDATE hon.hq_ai_task_profiles SET privacy_controls=ARRAY['ZERO_RETENTION'] WHERE profile_id=$1", [std]), () => admin.query("UPDATE hon.hq_ai_task_profiles SET privacy_controls='{}' WHERE profile_id=$1", [std])],
+  ];
+  for (const [label, apply, undo] of fallbackCases) {
+    await apply();
+    try {
+      assert.deepEqual(await ask('STANDARD'), { model_id: 'test/fallback', route_selection: 'PROFILE_FALLBACK', task_profile_id: std, task_profile_version: 1, status: 'COMPLETED', reason: null }, label);
+    } finally { await undo(); }
+  }
+  // 5. A profile with no eligible candidate refuses the route: nothing planned, reserved or called (no escape to policy order).
+  const refusals = [
+    ['every candidate inactive', () => admin.query('UPDATE hon.hq_ai_model_catalog SET active=false WHERE catalog_id=ANY($1)', [[m.standard, m.fallback]]), () => admin.query('UPDATE hon.hq_ai_model_catalog SET active=true WHERE catalog_id=ANY($1)', [[m.standard, m.fallback]])],
+    ['provider not allowed by the profile', () => admin.query("UPDATE hon.hq_ai_task_profiles SET allowed_provider_ids=ARRAY['DIRECT_LLM_API'] WHERE profile_id=$1", [std]), () => admin.query("UPDATE hon.hq_ai_task_profiles SET allowed_provider_ids=ARRAY['OPENROUTER'] WHERE profile_id=$1", [std])],
+    ['profile ceiling below every candidate', () => admin.query('UPDATE hon.hq_ai_task_profiles SET max_cost_micros=100 WHERE profile_id=$1', [std]), () => admin.query('UPDATE hon.hq_ai_task_profiles SET max_cost_micros=80000 WHERE profile_id=$1', [std])],
+    ['two active profiles for the same task', async () => { await profile('hon', 'HON_STANDARD', m.fallback); }, async () => {
+      const extra = (await rows("SELECT profile_id FROM hon.hq_ai_task_profiles WHERE routing_policy_id=$1 AND task_category='HON_STANDARD' AND profile_id<>$2", [o.policy, std])).map((r) => r.profile_id);
+      await admin.query('DELETE FROM hon.hq_ai_task_profile_candidates WHERE profile_id=ANY($1)', [extra]);
+      await admin.query('DELETE FROM hon.hq_ai_task_profiles WHERE profile_id=ANY($1)', [extra]);
+    }],
+  ];
+  for (const [label, apply, undo] of refusals) {
+    await apply();
+    const calls = fakes.hon.calls;
+    try {
+      assert.deepEqual(await ask('STANDARD'), { model_id: null, route_selection: null, task_profile_id: null, task_profile_version: null, status: 'BLOCKED', reason: 'NO_ELIGIBLE_ROUTE' }, label);
+      assert.equal(fakes.hon.calls, calls, `${label}: no provider call`);
+    } finally { await undo(); }
+  }
+  // 6. An inactive, expired or not-yet-effective profile is not a routing profile: the legacy order applies again.
+  for (const [label, sql] of [['inactive', 'UPDATE hon.hq_ai_task_profiles SET active=false WHERE profile_id=$1'],
+    ['expired', "UPDATE hon.hq_ai_task_profiles SET effective_from='2020-01-01', effective_until=clock_timestamp()-interval '1 minute' WHERE profile_id=$1"],
+    ['future', "UPDATE hon.hq_ai_task_profiles SET effective_from=clock_timestamp()+interval '1 day', effective_until=NULL WHERE profile_id=$1"]]) {
+    await admin.query(sql, [std]);
+    assert.deepEqual(await ask('STANDARD'), { model_id: 'approved/ai0-baseline', route_selection: 'POLICY_ORDER', task_profile_id: null, task_profile_version: null, status: 'COMPLETED', reason: null }, label);
+    await admin.query("UPDATE hon.hq_ai_task_profiles SET active=true, effective_from='2020-01-01', effective_until=NULL WHERE profile_id=$1", [std]);
+  }
+  // 7. The category is code-owned and closed; plan routing columns are as immutable as the rest of the plan.
+  assert.deepEqual((await rows("SELECT a, t, hon.ai_route_task_category(a, t) c FROM (VALUES ('hon','SUMMARIZE'),('hon','ANALYZE'),('claire','ANALYZE'),('marcus','DRAFT_MARKETING'),('chad','DRAFT_FOLLOW_UP'),('kai','DRAFT_TEACHING'),('claire','DRAFT_TEACHING'),('hon','DRAFT_MARKETING'),('maya','SUMMARIZE')) v(a,t) ORDER BY 1,2")).map((r) => `${r.a}/${r.t}=${r.c}`),
+    ['chad/DRAFT_FOLLOW_UP=CHAD_SALES', 'claire/ANALYZE=BUSINESS_PERFORMANCE', 'claire/DRAFT_TEACHING=null', 'hon/ANALYZE=HON_DETAILED', 'hon/DRAFT_MARKETING=null', 'hon/SUMMARIZE=HON_STANDARD', 'kai/DRAFT_TEACHING=KAI_TEACHING', 'marcus/DRAFT_MARKETING=MARCUS_MARKETING', 'maya/SUMMARIZE=null']);
+  await assert.rejects(admin.query("UPDATE hon.ai_invocation_plans SET route_selection='POLICY_ORDER' WHERE task_profile_id=$1", [std]), /immutable/);
+  // 8. The HQ owner can write a HON task profile through the reviewed HQ control plane (new agent keys and categories accepted).
+  await dropProfiles();
+  const hqProfile = K();
+  const write = await row('SELECT hon.hq_ai_control_plane_write($1,$2,$3::jsonb,$4::uuid,$5::uuid) AS data', [hq.subject, 'TASK_PROFILE', JSON.stringify({
+    profileId: hqProfile, routingPolicyId: o.policy, agentKey: 'hon', taskCategory: 'HON_STANDARD', costUnit: 'TOKEN', active: true, maxCostMicros: 80000,
+    defaultCatalogId: m.standard, fallbackCatalogIds: [m.fallback], advancedCatalogId: null, requiredCapabilities: ['TEXT'], requiredModalities: ['TEXT'],
+    allowedProviderIds: ['OPENROUTER'], privacyControls: [], timeoutCategory: 'STANDARD', retryCategory: 'NONE', effectiveFrom: '2020-01-01T00:00:00.000Z', effectiveUntil: null, expectedVersion: 0 }), K(), K()]);
+  assert.equal(write.data.replayed ?? false, false, JSON.stringify(write.data));
+  assert.deepEqual(await ask('STANDARD'), { model_id: 'test/standard', route_selection: 'PROFILE_DEFAULT', task_profile_id: hqProfile, task_profile_version: 1, status: 'COMPLETED', reason: null });
+  assert.ok(fakes.hon.calls > callsBefore);
+  pass('INV-32', 'R1: the planner routes by a code-owned task category (hon Standard/Detailed, Claire business performance, Marcus, Chad, Kai) through the single active effective HQ task profile on the school policy: its default, else the first eligible fallback (never advanced), each also inside the profile cost ceiling, provider list and privacy controls; no profile (or an inactive/expired/future one) keeps the legacy policy order; a profile with no eligible candidate or two active profiles refuse the route with no reservation or call; the profile and selection are recorded immutably on the plan; the HQ owner writes HON task profiles through the control plane');
+  }
+
   // ---- INV-37 (0284): Maya answers about one at-risk student from that student's 0259 factors only ----
   {
   const o = await makeOrg('inv-37');
