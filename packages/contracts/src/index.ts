@@ -1105,3 +1105,4 @@ export * from './school-booking-types.js';
 export * from './school-pay-autopay.js';
 export * from './hq-school-health.js';
 export * from './school-reports.js';
+export * from './school-onboarding.js';

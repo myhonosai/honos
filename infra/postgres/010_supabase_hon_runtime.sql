@@ -3436,6 +3436,17 @@ DO $$ DECLARE r text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_hq_hon_agent_performance(text,text) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0323 school onboarding answers and computed setup progress: exactly two runtime entry points, no table privilege.
+DO $$ DECLARE r text; BEGIN
+  IF to_regclass('hon.school_onboarding_profiles') IS NULL THEN RAISE EXCEPTION 'Apply migration 0323 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_onboarding_profiles, hon.school_onboarding_requests FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_onboarding_profiles, hon.school_onboarding_requests FROM '||quote_ident(r);
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.save_school_onboarding(text,jsonb,text,uuid,uuid), hon.read_school_onboarding(text) TO hon_runtime;
+END $$;
+
 -- 0344 website drafts on the CW1 school wallet: private deny-all tables, private helpers, four fixed runtime entry points.
 DO $$ DECLARE t text; r text; c text; f text; BEGIN
   IF to_regprocedure('hon.create_creative_website_draft(text,uuid,jsonb,jsonb,uuid,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0344 first'; END IF;

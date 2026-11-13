@@ -126,6 +126,8 @@ import { MembershipPauseController } from './billing/membership-pause.controller
 import { MembershipPauseService } from './billing/membership-pause.service.js';
 import { StudentImportController } from './migration/student-import.controller.js';
 import { StudentImportService } from './migration/student-import.service.js';
+import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
+import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
 import { SchoolMembershipListController, SchoolMembershipListHumanUiGuard } from './billing/school-membership-list.controller.js';
 import { SchoolMembershipListService } from './billing/school-membership-list.service.js';
 import { CrmSchoolClockController, CrmSchoolClockHumanUiGuard, CrmSessionSchoolClockController } from './crm/crm-school-clock.controller.js';
@@ -473,6 +475,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipDateRevisionController,
     MembershipPauseController,
     StudentImportController,
+    SchoolOnboardingController,
     TuitionPaymentController,
     SchoolPaymentController,
     SchoolPayMethodController,
@@ -633,6 +636,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipDateRevisionService,
     MembershipPauseService,
     StudentImportService,
+    SchoolOnboardingService,
     ClassSeriesService,
     SchoolReportsService,
     SchoolEventService,
