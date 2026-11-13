@@ -293,3 +293,33 @@ html[lang="ko"] p,html[lang="ko"] li{word-break:keep-all}
 .guarantee b{font-weight:500;font-size:15px}
 .guarantee p{color:var(--muted);font-size:14px}
 @media (max-width:760px){.guarantee{grid-template-columns:1fr}}
+
+/* blog */
+.blog main{position:relative;z-index:1;padding-bottom:96px}
+.blog main section{padding-block:0}
+.blog-head{padding-top:72px;padding-bottom:36px}
+.blog-head h1,.post h1{font-size:clamp(36px,5.6vw,64px);line-height:1.04;letter-spacing:-.03em;margin:18px 0 14px;max-width:20ch}
+.posts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:16px}
+.post-card{display:flex;flex-direction:column;gap:10px;height:100%;padding:26px;transition:border-color .2s,transform .2s}
+.post-card:hover{border-color:color-mix(in srgb,var(--accent) 45%,transparent);transform:translateY(-2px)}
+.post-card h2{font-size:22px;line-height:1.2;letter-spacing:-.01em;margin:0}
+.post-card p{color:var(--muted);font-size:15px;margin:0}
+.post{max-width:760px;padding-top:56px}
+.post .back{display:inline-block;padding:6px 0}
+.post .back:hover{color:var(--fg)}
+.post .meta{margin:0 0 36px}
+.prose{font-size:18px;line-height:1.7;color:#d9dbd5}
+.prose h2{font-size:26px;line-height:1.25;letter-spacing:-.015em;color:var(--fg);margin:44px 0 12px}
+.prose h3{font-size:20px;color:var(--fg);margin:32px 0 10px}
+.prose p,.prose ul,.prose ol{margin:0 0 18px}
+.prose ul,.prose ol{padding-left:1.3em}
+.prose li{margin:6px 0}
+.prose li::marker{color:var(--accent)}
+.prose a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
+.prose strong{color:var(--fg)}
+.prose blockquote{margin:32px 0;padding:6px 0 6px 22px;border-left:2px solid var(--accent);font-family:var(--serif);font-style:italic;font-size:24px;line-height:1.35;color:var(--fg)}
+.prose blockquote p{margin:0}
+.post-end{margin-top:56px;padding:30px}
+.post-end h2{font-size:24px;margin:0 0 8px}
+.post-end p{color:var(--muted);margin:0 0 18px}
+@media (max-width:620px){.prose{font-size:17px}.prose blockquote{font-size:21px}.blog-head{padding-top:48px}.post{padding-top:36px}}
