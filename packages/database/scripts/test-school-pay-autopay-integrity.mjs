@@ -363,6 +363,8 @@ try {
   const invoices = (await sql('SELECT i.*, l.student_rank FROM hon.invoices i JOIN hon.school_pay_autopay_cycle_lines l ON l.invoice_id=i.id WHERE l.cycle_id=$1 ORDER BY l.student_rank, i.subtotal_minor DESC', [cyc.cycleId])).rows;
   ok(invoices.length === 4 && invoices.every((i) => i.status === 'ISSUED' && i.currency === 'USD' && i.billing_account_id === P1 && i.total_minor === i.subtotal_minor - i.discount_minor),
     'four ISSUED invoices for payer 1');
+  ok((await sql('SELECT count(*)::int n FROM hon.school_pay_autopay_cycle_lines WHERE cycle_id=$1 AND series_anchor_at=period_at', [cyc.cycleId])).rows[0].n === 4,
+    'each first billed period anchors its own series');
   ok(invoices.map((i) => `${i.subtotal_minor}-${i.discount_minor}`).join() === '15000-0,4000-0,10000-1000,8000-1600', 'each invoice carries its line and discount');
   const dueLocal = (await sql("SELECT to_char($1::timestamptz AT TIME ZONE $2,'YYYY-MM-DD HH24:MI:SS') d", [invoices[0].due_at, LA])).rows[0].d;
   ok(dueLocal === `${today} 23:59:59`, `invoices are due at the end of the cycle day in the school time zone (${dueLocal})`);
@@ -387,6 +389,19 @@ try {
     ok(await next(await local('2027-03-10 12:00'), 'WEEKLY', null) === '2027-03-17 12:00', 'weekly across the DST change keeps local noon');
     ok(await next(await local('2027-03-15 18:00'), 'MONTHLY', jan31) === '2027-04-15 18:00', 'a schedule moved off its series starts a new one');
     ok(await next(jan31, 'MONTHLY', null) === '2027-02-28 18:00', 'no anchor: the period itself');
+    // Review P3: each line stores its series anchor, so a schedule moved to the 31st keeps the 31st after its first step.
+    const series = async (prevAt, prevAnchor, at, frequency = 'MONTHLY') => (await sql(`SELECT to_char(hon.school_pay_series_anchor($1::timestamptz,$2::timestamptz,$3::timestamptz,$4,$5) AT TIME ZONE $5,'YYYY-MM-DD HH24:MI') d`,
+      [prevAt, prevAnchor, at, frequency, LA])).rows[0].d;
+    const jan15 = await local('2027-01-15 18:00'); const feb15 = await local('2027-02-15 18:00'); const mar31 = await local('2027-03-31 18:00');
+    ok(await series(null, null, jan15) === '2027-01-15 18:00', 'the first period starts its own series');
+    ok(await series(jan15, jan15, feb15) === '2027-01-15 18:00', 'the next on-series period keeps the anchor');
+    ok(await series(feb15, jan15, mar31) === '2027-03-31 18:00', 'a schedule moved to Mar 31 starts a new series');
+    ok(await next(mar31, 'MONTHLY', mar31) === '2027-04-30 18:00', 'moved series: Mar 31 -> Apr 30');
+    const apr30 = await local('2027-04-30 18:00');
+    ok(await series(mar31, mar31, apr30) === '2027-03-31 18:00', 'Apr 30 continues the Mar 31 series');
+    ok(await next(apr30, 'MONTHLY', mar31) === '2027-05-31 18:00', 'moved series: Apr 30 -> May 31 (no drift to the 30th)');
+    ok(await series(jan31, jan31, await local('2027-02-28 18:00')) === '2027-01-31 18:00', 'a clamped Feb 28 stays on the Jan 31 series');
+    ok(await series(jan15, jan15, feb15, 'WEEKLY') === '2027-02-15 18:00', 'weekly: a period that is not the next week starts a new series');
   }
   ok(await localOf(after[anaWeekly.scheduleId]) === `${await localDay(7)} 12:00`, 'the weekly schedule moves seven days');
   ok(after[cyMonthly.scheduleId] === null, 'a schedule whose next period passes the term end has no next charge');
@@ -470,8 +485,8 @@ try {
   await rejectsSql(() => sql('UPDATE hon.school_pay_autopay_cycles SET total_minor=1 WHERE id=$1', [cyc.cycleId]), /IMMUTABLE/, 'cycle rewritten');
   await rejectsSql(() => sql('UPDATE hon.school_pay_autopay_cycle_lines SET discount_minor=0 WHERE cycle_id=$1', [cyc.cycleId]), /IMMUTABLE/, 'line rewritten');
   await rejectsSql(() => sql('DELETE FROM hon.school_pay_autopay_cycle_lines WHERE cycle_id=$1', [cyc.cycleId]), /IMMUTABLE/, 'line deleted');
-  await rejectsSql(() => sql(`INSERT INTO hon.school_pay_autopay_cycle_lines(organization_id,school_id,cycle_id,membership_id,schedule_id,period_at,student_rank,amount_minor,discount_minor,invoice_id)
-    SELECT organization_id,school_id,cycle_id,membership_id,schedule_id,period_at,student_rank,amount_minor,discount_minor,$2 FROM hon.school_pay_autopay_cycle_lines WHERE cycle_id=$1 LIMIT 1`, [cyc.cycleId, invoices[0].id]), /duplicate key|unique/, 'one schedule period billed twice');
+  await rejectsSql(() => sql(`INSERT INTO hon.school_pay_autopay_cycle_lines(organization_id,school_id,cycle_id,membership_id,schedule_id,period_at,series_anchor_at,student_rank,amount_minor,discount_minor,invoice_id)
+    SELECT organization_id,school_id,cycle_id,membership_id,schedule_id,period_at,series_anchor_at,student_rank,amount_minor,discount_minor,$2 FROM hon.school_pay_autopay_cycle_lines WHERE cycle_id=$1 LIMIT 1`, [cyc.cycleId, invoices[0].id]), /duplicate key|unique/, 'one schedule period billed twice');
   await rejectsSql(() => sql('UPDATE hon.school_pay_discount_rules SET second_value=50 WHERE version=1 AND organization_id=$1', [ids.organization]), /IMMUTABLE/, 'rule rewritten');
   await rejectsSql(() => sql('DELETE FROM hon.school_pay_discount_rules WHERE organization_id=$1', [ids.organization]), /IMMUTABLE/, 'rule deleted');
   await rejectsSql(() => sql("INSERT INTO hon.school_pay_discount_rules(organization_id,school_id,version,kind,second_value,later_value,created_by_principal_id) VALUES($1,$2,3,'PERCENT',150,0,$3)", [ids.organization, ids.schoolA, OWN.principal]), /check/i, 'a rule above 100 percent');
@@ -486,7 +501,7 @@ try {
   const helpers = ['guard_school_pay_autopay_plan()', 'require_school_pay_autopay_actor(text,text)', 'require_school_pay_autopay_reader(text,text[])', 'school_pay_school_zone()',
     'school_pay_discount_rule_json(hon.school_pay_discount_rules)', 'school_pay_autopay_plan_json(hon.school_pay_autopay_plans)', 'school_pay_current_discount_rule()',
     'school_pay_sibling_discount(hon.school_pay_discount_rules,integer,integer,text)', 'school_pay_next_period(timestamp with time zone,text,text,timestamp with time zone,timestamp with time zone)',
-    'school_pay_autopay_due(uuid,date,text,hon.school_pay_discount_rules)', 'school_pay_autopay_cycle_json(hon.school_pay_autopay_cycles)', 'school_pay_autopay_method_usable(uuid,uuid)',
+    'school_pay_series_anchor(timestamp with time zone,timestamp with time zone,timestamp with time zone,text,text)', 'school_pay_autopay_due(uuid,date,text,hon.school_pay_discount_rules)', 'school_pay_autopay_cycle_json(hon.school_pay_autopay_cycles)', 'school_pay_autopay_method_usable(uuid,uuid)',
     'school_pay_autopay_begin(text,text,text,text)', 'school_pay_autopay_record(uuid,uuid,text,uuid,integer,text,text,jsonb,jsonb,uuid,uuid)',
     'school_pay_autopay_complete(text,text,text,uuid,jsonb)', 'school_pay_lock_autopay_plan(uuid,integer)'];
   for (const fn of entry) {

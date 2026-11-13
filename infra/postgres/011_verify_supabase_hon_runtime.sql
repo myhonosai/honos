@@ -3225,6 +3225,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 ('hon.school_pay_current_discount_rule()',true,false,'search_path=pg_catalog, hon','ac0b1db791e36092e408428eb0b7315496f0ea57da67cd3c39967b65b49dc291'),
 ('hon.school_pay_sibling_discount(hon.school_pay_discount_rules,integer,integer,text)',false,false,'search_path=pg_catalog, hon','0ce701b08d2c9c42d11bc251c408f7bf1e383336925eb11ee10b01dedbde33bf'),
 ('hon.school_pay_next_period(timestamp with time zone,text,text,timestamp with time zone,timestamp with time zone)',false,false,'search_path=pg_catalog','5a26914caf6b255054169da1ed250aaea8723704203d5c4ebf56274874d4a285'),
+('hon.school_pay_series_anchor(timestamp with time zone,timestamp with time zone,timestamp with time zone,text,text)',false,false,'search_path=pg_catalog','fd2a63b1e9730c0930945739ea0c3942d8a17054f328789fc21b4dbb22afdb32'),
 ('hon.school_pay_autopay_due(uuid,date,text,hon.school_pay_discount_rules)',true,false,'search_path=pg_catalog, hon','27ccd7216b7e061bc81e7f8c839fb202ed540bb1a70b5374c90db6c85a50b2d3'),
 ('hon.school_pay_autopay_cycle_json(hon.school_pay_autopay_cycles)',true,false,'search_path=pg_catalog, hon','88d35e90a2180672b65c039343c43e58e51eafc8f55036d437075bc199d91a68'),
 ('hon.school_pay_autopay_method_usable(uuid,uuid)',true,false,'search_path=pg_catalog, hon','6e6df6c6984a0d035806752d2e73f1ff8ea548d64a36159486786914c8bacc45'),
@@ -3239,7 +3240,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 ('hon.change_school_pay_autopay_method(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','4afe599e81c3c0b48c87b43120add1679411a9fd124bd5603cbf6db2c595d405'),
 ('hon.set_school_pay_autopay_state(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','1447c643e9c7ecfd1ea72004cb151d602f95fcffb9f55cf348d9712963d6ec79'),
 ('hon.cancel_school_pay_autopay(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','ce709fd3dbd90a679df06aca118a6d17645c1759eaaf72992091c5a06a6f97f3'),
-('hon.prepare_school_pay_autopay_cycle(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','0fa67a5b05a6186f998d44cd29e90c81ca773ec3c6793dc09b77c81b10c613f9')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+('hon.prepare_school_pay_autopay_cycle(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','2db4818b8b823a5d7d796203f08b22eb3b538b0cc3e5ee18f6b6d8fad778d7b1')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
