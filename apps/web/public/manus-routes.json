@@ -125,6 +125,10 @@
       "title": "HON | Welcome and setup"
     },
     {
+      "path": "/staff/help",
+      "title": "HON | Ask for help"
+    },
+    {
       "path": "/staff/planning/revenue",
       "title": "HON | Human Revenue Planning"
     },
