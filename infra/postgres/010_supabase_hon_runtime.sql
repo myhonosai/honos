@@ -3095,3 +3095,16 @@ DO $$ DECLARE r text; f text; BEGIN
     END LOOP;
   END LOOP;
 END $$;
+
+-- 0250 Zernio lead intake: the runtime has no access to the form-mapping or receipt tables (no school screen
+-- reads them yet); it calls only the HQ-owner mapping command. Lead recording is worker-only (013).
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.record_zernio_lead(text,text,text,text,jsonb,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply Zernio lead migration 0250 first'; END IF;
+  REVOKE ALL ON TABLE hon.zernio_lead_forms, hon.zernio_lead_receipts FROM hon_runtime;
+  GRANT EXECUTE ON FUNCTION hon.set_zernio_lead_form_from_hq(text,uuid,text,text,uuid,uuid,jsonb,text,integer) TO hon_runtime;
+  REVOKE ALL ON FUNCTION hon.record_zernio_lead(text,text,text,text,jsonb,jsonb) FROM PUBLIC, hon_runtime;
+  REVOKE ALL ON FUNCTION hon.zernio_valid_field_map(jsonb) FROM PUBLIC, hon_runtime;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.record_zernio_lead(text,text,text,text,jsonb,jsonb), hon.set_zernio_lead_form_from_hq(text,uuid,text,text,uuid,uuid,jsonb,text,integer) FROM '||quote_ident(r);
+  END LOOP;
+END $$;

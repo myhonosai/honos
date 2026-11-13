@@ -1,5 +1,6 @@
 import {
-  BadRequestException, Controller, Header, Headers, HttpCode, Inject, Logger, Post, Req, ServiceUnavailableException,
+  BadRequestException, Controller, Header, Headers, HttpCode, HttpException, Inject, Logger, Optional, Post, Req, ServiceUnavailableException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { raw, type NextFunction, type Request, type Response } from 'express';
 import { COMMUNICATION_WORKER_STORE, type CommunicationWorkerStore, type VerifiedProviderReceipt } from './communication-worker-database.js';
@@ -7,16 +8,18 @@ import { SendGridEventWebhookVerifier, SendGridWebhookError } from './sendgrid-e
 import {
   TWILIO_INBOUND_PATH, TWILIO_STATUS_PATH, TWILIO_VOICE_PATH, TWILIO_VOICE_RESULT_PATH, TwilioWebhookError, TwilioWebhookVerifier, twilioPublicOrigin,
 } from './twilio-text-provider.js';
+import { ZERNIO_LEAD_PATH, ZernioLeadWebhookVerifier, ZernioWebhookError } from './zernio-lead-webhook.js';
 import { EMPTY_VOICE_TWIML, REJECT_VOICE_TWIML, voiceForwardTwiml } from './missed-call-text-back.js';
 
 const inboundLog = new Logger('CommunicationInboundText');
 
 export const COMMUNICATION_WEBHOOK_PREFIX = /^\/v1\/communications\/webhooks(?:\/|$)/i;
-const JSON_PATHS = new Set(['/v1/communications/webhooks/sendgrid']);
+const JSON_PATHS = new Set(['/v1/communications/webhooks/sendgrid', ZERNIO_LEAD_PATH]);
 const FORM_PATHS = new Set([TWILIO_STATUS_PATH, TWILIO_INBOUND_PATH, TWILIO_VOICE_PATH, TWILIO_VOICE_RESULT_PATH]);
 export const COMMUNICATION_WEBHOOK_PATHS = new Set([...JSON_PATHS, ...FORM_PATHS]);
 export const SENDGRID_EVENT_VERIFIER = Symbol('SENDGRID_EVENT_VERIFIER');
 export const TWILIO_WEBHOOK_VERIFIER = Symbol('TWILIO_WEBHOOK_VERIFIER');
+export const ZERNIO_LEAD_VERIFIER = Symbol('ZERNIO_LEAD_VERIFIER');
 const EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 
 /**
@@ -73,7 +76,35 @@ export class CommunicationWebhookController {
     @Inject(COMMUNICATION_WORKER_STORE) private readonly store: CommunicationWorkerStore,
     @Inject(SENDGRID_EVENT_VERIFIER) private readonly sendgrid: SendGridEventWebhookVerifier,
     @Inject(TWILIO_WEBHOOK_VERIFIER) private readonly twilio: TwilioWebhookVerifier,
+    @Optional() @Inject(ZERNIO_LEAD_VERIFIER) private readonly zernio: ZernioLeadWebhookVerifier = new ZernioLeadWebhookVerifier(() => ({})),
   ) {}
+
+  /**
+   * 0250 Zernio `lead.received`: a signed Meta Lead Gen lead becomes a CRM lead only through an HQ-mapped form.
+   * An unmapped form answers 422 (Zernio does not retry; the event waits in its dead-letter queue for redelivery
+   * once HQ maps the form). A rate limit answers 429 and database trouble 503, which Zernio retries.
+   */
+  @Post('zernio') @HttpCode(200)
+  async zernioLead(@Req() req: Request, @Headers('x-zernio-signature') signature: string | undefined): Promise<{ received: true }> {
+    if (!Buffer.isBuffer(req.body)) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+    let lead;
+    try { lead = this.zernio.verify(req.body, signature); }
+    catch (error) {
+      if (error instanceof ZernioWebhookError && error.reason === 'NOT_CONFIGURED') throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
+      throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+    }
+    if (!lead) return { received: true };
+    if (!this.store.isConfigured() || !this.store.recordZernioLead) throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
+    let result;
+    try { result = await this.store.recordZernioLead(lead); }
+    catch (error) {
+      if ((error as { code?: string })?.code === '22023') throw new UnprocessableEntityException({ code: 'ZERNIO_LEAD_INVALID' });
+      throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' });
+    }
+    if (result.outcome === 'UNROUTED') throw new UnprocessableEntityException({ code: 'ZERNIO_FORM_NOT_MAPPED' });
+    if (result.outcome === 'RATE_LIMITED') throw new HttpException({ code: 'ZERNIO_LEAD_RATE_LIMITED' }, 429);
+    return { received: true };
+  }
 
   @Post('twilio/status') @HttpCode(200)
   async twilioStatus(@Req() req: Request, @Headers('x-twilio-signature') signature: string | undefined): Promise<WebhookIngestSummary> {

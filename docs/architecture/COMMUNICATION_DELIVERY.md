@@ -157,6 +157,25 @@ receipt timeline. No address, no provider IDs, no cost.
   opt-out handling on the Messaging Service (Advanced Opt-Out or the default STOP list), which must stay on; this is on
   the pre-launch review list.
 
+## 5c. Zernio lead intake as built (0250)
+
+- Owner decision 2026-11-09: a Zernio `lead.received` event (Meta Lead Gen form) becomes a CRM lead
+  **automatically**, without a review queue, but only through an HQ-owner mapping. This replaces the human-review step
+  of the Phase 2A design for this one source. Zernio documents no Google lead-form webhook, so `ZERNIO_GOOGLE` is not built.
+- `POST /v1/hq/saas/schools/:schoolId/zernio-lead-forms` (human HQ owner, versioned, audited) maps one Facebook account id
+  + Lead Gen form id to one school pipeline and a non-terminal stage, with the answer keys for name, email and phone
+  (default `full_name`, `email`, `phone_number`). A form can never be moved to another school; DISABLED stops intake.
+- `POST /v1/communications/webhooks/zernio`: `X-Zernio-Signature` = hex HMAC-SHA256 of the raw body with the endpoint
+  secret HON chose. INACTIVE unless `ZERNIO_WEBHOOK_SECRET` (at least 32 characters) and
+  `HON_ZERNIO_LEAD_INTAKE_APPROVED=true`. Other events and Zernio test deliveries are acknowledged and ignored.
+- `hon.record_zernio_lead` (worker login only): dedupes on the event id and the Meta lead id; needs ACTIVE organization,
+  school, CRM entitlement and stage; needs a name plus a valid email or E.164 phone; creates the person and lead with
+  source `ZERNIO_META` and attribution holding only form and ad ids; records no message consent. An unmapped form answers 422
+  (Zernio keeps it in its dead-letter queue for redelivery once HQ maps the form); over 300 leads per form per hour
+  answers 429 (retried). Receipts keep ids and the outcome only, never answers or the raw payload.
+- The runtime has no access to `hon.zernio_lead_forms` or `hon.zernio_lead_receipts`; a later school or HQ screen that
+  lists mappings or receipts must add an entitlement-gated definer read (the 0249 missed-call pattern).
+
 ## 6. Who pays for texting (open, Decision 4)
 
 Nothing here charges anyone. Every delivery records provider, pieces, sent-as and measured provider cost

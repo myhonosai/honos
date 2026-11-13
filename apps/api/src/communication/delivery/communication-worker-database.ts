@@ -52,6 +52,13 @@ export interface CommunicationWorkerStore {
   claimMissedCallTextBacks?(limit: number, leaseSeconds: number): Promise<ClaimedMissedCallTextBack[]>;
   recordMissedCallTextBackResult?(missedCallId: string, leaseToken: string, outcome: 'ACCEPTED' | 'RETRYABLE' | 'FAILED' | 'UNKNOWN',
     providerMessageId: string | null): Promise<{ textBackStatus: string; accepted: boolean }>;
+  recordZernioLead?(lead: ZernioLeadRecord): Promise<{ outcome: ZernioLeadOutcome; leadId: string | null }>;
+}
+
+export type ZernioLeadOutcome = 'CREATED' | 'REPLAYED' | 'UNROUTED' | 'INVALID_CONTACT' | 'SCHOOL_INACTIVE' | 'RATE_LIMITED';
+export interface ZernioLeadRecord {
+  eventId: string; leadgenId: string; accountId: string; formId: string; fields: Record<string, string>;
+  ad: { adId?: string; adsetId?: string; campaignId?: string; isOrganic?: boolean };
 }
 
 export interface ClaimedMissedCallTextBack {
@@ -179,5 +186,14 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, On
       'SELECT * FROM hon.record_missed_call_text_back_result($1, $2, $3, $4)', [missedCallId, leaseToken, outcome, providerMessageId]))[0];
     if (!row) throw new Error('COMMUNICATION_MISSED_CALL_RESULT_NOT_RECORDED');
     return { textBackStatus: row.text_back_status, accepted: row.accepted };
+  }
+
+  /** 0250: one verified Zernio lead event; a CRM lead only through an HQ-mapped form. */
+  async recordZernioLead(lead: ZernioLeadRecord) {
+    const row = (await this.query<{ outcome: ZernioLeadOutcome; lead_id: string | null }>(
+      'SELECT * FROM hon.record_zernio_lead($1, $2, $3, $4, $5::jsonb, $6::jsonb)',
+      [lead.eventId, lead.leadgenId, lead.accountId, lead.formId, JSON.stringify(lead.fields), JSON.stringify(lead.ad)]))[0];
+    if (!row) throw new Error('COMMUNICATION_ZERNIO_LEAD_NOT_RECORDED');
+    return { outcome: row.outcome, leadId: row.lead_id };
   }
 }
