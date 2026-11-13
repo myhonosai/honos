@@ -1,4 +1,5 @@
 import type { HonTier, TenantScope } from './index.js';
+import { HON_AI_TEAM_AGENT_KEYS } from './ai-team.js';
 
 /** Code-owned adapter registry; adding a provider requires a reviewed code change. */
 export const AI_PROVIDER_IDS = Object.freeze(['OPENROUTER', 'DIRECT_LLM_API', 'HEYGEN', 'HIGGSFIELD'] as const);
@@ -113,10 +114,13 @@ export const AI_PRIVACY_CONTROLS = ['NO_TRAINING', 'ZERO_RETENTION'] as const;
 export type AiPrivacyControl = (typeof AI_PRIVACY_CONTROLS)[number];
 export const AI_TASK_TIMEOUT_CATEGORIES = ['QUICK', 'STANDARD', 'EXTENDED'] as const;
 export const AI_TASK_RETRY_CATEGORIES = ['NONE', 'TRANSIENT_ONCE'] as const;
+/** Task profiles may also route HON itself and Kai (R1, 0287); these keys select metadata only, never authority. */
+export const AI_TASK_PROFILE_AGENT_KEYS = [...HON_AI_TEAM_AGENT_KEYS, 'hon', 'kai'] as const;
+export type AiTaskProfileAgentKey = (typeof AI_TASK_PROFILE_AGENT_KEYS)[number];
 export interface AiTaskProfile {
   profileId: string;
   routingPolicyId: string;
-  agentKey: import('./ai-team.js').HonAiTeamAgentKey;
+  agentKey: AiTaskProfileAgentKey;
   taskCategory: import('./ai-model-evaluation.js').AiModelEvaluationTaskCategory;
   costUnit: AiCatalogEntry['costUnit'];
   active: boolean;

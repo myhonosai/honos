@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   saasUuid, validateSaasAccessAwaitInput, validateSaasAccessExceptionCloseInput, validateSaasAccessExceptionCloseReceipt,
   validateSaasAccessExceptionGrantInput, validateSaasAccessExceptionGrantReceipt, validateSaasAccessExceptionRevokeInput,
   validateSaasAccessExceptionRevokeReceipt, validateSaasAccessExceptionsView, validateSaasAccessAwaitReceipt, validateSaasAccessReadiness, validateSaasAccessRetryInput,
   validateSaasAccessRetryReceipt, validateSaasOrganizationAccessView, validateSaasSchoolAccessStanding, validateSaasSchoolBillingAccount, validateSaasSchoolInvoiceDetail, validateSaasSchoolInvoicePage,
   validateSaasSchoolInvoiceQuery,
-  validateSaasExceptionPolicyDecisionInput, validateSaasAccessOverview, validateSaasAccessOverviewQuery, validateHqSchoolDetail, validateHqSchoolHealth, validateHqSchoolsNeedingAttention, validateHqAttentionQuery, validateSaasExceptionPolicyReceipt, validateSaasExceptionPolicyView,
+  validateSaasExceptionPolicyDecisionInput, validateSaasAccessOverview, validateSaasAccessOverviewQuery, validateHqSchoolDetail, validateSaasExceptionPolicyReceipt, validateSaasExceptionPolicyView,
 } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
 
@@ -68,18 +68,6 @@ export class SaasSchoolBillingService {
   async readHqSchoolDetail(subject: string, schoolId: unknown) {
     const school = parse(() => saasUuid(schoolId));
     return this.billing.call('readHqSchoolDetail', [subject, school], validateHqSchoolDetail);
-  }
-  /** B-HQ-2b: one school's activity counts and advisory signals (HQ owner, billing operator or support staff). */
-  async readHqSchoolHealth(subject: string, schoolId: unknown) {
-    const school = parse(() => saasUuid(schoolId));
-    const view = await this.billing.call('readHqSchoolHealth', [subject, school], validateHqSchoolHealth);
-    if (view.schoolId.toLowerCase() !== school.toLowerCase()) throw new ServiceUnavailableException({ code: 'SAAS_UNAVAILABLE' });
-    return view;
-  }
-  /** B-HQ-2b: active schools with at least one health signal, most signals first. */
-  async readHqSchoolsNeedingAttention(subject: string, query: unknown) {
-    const q = parse(() => validateHqAttentionQuery(query));
-    return this.billing.call('readHqSchoolsNeedingAttention', [subject, String(q.limit)], validateHqSchoolsNeedingAttention);
   }
   // D9: HQ-owner access exceptions. The database enforces the HQ-owner authority, eligibility and window cap.
   async readExceptionPolicy(subject: string) {

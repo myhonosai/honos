@@ -12,7 +12,7 @@ import { championsDrift as drift, championsExactKeys as exactKeys, championsInva
 
 export const AI_USAGE_SPEND_CLASSES = ['AGENT_INFERENCE', 'CREATIVE_MEDIA', 'HQ_INTERNAL'] as const;
 export type AiUsageSpendClass = typeof AI_USAGE_SPEND_CLASSES[number];
-export const AI_USAGE_AGENTS = ['MARKETING', 'TEACHING', 'CHAD_FOLLOW_UP', 'HON_REPLY', 'UNATTRIBUTED'] as const;
+export const AI_USAGE_AGENTS = ['MARKETING', 'TEACHING', 'CHAD_FOLLOW_UP', 'HON_REPLY', 'BUSINESS_PERFORMANCE', 'UNATTRIBUTED'] as const;
 export type AiUsageAgent = typeof AI_USAGE_AGENTS[number];
 
 export interface AiUsageAmount {
@@ -38,6 +38,9 @@ export interface AiSchoolUsage {
   unreconciledInvocations: number;
   byClass: Partial<Record<AiUsageSpendClass, AiUsageClassTotals>>;
 }
+/** 0310 (owner 2026-11-13): agentCeilingCredits for an organization with no organization agent budget (a paying
+ *  organization without an operator override). Never a balance; the school is not capped. */
+export const AI_ORG_AGENT_NO_CEILING_UNITS = 2_147_483_647;
 export interface AiOrganizationAgentBudget {
   organizationId: string; agentWindowStart: string; agentWindowEnd: string; agentCommittedCredits: number; agentCeilingCredits: number;
   openUnknownHolds: number; aiPaused: boolean;

@@ -14,7 +14,7 @@
     },
     {
       "path": "/",
-      "title": "HON Complete | AI Command Center"
+      "title": "HON OS | Sign in"
     },
     {
       "path": "/hq",
@@ -43,10 +43,6 @@
     {
       "path": "/hq/schools/owners",
       "title": "HON HQ | School owners"
-    },
-    {
-      "path": "/hq/schools/attention",
-      "title": "HON HQ | Schools needing attention"
     },
     {
       "path": "/hq/ai-providers",
@@ -157,6 +153,10 @@
       "title": "School Enquiry Form"
     },
     {
+      "path": "/book/:publicId",
+      "title": "Book a time"
+    },
+    {
       "path": "/staff/team/availability",
       "title": "Human Staff Availability and Qualifications"
     },
@@ -167,6 +167,14 @@
     {
       "path": "/staff/schedule/sessions",
       "title": "HON | Bounded Class Sessions"
+    },
+    {
+      "path": "/staff/schedule/timetable",
+      "title": "HON | Weekly timetable"
+    },
+    {
+      "path": "/staff/schedule/events",
+      "title": "HON | Sale days & events"
     },
     {
       "path": "/staff/schedule/sessions/create",
@@ -227,6 +235,26 @@
     {
       "path": "/staff/billing/membership-changes",
       "title": "HON | Pause, cancel & refunds"
+    },
+    {
+      "path": "/staff/billing/receivables",
+      "title": "HON | Tuition balances"
+    },
+    {
+      "path": "/staff/billing/payment-processors",
+      "title": "HON | Payment processors"
+    },
+    {
+      "path": "/staff/billing/checkout-pages",
+      "title": "HON | Checkout pages"
+    },
+    {
+      "path": "/staff/retention/at-risk",
+      "title": "HON | Students at risk"
+    },
+    {
+      "path": "/staff/settings/branding",
+      "title": "HON | School branding"
     },
     {
       "path": "/staff/champions-club",
@@ -389,6 +417,22 @@
       "title": "HON HQ | Approvals"
     },
     {
+      "path": "/hq/communications",
+      "title": "HON HQ | Texts and email"
+    },
+    {
+      "path": "/hq/communications/:messageId",
+      "title": "HON HQ | HQ message"
+    },
+    {
+      "path": "/hq/growth/prospects",
+      "title": "HON HQ | Prospects"
+    },
+    {
+      "path": "/hq/growth/prospects/:prospectId",
+      "title": "HON HQ | Prospect"
+    },
+    {
       "path": "/hq/executives/:executive",
       "title": "HON HQ | :Executive"
     },
@@ -429,6 +473,18 @@
       "title": "HON HQ | Support"
     },
     {
+      "path": "/hq/marketing",
+      "title": "HON HQ | Marketing & Creative"
+    },
+    {
+      "path": "/hq/marketing/creative",
+      "title": "HON HQ | Creative Studio"
+    },
+    {
+      "path": "/hq/marketing/promotions",
+      "title": "HON HQ | Plan promotions"
+    },
+    {
       "path": "/hq/support/:caseId",
       "title": "HON HQ | Support case"
     },
@@ -449,6 +505,14 @@
       "title": "HON HQ | Free Trials"
     },
     {
+      "path": "/hq/revenue/sign-up-limits",
+      "title": "HON HQ | Sign-up Limits"
+    },
+    {
+      "path": "/hq/revenue/founder-billing",
+      "title": "HON HQ | Founder Billing"
+    },
+    {
       "path": "/staff/subscription",
       "title": "HON OS | School subscription"
     },
@@ -459,6 +523,10 @@
     {
       "path": "/settings/language-region",
       "title": "HON OS | Language & Region"
+    },
+    {
+      "path": "/settings/texts-from-hon",
+      "title": "HON OS | Texts from HON"
     },
     {
       "path": "/staff/billing/membership-plans",
@@ -473,8 +541,16 @@
       "title": "HON Classic | School Dashboard (reference)"
     },
     {
+      "path": "/reference/complete",
+      "title": "HON Complete | Design reference"
+    },
+    {
       "path": "/account/owner-invitation",
       "title": "HON OS | Owner invitation"
+    },
+    {
+      "path": "/account/start",
+      "title": "HON OS | Start your school"
     },
     {
       "path": "/account/staff-invitation",

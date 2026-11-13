@@ -97,11 +97,12 @@ try{
   return (await accept(await preview(schedule,who),K(),who)).acceptance;
  }
  for(const kind of c.SAAS_SCHEDULED_OFFER_KINDS){
-  const s=(await record(offers[kind],offers[kind.endsWith('MONTHLY')?'REGULAR_MONTHLY':'REGULAR_ANNUAL'])).schedule;versions[kind]=s.version;
-  assert.deepEqual(s.terms,c.proposedHonOsLaunchPriceSchedule(kind));
-  if(kind.startsWith('FOUNDER_')){const p=await preview(s);assert(p.blockers.includes('FOUNDER_ALLOCATION_CONTRACT_UNAVAILABLE'));await nothing(()=>accept(p),422,'SAAS_PRICE_ACCEPTANCE_BLOCKED');}
+  const s=(await record(offers[kind],offers[kind])).schedule;versions[kind]=s.version;
+  assert.deepEqual(s.terms,c.honOsLaunchScheduleTerms(kind));
+  // 0279: founder terms are locked while subscribed; a spot is counted only at the first verified payment, never here.
+  if(kind.startsWith('FOUNDER_')){const p=await preview(s);assert.deepEqual(p.blockers,[]);assert.equal(s.terms.schemaVersion,2);}
  }
- passed('all four immutable pricing schedules preserved; founder acknowledgement blocked pending C');
+ passed('all four immutable pricing schedules preserved; founder terms locked while subscribed (no spot counted by a preview)');
  const accepted=await fresh(),key=K(),g=(await generation(accepted,key)).generation;
  assert.deepEqual(g.acceptance,accepted);assert.equal(g.organizationId,org.id);assert.equal(g.schoolId,org.school);
  assert.equal(g.provider.identity,'UNCONFIGURED');assert.equal(g.provider.generationReference,g.generationId);
@@ -179,11 +180,13 @@ try{
  await admin.query('DELETE FROM hon.saas_outbox WHERE audit_id IN (SELECT id FROM hon.saas_audit WHERE actor_principal_id=$1 AND idempotency_key=$2)',[humans.school.id,tamperKey]);
  await admin.query('ALTER TABLE hon.saas_outbox ENABLE TRIGGER USER');await sqlDeny(admin.query('COMMIT'),'23514');assert.deepEqual(await footprint(),tamperBefore);
  passed('explicit rollback and missing inert-outbox evidence leave no partial generation or command effects');
+ // The additive 0230 schedule binding references a generation. CASCADE lets this proof reach
+ // the same private-table/immutable-history denial instead of PostgreSQL's FK precheck.
  for(const q of ['SELECT * FROM hon.saas_subscription_generations','DELETE FROM hon.saas_subscription_generations',
-  'UPDATE hon.saas_subscription_generations SET id=id','TRUNCATE hon.saas_subscription_generations',
+  'UPDATE hon.saas_subscription_generations SET id=id','TRUNCATE hon.saas_subscription_generations CASCADE',
   'INSERT INTO hon.saas_subscription_generations SELECT * FROM hon.saas_subscription_generations LIMIT 1'])await sqlDeny(b.query(q),'42501');
  await b.query("SELECT set_config('hon.saas.owner','true',false)");await sqlDeny(b.query('SELECT hon.saas_generation_content($1,$2)',[K(),accepted.acceptanceId]),'42501');
- for(const q of ['UPDATE hon.saas_subscription_generations SET id=id','DELETE FROM hon.saas_subscription_generations','TRUNCATE hon.saas_subscription_generations'])await sqlDeny(admin.query(q),'42501');
+ for(const q of ['UPDATE hon.saas_subscription_generations SET id=id','DELETE FROM hon.saas_subscription_generations','TRUNCATE hon.saas_subscription_generations CASCADE'])await sqlDeny(admin.query(q),'42501');
  passed('private table/column/helper privileges, forced RLS, immutable history and no forgeable setting bypass');
  if(!process.env.HON_STAGING_NETWORK_AUDIT){
   const {Test}=apiRequire('@nestjs/testing'),{issueSession,sessionConfig,HON_SESSION_COOKIE}=apiRequire('@hon/auth'),{request}=apiRequire('node:http'),{json}=apiRequire('express');

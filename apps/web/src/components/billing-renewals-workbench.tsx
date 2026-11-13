@@ -49,7 +49,7 @@ export function BillingRenewalsWorkbench(): React.ReactElement {
   }
   async function save(e: FormEvent) { e.preventDefault(); await run(() => submit(selected ? 'REVISE' : 'CREATE', selected?.renewalId ?? null, draft)); }
   return <main className={styles.page}>
-    <nav><a href="/core">HON Core</a><a href="/staff/search">Staff search</a><a href="/auth/login">Sign in</a></nav>
+    <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/search">Staff search</a><a href="/auth/login">Sign in</a></nav>
     <header><p>HUMAN BILLING · ESSENTIAL / CORE / COMPLETE</p><h1>Membership renewal reviews</h1><p>A practical shared finance review queue. Human records, not billing execution.</p></header>
     <aside><strong>No collection. No notices. No automatic renewal.</strong><p>{BILLING_RENEWAL_HELP}</p>
       <p>Exact school permissions: billing.renewal.manage and billing.membership.read, for verified human staff. Shared school records, not self assignments. No payer directory or customer contact lookup. Do not enter card details, payment-method tokens or provider secrets in private notes.</p></aside>

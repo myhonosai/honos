@@ -17,10 +17,13 @@ on:
       - 'apps/web/src/components/hq-support/**'
       - 'apps/web/test/hq-support*'
       - 'apps/web/scripts/hq-support-browser.mjs'
-      - 'apps/web/src/components/hq-school-health/**'
-      - 'apps/web/src/components/hq-school-detail/**'
-      - 'apps/web/test/hq-school-health*'
-      - 'apps/web/scripts/hq-school-health-browser.mjs'
+      - 'apps/web/src/app/hq/marketing/**'
+      - 'apps/web/src/components/hq-marketing/**'
+      - 'apps/web/test/hq-marketing*'
+      - 'apps/web/scripts/hq-marketing-browser.mjs'
+      - 'apps/web/src/components/hq-creative/**'
+      - 'apps/web/test/hq-creative*'
+      - 'apps/web/scripts/hq-creative-browser.mjs'
       - '.github/workflows/hq-school-create-validation.yml'
 permissions:
   contents: read
@@ -120,9 +123,12 @@ jobs:
       - name: Mounted HQ Support pages with synthetic browser fixtures
         id: support-browser
         run: pnpm --filter @hon/web exec node scripts/hq-support-browser.mjs
-      - name: Mounted HQ school health pages with synthetic browser fixtures
-        id: health-browser
-        run: pnpm --filter @hon/web exec node scripts/hq-school-health-browser.mjs
+      - name: Mounted HQ Marketing & Creative page with synthetic browser fixtures
+        id: marketing-browser
+        run: pnpm --filter @hon/web exec node scripts/hq-marketing-browser.mjs
+      - name: Mounted HQ Creative Studio page with synthetic browser fixtures
+        id: creative-browser
+        run: pnpm --filter @hon/web exec node scripts/hq-creative-browser.mjs
       - if: always() && steps.browser.outcome != 'skipped'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

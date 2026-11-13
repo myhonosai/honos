@@ -140,8 +140,10 @@ let providerCalls = 0;
 function fakeProvider(ErrorType, draft) {
   const provider = { calls: 0, mode: 'RESULT', held: [] };
   provider.readiness = () => 'READY';
-  provider.generate = async () => {
-    provider.calls += 1; providerCalls += 1;
+  // 0256: each input is kept so a proof can see what the server sent (for Kai: the school's tone).
+  provider.inputs = [];
+  provider.generate = async (input) => {
+    provider.calls += 1; providerCalls += 1; provider.inputs.push(input);
     if (provider.mode === 'HOLD') return new Promise((resolve, reject) => provider.held.push({ resolve, reject }));
     if (provider.mode === 'UNKNOWN') throw new ErrorType('UNKNOWN', 'PROVIDER_UNKNOWN');
     if (provider.mode === 'FAILED') throw new ErrorType('FAILED', 'PROVIDER_REJECTED');
@@ -163,7 +165,10 @@ function fakeHonProvider() {
   const provider = { calls: 0, mode: 'RESULT', held: [], inputs: [], ready: 'READY', reply: 'Focus on the two trials booked for tomorrow and review new leads.' };
   // suggestions (C3a): what the model's closing SUGGEST line named, already parsed to the closed delegate set.
   provider.suggestions = [];
-  const result = () => ({ reply: provider.reply, inputTokens: 300, outputTokens: 120, providerCostMicrounits: 900, truncated: false, suggestions: [...provider.suggestions] });
+  // followUps / sources (0254): the closing ASK and SOURCES lines, already parsed to their closed rules.
+  provider.followUps = []; provider.sources = [];
+  const result = () => ({ reply: provider.reply, inputTokens: 300, outputTokens: 120, providerCostMicrounits: 900, truncated: false, suggestions: [...provider.suggestions],
+    followUps: [...provider.followUps], sources: [...provider.sources] });
   provider.readiness = () => provider.ready;
   provider.generate = async (input) => {
     provider.calls += 1; providerCalls += 1; provider.inputs.push(input);
@@ -172,7 +177,7 @@ function fakeHonProvider() {
     if (provider.mode === 'FAILED') throw new HonReplyProviderRuntimeError('FAILED', 'PROVIDER_REJECTED');
     if (provider.mode === 'OVER') return { ...result(), outputTokens: 5000 };
     // Stopped at the plan's output limit with verified usage (finish_reason 'length').
-    if (provider.mode === 'TRUNCATED') return { ...result(), reply: `${provider.reply} Part ${provider.calls} continues`, outputTokens: input.outputBudget, truncated: true, suggestions: [] };
+    if (provider.mode === 'TRUNCATED') return { ...result(), reply: `${provider.reply} Part ${provider.calls} continues`, outputTokens: input.outputBudget, truncated: true, suggestions: [], followUps: [], sources: [] };
     return result();
   };
   provider.complete = () => { for (const h of provider.held.splice(0)) h.resolve(result()); };
@@ -193,7 +198,10 @@ const catalog = K(), hq = { id: K(), user: K(), subject: `ai0-hq-owner-${K()}` }
 const orgs = [];
 const context = (o, patch = {}) => ({ organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject, principalType: 'HUMAN_USER', source: 'HUMAN_UI', requestId: K(), correlationId: K(), idempotencyKey: K(), ...patch });
 
-async function makeOrg(label) {
+// 0310 (owner 2026-11-13): a paying organization has no organization agent budget. Fixture organizations keep the
+// former 12,000-unit budget through the migration-owner-only override so the 0194 lock invariants still exercise a
+// real ceiling; INV-39 proves an organization without an override has none.
+async function makeOrg(label, { orgCeiling = 12000 } = {}) {
   const o = { label, id: K(), school: K(), user: K(), principal: K(), role: K(), subject: `ai0-${label}-${K()}`, campaign: null, curriculum: K(), person: K(), pipeline: K(), stage: K(), lead: K(), policy: K() };
   await admin.query('BEGIN');
   await admin.query("INSERT INTO hon.organizations(id,legal_name,display_name) VALUES($1,'AI-0 synthetic organization','AI-0 synthetic organization')", [o.id]);
@@ -214,6 +222,7 @@ async function makeOrg(label) {
   for (const code of ['marketing.draft.save', 'teaching.draft.save', 'crm.follow_up_draft.propose']) {
     await admin.query("INSERT INTO hon.action_policies(organization_id,school_id,action_code,authority_mode,policy_version,effective_from) VALUES($1,$2,$3,'CONFIRM',1,clock_timestamp()-interval '1 day')", [o.id, o.school, code]);
   }
+  if (orgCeiling !== null) await admin.query("INSERT INTO hon.ai_org_agent_ceiling_overrides(organization_id,ceiling_units,reason) VALUES($1,$2,'AI-0 fixture keeps the 0194 budget lock under test')", [o.id, orgCeiling]);
   await admin.query('COMMIT');
   const start = new Date(Date.now() + 3_600_000).toISOString(), end = new Date(Date.now() + 30 * 86_400_000).toISOString();
   o.campaign = (await campaigns.save(context(o), null, { expectedVersion: 0, code: 'AI0', name: 'AI-0 synthetic campaign', goal: 'Introduce beginner classes', offerLabel: '', channel: 'REFERRAL', startsAt: start, endsAt: end, plannedBudgetMinor: 0, currency: 'USD' })).campaign.id;
@@ -1293,7 +1302,8 @@ try {
   const r0 = await makeOrg('inv-23');
   const before = await counts(), calls0 = Object.values(fakes).reduce((n, f) => n + f.calls, 0);
   const base = await ready(r0);
-  assert.deepEqual(base.agents.map((a) => [a.agentKey, a.available, a.route, a.spendDecision]), [['marcus', true, 'CONFIGURED', 'ALLOWED'], ['kai', true, 'CONFIGURED', 'ALLOWED'], ['chad', true, 'CONFIGURED', 'ALLOWED'], ['hon', true, 'CONFIGURED', 'ALLOWED'], ['claire', true, 'CONFIGURED', 'ALLOWED']], JSON.stringify(base));
+  assert.deepEqual(base.agents.map((a) => [a.agentKey, a.available, a.route, a.spendDecision]), [['marcus', true, 'CONFIGURED', 'ALLOWED'], ['kai', true, 'CONFIGURED', 'ALLOWED'], ['chad', true, 'CONFIGURED', 'ALLOWED'], ['hon', true, 'CONFIGURED', 'ALLOWED'], ['claire', true, 'CONFIGURED', 'ALLOWED'],
+    ['alex', true, 'CONFIGURED', 'ALLOWED'], ['jordan', true, 'CONFIGURED', 'ALLOWED'], ['lena', true, 'CONFIGURED', 'ALLOWED'], ['maya', true, 'CONFIGURED', 'ALLOWED']], JSON.stringify(base));
   assert.deepEqual([base.organizationId, base.schoolId, base.completeEntitlement, base.agentBudget.ceilingCredits], [r0.id, r0.school, true, 12000]);
   assert.deepEqual(await counts(), before, 'readiness writes nothing');
   assert.equal(Object.values(fakes).reduce((n, f) => n + f.calls, 0), calls0, 'readiness never reaches a provider');
@@ -1326,6 +1336,9 @@ try {
       assert(readiness === null || readiness.hon.available === (affected !== ALL), `hon ${label}: ${JSON.stringify(readiness?.hon)}`);
       // K2: Claire (Business Performance) follows the whole-school gates plus reporting.view, never the teaching permission.
       assert(readiness === null || readiness['claire-bp'].available === (affected !== ALL), `claire-bp ${label}: ${JSON.stringify(readiness?.['claire-bp'])}`);
+      // 0260: Alex, Jordan and Lena follow the whole-school gates plus their own capability, never the teaching permission.
+      // 0284: Maya likewise (retention.review.read).
+      for (const k of ['alex', 'jordan', 'lena', 'maya']) assert(readiness === null || readiness[k].available === (affected !== ALL), `${k} ${label}: ${JSON.stringify(readiness?.[k])}`);
     } finally { await restore(); }
   }
   assert.deepEqual(byKey(await ready(r0)).claire.available, true, 'restored');
@@ -1333,12 +1346,13 @@ try {
   await setUsed(r0, 11996);
   const near = byKey(await ready(r0));
   assert.deepEqual([near.marcus.blockedBy, near.claire.blockedBy, near.chad.available, near.hon.blockedBy, near['claire-bp'].blockedBy], ['ORGANIZATION_AI_BUDGET_REACHED', 'ORGANIZATION_AI_BUDGET_REACHED', true, 'ORGANIZATION_AI_BUDGET_REACHED', 'ORGANIZATION_AI_BUDGET_REACHED'], JSON.stringify(near));
+  assert.deepEqual([near.alex.blockedBy, near.jordan.blockedBy, near.lena.blockedBy, near.maya.blockedBy], Array(4).fill('ORGANIZATION_AI_BUDGET_REACHED'), '0260: the same 15-credit estimate as Claire');
   // The real request is refused too (the planner's budget denial surfaces as a BLOCKED request with no provider call).
   assert.match(await expectRefused('marcus', r0, {}, 'INV-23 budget'), /^BLOCKED_/, 'the real request agrees');
   const pauseIn = { action: 'PAUSE', organizationId: r0.id, spendClass: 'AGENT_INFERENCE', reason: 'Disposable synthetic AI-0 readiness pause' };
   const pause = await settle(admin.query('SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) r', [hq.subject, JSON.stringify(pauseIn), K()]));
   assert.equal(pause.value?.rows[0].r.status, 'ACTIVE', JSON.stringify(pause.error?.message));
-  assert.deepEqual(Object.values(byKey(await ready(r0))).map((a) => a.blockedBy), ['AI_PAUSED_BY_HQ', 'AI_PAUSED_BY_HQ', 'AI_PAUSED_BY_HQ', 'AI_PAUSED_BY_HQ', 'AI_PAUSED_BY_HQ']);
+  assert.deepEqual(Object.values(byKey(await ready(r0))).map((a) => a.blockedBy), Array(9).fill('AI_PAUSED_BY_HQ'));
   seen.pause = 'AI_PAUSED_BY_HQ';
   // Only the direct human of this transaction, in the human UI, may read readiness.
   for (const [patch, label] of [[{ source: 'AI' }, 'AI source'], [{ delegatedByPrincipalId: r0.principal }, 'delegated']]) {
@@ -1807,7 +1821,7 @@ try {
   // STANDARD (default): SUMMARIZE route, 8000/1500 tokens, the owner's $0.08 ceiling; 10 credits reserved, settled to 1.
   assert.deepEqual([i1.status, i1.reserved_credits, i1.agent_key, i1.task_class, i1.work_type, i1.input_budget, i1.output_budget, Number(i1.max_provider_cost_microunits), i1.customer_credit_estimate, i1.reply_mode, i1.step, i1.truncated],
     ['COMPLETED', 0, 'hon', 'SUMMARIZE', 'AI_SUMMARIZE', 8000, 1500, 80000, 10, 'STANDARD', 1, false]);
-  assert.deepEqual(r1.replyDetail, { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [] });
+  assert.deepEqual(r1.replyDetail, { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [] });
   assert.match(i1.context_digest, /^[a-f0-9]{64}$/);
   const l1 = await row('SELECT customer_credits::int c, provider_cost_microunits::int cost, spend_class, school_id FROM hon.ai_usage_ledger WHERE id=$1 AND source_invocation_id=$2', [i1.usage_id, i1.id]);
   assert.deepEqual([l1.c, l1.cost, l1.spend_class, l1.school_id], [1, 900, 'AGENT_INFERENCE', o.school], 'one AGENT_INFERENCE ledger row at the provider-reported cost; a short answer settles to 1 credit, not the 10 reserved');
@@ -1905,7 +1919,7 @@ try {
   const di1 = await reply(d1.turnId);
   assert.deepEqual([d1.status, di1.task_class, di1.work_type, di1.input_budget, di1.output_budget, Number(di1.max_provider_cost_microunits), di1.customer_credit_estimate, di1.reserved_credits],
     ['COMPLETED', 'ANALYZE', 'AI_ANALYZE', 11000, 4000, 80000, 15, 0], JSON.stringify(d1));
-  assert.deepEqual(d1.replyDetail, { mode: 'DETAILED', step: 1, maxSteps: 3, truncated: true, canContinue: true, continuesTurnId: null, suggestions: [] });
+  assert.deepEqual(d1.replyDetail, { mode: 'DETAILED', step: 1, maxSteps: 3, truncated: true, canContinue: true, continuesTurnId: null, suggestions: [], followUps: [], sources: [] });
   assert.equal((await row('SELECT customer_credits::int c FROM hon.ai_usage_ledger WHERE id=$1', [di1.usage_id])).c, 5, 'settled to ceil((300+4000)/1000), not the 15 reserved');
   assert.deepEqual([fakes.hon.inputs.at(-1).replyMode, fakes.hon.inputs.at(-1).outputBudget], ['DETAILED', 4000]);
   // Mode and continuation belong to questions only; a continuation keeps its answer's mode; a full answer is not continued.
@@ -1914,13 +1928,13 @@ try {
   assert.equal(await code(hon.sendTurn(scope, conv.id, { text: 'Draft it', delegation: { agentKey: 'chad', leadId: o.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' }, replyMode: 'DETAILED' }, K())), 'INVALID_HON_TURN');
   assert.equal((await settle(tenant(context(o), (c) => c.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4)', [o.subject, conv.id, JSON.stringify({ text: 'x', delegation: { agentKey: 'chad', leadId: o.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' }, replyMode: 'DETAILED' }), K()])))).error?.code, '22023', 'the database refuses a reply mode on a delegation too');
   const d2 = await hon.sendTurn(scope, conv.id, { text: 'Continue', delegation: null, continueTurnId: d1.turnId }, K());
-  assert.deepEqual(d2.replyDetail, { mode: 'DETAILED', step: 2, maxSteps: 3, truncated: true, canContinue: true, continuesTurnId: d1.turnId, suggestions: [] });
+  assert.deepEqual(d2.replyDetail, { mode: 'DETAILED', step: 2, maxSteps: 3, truncated: true, canContinue: true, continuesTurnId: d1.turnId, suggestions: [], followUps: [], sources: [] });
   const cont = JSON.parse(fakes.hon.inputs.at(-1).facts).continuation;
   assert.deepEqual([cont.step, cont.maxSteps, cont.originalQuestion, cont.previousAnswerEnd, fakes.hon.inputs.at(-1).step], [2, 3, 'Give me a detailed enrollment growth analysis.', d1.reply.slice(-2500), 2]);
   assert.equal((await hon.receipt(scope, d1.turnId)).replyDetail.canContinue, false, 'an answer is continued once');
   assert.equal(await code(hon.sendTurn(scope, conv.id, { text: 'Continue again', delegation: null, continueTurnId: d1.turnId }, K())), 'HON_REPLY_NOT_CONTINUABLE');
   const d3 = await hon.sendTurn(scope, conv.id, { text: 'Continue', delegation: null, continueTurnId: d2.turnId }, K());
-  assert.deepEqual(d3.replyDetail, { mode: 'DETAILED', step: 3, maxSteps: 3, truncated: true, canContinue: false, continuesTurnId: d2.turnId, suggestions: [] }, 'still cut off at the last step: shown as incomplete, no further step');
+  assert.deepEqual(d3.replyDetail, { mode: 'DETAILED', step: 3, maxSteps: 3, truncated: true, canContinue: false, continuesTurnId: d2.turnId, suggestions: [], followUps: [], sources: [] }, 'still cut off at the last step: shown as incomplete, no further step');
   const n4c = fakes.hon.calls;
   assert.equal(await code(hon.sendTurn(scope, conv.id, { text: 'Continue', delegation: null, continueTurnId: d3.turnId }, K())), 'HON_REPLY_NOT_CONTINUABLE');
   assert.deepEqual([fakes.hon.calls - n4c, fakes.hon.calls - n4b.calls, (await ledgerRows(o)) - n4b.ledger], [0, 3, 3], 'three bounded steps, three calls, three ledger rows');
@@ -2114,7 +2128,7 @@ try {
   assert.deepEqual(readiness.availableAgentKeys, ['marcus', 'kai', 'chad']);
   const team = (await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data;
   // K2: 'claire' is now the Business Performance analyst, listed separately from Kai.
-  assert.deepEqual(team.agents.map((a) => [a.agentKey, a.agent]), [['marcus', 'MARKETING'], ['kai', 'TEACHING'], ['chad', 'CHAD_FOLLOW_UP'], ['hon', 'HON_REPLY'], ['claire', 'BUSINESS_PERFORMANCE']]);
+  assert.deepEqual(team.agents.map((a) => [a.agentKey, a.agent]), [['marcus', 'MARKETING'], ['kai', 'TEACHING'], ['chad', 'CHAD_FOLLOW_UP'], ['hon', 'HON_REPLY'], ['claire', 'BUSINESS_PERFORMANCE'], ['alex', 'GENERAL_MANAGEMENT'], ['jordan', 'OPERATIONS'], ['lena', 'CREATIVE_COMMERCE'], ['maya', 'RETENTION']]);
   // 5. Without teaching.assistant.use, Kai is refused before any provider call (teaching-only permission boundary unchanged).
   await admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='teaching.assistant.use'", [o.role]);
   const n = fakes.claire.calls;
@@ -2215,7 +2229,12 @@ try {
   // 1. The owner (every capability) may plan each working agent; profile-only agents are never plannable.
   for (const agentKey of ['hon', 'marcus', 'chad']) assert.equal(await plan(agentKey), 'PLANNED', `${agentKey} plannable by an owner`);
   assert.equal(await plan('kai', 'DRAFT_TEACHING'), 'PLANNED', 'kai plannable for teaching by an owner');
-  for (const agentKey of ['alex', 'maya', 'jordan', 'lena', 'eian']) assert.equal(await plan(agentKey), 'PERMISSION_DENIED', `${agentKey} has no working backend and is never planned`);
+  for (const agentKey of ['eian']) assert.equal(await plan(agentKey), 'PERMISSION_DENIED', `${agentKey} has no working backend and is never planned`);
+  // 0260: Alex, Jordan and Lena (0284: and Maya) are plannable for analysis only, each with its own capability; never for teaching.
+  for (const agentKey of ['alex', 'jordan', 'lena', 'maya']) {
+    assert.equal(await plan(agentKey), 'PLANNED', `${agentKey} plannable for analysis by an owner`);
+    assert.notEqual(await plan(agentKey, 'DRAFT_TEACHING'), 'PLANNED', `${agentKey} is never planned for teaching`);
+  }
   // K2 (0229): Claire (Business Performance) is plannable for analysis only, with reporting.view; never for teaching.
   assert.equal(await plan('claire'), 'PLANNED', 'claire plannable for analysis by an owner');
   assert.notEqual(await plan('claire', 'DRAFT_TEACHING'), 'PLANNED', 'claire is never planned for teaching');
@@ -2297,7 +2316,7 @@ try {
     raceEvidence.push(label);
   }
   for (const f of ['ai_agent_capability_permission(text)', 'require_ai_agent_capability(text)', 'hold_and_recheck_ai_planning_authority(text)']) assert.equal((await row(`SELECT has_function_privilege($1,'hon.${f}','EXECUTE') s`, [runtimeRole])).s, false, `${f}: internal helper`);
-  pass('INV-27', `0212: the planner requires each agent's own capability (hon ai.invocation.plan, kai teaching.assistant.use, marcus marketing.assistant.use, chad crm.assistant.follow_up_draft); profile-only agents (alex, maya, jordan, lena, eian, claire) are never planned; the reviewed teaching-staff preset (CUSTOM_TEACHING_STAFF) is staff-assignable, excludes CRM/people/billing/reporting/marketing/approval, and is created through StaffRoleService and granted to a separate instructor; the instructor plans and uses Kai, is refused for Marcus, Chad and profile-only agents before any provider call, and gets HON answers without school business facts; authority is re-held and re-checked after the planner waits (pg_locks-observed ${raceEvidence.join(', ')}: refused, no plan/audit/outbox/idempotency effect)`);
+  pass('INV-27', `0212: the planner requires each agent's own capability (hon ai.invocation.plan, kai teaching.assistant.use, marcus marketing.assistant.use, chad crm.assistant.follow_up_draft); profile-only agents (maya, eian) are never planned (0260: alex, jordan and lena are planned for ANALYZE only); the reviewed teaching-staff preset (CUSTOM_TEACHING_STAFF) is staff-assignable, excludes CRM/people/billing/reporting/marketing/approval, and is created through StaffRoleService and granted to a separate instructor; the instructor plans and uses Kai, is refused for Marcus, Chad and profile-only agents before any provider call, and gets HON answers without school business facts; authority is re-held and re-checked after the planner waits (pg_locks-observed ${raceEvidence.join(', ')}: refused, no plan/audit/outbox/idempotency effect)`);
   }
 
   // ---- INV-28 (C3a, 0214): HON suggests specialists; suggestions are data, filtered by live capability, and run nothing ----
@@ -2340,7 +2359,7 @@ try {
   fakes.hon.mode = 'RESULT';
   assert.deepEqual([r3.status, r3.replyDetail.truncated, r3.replyDetail.suggestions, await stored(r3.turnId)], ['COMPLETED', true, [], []]);
   assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{kai}' WHERE turn_id=$1", [r3.turnId]))).error?.code, '23514', 'no suggestions on a cut-off answer');
-  for (const bad of ['{claire}', '{hon}', '{kai,chad,marcus,kai}']) {
+  for (const bad of ['{maya}', '{hon}', '{kai,chad,marcus,kai}']) {
     assert.equal((await settle(admin.query('UPDATE hon.hon_reply_invocations SET suggested_agents=$2::text[] WHERE turn_id=$1', [r1.turnId, bad]))).error?.code, '23514', `${bad} refused`);
   }
   // 6. The database refuses malformed suggestions from the API (closed set, unique, at most three) before any write.
@@ -2349,7 +2368,7 @@ try {
   for (const end = Date.now() + 15000; !(await row("SELECT count(*)::int n FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).n; await sleep(20)) assert.ok(Date.now() < end, 'reply never reached SENDING');
   const sending = (await row("SELECT turn_id FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).turn_id;
   const base = { reply: 'x', inputTokens: 1, outputTokens: 1, providerCostMicrounits: 0 };
-  for (const suggestions of [['claire'], ['kai', 'kai'], ['kai', 'chad', 'marcus', 'kai'], 'kai', [1], [null]]) {
+  for (const suggestions of [['maya'], ['kai', 'kai'], ['kai', 'chad', 'marcus', 'kai'], 'kai', [1], [null]]) {
     const r = await settle(tenant(context(o), (client) => client.query('SELECT hon.record_hon_reply_result($1,$2::uuid,$3::jsonb)', [o.subject, sending, JSON.stringify({ ...base, suggestions })])));
     assert.equal(r.error?.code, '22023', `${JSON.stringify(suggestions)} refused`);
   }
@@ -2359,7 +2378,7 @@ try {
   assert.deepEqual([r4?.status, r4?.replyDetail?.suggestions, await stored(sending)], ['COMPLETED', ['chad'], ['chad']], JSON.stringify(r4 ?? (await pending).error));
   fakes.hon.suggestions = [];
   assert.equal((await row("SELECT has_function_privilege($1,'hon.hon_reply_allowed_suggestions(uuid,uuid,uuid,text[])','EXECUTE') s", [runtimeRole])).s, false, 'internal helper');
-  pass('INV-28', 'C3a: HON suggestions are a closed list (marcus, kai, chad; unique; at most three) stored with the reply only for agents the requester holds the capability for, shown only on a whole, visible COMPLETED answer and only for agents still held now (concealed and cut-off answers show none; the table refuses others), malformed suggestions are refused before any write, and a suggestion runs no specialist, invocation or Action Center request');
+  pass('INV-28', 'C3a: HON suggestions are a closed list (marcus, kai, chad, and claire since K2c; unique; at most three) stored with the reply only for agents the requester holds the capability for, shown only on a whole, visible COMPLETED answer and only for agents still held now (concealed and cut-off answers show none; the table refuses others), malformed suggestions are refused before any write, and a suggestion runs no specialist, invocation or Action Center request');
   }
 
   // ---- INV-29 (C3a, 0215): confirming HON's suggestions is an ordinary delegation, grouped with a derived status ----
@@ -2704,7 +2723,935 @@ try {
   await dropRep();
   assert.equal((await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data.agents.find((x) => x.agentKey === 'claire').blockedBy, 'NOT_AUTHORIZED');
   await addRep();
-  pass('INV-31', "K2: Claire (Business Performance) answers a question in text from the school's aggregate metrics only (planned as claire/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays); she needs reporting.view at begin (refused, nothing recorded, also when it lapses while the reply row write waits) and in prepare (a lapse reserves and calls nothing); her answer is concealed when reporting.view lapses while usage evidence stays; HON sees her turn as Claire's without her text; the legacy 'claire' teaching alias is refused; Claire answers are never continued, summarized from or confirmed as suggestions; rows are single DETAILED analyses without suggestions and 'claire' plans are ANALYZE only; readiness lists BUSINESS_PERFORMANCE gated on reporting.view");
+  // 8. HQ usage (0267): Claire's calls count under BUSINESS_PERFORMANCE, never HON_REPLY, including a late provider
+  //    expense recorded after an HQ write-off of her UNKNOWN call; a HON answer in the same school stays HON_REPLY.
+  {
+    const usageOf = async () => (await row('SELECT hon.read_ai_school_usage_from_hq($1,$2::timestamptz,$3::timestamptz) r',
+      [hq.subject, new Date(Date.now() - 86_400_000).toISOString(), new Date(Date.now() + 3_600_000).toISOString()])).r.schools.find((x) => x.schoolId === o.school);
+    const claireLedger = (await row("SELECT count(*)::int n FROM hon.ai_usage_ledger u JOIN hon.hon_reply_invocations i ON i.id = u.source_invocation_id WHERE i.specialist='claire' AND u.organization_id=$1", [o.id])).n;
+    assert.ok(claireLedger >= 1);
+    const honLedger = (await row("SELECT count(*)::int n FROM hon.ai_usage_ledger u JOIN hon.hon_reply_invocations i ON i.id = u.source_invocation_id WHERE i.specialist='hon' AND u.organization_id=$1", [o.id])).n;
+    let by = (await usageOf()).byClass.AGENT_INFERENCE.byAgent;
+    assert.deepEqual([by.BUSINESS_PERFORMANCE?.entries, by.HON_REPLY?.entries ?? 0], [claireLedger, honLedger], JSON.stringify(by));
+    fakes.hon.mode = 'UNKNOWN';
+    let lostTurn;
+    try { lostTurn = await claire('Usage attribution probe'); } finally { fakes.hon.mode = 'RESULT'; }
+    assert.equal(lostTurn.status, 'UNKNOWN', JSON.stringify(lostTurn));
+    const lost = await row('SELECT id FROM hon.hon_reply_invocations WHERE turn_id=$1', [lostTurn.turnId]);
+    const off = await settle(admin.query('SELECT hon.resolve_ai_unknown_invocation($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) r',
+      [hq.subject, 'HON_REPLY', lost.id, JSON.stringify({ decision: 'WRITE_OFF', reason: 'Synthetic AI-0 K2 provider lookup unavailable', evidence: { estimatedProviderCostMicrounits: 700 } }), K(), K(), K()]));
+    assert.ok(off.value, off.error?.message);
+    const lateRec = await settle(admin.query('SELECT hon.record_ai_late_provider_expense($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) r',
+      [hq.subject, 'HON_REPLY', lost.id, JSON.stringify({ reason: 'Provider usage export showed the actual charge', evidence: { providerGenerationId: 'gen-ai0-claire-late', inputTokens: 900, outputTokens: 400, providerCostMicrounits: 650 } }), K(), K(), K()]));
+    assert.ok(lateRec.value, lateRec.error?.message);
+    by = (await usageOf()).byClass.AGENT_INFERENCE.byAgent;
+    assert.deepEqual([by.BUSINESS_PERFORMANCE?.entries, by.BUSINESS_PERFORMANCE?.writeOffEntries, by.BUSINESS_PERFORMANCE?.lateProviderExpenseEntries,
+      by.BUSINESS_PERFORMANCE?.lateProviderCostMicrounits, by.HON_REPLY?.entries ?? 0, by.HON_REPLY?.lateProviderExpenseEntries ?? 0], [claireLedger + 1, 1, 1, 650, honLedger, 0], JSON.stringify(by));
+    const honAnswer = await hon.sendTurn(scope, conv.id, { text: 'And overall?', delegation: null }, K());
+    assert.equal(honAnswer.status, 'COMPLETED', JSON.stringify(honAnswer));
+    by = (await usageOf()).byClass.AGENT_INFERENCE.byAgent;
+    assert.deepEqual([by.BUSINESS_PERFORMANCE?.entries, by.HON_REPLY?.entries], [claireLedger + 1, honLedger + 1], 'a HON answer stays HON_REPLY');
+  }
+  pass('INV-31', "K2: Claire (Business Performance) answers a question in text from the school's aggregate metrics only (planned as claire/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays); she needs reporting.view at begin (refused, nothing recorded, also when it lapses while the reply row write waits) and in prepare (a lapse reserves and calls nothing); her answer is concealed when reporting.view lapses while usage evidence stays; HON sees her turn as Claire's without her text; the legacy 'claire' teaching alias is refused; Claire answers are never continued, summarized from or used as a suggestion source; rows are single DETAILED analyses without suggestions and 'claire' plans are ANALYZE only; readiness lists BUSINESS_PERFORMANCE gated on reporting.view; HQ usage counts her calls (and a late provider expense after an HQ write-off) under BUSINESS_PERFORMANCE, never HON_REPLY");
+  }
+
+  // ---- INV-40 (K2c, 0266): HON may suggest Claire; confirming her is an ordinary K2 analysis grouped under the answer ----
+  {
+  const o = await makeOrg('inv-40');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const code = async (p) => { const r = await settle(p); return r.error?.getResponse?.().code ?? r.error?.code ?? r.error?.message ?? 'OK'; };
+  const turnsOf = async (id) => (await row('SELECT count(*)::int n FROM hon.hon_conversation_turns WHERE conversation_id=$1', [id])).n;
+  const stored = async (turnId) => (await row('SELECT suggested_agents FROM hon.hon_reply_invocations WHERE turn_id=$1', [turnId])).suggested_agents;
+  const conv = await hon.create(scope, { title: 'How are we doing' }, K());
+  const ask = async (suggestions, text) => { fakes.hon.suggestions = suggestions; try { return await hon.sendTurn(scope, conv.id, { text, delegation: null }, K()); } finally { fakes.hon.suggestions = []; } };
+  const claireFrom = (from, key = K(), text = 'How are trials converting this month?') => hon.sendTurn(scope, conv.id, { text, delegation: { agentKey: 'claire' }, fromSuggestionTurnId: from }, key);
+  const marcus = (from) => hon.sendTurn(scope, conv.id, { text: 'Draft a friendly trial-week post. Use placeholders for unprovided facts.', delegation: { agentKey: 'marcus', campaignId: o.campaign }, fromSuggestionTurnId: from }, K());
+  const dropRep = () => admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='reporting.view'", [o.role]);
+  const addRep = () => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'reporting.view')", [o.role, o.id]);
+  const members = async () => (await row('SELECT count(*)::int n FROM hon.hon_orchestration_members WHERE organization_id=$1', [o.id])).n;
+  const replies = async () => (await row('SELECT count(*)::int n FROM hon.hon_reply_invocations WHERE conversation_id=$1', [conv.id])).n;
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const honText = fakes.hon.reply;
+  // 1. HON may suggest Claire (closed set now marcus, kai, chad, claire), stored and shown for a reporting.view holder.
+  const src = await ask(['claire', 'marcus'], 'How is the school doing, and what should we do?');
+  assert.deepEqual([src.replyDetail.suggestions, await stored(src.turnId)], [['claire', 'marcus'], ['claire', 'marcus']], JSON.stringify(src));
+  // 2. Without reporting.view Claire is never stored: the answer recorded then keeps only agents they may use.
+  await dropRep();
+  const noRep = await ask(['claire', 'kai'], 'Anything for the instructors?');
+  await addRep();
+  assert.deepEqual(await stored(noRep.turnId), ['kai'], 'claire filtered by reporting.view when recorded');
+  // 3. Confirming Claire is an ordinary K2 analysis (one call, claire/ANALYZE, metrics only) grouped under the answer.
+  const before = { hon: fakes.hon.calls, specialists: fakes.marcus.calls + fakes.claire.calls + fakes.chad.calls };
+  const kc = K();
+  fakes.hon.reply = 'CLAIRE-ONLY-ANALYSIS-TEXT: trial conversion is steady.';
+  let c1;
+  try { c1 = await claireFrom(src.turnId, kc); } finally { fakes.hon.reply = honText; }
+  assert.deepEqual([c1.status, c1.delegatedAgentKeys, c1.replyDetail.mode, c1.replyDetail.suggestions], ['COMPLETED', ['claire'], 'DETAILED', []], JSON.stringify(c1));
+  assert.deepEqual([fakes.hon.calls - before.hon, fakes.marcus.calls + fakes.claire.calls + fakes.chad.calls - before.specialists], [1, 0]);
+  assert.deepEqual([fakes.hon.inputs.at(-1).specialist, Object.keys(JSON.parse(fakes.hon.inputs.at(-1).facts))], ['claire', ['school']], 'metrics only');
+  const plan = await row('SELECT p.agent_key, p.task_class FROM hon.hon_reply_invocations r JOIN hon.ai_invocation_plans p ON p.id = r.plan_id WHERE r.turn_id=$1', [c1.turnId]);
+  assert.deepEqual(plan, { agent_key: 'claire', task_class: 'ANALYZE' });
+  assert.deepEqual(await claireFrom(src.turnId, kc), c1, 'resend replays');
+  assert.equal(fakes.hon.calls - before.hon, 1, 'no second call');
+  assert.deepEqual(await hon.orchestrations(scope, conv.id), { items: [{ sourceTurnId: src.turnId, status: 'COMPLETED', members: [{ agentKey: 'claire', turnId: c1.turnId, status: 'COMPLETED' }] }] });
+  // Marcus joins the same group; the derived status follows the members.
+  const m1 = await marcus(src.turnId);
+  assert.deepEqual((await hon.orchestrations(scope, conv.id)).items[0].members.map((m) => [m.agentKey, m.status]), [['claire', 'COMPLETED'], ['marcus', 'AWAITING_APPROVAL']]);
+  assert.equal((await hon.orchestrations(scope, conv.id)).items[0].status, 'NEEDS_REVIEW');
+  // 4. Claire is confirmed once per answer, only where suggested, and never from a Claire answer; refusals record nothing.
+  let n = await turnsOf(conv.id);
+  assert.equal(await code(claireFrom(src.turnId)), 'HON_SUGGESTION_NOT_CONFIRMABLE', 'already confirmed');
+  const onlyMarcus = await ask(['marcus'], 'Marketing ideas?');
+  n = await turnsOf(conv.id);
+  assert.equal(await code(claireFrom(onlyMarcus.turnId)), 'HON_SUGGESTION_NOT_CONFIRMABLE', 'not suggested');
+  assert.equal(await code(claireFrom(c1.turnId)), 'HON_SUGGESTION_NOT_CONFIRMABLE', 'a Claire answer is not a source');
+  assert.equal(await code(claireFrom(noRep.turnId)), 'HON_SUGGESTION_NOT_CONFIRMABLE', 'never stored without reporting.view');
+  // 0260 specialists are not in HON's suggestion set: Alex, Jordan or Lena are never confirmed from a suggestion.
+  for (const agentKey of ['alex', 'jordan', 'lena']) {
+    assert.notEqual(await code(hon.sendTurn(scope, conv.id, { text: 'How are we doing?', delegation: { agentKey }, fromSuggestionTurnId: src.turnId }, K())), 'OK', agentKey);
+  }
+  assert.equal(await turnsOf(conv.id), n, 'refusals record no turn');
+  // Without reporting.view now, Claire is refused (her own capability) before anything is recorded.
+  const src2 = await ask(['claire'], 'Where are we losing students?');
+  await dropRep();
+  n = await turnsOf(conv.id);
+  assert.notEqual(await code(claireFrom(src2.turnId)), 'OK', 'refused without reporting.view');
+  assert.equal(await turnsOf(conv.id), n);
+  await addRep();
+  // 5. The source stops suggesting Claire while the confirmation waits behind its group writes (a blocker holds SHARE on
+  //    work_items): re-checked after every write, refused with nothing persisted (turn, group member, reply) and no call.
+  {
+    const before5 = { turns: await turnsOf(conv.id), members: await members(), replies: await replies(), calls: fakes.hon.calls };
+    const blocker = new pg.Client({ connectionString: ownerUrl, ssl: false });
+    await blocker.connect();
+    let out;
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('LOCK TABLE hon.work_items IN SHARE MODE');
+      const bpid = (await blocker.query('SELECT pg_backend_pid() p')).rows[0].p;
+      let done = false;
+      const p = code(claireFrom(src2.turnId, K(), 'Lapse while waiting?')).then((r) => { done = true; return r; });
+      for (const end = Date.now() + 5000; !(await row('SELECT count(*)::int n FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))', [bpid])).n; await sleep(20)) {
+        assert.ok(!done && Date.now() < end, 'the Claire confirmation never waited on the work item');
+      }
+      await admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{}' WHERE turn_id=$1", [src2.turnId]);
+      await blocker.query('COMMIT');
+      out = await p;
+    } finally { await blocker.query('ROLLBACK').catch(() => {}); await blocker.end(); await admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{claire}' WHERE turn_id=$1", [src2.turnId]); }
+    assert.equal(out, 'HON_SUGGESTION_NOT_CONFIRMABLE', 'refused after the wait');
+    assert.deepEqual({ turns: await turnsOf(conv.id), members: await members(), replies: await replies(), calls: fakes.hon.calls }, before5, 'nothing persisted');
+  }
+  // 6. A finished group with Claire can be summarized: HON sees her agent, status and reason only, never her text.
+  fakes.hon.reply = 'CLAIRE-ONLY-ANALYSIS-TEXT: churn is low.';
+  let c2;
+  try { c2 = await claireFrom(src2.turnId); } finally { fakes.hon.reply = honText; }
+  assert.equal(c2.status, 'COMPLETED');
+  const sum = await hon.sendTurn(scope, conv.id, { text: 'Summarize what the team did.', delegation: null, summarizeTurnId: src2.turnId }, K());
+  assert.equal(sum.status, 'COMPLETED', JSON.stringify(sum));
+  const facts = fakes.hon.inputs.at(-1).facts;
+  assert.deepEqual(JSON.parse(facts).group.members, [{ agentKey: 'claire', status: 'COMPLETED' }], facts);
+  assert.ok(!facts.includes('CLAIRE-ONLY-ANALYSIS-TEXT'), 'Claire text never reaches HON');
+  // 7. Table rules: members and suggestions accept claire; Claire's own rows still carry no suggestions.
+  assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{maya}' WHERE turn_id=$1", [src.turnId]))).error?.code, '23514');
+  assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{alex}' WHERE turn_id=$1", [src.turnId]))).error?.code, '23514', 'alex not suggestable');
+  assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{kai}' WHERE turn_id=$1", [c1.turnId]))).error?.code, '23514', 'Claire never suggests');
+  assert.equal((await row("SELECT has_function_privilege($1,'hon.hon_reply_allowed_suggestions(uuid,uuid,uuid,text[])','EXECUTE') s", [runtimeRole])).s, false, 'internal helper');
+  void m1;
+  pass('INV-40', "K2c: HON may suggest Claire (closed set marcus, kai, chad, claire), stored and shown only for a reporting.view holder; confirming her from this human's own whole, visible HON answer is an ordinary K2 analysis (one call, claire/ANALYZE, metrics only, resend replays) grouped under that answer with a status derived from her reply; she is confirmed once, only where suggested and never from a Claire answer; the source is re-checked after the group and work writes wait (a lapse persists no turn, member or reply and calls nothing); a C3b summary sees her agent, status and reason but never her text; Claire rows still never suggest; Alex, Jordan and Lena (0260) are neither suggested nor confirmed from a suggestion");
+  }
+
+  // ---- INV-32 (0254): "Ask next" follow-ups and "Based on" sources are presentation data only ----
+  {
+  const o = await makeOrg('inv-32');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const conv = await hon.create(scope, { title: 'Follow-ups' }, K());
+  const ask = (text, extra = {}) => hon.sendTurn(scope, conv.id, { text, delegation: null, ...extra }, K());
+  const stored = async (turnId) => row('SELECT follow_up_questions f, available_sources a, cited_sources c FROM hon.hon_reply_invocations WHERE turn_id=$1', [turnId]);
+  const dropRep = () => admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='reporting.view'", [o.role]);
+  const addRep = () => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'reporting.view')", [o.role, o.id]);
+  const set = (f, src) => { fakes.hon.followUps = f; fakes.hon.sources = src; };
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const metricKeys = ['newLeads24h', 'upcomingTrials24h', 'upcomingTestingEvents30d', 'pendingActionApprovals', 'outstandingWorkItems', 'membershipTermsEnding30d', 'paidInvoicesCreated30d'];
+  // 1. First question: the server records the fact areas it sent (AVAILABLE metrics only, no conversation yet) and keeps only
+  //    cited areas among them; follow-ups are stored and shown on the receipt and after reload.
+  const usageBefore = Number((await row('SELECT coalesce(sum(customer_credits),0) n FROM hon.ai_usage_ledger WHERE organization_id=$1', [o.id])).n);
+  const callsBefore = fakes.hon.calls;
+  set(['Who should call the new leads?', 'How many trials are booked?'], ['revenue', 'newLeads24h', 'conversation']);
+  const r1 = await ask('How are leads?');
+  const s1 = await stored(r1.turnId);
+  assert.deepEqual([r1.status, r1.replyDetail.followUps, r1.replyDetail.sources], ['COMPLETED', ['Who should call the new leads?', 'How many trials are booked?'], ['newLeads24h']], JSON.stringify(r1));
+  assert.deepEqual([s1.a, s1.c], [metricKeys, ['newLeads24h']], 'only AVAILABLE metrics sent; UNAVAILABLE revenue and absent conversation are never cited');
+  assert.deepEqual((await hon.read(scope, conv.id)).turns.at(-1).replyDetail.followUps, ['Who should call the new leads?', 'How many trials are booked?'], 'persisted');
+  // Presentation data only: one provider call, the usual usage row, nothing else runs.
+  assert.equal(fakes.hon.calls - callsBefore, 1);
+  assert.equal(Number((await row('SELECT coalesce(sum(customer_credits),0) n FROM hon.ai_usage_ledger WHERE organization_id=$1', [o.id])).n) - usageBefore, 1, 'same usage as any answer');
+  // 2. A later question sent the earlier conversation: it may be cited.
+  set([], ['conversation', 'upcomingTrials24h']);
+  const r2 = await ask('And what about trials?');
+  assert.deepEqual([r2.replyDetail.followUps, r2.replyDetail.sources, (await stored(r2.turnId)).a], [[], ['conversation', 'upcomingTrials24h'], [...metricKeys, 'conversation']]);
+  // 3. A concealed answer shows neither (stored evidence unchanged).
+  await dropRep();
+  const hidden = await hon.receipt(scope, r1.turnId);
+  assert.deepEqual([hidden.reason, hidden.replyDetail.followUps, hidden.replyDetail.sources, (await stored(r1.turnId)).c], ['RESULT_CONCEALED', [], [], ['newLeads24h']]);
+  // Without reporting.view no metrics are sent: a new answer can cite only the conversation.
+  set(['Anything else?'], ['newLeads24h', 'conversation']);
+  const r3 = await ask('What should I do today?');
+  assert.deepEqual([r3.replyDetail.sources, (await stored(r3.turnId)).a], [['conversation'], ['conversation']]);
+  await addRep();
+  // 4. A cut-off answer keeps none, and the table refuses them on it; cited must be a subset of available; bad text refused.
+  fakes.hon.mode = 'TRUNCATED'; set(['More?'], ['newLeads24h']);
+  const r4 = await ask('Write the full plan.', { replyMode: 'DETAILED' });
+  fakes.hon.mode = 'RESULT';
+  assert.deepEqual([r4.replyDetail.truncated, r4.replyDetail.followUps, r4.replyDetail.sources], [true, [], []]);
+  for (const [sql, args, why] of [
+    ["UPDATE hon.hon_reply_invocations SET follow_up_questions='{\"More please?\"}' WHERE turn_id=$1", [r4.turnId], 'no follow-ups on a cut-off answer'],
+    ["UPDATE hon.hon_reply_invocations SET cited_sources='{newLeads24h}' WHERE turn_id=$1", [r4.turnId], 'no sources on a cut-off answer'],
+    ["UPDATE hon.hon_reply_invocations SET cited_sources='{revenue}' WHERE turn_id=$1", [r1.turnId], 'cited must have been sent'],
+    ["UPDATE hon.hon_reply_invocations SET available_sources='{website}' WHERE turn_id=$1", [r1.turnId], 'closed source set'],
+    ["UPDATE hon.hon_reply_invocations SET follow_up_questions=ARRAY['a','b','c','d']||'{}'::text[] WHERE turn_id=$1", [r2.turnId], 'at most three'],
+    ["UPDATE hon.hon_reply_invocations SET follow_up_questions=ARRAY[E'Line\\nbreak?'] WHERE turn_id=$1", [r2.turnId], 'no newline'],
+  ]) assert.equal((await settle(admin.query(sql, args))).error?.code, '23514', why);
+  // 5. The database refuses malformed values from the API before any write.
+  fakes.hon.mode = 'HOLD';
+  const pending = settle(ask('Hold for malformed follow-ups.'));
+  for (const end = Date.now() + 15000; !(await row("SELECT count(*)::int n FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).n; await sleep(20)) assert.ok(Date.now() < end, 'reply never reached SENDING');
+  const sending = (await row("SELECT turn_id FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).turn_id;
+  const base = { reply: 'x', inputTokens: 1, outputTokens: 1, providerCostMicrounits: 0 };
+  const record = (result) => settle(tenant(context(o), (client) => client.query('SELECT hon.record_hon_reply_result($1,$2::uuid,$3::jsonb)', [o.subject, sending, JSON.stringify({ ...base, ...result })])));
+  // Wrong shapes are refused: a list of more than three, a non-array, a non-string item; unknown, repeated or too many sources.
+  for (const bad of [{ followUps: 'Why?' }, { followUps: ['a', 'b', 'c', 'd'].map((x) => `${x} question?`) }, { followUps: [1] }, { followUps: [null] },
+    { sources: ['website'] }, { sources: ['revenue', 'revenue'] }, { sources: 'revenue' },
+    { sources: ['newLeads24h', 'upcomingTrials24h', 'revenue', 'trialConversion', 'conversation', 'specialistResults'] }]) {
+    assert.equal((await record(bad)).error?.code, '22023', `${JSON.stringify(bad)} refused`);
+  }
+  // Items that fail the text rule are hints, not evidence: dropped (never raised), so the answer and its usage are kept.
+  // Lengths count code points and C1 controls fail, as in the API.
+  const kept = await record({ followUps: ['\u{1F600}?', 'Next\u0085step?', 'Good question?'], sources: ['pendingActionApprovals'] });
+  assert.equal(kept.error, undefined, String(kept.error));
+  fakes.hon.complete(); fakes.hon.mode = 'RESULT';
+  await pending; // The provider's late result finds the row already recorded: nothing is recorded twice.
+  const s5 = await stored(sending);
+  assert.deepEqual([s5.f, s5.c], [['Good question?'], ['pendingActionApprovals']]);
+  const r5 = await hon.receipt(scope, sending);
+  assert.deepEqual([r5.status, r5.replyDetail.followUps, r5.replyDetail.sources], ['COMPLETED', ['Good question?'], ['pendingActionApprovals']], JSON.stringify(r5));
+  assert.equal((await row('SELECT count(*)::int n FROM hon.ai_usage_ledger WHERE source_invocation_id=(SELECT id FROM hon.hon_reply_invocations WHERE turn_id=$1)', [sending])).n, 1, 'one usage row');
+  // The table refuses an invalid or repeated item written any other way.
+  for (const bad of ['{"Hi"}', '{"Same?","Same?"}', `{"Next\u0085step?"}`]) {
+    assert.equal((await settle(admin.query('UPDATE hon.hon_reply_invocations SET follow_up_questions=$2::text[] WHERE turn_id=$1', [sending, bad]))).error?.code, '23514', bad);
+  }
+  // 6. Claire may give follow-ups and cite metrics (never the conversation she is not sent).
+  set(['What changed this month?'], ['conversation', 'outstandingWorkItems']);
+  const c1 = await hon.sendTurn(scope, conv.id, { text: 'How is the school doing?', delegation: { agentKey: 'claire' } }, K());
+  assert.deepEqual([c1.status, c1.replyDetail.followUps, c1.replyDetail.sources, c1.replyDetail.suggestions], ['COMPLETED', ['What changed this month?'], ['outstandingWorkItems'], []], JSON.stringify(c1));
+  set([], []);
+  pass('INV-32', '0254: follow-up questions (at most three, bounded plain text, unique) and cited sources (closed set, at most five, only fact areas the server recorded as sent: AVAILABLE metrics, the earlier conversation, group results) are stored with a whole answer only, shown only on a visible COMPLETED answer (concealed and cut-off answers show none; the table refuses others), malformed values are refused before any write, Claire may give them (no suggestions), and they add no provider call or usage beyond the answer');
+  }
+
+  // ---- INV-33 (0255): What HON remembers: school notes are saved on purpose, visible to every HON user, erasable ----
+  {
+  const o = await makeOrg('inv-33');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const call = (fn, input, key = K()) => { const c = context(o); return tenant(c, (client) => client.query(`SELECT hon.${fn}($1,$2::jsonb,$3,$4::uuid,$5::uuid) r`, [o.subject, JSON.stringify(input), key, c.requestId, c.correlationId])).then((r) => r.rows[0].r); };
+  const read = () => tenant(context(o), (client) => client.query('SELECT hon.read_hon_school_notes($1) r', [o.subject])).then((r) => r.rows[0].r);
+  const code = async (p) => (await settle(p)).error?.code ?? 'OK';
+  const drop = (c) => admin.query('DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code=$2', [o.role, c]);
+  const add = (c) => admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [o.role, o.id, c]);
+  const perm = await row("SELECT is_sensitive, is_staff_assignable FROM hon.permissions WHERE code='ai.school_notes.manage'");
+  assert.deepEqual([perm.is_sensitive, perm.is_staff_assignable], [false, true], 'staff-assignable permission');
+  // 1. A note is saved, listed for HON users, and replayed by key; a reused key with other input is refused.
+  const key = K();
+  const a = await call('add_hon_school_note', { text: 'We close the first week of August.' }, key);
+  assert.deepEqual([a.replayed, a.record.note.text], [false, 'We close the first week of August.'], JSON.stringify(a));
+  assert.equal((await call('add_hon_school_note', { text: 'We close the first week of August.' }, key)).replayed, true);
+  assert.equal(await code(call('add_hon_school_note', { text: 'Something else entirely.' }, key)), '23505');
+  const r1 = await read();
+  assert.deepEqual([r1.notes.map((n) => n.text), r1.canManage, r1.limits], [['We close the first week of August.'], true, { maxNotes: 20, maxCharacters: 2000, noteCharacters: 200 }]);
+  // 2. Never about a person, never a link: refused before any write.
+  const before = (await row('SELECT count(*)::int n FROM hon.hon_school_notes WHERE organization_id=$1', [o.id])).n;
+  for (const input of [{ text: 'Email coach@example.test for help' }, { text: 'Call 555 123 4567 after six' }, { text: 'Ring (555)123-4567' }, { text: 'See https://example.test' },
+    { text: 'Visit www.example.test' }, { text: 'Use <b>bold</b>' }, { text: 'ab' }, { text: 'x'.repeat(201) }, { text: 'Two\nlines here' }, { text: ' padded note ' }, { text: 7 }, { text: 'ok note', extra: 1 }, {}]) {
+    assert.equal(await code(call('add_hon_school_note', input)), '22023', JSON.stringify(input));
+  }
+  assert.equal((await row('SELECT count(*)::int n FROM hon.hon_school_notes WHERE organization_id=$1', [o.id])).n, before, 'nothing stored');
+  // The rule is the contract's character for character: code points, C1 controls, line separators, Unicode spaces.
+  for (const [text, ok] of [['\u{1F600}'.repeat(200), true], ['\u{1F600}'.repeat(201), false], ['Caf\u00e9 hours are 9 to 5.', true], ['Next\u0085step here', false],
+    ['\u00a0padded note', false], ['padded note\u3000', false], ['Line\u2028break', false], ['555\u00a0123\u00a04567 is the line', false], ['mail a@b\u00a0x', false]]) {
+    assert.equal((await row('SELECT hon.hon_school_note_ok($1) ok', [text])).ok, ok, JSON.stringify(text));
+  }
+  // 3. HON's context carries the notes (newest first) and may cite them; Claire's does not.
+  await call('add_hon_school_note', { text: 'Kids classes are 45 minutes long.' });
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = []; fakes.hon.followUps = []; fakes.hon.sources = ['schoolNotes'];
+  const conv = await hon.create(scope, { title: 'Summer' }, K());
+  const t1 = await hon.sendTurn(scope, conv.id, { text: 'When are we closed?', delegation: null }, K());
+  assert.deepEqual(JSON.parse(fakes.hon.inputs.at(-1).facts).schoolNotes, ['Kids classes are 45 minutes long.', 'We close the first week of August.']);
+  assert.deepEqual(t1.replyDetail.sources, ['schoolNotes']);
+  await hon.sendTurn(scope, conv.id, { text: 'How is the school doing?', delegation: { agentKey: 'claire' } }, K());
+  assert.equal(JSON.parse(fakes.hon.inputs.at(-1).facts).schoolNotes, undefined, 'Claire gets metrics only');
+  // 4. Deleting erases the text at once (evidence keeps ids and times); HON no longer sees it; audit never holds text.
+  const del = await call('delete_hon_school_note', { noteId: a.record.note.id });
+  assert.deepEqual([del.replayed, del.record.noteId, del.record.deleted], [false, a.record.note.id, true]);
+  const gone = await row('SELECT body, deleted_at IS NOT NULL d, deleted_by FROM hon.hon_school_notes WHERE id=$1', [a.record.note.id]);
+  assert.deepEqual([gone.body, gone.d, gone.deleted_by], [null, true, o.principal]);
+  assert.equal(await code(call('delete_hon_school_note', { noteId: a.record.note.id })), 'P0002', 'already deleted');
+  assert.equal(await code(call('delete_hon_school_note', { noteId: K() })), 'P0002');
+  assert.deepEqual((await read()).notes.map((n) => n.text), ['Kids classes are 45 minutes long.']);
+  fakes.hon.sources = [];
+  await hon.sendTurn(scope, conv.id, { text: 'Anything else?', delegation: null }, K());
+  assert.deepEqual(JSON.parse(fakes.hon.inputs.at(-1).facts).schoolNotes, ['Kids classes are 45 minutes long.']);
+  const leaked = (await row("SELECT count(*)::int n FROM hon.audit_events WHERE organization_id=$1 AND (coalesce(next_state::text,'') LIKE '%August%' OR coalesce(next_state::text,'') LIKE '%45 minutes%')", [o.id])).n;
+  const outboxLeak = (await row("SELECT count(*)::int n FROM hon.outbox_events WHERE organization_id=$1 AND (payload::text LIKE '%August%' OR payload::text LIKE '%45 minutes%')", [o.id])).n;
+  assert.deepEqual([leaked, outboxLeak], [0, 0], 'ids only in audit and outbox');
+  assert.equal((await row("SELECT count(*)::int n FROM hon.audit_events WHERE organization_id=$1 AND action_code LIKE 'hon.school_note.%'", [o.id])).n, 3);
+  // 5. Limits: at most 20 notes and 2,000 characters per school.
+  for (let i = (await read()).notes.length; i < 20; i++) await call('add_hon_school_note', { text: `Note number ${String.fromCharCode(65 + i)} for the school.` });
+  assert.equal(await code(call('add_hon_school_note', { text: 'One note too many.' })), '23514', 'at most 20');
+  for (const n of (await read()).notes) await call('delete_hon_school_note', { noteId: n.id });
+  for (let i = 0; i < 10; i++) await call('add_hon_school_note', { text: `${String.fromCharCode(65 + i)}${'a'.repeat(199)}` });
+  assert.equal(await code(call('add_hon_school_note', { text: 'Too long now.' })), '23514', 'at most 2000 characters');
+  // 6. Authority: manage needs ai.school_notes.manage; reading needs HON (ai.invocation.plan) or manage.
+  await drop('ai.school_notes.manage');
+  assert.equal(await code(call('add_hon_school_note', { text: 'Not allowed here.' })), '42501');
+  assert.equal(await code(call('delete_hon_school_note', { noteId: (await read()).notes[0].id })), '42501');
+  assert.equal((await read()).canManage, false);
+  await drop('ai.invocation.plan');
+  assert.equal(await code(read()), '42501');
+  await add('ai.invocation.plan'); await add('ai.school_notes.manage');
+  // 7. The tables are reached only through the three entry points; rows are never removed or rewritten except the erase.
+  for (const t of ['hon_school_notes', 'hon_school_note_requests']) assert.equal((await row("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE') p", [runtimeRole, `hon.${t}`])).p, false, t);
+  for (const f of ['hon.read_hon_school_notes(text)', 'hon.add_hon_school_note(text,jsonb,text,uuid,uuid)', 'hon.delete_hon_school_note(text,jsonb,text,uuid,uuid)']) {
+    assert.equal((await row("SELECT has_function_privilege($1,$2,'EXECUTE') p", [runtimeRole, f])).p, true, f);
+  }
+  const live = (await read()).notes[0].id;
+  assert.equal((await settle(admin.query('DELETE FROM hon.hon_school_notes WHERE id=$1', [live]))).error?.code, '42501');
+  assert.equal((await settle(admin.query("UPDATE hon.hon_school_notes SET body='Changed text here' WHERE id=$1", [live]))).error?.code, '42501');
+  pass('INV-33', "0255: school notes are saved only by a human with ai.school_notes.manage (staff-assignable), listed for every HON user at the school, idempotent by key, refused when they look like a person's contact, a link or markup, limited to 20 notes and 2,000 characters, given to HON's context newest first and citable as schoolNotes (never to Claire), erased on delete (evidence keeps ids and times), audited and announced by id only, and reachable only through three runtime entry points");
+  }
+
+  // ---- INV-34 (0256): HON tone per school: the owner picks a closed key; HON and Kai receive it; Claire does not ----
+  {
+  const o = await makeOrg('inv-34');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const set = (input, key = K()) => { const c = context(o); return tenant(c, (client) => client.query('SELECT hon.set_hon_school_tone($1,$2::jsonb,$3,$4::uuid,$5::uuid) r', [o.subject, JSON.stringify(input), key, c.requestId, c.correlationId])).then((r) => r.rows[0].r); };
+  const read = () => tenant(context(o), (client) => client.query('SELECT hon.read_hon_school_tone($1) r', [o.subject])).then((r) => r.rows[0].r);
+  const code = async (p) => (await settle(p)).error?.code ?? 'OK';
+  const drop = (c) => admin.query('DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code=$2', [o.role, c]);
+  const add = (c) => admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [o.role, o.id, c]);
+  const perm = await row("SELECT is_sensitive, is_staff_assignable FROM hon.permissions WHERE code='ai.school_tone.manage'");
+  assert.deepEqual([perm.is_sensitive, perm.is_staff_assignable], [false, false], 'owner-only permission');
+  // 1. Default STANDARD; HON receives STANDARD.
+  assert.deepEqual(await read(), { tone: 'STANDARD', canManage: true, updatedAt: null });
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = []; fakes.hon.followUps = []; fakes.hon.sources = [];
+  const conv = await hon.create(scope, { title: 'Tone' }, K());
+  await hon.sendTurn(scope, conv.id, { text: 'How are leads?', delegation: null }, K());
+  assert.equal(fakes.hon.inputs.at(-1).tone, 'STANDARD');
+  // 2. Set, replay by key, reused key refused, same tone again is a no-op receipt; closed input only.
+  const key = K();
+  assert.deepEqual(await set({ tone: 'FRIENDLY_COACH' }, key), { tone: 'FRIENDLY_COACH', previousTone: 'STANDARD', replayed: false });
+  assert.deepEqual(await set({ tone: 'FRIENDLY_COACH' }, key), { tone: 'FRIENDLY_COACH', previousTone: 'STANDARD', replayed: true });
+  assert.equal(await code(set({ tone: 'FORMAL' }, key)), '23505');
+  assert.deepEqual(await set({ tone: 'FRIENDLY_COACH' }), { tone: 'FRIENDLY_COACH', previousTone: 'FRIENDLY_COACH', replayed: false });
+  for (const input of [{ tone: 'friendly_coach' }, { tone: 'PIRATE' }, { tone: 'FORMAL', extra: 1 }, {}, { tone: 7 }]) assert.equal(await code(set(input)), '22023', JSON.stringify(input));
+  const r1 = await read();
+  assert.deepEqual([r1.tone, r1.canManage, typeof r1.updatedAt], ['FRIENDLY_COACH', true, 'string']);
+  // 3. HON and Kai receive the school's tone; Claire's analysis does not carry one.
+  await hon.sendTurn(scope, conv.id, { text: 'How are trials?', delegation: null }, K());
+  assert.equal(fakes.hon.inputs.at(-1).tone, 'FRIENDLY_COACH');
+  await hon.sendTurn(scope, conv.id, { text: 'How is the school doing?', delegation: { agentKey: 'claire' } }, K());
+  assert.equal(fakes.hon.inputs.at(-1).specialist, 'claire');
+  assert.equal(fakes.hon.inputs.at(-1).tone, undefined, 'Claire keeps her own voice');
+  fakes.claire.mode = 'RESULT';
+  const nKai = fakes.claire.inputs.length;
+  await agents.claire.service.submit(context(o), agents.claire.input(o));
+  assert.equal(fakes.claire.inputs.length, nKai + 1, 'Kai called once');
+  assert.equal(fakes.claire.inputs.at(-1).tone, 'FRIENDLY_COACH');
+  // 4. Audit carries the keys only; the outbox is internal only.
+  const audits = (await admin.query("SELECT next_state FROM hon.audit_events WHERE organization_id=$1 AND action_code='hon.school_tone.set' ORDER BY occurred_at", [o.id])).rows;
+  assert.deepEqual(audits.map((a) => a.next_state), [{ tone: 'FRIENDLY_COACH', previousTone: 'STANDARD' }, { tone: 'FRIENDLY_COACH', previousTone: 'FRIENDLY_COACH' }]);
+  assert.equal((await row("SELECT count(*)::int n FROM hon.outbox_events WHERE organization_id=$1 AND event_type='hon.school_tone.set' AND payload->>'internalOnly'='true'", [o.id])).n, 2);
+  // 5. Authority: setting needs ai.school_tone.manage; reading needs HON, Kai or manage.
+  await drop('ai.school_tone.manage');
+  assert.equal(await code(set({ tone: 'FORMAL' })), '42501');
+  assert.equal((await read()).canManage, false);
+  await drop('ai.invocation.plan');
+  assert.equal((await read()).tone, 'FRIENDLY_COACH', 'Kai users read it');
+  await drop('teaching.assistant.use');
+  assert.equal(await code(read()), '42501');
+  await add('ai.invocation.plan'); await add('teaching.assistant.use'); await add('ai.school_tone.manage');
+  // 6. Grants: runtime reaches the tables only through the three entry points; rows are never removed.
+  for (const t of ['hon_school_tones', 'hon_school_tone_requests']) assert.equal((await row("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE') p", [runtimeRole, `hon.${t}`])).p, false, t);
+  for (const f of ['hon.read_hon_school_tone(text)', 'hon.set_hon_school_tone(text,jsonb,text,uuid,uuid)', 'hon.hon_ai_tone()']) assert.equal((await row("SELECT has_function_privilege($1,$2,'EXECUTE') p", [runtimeRole, f])).p, true, f);
+  assert.equal((await settle(admin.query('DELETE FROM hon.hon_school_tones WHERE school_id=$1', [o.school]))).error?.code, '42501');
+  assert.equal((await settle(admin.query('DELETE FROM hon.hon_school_tone_requests WHERE school_id=$1', [o.school]))).error?.code, '42501');
+  assert.equal((await settle(admin.query("UPDATE hon.hon_school_tones SET tone='PIRATE' WHERE school_id=$1", [o.school]))).error?.code, '23514');
+  pass('INV-34', "0256: each school's tone is a closed key (Standard by default) set only by a human with the owner-only ai.school_tone.manage, idempotent by key, audited with keys only, read by HON, Kai or manage users, sent to HON and Kai (never Claire), and reachable only through three runtime entry points");
+  }
+
+  // ---- INV-35 (0257): weekly briefing part 1: off by default, owner switch, "email me" for oneself, preview, no AI ----
+  {
+  const o = await makeOrg('inv-35');
+  const call = (fn, input, key = K()) => { const c = context(o); return tenant(c, (client) => client.query(`SELECT hon.${fn}($1,$2::jsonb,$3,$4::uuid,$5::uuid) r`, [o.subject, JSON.stringify(input), key, c.requestId, c.correlationId])).then((r) => r.rows[0].r); };
+  const read = () => tenant(context(o), (client) => client.query('SELECT hon.read_school_briefing($1) r', [o.subject])).then((r) => r.rows[0].r);
+  const preview = () => tenant(context(o), (client) => client.query('SELECT hon.read_school_briefing_preview($1) r', [o.subject])).then((r) => r.rows[0].r);
+  const code = async (p) => (await settle(p)).error?.code ?? 'OK';
+  const drop = (c) => admin.query('DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code=$2', [o.role, c]);
+  const add = (c) => admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [o.role, o.id, c]);
+  const perm = await row("SELECT is_sensitive, is_staff_assignable FROM hon.permissions WHERE code='ai.school_briefing.manage'");
+  assert.deepEqual([perm.is_sensitive, perm.is_staff_assignable], [false, false], 'owner-only permission');
+  const calls0 = providerCalls;
+  // 1. Off by default; nobody is subscribed.
+  assert.deepEqual(await read(), { enabled: false, sendHour: 8, canManage: true, me: { email: false, canSubscribe: true } });
+  // 2. Owner switch: replay by key, reused key refused, closed input.
+  const key = K();
+  const on = await call('set_school_briefing_settings', { enabled: true, sendHour: 7 }, key);
+  assert.deepEqual([on.replayed, on.record.enabled, on.record.sendHour], [false, true, 7]);
+  assert.equal((await call('set_school_briefing_settings', { enabled: true, sendHour: 7 }, key)).replayed, true);
+  assert.equal(await code(call('set_school_briefing_settings', { enabled: false, sendHour: 7 }, key)), '23505');
+  for (const input of [{ enabled: true, sendHour: 5 }, { enabled: true, sendHour: 12 }, { enabled: 'yes', sendHour: 8 }, { enabled: true }, { enabled: true, sendHour: 8, extra: 1 }, { enabled: true, sendHour: 8.5 }]) {
+    assert.equal(await code(call('set_school_briefing_settings', input)), '22023', JSON.stringify(input));
+  }
+  // 3. Email me: for oneself only, closed input, replay.
+  const me = await call('set_my_school_briefing', { email: true });
+  assert.deepEqual(me.record.me, { email: true, canSubscribe: true });
+  for (const input of [{ email: 'yes' }, { email: true, sms: true }, { sms: true }, {}]) assert.equal(await code(call('set_my_school_briefing', input)), '22023', JSON.stringify(input));
+  assert.equal((await row('SELECT count(*)::int n FROM hon.school_briefing_subscriptions WHERE organization_id=$1 AND email_enabled', [o.id])).n, 1);
+  // 4. Preview: fixed template over Command Center counts, the school name, how to stop; no provider call.
+  const pv = await preview();
+  assert.equal(pv.subject, 'HON weekly briefing: AI-0 synthetic school');
+  assert.match(pv.text, /^New leads in the last 24 hours: \d+$/m);
+  assert.match(pv.text, /Unanswered inquiries: not available yet/);
+  assert.match(pv.text, /turn off "Email me" under Weekly briefing/);
+  assert.doesNotMatch(pv.text, /Synthetic Lead|synthetic-lead@example\.test/, 'counts only, never names or addresses');
+  assert.equal(providerCalls, calls0, 'no AI call');
+  // 5. Audit and outbox carry values only (no address); the outbox is internal only.
+  const audits = (await admin.query("SELECT action_code, next_state FROM hon.audit_events WHERE organization_id=$1 AND action_code LIKE 'hon.school_briefing.%' ORDER BY occurred_at", [o.id])).rows;
+  assert.deepEqual(audits.map((a) => a.action_code), ['hon.school_briefing.settings', 'hon.school_briefing.me']);
+  assert.doesNotMatch(JSON.stringify(audits), /@example\.test/);
+  assert.equal((await row("SELECT count(*)::int n FROM hon.outbox_events WHERE organization_id=$1 AND event_type LIKE 'hon.school_briefing.%' AND payload->>'internalOnly'='true'", [o.id])).n, 2);
+  // 6. Authority: settings need the owner permission; email me and the preview need reporting.view.
+  await drop('ai.school_briefing.manage');
+  assert.equal(await code(call('set_school_briefing_settings', { enabled: false, sendHour: 8 })), '42501');
+  assert.equal((await read()).canManage, false);
+  await drop('reporting.view');
+  assert.deepEqual((await read()).me, { email: true, canSubscribe: false });
+  assert.equal(await code(call('set_my_school_briefing', { email: true })), '42501');
+  assert.equal(await code(preview()), '42501');
+  assert.equal((await call('set_my_school_briefing', { email: false })).record.me.email, false, 'anyone may always turn their own email off');
+  await drop('ai.invocation.plan');
+  assert.equal(await code(read()), '42501');
+  await add('ai.invocation.plan'); await add('reporting.view'); await add('ai.school_briefing.manage');
+  // 7. Grants and guards: four runtime entry points (plus the read), tables never removed, values checked.
+  for (const t of ['school_briefing_settings', 'school_briefing_subscriptions', 'school_briefing_requests']) assert.equal((await row("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE') p", [runtimeRole, `hon.${t}`])).p, false, t);
+  for (const f of ['hon.read_school_briefing(text)', 'hon.read_school_briefing_preview(text)', 'hon.set_school_briefing_settings(text,jsonb,text,uuid,uuid)', 'hon.set_my_school_briefing(text,jsonb,text,uuid,uuid)']) {
+    assert.equal((await row("SELECT has_function_privilege($1,$2,'EXECUTE') p", [runtimeRole, f])).p, true, f);
+  }
+  assert.equal((await row("SELECT has_function_privilege($1,'hon.school_briefing_email(jsonb,text)','EXECUTE') p", [runtimeRole])).p, false);
+  assert.equal((await settle(admin.query('DELETE FROM hon.school_briefing_settings WHERE school_id=$1', [o.school]))).error?.code, '42501');
+  assert.equal((await settle(admin.query('UPDATE hon.school_briefing_settings SET send_hour=3 WHERE school_id=$1', [o.school]))).error?.code, '23514');
+  assert.equal((await settle(admin.query('UPDATE hon.school_briefing_subscriptions SET sms_enabled=true WHERE school_id=$1', [o.school]))).error?.code, '23514', 'SMS is reserved for 0258');
+  pass('INV-35', '0257: the weekly briefing is off by default, switched on and timed only by the owner (ai.school_briefing.manage), subscribed by email for oneself only with reporting.view (always possible to turn off), previewed from Command Center counts with no AI call and no names, audited without addresses, idempotent by key, and reachable only through four runtime entry points; SMS stays reserved for 0258');
+  }
+
+  // ---- INV-36 (0260): Alex, Jordan and Lena answer as read-only analysis specialists from their own facts ----
+  {
+  const o = await makeOrg('inv-36');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const code = async (p) => { const r = await settle(p); return r.error?.getResponse?.().code ?? r.error?.code ?? r.error?.message ?? 'OK'; };
+  const turnsOf = async (id) => (await row('SELECT count(*)::int n FROM hon.hon_conversation_turns WHERE conversation_id=$1', [id])).n;
+  const drop = (perm) => admin.query('DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code=$2', [o.role, perm]);
+  const add = (perm) => admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3)', [o.role, o.id, perm]);
+  const CAP = { alex: 'reporting.view', jordan: 'schedule.session.manage', lena: 'marketing.campaign.read' };
+  // Synthetic aggregate facts: one scheduled class tomorrow with no instructor, one cancelled, one active campaign ending soon.
+  const program = K();
+  await admin.query("INSERT INTO hon.programs(id,organization_id,school_id,name,status) VALUES($1,$2,$3,'AI-0 synthetic program','SCHEDULED')", [program, o.id, o.school]);
+  await admin.query("INSERT INTO hon.class_sessions(organization_id,school_id,program_id,name,starts_at,ends_at,capacity,booking_policy) VALUES($1,$2,$3,'Synthetic class',clock_timestamp()+interval '1 day',clock_timestamp()+interval '1 day 1 hour',12,'WALK_IN')", [o.id, o.school, program]);
+  await admin.query("INSERT INTO hon.class_sessions(organization_id,school_id,program_id,name,starts_at,ends_at,capacity,booking_policy,status,cancellation_reason) VALUES($1,$2,$3,'Synthetic cancelled',clock_timestamp()+interval '2 days',clock_timestamp()+interval '2 days 1 hour',8,'WALK_IN','CANCELLED','Synthetic')", [o.id, o.school, program]);
+  // (makeOrg already saved one DRAFT campaign; this one is activated through the guarded DRAFT -> ACTIVE path.)
+  const camp = (await campaigns.save(context(o), null, { expectedVersion: 0, code: 'AI0INV36', name: 'Synthetic campaign', goal: 'Introduce beginner classes', offerLabel: '', channel: 'EMAIL',
+    startsAt: new Date(Date.now() + 3_600_000).toISOString(), endsAt: new Date(Date.now() + 5 * 86_400_000).toISOString(), plannedBudgetMinor: 0, currency: 'USD' })).campaign;
+  assert.equal((await campaigns.status(context(o), camp.id, { expectedVersion: camp.version, status: 'ACTIVE' })).campaign.status, 'ACTIVE');
+  const conv = await hon.create(scope, { title: 'Ask the team' }, K());
+  const ask = (agentKey, text = 'What should we look at this week?', key = K()) => hon.sendTurn(scope, conv.id, { text, delegation: { agentKey } }, key);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  await hon.sendTurn(scope, conv.id, { text: 'Earlier question for HON.', delegation: null }, K());
+  const answered = {};
+  for (const agent of ['alex', 'jordan', 'lena']) {
+    // 1. One call each, planned as <agent>/ANALYZE (DETAILED budgets), own facts and the question only; resend replays.
+    const before = { hon: fakes.hon.calls, specialists: fakes.marcus.calls + fakes.claire.calls + fakes.chad.calls };
+    const key = K();
+    const a = await ask(agent, `Question for ${agent}?`, key);
+    assert.deepEqual([a.status, a.delegatedAgentKeys, a.reply, a.replyDetail.mode, a.replyDetail.step, a.replyDetail.canContinue, a.replyDetail.suggestions],
+      ['COMPLETED', [agent], fakes.hon.reply, 'DETAILED', 1, false, []], `${agent}: ${JSON.stringify(a)}`);
+    assert.deepEqual([fakes.hon.calls - before.hon, fakes.marcus.calls + fakes.claire.calls + fakes.chad.calls - before.specialists], [1, 0], `${agent}: one analysis call, no draft specialist`);
+    const input = fakes.hon.inputs.at(-1);
+    assert.deepEqual([input.specialist, input.replyMode, input.step, input.question], [agent, 'DETAILED', 1, `Question for ${agent}?`]);
+    const facts = JSON.parse(input.facts);
+    assert.deepEqual(Object.keys(facts), ['school'], `${agent}: own facts only, no conversation history or notes`);
+    answered[agent] = { turn: a, facts: facts.school };
+    const rec = await row(`SELECT r.specialist, r.used_reporting, r.source_permissions, p.agent_key, p.task_class, t.agent_key AS turn_agent FROM hon.hon_reply_invocations r
+      JOIN hon.ai_invocation_plans p ON p.id = r.plan_id JOIN hon.hon_conversation_turns t ON t.id = r.turn_id WHERE r.turn_id=$1`, [a.turnId]);
+    const perms = agent === 'alex' ? ['reporting.view', 'schedule.session.manage', 'marketing.campaign.read'] : [CAP[agent]];
+    assert.deepEqual(rec, { specialist: agent, used_reporting: agent === 'alex', source_permissions: perms, agent_key: agent, task_class: 'ANALYZE', turn_agent: agent });
+    assert.deepEqual(await ask(agent, `Question for ${agent}?`, key), a, `${agent}: resend replays`);
+    assert.equal(fakes.hon.calls - before.hon, 1, `${agent}: no second call`);
+  }
+  // The facts are aggregate counts from this school only (no names, people or payment rows).
+  const ops = answered.jordan.facts;
+  assert.deepEqual([ops.availability, ops.next7Days.scheduledSessions, ops.next7Days.cancelledSessions, ops.next7Days.totalCapacity, ops.next7Days.sessionsWithoutInstructor, ops.next7Days.bookedSeats],
+    ['AVAILABLE', 1, 1, 12, 1, 0], JSON.stringify(ops));
+  const com = answered.lena.facts;
+  assert.deepEqual([com.availability, com.campaigns.active, com.campaigns.activeEndingWithin14Days, com.membershipPlans.available, com.creativeStudioLast30Days.requests],
+    ['AVAILABLE', 1, 1, 0, 0], JSON.stringify(com));
+  assert.equal(com.campaigns.draft, 1, 'the makeOrg draft campaign');
+  assert.deepEqual(Object.keys(answered.alex.facts).sort(), ['commandCenter', 'creativeCommerce', 'operations']);
+  assert.deepEqual([answered.alex.facts.operations, answered.alex.facts.creativeCommerce], [ops, com], 'Alex sees the same sections when he holds their permissions');
+  assert.doesNotMatch(JSON.stringify([ops, com]), /Synthetic class|Synthetic campaign|AI0INV36/, 'no record names leave the database');
+  // HON's next answer sees each turn as that specialist's, never with their answer text.
+  await hon.sendTurn(scope, conv.id, { text: 'And what next?', delegation: null }, K());
+  assert.deepEqual(JSON.parse(fakes.hon.inputs.at(-1).facts).history.map((h) => h.delegatedTo ?? null).slice(-3), ['alex', 'jordan', 'lena']);
+  assert.ok(JSON.parse(fakes.hon.inputs.at(-1).facts).history.slice(-3).every((h) => !('answer' in h)), 'no specialist text reaches HON');
+  // 2. Without the capability each one is refused at begin and nothing is recorded.
+  for (const agent of ['alex', 'jordan', 'lena']) {
+    await drop(CAP[agent]);
+    const n = await turnsOf(conv.id);
+    try { assert.equal(await code(ask(agent)), 'HON_CONVERSATION_FORBIDDEN', `${agent} without ${CAP[agent]}`); } finally { await add(CAP[agent]); }
+    assert.equal(await turnsOf(conv.id), n, `${agent}: refused before any turn`);
+  }
+  // 3. Alex without the operations or commerce permission: those sections are NOT_AUTHORIZED and not depended on.
+  await drop('schedule.session.manage');
+  try {
+    const a = await ask('alex', 'Whole-school view without operations?');
+    assert.equal(a.status, 'COMPLETED');
+    const f = JSON.parse(fakes.hon.inputs.at(-1).facts).school;
+    assert.deepEqual([f.operations, f.creativeCommerce.availability], [{ availability: 'NOT_AUTHORIZED' }, 'AVAILABLE']);
+    assert.deepEqual((await row('SELECT source_permissions FROM hon.hon_reply_invocations WHERE turn_id=$1', [a.turnId])).source_permissions, ['reporting.view', 'marketing.campaign.read']);
+  } finally { await add('schedule.session.manage'); }
+  // 4. A lapse between begin and prepare: BLOCKED, nothing reserved, no call.
+  for (const agent of ['jordan', 'lena']) {
+    const begun = await tenant(context(o), (c) => c.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4) d', [o.subject, conv.id, JSON.stringify({ text: 'Lapse?', delegation: { agentKey: agent } }), K()]));
+    const turnId = begun.rows[0].d.turnId;
+    const ref = (await tenant(context(o), (c) => c.query('SELECT hon.hon_reply_planning_reference($1,$2::uuid) d', [o.subject, turnId]))).rows[0].d;
+    assert.deepEqual([ref.agentKey, ref.limits.replyMode, ref.limits.taskClass], [agent, 'DETAILED', 'ANALYZE']);
+    const lim = ref.limits;
+    const planned = await plans.plan({ ...context(o), idempotencyKey: ref.invocationId }, ref.workItemId, { expectedVersion: ref.workVersion, expectedState: 'READY', agentKey: agent, modality: 'TEXT', taskClass: lim.taskClass, inputBudget: lim.inputBudget, outputBudget: lim.outputBudget, maxProviderCostMicrounits: lim.maxProviderCostMicrounits });
+    await drop(CAP[agent]);
+    const calls = fakes.hon.calls;
+    let prepared;
+    try {
+      prepared = await tenant(context(o), async (c) => { await c.query("SELECT set_config('app.hon_external_subject',$1,true)", [o.subject]); return (await c.query('SELECT hon.prepare_hon_reply($1,$2::uuid,$3::uuid,true) d', [o.subject, turnId, planned.plan.id])).rows[0].d; });
+    } finally { await add(CAP[agent]); }
+    const r = await row('SELECT status, reason, reserved_credits FROM hon.hon_reply_invocations WHERE turn_id=$1', [turnId]);
+    assert.deepEqual([prepared, r.status, r.reason, r.reserved_credits, fakes.hon.calls - calls], [null, 'BLOCKED', 'SOURCE_ACCESS_REFUSED', 0, 0], agent);
+  }
+  // 5. A lapse after completion conceals the answer (each permission the facts used); usage evidence stays.
+  for (const [agent, perm] of [['jordan', 'schedule.session.manage'], ['lena', 'marketing.campaign.read'], ['alex', 'reporting.view'], ['alex', 'schedule.session.manage']]) {
+    await drop(perm);
+    try {
+      const hidden = (await hon.read(scope, conv.id)).turns.find((t) => t.turnId === answered[agent].turn.turnId && t.role === agent);
+      assert.deepEqual([hidden.text, hidden.reason], [null, 'RESULT_CONCEALED'], `${agent} without ${perm}`);
+    } finally { await add(perm); }
+    assert.ok((await row('SELECT usage_id FROM hon.hon_reply_invocations WHERE turn_id=$1', [answered[agent].turn.turnId])).usage_id, 'usage evidence stays');
+  }
+  assert.equal((await hon.read(scope, conv.id)).turns.find((t) => t.turnId === answered.jordan.turn.turnId && t.role === 'jordan').text, fakes.hon.reply, 'shown again once restored');
+  // 6. Never continued, confirmed from a suggestion, given a target, or empty.
+  for (const [bad, expected] of [[{ text: 'x', delegation: { agentKey: 'jordan' }, fromSuggestionTurnId: answered.jordan.turn.turnId }, 'HON_SUGGESTION_NOT_CONFIRMABLE'],
+    [{ text: 'Continue', delegation: null, continueTurnId: answered.lena.turn.turnId }, 'HON_REPLY_NOT_CONTINUABLE'],
+    [{ text: 'Plan it', delegation: { agentKey: 'lena', campaignId: K() } }, 'HON_DELEGATION_REQUIRED'],
+    [{ text: '  ', delegation: { agentKey: 'alex' } }, 'INVALID_HON_TURN']]) {
+    assert.equal((await settle(tenant(context(o), (c) => c.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4)', [o.subject, conv.id, JSON.stringify(bad), K()])))).error?.message, expected, JSON.stringify(bad));
+  }
+  // 7. Table and planner rules.
+  assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET reply_mode='STANDARD' WHERE turn_id=$1", [answered.jordan.turn.turnId]))).error?.code ?? 'OK', '23514');
+  assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{marcus}' WHERE turn_id=$1", [answered.lena.turn.turnId]))).error?.code ?? 'OK', '23514');
+  assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET source_permissions='{billing.membership.read}' WHERE turn_id=$1", [answered.alex.turn.turnId]))).error?.code ?? 'OK', '23514');
+  assert.deepEqual((await row("SELECT hon.ai_agent_capability_permission('alex') a, hon.ai_agent_capability_permission('jordan') j, hon.ai_agent_capability_permission('lena') l")), { a: 'reporting.view', j: 'schedule.session.manage', l: 'marketing.campaign.read' });
+  assert.equal((await row("SELECT count(*)::int n FROM pg_constraint WHERE conname='ai_invocation_plans_specialists_analysis_only' AND convalidated")).n, 1);
+  for (const f of ['hon_school_operations_facts(uuid,uuid,timestamptz)', 'hon_school_creative_commerce_facts(uuid,uuid,timestamptz)', 'read_specialist_school_facts(text,text,uuid,uuid)']) {
+    assert.equal((await row(`SELECT has_function_privilege($1, 'hon.${f}', 'EXECUTE') x`, [runtimeRole])).x, false, `${f} is internal`);
+  }
+  // 8. Readiness lists each with its own capability.
+  const ready = (await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data.agents;
+  assert.deepEqual(ready.filter((x) => ['alex', 'jordan', 'lena'].includes(x.agentKey)).map((x) => [x.agentKey, x.agent, x.authorized, x.requestCredits]),
+    [['alex', 'GENERAL_MANAGEMENT', true, 15], ['jordan', 'OPERATIONS', true, 15], ['lena', 'CREATIVE_COMMERCE', true, 15]]);
+  await drop('schedule.session.manage');
+  try {
+    const r8 = (await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data.agents;
+    assert.deepEqual(['alex', 'jordan', 'lena'].map((k) => r8.find((x) => x.agentKey === k).blockedBy), [null, 'NOT_AUTHORIZED', null]);
+  } finally { await add('schedule.session.manage'); }
+  pass('INV-36', "0260: Alex (general management, reporting.view), Jordan (operations, schedule.session.manage) and Lena (creative & commerce, marketing.campaign.read) each answer a question in text from their own aggregate school facts (planned as <agent>/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays; no record names); Alex's operations and commerce sections follow those permissions; each is refused at begin without its capability (nothing recorded) and blocked in prepare on a lapse (nothing reserved or sent); answers are concealed when any permission their facts used lapses while usage evidence stays; HON sees their turns without their text; never continued, confirmed from suggestions or given a target; rows are single DETAILED analyses, source permissions are a closed set, plans are ANALYZE only, the fact readers are internal; readiness lists GENERAL_MANAGEMENT, OPERATIONS and CREATIVE_COMMERCE gated on each capability");
+  }
+
+  // ---- INV-32 (R1, 0287): routing by task class through the HQ task profile ----
+  {
+  const o = await makeOrg('inv-32');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const conv = await hon.create(scope, { title: 'Routing' }, K());
+  // Five synthetic catalog models on this school's policy only (ordinals after the shared baseline model at 0).
+  const m = {};
+  for (const [name, cost, privacy] of [['standard', 1, []], ['detailed', 3, []], ['fallback', 1, ['NO_TRAINING', 'ZERO_RETENTION']], ['advanced', 1, []], ['business', 2, []]]) {
+    m[name] = K();
+    await admin.query("INSERT INTO hon.hq_ai_model_catalog(catalog_id,provider_id,model_id,display_name,capabilities,modalities,privacy_controls,active,minimum_tier,unit_cost_micros,cost_unit,effective_from) VALUES($1,'OPENROUTER',$2,'AI-0 routing model',ARRAY['TEXT'],ARRAY['TEXT'],$3,true,'COMPLETE',$4,'TOKEN','2020-01-01')", [m[name], `test/${name}`, privacy, cost]);
+    await admin.query('INSERT INTO hon.hq_ai_routing_candidates(policy_id,ordinal,catalog_id) VALUES($1,(SELECT max(ordinal)+1 FROM hon.hq_ai_routing_candidates WHERE policy_id=$1),$2)', [o.policy, m[name]]);
+  }
+  const profile = async (agentKey, taskCategory, defaultId, fallbacks = [], advanced = null, patch = {}) => {
+    const id = K();
+    const p = { maxCostMicros: 80000, allowedProviderIds: ['OPENROUTER'], privacyControls: [], active: true, from: '2020-01-01', until: null, ...patch };
+    await admin.query(`INSERT INTO hon.hq_ai_task_profiles(profile_id,routing_policy_id,agent_key,task_category,cost_unit,active,max_cost_micros,required_capabilities,required_modalities,allowed_provider_ids,privacy_controls,timeout_category,retry_category,effective_from,effective_until)
+      VALUES($1,$2,$3,$4,'TOKEN',$5,$6,ARRAY['TEXT'],ARRAY['TEXT'],$7,$8,'STANDARD','NONE',$9,$10)`, [id, o.policy, agentKey, taskCategory, p.active, p.maxCostMicros, p.allowedProviderIds, p.privacyControls, p.from, p.until]);
+    const cands = [['DEFAULT', 0, defaultId], ...fallbacks.map((f, i) => ['FALLBACK', i + 1, f]), ...(advanced ? [['ADVANCED', 0, advanced]] : [])];
+    for (const [selection, ordinal, catalogId] of cands) await admin.query('INSERT INTO hon.hq_ai_task_profile_candidates(profile_id,routing_policy_id,selection,ordinal,catalog_id) VALUES($1,$2,$3,$4,$5)', [id, o.policy, selection, ordinal, catalogId]);
+    return id;
+  };
+  const dropProfiles = async () => { await admin.query('DELETE FROM hon.hq_ai_task_profile_candidates WHERE routing_policy_id=$1', [o.policy]); await admin.query('DELETE FROM hon.hq_ai_task_profiles WHERE routing_policy_id=$1', [o.policy]); };
+  const routed = async (turn) => row(`SELECT p.model_id, p.route_selection, p.task_profile_id, p.task_profile_version, r.status, r.reason FROM hon.hon_reply_invocations r
+    LEFT JOIN hon.ai_invocation_plans p ON p.id = r.plan_id WHERE r.turn_id=$1`, [turn.turnId]);
+  const ask = async (replyMode = 'STANDARD', extra = {}) => routed(await hon.sendTurn(scope, conv.id, { text: `Routing question ${K()}`, delegation: null, replyMode, ...extra }, K()));
+  const callsBefore = fakes.hon.calls;
+  // 1. No task profile: the legacy policy order (shared baseline model at ordinal 0), recorded as POLICY_ORDER.
+  assert.deepEqual(await ask(), { model_id: 'approved/ai0-baseline', route_selection: 'POLICY_ORDER', task_profile_id: null, task_profile_version: null, status: 'COMPLETED', reason: null });
+  // 2. HON Standard and HON Detailed each use their own profile's default.
+  const std = await profile('hon', 'HON_STANDARD', m.standard, [m.fallback], m.advanced);
+  const det = await profile('hon', 'HON_DETAILED', m.detailed, [m.standard]);
+  assert.deepEqual(await ask('STANDARD'), { model_id: 'test/standard', route_selection: 'PROFILE_DEFAULT', task_profile_id: std, task_profile_version: 1, status: 'COMPLETED', reason: null });
+  assert.deepEqual(await ask('DETAILED'), { model_id: 'test/detailed', route_selection: 'PROFILE_DEFAULT', task_profile_id: det, task_profile_version: 1, status: 'COMPLETED', reason: null });
+  // 3. Claire's analysis routes by BUSINESS_PERFORMANCE, not by HON's Detailed profile.
+  const bp = await profile('claire', 'BUSINESS_PERFORMANCE', m.business);
+  assert.deepEqual(await routed(await hon.sendTurn(scope, conv.id, { text: 'How is retention?', delegation: { agentKey: 'claire' } }, K())),
+    { model_id: 'test/business', route_selection: 'PROFILE_DEFAULT', task_profile_id: bp, task_profile_version: 1, status: 'COMPLETED', reason: null });
+  // 4. Default ineligible -> the first eligible fallback (never the advanced model, never the policy order).
+  const fallbackCases = [
+    ['default catalog inactive', () => admin.query('UPDATE hon.hq_ai_model_catalog SET active=false WHERE catalog_id=$1', [m.standard]), () => admin.query('UPDATE hon.hq_ai_model_catalog SET active=true WHERE catalog_id=$1', [m.standard])],
+    ['default over the profile cost ceiling', () => admin.query('UPDATE hon.hq_ai_model_catalog SET unit_cost_micros=9 WHERE catalog_id=$1', [m.standard]), () => admin.query('UPDATE hon.hq_ai_model_catalog SET unit_cost_micros=1 WHERE catalog_id=$1', [m.standard])],
+    ['default lacks a required privacy control', () => admin.query("UPDATE hon.hq_ai_task_profiles SET privacy_controls=ARRAY['ZERO_RETENTION'] WHERE profile_id=$1", [std]), () => admin.query("UPDATE hon.hq_ai_task_profiles SET privacy_controls='{}' WHERE profile_id=$1", [std])],
+  ];
+  for (const [label, apply, undo] of fallbackCases) {
+    await apply();
+    try {
+      assert.deepEqual(await ask('STANDARD'), { model_id: 'test/fallback', route_selection: 'PROFILE_FALLBACK', task_profile_id: std, task_profile_version: 1, status: 'COMPLETED', reason: null }, label);
+    } finally { await undo(); }
+  }
+  // 5. A profile with no eligible candidate refuses the route: nothing planned, reserved or called (no escape to policy order).
+  const refusals = [
+    ['every candidate inactive', () => admin.query('UPDATE hon.hq_ai_model_catalog SET active=false WHERE catalog_id=ANY($1)', [[m.standard, m.fallback]]), () => admin.query('UPDATE hon.hq_ai_model_catalog SET active=true WHERE catalog_id=ANY($1)', [[m.standard, m.fallback]])],
+    ['provider not allowed by the profile', () => admin.query("UPDATE hon.hq_ai_task_profiles SET allowed_provider_ids=ARRAY['DIRECT_LLM_API'] WHERE profile_id=$1", [std]), () => admin.query("UPDATE hon.hq_ai_task_profiles SET allowed_provider_ids=ARRAY['OPENROUTER'] WHERE profile_id=$1", [std])],
+    ['profile ceiling below every candidate', () => admin.query('UPDATE hon.hq_ai_task_profiles SET max_cost_micros=100 WHERE profile_id=$1', [std]), () => admin.query('UPDATE hon.hq_ai_task_profiles SET max_cost_micros=80000 WHERE profile_id=$1', [std])],
+    ['two active profiles for the same task', async () => { await profile('hon', 'HON_STANDARD', m.fallback); }, async () => {
+      const extra = (await rows("SELECT profile_id FROM hon.hq_ai_task_profiles WHERE routing_policy_id=$1 AND task_category='HON_STANDARD' AND profile_id<>$2", [o.policy, std])).map((r) => r.profile_id);
+      await admin.query('DELETE FROM hon.hq_ai_task_profile_candidates WHERE profile_id=ANY($1)', [extra]);
+      await admin.query('DELETE FROM hon.hq_ai_task_profiles WHERE profile_id=ANY($1)', [extra]);
+    }],
+  ];
+  for (const [label, apply, undo] of refusals) {
+    await apply();
+    const calls = fakes.hon.calls;
+    try {
+      assert.deepEqual(await ask('STANDARD'), { model_id: null, route_selection: null, task_profile_id: null, task_profile_version: null, status: 'BLOCKED', reason: 'NO_ELIGIBLE_ROUTE' }, label);
+      assert.equal(fakes.hon.calls, calls, `${label}: no provider call`);
+    } finally { await undo(); }
+  }
+  // 6. An inactive, expired or not-yet-effective profile is not a routing profile: the legacy order applies again.
+  for (const [label, sql] of [['inactive', 'UPDATE hon.hq_ai_task_profiles SET active=false WHERE profile_id=$1'],
+    ['expired', "UPDATE hon.hq_ai_task_profiles SET effective_from='2020-01-01', effective_until=clock_timestamp()-interval '1 minute' WHERE profile_id=$1"],
+    ['future', "UPDATE hon.hq_ai_task_profiles SET effective_from=clock_timestamp()+interval '1 day', effective_until=NULL WHERE profile_id=$1"]]) {
+    await admin.query(sql, [std]);
+    assert.deepEqual(await ask('STANDARD'), { model_id: 'approved/ai0-baseline', route_selection: 'POLICY_ORDER', task_profile_id: null, task_profile_version: null, status: 'COMPLETED', reason: null }, label);
+    await admin.query("UPDATE hon.hq_ai_task_profiles SET active=true, effective_from='2020-01-01', effective_until=NULL WHERE profile_id=$1", [std]);
+  }
+  // 7. The category is code-owned and closed; plan routing columns are as immutable as the rest of the plan.
+  assert.deepEqual((await rows("SELECT a, t, hon.ai_route_task_category(a, t) c FROM (VALUES ('hon','SUMMARIZE'),('hon','ANALYZE'),('claire','ANALYZE'),('marcus','DRAFT_MARKETING'),('chad','DRAFT_FOLLOW_UP'),('kai','DRAFT_TEACHING'),('claire','DRAFT_TEACHING'),('hon','DRAFT_MARKETING'),('maya','SUMMARIZE')) v(a,t) ORDER BY 1,2")).map((r) => `${r.a}/${r.t}=${r.c}`),
+    ['chad/DRAFT_FOLLOW_UP=CHAD_SALES', 'claire/ANALYZE=BUSINESS_PERFORMANCE', 'claire/DRAFT_TEACHING=null', 'hon/ANALYZE=HON_DETAILED', 'hon/DRAFT_MARKETING=null', 'hon/SUMMARIZE=HON_STANDARD', 'kai/DRAFT_TEACHING=KAI_TEACHING', 'marcus/DRAFT_MARKETING=MARCUS_MARKETING', 'maya/SUMMARIZE=null']);
+  await assert.rejects(admin.query("UPDATE hon.ai_invocation_plans SET route_selection='POLICY_ORDER' WHERE task_profile_id=$1", [std]), /immutable/);
+  // 8. The HQ owner can write a HON task profile through the reviewed HQ control plane (new agent keys and categories accepted).
+  await dropProfiles();
+  const hqProfile = K();
+  const write = await row('SELECT hon.hq_ai_control_plane_write($1,$2,$3::jsonb,$4::uuid,$5::uuid) AS data', [hq.subject, 'TASK_PROFILE', JSON.stringify({
+    profileId: hqProfile, routingPolicyId: o.policy, agentKey: 'hon', taskCategory: 'HON_STANDARD', costUnit: 'TOKEN', active: true, maxCostMicros: 80000,
+    defaultCatalogId: m.standard, fallbackCatalogIds: [m.fallback], advancedCatalogId: null, requiredCapabilities: ['TEXT'], requiredModalities: ['TEXT'],
+    allowedProviderIds: ['OPENROUTER'], privacyControls: [], timeoutCategory: 'STANDARD', retryCategory: 'NONE', effectiveFrom: '2020-01-01T00:00:00.000Z', effectiveUntil: null, expectedVersion: 0 }), K(), K()]);
+  assert.equal(write.data.replayed ?? false, false, JSON.stringify(write.data));
+  assert.deepEqual(await ask('STANDARD'), { model_id: 'test/standard', route_selection: 'PROFILE_DEFAULT', task_profile_id: hqProfile, task_profile_version: 1, status: 'COMPLETED', reason: null });
+  assert.ok(fakes.hon.calls > callsBefore);
+  pass('INV-32', 'R1: the planner routes by a code-owned task category (hon Standard/Detailed, Claire business performance, Marcus, Chad, Kai) through the single active effective HQ task profile on the school policy: its default, else the first eligible fallback (never advanced), each also inside the profile cost ceiling, provider list and privacy controls; no profile (or an inactive/expired/future one) keeps the legacy policy order; a profile with no eligible candidate or two active profiles refuse the route with no reservation or call; the profile and selection are recorded immutably on the plan; the HQ owner writes HON task profiles through the control plane');
+  }
+
+  // ---- INV-38 (R2, 0288): per-school internal AI cost ceiling, HQ levels and single-school pause ----
+  {
+  const o = await makeOrg('inv-38'), other = await makeOrg('inv-38-other');
+  const scopeOf = (x) => ({ organizationId: x.id, schoolId: x.school, principalId: x.principal, externalSubject: x.subject });
+  const conversations = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const convs = new Map();
+  const ask = async (x = o) => {
+    if (!convs.has(x.id)) convs.set(x.id, (await conversations.create(scopeOf(x), { title: 'Cost' }, K())).id);
+    const turns = async () => (await row('SELECT count(*)::int n FROM hon.hon_conversation_turns WHERE conversation_id=$1', [convs.get(x.id)])).n;
+    const n = await turns();
+    const r = await settle(conversations.sendTurn(scopeOf(x), convs.get(x.id), { text: `Cost question ${K()}`, delegation: null }, K()));
+    // A refusal at the turn's start records nothing (the existing S4 begin behavior for an HQ pause).
+    if (r.error?.getResponse?.().code === 'HON_AI_SPEND_REFUSED') { assert.equal(await turns(), n, 'refused before any turn'); return { refused: r.error.getResponse().reason }; }
+    if (r.error) throw r.error;
+    return row('SELECT status, reason, reserved_credits::int AS reserved FROM hon.hon_reply_invocations WHERE turn_id=$1', [r.value.turnId]);
+  };
+  const committedCost = async (x = o) => Number((await row('SELECT hon.ai_school_committed_cost_micros($1,$2,clock_timestamp()) n', [x.id, x.school])).n);
+  const cmdSql = 'SELECT hon.command_ai_school_cost_limit($1,$2::jsonb,$3::uuid) r';
+  const limit = (patch = {}, x = o) => ({ schoolId: x.school, ceilingMicros: 15000000, paused: false, reason: 'Synthetic HQ cost limit change', expectedVersion: 0, ...patch });
+  const command = async (input, key = K(), subject = hq.subject) => (await admin.query(cmdSql, [subject, JSON.stringify(input), key])).rows[0].r;
+  const status = async (x = o) => (await row('SELECT hon.read_ai_school_cost_limits_from_hq($1) r', [hq.subject])).r.schools.find((s) => s.schoolId === x.school);
+  const errCode = async (p) => { const r = await settle(p); return r.error ? `${r.error.code}:${r.error.message}` : 'OK'; };
+  // 1. Default for a paying (non-trial) school: no ceiling (owner 2026-11-12: conversations are not capped), no record;
+  //    a question completes and its verified cost (900) is counted. The $15 trial default is proven in the trial runtime
+  //    proof (it needs a live trial).
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null, reserved: 0 });
+  assert.equal(await committedCost(), 900);
+  let s = await status();
+  assert.deepEqual([s.ceilingMicros, s.defaultCeiling, s.paused, s.version, s.recordedCostMicros, s.committedCostMicros, s.level, s.usedBasisPoints], [null, true, false, 0, 900, 900, 'NO_CEILING', null]);
+  assert.equal(s.trial, false);
+  assert.deepEqual((await rows('SELECT hon.ai_school_trial_default_ceiling_micros() t, hon.ai_school_default_ceiling_for($1,clock_timestamp()) o, hon.ai_school_cost_level(999999999,NULL) l', [o.id]))[0],
+    { t: '15000000', o: null, l: 'NO_CEILING' });
+  // 2. Levels: 75%, 90%, 100% of the ceiling (pure and as HQ reads them).
+  assert.deepEqual((await rows('SELECT hon.ai_school_cost_level(c,1000) l FROM unnest(ARRAY[0,749,750,899,900,999,1000,5000]::bigint[]) c')).map((r) => r.l),
+    ['NORMAL', 'NORMAL', 'WARNING_75', 'WARNING_75', 'WARNING_90', 'WARNING_90', 'CEILING_REACHED', 'CEILING_REACHED']);
+  let v = (await command(limit({ ceilingMicros: 1200 }))).version;
+  s = await status(); assert.deepEqual([s.level, s.usedBasisPoints, s.defaultCeiling, s.version], ['WARNING_75', 7500, false, 1]);
+  v = (await command(limit({ ceilingMicros: 1000, expectedVersion: v }))).version;
+  assert.equal((await status()).level, 'WARNING_90');
+  // 3. Under the ceiling a question still runs; once the verified cost reaches it the next one is refused before any
+  //    reservation or provider call (reason AI_PAUSED_BY_HQ), while another organization's school is unaffected.
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null, reserved: 0 });
+  assert.equal(await committedCost(), 1800);
+  assert.equal((await status()).level, 'CEILING_REACHED');
+  let calls = fakes.hon.calls;
+  assert.deepEqual(await ask(), { refused: 'AI_PAUSED_BY_HQ' });
+  assert.equal(fakes.hon.calls, calls, 'no provider call at the ceiling');
+  const marcusRefusal = await settle(agents.marcus.service.submit(context(o), agents.marcus.input(o)));
+  assert.equal(marcusRefusal.error?.getStatus?.(), 403, 'specialists are refused at begin too');
+  assert.match(JSON.stringify(marcusRefusal.error.getResponse()), /AI_PAUSED_BY_HQ|FORBIDDEN|REFUSED/, JSON.stringify(marcusRefusal.error.getResponse()));
+  assert.equal((await row('SELECT count(*)::int n FROM hon.marketing_ai_invocations WHERE organization_id=$1', [o.id])).n, 0, 'nothing recorded for the refused request');
+  assert.deepEqual(await ask(other), { status: 'COMPLETED', reason: null, reserved: 0 });
+  const readiness = await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scopeOf(o));
+  assert.match(JSON.stringify(readiness), /AI_PAUSED_BY_HQ/, 'readiness reports the refusal');
+  // 4. Raising the ceiling restores AI at once.
+  v = (await command(limit({ ceilingMicros: 15000000, expectedVersion: v }))).version;
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null, reserved: 0 });
+  // 5. In-flight holds count at their plan maximum (80,000) until they are recorded.
+  fakes.hon.mode = 'HOLD';
+  const before = await committedCost();
+  const pending = settle(ask());
+  for (const end = Date.now() + 10000; (await row("SELECT count(*)::int n FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).n < 1; await sleep(20)) {
+    if (Date.now() > end) throw new Error('INV-38: hold never started');
+  }
+  assert.equal(await committedCost(), before + 80000, 'a hold counts at its plan maximum');
+  fakes.hon.complete(); fakes.hon.mode = 'RESULT';
+  assert.equal((await pending).value.status, 'COMPLETED');
+  assert.equal(await committedCost(), before + 900);
+  // 6. Defense in depth: the reserve guard refuses a hold for a school at its ceiling even outside the prepare path.
+  v = (await command(limit({ ceilingMicros: 0, expectedVersion: v }))).version;
+  const raw = await row("SELECT id FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='COMPLETED' LIMIT 1", [o.id]);
+  assert.match(await errCode(admin.query('UPDATE hon.hon_reply_invocations SET reserved_credits=reserved_credits+1 WHERE id=$1', [raw.id])), /AI_PAUSED_BY_HQ|immutable|IMMUTABLE/);
+  // 7. Single-school pause (agent and creative classes) and resume, with the reason kept.
+  v = (await command(limit({ ceilingMicros: 15000000, paused: true, reason: 'Synthetic school pause for review', expectedVersion: v }))).version;
+  s = await status(); assert.deepEqual([s.paused, s.reason, s.version], [true, 'Synthetic school pause for review', v]);
+  assert.deepEqual(await ask(), { refused: 'AI_PAUSED_BY_HQ' });
+  assert.deepEqual((await row("SELECT set_config('app.hon_school_id',$2,true) x, hon.ai_spend_allowed($1,clock_timestamp(),'CREATIVE_MEDIA') c, hon.ai_spend_allowed($1,clock_timestamp(),'HQ_INTERNAL') h", [o.id, o.school])), { x: o.school, c: 'AI_PAUSED_BY_HQ', h: null });
+  // The row's own school decides, with no session school (SaaS school paths forbid app.hon_school_id): the explicit
+  // decision, the agent begin guard, the B3 credit reservation guard and the creative wallet reservation guard.
+  const ownSchool = async () => {
+    const d = await row("SELECT coalesce(current_setting('app.hon_school_id',true),'') x, hon.ai_spend_allowed($1,$2::uuid,clock_timestamp(),'CREATIVE_MEDIA') c, hon.ai_spend_allowed($1,$2::uuid,clock_timestamp(),'HQ_INTERNAL') h", [o.id, o.school]);
+    const out = [d.x, d.c, d.h];
+    for (const table of ['marketing_ai_invocations', 'saas_credit_reservations', 'saas_creative_reservations'])
+      out.push(await errCode(admin.query(`INSERT INTO hon.${table}(organization_id, school_id) VALUES ($1,$2)`, [o.id, o.school])));
+    return out;
+  };
+  assert.deepEqual(await ownSchool(), ['', 'AI_PAUSED_BY_HQ', null, '42501:AI_PAUSED_BY_HQ', '42501:AI_PAUSED_BY_HQ', '23514:SAAS_CREATIVE_AI_PAUSED_BY_HQ']);
+  v = (await command(limit({ paused: false, expectedVersion: v }))).version;
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null, reserved: 0 });
+  const resumed = await ownSchool();
+  assert.deepEqual(resumed.slice(0, 3), ['', null, null]);
+  for (const e of resumed.slice(3)) assert.doesNotMatch(e, /PAUSED_BY_HQ/, 'a resumed school passes the guards (the bare row then fails its own constraints)');
+  // 8. The command: HQ owner only, exact shape, versioned, idempotent; its log and the limits are immutable.
+  assert.equal(await errCode(command(limit({ expectedVersion: v }), K(), o.subject)), '42501:SAAS_FORBIDDEN');
+  assert.equal(await errCode(command(limit({ expectedVersion: v - 1 }))), '40001:SAAS_VERSION_CONFLICT');
+  for (const bad of [{ reason: 'short' }, { ceilingMicros: -1 }, { ceilingMicros: 1000000001 }, { ceilingMicros: 1.5 }, { paused: 'no' }, { schoolId: 'school' }, { organizationId: o.id }])
+    assert.match(await errCode(command(limit({ expectedVersion: v, ...bad }))), /^22023:/, JSON.stringify(bad));
+  assert.equal(await errCode(command(limit({ schoolId: K(), expectedVersion: 0 }))), 'P0002:AI_SCHOOL_NOT_FOUND');
+  const key = K(), input = limit({ ceilingMicros: 14000000, expectedVersion: v });
+  const first = await command(input, key);
+  assert.deepEqual(await command(input, key), { ...first, replayed: true });
+  assert.equal(await errCode(command({ ...input, ceilingMicros: 13000000 }, key)), '23505:AI_SCHOOL_COST_LIMIT_KEY_REUSED');
+  assert.equal((await row('SELECT count(*)::int n FROM hon.ai_school_cost_limit_commands WHERE school_id=$1', [o.school])).n, 7);
+  assert.match(await errCode(admin.query('DELETE FROM hon.ai_school_cost_limit_commands WHERE school_id=$1', [o.school])), /IMMUTABLE/);
+  assert.match(await errCode(admin.query('DELETE FROM hon.ai_school_cost_limits WHERE school_id=$1', [o.school])), /IMMUTABLE/);
+  assert.match(await errCode(admin.query('UPDATE hon.ai_school_cost_limits SET paused=true WHERE school_id=$1', [o.school])), /IMMUTABLE/, 'only the command bumps the version');
+  // 9. Only the two HQ entry points reach the runtime; the helpers and tables do not.
+  const acl = await rows(`SELECT p.oid::regprocedure::text f, has_function_privilege($1,p.oid,'EXECUTE') x FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace
+    AND p.proname IN ('command_ai_school_cost_limit','read_ai_school_cost_limits_from_hq','ai_school_spend_decision','ai_school_committed_cost_micros','ai_org_spend_allowed','ai_school_cost_level') ORDER BY 1`, [runtimeRole]);
+  assert.deepEqual(acl.map((a) => `${a.f}=${a.x}`), ['hon.ai_org_spend_allowed(uuid,timestamp with time zone,text)=false', 'hon.ai_school_committed_cost_micros(uuid,uuid,timestamp with time zone)=false',
+    'hon.ai_school_cost_level(bigint,bigint)=false', 'hon.ai_school_spend_decision(uuid,uuid,timestamp with time zone,text)=false',
+    'hon.command_ai_school_cost_limit(text,jsonb,uuid)=true', 'hon.read_ai_school_cost_limits_from_hq(text)=true']);
+  assert.equal((await row("SELECT has_table_privilege($1,'hon.ai_school_cost_limits','SELECT') OR has_table_privilege($1,'hon.ai_school_cost_limit_commands','SELECT') x", [runtimeRole])).x, false);
+  pass('INV-38', 'R2: each school may have an internal monthly agent-AI cost ceiling (none by default for a paying school, $15 on a live trial, HQ-owner editable, versioned, idempotent, immutable command log) counted as verified ledger cost plus every counting hold at its plan maximum; HQ reads NO_CEILING/NORMAL/WARNING_75/WARNING_90/CEILING_REACHED per school; at the ceiling new work is refused before any reservation or provider call (HON prepare, specialist begin, readiness, reserve guard) as AI_PAUSED_BY_HQ while other schools are unaffected and a raised ceiling restores it at once; an HQ single-school pause covers agent and creative AI; only the HQ command and read reach the runtime');
+  }
+
+  // ---- INV-39 (0310): a paying organization has no organization agent budget ----
+  {
+  const o = await makeOrg('inv-39', { orgCeiling: null });
+  const scopeOf = (x) => ({ organizationId: x.id, schoolId: x.school, principalId: x.principal, externalSubject: x.subject });
+  const conversations = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const conv = (await conversations.create(scopeOf(o), { title: 'No ceiling' }, K())).id;
+  const ask = async () => {
+    const r = await settle(conversations.sendTurn(scopeOf(o), conv, { text: `No ceiling question ${K()}`, delegation: null }, K()));
+    if (r.error?.getResponse?.().code === 'HON_AI_SPEND_REFUSED') return { refused: r.error.getResponse().reason };
+    if (r.error) throw r.error;
+    return row('SELECT status, reason FROM hon.hon_reply_invocations WHERE turn_id=$1', [r.value.turnId]);
+  };
+  const ceilings = async () => row('SELECT hon.ai_org_ceiling($1,clock_timestamp()) c, hon.ai_org_display_ceiling($1,clock_timestamp()) d, hon.ai_org_no_ceiling_units() n', [o.id]);
+  // 1. No override: no ceiling, shown as the no-ceiling value to HQ and readiness.
+  assert.deepEqual(await ceilings(), { c: 2147483647, d: 2147483647, n: 2147483647 });
+  const ready = (await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scopeOf(o))).data;
+  assert.equal(ready.agentBudget.ceilingCredits, 2147483647);
+  // 2. Past the former 12,000-unit budget, HON still answers (one provider call, nothing refused).
+  await setUsed(o, 12000);
+  const callsBefore = fakes.hon.calls;
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null });
+  assert.equal(fakes.hon.calls, callsBefore + 1);
+  assert(Number((await row('SELECT hon.ai_org_committed_credits($1,clock_timestamp()) n', [o.id])).n) > 12000, 'committed passed 12,000');
+  // 3. The migration-owner override still restores a ceiling at once (refused before any provider call), and removing it lifts it.
+  await admin.query("INSERT INTO hon.ai_org_agent_ceiling_overrides(organization_id,ceiling_units,reason) VALUES($1,12000,'AI-0 operator backstop check')", [o.id]);
+  assert.equal((await ceilings()).c, 12000);
+  const calls2 = fakes.hon.calls;
+  const blocked = await ask();
+  assert.equal(blocked.status, 'BLOCKED'); assert.match(blocked.reason, /BUDGET|NO_ELIGIBLE_ROUTE/, 'the planner or prepare refuses at the organization ceiling (as INV-26)');
+  assert.equal(fakes.hon.calls, calls2, 'no provider call when the override is reached');
+  await admin.query('DELETE FROM hon.ai_org_agent_ceiling_overrides WHERE organization_id=$1', [o.id]);
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null });
+  // 4. The override table and helpers never reach the runtime.
+  assert.equal((await row("SELECT has_table_privilege($1,'hon.ai_org_agent_ceiling_overrides','SELECT') OR has_table_privilege($1,'hon.ai_org_agent_ceiling_overrides','INSERT') x", [runtimeRole])).x, false);
+  for (const f of ['hon.ai_org_no_ceiling_units()', 'hon.ai_org_paid_ceiling(uuid)'])
+    assert.equal((await row('SELECT has_function_privilege($1,$2,\'EXECUTE\') x', [runtimeRole, f])).x, false, f);
+  assert.deepEqual((await row("SELECT relrowsecurity r, relforcerowsecurity f FROM pg_class WHERE oid='hon.ai_org_agent_ceiling_overrides'::regclass")), { r: true, f: true });
+  pass('INV-39', '0310: an organization a trial does not own has no organization agent budget (ceiling and display read the no-ceiling value 2,147,483,647; readiness shows it); past the former 12,000 units HON still answers with one provider call; a migration-owner override restores a ceiling at once (refused at plan or prepare before any provider call) and removing it lifts it; the override table (forced RLS) and helpers never reach the runtime');
+  }
+
+  // ---- INV-37 (0284): Maya answers about one at-risk student from that student's 0259 factors only ----
+  {
+  const o = await makeOrg('inv-37');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const code = async (p) => { const r = await settle(p); return r.error?.getResponse?.().code ?? r.error?.code ?? r.error?.message ?? 'OK'; };
+  const turnsOf = async (id) => (await row('SELECT count(*)::int n FROM hon.hon_conversation_turns WHERE conversation_id=$1', [id])).n;
+  const drop = (perm) => admin.query('DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code=$2', [o.role, perm]);
+  const add = (perm) => admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3)', [o.role, o.id, perm]);
+  // Synthetic students (fixture rows only; triggers off while seeding): Quinn joined 20 days ago and never attended
+  // (LONG_ABSENCE 30, on the list); Riley joined today (not on the list). Another organization's membership for refusals.
+  const seed = async (org, school, given, started, ends = '4800 hours') => {
+    const person = K(), account = K(), membership = K();
+    await admin.query("INSERT INTO hon.people(id,organization_id,school_id,given_name,family_name,email,phone_e164) VALUES($1,$2,$3,$4,'Synthetic','maya-ai0@example.test','+15550000001')", [person, org, school, given]);
+    await admin.query('INSERT INTO hon.student_profiles(organization_id,school_id,person_id) VALUES($1,$2,$3)', [org, school, person]);
+    await admin.query('INSERT INTO hon.billing_accounts(id,organization_id,school_id,responsible_person_id) VALUES($1,$2,$3,$4)', [account, org, school, person]);
+    await admin.query(`INSERT INTO hon.memberships(id,organization_id,school_id,billing_account_id,participant_person_id,plan_code,state,term_started_at,term_ends_at)
+      VALUES($1,$2,$3,$4,$5,'MONTHLY','ACTIVE',clock_timestamp()-$6::interval,clock_timestamp()+$7::interval)`, [membership, org, school, account, person, started, ends]);
+    return membership;
+  };
+  const other = await makeOrg('inv-37-other');
+  await admin.query('BEGIN'); await admin.query('ALTER TABLE hon.memberships DISABLE TRIGGER USER');
+  const quinn = await seed(o.id, o.school, 'Quinn', '480 hours'), riley = await seed(o.id, o.school, 'Riley', '1 hour'), foreign = await seed(other.id, other.school, 'Sam', '480 hours');
+  await admin.query('ALTER TABLE hon.memberships ENABLE TRIGGER USER'); await admin.query('COMMIT');
+  const conv = await hon.create(scope, { title: 'Maya check-ins' }, K());
+  const ask = (membershipId, key = K(), text = 'Why is this student at risk?') => hon.sendTurn(scope, conv.id, { text, delegation: { agentKey: 'maya', membershipId } }, key);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  // 1. One call, planned as maya/ANALYZE, the student's factors only (no name, contact or record text); resend replays.
+  const before = fakes.hon.calls, key = K();
+  const a = await ask(quinn, key);
+  assert.deepEqual([a.status, a.delegatedAgentKeys, a.reply, a.replyDetail.mode, a.replyDetail.step, a.replyDetail.canContinue, a.replyDetail.suggestions],
+    ['COMPLETED', ['maya'], fakes.hon.reply, 'DETAILED', 1, false, []], JSON.stringify(a));
+  assert.equal(fakes.hon.calls - before, 1);
+  const input = fakes.hon.inputs.at(-1);
+  assert.deepEqual([input.specialist, input.replyMode, input.step, input.question], ['maya', 'DETAILED', 1, 'Why is this student at risk?']);
+  const facts = JSON.parse(input.facts).school;
+  assert.deepEqual(Object.keys(JSON.parse(input.facts)), ['school'], 'own facts only, no history');
+  assert.deepEqual([facts.tuitionChecked, facts.student.onAtRiskList, facts.student.membershipState, facts.student.score, facts.student.level, facts.student.suggestedNextStep, facts.student.factors],
+    [true, true, 'ACTIVE', 30, 'MEDIUM', 'CALL_TO_CHECK_IN', [{ code: 'LONG_ABSENCE', points: 30, neverAttended: true }]], JSON.stringify(facts)); // nulls are stripped from provider facts
+  assert.doesNotMatch(input.facts, /Quinn|Synthetic|maya-ai0|5550000001/, 'no name or contact leaves the database');
+  const rec = await row(`SELECT r.specialist, r.used_reporting, r.source_permissions, p.agent_key, p.task_class, t.agent_key AS turn_agent, t.delegation FROM hon.hon_reply_invocations r
+    JOIN hon.ai_invocation_plans p ON p.id = r.plan_id JOIN hon.hon_conversation_turns t ON t.id = r.turn_id WHERE r.turn_id=$1`, [a.turnId]);
+  assert.deepEqual(rec, { specialist: 'maya', used_reporting: false, source_permissions: ['retention.review.read', 'billing.invoice.payment.record'], agent_key: 'maya',
+    task_class: 'ANALYZE', turn_agent: 'maya', delegation: { question: 'Why is this student at risk?', membershipId: quinn } });
+  assert.deepEqual(await ask(quinn, key), a, 'resend replays');
+  assert.equal(fakes.hon.calls - before, 1, 'no second call');
+  // 2. A student who is not on the list: Maya is told so (no factors).
+  await ask(riley);
+  assert.deepEqual(JSON.parse(fakes.hon.inputs.at(-1).facts).school.student, { onAtRiskList: false });
+  // 2b. A student past the first page (50 rows): 55 synthetic students who never attended and whose term ends in 10 days (50 points) rank ahead of Quinn,
+  // and Maya still reads Quinn's own row.
+  await admin.query('BEGIN'); await admin.query('ALTER TABLE hon.memberships DISABLE TRIGGER USER');
+  const ahead = [];
+  for (let i = 0; i < 55; i++) ahead.push(await seed(o.id, o.school, `Ahead${i}`, '960 hours', '240 hours'));
+  await admin.query('ALTER TABLE hon.memberships ENABLE TRIGGER USER'); await admin.query('COMMIT');
+  await ask(ahead[0]);
+  assert.equal(JSON.parse(fakes.hon.inputs.at(-1).facts).school.student.score, 50, '55 students outrank Quinn (30), so Quinn is past the 50-row first page: ' + fakes.hon.inputs.at(-1).facts);
+  await ask(quinn);
+  assert.deepEqual([JSON.parse(fakes.hon.inputs.at(-1).facts).school.student.onAtRiskList, JSON.parse(fakes.hon.inputs.at(-1).facts).school.student.score], [true, 30], 'found on a later page');
+  // 3. Another organization's membership, a random id, no membershipId or an extra key are refused at begin; nothing recorded.
+  for (const [bad, expected] of [[{ text: 'x', delegation: { agentKey: 'maya', membershipId: foreign } }, 'INVALID_HON_TURN'],
+    [{ text: 'x', delegation: { agentKey: 'maya', membershipId: K() } }, 'INVALID_HON_TURN'],
+    [{ text: 'x', delegation: { agentKey: 'maya' } }, 'HON_DELEGATION_REQUIRED'],
+    [{ text: 'x', delegation: { agentKey: 'maya', membershipId: quinn, campaignId: K() } }, 'HON_DELEGATION_REQUIRED'],
+    [{ text: '  ', delegation: { agentKey: 'maya', membershipId: quinn } }, 'INVALID_HON_TURN'],
+    [{ text: 'x', delegation: { agentKey: 'maya', membershipId: quinn }, fromSuggestionTurnId: a.turnId }, 'HON_SUGGESTION_NOT_CONFIRMABLE']]) {
+    const n = await turnsOf(conv.id);
+    assert.equal((await settle(tenant(context(o), (c) => c.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4)', [o.subject, conv.id, JSON.stringify(bad), K()])))).error?.message, expected, JSON.stringify(bad));
+    assert.equal(await turnsOf(conv.id), n);
+  }
+  // 4. Without retention.review.read Maya is refused at begin (nothing recorded); after a lapse her answer is concealed.
+  await drop('retention.review.read');
+  try {
+    const n = await turnsOf(conv.id);
+    assert.equal(await code(ask(quinn)), 'HON_CONVERSATION_FORBIDDEN');
+    assert.equal(await turnsOf(conv.id), n);
+    const hidden = (await hon.read(scope, conv.id)).turns.find((t) => t.turnId === a.turnId && t.role === 'maya');
+    assert.deepEqual([hidden.text, hidden.reason], [null, 'RESULT_CONCEALED']);
+  } finally { await add('retention.review.read'); }
+  // Losing the tuition permission the facts used also conceals it; restored, it shows again.
+  await drop('billing.invoice.payment.record');
+  try { assert.equal((await hon.read(scope, conv.id)).turns.find((t) => t.turnId === a.turnId && t.role === 'maya').reason, 'RESULT_CONCEALED'); }
+  finally { await add('billing.invoice.payment.record'); }
+  assert.equal((await hon.read(scope, conv.id)).turns.find((t) => t.turnId === a.turnId && t.role === 'maya').text, fakes.hon.reply);
+  // 5. A lapse between begin and prepare: BLOCKED, nothing reserved, no call.
+  {
+    const begun = await tenant(context(o), (c) => c.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4) d', [o.subject, conv.id, JSON.stringify({ text: 'Lapse?', delegation: { agentKey: 'maya', membershipId: quinn } }), K()]));
+    const turnId = begun.rows[0].d.turnId;
+    const ref = (await tenant(context(o), (c) => c.query('SELECT hon.hon_reply_planning_reference($1,$2::uuid) d', [o.subject, turnId]))).rows[0].d;
+    const lim = ref.limits;
+    const planned = await plans.plan({ ...context(o), idempotencyKey: ref.invocationId }, ref.workItemId, { expectedVersion: ref.workVersion, expectedState: 'READY', agentKey: 'maya', modality: 'TEXT', taskClass: lim.taskClass, inputBudget: lim.inputBudget, outputBudget: lim.outputBudget, maxProviderCostMicrounits: lim.maxProviderCostMicrounits });
+    await drop('retention.review.read');
+    const calls = fakes.hon.calls;
+    let prepared;
+    try {
+      prepared = await tenant(context(o), async (c) => { await c.query("SELECT set_config('app.hon_external_subject',$1,true)", [o.subject]); return (await c.query('SELECT hon.prepare_hon_reply($1,$2::uuid,$3::uuid,true) d', [o.subject, turnId, planned.plan.id])).rows[0].d; });
+    } finally { await add('retention.review.read'); }
+    const r = await row('SELECT status, reason, reserved_credits FROM hon.hon_reply_invocations WHERE turn_id=$1', [turnId]);
+    assert.deepEqual([prepared, r.status, r.reason, r.reserved_credits, fakes.hon.calls - calls], [null, 'BLOCKED', 'SOURCE_ACCESS_REFUSED', 0, 0]);
+  }
+  // 6. Table, planner and grant rules; the 4-arg facts reader still answers for the target-free specialists.
+  assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET source_permissions='{billing.membership.read}' WHERE turn_id=$1", [a.turnId]))).error?.code ?? 'OK', '23514');
+  assert.equal((await row("SELECT hon.ai_agent_capability_permission('maya') m")).m, 'retention.review.read');
+  assert.equal((await row("SELECT count(*)::int n FROM pg_constraint WHERE conname='ai_invocation_plans_maya_analysis_only' AND convalidated")).n, 1);
+  for (const f of ['read_specialist_school_facts(text,text,uuid,uuid)', 'read_specialist_school_facts(text,text,uuid,uuid,jsonb)']) {
+    assert.equal((await row(`SELECT has_function_privilege($1, 'hon.${f}', 'EXECUTE') x`, [runtimeRole])).x, false, `${f} is internal`);
+  }
+  // 7. Readiness lists RETENTION gated on retention.review.read; the composer route without a student stays refused.
+  const ready = (await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data.agents;
+  assert.deepEqual(ready.filter((x) => x.agentKey === 'maya').map((x) => [x.agent, x.authorized, x.requestCredits]), [['RETENTION', true, 15]]);
+  await drop('retention.review.read');
+  try { assert.equal((await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data.agents.find((x) => x.agentKey === 'maya').blockedBy, 'NOT_AUTHORIZED'); }
+  finally { await add('retention.review.read'); }
+  pass('INV-37', "0284: Maya answers one question about one at-risk membership of this exact school from that student's 0259 row only (factor codes and numbers, state, score, level, step; no name or contact), planned as maya/ANALYZE with the fixed DETAILED budgets, one call, resend replays; a student off the list is reported as onAtRiskList false and a student past the first page is still found; another organization's or an unknown membership, a missing or extra target key, empty text and a suggestion confirmation are refused at begin with nothing recorded; without retention.review.read she is refused at begin, blocked in prepare (nothing reserved or sent) and her answer is concealed, as it is when the tuition permission her facts used lapses; source permissions are a closed set, plans are ANALYZE only, both fact readers are internal; readiness lists RETENTION gated on the capability");
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----

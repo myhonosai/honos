@@ -4,14 +4,12 @@ import { useLocale } from '../localization/provider';
 import { HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { SchoolDetailError, schoolDetailApi, schoolDetailId, type SchoolDetailApi } from './http';
 import { HqSchoolDetailView, type SchoolDetailState } from './view';
-import { HqSchoolHealthCard } from '../hq-school-health/parts';
-import { healthApi as defaultHealthApi, type HealthApi } from '../hq-school-health/http';
 
 /**
  * HQ school detail (C-HQ-3). Read only. Leaving the tab (blur, hidden tab, page hide) or a session end hides every fact
  * and retires the read; "Show again" reads fresh. The server decides who may read, on every read.
  */
-export function HqSchoolDetail({ schoolId, api = schoolDetailApi, healthApi = defaultHealthApi }: { schoolId: string; api?: SchoolDetailApi; healthApi?: HealthApi }): React.ReactElement {
+export function HqSchoolDetail({ schoolId, api = schoolDetailApi }: { schoolId: string; api?: SchoolDetailApi }): React.ReactElement {
   const { preferences, formattingLocale } = useLocale();
   const valid = schoolDetailId(schoolId) !== null;
   const [state, setState] = useState<SchoolDetailState>(valid ? { state: 'LOADING' } : { state: 'INVALID' });
@@ -48,7 +46,5 @@ export function HqSchoolDetail({ schoolId, api = schoolDetailApi, healthApi = de
   const onRefresh = useCallback(() => setRefresh((n) => n + 1), []);
   const onReveal = useCallback(() => setConcealed(false), []);
   return <HqSchoolDetailView language={preferences.language} formattingLocale={formattingLocale} concealed={concealed} state={state} busy={busy}
-    onRefresh={onRefresh} onReveal={onReveal}
-    // Shown only with a ready detail; a refresh or concealment unmounts it, so each showing reads fresh.
-    health={state.state === 'READY' && !concealed ? <HqSchoolHealthCard key={refresh} schoolId={schoolId} language={preferences.language} formattingLocale={formattingLocale} api={healthApi}/> : null}/>;
+    onRefresh={onRefresh} onReveal={onReveal}/>;
 }

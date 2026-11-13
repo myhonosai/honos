@@ -77,6 +77,10 @@
 .railFoot { margin-top: auto; display: flex; gap: var(--hon-space-4); padding: var(--hon-space-3) var(--hon-space-2) 0; border-top: 1px solid var(--hon-border); font-size: var(--hon-text-sm); }
 .railFoot a { color: var(--hon-text-subtle); text-decoration: none; }
 .railFoot a:hover { color: var(--hon-text); }
+.signOut { margin: 0 0 0 auto; }
+.signOut button { padding: 0; border: 0; background: none; font: inherit; color: var(--hon-text-subtle); cursor: pointer; text-decoration: underline; }
+.signOut button:hover, .signOut button:focus-visible { color: var(--hon-text); }
+.menuFoot { display: flex; margin-top: var(--hon-space-4); padding-top: var(--hon-space-3); border-top: 1px solid var(--hon-border); font-size: var(--hon-text-sm); }
 
 /* Workspace */
 .workspace { min-width: 0; display: flex; flex-direction: column; }

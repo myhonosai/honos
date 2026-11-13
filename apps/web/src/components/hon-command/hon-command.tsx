@@ -4,8 +4,11 @@ import React, { useCallback, useEffect, useId, useRef, useState, useSyncExternal
 import { DEFAULT_HON_INTERFACE_THEME, type HonInterfaceTheme } from '@hon/design-system';
 import { HonCommandController, initialHonCommandSnapshot, type HonCommandApi, type HonCommandSnapshot, type HonScope } from './hon-command-data';
 import { HonConversation } from './hon-conversation-panel';
+import { HonSchoolNotes } from './hon-school-notes';
+import { HonSchoolTone } from './hon-school-tone';
+import { HonWeeklyBriefing } from './hon-weekly-briefing';
 import { HON_COMMAND_ROSTER, honAgent, safeHonReturnPath } from './roster';
-import { AgentPortrait, AvailabilityBadge, HonMark, HonWorkspaceView, type HonTab } from './hon-workspace-view';
+import { AgentPortrait, AvailabilityBadge, availabilityLabel, HonMark, HonWorkspaceView, type HonTab } from './hon-workspace-view';
 import styles from './hon-command.module.css';
 
 const SERVER_SNAPSHOT = initialHonCommandSnapshot();
@@ -44,7 +47,11 @@ interface HonPanelProps {
 /** The live Ask HON conversation, only for a server-verified school; a school change remounts it. */
 function verifiedConversation(scope: HonCommandSnapshot['scope'], presentation: 'panel' | 'full'): React.ReactNode {
   if (scope.state !== 'VERIFIED') return null;
-  return <HonConversation key={`${scope.organizationId}/${scope.schoolId}`} school={{ organizationId: scope.organizationId, schoolId: scope.schoolId }} presentation={presentation} />;
+  const key = `${scope.organizationId}/${scope.schoolId}`, school = { organizationId: scope.organizationId, schoolId: scope.schoolId };
+  const conversation = <HonConversation key={key} school={school} presentation={presentation} />;
+  // 0255: the full workspace also shows what HON remembers about this school.
+  // 0256: and how HON talks at this school.
+  return presentation === 'full' ? <>{conversation}<HonSchoolNotes key={`${key}/notes`} school={school} /><HonSchoolTone key={`${key}/tone`} school={school} /><HonWeeklyBriefing key={`${key}/briefing`} school={school} /></> : conversation;
 }
 
 /** Expandable HON panel: a modal side sheet that keeps the page underneath intact. */
@@ -149,7 +156,7 @@ export function HonTeamBand({ scope, variant, api }: { scope: HonScope; variant:
     </div>
     <ul className={styles.bandTeam} aria-label="AI employees">
       {HON_COMMAND_ROSTER.map((agent) => <li key={agent.id}>
-        <button type="button" className={styles.bandAgent} style={{ '--agent': agent.color } as React.CSSProperties} aria-haspopup="dialog" onClick={(event) => launch(event, agent.id)} aria-label={`${agent.name}, ${agent.title}. ${agent.availability === 'GOVERNED_DRAFTS' ? 'Governed drafts available with approval' : 'Planned, not yet available'}`}>
+        <button type="button" className={styles.bandAgent} style={{ '--agent': agent.color } as React.CSSProperties} aria-haspopup="dialog" onClick={(event) => launch(event, agent.id)} aria-label={`${agent.name}, ${agent.title}. ${availabilityLabel(agent)}`}>
           <AgentPortrait agent={agent} size={variant === 'classic' ? 'sm' : 'md'} />
           <span><strong>{agent.name}</strong><small>{agent.title}</small></span>
           <AvailabilityBadge agent={agent} compact={variant === 'classic'} />

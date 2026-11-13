@@ -40,7 +40,7 @@ test('HON reply runtime refuses changed budgets, bad model ids and oversized inp
 test('HON reply runtime sends one fixed, tool-free request and returns verified usage and provider cost', async () => {
   const seen = [];
   const runtime = new OpenRouterHonReplyRuntime(approved, async (url, init) => { seen.push({ url, init }); return ok(); });
-  assert.deepEqual(await runtime.generate(input), { reply: 'You have 12 active students.', inputTokens: 300, outputTokens: 20, providerCostMicrounits: 123, truncated: false, suggestions: [] });
+  assert.deepEqual(await runtime.generate(input), { reply: 'You have 12 active students.', inputTokens: 300, outputTokens: 20, providerCostMicrounits: 123, truncated: false, suggestions: [], followUps: [], sources: [] });
   assert.equal(seen.length, 1);
   const { url, init } = seen[0];
   assert.equal(url, 'https://openrouter.ai/api/v1/chat/completions');
@@ -63,7 +63,7 @@ test('HON reply runtime sends one fixed, tool-free request and returns verified 
 
 test('HON reply runtime records a verified stop at the output limit as truncated, never as a complete answer', async () => {
   const runtime = new OpenRouterHonReplyRuntime(approved, async () => ok({ choices: [{ finish_reason: 'length', message: { content: 'Part one of the plan' } }], usage: { prompt_tokens: 900, completion_tokens: D.outputTokens, cost: 0.0021 } }));
-  assert.deepEqual(await runtime.generate(detailed), { reply: 'Part one of the plan', inputTokens: 900, outputTokens: D.outputTokens, providerCostMicrounits: 2100, truncated: true, suggestions: [] });
+  assert.deepEqual(await runtime.generate(detailed), { reply: 'Part one of the plan', inputTokens: 900, outputTokens: D.outputTokens, providerCostMicrounits: 2100, truncated: true, suggestions: [], followUps: [], sources: [] });
 });
 
 test('HON reply runtime maps rejections to FAILED and every uncertain outcome to UNKNOWN (never resent)', async () => {
@@ -103,14 +103,18 @@ test('HON prompt keeps the owner identities: Kai teaches, Claire is business per
 
 test('HON reply suggestions are parsed from one closing SUGGEST line into a closed, unique list of at most three delegates', async () => {
   assert.deepEqual(splitHonReplySuggestions('Enrollment is flat.\nSUGGEST: marcus, chad'), { reply: 'Enrollment is flat.', suggestions: ['marcus', 'chad'] });
-  assert.deepEqual(splitHonReplySuggestions('Plan below.\nsuggest:  Kai ,kai, claire, hon, chad, marcus'), { reply: 'Plan below.', suggestions: ['kai', 'chad', 'marcus'] });
+  assert.deepEqual(splitHonReplySuggestions('Plan below.\nsuggest:  Kai ,kai, maya, hon, chad, marcus'), { reply: 'Plan below.', suggestions: ['kai', 'chad', 'marcus'] });
+  assert.deepEqual(splitHonReplySuggestions('Plan below.\nSUGGEST: claire, kai, chad, marcus'), { reply: 'Plan below.', suggestions: ['claire', 'kai', 'chad'] }, 'at most three, in order');
   // The line is always removed, even when it names nothing usable; a SUGGEST line elsewhere is ordinary text.
-  assert.deepEqual(splitHonReplySuggestions('Answer.\nSUGGEST: claire, lena'), { reply: 'Answer.', suggestions: [] });
+  // K2c: Claire joins the closed set; any other name is dropped.
+  assert.deepEqual(splitHonReplySuggestions('Answer.\nSUGGEST: claire, lena'), { reply: 'Answer.', suggestions: ['claire'] });
+  assert.deepEqual(splitHonReplySuggestions('Answer.\nSUGGEST: maya, hon'), { reply: 'Answer.', suggestions: [] });
   assert.deepEqual(splitHonReplySuggestions('SUGGEST: kai\nBut more text follows.'), { reply: 'SUGGEST: kai\nBut more text follows.', suggestions: [] });
   assert.deepEqual(splitHonReplySuggestions('Plain answer.'), { reply: 'Plain answer.', suggestions: [] });
-  assert.match(HON_REPLY_SYSTEM_PROMPT, /SUGGEST: marcus, kai/);
+  assert.match(HON_REPLY_SYSTEM_PROMPT, /SUGGEST: marcus, claire/);
+  assert.match(HON_REPLY_SYSTEM_PROMPT, /naming up to three of marcus, chad, kai and claire/);
   const run = (content, finish = 'stop') => new OpenRouterHonReplyRuntime(approved, async () => ok({ choices: [{ finish_reason: finish, message: { content } }] })).generate(input);
-  assert.deepEqual(await run('Try a trial-week campaign.\nSUGGEST: marcus'), { reply: 'Try a trial-week campaign.', inputTokens: 300, outputTokens: 20, providerCostMicrounits: 123, truncated: false, suggestions: ['marcus'] });
+  assert.deepEqual(await run('Try a trial-week campaign.\nSUGGEST: marcus'), { reply: 'Try a trial-week campaign.', inputTokens: 300, outputTokens: 20, providerCostMicrounits: 123, truncated: false, suggestions: ['marcus'], followUps: [], sources: [] });
   // A cut-off answer never carries suggestions (the line may itself be cut off).
   assert.deepEqual((await run('Part one\nSUGGEST: marcus', 'length')).suggestions, []);
   // A reply that is only a SUGGEST line has no answer: never recorded as complete.
@@ -122,7 +126,7 @@ test('K2 Claire analysis: fixed DETAILED single step, her own two-part prompt, n
   const runtime = new OpenRouterHonReplyRuntime(approved, async (url, init) => { seen.push(init); return ok({ choices: [{ finish_reason: 'stop', message: { content: 'Recorded facts: 12 active.\nSUGGEST: marcus' } }] }); });
   const claire = { ...detailed, specialist: 'claire' };
   // The SUGGEST-shaped line stays ordinary text: Claire never suggests.
-  assert.deepEqual(await runtime.generate(claire), { reply: 'Recorded facts: 12 active.\nSUGGEST: marcus', inputTokens: 300, outputTokens: 20, providerCostMicrounits: 123, truncated: false, suggestions: [] });
+  assert.deepEqual(await runtime.generate(claire), { reply: 'Recorded facts: 12 active.\nSUGGEST: marcus', inputTokens: 300, outputTokens: 20, providerCostMicrounits: 123, truncated: false, suggestions: [], followUps: [], sources: [] });
   const body = JSON.parse(seen[0].body);
   assert.equal(body.messages[0].content, honReplySystemPrompt('DETAILED', 1, 'claire'));
   assert.match(body.messages[0].content, /You are Claire, the business performance specialist/);

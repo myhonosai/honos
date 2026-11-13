@@ -1,10 +1,12 @@
 import { pricingOperationsKo } from './pricing-operations.js';
 import type { TranslationCatalog } from './index.js';
 import { pricingKo } from './pricing-offers.js';
+import { honOsPricesKo } from './hon-os-prices.js';
 import { zernioKo } from './zernio.js';
 export const ko = {
   ...zernioKo,
   ...pricingKo,
+  ...honOsPricesKo,
   ...pricingOperationsKo,
   " · Deterministic simulator, not Stripe sandbox": " · 결정적 시뮬레이터이며 Stripe 샌드박스가 아닙니다",
   " · Reservation recorded": " · 예약 기록됨",
@@ -161,6 +163,21 @@ export const ko = {
   "Founder Campaigns": "창립 캠페인",
   "Founder availability and school eligibility have not been verified.": "창립 상품의 잔여 수량과 학교 자격이 확인되지 않았습니다.",
   "Founder campaigns": "창립 캠페인",
+  "Earlier one-time purchase; no longer sold": "이전 일회성 구매 상품이며 더 이상 판매하지 않습니다",
+  "Founder pricing is limited to the first 50 eligible schools. A spot is counted only when a school’s first payment is verified, so the limit is not the number of spots left. Founder lifetime is no longer sold; earlier lifetime purchases are unchanged.": "창립 요금은 처음 50개 적격 학교로 제한됩니다. 학교의 첫 결제가 확인될 때만 자리가 집계되므로 이 한도는 남은 자리 수가 아닙니다. 창립 평생 요금제는 더 이상 판매하지 않으며, 이전 평생 구매는 변경되지 않습니다.",
+  "Founder limits: {total} organizations · {monthly} monthly. Limits are not remaining inventory.": "창립 상품 한도: 조직 {total}개 · 월간 {monthly}개. 남은 수량이 아닙니다.",
+  "Founder availability: monthly {monthly}. HON rechecks eligibility and reservation at checkout.": "창립 상품 잔여 수량: 월간 {monthly}개. HON이 결제 시 자격과 예약을 다시 확인합니다.",
+  "Paid once. It does not renew.": "한 번 결제하며 갱신되지 않습니다.",
+  "Refund window: {days} days.": "환불 가능 기간: {days}일.",
+  "Not available while your organization has a HON OS subscription.": "조직에 HON OS 구독이 있는 동안에는 이용할 수 없습니다.",
+  "Not available because of an earlier purchase.": "이전 구매로 인해 이용할 수 없습니다.",
+  "Not available for your organization’s current access.": "조직의 현재 이용 권한으로는 이용할 수 없습니다.",
+  "A checkout is already in progress for your organization.": "조직의 결제가 이미 진행 중입니다.",
+  "Sold out.": "매진되었습니다.",
+  "All founder spots are taken.": "창립 자리가 모두 찼습니다.",
+  "Not available until its terms are published.": "조건이 게시될 때까지 이용할 수 없습니다.",
+  "Not available now.": "지금은 이용할 수 없습니다.",
+  "Your organization meets this offer’s terms. Lifetime checkout is not open yet.": "조직이 이 상품의 조건을 충족합니다. 평생 요금제 결제는 아직 열리지 않았습니다.",
   "Founder lifetime": "창립 평생 요금제",
   "Founder monthly": "창립 월간 요금제",
   "Founder status": "창립 회원 상태",
@@ -197,6 +214,7 @@ export const ko = {
   "HQ support cases and escalations are not available. This interface does not grant school access or impersonation.": "HQ 지원 사례와 에스컬레이션을 사용할 수 없습니다. 이 화면은 학교 접근이나 사용자 가장 권한을 부여하지 않습니다.",
   "HQ unavailable": "HQ 사용 불가",
   "HQ workspace": "HQ 작업 공간",
+  "Sign out": "로그아웃",
   "Home": "홈",
   "How can HON help here?": "HON이 무엇을 도와드릴까요?",
   "How can HON help today?": "오늘 HON이 무엇을 도와드릴까요?",
@@ -499,7 +517,7 @@ export const ko = {
   "status.ACTIVE": "활성",
   "status.INACTIVE": "비활성",
   "status.NONE": "없음",
-  "Both plans include all three views. Capability inclusion describes the approved plan catalog; it does not mean every integration or AI job is operational. No new Essential or annual subscriptions are offered.": "두 요금제 모두 세 가지 보기를 포함합니다. 기능 포함 표시는 승인된 요금제 카탈로그이며 모든 연동이나 AI 작업이 운영 중이라는 뜻은 아닙니다. 신규 Essential 및 연간 구독은 제공하지 않습니다.",
+  "Both plans include all three views. Capability inclusion describes the approved plan catalog; it does not mean every integration or AI job is operational. No new Essential subscriptions are offered.": "두 요금제 모두 세 가지 보기를 포함합니다. 기능 포함 표시는 승인된 요금제 카탈로그이며 모든 연동이나 AI 작업이 운영 중이라는 뜻은 아닙니다. 신규 Essential 구독은 제공하지 않습니다.",
   "Eligibility is rechecked at checkout. Test mode only; no live charge. Published legal/tax policies are required before a live launch.": "결제 시 자격을 다시 확인합니다. 테스트 모드 전용이며 실제 청구는 없습니다. 실제 출시 전에 법률 및 세금 정책을 게시해야 합니다.",
   "The reported tier and subscription plan differ. Contact HON support; this page cannot change either record.": "보고된 요금제와 구독 요금제가 다릅니다. HON 지원팀에 문의하세요. 이 페이지에서는 두 기록을 변경할 수 없습니다.",
   "Unavailable here. HON must confirm effective access separately; payment does not activate features or clear a suspension.": "여기서는 사용할 수 없습니다. 실제 이용 권한은 HON이 별도로 확인해야 하며 결제로 기능이 활성화되거나 일시 중지가 해제되지 않습니다.",

@@ -1,16 +1,19 @@
 import { ForbiddenException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
-import { HON_DELEGATE_AGENTS, HON_REPLY_LIMITS, HON_REPLY_MAX_SUGGESTIONS, HON_REPLY_MODES, type HonReplyMode } from '@hon/contracts';
+import {
+  HON_SUGGESTED_AGENTS, HON_REPLY_LIMITS, isHonAnalystAgent, HON_REPLY_MAX_FOLLOW_UPS, HON_REPLY_MAX_SOURCES, HON_REPLY_MAX_SUGGESTIONS, HON_REPLY_MODES, isHonReplyFollowUp, isHonReplySourceKey,
+  type HonAiTone, type HonAnalystAgentKey, type HonReplyMode,
+} from '@hon/contracts';
 import { RuntimeDatabaseService, type ResolvedPrincipalScope } from '../foundation/runtime-database.service.js';
 import { AiInvocationPlanService } from '../ai/ai-invocation-plan.service.js';
 import {
-  HON_REPLY_PROVIDER_RUNTIME, HonReplyProviderRuntimeError, type HonReplyInvocation, type HonReplyProviderRuntime, type HonReplyResult,
+  HON_REPLY_PROVIDER_RUNTIME, HonReplyProviderRuntimeError, type HonReplyInvocation, type HonReplyProviderRuntime, type HonReplyResult, type HonReplySpecialist,
 } from '../ai/hon-reply-provider-runtime.js';
 
 type Scope = ResolvedPrincipalScope & { externalSubject: string };
 type Limits = { replyMode: HonReplyMode; taskClass: string; inputBudget: number; outputBudget: number; maxProviderCostMicrounits: number };
-type Reference = { invocationId: string; workItemId: string; workVersion: number; limits: Limits; agentKey: 'hon' | 'claire' };
+type Reference = { invocationId: string; workItemId: string; workVersion: number; limits: Limits; agentKey: 'hon' | HonAnalystAgentKey };
 
 /** The database names the mode; its budgets must be exactly the contract's (no caller or stored value can raise them). */
 function modeLimits(limits: Limits | undefined) {
@@ -22,22 +25,34 @@ function modeLimits(limits: Limits | undefined) {
 }
 
 const tokens = (n: unknown, max: number) => Number.isSafeInteger(n) && (n as number) >= 1 && (n as number) <= max;
-/** Optional closed list: delegate keys only, unique, at most HON_REPLY_MAX_SUGGESTIONS, never on a cut-off answer. */
+/** Optional closed list: delegate keys and Claire (K2c) only, unique, at most HON_REPLY_MAX_SUGGESTIONS, never on a cut-off answer. */
 function suggestionsValid(v: unknown, truncated: boolean): boolean {
   if (v === undefined) return true;
   return Array.isArray(v) && v.length <= HON_REPLY_MAX_SUGGESTIONS && (!truncated || v.length === 0) && new Set(v).size === v.length
-    && v.every((k) => (HON_DELEGATE_AGENTS as readonly unknown[]).includes(k));
+    && v.every((k) => (HON_SUGGESTED_AGENTS as readonly unknown[]).includes(k));
 }
-function verified(result: HonReplyResult, specialist: 'hon' | 'claire'): HonReplyResult {
-  // Claire (K2) never suggests specialists; any suggestion from her runtime is unverified output.
-  if (specialist === 'claire' && (result?.suggestions ?? []).length > 0) throw new HonReplyProviderRuntimeError('UNKNOWN', 'PROVIDER_UNKNOWN');
+/** 0254: optional follow-ups (bounded plain text, unique ignoring case) and sources (closed set, unique); none on a cut-off answer. */
+function followUpsValid(v: unknown, truncated: boolean): boolean {
+  if (v === undefined) return true;
+  return Array.isArray(v) && v.length <= HON_REPLY_MAX_FOLLOW_UPS && (!truncated || v.length === 0) && v.every(isHonReplyFollowUp)
+    && new Set(v.map((x) => String(x).toLowerCase())).size === v.length;
+}
+function sourcesValid(v: unknown, truncated: boolean): boolean {
+  if (v === undefined) return true;
+  return Array.isArray(v) && v.length <= HON_REPLY_MAX_SOURCES && (!truncated || v.length === 0) && v.every(isHonReplySourceKey) && new Set(v).size === v.length;
+}
+function verified(result: HonReplyResult, specialist: HonReplySpecialist): HonReplyResult {
+  // An analysis specialist (K2, 0260) never suggests specialists; any suggestion from its runtime is unverified output.
+  if (specialist !== 'hon' && (result?.suggestions ?? []).length > 0) throw new HonReplyProviderRuntimeError('UNKNOWN', 'PROVIDER_UNKNOWN');
   const reply = typeof result?.reply === 'string' ? result.reply.trim() : '';
   if (reply.length < 1 || reply.length > HON_REPLY_LIMITS.replyCharacters || !tokens(result.inputTokens, 1_000_000) || !tokens(result.outputTokens, 1_000_000)
     || !Number.isSafeInteger(result.providerCostMicrounits) || result.providerCostMicrounits < 0 || result.providerCostMicrounits > 1_000_000_000
-    || typeof result.truncated !== 'boolean' || !suggestionsValid(result.suggestions, result.truncated)) {
+    || typeof result.truncated !== 'boolean' || !suggestionsValid(result.suggestions, result.truncated)
+    || !followUpsValid(result.followUps, result.truncated) || !sourcesValid(result.sources, result.truncated)) {
     throw new HonReplyProviderRuntimeError('UNKNOWN', 'PROVIDER_UNKNOWN');
   }
-  return { reply, inputTokens: result.inputTokens, outputTokens: result.outputTokens, providerCostMicrounits: result.providerCostMicrounits, truncated: result.truncated, suggestions: [...(result.suggestions ?? [])] };
+  return { reply, inputTokens: result.inputTokens, outputTokens: result.outputTokens, providerCostMicrounits: result.providerCostMicrounits, truncated: result.truncated, suggestions: [...(result.suggestions ?? [])],
+    followUps: [...(result.followUps ?? [])], sources: [...(result.sources ?? [])] };
 }
 
 /**
@@ -73,8 +88,8 @@ export class HonReplyService {
     const ref = await this.transaction(scope, async (client) => (await client.query<{ data: Reference | null }>('SELECT hon.hon_reply_planning_reference($1,$2::uuid) data', [scope.externalSubject, turnId])).rows[0]!.data);
     if (!ref) return;
     const limits = modeLimits(ref.limits);
-    // The database names the agent: HON, or Claire whose analysis is always the DETAILED (ANALYZE) mode.
-    if ((ref.agentKey !== 'hon' && ref.agentKey !== 'claire') || (ref.agentKey === 'claire' && ref.limits.replyMode !== 'DETAILED')) throw new Error('HON_REPLY_AGENT_DRIFT');
+    // The database names the agent: HON, or an analysis specialist whose answer is always the DETAILED (ANALYZE) mode.
+    if ((ref.agentKey !== 'hon' && !isHonAnalystAgent(ref.agentKey)) || (ref.agentKey !== 'hon' && ref.limits.replyMode !== 'DETAILED')) throw new Error('HON_REPLY_AGENT_DRIFT');
     let planId: string | null = null;
     try {
       const planned = await this.plans.plan({ ...this.context(scope), idempotencyKey: ref.invocationId }, ref.workItemId, {
@@ -87,7 +102,12 @@ export class HonReplyService {
       if (!(error instanceof ForbiddenException)) throw error;
     }
     const ready = this.provider.readiness('OPENROUTER') === 'READY';
-    const invocation = await this.transaction(scope, async (client) => (await client.query<{ data: HonReplyInvocation | null }>('SELECT hon.prepare_hon_reply($1,$2::uuid,$3::uuid,$4) data', [scope.externalSubject, turnId, planId, ready])).rows[0]!.data);
+    const invocation = await this.transaction(scope, async (client) => {
+      const prepared = (await client.query<{ data: HonReplyInvocation | null }>('SELECT hon.prepare_hon_reply($1,$2::uuid,$3::uuid,$4) data', [scope.externalSubject, turnId, planId, ready])).rows[0]!.data;
+      // 0256: HON answers in the school's tone (a closed key from the database, read in the same transaction); analysis specialists keep their own voice.
+      if (!prepared || prepared.specialist !== 'hon') return prepared;
+      return { ...prepared, tone: (await client.query<{ tone: HonAiTone }>('SELECT hon.hon_ai_tone() tone')).rows[0]!.tone };
+    });
     if (!invocation) return;
     let result: HonReplyResult;
     try {

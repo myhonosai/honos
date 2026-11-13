@@ -1,0 +1,9 @@
+.page { min-height: 100vh; display: flex; align-items: center; background: radial-gradient(circle at 70% 10%, rgba(47, 107, 255, 0.22), transparent 40%), #07101f; color: #e8eefc; font: 1rem/1.6 system-ui, sans-serif; }
+.inner { display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 640px; margin: 0 auto; padding: 48px 16px; }
+.brand { margin: 0; font-weight: 800; letter-spacing: 0.08em; color: #8fb4ff; }
+.page h1 { margin: 0; font-size: clamp(1.6rem, 4vw, 2.4rem); line-height: 1.2; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.actions a { display: inline-flex; align-items: center; min-height: 48px; padding: 0 22px; border-radius: 999px; border: 1px solid #3a4f86; color: #e8eefc; text-decoration: none; font-weight: 600; }
+.actions a:focus-visible { outline: 3px solid #8fb4ff; outline-offset: 3px; }
+.actions .primary { background: #2f6bff; border-color: #2f6bff; color: #fff; }
+.help { margin: 0; color: #a9b6d6; font-size: 0.95rem; }
