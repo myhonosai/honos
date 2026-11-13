@@ -55,14 +55,15 @@ try{
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname IN ('guard_school_onboarding','require_onboarding_actor','school_onboarding_profile_json','onboarding_codes','onboarding_choice','onboarding_text','save_school_onboarding','onboarding_step','read_school_onboarding')");
  assert.equal(fns.length,9);
  for(const f of fns)assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,['save_school_onboarding','read_school_onboarding'].includes(f.proname),f.proname);
- assert.equal((await q("SELECT count(*) n FROM hon.role_permissions rp JOIN hon.roles r ON r.id=rp.role_id WHERE r.code='OWNER' AND r.is_system_role AND rp.permission_code='onboarding.manage'"))[0].n,(await q("SELECT count(*) n FROM hon.roles WHERE code='OWNER' AND is_system_role"))[0].n);
- pass('forced deny-all RLS on two new tables; runtime executes exactly two entry points; every system OWNER role holds onboarding.manage');
+ pass('forced deny-all RLS on two new tables; runtime executes exactly two entry points');
 
  const module=await Test.createTestingModule({controllers:[SchoolOnboardingController],providers:[SchoolOnboardingService,SchoolOnboardingReadHumanUiGuard,SchoolOnboardingSaveHumanUiGuard,HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
  app=module.createNestApplication({logger:false});app.setGlobalPrefix('v1');await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;
  await q("UPDATE hon.hon_os_signup_program SET status='TEST_MODE',recorded_at=clock_timestamp() WHERE program_id=1");
  terms=(await q('SELECT id FROM hon.hon_os_signup_terms_versions ORDER BY version DESC LIMIT 1'))[0].id;
  const a=await register('alpha'),b=await register('beta');
+ // Owners of new sign-ups hold onboarding.manage (registration copies every permission; the migration backfills older OWNER roles).
+ for(const w of [a,b])assert.equal((await q("SELECT count(*) n FROM hon.role_permissions rp JOIN hon.roles r ON r.id=rp.role_id WHERE r.organization_id=$1 AND r.code='OWNER' AND r.is_system_role AND rp.permission_code='onboarding.manage'",[w.org]))[0].n,'1');
 
  // 2. D3: a signed-up school with no trial or paid access sees its welcome and school details; school-data steps are UNAVAILABLE.
  let o=await get(a);
