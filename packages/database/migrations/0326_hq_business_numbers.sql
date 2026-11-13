@@ -8,9 +8,10 @@ BEGIN;
 --   * Charges are not enabled. Every amount is a recorded list price (v1 subscription price or the locked price of a HON OS
 --     schedule binding), never collected money.
 --   * One school counts once. A school with an ACTIVE schedule binding is counted from the binding; otherwise from its
---     newest IN_SERVICE monthly v1 subscription. Annual prices count as price / 12 (rounded to the cent). Lifetime and
---     legacy unpriced records are counted, never added to MRR.
---   * "Stopped paying" is evidence only: a v1 subscription history step from IN_SERVICE to SUSPENDED or VOIDED. HON OS
+--     newest IN_SERVICE v1 subscription (monthly or annual). Annual prices count as price / 12 (rounded to the cent).
+--     Lifetime and legacy unpriced (interval NONE) records are counted, never added to MRR.
+--   * "Stopped paying" is evidence only: a v1 subscription history step from IN_SERVICE to SUSPENDED or VOIDED (a void
+--     recorded in error is a correction and is not counted). HON OS
 --     schedule bindings have no recorded cancellation after payment yet, so no churn rate is computed; bindings held for
 --     review are reported as a current count.
 -- Who may read: an HQ owner, or an HQ operator with hq.billing.manage (the SaaS HQ reader rule), checked before and again
@@ -40,8 +41,11 @@ BEGIN
       hon.hq_business_monthly_minor(b.requirements) AS eq
     FROM hon.saas_schedule_bindings b WHERE b.status = 'ACTIVE' ORDER BY b.organization_id, b.activated_at DESC, b.id
   ), v1 AS (
-    SELECT DISTINCT ON (s.organization_id) s.organization_id AS org, 'MONTHLY'::text AS iv, s.price_minor::bigint AS eq
-    FROM hon.saas_subscriptions s WHERE s.status = 'IN_SERVICE' AND s.billing_interval = 'MONTHLY'
+    -- Every in-service v1 record that is not lifetime: catalog and HON OS monthly or annual purchases are priced; a legacy
+    -- entitlement record (interval NONE) carries no price and is counted as unpriced.
+    SELECT DISTINCT ON (s.organization_id) s.organization_id AS org, s.billing_interval AS iv,
+      CASE s.billing_interval WHEN 'MONTHLY' THEN s.price_minor::bigint WHEN 'ANNUAL' THEN round(s.price_minor::numeric / 12)::bigint END AS eq
+    FROM hon.saas_subscriptions s WHERE s.status = 'IN_SERVICE' AND s.billing_interval <> 'LIFETIME'
       AND NOT EXISTS (SELECT 1 FROM bound WHERE bound.org = s.organization_id)
     ORDER BY s.organization_id, s.service_started_at DESC, s.id
   ), rec AS (SELECT org, iv, eq, 'SCHEDULE_BINDING'::text AS src FROM bound UNION ALL SELECT org, iv, eq, 'V1_SUBSCRIPTION' FROM v1),
@@ -72,17 +76,19 @@ BEGIN
       SELECT b.organization_id AS org, b.activated_at AS t FROM hon.saas_schedule_bindings b WHERE b.activated_at IS NOT NULL
       UNION ALL
       SELECT s.organization_id, s.service_started_at FROM hon.saas_subscriptions s
-      WHERE s.service_started_at IS NOT NULL AND s.billing_interval IN ('MONTHLY','LIFETIME')
+      WHERE s.service_started_at IS NOT NULL AND s.billing_interval IN ('MONTHLY','ANNUAL','LIFETIME')
       UNION ALL
       -- A voided subscription clears service_started_at; its IN_SERVICE history step still marks when paying began.
       SELECT s.organization_id, h.occurred_at FROM hon.saas_subscription_history h JOIN hon.saas_subscriptions s ON s.id = h.subscription_id
-      WHERE h.status = 'IN_SERVICE' AND s.billing_interval IN ('MONTHLY','LIFETIME')) x
+      WHERE h.status = 'IN_SERVICE' AND s.billing_interval IN ('MONTHLY','ANNUAL','LIFETIME')) x
     GROUP BY org
   ), stops AS (
     SELECT DISTINCT s.organization_id AS org, h.occurred_at AS t FROM hon.saas_subscription_history h
     JOIN hon.saas_subscription_history prev ON prev.subscription_id = h.subscription_id AND prev.version = h.version - 1
     JOIN hon.saas_subscriptions s ON s.id = h.subscription_id
-    WHERE prev.status = 'IN_SERVICE' AND h.status IN ('SUSPENDED','VOIDED') AND s.billing_interval IN ('MONTHLY','LIFETIME')
+    -- A void recorded as an error is a correction, not a school that stopped paying.
+    WHERE prev.status = 'IN_SERVICE' AND h.status IN ('SUSPENDED','VOIDED') AND h.status_reason <> 'RECORDED_IN_ERROR'
+      AND s.billing_interval IN ('MONTHLY','ANNUAL','LIFETIME')
   )
   SELECT coalesce(jsonb_agg(jsonb_build_object(
       'month', to_char(m.starts AT TIME ZONE 'UTC', 'YYYY-MM'),
