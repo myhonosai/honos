@@ -215,3 +215,25 @@ export function validateHqMessageReceipt(value: unknown): HqMessageReceipt {
   if (m.status !== expected) drift();
   return r as unknown as HqMessageReceipt;
 }
+
+// ---------- text pieces (display only) ----------
+const GSM_BASIC = '@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà';
+const GSM_EXTENDED = '^{}\\[~]|€\f';
+/** How a text will be counted: characters (extended GSM characters count twice), the encoding, and the SMS pieces it
+ * would take. Twilio's MMS Converter sends anything over three pieces as one MMS, so `asMms` tells the writer the message
+ * still arrives whole. This only guides the counter on screen; the database enforces the 1,600-character limit. */
+export interface HqTextPieces { characters: number; encoding: 'GSM-7' | 'UCS-2'; pieces: number; asMms: boolean }
+/** A US/Canada 10-digit number or any E.164 number, as E.164; null when it is not one. */
+export function normalizeHqPhone(value: string): string | null {
+  const digits = value.replace(/[\s().-]/g, '');
+  const e164 = /^[0-9]{10}$/.test(digits) ? `+1${digits}` : /^1[0-9]{10}$/.test(digits) ? `+${digits}` : digits;
+  return PHONE.test(e164) ? e164 : null;
+}
+export function hqTextPieces(content: string): HqTextPieces {
+  const chars = [...content];
+  const gsm = chars.every((c) => GSM_BASIC.includes(c) || GSM_EXTENDED.includes(c));
+  const units = gsm ? chars.reduce((n, c) => n + (GSM_EXTENDED.includes(c) ? 2 : 1), 0) : content.length;
+  const [single, multi] = gsm ? [160, 153] : [70, 67];
+  const pieces = units === 0 ? 0 : units <= single ? 1 : Math.ceil(units / multi);
+  return { characters: chars.length, encoding: gsm ? 'GSM-7' : 'UCS-2', pieces, asMms: pieces >= 3 };
+}
