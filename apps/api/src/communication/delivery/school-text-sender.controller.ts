@@ -9,6 +9,7 @@ import type { HonRequest } from '../../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../../foundation/runtime-database.service.js';
 import { SaasCommandGuard, SaasCommandName } from '../../saas-billing/saas-billing.guards.js';
 import { validateMissedCallSettingsInput } from './missed-call-text-back.js';
+import { parseZernioLeadFormInput } from './zernio-lead-webhook.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const E164 = /^\+[1-9][0-9]{7,14}$/;
@@ -127,5 +128,37 @@ export class SchoolMissedCallsController {
       throw error;
     });
     return { data };
+  }
+}
+
+/**
+ * 0250: a human HON HQ owner maps one Facebook account + Meta Lead Gen form (as Zernio reports them) to one school
+ * pipeline stage, or disables the mapping. Only mapped, ACTIVE forms create CRM leads; a form can never move schools.
+ */
+@Controller('hq/saas/schools/:schoolId/zernio-lead-forms')
+@UseGuards(HonIdentityGuard)
+export class ZernioLeadFormHqController {
+  constructor(private readonly database: RuntimeDatabaseService) {}
+
+  @Post() @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.setZernioLeadForm)
+  async set(@Req() req: HonRequest, @Param('schoolId') schoolId: string, @Body() body: unknown) {
+    if (!req.honIdentity) throw new ForbiddenException({ code: 'SAAS_FORBIDDEN' });
+    if (!UUID.test(schoolId)) throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' });
+    const input = parseZernioLeadFormInput(body);
+    if (!input) throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' });
+    try {
+      const data = await this.database.callSaasBilling('setZernioLeadForm', [req.honIdentity.externalSubject, schoolId, input.accountId, input.formId,
+        input.pipelineId, input.pipelineStageId, input.fieldMap ? JSON.stringify(input.fieldMap) : null, input.status,
+        input.expectedVersion === undefined ? null : String(input.expectedVersion)]);
+      return { data };
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      if (code === '42501') throw new ForbiddenException({ code: 'SAAS_FORBIDDEN' });
+      if (code === 'P0002') throw new NotFoundException({ code: 'HQ_SCHOOL_NOT_FOUND' });
+      if (code === '40001') throw new ConflictException({ code: 'VERSION_CONFLICT' });
+      if (code === '23505') throw new ConflictException({ code: 'ZERNIO_FORM_BELONGS_TO_ANOTHER_SCHOOL' });
+      if (code === '22023' || code === '23514' || code === '23503') throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' });
+      throw new ServiceUnavailableException({ code: 'SAAS_UNAVAILABLE' });
+    }
   }
 }

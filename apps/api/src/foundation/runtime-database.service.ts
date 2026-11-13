@@ -239,6 +239,8 @@ const SAAS_BILLING_CALLS = {
   setSchoolTextSender: { sql: 'SELECT hon.set_school_text_sender_from_hq($1,$2::uuid,$3,$4,$5,$6::boolean,$7::integer) AS data', arity: 7, readOnly: false },
   // 0249: the HQ owner sets the school's forwarding phone and the missed-call text-back switch.
   setSchoolMissedCallSettings: { sql: 'SELECT hon.set_school_missed_call_settings_from_hq($1,$2::uuid,$3,$4::boolean,$5::integer) AS data', arity: 5, readOnly: false },
+  // 0250: the HQ owner maps one Facebook account + Lead Gen form to one school pipeline stage for Zernio lead intake.
+  setZernioLeadForm: { sql: 'SELECT hon.set_zernio_lead_form_from_hq($1,$2::uuid,$3,$4,$5::uuid,$6::uuid,$7::jsonb,$8,$9::integer) AS data', arity: 9, readOnly: false },
   readHqSchoolDetail: { sql: 'SELECT hon.read_hq_school_detail_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   // B-HQ-2 (0232): HQ support records. Reads are read-only; the three commands write only support rows.
   readSupportCases: { sql: 'SELECT hon.read_hq_support_cases($1,$2,$3::uuid,$4::timestamptz,$5::uuid,$6::integer) AS data', arity: 6, readOnly: true },

@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "bc506a4165e41fe18bb2e9256be1d615a67ab719bf2073f9b4428d314f7dab93",
+  "chainSha256": "18ec4a903b00ed942261ded06aacb5abe001ea8ea2a750496f2e2fedd57a9e66",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -251,6 +251,10 @@
       "sha256": "7714b5cac10d99638b40998c6726cbb3dc3b0458be4f57061d266deed0118ef9"
     },
     {
+      "file": "0250_zernio_lead_intake.sql",
+      "sha256": "ae23500f1db741dd9c2b13a0ea0e0f60570f85ddaed990880f4dc8c85718f05f"
+    },
+    {
       "file": "0251_class_series_ongoing.sql",
       "sha256": "90532172b977efee9e3947d261f0ac20387a987cec14e7afeb4cf3d725e324e8"
     },
@@ -360,7 +364,7 @@
     },
     {
       "file": "0305_creative_studio_photo_avatars.sql",
-      "sha256": "85a0d0770bf4debba74985d1c1f45943e73237e0585624ecd01d8a4f8c92eb03"
+      "sha256": "56cda70f192a1f5578d930c599f3f8144bcab42debd5677c85a79153e9a6f3d0"
     }
   ]
 }

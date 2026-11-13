@@ -3369,3 +3369,24 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
     RAISE EXCEPTION 'school_branding.manage must exist as a sensitive staff-assignable permission'; END IF;
 END $$;
 -- End school page branding exact verification.
+
+-- Zernio lead intake exact verification (B-COM-1 0250): two private forced-RLS tables the runtime cannot touch, the
+-- HQ-owner mapping command for the runtime, and worker-only lead recording.
+DO $$ DECLARE t text; runtime oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'); BEGIN
+  FOREACH t IN ARRAY ARRAY['hon.zernio_lead_forms','hon.zernio_lead_receipts'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR has_table_privilege('hon_runtime',t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+      RAISE EXCEPTION 'Unsafe Zernio table posture: %',t; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner
+      WHERE p.oid='hon.set_zernio_lead_form_from_hq(text,uuid,text,text,uuid,uuid,jsonb,text,integer)'::regprocedure AND p.prosecdef
+      AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND p.proowner<>runtime AND (owner.rolsuper OR owner.rolbypassrls)
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>runtime OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+    RAISE EXCEPTION 'Unsafe Zernio mapping command'; END IF;
+  IF has_function_privilege('hon_runtime','hon.record_zernio_lead(text,text,text,text,jsonb,jsonb)'::regprocedure,'EXECUTE')
+    OR has_function_privilege('hon_runtime','hon.zernio_valid_field_map(jsonb)'::regprocedure,'EXECUTE') THEN
+    RAISE EXCEPTION 'Runtime can run a Zernio worker function'; END IF;
+END $$;
+-- End Zernio lead intake exact verification.
