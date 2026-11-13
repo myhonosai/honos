@@ -15,7 +15,10 @@ export interface ProviderSubscriptionScheduleAdapter {
   cancelUnpaidSchedule(request: ProviderScheduleCancelRequest): Promise<ProviderScheduleCancelObservation>;
   /** 0325: put a recorded welcome credit on the customer's balance (TEST adapter only). Idempotent on creditKey. */
   creditCustomerBalance(request: ProviderBalanceCreditRequest): Promise<ProviderBalanceCreditObservation>;
+  /** 0341: stop a switched plan's schedule now, with no proration and no refund (TEST adapter only). Idempotent. */
+  stopScheduleNoRefund(request: ProviderScheduleCancelRequest): Promise<ProviderScheduleStopObservation>;
 }
+export interface ProviderScheduleStopObservation { outcome: 'STOPPED_NO_REFUND'; bindingId: string; scheduleReference: string; refundSent: false }
 export interface ProviderBalanceCreditRequest { accountReference: string; amountMinor: number; currency: 'USD'; creditKey: string }
 export interface ProviderBalanceCreditObservation { outcome: 'CREDITED'; creditKey: string; amountMinor: number }
 export interface ProviderScheduleLookupMiss {
@@ -106,4 +109,5 @@ export class UnconfiguredSubscriptionScheduleProvider implements ProviderSubscri
   async findByBindingKey(): Promise<ProviderScheduleBindingObservation> { throw new Error('SAAS_SCHEDULE_PROVIDER_UNAVAILABLE'); }
   async cancelUnpaidSchedule(): Promise<ProviderScheduleCancelObservation> { throw new Error('SAAS_SCHEDULE_PROVIDER_UNAVAILABLE'); }
   async creditCustomerBalance(): Promise<ProviderBalanceCreditObservation> { throw new Error('SAAS_SCHEDULE_PROVIDER_UNAVAILABLE'); }
+  async stopScheduleNoRefund(): Promise<ProviderScheduleStopObservation> { throw new Error('SAAS_SCHEDULE_PROVIDER_UNAVAILABLE'); }
 }

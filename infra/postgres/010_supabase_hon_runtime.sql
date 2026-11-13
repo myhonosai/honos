@@ -2581,6 +2581,30 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 
+-- 0341 switch from monthly or annual to lifetime with credit: the school quote and switch sign-up, the HQ switch list, and
+-- the reads and ingest 0341 replaced. The switch table, credit and source helpers, guards and the access move stay unreachable.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regclass('hon.saas_lifetime_switches') IS NULL THEN RAISE EXCEPTION 'Apply migration 0341 first'; END IF;
+  REVOKE ALL ON TABLE hon.saas_lifetime_switches FROM PUBLIC;
+  FOREACH f IN ARRAY ARRAY['saas_lifetime_switch_credit(integer,timestamp with time zone,timestamp with time zone,timestamp with time zone,integer)',
+    'saas_lifetime_switch_source(uuid,timestamp with time zone)','saas_lifetime_switch_json(hon.saas_lifetime_switches)',
+    'saas_lifetime_switch_for_binding(uuid)','guard_saas_lifetime_switch_binding_insert()','verify_saas_lifetime_switch()',
+    'saas_schedule_switch_lifetime_access(uuid,uuid,uuid,text,timestamp with time zone)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.saas_lifetime_switches FROM '||quote_ident(r);
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_saas_hon_os_lifetime_switch_quote(text,uuid),hon.start_saas_schedule_lifetime_switch(text,uuid,jsonb,uuid,uuid,uuid),
+      hon.read_saas_hq_lifetime_switches(text,integer),hon.read_saas_schedule_binding(text,uuid,uuid),hon.read_saas_schedule_binding_from_hq(text,uuid),
+      hon.ingest_saas_schedule_evidence(jsonb,text),hon.read_saas_paid_reviews(text,text) TO hon_runtime;
+  END IF;
+END $$;
+
 -- B-HQ-2 0232 (proposed) HQ support records: no table privileges; three commands and three reads are the only runtime boundary.
 DO $$ DECLARE r text; t text; BEGIN
   FOREACH t IN ARRAY ARRAY['hq_support_cases','hq_support_case_events','hq_support_requests'] LOOP

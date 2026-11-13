@@ -3,7 +3,7 @@
 // HON-bills-schools records,
 // separate from school-to-family billing.
 // Private deny-all tables reachable only through fixed functions.
-export const saasBillingTables = ['saas_schedule_welcome_credits','saas_schedule_credit_uses','saas_founder_pool','saas_founder_allocations','saas_lifetime_sales','saas_subscription_generations','saas_billing_lifecycle_policy','saas_schedule_bindings','saas_schedule_provider_events','saas_schedule_paid_periods','saas_schedule_reconciliations','saas_paid_review_resolutions','saas_price_schedules','saas_price_acceptances','saas_policy_decisions','saas_catalog_versions','saas_catalog_plans','saas_catalog_offers','saas_founder_reservations',
+export const saasBillingTables = ['saas_lifetime_switches','saas_schedule_welcome_credits','saas_schedule_credit_uses','saas_founder_pool','saas_founder_allocations','saas_lifetime_sales','saas_subscription_generations','saas_billing_lifecycle_policy','saas_schedule_bindings','saas_schedule_provider_events','saas_schedule_paid_periods','saas_schedule_reconciliations','saas_paid_review_resolutions','saas_price_schedules','saas_price_acceptances','saas_policy_decisions','saas_catalog_versions','saas_catalog_plans','saas_catalog_offers','saas_founder_reservations',
  'saas_subscriptions','saas_subscription_history','saas_requests','saas_audit','saas_outbox',
  'saas_policy_records','saas_invoice_sequences','saas_invoices','saas_invoice_lines','saas_payment_evidence',
  'saas_credit_program','saas_provider_cost_evidence','saas_pricing_versions','saas_operation_prices','saas_credit_allowances',
@@ -15,7 +15,7 @@ export const saasBillingTables = ['saas_schedule_welcome_credits','saas_schedule
  'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops','saas_new_sales_policy','saas_access_exceptions','saas_exception_policy_decisions','saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications',
  'saas_creative_program','saas_creative_rate_versions','saas_creative_rates','saas_creative_topup_packages','saas_creative_wallets',
  'saas_creative_topup_purchases','saas_creative_adjustments','saas_creative_lots','saas_creative_reservations','saas_creative_ledger','saas_creative_cost_events'];
-const evidenceTables = ['saas_schedule_welcome_credits','saas_schedule_credit_uses','saas_founder_pool','saas_founder_allocations','saas_lifetime_sales','saas_subscription_generations','saas_billing_lifecycle_policy','saas_schedule_provider_events','saas_schedule_paid_periods','saas_schedule_reconciliations','saas_price_schedules','saas_price_acceptances','saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications','saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
+const evidenceTables = ['saas_lifetime_switches','saas_schedule_welcome_credits','saas_schedule_credit_uses','saas_founder_pool','saas_founder_allocations','saas_lifetime_sales','saas_subscription_generations','saas_billing_lifecycle_policy','saas_schedule_provider_events','saas_schedule_paid_periods','saas_schedule_reconciliations','saas_price_schedules','saas_price_acceptances','saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications','saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
  'saas_provider_cost_evidence','saas_credit_ledger','saas_credit_threshold_events',
  'saas_refund_history','saas_reward_applications','saas_account_credit_ledger','saas_free_periods','saas_provider_events','saas_provider_payment_refs',
  'saas_exception_policy_decisions','saas_access_program','saas_access_policy_terms','saas_access_transitions','saas_offer_sales_stops','saas_new_sales_policy',
@@ -76,6 +76,17 @@ export const saasBillingFunctions = [
  ['hon.verify_saas_schedule_credit_consistency()',false,true],
  ['hon.guard_saas_reward_single_path()',false,false],
  ['hon.saas_schedule_event_referral_alert()',false,false],
+ // 0341: switch from monthly or annual to lifetime with credit
+ ['hon.read_saas_hon_os_lifetime_switch_quote(text,uuid)',true,true],
+ ['hon.start_saas_schedule_lifetime_switch(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.read_saas_hq_lifetime_switches(text,integer)',true,true],
+ ['hon.saas_lifetime_switch_credit(integer,timestamp with time zone,timestamp with time zone,timestamp with time zone,integer)',false,false],
+ ['hon.saas_lifetime_switch_source(uuid,timestamp with time zone)',false,false],
+ ['hon.saas_lifetime_switch_json(hon.saas_lifetime_switches)',false,false],
+ ['hon.saas_lifetime_switch_for_binding(uuid)',false,false],
+ ['hon.guard_saas_lifetime_switch_binding_insert()',false,true],
+ ['hon.verify_saas_lifetime_switch()',false,true],
+ ['hon.saas_schedule_switch_lifetime_access(uuid,uuid,uuid,text,timestamp with time zone)',false,false],
  ['hon.retry_saas_schedule_access(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  // 0237 HON OS schedule billing piece 3: HQ review queue for held payments and refunds; v1 founder/lifetime stop
  ['hon.guard_saas_hon_os_v1_offer_kind()',false,false],
@@ -442,6 +453,10 @@ const crossTriggers = [
  ['saas_schedule_credit_uses','saas_schedule_credit_consistency',5,'verify_saas_schedule_credit_consistency'],
  ['saas_reward_applications','saas_reward_single_path',7,'guard_saas_reward_single_path'],
  ['saas_schedule_welcome_credits','saas_reward_single_path',7,'guard_saas_reward_single_path'],
+ // 0341: a switch binding comes only from the switch command; its switch record is checked at commit.
+ ['saas_schedule_bindings','saas_lifetime_switch_binding_insert',7,'guard_saas_lifetime_switch_binding_insert'],
+ ['saas_schedule_bindings','saas_lifetime_switch_consistency',5,'verify_saas_lifetime_switch'],
+ ['saas_lifetime_switches','saas_lifetime_switch_consistency',5,'verify_saas_lifetime_switch'],
  ['saas_schedule_provider_events','saas_referral_alert',5,'saas_schedule_event_referral_alert'],
  ['saas_invoices','saas_free_period_check',7,'saas_invoice_free_period_check'],
  ['saas_credit_allowances','saas_champions_basis',7,'saas_allowance_free_month_basis'],

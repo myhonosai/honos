@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { saasUuid, validateSaasScheduleAccessRetryInput, validateSaasScheduleAccessRetryReceipt, validateSaasScheduleBindingInput,
   validateSaasScheduleBindingReceipt, validateSaasScheduleBindingView, validateSaasScheduleEvidenceReceipt, validateSaasSchedulePastDueList,
   validateSaasSchedulePastDueSuspension, validateSaasScheduleWelcomeCreditInput, validateSaasScheduleWelcomeCreditReceipt,
+  validateSaasLifetimeSwitchQuote, validateSaasLifetimeSwitchInput, validateSaasLifetimeSwitchReceipt, validateSaasHqLifetimeSwitchList,
   type SaasScheduleRequirements } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
 import { SUBSCRIPTION_SCHEDULE_PROVIDER, type ProviderScheduleRequirements, type ProviderSubscriptionScheduleAdapter } from '../payments/subscription-schedule-provider.js';
@@ -158,9 +159,75 @@ export class SaasScheduleBillingService {
     return { ...receipt, providerCredited: true as const };
   }
 
-  /** Internal only: caller must already have verified raw provider bytes and selected the fixed TEST adapter. */
-  ingestVerifiedTestEvidence(event: unknown, digest: unknown) {
+  /** 0341: the school's switch-to-lifetime quote (credit for the unused whole days of its current paid period). */
+  lifetimeSwitchQuote(subject: string, school: unknown) {
+    return this.billing.call('readLifetimeSwitchQuote',[subject,parse(() => saasUuid(school))],validateSaasLifetimeSwitchQuote);
+  }
+  /** 0341: HQ list of switches to lifetime, newest first. */
+  hqLifetimeSwitches(subject: string, limit = 100) {
+    return this.billing.call('readHqLifetimeSwitches',[subject,String(limit)],validateSaasHqLifetimeSwitchList);
+  }
+
+  /**
+   * 0341: sign up for a switch to lifetime. Same two-transaction protocol as start() (DB intent -> idempotent TEST adapter
+   * -> DB observation), then the fixed switch credit goes on the new customer's provider balance under the switch's own
+   * key, so the one-time charge is the lifetime price minus the credit. If that credit fails, the sign-up stays; a retry
+   * with the same idempotency key re-sends the same idempotent credit. Until it lands, a full-price payment is held for
+   * review, never counted. No refund is ever sent.
+   */
+  async startLifetimeSwitch(subject: string, school: unknown, body: unknown, key: unknown) {
+    const [s,input,k] = parse(() => [saasUuid(school), validateSaasLifetimeSwitchInput(body), saasUuid(key)] as const);
+    const intent = await this.billing.call('startLifetimeSwitch',[subject,s,JSON.stringify(input),k,randomUUID(),randomUUID()],validateSaasLifetimeSwitchReceipt);
+    let bound = intent;
+    if (intent.binding.status === 'PENDING_PROVIDER_BINDING') {
+      if (intent.replayed) throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_BINDING_RECONCILIATION_REQUIRED', detail: 'The original switch binding is pending reconciliation; retry did not contact a provider or create another schedule.' });
+      let observation;
+      try {
+        observation = await this.provider.bindOrFindSchedule({ bindingId:intent.binding.bindingId, bindingKey:intent.binding.bindingKey,
+          requirementsDigest:intent.binding.requirementsDigest, requirements:providerRequirements(intent.binding.requirements) });
+      } catch {
+        throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_PROVIDER_UNAVAILABLE', detail: 'Do not assume a provider binding took effect; the original binding requires reconciliation before any further provider inspection.' });
+      }
+      const observed = await this.billing.call('recordScheduleBindingObservation', [intent.binding.bindingId,JSON.stringify(observation),randomUUID(),randomUUID()], validateSaasScheduleBindingReceipt);
+      bound = { ...intent, binding: observed.binding };
+    }
+    if (bound.binding.status !== 'BOUND_TEST_ONLY' || bound.lifetimeSwitch.creditMinor === 0 || !bound.binding.providerAccountReference)
+      return { ...bound, providerCredited: bound.lifetimeSwitch.creditMinor === 0 };
+    let credited;
+    try {
+      credited = await this.provider.creditCustomerBalance({ accountReference:bound.binding.providerAccountReference, amountMinor:bound.lifetimeSwitch.creditMinor,
+        currency:'USD', creditKey:bound.lifetimeSwitch.providerCreditKey });
+    } catch {
+      throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_PROVIDER_UNAVAILABLE', detail: 'The switch is recorded; retry with the same idempotency key to send its credit to the provider.' });
+    }
+    if (credited.outcome !== 'CREDITED' || credited.creditKey !== bound.lifetimeSwitch.providerCreditKey || credited.amountMinor !== bound.lifetimeSwitch.creditMinor)
+      throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_BINDING_RECONCILIATION_REQUIRED' });
+    return { ...bound, providerCredited: true };
+  }
+
+  /**
+   * Internal only: caller must already have verified raw provider bytes and selected the fixed TEST adapter.
+   * 0341: after a paid switch, the old plan's schedule is stopped with no proration and no refund. The switch is already
+   * final in the database. If the stop fails or is not confirmed exactly, this throws 503 so the webhook is NOT acknowledged
+   * and the provider redelivers: the replay returns the stored receipt (with switchedFrom) and the idempotent stop is tried
+   * again, so the old plan can never keep charging a lifetime school silently. Any old-plan renewal that still arrives is
+   * held for review.
+   */
+  async ingestVerifiedTestEvidence(event: unknown, digest: unknown) {
     if (typeof digest !== 'string' || !/^[0-9a-f]{64}$/.test(digest)) throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' });
-    return this.billing.call('ingestScheduleEvidence',[JSON.stringify(event),digest],validateSaasScheduleEvidenceReceipt);
+    const receipt = await this.billing.call('ingestScheduleEvidence',[JSON.stringify(event),digest],validateSaasScheduleEvidenceReceipt);
+    if (!receipt.switchedFrom) return receipt;
+    const from = receipt.switchedFrom;
+    const retry = 'The switch to lifetime is recorded; redeliver this event to stop the old schedule (no proration, no refund).';
+    let r;
+    try {
+      r = await this.provider.stopScheduleNoRefund({ bindingId:from.bindingId, accountReference:from.accountReference,
+        subscriptionReference:from.subscriptionReference, scheduleReference:from.scheduleReference });
+    } catch {
+      throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_PROVIDER_UNAVAILABLE', detail: retry });
+    }
+    if (r?.outcome !== 'STOPPED_NO_REFUND' || r.bindingId !== from.bindingId || r.scheduleReference !== from.scheduleReference || r.refundSent !== false)
+      throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_PROVIDER_UNAVAILABLE', detail: retry });
+    return { ...receipt, oldScheduleStopped: true as const };
   }
 }
