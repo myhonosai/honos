@@ -371,6 +371,10 @@ Status: source only, not deployed, test mode only, on the in-process simulators 
   Provider account, customer and method references stay in the API and never reach the browser.
 - **Known limits:** a disconnected connection's saved methods stay ACTIVE in HON but cannot be used (autopay, piece 4,
   checks the connection); card expiry updates from the provider come with webhooks (pieces 5 and 6).
+- **Bank accounts verified by microdeposits:** when Stripe cannot verify a US bank account instantly, the SetupIntent
+  stays unfinished until the payer confirms the microdeposits, so finishing the setup returns `SETUP_INCOMPLETE` (409)
+  and nothing is saved. The payer finishes later on a new setup; recording the account once the deposits clear needs
+  the webhooks in piece 5b.
 - **Real sandboxes (after piece 2, 0320):** the Stripe Connect test adapter saves methods for real: the customer and a
   Checkout session in setup mode are created on the school's own account (`Stripe-Account`), each with an idempotency key
   (so a retry never leaves an orphan customer or setup), and the saved card or bank account is read back with the platform
