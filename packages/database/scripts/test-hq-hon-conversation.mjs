@@ -358,7 +358,7 @@ try{
     WHERE agent_key=$1 AND period_start=date_trunc('month',clock_timestamp() AT TIME ZONE 'UTC')::date`,[agentKey]);
   assert.deepEqual([p.agentKey,p.periodStart,p.asked,p.answered,p.failed,p.askers,p.chargedCredits],[agentKey,NOW,want.asked,want.answered,want.failed,want.askers,want.credits],agentKey);
   assert.equal(p.answered+p.failed+p.underReview+p.inProgress+p.resolved,p.asked,agentKey);
-  assert.deepEqual(Object.keys(p).sort(),['agentKey','answered','asOf','askers','asked','chargedCredits','failed','inProgress','lastAskedAt','periodStart','resolved','underReview'],'aggregates only');
+  assert.deepEqual(Object.keys(p).sort(),['agentKey','answered','asOf','asked','askers','chargedCredits','failed','inProgress','lastAskedAt','periodStart','resolved','underReview'],'aggregates only');
  }
  assert((await hon.performance(H('owner'),'olivia')).asked>=1,'olivia was asked above');
  // The finance operator lost hq.billing.manage above: Olivia's performance is refused; HON's is still readable.
