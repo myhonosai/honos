@@ -175,6 +175,21 @@ export class TwilioWebhookVerifier {
     return keyword ? { to, from, keyword, providerMessageId: sid, receivedAt: new Date(this.now()).toISOString() } : null;
   }
 
+  /**
+   * 0282: the same signed inbound text for the HQ check: the Messaging Service it reached and the raw body (classified
+   * in the database, never stored). Null when Twilio sent no Messaging Service SID (a number outside any service).
+   */
+  inboundText(rawBody: Buffer, signature: string | undefined): { eventId: string; from: string; toService: string; body: string; receivedAt: string } | null {
+    const params = this.params(rawBody, TWILIO_INBOUND_PATH, signature);
+    const sid = params.get('MessageSid') ?? '';
+    const from = params.get('From') ?? '';
+    const to = params.get('To') ?? '';
+    if (!MESSAGE_SID.test(sid) || !E164.test(from) || !E164.test(to)) throw new TwilioWebhookError('MALFORMED');
+    const service = params.get('MessagingServiceSid') ?? '';
+    if (!SERVICE_SID.test(service)) return null;
+    return { eventId: sid, from, toService: service, body: (params.get('Body') ?? '').slice(0, 1600), receivedAt: new Date(this.now()).toISOString() };
+  }
+
   /** 0249: an incoming call to a school number. A withheld caller ID is null (it is forwarded, never texted). */
   voice(rawBody: Buffer, signature: string | undefined): IncomingCall {
     const params = this.params(rawBody, TWILIO_VOICE_PATH, signature);
