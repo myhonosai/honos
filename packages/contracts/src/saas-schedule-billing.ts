@@ -229,3 +229,25 @@ export function validateSaasScheduleAccessRetryReceipt(value: unknown): SaasSche
   if (!uuid(r.bindingId) || typeof r.replayed !== 'boolean') drift();
   return { bindingId: r.bindingId as string, access: validateBindingAccess(r.access, true) as SaasScheduleAccessRetryReceipt['access'], replayed: r.replayed as boolean };
 }
+
+/** 0324: a worker's list of plans past due after grace (ids only). */
+export interface SaasSchedulePastDueList { bindingIds: string[] }
+export function validateSaasSchedulePastDueList(value: unknown): SaasSchedulePastDueList {
+  const r = record(value, drift); keys(r, ['bindingIds'], drift);
+  if (!Array.isArray(r.bindingIds) || r.bindingIds.length > 200 || !r.bindingIds.every(uuid) || new Set(r.bindingIds).size !== r.bindingIds.length) drift();
+  return { bindingIds: [...(r.bindingIds as string[])] };
+}
+/** 0324: one past-due suspension (terms v2): entitlement SUSPENDED, owner read-only window open. replayed on a repeat run. */
+export interface SaasSchedulePastDueSuspension {
+  bindingId: string; outcome: 'SUSPENDED'; paidThrough: string; graceEndedAt: string; suspendedAt: string; ownerReadOnlyUntil: string;
+  policyVersion: number; replayed: boolean;
+}
+export function validateSaasSchedulePastDueSuspension(value: unknown): SaasSchedulePastDueSuspension {
+  const r = record(value, drift);
+  keys(r, ['bindingId','outcome','paidThrough','graceEndedAt','suspendedAt','ownerReadOnlyUntil','policyVersion','replayed'], drift);
+  if (!uuid(r.bindingId) || r.outcome !== 'SUSPENDED' || ![r.paidThrough,r.graceEndedAt,r.suspendedAt,r.ownerReadOnlyUntil].every(timestamp)
+    || !integer(r.policyVersion, 1, 1000) || typeof r.replayed !== 'boolean'
+    || !(Date.parse(r.paidThrough as string) < Date.parse(r.graceEndedAt as string) && Date.parse(r.graceEndedAt as string) <= Date.parse(r.suspendedAt as string)
+      && Date.parse(r.suspendedAt as string) < Date.parse(r.ownerReadOnlyUntil as string))) drift();
+  return r as unknown as SaasSchedulePastDueSuspension;
+}

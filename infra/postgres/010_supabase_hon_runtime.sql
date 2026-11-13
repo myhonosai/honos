@@ -2550,6 +2550,20 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.ingest_saas_schedule_evidence(jsonb,text),hon.read_saas_paid_reviews(text,text) TO hon_runtime;
   END IF;
 END $$;
+-- 0324 schedule renewals and suspension: the worker's suspension command and past-due list, and the school standing read
+-- 0324 replaced. The suspension helper and the renewal hook stay unreachable.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['saas_schedule_current_suspension(uuid)','saas_schedule_after_paid_period(uuid,uuid,timestamp with time zone)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.record_saas_schedule_past_due_suspension(uuid),hon.list_saas_schedule_past_due_bindings(integer),
+      hon.read_saas_school_access_standing(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
 
 -- B-HQ-2 0232 (proposed) HQ support records: no table privileges; three commands and three reads are the only runtime boundary.
 DO $$ DECLARE r text; t text; BEGIN
