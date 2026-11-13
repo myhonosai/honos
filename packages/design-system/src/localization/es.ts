@@ -1,10 +1,12 @@
 import { pricingOperationsEs } from './pricing-operations.js';
 import type { TranslationCatalog } from './index.js';
 import { pricingEs } from './pricing-offers.js';
+import { honOsPricesEs } from './hon-os-prices.js';
 import { zernioEs } from './zernio.js';
 export const es = {
   ...zernioEs,
   ...pricingEs,
+  ...honOsPricesEs,
   ...pricingOperationsEs,
   " · Deterministic simulator, not Stripe sandbox": " · Simulador determinista, no sandbox de Stripe",
   " · Reservation recorded": " · Reserva registrada",
@@ -161,6 +163,10 @@ export const es = {
   "Founder Campaigns": "Campañas fundadoras",
   "Founder availability and school eligibility have not been verified.": "No se ha verificado la disponibilidad de ofertas fundadoras ni la elegibilidad de la escuela.",
   "Founder campaigns": "Campañas fundadoras",
+  "Earlier one-time purchase; no longer sold": "Compra única anterior; ya no se vende",
+  "Founder pricing is limited to the first 50 eligible schools. A spot is counted only when a school’s first payment is verified, so the limit is not the number of spots left. Founder lifetime is no longer sold; earlier lifetime purchases are unchanged.": "El precio de fundador se limita a las primeras 50 escuelas elegibles. Una plaza solo se cuenta cuando se verifica el primer pago de la escuela, así que el límite no es el número de plazas restantes. Fundador de por vida ya no se vende; las compras de por vida anteriores no cambian.",
+  "Founder limits: {total} organizations · {monthly} monthly. Limits are not remaining inventory.": "Límites de fundador: {total} organizaciones · {monthly} mensuales. No son plazas restantes.",
+  "Founder availability: monthly {monthly}. HON rechecks eligibility and reservation at checkout.": "Disponibilidad de fundador: mensual {monthly}. HON vuelve a verificar la elegibilidad y la reserva al pagar.",
   "Founder lifetime": "Fundador de por vida",
   "Founder monthly": "Fundador mensual",
   "Founder status": "Estado de fundador",
@@ -500,7 +506,7 @@ export const es = {
   "status.ACTIVE": "ACTIVO",
   "status.INACTIVE": "INACTIVO",
   "status.NONE": "NINGUNO",
-  "Both plans include all three views. Capability inclusion describes the approved plan catalog; it does not mean every integration or AI job is operational. No new Essential or annual subscriptions are offered.": "Ambos planes incluyen las tres vistas. El catálogo aprobado no significa que cada integración o tarea de IA esté operativa. No se ofrecen nuevas suscripciones Essential ni anuales.",
+  "Both plans include all three views. Capability inclusion describes the approved plan catalog; it does not mean every integration or AI job is operational. No new Essential subscriptions are offered.": "Ambos planes incluyen las tres vistas. El catálogo aprobado no significa que cada integración o tarea de IA esté operativa. No se ofrecen nuevas suscripciones Essential.",
   "Eligibility is rechecked at checkout. Test mode only; no live charge. Published legal/tax policies are required before a live launch.": "La elegibilidad se vuelve a verificar al pagar. Solo modo de prueba, sin cobro real. Se requieren políticas legales y fiscales publicadas antes del lanzamiento real.",
   "The reported tier and subscription plan differ. Contact HON support; this page cannot change either record.": "El nivel informado y el plan de suscripción difieren. Contacta con soporte de HON; esta página no puede cambiar los registros.",
   "Unavailable here. HON must confirm effective access separately; payment does not activate features or clear a suspension.": "No disponible aquí. HON debe confirmar el acceso efectivo por separado; el pago no activa funciones ni levanta una suspensión.",

@@ -24,7 +24,7 @@ export function CrmLeadMembershipsWorkbench({ scope, sessionSubject }: { scope: 
   const key = JSON.stringify([sessionSubject, scope?.organizationId, scope?.schoolId, scope?.leadId]);
   const [mode, setMode] = useState<'modern' | 'classic' | 'big'>('modern');
   const [result, setResult] = useState<{ key: string; data: CrmLeadMemberships } | null>(null);
-  const [loading, setLoading] = useState(false), [hidden, setHidden] = useState(false), [failure, setFailure] = useState<DiscoveryFailure | ''>(scope ? '' : 'INVALID');
+  const [loading, setLoading] = useState(false), [hidden, setHidden] = useState(false), [failure, setFailure] = useState<DiscoveryFailure | ''>('');
   const [selection, setSelection] = useState<Selection | null>(null);
   const epoch = useRef(0), abort = useRef<AbortController | null>(null), active = useRef(false), mounted = useRef(true), concealed = useRef(false);
   const currentKey = useRef(key); currentKey.current = key;
@@ -97,6 +97,7 @@ export function CrmLeadMembershipsWorkbench({ scope, sessionSubject }: { scope: 
     <div role="status" aria-live="polite" aria-atomic="true" className={styles.status}>{loading ? t('loading') : hidden ? t('hidden') : data ? t('loaded') : ''}</div>
     {hidden && <section aria-labelledby="membership-recovery-shield"><h2 id="membership-recovery-shield" tabIndex={-1} ref={shield}>{t('hidden')}</h2><p>{t('privacy')}</p><button type="button" disabled={loading} onClick={() => void load()}>{t('verify')}</button></section>}
     <div ref={privateArea} hidden={hidden} inert={hidden}>
+      {!scope && <section><p>{t('chooseLead')}</p><nav className={styles.actions}><a href="/staff/crm/leads">{t('leads')}</a></nav></section>}
       {scope && <><section><h2>{t('selectors')}</h2><code>{scope.leadId}</code><p>{t('idle')}</p><button type="button" disabled={loading} onClick={() => void load()}>{t(data ? 'refresh' : 'load')}</button></section>
         <nav className={styles.actions}><a href={leadWorkflowHref(scope)}>{t('crm')}</a></nav><p>{t('crmNote')}</p></>}
       {data && <section aria-label={t('title')}>
