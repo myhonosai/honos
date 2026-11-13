@@ -271,6 +271,7 @@
     "0304_hq_hon_schedule_billing_facts.sql": "32bc6ea5821c7f36b819db74a407e6466a3712d3700f513d1cd0d55d254e7365",
     "0308_hq_plan_promotions.sql": "13ddea1cc69c6ee892e775a333a1eb6bd4eb74f5e96c16c13d4cc45380d394bb",
     "0310_ai_org_agent_ceiling_removed.sql": "3427f3424c2e61ed9b12e5a8d8c0ac02b431fcbe7c14c7ab110d293ab08802bc",
-    "0320_school_payment_credential_vault.sql": "42194542aa26affc6ce836fd06fbce0210d30a7ed79989d6182b966c50a2bf56"
+    "0320_school_payment_credential_vault.sql": "42194542aa26affc6ce836fd06fbce0210d30a7ed79989d6182b966c50a2bf56",
+    "0329_parent_class_booking.sql": "28650fbd310da68a4a9bbbe8a670c74cb07269010b6f512b2c2b8f2f1da379f9"
   }
 }

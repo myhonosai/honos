@@ -3273,3 +3273,16 @@ DO $$ DECLARE r text; f text; BEGIN
     END LOOP;
   END LOOP;
 END $$;
+
+-- 0329 parent class booking: private helpers and three runtime entry points (choices, book, cancel). No table privilege.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.book_parent_class_session(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0329 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.parent_class_booking_scope(text,boolean)','hon.parent_class_booking_child_ok(uuid,uuid)','hon.parent_class_booking_session_ok(uuid,hon.class_sessions)','hon.parent_class_booking_seats(uuid)','hon.parent_class_booking_json(hon.class_bookings,hon.class_sessions)','hon.parent_class_booking_begin(text,text,text)','hon.parent_class_booking_finish(text,text,uuid,jsonb,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)','hon.read_parent_class_booking_choices(text)','hon.book_parent_class_session(text,jsonb,text,uuid,uuid)','hon.cancel_parent_class_booking(text,jsonb,text,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_parent_class_booking_choices(text),hon.book_parent_class_session(text,jsonb,text,uuid,uuid),
+      hon.cancel_parent_class_booking(text,jsonb,text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;

@@ -12,7 +12,7 @@ grant, and it is re-checked after the locks. Only `PRIMARY_GUARDIAN` and `SECOND
 power and a staff role never acts as a parent. Every write has exact-request idempotency, audit and an inert outbox event
 (ids and version only).
 
-## PR A: book classes from the parent account
+## PR A: book classes from the parent account (0329)
 
 - **A1 Choices.** A guardian sees, for each child of the family, upcoming class sessions in the next 14 days that:
   are SCHEDULED, have a booking policy of `OPTIONAL_BOOKING` or `REQUIRED_BOOKING` (never `WALK_IN`), belong to a program
@@ -21,11 +21,11 @@ power and a staff role never acts as a parent. Every write has exact-request ide
   never exceeded and the same child is never booked twice. The booking is `REGULAR`, `source = PARENT_APP`.
 - **A3 Cancel.** The guardian may cancel a `PARENT_APP` booking of their own child until the session starts. A staff-made
   booking is cancelled only by staff.
-- **A4 Event slots and families-only booking types.** The guardian can book a 0261 event slot or a 0286
+- **A4 Event slots and families-only booking types (later PR, needs its own number).** The guardian can book a 0261 event slot or a 0286
   `FAMILIES_ONLY` booking type with the family's details filled in from the account, with the same capacity and
   one-booking rules as the public path. (This is booking types part 3's family path.)
 
-## PR B: messages between a family and the school, inside HON
+## PR B: messages between a family and the school, inside HON (0330)
 
 - **B1 Threads.** One conversation per family and school. A guardian writes a message (1-2,000 characters, plain text).
   Staff with the new permission `family_messages.manage` (granted to system OWNER and MANAGER roles) read every family
