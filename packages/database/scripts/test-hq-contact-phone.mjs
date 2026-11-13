@@ -85,6 +85,10 @@ try {
   }
   const inboundSig = 'record_hq_inbound_text(text,text,text,text,text,timestamp with time zone)';
   eq(await has(worker, inboundSig), true, 'worker records inbound texts'); eq(await has(runtime, inboundSig), false, 'runtime cannot record inbound texts');
+  const claimSig = 'claim_hq_message_deliveries(text[],integer,integer)';
+  eq(await has(worker, claimSig), true, 'worker still claims HQ deliveries after the claim is recreated'); eq(await has(runtime, claimSig), false, 'runtime cannot claim HQ deliveries');
+  eq((await one(admin, "SELECT has_function_privilege('public',$1,'EXECUTE') a", ['hon.' + claimSig])).a, false, 'PUBLIC cannot claim HQ deliveries');
+  ok(/attempt integer, purpose text\)$/.test((await one(admin, "SELECT pg_get_function_result($1::regprocedure) r", ['hon.' + claimSig])).r), 'the claim returns the message purpose');
   for (const sig of ['require_hq_contact_self(text)', 'hq_contact_json(uuid)', 'hq_contact_sms_address(uuid)', 'hq_contact_set_preference(uuid,text,text,timestamp with time zone)'])
     eq(await has(runtime, sig), false, `runtime cannot run helper ${sig}`);
   for (const t of ['hq_contact_phones', 'hq_inbound_texts', 'hq_contact_requests']) {
@@ -189,6 +193,7 @@ try {
   eq([byPrincipal[P('owner2')].status, byPrincipal[P('owner2')].failure_code], ['SUPPRESSED', 'CONSENT_MISSING'], 'pending number never texted');
   if (hour >= 8 && hour < 21) {
     eq(claimed.map((r) => [r.recipient_address, r.sender_ref, r.content.length]), [[PHONE1, SID, draft.message.content.length]], 'confirmed owner leased, whole text, HQ Messaging Service');
+    eq(claimed[0].purpose, 'SUPPORT', 'the lease carries the message purpose');
     await worker.query('SELECT * FROM hon.record_hq_message_send_result($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
       [claimed[0].delivery_id, claimed[0].lease_token, 'ACCEPTED', 'FAKE', 'fake-sms-1', 'MMS', null, null, null, null]);
   } else {

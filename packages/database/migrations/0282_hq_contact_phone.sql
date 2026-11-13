@@ -350,6 +350,102 @@ BEGIN
   RETURN NEXT;
 END $$;
 
+-- ---------- the 0281 claim also returns the message purpose ----------
+-- Same claim as 0281, plus the message purpose, so the dispatcher can tell the email adapter that a BILLING or ACCOUNT
+-- notice is a required notice (owner decision 2026-11-12: those emails reach owners who opted out of HQ email, and the
+-- adapter skips the email provider's own unsubscribe handling for them). The rules for who is reached are unchanged.
+-- A new result column needs DROP + CREATE; the privileges below grant it to the worker again.
+DROP FUNCTION hon.claim_hq_message_deliveries(text[], integer, integer);
+CREATE FUNCTION hon.claim_hq_message_deliveries(p_channels text[], p_limit integer, p_lease_seconds integer DEFAULT 60)
+RETURNS TABLE (delivery_id uuid, lease_token uuid, organization_id uuid, school_id uuid, message_id uuid, channel text,
+  recipient_address text, content text, sender_ref text, sender_name text, attempt integer, purpose text)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
+#variable_conflict use_column
+DECLARE v_delivery hon.hq_message_deliveries; v_message hon.hq_messages; v_sender hon.hq_communication_senders; v_prior text;
+  v_user uuid; v_address text; v_zone text; v_local timestamp; v_wake timestamptz; v_token uuid; v_fail text;
+BEGIN
+  IF p_limit < 1 OR p_limit > 100 THEN RAISE EXCEPTION 'HQ message claim limit must be between 1 and 100.' USING ERRCODE = '22023'; END IF;
+  IF p_lease_seconds < 15 OR p_lease_seconds > 300 THEN RAISE EXCEPTION 'HQ message lease must be between 15 and 300 seconds.' USING ERRCODE = '22023'; END IF;
+  IF p_channels IS NULL OR cardinality(p_channels) < 1 OR NOT (p_channels <@ ARRAY['EMAIL','SMS']) THEN
+    RAISE EXCEPTION 'HQ message claim channels must be EMAIL and/or SMS.' USING ERRCODE = '22023';
+  END IF;
+  PERFORM hon.reconcile_expired_hq_message_leases(p_limit);
+  FOR v_delivery IN SELECT d.* FROM hon.hq_message_deliveries d
+    WHERE d.status = 'PENDING' AND d.channel = ANY (p_channels) AND d.next_attempt_at <= now()
+    ORDER BY d.next_attempt_at, d.id FOR UPDATE OF d SKIP LOCKED LIMIT p_limit LOOP
+    v_prior := v_delivery.status::text;
+    SELECT * INTO v_message FROM hon.hq_messages WHERE id = v_delivery.message_id;
+    SELECT p.user_id INTO v_user FROM hon.principals p WHERE p.id = v_delivery.recipient_principal_id;
+    v_fail := NULL;
+    IF v_message.status <> 'QUEUED' THEN v_fail := 'CANCELLED';
+    ELSIF v_delivery.attempt_count >= 5 THEN v_fail := 'RETRIES_EXHAUSTED';
+    ELSIF NOT EXISTS (SELECT 1 FROM hon.hq_message_owner_recipients(v_delivery.school_id) r WHERE r.principal_id = v_delivery.recipient_principal_id) THEN
+      v_fail := 'RECIPIENT_REMOVED';
+    -- An email opt-out does not stop BILLING or ACCOUNT notices (owner decision 2026-11-12): they are required notices about the
+    -- school's own HON account. Support and onboarding email, and every text, honor the opt-out.
+    ELSIF EXISTS (SELECT 1 FROM hon.hq_contact_preferences c WHERE c.user_id = v_user AND c.channel = v_delivery.channel AND c.status = 'OPTED_OUT')
+        AND NOT (v_delivery.channel = 'EMAIL' AND v_message.purpose IN ('BILLING','ACCOUNT'))
+      -- Texts also need the person's own HQ texting opt-in (recorded by 0282 after they confirm their phone).
+      OR (v_delivery.channel = 'SMS' AND NOT EXISTS (SELECT 1 FROM hon.hq_contact_preferences c WHERE c.user_id = v_user
+        AND c.channel = 'SMS' AND c.status = 'OPTED_IN')) THEN
+      v_fail := 'CONSENT_MISSING';
+    ELSE
+      v_address := CASE v_delivery.channel WHEN 'EMAIL' THEN (SELECT u.email::text FROM hon.users u WHERE u.id = v_user)
+        ELSE hon.hq_contact_sms_address(v_user) END;
+      IF v_address IS NULL OR btrim(v_address) = '' THEN v_fail := 'ADDRESS_MISSING'; END IF;
+    END IF;
+    IF v_fail IS NOT NULL THEN
+      UPDATE hon.hq_message_deliveries SET status = CASE WHEN v_fail = 'RETRIES_EXHAUSTED' THEN 'FAILED' ELSE 'SUPPRESSED' END::hon.communication_delivery_status,
+        hold_reason = NULL, failure_code = v_fail, final_at = now(), version = version + 1, updated_at = now()
+      WHERE id = v_delivery.id RETURNING * INTO v_delivery;
+      PERFORM hon.hq_message_delivery_evidence(v_delivery, v_prior, 'hq.communication.delivery.' || lower(v_delivery.status::text));
+      CONTINUE;
+    END IF;
+
+    v_sender := NULL;
+    SELECT * INTO v_sender FROM hon.hq_communication_senders s WHERE s.channel = v_delivery.channel AND s.status = 'ACTIVE';
+    IF v_sender.id IS NULL THEN
+      IF v_delivery.hold_reason IS DISTINCT FROM 'NO_SENDER' THEN
+        UPDATE hon.hq_message_deliveries SET hold_reason = 'NO_SENDER', next_attempt_at = now() + interval '1 hour', version = version + 1,
+          updated_at = now() WHERE id = v_delivery.id RETURNING * INTO v_delivery;
+        PERFORM hon.hq_message_delivery_evidence(v_delivery, v_prior, 'hq.communication.delivery.held');
+      ELSE
+        UPDATE hon.hq_message_deliveries SET next_attempt_at = now() + interval '1 hour' WHERE id = v_delivery.id;
+      END IF;
+      CONTINUE;
+    END IF;
+
+    IF v_delivery.channel = 'SMS' THEN
+      SELECT s.timezone INTO v_zone FROM hon.schools s WHERE s.id = v_delivery.school_id;
+      v_local := now() AT TIME ZONE v_zone;
+      IF v_local::time >= time '21:00' OR v_local::time < time '08:00' THEN
+        v_wake := (date_trunc('day', v_local) + CASE WHEN v_local::time >= time '21:00' THEN interval '1 day' ELSE interval '0' END
+          + interval '8 hours') AT TIME ZONE v_zone;
+        IF v_delivery.hold_reason IS DISTINCT FROM 'QUIET_HOURS' THEN
+          UPDATE hon.hq_message_deliveries SET hold_reason = 'QUIET_HOURS', next_attempt_at = v_wake, version = version + 1, updated_at = now()
+          WHERE id = v_delivery.id RETURNING * INTO v_delivery;
+          PERFORM hon.hq_message_delivery_evidence(v_delivery, v_prior, 'hq.communication.delivery.held');
+        ELSE
+          UPDATE hon.hq_message_deliveries SET next_attempt_at = v_wake WHERE id = v_delivery.id;
+        END IF;
+        CONTINUE;
+      END IF;
+    END IF;
+
+    v_token := gen_random_uuid();
+    UPDATE hon.hq_message_deliveries SET status = 'SENDING', hold_reason = NULL, attempt_count = attempt_count + 1, lease_token = v_token,
+      lease_expires_at = now() + make_interval(secs => p_lease_seconds), sender_id = v_sender.id, version = version + 1, updated_at = now()
+    WHERE id = v_delivery.id RETURNING * INTO v_delivery;
+    PERFORM hon.hq_message_delivery_evidence(v_delivery, v_prior, 'hq.communication.delivery.leased');
+    delivery_id := v_delivery.id; lease_token := v_token; organization_id := v_delivery.organization_id; school_id := v_delivery.school_id;
+    message_id := v_delivery.message_id; channel := v_delivery.channel; recipient_address := v_address; content := v_message.content;
+    sender_ref := CASE v_delivery.channel WHEN 'EMAIL' THEN v_sender.email_from ELSE v_sender.sms_service_sid END;
+    sender_name := coalesce(v_sender.email_display_name, 'HON OS'); attempt := v_delivery.attempt_count;
+    purpose := v_message.purpose::text;
+    RETURN NEXT;
+  END LOOP;
+END $$;
+
 -- ---------- privileges ----------
 DO $$ DECLARE r text; t text; f text; BEGIN
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_communication_worker','hon_outbox_worker') LOOP
@@ -360,7 +456,8 @@ DO $$ DECLARE r text; t text; f text; BEGIN
   FOREACH f IN ARRAY ARRAY['guard_hq_contact_phone()','require_hq_contact_self(text)','hq_contact_claim(uuid,uuid,text,text)',
     'hq_contact_phone_lock(uuid)','hq_contact_texting_on(uuid)','hq_contact_json(uuid)','hq_contact_set_preference(uuid,text,text,timestamptz)',
     'hq_contact_sms_address(uuid)','read_my_hq_contact(text)','start_my_hq_phone(text,jsonb,uuid)','set_my_hq_texting(text,jsonb,uuid)',
-    'remove_my_hq_phone(text,jsonb,uuid)','hq_inbound_reply(text)','record_hq_inbound_text(text,text,text,text,text,timestamptz)'] LOOP
+    'remove_my_hq_phone(text,jsonb,uuid)','hq_inbound_reply(text)','record_hq_inbound_text(text,text,text,text,text,timestamptz)',
+    'claim_hq_message_deliveries(text[],integer,integer)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_communication_worker','hon_outbox_worker') LOOP
       EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
@@ -371,7 +468,8 @@ DO $$ DECLARE r text; t text; f text; BEGIN
       hon.remove_my_hq_phone(text,jsonb,uuid) TO hon_runtime;
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_communication_worker') THEN
-    GRANT EXECUTE ON FUNCTION hon.record_hq_inbound_text(text,text,text,text,text,timestamptz) TO hon_communication_worker;
+    GRANT EXECUTE ON FUNCTION hon.record_hq_inbound_text(text,text,text,text,text,timestamptz),
+      hon.claim_hq_message_deliveries(text[],integer,integer) TO hon_communication_worker;
   END IF;
 END $$;
 
