@@ -274,6 +274,7 @@
     "0320_school_payment_credential_vault.sql": "42194542aa26affc6ce836fd06fbce0210d30a7ed79989d6182b966c50a2bf56",
     "0306_hon_os_lifetime_purchase.sql": "e953952706c8f078f0e95dbaadffb357d4560e990422f7c1daac9e0405f0f491",
     "0309_hon_os_lifetime_refund_ends_access.sql": "810a648cf0c9faec1f458e841b2710d609982d6f911674c57cc352687c6e562c",
-    "0324_hon_os_schedule_renewals_suspension.sql": "6348290ebb2786e32489e2119be51300d6e12ba8e16a3f50e1f50d8e0c967cbe"
+    "0324_hon_os_schedule_renewals_suspension.sql": "6348290ebb2786e32489e2119be51300d6e12ba8e16a3f50e1f50d8e0c967cbe",
+    "0325_hon_os_referral_welcome_credit.sql": "95f27dfb6d106ad3dcfd579ffec2573471d4ef9f89cfb5e38aa43f5a9cb9b80e"
   }
 }

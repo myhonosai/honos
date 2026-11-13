@@ -2565,6 +2565,22 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 
+-- 0325 referral welcome credit on HON OS plans: the HQ owner's apply command and the two binding reads 0325 replaced.
+-- The credit helpers, the consistency check and the alert and single-path triggers stay unreachable.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['saas_schedule_credit_remaining(uuid)','saas_schedule_welcome_credit_json(uuid)',
+    'verify_saas_schedule_credit_consistency()','guard_saas_reward_single_path()','saas_schedule_event_referral_alert()'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.apply_saas_schedule_welcome_credit(text,uuid,jsonb,uuid,uuid,uuid),
+      hon.read_saas_schedule_binding(text,uuid,uuid),hon.read_saas_schedule_binding_from_hq(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
 -- B-HQ-2 0232 (proposed) HQ support records: no table privileges; three commands and three reads are the only runtime boundary.
 DO $$ DECLARE r text; t text; BEGIN
   FOREACH t IN ARRAY ARRAY['hq_support_cases','hq_support_case_events','hq_support_requests'] LOOP

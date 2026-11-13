@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "260be507009ba8f5fbaeabb3d4297ebc6b24a086d1decb225138121611e109fe",
+  "chainSha256": "e0f9cde6124920af0a3ddbdf4141a171e06220cbbb6871c78fca6f5faf921a5a",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -409,6 +409,10 @@
     {
       "file": "0324_hon_os_schedule_renewals_suspension.sql",
       "sha256": "6348290ebb2786e32489e2119be51300d6e12ba8e16a3f50e1f50d8e0c967cbe"
+    },
+    {
+      "file": "0325_hon_os_referral_welcome_credit.sql",
+      "sha256": "95f27dfb6d106ad3dcfd579ffec2573471d4ef9f89cfb5e38aa43f5a9cb9b80e"
     }
   ]
 }

@@ -33,4 +33,8 @@ export class SaasScheduleBindingHqController {
   retryAccess(@Req() r: HonRequest,@Param('bindingId') binding: string,@Body() body: unknown,@Headers('idempotency-key') key: string | undefined) {
     return this.schedules.retryAccess(subject(r),binding,body,key).then(data => ({data}));
   }
+  @Post(':bindingId/welcome-credit') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.applyScheduleWelcomeCredit)
+  applyWelcomeCredit(@Req() r: HonRequest,@Param('bindingId') binding: string,@Body() body: unknown,@Headers('idempotency-key') key: string | undefined) {
+    return this.schedules.applyWelcomeCredit(subject(r),binding,body,key).then(data => ({data}));
+  }
 }
