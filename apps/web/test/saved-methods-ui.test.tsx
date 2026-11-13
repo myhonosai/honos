@@ -6,7 +6,7 @@ import { SCHOOL_SHELL_NAV, schoolShellActiveRoute } from '../src/components/scho
 import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
 import { MethodError, keepForRetry, methodErrorFor, methodsQueryFrom, savedMethodsApi } from '../src/components/saved-methods/http';
 import { methodBody, payerOptions, takeMethodsQuery } from '../src/components/saved-methods/saved-methods';
-import { CONSENT, SavedMethodsView, methodLabel, type SavedMethodsViewProps } from '../src/components/saved-methods/view';
+import { CONSENT, SavedMethodsView, consentGiven, consentScope, methodLabel, type SavedMethodsViewProps } from '../src/components/saved-methods/view';
 import { id } from './account-status-fixtures';
 
 // B-TUI-2 piece 3-web (0321): staff save a payer's card or bank account with the school's own processor, test mode only, no HON fee.
@@ -164,6 +164,16 @@ it('shows saved methods and only the actions the staff permission allows; the co
   const remove = renderToStaticMarkup(<SavedMethodsView {...props({ form: { kind: 'remove', methodId } })}/>);
   expect(remove).toContain('data-testid="remove-form"');
   expect(methodLabel({ brand: 'BANK', last4: '6789', expMonth: null, expYear: null })).toBe('Bank account ending 6789');
+});
+
+it('clears consent when the kind or the processor changes, so Continue needs the new text accepted', () => {
+  const ticked = consentScope(connectionId, 'CARD');
+  expect(consentGiven(ticked, connectionId, 'CARD')).toBe(true);
+  expect(consentGiven(ticked, connectionId, 'US_BANK_ACCOUNT')).toBe(false);
+  expect(consentGiven(ticked, id(31), 'CARD')).toBe(false);
+  expect(consentGiven(null, connectionId, 'CARD')).toBe(false);
+  const add = renderToStaticMarkup(<SavedMethodsView {...props({ form: { kind: 'add' } })}/>);
+  expect(add).toMatch(/<button type="submit"[^>]*disabled=""[^>]*>Continue to the payment processor/);
 });
 
 it('offers Finish saving only with a return, lists expiring cards, and shows outcomes plainly', () => {

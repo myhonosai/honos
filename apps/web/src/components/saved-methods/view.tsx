@@ -11,6 +11,12 @@ export type MethodForm = null | Readonly<{ kind: 'add' }> | Readonly<{ kind: 're
 export type MethodOutcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | 'REDIRECTING' | 'LINK_REPLAYED' | MethodErrorKind; action: MethodCommand; providerDetached?: boolean }>;
 
 /** The consent each method kind records (by version); the payer must agree before the provider page opens. */
+/** Consent is for one text on one processor: changing the kind or the connection clears it. */
+export function consentScope(connectionId: string, kind: SchoolPayMethodKind): string { return `${connectionId}|${kind}`; }
+export function consentGiven(agreedFor: string | null, connectionId: string, kind: SchoolPayMethodKind): boolean {
+  return agreedFor !== null && agreedFor === consentScope(connectionId, kind);
+}
+
 export const CONSENT: Record<SchoolPayMethodKind, Readonly<{ version: string; text: (school: string) => string }>> = {
   CARD: { version: 'card-on-file-v1', text: (school) => `I allow ${school} to save this card with its payment processor and charge it for tuition and fees I agree to, until I ask to remove it.` },
   US_BANK_ACCOUNT: { version: 'ach-mandate-v1', text: (school) => `I allow ${school} to save this bank account with its payment processor and debit it for tuition and fees I agree to, until I ask to remove it.` },
@@ -78,9 +84,11 @@ function Method({ p, m, canManage }: { p: SavedMethodsViewProps; m: SchoolPayMet
 function AddForm({ p, read }: { p: SavedMethodsViewProps; read: SchoolPayPayerMethodsView }) {
   const [connectionId, setConnectionId] = React.useState(read.connections[0]?.connectionId ?? '');
   const [kind, setKind] = React.useState<SchoolPayMethodKind>('CARD');
-  const [agreed, setAgreed] = React.useState(false);
   const connection = read.connections.find((c) => c.connectionId === connectionId);
   const effectiveKind: SchoolPayMethodKind = kind === 'US_BANK_ACCOUNT' && !connection?.bankDebit ? 'CARD' : kind;
+  const consentFor = consentScope(connectionId, effectiveKind);
+  const [agreedFor, setAgreedFor] = React.useState<string | null>(null);
+  const agreed = consentGiven(agreedFor, connectionId, effectiveKind);
   return <form className={styles.form} data-testid="add-form" onSubmit={(e) => { e.preventDefault(); if (agreed && connection) p.onStart?.(connection.connectionId, effectiveKind); }}>
     <label className={styles.field}>Payment processor
       <select value={connectionId} onChange={(e) => setConnectionId(e.target.value)}>
@@ -90,7 +98,7 @@ function AddForm({ p, read }: { p: SavedMethodsViewProps; read: SchoolPayPayerMe
       <label><input type="radio" name="kind" checked={effectiveKind === 'CARD'} onChange={() => setKind('CARD')}/> Card</label>
       {connection?.bankDebit ? <label><input type="radio" name="kind" checked={effectiveKind === 'US_BANK_ACCOUNT'} onChange={() => setKind('US_BANK_ACCOUNT')}/> US bank account</label> : null}
     </fieldset>
-    <label><input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} data-testid="consent"/> {CONSENT[effectiveKind].text(p.schoolName || 'the school')}</label>
+    <label><input type="checkbox" checked={agreed} onChange={(e) => setAgreedFor(e.target.checked ? consentFor : null)} data-testid="consent"/> {CONSENT[effectiveKind].text(p.schoolName || 'the school')}</label>
     <p className={styles.meta}>The payer enters the details on the payment processor&apos;s own page. HON never sees the card or account number. Nothing is charged now.</p>
     <div className={styles.row}><button type="submit" className={styles.primary} disabled={p.locked || !agreed || !connection}>Continue to the payment processor</button>
       <button type="button" className={styles.secondary} disabled={p.locked} onClick={p.onClose}>Close</button></div>
