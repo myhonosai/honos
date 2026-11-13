@@ -3603,3 +3603,42 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END LOOP;
 END $$;
 -- End parent class booking exact verification.
+
+-- Family messages exact verification (0330): private helpers, private forced-RLS tables and six runtime entry points.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.family_message_body_ok(text)',false,false,'search_path=pg_catalog','911c8020274ce0bad19829ea68cafc456c16dd76f61ef1fbe827e68611e0b146'),
+('hon.guard_family_message_thread()',false,false,'search_path=pg_catalog, hon','f1492f25d9552a3a0c22e7094d719ac3775435655527c010d465a665961f9cbf'),
+('hon.family_message_parent_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','934532bf7f7ae9807bbc7692110f31a3aa0f3359250a578897d95f308e6c6c35'),
+('hon.require_family_messages_actor(text)',true,false,'search_path=pg_catalog, hon','29ee5eb47779b29faf23ddd1598712047d1bc04d905ab7e8bc1b30eae56f686b'),
+('hon.family_message_time(timestamp with time zone)',false,false,'search_path=pg_catalog','e4a86c6f3c7e0d57791518a05be7b1552ebb4b274f34c42dc0e8b86bf6a93d46'),
+('hon.family_message_json(hon.family_messages,uuid)',true,false,'search_path=pg_catalog, hon','baf138c7b630fcb89c0ec813fb95510288fbcf44700df03774940fd2477f0a74'),
+('hon.family_message_list(uuid,uuid)',true,false,'search_path=pg_catalog, hon','c37b4dea088a25f7a72fdffcbacaf890e3080d9d655120dae7d889888135614f'),
+('hon.family_message_unread(hon.family_message_threads)',true,false,'search_path=pg_catalog, hon','6b2760aeceef08a8cf14010c232d91a3af41e181dfc5c48faa438fab7b6cea81'),
+('hon.family_message_begin(uuid,text,text)',true,false,'search_path=pg_catalog, hon','ab1a5d9b6f613a0882b3d242846da5cbaa3f5c5487410b76e0969d02494762d6'),
+('hon.family_message_append(hon.family_message_threads,uuid,text,text,text,uuid,uuid)',true,false,'search_path=pg_catalog, hon','dce0f8f6869d3828ae2e508f37ae9e3c374fba3e78519e49db008fc675ebca48'),
+('hon.read_parent_family_messages(text)',true,true,'search_path=pg_catalog, hon','1def9f2bc2adac08074493044c5212e4def48eaf4989a224878e0f2d202813e0'),
+('hon.send_parent_family_message(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','c7c4ea7a7dde93b686886d4f57d3dedb3603c6cf60a2d5acd2d715ccd89358ee'),
+('hon.read_family_message_inbox(text)',true,true,'search_path=pg_catalog, hon','bf49605bc28739c2b9fad8e9272d7de8a89726e059efd9a79cdd7442755fadc3'),
+('hon.read_family_message_thread(text,uuid)',true,true,'search_path=pg_catalog, hon','2a3e50dfdfd9e083baec07b7415b69d4d608b42dcd2423b3b0f62795aa594bcb'),
+('hon.mark_family_message_thread_read(text,jsonb,uuid,uuid)',true,true,'search_path=pg_catalog, hon','3013e2b7e9695a2f655318985a90e983ffac9b6ba89f6d56fd73a3227f90e212'),
+('hon.reply_family_message(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','ad9bd61f7e5a18ff260ae7b2285a6fc06a2148c1816d9511c91822d38bad9475')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe family message function: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['family_message_threads','family_messages'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe family message table: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End family messages exact verification.

@@ -196,6 +196,8 @@ import { ParentPlannedAbsenceRequestController, ParentPlannedAbsenceRequestGuard
 import { ParentPlannedAbsenceRequestService } from './families/parent-planned-absence-request.service.js';
 import { ParentClassBookingBookGuard, ParentClassBookingCancelGuard, ParentClassBookingController, ParentClassBookingReadGuard } from './families/parent-class-booking.controller.js';
 import { ParentClassBookingService } from './families/parent-class-booking.service.js';
+import { FamilyMessagesInboxController, FamilyMessagesInboxReadGuard, FamilyMessagesMarkReadGuard, FamilyMessagesReplyGuard, ParentFamilyMessagesController, ParentFamilyMessagesReadGuard, ParentFamilyMessagesSendGuard } from './families/family-messages.controller.js';
+import { FamilyMessagesService } from './families/family-messages.service.js';
 import { ParentMessageHistoryController, ParentMessageHistoryReadGuard } from './families/parent-message-history.controller.js';
 import { ParentMessageHistoryService } from './families/parent-message-history.service.js';
 import { CrmLeadActionTool } from './crm/crm-lead-action.tool.js';
@@ -422,6 +424,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentPlannedAbsenceHistoryController,
     ParentPlannedAbsenceRequestController,
     ParentClassBookingController,
+    ParentFamilyMessagesController,
+    FamilyMessagesInboxController,
     ParentMessageHistoryController,
     LeadController,
     LeadCloseController,
@@ -562,6 +566,12 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentClassBookingReadGuard,
     ParentClassBookingBookGuard,
     ParentClassBookingCancelGuard,
+    FamilyMessagesService,
+    ParentFamilyMessagesReadGuard,
+    ParentFamilyMessagesSendGuard,
+    FamilyMessagesInboxReadGuard,
+    FamilyMessagesMarkReadGuard,
+    FamilyMessagesReplyGuard,
     ParentPlannedAbsenceRequestGuard,
     ParentMessageHistoryService,
     ParentMessageHistoryReadGuard,

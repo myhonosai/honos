@@ -3468,3 +3468,19 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.cancel_parent_class_booking(text,jsonb,text,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0330 family messages: private helpers, two private tables and six runtime entry points (parent read/send; staff inbox, thread, mark read, reply).
+DO $$ DECLARE r text; f text; t text; BEGIN
+  IF to_regprocedure('hon.reply_family_message(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0330 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.family_message_body_ok(text)','hon.guard_family_message_thread()','hon.family_message_parent_scope(text,boolean)','hon.require_family_messages_actor(text)','hon.family_message_time(timestamp with time zone)','hon.family_message_json(hon.family_messages,uuid)','hon.family_message_list(uuid,uuid)','hon.family_message_unread(hon.family_message_threads)','hon.family_message_begin(uuid,text,text)','hon.family_message_append(hon.family_message_threads,uuid,text,text,text,uuid,uuid)','hon.read_parent_family_messages(text)','hon.send_parent_family_message(text,jsonb,text,uuid,uuid)','hon.read_family_message_inbox(text)','hon.read_family_message_thread(text,uuid)','hon.mark_family_message_thread_read(text,jsonb,uuid,uuid)','hon.reply_family_message(text,jsonb,text,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['family_message_threads','family_messages'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY ARRAY['hon.read_parent_family_messages(text)','hon.send_parent_family_message(text,jsonb,text,uuid,uuid)','hon.read_family_message_inbox(text)','hon.read_family_message_thread(text,uuid)','hon.mark_family_message_thread_read(text,jsonb,uuid,uuid)','hon.reply_family_message(text,jsonb,text,uuid,uuid)'] LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;

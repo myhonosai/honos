@@ -431,6 +431,10 @@
       "sha256": "28650fbd310da68a4a9bbbe8a670c74cb07269010b6f512b2c2b8f2f1da379f9"
     },
     {
+      "file": "0330_family_messages.sql",
+      "sha256": "x"
+    },
+    {
       "file": "0331_school_reports.sql",
       "sha256": "a5480e9eef175e40a64f58343ee9f9a550f2470b4bf98c97452e0405df60c130"
     },
