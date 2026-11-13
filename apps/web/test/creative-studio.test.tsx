@@ -31,7 +31,7 @@ it('projects only school-facing wallet facts, newest history first and capped', 
   expect(wallet.history).toHaveLength(STUDIO_HISTORY_LIMIT);
   expect(wallet.history[0]!.occurredAt > wallet.history[1]!.occurredAt).toBe(true);
   expect(wallet.rates?.map(rate => rate.provisional)).toEqual([true, false]);
-  expect(Object.keys(wallet).sort()).toEqual(['available', 'eligible', 'held', 'history', 'monthlyIncluded', 'packages', 'programActive', 'rates', 'reason', 'window']);
+  expect(Object.keys(wallet).sort()).toEqual(['available', 'eligible', 'held', 'history', 'monthlyIncluded', 'packages', 'programActive', 'rates', 'reason', 'websiteRate', 'window']);
   expect(JSON.stringify(wallet)).not.toMatch(/providerCost|providerId|modelCode|lotId|reservationId/);
 });
 

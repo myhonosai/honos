@@ -1,15 +1,15 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { CreativeAvatar, CreativeAvatarInput, CreativeAvatarReceipt, CreativeAvatarVideo, CreativeAvatarVideoInput, CreativeAvatarVideoReceipt, CreativeAvatarVideoRecords, CreativeGeneration, CreativeGenerationInput, CreativeGenerationReceipt, CreativeStudioAvatarList,
-  CreativeStudioGenerationList } from '@hon/contracts';
+  CreativeStudioGenerationList, CreativeWebsiteDraft, CreativeWebsiteDraftInput, CreativeWebsiteDraftList, CreativeWebsiteDraftReceipt } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { AccountStatusError, readSchoolCreativeWallet } from '../account-status/http';
-import { CreativeGenerationError, createCreativeAvatar, createCreativeAvatarVideo, createCreativeGeneration, listCreativeAvatarVideos, listCreativeAvatars,
-  listCreativeGenerations } from './generation-http';
-import { studioWallet, type AvatarsState, type VideosState, type CreateLock, type CreateOutcome, type GenerationsState, type StudioState, type StudioWallet } from './model';
+import { CreativeGenerationError, createCreativeAvatar, createCreativeAvatarVideo, createCreativeGeneration, createCreativeWebsiteDraft, listCreativeAvatarVideos, listCreativeAvatars,
+  listCreativeGenerations, listCreativeWebsiteDrafts, readCreativeWebsiteDraft } from './generation-http';
+import { studioWallet, type AvatarsState, type OpenDraft, type VideosState, type WebsitesState, type CreateLock, type CreateOutcome, type GenerationsState, type StudioState, type StudioWallet } from './model';
 import { CreativeStudioView } from './view';
 
 type Scope = Readonly<{ organizationId: string; schoolId: string }>;
@@ -23,6 +23,10 @@ export type CreativeStudioApi = {
   /** A2 (0277) talking avatar videos: optional for the same reason. */
   videos?(scope: Scope, signal: AbortSignal): Promise<CreativeAvatarVideoRecords>;
   createVideo?(scope: Scope, input: CreativeAvatarVideoInput, idempotencyKey: string, signal: AbortSignal): Promise<CreativeAvatarVideoReceipt>;
+  /** WB1 (0344) website drafts: optional for the same reason. */
+  websites?(scope: Scope, signal: AbortSignal): Promise<CreativeWebsiteDraftList>;
+  readWebsite?(scope: Scope, draftId: string, signal: AbortSignal): Promise<CreativeWebsiteDraft>;
+  createWebsite?(scope: Scope, input: CreativeWebsiteDraftInput, idempotencyKey: string, signal: AbortSignal): Promise<CreativeWebsiteDraftReceipt>;
 };
 /** The wallet and generation reads plus the one closed create command. The server authorizes the exact school for each. */
 export const CREATIVE_STUDIO_API: CreativeStudioApi = {
@@ -33,6 +37,9 @@ export const CREATIVE_STUDIO_API: CreativeStudioApi = {
   createAvatar: (scope, input, key, signal) => createCreativeAvatar(scope.schoolId, input, key, signal),
   videos: (scope, signal) => listCreativeAvatarVideos(scope.schoolId, signal),
   createVideo: (scope, input, key, signal) => createCreativeAvatarVideo(scope.schoolId, input, key, signal),
+  websites: (scope, signal) => listCreativeWebsiteDrafts(scope.schoolId, signal),
+  readWebsite: (scope, draftId, signal) => readCreativeWebsiteDraft(scope.schoolId, draftId, signal),
+  createWebsite: (scope, input, key, signal) => createCreativeWebsiteDraft(scope.schoolId, input, key, signal),
 };
 
 /**
@@ -42,6 +49,7 @@ export const CREATIVE_STUDIO_API: CreativeStudioApi = {
 type Pending = Readonly<{ schoolId: string; key: string; input: CreativeGenerationInput; unresolved: boolean }>;
 type PendingAvatar = Readonly<{ schoolId: string; key: string; input: CreativeAvatarInput; unresolved: boolean }>;
 type PendingVideo = Readonly<{ schoolId: string; key: string; input: CreativeAvatarVideoInput; unresolved: boolean }>;
+type PendingWebsite = Readonly<{ schoolId: string; key: string; input: CreativeWebsiteDraftInput; unresolved: boolean }>;
 const newKey = () => globalThis.crypto.randomUUID();
 
 export function outcomeFromReceipt(receipt: CreativeGenerationReceipt): CreateOutcome {
@@ -92,6 +100,20 @@ export function matchesPendingVideoGeneration(request: Readonly<{ input: Creativ
   return !!request && g.operationCode === 'avatar.video' && g.prompt === request.input.script && g.units === request.input.seconds && g.format === request.input.format;
 }
 
+/** A website draft receipt as a create outcome. */
+export function outcomeFromWebsiteReceipt(receipt: CreativeWebsiteDraftReceipt): CreateOutcome {
+  switch (receipt.draft.status) {
+    case 'SUCCEEDED': case 'RESOLVED_CHARGED': return { kind: 'DONE' };
+    case 'UNDER_REVIEW': return { kind: 'HELD' };
+    case 'FAILED': case 'RESOLVED_NOT_CHARGED': return { kind: 'FAILED' };
+    case 'GENERATING': return { kind: 'UNKNOWN' };
+  }
+}
+/** Drafts that may be this tab's unconfirmed website request: their brief and pages are not shown. */
+export function matchesPendingWebsite(request: Readonly<{ input: CreativeWebsiteDraftInput }> | null, d: Readonly<{ operationCode: string; pages: readonly string[]; brief: string }>): boolean {
+  return !!request && d.operationCode === request.input.operationCode && d.brief === request.input.brief && d.pages.join(',') === request.input.pages.join(',');
+}
+
 /** Rows that may be this tab's unconfirmed request: the list shows their status and credits, never their text. */
 export function matchesPending(request: Readonly<{ input: CreativeGenerationInput }> | null, g: CreativeGeneration): boolean {
   return !!request && g.operationCode === request.input.operationCode && g.units === request.input.units
@@ -122,6 +144,13 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
   const [videoLock, setVideoLock] = useState<CreateLock>('NONE');
   const pendingVideo = useRef<PendingVideo | null>(null);
   const sendingVideo = useRef(false);
+  const [websites, setWebsites] = useState<WebsitesState>({ state: 'LOADING' });
+  const [websiteOutcome, setWebsiteOutcome] = useState<CreateOutcome>(null);
+  const [websiteLock, setWebsiteLock] = useState<CreateLock>('NONE');
+  const pendingWebsite = useRef<PendingWebsite | null>(null);
+  const sendingWebsite = useRef(false);
+  const [openDraft, setOpenDraft] = useState<OpenDraft>(null);
+  const openRead = useRef(0);
   const [refresh, setRefresh] = useState(0);
   const generation = useRef(0);
   // Advances only when the page is concealed (blur, hidden tab, school change, session end), never on a read Refresh,
@@ -134,14 +163,14 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
   useEffect(() => onShellPrivacyEvent(() => {
     concealShellPrivateNow(); generation.current++; privacy.current++; loadedSchool.current = null;
     setStudio({ state: 'LOADING' }); setGenerations({ state: 'LOADING' }); setOutcome(null); setAvatars({ state: 'LOADING' }); setAvatarOutcome(null);
-    setVideos({ state: 'LOADING' }); setVideoOutcome(null);
+    setVideos({ state: 'LOADING' }); setVideoOutcome(null); setWebsites({ state: 'LOADING' }); setWebsiteOutcome(null); openRead.current++; setOpenDraft(null);
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), []);
 
   useEffect(() => {
     const current = ++generation.current;
     const school = selection ? selection.schoolId.toLowerCase() : null;
     // A Refresh of the same school keeps what is shown (and any draft in the form) until the new reads answer.
-    if (school === null || school !== loadedSchool.current) { setStudio({ state: 'LOADING' }); setGenerations({ state: 'LOADING' }); setAvatars({ state: 'LOADING' }); setVideos({ state: 'LOADING' }); }
+    if (school === null || school !== loadedSchool.current) { setStudio({ state: 'LOADING' }); setGenerations({ state: 'LOADING' }); setAvatars({ state: 'LOADING' }); setVideos({ state: 'LOADING' }); setWebsites({ state: 'LOADING' }); openRead.current++; setOpenDraft(null); }
     loadedSchool.current = school;
     if (!selection) return;
     const scope = { organizationId: selection.organizationId, schoolId: selection.schoolId };
@@ -156,6 +185,10 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
     if (pendingVideo.current && pendingVideo.current.schoolId !== scope.schoolId.toLowerCase()) {
       pendingVideo.current = null;
       if (!sendingVideo.current) setVideoLock('NONE');
+    }
+    if (pendingWebsite.current && pendingWebsite.current.schoolId !== scope.schoolId.toLowerCase()) {
+      pendingWebsite.current = null;
+      if (!sendingWebsite.current) setWebsiteLock('NONE');
     }
     const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
     api.wallet(scope, signal).then(
@@ -172,6 +205,10 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
       list => { if (current === generation.current) setVideos({ state: 'READY', items: list.videos }); },
       error => { if (current === generation.current) setVideos({ state: error instanceof CreativeGenerationError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
     else setVideos({ state: 'UNAVAILABLE' });
+    if (api.websites) api.websites(scope, signal).then(
+      list => { if (current === generation.current) setWebsites({ state: 'READY', provider: list.provider, items: list.drafts }); },
+      error => { if (current === generation.current) setWebsites({ state: error instanceof CreativeGenerationError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
+    else setWebsites({ state: 'UNAVAILABLE' });
     return () => { abort.abort(); };
   }, [selection?.organizationId, selection?.schoolId, api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -257,6 +294,42 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
   const onCheckVideoAgain = useCallback(() => { void sendVideo(); }, [sendVideo]);
   const shownVideoOutcome: CreateOutcome = videoOutcome ?? (videoLock === 'SENDING' ? { kind: 'SENDING' } : videoLock === 'UNRESOLVED' ? { kind: 'HIDDEN_PENDING' } : null);
   const hideVideoText = useCallback((v: CreativeAvatarVideo) => matchesPendingVideo(pendingVideo.current, v), [videoLock]); // eslint-disable-line react-hooks/exhaustive-deps
+  // WB1 website drafts: the same rules again. Only a known outcome releases the request; anything else keeps its key.
+  const sendWebsite = useCallback(async () => {
+    const request = pendingWebsite.current;
+    if (!request || sendingWebsite.current || !selection || selection.schoolId.toLowerCase() !== request.schoolId || !api.createWebsite) return;
+    sendingWebsite.current = true; const shown = privacy.current;
+    setWebsiteLock('SENDING'); setWebsiteOutcome({ kind: 'SENDING' });
+    let next: CreateOutcome, release: boolean;
+    try {
+      const receipt = await api.createWebsite({ organizationId: selection.organizationId, schoolId: request.schoolId }, request.input, request.key, AbortSignal.timeout(300000));
+      next = outcomeFromWebsiteReceipt(receipt); release = next?.kind !== 'UNKNOWN';
+    } catch (error) { ({ outcome: next, release } = outcomeFromAttempt(error, request.unresolved)); }
+    finally { sendingWebsite.current = false; }
+    if (pendingWebsite.current?.key === request.key) pendingWebsite.current = release ? null : { ...request, unresolved: true };
+    setWebsiteLock(pendingWebsite.current ? 'UNRESOLVED' : 'NONE');
+    if (next?.kind === 'DONE' || next?.kind === 'HELD' || next?.kind === 'FAILED') setRefresh(value => value + 1);
+    if (shown !== privacy.current) { setWebsiteOutcome(prior => prior?.kind === 'SENDING' ? null : prior); return; }
+    setWebsiteOutcome(next);
+  }, [api, selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onCreateWebsite = useCallback((input: CreativeWebsiteDraftInput) => {
+    if (pendingWebsite.current || sendingWebsite.current || websiteLock !== 'NONE' || !selection) return;
+    pendingWebsite.current = { schoolId: selection.schoolId.toLowerCase(), key: newKey(), input, unresolved: false };
+    void sendWebsite();
+  }, [sendWebsite, websiteLock, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onCheckWebsiteAgain = useCallback(() => { void sendWebsite(); }, [sendWebsite]);
+  const shownWebsiteOutcome: CreateOutcome = websiteOutcome ?? (websiteLock === 'SENDING' ? { kind: 'SENDING' } : websiteLock === 'UNRESOLVED' ? { kind: 'HIDDEN_PENDING' } : null);
+  const hideWebsiteText = useCallback((d: CreativeWebsiteDraft) => matchesPendingWebsite(pendingWebsite.current, d), [websiteLock]); // eslint-disable-line react-hooks/exhaustive-deps
+  // One draft's pages, read on demand. A conceal, school change or a newer open retires the read.
+  const onViewWebsite = useCallback((draftId: string) => {
+    if (!selection || !api.readWebsite) return;
+    const current = ++openRead.current, shown = privacy.current;
+    setOpenDraft({ draftId, state: 'LOADING' });
+    api.readWebsite({ organizationId: selection.organizationId, schoolId: selection.schoolId }, draftId, AbortSignal.timeout(15000)).then(
+      draft => { if (current === openRead.current && shown === privacy.current) setOpenDraft({ draftId, state: 'READY', draft }); },
+      () => { if (current === openRead.current && shown === privacy.current) setOpenDraft({ draftId, state: 'FAILED' }); });
+  }, [api, selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onHideWebsite = useCallback(() => { openRead.current++; setOpenDraft(null); }, []);
   const onRefresh = useCallback(() => setRefresh(value => value + 1), []);
   // After a conceal the shown outcome is gone, but a locked request still says it is waiting (without what it was).
   const shownOutcome: CreateOutcome = outcome ?? (lock === 'SENDING' ? { kind: 'SENDING' } : lock === 'UNRESOLVED' ? { kind: 'HIDDEN_PENDING' } : null);
@@ -268,6 +341,8 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
     <CreativeStudioView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       hasSchool={selection !== null} studio={studio} onRefresh={onRefresh} generations={generations} outcome={shownOutcome} locked={lock !== 'NONE'} hidePrompt={hidePrompt} onCreate={onCreate} onCheckAgain={onCheckAgain}
       avatars={avatars} avatarOutcome={shownAvatarOutcome} avatarLocked={avatarLock !== 'NONE'} hideAvatarText={hideAvatarText} onCreateAvatar={onCreateAvatar} onCheckAvatarAgain={onCheckAvatarAgain}
-      videos={videos} videoOutcome={shownVideoOutcome} videoLocked={videoLock !== 'NONE'} hideVideoText={hideVideoText} onCreateVideo={onCreateVideo} onCheckVideoAgain={onCheckVideoAgain}/>
+      videos={videos} videoOutcome={shownVideoOutcome} videoLocked={videoLock !== 'NONE'} hideVideoText={hideVideoText} onCreateVideo={onCreateVideo} onCheckVideoAgain={onCheckVideoAgain}
+      websites={websites} websiteOutcome={shownWebsiteOutcome} websiteLocked={websiteLock !== 'NONE'} hideWebsiteText={hideWebsiteText} onCreateWebsite={onCreateWebsite}
+      onCheckWebsiteAgain={onCheckWebsiteAgain} openDraft={openDraft} onViewWebsite={onViewWebsite} onHideWebsite={onHideWebsite}/>
   </div>;
 }

@@ -1,4 +1,5 @@
-import { accountClosed, saasUuid, validateCreativeAvatarInput, validateCreativeAvatarReceipt, validateCreativeAvatarVideoInput, validateCreativeAvatarVideoReceipt,
+import { accountClosed, saasUuid, validateCreativeWebsiteDraft, validateCreativeWebsiteDraftInput, validateCreativeWebsiteDraftList, validateCreativeWebsiteDraftReceipt,
+  type CreativeWebsiteDraft, type CreativeWebsiteDraftInput, type CreativeWebsiteDraftList, type CreativeWebsiteDraftReceipt, validateCreativeAvatarInput, validateCreativeAvatarReceipt, validateCreativeAvatarVideoInput, validateCreativeAvatarVideoReceipt,
   validateCreativeAvatarVideoRecords, type CreativeAvatarVideoInput, type CreativeAvatarVideoReceipt, type CreativeAvatarVideoRecords, validateCreativeGenerationInput, validateCreativeGenerationReceipt,
   validateCreativeStudioAvatarList, validateCreativeStudioGenerationList, type CreativeAvatarInput, type CreativeAvatarReceipt, type CreativeGenerationInput,
   type CreativeGenerationReceipt, type CreativeStudioAvatarList, type CreativeStudioGenerationList } from '@hon/contracts';
@@ -22,6 +23,7 @@ export class CreativeGenerationError extends Error {
 export const CREATIVE_GENERATION_COMMAND = 'saas-creative-generation-create';
 export const CREATIVE_AVATAR_COMMAND = 'saas-creative-avatar-create';
 export const CREATIVE_AVATAR_VIDEO_COMMAND = 'saas-creative-avatar-video-create';
+export const CREATIVE_WEBSITE_COMMAND = 'saas-creative-website-draft-create';
 /**
  * Only these answers prove the request was refused before anything was accepted. Every other 409 or 422 (including an
  * unrecognized or missing code, or a conflict raised while recording a provider result) leaves the outcome unknown.
@@ -40,6 +42,7 @@ const VIDEO_REFUSALS = new Set([...PRE_ACCEPTANCE_REFUSALS, 'SAAS_OPERATION_NOT_
 
 const generationsPath = (schoolId: string) => `/api/v1/schools/${saasUuid(schoolId).toLowerCase()}/creative-studio/generations`;
 const avatarsPath = (schoolId: string) => `/api/v1/schools/${saasUuid(schoolId).toLowerCase()}/creative-studio/avatars`;
+const websitesPath = (schoolId: string) => `/api/v1/schools/${saasUuid(schoolId).toLowerCase()}/creative-studio/website-drafts`;
 const videosPath = (schoolId: string) => `/api/v1/schools/${saasUuid(schoolId).toLowerCase()}/creative-studio/avatar-videos`;
 const json = /^application\/json(?:\s*;|$)/i;
 
@@ -179,6 +182,67 @@ export async function createCreativeAvatarVideo(schoolId: string, input: Creativ
     const v = receipt.video;
     if (v.schoolId !== schoolId.toLowerCase() || v.avatarId !== request.avatarId.toLowerCase() || v.script !== request.script || v.seconds !== request.seconds
       || v.format !== request.format) throw new Error('mismatch');
+    return receipt;
+  } catch { throw new CreativeGenerationError('UNKNOWN'); }
+}
+
+// ---------- 0344 website drafts: the same closed, keyed, fail-unknown handling ----------
+/** Website drafts are refused before anything is reserved when HQ has not priced them or the rate is not a website rate. */
+const WEBSITE_REFUSALS = new Set([...PRE_ACCEPTANCE_REFUSALS, 'SAAS_OPERATION_NOT_PRICED', 'CREATIVE_WEBSITE_RATE_INVALID']);
+
+async function readJson<T>(path: string, signal: AbortSignal, validate: (value: unknown) => T): Promise<T> {
+  const response = await fetch(path, { method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
+    referrerPolicy: 'no-referrer', headers: { Accept: 'application/json' }, signal });
+  if (response.status === 401) { reportConfirmedSessionInvalidation(); throw new CreativeGenerationError('SESSION'); }
+  if (response.status === 403) throw new CreativeGenerationError('DENIED', codeOf(await body(response)));
+  if (response.status !== 200) throw new CreativeGenerationError('UNKNOWN', codeOf(await body(response)));
+  try { return validate(accountClosed(await response.json(), ['data']).data); } catch { throw new CreativeGenerationError('UNKNOWN'); }
+}
+
+export function listCreativeWebsiteDrafts(schoolId: string, signal: AbortSignal): Promise<CreativeWebsiteDraftList> {
+  return readJson(websitesPath(schoolId), signal, (v) => {
+    const list = validateCreativeWebsiteDraftList(v);
+    if (list.drafts.some(d => d.schoolId !== schoolId.toLowerCase())) throw new Error('school');
+    return list;
+  });
+}
+
+/** One draft with its page text. */
+export function readCreativeWebsiteDraft(schoolId: string, draftId: string, signal: AbortSignal): Promise<CreativeWebsiteDraft> {
+  const id = saasUuid(draftId).toLowerCase();
+  return readJson(`${websitesPath(schoolId)}/${id}`, signal, (v) => {
+    const d = validateCreativeWebsiteDraft(v);
+    if (d.schoolId !== schoolId.toLowerCase() || d.draftId !== id) throw new Error('mismatch');
+    return d;
+  });
+}
+
+export function prepareCreativeWebsiteDraft(input: CreativeWebsiteDraftInput): CreativeWebsiteDraftInput {
+  try { return validateCreativeWebsiteDraftInput(input); } catch { throw new CreativeGenerationError('INVALID', 'INVALID_SAAS_INPUT'); }
+}
+
+/** One website draft attempt. Repeating it with the same key and input never makes a second draft or charge. */
+export async function createCreativeWebsiteDraft(schoolId: string, input: CreativeWebsiteDraftInput, idempotencyKey: string, signal: AbortSignal): Promise<CreativeWebsiteDraftReceipt> {
+  const path = websitesPath(schoolId), key = saasUuid(idempotencyKey).toLowerCase(), request = prepareCreativeWebsiteDraft(input);
+  let response: Response;
+  try {
+    response = await fetch(path, { method: 'POST', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-HON-Human-Command': CREATIVE_WEBSITE_COMMAND, 'Idempotency-Key': key },
+      body: JSON.stringify(request), signal });
+  } catch { throw new CreativeGenerationError('UNKNOWN'); }
+  const code = response.status === 200 ? null : codeOf(await body(response));
+  if (response.status === 401) { reportConfirmedSessionInvalidation(); throw new CreativeGenerationError('SESSION'); }
+  if (response.status === 403) throw new CreativeGenerationError('DENIED', code);
+  if (response.status === 400 || response.status === 404) throw new CreativeGenerationError('INVALID', code);
+  if (response.status === 422) throw new CreativeGenerationError(code !== null && WEBSITE_REFUSALS.has(code) ? 'REFUSED' : 'UNKNOWN', code);
+  if (response.status === 409) throw new CreativeGenerationError(code !== null && DEFINITIVE_CONFLICTS.has(code) ? 'INVALID' : 'UNKNOWN', code);
+  if (response.status === 503 && code === 'CREATIVE_PROVIDER_NOT_CONNECTED') throw new CreativeGenerationError('NOT_CONNECTED', code);
+  if (response.status !== 200) throw new CreativeGenerationError('UNKNOWN', code);
+  try {
+    const receipt = validateCreativeWebsiteDraftReceipt(accountClosed(await response.json(), ['data']).data);
+    const d = receipt.draft;
+    if (d.schoolId !== schoolId.toLowerCase() || d.operationCode !== request.operationCode || d.brief !== request.brief
+      || d.pages.join(',') !== request.pages.join(',')) throw new Error('mismatch');
     return receipt;
   } catch { throw new CreativeGenerationError('UNKNOWN'); }
 }
