@@ -3582,7 +3582,7 @@ END $$;
 -- Parent class booking exact verification (0329): private helpers and three runtime entry points.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.parent_class_booking_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','4ece4170e73ae487d017f6a394a3757547a18f0fc08b91f6e7956ff6877d4d64'),
+('hon.parent_class_booking_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','743cf1c21f074a7a4dbc413e04aa8c2deb59ea68cbc7845ea37dbc0213e19933'),
 ('hon.parent_class_booking_child_ok(uuid,uuid)',true,false,'search_path=pg_catalog, hon','237a329c4db7c485ffa5521d1a4028ed443de87e157873ac4e2b17fdc11110d7'),
 ('hon.parent_class_booking_session_ok(uuid,hon.class_sessions)',true,false,'search_path=pg_catalog, hon','34c305ae6857963bed97c48089b88563e20dfd2091d60888830d6cfedb7cc183'),
 ('hon.parent_class_booking_seats(uuid)',true,false,'search_path=pg_catalog, hon','d05efcb128c7e55cfef7d12d6db9d25bd8c314bc20305ad2cc38055123f4f3eb'),
@@ -3591,7 +3591,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.parent_class_booking_finish(text,text,uuid,jsonb,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)',true,false,'search_path=pg_catalog, hon','a9ddf831453529fd97154ae53e60eb65f1e023218b332008491e172d3a97e5e0'),
 ('hon.read_parent_class_booking_choices(text)',true,true,'search_path=pg_catalog, hon','edd9ec2e0d2c427c5ab4ea2e44be2d7c7b42fc702ec897b6d96187a7459318d4'),
 ('hon.book_parent_class_session(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','3370b119da07e09107e79c289f816b6e5a89313503f71cdfefefb8e8b8f7a70e'),
-('hon.cancel_parent_class_booking(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','a9d03e032c77500b5dcc82411c750507b689472d6efed7ba86eb38842dec5e2d')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+('hon.cancel_parent_class_booking(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','3ba7638f326952cc3589d28740abc64d8d45faf4f5527f667319e08bc6f88aee')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash

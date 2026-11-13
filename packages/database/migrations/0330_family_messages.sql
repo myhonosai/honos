@@ -29,6 +29,84 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- 0329 review follow-ups (P3), applied here so the reviewed 0329 file stays as it was merged:
+--   the parent scope's own grant queries also require an ACTIVE family, as the API's first resolution (0071) does, which
+--   family messages inherit; and a parent cancel audits the booking's real prior status (BOOKED or WAITLISTED).
+CREATE OR REPLACE FUNCTION hon.parent_class_booking_scope(subject text, guardian boolean)
+RETURNS TABLE(principal_id uuid, organization_id uuid, school_id uuid, family_id uuid, access_level text)
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE n integer; r record;
+BEGIN
+  IF subject IS NULL OR length(subject) NOT BETWEEN 1 AND 200 OR btrim(subject)<>subject
+    OR subject IS DISTINCT FROM current_setting('app.hon_external_subject',true)
+    OR current_setting('app.hon_principal_type',true) IS DISTINCT FROM 'HUMAN_USER'
+    OR current_setting('app.hon_source',true) IS DISTINCT FROM 'HUMAN_UI'
+    OR nullif(current_setting('app.hon_action_request_id',true),'') IS NOT NULL
+    OR nullif(current_setting('app.hon_delegated_by_principal_id',true),'') IS NOT NULL THEN
+    RAISE EXCEPTION 'PARENT_CLASS_BOOKING_FORBIDDEN' USING ERRCODE='42501';
+  END IF;
+  SELECT count(*) INTO n FROM (
+    SELECT DISTINCT g.school_id,g.family_id FROM hon.users u
+    JOIN hon.principals p ON p.user_id=u.id AND p.principal_type='HUMAN_USER' AND p.is_active
+    JOIN hon.family_access_grants g ON g.principal_id=p.id
+    JOIN hon.families f ON f.id=g.family_id AND f.organization_id=g.organization_id AND f.school_id=g.school_id AND f.status='ACTIVE'
+    WHERE u.external_subject=subject AND g.effective_from<=clock_timestamp() AND (g.effective_until IS NULL OR g.effective_until>clock_timestamp())) x;
+  IF n<>1 THEN RAISE EXCEPTION 'PARENT_CLASS_BOOKING_FORBIDDEN' USING ERRCODE='42501'; END IF;
+  SELECT p.id pid,g.organization_id org,g.school_id school,g.family_id fam,g.access_level::text lvl INTO r
+  FROM hon.users u
+  JOIN hon.principals p ON p.user_id=u.id AND p.principal_type='HUMAN_USER' AND p.is_active
+  JOIN hon.family_access_grants g ON g.principal_id=p.id
+  JOIN hon.families f ON f.id=g.family_id AND f.organization_id=g.organization_id AND f.school_id=g.school_id AND f.status='ACTIVE'
+  WHERE u.external_subject=subject AND g.effective_from<=clock_timestamp() AND (g.effective_until IS NULL OR g.effective_until>clock_timestamp())
+    AND (SELECT count(*) FROM hon.principals x WHERE x.user_id=u.id AND x.principal_type='HUMAN_USER' AND x.is_active)=1
+  ORDER BY CASE g.access_level WHEN 'PRIMARY_GUARDIAN' THEN 3 WHEN 'SECONDARY_GUARDIAN' THEN 2 ELSE 1 END DESC, g.effective_from DESC
+  LIMIT 1;
+  IF r.pid IS NULL
+    OR r.pid::text IS DISTINCT FROM current_setting('app.hon_principal_id',true)
+    OR r.org IS DISTINCT FROM hon.current_organization_id() OR r.school IS DISTINCT FROM hon.current_school_id()
+    OR NOT EXISTS(SELECT 1 FROM hon.organizations o WHERE o.id=r.org AND o.status='ACTIVE')
+    OR NOT EXISTS(SELECT 1 FROM hon.schools s WHERE s.id=r.school AND s.organization_id=r.org AND s.status='ACTIVE')
+    OR NOT EXISTS(SELECT 1 FROM hon.organization_entitlements e WHERE e.organization_id=r.org AND e.status='ACTIVE'
+      AND e.tier IN ('ESSENTIAL','CORE','COMPLETE') AND e.effective_from<=clock_timestamp() AND (e.effective_until IS NULL OR e.effective_until>clock_timestamp()))
+    OR (guardian AND r.lvl NOT IN ('PRIMARY_GUARDIAN','SECONDARY_GUARDIAN')) THEN
+    RAISE EXCEPTION 'PARENT_CLASS_BOOKING_FORBIDDEN' USING ERRCODE='42501';
+  END IF;
+  RETURN QUERY SELECT r.pid,r.org,r.school,r.fam,r.lvl;
+END $$;
+
+CREATE OR REPLACE FUNCTION hon.cancel_parent_class_booking(subject text, p jsonb, key text, request uuid, correlation uuid) RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE sc record; booking uuid; expected integer; prior jsonb; s hon.class_sessions; b hon.class_bookings; session uuid; result jsonb; before jsonb;
+BEGIN
+  IF jsonb_typeof(p) IS DISTINCT FROM 'object' OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p) k)<>ARRAY['bookingId','expectedVersion']
+    OR jsonb_typeof(p->'bookingId') IS DISTINCT FROM 'string' OR jsonb_typeof(p->'expectedVersion') IS DISTINCT FROM 'number'
+    OR p->>'bookingId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    OR p->>'expectedVersion' !~ '^[1-9][0-9]{0,8}$' OR request IS NULL OR correlation IS NULL THEN
+    RAISE EXCEPTION 'VALIDATION_FAILED' USING ERRCODE='22023'; END IF;
+  booking:=(p->>'bookingId')::uuid; expected:=(p->>'expectedVersion')::integer;
+  prior:=hon.parent_class_booking_begin(subject,key,encode(sha256(convert_to('cancel:'||booking||':'||expected,'UTF8')),'hex'));
+  IF prior IS NOT NULL THEN RETURN jsonb_build_object('receipt',prior,'replayed',true); END IF;
+  SELECT * INTO sc FROM hon.parent_class_booking_scope(subject,true);
+  SELECT x.class_session_id INTO session FROM hon.class_bookings x WHERE x.id=booking AND x.organization_id=sc.organization_id AND x.school_id=sc.school_id;
+  IF session IS NULL THEN RAISE EXCEPTION 'PARENT_CLASS_BOOKING_NOT_FOUND' USING ERRCODE='P0002'; END IF;
+  SELECT * INTO s FROM hon.class_sessions WHERE id=session FOR UPDATE;
+  SELECT * INTO b FROM hon.class_bookings WHERE id=booking FOR UPDATE;
+  IF NOT hon.parent_class_booking_child_ok(sc.family_id,b.student_profile_id) THEN
+    RAISE EXCEPTION 'PARENT_CLASS_BOOKING_NOT_FOUND' USING ERRCODE='P0002'; END IF;
+  IF b.version<>expected THEN RAISE EXCEPTION 'VERSION_CONFLICT' USING ERRCODE='40001'; END IF;
+  IF b.source<>'PARENT_APP' OR b.booking_kind<>'REGULAR' OR b.status NOT IN ('BOOKED','WAITLISTED') OR s.starts_at<=clock_timestamp() THEN
+    RAISE EXCEPTION 'PARENT_CLASS_BOOKING_NOT_CANCELLABLE' USING ERRCODE='P0002'; END IF;
+  before:=jsonb_build_object('status',b.status::text,'version',b.version);
+  UPDATE hon.class_bookings SET status='CANCELLED',cancelled_at=clock_timestamp(),version=version+1,updated_at=clock_timestamp()
+    WHERE id=b.id RETURNING * INTO b;
+  result:=jsonb_build_object('booking',hon.parent_class_booking_json(b,s),'spotsLeft',greatest(s.capacity-hon.parent_class_booking_seats(s.id),0));
+  PERFORM hon.parent_class_booking_finish(subject,key,sc.principal_id,result,'class_booking.parent_cancel',b.id,
+    before,
+    jsonb_build_object('bookingId',b.id,'sessionId',s.id,'studentProfileId',b.student_profile_id,'familyId',sc.family_id,'status','CANCELLED','version',b.version),
+    'class_booking.parent_cancelled',b.version,request,correlation);
+  RETURN jsonb_build_object('receipt',result,'replayed',false);
+END $$;
+
 INSERT INTO hon.permissions(code,description,is_sensitive,is_staff_assignable) VALUES
   ('family_messages.manage','Read and reply to messages families send the school in the HON parent app',true,true)
 ON CONFLICT (code) DO NOTHING;

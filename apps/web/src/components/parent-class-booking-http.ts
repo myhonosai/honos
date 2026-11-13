@@ -5,6 +5,8 @@ import {
 
 /** 0329 parent class booking: same-origin browser commands only; no school, family or child selector is ever sent in the URL. */
 export class ParentClassBookingAccessError extends Error { constructor(message: string, readonly status: number) { super(message); } }
+/** A definite refusal: nothing changed, so a retry is a new action with a new key. Other failures keep the key for an exact retry. */
+export class ParentClassBookingRefusal extends Error {}
 function invalid(): never { throw new Error('The booking answer could not be checked. Nothing is assumed. Refresh to see the current state.'); }
 const MESSAGES: Record<string, string> = {
   PARENT_CLASS_BOOKING_FULL: 'This class is full.',
@@ -28,7 +30,9 @@ async function call(method: 'GET' | 'POST', path: string, command?: string, body
   if (!response.ok) {
     if (response.status === 401) throw new ParentClassBookingAccessError('Your session has ended. Sign in again.', 401);
     if (response.status === 403) throw new ParentClassBookingAccessError('Booking is not available on this account right now.', 403);
-    throw new Error(MESSAGES[String(root.code)] ?? 'Booking is unavailable right now. Nothing was changed that we know of. Refresh and try again.');
+    if (MESSAGES[String(root.code)]) throw new ParentClassBookingRefusal(MESSAGES[String(root.code)]!);
+    if (response.status < 500) throw new ParentClassBookingRefusal('This request was not accepted. Nothing was changed. Refresh and try again.');
+    throw new Error('Booking is unavailable right now. Nothing was changed that we know of. Refresh and try again.');
   }
   if (!Object.hasOwn(root, 'data')) invalid();
   return root as { data: unknown; meta?: unknown };

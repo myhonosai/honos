@@ -293,6 +293,9 @@ try {
   await sql('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(), revoked_by_principal_id=principal_id WHERE id=$1', [COACH.grant]);
   await refused(() => inbox(COACH), 403, 'FAMILY_MESSAGES_FORBIDDEN', 'a revoked staff role');
   await sql('UPDATE hon.principal_role_grants SET revoked_at=NULL, revoked_by_principal_id=NULL WHERE id=$1', [COACH.grant]);
+  await sql("UPDATE hon.families SET status='SUSPENDED' WHERE id=$1", [ids.family]);
+  await refused(() => parentSend(GUARDIAN, { body: 'Inactive family' }), 403, 'FAMILY_MESSAGES_FORBIDDEN', 'an inactive family');
+  await sql("UPDATE hon.families SET status='ACTIVE' WHERE id=$1", [ids.family]);
   await sql("UPDATE hon.schools SET status='SUSPENDED' WHERE id=$1", [ids.school]);
   await refused(() => parentRead(GUARDIAN), 403, 'FAMILY_MESSAGES_FORBIDDEN', 'suspended school, parent');
   await refused(() => inbox(COACH), 403, 'FAMILY_MESSAGES_FORBIDDEN', 'suspended school, staff');
