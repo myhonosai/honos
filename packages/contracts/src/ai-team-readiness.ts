@@ -24,6 +24,7 @@ export interface AiTeamReadiness {
   /**
    * Organization-wide agent budget (all schools of the organization). Null unless the requester independently holds
    * organization-wide authority (HON HQ reader, or ai.usage.read at every school of the organization).
+   * ceilingCredits is AI_ORG_AGENT_NO_CEILING_UNITS (0310) when the organization has no agent budget: never show it as a balance.
    */
   agentBudget: { committedCredits: number; ceilingCredits: number } | null; agents: AiTeamAgentReadiness[]; asOf: string;
   /** The C1 HON conversation contract exists; GET /hon/readiness gives the composer prerequisites. */

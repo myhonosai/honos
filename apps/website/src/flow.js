@@ -12,16 +12,18 @@
     [-0.12,0.22, 0.35,0.62, 0.70,0.04, 1.12,0.44, .22,.40,.50]  // cta/footer
   ];
   var reduce=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var W,H,D,N,SEG,strands=[],parts=[],cur=K[0].slice(),A=[200,242,90],B=[98,214,196];
+  var W,H,D,N,SEG,FRAME=0,last=-1e9,strands=[],parts=[],cur=K[0].slice(),A=[200,242,90],B=[98,214,196];
   var mx=.5,my=.5,tmx=.5,tmy=.5,P=[0,0,0,0],Q=[0,0];
   function rnd(a,b){return a+Math.random()*(b-a)}
   function hex(h){h=String(h).trim().replace("#","");if(h.length!==6)return null;return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]}
   function colors(){var s=getComputedStyle(document.body),a=hex(s.getPropertyValue("--accent")),b=hex(s.getPropertyValue("--accent-2"));if(a)A=a;if(b)B=b;
     strands.forEach(function(st){var m=Math.pow(st.m,1.1);st.rgb=Math.round(A[0]+(B[0]-A[0])*m)+","+Math.round(A[1]+(B[1]-A[1])*m)+","+Math.round(A[2]+(B[2]-A[2])*m)})}
-  function size(){D=Math.min(window.devicePixelRatio||1,1.5);W=innerWidth;H=innerHeight;c.width=Math.round(W*D);c.height=Math.round(H*D);x.setTransform(D,0,0,D,0,0);
-    var small=W<700;N=small?110:200;SEG=small?44:70;strands=[];
-    for(var i=0;i<N;i++)strands.push({o:(i/(N-1))*2-1+rnd(-.06,.06),ph:rnd(0,6.283),w:rnd(.5,1.3),a:Math.random()<.14?rnd(.32,.6):rnd(.07,.2),m:Math.random(),f:rnd(.6,1.5)});
-    parts=[];for(var j=0;j<(small?40:110);j++)parts.push({s:Math.floor(Math.random()*N),t:Math.random(),v:rnd(.0006,.0022),r:rnd(.5,1.5)});
+  // Phones: fewer, slightly brighter strands, 1x pixels and ~30 fps, so the page stays responsive on slower CPUs.
+  function size(){W=innerWidth;H=innerHeight;var small=W<700;D=small?1:Math.min(window.devicePixelRatio||1,1.5);FRAME=small?33:0;
+    c.width=Math.round(W*D);c.height=Math.round(H*D);x.setTransform(D,0,0,D,0,0);
+    N=small?56:200;SEG=small?28:70;var lift=small?1.45:1;strands=[];
+    for(var i=0;i<N;i++)strands.push({o:(i/(N-1))*2-1+rnd(-.06,.06),ph:rnd(0,6.283),w:rnd(.5,1.3)*(small?1.15:1),a:Math.min(.8,(Math.random()<.14?rnd(.32,.6):rnd(.07,.2))*lift),m:Math.random(),f:rnd(.6,1.5)});
+    parts=[];for(var j=0;j<(small?24:110);j++)parts.push({s:Math.floor(Math.random()*N),t:Math.random(),v:rnd(.0006,.0022)*(small?2:1),r:rnd(.5,1.5)});
     colors()}
   function target(){var max=document.documentElement.scrollHeight-H,p=max>0?Math.min(1,Math.max(0,scrollY/max)):0,f=p*(K.length-1),i=Math.min(K.length-2,Math.floor(f)),k=f-i;k=k*k*(3-2*k);
     var a=K[i],b=K[i+1],o=[];for(var n=0;n<a.length;n++)o.push(a[n]+(b[n]-a[n])*k);return o}
@@ -36,8 +38,8 @@
     var px=P[0]+P[2]*off,py=P[1]+P[3]*off,dx=mx*W-px,dy=my*H-py,dm=Math.hypot(dx,dy),pull=Math.max(0,1-dm/(Math.min(W,H)*.35))*.07;
     Q[0]=px+dx*pull;Q[1]=py+dy*pull;return g}
   function draw(time){
-    var tg=target(),e=reduce?1:.055;for(var n=0;n<cur.length;n++)cur[n]+=(tg[n]-cur[n])*e;
-    mx+=(tmx-mx)*.04;my+=(tmy-my)*.04;
+    var tg=target(),e=reduce?1:(FRAME?.105:.055);for(var n=0;n<cur.length;n++)cur[n]+=(tg[n]-cur[n])*e;
+    var me=FRAME?.08:.04;mx+=(tmx-mx)*me;my+=(tmy-my)*me;
     var T=reduce?0:time*.001,S=Math.min(W,H)*cur[8]*(W<700?1.3:1);
     x.globalCompositeOperation="source-over";x.clearRect(0,0,W,H);x.globalCompositeOperation="lighter";
     // glow at the knot
@@ -51,7 +53,8 @@
       var st=strands[q.s];point(st,q.t,T,S);var fade=Math.sin(q.t*Math.PI);
       x.fillStyle="rgba("+st.rgb+","+(.75*fade).toFixed(3)+")";x.beginPath();x.arc(Q[0],Q[1],q.r,0,6.283);x.fill()}
   }
-  var raf=0;function loop(t){draw(t);raf=requestAnimationFrame(loop)}
+  var raf=0;function loop(t){if(t-last>=FRAME){last=t;draw(t)}raf=requestAnimationFrame(loop)}
+  document.addEventListener("visibilitychange",function(){if(reduce)return;cancelAnimationFrame(raf);if(document.visibilityState==="visible")raf=requestAnimationFrame(loop)});
   size();
   addEventListener("resize",function(){size();if(reduce)draw(0)});
   addEventListener("pointermove",function(e){tmx=e.clientX/W;tmy=e.clientY/H},{passive:true});

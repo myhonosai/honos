@@ -70,4 +70,13 @@ BEGIN
 END;
 $$;
 
+-- HQ-COMM 0282: inbound texts to the HQ number (confirmation codes, STOP / START / HELP), when 0282 is applied.
+DO $$
+BEGIN
+  IF to_regprocedure('hon.record_hq_inbound_text(text,text,text,text,text,timestamptz)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.record_hq_inbound_text(text, text, text, text, text, timestamptz) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 COMMIT;

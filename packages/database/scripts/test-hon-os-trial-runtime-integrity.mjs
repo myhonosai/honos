@@ -213,7 +213,7 @@ try{
   assert.equal(await room(eli.reg.organizationId),2147483647-Number((await q('SELECT hon.ai_org_committed_credits($1,clock_timestamp()) u',[eli.reg.organizationId]))[0].u),'a school with no trial has no organization budget (0310)');
  }finally{await admin.query('ROLLBACK');}
  assert.equal(ok(await send('account/trial',{identity:ana,method:'GET'})).trial.aiCredits.used,0);
- pass('trial AI credit: per-request cap 10, daily cap 20 resetting each UTC day, 100 credits per school, and the campaign cost cap across schools all bound the ceiling agent prepares enforce; schools without a trial keep 12000');
+ pass('trial AI credit: per-request cap 10, daily cap 20 resetting each UTC day, 100 credits per school, and the campaign cost cap across schools all bound the ceiling agent prepares enforce; schools without a trial have no organization agent budget (0310)');
 
  // 8. No checkout for a trial school until the reviewed conversion slice exists.
  await assert.rejects(()=>q("INSERT INTO hon.saas_checkout_sessions(organization_id) VALUES($1)",[ana.reg.organizationId]),e=>e.message==='TRIAL_CONVERSION_UNAVAILABLE');

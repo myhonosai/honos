@@ -1,0 +1,10 @@
+.region { margin: 0 0 20px; display: grid; gap: 12px; }
+.region h2 { margin: 0; font-size: 0.95rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.card { border: 1px solid #c9a24d66; border-radius: 14px; padding: 16px 18px; display: grid; gap: 8px; background: #c9a24d14; }
+.card h3 { margin: 0; font-size: 1.1rem; }
+.card p { margin: 0; }
+.meta { font-size: 0.85rem; opacity: 0.8; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.open { display: inline-block; padding: 8px 16px; border-radius: 999px; background: #c9a24d; color: #1b1405; font-weight: 600; text-decoration: none; }
+.open:focus-visible, .dismiss:focus-visible { outline: 3px solid #c9a24d; outline-offset: 2px; }
+.dismiss { padding: 8px 14px; border-radius: 999px; border: 1px solid currentColor; background: transparent; color: inherit; cursor: pointer; }
