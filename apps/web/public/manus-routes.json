@@ -45,6 +45,10 @@
       "title": "HON HQ | School owners"
     },
     {
+      "path": "/hq/schools/attention",
+      "title": "HON HQ | Schools needing attention"
+    },
+    {
       "path": "/hq/ai-providers",
       "title": "HON HQ | AI Provider Control"
     },
@@ -247,6 +251,10 @@
     {
       "path": "/staff/billing/checkout-pages",
       "title": "HON | Checkout pages"
+    },
+    {
+      "path": "/staff/billing/saved-payment-methods",
+      "title": "HON | Saved payment methods"
     },
     {
       "path": "/staff/retention/at-risk",
@@ -534,7 +542,7 @@
     },
     {
       "path": "/hq/pricing-offers",
-      "title": "HON HQ | Pricing & Offers \u00b7 Design review"
+      "title": "HON HQ | Pricing & Offers · Design review"
     },
     {
       "path": "/reference/classic-dashboard",

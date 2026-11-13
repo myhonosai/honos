@@ -240,6 +240,9 @@ const SAAS_BILLING_CALLS = {
   // 0250: the HQ owner maps one Facebook account + Lead Gen form to one school pipeline stage for Zernio lead intake.
   setZernioLeadForm: { sql: 'SELECT hon.set_zernio_lead_form_from_hq($1,$2::uuid,$3,$4,$5::uuid,$6::uuid,$7::jsonb,$8,$9::integer) AS data', arity: 9, readOnly: false },
   readHqSchoolDetail: { sql: 'SELECT hon.read_hq_school_detail_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  // B-HQ-2b (0327): read-only HQ school health counts and the schools-needing-attention list.
+  readHqSchoolHealth: { sql: 'SELECT hon.read_hq_school_health($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readHqSchoolsNeedingAttention: { sql: 'SELECT hon.read_hq_schools_needing_attention($1,$2::integer) AS data', arity: 2, readOnly: true },
   // B-HQ-3 (0326): read-only HQ business numbers (list-price MRR, paying schools, sign-ups and trials per UTC month).
   readHqBusinessNumbers: { sql: 'SELECT hon.read_hq_business_numbers($1,$2::integer) AS data', arity: 2, readOnly: true },
   // B-HQ-2 (0232): HQ support records. Reads are read-only; the three commands write only support rows.
