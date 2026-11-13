@@ -220,7 +220,7 @@ export function validateHqMessageReceipt(value: unknown): HqMessageReceipt {
 const GSM_BASIC = '@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà';
 const GSM_EXTENDED = '^{}\\[~]|€\f';
 /** How a text will be counted: characters (extended GSM characters count twice), the encoding, and the SMS pieces it
- * would take. Twilio's MMS Converter sends anything over three pieces as one MMS, so `asMms` tells the writer the message
+ * would take. Twilio's MMS Converter sends a text of three or more pieces as one MMS, so `asMms` tells the writer the message
  * still arrives whole. This only guides the counter on screen; the database enforces the 1,600-character limit. */
 export interface HqTextPieces { characters: number; encoding: 'GSM-7' | 'UCS-2'; pieces: number; asMms: boolean }
 /** A US/Canada 10-digit number or any E.164 number, as E.164; null when it is not one. */
@@ -242,25 +242,20 @@ export function hqTextPieces(content: string): HqTextPieces {
 export const HQ_CONTACT_COMMANDS = { startPhone: 'hq-contact-phone-start', setTexting: 'hq-contact-texting', removePhone: 'hq-contact-phone-remove' } as const;
 export const HQ_CONTACT_PHONE_STATUSES = ['REMOVED', 'PENDING', 'CONFIRMED'] as const;
 export type HqContactPhoneStatus = typeof HQ_CONTACT_PHONE_STATUSES[number];
-const E164 = /^\+[1-9][0-9]{7,14}$/;
 export interface HqContact {
   status: HqContactPhoneStatus; phone: string | null; codeExpiresAt: string | null; codeExpired: boolean; wrongCodes: number; codesLeftToday: number;
-  confirmedAt: string | null; textingOn: boolean; version: number; hqNumber: { ready: true; a2pState: HqSenderA2pState | null } | null;
+  confirmedAt: string | null; textingOn: boolean; stoppedByReply: boolean; version: number; hqNumber: { ready: true; a2pState: HqSenderA2pState | null; number: string } | null;
 }
 export interface HqContactView { contact: HqContact; asOf: string }
 export interface HqContactReceipt { operation: 'PHONE_START' | 'TEXTING' | 'PHONE_REMOVE'; contact: HqContact; replayed: boolean; code?: string | null }
 export interface HqContactPhoneStartInput { phone: string; expectedVersion: number }
 export interface HqContactTextingInput { enabled: boolean; expectedVersion: number }
 
-/** A US/Canada 10-digit number or any E.164 number, as E.164; null when it is not one. */
-export function normalizeHqContactPhone(value: string): string | null {
-  const digits = value.replace(/[\s().-]/g, '');
-  const e164 = /^[0-9]{10}$/.test(digits) ? `+1${digits}` : /^1[0-9]{10}$/.test(digits) ? `+${digits}` : digits;
-  return E164.test(e164) ? e164 : null;
-}
+/** The person's own number as E.164 (same rules as the HQ texting number). */
+export const normalizeHqContactPhone = normalizeHqPhone;
 export function validateHqContactPhoneStartInput(value: unknown): HqContactPhoneStartInput {
   const r = record(value, invalid); exactKeys(r, ['phone', 'expectedVersion'], invalid);
-  if (typeof r.phone !== 'string' || !E164.test(r.phone) || !isInt(r.expectedVersion, 0, 999_999_999)) invalid();
+  if (typeof r.phone !== 'string' || !PHONE.test(r.phone) || !isInt(r.expectedVersion, 0, 999_999_999)) invalid();
   return { phone: r.phone as string, expectedVersion: r.expectedVersion as number };
 }
 export function validateHqContactTextingInput(value: unknown): HqContactTextingInput {
@@ -270,15 +265,15 @@ export function validateHqContactTextingInput(value: unknown): HqContactTextingI
 }
 function contact(value: unknown): HqContact {
   const c = record(value, drift);
-  exactKeys(c, ['status', 'phone', 'codeExpiresAt', 'codeExpired', 'wrongCodes', 'codesLeftToday', 'confirmedAt', 'textingOn', 'version', 'hqNumber'], drift);
-  if (!has(HQ_CONTACT_PHONE_STATUSES, c.status) || !nullable(c.phone, (p: unknown): p is string => typeof p === 'string' && E164.test(p))
+  exactKeys(c, ['status', 'phone', 'codeExpiresAt', 'codeExpired', 'wrongCodes', 'codesLeftToday', 'confirmedAt', 'textingOn', 'stoppedByReply', 'version', 'hqNumber'], drift);
+  if (!has(HQ_CONTACT_PHONE_STATUSES, c.status) || !nullable(c.phone, (p: unknown): p is string => typeof p === 'string' && PHONE.test(p))
     || (c.status === 'REMOVED') !== (c.phone === null) || !nullable(c.codeExpiresAt, isTimestamp) || (c.status === 'PENDING') !== (c.codeExpiresAt !== null)
     || typeof c.codeExpired !== 'boolean' || (c.codeExpired && c.status !== 'PENDING') || !isInt(c.wrongCodes, 0, 5) || !isInt(c.codesLeftToday, 0, 5)
     || !nullable(c.confirmedAt, isTimestamp) || (c.status === 'CONFIRMED') !== (c.confirmedAt !== null) || typeof c.textingOn !== 'boolean'
-    || (c.textingOn && c.status !== 'CONFIRMED') || !isInt(c.version, 0, 999_999_999)) drift();
+    || (c.textingOn && c.status !== 'CONFIRMED') || typeof c.stoppedByReply !== 'boolean' || (c.stoppedByReply && (c.textingOn || c.status !== 'CONFIRMED')) || !isInt(c.version, 0, 999_999_999)) drift();
   if (c.hqNumber !== null) {
-    const n = record(c.hqNumber, drift); exactKeys(n, ['ready', 'a2pState'], drift);
-    if (n.ready !== true || !nullable(n.a2pState, (s: unknown): s is string => has(HQ_SENDER_A2P_STATES, s))) drift();
+    const n = record(c.hqNumber, drift); exactKeys(n, ['ready', 'a2pState', 'number'], drift);
+    if (n.ready !== true || typeof n.number !== 'string' || !PHONE.test(n.number) || !nullable(n.a2pState, (s: unknown): s is string => has(HQ_SENDER_A2P_STATES, s))) drift();
   }
   return c as unknown as HqContact;
 }

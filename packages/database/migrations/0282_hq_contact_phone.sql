@@ -132,8 +132,11 @@ LANGUAGE sql STABLE SET search_path = pg_catalog, hon AS $$
     'wrongCodes', coalesce(ph.wrong_codes, 0), 'codesLeftToday',
       5 - CASE WHEN ph.codes_issued_on = (clock_timestamp() AT TIME ZONE 'UTC')::date THEN ph.codes_issued ELSE 0 END,
     'confirmedAt', CASE WHEN ph.status = 'CONFIRMED' THEN hon.saas_ts(ph.confirmed_at) END,
-    'textingOn', hon.hq_contact_texting_on(p_user), 'version', coalesce(ph.version, 0),
-    'hqNumber', (SELECT jsonb_build_object('ready', true, 'a2pState', s.a2p_state) FROM hon.hq_communication_senders s WHERE s.channel = 'SMS' AND s.status = 'ACTIVE'))
+    'textingOn', hon.hq_contact_texting_on(p_user),
+    'stoppedByReply', coalesce(ph.status = 'CONFIRMED' AND EXISTS (SELECT 1 FROM hon.hq_contact_preferences c WHERE c.user_id = p_user AND c.channel = 'SMS'
+      AND c.status = 'OPTED_OUT' AND c.source = 'RECIPIENT'), false),
+    'version', coalesce(ph.version, 0),
+    'hqNumber', (SELECT jsonb_build_object('ready', true, 'a2pState', s.a2p_state, 'number', s.sms_reply_number) FROM hon.hq_communication_senders s WHERE s.channel = 'SMS' AND s.status = 'ACTIVE'))
   FROM (SELECT p_user AS id) x LEFT JOIN hon.hq_contact_phones ph ON ph.user_id = x.id
 $$;
 
@@ -143,7 +146,8 @@ BEGIN
   INSERT INTO hon.hq_contact_preferences (user_id, channel, status, source, captured_at) VALUES (p_user, 'SMS', p_status, p_source, p_at)
   ON CONFLICT (user_id, channel) DO UPDATE SET status = EXCLUDED.status, source = EXCLUDED.source, captured_at = EXCLUDED.captured_at,
     version = hon.hq_contact_preferences.version + 1
-  WHERE hon.hq_contact_preferences.status <> EXCLUDED.status;
+  -- An older event (a retried webhook) never overwrites a newer choice.
+  WHERE hon.hq_contact_preferences.status <> EXCLUDED.status AND EXCLUDED.captured_at >= hon.hq_contact_preferences.captured_at;
 END $$;
 
 -- 0281's address seam: the confirmed number only. The 0281 claim still requires the person's own SMS opt-in.
@@ -189,9 +193,8 @@ BEGIN
     RAISE EXCEPTION 'SAAS_VERSION_CONFLICT' USING ERRCODE = '40001';
   END IF;
   IF r.status = 'CONFIRMED' AND r.phone_e164 = v_phone THEN RAISE EXCEPTION 'HQ_PHONE_ALREADY_CONFIRMED' USING ERRCODE = '23514'; END IF;
-  IF EXISTS (SELECT 1 FROM hon.hq_contact_phones x WHERE x.phone_e164 = v_phone AND x.status = 'CONFIRMED' AND x.user_id <> v_user) THEN
-    RAISE EXCEPTION 'HQ_PHONE_IN_USE' USING ERRCODE = '23514';
-  END IF;
+  -- Whether this number is confirmed to someone else is never told here (that would let anyone look numbers up); a code
+  -- texted from a number that is already someone else's confirms nothing (PHONE_IN_USE at the inbound text).
   v_issued := CASE WHEN r.codes_issued_on = v_day THEN r.codes_issued ELSE 0 END;
   IF v_issued >= 5 THEN RAISE EXCEPTION 'HQ_PHONE_CODE_LIMIT' USING ERRCODE = '23514'; END IF;
   -- Built-in randomness only (gen_random_uuid is cryptographically random), so no extension schema is needed.
@@ -228,6 +231,11 @@ BEGIN
   IF r.version <> (p_input->>'expectedVersion')::integer THEN RAISE EXCEPTION 'SAAS_VERSION_CONFLICT' USING ERRCODE = '40001'; END IF;
   IF r.status <> 'CONFIRMED' THEN RAISE EXCEPTION 'HQ_PHONE_NOT_CONFIRMED' USING ERRCODE = '23514'; END IF;
   IF hon.hq_contact_texting_on(v_user) = v_on THEN RAISE EXCEPTION 'HQ_TEXTING_NO_CHANGE' USING ERRCODE = '23514'; END IF;
+  -- STOP from the handset is also held by the carrier and Twilio; only START from that phone undoes it.
+  IF v_on AND EXISTS (SELECT 1 FROM hon.hq_contact_preferences c WHERE c.user_id = v_user AND c.channel = 'SMS' AND c.status = 'OPTED_OUT'
+      AND c.source = 'RECIPIENT') THEN
+    RAISE EXCEPTION 'HQ_TEXTING_STOPPED_BY_REPLY' USING ERRCODE = '23514';
+  END IF;
   PERFORM hon.hq_contact_set_preference(v_user, CASE WHEN v_on THEN 'OPTED_IN' ELSE 'OPTED_OUT' END, 'USER', at);
   UPDATE hon.hq_contact_phones SET updated_at = at, version = version + 1 WHERE user_id = v_user;
   result := jsonb_build_object('operation', 'TEXTING', 'contact', hon.hq_contact_json(v_user));
@@ -259,6 +267,12 @@ BEGIN
 END $$;
 
 -- ---------- worker: an inbound text to the HQ number ----------
+CREATE FUNCTION hon.hq_inbound_reply(p_outcome text) RETURNS text
+LANGUAGE sql IMMUTABLE SET search_path = pg_catalog AS $$
+  SELECT CASE p_outcome WHEN 'OPTED_OUT' THEN 'STOPPED' WHEN 'OPTED_IN' THEN 'STARTED' WHEN 'HELP' THEN 'HELP' WHEN 'CONFIRMED' THEN 'CONFIRMED'
+    WHEN 'CODE_WRONG' THEN 'CODE_WRONG' WHEN 'PHONE_IN_USE' THEN 'CODE_WRONG' ELSE NULL END
+$$;
+
 -- Records one inbound text once per provider event and says what to reply: STOP/START/HELP keywords for a confirmed
 -- number, or a confirmation code from a pending number. Texts to any number other than the active HQ Messaging Service
 -- are NOT_HQ (the school path handles them). The body is never stored. `reply` is the fixed reply kind for the webhook.
@@ -266,18 +280,20 @@ CREATE FUNCTION hon.record_hq_inbound_text(p_provider text, p_event_id text, p_f
 RETURNS TABLE (outcome text, reply text, replayed boolean)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
 #variable_conflict use_column
-DECLARE prior hon.hq_inbound_texts%ROWTYPE; v_word text; v_kind text; v_out text; v_user uuid; r hon.hq_contact_phones%ROWTYPE; at timestamptz := clock_timestamp();
+DECLARE prior hon.hq_inbound_texts%ROWTYPE; v_word text; v_kind text; v_out text; v_user uuid; r hon.hq_contact_phones%ROWTYPE; v_match hon.hq_contact_phones%ROWTYPE;
+  v_tried integer := 0; at timestamptz := clock_timestamp(); v_when timestamptz;
 BEGIN
   IF p_provider NOT IN ('FAKE','TWILIO') OR p_event_id IS NULL OR length(p_event_id) NOT BETWEEN 1 AND 200 OR p_received_at IS NULL
     OR p_body IS NULL OR length(p_body) > 1600 OR p_from IS NULL OR p_to_service IS NULL THEN
     RAISE EXCEPTION 'HQ inbound text is not valid.' USING ERRCODE = '22023';
   END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended('hq-inbound:' || p_provider || ':' || p_event_id, 0));
+  -- When the person sent it (never later than now): a code sent in time still counts if the webhook is late, and an
+  -- older STOP/START never overwrites a newer choice.
+  v_when := least(p_received_at, at);
   SELECT * INTO prior FROM hon.hq_inbound_texts WHERE provider = p_provider AND provider_event_id = p_event_id;
   IF FOUND THEN
-    outcome := prior.outcome; replayed := true;
-    reply := CASE prior.outcome WHEN 'OPTED_OUT' THEN 'STOPPED' WHEN 'OPTED_IN' THEN 'STARTED' WHEN 'HELP' THEN 'HELP' WHEN 'CONFIRMED' THEN 'CONFIRMED'
-      WHEN 'CODE_WRONG' THEN 'CODE_WRONG' WHEN 'PHONE_IN_USE' THEN 'CODE_WRONG' ELSE NULL END;
+    outcome := prior.outcome; replayed := true; reply := hon.hq_inbound_reply(prior.outcome);
     RETURN NEXT; RETURN;
   END IF;
   v_word := upper(regexp_replace(btrim(p_body), '\s+', ' ', 'g'));
@@ -288,38 +304,49 @@ BEGIN
     v_out := 'NOT_HQ';
   ELSIF v_kind = 'HELP' THEN
     v_out := 'HELP';
+  ELSE
+    -- One inbound text per phone at a time, so two codes for the same number can never both confirm.
+    PERFORM pg_advisory_xact_lock(hashtextextended('hq-contact-phone:' || p_from, 0));
+  END IF;
+  IF v_out IS NOT NULL THEN
+    NULL;
   ELSIF v_kind IN ('STOP','START') THEN
     SELECT ph.user_id INTO v_user FROM hon.hq_contact_phones ph WHERE ph.phone_e164 = p_from AND ph.status = 'CONFIRMED' FOR UPDATE;
     IF v_user IS NULL THEN v_out := 'NO_MATCH';
+    ELSIF EXISTS (SELECT 1 FROM hon.hq_contact_preferences c WHERE c.user_id = v_user AND c.channel = 'SMS' AND c.captured_at > v_when) THEN
+      v_out := 'IGNORED';  -- sent before the person's latest choice (a late or retried webhook): it changes nothing
     ELSE
-      PERFORM hon.hq_contact_set_preference(v_user, CASE WHEN v_kind = 'STOP' THEN 'OPTED_OUT' ELSE 'OPTED_IN' END, 'RECIPIENT', p_received_at);
+      PERFORM hon.hq_contact_set_preference(v_user, CASE WHEN v_kind = 'STOP' THEN 'OPTED_OUT' ELSE 'OPTED_IN' END, 'RECIPIENT', v_when);
       UPDATE hon.hq_contact_phones SET updated_at = at, version = version + 1 WHERE user_id = v_user;
       v_out := CASE WHEN v_kind = 'STOP' THEN 'OPTED_OUT' ELSE 'OPTED_IN' END;
     END IF;
   ELSIF v_kind = 'CODE' THEN
-    -- The most recent unexpired pending number that sent this; one try is counted per text.
-    SELECT * INTO r FROM hon.hq_contact_phones ph WHERE ph.phone_e164 = p_from AND ph.status = 'PENDING' AND ph.code_expires_at > at AND ph.wrong_codes < 5
-      ORDER BY ph.updated_at DESC, ph.user_id LIMIT 1 FOR UPDATE;
-    IF r.user_id IS NULL THEN v_out := 'NO_MATCH';
-    ELSIF r.code_hash <> sha256(r.code_salt || convert_to(right(v_word, 6), 'UTF8')) THEN
-      UPDATE hon.hq_contact_phones SET wrong_codes = wrong_codes + 1, updated_at = at, version = version + 1 WHERE user_id = r.user_id;
-      v_out := 'CODE_WRONG'; v_user := r.user_id;
-    ELSIF EXISTS (SELECT 1 FROM hon.hq_contact_phones x WHERE x.phone_e164 = p_from AND x.status = 'CONFIRMED' AND x.user_id <> r.user_id) THEN
-      v_out := 'PHONE_IN_USE'; v_user := r.user_id;
+    -- Every unexpired pending row for this number is tried, so someone else adding the same number cannot block the
+    -- person who holds the phone. One try is counted per text, on each row it was tried against.
+    FOR r IN SELECT * FROM hon.hq_contact_phones ph WHERE ph.phone_e164 = p_from AND ph.status = 'PENDING' AND ph.code_expires_at > v_when
+        AND ph.wrong_codes < 5 ORDER BY ph.user_id FOR UPDATE LOOP
+      v_tried := v_tried + 1;
+      IF r.code_hash = sha256(r.code_salt || convert_to(right(v_word, 6), 'UTF8')) THEN v_match := r; EXIT; END IF;
+    END LOOP;
+    IF v_tried = 0 THEN v_out := 'NO_MATCH';
+    ELSIF v_match.user_id IS NULL THEN
+      UPDATE hon.hq_contact_phones SET wrong_codes = wrong_codes + 1, updated_at = at, version = version + 1
+      WHERE phone_e164 = p_from AND status = 'PENDING' AND code_expires_at > v_when AND wrong_codes < 5;
+      v_out := 'CODE_WRONG'; v_user := CASE WHEN v_tried = 1 THEN r.user_id END;
+    ELSIF EXISTS (SELECT 1 FROM hon.hq_contact_phones x WHERE x.phone_e164 = p_from AND x.status = 'CONFIRMED' AND x.user_id <> v_match.user_id) THEN
+      v_out := 'PHONE_IN_USE'; v_user := v_match.user_id;
     ELSE
       UPDATE hon.hq_contact_phones SET status = 'CONFIRMED', code_salt = NULL, code_hash = NULL, code_expires_at = NULL, wrong_codes = 0,
-        confirmed_at = at, confirmed_event = p_provider || ':' || p_event_id, updated_at = at, version = version + 1 WHERE user_id = r.user_id;
+        confirmed_at = at, confirmed_event = p_provider || ':' || p_event_id, updated_at = at, version = version + 1 WHERE user_id = v_match.user_id;
       -- Texting the code is the person's own request for HQ texts.
-      PERFORM hon.hq_contact_set_preference(r.user_id, 'OPTED_IN', 'RECIPIENT', p_received_at);
-      v_out := 'CONFIRMED'; v_user := r.user_id;
+      PERFORM hon.hq_contact_set_preference(v_match.user_id, 'OPTED_IN', 'RECIPIENT', v_when);
+      v_out := 'CONFIRMED'; v_user := v_match.user_id;
     END IF;
   ELSE
     v_out := 'IGNORED';
   END IF;
   INSERT INTO hon.hq_inbound_texts VALUES (p_provider, p_event_id, v_kind, v_out, v_user, p_received_at, at);
-  outcome := v_out; replayed := false;
-  reply := CASE v_out WHEN 'OPTED_OUT' THEN 'STOPPED' WHEN 'OPTED_IN' THEN 'STARTED' WHEN 'HELP' THEN 'HELP' WHEN 'CONFIRMED' THEN 'CONFIRMED'
-    WHEN 'CODE_WRONG' THEN 'CODE_WRONG' WHEN 'PHONE_IN_USE' THEN 'CODE_WRONG' ELSE NULL END;
+  outcome := v_out; replayed := false; reply := hon.hq_inbound_reply(v_out);
   RETURN NEXT;
 END $$;
 
@@ -333,7 +360,7 @@ DO $$ DECLARE r text; t text; f text; BEGIN
   FOREACH f IN ARRAY ARRAY['guard_hq_contact_phone()','require_hq_contact_self(text)','hq_contact_claim(uuid,uuid,text,text)',
     'hq_contact_phone_lock(uuid)','hq_contact_texting_on(uuid)','hq_contact_json(uuid)','hq_contact_set_preference(uuid,text,text,timestamptz)',
     'hq_contact_sms_address(uuid)','read_my_hq_contact(text)','start_my_hq_phone(text,jsonb,uuid)','set_my_hq_texting(text,jsonb,uuid)',
-    'remove_my_hq_phone(text,jsonb,uuid)','record_hq_inbound_text(text,text,text,text,text,timestamptz)'] LOOP
+    'remove_my_hq_phone(text,jsonb,uuid)','hq_inbound_reply(text)','record_hq_inbound_text(text,text,text,text,text,timestamptz)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_communication_worker','hon_outbox_worker') LOOP
       EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);

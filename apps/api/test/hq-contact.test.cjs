@@ -16,7 +16,7 @@ const contracts = require('@hon/contracts');
 
 const U = () => randomUUID(), T = '2026-11-01T00:00:00.000Z', T2 = '2026-11-02T00:00:00.000Z';
 const contact = (patch = {}) => ({ status: 'REMOVED', phone: null, codeExpiresAt: null, codeExpired: false, wrongCodes: 0, codesLeftToday: 5, confirmedAt: null,
-  textingOn: false, version: 0, hqNumber: { ready: true, a2pState: 'REGISTERED_SERVICE' }, ...patch });
+  textingOn: false, stoppedByReply: false, version: 0, hqNumber: { ready: true, a2pState: 'REGISTERED_SERVICE', number: '+15555550199' }, ...patch });
 const pending = (patch = {}) => contact({ status: 'PENDING', phone: '+15550100001', codeExpiresAt: T2, codesLeftToday: 4, version: 2, ...patch });
 const confirmed = (patch = {}) => contact({ status: 'CONFIRMED', phone: '+15550100001', confirmedAt: T, textingOn: true, version: 3, ...patch });
 
@@ -31,7 +31,8 @@ test('contracts: own-phone inputs are closed; answers are consistent and show th
   assert.throws(() => contracts.validateHqContactTextingInput({ enabled: 'yes', expectedVersion: 1 }));
   assert.equal(contracts.validateHqContactView({ contact: contact(), asOf: T2 }).contact.status, 'REMOVED');
   for (const bad of [contact({ phone: '+15550100001' }), contact({ textingOn: true }), pending({ codeExpiresAt: null }), confirmed({ confirmedAt: null }),
-    contact({ hqNumber: { ready: true, a2pState: 'PENDING', smsServiceSid: 'MG' } }), contact({ codeExpired: true })])
+    contact({ hqNumber: { ready: true, a2pState: 'PENDING', number: '+15555550199', smsServiceSid: 'MG' } }),
+    contact({ hqNumber: { ready: true, a2pState: 'PENDING', number: '5555550199' } }), contact({ codeExpired: true })])
     assert.throws(() => contracts.validateHqContactView({ contact: bad, asOf: T2 }), JSON.stringify(bad));
   assert.equal(contracts.validateHqContactReceipt({ operation: 'PHONE_START', contact: pending(), code: '123456', replayed: false }).code, '123456');
   assert.equal(contracts.validateHqContactReceipt({ operation: 'PHONE_START', contact: pending(), code: null, replayed: true }).code, null);

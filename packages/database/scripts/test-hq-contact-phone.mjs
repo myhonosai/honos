@@ -51,8 +51,9 @@ const start = (who, phone, version, key = K()) => call('start_my_hq_phone', [H(w
 const texting = (who, enabled, version, key = K()) => call('set_my_hq_texting', [H(who), JSON.stringify({ enabled, expectedVersion: version }), key], ['', '::jsonb', '::uuid']);
 const remove = (who, version, key = K()) => call('remove_my_hq_phone', [H(who), JSON.stringify({ expectedVersion: version }), key], ['', '::jsonb', '::uuid']);
 let ev = 0;
-const inbound = async (from, body, { to = SID, event = `ev-${++ev}` } = {}) =>
-  one(worker, 'SELECT * FROM hon.record_hq_inbound_text($1,$2,$3,$4,$5,$6)', ['FAKE', event, from, to, body, new Date().toISOString()]);
+const inbound = async (from, body, { to = SID, event = `ev-${++ev}`, at = new Date() } = {}) =>
+  one(worker, 'SELECT * FROM hon.record_hq_inbound_text($1,$2,$3,$4,$5,$6)', ['FAKE', event, from, to, body, at.toISOString()]);
+const minutesAgo = (n) => new Date(Date.now() - n * 60_000);
 const pref = async (who) => (await one(admin, "SELECT status, source FROM hon.hq_contact_preferences WHERE user_id=$1 AND channel='SMS'", [Uu(who)])) ?? null;
 
 const tables = ['hq_inbound_texts', 'hq_contact_requests', 'hq_contact_phones', 'hq_message_delivery_events', 'hq_message_deliveries', 'hq_messages',
@@ -116,12 +117,12 @@ try {
   // ---------- 1. no HQ number yet ----------
   let view = await mine('owner1');
   eq(view.contact, { status: 'REMOVED', phone: null, codeExpiresAt: null, codeExpired: false, wrongCodes: 0, codesLeftToday: 5, confirmedAt: null,
-    textingOn: false, version: 0, hqNumber: null }, 'nothing set up');
+    textingOn: false, stoppedByReply: false, version: 0, hqNumber: null }, 'nothing set up');
   await refuse('23514', () => start('owner1', PHONE1, 0), 'no HQ number, no code', 'HQ_TEXTING_UNAVAILABLE');
   await refuse('42501', () => call('read_my_hq_contact', ['nobody-' + randomUUID()]), 'unknown subject refused');
-  await call('set_hq_communication_sender', [H('hqOwner'), JSON.stringify({ channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: SID,
+  await call('set_hq_communication_sender', [H('hqOwner'), JSON.stringify({ channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: SID, smsReplyNumber: '+15555550199',
     a2pState: 'REGISTERED_SERVICE', mmsConverterConfirmed: true }), K()], ['', '::jsonb', '::uuid']);
-  eq((await mine('owner1')).contact.hqNumber, { ready: true, a2pState: 'REGISTERED_SERVICE' }, 'HQ number ready, never its SID');
+  eq((await mine('owner1')).contact.hqNumber, { ready: true, a2pState: 'REGISTERED_SERVICE', number: '+15555550199' }, 'HQ number ready with the number to text, never its SID');
 
   // ---------- 2. start: code once, hash only ----------
   await refuse('22023', () => start('owner1', '5550100001', 0), 'not E.164');
@@ -138,21 +139,29 @@ try {
   const again = await start('owner1', PHONE1, 0, key1);
   eq([again.code, again.replayed, again.contact.status], [null, true, 'PENDING'], 'a replay never shows the code again');
   await refuse('40001', () => start('owner1', PHONE1, 0), 'stale version refused');
+  // Someone else adding the same number later neither learns anything nor blocks the person holding the phone.
+  const sx = await start('other', PHONE1, 0);
+  ok(/^[0-9]{6}$/.test(sx.code), 'a second account can start the same number (nothing is revealed)');
+  const wrong = ['000000', '111111', '222222'].find((c) => c !== s1.code && c !== sx.code);
 
   // ---------- 3. confirming by texting the code ----------
-  eq(await inbound(PHONE1, '000000' === s1.code ? '111111' : '000000'), { outcome: 'CODE_WRONG', reply: 'CODE_WRONG', replayed: false }, 'wrong code counted');
-  eq((await mine('owner1')).contact.wrongCodes, 1, 'one wrong try');
+  eq(await inbound(PHONE1, wrong), { outcome: 'CODE_WRONG', reply: 'CODE_WRONG', replayed: false }, 'wrong code counted');
+  eq([(await mine('owner1')).contact.wrongCodes, (await mine('other')).contact.wrongCodes], [1, 1], 'one wrong try on each pending row it was tried against');
   eq(await inbound(PHONE2, s1.code), { outcome: 'NO_MATCH', reply: null, replayed: false }, 'the code from another phone does nothing');
   eq(await inbound(PHONE1, s1.code, { to: OTHER_SID }), { outcome: 'NOT_HQ', reply: null, replayed: false }, 'a text to another number is not HQ');
   const confirmEvent = `ev-${++ev}`;
-  eq(await inbound(PHONE1, ` hon ${s1.code} `, { event: confirmEvent }), { outcome: 'CONFIRMED', reply: 'CONFIRMED', replayed: false }, 'texting the code confirms');
+  eq(await inbound(PHONE1, ` hon ${s1.code} `, { event: confirmEvent }), { outcome: 'CONFIRMED', reply: 'CONFIRMED', replayed: false },
+    'texting the code confirms, even though another account started the same number later');
   eq(await inbound(PHONE1, s1.code, { event: confirmEvent }), { outcome: 'CONFIRMED', reply: 'CONFIRMED', replayed: true }, 'same event replays');
   view = await mine('owner1');
   eq([view.contact.status, view.contact.phone, view.contact.textingOn, view.contact.codeExpiresAt], ['CONFIRMED', PHONE1, true, null], 'confirmed and opted in');
   eq(await pref('owner1'), { status: 'OPTED_IN', source: 'RECIPIENT' }, 'texting the code is the person\'s own opt-in');
   eq((await one(admin, 'SELECT code_hash, code_salt FROM hon.hq_contact_phones WHERE user_id=$1', [Uu('owner1')])), { code_hash: null, code_salt: null }, 'hash dropped');
   await refuse('23514', () => start('owner1', PHONE1, view.contact.version), 'same number already confirmed', 'HQ_PHONE_ALREADY_CONFIRMED');
-  await refuse('23514', () => start('owner2', PHONE1, 0), 'a confirmed number belongs to one person', 'HQ_PHONE_IN_USE');
+  eq(await inbound(PHONE1, sx.code), { outcome: 'PHONE_IN_USE', reply: 'CODE_WRONG', replayed: false }, 'a confirmed number belongs to one person');
+  eq((await mine('owner1')).contact.status, 'CONFIRMED', 'the first person keeps it');
+  const sy = await start('other', PHONE1, (await mine('other')).contact.version);
+  ok(/^[0-9]{6}$/.test(sy.code), 'starting a number confirmed to someone else is not refused (no number lookup)');
 
   // ---------- 4. wrong-try and daily limits ----------
   const s2 = await start('owner2', PHONE2, 0);
@@ -192,7 +201,9 @@ try {
   // ---------- 6. STOP / START / HELP ----------
   eq(await inbound(PHONE1, 'stop'), { outcome: 'OPTED_OUT', reply: 'STOPPED', replayed: false }, 'STOP');
   eq(await pref('owner1'), { status: 'OPTED_OUT', source: 'RECIPIENT' }, 'STOP recorded as the recipient\'s opt-out');
-  eq((await mine('owner1')).contact.textingOn, false, 'texts off');
+  view = await mine('owner1');
+  eq([view.contact.textingOn, view.contact.stoppedByReply], [false, true], 'texts off, by the reply');
+  await refuse('23514', () => texting('owner1', true, view.contact.version), 'STOP from the phone is undone only by START', 'HQ_TEXTING_STOPPED_BY_REPLY');
   const after = await call('create_hq_message', [H('supportOp'), JSON.stringify({ organizationId: ORG, schoolId: S, purpose: 'SUPPORT', channel: 'SMS',
     content: 'After STOP.', supportCaseId: null }), K()], ['', '::jsonb', '::uuid']);
   await call('queue_hq_message', [H('supportOp'), after.message.messageId, JSON.stringify({ expectedVersion: 1 }), K()], ['', '::uuid', '::jsonb', '::uuid']);
@@ -206,6 +217,9 @@ try {
   eq(await inbound(PHONE1, 'what time is class?'), { outcome: 'IGNORED', reply: null, replayed: false }, 'other text ignored');
   eq(await inbound(PHONE1, 'Start'), { outcome: 'OPTED_IN', reply: 'STARTED', replayed: false }, 'START');
   eq(await pref('owner1'), { status: 'OPTED_IN', source: 'RECIPIENT' }, 'START recorded');
+  eq((await mine('owner1')).contact.stoppedByReply, false, 'START clears it');
+  eq(await inbound(PHONE1, 'STOP', { at: minutesAgo(60) }), { outcome: 'IGNORED', reply: null, replayed: false }, 'a STOP sent before the latest START (late webhook) changes nothing');
+  eq(await pref('owner1'), { status: 'OPTED_IN', source: 'RECIPIENT' }, 'still on');
   const kinds = (await admin.query("SELECT keyword, outcome FROM hon.hq_inbound_texts ORDER BY recorded_at")).rows;
   ok(kinds.length === ev - 1 || kinds.length === ev, 'one row per provider event');
   ok(!JSON.stringify((await admin.query('SELECT * FROM hon.hq_inbound_texts')).rows).includes('what time'), 'no body stored');
@@ -228,7 +242,9 @@ try {
   await refuse('23514', () => remove('owner1', gone.contact.version), 'nothing to remove', 'HQ_PHONE_NONE');
   // Now that owner1 released it, owner2 can confirm the same number.
   const s4 = await start('owner2', PHONE1, (await mine('owner2')).contact.version);
-  eq((await inbound(PHONE1, s4.code)).outcome, 'CONFIRMED', 'a released number can be confirmed by someone else');
+  await admin.query("UPDATE hon.hq_contact_phones SET code_expires_at = clock_timestamp() - interval '1 second', version = version + 1 WHERE user_id=$1", [Uu('owner2')]);
+  eq((await inbound(PHONE1, s4.code, { at: minutesAgo(2) })).outcome, 'CONFIRMED',
+    'a released number can be confirmed by someone else; a code sent in time counts even if the webhook is late');
 
   // ---------- 8. history is append-only ----------
   await refuse('42501', () => admin.query('DELETE FROM hon.hq_contact_phones WHERE user_id=$1', [Uu('owner1')]), 'phones cannot be deleted');

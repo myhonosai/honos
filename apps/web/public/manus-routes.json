@@ -513,6 +513,10 @@
       "title": "HON OS | Language & Region"
     },
     {
+      "path": "/settings/texts-from-hon",
+      "title": "HON OS | Texts from HON"
+    },
+    {
       "path": "/staff/billing/membership-plans",
       "title": "HON OS | School membership plans"
     },

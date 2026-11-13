@@ -58,24 +58,25 @@ function readError(status: number, code: string | null): CommsError {
   return new CommsError('UNKNOWN', code);
 }
 /** What a refused command means. Only these exact answers are definitive; anything else is UNKNOWN. */
-export function commsCommandError(status: number, code: string | null): CommsError {
+export function commsCommandError(status: number, code: string | null, refused: ReadonlySet<string> = REFUSED): CommsError {
   if (status === 403) return new CommsError('DENIED', code);
   if (status === 400) return new CommsError('INVALID', code);
   if (status === 404 && code === 'SAAS_UNAVAILABLE') return new CommsError('GONE', code);
   if (status === 409 && code === 'SAAS_VERSION_CONFLICT') return new CommsError('CHANGED', code);
-  if (status === 422 && code !== null && REFUSED.has(code)) return new CommsError('REFUSED', code);
+  if (status === 422 && code !== null && refused.has(code)) return new CommsError('REFUSED', code);
   if (status === 409 && code === 'IDEMPOTENCY_KEY_REUSED') return new CommsError('KEY_REUSED', code);
   return new CommsError('UNKNOWN', code);
 }
-async function read<T>(path: string, signal: AbortSignal, owned: Owned, validate: (v: unknown) => T): Promise<T> {
+export async function commsRead<T>(path: string, signal: AbortSignal, owned: Owned, validate: (v: unknown) => T): Promise<T> {
   const { status, value } = await exchange(path, signal, owned);
   if (status !== 200) throw readError(status, codeOf(value));
   try { return validate(data(value)); } catch { throw new CommsError('UNKNOWN'); }
 }
-async function command<T>(path: string, marker: string, body: object, key: string, signal: AbortSignal, owned: Owned, validate: (v: unknown) => T): Promise<T> {
+export async function commsCommand<T>(path: string, marker: string, body: object, key: string, signal: AbortSignal, owned: Owned, validate: (v: unknown) => T,
+  refused: ReadonlySet<string> = REFUSED): Promise<T> {
   const k = saasUuid(key);
   const answer = await exchange(path, signal, owned, { marker, body: JSON.stringify(body), key: k });
-  if (answer.status !== 200) throw commsCommandError(answer.status, codeOf(answer.value));
+  if (answer.status !== 200) throw commsCommandError(answer.status, codeOf(answer.value), refused);
   try { return validate(data(answer.value)); } catch { throw new CommsError('UNKNOWN'); }
 }
 const same = (a: string | null, b: string | null) => (a === null || b === null) ? a === b : a.toLowerCase() === b.toLowerCase();
@@ -90,7 +91,7 @@ export const commsApi = {
     if (request.schoolId) q.set('schoolId', saasUuid(request.schoolId));
     if (request.cursor) q.set('cursor', encodeHqMessageCursor(request.cursor));
     q.set('limit', String(COMMS_PAGE_SIZE));
-    const view = await read(`${BASE}?${q}`, signal, owned, validateHqCommunicationsView);
+    const view = await commsRead(`${BASE}?${q}`, signal, owned, validateHqCommunicationsView);
     // A school-filtered page holds only that school's messages, and only purposes the reader holds.
     if (view.messages.some((m) => (request.schoolId !== null && !same(m.schoolId, request.schoolId)) || !view.viewer.purposes.includes(m.purpose))) throw new CommsError('UNKNOWN');
     return view;
@@ -98,21 +99,21 @@ export const commsApi = {
   async read(messageId: string, signal: AbortSignal, owned: Owned): Promise<HqMessageDetail> {
     const id = commsId(messageId);
     if (!id) throw new CommsError('INVALID');
-    const view = await read(`${BASE}/messages/${id}`, signal, owned, validateHqMessageDetail);
+    const view = await commsRead(`${BASE}/messages/${id}`, signal, owned, validateHqMessageDetail);
     if (!same(view.message.messageId, id)) throw new CommsError('UNKNOWN');
     return view;
   },
   async setSender(input: HqSenderSetInput, key: string, signal: AbortSignal, owned: Owned): Promise<HqSenderReceipt> {
     let body: HqSenderSetInput;
     try { body = validateHqSenderSetInput(input); } catch { throw new CommsError('INVALID'); }
-    const r = await command(`${BASE}/senders`, HQ_COMMUNICATION_COMMANDS.setSender, body, key, signal, owned, validateHqSenderReceipt);
+    const r = await commsCommand(`${BASE}/senders`, HQ_COMMUNICATION_COMMANDS.setSender, body, key, signal, owned, validateHqSenderReceipt);
     if (r.operation !== 'SENDER_SET' || r.sender.channel !== body.channel || r.sender.status !== 'ACTIVE') throw new CommsError('UNKNOWN');
     return r;
   },
   async retireSender(senderId: string, key: string, signal: AbortSignal, owned: Owned): Promise<HqSenderReceipt> {
     const id = commsId(senderId);
     if (!id) throw new CommsError('INVALID');
-    const r = await command(`${BASE}/senders/${id}/retire`, HQ_COMMUNICATION_COMMANDS.retireSender, {}, key, signal, owned, validateHqSenderReceipt);
+    const r = await commsCommand(`${BASE}/senders/${id}/retire`, HQ_COMMUNICATION_COMMANDS.retireSender, {}, key, signal, owned, validateHqSenderReceipt);
     if (r.operation !== 'SENDER_RETIRE' || !same(r.sender.senderId, id) || r.sender.status !== 'RETIRED') throw new CommsError('UNKNOWN');
     return r;
   },
@@ -120,7 +121,7 @@ export const commsApi = {
   async create(input: HqMessageCreateInput, key: string, signal: AbortSignal, owned: Owned): Promise<HqMessageReceipt> {
     let body: HqMessageCreateInput;
     try { body = validateHqMessageCreateInput(input); } catch { throw new CommsError('INVALID'); }
-    const r = await command(`${BASE}/messages`, HQ_COMMUNICATION_COMMANDS.createMessage, body, key, signal, owned, validateHqMessageReceipt), m = r.message;
+    const r = await commsCommand(`${BASE}/messages`, HQ_COMMUNICATION_COMMANDS.createMessage, body, key, signal, owned, validateHqMessageReceipt), m = r.message;
     if (r.operation !== 'CREATE' || !same(m.organizationId, body.organizationId) || !same(m.schoolId, body.schoolId) || m.purpose !== body.purpose
       || m.channel !== body.channel || m.content !== body.content || !same(m.supportCaseId, body.supportCaseId)) throw new CommsError('UNKNOWN');
     return r;
@@ -137,7 +138,7 @@ async function versioned(path: 'queue' | 'cancel', operation: 'QUEUE' | 'CANCEL'
   const id = commsId(messageId);
   let body: HqMessageVersionInput;
   try { if (!id) throw new Error('id'); body = validateHqMessageVersionInput(input); } catch { throw new CommsError('INVALID'); }
-  const r = await command(`${BASE}/messages/${id}/${path}`, marker, body, key, signal, owned, validateHqMessageReceipt);
+  const r = await commsCommand(`${BASE}/messages/${id}/${path}`, marker, body, key, signal, owned, validateHqMessageReceipt);
   if (r.operation !== operation || !same(r.message.messageId, id) || r.message.version !== body.expectedVersion + 1) throw new CommsError('UNKNOWN');
   return r;
 }
