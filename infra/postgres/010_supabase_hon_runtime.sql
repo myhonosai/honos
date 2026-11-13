@@ -3327,6 +3327,14 @@ DO $$ DECLARE r text; f text; BEGIN
     END LOOP;
   END LOOP;
 END $$;
+-- 0328 HQ usage specialist attribution: the attribution helper is migration-owner only (the HQ usage read keeps its grant).
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.ai_usage_reply_agent(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0328 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.ai_usage_reply_agent(text) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.ai_usage_reply_agent(text) FROM '||quote_ident(r);
+  END LOOP;
+END $$;
 
 -- B-TUI-2 piece 3 0321 payer saved methods (test mode only): four private tables reached only through six runtime entry
 -- points; guards, validators and helpers are private.
