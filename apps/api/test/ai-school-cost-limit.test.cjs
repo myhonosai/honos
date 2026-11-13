@@ -5,7 +5,7 @@ const { request: httpRequest } = require('node:http');
 require('reflect-metadata');
 const { Test } = require('@nestjs/testing');
 const { json } = require('express');
-const { AiSchoolCostLimitHqController, AiSchoolCostLimitService } = require('../dist/ai-spend/ai-school-cost-limit.controller.js');
+const { AiSchoolCostAlertHqController, AiSchoolCostLimitHqController, AiSchoolCostLimitService } = require('../dist/ai-spend/ai-school-cost-limit.controller.js');
 const { SaasBillingService } = require('../dist/saas-billing/saas-billing.service.js');
 const { SaasCommandGuard, SaasReadGuard } = require('../dist/saas-billing/saas-billing.guards.js');
 const { HonIdentityGuard } = require('../dist/foundation/hon-identity.guard.js');
@@ -66,7 +66,7 @@ const send = (url, { method = 'GET', headers = {}, body } = {}) => new Promise((
   req.on('error', reject); req.end(body);
 });
 async function appWith(callSaasBilling) {
-  const module = await Test.createTestingModule({ controllers: [AiSchoolCostLimitHqController],
+  const module = await Test.createTestingModule({ controllers: [AiSchoolCostLimitHqController, AiSchoolCostAlertHqController],
     providers: [AiSchoolCostLimitService, SaasBillingService, SaasReadGuard, SaasCommandGuard, { provide: RuntimeDatabaseService, useValue: { callSaasBilling } }] })
     .overrideGuard(HonIdentityGuard).useValue({ canActivate(context) { context.switchToHttp().getRequest().honIdentity = { externalSubject: 'verified-human' }; return true; } }).compile();
   const app = module.createNestApplication({ bodyParser: false });
@@ -129,6 +129,76 @@ test('HTTP: school AI cost limit is an exact HQ human command; the database deci
     assert.equal((await send(`${base}/hq/ai/school-cost-limits?x=1`, { method: 'POST', headers: human(), body })).status, 400, 'commands take no query');
     for (const method of ['PATCH', 'DELETE', 'PUT'])
       assert.equal((await send(`${base}/hq/ai/school-cost-limits`, { method, headers: human(), body })).status, 404, method);
+    assert.equal(calls.length, n, 'refused requests never reach the database');
+  } finally { await app.close(); if (previous === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = previous; }
+});
+
+// ---------- 0343: HQ alerts at 75%, 90% and 100% of a school's ceiling ----------
+const alert = (patch = {}) => ({ schoolId: U(), organizationId: U(), schoolName: 'Synthetic Dojo', trial: true, level: 'WARNING_90', ceilingMicros: 15_000_000,
+  committedCostMicros: 13_600_000, usedBasisPoints: 9066, crossedAt: '2026-11-10T12:00:00.000Z', windowStart: T, acknowledgement: null, ...patch });
+const alerts = (list, patch = {}) => ({ alerts: list, openCount: list.filter((a) => a.acknowledgement === null).length, asOf: T, ...patch });
+const ackInput = (patch = {}) => ({ schoolId: U(), level: 'WARNING_75', windowStart: T, reason: 'Synthetic HQ alert acknowledgement', ...patch });
+
+test('0343 contracts: an alert must be reached by its numbers; open alerts first; closed acknowledgement input', () => {
+  const ok = alerts([alert(), alert({ level: 'WARNING_75', acknowledgement: { acknowledgedAt: T2, reason: REASON } })]);
+  assert.equal(contracts.validateAiSchoolCostAlertList(ok).openCount, 1);
+  for (const [bad, label] of [
+    [alerts([alert({ level: 'CEILING_REACHED' })]), 'level not reached by the committed cost'],
+    [alerts([alert({ usedBasisPoints: 9000 })]), 'basis points disagree'],
+    [alerts([alert({ ceilingMicros: 0, usedBasisPoints: 0 })]), 'a $0 block is never an alert'],
+    [alerts([alert({ crossedAt: '2026-10-31T23:59:59.000Z' })]), 'crossed before the window'],
+    [alerts([alert({ level: 'NORMAL' })]), 'NORMAL is not an alert'],
+    [alerts([alert({ acknowledgement: { acknowledgedAt: T2, reason: REASON } }), alert()]), 'acknowledged before open'],
+    [{ ...ok, openCount: 2 }, 'openCount disagrees with a short list'],
+    [alerts([alert({ providerCost: 1 })]), 'extra key'],
+    [(() => { const a = alert(); return alerts([a, { ...a }]); })(), 'duplicate school and level']])
+    assert.throws(() => contracts.validateAiSchoolCostAlertList(bad), label);
+  assert.deepEqual(contracts.validateAiSchoolCostAlertAckInput(ackInput({ schoolId: T.length ? 'a0000000-0000-4000-8000-000000000000' : '' })).level, 'WARNING_75');
+  for (const bad of [{ level: 'NORMAL' }, { reason: 'short' }, { windowStart: 'yesterday' }, { organizationId: U() }, { acknowledgedBy: U() }])
+    assert.throws(() => contracts.validateAiSchoolCostAlertAckInput(ackInput(bad)), JSON.stringify(bad));
+});
+
+test('HTTP: school AI cost alerts are an HQ read and an exact HQ human acknowledgement; the database decides authority', async () => {
+  const previous = process.env.HON_PUBLIC_ORIGIN; process.env.HON_PUBLIC_ORIGIN = 'https://hon.example';
+  const calls = [];
+  const human = (command = contracts.SAAS_COMMANDS.aiSchoolCostAlertAck) => ({ 'content-type': 'application/json', origin: 'https://hon.example', 'x-hon-human-command': command,
+    'sec-fetch-site': 'same-origin', 'sec-fetch-mode': 'same-origin', 'sec-fetch-dest': 'empty', 'idempotency-key': randomUUID() });
+  let next = null, drift = false;
+  const { app, base } = await appWith(async (operation, params) => {
+    calls.push([operation, params]);
+    if (next) { const e = new Error(next.message); e.code = next.code; next = null; throw e; }
+    if (operation === 'readAiSchoolCostAlerts') return drift ? alerts([alert({ level: 'CEILING_REACHED' })]) : alerts([alert()]);
+    if (operation === 'commandAiSchoolCostAlertAck') { const i = JSON.parse(params[1]); return { schoolId: i.schoolId, organizationId: U(), level: i.level, windowStart: i.windowStart, acknowledgedAt: T2, replayed: false }; }
+    throw new Error('unexpected');
+  });
+  try {
+    const read = await send(`${base}/hq/ai/school-cost-alerts`);
+    assert.equal(read.status, 200, read.body); assert.match(read.headers['cache-control'], /no-store/);
+    assert.equal(JSON.parse(read.body).data.openCount, 1);
+    assert.deepEqual(calls.at(-1), ['readAiSchoolCostAlerts', ['verified-human']]);
+    drift = true;
+    assert.equal((await send(`${base}/hq/ai/school-cost-alerts`)).status, 503, 'an alert its numbers do not reach is drift');
+    drift = false;
+    const body = JSON.stringify(ackInput());
+    const headers = human();
+    const done = await send(`${base}/hq/ai/school-cost-alerts/acknowledgements`, { method: 'POST', headers, body });
+    assert.equal(done.status, 200, done.body); assert.equal(JSON.parse(done.body).data.level, 'WARNING_75');
+    assert.deepEqual(calls.at(-1), ['commandAiSchoolCostAlertAck', ['verified-human', body, headers['idempotency-key']]]);
+    for (const [message, code, status] of [['SAAS_FORBIDDEN', '42501', 403], ['AI_SCHOOL_COST_ALERT_ALREADY_ACKNOWLEDGED', '23505', 409],
+      ['AI_SCHOOL_COST_ALERT_NOT_ACTIVE', '22023', 400], ['AI_SCHOOL_NOT_FOUND', 'P0002', 404]]) {
+      next = { message, code };
+      assert.equal((await send(`${base}/hq/ai/school-cost-alerts/acknowledgements`, { method: 'POST', headers: human(), body })).status, status, message);
+    }
+    const n = calls.length;
+    const { 'idempotency-key': _key, ...noKey } = human();
+    for (const [h, payload, label] of [
+      [human(contracts.SAAS_COMMANDS.aiSchoolCostLimit), body, 'wrong command header'],
+      [{ ...human(), origin: 'https://evil.example' }, body, 'foreign origin'],
+      [noKey, body, 'no idempotency key'],
+      [human(), JSON.stringify({ ...ackInput(), organizationId: U() }), 'browser names the organization'],
+      [human(), JSON.stringify(ackInput({ level: 'NORMAL' })), 'not an alert level']])
+      assert.ok([400, 403].includes((await send(`${base}/hq/ai/school-cost-alerts/acknowledgements`, { method: 'POST', headers: h, body: payload })).status), label);
+    assert.equal((await send(`${base}/hq/ai/school-cost-alerts?schoolId=${U()}`)).status, 400, 'reads take no query');
     assert.equal(calls.length, n, 'refused requests never reach the database');
   } finally { await app.close(); if (previous === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = previous; }
 });

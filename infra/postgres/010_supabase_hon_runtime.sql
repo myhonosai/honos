@@ -3436,3 +3436,19 @@ DO $$ DECLARE r text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_hq_hon_agent_performance(text,text) TO hon_runtime;
   END IF;
 END $$;
+-- 0343 HQ school AI cost alerts: acknowledgements are migration-owner only; the runtime may only call the HQ read and command.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regclass('hon.ai_school_cost_alert_acknowledgements') IS NULL THEN RAISE EXCEPTION 'Apply migration 0343 first'; END IF;
+  REVOKE ALL ON TABLE hon.ai_school_cost_alert_acknowledgements FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.ai_school_cost_alert_acknowledgements FROM '||quote_ident(r);
+    FOREACH f IN ARRAY ARRAY['guard_ai_school_cost_alert_acknowledgements()','ai_school_cost_level_rank(text)',
+      'ai_school_cost_alert_crossed_at(uuid,uuid,tstzrange,bigint,text)','ai_school_cost_alert_rows(timestamptz)',
+      'read_ai_school_cost_alerts_from_hq(text)','command_ai_school_cost_alert_acknowledgement(text,jsonb,uuid)'] LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_ai_school_cost_alerts_from_hq(text), hon.command_ai_school_cost_alert_acknowledgement(text,jsonb,uuid) TO hon_runtime;
+  END IF;
+END $$;

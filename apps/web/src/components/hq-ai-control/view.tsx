@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  AI_ORG_AGENT_NO_CEILING_UNITS, AI_SPEND_PAUSE_CLASSES, AI_UNKNOWN_DECISIONS, type AiSchoolUsage, type AiSchoolUsageReport, type AiSpendPause, type AiSpendPauseList,
+  AI_ORG_AGENT_NO_CEILING_UNITS, AI_SPEND_PAUSE_CLASSES, type AiSchoolCostAlert, type AiSchoolCostAlertList, AI_UNKNOWN_DECISIONS, type AiSchoolUsage, type AiSchoolUsageReport, type AiSpendPause, type AiSpendPauseList,
   type AiUnknownDecision, type AiUnknownOpenItem, type AiUnknownQueue, type AiUnknownResolvedItem, type AiUsageAgent, type AiUsageAmount,
 } from '@hon/contracts';
 import { aiControlText, type AiControlKey } from './copy';
@@ -100,6 +100,54 @@ export function AiCostsView(p: AiCostsViewProps): React.ReactElement {
         </article>
         <p className={styles.meta}>{t('asOf', { time: moment(p.language, report.asOf) })}</p>
       </>}
+    </>}
+  </section>;
+}
+
+// ---------- AI cost limit alerts (0343) ----------
+export type AlertOutcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | AiControlErrorKind; replayed?: boolean }>;
+export const alertKey = (a: Pick<AiSchoolCostAlert, 'schoolId' | 'level'>) => `${a.schoolId.toLowerCase()}:${a.level}`;
+export type AiCostAlertsViewProps = Readonly<{
+  language: string; concealed: boolean; alerts: ReadState<AiSchoolCostAlertList>; open: string | null; outcome: AlertOutcome; locked: boolean; canRetry: boolean;
+  onRefresh?: (() => void) | undefined; onReveal?: (() => void) | undefined; onOpen?: ((key: string) => void) | undefined; onClose?: (() => void) | undefined;
+  onSubmit?: ((key: string, reason: string) => void) | undefined; onTryAgain?: (() => void) | undefined; onDiscard?: (() => void) | undefined;
+}>;
+function AlertRow({ a, p, t }: { a: AiSchoolCostAlert; p: AiCostAlertsViewProps; t: T }) {
+  const key = alertKey(a), pct = new Intl.NumberFormat(p.language, { maximumFractionDigits: 2 }).format(a.usedBasisPoints / 100);
+  return <li data-testid="cost-alert" data-level={a.level} data-open={a.acknowledgement === null}>
+    <span className={styles.chip} data-kind={a.acknowledgement ? 'ok' : 'warn'}>{t(`lv_${a.level}`)}</span>
+    <strong>{a.schoolName}</strong>{a.trial ? <span className={styles.chip}>{t('alertTrial')}</span> : null}
+    <span>{t('alertUsed', { used: usd(p.language, a.committedCostMicros), ceiling: usd(p.language, a.ceilingMicros), pct })}</span>
+    <span className={styles.meta}>{a.crossedAt ? t('alertCrossed', { time: moment(p.language, a.crossedAt) }) : t('alertHolds')}</span>
+    {a.acknowledgement ? <span className={styles.meta}>{t('alertAcked', { time: moment(p.language, a.acknowledgement.acknowledgedAt), reason: a.acknowledgement.reason })}</span>
+      : p.open === key ? <form className={styles.form} data-testid="ack-form" onSubmit={(e) => { e.preventDefault(); p.onSubmit?.(key, fieldsOf(e.currentTarget).reason ?? ''); }}>
+        <Reason name="reason" label="ackReason" t={t}/>
+        <div className={styles.row}><button type="submit" className={styles.primary} disabled={p.locked}>{t('ackConfirm')}</button>
+          <button type="button" className={styles.secondary} disabled={p.locked} onClick={p.onClose}>{t('back')}</button></div>
+      </form> : <button type="button" className={styles.secondary} disabled={p.locked || p.open !== null} onClick={() => p.onOpen?.(key)}>{t('ackButton')}</button>}
+  </li>;
+}
+/** Schools at 75%, 90% or 100% of their internal AI cost limit, read fresh from the database. Acknowledging changes no limit or spend decision. */
+export function AiCostAlertsView(p: AiCostAlertsViewProps): React.ReactElement {
+  const t: T = (key, vars) => aiControlText(p.language, key, vars);
+  const list = p.alerts.state === 'READY' ? p.alerts.view : null;
+  return <section className={styles.page} aria-labelledby="ai-alerts-title" data-testid="hq-ai-cost-alerts">
+    <Head id="ai-alerts-title" title={t('alertsTitle')} intro={t('alertsIntro')} t={t} concealed={p.concealed} onRefresh={p.onRefresh} onReveal={p.onReveal} busy={p.locked}/>
+    {p.concealed ? null : <>
+      {p.outcome ? <div className={styles.notice} role="status" data-testid="alert-outcome" data-kind={p.outcome.kind}>
+        <p>{p.outcome.kind === 'SENDING' ? t('sending') : p.outcome.kind === 'DONE' ? `${t('ackDone')}${p.outcome.replayed ? ` ${t('replayed')}` : ''}` : t(`e_${p.outcome.kind}`)}</p>
+        {p.canRetry ? <div className={styles.row}>{p.onTryAgain ? <button type="button" className={styles.primary} onClick={p.onTryAgain}>{t('tryAgain')}</button> : null}
+          {p.onDiscard ? <button type="button" className={styles.secondary} onClick={p.onDiscard}>{t('discard')}</button> : null}</div> : null}</div> : null}
+      <article className={styles.card} aria-labelledby="ai-alerts-list">
+        <div className={styles.rowHead}><h2 id="ai-alerts-list">{t('alertsTitle')}</h2>
+          {list && list.openCount > 0 ? <span className={styles.chip} data-kind="warn" data-testid="alerts-open">{t('alertsOpen', { n: new Intl.NumberFormat(p.language).format(list.openCount) })}</span> : null}</div>
+        {!list ? <Notice state={p.alerts} t={t} onRefresh={p.onRefresh}/> : <>
+          {list.alerts.length === 0 ? <p className={styles.meta}>{t('alertsNone')}</p>
+            : <ul className={styles.list}>{list.alerts.map((a) => <AlertRow key={alertKey(a)} a={a} p={p} t={t}/>)}</ul>}
+          {list.alerts.length >= 500 ? <p className={styles.meta}>{t('alertsTruncated')}</p> : null}
+          <p className={styles.meta}>{t('asOf', { time: moment(p.language, list.asOf) })}</p>
+        </>}
+      </article>
     </>}
   </section>;
 }

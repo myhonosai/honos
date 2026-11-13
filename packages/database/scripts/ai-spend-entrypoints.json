@@ -82,6 +82,7 @@
     "hon.ai_org_committed_credits(uuid,timestamp with time zone)",
     "hon.ai_org_open_agent_holds(uuid)",
     "hon.ai_school_committed_cost_micros(uuid,uuid,timestamp with time zone)",
+    "hon.ai_school_cost_alert_crossed_at(uuid,uuid,tstzrange,bigint,text)",
     "hon.ai_spend_reserve_guard()",
     "hon.ai_stamp_hold_origin()",
     "hon.ai_trial_ceiling_terms(uuid,timestamp with time zone)",

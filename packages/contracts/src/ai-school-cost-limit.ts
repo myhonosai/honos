@@ -72,3 +72,64 @@ export function validateAiSchoolCostStatusList(value: unknown): AiSchoolCostStat
   if (new Set(schools.map((s) => s.schoolId)).size !== schools.length) drift();
   return { schools, trialDefaultCeilingMicros: AI_SCHOOL_TRIAL_DEFAULT_CEILING_MICROS, asOf: r.asOf };
 }
+
+// ---------- 0343: HQ alerts at 75%, 90% and 100% of a school's ceiling, and HQ-owner acknowledgement ----------
+export const AI_SCHOOL_COST_ALERT_LEVELS = ['WARNING_75', 'WARNING_90', 'CEILING_REACHED'] as const;
+export type AiSchoolCostAlertLevel = typeof AI_SCHOOL_COST_ALERT_LEVELS[number];
+const alertRank = (level: AiSchoolCostLevel): number => ({ NO_CEILING: 0, NORMAL: 0, WARNING_75: 1, WARNING_90: 2, CEILING_REACHED: 3 })[level];
+/** One reached level of one school in its current budget window. crossedAt is null while only in-flight holds reach it. */
+export interface AiSchoolCostAlert {
+  schoolId: string; organizationId: string; schoolName: string; trial: boolean; level: AiSchoolCostAlertLevel; ceilingMicros: number;
+  committedCostMicros: number; usedBasisPoints: number; crossedAt: string | null; windowStart: string;
+  acknowledgement: { acknowledgedAt: string; reason: string } | null;
+}
+/** Open alerts first; at most 500. openCount counts every open alert, including any beyond the list. */
+export interface AiSchoolCostAlertList { alerts: AiSchoolCostAlert[]; openCount: number; asOf: string }
+export interface AiSchoolCostAlertAckInput { schoolId: string; level: AiSchoolCostAlertLevel; windowStart: string; reason: string }
+export interface AiSchoolCostAlertAckReceipt { schoolId: string; organizationId: string; level: AiSchoolCostAlertLevel; windowStart: string; acknowledgedAt: string; replayed: boolean }
+
+const isAlertLevel = (v: unknown): v is AiSchoolCostAlertLevel => (AI_SCHOOL_COST_ALERT_LEVELS as readonly unknown[]).includes(v);
+
+export function validateAiSchoolCostAlertAckInput(value: unknown): AiSchoolCostAlertAckInput {
+  const r = record(value, invalid); exactKeys(r, ['schoolId', 'level', 'windowStart', 'reason'], invalid);
+  if (!isUuid(r.schoolId) || !isAlertLevel(r.level) || !isTimestamp(r.windowStart) || !isReason(r.reason)) invalid();
+  return { schoolId: r.schoolId, level: r.level, windowStart: r.windowStart, reason: r.reason };
+}
+
+export function validateAiSchoolCostAlertAckReceipt(value: unknown): AiSchoolCostAlertAckReceipt {
+  const r = record(value, drift); exactKeys(r, ['schoolId', 'organizationId', 'level', 'windowStart', 'acknowledgedAt', 'replayed'], drift);
+  if (!isUuid(r.schoolId) || !isUuid(r.organizationId) || !isAlertLevel(r.level) || !isTimestamp(r.windowStart) || !isTimestamp(r.acknowledgedAt)
+    || typeof r.replayed !== 'boolean') drift();
+  return r as unknown as AiSchoolCostAlertAckReceipt;
+}
+
+function validateAlert(value: unknown): AiSchoolCostAlert {
+  const r = record(value, drift);
+  exactKeys(r, ['schoolId', 'organizationId', 'schoolName', 'trial', 'level', 'ceilingMicros', 'committedCostMicros', 'usedBasisPoints', 'crossedAt',
+    'windowStart', 'acknowledgement'], drift);
+  if (!isUuid(r.schoolId) || !isUuid(r.organizationId) || typeof r.schoolName !== 'string' || r.schoolName.length < 1 || r.schoolName.length > 300
+    || typeof r.trial !== 'boolean' || !isAlertLevel(r.level) || !isCeiling(r.ceilingMicros) || (r.ceilingMicros as number) < 1
+    || !isCount(r.committedCostMicros) || !isCount(r.usedBasisPoints, 1_000_000)
+    || !(r.crossedAt === null || isTimestamp(r.crossedAt)) || !isTimestamp(r.windowStart)) drift();
+  // The level must actually be reached by the committed cost, with the database's thresholds.
+  if (alertRank(aiSchoolCostLevel(r.committedCostMicros as number, r.ceilingMicros as number)) < alertRank(r.level as AiSchoolCostLevel)) drift();
+  if (r.usedBasisPoints !== Math.min(Math.floor((r.committedCostMicros as number) * 10000 / (r.ceilingMicros as number)), 1_000_000)) drift();
+  if (r.crossedAt !== null && Date.parse(r.crossedAt as string) < Date.parse(r.windowStart as string)) drift();
+  if (r.acknowledgement !== null) {
+    const k = record(r.acknowledgement, drift); exactKeys(k, ['acknowledgedAt', 'reason'], drift);
+    if (!isTimestamp(k.acknowledgedAt) || !isReason(k.reason)) drift();
+  }
+  return r as unknown as AiSchoolCostAlert;
+}
+
+export function validateAiSchoolCostAlertList(value: unknown): AiSchoolCostAlertList {
+  const r = record(value, drift); exactKeys(r, ['alerts', 'openCount', 'asOf'], drift);
+  if (!Array.isArray(r.alerts) || r.alerts.length > 500 || !isCount(r.openCount) || !isTimestamp(r.asOf)) drift();
+  const alerts = r.alerts.map(validateAlert);
+  if (new Set(alerts.map((a) => `${a.schoolId}:${a.level}`)).size !== alerts.length) drift();
+  const open = alerts.filter((a) => a.acknowledgement === null).length;
+  // Open alerts come first; openCount covers at least the open ones listed (exactly, when the list is not cut at 500).
+  if (alerts.some((a, i) => i > 0 && a.acknowledgement === null && alerts[i - 1]?.acknowledgement !== null)) drift();
+  if ((r.openCount as number) < open || (alerts.length < 500 && r.openCount !== open)) drift();
+  return { alerts, openCount: r.openCount as number, asOf: r.asOf as string };
+}
