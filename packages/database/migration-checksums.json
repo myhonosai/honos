@@ -272,6 +272,7 @@
     "0308_hq_plan_promotions.sql": "13ddea1cc69c6ee892e775a333a1eb6bd4eb74f5e96c16c13d4cc45380d394bb",
     "0310_ai_org_agent_ceiling_removed.sql": "3427f3424c2e61ed9b12e5a8d8c0ac02b431fcbe7c14c7ab110d293ab08802bc",
     "0320_school_payment_credential_vault.sql": "42194542aa26affc6ce836fd06fbce0210d30a7ed79989d6182b966c50a2bf56",
-    "0323_school_onboarding_progress.sql": "e76af139691a8e54a65e8024e186bf230d3a3768b320665a3c0cd08cff32bd2a"
+    "0323_school_onboarding_progress.sql": "e76af139691a8e54a65e8024e186bf230d3a3768b320665a3c0cd08cff32bd2a",
+    "0335_school_support_requests.sql": "4361133db9255836187b05cad0b11e877ed3fe6d895722bad07859c2b8f98f58"
   }
 }

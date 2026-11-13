@@ -125,6 +125,8 @@ import { StudentImportController } from './migration/student-import.controller.j
 import { StudentImportService } from './migration/student-import.service.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
+import { SchoolSupportController } from './support/school-support.controller.js';
+import { SchoolSupportService } from './support/school-support.service.js';
 import { SchoolMembershipListController, SchoolMembershipListHumanUiGuard } from './billing/school-membership-list.controller.js';
 import { SchoolMembershipListService } from './billing/school-membership-list.service.js';
 import { CrmSchoolClockController, CrmSchoolClockHumanUiGuard, CrmSessionSchoolClockController } from './crm/crm-school-clock.controller.js';
@@ -463,6 +465,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipPauseController,
     StudentImportController,
     SchoolOnboardingController,
+    SchoolSupportController,
     TuitionPaymentController,
     SchoolPaymentController,
     SchoolCheckoutController,
@@ -619,6 +622,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipPauseService,
     StudentImportService,
     SchoolOnboardingService,
+    SchoolSupportService,
     ClassSeriesService,
     SchoolEventService,
     SchoolEventReadHumanUiGuard,
