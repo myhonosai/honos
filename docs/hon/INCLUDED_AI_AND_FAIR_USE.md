@@ -2,6 +2,16 @@
 
 **Owner clarification, 2026-11-06 18:25Z (David).** This page states the commercial intent. It does not authorize paid providers, billing changes, credit grants or production changes. Where it conflicts with older wording in [OWNER_COMMERCIAL_POLICY.md](OWNER_COMMERCIAL_POLICY.md) or [HQ_AUTONOMY_AND_AI.md](HQ_AUTONOMY_AND_AI.md) about "premium AI credits" for agent work, this page wins.
 
+## Owner decisions 2026-11-12 (David), these win over the proposal below
+
+1. **Conversations have no cap.** A paying school's conversations with HON and the AI team are not capped by any per-school dollar limit or per-person daily cap. The proposed fair-use steps and rate limits below (items 2 and 3) are **not adopted**. Built in R2 (#222, migration 0288): a paying school has no default ceiling (HQ reads `NO_CEILING`).
+2. **A paid school's AI money is its creative credits.** About $30 a month of AI cost is given to the school as its **12,000 monthly creative credits** (wallet 0202). Creative and heavier work (images, video, and future heavy jobs such as website building) spends those credits. When they run out the school buys a top-up pack or waits for next month's refresh. Nothing else is charged.
+3. **Trial schools: $15.** While a free trial owns the school's access, its internal AI cost ceiling defaults to $15 (R2, `hon.ai_school_trial_default_ceiling_micros()`). Trial Creative Studio funding (the trial credit lot) is a separate change, not yet on main.
+4. **HQ keeps emergency tools.** HQ can still set a ceiling for one school or pause one school's AI (R2), or pause an organization (0195).
+5. **Open:** whether to keep the organization's interim internal agent budget (0194, about $200-$240 of worst-case cost a month) as a hidden backstop on conversations, remove it, or keep it with HQ alerts at 75% and 90%.
+
+**Rule for new heavy features.** Images and video already reserve creative credits through `hon.saas_creative_reservations` (0202, 0216, 0276). No AI website builder or other heavy generator exists in the code yet. Any one that is added must reserve creative credits through that same wallet path (which also carries the S4 and R2 pause guards), with HQ-configurable rates, and must not be billed as included conversation.
+
 ## Policy
 
 HON OS is sold as **one subscription with an included AI team**. It is not a chatbot where customers buy credits for every reply.
@@ -23,7 +33,7 @@ HON OS is sold as **one subscription with an included AI team**. It is not a cha
 
 The code still names the internal unit `customer_credits` / `reserved_credits` / `requestCredits` in several places (columns and APIs that predate this clarification). These are **internal usage units**. They must never be labelled, summed or displayed as purchased credits, creative credits or a pay-per-message charge.
 
-## Fair-use and abuse protections (proposal for owner approval)
+## Fair-use and abuse protections (2026-11-06 proposal; items 1-3 superseded by the 2026-11-12 decisions above)
 
 Goal: keep the included AI economical and safe without ever charging the customer or quietly creating a paid AI tier.
 
@@ -35,7 +45,7 @@ Goal: keep the included AI economical and safe without ever charging the custome
 3. **Per-person rate limits** (proposed defaults): 30 HON replies per hour and 200 per day per staff member; 20 Detailed replies per day; at most one reply in flight per person and three per school; continuation stays at 3 steps.
 4. **Human-only use.** Included AI runs only from signed-in human staff sessions (`HUMAN_UI`), never API keys, automations or integrations, unless a later governed feature is approved.
 5. **Input bounds stay.** Question 2,000 characters; facts and history built by the database; idempotency so a resend never calls twice.
-6. **Anomaly alerts to HQ.** A school whose daily provider cost exceeds a set multiple of its average, or repeated identical questions, raises an HQ alert. Today HQ can pause a whole organization instantly (existing `/v1/hq/ai/spend-pauses`, organization or platform scope only); a pause for one school is future work.
+6. **Anomaly alerts to HQ.** A school whose daily provider cost exceeds a set multiple of its average, or repeated identical questions, raises an HQ alert. HQ can pause a whole organization instantly (`/v1/hq/ai/spend-pauses`) and, since R2 (0288), one school (`/v1/hq/ai/school-cost-limits`).
 7. **No silent paid tier.** Any future option to buy more included-AI capacity needs its own owner-approved commercial terms. Until then, hitting a limit only pauses work.
 
 ## What must change to match (follow-up slice "I1", after #148 → #150 → #151)
@@ -52,8 +62,8 @@ No code in #148, #150 or #151 deducts customer-purchased or creative credits, to
 
 ## Owner decisions
 
-1. Approve the fair-use steps above, or set different thresholds.
-2. Set the target monthly included-AI provider cost per school that HQ budgets from.
-3. Approve the per-person rate limits, or change them.
+1. ~~Approve the fair-use steps above~~ Decided 2026-11-12: no cap on conversations.
+2. ~~Set the target monthly included-AI provider cost per school~~ Decided 2026-11-12: about $30 a month, given as the 12,000 creative credits; $15 on trial.
+3. ~~Approve the per-person rate limits~~ Decided 2026-11-12: none.
 4. Retire the legacy premium-credit categories `AI_EMPLOYEE_TASK` and `DEEP_RESEARCH`, or keep them for a later approved add-on.
 5. Approve the I1 follow-up slice (naming and UI wording, no billing or provider change).
