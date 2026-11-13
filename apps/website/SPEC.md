@@ -50,3 +50,11 @@ Source of truth for every claim: `/mnt/project-files/website/HON_OS_WEBSITE_SUMM
 3. Build: `scripts/build.mjs` copies `src` to `dist`, replaces `{{APP_URL}}` and `{{ROBOTS}}`, and refuses a non-http(s) app address.
 4. Wire `build` and `test` scripts so the root `pnpm build` / `pnpm test` include the site.
 5. Verify in a real browser at desktop and phone widths, then review and open the PR.
+
+## Blog (2026-11-13)
+
+- `/blog/` lists posts newest first; each post is at `/blog/<slug>/`. Korean and Spanish live at `/ko/blog/…` and `/es/blog/…`.
+- A post is a folder `src/blog/posts/<slug>/` with `en.md`, `ko.md` and `es.md`. Each file starts with front matter (`title`, `description` up to 200 characters, `date` as YYYY-MM-DD, `author`), then a small Markdown subset: `##`/`###` headings, paragraphs, `-` and `1.` lists, `>` quotes, `**bold**`, `*italic*`, and links to site paths only (for example `/#pricing`). The build fails if a language is missing, the dates differ or a link leaves the site.
+- Blog pages reuse the home page header and footer of the same language, load only the stylesheet (no scripts, no background animation) and end with a "Start a new school" card. Blog-only labels are in `scripts/blog.mjs`.
+- `test/blog.test.mjs` applies the same banned-claims rules to every post in all three languages and checks that every link on every page resolves.
+- The two first posts are general school-owner advice written by Claude, and need David's OK and a native-speaker read like the rest of the KO/ES copy.

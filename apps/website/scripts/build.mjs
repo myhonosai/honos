@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { localize, markLanguage } from './i18n.mjs';
+import { loadPosts, blogPages } from './blog.mjs';
 
 export const LANGUAGES = ['ko', 'es'];
 
@@ -52,6 +53,7 @@ export function buildSite({ outDir = join(root, 'dist'), env = process.env } = {
   mkdirSync(out, { recursive: true });
   cpSync(join(root, 'src'), out, { recursive: true });
   rmSync(join(out, 'i18n'), { recursive: true, force: true });
+  rmSync(join(out, 'blog'), { recursive: true, force: true });
   versionCss(out);
   const fill = (html, name) => {
     const done = versionPage(html.replaceAll('{{APP_URL}}', app).replaceAll('{{ROBOTS}}', robots), out);
@@ -59,13 +61,21 @@ export function buildSite({ outDir = join(root, 'dist'), env = process.env } = {
     return done;
   };
   const english = readFileSync(join(root, 'src', 'index.html'), 'utf8');
-  writeFileSync(join(out, 'index.html'), fill(markLanguage(english, 'en'), 'index.html'));
+  const homes = { en: fill(markLanguage(english, 'en'), 'index.html') };
+  writeFileSync(join(out, 'index.html'), homes.en);
   for (const lang of LANGUAGES) {
     const dict = JSON.parse(readFileSync(join(root, 'src', 'i18n', `${lang}.json`), 'utf8'));
     mkdirSync(join(out, lang), { recursive: true });
-    writeFileSync(join(out, lang, 'index.html'), fill(localize(english, dict, lang), `${lang}/index.html`));
+    // Site paths outside the home page (the blog) live under the language folder too.
+    homes[lang] = fill(localize(english, dict, lang), `${lang}/index.html`).replaceAll('href="/blog/"', `href="/${lang}/blog/"`);
+    writeFileSync(join(out, lang, 'index.html'), homes[lang]);
   }
-  return { outDir: out, app, robots };
+  const posts = loadPosts(join(root, 'src', 'blog', 'posts'));
+  for (const { file, html } of blogPages({ posts, homes, app })) {
+    mkdirSync(dirname(join(out, file)), { recursive: true });
+    writeFileSync(join(out, file), html);
+  }
+  return { outDir: out, app, robots, posts: posts.map((p) => p.slug) };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
