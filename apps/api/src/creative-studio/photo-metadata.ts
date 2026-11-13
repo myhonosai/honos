@@ -7,22 +7,44 @@ export class PhotoMetadataError extends Error {}
 
 const fail = (): never => { throw new PhotoMetadataError('PHOTO_UNREADABLE'); };
 
-/** JPEG: keep JFIF (APP0), ICC colour profiles (APP2 "ICC_PROFILE") and Adobe colour info (APP14); drop every other APPn and comments. */
+/**
+ * JPEG: keep JFIF (APP0), ICC colour profiles (APP2 "ICC_PROFILE") and Adobe colour info (APP14); drop every other APPn
+ * and comments. Entropy-coded scan data is walked byte by byte (FF00 stuffing and RSTn stay data), so markers between the
+ * scans of a progressive JPEG are filtered too. Everything after EOI (MPF / Ultra HDR secondary images with their own EXIF,
+ * vendor trailers, motion-photo video) is dropped. A file without EOI is refused.
+ */
 function jpeg(src: Buffer): Buffer {
   if (src.length < 4 || src[0] !== 0xff || src[1] !== 0xd8) fail();
   const out: Buffer[] = [src.subarray(0, 2)];
   let i = 2;
   for (;;) {
-    if (i + 4 > src.length || src[i] !== 0xff) fail();
+    if (i + 2 > src.length || src[i] !== 0xff) fail();
     while (src[i + 1] === 0xff) i++; // fill bytes
-    if (i + 4 > src.length) fail();
+    if (i + 2 > src.length) fail();
     const marker = src[i + 1]!;
-    if (marker === 0xd9) { out.push(src.subarray(i, i + 2)); return Buffer.concat(out); }
+    if (marker === 0xd9) { out.push(src.subarray(i, i + 2)); return Buffer.concat(out); } // EOI: anything after it is dropped
     if ((marker >= 0xd0 && marker <= 0xd7) || marker === 0x01) { out.push(src.subarray(i, i + 2)); i += 2; continue; }
+    if (marker === 0x00 || marker === 0xd8) fail();
+    if (i + 4 > src.length) fail();
     const length = src.readUInt16BE(i + 2);
     if (length < 2 || i + 2 + length > src.length) fail();
     const end = i + 2 + length;
-    if (marker === 0xda) { out.push(src.subarray(i)); return Buffer.concat(out); } // start of scan: the rest is image data
+    if (marker === 0xda) { // start of scan: header, then entropy-coded data up to the next real marker
+      let j = end;
+      for (;;) {
+        if (j + 1 >= src.length) fail();
+        if (src[j] === 0xff) {
+          const next = src[j + 1]!;
+          if (next === 0x00 || (next >= 0xd0 && next <= 0xd7)) { j += 2; continue; }
+          if (next === 0xff) { j++; continue; }
+          break;
+        }
+        j++;
+      }
+      out.push(src.subarray(i, j));
+      i = j;
+      continue;
+    }
     const app = marker >= 0xe0 && marker <= 0xef;
     const keep = !app && marker !== 0xfe ? true
       : marker === 0xe0 || marker === 0xee || (marker === 0xe2 && src.subarray(i + 4, i + 16).toString('latin1') === 'ICC_PROFILE\0');

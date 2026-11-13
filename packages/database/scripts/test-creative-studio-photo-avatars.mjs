@@ -224,12 +224,14 @@ try{
   assert.deepEqual(await photoCounts(S.A1),before);
  });
 
- await check('PH3','staff only: a parent-coded account, another organization and a sibling school\'s staff cannot upload for this school',async()=>{
+ await check('PH3','staff only: a parent-coded account, another organization and a sibling school\'s staff cannot upload to, or list, this school',async()=>{
   const before=await photoCounts(S.A1);
   await deny(upload('parentA1'),403,'SAAS_FORBIDDEN');
   await deny(upload('ownerB'),403,'SAAS_FORBIDDEN');
   await deny(upload('staffA2'),403,'SAAS_FORBIDDEN');
   assert.deepEqual(await photoCounts(S.A1),before);
+  // Nor can they list this school's photos: refused, never answered with an empty list.
+  for(const k of ['parentA1','ownerB','staffA2'])await deny(studio.listPhotos(H(k),S.A1),403,'SAAS_FORBIDDEN');
  });
 
  await check('PH4','own photo only: another staff member cannot view, list, use or delete someone else\'s photo',async()=>{

@@ -213,6 +213,10 @@ BEGIN
   b := decode(p_photo, 'base64');
   IF NOT hon.creative_photo_bytes_ok(p->>'contentType', b) THEN RAISE EXCEPTION 'CREATIVE_AVATAR_PHOTO_INVALID' USING ERRCODE = '22023'; END IF;
   SELECT * INTO scope FROM hon.require_saas_school_actor(p_subject, p_school) LIMIT 1;
+  -- The same likeness rule every later use checks: an eligible staff member with no family access.
+  IF NOT hon.creative_photo_subject_live(scope.principal_id, scope.organization_id, scope.school_id) THEN
+    RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE = '42501';
+  END IF;
   sha := encode(sha256(b), 'hex');
   fp := hon.creative_photo_fingerprint(scope.school_id, p, sha);
   -- One writer per person per school: replace, delete and create-from-photo all take this lock.
@@ -254,6 +258,11 @@ BEGIN
   me := hon.creative_photo_principal(p_subject);
   IF p_school IS NULL THEN RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE = '42501'; END IF;
   owner := EXISTS (SELECT 1 FROM hon.school_owner_grant_rows(p_school, clock_timestamp()) o WHERE o.o_principal = me AND o.o_live AND NOT o.o_hq);
+  -- Only someone of this school gets an answer: its live owner, the person in a photo stored here (any standing, so they
+  -- can always delete it), or one of its staff actors (who may save one). Anybody else is refused, never told "none".
+  IF NOT owner AND NOT EXISTS (SELECT 1 FROM hon.creative_avatar_photo_consents c WHERE c.school_id = p_school AND c.subject_principal_id = me) THEN
+    PERFORM 1 FROM hon.require_saas_school_actor(p_subject, p_school);
+  END IF;
   SELECT coalesce(jsonb_agg(hon.creative_photo_consent_json(c, me) ORDER BY c.created_at DESC, c.id DESC), '[]'::jsonb) INTO list
     FROM (SELECT * FROM hon.creative_avatar_photo_consents WHERE school_id = p_school AND (subject_principal_id = me OR owner)
       ORDER BY created_at DESC, id DESC LIMIT 50) c;

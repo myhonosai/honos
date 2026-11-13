@@ -73,6 +73,24 @@ test('A3 metadata stripping removes EXIF, XMP, IPTC and text from JPEG, PNG and 
     assert.throws(() => stripPhotoMetadata(type, bad), PhotoMetadataError, type);
 });
 
+test('A3 JPEG: scan data is walked, markers between progressive scans are filtered, and everything after EOI is dropped', () => {
+  const scan = (data) => Buffer.concat([seg(0xda, Buffer.from([1, 1, 0, 0, 0x3f, 0])), Buffer.from(data)]);
+  // Entropy data with byte stuffing (FF00), a restart marker and fill bytes; then an APP1 between two scans (progressive),
+  // then EOI followed by an MPF/Ultra HDR secondary image with its own EXIF and a motion-photo MP4 with a location box.
+  const secondary = Buffer.concat([Buffer.from([0xff, 0xd8]), seg(0xe1, Buffer.from('Exif\0\0GPS-SECRET-2', 'latin1')), scan('second'), Buffer.from([0xff, 0xd9])]);
+  const motion = Buffer.concat([Buffer.from('\0\0\0\x18ftypmp42', 'latin1'), Buffer.from('udta\xa9xyz+37.56+126.97/', 'latin1')]);
+  const file = Buffer.concat([Buffer.from([0xff, 0xd8]), seg(0xe0, Buffer.from('JFIF\0\x01\x01\0\0\x01\0\x01\0\0', 'latin1')), seg(0xdb, Buffer.alloc(65, 7)),
+    scan(Buffer.concat([Buffer.from('aa'), Buffer.from([0xff, 0x00]), Buffer.from('bb'), Buffer.from([0xff, 0xd3]), Buffer.from('cc')])),
+    seg(0xe1, Buffer.from('Exif\0\0GPS-SECRET-BETWEEN-SCANS', 'latin1')), seg(0xc4, Buffer.alloc(20, 3)), scan('dd'), Buffer.from([0xff, 0xff, 0xd9]), secondary, motion]);
+  const out = stripPhotoMetadata('image/jpeg', file), text = out.toString('latin1');
+  assert.doesNotMatch(text, /GPS-SECRET|xyz|ftyp|second/, 'no EXIF between scans, no secondary image, no motion-photo trailer');
+  assert.ok(text.includes('aa\xff\0bb\xff\xd3cc') && text.includes('dd'), 'stuffed bytes, restart markers and both scans are kept');
+  assert.deepEqual([...out.subarray(-2)], [0xff, 0xd9], 'ends at EOI');
+  assert.deepEqual(stripPhotoMetadata('image/jpeg', out), out, 'idempotent');
+  // A scan that never reaches EOI is refused, not stored as-is.
+  assert.throws(() => stripPhotoMetadata('image/jpeg', Buffer.concat([Buffer.from([0xff, 0xd8]), seg(0xdb, Buffer.alloc(65, 7)), scan('no end of image')])), PhotoMetadataError);
+});
+
 /** A fake database that answers like 0305 and records every call. */
 function fakeDatabase() {
   const calls = [];
