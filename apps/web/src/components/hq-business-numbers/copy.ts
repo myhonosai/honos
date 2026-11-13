@@ -14,8 +14,8 @@ const en = {
   monthsTitle: 'By month (UTC)', month: 'Month', toDate: '{month} (to date)',
   newSchools: 'New schools', signups: 'Public sign-ups', trialsStarted: 'Trials started', newPaying: 'Started paying',
   conversions: 'Of those, after a trial', stopped: 'Stopped paying',
-  rules: 'How these are counted: each school counts once, from its HON OS plan if it has an active one, otherwise from its newest monthly subscription. Annual prices count as one twelfth a month. Lifetime purchases are counted but never added to monthly revenue.',
-  noChurn: 'No churn rate is shown. "Stopped paying" counts only earlier subscriptions that were suspended or voided; HON OS plans have no recorded cancellation after payment yet.',
+  rules: 'How these are counted: each school counts once, from its HON OS plan if it has an active one, otherwise from its newest monthly or annual subscription. Annual prices count as one twelfth a month. Lifetime purchases and records without a price are counted but never added to monthly revenue.',
+  noChurn: 'No churn rate is shown. "Stopped paying" counts only earlier subscriptions that were suspended or voided (not voids recorded in error); HON OS plans have no recorded cancellation after payment yet.',
   asOf: 'Read {time} UTC.',
 };
 type Key = keyof typeof en;
@@ -34,8 +34,8 @@ const ko: Record<Key, string> = {
   monthsTitle: '월별(UTC)', month: '월', toDate: '{month}(현재까지)',
   newSchools: '새 도장', signups: '공개 가입', trialsStarted: '시작된 체험', newPaying: '결제 시작',
   conversions: '그중 체험 후', stopped: '결제 중단',
-  rules: '집계 방법: 도장마다 한 번만 셉니다. 활성 HON OS 플랜이 있으면 그 플랜으로, 없으면 가장 최근 월간 구독으로 셉니다. 연간 가격은 매월 12분의 1로 셉니다. 평생 구매는 세지만 월 매출에는 더하지 않습니다.',
-  noChurn: '이탈률은 표시하지 않습니다. "결제 중단"은 일시 중지되거나 무효 처리된 이전 구독만 셉니다. HON OS 플랜에는 아직 결제 후 해지 기록이 없습니다.',
+  rules: '집계 방법: 도장마다 한 번만 셉니다. 활성 HON OS 플랜이 있으면 그 플랜으로, 없으면 가장 최근 월간 또는 연간 구독으로 셉니다. 연간 가격은 매월 12분의 1로 셉니다. 평생 구매와 가격이 없는 기록은 세지만 월 매출에는 더하지 않습니다.',
+  noChurn: '이탈률은 표시하지 않습니다. "결제 중단"은 일시 중지되거나 무효 처리된 이전 구독만 셉니다(오류로 기록된 무효 제외). HON OS 플랜에는 아직 결제 후 해지 기록이 없습니다.',
   asOf: '{time} UTC에 읽음.',
 };
 const es: Record<Key, string> = {
@@ -53,8 +53,8 @@ const es: Record<Key, string> = {
   monthsTitle: 'Por mes (UTC)', month: 'Mes', toDate: '{month} (hasta hoy)',
   newSchools: 'Escuelas nuevas', signups: 'Registros públicos', trialsStarted: 'Pruebas iniciadas', newPaying: 'Empezaron a pagar',
   conversions: 'De ellas, tras una prueba', stopped: 'Dejaron de pagar',
-  rules: 'Cómo se cuentan: cada escuela cuenta una vez, por su plan HON OS si tiene uno activo, si no por su suscripción mensual más reciente. Los precios anuales cuentan como una doceava parte al mes. Las compras vitalicias se cuentan pero nunca se suman al ingreso mensual.',
-  noChurn: 'No se muestra una tasa de cancelación. "Dejaron de pagar" cuenta solo suscripciones anteriores suspendidas o anuladas; los planes HON OS aún no tienen una cancelación registrada después del pago.',
+  rules: 'Cómo se cuentan: cada escuela cuenta una vez, por su plan HON OS si tiene uno activo, si no por su suscripción mensual o anual más reciente. Los precios anuales cuentan como una doceava parte al mes. Las compras vitalicias y los registros sin precio se cuentan pero nunca se suman al ingreso mensual.',
+  noChurn: 'No se muestra una tasa de cancelación. "Dejaron de pagar" cuenta solo suscripciones anteriores suspendidas o anuladas (no las anuladas por error de registro); los planes HON OS aún no tienen una cancelación registrada después del pago.',
   asOf: 'Leído {time} UTC.',
 };
 export type BusinessKey = Key;
