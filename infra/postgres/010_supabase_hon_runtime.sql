@@ -3323,3 +3323,16 @@ DO $$ DECLARE r text; t text; col text; f text; BEGIN
       hon.set_default_school_pay_method(text,uuid,jsonb,text,uuid,uuid),hon.remove_school_pay_method(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
+-- B-HQ-2b 0327 HQ school health: two read-only entry points; the reader rule and facts helpers are internal.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['require_hq_health_actor(text)','hq_school_health_facts(uuid,timestamptz)','read_hq_school_health(text,uuid)',
+    'read_hq_schools_needing_attention(text,integer)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_hq_school_health(text,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.read_hq_schools_needing_attention(text,integer) TO hon_runtime;
+  END IF;
+END $$;
