@@ -2,8 +2,11 @@ import { createHash } from 'node:crypto';
 import {
   NO_SCHOOL_PAY_CAPABILITIES,
   SCHOOL_PAY_PROVIDER_CODES,
+  verifySchoolPayMethodObservation,
   verifySchoolPayObservation,
   type SchoolPayCapabilities,
+  type SchoolPayMethodKind,
+  type SchoolPayMethodObservation,
   type SchoolPayObservation,
   type SchoolPayProviderCode,
 } from '@hon/contracts';
@@ -35,12 +38,23 @@ export interface SchoolPaymentAdapter {
   renewCredential?(input: { accountRef: string; credential: SchoolPayCredential }): Promise<SchoolPayCredential>;
   /** Revoke HON's access to the school's account; the school's own account and objects stay. */
   disconnect(input: { accountRef: string }): Promise<void>;
+  /** 0321: the payer's customer on the school's account (created once; an existing reference is returned as is). */
+  ensureCustomer(input: { accountRef: string; billingAccountId: string; customerRef: string | null }): Promise<{ customerRef: string }>;
+  /**
+   * 0321: a hosted page where the payer enters a card or bank account (Stripe SetupIntent / Checkout setup mode, Square Web
+   * Payments SDK card on file) that returns to `returnUrl` with `state`. The card number never reaches HON.
+   */
+  beginMethodSetup(input: { accountRef: string; customerRef: string; setupId: string; methodKinds: readonly SchoolPayMethodKind[]; state: string; returnUrl: string }): Promise<{ setupRef: string; setupUrl: string }>;
+  /** 0321: authenticated retrieval of the saved method of one setup; never derived from a browser return. */
+  retrieveMethodSetup(input: { accountRef: string; customerRef: string; setupRef: string }): Promise<SchoolPayMethodObservation>;
+  /** 0321: detach a removed method from the payer's customer at the provider. */
+  detachMethod(input: { accountRef: string; methodRef: string }): Promise<void>;
 }
 
 /** PRE_SEND: nothing reached the provider. FAILED: the provider refused. UNKNOWN: it may have acted. */
 export class SchoolPaymentProviderError extends Error {
   constructor(readonly outcome: 'PRE_SEND' | 'FAILED' | 'UNKNOWN',
-    readonly reason: 'NOT_CONFIGURED' | 'LIVE_MODE_REFUSED' | 'INVALID_REQUEST' | 'PROVIDER_REJECTED' | 'PROVIDER_UNKNOWN' | 'REVOKE_NOT_SUPPORTED'
+    readonly reason: 'NOT_CONFIGURED' | 'LIVE_MODE_REFUSED' | 'INVALID_REQUEST' | 'PROVIDER_REJECTED' | 'PROVIDER_UNKNOWN' | 'REVOKE_NOT_SUPPORTED' | 'SETUP_INCOMPLETE'
       /** The school withdrew HON's access (a renewal answered 401 or invalid_grant): record reauthorization required. */
       | 'GRANT_REVOKED') { super(reason); }
 }
@@ -57,11 +71,17 @@ export class UnconfiguredSchoolPaymentAdapter implements SchoolPaymentAdapter {
   async completeOnboarding(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
   async retrieveStatus(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
   async disconnect(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
+  async ensureCustomer(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
+  async beginMethodSetup(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
+  async retrieveMethodSetup(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
+  async detachMethod(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
 }
 
 const ALL: SchoolPayCapabilities = Object.freeze({ bankDebit: true, offSessionRecurring: true, oneTimeCard: true, refunds: true, storedCard: true });
 
 export interface SimulatedAccountStatus { chargesEnabled: boolean; payoutsEnabled: boolean; requirementsDue: boolean; reauthorizationRequired: boolean }
+/** What the simulated payer entered on the hosted setup page; `incomplete` means the payer left without saving. */
+export interface SimulatedSetupOutcome { kind: SchoolPayMethodKind; brand: SchoolPayMethodObservation['brand']; last4: string; expMonth: number | null; expYear: number | null; incomplete: boolean; customerRef: string }
 
 /**
  * Deterministic in-process stand-ins for the Stripe Connect test API and the Square sandbox (no network, no credentials).
@@ -98,12 +118,46 @@ abstract class SimulatedSchoolPaymentAdapter implements SchoolPaymentAdapter {
     });
   }
   async disconnect({ accountRef }: { accountRef: string }): Promise<void> { this.revoked.add(accountRef); }
+
+  protected abstract readonly refs: { customer: string; setup: string; method: string };
+  /** Per setup reference: what the payer "entered". The default is a test Visa ending 4242 (or a bank account ending 6789). */
+  readonly setupOutcomes = new Map<string, Partial<SimulatedSetupOutcome>>();
+  readonly setups = new Map<string, { accountRef: string; customerRef: string; methodKinds: readonly SchoolPayMethodKind[] }>();
+  readonly detached = new Set<string>();
+  protected hash(value: string): string { return createHash('sha256').update(`${this.providerCode}:${value}`).digest('hex').slice(0, 16); }
+  async ensureCustomer({ accountRef, billingAccountId, customerRef }: { accountRef: string; billingAccountId: string; customerRef: string | null }) {
+    if (this.revoked.has(accountRef)) throw new SchoolPaymentProviderError('FAILED', 'PROVIDER_REJECTED');
+    return { customerRef: customerRef ?? `${this.refs.customer}${this.hash(`${accountRef}:${billingAccountId}`)}` };
+  }
+  async beginMethodSetup({ accountRef, customerRef, setupId, methodKinds, state, returnUrl }: { accountRef: string; customerRef: string; setupId: string; methodKinds: readonly SchoolPayMethodKind[]; state: string; returnUrl: string }) {
+    if (this.revoked.has(accountRef)) throw new SchoolPaymentProviderError('FAILED', 'PROVIDER_REJECTED');
+    if (methodKinds.includes('US_BANK_ACCOUNT') && !this.manifest.bankDebit) throw new SchoolPaymentProviderError('PRE_SEND', 'INVALID_REQUEST');
+    const setupRef = `${this.refs.setup}${this.hash(setupId)}`;
+    const setupUrl = this.returnTo(returnUrl, state);
+    this.setups.set(setupRef, { accountRef, customerRef, methodKinds: [...methodKinds] });
+    return { setupRef, setupUrl };
+  }
+  async retrieveMethodSetup({ accountRef, customerRef, setupRef }: { accountRef: string; customerRef: string; setupRef: string }): Promise<SchoolPayMethodObservation> {
+    const setup = this.setups.get(setupRef);
+    if (!setup || setup.accountRef !== accountRef || setup.customerRef !== customerRef) throw new SchoolPaymentProviderError('FAILED', 'PROVIDER_REJECTED');
+    const outcome = this.setupOutcomes.get(setupRef) ?? {};
+    if (outcome.incomplete) throw new SchoolPaymentProviderError('FAILED', 'SETUP_INCOMPLETE');
+    const kind = outcome.kind ?? setup.methodKinds[0] ?? 'CARD';
+    const card = kind === 'CARD';
+    return verifySchoolPayMethodObservation({
+      customerRef: outcome.customerRef ?? customerRef, methodRef: `${this.refs.method}${this.hash(setupRef)}`, kind,
+      brand: outcome.brand ?? (card ? 'VISA' : 'BANK'), last4: outcome.last4 ?? (card ? '4242' : '6789'),
+      expMonth: outcome.expMonth !== undefined ? outcome.expMonth : card ? 12 : null, expYear: outcome.expYear !== undefined ? outcome.expYear : card ? 2034 : null,
+    });
+  }
+  async detachMethod({ methodRef }: { accountRef: string; methodRef: string }): Promise<void> { this.detached.add(methodRef); }
 }
 
 /** Stripe Connect (test mode): the connected account exists before onboarding, like Accounts + Account Links. */
 export class SimulatedStripeConnectAdapter extends SimulatedSchoolPaymentAdapter {
   readonly providerCode = 'STRIPE_CONNECT' as const;
   readonly manifest = ALL;
+  protected readonly refs = { customer: 'cus_sim', setup: 'seti_sim', method: 'pm_sim' };
   readonly credentialKind = 'NONE' as const;
   async beginOnboarding({ connectionId, accountRef, state, returnUrl }: { connectionId: string; accountRef: string | null; state: string; returnUrl: string }) {
     const account = accountRef ?? this.ref('acct_sim', connectionId);
@@ -122,6 +176,7 @@ export class SimulatedStripeConnectAdapter extends SimulatedSchoolPaymentAdapter
 export class SimulatedSquareAdapter extends SimulatedSchoolPaymentAdapter {
   readonly providerCode = 'SQUARE' as const;
   readonly manifest: SchoolPayCapabilities = Object.freeze({ ...ALL, bankDebit: false });
+  protected readonly refs = { customer: 'SQCUSTSIM', setup: 'sqsetup_sim', method: 'ccof:sim' };
   readonly credentialKind = 'OAUTH_TOKENS' as const;
   /** Access tokens seen by status calls and renewals (the proof checks the vault round trip with them). */
   readonly seenTokens: string[] = [];

@@ -163,7 +163,9 @@
     "db:test-class-series": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-series-integrity.mjs",
     "db:test-tuition-payments": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-tuition-payment-integrity.mjs",
     "db:test-school-payment-connections": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-payment-connections-integrity.mjs",
+    "db:test-school-pay-methods": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-pay-methods-integrity.mjs",
     "db:test-school-payment-credential-vault": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-payment-credential-vault-integrity.mjs",
+    "db:test-school-pay-autopay": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-pay-autopay-integrity.mjs",
     "db:test-school-checkout-pages": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-checkout-pages-integrity.mjs",
     "db:test-maya-at-risk": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-maya-at-risk-integrity.mjs",
     "db:test-crm-close-proof-target": "node scripts/test-crm-close-proof-target.mjs"

@@ -1,0 +1,9 @@
+/* School reports (0331): month tables that scroll sideways inside their card on a phone, never the page. */
+.scroll { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table { width: 100%; min-width: 420px; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.table caption { text-align: left; padding: 0 0 6px; color: var(--hon-muted, #9fb4c8); font-size: 13px; }
+.table th, .table td { padding: 8px 10px; border-bottom: 1px solid #1c3349; text-align: right; white-space: nowrap; }
+.table th:first-child, .table td:first-child { text-align: left; }
+.table thead th { color: #b6c8da; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
+.table tbody th { font-weight: 700; }
+.partial { margin-left: 6px; color: var(--hon-muted, #9fb4c8); font-size: 12px; font-weight: 600; }
