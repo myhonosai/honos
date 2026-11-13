@@ -167,11 +167,14 @@ function fakeHonProvider() {
   provider.suggestions = [];
   // followUps / sources (0254): the closing ASK and SOURCES lines, already parsed to their closed rules.
   provider.followUps = []; provider.sources = [];
+  provider.unavailableModels = new Set(); provider.beforeUnavailable = null;
   const result = () => ({ reply: provider.reply, inputTokens: 300, outputTokens: 120, providerCostMicrounits: 900, truncated: false, suggestions: [...provider.suggestions],
     followUps: [...provider.followUps], sources: [...provider.sources] });
   provider.readiness = () => provider.ready;
   provider.generate = async (input) => {
     provider.calls += 1; providerCalls += 1; provider.inputs.push(input);
+    // 0336 (RA-1): a model listed here is definitely unavailable (404/429/OpenRouter 503); beforeUnavailable runs first.
+    if (provider.unavailableModels.has(input.modelId)) { await provider.beforeUnavailable?.(input); throw new HonReplyProviderRuntimeError('FAILED', 'PROVIDER_UNAVAILABLE'); }
     if (provider.mode === 'HOLD') return new Promise((resolve, reject) => provider.held.push({ resolve, reject }));
     if (provider.mode === 'UNKNOWN') throw new HonReplyProviderRuntimeError('UNKNOWN', 'PROVIDER_UNKNOWN');
     if (provider.mode === 'FAILED') throw new HonReplyProviderRuntimeError('FAILED', 'PROVIDER_REJECTED');
@@ -3536,6 +3539,96 @@ try {
     assert.equal((await row('SELECT has_function_privilege($1,$2,\'EXECUTE\') x', [runtimeRole, f])).x, false, f);
   assert.deepEqual((await row("SELECT relrowsecurity r, relforcerowsecurity f FROM pg_class WHERE oid='hon.ai_org_agent_ceiling_overrides'::regclass")), { r: true, f: true });
   pass('INV-39', '0310: an organization a trial does not own has no organization agent budget (ceiling and display read the no-ceiling value 2,147,483,647; readiness shows it); past the former 12,000 units HON still answers with one provider call; a migration-owner override restores a ceiling at once (refused at plan or prepare before any provider call) and removing it lifts it; the override table (forced RLS) and helpers never reach the runtime');
+  }
+
+  // ---- INV-41 (0336, RA-1): reduced-AI mode: one automatic fallback when the default model is definitely unavailable ----
+  {
+  const o = await makeOrg('inv-41');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const conv = await hon.create(scope, { title: 'Reduced AI' }, K());
+  const m = {};
+  for (const name of ['primary', 'backup']) {
+    m[name] = K();
+    await admin.query("INSERT INTO hon.hq_ai_model_catalog(catalog_id,provider_id,model_id,display_name,capabilities,modalities,privacy_controls,active,minimum_tier,unit_cost_micros,cost_unit,effective_from) VALUES($1,'OPENROUTER',$2,'AI-0 RA-1 model',ARRAY['TEXT'],ARRAY['TEXT'],'{}',true,'COMPLETE',1,'TOKEN','2020-01-01')", [m[name], `ra1/${name}`]);
+    await admin.query('INSERT INTO hon.hq_ai_routing_candidates(policy_id,ordinal,catalog_id) VALUES($1,(SELECT max(ordinal)+1 FROM hon.hq_ai_routing_candidates WHERE policy_id=$1),$2)', [o.policy, m[name]]);
+  }
+  const profileId = K();
+  await admin.query(`INSERT INTO hon.hq_ai_task_profiles(profile_id,routing_policy_id,agent_key,task_category,cost_unit,active,max_cost_micros,required_capabilities,required_modalities,allowed_provider_ids,privacy_controls,timeout_category,retry_category,effective_from,effective_until)
+    VALUES($1,$2,'hon','HON_STANDARD','TOKEN',true,80000,ARRAY['TEXT'],ARRAY['TEXT'],ARRAY['OPENROUTER'],'{}','STANDARD','TRANSIENT_ONCE','2020-01-01',NULL)`, [profileId, o.policy]);
+  for (const [selection, ordinal, catalogId] of [['DEFAULT', 0, m.primary], ['FALLBACK', 1, m.backup]]) {
+    await admin.query('INSERT INTO hon.hq_ai_task_profile_candidates(profile_id,routing_policy_id,selection,ordinal,catalog_id) VALUES($1,$2,$3,$4,$5)', [profileId, o.policy, selection, ordinal, catalogId]);
+  }
+  const state = async (turn) => row(`SELECT r.id, r.status, r.reason, r.reserved_credits, r.provider_request_id, p.model_id, p.route_selection,
+      (SELECT count(*)::int FROM hon.ai_route_unavailable_attempts a WHERE a.invocation_id = r.id) attempts,
+      (SELECT count(*)::int FROM hon.ai_usage_ledger u WHERE u.source_invocation_id = r.id) ledger,
+      (SELECT count(*)::int FROM hon.ai_invocation_plans x WHERE x.work_item_id = r.work_item_id) plans
+    FROM hon.hon_reply_invocations r LEFT JOIN hon.ai_invocation_plans p ON p.id = r.plan_id WHERE r.turn_id=$1`, [turn.turnId]);
+  const ask = async () => { const turn = await hon.sendTurn(scope, conv.id, { text: `Reduced AI question ${K()}`, delegation: null }, K()); return { turn, s: await state(turn) }; };
+  const pick = (s) => [s.status, s.reason, s.model_id, s.route_selection, s.reserved_credits, s.attempts, s.ledger, s.plans];
+  const unavailable = (...names) => { fakes.hon.unavailableModels = new Set(names.map((n) => `ra1/${n}`)); };
+  try {
+    // 0. Normally the default answers in one call.
+    let calls = fakes.hon.calls;
+    let r = await ask();
+    assert.deepEqual([...pick(r.s), fakes.hon.calls - calls], ['COMPLETED', null, 'ra1/primary', 'PROFILE_DEFAULT', 0, 0, 1, 1, 1]);
+    // 1. Default definitely unavailable: one fallback call on the profile's FALLBACK model; the turn completes; one ledger
+    //    row (the failed attempt cost nothing); the attempt is recorded once with the failed model and request id.
+    unavailable('primary'); calls = fakes.hon.calls;
+    r = await ask();
+    assert.equal(r.turn.status, 'COMPLETED', JSON.stringify(r.turn));
+    assert.deepEqual([...pick(r.s), fakes.hon.calls - calls], ['COMPLETED', null, 'ra1/backup', 'PROFILE_FALLBACK', 0, 1, 1, 2, 2], JSON.stringify(r.s));
+    const attempt = await row('SELECT a.*, p.model_id FROM hon.ai_route_unavailable_attempts a JOIN hon.ai_invocation_plans p ON p.id=a.plan_id WHERE a.invocation_id=$1', [r.s.id]);
+    assert.deepEqual([attempt.model_id, attempt.catalog_id, attempt.reason], ['ra1/primary', m.primary, 'PROVIDER_UNAVAILABLE']);
+    assert.notEqual(attempt.failed_provider_request_id, r.s.provider_request_id, 'the fallback call has a new provider request id');
+    const sent = fakes.hon.inputs.slice(-2).map((x) => [x.modelId, x.providerRequestId]);
+    assert.deepEqual(sent, [['ra1/primary', attempt.failed_provider_request_id], ['ra1/backup', r.s.provider_request_id]]);
+    // A resend of the same turn replays: no plan, no call.
+    calls = fakes.hon.calls;
+    await honReplies.run(scope, r.turn.turnId);
+    assert.equal(fakes.hon.calls, calls, 'a finished turn never calls again');
+    // 2. Both unavailable: exactly two calls, then FAILED as PROVIDER_UNAVAILABLE with nothing held; never a third call.
+    unavailable('primary', 'backup'); calls = fakes.hon.calls;
+    r = await ask();
+    assert.deepEqual([...pick(r.s), fakes.hon.calls - calls], ['FAILED', 'PROVIDER_UNAVAILABLE', 'ra1/backup', 'PROFILE_FALLBACK', 0, 1, 0, 2, 2], JSON.stringify(r.s));
+    assert.equal(r.turn.reason, 'PROVIDER_UNAVAILABLE', JSON.stringify(r.turn));
+    assert.equal((await tenant(context(o), async (c) => { await c.query("SELECT set_config('app.hon_source','HUMAN_UI',true)"); return (await c.query('SELECT hon.reopen_hon_reply_for_fallback($1,$2::uuid) r', [o.subject, r.turn.turnId])).rows[0].r; })), false, 'never reopened twice');
+    // 3. The fallback plan is made live: a backup made inactive between the attempts gives no route and no second call.
+    unavailable('primary'); calls = fakes.hon.calls;
+    fakes.hon.beforeUnavailable = () => admin.query('UPDATE hon.hq_ai_model_catalog SET active=false WHERE catalog_id=$1', [m.backup]);
+    try { r = await ask(); } finally { fakes.hon.beforeUnavailable = null; await admin.query('UPDATE hon.hq_ai_model_catalog SET active=true WHERE catalog_id=$1', [m.backup]); }
+    assert.deepEqual([...pick(r.s), fakes.hon.calls - calls], ['BLOCKED', 'NO_ELIGIBLE_ROUTE', null, null, 0, 1, 0, 1, 1], JSON.stringify(r.s));
+    // 4. An HQ pause between the attempts stops the fallback before any reservation or call.
+    calls = fakes.hon.calls;
+    const ra1Pause = (action) => admin.query('SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) r', [hq.subject, JSON.stringify({ action, organizationId: o.id, spendClass: 'AGENT_INFERENCE', reason: 'Synthetic AI-0 RA-1 pause between attempts' }), K()]);
+    fakes.hon.beforeUnavailable = () => ra1Pause('PAUSE');
+    try { r = await ask(); } finally { fakes.hon.beforeUnavailable = null; await ra1Pause('RESUME'); }
+    assert.equal(fakes.hon.calls - calls, 1, JSON.stringify(r.s));
+    assert.deepEqual([r.s.status, r.s.reserved_credits, r.s.ledger], ['BLOCKED', 0, 0], JSON.stringify(r.s));
+    // 5. No fallback when the profile retry is NONE, for UNKNOWN or a rejection, or on the legacy policy order: one call each.
+    await admin.query("UPDATE hon.hq_ai_task_profiles SET retry_category='NONE', version=version+1 WHERE profile_id=$1", [profileId]);
+    calls = fakes.hon.calls; r = await ask();
+    assert.deepEqual([r.s.status, r.s.reason, r.s.attempts, fakes.hon.calls - calls], ['FAILED', 'PROVIDER_UNAVAILABLE', 0, 1], 'retry NONE');
+    await admin.query("UPDATE hon.hq_ai_task_profiles SET retry_category='TRANSIENT_ONCE', version=version+1 WHERE profile_id=$1", [profileId]);
+    unavailable();
+    for (const [mode, status, reason] of [['UNKNOWN', 'UNKNOWN', 'PROVIDER_UNKNOWN'], ['FAILED', 'FAILED', 'PROVIDER_REJECTED']]) {
+      fakes.hon.mode = mode; calls = fakes.hon.calls;
+      try { r = await ask(); } finally { fakes.hon.mode = 'RESULT'; }
+      assert.deepEqual([r.s.status, r.s.reason, r.s.attempts, fakes.hon.calls - calls], [status, reason, 0, 1], mode);
+    }
+    await admin.query('UPDATE hon.hq_ai_task_profiles SET active=false WHERE profile_id=$1', [profileId]);
+    fakes.hon.unavailableModels = new Set(['approved/ai0-baseline']); calls = fakes.hon.calls;
+    r = await ask();
+    assert.deepEqual([r.s.status, r.s.reason, r.s.route_selection, r.s.attempts, fakes.hon.calls - calls], ['FAILED', 'PROVIDER_UNAVAILABLE', 'POLICY_ORDER', 0, 1], 'legacy order');
+  } finally { unavailable(); fakes.hon.mode = 'RESULT'; }
+  // 6. Evidence is immutable and migration-owner only; the runtime may only call the reopen function.
+  const anyAttempt = await row('SELECT id FROM hon.ai_route_unavailable_attempts WHERE organization_id=$1 LIMIT 1', [o.id]);
+  await assert.rejects(admin.query("UPDATE hon.ai_route_unavailable_attempts SET reason='PROVIDER_UNAVAILABLE' WHERE id=$1", [anyAttempt.id]), /AI_ROUTE_ATTEMPT_IMMUTABLE/);
+  await assert.rejects(admin.query('DELETE FROM hon.ai_route_unavailable_attempts WHERE id=$1', [anyAttempt.id]), /AI_ROUTE_ATTEMPT_IMMUTABLE/);
+  assert.deepEqual(await row(`SELECT has_table_privilege($1,'hon.ai_route_unavailable_attempts','SELECT') s, has_function_privilege($1,'hon.reopen_hon_reply_for_fallback(text,uuid)','EXECUTE') e,
+    (SELECT relforcerowsecurity FROM pg_class WHERE oid='hon.ai_route_unavailable_attempts'::regclass) f`, [runtimeRole]), { s: false, e: true, f: true });
+  pass('INV-41', "0336 (RA-1): when HON's default model is definitely unavailable (PROVIDER_UNAVAILABLE) and its HQ task profile is TRANSIENT_ONCE, the reply is reopened once: the failed attempt is recorded immutably, the next plan never picks that model again and uses the profile's fallback with a new provider request id, and the turn completes with one ledger row; both models unavailable ends FAILED/PROVIDER_UNAVAILABLE after exactly two calls with nothing held; the fallback is planned and prepared live (an inactive backup gives no route, an HQ pause blocks it, no call); retry NONE, UNKNOWN, a rejection and the legacy policy order never fall back; evidence is migration-owner only");
   }
 
   // ---- INV-37 (0284): Maya answers about one at-risk student from that student's 0259 factors only ----
