@@ -144,16 +144,17 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
     return () => { window.removeEventListener('keydown', escape); if (opener?.isConnected) opener.focus(); };
   }, [menuOpen]);
 
-  const chooseMode = useCallback((next: HonInterfaceTheme) => {
+  const saveMode = useCallback((next: HonInterfaceTheme, via: 'ONBOARDING' | 'SETTINGS'): Promise<boolean> => {
     setMode(next);
     const scope = entry.snapshot().phase === 'READY' ? entry.snapshot().selection : null;
-    if (!scope) { setViewState('LOCAL'); return; }
+    if (!scope) { setViewState('LOCAL'); return Promise.resolve(false); }
     const generation = ++themeGeneration.current;
     setViewState('SAVING');
-    saveInterfaceThemePreference(scope, next, crypto.randomUUID(), 'SETTINGS').then(
-      () => { if (generation === themeGeneration.current) setViewState('SAVED'); },
-      () => { if (generation === themeGeneration.current) setViewState('ERROR'); });
+    return saveInterfaceThemePreference(scope, next, crypto.randomUUID(), via).then(
+      () => { if (generation === themeGeneration.current) setViewState('SAVED'); return true; },
+      () => { if (generation === themeGeneration.current) setViewState('ERROR'); return false; });
   }, [entry]);
+  const chooseMode = useCallback((next: HonInterfaceTheme) => { void saveMode(next, 'SETTINGS'); }, [saveMode]);
 
   const choose = useCallback((schoolId: string) => {
     const current = entry.snapshot();
@@ -170,8 +171,8 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   }, [entry]);
 
   const shared = useMemo<SchoolShellState>(() => ({ phase: snapshot.phase, selection: snapshot.phase === 'READY' ? snapshot.selection : null,
-    schoolName: snapshot.phase === 'READY' ? schoolName : null, mode, artStyle: artChoice ?? defaultArtStyle(mode), onArtStyle: chooseArtStyle }),
-  [snapshot, schoolName, mode, artChoice, chooseArtStyle]);
+    schoolName: snapshot.phase === 'READY' ? schoolName : null, mode, artStyle: artChoice ?? defaultArtStyle(mode), onArtStyle: chooseArtStyle, onMode: saveMode }),
+  [snapshot, schoolName, mode, artChoice, chooseArtStyle, saveMode]);
 
   return <SchoolShellFrame path={path} language={preferences.language} phase={snapshot.phase} selection={snapshot.selection} schoolName={schoolName}
     choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility inShell />}

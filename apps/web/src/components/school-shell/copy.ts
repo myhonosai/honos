@@ -23,7 +23,7 @@ const en = {
   routeVoice: 'Voice', routeDocuments: 'Documents',
   routeHon: 'HON workspace', routeAiWork: 'AI drafts', routeKai: 'Kai teaching assistant', routeMayaAtRisk: 'Maya: students at risk', routeTeachingStudio: 'Teaching studio', routeCurriculumLibrary: 'Curriculum library',
   routeApprovals: 'Action Center', routeWork: 'Work', routeAutomation: 'Automation rules',
-  routeTeam: 'Team & invitations', routeRoles: 'Roles', routeAvailability: 'Availability', routeQualifications: 'Instructor qualifications', routeAccount: 'Account & usage', routeOwners: 'School owners', routeSubscription: 'HON subscription', routeLaunch: 'School launch', routeFounderSetup: 'Founder Setup guide', routeHelp: 'Ask HON for help',
+  routeTeam: 'Team & invitations', routeRoles: 'Roles', routeAvailability: 'Availability', routeQualifications: 'Instructor qualifications', routeAccount: 'Account & usage', routeOwners: 'School owners', routeSubscription: 'HON subscription', routeLaunch: 'School launch', routeFounderSetup: 'Founder Setup guide', routeWelcome: 'Welcome and setup', routeHelp: 'Ask HON for help',
 } as const;
 export type ShellKey = keyof typeof en;
 const ko: Record<ShellKey, string> = {
@@ -50,7 +50,7 @@ const ko: Record<ShellKey, string> = {
   routeVoice: '음성', routeDocuments: '문서',
   routeHon: 'HON 업무 공간', routeAiWork: 'AI 초안', routeKai: 'Kai 교육 도우미', routeMayaAtRisk: 'Maya: 이탈 위험 학생', routeTeachingStudio: '교육 스튜디오', routeCurriculumLibrary: '커리큘럼 라이브러리',
   routeApprovals: '액션 센터', routeWork: '업무 목록', routeAutomation: '자동화 규칙',
-  routeTeam: '팀 및 초대', routeRoles: '역할', routeAvailability: '근무 가능 시간', routeQualifications: '사범 자격', routeAccount: '계정 및 사용량', routeOwners: '도장 소유자', routeSubscription: 'HON 구독', routeLaunch: '도장 개설', routeFounderSetup: '창업 설정 가이드', routeHelp: 'HON에 도움 요청',
+  routeTeam: '팀 및 초대', routeRoles: '역할', routeAvailability: '근무 가능 시간', routeQualifications: '사범 자격', routeAccount: '계정 및 사용량', routeOwners: '도장 소유자', routeSubscription: 'HON 구독', routeLaunch: '도장 개설', routeFounderSetup: '창업 설정 가이드', routeWelcome: '환영 및 설정', routeHelp: 'HON에 도움 요청',
 };
 const es: Record<ShellKey, string> = {
   brand: 'HON OS', brandTagline: 'Para escuelas de artes marciales', skip: 'Saltar al contenido principal', primaryNav: 'Navegación de la escuela', sectionNav: 'Páginas de esta sección',
@@ -76,7 +76,7 @@ const es: Record<ShellKey, string> = {
   routeVoice: 'Voz', routeDocuments: 'Documentos',
   routeHon: 'Espacio HON', routeAiWork: 'Borradores de IA', routeKai: 'Asistente de enseñanza Kai', routeMayaAtRisk: 'Maya: alumnos en riesgo', routeTeachingStudio: 'Estudio de enseñanza', routeCurriculumLibrary: 'Biblioteca del plan de estudios',
   routeApprovals: 'Centro de acciones', routeWork: 'Trabajo', routeAutomation: 'Reglas de automatización',
-  routeTeam: 'Equipo e invitaciones', routeRoles: 'Roles', routeAvailability: 'Disponibilidad', routeQualifications: 'Certificaciones de instructores', routeAccount: 'Cuenta y uso', routeOwners: 'Propietarios de la escuela', routeSubscription: 'Suscripción HON', routeLaunch: 'Apertura de la escuela', routeFounderSetup: 'Guía de configuración inicial', routeHelp: 'Pedir ayuda a HON',
+  routeTeam: 'Equipo e invitaciones', routeRoles: 'Roles', routeAvailability: 'Disponibilidad', routeQualifications: 'Certificaciones de instructores', routeAccount: 'Cuenta y uso', routeOwners: 'Propietarios de la escuela', routeSubscription: 'Suscripción HON', routeLaunch: 'Apertura de la escuela', routeFounderSetup: 'Guía de configuración inicial', routeWelcome: 'Bienvenida y configuración', routeHelp: 'Pedir ayuda a HON',
 };
 export const SHELL_LANGUAGES = ['en', 'ko', 'es'] as const;
 export type ShellLanguage = (typeof SHELL_LANGUAGES)[number];

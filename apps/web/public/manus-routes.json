@@ -117,6 +117,10 @@
       "title": "HON | Import students"
     },
     {
+      "path": "/staff/welcome",
+      "title": "HON | Welcome and setup"
+    },
+    {
       "path": "/staff/help",
       "title": "HON | Ask for help"
     },
