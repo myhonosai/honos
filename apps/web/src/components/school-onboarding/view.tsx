@@ -139,6 +139,8 @@ export function SchoolOnboardingView(p: SchoolOnboardingViewProps): React.ReactE
   const o = p.read.onboarding, next = nextStep(o), progress = progressOf(o), saved = o.profile;
   const goalNames = (key: OnboardingStep['key']) => goalsForStep(key, saved?.goals ?? []).map((g) => t(`goal_${g}`));
   const outcome = p.outcome;
+  // A skip saves the last-saved answers, so it waits while the welcome form is open and could hold unsaved changes.
+  const formOpen = !saved || p.editing;
   return <section className={styles.page}>
     {head}
     <Access onboarding={o} t={t} locale={p.locale} />
@@ -168,7 +170,7 @@ export function SchoolOnboardingView(p: SchoolOnboardingViewProps): React.ReactE
       <div className={styles.cardHead}><h2>{t('checklistTitle')}</h2>
         <span className={styles.meta}>{t('progress', { done: String(progress.done), total: String(progress.total) })}</span></div>
       <p data-onboarding-next>{next ? t('nextStep', { step: t(`step_${next.key}`) }) : t('allDone')}</p>
-      <ol className={styles.steps}>{o.steps.map((s) => <Step key={s.key} step={s} t={t} isNext={next?.key === s.key} goals={goalNames(s.key)} locked={p.locked} onSkip={p.onSkip} />)}</ol>
+      <ol className={styles.steps}>{o.steps.map((s) => <Step key={s.key} step={s} t={t} isNext={next?.key === s.key} goals={goalNames(s.key)} locked={p.locked || formOpen} onSkip={p.onSkip} />)}</ol>
       <p className={styles.meta}>{t('checkedAt', { time: schoolTime(o.checkedAt, o.timezone, p.locale) })}</p>
       <p className={styles.meta}><a href="/staff/founder-setup">{t('founderGuide')}</a></p>
     </div>

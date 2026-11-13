@@ -133,6 +133,14 @@ it('with access: trial end in the school time zone, saved answers as a summary, 
   expect(done).toContain('Complete'); expect(done).not.toContain('href=');
 });
 
+it('Skip waits while the welcome form is open, so a skip save cannot drop unsaved answers', () => {
+  const skipButtons = (html: string) => [...html.matchAll(/<button[^>]*>(Skip for now|Bring back)<\/button>/g)].map((m) => m[0]);
+  const shown = skipButtons(renderToStaticMarkup(<SchoolOnboardingView {...base()} />));
+  expect(shown.length).toBeGreaterThan(0); expect(shown.every((b) => !b.includes('disabled'))).toBe(true);
+  const editing = skipButtons(renderToStaticMarkup(<SchoolOnboardingView {...base({ editing: true })} />));
+  expect(editing.length).toBe(shown.length); expect(editing.every((b) => b.includes('disabled'))).toBe(true);
+});
+
 it('the switching path asks what they use and what to bring over, and says honestly what imports exist today', () => {
   const draft = { ...EMPTY_ANSWERS, path: 'SWITCHING' as const, previousSoftware: 'OTHER' as const, previousSoftwareOther: 'x>y' };
   const html = renderToStaticMarkup(<SchoolOnboardingView {...base({ read: { state: 'READY', onboarding: active({ profile: null }) }, draft })} />);
