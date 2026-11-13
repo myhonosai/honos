@@ -60,7 +60,7 @@ export function takeMethodsQuery(location: Pick<Location, 'search' | 'pathname'>
 }
 
 /**
- * Saved payment methods (B-TUI-2 piece 3, 0290), test mode only. Staff choose a payer, see the cards and bank accounts
+ * Saved payment methods (B-TUI-2 piece 3, 0321), test mode only. Staff choose a payer, see the cards and bank accounts
  * saved with the school's own payment processor, add one through the processor's hosted page, pick the default and remove
  * one. The processor sends the staff member back here with a one-time state, which this page removes from the address bar
  * at once, keeps only in memory, and sends to the server only when they choose Finish saving. Blur, a hidden tab, page
