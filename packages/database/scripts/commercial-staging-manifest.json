@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "260be507009ba8f5fbaeabb3d4297ebc6b24a086d1decb225138121611e109fe",
+  "chainSha256": "2f0a066349dce32495705d3efdbd8f8996e0fdd23050c6bbd87f28b3a1f186c7",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -407,8 +407,52 @@
       "sha256": "42194542aa26affc6ce836fd06fbce0210d30a7ed79989d6182b966c50a2bf56"
     },
     {
+      "file": "0321_school_payer_saved_methods.sql",
+      "sha256": "5de27cdfc04af16d057dc62da3d11fdc02e4106dbbcbcefcc6460edf8cc6c4fc"
+    },
+    {
+      "file": "0322_school_pay_autopay_sibling_discounts.sql",
+      "sha256": "9bbb358a89cf566f1480ff55e0bdaed5d09356f314e22b7fbff4c947a5e576d0"
+    },
+    {
+      "file": "0323_school_onboarding_progress.sql",
+      "sha256": "282ebdfcbb78a7a38e10c19007f5f100a1f810944bb7c5cd82b5c97ee2580dc9"
+    },
+    {
       "file": "0324_hon_os_schedule_renewals_suspension.sql",
       "sha256": "6348290ebb2786e32489e2119be51300d6e12ba8e16a3f50e1f50d8e0c967cbe"
+    },
+    {
+      "file": "0326_hq_business_numbers.sql",
+      "sha256": "3578cb98353a3d7e3f53af4ebc75e9f725971e32d538f79f070ce02a97edec8d"
+    },
+    {
+      "file": "0327_hq_school_health.sql",
+      "sha256": "444c4cb9c52e514aa3336280d20c7442a3878c12144800a9f719d59e6b2575e5"
+    },
+    {
+      "file": "0328_hq_usage_specialist_attribution.sql",
+      "sha256": "2537a3f1a116c3b81ad4682308ebfb9d4a57fd9ff1b7bf29018a69729ce74447"
+    },
+    {
+      "file": "0329_parent_class_booking.sql",
+      "sha256": "28650fbd310da68a4a9bbbe8a670c74cb07269010b6f512b2c2b8f2f1da379f9"
+    },
+    {
+      "file": "0331_school_reports.sql",
+      "sha256": "a5480e9eef175e40a64f58343ee9f9a550f2470b4bf98c97452e0405df60c130"
+    },
+    {
+      "file": "0335_school_support_requests.sql",
+      "sha256": "4361133db9255836187b05cad0b11e877ed3fe6d895722bad07859c2b8f98f58"
+    },
+    {
+      "file": "0336_ai_reduced_mode_fallback.sql",
+      "sha256": "3e83f6db003e7888dfba22a00d5a0593b4604265314abce73cd80fff612959df"
+    },
+    {
+      "file": "0338_hq_executive_performance.sql",
+      "sha256": "36efc3eafd9ab2bd4e6a9b549d973e50e7ac9e57b7fa6a5bbfd79c29748f04d0"
     }
   ]
 }

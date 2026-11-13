@@ -1,0 +1,6 @@
+/* Business numbers: the month table scrolls inside its own region instead of breaking words on narrow screens. */
+.table { border-collapse: collapse; min-width: 100%; }
+.table th, .table td { padding: 6px 10px; white-space: nowrap; overflow-wrap: normal; text-align: right; font-variant-numeric: tabular-nums; }
+.table th[scope="row"], .table thead th:first-child { text-align: left; }
+.table thead th { color: var(--hon-muted, #9fb4c8); font-size: 12px; font-weight: 700; border-bottom: 1px solid var(--hon-line, #24405a); }
+.fact { align-content: start; }

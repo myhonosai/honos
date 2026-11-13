@@ -133,7 +133,7 @@ export function HonOsStart({ sessionSubject }: { sessionSubject: string }) {
         </>}
       {registration && trial && <>
         <h2>{c.step2}</h2>
-        {trial.trial ? <><TrialSummary trial={trial.trial} c={c} at={at} />{trial.trial.status === 'TRIAL_ACTIVE' && <a href="/staff/founder-setup">{c.founderSetup}</a>}</>
+        {trial.trial ? <><TrialSummary trial={trial.trial} c={c} at={at} />{trial.trial.status === 'TRIAL_ACTIVE' && <><a href="/staff/welcome">{c.welcome}</a> <a href="/staff/founder-setup">{c.founderSetup}</a></>}</>
           : trial.trialStatus === 'CLOSED' ? <p className={styles.notice} data-start-trial-closed>{c.trialClosed}</p>
           : !trial.available ? <p className={styles.notice}>{c.noOffer}</p>
           : <div data-start-offer>

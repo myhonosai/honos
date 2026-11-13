@@ -36,7 +36,7 @@ const isErr = (outcome, code) => (e) => e instanceof CommunicationProviderError 
 
 test('Twilio adapter is READY only with account, token, https origin and the exact send approval', async () => {
   for (const env of [{}, approved({ TWILIO_ACCOUNT_SID: 'AC1' }), approved({ TWILIO_AUTH_TOKEN: ' ' }), approved({ HON_PUBLIC_API_ORIGIN: 'http://api.hon.example' }),
-    approved({ HON_PUBLIC_API_ORIGIN: 'https://api.hon.example/path' }), approved({ HON_SMS_SEND_APPROVED: 'yes' })]) {
+    approved({ HON_PUBLIC_API_ORIGIN: 'https://api.hon.example/api?x=1' }), approved({ HON_SMS_SEND_APPROVED: 'yes' })]) {
     let calls = 0;
     const adapter = new TwilioTextProvider(() => env, async () => { calls += 1; throw new Error('NETWORK_FORBIDDEN'); });
     assert.equal(adapter.readiness(), 'CONFIGURATION_REQUIRED');
@@ -232,4 +232,46 @@ test('Twilio inbound: texts to the HQ Messaging Service go to HQ first, NOT_HQ f
   assert.match(hqInboundTwiml({ outcome: 'CODE_WRONG', reply: 'CODE_WRONG', replyText: 'no match', replayed: false }), /<Message>no match<\/Message>/);
   for (const reply of ['STOPPED', 'STARTED', 'HELP', null, 'SOMETHING']) assert.equal(hqInboundTwiml({ outcome: 'X', reply, replyText: 'x', replayed: false }), empty);
   assert.equal(hqInboundTwiml({ outcome: 'NO_MATCH', reply: null, replyText: null, replayed: false }), empty);
+});
+
+test('Twilio behind hon-web: an /api path prefix is part of every callback URL and every signature, and odd bases are refused', async () => {
+  const { twilioPublicOrigin } = require('../dist/communication/delivery/twilio-text-provider.js');
+  const { voiceForwardTwiml } = require('../dist/communication/delivery/missed-call-text-back.js');
+  const base = (value) => twilioPublicOrigin({ HON_PUBLIC_API_ORIGIN: value });
+  assert.equal(base('https://app.hon.example/api'), 'https://app.hon.example/api');
+  assert.equal(base('https://app.hon.example/api/'), 'https://app.hon.example/api');
+  assert.equal(base(' https://api.hon.example/ '), 'https://api.hon.example');
+  for (const bad of ['http://app.hon.example/api', 'https://app.hon.example/api?x=1', 'https://app.hon.example/api#x', 'https://u:p@app.hon.example/api',
+    'https://app.hon.example:8443/api', 'https://app.hon.example/a/../api', 'https://app.hon.example/%61pi', 'https://app.hon.example//api', 'https://APP.hon.example/api',
+    'https://app.hon.example/api/v1 x', 'not a url', '']) {
+    assert.equal(base(bad), undefined, bad);
+  }
+
+  const env = () => approved({ HON_PUBLIC_API_ORIGIN: 'https://app.hon.example/api' });
+  let seen;
+  const adapter = new TwilioTextProvider(env, async (_url, init) => { seen = new URLSearchParams(init.body); return { status: 201, json: async () => ({ sid: `SM${'d'.repeat(32)}`, num_segments: '1' }) }; });
+  assert.equal(adapter.readiness(), 'READY');
+  await adapter.send(request());
+  assert.equal(seen.get('StatusCallback'), 'https://app.hon.example/api/v1/communications/webhooks/twilio/status');
+  await adapter.send(request({ origin: 'HQ' }));
+  assert.equal(seen.get('StatusCallback'), 'https://app.hon.example/api/v1/communications/webhooks/twilio/hq-status');
+  assert.match(voiceForwardTwiml('+15555550199', twilioPublicOrigin(env())), /action="https:\/\/app\.hon\.example\/api\/v1\/communications\/webhooks\/twilio\/voice-result"/);
+
+  // Twilio signs the public URL it called (with /api); the API receives /v1/... from the rewrite and must check the /api URL.
+  const verifier = new TwilioWebhookVerifier(env, () => 1_800_000_000_000);
+  const sid = `SM${'d'.repeat(32)}`;
+  const signAt = (url, fields) => {
+    const params = new URLSearchParams(fields);
+    const data = [...new Set(params.keys())].sort().reduce((acc, name) => acc + name + params.get(name), url);
+    return { body: Buffer.from(params.toString()), signature: createHmac('sha1', 'tok').update(data).digest('base64') };
+  };
+  const fields = { AccountSid: account, MessageSid: sid, MessageStatus: 'delivered' };
+  const viaWeb = signAt('https://app.hon.example/api/v1/communications/webhooks/twilio/status', fields);
+  assert.equal(verifier.status(viaWeb.body, viaWeb.signature).eventType, 'DELIVERED');
+  const direct = signAt('https://app.hon.example/v1/communications/webhooks/twilio/status', fields);
+  assert.equal(reason(() => verifier.status(direct.body, direct.signature)), 'SIGNATURE_INVALID');
+  const inbound = signAt('https://app.hon.example/api/v1/communications/webhooks/twilio/inbound', { AccountSid: account, MessageSid: sid, From: '+15555550101', To: '+15555559001', Body: 'STOP' });
+  assert.equal(verifier.inbound(inbound.body, inbound.signature).keyword, 'STOP');
+  const voice = signAt('https://app.hon.example/api/v1/communications/webhooks/twilio/voice', { AccountSid: account, CallSid: `CA${'a'.repeat(32)}`, From: '+15555550101', To: '+15555559001' });
+  assert.equal(verifier.voice(voice.body, voice.signature).to, '+15555559001');
 });
