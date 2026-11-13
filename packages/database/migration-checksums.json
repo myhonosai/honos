@@ -277,6 +277,7 @@
     "0327_hq_school_health.sql": "444c4cb9c52e514aa3336280d20c7442a3878c12144800a9f719d59e6b2575e5",
     "0326_hq_business_numbers.sql": "3578cb98353a3d7e3f53af4ebc75e9f725971e32d538f79f070ce02a97edec8d",
     "0331_school_reports.sql": "a5480e9eef175e40a64f58343ee9f9a550f2470b4bf98c97452e0405df60c130",
-    "0322_school_pay_autopay_sibling_discounts.sql": "9bbb358a89cf566f1480ff55e0bdaed5d09356f314e22b7fbff4c947a5e576d0"
+    "0322_school_pay_autopay_sibling_discounts.sql": "9bbb358a89cf566f1480ff55e0bdaed5d09356f314e22b7fbff4c947a5e576d0",
+    "0337_school_pay_autopay_charges.sql": "f3c9646fb394c6d8137fb33e941225c83151384fe58dbe7b147c19c90a0fa0bf"
   }
 }
