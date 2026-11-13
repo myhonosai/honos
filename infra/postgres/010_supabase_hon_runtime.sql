@@ -3410,6 +3410,21 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_school_reports(text,jsonb) TO hon_runtime;
   END IF;
 END $$;
+-- 0336 reduced-AI mode (RA-1): the attempt evidence is migration-owner only; the runtime may only reopen its own reply once.
+DO $$ DECLARE r text; BEGIN
+  IF to_regclass('hon.ai_route_unavailable_attempts') IS NULL THEN RAISE EXCEPTION 'Apply migration 0336 first'; END IF;
+  REVOKE ALL ON TABLE hon.ai_route_unavailable_attempts FROM PUBLIC;
+  REVOKE ALL ON FUNCTION hon.ai_route_unavailable_attempts_immutable() FROM PUBLIC;
+  REVOKE ALL ON FUNCTION hon.reopen_hon_reply_for_fallback(text,uuid) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.ai_route_unavailable_attempts FROM '||quote_ident(r);
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.ai_route_unavailable_attempts_immutable() FROM '||quote_ident(r);
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.reopen_hon_reply_for_fallback(text,uuid) FROM '||quote_ident(r);
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.reopen_hon_reply_for_fallback(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
 
 -- R2 0332 school reports across locations: one read-only runtime entry point; the per-location check is private.
 DO $$ DECLARE r text; f text; BEGIN
