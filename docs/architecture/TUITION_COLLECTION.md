@@ -429,6 +429,9 @@ sends the cycle to the processor. No message is sent and HON takes no fee.
   rounds down; a fixed amount never exceeds the line and applies only in its currency). Each line becomes one ISSUED
   invoice due at the end of the cycle day, and its schedule moves to the next period (or ends at the term end). One
   schedule period is billed per cycle, so a schedule that is several periods behind catches up over several cycles.
+  Months and years count from the schedule's first autopay period, so a short month clamps only that one period
+  (Jan 31, Feb 28, Mar 31; a Feb 29 annual schedule bills Feb 28 in other years and Feb 29 again in leap years). A
+  schedule staff move off that series starts a new one. Local time of day is kept across daylight-saving changes.
 - **Routes** (`/v1/organizations/:org/schools/:school/payments/...`, human-UI guards, no-store): `GET
   payers/:billingAccountId/autopay`, `GET sibling-discount`, `POST sibling-discount`, `POST payers/:billingAccountId/autopay`,
   `POST autopay/:planId/method`, `POST autopay/:planId/state` (ACTIVE or PAUSED), `POST autopay/:planId/cancel` (reason
@@ -436,5 +439,10 @@ sends the cycle to the processor. No message is sent and HON takes no fee.
 - **Defaults to confirm with the owner:** ranking students by their largest due line; one period per cycle; schedules
   advance when the cycle is prepared (not when it is paid); a seven-day preparation window. Screens for staff come in a
   later web piece.
-- **Evidence:** `packages/database/scripts/test-school-pay-autopay-integrity.mjs` (221 checks over signed HTTP);
+- **Review P3s carried forward:** the consent text version is free text today; before 5a charges anything it must be
+  one of the recurring-charge consent texts and match the method kind, re-checked when the method changes. A 100%
+  discount makes a zero invoice that cannot become PAID. Sibling rank counts only lines due in the same cycle. Manual
+  invoices can overlap autopay periods, and a backdated cycle issues invoices that are already overdue.
+- **Evidence:** `packages/database/scripts/test-school-pay-autopay-integrity.mjs` (231 checks over signed HTTP, including month-end,
+  leap-year and daylight-saving periods);
   `apps/api/test/school-payments.test.cjs` (0322 contract, discount and route tests).
