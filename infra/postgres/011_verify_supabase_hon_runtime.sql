@@ -3498,3 +3498,21 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
   END LOOP;
 END $$;
 -- End school booking types exact verification.
+
+-- School reports exact verification (R1 0331): one runtime read, the private actor check and period builder.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.require_school_reports_actor(text)',true,false,'search_path=pg_catalog, hon','3d47547f35d2562a600d01b79ef892740979a6066aace4098bb50327e934dce1'),
+('hon.school_report_periods(uuid,uuid,text,integer,timestamptz)',true,false,'search_path=pg_catalog, hon','7212d2355091511b853d743dce01ec2b5fb959fb5df043b4a28cff9478a8891b'),
+('hon.read_school_reports(text,jsonb)',true,true,'search_path=pg_catalog, hon','6721f3af25235c837b0f50552777df73c3606d3898b826cb5b278f5a81d63e8a')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school reports function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End school reports exact verification.
