@@ -3227,3 +3227,17 @@ DO $$ DECLARE t text; r text; BEGIN
     hon.record_hq_prospect_consent(text,uuid,jsonb,uuid), hon.read_hq_prospects(text,text,uuid,timestamptz,uuid,integer),
     hon.read_hq_prospect(text,uuid) TO hon_runtime;
 END $$;
+-- 0310 organization agent budget removed for paying organizations: the override table and helpers are migration-owner only.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regclass('hon.ai_org_agent_ceiling_overrides') IS NULL THEN RAISE EXCEPTION 'Apply migration 0310 first'; END IF;
+  REVOKE ALL ON TABLE hon.ai_org_agent_ceiling_overrides FROM PUBLIC;
+  FOREACH f IN ARRAY ARRAY['ai_org_no_ceiling_units()','ai_org_paid_ceiling(uuid)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+  END LOOP;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.ai_org_agent_ceiling_overrides FROM '||quote_ident(r);
+    FOREACH f IN ARRAY ARRAY['ai_org_no_ceiling_units()','ai_org_paid_ceiling(uuid)'] LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+END $$;
