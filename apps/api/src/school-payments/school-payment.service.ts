@@ -12,6 +12,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import {
+  NO_SCHOOL_PAY_CAPABILITIES,
   narrowSchoolPayCapabilities,
   validateDisconnectSchoolPayInput,
   validateFinishSchoolPayOnboardingInput,
@@ -171,17 +172,28 @@ export class SchoolPaymentService {
     let observation: SchoolPayObservation;
     let rotated: { credential: SchoolPayCredential; expectedCredentialVersion: number } | null = null;
     let credential: SchoolPayCredential | undefined;
+    let revoked = false;
     if (vault) {
       const stored = await this.readCredential(context, connectionId);
       if (stored.accountRef !== accountRef || stored.providerCode !== connection.providerCode) throw CREDENTIAL_UNAVAILABLE();
       try { credential = vault.open(binding, stored.keyId, stored.sealed); } catch { throw CREDENTIAL_UNAVAILABLE(); }
       if (adapter.needsRenewal?.(credential) && adapter.renewCredential) {
-        try { credential = await adapter.renewCredential({ accountRef, credential }); } catch (error) { return translate(error, 'SCHOOL_PAY_MANAGE_FORBIDDEN'); }
-        rotated = { credential, expectedCredentialVersion: stored.credentialVersion };
+        try {
+          credential = await adapter.renewCredential({ accountRef, credential });
+          rotated = { credential, expectedCredentialVersion: stored.credentialVersion };
+        } catch (error) {
+          // The school withdrew HON's access: record reauthorization required (no rotation), so later work sees it.
+          if (!(error instanceof SchoolPaymentProviderError && error.reason === 'GRANT_REVOKED')) return translate(error, 'SCHOOL_PAY_MANAGE_FORBIDDEN');
+          revoked = true;
+        }
       }
     }
-    try { observation = this.narrowed(adapter, await adapter.retrieveStatus({ accountRef, ...(credential ? { credential } : {}) })); }
-    catch (error) { return translate(error, 'SCHOOL_PAY_MANAGE_FORBIDDEN'); }
+    if (revoked) observation = verifySchoolPayObservation({ accountRef, chargesEnabled: false, payoutsEnabled: false, requirementsDue: true,
+      reauthorizationRequired: true, capabilities: { ...NO_SCHOOL_PAY_CAPABILITIES } });
+    else {
+      try { observation = this.narrowed(adapter, await adapter.retrieveStatus({ accountRef, ...(credential ? { credential } : {}) })); }
+      catch (error) { return translate(error, 'SCHOOL_PAY_MANAGE_FORBIDDEN'); }
+    }
     const body: Record<string, unknown> = { expectedVersion: input.expectedVersion, kind: 'REFRESH', observation };
     if (vault && rotated) {
       body.credential = { keyId: vault.keyId, accessExpiresAt: rotated.credential.accessExpiresAt, expectedCredentialVersion: rotated.expectedCredentialVersion,

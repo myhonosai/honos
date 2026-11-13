@@ -32,6 +32,13 @@ export const defaultSchoolPayHttp: SchoolPayHttp = async ({ method, url, headers
 const unknown = (): never => { throw new SchoolPaymentProviderError('UNKNOWN', 'PROVIDER_UNKNOWN'); };
 const rejected = (): never => { throw new SchoolPaymentProviderError('FAILED', 'PROVIDER_REJECTED'); };
 const object = (value: unknown): Record<string, unknown> => (value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : unknown());
+/** Square's OAuth error shapes: {errors:[{code}]} or {error:'invalid_grant'}. */
+function grantInvalid(body: unknown): boolean {
+  if (!body || typeof body !== 'object') return false;
+  const row = body as Record<string, unknown>;
+  if (typeof row.error === 'string' && row.error.toLowerCase() === 'invalid_grant') return true;
+  return Array.isArray(row.errors) && row.errors.some(e => !!e && typeof e === 'object' && String((e as Record<string, unknown>).code ?? '').toUpperCase() === 'INVALID_GRANT');
+}
 const accountRef = (value: unknown): string => (typeof value === 'string' && ACCOUNT_REF.test(value) ? value : unknown());
 
 /** One provider call. The error never carries the provider's text, the request or a credential. */
@@ -190,6 +197,8 @@ export class SquareSandboxAdapter implements SchoolPaymentAdapter {
     const response = await this.call('POST', '/oauth2/token', null, {
       client_id: this.applicationId, client_secret: this.applicationSecret, grant_type: 'refresh_token', refresh_token: credential.refreshToken,
     });
+    // A seller who revoked HON (or a dead refresh token) answers 401 or invalid_grant: that is a known outcome, not UNKNOWN.
+    if (response.status === 401 || (response.status === 400 && grantInvalid(response.body))) throw new SchoolPaymentProviderError('FAILED', 'GRANT_REVOKED');
     return this.credentialFrom(response, ref).credential;
   }
 

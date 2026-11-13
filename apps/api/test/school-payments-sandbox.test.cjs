@@ -219,6 +219,16 @@ test('0320 Square: refusals, revoked access and lost answers map to FAILED, reau
   await assert.rejects(make([{ method: 'GET', url: /merchants/, reply: { status: 200, body: { merchant: { id: 'MLOTHER', status: 'ACTIVE' } } } }])
     .retrieveStatus({ accountRef: 'MLMERCHANT01', credential }), (e) => e.outcome === 'UNKNOWN');
   assert.throws(() => new SquareSandboxAdapter('sq0idp-production', SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_SECRET), (e) => e.reason === 'LIVE_MODE_REFUSED');
+  // A seller who revoked HON: the renewal answers 401 or invalid_grant -> GRANT_REVOKED (recorded as reauthorization), never UNKNOWN.
+  for (const reply of [{ status: 401, body: { errors: [{ code: 'UNAUTHORIZED' }] } }, { status: 400, body: { errors: [{ code: 'INVALID_GRANT' }] } }, { status: 400, body: { error: 'invalid_grant' } }]) {
+    await assert.rejects(make([{ method: 'POST', url: /oauth2\/token$/, reply }]).renewCredential({ accountRef: 'MLMERCHANT01', credential }),
+      (e) => e.outcome === 'FAILED' && e.reason === 'GRANT_REVOKED', JSON.stringify(reply));
+  }
+  for (const reply of [{ status: 500, body: {} }, { status: 429, body: {} }]) {
+    await assert.rejects(make([{ method: 'POST', url: /oauth2\/token$/, reply }]).renewCredential({ accountRef: 'MLMERCHANT01', credential }), (e) => e.outcome === 'UNKNOWN');
+  }
+  await assert.rejects(make([{ method: 'POST', url: /oauth2\/token$/, reply: { status: 400, body: { errors: [{ code: 'BAD_REQUEST' }] } } }]).renewCredential({ accountRef: 'MLMERCHANT01', credential }),
+    (e) => e.outcome === 'FAILED' && e.reason === 'PROVIDER_REJECTED', 'another 400 is a plain refusal');
 });
 
 test('0320 sources: fixed sandbox hosts, tuition keys only, no fee, no secret logged', () => {
@@ -243,4 +253,3 @@ test('0320 service: state checked before the exchange, credential stored with th
   const module = fs.readFileSync(path.join(__dirname, '../src/app.module.ts'), 'utf8');
   assert.match(module, /provide: SCHOOL_PAYMENT_VAULT, useFactory: \(\) => schoolPaymentVaultForProcess\(\)/);
 });
-

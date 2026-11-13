@@ -317,7 +317,8 @@ Status: source only, not deployed. Test/sandbox only.
   injectable transport with a 15 s limit and no redirects), `school-payment-vault.ts` (AES-256-GCM seal/open bound to
   connection, provider and account), adapter selection in `schoolPaymentAdaptersFromEnvironment`, and the service wiring:
   state check before the Square exchange, sealed credential stored with the FINISH/REFRESH record, renewal within 7 days
-  of expiry, and disconnect skipping the provider revoke while another open connection uses the same account (school B in
+  of expiry (a grant the seller revoked, Square 401 or `invalid_grant`, is recorded as `REAUTHORIZATION_REQUIRED` with
+  no rotation; timeouts, 429 and 5xx stay `UNKNOWN`), and disconnect skipping the provider revoke while another open connection uses the same account (school B in
   the same organization may share it; this also changes the piece 1 behaviour, which revoked unconditionally).
 - **Simulators:** the simulated Square now hands back synthetic tokens, so the vault path runs end to end without a
   network. With simulators on (never in production) and no vault key, the API uses a random per-process key.
@@ -327,13 +328,19 @@ Status: source only, not deployed. Test/sandbox only.
   `read_school_payment_credential`, `read_school_payment_account_use`); grants in 010, exact section in 011.
 - **Evidence:** `apps/api/test/school-payments-sandbox.test.cjs` (8 tests: vault, environment selection, Stripe and
   Square request shapes and answer mapping over a recording transport); `pnpm --filter @hon/database
-  db:test-school-payment-credential-vault` (79 checks over signed HTTP); the 0258 proof now runs with the vault (141).
+  db:test-school-payment-credential-vault` (89 checks over signed HTTP); the 0258 proof now runs with the vault (141).
 - **Real sandbox check (2026-11-13, from the build container):** Square sandbox answered with the configured app: a made-up
   code is refused (`FAILED`), a made-up token reads as reauthorization required. Stripe was **not** called: this
   container's network proxy replaces the `Authorization` header on `api.stripe.com` with HON's SaaS sandbox key, which
   must never be used for tuition. A full connect needs a browser sign-in to a Square sandbox seller and the Square app's
   redirect URL set to `<web origin>/staff/billing/payment-processors`.
+- **Real Stripe check (2026-11-13, separate test environment without the key injection, head 3f5f77c):** with the tuition
+  `sk_test_` key, the adapter created a Standard connected account, created an Account Link (a repeated request returned
+  the same account) and read its status (not ready, requirements due). No code changed.
+- **Assumption:** in the code flow Square's refresh token stays reusable and comes back in every renewal answer; the
+  token from the answer is stored. An answer without one is treated as `UNKNOWN` and nothing is rotated.
 - **Still needed before any real use:** `HON_SCHOOL_PAY_VAULT_KEY`/`_KEY_ID` in each environment (a secret, owner
   adds), Square redirect URL, Stripe calls from an environment without the SaaS key injection, key rotation (old key ids
-  are not yet kept), and the Manus final review (live-money/credential item).
-
+  are not yet kept, so rotating the single vault key strands stored credentials until reconnect), two disconnects of
+  connections sharing one Square merchant that race can both skip the provider revoke (no lock across connections yet),
+  and the Manus final review (live-money/credential item).

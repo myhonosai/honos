@@ -40,7 +40,9 @@ export interface SchoolPaymentAdapter {
 /** PRE_SEND: nothing reached the provider. FAILED: the provider refused. UNKNOWN: it may have acted. */
 export class SchoolPaymentProviderError extends Error {
   constructor(readonly outcome: 'PRE_SEND' | 'FAILED' | 'UNKNOWN',
-    readonly reason: 'NOT_CONFIGURED' | 'LIVE_MODE_REFUSED' | 'INVALID_REQUEST' | 'PROVIDER_REJECTED' | 'PROVIDER_UNKNOWN' | 'REVOKE_NOT_SUPPORTED') { super(reason); }
+    readonly reason: 'NOT_CONFIGURED' | 'LIVE_MODE_REFUSED' | 'INVALID_REQUEST' | 'PROVIDER_REJECTED' | 'PROVIDER_UNKNOWN' | 'REVOKE_NOT_SUPPORTED'
+      /** The school withdrew HON's access (a renewal answered 401 or invalid_grant): record reauthorization required. */
+      | 'GRANT_REVOKED') { super(reason); }
 }
 
 export const SCHOOL_PAYMENT_ADAPTERS = Symbol('SCHOOL_PAYMENT_ADAPTERS');

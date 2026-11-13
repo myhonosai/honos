@@ -53,10 +53,11 @@ const ok = (condition, message) => { checks += 1; assert.ok(condition, message);
 
 /** Square simulator that counts code exchanges and remembers every credential it hands out. */
 class ProofSquare extends SimulatedSquareAdapter {
-  exchanges = 0; issued = []; failRenewal = false;
+  exchanges = 0; issued = []; failRenewal = false; revokeRenewal = false;
   async completeOnboarding(input) { this.exchanges += 1; const result = await super.completeOnboarding(input); this.issued.push(result.credential); return result; }
   async renewCredential(input) {
     if (this.failRenewal) throw new SchoolPaymentProviderError('UNKNOWN', 'PROVIDER_UNKNOWN');
+    if (this.revokeRenewal) throw new SchoolPaymentProviderError('FAILED', 'GRANT_REVOKED');
     const credential = await super.renewCredential(input); this.issued.push(credential); return credential;
   }
 }
@@ -359,6 +360,24 @@ try {
   // 8. A pending Square connection abandoned before finishing has nothing to destroy or revoke.
   const abandoned = await success(() => disconnect(OWN_B, qb.c.connectionId, 2, 'Not now'), 'abandon pending Square');
   ok(abandoned.data.connection.state === 'ABANDONED' && abandoned.meta.providerRevoked === false && !(await credentialRow(qb.c.connectionId)), 'abandoned: no credential, no revoke');
+
+  // 8b. A grant the seller revoked at Square, found while renewing a near-expiry token: recorded as
+  // REAUTHORIZATION_REQUIRED in a normal refresh, with no rotation and no status read on the dead token.
+  { const g = await squareConnected(OWN_B);
+    const gf = (await success(() => finish(OWN_B, g.c.connectionId, { expectedVersion: 2, state: g.state, authorizationCode: g.code }), 'finish Square (school B)')).data.connection;
+    const before = await credentialRow(g.c.connectionId);
+    const reads = square.seenTokens.length;
+    square.now = () => new Date(Date.now() + 25 * 86_400_000);
+    square.revokeRenewal = true;
+    const revokedRefresh = (await success(() => refresh(OWN_B, g.c.connectionId, gf.version), 'refresh with a revoked grant')).data.connection;
+    square.revokeRenewal = false; square.now = () => new Date();
+    const after = await credentialRow(g.c.connectionId);
+    ok(revokedRefresh.state === 'REAUTHORIZATION_REQUIRED' && (await connectionRow(g.c.connectionId)).state === 'REAUTHORIZATION_REQUIRED', 'revoked grant recorded as reauthorization required');
+    ok(after.version === before.version && after.sealed === before.sealed && after.destroyed_at === null, 'no rotation for a revoked grant');
+    ok(square.seenTokens.length === reads, 'no status read with the revoked token');
+    ok((await sql("SELECT count(*)::int n FROM hon.audit_events WHERE entity_id=$1 AND action_code='school_pay.credential.rotate'", [g.c.connectionId])).rows[0].n === 0, 'no rotation audited');
+    const ended = await success(() => disconnect(OWN_B, g.c.connectionId, revokedRefresh.version, 'Reconnecting later'), 'disconnect revoked Square');
+    ok((await credentialRow(g.c.connectionId)).sealed === null && ended.data.connection.state !== 'CONNECTED_ACTIVE', 'revoked connection can still be ended and its credential destroyed'); }
 
   // 9. Stripe keeps no credential and never revokes the school's own account.
   const s = (await success(() => start(OWN, 'STRIPE_CONNECT'), 'start Stripe')).data.connection;
