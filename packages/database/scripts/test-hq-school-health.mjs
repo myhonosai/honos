@@ -23,6 +23,8 @@ const ORG=randomUUID(),BUSY=randomUUID(),QUIET=randomUUID(),LAPSED=randomUUID(),
 const humans=Object.fromEntries(['owner','exowner','billingOp','supportAgent','plainSupport','stranger']
  .map(k=>[k,{id:randomUUID(),user:randomUUID(),subject:`hqhealth-${k}-${randomUUID()}`,name:`Fixture ${k}`}]));
 const H=k=>humans[k].subject,P=k=>humans[k].id;
+// A per-run person name: other proofs leave schools named "Synthetic ..." in the shared fixture database.
+const PERSON=`Hqh${randomUUID().slice(0,8)}`;
 const owned=['outbox_delivery_attempts','outbox_events','audit_events','attendance_records','class_bookings','class_sessions','student_profiles','crm_lead_attributions','crm_leads','crm_pipeline_stages','crm_pipelines','people','programs'];
 async function cleanup(){
  await admin.query('ROLLBACK').catch(()=>{});
@@ -55,7 +57,7 @@ async function session(school,offset,status='COMPLETED'){
 }
 async function student(school){
  const person=randomUUID(),id=randomUUID();
- await admin.query("INSERT INTO hon.people(id,organization_id,school_id,given_name,family_name) VALUES($1,$2,$3,'Synthetic','Student')",[person,ORG,school]);
+ await admin.query("INSERT INTO hon.people(id,organization_id,school_id,given_name,family_name) VALUES($1,$2,$3,$4,'Student')",[person,ORG,school,PERSON]);
  await admin.query('INSERT INTO hon.student_profiles(id,organization_id,school_id,person_id) VALUES($1,$2,$3,$4)',[id,ORG,school,person]);
  return id;
 }
@@ -65,7 +67,7 @@ async function visit(school,who,ago,status='PRESENT'){
 }
 async function lead(school,ago,won=null){
  const person=randomUUID();
- await admin.query("INSERT INTO hon.people(id,organization_id,school_id,given_name,family_name) VALUES($1,$2,$3,'Synthetic','Lead')",[person,ORG,school]);
+ await admin.query("INSERT INTO hon.people(id,organization_id,school_id,given_name,family_name) VALUES($1,$2,$3,$4,'Lead')",[person,ORG,school,PERSON]);
  await admin.query(`INSERT INTO hon.crm_leads(id,organization_id,school_id,primary_person_id,pipeline_id,pipeline_stage_id,status,source_code,created_at,won_at)
   VALUES($1,$2,$3,$4,$5,$6,$7,'HEALTH',clock_timestamp()-$8::interval,${won?`clock_timestamp()-'${won}'::interval`:'NULL'})`,[randomUUID(),ORG,school,person,PIPE,STAGE,won?'WON':'OPEN',ago]);
 }
@@ -154,7 +156,7 @@ try{
  for(let i=1;i<list.schools.length;i++)assert(list.schools[i-1].health.signals.length>=list.schools[i].health.signals.length);
  const one=await reads.readHqSchoolsNeedingAttention(H('owner'),{limit:'1'});
  assert.equal(one.schools.length,1); assert.equal(one.truncated,one.flagged>1); assert(one.checked>=3);
- assert(!JSON.stringify(list).includes('Synthetic'),'no person names');
+ assert(!JSON.stringify(list).includes(PERSON),'no person names');
  const after=await counts(); assert.deepEqual({...after,c:before.c},before,'reads write nothing');
 
  // ---------- 4. a reader revoked meanwhile gets nothing ----------
