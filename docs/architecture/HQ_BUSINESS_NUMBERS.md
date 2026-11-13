@@ -16,14 +16,15 @@ runtime can execute only the read; the price helper `hon.hq_business_monthly_min
 - **Charges are not enabled.** Every amount is a recorded list price, never collected money. `chargesEnabled` is always
   `false` in the answer.
 - **MRR** counts each school once. A school with an ACTIVE HON OS schedule binding is counted from the binding's locked
-  price; otherwise from its newest IN_SERVICE monthly v1 subscription. An annual price counts as price / 12, rounded to
-  the cent. **ARR** is MRR × 12.
-- **Lifetime** v1 purchases and active records without a readable price are counted (`lifetimeSchools`,
-  `unpricedActiveRecords`) and never added to MRR.
+  price; otherwise from its newest IN_SERVICE v1 subscription, monthly or annual (catalog or HON OS purchase). An annual
+  price counts as price / 12, rounded to the cent. **ARR** is MRR × 12.
+- **Lifetime** v1 purchases and active records without a readable price (including legacy entitlement records with
+  interval NONE) are counted (`lifetimeSchools`, `unpricedActiveRecords`) and never added to MRR.
 - **New paying schools** in a month: schools whose first paid start (binding activation, v1 service start, or a v1
-  IN_SERVICE history step) falls in that month. **Trial conversions**: those that also had a trial that started on or
+  IN_SERVICE history step; monthly, annual or lifetime) falls in that month. **Trial conversions**: those that also had a trial that started on or
   before that paid start.
-- **Stopped paying** is evidence only: a v1 subscription history step from IN_SERVICE to SUSPENDED or VOIDED. HON OS
+- **Stopped paying** is evidence only: a v1 subscription history step from IN_SERVICE to SUSPENDED or VOIDED (a void
+  recorded in error is a correction and is not counted). HON OS
   bindings have no recorded cancellation after payment yet, so **no churn rate is computed** (`churnRateAvailable:
   false`). Bindings held for review and suspended subscriptions are shown as current counts.
 - **New schools** are organizations created in the month; **public sign-ups** are HON OS self-serve registrations;

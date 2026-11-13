@@ -78,7 +78,7 @@ try{
  const mKey=x=>x.slice(0,7);
  const before=await read(3),rowsBefore=await rowCounts();
  assert.deepEqual(before.months.map(m=>m.month),[mKey(old2),mKey(prev),mKey(cur)],'UTC calendar months, oldest first');
- const O=Object.fromEntries('ABCDEFGH'.split('').map(k=>[k,randomUUID()]));
+ const O=Object.fromEntries('ABCDEFGHIJK'.split('').map(k=>[k,randomUUID()]));
  for(const[k,id]of Object.entries(O))
   await admin.query("INSERT INTO hon.organizations(id,legal_name,display_name,status,created_at) VALUES($1,$2,$2,'ACTIVE',$3)",[id,`HQB Fixture ${k}`,k==='H'?prev:cur]);
  await admin.query("INSERT INTO hon.organizations(id,legal_name,display_name,status,created_at) VALUES($1,'HQB Fixture old','HQB Fixture old','ACTIVE',$2)",[randomUUID(),outside]);
@@ -91,16 +91,22 @@ try{
    [randomUUID(),randomUUID(),org,randomUUID(),requirements,randomBytes(32).toString('hex'),status,live?'FIRST_PAYMENT_VERIFIED':'AMOUNT_MISMATCH',
     fake(),fake(),fake(),P('owner'),randomUUID(),P('owner'),randomUUID(),activated??old2,live?activated:null]);
  }
- async function subscription(org,{status,interval='MONTHLY',price=14900,started=null,history}){
-  const id=randomUUID(),life=interval==='LIFETIME',inService=['IN_SERVICE','SUSPENDED'].includes(status);
+ async function subscription(org,{status,source='CATALOG_OFFER',interval='MONTHLY',price=14900,started=null,history,reason}){
+  // source CATALOG_OFFER (monthly or founder lifetime), HON_OS_OFFER (any interval) or LEGACY_ENTITLEMENT (interval NONE, no price).
+  const id=randomUUID(),life=interval==='LIFETIME',none=interval==='NONE',inService=['IN_SERVICE','SUSPENDED'].includes(status),periodic=inService&&!life&&!none;
+  const hon=source==='HON_OS_OFFER',legacy=source==='LEGACY_ENTITLEMENT';
+  const kind=legacy?null:hon?({MONTHLY:'REGULAR_MONTHLY',ANNUAL:'REGULAR_ANNUAL',LIFETIME:'LIFETIME'})[interval]:life?'FOUNDER_LIFETIME':'REGULAR_MONTHLY';
+  const offer=randomUUID(),set=randomUUID(),plan=hon?'COMPLETE':'CORE';
   await admin.query(`INSERT INTO hon.saas_subscriptions(id,organization_id,source,catalog_id,offer_id,plan_code,entitlement_tier,offer_kind,billing_interval,price_minor,founder_reservation_id,
-   entitlement_version_at_record,status,status_reason,version,service_started_at,period_anchor_at,period_index,current_period_start,current_period_end,created_by_principal_id,created_at,updated_at)
-   VALUES($1,$2,'CATALOG_OFFER',$3,$4,'CORE','CORE',$5,$6,$7,$8,1,$9,$10,$11,$12,$12,$13,$12,$14,$15,$16,$16)`,
-   [id,org,randomUUID(),randomUUID(),life?'FOUNDER_LIFETIME':'REGULAR_MONTHLY',interval,price,life?randomUUID():null,status,
-    {IN_SERVICE:'SERVICE_STARTED',SUSPENDED:'OWNER_HOLD',VOIDED:'RECORDED_IN_ERROR'}[status],history.length,inService?started:null,
-    inService&&!life?0:null,inService&&!life?at(Date.parse(started)+31*day):null,P('owner'),history[0][1]]);
-  for(const[i,[st,t]]of history.entries())
-   await admin.query("INSERT INTO hon.saas_subscription_history(subscription_id,version,status,status_reason,actor_principal_id,occurred_at) VALUES($1,$2,$3,'RECORDED',$4,$5)",[id,i+1,st,P('owner'),t]);
+   entitlement_version_at_record,status,status_reason,version,service_started_at,period_anchor_at,period_index,current_period_start,current_period_end,created_by_principal_id,created_at,updated_at,
+   hon_os_offer_id,offer_set_id,accepted_offer,accepted_offer_digest)
+   VALUES($1,$2,$17,$3,$4,$18::text,$18::text::hon.plan_tier,$5,$6,$7,$8,1,$9,$10,$11,$12,${none?'NULL':'$12'},$13,${none?'NULL':'$12'},$14,$15,$16,$16,$19,$20,$21,$22)`,
+   [id,org,hon||legacy?null:randomUUID(),hon||legacy?null:randomUUID(),kind,interval,legacy?null:price,!hon&&life?randomUUID():null,status,
+    reason??{IN_SERVICE:'SERVICE_STARTED',SUSPENDED:'OWNER_HOLD',VOIDED:'ACCOUNT_REVIEW'}[status],history.length,inService?started:null,
+    periodic?0:null,periodic?at(Date.parse(started)+(interval==='ANNUAL'?366:31)*day):null,P('owner'),history[0][1],source,plan,
+    hon?offer:null,hon?set:null,hon?{offerId:offer,offerSetId:set,offerKind:kind,priceMinor:price}:null,hon?randomBytes(32).toString('hex'):null]);
+  for(const[i,[st,t,why='RECORDED']]of history.entries())
+   await admin.query("INSERT INTO hon.saas_subscription_history(subscription_id,version,status,status_reason,actor_principal_id,occurred_at) VALUES($1,$2,$3,$4,$5,$6)",[id,i+1,st,why,P('owner'),t]);
  }
  async function trial(org,starts){
   await admin.query(`INSERT INTO hon.hon_os_trial_enrollments(organization_id,school_id,registration_id,campaign_id,campaign_version_id,publication_id,policy_decision_id,capability_profile,duration_days,
@@ -128,6 +134,12 @@ try{
  // F: paid from last month, suspended this month. G: paid two months ago, voided last month (its start date is cleared).
  await subscription(O.F,{status:'SUSPENDED',price:14900,started:prev,history:[['PENDING_ACTIVATION',old2],['IN_SERVICE',prev],['SUSPENDED',cur]]});
  await subscription(O.G,{status:'VOIDED',price:14900,history:[['IN_SERVICE',old2],['VOIDED',prev]]});
+ // I: HON OS annual purchase recorded as a v1 subscription (0182 path): 2,988.00 a year counts as 249.00 a month.
+ await subscription(O.I,{status:'IN_SERVICE',source:'HON_OS_OFFER',interval:'ANNUAL',price:298800,started:cur,history:[['PENDING_ACTIVATION',cur1],['IN_SERVICE',cur]]});
+ // J: legacy entitlement record in service: no interval or price, so unpriced and never a paid start.
+ await subscription(O.J,{status:'IN_SERVICE',source:'LEGACY_ENTITLEMENT',interval:'NONE',started:prev,history:[['PENDING_ACTIVATION',old2],['IN_SERVICE',prev]]});
+ // K: paid long ago (outside the window), voided this month as recorded in error: a correction, not a stop.
+ await subscription(O.K,{status:'VOIDED',price:14900,reason:'RECORDED_IN_ERROR',history:[['IN_SERVICE',outside],['VOIDED',cur,'RECORDED_IN_ERROR']]});
  // H: binding held for review; public sign-ups for H (this month), G (last month) and one outside the window.
  await binding(O.H,'NEEDS_REVIEW',{billingInterval:'MONTHLY',lockedPriceMinor:24900},null);
  await registration(O.H,cur); await registration(O.G,prev); await registration(randomUUID(),outside);
@@ -138,15 +150,15 @@ try{
  const rowsMid=await rowCounts(),after=await read(3);
  assert.deepEqual(await rowCounts(),rowsMid,'the read writes nothing');
  const d=(a,b)=>Object.fromEntries(Object.keys(a).map(k=>[k,typeof a[k]==='object'?d(a[k],b[k]):a[k]-b[k]]));
- assert.deepEqual(d(after.current,before.current),{mrrMinor:24900+19901+14900,arrMinor:(24900+19901+14900)*12,payingSchools:3,
-  payingByInterval:{MONTHLY:2,ANNUAL:1},payingBySource:{SCHEDULE_BINDING:2,V1_SUBSCRIPTION:1},unpricedActiveRecords:1,lifetimeSchools:1,
+ assert.deepEqual(d(after.current,before.current),{mrrMinor:24900+19901+14900+24900,arrMinor:(24900+19901+14900+24900)*12,payingSchools:4,
+  payingByInterval:{MONTHLY:2,ANNUAL:2},payingBySource:{SCHEDULE_BINDING:2,V1_SUBSCRIPTION:2},unpricedActiveRecords:2,lifetimeSchools:1,
   bindingsNeedingReview:1,suspendedSubscriptions:1,activeTrials:1});
  const flows=after.months.map((m,i)=>{const{month,monthToDate,...rest}=d(m,{...before.months[i],month:0,monthToDate:0});return rest;});
  assert.deepEqual(after.months.map(m=>[m.month,m.monthToDate]),[[mKey(old2),false],[mKey(prev),false],[mKey(cur),true]]);
  assert.deepEqual(flows,[
   {newSchools:0,publicSignups:0,trialsStarted:1,newPayingSchools:1,trialConversions:0,stoppedPayingSchools:0}, // G began paying (history only); A's trial
   {newSchools:1,publicSignups:1,trialsStarted:0,newPayingSchools:2,trialConversions:1,stoppedPayingSchools:1}, // H created; G signed up; A and F began; A after its trial; G voided
-  {newSchools:7,publicSignups:1,trialsStarted:1,newPayingSchools:4,trialConversions:1,stoppedPayingSchools:1}, // B, C, D, E began; C after its trial; F suspended
+  {newSchools:10,publicSignups:1,trialsStarted:1,newPayingSchools:5,trialConversions:1,stoppedPayingSchools:1}, // B, C, D, E, I began; C after its trial; F suspended (K's void in error is not a stop)
  ]);
  assert(!JSON.stringify(after).match(/HQB Fixture|example\.test|oidc:|fake_/),'no school, person or provider reference');
  await admin.query('ROLLBACK');
@@ -156,7 +168,7 @@ try{
  // ---------- 3. a reader revoked meanwhile gets nothing ----------
  await admin.query("UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp() WHERE principal_id=$1",[P('billingOp')]);
  await deny(reads.readHqBusinessNumbers(H('billingOp'),{}),403,'SAAS_FORBIDDEN');
- console.log('HQ business numbers proof passed (posture, authority, input bounds, one record per school, binding over v1, annual / 12, lifetime and unpriced kept out of MRR, stopped-paying evidence, trial conversions, UTC months, no references, read-only, revocation).');
+ console.log('HQ business numbers proof passed (posture, authority, input bounds, one record per school, binding over v1, annual / 12 (binding and HON OS v1), legacy NONE unpriced, voids in error not stops, lifetime and unpriced kept out of MRR, stopped-paying evidence, trial conversions, UTC months, no references, read-only, revocation).');
 }finally{
  try{await cleanup();}finally{await Promise.allSettled([admin.end(),restricted.end(),database.onModuleDestroy?.()]);}
 }
