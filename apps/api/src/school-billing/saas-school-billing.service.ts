@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import {
   saasUuid, validateSaasAccessAwaitInput, validateSaasAccessExceptionCloseInput, validateSaasAccessExceptionCloseReceipt,
   validateSaasAccessExceptionGrantInput, validateSaasAccessExceptionGrantReceipt, validateSaasAccessExceptionRevokeInput,
   validateSaasAccessExceptionRevokeReceipt, validateSaasAccessExceptionsView, validateSaasAccessAwaitReceipt, validateSaasAccessReadiness, validateSaasAccessRetryInput,
   validateSaasAccessRetryReceipt, validateSaasOrganizationAccessView, validateSaasSchoolAccessStanding, validateSaasSchoolBillingAccount, validateSaasSchoolInvoiceDetail, validateSaasSchoolInvoicePage,
   validateSaasSchoolInvoiceQuery,
-  validateSaasExceptionPolicyDecisionInput, validateSaasAccessOverview, validateSaasAccessOverviewQuery, validateHqSchoolDetail, validateSaasExceptionPolicyReceipt, validateSaasExceptionPolicyView,
+  validateSaasExceptionPolicyDecisionInput, validateSaasAccessOverview, validateSaasAccessOverviewQuery, validateHqSchoolDetail, validateHqBusinessNumbers, validateHqBusinessQuery, validateSaasExceptionPolicyReceipt, validateSaasExceptionPolicyView,
 } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
 
@@ -68,6 +68,13 @@ export class SaasSchoolBillingService {
   async readHqSchoolDetail(subject: string, schoolId: unknown) {
     const school = parse(() => saasUuid(schoolId));
     return this.billing.call('readHqSchoolDetail', [subject, school], validateHqSchoolDetail);
+  }
+  /** B-HQ-3: HON's own contracted recurring revenue at list price plus monthly school, sign-up and trial flows. */
+  async readHqBusinessNumbers(subject: string, query: unknown) {
+    const q = parse(() => validateHqBusinessQuery(query));
+    const view = await this.billing.call('readHqBusinessNumbers', [subject, String(q.months)], validateHqBusinessNumbers);
+    if (view.monthsRequested !== q.months) throw new ServiceUnavailableException({ code: 'SAAS_UNAVAILABLE' });
+    return view;
   }
   // D9: HQ-owner access exceptions. The database enforces the HQ-owner authority, eligibility and window cap.
   async readExceptionPolicy(subject: string) {

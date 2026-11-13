@@ -62,6 +62,20 @@ export class SaasAccessOverviewHqController {
   }
 }
 
+/**
+ * B-HQ-3 HQ business numbers: contracted MRR/ARR at list price (charges are not enabled), paying schools, and per-month
+ * new schools, sign-ups, trials, new and stopped paying schools. Counts and sums only; read only.
+ */
+@Controller('hq/saas/business-numbers')
+@UseGuards(HonIdentityGuard)
+export class HqBusinessNumbersController {
+  constructor(private readonly reads: SaasSchoolBillingService) {}
+  @Get() @UseGuards(SaasReadGuard) @SaasReadQuery(['months'])
+  async numbers(@Req() req: HonRequest, @Query() query: Record<string, unknown>) {
+    return { data: await this.reads.readHqBusinessNumbers(subject(req), query) };
+  }
+}
+
 /** C-HQ-3 HQ school detail: one school's access standing, ownership summary and counts. Read only; names no people. */
 @Controller('hq/saas/schools')
 @UseGuards(HonIdentityGuard)
