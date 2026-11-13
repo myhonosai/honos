@@ -95,6 +95,29 @@ async function refused(read, expectedStatus, expectedCode, label) {
 }
 
 const orgs = () => [ids.organization, ids.otherOrganization];
+// Disposable fixture only: when the first read is not 200, repeat it on the runtime role and print the database error
+// and any waiting or busy sessions, so an intermittent CI failure carries its cause. Synthetic data, no secrets.
+async function diagnose(actor, elapsed) {
+  console.log(`DIAGNOSE first read failed after ${elapsed}ms`);
+  const busy = await sql(`SELECT a.pid, a.usename, a.state, a.wait_event_type, a.wait_event, round(extract(epoch from clock_timestamp()-a.xact_start)::numeric,1) AS xact_s,
+      left(regexp_replace(a.query,'\\s+',' ','g'),90) AS query FROM pg_stat_activity a
+    WHERE a.datname=current_database() AND a.pid<>pg_backend_pid() AND a.state IS DISTINCT FROM 'idle'`);
+  console.log('DIAGNOSE sessions', JSON.stringify(busy.rows));
+  const waiting = await sql(`SELECT l.pid, l.locktype, l.mode, l.relation::regclass::text AS relation FROM pg_locks l WHERE NOT l.granted`);
+  console.log('DIAGNOSE waiting locks', JSON.stringify(waiting.rows));
+  const started = Date.now();
+  try {
+    await runtime.query('BEGIN READ ONLY');
+    await runtime.query(`SELECT set_config('app.hon_organization_id',$1,true), set_config('app.hon_school_id',$2,true), set_config('app.hon_principal_id',$3,true),
+      set_config('app.hon_principal_type','HUMAN_USER',true), set_config('app.hon_request_id',$4,true)`, [actor.org, actor.school, actor.principal, randomUUID()]);
+    await runtime.query("SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='3s'");
+    await runtime.query("SELECT set_config('app.hon_source','HUMAN_UI',true), set_config('app.hon_external_subject',$1,true), set_config('app.hon_action_request_id','',true), set_config('app.hon_delegated_by_principal_id','',true)", [actor.subject]);
+    const result = await runtime.query("SELECT hon.read_school_reports($1,'{\"months\":3}'::jsonb) AS data", [actor.subject]);
+    console.log(`DIAGNOSE direct read ok in ${Date.now() - started}ms`, JSON.stringify(result.rows[0].data).slice(0, 300));
+  } catch (error) {
+    console.log(`DIAGNOSE direct read failed in ${Date.now() - started}ms: ${error.code} ${error.message}`);
+  } finally { await runtime.query('ROLLBACK').catch(() => {}); }
+}
 // Disposable-fixture cleanup only (as in the 0239 proof).
 async function cleanup() {
   const tables = (await sql(`SELECT c.relname FROM pg_class c JOIN pg_attribute a ON a.attrelid=c.oid AND a.attname='organization_id' AND NOT a.attisdropped
@@ -264,7 +287,11 @@ try {
   await startApp();
 
   // 1. Authority: reporting.view at this school, a direct human, no HQ, family or other-school borrowing.
-  const report = await success(() => call(REPORTER, 'months=3'), 'a reporting.view staff member');
+  const report = await success(async () => {
+    const started = Date.now(), response = await call(REPORTER, 'months=3');
+    if (response.status !== 200) await diagnose(REPORTER, Date.now() - started);
+    return response;
+  }, 'a reporting.view staff member');
   for (const [actor, label] of [[NONE, 'no reporting.view'], [MIXED, 'a mixed parent role'], [HQ, 'an HQ operator']]) {
     await refused(() => call(actor, 'months=3'), 403, undefined, `refused for ${label}`);
   }
