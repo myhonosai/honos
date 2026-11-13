@@ -267,6 +267,7 @@
     "0286_school_booking_types.sql": "c29503fa5753959310c649eaf3e131f30c4c63b60d4d1c599015108c1ad6721f",
     "0287_ai_task_class_routing.sql": "eb09bd1fe61ae8d75c91f1151431653faeb4bd16b0472c91f33d0163e38499bd",
     "0288_ai_school_cost_ceiling.sql": "0f77dfd17d256f21f724c16f3287247b75a94ef657b017d745278fe56165e123",
-    "0304_hq_hon_schedule_billing_facts.sql": "32bc6ea5821c7f36b819db74a407e6466a3712d3700f513d1cd0d55d254e7365"
+    "0304_hq_hon_schedule_billing_facts.sql": "32bc6ea5821c7f36b819db74a407e6466a3712d3700f513d1cd0d55d254e7365",
+    "0308_hq_plan_promotions.sql": "13ddea1cc69c6ee892e775a333a1eb6bd4eb74f5e96c16c13d4cc45380d394bb"
   }
 }

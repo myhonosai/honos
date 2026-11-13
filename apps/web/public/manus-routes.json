@@ -473,6 +473,10 @@
       "title": "HON HQ | Creative Studio"
     },
     {
+      "path": "/hq/marketing/promotions",
+      "title": "HON HQ | Plan promotions"
+    },
+    {
       "path": "/hq/support/:caseId",
       "title": "HON HQ | Support case"
     },

@@ -124,6 +124,11 @@ export const SAAS_COMMANDS = {
   createMarketingCampaign: 'hq-marketing-campaign-create',
   updateMarketingCampaign: 'hq-marketing-campaign-update',
   setMarketingCampaignStatus: 'hq-marketing-campaign-status',
+  // 0308: HQ plan promotions; same values as HQ_PLAN_PROMOTION_COMMANDS.
+  createPlanPromotion: 'hq-plan-promotion-create',
+  updatePlanPromotion: 'hq-plan-promotion-update',
+  setPlanPromotionStatus: 'hq-plan-promotion-status',
+  recordSchoolPlanPromotionEvent: 'school-plan-promotion-event',
   createHqCreativeGeneration: 'hq-creative-generation-create',
   setHqCreativeBudget: 'hq-creative-budget-set',
   resolveHqCreativeGeneration: 'hq-creative-generation-resolve',

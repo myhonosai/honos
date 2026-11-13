@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "ef58de0fe6a7695be66ba615c692528202f88ab822d8e3ae1238c09bc3e5e078",
+  "chainSha256": "03407423ffc91029772fc3156bba08cd9f873ae2bcfd3f19397f3bd721bb2b18",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -381,6 +381,10 @@
     {
       "file": "0304_hq_hon_schedule_billing_facts.sql",
       "sha256": "32bc6ea5821c7f36b819db74a407e6466a3712d3700f513d1cd0d55d254e7365"
+    },
+    {
+      "file": "0308_hq_plan_promotions.sql",
+      "sha256": "13ddea1cc69c6ee892e775a333a1eb6bd4eb74f5e96c16c13d4cc45380d394bb"
     }
   ]
 }

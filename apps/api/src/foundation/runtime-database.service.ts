@@ -264,6 +264,15 @@ const SAAS_BILLING_CALLS = {
   createMarketingCampaign: { sql: 'SELECT hon.create_hq_marketing_campaign($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   updateMarketingCampaign: { sql: 'SELECT hon.update_hq_marketing_campaign($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   setMarketingCampaignStatus: { sql: 'SELECT hon.set_hq_marketing_campaign_status($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  // 0308: HQ plan promotions. HQ reads are read-only; HQ commands write only promotion rows; the school event writes one
+  // seen/opened/dismissed row. Nothing here changes prices, offers, checkouts, plans, billing or messages.
+  readPlanPromotions: { sql: 'SELECT hon.read_hq_plan_promotions($1,$2,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },
+  readPlanPromotion: { sql: 'SELECT hon.read_hq_plan_promotion($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  createPlanPromotion: { sql: 'SELECT hon.create_hq_plan_promotion($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  updatePlanPromotion: { sql: 'SELECT hon.update_hq_plan_promotion($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  setPlanPromotionStatus: { sql: 'SELECT hon.set_hq_plan_promotion_status($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  readSchoolPlanPromotions: { sql: 'SELECT hon.read_school_plan_promotions($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  recordSchoolPlanPromotionEvent: { sql: 'SELECT hon.record_school_plan_promotion_event($1,$2::uuid,$3::uuid,$4::jsonb) AS data', arity: 4, readOnly: false },
   readHqCreativeStudio: { sql: 'SELECT hon.read_hq_creative_studio($1) AS data', arity: 1, readOnly: true },
   readHqCreativeGeneration: { sql: 'SELECT hon.read_hq_creative_generation($1,$2::uuid) AS data', arity: 2, readOnly: true },
   setHqCreativeBudget: { sql: 'SELECT hon.set_hq_creative_budget($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
