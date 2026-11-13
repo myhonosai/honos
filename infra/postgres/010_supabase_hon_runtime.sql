@@ -2604,6 +2604,40 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_hq_creative_generation(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+-- 0308 HQ plan promotions: no table privileges; three HQ commands, two HQ reads, the school read and the school
+-- seen/opened/dismissed command are the only runtime boundary.
+DO $$ DECLARE r text; t text; BEGIN
+  FOREACH t IN ARRAY ARRAY['hq_plan_promotions','hq_plan_promotion_versions','hq_plan_promotion_requests','school_plan_promotion_events'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC', t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I', t, r); END LOOP;
+  END LOOP;
+END $$;
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['guard_hq_plan_promotion()','guard_hq_plan_promotion_evidence()',
+    'hq_plan_promotion_school_plan(uuid,timestamptz)','hq_plan_promotion_targets(hon.hq_plan_promotions,uuid,timestamptz)',
+    'hq_plan_promotion_live(hon.hq_plan_promotions,timestamptz)','require_hq_plan_promotion_owner(text)','hq_plan_promotion_owner_eligible(uuid)',
+    'hq_plan_promotion_offer_json(uuid)','hq_plan_promotion_snapshot(hon.hq_plan_promotions)','hq_plan_promotion_json(hon.hq_plan_promotions)',
+    'hq_plan_promotion_digest(hon.hq_plan_promotions)','hq_plan_promotion_preview(hon.hq_plan_promotions)','hq_plan_promotion_reach(hon.hq_plan_promotions)',
+    'hq_plan_promotion_claim(uuid,uuid,text,text)','hq_plan_promotion_time(jsonb,text)','hq_plan_promotion_content(jsonb)',
+    'hq_plan_promotion_lock(uuid,integer)','create_hq_plan_promotion(text,jsonb,uuid)','update_hq_plan_promotion(text,uuid,jsonb,uuid)',
+    'set_hq_plan_promotion_status(text,uuid,jsonb,uuid)','read_hq_plan_promotions(text,text,timestamptz,uuid,integer)',
+    'read_hq_plan_promotion(text,uuid)','school_plan_promotions_shown(text,uuid,timestamptz)','read_school_plan_promotions(text,uuid)',
+    'record_school_plan_promotion_event(text,uuid,uuid,jsonb)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.create_hq_plan_promotion(text,jsonb,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.update_hq_plan_promotion(text,uuid,jsonb,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.set_hq_plan_promotion_status(text,uuid,jsonb,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.read_hq_plan_promotions(text,text,timestamptz,uuid,integer) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.read_hq_plan_promotion(text,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.read_school_plan_promotions(text,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.record_school_plan_promotion_event(text,uuid,uuid,jsonb) TO hon_runtime;
+  END IF;
+END $$;
 -- C3b 0228 HON group summary: the group-facts helper is internal; summaries use the existing turn and reply
 -- entry points (begin_hon_turn, prepare_hon_reply), whose grants are unchanged.
 DO $$ DECLARE r text; BEGIN

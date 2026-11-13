@@ -1085,6 +1085,7 @@ export * from './saas-paid-review.js';
 export * from './hq-support.js';
 export * from './hq-communications.js';
 export * from './hq-marketing.js';
+export * from './hq-plan-promotions.js';
 export * from './hq-creative.js';
 export * from './student-imports.js';
 export * from './class-series.js';
