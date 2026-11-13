@@ -87,41 +87,145 @@ LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
   SELECT o.id FROM hon.saas_offer_set_offers o WHERE o.id::text=b.requirements->>'offerId' AND o.founder AND o.billing_interval<>'ONE_TIME'
 $$;
 
--- ---------- v1 eligibility and the school offers read (0185 body): founder lifetime ignores the founder pool ----------
-CREATE OR REPLACE FUNCTION hon.saas_hon_os_refusal(p_org uuid, o hon.saas_offer_set_offers, p_at timestamptz) RETURNS text
+-- ---------- the school offers read (0185 body): founder lifetime ignores the founder pool ----------
+-- The v1 refusal (0185) is unchanged: it still decides the legacy v1 checkout, which 0237 refuses for every founder and
+-- lifetime offer. Only what a school is shown follows owner D1: a one-time founder offer has its own HQ sale limit and
+-- is never FOUNDER_SOLD_OUT. The founder-pool check is the last refusal in 0185, so dropping only that answer for a
+-- one-time offer leaves every earlier refusal (sale limit, entitlement, open checkout) in force.
+CREATE FUNCTION hon.saas_hon_os_school_refusal(p_org uuid, o hon.saas_offer_set_offers, p_at timestamptz) RETURNS text
 LANGUAGE plpgsql STABLE SET search_path = pg_catalog, hon AS $$
-DECLARE ent hon.organization_entitlements%ROWTYPE; v_set hon.saas_offer_sets%ROWTYPE; used jsonb; awaiting boolean;
+DECLARE refusal text := hon.saas_hon_os_refusal(p_org, o, p_at);
 BEGIN
-  SELECT * INTO v_set FROM hon.saas_offer_sets WHERE id = o.set_id;
-  IF o.id IS NULL OR v_set.status IS DISTINCT FROM 'PUBLISHED' OR NOT hon.saas_hon_os_offer_on_sale(o, p_at) THEN RETURN 'SAAS_OFFER_NOT_AVAILABLE'; END IF;
-  IF hon.saas_hon_os_recurring(o) IS NULL THEN RETURN 'SAAS_OFFER_TERMS_UNSUPPORTED'; END IF;
-  SELECT * INTO ent FROM hon.organization_entitlements e WHERE e.organization_id = p_org;
-  -- D7: awaiting its first payment (only while paid access is ACTIVE), the held entitlement is not required to be
-  -- active; the verified payment activates it. Otherwise the 0182 rule: an ACTIVE COMPLETE entitlement in effect.
-  -- D9: free access under an HQ-owner exception is never a purchase basis; HQ revokes it (or it ends) first.
-  IF hon.saas_access_exception_live(p_org) THEN RETURN 'SAAS_ACCESS_EXCEPTION_ACTIVE'; END IF;
-  awaiting := hon.saas_access_program_active() AND hon.saas_awaiting_first_payment(p_org);
-  IF ent.organization_id IS NULL OR NOT awaiting AND (ent.status <> 'ACTIVE' OR ent.effective_from > p_at
-      OR (ent.effective_until IS NOT NULL AND ent.effective_until <= p_at) OR hon.saas_awaiting_first_payment(p_org)) THEN
-    RETURN 'SAAS_ENTITLEMENT_NOT_ACTIVE';
-  END IF;
-  IF NOT awaiting AND ent.tier::text <> 'COMPLETE' THEN RETURN 'SAAS_ENTITLEMENT_MISMATCH'; END IF;
-  IF EXISTS (SELECT 1 FROM hon.saas_subscriptions s WHERE s.organization_id = p_org AND s.status <> 'VOIDED') THEN RETURN 'SAAS_SUBSCRIPTION_EXISTS'; END IF;
-  IF o.eligibility = 'NEW_ORGANIZATIONS_ONLY' AND EXISTS (SELECT 1 FROM hon.saas_payment_evidence e
-      WHERE e.organization_id = p_org AND e.kind = 'PAYMENT_RECEIVED') THEN
-    RETURN 'SAAS_OFFER_NOT_ELIGIBLE';
-  END IF;
-  IF EXISTS (SELECT 1 FROM hon.saas_checkout_sessions c WHERE c.organization_id = p_org AND c.status IN ('CREATED','OPEN') AND c.expires_at > p_at) THEN
-    RETURN 'SAAS_CHECKOUT_OPEN';
-  END IF;
-  IF o.sale_limit IS NOT NULL AND hon.saas_hon_os_offer_usage(o.id, p_at, NULL) >= o.sale_limit THEN RETURN 'SAAS_OFFER_SOLD_OUT'; END IF;
-  -- 0306 (owner D1): founder lifetime has its own HQ sale limit and never uses the founder pool.
-  IF o.founder AND o.billing_interval <> 'ONE_TIME' THEN
-    used := hon.saas_hon_os_founder_usage(p_at, NULL);
-    IF (used->>'allocated')::integer + (used->>'held')::integer >= coalesce(v_set.founder_total_limit, 0) THEN RETURN 'SAAS_FOUNDER_SOLD_OUT'; END IF;
-  END IF;
-  RETURN NULL;
+  IF refusal = 'SAAS_FOUNDER_SOLD_OUT' AND o.billing_interval = 'ONE_TIME' THEN RETURN NULL; END IF;
+  RETURN refusal;
 END $$;
+
+CREATE OR REPLACE FUNCTION hon.read_saas_hon_os_offers_for_school(p_subject text, p_school uuid) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
+DECLARE actor record; at timestamptz := clock_timestamp(); pub hon.saas_offer_sets%ROWTYPE; chk hon.saas_checkout_sessions%ROWTYPE;
+  sub hon.saas_subscriptions%ROWTYPE;
+BEGIN
+  SELECT * INTO actor FROM hon.require_saas_school_purchaser(p_subject, p_school);
+  SELECT * INTO pub FROM hon.saas_offer_sets WHERE status = 'PUBLISHED';
+  SELECT * INTO chk FROM hon.saas_checkout_sessions WHERE organization_id = actor.organization_id AND hon_os_offer_id IS NOT NULL
+    ORDER BY created_at DESC, id LIMIT 1;
+  SELECT * INTO sub FROM hon.saas_subscriptions WHERE organization_id = actor.organization_id AND status <> 'VOIDED' AND source = 'HON_OS_OFFER';
+  RETURN jsonb_build_object('schoolId',p_school,'product',hon.saas_hon_os_product_json(),'offerSetVersion',pub.set_version,
+    'termsReference',pub.terms_reference,
+    -- Eligibility is the server's purchase decision for this organization now; the client never re-derives it.
+    'offers',(SELECT coalesce(jsonb_agg((hon.saas_offer_json(o) - ARRAY['salesStop','salesOpensAt','position','saleLimit'])
+        || jsonb_build_object('recurringBilling',hon.saas_hon_os_recurring(o),'eligibility',CASE r.refusal
+          WHEN 'SAAS_OFFER_TERMS_UNSUPPORTED' THEN 'NOT_AVAILABLE_TERMS'
+          WHEN 'SAAS_ENTITLEMENT_NOT_ACTIVE' THEN 'NOT_ELIGIBLE_ENTITLEMENT' WHEN 'SAAS_ACCESS_EXCEPTION_ACTIVE' THEN 'NOT_ELIGIBLE_ENTITLEMENT' WHEN 'SAAS_ENTITLEMENT_MISMATCH' THEN 'NOT_ELIGIBLE_ENTITLEMENT'
+          WHEN 'SAAS_SUBSCRIPTION_EXISTS' THEN 'NOT_ELIGIBLE_EXISTING_SUBSCRIPTION' WHEN 'SAAS_OFFER_NOT_ELIGIBLE' THEN 'NOT_ELIGIBLE_PRIOR_PURCHASE'
+          WHEN 'SAAS_CHECKOUT_OPEN' THEN 'CHECKOUT_IN_PROGRESS' WHEN 'SAAS_OFFER_SOLD_OUT' THEN 'SOLD_OUT'
+          WHEN 'SAAS_FOUNDER_SOLD_OUT' THEN 'FOUNDER_SOLD_OUT' WHEN 'SAAS_OFFER_NOT_AVAILABLE' THEN 'NOT_AVAILABLE' ELSE 'ELIGIBLE' END)
+      ORDER BY o.position),'[]'::jsonb)
+      FROM hon.saas_offer_set_offers o CROSS JOIN LATERAL (SELECT hon.saas_hon_os_school_refusal(actor.organization_id, o, at) refusal) r
+      WHERE o.set_id = pub.id AND hon.saas_hon_os_offer_on_sale(o, at)),
+    'purchase',CASE WHEN (SELECT status FROM hon.saas_payment_program WHERE program_id = 1) = 'TEST_MODE' THEN 'TEST_MODE' ELSE 'UNAVAILABLE' END,
+    'checkout',CASE WHEN chk.id IS NULL THEN NULL ELSE hon.saas_checkout_json(chk) END,
+    'purchased',CASE WHEN sub.id IS NULL THEN NULL ELSE jsonb_build_object('subscriptionId',sub.id,'offerId',sub.hon_os_offer_id,
+      'offerKind',sub.offer_kind,'displayName',sub.accepted_offer->>'displayName','priceMinor',sub.price_minor,
+      'recurringBilling',sub.accepted_offer->>'recurringBilling','offerSetVersion',(sub.accepted_offer->>'offerSetVersion')::integer,
+      'acceptedOfferDigest',sub.accepted_offer_digest,'status',sub.status,'serviceStartedAt',hon.saas_ts(sub.service_started_at)) END,
+    'paidAccessProgram',CASE WHEN hon.saas_access_program_active() THEN 'ACTIVE' ELSE 'INACTIVE' END,
+    'chargesEnabled',false);
+END $$;
+
+-- 0172 body + revoke-first pilot conversion (owner policy, 2026-10-24): an approved pilot, demonstration or testing
+-- exception must be revoked by an HQ owner or reach its expiry before the school enters awaiting-first-payment. While
+-- one is active or scheduled the transition is refused (SAAS_ACCESS_EXCEPTION_ACTIVE) and nothing changes. An open
+-- exception that already lapsed (or whose entitlement was replaced) is closed here first, so its record ends as EXPIRED
+-- (or SUPERSEDED) rather than staying open under the awaiting state. A seamless verified-payment conversion is a
+-- separate, unapproved milestone.
+CREATE OR REPLACE FUNCTION hon.place_saas_organization_awaiting_payment(p_subject text, p_org uuid, p_input jsonb, p_key uuid, p_request_id uuid,
+  p_correlation_id uuid) RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
+DECLARE actor uuid; fp text; replay jsonb; ent hon.organization_entitlements%ROWTYPE; prior jsonb; nxt jsonb; at timestamptz := clock_timestamp();
+  expected integer; lapsed hon.saas_access_exceptions%ROWTYPE;
+BEGIN
+  IF p_org IS NULL OR p_input IS NULL OR jsonb_typeof(p_input) <> 'object'
+    OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p_input) k) <> ARRAY['expectedEntitlementVersion']
+    OR jsonb_typeof(p_input->'expectedEntitlementVersion') <> 'number' OR (p_input->>'expectedEntitlementVersion') !~ '^[1-9][0-9]{0,8}$' THEN
+    RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE = '22023';
+  END IF;
+  expected := (p_input->>'expectedEntitlementVersion')::integer;
+  actor := hon.require_saas_hq_actor(p_subject, true);
+  fp := hon.saas_fingerprint(ARRAY['access.await', p_org::text, expected::text]);
+  replay := hon.saas_claim_request(actor, p_key, 'saas.access.await', fp, p_request_id, p_correlation_id);
+  IF replay IS NOT NULL THEN RETURN replay; END IF;
+  IF NOT hon.saas_access_program_active() THEN RAISE EXCEPTION 'SAAS_ACCESS_NOT_ACTIVE' USING ERRCODE = '23514'; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('saas.organization:' || p_org::text, 0));
+  SELECT * INTO ent FROM hon.organization_entitlements WHERE organization_id = p_org FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'SAAS_UNAVAILABLE' USING ERRCODE = 'P0002'; END IF;
+  IF ent.version <> expected THEN RAISE EXCEPTION 'SAAS_VERSION_CONFLICT' USING ERRCODE = '40001'; END IF;
+  IF hon.saas_access_exception_live(p_org) THEN RAISE EXCEPTION 'SAAS_ACCESS_EXCEPTION_ACTIVE' USING ERRCODE = '23514'; END IF;
+  IF EXISTS (SELECT 1 FROM hon.saas_access_states WHERE organization_id = p_org) THEN RAISE EXCEPTION 'SAAS_ACCESS_STATE_EXISTS' USING ERRCODE = '23514'; END IF;
+  IF EXISTS (SELECT 1 FROM hon.saas_subscriptions WHERE organization_id = p_org AND status <> 'VOIDED') THEN
+    RAISE EXCEPTION 'SAAS_SUBSCRIPTION_EXISTS' USING ERRCODE = '23514';
+  END IF;
+  IF EXISTS (SELECT 1 FROM hon.saas_checkout_sessions WHERE organization_id = p_org AND status IN ('CREATED','OPEN')) THEN
+    RAISE EXCEPTION 'SAAS_CHECKOUT_OPEN' USING ERRCODE = '23514';
+  END IF;
+  prior := hon.saas_entitlement_json(p_org);
+  SELECT * INTO lapsed FROM hon.saas_access_exceptions WHERE organization_id = p_org AND status = 'GRANTED' FOR UPDATE;
+  IF FOUND THEN PERFORM hon.saas_end_access_exception(lapsed.id, 'EXPIRED', NULL, actor, at); END IF;
+  -- No access before the first payment: the existing row is held SUSPENDED (every status-gated function refuses it).
+  UPDATE hon.organization_entitlements SET status = 'SUSPENDED', version = version + 1, updated_at = at WHERE organization_id = p_org;
+  nxt := hon.saas_entitlement_json(p_org);
+  INSERT INTO hon.saas_access_states(organization_id, state, reason, version, changed_by_principal_id, created_at, updated_at)
+    VALUES (p_org, 'AWAITING_FIRST_PAYMENT', 'AWAITING_INITIAL_PAYMENT', 1, actor, at, at);
+  INSERT INTO hon.saas_access_transitions(organization_id, kind, outcome, reason, prior_entitlement, next_entitlement, actor_principal_id, occurred_at)
+    VALUES (p_org, 'AWAITING_FIRST_PAYMENT', 'APPLIED', 'AWAITING_INITIAL_PAYMENT', prior, nxt, actor, at);
+  RETURN hon.saas_record(actor, p_key, 'saas.access.await', 'saas.access.awaiting', 'ACCESS_STATE', p_org, p_org, prior, nxt,
+    jsonb_build_object('access', hon.saas_organization_access(p_org)), at);
+END $$;
+
+-- Database backstop for the same rule on every path: no access state (awaiting or paid) is created for an
+-- organization holding an open, unexpired exception.
+CREATE FUNCTION hon.guard_saas_access_state_exception() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, hon AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM hon.saas_access_exceptions x WHERE x.organization_id = NEW.organization_id AND x.status = 'GRANTED'
+    AND x.expires_at > clock_timestamp()) THEN
+    RAISE EXCEPTION 'SAAS_ACCESS_EXCEPTION_ACTIVE' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER saas_exception_await BEFORE INSERT ON hon.saas_access_states FOR EACH ROW EXECUTE FUNCTION hon.guard_saas_access_state_exception();
+
+-- 0152 body + the entitlement window: Champions contest eligibility (live standings and the frozen results that
+-- winner proposals read) requires the referrer's entitlement to be in effect at the evaluation time (p_cutoff: now
+-- for live standings, the END time for the freeze), not only ACTIVE at an eligible tier. A scheduled (future-start)
+-- or lapsed window, such as an expired HQ-owner exception that nobody closed yet, is TIER_NOT_ELIGIBLE. Results
+-- already frozen are evidence and are not recalculated.
+CREATE OR REPLACE FUNCTION hon.champions_contest_counts(p_contest uuid, p_cutoff timestamptz)
+RETURNS TABLE (school_id uuid, organization_id uuid, qualified integer, reached_at timestamptz, ineligible_reason text)
+LANGUAGE sql STABLE SET search_path = pg_catalog, hon AS $$
+  WITH c AS (SELECT * FROM hon.champions_contests WHERE id = p_contest),
+  counted AS (
+    SELECT a.referrer_school_id, a.referrer_organization_id, count(*)::integer qualified, max(a.qualified_at) reached_at
+    FROM hon.champions_attributions a, c
+    WHERE a.state = 'QUALIFIED' AND a.qualified_at >= c.starts_at AND a.qualified_at < least(c.ends_at, p_cutoff)
+      AND (c.count_basis = 'QUALIFIED_IN_WINDOW' OR (a.captured_at >= c.starts_at AND a.captured_at < c.ends_at))
+      AND NOT EXISTS (SELECT 1 FROM hon.champions_contest_pauses pz WHERE pz.contest_id = c.id
+        AND a.qualified_at >= pz.paused_at AND a.qualified_at < coalesce(pz.resumed_at, 'infinity'::timestamptz))
+    GROUP BY a.referrer_school_id, a.referrer_organization_id)
+  SELECT k.referrer_school_id, k.referrer_organization_id, k.qualified, k.reached_at,
+    CASE
+      WHEN c.eligibility_scope = 'SELECTED_SCHOOLS' AND NOT EXISTS (SELECT 1 FROM hon.champions_contest_schools cs
+        WHERE cs.contest_id = c.id AND cs.school_id = k.referrer_school_id) THEN 'NOT_SELECTED'
+      WHEN NOT EXISTS (SELECT 1 FROM hon.schools s JOIN hon.organizations o ON o.id = s.organization_id
+        WHERE s.id = k.referrer_school_id AND s.status = 'ACTIVE' AND o.status = 'ACTIVE') THEN 'SCHOOL_INACTIVE'
+      WHEN NOT EXISTS (SELECT 1 FROM hon.organization_entitlements e WHERE e.organization_id = k.referrer_organization_id
+        AND e.status = 'ACTIVE' AND e.tier::text = ANY(c.eligible_tiers)
+        AND e.effective_from <= p_cutoff AND (e.effective_until IS NULL OR e.effective_until > p_cutoff)) THEN 'TIER_NOT_ELIGIBLE'
+      WHEN EXISTS (SELECT 1 FROM hon.champions_leaderboard_holds h WHERE h.school_id = k.referrer_school_id AND h.status = 'ACTIVE') THEN 'LEADERBOARD_HOLD'
+      WHEN k.qualified < c.minimum_qualified THEN 'BELOW_MINIMUM'
+    END
+  FROM counted k, c
+$$;
 
 -- ---------- one-time terms (0279 body plus a lifetime branch) ----------
 CREATE OR REPLACE FUNCTION hon.saas_price_content(p_offer uuid,p_renewal uuid) RETURNS jsonb
@@ -556,7 +660,7 @@ DO $$ DECLARE r text; c text; f text; BEGIN
   END LOOP;
   FOREACH f IN ARRAY ARRAY['hon.saas_hon_os_offer_usage(uuid,timestamp with time zone,uuid)','hon.saas_lifetime_unavailable_reason(uuid)',
     'hon.saas_schedule_binding_lifetime_offer(hon.saas_schedule_bindings)','hon.saas_schedule_binding_founder_offer(hon.saas_schedule_bindings)',
-    'hon.saas_hon_os_refusal(uuid,hon.saas_offer_set_offers,timestamp with time zone)',
+    'hon.saas_hon_os_school_refusal(uuid,hon.saas_offer_set_offers,timestamp with time zone)',
     'hon.saas_price_content(uuid,uuid)','hon.saas_price_acceptance_preview(uuid,uuid,uuid)','hon.saas_generation_content(uuid,uuid)',
     'hon.saas_generation_available(uuid)','hon.saas_schedule_requirements(hon.saas_subscription_generations)',
     'hon.saas_schedule_period_matches(text,timestamp with time zone,timestamp with time zone)',

@@ -274,6 +274,7 @@ export const saasBillingFunctions = [
  ['hon.saas_hon_os_offer_usage(uuid,timestamp with time zone,uuid)',false,false],
  ['hon.saas_hon_os_founder_usage(timestamp with time zone,uuid)',false,false],
  ['hon.saas_hon_os_refusal(uuid,hon.saas_offer_set_offers,timestamp with time zone)',false,false],
+ ['hon.saas_hon_os_school_refusal(uuid,hon.saas_offer_set_offers,timestamp with time zone)',false,false],
  ['hon.saas_open_hon_os_checkout(uuid,uuid,uuid,uuid,timestamp with time zone)',false,false],
  ['hon.saas_hon_os_purchase_json(hon.saas_checkout_sessions)',false,false],
  ['hon.saas_activate_hon_os_checkout(uuid,jsonb,timestamp with time zone)',false,false],
