@@ -3240,7 +3240,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 ('hon.change_school_pay_autopay_method(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','4afe599e81c3c0b48c87b43120add1679411a9fd124bd5603cbf6db2c595d405'),
 ('hon.set_school_pay_autopay_state(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','1447c643e9c7ecfd1ea72004cb151d602f95fcffb9f55cf348d9712963d6ec79'),
 ('hon.cancel_school_pay_autopay(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','ce709fd3dbd90a679df06aca118a6d17645c1759eaaf72992091c5a06a6f97f3'),
-('hon.prepare_school_pay_autopay_cycle(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','2db4818b8b823a5d7d796203f08b22eb3b538b0cc3e5ee18f6b6d8fad778d7b1')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+('hon.prepare_school_pay_autopay_cycle(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','d8f3fe44fc1dae7855069a9f879b554afb877794e0a9035fe1e2ff7823eecdd2')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash

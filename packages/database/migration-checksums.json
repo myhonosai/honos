@@ -275,6 +275,6 @@
     "0306_hon_os_lifetime_purchase.sql": "e953952706c8f078f0e95dbaadffb357d4560e990422f7c1daac9e0405f0f491",
     "0321_school_payer_saved_methods.sql": "5de27cdfc04af16d057dc62da3d11fdc02e4106dbbcbcefcc6460edf8cc6c4fc",
     "0327_hq_school_health.sql": "444c4cb9c52e514aa3336280d20c7442a3878c12144800a9f719d59e6b2575e5",
-    "0322_school_pay_autopay_sibling_discounts.sql": "d5c214d8102a74416e5f5ebf74e93f22e987a6a6c622e98b1d51477dec848877"
+    "0322_school_pay_autopay_sibling_discounts.sql": "9bbb358a89cf566f1480ff55e0bdaed5d09356f314e22b7fbff4c947a5e576d0"
   }
 }

@@ -646,6 +646,10 @@ BEGIN
   SELECT count(*),coalesce(sum(d.amount_minor),0),coalesce(sum(d.discount_minor),0) INTO n,sub,disc FROM hon.school_pay_autopay_due(a.billing_account_id,day,tz,rule) d;
   IF n=0 THEN RAISE EXCEPTION 'SCHOOL_PAY_AUTOPAY_NOTHING_DUE' USING ERRCODE='40001'; END IF;
   IF n>50 THEN RAISE EXCEPTION 'SCHOOL_PAY_AUTOPAY_TOO_MANY_LINES' USING ERRCODE='22023'; END IF;
+  -- Review P3: an invoice cannot be ISSUED for zero (0155), so a line the discount makes free stops the whole cycle with a
+  -- clear refusal; staff lower the rule or take that membership off its schedule.
+  IF EXISTS(SELECT 1 FROM hon.school_pay_autopay_due(a.billing_account_id,day,tz,rule) d WHERE d.amount_minor-d.discount_minor<=0) THEN
+    RAISE EXCEPTION 'SCHOOL_PAY_AUTOPAY_ZERO_LINE' USING ERRCODE='22023'; END IF;
   INSERT INTO hon.school_pay_autopay_cycles(organization_id,school_id,billing_account_id,plan_id,method_id,cycle_date,currency,subtotal_minor,discount_minor,total_minor,
     discount_rule_version,line_count,created_by_principal_id)
     VALUES(org,school,a.billing_account_id,a.id,a.method_id,day,currency,sub,disc,sub-disc,

@@ -530,6 +530,13 @@ try {
     ok(section, begin);
     await sql(section.replace(/^[^\n]*\n[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
+  // Review P3: a discount that makes a line free refuses the cycle (an ISSUED invoice is never zero) and writes nothing.
+  ok((await success(() => setRule(OWN, { basedOnVersion: 2, kind: 'PERCENT', secondValue: 100, laterValue: 100 }), '100 percent rule')).data.rule.version === 3, 'rule version 3');
+  for (const x of [anaMonthly, benMonthly]) await sql('UPDATE hon.membership_payment_schedules SET next_charge_at=$2 WHERE id=$1', [x.scheduleId, await localNoon(2)]);
+  const cyclesBefore = (await sql('SELECT count(*)::int n FROM hon.school_pay_autopay_cycles WHERE billing_account_id=$1', [P1])).rows[0].n;
+  await refused(async () => prepare(OWN, again.planId, 1, await localDay(2)), 422, 'SCHOOL_PAY_AUTOPAY_ZERO_LINE', 'a free second student refuses the cycle');
+  ok((await sql('SELECT count(*)::int n FROM hon.school_pay_autopay_cycles WHERE billing_account_id=$1', [P1])).rows[0].n === cyclesBefore, 'no cycle or invoice was written');
+
   // 15. No money moved: no payment attempt; the only invoices are the autopay cycle invoices.
   ok((await sql('SELECT count(*)::int n FROM hon.payment_attempts WHERE organization_id=ANY($1::uuid[])', [[ids.organization, ids.otherOrganization]])).rows[0].n === 0, 'no payment attempt was created');
   ok((await sql('SELECT count(*)::int n FROM hon.invoices i WHERE organization_id=$1 AND NOT EXISTS(SELECT 1 FROM hon.school_pay_autopay_cycle_lines l WHERE l.invoice_id=i.id)', [ids.organization])).rows[0].n === 0, 'every invoice belongs to a cycle line');

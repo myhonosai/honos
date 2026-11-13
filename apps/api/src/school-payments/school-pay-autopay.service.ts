@@ -46,6 +46,7 @@ const ERRORS: Record<string, (code: string) => HttpException> = {
   SCHOOL_PAY_AUTOPAY_METHOD_UNUSABLE: code => new UnprocessableEntityException({ code, detail: 'This saved payment method cannot be used for autopay now.' }),
   SCHOOL_PAY_AUTOPAY_TOO_EARLY: code => new UnprocessableEntityException({ code, detail: 'A cycle can be prepared at most seven days ahead.' }),
   SCHOOL_PAY_AUTOPAY_TOO_MANY_LINES: code => new UnprocessableEntityException({ code, detail: 'This payer has too many charges due at once.' }),
+  SCHOOL_PAY_AUTOPAY_ZERO_LINE: code => new UnprocessableEntityException({ code, detail: 'The sibling discount makes a charge free. Lower the discount or take that membership off its schedule.' }),
   SCHOOL_PAY_SCHOOL_TIME_ZONE_INVALID: code => new UnprocessableEntityException({ code, detail: 'The school time zone is not set.' }),
   SCHOOL_PAY_AUTOPAY_EXISTS: code => new ConflictException({ code, detail: 'This payer already has autopay.' }),
   SCHOOL_PAY_AUTOPAY_STATE: code => new ConflictException({ code, detail: 'This autopay plan is not in a state that allows this.' }),
