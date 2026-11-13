@@ -52,6 +52,7 @@ it('maps refusals, keeps only unknown outcomes for retry, and reads the page hin
   expect(supportErrorFor(404, null).kind).toBe('GONE'); expect(supportErrorFor(409, 'SUPPORT_BUSY').kind).toBe('UNKNOWN'); expect(supportErrorFor(503, null).kind).toBe('UNKNOWN');
   expect(keepForRetry(new SupportError('UNKNOWN'))).toBe(true); expect(keepForRetry(new SupportError('LIMIT'))).toBe(false);
   expect(pageHintFrom('#/staff/welcome')).toBe('/staff/welcome'); expect(pageHintFrom('#https://evil.test')).toBeNull(); expect(pageHintFrom('#/family/x')).toBeNull(); expect(pageHintFrom('')).toBeNull();
+  expect(pageHintFrom('#/staffx/welcome')).toBeNull(); expect(pageHintFrom('#/staff')).toBe('/staff');
   expect(draftReady({ topic: 'IDEA', subject: 'New idea', message: 'x' })).toBe(true);
   expect(draftReady({ topic: null, subject: 'New idea', message: 'x' })).toBe(false); expect(draftReady({ topic: 'IDEA', subject: ' New', message: 'x' })).toBe(false);
 });
@@ -80,7 +81,7 @@ it('shows the ask form, the school\'s requests with status and own messages, and
 
 it('reports outcomes plainly, with Try again only for an unknown outcome', () => {
   expect(renderToStaticMarkup(<SupportView {...base({ outcome: { kind: 'DONE', action: 'submit' } })} />)).toContain('HON support has your question');
-  expect(renderToStaticMarkup(<SupportView {...base({ outcome: { kind: 'LIMIT', action: 'submit' } })} />)).toContain('today&#x27;s limit');
+  expect(renderToStaticMarkup(<SupportView {...base({ outcome: { kind: 'LIMIT', action: 'submit' } })} />)).toContain('sending limit was reached');
   expect(renderToStaticMarkup(<SupportView {...base({ outcome: { kind: 'UNKNOWN', action: 'message' }, canRetry: true, locked: true })} />)).toContain('Try again');
 });
 

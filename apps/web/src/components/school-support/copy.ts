@@ -15,9 +15,9 @@ const en = {
   reply: 'Write back', replyLabel: 'Add a message', sendReply: 'Send message', cancel: 'Cancel',
   done_submit: 'Sent. HON support has your question.', done_message: 'Your message was added.',
   e_DENIED: 'You are not allowed to do this at this school. Nothing was sent.', e_GONE: 'This request is not available at this school. Nothing was sent.',
-  e_CLOSED: 'This request is closed. Nothing was sent; ask a new question instead.', e_LIMIT: 'Your school reached today\'s limit. Nothing was sent. Try again tomorrow, or email HON.',
+  e_CLOSED: 'This request is closed. Nothing was sent; ask a new question instead.', e_LIMIT: 'The sending limit was reached. Nothing was sent. Try again later, or email HON.',
   e_INVALID: 'This was not accepted. Check the topic, subject and message. Nothing was sent.',
-  e_UNKNOWN: 'We could not confirm whether this was sent. Try again sends exactly the same request, and it cannot arrive twice.',
+  e_UNKNOWN: 'We could not confirm whether this was sent. While this page stays open, Try again sends exactly the same request, so it cannot arrive twice.',
   e_SESSION: 'Your session ended. Sign in again.', tryAgain: 'Try again', textProblem: 'Remove spaces at the start or end, and hidden characters.',
 };
 export type SupportKey = keyof typeof en;
@@ -37,9 +37,9 @@ const ko: Record<SupportKey, string> = {
   reply: '답장하기', replyLabel: '메시지 추가', sendReply: '메시지 보내기', cancel: '취소',
   done_submit: '보냈습니다. HON 지원팀이 질문을 받았습니다.', done_message: '메시지를 추가했습니다.',
   e_DENIED: '이 도장에서 이 작업을 할 권한이 없습니다. 보내지 않았습니다.', e_GONE: '이 도장에서 볼 수 없는 요청입니다. 보내지 않았습니다.',
-  e_CLOSED: '종료된 요청입니다. 보내지 않았습니다. 새 질문을 보내세요.', e_LIMIT: '도장의 오늘 한도에 도달했습니다. 보내지 않았습니다. 내일 다시 시도하거나 HON에 이메일을 보내세요.',
+  e_CLOSED: '종료된 요청입니다. 보내지 않았습니다. 새 질문을 보내세요.', e_LIMIT: '보내기 한도에 도달했습니다. 보내지 않았습니다. 나중에 다시 시도하거나 HON에 이메일을 보내세요.',
   e_INVALID: '받아들여지지 않았습니다. 주제, 제목, 메시지를 확인하세요. 보내지 않았습니다.',
-  e_UNKNOWN: '보냈는지 확인하지 못했습니다. 다시 시도하면 똑같은 요청을 보내며, 두 번 도착하지 않습니다.',
+  e_UNKNOWN: '보냈는지 확인하지 못했습니다. 이 페이지가 열려 있는 동안 다시 시도하면 똑같은 요청을 보내므로 두 번 도착하지 않습니다.',
   e_SESSION: '세션이 끝났습니다. 다시 로그인하세요.', tryAgain: '다시 시도', textProblem: '앞뒤 공백과 숨은 문자를 지우세요.',
 };
 const es: Record<SupportKey, string> = {
@@ -58,9 +58,9 @@ const es: Record<SupportKey, string> = {
   reply: 'Responder', replyLabel: 'Añadir un mensaje', sendReply: 'Enviar mensaje', cancel: 'Cancelar',
   done_submit: 'Enviada. El soporte de HON tiene su pregunta.', done_message: 'Se añadió su mensaje.',
   e_DENIED: 'No tiene permiso para hacer esto en esta escuela. No se envió nada.', e_GONE: 'Esta solicitud no está disponible en esta escuela. No se envió nada.',
-  e_CLOSED: 'Esta solicitud está cerrada. No se envió nada; haga una nueva pregunta.', e_LIMIT: 'Su escuela alcanzó el límite de hoy. No se envió nada. Inténtelo mañana o escriba a HON.',
+  e_CLOSED: 'Esta solicitud está cerrada. No se envió nada; haga una nueva pregunta.', e_LIMIT: 'Se alcanzó el límite de envíos. No se envió nada. Inténtelo más tarde o escriba a HON.',
   e_INVALID: 'No se aceptó. Revise el tema, el asunto y el mensaje. No se envió nada.',
-  e_UNKNOWN: 'No pudimos confirmar si se envió. Reintentar envía exactamente la misma solicitud y no puede llegar dos veces.',
+  e_UNKNOWN: 'No pudimos confirmar si se envió. Mientras esta página siga abierta, Reintentar envía exactamente la misma solicitud, así que no puede llegar dos veces.',
   e_SESSION: 'Su sesión terminó. Inicie sesión de nuevo.', tryAgain: 'Reintentar', textProblem: 'Quite los espacios al principio o al final y los caracteres ocultos.',
 };
 export const SUPPORT_LANGUAGES = { en, ko, es } as const;

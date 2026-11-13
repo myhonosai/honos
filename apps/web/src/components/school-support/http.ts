@@ -98,5 +98,5 @@ const PAGE_HINT = /^\/[a-z0-9/_-]{0,119}$/;
 /** The page someone asked from, carried in the link's fragment (never sent anywhere but in the request body). */
 export function pageHintFrom(hash: string): string | null {
   const v = hash.startsWith('#') ? hash.slice(1) : hash;
-  return PAGE_HINT.test(v) && v.startsWith('/staff') ? v : null;
+  return PAGE_HINT.test(v) && (v === '/staff' || v.startsWith('/staff/')) ? v : null;
 }
