@@ -243,6 +243,8 @@ const SAAS_BILLING_CALLS = {
   // B-HQ-2b (0327): read-only HQ school health counts and the schools-needing-attention list.
   readHqSchoolHealth: { sql: 'SELECT hon.read_hq_school_health($1,$2::uuid) AS data', arity: 2, readOnly: true },
   readHqSchoolsNeedingAttention: { sql: 'SELECT hon.read_hq_schools_needing_attention($1,$2::integer) AS data', arity: 2, readOnly: true },
+  // B-HQ-3 (0326): read-only HQ business numbers (list-price MRR, paying schools, sign-ups and trials per UTC month).
+  readHqBusinessNumbers: { sql: 'SELECT hon.read_hq_business_numbers($1,$2::integer) AS data', arity: 2, readOnly: true },
   // B-HQ-2 (0232): HQ support records. Reads are read-only; the three commands write only support rows.
   readSupportCases: { sql: 'SELECT hon.read_hq_support_cases($1,$2,$3::uuid,$4::timestamptz,$5::uuid,$6::integer) AS data', arity: 6, readOnly: true },
   readSupportCase: { sql: 'SELECT hon.read_hq_support_case($1,$2::uuid) AS data', arity: 2, readOnly: true },

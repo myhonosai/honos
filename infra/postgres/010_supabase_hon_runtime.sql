@@ -3336,6 +3336,16 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_hq_schools_needing_attention(text,integer) TO hon_runtime;
   END IF;
 END $$;
+-- B-HQ-3 0326 HQ business numbers: one read entry point; the price helper stays internal.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.read_hq_business_numbers(text,integer)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0326 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hq_business_monthly_minor(jsonb)','read_hq_business_numbers(text,integer)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.read_hq_business_numbers(text,integer) TO hon_runtime;
+END $$;
 
 -- R1 0331 school reports: one read-only runtime entry point; the actor check and the period builder are private. The
 -- runtime gains no table privilege.
