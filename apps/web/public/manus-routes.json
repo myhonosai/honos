@@ -85,6 +85,10 @@
       "title": "HON | Planned absence history"
     },
     {
+      "path": "/parent/classes",
+      "title": "HON | Book a class"
+    },
+    {
       "path": "/parent/messages",
       "title": "HON | School message history"
     },
@@ -119,6 +123,10 @@
     {
       "path": "/staff/welcome",
       "title": "HON | Welcome and setup"
+    },
+    {
+      "path": "/staff/help",
+      "title": "HON | Ask for help"
     },
     {
       "path": "/staff/planning/revenue",
