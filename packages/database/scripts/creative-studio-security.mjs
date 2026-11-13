@@ -6,7 +6,11 @@
 // SECURITY DEFINER deferred guard that refuses an avatar.* generation without its avatar at commit.
 // A2 (0277) adds creative_avatar_videos (one avatar.video generation each, three runtime entry points) and replaces that
 // guard's body so each avatar.* operation needs its own record and any other avatar.* operation is refused.
-export const creativeStudioTables = ['creative_generations', 'creative_generation_assets', 'creative_avatars', 'creative_avatar_videos'];
+// A3 (0305) adds own-photo avatars: a permanent consent record, the deletable photo bytes, withdrawals and avatar links,
+// five runtime entry points, and replaces the school reads and the avatar-video create so a withdrawn likeness is hidden
+// and never used again.
+export const creativeStudioTables = ['creative_generations', 'creative_generation_assets', 'creative_avatars', 'creative_avatar_videos',
+  'creative_avatar_photo_consents', 'creative_avatar_photos', 'creative_avatar_photo_withdrawals', 'creative_avatar_photo_links'];
 // [signature, runtime may execute, SECURITY DEFINER]
 export const creativeStudioFunctions = [
   ['hon.creative_prompt_ok(text)', false, false],
@@ -29,6 +33,22 @@ export const creativeStudioFunctions = [
   ['hon.create_creative_avatar_video(text,uuid,jsonb,jsonb,uuid,uuid,uuid)', true, true],
   ['hon.read_creative_avatar_videos(text,uuid)', true, true],
   ['hon.read_creative_avatar_video(text,uuid,uuid)', true, true],
+  ['hon.creative_photo_signature_ok(text)', false, false],
+  ['hon.creative_photo_bytes_ok(text,bytea)', false, false],
+  ['hon.guard_creative_avatar_photo()', false, false],
+  ['hon.creative_photo_principal(text)', false, true],
+  ['hon.creative_photo_subject_live(uuid,uuid,uuid)', false, true],
+  ['hon.creative_photo_consent_live(uuid)', false, true],
+  ['hon.creative_avatar_withdrawn(uuid)', false, true],
+  ['hon.creative_generation_withdrawn(uuid)', false, true],
+  ['hon.creative_photo_consent_json(hon.creative_avatar_photo_consents,uuid)', false, true],
+  ['hon.creative_photo_fingerprint(uuid,jsonb,text)', false, false],
+  ['hon.upload_creative_avatar_photo(text,uuid,jsonb,text,uuid)', true, true],
+  ['hon.read_creative_avatar_photos(text,uuid)', true, true],
+  ['hon.read_creative_avatar_photo_image(text,uuid,uuid)', true, true],
+  ['hon.delete_creative_avatar_photo(text,uuid,uuid)', true, true],
+  ['hon.creative_photo_avatar_fingerprint(uuid,jsonb)', false, false],
+  ['hon.create_creative_photo_avatar(text,uuid,jsonb,jsonb,uuid,uuid,uuid)', true, true],
 ];
 const triggers = [
   ['creative_generations', 'creative_generation_guarded', 27, 'guard_creative_generation'],
@@ -40,6 +60,14 @@ const triggers = [
   ['creative_avatars', 'creative_avatar_no_truncate', 34, 'guard_saas_evidence'],
   ['creative_avatar_videos', 'creative_avatar_video_immutable', 27, 'guard_saas_evidence'],
   ['creative_avatar_videos', 'creative_avatar_video_no_truncate', 34, 'guard_saas_evidence'],
+  ['creative_avatar_photo_consents', 'creative_avatar_photo_consent_immutable', 27, 'guard_saas_evidence'],
+  ['creative_avatar_photo_consents', 'creative_avatar_photo_consent_no_truncate', 34, 'guard_saas_evidence'],
+  ['creative_avatar_photos', 'creative_avatar_photo_no_update', 19, 'guard_creative_avatar_photo'],
+  ['creative_avatar_photos', 'creative_avatar_photo_no_truncate', 34, 'guard_creative_avatar_photo'],
+  ['creative_avatar_photo_withdrawals', 'creative_avatar_photo_withdrawal_immutable', 27, 'guard_saas_evidence'],
+  ['creative_avatar_photo_withdrawals', 'creative_avatar_photo_withdrawal_no_truncate', 34, 'guard_saas_evidence'],
+  ['creative_avatar_photo_links', 'creative_avatar_photo_link_immutable', 27, 'guard_saas_evidence'],
+  ['creative_avatar_photo_links', 'creative_avatar_photo_link_no_truncate', 34, 'guard_saas_evidence'],
 ];
 export async function verifyCreativeStudioSecurity(client, runtime) {
   if (!/^hon_[a-z_]+$/.test(runtime)) throw new Error('Unsafe Creative Studio runtime role.');
@@ -60,7 +88,7 @@ export async function verifyCreativeStudioSecurity(client, runtime) {
   const deferred = (await client.query(`SELECT tgdeferrable AND tginitdeferred AND tgconstraint<>0 ok FROM pg_trigger
     WHERE tgrelid='hon.creative_generations'::regclass AND tgname='creative_generation_avatar_required'`)).rows[0];
   if (deferred?.ok !== true) throw new Error('Unsafe Creative Studio avatar guard: not a deferred constraint trigger');
-  const total = (await client.query("SELECT count(*)::int n FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname ~ '(^|_)creative_(prompt|generation|avatar)|creative_generations?$|_creative_generation' AND proname !~ '(^|_)hq_creative_'")).rows[0].n;
+  const total = (await client.query("SELECT count(*)::int n FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname ~ '(^|_)creative_(prompt|generation|avatar|photo)|creative_generations?$|_creative_generation' AND proname !~ '(^|_)hq_creative_'")).rows[0].n;
   if (total !== creativeStudioFunctions.length) throw new Error(`Untracked Creative Studio functions: ${total}`);
   for (const [signature, execute, definer] of creativeStudioFunctions) {
     const r = (await client.query(`SELECT p.prosecdef=$3 AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>$2

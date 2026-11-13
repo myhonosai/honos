@@ -2213,6 +2213,34 @@ DO $$ DECLARE r text; c text; f text; BEGIN
   END IF;
 END $$;
 
+-- A3 0305 Creative Studio photo avatars (adult staff, own photo, signed likeness consent, real erasure): four private
+-- deny-all tables, private helpers, five fixed runtime entry points.
+DO $$ DECLARE t text; r text; c text; f text; BEGIN
+  IF to_regprocedure('hon.upload_creative_avatar_photo(text,uuid,jsonb,text,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply A3 migration 0305 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['creative_avatar_photo_consents','creative_avatar_photos','creative_avatar_photo_withdrawals','creative_avatar_photo_links'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t); EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r); END LOOP;
+    FOR c IN SELECT attname FROM pg_attribute WHERE attrelid=format('hon.%I',t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',c,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',c,t,r); END LOOP;
+    END LOOP;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace
+      AND p.proname IN ('creative_photo_signature_ok','creative_photo_bytes_ok','guard_creative_avatar_photo','creative_photo_principal',
+        'creative_photo_subject_live','creative_photo_consent_live','creative_avatar_withdrawn','creative_generation_withdrawn',
+        'creative_photo_consent_json','creative_photo_fingerprint','upload_creative_avatar_photo','read_creative_avatar_photos',
+        'read_creative_avatar_photo_image','delete_creative_avatar_photo','creative_photo_avatar_fingerprint','create_creative_photo_avatar') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.upload_creative_avatar_photo(text,uuid,jsonb,text,uuid), hon.read_creative_avatar_photos(text,uuid),
+      hon.read_creative_avatar_photo_image(text,uuid,uuid), hon.delete_creative_avatar_photo(text,uuid,uuid),
+      hon.create_creative_photo_avatar(text,uuid,jsonb,jsonb,uuid,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
 -- 0204 (provisional) school staff invitations: private custody tables, internal helpers, three fixed runtime entry points.
 DO $$ DECLARE t text; r text; f text; c text; BEGIN
   FOREACH t IN ARRAY ARRAY['school_staff_invitations','school_staff_account_events'] LOOP

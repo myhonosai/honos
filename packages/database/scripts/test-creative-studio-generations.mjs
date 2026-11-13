@@ -30,7 +30,7 @@ const ownerPool=new pg.Pool({...targets.owner,max:8});
 const creativeTables=['creative_generation_assets','creative_generations','saas_creative_ledger','saas_creative_reservations','saas_creative_lots','saas_creative_adjustments','saas_creative_topup_purchases',
  'saas_creative_wallets','saas_creative_rates','saas_creative_rate_versions'];
 // creative_avatars (0276) and creative_avatar_videos (0277) reference generations: delete them first when present.
-const optionalCreativeTables=['saas_creative_cost_events','creative_avatars','creative_avatar_videos'];
+const optionalCreativeTables=['saas_creative_cost_events','creative_avatars','creative_avatar_videos','creative_avatar_photo_consents','creative_avatar_photo_withdrawals','creative_avatar_photos','creative_avatar_photo_links'];
 const saasTables=['saas_access_transitions','saas_access_states','saas_provider_payment_refs','saas_provider_events','saas_checkout_sessions',
  'saas_referral_payment_alerts','saas_free_periods','saas_account_credit_ledger','saas_reward_applications','saas_refund_history','saas_refund_requests',
  'saas_credit_threshold_events','saas_credit_ledger','saas_credit_reservations','saas_credit_allowances','saas_operation_prices','saas_pricing_versions',

@@ -1,4 +1,4 @@
-import type { CreativeAvatar, CreativeAvatarVideo, CreativeGeneration, CreativeStudioProviderState, SaasCreativeSchoolWallet } from '@hon/contracts';
+import type { CreativeAvatar, CreativeAvatarVideo, CreativePhotoConsent, CreativeGeneration, CreativeStudioProviderState, SaasCreativeSchoolWallet } from '@hon/contracts';
 
 /**
  * What Creative Studio shows from the school's own creative wallet read. School views carry no provider
@@ -53,3 +53,10 @@ export type AvatarsState =
 export type VideosState =
   | Readonly<{ state: 'LOADING' }> | Readonly<{ state: 'DENIED' }> | Readonly<{ state: 'UNAVAILABLE' }>
   | Readonly<{ state: 'READY'; items: readonly CreativeAvatarVideo[] }>;
+/** A3 (0305): the signed-in person's own consented photos; a live school owner also sees every staff consent (never the image). */
+export type PhotosState =
+  | Readonly<{ state: 'LOADING' }> | Readonly<{ state: 'DENIED' }> | Readonly<{ state: 'UNAVAILABLE' }>
+  | Readonly<{ state: 'READY'; items: readonly CreativePhotoConsent[]; canManageAll: boolean }>;
+/** What this tab's last photo save or delete is known to have done. Deleting is safe to repeat; a save keeps its key until known. */
+export type PhotoOutcome =
+  | null | Readonly<{ kind: 'SAVING' | 'SAVED' | 'SAVE_UNKNOWN' | 'SAVE_INVALID' | 'DELETING' | 'DELETED' | 'DELETE_UNKNOWN' | 'DENIED' }>;

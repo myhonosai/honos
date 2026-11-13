@@ -140,3 +140,101 @@ export function validateCreativeAvatarVideoReceipt(value: unknown): CreativeAvat
   validateCreativeAvatarVideo(r.video); validateSaasCreativeBalance(r.balance);
   return r as unknown as CreativeAvatarVideoReceipt;
 }
+
+// ---------- A3 photo avatars (migration 0305) ----------
+// An adult staff member may make an avatar from THEIR OWN photo (owner decision 2026-11-12), after signing the likeness
+// consent below. The photo never leaves HON while no real provider is connected; the person can delete it at any time
+// (a live school owner can too), which erases the image and withdraws the avatar and its videos. Students, children and
+// anybody else are never allowed: the database ties the photo, the consent and the photo avatar to the signed-in person.
+export const CREATIVE_PHOTO_CONSENT_VERSION = 'HON-LIKENESS-2026-11-12';
+export const CREATIVE_PHOTO_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export type CreativePhotoContentType = typeof CREATIVE_PHOTO_CONTENT_TYPES[number];
+export const CREATIVE_PHOTO_STATUSES = ['ACTIVE', 'WITHDRAWN', 'INACTIVE'] as const;
+export type CreativePhotoStatus = typeof CREATIVE_PHOTO_STATUSES[number];
+export const CREATIVE_PHOTO_WITHDRAWN_REASONS = ['DELETED_BY_SUBJECT', 'DELETED_BY_OWNER', 'REPLACED'] as const;
+export type CreativePhotoWithdrawnReason = typeof CREATIVE_PHOTO_WITHDRAWN_REASONS[number];
+/** The fixed look description of every photo avatar (0305 sets it; the photo itself is never described in words). */
+export const CREATIVE_PHOTO_AVATAR_DESCRIPTION = 'An avatar of the staff member, made from their own consented photo.';
+/** Limits shared by the database (0305), the API and the web form. */
+export const CREATIVE_PHOTO_LIMITS = { minBytes: 64, maxBytes: 1_048_576, signatureMin: 2, signatureMax: 80, listLimit: 50 } as const;
+
+/** What the person signs: three attestations and their typed name, for one photo of themselves. */
+export interface CreativePhotoUploadInput {
+  consentVersion: typeof CREATIVE_PHOTO_CONSENT_VERSION; ownLikeness: true; adult: true; marketingUse: true;
+  signatureName: string; contentType: CreativePhotoContentType;
+  /** Base64 image bytes (no data: prefix). */
+  photo: string;
+}
+export interface CreativePhotoConsent {
+  consentId: string; schoolId: string; mine: boolean; signatureName: string; consentVersion: string; contentType: CreativePhotoContentType;
+  byteSize: number; status: CreativePhotoStatus; withdrawnReason: CreativePhotoWithdrawnReason | null; withdrawnAt: string | null;
+  avatarIds: string[]; createdAt: string;
+}
+export interface CreativePhotoRecords { photos: CreativePhotoConsent[]; canManageAll: boolean; limit: 50 }
+export interface CreativePhotoReceipt { photo: CreativePhotoConsent; replayed: boolean }
+export interface CreativePhotoDeleted { photo: CreativePhotoConsent }
+export interface CreativePhotoImage { consentId: string; contentType: CreativePhotoContentType; photo: string }
+export interface CreativePhotoAvatarInput { consentId: string; name: string; style: CreativeAvatarStyle }
+
+export function isCreativePhotoSignature(value: unknown): value is string {
+  return typeof value === 'string' && value.length >= CREATIVE_PHOTO_LIMITS.signatureMin && value.length <= CREATIVE_PHOTO_LIMITS.signatureMax
+    && value.trim() === value && !NAME_UNSAFE.test(value);
+}
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+/** Decoded size of a canonical base64 string, or -1. */
+export function creativePhotoBase64Bytes(value: unknown): number {
+  if (typeof value !== 'string' || value.length === 0 || value.length % 4 !== 0 || !BASE64.test(value)) return -1;
+  return value.length / 4 * 3 - (value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0);
+}
+
+export function validateCreativePhotoUploadInput(value: unknown): CreativePhotoUploadInput {
+  const input = record(value, invalid);
+  exactKeys(input, ['consentVersion', 'ownLikeness', 'adult', 'marketingUse', 'signatureName', 'contentType', 'photo'], invalid);
+  const size = creativePhotoBase64Bytes(input.photo);
+  if (input.consentVersion !== CREATIVE_PHOTO_CONSENT_VERSION || input.ownLikeness !== true || input.adult !== true || input.marketingUse !== true
+    || !isCreativePhotoSignature(input.signatureName) || !has(CREATIVE_PHOTO_CONTENT_TYPES, input.contentType)
+    || size < CREATIVE_PHOTO_LIMITS.minBytes || size > CREATIVE_PHOTO_LIMITS.maxBytes) invalid();
+  return { consentVersion: CREATIVE_PHOTO_CONSENT_VERSION, ownLikeness: true, adult: true, marketingUse: true, signatureName: input.signatureName as string,
+    contentType: input.contentType as CreativePhotoContentType, photo: input.photo as string };
+}
+
+export function validateCreativePhotoConsent(value: unknown): CreativePhotoConsent {
+  const c = record(value, drift);
+  exactKeys(c, ['consentId', 'schoolId', 'mine', 'signatureName', 'consentVersion', 'contentType', 'byteSize', 'status', 'withdrawnReason', 'withdrawnAt', 'avatarIds', 'createdAt'], drift);
+  if (!isUuid(c.consentId) || !isUuid(c.schoolId) || typeof c.mine !== 'boolean' || !isCreativePhotoSignature(c.signatureName)
+    || c.consentVersion !== CREATIVE_PHOTO_CONSENT_VERSION || !has(CREATIVE_PHOTO_CONTENT_TYPES, c.contentType)
+    || !Number.isInteger(c.byteSize) || (c.byteSize as number) < CREATIVE_PHOTO_LIMITS.minBytes || (c.byteSize as number) > CREATIVE_PHOTO_LIMITS.maxBytes
+    || !has(CREATIVE_PHOTO_STATUSES, c.status) || !isTimestamp(c.createdAt) || !Array.isArray(c.avatarIds) || !(c.avatarIds as unknown[]).every(isUuid)) drift();
+  const withdrawn = c.withdrawnReason !== null;
+  if (withdrawn ? !has(CREATIVE_PHOTO_WITHDRAWN_REASONS, c.withdrawnReason) || !isTimestamp(c.withdrawnAt) || c.status !== 'WITHDRAWN' : c.withdrawnAt !== null) drift();
+  return c as unknown as CreativePhotoConsent;
+}
+export function validateCreativePhotoRecords(value: unknown): CreativePhotoRecords {
+  const r = record(value, drift); exactKeys(r, ['photos', 'canManageAll', 'limit'], drift);
+  if (r.limit !== CREATIVE_PHOTO_LIMITS.listLimit || typeof r.canManageAll !== 'boolean' || !Array.isArray(r.photos) || r.photos.length > CREATIVE_PHOTO_LIMITS.listLimit) drift();
+  const list = (r.photos as unknown[]).map(validateCreativePhotoConsent);
+  if (new Set(list.map(p => p.consentId)).size !== list.length || new Set(list.map(p => p.schoolId)).size > 1) drift();
+  if (!r.canManageAll && list.some(p => !p.mine)) drift();
+  return r as unknown as CreativePhotoRecords;
+}
+export function validateCreativePhotoReceipt(value: unknown): CreativePhotoReceipt {
+  const r = record(value, drift); exactKeys(r, ['photo', 'replayed'], drift);
+  if (typeof r.replayed !== 'boolean' || validateCreativePhotoConsent(r.photo).mine !== true) drift();
+  return r as unknown as CreativePhotoReceipt;
+}
+export function validateCreativePhotoDeleted(value: unknown): CreativePhotoDeleted {
+  const r = record(value, drift); exactKeys(r, ['photo'], drift);
+  if (validateCreativePhotoConsent(r.photo).status !== 'WITHDRAWN') drift();
+  return r as unknown as CreativePhotoDeleted;
+}
+export function validateCreativePhotoImage(value: unknown): CreativePhotoImage {
+  const r = record(value, drift); exactKeys(r, ['consentId', 'contentType', 'photo'], drift);
+  const size = creativePhotoBase64Bytes(r.photo);
+  if (!isUuid(r.consentId) || !has(CREATIVE_PHOTO_CONTENT_TYPES, r.contentType) || size < CREATIVE_PHOTO_LIMITS.minBytes || size > CREATIVE_PHOTO_LIMITS.maxBytes) drift();
+  return r as unknown as CreativePhotoImage;
+}
+export function validateCreativePhotoAvatarInput(value: unknown): CreativePhotoAvatarInput {
+  const input = record(value, invalid); exactKeys(input, ['consentId', 'name', 'style'], invalid);
+  if (!isUuid(input.consentId) || !isCreativeAvatarName(input.name) || !has(CREATIVE_AVATAR_STYLES, input.style)) invalid();
+  return { consentId: input.consentId as string, name: input.name as string, style: input.style as CreativeAvatarStyle };
+}

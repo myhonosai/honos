@@ -1,4 +1,4 @@
-# Creative Studio avatars (migrations 0276, 0277)
+# Creative Studio avatars (migrations 0276, 0277, 0305)
 
 Owner request (David, 2026-11-12): Creative Studio needs an avatar option, and a trial school should be able to try
 making one inside its trial creative budget. This builds it on the CS1 generation pipeline (0216) and the per-school
@@ -11,8 +11,9 @@ instructor in a black dobok") that the school can reuse in marketing. Slice A1 c
 the avatar present a short video by speaking a script (the "talking avatar" planned for HeyGen-class providers in the
 AI model plan).
 
-Out of scope (owner decision needed later): an avatar made **from a photo of a real person** (needs reviewed media
-upload storage and recorded likeness consent), voices or voice cloning, editing an avatar after creation.
+Owner decision (David, 2026-11-12 23:16Z): an avatar may be made **from a photo** only by an **adult staff member using
+their own photo**, with signed likeness consent and a delete option; never students, children or other people (slice
+A3). Still out of scope: voices or voice cloning, editing an avatar after creation.
 
 ## Slices
 
@@ -20,6 +21,7 @@ upload storage and recorded likeness consent), voices or voice cloning, editing 
 |---|---|---|
 | A1 Create an avatar | 0276 | `hon.creative_avatars`, create/list/read, API `/creative-studio/avatars`, Avatars card in Creative Studio |
 | A2 Avatar video | 0277 | a generation that names a READY avatar and a script, operation `avatar.video` |
+| A3 Photo avatar | 0305 | an adult staff member's own photo + signed likeness consent → an ordinary A1 avatar; delete at any time |
 
 ## A1 contract
 
@@ -98,3 +100,48 @@ retry. EN/KO/ES.
 **Tests**: contracts and API unit tests (`creative-studio-avatar-videos.test.cjs`), DB proof
 `test-creative-studio-avatar-videos.mjs` VD1–VD11b, web tests (`creative-studio-avatar-videos.test.tsx`) and the local
 mounted browser check (desktop and phone, axe).
+
+## A3 contract (0305): photo avatars
+
+**Who**: only the signed-in person, about themselves. The uploader, the consent signer and the person in the photo are
+the same principal; there is no "subject" field to fill in. `require_saas_school_actor` refuses parent, guardian,
+student and family roles and family grants, so only school staff get this far. The person attests three things
+(it is a photo of me and nobody else; I am an adult on this school's staff; the school may use an AI avatar of my
+likeness in marketing until I delete it) and types their name (2..80 characters). Consent version `HON-LIKENESS-2026-11-12`.
+
+**Photo**: JPEG, PNG or WebP, 64 B..1 MiB, magic bytes checked in the database. Before storing, the API removes embedded
+metadata without re-encoding (`apps/api/src/creative-studio/photo-metadata.ts`): JPEG APPn segments other than JFIF,
+ICC profile and Adobe, and comments; PNG `eXIf`, `tEXt`, `zTXt`, `iTXt`, `tIME`; WebP `EXIF`/`XMP ` chunks and their
+VP8X flags. A file that does not parse cleanly is refused, never stored as-is. While no provider is connected the
+photo never leaves HON; the synthetic provider receives only the avatar's name, style and a fixed description.
+
+**Database** (`0305_creative_studio_photo_avatars.sql`), all forced RLS and deny-all, runtime may only execute the five
+entry points:
+- `creative_avatar_photo_consents` (immutable signed consent + SHA-256 of the stored bytes), `creative_avatar_photos`
+  (the bytes; one per person per school; UPDATE and TRUNCATE refused, DELETE allowed so it can be erased),
+  `creative_avatar_photo_withdrawals` (immutable: DELETED_BY_SUBJECT, DELETED_BY_OWNER or REPLACED) and
+  `creative_avatar_photo_links` (immutable avatar → consent, with the request's own idempotency).
+- A likeness is **live** while its bytes exist, it is not withdrawn and the person is still eligible staff with no family
+  role. Saving a new photo replaces (withdraws) the old one.
+- `create_creative_photo_avatar` calls the unchanged A1 `create_creative_avatar` (same `avatar.create` rate, wallet and
+  rules, 12-avatar cap) with a fixed description, links it, and re-checks the likeness is live after the writes.
+- Delete is always available to the person in the photo, and to a live (non-HQ) school owner, who never sees the image.
+  It erases the bytes and records the withdrawal. Delete and photo-avatar/video creation serialize on an advisory lock
+  plus the consent row (FOR UPDATE vs FOR SHARE), so a video cannot start on a likeness being deleted.
+- Withdrawn photo avatars, their videos and their generations disappear from every school read; `avatar.video` on a
+  withdrawn photo avatar is refused (`CREATIVE_AVATAR_WITHDRAWN`).
+
+**API**: `/v1/schools/:schoolId/creative-studio/avatar-photos`: `GET` (own photos; owners also see every staff consent,
+never bytes), `GET :consentId/image` (subject only), `POST` upload (`saas-creative-avatar-photo-upload`, Idempotency-Key),
+`POST avatars` (`saas-creative-photo-avatar-create`, Idempotency-Key, body `{consentId, name, style}`),
+`POST :consentId/delete` (`saas-creative-avatar-photo-delete`, empty body; repeating it is harmless).
+
+**Web**: a "Use my photo" card after the Avatars card. Saving and making are offered only when avatars are open to the
+school; deleting is always offered, behind a two-step confirmation (no browser dialogs). The upload keeps its photo and
+key in memory only until the outcome is known ("Check again" resends the identical request). The person's own photo is
+shown only to them, inside the shell's private area, and is dropped on blur, school change or session end. EN/KO/ES.
+
+**Tests**: DB proof `test-creative-studio-photo-avatars.mjs` PH1–PH11b (own-only, staff-only, metadata stripped, erasure,
+owner delete, replace, leaving staff withdraws, delete/video race, posture), API tests
+(`creative-studio-photo-avatars.test.cjs`), web tests (`creative-studio-avatar-photos.test.tsx`) and the local mounted
+browser check (desktop and phone, axe).

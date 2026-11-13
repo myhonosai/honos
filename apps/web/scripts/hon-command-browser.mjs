@@ -240,6 +240,11 @@ const creativeAvatar = (body, n) => {
 };
 // A2 (0277) avatar videos: each video carries its avatar.video generation (per second). replies: 'ok', 'unknown', 'notReady'.
 const videosFake = { items: [], posts: [], replies: [], byKey: new Map() };
+// A3 (0305) photo avatars: the signed-in person's own consented photo (synthetic bytes), plus one other staff consent the owner can delete.
+const photosFake = { items: [], images: new Map(), posts: [], replies: [], byKey: new Map(), canManageAll: true };
+const PHOTO_DESCRIPTION = 'An avatar of the staff member, made from their own consented photo.';
+const photoConsent = (n, extra = {}) => ({ consentId: id(880 + n), schoolId: scope.schoolId, mine: true, signatureName: 'Dana Kim', consentVersion: 'HON-LIKENESS-2026-11-12',
+  contentType: 'image/jpeg', byteSize: 512, status: 'ACTIVE', withdrawnReason: null, withdrawnAt: null, avatarIds: [], createdAt: iso(n), ...extra });
 const creativeVideo = (body, n) => {
   const createdAt = iso(n), generation = { generationId: id(800 + n), schoolId: scope.schoolId, operationCode: 'avatar.video', mediaKind: 'VIDEO', units: body.seconds, format: body.format,
     prompt: body.script, status: 'SUCCEEDED', failureReason: null, reservedCredits: 50 * body.seconds, chargedCredits: 50 * body.seconds, createdAt, completedAt: createdAt,
@@ -335,6 +340,48 @@ async function api(route) {
     const v = creativeVideo(body, videosFake.items.length + 1);
     videosFake.items = [v, ...videosFake.items]; videosFake.byKey.set(idem, v);
     return json(route, 200, { data: { video: v, balance: creativeWallet().balance, replayed: false } });
+  }
+  const photoBase = `/api/v1/schools/${scope.schoolId}/creative-studio/avatar-photos`;
+  if (path === photoBase || path.startsWith(`${photoBase}/`)) {
+    const request = route.request(), idem = request.headers()['idempotency-key'];
+    if (method === 'GET' && path === photoBase) return json(route, 200, { data: { photos: photosFake.items, canManageAll: photosFake.canManageAll, limit: 50 } });
+    const image = /\/([0-9a-f-]{36})\/image$/.exec(path);
+    if (method === 'GET' && image) {
+      const found = photosFake.items.find((p) => p.consentId === image[1] && p.mine && p.status === 'ACTIVE');
+      return found ? json(route, 200, { data: { consentId: found.consentId, contentType: found.contentType, photo: photosFake.images.get(found.consentId) } }) : json(route, 404, { code: 'SAAS_UNAVAILABLE' });
+    }
+    photosFake.posts.push({ path, key: idem, command: request.headers()['x-hon-human-command'], body: request.postData() });
+    const next = photosFake.replies.shift() ?? 'ok';
+    if (next === 'unknown') return json(route, 503, { code: 'SAAS_UNAVAILABLE' });
+    if (path === photoBase) {
+      const body = JSON.parse(request.postData() ?? '{}'), prior = photosFake.byKey.get(idem);
+      if (prior) return json(route, 200, { data: { photo: prior, replayed: true } });
+      const c = photoConsent(photosFake.items.length + 1, { signatureName: body.signatureName, contentType: body.contentType, byteSize: Buffer.from(body.photo, 'base64').length });
+      photosFake.items = [c, ...photosFake.items]; photosFake.images.set(c.consentId, body.photo); photosFake.byKey.set(idem, c);
+      return json(route, 200, { data: { photo: c, replayed: false } });
+    }
+    if (path === `${photoBase}/avatars`) {
+      if (creative.provider !== 'CONNECTED') return json(route, 503, { code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
+      const body = JSON.parse(request.postData() ?? '{}'), prior = avatarsFake.byKey.get(idem);
+      if (prior) return json(route, 200, { data: { avatar: prior, balance: creativeWallet().balance, replayed: true } });
+      const c = photosFake.items.find((p) => p.consentId === body.consentId && p.mine && p.status === 'ACTIVE');
+      if (!c) return json(route, 422, { code: 'CREATIVE_AVATAR_WITHDRAWN' });
+      const a = creativeAvatar({ name: body.name, style: body.style, description: PHOTO_DESCRIPTION }, avatarsFake.items.length + 1);
+      avatarsFake.items = [a, ...avatarsFake.items]; avatarsFake.byKey.set(idem, a);
+      photosFake.items = photosFake.items.map((p) => p.consentId === c.consentId ? { ...p, avatarIds: [a.avatarId, ...p.avatarIds] } : p);
+      return json(route, 200, { data: { avatar: a, balance: creativeWallet().balance, replayed: false } });
+    }
+    const del = /\/([0-9a-f-]{36})\/delete$/.exec(path);
+    if (del) {
+      assert.equal(request.postData(), '{}', 'delete sends an empty body');
+      const c = photosFake.items.find((p) => p.consentId === del[1]);
+      if (!c) return json(route, 404, { code: 'SAAS_UNAVAILABLE' });
+      const gone = { ...c, status: 'WITHDRAWN', withdrawnReason: c.mine ? 'DELETED_BY_SUBJECT' : 'DELETED_BY_OWNER', withdrawnAt: c.withdrawnAt ?? iso(0) };
+      photosFake.items = photosFake.items.map((p) => p.consentId === c.consentId ? gone : p); photosFake.images.delete(c.consentId);
+      avatarsFake.items = avatarsFake.items.filter((a) => !c.avatarIds.includes(a.avatarId));
+      return json(route, 200, { data: { photo: gone } });
+    }
+    return json(route, 404, { code: 'SAAS_UNAVAILABLE' });
   }
   if (path === `/api/v1/schools/${scope.schoolId}/creative-credits`) {
     assert.equal(method, 'GET', 'Creative Studio only reads the wallet');
@@ -2184,6 +2231,84 @@ for (const [name, viewport] of [['desktop-1440', { width: 1440, height: 900 }], 
     await ctx.close();
   });
 }
+// A small synthetic JPEG (a drawn figure, not a real person) carrying an APP1 "Exif" block with a fake GPS tag: the browser sends it
+// exactly as chosen; the API strips the Exif block before storing.
+const photoJpeg = Buffer.from('/9j/4QASRXhpZgAAR1BTIDM3LjVOIP/gABBKRklGAAEBAAABAAEAAP/bAEMADQkKCwoIDQsKCw4ODQ8TIBUTEhITJxweFyAuKTEwLiktLDM6Sj4zNkY3LC1AV0FGTE5SU1IyPlphWlBgSlFST//bAEMBDg4OExETJhUVJk81LTVPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT//AABEIAGAAYAMBIgACEQEDEQH/xAAfAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgv/xAC1EAACAQMDAgQDBQUEBAAAAX0BAgMABBEFEiExQQYTUWEHInEUMoGRoQgjQrHBFVLR8CQzYnKCCQoWFxgZGiUmJygpKjQ1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4eLj5OXm5+jp6vHy8/T19vf4+fr/xAAfAQADAQEBAQEBAQEBAAAAAAAAAQIDBAUGBwgJCgv/xAC1EQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2gAMAwEAAhEDEQA/AOcxRin4oxXrXPMsMxRin4oxRcLDMUYp+KMUXCwzFGKfijFFwsMxRin4oxRcLDMUYp+KMUXCw/FGKfijFRcuwzFGKfitHQbJb3U0WTBjjHmMD3A7fmR+GamU1FNscY8zsi3onh/7VGLm93LEcFEHBcep9B+v9eotrS3tE220KRjAB2jBOOmT3/GpqK8irWlUep6lOlGC0I5oIZ0CTxJKoOQHUMM/jXOav4bRYjPpytleWhznI/2e+fb/APVXT0UqdWVN3THOnGaszzLFGK3fFFksF+twmAtwCSB/eHX88j8c1i4r14VFOKkjy5w5JOLGYoxT8UYq7k2HYoxT8UYrO5dhmK6TwgMfa/8AgH/s1c9itXw7dC21IIxOyYbOvGexx+n41lXTlTaRpRaU02dhRRRXlHphRRRQBieK/wDkGR/9dh/6C1cliug8UXQkuY7VCcRDc/PGT049h/OsLFenhk1TVzzq7vNjMUYp+KMVvcxsPxRin4oxUXKsMxRim3c32a2ebbu244zjvis3+2v+nf8A8f8A/rUnNLcpQb2O40jW1KCC+fDDhZT39j7+/wDk7qsrqGUhlIyCDkEV5V/bX/Tv/wCP/wD1qki8QzQZ8lJI93XZKRn8hXLUowk7xdjphUmlZo9SrH1TW4oIzHZuskx43DlV9/Q1w0viOeZdsyyyKDnDTEjP5VF/bX/Tv/4//wDWpQowTvJ3HOrNq0UarFnYsxLMTkknJJpMVl/21/07/wDj/wD9ar9jc/a4TJs2YbbjOfT/ABrrU09jlcGtyXFGKfijFO5Nh+KMU/FGKi5dihqw/wCJbL+H8xXN102sD/iWTf8AAf8A0IVzNZz3NYbBRRRUlBRRRQAVvaEP9Cf/AK6H+QrBroNAH+hP/wBdD/IVUdyZ7GhijFPxRitLmVh+KMU/FGKi5djP1kf8Sub/AID/AOhCuWrq9aH/ABKpv+A/+hCuUqWXHYKKKKQwooooAK6Lw+P9Bf8A66n+Qrna6Tw6P9Af/rqf5CmhS2NLFGKfijFVcix//9k=', 'base64');
+for (const [name, viewport] of [['desktop-1440', { width: 1440, height: 900 }], ['phone-390', { width: 390, height: 844 }]]) {
+  await check(`Creative Studio photo avatars ${name}: sign and save my own photo, make my avatar, then delete it`, async () => {
+    studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: [], byKey: new Map(), gate: null });
+    Object.assign(avatarsFake, { items: [], posts: [], replies: [], byKey: new Map() });
+    Object.assign(videosFake, { items: [], posts: [], replies: [], byKey: new Map() });
+    Object.assign(photosFake, { items: [photoConsent(0, { consentId: id(879), mine: false, signatureName: 'Sam Lee', createdAt: iso(-5) })], images: new Map(), posts: [],
+      replies: ['unknown', 'ok'], byKey: new Map(), canManageAll: true });
+    const { ctx, page } = await creativeStudio(viewport);
+    const card = page.locator('article[aria-labelledby="creative-avatar-photos-title"]');
+    await page.locator('article[aria-labelledby="creative-avatar-photos-title"][data-avatar-photo-state="OPEN"]').waitFor();
+    assert.equal(await card.locator('img').count(), 0, 'the owner never sees another staff member\'s photo');
+    await card.getByText('Delete Sam Lee’s photo').waitFor();
+    await card.getByLabel(/Your photo \(JPEG, PNG or WebP/).setInputFiles({ name: 'me.jpg', mimeType: 'image/jpeg', buffer: photoJpeg });
+    const save = card.getByRole('button', { name: 'Sign and save my photo' });
+    await card.getByLabel('This is a photo of me, and nobody else is in it.').check();
+    await card.getByLabel(/I am an adult \(18 or older\)/).check();
+    assert.equal(await save.isDisabled(), true, 'every consent and the typed name are required');
+    await card.getByLabel(/I agree that my school may use an AI avatar/).check();
+    await card.getByLabel('Type your full name to sign').fill('Dana Kim');
+    await shot(page, `creative-studio-photo-consent-${name}`);
+    await save.click();
+    await card.getByText(/We could not confirm whether your photo was saved/).waitFor();
+    await card.getByRole('button', { name: 'Check again' }).click();
+    await card.getByText('Your photo and signed consent are saved.').waitFor();
+    await card.locator('[data-photo-mine] img').waitFor();
+    assert.equal(photosFake.posts.length, 2);
+    assert.equal(photosFake.posts[0].key, photosFake.posts[1].key, 'Check again reuses the idempotency key');
+    assert.equal(photosFake.posts[0].body, photosFake.posts[1].body, 'Check again resends the identical photo and consent');
+    assert.equal(photosFake.posts[0].command, 'saas-creative-avatar-photo-upload');
+    assert.deepEqual(JSON.parse(photosFake.posts[0].body), { consentVersion: 'HON-LIKENESS-2026-11-12', ownLikeness: true, adult: true, marketingUse: true, signatureName: 'Dana Kim',
+      contentType: 'image/jpeg', photo: photoJpeg.toString('base64') });
+    await card.getByLabel('Avatar name').fill('Coach Dana');
+    await card.getByLabel('Cute (chibi)').check();
+    assert.ok(await card.getByText('Uses 100 credits. You have 11,640 available.').isVisible());
+    await shot(page, `creative-studio-photo-saved-${name}`, true);
+    await card.getByRole('button', { name: 'Make my avatar' }).click();
+    await card.getByText('Done. The result is listed below.').waitFor();
+    await page.locator('article[aria-labelledby="creative-avatars-title"]').getByText('Coach Dana').waitFor();
+    const made = photosFake.posts.find((p) => p.path.endsWith('/avatars'));
+    assert.equal(made.command, 'saas-creative-photo-avatar-create');
+    assert.deepEqual(JSON.parse(made.body), { consentId: photosFake.items[0].consentId, name: 'Coach Dana', style: 'CHIBI' });
+    assert.equal(creative.posts.length + avatarsFake.posts.length, 0, 'the photo avatar never goes through the generic or described-avatar route');
+    await card.getByText('Avatars made from it: 1').waitFor();
+    await card.getByRole('button', { name: 'Delete my photo' }).click();
+    await card.getByText(/This cannot be undone/).waitFor();
+    await shot(page, `creative-studio-photo-delete-confirm-${name}`);
+    await card.getByRole('button', { name: 'Yes, delete it' }).click();
+    await card.getByText('The photo is deleted. Its avatars and videos are withdrawn.').waitFor();
+    await card.getByRole('button', { name: 'Sign and save my photo' }).waitFor();
+    assert.equal(await card.locator('[data-photo-mine]').count(), 0);
+    assert.equal(await page.locator('article[aria-labelledby="creative-avatars-title"]').getByText('Coach Dana').count(), 0, 'its avatar is withdrawn from the list');
+    assert.equal(photosFake.posts.at(-1).command, 'saas-creative-avatar-photo-delete');
+    await noOverflow(page, `creative-studio-photo-${name}`);
+    await axe(page, `creative-studio-photo-${name}`);
+    await shot(page, `creative-studio-photo-deleted-${name}`, true);
+    creative.provider = 'NOT_CONNECTED'; creative.items = []; avatarsFake.items = []; photosFake.items = [];
+    await ctx.close();
+  });
+}
+await check('Creative Studio photo avatars: blur hides my photo, and nothing about it survives until the shell re-verifies', async () => {
+  studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: [], byKey: new Map(), gate: null });
+  Object.assign(avatarsFake, { items: [], posts: [], replies: [], byKey: new Map() });
+  const mine = photoConsent(1);
+  Object.assign(photosFake, { items: [mine], images: new Map([[mine.consentId, photoJpeg.toString('base64')]]), posts: [], replies: [], byKey: new Map(), canManageAll: false });
+  const { ctx, page } = await creativeStudio({ width: 390, height: 844 });
+  const card = () => page.locator('article[aria-labelledby="creative-avatar-photos-title"]');
+  await card().locator('[data-photo-mine] img').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => !document.querySelector('[data-photo-mine] img') || !!document.querySelector('[data-shell-private][hidden], [data-shell-private][inert]'));
+  await page.getByRole('button', { name: 'Show school' }).click();
+  await card().locator('[data-photo-mine] img').waitFor({ timeout: 20000 });
+  assert.equal(await card().locator('[data-photo-staff]').count(), 0, 'a non-owner sees no staff list');
+  creative.provider = 'NOT_CONNECTED'; photosFake.items = []; photosFake.images = new Map();
+  await ctx.close();
+});
 await check('Creative Studio: a refused wallet read shows no numbers', async () => {
   studio = 'denied';
   const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
