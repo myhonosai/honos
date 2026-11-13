@@ -1,4 +1,4 @@
-import type { CreativeAvatar, CreativeAvatarVideo, CreativeGeneration, CreativeStudioProviderState, SaasCreativeSchoolWallet } from '@hon/contracts';
+import type { CreativeAvatar, CreativeAvatarVideo, CreativeGeneration, CreativeStudioProviderState, CreativeWebsiteDraft, SaasCreativeSchoolWallet } from '@hon/contracts';
 
 /**
  * What Creative Studio shows from the school's own creative wallet read. School views carry no provider
@@ -6,11 +6,15 @@ import type { CreativeAvatar, CreativeAvatarVideo, CreativeGeneration, CreativeS
  */
 export type StudioRate = Readonly<{ operationCode: string; mediaKind: 'IMAGE' | 'VIDEO'; displayName: string; billingUnit: 'IMAGE' | 'VIDEO_SECOND' | 'REQUEST';
   creditsPerUnit: number; maxUnitsPerRequest: number; provisional: boolean }>;
+/** 0344: a WEBSITE rate, billed per page. */
+export type StudioWebsiteRate = Readonly<{ operationCode: string; displayName: string; creditsPerUnit: number; maxUnitsPerRequest: number }>;
 export type StudioEntry = Readonly<{ entryId: string; entryKind: string; lotKind: string; credits: number; occurredAt: string }>;
 export type StudioPackage = Readonly<{ packageCode: string; totalCredits: number; bonusCredits: number; priceMinor: number; currency: 'usd' }>;
 export type StudioWallet = Readonly<{
   programActive: boolean; eligible: boolean; reason: string | null; window: Readonly<{ startsAt: string; endsAt: string }> | null;
   available: number; held: number; monthlyIncluded: number; rates: readonly StudioRate[] | null;
+  /** 0344: the published website-draft rate (credits per page), if HQ has set one. */
+  websiteRate: StudioWebsiteRate | null;
   history: readonly StudioEntry[]; packages: readonly StudioPackage[];
 }>;
 export type StudioState =
@@ -32,6 +36,8 @@ export function studioWallet(data: SaasCreativeSchoolWallet): StudioWallet {
     // Website rates (0344) fund website drafts only; the image and video studio never offers them.
     rates: data.rates && data.rates.rates.filter(isMediaRate).map(rate => ({ operationCode: rate.operationCode, mediaKind: rate.mediaKind, displayName: rate.displayName,
       billingUnit: rate.billingUnit, creditsPerUnit: rate.creditsPerUnit, maxUnitsPerRequest: rate.maxUnitsPerRequest, provisional: rate.rateBasis === 'PROVISIONAL' })),
+    websiteRate: (() => { const r = data.rates?.rates.find(x => x.mediaKind === 'WEBSITE' && x.billingUnit === 'PAGE');
+      return r ? { operationCode: r.operationCode, displayName: r.displayName, creditsPerUnit: r.creditsPerUnit, maxUnitsPerRequest: r.maxUnitsPerRequest } : null; })(),
     history: [...data.history].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)).slice(0, STUDIO_HISTORY_LIMIT)
       .map(entry => ({ entryId: entry.entryId, entryKind: entry.entryKind, lotKind: entry.lotKind, credits: entry.credits, occurredAt: entry.occurredAt })),
     packages: data.packages.map(pack => ({ packageCode: pack.packageCode, totalCredits: pack.totalCredits, bonusCredits: pack.bonusCredits, priceMinor: pack.priceMinor, currency: pack.currency })),
@@ -58,3 +64,10 @@ export type AvatarsState =
 export type VideosState =
   | Readonly<{ state: 'LOADING' }> | Readonly<{ state: 'DENIED' }> | Readonly<{ state: 'UNAVAILABLE' }>
   | Readonly<{ state: 'READY'; items: readonly CreativeAvatarVideo[] }>;
+
+/** 0344: the school's website drafts (list without page text). */
+export type WebsitesState =
+  | Readonly<{ state: 'LOADING' }> | Readonly<{ state: 'DENIED' }> | Readonly<{ state: 'UNAVAILABLE' }>
+  | Readonly<{ state: 'READY'; provider: CreativeStudioProviderState; items: readonly CreativeWebsiteDraft[] }>;
+/** The one draft whose pages are open on screen. */
+export type OpenDraft = null | Readonly<{ draftId: string; state: 'LOADING' | 'FAILED' }> | Readonly<{ draftId: string; state: 'READY'; draft: CreativeWebsiteDraft }>;

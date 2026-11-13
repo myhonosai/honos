@@ -1,11 +1,12 @@
 import React from 'react';
 import { accountValue } from '../account-status/copy';
 import { studioEntryText, studioText, type StudioKey } from './copy';
-import type { AvatarsState, VideosState, CreateOutcome, GenerationsState, StudioRate, StudioState, StudioWallet } from './model';
+import type { AvatarsState, OpenDraft, VideosState, WebsitesState, CreateOutcome, GenerationsState, StudioRate, StudioState, StudioWallet } from './model';
 import { CreatePanel, GenerationsPanel } from './create';
 import { AvatarsPanel } from './avatars';
 import { AvatarVideosPanel } from './avatar-videos';
-import type { CreativeAvatar, CreativeAvatarInput, CreativeAvatarVideo, CreativeAvatarVideoInput, CreativeGeneration, CreativeGenerationInput } from '@hon/contracts';
+import { WebsiteDraftsPanel } from './website-drafts';
+import type { CreativeAvatar, CreativeAvatarInput, CreativeAvatarVideo, CreativeAvatarVideoInput, CreativeGeneration, CreativeGenerationInput, CreativeWebsiteDraft, CreativeWebsiteDraftInput } from '@hon/contracts';
 import styles from './creative-studio.module.css';
 
 export type CreativeStudioViewProps = Readonly<{
@@ -20,6 +21,10 @@ export type CreativeStudioViewProps = Readonly<{
   /** A2 (0277) talking avatar videos: the read, this tab's video request outcome and lock. */
   videos?: VideosState; videoOutcome?: CreateOutcome; videoLocked?: boolean | undefined; hideVideoText?: ((v: CreativeAvatarVideo) => boolean) | undefined;
   onCreateVideo?: ((input: CreativeAvatarVideoInput) => void) | undefined; onCheckVideoAgain?: (() => void) | undefined;
+  /** WB1 (0344) website drafts: the read, this tab's website request outcome and lock, and the one open draft. */
+  websites?: WebsitesState; websiteOutcome?: CreateOutcome; websiteLocked?: boolean | undefined; hideWebsiteText?: ((d: CreativeWebsiteDraft) => boolean) | undefined;
+  onCreateWebsite?: ((input: CreativeWebsiteDraftInput) => void) | undefined; onCheckWebsiteAgain?: (() => void) | undefined;
+  openDraft?: OpenDraft | undefined; onViewWebsite?: ((draftId: string) => void) | undefined; onHideWebsite?: (() => void) | undefined;
 }>;
 
 const UNIT: Record<StudioRate['billingUnit'], StudioKey> = { IMAGE: 'perImage', VIDEO_SECOND: 'perSecond', REQUEST: 'perRequest' };
@@ -27,7 +32,8 @@ const UNIT: Record<StudioRate['billingUnit'], StudioKey> = { IMAGE: 'perImage', 
 /** Pure view. Every number comes from the school's wallet read; generation is shown as not connected. */
 export function CreativeStudioView({ language, waiting, concealed, hasSchool, studio, onRefresh, generations = { state: 'UNAVAILABLE' }, outcome = null, locked = false, hidePrompt, onCreate, onCheckAgain,
   avatars = { state: 'UNAVAILABLE' }, avatarOutcome = null, avatarLocked = false, hideAvatarText, onCreateAvatar, onCheckAvatarAgain,
-  videos = { state: 'UNAVAILABLE' }, videoOutcome = null, videoLocked = false, hideVideoText, onCreateVideo, onCheckVideoAgain }: CreativeStudioViewProps): React.ReactElement {
+  videos = { state: 'UNAVAILABLE' }, videoOutcome = null, videoLocked = false, hideVideoText, onCreateVideo, onCheckVideoAgain,
+  websites = { state: 'UNAVAILABLE' }, websiteOutcome = null, websiteLocked = false, hideWebsiteText, onCreateWebsite, onCheckWebsiteAgain, openDraft = null, onViewWebsite, onHideWebsite }: CreativeStudioViewProps): React.ReactElement {
   const t = (key: StudioKey, vars?: Record<string, string>) => studioText(language, key, vars);
   const number = (n: number) => new Intl.NumberFormat(language).format(n);
   const notice = waiting ? t('waiting') : concealed ? t('concealed') : !hasSchool ? t('noSchool')
@@ -45,6 +51,8 @@ export function CreativeStudioView({ language, waiting, concealed, hasSchool, st
       hideText={hideAvatarText} onCreate={onCreateAvatar} onCheckAgain={onCheckAvatarAgain}/>
     <AvatarVideosPanel language={language} wallet={wallet} avatars={visible ? avatars : { state: 'UNAVAILABLE' }} videos={visible ? videos : { state: 'UNAVAILABLE' }} showList={!!wallet}
       outcome={visible ? videoOutcome : null} locked={videoLocked} hideText={hideVideoText} onCreate={onCreateVideo} onCheckAgain={onCheckVideoAgain}/>
+    <WebsiteDraftsPanel language={language} wallet={wallet} websites={visible ? websites : { state: 'UNAVAILABLE' }} showList={!!wallet} outcome={visible ? websiteOutcome : null}
+      locked={websiteLocked} hideText={hideWebsiteText} onCreate={onCreateWebsite} onCheckAgain={onCheckWebsiteAgain} openDraft={visible ? openDraft : null} onView={onViewWebsite} onHide={onHideWebsite}/>
     {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
     {wallet ? <WalletCards wallet={wallet} language={language} t={t} number={number}/> : null}
     {wallet ? <GenerationsPanel language={language} generations={generations} hidePrompt={hidePrompt}/> : null}

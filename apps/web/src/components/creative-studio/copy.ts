@@ -1,5 +1,11 @@
 /** Creative Studio wording (en / ko / es). Creative credits are for images and video only; the AI team never uses them. */
 const en = {
+  wsTitle: 'Website draft', wsIntro: 'Ask HON for draft pages for your school website. Each page uses creative credits; nothing is published. You copy what you like into your site.',
+  wsNotConnected: 'Website drafts are not connected yet. Nothing is sent or charged.', wsNotPriced: 'HQ has not set a price for website drafts yet.', wsBlocked: 'Website drafts are not available for this school right now.',
+  wsPages: 'Pages', wsBrief: 'Describe your school, classes and what makes you different', wsHelp: 'Up to {n} characters. Do not include student names or private details.',
+  wsCost: 'This uses {cost} credits ({per} per page). You have {available}.', wsButton: 'Draft pages', wsNone: 'No website drafts yet.', wsUnavailable: 'Website drafts could not be read.',
+  wsView: 'Show draft', wsHide: 'Hide draft', wsLoadFailed: 'This draft could not be read. Try again.', wsSynthetic: 'Test draft from a stand-in provider, not real AI output.',
+  pg_HOME: 'Home', pg_PROGRAMS: 'Programs', pg_SCHEDULE: 'Schedule', pg_FREE_TRIAL: 'Free trial', pg_INSTRUCTORS: 'Instructors', pg_ABOUT: 'About', pg_FAQ: 'FAQ', pg_CONTACT: 'Contact',
   AVATAR: 'Avatar', avatarsTitle: 'Avatars', avatarsIntro: 'Your school’s own AI presenter: one consistent character you can reuse in your marketing.',
   avatarName: 'Avatar name', avatarStyle: 'Look', REALISTIC: 'Realistic', ILLUSTRATED: 'Illustrated', CHIBI: 'Cute (chibi)',
   avatarDescribe: 'Describe how your avatar looks', avatarHelp: 'Up to {n} characters, for example clothing, age range, hair and mood. Do not include private student or family details.',
@@ -49,6 +55,12 @@ const en = {
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
+  wsTitle: '웹사이트 초안', wsIntro: 'HON에게 도장 웹사이트 페이지 초안을 요청하세요. 페이지마다 크리에이티브 크레딧이 사용되며, 아무것도 게시되지 않습니다. 마음에 드는 내용을 사이트에 옮기세요.',
+  wsNotConnected: '웹사이트 초안은 아직 연결되지 않았습니다. 아무것도 전송되거나 청구되지 않습니다.', wsNotPriced: 'HQ가 아직 웹사이트 초안 가격을 정하지 않았습니다.', wsBlocked: '지금은 이 도장에서 웹사이트 초안을 사용할 수 없습니다.',
+  wsPages: '페이지', wsBrief: '도장, 수업, 그리고 차별점을 설명해 주세요', wsHelp: '최대 {n}자. 학생 이름이나 개인 정보는 넣지 마세요.',
+  wsCost: '{cost} 크레딧을 사용합니다 (페이지당 {per}). 보유: {available}.', wsButton: '페이지 초안 만들기', wsNone: '아직 웹사이트 초안이 없습니다.', wsUnavailable: '웹사이트 초안을 읽을 수 없습니다.',
+  wsView: '초안 보기', wsHide: '초안 숨기기', wsLoadFailed: '이 초안을 읽을 수 없습니다. 다시 시도하세요.', wsSynthetic: '대체 제공업체의 테스트 초안이며 실제 AI 결과가 아닙니다.',
+  pg_HOME: '홈', pg_PROGRAMS: '프로그램', pg_SCHEDULE: '시간표', pg_FREE_TRIAL: '무료 체험', pg_INSTRUCTORS: '사범', pg_ABOUT: '소개', pg_FAQ: '자주 묻는 질문', pg_CONTACT: '연락처',
   AVATAR: '아바타', avatarsTitle: '아바타', avatarsIntro: '도장만의 AI 진행자입니다. 마케팅에 계속 쓸 수 있는 하나의 일관된 캐릭터입니다.',
   avatarName: '아바타 이름', avatarStyle: '스타일', REALISTIC: '실사', ILLUSTRATED: '일러스트', CHIBI: '귀여운 (치비)',
   avatarDescribe: '아바타의 모습을 설명하세요', avatarHelp: '최대 {n}자. 예: 복장, 연령대, 머리 모양, 분위기. 학생이나 가족의 개인정보는 넣지 마세요.',
@@ -97,6 +109,12 @@ const ko: Record<Key, string> = {
   unavailable: '크리에이티브 크레딧을 읽거나 확인할 수 없습니다. 숫자를 표시하지 않습니다.', refresh: '새로 고침',
 };
 const es: Record<Key, string> = {
+  wsTitle: 'Borrador de sitio web', wsIntro: 'Pide a HON páginas de borrador para el sitio web de tu escuela. Cada página usa créditos creativos; nada se publica. Copias lo que te guste a tu sitio.',
+  wsNotConnected: 'Los borradores de sitio web aún no están conectados. No se envía ni se cobra nada.', wsNotPriced: 'HQ aún no ha fijado un precio para los borradores de sitio web.', wsBlocked: 'Los borradores de sitio web no están disponibles para esta escuela ahora.',
+  wsPages: 'Páginas', wsBrief: 'Describe tu escuela, tus clases y lo que te hace diferente', wsHelp: 'Hasta {n} caracteres. No incluyas nombres de alumnos ni datos privados.',
+  wsCost: 'Usa {cost} créditos ({per} por página). Tienes {available}.', wsButton: 'Crear páginas', wsNone: 'Aún no hay borradores de sitio web.', wsUnavailable: 'No se pudieron leer los borradores de sitio web.',
+  wsView: 'Ver borrador', wsHide: 'Ocultar borrador', wsLoadFailed: 'No se pudo leer este borrador. Inténtalo de nuevo.', wsSynthetic: 'Borrador de prueba de un proveedor sustituto, no es resultado real de IA.',
+  pg_HOME: 'Inicio', pg_PROGRAMS: 'Programas', pg_SCHEDULE: 'Horario', pg_FREE_TRIAL: 'Clase de prueba gratis', pg_INSTRUCTORS: 'Instructores', pg_ABOUT: 'Nosotros', pg_FAQ: 'Preguntas frecuentes', pg_CONTACT: 'Contacto',
   AVATAR: 'Avatar', avatarsTitle: 'Avatares', avatarsIntro: 'El presentador de IA propio de tu escuela: un personaje constante que puedes reutilizar en tu marketing.',
   avatarName: 'Nombre del avatar', avatarStyle: 'Estilo', REALISTIC: 'Realista', ILLUSTRATED: 'Ilustrado', CHIBI: 'Tierno (chibi)',
   avatarDescribe: 'Describe cómo se ve tu avatar', avatarHelp: 'Hasta {n} caracteres, por ejemplo ropa, edad aproximada, cabello y estado de ánimo. No incluyas datos privados de alumnos o familias.',
