@@ -252,6 +252,19 @@ const tenant = (c, work) => db.withTenantTransaction(c, async (client) => { awai
 const settle = (promise) => promise.then((value) => ({ value }), (error) => ({ error }));
 
 /** A further disposable human HQ owner whose authority the race proofs change (the shared `hq` is never touched). */
+// 0328: the HQ usage read attributes every reply-table specialist to its own agent; returns [usage agent entries, ledger rows] per specialist.
+async function usageBySpecialist(orgId, schoolId, specialists) {
+  const r = (await row('SELECT hon.read_ai_school_usage_from_hq($1,$2::timestamptz,$3::timestamptz) r',
+    [hq.subject, new Date(Date.now() - 86_400_000).toISOString(), new Date(Date.now() + 3_600_000).toISOString()])).r;
+  const by = r.schools.find((x) => x.schoolId === schoolId).byClass.AGENT_INFERENCE.byAgent;
+  const out = {};
+  for (const [specialist, agent] of specialists) {
+    const n = (await row('SELECT count(*)::int n FROM hon.ai_usage_ledger u JOIN hon.hon_reply_invocations i ON i.id = u.source_invocation_id WHERE i.specialist=$1 AND u.organization_id=$2', [specialist, orgId])).n;
+    out[specialist] = [by[agent]?.entries ?? 0, n];
+  }
+  return { by, out };
+}
+
 async function makeHqOwner(label, untilSql = 'NULL') {
   const h = { id: K(), user: K(), subject: `ai0-hq-${label}-${K()}` };
   await admin.query('BEGIN');
@@ -3285,7 +3298,13 @@ try {
     const r8 = (await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data.agents;
     assert.deepEqual(['alex', 'jordan', 'lena'].map((k) => r8.find((x) => x.agentKey === k).blockedBy), [null, 'NOT_AUTHORIZED', null]);
   } finally { await add('schedule.session.manage'); }
-  pass('INV-36', "0260: Alex (general management, reporting.view), Jordan (operations, schedule.session.manage) and Lena (creative & commerce, marketing.campaign.read) each answer a question in text from their own aggregate school facts (planned as <agent>/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays; no record names); Alex's operations and commerce sections follow those permissions; each is refused at begin without its capability (nothing recorded) and blocked in prepare on a lapse (nothing reserved or sent); answers are concealed when any permission their facts used lapses while usage evidence stays; HON sees their turns without their text; never continued, confirmed from suggestions or given a target; rows are single DETAILED analyses, source permissions are a closed set, plans are ANALYZE only, the fact readers are internal; readiness lists GENERAL_MANAGEMENT, OPERATIONS and CREATIVE_COMMERCE gated on each capability");
+  // 9. HQ usage (0328): each specialist's calls count under its own agent, never HON_REPLY.
+  {
+    const { by, out } = await usageBySpecialist(o.id, o.school, [['alex', 'GENERAL_MANAGEMENT'], ['jordan', 'OPERATIONS'], ['lena', 'CREATIVE_COMMERCE'], ['hon', 'HON_REPLY']]);
+    for (const k of ['alex', 'jordan', 'lena']) assert.ok(out[k][1] >= 1 && out[k][0] === out[k][1], `${k}: ${JSON.stringify(out)} ${JSON.stringify(by)}`);
+    assert.equal(out.hon[0], out.hon[1], `HON_REPLY counts only HON's own rows: ${JSON.stringify(out)}`);
+  }
+  pass('INV-36', "0260: Alex (general management, reporting.view), Jordan (operations, schedule.session.manage) and Lena (creative & commerce, marketing.campaign.read) each answer a question in text from their own aggregate school facts (planned as <agent>/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays; no record names); Alex's operations and commerce sections follow those permissions; each is refused at begin without its capability (nothing recorded) and blocked in prepare on a lapse (nothing reserved or sent); answers are concealed when any permission their facts used lapses while usage evidence stays; HON sees their turns without their text; never continued, confirmed from suggestions or given a target; rows are single DETAILED analyses, source permissions are a closed set, plans are ANALYZE only, the fact readers are internal; readiness lists GENERAL_MANAGEMENT, OPERATIONS and CREATIVE_COMMERCE gated on each capability; HQ usage (0328) counts their calls under those agents, never HON_REPLY");
   }
 
   // ---- INV-32 (R1, 0287): routing by task class through the HQ task profile ----
@@ -3744,7 +3763,14 @@ try {
   await drop('retention.review.read');
   try { assert.equal((await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data.agents.find((x) => x.agentKey === 'maya').blockedBy, 'NOT_AUTHORIZED'); }
   finally { await add('retention.review.read'); }
-  pass('INV-37', "0284: Maya answers one question about one at-risk membership of this exact school from that student's 0259 row only (factor codes and numbers, state, score, level, step; no name or contact), planned as maya/ANALYZE with the fixed DETAILED budgets, one call, resend replays; a student off the list is reported as onAtRiskList false and a student past the first page is still found; another organization's or an unknown membership, a missing or extra target key, empty text and a suggestion confirmation are refused at begin with nothing recorded; without retention.review.read she is refused at begin, blocked in prepare (nothing reserved or sent) and her answer is concealed, as it is when the tuition permission her facts used lapses; source permissions are a closed set, plans are ANALYZE only, both fact readers are internal; readiness lists RETENTION gated on the capability");
+  // 8. HQ usage (0328): Maya's calls count under RETENTION, never HON_REPLY.
+  {
+    const { by, out } = await usageBySpecialist(o.id, o.school, [['maya', 'RETENTION'], ['hon', 'HON_REPLY']]);
+    assert.ok(out.maya[1] >= 1 && out.maya[0] === out.maya[1], `maya: ${JSON.stringify(out)} ${JSON.stringify(by)}`);
+    assert.equal(out.hon[0], out.hon[1], `HON_REPLY counts only HON's own rows: ${JSON.stringify(out)}`);
+    assert.equal((await row("SELECT has_function_privilege($1,'hon.ai_usage_reply_agent(text)','EXECUTE') x", [runtimeRole])).x, false, 'the attribution helper is internal');
+  }
+  pass('INV-37', "0284: Maya answers one question about one at-risk membership of this exact school from that student's 0259 row only (factor codes and numbers, state, score, level, step; no name or contact), planned as maya/ANALYZE with the fixed DETAILED budgets, one call, resend replays; a student off the list is reported as onAtRiskList false and a student past the first page is still found; another organization's or an unknown membership, a missing or extra target key, empty text and a suggestion confirmation are refused at begin with nothing recorded; without retention.review.read she is refused at begin, blocked in prepare (nothing reserved or sent) and her answer is concealed, as it is when the tuition permission her facts used lapses; source permissions are a closed set, plans are ANALYZE only, both fact readers are internal; readiness lists RETENTION gated on the capability; HQ usage (0328) counts her calls under RETENTION, never HON_REPLY");
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----

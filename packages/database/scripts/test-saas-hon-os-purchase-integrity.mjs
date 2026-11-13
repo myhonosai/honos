@@ -295,7 +295,8 @@ try{
  const winner=race[0].status==='fulfilled'?'FM1':'FM2',loser=winner==='FM1'?'FM2':'FM1',coWin=race.find(r=>r.status==='fulfilled').value;
  http(422,'SAAS_FOUNDER_SOLD_OUT')(race.find(r=>r.status==='rejected').reason);
  assert.equal((await eligibility('X')).OS_FOUNDER_MONTHLY,'FOUNDER_SOLD_OUT');
- assert.equal((await eligibility('X')).OS_FOUNDER_LIFETIME,'FOUNDER_SOLD_OUT');
+ // 0306 (owner D1): founder lifetime has its own HQ sale limit and never uses the founder pool, so it stays eligible here.
+ assert.equal((await eligibility('X')).OS_FOUNDER_LIFETIME,'ELIGIBLE');
  assert.deepEqual((await billing.readOfferManagement(H('operator'))).honOsSales.founderPool,{limit:4,allocated:2,held:2,remaining:0});
  await deny(payments.cancelCheckout(H(`owner${loser}`),coWin.checkout.checkoutId,{expectedVersion:coWin.checkout.version},K()),403,'SAAS_FORBIDDEN');
  const cancelled=await payments.cancelCheckout(H(`owner${winner}`),coWin.checkout.checkoutId,{expectedVersion:coWin.checkout.version},K());

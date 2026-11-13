@@ -269,9 +269,16 @@
     "0287_ai_task_class_routing.sql": "eb09bd1fe61ae8d75c91f1151431653faeb4bd16b0472c91f33d0163e38499bd",
     "0288_ai_school_cost_ceiling.sql": "0f77dfd17d256f21f724c16f3287247b75a94ef657b017d745278fe56165e123",
     "0304_hq_hon_schedule_billing_facts.sql": "32bc6ea5821c7f36b819db74a407e6466a3712d3700f513d1cd0d55d254e7365",
+    "0306_hon_os_lifetime_purchase.sql": "e953952706c8f078f0e95dbaadffb357d4560e990422f7c1daac9e0405f0f491",
     "0308_hq_plan_promotions.sql": "13ddea1cc69c6ee892e775a333a1eb6bd4eb74f5e96c16c13d4cc45380d394bb",
     "0310_ai_org_agent_ceiling_removed.sql": "3427f3424c2e61ed9b12e5a8d8c0ac02b431fcbe7c14c7ab110d293ab08802bc",
     "0320_school_payment_credential_vault.sql": "42194542aa26affc6ce836fd06fbce0210d30a7ed79989d6182b966c50a2bf56",
+    "0321_school_payer_saved_methods.sql": "5de27cdfc04af16d057dc62da3d11fdc02e4106dbbcbcefcc6460edf8cc6c4fc",
+    "0322_school_pay_autopay_sibling_discounts.sql": "9bbb358a89cf566f1480ff55e0bdaed5d09356f314e22b7fbff4c947a5e576d0",
+    "0326_hq_business_numbers.sql": "3578cb98353a3d7e3f53af4ebc75e9f725971e32d538f79f070ce02a97edec8d",
+    "0327_hq_school_health.sql": "444c4cb9c52e514aa3336280d20c7442a3878c12144800a9f719d59e6b2575e5",
+    "0328_hq_usage_specialist_attribution.sql": "2537a3f1a116c3b81ad4682308ebfb9d4a57fd9ff1b7bf29018a69729ce74447",
+    "0331_school_reports.sql": "a5480e9eef175e40a64f58343ee9f9a550f2470b4bf98c97452e0405df60c130",
     "0336_ai_reduced_mode_fallback.sql": "3e83f6db003e7888dfba22a00d5a0593b4604265314abce73cd80fff612959df"
   }
 }
