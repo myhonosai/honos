@@ -493,6 +493,10 @@
       "title": "HON HQ | School referrals"
     },
     {
+      "path": "/hq/revenue/business-numbers",
+      "title": "HON HQ | Business numbers"
+    },
+    {
       "path": "/hq/revenue/invoices",
       "title": "HON HQ | Invoices"
     },
