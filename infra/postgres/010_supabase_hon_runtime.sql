@@ -3048,7 +3048,7 @@ DO $$ DECLARE r text; t text; col text; f text; BEGIN
   FOREACH f IN ARRAY ARRAY['hon.guard_school_pay_autopay_plan()','hon.require_school_pay_autopay_actor(text,text)','hon.require_school_pay_autopay_reader(text,text[])',
     'hon.school_pay_school_zone()','hon.school_pay_discount_rule_json(hon.school_pay_discount_rules)','hon.school_pay_autopay_plan_json(hon.school_pay_autopay_plans)',
     'hon.school_pay_current_discount_rule()','hon.school_pay_sibling_discount(hon.school_pay_discount_rules,integer,integer,text)',
-    'hon.school_pay_next_period(timestamp with time zone,text,text,timestamp with time zone)','hon.school_pay_autopay_due(uuid,date,text,hon.school_pay_discount_rules)',
+    'hon.school_pay_next_period(timestamp with time zone,text,text,timestamp with time zone,timestamp with time zone)','hon.school_pay_autopay_due(uuid,date,text,hon.school_pay_discount_rules)',
     'hon.school_pay_autopay_cycle_json(hon.school_pay_autopay_cycles)','hon.school_pay_autopay_method_usable(uuid,uuid)','hon.school_pay_autopay_begin(text,text,text,text)',
     'hon.school_pay_autopay_record(uuid,uuid,text,uuid,integer,text,text,jsonb,jsonb,uuid,uuid)','hon.school_pay_autopay_complete(text,text,text,uuid,jsonb)',
     'hon.school_pay_lock_autopay_plan(uuid,integer)','hon.read_school_pay_autopay(text,uuid)','hon.read_school_pay_discount_rule(text)',

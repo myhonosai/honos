@@ -299,10 +299,19 @@ LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,hon AS $$
 $$;
 
 -- A3: one schedule's next period in school-local time (same local day and time), or NULL past the membership term end.
-CREATE FUNCTION hon.school_pay_next_period(at timestamptz,frequency text,tz text,term_end timestamptz) RETURNS timestamptz
+-- Months and years count from a fixed anchor (the schedule's first autopay period) so a short month clamps only that
+-- one period: Jan 31 -> Feb 28 -> Mar 31, and Feb 29 annual -> Feb 28 -> Feb 29. When `at` is not on the anchor's series
+-- (staff moved the schedule), `at` becomes the anchor.
+CREATE FUNCTION hon.school_pay_next_period(at timestamptz,frequency text,tz text,term_end timestamptz,anchor timestamptz) RETURNS timestamptz
 LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
-  SELECT CASE WHEN n IS NULL OR (term_end IS NOT NULL AND n>=term_end) THEN NULL ELSE n END FROM (
-    SELECT ((at AT TIME ZONE tz)+CASE frequency WHEN 'WEEKLY' THEN interval '7 days' WHEN 'MONTHLY' THEN interval '1 month' WHEN 'ANNUAL' THEN interval '1 year' END) AT TIME ZONE tz AS n) x
+  WITH l AS (SELECT at AT TIME ZONE tz AS la,anchor AT TIME ZONE tz AS lanchor,CASE frequency WHEN 'MONTHLY' THEN 1 WHEN 'ANNUAL' THEN 12 END AS step),
+  k AS (SELECT la,lanchor,step,CASE WHEN lanchor IS NULL OR step IS NULL THEN NULL ELSE
+      ((extract(year FROM la)*12+extract(month FROM la))-(extract(year FROM lanchor)*12+extract(month FROM lanchor)))::integer END AS months FROM l),
+  b AS (SELECT la,step,CASE WHEN months IS NOT NULL AND months>=0 AND months%step=0 AND lanchor+months*interval '1 month'=la THEN lanchor ELSE la END AS base,
+      CASE WHEN months IS NOT NULL AND months>=0 AND months%step=0 AND lanchor+months*interval '1 month'=la THEN months ELSE 0 END AS done FROM k),
+  n AS (SELECT CASE WHEN frequency='WEEKLY' THEN (la+interval '7 days') AT TIME ZONE tz
+      WHEN step IS NULL THEN NULL ELSE (base+(done+step)*interval '1 month') AT TIME ZONE tz END AS n FROM b)
+  SELECT CASE WHEN n IS NULL OR (term_end IS NOT NULL AND n>=term_end) THEN NULL ELSE n END FROM n
 $$;
 
 -- A2/A3: the payer's due lines on or before a school-local date, ranked by student, with the rule's discount.
@@ -637,7 +646,8 @@ BEGIN
       RETURNING id INTO invoice;
     INSERT INTO hon.school_pay_autopay_cycle_lines(organization_id,school_id,cycle_id,membership_id,schedule_id,period_at,student_rank,amount_minor,discount_minor,invoice_id)
       VALUES(org,school,c.id,line.membership_id,line.schedule_id,line.period_at,line.student_rank,line.amount_minor,line.discount_minor,invoice);
-    UPDATE hon.membership_payment_schedules SET next_charge_at=hon.school_pay_next_period(line.period_at,line.frequency,tz,line.term_ends_at),updated_at=clock_timestamp()
+    UPDATE hon.membership_payment_schedules SET next_charge_at=hon.school_pay_next_period(line.period_at,line.frequency,tz,line.term_ends_at,
+        (SELECT min(x.period_at) FROM hon.school_pay_autopay_cycle_lines x WHERE x.schedule_id=line.schedule_id)),updated_at=clock_timestamp()
       WHERE id=line.schedule_id;
     INSERT INTO hon.audit_events(organization_id,school_id,actor_principal_id,source,action_code,entity_type,entity_id,prior_state,next_state,result,request_id,correlation_id)
       VALUES(org,school,actor,'HUMAN_UI','school_pay.autopay.invoice','INVOICE',invoice,NULL,
@@ -680,7 +690,7 @@ DO $$ DECLARE r text; col text; t text;
   private_fns text:='hon.guard_school_pay_autopay_plan(),hon.require_school_pay_autopay_actor(text,text),hon.require_school_pay_autopay_reader(text,text[]),
     hon.school_pay_school_zone(),hon.school_pay_discount_rule_json(hon.school_pay_discount_rules),hon.school_pay_autopay_plan_json(hon.school_pay_autopay_plans),
     hon.school_pay_current_discount_rule(),hon.school_pay_sibling_discount(hon.school_pay_discount_rules,integer,integer,text),
-    hon.school_pay_next_period(timestamptz,text,text,timestamptz),hon.school_pay_autopay_due(uuid,date,text,hon.school_pay_discount_rules),
+    hon.school_pay_next_period(timestamptz,text,text,timestamptz,timestamptz),hon.school_pay_autopay_due(uuid,date,text,hon.school_pay_discount_rules),
     hon.school_pay_autopay_cycle_json(hon.school_pay_autopay_cycles),hon.school_pay_autopay_method_usable(uuid,uuid),hon.school_pay_autopay_begin(text,text,text,text),
     hon.school_pay_autopay_record(uuid,uuid,text,uuid,integer,text,text,jsonb,jsonb,uuid,uuid),hon.school_pay_autopay_complete(text,text,text,uuid,jsonb),
     hon.school_pay_lock_autopay_plan(uuid,integer)';

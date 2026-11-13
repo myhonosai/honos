@@ -370,6 +370,24 @@ try {
   const localOf = async (iso) => (await sql("SELECT to_char($1::timestamptz AT TIME ZONE $2,'YYYY-MM-DD HH24:MI') d", [iso, LA])).rows[0].d;
   const plusMonth = (await sql("SELECT to_char((($1::date+interval '1 month')::date),'YYYY-MM-DD') d", [today])).rows[0].d;
   ok(await localOf(after[anaMonthly.scheduleId]) === `${plusMonth} 12:00` && await localOf(after[benMonthly.scheduleId]) === `${plusMonth} 12:00`, 'monthly schedules move one month, same local time');
+  // Review P2: months count from the schedule's anchor, so a short month clamps only that period (no drift to the 28th).
+  { const next = async (at, frequency, anchor) => (await sql(`SELECT to_char(hon.school_pay_next_period($1::timestamptz,$2,$3,NULL,$4::timestamptz) AT TIME ZONE $3,'YYYY-MM-DD HH24:MI') d`,
+      [at, frequency, LA, anchor])).rows[0].d;
+    const local = (text) => sql('SELECT ($1::timestamp AT TIME ZONE $2)::text t', [text, LA]).then((r) => r.rows[0].t);
+    const jan31 = await local('2027-01-31 18:00');
+    ok(await next(jan31, 'MONTHLY', jan31) === '2027-02-28 18:00', 'Jan 31 -> Feb 28');
+    ok(await next(await local('2027-02-28 18:00'), 'MONTHLY', jan31) === '2027-03-31 18:00', 'Feb 28 -> Mar 31 from the Jan 31 anchor');
+    ok(await next(await local('2027-03-31 18:00'), 'MONTHLY', jan31) === '2027-04-30 18:00', 'Mar 31 -> Apr 30');
+    ok(await next(await local('2027-04-30 18:00'), 'MONTHLY', jan31) === '2027-05-31 18:00', 'Apr 30 -> May 31');
+    const leap = await local('2028-02-29 09:00');
+    ok(await next(leap, 'ANNUAL', leap) === '2029-02-28 09:00', 'Feb 29 annual -> Feb 28');
+    ok(await next(await local('2031-02-28 09:00'), 'ANNUAL', leap) === '2032-02-29 09:00', 'and back to Feb 29 in the next leap year');
+    const dst = await local('2027-02-14 12:00');
+    ok(await next(await local('2027-03-14 12:00'), 'MONTHLY', dst) === '2027-04-14 12:00', 'monthly across the DST change keeps local noon');
+    ok(await next(await local('2027-03-10 12:00'), 'WEEKLY', null) === '2027-03-17 12:00', 'weekly across the DST change keeps local noon');
+    ok(await next(await local('2027-03-15 18:00'), 'MONTHLY', jan31) === '2027-04-15 18:00', 'a schedule moved off its series starts a new one');
+    ok(await next(jan31, 'MONTHLY', null) === '2027-02-28 18:00', 'no anchor: the period itself');
+  }
   ok(await localOf(after[anaWeekly.scheduleId]) === `${await localDay(7)} 12:00`, 'the weekly schedule moves seven days');
   ok(after[cyMonthly.scheduleId] === null, 'a schedule whose next period passes the term end has no next charge');
   ok([later, frozen, custom, paused, euro, p2line].every((x) => after[x.scheduleId] === before[x.scheduleId]), 'every other schedule is untouched');
@@ -467,7 +485,7 @@ try {
     'cancel_school_pay_autopay(text,uuid,jsonb,text,uuid,uuid)', 'prepare_school_pay_autopay_cycle(text,uuid,jsonb,text,uuid,uuid)'];
   const helpers = ['guard_school_pay_autopay_plan()', 'require_school_pay_autopay_actor(text,text)', 'require_school_pay_autopay_reader(text,text[])', 'school_pay_school_zone()',
     'school_pay_discount_rule_json(hon.school_pay_discount_rules)', 'school_pay_autopay_plan_json(hon.school_pay_autopay_plans)', 'school_pay_current_discount_rule()',
-    'school_pay_sibling_discount(hon.school_pay_discount_rules,integer,integer,text)', 'school_pay_next_period(timestamp with time zone,text,text,timestamp with time zone)',
+    'school_pay_sibling_discount(hon.school_pay_discount_rules,integer,integer,text)', 'school_pay_next_period(timestamp with time zone,text,text,timestamp with time zone,timestamp with time zone)',
     'school_pay_autopay_due(uuid,date,text,hon.school_pay_discount_rules)', 'school_pay_autopay_cycle_json(hon.school_pay_autopay_cycles)', 'school_pay_autopay_method_usable(uuid,uuid)',
     'school_pay_autopay_begin(text,text,text,text)', 'school_pay_autopay_record(uuid,uuid,text,uuid,integer,text,text,jsonb,jsonb,uuid,uuid)',
     'school_pay_autopay_complete(text,text,text,uuid,jsonb)', 'school_pay_lock_autopay_plan(uuid,integer)'];
