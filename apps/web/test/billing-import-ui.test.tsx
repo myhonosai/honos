@@ -148,6 +148,7 @@ it('reviews each row with its payer, terms in money, the opening balance and pro
   expect(unsavedDecisions(read as never, { 1: 'SKIP' })).toEqual([{ index: 1, choice: 'SKIP' }, { index: 2, choice: 'SKIP' }]);
   expect(problemText('x:NEW_CODE', (k) => billingImportText('en', k))).toBe('x: needs checking');
   expect(money('en', '5000', 'JPY')).toBe('¥5,000'); expect(money('en', '14900', 'USD')).toBe('$149.00');
+  expect(problemText('currency:UNSUPPORTED', (k) => billingImportText('en', k))).toBe('Currency: use USD, CAD, AUD, NZD, GBP, EUR, JPY or KRW');
 });
 
 it('after import, says what was created and where to go next, and explains a stale import', () => {
