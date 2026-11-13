@@ -23,6 +23,7 @@ export const HQ_GROWTH = [
   { path: '/hq/growth/contests', title: 'Referral Contests', icon: 'flag' },
   { path: '/hq/growth/rewards', title: 'Reward Management', icon: 'gift' },
   { path: '/hq/growth/founder-campaigns', title: 'Founder Campaigns', icon: 'target' },
+  { path: '/hq/growth/prospects', title: 'Prospects', icon: 'team' },
 ] as const;
 export const HQ_SCHOOLS = [
   { path: '/hq/schools', title: 'School Directory', icon: 'school' },
@@ -88,6 +89,7 @@ export function hqPageLabel(path: string): string {
   if (/^\/hq\/schools\/[0-9a-f-]{36}$/i.test(path)) return 'School detail';
   if (/^\/hq\/support\/[0-9a-f-]{36}$/i.test(path)) return 'Support case';
   if (/^\/hq\/communications\/[0-9a-f-]{36}$/i.test(path)) return 'HQ message';
+  if (/^\/hq\/growth\/prospects\/[0-9a-f-]{36}$/i.test(path)) return 'Prospect';
   if (/^\/hq\/growth\/contests\/[0-9a-f-]{36}$/i.test(path)) return 'Contest detail';
   if (path === '/hq/revenue') return 'Revenue';
   if (path === '/hq/marketing/promotions') return 'Plan promotions';

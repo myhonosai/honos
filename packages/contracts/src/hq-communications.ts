@@ -35,6 +35,10 @@ const version = (v: unknown): number => (isInt(v, 1, 999_999_999) ? v as number 
 const EMAIL = /^[a-z0-9._%+-]{1,64}@[a-z0-9.-]{1,180}\.[a-z]{2,24}$/;
 const SERVICE_SID = /^MG[0-9a-f]{32}$/;
 const PHONE = /^\+[1-9][0-9]{7,14}$/;
+/** An HQ email address as the database stores it: lower case. */
+export const isHqEmail = (v: unknown): v is string => typeof v === 'string' && EMAIL.test(v);
+/** A phone number in E.164 form. */
+export const isHqPhone = (v: unknown): v is string => typeof v === 'string' && PHONE.test(v);
 
 /** The longest content allowed for a channel. */
 export function hqMessageMaxLength(channel: HqMessageChannel): number { return channel === 'SMS' ? HQ_MESSAGE_SMS_MAX : HQ_MESSAGE_EMAIL_MAX; }

@@ -46,8 +46,23 @@ Add to `render.yaml` under `services:` only with that OK, then turn Auto Sync ba
         value: public, max-age=31536000, immutable
       - path: /assets/*
         name: Cache-Control
-        value: public, max-age=86400
+        value: public, max-age=31536000, immutable
+      - path: /styles.css
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /site.js
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /flow.js
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
 ```
+
+**Why these files can be cached for a year:** the build adds `?v=<content hash>` to every page's links to `styles.css`, `site.js`, `flow.js` and the fonts, so a changed file gets a new address on the next deploy. Photos in `/assets/` are never edited in place: a new or changed photo gets a new file name (for example `kids-class-v2-1168.webp`). The pages themselves (`/`, `/ko/`, `/es/`) keep the default short caching so a deploy shows up straight away.
+
+### Applying the caching headers to the live site
+
+The live `hon-website` service was created in the Render dashboard, not from `render.yaml`, so these header rules are set in its **Settings → Headers**. Changing them is a production change: it needs David's OK and is done together with the next redeploy. Until then the site still works; browsers just re-check these files more often.
 
 Checked locally: all three language pages render with this Content-Security-Policy and show no CSP errors (2026-11-12).
 
