@@ -111,6 +111,8 @@ const expectedRlsTables = [
   'hon_orchestration_members',
   'ai_late_provider_expenses',
   'ai_spend_pause_commands',
+  'ai_school_cost_limits',
+  'ai_school_cost_limit_commands',
   'ai_invocation_plans',
   'chad_follow_up_invocations',
   'chad_follow_up_drafts',

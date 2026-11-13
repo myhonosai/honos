@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "f98dcb3f43337c6b50d125a59a9cd8fb132657b9253aa177efa97c0dbbebe89a",
+  "chainSha256": "d1f74bc502c11272a3928892e1abe4977670859f3c870d0b6a43d498cc77e153",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -361,6 +361,10 @@
     {
       "file": "0287_ai_task_class_routing.sql",
       "sha256": "eb09bd1fe61ae8d75c91f1151431653faeb4bd16b0472c91f33d0163e38499bd"
+    },
+    {
+      "file": "0288_ai_school_cost_ceiling.sql",
+      "sha256": "0f77dfd17d256f21f724c16f3287247b75a94ef657b017d745278fe56165e123"
     },
     {
       "file": "0304_hq_hon_schedule_billing_facts.sql",
