@@ -117,6 +117,10 @@
       "title": "HON | Import students"
     },
     {
+      "path": "/staff/welcome",
+      "title": "HON | Welcome and setup"
+    },
+    {
       "path": "/staff/planning/revenue",
       "title": "HON | Human Revenue Planning"
     },
