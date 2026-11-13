@@ -127,6 +127,7 @@
     "hon.record_hq_hon_result(text,uuid,jsonb)",
     "hon.record_marketing_result(text,uuid,jsonb)",
     "hon.record_teaching_result(text,uuid,jsonb)",
+    "hon.reopen_hon_reply_for_fallback(text,uuid)",
     "hon.reserve_saas_creative_credits(text,uuid,jsonb,uuid,uuid,uuid)",
     "hon.reserve_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)",
     "hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)",

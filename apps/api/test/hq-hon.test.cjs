@@ -239,3 +239,27 @@ test('HTTP: ask -> one provider call -> record; replay never calls again; outcom
     assert.equal((await send(`${base}/hq/hon/turns/not-a-uuid/resolution`, { method: 'POST', headers: command('hq-hon-turn-resolve'), body: JSON.stringify(res) })).status, 400);
   } finally { await app.close(); }
 }));
+
+test('HTTP (0338): executive performance forwards only a catalog agent and returns validated aggregates', () => withOrigin(async () => {
+  const calls = [];
+  const perf = (agentKey, patch = {}) => ({ agentKey, periodStart: '2026-11-01', asked: 4, answered: 2, failed: 1, underReview: 1, inProgress: 0, resolved: 0,
+    askers: 2, chargedCredits: 9, lastAskedAt: '2026-11-13T07:00:00.000Z', asOf: '2026-11-13T07:30:00.000Z', ...patch });
+  let reply = (op, params) => perf(params[1]);
+  const { app, base } = await appWith(async (operation, params) => { calls.push([operation, params]); return reply(operation, params); }, new OpenRouterHonReplyRuntime(() => ({})));
+  try {
+    const r = await send(`${base}/hq/hon/performance/chase`);
+    assert.equal(r.status, 200, r.body); assert.equal(r.headers['cache-control'], 'private, no-store');
+    assert.deepEqual(JSON.parse(r.body).data, perf('chase'));
+    assert.deepEqual(calls, [['readHqHonAgentPerformance', ['verified-human', 'chase']]]);
+    for (const bad of ['claire', 'CHASE', 'kai']) {
+      const b = await send(`${base}/hq/hon/performance/${bad}`);
+      assert.deepEqual([b.status, JSON.parse(b.body).code], [400, 'INVALID_SAAS_INPUT'], bad);
+    }
+    assert.equal(calls.length, 1, 'an unknown agent never reaches the database');
+    // Totals that do not add up, a non-month period or an extra key are drift, never shown.
+    for (const drift of [perf('mia', { asked: 5 }), perf('mia', { periodStart: '2026-11-13' }), { ...perf('mia'), question: 'x' }, perf('mia', { asked: 0, answered: 0, failed: 0, underReview: 0, askers: 0 })]) {
+      reply = () => drift;
+      assert.equal((await send(`${base}/hq/hon/performance/mia`)).status, 503);
+    }
+  } finally { await app.close(); }
+}));

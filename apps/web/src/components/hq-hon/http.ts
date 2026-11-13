@@ -1,5 +1,5 @@
-import { SAAS_COMMANDS, validateHqHonAskInput, validateHqHonBudgetInput, validateHqHonBudgetReceipt, validateHqHonConversation, validateHqHonTurnReceipt,
-  type HqHonAskInput, type HqHonBudgetInput, type HqHonBudgetReceipt, type HqHonConversation, type HqHonTurnReceipt } from '@hon/contracts';
+import { SAAS_COMMANDS, isHqHonAgent, validateHqHonAgentPerformance, validateHqHonAskInput, validateHqHonBudgetInput, validateHqHonBudgetReceipt, validateHqHonConversation, validateHqHonTurnReceipt,
+  type HqHonAgentKey, type HqHonAgentPerformance, type HqHonAskInput, type HqHonBudgetInput, type HqHonBudgetReceipt, type HqHonConversation, type HqHonTurnReceipt } from '@hon/contracts';
 import { MarketingError, marketingExchange, marketingRead, type Owned } from '../hq-marketing/http';
 import { saasUuid } from '@hon/contracts';
 
@@ -38,6 +38,13 @@ export function hqHonBudgetError(status: number, code: string | null): Marketing
 export const hqHonApi = {
   conversation(signal: AbortSignal, owned: Owned): Promise<HqHonConversation> {
     return marketingRead('/api/v1/hq/hon', signal, owned, validateHqHonConversation);
+  },
+  /** 0338 (HX-1): one agent's aggregate for this UTC month. A different agent in the answer is drift, never shown. */
+  async performance(agentKey: HqHonAgentKey, signal: AbortSignal, owned: Owned): Promise<HqHonAgentPerformance> {
+    if (!isHqHonAgent(agentKey)) throw new MarketingError('INVALID');
+    const p = await marketingRead(`/api/v1/hq/hon/performance/${agentKey}`, signal, owned, validateHqHonAgentPerformance);
+    if (p.agentKey !== agentKey) throw new MarketingError('UNKNOWN');
+    return p;
   },
   /** One attempt. The same key and body replay the saved turn and never call the provider again. */
   async ask(input: HqHonAskInput, key: string, signal: AbortSignal, owned: Owned): Promise<HqHonTurnReceipt> {
