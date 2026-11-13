@@ -195,3 +195,25 @@ test('HQ dispatcher: never claims without a READY adapter; maps provider errors;
   await new HqMessageDispatcher(s, [fake]).runOnce();
   assert.equal(fake.sent.length, 1); assert.equal(JSON.stringify(fake.sent).includes('owner@example.test'), false, 'the fake keeps no address');
 });
+
+test('HQ worker records a verified provider receipt through record_hq_message_provider_event only', async () => {
+  const { HqMessageWorkerDatabase } = require('../dist/hq-communications/hq-message-dispatcher.js');
+  const previous = process.env.HON_COMMUNICATION_WORKER_DATABASE_URL;
+  process.env.HON_COMMUNICATION_WORKER_DATABASE_URL = 'postgres://worker@localhost/hon_test_only';
+  try {
+    const db = new HqMessageWorkerDatabase();
+    const calls = [];
+    let rows = [{ outcome: 'RECORDED', delivery_status: 'DELIVERED' }];
+    db.pool = { query: async (sql, values) => { calls.push({ sql, values }); return { rows }; }, end: async () => undefined };
+    db.posture = Promise.resolve();
+    const receipt = { provider: 'TWILIO', providerEventId: `SM${'d'.repeat(32)}:delivered`, providerMessageId: `SM${'d'.repeat(32)}`, eventType: 'DELIVERED',
+      occurredAt: '2027-01-15T12:00:00.000Z', scope: 'HQ' };
+    assert.deepEqual(await db.recordReceipt(receipt), { outcome: 'RECORDED', deliveryStatus: 'DELIVERED' });
+    assert.equal(calls[0].sql, 'SELECT * FROM hon.record_hq_message_provider_event($1, $2, $3, $4, $5, $6, $7)');
+    assert.deepEqual(calls[0].values, ['TWILIO', receipt.providerEventId, receipt.providerMessageId, null, 'DELIVERED', receipt.occurredAt, null]);
+    rows = [];
+    await assert.rejects(db.recordReceipt(receipt), /HQ_MESSAGE_RECEIPT_NOT_RECORDED/);
+  } finally {
+    if (previous === undefined) delete process.env.HON_COMMUNICATION_WORKER_DATABASE_URL; else process.env.HON_COMMUNICATION_WORKER_DATABASE_URL = previous;
+  }
+});

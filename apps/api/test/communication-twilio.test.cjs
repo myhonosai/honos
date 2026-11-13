@@ -101,6 +101,45 @@ test('Twilio signatures: status callbacks map to receipts; forged, other-account
   assert.equal(reason(() => new TwilioWebhookVerifier(() => ({})).status(ok.body, ok.signature)), 'NOT_CONFIGURED');
 });
 
+test('Twilio HQ sends use the HQ status callback; HQ status callbacks are signed over their own path and come back scope HQ', async () => {
+  let seen;
+  const adapter = new TwilioTextProvider(() => approved(), async (_url, init) => { seen = new URLSearchParams(init.body); return { status: 201, json: async () => ({ sid: `SM${'d'.repeat(32)}`, num_segments: '1' }) }; });
+  assert.equal(adapter.hqSender, true);
+  await adapter.send(request({ origin: 'HQ', senderServiceId: `MG${'b'.repeat(32)}` }));
+  assert.equal(seen.get('MessagingServiceSid'), `MG${'b'.repeat(32)}`);
+  assert.equal(seen.get('StatusCallback'), 'https://api.hon.example/v1/communications/webhooks/twilio/hq-status');
+  await adapter.send(request({ origin: 'HQ', statusCallback: false }));
+  assert.equal(seen.get('StatusCallback'), null);
+  const verifier = new TwilioWebhookVerifier(() => approved(), () => 1_800_000_000_000);
+  const sid = `SM${'d'.repeat(32)}`;
+  const fields = { AccountSid: account, MessageSid: sid, MessageStatus: 'undelivered' };
+  const hq = signed('/v1/communications/webhooks/twilio/hq-status', fields);
+  assert.deepEqual(verifier.hqStatus(hq.body, hq.signature), { provider: 'TWILIO', providerEventId: `${sid}:undelivered`, providerMessageId: sid, eventType: 'UNDELIVERED',
+    occurredAt: new Date(1_800_000_000_000).toISOString(), scope: 'HQ' });
+  // A school status callback cannot be replayed onto the HQ path, nor an HQ one onto the school path.
+  const school = signed('/v1/communications/webhooks/twilio/status', fields);
+  assert.equal(reason(() => verifier.hqStatus(school.body, school.signature)), 'SIGNATURE_INVALID');
+  assert.equal(reason(() => verifier.status(hq.body, hq.signature)), 'SIGNATURE_INVALID');
+  const queued = signed('/v1/communications/webhooks/twilio/hq-status', { ...fields, MessageStatus: 'queued' });
+  assert.equal(verifier.hqStatus(queued.body, queued.signature), null);
+
+  const { CommunicationWebhookController, COMMUNICATION_WEBHOOK_PATHS } = require('../dist/communication/delivery/communication-webhook.controller.js');
+  const { SendGridEventWebhookVerifier } = require('../dist/communication/delivery/sendgrid-email-provider.js');
+  assert.equal(COMMUNICATION_WEBHOOK_PATHS.has('/v1/communications/webhooks/twilio/hq-status'), true);
+  const seenSchool = [];
+  const seenHq = [];
+  const schoolStore = { isConfigured: () => true, recordReceipt: async (r) => { seenSchool.push(r); return { outcome: 'RECORDED' }; } };
+  const hqStore = { isConfigured: () => true, recordReceipt: async (r) => { seenHq.push(r); return { outcome: 'RECORDED', deliveryStatus: 'FAILED' }; } };
+  const controller = new CommunicationWebhookController(schoolStore, new SendGridEventWebhookVerifier(() => ({})), verifier, undefined, hqStore);
+  assert.deepEqual(await controller.twilioHqStatus({ body: hq.body }, hq.signature), { received: true, recorded: 1, replayed: 0, ignored: 0 });
+  assert.deepEqual([seenSchool.length, seenHq.map((r) => r.providerEventId)], [0, [`${sid}:undelivered`]]);
+  assert.deepEqual(await controller.twilioHqStatus({ body: queued.body }, queued.signature), { received: true, recorded: 0, replayed: 0, ignored: 1 });
+  await assert.rejects(controller.twilioHqStatus({ body: school.body }, school.signature), (e) => e.getStatus() === 400);
+  await assert.rejects(controller.twilioHqStatus({ body: 'not a buffer' }, hq.signature), (e) => e.getStatus() === 400);
+  await assert.rejects(new CommunicationWebhookController(schoolStore, new SendGridEventWebhookVerifier(() => ({})), verifier).twilioHqStatus({ body: hq.body }, hq.signature),
+    (e) => e.getStatus() === 503);
+});
+
 test('Twilio inbound: only exact STOP/START/HELP words are keywords', () => {
   const verifier = new TwilioWebhookVerifier(() => approved(), () => 1_800_000_000_000);
   const inbound = (body) => {

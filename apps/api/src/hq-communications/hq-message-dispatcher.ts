@@ -10,7 +10,7 @@ import {
   type CommunicationSendRequest,
   type DeliverableChannel,
 } from '../communication/delivery/communication-provider.js';
-import type { CommunicationSendResult } from '../communication/delivery/communication-worker-database.js';
+import type { CommunicationSendResult, VerifiedProviderReceipt } from '../communication/delivery/communication-worker-database.js';
 import type { DispatchSummary } from '../communication/delivery/communication-dispatcher.js';
 
 /** One leased HQ delivery: the address and body exist only in memory for this one send. */
@@ -41,6 +41,8 @@ export interface HqMessageWorkerStore {
   isConfigured(): boolean;
   claim(channels: DeliverableChannel[], limit: number, leaseSeconds: number): Promise<ClaimedHqMessageDelivery[]>;
   recordResult(deliveryId: string, leaseToken: string, result: CommunicationSendResult): Promise<{ status: string; accepted: boolean }>;
+  /** A verified provider receipt for an HQ delivery (SendGrid hon_purpose HQ, Twilio HQ status path). */
+  recordReceipt?(receipt: VerifiedProviderReceipt): Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNMATCHED'; deliveryStatus: string | null }>;
 }
 
 /** One inbound text to the HQ number, as the webhook verified it. The body is classified in the database, never stored. */
@@ -111,6 +113,15 @@ export class HqMessageWorkerDatabase implements HqMessageWorkerStore, OnModuleDe
         result.segments ?? null, result.encoding ?? null, result.failureCode ?? null, result.retryAfterSeconds ?? null]))[0];
     if (!row) throw new Error('HQ_MESSAGE_RESULT_NOT_RECORDED');
     return row;
+  }
+
+  async recordReceipt(receipt: VerifiedProviderReceipt) {
+    const row = (await this.query<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNMATCHED'; delivery_status: string | null }>(
+      'SELECT * FROM hon.record_hq_message_provider_event($1, $2, $3, $4, $5, $6, $7)',
+      [receipt.provider, receipt.providerEventId, receipt.providerMessageId, receipt.honDeliveryId ?? null, receipt.eventType,
+        receipt.occurredAt, receipt.providerCostMicrounits ?? null]))[0];
+    if (!row) throw new Error('HQ_MESSAGE_RECEIPT_NOT_RECORDED');
+    return { outcome: row.outcome, deliveryStatus: row.delivery_status };
   }
 }
 

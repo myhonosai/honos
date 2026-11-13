@@ -22,6 +22,8 @@ type Env = Record<string, string | undefined>;
 export class SendGridEmailProvider implements CommunicationProviderAdapter {
   readonly provider = 'SENDGRID' as const;
   readonly channel = 'EMAIL' as const;
+  /** 0281: HQ sends go from the HQ sender address and name, tagged hon_purpose HQ so receipts reach HQ deliveries. */
+  readonly hqSender = true;
   constructor(private readonly environment: () => Env = () => process.env, private readonly transport: typeof fetch = fetch) {}
 
   readiness() {
@@ -36,16 +38,23 @@ export class SendGridEmailProvider implements CommunicationProviderAdapter {
 
   /** The exact request body; exported for tests. The school name is the sender display name. */
   requestBody(request: CommunicationSendRequest): Record<string, unknown> {
-    const from = this.environment().HON_EMAIL_FROM ?? '';
-    const schoolName = request.schoolName.replace(/[\r\n"<>]/g, ' ').trim().slice(0, 80) || 'Your school';
+    const hq = request.origin === 'HQ';
+    const from = hq ? request.senderEmail ?? '' : this.environment().HON_EMAIL_FROM ?? '';
+    const name = (hq ? request.senderName ?? '' : request.schoolName).replace(/[\r\n"<>]/g, ' ').trim().slice(0, 80) || (hq ? 'HON OS' : 'Your school');
+    const purpose = hq ? 'HQ' : request.purpose && request.purpose !== 'SCHOOL' ? request.purpose : undefined;
+    // HQ BILLING and ACCOUNT mail are required notices: HON already let them through an HQ email opt-out (0281), so
+    // SendGrid must not drop them for an earlier unsubscribe. Spam reports and bounces still suppress.
+    // NOT YET ACTIVE: the 0281 claim does not return the message purpose, so HqMessageDispatcher never sets hqPurpose
+    // and every HQ email gets normal unsubscribe handling until 0282 (HQ-COMM PR C) passes it.
+    const requiredNotice = hq && (request.hqPurpose === 'BILLING' || request.hqPurpose === 'ACCOUNT');
     return {
       personalizations: [{ to: [{ email: request.recipientAddress }], custom_args: {
-        hon_delivery_id: request.deliveryId, ...(request.purpose && request.purpose !== 'SCHOOL' ? { hon_purpose: request.purpose } : {}),
+        hon_delivery_id: request.deliveryId, ...(purpose ? { hon_purpose: purpose } : {}),
       } }],
-      from: { email: from, name: `${schoolName} via HON` },
-      subject: `A message from ${schoolName}`,
+      from: { email: from, name: hq ? name : `${name} via HON` },
+      subject: `A message from ${name}`,
       content: [{ type: 'text/plain', value: request.content }],
-      mail_settings: { sandbox_mode: { enable: this.sandbox() } },
+      mail_settings: { sandbox_mode: { enable: this.sandbox() }, ...(requiredNotice ? { bypass_unsubscribe_management: { enable: true } } : {}) },
       tracking_settings: { subscription_tracking: { enable: true }, open_tracking: { enable: false }, click_tracking: { enable: false } },
     };
   }
@@ -53,6 +62,8 @@ export class SendGridEmailProvider implements CommunicationProviderAdapter {
   async send(request: CommunicationSendRequest): Promise<CommunicationSendAccepted> {
     const key = this.environment().SENDGRID_API_KEY?.trim();
     if (this.readiness() !== 'READY' || !key) throw new CommunicationProviderError('RETRYABLE', 'PROVIDER_FAILED', 300);
+    // An HQ send never falls back to the school from-address: without a valid HQ sender nothing is sent.
+    if (request.origin === 'HQ' && !ADDRESS.test(request.senderEmail ?? '')) throw new CommunicationProviderError('RETRYABLE', 'PROVIDER_FAILED', 900);
     if (!ADDRESS.test(request.recipientAddress)) throw new CommunicationProviderError('FAILED', 'INVALID_ADDRESS');
     let response: Response;
     try {
@@ -102,9 +113,9 @@ const TOLERANCE_SECONDS = 600;
 /**
  * SendGrid Signed Event Webhook: ECDSA P-256 / SHA-256 over timestamp header + exact raw body, verified with
  * SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY (base64 DER SPKI, as SendGrid shows it). Returns only HON-sent events
- * (those carrying hon_delivery_id) mapped to the closed receipt vocabulary; opens and clicks are dropped. Mail tagged with any
- * hon_purpose other than SCHOOL (internal staff notices, HQ messages, or a purpose this build does not know) is acknowledged
- * and ignored here, so it never makes SendGrid retry the whole batch.
+ * (those carrying hon_delivery_id) mapped to the closed receipt vocabulary; opens and clicks are dropped. Mail tagged
+ * hon_purpose HQ comes back with scope HQ (an 0281 HQ delivery). Any other purpose (internal staff notices, or one this
+ * build does not know) is acknowledged and ignored here, so it never makes SendGrid retry the whole batch.
  */
 export class SendGridEventWebhookVerifier {
   private key: KeyObject | undefined;
@@ -136,7 +147,8 @@ export class SendGridEventWebhookVerifier {
     for (const item of parsed) {
       if (!item || typeof item !== 'object') continue;
       const event = item as Record<string, unknown>;
-      if (event.hon_purpose !== undefined && event.hon_purpose !== 'SCHOOL') continue;
+      const hq = event.hon_purpose === 'HQ';
+      if (event.hon_purpose !== undefined && event.hon_purpose !== 'SCHOOL' && !hq) continue;
       const eventType = typeof event.event === 'string' ? EVENT_MAP[event.event] : undefined;
       const delivery = typeof event.hon_delivery_id === 'string' && UUID.test(event.hon_delivery_id) ? event.hon_delivery_id.toLowerCase() : undefined;
       const eventId = typeof event.sg_event_id === 'string' && PROVIDER_ID.test(event.sg_event_id) ? event.sg_event_id : undefined;
@@ -144,7 +156,7 @@ export class SendGridEventWebhookVerifier {
       const seconds = typeof event.timestamp === 'number' && Number.isSafeInteger(event.timestamp) ? event.timestamp : undefined;
       if (!eventType || !delivery || !eventId || !messageId || !PROVIDER_ID.test(messageId) || seconds === undefined) continue;
       receipts.push({ provider: 'SENDGRID', providerEventId: eventId, providerMessageId: messageId, honDeliveryId: delivery, eventType,
-        occurredAt: new Date(seconds * 1000).toISOString() });
+        occurredAt: new Date(seconds * 1000).toISOString(), ...(hq ? { scope: 'HQ' as const } : {}) });
     }
     return receipts;
   }
