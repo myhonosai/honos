@@ -188,7 +188,7 @@ export interface SaasScheduleBindingAccess {
    * a lifetime purchase). */
   accessUntil: string | null;
 }
-export interface SaasScheduleBindingView extends SaasScheduleBinding { access: SaasScheduleBindingAccess }
+export interface SaasScheduleBindingView extends SaasScheduleBinding { access: SaasScheduleBindingAccess; welcomeCredit: SaasScheduleWelcomeCreditAmounts }
 export interface SaasScheduleAccessRetryInput { expectedBindingVersion: number }
 export interface SaasScheduleAccessRetryReceipt { bindingId: string; access: SaasScheduleBindingAccess & { accessGranted: boolean }; replayed: boolean }
 
@@ -208,14 +208,48 @@ function validateBindingAccess(value: unknown, withGranted: boolean, lifetime?: 
 
 export function validateSaasScheduleBindingView(value: unknown): SaasScheduleBindingView {
   const r = record(value, drift);
-  const { access, ...binding } = r;
+  const { access, welcomeCredit, ...binding } = r;
   const checked = validateSaasScheduleBinding(binding);
+  const credit = validateWelcomeCreditAmounts(welcomeCredit);
   const a = validateBindingAccess(access, false, checked.requirements.billingInterval === 'ONE_TIME');
   // Access can only have been applied after billing became ACTIVE; a review never relabels the billing status.
   if (a.accessActivation === 'APPLIED' && checked.status !== 'ACTIVE' && checked.status !== 'NEEDS_REVIEW') drift();
   // 0309: an ended lifetime plan reports ENDED, and only it does.
   if ((a.accessActivation === 'ENDED') !== (checked.status === 'REFUNDED_ENDED')) drift();
-  return { ...checked, access: a };
+  // 0325: only a recurring plan can carry a welcome credit.
+  if (credit.creditedMinor > 0 && checked.requirements.billingInterval === 'ONE_TIME') drift();
+  return { ...checked, access: a, welcomeCredit: credit };
+}
+
+/** 0325: a HON OS plan's welcome credit, amounts only (never who referred the school). */
+export interface SaasScheduleWelcomeCreditAmounts { creditedMinor: number; usedMinor: number; remainingMinor: number }
+function validateWelcomeCreditAmounts(value: unknown): SaasScheduleWelcomeCreditAmounts {
+  const r = record(value, drift); keys(r, ['creditedMinor','usedMinor','remainingMinor'], drift);
+  if (!integer(r.creditedMinor, 0, 100000000) || !integer(r.usedMinor, 0, 100000000) || !integer(r.remainingMinor, 0, 100000000)
+    || (r.usedMinor as number) + (r.remainingMinor as number) !== r.creditedMinor) drift();
+  return { creditedMinor: r.creditedMinor as number, usedMinor: r.usedMinor as number, remainingMinor: r.remainingMinor as number };
+}
+/** 0325: HQ owner applies one approved Champions WELCOME_CREDIT entry to the referred school's HON OS plan. */
+export interface SaasScheduleWelcomeCreditInput { rewardEntryId: string; expectedEntryVersion: number }
+export function validateSaasScheduleWelcomeCreditInput(value: unknown): SaasScheduleWelcomeCreditInput {
+  const r = record(value, invalid); keys(r, ['expectedEntryVersion','rewardEntryId'], invalid);
+  if (!uuid(r.rewardEntryId) || !integer(r.expectedEntryVersion, 1, 999999999)) invalid();
+  return Object.freeze({ rewardEntryId: r.rewardEntryId as string, expectedEntryVersion: r.expectedEntryVersion as number });
+}
+export interface SaasScheduleWelcomeCreditReceipt {
+  welcomeCreditId: string; rewardEntryId: string; bindingId: string; organizationId: string; amountMinor: number;
+  providerAccountReference: string; providerCreditKey: string; appliedAt: string; welcomeCredit: SaasScheduleWelcomeCreditAmounts;
+  cashPayout: false; replayed: boolean;
+}
+export function validateSaasScheduleWelcomeCreditReceipt(value: unknown): SaasScheduleWelcomeCreditReceipt {
+  const r = record(value, drift);
+  keys(r, ['welcomeCreditId','rewardEntryId','bindingId','organizationId','amountMinor','providerAccountReference','providerCreditKey','appliedAt',
+    'welcomeCredit','cashPayout','replayed'], drift);
+  if (![r.welcomeCreditId,r.rewardEntryId,r.bindingId,r.organizationId,r.providerCreditKey].every(uuid) || !integer(r.amountMinor, 1, 100000)
+    || !fakeReference(r.providerAccountReference) || !timestamp(r.appliedAt) || r.cashPayout !== false || typeof r.replayed !== 'boolean') drift();
+  const credit = validateWelcomeCreditAmounts(r.welcomeCredit);
+  if (credit.creditedMinor < (r.amountMinor as number)) drift();
+  return { ...(r as object), welcomeCredit: credit } as SaasScheduleWelcomeCreditReceipt;
 }
 
 export function validateSaasScheduleAccessRetryInput(value: unknown): SaasScheduleAccessRetryInput {

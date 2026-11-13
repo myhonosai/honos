@@ -206,7 +206,9 @@ try {
   await deny(()=>schedules.start(H('school'),org.second,input,K()),403,'SAAS_FORBIDDEN');await deny(()=>schedules.read(H('other'),foreign.school,binding.bindingId),404,'SAAS_UNAVAILABLE');
   const notAttempted={accessActivation:'NOT_ATTEMPTED',reason:null,paidThrough:null,accessUntil:null};
   for(const view of [await schedules.read(H('staff'),org.school,binding.bindingId),await schedules.readHq(H('hq'),binding.bindingId)]){
-    const {access:viewAccess,...billingView}=view;assert.deepEqual(billingView,binding);assert.deepEqual(viewAccess,notAttempted);
+    const {access:viewAccess,welcomeCredit,...billingView}=view;assert.deepEqual(billingView,binding);assert.deepEqual(viewAccess,notAttempted);
+    // 0325: the view also carries the plan's welcome credit amounts (none here).
+    assert.deepEqual(welcomeCredit,{creditedMinor:0,usedMinor:0,remainingMinor:0});
   }
 
   // The reverse D9 writer and B2 use the same organization key. A waiting state may win and B2 then succeeds;

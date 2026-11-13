@@ -13,7 +13,11 @@ export interface ProviderSubscriptionScheduleAdapter {
   findByBindingKey(request: ProviderScheduleBindingRequest): Promise<ProviderScheduleBindingObservation | ProviderScheduleLookupMiss>;
   /** Worker-only: cancel a bound schedule that never collected. COLLECTED or UNKNOWN records nothing. */
   cancelUnpaidSchedule(request: ProviderScheduleCancelRequest): Promise<ProviderScheduleCancelObservation>;
+  /** 0325: put a recorded welcome credit on the customer's balance (TEST adapter only). Idempotent on creditKey. */
+  creditCustomerBalance(request: ProviderBalanceCreditRequest): Promise<ProviderBalanceCreditObservation>;
 }
+export interface ProviderBalanceCreditRequest { accountReference: string; amountMinor: number; currency: 'USD'; creditKey: string }
+export interface ProviderBalanceCreditObservation { outcome: 'CREDITED'; creditKey: string; amountMinor: number }
 export interface ProviderScheduleLookupMiss {
   readonly identity: 'DETERMINISTIC_FAKE'; readonly mode: 'TEST'; readonly outcome: 'NOT_FOUND' | 'TERMS_MISMATCH' | 'UNKNOWN';
   readonly bindingId: string; readonly bindingKey: string; readonly requirementsDigest: string;
@@ -101,4 +105,5 @@ export class UnconfiguredSubscriptionScheduleProvider implements ProviderSubscri
   async bindOrFindSchedule(): Promise<ProviderScheduleBindingObservation> { throw new Error('SAAS_SCHEDULE_PROVIDER_UNAVAILABLE'); }
   async findByBindingKey(): Promise<ProviderScheduleBindingObservation> { throw new Error('SAAS_SCHEDULE_PROVIDER_UNAVAILABLE'); }
   async cancelUnpaidSchedule(): Promise<ProviderScheduleCancelObservation> { throw new Error('SAAS_SCHEDULE_PROVIDER_UNAVAILABLE'); }
+  async creditCustomerBalance(): Promise<ProviderBalanceCreditObservation> { throw new Error('SAAS_SCHEDULE_PROVIDER_UNAVAILABLE'); }
 }

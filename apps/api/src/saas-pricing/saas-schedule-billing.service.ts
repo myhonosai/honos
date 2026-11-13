@@ -3,7 +3,8 @@ import type { SaasScheduleBinding } from '@hon/contracts';
 import { randomUUID } from 'node:crypto';
 import { saasUuid, validateSaasScheduleAccessRetryInput, validateSaasScheduleAccessRetryReceipt, validateSaasScheduleBindingInput,
   validateSaasScheduleBindingReceipt, validateSaasScheduleBindingView, validateSaasScheduleEvidenceReceipt, validateSaasSchedulePastDueList,
-  validateSaasSchedulePastDueSuspension, type SaasScheduleRequirements } from '@hon/contracts';
+  validateSaasSchedulePastDueSuspension, validateSaasScheduleWelcomeCreditInput, validateSaasScheduleWelcomeCreditReceipt,
+  type SaasScheduleRequirements } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
 import { SUBSCRIPTION_SCHEDULE_PROVIDER, type ProviderScheduleRequirements, type ProviderSubscriptionScheduleAdapter } from '../payments/subscription-schedule-provider.js';
 
@@ -132,6 +133,29 @@ export class SaasScheduleBillingService {
     // A collected or unknown provider answer is never recorded as a no-cost cancellation.
     if (observed.outcome !== 'CANCELLED_NOTHING_COLLECTED') throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_BINDING_RECONCILIATION_REQUIRED' });
     return this.billing.call('cancelScheduleBinding',[subject,s,b,JSON.stringify(observed),k,randomUUID(),randomUUID()],validateSaasScheduleBindingReceipt);
+  }
+
+  /**
+   * 0325, HQ owner only (database-enforced): record one approved welcome credit on the referred school's HON OS plan,
+   * then ask the provider to put the same amount on the customer's balance under the credit's key. A provider failure
+   * leaves the recorded credit in place; a retry with the same idempotency key replays the record and re-sends the same
+   * idempotent provider credit. Until the provider applies it, the next renewal arrives at full price and is held for review.
+   */
+  async applyWelcomeCredit(subject: string, binding: unknown, body: unknown, key: unknown) {
+    const [b,input,k] = parse(() => [saasUuid(binding), validateSaasScheduleWelcomeCreditInput(body), saasUuid(key)] as const);
+    const receipt = await this.billing.call('applyScheduleWelcomeCredit',
+      [subject,input.rewardEntryId,JSON.stringify({ bindingId:b, expectedEntryVersion:input.expectedEntryVersion }),k,randomUUID(),randomUUID()],
+      validateSaasScheduleWelcomeCreditReceipt);
+    let observed;
+    try {
+      observed = await this.provider.creditCustomerBalance({ accountReference:receipt.providerAccountReference, amountMinor:receipt.amountMinor,
+        currency:'USD', creditKey:receipt.providerCreditKey });
+    } catch {
+      throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_PROVIDER_UNAVAILABLE', detail: 'The credit is recorded; retry with the same idempotency key to send it to the provider.' });
+    }
+    if (observed.outcome !== 'CREDITED' || observed.creditKey !== receipt.providerCreditKey || observed.amountMinor !== receipt.amountMinor)
+      throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_BINDING_RECONCILIATION_REQUIRED' });
+    return { ...receipt, providerCredited: true as const };
   }
 
   /** Internal only: caller must already have verified raw provider bytes and selected the fixed TEST adapter. */

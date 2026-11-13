@@ -34,5 +34,14 @@ class DeterministicScheduleProvider {
     return {identity:this.identity,mode:this.mode,outcome:this.collected.has(bindingId)?'COLLECTED':'CANCELLED_NOTHING_COLLECTED',
       bindingId,accountReference,subscriptionReference,scheduleReference};
   }
+  /** 0325: customer balance credits, idempotent on creditKey; failNextCredit simulates a provider outage. */
+  balances=new Map(); credits=new Map(); failNextCredit=false;
+  async creditCustomerBalance({accountReference,amountMinor,currency,creditKey}){
+    this.calls++;
+    if(this.failNextCredit){this.failNextCredit=false;throw new Error('network');}
+    if(currency!=='USD'||!Number.isInteger(amountMinor)||amountMinor<1) throw new Error('INVALID');
+    if(!this.credits.has(creditKey)){this.credits.set(creditKey,amountMinor);this.balances.set(accountReference,(this.balances.get(accountReference)||0)+amountMinor);}
+    return {outcome:'CREDITED',creditKey,amountMinor:this.credits.get(creditKey)};
+  }
 }
 module.exports={DeterministicScheduleProvider};
