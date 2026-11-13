@@ -284,6 +284,7 @@
     "0335_school_support_requests.sql": "4361133db9255836187b05cad0b11e877ed3fe6d895722bad07859c2b8f98f58",
     "0336_ai_reduced_mode_fallback.sql": "3e83f6db003e7888dfba22a00d5a0593b4604265314abce73cd80fff612959df",
     "0338_hq_executive_performance.sql": "36efc3eafd9ab2bd4e6a9b549d973e50e7ac9e57b7fa6a5bbfd79c29748f04d0",
-    "0334_school_membership_balance_import.sql": "d5b18703308e4f456394a96b1d89c9b348a6ee9ca6b69d7d9155ded8dd07a7fc"
+    "0309_hon_os_lifetime_refund_ends_access.sql": "810a648cf0c9faec1f458e841b2710d609982d6f911674c57cc352687c6e562c",
+    "0334_school_membership_balance_import.sql": "c3cd842298cea1d168b08e7b21c8c0cded0f48df081c32cc8692087d248cae9c"
   }
 }

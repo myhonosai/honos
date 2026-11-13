@@ -166,6 +166,10 @@ BEGIN
     AND EXISTS(SELECT 1 FROM hon.schools s WHERE s.id=school AND s.organization_id=org AND s.status='ACTIVE')
     AND NOT EXISTS(SELECT 1 FROM hon.hq_operator_grants h WHERE h.principal_id=p.id)
     AND NOT EXISTS(SELECT 1 FROM hon.family_access_grants f WHERE f.principal_id=p.id AND f.effective_from<=clock_timestamp() AND (f.effective_until IS NULL OR f.effective_until>clock_timestamp()))
+    -- A family, HQ or system role anywhere disqualifies the person, as in the 0322 and 0330 actors.
+    AND NOT EXISTS(SELECT 1 FROM hon.principal_role_grants g JOIN hon.roles r ON r.id=g.role_id AND r.organization_id=g.organization_id
+      WHERE g.principal_id=p.id AND g.revoked_at IS NULL AND g.effective_from<=clock_timestamp() AND (g.effective_until IS NULL OR g.effective_until>clock_timestamp())
+        AND r.code ~* '^(PARENT|GUARDIAN|STUDENT|FAMILY|HQ|HON_|PLATFORM|SYSTEM)')
     AND hon.staff_member_eligible(p.id,org,school)
     AND (SELECT count(DISTINCT x.code) FROM hon.principal_role_grants g JOIN hon.roles r ON r.id=g.role_id AND r.organization_id=g.organization_id
       JOIN hon.role_permissions rp ON rp.role_id=r.id AND rp.organization_id=r.organization_id JOIN hon.permissions x ON x.code=rp.permission_code
@@ -200,13 +204,20 @@ BEGIN
   RETURN CASE WHEN to_char(d,'YYYY-MM-DD')=v AND d>=date '2000-01-01' THEN d END;
 END $$;
 
+-- The currencies an import understands, with their minor units: two decimals, or whole units for JPY and KRW. Any other
+-- code (VND, KWD, an unknown one) is refused as currency:UNSUPPORTED rather than stored at the wrong scale.
+CREATE FUNCTION hon.billing_import_currency_supported(cur text) RETURNS boolean
+LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
+  SELECT coalesce(cur IN ('USD','CAD','AUD','NZD','GBP','EUR','JPY','KRW'),false)
+$$;
+
 -- "149", "149.00", "$1,250.50" -> minor units of a two-decimal currency; whole units only for JPY and KRW. NULL when the
--- text is not a plain non-negative amount of at most 1,000,000 units.
+-- text is not a plain non-negative amount of at most 1,000,000 units, or the currency is not supported.
 CREATE FUNCTION hon.billing_import_money(v text,cur text) RETURNS integer
 LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog AS $$
 DECLARE t text; m text[]; whole bigint; frac text;
 BEGIN
-  IF v IS NULL OR cur IS NULL THEN RETURN NULL; END IF;
+  IF v IS NULL OR NOT hon.billing_import_currency_supported(cur) THEN RETURN NULL; END IF;
   t:=regexp_replace(btrim(v),'^[$€£¥₩]\s*','');
   IF t ~ '^[0-9]{1,3}(,[0-9]{3})+(\.[0-9]+)?$' THEN t:=replace(t,',',''); END IF;
   m:=regexp_match(t,'^([0-9]{1,7})(?:\.([0-9]{1,2}))?$');
@@ -265,7 +276,8 @@ BEGIN
         IF f IS NULL THEN errors:=errors||jsonb_build_array('frequency:USE_WEEKLY_MONTHLY_OR_ANNUAL'); ELSE v:=f; END IF;
       ELSIF field='currency' THEN
         v:=upper(v);
-        IF v !~ '^[A-Z]{3}$' THEN errors:=errors||jsonb_build_array('currency:USE_THREE_LETTER_CODE'); v:=''; END IF;
+        IF v !~ '^[A-Z]{3}$' THEN errors:=errors||jsonb_build_array('currency:USE_THREE_LETTER_CODE'); v:='';
+        ELSIF NOT hon.billing_import_currency_supported(v) THEN errors:=errors||jsonb_build_array('currency:UNSUPPORTED'); v:=''; END IF;
       END IF;
     END IF;
     n:=n||jsonb_build_object(field,v);
@@ -501,7 +513,11 @@ BEGIN
       IF payer_cur ? payer::text AND payer_cur->>payer::text<>cur THEN errs:=errs||'["currency:PAYER_CURRENCY_MISMATCH"]'::jsonb;
       ELSE payer_cur:=payer_cur||jsonb_build_object(payer::text,cur); END IF;
     ELSIF cur='' THEN cur:='USD'; END IF;
-    IF cur<>'' AND NOT errs ? 'currency:USE_THREE_LETTER_CODE' THEN
+    -- A defaulted currency (from an existing account) must be one the parser understands too.
+    IF cur<>'' AND NOT hon.billing_import_currency_supported(cur) AND NOT errs ? 'currency:UNSUPPORTED' THEN
+      errs:=errs||'["currency:UNSUPPORTED"]'::jsonb;
+    END IF;
+    IF cur<>'' AND NOT errs ?| ARRAY['currency:USE_THREE_LETTER_CODE','currency:UNSUPPORTED'] THEN
       amt:=hon.billing_import_money(n->>'amount',cur);
       IF coalesce(n->>'amount','')<>'' AND (amt IS NULL OR amt<=0) THEN errs:=errs||'["amount:USE_A_PRICE"]'::jsonb; END IF;
       bal:=CASE WHEN n->>'balanceOwed'='' THEN 0 ELSE hon.billing_import_money(n->>'balanceOwed',cur) END;
@@ -719,7 +735,7 @@ DO $$ DECLARE r text; t text; f regprocedure; BEGIN
     END LOOP;
   END LOOP;
   FOREACH f IN ARRAY ARRAY['hon.guard_billing_import()','hon.require_billing_import_actor(text)','hon.billing_import_fields()',
-    'hon.billing_import_required()','hon.billing_import_date(text)','hon.billing_import_money(text,text)','hon.billing_import_frequency(text)',
+    'hon.billing_import_required()','hon.billing_import_date(text)','hon.billing_import_currency_supported(text)','hon.billing_import_money(text,text)','hon.billing_import_frequency(text)',
     'hon.billing_import_check_row(jsonb,jsonb,jsonb,date)','hon.billing_import_plan_code(text)','hon.billing_import_match_student(jsonb,jsonb)',
     'hon.billing_import_payer(uuid,jsonb,date)','hon.billing_import_has_membership(uuid)','hon.billing_import_summary(uuid)','hon.billing_import_detail(uuid)',
     'hon.billing_import_begin(text,text,jsonb,text,uuid,uuid)','hon.billing_import_finish(text,uuid,text,uuid,text,uuid,uuid,jsonb)',

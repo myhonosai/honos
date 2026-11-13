@@ -73,7 +73,7 @@ try{
  }
  const entry=['stage_billing_import','decide_billing_import','finalize_billing_import','read_billing_imports','read_billing_import'];
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname LIKE '%billing_import%'");
- assert.equal(fns.length,24);
+ assert.equal(fns.length,25);
  for(const f of fns)assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entry.includes(f.proname),f.proname);
  pass('forced deny-all RLS on three new tables; runtime executes exactly five entry points');
 
@@ -135,7 +135,26 @@ try{
   {First:'studentGivenName',Last:'studentFamilyName',Plan:'planName',Price:'amount',Every:'frequency',Start:'startedOn',Next:'className'}),400,'BILLING_IMPORT_INVALID');
  const nothing=await q("SELECT (SELECT count(*) FROM hon.memberships WHERE organization_id=$1) m,(SELECT count(*) FROM hon.invoices WHERE organization_id=$1) i,(SELECT count(*) FROM hon.billing_accounts WHERE organization_id=$1) b",[a.org]);
  assert.deepEqual(nothing[0],{m:'0',i:'0',b:'0'});
- pass('staging revalidates every cell in the database, matches students and payers exactly (named guardian, only guardian, billing contact, adult student), converts amounts to minor units, matches catalog plans, and refuses unknown students, unclear or minor payers, past charges, ended terms, formulas and repeats while creating no record');
+ // Currencies: only codes the parser knows are accepted. JPY is whole units; VND (zero-decimal), KWD (three-decimal) and an unknown
+ // code are refused, never stored at the wrong scale; an existing account in an unsupported currency is refused the same way.
+ const g=await register('gamma');await setAccess(g,'ACTIVE');
+ const moss=await student(g,'Lee','Moss','1985-05-05');
+ await q("INSERT INTO hon.billing_accounts(organization_id,school_id,responsible_person_id,currency,account_classification) VALUES($1,$2,$3,'VND','CANONICAL')",[g.org,g.school,moss.person]);
+ const cmap={...map,Cur:'currency'},chead=[...head,'Cur'];
+ const cb=ok(await stage(g,[chead,
+  ['Nobody','One','','','','Kids','5000','Monthly','2025-01-01','',nextCharge,'1200','','','jpy'],
+  ['Nobody','Two','','','','Kids','5000.50','Monthly','2025-01-01','',nextCharge,'','','','JPY'],
+  ['Nobody','Three','','','','Kids','500000','Monthly','2025-01-01','',nextCharge,'','','','VND'],
+  ['Nobody','Four','','','','Kids','10','Monthly','2025-01-01','',nextCharge,'','','','KWD'],
+  ['Nobody','Five','','','','Kids','10','Monthly','2025-01-01','',nextCharge,'','','','ABC'],
+  ['Lee','Moss','','','','Kids','10','Monthly','2025-01-01','',nextCharge,'','','','']],cmap));
+ const cd=await detail(g,cb.id);
+ assert.deepEqual([cd.rows[0].normalized.currency,cd.rows[0].normalized.amountMinor,cd.rows[0].normalized.balanceMinor],['JPY','5000','1200']);
+ assert(cd.rows[1].errors.includes('amount:USE_A_PRICE'));
+ for(const i of [2,3,4,5]){assert(cd.rows[i].errors.includes('currency:UNSUPPORTED'),JSON.stringify(cd.rows[i].errors));assert.equal(cd.rows[i].normalized.amountMinor,'');}
+ assert.deepEqual(cd.rows[5].errors,['currency:UNSUPPORTED']);
+ assert.equal((await q("SELECT hon.billing_import_money('500000','VND') v"))[0].v,null);
+ pass('staging revalidates every cell in the database, matches students and payers exactly (named guardian, only guardian, billing contact, adult student), converts amounts to minor units in supported currencies only, matches catalog plans, and refuses unknown students, unclear or minor payers, past charges, ended terms, formulas and repeats while creating no record');
 
  // 3. Decide and finalize: ACTIVE memberships with 0177 evidence, ACTIVE schedules, ISSUED balances, one account per payer.
  refused(await decide(a,batch.id,1,[{index:6,choice:'IMPORT'}]),400,'BILLING_IMPORT_ROW_NOT_IMPORTABLE');
@@ -218,11 +237,16 @@ try{
  refused(await send(base(b),{identity:b}),403,'BILLING_IMPORT_FORBIDDEN');
  await q("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) SELECT r.id,r.organization_id,'billing.membership.activate' FROM hon.roles r WHERE r.organization_id=$1 AND r.code='OWNER' AND r.is_system_role",[b.org]);
  ok(await send(base(b),{identity:b}));
+ // A family role anywhere disqualifies a staff member, as in the 0322 and 0330 actors.
+ const bPrincipal=(await q("SELECT p.id FROM hon.principals p JOIN hon.users u ON u.id=p.user_id WHERE u.external_subject=$1",[b.externalSubject]))[0].id;
+ const famRole=(await q("INSERT INTO hon.roles(organization_id,code,name) VALUES($1,'GUARDIAN','Guardian') RETURNING id",[b.org]))[0].id;
+ await q("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id) VALUES($1,$2,$3,$4,$3)",[b.org,b.school,bPrincipal,famRole]);
+ refused(await send(base(b),{identity:b}),403,'BILLING_IMPORT_FORBIDDEN');
  await setAccess(b,'SUSPENDED');
  refused(await send(base(b),{identity:b}),403,'BILLING_IMPORT_FORBIDDEN');refused(await decide(b,bBatch.id,1,[{index:1,choice:'IMPORT'}]),403,'BILLING_IMPORT_FORBIDDEN');
  assert.equal((await q("SELECT count(*) n FROM hon.billing_import_batches WHERE organization_id=$1",[b.org]))[0].n,'1');
  assert.equal((await q("SELECT count(*) n FROM hon.memberships WHERE organization_id=$1",[b.org]))[0].n,'0');
- pass('import needs students.import, billing.membership.activate and billing.invoice.issue; batches of another school are not found; another school, delegation, a wrong browser command, a stranger and suspended access are refused with nothing written');
+ pass('import needs students.import, billing.membership.activate and billing.invoice.issue; batches of another school are not found; another school, delegation, a wrong browser command, a stranger, a family role and suspended access are refused with nothing written');
 
  // 6. Evidence rows cannot be changed or removed outside the entry points; imported memberships stay guarded.
  await assert.rejects(()=>q('DELETE FROM hon.billing_import_batches WHERE organization_id=$1',[a.org]),/BILLING_IMPORT_IMMUTABLE/);
