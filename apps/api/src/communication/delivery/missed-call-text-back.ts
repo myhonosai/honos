@@ -18,8 +18,10 @@ const FORWARD_RING_SECONDS = 20;
 export function voiceForwardTwiml(forwardPhoneE164: string | null, publicOrigin: string): string {
   if (forwardPhoneE164 === null) return `${XML_HEAD}<Response><Hangup/></Response>`;
   if (!E164.test(forwardPhoneE164)) throw new Error('HON forwarding phone is invalid.');
-  const origin = new URL(publicOrigin).origin;
-  return `${XML_HEAD}<Response><Dial timeout="${FORWARD_RING_SECONDS}" action="${origin}${TWILIO_VOICE_RESULT_PATH}" method="POST">`
+  // publicOrigin is the validated Twilio base URL (origin plus any path prefix such as /api), never a request header.
+  const url = new URL(publicOrigin);
+  const base = `${url.origin}${url.pathname.replace(/\/$/, '')}`;
+  return `${XML_HEAD}<Response><Dial timeout="${FORWARD_RING_SECONDS}" action="${base}${TWILIO_VOICE_RESULT_PATH}" method="POST">`
     + `<Number>${forwardPhoneE164}</Number></Dial></Response>`;
 }
 
