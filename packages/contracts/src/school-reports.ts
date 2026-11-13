@@ -114,3 +114,54 @@ export function verifySchoolReports(value: unknown, expectedSchoolId: string, qu
 export function schoolReportRetainedPercent(retention: SchoolReportRetention): number | null {
   return retention.activeAtStart === 0 ? null : Math.round((100 * retention.retainedFromStart) / retention.activeAtStart);
 }
+
+/** R2 (0332): the same month by month totals for each location of the organization where the reader may see reports. */
+export const SCHOOL_REPORT_LOCATIONS_MAX = 20;
+export interface SchoolReportLocation { schoolId: string; schoolName: string; timezone: string; cancelledWithoutDate: number; periods: SchoolReportPeriod[] }
+export interface SchoolReportLocations { organizationId: string; months: number; generatedAt: string; locations: SchoolReportLocation[] }
+export interface SchoolReportTotals {
+  month: string; partial: boolean; attendance: SchoolReportAttendance; enrollment: SchoolReportEnrollment; retention: SchoolReportRetention;
+  revenue: SchoolReportRevenue[];
+}
+
+export function verifySchoolReportLocations(value: unknown, expectedOrganizationId: string, expectedSchoolId: string, query: SchoolReportsQuery): SchoolReportLocations {
+  const source = exact(value, ['organizationId', 'months', 'generatedAt', 'locations']);
+  const organizationId = text(source.organizationId, 36).toLowerCase();
+  if (!UUID.test(organizationId) || organizationId !== expectedOrganizationId.toLowerCase()) fail();
+  const months = count(source.months);
+  if (months !== (query.months ?? SCHOOL_REPORT_MONTHS_DEFAULT)) fail();
+  if (!Array.isArray(source.locations) || source.locations.length < 1 || source.locations.length > SCHOOL_REPORT_LOCATIONS_MAX) fail();
+  const seen = new Set<string>();
+  const locations = source.locations.map(item => {
+    const l = exact(item, ['schoolId', 'schoolName', 'timezone', 'cancelledWithoutDate', 'periods']);
+    const schoolId = text(l.schoolId, 36).toLowerCase();
+    if (!UUID.test(schoolId) || seen.has(schoolId)) fail();
+    seen.add(schoolId);
+    return { schoolId, schoolName: text(l.schoolName, 200), timezone: text(l.timezone, 64), cancelledWithoutDate: count(l.cancelledWithoutDate),
+      periods: verifySchoolReportPeriods(l.periods, months) };
+  });
+  // The school the reader is working in is always one of the locations (the server checked it first).
+  if (!seen.has(expectedSchoolId.toLowerCase())) fail();
+  return { organizationId, months, generatedAt: instant(source.generatedAt), locations };
+}
+
+/** Organization totals per month label (each location's months follow its own school time). */
+export function sumSchoolReportLocations(locations: readonly SchoolReportLocation[]): SchoolReportTotals[] {
+  const byMonth = new Map<string, SchoolReportTotals>();
+  for (const location of locations) for (const p of location.periods) {
+    const t = byMonth.get(p.month) ?? { month: p.month, partial: false, attendance: { classesHeld: 0, checkIns: 0, absences: 0, studentsAttended: 0 },
+      enrollment: { newLeads: 0, leadsWon: 0, newMemberships: 0 }, retention: { activeAtStart: 0, activeAtEnd: 0, ended: 0, retainedFromStart: 0 }, revenue: [] };
+    t.partial = t.partial || p.partial;
+    for (const k of ['classesHeld', 'checkIns', 'absences', 'studentsAttended'] as const) t.attendance[k] += p.attendance[k];
+    for (const k of ['newLeads', 'leadsWon', 'newMemberships'] as const) t.enrollment[k] += p.enrollment[k];
+    for (const k of ['activeAtStart', 'activeAtEnd', 'ended', 'retainedFromStart'] as const) t.retention[k] += p.retention[k];
+    for (const line of p.revenue) {
+      const r = t.revenue.find(x => x.currency === line.currency);
+      if (!r) t.revenue.push({ ...line });
+      else { r.billedMinor += line.billedMinor; r.recordedPaymentsMinor += line.recordedPaymentsMinor; r.onlinePaymentsMinor += line.onlinePaymentsMinor; r.refundsMinor += line.refundsMinor; }
+    }
+    byMonth.set(p.month, t);
+  }
+  for (const t of byMonth.values()) t.revenue.sort((a, b) => a.currency.localeCompare(b.currency));
+  return [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
+}

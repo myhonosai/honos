@@ -3516,3 +3516,20 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END LOOP;
 END $$;
 -- End school reports exact verification.
+
+-- School reports locations exact verification (R2 0332): one runtime read and the private per-location check.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.school_reports_location_allowed(uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','09ea5075a1e424962a80a8075be4e3d318a929867bab5ba534effdfad6491710'),
+('hon.read_school_reports_locations(text,jsonb)',true,true,'search_path=pg_catalog, hon','a7e4713c7c9ace670344f20125c0c6ae845feb274dfaf505e0ffc1a7c6d0ad74')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school reports locations function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End school reports locations exact verification.
