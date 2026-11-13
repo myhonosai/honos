@@ -14,6 +14,8 @@ const MESSAGE_SID = /^(?:SM|MM)[0-9a-f]{32}$/;
 const SERVICE_SID = /^MG[0-9a-f]{32}$/;
 const E164 = /^\+[1-9][0-9]{7,14}$/;
 export const TWILIO_STATUS_PATH = '/v1/communications/webhooks/twilio/status';
+/** 0281: status callbacks for HQ sends, resolved against HQ deliveries only. */
+export const TWILIO_HQ_STATUS_PATH = '/v1/communications/webhooks/twilio/hq-status';
 export const TWILIO_INBOUND_PATH = '/v1/communications/webhooks/twilio/inbound';
 export const TWILIO_VOICE_PATH = '/v1/communications/webhooks/twilio/voice';
 export const TWILIO_VOICE_RESULT_PATH = '/v1/communications/webhooks/twilio/voice-result';
@@ -42,6 +44,8 @@ function origin(env: Env): string | undefined {
 export class TwilioTextProvider implements CommunicationProviderAdapter {
   readonly provider = 'TWILIO' as const;
   readonly channel = 'SMS' as const;
+  /** 0281: HQ sends go from the HQ Messaging Service (senderServiceId) with the HQ status callback path. */
+  readonly hqSender = true;
   constructor(private readonly environment: () => Env = () => process.env, private readonly transport: typeof fetch = fetch) {}
 
   readiness() {
@@ -63,7 +67,7 @@ export class TwilioTextProvider implements CommunicationProviderAdapter {
     const form = new URLSearchParams({
       To: request.recipientAddress, MessagingServiceSid: request.senderServiceId!, Body: smartEncodeText(request.content),
     });
-    if (request.statusCallback !== false) form.set('StatusCallback', `${base}${TWILIO_STATUS_PATH}`);
+    if (request.statusCallback !== false) form.set('StatusCallback', `${base}${request.origin === 'HQ' ? TWILIO_HQ_STATUS_PATH : TWILIO_STATUS_PATH}`);
     let response: Response;
     try {
       response = await this.transport(`https://api.twilio.com/2010-04-01/Accounts/${account}/Messages.json`, {
@@ -140,7 +144,17 @@ export class TwilioWebhookVerifier {
 
   /** A status callback as a receipt, or null for statuses HON does not store (queued, sending, read). */
   status(rawBody: Buffer, signature: string | undefined): VerifiedProviderReceipt | null {
-    const params = this.params(rawBody, TWILIO_STATUS_PATH, signature);
+    return this.statusAt(rawBody, TWILIO_STATUS_PATH, signature);
+  }
+
+  /** 0281: the same status callback for an HQ send, signed over the HQ path and marked scope HQ. */
+  hqStatus(rawBody: Buffer, signature: string | undefined): VerifiedProviderReceipt | null {
+    const receipt = this.statusAt(rawBody, TWILIO_HQ_STATUS_PATH, signature);
+    return receipt ? { ...receipt, scope: 'HQ' } : null;
+  }
+
+  private statusAt(rawBody: Buffer, path: string, signature: string | undefined): VerifiedProviderReceipt | null {
+    const params = this.params(rawBody, path, signature);
     const sid = params.get('MessageSid') ?? '';
     const status = params.get('MessageStatus') ?? '';
     if (!MESSAGE_SID.test(sid)) throw new TwilioWebhookError('MALFORMED');
@@ -159,6 +173,21 @@ export class TwilioWebhookVerifier {
     const word = (params.get('Body') ?? '').trim().replace(/[.!]+$/, '').toUpperCase();
     const keyword = KEYWORDS[word];
     return keyword ? { to, from, keyword, providerMessageId: sid, receivedAt: new Date(this.now()).toISOString() } : null;
+  }
+
+  /**
+   * 0282: the same signed inbound text for the HQ check: the Messaging Service it reached and the raw body (classified
+   * in the database, never stored). Null when Twilio sent no Messaging Service SID (a number outside any service).
+   */
+  inboundText(rawBody: Buffer, signature: string | undefined): { eventId: string; from: string; toService: string; body: string; receivedAt: string } | null {
+    const params = this.params(rawBody, TWILIO_INBOUND_PATH, signature);
+    const sid = params.get('MessageSid') ?? '';
+    const from = params.get('From') ?? '';
+    const to = params.get('To') ?? '';
+    if (!MESSAGE_SID.test(sid) || !E164.test(from) || !E164.test(to)) throw new TwilioWebhookError('MALFORMED');
+    const service = params.get('MessagingServiceSid') ?? '';
+    if (!SERVICE_SID.test(service)) return null;
+    return { eventId: sid, from, toService: service, body: (params.get('Body') ?? '').slice(0, 1600), receivedAt: new Date(this.now()).toISOString() };
   }
 
   /** 0249: an incoming call to a school number. A withheld caller ID is null (it is forwarded, never texted). */

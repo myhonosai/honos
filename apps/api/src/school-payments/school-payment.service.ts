@@ -7,10 +7,12 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import {
+  NO_SCHOOL_PAY_CAPABILITIES,
   narrowSchoolPayCapabilities,
   validateDisconnectSchoolPayInput,
   validateFinishSchoolPayOnboardingInput,
@@ -31,11 +33,14 @@ import type { PoolClient } from 'pg';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import type { MembershipLifecycleContext } from '../billing/membership.service.js';
 import { SCHOOL_PAYMENT_ADAPTERS, SchoolPaymentProviderError, type SchoolPaymentAdapter } from './school-payment-adapter.js';
+import { SCHOOL_PAYMENT_VAULT, type SchoolPayCredential, type SchoolPaymentVault } from './school-payment-vault.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HUMAN_SETTINGS = "SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_external_subject',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)";
 const READ_LIMITS = "SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0";
 const WRITE_LIMITS = "SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0";
+const RECORD_STATUS = 'SELECT hon.record_school_payment_status($1,$2::uuid,$3::jsonb,$4,$5::uuid,$6::uuid) AS data';
+const RECORD_STATUS_WITH_CREDENTIAL = 'SELECT hon.record_school_payment_status_with_credential($1,$2::uuid,$3::jsonb,$4,$5::uuid,$6::uuid) AS data';
 const CONNECTED: readonly SchoolPayConnectionState[] = ['CONNECTED_RESTRICTED', 'CONNECTED_ACTIVE', 'REAUTHORIZATION_REQUIRED'];
 
 // Exact 0258 error codes; every unknown database failure is unavailable, never success.
@@ -54,7 +59,11 @@ const ERRORS: Record<string, (code: string) => HttpException> = {
   VERSION_CONFLICT: code => new ConflictException({ code, detail: 'The connection has changed. Reload it and try again with a new Idempotency-Key.' }),
   IDEMPOTENCY_KEY_REUSED: code => new ConflictException({ code, detail: 'The idempotency key was already used for a different command.' }),
   IDEMPOTENCY_IN_PROGRESS: code => new ConflictException({ code, detail: 'The matching command is being processed.' }),
+  SCHOOL_PAY_CREDENTIAL_CONFLICT: code => new ConflictException({ code, detail: 'The connection changed while it was being checked. Try again.' }),
+  SCHOOL_PAY_CREDENTIAL_NOT_FOUND: code => new ConflictException({ code, detail: 'HON no longer has access to this account. Disconnect it and connect again.' }),
+  SCHOOL_PAY_CREDENTIAL_REQUIRED: code => new ServiceUnavailableException({ code, detail: 'The provider did not give HON access to the account. Start the connection again.' }),
 };
+const CREDENTIAL_UNAVAILABLE = () => new ServiceUnavailableException({ code: 'SCHOOL_PAY_CREDENTIAL_UNAVAILABLE', detail: 'HON cannot use the saved access to this account here. Disconnect it and connect again.' });
 function translate(error: unknown, forbidden: string): never {
   if (error instanceof HttpException) throw error;
   if (error instanceof SchoolPaymentProviderError) {
@@ -66,7 +75,8 @@ function translate(error: unknown, forbidden: string): never {
   const sqlState = (error as { code?: string })?.code ?? '';
   const message = (error as { message?: string })?.message ?? '';
   const known = ERRORS[message];
-  if (known && ['22023', '42501', 'P0002', '40001', '23505'].includes(sqlState)) throw known(message);
+  if (known && ['22023', '42501', 'P0002', '40001', '23505', '23514'].includes(sqlState)) throw known(message);
+  if (message === 'SCHOOL_PAY_VAULT_REFUSED') throw CREDENTIAL_UNAVAILABLE();
   if (sqlState === '42501') throw new ForbiddenException({ code: forbidden });
   if (['40001', '40P01', '55P03', '23505'].includes(sqlState)) throw new ConflictException({ code: 'SCHOOL_PAY_CONFLICT' });
   if (['22023', '22P02', '22003', '22007', '22008'].includes(sqlState)) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
@@ -83,7 +93,8 @@ export interface OnboardingLinkResult extends SchoolPayConnectionReceipt { onboa
 @Injectable()
 export class SchoolPaymentService {
   constructor(private readonly database: RuntimeDatabaseService,
-    @Inject(SCHOOL_PAYMENT_ADAPTERS) private readonly adapters: Map<SchoolPayProviderCode, SchoolPaymentAdapter>) {}
+    @Inject(SCHOOL_PAYMENT_ADAPTERS) private readonly adapters: Map<SchoolPayProviderCode, SchoolPaymentAdapter>,
+    @Optional() @Inject(SCHOOL_PAYMENT_VAULT) private readonly vault: SchoolPaymentVault | null = null) {}
 
   async processors(context: MembershipLifecycleContext): Promise<SchoolPaymentProcessors> {
     this.assertHumanContext(context, 'SCHOOL_PAY_READ_FORBIDDEN', false);
@@ -126,14 +137,25 @@ export class SchoolPaymentService {
     const input = this.validated(() => validateFinishSchoolPayOnboardingInput(value));
     const connection = await this.openConnection(context, connectionId, ['PENDING_ONBOARDING']);
     const adapter = this.adapter(connection.providerCode);
+    const vault = this.vaultFor(adapter);
+    // A one-time provider code is spent only after the database confirms this return's state (0320 V4).
+    if (vault) await this.checkOnboardingState(context, connectionId, input.expectedVersion, input.state);
     let observation: SchoolPayObservation;
+    let credential: SchoolPayCredential | undefined;
     try {
-      const { accountRef } = await adapter.completeOnboarding({ connectionId: connection.connectionId, accountRef: connection.accountRef,
+      const completed = await adapter.completeOnboarding({ connectionId: connection.connectionId, accountRef: connection.accountRef,
         ...(input.authorizationCode === undefined ? {} : { authorizationCode: input.authorizationCode }) });
-      observation = this.narrowed(adapter, await adapter.retrieveStatus({ accountRef }));
+      credential = completed.credential;
+      if (vault && !credential) throw new SchoolPaymentProviderError('UNKNOWN', 'PROVIDER_UNKNOWN');
+      observation = this.narrowed(adapter, await adapter.retrieveStatus({ accountRef: completed.accountRef, ...(credential ? { credential } : {}) }));
     } catch (error) { return translate(error, 'SCHOOL_PAY_MANAGE_FORBIDDEN'); }
-    const body = { expectedVersion: input.expectedVersion, kind: 'FINISH', onboardingState: input.state, observation };
-    return this.write(context, 'SELECT hon.record_school_payment_status($1,$2::uuid,$3::jsonb,$4,$5::uuid,$6::uuid) AS data',
+    const body: Record<string, unknown> = { expectedVersion: input.expectedVersion, kind: 'FINISH', onboardingState: input.state, observation };
+    if (vault && credential) {
+      // Sealed in memory and stored in the same transaction as the accepted finish (0320 V3); never logged or returned.
+      body.credential = { keyId: vault.keyId, accessExpiresAt: credential.accessExpiresAt, expectedCredentialVersion: 0,
+        sealed: vault.seal({ connectionId: connection.connectionId, providerCode: connection.providerCode, accountRef: observation.accountRef }, credential) };
+    }
+    return this.write(context, vault ? RECORD_STATUS_WITH_CREDENTIAL : RECORD_STATUS,
       [context.externalSubject, connectionId, JSON.stringify(body), context.idempotencyKey, context.requestId, context.correlationId],
       data => verifySchoolPayConnectionReceipt(data, { connectionId, states: CONNECTED }));
   }
@@ -144,11 +166,40 @@ export class SchoolPaymentService {
     const input = this.validated(() => validateSchoolPayVersionInput(value));
     const connection = await this.openConnection(context, connectionId, CONNECTED);
     const adapter = this.adapter(connection.providerCode);
+    const vault = this.vaultFor(adapter);
+    const accountRef = connection.accountRef!;
+    const binding = { connectionId: connection.connectionId, providerCode: connection.providerCode, accountRef };
     let observation: SchoolPayObservation;
-    try { observation = this.narrowed(adapter, await adapter.retrieveStatus({ accountRef: connection.accountRef! })); }
-    catch (error) { return translate(error, 'SCHOOL_PAY_MANAGE_FORBIDDEN'); }
-    const body = { expectedVersion: input.expectedVersion, kind: 'REFRESH', observation };
-    return this.write(context, 'SELECT hon.record_school_payment_status($1,$2::uuid,$3::jsonb,$4,$5::uuid,$6::uuid) AS data',
+    let rotated: { credential: SchoolPayCredential; expectedCredentialVersion: number } | null = null;
+    let credential: SchoolPayCredential | undefined;
+    let revoked = false;
+    if (vault) {
+      const stored = await this.readCredential(context, connectionId);
+      if (stored.accountRef !== accountRef || stored.providerCode !== connection.providerCode) throw CREDENTIAL_UNAVAILABLE();
+      try { credential = vault.open(binding, stored.keyId, stored.sealed); } catch { throw CREDENTIAL_UNAVAILABLE(); }
+      if (adapter.needsRenewal?.(credential) && adapter.renewCredential) {
+        try {
+          credential = await adapter.renewCredential({ accountRef, credential });
+          rotated = { credential, expectedCredentialVersion: stored.credentialVersion };
+        } catch (error) {
+          // The school withdrew HON's access: record reauthorization required (no rotation), so later work sees it.
+          if (!(error instanceof SchoolPaymentProviderError && error.reason === 'GRANT_REVOKED')) return translate(error, 'SCHOOL_PAY_MANAGE_FORBIDDEN');
+          revoked = true;
+        }
+      }
+    }
+    if (revoked) observation = verifySchoolPayObservation({ accountRef, chargesEnabled: false, payoutsEnabled: false, requirementsDue: true,
+      reauthorizationRequired: true, capabilities: { ...NO_SCHOOL_PAY_CAPABILITIES } });
+    else {
+      try { observation = this.narrowed(adapter, await adapter.retrieveStatus({ accountRef, ...(credential ? { credential } : {}) })); }
+      catch (error) { return translate(error, 'SCHOOL_PAY_MANAGE_FORBIDDEN'); }
+    }
+    const body: Record<string, unknown> = { expectedVersion: input.expectedVersion, kind: 'REFRESH', observation };
+    if (vault && rotated) {
+      body.credential = { keyId: vault.keyId, accessExpiresAt: rotated.credential.accessExpiresAt, expectedCredentialVersion: rotated.expectedCredentialVersion,
+        sealed: vault.seal(binding, rotated.credential) };
+    }
+    return this.write(context, body.credential ? RECORD_STATUS_WITH_CREDENTIAL : RECORD_STATUS,
       [context.externalSubject, connectionId, JSON.stringify(body), context.idempotencyKey, context.requestId, context.correlationId],
       data => verifySchoolPayConnectionReceipt(data, { connectionId, states: CONNECTED }));
   }
@@ -173,9 +224,60 @@ export class SchoolPaymentService {
     const { connection } = result.receipt;
     let providerRevoked = false;
     if (connection.accountRef !== null) {
-      try { await this.adapter(connection.providerCode).disconnect({ accountRef: connection.accountRef }); providerRevoked = true; } catch { providerRevoked = false; }
+      // A provider revoke ends HON's access to the whole account, so it is skipped while another connection still uses it.
+      try {
+        if (!(await this.accountOpenElsewhere(context, connectionId))) {
+          await this.adapter(connection.providerCode).disconnect({ accountRef: connection.accountRef }); providerRevoked = true;
+        }
+      } catch { providerRevoked = false; }
     }
     return { ...result, providerRevoked };
+  }
+
+  /** The vault when this provider keeps per-school credentials; such a provider without a vault is not configured. */
+  private vaultFor(adapter: SchoolPaymentAdapter): SchoolPaymentVault | null {
+    if (adapter.credentialKind !== 'OAUTH_TOKENS') return null;
+    if (!this.vault) throw new ServiceUnavailableException({ code: 'SCHOOL_PAY_PROVIDER_NOT_CONFIGURED', detail: 'This payment provider is not set up in this environment.' });
+    return this.vault;
+  }
+
+  private async readOnly<T>(context: MembershipLifecycleContext, statement: string, values: unknown[], verify: (data: unknown) => T): Promise<T> {
+    try {
+      return await this.database.withTenantReadOnlyTransaction(context, async (client: PoolClient) => {
+        await client.query(READ_LIMITS);
+        await client.query(HUMAN_SETTINGS, [context.externalSubject]);
+        const result = await client.query<{ data: unknown }>(statement, values);
+        if (result.rows.length !== 1) throw new Error('Unverified school payment read.');
+        return verify(result.rows[0]!.data);
+      });
+    } catch (error) { return translate(error, 'SCHOOL_PAY_MANAGE_FORBIDDEN'); }
+  }
+
+  private checkOnboardingState(context: MembershipLifecycleContext, connectionId: string, expectedVersion: number, onboardingState: string): Promise<void> {
+    return this.readOnly(context, 'SELECT hon.check_school_payment_onboarding_state($1,$2::uuid,$3::jsonb) AS data',
+      [context.externalSubject, connectionId, JSON.stringify({ expectedVersion, onboardingState })], data => {
+        const row = data as Record<string, unknown> | null;
+        if (!row || row.matches !== true || String(row.connectionId).toLowerCase() !== connectionId.toLowerCase()) throw new Error('Unverified onboarding state check.');
+      });
+  }
+
+  private readCredential(context: MembershipLifecycleContext, connectionId: string): Promise<{ providerCode: string; accountRef: string; keyId: string; sealed: string; credentialVersion: number }> {
+    return this.readOnly(context, 'SELECT hon.read_school_payment_credential($1,$2::uuid) AS data', [context.externalSubject, connectionId], data => {
+      const row = data as Record<string, unknown> | null;
+      if (!row || String(row.connectionId).toLowerCase() !== connectionId.toLowerCase() || typeof row.providerCode !== 'string' || typeof row.accountRef !== 'string'
+        || typeof row.keyId !== 'string' || typeof row.sealed !== 'string' || !Number.isInteger(row.credentialVersion) || (row.credentialVersion as number) < 1) {
+        throw new Error('Unverified school payment credential.');
+      }
+      return { providerCode: row.providerCode, accountRef: row.accountRef, keyId: row.keyId, sealed: row.sealed, credentialVersion: row.credentialVersion as number };
+    });
+  }
+
+  private accountOpenElsewhere(context: MembershipLifecycleContext, connectionId: string): Promise<boolean> {
+    return this.readOnly(context, 'SELECT hon.read_school_payment_account_use($1,$2::uuid) AS data', [context.externalSubject, connectionId], data => {
+      const row = data as Record<string, unknown> | null;
+      if (!row || typeof row.openElsewhere !== 'boolean') throw new Error('Unverified account use.');
+      return row.openElsewhere;
+    });
   }
 
   private narrowed(adapter: SchoolPaymentAdapter, value: unknown): SchoolPayObservation {

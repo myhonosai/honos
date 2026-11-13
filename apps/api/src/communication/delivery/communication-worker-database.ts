@@ -37,6 +37,8 @@ export interface VerifiedProviderReceipt {
   eventType: 'SENT' | 'DELIVERED' | 'DEFERRED' | 'BOUNCED' | 'DROPPED' | 'UNDELIVERED' | 'FAILED' | 'UNSUBSCRIBED' | 'SPAM_REPORT';
   occurredAt: string;
   providerCostMicrounits?: number | undefined;
+  /** HQ: the receipt belongs to an 0281 HQ delivery (SendGrid hon_purpose HQ, or the Twilio HQ status path). */
+  scope?: 'HQ' | undefined;
 }
 
 export interface CommunicationWorkerStore {

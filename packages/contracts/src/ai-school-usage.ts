@@ -38,6 +38,9 @@ export interface AiSchoolUsage {
   unreconciledInvocations: number;
   byClass: Partial<Record<AiUsageSpendClass, AiUsageClassTotals>>;
 }
+/** 0310 (owner 2026-11-13): agentCeilingCredits for an organization with no organization agent budget (a paying
+ *  organization without an operator override). Never a balance; the school is not capped. */
+export const AI_ORG_AGENT_NO_CEILING_UNITS = 2_147_483_647;
 export interface AiOrganizationAgentBudget {
   organizationId: string; agentWindowStart: string; agentWindowEnd: string; agentCommittedCredits: number; agentCeilingCredits: number;
   openUnknownHolds: number; aiPaused: boolean;

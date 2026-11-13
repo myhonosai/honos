@@ -1,11 +1,11 @@
 import { PUBLIC_PLAN_CATALOG, type PublicPlanTier } from '@hon/config';
-import { HON_OS_LAUNCH_PRICING_REFERENCE, SAAS_OWNER_APPROVED_DRAFT, SAAS_PLAN_CAPABILITIES, SAAS_SCHEDULED_OFFER_KINDS, type SaasFounderSchoolAvailability, type SaasFounderUnavailableReason, type SaasHonOsSchoolOfferView, type SaasOfferKind } from '@hon/contracts';
+import { HON_OS_LAUNCH_PRICING_REFERENCE, SAAS_OWNER_APPROVED_DRAFT, SAAS_PLAN_CAPABILITIES, SAAS_SCHEDULED_OFFER_KINDS, type SaasFounderSchoolAvailability, type SaasFounderUnavailableReason, type SaasHonOsSchoolOfferEligibility, type SaasHonOsSchoolOfferView, type SaasOfferKind } from '@hon/contracts';
 
 /** Display metadata only. Never an available offer, price quote, entitlement or credit grant. */
 export const OFFER_CHOICES: readonly { kind: SaasOfferKind; label: string; description: string }[] = [
   { kind: 'REGULAR_MONTHLY', label: 'Regular monthly', description: 'Billed monthly' },
   { kind: 'FOUNDER_MONTHLY', label: 'Founder monthly', description: 'Eligibility and availability required' },
-  { kind: 'FOUNDER_LIFETIME', label: 'Founder lifetime', description: 'Earlier one-time purchase; no longer sold' },
+  { kind: 'FOUNDER_LIFETIME', label: 'Founder lifetime', description: 'One-time purchase; offered only when HQ publishes it' },
 ];
 /** Offers a school may still pick on this page. Founder lifetime stays above only to label earlier purchases. */
 export const SELLABLE_OFFER_CHOICES = OFFER_CHOICES.filter((entry) => entry.kind !== 'FOUNDER_LIFETIME');
@@ -70,6 +70,8 @@ export type HonOsPriceKind = typeof SAAS_SCHEDULED_OFFER_KINDS[number];
 export type HonOsPriceRow = {
   kind: HonOsPriceKind; founder: boolean; annual: boolean; priceMinor: number; standardPriceMinor: number;
   source: 'SERVER_OFFER' | 'LAUNCH_REFERENCE' | 'NOT_ON_SALE';
+  /** The server offer's id and whether this school may buy it now; null and false for a launch reference price. */
+  offerId: string | null; eligible: boolean;
   founderSpot: { state: 'AVAILABLE' | 'UNAVAILABLE' | 'UNVERIFIED'; reason: SaasFounderUnavailableReason | null } | null;
 };
 export const HON_OS_PRICE_LABELS: Record<HonOsPriceKind, string> = {
@@ -95,9 +97,31 @@ export function honOsPriceRows(offers: SaasHonOsSchoolOfferView | null, founder:
       standardPriceMinor: spot?.standardPriceMinor ?? standard,
       // A published offer set that leaves a kind out means that price is not on sale now (e.g. founder sales closed).
       source: server ? 'SERVER_OFFER' : offers && offers.offerSetVersion !== null ? 'NOT_ON_SALE' : 'LAUNCH_REFERENCE',
+      offerId: server?.offerId ?? null, eligible: server?.eligibility === 'ELIGIBLE',
       founderSpot: !isFounder ? null : spot ? { state: spot.available ? 'AVAILABLE' : 'UNAVAILABLE', reason: spot.reason }
         : founder?.organizationUsedFounderSpot ? { state: 'UNAVAILABLE', reason: 'FOUNDER_ALREADY_USED' }
         : founder && founder.pool.remaining === 0 ? { state: 'UNAVAILABLE', reason: 'FOUNDER_SOLD_OUT' } : { state: 'UNVERIFIED', reason: null },
     };
   });
+}
+
+/** A one-time (lifetime) HON OS offer the HQ owner published. Shown only from the server; there is no launch reference for it. */
+export type HonOsOneTimeRow = {
+  offerId: string; offerCode: string; displayName: string; founder: boolean; priceMinor: number; refundWindowDays: number | null;
+  available: boolean; eligibility: SaasHonOsSchoolOfferEligibility;
+};
+export const ONE_TIME_ELIGIBILITY_COPY: Record<SaasHonOsSchoolOfferEligibility, string> = {
+  ELIGIBLE: 'Your organization meets this offer’s terms. Lifetime checkout is not open yet.',
+  NOT_ELIGIBLE_EXISTING_SUBSCRIPTION: 'Not available while your organization has a HON OS subscription.',
+  NOT_ELIGIBLE_PRIOR_PURCHASE: 'Not available because of an earlier purchase.',
+  NOT_ELIGIBLE_ENTITLEMENT: 'Not available for your organization’s current access.',
+  CHECKOUT_IN_PROGRESS: 'Not available while another sign-up for your organization is in progress.',
+  SOLD_OUT: 'Sold out.', FOUNDER_SOLD_OUT: 'Not available now.',
+  NOT_AVAILABLE_TERMS: 'Not available until its terms are published.', NOT_AVAILABLE: 'Not available now.',
+};
+export function honOsOneTimeRows(offers: SaasHonOsSchoolOfferView | null): HonOsOneTimeRow[] {
+  return (offers?.offers ?? []).filter((o) => o.billingInterval === 'ONE_TIME').map((o) => ({
+    offerId: o.offerId, offerCode: o.offerCode, displayName: o.displayName, founder: o.founder, priceMinor: o.priceMinor,
+    refundWindowDays: o.refundWindowDays, available: o.eligibility === 'ELIGIBLE', eligibility: o.eligibility,
+  }));
 }

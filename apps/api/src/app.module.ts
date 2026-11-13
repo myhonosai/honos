@@ -134,6 +134,7 @@ import { TuitionPaymentService } from './billing/tuition-payment.service.js';
 import { SchoolPaymentController } from './school-payments/school-payment.controller.js';
 import { SchoolPaymentService } from './school-payments/school-payment.service.js';
 import { SCHOOL_PAYMENT_ADAPTERS, schoolPaymentAdaptersFromEnvironment } from './school-payments/school-payment-adapter.js';
+import { SCHOOL_PAYMENT_VAULT, schoolPaymentVaultForProcess } from './school-payments/school-payment-vault.js';
 import {
   SchoolPayDefaultHumanUiGuard, SchoolPayDisconnectHumanUiGuard, SchoolPayFinishHumanUiGuard, SchoolPayOnboardingLinkHumanUiGuard,
   SchoolPayReadHumanUiGuard, SchoolPayRefreshHumanUiGuard, SchoolPayStartHumanUiGuard,
@@ -216,6 +217,9 @@ import { ClassSeriesController } from './schedule/class-series.controller.js';
 import { ClassSeriesService } from './schedule/class-series.service.js';
 import { PublicSchoolEventController, SchoolEventController } from './schedule/school-event.controller.js';
 import { SchoolEventService } from './schedule/school-event.service.js';
+import { BookingTypeController, PublicBookingTypeController } from './schedule/booking-type.controller.js';
+import { BookingTypeService } from './schedule/booking-type.service.js';
+import { BookingTypeBookingStatusHumanUiGuard, BookingTypeReadHumanUiGuard, BookingTypeSaveHumanUiGuard, BookingTypeStatusHumanUiGuard } from './schedule/booking-type-human-ui.guard.js';
 import { SchoolEventBookingStatusHumanUiGuard, SchoolEventReadHumanUiGuard, SchoolEventSaveHumanUiGuard, SchoolEventStatusHumanUiGuard } from './schedule/school-event-human-ui.guard.js';
 import { ClassSeriesCreateHumanUiGuard, ClassSeriesEndHumanUiGuard, ClassSeriesFillHumanUiGuard, ClassSeriesOngoingHumanUiGuard, ClassSeriesReadHumanUiGuard, ClassSeriesReviseHumanUiGuard, ClassSeriesTopUpHumanUiGuard } from './schedule/class-series-human-ui.guard.js';
 import { ClassSessionPagesService } from './schedule/class-session-pages.service.js';
@@ -294,14 +298,24 @@ import { SaasOffersHqController, SaasOffersSchoolController } from './saas-billi
 import { PaymentWebhookController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, SaasPlanSchoolController } from './payments/saas-payments.controller.js';
 import { SaasPaymentsService } from './payments/saas-payments.service.js';
 import { AiSpendPauseHqController, AiSpendPauseService } from './ai-spend/ai-spend-pause.controller.js';
+import { AiSchoolCostLimitHqController, AiSchoolCostLimitService } from './ai-spend/ai-school-cost-limit.controller.js';
 import { AiUnknownResolutionHqController, AiUnknownResolutionService } from './ai-spend/ai-unknown-resolution.controller.js';
 import { AiSchoolUsageHqController, AiSchoolUsageService } from './ai-spend/ai-school-usage.controller.js';
 import { SaasExceptionPolicyHqController, SaasAccessExceptionCommandsHqController, SaasAccessExceptionsHqController, SaasAccessOverviewHqController, HqSchoolDetailController, SaasAccessReadinessHqController, SaasAccessRetryHqController, SaasOrganizationAccessHqController, SaasSchoolBillingController } from './school-billing/saas-school-billing.controller.js';
 import { SaasSchoolBillingService } from './school-billing/saas-school-billing.service.js';
 import { HqSupportController } from './hq-support/hq-support.controller.js';
 import { HqSupportService } from './hq-support/hq-support.service.js';
+import { HqCommunicationsController } from './hq-communications/hq-communications.controller.js';
+import { HqCommunicationsService } from './hq-communications/hq-communications.service.js';
+import { HqContactController } from './hq-communications/hq-contact.controller.js';
+import { HqContactService } from './hq-communications/hq-contact.service.js';
+import { HQ_MESSAGE_WORKER_STORE, HqMessageDispatchScheduler, HqMessageDispatcher, HqMessageWorkerDatabase } from './hq-communications/hq-message-dispatcher.js';
 import { HqMarketingController } from './hq-marketing/hq-marketing.controller.js';
 import { HqMarketingService } from './hq-marketing/hq-marketing.service.js';
+import { HqPlanPromotionsController, SchoolPlanPromotionsController } from './hq-plan-promotions/hq-plan-promotions.controller.js';
+import { HqPlanPromotionsService } from './hq-plan-promotions/hq-plan-promotions.service.js';
+import { HqProspectsController } from './hq-prospects/hq-prospects.controller.js';
+import { HqProspectsService } from './hq-prospects/hq-prospects.service.js';
 import { HqCreativeController } from './hq-creative/hq-creative.controller.js';
 import { HqCreativeService } from './hq-creative/hq-creative.service.js';
 import { HqHonController } from './hq-hon/hq-hon.controller.js';
@@ -408,6 +422,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSeriesController,
     SchoolEventController,
     PublicSchoolEventController,
+    BookingTypeController,
+    PublicBookingTypeController,
     AttendanceController,
     ClassSessionRosterController,
     AttendancePolicyController,
@@ -467,7 +483,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     A2pPreparationController,
     HqEntitlementController,
     ChampionsSchoolController, ChampionsHqController,
-    SaasSubscriptionGenerationHqController, HqHonController, SaasSubscriptionGenerationSchoolController, SaasScheduleBindingHqController, SaasScheduleBindingSchoolController, SaasPaidReviewHqController, SaasFounderPoolHqController, SaasFounderAvailabilitySchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, CreativeStudioAvatarsController, CreativeStudioAvatarVideosController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, CommunicationWebhookController, SchoolTextSenderHqController, SchoolMissedCallHqController, SchoolMissedCallsController, ZernioLeadFormHqController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqSupportController, HqMarketingController, HqCreativeController, AiSpendPauseHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
+    SaasSubscriptionGenerationHqController, HqHonController, SaasSubscriptionGenerationSchoolController, SaasScheduleBindingHqController, SaasScheduleBindingSchoolController, SaasPaidReviewHqController, SaasFounderPoolHqController, SaasFounderAvailabilitySchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, CreativeStudioAvatarsController, CreativeStudioAvatarVideosController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, CommunicationWebhookController, SchoolTextSenderHqController, SchoolMissedCallHqController, SchoolMissedCallsController, ZernioLeadFormHqController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqSupportController, HqMarketingController, HqPlanPromotionsController, SchoolPlanPromotionsController, HqCreativeController, AiSpendPauseHqController, AiSchoolCostLimitHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController, HqCommunicationsController, HqContactController, HqProspectsController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [BookableStudentsService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard,
@@ -576,6 +592,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     CommunicationDispatcher,
     MissedCallTextBackDispatcher,
     CommunicationDispatchScheduler,
+    HqMessageWorkerDatabase,
+    { provide: HQ_MESSAGE_WORKER_STORE, useExisting: HqMessageWorkerDatabase },
+    HqMessageDispatcher,
+    HqMessageDispatchScheduler,
     TestingEventService,
     TestingCandidateService,
     PromotionDecisionService,
@@ -601,6 +621,11 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolEventSaveHumanUiGuard,
     SchoolEventStatusHumanUiGuard,
     SchoolEventBookingStatusHumanUiGuard,
+    BookingTypeService,
+    BookingTypeReadHumanUiGuard,
+    BookingTypeSaveHumanUiGuard,
+    BookingTypeStatusHumanUiGuard,
+    BookingTypeBookingStatusHumanUiGuard,
     ClassSeriesCreateHumanUiGuard,
     ClassSeriesReviseHumanUiGuard,
     ClassSeriesOngoingHumanUiGuard,
@@ -611,6 +636,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     TuitionPaymentService,
     SchoolPaymentService,
     { provide: SCHOOL_PAYMENT_ADAPTERS, useFactory: () => schoolPaymentAdaptersFromEnvironment() },
+    { provide: SCHOOL_PAYMENT_VAULT, useFactory: () => schoolPaymentVaultForProcess() },
     SchoolPayReadHumanUiGuard, SchoolPayStartHumanUiGuard, SchoolPayOnboardingLinkHumanUiGuard, SchoolPayFinishHumanUiGuard,
     SchoolPayRefreshHumanUiGuard, SchoolPayDefaultHumanUiGuard, SchoolPayDisconnectHumanUiGuard,
     SchoolCheckoutService, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard,
@@ -641,7 +667,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqEntitlementService,
     HqEntitlementHumanUiGuard,
     ChampionsClubService, ChampionsCommandGuard, ChampionsReadGuard,
-    SaasBillingService, SaasCreativeWalletService, CreativeStudioService, SaasCommandGuard, SaasReadGuard, SaasPaymentsService, SaasSchoolBillingService, HqSupportService, HqMarketingService, HqCreativeService, HqHonService, AiSpendPauseService, AiUnknownResolutionService, AiSchoolUsageService, AiTeamReadinessService, HonConversationService, HonReplyService, HonConversationHumanUiGuard, LanguagePreferencesService, LanguageReadGuard, LanguageCommandGuard,
+    SaasBillingService, SaasCreativeWalletService, CreativeStudioService, SaasCommandGuard, SaasReadGuard, SaasPaymentsService, SaasSchoolBillingService, HqSupportService, HqMarketingService, HqPlanPromotionsService, HqCreativeService, HqHonService, AiSpendPauseService, AiSchoolCostLimitService, AiUnknownResolutionService, AiSchoolUsageService, AiTeamReadinessService, HonConversationService, HonReplyService, HonConversationHumanUiGuard, LanguagePreferencesService, LanguageReadGuard, LanguageCommandGuard, HqCommunicationsService, HqContactService, HqProspectsService,
     // Real Stripe test mode only when both test credentials are configured; otherwise every call is refused.
     { provide: PAYMENT_PROVIDER_ADAPTER, useFactory: () => paymentProviderFromEnvironment() ?? new UnconfiguredPaymentProvider() },
     // 0230 schedule billing never selects a provider from environment. Only tests may override this deterministic boundary.

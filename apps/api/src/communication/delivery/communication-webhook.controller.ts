@@ -6,16 +6,17 @@ import { raw, type NextFunction, type Request, type Response } from 'express';
 import { COMMUNICATION_WORKER_STORE, type CommunicationWorkerStore, type VerifiedProviderReceipt } from './communication-worker-database.js';
 import { SendGridEventWebhookVerifier, SendGridWebhookError } from './sendgrid-email-provider.js';
 import {
-  TWILIO_INBOUND_PATH, TWILIO_STATUS_PATH, TWILIO_VOICE_PATH, TWILIO_VOICE_RESULT_PATH, TwilioWebhookError, TwilioWebhookVerifier, twilioPublicOrigin,
+  TWILIO_HQ_STATUS_PATH, TWILIO_INBOUND_PATH, TWILIO_STATUS_PATH, TWILIO_VOICE_PATH, TWILIO_VOICE_RESULT_PATH, TwilioWebhookError, TwilioWebhookVerifier, twilioPublicOrigin,
 } from './twilio-text-provider.js';
 import { ZERNIO_LEAD_PATH, ZernioLeadWebhookVerifier, ZernioWebhookError } from './zernio-lead-webhook.js';
+import { HQ_MESSAGE_WORKER_STORE, type HqMessageWorkerStore } from '../../hq-communications/hq-message-dispatcher.js';
 import { EMPTY_VOICE_TWIML, REJECT_VOICE_TWIML, voiceForwardTwiml } from './missed-call-text-back.js';
 
 const inboundLog = new Logger('CommunicationInboundText');
 
 export const COMMUNICATION_WEBHOOK_PREFIX = /^\/v1\/communications\/webhooks(?:\/|$)/i;
 const JSON_PATHS = new Set(['/v1/communications/webhooks/sendgrid', ZERNIO_LEAD_PATH]);
-const FORM_PATHS = new Set([TWILIO_STATUS_PATH, TWILIO_INBOUND_PATH, TWILIO_VOICE_PATH, TWILIO_VOICE_RESULT_PATH]);
+const FORM_PATHS = new Set([TWILIO_STATUS_PATH, TWILIO_HQ_STATUS_PATH, TWILIO_INBOUND_PATH, TWILIO_VOICE_PATH, TWILIO_VOICE_RESULT_PATH]);
 export const COMMUNICATION_WEBHOOK_PATHS = new Set([...JSON_PATHS, ...FORM_PATHS]);
 export const SENDGRID_EVENT_VERIFIER = Symbol('SENDGRID_EVENT_VERIFIER');
 export const TWILIO_WEBHOOK_VERIFIER = Symbol('TWILIO_WEBHOOK_VERIFIER');
@@ -48,8 +49,20 @@ export function communicationWebhookTransport() {
 
 export interface WebhookIngestSummary { received: true; recorded: number; replayed: number; ignored: number }
 
+/** Anything that records verified receipts: the school worker store (0243) or the HQ worker store (0281). */
+export type ReceiptRecorder = Pick<CommunicationWorkerStore, 'isConfigured' | 'recordReceipt'>;
+
+/** The HQ worker store as a receipt recorder, or one that is never configured when HQ receipts are unavailable. */
+export function hqReceiptRecorder(store: HqMessageWorkerStore | undefined): ReceiptRecorder {
+  const record = store?.recordReceipt?.bind(store);
+  return {
+    isConfigured: () => Boolean(record && store?.isConfigured()),
+    recordReceipt: (receipt) => { if (!record) throw new Error('HQ_RECEIPTS_NOT_CONFIGURED'); return record(receipt); },
+  };
+}
+
 /** Records verified receipts one by one. An UNMATCHED receipt (send result not committed yet) asks the provider to retry. */
-export async function ingestReceipts(store: CommunicationWorkerStore, receipts: VerifiedProviderReceipt[], ignored: number): Promise<WebhookIngestSummary> {
+export async function ingestReceipts(store: ReceiptRecorder, receipts: VerifiedProviderReceipt[], ignored: number): Promise<WebhookIngestSummary> {
   if (!store.isConfigured()) throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
   const summary: WebhookIngestSummary = { received: true, recorded: 0, replayed: 0, ignored };
   let unmatched = 0;
@@ -77,7 +90,18 @@ export class CommunicationWebhookController {
     @Inject(SENDGRID_EVENT_VERIFIER) private readonly sendgrid: SendGridEventWebhookVerifier,
     @Inject(TWILIO_WEBHOOK_VERIFIER) private readonly twilio: TwilioWebhookVerifier,
     @Optional() @Inject(ZERNIO_LEAD_VERIFIER) private readonly zernio: ZernioLeadWebhookVerifier = new ZernioLeadWebhookVerifier(() => ({})),
+    @Optional() @Inject(HQ_MESSAGE_WORKER_STORE) private readonly hqStore?: HqMessageWorkerStore,
   ) {}
+
+  /** 0281: status callbacks for HQ texts, signed over their own path and resolved only against HQ deliveries. */
+  @Post('twilio/hq-status') @HttpCode(200)
+  async twilioHqStatus(@Req() req: Request, @Headers('x-twilio-signature') signature: string | undefined): Promise<WebhookIngestSummary> {
+    if (!Buffer.isBuffer(req.body)) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+    let receipt;
+    try { receipt = this.twilio.hqStatus(req.body, signature); }
+    catch (error) { throw twilioError(error); }
+    return ingestReceipts(hqReceiptRecorder(this.hqStore), receipt ? [receipt] : [], receipt ? 0 : 1);
+  }
 
   /**
    * 0250 Zernio `lead.received`: a signed Meta Lead Gen lead becomes a CRM lead only through an HQ-mapped form.
@@ -115,13 +139,28 @@ export class CommunicationWebhookController {
     return ingestReceipts(this.store, receipt ? [receipt] : [], receipt ? 0 : 1);
   }
 
-  /** Inbound texts: only STOP/START/HELP keywords are recorded; the reply is empty (Twilio Advanced Opt-Out answers). */
+  /**
+   * Inbound texts. A text to the active HQ Messaging Service (0282) is HQ's: STOP/START/HELP and HON OS phone
+   * confirmation codes are recorded there, and only a code result is answered here (keywords are answered by the
+   * Messaging Service's own opt-out handling, which must stay on, so a person never gets two replies). Anything else is
+   * a school text: only STOP/START/HELP keywords are recorded, and the reply is empty (Twilio Advanced Opt-Out answers).
+   */
   @Post('twilio/inbound') @HttpCode(200) @Header('content-type', 'text/xml; charset=utf-8')
   async twilioInbound(@Req() req: Request, @Headers('x-twilio-signature') signature: string | undefined): Promise<string> {
     if (!Buffer.isBuffer(req.body)) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
     let keyword;
-    try { keyword = this.twilio.inbound(req.body, signature); }
+    let text;
+    try { keyword = this.twilio.inbound(req.body, signature); text = this.twilio.inboundText(req.body, signature); }
     catch (error) { throw twilioError(error); }
+    if (text && this.hqStore?.recordInbound && this.hqStore.isConfigured()) {
+      let result;
+      try { result = await this.hqStore.recordInbound({ provider: 'TWILIO', ...text }); }
+      catch {
+        inboundLog.warn(`Inbound HQ text not recorded; reconcile Twilio message ${text.eventId}.`);
+        throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' });
+      }
+      if (result.outcome !== 'NOT_HQ') return hqInboundTwiml(result);
+    }
     if (!keyword) return EMPTY_TWIML;
     if (!this.store.isConfigured() || !this.store.recordInboundKeyword) throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
     try { await this.store.recordInboundKeyword(keyword); }
@@ -191,8 +230,24 @@ export class CommunicationWebhookController {
       if (error instanceof SendGridWebhookError && error.reason === 'NOT_CONFIGURED') throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
       throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
     }
-    return ingestReceipts(this.store, receipts, total - receipts.length);
+    // One SendGrid account carries school and HQ mail: HQ receipts go to HQ deliveries, the rest to school deliveries.
+    // Both are idempotent, so a batch retried for one side replays harmlessly on the other.
+    const hq = receipts.filter((receipt) => receipt.scope === 'HQ');
+    const school = receipts.filter((receipt) => receipt.scope !== 'HQ');
+    const ignored = total - receipts.length;
+    const summary = school.length || !hq.length ? await ingestReceipts(this.store, school, ignored) : { received: true as const, recorded: 0, replayed: 0, ignored };
+    if (!hq.length) return summary;
+    const hqSummary = await ingestReceipts(hqReceiptRecorder(this.hqStore), hq, 0);
+    return { received: true, recorded: summary.recorded + hqSummary.recorded, replayed: summary.replayed + hqSummary.replayed, ignored: summary.ignored + hqSummary.ignored };
   }
+}
+
+/** Replies HON sends itself: only phone-code results. Keyword replies come from the Messaging Service; a replay is never answered twice. */
+const HQ_TWIML_REPLY_KINDS = new Set(['CONFIRMED', 'CODE_WRONG']);
+export function hqInboundTwiml(result: { reply: string | null; replyText: string | null; replayed: boolean }): string {
+  if (result.replayed || !result.reply || !result.replyText || !HQ_TWIML_REPLY_KINDS.has(result.reply)) return EMPTY_TWIML;
+  const body = result.replyText.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!);
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${body}</Message></Response>`;
 }
 
 function twilioError(error: unknown): Error {

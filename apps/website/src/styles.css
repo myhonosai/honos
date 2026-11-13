@@ -1,7 +1,6 @@
 @font-face{font-family:"Geist";src:url("/fonts/geist-latin-400-normal.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
 @font-face{font-family:"Geist";src:url("/fonts/geist-latin-500-normal.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap}
 @font-face{font-family:"Geist";src:url("/fonts/geist-latin-600-normal.woff2") format("woff2");font-weight:600;font-style:normal;font-display:swap}
-@font-face{font-family:"Geist";src:url("/fonts/geist-latin-700-normal.woff2") format("woff2");font-weight:700;font-style:normal;font-display:swap}
 @font-face{font-family:"Geist Mono";src:url("/fonts/geist-mono-latin-400-normal.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
 @font-face{font-family:"Geist Mono";src:url("/fonts/geist-mono-latin-500-normal.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap}
 @font-face{font-family:"Instrument Serif";src:url("/fonts/instrument-serif-latin-400-italic.woff2") format("woff2");font-weight:400;font-style:italic;font-display:swap}
@@ -248,10 +247,9 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;backdrop-filt
 
 /* final cta */
 .final{display:grid;grid-template-columns:.8fr 1.2fr;gap:14px}
-.brandcard{padding:28px;display:flex;flex-direction:column;gap:22px;position:relative;overflow:hidden;min-height:320px}
-.brandcard .beltbg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.32}
+.brandcard{background:repeating-linear-gradient(135deg,rgba(200,242,90,.05) 0 2px,transparent 2px 14px),radial-gradient(120% 90% at 80% 0%,rgba(98,214,196,.14),transparent 60%),var(--surface);padding:28px;display:flex;flex-direction:column;gap:22px;position:relative;overflow:hidden;min-height:320px}
 .brandcard::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,11,10,.2),rgba(10,11,10,.9))}
-.brandcard>*:not(.beltbg){position:relative;z-index:1}
+.brandcard>*{position:relative;z-index:1}
 .socials{display:flex;gap:6px}
 .socials span{font-family:var(--mono);font-size:11px;border:1px solid var(--line-2);border-radius:6px;padding:4px 8px;color:var(--muted)}
 .cta-card{background:var(--accent);color:var(--on-accent);border-radius:var(--r-lg);padding:clamp(26px,4vw,44px);display:flex;flex-direction:column;gap:16px;position:relative;overflow:hidden}
@@ -295,3 +293,33 @@ html[lang="ko"] p,html[lang="ko"] li{word-break:keep-all}
 .guarantee b{font-weight:500;font-size:15px}
 .guarantee p{color:var(--muted);font-size:14px}
 @media (max-width:760px){.guarantee{grid-template-columns:1fr}}
+
+/* blog */
+.blog main{position:relative;z-index:1;padding-bottom:96px}
+.blog main section{padding-block:0}
+.blog-head{padding-top:72px;padding-bottom:36px}
+.blog-head h1,.post h1{font-size:clamp(36px,5.6vw,64px);line-height:1.04;letter-spacing:-.03em;margin:18px 0 14px;max-width:20ch}
+.posts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:16px}
+.post-card{display:flex;flex-direction:column;gap:10px;height:100%;padding:26px;transition:border-color .2s,transform .2s}
+.post-card:hover{border-color:color-mix(in srgb,var(--accent) 45%,transparent);transform:translateY(-2px)}
+.post-card h2{font-size:22px;line-height:1.2;letter-spacing:-.01em;margin:0}
+.post-card p{color:var(--muted);font-size:15px;margin:0}
+.post{max-width:760px;padding-top:56px}
+.post .back{display:inline-block;padding:6px 0}
+.post .back:hover{color:var(--fg)}
+.post .meta{margin:0 0 36px}
+.prose{font-size:18px;line-height:1.7;color:#d9dbd5}
+.prose h2{font-size:26px;line-height:1.25;letter-spacing:-.015em;color:var(--fg);margin:44px 0 12px}
+.prose h3{font-size:20px;color:var(--fg);margin:32px 0 10px}
+.prose p,.prose ul,.prose ol{margin:0 0 18px}
+.prose ul,.prose ol{padding-left:1.3em}
+.prose li{margin:6px 0}
+.prose li::marker{color:var(--accent)}
+.prose a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
+.prose strong{color:var(--fg)}
+.prose blockquote{margin:32px 0;padding:6px 0 6px 22px;border-left:2px solid var(--accent);font-family:var(--serif);font-style:italic;font-size:24px;line-height:1.35;color:var(--fg)}
+.prose blockquote p{margin:0}
+.post-end{margin-top:56px;padding:30px}
+.post-end h2{font-size:24px;margin:0 0 8px}
+.post-end p{color:var(--muted);margin:0 0 18px}
+@media (max-width:620px){.prose{font-size:17px}.prose blockquote{font-size:21px}.blog-head{padding-top:48px}.post{padding-top:36px}}

@@ -102,6 +102,7 @@ export const SAAS_COMMANDS = {
   closeExpiredAccessExceptions: 'saas-access-exception-close',
   decideExceptionPolicy: 'saas-access-exception-policy-decision',
   aiSpendPause: 'ai-spend-pause',
+  aiSchoolCostLimit: 'ai-school-cost-limit',
   aiUnknownResolve: 'ai-unknown-resolve',
   aiLateProviderExpense: 'ai-late-provider-expense',
   setCreativeProgram: 'saas-creative-program',
@@ -123,6 +124,11 @@ export const SAAS_COMMANDS = {
   createMarketingCampaign: 'hq-marketing-campaign-create',
   updateMarketingCampaign: 'hq-marketing-campaign-update',
   setMarketingCampaignStatus: 'hq-marketing-campaign-status',
+  // 0308: HQ plan promotions; same values as HQ_PLAN_PROMOTION_COMMANDS.
+  createPlanPromotion: 'hq-plan-promotion-create',
+  updatePlanPromotion: 'hq-plan-promotion-update',
+  setPlanPromotionStatus: 'hq-plan-promotion-status',
+  recordSchoolPlanPromotionEvent: 'school-plan-promotion-event',
   createHqCreativeGeneration: 'hq-creative-generation-create',
   setHqCreativeBudget: 'hq-creative-budget-set',
   resolveHqCreativeGeneration: 'hq-creative-generation-resolve',
@@ -130,6 +136,18 @@ export const SAAS_COMMANDS = {
   askHqHon: 'hq-hon-ask',
   setHqHonBudget: 'hq-hon-budget-set',
   resolveHqHonTurn: 'hq-hon-turn-resolve',
+  // HQ-COMM (0281): HQ texting and email; same values as HQ_COMMUNICATION_COMMANDS.
+  setHqCommunicationSender: 'hq-communication-sender-set',
+  retireHqCommunicationSender: 'hq-communication-sender-retire',
+  createHqMessage: 'hq-message-create',
+  queueHqMessage: 'hq-message-queue',
+  cancelHqMessage: 'hq-message-cancel',
+  startMyHqPhone: 'hq-contact-phone-start',
+  setMyHqTexting: 'hq-contact-texting',
+  removeMyHqPhone: 'hq-contact-phone-remove',
+  createHqProspect: 'hq-prospect-create',
+  updateHqProspect: 'hq-prospect-update',
+  recordHqProspectConsent: 'hq-prospect-consent',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 

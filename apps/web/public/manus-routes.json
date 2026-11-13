@@ -417,6 +417,22 @@
       "title": "HON HQ | Approvals"
     },
     {
+      "path": "/hq/communications",
+      "title": "HON HQ | Texts and email"
+    },
+    {
+      "path": "/hq/communications/:messageId",
+      "title": "HON HQ | HQ message"
+    },
+    {
+      "path": "/hq/growth/prospects",
+      "title": "HON HQ | Prospects"
+    },
+    {
+      "path": "/hq/growth/prospects/:prospectId",
+      "title": "HON HQ | Prospect"
+    },
+    {
       "path": "/hq/executives/:executive",
       "title": "HON HQ | :Executive"
     },
@@ -465,6 +481,10 @@
       "title": "HON HQ | Creative Studio"
     },
     {
+      "path": "/hq/marketing/promotions",
+      "title": "HON HQ | Plan promotions"
+    },
+    {
       "path": "/hq/support/:caseId",
       "title": "HON HQ | Support case"
     },
@@ -503,6 +523,10 @@
     {
       "path": "/settings/language-region",
       "title": "HON OS | Language & Region"
+    },
+    {
+      "path": "/settings/texts-from-hon",
+      "title": "HON OS | Texts from HON"
     },
     {
       "path": "/staff/billing/membership-plans",

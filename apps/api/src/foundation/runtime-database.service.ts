@@ -214,6 +214,9 @@ const SAAS_BILLING_CALLS = {
   recordAiLateProviderExpense: { sql: 'SELECT hon.record_ai_late_provider_expense($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
   readAiSpendPauses: { sql: 'SELECT hon.read_ai_spend_pauses_from_hq($1) AS data', arity: 1, readOnly: true },
   commandAiSpendPause: { sql: 'SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  // R2 (0288): per-school internal AI cost ceiling and single-school pause (HQ only).
+  readAiSchoolCostLimits: { sql: 'SELECT hon.read_ai_school_cost_limits_from_hq($1) AS data', arity: 1, readOnly: true },
+  commandAiSchoolCostLimit: { sql: 'SELECT hon.command_ai_school_cost_limit($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readAccessExceptions: { sql: 'SELECT hon.read_saas_access_exceptions_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   grantAccessException: { sql: 'SELECT hon.grant_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   revokeAccessException: { sql: 'SELECT hon.revoke_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
@@ -242,6 +245,22 @@ const SAAS_BILLING_CALLS = {
   readSupportCase: { sql: 'SELECT hon.read_hq_support_case($1,$2::uuid) AS data', arity: 2, readOnly: true },
   readSupportSchools: { sql: 'SELECT hon.read_hq_support_schools($1) AS data', arity: 1, readOnly: true },
   openSupportCase: { sql: 'SELECT hon.open_hq_support_case($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  readHqCommunications: { sql: 'SELECT hon.read_hq_communications($1,$2::uuid,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },
+  readHqMessage: { sql: 'SELECT hon.read_hq_message($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  setHqCommunicationSender: { sql: 'SELECT hon.set_hq_communication_sender($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  retireHqCommunicationSender: { sql: 'SELECT hon.retire_hq_communication_sender($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: false },
+  createHqMessage: { sql: 'SELECT hon.create_hq_message($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  queueHqMessage: { sql: 'SELECT hon.queue_hq_message($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  cancelHqMessage: { sql: 'SELECT hon.cancel_hq_message($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  readMyHqContact: { sql: 'SELECT hon.read_my_hq_contact($1) AS data', arity: 1, readOnly: true },
+  startMyHqPhone: { sql: 'SELECT hon.start_my_hq_phone($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  setMyHqTexting: { sql: 'SELECT hon.set_my_hq_texting($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  removeMyHqPhone: { sql: 'SELECT hon.remove_my_hq_phone($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  readHqProspects: { sql: 'SELECT hon.read_hq_prospects($1,$2,$3::uuid,$4::timestamptz,$5::uuid,$6::integer) AS data', arity: 6, readOnly: true },
+  readHqProspect: { sql: 'SELECT hon.read_hq_prospect($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  createHqProspect: { sql: 'SELECT hon.create_hq_prospect($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  updateHqProspect: { sql: 'SELECT hon.update_hq_prospect($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  recordHqProspectConsent: { sql: 'SELECT hon.record_hq_prospect_consent($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   addSupportNote: { sql: 'SELECT hon.add_hq_support_note($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   changeSupportCase: { sql: 'SELECT hon.change_hq_support_case($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   // M1 (0252): HQ marketing campaigns. Reads are read-only; the three commands write only HQ campaign rows.
@@ -250,6 +269,15 @@ const SAAS_BILLING_CALLS = {
   createMarketingCampaign: { sql: 'SELECT hon.create_hq_marketing_campaign($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   updateMarketingCampaign: { sql: 'SELECT hon.update_hq_marketing_campaign($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   setMarketingCampaignStatus: { sql: 'SELECT hon.set_hq_marketing_campaign_status($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  // 0308: HQ plan promotions. HQ reads are read-only; HQ commands write only promotion rows; the school event writes one
+  // seen/opened/dismissed row. Nothing here changes prices, offers, checkouts, plans, billing or messages.
+  readPlanPromotions: { sql: 'SELECT hon.read_hq_plan_promotions($1,$2,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },
+  readPlanPromotion: { sql: 'SELECT hon.read_hq_plan_promotion($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  createPlanPromotion: { sql: 'SELECT hon.create_hq_plan_promotion($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  updatePlanPromotion: { sql: 'SELECT hon.update_hq_plan_promotion($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  setPlanPromotionStatus: { sql: 'SELECT hon.set_hq_plan_promotion_status($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  readSchoolPlanPromotions: { sql: 'SELECT hon.read_school_plan_promotions($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  recordSchoolPlanPromotionEvent: { sql: 'SELECT hon.record_school_plan_promotion_event($1,$2::uuid,$3::uuid,$4::jsonb) AS data', arity: 4, readOnly: false },
   readHqCreativeStudio: { sql: 'SELECT hon.read_hq_creative_studio($1) AS data', arity: 1, readOnly: true },
   readHqCreativeGeneration: { sql: 'SELECT hon.read_hq_creative_generation($1,$2::uuid) AS data', arity: 2, readOnly: true },
   setHqCreativeBudget: { sql: 'SELECT hon.set_hq_creative_budget($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
@@ -577,6 +605,9 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT hon.read_public_school_event($1) AS data',
       'SELECT hon.book_public_school_event($1,$2::jsonb,$3) AS data',
       'SELECT hon.cancel_public_school_event_booking($1,$2::jsonb) AS data',
+      'SELECT hon.read_public_school_booking_type($1) AS data',
+      'SELECT hon.book_public_school_booking_type($1,$2::jsonb,$3) AS data',
+      'SELECT hon.cancel_public_school_booking_type_booking($1,$2::jsonb) AS data',
     ].includes(statement)) throw new Error('Unknown public event call.');
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();

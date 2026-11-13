@@ -198,7 +198,10 @@ const catalog = K(), hq = { id: K(), user: K(), subject: `ai0-hq-owner-${K()}` }
 const orgs = [];
 const context = (o, patch = {}) => ({ organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject, principalType: 'HUMAN_USER', source: 'HUMAN_UI', requestId: K(), correlationId: K(), idempotencyKey: K(), ...patch });
 
-async function makeOrg(label) {
+// 0310 (owner 2026-11-13): a paying organization has no organization agent budget. Fixture organizations keep the
+// former 12,000-unit budget through the migration-owner-only override so the 0194 lock invariants still exercise a
+// real ceiling; INV-39 proves an organization without an override has none.
+async function makeOrg(label, { orgCeiling = 12000 } = {}) {
   const o = { label, id: K(), school: K(), user: K(), principal: K(), role: K(), subject: `ai0-${label}-${K()}`, campaign: null, curriculum: K(), person: K(), pipeline: K(), stage: K(), lead: K(), policy: K() };
   await admin.query('BEGIN');
   await admin.query("INSERT INTO hon.organizations(id,legal_name,display_name) VALUES($1,'AI-0 synthetic organization','AI-0 synthetic organization')", [o.id]);
@@ -219,6 +222,7 @@ async function makeOrg(label) {
   for (const code of ['marketing.draft.save', 'teaching.draft.save', 'crm.follow_up_draft.propose']) {
     await admin.query("INSERT INTO hon.action_policies(organization_id,school_id,action_code,authority_mode,policy_version,effective_from) VALUES($1,$2,$3,'CONFIRM',1,clock_timestamp()-interval '1 day')", [o.id, o.school, code]);
   }
+  if (orgCeiling !== null) await admin.query("INSERT INTO hon.ai_org_agent_ceiling_overrides(organization_id,ceiling_units,reason) VALUES($1,$2,'AI-0 fixture keeps the 0194 budget lock under test')", [o.id, orgCeiling]);
   await admin.query('COMMIT');
   const start = new Date(Date.now() + 3_600_000).toISOString(), end = new Date(Date.now() + 30 * 86_400_000).toISOString();
   o.campaign = (await campaigns.save(context(o), null, { expectedVersion: 0, code: 'AI0', name: 'AI-0 synthetic campaign', goal: 'Introduce beginner classes', offerLabel: '', channel: 'REFERRAL', startsAt: start, endsAt: end, plannedBudgetMinor: 0, currency: 'USD' })).campaign.id;
@@ -3279,6 +3283,259 @@ try {
     assert.deepEqual(['alex', 'jordan', 'lena'].map((k) => r8.find((x) => x.agentKey === k).blockedBy), [null, 'NOT_AUTHORIZED', null]);
   } finally { await add('schedule.session.manage'); }
   pass('INV-36', "0260: Alex (general management, reporting.view), Jordan (operations, schedule.session.manage) and Lena (creative & commerce, marketing.campaign.read) each answer a question in text from their own aggregate school facts (planned as <agent>/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays; no record names); Alex's operations and commerce sections follow those permissions; each is refused at begin without its capability (nothing recorded) and blocked in prepare on a lapse (nothing reserved or sent); answers are concealed when any permission their facts used lapses while usage evidence stays; HON sees their turns without their text; never continued, confirmed from suggestions or given a target; rows are single DETAILED analyses, source permissions are a closed set, plans are ANALYZE only, the fact readers are internal; readiness lists GENERAL_MANAGEMENT, OPERATIONS and CREATIVE_COMMERCE gated on each capability");
+  }
+
+  // ---- INV-32 (R1, 0287): routing by task class through the HQ task profile ----
+  {
+  const o = await makeOrg('inv-32');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const conv = await hon.create(scope, { title: 'Routing' }, K());
+  // Five synthetic catalog models on this school's policy only (ordinals after the shared baseline model at 0).
+  const m = {};
+  for (const [name, cost, privacy] of [['standard', 1, []], ['detailed', 3, []], ['fallback', 1, ['NO_TRAINING', 'ZERO_RETENTION']], ['advanced', 1, []], ['business', 2, []]]) {
+    m[name] = K();
+    await admin.query("INSERT INTO hon.hq_ai_model_catalog(catalog_id,provider_id,model_id,display_name,capabilities,modalities,privacy_controls,active,minimum_tier,unit_cost_micros,cost_unit,effective_from) VALUES($1,'OPENROUTER',$2,'AI-0 routing model',ARRAY['TEXT'],ARRAY['TEXT'],$3,true,'COMPLETE',$4,'TOKEN','2020-01-01')", [m[name], `test/${name}`, privacy, cost]);
+    await admin.query('INSERT INTO hon.hq_ai_routing_candidates(policy_id,ordinal,catalog_id) VALUES($1,(SELECT max(ordinal)+1 FROM hon.hq_ai_routing_candidates WHERE policy_id=$1),$2)', [o.policy, m[name]]);
+  }
+  const profile = async (agentKey, taskCategory, defaultId, fallbacks = [], advanced = null, patch = {}) => {
+    const id = K();
+    const p = { maxCostMicros: 80000, allowedProviderIds: ['OPENROUTER'], privacyControls: [], active: true, from: '2020-01-01', until: null, ...patch };
+    await admin.query(`INSERT INTO hon.hq_ai_task_profiles(profile_id,routing_policy_id,agent_key,task_category,cost_unit,active,max_cost_micros,required_capabilities,required_modalities,allowed_provider_ids,privacy_controls,timeout_category,retry_category,effective_from,effective_until)
+      VALUES($1,$2,$3,$4,'TOKEN',$5,$6,ARRAY['TEXT'],ARRAY['TEXT'],$7,$8,'STANDARD','NONE',$9,$10)`, [id, o.policy, agentKey, taskCategory, p.active, p.maxCostMicros, p.allowedProviderIds, p.privacyControls, p.from, p.until]);
+    const cands = [['DEFAULT', 0, defaultId], ...fallbacks.map((f, i) => ['FALLBACK', i + 1, f]), ...(advanced ? [['ADVANCED', 0, advanced]] : [])];
+    for (const [selection, ordinal, catalogId] of cands) await admin.query('INSERT INTO hon.hq_ai_task_profile_candidates(profile_id,routing_policy_id,selection,ordinal,catalog_id) VALUES($1,$2,$3,$4,$5)', [id, o.policy, selection, ordinal, catalogId]);
+    return id;
+  };
+  const dropProfiles = async () => { await admin.query('DELETE FROM hon.hq_ai_task_profile_candidates WHERE routing_policy_id=$1', [o.policy]); await admin.query('DELETE FROM hon.hq_ai_task_profiles WHERE routing_policy_id=$1', [o.policy]); };
+  const routed = async (turn) => row(`SELECT p.model_id, p.route_selection, p.task_profile_id, p.task_profile_version, r.status, r.reason FROM hon.hon_reply_invocations r
+    LEFT JOIN hon.ai_invocation_plans p ON p.id = r.plan_id WHERE r.turn_id=$1`, [turn.turnId]);
+  const ask = async (replyMode = 'STANDARD', extra = {}) => routed(await hon.sendTurn(scope, conv.id, { text: `Routing question ${K()}`, delegation: null, replyMode, ...extra }, K()));
+  const callsBefore = fakes.hon.calls;
+  // 1. No task profile: the legacy policy order (shared baseline model at ordinal 0), recorded as POLICY_ORDER.
+  assert.deepEqual(await ask(), { model_id: 'approved/ai0-baseline', route_selection: 'POLICY_ORDER', task_profile_id: null, task_profile_version: null, status: 'COMPLETED', reason: null });
+  // 2. HON Standard and HON Detailed each use their own profile's default.
+  const std = await profile('hon', 'HON_STANDARD', m.standard, [m.fallback], m.advanced);
+  const det = await profile('hon', 'HON_DETAILED', m.detailed, [m.standard]);
+  assert.deepEqual(await ask('STANDARD'), { model_id: 'test/standard', route_selection: 'PROFILE_DEFAULT', task_profile_id: std, task_profile_version: 1, status: 'COMPLETED', reason: null });
+  assert.deepEqual(await ask('DETAILED'), { model_id: 'test/detailed', route_selection: 'PROFILE_DEFAULT', task_profile_id: det, task_profile_version: 1, status: 'COMPLETED', reason: null });
+  // 3. Claire's analysis routes by BUSINESS_PERFORMANCE, not by HON's Detailed profile.
+  const bp = await profile('claire', 'BUSINESS_PERFORMANCE', m.business);
+  assert.deepEqual(await routed(await hon.sendTurn(scope, conv.id, { text: 'How is retention?', delegation: { agentKey: 'claire' } }, K())),
+    { model_id: 'test/business', route_selection: 'PROFILE_DEFAULT', task_profile_id: bp, task_profile_version: 1, status: 'COMPLETED', reason: null });
+  // 4. Default ineligible -> the first eligible fallback (never the advanced model, never the policy order).
+  const fallbackCases = [
+    ['default catalog inactive', () => admin.query('UPDATE hon.hq_ai_model_catalog SET active=false WHERE catalog_id=$1', [m.standard]), () => admin.query('UPDATE hon.hq_ai_model_catalog SET active=true WHERE catalog_id=$1', [m.standard])],
+    ['default over the profile cost ceiling', () => admin.query('UPDATE hon.hq_ai_model_catalog SET unit_cost_micros=9 WHERE catalog_id=$1', [m.standard]), () => admin.query('UPDATE hon.hq_ai_model_catalog SET unit_cost_micros=1 WHERE catalog_id=$1', [m.standard])],
+    ['default lacks a required privacy control', () => admin.query("UPDATE hon.hq_ai_task_profiles SET privacy_controls=ARRAY['ZERO_RETENTION'] WHERE profile_id=$1", [std]), () => admin.query("UPDATE hon.hq_ai_task_profiles SET privacy_controls='{}' WHERE profile_id=$1", [std])],
+  ];
+  for (const [label, apply, undo] of fallbackCases) {
+    await apply();
+    try {
+      assert.deepEqual(await ask('STANDARD'), { model_id: 'test/fallback', route_selection: 'PROFILE_FALLBACK', task_profile_id: std, task_profile_version: 1, status: 'COMPLETED', reason: null }, label);
+    } finally { await undo(); }
+  }
+  // 5. A profile with no eligible candidate refuses the route: nothing planned, reserved or called (no escape to policy order).
+  const refusals = [
+    ['every candidate inactive', () => admin.query('UPDATE hon.hq_ai_model_catalog SET active=false WHERE catalog_id=ANY($1)', [[m.standard, m.fallback]]), () => admin.query('UPDATE hon.hq_ai_model_catalog SET active=true WHERE catalog_id=ANY($1)', [[m.standard, m.fallback]])],
+    ['provider not allowed by the profile', () => admin.query("UPDATE hon.hq_ai_task_profiles SET allowed_provider_ids=ARRAY['DIRECT_LLM_API'] WHERE profile_id=$1", [std]), () => admin.query("UPDATE hon.hq_ai_task_profiles SET allowed_provider_ids=ARRAY['OPENROUTER'] WHERE profile_id=$1", [std])],
+    ['profile ceiling below every candidate', () => admin.query('UPDATE hon.hq_ai_task_profiles SET max_cost_micros=100 WHERE profile_id=$1', [std]), () => admin.query('UPDATE hon.hq_ai_task_profiles SET max_cost_micros=80000 WHERE profile_id=$1', [std])],
+    ['two active profiles for the same task', async () => { await profile('hon', 'HON_STANDARD', m.fallback); }, async () => {
+      const extra = (await rows("SELECT profile_id FROM hon.hq_ai_task_profiles WHERE routing_policy_id=$1 AND task_category='HON_STANDARD' AND profile_id<>$2", [o.policy, std])).map((r) => r.profile_id);
+      await admin.query('DELETE FROM hon.hq_ai_task_profile_candidates WHERE profile_id=ANY($1)', [extra]);
+      await admin.query('DELETE FROM hon.hq_ai_task_profiles WHERE profile_id=ANY($1)', [extra]);
+    }],
+  ];
+  for (const [label, apply, undo] of refusals) {
+    await apply();
+    const calls = fakes.hon.calls;
+    try {
+      assert.deepEqual(await ask('STANDARD'), { model_id: null, route_selection: null, task_profile_id: null, task_profile_version: null, status: 'BLOCKED', reason: 'NO_ELIGIBLE_ROUTE' }, label);
+      assert.equal(fakes.hon.calls, calls, `${label}: no provider call`);
+    } finally { await undo(); }
+  }
+  // 6. An inactive, expired or not-yet-effective profile is not a routing profile: the legacy order applies again.
+  for (const [label, sql] of [['inactive', 'UPDATE hon.hq_ai_task_profiles SET active=false WHERE profile_id=$1'],
+    ['expired', "UPDATE hon.hq_ai_task_profiles SET effective_from='2020-01-01', effective_until=clock_timestamp()-interval '1 minute' WHERE profile_id=$1"],
+    ['future', "UPDATE hon.hq_ai_task_profiles SET effective_from=clock_timestamp()+interval '1 day', effective_until=NULL WHERE profile_id=$1"]]) {
+    await admin.query(sql, [std]);
+    assert.deepEqual(await ask('STANDARD'), { model_id: 'approved/ai0-baseline', route_selection: 'POLICY_ORDER', task_profile_id: null, task_profile_version: null, status: 'COMPLETED', reason: null }, label);
+    await admin.query("UPDATE hon.hq_ai_task_profiles SET active=true, effective_from='2020-01-01', effective_until=NULL WHERE profile_id=$1", [std]);
+  }
+  // 7. The category is code-owned and closed; plan routing columns are as immutable as the rest of the plan.
+  assert.deepEqual((await rows("SELECT a, t, hon.ai_route_task_category(a, t) c FROM (VALUES ('hon','SUMMARIZE'),('hon','ANALYZE'),('claire','ANALYZE'),('marcus','DRAFT_MARKETING'),('chad','DRAFT_FOLLOW_UP'),('kai','DRAFT_TEACHING'),('claire','DRAFT_TEACHING'),('hon','DRAFT_MARKETING'),('maya','SUMMARIZE')) v(a,t) ORDER BY 1,2")).map((r) => `${r.a}/${r.t}=${r.c}`),
+    ['chad/DRAFT_FOLLOW_UP=CHAD_SALES', 'claire/ANALYZE=BUSINESS_PERFORMANCE', 'claire/DRAFT_TEACHING=null', 'hon/ANALYZE=HON_DETAILED', 'hon/DRAFT_MARKETING=null', 'hon/SUMMARIZE=HON_STANDARD', 'kai/DRAFT_TEACHING=KAI_TEACHING', 'marcus/DRAFT_MARKETING=MARCUS_MARKETING', 'maya/SUMMARIZE=null']);
+  await assert.rejects(admin.query("UPDATE hon.ai_invocation_plans SET route_selection='POLICY_ORDER' WHERE task_profile_id=$1", [std]), /immutable/);
+  // 8. The HQ owner can write a HON task profile through the reviewed HQ control plane (new agent keys and categories accepted).
+  await dropProfiles();
+  const hqProfile = K();
+  const write = await row('SELECT hon.hq_ai_control_plane_write($1,$2,$3::jsonb,$4::uuid,$5::uuid) AS data', [hq.subject, 'TASK_PROFILE', JSON.stringify({
+    profileId: hqProfile, routingPolicyId: o.policy, agentKey: 'hon', taskCategory: 'HON_STANDARD', costUnit: 'TOKEN', active: true, maxCostMicros: 80000,
+    defaultCatalogId: m.standard, fallbackCatalogIds: [m.fallback], advancedCatalogId: null, requiredCapabilities: ['TEXT'], requiredModalities: ['TEXT'],
+    allowedProviderIds: ['OPENROUTER'], privacyControls: [], timeoutCategory: 'STANDARD', retryCategory: 'NONE', effectiveFrom: '2020-01-01T00:00:00.000Z', effectiveUntil: null, expectedVersion: 0 }), K(), K()]);
+  assert.equal(write.data.replayed ?? false, false, JSON.stringify(write.data));
+  assert.deepEqual(await ask('STANDARD'), { model_id: 'test/standard', route_selection: 'PROFILE_DEFAULT', task_profile_id: hqProfile, task_profile_version: 1, status: 'COMPLETED', reason: null });
+  assert.ok(fakes.hon.calls > callsBefore);
+  pass('INV-32', 'R1: the planner routes by a code-owned task category (hon Standard/Detailed, Claire business performance, Marcus, Chad, Kai) through the single active effective HQ task profile on the school policy: its default, else the first eligible fallback (never advanced), each also inside the profile cost ceiling, provider list and privacy controls; no profile (or an inactive/expired/future one) keeps the legacy policy order; a profile with no eligible candidate or two active profiles refuse the route with no reservation or call; the profile and selection are recorded immutably on the plan; the HQ owner writes HON task profiles through the control plane');
+  }
+
+  // ---- INV-38 (R2, 0288): per-school internal AI cost ceiling, HQ levels and single-school pause ----
+  {
+  const o = await makeOrg('inv-38'), other = await makeOrg('inv-38-other');
+  const scopeOf = (x) => ({ organizationId: x.id, schoolId: x.school, principalId: x.principal, externalSubject: x.subject });
+  const conversations = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const convs = new Map();
+  const ask = async (x = o) => {
+    if (!convs.has(x.id)) convs.set(x.id, (await conversations.create(scopeOf(x), { title: 'Cost' }, K())).id);
+    const turns = async () => (await row('SELECT count(*)::int n FROM hon.hon_conversation_turns WHERE conversation_id=$1', [convs.get(x.id)])).n;
+    const n = await turns();
+    const r = await settle(conversations.sendTurn(scopeOf(x), convs.get(x.id), { text: `Cost question ${K()}`, delegation: null }, K()));
+    // A refusal at the turn's start records nothing (the existing S4 begin behavior for an HQ pause).
+    if (r.error?.getResponse?.().code === 'HON_AI_SPEND_REFUSED') { assert.equal(await turns(), n, 'refused before any turn'); return { refused: r.error.getResponse().reason }; }
+    if (r.error) throw r.error;
+    return row('SELECT status, reason, reserved_credits::int AS reserved FROM hon.hon_reply_invocations WHERE turn_id=$1', [r.value.turnId]);
+  };
+  const committedCost = async (x = o) => Number((await row('SELECT hon.ai_school_committed_cost_micros($1,$2,clock_timestamp()) n', [x.id, x.school])).n);
+  const cmdSql = 'SELECT hon.command_ai_school_cost_limit($1,$2::jsonb,$3::uuid) r';
+  const limit = (patch = {}, x = o) => ({ schoolId: x.school, ceilingMicros: 15000000, paused: false, reason: 'Synthetic HQ cost limit change', expectedVersion: 0, ...patch });
+  const command = async (input, key = K(), subject = hq.subject) => (await admin.query(cmdSql, [subject, JSON.stringify(input), key])).rows[0].r;
+  const status = async (x = o) => (await row('SELECT hon.read_ai_school_cost_limits_from_hq($1) r', [hq.subject])).r.schools.find((s) => s.schoolId === x.school);
+  const errCode = async (p) => { const r = await settle(p); return r.error ? `${r.error.code}:${r.error.message}` : 'OK'; };
+  // 1. Default for a paying (non-trial) school: no ceiling (owner 2026-11-12: conversations are not capped), no record;
+  //    a question completes and its verified cost (900) is counted. The $15 trial default is proven in the trial runtime
+  //    proof (it needs a live trial).
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null, reserved: 0 });
+  assert.equal(await committedCost(), 900);
+  let s = await status();
+  assert.deepEqual([s.ceilingMicros, s.defaultCeiling, s.paused, s.version, s.recordedCostMicros, s.committedCostMicros, s.level, s.usedBasisPoints], [null, true, false, 0, 900, 900, 'NO_CEILING', null]);
+  assert.equal(s.trial, false);
+  assert.deepEqual((await rows('SELECT hon.ai_school_trial_default_ceiling_micros() t, hon.ai_school_default_ceiling_for($1,clock_timestamp()) o, hon.ai_school_cost_level(999999999,NULL) l', [o.id]))[0],
+    { t: '15000000', o: null, l: 'NO_CEILING' });
+  // 2. Levels: 75%, 90%, 100% of the ceiling (pure and as HQ reads them).
+  assert.deepEqual((await rows('SELECT hon.ai_school_cost_level(c,1000) l FROM unnest(ARRAY[0,749,750,899,900,999,1000,5000]::bigint[]) c')).map((r) => r.l),
+    ['NORMAL', 'NORMAL', 'WARNING_75', 'WARNING_75', 'WARNING_90', 'WARNING_90', 'CEILING_REACHED', 'CEILING_REACHED']);
+  let v = (await command(limit({ ceilingMicros: 1200 }))).version;
+  s = await status(); assert.deepEqual([s.level, s.usedBasisPoints, s.defaultCeiling, s.version], ['WARNING_75', 7500, false, 1]);
+  v = (await command(limit({ ceilingMicros: 1000, expectedVersion: v }))).version;
+  assert.equal((await status()).level, 'WARNING_90');
+  // 3. Under the ceiling a question still runs; once the verified cost reaches it the next one is refused before any
+  //    reservation or provider call (reason AI_PAUSED_BY_HQ), while another organization's school is unaffected.
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null, reserved: 0 });
+  assert.equal(await committedCost(), 1800);
+  assert.equal((await status()).level, 'CEILING_REACHED');
+  let calls = fakes.hon.calls;
+  assert.deepEqual(await ask(), { refused: 'AI_PAUSED_BY_HQ' });
+  assert.equal(fakes.hon.calls, calls, 'no provider call at the ceiling');
+  const marcusRefusal = await settle(agents.marcus.service.submit(context(o), agents.marcus.input(o)));
+  assert.equal(marcusRefusal.error?.getStatus?.(), 403, 'specialists are refused at begin too');
+  assert.match(JSON.stringify(marcusRefusal.error.getResponse()), /AI_PAUSED_BY_HQ|FORBIDDEN|REFUSED/, JSON.stringify(marcusRefusal.error.getResponse()));
+  assert.equal((await row('SELECT count(*)::int n FROM hon.marketing_ai_invocations WHERE organization_id=$1', [o.id])).n, 0, 'nothing recorded for the refused request');
+  assert.deepEqual(await ask(other), { status: 'COMPLETED', reason: null, reserved: 0 });
+  const readiness = await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scopeOf(o));
+  assert.match(JSON.stringify(readiness), /AI_PAUSED_BY_HQ/, 'readiness reports the refusal');
+  // 4. Raising the ceiling restores AI at once.
+  v = (await command(limit({ ceilingMicros: 15000000, expectedVersion: v }))).version;
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null, reserved: 0 });
+  // 5. In-flight holds count at their plan maximum (80,000) until they are recorded.
+  fakes.hon.mode = 'HOLD';
+  const before = await committedCost();
+  const pending = settle(ask());
+  for (const end = Date.now() + 10000; (await row("SELECT count(*)::int n FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).n < 1; await sleep(20)) {
+    if (Date.now() > end) throw new Error('INV-38: hold never started');
+  }
+  assert.equal(await committedCost(), before + 80000, 'a hold counts at its plan maximum');
+  fakes.hon.complete(); fakes.hon.mode = 'RESULT';
+  assert.equal((await pending).value.status, 'COMPLETED');
+  assert.equal(await committedCost(), before + 900);
+  // 6. Defense in depth: the reserve guard refuses a hold for a school at its ceiling even outside the prepare path.
+  v = (await command(limit({ ceilingMicros: 0, expectedVersion: v }))).version;
+  const raw = await row("SELECT id FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='COMPLETED' LIMIT 1", [o.id]);
+  assert.match(await errCode(admin.query('UPDATE hon.hon_reply_invocations SET reserved_credits=reserved_credits+1 WHERE id=$1', [raw.id])), /AI_PAUSED_BY_HQ|immutable|IMMUTABLE/);
+  // 7. Single-school pause (agent and creative classes) and resume, with the reason kept.
+  v = (await command(limit({ ceilingMicros: 15000000, paused: true, reason: 'Synthetic school pause for review', expectedVersion: v }))).version;
+  s = await status(); assert.deepEqual([s.paused, s.reason, s.version], [true, 'Synthetic school pause for review', v]);
+  assert.deepEqual(await ask(), { refused: 'AI_PAUSED_BY_HQ' });
+  assert.deepEqual((await row("SELECT set_config('app.hon_school_id',$2,true) x, hon.ai_spend_allowed($1,clock_timestamp(),'CREATIVE_MEDIA') c, hon.ai_spend_allowed($1,clock_timestamp(),'HQ_INTERNAL') h", [o.id, o.school])), { x: o.school, c: 'AI_PAUSED_BY_HQ', h: null });
+  // The row's own school decides, with no session school (SaaS school paths forbid app.hon_school_id): the explicit
+  // decision, the agent begin guard, the B3 credit reservation guard and the creative wallet reservation guard.
+  const ownSchool = async () => {
+    const d = await row("SELECT coalesce(current_setting('app.hon_school_id',true),'') x, hon.ai_spend_allowed($1,$2::uuid,clock_timestamp(),'CREATIVE_MEDIA') c, hon.ai_spend_allowed($1,$2::uuid,clock_timestamp(),'HQ_INTERNAL') h", [o.id, o.school]);
+    const out = [d.x, d.c, d.h];
+    for (const table of ['marketing_ai_invocations', 'saas_credit_reservations', 'saas_creative_reservations'])
+      out.push(await errCode(admin.query(`INSERT INTO hon.${table}(organization_id, school_id) VALUES ($1,$2)`, [o.id, o.school])));
+    return out;
+  };
+  assert.deepEqual(await ownSchool(), ['', 'AI_PAUSED_BY_HQ', null, '42501:AI_PAUSED_BY_HQ', '42501:AI_PAUSED_BY_HQ', '23514:SAAS_CREATIVE_AI_PAUSED_BY_HQ']);
+  v = (await command(limit({ paused: false, expectedVersion: v }))).version;
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null, reserved: 0 });
+  const resumed = await ownSchool();
+  assert.deepEqual(resumed.slice(0, 3), ['', null, null]);
+  for (const e of resumed.slice(3)) assert.doesNotMatch(e, /PAUSED_BY_HQ/, 'a resumed school passes the guards (the bare row then fails its own constraints)');
+  // 8. The command: HQ owner only, exact shape, versioned, idempotent; its log and the limits are immutable.
+  assert.equal(await errCode(command(limit({ expectedVersion: v }), K(), o.subject)), '42501:SAAS_FORBIDDEN');
+  assert.equal(await errCode(command(limit({ expectedVersion: v - 1 }))), '40001:SAAS_VERSION_CONFLICT');
+  for (const bad of [{ reason: 'short' }, { ceilingMicros: -1 }, { ceilingMicros: 1000000001 }, { ceilingMicros: 1.5 }, { paused: 'no' }, { schoolId: 'school' }, { organizationId: o.id }])
+    assert.match(await errCode(command(limit({ expectedVersion: v, ...bad }))), /^22023:/, JSON.stringify(bad));
+  assert.equal(await errCode(command(limit({ schoolId: K(), expectedVersion: 0 }))), 'P0002:AI_SCHOOL_NOT_FOUND');
+  const key = K(), input = limit({ ceilingMicros: 14000000, expectedVersion: v });
+  const first = await command(input, key);
+  assert.deepEqual(await command(input, key), { ...first, replayed: true });
+  assert.equal(await errCode(command({ ...input, ceilingMicros: 13000000 }, key)), '23505:AI_SCHOOL_COST_LIMIT_KEY_REUSED');
+  assert.equal((await row('SELECT count(*)::int n FROM hon.ai_school_cost_limit_commands WHERE school_id=$1', [o.school])).n, 7);
+  assert.match(await errCode(admin.query('DELETE FROM hon.ai_school_cost_limit_commands WHERE school_id=$1', [o.school])), /IMMUTABLE/);
+  assert.match(await errCode(admin.query('DELETE FROM hon.ai_school_cost_limits WHERE school_id=$1', [o.school])), /IMMUTABLE/);
+  assert.match(await errCode(admin.query('UPDATE hon.ai_school_cost_limits SET paused=true WHERE school_id=$1', [o.school])), /IMMUTABLE/, 'only the command bumps the version');
+  // 9. Only the two HQ entry points reach the runtime; the helpers and tables do not.
+  const acl = await rows(`SELECT p.oid::regprocedure::text f, has_function_privilege($1,p.oid,'EXECUTE') x FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace
+    AND p.proname IN ('command_ai_school_cost_limit','read_ai_school_cost_limits_from_hq','ai_school_spend_decision','ai_school_committed_cost_micros','ai_org_spend_allowed','ai_school_cost_level') ORDER BY 1`, [runtimeRole]);
+  assert.deepEqual(acl.map((a) => `${a.f}=${a.x}`), ['hon.ai_org_spend_allowed(uuid,timestamp with time zone,text)=false', 'hon.ai_school_committed_cost_micros(uuid,uuid,timestamp with time zone)=false',
+    'hon.ai_school_cost_level(bigint,bigint)=false', 'hon.ai_school_spend_decision(uuid,uuid,timestamp with time zone,text)=false',
+    'hon.command_ai_school_cost_limit(text,jsonb,uuid)=true', 'hon.read_ai_school_cost_limits_from_hq(text)=true']);
+  assert.equal((await row("SELECT has_table_privilege($1,'hon.ai_school_cost_limits','SELECT') OR has_table_privilege($1,'hon.ai_school_cost_limit_commands','SELECT') x", [runtimeRole])).x, false);
+  pass('INV-38', 'R2: each school may have an internal monthly agent-AI cost ceiling (none by default for a paying school, $15 on a live trial, HQ-owner editable, versioned, idempotent, immutable command log) counted as verified ledger cost plus every counting hold at its plan maximum; HQ reads NO_CEILING/NORMAL/WARNING_75/WARNING_90/CEILING_REACHED per school; at the ceiling new work is refused before any reservation or provider call (HON prepare, specialist begin, readiness, reserve guard) as AI_PAUSED_BY_HQ while other schools are unaffected and a raised ceiling restores it at once; an HQ single-school pause covers agent and creative AI; only the HQ command and read reach the runtime');
+  }
+
+  // ---- INV-39 (0310): a paying organization has no organization agent budget ----
+  {
+  const o = await makeOrg('inv-39', { orgCeiling: null });
+  const scopeOf = (x) => ({ organizationId: x.id, schoolId: x.school, principalId: x.principal, externalSubject: x.subject });
+  const conversations = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const conv = (await conversations.create(scopeOf(o), { title: 'No ceiling' }, K())).id;
+  const ask = async () => {
+    const r = await settle(conversations.sendTurn(scopeOf(o), conv, { text: `No ceiling question ${K()}`, delegation: null }, K()));
+    if (r.error?.getResponse?.().code === 'HON_AI_SPEND_REFUSED') return { refused: r.error.getResponse().reason };
+    if (r.error) throw r.error;
+    return row('SELECT status, reason FROM hon.hon_reply_invocations WHERE turn_id=$1', [r.value.turnId]);
+  };
+  const ceilings = async () => row('SELECT hon.ai_org_ceiling($1,clock_timestamp()) c, hon.ai_org_display_ceiling($1,clock_timestamp()) d, hon.ai_org_no_ceiling_units() n', [o.id]);
+  // 1. No override: no ceiling, shown as the no-ceiling value to HQ and readiness.
+  assert.deepEqual(await ceilings(), { c: 2147483647, d: 2147483647, n: 2147483647 });
+  const ready = (await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scopeOf(o))).data;
+  assert.equal(ready.agentBudget.ceilingCredits, 2147483647);
+  // 2. Past the former 12,000-unit budget, HON still answers (one provider call, nothing refused).
+  await setUsed(o, 12000);
+  const callsBefore = fakes.hon.calls;
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null });
+  assert.equal(fakes.hon.calls, callsBefore + 1);
+  assert(Number((await row('SELECT hon.ai_org_committed_credits($1,clock_timestamp()) n', [o.id])).n) > 12000, 'committed passed 12,000');
+  // 3. The migration-owner override still restores a ceiling at once (refused before any provider call), and removing it lifts it.
+  await admin.query("INSERT INTO hon.ai_org_agent_ceiling_overrides(organization_id,ceiling_units,reason) VALUES($1,12000,'AI-0 operator backstop check')", [o.id]);
+  assert.equal((await ceilings()).c, 12000);
+  const calls2 = fakes.hon.calls;
+  const blocked = await ask();
+  assert.equal(blocked.status, 'BLOCKED'); assert.match(blocked.reason, /BUDGET|NO_ELIGIBLE_ROUTE/, 'the planner or prepare refuses at the organization ceiling (as INV-26)');
+  assert.equal(fakes.hon.calls, calls2, 'no provider call when the override is reached');
+  await admin.query('DELETE FROM hon.ai_org_agent_ceiling_overrides WHERE organization_id=$1', [o.id]);
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null });
+  // 4. The override table and helpers never reach the runtime.
+  assert.equal((await row("SELECT has_table_privilege($1,'hon.ai_org_agent_ceiling_overrides','SELECT') OR has_table_privilege($1,'hon.ai_org_agent_ceiling_overrides','INSERT') x", [runtimeRole])).x, false);
+  for (const f of ['hon.ai_org_no_ceiling_units()', 'hon.ai_org_paid_ceiling(uuid)'])
+    assert.equal((await row('SELECT has_function_privilege($1,$2,\'EXECUTE\') x', [runtimeRole, f])).x, false, f);
+  assert.deepEqual((await row("SELECT relrowsecurity r, relforcerowsecurity f FROM pg_class WHERE oid='hon.ai_org_agent_ceiling_overrides'::regclass")), { r: true, f: true });
+  pass('INV-39', '0310: an organization a trial does not own has no organization agent budget (ceiling and display read the no-ceiling value 2,147,483,647; readiness shows it); past the former 12,000 units HON still answers with one provider call; a migration-owner override restores a ceiling at once (refused at plan or prepare before any provider call) and removing it lifts it; the override table (forced RLS) and helpers never reach the runtime');
   }
 
   // ---- INV-37 (0284): Maya answers about one at-risk student from that student's 0259 factors only ----

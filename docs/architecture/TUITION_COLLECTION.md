@@ -218,3 +218,129 @@ Status: source only, not deployed. Web only, over the 0269 routes; no migration 
 - **Privacy:** blur or a hidden tab hides the page but keeps unsaved edits in memory; a school change or session end drops
   them. Nothing is kept in browser storage.
 - **Evidence:** `apps/web/test/school-checkout-ui.test.tsx` (9 tests).
+
+## 11. Piece 2 design (0320): real sandbox adapters and the credential vault
+
+Status: spec and plan. Test/sandbox mode only. Owner decisions (David, 2026-11-13): each school is the merchant of
+record (direct charges, HON takes no cut); Stripe Connect accounts with the full Stripe Dashboard ("Standard"-type
+controller: the school pays Stripe's fees, Stripe carries losses, Stripe collects requirements); Stripe-hosted
+onboarding. Embedded components may come later (separate decision doc).
+
+### Configuration (names only; values live in the environment, never in the repo or chat)
+
+| Variable | Use | Refused when |
+| --- | --- | --- |
+| `HON_TUITION_STRIPE_TEST_SECRET_KEY` | Secret key of the **separate** Stripe Connect test platform (not HON's SaaS account) | not `sk_test_`/`rk_test_` |
+| `HON_TUITION_SQUARE_SANDBOX_APP_ID` | Square Developer application id (sandbox) | not `sandbox-sq0idb-` |
+| `HON_TUITION_SQUARE_SANDBOX_APP_SECRET` | Square sandbox application secret | not `sandbox-sq0csb-` |
+| `HON_SCHOOL_PAY_VAULT_KEY` / `HON_SCHOOL_PAY_VAULT_KEY_ID` | 32-byte AES-256-GCM key (base64) and its id for sealing per-school tokens | key not exactly 32 bytes, id not `^[a-z0-9-]{1,40}$` |
+
+Selection per provider: `HON_SCHOOL_PAY_SIMULATORS=1` (never in production) keeps the piece 1 simulators; otherwise a
+provider whose variables are all present and valid gets its real sandbox adapter; otherwise it stays NOT_CONFIGURED
+(503). A live-looking key (`sk_live_`, `rk_live_`, a non-sandbox Square id) is refused and the provider stays
+NOT_CONFIGURED. Square also needs the vault key. Hosts are fixed in code: `api.stripe.com` and
+`connect.squareupsandbox.com` only; Square's production host is never used.
+
+### Stripe Connect (test mode)
+
+- `beginOnboarding`: with no account yet, `POST /v1/accounts` with `controller[stripe_dashboard][type]=full`,
+  `controller[fees][payer]=account`, `controller[losses][payments]=stripe`, `controller[requirement_collection]=stripe`,
+  `metadata[hon_connection_id]`, and the Stripe `Idempotency-Key` `hon-school-pay-account-<connectionId>` (a retry within
+  24 h returns the same account). No school name, email or other personal data is sent. Then
+  `POST /v1/account_links` (`type=account_onboarding`, `return_url` = HON return with `state`, `refresh_url` = the HON
+  page with `connection` only, so an expired link asks for a new one).
+- `completeOnboarding`: no code; the account is the one stored on the connection.
+- `retrieveStatus`: `GET /v1/accounts/<id>`: `charges_enabled`, `payouts_enabled`, requirements due = any
+  `currently_due` or `past_due` entry or a `disabled_reason`; capabilities from `card_payments` /
+  `us_bank_account_ach_payments` being `active`; a 403 or `account_invalid` answer means
+  reauthorization required (a 401 means HON's own platform key is wrong and is reported as a provider refusal).
+- `disconnect`: a Standard account belongs to the school and the platform cannot revoke it with the secret key alone, so
+  the adapter does not call Stripe and the API reports `providerRevoked: false` (the school removes HON in its own
+  Stripe Dashboard). No account is ever deleted.
+- No call carries `application_fee_amount` or any fee field.
+
+### Square (sandbox)
+
+- `beginOnboarding`: `https://connect.squareupsandbox.com/oauth2/authorize?client_id&scope&session=false&state` with the
+  fixed scope list `MERCHANT_PROFILE_READ PAYMENTS_READ PAYMENTS_WRITE CUSTOMERS_READ CUSTOMERS_WRITE` (what pieces 3
+  and 5 need; no ORDERS, BANK_ACCOUNTS, EMPLOYEES or payouts). The redirect URL is the one set in the Square app.
+- **Before** the code exchange the API checks the one-time state against the stored hash
+  (`check_school_payment_onboarding_state`, read-only), so a wrong or replayed state never spends the code.
+- `completeOnboarding`: `POST /oauth2/token` (`authorization_code`) → `merchant_id`, access token, refresh token,
+  expiry. The tokens go to the vault, never to logs, responses or the database in clear.
+- `retrieveStatus`: `GET /v2/merchants/<id>` (status `ACTIVE`) and `GET /v2/locations` (any active location with
+  `CREDIT_CARD_PROCESSING`); a 401 means reauthorization required. An access token that expires within 7 days is renewed
+  first with `POST /oauth2/token` (`refresh_token`); the renewed token is stored with the same status record.
+- `disconnect`: `POST /oauth2/revoke` (`Authorization: Client <secret>`, `merchant_id`), reported, never assumed.
+
+### Credential vault (0320)
+
+- **Table** `hon.school_pay_credentials` (private, forced RLS, no runtime privilege): one row per connection; provider,
+  key id, `sealed` (AES-256-GCM `v1.<iv>.<ciphertext>.<tag>`, base64url), access-token expiry, credential version,
+  stored/rotated/destroyed times. A settings-free guard trigger: no delete or truncate, scope never changes, the
+  version bumps by one, a destroyed row never changes again and holds no sealed value.
+- **Registry** `hon.school_pay_provider_credentials(provider_code, credential_kind)`: which providers keep per-school
+  credentials (`SQUARE` → `OAUTH_TOKENS`); Stripe keeps none. HON's own processor later is one row.
+- **Sealing happens in the API**; the database sees only the sealed text. The additional data binds the blob to
+  `connectionId`, provider and account, so a blob copied to another connection does not open.
+- **Entry points** (direct human, `school_pay.connection.manage`, live re-checks):
+  - `check_school_payment_onboarding_state(subject, connection, {expectedVersion, onboardingState})`: read-only state check.
+  - `store_school_payment_credential(subject, connection, {keyId, sealed, accessExpiresAt, expectedCredentialVersion})`:
+    accepted only when the same transaction has just recorded that connection's FINISH or REFRESH (the connection row
+    was written by the current transaction) and the connection is connected. So tokens are stored only if the database
+    accepts the finish, in the same commit.
+  - `read_school_payment_credential(subject, connection)`: the sealed record of an open, connected connection.
+  - `destroy_school_payment_credential(subject, connection)`: accepted only in the transaction that ended the
+    connection; clears the sealed value.
+  Each write adds an audit event (no secret in it). Replays of the finish/refresh command store nothing.
+- If the finish write is refused after a Square code exchange, the new tokens are dropped from memory and **not**
+  revoked: Square revokes per merchant, so a revoke could cut off another connection on the same account. The owner
+  starts again.
+
+### Plan (TDD, one PR)
+
+1. Contracts: credential record verifier; observation unchanged.
+2. Vault module (seal/open, key checks) with unit tests.
+3. Real adapters over an injected HTTPS transport, unit-tested against recorded-shape fakes (no network in tests):
+   Stripe account + link + status, Square authorize URL + token + status + renew + revoke; live keys refused.
+4. Migration 0320 + DB/HTTP proof (simulated Square returns synthetic tokens): stored only with a finish, sealed only,
+   wrong-transaction store refused, read needs manage, destroyed with disconnect, runtime ACL, history.
+5. Service wiring: state check before exchange, store in the finish/refresh transaction, renew, destroy on disconnect.
+6. Sandbox smoke check (manual, owner-visible): Square sandbox token endpoint reachable with the app credentials;
+   Stripe calls only once the environment stops replacing the key on `api.stripe.com` (owner choice).
+
+## 12. Piece 2 as built (0320)
+
+Status: source only, not deployed. Test/sandbox only.
+
+- **API:** `school-payment-sandbox-adapters.ts` (`StripeConnectTestAdapter`, `SquareSandboxAdapter`, fixed hosts, an
+  injectable transport with a 15 s limit and no redirects), `school-payment-vault.ts` (AES-256-GCM seal/open bound to
+  connection, provider and account), adapter selection in `schoolPaymentAdaptersFromEnvironment`, and the service wiring:
+  state check before the Square exchange, sealed credential stored with the FINISH/REFRESH record, renewal within 7 days
+  of expiry (a grant the seller revoked, Square 401 or `invalid_grant`, is recorded as `REAUTHORIZATION_REQUIRED` with
+  no rotation; timeouts, 429 and 5xx stay `UNKNOWN`), and disconnect skipping the provider revoke while another open connection uses the same account (school B in
+  the same organization may share it; this also changes the piece 1 behaviour, which revoked unconditionally).
+- **Simulators:** the simulated Square now hands back synthetic tokens, so the vault path runs end to end without a
+  network. With simulators on (never in production) and no vault key, the API uses a random per-process key.
+- **Database:** `school_pay_provider_credentials`, `school_pay_credentials` (private, forced RLS, no runtime privilege),
+  the destroy-on-end trigger, the deferred credential check, and four runtime entry points
+  (`check_school_payment_onboarding_state`, `record_school_payment_status_with_credential`,
+  `read_school_payment_credential`, `read_school_payment_account_use`); grants in 010, exact section in 011.
+- **Evidence:** `apps/api/test/school-payments-sandbox.test.cjs` (8 tests: vault, environment selection, Stripe and
+  Square request shapes and answer mapping over a recording transport); `pnpm --filter @hon/database
+  db:test-school-payment-credential-vault` (89 checks over signed HTTP); the 0258 proof now runs with the vault (141).
+- **Real sandbox check (2026-11-13, from the build container):** Square sandbox answered with the configured app: a made-up
+  code is refused (`FAILED`), a made-up token reads as reauthorization required. Stripe was **not** called: this
+  container's network proxy replaces the `Authorization` header on `api.stripe.com` with HON's SaaS sandbox key, which
+  must never be used for tuition. A full connect needs a browser sign-in to a Square sandbox seller and the Square app's
+  redirect URL set to `<web origin>/staff/billing/payment-processors`.
+- **Real Stripe check (2026-11-13, separate test environment without the key injection, head 3f5f77c):** with the tuition
+  `sk_test_` key, the adapter created a Standard connected account, created an Account Link (a repeated request returned
+  the same account) and read its status (not ready, requirements due). No code changed.
+- **Assumption:** in the code flow Square's refresh token stays reusable and comes back in every renewal answer; the
+  token from the answer is stored. An answer without one is treated as `UNKNOWN` and nothing is rotated.
+- **Still needed before any real use:** `HON_SCHOOL_PAY_VAULT_KEY`/`_KEY_ID` in each environment (a secret, owner
+  adds), Square redirect URL, Stripe calls from an environment without the SaaS key injection, key rotation (old key ids
+  are not yet kept, so rotating the single vault key strands stored credentials until reconnect), two disconnects of
+  connections sharing one Square merchant that race can both skip the provider revoke (no lock across connections yet),
+  and the Manus final review (live-money/credential item).
