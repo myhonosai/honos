@@ -47,6 +47,15 @@ DO $$ BEGIN
   IF to_regprocedure('hon.record_inbound_text_keyword(text,text,text,text,timestamptz)') IS NOT NULL THEN
     GRANT EXECUTE ON FUNCTION hon.record_inbound_text_keyword(text, text, text, text, timestamptz) TO hon_communication_worker;
   END IF;
+  -- 0249 missed-call routing, recording and text-back (when applied).
+  IF to_regprocedure('hon.record_missed_call(text,text,text,text,timestamptz)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.read_missed_call_route(text), hon.record_missed_call(text, text, text, text, timestamptz),
+      hon.claim_missed_call_text_backs(integer, integer), hon.record_missed_call_text_back_result(uuid, uuid, text, text) TO hon_communication_worker;
+  END IF;
+  -- 0250 Zernio lead intake (when applied).
+  IF to_regprocedure('hon.record_zernio_lead(text,text,text,text,jsonb,jsonb)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.record_zernio_lead(text, text, text, text, jsonb, jsonb) TO hon_communication_worker;
+  END IF;
 END $$;
 
 -- HQ-COMM 0281: the same worker delivers HQ messages through its own four fixed functions, when 0281 is applied.

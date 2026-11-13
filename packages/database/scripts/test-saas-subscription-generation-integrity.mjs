@@ -97,11 +97,12 @@ try{
   return (await accept(await preview(schedule,who),K(),who)).acceptance;
  }
  for(const kind of c.SAAS_SCHEDULED_OFFER_KINDS){
-  const s=(await record(offers[kind],offers[kind.endsWith('MONTHLY')?'REGULAR_MONTHLY':'REGULAR_ANNUAL'])).schedule;versions[kind]=s.version;
-  assert.deepEqual(s.terms,c.proposedHonOsLaunchPriceSchedule(kind));
-  if(kind.startsWith('FOUNDER_')){const p=await preview(s);assert(p.blockers.includes('FOUNDER_ALLOCATION_CONTRACT_UNAVAILABLE'));await nothing(()=>accept(p),422,'SAAS_PRICE_ACCEPTANCE_BLOCKED');}
+  const s=(await record(offers[kind],offers[kind])).schedule;versions[kind]=s.version;
+  assert.deepEqual(s.terms,c.honOsLaunchScheduleTerms(kind));
+  // 0279: founder terms are locked while subscribed; a spot is counted only at the first verified payment, never here.
+  if(kind.startsWith('FOUNDER_')){const p=await preview(s);assert.deepEqual(p.blockers,[]);assert.equal(s.terms.schemaVersion,2);}
  }
- passed('all four immutable pricing schedules preserved; founder acknowledgement blocked pending C');
+ passed('all four immutable pricing schedules preserved; founder terms locked while subscribed (no spot counted by a preview)');
  const accepted=await fresh(),key=K(),g=(await generation(accepted,key)).generation;
  assert.deepEqual(g.acceptance,accepted);assert.equal(g.organizationId,org.id);assert.equal(g.schoolId,org.school);
  assert.equal(g.provider.identity,'UNCONFIGURED');assert.equal(g.provider.generationReference,g.generationId);

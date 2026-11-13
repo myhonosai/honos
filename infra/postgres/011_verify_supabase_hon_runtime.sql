@@ -2810,6 +2810,37 @@ DO $$ DECLARE t text; safe boolean; expected record; r text; BEGIN
     END LOOP;
   END LOOP;
 END $$;
+
+-- A2 0277 Creative Studio avatar videos: exact posture of the private table and the three runtime entry points.
+DO $$ DECLARE t text; safe boolean; expected record; r text; BEGIN
+  FOR t IN SELECT unnest(ARRAY['creative_avatar_videos']) LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity
+      AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime'
+      AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl WHERE acl.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped AND acl.grantee<>c.relowner)
+    INTO safe FROM pg_class c JOIN pg_roles owner_role ON owner_role.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Creative Studio avatar video private table: %',t; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES
+    ('hon.guard_creative_avatar_generation()',false,true,'v'),
+    ('hon.creative_avatar_video_json(hon.creative_avatar_videos)',false,false,'s'),
+    ('hon.creative_avatar_video_fingerprint(uuid,jsonb)',false,false,'i'),
+    ('hon.create_creative_avatar_video(text,uuid,jsonb,jsonb,uuid,uuid,uuid)',true,true,'v'),
+    ('hon.read_creative_avatar_videos(text,uuid)',true,true,'v'),
+    ('hon.read_creative_avatar_video(text,uuid,uuid)',true,true,'v')
+  ) AS x(signature,runtime_execute,security_definer,volatility) LOOP
+    SELECT p.prosecdef=expected.security_definer AND p.provolatile=expected.volatility AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[]
+      AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime'
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=expected.runtime_execute
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl WHERE acl.grantee<>p.proowner AND (acl.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT expected.runtime_execute OR acl.is_grantable OR acl.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner_role ON owner_role.oid=p.proowner WHERE p.oid=expected.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Creative Studio avatar video function: %',expected.signature; END IF;
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+      IF has_function_privilege(r,expected.signature,'EXECUTE') THEN RAISE EXCEPTION 'Creative Studio avatar video function exposed to %: %',r,expected.signature; END IF;
+    END LOOP;
+  END LOOP;
+END $$;
 -- End Creative Studio generations exact verification.
 
 -- School membership list exact verification (0220, U6): one read-only definer projection, runtime EXECUTE only.
@@ -3235,3 +3266,134 @@ DO $$ DECLARE safe boolean; BEGIN
   IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school invoice list function'; END IF;
 END $$;
 -- End school invoice list exact verification.
+
+-- Missed-call text-back exact verification (B-COM-1 0249): a private forced-RLS table the runtime cannot touch, one
+-- entitlement-gated definer read and the HQ-owner settings command for the runtime, and worker-only routing/recording.
+DO $$ DECLARE f text; runtime oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'); BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.missed_calls'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR has_table_privilege('hon_runtime','hon.missed_calls','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+    RAISE EXCEPTION 'Unsafe missed-call table posture'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.read_school_missed_calls(text,uuid,integer)','hon.set_school_missed_call_settings_from_hq(text,uuid,text,boolean,integer)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef
+        AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND p.proowner<>runtime AND (owner.rolsuper OR owner.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (a.grantee<>runtime OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe missed-call runtime function: %',f; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc x WHERE x.pronamespace='hon'::regnamespace AND x.proname='read_school_missed_calls')<>1 THEN
+    RAISE EXCEPTION 'Unexpected missed-call read overload'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.read_missed_call_route(text)','hon.record_missed_call(text,text,text,text,timestamptz)',
+    'hon.claim_missed_call_text_backs(integer,integer)','hon.record_missed_call_text_back_result(uuid,uuid,text,text)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') THEN RAISE EXCEPTION 'Runtime can run missed-call worker function: %',f; END IF;
+  END LOOP;
+END $$;
+-- End missed-call text-back exact verification.
+
+-- School page branding exact verification (B-SCH-3 0285): two private forced-RLS tables, the guards, private validators
+-- and helpers, three runtime entry points and the permission.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['hon.school_page_branding','hon.school_page_branding_versions'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=t::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'School branding table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.school_branding_image_ok(text)',false,false,'search_path=pg_catalog','b10e7b2fced41045b95b6ab3843d662dc31192978ec596c23922071faa482d62'),
+('hon.school_branding_input_ok(jsonb)',false,false,'search_path=pg_catalog, hon','053a6c6f5c424e4bbe5dcdbdfe8e696d652884514bc1562f34c3705426678882'),
+('hon.guard_school_page_branding()',false,false,'search_path=pg_catalog, hon','4069df59a225f8552d5f3580bc20e0bf8f597d6a4a8532094e9ba05e485323f4'),
+('hon.require_school_branding_actor(text)',true,false,'search_path=pg_catalog, hon','c40bd4f620b7673b7fe6853ca22fb8712ae5c4a0c27e2fc3ac369c20af3fb4a0'),
+('hon.school_page_branding_json(hon.school_page_branding)',false,false,'search_path=pg_catalog, hon','2b75779f3aa2a4fddf7b26cbca03e922a752effa694a3653ec0bba0b3551810d'),
+('hon.read_school_page_branding(text)',true,true,'search_path=pg_catalog, hon','7a0f8422ee144c7c90df29e63b9160255d052ea64d193e2a199b84568a0273c7'),
+('hon.save_school_page_branding(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','71b8e89c1975c7d3f9d3d6a2cc6a1d1787438579d6ead5d2667c22f6c62134f4'),
+('hon.read_public_school_branding(uuid)',true,true,'search_path=pg_catalog, hon','92c9b82ee4ff86f509546c2bb441a6f63144a88de8f2adefab0385368a84ea63')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school branding function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('school_page_branding','school_page_branding_guard','hon.guard_school_page_branding()'),
+    ('school_page_branding','school_page_branding_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('school_page_branding_versions','school_page_branding_versions_immutable','hon.guard_membership_activation_evidence()'),
+    ('school_page_branding_versions','school_page_branding_versions_no_truncate','hon.guard_membership_activation_evidence()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing school branding guard: %',expected.name; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='school_branding.manage' AND is_sensitive AND is_staff_assignable) THEN
+    RAISE EXCEPTION 'school_branding.manage must exist as a sensitive staff-assignable permission'; END IF;
+END $$;
+-- End school page branding exact verification.
+
+-- Zernio lead intake exact verification (B-COM-1 0250): two private forced-RLS tables the runtime cannot touch, the
+-- HQ-owner mapping command for the runtime, and worker-only lead recording.
+DO $$ DECLARE t text; runtime oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'); BEGIN
+  FOREACH t IN ARRAY ARRAY['hon.zernio_lead_forms','hon.zernio_lead_receipts'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR has_table_privilege('hon_runtime',t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+      RAISE EXCEPTION 'Unsafe Zernio table posture: %',t; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner
+      WHERE p.oid='hon.set_zernio_lead_form_from_hq(text,uuid,text,text,uuid,uuid,jsonb,text,integer)'::regprocedure AND p.prosecdef
+      AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND p.proowner<>runtime AND (owner.rolsuper OR owner.rolbypassrls)
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>runtime OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+    RAISE EXCEPTION 'Unsafe Zernio mapping command'; END IF;
+  IF has_function_privilege('hon_runtime','hon.record_zernio_lead(text,text,text,text,jsonb,jsonb)'::regprocedure,'EXECUTE')
+    OR has_function_privilege('hon_runtime','hon.zernio_valid_field_map(jsonb)'::regprocedure,'EXECUTE') THEN
+    RAISE EXCEPTION 'Runtime can run a Zernio worker function'; END IF;
+END $$;
+-- End Zernio lead intake exact verification.
+
+-- School booking types exact verification (0286): three private forced-RLS tables, private helpers and eight runtime entry points.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOREACH t IN ARRAY ARRAY['school_booking_types','school_booking_type_bookings','school_booking_type_rates'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class WHERE oid=('hon.'||t)::regclass AND relrowsecurity AND relforcerowsecurity)
+      OR has_table_privilege('hon_runtime',('hon.'||t)::regclass,'SELECT') OR has_table_privilege('hon_runtime',('hon.'||t)::regclass,'INSERT')
+      OR has_table_privilege('hon_runtime',('hon.'||t)::regclass,'UPDATE') OR has_table_privilege('hon_runtime',('hon.'||t)::regclass,'DELETE')
+      OR has_any_column_privilege('hon_runtime',('hon.'||t)::regclass,'SELECT') THEN
+      RAISE EXCEPTION 'hon.% must be private with forced RLS',t; END IF;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM hon.principal_role_grants WHERE principal_id='00000000-0000-4000-8000-000000000286')
+    OR NOT EXISTS(SELECT 1 FROM hon.principals WHERE id='00000000-0000-4000-8000-000000000286' AND principal_type='SYSTEM_SERVICE' AND user_id IS NULL) THEN
+    RAISE EXCEPTION 'The public booking type principal must be a role-free system service'; END IF;
+  FOR f IN SELECT * FROM (VALUES
+('hon.school_booking_text_ok(text,integer)',false,false,'search_path=pg_catalog, hon','0d6e88ab130348536766d9d478a269481d62f313a13c8d610e707aafb168c90e'),
+('hon.guard_school_booking_type()',true,false,'search_path=pg_catalog, hon','15a94d96ce5192ae45d9b69f5a4ff1161701bdb2c4b75d3b9e40f0a10c8b30e8'),
+('hon.guard_school_booking_type_booking()',true,false,'search_path=pg_catalog, hon','a40ee1d67f60ac9d94bd2019e702f17e61aae3e6809193919f0a2c7649b006b1'),
+('hon.school_booking_type_utc(timestamp with time zone)',false,false,'search_path=pg_catalog','ee207cea42ebf3e328b051bda6eae4cb6b246e589d7fe99e6e0da208f148377d'),
+('hon.school_booking_type_taken(uuid,timestamp with time zone)',true,false,'search_path=pg_catalog, hon','1b22d9be44c388792205ec2f4c60b777cd6a96c8ff057cfe246c80ffdf107ecd'),
+('hon.school_booking_type_times(hon.school_booking_types,text,integer)',true,false,'search_path=pg_catalog, hon','92d769ba9ef67fb5f2b727ac1c441076c4ec9780fdd4b4462ef497ec9487c471'),
+('hon.school_booking_type_time_ok(hon.school_booking_types,text,timestamp with time zone)',true,false,'search_path=pg_catalog, hon','b1c5bdf12b059e7dd675a9fa9a01860eb046adfe7652edd3c0af46b0f8e9c505'),
+('hon.school_booking_type_json(hon.school_booking_types)',true,false,'search_path=pg_catalog, hon','631cac50109ccca513e97cd339dac22fe1ddb05f8f7d180f1336b90dec2897f5'),
+('hon.school_booking_type_booking_json(hon.school_booking_type_bookings)',true,false,'search_path=pg_catalog, hon','36ea3927ac1f750830aabe316270f45f7abcca18fdcadfccce140a0d0e46a318'),
+('hon.school_booking_type_input(jsonb)',false,false,'search_path=pg_catalog, hon','a1895d42966ddf39845a87f62afe675226ee014bb87c9847d63c6e27017230b1'),
+('hon.school_booking_type_command_finish(text,text,uuid,jsonb,text,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)',true,false,'search_path=pg_catalog, hon','963bd4d5683dfb0034c9d9ac1e4dc85360d1f8b1d3e6813f1091e953508c8249'),
+('hon.save_school_booking_type(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','0257aa0164d3f928f9a7d210aed57c8b7209c7b5f007e95de13ec93f84de7c52'),
+('hon.set_school_booking_type_status(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','e1c48d3f8c7be64d7411761ec6a0423eed8bc6d97075962930fffb255f0fba4a'),
+('hon.set_school_booking_type_booking_status(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','3cac890784545b0a15070ecdc337c4ad300007c30b705e6013c812736376e5bb'),
+('hon.read_school_booking_types(text)',true,true,'search_path=pg_catalog, hon','22965831c550b3532fd87805d8c7cc2edcf24845f800949d59eeaeb20f8acd4e'),
+('hon.read_school_booking_type(text,uuid)',true,true,'search_path=pg_catalog, hon','27b3d4290eae5edb032ed7cf666203e51a64bf51c29e68f1b2bfb0125de9cd60'),
+('hon.take_school_booking_type_rate(uuid,text,integer)',true,false,'search_path=pg_catalog, hon','d479fe0eb90801226320d450325c4696f86813da7a761ad42c9849dae857217a'),
+('hon.public_school_booking_type(text)',true,false,'search_path=pg_catalog, hon','987bb22bcbb535ba7247d91f3458ae0616f42a97e991eb1a82cba2cc509eedf6'),
+('hon.read_public_school_booking_type(text)',true,true,'search_path=pg_catalog, hon','2e3694f46c07519104fe9cfcf2d1979e1e139a51202a3a6f37287c5646adb1fb'),
+('hon.school_booking_type_booking_input(hon.school_booking_types,jsonb)',false,false,'search_path=pg_catalog, hon','32942ec9fcbf16a1ce973e3b983f4b1723197b9c7c1e5988b6eccb19f5a7bb1c'),
+('hon.book_public_school_booking_type(text,jsonb,text)',true,true,'search_path=pg_catalog, hon','540e84332911f853dffe21523d1620f80bcb305778aa3d7afefae0a52879a364'),
+('hon.cancel_public_school_booking_type_booking(text,jsonb)',true,true,'search_path=pg_catalog, hon','3425646e00b723373cc76a5a7883f5281456e2830d60d43fcf18b5512c1059ca')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school booking type function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End school booking types exact verification.

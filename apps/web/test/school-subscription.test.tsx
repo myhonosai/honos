@@ -7,7 +7,7 @@ import { loadSchoolAccount, loadSchoolAllowance, startSchoolCheckout, hostedChec
 import { SchoolSubscription } from '../src/components/school-subscription/subscription';
 import { SchoolAccessStatus, SchoolCreditStatus, SchoolReadinessNextSteps } from '../src/components/school-subscription/readiness';
 import { SchoolAccountStatus } from '../src/components/school-subscription/account';
-import { INITIAL_SELECTION, OFFER_CHOICES, PLAN_COMPARISON, displayUsd, planDisplay, selectPlan } from '../src/components/school-subscription/catalog';
+import { INITIAL_SELECTION, OFFER_CHOICES, PLAN_COMPARISON, SELLABLE_OFFER_CHOICES, displayUsd, planDisplay, selectPlan } from '../src/components/school-subscription/catalog';
 import { checkoutId, schoolContext, schoolPlanFixture, schoolCreditsFixture, schoolCheckoutReceipt } from '../scripts/fixtures/school-checkout.mjs';
 
 const ok = (data: unknown) => new Response(JSON.stringify({ data }), { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' } });
@@ -19,6 +19,7 @@ afterEach(() => vi.restoreAllMocks());
 describe('school subscription — merged B5/B3 integration boundaries', () => {
   it('uses six approved informational prices, exact cents and canonical capabilities', () => {
     expect(OFFER_CHOICES.map((o) => o.kind)).toEqual(['REGULAR_MONTHLY','FOUNDER_MONTHLY','FOUNDER_LIFETIME']);
+    expect(SELLABLE_OFFER_CHOICES.map((o) => o.kind)).toEqual(['REGULAR_MONTHLY','FOUNDER_MONTHLY']);
     for (const [tier, prices, credits] of [['CORE',[14900,7900,189600],5000],['COMPLETE',[24900,14900,357600],12000]] as const) OFFER_CHOICES.forEach((o,i)=>{ expect(planDisplay(tier,o.kind).priceMinor).toBe(prices[i]); expect(planDisplay(tier,o.kind).premiumAiCreditPlanningAllowance).toBe(credits); });
     expect(displayUsd(14901)).toBe('$149.01'); expect(displayUsd(189600)).toBe('$1,896'); expect(PLAN_COMPARISON.filter((r)=>!r.core)).toHaveLength(5);
     for (const t of ['ESSENTIAL','../hq']) expect(()=>planDisplay(t as never,'REGULAR_MONTHLY')).toThrow();
@@ -87,7 +88,7 @@ describe('school subscription — merged B5/B3 integration boundaries', () => {
   });
   it('fingerprints immutable offer terms and resets confirmation on changed selection', () => {
     const a=account(),o=a.plan.offers[1]!;expect(offerFingerprint(a,o)).toBe(offerFingerprint(a,{...o,founderSlotsRemaining:1}));expect(offerFingerprint(a,o)).not.toBe(offerFingerprint(a,{...o,priceMinor:o.priceMinor+1}));expect(reviewFingerprint(a,o)).not.toBe(reviewFingerprint({...a,plan:schoolPlanFixture({state:'created'})},o));
-    let s=selectPlan(INITIAL_SELECTION,{type:'REVIEW'});s=selectPlan(s,{type:'ACKNOWLEDGE',checked:true});expect(selectPlan(s,{type:'OFFER',offer:'FOUNDER_LIFETIME'}).acknowledged).toBe(false);
+    let s=selectPlan(INITIAL_SELECTION,{type:'REVIEW'});s=selectPlan(s,{type:'ACKNOWLEDGE',checked:true});expect(selectPlan(s,{type:'OFFER',offer:'FOUNDER_MONTHLY'}).acknowledged).toBe(false); expect(selectPlan(s,{type:'OFFER',offer:'FOUNDER_LIFETIME'})).toBe(s);
   });
   it('shows pending activation after verified test payment, preserving attestation, dispute and invoice distinctions', () => {
     const sim=renderAccount('paid');expect(sim).toContain('Simulator-verified test payment');expect(sim).toContain('Pending Account Activation');expect(sim).toContain('4,000');expect(sim).toContain('School invoice details and download are unavailable');
@@ -100,7 +101,7 @@ describe('school subscription — merged B5/B3 integration boundaries', () => {
   it('keeps return selectors inert behind the session gate and preserves all modes', () => {
     const route=readFileSync('src/app/schools/[schoolId]/hon-plan/page.tsx','utf8');expect(route).toContain('await requireVerifiedWebSession()');expect(route).not.toMatch(/params|searchParams|result=|checkoutId|fetch\(/);
     const source=readFileSync('src/components/school-subscription/subscription.tsx','utf8');expect(source).toContain('HON_INTERFACE_THEMES.map');expect(source).toContain('AI conversation and voice are unavailable');expect(source).not.toMatch(/localStorage|sessionStorage|searchParams|window\.location/);
-    const html=renderToStaticMarkup(<SchoolSubscription/>);expect(html).toContain('Test-mode purchasing');expect(html).toContain('Informational comparison price');expect(html).toContain('Big Button');expect(html).not.toContain('SYNTHETIC');
+    const html=renderToStaticMarkup(<SchoolSubscription/>);expect(html).toContain('Test-mode purchasing');expect(html).toContain('Informational comparison price');expect(html).toContain('Big Button');expect(html).not.toContain('SYNTHETIC');expect(html).not.toContain('value="FOUNDER_LIFETIME"');expect(readFileSync('src/components/school-subscription/subscription.tsx','utf8')).not.toMatch(/20 lifetime|lifetime {lifetime}/);
   });
 });
 

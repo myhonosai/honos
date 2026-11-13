@@ -48,6 +48,8 @@ export const SAAS_PLAN_CAPABILITIES: Record<SaasPlanCode, readonly string[]> = {
 /** Human-command header values, one per command route. */
 export const SAAS_COMMANDS = {
   setSchoolTextSender: 'hq-school-text-sender-set',
+  setSchoolMissedCallSettings: 'hq-school-missed-call-settings-set',
+  setZernioLeadForm: 'hq-zernio-lead-form-set',
   recordSubscriptionGeneration: 'saas-subscription-generation-record',
   startScheduleBinding: 'saas-schedule-binding-start',
   cancelScheduleBinding: 'saas-schedule-binding-cancel',
@@ -100,6 +102,7 @@ export const SAAS_COMMANDS = {
   closeExpiredAccessExceptions: 'saas-access-exception-close',
   decideExceptionPolicy: 'saas-access-exception-policy-decision',
   aiSpendPause: 'ai-spend-pause',
+  aiSchoolCostLimit: 'ai-school-cost-limit',
   aiUnknownResolve: 'ai-unknown-resolve',
   aiLateProviderExpense: 'ai-late-provider-expense',
   setCreativeProgram: 'saas-creative-program',
@@ -112,7 +115,7 @@ export const SAAS_COMMANDS = {
   createCreativeTopupPurchase: 'saas-creative-topup-purchase',
   createCreativeGeneration: 'saas-creative-generation-create',
   // A1 (0276): Creative Studio avatars.
-  createCreativeAvatar: 'saas-creative-avatar-create',
+  createCreativeAvatar: 'saas-creative-avatar-create', createCreativeAvatarVideo: 'saas-creative-avatar-video-create',
   // B-HQ-2 (0232): HQ support records; same values as HQ_SUPPORT_COMMANDS.
   openSupportCase: 'hq-support-case-open',
   addSupportNote: 'hq-support-case-note',

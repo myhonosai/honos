@@ -1062,11 +1062,13 @@ export * from './language-preferences.js';
 export * from './saas-trials.js';
 
 export * from './saas-price-acceptance.js';
+export * from './saas-founder-allocation.js';
 export * from './saas-subscription-generation.js';
 
 export * from './school-owner-invitations.js';
 export * from './school-ownership.js';
 export * from './ai-spend-pause.js';
+export * from './ai-school-cost-limit.js';
 export * from './ai-unknown-resolution.js';
 export * from './ai-school-usage.js';
 export * from './ai-team-readiness.js';
@@ -1093,3 +1095,5 @@ export * from './school-checkout.js';
 export * from './maya-at-risk.js';
 export * from './text-pieces.js';
 export * from './hq-hon.js';
+export * from './school-branding.js';
+export * from './school-booking-types.js';
