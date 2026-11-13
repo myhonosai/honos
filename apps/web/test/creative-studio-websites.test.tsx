@@ -133,6 +133,8 @@ it('lists drafts with status and credits, hides the pending brief, locks while u
   const hidden = card(view({ state: 'READY', provider: 'CONNECTED', items: [draft('GENERATING')] }, { hide: () => true }));
   expect(hidden).not.toContain('Family taekwondo'); expect(hidden).toContain('data-prompt-hidden');
   expect(card(view({ state: 'READY', provider: 'CONNECTED', items: [draft('GENERATING')] }))).toMatch(/<textarea[^>]*disabled=""/);
+  expect(card(view({ state: 'READY', provider: 'CONNECTED', items: [draft('GENERATING')] }))).toContain('A draft is still being made');
+  expect(html).not.toContain('A draft is still being made');
   expect(card(view({ state: 'READY', provider: 'CONNECTED', items: [] }, { locked: true }))).toMatch(/<textarea[^>]*disabled=""/);
   expect(card(view({ state: 'READY', provider: 'CONNECTED', items: [] }, { outcome: { kind: 'UNKNOWN' } }))).toContain('Check again');
   const opened = card(view({ state: 'READY', provider: 'CONNECTED', items: [draft()] }, { open: { draftId: id(1960), state: 'READY', draft: draft('SUCCEEDED', { content: content() }) } }));

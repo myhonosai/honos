@@ -48,6 +48,7 @@ export function WebsiteDraftsPanel({ language, wallet, websites, outcome, showLi
     {usable && wallet && rate ? <WebsiteForm language={language} perPage={rate.creditsPerUnit} maxPages={Math.min(CREATIVE_WEBSITE_LIMITS.maxPages, rate.maxUnitsPerRequest)}
       operationCode={rate.operationCode} available={wallet.available} disabled={pending || busy} onCreate={onCreate}/>
       : <p className={styles.note}>{!connected ? t('wsNotConnected') : open ? t('wsNotPriced') : t('wsBlocked')}</p>}
+    {usable && busy ? <p className={styles.meta} data-website-busy="">{t('wsBusy')}</p> : null}
     {status ? <div className={styles.outcome} data-tone={status.tone} role="status">
       <p>{status.text}</p>
       {(outcome?.kind === 'UNKNOWN' || outcome?.kind === 'HIDDEN_PENDING' || outcome?.kind === 'RETRY_BLOCKED') && onCheckAgain ? <button type="button" className={styles.secondary} onClick={onCheckAgain}>{t('checkAgain')}</button> : null}
@@ -68,7 +69,7 @@ export function WebsiteDraftsPanel({ language, wallet, websites, outcome, showLi
         {shown?.state === 'LOADING' ? <p className={styles.meta}>{t('loading')}</p> : null}
         {shown?.state === 'FAILED' ? <p className={styles.meta} role="status">{t('wsLoadFailed')}</p> : null}
         {shown?.state === 'READY' && shown.draft.content ? <div data-website-content="">
-          <p className={styles.meta}>{t('wsSynthetic')}</p>
+          {shown.draft.content.some(page => page.origin === 'SYNTHETIC') ? <p className={styles.meta}>{t('wsSynthetic')}</p> : null}
           {shown.draft.content.map(page => <section key={page.pageKey} aria-label={t(PAGE_KEY(page.pageKey))}>
             <h3>{t(PAGE_KEY(page.pageKey))}: {page.title}</h3>
             {page.sections.map((s, i) => <div key={i}><h4>{s.heading}</h4><p className={styles.prompt}>{s.body}</p></div>)}
