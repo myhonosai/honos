@@ -130,6 +130,52 @@ receipt timeline. No address, no provider IDs, no cost.
   stored (`hon.inbound_text_keywords`, without the sender's number). START re-opens only an opt-out the person
   made themselves (source RECIPIENT). Replies come from Twilio Advanced Opt-Out; HON answers empty TwiML.
 
+## 5b. Missed-call text-back as built (0249)
+
+- The HQ owner sets, per school sender, a forwarding phone (the school's own line) and a text-back switch
+  (`POST /v1/hq/saas/schools/:schoolId/missed-call-settings`, human-command guard, version-checked, audited). Off by default.
+- `POST /v1/communications/webhooks/twilio/voice` (signed like the other Twilio webhooks): a call to an ACTIVE school
+  number rings the forwarding phone for 20 seconds with a fixed `voice-result` action URL; with no forwarding phone the
+  call is recorded as missed and HON hangs up; any other number is rejected. A withheld caller ID is never texted.
+- `POST /v1/communications/webhooks/twilio/voice-result`: `no-answer`, `busy`, `failed` or `canceled` records one row in
+  `hon.missed_calls` (unique Twilio CallSid, so a redelivered callback is a replay).
+- Text-back: at most one per caller per school per 24 hours (an UNKNOWN reply counts as sent), never to a number the
+  school holds as SMS `OPTED_OUT` (checked when recorded and again before sending), only while the switch and sender are
+  ACTIVE and the school and organization are ACTIVE, and only 08:00-21:00 school time. Leases, three attempts with
+  backoff, and expired leases as UNKNOWN follow the 0243 rules. The reply is one fixed message in the school's default
+  language (en/ko/es) naming the school and ending with STOP wording; it goes through the same Twilio adapter and
+  `HON_SMS_SEND_APPROVED` switch as other texts, without a status callback.
+- School staff read their recent missed calls to call back with `communication.message.read`
+  (`GET /v1/organizations/:org/schools/:school/communications/missed-calls`): caller, dial outcome, text-back state, time.
+  The list is a definer read (`hon.read_school_missed_calls(subject, school, limit)`) that also requires the
+  organization's entitlement to be ACTIVE and in effect, so staff at a suspended, lapsed or not-yet-started school read
+  nothing (403); the runtime has no direct access to `hon.missed_calls`.
+- `canceled` (the caller hung up before the forwarding phone answered) counts as missed and gets a text-back, the same as
+  `no-answer` and `busy`.
+- A STOP texted from a number the school has no person record for is not stored in HON (0248 keywords need a school
+  number match and record against the school's people). Blocking further texts to that number relies on Twilio's own
+  opt-out handling on the Messaging Service (Advanced Opt-Out or the default STOP list), which must stay on; this is on
+  the pre-launch review list.
+
+## 5c. Zernio lead intake as built (0250)
+
+- Owner decision 2026-11-09: a Zernio `lead.received` event (Meta Lead Gen form) becomes a CRM lead
+  **automatically**, without a review queue, but only through an HQ-owner mapping. This replaces the human-review step
+  of the Phase 2A design for this one source. Zernio documents no Google lead-form webhook, so `ZERNIO_GOOGLE` is not built.
+- `POST /v1/hq/saas/schools/:schoolId/zernio-lead-forms` (human HQ owner, versioned, audited) maps one Facebook account id
+  + Lead Gen form id to one school pipeline and a non-terminal stage, with the answer keys for name, email and phone
+  (default `full_name`, `email`, `phone_number`). A form can never be moved to another school; DISABLED stops intake.
+- `POST /v1/communications/webhooks/zernio`: `X-Zernio-Signature` = hex HMAC-SHA256 of the raw body with the endpoint
+  secret HON chose. INACTIVE unless `ZERNIO_WEBHOOK_SECRET` (at least 32 characters) and
+  `HON_ZERNIO_LEAD_INTAKE_APPROVED=true`. Other events and Zernio test deliveries are acknowledged and ignored.
+- `hon.record_zernio_lead` (worker login only): dedupes on the event id and the Meta lead id; needs ACTIVE organization,
+  school, CRM entitlement and stage; needs a name plus a valid email or E.164 phone; creates the person and lead with
+  source `ZERNIO_META` and attribution holding only form and ad ids; records no message consent. An unmapped form answers 422
+  (Zernio keeps it in its dead-letter queue for redelivery once HQ maps the form); over 300 leads per form per hour
+  answers 429 (retried). Receipts keep ids and the outcome only, never answers or the raw payload.
+- The runtime has no access to `hon.zernio_lead_forms` or `hon.zernio_lead_receipts`; a later school or HQ screen that
+  lists mappings or receipts must add an entitlement-gated definer read (the 0249 missed-call pattern).
+
 ## 6. Who pays for texting (open, Decision 4)
 
 Nothing here charges anyone. Every delivery records provider, pieces, sent-as and measured provider cost

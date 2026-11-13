@@ -26,6 +26,8 @@ weekly hours and stays open until the school pauses it.
 - **T2 Status.** DRAFT → ACTIVE (bookable, link on) ↔ PAUSED (link shows "not taking bookings") → ARCHIVED (final). Edits keep
   the version moving by exactly 1. Changing the hours, length or spots never cancels a booking that already exists. Lowering the
   spots is refused if any future time already holds more bookings than the new number.
+  Spots are counted per exact start time. After a length or hours edit, an old booking whose time overlaps a new time
+  but does not start at the same instant is not counted against it, so the room can briefly hold more than the spots.
 - **T3 Times.** Times are worked out when asked, not stored. They start at each window's start and step by the length,
   and each one must end by the window's end. They run from now plus the notice to the end of the horizon. A local time
   that does not exist on a daylight-saving day is skipped. One read returns at most 400 times.

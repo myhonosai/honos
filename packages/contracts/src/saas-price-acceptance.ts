@@ -1,7 +1,7 @@
 /** Commercial A2: immutable acknowledgement evidence. Never a payment or access authorization. */
 import { championsExactKeys as keys, championsIsInt as integer, championsIsTimestamp as timestamp,
   championsIsUuid as uuid, championsRecord as record } from './champions-club.js';
-import { SAAS_PRICE_SCHEDULE_CONFIRMATION, validateSaasPriceScheduleTermsV1, type SaasPriceScheduleTermsV1 } from './saas-introductory-pricing.js';
+import { SAAS_PRICE_SCHEDULE_CONFIRMATION, validateSaasPriceScheduleTerms, type SaasPriceScheduleTerms } from './saas-introductory-pricing.js';
 import { validateSaasHonOsOffer } from './saas-offers.js';
 
 export const SAAS_PRICE_DISCLOSURE_VERSION = 'HON_OS_PRICING_EN_V1' as const;
@@ -15,13 +15,16 @@ export interface SaasPriceAcceptanceInput {
 }
 export interface SaasPriceSchedule {
   scheduleId: string; version: number; offerId: string; offerSetId: string; offerSetVersion: number; offerSetRevision: number;
-  renewalOfferId: string; terms: SaasPriceScheduleTermsV1; acceptedOffer: Readonly<Record<string, unknown>>; acceptedOfferDigest: string;
+  renewalOfferId: string; terms: SaasPriceScheduleTerms; acceptedOffer: Readonly<Record<string, unknown>>; acceptedOfferDigest: string;
   disclosureVersion: typeof SAAS_PRICE_DISCLOSURE_VERSION; disclosureLanguage: 'en'; disclosureText: string; termsReference: string;
   refundTerms: { termsReference: string; windowDays: number }; cancellationTerms: { termsReference: string; timing: 'END_OF_PAID_PERIOD' };
   scheduleDigest: string; actorPrincipalId: string; recordedAt: string; providerBinding: 'UNAVAILABLE_COMMERCIAL_B'; billingEnabled: false;
 }
+/** Founder blockers (0279) describe availability now; they are never a promise of a spot. A spot is counted only at the
+ * first verified payment, so FOUNDER_* blockers can appear later than an acceptance. */
 export const SAAS_PRICE_ACCEPTANCE_BLOCKERS = ['SCHEDULE_CHANGED','OFFER_NOT_AVAILABLE','SCHEDULE_SUPERSEDED',
-  'FOUNDER_ALLOCATION_CONTRACT_UNAVAILABLE','ALREADY_ACCEPTED'] as const;
+  'FOUNDER_TERMS_NOT_LOCKED','FOUNDER_ALREADY_USED','FOUNDER_SOLD_OUT','FOUNDER_SET_LIMIT_REACHED','FOUNDER_OFFER_LIMIT_REACHED',
+  'ALREADY_ACCEPTED'] as const;
 export interface SaasPriceAcceptancePreview {
   organizationId: string; schoolId: string; schedule: SaasPriceSchedule; acceptanceDigest: string; canAcknowledge: boolean;
   blockers: typeof SAAS_PRICE_ACCEPTANCE_BLOCKERS[number][]; purchaseAvailable: false; paymentAuthorized: false; accessGranted: false; asOf: string;
@@ -54,7 +57,7 @@ export function validateSaasPriceSchedule(value: unknown): SaasPriceSchedule {
   keys(r, ['scheduleId','version','offerId','offerSetId','offerSetVersion','offerSetRevision','renewalOfferId','terms','acceptedOffer',
     'acceptedOfferDigest','disclosureVersion','disclosureLanguage','disclosureText','termsReference','refundTerms','cancellationTerms',
     'scheduleDigest','actorPrincipalId','recordedAt','providerBinding','billingEnabled'], drift);
-  const terms = validateSaasPriceScheduleTermsV1(r.terms), refund = record(r.refundTerms, drift), cancel = record(r.cancellationTerms, drift);
+  const terms = validateSaasPriceScheduleTerms(r.terms), refund = record(r.refundTerms, drift), cancel = record(r.cancellationTerms, drift);
   keys(refund, ['termsReference','windowDays'], drift); keys(cancel, ['termsReference','timing'], drift);
   const a = record(r.acceptedOffer, drift);
   const extra = ['productCode','capabilityPolicyVersion','planCode','offerSetId','offerSetVersion','termsReference','approvedPreviewDigest','recurringBilling'];
@@ -92,7 +95,7 @@ export function validateSaasPriceAcceptance(value: unknown): SaasPriceAcceptance
   const s = validateSaasPriceSchedule(r.schedule);
   if (![r.acceptanceId,r.organizationId,r.schoolId,r.actorPrincipalId,r.idempotencyKey].every(uuid) || !digest(r.acceptanceDigest)
     || r.scheduleDigest !== s.scheduleDigest || r.disclosureVersion !== s.disclosureVersion || r.disclosureText !== s.disclosureText
-    || r.confirmation !== SAAS_PRICE_SCHEDULE_CONFIRMATION || r.founderAllocationId !== null || s.terms.offerKind.startsWith('FOUNDER_')
+    || r.confirmation !== SAAS_PRICE_SCHEDULE_CONFIRMATION || r.founderAllocationId !== null || (s.terms.offerKind.startsWith('FOUNDER_') && s.terms.schemaVersion !== 2)
     || !timestamp(r.acceptedAt) || r.paymentStatus !== 'NOT_AUTHORIZED' || r.subscriptionStatus !== 'NOT_CREATED'
     || r.accessGranted !== false || r.paidPeriodEvidence !== 'NOT_IMPLEMENTED_COMMERCIAL_B') drift();
   return r as unknown as SaasPriceAcceptance;

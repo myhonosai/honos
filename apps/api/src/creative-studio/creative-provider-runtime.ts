@@ -7,10 +7,11 @@ export interface CreativeProviderRoute { providerId: string; modelCode: string }
 /** Exactly what the database recorded for the generation, plus the server route. */
 export interface CreativeInvocation extends CreativeProviderRoute {
   providerRequestId: string; operationCode: string; mediaKind: SaasCreativeMediaKind; units: number; format: CreativeGenerationFormat; prompt: string;
-  /** Present only for avatar.create (0276): the avatar's name and look; the prompt is its description. */
+  /** Present only for avatar.* operations: for avatar.create (0276) the name and look (the prompt is the description); for
+   *  avatar.video (0277) the presenter's name, look and description (the prompt is the script it speaks). */
   avatar?: CreativeAvatarLook;
 }
-export interface CreativeAvatarLook { name: string; style: CreativeAvatarStyle }
+export interface CreativeAvatarLook { name: string; style: CreativeAvatarStyle; description?: string }
 export interface CreativeResultAsset { mediaType: CreativeAssetMediaType; width: number; height: number; durationSeconds: number | null; providerAssetReference: string }
 export interface CreativeResult { finalUnits: number; providerCostMicrounits: number; assets: CreativeResultAsset[] }
 
@@ -59,7 +60,7 @@ export class SyntheticCreativeProviderRuntime implements CreativeProviderRuntime
   readiness() { return this.options.ready === false ? 'CONFIGURATION_REQUIRED' as const : 'READY' as const; }
   route(operationCode: string): CreativeProviderRoute | null {
     if (this.readiness() !== 'READY') return null;
-    return { providerId: this.options.providerId ?? 'HIGGSFIELD', modelCode: operationCode.startsWith('avatar.') ? 'synthetic-avatar-1' : operationCode.startsWith('video') ? 'synthetic-video-1' : 'synthetic-image-1' };
+    return { providerId: this.options.providerId ?? 'HIGGSFIELD', modelCode: operationCode === 'avatar.video' ? 'synthetic-avatar-video-1' : operationCode.startsWith('avatar.') ? 'synthetic-avatar-1' : operationCode.startsWith('video') ? 'synthetic-video-1' : 'synthetic-image-1' };
   }
   async generate(input: CreativeInvocation): Promise<CreativeResult> {
     this.calls.push(input);

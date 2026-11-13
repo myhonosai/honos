@@ -62,7 +62,7 @@ try{
   for(const p of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'])assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[runtime.username,'hon.'+t,p]))[0].ok,false,t+':'+p);
  }
  const fns=await q("SELECT p.oid,p.proname,p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname IN ('hon_os_trial_open','hon_os_trial_live','hon_os_trial_json','hon_os_trial_campaign_offer','start_hon_os_trial','read_hon_os_trial','guard_hon_os_trial_checkout','ai_spend_allowed','ai_trial_funding_available','ai_org_ceiling')");
- assert.equal(fns.length,10);
+ assert.equal(fns.length,11); // 0288 adds the school-explicit ai_spend_allowed(org,school,at,class) overload (also internal, SECURITY DEFINER)
  for(const f of fns){const entry=['start_hon_os_trial','read_hon_os_trial'].includes(f.proname);
   assert.equal(f.prosecdef,entry||f.proname==='ai_spend_allowed',f.proname);assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entry,f.proname);}
  assert.equal((await q('SELECT status FROM hon.hon_os_trial_program'))[0].status,'CLOSED');
@@ -147,6 +147,14 @@ try{
  // Agent AI is allowed under the HQ-set credit; Creative Studio media never is (wallet only).
  assert.equal(await ai(ana.reg.organizationId),null);assert.equal(await ai(ana.reg.organizationId,'clock_timestamp()','CREATIVE_MEDIA'),'AI_TRIAL_FUNDING_NOT_APPROVED');
  assert.equal(await ai(ben.reg.organizationId),'AI_ACCESS_NOT_PAID');
+ // 0288 (owner 2026-11-12): while the trial owns access the school's internal AI cost ceiling defaults to $15; a school
+ // without a live trial has no default ceiling (paying schools' conversations are not capped). HQ sees which applies.
+ {const list=(await q('SELECT hon.read_ai_school_cost_limits_from_hq($1) r',[hq.subject]))[0].r;
+  assert.equal(list.trialDefaultCeilingMicros,15000000);assert.equal('defaultCeilingMicros' in list,false);
+  const of=id=>list.schools.find(x=>x.schoolId===id);
+  assert.deepEqual([of(ana.reg.schoolId).trial,of(ana.reg.schoolId).ceilingMicros,of(ana.reg.schoolId).defaultCeiling],[true,15000000,true]);
+  assert.deepEqual([of(ben.reg.schoolId).trial,of(ben.reg.schoolId).ceilingMicros,of(ben.reg.schoolId).level],[false,null,'NO_CEILING']);
+  assert.equal((await q('SELECT hon.ai_school_default_ceiling_for($1,clock_timestamp()+interval \'15 days\') n',[ana.reg.organizationId]))[0].n,null,'after the trial window no default applies');}
  // Credits expire after creditExpiryDays (7) while the trial itself runs 14; access ends by the clock at endsAt.
  const startsAt="(SELECT starts_at FROM hon.hon_os_trial_enrollments WHERE organization_id=$1)",endsAt="(SELECT ends_at FROM hon.hon_os_trial_enrollments WHERE organization_id=$1)";
  assert.equal(await ai(ana.reg.organizationId,startsAt+"+interval '7 days'-interval '1 millisecond'"),null);

@@ -2190,6 +2190,29 @@ DO $$ DECLARE r text; c text; f text; BEGIN
   END IF;
 END $$;
 
+-- A2 0277 Creative Studio avatar videos (one video = one CS1 generation of avatar.video): private deny-all table, private
+-- helpers (the replaced deferred avatar-generation guard stays private), three fixed runtime entry points.
+DO $$ DECLARE r text; c text; f text; BEGIN
+  IF to_regprocedure('hon.create_creative_avatar_video(text,uuid,jsonb,jsonb,uuid,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply A2 migration 0277 first'; END IF;
+  ALTER TABLE hon.creative_avatar_videos ENABLE ROW LEVEL SECURITY; ALTER TABLE hon.creative_avatar_videos FORCE ROW LEVEL SECURITY;
+  REVOKE ALL ON hon.creative_avatar_videos FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON hon.creative_avatar_videos FROM %I',r); END LOOP;
+  FOR c IN SELECT attname FROM pg_attribute WHERE attrelid='hon.creative_avatar_videos'::regclass AND attnum>0 AND NOT attisdropped LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.creative_avatar_videos FROM PUBLIC',c);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.creative_avatar_videos FROM %I',c,r); END LOOP;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace
+      AND p.proname IN ('guard_creative_avatar_generation','creative_avatar_video_json','creative_avatar_video_fingerprint',
+        'create_creative_avatar_video','read_creative_avatar_videos','read_creative_avatar_video') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.create_creative_avatar_video(text,uuid,jsonb,jsonb,uuid,uuid,uuid), hon.read_creative_avatar_videos(text,uuid),
+      hon.read_creative_avatar_video(text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
 -- 0204 (provisional) school staff invitations: private custody tables, internal helpers, three fixed runtime entry points.
 DO $$ DECLARE t text; r text; f text; c text; BEGIN
   FOREACH t IN ARRAY ARRAY['school_staff_invitations','school_staff_account_events'] LOOP
@@ -2479,6 +2502,22 @@ DO $$ DECLARE r text; f text; BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.read_saas_paid_reviews(text,text),hon.resolve_saas_paid_review(text,jsonb,uuid,uuid,uuid),
       hon.verify_saas_paid_review_refund(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- 0279 HON OS schedule billing piece 4 (founder 50-spot count). Runs after every broader revocation above: restore only
+-- the two reads plus the ingest and cancel commands 0279 replaced. Availability helpers, guards and JSON stay unreachable.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['read_saas_founder_pool_from_hq(text)','read_saas_founder_availability_for_school(text,uuid)',
+    'saas_founder_unavailable_reason(uuid,uuid)','saas_schedule_binding_founder_offer(hon.saas_schedule_bindings)','saas_founder_pool_json()',
+    'guard_saas_founder_binding_insert()','guard_saas_founder_allocation_insert()','verify_saas_founder_allocation_evidence()'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_saas_founder_pool_from_hq(text),hon.read_saas_founder_availability_for_school(text,uuid),
+      hon.ingest_saas_schedule_evidence(jsonb,text),hon.cancel_saas_schedule_binding(text,uuid,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
 
@@ -3039,6 +3078,56 @@ DO $$ DECLARE r text; BEGIN
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.read_school_invoices(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0249 missed-call text-back: school staff read their missed calls only through the entitlement-gated definer list;
+-- the runtime calls only the HQ-owner settings command. Routing, recording and text-back are worker-only (013).
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.record_missed_call(text,text,text,text,timestamptz)') IS NULL THEN RAISE EXCEPTION 'Apply missed-call migration 0249 first'; END IF;
+  REVOKE ALL ON TABLE hon.missed_calls FROM hon_runtime;
+  GRANT EXECUTE ON FUNCTION hon.set_school_missed_call_settings_from_hq(text,uuid,text,boolean,integer), hon.read_school_missed_calls(text,uuid,integer) TO hon_runtime;
+  FOREACH f IN ARRAY ARRAY['hon.read_missed_call_route(text)','hon.record_missed_call(text,text,text,text,timestamptz)',
+    'hon.claim_missed_call_text_backs(integer,integer)','hon.record_missed_call_text_back_result(uuid,uuid,text,text)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM PUBLIC, hon_runtime';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+END $$;
+
+-- 0250 Zernio lead intake: the runtime has no access to the form-mapping or receipt tables (no school screen
+-- reads them yet); it calls only the HQ-owner mapping command. Lead recording is worker-only (013).
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.record_zernio_lead(text,text,text,text,jsonb,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply Zernio lead migration 0250 first'; END IF;
+  REVOKE ALL ON TABLE hon.zernio_lead_forms, hon.zernio_lead_receipts FROM hon_runtime;
+  GRANT EXECUTE ON FUNCTION hon.set_zernio_lead_form_from_hq(text,uuid,text,text,uuid,uuid,jsonb,text,integer) TO hon_runtime;
+  REVOKE ALL ON FUNCTION hon.record_zernio_lead(text,text,text,text,jsonb,jsonb) FROM PUBLIC, hon_runtime;
+  REVOKE ALL ON FUNCTION hon.zernio_valid_field_map(jsonb) FROM PUBLIC, hon_runtime;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.record_zernio_lead(text,text,text,text,jsonb,jsonb), hon.set_zernio_lead_form_from_hq(text,uuid,text,text,uuid,uuid,jsonb,text,integer) FROM '||quote_ident(r);
+  END LOOP;
+END $$;
+-- R1 0287 task-class routing: the category mapping is internal to the planner; plan_ai_invocation's grant is unchanged.
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.ai_route_task_category(text,text)') IS NULL THEN RAISE EXCEPTION 'Apply R1 migration 0287 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.ai_route_task_category(text,text) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.ai_route_task_category(text,text) FROM '||quote_ident(r);
+  END LOOP;
+END $$;
+-- R2 0288 per-school AI cost ceiling: only the HQ command and read reach the runtime; the decision helpers are internal.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.command_ai_school_cost_limit(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply R2 migration 0288 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['ai_school_spend_decision(uuid,uuid,timestamptz,text)','ai_school_committed_cost_micros(uuid,uuid,timestamptz)',
+    'ai_school_cost_level(bigint,bigint)','ai_org_spend_allowed(uuid,timestamptz,text)','ai_school_trial_default_ceiling_micros()','ai_school_default_ceiling_for(uuid,timestamptz)',
+    'ai_spend_allowed(uuid,uuid,timestamptz,text)','ai_school_creative_guard()'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.command_ai_school_cost_limit(text,jsonb,uuid), hon.read_ai_school_cost_limits_from_hq(text) TO hon_runtime;
   END IF;
 END $$;
 

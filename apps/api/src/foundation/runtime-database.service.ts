@@ -105,6 +105,8 @@ const SAAS_BILLING_CALLS = {
   recordScheduleBindingExpiry: { sql: 'SELECT hon.record_saas_schedule_binding_expiry($1::uuid,$2::jsonb) AS data', arity: 2, readOnly: false },
   retryScheduleAccess: { sql: 'SELECT hon.retry_saas_schedule_access($1::text,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   readPaidReviews: { sql: 'SELECT hon.read_saas_paid_reviews($1::text,$2::text) AS data', arity: 2, readOnly: true },
+  readFounderPoolHq: { sql: 'SELECT hon.read_saas_founder_pool_from_hq($1::text) AS data', arity: 1, readOnly: true },
+  readFounderAvailabilitySchool: { sql: 'SELECT hon.read_saas_founder_availability_for_school($1::text,$2::uuid) AS data', arity: 2, readOnly: true },
   resolvePaidReview: { sql: 'SELECT hon.resolve_saas_paid_review($1::text,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   verifyPaidReviewRefund: { sql: 'SELECT hon.verify_saas_paid_review_refund($1::text,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   cancelScheduleBinding: { sql: 'SELECT hon.cancel_saas_schedule_binding($1::text,$2::uuid,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
@@ -169,6 +171,10 @@ const SAAS_BILLING_CALLS = {
   createCreativeAvatar: { sql: 'SELECT hon.create_creative_avatar($1,$2::uuid,$3::jsonb,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
   readCreativeAvatars: { sql: 'SELECT hon.read_creative_avatars($1,$2::uuid) AS data', arity: 2, readOnly: true },
   readCreativeAvatar: { sql: 'SELECT hon.read_creative_avatar($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
+  // A2 (0277): avatar videos, each one CS1 generation of avatar.video for a READY avatar.
+  createCreativeAvatarVideo: { sql: 'SELECT hon.create_creative_avatar_video($1,$2::uuid,$3::jsonb,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
+  readCreativeAvatarVideos: { sql: 'SELECT hon.read_creative_avatar_videos($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readCreativeAvatarVideo: { sql: 'SELECT hon.read_creative_avatar_video($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
   // B4: refund guarantee records and Champions reward application (no refund execution, payout or prize).
   readRefundEligibility: { sql: 'SELECT hon.read_saas_refund_eligibility_from_hq($1,$2::uuid,$3::timestamptz) AS data', arity: 3, readOnly: true },
   readRefundRequests: { sql: 'SELECT hon.read_saas_refund_requests_from_hq($1,$2) AS data', arity: 2, readOnly: true },
@@ -208,6 +214,9 @@ const SAAS_BILLING_CALLS = {
   recordAiLateProviderExpense: { sql: 'SELECT hon.record_ai_late_provider_expense($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
   readAiSpendPauses: { sql: 'SELECT hon.read_ai_spend_pauses_from_hq($1) AS data', arity: 1, readOnly: true },
   commandAiSpendPause: { sql: 'SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  // R2 (0288): per-school internal AI cost ceiling and single-school pause (HQ only).
+  readAiSchoolCostLimits: { sql: 'SELECT hon.read_ai_school_cost_limits_from_hq($1) AS data', arity: 1, readOnly: true },
+  commandAiSchoolCostLimit: { sql: 'SELECT hon.command_ai_school_cost_limit($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readAccessExceptions: { sql: 'SELECT hon.read_saas_access_exceptions_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   grantAccessException: { sql: 'SELECT hon.grant_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   revokeAccessException: { sql: 'SELECT hon.revoke_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
@@ -226,6 +235,10 @@ const SAAS_BILLING_CALLS = {
   // C-HQ-3 (0225): read-only HQ detail of one school; names, statuses and counts only.
   // 0248: the HQ owner sets or disables a school's Twilio sending number; nothing is bought or sent.
   setSchoolTextSender: { sql: 'SELECT hon.set_school_text_sender_from_hq($1,$2::uuid,$3,$4,$5,$6::boolean,$7::integer) AS data', arity: 7, readOnly: false },
+  // 0249: the HQ owner sets the school's forwarding phone and the missed-call text-back switch.
+  setSchoolMissedCallSettings: { sql: 'SELECT hon.set_school_missed_call_settings_from_hq($1,$2::uuid,$3,$4::boolean,$5::integer) AS data', arity: 5, readOnly: false },
+  // 0250: the HQ owner maps one Facebook account + Lead Gen form to one school pipeline stage for Zernio lead intake.
+  setZernioLeadForm: { sql: 'SELECT hon.set_zernio_lead_form_from_hq($1,$2::uuid,$3,$4,$5::uuid,$6::uuid,$7::jsonb,$8,$9::integer) AS data', arity: 9, readOnly: false },
   readHqSchoolDetail: { sql: 'SELECT hon.read_hq_school_detail_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   // B-HQ-2 (0232): HQ support records. Reads are read-only; the three commands write only support rows.
   readSupportCases: { sql: 'SELECT hon.read_hq_support_cases($1,$2,$3::uuid,$4::timestamptz,$5::uuid,$6::integer) AS data', arity: 6, readOnly: true },

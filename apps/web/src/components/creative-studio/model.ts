@@ -1,4 +1,4 @@
-import type { CreativeAvatar, CreativeGeneration, CreativeStudioProviderState, SaasCreativeSchoolWallet } from '@hon/contracts';
+import type { CreativeAvatar, CreativeAvatarVideo, CreativeGeneration, CreativeStudioProviderState, SaasCreativeSchoolWallet } from '@hon/contracts';
 
 /**
  * What Creative Studio shows from the school's own creative wallet read. School views carry no provider
@@ -49,3 +49,7 @@ export type CreateLock = 'NONE' | 'SENDING' | 'UNRESOLVED';
 export type AvatarsState =
   | Readonly<{ state: 'LOADING' }> | Readonly<{ state: 'DENIED' }> | Readonly<{ state: 'UNAVAILABLE' }>
   | Readonly<{ state: 'READY'; provider: CreativeStudioProviderState; items: readonly CreativeAvatar[] }>;
+/** A2 (0277): the school's avatar videos, each made by one avatar.video generation. */
+export type VideosState =
+  | Readonly<{ state: 'LOADING' }> | Readonly<{ state: 'DENIED' }> | Readonly<{ state: 'UNAVAILABLE' }>
+  | Readonly<{ state: 'READY'; items: readonly CreativeAvatarVideo[] }>;

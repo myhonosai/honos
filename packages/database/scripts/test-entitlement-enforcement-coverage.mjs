@@ -44,13 +44,14 @@ const OPEN_BY_DESIGN={
  'hon.read_saas_school_access_standing(text,uuid)':'billing recovery: the owner sees the payment issue, grace end, owner CRM read-only window or CRM lock (read only)',
  'hon.read_saas_school_plan_options(text,uuid)':'billing recovery: plan selection and checkout for the first or a renewed payment',
  'hon.read_saas_hon_os_offers_for_school(text,uuid)':'billing recovery: the published HON OS offers and the server eligibility decision for this school (read only)',
+ 'hon.read_saas_founder_availability_for_school(text,uuid)':'billing recovery: founder spot availability for this organization, so a suspended school sees the prices it can resubscribe at (read only, reserves nothing)',
  'hon.read_my_language_preference(text,uuid)':'personal interface setting',
  'hon.read_school_language_default(text,uuid)':'interface setting; grants nothing',
  'hon.submit_public_form(text,jsonb,text)':'public intake route (owner: keep public routes available); B6B decides suspended-school intake',
  'hon.submit_kiosk_handoff(text,text)':'public kiosk route; B6B decides suspended-school behaviour',
  'hon.book_public_school_event(text,jsonb,text)':'public event booking link (0261), same rule as submit_public_form; B6B decides suspended-school intake',
  'hon.cancel_public_school_event_booking(text,jsonb)':'family cancels their own event booking (0261); must keep working for a suspended school',
- 'hon.book_public_school_booking_type(text,jsonb,text)':'public booking-type link (0286): answers CLOSED for a suspended school or lapsed entitlement, never books; same rule as 0261',
+ 'hon.book_public_school_booking_type(text,jsonb,text)':'public booking-type link (0286): answers INVALID for a suspended school or lapsed entitlement and never books; returns no booking data',
  'hon.cancel_public_school_booking_type_booking(text,jsonb)':'family cancel by code (0286): answers INVALID for a suspended school or lapsed entitlement and changes nothing; returns no booking data',
  'hon.chad_follow_up_draft_is_current(uuid,jsonb)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.crm_lead_target_is_current(uuid,uuid)':'boolean predicate over ids; returns no data and grants nothing',
@@ -73,7 +74,9 @@ const MUST_ENFORCE=['hon.issue_champions_referral_code(text,uuid,uuid,uuid,uuid)
  'hon.resolve_teaching_assistant_scope(text)','hon.resolve_testing_certificate_scope(text,uuid)','hon.resolve_testing_scorecard_scope(text,uuid)',
  // Formerly recorded gaps, gated in 0172.
  'hon.resolve_achievement_scope(text,uuid)','hon.resolve_current_staff_reporting_scope(text)','hon.resolve_follow_up_scope(text)',
- 'hon.resolve_human_work_scope(text)','hon.resolve_teaching_studio_scope(text,uuid)','hon.resolve_testing_registration_review_scopes(text)'];
+ 'hon.resolve_human_work_scope(text)','hon.resolve_teaching_studio_scope(text,uuid)','hon.resolve_testing_registration_review_scopes(text)',
+ // 0249: school missed-call list (caller numbers) for staff with communication.message.read.
+ 'hon.read_school_missed_calls(text,uuid,integer)'];
 
 async function call(f,k,target=k){
  const a=args(f,k,target);

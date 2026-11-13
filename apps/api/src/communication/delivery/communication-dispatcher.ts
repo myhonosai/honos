@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { emitTelemetry } from '../../observability/telemetry.js';
 import {
   COMMUNICATION_PROVIDER_ADAPTERS,
@@ -11,6 +11,7 @@ import {
   type CommunicationSendResult,
   type CommunicationWorkerStore,
 } from './communication-worker-database.js';
+import { MissedCallTextBackDispatcher } from './missed-call-text-back.js';
 
 export interface DispatchSummary {
   claimed: number;
@@ -106,7 +107,7 @@ async function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
 export class CommunicationDispatchScheduler implements OnModuleInit, OnModuleDestroy {
   private timer: NodeJS.Timeout | undefined;
   private running = false;
-  constructor(private readonly dispatcher: CommunicationDispatcher) {}
+  constructor(private readonly dispatcher: CommunicationDispatcher, @Optional() private readonly missedCalls?: MissedCallTextBackDispatcher) {}
 
   onModuleInit(): void {
     const raw = process.env.HON_COMMUNICATION_DISPATCH_INTERVAL_SECONDS;
@@ -131,6 +132,8 @@ export class CommunicationDispatchScheduler implements OnModuleInit, OnModuleDes
     try {
       const summary = await this.dispatcher.runOnce();
       if (summary.claimed) emitTelemetry('info', 'communication.dispatch_completed', { component: 'communication-dispatch', message: JSON.stringify(summary) });
+      const missed = await this.missedCalls?.runOnce();
+      if (missed?.claimed) emitTelemetry('info', 'communication.missed_call_text_back_completed', { component: 'communication-dispatch', message: JSON.stringify(missed) });
     } catch {
       emitTelemetry('error', 'communication.dispatch_failed', { component: 'communication-dispatch' });
     } finally { this.running = false; }

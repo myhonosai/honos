@@ -46,6 +46,31 @@ export interface CommunicationWorkerStore {
   recordReceipt(receipt: VerifiedProviderReceipt): Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNMATCHED'; deliveryStatus: string | null }>;
   recordInboundKeyword?(keyword: { to: string; from: string; keyword: 'STOP' | 'START' | 'HELP'; providerMessageId: string; receivedAt: string }):
     Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNROUTED'; schoolName: string | null; consentsChanged: number }>;
+  readMissedCallRoute?(to: string): Promise<{ routed: boolean; forwardPhoneE164: string | null }>;
+  recordMissedCall?(call: { to: string; from: string; callSid: string; dialStatus: string; receivedAt: string }):
+    Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNROUTED'; textBackStatus: string | null }>;
+  claimMissedCallTextBacks?(limit: number, leaseSeconds: number): Promise<ClaimedMissedCallTextBack[]>;
+  recordMissedCallTextBackResult?(missedCallId: string, leaseToken: string, outcome: 'ACCEPTED' | 'RETRYABLE' | 'FAILED' | 'UNKNOWN',
+    providerMessageId: string | null): Promise<{ textBackStatus: string; accepted: boolean }>;
+  recordZernioLead?(lead: ZernioLeadRecord): Promise<{ outcome: ZernioLeadOutcome; leadId: string | null }>;
+}
+
+export type ZernioLeadOutcome = 'CREATED' | 'REPLAYED' | 'UNROUTED' | 'INVALID_CONTACT' | 'SCHOOL_INACTIVE' | 'RATE_LIMITED';
+export interface ZernioLeadRecord {
+  eventId: string; leadgenId: string; accountId: string; formId: string; fields: Record<string, string>;
+  ad: { adId?: string; adsetId?: string; campaignId?: string; isOrganic?: boolean };
+}
+
+export interface ClaimedMissedCallTextBack {
+  missedCallId: string;
+  leaseToken: string;
+  organizationId: string;
+  schoolId: string;
+  callerE164: string;
+  schoolName: string;
+  language: string;
+  senderServiceId: string | null;
+  attempt: number;
 }
 
 export const COMMUNICATION_WORKER_STORE = Symbol('COMMUNICATION_WORKER_STORE');
@@ -132,5 +157,43 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, On
       [keyword.to, keyword.from, keyword.keyword, keyword.providerMessageId, keyword.receivedAt]))[0];
     if (!row) throw new Error('COMMUNICATION_KEYWORD_NOT_RECORDED');
     return { outcome: row.outcome, schoolName: row.school_name, consentsChanged: row.consents_changed };
+  }
+
+  /** 0249: where to forward a call to a school number. */
+  async readMissedCallRoute(to: string) {
+    const row = (await this.query<{ routed: boolean; forward_phone_e164: string | null }>('SELECT * FROM hon.read_missed_call_route($1)', [to]))[0];
+    return { routed: Boolean(row?.routed), forwardPhoneE164: row?.forward_phone_e164 ?? null };
+  }
+
+  async recordMissedCall(call: { to: string; from: string; callSid: string; dialStatus: string; receivedAt: string }) {
+    const row = (await this.query<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNROUTED'; text_back_status: string | null }>(
+      'SELECT * FROM hon.record_missed_call($1, $2, $3, $4, $5)', [call.to, call.from, call.callSid, call.dialStatus, call.receivedAt]))[0];
+    if (!row) throw new Error('COMMUNICATION_MISSED_CALL_NOT_RECORDED');
+    return { outcome: row.outcome, textBackStatus: row.text_back_status };
+  }
+
+  async claimMissedCallTextBacks(limit: number, leaseSeconds: number): Promise<ClaimedMissedCallTextBack[]> {
+    const rows = await this.query<{ missed_call_id: string; lease_token: string; organization_id: string; school_id: string; caller_e164: string;
+      school_name: string; language: string; sender_service_id: string | null; attempt: number }>(
+      'SELECT * FROM hon.claim_missed_call_text_backs($1, $2)', [limit, leaseSeconds]);
+    return rows.map((row) => ({ missedCallId: row.missed_call_id, leaseToken: row.lease_token, organizationId: row.organization_id,
+      schoolId: row.school_id, callerE164: row.caller_e164, schoolName: row.school_name, language: row.language,
+      senderServiceId: row.sender_service_id, attempt: row.attempt }));
+  }
+
+  async recordMissedCallTextBackResult(missedCallId: string, leaseToken: string, outcome: 'ACCEPTED' | 'RETRYABLE' | 'FAILED' | 'UNKNOWN', providerMessageId: string | null) {
+    const row = (await this.query<{ text_back_status: string; accepted: boolean }>(
+      'SELECT * FROM hon.record_missed_call_text_back_result($1, $2, $3, $4)', [missedCallId, leaseToken, outcome, providerMessageId]))[0];
+    if (!row) throw new Error('COMMUNICATION_MISSED_CALL_RESULT_NOT_RECORDED');
+    return { textBackStatus: row.text_back_status, accepted: row.accepted };
+  }
+
+  /** 0250: one verified Zernio lead event; a CRM lead only through an HQ-mapped form. */
+  async recordZernioLead(lead: ZernioLeadRecord) {
+    const row = (await this.query<{ outcome: ZernioLeadOutcome; lead_id: string | null }>(
+      'SELECT * FROM hon.record_zernio_lead($1, $2, $3, $4, $5::jsonb, $6::jsonb)',
+      [lead.eventId, lead.leadgenId, lead.accountId, lead.formId, JSON.stringify(lead.fields), JSON.stringify(lead.ad)]))[0];
+    if (!row) throw new Error('COMMUNICATION_ZERNIO_LEAD_NOT_RECORDED');
+    return { outcome: row.outcome, leadId: row.lead_id };
   }
 }

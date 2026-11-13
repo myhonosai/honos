@@ -99,7 +99,7 @@ const view = (avatars: AvatarsState, extra: { outcome?: CreateOutcome; language?
   <CreativeStudioView language={extra.language ?? 'en'} waiting={false} concealed={false} hasSchool studio={{ state: 'READY', wallet: extra.w ?? wallet() }}
     generations={{ state: 'READY', provider: 'CONNECTED', items: [] }} avatars={avatars} avatarOutcome={extra.outcome ?? null} avatarLocked={extra.locked}
     hideAvatarText={extra.hide} onCreateAvatar={() => {}} onCheckAvatarAgain={() => {}}/>);
-const card = (html: string) => html.slice(html.indexOf('creative-avatars-title') - 60, html.indexOf('creative-credits-title'));
+const card = (html: string) => html.slice(html.indexOf('creative-avatars-title') - 60, html.indexOf('creative-avatar-videos-title') - 60);
 
 it('offers the avatar form only when connected, eligible and priced by HQ; the generic form never offers avatar.*', () => {
   const off = card(view({ state: 'READY', provider: 'NOT_CONNECTED', items: [] }));

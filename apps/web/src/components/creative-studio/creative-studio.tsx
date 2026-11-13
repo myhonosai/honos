@@ -1,14 +1,15 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { CreativeAvatar, CreativeAvatarInput, CreativeAvatarReceipt, CreativeGeneration, CreativeGenerationInput, CreativeGenerationReceipt, CreativeStudioAvatarList,
+import type { CreativeAvatar, CreativeAvatarInput, CreativeAvatarReceipt, CreativeAvatarVideo, CreativeAvatarVideoInput, CreativeAvatarVideoReceipt, CreativeAvatarVideoRecords, CreativeGeneration, CreativeGenerationInput, CreativeGenerationReceipt, CreativeStudioAvatarList,
   CreativeStudioGenerationList } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { AccountStatusError, readSchoolCreativeWallet } from '../account-status/http';
-import { CreativeGenerationError, createCreativeAvatar, createCreativeGeneration, listCreativeAvatars, listCreativeGenerations } from './generation-http';
-import { studioWallet, type AvatarsState, type CreateLock, type CreateOutcome, type GenerationsState, type StudioState, type StudioWallet } from './model';
+import { CreativeGenerationError, createCreativeAvatar, createCreativeAvatarVideo, createCreativeGeneration, listCreativeAvatarVideos, listCreativeAvatars,
+  listCreativeGenerations } from './generation-http';
+import { studioWallet, type AvatarsState, type VideosState, type CreateLock, type CreateOutcome, type GenerationsState, type StudioState, type StudioWallet } from './model';
 import { CreativeStudioView } from './view';
 
 type Scope = Readonly<{ organizationId: string; schoolId: string }>;
@@ -19,6 +20,9 @@ export type CreativeStudioApi = {
   /** A1 (0276) avatars: optional so older test doubles keep working; without them the Avatars card says it is unavailable. */
   avatars?(scope: Scope, signal: AbortSignal): Promise<CreativeStudioAvatarList>;
   createAvatar?(scope: Scope, input: CreativeAvatarInput, idempotencyKey: string, signal: AbortSignal): Promise<CreativeAvatarReceipt>;
+  /** A2 (0277) talking avatar videos: optional for the same reason. */
+  videos?(scope: Scope, signal: AbortSignal): Promise<CreativeAvatarVideoRecords>;
+  createVideo?(scope: Scope, input: CreativeAvatarVideoInput, idempotencyKey: string, signal: AbortSignal): Promise<CreativeAvatarVideoReceipt>;
 };
 /** The wallet and generation reads plus the one closed create command. The server authorizes the exact school for each. */
 export const CREATIVE_STUDIO_API: CreativeStudioApi = {
@@ -27,6 +31,8 @@ export const CREATIVE_STUDIO_API: CreativeStudioApi = {
   create: (scope, input, key, signal) => createCreativeGeneration(scope.schoolId, input, key, signal),
   avatars: (scope, signal) => listCreativeAvatars(scope.schoolId, signal),
   createAvatar: (scope, input, key, signal) => createCreativeAvatar(scope.schoolId, input, key, signal),
+  videos: (scope, signal) => listCreativeAvatarVideos(scope.schoolId, signal),
+  createVideo: (scope, input, key, signal) => createCreativeAvatarVideo(scope.schoolId, input, key, signal),
 };
 
 /**
@@ -35,6 +41,7 @@ export const CREATIVE_STUDIO_API: CreativeStudioApi = {
  */
 type Pending = Readonly<{ schoolId: string; key: string; input: CreativeGenerationInput; unresolved: boolean }>;
 type PendingAvatar = Readonly<{ schoolId: string; key: string; input: CreativeAvatarInput; unresolved: boolean }>;
+type PendingVideo = Readonly<{ schoolId: string; key: string; input: CreativeAvatarVideoInput; unresolved: boolean }>;
 const newKey = () => globalThis.crypto.randomUUID();
 
 export function outcomeFromReceipt(receipt: CreativeGenerationReceipt): CreateOutcome {
@@ -73,6 +80,18 @@ export function matchesPendingAvatarGeneration(request: Readonly<{ input: Creati
   return !!request && g.operationCode === 'avatar.create' && g.prompt === request.input.description;
 }
 
+/** An avatar video receipt as a create outcome: the video's status follows its generation. */
+export function outcomeFromVideoReceipt(receipt: CreativeAvatarVideoReceipt): CreateOutcome {
+  return outcomeFromReceipt({ generation: receipt.video.generation, balance: receipt.balance, replayed: receipt.replayed });
+}
+/** Videos (and their generations) that may be this tab's unconfirmed video request: their script is not shown. */
+export function matchesPendingVideo(request: Readonly<{ input: CreativeAvatarVideoInput }> | null, v: Readonly<{ avatarId: string; script: string; seconds: number; format: string }>): boolean {
+  return !!request && v.avatarId === request.input.avatarId.toLowerCase() && v.script === request.input.script && v.seconds === request.input.seconds && v.format === request.input.format;
+}
+export function matchesPendingVideoGeneration(request: Readonly<{ input: CreativeAvatarVideoInput }> | null, g: CreativeGeneration): boolean {
+  return !!request && g.operationCode === 'avatar.video' && g.prompt === request.input.script && g.units === request.input.seconds && g.format === request.input.format;
+}
+
 /** Rows that may be this tab's unconfirmed request: the list shows their status and credits, never their text. */
 export function matchesPending(request: Readonly<{ input: CreativeGenerationInput }> | null, g: CreativeGeneration): boolean {
   return !!request && g.operationCode === request.input.operationCode && g.units === request.input.units
@@ -98,6 +117,11 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
   const [avatarLock, setAvatarLock] = useState<CreateLock>('NONE');
   const pendingAvatar = useRef<PendingAvatar | null>(null);
   const sendingAvatar = useRef(false);
+  const [videos, setVideos] = useState<VideosState>({ state: 'LOADING' });
+  const [videoOutcome, setVideoOutcome] = useState<CreateOutcome>(null);
+  const [videoLock, setVideoLock] = useState<CreateLock>('NONE');
+  const pendingVideo = useRef<PendingVideo | null>(null);
+  const sendingVideo = useRef(false);
   const [refresh, setRefresh] = useState(0);
   const generation = useRef(0);
   // Advances only when the page is concealed (blur, hidden tab, school change, session end), never on a read Refresh,
@@ -110,13 +134,14 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
   useEffect(() => onShellPrivacyEvent(() => {
     concealShellPrivateNow(); generation.current++; privacy.current++; loadedSchool.current = null;
     setStudio({ state: 'LOADING' }); setGenerations({ state: 'LOADING' }); setOutcome(null); setAvatars({ state: 'LOADING' }); setAvatarOutcome(null);
+    setVideos({ state: 'LOADING' }); setVideoOutcome(null);
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), []);
 
   useEffect(() => {
     const current = ++generation.current;
     const school = selection ? selection.schoolId.toLowerCase() : null;
     // A Refresh of the same school keeps what is shown (and any draft in the form) until the new reads answer.
-    if (school === null || school !== loadedSchool.current) { setStudio({ state: 'LOADING' }); setGenerations({ state: 'LOADING' }); setAvatars({ state: 'LOADING' }); }
+    if (school === null || school !== loadedSchool.current) { setStudio({ state: 'LOADING' }); setGenerations({ state: 'LOADING' }); setAvatars({ state: 'LOADING' }); setVideos({ state: 'LOADING' }); }
     loadedSchool.current = school;
     if (!selection) return;
     const scope = { organizationId: selection.organizationId, schoolId: selection.schoolId };
@@ -127,6 +152,10 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
     if (pendingAvatar.current && pendingAvatar.current.schoolId !== scope.schoolId.toLowerCase()) {
       pendingAvatar.current = null;
       if (!sendingAvatar.current) setAvatarLock('NONE');
+    }
+    if (pendingVideo.current && pendingVideo.current.schoolId !== scope.schoolId.toLowerCase()) {
+      pendingVideo.current = null;
+      if (!sendingVideo.current) setVideoLock('NONE');
     }
     const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
     api.wallet(scope, signal).then(
@@ -139,6 +168,10 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
       list => { if (current === generation.current) setAvatars({ state: 'READY', provider: list.provider, items: list.avatars }); },
       error => { if (current === generation.current) setAvatars({ state: error instanceof CreativeGenerationError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
     else setAvatars({ state: 'UNAVAILABLE' });
+    if (api.videos) api.videos(scope, signal).then(
+      list => { if (current === generation.current) setVideos({ state: 'READY', items: list.videos }); },
+      error => { if (current === generation.current) setVideos({ state: error instanceof CreativeGenerationError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
+    else setVideos({ state: 'UNAVAILABLE' });
     return () => { abort.abort(); };
   }, [selection?.organizationId, selection?.schoolId, api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -198,15 +231,43 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
   const onCheckAvatarAgain = useCallback(() => { void sendAvatar(); }, [sendAvatar]);
   const shownAvatarOutcome: CreateOutcome = avatarOutcome ?? (avatarLock === 'SENDING' ? { kind: 'SENDING' } : avatarLock === 'UNRESOLVED' ? { kind: 'HIDDEN_PENDING' } : null);
   const hideAvatarText = useCallback((a: CreativeAvatar) => matchesPendingAvatar(pendingAvatar.current, a), [avatarLock]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A2 avatar videos: the same rules again. Only a known outcome releases the request; anything else keeps its key.
+  const sendVideo = useCallback(async () => {
+    const request = pendingVideo.current;
+    if (!request || sendingVideo.current || !selection || selection.schoolId.toLowerCase() !== request.schoolId || !api.createVideo) return;
+    sendingVideo.current = true; const shown = privacy.current;
+    setVideoLock('SENDING'); setVideoOutcome({ kind: 'SENDING' });
+    let next: CreateOutcome, release: boolean;
+    try {
+      const receipt = await api.createVideo({ organizationId: selection.organizationId, schoolId: request.schoolId }, request.input, request.key, AbortSignal.timeout(300000));
+      next = outcomeFromVideoReceipt(receipt); release = next?.kind !== 'UNKNOWN';
+    } catch (error) { ({ outcome: next, release } = outcomeFromAttempt(error, request.unresolved)); }
+    finally { sendingVideo.current = false; }
+    if (pendingVideo.current?.key === request.key) pendingVideo.current = release ? null : { ...request, unresolved: true };
+    setVideoLock(pendingVideo.current ? 'UNRESOLVED' : 'NONE');
+    if (next?.kind === 'DONE' || next?.kind === 'HELD' || next?.kind === 'FAILED') setRefresh(value => value + 1);
+    if (shown !== privacy.current) { setVideoOutcome(prior => prior?.kind === 'SENDING' ? null : prior); return; }
+    setVideoOutcome(next);
+  }, [api, selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onCreateVideo = useCallback((input: CreativeAvatarVideoInput) => {
+    if (pendingVideo.current || sendingVideo.current || videoLock !== 'NONE' || !selection) return;
+    pendingVideo.current = { schoolId: selection.schoolId.toLowerCase(), key: newKey(), input, unresolved: false };
+    void sendVideo();
+  }, [sendVideo, videoLock, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onCheckVideoAgain = useCallback(() => { void sendVideo(); }, [sendVideo]);
+  const shownVideoOutcome: CreateOutcome = videoOutcome ?? (videoLock === 'SENDING' ? { kind: 'SENDING' } : videoLock === 'UNRESOLVED' ? { kind: 'HIDDEN_PENDING' } : null);
+  const hideVideoText = useCallback((v: CreativeAvatarVideo) => matchesPendingVideo(pendingVideo.current, v), [videoLock]); // eslint-disable-line react-hooks/exhaustive-deps
   const onRefresh = useCallback(() => setRefresh(value => value + 1), []);
   // After a conceal the shown outcome is gone, but a locked request still says it is waiting (without what it was).
   const shownOutcome: CreateOutcome = outcome ?? (lock === 'SENDING' ? { kind: 'SENDING' } : lock === 'UNRESOLVED' ? { kind: 'HIDDEN_PENDING' } : null);
-  const hidePrompt = useCallback((g: CreativeGeneration) => matchesPending(pending.current, g) || matchesPendingAvatarGeneration(pendingAvatar.current, g), [lock, avatarLock]); // eslint-disable-line react-hooks/exhaustive-deps
+  const hidePrompt = useCallback((g: CreativeGeneration) => matchesPending(pending.current, g) || matchesPendingAvatarGeneration(pendingAvatar.current, g)
+    || matchesPendingVideoGeneration(pendingVideo.current, g), [lock, avatarLock, videoLock]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyed by the shell phase: a concealed node is replaced, never un-hidden in place.
   return <div key={shell.phase} data-shell-private="">
     <CreativeStudioView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       hasSchool={selection !== null} studio={studio} onRefresh={onRefresh} generations={generations} outcome={shownOutcome} locked={lock !== 'NONE'} hidePrompt={hidePrompt} onCreate={onCreate} onCheckAgain={onCheckAgain}
-      avatars={avatars} avatarOutcome={shownAvatarOutcome} avatarLocked={avatarLock !== 'NONE'} hideAvatarText={hideAvatarText} onCreateAvatar={onCreateAvatar} onCheckAvatarAgain={onCheckAvatarAgain}/>
+      avatars={avatars} avatarOutcome={shownAvatarOutcome} avatarLocked={avatarLock !== 'NONE'} hideAvatarText={hideAvatarText} onCreateAvatar={onCreateAvatar} onCheckAvatarAgain={onCheckAvatarAgain}
+      videos={videos} videoOutcome={shownVideoOutcome} videoLocked={videoLock !== 'NONE'} hideVideoText={hideVideoText} onCreateVideo={onCreateVideo} onCheckVideoAgain={onCheckVideoAgain}/>
   </div>;
 }

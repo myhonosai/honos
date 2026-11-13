@@ -65,3 +65,36 @@ cost from the published `avatar.create` rate). The generic Create form no longer
   generic `avatar.create` refused at commit; non-image rate refused; 12-avatar cap; sibling school cannot read;
   security inventory (runtime has no table access, only the three entry points).
 - Web: avatar card states (not connected, unpriced, ready form, list statuses) in three languages.
+
+## A2 contract (0277)
+
+**Operation** `avatar.video`: HQ prices it as a VIDEO rate per second (`VIDEO_SECOND`). The school picks one of its own
+READY avatars, a script (1..1000 characters, the generation's prompt), a length of 5..60 seconds (also bounded by the
+rate's max units) and a format. The client never sends the operation, units, provider, model, price or school.
+
+**Database** (`0277_creative_studio_avatar_videos.sql`):
+- `hon.creative_avatar_videos`: immutable, forced RLS, deny-all; FKs to the school's wallet, the avatar `(id, school_id)`
+  and the generation `(id, school_id)`; one row per `avatar.video` generation; `(creator, key)` idempotency.
+- `create_creative_avatar_video(subject, school, {avatarId, script, seconds, format}, provider, key, request, correlation)`:
+  exact-school actor → same-key replay (a different body is `IDEMPOTENCY_KEY_REUSED`) → the avatar must be this school's
+  (`SAAS_UNAVAILABLE` otherwise) and READY, meaning its creation generation SUCCEEDED (`CREATIVE_AVATAR_NOT_READY`) → the
+  unchanged `create_creative_generation` (`avatar.video`, units = seconds) → the rate must be VIDEO with units = seconds
+  (`CREATIVE_AVATAR_RATE_INVALID`) → insert → the A1 finality re-checks (actor, `CREATIVE_MEDIA` spend, eligibility).
+- `read_creative_avatar_videos` (newest 50) and `read_creative_avatar_video`: exact school only.
+- The deferred commit guard from 0276 is replaced: `avatar.create` needs its avatar row, `avatar.video` its video row,
+  and any other `avatar.*` operation is refused, so the generic route can never create an avatar charge.
+
+**API**: `GET/POST /v1/schools/:schoolId/creative-studio/avatar-videos`, `GET …/avatar-videos/:videoId`, command
+`saas-creative-avatar-video-create`. The avatar's look is read first under the requester's authority (nothing is
+reserved if that fails), then create → one provider call with the avatar's name, style and description and the script
+as prompt → record → read the video back. Production stays not connected (503); the synthetic runtime routes it to
+`synthetic-avatar-video-1`. A real provider integration will also need the avatar's portrait asset server side; that is
+out of scope until a provider is approved.
+
+**Web**: a "Talking avatar videos" card after the Avatars card (avatar picker of READY avatars, script, seconds, format,
+cost = per-second rate × seconds), the list with presenter, length, status and credits, and the same keyed fail-unknown
+retry. EN/KO/ES.
+
+**Tests**: contracts and API unit tests (`creative-studio-avatar-videos.test.cjs`), DB proof
+`test-creative-studio-avatar-videos.mjs` VD1–VD11b, web tests (`creative-studio-avatar-videos.test.tsx`) and the local
+mounted browser check (desktop and phone, axe).
