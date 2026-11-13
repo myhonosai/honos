@@ -65,6 +65,10 @@ export const saasBillingFunctions = [
  ['hon.saas_schedule_activate_access(uuid,uuid,timestamp with time zone)',false,false],
  // 0309: a verified refund inside the window ends lifetime access
  ['hon.saas_schedule_end_lifetime_access(uuid,uuid,text,timestamp with time zone)',false,false],
+ // 0324: renewals, grace, past-due suspension and restore
+ ['hon.saas_schedule_current_suspension(uuid)',false,false],
+ ['hon.record_saas_schedule_past_due_suspension(uuid)',true,true],
+ ['hon.list_saas_schedule_past_due_bindings(integer)',true,true],
  ['hon.retry_saas_schedule_access(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  // 0237 HON OS schedule billing piece 3: HQ review queue for held payments and refunds; v1 founder/lifetime stop
  ['hon.guard_saas_hon_os_v1_offer_kind()',false,false],
