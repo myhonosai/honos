@@ -113,6 +113,10 @@
       "title": "HON | Import students"
     },
     {
+      "path": "/staff/migration/classes",
+      "title": "HON | Import classes and attendance"
+    },
+    {
       "path": "/staff/planning/revenue",
       "title": "HON | Human Revenue Planning"
     },
