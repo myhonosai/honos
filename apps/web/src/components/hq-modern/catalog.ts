@@ -87,6 +87,7 @@ export function hqPageLabel(path: string): string {
   if (/^\/hq\/support\/[0-9a-f-]{36}$/i.test(path)) return 'Support case';
   if (/^\/hq\/growth\/contests\/[0-9a-f-]{36}$/i.test(path)) return 'Contest detail';
   if (path === '/hq/revenue') return 'Revenue';
+  if (path === '/hq/marketing/promotions') return 'Plan promotions';
   const fixed = [...HQ_REVENUE, ...HQ_AI, ...HQ_GROWTH, ...HQ_NAV, ...HQ_SCHOOLS].find((item) => item.path === path);
   if (fixed) return fixed.title;
   const executive = HQ_EXECUTIVES.find((entry) => path === `/hq/executives/${entry.executiveKey}`);
