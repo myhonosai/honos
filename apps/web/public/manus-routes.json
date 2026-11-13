@@ -45,6 +45,10 @@
       "title": "HON HQ | School owners"
     },
     {
+      "path": "/hq/schools/attention",
+      "title": "HON HQ | Schools needing attention"
+    },
+    {
       "path": "/hq/ai-providers",
       "title": "HON HQ | AI Provider Control"
     },

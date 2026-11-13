@@ -1101,3 +1101,4 @@ export * from './hq-hon.js';
 export * from './school-branding.js';
 export * from './school-booking-types.js';
 export * from './school-pay-autopay.js';
+export * from './hq-school-health.js';

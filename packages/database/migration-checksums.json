@@ -274,6 +274,7 @@
     "0320_school_payment_credential_vault.sql": "42194542aa26affc6ce836fd06fbce0210d30a7ed79989d6182b966c50a2bf56",
     "0306_hon_os_lifetime_purchase.sql": "e953952706c8f078f0e95dbaadffb357d4560e990422f7c1daac9e0405f0f491",
     "0321_school_payer_saved_methods.sql": "5de27cdfc04af16d057dc62da3d11fdc02e4106dbbcbcefcc6460edf8cc6c4fc",
-    "0322_school_pay_autopay_sibling_discounts.sql": "3f452947664d68f96c2d09688436f1d022a77a2bc71c1fcbb3db26ee0636e1d6"
+    "0327_hq_school_health.sql": "444c4cb9c52e514aa3336280d20c7442a3878c12144800a9f719d59e6b2575e5",
+    "0322_school_pay_autopay_sibling_discounts.sql": "d5c214d8102a74416e5f5ebf74e93f22e987a6a6c622e98b1d51477dec848877"
   }
 }
