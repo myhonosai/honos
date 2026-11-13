@@ -4,7 +4,10 @@ import {
   SCHOOL_PAY_PROVIDER_CODES,
   verifySchoolPayMethodObservation,
   verifySchoolPayObservation,
+  verifySchoolPayChargeObservation,
   type SchoolPayCapabilities,
+  type SchoolPayChargeFailureClass,
+  type SchoolPayChargeObservation,
   type SchoolPayMethodKind,
   type SchoolPayMethodObservation,
   type SchoolPayObservation,
@@ -49,7 +52,22 @@ export interface SchoolPaymentAdapter {
   retrieveMethodSetup(input: { accountRef: string; customerRef: string; setupRef: string }): Promise<SchoolPayMethodObservation>;
   /** 0321: detach a removed method from the payer's customer at the provider. */
   detachMethod(input: { accountRef: string; methodRef: string }): Promise<void>;
+  /**
+   * 0337: one off-session charge of a saved method on the school's account (a direct charge; no application fee), with the
+   * provider idempotency key hon-school-pay-charge-<attemptId>, so a resend never charges twice while the provider keeps
+   * the key. A decline is a FAILED observation; anything ambiguous throws UNKNOWN.
+   */
+  chargeOffSession(input: SchoolPayChargeRequest): Promise<SchoolPayChargeObservation>;
+  /** 0337: the provider's own record of the charge made for one attempt, or null when the provider has none. */
+  findCharge(input: SchoolPayChargeLookup): Promise<SchoolPayChargeObservation | null>;
 }
+
+export interface SchoolPayChargeRequest {
+  accountRef: string; customerRef: string; methodRef: string; methodKind: SchoolPayMethodKind; attemptId: string; amountMinor: number; currency: string;
+}
+export interface SchoolPayChargeLookup { accountRef: string; customerRef: string; attemptId: string; amountMinor: number; currency: string; createdAt: string }
+/** The provider idempotency key of one charge attempt. */
+export const schoolPayChargeKey = (attemptId: string): string => `hon-school-pay-charge-${attemptId}`;
 
 /** PRE_SEND: nothing reached the provider. FAILED: the provider refused. UNKNOWN: it may have acted. */
 export class SchoolPaymentProviderError extends Error {
@@ -75,12 +93,19 @@ export class UnconfiguredSchoolPaymentAdapter implements SchoolPaymentAdapter {
   async beginMethodSetup(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
   async retrieveMethodSetup(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
   async detachMethod(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
+  async chargeOffSession(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
+  async findCharge(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
 }
 
 const ALL: SchoolPayCapabilities = Object.freeze({ bankDebit: true, offSessionRecurring: true, oneTimeCard: true, refunds: true, storedCard: true });
 
 export interface SimulatedAccountStatus { chargesEnabled: boolean; payoutsEnabled: boolean; requirementsDue: boolean; reauthorizationRequired: boolean }
 /** What the simulated payer entered on the hosted setup page; `incomplete` means the payer left without saving. */
+/**
+ * What the simulated processor does with one attempt's charge. `lostAnswer`: it charged but the answer never arrived
+ * (UNKNOWN). `neverArrived`: the request never reached it (UNKNOWN, and nothing charged).
+ */
+export interface SimulatedChargeOutcome { outcome: 'SUCCEEDED' | 'PROCESSING' | 'FAILED'; failureClass: SchoolPayChargeFailureClass; lostAnswer: boolean; neverArrived: boolean }
 export interface SimulatedSetupOutcome { kind: SchoolPayMethodKind; brand: SchoolPayMethodObservation['brand']; last4: string; expMonth: number | null; expYear: number | null; incomplete: boolean; customerRef: string }
 
 /**
@@ -119,7 +144,7 @@ abstract class SimulatedSchoolPaymentAdapter implements SchoolPaymentAdapter {
   }
   async disconnect({ accountRef }: { accountRef: string }): Promise<void> { this.revoked.add(accountRef); }
 
-  protected abstract readonly refs: { customer: string; setup: string; method: string };
+  protected abstract readonly refs: { customer: string; setup: string; method: string; charge: string };
   /** Per setup reference: what the payer "entered". The default is a test Visa ending 4242 (or a bank account ending 6789). */
   readonly setupOutcomes = new Map<string, Partial<SimulatedSetupOutcome>>();
   readonly setups = new Map<string, { accountRef: string; customerRef: string; methodKinds: readonly SchoolPayMethodKind[] }>();
@@ -151,13 +176,48 @@ abstract class SimulatedSchoolPaymentAdapter implements SchoolPaymentAdapter {
     });
   }
   async detachMethod({ methodRef }: { accountRef: string; methodRef: string }): Promise<void> { this.detached.add(methodRef); }
+
+  /** Per attempt: what the processor does. The default is an immediate success. */
+  readonly chargeOutcomes = new Map<string, Partial<SimulatedChargeOutcome>>();
+  /** Charges the simulated processor holds, by provider idempotency key (a resend returns the first answer). */
+  readonly charges = new Map<string, SchoolPayChargeObservation & { accountRef: string; customerRef: string; methodRef: string }>();
+  chargeCalls = 0;
+  async chargeOffSession({ accountRef, customerRef, methodRef, methodKind, attemptId, amountMinor, currency }: SchoolPayChargeRequest): Promise<SchoolPayChargeObservation> {
+    if (this.revoked.has(accountRef)) throw new SchoolPaymentProviderError('FAILED', 'PROVIDER_REJECTED');
+    if (methodKind === 'US_BANK_ACCOUNT' && !this.manifest.bankDebit) throw new SchoolPaymentProviderError('PRE_SEND', 'INVALID_REQUEST');
+    this.chargeCalls += 1;
+    const key = schoolPayChargeKey(attemptId);
+    const plan = this.chargeOutcomes.get(attemptId) ?? {};
+    if (plan.neverArrived) { this.chargeOutcomes.set(attemptId, { ...plan, neverArrived: false }); throw new SchoolPaymentProviderError('UNKNOWN', 'PROVIDER_UNKNOWN'); }
+    let held = this.charges.get(key);
+    if (!held) {
+      const outcome = plan.outcome ?? (methodKind === 'US_BANK_ACCOUNT' ? 'PROCESSING' : 'SUCCEEDED');
+      held = verifySchoolPayChargeObservation({ outcome, chargeRef: `${this.refs.charge}${this.hash(key)}`, failureClass: outcome === 'FAILED' ? plan.failureClass ?? 'DECLINED' : null,
+        amountMinor, currency }) as SchoolPayChargeObservation & { accountRef: string; customerRef: string; methodRef: string };
+      held = { ...held, accountRef, customerRef, methodRef };
+      this.charges.set(key, held);
+    }
+    if (plan.lostAnswer) { this.chargeOutcomes.set(attemptId, { ...plan, lostAnswer: false }); throw new SchoolPaymentProviderError('UNKNOWN', 'PROVIDER_UNKNOWN'); }
+    return { outcome: held.outcome, chargeRef: held.chargeRef, failureClass: held.failureClass, amountMinor: held.amountMinor, currency: held.currency };
+  }
+  async findCharge({ accountRef, customerRef, attemptId }: SchoolPayChargeLookup): Promise<SchoolPayChargeObservation | null> {
+    const held = this.charges.get(schoolPayChargeKey(attemptId));
+    if (!held || held.accountRef !== accountRef || held.customerRef !== customerRef) return null;
+    return { outcome: held.outcome, chargeRef: held.chargeRef, failureClass: held.failureClass, amountMinor: held.amountMinor, currency: held.currency };
+  }
+  /** Test hook: the processor settles a held charge (a bank debit clearing or bouncing). */
+  settleCharge(attemptId: string, outcome: 'SUCCEEDED' | 'FAILED', failureClass: SchoolPayChargeFailureClass = 'INSUFFICIENT_FUNDS'): void {
+    const key = schoolPayChargeKey(attemptId), held = this.charges.get(key);
+    if (!held) throw new Error('No simulated charge for this attempt.');
+    this.charges.set(key, { ...held, outcome, failureClass: outcome === 'FAILED' ? failureClass : null });
+  }
 }
 
 /** Stripe Connect (test mode): the connected account exists before onboarding, like Accounts + Account Links. */
 export class SimulatedStripeConnectAdapter extends SimulatedSchoolPaymentAdapter {
   readonly providerCode = 'STRIPE_CONNECT' as const;
   readonly manifest = ALL;
-  protected readonly refs = { customer: 'cus_sim', setup: 'seti_sim', method: 'pm_sim' };
+  protected readonly refs = { customer: 'cus_sim', setup: 'seti_sim', method: 'pm_sim', charge: 'pi_sim' };
   readonly credentialKind = 'NONE' as const;
   async beginOnboarding({ connectionId, accountRef, state, returnUrl }: { connectionId: string; accountRef: string | null; state: string; returnUrl: string }) {
     const account = accountRef ?? this.ref('acct_sim', connectionId);
@@ -176,7 +236,7 @@ export class SimulatedStripeConnectAdapter extends SimulatedSchoolPaymentAdapter
 export class SimulatedSquareAdapter extends SimulatedSchoolPaymentAdapter {
   readonly providerCode = 'SQUARE' as const;
   readonly manifest: SchoolPayCapabilities = Object.freeze({ ...ALL, bankDebit: false });
-  protected readonly refs = { customer: 'SQCUSTSIM', setup: 'sqsetup_sim', method: 'ccof:sim' };
+  protected readonly refs = { customer: 'SQCUSTSIM', setup: 'sqsetup_sim', method: 'ccof:sim', charge: 'sqpay_sim' };
   readonly credentialKind = 'OAUTH_TOKENS' as const;
   /** Access tokens seen by status calls and renewals (the proof checks the vault round trip with them). */
   readonly seenTokens: string[] = [];

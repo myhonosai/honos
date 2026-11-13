@@ -1,5 +1,5 @@
 import React from 'react';
-import { TUITION_PAYMENT_METHODS, type InvoiceBalance, type InvoicePayments, type ReceivablesFilter, type SchoolReceivables, type TuitionPayment, type TuitionPaymentMethod } from '@hon/contracts';
+import { TUITION_PAYMENT_METHODS, type InvoiceBalance, type InvoicePayments, type ReceivablesFilter, type SchoolReceivables, type TuitionPayment, type TuitionPaymentRecordMethod } from '@hon/contracts';
 import { money } from '../membership-changes/http';
 import type { TuitionErrorKind } from './http';
 import styles from '../membership-changes/membership-changes.module.css';
@@ -22,7 +22,7 @@ export type TuitionPaymentsViewProps = Readonly<{
   onSubmit?: ((action: TuitionAction, fields: TuitionFields) => void) | undefined; onTryAgain?: (() => void) | undefined;
 }>;
 
-const METHOD_LABEL: Record<TuitionPaymentMethod, string> = { CASH: 'Cash', CHECK: 'Check', CARD_TERMINAL: 'Card terminal', BANK_TRANSFER: 'Bank transfer', OTHER: 'Other' };
+const METHOD_LABEL: Record<TuitionPaymentRecordMethod, string> = { CASH: 'Cash', CHECK: 'Check', CARD_TERMINAL: 'Card terminal', BANK_TRANSFER: 'Bank transfer', OTHER: 'Other', PROVIDER: 'Autopay (saved method)' };
 const FILTER_LABEL: Record<ReceivablesFilter, string> = { OPEN: 'All unpaid', OVERDUE: 'Overdue' };
 const OUTCOME_TEXT: Record<NonNullable<TuitionOutcome>['kind'], string> = {
   SENDING: 'Saving. Keep this page open.',
@@ -85,7 +85,8 @@ function Payment({ p, payment, read }: { p: TuitionPaymentsViewProps; payment: T
       {payment.reference ? ` · ref ${payment.reference}` : ''}{payment.void ? ' · voided' : ''}</p>
     {payment.note ? <p className={styles.meta}>{payment.note}</p> : null}
     {payment.void ? <p className={styles.meta}>Voided {instant(p.language, payment.void.voidedAt)}: {payment.void.reason}</p> : null}
-    {!payment.void && read.canRecord && !voiding ? <button type="button" className={styles.secondary} disabled={p.locked} onClick={() => p.onOpen?.({ kind: 'void', paymentId: payment.paymentId })}>Void this payment</button> : null}
+    {payment.method === 'PROVIDER' ? <p className={styles.meta}>Charged through the school's payment processor. It cannot be voided here; refunds come from the processor.</p> : null}
+    {!payment.void && payment.method !== 'PROVIDER' && read.canRecord && !voiding ? <button type="button" className={styles.secondary} disabled={p.locked} onClick={() => p.onOpen?.({ kind: 'void', paymentId: payment.paymentId })}>Void this payment</button> : null}
     {voiding ? <form className={`${styles.form} ${styles.danger}`} data-testid="void-form" onSubmit={(e) => { e.preventDefault(); p.onSubmit?.('void', fieldsOf(e.currentTarget)); }}>
       <label className={styles.field}>Why is it being voided?<textarea name="reason" rows={2} maxLength={1000} required/></label>
       <p className={styles.meta}>The payment stays on record as voided. This does not refund anyone; return money outside HON if needed.</p>

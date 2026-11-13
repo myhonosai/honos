@@ -263,3 +263,53 @@ test('0322 API: eight routes under human-UI guards; no processor, adapter or fee
   const module = fs.readFileSync(path.join(__dirname, '../src/app.module.ts'), 'utf8');
   assert.match(module, /SchoolPayAutopayController,/); assert.match(module, /SchoolPayAutopayService,/);
 });
+
+// B-TUI-2 piece 5a (0337): charging a prepared autopay cycle with the saved method, test mode only. No HON fee.
+test('0337 inputs and observations are closed', () => {
+  assert.deepEqual(contracts.validateStartSchoolPayChargeInput({ totalMinor: 20000, currency: 'USD' }), { totalMinor: 20000, currency: 'USD' });
+  for (const bad of [{ totalMinor: 0, currency: 'USD' }, { totalMinor: 1.5, currency: 'USD' }, { totalMinor: 20000, currency: 'usd' }, { totalMinor: 20000 },
+    { totalMinor: 20000, currency: 'USD', applicationFee: 1 }, { totalMinor: 20000, currency: 'USD', outcome: 'SUCCEEDED' }, null, []]) {
+    assert.throws(() => contracts.validateStartSchoolPayChargeInput(bad), undefined, JSON.stringify(bad));
+  }
+  const obs = (patch) => ({ outcome: 'SUCCEEDED', chargeRef: 'pi_1', failureClass: null, amountMinor: 100, currency: 'USD', ...patch });
+  assert.equal(contracts.verifySchoolPayChargeObservation(obs({})).outcome, 'SUCCEEDED');
+  assert.equal(contracts.verifySchoolPayChargeObservation(obs({ outcome: 'FAILED', chargeRef: null, failureClass: 'NOT_SENT' })).failureClass, 'NOT_SENT');
+  assert.equal(contracts.verifySchoolPayChargeObservation(obs({ outcome: 'UNKNOWN', chargeRef: null })).chargeRef, null);
+  for (const bad of [obs({ chargeRef: null }), obs({ outcome: 'PROCESSING', chargeRef: null }), obs({ outcome: 'FAILED', failureClass: null }), obs({ failureClass: 'DECLINED' }),
+    obs({ outcome: 'PENDING' }), obs({ chargeRef: 'pi 1' }), obs({ amountMinor: 0 })]) assert.throws(() => contracts.verifySchoolPayChargeObservation(bad), undefined, JSON.stringify(bad));
+  assert.throws(() => contracts.verifySchoolPayChargeObservation(obs({}), { amountMinor: 99 }), undefined, 'another amount');
+  assert.ok(contracts.TUITION_PAYMENT_RECORD_METHODS.includes('PROVIDER') && !contracts.TUITION_PAYMENT_METHODS.includes('PROVIDER'), 'staff never enter PROVIDER');
+});
+
+test('0337 attempt verifier: states, failure classes, one live attempt per cycle; context refs stay API-side', () => {
+  const at = (patch = {}) => ({ attemptId: '11111111-1111-4111-8111-111111111111', cycleId: '22222222-2222-4222-8222-222222222222', billingAccountId: PAYER,
+    planId: '33333333-3333-4333-8333-333333333333', methodId: '44444444-4444-4444-8444-444444444445', providerCode: 'STRIPE_CONNECT', amountMinor: 20000, currency: 'USD',
+    state: 'SUCCEEDED', failureClass: null, platformFee: 'NONE', version: 2, createdAt: '2026-11-13T07:00:00.000Z', updatedAt: '2026-11-13T07:00:01.000Z',
+    finishedAt: '2026-11-13T07:00:01.000Z', ...patch });
+  assert.equal(contracts.verifySchoolPayChargeAttempt(at()).state, 'SUCCEEDED');
+  for (const bad of [at({ state: 'FAILED' }), at({ failureClass: 'DECLINED' }), at({ finishedAt: null }), at({ state: 'UNKNOWN' }), at({ state: 'PENDING' }), at({ platformFee: 'HON' }),
+    at({ chargeRef: 'pi_1' })]) assert.throws(() => contracts.verifySchoolPayChargeAttempt(bad), undefined, JSON.stringify(bad).slice(0, 80));
+  assert.equal(contracts.verifySchoolPayChargeAttempt(at({ state: 'PENDING', version: 1, finishedAt: null })).state, 'PENDING');
+  const failed = at({ attemptId: '55555555-5555-4555-8555-555555555556', state: 'FAILED', failureClass: 'DECLINED' });
+  assert.equal(contracts.verifySchoolPayPayerCharges({ billingAccountId: PAYER, canManage: true, platformFee: 'NONE', attempts: [at(), failed] }, PAYER).attempts.length, 2);
+  assert.throws(() => contracts.verifySchoolPayPayerCharges({ billingAccountId: PAYER, canManage: true, platformFee: 'NONE',
+    attempts: [at(), at({ attemptId: '66666666-6666-4666-8666-666666666666' })] }, PAYER), undefined, 'two live attempts for one cycle');
+  const context = { attempt: at(), provider: { providerCode: 'STRIPE_CONNECT', accountRef: 'acct_1', customerRef: 'cus_1', methodRef: 'pm_1', methodKind: 'CARD', connectionState: 'CONNECTED_ACTIVE' } };
+  assert.equal(contracts.verifySchoolPayChargeContext(context).provider.methodRef, 'pm_1');
+  assert.throws(() => contracts.verifySchoolPayChargeContext({ ...context, provider: { ...context.provider, providerCode: 'SQUARE' } }), undefined, 'another provider');
+});
+
+test('0337 API: three routes under human-UI guards; references never reach the browser; no fee', () => {
+  const controller = fs.readFileSync(path.join(__dirname, '../src/school-payments/school-pay-charge.controller.ts'), 'utf8');
+  for (const route of [/@Get\('payers\/:billingAccountId\/autopay\/charges'\)/, /@Post\('autopay\/cycles\/:cycleId\/charge'\)/, /@Post\('autopay\/charges\/:attemptId\/reconcile'\)/]) assert.match(controller, route);
+  assert.equal((controller.match(/@UseGuards\(SchoolPay[A-Za-z]+HumanUiGuard\)/g) ?? []).length, 3);
+  assert.doesNotMatch(controller, /accountRef|customerRef|methodRef|\.provider\b/, 'the controller only returns attempts');
+  const guards = fs.readFileSync(path.join(__dirname, '../src/school-payments/school-payment-human-ui.guard.ts'), 'utf8');
+  for (const command of ['school_pay.autopay.charge', 'school_pay.autopay.reconcile']) assert.match(guards, new RegExp(`'${command.replaceAll('.', '\\.')}'`));
+  const service = fs.readFileSync(path.join(__dirname, '../src/school-payments/school-pay-charge.service.ts'), 'utf8');
+  for (const fn of ['read_school_pay_autopay_charges', 'read_school_pay_charge_attempt', 'begin_school_pay_charge', 'finish_school_pay_charge']) assert.match(service, new RegExp(`hon\\.${fn}\\(`));
+  assert.match(service, /verifySchoolPayChargeReceipt/);
+  assert.doesNotMatch(service + controller, /from '\.\.\/payments\/|PAYMENT_PROVIDER_ADAPTER|STRIPE_TEST_SECRET_KEY|application_fee|app_fee_money/i);
+  const module = fs.readFileSync(path.join(__dirname, '../src/app.module.ts'), 'utf8');
+  assert.match(module, /SchoolPayChargeController,/); assert.match(module, /SchoolPayChargeService,/);
+});

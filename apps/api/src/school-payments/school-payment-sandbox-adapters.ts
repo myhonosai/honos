@@ -1,8 +1,10 @@
 import {
-  verifySchoolPayMethodObservation, verifySchoolPayObservation, type SchoolPayCapabilities, type SchoolPayCardBrand, type SchoolPayMethodKind,
-  type SchoolPayMethodObservation, type SchoolPayObservation,
+  verifySchoolPayChargeObservation, verifySchoolPayMethodObservation, verifySchoolPayObservation, type SchoolPayCapabilities, type SchoolPayCardBrand,
+  type SchoolPayChargeFailureClass, type SchoolPayChargeObservation, type SchoolPayMethodKind, type SchoolPayMethodObservation, type SchoolPayObservation,
 } from '@hon/contracts';
-import { SchoolPaymentProviderError, type SchoolPaymentAdapter } from './school-payment-adapter.js';
+import {
+  SchoolPaymentProviderError, schoolPayChargeKey, type SchoolPayChargeLookup, type SchoolPayChargeRequest, type SchoolPaymentAdapter,
+} from './school-payment-adapter.js';
 import type { SchoolPayCredential } from './school-payment-vault.js';
 
 /**
@@ -47,6 +49,37 @@ const providerRef = (value: unknown): string => (typeof value === 'string' && PR
 const STRIPE_BRANDS: Record<string, SchoolPayCardBrand> = { visa: 'VISA', mastercard: 'MASTERCARD', amex: 'AMEX', discover: 'DISCOVER', jcb: 'JCB', diners: 'DINERS', unionpay: 'UNIONPAY' };
 const stripeBrand = (value: unknown): SchoolPayCardBrand => (typeof value === 'string' ? STRIPE_BRANDS[value] ?? 'OTHER' : unknown());
 const accountRef = (value: unknown): string => (typeof value === 'string' && ACCOUNT_REF.test(value) ? value : unknown());
+/** Stripe decline and error codes to HON's failure classes (anything else is OTHER). */
+function stripeFailure(error: Record<string, unknown> | null): SchoolPayChargeFailureClass {
+  const codes = [error?.decline_code, error?.code].filter((v): v is string => typeof v === 'string');
+  for (const code of codes) {
+    if (code === 'authentication_required') return 'AUTHENTICATION_REQUIRED';
+    if (code === 'insufficient_funds') return 'INSUFFICIENT_FUNDS';
+    if (code === 'expired_card') return 'EXPIRED_CARD';
+    if (['card_declined', 'generic_decline', 'do_not_honor', 'lost_card', 'stolen_card', 'fraudulent', 'pickup_card', 'restricted_card', 'transaction_not_allowed',
+      'incorrect_cvc', 'incorrect_number', 'invalid_account', 'account_closed', 'debit_not_authorized'].includes(code)) return 'DECLINED';
+  }
+  return 'OTHER';
+}
+/** One PaymentIntent of one attempt, as an observation; the amount and currency must be the attempt's own. */
+function stripeIntent(value: unknown, attemptId: string, amountMinor: number, currency: string): SchoolPayChargeObservation {
+  const intent = object(value);
+  const metadata = object(intent.metadata ?? {});
+  if (typeof intent.id !== 'string' || !intent.id.startsWith('pi_') || metadata.hon_attempt_id !== attemptId
+    || intent.amount !== amountMinor || intent.currency !== currency.toLowerCase()) return unknown();
+  const chargeRef = providerRef(intent.id);
+  const base = { chargeRef, amountMinor, currency };
+  const lastError = intent.last_payment_error && typeof intent.last_payment_error === 'object' ? object(intent.last_payment_error) : null;
+  switch (intent.status) {
+    case 'succeeded': return verifySchoolPayChargeObservation({ ...base, outcome: 'SUCCEEDED', failureClass: null });
+    case 'processing': return verifySchoolPayChargeObservation({ ...base, outcome: 'PROCESSING', failureClass: null });
+    // Off session nobody can complete 3-D Secure: the payer has to authenticate in a later on-session payment.
+    case 'requires_action': case 'requires_confirmation': return verifySchoolPayChargeObservation({ ...base, outcome: 'FAILED', failureClass: 'AUTHENTICATION_REQUIRED' });
+    case 'requires_payment_method': return verifySchoolPayChargeObservation({ ...base, outcome: 'FAILED', failureClass: stripeFailure(lastError) });
+    case 'canceled': return verifySchoolPayChargeObservation({ ...base, outcome: 'FAILED', failureClass: 'OTHER' });
+    default: return unknown();
+  }
+}
 
 /** One provider call. The error never carries the provider's text, the request or a credential. */
 async function send(http: SchoolPayHttp, request: SchoolPayHttpRequest): Promise<SchoolPayHttpResponse> {
@@ -191,6 +224,51 @@ export class StripeConnectTestAdapter implements SchoolPaymentAdapter {
     if (response.status !== 200) return rejected();
   }
 
+  /**
+   * 0337: a direct charge on the school's own account: a PaymentIntent confirmed off session with the saved method, no
+   * application fee, and the attempt's idempotency key, so a resend within Stripe's 24-hour key window returns the same
+   * intent. A card decline answers 402 with the intent attached; that is a FAILED observation, never UNKNOWN.
+   */
+  async chargeOffSession({ accountRef: account, customerRef, methodRef, methodKind, attemptId, amountMinor, currency }: SchoolPayChargeRequest): Promise<SchoolPayChargeObservation> {
+    if (!Number.isInteger(amountMinor) || amountMinor < 1 || !/^[A-Z]{3}$/.test(currency)) throw new SchoolPaymentProviderError('PRE_SEND', 'INVALID_REQUEST');
+    const response = await this.call('POST', '/v1/payment_intents', {
+      amount: String(amountMinor), currency: currency.toLowerCase(), customer: providerRef(customerRef), payment_method: providerRef(methodRef),
+      'payment_method_types[0]': methodKind === 'CARD' ? 'card' : 'us_bank_account', off_session: 'true', confirm: 'true',
+      'metadata[hon_attempt_id]': attemptId,
+    }, schoolPayChargeKey(attemptId), account);
+    if (response.status === 200) return stripeIntent(response.body, attemptId, amountMinor, currency);
+    const error = object(object(response.body ?? {}).error ?? {});
+    if (response.status === 402) {
+      if (error.payment_intent && typeof error.payment_intent === 'object') {
+        const observed = stripeIntent(error.payment_intent, attemptId, amountMinor, currency);
+        if (observed.outcome !== 'FAILED') return unknown();
+        return verifySchoolPayChargeObservation({ ...observed, failureClass: observed.failureClass === 'OTHER' ? stripeFailure(error) : observed.failureClass });
+      }
+      return verifySchoolPayChargeObservation({ outcome: 'FAILED', chargeRef: null, failureClass: stripeFailure(error), amountMinor, currency });
+    }
+    // A concurrent request with the same key is still running at Stripe: its outcome is not known yet.
+    if (response.status === 409 || error.code === 'idempotency_key_in_use') return unknown();
+    return rejected();
+  }
+
+  /**
+   * 0337: the PaymentIntent Stripe holds for one attempt, found on the payer's customer by the attempt id in its metadata
+   * (created from ten minutes before the attempt). More than one, or a page that might hide it, is UNKNOWN.
+   */
+  async findCharge({ accountRef: account, customerRef, attemptId, amountMinor, currency, createdAt }: SchoolPayChargeLookup): Promise<SchoolPayChargeObservation | null> {
+    const since = Math.floor(new Date(createdAt).getTime() / 1000) - 600;
+    if (!Number.isFinite(since)) throw new SchoolPaymentProviderError('PRE_SEND', 'INVALID_REQUEST');
+    const query = new URLSearchParams({ customer: providerRef(customerRef), 'created[gte]': String(since), limit: '100' });
+    const response = await this.call('GET', `/v1/payment_intents?${query.toString()}`, undefined, undefined, account);
+    if (response.status !== 200) return rejected();
+    const body = object(response.body);
+    if (!Array.isArray(body.data)) return unknown();
+    const matches = body.data.filter(row => object(object(row).metadata ?? {}).hon_attempt_id === attemptId);
+    if (matches.length > 1) return unknown();
+    if (matches.length === 0) return body.has_more === false ? null : unknown();
+    return stripeIntent(matches[0], attemptId, amountMinor, currency);
+  }
+
   /** A full-dashboard account is the school's: the platform's secret key cannot revoke it, and HON never deletes it. */
   async disconnect(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'REVOKE_NOT_SUPPORTED'); }
 }
@@ -294,6 +372,9 @@ export class SquareSandboxAdapter implements SchoolPaymentAdapter {
   async beginMethodSetup(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
   async retrieveMethodSetup(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
   async detachMethod(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
+  /** 0337: Square cards on file come with the Web Payments SDK piece; until then a charge is refused before sending. */
+  async chargeOffSession(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
+  async findCharge(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
 
   /** Revokes this application's access to the merchant (all its tokens). The seller account itself stays. */
   async disconnect({ accountRef: ref }: { accountRef: string }): Promise<void> {

@@ -4,6 +4,9 @@
  */
 export const TUITION_PAYMENT_METHODS = ['CASH', 'CHECK', 'CARD_TERMINAL', 'BANK_TRANSFER', 'OTHER'] as const;
 export type TuitionPaymentMethod = (typeof TUITION_PAYMENT_METHODS)[number];
+/** Methods a recorded payment can carry: the manual ones staff enter, plus PROVIDER (0337), written only by an autopay charge. */
+export const TUITION_PAYMENT_RECORD_METHODS = [...TUITION_PAYMENT_METHODS, 'PROVIDER'] as const;
+export type TuitionPaymentRecordMethod = (typeof TUITION_PAYMENT_RECORD_METHODS)[number];
 export const RECEIVABLES_FILTERS = ['OPEN', 'OVERDUE'] as const;
 export type ReceivablesFilter = (typeof RECEIVABLES_FILTERS)[number];
 export const BALANCE_INVOICE_STATUSES = ['ISSUED', 'PAID', 'VOID', 'UNCOLLECTIBLE'] as const;
@@ -17,7 +20,7 @@ export interface VoidTuitionPaymentInput { expectedInvoiceVersion: number; reaso
 export interface ReceivablesQuery { filter: ReceivablesFilter; after?: string }
 
 export interface TuitionPayment {
-  paymentId: string; invoiceId: string; amountMinor: number; currency: string; receivedOn: string; method: TuitionPaymentMethod;
+  paymentId: string; invoiceId: string; amountMinor: number; currency: string; receivedOn: string; method: TuitionPaymentRecordMethod;
   reference: string | null; note: string | null; recordedAt: string; void: { voidedAt: string; reason: string } | null;
 }
 export interface InvoiceBalance {
@@ -96,7 +99,7 @@ export function verifyTuitionPayment(value: unknown, invoiceId?: string): Tuitio
   const row = record(value, ['paymentId', 'invoiceId', 'amountMinor', 'currency', 'receivedOn', 'method', 'reference', 'note', 'recordedAt', 'void']);
   const payment: TuitionPayment = {
     paymentId: uuid(row.paymentId), invoiceId: uuid(row.invoiceId), amountMinor: count(row.amountMinor, 1, MAX_MINOR), currency: currency(row.currency),
-    receivedOn: date(row.receivedOn), method: oneOf(row.method, TUITION_PAYMENT_METHODS), reference: nullable(row.reference, v => text(v, 120)),
+    receivedOn: date(row.receivedOn), method: oneOf(row.method, TUITION_PAYMENT_RECORD_METHODS), reference: nullable(row.reference, v => text(v, 120)),
     note: nullable(row.note, v => text(v)), recordedAt: instant(row.recordedAt),
     void: nullable(row.void, v => { const x = record(v, ['voidedAt', 'reason']); return { voidedAt: instant(x.voidedAt), reason: text(x.reason) }; }),
   };
