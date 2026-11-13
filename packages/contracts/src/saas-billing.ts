@@ -116,6 +116,8 @@ export const SAAS_COMMANDS = {
   createCreativeGeneration: 'saas-creative-generation-create',
   // A1 (0276): Creative Studio avatars.
   createCreativeAvatar: 'saas-creative-avatar-create', createCreativeAvatarVideo: 'saas-creative-avatar-video-create',
+  // WB1 (0344): AI website drafts on the school's creative credits.
+  createCreativeWebsiteDraft: 'saas-creative-website-draft-create',
   // B-HQ-2 (0232): HQ support records; same values as HQ_SUPPORT_COMMANDS.
   openSupportCase: 'hq-support-case-open',
   addSupportNote: 'hq-support-case-note',

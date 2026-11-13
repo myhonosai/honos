@@ -90,6 +90,7 @@
     "hon.command_saas_credit_allowance(text,jsonb,uuid,uuid,uuid)",
     "hon.create_hq_creative_generation(text,jsonb,jsonb,uuid)",
     "hon.creative_generation_json(hon.creative_generations)",
+    "hon.creative_website_draft_json(hon.creative_website_drafts,boolean)",
     "hon.estimate_saas_premium_operation(text,uuid,text,integer)",
     "hon.fail_chad_follow_up_invocation(text,uuid,text,text)",
     "hon.fail_hon_reply(text,uuid,text,text)",

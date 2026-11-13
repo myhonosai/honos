@@ -5,7 +5,7 @@
 import { championsDrift as drift, championsExactKeys as exactKeys, championsInvalid as invalid, championsIsInt as isInt,
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsRecord as record } from './champions-club.js';
 import { CREATIVE_ASSET_MEDIA_TYPES, CREATIVE_GENERATION_FORMATS, CREATIVE_GENERATION_LIMITS, isCreativePrompt,
-  type CreativeAssetMediaType, type CreativeGenerationFormat } from './creative-studio.js';
+  type CreativeAssetMediaType, type CreativeGenerationFormat, type CreativeMediaKind } from './creative-studio.js';
 import { isHqMarketingDate, type HqMarketingPerson } from './hq-marketing.js';
 import type { SaasCreativeBillingUnit, SaasCreativeMediaKind } from './saas-creative-wallet.js';
 
@@ -69,7 +69,7 @@ export interface HqCreativeAsset {
 }
 export interface HqCreativeGeneration {
   generationId: string; periodStart: string; campaign: { campaignId: string; code: string; name: string } | null; operationCode: string;
-  mediaKind: SaasCreativeMediaKind; units: number; format: CreativeGenerationFormat; prompt: string; status: HqCreativeStatus;
+  mediaKind: CreativeMediaKind; units: number; format: CreativeGenerationFormat; prompt: string; status: HqCreativeStatus;
   failureReason: HqCreativeFailureReason | null; reservedCredits: number; chargedCredits: number | null; requestedBy: HqMarketingPerson;
   version: number; createdAt: string; completedAt: string | null; assets: HqCreativeAsset[];
 }
@@ -101,7 +101,7 @@ function budget(value: unknown): HqCreativeBudget {
   }
   return b as unknown as HqCreativeBudget;
 }
-function asset(value: unknown, kind: SaasCreativeMediaKind, ordinal: number): void {
+function asset(value: unknown, kind: CreativeMediaKind, ordinal: number): void {
   const a = record(value, drift); exactKeys(a, ['assetId', 'ordinal', 'mediaType', 'width', 'height', 'durationSeconds', 'origin'], drift);
   if (!isUuid(a.assetId) || a.ordinal !== ordinal || !has(CREATIVE_ASSET_MEDIA_TYPES[kind], a.mediaType) || !isInt(a.width, 1, 8192) || !isInt(a.height, 1, 8192)
     || a.origin !== 'SYNTHETIC' || (kind === 'IMAGE' ? a.durationSeconds !== null : !isInt(a.durationSeconds, 1, 600))) drift();
@@ -131,7 +131,7 @@ export function validateHqCreativeGeneration(value: unknown): HqCreativeGenerati
   if (status === 'UNDER_REVIEW' && !has(['PROVIDER_UNKNOWN', 'UNVERIFIED_RESULT', 'INTERRUPTED'], g.failureReason)) drift();
   if (g.completedAt !== null && Date.parse(g.completedAt as string) < Date.parse(g.createdAt as string)) drift();
   if (g.mediaKind === 'VIDEO' && (g.assets as unknown[]).length > 1) drift();
-  (g.assets as unknown[]).forEach((a, i) => asset(a, g.mediaKind as SaasCreativeMediaKind, i + 1));
+  (g.assets as unknown[]).forEach((a, i) => asset(a, g.mediaKind as CreativeMediaKind, i + 1));
   return g as unknown as HqCreativeGeneration;
 }
 function viewer(value: unknown): HqCreativeViewer {
@@ -141,8 +141,8 @@ function viewer(value: unknown): HqCreativeViewer {
 }
 function rate(value: unknown): void {
   const r = record(value, drift); exactKeys(r, ['operationCode', 'mediaKind', 'displayName', 'billingUnit', 'creditsPerUnit', 'maxUnitsPerRequest'], drift);
-  if (typeof r.operationCode !== 'string' || !OPERATION.test(r.operationCode) || !has(['IMAGE', 'VIDEO'], r.mediaKind) || !text(r.displayName, 1, 120)
-    || !has(['IMAGE', 'VIDEO_SECOND', 'REQUEST'], r.billingUnit) || !isInt(r.creditsPerUnit, 1, 1_000_000) || !isInt(r.maxUnitsPerRequest, 1, 1000)) drift();
+  if (typeof r.operationCode !== 'string' || !OPERATION.test(r.operationCode) || !has(['IMAGE', 'VIDEO', 'WEBSITE'], r.mediaKind) || !text(r.displayName, 1, 120)
+    || !has(['IMAGE', 'VIDEO_SECOND', 'REQUEST', 'PAGE'], r.billingUnit) || !isInt(r.creditsPerUnit, 1, 1_000_000) || !isInt(r.maxUnitsPerRequest, 1, 1000)) drift();
 }
 function records(r: Record<string, unknown>): void {
   if (r.limit !== HQ_CREATIVE_LIMITS.listLimit || !isTimestamp(r.asOf) || !Array.isArray(r.budgetHistory) || r.budgetHistory.length > HQ_CREATIVE_LIMITS.historyLimit

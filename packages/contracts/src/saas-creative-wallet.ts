@@ -11,15 +11,22 @@ import { championsDrift as drift, championsExactKeys as exactKeys, championsInva
 import { saasUuid } from './saas-billing.js';
 
 export type SaasCreativeLotKind = 'INCLUDED_MONTHLY' | 'PROMOTIONAL' | 'ADJUSTMENT' | 'PURCHASED_TOPUP';
-export type SaasCreativeMediaKind = 'IMAGE' | 'VIDEO';
-export type SaasCreativeBillingUnit = 'IMAGE' | 'VIDEO_SECOND' | 'REQUEST';
+/** WEBSITE (0344): AI website drafts, billed per PAGE, always PROVISIONAL. */
+export type SaasCreativeMediaKind = 'IMAGE' | 'VIDEO' | 'WEBSITE';
+export type SaasCreativeBillingUnit = 'IMAGE' | 'VIDEO_SECOND' | 'REQUEST' | 'PAGE';
 export type SaasCreativeRateBasis = 'PROVISIONAL' | 'VERIFIED_COST';
 export type SaasCreativePackageCode = 'STARTER' | 'GROWTH' | 'CREATOR';
 export type SaasCreativeEligibilityReason = 'PROGRAM_INACTIVE' | 'SCHOOL_NOT_ACTIVE' | 'PAID_ACCESS_REQUIRED' | 'ENTITLEMENT_NOT_IN_EFFECT'
   | 'HON_OS_SUBSCRIPTION_REQUIRED' | 'SUBSCRIPTION_NOT_IN_SERVICE' | 'VERIFIED_PAYMENT_REQUIRED' | 'WINDOW_UNAVAILABLE' | 'WINDOW_NOT_PAID';
 const LOT_KINDS: readonly SaasCreativeLotKind[] = ['INCLUDED_MONTHLY','PROMOTIONAL','ADJUSTMENT','PURCHASED_TOPUP'];
-const MEDIA: readonly SaasCreativeMediaKind[] = ['IMAGE','VIDEO'];
-const UNITS: readonly SaasCreativeBillingUnit[] = ['IMAGE','VIDEO_SECOND','REQUEST'];
+const MEDIA: readonly SaasCreativeMediaKind[] = ['IMAGE','VIDEO','WEBSITE'];
+const UNITS: readonly SaasCreativeBillingUnit[] = ['IMAGE','VIDEO_SECOND','REQUEST','PAGE'];
+/** Whether a billing unit fits a kind, exactly as the database checks it (0202, 0344): PAGE is the website unit and only that. */
+export function saasCreativeUnitFitsKind(kind: unknown, unit: unknown): boolean {
+  if (kind === 'IMAGE') return unit === 'IMAGE' || unit === 'REQUEST';
+  if (kind === 'VIDEO') return unit === 'IMAGE' || unit === 'VIDEO_SECOND' || unit === 'REQUEST';
+  return kind === 'WEBSITE' && unit === 'PAGE';
+}
 const BASES: readonly SaasCreativeRateBasis[] = ['PROVISIONAL','VERIFIED_COST'];
 const PACKAGES: readonly SaasCreativePackageCode[] = ['STARTER','GROWTH','CREATOR'];
 const REASONS: readonly SaasCreativeEligibilityReason[] = ['PROGRAM_INACTIVE','SCHOOL_NOT_ACTIVE','PAID_ACCESS_REQUIRED','ENTITLEMENT_NOT_IN_EFFECT',
@@ -178,8 +185,9 @@ export function validateSaasCreativeRatesInput(value: unknown): SaasCreativeRate
     const r = record(item, invalid);
     exactKeys(r, ['operationCode','mediaKind','displayName','billingUnit','creditsPerUnit','maxUnitsPerRequest','costEvidenceId'], invalid);
     if (typeof r.operationCode !== 'string' || !OPERATION.test(r.operationCode) || !has(MEDIA, r.mediaKind) || !text(r.displayName, 120)
-      || !has(UNITS, r.billingUnit) || (r.mediaKind === 'IMAGE' && r.billingUnit === 'VIDEO_SECOND')
-      || !isInt(r.creditsPerUnit, 1, 1_000_000) || !isInt(r.maxUnitsPerRequest, 1, 1000)) invalid();
+      || !has(UNITS, r.billingUnit) || !saasCreativeUnitFitsKind(r.mediaKind, r.billingUnit)
+      || !isInt(r.creditsPerUnit, 1, 1_000_000) || !isInt(r.maxUnitsPerRequest, 1, 1000)
+      || (r.mediaKind === 'WEBSITE' && ((r.maxUnitsPerRequest as number) > 8 || r.costEvidenceId !== null))) invalid();
     return { ...r, costEvidenceId: r.costEvidenceId === null ? null : saasUuid(r.costEvidenceId) } as unknown as SaasCreativeRateDraft;
   });
   if (new Set(rates.map(r => r.operationCode)).size !== rates.length) invalid();
@@ -304,6 +312,7 @@ function validateRates(value: unknown, internal: boolean): void {
     exactKeys(r, internal ? [...keys, 'costEvidenceId'] : keys, drift);
     if (typeof r.operationCode !== 'string' || !OPERATION.test(r.operationCode) || !has(MEDIA, r.mediaKind) || !text(r.displayName, 120)
       || !has(UNITS, r.billingUnit) || !isInt(r.creditsPerUnit, 1, 1_000_000) || !isInt(r.maxUnitsPerRequest, 1, 1000) || !has(BASES, r.rateBasis)
+      || !saasCreativeUnitFitsKind(r.mediaKind, r.billingUnit) || (r.mediaKind === 'WEBSITE' && r.rateBasis !== 'PROVISIONAL')
       || (internal && (!nullable(r.costEvidenceId, isUuid) || (r.rateBasis === 'VERIFIED_COST') !== (r.costEvidenceId !== null)))) drift();
   });
 }
