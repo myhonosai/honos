@@ -44,6 +44,8 @@ export class SendGridEmailProvider implements CommunicationProviderAdapter {
     const purpose = hq ? 'HQ' : request.purpose && request.purpose !== 'SCHOOL' ? request.purpose : undefined;
     // HQ BILLING and ACCOUNT mail are required notices: HON already let them through an HQ email opt-out (0281), so
     // SendGrid must not drop them for an earlier unsubscribe. Spam reports and bounces still suppress.
+    // NOT YET ACTIVE: the 0281 claim does not return the message purpose, so HqMessageDispatcher never sets hqPurpose
+    // and every HQ email gets normal unsubscribe handling until 0282 (HQ-COMM PR C) passes it.
     const requiredNotice = hq && (request.hqPurpose === 'BILLING' || request.hqPurpose === 'ACCOUNT');
     return {
       personalizations: [{ to: [{ email: request.recipientAddress }], custom_args: {
