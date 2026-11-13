@@ -1,8 +1,8 @@
 import { BadRequestException, ConflictException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import {
   HON_REPLY_LIMITS, HQ_HON_LIMITS, saasUuid, validateHqHonAskInput, validateHqHonAskRecords, validateHqHonBudgetInput, validateHqHonBudgetReceipt,
-  validateHqHonConversation, validateHqHonConversationRecords, validateHqHonResolveInput, validateHqHonTurnReceipt,
-  type HqHonConversation, type HqHonInvocation, type HqHonTurnReceipt,
+  validateHqHonAgentPerformance, validateHqHonConversation, validateHqHonConversationRecords, validateHqHonResolveInput, validateHqHonTurnReceipt,
+  isHqHonAgent, type HqHonAgentPerformance, type HqHonConversation, type HqHonInvocation, type HqHonTurnReceipt,
 } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
 import {
@@ -53,6 +53,12 @@ export class HqHonService {
     const records = await this.billing.call('readHqHonConversation', [subject], validateHqHonConversationRecords);
     try { return validateHqHonConversation({ provider: this.connected() ? 'CONNECTED' : 'NOT_CONNECTED', ...records }); }
     catch { throw new ServiceUnavailableException({ code: 'SAAS_UNAVAILABLE' }); }
+  }
+
+  /** 0338 (HX-1): one HQ agent's aggregate for this UTC month; the database checks the agent's own HQ permission. */
+  async performance(subject: string, agent: unknown): Promise<HqHonAgentPerformance> {
+    const key = parse(() => { if (!isHqHonAgent(agent)) throw new Error('agent'); return agent; });
+    return this.billing.call('readHqHonAgentPerformance', [subject, key], validateHqHonAgentPerformance);
   }
 
   async setBudget(subject: string, body: unknown, key: unknown) {
