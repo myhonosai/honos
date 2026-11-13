@@ -3503,7 +3503,7 @@ END $$;
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.require_school_reports_actor(text)',true,false,'search_path=pg_catalog, hon','3d47547f35d2562a600d01b79ef892740979a6066aace4098bb50327e934dce1'),
-('hon.school_report_periods(uuid,uuid,text,integer,timestamptz)',true,false,'search_path=pg_catalog, hon','5ddf70ae70ab5d4a7124c5f14b1a7f9d20147d05bc44cb9a9a8b485e6d5a227b'),
+('hon.school_report_periods(uuid,uuid,text,integer,timestamptz)',true,false,'search_path=pg_catalog, hon','7212d2355091511b853d743dce01ec2b5fb959fb5df043b4a28cff9478a8891b'),
 ('hon.read_school_reports(text,jsonb)',true,true,'search_path=pg_catalog, hon','6721f3af25235c837b0f50552777df73c3606d3898b826cb5b278f5a81d63e8a')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed

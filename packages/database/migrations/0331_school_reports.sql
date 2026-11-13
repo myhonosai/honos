@@ -74,8 +74,10 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
     SELECT to_char(m,'YYYY-MM') AS month, m::date AS first_day, (m + interval '1 month')::date AS next_day,
       (m AT TIME ZONE tz) AS t_from, least(((m + interval '1 month') AT TIME ZONE tz), as_of) AS t_to,
       ((m + interval '1 month') AT TIME ZONE tz) > as_of AS partial
-    FROM generate_series(date_trunc('month', as_of AT TIME ZONE tz) - make_interval(months => months - 1),
-      date_trunc('month', as_of AT TIME ZONE tz), interval '1 month') m
+    -- Month starts from a constant 0..11 series (months is 3..12): the planner then expects a handful of months, not the
+    -- 1000 rows it assumes for a timestamp series, so the per-month subqueries stay cheap and are never JIT compiled.
+    FROM (SELECT date_trunc('month', as_of AT TIME ZONE tz) - make_interval(months => months - 1 - g) AS m
+      FROM generate_series(0, 11) g WHERE g < months) n
   ),
   members AS MATERIALIZED (
     SELECT x.term_started_at AS started,
