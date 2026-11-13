@@ -1100,4 +1100,5 @@ export * from './text-pieces.js';
 export * from './hq-hon.js';
 export * from './school-branding.js';
 export * from './school-booking-types.js';
+export * from './hq-school-health.js';
 export * from './school-reports.js';
