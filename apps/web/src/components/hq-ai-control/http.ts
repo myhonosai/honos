@@ -1,7 +1,8 @@
 import {
   SAAS_COMMANDS, saasUuid, validateAiLateProviderExpenseInput, validateAiLateProviderExpenseReceipt, validateAiSchoolUsageRange, validateAiSchoolUsageReport,
   validateAiSpendPauseInput, validateAiSpendPauseList, validateAiSpendPauseReceipt, validateAiUnknownAgent, validateAiUnknownQueue,
-  validateAiUnknownResolutionInput, validateAiUnknownResolutionReceipt,
+  validateAiUnknownResolutionInput, validateAiUnknownResolutionReceipt, validateAiSchoolCostAlertAckInput, validateAiSchoolCostAlertAckReceipt, validateAiSchoolCostAlertList,
+  type AiSchoolCostAlertAckInput, type AiSchoolCostAlertAckReceipt, type AiSchoolCostAlertList,
   type AiLateProviderExpenseInput, type AiLateProviderExpenseReceipt, type AiSchoolUsageReport, type AiSpendPauseInput, type AiSpendPauseList,
   type AiSpendPauseReceipt, type AiUnknownAgent, type AiUnknownQueue, type AiUnknownResolutionInput, type AiUnknownResolutionReceipt,
 } from '@hon/contracts';
@@ -119,6 +120,19 @@ export const aiControlApi = {
     return command(`/api/v1/hq/ai/unknown-invocations/${a}/${id.toLowerCase()}/late-provider-expense`, SAAS_COMMANDS.aiLateProviderExpense, body, k, (v) => {
       const receipt = validateAiLateProviderExpenseReceipt(v);
       if (receipt.agent !== a || receipt.invocationId.toLowerCase() !== id.toLowerCase() || receipt.providerCostMicrounits !== body.evidence.providerCostMicrounits) throw new Error('mismatch');
+      return receipt;
+    }, signal, owned);
+  },
+  /** 0343: schools at 75%, 90% or 100% of their internal AI cost limit. */
+  costAlerts(signal: AbortSignal, owned: Owned): Promise<AiSchoolCostAlertList> {
+    return read('/api/v1/hq/ai/school-cost-alerts', validateAiSchoolCostAlertList, signal, owned);
+  },
+  /** The HQ owner acknowledges one current alert, once. Informational: it changes no limit, pause or spend decision. */
+  async acknowledgeCostAlert(input: AiSchoolCostAlertAckInput, key: string, signal: AbortSignal, owned: Owned): Promise<AiSchoolCostAlertAckReceipt> {
+    const [body, k] = checked(() => [validateAiSchoolCostAlertAckInput(input), saasUuid(key)] as const);
+    return command('/api/v1/hq/ai/school-cost-alerts/acknowledgements', SAAS_COMMANDS.aiSchoolCostAlertAck, body, k, (v) => {
+      const receipt = validateAiSchoolCostAlertAckReceipt(v);
+      if (receipt.schoolId.toLowerCase() !== body.schoolId.toLowerCase() || receipt.level !== body.level || Date.parse(receipt.windowStart) !== Date.parse(body.windowStart)) throw new Error('mismatch');
       return receipt;
     }, signal, owned);
   },

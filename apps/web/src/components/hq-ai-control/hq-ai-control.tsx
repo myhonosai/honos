@@ -1,11 +1,11 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { AiSchoolUsageReport, AiSpendPauseInput, AiSpendPauseList, AiUnknownQueue, AiUnknownResolutionInput, AiLateProviderExpenseInput } from '@hon/contracts';
+import type { AiSchoolCostAlertAckInput, AiSchoolCostAlertList, AiSchoolUsageReport, AiSpendPauseInput, AiSpendPauseList, AiUnknownQueue, AiUnknownResolutionInput, AiLateProviderExpenseInput } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
 import { HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { loadHqSchoolDirectory } from '../hq-school-directory-http';
 import { AiControlError, aiControlApi, keepForRetry, lastDays, toMicro, type AiControlApi } from './http';
-import { AiCostsView, AiSafetyView, RANGE_DAYS, type Fields, type Names, type RangeKey, type ReadState, type SafetyAction, type SafetyForm, type SafetyOutcome } from './view';
+import { AiCostAlertsView, AiCostsView, AiSafetyView, alertKey, type AlertOutcome, RANGE_DAYS, type Fields, type Names, type RangeKey, type ReadState, type SafetyAction, type SafetyForm, type SafetyOutcome } from './view';
 
 /** School names for display only: schoolId -> "Organization — School". Never authority. */
 export type DirectoryLoader = (signal: AbortSignal) => Promise<ReadonlyMap<string, { school: string; org: string }>>;
@@ -182,4 +182,74 @@ export function HqAiSafety({ api = aiControlApi, directoryLoader = loadDirectory
     onSubmit={onSubmit} onTryAgain={() => { void send(); }}
     // Dropping a kept request is safe: the database refuses a second pause, settlement or late charge for the same item, and fresh reads show what happened.
     onDiscard={() => { if (lock !== 'KEPT' || sending.current) return; pending.current = null; setLock('NONE'); setForm(null); setOutcome(null); setRefresh((n) => n + 1); }}/>;
+}
+
+type AlertPending = Readonly<{ key: string; body: AiSchoolCostAlertAckInput }>;
+
+/**
+ * HQ AI cost limit alerts (0343): schools at 75%, 90% or 100% of their internal AI cost limit this window. Any HQ billing
+ * reader sees them; only the human HQ owner acknowledges, once per school, level and window. An unknown outcome keeps the
+ * exact request so Try again replays the same key. Acknowledging changes no limit, pause or spend decision.
+ */
+export function HqAiCostAlerts({ api = aiControlApi }: { api?: AiControlApi }): React.ReactElement {
+  const { preferences } = useLocale();
+  const [alerts, setAlerts] = useState<ReadState<AiSchoolCostAlertList>>({ state: 'LOADING' });
+  const [open, setOpen] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<AlertOutcome>(null);
+  const [lock, setLock] = useState<Lock>('NONE');
+  const [refresh, setRefresh] = useState(0);
+  const generation = useRef(0), privacy = useRef(0), mounted = useRef(false), pending = useRef<AlertPending | null>(null), sending = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; privacy.current++; pending.current = null; }; }, []);
+  const [concealed, reveal] = useConceal(() => {
+    generation.current++; privacy.current++; pending.current = null; setLock(sending.current ? 'SENDING' : 'NONE');
+    setAlerts({ state: 'LOADING' }); setOpen(null); setOutcome(null);
+  });
+
+  useEffect(() => {
+    if (concealed) return;
+    const current = ++generation.current, shown = privacy.current;
+    const owned = () => mounted.current && current === generation.current && shown === privacy.current;
+    const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
+    setAlerts({ state: 'LOADING' });
+    api.costAlerts(signal, owned).then((view) => { if (owned()) setAlerts({ state: 'READY', view }); }, (error) => { if (owned() && !abort.signal.aborted) setAlerts(readFailed(error)); });
+    return () => { abort.abort(); };
+  }, [api, refresh, concealed]);
+
+  const send = useCallback(async () => {
+    const request = pending.current;
+    if (!request || sending.current) return;
+    sending.current = true; const shown = privacy.current;
+    setLock('SENDING'); setOutcome({ kind: 'SENDING' });
+    let next: AlertOutcome, keep = false;
+    try {
+      const owned = () => mounted.current && shown === privacy.current && pending.current?.key === request.key;
+      next = { kind: 'DONE', replayed: (await api.acknowledgeCostAlert(request.body, request.key, AbortSignal.timeout(30000), owned)).replayed };
+    } catch (error) {
+      keep = keepForRetry(error);
+      next = { kind: error instanceof AiControlError && error.kind !== 'SESSION' ? error.kind : 'UNKNOWN' };
+    } finally { sending.current = false; }
+    if (pending.current?.key === request.key) pending.current = keep ? request : null;
+    setLock(pending.current ? 'KEPT' : 'NONE');
+    if (shown !== privacy.current || !mounted.current) return;
+    setOutcome(next);
+    if (next.kind === 'DONE' || !FIXABLE.includes(next.kind)) setOpen(null);
+    setRefresh((n) => n + 1);
+  }, [api]);
+
+  const onSubmit = useCallback((target: string, reason: string) => {
+    if (lock !== 'NONE' || pending.current || sending.current) return;
+    const alert = alerts.state === 'READY' ? alerts.view.alerts.find((a) => alertKey(a) === target && a.acknowledgement === null) : undefined;
+    if (!alert) { setOutcome({ kind: 'CHANGED' }); setOpen(null); return; }
+    const text = reason.trim();
+    if (text.length < 10 || text.length > 500) { setOutcome({ kind: 'INVALID' }); return; }
+    pending.current = { key: globalThis.crypto.randomUUID(), body: { schoolId: alert.schoolId, level: alert.level, windowStart: alert.windowStart, reason: text } };
+    void send();
+  }, [lock, alerts, send]);
+
+  return <AiCostAlertsView language={preferences.language} concealed={concealed} alerts={alerts} open={open} outcome={outcome}
+    locked={lock !== 'NONE'} canRetry={lock === 'KEPT'} onRefresh={() => setRefresh((n) => n + 1)} onReveal={reveal}
+    onOpen={(key) => { if (lock === 'NONE') { setOpen(key); setOutcome(null); } }} onClose={() => { if (lock === 'NONE') setOpen(null); }}
+    onSubmit={onSubmit} onTryAgain={() => { void send(); }}
+    // Dropping a kept request is safe: the database accepts one acknowledgement per school, level and window.
+    onDiscard={() => { if (lock !== 'KEPT' || sending.current) return; pending.current = null; setLock('NONE'); setOpen(null); setOutcome(null); setRefresh((n) => n + 1); }}/>;
 }

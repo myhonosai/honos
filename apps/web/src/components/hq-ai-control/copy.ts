@@ -36,6 +36,11 @@ const en = {
   e_INVALID: 'Check the details and try again. Nothing changed.', e_RATE: 'Too many requests. Nothing changed. Wait a minute and try again.',
   e_UNKNOWN: 'We could not confirm whether this went through. Try again sends exactly the same request, and it cannot happen twice.',
   e_SESSION: 'Your session ended. Sign in again.', tryAgain: 'Try again', discard: 'Stop and check the lists',
+  alertsTitle: 'AI cost limit alerts', alertsIntro: 'Schools that have used 75%, 90% or all of their monthly AI cost limit. A school without a limit never appears. This is HON\'s own provider cost and is never shown to the school.',
+  alertsNone: 'No school is near its AI cost limit.', alertsOpen: '{n} open', alertsTruncated: 'Only the first 500 alerts are shown.',
+  lv_WARNING_75: '75% of the limit used', lv_WARNING_90: '90% of the limit used', lv_CEILING_REACHED: 'Limit reached: new AI work is refused',
+  alertUsed: '{used} of {ceiling} ({pct}%)', alertCrossed: 'Reached {time}', alertHolds: 'Reached by work still in progress', alertTrial: 'Free trial',
+  alertAcked: 'Acknowledged {time}: {reason}', ackButton: 'Acknowledge', ackReason: 'Note for HQ (at least 10 characters)', ackConfirm: 'Acknowledge alert', ackDone: 'Acknowledged.',
 };
 export type AiControlKey = keyof typeof en;
 
@@ -76,6 +81,11 @@ const ko: Record<AiControlKey, string> = {
   e_INVALID: '내용을 확인하고 다시 시도하세요. 변경된 것은 없습니다.', e_RATE: '요청이 너무 많습니다. 변경된 것은 없습니다. 잠시 후 다시 시도하세요.',
   e_UNKNOWN: '처리되었는지 확인하지 못했습니다. 다시 시도하면 똑같은 요청을 보내며 두 번 적용되지 않습니다.',
   e_SESSION: '세션이 끝났습니다. 다시 로그인하세요.', tryAgain: '다시 시도', discard: '중단하고 목록 확인',
+  alertsTitle: 'AI 비용 한도 알림', alertsIntro: '월간 AI 비용 한도의 75%, 90% 또는 전부를 사용한 학교입니다. 한도가 없는 학교는 표시되지 않습니다. HON 자체의 제공업체 비용이며 학교에는 표시되지 않습니다.',
+  alertsNone: 'AI 비용 한도에 가까운 학교가 없습니다.', alertsOpen: '미확인 {n}건', alertsTruncated: '처음 500건만 표시됩니다.',
+  lv_WARNING_75: '한도의 75% 사용', lv_WARNING_90: '한도의 90% 사용', lv_CEILING_REACHED: '한도 도달: 새 AI 작업이 거부됩니다',
+  alertUsed: '{ceiling} 중 {used} ({pct}%)', alertCrossed: '{time}에 도달', alertHolds: '진행 중인 작업으로 도달', alertTrial: '무료 체험',
+  alertAcked: '{time}에 확인: {reason}', ackButton: '확인', ackReason: 'HQ 메모 (10자 이상)', ackConfirm: '알림 확인', ackDone: '확인했습니다.',
 };
 const es: Record<AiControlKey, string> = {
   costsTitle: 'Costes de IA', costsIntro: 'Lo que costó el trabajo de IA de cada escuela, según el registro de uso de HON. Los cargos del proveedor, las estimaciones de HQ y los cargos tardíos se muestran por separado y nunca se suman.',
@@ -114,6 +124,11 @@ const es: Record<AiControlKey, string> = {
   e_INVALID: 'Revise los datos y vuelva a intentarlo. No cambió nada.', e_RATE: 'Demasiadas solicitudes. No cambió nada. Espere un minuto y vuelva a intentarlo.',
   e_UNKNOWN: 'No pudimos confirmar si se completó. Reintentar envía exactamente la misma solicitud y no puede aplicarse dos veces.',
   e_SESSION: 'Su sesión terminó. Inicie sesión de nuevo.', tryAgain: 'Reintentar', discard: 'Detener y revisar las listas',
+  alertsTitle: 'Alertas del límite de costo de IA', alertsIntro: 'Escuelas que han usado el 75%, el 90% o todo su límite mensual de costo de IA. Una escuela sin límite nunca aparece. Es el costo de proveedor propio de HON y nunca se muestra a la escuela.',
+  alertsNone: 'Ninguna escuela está cerca de su límite de costo de IA.', alertsOpen: '{n} abiertas', alertsTruncated: 'Solo se muestran las primeras 500 alertas.',
+  lv_WARNING_75: '75% del límite usado', lv_WARNING_90: '90% del límite usado', lv_CEILING_REACHED: 'Límite alcanzado: se rechaza el nuevo trabajo de IA',
+  alertUsed: '{used} de {ceiling} ({pct}%)', alertCrossed: 'Alcanzado {time}', alertHolds: 'Alcanzado por trabajo aún en curso', alertTrial: 'Prueba gratuita',
+  alertAcked: 'Confirmada {time}: {reason}', ackButton: 'Confirmar', ackReason: 'Nota para HQ (al menos 10 caracteres)', ackConfirm: 'Confirmar alerta', ackDone: 'Confirmada.',
 };
 export const AI_CONTROL_LANGUAGES = { en, ko, es } as const;
 export function aiControlText(language: string, key: AiControlKey, vars: Record<string, string> = {}): string {

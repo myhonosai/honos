@@ -3518,6 +3518,87 @@ try {
   assert.equal((await row("SELECT has_table_privilege($1,'hon.ai_school_cost_limits','SELECT') OR has_table_privilege($1,'hon.ai_school_cost_limit_commands','SELECT') x", [runtimeRole])).x, false);
   pass('INV-38', 'R2: each school may have an internal monthly agent-AI cost ceiling (none by default for a paying school, $15 on a live trial, HQ-owner editable, versioned, idempotent, immutable command log) counted as verified ledger cost plus every counting hold at its plan maximum; HQ reads NO_CEILING/NORMAL/WARNING_75/WARNING_90/CEILING_REACHED per school; at the ceiling new work is refused before any reservation or provider call (HON prepare, specialist begin, readiness, reserve guard) as AI_PAUSED_BY_HQ while other schools are unaffected and a raised ceiling restores it at once; an HQ single-school pause covers agent and creative AI; only the HQ command and read reach the runtime');
   }
+  // ---- INV-42 (0343): HQ alerts at 75%, 90% and 100% of a school's internal AI cost ceiling, HQ-owner acknowledgement ----
+  {
+  const o = await makeOrg('inv-42');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const conversations = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const conv = (await conversations.create(scope, { title: 'Alerts' }, K())).id;
+  const ask = async () => { const t = await conversations.sendTurn(scope, conv, { text: `Alert question ${K()}`, delegation: null }, K()); assert.equal(t.status, 'COMPLETED', JSON.stringify(t)); };
+  const read = async (subject = hq.subject) => (await row('SELECT hon.read_ai_school_cost_alerts_from_hq($1) r', [subject])).r;
+  const mine = async () => (await read()).alerts.filter((a) => a.schoolId === o.school);
+  const shape = (list) => list.map((a) => [a.level, a.committedCostMicros, a.usedBasisPoints, a.ceilingMicros, a.acknowledgement?.reason ?? null]);
+  const ack = async (input, key = K(), subject = hq.subject) => (await admin.query('SELECT hon.command_ai_school_cost_alert_acknowledgement($1,$2::jsonb,$3::uuid) r', [subject, JSON.stringify(input), key])).rows[0].r;
+  const limit = async (ceilingMicros, expectedVersion) => (await admin.query('SELECT hon.command_ai_school_cost_limit($1,$2::jsonb,$3::uuid) r',
+    [hq.subject, JSON.stringify({ schoolId: o.school, ceilingMicros, paused: false, reason: 'Synthetic HQ cost limit for alerts', expectedVersion }), K()])).rows[0].r.version;
+  const errCode = async (p) => { const r = await settle(p); return r.error ? `${r.error.code}:${r.error.message}` : 'OK'; };
+  const lastLedger = async () => (await row("SELECT hon.saas_ts(max(occurred_at)) t FROM hon.ai_usage_ledger WHERE organization_id=$1 AND school_id=$2 AND spend_class='AGENT_INFERENCE'", [o.id, o.school])).t;
+  const windowStart = (await row('SELECT hon.saas_ts(lower(hon.ai_spend_window($1, clock_timestamp()))) w', [o.id])).w;
+  // 1. A paying school has no ceiling by default, so spend raises no alert.
+  await ask();
+  assert.deepEqual(await mine(), []);
+  // 2. HQ sets $0.002 (2,000 micro-USD): 900 is 45%, still no alert.
+  let v = await limit(2000, 0);
+  assert.deepEqual(await mine(), []);
+  // 3. A second question (1,800 = 90%) raises WARNING_90 and WARNING_75, both crossed at that ledger row, most severe first.
+  await ask();
+  let a = await mine();
+  assert.deepEqual(shape(a), [['WARNING_90', 1800, 9000, 2000, null], ['WARNING_75', 1800, 9000, 2000, null]]);
+  const second = await lastLedger();
+  assert.deepEqual(a.map((x) => [x.crossedAt, x.windowStart, x.trial, x.schoolName.length > 0]), [[second, windowStart, false, true], [second, windowStart, false, true]]);
+  const all = await read();
+  assert.equal(all.openCount, all.alerts.filter((x) => x.acknowledgement === null).length, 'openCount counts every open alert');
+  // 4. The HQ owner acknowledges WARNING_75: idempotent replay, key reuse, a second acknowledgement, an inactive level,
+  //    another window, an unknown school and a malformed input are refused.
+  const input = { schoolId: o.school, level: 'WARNING_75', windowStart, reason: 'Synthetic HQ alert acknowledgement' };
+  const key = K();
+  const first = await ack(input, key);
+  assert.deepEqual([first.schoolId, first.organizationId, first.level, first.windowStart, first.replayed], [o.school, o.id, 'WARNING_75', windowStart, false]);
+  assert.deepEqual(await ack(input, key), { ...first, replayed: true });
+  assert.equal(await errCode(ack({ ...input, reason: 'A different synthetic reason' }, key)), '23505:AI_SCHOOL_COST_ALERT_KEY_REUSED');
+  assert.equal(await errCode(ack(input)), '23505:AI_SCHOOL_COST_ALERT_ALREADY_ACKNOWLEDGED');
+  assert.equal(await errCode(ack({ ...input, level: 'CEILING_REACHED' })), '22023:AI_SCHOOL_COST_ALERT_NOT_ACTIVE');
+  assert.equal(await errCode(ack({ ...input, level: 'WARNING_90', windowStart: '2020-01-01T00:00:00.000Z' })), '22023:AI_SCHOOL_COST_ALERT_NOT_ACTIVE');
+  assert.equal(await errCode(ack({ ...input, schoolId: K() })), 'P0002:AI_SCHOOL_NOT_FOUND');
+  for (const bad of [{ ...input, level: 'NORMAL' }, { ...input, reason: 'short' }, { ...input, extra: 1 }])
+    assert.equal(await errCode(ack(bad)), '22023:INVALID_AI_SCHOOL_COST_ALERT_ACK', JSON.stringify(bad));
+  a = await mine();
+  assert.deepEqual(shape(a), [['WARNING_90', 1800, 9000, 2000, null], ['WARNING_75', 1800, 9000, 2000, 'Synthetic HQ alert acknowledgement']], 'open alerts first');
+  assert.equal(a[1].acknowledgement.acknowledgedAt, first.acknowledgedAt);
+  // 5. A third question (2,700) reaches the ceiling: CEILING_REACHED crossed at that row; the acknowledgement stays.
+  await ask();
+  a = await mine();
+  assert.deepEqual(shape(a), [['CEILING_REACHED', 2700, 13500, 2000, null], ['WARNING_90', 2700, 13500, 2000, null], ['WARNING_75', 2700, 13500, 2000, 'Synthetic HQ alert acknowledgement']]);
+  assert.equal(a[0].crossedAt, await lastLedger());
+  assert.equal(a[1].crossedAt, second, 'crossedAt keeps the first time the level was reached');
+  // 6. A $0 ceiling is an HQ block and raises no alert; a raised ceiling clears the alerts; the acknowledgement is kept.
+  v = await limit(0, v);
+  assert.deepEqual(await mine(), []);
+  v = await limit(1000000000, v);
+  assert.deepEqual(await mine(), []);
+  assert.equal((await row('SELECT count(*)::int n FROM hon.ai_school_cost_alert_acknowledgements WHERE school_id=$1', [o.school])).n, 1);
+  // 7. Authority: an HQ billing operator reads but cannot acknowledge; a school owner can do neither.
+  const op = { user: K(), principal: K(), subject: `ai0-inv42-billing-${K()}` };
+  await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1::uuid,$2,$1::uuid::text||'@example.test','AI-0 synthetic HQ billing')", [op.user, op.subject]);
+  await admin.query("INSERT INTO hon.principals(id,principal_type,user_id,display_name) VALUES($1,'HUMAN_USER',$2,'AI-0 synthetic HQ billing')", [op.principal, op.user]);
+  await admin.query("INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from,effective_until) VALUES($1,'HON_HQ_OPERATOR',ARRAY['hq.billing.manage'],clock_timestamp()-interval '1 day',NULL)", [op.principal]);
+  v = await limit(2000, v);
+  assert.equal((await read(op.subject)).alerts.filter((x) => x.schoolId === o.school).length, 3, 'billing reader sees the alerts');
+  assert.match(await errCode(ack({ ...input, level: 'WARNING_90' }, K(), op.subject)), /^42501:SAAS_FORBIDDEN/);
+  assert.match(await errCode(read(o.subject)), /^42501:SAAS_FORBIDDEN/);
+  assert.match(await errCode(ack({ ...input, level: 'WARNING_90' }, K(), o.subject)), /^42501:SAAS_FORBIDDEN/);
+  // 8. Acknowledgements are immutable; only the HQ read and command reach the runtime.
+  assert.match(await errCode(admin.query("UPDATE hon.ai_school_cost_alert_acknowledgements SET reason='Changed synthetic reason' WHERE school_id=$1", [o.school])), /AI_SCHOOL_COST_ALERT_ACK_IMMUTABLE/);
+  assert.match(await errCode(admin.query('DELETE FROM hon.ai_school_cost_alert_acknowledgements WHERE school_id=$1', [o.school])), /AI_SCHOOL_COST_ALERT_ACK_IMMUTABLE/);
+  const acl = await rows(`SELECT p.oid::regprocedure::text f, has_function_privilege($1,p.oid,'EXECUTE') x FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace
+    AND p.proname IN ('read_ai_school_cost_alerts_from_hq','command_ai_school_cost_alert_acknowledgement','ai_school_cost_alert_rows','ai_school_cost_alert_crossed_at','ai_school_cost_level_rank') ORDER BY 1`, [runtimeRole]);
+  assert.deepEqual(acl.map((x) => `${x.f}=${x.x}`), ['hon.ai_school_cost_alert_crossed_at(uuid,uuid,tstzrange,bigint,text)=false', 'hon.ai_school_cost_alert_rows(timestamp with time zone)=false',
+    'hon.ai_school_cost_level_rank(text)=false', 'hon.command_ai_school_cost_alert_acknowledgement(text,jsonb,uuid)=true', 'hon.read_ai_school_cost_alerts_from_hq(text)=true']);
+  assert.deepEqual(await row(`SELECT has_table_privilege($1,'hon.ai_school_cost_alert_acknowledgements','SELECT') s,
+    (SELECT relforcerowsecurity FROM pg_class WHERE oid='hon.ai_school_cost_alert_acknowledgements'::regclass) f`, [runtimeRole]), { s: false, f: true });
+  pass('INV-42', '0343: HQ sees an alert for every level (75%, 90%, 100%) a school with a ceiling above $0 has reached this budget window, derived from the committed cost with crossedAt = the first verified ledger row that reached it, open alerts first; no ceiling or a $0 block raises none and a raised ceiling clears them; the HQ owner alone acknowledges an active current-window alert once (idempotent, key reuse refused, immutable record), HQ billing operators read, school users are refused; only the read and the command reach the runtime');
+  }
 
   // ---- INV-39 (0310): a paying organization has no organization agent budget ----
   {
