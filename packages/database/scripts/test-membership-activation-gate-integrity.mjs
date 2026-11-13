@@ -664,9 +664,9 @@ try {
   // ---------- 8. static benefit-path guard ----------
   // Every function that reads hon.memberships is a reviewed path. None is a booking, attendance, ClassPass, kiosk or
   // check-in path, so a SCHEDULED (future-dated) ACTIVE membership grants no benefit today. A new reader fails here
-  // until it is reviewed for effective dates (E1b).
+  // until it is reviewed for effective dates (E1b). The 0334 import writer and its open-membership check grant no benefit.
   const readers = (await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' ORDER BY proname")).map((r) => r.proname);
-  assert.deepEqual(readers, ['acknowledge_retention_review_evidence', 'activate_school_membership', 'begin_hon_turn', 'cancel_school_membership', 'crm_adult_membership_draft_is_current',
+  assert.deepEqual(readers, ['acknowledge_retention_review_evidence', 'activate_school_membership', 'apply_billing_import_row', 'begin_hon_turn', 'billing_import_has_membership', 'cancel_school_membership', 'crm_adult_membership_draft_is_current',
     'crm_guardian_child_membership_draft_current', 'draft_crm_adult_membership', 'draft_crm_adult_membership_from_plan', 'draft_crm_guardian_child_membership_from_plan',
     'draft_owner_launch_membership', 'evaluate_membership_activation', 'evaluate_membership_date_revision', 'guard_membership_date_revision_insert',
     'guard_membership_pause', 'pause_school_membership', 'prepare_school_pay_autopay_cycle', 'read_crm_adult_membership_draft_confirmation', 'read_crm_adult_membership_preparation',
