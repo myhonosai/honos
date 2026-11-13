@@ -31,6 +31,8 @@ Required: `studentGivenName`, `studentFamilyName`, `planName`, `amount`, `freque
 
 Stated defaults shown on review: currency is the payer's existing account currency, else USD; the balance is due today;
 amounts accept `149`, `149.00`, `$1,250.50` (whole units only for JPY and KRW).
+Only USD, CAD, AUD, NZD, GBP, EUR, JPY and KRW are accepted, whether given in the file or taken from the payer's existing
+account; any other code is refused as `currency:UNSUPPORTED` so no amount is stored at the wrong scale.
 
 ## Matching (never a guess)
 
