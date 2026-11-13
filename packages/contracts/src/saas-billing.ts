@@ -55,6 +55,7 @@ export const SAAS_COMMANDS = {
   cancelScheduleBinding: 'saas-schedule-binding-cancel',
   retryScheduleAccess: 'saas-schedule-access-retry',
   applyScheduleWelcomeCredit: 'saas-hon-os-welcome-credit-apply',
+  startLifetimeSwitch: 'saas-hon-os-lifetime-switch-start',
   resolvePaidReview: 'saas-paid-review-resolve',
   verifyPaidReviewRefund: 'saas-paid-review-verify-refund',
   recordPriceSchedule: 'saas-price-schedule-record',

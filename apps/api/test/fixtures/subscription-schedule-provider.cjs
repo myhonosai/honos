@@ -43,5 +43,13 @@ class DeterministicScheduleProvider {
     if(!this.credits.has(creditKey)){this.credits.set(creditKey,amountMinor);this.balances.set(accountReference,(this.balances.get(accountReference)||0)+amountMinor);}
     return {outcome:'CREDITED',creditKey,amountMinor:this.credits.get(creditKey)};
   }
+  /** 0341: stop a switched plan's schedule with no proration and no refund; idempotent; failNextStop simulates an outage. */
+  stopped=new Set(); failNextStop=false;
+  async stopScheduleNoRefund({bindingId,scheduleReference}){
+    this.calls++;
+    if(this.failNextStop){this.failNextStop=false;throw new Error('network');}
+    this.stopped.add(bindingId);
+    return {outcome:'STOPPED_NO_REFUND',bindingId,scheduleReference,refundSent:false};
+  }
 }
 module.exports={DeterministicScheduleProvider};

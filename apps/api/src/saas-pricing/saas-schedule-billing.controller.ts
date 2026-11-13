@@ -14,6 +14,15 @@ export class SaasScheduleBindingSchoolController {
   start(@Req() r: HonRequest,@Param('schoolId') school: string,@Body() body: unknown,@Headers('idempotency-key') key: string | undefined) {
     return this.schedules.start(subject(r),school,body,key).then(data => ({data}));
   }
+  /** 0341: the switch-to-lifetime quote; declared before ':bindingId' so the literal path wins. */
+  @Get('lifetime-switch-quote') @UseGuards(SaasReadGuard)
+  lifetimeSwitchQuote(@Req() r: HonRequest,@Param('schoolId') school: string) {
+    return this.schedules.lifetimeSwitchQuote(subject(r),school).then(data => ({data}));
+  }
+  @Post('lifetime-switch') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.startLifetimeSwitch)
+  startLifetimeSwitch(@Req() r: HonRequest,@Param('schoolId') school: string,@Body() body: unknown,@Headers('idempotency-key') key: string | undefined) {
+    return this.schedules.startLifetimeSwitch(subject(r),school,body,key).then(data => ({data}));
+  }
   @Get(':bindingId') @UseGuards(SaasReadGuard)
   read(@Req() r: HonRequest,@Param('schoolId') school: string,@Param('bindingId') binding: string) {
     return this.schedules.read(subject(r),school,binding).then(data => ({data}));
@@ -27,6 +36,9 @@ export class SaasScheduleBindingSchoolController {
 @Controller('hq/saas/subscription-schedule-bindings') @UseGuards(HonIdentityGuard)
 export class SaasScheduleBindingHqController {
   constructor(private readonly schedules: SaasScheduleBillingService) {}
+  /** 0341: every switch to lifetime, newest first. */
+  @Get('lifetime-switches') @UseGuards(SaasReadGuard)
+  lifetimeSwitches(@Req() r: HonRequest) { return this.schedules.hqLifetimeSwitches(subject(r)).then(data => ({data})); }
   @Get(':bindingId') @UseGuards(SaasReadGuard)
   read(@Req() r: HonRequest,@Param('bindingId') binding: string) { return this.schedules.readHq(subject(r),binding).then(data => ({data})); }
   @Post(':bindingId/access-retry') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.retryScheduleAccess)
