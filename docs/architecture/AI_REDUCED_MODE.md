@@ -44,6 +44,8 @@ later slice. Only stand-in providers are used; nothing here activates a real pro
    - The second attempt is planned and prepared live, like the first: access decision, budget lock, HQ pauses, school
      ceilings and source permissions all apply again.
    - A turn makes at most two provider calls. A second failure is final.
+   - 0342: if HQ deactivates the task profile between the attempts, the second plan uses the legacy policy order, and
+     that order also skips the model that just failed. The failed model is never called twice for one turn.
 3. **Honest message.** `PROVIDER_UNAVAILABLE` and `NO_ELIGIBLE_ROUTE` show: "HON's AI is temporarily unavailable.
    Everything else in HON OS keeps working. Nothing is charged. Try again in a few minutes."
 
