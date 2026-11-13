@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "bca9859880dc56ef4865b9aca97c2c0516a620369b5d0d074e2b401d633a3626",
+  "chainSha256": "85957f2750b06b44ca3132324c6e17973b0cc5999f5433c04665c0ca8fd093f7",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -183,6 +183,14 @@
       "sha256": "f0c4ae400b1785b0df8793bdefe477d3624a27bb86dcfbf95db3a12e3d9bcb79"
     },
     {
+      "file": "0226_school_student_csv_import.sql",
+      "sha256": "536b8ccf5b42a982142871b00a92b39a5038560f8f7075e6f65b99d5760f0952"
+    },
+    {
+      "file": "0227_campaign_reads_school_id.sql",
+      "sha256": "32a2a1d3f5a59b53dd472222a1eddeb39a4e38b9c1001c81fd724ff7993bd4a1"
+    },
+    {
       "file": "0228_hon_group_summary.sql",
       "sha256": "dac3557a4cab512c9c4ca6b59646f401689b7e58e88ad02804f08d33f43f12db"
     },
@@ -191,12 +199,12 @@
       "sha256": "f318322679ffb9e5594ddd7d088d38cb3b4c9e42fc6d36592ea18793bce58dac"
     },
     {
-      "file": "0232_hq_support_cases.sql",
-      "sha256": "8f3decac8ed134e1deae12e239b8c1b9398506ae7d0b654fda6f42139165aedf"
+      "file": "0231_membership_pause_rolling_year.sql",
+      "sha256": "97bcb50f32def69d43da7ca9fa497c8d5b291393a33060d788cd7209c77867bc"
     },
     {
-      "file": "0233_hq_school_health.sql",
-      "sha256": "92029e0825b919d75af866fb67f7aa7fe9ab99444c1da1d0961470dd112bafa6"
+      "file": "0232_hq_support_cases.sql",
+      "sha256": "8f3decac8ed134e1deae12e239b8c1b9398506ae7d0b654fda6f42139165aedf"
     }
   ]
 }

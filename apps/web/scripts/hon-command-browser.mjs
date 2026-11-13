@@ -91,8 +91,8 @@ const draftWork = {
 const approval = (n, actionCode, hours) => ({ id: id(n), actionCode, status: 'AWAITING_APPROVAL', requestedByPrincipalId: id(60), effectiveAuthorityMode: 'CONFIRM', policyVersion: 1, approvalExpiresAt: iso(hours + 48), createdAt: iso(hours) });
 
 // Ask HON conversation fixtures. Default: provider route not activated, so HON cannot answer (the real state today).
-const hon = { reply: false, conversations: [], turns: new Map(), queue: [], posts: [], held: null, readinessReads: 0, groups: new Map(), targets: { step: null, gate: null, reads: [] } };
-const honReadiness = () => ({ contract: true, providerRoute: hon.reply, entitlement: true, authorization: true, availableAgentKeys: hon.reply ? ['marcus', 'kai', 'chad'] : [], honReply: hon.reply, businessPerformance: false, asOf: iso(0) });
+const hon = { reply: false, claire: false, conversations: [], turns: new Map(), queue: [], posts: [], held: null, readinessReads: 0, groups: new Map(), targets: { step: null, gate: null, reads: [] } };
+const honReadiness = () => ({ contract: true, providerRoute: hon.reply, entitlement: true, authorization: true, availableAgentKeys: hon.reply ? ['marcus', 'kai', 'chad'] : [], honReply: hon.reply, businessPerformance: hon.reply && hon.claire, asOf: iso(0) });
 // C3a: each specialist's own target list (synthetic), and the grouped confirmations by HON answer.
 const honCampaigns = () => [['Spring trial week', 'ACTIVE'], ['Summer camp', 'DRAFT'], ['Old open house', 'ARCHIVED']].map(([name, status], n) => ({ id: id(720 + n), code: `C${n}`, name, goal: 'More trials', offerLabel: '',
   channel: 'EMAIL', startsAt: iso(-100), endsAt: iso(100), plannedBudgetMinor: 0, currency: 'USD', version: 3, status, createdAt: iso(-200), updatedAt: iso(-10), planningOnly: true }));
@@ -135,6 +135,7 @@ async function honApi(route, path, method, prefix) {
   if (step === 'timeout') return json(route, 503, { code: 'HON_CONVERSATION_TIMEOUT' });
   if (step === 'paused') return json(route, 403, { code: 'HON_AI_SPEND_REFUSED', reason: 'AI_SPEND_PAUSED' });
   if (step === 'notConfirmable') return json(route, 400, { code: 'HON_SUGGESTION_NOT_CONFIRMABLE' });
+  if (step === 'notSummarizable') return json(route, 400, { code: 'HON_GROUP_NOT_SUMMARIZABLE' });
   if (step === 'holdSession') { await new Promise((done) => { hon.held = done; }); return json(route, 401, { code: 'SIGN_IN_REQUIRED' }); }
   if (step === 'hold') await new Promise((done) => { hon.held = done; });
   // Idempotent replay: the same key returns the first result.
@@ -150,6 +151,17 @@ async function honApi(route, path, method, prefix) {
   const c = turn && hon.conversations.find((x) => x.id === turn[1]);
   if (!c) return json(route, 404, { code: 'HON_CONVERSATION_NOT_FOUND' });
   const ask = JSON.parse(body); const turnId = id(honSeq += 1);
+  if (ask.delegation?.agentKey === 'claire') {
+    // K2: Claire's read-only Business Performance analysis. One detailed answer from aggregate metrics; nothing is drafted.
+    const text = 'Recorded facts: trial conversion is 40% over the last 30 days and 2 inquiries are unanswered. Claire’s view: answer the inquiries first, then book trial follow-ups.';
+    const detail = replyDetail('DETAILED');
+    c.turns.push({ turnId, role: 'HUMAN', text: ask.text, createdAt: iso(0), status: 'COMPLETED', reason: null, references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null });
+    c.turns.push({ turnId, role: 'claire', text, createdAt: iso(0), status: 'COMPLETED', reason: null, references: { workItemId: id(honSeq += 1), actionRequestId: null, invocationId: id(honSeq += 1) }, replyDetail: detail });
+    c.turnCount += 1; c.status = 'COMPLETED';
+    const receipt = { turnId, conversationId: c.id, status: 'COMPLETED', reason: null, delegatedAgentKeys: ['claire'], actionRequestIds: [], workItemIds: [c.turns.at(-1).references.workItemId], invocationId: c.turns.at(-1).references.invocationId, reply: text, replyDetail: detail };
+    hon.turns.set(headers['idempotency-key'], receipt);
+    return json(route, 200, { data: receipt });
+  }
   if (ask.delegation) {
     // A confirmed suggestion: the specialist records a draft that waits for approval. Nothing is sent or published.
     const agent = ask.delegation.agentKey; const actionRequestId = id(honSeq += 1); const workItemId = id(honSeq += 1); const invocationId = id(honSeq += 1);
@@ -165,9 +177,14 @@ async function honApi(route, path, method, prefix) {
     hon.turns.set(headers['idempotency-key'], receipt);
     return json(route, 200, { data: receipt });
   }
+  // C3b: a summary is a fresh question about this human's own finished group in this conversation.
+  if (ask.summarizeTurnId) {
+    const g = hon.groups.get(c.id)?.get(ask.summarizeTurnId);
+    if (!g || ask.continueTurnId || !['COMPLETED', 'FAILED', 'PARTIAL'].includes(groupStatus(g.members.map((m) => m.status)))) return json(route, 400, { code: 'HON_GROUP_NOT_SUMMARIZABLE' });
+  }
   const long = /long/i.test(ask.text);
   const suggest = /saturday/i.test(ask.text) ? ['marcus', 'chad', 'kai'] : [];
-  const text = ask.continueTurnId ? 'Second part: book the two trial follow-ups for Tuesday and confirm the testing date with parents.'
+  const text = ask.summarizeTurnId ? 'Summary: Marcus recorded a Saturday trial post draft that a human approved. Next, share it with parents this week.' : ask.continueTurnId ? 'Second part: book the two trial follow-ups for Tuesday and confirm the testing date with parents.'
     : long ? 'Here is a detailed plan for this week. First, follow up the three new leads from the weekend…' : 'You have 3 new leads in the last 24 hours and 2 trial appointments tomorrow. I suggest following up the leads first.';
   const detail = ask.continueTurnId ? replyDetail('DETAILED', { step: 2, continuesTurnId: ask.continueTurnId }) : replyDetail(ask.replyMode ?? 'STANDARD', long ? { truncated: true, canContinue: true } : { suggestions: suggest });
   c.turns.push({ turnId, role: 'HUMAN', text: ask.text, createdAt: iso(0), status: 'COMPLETED', reason: null, references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null });
@@ -227,6 +244,8 @@ async function api(route) {
     durableHqWork: { availability: 'UNAVAILABLE', state: 'NO_RECORDED_WORK', reason: 'No durable HQ executive work is recorded or active in HQ-1.' } } } });
   if (path === '/api/v1/hq/schools' || path.endsWith('/ownership') || path === '/api/v1/hq/school-ownership/primary-owner') { const answered = await ownershipApiRoute(route, path, method); if (answered !== null) return answered; }
   if (path.startsWith('/api/v1/hq/ai/')) { const answered = await aiControlApiRoute(route, path, method, url); if (answered !== null) return answered; }
+  if (path.startsWith('/api/v1/hq/saas/trials/')) { const answered = await trialsApiRoute(route, path, method, url); if (answered !== null) return answered; }
+  if (path === '/api/v1/hq/saas/creative-credits' || path.startsWith('/api/v1/hq/saas/creative-credits/')) { const answered = await creditsApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith('/api/v1/hq/saas/')) { const answered = await hqAccessApi(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith('/api/v1/marketing/campaigns')) { const answered = await marketingApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith(`${prefix}/schedule/sessions`)) { const answered = await rosterApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
@@ -715,6 +734,245 @@ const ownView = (schoolId) => { const primary = own.primary.get(schoolId) ?? nul
   return { owners, primaryOwnerGrantId: primary, notices: ownNotices(schoolId), asOf: '2026-11-08T12:30:00.000Z' }; };
 // HQ AI costs and safety (S4-c/d/e, synthetic). Pauses, lost calls and settlements live here; replies, one per POST:
 // 'ok', 'unknown' (503, nothing changed), 'active' (422 AI_SPEND_PAUSE_ALREADY_ACTIVE).
+// ---------- HQ free-trial governance ----------
+const tgId = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const tgTerms = { allowedDurationsDays: [14, 30], allowedCapabilityProfiles: ['CORE', 'COMPLETE'], allowedEligibilityCodes: ['NEW_ORGANIZATIONS_ONLY'], allowedLinkModes: ['PRIVATE_INVITATION'],
+  maxEnrollmentCapacity: 50, maxEnrollmentWindowDays: 90, maxPublishedCampaigns: 3, maxTotalEnrollmentCapacity: 120, termsReference: 'hon-trial-terms/v1', promotionalLimits: null };
+const tgDef = (over = {}) => ({ name: 'Spring pilot schools', durationDays: 30, capabilityProfile: 'COMPLETE', eligibility: 'NEW_ORGANIZATIONS_ONLY', linkMode: 'PRIVATE_INVITATION',
+  enrollmentOpensAt: '2026-11-15T00:00:00.000Z', enrollmentClosesAt: '2026-12-15T00:00:00.000Z', maximumEnrollments: 20, termsReference: 'hon-trial-terms/v1', promotionalBudget: null, ...over });
+const tgActor = tgId(9);
+const tgx = { reads: [], posts: [], denied: false, other: 0, unknownOnce: false, byKey: new Map(), next: 100, policies: [], decisions: [], versions: [], publications: [] };
+function resetTrials(over = {}) {
+  Object.assign(tgx, { reads: [], posts: [], denied: false, other: 0, unknownOnce: false, byKey: new Map(), next: 100,
+    policies: [{ policyId: tgId(11), version: 2, status: 'PROPOSED', terms: tgTerms, reason: 'Owner-approved pilot trial rules', actorPrincipalId: tgActor, recordedAt: '2026-11-02T10:00:00.000Z' },
+      { policyId: tgId(10), version: 1, status: 'PROPOSED', terms: { ...tgTerms, allowedDurationsDays: [14] }, reason: 'First draft of the trial rules', actorPrincipalId: tgActor, recordedAt: '2026-11-01T10:00:00.000Z' }],
+    decisions: [{ decisionId: tgId(20), revision: 1, policyId: tgId(11), decision: 'APPROVED', validFrom: '2026-11-01T00:00:00.000Z', validUntil: '2027-02-01T00:00:00.000Z',
+      reason: 'Approved for the pilot window', actorPrincipalId: tgActor, recordedAt: '2026-11-03T10:00:00.000Z' }],
+    versions: [
+      { versionId: tgId(40), campaignId: tgId(30), version: 1, definition: tgDef(), reason: 'Draft for the first pilot cohort', actorPrincipalId: tgActor, recordedAt: '2026-11-04T10:00:00.000Z' },
+      { versionId: tgId(41), campaignId: tgId(30), version: 2, definition: tgDef({ maximumEnrollments: 60 }), reason: 'Larger cohort requested by HQ', actorPrincipalId: tgActor, recordedAt: '2026-11-05T10:00:00.000Z' },
+      { versionId: tgId(42), campaignId: tgId(31), version: 1, definition: tgDef({ name: 'Founder schools', capabilityProfile: 'CORE', durationDays: 14 }), reason: 'Founder cohort draft for review',
+        actorPrincipalId: tgActor, recordedAt: '2026-11-03T12:00:00.000Z' }],
+    publications: [{ publicationId: tgId(50), campaignId: tgId(30), revision: 1, kind: 'PUBLISHED', versionId: tgId(40), policyDecisionId: tgId(20), previewDigest: 'a'.repeat(64),
+      reason: 'Definition recorded for the pilot', actorPrincipalId: tgActor, recordedAt: '2026-11-04T12:00:00.000Z', activationAvailable: false }], ...over });
+}
+resetTrials();
+const tgStamp = () => new Date(Date.UTC(2026, 10, 9, 6, 0, tgx.next % 60)).toISOString();
+function trialsGovernance() {
+  return { scope: 'CUSTOMER_TRIAL_GOVERNANCE_ONLY', program: { status: 'INACTIVE', signupEnabled: false, enrollmentEnabled: false, promotionalIssuanceEnabled: false },
+    policyVersions: [...tgx.policies].sort((x, y) => y.version - x.version), policyDecisions: [...tgx.decisions].sort((x, y) => y.revision - x.revision),
+    campaignVersions: tgx.versions, publications: tgx.publications, limit: 100, hasMore: { policyVersions: false, policyDecisions: false, campaignVersions: false, publications: false },
+    existingPrograms: { paidAccess: 'INACTIVE', aiCredits: 'INACTIVE', payments: 'TEST_MODE' }, asOf: '2026-11-09T05:00:00.000Z' };
+}
+function trialsPreview(versionId) {
+  const v = tgx.versions.find((x) => x.versionId === versionId);
+  if (!v) return null;
+  const latest = Math.max(...tgx.versions.filter((x) => x.campaignId === v.campaignId).map((x) => x.version));
+  const pubs = tgx.publications.filter((x) => x.campaignId === v.campaignId), decision = [...tgx.decisions].sort((x, y) => y.revision - x.revision)[0];
+  const blockers = [];
+  if (v.version !== latest) blockers.push('CAMPAIGN_VERSION_STALE');
+  if (pubs.some((x) => x.versionId === versionId && x.kind === 'PUBLISHED')) blockers.push('CAMPAIGN_ALREADY_PUBLISHED');
+  if (decision?.decision !== 'APPROVED') blockers.push('TRIAL_POLICY_REQUIRED');
+  if (v.definition.maximumEnrollments > 50) blockers.push('CAPACITY_EXCEEDS_POLICY');
+  const digest = (versionId.slice(-2) + String(pubs.length)).padEnd(64, 'c').replace(/[^0-9a-f]/g, 'd');
+  return { campaignId: v.campaignId, versionId, version: v.version, expectedRevision: pubs.length, policyDecisionId: decision?.decisionId ?? null, policyId: decision?.policyId ?? null,
+    digest, ready: blockers.length === 0, blockers, activationAvailable: false, promotionalCreditsAvailable: false,
+    plannedExposure: { enrollments: v.definition.maximumEnrollments, promotionalCostMinor: 0, currency: 'USD' }, asOf: '2026-11-09T05:01:00.000Z' };
+}
+const TG_COMMANDS = { 'policy-versions': 'saas-trial-policy-propose', 'policy-decisions': 'saas-trial-policy-decide', 'campaign-versions': 'saas-trial-campaign-draft',
+  publish: 'saas-trial-campaign-publish', withdraw: 'saas-trial-campaign-withdraw' };
+async function trialsApiRoute(route, path, method, url) {
+  const request = route.request(), headers = request.headers();
+  const tail = path.slice('/api/v1/hq/saas/trials/'.length);
+  if (method === 'GET') {
+    if (url.search || Object.keys(headers).some((k) => k.startsWith('x-hon-') || k === 'idempotency-key')) { tgx.other++; return json(route, 400, { code: 'SAAS_INVALID_REQUEST' }); }
+    if (tgx.denied) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+    tgx.reads.push(tail);
+    if (tail === 'governance') return json(route, 200, { data: trialsGovernance() });
+    const m = /^campaign-versions\/([0-9a-f-]{36})\/publication-preview$/.exec(tail);
+    if (m) { const p = trialsPreview(m[1]); return p ? json(route, 200, { data: p }) : json(route, 404, { code: 'SAAS_UNAVAILABLE' }); }
+    return null;
+  }
+  const c = /^campaigns\/([0-9a-f-]{36})\/(publish|withdraw)$/.exec(tail), name = c ? c[2] : tail, command = TG_COMMANDS[name];
+  const key = headers['idempotency-key'];
+  if (method !== 'POST' || !command || headers['x-hon-human-command'] !== command || !/^[0-9a-f-]{36}$/.test(key ?? '') || !/^application\/json/.test(headers['content-type'] ?? '')
+    || Object.keys(headers).some((k) => k.startsWith('x-hon-') && k !== 'x-hon-human-command')) { tgx.other++; return json(route, 400, { code: 'SAAS_INVALID_REQUEST' }); }
+  const body = JSON.parse(request.postData() ?? 'null');
+  tgx.posts.push({ name, command, key, body, campaignId: c?.[1] ?? null });
+  if (tgx.byKey.has(key)) return json(route, 200, { data: { ...tgx.byKey.get(key), replayed: true } });
+  let receipt;
+  const id = tgId(tgx.next++), at = tgStamp();
+  if (name === 'policy-versions') {
+    if (body.expectedVersion !== Math.max(...tgx.policies.map((x) => x.version))) return json(route, 409, { code: 'SAAS_VERSION_CONFLICT' });
+    const made = { policyId: id, version: body.expectedVersion + 1, status: 'PROPOSED', terms: body.terms, reason: body.reason, actorPrincipalId: tgActor, recordedAt: at };
+    tgx.policies.push(made); receipt = { policyVersion: made };
+  } else if (name === 'policy-decisions') {
+    const prior = [...tgx.decisions].sort((x, y) => y.revision - x.revision)[0];
+    if (body.expectedRevision !== (prior?.revision ?? 0)) return json(route, 409, { code: 'SAAS_VERSION_CONFLICT' });
+    if (body.decision === 'APPROVED' && body.policyId !== [...tgx.policies].sort((x, y) => y.version - x.version)[0].policyId) return json(route, 409, { code: 'SAAS_TRIAL_POLICY_STALE' });
+    const made = { decisionId: id, revision: body.expectedRevision + 1, policyId: body.policyId ?? prior.policyId, decision: body.decision, validFrom: body.validFrom ?? prior.validFrom,
+      validUntil: body.validUntil ?? prior.validUntil, reason: body.reason, actorPrincipalId: tgActor, recordedAt: at };
+    tgx.decisions.push(made); receipt = { decision: made };
+  } else if (name === 'campaign-versions') {
+    const campaignId = body.campaignId ?? tgId(tgx.next++);
+    const latest = Math.max(0, ...tgx.versions.filter((x) => x.campaignId === campaignId).map((x) => x.version));
+    if (body.expectedVersion !== latest) return json(route, 409, { code: 'SAAS_VERSION_CONFLICT' });
+    const made = { versionId: id, campaignId, version: latest + 1, definition: body.definition, reason: body.reason, actorPrincipalId: tgActor, recordedAt: at };
+    tgx.versions.push(made); receipt = { campaignVersion: made };
+  } else {
+    const pubs = tgx.publications.filter((x) => x.campaignId === c[1]), prior = pubs.sort((x, y) => y.revision - x.revision)[0];
+    if (body.expectedRevision !== (prior?.revision ?? 0)) return json(route, 409, { code: 'SAAS_VERSION_CONFLICT' });
+    if (name === 'publish') {
+      const p = trialsPreview(body.versionId);
+      if (!p || p.digest !== body.previewDigest) return json(route, 409, { code: 'SAAS_TRIAL_PREVIEW_STALE' });
+      if (!p.ready) return json(route, 422, { code: 'SAAS_TRIAL_PUBLICATION_BLOCKED' });
+    } else if (prior?.kind !== 'PUBLISHED') return json(route, 422, { code: 'SAAS_TRIAL_PUBLICATION_BLOCKED' });
+    const made = { publicationId: id, campaignId: c[1], revision: body.expectedRevision + 1, kind: name === 'publish' ? 'PUBLISHED' : 'WITHDRAWN',
+      versionId: name === 'publish' ? body.versionId : prior.versionId, policyDecisionId: [...tgx.decisions].sort((x, y) => y.revision - x.revision)[0].decisionId,
+      previewDigest: name === 'publish' ? body.previewDigest : null, reason: body.reason, actorPrincipalId: tgActor, recordedAt: at, activationAvailable: false };
+    tgx.publications.push(made); receipt = { publication: made };
+  }
+  tgx.byKey.set(key, receipt);
+  // An unknown outcome: the write happened, the answer was lost. Try again with the same key gets the first receipt.
+  if (tgx.unknownOnce) { tgx.unknownOnce = false; return json(route, 503, { code: 'SAAS_OUTCOME_UNKNOWN' }); }
+  return json(route, 200, { data: { ...receipt, replayed: false } });
+}
+// ---------- HQ creative credits (read only, synthetic) ----------
+const ccx = { reads: [], denied: false, other: 0, posts: [], replies: [], byKey: new Map(), state: new Map() };
+const ccId = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const ccPackages = [['STARTER', 3000, 0, 3000], ['GROWTH', 6000, 1200, 6000], ['CREATOR', 12000, 4800, 12000]].map(([packageCode, base, bonus, price]) => ({
+  packageCode, packageVersion: 1, baseCredits: base, bonusCredits: bonus, totalCredits: base + bonus, priceMinor: price, currency: 'usd' }));
+const ccRates = { rateVersionId: ccId(70), rateVersion: 1, termsReference: 'hon-creative-rates/v1', publishedAt: '2026-11-04T10:00:00.000Z',
+  rates: [{ operationCode: 'image.standard', mediaKind: 'IMAGE', displayName: 'Standard image', billingUnit: 'IMAGE', creditsPerUnit: 20, maxUnitsPerRequest: 4, rateBasis: 'PROVISIONAL', costEvidenceId: null },
+    { operationCode: 'video.short', mediaKind: 'VIDEO', displayName: 'Short video clip', billingUnit: 'VIDEO_SECOND', creditsPerUnit: 60, maxUnitsPerRequest: 10, rateBasis: 'PROVISIONAL', costEvidenceId: null }] };
+const ccOrg = ccId(1), ccNorth = ccId(2), ccSouth = ccId(3), ccLot = ccId(60), ccAdj = ccId(61);
+const ccKinds = (promo) => ['INCLUDED_MONTHLY', 'ADJUSTMENT', 'PROMOTIONAL', 'PURCHASED_TOPUP'].map((kind) => ({ kind, grantedCredits: 0, availableCredits: 0, heldCredits: 0, consumedCredits: 0,
+  expiredCredits: 0, debitedCredits: 0, ...(kind === 'PROMOTIONAL' ? promo : {}) }));
+const ccRes = (over) => ({ schoolId: ccNorth, organizationId: ccOrg, operationCode: 'image.standard', mediaKind: 'IMAGE', rateBasis: 'PROVISIONAL', creditsPerUnit: 20,
+  providerId: 'synthetic-provider', modelCode: 'synthetic-image-1', resolutionReference: null, version: 2, ...over });
+function ccWallet(schoolId) {
+  const empty = schoolId === ccSouth;
+  return { schoolId, organizationId: ccOrg, walletVersion: empty ? null : 3, program: { status: 'INACTIVE', monthlyIncludedCredits: 12000 },
+    eligibility: { eligible: false, reason: 'PROGRAM_INACTIVE', window: null },
+    balance: empty ? { availableCredits: 0, heldCredits: 0, byKind: ccKinds({}) } : { availableCredits: 440, heldCredits: 20, byKind: ccKinds({ grantedCredits: 500, availableCredits: 440, heldCredits: 20, consumedCredits: 40 }) },
+    lots: empty ? [] : [{ lotId: ccLot, kind: 'PROMOTIONAL', credits: 500, baseCredits: null, bonusCredits: null, window: null, purchaseId: null, adjustmentId: ccAdj, expiresAt: null, expired: false,
+      availableCredits: 440, heldCredits: 20, consumedCredits: 40, expiredCredits: 0, debitedCredits: 0, grantedAt: '2026-11-05T10:00:00.000Z' }],
+    history: empty ? [] : [{ entryId: ccId(80), lotId: ccLot, lotKind: 'PROMOTIONAL', entryKind: 'GRANT', credits: 500, reservationId: null, adjustmentId: ccAdj, occurredAt: '2026-11-05T10:00:00.000Z' }],
+    reservations: empty ? [] : [
+      ccRes({ reservationId: ccId(62), units: 2, reservedCredits: 40, status: 'FINALIZED', statusReason: 'PROVIDER_SUCCEEDED', finalUnits: 2, finalCredits: 40, lots: [{ lotId: ccLot, reservedCredits: 40 }],
+        reservedAt: '2026-11-06T10:00:00.000Z', settledAt: '2026-11-06T10:01:00.000Z', costStatus: 'RECORDED', providerCostMicrounits: 80000, costReference: 'synthetic-receipt-1',
+        costRecordedAt: '2026-11-06T10:01:00.000Z', usageId: ccId(64) }),
+      ccRes({ reservationId: ccId(63), units: 1, reservedCredits: 20, status: 'OUTCOME_UNKNOWN', statusReason: 'PROVIDER_OUTCOME_UNKNOWN', finalUnits: null, finalCredits: null, lots: [{ lotId: ccLot, reservedCredits: 20 }],
+        reservedAt: '2026-11-07T10:00:00.000Z', settledAt: null, costStatus: 'PENDING', providerCostMicrounits: null, costReference: null, costRecordedAt: null, usageId: null })],
+    adjustments: empty ? [] : [{ adjustmentId: ccAdj, kind: 'PROMOTIONAL_GRANT', credits: 500, lotId: ccLot, reasonCode: 'PROMOTION', occurredAt: '2026-11-05T10:00:00.000Z',
+      note: 'Synthetic launch promotion', actorPrincipalId: ccId(9) }],
+    purchases: empty ? [] : [{ purchaseId: ccId(65), schoolId, packageCode: 'STARTER', packageVersion: 1, baseCredits: 3000, bonusCredits: 0, priceMinor: 3000, currency: 'usd',
+      status: 'PENDING_PAYMENT', statusReason: 'AWAITING_VERIFIED_PAYMENT', version: 1, lotId: null, payment: 'NOT_CONNECTED', createdAt: '2026-11-08T09:00:00.000Z', fulfilledAt: null,
+      paymentProvider: null, providerPaymentRef: null, paidAmountMinor: null, paidCurrency: null }],
+    rates: ccRates, packages: ccPackages, agentConversationsDeductCredits: false, paymentsActive: false,
+    providerExpense: { actualProviderCostMicrounits: empty ? 0 : 80000, finalizedProviderCostMicrounits: empty ? 0 : 80000, failedOrNotChargedProviderCostMicrounits: 0, consumedCredits: empty ? 0 : 40,
+      unknownCostGenerations: 0, pendingCostGenerations: empty ? 0 : 1, spendClass: 'CREATIVE_MEDIA', generations: { finalized: empty ? 0 : 1, released: 0, reserved: 0, outcomeUnknown: empty ? 0 : 1 } } };
+}
+// Derived exactly as the database does: balances from lots, expense from generations, list rows from wallets.
+const ccLotKinds = ['INCLUDED_MONTHLY', 'ADJUSTMENT', 'PROMOTIONAL', 'PURCHASED_TOPUP'];
+function ccDerive(w) {
+  const byKind = ccLotKinds.map((kind) => { const lots = w.lots.filter((l) => l.kind === kind); const sum = (k) => lots.reduce((n, l) => n + l[k], 0);
+    return { kind, grantedCredits: sum('credits'), availableCredits: sum('availableCredits'), heldCredits: sum('heldCredits'), consumedCredits: sum('consumedCredits'),
+      expiredCredits: sum('expiredCredits'), debitedCredits: sum('debitedCredits') }; });
+  w.balance = { availableCredits: byKind.reduce((n, k) => n + k.availableCredits, 0), heldCredits: byKind.reduce((n, k) => n + k.heldCredits, 0), byKind };
+  const rec = (pred) => w.reservations.filter((r) => pred(r) && r.costStatus === 'RECORDED').reduce((n, r) => n + r.providerCostMicrounits, 0);
+  const count = (pred) => w.reservations.filter(pred).length;
+  w.providerExpense = { actualProviderCostMicrounits: rec(() => true), finalizedProviderCostMicrounits: rec((r) => r.status === 'FINALIZED'),
+    failedOrNotChargedProviderCostMicrounits: rec((r) => r.status === 'RELEASED'), consumedCredits: w.reservations.reduce((n, r) => n + (r.finalCredits ?? 0), 0),
+    unknownCostGenerations: count((r) => r.costStatus === 'UNKNOWN'), pendingCostGenerations: count((r) => r.costStatus === 'PENDING'), spendClass: 'CREATIVE_MEDIA',
+    generations: { finalized: count((r) => r.status === 'FINALIZED'), released: count((r) => r.status === 'RELEASED'), reserved: count((r) => r.status === 'RESERVED'),
+      outcomeUnknown: count((r) => r.status === 'OUTCOME_UNKNOWN') } };
+  return w;
+}
+const ccReset = () => { ccx.state = new Map([[ccNorth, ccDerive(ccWallet(ccNorth))], [ccSouth, ccDerive(ccWallet(ccSouth))]]); ccx.byKey = new Map(); ccx.posts = []; ccx.replies = []; };
+const ccNames = { [ccNorth]: 'Synthetic Dojo North', [ccSouth]: 'Synthetic Dojo South' };
+const ccList = () => ({ program: { status: 'INACTIVE', version: 1, monthlyIncludedCredits: 12000 }, rates: ccRates, packages: ccPackages,
+  wallets: [...ccx.state.values()].map((w) => ({ schoolId: w.schoolId, schoolName: ccNames[w.schoolId], organizationId: ccOrg, organizationName: 'Synthetic Martial Arts LLC',
+    availableCredits: w.balance.availableCredits, heldCredits: w.balance.heldCredits, consumedCredits: w.providerExpense.consumedCredits,
+    actualProviderCostMicrounits: w.providerExpense.actualProviderCostMicrounits, outcomeUnknown: w.providerExpense.generations.outcomeUnknown,
+    unknownCostGenerations: w.providerExpense.unknownCostGenerations, updatedAt: '2026-11-08T12:00:00.000Z' })) });
+const CC_COMMAND = { grants: 'saas-creative-grant', debits: 'saas-creative-debit', resolve: 'saas-creative-resolve', 'provider-cost': 'saas-creative-cost-record' };
+let ccSeq = 100;
+function ccCommand(kind, target, body) {
+  const at = '2026-11-09T06:30:00.000Z';
+  if (kind === 'grants') {
+    const w = ccx.state.get(target); if (!w) return [404, { code: 'SAAS_UNAVAILABLE' }];
+    const adjustmentId = ccId(ccSeq++), lotId = ccId(ccSeq++);
+    const lot = { lotId, kind: body.kind, credits: body.credits, baseCredits: null, bonusCredits: null, window: null, purchaseId: null, adjustmentId, expiresAt: null, expired: false,
+      availableCredits: body.credits, heldCredits: 0, consumedCredits: 0, expiredCredits: 0, debitedCredits: 0, grantedAt: at };
+    w.lots.push(lot); w.walletVersion = (w.walletVersion ?? 0) + 1;
+    w.adjustments.unshift({ adjustmentId, kind: body.kind === 'PROMOTIONAL' ? 'PROMOTIONAL_GRANT' : 'ADJUSTMENT_GRANT', credits: body.credits, lotId, reasonCode: body.reasonCode, occurredAt: at, note: body.note, actorPrincipalId: ccId(9) });
+    w.history.unshift({ entryId: ccId(ccSeq++), lotId, lotKind: body.kind, entryKind: 'GRANT', credits: body.credits, reservationId: null, adjustmentId, occurredAt: at });
+    ccDerive(w);
+    return [200, { data: { adjustment: { adjustmentId, schoolId: w.schoolId, lot: { ...lot }, reasonCode: body.reasonCode, note: body.note }, balance: w.balance, replayed: false } }];
+  }
+  const w = [...ccx.state.values()].find((x) => x.lots.some((l) => l.lotId === target) || x.reservations.some((r) => r.reservationId === target));
+  if (!w) return [404, { code: 'SAAS_UNAVAILABLE' }];
+  if (kind === 'debits') {
+    const lot = w.lots.find((l) => l.lotId === target);
+    if (lot.kind === 'PURCHASED_TOPUP') return [422, { code: 'SAAS_CREATIVE_PURCHASED_LOT_PROTECTED' }];
+    if (body.credits > lot.availableCredits) return [422, { code: 'SAAS_CREATIVE_DEBIT_EXCEEDS_AVAILABLE' }];
+    lot.availableCredits -= body.credits; lot.debitedCredits += body.credits;
+    const adjustmentId = ccId(ccSeq++);
+    w.adjustments.unshift({ adjustmentId, kind: 'CORRECTION_DEBIT', credits: body.credits, lotId: lot.lotId, reasonCode: body.reasonCode, occurredAt: at, note: body.note, actorPrincipalId: ccId(9) });
+    w.history.unshift({ entryId: ccId(ccSeq++), lotId: lot.lotId, lotKind: lot.kind, entryKind: 'DEBIT', credits: body.credits, reservationId: null, adjustmentId, occurredAt: at });
+    ccDerive(w);
+    return [200, { data: { adjustment: { adjustmentId, schoolId: w.schoolId, lot: { ...lot }, credits: body.credits, reasonCode: body.reasonCode, note: body.note }, balance: w.balance, replayed: false } }];
+  }
+  const r = w.reservations.find((x) => x.reservationId === target);
+  if (r.version !== body.expectedVersion) return [409, { code: 'SAAS_VERSION_CONFLICT' }];
+  if (kind === 'resolve') {
+    if (r.status !== 'OUTCOME_UNKNOWN' && r.status !== 'RESERVED') return [409, { code: 'SAAS_TRANSITION_NOT_ALLOWED' }];
+    const lot = w.lots.find((l) => l.lotId === r.lots[0].lotId), final = body.resolution === 'SUCCEEDED' ? body.finalUnits * r.creditsPerUnit : 0;
+    lot.heldCredits -= r.reservedCredits; lot.consumedCredits += final; lot.availableCredits += r.reservedCredits - final;
+    Object.assign(r, { status: body.resolution === 'SUCCEEDED' ? 'FINALIZED' : 'RELEASED', statusReason: body.resolution === 'SUCCEEDED' ? 'HQ_RESOLVED_SUCCEEDED' : 'HQ_RESOLVED_NOT_CHARGED',
+      version: r.version + 1, finalUnits: body.finalUnits, finalCredits: body.resolution === 'SUCCEEDED' ? final : null, settledAt: at, resolutionReference: body.evidenceReference,
+      costStatus: body.providerCostMicrounits === null ? 'UNKNOWN' : 'RECORDED', providerCostMicrounits: body.providerCostMicrounits,
+      costReference: body.providerCostMicrounits === null ? null : body.evidenceReference, costRecordedAt: body.providerCostMicrounits === null ? null : at,
+      usageId: body.resolution === 'SUCCEEDED' || body.providerCostMicrounits > 0 ? ccId(ccSeq++) : null });
+    ccDerive(w);
+    return [200, { data: { reservation: { ...r }, replayed: false } }];
+  }
+  if (r.status !== 'RELEASED' || r.costStatus !== 'UNKNOWN') return [409, { code: 'SAAS_TRANSITION_NOT_ALLOWED' }];
+  Object.assign(r, { version: r.version + 1, costStatus: 'RECORDED', providerCostMicrounits: body.providerCostMicrounits, costReference: body.evidenceReference, costRecordedAt: at,
+    usageId: body.providerCostMicrounits > 0 ? ccId(ccSeq++) : null });
+  ccDerive(w);
+  return [200, { data: { reservation: { ...r }, outcome: 'APPLIED', replayed: false } }];
+}
+async function creditsApiRoute(route, path, method, url) {
+  const headers = route.request().headers();
+  if (method === 'POST') {
+    // HQ-owner corrections only: one marker per path, a key, JSON, no query. Replies queue: 'ok' (default), 'unknown' (503, nothing changed), 'denied' (403).
+    const m = /^\/api\/v1\/hq\/saas\/creative-credits\/(?:schools|lots|reservations)\/([0-9a-f-]{36})\/(grants|debits|resolve|provider-cost)$/.exec(path);
+    const key = headers['idempotency-key'] ?? '';
+    if (!m || url.search || headers['x-hon-human-command'] !== CC_COMMAND[m[2]] || !/^[0-9a-f-]{36}$/.test(key) || !/^application\/json/.test(headers['content-type'] ?? '')
+      || Object.keys(headers).some((k) => k.startsWith('x-hon-') && k !== 'x-hon-human-command')) { ccx.other++; return json(route, 400, { code: 'INVALID_SAAS_INPUT' }); }
+    const body = JSON.parse(route.request().postData() ?? 'null');
+    ccx.posts.push({ kind: m[2], target: m[1], key, body });
+    if (ccx.byKey.has(key)) { const [status, answer] = ccx.byKey.get(key); return json(route, status, status === 200 ? { data: { ...answer.data, replayed: true } } : answer); }
+    let reply = ccx.replies.shift() ?? 'ok';
+    // 'hold' answers only when the check calls ccx.release(), then as 'ok'.
+    if (reply === 'hold') { await new Promise((resolve) => { ccx.release = resolve; }); reply = 'ok'; }
+    if (reply === 'unknown') return json(route, 503, { code: 'SAAS_UNAVAILABLE' });
+    if (reply === 'denied') return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+    const answer = ccCommand(m[2], m[1], body);
+    if (answer[0] === 200) ccx.byKey.set(key, answer);
+    return json(route, answer[0], answer[1]);
+  }
+  // Reads: any write method other than the corrections, command marker, key or query is refused.
+  if (method !== 'GET' || url.search || Object.keys(headers).some((k) => k.startsWith('x-hon-') || k === 'idempotency-key')) { ccx.other++; return json(route, 400, { code: 'INVALID_SAAS_INPUT' }); }
+  if (ccx.denied) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+  ccx.reads.push(path.slice('/api/v1/hq/saas/creative-credits'.length) || '/');
+  if (path === '/api/v1/hq/saas/creative-credits') return json(route, 200, { data: ccList() });
+  const m = /^\/api\/v1\/hq\/saas\/creative-credits\/schools\/([0-9a-f-]{36})$/.exec(path);
+  if (m && ccx.state.has(m[1])) return json(route, 200, { data: ccx.state.get(m[1]) });
+  return null;
+}
 const aix = { pauses: [], open: [], resolved: [], posts: [], replies: [], byKey: new Map(), usage: [], reads: [], denied: false };
 const AIX_COMMAND = { 'spend-pauses': 'ai-spend-pause', resolve: 'ai-unknown-resolve', 'late-provider-expense': 'ai-late-provider-expense' };
 const aixZero = { providerReportedCostMicrounits: 0, estimatedWriteOffCostMicrounits: 0, entries: 0, writeOffEntries: 0, lateProviderCostMicrounits: 0, lateProviderExpenseEntries: 0, supersededWriteOffEstimateMicrounits: 0 };
@@ -1225,7 +1483,7 @@ await check('no unsupported capability presented as operational', async () => {
 });
 
 // ---------- Ask HON conversation ----------
-function resetHon(reply) { hon.reply = reply; hon.conversations = []; hon.turns = new Map(); hon.queue = []; hon.posts = []; hon.held = null; hon.readinessReads = 0; hon.groups = new Map(); hon.targets = { step: null, gate: null, reads: [] }; }
+function resetHon(reply, claire = false) { hon.reply = reply; hon.claire = claire; hon.conversations = []; hon.turns = new Map(); hon.queue = []; hon.posts = []; hon.held = null; hon.readinessReads = 0; hon.groups = new Map(); hon.targets = { step: null, gate: null, reads: [] }; }
 async function fullHon(viewport, nextTheme = 'modern') {
   theme = nextTheme; mode = 'ready';
   const ctx = await context(viewport); const page = await ctx.newPage();
@@ -1276,6 +1534,39 @@ for (const [name, viewport, mode_] of [['desktop-1440', { width: 1440, height: 9
     await ctx.close();
   });
 }
+
+await check('Ask Claire: one read-only Business Performance answer, offered only when readiness allows', async () => {
+  resetHon(true, false);
+  {
+    const { ctx, ask } = await fullHon({ width: 1440, height: 900 });
+    assert.equal(await ask.getByRole('radio', { name: /Claire/ }).count(), 0, 'no Claire choice without businessPerformance');
+    await ctx.close();
+  }
+  resetHon(true, true);
+  const { ctx, page, ask } = await fullHon({ width: 1440, height: 900 });
+  await ask.getByRole('radio', { name: 'Claire, Business Performance' }).check();
+  assert.ok(await ask.getByText(/She never drafts, sends or changes anything/).isVisible());
+  assert.equal(await ask.getByRole('radio', { name: 'Quick' }).isDisabled(), true);
+  const box = ask.getByRole('textbox', { name: 'Message Claire' });
+  await box.fill('How is the school doing this month?');
+  await ask.getByRole('button', { name: 'Send' }).click();
+  await ask.getByText(/Recorded facts: trial conversion is 40%/).waitFor();
+  assert.equal(hon.posts.length, 2, 'create then the Claire turn');
+  assert.deepEqual(JSON.parse(hon.posts[1].body), { text: 'How is the school doing this month?', delegation: { agentKey: 'claire' } });
+  assert.ok(await ask.locator('li[data-role="claire"]').getByText('Claire', { exact: true }).isVisible());
+  assert.equal(await ask.getByRole('button', { name: 'Continue this answer' }).count(), 0);
+  assert.equal(await ask.locator('li[data-role="claire"] a').count(), 0, 'no Action Center link: nothing was drafted');
+  // Back to HON: the next question is an ordinary HON turn with its mode.
+  await ask.getByRole('radio', { name: 'HON', exact: true }).check();
+  await askBox(ask).fill('Who should I follow up with today?');
+  await ask.getByRole('button', { name: 'Send' }).click();
+  await ask.getByText(/You have 3 new leads in the last 24 hours/).waitFor();
+  assert.deepEqual(JSON.parse(hon.posts[2].body), { text: 'Who should I follow up with today?', delegation: null, replyMode: 'STANDARD' });
+  await noOverflow(page, 'ask-claire-desktop-1440');
+  await axe(page, 'ask-claire-desktop-1440');
+  await shot(page, 'ask-claire-desktop-1440');
+  await ctx.close();
+});
 
 await check('Ask HON from the school shell corner on another staff page', async () => {
   resetHon(true);
@@ -1444,6 +1735,39 @@ await check('Ask HON suggestions: an unknown outcome keeps one exact retry and l
   const sends = hon.posts.filter((p) => JSON.parse(p.body).delegation);
   assert.equal(sends.length, 2); assert.equal(new Set(sends.map((p) => p.key)).size, 1); assert.equal(new Set(sends.map((p) => p.body)).size, 1);
   assert.equal(hon.groups.get(hon.conversations[0].id).get(sourceTurn()).members.length, 1, 'exactly one Marcus request exists');
+  await ctx.close();
+});
+
+await check('Ask HON group summary: Summarize with HON appears once the group is finished and sends a question naming that group', async () => {
+  const { ctx, page, ask } = await suggestedAnswer({ width: 1440, height: 900 });
+  await ask.getByRole('button', { name: 'Ask Marcus' }).click();
+  const form = ask.getByRole('form', { name: 'Ask Marcus' });
+  await form.getByLabel('Campaign').selectOption({ label: 'Spring trial week (active)' });
+  await form.getByLabel('What should Marcus draft?').fill('A Saturday trial post for parents');
+  await form.getByRole('button', { name: 'Send to Marcus' }).click();
+  await ask.getByText('Needs your review').waitFor();
+  assert.equal(await ask.getByRole('button', { name: 'Summarize with HON' }).count(), 0, 'not offered while a draft waits for review');
+  // A human approves the draft in Action Center; reopening the conversation reads the group again.
+  const source = sourceTurn();
+  hon.groups.get(hon.conversations[0].id).get(source).members[0].status = 'COMPLETED';
+  await ask.getByRole('button', { name: /How do I fill Saturday trials\?/ }).click();
+  await ask.getByRole('button', { name: 'Summarize with HON' }).waitFor();
+  assert.ok(await ask.getByText('Done', { exact: true }).isVisible());
+  await axe(page, 'ask-hon-group-summary-offer');
+  await shot(page, 'ask-hon-group-summary-offer', true);
+  hon.queue = ['notSummarizable'];
+  await ask.getByRole('button', { name: 'Summarize with HON' }).click();
+  await ask.getByText(/HON can’t summarize those specialists: their group changed/).waitFor();
+  assert.equal(await ask.getByRole('button', { name: 'Retry the same request' }).count(), 0, 'a refusal is not retried');
+  const posts = hon.posts.length;
+  await ask.getByRole('button', { name: 'Summarize with HON' }).click();
+  await ask.getByText(/^Summary: Marcus recorded/).waitFor();
+  assert.equal(hon.posts.length, posts + 1);
+  assert.deepEqual(lastBody(), { text: 'Summarize what the specialists I asked recorded, and what I should do next.', delegation: null, summarizeTurnId: source });
+  assert.notEqual(hon.posts.at(-1).key, hon.posts.at(-2).key, 'a fresh key after a definitive refusal');
+  await noOverflow(page, 'ask-hon-group-summary');
+  await axe(page, 'ask-hon-group-summary');
+  await shot(page, 'ask-hon-group-summary', true);
   await ctx.close();
 });
 
@@ -3385,6 +3709,348 @@ await check('AI Safety: leaving the tab hides pauses and calls; a refused read s
   await aiSafety(page).getByTestId('ai-pauses').getByText('does not include AI costs').waitFor();
   assert.equal(await aiSafety(page).getByTestId('unknown-row').count(), 0);
   assert.equal(await aiSafety(page).getByRole('button', { name: 'Pause AI spend' }).count(), 0);
+  await ctx.close();
+});
+
+const trialsPage = (page) => page.getByTestId('hq-trials');
+const tgOutcome = (page, kind) => trialsPage(page).locator(`[data-testid="trial-outcome"][data-kind="${kind}"]`);
+const TG_TEXT = { en: ['Free Trials', 'Spring pilot schools', 'Check publication readiness', 'It allows more schools than the rules permit.', 'Draft next version', 'Save draft',
+  'Publish version 3', 'Publish definition'],
+  ko: ['무료 체험', 'Spring pilot schools', '게시 준비 상태 확인', '규칙이 허용하는 것보다 많은 학교를 허용합니다.', '다음 버전 초안 작성', '초안 저장', '버전 3 게시', '정의 게시'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko']]) {
+  await check(`Free Trials ${nextTheme} ${language} ${name}: a blocked version, a smaller next draft, then publish it bound to its readiness check`, async () => {
+    resetTrials();
+    const [title, campaign, check, blocker, draftNext, saveDraft, publishOpen, publishConfirm] = TG_TEXT[language];
+    const { ctx, page } = await ownershipPage('/hq/revenue/trials', viewport, { nextTheme, language });
+    await trialsPage(page).getByTestId('trial-campaign').first().waitFor({ timeout: 20000 });
+    assert.equal(await trialsPage(page).locator('h1').innerText(), title);
+    assert.equal(await trialsPage(page).getByTestId('trial-rule-state').getAttribute('data-rule-state'), 'IN_FORCE');
+    await noOverflow(page, `trials-${nextTheme}-${language}-${name}`);
+    await axe(page, `trials-${nextTheme}-${language}-${name}`);
+    await shot(page, `trials-${nextTheme}-${language}-${name}`, true);
+    const spring = () => trialsPage(page).getByTestId('trial-campaign').filter({ hasText: campaign });
+    await spring().getByRole('button', { name: check }).click();
+    await spring().getByTestId('trial-readiness').getByText(blocker).waitFor();
+    assert.equal(await spring().getByRole('button', { name: publishOpen }).count(), 0, 'no publish while blocked');
+    await spring().getByRole('button', { name: draftNext }).click();
+    const draft = spring().locator('[data-testid="trial-form"][data-form="draft"]');
+    await draft.locator('input[name="maxEnrollments"]').fill('40');
+    await draft.locator('textarea[name="reason"]').fill('Smaller cohort within the rules');
+    await noOverflow(page, `trials-draft-${nextTheme}-${language}-${name}`);
+    await axe(page, `trials-draft-${nextTheme}-${language}-${name}`);
+    await shot(page, `trials-draft-${nextTheme}-${language}-${name}`, true);
+    await draft.getByRole('button', { name: saveDraft }).click();
+    await tgOutcome(page, 'DONE').waitFor();
+    await page.waitForFunction(() => document.querySelector('[data-testid="hq-trials"] [data-testid="trial-campaign"]')?.textContent?.includes('3'));
+    const drafted = tgx.posts.at(-1);
+    assert.deepEqual({ name: drafted.name, command: drafted.command, campaignId: drafted.body.campaignId, expectedVersion: drafted.body.expectedVersion, max: drafted.body.definition.maximumEnrollments },
+      { name: 'campaign-versions', command: 'saas-trial-campaign-draft', campaignId: tgId(30), expectedVersion: 2, max: 40 });
+    await spring().getByRole('button', { name: check }).click();
+    await spring().getByTestId('trial-readiness').waitFor();
+    await spring().getByRole('button', { name: publishOpen }).click();
+    const publish = spring().locator('[data-testid="trial-form"][data-form="publish"]');
+    await publish.locator('input[name="confirm"]').check();
+    await publish.locator('textarea[name="reason"]').fill('Publishing the smaller cohort');
+    await axe(page, `trials-publish-${nextTheme}-${language}-${name}`);
+    await shot(page, `trials-publish-${nextTheme}-${language}-${name}`, true);
+    await publish.getByRole('button', { name: publishConfirm }).click();
+    await tgOutcome(page, 'DONE').waitFor();
+    await trialsPage(page).locator('[data-testid="trial-campaign"][data-status="PUBLISHED"]').first().waitFor();
+    const published = tgx.posts.at(-1), preview = trialsPreview(published.body.versionId);
+    assert.equal(published.command, 'saas-trial-campaign-publish');
+    assert.equal(published.campaignId, tgId(30));
+    assert.equal(published.body.confirmation, 'PUBLISH_TRIAL_CAMPAIGN_DEFINITION_ONLY');
+    assert.equal(published.body.expectedRevision, 1);
+    assert.notEqual(published.key, drafted.key);
+    assert.ok(tgx.reads.filter((r) => r === 'governance').length >= 3, 'read again after each answer');
+    await noOverflow(page, `trials-published-${nextTheme}-${language}-${name}`);
+    await shot(page, `trials-published-${nextTheme}-${language}-${name}`, true);
+    assert.equal(preview.expectedRevision, 2, 'the publication was recorded');
+    assert.equal(tgx.other, 0, 'no malformed request');
+    await ctx.close();
+  });
+}
+await check('Free Trials: propose new rules, then approve the new version for a window with the confirmation box', async () => {
+  resetTrials();
+  const { ctx, page } = await ownershipPage('/hq/revenue/trials', { width: 1280, height: 900 });
+  await trialsPage(page).getByTestId('trial-campaign').first().waitFor({ timeout: 20000 });
+  await trialsPage(page).getByRole('button', { name: 'Propose new rules' }).click();
+  const propose = trialsPage(page).locator('[data-testid="trial-form"][data-form="propose"]');
+  await propose.locator('input[name="dur"][value="60"]').check();
+  await propose.locator('input[name="termsReference"]').fill('hon-trial-terms/v2');
+  await propose.locator('textarea[name="reason"]').fill('Allow a 60-day trial for larger schools');
+  await axe(page, 'trials-propose-form');
+  await shot(page, 'trials-propose-form', true);
+  await propose.getByRole('button', { name: 'Propose these rules' }).click();
+  await tgOutcome(page, 'DONE').getByText('The new rules version is recorded.').waitFor();
+  assert.deepEqual(tgx.posts.at(-1).body.terms.allowedDurationsDays, [14, 30, 60]);
+  assert.equal(tgx.posts.at(-1).body.expectedVersion, 2);
+  await trialsPage(page).getByRole('button', { name: 'Approve rules v3' }).click();
+  const approve = trialsPage(page).locator('[data-testid="trial-form"][data-form="approve"]');
+  await approve.locator('input[name="validFrom"]').fill('2026-11-09');
+  await approve.locator('input[name="validUntil"]').fill('2027-03-01');
+  await approve.locator('textarea[name="reason"]').fill('Approved for the spring pilot window');
+  // Without the confirmation box the browser does not send it.
+  await approve.getByRole('button', { name: 'Approve rules' }).click();
+  assert.equal(tgx.posts.length, 1);
+  await approve.locator('input[name="confirm"]').check();
+  await axe(page, 'trials-approve-form');
+  await approve.getByRole('button', { name: 'Approve rules' }).click();
+  await tgOutcome(page, 'DONE').getByText('The trial rules are approved.').waitFor();
+  const decided = tgx.posts.at(-1);
+  assert.deepEqual({ command: decided.command, decision: decided.body.decision, policyId: decided.body.policyId, expectedRevision: decided.body.expectedRevision,
+    validFrom: decided.body.validFrom, validUntil: decided.body.validUntil, confirmation: decided.body.confirmation },
+    { command: 'saas-trial-policy-decide', decision: 'APPROVED', policyId: tgx.policies.find((p) => p.version === 3).policyId, expectedRevision: 1,
+      validFrom: '2026-11-09T00:00:00.000Z', validUntil: '2027-03-01T00:00:00.000Z', confirmation: 'APPROVE_CUSTOMER_TRIAL_POLICY_ONLY' });
+  await trialsPage(page).getByTestId('trial-rule-state').getByText('Approved rules v3').waitFor();
+  await ctx.close();
+});
+await check('Free Trials: an unknown withdraw outcome keeps the exact request; Try again replays the same key; Stop drops it', async () => {
+  resetTrials({ unknownOnce: true });
+  const { ctx, page } = await ownershipPage('/hq/revenue/trials', { width: 1280, height: 900 });
+  const spring = () => trialsPage(page).getByTestId('trial-campaign').filter({ hasText: 'Spring pilot schools' });
+  await spring().waitFor({ timeout: 20000 });
+  await spring().getByRole('button', { name: 'Withdraw campaign' }).click();
+  const form = spring().locator('[data-testid="trial-form"][data-form="withdraw"]');
+  await form.locator('textarea[name="reason"]').fill('Pilot paused by the HQ owner');
+  await form.getByRole('button', { name: 'Withdraw campaign' }).click();
+  await tgOutcome(page, 'UNKNOWN').waitFor();
+  await shot(page, 'trials-unknown-outcome', true);
+  assert.equal(await trialsPage(page).getByRole('button', { name: 'Propose new rules' }).isDisabled(), true, 'locked while kept');
+  await tgOutcome(page, 'UNKNOWN').getByRole('button', { name: 'Try again' }).click();
+  await tgOutcome(page, 'DONE').getByText('This was already done with the same request.').waitFor();
+  assert.equal(tgx.posts.length, 2);
+  assert.equal(tgx.posts[0].key, tgx.posts[1].key);
+  assert.deepEqual(tgx.posts[0].body, tgx.posts[1].body);
+  await trialsPage(page).locator('[data-testid="trial-campaign"][data-status="WITHDRAWN"]').waitFor();
+  // A second unknown: Stop drops the request and nothing more is sent.
+  tgx.unknownOnce = true;
+  await trialsPage(page).getByRole('button', { name: 'Propose new rules' }).click();
+  const propose = trialsPage(page).locator('[data-testid="trial-form"][data-form="propose"]');
+  await propose.locator('textarea[name="reason"]').fill('Same rules recorded again for audit');
+  await propose.getByRole('button', { name: 'Propose these rules' }).click();
+  await tgOutcome(page, 'UNKNOWN').getByRole('button', { name: 'Stop and review' }).click();
+  await page.waitForFunction(() => !document.querySelector('[data-testid="trial-outcome"]'));
+  assert.equal(tgx.posts.length, 3);
+  await ctx.close();
+});
+await check('Free Trials: a refused read shows nothing; leaving the tab hides everything until Show again reads fresh', async () => {
+  resetTrials({ denied: true });
+  const { ctx, page } = await ownershipPage('/hq/revenue/trials', { width: 1280, height: 900 });
+  await trialsPage(page).getByText('does not include free-trial governance').waitFor({ timeout: 20000 });
+  assert.equal(await trialsPage(page).getByTestId('trial-campaign').count(), 0);
+  tgx.denied = false;
+  await trialsPage(page).getByRole('button', { name: 'Refresh' }).click();
+  await trialsPage(page).getByTestId('trial-campaign').first().waitFor();
+  await trialsPage(page).getByRole('button', { name: 'Propose new rules' }).click();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await trialsPage(page).getByText('Hidden while you were away.').waitFor();
+  assert.equal(await trialsPage(page).getByTestId('trial-campaign').count(), 0);
+  assert.equal(await trialsPage(page).getByTestId('trial-form').count(), 0);
+  const reads = tgx.reads.length;
+  await trialsPage(page).getByRole('button', { name: 'Show again' }).click();
+  await trialsPage(page).getByTestId('trial-campaign').first().waitFor();
+  assert.ok(tgx.reads.length > reads);
+  await page.evaluate(() => window.dispatchEvent(new Event('hon:session-invalidated')));
+  await trialsPage(page).getByText('Hidden while you were away.').waitFor();
+  assert.equal(await trialsPage(page).getByTestId('trial-campaign').count(), 0);
+  assert.equal(tgx.posts.length, 0);
+  await ctx.close();
+});
+
+const creditsPage = (page) => page.getByTestId('hq-creative-credits');
+const CC_TEXT = { en: ['Creative Credits', 'View wallet for Synthetic Dojo North', 'Generations (2)', 'Outcome unknown'],
+  es: ['Créditos creativos', 'Ver billetera de Synthetic Dojo North', 'Generaciones (2)', 'Resultado desconocido'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'es']]) {
+  await check(`Creative Credits ${nextTheme} ${language} ${name}: program, rates, wallets, and one school's wallet read that changes nothing`, async () => {
+    Object.assign(ccx, { reads: [], denied: false, other: 0 }); ccReset();
+    const [title, open, generations, unknown] = CC_TEXT[language];
+    const { ctx, page } = await ownershipPage('/hq/creative-credits', viewport, { nextTheme, language });
+    await creditsPage(page).getByTestId('credits-wallet').first().waitFor({ timeout: 20000 });
+    assert.equal(await creditsPage(page).locator('h1').innerText(), title);
+    assert.equal(await creditsPage(page).getByTestId('credits-program').getAttribute('data-state'), 'INACTIVE');
+    assert.equal(await creditsPage(page).getByTestId('credits-wallet').count(), 2);
+    await noOverflow(page, `credits-${nextTheme}-${language}-${name}`);
+    await axe(page, `credits-${nextTheme}-${language}-${name}`);
+    await shot(page, `credits-${nextTheme}-${language}-${name}`, true);
+    await creditsPage(page).getByRole('button', { name: open }).click();
+    const detail = creditsPage(page).getByTestId('credits-detail');
+    await detail.and(page.locator('[data-state="READY"]')).waitFor();
+    await detail.getByText(generations).waitFor();
+    await detail.getByText(unknown, { exact: true }).waitFor();
+    await detail.scrollIntoViewIfNeeded();
+    await noOverflow(page, `credits-detail-${nextTheme}-${language}-${name}`);
+    await axe(page, `credits-detail-${nextTheme}-${language}-${name}`);
+    await shot(page, `credits-detail-${nextTheme}-${language}-${name}`, true);
+    // Opening a school reads the list and that school's wallet again, fresh.
+    assert.deepEqual(ccx.reads, ['/', '/', `/schools/${ccNorth}`]);
+    assert.equal(ccx.other, 0, 'no stray write, key or command marker was sent');
+    assert.equal(ccx.posts.length, 0, 'opening a wallet sends no correction');
+    await ctx.close();
+  });
+}
+await check('Creative Credits: a refused read shows nothing; leaving the window or a session end hides everything until shown again', async () => {
+  Object.assign(ccx, { reads: [], denied: true, other: 0 }); ccReset();
+  const { ctx, page } = await ownershipPage('/hq/creative-credits', { width: 1280, height: 900 });
+  await creditsPage(page).getByText('does not include creative credits').waitFor({ timeout: 20000 });
+  assert.equal(await creditsPage(page).getByTestId('credits-wallet').count(), 0);
+  ccx.denied = false;
+  await creditsPage(page).getByRole('button', { name: 'Refresh' }).click();
+  await creditsPage(page).getByTestId('credits-wallet').first().waitFor();
+  await creditsPage(page).getByRole('button', { name: 'View wallet for Synthetic Dojo South' }).click();
+  await creditsPage(page).getByText('No wallet has been opened for this school yet.').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('hon:session-invalidated')));
+  await creditsPage(page).getByText('Hidden while you were away or because your session ended.').waitFor();
+  assert.equal(await creditsPage(page).getByTestId('credits-wallet').count(), 0);
+  assert.equal(await creditsPage(page).getByTestId('credits-detail').count(), 0);
+  await creditsPage(page).getByRole('button', { name: 'Show again' }).click();
+  await creditsPage(page).getByTestId('credits-wallet').first().waitFor();
+  assert.equal(await creditsPage(page).getByTestId('credits-detail').count(), 0);
+  // Leaving the window hides per-school billing data too.
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await creditsPage(page).getByText('Hidden while you were away or because your session ended.').waitFor();
+  assert.equal(await creditsPage(page).getByTestId('credits-wallet').count(), 0);
+  await creditsPage(page).getByRole('button', { name: 'Show again' }).click();
+  await creditsPage(page).getByTestId('credits-wallet').first().waitFor();
+  assert.equal(ccx.other, 0);
+  await ctx.close();
+});
+
+for (const [name, viewport, nextTheme] of [['desktop-1440', { width: 1440, height: 900 }, 'modern'], ['phone-390', { width: 390, height: 844 }, 'big-button']]) {
+  await check(`Creative Credits corrections ${nextTheme} ${name}: grant, settle not charged, record cost and remove, each read again`, async () => {
+    Object.assign(ccx, { reads: [], denied: false, other: 0 }); ccReset();
+    const { ctx, page } = await ownershipPage('/hq/creative-credits', viewport, { nextTheme, language: 'en' });
+    await creditsPage(page).getByRole('button', { name: 'View wallet for Synthetic Dojo North' }).click();
+    const detail = creditsPage(page).getByTestId('credits-detail');
+    await detail.and(page.locator('[data-state="READY"]')).waitFor({ timeout: 20000 });
+    const outcome = detail.getByTestId('credit-outcome');
+    // Grant: form in place, confirmation required.
+    await detail.getByRole('button', { name: 'Grant credits' }).click();
+    const grant = detail.locator('form[data-form="grant"]');
+    await grant.getByLabel('Credits', { exact: true }).fill('250');
+    await grant.getByLabel('Note (why, for the record)').fill('Service outage on Nov 7');
+    await noOverflow(page, `credits-grant-${nextTheme}-${name}`);
+    await axe(page, `credits-grant-${nextTheme}-${name}`);
+    await shot(page, `credits-grant-${nextTheme}-${name}`, true);
+    await grant.getByRole('button', { name: 'Grant credits' }).click();
+    assert.equal(ccx.posts.length, 0, 'nothing is sent before the confirmation is ticked');
+    await grant.getByRole('checkbox').check();
+    await grant.getByRole('button', { name: 'Grant credits' }).click();
+    await outcome.and(page.locator('[data-kind="DONE"]')).waitFor();
+    await detail.getByText('Credit lots (2)').waitFor();
+    assert.equal(await creditsPage(page).getByTestId('credits-wallet').first().locator('td').first().innerText(), '690');
+    // Settle the unknown generation as not charged, leaving the cost blank: it stays unknown, never zero.
+    await detail.getByRole('button', { name: 'Settle: not charged' }).click();
+    const settle = detail.locator('form[data-form="resolve-not-charged"]');
+    await settle.getByLabel(/Evidence reference/).fill('provider-ticket-7');
+    await settle.getByRole('checkbox').check();
+    await settle.getByRole('button', { name: 'Settle generation' }).click();
+    await outcome.getByText('The generation is settled.').waitFor();
+    await detail.getByText('Cost unknown (never counted as zero)').waitFor();
+    // Then record the provider cost once.
+    await detail.getByRole('button', { name: 'Record provider cost' }).click();
+    const cost = detail.locator('form[data-form="cost"]');
+    await cost.getByLabel('Provider cost (USD)').fill('0.03');
+    await cost.getByLabel(/Evidence reference/).fill('provider-invoice-4 line 2');
+    await cost.getByRole('checkbox').check();
+    await cost.getByRole('button', { name: 'Record cost' }).click();
+    await outcome.getByText('The provider cost is recorded.').waitFor();
+    await detail.getByText('Cost recorded: $0.03').waitFor();
+    // Remove credits from the original promotional lot.
+    await detail.getByTestId('credits-lot').first().getByRole('button', { name: 'Remove credits' }).click();
+    const debit = detail.locator('form[data-form="debit"]');
+    await debit.getByLabel('Credits', { exact: true }).fill('40');
+    await debit.getByLabel('Reason').selectOption('RECORDED_IN_ERROR');
+    await debit.getByLabel('Note (why, for the record)').fill('Granted twice by mistake');
+    await debit.getByRole('checkbox').check();
+    await noOverflow(page, `credits-debit-${nextTheme}-${name}`);
+    await axe(page, `credits-debit-${nextTheme}-${name}`);
+    await debit.getByRole('button', { name: 'Remove credits' }).click();
+    await outcome.getByText('The credits were removed.').waitFor();
+    await shot(page, `credits-after-${nextTheme}-${name}`, true);
+    assert.deepEqual(ccx.posts.map((p) => p.kind), ['grants', 'resolve', 'provider-cost', 'debits']);
+    assert.equal(new Set(ccx.posts.map((p) => p.key)).size, 4, 'each correction has its own key');
+    assert.deepEqual(ccx.posts[0].body, { kind: 'PROMOTIONAL', credits: 250, reasonCode: 'GOODWILL', note: 'Service outage on Nov 7' });
+    assert.deepEqual(ccx.posts[1].body, { resolution: 'NOT_CHARGED', expectedVersion: 2, finalUnits: null, providerCostMicrounits: null, evidenceReference: 'provider-ticket-7' });
+    assert.deepEqual(ccx.posts[2].body, { expectedVersion: 3, providerCostMicrounits: 30000, evidenceReference: 'provider-invoice-4 line 2' });
+    assert.equal(ccx.posts[3].target, ccLot);
+    assert.equal(ccx.other, 0);
+    await ctx.close();
+  });
+}
+await check('Creative Credits corrections: an unknown answer keeps the request and Try again replays the same key; a refusal says nothing changed', async () => {
+  Object.assign(ccx, { reads: [], denied: false, other: 0 }); ccReset(); ccx.replies = ['unknown'];
+  const { ctx, page } = await ownershipPage('/hq/creative-credits', { width: 1280, height: 900 });
+  await creditsPage(page).getByRole('button', { name: 'View wallet for Synthetic Dojo South' }).click();
+  const detail = creditsPage(page).getByTestId('credits-detail');
+  await detail.and(page.locator('[data-state="READY"]')).waitFor({ timeout: 20000 });
+  await detail.getByRole('button', { name: 'Grant credits' }).click();
+  const grant = detail.locator('form[data-form="grant"]');
+  await grant.getByLabel('Kind of credits').selectOption('ADJUSTMENT');
+  await grant.getByLabel('Credits', { exact: true }).fill('100');
+  await grant.getByLabel('Reason').selectOption('BILLING_CORRECTION');
+  await grant.getByLabel('Note (why, for the record)').fill('Correcting a missed adjustment');
+  await grant.getByRole('checkbox').check();
+  await grant.getByRole('button', { name: 'Grant credits' }).click();
+  const outcome = detail.getByTestId('credit-outcome');
+  await outcome.and(page.locator('[data-kind="UNKNOWN"]')).waitFor();
+  assert.equal(await creditsPage(page).getByRole('button', { name: 'View wallet for Synthetic Dojo North' }).isDisabled(), true, 'nothing else opens while a request is kept');
+  await axe(page, 'credits-unknown');
+  // Leaving the window keeps the unconfirmed grant: Show again brings back its school, its outcome and Try again (same key).
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await creditsPage(page).getByText('Hidden while you were away or because your session ended.').waitFor();
+  assert.equal(await creditsPage(page).getByTestId('credit-outcome').count(), 0);
+  await creditsPage(page).getByRole('button', { name: 'Show again' }).click();
+  await outcome.and(page.locator('[data-kind="UNKNOWN"]')).waitFor();
+  assert.equal(ccx.posts.length, 1);
+  await outcome.getByRole('button', { name: 'Try again' }).click();
+  await outcome.and(page.locator('[data-kind="DONE"]')).waitFor();
+  assert.equal(ccx.posts.length, 2);
+  assert.equal(ccx.posts[0].key, ccx.posts[1].key, 'Try again replays the identical request');
+  assert.deepEqual(ccx.posts[0].body, ccx.posts[1].body);
+  await detail.getByText('Adjustment: 100 credits').waitFor();
+  assert.equal(ccx.state.get(ccSouth).lots.length, 1, 'the grant applied once');
+  // A refusal (not the HQ owner) is final: nothing kept, nothing changed.
+  ccx.replies = ['denied'];
+  await detail.getByRole('button', { name: 'Remove credits' }).click();
+  const debit = detail.locator('form[data-form="debit"]');
+  await debit.getByLabel('Credits', { exact: true }).fill('10');
+  await debit.getByLabel('Note (why, for the record)').fill('Testing a refusal');
+  await debit.getByRole('checkbox').check();
+  await debit.getByRole('button', { name: 'Remove credits' }).click();
+  await outcome.getByText('Only the HQ owner can do this. Nothing changed.').waitFor();
+  assert.equal(await outcome.getByRole('button', { name: 'Try again' }).count(), 0);
+  // A grant still sending when the window is left: Show again shows it sending, and its late answer is applied on screen.
+  ccx.replies = ['hold'];
+  await detail.getByRole('button', { name: 'Grant credits' }).click();
+  await grant.getByLabel('Credits', { exact: true }).fill('30');
+  await grant.getByLabel('Note (why, for the record)').fill('Testing a late answer');
+  await grant.getByRole('checkbox').check();
+  await grant.getByRole('button', { name: 'Grant credits' }).click();
+  await outcome.and(page.locator('[data-kind="SENDING"]')).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await creditsPage(page).getByText('Hidden while you were away or because your session ended.').waitFor();
+  await creditsPage(page).getByRole('button', { name: 'Show again' }).click();
+  await outcome.and(page.locator('[data-kind="SENDING"]')).waitFor();
+  ccx.release();
+  await outcome.and(page.locator('[data-kind="DONE"]')).waitFor();
+  await detail.getByText('Credit lots (2)').waitFor();
+  assert.equal(ccx.state.get(ccSouth).lots.length, 2, 'the late grant applied once');
+  assert.equal(await detail.getByRole('button', { name: 'Grant credits' }).isDisabled(), false, 'the lock is released');
+  // A session end drops an unconfirmed correction and says so after Show again, with no Try again.
+  ccx.replies = ['unknown'];
+  await detail.getByRole('button', { name: 'Remove credits' }).first().click();
+  await debit.getByLabel('Credits', { exact: true }).fill('10');
+  await debit.getByLabel('Note (why, for the record)').fill('Testing a session end');
+  await debit.getByRole('checkbox').check();
+  await debit.getByRole('button', { name: 'Remove credits' }).click();
+  await outcome.and(page.locator('[data-kind="UNKNOWN"]')).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('hon:session-invalidated')));
+  await creditsPage(page).getByText('Hidden while you were away or because your session ended.').waitFor();
+  await creditsPage(page).getByRole('button', { name: 'Show again' }).click();
+  await outcome.getByText('Check this school\'s wallet before sending it again.').waitFor();
+  assert.equal(await outcome.getByRole('button', { name: 'Try again' }).count(), 0);
+  assert.equal(ccx.other, 0);
   await ctx.close();
 });
 

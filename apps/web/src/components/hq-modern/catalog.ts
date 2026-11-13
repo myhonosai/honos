@@ -34,11 +34,13 @@ export const HQ_SCHOOLS = [
 export const HQ_REVENUE = [
   { path: '/hq/revenue', title: 'Subscriptions', icon: 'chart' },
   { path: '/hq/revenue/invoices', title: 'Invoices', icon: 'database' },
+  { path: '/hq/revenue/trials', title: 'Free Trials', icon: 'flag' },
   { path: '/hq/pricing-offers', title: 'Pricing & Offers', icon: 'settings' },
 ] as const;
 export const HQ_AI = [
   { path: '/hq/executives', title: 'Executive Team', icon: 'team' },
   { path: '/hq/ai-costs', title: 'AI Costs', icon: 'database' },
+  { path: '/hq/creative-credits', title: 'Creative Credits', icon: 'chart' },
   { path: '/hq/ai-safety', title: 'AI Safety', icon: 'check' },
   { path: '/hq/ai-providers', title: 'AI Providers', icon: 'settings' },
 ] as const;
@@ -71,7 +73,6 @@ export const HQ_PLANNED: Readonly<Record<string, { title: string; description: s
   '/hq/approvals': { title: 'Approvals', description: 'An HQ approval queue is not available. School approval authority is separate and is not reused here.', areas: ['Pending decisions', 'Approval history', 'Policy evidence'] },
   '/hq/growth': { title: 'Growth & Referrals', description: 'HON company growth operations, governed by the owner. No campaign, contest or reward is active from this interface.', areas: ['Champions Club', 'Referral competitions', 'Founder campaigns'] },
   '/hq/growth/champions-club': { title: 'Champions Club', description: 'The permanent school referral program. Qualification, attribution and reward accounting require approved services before activation.', areas: ['Referral invitations', 'Qualified milestones', 'Member progress'] },
-  '/hq/growth/contests': { title: 'Referral Contests', description: 'Owner-controlled competitions. Publishing, changing live rules and awarding prizes require independently authorized workflows.', areas: ['Draft & schedule', 'Launch & pause', 'End & review winners'] },
   '/hq/growth/rewards': { title: 'Reward Management', description: 'Review qualified rewards and liabilities before approved fulfillment. No credit, refund, gift or financial grant is issued here.', areas: ['Eligibility review', 'Reward liabilities', 'Approved fulfillment'] },
   '/hq/growth/founder-campaigns': { title: 'Founder Campaigns', description: 'Plan HON founder offers using owner-approved commercial policy. No checkout, published inventory or campaign delivery is active here.', areas: ['Founding 50', 'Campaign planning', 'Offer readiness'] },
 };
@@ -83,6 +84,7 @@ export function hqPageLabel(path: string): string {
   if (path === '/hq/growth/champions-club/schools') return 'School referrals';
   if (/^\/hq\/schools\/[0-9a-f-]{36}$/i.test(path)) return 'School detail';
   if (/^\/hq\/support\/[0-9a-f-]{36}$/i.test(path)) return 'Support case';
+  if (/^\/hq\/growth\/contests\/[0-9a-f-]{36}$/i.test(path)) return 'Contest detail';
   if (path === '/hq/revenue') return 'Revenue';
   const fixed = [...HQ_REVENUE, ...HQ_AI, ...HQ_GROWTH, ...HQ_NAV, ...HQ_SCHOOLS].find((item) => item.path === path);
   if (fixed) return fixed.title;
