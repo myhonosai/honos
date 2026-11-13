@@ -46,6 +46,8 @@ export interface HqMessageWorkerStore {
   recordResult(deliveryId: string, leaseToken: string, result: CommunicationSendResult): Promise<{ status: string; accepted: boolean }>;
   /** A verified provider receipt for an HQ delivery (SendGrid hon_purpose HQ, Twilio HQ status path). */
   recordReceipt?(receipt: VerifiedProviderReceipt): Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNMATCHED'; deliveryStatus: string | null }>;
+  /** 0282: one signed inbound text to a Messaging Service; NOT_HQ when it is not the active HQ sender. */
+  recordInbound?(text: HqInboundText): Promise<HqInboundOutcome>;
 }
 
 /** One inbound text to the HQ number, as the webhook verified it. The body is classified in the database, never stored. */

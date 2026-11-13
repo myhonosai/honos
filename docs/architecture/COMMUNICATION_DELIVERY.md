@@ -157,6 +157,21 @@ receipt timeline. No address, no provider IDs, no cost.
   opt-out handling on the Messaging Service (Advanced Opt-Out or the default STOP list), which must stay on; this is on
   the pre-launch review list.
 
+## 5d. HQ sending, receipts and inbound texts (0281/0282 follow-ups)
+
+- SendGrid and Twilio declare `hqSender`. HQ email goes from the HQ sender address and name (`hon_purpose: HQ`); with no
+  valid HQ sender nothing is sent. HQ BILLING/ACCOUNT email sets `bypass_unsubscribe_management` (required notices).
+  HQ texts go from the HQ Messaging Service with status callbacks to `/twilio/hq-status` (signed over that path).
+- HQ receipts (SendGrid `hon_purpose: HQ`, `/twilio/hq-status`) go to `hon.record_hq_message_provider_event`; school
+  receipts are unchanged. Unrecordable HQ receipts answer 503 so the provider redelivers, so the communication worker
+  database must be configured wherever the SendGrid event webhook is on.
+- `/twilio/inbound` first offers a text that carries a `MessagingServiceSid` to `hon.record_hq_inbound_text`. `NOT_HQ`
+  (not the active HQ service) falls through to the school keyword path unchanged. For HQ texts, HON answers TwiML only
+  for a phone-confirmation code result (CONFIRMED, CODE_WRONG) and never for a replayed event. STOP/START/HELP replies
+  come from the HQ Messaging Service's own opt-out handling, which must stay on, so a person never gets two replies.
+  Operators should set that service's Advanced Opt-Out replies to the HQ texts in `HQ_INBOUND_REPLIES` (contracts).
+  Point the HQ Messaging Service's incoming-message webhook at `/v1/communications/webhooks/twilio/inbound`.
+
 ## 5c. Zernio lead intake as built (0250)
 
 - Owner decision 2026-11-09: a Zernio `lead.received` event (Meta Lead Gen form) becomes a CRM lead
