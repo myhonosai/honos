@@ -56,3 +56,37 @@ export class SchoolPayMethodDefaultHumanUiGuard extends MembershipActivationHuma
 export class SchoolPayMethodRemoveHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'school_pay.method.remove';
 }
+
+/** B-TUI-2 (0322): autopay and sibling discounts, one browser command per call. */
+@Injectable()
+export class SchoolPayAutopayReadHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'school_pay.autopay.read';
+}
+@Injectable()
+export class SchoolPayDiscountReadHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'school_pay.discount.read';
+}
+@Injectable()
+export class SchoolPayDiscountSetHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'school_pay.discount.set';
+}
+@Injectable()
+export class SchoolPayAutopayEnrollHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'school_pay.autopay.enroll';
+}
+@Injectable()
+export class SchoolPayAutopayMethodHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'school_pay.autopay.method';
+}
+@Injectable()
+export class SchoolPayAutopayStateHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'school_pay.autopay.state';
+}
+@Injectable()
+export class SchoolPayAutopayCancelHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'school_pay.autopay.cancel';
+}
+@Injectable()
+export class SchoolPayAutopayCycleHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'school_pay.autopay.cycle';
+}
