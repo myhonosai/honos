@@ -57,14 +57,15 @@ try{
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname IN ('guard_school_support','require_support_request_actor','support_request_text','school_support_request_json','school_support_claim','school_support_check_call','submit_school_support_request','add_school_support_message','read_school_support_requests')");
  assert.equal(fns.length,9);
  for(const f of fns)assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entry.includes(f.proname),f.proname);
- assert.equal((await q("SELECT count(*) n FROM hon.role_permissions rp JOIN hon.roles r ON r.id=rp.role_id WHERE r.code='OWNER' AND r.is_system_role AND rp.permission_code='support.request'"))[0].n,(await q("SELECT count(*) n FROM hon.roles WHERE code='OWNER' AND is_system_role"))[0].n);
- pass('forced deny-all RLS on two new tables; runtime executes exactly three entry points; every system OWNER role holds support.request');
+ pass('forced deny-all RLS on two new tables; runtime executes exactly three entry points');
 
  const module=await Test.createTestingModule({controllers:[SchoolSupportController],providers:[SchoolSupportService,SchoolSupportReadHumanUiGuard,SchoolSupportSubmitHumanUiGuard,SchoolSupportMessageHumanUiGuard,HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
  app=module.createNestApplication({logger:false});app.setGlobalPrefix('v1');await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;
  await q("UPDATE hon.hon_os_signup_program SET status='TEST_MODE',recorded_at=clock_timestamp() WHERE program_id=1");
  terms=(await q('SELECT id FROM hon.hon_os_signup_terms_versions ORDER BY version DESC LIMIT 1'))[0].id;
  const a=await register('alpha'),b=await register('beta');
+ // Owners of new sign-ups hold support.request (registration copies every permission; the migration backfills older OWNER roles).
+ for(const w of [a,b])assert.equal((await q("SELECT count(*) n FROM hon.role_permissions rp JOIN hon.roles r ON r.id=rp.role_id WHERE r.organization_id=$1 AND r.code='OWNER' AND r.is_system_role AND rp.permission_code='support.request'",[w.org]))[0].n,'1');
  assert.equal((await q("SELECT count(*) n FROM hon.organization_entitlements WHERE organization_id=$1 AND status='ACTIVE'",[a.org]))[0].n,'0');
 
  // 2. D3: before access starts the owner asks for help; it is an OPEN HQ case for this exact school with the school's words.
