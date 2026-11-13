@@ -17,6 +17,9 @@ const local = (url) => {
 const admin = new Client(local(process.env.DATABASE_URL));
 const runtime = new Client(local(process.env.HON_RUNTIME_DATABASE_URL));
 const worker = new Client(local(process.env.HON_COMMUNICATION_WORKER_DATABASE_URL));
+// Second sessions for the 0250 concurrency proofs.
+const runtime2 = new Client(local(process.env.HON_RUNTIME_DATABASE_URL));
+const worker2 = new Client(local(process.env.HON_COMMUNICATION_WORKER_DATABASE_URL));
 
 let passed = 0;
 function check(condition, message) {
@@ -78,6 +81,15 @@ async function cleanup() {
     await admin.query('DELETE FROM hon.communication_messages WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.inbound_text_keywords WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.missed_calls WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.zernio_lead_receipts WHERE organization_id = $1', [ids.org]);
+    await admin.query('ALTER TABLE hon.crm_lead_attributions DISABLE TRIGGER USER');
+    await admin.query('DELETE FROM hon.crm_lead_attributions WHERE organization_id = $1', [ids.org]);
+    await admin.query('ALTER TABLE hon.crm_lead_attributions ENABLE TRIGGER USER');
+    await admin.query('DELETE FROM hon.crm_leads WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.zernio_lead_forms WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.crm_pipeline_stages WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.crm_pipelines WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.organization_entitlements WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.school_text_senders WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.hq_operator_grants WHERE principal_id = $1', [ids.hqPrincipal]);
     await admin.query('DELETE FROM hon.communication_consents WHERE organization_id = $1', [ids.org]);
@@ -85,7 +97,6 @@ async function cleanup() {
     await admin.query('DELETE FROM hon.principal_role_grants WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.role_permissions WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.roles WHERE organization_id = $1', [ids.org]);
-    await admin.query('DELETE FROM hon.organization_entitlements WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.principals WHERE id = ANY($1::uuid[])', [[ids.principal, ids.hqPrincipal, ids.readerPrincipal]]);
     await admin.query('DELETE FROM hon.users WHERE id = ANY($1::uuid[])', [[ids.user, ids.hqUser, ids.readerUser]]);
     await admin.query('DELETE FROM hon.schools WHERE organization_id = $1', [ids.org]);
@@ -94,7 +105,7 @@ async function cleanup() {
   } catch (error) { await admin.query('ROLLBACK'); throw error; }
 }
 
-await Promise.all([admin.connect(), runtime.connect(), worker.connect()]);
+await Promise.all([admin.connect(), runtime.connect(), worker.connect(), runtime2.connect(), worker2.connect()]);
 try {
   await admin.query("INSERT INTO hon.organizations (id, legal_name, display_name) VALUES ($1, 'Delivery Org', 'Delivery Org')", [ids.org]);
   await admin.query('INSERT INTO hon.schools (id, organization_id, name, slug, timezone) VALUES ($1,$2,$3,$4,$5), ($6,$2,$7,$8,$9)',
@@ -540,8 +551,93 @@ try {
   await expectError('42501', () => list(ids.schoolA, `delivery-${ids.user}`), 'staff without communication.message.read read no missed calls');
   await expectError('42501', () => runtime.query('SELECT count(*) FROM hon.missed_calls'), 'the runtime cannot read the missed-call table directly');
 
+  // 16. 0250 Zernio lead intake: HQ-owner form mapping, exact routing, automatic CRM lead, dedupe, refusals, RLS.
+  const pipe = {};
+  for (const [key, school] of [['A', ids.schoolA], ['B', ids.schoolB]]) {
+    pipe[key] = randomUUID(); pipe[`${key}open`] = randomUUID(); pipe[`${key}won`] = randomUUID();
+    await admin.query('INSERT INTO hon.crm_pipelines (id, organization_id, school_id, name) VALUES ($1,$2,$3,$4)', [pipe[key], ids.org, school, `Leads ${key}`]);
+    await admin.query("INSERT INTO hon.crm_pipeline_stages (id, organization_id, school_id, pipeline_id, name, position, terminal_status) VALUES ($1,$2,$3,$4,'New',1,NULL), ($5,$2,$3,$4,'Won',2,'WON')",
+      [pipe[`${key}open`], ids.org, school, pipe[key], pipe[`${key}won`]]);
+  }
+  // The missed-call section above left the organization's entitlement ACTIVE and in effect; intake uses CORE.
+  await admin.query("UPDATE hon.organization_entitlements SET tier = 'CORE', status = 'ACTIVE', effective_until = NULL WHERE organization_id = $1", [ids.org]);
+  const mapForm = (school, account, form, stageKey, status = 'ACTIVE', version = null, fieldMap = null) =>
+    runtime.query('SELECT hon.set_zernio_lead_form_from_hq($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9) AS data',
+      [`hq-${ids.hqUser}`, school, account, form, pipe[stageKey[0]], pipe[stageKey], fieldMap === null ? null : JSON.stringify(fieldMap), status, version]).then((r) => r.rows[0].data);
+  await expectError('42501', () => runtime.query('SELECT hon.set_zernio_lead_form_from_hq($1,$2,$3,$4,$5,$6,NULL,$7,NULL)', [`delivery-${ids.user}`, ids.schoolA, '12345', '777', pipe.A, pipe.Aopen, 'ACTIVE']), 'school staff cannot map a Zernio form');
+  await expectError('22023', () => mapForm(ids.schoolA, '12345', '777', 'Awon'), 'a form cannot route into a terminal stage');
+  await expectError('22023', () => runtime.query('SELECT hon.set_zernio_lead_form_from_hq($1,$2,$3,$4,$5,$6,NULL,$7,NULL)', [`hq-${ids.hqUser}`, ids.schoolA, '12345', '777', pipe.B, pipe.Bopen, 'ACTIVE']), "another school's pipeline cannot be used");
+  await expectError('22023', () => mapForm(ids.schoolA, '12345', '777', 'Aopen', 'ACTIVE', null, { email: 'email' }), 'a field map needs a name key');
+  const formA = await mapForm(ids.schoolA, '12345', '777', 'Aopen');
+  check(formA.status === 'ACTIVE' && formA.version === 1 && formA.fieldMap.fullName === 'full_name', 'the HQ owner maps a Facebook account form to school A with the standard Meta field keys');
+  await expectError('23505', () => mapForm(ids.schoolB, '12345', '777', 'Bopen'), 'the same form can never be mapped to a second school');
+  await expectError('40001', () => mapForm(ids.schoolA, '12345', '777', 'Aopen'), 'changing a mapping needs its version');
+  const formB = await mapForm(ids.schoolB, '12345', '888', 'Bopen', 'ACTIVE', null, { givenName: 'first_name', familyName: 'last_name', phone: 'phone' });
+  check(formB.version === 1, 'the same account can map a different form to school B');
+  check((await admin.query("SELECT count(*)::int AS n FROM hon.audit_events WHERE action_code = 'integration.zernio_lead_form.set' AND organization_id = $1", [ids.org])).rows[0].n === 2, 'form mappings are audited');
+  await expectError('42501', () => runtime.query("SELECT * FROM hon.record_zernio_lead('e','1','12345','777','{}','{}')"), 'runtime cannot record Zernio leads');
+  await expectError('42501', () => worker.query('SELECT 1 FROM hon.zernio_lead_forms LIMIT 1'), 'worker cannot read form mappings directly');
+  const zlead = async (eventId, leadgenId, account, form, fields, ad = {}) =>
+    (await worker.query('SELECT * FROM hon.record_zernio_lead($1,$2,$3,$4,$5::jsonb,$6::jsonb)', [eventId, leadgenId, account, form, JSON.stringify(fields), JSON.stringify(ad)])).rows[0];
+  const zCreated = await zlead('evt_1', '9001', '12345', '777', { full_name: '  Ada   King Lovelace ', email: 'ADA@Example.test', phone_number: '+1 (555) 555-0111', note: 'ignored' }, { adId: '55', campaignId: '77', isOrganic: false });
+  check(zCreated.outcome === 'CREATED' && zCreated.lead_id, 'a signed lead on a mapped form becomes a CRM lead');
+  const leadRow = (await admin.query('SELECT l.*, p.given_name, p.family_name, p.email::text AS email, p.phone_e164 FROM hon.crm_leads l JOIN hon.people p ON p.id = l.primary_person_id WHERE l.id = $1', [zCreated.lead_id])).rows[0];
+  check(leadRow.school_id === ids.schoolA && leadRow.pipeline_stage_id === pipe.Aopen && leadRow.source_code === 'ZERNIO_META', 'the lead lands in school A at the mapped stage with source ZERNIO_META');
+  check(leadRow.given_name === 'Ada' && leadRow.family_name === 'King Lovelace' && leadRow.email === 'ada@example.test' && leadRow.phone_e164 === '+15555550111', 'name, email and phone are normalized from the mapped keys');
+  check(leadRow.attribution.zernio.formId === '777' && leadRow.attribution.zernio.adCampaignId === '77' && !JSON.stringify(leadRow.attribution).includes('ignored'), 'attribution carries form and ad ids, never unmapped answers');
+  check((await admin.query('SELECT count(*)::int AS n FROM hon.crm_lead_attributions WHERE lead_id = $1', [zCreated.lead_id])).rows[0].n === 1, 'the immutable lead attribution is captured');
+  check((await admin.query("SELECT count(*)::int AS n FROM hon.communication_consents WHERE person_id = $1", [leadRow.primary_person_id])).rows[0].n === 0, 'an ad lead records no message consent');
+  check((await zlead('evt_1', '9001', '12345', '777', { full_name: 'Ada', email: 'ada@example.test' })).outcome === 'REPLAYED', 'a redelivered event is a replay');
+  const sameLead = await zlead('evt_2', '9001', '12345', '777', { full_name: 'Ada', email: 'ada@example.test' });
+  check(sameLead.outcome === 'REPLAYED' && sameLead.lead_id === zCreated.lead_id, 'the same Meta lead under a new event id is still one lead');
+  check((await zlead('evt_3', '9002', '12345', '999', { full_name: 'Eve', email: 'eve@example.test' })).outcome === 'UNROUTED', 'an unmapped form creates nothing');
+  check((await zlead('evt_4', '9003', '54321', '777', { full_name: 'Eve', email: 'eve@example.test' })).outcome === 'UNROUTED', 'the same form id under another account creates nothing');
+  check((await zlead('evt_5', '9004', '12345', '888', { first_name: 'Bo', last_name: 'Kim', phone: '+15555550222' })).outcome === 'CREATED', 'a custom field map works for school B');
+  check((await zlead('evt_6', '9005', '12345', '777', { full_name: 'No Contact', email: 'not-an-email', phone_number: '5550123' })).outcome === 'INVALID_CONTACT', 'a lead without a valid email or E.164 phone is refused');
+  check((await zlead('evt_7', '9006', '12345', '777', { email: 'nameless@example.test' })).outcome === 'INVALID_CONTACT', 'a lead without a name is refused');
+  await expectError('22023', () => zlead('bad id', '9007', '12345', '777', { full_name: 'X', email: 'x@example.test' }), 'a malformed event id is refused');
+  check((await admin.query("SELECT count(*)::int AS n FROM hon.zernio_lead_receipts WHERE organization_id = $1 AND outcome = 'INVALID_CONTACT' AND lead_id IS NULL", [ids.org])).rows[0].n === 2, 'refused leads keep only an outcome receipt');
+  await mapForm(ids.schoolA, '12345', '777', 'Aopen', 'DISABLED', 1);
+  check((await zlead('evt_8', '9008', '12345', '777', { full_name: 'Late', email: 'late@example.test' })).outcome === 'UNROUTED', 'a disabled mapping creates nothing');
+  await mapForm(ids.schoolA, '12345', '777', 'Aopen', 'ACTIVE', 2);
+  await admin.query("UPDATE hon.organization_entitlements SET status = 'SUSPENDED' WHERE organization_id = $1", [ids.org]).catch(async () => {
+    await admin.query("UPDATE hon.organization_entitlements SET effective_until = clock_timestamp() WHERE organization_id = $1", [ids.org]);
+  });
+  check((await zlead('evt_9', '9009', '12345', '777', { full_name: 'Lapsed', email: 'lapsed@example.test' })).outcome === 'SCHOOL_INACTIVE', 'without an active CRM entitlement no lead is created');
+  check((await admin.query("SELECT count(*)::int AS n FROM hon.crm_leads WHERE organization_id = $1 AND source_code = 'ZERNIO_META'", [ids.org])).rows[0].n === 2, 'exactly two Zernio leads exist');
+  const zEvidence = (await admin.query("SELECT count(*)::int AS n FROM hon.outbox_events WHERE event_type = 'marketing.zernio.lead_received' AND organization_id = $1", [ids.org])).rows[0].n;
+  check(zEvidence === 2, 'each created lead writes one internal outbox event');
+  // 0250 review P3s: two-session proofs for the per-form mapping lock and the per-form hourly limit, and the intake principal.
+  await admin.query("UPDATE hon.organization_entitlements SET status = 'ACTIVE', effective_until = NULL WHERE organization_id = $1", [ids.org]);
+  const mapArgs = (form) => [`hq-${ids.hqUser}`, ids.schoolA, '12345', form, pipe.A, pipe.Aopen, null, 'ACTIVE', null];
+  const mapSql = 'SELECT hon.set_zernio_lead_form_from_hq($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9) AS data';
+  await runtime.query('BEGIN');
+  await runtime.query(mapSql, mapArgs('4242'));
+  const secondMap = runtime2.query(mapSql, mapArgs('4242')).then(() => 'OK', (error) => error.code);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  await runtime.query('COMMIT');
+  check(await secondMap === '40001', 'a concurrent first mapping of the same form by the same school is a version conflict, not another-school');
+  const rateForm = (await admin.query("SELECT id, version FROM hon.zernio_lead_forms WHERE account_id = '12345' AND form_id = '4242'")).rows[0];
+  await admin.query(`INSERT INTO hon.zernio_lead_receipts (organization_id, school_id, form_mapping_id, form_mapping_version, event_id, leadgen_id, outcome)
+    SELECT $1, $2, $3, $4, 'evt_seed_' || n, 'seed' || n, 'INVALID_CONTACT' FROM generate_series(1, 299) n`, [ids.org, ids.schoolA, rateForm.id, rateForm.version]);
+  const leadSql = 'SELECT * FROM hon.record_zernio_lead($1,$2,$3,$4,$5::jsonb,$6::jsonb)';
+  await worker.query('BEGIN');
+  const firstRate = (await worker.query(leadSql, ['evt_r1', '9301', '12345', '4242', JSON.stringify({ full_name: 'Rate One', email: 'r1@example.test' }), '{}'])).rows[0];
+  const secondRate = worker2.query(leadSql, ['evt_r2', '9302', '12345', '4242', JSON.stringify({ full_name: 'Rate Two', email: 'r2@example.test' }), '{}']).then((r) => r.rows[0].outcome);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  await worker.query('COMMIT');
+  check(firstRate.outcome === 'CREATED' && await secondRate === 'RATE_LIMITED', 'two concurrent leads at 299 in the hour: exactly one is created, the other is rate limited (HTTP 429)');
+  await admin.query("UPDATE hon.principals SET is_active = false WHERE id = '00000000-0000-4000-8000-00000000c050'");
+  try {
+    await expectError('55000', () => zlead('evt_p1', '9401', '12345', '888', { first_name: 'Pat', phone: '+15555550333' }), 'an inactive intake principal creates nothing (the webhook answers 503 and Zernio retries)');
+  } finally { await admin.query("UPDATE hon.principals SET is_active = true WHERE id = '00000000-0000-4000-8000-00000000c050'"); }
+  await expectError('42501', () => runtime.query('SELECT form_id FROM hon.zernio_lead_forms'), 'the runtime cannot read Zernio form mappings directly');
+  await expectError('42501', () => runtime.query('SELECT school_id FROM hon.zernio_lead_receipts'), 'the runtime cannot read Zernio receipts directly');
+  const bReceipts = (await admin.query('SELECT r.school_id FROM hon.zernio_lead_receipts r JOIN hon.zernio_lead_forms f ON f.id = r.form_mapping_id WHERE r.organization_id = $1 AND f.form_id = $2', [ids.org, '888'])).rows;
+  check(bReceipts.length === 1 && bReceipts[0].school_id === ids.schoolB, "school B's form records its receipt against school B only");
+
   console.log(`PASS: communication delivery integrity (${passed} checks; day zone ${dayZone}, night zone ${nightZone}).`);
 } finally {
   await cleanup();
-  await Promise.all([admin.end(), runtime.end(), worker.end()]);
+  await Promise.all([admin.end(), runtime.end(), worker.end(), runtime2.end(), worker2.end()]);
 }
