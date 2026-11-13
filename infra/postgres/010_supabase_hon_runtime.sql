@@ -3425,3 +3425,14 @@ DO $$ DECLARE r text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.reopen_hon_reply_for_fallback(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+-- 0338 HQ executive workspace Performance: one read-only HQ aggregate, runtime EXECUTE only.
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.read_hq_hon_agent_performance(text,text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0338 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.read_hq_hon_agent_performance(text,text) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.read_hq_hon_agent_performance(text,text) FROM '||quote_ident(r);
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_hq_hon_agent_performance(text,text) TO hon_runtime;
+  END IF;
+END $$;
