@@ -3214,6 +3214,19 @@ DO $$ DECLARE t text; r text; BEGIN
   GRANT EXECUTE ON FUNCTION hon.read_my_hq_contact(text), hon.start_my_hq_phone(text,jsonb,uuid), hon.set_my_hq_texting(text,jsonb,uuid),
     hon.remove_my_hq_phone(text,jsonb,uuid) TO hon_runtime;
 END $$;
+
+-- HQ-COMM 0283 HON prospects and their consent: no table privileges; HQ marketing reads and three commands.
+DO $$ DECLARE t text; r text; BEGIN
+  IF to_regprocedure('hon.create_hq_prospect(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply HQ prospects migration 0283 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hq_prospects','hq_prospect_consents','hq_prospect_requests'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t); EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.create_hq_prospect(text,jsonb,uuid), hon.update_hq_prospect(text,uuid,jsonb,uuid),
+    hon.record_hq_prospect_consent(text,uuid,jsonb,uuid), hon.read_hq_prospects(text,text,uuid,timestamptz,uuid,integer),
+    hon.read_hq_prospect(text,uuid) TO hon_runtime;
+END $$;
 -- 0310 organization agent budget removed for paying organizations: the override table and helpers are migration-owner only.
 DO $$ DECLARE r text; f text; BEGIN
   IF to_regclass('hon.ai_org_agent_ceiling_overrides') IS NULL THEN RAISE EXCEPTION 'Apply migration 0310 first'; END IF;

@@ -144,12 +144,28 @@ webhook side.
 
 HON's own prospects: people who signed up, started a trial or asked about HON OS, not schools' leads.
 
-- `hon.hq_prospects`: name, school name, email, phone (E.164), source (`PUBLIC_SIGN_UP`, `TRIAL`, `HQ_ENTERED`,
-  `IMPORT`, `INBOUND_TEXT`), optional HQ marketing campaign (0252), status, created by/at, version. HQ marketing
-  people (`hq.marketing.manage`) can add and read prospects; their address is shown to them, unlike owners'.
-- `hon.hq_prospect_consents`: per prospect and channel, append-only: `OPTED_IN` / `OPTED_OUT`, purpose
-  (`SERVICE`, `MARKETING`), source (`SIGN_UP_FORM`, `HQ_RECORDED`, `RECIPIENT`), the exact disclosure text version
-  shown, and when. Current state is the latest row.
+E is split in two. **E1 (0283, built)** keeps prospects and their consent and sends nothing. **E2 (later)** sends to
+them.
+
+- `hon.hq_prospects`: name, school name, lower-case email, phone (E.164), source (`PUBLIC_SIGN_UP`, `TRIAL`,
+  `HQ_ENTERED`, `IMPORT`, `INBOUND_TEXT`), optional HQ marketing campaign (0252), status `ACTIVE` / `ARCHIVED`,
+  created by (required for `HQ_ENTERED` and `IMPORT`), created at (millisecond precision), version. One prospect per
+  email and one per phone, archived or not. HQ owner, or an HQ operator with `hq.marketing.manage`, adds, corrects,
+  archives, restores and reads prospects. Reads also need write authority, because they show contact details.
+  An archived prospect can only be restored.
+- `hon.hq_prospect_consents`: append-only, per channel and purpose (`SERVICE`, `MARKETING`): `OPTED_IN` /
+  `OPTED_OUT`, source (`SIGN_UP_FORM`, `HQ_RECORDED`, `RECIPIENT`), the exact address it was given for, the
+  disclosure version (required for a sign-up opt-in), note and who recorded it (both required for, and only for,
+  `HQ_RECORDED`), and when. The current answer is the latest row for the prospect's current address, so a changed
+  address starts with no answer. History marks answers for an old address as not current.
+- HQ may record any opt-out and an email `SERVICE` opt-in (the person asked HON something), never a marketing or
+  texting opt-in, and no opt-in for an archived prospect. The table CHECKs enforce this as well as the function.
+- API `/v1/hq/prospects` (list with status, campaign, cursor and limit; read one; create; update; record consent),
+  human command markers `hq-prospect-create`, `hq-prospect-update` and `hq-prospect-consent`, idempotency keys.
+  Screens `/hq/growth/prospects` and `/hq/growth/prospects/:prospectId` (Growth nav). Contact details hide when the
+  tab is left. The consent form offers only answers HQ may record right now.
+
+E2 (not built):
 - Marketing texts need `MARKETING` `OPTED_IN` from the prospect themselves (sign-up checkbox with the disclosure, or
   texting in). HQ cannot record SMS marketing consent on someone's behalf. Marketing emails need an opt-in or an
   existing inquiry, and always carry an unsubscribe link and HON's postal address (CAN-SPAM).
@@ -168,7 +184,8 @@ HON's own prospects: people who signed up, started a trial or asked about HON OS
 | B | HQ screens: Message the owners (school detail + support case), `/hq/communications` | none |
 | C | Own phone + code confirmation + HQ texting switch (school app), STOP/START/HELP on the HQ number | 0282 |
 | D | Webhook routing for HQ receipts (comms thread) | none planned |
-| E | HON prospects, prospect consent, campaign sends with HQ owner approval, prospect screens | 0283 |
+| E1 | HON prospects, prospect consent, prospect screens (sends nothing) | 0283 |
+| E2 | Sending to prospects: campaign sends with HQ owner approval, consent re-checked at claim | owner allocates |
 
 A waits for #223 (0243) and SendGrid to be on main, because it reuses the worker role, dispatcher and adapter.
 

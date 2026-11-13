@@ -139,13 +139,28 @@ export class CommunicationWebhookController {
     return ingestReceipts(this.store, receipt ? [receipt] : [], receipt ? 0 : 1);
   }
 
-  /** Inbound texts: only STOP/START/HELP keywords are recorded; the reply is empty (Twilio Advanced Opt-Out answers). */
+  /**
+   * Inbound texts. A text to the active HQ Messaging Service (0282) is HQ's: STOP/START/HELP and HON OS phone
+   * confirmation codes are recorded there, and only a code result is answered here (keywords are answered by the
+   * Messaging Service's own opt-out handling, which must stay on, so a person never gets two replies). Anything else is
+   * a school text: only STOP/START/HELP keywords are recorded, and the reply is empty (Twilio Advanced Opt-Out answers).
+   */
   @Post('twilio/inbound') @HttpCode(200) @Header('content-type', 'text/xml; charset=utf-8')
   async twilioInbound(@Req() req: Request, @Headers('x-twilio-signature') signature: string | undefined): Promise<string> {
     if (!Buffer.isBuffer(req.body)) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
     let keyword;
-    try { keyword = this.twilio.inbound(req.body, signature); }
+    let text;
+    try { keyword = this.twilio.inbound(req.body, signature); text = this.twilio.inboundText(req.body, signature); }
     catch (error) { throw twilioError(error); }
+    if (text && this.hqStore?.recordInbound && this.hqStore.isConfigured()) {
+      let result;
+      try { result = await this.hqStore.recordInbound({ provider: 'TWILIO', ...text }); }
+      catch {
+        inboundLog.warn(`Inbound HQ text not recorded; reconcile Twilio message ${text.eventId}.`);
+        throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' });
+      }
+      if (result.outcome !== 'NOT_HQ') return hqInboundTwiml(result);
+    }
     if (!keyword) return EMPTY_TWIML;
     if (!this.store.isConfigured() || !this.store.recordInboundKeyword) throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
     try { await this.store.recordInboundKeyword(keyword); }
@@ -225,6 +240,14 @@ export class CommunicationWebhookController {
     const hqSummary = await ingestReceipts(hqReceiptRecorder(this.hqStore), hq, 0);
     return { received: true, recorded: summary.recorded + hqSummary.recorded, replayed: summary.replayed + hqSummary.replayed, ignored: summary.ignored + hqSummary.ignored };
   }
+}
+
+/** Replies HON sends itself: only phone-code results. Keyword replies come from the Messaging Service; a replay is never answered twice. */
+const HQ_TWIML_REPLY_KINDS = new Set(['CONFIRMED', 'CODE_WRONG']);
+export function hqInboundTwiml(result: { reply: string | null; replyText: string | null; replayed: boolean }): string {
+  if (result.replayed || !result.reply || !result.replyText || !HQ_TWIML_REPLY_KINDS.has(result.reply)) return EMPTY_TWIML;
+  const body = result.replyText.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!);
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${body}</Message></Response>`;
 }
 
 function twilioError(error: unknown): Error {
