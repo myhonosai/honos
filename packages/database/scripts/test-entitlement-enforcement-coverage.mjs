@@ -44,6 +44,7 @@ const OPEN_BY_DESIGN={
  'hon.read_saas_school_access_standing(text,uuid)':'billing recovery: the owner sees the payment issue, grace end, owner CRM read-only window or CRM lock (read only)',
  'hon.read_saas_school_plan_options(text,uuid)':'billing recovery: plan selection and checkout for the first or a renewed payment',
  'hon.read_saas_hon_os_offers_for_school(text,uuid)':'billing recovery: the published HON OS offers and the server eligibility decision for this school (read only)',
+ 'hon.read_saas_founder_availability_for_school(text,uuid)':'billing recovery: founder spot availability for this organization, so a suspended school sees the prices it can resubscribe at (read only, reserves nothing)',
  'hon.read_my_language_preference(text,uuid)':'personal interface setting',
  'hon.read_school_language_default(text,uuid)':'interface setting; grants nothing',
  'hon.submit_public_form(text,jsonb,text)':'public intake route (owner: keep public routes available); B6B decides suspended-school intake',
@@ -71,7 +72,9 @@ const MUST_ENFORCE=['hon.issue_champions_referral_code(text,uuid,uuid,uuid,uuid)
  'hon.resolve_teaching_assistant_scope(text)','hon.resolve_testing_certificate_scope(text,uuid)','hon.resolve_testing_scorecard_scope(text,uuid)',
  // Formerly recorded gaps, gated in 0172.
  'hon.resolve_achievement_scope(text,uuid)','hon.resolve_current_staff_reporting_scope(text)','hon.resolve_follow_up_scope(text)',
- 'hon.resolve_human_work_scope(text)','hon.resolve_teaching_studio_scope(text,uuid)','hon.resolve_testing_registration_review_scopes(text)'];
+ 'hon.resolve_human_work_scope(text)','hon.resolve_teaching_studio_scope(text,uuid)','hon.resolve_testing_registration_review_scopes(text)',
+ // 0249: school missed-call list (caller numbers) for staff with communication.message.read.
+ 'hon.read_school_missed_calls(text,uuid,integer)'];
 
 async function call(f,k,target=k){
  const a=args(f,k,target);

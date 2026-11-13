@@ -71,7 +71,7 @@ stops getting new `AGENT_INFERENCE` calls until HQ raises its ceiling or the mon
 
 ## Plan (TDD)
 
-1. AI-0 INV-33 (fails on main): levels; ceiling via HQ commands; Marcus refused at begin with no provider call; HON turn
+1. AI-0 INV-38 (fails on main): levels; ceiling via HQ commands; Marcus refused at begin with no provider call; HON turn
    refused; other org unaffected; readiness shows `AI_PAUSED_BY_HQ`; hold counts at plan max; reserve guard refuses at 0;
    pause covers `CREATIVE_MEDIA` but not `HQ_INTERNAL`; command authority, version, input, unknown school, replay, key reuse,
    immutable log; runtime ACL.

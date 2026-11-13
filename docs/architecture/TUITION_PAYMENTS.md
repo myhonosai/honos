@@ -39,12 +39,22 @@ the verified session and re-checked by the database):
 | Method | Path | Guard / command header |
 | --- | --- | --- |
 | GET | `receivables?filter=OPEN\|OVERDUE&after=<invoiceId>` | `TuitionReadHumanUiGuard` |
+| GET | `invoices?status=ALL\|DRAFT\|ISSUED\|PAID\|VOID\|UNCOLLECTIBLE&after=<invoiceId>` (0280) | `TuitionReadHumanUiGuard` |
 | GET | `invoices/:invoiceId/payments` | `TuitionReadHumanUiGuard` |
 | POST | `invoices/:invoiceId/payments` | `billing.invoice.payment.record` + Idempotency-Key |
 | POST | `invoice-payments/:paymentId/void` | `billing.invoice.payment.void` + Idempotency-Key |
 
 Responses are `private, no-store`. Every database answer is verified by the `@hon/contracts` verifiers before it reaches a
 client; unknown failures are `TUITION_PAYMENTS_UNAVAILABLE`, never success.
+
+## School invoice list (B-TUI-1b, migration 0280)
+
+`hon.read_school_invoices(subject, {status, after?})` lists the current school's invoices of every status (or one), newest
+first by creation time then id, 50 per page. It has the same readers as receivables (`billing.invoice.payment.record`,
+`.issue` or `.create`, re-proved after the read) and says whether the reader may also issue (`canIssue`) or record
+(`canRecord`). A cursor must be an invoice of this school; another school's id is refused, never disclosed. Each row is the
+0240 balance row plus `createdAt`; a DRAFT has no payments and is never overdue. Read-only: no DML. It exists so a DRAFT that
+was not issued at once can be found and issued later (full-build weak spot 5).
 
 ## Web
 
@@ -60,6 +70,9 @@ Page text is English only for now (the menu label has English, Korean and Spanis
 HTTP, including partial then full payment, overpayment, currency, future date, stale version, replay and key reuse, one
 winner of two concurrent records, void back to ISSUED, live grant/expiry/school/entitlement loss, browser transport,
 settings-free triggers, runtime ACL, the 011 section, and no change to other invoices, payment attempts or refund records.
+With 0280 the same proof (190 checks) also covers the invoice list: only the current school, newest first, the status
+filter, a two-page cursor over 58 invoices, another school's cursor refused, readers and `canIssue`/`canRecord`, no DML,
+runtime EXECUTE only and its 011 section.
 
 ## Residual risks and follow-ups
 

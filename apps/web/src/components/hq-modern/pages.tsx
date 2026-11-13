@@ -6,6 +6,8 @@ import { HQ_EXECUTIVES, HQ_GROWTH, HQ_PLANNED, HQ_RESPONSIBILITIES } from './cat
 import { ExecutiveCards, ExecutivePortrait, GrowthLinks } from './dashboard';
 import { useHqModern } from './shell';
 import { HqIcon } from './icon';
+import { isHqHonAgent } from '@hon/contracts';
+import { HqHonPanel } from '../hq-hon/hq-hon-panel';
 import styles from './hq-modern.module.css';
 
 export function HqModernExecutives(): React.ReactElement {
@@ -21,6 +23,7 @@ export function HqExecutiveWorkspace({ executiveKey }: { executiveKey: string })
   return <>
     <Link href="/hq/executives" className={styles.backLink}>← Executive Team</Link>
     <section className={`${styles.panel} ${styles.profileHero}`}><ExecutivePortrait index={index} executiveKey={executive.executiveKey} name={executive.displayName}/><div><p className={styles.eyebrow}>HQ executive workspace</p><h2>{executive.displayName}</h2><h3>{executive.title}</h3><p>{HQ_RESPONSIBILITIES[executiveKey]}</p><span className={styles.badge}>No recorded work</span></div><button type="button" className={styles.primary} onClick={openAssistant}>Open HON assistant</button></section>
+    {isHqHonAgent(executive.executiveKey) && <section className={styles.panel}><HqHonPanel agentKey={executive.executiveKey} name={executive.displayName}/></section>}
     <div className={styles.tabBar} role="group" aria-label={`${executive.displayName} workspace sections`}>{['Task history', 'Recommendations', 'Approvals', 'Performance'].map((label) => <button type="button" key={label} aria-pressed={tab === label} onClick={() => setTab(label)}>{label}</button>)}</div>
     <section className={`${styles.panel} ${styles.emptyState}`} aria-live="polite"><HqIcon name="database" size={36}/><h2>{tab} unavailable</h2><p>This executive does not have an active durable HQ workspace service. No tasks, recommendations, decisions or results are inferred.</p><span className={styles.badge}>Planned integration</span></section>
   </>;
