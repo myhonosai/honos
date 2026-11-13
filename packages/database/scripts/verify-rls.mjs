@@ -208,6 +208,8 @@ const expectedRlsTables = [
   'families',
   'family_access_grants',
   'family_members',
+  'family_message_threads',
+  'family_messages',
   'hq_ai_provider_connections',
   'hq_ai_model_catalog',
   'hq_ai_routing_policies',

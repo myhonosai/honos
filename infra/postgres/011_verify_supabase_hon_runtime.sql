@@ -3582,7 +3582,7 @@ END $$;
 -- Parent class booking exact verification (0329): private helpers and three runtime entry points.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.parent_class_booking_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','4ece4170e73ae487d017f6a394a3757547a18f0fc08b91f6e7956ff6877d4d64'),
+('hon.parent_class_booking_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','743cf1c21f074a7a4dbc413e04aa8c2deb59ea68cbc7845ea37dbc0213e19933'),
 ('hon.parent_class_booking_child_ok(uuid,uuid)',true,false,'search_path=pg_catalog, hon','237a329c4db7c485ffa5521d1a4028ed443de87e157873ac4e2b17fdc11110d7'),
 ('hon.parent_class_booking_session_ok(uuid,hon.class_sessions)',true,false,'search_path=pg_catalog, hon','34c305ae6857963bed97c48089b88563e20dfd2091d60888830d6cfedb7cc183'),
 ('hon.parent_class_booking_seats(uuid)',true,false,'search_path=pg_catalog, hon','d05efcb128c7e55cfef7d12d6db9d25bd8c314bc20305ad2cc38055123f4f3eb'),
@@ -3591,7 +3591,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.parent_class_booking_finish(text,text,uuid,jsonb,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)',true,false,'search_path=pg_catalog, hon','a9ddf831453529fd97154ae53e60eb65f1e023218b332008491e172d3a97e5e0'),
 ('hon.read_parent_class_booking_choices(text)',true,true,'search_path=pg_catalog, hon','edd9ec2e0d2c427c5ab4ea2e44be2d7c7b42fc702ec897b6d96187a7459318d4'),
 ('hon.book_parent_class_session(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','3370b119da07e09107e79c289f816b6e5a89313503f71cdfefefb8e8b8f7a70e'),
-('hon.cancel_parent_class_booking(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','a9d03e032c77500b5dcc82411c750507b689472d6efed7ba86eb38842dec5e2d')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+('hon.cancel_parent_class_booking(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','3ba7638f326952cc3589d28740abc64d8d45faf4f5527f667319e08bc6f88aee')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
@@ -3603,3 +3603,43 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END LOOP;
 END $$;
 -- End parent class booking exact verification.
+
+-- Family messages exact verification (0330): private helpers, private forced-RLS tables and six runtime entry points.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.family_message_body_ok(text)',false,false,'search_path=pg_catalog','911c8020274ce0bad19829ea68cafc456c16dd76f61ef1fbe827e68611e0b146'),
+('hon.guard_family_message_thread()',false,false,'search_path=pg_catalog, hon','f1492f25d9552a3a0c22e7094d719ac3775435655527c010d465a665961f9cbf'),
+('hon.family_message_parent_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','934532bf7f7ae9807bbc7692110f31a3aa0f3359250a578897d95f308e6c6c35'),
+('hon.require_family_messages_actor(text)',true,false,'search_path=pg_catalog, hon','29ee5eb47779b29faf23ddd1598712047d1bc04d905ab7e8bc1b30eae56f686b'),
+('hon.family_message_time(timestamp with time zone)',false,false,'search_path=pg_catalog','e4a86c6f3c7e0d57791518a05be7b1552ebb4b274f34c42dc0e8b86bf6a93d46'),
+('hon.family_message_json(hon.family_messages,uuid)',true,false,'search_path=pg_catalog, hon','baf138c7b630fcb89c0ec813fb95510288fbcf44700df03774940fd2477f0a74'),
+('hon.family_message_list(uuid,uuid)',true,false,'search_path=pg_catalog, hon','c37b4dea088a25f7a72fdffcbacaf890e3080d9d655120dae7d889888135614f'),
+('hon.family_message_unread(hon.family_message_threads)',true,false,'search_path=pg_catalog, hon','6b2760aeceef08a8cf14010c232d91a3af41e181dfc5c48faa438fab7b6cea81'),
+('hon.family_message_read_through(hon.family_message_threads,uuid)',true,false,'search_path=pg_catalog, hon','7c6743a71b1c4f248ff2ef17dbf48622d898689eb7b5027e3512c6bd91ba56c9'),
+('hon.family_message_begin(uuid,text,text)',true,false,'search_path=pg_catalog, hon','ab1a5d9b6f613a0882b3d242846da5cbaa3f5c5487410b76e0969d02494762d6'),
+('hon.family_message_append(hon.family_message_threads,uuid,text,text,text,uuid,uuid)',true,false,'search_path=pg_catalog, hon','3f1ef77db5d298e350ab36c269f6c614450cac712368eb0f9111db2a4591a57b'),
+('hon.read_parent_family_messages(text)',true,true,'search_path=pg_catalog, hon','1def9f2bc2adac08074493044c5212e4def48eaf4989a224878e0f2d202813e0'),
+('hon.send_parent_family_message(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','c55c87326a967de7c244a98197ac0c01c268be3d93e69a6c3d085625054f1f04'),
+('hon.read_family_message_inbox(text)',true,true,'search_path=pg_catalog, hon','bf49605bc28739c2b9fad8e9272d7de8a89726e059efd9a79cdd7442755fadc3'),
+('hon.read_family_message_thread(text,uuid)',true,true,'search_path=pg_catalog, hon','2a3e50dfdfd9e083baec07b7415b69d4d608b42dcd2423b3b0f62795aa594bcb'),
+('hon.mark_family_message_thread_read(text,jsonb,uuid,uuid)',true,true,'search_path=pg_catalog, hon','4a8709f673dad310ca48205c89698a47a3ede41ca75a4a8765919fb9b0599ac6'),
+('hon.reply_family_message(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','15319da45d4f9dfd4c979700a88010b4972d70f90e9594e9afb2887ce3147a7f')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe family message function: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['family_message_threads','family_messages'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe family message table: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End family messages exact verification.
