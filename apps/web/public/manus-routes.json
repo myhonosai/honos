@@ -81,6 +81,10 @@
       "title": "HON | Planned absence history"
     },
     {
+      "path": "/parent/classes",
+      "title": "HON | Book a class"
+    },
+    {
       "path": "/parent/messages",
       "title": "HON | School message history"
     },
