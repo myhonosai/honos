@@ -3288,6 +3288,42 @@ DO $$ DECLARE r text; f text; BEGIN
   END LOOP;
 END $$;
 
+-- B-TUI-2 piece 3 0321 payer saved methods (test mode only): four private tables reached only through six runtime entry
+-- points; guards, validators and helpers are private.
+DO $$ DECLARE r text; t text; col text; f text; BEGIN
+  IF to_regclass('hon.school_pay_methods') IS NULL THEN RAISE EXCEPTION 'Apply migration 0321 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.school_pay_customers','hon.school_pay_method_setups','hon.school_pay_methods','hon.school_pay_method_events'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid=t::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON %s FROM PUBLIC',col,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+        EXECUTE format('REVOKE ALL (%I) ON %s FROM %I',col,t,r);
+      END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_school_pay_method_setup()','hon.guard_school_pay_method()','hon.require_school_pay_method_actor(text,text)',
+    'hon.require_school_pay_method_reader(text)','hon.school_pay_instant(timestamp with time zone)','hon.school_pay_method_json(hon.school_pay_methods)',
+    'hon.school_pay_setup_json(hon.school_pay_method_setups)','hon.school_pay_method_observation_ok(jsonb)','hon.school_pay_method_begin(text,text,text)',
+    'hon.school_pay_method_record(uuid,uuid,text,uuid,integer,text,text,jsonb,jsonb,uuid,uuid)','hon.school_pay_method_complete(text,text,uuid,jsonb)',
+    'hon.school_pay_lock_payer(uuid)','hon.school_pay_lock_method(uuid,integer)','hon.read_school_pay_payer_methods(text,uuid)',
+    'hon.read_school_pay_expiring_methods(text)','hon.start_school_pay_method_setup(text,jsonb,text,uuid,uuid)',
+    'hon.finish_school_pay_method_setup(text,uuid,jsonb,text,uuid,uuid)','hon.set_default_school_pay_method(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.remove_school_pay_method(text,uuid,jsonb,text,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_pay_payer_methods(text,uuid),hon.read_school_pay_expiring_methods(text),
+      hon.start_school_pay_method_setup(text,jsonb,text,uuid,uuid),hon.finish_school_pay_method_setup(text,uuid,jsonb,text,uuid,uuid),
+      hon.set_default_school_pay_method(text,uuid,jsonb,text,uuid,uuid),hon.remove_school_pay_method(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
 -- R1 0331 school reports: one read-only runtime entry point; the actor check and the period builder are private. The
 -- runtime gains no table privilege.
 DO $$ DECLARE r text; f text; BEGIN
