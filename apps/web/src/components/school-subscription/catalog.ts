@@ -70,6 +70,8 @@ export type HonOsPriceKind = typeof SAAS_SCHEDULED_OFFER_KINDS[number];
 export type HonOsPriceRow = {
   kind: HonOsPriceKind; founder: boolean; annual: boolean; priceMinor: number; standardPriceMinor: number;
   source: 'SERVER_OFFER' | 'LAUNCH_REFERENCE' | 'NOT_ON_SALE';
+  /** The server offer's id and whether this school may buy it now; null and false for a launch reference price. */
+  offerId: string | null; eligible: boolean;
   founderSpot: { state: 'AVAILABLE' | 'UNAVAILABLE' | 'UNVERIFIED'; reason: SaasFounderUnavailableReason | null } | null;
 };
 export const HON_OS_PRICE_LABELS: Record<HonOsPriceKind, string> = {
@@ -95,6 +97,7 @@ export function honOsPriceRows(offers: SaasHonOsSchoolOfferView | null, founder:
       standardPriceMinor: spot?.standardPriceMinor ?? standard,
       // A published offer set that leaves a kind out means that price is not on sale now (e.g. founder sales closed).
       source: server ? 'SERVER_OFFER' : offers && offers.offerSetVersion !== null ? 'NOT_ON_SALE' : 'LAUNCH_REFERENCE',
+      offerId: server?.offerId ?? null, eligible: server?.eligibility === 'ELIGIBLE',
       founderSpot: !isFounder ? null : spot ? { state: spot.available ? 'AVAILABLE' : 'UNAVAILABLE', reason: spot.reason }
         : founder?.organizationUsedFounderSpot ? { state: 'UNAVAILABLE', reason: 'FOUNDER_ALREADY_USED' }
         : founder && founder.pool.remaining === 0 ? { state: 'UNAVAILABLE', reason: 'FOUNDER_SOLD_OUT' } : { state: 'UNVERIFIED', reason: null },
@@ -104,7 +107,7 @@ export function honOsPriceRows(offers: SaasHonOsSchoolOfferView | null, founder:
 
 /** A one-time (lifetime) HON OS offer the HQ owner published. Shown only from the server; there is no launch reference for it. */
 export type HonOsOneTimeRow = {
-  offerCode: string; displayName: string; founder: boolean; priceMinor: number; refundWindowDays: number | null;
+  offerId: string; offerCode: string; displayName: string; founder: boolean; priceMinor: number; refundWindowDays: number | null;
   available: boolean; eligibility: SaasHonOsSchoolOfferEligibility;
 };
 export const ONE_TIME_ELIGIBILITY_COPY: Record<SaasHonOsSchoolOfferEligibility, string> = {
@@ -118,7 +121,7 @@ export const ONE_TIME_ELIGIBILITY_COPY: Record<SaasHonOsSchoolOfferEligibility, 
 };
 export function honOsOneTimeRows(offers: SaasHonOsSchoolOfferView | null): HonOsOneTimeRow[] {
   return (offers?.offers ?? []).filter((o) => o.billingInterval === 'ONE_TIME').map((o) => ({
-    offerCode: o.offerCode, displayName: o.displayName, founder: o.founder, priceMinor: o.priceMinor,
+    offerId: o.offerId, offerCode: o.offerCode, displayName: o.displayName, founder: o.founder, priceMinor: o.priceMinor,
     refundWindowDays: o.refundWindowDays, available: o.eligibility === 'ELIGIBLE', eligibility: o.eligibility,
   }));
 }
