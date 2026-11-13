@@ -1,5 +1,5 @@
 import {
-  validateReplyFamilyMessageInput, validateSendFamilyMessageInput, verifyFamilyMessageInbox, verifyFamilyMessageReadMark, verifyFamilyMessageReceipt,
+  validateMarkFamilyMessageReadInput, validateReplyFamilyMessageInput, validateSendFamilyMessageInput, verifyFamilyMessageInbox, verifyFamilyMessageReadMark, verifyFamilyMessageReceipt,
   verifyFamilyMessageThread, verifyParentFamilyMessages,
   type FamilyMessageInbox, type FamilyMessageReadMark, type FamilyMessageReceipt, type FamilyMessageThread, type ParentFamilyMessages,
 } from '@hon/contracts';
@@ -67,13 +67,14 @@ export async function loadFamilyMessageThread(scope: FamilyMessagesScope, thread
   const id = thread(threadId);
   return verifyFamilyMessageThread((await call(`${base(scope)}/${id}`, 'GET')).data, id);
 }
-export async function markFamilyMessageThreadRead(scope: FamilyMessagesScope, threadId: string): Promise<FamilyMessageReadMark> {
-  const id = thread(threadId);
-  return verifyFamilyMessageReadMark((await call(`${base(scope)}/${id}/read`, 'POST', 'family_messages.mark_read', {})).data, id);
+/** throughMessageId is the newest message on screen: the read mark never moves past what the staff member saw. */
+export async function markFamilyMessageThreadRead(scope: FamilyMessagesScope, threadId: string, throughMessageId: string): Promise<FamilyMessageReadMark> {
+  const input = validateMarkFamilyMessageReadInput({ threadId: thread(threadId), throughMessageId: thread(throughMessageId) });
+  return verifyFamilyMessageReadMark((await call(`${base(scope)}/${input.threadId}/read`, 'POST', 'family_messages.mark_read', { throughMessageId: input.throughMessageId })).data, input.threadId);
 }
-export async function replyFamilyMessage(scope: FamilyMessagesScope, threadId: string, text: string, key: string): Promise<{ receipt: FamilyMessageReceipt; replayed: boolean }> {
-  const input = validateReplyFamilyMessageInput({ threadId: thread(threadId), body: text });
-  const out = await call(`${base(scope)}/${input.threadId}/replies`, 'POST', 'family_messages.reply', { body: input.body }, key);
+export async function replyFamilyMessage(scope: FamilyMessagesScope, threadId: string, text: string, key: string, throughMessageId: string): Promise<{ receipt: FamilyMessageReceipt; replayed: boolean }> {
+  const input = validateReplyFamilyMessageInput({ threadId: thread(threadId), body: text, throughMessageId: thread(throughMessageId) });
+  const out = await call(`${base(scope)}/${input.threadId}/replies`, 'POST', 'family_messages.reply', { body: input.body, throughMessageId: input.throughMessageId }, key);
   return { receipt: verifyFamilyMessageReceipt(out.data, { from: 'SCHOOL', body: input.body, threadId: input.threadId }), replayed: replayed(out.meta) };
 }
 

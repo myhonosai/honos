@@ -94,7 +94,7 @@ const parentSend = (actor, body, options = {}) => call(actor, 'POST', '/parent/m
 const base = (actor) => `/organizations/${actor.org}/schools/${actor.school}/family-messages`;
 const inbox = (actor, options = {}) => call(actor, 'GET', base(actor), options);
 const thread = (actor, id, options = {}) => call(actor, 'GET', `${base(actor)}/${id}`, options);
-const markRead = (actor, id, options = {}) => call(actor, 'POST', `${base(actor)}/${id}/read`, { body: {}, key: null, command: 'family_messages.mark_read', ...options });
+const markRead = (actor, id, through, options = {}) => call(actor, 'POST', `${base(actor)}/${id}/read`, { body: { throughMessageId: through }, key: null, command: 'family_messages.mark_read', ...options });
 const reply = (actor, id, body, options = {}) => call(actor, 'POST', `${base(actor)}/${id}/replies`, { body, command: 'family_messages.reply', ...options });
 
 async function success(read, label, expectedStatus = 200) {
@@ -234,31 +234,45 @@ try {
   const open = (await success(() => thread(COACH, T), 'staff opens the thread')).data;
   ok(open.messages.length === 2 && open.messages[0].body === TEXT && open.unreadCount === 2, 'reading does not mark read');
 
-  // 4. Mark read, then reply; families never see staff names.
-  await refused(() => markRead(COACH, T, { body: { at: 1 } }), 400, 'VALIDATION_FAILED', 'mark read takes an empty body');
-  await refused(() => markRead(COACH, T, { key: 'k' }), 409, 'IDEMPOTENCY_KEY_NOT_ACCEPTED', 'mark read takes no key');
-  await refused(() => markRead(COACH_B, T), 404, 'FAMILY_MESSAGES_NOT_FOUND', 'another school cannot mark it');
-  const marked = (await success(() => markRead(COACH, T), 'mark read')).data;
-  ok(marked.unreadCount === 0 && marked.version === 4, 'marked read');
-  ok((await success(() => markRead(COACH, T), 'mark read again')).data.version === 4, 'marking again changes nothing');
+  // 4. Mark read up to what was loaded, then reply; families never see staff names.
+  const firstId = open.messages[0].messageId, loadedId = open.messages[1].messageId;
+  await refused(() => markRead(COACH, T, undefined, { body: {} }), 400, 'VALIDATION_FAILED', 'mark read needs the loaded message');
+  await refused(() => markRead(COACH, T, loadedId, { body: { throughMessageId: loadedId, at: 1 } }), 400, 'VALIDATION_FAILED', 'mark read takes no other field');
+  await refused(() => markRead(COACH, T, loadedId, { key: 'k' }), 409, 'IDEMPOTENCY_KEY_NOT_ACCEPTED', 'mark read takes no key');
+  await refused(() => markRead(COACH_B, T, loadedId), 404, 'FAMILY_MESSAGES_NOT_FOUND', 'another school cannot mark it');
+  await refused(() => markRead(COACH, T, randomUUID()), 404, 'FAMILY_MESSAGES_NOT_FOUND', 'a message outside the thread');
+  const partly = (await success(() => markRead(COACH, T, firstId), 'mark read through the first message')).data;
+  ok(partly.unreadCount === 1 && partly.version === 4, 'only what was loaded is marked read');
+  ok((await success(() => markRead(COACH, T, firstId), 'mark the same again')).data.version === 4, 'marking again changes nothing');
+  const marked = (await success(() => markRead(COACH, T, loadedId), 'mark read')).data;
+  ok(marked.unreadCount === 0 && marked.version === 5, 'marked read');
+  ok((await success(() => markRead(COACH, T, firstId), 'an older mark')).data.version === 5, 'the read mark never moves back');
   ok((await success(() => inbox(COACH), 'inbox after read')).data.unreadThreads === 0, 'no unread threads');
-  await refused(() => reply(NOPE, T, { body: 'Hi' }), 403, 'FAMILY_MESSAGES_FORBIDDEN', 'reply without permission');
-  await refused(() => reply(COACH, T, { body: 'Hi' }, { key: null }), 409, 'IDEMPOTENCY_KEY_REQUIRED', 'reply without a key');
-  await refused(() => reply(COACH, T, { body: 'Hi', threadId: T }), 400, 'VALIDATION_FAILED', 'reply with an extra key');
-  await refused(() => reply(COACH, randomUUID(), { body: 'Hi' }), 404, 'FAMILY_MESSAGES_NOT_FOUND', 'reply to an unknown thread');
-  await refused(() => reply(COACH_B, T, { body: 'Hi' }), 404, 'FAMILY_MESSAGES_NOT_FOUND', 'reply from another school');
+  // A family message that arrives after the staff member loaded the thread stays unread through a reply.
+  const late = await success(() => parentSend(GUARDIAN, { body: 'One more thing about Tuesday.' }), 'family writes after the load', 201);
+  ok(late.data.version === 6, 'late family message');
+  await refused(() => reply(NOPE, T, { body: 'Hi', throughMessageId: loadedId }), 403, 'FAMILY_MESSAGES_FORBIDDEN', 'reply without permission');
+  await refused(() => reply(COACH, T, { body: 'Hi', throughMessageId: loadedId }, { key: null }), 409, 'IDEMPOTENCY_KEY_REQUIRED', 'reply without a key');
+  await refused(() => reply(COACH, T, { body: 'Hi', threadId: T, throughMessageId: loadedId }), 400, 'VALIDATION_FAILED', 'reply with an extra key');
+  await refused(() => reply(COACH, T, { body: 'Hi' }), 400, 'VALIDATION_FAILED', 'reply needs the loaded message');
+  await refused(() => reply(COACH, randomUUID(), { body: 'Hi', throughMessageId: loadedId }), 404, 'FAMILY_MESSAGES_NOT_FOUND', 'reply to an unknown thread');
+  await refused(() => reply(COACH_B, T, { body: 'Hi', throughMessageId: loadedId }), 404, 'FAMILY_MESSAGES_NOT_FOUND', 'reply from another school');
+  await refused(() => reply(COACH, T, { body: 'Hi', throughMessageId: randomUUID() }), 404, 'FAMILY_MESSAGES_NOT_FOUND', 'reply through a message outside the thread');
   const replyKey = randomUUID();
-  const answered = await success(() => reply(COACH, T, { body: 'Thanks, see you Tuesday.' }, { key: replyKey }), 'staff replies', 201);
-  ok(answered.data.message.from === 'SCHOOL' && answered.data.message.mine && answered.data.version === 5 && answered.meta.replayed === false, 'reply stored');
-  ok((await success(() => reply(COACH, T, { body: 'Thanks, see you Tuesday.' }, { key: replyKey }), 'reply replay')).meta.replayed === true, 'reply replay');
+  const answered = await success(() => reply(COACH, T, { body: 'Thanks, see you Tuesday.', throughMessageId: loadedId }, { key: replyKey }), 'staff replies', 201);
+  ok(answered.data.message.from === 'SCHOOL' && answered.data.message.mine && answered.data.version === 7 && answered.meta.replayed === false, 'reply stored');
+  ok((await success(() => reply(COACH, T, { body: 'Thanks, see you Tuesday.', throughMessageId: late.data.message.messageId }, { key: replyKey }), 'reply replay')).meta.replayed === true, 'a retry after a refresh replays the reply');
+  const after = (await success(() => thread(COACH, T), 'thread after the reply')).data;
+  ok(after.unreadCount === 1 && after.version === 7, 'the late family message is still unread after the reply');
+  ok((await success(() => markRead(COACH, T, after.messages.at(-1).messageId), 'mark read through the reply')).data.unreadCount === 0, 'marking through the reply reads the late message');
   const family = (await success(() => parentRead(GUARDIAN), 'parent sees the reply')).data;
-  ok(family.messages.length === 3 && family.messages[2].from === 'SCHOOL' && family.messages[2].mine === false && family.messages[0].mine === true, 'the reply shows as from the school');
+  ok(family.messages.length === 4 && family.messages[3].from === 'SCHOOL' && family.messages[3].mine === false && family.messages[0].mine === true, 'the reply shows as from the school');
   ok(!JSON.stringify(family).includes('Secret-Staff-Name') && !JSON.stringify(family).includes(COACH.principal), 'no staff name or id reaches the family');
   ok((await success(() => inbox(COACH), 'inbox after reply')).data.threads[0].lastFrom === 'SCHOOL', 'the inbox shows the school answered');
 
   // 5. Audit and outbox carry ids only.
-  ok((await sql("SELECT count(*)::int n FROM hon.audit_events WHERE entity_id=$1 AND entity_type='FAMILY_MESSAGE_THREAD' AND action_code IN ('family_message.family_send','family_message.staff_reply')", [T])).rows[0].n === 3, 'three audit rows');
-  ok((await sql("SELECT count(*)::int n FROM hon.outbox_events WHERE aggregate_id=$1 AND event_type IN ('family_message.family_sent','family_message.staff_replied')", [T])).rows[0].n === 3, 'three inert outbox events');
+  ok((await sql("SELECT count(*)::int n FROM hon.audit_events WHERE entity_id=$1 AND entity_type='FAMILY_MESSAGE_THREAD' AND action_code IN ('family_message.family_send','family_message.staff_reply')", [T])).rows[0].n === 4, 'four audit rows');
+  ok((await sql("SELECT count(*)::int n FROM hon.outbox_events WHERE aggregate_id=$1 AND event_type IN ('family_message.family_sent','family_message.staff_replied')", [T])).rows[0].n === 4, 'four inert outbox events');
   ok((await sql("SELECT count(*)::int n FROM hon.outbox_events WHERE aggregate_id=$1 AND (payload::text LIKE '%Tuesday%' OR payload::text LIKE '%lesson%')", [T])).rows[0].n === 0
     && (await sql("SELECT count(*)::int n FROM hon.audit_events WHERE entity_id=$1 AND (next_state::text LIKE '%Tuesday%' OR prior_state::text LIKE '%Tuesday%')", [T])).rows[0].n === 0, 'no message text in audit or outbox');
 
@@ -273,7 +287,7 @@ try {
   await sql(`INSERT INTO hon.family_messages(thread_id,organization_id,school_id,family_id,author_kind,author_principal_id,body)
     SELECT $1,$2,$3,$4,'SCHOOL',$5,'filler' FROM generate_series(1,600-(SELECT count(*)::int FROM hon.family_messages WHERE school_id=$3))`,
     [busy.data.threadId, ids.organization, ids.school, ids.busyFamily, COACH.principal]);
-  await refused(() => reply(COACH, T, { body: 'Over the school limit' }), 429, 'FAMILY_MESSAGES_RATE_LIMITED', 'the 601st school message in an hour');
+  await refused(() => reply(COACH, T, { body: 'Over the school limit', throughMessageId: loadedId }), 429, 'FAMILY_MESSAGES_RATE_LIMITED', 'the 601st school message in an hour');
   await refused(() => parentSend(GUARDIAN, { body: 'Over the school limit' }), 429, 'FAMILY_MESSAGES_RATE_LIMITED', 'families share the school limit');
   await sql("ALTER TABLE hon.family_messages DISABLE TRIGGER family_messages_immutable");
   await sql("UPDATE hon.family_messages SET created_at=created_at-interval '2 hours' WHERE thread_id=$1", [busy.data.threadId]);
@@ -311,7 +325,7 @@ try {
     'read_family_message_thread(text,uuid)', 'mark_family_message_thread_read(text,jsonb,uuid,uuid)', 'reply_family_message(text,jsonb,text,uuid,uuid)'];
   const helpers = ['family_message_body_ok(text)', 'guard_family_message_thread()', 'family_message_parent_scope(text,boolean)', 'require_family_messages_actor(text)',
     'family_message_time(timestamp with time zone)', 'family_message_json(hon.family_messages,uuid)', 'family_message_list(uuid,uuid)',
-    'family_message_unread(hon.family_message_threads)', 'family_message_begin(uuid,text,text)', 'family_message_append(hon.family_message_threads,uuid,text,text,text,uuid,uuid)'];
+    'family_message_unread(hon.family_message_threads)', 'family_message_read_through(hon.family_message_threads,uuid)', 'family_message_begin(uuid,text,text)', 'family_message_append(hon.family_message_threads,uuid,text,text,text,uuid,uuid)'];
   for (const fn of entry) {
     const r = (await sql(`SELECT has_function_privilege($1,$2,'EXECUTE') runtime, p.prosecdef, EXISTS(SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee=0) public
       FROM pg_proc p WHERE p.oid=$2::regprocedure`, [CRM_CLOSE_RUNTIME_ROLE, `hon.${fn}`])).rows[0];

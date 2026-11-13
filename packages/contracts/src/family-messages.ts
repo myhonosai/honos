@@ -19,7 +19,9 @@ export interface FamilyMessageInbox { threads: FamilyMessageInboxThread[]; unrea
 export interface FamilyMessageThread { threadId: string; familyId: string; familyName: string; version: number; unreadCount: number; messages: FamilyMessage[] }
 export interface FamilyMessageReadMark { threadId: string; version: number; unreadCount: number }
 export interface SendFamilyMessageInput { body: string }
-export interface ReplyFamilyMessageInput { threadId: string; body: string }
+/** throughMessageId is the newest message the staff member loaded: the read mark moves up to it and never past it. */
+export interface ReplyFamilyMessageInput { threadId: string; body: string; throughMessageId: string }
+export interface MarkFamilyMessageReadInput { threadId: string; throughMessageId: string }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
@@ -55,9 +57,13 @@ export function validateSendFamilyMessageInput(value: unknown): SendFamilyMessag
   return { body: row.body };
 }
 export function validateReplyFamilyMessageInput(value: unknown): ReplyFamilyMessageInput {
-  const row = record(value, ['threadId', 'body']);
+  const row = record(value, ['threadId', 'body', 'throughMessageId']);
   if (!familyMessageBodyOk(row.body)) invalid();
-  return { threadId: uuid(row.threadId), body: row.body };
+  return { threadId: uuid(row.threadId), body: row.body, throughMessageId: uuid(row.throughMessageId) };
+}
+export function validateMarkFamilyMessageReadInput(value: unknown): MarkFamilyMessageReadInput {
+  const row = record(value, ['threadId', 'throughMessageId']);
+  return { threadId: uuid(row.threadId), throughMessageId: uuid(row.throughMessageId) };
 }
 
 export function verifyFamilyMessage(value: unknown): FamilyMessage {
@@ -114,6 +120,6 @@ export function verifyFamilyMessageThread(value: unknown, threadId: string): Fam
 export function verifyFamilyMessageReadMark(value: unknown, threadId: string): FamilyMessageReadMark {
   const row = record(value, ['threadId', 'version', 'unreadCount']);
   const out = { threadId: uuid(row.threadId), version: count(row.version, 1), unreadCount: count(row.unreadCount, 0) };
-  if (out.threadId !== threadId || out.unreadCount !== 0) invalid();
+  if (out.threadId !== threadId) invalid();
   return out;
 }

@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, HttpExcepti
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import {
-  validateReplyFamilyMessageInput, validateSendFamilyMessageInput, verifyFamilyMessageInbox, verifyFamilyMessageReadMark, verifyFamilyMessageReceipt,
+  validateMarkFamilyMessageReadInput, validateReplyFamilyMessageInput, validateSendFamilyMessageInput, verifyFamilyMessageInbox, verifyFamilyMessageReadMark, verifyFamilyMessageReceipt,
   verifyFamilyMessageThread, verifyParentFamilyMessages,
   type FamilyMessageInbox, type FamilyMessageReadMark, type FamilyMessageReceipt, type FamilyMessageThread, type ParentFamilyMessages,
 } from '@hon/contracts';
@@ -104,15 +104,20 @@ export class FamilyMessagesService {
       data => verifyFamilyMessageThread(data, threadId));
   }
 
-  async markRead(context: MembershipLifecycleContext, threadId: string): Promise<FamilyMessageReadMark> {
+  async markRead(context: MembershipLifecycleContext, threadId: string, value: unknown): Promise<FamilyMessageReadMark> {
     this.assertStaff(context, false);
-    if (typeof threadId !== 'string' || !UUID.test(threadId)) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
+    let input;
+    try {
+      const body = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+      if (Object.keys(body).join() !== 'throughMessageId') throw new Error('shape');
+      input = validateMarkFamilyMessageReadInput({ threadId, throughMessageId: body.throughMessageId });
+    } catch { throw new BadRequestException({ code: 'VALIDATION_FAILED' }); }
     try {
       return await this.database.withTenantTransaction(context, async client => {
         await client.query(WRITE_LIMITS);
         await client.query(HUMAN_SETTINGS, [context.externalSubject]);
         const data = await this.one(client, 'SELECT hon.mark_family_message_thread_read($1,$2::jsonb,$3::uuid,$4::uuid) AS data',
-          [context.externalSubject, JSON.stringify({ threadId }), context.requestId, context.correlationId]);
+          [context.externalSubject, JSON.stringify(input), context.requestId, context.correlationId]);
         return verifyFamilyMessageReadMark(data, threadId);
       });
     } catch (error) { return translate(error); }
@@ -123,8 +128,8 @@ export class FamilyMessagesService {
     let input;
     try {
       const body = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
-      if (Object.keys(body).join() !== 'body') throw new Error('shape');
-      input = validateReplyFamilyMessageInput({ threadId, body: body.body });
+      if (Object.keys(body).sort().join() !== 'body,throughMessageId') throw new Error('shape');
+      input = validateReplyFamilyMessageInput({ threadId, body: body.body, throughMessageId: body.throughMessageId });
     } catch { throw new BadRequestException({ code: 'VALIDATION_FAILED' }); }
     try {
       return await this.database.withTenantTransaction(context, async client => {

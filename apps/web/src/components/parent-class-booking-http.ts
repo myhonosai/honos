@@ -31,6 +31,8 @@ async function call(method: 'GET' | 'POST', path: string, command?: string, body
     if (response.status === 401) throw new ParentClassBookingAccessError('Your session has ended. Sign in again.', 401);
     if (response.status === 403) throw new ParentClassBookingAccessError('Booking is not available on this account right now.', 403);
     if (MESSAGES[String(root.code)]) throw new ParentClassBookingRefusal(MESSAGES[String(root.code)]!);
+    // Another tab is still sending with this key: the outcome is unknown, so the key is kept for an exact retry.
+    if (root.code === 'IDEMPOTENCY_IN_PROGRESS') throw new Error('This request is still being processed. Wait a moment, then refresh to check.');
     if (response.status < 500) throw new ParentClassBookingRefusal('This request was not accepted. Nothing was changed. Refresh and try again.');
     throw new Error('Booking is unavailable right now. Nothing was changed that we know of. Refresh and try again.');
   }

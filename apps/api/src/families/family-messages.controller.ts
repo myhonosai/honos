@@ -105,9 +105,8 @@ export class FamilyMessagesInboxController {
     @Req() request: HonRequest) {
     noSelectors(request, query);
     if (key !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
-    if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
     const context = await this.context(request, organizationId, schoolId, '');
-    return { data: await this.messages.markRead(context, threadId), meta: { requestId: context.requestId } };
+    return { data: await this.messages.markRead(context, threadId, body), meta: { requestId: context.requestId } };
   }
 
   @Post(':threadId/replies')

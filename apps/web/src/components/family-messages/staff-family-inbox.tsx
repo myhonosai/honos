@@ -14,7 +14,7 @@ function failure(error: unknown) { return error instanceof Error ? error.message
 
 /**
  * 0330 staff inbox: every family conversation of the verified school, newest first, with unread counts. Opening a thread
- * does not mark it read; "Mark read" and a reply do. The server checks family_messages.manage on every call. Nothing is
+ * does not mark it read; "Mark read" and a reply do, up to the newest message on screen, so a later family message stays unread. The server checks family_messages.manage on every call. Nothing is
  * texted or emailed; families see the reply as from the school.
  */
 export function StaffFamilyInbox(): React.ReactElement {
@@ -55,10 +55,11 @@ export function StaffFamilyInbox(): React.ReactElement {
   }
   async function sendReply(event: React.FormEvent) {
     event.preventDefault();
-    if (!scope || !open || acting || !familyMessageBodyOk(text)) return;
+    const seen = open?.messages.at(-1)?.messageId;
+    if (!scope || !open || !seen || acting || !familyMessageBodyOk(text)) return;
     attempt.current = sendAttempt(`${open.threadId}:${text}`, attempt.current, () => crypto.randomUUID());
     const key = attempt.current.key, threadId = open.threadId;
-    const result = await command(() => replyFamilyMessage(scope, threadId, text, key), `Reply sent to ${open.familyName}.`, threadId);
+    const result = await command(() => replyFamilyMessage(scope, threadId, text, key, seen), `Reply sent to ${open.familyName}.`, threadId);
     if (result === true) { attempt.current = null; setText(''); }
     else if (result instanceof FamilyMessagesRefusal) attempt.current = null;
   }
@@ -87,8 +88,8 @@ export function StaffFamilyInbox(): React.ReactElement {
       <ol className={s.list}>{open.messages.map(m => <li key={m.messageId}>
         <p><strong>{m.from === 'FAMILY' ? open.familyName : m.mine ? 'You' : 'School staff'}</strong> · <span className={s.subtle}>{when(m.sentAt)}</span></p>
         <p style={{ whiteSpace: 'pre-wrap' }}>{m.body}</p></li>)}</ol>
-      {open.unreadCount > 0 && <p className={s.actions}><button type="button" disabled={acting}
-        onClick={() => void command(() => markFamilyMessageThreadRead(scope, open.threadId), 'Marked read.', open.threadId)}>Mark read ({open.unreadCount} new)</button></p>}
+      {open.unreadCount > 0 && open.messages.length > 0 && <p className={s.actions}><button type="button" disabled={acting}
+        onClick={() => void command(() => markFamilyMessageThreadRead(scope, open.threadId, open.messages.at(-1)!.messageId), 'Marked read.', open.threadId)}>Mark read ({open.unreadCount} new)</button></p>}
       <form onSubmit={sendReply}>
         <label htmlFor="family-reply">Reply to {open.familyName}</label>
         <textarea id="family-reply" rows={4} value={text} maxLength={FAMILY_MESSAGE_LIMITS.bodyMax + 1} onChange={e => setText(e.target.value)} disabled={acting} />

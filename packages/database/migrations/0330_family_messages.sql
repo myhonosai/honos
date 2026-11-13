@@ -261,6 +261,19 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
     AND (t.staff_read_at IS NULL OR m.created_at>t.staff_read_at);
 $$;
 
+-- Moves the staff read mark of a locked thread up to one of its own messages, never back and never past it.
+CREATE FUNCTION hon.family_message_read_through(t hon.family_message_threads, through uuid) RETURNS hon.family_message_threads
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE upto timestamptz; nt hon.family_message_threads;
+BEGIN
+  SELECT m.created_at INTO upto FROM hon.family_messages m WHERE m.id=through AND m.thread_id=t.id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'FAMILY_MESSAGES_NOT_FOUND' USING ERRCODE='P0002'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM hon.family_messages m WHERE m.thread_id=t.id AND m.author_kind='FAMILY' AND m.created_at<=upto
+      AND (t.staff_read_at IS NULL OR m.created_at>t.staff_read_at)) THEN RETURN t; END IF;
+  UPDATE hon.family_message_threads SET staff_read_at=upto,version=version+1,updated_at=clock_timestamp() WHERE id=t.id RETURNING * INTO nt;
+  RETURN nt;
+END $$;
+
 -- Exact-request idempotency for one actor: NULL when reserved now, else the earlier exact result.
 CREATE FUNCTION hon.family_message_begin(actor uuid, key text, fp text) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
@@ -294,7 +307,7 @@ BEGIN
   INSERT INTO hon.family_messages(thread_id,organization_id,school_id,family_id,author_kind,author_principal_id,body)
     VALUES(t.id,t.organization_id,t.school_id,t.family_id,author,actor,body) RETURNING * INTO m;
   UPDATE hon.family_message_threads SET message_count=message_count+1,last_message_at=m.created_at,last_from=author,
-    staff_read_at=CASE WHEN author='SCHOOL' THEN m.created_at ELSE staff_read_at END,version=version+1,updated_at=clock_timestamp()
+    version=version+1,updated_at=clock_timestamp()
     WHERE id=t.id RETURNING * INTO nt;
   result:=jsonb_build_object('threadId',nt.id,'version',nt.version,'message',hon.family_message_json(m,actor));
   ids:=jsonb_build_object('threadId',nt.id,'messageId',m.id,'familyId',nt.family_id,'from',author,'version',nt.version);
@@ -324,7 +337,7 @@ END $$;
 -- B1 parent send.
 CREATE FUNCTION hon.send_parent_family_message(subject text, p jsonb, key text, request uuid, correlation uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-DECLARE sc record; prior jsonb; t hon.family_message_threads; result jsonb; live uuid;
+DECLARE sc record; prior jsonb; t hon.family_message_threads; result jsonb; live uuid; live_family uuid;
 BEGIN
   IF jsonb_typeof(p) IS DISTINCT FROM 'object' OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p) k) IS DISTINCT FROM ARRAY['body']
     OR jsonb_typeof(p->'body') IS DISTINCT FROM 'string' OR NOT hon.family_message_body_ok(p->>'body')
@@ -342,8 +355,8 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'FAMILY_MESSAGES_FORBIDDEN' USING ERRCODE='42501'; END IF;
   result:=hon.family_message_append(t,sc.principal_id,'FAMILY',p->>'body',key,request,correlation);
   -- Authority is checked again after every lock and write of the command.
-  SELECT principal_id INTO live FROM hon.family_message_parent_scope(subject,true);
-  IF live IS DISTINCT FROM sc.principal_id THEN RAISE EXCEPTION 'FAMILY_MESSAGES_FORBIDDEN' USING ERRCODE='42501'; END IF;
+  SELECT x.principal_id, x.family_id INTO live, live_family FROM hon.family_message_parent_scope(subject,true) x;
+  IF live IS DISTINCT FROM sc.principal_id OR live_family IS DISTINCT FROM sc.family_id THEN RAISE EXCEPTION 'FAMILY_MESSAGES_FORBIDDEN' USING ERRCODE='42501'; END IF;
   RETURN jsonb_build_object('receipt',result,'replayed',false);
 END $$;
 
@@ -381,33 +394,35 @@ BEGIN
   RETURN result;
 END $$;
 
--- B2 staff mark read: moves the staff read mark to now. Repeating it is harmless, so it takes no idempotency key.
+-- B2 staff mark read: moves the staff read mark up to the newest message the staff member loaded (throughMessageId), never
+-- past it, so a family message that arrives after the thread was loaded stays unread. Repeating it is harmless: no key.
 CREATE FUNCTION hon.mark_family_message_thread_read(subject text, p jsonb, request uuid, correlation uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid; t hon.family_message_threads; thread uuid;
 BEGIN
-  IF jsonb_typeof(p) IS DISTINCT FROM 'object' OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p) k) IS DISTINCT FROM ARRAY['threadId']
+  IF jsonb_typeof(p) IS DISTINCT FROM 'object' OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p) k) IS DISTINCT FROM ARRAY['threadId','throughMessageId']
     OR jsonb_typeof(p->'threadId') IS DISTINCT FROM 'string' OR p->>'threadId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    OR jsonb_typeof(p->'throughMessageId') IS DISTINCT FROM 'string' OR p->>'throughMessageId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
     OR request IS NULL OR correlation IS NULL OR request::text IS DISTINCT FROM current_setting('app.hon_request_id',true) THEN
     RAISE EXCEPTION 'VALIDATION_FAILED' USING ERRCODE='22023'; END IF;
   thread:=(p->>'threadId')::uuid;
   actor:=hon.require_family_messages_actor(subject);
   SELECT * INTO t FROM hon.family_message_threads x WHERE x.id=thread AND x.organization_id=hon.current_organization_id() AND x.school_id=hon.current_school_id() FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'FAMILY_MESSAGES_NOT_FOUND' USING ERRCODE='P0002'; END IF;
-  IF hon.family_message_unread(t)>0 THEN
-    UPDATE hon.family_message_threads SET staff_read_at=clock_timestamp(),version=version+1,updated_at=clock_timestamp() WHERE id=t.id RETURNING * INTO t;
-  END IF;
+  t:=hon.family_message_read_through(t,(p->>'throughMessageId')::uuid);
   IF hon.require_family_messages_actor(subject) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'FAMILY_MESSAGES_FORBIDDEN' USING ERRCODE='42501'; END IF;
   RETURN jsonb_build_object('threadId',t.id,'version',t.version,'unreadCount',hon.family_message_unread(t));
 END $$;
 
--- B1 staff reply to an existing family thread.
+-- B1 staff reply to an existing family thread. The reply also marks read up to throughMessageId, the newest message the
+-- staff member loaded. It is not part of the request fingerprint, so a retry after a refresh replays the first reply.
 CREATE FUNCTION hon.reply_family_message(subject text, p jsonb, key text, request uuid, correlation uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid; prior jsonb; t hon.family_message_threads; thread uuid; result jsonb;
 BEGIN
-  IF jsonb_typeof(p) IS DISTINCT FROM 'object' OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p) k) IS DISTINCT FROM ARRAY['body','threadId']
+  IF jsonb_typeof(p) IS DISTINCT FROM 'object' OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p) k) IS DISTINCT FROM ARRAY['body','threadId','throughMessageId']
     OR jsonb_typeof(p->'threadId') IS DISTINCT FROM 'string' OR p->>'threadId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    OR jsonb_typeof(p->'throughMessageId') IS DISTINCT FROM 'string' OR p->>'throughMessageId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
     OR jsonb_typeof(p->'body') IS DISTINCT FROM 'string' OR NOT hon.family_message_body_ok(p->>'body')
     OR NOT hon.membership_command_args_ok(subject,key,request,correlation) OR key ~ '[[:cntrl:]]' THEN
     RAISE EXCEPTION 'VALIDATION_FAILED' USING ERRCODE='22023'; END IF;
@@ -420,6 +435,7 @@ BEGIN
   END IF;
   SELECT * INTO t FROM hon.family_message_threads x WHERE x.id=thread AND x.organization_id=hon.current_organization_id() AND x.school_id=hon.current_school_id() FOR UPDATE;
   IF NOT FOUND OR t.message_count=0 THEN RAISE EXCEPTION 'FAMILY_MESSAGES_NOT_FOUND' USING ERRCODE='P0002'; END IF;
+  t:=hon.family_message_read_through(t,(p->>'throughMessageId')::uuid);
   result:=hon.family_message_append(t,actor,'SCHOOL',p->>'body',key,request,correlation);
   IF hon.require_family_messages_actor(subject) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'FAMILY_MESSAGES_FORBIDDEN' USING ERRCODE='42501'; END IF;
   RETURN jsonb_build_object('receipt',result,'replayed',false);
@@ -431,7 +447,7 @@ DO $$ DECLARE r text; f text; t text;
     'hon.reply_family_message(text,jsonb,text,uuid,uuid)'];
   fns text[]:=ARRAY['hon.family_message_body_ok(text)','hon.guard_family_message_thread()','hon.family_message_parent_scope(text,boolean)',
     'hon.require_family_messages_actor(text)','hon.family_message_time(timestamp with time zone)','hon.family_message_json(hon.family_messages,uuid)',
-    'hon.family_message_list(uuid,uuid)','hon.family_message_unread(hon.family_message_threads)','hon.family_message_begin(uuid,text,text)',
+    'hon.family_message_list(uuid,uuid)','hon.family_message_unread(hon.family_message_threads)','hon.family_message_read_through(hon.family_message_threads,uuid)','hon.family_message_begin(uuid,text,text)',
     'hon.family_message_append(hon.family_message_threads,uuid,text,text,text,uuid,uuid)']||entry; BEGIN
   FOREACH f IN ARRAY fns LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);

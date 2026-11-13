@@ -31,7 +31,9 @@ power and a staff role never acts as a parent. Every write has exact-request ide
   Staff with the new staff-assignable permission `family_messages.manage` read every family thread of their school and
   reply to it. It is granted to the system OWNER role (the only system role), and the owner can add it to any staff role.
   Staff reply to existing threads; starting a thread from the school side is a later PR. VIEWER parents read only.
-- **B2 Inbox.** Staff see threads newest first with an unread count; opening a thread marks it read for staff. The parent
+- **B2 Inbox.** Staff see threads newest first with an unread count. Opening a thread does not mark it read; "Mark read"
+  and a reply move the staff read mark up to the newest message the staff member loaded, never past it, so a family
+  message that arrives after the load stays unread. The parent
   sees the school's replies in the Messages page, as "the school", never with a staff name.
 - **B3 No outside delivery.** Nothing is texted or emailed. A later PR may send a "you have a new message" notice through
   the existing 0243 worker once messaging providers are approved and live.

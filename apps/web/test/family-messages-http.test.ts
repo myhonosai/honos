@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { FamilyMessagesAccessError, FamilyMessagesRefusal, loadFamilyMessageInbox, sendAttempt, sendParentFamilyMessage } from '../src/components/family-messages/http';
+import { FamilyMessagesAccessError, FamilyMessagesRefusal, loadFamilyMessageInbox, markFamilyMessageThreadRead, replyFamilyMessage, sendAttempt, sendParentFamilyMessage } from '../src/components/family-messages/http';
 
 // 0330 family messages web client: fixed same-origin calls, verified answers, definite refusals vs unknown outcomes.
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -29,6 +29,18 @@ describe('family messages http', () => {
     const unknown = await sendParentFamilyMessage('Hi', 'k').catch(e => e);
     expect(unknown).not.toBeInstanceOf(FamilyMessagesRefusal); expect(unknown).toBeInstanceOf(Error);
     await expect(loadFamilyMessageInbox({ organizationId: A, schoolId: B })).rejects.toBeInstanceOf(FamilyMessagesAccessError);
+  });
+  it('marks read and replies only up to the newest message on screen', async () => {
+    const C = '33333333-3333-4333-8333-333333333333';
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json(200, { data: { threadId: A, version: 4, unreadCount: 1 }, meta: {} }))
+      .mockResolvedValueOnce(json(201, { data: { threadId: A, version: 5, message: { messageId: C, from: 'SCHOOL', mine: true, body: 'Thanks', sentAt: '2026-11-20T17:00:00.000Z' } }, meta: { replayed: false } }));
+    const scope = { organizationId: A, schoolId: B };
+    expect((await markFamilyMessageThreadRead(scope, A, B)).unreadCount).toBe(1);
+    expect(fetcher.mock.calls[0]![1]).toMatchObject({ body: JSON.stringify({ throughMessageId: B }) });
+    expect((await replyFamilyMessage(scope, A, 'Thanks', 'k', B)).receipt.version).toBe(5);
+    expect(fetcher.mock.calls[1]![1]).toMatchObject({ body: JSON.stringify({ body: 'Thanks', throughMessageId: B }) });
+    await expect(markFamilyMessageThreadRead(scope, A, 'nope')).rejects.toThrow();
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
   it('keeps the key only for the same text', () => {
     let n = 0; const key = () => `k${++n}`;

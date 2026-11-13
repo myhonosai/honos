@@ -14,8 +14,8 @@ test('0330 message text and inputs are closed', () => {
     assert.throws(() => contracts.validateSendFamilyMessageInput(value), undefined, JSON.stringify(value));
   }
   assert.equal(contracts.familyMessageBodyOk('x'.repeat(2000)), true);
-  assert.deepEqual(contracts.validateReplyFamilyMessageInput({ threadId: B, body: 'Thanks' }), { threadId: B, body: 'Thanks' });
-  assert.throws(() => contracts.validateReplyFamilyMessageInput({ threadId: 'nope', body: 'Thanks' }));
+  assert.deepEqual(contracts.validateReplyFamilyMessageInput({ threadId: B, body: 'Thanks', throughMessageId: C }), { threadId: B, body: 'Thanks', throughMessageId: C });
+  assert.throws(() => contracts.validateReplyFamilyMessageInput({ threadId: 'nope', body: 'Thanks', throughMessageId: C }));
 });
 
 test('0330 projections are verified exactly', () => {
@@ -33,7 +33,11 @@ test('0330 projections are verified exactly', () => {
   assert.throws(() => contracts.verifyFamilyMessageInbox({ threads: [row], unreadThreads: 0 }), undefined, 'unread thread count matches');
   assert.throws(() => contracts.verifyFamilyMessageInbox({ threads: [{ ...row, body: 'x' }], unreadThreads: 1 }), undefined, 'no text in the inbox');
   assert.throws(() => contracts.verifyFamilyMessageInbox({ threads: [{ ...row, lastMessageAt: T1 }, row], unreadThreads: 2 }), undefined, 'newest first');
-  assert.throws(() => contracts.verifyFamilyMessageReadMark({ threadId: B, version: 3, unreadCount: 1 }, B), undefined, 'read means nothing unread');
+  assert.deepEqual(contracts.verifyFamilyMessageReadMark({ threadId: B, version: 3, unreadCount: 1 }, B), { threadId: B, version: 3, unreadCount: 1 }, 'a message after the loaded one stays unread');
+  assert.throws(() => contracts.verifyFamilyMessageReadMark({ threadId: C, version: 3, unreadCount: 0 }, B), undefined, 'bound to the thread');
+  assert.deepEqual(contracts.validateMarkFamilyMessageReadInput({ threadId: B, throughMessageId: C }), { threadId: B, throughMessageId: C });
+  assert.throws(() => contracts.validateMarkFamilyMessageReadInput({ threadId: B }), undefined, 'mark read names the loaded message');
+  assert.throws(() => contracts.validateReplyFamilyMessageInput({ threadId: B, body: 'Hi' }), undefined, 'a reply names the loaded message');
 });
 
 test('0330 service refuses before any database call', async () => {
@@ -48,7 +52,10 @@ test('0330 service refuses before any database call', async () => {
   await assert.rejects(() => service.inbox({ ...staff, actionRequestId: A }), (e) => e.response.code === 'HUMAN_COMMAND_REQUIRED');
   await assert.rejects(() => service.inbox({ ...staff, idempotencyKey: 'k' }), (e) => e.response.code === 'IDEMPOTENCY_KEY_NOT_ACCEPTED');
   await assert.rejects(() => service.thread(staff, 'nope'), (e) => e.response.code === 'VALIDATION_FAILED');
-  await assert.rejects(() => service.markRead(staff, 'BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB'), (e) => e.response.code === 'VALIDATION_FAILED');
+  await assert.rejects(() => service.markRead(staff, 'BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB', { throughMessageId: C }), (e) => e.response.code === 'VALIDATION_FAILED');
+  await assert.rejects(() => service.markRead(staff, B, {}), (e) => e.response.code === 'VALIDATION_FAILED');
+  await assert.rejects(() => service.markRead(staff, B, { throughMessageId: C, at: 1 }), (e) => e.response.code === 'VALIDATION_FAILED');
+  await assert.rejects(() => service.reply({ ...staff, idempotencyKey: 'k' }, B, { body: 'Hi' }), (e) => e.response.code === 'VALIDATION_FAILED');
   await assert.rejects(() => service.reply(staff, B, { body: 'Hi' }), (e) => e.response.code === 'IDEMPOTENCY_KEY_REQUIRED');
   await assert.rejects(() => service.reply({ ...staff, idempotencyKey: 'k' }, B, { body: 'Hi', threadId: B }), (e) => e.response.code === 'VALIDATION_FAILED');
   assert.equal(calls, 0);
