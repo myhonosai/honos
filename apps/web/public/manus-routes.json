@@ -425,6 +425,14 @@
       "title": "HON HQ | HQ message"
     },
     {
+      "path": "/hq/growth/prospects",
+      "title": "HON HQ | Prospects"
+    },
+    {
+      "path": "/hq/growth/prospects/:prospectId",
+      "title": "HON HQ | Prospect"
+    },
+    {
       "path": "/hq/executives/:executive",
       "title": "HON HQ | :Executive"
     },
