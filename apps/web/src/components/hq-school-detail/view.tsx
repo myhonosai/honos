@@ -8,7 +8,7 @@ export type SchoolDetailState =
   | { state: 'LOADING' } | { state: 'DENIED' } | { state: 'GONE' } | { state: 'INVALID' } | { state: 'UNAVAILABLE' }
   | { state: 'READY'; view: HqSchoolDetail };
 export type SchoolDetailViewProps = Readonly<{ language: string; formattingLocale: string; concealed: boolean; state: SchoolDetailState; busy: boolean;
-  onRefresh: () => void; onReveal: () => void }>;
+  onRefresh: () => void; onReveal: () => void; health?: React.ReactNode }>;
 
 const STATUS = new Set(['ACTIVE', 'SUSPENDED', 'ARCHIVED']);
 const tone = (status: string) => status === 'PAID_ACCESS' || status === 'PROVISIONED_ACCESS' || status === 'EXCEPTION_IN_EFFECT' ? 'ready'
@@ -85,6 +85,7 @@ export function HqSchoolDetailView(props: SchoolDetailViewProps): React.ReactEle
         [t('activeStudents'), String(v.people.activeStudents)]]}/>
       <p className={styles.meta}>{t('staffHelp')}</p>
     </article>
+    {props.health}
     <p className={styles.meta}>{t('asOf', { time: time(v.asOf) })}</p>
   </section>;
 }

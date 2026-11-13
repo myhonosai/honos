@@ -344,3 +344,105 @@ Status: source only, not deployed. Test/sandbox only.
   are not yet kept, so rotating the single vault key strands stored credentials until reconnect), two disconnects of
   connections sharing one Square merchant that race can both skip the provider revoke (no lock across connections yet),
   and the Manus final review (live-money/credential item).
+
+## 13. Piece 3 as built (0321): a payer's saved cards and bank accounts
+
+Status: source only, not deployed, test mode only, on the in-process simulators (no real Stripe or Square call yet; piece
+2 adds the sandbox adapters with test keys the owner enters). No charge, autopay or message; HON takes no fee.
+
+- **Permission:** `school_pay.method.manage` (sensitive, staff-assignable, granted to OWNER) saves, chooses the default
+  for, or removes a method; `school_pay.read` or the manage permission reads. Live direct-human authority at the route
+  school is re-checked before and after every command, as in 0258.
+- **Data (private, forced RLS, no runtime table privilege):** `school_pay_customers` (one provider customer per payer and
+  connection, set once), `school_pay_method_setups` (hosted setup: one-time state kept only as SHA-256, one hour, newer
+  replaces older, recently completed listed for one hour so a retried finish replays), `school_pay_methods` (provider
+  reference, kind CARD or US_BANK_ACCOUNT, brand, last four, card expiry, consent text version, ACTIVE or REMOVED, one
+  default per payer), `school_pay_method_events` (append-only history). No card number, bank number, CVC or token
+  secret exists anywhere in HON.
+- **Flow:** staff pick a connection and method kinds and show the payer the consent text (its version is recorded). The
+  API creates the payer's provider customer once, then a hosted setup page (Stripe SetupIntent or Checkout setup mode;
+  Square Web Payments SDK card on file) that returns to `/staff/billing/saved-payment-methods?payer=..&setup=..&state=..`.
+  On return the API retrieves the saved method from the provider with its own credentials (never from the browser),
+  then records it; the payer's first method becomes the default. Square takes cards only.
+- **Routes** (`/v1/organizations/:org/schools/:school/payments/...`, human-UI guards, no-store): `GET
+  payers/:billingAccountId/methods`, `GET saved-methods/expiring` (expired or expiring this or next school month),
+  `POST payers/:id/method-setups`, `POST payers/:id/method-setups/:setupId/finish`, `POST payers/:id/methods/:methodId/default`,
+  `POST payers/:id/methods/:methodId/remove` (reason required; the provider detach is reported as `providerDetached`).
+  Provider account, customer and method references stay in the API and never reach the browser.
+- **Known limits:** a disconnected connection's saved methods stay ACTIVE in HON but cannot be used (autopay, piece 4,
+  checks the connection); card expiry updates from the provider come with webhooks (pieces 5 and 6).
+- **Bank accounts verified by microdeposits:** when Stripe cannot verify a US bank account instantly, the SetupIntent
+  stays unfinished until the payer confirms the microdeposits, so finishing the setup returns `SETUP_INCOMPLETE` (409)
+  and nothing is saved. The payer finishes later on a new setup; recording the account once the deposits clear needs
+  the webhooks in piece 5b.
+- **Real sandboxes (after piece 2, 0320):** the Stripe Connect test adapter saves methods for real: the customer and a
+  Checkout session in setup mode are created on the school's own account (`Stripe-Account`), each with an idempotency key
+  (so a retry never leaves an orphan customer or setup), and the saved card or bank account is read back with the platform
+  key. Square's sandbox adapter refuses saved-method calls before sending anything (`SCHOOL_PAY_PROVIDER_NOT_CONFIGURED`):
+  saving a Square card needs the Web Payments SDK on a HON page plus the seller's vaulted token, a later piece.
+- **Evidence:** `packages/database/scripts/test-school-pay-methods-integrity.mjs` (188 checks over signed HTTP);
+  `apps/api/test/school-payments.test.cjs` (0321 contract, simulator and route tests).
+
+## 14. Piece 3-web as built: saved payment methods page for staff
+
+- **Page:** `/staff/billing/saved-payment-methods` (Billing menu, "Saved payment methods"), dynamic, noindex,
+  `no-referrer`, behind the verified web session. The page holds no school or payer id of its own; it uses the shell's
+  verified school, and the API decides every permission (`school_pay.method.manage` to change, the read permission to see).
+- **Payer picker:** payers come from the existing membership list read (one option per billing account, named from its
+  participants); a `?payer=` link opens one directly, and the expiring list links to each payer.
+- **Adding:** staff choose the processor connection and card or US bank account (bank only where the connection can
+  debit), and the payer ticks the consent text, which names the school (`card-on-file-v1` or `ach-mandate-v1`). The page
+  then opens the processor's hosted page. A replayed start answers with no link, and the page says to start again.
+- **Return:** the query (`payer`, `setup`, `state`) is read once and removed from the address bar at once; the one-time
+  state is kept only in memory, never in storage, and is sent only when staff choose Finish saving. A session end, a
+  school change or picking another payer drops it; blur or a hidden tab hides the page but keeps it.
+- **Commands:** each sends its own `X-HON-Human-Command` and `Idempotency-Key`; an unknown or rate-limited outcome keeps
+  the exact request and key in memory for Try again. Every answer is followed by a fresh read. Remove needs a reason and
+  says plainly when the processor did not confirm the detach.
+- **Evidence:** `apps/web/test/saved-methods-ui.test.tsx` (http shape and verification, refusal mapping, query cleaning,
+  body building, view states, page and menu wiring).
+
+## 15. Piece 4 as built (0322): autopay plans and sibling discounts
+
+Test mode only. A payer's autopay plan points at one of their saved methods (0321), and preparing a cycle turns that
+payer's due membership schedules into invoices with the school's sibling discount. **Nothing is charged here**: piece 5
+sends the cycle to the processor. No message is sent and HON takes no fee.
+
+- **Permissions:** `school_pay.autopay.manage` enrolls, changes the method, pauses, resumes, cancels and prepares cycles;
+  `school_pay.discount.manage` sets the sibling discount. Both are sensitive, staff-assignable and granted to OWNER.
+  Reads accept either one or `school_pay.read`. Live direct-human authority at the route school is re-checked before
+  and after every command, as in 0258 and 0321.
+- **Data (private, forced RLS, no runtime table privilege):** `school_pay_discount_rules` (append-only versions per
+  school: NONE, PERCENT 0 to 100, or FIXED minor units in one currency, with one value for the 2nd student and one for
+  the 3rd and later), `school_pay_autopay_plans` (one open plan per payer; ACTIVE, PAUSED or CANCELLED with a reason;
+  the saved method, the consent text version and an expected version on every change), `school_pay_autopay_cycles`
+  and `school_pay_autopay_cycle_lines` (immutable; one line per billed schedule period, unique per schedule and
+  period, each with its own invoice), and `school_pay_autopay_events` (append-only history). Each command writes one
+  history row, one audit row and one inert outbox event; each cycle invoice also gets an audit row.
+- **Method rule:** the plan's method must be ACTIVE, belong to the same payer, and sit on a connection that is
+  CONNECTED_ACTIVE and allows off-session recurring charges. Otherwise the command is refused with
+  `SCHOOL_PAY_AUTOPAY_METHOD_UNUSABLE`.
+- **Cycle rule:** a cycle can be prepared for an ACTIVE plan for today or up to seven days ahead (school time zone).
+  Due lines are the payer's ACTIVE memberships whose ACTIVE WEEKLY, MONTHLY or ANNUAL schedule is in the payer's
+  currency, has its next charge on or before the cycle date, and has not been billed for that period. Students are
+  ranked by their largest due line; the 1st pays full price, the 2nd and later get the rule's discount (a percentage
+  rounds down; a fixed amount never exceeds the line and applies only in its currency). Each line becomes one ISSUED
+  invoice due at the end of the cycle day, and its schedule moves to the next period (or ends at the term end). One
+  schedule period is billed per cycle, so a schedule that is several periods behind catches up over several cycles.
+  Months and years count from the schedule's first autopay period, so a short month clamps only that one period
+  (Jan 31, Feb 28, Mar 31; a Feb 29 annual schedule bills Feb 28 in other years and Feb 29 again in leap years). A
+  schedule staff move off that series starts a new one. Local time of day is kept across daylight-saving changes.
+- **Routes** (`/v1/organizations/:org/schools/:school/payments/...`, human-UI guards, no-store): `GET
+  payers/:billingAccountId/autopay`, `GET sibling-discount`, `POST sibling-discount`, `POST payers/:billingAccountId/autopay`,
+  `POST autopay/:planId/method`, `POST autopay/:planId/state` (ACTIVE or PAUSED), `POST autopay/:planId/cancel` (reason
+  required), `POST autopay/:planId/cycles`. Every command takes an Idempotency-Key; a replay returns the stored receipt.
+- **Defaults to confirm with the owner:** ranking students by their largest due line; one period per cycle; schedules
+  advance when the cycle is prepared (not when it is paid); a seven-day preparation window. Screens for staff come in a
+  later web piece.
+- **Review P3s carried forward:** the consent text version is free text today; before 5a charges anything it must be
+  one of the recurring-charge consent texts and match the method kind, re-checked when the method changes. A discount
+  that would make a line free refuses the cycle (`SCHOOL_PAY_AUTOPAY_ZERO_LINE`), since an ISSUED invoice is never zero. Sibling rank counts only lines due in the same cycle. Manual
+  invoices can overlap autopay periods, and a backdated cycle issues invoices that are already overdue.
+- **Evidence:** `packages/database/scripts/test-school-pay-autopay-integrity.mjs` (246 checks over signed HTTP, including month-end,
+  leap-year and daylight-saving periods);
+  `apps/api/test/school-payments.test.cjs` (0322 contract, discount and route tests).
