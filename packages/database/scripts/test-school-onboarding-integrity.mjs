@@ -89,7 +89,13 @@ try{
  p=ok(await save(a,{...first,path:'SWITCHING',previousSoftware:'OTHER',previousSoftwareOther:'Old Dojo App',importWishes:['STUDENTS','BALANCES'],skippedSteps:['STAFF']},1));
  assert.equal(p.version,2);o=await get(a);assert.equal(step(o,'WELCOME').status,'COMPLETE');assert.equal(o.profile.previousSoftwareOther,'Old Dojo App');
  assert.equal(step(o,'STAFF').status,'UNAVAILABLE');assert.equal(step(o,'STAFF').skipped,true);
- pass('answers save with exact replay, refused key reuse and stale versions, closed validation, and identifier-only audit and outbox');
+ // Two concurrent first saves: exactly one writes version 1, the other is a VERSION_CONFLICT (no lost update).
+ const g=await register('gamma');
+ const race=await Promise.all([save(g,{situation:'NEW_SCHOOL'},0),save(g,{situation:'EXPLORING'},0)]);
+ assert.deepEqual(race.map(x=>x.status).sort(),[200,409]);assert.equal(race.find(x=>x.status===409).body.code,'VERSION_CONFLICT');
+ const kept=(await q('SELECT version,situation FROM hon.school_onboarding_profiles WHERE organization_id=$1',[g.org]))[0];
+ assert.equal(kept.version,1);assert.equal(kept.situation,race.find(x=>x.status===200).body.data.situation);
+ pass('answers save with exact replay, refused key reuse and stale versions, closed validation, a concurrent first-save race with one winner, and identifier-only audit and outbox');
 
  // 4. Isolation and authority: another school, a delegation header, a missing command, a revoked grant.
  r=await send(path(a),{identity:b});assert.equal(r.status,403);
