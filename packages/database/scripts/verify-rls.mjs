@@ -102,6 +102,7 @@ const expectedRlsTables = [
   'action_requests',
   'ai_team_presentation_preferences',
   'ai_usage_ledger',
+  'ai_route_unavailable_attempts',
   'ai_spend_pauses',
   'ai_unknown_resolutions',
   'hon_conversations',
