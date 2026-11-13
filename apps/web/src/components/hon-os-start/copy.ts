@@ -19,7 +19,7 @@ export type StartCopy = Readonly<{
   trialActive: string; trialEnded: string; trialReplaced: string;
   trialDates: (days: number, from: string, until: string) => string;
   aiUsage: (used: number, credits: number, daily: number, until: string) => string;
-  noAi: string; founderSetup: string;
+  noAi: string; founderSetup: string; welcome: string;
   trialClosed: string; noOffer: string;
   offer: (name: string, days: number) => string;
   offerAi: (credits: number, daily: number, expiryDays: number) => string;
@@ -75,7 +75,7 @@ const en: StartCopy = {
   trialActive: 'Your free trial is on.', trialEnded: 'Your free trial has ended.', trialReplaced: 'Your free trial was replaced by other access.',
   trialDates: (d, f, u) => `${d} days, from ${f} until ${u}. No charge, and no payment method is needed. Nothing renews automatically.`,
   aiUsage: (used, c, daily, u) => `AI team: ${used} of ${c} trial credits used, up to ${daily} a day, until ${u}. Creative Studio images and video are not included.`,
-  noAi: 'This trial does not include the AI team.', founderSetup: 'Continue to Founder Setup →',
+  noAi: 'This trial does not include the AI team.', founderSetup: 'Continue to Founder Setup →', welcome: 'Answer HON\'s welcome and see your setup checklist →',
   trialClosed: 'Free trials are not open yet. Your school account is saved; come back when HON opens them.',
   noOffer: 'No free trial is available right now. Check again later.',
   offer: (n, d) => `${n}: ${d} days. No charge, no payment method, nothing renews automatically.`,
@@ -132,7 +132,7 @@ const ko: StartCopy = {
   trialActive: '무료 체험 중입니다.', trialEnded: '무료 체험이 끝났습니다.', trialReplaced: '무료 체험이 다른 접근 권한으로 대체되었습니다.',
   trialDates: (d, f, u) => `${d}일, ${f}부터 ${u}까지. 요금이 없고 결제 수단이 필요 없습니다. 자동으로 갱신되지 않습니다.`,
   aiUsage: (used, c, daily, u) => `AI 팀: 체험 크레딧 ${c} 중 ${used} 사용, 하루 최대 ${daily}, ${u}까지. 크리에이티브 스튜디오 이미지와 동영상은 포함되지 않습니다.`,
-  noAi: '이 체험에는 AI 팀이 포함되지 않습니다.', founderSetup: '창업자 설정으로 계속 →',
+  noAi: '이 체험에는 AI 팀이 포함되지 않습니다.', founderSetup: '창업자 설정으로 계속 →', welcome: 'HON 환영 질문에 답하고 설정 체크리스트 보기 →',
   trialClosed: '무료 체험은 아직 열리지 않았습니다. 도장 계정은 저장되었습니다. HON이 체험을 열면 다시 오세요.',
   noOffer: '지금은 이용 가능한 무료 체험이 없습니다. 나중에 다시 확인하세요.',
   offer: (n, d) => `${n}: ${d}일. 요금 없음, 결제 수단 없음, 자동 갱신 없음.`,
@@ -189,7 +189,7 @@ const es: StartCopy = {
   trialActive: 'Su prueba gratuita está activa.', trialEnded: 'Su prueba gratuita ha terminado.', trialReplaced: 'Su prueba gratuita fue sustituida por otro acceso.',
   trialDates: (d, f, u) => `${d} días, desde ${f} hasta ${u}. Sin cargo y sin método de pago. Nada se renueva automáticamente.`,
   aiUsage: (used, c, daily, u) => `Equipo de IA: ${used} de ${c} créditos de prueba usados, hasta ${daily} al día, hasta ${u}. No incluye imágenes ni video de Creative Studio.`,
-  noAi: 'Esta prueba no incluye el equipo de IA.', founderSetup: 'Continuar a la configuración inicial →',
+  noAi: 'Esta prueba no incluye el equipo de IA.', founderSetup: 'Continuar a la configuración inicial →', welcome: 'Responder la bienvenida de HON y ver su lista de configuración →',
   trialClosed: 'Las pruebas gratuitas aún no están abiertas. La cuenta de su escuela está guardada; vuelva cuando HON las abra.',
   noOffer: 'No hay ninguna prueba gratuita disponible ahora. Vuelva a comprobar más tarde.',
   offer: (n, d) => `${n}: ${d} días. Sin cargo, sin método de pago, nada se renueva automáticamente.`,

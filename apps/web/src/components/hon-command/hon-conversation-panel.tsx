@@ -62,6 +62,9 @@ const REASON: Record<string, string> = {
   INVALID_REQUEST: 'HON could not process this question. Try rephrasing it. Nothing is charged.',
   PROVIDER_REJECTED: 'The AI provider declined to answer this question. Try rephrasing it. Nothing is charged.',
   PROVIDER_UNKNOWN: 'HON could not confirm whether an answer was produced. HON HQ reviews it; it will not be sent twice.',
+  // 0336 (RA-1): reduced-AI mode. The model and its backup were unavailable, or HQ has no AI model available right now.
+  PROVIDER_UNAVAILABLE: 'HON’s AI is temporarily unavailable. Everything else in HON OS keeps working. Nothing is charged. Try again in a few minutes.',
+  NO_ELIGIBLE_ROUTE: 'HON’s AI is temporarily unavailable. Everything else in HON OS keeps working. Nothing is charged. Try again in a few minutes.',
   HANDOFF_NOT_CONFIRMED: 'HON could not confirm this message was handed over. Retry sends the exact same request.',
   AGENT_NOT_AUTHORIZED: 'The specialist could not take this request: your role or this school’s AI access does not allow it. Nothing was drafted and nothing is charged.',
   AGENT_REQUEST_INVALID: 'The specialist could not accept this request. Nothing was drafted and nothing is charged.',
