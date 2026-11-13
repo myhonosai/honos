@@ -202,7 +202,17 @@ try {
   // ---------- switch paid ----------
   const pay=b=>lifetimePaid(swA.binding,b);
   const ev=pay(357600-credA);
+  // A provider outage on the stop: 503 (webhook not acknowledged) with the switch already committed; nothing stopped yet.
+  provider.failNextStop=true;
+  const eventsBefore=(await row("SELECT count(*)::int n FROM hon.saas_schedule_provider_events")).n;
+  await deny(()=>withProgram(()=>ingest(ev)),503,'SAAS_SCHEDULE_PROVIDER_UNAVAILABLE');
+  assert.equal(provider.stopped.has(bA.bindingId),false);
+  assert.deepEqual(await bstatus(bA),{status:'SWITCHED_TO_LIFETIME',status_reason:'SWITCHED_TO_LIFETIME'});
+  const eventsAfterOutage=(await row("SELECT count(*)::int n FROM hon.saas_schedule_provider_events")).n;
+  assert.equal(eventsAfterOutage,eventsBefore+1);
+  // The provider redelivers the same event: the stored receipt is replayed and the stop happens once; nothing new is written.
   const r=await withProgram(()=>ingest(ev));
+  assert.equal((await row("SELECT count(*)::int n FROM hon.saas_schedule_provider_events")).n,eventsAfterOutage);
   assert.equal(r.outcome,'APPLIED');assert.equal(r.billingStatus,'ACTIVE');assert.equal(r.access.accessActivation,'APPLIED');
   assert.equal(r.switchedFrom.bindingId,bA.bindingId);assert.equal(r.oldScheduleStopped,true);assert(provider.stopped.has(bA.bindingId));
   assert.deepEqual(await bstatus(bA),{status:'SWITCHED_TO_LIFETIME',status_reason:'SWITCHED_TO_LIFETIME'});
@@ -216,7 +226,7 @@ try {
   // Replay: the stored receipt, nothing changes.
   const replay=await ingest(ev);assert.equal(replay.outcome,'APPLIED');assert.equal(await sales(lt.offerId),2);
   assert.equal((await row("SELECT count(*)::int n FROM hon.saas_access_transitions WHERE kind='SCHEDULE_LIFETIME_SWITCH'")).n,1);
-  passed(`switch paid at $${(357600-credA)/100}: one transaction makes lifetime ACTIVE, counts the sale, moves access open-ended and ends the old plan as SWITCHED_TO_LIFETIME; the old schedule is stopped (no proration, no refund); a replay changes nothing; HQ lists it`);
+  passed(`switch paid at $${(357600-credA)/100}: one transaction makes lifetime ACTIVE, counts the sale, moves access open-ended and ends the old plan as SWITCHED_TO_LIFETIME; the old schedule is stopped (no proration, no refund); a stop outage answers 503 and the redelivery stops it once with nothing new written; a replay changes nothing; HQ lists it`);
 
   // ---------- held for review ----------
   // Wrong amount (full price although the credit was recorded): held; access stays on the old plan.

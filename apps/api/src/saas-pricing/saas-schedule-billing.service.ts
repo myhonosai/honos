@@ -208,20 +208,26 @@ export class SaasScheduleBillingService {
   /**
    * Internal only: caller must already have verified raw provider bytes and selected the fixed TEST adapter.
    * 0341: after a paid switch, the old plan's schedule is stopped with no proration and no refund. The switch is already
-   * final in the database; a provider failure here is reported in the receipt and repeated on the provider's redelivery
-   * (the stored receipt is replayed and the stop is idempotent). Any old-plan renewal that still arrives is held for review.
+   * final in the database. If the stop fails or is not confirmed exactly, this throws 503 so the webhook is NOT acknowledged
+   * and the provider redelivers: the replay returns the stored receipt (with switchedFrom) and the idempotent stop is tried
+   * again, so the old plan can never keep charging a lifetime school silently. Any old-plan renewal that still arrives is
+   * held for review.
    */
   async ingestVerifiedTestEvidence(event: unknown, digest: unknown) {
     if (typeof digest !== 'string' || !/^[0-9a-f]{64}$/.test(digest)) throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' });
     const receipt = await this.billing.call('ingestScheduleEvidence',[JSON.stringify(event),digest],validateSaasScheduleEvidenceReceipt);
     if (!receipt.switchedFrom) return receipt;
     const from = receipt.switchedFrom;
-    let stopped = false;
+    const retry = 'The switch to lifetime is recorded; redeliver this event to stop the old schedule (no proration, no refund).';
+    let r;
     try {
-      const r = await this.provider.stopScheduleNoRefund({ bindingId:from.bindingId, accountReference:from.accountReference,
+      r = await this.provider.stopScheduleNoRefund({ bindingId:from.bindingId, accountReference:from.accountReference,
         subscriptionReference:from.subscriptionReference, scheduleReference:from.scheduleReference });
-      stopped = r.outcome === 'STOPPED_NO_REFUND' && r.bindingId === from.bindingId && r.refundSent === false;
-    } catch { stopped = false; }
-    return { ...receipt, oldScheduleStopped: stopped };
+    } catch {
+      throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_PROVIDER_UNAVAILABLE', detail: retry });
+    }
+    if (r?.outcome !== 'STOPPED_NO_REFUND' || r.bindingId !== from.bindingId || r.scheduleReference !== from.scheduleReference || r.refundSent !== false)
+      throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_PROVIDER_UNAVAILABLE', detail: retry });
+    return { ...receipt, oldScheduleStopped: true as const };
   }
 }
