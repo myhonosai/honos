@@ -113,6 +113,10 @@
       "title": "HON | Import students"
     },
     {
+      "path": "/staff/help",
+      "title": "HON | Ask for help"
+    },
+    {
       "path": "/staff/planning/revenue",
       "title": "HON | Human Revenue Planning"
     },

@@ -1,0 +1,70 @@
+/** Help and support requests wording (en / ko / es). Labels only; nothing here is authority or an outcome. */
+const en = {
+  title: 'Ask HON for help', intro: 'Send a question to the HON team. It goes straight to HON support for your school, and you can follow it here.',
+  waiting: 'Checking your school…', noSchool: 'Choose a school to ask for help.', concealed: 'Hidden while you were away. It shows again once your school is checked.',
+  loading: 'Reading your requests…', denied: 'You cannot send support requests for this school. Ask the school owner for access.', unavailable: 'Your requests could not be loaded.', refresh: 'Check again',
+  askTitle: 'New question', topic: 'What is it about?', subject: 'Subject', message: 'Your message', send: 'Send to HON support', sending: 'Sending…',
+  t_GETTING_STARTED: 'Getting started', t_IMPORTING_DATA: 'Bringing over my data', t_BILLING: 'Billing and plans', t_ACCOUNT_ACCESS: 'Signing in and access',
+  t_PROBLEM: 'Something is not working', t_IDEA: 'An idea or request', t_OTHER: 'Something else',
+  subjectHelp: '3 to 200 characters.', messageHelp: 'Up to 4,000 characters. Please leave out card numbers, passwords and student medical details.',
+  fromPage: 'Asked from {page}.', privacy: 'HON support sees your name, your school and what you write here.',
+  listTitle: 'Your requests', none: 'No requests yet.', opened: 'Sent {time}', updated: 'Last change {time}',
+  st_OPEN: 'With HON support', st_WAITING_ON_SCHOOL: 'Waiting for you', st_RESOLVED: 'Resolved', st_CLOSED: 'Closed',
+  waitingHelp: 'HON support needs something from you. Reply below.', resolvedHelp: 'Marked resolved. Writing back reopens it.', closedHelp: 'This request is closed. Ask a new question if you still need help.',
+  replies: 'HON support answers by message to your school.',
+  reply: 'Write back', replyLabel: 'Add a message', sendReply: 'Send message', cancel: 'Cancel',
+  done_submit: 'Sent. HON support has your question.', done_message: 'Your message was added.',
+  e_DENIED: 'You are not allowed to do this at this school. Nothing was sent.', e_GONE: 'This request is not available at this school. Nothing was sent.',
+  e_CLOSED: 'This request is closed. Nothing was sent; ask a new question instead.', e_LIMIT: 'Your school reached today\'s limit. Nothing was sent. Try again tomorrow, or email HON.',
+  e_INVALID: 'This was not accepted. Check the topic, subject and message. Nothing was sent.',
+  e_UNKNOWN: 'We could not confirm whether this was sent. Try again sends exactly the same request, and it cannot arrive twice.',
+  e_SESSION: 'Your session ended. Sign in again.', tryAgain: 'Try again', textProblem: 'Remove spaces at the start or end, and hidden characters.',
+};
+export type SupportKey = keyof typeof en;
+const ko: Record<SupportKey, string> = {
+  title: 'HON에 도움 요청', intro: 'HON 팀에 질문을 보내세요. 도장의 HON 지원팀에 바로 전달되며, 여기에서 진행 상황을 볼 수 있습니다.',
+  waiting: '도장을 확인하는 중…', noSchool: '도움을 요청할 도장을 선택하세요.', concealed: '자리를 비운 동안 숨겨졌습니다. 도장 확인 후 다시 표시됩니다.',
+  loading: '요청을 읽는 중…', denied: '이 도장의 지원 요청을 보낼 권한이 없습니다. 도장 소유자에게 요청하세요.', unavailable: '요청을 불러오지 못했습니다.', refresh: '다시 확인',
+  askTitle: '새 질문', topic: '어떤 내용인가요?', subject: '제목', message: '메시지', send: 'HON 지원팀에 보내기', sending: '보내는 중…',
+  t_GETTING_STARTED: '시작하기', t_IMPORTING_DATA: '데이터 옮기기', t_BILLING: '결제와 플랜', t_ACCOUNT_ACCESS: '로그인과 접근',
+  t_PROBLEM: '작동하지 않는 기능', t_IDEA: '아이디어나 요청', t_OTHER: '기타',
+  subjectHelp: '3~200자.', messageHelp: '최대 4,000자. 카드 번호, 비밀번호, 학생 의료 정보는 적지 마세요.',
+  fromPage: '{page}에서 요청했습니다.', privacy: 'HON 지원팀은 이름, 도장, 작성한 내용을 볼 수 있습니다.',
+  listTitle: '내 요청', none: '아직 요청이 없습니다.', opened: '{time}에 보냄', updated: '마지막 변경 {time}',
+  st_OPEN: 'HON 지원팀 확인 중', st_WAITING_ON_SCHOOL: '답변 필요', st_RESOLVED: '해결됨', st_CLOSED: '종료됨',
+  waitingHelp: 'HON 지원팀이 정보를 요청했습니다. 아래에 답해 주세요.', resolvedHelp: '해결됨으로 표시되었습니다. 답장하면 다시 열립니다.', closedHelp: '이 요청은 종료되었습니다. 도움이 더 필요하면 새 질문을 보내세요.',
+  replies: 'HON 지원팀은 도장으로 메시지를 보내 답합니다.',
+  reply: '답장하기', replyLabel: '메시지 추가', sendReply: '메시지 보내기', cancel: '취소',
+  done_submit: '보냈습니다. HON 지원팀이 질문을 받았습니다.', done_message: '메시지를 추가했습니다.',
+  e_DENIED: '이 도장에서 이 작업을 할 권한이 없습니다. 보내지 않았습니다.', e_GONE: '이 도장에서 볼 수 없는 요청입니다. 보내지 않았습니다.',
+  e_CLOSED: '종료된 요청입니다. 보내지 않았습니다. 새 질문을 보내세요.', e_LIMIT: '도장의 오늘 한도에 도달했습니다. 보내지 않았습니다. 내일 다시 시도하거나 HON에 이메일을 보내세요.',
+  e_INVALID: '받아들여지지 않았습니다. 주제, 제목, 메시지를 확인하세요. 보내지 않았습니다.',
+  e_UNKNOWN: '보냈는지 확인하지 못했습니다. 다시 시도하면 똑같은 요청을 보내며, 두 번 도착하지 않습니다.',
+  e_SESSION: '세션이 끝났습니다. 다시 로그인하세요.', tryAgain: '다시 시도', textProblem: '앞뒤 공백과 숨은 문자를 지우세요.',
+};
+const es: Record<SupportKey, string> = {
+  title: 'Pedir ayuda a HON', intro: 'Envíe una pregunta al equipo de HON. Llega directamente al soporte de HON para su escuela y puede seguirla aquí.',
+  waiting: 'Comprobando su escuela…', noSchool: 'Elija una escuela para pedir ayuda.', concealed: 'Oculto mientras no estaba. Se muestra de nuevo cuando se comprueba su escuela.',
+  loading: 'Leyendo sus solicitudes…', denied: 'No puede enviar solicitudes de soporte para esta escuela. Pida acceso al propietario.', unavailable: 'No se pudieron cargar sus solicitudes.', refresh: 'Comprobar de nuevo',
+  askTitle: 'Nueva pregunta', topic: '¿De qué se trata?', subject: 'Asunto', message: 'Su mensaje', send: 'Enviar al soporte de HON', sending: 'Enviando…',
+  t_GETTING_STARTED: 'Primeros pasos', t_IMPORTING_DATA: 'Traer mis datos', t_BILLING: 'Facturación y planes', t_ACCOUNT_ACCESS: 'Inicio de sesión y acceso',
+  t_PROBLEM: 'Algo no funciona', t_IDEA: 'Una idea o petición', t_OTHER: 'Otra cosa',
+  subjectHelp: 'De 3 a 200 caracteres.', messageHelp: 'Hasta 4.000 caracteres. No incluya números de tarjeta, contraseñas ni datos médicos de alumnos.',
+  fromPage: 'Preguntado desde {page}.', privacy: 'El soporte de HON ve su nombre, su escuela y lo que escriba aquí.',
+  listTitle: 'Sus solicitudes', none: 'Aún no hay solicitudes.', opened: 'Enviada {time}', updated: 'Último cambio {time}',
+  st_OPEN: 'Con el soporte de HON', st_WAITING_ON_SCHOOL: 'Esperando su respuesta', st_RESOLVED: 'Resuelta', st_CLOSED: 'Cerrada',
+  waitingHelp: 'El soporte de HON necesita algo de usted. Responda abajo.', resolvedHelp: 'Marcada como resuelta. Si responde, se vuelve a abrir.', closedHelp: 'Esta solicitud está cerrada. Haga una nueva pregunta si aún necesita ayuda.',
+  replies: 'El soporte de HON responde con un mensaje a su escuela.',
+  reply: 'Responder', replyLabel: 'Añadir un mensaje', sendReply: 'Enviar mensaje', cancel: 'Cancelar',
+  done_submit: 'Enviada. El soporte de HON tiene su pregunta.', done_message: 'Se añadió su mensaje.',
+  e_DENIED: 'No tiene permiso para hacer esto en esta escuela. No se envió nada.', e_GONE: 'Esta solicitud no está disponible en esta escuela. No se envió nada.',
+  e_CLOSED: 'Esta solicitud está cerrada. No se envió nada; haga una nueva pregunta.', e_LIMIT: 'Su escuela alcanzó el límite de hoy. No se envió nada. Inténtelo mañana o escriba a HON.',
+  e_INVALID: 'No se aceptó. Revise el tema, el asunto y el mensaje. No se envió nada.',
+  e_UNKNOWN: 'No pudimos confirmar si se envió. Reintentar envía exactamente la misma solicitud y no puede llegar dos veces.',
+  e_SESSION: 'Su sesión terminó. Inicie sesión de nuevo.', tryAgain: 'Reintentar', textProblem: 'Quite los espacios al principio o al final y los caracteres ocultos.',
+};
+export const SUPPORT_LANGUAGES = { en, ko, es } as const;
+export function supportText(language: string, key: SupportKey, vars: Record<string, string> = {}): string {
+  const table = language === 'ko' ? ko : language === 'es' ? es : en;
+  return table[key].replace(/\{(\w+)\}/g, (match, name: string) => vars[name] ?? match);
+}
