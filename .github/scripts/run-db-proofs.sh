@@ -140,6 +140,7 @@ proof champions-club test-a2p-preparation-integrity.mjs "A2P-1: read-only exact-
 proof champions-club test-champions-club-integrity.mjs "Champions Club authority, attribution, qualification gates and evidence"
 proof champions-club test-champions-club-rewards-integrity.mjs "Champions Club reward accounting: liabilities, approvals, reversals, no billing effect"
 proof champions-club test-champions-club-leaderboard-integrity.mjs "Champions Club leaderboards: qualified-only standings, privacy, holds, statistics"
+proof champions-club test-history-import-integrity.mjs "Class and attendance-history CSV import (0333) over signed HTTP: closed per-kind mapping, every cell revalidated in the database, students matched only by exact name (and birth date), stage/decide/finalize with exact replay and an exact selection, classes become weekly series with no sessions, attendance becomes imported history only (no session, booking or attendance record), identifier-only audit and inert outbox, class imports need schedule permission, runtime EXECUTE-only ACL"
 proof champions-club test-champions-club-contests-integrity.mjs "Champions Club contests: HQ lifecycle, frozen standings, winner review, liabilities"
 proof champions-club test-champions-club-journey-integrity.mjs "Champions Club end-to-end journey: code to winner, automatic reward reconciliation, audit"
 proof champions-club test-saas-subscription-integrity.mjs "HON subscription catalog (B1): owner-only offers, atomic founder inventory, entitlement-linked records, no billing effect"

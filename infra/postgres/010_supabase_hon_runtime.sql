@@ -3273,3 +3273,16 @@ DO $$ DECLARE r text; f text; BEGIN
     END LOOP;
   END LOOP;
 END $$;
+-- 0333 class and attendance-history import: four private tables reached only through six runtime entry points.
+DO $$ DECLARE r text; t text; f text; BEGIN
+  IF to_regclass('hon.history_import_batches') IS NULL THEN RAISE EXCEPTION 'Apply migration 0333 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['history_import_batches','history_import_rows','history_import_requests','imported_attendance_history'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.stage_history_import(text,jsonb,text,uuid,uuid),hon.decide_history_import(text,jsonb,text,uuid,uuid),
+      hon.finalize_history_import(text,jsonb,text,uuid,uuid),hon.read_history_imports(text),hon.read_history_import(text,uuid),
+      hon.read_imported_attendance(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
