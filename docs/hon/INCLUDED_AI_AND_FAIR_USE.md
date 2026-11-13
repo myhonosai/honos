@@ -10,7 +10,7 @@
 4. **HQ keeps emergency tools.** HQ can still set a ceiling for one school or pause one school's AI (R2), or pause an organization (0195).
 5. **Organization agent budget removed (decided 2026-11-13).** The interim 12,000-unit organization agent budget (0194, OD-23) no longer caps a paying organization (migration 0310, [AI_ORG_AGENT_CEILING_REMOVED.md](../architecture/AI_ORG_AGENT_CEILING_REMOVED.md)). Only HQ's per-school ceiling or pause and the organization pause can stop a paying school's agent spend; an operator-only override remains as a backstop.
 
-**Rule for new heavy features.** Images and video already reserve creative credits through `hon.saas_creative_reservations` (0202, 0216, 0276). No AI website builder or other heavy generator exists in the code yet. Any one that is added must reserve creative credits through that same wallet path (which also carries the S4 and R2 pause guards), with HQ-configurable rates, and must not be billed as included conversation.
+**Rule for new heavy features.** Images and video already reserve creative credits through `hon.saas_creative_reservations` (0202, 0216, 0276). The first heavy generator, AI website drafts (WB1, 0344, [CREATIVE_WEBSITE_DRAFTS.md](../architecture/CREATIVE_WEBSITE_DRAFTS.md)), reserves per page through that path with test providers only. Any further one must reserve creative credits through that same wallet path (which also carries the S4 and R2 pause guards), with HQ-configurable rates, and must not be billed as included conversation.
 
 ## Policy
 

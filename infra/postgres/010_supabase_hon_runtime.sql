@@ -3446,3 +3446,27 @@ DO $$ DECLARE r text; BEGIN
   END LOOP;
   GRANT EXECUTE ON FUNCTION hon.save_school_onboarding(text,jsonb,text,uuid,uuid), hon.read_school_onboarding(text) TO hon_runtime;
 END $$;
+
+-- 0344 website drafts on the CW1 school wallet: private deny-all tables, private helpers, four fixed runtime entry points.
+DO $$ DECLARE t text; r text; c text; f text; BEGIN
+  IF to_regprocedure('hon.create_creative_website_draft(text,uuid,jsonb,jsonb,uuid,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0344 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['creative_website_drafts','creative_website_draft_pages'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t); EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r); END LOOP;
+    FOR c IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',c,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',c,t,r); END LOOP;
+    END LOOP;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p WHERE p.pronamespace = 'hon'::regnamespace
+      AND (p.proname LIKE 'creative_website%' OR p.proname IN ('guard_creative_website_draft','create_creative_website_draft','record_creative_website_draft_result',
+        'read_creative_website_drafts','read_creative_website_draft')) LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.create_creative_website_draft(text,uuid,jsonb,jsonb,uuid,uuid,uuid), hon.record_creative_website_draft_result(text,uuid,jsonb),
+      hon.read_creative_website_drafts(text,uuid), hon.read_creative_website_draft(text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;

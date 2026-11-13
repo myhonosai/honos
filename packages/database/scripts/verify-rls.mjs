@@ -230,6 +230,8 @@ const expectedRlsTables = [
   'hq_creative_generations',
   'hq_creative_generation_assets',
   'hq_creative_requests',
+  'creative_website_drafts',
+  'creative_website_draft_pages',
   'hq_hon_budget_periods',
   'hq_hon_budget_changes',
   'hq_hon_turns',
