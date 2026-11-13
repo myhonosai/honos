@@ -1,7 +1,7 @@
 /** School reports wording (en / ko / es). Labels only; nothing here is authority or an outcome. */
 const en = {
   scopeThis: 'This school', scopeAll: 'All locations',
-  locationsIntro: 'Totals for every location where you can see reports. Each location counts months in its own school time.',
+  locationsIntro: 'Totals for every location where you can see reports. Each location counts months in its own school time. A student who attends more than one location is counted at each.',
   locationsCount: '{n} locations', byLocationTitle: 'By location', byLocationHelp: 'One month at a time, side by side.', location: 'Location',
   pickMonth: 'Month', tooMany: 'You can see reports at more than 20 locations, which is too many to show together. Open each school\'s own report instead.',
   oneLocation: 'You can see reports at this school only, so there is nothing to compare yet.',
@@ -27,7 +27,7 @@ const en = {
 export type ReportsKey = keyof typeof en;
 const ko: Record<ReportsKey, string> = {
   scopeThis: '이 학교', scopeAll: '전체 지점',
-  locationsIntro: '보고서를 볼 수 있는 모든 지점의 합계입니다. 각 지점은 자기 학교 시간 기준으로 월을 셉니다.',
+  locationsIntro: '보고서를 볼 수 있는 모든 지점의 합계입니다. 각 지점은 자기 학교 시간 기준으로 월을 셉니다. 여러 지점에 출석한 학생은 지점마다 한 번씩 셉니다.',
   locationsCount: '지점 {n}곳', byLocationTitle: '지점별', byLocationHelp: '한 달씩 나란히 비교합니다.', location: '지점',
   pickMonth: '월', tooMany: '보고서를 볼 수 있는 지점이 20곳을 넘어 한꺼번에 보여 줄 수 없습니다. 각 학교의 보고서를 따로 열어 주세요.',
   oneLocation: '이 학교의 보고서만 볼 수 있어 아직 비교할 지점이 없습니다.',
@@ -52,7 +52,7 @@ const ko: Record<ReportsKey, string> = {
 };
 const es: Record<ReportsKey, string> = {
   scopeThis: 'Esta escuela', scopeAll: 'Todas las sedes',
-  locationsIntro: 'Totales de todas las sedes donde puede ver informes. Cada sede cuenta los meses en la hora de su escuela.',
+  locationsIntro: 'Totales de todas las sedes donde puede ver informes. Cada sede cuenta los meses en la hora de su escuela. Un alumno que asiste a más de una sede se cuenta en cada una.',
   locationsCount: '{n} sedes', byLocationTitle: 'Por sede', byLocationHelp: 'Un mes a la vez, lado a lado.', location: 'Sede',
   pickMonth: 'Mes', tooMany: 'Puede ver informes en más de 20 sedes, demasiadas para mostrarlas juntas. Abra el informe de cada escuela por separado.',
   oneLocation: 'Solo puede ver informes de esta escuela, así que todavía no hay nada que comparar.',
