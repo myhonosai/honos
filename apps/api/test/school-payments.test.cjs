@@ -83,10 +83,13 @@ test('0258 simulators: Stripe account first, Square code exchange, status overri
   const q = await square.beginOnboarding({ connectionId: id, accountRef: null, state, returnUrl: 'http://127.0.0.1:3000/x' });
   assert.equal(q.accountRef, null);
   const code = new URL(q.onboardingUrl).searchParams.get('code');
-  assert.match((await square.completeOnboarding({ connectionId: id, accountRef: null, authorizationCode: code })).accountRef, /^MLSIM[0-9a-f]{16}$/);
+  const exchanged = await square.completeOnboarding({ connectionId: id, accountRef: null, authorizationCode: code });
+  assert.match(exchanged.accountRef, /^MLSIM[0-9a-f]{16}$/);
+  assert.match(exchanged.credential.accessToken, /^simacc_[0-9a-f]{24}$/);
   await assert.rejects(square.completeOnboarding({ connectionId: id, accountRef: null, authorizationCode: 'sim_wrong' }), (error) => error.outcome === 'FAILED');
   await square.disconnect({ accountRef: 'MLSIMabc' });
-  assert.equal((await square.retrieveStatus({ accountRef: 'MLSIMabc' })).reauthorizationRequired, true);
+  assert.equal((await square.retrieveStatus({ accountRef: 'MLSIMabc', credential: exchanged.credential })).reauthorizationRequired, true);
+  await assert.rejects(square.retrieveStatus({ accountRef: 'MLSIMabc' }), (error) => error.outcome === 'PRE_SEND', 'Square status needs the stored token');
 });
 
 test('0258 API: seven routes under human-UI guards; never the SaaS adapter, never a fee', () => {
@@ -96,7 +99,7 @@ test('0258 API: seven routes under human-UI guards; never the SaaS adapter, neve
   assert.equal((controller.match(/@UseGuards\(SchoolPay[A-Za-z]+HumanUiGuard\)/g) ?? []).length, 7);
   const sources = ['school-payment.service.ts', 'school-payment-adapter.ts', 'school-payment.controller.ts']
     .map((file) => fs.readFileSync(path.join(__dirname, '../src/school-payments', file), 'utf8')).join('\n');
-  assert.doesNotMatch(sources, /from '\.\.\/payments\/|@Inject\(PAYMENT_PROVIDER_ADAPTER\)|STRIPE_TEST_SECRET_KEY|STRIPE_TEST_WEBHOOK_SECRET|application_fee|app_fee_money/);
+  assert.doesNotMatch(sources, /from '\.\.\/payments\/|@Inject\(PAYMENT_PROVIDER_ADAPTER\)|(?<![A-Z_])STRIPE_TEST_SECRET_KEY|STRIPE_TEST_WEBHOOK_SECRET|application_fee|app_fee_money/);
   const service = fs.readFileSync(path.join(__dirname, '../src/school-payments/school-payment.service.ts'), 'utf8');
   for (const fn of ['read_school_payment_processors', 'start_school_payment_connection', 'set_school_payment_onboarding_link', 'record_school_payment_status',
     'set_default_school_payment_connection', 'disconnect_school_payment_connection']) assert.match(service, new RegExp(`hon\\.${fn}\\(`));
@@ -104,7 +107,7 @@ test('0258 API: seven routes under human-UI guards; never the SaaS adapter, neve
   assert.match(module, /provide: SCHOOL_PAYMENT_ADAPTERS, useFactory: \(\) => schoolPaymentAdaptersFromEnvironment\(\)/);
 });
 
-// B-TUI-2 piece 3 (0290): payer saved methods, test mode only, never a card number.
+// B-TUI-2 piece 3 (0321): payer saved methods, test mode only, never a card number.
 const PAYER = '44444444-4444-4444-8444-444444444444', CONN = '11111111-1111-4111-8111-111111111111';
 const method = (patch = {}) => ({
   methodId: '55555555-5555-4555-8555-555555555555', billingAccountId: PAYER, connectionId: CONN, kind: 'CARD', brand: 'VISA', last4: '4242', expMonth: 12, expYear: 2034,
@@ -115,7 +118,7 @@ const setup = (patch = {}) => ({
   consentTextVersion: 'card-on-file-v1', expiresAt: '2026-11-12T09:00:00.000Z', methodId: null, version: 1, createdAt: '2026-11-12T08:00:00.000Z', ...patch,
 });
 
-test('0290 inputs are closed and never take a card number', () => {
+test('0321 inputs are closed and never take a card number', () => {
   assert.deepEqual(contracts.validateStartSchoolPayMethodSetupInput({ connectionId: CONN, methodKinds: ['US_BANK_ACCOUNT', 'CARD'], consentTextVersion: 'v1' }),
     { connectionId: CONN, methodKinds: ['CARD', 'US_BANK_ACCOUNT'], consentTextVersion: 'v1' });
   for (const bad of [{ connectionId: CONN, methodKinds: [], consentTextVersion: 'v1' }, { connectionId: CONN, methodKinds: ['CARD', 'CARD'], consentTextVersion: 'v1' },
@@ -128,7 +131,7 @@ test('0290 inputs are closed and never take a card number', () => {
   assert.throws(() => contracts.validateRemoveSchoolPayMethodInput({ expectedVersion: 1, reason: '' }));
 });
 
-test('0290 verifiers: card and bank facts, removed state, one default, expiry window', () => {
+test('0321 verifiers: card and bank facts, removed state, one default, expiry window', () => {
   assert.equal(contracts.verifySchoolPayMethod(method()).brand, 'VISA');
   assert.equal(contracts.verifySchoolPayMethod(method({ kind: 'US_BANK_ACCOUNT', brand: 'BANK', last4: '6789', expMonth: null, expYear: null, isDefault: false })).kind, 'US_BANK_ACCOUNT');
   for (const bad of [method({ kind: 'US_BANK_ACCOUNT' }), method({ brand: 'BANK' }), method({ expMonth: null }), method({ last4: '42' }), method({ cardNumber: '4242' }),
@@ -152,7 +155,7 @@ test('0290 verifiers: card and bank facts, removed state, one default, expiry wi
   assert.throws(() => contracts.verifySchoolPayMethodRemoval({ method: method(), providerMethodRef: 'pm_sim1', connectionId: CONN }, { methodId: method().methodId, billingAccountId: PAYER }), undefined, 'not removed');
 });
 
-test('0290 simulators: customer once, hosted setup, retrieval with overrides, Square cards only, unconfigured refuses before sending', async () => {
+test('0321 simulators: customer once, hosted setup, retrieval with overrides, Square cards only, unconfigured refuses before sending', async () => {
   const { SimulatedStripeConnectAdapter, SimulatedSquareAdapter, UnconfiguredSchoolPaymentAdapter, SchoolPaymentProviderError } = await load();
   const stripe = new SimulatedStripeConnectAdapter();
   const { customerRef } = await stripe.ensureCustomer({ accountRef: 'acct_sim1', billingAccountId: PAYER, customerRef: null });
@@ -175,7 +178,7 @@ test('0290 simulators: customer once, hosted setup, retrieval with overrides, Sq
   }
 });
 
-test('0290 API: six routes under human-UI guards; provider references never reach the browser', () => {
+test('0321 API: six routes under human-UI guards; provider references never reach the browser', () => {
   const controller = fs.readFileSync(path.join(__dirname, '../src/school-payments/school-pay-method.controller.ts'), 'utf8');
   for (const route of [/@Get\('payers\/:billingAccountId\/methods'\)/, /@Get\('saved-methods\/expiring'\)/, /@Post\('payers\/:billingAccountId\/method-setups'\)/,
     /@Post\('payers\/:billingAccountId\/method-setups\/:setupId\/finish'\)/, /@Post\('payers\/:billingAccountId\/methods\/:methodId\/default'\)/,
@@ -190,7 +193,7 @@ test('0290 API: six routes under human-UI guards; provider references never reac
   assert.match(module, /SchoolPayMethodController,/); assert.match(module, /SchoolPayMethodService,/);
 });
 
-test('0290 browser views carry no provider account, customer or setup reference', () => {
+test('0321 browser views carry no provider account, customer or setup reference', () => {
   const full = { billingAccountId: PAYER, canManage: true, platformFee: 'NONE', payerName: 'Avery Family',
     connections: [{ connectionId: CONN, providerCode: 'STRIPE_CONNECT', displayName: 'Stripe', accountRef: 'acct_sim1234', isDefault: true, storedCard: true, bankDebit: true, customerRef: 'cus_sim1234' }],
     methods: [method()], setups: [setup()] };

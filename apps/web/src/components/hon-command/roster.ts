@@ -50,6 +50,7 @@ type Definition = Omit<HonCommandAgent, 'name' | 'title' | 'signal' | 'color' | 
 
 const PLANNED_APPROVAL = 'No AI work is available yet. When a governed contract exists, consequential work will still require a qualified human approval in Action Center.';
 const ANSWER_APPROVAL = 'Answers only: it reads this school’s own aggregate numbers and gives the recorded facts and a view. It never drafts, sends, schedules, charges or changes anything; any next step is yours to take.';
+const MAYA_APPROVAL = 'Answers only: she reads this school’s attendance, rank, billing and term signals with your own access and suggests a check-in message. She never sends, schedules, books, charges or changes anything; you decide whether to reach out.';
 const DRAFT_APPROVAL = 'Every draft becomes a CONFIRM proposal. A different qualified human must approve the exact payload in Action Center; approval never sends, publishes or delivers anything.';
 
 const DEFINITIONS: readonly Definition[] = [
@@ -91,17 +92,20 @@ const DEFINITIONS: readonly Definition[] = [
   {
     id: 'maya',
     purpose: 'Attendance, retention, student engagement, renewals and family success.',
-    availability: 'PLANNED',
+    availability: 'ANSWERS',
     capabilities: [
-      { label: 'Retention and attendance outreach drafts', state: 'BACKEND_REQUIRED' },
+      { label: 'At-risk students with reasons and one suggested next step (read only)', state: 'AVAILABLE', href: '/staff/retention/at-risk' },
+      { label: 'Explain one at-risk student and suggest a check-in message you can send yourself (Ask Maya)', state: 'AVAILABLE', href: '/staff/retention/at-risk' },
+      { label: 'Send, schedule or track outreach', state: 'BACKEND_REQUIRED' },
       { label: 'Renewal preparation', state: 'BACKEND_REQUIRED' },
     ],
     workflows: [
+      { label: 'At-risk students', href: '/staff/retention/at-risk' },
       { label: 'Retention review', href: '/staff/retention/review' },
       { label: 'Attendance', href: '/staff/attendance' },
       { label: 'Renewal reviews', href: '/staff/billing/renewals' },
     ],
-    approval: PLANNED_APPROVAL,
+    approval: MAYA_APPROVAL,
     workspace: null,
     draftWorkKey: null,
   },

@@ -1,5 +1,5 @@
 /**
- * School payer saved methods proof (B-TUI-2 piece 3, 0290) over signed HTTP (HON session cookie -> HonIdentityGuard +
+ * School payer saved methods proof (B-TUI-2 piece 3, 0321) over signed HTTP (HON session cookie -> HonIdentityGuard +
  * human UI guards + global ValidationPipe + HonExceptionFilter -> SchoolPayMethodController -> school payment adapters
  * (in-process Stripe Connect and Square simulators, no network) -> protected definer functions on the restricted runtime
  * role with forced RLS), on the guarded disposable CRM-close fixture only. Test mode only; synthetic data; nothing charges
@@ -35,6 +35,8 @@ const { SchoolPaymentService } = await load('school-payments/school-payment.serv
 const { SchoolPayMethodController } = await load('school-payments/school-pay-method.controller.js');
 const { SchoolPayMethodService } = await load('school-payments/school-pay-method.service.js');
 const { SCHOOL_PAYMENT_ADAPTERS, SimulatedStripeConnectAdapter, SimulatedSquareAdapter } = await load('school-payments/school-payment-adapter.js');
+// 0320: connecting the simulated Square seals its synthetic tokens in the vault, so the app needs one (a fresh key per run).
+const { SCHOOL_PAYMENT_VAULT, SchoolPaymentVault } = await load('school-payments/school-payment-vault.js');
 
 const admin = new pg.Client(targets.owner);
 await admin.connect();
@@ -62,7 +64,7 @@ async function startApp() {
   const module = await Test.createTestingModule({
     controllers: [SchoolPaymentController, SchoolPayMethodController],
     providers: [HonIdentityGuard, HonIdentityService, SchoolPaymentService, SchoolPayMethodService, { provide: RuntimeDatabaseService, useValue: database },
-      { provide: SCHOOL_PAYMENT_ADAPTERS, useValue: adapters }],
+      { provide: SCHOOL_PAYMENT_ADAPTERS, useValue: adapters }, { provide: SCHOOL_PAYMENT_VAULT, useValue: new SchoolPaymentVault(randomBytes(32), 'proof-0321') }],
   }).compile();
   app = module.createNestApplication({ logger: false });
   app.setGlobalPrefix('v1');
@@ -448,9 +450,9 @@ try {
   await assert.rejects(runtime.query("SELECT hon.require_school_pay_method_actor('x','school_pay.read')"), /permission denied/); checks += 1;
   // Called directly without the human session settings, every entry point refuses.
   await assert.rejects(runtime.query("SELECT hon.read_school_pay_expiring_methods('x')"), /SCHOOL_PAY_READ_FORBIDDEN/); checks += 1;
-  // The deployment verifier's 0290 section (infra/postgres/011) passes against this database with its runtime role.
+  // The deployment verifier's 0321 section (infra/postgres/011) passes against this database with its runtime role.
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const begin = '-- School payer saved methods exact verification (B-TUI-2 0290)', end = '-- End school payer saved methods exact verification.';
+    const begin = '-- School payer saved methods exact verification (B-TUI-2 0321)', end = '-- End school payer saved methods exact verification.';
     const section = verify.split(begin)[1]?.split(end)[0];
     ok(section, begin);
     await sql(section.replace(/^[^\n]*\n[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
@@ -459,7 +461,7 @@ try {
   ok((await sql('SELECT (SELECT count(*) FROM hon.payment_attempts WHERE organization_id=ANY($1::uuid[])) + (SELECT count(*) FROM hon.invoices WHERE organization_id=ANY($1::uuid[])) n',
     [[ids.organization, ids.otherOrganization]])).rows[0].n === '0', 'no payment attempt or invoice was created');
 
-  console.log(`PASS: school payer saved methods (0290): ${checks} checks.`);
+  console.log(`PASS: school payer saved methods (0321): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

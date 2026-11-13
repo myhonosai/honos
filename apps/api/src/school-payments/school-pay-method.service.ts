@@ -38,7 +38,7 @@ import { HUMAN_SETTINGS, READ_LIMITS, WRITE_LIMITS, translateSchoolPayError } fr
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const FORBIDDEN = 'SCHOOL_PAY_METHOD_FORBIDDEN';
 
-// Exact 0290 error codes; every unknown database failure is unavailable, never success.
+// Exact 0321 error codes; every unknown database failure is unavailable, never success.
 const ERRORS: Record<string, (code: string) => HttpException> = {
   VALIDATION_FAILED: code => new BadRequestException({ code }),
   SCHOOL_PAY_METHOD_FORBIDDEN: code => new ForbiddenException({ code }),
@@ -66,7 +66,7 @@ export interface MethodSetupStart extends SchoolPaySetupReceipt { setupUrl: stri
 export interface MethodRemovalResult extends SchoolPayMethodReceipt { providerDetached: boolean }
 
 /**
- * B-TUI-2 piece 3 (0290): a payer's saved cards and US bank accounts at the school's own processor, test mode only.
+ * B-TUI-2 piece 3 (0321): a payer's saved cards and US bank accounts at the school's own processor, test mode only.
  * The payer enters the card on the provider's hosted page; HON keeps the provider reference, brand, last four, expiry and
  * consent version only, from an authenticated provider retrieval. Every change is one protected definer command that
  * re-proves the direct human subject and the live school-scoped permission. Nothing here charges anyone; HON takes no fee.

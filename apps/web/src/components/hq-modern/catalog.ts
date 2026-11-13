@@ -23,6 +23,7 @@ export const HQ_GROWTH = [
   { path: '/hq/growth/contests', title: 'Referral Contests', icon: 'flag' },
   { path: '/hq/growth/rewards', title: 'Reward Management', icon: 'gift' },
   { path: '/hq/growth/founder-campaigns', title: 'Founder Campaigns', icon: 'target' },
+  { path: '/hq/growth/prospects', title: 'Prospects', icon: 'team' },
 ] as const;
 export const HQ_SCHOOLS = [
   { path: '/hq/schools', title: 'School Directory', icon: 'school' },
@@ -35,6 +36,7 @@ export const HQ_REVENUE = [
   { path: '/hq/revenue/invoices', title: 'Invoices', icon: 'database' },
   { path: '/hq/revenue/trials', title: 'Free Trials', icon: 'flag' },
   { path: '/hq/revenue/sign-up-limits', title: 'Sign-up Limits', icon: 'settings' },
+  { path: '/hq/revenue/founder-billing', title: 'Founder Billing', icon: 'flag' },
   { path: '/hq/pricing-offers', title: 'Pricing & Offers', icon: 'settings' },
 ] as const;
 export const HQ_AI = [
@@ -54,6 +56,7 @@ export const HQ_NAV = [
   { path: '/hq/marketing', title: 'Marketing & Creative', icon: 'target' },
   { path: '/hq/approvals', title: 'Approvals', icon: 'check' },
   { path: '/hq/support', title: 'Support', icon: 'support' },
+  { path: '/hq/communications', title: 'Texts & Email', icon: 'support' },
 ] as const;
 type HqNavLink = { readonly path: string; readonly title: string; readonly icon: string };
 export type HqNavGroup = { readonly key: 'schools' | 'revenue' | 'ai' | 'growth'; readonly title: string; readonly icon: string; readonly overview?: HqNavLink; readonly children: readonly HqNavLink[] };
@@ -85,8 +88,11 @@ export function hqPageLabel(path: string): string {
   if (path === '/hq/growth/champions-club/schools') return 'School referrals';
   if (/^\/hq\/schools\/[0-9a-f-]{36}$/i.test(path)) return 'School detail';
   if (/^\/hq\/support\/[0-9a-f-]{36}$/i.test(path)) return 'Support case';
+  if (/^\/hq\/communications\/[0-9a-f-]{36}$/i.test(path)) return 'HQ message';
+  if (/^\/hq\/growth\/prospects\/[0-9a-f-]{36}$/i.test(path)) return 'Prospect';
   if (/^\/hq\/growth\/contests\/[0-9a-f-]{36}$/i.test(path)) return 'Contest detail';
   if (path === '/hq/revenue') return 'Revenue';
+  if (path === '/hq/marketing/promotions') return 'Plan promotions';
   const fixed = [...HQ_REVENUE, ...HQ_AI, ...HQ_GROWTH, ...HQ_NAV, ...HQ_SCHOOLS].find((item) => item.path === path);
   if (fixed) return fixed.title;
   const executive = HQ_EXECUTIVES.find((entry) => path === `/hq/executives/${entry.executiveKey}`);

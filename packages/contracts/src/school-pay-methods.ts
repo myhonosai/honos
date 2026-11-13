@@ -1,5 +1,5 @@
 /**
- * B-TUI-2 piece 3 (0290): a payer's saved cards and US bank accounts at the school's own processor (Stripe, Square),
+ * B-TUI-2 piece 3 (0321): a payer's saved cards and US bank accounts at the school's own processor (Stripe, Square),
  * TEST mode only. HON keeps only the provider reference, brand, last four, card expiry and the consent version the payer
  * agreed to: never a card number, bank number, token secret or CVC. Nothing here charges anyone, and HON takes no fee.
  */

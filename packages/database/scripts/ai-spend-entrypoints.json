@@ -8,6 +8,7 @@
     "chad_follow_up_invocations",
     "hon_reply_invocations",
     "hq_creative_generations",
+    "hq_hon_turns",
     "marketing_ai_invocations",
     "saas_creative_reservations",
     "saas_credit_reservations",
@@ -80,10 +81,12 @@
   "spendReferences": [
     "hon.ai_org_committed_credits(uuid,timestamp with time zone)",
     "hon.ai_org_open_agent_holds(uuid)",
+    "hon.ai_school_committed_cost_micros(uuid,uuid,timestamp with time zone)",
     "hon.ai_spend_reserve_guard()",
     "hon.ai_stamp_hold_origin()",
     "hon.ai_trial_ceiling_terms(uuid,timestamp with time zone)",
     "hon.ai_unknown_receipt(hon.ai_unknown_resolutions,boolean)",
+    "hon.ask_hq_hon(text,jsonb,uuid)",
     "hon.command_saas_credit_allowance(text,jsonb,uuid,uuid,uuid)",
     "hon.create_hq_creative_generation(text,jsonb,jsonb,uuid)",
     "hon.creative_generation_json(hon.creative_generations)",
@@ -100,11 +103,14 @@
     "hon.hon_os_trial_json(hon.hon_os_trial_enrollments)",
     "hon.hq_creative_budget_json(date)",
     "hon.hq_creative_generation_json(hon.hq_creative_generations)",
+    "hon.hq_hon_budget_json(date)",
+    "hon.hq_hon_turn_json(hon.hq_hon_turns,uuid)",
     "hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)",
     "hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)",
     "hon.prepare_hon_reply(text,uuid,uuid,boolean)",
     "hon.prepare_marketing_invocation(text,uuid,uuid,boolean)",
     "hon.prepare_teaching_invocation(text,uuid,uuid,boolean)",
+    "hon.read_ai_school_cost_limits_from_hq(text)",
     "hon.read_ai_school_usage_from_hq(text,timestamp with time zone,timestamp with time zone)",
     "hon.read_ai_unknown_invocations_from_hq(text)",
     "hon.read_chad_follow_up_invocation(text,uuid)",
@@ -118,11 +124,13 @@
     "hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)",
     "hon.record_chad_follow_up_result(text,uuid,jsonb)",
     "hon.record_hon_reply_result(text,uuid,jsonb)",
+    "hon.record_hq_hon_result(text,uuid,jsonb)",
     "hon.record_marketing_result(text,uuid,jsonb)",
     "hon.record_teaching_result(text,uuid,jsonb)",
     "hon.reserve_saas_creative_credits(text,uuid,jsonb,uuid,uuid,uuid)",
     "hon.reserve_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)",
     "hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)",
+    "hon.resolve_hq_hon_turn(text,uuid,jsonb,uuid)",
     "hon.resolve_saas_credit_reservation(text,uuid,jsonb,uuid,uuid,uuid)",
     "hon.saas_allowance_balance(uuid)",
     "hon.saas_allowance_json(uuid)",
@@ -135,6 +143,7 @@
     "hon.saas_record_provider_usage(hon.saas_credit_reservations,uuid,bigint,bigint,bigint)",
     "hon.saas_record_thresholds(uuid,timestamp with time zone)",
     "hon.set_hq_creative_budget(text,jsonb,uuid)",
+    "hon.set_hq_hon_budget(text,jsonb,uuid)",
     "hon.set_saas_credit_program(text,jsonb,uuid,uuid,uuid)",
     "hon.settle_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)"
   ],
@@ -326,6 +335,13 @@
       "delete": false,
       "truncate": false
     },
+    "hq_hon_turns": {
+      "select": false,
+      "insert": false,
+      "update": false,
+      "delete": false,
+      "truncate": false
+    },
     "marketing_ai_invocations": {
       "select": false,
       "insert": false,
@@ -376,6 +392,10 @@
       "guarded",
       "no_truncate"
     ],
+    "hq_hon_turns": [
+      "guarded",
+      "no_truncate"
+    ],
     "marketing_ai_invocations": [
       "ai_spend_reserve_guard",
       "ai_spend_reserve_guard_insert",
@@ -386,6 +406,7 @@
       "zz_ai_hold_origin"
     ],
     "saas_creative_reservations": [
+      "ai_school_creative_guard",
       "saas_guarded",
       "saas_no_truncate"
     ],

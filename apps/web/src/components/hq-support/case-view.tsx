@@ -76,6 +76,8 @@ export function HqSupportCaseView(props: SupportCaseViewProps): React.ReactEleme
       <Facts rows={[[t('organization'), c.organizationDisplayName], [t('school'), c.schoolDisplayName ?? t('wholeOrganization')], [t('category'), t(c.category)],
         [t('assignee'), c.assignee?.displayName ?? t('unassigned')], [t('openedBy'), c.openedBy.displayName], [t('opened'), `${formatTime(formattingLocale, c.openedAt)} UTC`],
         [t('updated'), `${formatTime(formattingLocale, c.updatedAt)} UTC`], [t('closed'), c.closedAt ? `${formatTime(formattingLocale, c.closedAt)} UTC` : '—']]}/>
+      {c.schoolId && <div className={styles.actions}><a className={styles.secondary} data-hq-message-owners=""
+        href={`/hq/communications?${new URLSearchParams({ organizationId: c.organizationId, schoolId: c.schoolId, supportCaseId: c.caseId })}`}>{t('messageOwners')}</a></div>}
     </article>
     <Outcome language={language} outcome={props.outcome} done={done} canRetry={props.canRetry} onTryAgain={props.onTryAgain}/>
     {closed ? <p className={styles.notice}>{t('closedFinal')}</p> : <React.Fragment key={props.formKey}>

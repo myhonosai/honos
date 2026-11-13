@@ -67,7 +67,9 @@ export function HqSchoolDetailView(props: SchoolDetailViewProps): React.ReactEle
       {v.ownership.ownerCount === 0 && <p className={styles.meta}>{t('noOwners')}</p>}
       {v.ownership.primaryNeeded && <p className={styles.outcome} data-tone="waiting" role="note">{t('primaryNeeded')}</p>}
       <div className={styles.actions}><a className={styles.secondary} href="/hq/schools/owners">{t('manageOwners')}</a>
-        <a className={styles.secondary} href="/hq/school-owner-invitations">{t('inviteOwner')}</a></div>
+        <a className={styles.secondary} href="/hq/school-owner-invitations">{t('inviteOwner')}</a>
+        {v.ownership.ownerCount > 0 && <a className={styles.secondary} data-hq-message-owners=""
+          href={`/hq/communications?${new URLSearchParams({ organizationId: org.organizationId, schoolId: v.school.schoolId })}`}>{t('messageOwners')}</a>}</div>
     </article>
 
     <article className={styles.card} aria-labelledby="hq-sd-invitations"><div className={styles.cardHead}><h2 id="hq-sd-invitations">{t('sectionInvitations')}</h2></div>

@@ -5,7 +5,9 @@ import { championsDrift as drift, championsExactKeys as exactKeys, championsIsTi
 
 export const AI_TEAM_READY_AGENTS = [['marcus', 'MARKETING', 6], ['kai', 'TEACHING', 6], ['chad', 'CHAD_FOLLOW_UP', 3], ['hon', 'HON_REPLY', 10], ['claire', 'BUSINESS_PERFORMANCE', 15],
   // 0260: Alex, Jordan and Lena (read-only analysis specialists, the same DETAILED reply runtime as Claire).
-  ['alex', 'GENERAL_MANAGEMENT', 15], ['jordan', 'OPERATIONS', 15], ['lena', 'CREATIVE_COMMERCE', 15]] as const;
+  ['alex', 'GENERAL_MANAGEMENT', 15], ['jordan', 'OPERATIONS', 15], ['lena', 'CREATIVE_COMMERCE', 15],
+  // 0284: Maya (retention, one at-risk student; the same DETAILED reply runtime).
+  ['maya', 'RETENTION', 15]] as const;
 export type AiTeamReadyAgentKey = typeof AI_TEAM_READY_AGENTS[number][0];
 /** S4-c decisions plus ALLOWED. */
 export const AI_TEAM_SPEND_DECISIONS = ['ALLOWED', 'AI_PAUSED_BY_HQ', 'AI_EXCEPTION_NO_AI', 'AI_ACCESS_UNKNOWN_STATE', 'AI_TRIAL_FUNDING_NOT_APPROVED',
@@ -22,6 +24,7 @@ export interface AiTeamReadiness {
   /**
    * Organization-wide agent budget (all schools of the organization). Null unless the requester independently holds
    * organization-wide authority (HON HQ reader, or ai.usage.read at every school of the organization).
+   * ceilingCredits is AI_ORG_AGENT_NO_CEILING_UNITS (0310) when the organization has no agent budget: never show it as a balance.
    */
   agentBudget: { committedCredits: number; ceilingCredits: number } | null; agents: AiTeamAgentReadiness[]; asOf: string;
   /** The C1 HON conversation contract exists; GET /hon/readiness gives the composer prerequisites. */
