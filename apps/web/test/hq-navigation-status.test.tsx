@@ -25,7 +25,7 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('HQ navigation groups', () => {
   it('places Pricing & Offers under Revenue and AI Providers under AI without changing any URL', () => {
-    expect(HQ_REVENUE.map((item) => item.path)).toEqual(['/hq/revenue', '/hq/revenue/invoices', '/hq/revenue/trials', '/hq/revenue/sign-up-limits', '/hq/revenue/founder-billing', '/hq/pricing-offers']);
+    expect(HQ_REVENUE.map((item) => item.path)).toEqual(['/hq/revenue', '/hq/revenue/business-numbers', '/hq/revenue/invoices', '/hq/revenue/trials', '/hq/revenue/sign-up-limits', '/hq/revenue/founder-billing', '/hq/pricing-offers']);
     expect(HQ_AI.map((item) => item.path)).toEqual(['/hq/executives', '/hq/ai-costs', '/hq/creative-credits', '/hq/ai-safety', '/hq/ai-providers']);
     const topLevel = HQ_NAV.map((item) => item.path);
     for (const moved of ['/hq/pricing-offers', '/hq/ai-providers', '/hq/ai-costs', '/hq/ai-safety']) expect(topLevel).not.toContain(moved);

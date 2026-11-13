@@ -7,6 +7,7 @@ import { hqHonApi, hqHonAskError, hqHonBudgetError } from '../src/components/hq-
 import { HqHonPanelView, type HqHonPanelViewProps } from '../src/components/hq-hon/hq-hon-panel';
 import { HQ_HON_COPY_TABLES, hqHonText } from '../src/components/hq-hon/copy';
 import { MarketingError } from '../src/components/hq-marketing/http';
+import { HqExecutiveRecords, PerformanceView, TaskHistoryView } from '../src/components/hq-hon/hq-executive-records';
 
 // HQ Ask HON web (0263/0264): same-origin transport, one Idempotency-Key per attempt, server-decided availability,
 // concealed answers never shown, and no provider, model, school or cost in the view.
@@ -144,4 +145,41 @@ it('offers the budget form to the HQ owner only, and says setting it spends noth
   expect(refused).toContain('Not saved: the cap is below what this month has already used or holds.');
   const sending = renderToStaticMarkup(<HqHonPanelView {...props({ state: owner, budgetOutcome: { kind: 'SENDING' } })}/>);
   expect(sending).toMatch(/data-hq-hon-budget-form=""[^]*?<fieldset disabled="">/);
+});
+
+// ---------- 0338 (HX-1): executive workspace sections ----------
+const tx = (key: Parameters<typeof hqHonText>[1], params: Readonly<Record<string, string | number>> = {}) => hqHonText('en', key, { name: 'Chase', ...params });
+const perf = { agentKey: 'chase' as const, periodStart: '2026-11-01', asked: 4, answered: 2, failed: 1, underReview: 1, inProgress: 0, resolved: 0, askers: 2,
+  chargedCredits: 9, lastAskedAt: '2026-11-13T07:00:00.000Z', asOf: '2026-11-13T07:30:00.000Z' };
+
+it('0338: performance shows this month\'s aggregate counts only; refusals and errors show nothing invented', () => {
+  const html = renderToStaticMarkup(<PerformanceView state={{ kind: 'READY', value: perf }} t={tx}/>);
+  for (const text of ['Chase this month', 'Every HQ question to Chase since 2026-11', 'Questions asked', 'Answered', 'HQ people who asked', 'HQ AI text credits charged', 'Last question']) expect(html).toContain(text);
+  expect(html).not.toMatch(/reply|provider|model|\$/i);
+  expect(renderToStaticMarkup(<PerformanceView state={{ kind: 'READY', value: { ...perf, asked: 0, answered: 0, failed: 0, underReview: 0, askers: 0, chargedCredits: 0, lastAskedAt: null } }} t={tx}/>)).toContain('No HQ questions to Chase this month.');
+  expect(renderToStaticMarkup(<PerformanceView state={{ kind: 'DENIED' }} t={tx}/>)).toContain('does not include Chase&#x27;s area');
+  expect(renderToStaticMarkup(<PerformanceView state={{ kind: 'UNAVAILABLE' }} t={tx}/>)).toContain('Performance could not be read. Nothing is shown.');
+});
+
+it('0338: task history lists only this agent\'s recorded turns; recommendations and approvals say the executive never acts', () => {
+  const turn = (agentKey: string, question: string) => ({ turnId: crypto.randomUUID(), agentKey, replyMode: 'STANDARD', question, status: 'ANSWERED', failureReason: null,
+    reply: 'x', truncated: false, concealed: false, reservedCredits: 10, chargedCredits: 2, askedBy: { principalId: crypto.randomUUID(), displayName: 'A' }, version: 2,
+    createdAt: '2026-11-13T07:00:00.000Z', completedAt: '2026-11-13T07:00:05.000Z' });
+  const view = { turns: [turn('chase', 'How are HQ campaigns doing?'), turn('mia', 'Support backlog?')] } as never;
+  const html = renderToStaticMarkup(<TaskHistoryView agentKey="chase" state={{ kind: 'READY', value: view }} t={tx}/>);
+  expect(html).toContain('How are HQ campaigns doing?'); expect(html).not.toContain('Support backlog?'); expect(html).toContain('Answered');
+  expect(renderToStaticMarkup(<TaskHistoryView agentKey="chase" state={{ kind: 'READY', value: { turns: [] } as never }} t={tx}/>)).toContain('You have not asked Chase anything yet.');
+  expect(renderToStaticMarkup(<HqExecutiveRecords agentKey="chase" name="Chase" tab="recommendations"/>)).toContain('Chase answers questions only');
+  expect(renderToStaticMarkup(<HqExecutiveRecords agentKey="chase" name="Chase" tab="approvals"/>)).toContain('Chase never takes an action');
+});
+
+it('0338: the performance read asks for one catalog agent and refuses an answer about another', async () => {
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: { ...perf, agentKey: 'mia' } }), { status: 200, headers: { 'content-type': 'application/json' } }));
+  vi.stubGlobal('fetch', fetchMock);
+  try {
+    await expect(hqHonApi.performance('chase', AbortSignal.timeout(1000), () => true)).rejects.toMatchObject({ kind: 'UNKNOWN' });
+    expect(String((fetchMock.mock.calls[0] as unknown[])[0])).toContain('/api/v1/hq/hon/performance/chase');
+    await expect(hqHonApi.performance('claire' as never, AbortSignal.timeout(1000), () => true)).rejects.toMatchObject({ kind: 'INVALID' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  } finally { vi.unstubAllGlobals(); }
 });

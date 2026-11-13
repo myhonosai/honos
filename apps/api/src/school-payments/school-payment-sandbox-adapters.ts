@@ -1,4 +1,7 @@
-import { verifySchoolPayObservation, type SchoolPayCapabilities, type SchoolPayObservation } from '@hon/contracts';
+import {
+  verifySchoolPayMethodObservation, verifySchoolPayObservation, type SchoolPayCapabilities, type SchoolPayCardBrand, type SchoolPayMethodKind,
+  type SchoolPayMethodObservation, type SchoolPayObservation,
+} from '@hon/contracts';
 import { SchoolPaymentProviderError, type SchoolPaymentAdapter } from './school-payment-adapter.js';
 import type { SchoolPayCredential } from './school-payment-vault.js';
 
@@ -39,6 +42,10 @@ function grantInvalid(body: unknown): boolean {
   if (typeof row.error === 'string' && row.error.toLowerCase() === 'invalid_grant') return true;
   return Array.isArray(row.errors) && row.errors.some(e => !!e && typeof e === 'object' && String((e as Record<string, unknown>).code ?? '').toUpperCase() === 'INVALID_GRANT');
 }
+const PROVIDER_REF = /^[A-Za-z0-9_:-]{3,100}$/;
+const providerRef = (value: unknown): string => (typeof value === 'string' && PROVIDER_REF.test(value) ? value : unknown());
+const STRIPE_BRANDS: Record<string, SchoolPayCardBrand> = { visa: 'VISA', mastercard: 'MASTERCARD', amex: 'AMEX', discover: 'DISCOVER', jcb: 'JCB', diners: 'DINERS', unionpay: 'UNIONPAY' };
+const stripeBrand = (value: unknown): SchoolPayCardBrand => (typeof value === 'string' ? STRIPE_BRANDS[value] ?? 'OTHER' : unknown());
 const accountRef = (value: unknown): string => (typeof value === 'string' && ACCOUNT_REF.test(value) ? value : unknown());
 
 /** One provider call. The error never carries the provider's text, the request or a credential. */
@@ -75,11 +82,12 @@ export class StripeConnectTestAdapter implements SchoolPaymentAdapter {
   }
   readiness(): 'READY' { return 'READY'; }
 
-  private async call(method: 'GET' | 'POST', path: string, form?: Record<string, string>, idempotencyKey?: string): Promise<SchoolPayHttpResponse> {
+  private async call(method: 'GET' | 'POST', path: string, form?: Record<string, string>, idempotencyKey?: string, connectedAccount?: string): Promise<SchoolPayHttpResponse> {
     return send(this.http, {
       method, url: `${STRIPE_API}${path}`,
       headers: { Authorization: `Bearer ${this.secretKey}`, 'Stripe-Version': '2025-03-31.basil', Accept: 'application/json',
-        ...(form ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}), ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
+        ...(form ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}), ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+        ...(connectedAccount ? { 'Stripe-Account': accountRef(connectedAccount) } : {}) },
       ...(form ? { body: new URLSearchParams(form).toString() } : {}),
     });
   }
@@ -129,6 +137,58 @@ export class StripeConnectTestAdapter implements SchoolPaymentAdapter {
       reauthorizationRequired: false,
       capabilities: { bankDebit: ach, offSessionRecurring: card, oneTimeCard: card, refunds: card, storedCard: card },
     });
+  }
+
+  /**
+   * 0321: the payer's customer lives on the school's own account (direct charges), so every saved-method call carries
+   * Stripe-Account. The idempotency key makes a retried create return the same customer, never an orphan.
+   */
+  async ensureCustomer({ accountRef: account, billingAccountId, customerRef }: { accountRef: string; billingAccountId: string; customerRef: string | null }) {
+    if (customerRef !== null) return { customerRef: providerRef(customerRef) };
+    const created = await this.call('POST', '/v1/customers', { 'metadata[hon_billing_account_id]': billingAccountId },
+      `hon-school-pay-customer-${account}-${billingAccountId}`, account);
+    if (created.status !== 200) return rejected();
+    return { customerRef: providerRef(object(created.body).id) };
+  }
+
+  /** 0321: Stripe Checkout in setup mode on the school's account; the payer enters the card or bank details on Stripe's page. */
+  async beginMethodSetup({ accountRef: account, customerRef, setupId, methodKinds, state, returnUrl }: { accountRef: string; customerRef: string; setupId: string; methodKinds: readonly SchoolPayMethodKind[]; state: string; returnUrl: string }) {
+    if (!methodKinds.length) throw new SchoolPaymentProviderError('PRE_SEND', 'INVALID_REQUEST');
+    const form: Record<string, string> = { mode: 'setup', customer: providerRef(customerRef), success_url: returnWith(returnUrl, state), cancel_url: returnWith(returnUrl, null),
+      'metadata[hon_setup_id]': setupId };
+    [...methodKinds].sort().forEach((kind, i) => { form[`payment_method_types[${i}]`] = kind === 'CARD' ? 'card' : 'us_bank_account'; });
+    const created = await this.call('POST', '/v1/checkout/sessions', form, `hon-school-pay-setup-${setupId}`, account);
+    if (created.status !== 200) return rejected();
+    const body = object(created.body);
+    return { setupRef: providerRef(body.id), setupUrl: hostedUrl(body.url, 'checkout.stripe.com') };
+  }
+
+  /** 0321: the saved method read from Stripe with the platform key (the browser return proves nothing). */
+  async retrieveMethodSetup({ accountRef: account, customerRef, setupRef }: { accountRef: string; customerRef: string; setupRef: string }): Promise<SchoolPayMethodObservation> {
+    const response = await this.call('GET', `/v1/checkout/sessions/${encodeURIComponent(providerRef(setupRef))}?expand[]=setup_intent.payment_method`, undefined, undefined, account);
+    if (response.status !== 200) return rejected();
+    const session = object(response.body);
+    if (session.id !== setupRef || session.mode !== 'setup' || session.customer !== customerRef) return unknown();
+    const intent = session.setup_intent && typeof session.setup_intent === 'object' ? object(session.setup_intent) : null;
+    if (session.status !== 'complete' || !intent || intent.status !== 'succeeded') throw new SchoolPaymentProviderError('FAILED', 'SETUP_INCOMPLETE');
+    const method = object(intent.payment_method);
+    if (method.customer !== customerRef) return unknown();
+    if (method.type === 'card') {
+      const card = object(method.card);
+      return verifySchoolPayMethodObservation({ customerRef, methodRef: providerRef(method.id), kind: 'CARD', brand: stripeBrand(card.brand), last4: card.last4,
+        expMonth: card.exp_month, expYear: card.exp_year });
+    }
+    if (method.type === 'us_bank_account') {
+      const bank = object(method.us_bank_account);
+      return verifySchoolPayMethodObservation({ customerRef, methodRef: providerRef(method.id), kind: 'US_BANK_ACCOUNT', brand: 'BANK', last4: bank.last4, expMonth: null, expYear: null });
+    }
+    return unknown();
+  }
+
+  /** 0321: detach a removed method from the payer's customer on the school's account. */
+  async detachMethod({ accountRef: account, methodRef }: { accountRef: string; methodRef: string }): Promise<void> {
+    const response = await this.call('POST', `/v1/payment_methods/${encodeURIComponent(providerRef(methodRef))}/detach`, {}, `hon-school-pay-detach-${methodRef}`, account);
+    if (response.status !== 200) return rejected();
   }
 
   /** A full-dashboard account is the school's: the platform's secret key cannot revoke it, and HON never deletes it. */
@@ -225,6 +285,15 @@ export class SquareSandboxAdapter implements SchoolPaymentAdapter {
       capabilities: { bankDebit: false, offSessionRecurring: charges, oneTimeCard: charges, refunds: charges, storedCard: charges },
     });
   }
+
+  /**
+   * 0321: saving a Square card needs the Web Payments SDK on a HON-hosted page and the seller's token from the vault; that
+   * is a later piece. Until then every saved-method call is refused before anything is sent (the simulator covers it).
+   */
+  async ensureCustomer(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
+  async beginMethodSetup(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
+  async retrieveMethodSetup(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
+  async detachMethod(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
 
   /** Revokes this application's access to the merchant (all its tokens). The seller account itself stays. */
   async disconnect({ accountRef: ref }: { accountRef: string }): Promise<void> {
