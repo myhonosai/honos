@@ -49,6 +49,7 @@ export const SAAS_PLAN_CAPABILITIES: Record<SaasPlanCode, readonly string[]> = {
 export const SAAS_COMMANDS = {
   setSchoolTextSender: 'hq-school-text-sender-set',
   setSchoolMissedCallSettings: 'hq-school-missed-call-settings-set',
+  setZernioLeadForm: 'hq-zernio-lead-form-set',
   recordSubscriptionGeneration: 'saas-subscription-generation-record',
   startScheduleBinding: 'saas-schedule-binding-start',
   cancelScheduleBinding: 'saas-schedule-binding-cancel',
@@ -101,6 +102,7 @@ export const SAAS_COMMANDS = {
   closeExpiredAccessExceptions: 'saas-access-exception-close',
   decideExceptionPolicy: 'saas-access-exception-policy-decision',
   aiSpendPause: 'ai-spend-pause',
+  aiSchoolCostLimit: 'ai-school-cost-limit',
   aiUnknownResolve: 'ai-unknown-resolve',
   aiLateProviderExpense: 'ai-late-provider-expense',
   setCreativeProgram: 'saas-creative-program',
@@ -134,6 +136,12 @@ export const SAAS_COMMANDS = {
   askHqHon: 'hq-hon-ask',
   setHqHonBudget: 'hq-hon-budget-set',
   resolveHqHonTurn: 'hq-hon-turn-resolve',
+  // HQ-COMM (0281): HQ texting and email; same values as HQ_COMMUNICATION_COMMANDS.
+  setHqCommunicationSender: 'hq-communication-sender-set',
+  retireHqCommunicationSender: 'hq-communication-sender-retire',
+  createHqMessage: 'hq-message-create',
+  queueHqMessage: 'hq-message-queue',
+  cancelHqMessage: 'hq-message-cancel',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 

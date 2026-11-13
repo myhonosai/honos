@@ -214,6 +214,9 @@ const SAAS_BILLING_CALLS = {
   recordAiLateProviderExpense: { sql: 'SELECT hon.record_ai_late_provider_expense($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
   readAiSpendPauses: { sql: 'SELECT hon.read_ai_spend_pauses_from_hq($1) AS data', arity: 1, readOnly: true },
   commandAiSpendPause: { sql: 'SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  // R2 (0288): per-school internal AI cost ceiling and single-school pause (HQ only).
+  readAiSchoolCostLimits: { sql: 'SELECT hon.read_ai_school_cost_limits_from_hq($1) AS data', arity: 1, readOnly: true },
+  commandAiSchoolCostLimit: { sql: 'SELECT hon.command_ai_school_cost_limit($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readAccessExceptions: { sql: 'SELECT hon.read_saas_access_exceptions_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   grantAccessException: { sql: 'SELECT hon.grant_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   revokeAccessException: { sql: 'SELECT hon.revoke_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
@@ -234,12 +237,21 @@ const SAAS_BILLING_CALLS = {
   setSchoolTextSender: { sql: 'SELECT hon.set_school_text_sender_from_hq($1,$2::uuid,$3,$4,$5,$6::boolean,$7::integer) AS data', arity: 7, readOnly: false },
   // 0249: the HQ owner sets the school's forwarding phone and the missed-call text-back switch.
   setSchoolMissedCallSettings: { sql: 'SELECT hon.set_school_missed_call_settings_from_hq($1,$2::uuid,$3,$4::boolean,$5::integer) AS data', arity: 5, readOnly: false },
+  // 0250: the HQ owner maps one Facebook account + Lead Gen form to one school pipeline stage for Zernio lead intake.
+  setZernioLeadForm: { sql: 'SELECT hon.set_zernio_lead_form_from_hq($1,$2::uuid,$3,$4,$5::uuid,$6::uuid,$7::jsonb,$8,$9::integer) AS data', arity: 9, readOnly: false },
   readHqSchoolDetail: { sql: 'SELECT hon.read_hq_school_detail_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   // B-HQ-2 (0232): HQ support records. Reads are read-only; the three commands write only support rows.
   readSupportCases: { sql: 'SELECT hon.read_hq_support_cases($1,$2,$3::uuid,$4::timestamptz,$5::uuid,$6::integer) AS data', arity: 6, readOnly: true },
   readSupportCase: { sql: 'SELECT hon.read_hq_support_case($1,$2::uuid) AS data', arity: 2, readOnly: true },
   readSupportSchools: { sql: 'SELECT hon.read_hq_support_schools($1) AS data', arity: 1, readOnly: true },
   openSupportCase: { sql: 'SELECT hon.open_hq_support_case($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  readHqCommunications: { sql: 'SELECT hon.read_hq_communications($1,$2::uuid,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },
+  readHqMessage: { sql: 'SELECT hon.read_hq_message($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  setHqCommunicationSender: { sql: 'SELECT hon.set_hq_communication_sender($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  retireHqCommunicationSender: { sql: 'SELECT hon.retire_hq_communication_sender($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: false },
+  createHqMessage: { sql: 'SELECT hon.create_hq_message($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  queueHqMessage: { sql: 'SELECT hon.queue_hq_message($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  cancelHqMessage: { sql: 'SELECT hon.cancel_hq_message($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   addSupportNote: { sql: 'SELECT hon.add_hq_support_note($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   changeSupportCase: { sql: 'SELECT hon.change_hq_support_case($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   // M1 (0252): HQ marketing campaigns. Reads are read-only; the three commands write only HQ campaign rows.
@@ -584,6 +596,9 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT hon.read_public_school_event($1) AS data',
       'SELECT hon.book_public_school_event($1,$2::jsonb,$3) AS data',
       'SELECT hon.cancel_public_school_event_booking($1,$2::jsonb) AS data',
+      'SELECT hon.read_public_school_booking_type($1) AS data',
+      'SELECT hon.book_public_school_booking_type($1,$2::jsonb,$3) AS data',
+      'SELECT hon.cancel_public_school_booking_type_booking($1,$2::jsonb) AS data',
     ].includes(statement)) throw new Error('Unknown public event call.');
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();

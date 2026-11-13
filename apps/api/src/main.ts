@@ -5,6 +5,7 @@ import { AppModule } from './app.module.js';
 import { json } from 'express';
 import { publicFormTransport } from './marketing/public-form-transport.js';
 import { publicEventTransport } from './schedule/public-event-transport.js';
+import { publicBookingTypeTransport } from './schedule/public-booking-type-transport.js';
 import { kioskTransport } from './kiosk/kiosk-transport.js';
 import { paymentWebhookTransport } from './payments/payment-webhook-transport.js';
 import { communicationWebhookTransport } from './communication/delivery/communication-webhook.controller.js';
@@ -27,6 +28,7 @@ async function bootstrap(): Promise<void> {
   app.use(kioskTransport());
   app.use(publicFormTransport());
   app.use(publicEventTransport());
+  app.use(publicBookingTypeTransport());
   app.use(paymentWebhookTransport());
   app.use(communicationWebhookTransport());
   app.use(json({ limit: '2mb', strict: true }));

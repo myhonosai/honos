@@ -35,6 +35,7 @@ export const HQ_REVENUE = [
   { path: '/hq/revenue/invoices', title: 'Invoices', icon: 'database' },
   { path: '/hq/revenue/trials', title: 'Free Trials', icon: 'flag' },
   { path: '/hq/revenue/sign-up-limits', title: 'Sign-up Limits', icon: 'settings' },
+  { path: '/hq/revenue/founder-billing', title: 'Founder Billing', icon: 'flag' },
   { path: '/hq/pricing-offers', title: 'Pricing & Offers', icon: 'settings' },
 ] as const;
 export const HQ_AI = [

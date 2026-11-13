@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "01e28a48d6ef350a25a20086fe85d075db5d4c7e5374132ff317ad11605b8a24",
+  "chainSha256": "603ec95f14f30ab09d24096eee700ce0a41587bb3888c5e53a4a3cf3abca8542",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -251,6 +251,10 @@
       "sha256": "7714b5cac10d99638b40998c6726cbb3dc3b0458be4f57061d266deed0118ef9"
     },
     {
+      "file": "0250_zernio_lead_intake.sql",
+      "sha256": "ae23500f1db741dd9c2b13a0ea0e0f60570f85ddaed990880f4dc8c85718f05f"
+    },
+    {
       "file": "0251_class_series_ongoing.sql",
       "sha256": "90532172b977efee9e3947d261f0ac20387a987cec14e7afeb4cf3d725e324e8"
     },
@@ -347,12 +351,28 @@
       "sha256": "ce54010d93d988fd9ea096e3c87a1aaaebced068a60e17eb786644044707292d"
     },
     {
+      "file": "0281_hq_communications.sql",
+      "sha256": "0bab5c668cc9ac4fbfb510deb8a21f173360b09a6ab561b52d3ef94bf7d34ed1"
+    },
+    {
       "file": "0284_maya_retention_answers.sql",
       "sha256": "8518211375aa88c5e8ddf4bb2881d63bd437e4c19b84925b6cdd5af6c1eddaba"
     },
     {
       "file": "0285_school_page_branding.sql",
       "sha256": "4cb98a54593a817a4f604a1ef2087c8d4cab4abd5031e7455e392c3a8dd9157f"
+    },
+    {
+      "file": "0286_school_booking_types.sql",
+      "sha256": "c29503fa5753959310c649eaf3e131f30c4c63b60d4d1c599015108c1ad6721f"
+    },
+    {
+      "file": "0287_ai_task_class_routing.sql",
+      "sha256": "eb09bd1fe61ae8d75c91f1151431653faeb4bd16b0472c91f33d0163e38499bd"
+    },
+    {
+      "file": "0288_ai_school_cost_ceiling.sql",
+      "sha256": "0f77dfd17d256f21f724c16f3287247b75a94ef657b017d745278fe56165e123"
     },
     {
       "file": "0304_hq_hon_schedule_billing_facts.sql",

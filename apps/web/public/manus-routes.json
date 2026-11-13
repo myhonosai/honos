@@ -493,6 +493,10 @@
       "title": "HON HQ | Sign-up Limits"
     },
     {
+      "path": "/hq/revenue/founder-billing",
+      "title": "HON HQ | Founder Billing"
+    },
+    {
       "path": "/staff/subscription",
       "title": "HON OS | School subscription"
     },
