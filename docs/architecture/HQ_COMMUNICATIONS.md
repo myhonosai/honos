@@ -63,8 +63,11 @@ inbound replies routed to HQ support (STOP/START/HELP are handled), attachments 
   `UNKNOWN`), hold reasons, lease columns, provider ids, `sent_as`, `segments`, `encoding`, measured cost. No address
   or body copy.
 - `hon.hq_message_delivery_events`: append-only receipts, unique on (provider, provider_event_id).
-- `hon.hq_contact_channels`: per user, the SMS phone (E.164) they added, when it was confirmed, and their HQ texting
-  opt-in. Email is the account email (`hon.users.email`), not copied.
+- `hon.hq_contact_phones` (0282): per user, the SMS phone (E.164) they added; while PENDING a salted SHA-256 of the
+  on-screen code (never the code), its 15-minute expiry and wrong tries (5 max); 5 codes a day; when it was confirmed.
+  A number can be CONFIRMED for one person only. The HQ texting opt-in is the person's SMS row in
+  `hon.hq_contact_preferences`. `hon.hq_inbound_texts` records each inbound text once per provider event (keyword and
+  outcome, never the body). Email is the account email (`hon.users.email`), not copied.
 - Forced RLS on all tables; runtime has no table privileges; everything goes through SECURITY DEFINER functions.
   History rows cannot be changed or deleted. Grants are mirrored in `infra/postgres/010_supabase_hon_runtime.sql`.
 
@@ -85,7 +88,11 @@ origin, `X-HON-Human-Command`, JSON, `Idempotency-Key`). An AI agent can draft t
 - EMAIL: account and service email to a school owner's account address is allowed. Each email carries a one-click
   "stop HQ emails" link that records a per-user email opt-out; `BILLING` and `ACCOUNT` notices that the owner must
   receive are marked as such and still go (owner decision, §7).
-- SMS: only to a phone the user added and confirmed with a code, with HQ texting switched on by them. STOP from that
+- SMS: only to a phone the user added and confirmed, with HQ texting switched on by them. Confirmation runs the other
+  way from a usual sign-in code, so HON never texts anyone first: the screen shows a 6-digit code once, and the person
+  texts it from that phone to the HQ texting number. That one text proves the number is theirs and is their own opt-in,
+  so HQ texts turn on when it arrives (fixed CONFIRMED reply with STOP/HELP wording). A wrong code gets a fixed
+  CODE_WRONG reply; a code for a number confirmed to someone else confirms nothing. STOP from that
   phone to the HQ number turns it off (source `RECIPIENT`); START turns it back on; HELP gets a fixed reply. Quiet hours
   are 21:00 to 08:00 in the school's time zone, as for schools.
 - Checked again at claim time, so a change after queueing still stops the send (`SUPPRESSED`).
@@ -116,14 +123,21 @@ webhook side.
 - `GET /v1/hq/communications/messages?schoolId&cursor&limit`, `GET …/messages/:id` (status, pieces, sent-as,
   per-recipient delivery state; never the address).
 - `POST /v1/hq/communications/messages` (draft), `…/:id/queue`, `…/:id/cancel`.
-- School app: `GET/POST /v1/me/hq-contact` (own phone, confirm code, HQ texting on/off).
+- School app: `GET /v1/me/hq-contact`; `POST …/phone` {phone, expectedVersion} (returns the code once, a replay
+  returns `code: null`), `POST …/texting` {enabled, expectedVersion}, `POST …/phone/remove` {expectedVersion}. The
+  person comes from the session; no user id is in any path.
+- Worker: `record_hq_inbound_text(provider, eventId, from, toMessagingServiceSid, body, receivedAt)` returns the outcome
+  and the fixed reply kind; `HQ_INBOUND_REPLIES` holds the reply wording. The Twilio inbound route that calls it belongs
+  with the provider adapters.
 
 ### 4.7 Screens
 
 - HQ school detail and HQ support case: "Message the owners" with channel, purpose, the piece counter and the delivery
   timeline. No address is shown.
 - `/hq/communications`: sender status per channel (Not set up / Waiting for approval / Ready) and recent HQ messages.
-- School app account page: "Texts from HON" phone, code and switch.
+- School app `/settings/texts-from-hon` ("Texts from HON", in the Settings nav): add a number, the code and the HQ
+  number to text it to (the screen checks again every 5 seconds while a code is shown), the on/off switch, change or
+  remove the number. The code lives in memory only and is dropped when the session ends.
 - English, Korean and Spanish.
 
 ### 4.8 HON prospects (owner decision: in v1)
