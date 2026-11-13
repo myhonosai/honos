@@ -263,6 +263,6 @@
     "0284_maya_retention_answers.sql": "8518211375aa88c5e8ddf4bb2881d63bd437e4c19b84925b6cdd5af6c1eddaba",
     "0285_school_page_branding.sql": "4cb98a54593a817a4f604a1ef2087c8d4cab4abd5031e7455e392c3a8dd9157f",
     "0304_hq_hon_schedule_billing_facts.sql": "32bc6ea5821c7f36b819db74a407e6466a3712d3700f513d1cd0d55d254e7365",
-    "0306_hon_os_lifetime_purchase.sql": "9304842949f5f88d8ccda93b9303d27abbc77b977058e1672603e050fbb8e690"
+    "0306_hon_os_lifetime_purchase.sql": "e953952706c8f078f0e95dbaadffb357d4560e990422f7c1daac9e0405f0f491"
   }
 }
