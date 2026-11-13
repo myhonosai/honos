@@ -198,7 +198,10 @@ const catalog = K(), hq = { id: K(), user: K(), subject: `ai0-hq-owner-${K()}` }
 const orgs = [];
 const context = (o, patch = {}) => ({ organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject, principalType: 'HUMAN_USER', source: 'HUMAN_UI', requestId: K(), correlationId: K(), idempotencyKey: K(), ...patch });
 
-async function makeOrg(label) {
+// 0310 (owner 2026-11-13): a paying organization has no organization agent budget. Fixture organizations keep the
+// former 12,000-unit budget through the migration-owner-only override so the 0194 lock invariants still exercise a
+// real ceiling; INV-39 proves an organization without an override has none.
+async function makeOrg(label, { orgCeiling = 12000 } = {}) {
   const o = { label, id: K(), school: K(), user: K(), principal: K(), role: K(), subject: `ai0-${label}-${K()}`, campaign: null, curriculum: K(), person: K(), pipeline: K(), stage: K(), lead: K(), policy: K() };
   await admin.query('BEGIN');
   await admin.query("INSERT INTO hon.organizations(id,legal_name,display_name) VALUES($1,'AI-0 synthetic organization','AI-0 synthetic organization')", [o.id]);
@@ -219,6 +222,7 @@ async function makeOrg(label) {
   for (const code of ['marketing.draft.save', 'teaching.draft.save', 'crm.follow_up_draft.propose']) {
     await admin.query("INSERT INTO hon.action_policies(organization_id,school_id,action_code,authority_mode,policy_version,effective_from) VALUES($1,$2,$3,'CONFIRM',1,clock_timestamp()-interval '1 day')", [o.id, o.school, code]);
   }
+  if (orgCeiling !== null) await admin.query("INSERT INTO hon.ai_org_agent_ceiling_overrides(organization_id,ceiling_units,reason) VALUES($1,$2,'AI-0 fixture keeps the 0194 budget lock under test')", [o.id, orgCeiling]);
   await admin.query('COMMIT');
   const start = new Date(Date.now() + 3_600_000).toISOString(), end = new Date(Date.now() + 30 * 86_400_000).toISOString();
   o.campaign = (await campaigns.save(context(o), null, { expectedVersion: 0, code: 'AI0', name: 'AI-0 synthetic campaign', goal: 'Introduce beginner classes', offerLabel: '', channel: 'REFERRAL', startsAt: start, endsAt: end, plannedBudgetMinor: 0, currency: 'USD' })).campaign.id;
@@ -3378,7 +3382,7 @@ try {
 
   // ---- INV-38 (R2, 0288): per-school internal AI cost ceiling, HQ levels and single-school pause ----
   {
-  const o = await makeOrg('inv-33'), other = await makeOrg('inv-33-other');
+  const o = await makeOrg('inv-38'), other = await makeOrg('inv-38-other');
   const scopeOf = (x) => ({ organizationId: x.id, schoolId: x.school, principalId: x.principal, externalSubject: x.subject });
   const conversations = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
   fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
@@ -3491,6 +3495,47 @@ try {
     'hon.command_ai_school_cost_limit(text,jsonb,uuid)=true', 'hon.read_ai_school_cost_limits_from_hq(text)=true']);
   assert.equal((await row("SELECT has_table_privilege($1,'hon.ai_school_cost_limits','SELECT') OR has_table_privilege($1,'hon.ai_school_cost_limit_commands','SELECT') x", [runtimeRole])).x, false);
   pass('INV-38', 'R2: each school may have an internal monthly agent-AI cost ceiling (none by default for a paying school, $15 on a live trial, HQ-owner editable, versioned, idempotent, immutable command log) counted as verified ledger cost plus every counting hold at its plan maximum; HQ reads NO_CEILING/NORMAL/WARNING_75/WARNING_90/CEILING_REACHED per school; at the ceiling new work is refused before any reservation or provider call (HON prepare, specialist begin, readiness, reserve guard) as AI_PAUSED_BY_HQ while other schools are unaffected and a raised ceiling restores it at once; an HQ single-school pause covers agent and creative AI; only the HQ command and read reach the runtime');
+  }
+
+  // ---- INV-39 (0310): a paying organization has no organization agent budget ----
+  {
+  const o = await makeOrg('inv-39', { orgCeiling: null });
+  const scopeOf = (x) => ({ organizationId: x.id, schoolId: x.school, principalId: x.principal, externalSubject: x.subject });
+  const conversations = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const conv = (await conversations.create(scopeOf(o), { title: 'No ceiling' }, K())).id;
+  const ask = async () => {
+    const r = await settle(conversations.sendTurn(scopeOf(o), conv, { text: `No ceiling question ${K()}`, delegation: null }, K()));
+    if (r.error?.getResponse?.().code === 'HON_AI_SPEND_REFUSED') return { refused: r.error.getResponse().reason };
+    if (r.error) throw r.error;
+    return row('SELECT status, reason FROM hon.hon_reply_invocations WHERE turn_id=$1', [r.value.turnId]);
+  };
+  const ceilings = async () => row('SELECT hon.ai_org_ceiling($1,clock_timestamp()) c, hon.ai_org_display_ceiling($1,clock_timestamp()) d, hon.ai_org_no_ceiling_units() n', [o.id]);
+  // 1. No override: no ceiling, shown as the no-ceiling value to HQ and readiness.
+  assert.deepEqual(await ceilings(), { c: 2147483647, d: 2147483647, n: 2147483647 });
+  const ready = (await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scopeOf(o))).data;
+  assert.equal(ready.agentBudget.ceilingCredits, 2147483647);
+  // 2. Past the former 12,000-unit budget, HON still answers (one provider call, nothing refused).
+  await setUsed(o, 12000);
+  const callsBefore = fakes.hon.calls;
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null });
+  assert.equal(fakes.hon.calls, callsBefore + 1);
+  assert(Number((await row('SELECT hon.ai_org_committed_credits($1,clock_timestamp()) n', [o.id])).n) > 12000, 'committed passed 12,000');
+  // 3. The migration-owner override still restores a ceiling at once (refused before any provider call), and removing it lifts it.
+  await admin.query("INSERT INTO hon.ai_org_agent_ceiling_overrides(organization_id,ceiling_units,reason) VALUES($1,12000,'AI-0 operator backstop check')", [o.id]);
+  assert.equal((await ceilings()).c, 12000);
+  const calls2 = fakes.hon.calls;
+  const blocked = await ask();
+  assert.equal(blocked.status, 'BLOCKED'); assert.match(blocked.reason, /BUDGET|NO_ELIGIBLE_ROUTE/, 'the planner or prepare refuses at the organization ceiling (as INV-26)');
+  assert.equal(fakes.hon.calls, calls2, 'no provider call when the override is reached');
+  await admin.query('DELETE FROM hon.ai_org_agent_ceiling_overrides WHERE organization_id=$1', [o.id]);
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null });
+  // 4. The override table and helpers never reach the runtime.
+  assert.equal((await row("SELECT has_table_privilege($1,'hon.ai_org_agent_ceiling_overrides','SELECT') OR has_table_privilege($1,'hon.ai_org_agent_ceiling_overrides','INSERT') x", [runtimeRole])).x, false);
+  for (const f of ['hon.ai_org_no_ceiling_units()', 'hon.ai_org_paid_ceiling(uuid)'])
+    assert.equal((await row('SELECT has_function_privilege($1,$2,\'EXECUTE\') x', [runtimeRole, f])).x, false, f);
+  assert.deepEqual((await row("SELECT relrowsecurity r, relforcerowsecurity f FROM pg_class WHERE oid='hon.ai_org_agent_ceiling_overrides'::regclass")), { r: true, f: true });
+  pass('INV-39', '0310: an organization a trial does not own has no organization agent budget (ceiling and display read the no-ceiling value 2,147,483,647; readiness shows it); past the former 12,000 units HON still answers with one provider call; a migration-owner override restores a ceiling at once (refused at plan or prepare before any provider call) and removing it lifts it; the override table (forced RLS) and helpers never reach the runtime');
   }
 
   // ---- INV-37 (0284): Maya answers about one at-risk student from that student's 0259 factors only ----
