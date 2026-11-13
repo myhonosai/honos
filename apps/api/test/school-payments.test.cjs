@@ -207,3 +207,59 @@ test('0321 browser views carry no provider account, customer or setup reference'
   assert.equal(contracts.verifySchoolPaySetupStartView(start, { billingAccountId: PAYER }).setupUrl, 'https://checkout.stripe.test/x');
   assert.throws(() => contracts.verifySchoolPaySetupStartView({ setup: setup(), setupUrl: null }));
 });
+
+// B-TUI-2 piece 4 (0322): autopay plans and the school's sibling discount, test mode only. Nothing is charged here.
+test('0322 inputs are closed', () => {
+  assert.deepEqual(contracts.validateSetSchoolPayDiscountRuleInput({ basedOnVersion: 0, kind: 'PERCENT', secondValue: 10, laterValue: 20 }),
+    { basedOnVersion: 0, kind: 'PERCENT', secondValue: 10, laterValue: 20 });
+  assert.equal(contracts.validateSetSchoolPayDiscountRuleInput({ basedOnVersion: 2, kind: 'FIXED', secondValue: 500, laterValue: 700, currency: 'USD' }).currency, 'USD');
+  assert.deepEqual(contracts.validateSetSchoolPayDiscountRuleInput({ basedOnVersion: 1, kind: 'NONE' }), { basedOnVersion: 1, kind: 'NONE' });
+  for (const bad of [{ basedOnVersion: 0, kind: 'PERCENT', secondValue: 101, laterValue: 0 }, { basedOnVersion: 0, kind: 'PERCENT', secondValue: 0, laterValue: 0 },
+    { basedOnVersion: 0, kind: 'PERCENT', secondValue: 10, laterValue: 20, currency: 'USD' }, { basedOnVersion: 0, kind: 'FIXED', secondValue: 500, laterValue: 700 },
+    { basedOnVersion: 0, kind: 'FIXED', secondValue: 500, laterValue: 700, currency: 'usd' }, { basedOnVersion: 0, kind: 'NONE', secondValue: 1, laterValue: 1 },
+    { basedOnVersion: -1, kind: 'NONE' }, { basedOnVersion: 0, kind: 'PERCENT', secondValue: 10.5, laterValue: 20 }, { basedOnVersion: 0, kind: 'TIERED', secondValue: 1, laterValue: 1 }]) {
+    assert.throws(() => contracts.validateSetSchoolPayDiscountRuleInput(bad), undefined, JSON.stringify(bad));
+  }
+  assert.deepEqual(contracts.validateEnrollSchoolPayAutopayInput({ methodId: CONN, consentTextVersion: contracts.SCHOOL_PAY_AUTOPAY_CONSENT_VERSION }),
+    { methodId: CONN, consentTextVersion: 'autopay-v1' });
+  assert.throws(() => contracts.validateEnrollSchoolPayAutopayInput({ methodId: CONN, consentTextVersion: 'autopay-v1', amountMinor: 100 }));
+  assert.throws(() => contracts.validateSetSchoolPayAutopayStateInput({ expectedVersion: 1, state: 'CANCELLED' }));
+  assert.equal(contracts.validateSetSchoolPayAutopayStateInput({ expectedVersion: 1, state: 'PAUSED' }).state, 'PAUSED');
+  assert.throws(() => contracts.validateCancelSchoolPayAutopayInput({ expectedVersion: 1, reason: '' }));
+  assert.throws(() => contracts.validatePrepareSchoolPayAutopayCycleInput({ expectedVersion: 1, cycleDate: '2026-02-30' }));
+  assert.throws(() => contracts.validatePrepareSchoolPayAutopayCycleInput({ expectedVersion: 0, cycleDate: '2026-11-12' }));
+  assert.equal(contracts.validatePrepareSchoolPayAutopayCycleInput({ expectedVersion: 4, cycleDate: '2026-11-12' }).cycleDate, '2026-11-12');
+});
+
+test('0322 sibling discount: none for the first student, percent floors, fixed caps at the line and only in its currency', () => {
+  const percent = { kind: 'PERCENT', secondValue: 10, laterValue: 20, currency: null };
+  const fixed = { kind: 'FIXED', secondValue: 500, laterValue: 700, currency: 'USD' };
+  assert.equal(contracts.schoolPaySiblingDiscount(percent, 1, 15000, 'USD'), 0);
+  assert.equal(contracts.schoolPaySiblingDiscount(percent, 2, 12000, 'USD'), 1200);
+  assert.equal(contracts.schoolPaySiblingDiscount(percent, 3, 9999, 'USD'), 1999);
+  assert.equal(contracts.schoolPaySiblingDiscount(fixed, 2, 12000, 'USD'), 500);
+  assert.equal(contracts.schoolPaySiblingDiscount(fixed, 3, 600, 'USD'), 600);
+  assert.equal(contracts.schoolPaySiblingDiscount(fixed, 3, 12000, 'CAD'), 0);
+  assert.equal(contracts.schoolPaySiblingDiscount({ kind: 'NONE', secondValue: null, laterValue: null, currency: null }, 3, 12000, 'USD'), 0);
+  assert.equal(contracts.schoolPaySiblingDiscount(null, 2, 12000, 'USD'), 0);
+  const rule = { version: 1, ...percent, createdAt: '2026-11-12T10:00:00.000Z' };
+  assert.deepEqual(contracts.verifySchoolPayDiscountRule(rule), rule);
+  assert.throws(() => contracts.verifySchoolPayDiscountRule({ ...rule, currency: 'USD' }), undefined, 'a percent rule has no currency');
+  assert.throws(() => contracts.verifySchoolPayDiscountRule({ ...rule, kind: 'FIXED' }), undefined, 'a fixed rule needs its currency');
+});
+
+test('0322 API: eight routes under human-UI guards; no processor, adapter or fee', () => {
+  const controller = fs.readFileSync(path.join(__dirname, '../src/school-payments/school-pay-autopay.controller.ts'), 'utf8');
+  for (const route of [/@Get\('payers\/:billingAccountId\/autopay'\)/, /@Get\('sibling-discount'\)/, /@Post\('sibling-discount'\)/, /@Post\('payers\/:billingAccountId\/autopay'\)/,
+    /@Post\('autopay\/:planId\/method'\)/, /@Post\('autopay\/:planId\/state'\)/, /@Post\('autopay\/:planId\/cancel'\)/, /@Post\('autopay\/:planId\/cycles'\)/]) assert.match(controller, route);
+  assert.equal((controller.match(/@UseGuards\(SchoolPay[A-Za-z]+HumanUiGuard\)/g) ?? []).length, 8);
+  const guards = fs.readFileSync(path.join(__dirname, '../src/school-payments/school-payment-human-ui.guard.ts'), 'utf8');
+  for (const command of ['school_pay.autopay.read', 'school_pay.discount.read', 'school_pay.discount.set', 'school_pay.autopay.enroll', 'school_pay.autopay.method',
+    'school_pay.autopay.state', 'school_pay.autopay.cancel', 'school_pay.autopay.cycle']) assert.match(guards, new RegExp(`'${command.replaceAll('.', '\\.')}'`));
+  const service = fs.readFileSync(path.join(__dirname, '../src/school-payments/school-pay-autopay.service.ts'), 'utf8');
+  for (const fn of ['read_school_pay_autopay', 'read_school_pay_discount_rule', 'set_school_pay_discount_rule', 'enroll_school_pay_autopay', 'change_school_pay_autopay_method',
+    'set_school_pay_autopay_state', 'cancel_school_pay_autopay', 'prepare_school_pay_autopay_cycle']) assert.match(service, new RegExp(`hon\\.${fn}\\b`));
+  assert.doesNotMatch(service + controller, /from '\.\.\/payments\/|PAYMENT_PROVIDER_ADAPTER|SCHOOL_PAYMENT_ADAPTER|school-payment-adapter|STRIPE_TEST_SECRET_KEY|application_fee|app_fee_money/i);
+  const module = fs.readFileSync(path.join(__dirname, '../src/app.module.ts'), 'utf8');
+  assert.match(module, /SchoolPayAutopayController,/); assert.match(module, /SchoolPayAutopayService,/);
+});

@@ -152,7 +152,7 @@ async function staff(label, roles, { org = ids.organization, school = ids.school
 }
 
 
-let OWN, ONLY_A, NONE, BIG;
+let OWN, ONLY_A, NONE, BIG, VIEWER;
 const extraSchools = [];
 async function seed() {
   await sql("INSERT INTO hon.organizations(id,legal_name,display_name) VALUES($1,'Locations Org','Locations Org'),($2,'Locations Other Org','Locations Other Org')", orgs());
@@ -161,7 +161,7 @@ async function seed() {
     [ids.schoolC, ids.organization, 'Northside Dojo', 'America/Chicago'], [ids.otherSchool, ids.otherOrganization, 'Other Org Dojo', 'America/Los_Angeles']]) {
     await sql('INSERT INTO hon.schools(id,organization_id,name,slug,timezone) VALUES($1,$2,$3,$4,$5)', [school, org, name, `locs-${school.slice(0, 8)}`, tz]);
   }
-  const viewer = await role(ids.organization, ['reporting.view']);
+  const viewer = await role(ids.organization, ['reporting.view']); VIEWER = viewer;
   const other = await role(ids.otherOrganization, ['reporting.view']);
   OWN = await staff('owner', [await role(ids.organization, allPermissions, 'OWNER')]);
   await grant(OWN, ids.organization, ids.schoolB, viewer);
@@ -252,6 +252,52 @@ try {
   await sql('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=$2 WHERE principal_id=$1 AND school_id=$3', [OWN.principal, OWN.principal, ids.schoolB]);
   const after = await success(() => call(OWN, 'months=3'), 'after revoking B');
   ok(after.data.locations.length === 1 && after.data.locations[0].schoolId === ids.schoolA, 'B is gone once its grant is revoked');
+
+  // 4b. Every other way reporting.view at B can be not live leaves B out, after a positive control that a live grant lists it.
+  const listsB = async (label) => (await success(() => call(OWN, 'months=3'), label)).data.locations.some((l) => l.schoolId === ids.schoolB);
+  const grantAtB = async (roleId, from = "clock_timestamp()-interval '1 day'", until = 'NULL') => {
+    const id = randomUUID();
+    await sql(`INSERT INTO hon.principal_role_grants(id,organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from,effective_until)
+      VALUES($1,$2,$3,$4,$5,$4,${from},${until})`, [id, ids.organization, ids.schoolB, OWN.principal, roleId]);
+    return id;
+  };
+  const dropGrant = (id) => sql('DELETE FROM hon.principal_role_grants WHERE id=$1', [id]);
+  let live = await grantAtB(VIEWER);
+  ok(await listsB('a live grant at B again'), 'positive control: a live reporting.view grant at B lists B');
+  await sql("UPDATE hon.schools SET status='SUSPENDED' WHERE id=$1", [ids.schoolB]);
+  ok(!(await listsB('B suspended')), 'a suspended school B is not listed');
+  await sql("UPDATE hon.schools SET status='ARCHIVED' WHERE id=$1", [ids.schoolB]);
+  ok(!(await listsB('B archived')), 'an archived school B is not listed');
+  await sql("UPDATE hon.schools SET status='ACTIVE' WHERE id=$1", [ids.schoolB]);
+  // Not eligible staff (here an HQ operator): refused outright, and B is not allowed by the private check either.
+  await sql("INSERT INTO hon.hq_operator_grants(principal_id,hq_role) VALUES($1,'HON_HQ_SUPPORT')", [OWN.principal]);
+  await refused(() => call(OWN, 'months=3'), 403, undefined, 'an HQ operator is not school staff');
+  ok((await sql('SELECT hon.school_reports_location_allowed($1,$2,$3) allowed', [OWN.principal, ids.organization, ids.schoolB])).rows[0].allowed === false,
+    'an HQ operator is not allowed at B');
+  await sql('DELETE FROM hon.hq_operator_grants WHERE principal_id=$1', [OWN.principal]);
+  ok(await listsB('after the HQ grant is removed'), 'B is listed again once the person is eligible staff');
+  await dropGrant(live);
+  for (const [label, make] of [
+    ['an expired grant', () => grantAtB(VIEWER, "clock_timestamp()-interval '2 days'", "clock_timestamp()-interval '1 minute'")],
+    ['a grant that starts tomorrow', () => grantAtB(VIEWER, "clock_timestamp()+interval '1 day'")],
+    ['a PARENT role with reporting.view', async () => grantAtB(await role(ids.organization, ['reporting.view'], `PARENT_${randomUUID().slice(0, 8)}`))],
+    ['a FAMILY role with reporting.view', async () => grantAtB(await role(ids.organization, ['reporting.view'], `FAMILY_${randomUUID().slice(0, 8)}`))],
+    ['a role managed by school A granted at B', async () => {
+      const managed = await role(ids.organization, ['reporting.view']);
+      await raw('roles', 'UPDATE hon.roles SET management_school_id=$2 WHERE id=$1', [managed, ids.schoolA]);
+      return grantAtB(managed);
+    }],
+  ]) {
+    const id = await make();
+    if (/PARENT|FAMILY/.test(label)) {
+      // A family role anywhere makes the person not school staff: the whole read is refused, not just B.
+      await refused(() => call(OWN, 'months=3'), 403, 'SCHOOL_REPORTS_FORBIDDEN', `${label} at B`);
+    } else ok(!(await listsB(label)), `${label} at B does not list B`);
+    ok((await sql('SELECT hon.school_reports_location_allowed($1,$2,$3) allowed', [OWN.principal, ids.organization, ids.schoolB])).rows[0].allowed === false,
+      `${label}: B is not allowed by the private check`);
+    await dropGrant(id);
+  }
+  ok(!(await listsB('every negative grant removed')), 'with none of those grants B stays out, and the read works again');
 
   // 5. Database boundary.
   const fns = (await sql(`SELECT p.oid::regprocedure::text sig, has_function_privilege($1,p.oid,'EXECUTE') runtime,

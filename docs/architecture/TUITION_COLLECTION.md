@@ -371,6 +371,10 @@ Status: source only, not deployed, test mode only, on the in-process simulators 
   Provider account, customer and method references stay in the API and never reach the browser.
 - **Known limits:** a disconnected connection's saved methods stay ACTIVE in HON but cannot be used (autopay, piece 4,
   checks the connection); card expiry updates from the provider come with webhooks (pieces 5 and 6).
+- **Bank accounts verified by microdeposits:** when Stripe cannot verify a US bank account instantly, the SetupIntent
+  stays unfinished until the payer confirms the microdeposits, so finishing the setup returns `SETUP_INCOMPLETE` (409)
+  and nothing is saved. The payer finishes later on a new setup; recording the account once the deposits clear needs
+  the webhooks in piece 5b.
 - **Real sandboxes (after piece 2, 0320):** the Stripe Connect test adapter saves methods for real: the customer and a
   Checkout session in setup mode are created on the school's own account (`Stripe-Account`), each with an idempotency key
   (so a retry never leaves an orphan customer or setup), and the saved card or bank account is read back with the platform
@@ -397,3 +401,48 @@ Status: source only, not deployed, test mode only, on the in-process simulators 
   says plainly when the processor did not confirm the detach.
 - **Evidence:** `apps/web/test/saved-methods-ui.test.tsx` (http shape and verification, refusal mapping, query cleaning,
   body building, view states, page and menu wiring).
+
+## 15. Piece 4 as built (0322): autopay plans and sibling discounts
+
+Test mode only. A payer's autopay plan points at one of their saved methods (0321), and preparing a cycle turns that
+payer's due membership schedules into invoices with the school's sibling discount. **Nothing is charged here**: piece 5
+sends the cycle to the processor. No message is sent and HON takes no fee.
+
+- **Permissions:** `school_pay.autopay.manage` enrolls, changes the method, pauses, resumes, cancels and prepares cycles;
+  `school_pay.discount.manage` sets the sibling discount. Both are sensitive, staff-assignable and granted to OWNER.
+  Reads accept either one or `school_pay.read`. Live direct-human authority at the route school is re-checked before
+  and after every command, as in 0258 and 0321.
+- **Data (private, forced RLS, no runtime table privilege):** `school_pay_discount_rules` (append-only versions per
+  school: NONE, PERCENT 0 to 100, or FIXED minor units in one currency, with one value for the 2nd student and one for
+  the 3rd and later), `school_pay_autopay_plans` (one open plan per payer; ACTIVE, PAUSED or CANCELLED with a reason;
+  the saved method, the consent text version and an expected version on every change), `school_pay_autopay_cycles`
+  and `school_pay_autopay_cycle_lines` (immutable; one line per billed schedule period, unique per schedule and
+  period, each with its own invoice), and `school_pay_autopay_events` (append-only history). Each command writes one
+  history row, one audit row and one inert outbox event; each cycle invoice also gets an audit row.
+- **Method rule:** the plan's method must be ACTIVE, belong to the same payer, and sit on a connection that is
+  CONNECTED_ACTIVE and allows off-session recurring charges. Otherwise the command is refused with
+  `SCHOOL_PAY_AUTOPAY_METHOD_UNUSABLE`.
+- **Cycle rule:** a cycle can be prepared for an ACTIVE plan for today or up to seven days ahead (school time zone).
+  Due lines are the payer's ACTIVE memberships whose ACTIVE WEEKLY, MONTHLY or ANNUAL schedule is in the payer's
+  currency, has its next charge on or before the cycle date, and has not been billed for that period. Students are
+  ranked by their largest due line; the 1st pays full price, the 2nd and later get the rule's discount (a percentage
+  rounds down; a fixed amount never exceeds the line and applies only in its currency). Each line becomes one ISSUED
+  invoice due at the end of the cycle day, and its schedule moves to the next period (or ends at the term end). One
+  schedule period is billed per cycle, so a schedule that is several periods behind catches up over several cycles.
+  Months and years count from the schedule's first autopay period, so a short month clamps only that one period
+  (Jan 31, Feb 28, Mar 31; a Feb 29 annual schedule bills Feb 28 in other years and Feb 29 again in leap years). A
+  schedule staff move off that series starts a new one. Local time of day is kept across daylight-saving changes.
+- **Routes** (`/v1/organizations/:org/schools/:school/payments/...`, human-UI guards, no-store): `GET
+  payers/:billingAccountId/autopay`, `GET sibling-discount`, `POST sibling-discount`, `POST payers/:billingAccountId/autopay`,
+  `POST autopay/:planId/method`, `POST autopay/:planId/state` (ACTIVE or PAUSED), `POST autopay/:planId/cancel` (reason
+  required), `POST autopay/:planId/cycles`. Every command takes an Idempotency-Key; a replay returns the stored receipt.
+- **Defaults to confirm with the owner:** ranking students by their largest due line; one period per cycle; schedules
+  advance when the cycle is prepared (not when it is paid); a seven-day preparation window. Screens for staff come in a
+  later web piece.
+- **Review P3s carried forward:** the consent text version is free text today; before 5a charges anything it must be
+  one of the recurring-charge consent texts and match the method kind, re-checked when the method changes. A discount
+  that would make a line free refuses the cycle (`SCHOOL_PAY_AUTOPAY_ZERO_LINE`), since an ISSUED invoice is never zero. Sibling rank counts only lines due in the same cycle. Manual
+  invoices can overlap autopay periods, and a backdated cycle issues invoices that are already overdue.
+- **Evidence:** `packages/database/scripts/test-school-pay-autopay-integrity.mjs` (246 checks over signed HTTP, including month-end,
+  leap-year and daylight-saving periods);
+  `apps/api/test/school-payments.test.cjs` (0322 contract, discount and route tests).
