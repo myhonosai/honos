@@ -277,6 +277,10 @@
       "title": "HON | Saved payment methods"
     },
     {
+      "path": "/staff/ai-team",
+      "title": "HON | AI team"
+    },
+    {
       "path": "/staff/retention/at-risk",
       "title": "HON | Students at risk"
     },

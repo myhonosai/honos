@@ -54,6 +54,12 @@ describe('school shell navigation catalog', () => {
     expect(schoolShellHref(scoped, { organizationId: A, schoolId: `${B}&role=owner` })).toBe(scoped.href);
   });
 
+  it('lists the whole AI team page first under AI Team, and keeps the human-only Teaching studio out of it', () => {
+    const ai = SCHOOL_SHELL_NAV.find(item => item.key === 'aiTeam')!;
+    expect(ai.routes.map(route => route.href)).toEqual(['/staff/ai-team', '/staff/leads/assistant', '/staff/marketing/assistant', '/staff/teaching-assistant', '/staff/retention/at-risk']);
+    expect(schoolShellActiveItem('/staff/teaching-studio')?.key).toBe('attendance');
+  });
+
   it('resolves the active primary item from the path, including sub-routes and dynamic detail pages', () => {
     expect(schoolShellActiveItem('/staff/dashboard')?.key).toBe('home');
     expect(schoolShellActiveItem('/staff/crm/follow-ups')?.key).toBe('crm');

@@ -100,23 +100,30 @@ export type AgentStatus = 'READY' | 'PROVIDER_OFF' | 'AI_OFF' | 'BUDGET' | 'NO_R
 export type AgentCard = Readonly<{ id: string; name: string; title: HomeKey; portrait: string; color: string; status: AgentStatus; href: string | null }>;
 
 /**
- * The owner roster (2026-11-06): Kai teaches; seven business specialists; Claire is Business
- * Performance only. Status comes from AI team readiness, never from the portrait: an agent with
- * no backend is "not available yet". The backend's teaching key is still `claire`; it is Kai's.
+ * The owner roster (2026-11-06): Kai teaches; seven business specialists; Claire is Business Performance only.
+ * Status comes from AI team readiness, never from the portrait. Chad, Marcus, Kai and Maya have their own
+ * workspace; Alex, Jordan, Lena and Claire answer inside Ask HON (0260), opened with that specialist picked.
  */
-const LIVE: Record<string, { key: 'chad' | 'marcus' | 'claire'; href: string }> = {
-  kai: { key: 'claire', href: '/staff/teaching-assistant' },
+type ReadyKey = AiTeamReadiness['agents'][number]['agentKey'];
+const LIVE: Record<string, { key: ReadyKey; href: string }> = {
+  kai: { key: 'kai', href: '/staff/teaching-assistant' },
   chad: { key: 'chad', href: '/staff/leads/assistant' },
   marcus: { key: 'marcus', href: '/staff/marketing/assistant' },
+  maya: { key: 'maya', href: '/staff/retention/at-risk' },
+  alex: { key: 'alex', href: '/staff/hon?ask=alex' },
+  jordan: { key: 'jordan', href: '/staff/hon?ask=jordan' },
+  claire: { key: 'claire', href: '/staff/hon?ask=claire' },
+  lena: { key: 'lena', href: '/staff/hon?ask=lena' },
 };
+/** Specialists who answer in Ask HON rather than in a workspace of their own. */
+export const ASK_HON_AGENTS: ReadonlySet<string> = new Set(['alex', 'jordan', 'claire', 'lena']);
 const TITLES: Record<string, HomeKey> = { kai: 'agentKai', alex: 'agentAlex', chad: 'agentChad', maya: 'agentMaya', marcus: 'agentMarcus', jordan: 'agentJordan', claire: 'agentClaire', lena: 'agentLena' };
 
-export function agentStatus(readiness: Panel<AiTeamReadiness>, key: 'chad' | 'marcus' | 'claire'): AgentStatus {
+export function agentStatus(readiness: Panel<AiTeamReadiness>, key: ReadyKey): AgentStatus {
   if (readiness.state === 'LOADING') return 'CHECKING';
   if (readiness.state === 'DENIED') return 'HIDDEN';
   if (readiness.state === 'UNAVAILABLE') return 'UNKNOWN';
-  // The teaching key is moving from the legacy 'claire' to 'kai' (backend contract change); accept either for Kai.
-  const agent = readiness.value.agents.find(item => item.agentKey === key || (key === 'claire' && (item.agentKey as string) === 'kai'));
+  const agent = readiness.value.agents.find(item => item.agentKey === key);
   if (!agent) return 'UNKNOWN';
   if (agent.available) return 'READY';
   switch (agent.blockedBy) {
@@ -130,7 +137,7 @@ export function agentStatus(readiness: Panel<AiTeamReadiness>, key: 'chad' | 'ma
 
 /** Kai and the seven specialists in the viewer's art style. Status is readiness only; the style never changes it. */
 export function homeAiTeam(readiness: Panel<AiTeamReadiness>, style: HonArtStyle): AgentCard[] {
-  const kai: AgentCard = { id: 'kai', name: 'Kai', title: TITLES.kai!, portrait: aiTeamPortrait('kai', style)!, color: '#34d6e8', status: agentStatus(readiness, 'claire'), href: LIVE.kai!.href };
+  const kai: AgentCard = { id: 'kai', name: 'Kai', title: TITLES.kai!, portrait: aiTeamPortrait('kai', style)!, color: '#34d6e8', status: agentStatus(readiness, 'kai'), href: LIVE.kai!.href };
   const order = ['chad', 'marcus', 'alex', 'maya', 'jordan', 'claire', 'lena'];
   const team = order.map(id => HON_AI_TEAM.find(member => member.id === id)!).map((member): AgentCard => {
     const live = LIVE[member.id];
