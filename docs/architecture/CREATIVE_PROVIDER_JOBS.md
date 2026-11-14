@@ -1,6 +1,6 @@
 # C1: asynchronous creative provider jobs, daily caps and the platform spend guard (migration 0354)
 
-Status: C1a built (database, 0354), 2026-11-14; C1b (API async path, worker, HQ endpoints) is the next PR, no migration. Piece C1 of [CREATIVE_AI_IMAGE_VIDEO_PROVIDERS.md](CREATIVE_AI_IMAGE_VIDEO_PROVIDERS.md).
+Status: C1a built (database, 0354), 2026-11-14; C1b built (API async path, worker, HQ endpoints), no migration. Piece C1 of [CREATIVE_AI_IMAGE_VIDEO_PROVIDERS.md](CREATIVE_AI_IMAGE_VIDEO_PROVIDERS.md).
 No provider adapter, network call, key or deploy. Tests use fake runtimes only.
 
 ## 1. Problem
@@ -129,7 +129,7 @@ Changes to 0216 behaviour (replacement bodies in 0354):
 Known limit: a `REQUESTER_UNAVAILABLE` reservation still counts toward the school's 3-in-progress cap until the HQ
 owner resolves it. It is listed in the HQ read for that reason.
 
-## 4. API (C1b, next PR)
+## 4. API (C1b)
 
 C1a already maps the new refusals in `SaasBillingService`: `CREATIVE_DAILY_LIMIT_REACHED`, `CREATIVE_PROVIDER_DAILY_LIMIT` and
 `CREATIVE_PROVIDER_LIMIT_NOT_SET` are 422, and `CREATIVE_GENERATION_HAS_PROVIDER_JOB` and `CREATIVE_JOB_LEASE_LOST` are 409.
@@ -149,13 +149,36 @@ C1a already maps the new refusals in `SaasBillingService`: `CREATIVE_DAILY_LIMIT
   4. Return the generation as `GENERATING`. A replay never submits again.
 - `CreativeJobWorker`: claim → `poll` → record, one job at a time, the same loop shape as the S2 publish worker. A poll
   error is PENDING until the deadline, never a guess.
-- HQ endpoints `GET/POST /v1/hq/creative/limits` (provider limit, school caps).
+- HQ endpoints: `GET /v1/hq/creative/limits` (owner or billing operator), `POST /v1/hq/creative/limits/providers`
+  (`x-hon-human-command: saas-creative-provider-daily-limit`) and `POST /v1/hq/creative/limits/schools`
+  (`saas-creative-school-daily-caps`), both HQ owner only in the database, with an idempotency key.
+
+As built (C1b):
+
+- `creative-provider-runtime.ts`: optional `submit` / `poll` (both or neither, `isAsyncCreativeProviderRuntime`) and a
+  test-only `SyntheticAsyncCreativeProviderRuntime`. Production still wires `UnconfiguredCreativeProviderRuntime`, so
+  nothing is ever submitted until C2 and an owner switch.
+- `creative-outcome.ts`: the result verification and outcome mapping shared by the request path and the worker.
+- `CreativeStudioService`: images, avatars and avatar videos share one `run()`. With an async runtime a permit refusal
+  records NOT_SENT (`PROVIDER_NOT_CONNECTED`, the only 0216 NOT_SENT reason that fits) and answers with the refusal code;
+  an unsafe job id is UNKNOWN (`UNVERIFIED_RESULT`); a lost job-id record leaves the job PERMITTED for the deadline sweep.
+- `creative-job-worker.ts`: `CreativeJobWorkerDatabase` (the `hon_communication_worker` login, same posture checks as the
+  other worker stores), `CreativeJobWorker.runOnce()` (10 jobs, 120-second lease) and `CreativeJobScheduler`, off unless
+  `HON_COMMUNICATION_WORKER_DATABASE_URL` and `HON_CREATIVE_JOB_POLL_INTERVAL_SECONDS` (10..3600) are both set. Only a
+  provider's explicit FAILED or UNKNOWN closes a job; a poll error, a PRE_SEND from poll, an unsafe claimed row or no
+  connected async provider releases the lease and waits.
+- `creative-limits.controller.ts` and contracts in `packages/contracts/src/creative-provider-jobs.ts` (closed inputs,
+  fail-closed reads).
 
 ## 5. Tests
 
 C1a ran: `test-creative-provider-jobs.mjs` J1-J12 pass 12/12. The CS1, A1, A2, HQ Creative Studio and CW1 review
 regression proofs pass unchanged. `pnpm test`, `pnpm check` and the staging pins test pass.
 The HQ read also lists `requesterUnavailable` jobs whose reservation is still RESERVED, so HQ can resolve them.
+
+C1b ran: API unit tests `creative-provider-jobs.test.cjs` 9/9 plus an async avatar test; DB proof J13 (the real API
+services against the fixture: limits read and commands, async create, worker PENDING then SUCCEEDED for the requester,
+PROVIDER assets, charge 20, never resent): 13/13.
 
 Planned coverage:
 

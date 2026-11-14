@@ -24,6 +24,8 @@ export interface CreativeSchoolDailyCapsInput extends CreativeSchoolDailyCaps { 
 export interface CreativeSchoolDailyCapsReceipt extends CreativeSchoolDailyCaps { schoolId: string; version: number; replayed: boolean }
 export interface CreativeProviderLimitStatus {
   providerId: CreativeJobProvider; dailyLimitMicros: number | null; version: number; reason: string | null; committedTodayMicros: number; openJobs: number;
+  /** Open past the 30-minute deadline: committed at worst case until the claim sweep closes them. */
+  overdueJobs: number;
 }
 export interface CreativeRequesterUnavailableJob {
   jobId: string; schoolId: string; reservationId: string; providerId: CreativeJobProvider; closedAt: string; providerResult: Record<string, unknown> | null;
@@ -74,8 +76,9 @@ export function validateCreativeSchoolDailyCapsReceipt(value: unknown): Creative
 }
 
 function validateProviderStatus(value: unknown): CreativeProviderLimitStatus {
-  const r = record(value, drift); exactKeys(r, ['providerId', 'dailyLimitMicros', 'version', 'reason', 'committedTodayMicros', 'openJobs'], drift);
-  if (!isProvider(r.providerId) || !isVersion(r.version) || !isCount(r.committedTodayMicros) || !isCount(r.openJobs)) drift();
+  const r = record(value, drift); exactKeys(r, ['providerId', 'dailyLimitMicros', 'version', 'reason', 'committedTodayMicros', 'openJobs', 'overdueJobs'], drift);
+  if (!isProvider(r.providerId) || !isVersion(r.version) || !isCount(r.committedTodayMicros) || !isCount(r.openJobs) || !isCount(r.overdueJobs)
+    || (r.overdueJobs as number) > (r.openJobs as number)) drift();
   // No row: no limit, no reason, version 0 (the guard refuses every real submission). A row always carries its reason.
   if (r.version === 0 ? !(r.dailyLimitMicros === null && r.reason === null) : !(isLimit(r.dailyLimitMicros) && isReason(r.reason))) drift();
   return r as unknown as CreativeProviderLimitStatus;

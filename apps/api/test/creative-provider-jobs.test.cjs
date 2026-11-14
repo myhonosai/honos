@@ -175,8 +175,8 @@ test('C1 wiring: no provider is connected, the loop is off by default and the wo
   } finally { for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]; Object.assign(process.env, saved); }
 });
 
-const providers = () => [{ providerId: 'HEYGEN', dailyLimitMicros: null, version: 0, reason: null, committedTodayMicros: 0, openJobs: 0 },
-  { providerId: 'HIGGSFIELD', dailyLimitMicros: 25_000_000, version: 1, reason: 'Owner default guard for launch', committedTodayMicros: 2_000_000, openJobs: 1 }];
+const providers = () => [{ providerId: 'HEYGEN', dailyLimitMicros: null, version: 0, reason: null, committedTodayMicros: 0, openJobs: 0, overdueJobs: 0 },
+  { providerId: 'HIGGSFIELD', dailyLimitMicros: 25_000_000, version: 1, reason: 'Owner default guard for launch', committedTodayMicros: 2_000_000, openJobs: 1, overdueJobs: 0 }];
 const view = (patch = {}) => ({ providers: providers(), requesterUnavailable: [], defaultSchoolCaps: { images: 50, videos: 12, avatarVideos: 10 },
   schoolCaps: [], day: { start: '2026-11-14T00:00:00.000Z', end: '2026-11-15T00:00:00.000Z' }, ...patch });
 
