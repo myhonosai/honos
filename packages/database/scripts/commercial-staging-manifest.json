@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "c9d3117c6a58ebe90a1de50636bf87fb6737b911bc810c572359212651a907b2",
+  "chainSha256": "a4286b6fa5abb85dbe1533d2417d7ac680dd6b4d944dbac2b0ba8be090854ab6",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -469,6 +469,10 @@
     {
       "file": "0353_ai_exception_school_allowance.sql",
       "sha256": "b46e8aa76543fe0bd1f4881d7882f7369dcd9ce20c138511238c3334d57ec6a5"
+    },
+    {
+      "file": "0358_school_number_order_settle.sql",
+      "sha256": "04aec55d14c81c53b4012377c9ad610221cfacf53ed3fb8a23a12cb9d98afdc0"
     }
   ]
 }

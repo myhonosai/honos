@@ -218,8 +218,14 @@ records a per-school count of accepted emails for HQ visibility only; a school's
   after this attempt found no such number on the subaccount, clears it. Five attempts end FAILED: `RECONCILE_REQUIRED`
   when `outcomeUnknown`, else `ATTEMPTS_EXHAUSTED`.
 - A FAILED order with `outcomeUnknown` is **unsettled**: it keeps the number reserved and blocks a new order for the
-  school (`NUMBER_ORDER_UNSETTLED`) until HQ reconciles it with Twilio. The HQ reconcile action is a later piece; until
-  then an operator checks the subaccount in Twilio.
+  school (`NUMBER_ORDER_UNSETTLED`) until HQ settles it (T2c, 0358).
+- Settle (T2c, 0358): a human HQ owner checks the school's Twilio subaccount and records the finding with a note
+  (`POST /v1/hq/saas/school-number-orders/:orderId/settle`, `{ expectedVersion, finding, note }`). `NOT_BOUGHT`: the order
+  stays FAILED (`SETTLED_NOT_BOUGHT`), stops holding the number and frees the school. `BOUGHT`: the order goes back to
+  APPROVED with fresh attempts and `outcomeUnknown` kept, so the worker finds the number on the subaccount (never buys
+  again) and finishes the Messaging Service and sender. Refused when the school has another open order. Audited as
+  `communication.number_order.settled`; the guard allows only these two moves and never rewrites a settle record.
+  This must exist before `HON_TWILIO_PROVISIONING_APPROVED` is ever set.
 - A bought number becomes the school's 0248 sender as DISABLED. The HQ setter refuses a phone or service change on it
   (`PROVISIONED_SENDER_LOCKED`) but can still switch it ACTIVE. HQ must not do that before the school's A2P campaign is
   approved; T3 adds the A2P check to that switch.

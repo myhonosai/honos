@@ -3544,6 +3544,15 @@ DO $$ DECLARE r text; f text; BEGIN
     hon.cancel_school_number_order(text,uuid,integer), hon.read_school_number_orders(text),
     hon.decide_school_number_order_from_hq(text,uuid,text,text,integer), hon.read_hq_school_number_orders(text,text) TO hon_runtime;
 END $$;
+-- 0358 settle an unsettled school number order: one HQ-owner runtime entry point; the guard trigger stays private.
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.settle_school_number_order_from_hq(text,uuid,text,text,integer)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0358 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.settle_school_number_order_from_hq(text,uuid,text,text,integer), hon.guard_school_number_order() FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.settle_school_number_order_from_hq(text,uuid,text,text,integer), hon.guard_school_number_order() FROM '||quote_ident(r);
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.settle_school_number_order_from_hq(text,uuid,text,text,integer) TO hon_runtime;
+END $$;
 -- 0353 AI on HQ access-exception schools under an HQ-owner monthly limit: only the HQ command and read reach the
 -- runtime; the two tables and the decision helpers are internal.
 DO $$ DECLARE r text; f text; BEGIN

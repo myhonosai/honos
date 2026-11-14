@@ -49,6 +49,7 @@ export const SAAS_PLAN_CAPABILITIES: Record<SaasPlanCode, readonly string[]> = {
 export const SAAS_COMMANDS = {
   setSchoolTextSender: 'hq-school-text-sender-set',
   decideSchoolNumberOrder: 'hq-school-number-order-decide',
+  settleSchoolNumberOrder: 'hq-school-number-order-settle',
   setSchoolMissedCallSettings: 'hq-school-missed-call-settings-set',
   setZernioLeadForm: 'hq-zernio-lead-form-set',
   recordSubscriptionGeneration: 'saas-subscription-generation-record',
