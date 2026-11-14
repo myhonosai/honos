@@ -292,6 +292,7 @@ import { SendGridEmailProvider, SendGridEventWebhookVerifier } from './communica
 import { CommunicationWebhookController, SENDGRID_EVENT_VERIFIER, TWILIO_WEBHOOK_VERIFIER, ZERNIO_LEAD_VERIFIER } from './communication/delivery/communication-webhook.controller.js';
 import { ZernioLeadWebhookVerifier } from './communication/delivery/zernio-lead-webhook.js';
 import { TwilioTextProvider, TwilioWebhookVerifier } from './communication/delivery/twilio-text-provider.js';
+import { TWILIO_SUBACCOUNT_DIRECTORY, WorkerTwilioSubaccountDirectory, type TwilioSubaccountDirectory } from './communication/delivery/twilio-subaccounts.js';
 import { SchoolMissedCallHqController, SchoolMissedCallsController, SchoolTextSenderHqController, ZernioLeadFormHqController } from './communication/delivery/school-text-sender.controller.js';
 import { MissedCallTextBackDispatcher } from './communication/delivery/missed-call-text-back.js';
 import { HqAiProviderController } from './hq/hq-ai-provider.controller.js';
@@ -615,7 +616,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     CommunicationWorkerDatabase,
     { provide: COMMUNICATION_WORKER_STORE, useExisting: CommunicationWorkerDatabase },
     // Real adapters (SendGrid, Twilio) are listed before the fakes; each is READY only behind its own approval flag.
-    { provide: COMMUNICATION_PROVIDER_ADAPTERS, useFactory: () => [new SendGridEmailProvider(), new TwilioTextProvider(), new FakeCommunicationProvider('EMAIL'), new FakeCommunicationProvider('SMS')] },
+    // T1 (0351): school subaccounts are looked up through the communication worker login only.
+    { provide: TWILIO_SUBACCOUNT_DIRECTORY, useFactory: (worker: CommunicationWorkerDatabase) => new WorkerTwilioSubaccountDirectory(worker), inject: [CommunicationWorkerDatabase] },
+    { provide: COMMUNICATION_PROVIDER_ADAPTERS, useFactory: (subaccounts: TwilioSubaccountDirectory) => [new SendGridEmailProvider(),
+      new TwilioTextProvider(undefined, undefined, subaccounts), new FakeCommunicationProvider('EMAIL'), new FakeCommunicationProvider('SMS')], inject: [TWILIO_SUBACCOUNT_DIRECTORY] },
     { provide: TWILIO_WEBHOOK_VERIFIER, useFactory: () => new TwilioWebhookVerifier() },
     { provide: ZERNIO_LEAD_VERIFIER, useFactory: () => new ZernioLeadWebhookVerifier() },
     { provide: SENDGRID_EVENT_VERIFIER, useFactory: () => new SendGridEventWebhookVerifier() },
