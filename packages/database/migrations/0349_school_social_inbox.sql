@@ -279,7 +279,12 @@ BEGIN
   IF p_input ? 'assignedPrincipalId' AND jsonb_typeof(p_input->'assignedPrincipalId')='string' THEN
     v:=(p_input->>'assignedPrincipalId')::uuid;
     IF NOT EXISTS(SELECT 1 FROM hon.principals p WHERE p.id=v AND p.principal_type='HUMAN_USER' AND p.is_active) OR NOT hon.staff_member_eligible(v,org,school)
-      OR EXISTS(SELECT 1 FROM hon.hq_operator_grants h WHERE h.principal_id=v) THEN RAISE EXCEPTION 'SOCIAL_ASSIGNEE_INVALID' USING ERRCODE='22023'; END IF;
+      OR EXISTS(SELECT 1 FROM hon.hq_operator_grants h WHERE h.principal_id=v)
+      -- Someone who is also a parent, guardian, student or family member is never an inbox assignee (same rule as the actor check).
+      OR EXISTS(SELECT 1 FROM hon.family_access_grants f WHERE f.principal_id=v AND f.effective_from<=clock_timestamp() AND (f.effective_until IS NULL OR f.effective_until>clock_timestamp()))
+      OR EXISTS(SELECT 1 FROM hon.principal_role_grants g JOIN hon.roles r ON r.id=g.role_id AND r.organization_id=g.organization_id
+        WHERE g.principal_id=v AND g.revoked_at IS NULL AND g.effective_from<=clock_timestamp() AND (g.effective_until IS NULL OR g.effective_until>clock_timestamp())
+          AND r.code ~* '^(PARENT|GUARDIAN|STUDENT|FAMILY|HQ|HON_|PLATFORM|SYSTEM)') THEN RAISE EXCEPTION 'SOCIAL_ASSIGNEE_INVALID' USING ERRCODE='22023'; END IF;
   END IF;
   IF jsonb_typeof(p_input->'linkedLeadId')='string' AND NOT EXISTS(SELECT 1 FROM hon.crm_leads l WHERE l.id=(p_input->>'linkedLeadId')::uuid AND l.organization_id=org AND l.school_id=school) THEN
     RAISE EXCEPTION 'SOCIAL_LINK_NOT_FOUND' USING ERRCODE='P0002'; END IF;
@@ -435,9 +440,11 @@ BEGIN
   IF p_action IS NULL OR p_lease_token IS NULL OR p_outcome NOT IN ('DONE','FAILED','UNKNOWN') THEN RAISE EXCEPTION 'SOCIAL_INVALID' USING ERRCODE='22023'; END IF;
   PERFORM hon.school_social_check_call(p_request,p_correlation);
   actor:=hon.require_school_social_actor(p_subject,'marketing.social.inbox');
-  SELECT * INTO x FROM hon.school_social_comment_actions WHERE id=p_action AND organization_id=org AND school_id=school FOR UPDATE;
+  -- Lock order: the conversation, then its action (the same order start_school_social_comment_action takes).
+  SELECT * INTO x FROM hon.school_social_comment_actions WHERE id=p_action AND organization_id=org AND school_id=school;
   IF x.id IS NULL THEN RAISE EXCEPTION 'SOCIAL_MESSAGE_NOT_FOUND' USING ERRCODE='P0002'; END IF;
   c:=hon.school_social_conversation_at(org,school,x.conversation_id,true);
+  SELECT * INTO x FROM hon.school_social_comment_actions WHERE id=p_action FOR UPDATE;
   IF x.lease_token=p_lease_token AND x.status='SENDING' THEN
     UPDATE hon.school_social_comment_actions SET status=p_outcome,version=version+1,updated_at=clock_timestamp() WHERE id=x.id RETURNING * INTO x;
     IF p_outcome='DONE' THEN

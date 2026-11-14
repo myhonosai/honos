@@ -224,6 +224,9 @@ allowed) before activation:
 4. Account disconnect endpoint.
 5. (S2–S4) post create/schedule/cancel fields and statuses, inbox send/reply endpoints, ad create/budget units
    (cents vs currency), PAUSED creation, insights, and webhook event names.
+6. (S3) In `comment.received`, whether `from.id` is the Zernio account id or the Meta Page id. HON drops a comment
+   whose author is the school's own account as an echo; if Zernio sends the Page id instead, the echo check must
+   compare against that id, or the school's own replies would be stored as inbound.
 
 ## 6. What David changes in Zernio when a piece is approved
 
