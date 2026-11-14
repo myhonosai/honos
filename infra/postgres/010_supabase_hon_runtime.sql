@@ -3575,3 +3575,15 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.command_ai_exception_school_allowance(text,jsonb,uuid), hon.read_ai_exception_school_allowances_from_hq(text) TO hon_runtime;
   END IF;
 END $$;
+-- 0349 school social inbox: exactly eight runtime entry points, no table privilege (the inbound receipt goes to the 013 worker role only).
+DO $$ DECLARE r text; BEGIN
+  IF to_regclass('hon.school_social_conversations') IS NULL THEN RAISE EXCEPTION 'Apply migration 0349 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_social_conversations, hon.school_social_messages, hon.school_social_comment_actions, hon.school_social_inbox_receipts FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_social_conversations, hon.school_social_messages, hon.school_social_comment_actions, hon.school_social_inbox_receipts FROM '||quote_ident(r);
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.read_school_social_inbox(text,jsonb), hon.read_school_social_conversation(text,uuid),
+    hon.change_school_social_conversation(text,uuid,jsonb,text,uuid,uuid), hon.start_school_social_reply(text,uuid,jsonb,text,uuid,uuid),
+    hon.record_school_social_reply_result(text,uuid,uuid,text,text,uuid,uuid), hon.resolve_school_social_message(text,uuid,jsonb,text,uuid,uuid),
+    hon.start_school_social_comment_action(text,uuid,jsonb,text,uuid,uuid), hon.record_school_social_comment_action_result(text,uuid,uuid,text,uuid,uuid) TO hon_runtime;
+END $$;

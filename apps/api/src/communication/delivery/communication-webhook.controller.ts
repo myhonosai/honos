@@ -133,7 +133,8 @@ export class CommunicationWebhookController {
 
   /**
    * 0250 Zernio `lead.received`: a signed Meta Lead Gen lead becomes a CRM lead only through an HQ-mapped form.
-   * 0348 adds signed `post.published`, `post.failed` and `account.disconnected` receipts on the same endpoint.
+   * 0348 adds signed `post.published`, `post.failed` and `account.disconnected` receipts on the same endpoint, and
+   * 0349 signed `message.received` / `comment.received` inbox events.
    * An unmapped form answers 422 (Zernio does not retry; the event waits in its dead-letter queue for redelivery
    * once HQ maps the form). A rate limit answers 429 and database trouble 503, which Zernio retries.
    */
@@ -152,6 +153,17 @@ export class CommunicationWebhookController {
       // trouble answers 503 so Zernio retries.
       if (!this.store.isConfigured() || !this.store.recordSocialPostEvent) throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
       try { await this.store.recordSocialPostEvent(delivery.event); }
+      catch (error) {
+        if ((error as { code?: string })?.code === '22023') throw new UnprocessableEntityException({ code: 'ZERNIO_EVENT_INVALID' });
+        throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' });
+      }
+      return { received: true };
+    }
+    if (delivery.kind === 'INBOX') {
+      // 0349: an inbound DM or comment. Unmatched or switched-off accounts are acknowledged; database trouble answers
+      // 503 so Zernio retries, and a retried event id is recorded once.
+      if (!this.store.isConfigured() || !this.store.recordSocialInboxEvent) throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
+      try { await this.store.recordSocialInboxEvent(delivery.event); }
       catch (error) {
         if ((error as { code?: string })?.code === '22023') throw new UnprocessableEntityException({ code: 'ZERNIO_EVENT_INVALID' });
         throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' });

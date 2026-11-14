@@ -1111,3 +1111,4 @@ export * from './school-support.js';
 export * from './school-social.js';
 export * from './school-social-posts.js';
 export * from './school-number-orders.js';
+export * from './school-social-inbox.js';

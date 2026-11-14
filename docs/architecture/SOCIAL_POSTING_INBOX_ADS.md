@@ -162,6 +162,55 @@ checks as S1, re-checked after the writes.
    recorded as a definite refusal (FAILED); a later piece may return it to PENDING with a later due time instead.
 7. **Read** `GET …/marketing/social/posts?from&to`: the calendar list with targets and statuses, at most 200.
 
+## 4B. S3 design (0349): inbox (Messenger, Instagram DMs and comments)
+
+### 4B.1 Scope
+
+Messenger conversations and Instagram DMs on the school's connected accounts, and comments on the school's own posts,
+arrive in one school inbox. Staff read them, reply, hide or unhide a comment, mark a conversation read, assign it to a
+staff member, and link it to a CRM lead or person of the same school. Nothing is sent automatically; agent reply
+drafts come later with the AI Action Engine.
+
+### 4B.2 Records
+
+- `hon.school_social_conversations`: one per (account, provider conversation id): `kind` (`DM`, `COMMENT`; a comment
+  conversation is one top-level comment and its replies), the participant's display name (at most 120, as Meta gives
+  it; no Meta user id is stored), `last_inbound_at` (for the reply window), `last_message_at`, `unread` count,
+  `assigned_principal_id`, `linked_lead_id` / `linked_person_id` (same school only), `comment_hidden`, `version`.
+- `hon.school_social_messages`: one per message: `direction` (`INBOUND`, `OUTBOUND`), `body` (1 to 2,000 characters,
+  control characters removed), the provider message or comment id (unique per account), and for outbound messages the
+  person who sent it and a send state (`SENDING`, `SENT`, `FAILED`, `UNKNOWN`) with a 60-second lease.
+- `hon.school_social_inbox_receipts`: one per Zernio event id.
+- Message text is school-private CRM data. It is never written to audit or outbox.
+
+### 4B.3 Who
+
+New permission `marketing.social.inbox` (read the inbox, reply, hide comments, mark read, assign, link; staff
+assignable, sensitive because it shows private messages). The same 0331 actor checks, re-checked after the writes.
+Linking also needs the lead or person to belong to the same school.
+
+### 4B.4 Flow
+
+1. **Receive** (only when inbox is READY: `HON_ZERNIO_INBOX_APPROVED=true` with a key, or the fake): signed
+   `message.received` / `comment.received` on the existing endpoint, as the worker role. The account must be bound to a
+   school with its inbox switch on; otherwise the event is acknowledged and nothing is stored (not even the text).
+   Deduplicated by event id and by provider message id. A comment on a post that is not the school's own still lands
+   (Meta only sends comments on the Page's own posts).
+2. **Reply** `POST …/inbox/conversations/:id/reply {text}` (the idempotency key makes a retry safe): refused with
+   nothing recorded while replying is off (`SOCIAL_INBOX_NOT_ENABLED`). DB checks the account still has inbox on
+   and, for a DM, that the person wrote within the last 24 hours (Meta's standard messaging window; HON does not use
+   message tags). It records the outbound message as SENDING with a lease and returns its id; the API then asks Zernio
+   to send it once (idempotency key = HON's message id) and records SENT (with the provider id), FAILED or UNKNOWN. A
+   SENDING message whose lease ran out reads as UNKNOWN and is never resent; a person can mark it as sent or not sent.
+3. **Comment actions** `POST …/inbox/conversations/:id/comment {action: HIDE | UNHIDE}`: same once-only pattern
+   (one request in flight per comment); the conversation records the hidden state only after Zernio confirms. An
+   UNKNOWN or FAILED request leaves the shown state unchanged and a new request may follow (hiding is repeatable).
+   A person settles an UNKNOWN reply with `POST …/inbox/messages/:id/resolve {outcome: SENT | NOT_SENT, expectedVersion}`.
+4. **Read / assign / link** `POST …/inbox/conversations/:id {read?, assignedPrincipalId?, linkedLeadId?,
+   linkedPersonId?, expectedVersion}`. Assignment needs an eligible staff member at this school.
+5. **List** `GET …/inbox?view=ALL|UNREAD|MINE&before=` (at most 50 per page, newest activity first) and
+   `GET …/inbox/conversations/:id` (the last 200 messages).
+
 ## 5. Provider facts to confirm before any switch is turned on
 
 docs.zernio.com is blocked from the build container, so the adapter is written against these assumptions, each one
@@ -175,6 +224,9 @@ allowed) before activation:
 4. Account disconnect endpoint.
 5. (S2–S4) post create/schedule/cancel fields and statuses, inbox send/reply endpoints, ad create/budget units
    (cents vs currency), PAUSED creation, insights, and webhook event names.
+6. (S3) In `comment.received`, whether `from.id` is the Zernio account id or the Meta Page id. HON drops a comment
+   whose author is the school's own account as an echo; if Zernio sends the Page id instead, the echo check must
+   compare against that id, or the school's own replies would be stored as inbound.
 
 ## 6. What David changes in Zernio when a piece is approved
 

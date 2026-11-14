@@ -111,4 +111,13 @@ BEGIN
 END;
 $$;
 
+-- 0349 school social inbox: signed inbound Zernio messages and comments, when 0349 is applied.
+DO $$
+BEGIN
+  IF to_regprocedure('hon.record_school_social_inbox_event(text,text,text,text,text,text,text,text,text,timestamptz)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.record_school_social_inbox_event(text, text, text, text, text, text, text, text, text, timestamptz) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 COMMIT;

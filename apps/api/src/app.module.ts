@@ -131,6 +131,8 @@ import { SchoolSocialController } from './marketing/social/school-social.control
 import { SchoolSocialService } from './marketing/social/school-social.service.js';
 import { SchoolSocialPostsController } from './marketing/social/school-social-posts.controller.js';
 import { SchoolSocialPostsService } from './marketing/social/school-social-posts.service.js';
+import { SchoolSocialInboxController } from './marketing/social/school-social-inbox.controller.js';
+import { SchoolSocialInboxService } from './marketing/social/school-social-inbox.service.js';
 import { SocialPostDispatcher } from './marketing/social/social-post-dispatcher.js';
 import { ZERNIO_SOCIAL_ADAPTER, zernioSocialAdapterFactory } from './marketing/social/zernio-social-adapter.js';
 import { SchoolMembershipListController, SchoolMembershipListHumanUiGuard } from './billing/school-membership-list.controller.js';
@@ -494,6 +496,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolSupportController,
     SchoolSocialController,
     SchoolSocialPostsController,
+    SchoolSocialInboxController,
     TuitionPaymentController,
     SchoolPaymentController,
     SchoolPayMethodController,
@@ -674,6 +677,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolSupportService,
     SchoolSocialService,
     SchoolSocialPostsService,
+    SchoolSocialInboxService,
     SocialPostDispatcher,
     ClassSeriesService,
     SchoolReportsService,
