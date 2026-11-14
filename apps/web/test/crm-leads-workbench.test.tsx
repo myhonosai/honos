@@ -61,6 +61,8 @@ describe('bounded conventional CRM lead list', () => {
       expect(html).not.toContain('Organization UUID'); expect(html).not.toContain('School UUID');
       expect(html).toContain('Your leads'); expect(html).toContain('Refresh list');
       expect(html).not.toContain(organizationId);
+      // A new lead is added on the Leads page by stage name, not here with pipeline/stage IDs.
+      expect(html).toContain('href="/staff/crm"'); expect(html).not.toMatch(/Known pipeline UUID|Known non-terminal stage UUID/);
       // Server rendering runs no effect: the read happens only in the browser, through the same verified list route.
       expect(fetcher).not.toHaveBeenCalled();
       const source = readFileSync('src/components/crm-leads-workbench.tsx', 'utf8');

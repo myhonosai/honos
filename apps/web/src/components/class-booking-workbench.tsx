@@ -10,6 +10,7 @@ import {
 import { exactClassBookingSelectorPrefill, type ClassBookingSelectorPrefill } from './class-booking-selector-prefill';
 import { ClassBookingPickers, type BookingScope } from './class-booking-pickers';
 import styles from './attendance-workbench.module.css';
+import { useShellSchoolInto } from './school-shell/page-school';
 
 const EMPTY_IDS: ClassBookingKnownIds = { organizationId: '', schoolId: '', sessionId: '', studentProfileId: '' };
 const ID_LABELS: Record<keyof ClassBookingKnownIds, string> = {
@@ -32,6 +33,7 @@ export function shellBookingIds(rawIds: ClassBookingKnownIds, shellScope: Bookin
 /** Conventional canonical booking only; IDs are untrusted selectors, not authority. */
 export function ClassBookingWorkbench({ initialPrefill, shellScope = null }: { initialPrefill?: unknown; shellScope?: BookingScope | null } = {}): React.ReactElement {
   const [rawIds, setIds] = useState<ClassBookingKnownIds>(initialIds(initialPrefill));
+  const shellSchool = useShellSchoolInto(school => setIds(current => ({ ...current, organizationId: school.organizationId, schoolId: school.schoolId })));
   // With a shell-verified school, the school selectors come from the shell and staff pick the class and student by name.
   const ids = shellBookingIds(rawIds, shellScope);
   const [bookingKind, setBookingKind] = useState('');
@@ -113,7 +115,7 @@ export function ClassBookingWorkbench({ initialPrefill, shellScope = null }: { i
       <form onSubmit={submit}><fieldset disabled={busy}>
         <div className={styles.scopeGrid}>{shellScope ? <ClassBookingPickers scope={shellScope} sessionId={ids.sessionId} studentProfileId={ids.studentProfileId} disabled={busy}
             onSession={value => edit(() => setIds({ ...ids, sessionId: value }))} onStudent={value => edit(() => setIds({ ...ids, studentProfileId: value }))}/>
-          : (Object.keys(ID_LABELS) as (keyof ClassBookingKnownIds)[]).map(field =>
+          : (Object.keys(ID_LABELS) as (keyof ClassBookingKnownIds)[]).filter(field => !shellSchool || (field !== 'organizationId' && field !== 'schoolId')).map(field =>
           <label key={field}>{ID_LABELS[field]}<input name={field} required autoComplete="off" spellCheck={false} maxLength={36} value={ids[field]} onChange={event => edit(() => setIds({ ...ids, [field]: event.target.value }))} /></label>)}
           <label>Booking kind<select name="bookingKind" required value={bookingKind} onChange={event => edit(() => setBookingKind(event.target.value))}>
             <option value="">Choose a booking kind</option>{MANUAL_CLASS_BOOKING_KINDS.map(kind => <option key={kind} value={kind}>{kind}</option>)}

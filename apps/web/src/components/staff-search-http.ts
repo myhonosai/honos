@@ -3,7 +3,7 @@ import type { StaffSearchKind, StaffSearchResult } from '@hon/contracts';
 export const SEARCH_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const KIND_LABEL: Record<StaffSearchKind, string> = { STUDENT: 'Students', LEAD: 'Leads', CLASS_SESSION: 'Class sessions', PROGRAM: 'Programs', CURRICULUM: 'Curricula' };
 export function searchApiPath(org: string, school: string): string {
-  if (!SEARCH_UUID.test(org) || !SEARCH_UUID.test(school)) throw new Error('Enter your already-known organization and school UUIDs.');
+  if (!SEARCH_UUID.test(org) || !SEARCH_UUID.test(school)) throw new Error('Choose your school at the top of the page to search it.');
   return `/api/v1/organizations/${org.toLowerCase()}/schools/${school.toLowerCase()}/search`;
 }
 export function safeSearchCard(value: unknown, org: string, school: string): StaffSearchResult {

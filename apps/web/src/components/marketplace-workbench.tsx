@@ -4,9 +4,11 @@ import React, { useRef, useState } from 'react';
 import { MARKETPLACE_HELP, MARKETPLACE_CATEGORIES, MARKETPLACE_MODULES, MARKETPLACE_REQUIRED_PERMISSIONS, type MarketplaceAccess, type MarketplaceAsset, type MarketplaceInput, type MarketplaceSelection, type MarketplaceHistory } from '@hon/contracts';
 import { loadMarketplaceAccess, loadMarketplace, loadMarketplaceSelections, loadMarketplaceHistory, saveMarketplace, marketplaceFingerprint, type MarketplaceMutation } from './marketplace-http';
 import s from './community-workbench.module.css';
+import { ManualSchoolFields, useShellSchoolInto } from './school-shell/page-school';
 const fresh = (): MarketplaceInput => ({ expectedVersion: 0, title: '', category: 'OPERATIONS', assetKind: 'BLUEPRINT', targetModule: 'WORK_ITEMS', requiredPermissions: ['work_item.read'], releaseNotes: '', previewText: '', status: 'DRAFT' });
 export function MarketplaceWorkbench() {
   const [school, setSchool] = useState(''), [scope, setScope] = useState('');
+  useShellSchoolInto(school => { setSchool(school.schoolId); });
   const [access, setAccess] = useState<MarketplaceAccess | null>(null), [assets, setAssets] = useState<MarketplaceAsset[]>([]), [own, setOwn] = useState<MarketplaceAsset[]>([]), [saved, setSaved] = useState<MarketplaceSelection[]>([]);
   const [cursor, setCursor] = useState<{ browse: string | null; own: string | null; saved: string | null }>({ browse: null, own: null, saved: null });
   const [draft, setDraft] = useState(fresh), [editId, setEditId] = useState<string | null>(null), [history, setHistory] = useState<MarketplaceHistory | null>(null);
@@ -58,7 +60,7 @@ export function MarketplaceWorkbench() {
     <nav><Link href="/community">Community membership and opt-in</Link><Link href="/staff/dashboard">School workspace</Link></nav>
     <header><p>HON / VERIFIED HUMAN MARKETPLACE</p><h1>Blueprints, not installations</h1><p>Browse and save for review only. No purchase, installation or automation.</p></header>
     <aside>{MARKETPLACE_HELP}</aside>
-    <section><h2>Current school access</h2><label>School UUID<input value={school} onChange={e => { ++generation.current; setSchool(e.target.value); clear(); setPending(null); setBusy(false); setError(''); setNotice(''); }}/></label><button disabled={busy} onClick={() => void load()}>Load current access</button><p>A school selector is not authority. Community membership and organization/profile opt-in must already be enabled.</p></section>
+    <section><h2>Current school access</h2><ManualSchoolFields><label>School UUID<input value={school} onChange={e => { ++generation.current; setSchool(e.target.value); clear(); setPending(null); setBusy(false); setError(''); setNotice(''); }}/></label></ManualSchoolFields><button disabled={busy} onClick={() => void load()}>Load current access</button><p>A school selector is not authority. Community membership and organization/profile opt-in must already be enabled.</p></section>
     {error && <p role="alert" className={s.error}>{error}</p>}{notice && <p role="status" className={s.notice}>{notice}</p>}
     {pending && <section><h2>Uncertain request</h2><p>Keep the original key. Reload current access for the same school, then retry the exact unchanged request. Nothing is automatically retried.</p><button disabled={busy || scope !== pending.scope || !access} onClick={() => void mutate(pending.m, true)}>Retry unchanged request</button><button disabled={busy} onClick={() => setPending(null)}>Discard retained retry</button></section>}
     {access?.canBrowse && <section><h2>Platform-curated published assets</h2>{assets.length === 0 && <p>No currently visible curated assets.</p>}{assets.map(a => <article key={a.id}>{describe(a)}{access.canSave && <button disabled={busy || Boolean(pending)} onClick={() => void mutate({ op: 'SAVE', id: a.id, input: { expectedVersion: 0, assetVersion: a.version } })}>Save version {a.version} for review only</button>}</article>)}{cursor.browse && <button disabled={busy} onClick={() => void more('BROWSE')}>Next published page</button>}</section>}
