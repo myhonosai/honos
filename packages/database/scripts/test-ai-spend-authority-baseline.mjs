@@ -3545,6 +3545,9 @@ try {
   for (const z of [o, plain]) { await admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [z.id]); await grantFor(z, 'COMPLETE', 86_400_000); }
   assert.equal(await explicit(), 'AI_EXCEPTION_NO_AI');
   assert.deepEqual(await ask(), { refused: 'AI_EXCEPTION_NO_AI' });
+  // The AI team status (dashboard and onboarding) reads the same school decision as the reply path.
+  const spendOf = async (z = o) => [...new Set((await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scopeOf(z))).data.agents.map((x) => x.spendDecision))];
+  assert.deepEqual(await spendOf(), ['AI_EXCEPTION_NO_AI']);
   let e = await entry();
   assert.deepEqual([e.ceilingMicros, e.aiAllowed, e.version, e.exceptionLive, e.level], [null, false, 0, true, 'NO_CEILING']);
   assert.equal((await read()).defaultCeilingMicros, 25000000);
@@ -3556,6 +3559,8 @@ try {
   assert.equal(await explicit(o, 'CREATIVE_MEDIA'), 'AI_EXCEPTION_NO_AI', 'image and video stay off on an exception');
   assert.equal(await explicit(o, 'AGENT_INFERENCE', null), 'AI_EXCEPTION_NO_AI', 'no school named: still refused');
   assert.equal(await explicit(o, 'AGENT_INFERENCE', plain.school), 'AI_EXCEPTION_NO_AI', 'another school never borrows the limit');
+  assert.deepEqual(await spendOf(), ['ALLOWED'], 'readiness shows the AI team on for the exception school with a limit');
+  assert.deepEqual(await spendOf(plain), ['AI_EXCEPTION_NO_AI'], 'readiness still shows AI off for an exception school without a limit');
   let calls = fakes.hon.calls;
   assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null });
   assert.equal(fakes.hon.calls, calls + 1);
@@ -3580,6 +3585,7 @@ try {
   // 5. Clearing returns the school to no AI at once, including the reserve guard outside the prepare path.
   v = (await command(input({ ceilingMicros: null, expectedVersion: v }))).version;
   assert.equal(await explicit(), 'AI_EXCEPTION_NO_AI');
+  assert.deepEqual(await spendOf(), ['AI_EXCEPTION_NO_AI'], 'clearing the limit shows AI off again');
   assert.deepEqual(await ask(), { refused: 'AI_EXCEPTION_NO_AI' });
   e = await entry(); assert.deepEqual([e.ceilingMicros, e.aiAllowed, e.version], [null, false, v]);
   const raw = await row("SELECT id FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='COMPLETED' LIMIT 1", [o.id]);

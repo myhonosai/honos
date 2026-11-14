@@ -50,7 +50,7 @@ try {
     catch { await new Promise(resolve => setTimeout(resolve, 100)); }
   }
   assert(ready, 'Production Next server did not start.');
-  for (const [subject, expected, count] of [['hq','/hq',1],['staff','/staff/entry',2],['guardian','/auth/access',3],['unknown','/auth/access',3],['unavailable','/auth/access',2]]) {
+  for (const [subject, expected, count] of [['hq','/hq',1],['staff','/staff/dashboard',2],['guardian','/auth/access',3],['unknown','/auth/access',3],['unavailable','/auth/access',2]]) {
     const before = requests.length;
     const response = await fetch(`${origin}/auth/continue`, { headers: { Cookie: cookie(subject), 'x-hon-role': 'HON_HQ_OWNER', 'x-school-id': id }, redirect: 'manual' });
     assert.equal(response.status, 303); assert.equal(response.headers.get('location'), expected);

@@ -37,7 +37,7 @@ describe('verified post-login routing', () => {
   it('routes only a verified RESOLVED school to the ordinary dashboard, with no scope in the redirect', async () => {
     const current = token();
     const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json({}, 403)).mockResolvedValueOnce(json(staff));
-    expect(await location(request(current, '', { host: 'evil.example', 'x-forwarded-host': 'evil.example', 'x-forwarded-proto': 'https', 'x-hon-role': 'HON_HQ_OWNER', 'x-school-id': uuid, authorization: 'Bearer FORGED' }))).toBe('/staff/entry');
+    expect(await location(request(current, '', { host: 'evil.example', 'x-forwarded-host': 'evil.example', 'x-forwarded-proto': 'https', 'x-hon-role': 'HON_HQ_OWNER', 'x-school-id': uuid, authorization: 'Bearer FORGED' }))).toBe('/staff/dashboard');
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['http://127.0.0.1:3001/v1/hq/session', 'http://127.0.0.1:3001/v1/staff/current-reporting-school']);
     for (const [, options] of fetcher.mock.calls) {
       expect(options).toMatchObject({ method: 'GET', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer', headers: { Accept: 'application/json', Cookie: `${HON_SESSION_COOKIE}=${current}` } });
@@ -192,7 +192,7 @@ describe('verified post-login routing', () => {
       expect([`${HON_SESSION_COOKIE}=${a}`, `${HON_SESSION_COOKIE}=${b}`]).toContain(cookie);
       return String(url).endsWith('/hq/session') ? cookie === `${HON_SESSION_COOKIE}=${a}` ? json({}, 403) : json(hq) : json(staff);
     });
-    expect(await Promise.all([location(request(a)), location(request(b))])).toEqual(['/staff/entry', '/hq']);
+    expect(await Promise.all([location(request(a)), location(request(b))])).toEqual(['/staff/dashboard', '/hq']);
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
