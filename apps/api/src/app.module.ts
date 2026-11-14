@@ -51,7 +51,8 @@ import { ChadFollowUpAssistantService } from './chad-follow-up-assistant/chad-fo
 import { CHAD_PROVIDER_RUNTIME, OpenRouterChadRuntime } from './ai/chad-provider-runtime.js';
 import { HON_REPLY_PROVIDER_RUNTIME, OpenRouterHonReplyRuntime } from './ai/hon-reply-provider-runtime.js';
 import { HonReplyService } from './hon-conversation/hon-reply.service.js';
-import { CREATIVE_PROVIDER_RUNTIME, UnconfiguredCreativeProviderRuntime } from './creative-studio/creative-provider-runtime.js';
+import { CREATIVE_PROVIDER_RUNTIME } from './creative-studio/creative-provider-runtime.js';
+import { createCreativeProviderRuntime } from './creative-studio/providers/creative-provider-router.js';
 import { CreativeStudioService } from './creative-studio/creative-studio.service.js';
 import { CreativeStudioController } from './creative-studio/creative-studio.controller.js';
 import { CreativeStudioAvatarsController, CreativeStudioAvatarVideosController } from './creative-studio/creative-studio-avatars.controller.js';
@@ -553,7 +554,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     { provide: CHAD_PROVIDER_RUNTIME, useFactory: () => new OpenRouterChadRuntime() },
     { provide: HON_REPLY_PROVIDER_RUNTIME, useFactory: () => new OpenRouterHonReplyRuntime() },
     // CS1: no creative provider is connected; the synthetic runtime is test-only and never selected here.
-    { provide: CREATIVE_PROVIDER_RUNTIME, useFactory: () => new UnconfiguredCreativeProviderRuntime() },
+    // C2: real adapters exist, but stay off until results can be copied into HON storage (C3).
+    { provide: CREATIVE_PROVIDER_RUNTIME, useFactory: () => createCreativeProviderRuntime({ mediaStorageReady: false }) },
     // C1 (0354): the provider job worker (worker login only; the loop is off unless its interval is set).
     CreativeJobWorkerDatabase,
     { provide: CREATIVE_JOB_WORKER_STORE, useExisting: CreativeJobWorkerDatabase },
