@@ -34,6 +34,12 @@ export function composerTurnRequest(text: string, ask: HonComposerAsk, mode: Hon
   return isHonAnalystAgent(ask) ? { text, delegation: { agentKey: ask } } : { text, delegation: null, replyMode: mode };
 }
 const askName = (ask: HonComposerAsk) => AGENT_NAME[ask] ?? 'HON';
+/** `/staff/hon?ask=<key>` preselects one Ask HON specialist. Presentation only: readiness still decides, and anything else asks HON. */
+export function composerAskFromQuery(value: unknown): HonComposerAsk {
+  return typeof value === 'string' && value !== 'maya' && isHonAnalystAgent(value) ? value as HonComposerAsk : 'hon';
+}
+/** The link that opens Ask HON with one specialist chosen. */
+export const honAskHref = (key: Exclude<HonAnalystAgentKey, 'maya'>): string => `/staff/hon?ask=${key}`;
 /** The analysis specialists readiness offers now (Claire through businessPerformance, the others through availableAnalystKeys). */
 // 0284: Maya answers about one at-risk student, so she is asked from that student's row on the at-risk list, not here.
 export function offeredAnalysts(readiness: HonConversationReadiness | null): Exclude<HonAnalystAgentKey, 'maya'>[] {
@@ -339,7 +345,7 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
  * Private conversation content is concealed synchronously on blur, a hidden tab, page hide or session end, and shown again
  * only after an explicit Refresh. A sent message is never cancelled: its outcome and exact retry are kept.
  */
-export function HonConversation({ school, presentation, api = HON_CONVERSATION_API }: { school: HonSchool; presentation: 'panel' | 'full'; api?: HonConversationApi }): React.ReactElement {
+export function HonConversation({ school, presentation, api = HON_CONVERSATION_API, initialAsk = 'hon' }: { school: HonSchool; presentation: 'panel' | 'full'; api?: HonConversationApi; initialAsk?: HonComposerAsk }): React.ReactElement {
   const [phase, setPhase] = useState<ConversationPhase>('LOADING');
   const [readiness, setReadiness] = useState<HonConversationReadiness | null>(null);
   const [conversations, setConversations] = useState<HonConversationSummary[]>([]);
@@ -348,7 +354,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   const [pending, setPending] = useState<Pending | null>(null);
   const [draft, setDraft] = useState('');
   const [mode, setMode] = useState<HonReplyMode>('STANDARD');
-  const [ask, setAsk] = useState<HonComposerAsk>('hon');
+  const [ask, setAsk] = useState<HonComposerAsk>(initialAsk);
   const [groups, setGroups] = useState<ReadonlyMap<string, HonOrchestration>>(new Map());
   const [groupPhase, setGroupPhase] = useState<GroupPhase>('NONE');
   const [confirm, setConfirm] = useState<SuggestionConfirm | null>(null);
