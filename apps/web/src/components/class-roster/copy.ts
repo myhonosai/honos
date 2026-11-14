@@ -1,7 +1,7 @@
 /** Class roster wording (en / ko / es). Labels only; nothing here is authority or an outcome. */
 const en = {
   title: 'Class rosters', intro: 'Your school\'s classes and, for one class, who is booked and whose attendance is recorded.',
-  readOnly: 'This page only shows records. Book students and record attendance in their own pages, which check your access again.',
+  readOnly: 'Open a class and mark each student present, late or absent. Every save checks your access again. Book students on their own page.',
   refresh: 'Refresh', fromLabel: 'Classes starting from', today: 'Today', moreClasses: 'Show more classes',
   listTitle: 'Classes', listLoading: 'Reading classes…', listNone: 'No classes here.', shown: '{n} shown',
   listWindow: 'Classes from {date} on, in start order. Times are school time ({zone}).', listRestarted: 'The class list changed while it was being read, so it was read again from the start.',
@@ -22,11 +22,15 @@ const en = {
   REGULAR: 'Regular', TRIAL: 'Trial', PRIVATE_LESSON: 'Private lesson', EVENT: 'Event', CLASS_PASS: 'ClassPass',
   nextSteps: 'Next steps', recordAttendance: 'Record attendance', book: 'Book a student on this class',
   waiting: 'Checking your school…', noSchool: 'Choose a school to see its classes.', concealed: 'Rosters are hidden. Come back to this tab to check your school again.',
+  markGroup: 'Attendance for {name}', markPresent: 'Present', markLate: 'Late', markExcused: 'Excused', markAbsent: 'Absent',
+  markSaving: 'Saving {status}…', markSaved: 'Saved: {status}.', markSession: 'Your session ended. Sign in again, then mark attendance.',
+  markDenied: 'Your role does not include recording attendance at this school.', markRejected: 'This could not be saved for this class. Refresh the roster and try again.',
+  markUnknown: 'Not confirmed yet. Press {status} again; it will not be recorded twice.', correctAttendance: 'Correct a past attendance record',
 };
 export type RosterKey = keyof typeof en;
 const ko: Record<RosterKey, string> = {
   title: '수업 명단', intro: '학교의 수업과, 선택한 수업에 예약된 학생 및 출석 기록.',
-  readOnly: '이 페이지는 기록을 보여 주기만 합니다. 예약과 출석 기록은 각 페이지에서 하며, 그곳에서 권한을 다시 확인합니다.',
+  readOnly: '수업을 열고 학생마다 출석, 지각, 결석을 기록하세요. 저장할 때마다 권한을 다시 확인합니다. 예약은 예약 페이지에서 합니다.',
   refresh: '새로 고침', fromLabel: '수업 시작일', today: '오늘', moreClasses: '수업 더 보기',
   listTitle: '수업', listLoading: '수업을 읽는 중…', listNone: '해당 수업이 없습니다.', shown: '{n}개 표시',
   listWindow: '{date}부터의 수업을 시작 순서로 표시합니다. 시간은 학교 기준({zone})입니다.', listRestarted: '읽는 도중 수업 목록이 바뀌어 처음부터 다시 읽었습니다.',
@@ -47,10 +51,14 @@ const ko: Record<RosterKey, string> = {
   REGULAR: '정규', TRIAL: '체험', PRIVATE_LESSON: '개인 레슨', EVENT: '행사', CLASS_PASS: 'ClassPass',
   nextSteps: '다음 단계', recordAttendance: '출석 기록', book: '이 수업에 학생 예약',
   waiting: '학교를 확인하는 중…', noSchool: '수업을 보려면 학교를 선택하세요.', concealed: '명단이 숨겨졌습니다. 이 탭으로 돌아오면 학교를 다시 확인합니다.',
+  markGroup: '{name} 출석', markPresent: '출석', markLate: '지각', markExcused: '사유 결석', markAbsent: '결석',
+  markSaving: '{status} 저장 중…', markSaved: '저장됨: {status}.', markSession: '세션이 끝났습니다. 다시 로그인한 뒤 출석을 기록하세요.',
+  markDenied: '이 학교에서 출석을 기록할 권한이 없습니다.', markRejected: '이 수업에 저장할 수 없습니다. 명단을 새로 고친 뒤 다시 시도하세요.',
+  markUnknown: '아직 확인되지 않았습니다. {status}을(를) 다시 누르세요. 두 번 기록되지 않습니다.', correctAttendance: '지난 출석 기록 수정',
 };
 const es: Record<RosterKey, string> = {
   title: 'Listas de clase', intro: 'Las clases de su escuela y, para una clase, quién está reservado y a quién se le registró la asistencia.',
-  readOnly: 'Esta página solo muestra registros. Reserve alumnos y registre la asistencia en sus propias páginas, que vuelven a comprobar su acceso.',
+  readOnly: 'Abre una clase y marca a cada alumno presente, tarde o ausente. Cada registro vuelve a comprobar tu acceso. Las reservas se hacen en su propia página.',
   refresh: 'Actualizar', fromLabel: 'Clases a partir del', today: 'Hoy', moreClasses: 'Mostrar más clases',
   listTitle: 'Clases', listLoading: 'Leyendo clases…', listNone: 'No hay clases aquí.', shown: '{n} mostradas',
   listWindow: 'Clases desde el {date}, por orden de inicio. Horas de la escuela ({zone}).', listRestarted: 'La lista de clases cambió mientras se leía, así que se volvió a leer desde el principio.',
@@ -71,6 +79,10 @@ const es: Record<RosterKey, string> = {
   REGULAR: 'Regular', TRIAL: 'Prueba', PRIVATE_LESSON: 'Clase privada', EVENT: 'Evento', CLASS_PASS: 'ClassPass',
   nextSteps: 'Siguientes pasos', recordAttendance: 'Registrar asistencia', book: 'Reservar un alumno en esta clase',
   waiting: 'Comprobando su escuela…', noSchool: 'Elija una escuela para ver sus clases.', concealed: 'Las listas están ocultas. Vuelva a esta pestaña para comprobar su escuela de nuevo.',
+  markGroup: 'Asistencia de {name}', markPresent: 'Presente', markLate: 'Tarde', markExcused: 'Justificada', markAbsent: 'Ausente',
+  markSaving: 'Guardando {status}…', markSaved: 'Guardado: {status}.', markSession: 'Tu sesión terminó. Inicia sesión de nuevo y marca la asistencia.',
+  markDenied: 'Tu rol no incluye registrar asistencia en esta escuela.', markRejected: 'No se pudo guardar para esta clase. Actualiza la lista e inténtalo de nuevo.',
+  markUnknown: 'Aún sin confirmar. Pulsa {status} otra vez; no se registrará dos veces.', correctAttendance: 'Corregir una asistencia anterior',
 };
 export const ROSTER_LANGUAGES = { en, ko, es } as const;
 export function rosterText(language: string, key: RosterKey, vars: Record<string, string> = {}): string {

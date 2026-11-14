@@ -53,6 +53,11 @@ function recordDraftOf(record: AttendanceRecordSummary | null): RecordDraft {
   return record ? { status: record.status, category: record.category, note: record.note ?? '' } : blankRecord();
 }
 
+/** Inside the shell the exact-record and policy tools are an advanced, collapsed section under the roster link. */
+function AdvancedAttendance({ inShell, children }: { inShell: boolean; children?: React.ReactNode }): React.ReactElement {
+  return inShell ? <details className={styles.advanced}><summary>Advanced: correct one exact record or set attendance rules for a program</summary>{children}</details> : <>{children}</>;
+}
+
 export function AttendanceWorkbench({ initialScope = {} }: { initialScope?: AttendanceInitialScope } = {}): React.ReactElement {
   const [scope, setScope] = useState<AttendanceKnownScope>(() => blankScope(initialScope));
   const shellSchool = useShellSchoolInto(school => setScope(current => ({ ...current, organizationId: school.organizationId, schoolId: school.schoolId })));
@@ -178,7 +183,9 @@ export function AttendanceWorkbench({ initialScope = {} }: { initialScope?: Atte
   const scopeReady = validScope(scope);
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">School dashboard</a><a href="/staff/attendance/planned-absences">Planned absence review</a><a href="/staff/team/availability">Availability</a><a href="/staff/instructor-qualifications">Qualifications</a><a href="/staff/roles">Roles</a><a href="/auth/login">Sign in</a></nav>
-    <header><p>HUMAN STAFF / ATTENDANCE OPERATIONS</p><h1>Attendance workbench</h1><p>Record one exact known student attendance state for one exact known class session, and maintain one exact known program’s closed-set attendance policy.</p></header>
+    {shellSchool ? <header><h1>Attendance</h1><p>Mark attendance from the class roster: open a class and tap Present, Late, Excused or Absent for each student.</p><p><a className={styles.primaryLink} href="/staff/schedule">Open class rosters</a></p></header>
+      : <header><p>HUMAN STAFF / ATTENDANCE OPERATIONS</p><h1>Attendance workbench</h1><p>Record one exact known student attendance state for one exact known class session, and maintain one exact known program’s closed-set attendance policy.</p></header>}
+    <AdvancedAttendance inShell={Boolean(shellSchool)}>
     <aside><strong>Conventional staff recordkeeping only.</strong><p>Each request uses existing server authorization, tenant RLS, category and policy-snapshot validation, plus audit/outbox evidence. This workbench has no Action Engine, AI, provider, payment, message, membership, capacity, schedule, or external-network path. It does not determine class eligibility, program suitability, readiness, progress, pass credit, or any automatic progression outcome.</p></aside>
     {busy && <p role="status">Checking the current exact human-staff scope and requested attendance fact…</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
@@ -257,5 +264,6 @@ export function AttendanceWorkbench({ initialScope = {} }: { initialScope?: Atte
         <p>These are returned record snapshots, not a current progress/readiness calculation, a pass credit, a promotion decision, or a payment/member/schedule result.</p>
       </div>}
     </section>
+    </AdvancedAttendance>
   </main>;
 }

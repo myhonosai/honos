@@ -232,3 +232,16 @@ export async function saveAttendanceRecord(scope: AttendanceKnownScope, input: R
   const response = await request(attendancePaths.record(scope), 'RECORD_SAVE', input, idempotencyKey);
   return { attendance: attendance(response.data, scope), replayed: response.meta.replayed === true };
 }
+
+/**
+ * Marking from a class roster: the same fixed record path, command marker, key and response checks as
+ * saveAttendanceRecord, without the program selector (recording never needs it; only the policy does).
+ */
+export type RosterAttendanceTarget = Pick<AttendanceKnownScope, 'organizationId' | 'schoolId' | 'sessionId' | 'studentProfileId'>;
+export async function saveRosterAttendance(target: RosterAttendanceTarget, input: RecordAttendanceInput, idempotencyKey: string): Promise<{ attendance: AttendanceRecordSummary; replayed: boolean }> {
+  for (const value of [target.organizationId, target.schoolId, target.sessionId, target.studentProfileId]) if (!UUID.test(value)) invalid();
+  if (input.studentProfileId !== target.studentProfileId) invalid();
+  validateAttendanceRecordInput(input);
+  const response = await request(recordPath({ ...target, programId: '' }), 'RECORD_SAVE', input, idempotencyKey);
+  return { attendance: attendance(response.data, target), replayed: response.meta.replayed === true };
+}

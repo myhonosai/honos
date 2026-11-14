@@ -59,3 +59,12 @@
 }
 .fromRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .fromRow input { width: auto; max-width: 220px; }
+/* Marking attendance from the roster: pills like the tabs; the recorded status is pressed. */
+.marks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.mark { min-height: var(--hon-target, 44px); padding: 6px 12px; border: 1px solid var(--hon-line, #24405a); border-radius: 999px; background: #0d1d2e; color: #cfe0f2; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.mark:hover { border-color: var(--hon-accent, #8de3d8); }
+.mark[aria-pressed="true"] { border-color: var(--hon-accent, #8de3d8); background: #123047; color: #eef6fc; }
+.mark:disabled { opacity: .55; cursor: progress; }
+.mark:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
+.markNote { display: block; margin-top: 6px; color: var(--hon-muted, #9fb4c8); font-size: 12px; }
+.markNote[data-mark="UNKNOWN"], .markNote[data-mark="DENIED"], .markNote[data-mark="REJECTED"], .markNote[data-mark="SESSION"] { color: #ffc9a8; }
