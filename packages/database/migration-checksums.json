@@ -291,6 +291,7 @@
     "0351_school_twilio_subaccounts.sql": "ff9bca68045b9d5f593c56faa97d0cff5c0d408d9f2cbe97287514fda2f25f88",
     "0353_ai_exception_school_allowance.sql": "b46e8aa76543fe0bd1f4881d7882f7369dcd9ce20c138511238c3334d57ec6a5",
     "0352_school_number_orders.sql": "66707e67a865b901425603ac7f23127291e44faaf5a9cdcad75648c6feff18a9",
-    "0354_creative_provider_jobs.sql": "51d614822499ff9c8c894f2ff73853c19dfad33c677b6a741329556cb460be67"
+    "0354_creative_provider_jobs.sql": "51d614822499ff9c8c894f2ff73853c19dfad33c677b6a741329556cb460be67",
+    "0358_school_number_order_settle.sql": "04aec55d14c81c53b4012377c9ad610221cfacf53ed3fb8a23a12cb9d98afdc0"
   }
 }
