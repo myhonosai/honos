@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, type ReactNode } from 'react';
+import React, { useEffect, useRef, type ReactNode } from 'react';
 import type { OperationalSchoolScope } from '../operational-navigation';
 import { useSchoolShell } from './context';
 
@@ -20,7 +20,17 @@ export function useShellSchoolInto(apply: (school: OperationalSchoolScope) => vo
   return school;
 }
 
-/** Renders the manual organization/school ID fields only when the shell has no verified school (for example outside the shell). */
-export function ManualSchoolFields({ children }: { children?: ReactNode }): React.ReactElement | null {
-  return useShellSchool() ? null : <>{children}</>;
+/**
+ * Renders the manual organization/school ID fields only when the shell has no verified school (for example outside the
+ * shell). Pass the page's own school value as `current`: a page that cleared it after an access change (its fields are
+ * hidden) then offers a reload, which verifies the school again, instead of a dead end.
+ */
+export function ManualSchoolFields({ children, current }: { children?: ReactNode; current?: string | undefined }): React.ReactElement | null {
+  const school = useShellSchool();
+  // Only a page that had the school and then cleared it is stuck; the first paint (before the copy) is not.
+  const had = useRef(false);
+  if (current) had.current = true;
+  if (!school) return <>{children}</>;
+  if (current === undefined || current !== '' || !had.current) return null;
+  return <p role="status">Your access changed, so this page stopped. <button type="button" onClick={() => window.location.reload()}>Reload page</button></p>;
 }

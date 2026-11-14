@@ -31,6 +31,25 @@ describe('pages take the school from the shell', () => {
       expect(fetcher).not.toHaveBeenCalled(); fetcher.mockRestore();
     });
 
+  it('never shows a reload prompt on the first paint, before the page has copied the school', () => {
+    const fields = (current: string) => <ManualSchoolFields current={current}><label>School UUID</label></ManualSchoolFields>;
+    expect(inShell(fields(''))).toBe('');
+    expect(inShell(fields(school.schoolId))).toBe('');
+    expect(renderToStaticMarkup(fields(''))).toBe('<label>School UUID</label>');
+    const source = readFileSync('src/components/school-shell/page-school.tsx', 'utf8');
+    expect(source).toContain("if (current === undefined || current !== '' || !had.current) return null;");
+    expect(source).toContain('window.location.reload()');
+  });
+
+  it('attendance inside the shell leads to the class rosters and keeps the exact tools collapsed', () => {
+    const html = inShell(<AttendanceWorkbench />);
+    expect(html).toContain('href="/staff/schedule"'); expect(html).toContain('<h1>Attendance</h1>');
+    expect(html).toMatch(/<details[^>]*><summary>Advanced: correct one exact record/);
+    expect(html).not.toContain('HUMAN STAFF / ATTENDANCE OPERATIONS');
+    expect(renderToStaticMarkup(<AttendanceWorkbench />)).toContain('HUMAN STAFF / ATTENDANCE OPERATIONS');
+    expect(renderToStaticMarkup(<AttendanceWorkbench />)).not.toContain('<details');
+  });
+
   it('every school page that had school ID boxes now uses the shell school', () => {
     const pages = ['achievements-workbench', 'action-approvals-workbench', 'attendance-workbench', 'class-booking-workbench', 'class-session-workbench', 'class-sessions-read',
       'community-workbench', 'curriculum-progress-workbench', 'document-workbench', 'invoice-workbench', 'marketplace-workbench', 'promotion-decision-workbench',
