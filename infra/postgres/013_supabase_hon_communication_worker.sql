@@ -89,4 +89,14 @@ BEGIN
 END;
 $$;
 
+-- 0352 school number purchases: claim approved orders and record each purchase attempt (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.claim_school_number_purchases(integer,integer)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.claim_school_number_purchases(integer, integer),
+      hon.record_school_number_purchase(uuid, uuid, text, text, text, text, text) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 COMMIT;

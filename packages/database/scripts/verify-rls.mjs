@@ -137,6 +137,7 @@ const expectedRlsTables = [
   'inbound_text_keywords',
   'missed_calls',
   'school_twilio_accounts',
+  'school_number_orders',
   'zernio_lead_forms',
   'zernio_lead_receipts',
   'crm_activities',
