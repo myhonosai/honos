@@ -3654,3 +3654,27 @@ DO $$ BEGIN
     RAISE EXCEPTION 'Unsafe school number order settle posture'; END IF;
 END $$;
 -- End school number order settle exact verification.
+-- Creative provider jobs exact verification (C1 0354): four private forced-RLS tables the runtime cannot touch, five
+-- runtime entry points (plus the 0216 record wrapper above), worker functions and private helpers not runnable by it.
+DO $$ DECLARE t text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['creative_provider_daily_limits','creative_school_daily_caps','creative_limit_commands','creative_provider_jobs'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+      RAISE EXCEPTION 'Unsafe creative provider job table posture: %',t; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.begin_creative_provider_submission(text,uuid)','hon.record_creative_provider_submission(text,uuid,text)',
+    'hon.command_creative_provider_daily_limit(text,jsonb,uuid)','hon.command_creative_school_daily_caps(text,jsonb,uuid)','hon.read_creative_limits_from_hq(text)',
+    'hon.claim_creative_provider_jobs(integer,integer)','hon.record_creative_provider_job_poll(uuid,uuid)','hon.record_creative_provider_job_result(uuid,uuid,jsonb)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef
+        AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND (owner.rolsuper OR owner.rolbypassrls)) THEN
+      RAISE EXCEPTION 'Unsafe creative provider job function: %',f; END IF;
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') <> (f NOT LIKE 'hon.claim_creative%' AND f NOT LIKE 'hon.record_creative_provider_job_%') THEN
+      RAISE EXCEPTION 'Wrong runtime EXECUTE on creative provider job function: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.creative_record_generation_result(text,uuid,jsonb,text)','hon.creative_requester_subject(uuid)',
+    'hon.creative_close_provider_job(hon.creative_provider_jobs,jsonb,text)','hon.creative_leased_job(uuid,uuid)','hon.creative_provider_committed_micros(text,timestamptz)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') THEN RAISE EXCEPTION 'Creative provider job helper runnable by runtime: %',f; END IF;
+  END LOOP;
+END $$;
+-- End creative provider jobs exact verification.

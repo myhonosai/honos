@@ -12,6 +12,7 @@ import {
   type CommunicationWorkerStore,
 } from './communication-worker-database.js';
 import { MissedCallTextBackDispatcher } from './missed-call-text-back.js';
+import { SocialPostDispatcher } from '../../marketing/social/social-post-dispatcher.js';
 
 export interface DispatchSummary {
   claimed: number;
@@ -100,14 +101,15 @@ async function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
 }
 
 /**
- * Optional in-process loop. Off unless HON_COMMUNICATION_WORKER_DATABASE_URL and
+ * Optional in-process loop (communication sends, missed-call text-backs, 0348 school posts). Off unless HON_COMMUNICATION_WORKER_DATABASE_URL and
  * HON_COMMUNICATION_DISPATCH_INTERVAL_SECONDS (15-3600) are both set. One run at a time.
  */
 @Injectable()
 export class CommunicationDispatchScheduler implements OnModuleInit, OnModuleDestroy {
   private timer: NodeJS.Timeout | undefined;
   private running = false;
-  constructor(private readonly dispatcher: CommunicationDispatcher, @Optional() private readonly missedCalls?: MissedCallTextBackDispatcher) {}
+  constructor(private readonly dispatcher: CommunicationDispatcher, @Optional() private readonly missedCalls?: MissedCallTextBackDispatcher,
+    @Optional() private readonly socialPosts?: SocialPostDispatcher) {}
 
   onModuleInit(): void {
     const raw = process.env.HON_COMMUNICATION_DISPATCH_INTERVAL_SECONDS;
@@ -134,6 +136,9 @@ export class CommunicationDispatchScheduler implements OnModuleInit, OnModuleDes
       if (summary.claimed) emitTelemetry('info', 'communication.dispatch_completed', { component: 'communication-dispatch', message: JSON.stringify(summary) });
       const missed = await this.missedCalls?.runOnce();
       if (missed?.claimed) emitTelemetry('info', 'communication.missed_call_text_back_completed', { component: 'communication-dispatch', message: JSON.stringify(missed) });
+      // 0348: approved school posts, only when publishing is READY.
+      const posts = await this.socialPosts?.runOnce();
+      if (posts?.claimed) emitTelemetry('info', 'marketing.social.publish_completed', { component: 'communication-dispatch', message: JSON.stringify(posts) });
     } catch {
       emitTelemetry('error', 'communication.dispatch_failed', { component: 'communication-dispatch' });
     } finally { this.running = false; }

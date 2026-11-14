@@ -49,6 +49,7 @@
     "db:test-saas-invoicing": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-invoicing-integrity.mjs",
     "db:test-saas-creative-wallet": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-creative-wallet-integrity.mjs",
     "db:test-saas-creative-wallet-review-regressions": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-creative-wallet-review-regressions.mjs",
+    "db:test-creative-provider-jobs": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-creative-provider-jobs.mjs",
     "db:test-creative-studio-generations": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-creative-studio-generations.mjs",
     "db:test-saas-credits": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-credits-integrity.mjs",
     "db:test-saas-payments": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-payments-integrity.mjs",
