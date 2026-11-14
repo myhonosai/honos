@@ -3519,6 +3519,109 @@ try {
   pass('INV-38', 'R2: each school may have an internal monthly agent-AI cost ceiling (none by default for a paying school, $15 on a live trial, HQ-owner editable, versioned, idempotent, immutable command log) counted as verified ledger cost plus every counting hold at its plan maximum; HQ reads NO_CEILING/NORMAL/WARNING_75/WARNING_90/CEILING_REACHED per school; at the ceiling new work is refused before any reservation or provider call (HON prepare, specialist begin, readiness, reserve guard) as AI_PAUSED_BY_HQ while other schools are unaffected and a raised ceiling restores it at once; an HQ single-school pause covers agent and creative AI; only the HQ command and read reach the runtime');
   }
 
+  // ---- INV-43 (0353): AI on a free HQ access exception only under an HQ-owner monthly dollar limit ----
+  {
+  const o = await makeOrg('inv-43', { orgCeiling: null }), plain = await makeOrg('inv-43-plain', { orgCeiling: null });
+  const scopeOf = (z) => ({ organizationId: z.id, schoolId: z.school, principalId: z.principal, externalSubject: z.subject });
+  const conversations = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const convs = new Map();
+  const ask = async (z = o) => {
+    if (!convs.has(z.id)) convs.set(z.id, (await conversations.create(scopeOf(z), { title: 'Exception AI' }, K())).id);
+    const r = await settle(conversations.sendTurn(scopeOf(z), convs.get(z.id), { text: `Exception question ${K()}`, delegation: null }, K()));
+    if (r.error?.getResponse?.().code === 'HON_AI_SPEND_REFUSED') return { refused: r.error.getResponse().reason };
+    if (r.error) throw r.error;
+    return row('SELECT status, reason FROM hon.hon_reply_invocations WHERE turn_id=$1', [r.value.turnId]);
+  };
+  const explicit = async (z = o, cls = 'AGENT_INFERENCE', school = z.school) => (await row('SELECT hon.ai_spend_allowed($1,$2::uuid,clock_timestamp(),$3) d', [z.id, school, cls])).d;
+  const cmdSql = 'SELECT hon.command_ai_exception_school_allowance($1,$2::jsonb,$3::uuid) r';
+  const input = (patch = {}, z = o) => ({ schoolId: z.school, ceilingMicros: 25000000, reason: 'Synthetic exception AI limit', expectedVersion: 0, ...patch });
+  const command = async (body, key = K(), subject = hq.subject) => (await admin.query(cmdSql, [subject, JSON.stringify(body), key])).rows[0].r;
+  const errCode = async (p) => { const r = await settle(p); return r.error ? `${r.error.code}:${r.error.message}` : 'OK'; };
+  const read = async () => (await row('SELECT hon.read_ai_exception_school_allowances_from_hq($1) r', [hq.subject])).r;
+  const entry = async (z = o) => (await read()).schools.find((s) => s.schoolId === z.school);
+  const spendCost = (micros, z = o) => admin.query("INSERT INTO hon.ai_usage_ledger(organization_id,school_id,provider_code,model_code,modality,customer_credits,provider_cost_microunits,correlation_id,spend_class) VALUES($1,$2,'OPENROUTER','ai0-exception-cost','TEXT',0,$3,$4,'AGENT_INFERENCE')", [z.id, z.school, micros, K()]);
+  // 1. A live COMPLETE exception without a limit: no AI (AI-D1 unchanged), HQ sees the school with no limit and the $25 suggestion.
+  for (const z of [o, plain]) { await admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [z.id]); await grantFor(z, 'COMPLETE', 86_400_000); }
+  assert.equal(await explicit(), 'AI_EXCEPTION_NO_AI');
+  assert.deepEqual(await ask(), { refused: 'AI_EXCEPTION_NO_AI' });
+  let e = await entry();
+  assert.deepEqual([e.ceilingMicros, e.aiAllowed, e.version, e.exceptionLive, e.level], [null, false, 0, true, 'NO_CEILING']);
+  assert.equal((await read()).defaultCeilingMicros, 25000000);
+  // 2. Only the human HQ owner sets it; then HON answers, while creative media, no-school decisions and another exception school stay refused.
+  assert.equal(await errCode(command(input(), K(), o.subject)), '42501:SAAS_FORBIDDEN');
+  let v = (await command(input())).version;
+  assert.equal(v, 1);
+  assert.equal(await explicit(), null);
+  assert.equal(await explicit(o, 'CREATIVE_MEDIA'), 'AI_EXCEPTION_NO_AI', 'image and video stay off on an exception');
+  assert.equal(await explicit(o, 'AGENT_INFERENCE', null), 'AI_EXCEPTION_NO_AI', 'no school named: still refused');
+  assert.equal(await explicit(o, 'AGENT_INFERENCE', plain.school), 'AI_EXCEPTION_NO_AI', 'another school never borrows the limit');
+  let calls = fakes.hon.calls;
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null });
+  assert.equal(fakes.hon.calls, calls + 1);
+  assert.deepEqual(await ask(plain), { refused: 'AI_EXCEPTION_NO_AI' });
+  e = await entry();
+  assert.deepEqual([e.ceilingMicros, e.aiAllowed, e.version, e.committedCostMicros, e.level, e.reason], [25000000, true, 1, 900, 'NORMAL', 'Synthetic exception AI limit']);
+  // 3. At the limit the next request is refused before any provider call (the R2 ceiling, AI_PAUSED_BY_HQ); raising it restores AI.
+  v = (await command(input({ ceilingMicros: 1000000, expectedVersion: v }))).version;
+  await spendCost(1000000 - 900);
+  assert.equal((await entry()).level, 'CEILING_REACHED');
+  calls = fakes.hon.calls;
+  assert.deepEqual(await ask(), { refused: 'AI_PAUSED_BY_HQ' });
+  assert.equal(fakes.hon.calls, calls, 'no provider call at the limit');
+  v = (await command(input({ ceilingMicros: 25000000, expectedVersion: v }))).version;
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null });
+  // 4. A lower R2 school ceiling (0288) still wins; removing it restores the exception limit.
+  const lim = (patch) => admin.query('SELECT hon.command_ai_school_cost_limit($1,$2::jsonb,$3::uuid) r', [hq.subject, JSON.stringify({ schoolId: o.school, ceilingMicros: 1000, paused: false, reason: 'Synthetic lower R2 ceiling', expectedVersion: 0, ...patch }), K()]);
+  await lim({});
+  assert.equal(await explicit(), 'AI_PAUSED_BY_HQ');
+  await lim({ ceilingMicros: 1000000000, expectedVersion: 1 });
+  assert.equal(await explicit(), null);
+  // 5. Clearing returns the school to no AI at once, including the reserve guard outside the prepare path.
+  v = (await command(input({ ceilingMicros: null, expectedVersion: v }))).version;
+  assert.equal(await explicit(), 'AI_EXCEPTION_NO_AI');
+  assert.deepEqual(await ask(), { refused: 'AI_EXCEPTION_NO_AI' });
+  e = await entry(); assert.deepEqual([e.ceilingMicros, e.aiAllowed, e.version], [null, false, v]);
+  const raw = await row("SELECT id FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='COMPLETED' LIMIT 1", [o.id]);
+  assert.match(await errCode(admin.query('UPDATE hon.hon_reply_invocations SET reserved_credits=reserved_credits+1 WHERE id=$1', [raw.id])), /AI_EXCEPTION_NO_AI|immutable|IMMUTABLE/);
+  // 6. Ending the exception ends the limit; a new exception never inherits it; setting needs a live exception for this school.
+  v = (await command(input({ expectedVersion: v }))).version;
+  assert.equal(await explicit(), null);
+  const xid = (await row("SELECT id FROM hon.saas_access_exceptions WHERE organization_id=$1 AND status='GRANTED'", [o.id])).id;
+  await schoolBilling.revokeAccessException(hq.subject, xid, { reason: 'Disposable synthetic AI-0 revocation' }, K());
+  // The revoke restores the suspended entitlement (the entitlement gate refuses the school, INV-9); the limit is inert.
+  assert.equal((await row('SELECT status FROM hon.organization_entitlements WHERE organization_id=$1', [o.id])).status, 'SUSPENDED');
+  assert.equal((await row('SELECT hon.ai_exception_allowance_micros($1,$2) m', [o.id, o.school])).m, null);
+  assert.equal(await errCode(command(input({ expectedVersion: v }))), '23514:AI_EXCEPTION_NOT_LIVE');
+  await grantFor(o, 'COMPLETE', 86_400_000);
+  assert.equal(await explicit(), 'AI_EXCEPTION_NO_AI', 'a new exception starts with no AI');
+  e = await entry(); assert.deepEqual([e.ceilingMicros, e.aiAllowed, e.version], [null, false, v]);
+  v = (await command(input({ ceilingMicros: 30000000, expectedVersion: v }))).version;
+  assert.equal(await explicit(), null);
+  // 7. Command shape, versions, idempotency, immutable log and limits.
+  assert.equal(await errCode(command(input({ expectedVersion: v - 1 }))), '40001:SAAS_VERSION_CONFLICT');
+  for (const bad of [{ reason: 'short' }, { ceilingMicros: 999999 }, { ceilingMicros: 1000000001 }, { ceilingMicros: 1500000.5 }, { ceilingMicros: '25' }, { schoolId: 'school' }, { organizationId: o.id }])
+    assert.match(await errCode(command(input({ expectedVersion: v, ...bad }))), /^22023:/, JSON.stringify(bad));
+  assert.equal(await errCode(command(input({ schoolId: K(), expectedVersion: 0 }))), 'P0002:AI_SCHOOL_NOT_FOUND');
+  assert.equal(await errCode(command(input({ ceilingMicros: null }, plain))), '23514:AI_EXCEPTION_ALLOWANCE_NOT_SET');
+  const key = K(), body = input({ ceilingMicros: 20000000, expectedVersion: v });
+  const first = await command(body, key);
+  assert.deepEqual(await command(body, key), { ...first, replayed: true });
+  assert.equal(await errCode(command({ ...body, ceilingMicros: 21000000 }, key)), '23505:AI_EXCEPTION_ALLOWANCE_KEY_REUSED');
+  assert.equal((await row('SELECT count(*)::int n FROM hon.ai_exception_school_allowance_commands WHERE school_id=$1', [o.school])).n, 7);
+  assert.match(await errCode(admin.query('DELETE FROM hon.ai_exception_school_allowance_commands WHERE school_id=$1', [o.school])), /IMMUTABLE/);
+  assert.match(await errCode(admin.query('DELETE FROM hon.ai_exception_school_allowances WHERE school_id=$1', [o.school])), /IMMUTABLE/);
+  assert.match(await errCode(admin.query('UPDATE hon.ai_exception_school_allowances SET ceiling_micros=1000000 WHERE school_id=$1', [o.school])), /IMMUTABLE/, 'only the command bumps the version');
+  // 8. Only the HQ command and read reach the runtime.
+  const acl = await rows(`SELECT p.oid::regprocedure::text f, has_function_privilege($1,p.oid,'EXECUTE') x FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace
+    AND p.proname IN ('command_ai_exception_school_allowance','read_ai_exception_school_allowances_from_hq','ai_exception_allowance_micros','ai_org_spend_allowed_for_school','ai_exception_default_allowance_micros') ORDER BY 1`, [runtimeRole]);
+  assert.deepEqual(acl.map((a) => `${a.f}=${a.x}`), ['hon.ai_exception_allowance_micros(uuid,uuid)=false', 'hon.ai_exception_default_allowance_micros()=false',
+    'hon.ai_org_spend_allowed_for_school(uuid,uuid,timestamp with time zone,text)=false', 'hon.command_ai_exception_school_allowance(text,jsonb,uuid)=true',
+    'hon.read_ai_exception_school_allowances_from_hq(text)=true']);
+  assert.equal((await row("SELECT has_table_privilege($1,'hon.ai_exception_school_allowances','SELECT') OR has_table_privilege($1,'hon.ai_exception_school_allowance_commands','SELECT') x", [runtimeRole])).x, false);
+  pass('INV-43', '0353: a free HQ access exception still grants no AI unless the HQ owner sets a monthly dollar limit ($1-$1,000, $25 suggested) for that exception and its own school; then HON and the AI team answer, the R2 per-school ceiling enforces the limit (the lower of both applies) and refuses at it before any provider call; image/video, other schools and no-school decisions stay refused; clearing, revoking or a new exception returns AI_EXCEPTION_NO_AI at once; HQ-owner only, versioned, idempotent, immutable command log; only the HQ command and read reach the runtime');
+  }
+
   // ---- INV-39 (0310): a paying organization has no organization agent budget ----
   {
   const o = await makeOrg('inv-39', { orgCeiling: null });
