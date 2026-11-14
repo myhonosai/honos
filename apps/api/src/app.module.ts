@@ -131,6 +131,9 @@ import { SchoolSupportController } from './support/school-support.controller.js'
 import { SchoolSupportService } from './support/school-support.service.js';
 import { SchoolSocialController } from './marketing/social/school-social.controller.js';
 import { SchoolSocialService } from './marketing/social/school-social.service.js';
+import { SchoolSocialPostsController } from './marketing/social/school-social-posts.controller.js';
+import { SchoolSocialPostsService } from './marketing/social/school-social-posts.service.js';
+import { SocialPostDispatcher } from './marketing/social/social-post-dispatcher.js';
 import { ZERNIO_SOCIAL_ADAPTER, zernioSocialAdapterFactory } from './marketing/social/zernio-social-adapter.js';
 import { SchoolMembershipListController, SchoolMembershipListHumanUiGuard } from './billing/school-membership-list.controller.js';
 import { SchoolMembershipListService } from './billing/school-membership-list.service.js';
@@ -294,9 +297,14 @@ import { SendGridEmailProvider, SendGridEventWebhookVerifier } from './communica
 import { CommunicationWebhookController, SENDGRID_EVENT_VERIFIER, TWILIO_WEBHOOK_VERIFIER, ZERNIO_LEAD_VERIFIER } from './communication/delivery/communication-webhook.controller.js';
 import { ZernioLeadWebhookVerifier } from './communication/delivery/zernio-lead-webhook.js';
 import { TwilioTextProvider, TwilioWebhookVerifier } from './communication/delivery/twilio-text-provider.js';
-import { TWILIO_SUBACCOUNT_DIRECTORY, WorkerTwilioSubaccountDirectory, type TwilioSubaccountDirectory } from './communication/delivery/twilio-subaccounts.js';
+import { TWILIO_SUBACCOUNT_DIRECTORY, TwilioRestProvisioningClient, twilioSubaccountVaultFromEnvironment, WorkerTwilioSubaccountDirectory, type TwilioSubaccountDirectory } from './communication/delivery/twilio-subaccounts.js';
 import { SchoolMissedCallHqController, SchoolMissedCallsController, SchoolTextSenderHqController, ZernioLeadFormHqController } from './communication/delivery/school-text-sender.controller.js';
 import { MissedCallTextBackDispatcher } from './communication/delivery/missed-call-text-back.js';
+import { SchoolNumberController, SchoolNumberOrderHqController } from './communication/delivery/school-number.controller.js';
+import { SchoolNumberCancelHumanUiGuard, SchoolNumberOrderHumanUiGuard, SchoolNumberReadHumanUiGuard } from './communication/delivery/school-number.guard.js';
+import { SchoolNumberService } from './communication/delivery/school-number.service.js';
+import { SCHOOL_NUMBER_PURCHASE_SETUP, SCHOOL_NUMBER_PURCHASE_STORE, SchoolNumberPurchaseScheduler, SchoolNumberPurchaseWorker } from './communication/delivery/school-number-purchase.js';
+import { TWILIO_NUMBER_CLIENT, TwilioRestNumberClient } from './communication/delivery/twilio-numbers.js';
 import { HqAiProviderController } from './hq/hq-ai-provider.controller.js';
 import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
 import { ZernioIntegrationController, ZernioHumanUiGuard } from './integrations/zernio.controller.js';
@@ -487,6 +495,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolOnboardingController,
     SchoolSupportController,
     SchoolSocialController,
+    SchoolSocialPostsController,
     TuitionPaymentController,
     SchoolPaymentController,
     SchoolPayMethodController,
@@ -513,7 +522,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     A2pPreparationController,
     HqEntitlementController,
     ChampionsSchoolController, ChampionsHqController,
-    SaasSubscriptionGenerationHqController, HqHonController, SaasSubscriptionGenerationSchoolController, SaasScheduleBindingHqController, SaasScheduleBindingSchoolController, SaasPaidReviewHqController, SaasFounderPoolHqController, SaasFounderAvailabilitySchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, CreativeStudioAvatarsController, CreativeStudioAvatarVideosController, CreativeLimitsHqController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, CommunicationWebhookController, SchoolTextSenderHqController, SchoolMissedCallHqController, SchoolMissedCallsController, ZernioLeadFormHqController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqBusinessNumbersController, HqSupportController, HqMarketingController, HqPlanPromotionsController, SchoolPlanPromotionsController, HqCreativeController, AiSpendPauseHqController, AiSchoolCostLimitHqController, AiExceptionAllowanceHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController, HqCommunicationsController, HqContactController, HqProspectsController,
+    SaasSubscriptionGenerationHqController, HqHonController, SaasSubscriptionGenerationSchoolController, SaasScheduleBindingHqController, SaasScheduleBindingSchoolController, SaasPaidReviewHqController, SaasFounderPoolHqController, SaasFounderAvailabilitySchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, CreativeStudioAvatarsController, CreativeStudioAvatarVideosController, CreativeLimitsHqController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, CommunicationWebhookController, SchoolTextSenderHqController, SchoolNumberController, SchoolNumberOrderHqController, SchoolMissedCallHqController, SchoolMissedCallsController, ZernioLeadFormHqController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqBusinessNumbersController, HqSupportController, HqMarketingController, HqPlanPromotionsController, SchoolPlanPromotionsController, HqCreativeController, AiSpendPauseHqController, AiSchoolCostLimitHqController, AiExceptionAllowanceHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController, HqCommunicationsController, HqContactController, HqProspectsController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [BookableStudentsService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard,
@@ -631,6 +640,17 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     { provide: TWILIO_WEBHOOK_VERIFIER, useFactory: () => new TwilioWebhookVerifier() },
     { provide: ZERNIO_LEAD_VERIFIER, useFactory: () => new ZernioLeadWebhookVerifier() },
     { provide: SENDGRID_EVENT_VERIFIER, useFactory: () => new SendGridEventWebhookVerifier() },
+    // T2 (0352): school number search/orders and the HQ-approved purchase worker; every Twilio call is behind
+    // HON_TWILIO_PROVISIONING_APPROVED, and the worker loop also needs HON_SCHOOL_NUMBER_PURCHASE_INTERVAL_SECONDS.
+    { provide: TWILIO_NUMBER_CLIENT, useFactory: () => new TwilioRestNumberClient() },
+    { provide: SCHOOL_NUMBER_PURCHASE_STORE, useExisting: CommunicationWorkerDatabase },
+    { provide: SCHOOL_NUMBER_PURCHASE_SETUP, useFactory: () => ({ provisioning: new TwilioRestProvisioningClient(), vault: () => twilioSubaccountVaultFromEnvironment() }) },
+    SchoolNumberService,
+    SchoolNumberReadHumanUiGuard,
+    SchoolNumberOrderHumanUiGuard,
+    SchoolNumberCancelHumanUiGuard,
+    SchoolNumberPurchaseWorker,
+    SchoolNumberPurchaseScheduler,
     CommunicationDispatcher,
     MissedCallTextBackDispatcher,
     CommunicationDispatchScheduler,
@@ -660,6 +680,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolOnboardingService,
     SchoolSupportService,
     SchoolSocialService,
+    SchoolSocialPostsService,
+    SocialPostDispatcher,
     ClassSeriesService,
     SchoolReportsService,
     SchoolEventService,

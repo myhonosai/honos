@@ -41,6 +41,7 @@ const complete = async (school, claim, sid, n = 1) =>
 
 async function cleanup() {
   await admin.query('BEGIN');
+  await admin.query('ALTER TABLE hon.school_twilio_accounts DISABLE TRIGGER guarded'); // the 0352 guard forbids deletes; the disposable fixture's owner lifts it for cleanup only
   try {
     await admin.query('DELETE FROM hon.audit_events WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.school_text_senders WHERE organization_id = $1', [ids.org]);
@@ -49,6 +50,7 @@ async function cleanup() {
     await admin.query('DELETE FROM hon.users WHERE id = $1', [ids.user]);
     await admin.query('DELETE FROM hon.schools WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.organizations WHERE id = $1', [ids.org]);
+    await admin.query('ALTER TABLE hon.school_twilio_accounts ENABLE TRIGGER guarded');
     await admin.query('COMMIT');
   } catch (error) { await admin.query('ROLLBACK'); throw error; }
 }

@@ -1,3 +1,4 @@
+import type { SchoolNumberPurchaseResult } from './school-number-purchase.js';
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Pool } from 'pg';
 import { runtimePoolOptions } from '../../foundation/runtime-pool-options.js';
@@ -56,6 +57,20 @@ export interface CommunicationWorkerStore {
   recordMissedCallTextBackResult?(missedCallId: string, leaseToken: string, outcome: 'ACCEPTED' | 'RETRYABLE' | 'FAILED' | 'UNKNOWN',
     providerMessageId: string | null): Promise<{ textBackStatus: string; accepted: boolean }>;
   recordZernioLead?(lead: ZernioLeadRecord): Promise<{ outcome: ZernioLeadOutcome; leadId: string | null }>;
+  /** 0348 school posts: lease due targets, record each publish result, and record signed Zernio post/account receipts. */
+  claimSocialPostTargets?(limit: number, leaseSeconds: number): Promise<ClaimedSocialPostTarget[]>;
+  recordSocialPostResult?(targetId: string, leaseToken: string, outcome: 'PUBLISHED' | 'FAILED' | 'UNKNOWN', providerPostId: string | null):
+    Promise<{ status: string; accepted: boolean }>;
+  recordSocialPostEvent?(event: ZernioSocialEventRecord): Promise<{ outcome: 'APPLIED' | 'IGNORED' | 'UNMATCHED' | 'REPLAYED' }>;
+}
+
+export interface ClaimedSocialPostTarget {
+  targetId: string; leaseToken: string; organizationId: string; schoolId: string; platform: 'FACEBOOK' | 'INSTAGRAM';
+  providerAccountId: string; providerProfileId: string | null; text: string; linkUrl: string | null;
+}
+export interface ZernioSocialEventRecord {
+  eventId: string; eventType: 'post.published' | 'post.failed' | 'account.disconnected'; platform: 'FACEBOOK' | 'INSTAGRAM';
+  providerAccountId: string; providerPostId: string | null;
 }
 
 export type ZernioLeadOutcome = 'CREATED' | 'REPLAYED' | 'UNROUTED' | 'INVALID_CONTACT' | 'SCHOOL_INACTIVE' | 'RATE_LIMITED';
@@ -200,6 +215,28 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
     return { outcome: row.outcome, leadId: row.lead_id };
   }
 
+  async claimSocialPostTargets(limit: number, leaseSeconds: number): Promise<ClaimedSocialPostTarget[]> {
+    const rows = await this.query<{ target_id: string; lease_token: string; organization_id: string; school_id: string; platform: 'FACEBOOK' | 'INSTAGRAM';
+      provider_account_id: string; provider_profile_id: string | null; body: string; link_url: string | null }>(
+      'SELECT * FROM hon.claim_school_social_post_targets($1, $2)', [limit, leaseSeconds]);
+    return rows.map((row) => ({ targetId: row.target_id, leaseToken: row.lease_token, organizationId: row.organization_id, schoolId: row.school_id,
+      platform: row.platform, providerAccountId: row.provider_account_id, providerProfileId: row.provider_profile_id, text: row.body, linkUrl: row.link_url }));
+  }
+
+  async recordSocialPostResult(targetId: string, leaseToken: string, outcome: 'PUBLISHED' | 'FAILED' | 'UNKNOWN', providerPostId: string | null) {
+    const row = (await this.query<{ status: string; accepted: boolean }>('SELECT * FROM hon.record_school_social_post_result($1, $2, $3, $4, $5)',
+      [targetId, leaseToken, outcome, outcome === 'PUBLISHED' ? providerPostId : null, outcome === 'FAILED' ? 'PROVIDER_REJECTED' : null]))[0];
+    if (!row) throw new Error('COMMUNICATION_SOCIAL_POST_NOT_RECORDED');
+    return { status: row.status, accepted: row.accepted };
+  }
+
+  async recordSocialPostEvent(event: ZernioSocialEventRecord) {
+    const row = (await this.query<{ outcome: 'APPLIED' | 'IGNORED' | 'UNMATCHED' | 'REPLAYED' }>('SELECT * FROM hon.record_school_social_post_event($1, $2, $3, $4, $5)',
+      [event.eventId, event.eventType, event.platform, event.providerAccountId, event.providerPostId]))[0];
+    if (!row) throw new Error('COMMUNICATION_SOCIAL_EVENT_NOT_RECORDED');
+    return { outcome: row.outcome };
+  }
+
   /** T1 (0351): an ACTIVE school subaccount's sealed token, for webhook signature checks only. */
   async readTwilioWebhookAccount(accountSid: string) {
     const row = (await this.query<{ school_id: string; organization_id: string; sealed_auth_token: string; vault_key_id: string }>(
@@ -233,5 +270,20 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
       [schoolId, claimToken, accountSid, sealedAuthToken, vaultKeyId]))[0];
     if (!row) throw new Error('TWILIO_ACCOUNT_NOT_RECORDED');
     return { accountSid: row.account_sid };
+  }
+
+  /** T2 (0352): approved number orders for ACTIVE, entitled schools, each under a fresh purchase lease. */
+  async claimSchoolNumberPurchases(limit: number, leaseSeconds: number) {
+    const rows = await this.query<{ order_id: string; lease_token: string; school_id: string; organization_id: string; phone_e164: string; attempt: number; outcome_unknown: boolean }>(
+      'SELECT * FROM hon.claim_school_number_purchases($1, $2)', [limit, leaseSeconds]);
+    return rows.map((r) => ({ orderId: r.order_id, leaseToken: r.lease_token, schoolId: r.school_id, organizationId: r.organization_id,
+      phoneE164: r.phone_e164, attempt: r.attempt, outcomeUnknown: r.outcome_unknown }));
+  }
+
+  async recordSchoolNumberPurchase(result: SchoolNumberPurchaseResult) {
+    const row = (await this.query<{ data: { status: string; version: number } }>('SELECT hon.record_school_number_purchase($1, $2, $3, $4, $5, $6, $7) AS data',
+      [result.orderId, result.leaseToken, result.outcome, result.numberSid ?? null, result.serviceSid ?? null, result.accountSid ?? null, result.failureCode ?? null]))[0];
+    if (!row?.data) throw new Error('NUMBER_PURCHASE_NOT_RECORDED');
+    return row.data;
   }
 }

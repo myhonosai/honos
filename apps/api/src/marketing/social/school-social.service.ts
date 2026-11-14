@@ -14,11 +14,12 @@ import { allowedConnectUrl, SocialProviderError, ZERNIO_SOCIAL_ADAPTER, type Zer
 
 export type SchoolSocialContext = MembershipLifecycleContext;
 
-const HUMAN_SETTINGS = "SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_external_subject',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)";
-const LIMITS = "SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='2s'; SET LOCAL log_parameter_max_length_on_error=0";
+export const SOCIAL_HUMAN_SETTINGS = "SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_external_subject',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)";
+export const SOCIAL_LIMITS = "SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='2s'; SET LOCAL log_parameter_max_length_on_error=0";
 const NOTHING = 'Nothing was connected. Try again.';
 
-const ERRORS: Record<string, [string[], (code: string) => HttpException]> = {
+export type SocialErrorTable = Record<string, [string[], (code: string) => HttpException]>;
+const ERRORS: SocialErrorTable = {
   SOCIAL_INVALID: [['22023'], code => new BadRequestException({ code })],
   SOCIAL_FORBIDDEN: [['42501'], code => new ForbiddenException({ code, detail: 'Social account permission at this school is required.' })],
   SOCIAL_CONNECT_STATE_INVALID: [['22023'], code => new BadRequestException({ code, detail: 'This connection link was already used or is not yours. Start again from Social accounts.' })],
@@ -31,10 +32,11 @@ const ERRORS: Record<string, [string[], (code: string) => HttpException]> = {
   SOCIAL_BUSY: [['55P03'], code => new ConflictException({ code, detail: 'The same change is still being processed. Try again shortly with the same key.' })],
   IDEMPOTENCY_KEY_REUSED: [['23505'], code => new ConflictException({ code, detail: 'The idempotency key was already used for a different change.' })],
 };
-function translate(error: unknown): never {
+/** Maps a database refusal to a fixed HTTP answer; `extra` adds the codes of a later piece (0348). Never passes SQL text on. */
+export function translateSocialError(error: unknown, extra: SocialErrorTable = {}): never {
   if (error instanceof HttpException) throw error;
   const sqlState = (error as { code?: string })?.code ?? '', message = (error as { message?: string })?.message ?? '';
-  const known = ERRORS[message];
+  const known = Object.hasOwn(extra, message) ? extra[message] : Object.hasOwn(ERRORS, message) ? ERRORS[message] : undefined;
   if (known && known[0].includes(sqlState)) throw known[1](message);
   if (sqlState === '42501') throw new ForbiddenException({ code: 'SOCIAL_FORBIDDEN' });
   if (['22023', '22P02', '22003'].includes(sqlState)) throw new BadRequestException({ code: 'SOCIAL_INVALID' });
@@ -145,13 +147,13 @@ export class SchoolSocialService {
     call: (client: PoolClient) => Promise<{ rows: { data: Record<string, unknown> }[] }>): Promise<Record<string, unknown>> {
     try {
       const body = async (client: PoolClient) => {
-        await client.query(LIMITS); await client.query(HUMAN_SETTINGS, [context.externalSubject]);
+        await client.query(SOCIAL_LIMITS); await client.query(SOCIAL_HUMAN_SETTINGS, [context.externalSubject]);
         const r = await call(client);
         if (r.rows.length !== 1 || !r.rows[0]?.data || typeof r.rows[0].data !== 'object') throw new Error('Unverified social receipt.');
         return r.rows[0].data;
       };
       return readOnly ? await this.database.withTenantReadOnlyTransaction(context, body) : await this.database.withTenantTransaction(context, body);
-    } catch (error) { return translate(error); }
+    } catch (error) { return translateSocialError(error); }
   }
 
   private assertHuman(context: SchoolSocialContext, command: boolean): void {

@@ -79,12 +79,34 @@ BEGIN
 END;
 $$;
 
+-- 0348 school social posts: lease due post targets, record each publish result, and record signed Zernio post/account
+-- receipts, when 0348 is applied.
+DO $$
+BEGIN
+  IF to_regprocedure('hon.claim_school_social_post_targets(integer,integer)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.claim_school_social_post_targets(integer, integer),
+      hon.record_school_social_post_result(uuid, uuid, text, text, text),
+      hon.record_school_social_post_event(text, text, text, text, text) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 -- 0351 school Twilio subaccounts: claim/complete creation, and the webhook/send/number reads (when applied).
 DO $$
 BEGIN
   IF to_regprocedure('hon.begin_school_twilio_account(uuid,integer)') IS NOT NULL THEN
     GRANT EXECUTE ON FUNCTION hon.begin_school_twilio_account(uuid, integer), hon.complete_school_twilio_account(uuid, uuid, text, text, text),
       hon.read_twilio_webhook_account(text), hon.read_twilio_send_account(uuid, text), hon.twilio_number_in_account(text, text) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
+-- 0352 school number purchases: claim approved orders and record each purchase attempt (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.claim_school_number_purchases(integer,integer)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.claim_school_number_purchases(integer, integer),
+      hon.record_school_number_purchase(uuid, uuid, text, text, text, text, text) TO hon_communication_worker;
   END IF;
 END;
 $$;
