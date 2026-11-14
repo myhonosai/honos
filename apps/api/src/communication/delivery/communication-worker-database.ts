@@ -1,3 +1,4 @@
+import type { SchoolNumberPurchaseResult } from './school-number-purchase.js';
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Pool } from 'pg';
 import { runtimePoolOptions } from '../../foundation/runtime-pool-options.js';
@@ -233,5 +234,20 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
       [schoolId, claimToken, accountSid, sealedAuthToken, vaultKeyId]))[0];
     if (!row) throw new Error('TWILIO_ACCOUNT_NOT_RECORDED');
     return { accountSid: row.account_sid };
+  }
+
+  /** T2 (0352): approved number orders for ACTIVE, entitled schools, each under a fresh purchase lease. */
+  async claimSchoolNumberPurchases(limit: number, leaseSeconds: number) {
+    const rows = await this.query<{ order_id: string; lease_token: string; school_id: string; organization_id: string; phone_e164: string; attempt: number; outcome_unknown: boolean }>(
+      'SELECT * FROM hon.claim_school_number_purchases($1, $2)', [limit, leaseSeconds]);
+    return rows.map((r) => ({ orderId: r.order_id, leaseToken: r.lease_token, schoolId: r.school_id, organizationId: r.organization_id,
+      phoneE164: r.phone_e164, attempt: r.attempt, outcomeUnknown: r.outcome_unknown }));
+  }
+
+  async recordSchoolNumberPurchase(result: SchoolNumberPurchaseResult) {
+    const row = (await this.query<{ data: { status: string; version: number } }>('SELECT hon.record_school_number_purchase($1, $2, $3, $4, $5, $6, $7) AS data',
+      [result.orderId, result.leaseToken, result.outcome, result.numberSid ?? null, result.serviceSid ?? null, result.accountSid ?? null, result.failureCode ?? null]))[0];
+    if (!row?.data) throw new Error('NUMBER_PURCHASE_NOT_RECORDED');
+    return row.data;
   }
 }

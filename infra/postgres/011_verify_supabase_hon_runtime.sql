@@ -3618,3 +3618,27 @@ DO $$ DECLARE f text; BEGIN
   END LOOP;
 END $$;
 -- End school Twilio subaccounts exact verification.
+-- School number orders exact verification (T2 0352): private forced-RLS table, six runtime entry points, worker-only
+-- claim/record and private helpers.
+DO $$ DECLARE f record; BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.school_number_orders'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR has_table_privilege('hon_runtime','hon.school_number_orders','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+    RAISE EXCEPTION 'Unsafe school number order table posture'; END IF;
+  FOR f IN SELECT * FROM (VALUES
+    ('hon.authorize_school_number_search(text)',true),('hon.request_school_number(text,jsonb,text)',true),
+    ('hon.cancel_school_number_order(text,uuid,integer)',true),('hon.read_school_number_orders(text)',true),
+    ('hon.decide_school_number_order_from_hq(text,uuid,text,text,integer)',true),('hon.read_hq_school_number_orders(text,text)',true),
+    ('hon.require_school_sender_manager(text)',false),('hon.claim_school_number_purchases(integer,integer)',false),
+    ('hon.record_school_number_purchase(uuid,uuid,text,text,text,text,text)',false),
+    ('hon.guard_school_number_order()',false),('hon.guard_school_twilio_account()',false)) e(signature,runtime_allowed) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure AND p.prosecdef
+        AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND (owner.rolsuper OR owner.rolbypassrls))
+      OR has_function_privilege('hon_runtime',f.signature::regprocedure,'EXECUTE') IS DISTINCT FROM f.runtime_allowed THEN
+      RAISE EXCEPTION 'Unsafe school number order function: %',f.signature; END IF;
+  END LOOP;
+  -- Both tables keep their guard triggers (no delete, no truncate, forward-only status, fixed school and SID).
+  IF (SELECT count(*) FROM pg_trigger t WHERE NOT t.tgisinternal AND t.tgenabled='O' AND t.tgname IN ('guarded','no_truncate')
+      AND t.tgrelid IN ('hon.school_number_orders'::regclass,'hon.school_twilio_accounts'::regclass)) <> 4 THEN
+    RAISE EXCEPTION 'Unsafe school number order table posture'; END IF;
+END $$;
+-- End school number orders exact verification.

@@ -171,8 +171,8 @@ records a per-school count of accepted emails for HQ visibility only; a school's
 
 - What the school pays: **only its number** (Twilio's monthly number price, at cost unless David decides otherwise).
   Texting and email usage are included in the HON plan; HON pays the provider.
-- Open for David (asked 2026-11-14): whether the one-time A2P brand/campaign fees and the monthly campaign fee count as
-  part of "buying the number" (billed to the school) or are covered by HON.
+- A2P fees, decided by David 2026-11-14 05:35Z ("Split: school pays one-time only"): the school pays the one-time
+  brand and campaign-vetting fees with its number; HON covers the monthly campaign fee. Nothing is charged until piece B.
 - Every cost line is still recorded per school and per month, so HQ sees what each school costs HON. School OWNER sees
   its number charge; HQ sees all lines (entitlement-gated reads).
 - Safety cap on included texting: none is chosen yet; asked David 2026-11-14 (options: no cap, HQ alert only, or a
@@ -187,7 +187,7 @@ records a per-school count of accepted emails for HQ visibility only; a school's
 | T1 | `school_twilio_accounts`, sealed tokens, per-account webhook signature verification, per-subaccount send URL, fake provisioning client, subaccount creation worker step | - |
 | T2 | number search, order, HQ approval, purchase + Messaging Service (fake), release; school + HQ screens | T1 |
 | T3 | A2P draft persistence, HQ submit approval, Trust Hub/brand/campaign (fake), status callbacks, activation into 0248 | T2, 0190 |
-| T4 | cost lines (number charge to school; usage for HQ visibility), safety limit if David picks one, cost reads and screens | T2 |
+| T4 | cost lines (number charge to school; usage for HQ visibility), cost reads and screens; no texting limit (David 2026-11-14 05:34Z) | T2 |
 | E1 | school email sender: fallback from-name/reply-to, own-domain setup + DNS screen (fake SendGrid client) | - |
 | E2 | email cost lines + `hon_school_id` attribution | E1, T4 |
 | B | charging the school, after David's decision | T4, E2, David |
@@ -208,6 +208,21 @@ records a per-school count of accepted emails for HQ visibility only; a school's
 - `SchoolTwilioAccounts.ensure(school)`, `TwilioRestProvisioningClient` (READY only with parent credentials and
   `HON_TWILIO_PROVISIONING_APPROVED=true`) and `FakeTwilioProvisioningClient` exist but no route calls `ensure` yet (T2).
 - Open for T2: the 0248 HQ manual setter must refuse to change the phone or service of a sender that has a subaccount.
+
+## 8b. T2 as built (0352)
+- Orders: REQUESTED (school owner, price = the API's own Twilio quote) -> APPROVED or REJECTED (human HQ owner) ->
+  PURCHASING (worker lease) -> PURCHASED, FAILED or back to APPROVED on RETRY. The owner may cancel before buying starts.
+- Every purchase step reads Twilio before it creates: subaccount, number, Messaging Service, number-in-service.
+- `outcomeUnknown`: set when a step may have acted without a recorded result (lost response, lost lease) or once the
+  number is bought and a later step fails. It is never cleared by RETRY; only PURCHASED, or Twilio refusing the buy right
+  after this attempt found no such number on the subaccount, clears it. Five attempts end FAILED: `RECONCILE_REQUIRED`
+  when `outcomeUnknown`, else `ATTEMPTS_EXHAUSTED`.
+- A FAILED order with `outcomeUnknown` is **unsettled**: it keeps the number reserved and blocks a new order for the
+  school (`NUMBER_ORDER_UNSETTLED`) until HQ reconciles it with Twilio. The HQ reconcile action is a later piece; until
+  then an operator checks the subaccount in Twilio.
+- A bought number becomes the school's 0248 sender as DISABLED. The HQ setter refuses a phone or service change on it
+  (`PROVISIONED_SENDER_LOCKED`) but can still switch it ACTIVE. HQ must not do that before the school's A2P campaign is
+  approved; T3 adds the A2P check to that switch.
 
 ## 9. Security and failure rules
 
@@ -232,7 +247,7 @@ records a per-school count of accepted emails for HQ visibility only; a school's
 
 ## 11. Open questions (defaults used until David says otherwise)
 
-1. A2P fees: school or HON (card asked). Default: recorded, nobody charged.
-2. Safety limit on included texting (card asked). Default: none enforced, costs recorded.
+1. ~~A2P fees.~~ Decided 2026-11-14 05:35Z: school pays the one-time brand and vetting fees; HON pays the monthly campaign fee.
+2. ~~Safety limit on included texting.~~ Decided 2026-11-14 05:34Z: **no limit**. Costs are recorded per school for HQ to see; nothing is capped or paused.
 3. SendGrid plan: stay on current plan, no subusers.
 4. Existing hand-entered 0248 senders: kept; HQ may migrate them into a subaccount later.
