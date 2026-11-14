@@ -12,7 +12,7 @@
     [-0.12,0.22, 0.35,0.62, 0.70,0.04, 1.12,0.44, .22,.40,.50]  // cta/footer
   ];
   var reduce=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var W,H,D,N,SEG,FRAME=0,last=-1e9,strands=[],parts=[],cur=K[0].slice(),A=[200,242,90],B=[98,214,196];
+  var W,H,D,N,SEG,FRAME=0,last=-1e9,strands=[],parts=[],cur=K[0].slice(),A=[91,155,255],B=[232,240,255];
   var mx=.5,my=.5,tmx=.5,tmy=.5,P=[0,0,0,0],Q=[0,0];
   function rnd(a,b){return a+Math.random()*(b-a)}
   function hex(h){h=String(h).trim().replace("#","");if(h.length!==6)return null;return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]}
