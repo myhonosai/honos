@@ -18,8 +18,8 @@ describe('bounded conventional CRM lead list', () => {
     try {
       const html = renderToStaticMarkup(<CrmLeadsWorkbench />);
       expect(fetcher).not.toHaveBeenCalled();
-      expect(html).toContain('Current school CRM leads');
-      expect(html).toContain('No verified school list is loaded.');
+      expect(html).toContain('Enroll a lead');
+      expect(html).toContain('No list loaded yet.');
       expect(html).not.toContain('Ari Stone');
       expect(html).not.toContain('Send message');
       expect(html).not.toContain('Record trial appointment');
@@ -49,8 +49,22 @@ describe('bounded conventional CRM lead list', () => {
       const html = renderToStaticMarkup(<CrmLeadsWorkbench initialScope={{ organizationId, schoolId }} />);
       expect(html).toContain(`value="${organizationId}"`);
       expect(html).toContain(`value="${schoolId}"`);
-      expect(html).toContain('No verified school list is loaded.');
+      expect(html).toContain('No list loaded yet.');
       expect(fetcher).not.toHaveBeenCalled();
+    } finally { fetcher.mockRestore(); }
+  });
+
+  it('with the school from the session asks for no IDs and loads that school once on mount', () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch');
+    try {
+      const html = renderToStaticMarkup(<CrmLeadsWorkbench initialScope={{ organizationId, schoolId, fromSession: true }} />);
+      expect(html).not.toContain('Organization UUID'); expect(html).not.toContain('School UUID');
+      expect(html).toContain('Your leads'); expect(html).toContain('Refresh list');
+      expect(html).not.toContain(organizationId);
+      // Server rendering runs no effect: the read happens only in the browser, through the same verified list route.
+      expect(fetcher).not.toHaveBeenCalled();
+      const source = readFileSync('src/components/crm-leads-workbench.tsx', 'utf8');
+      expect(source).toMatch(/useEffect\(\(\) => \{ if \(fromSession && organizationId && schoolId\) void load\(/);
     } finally { fetcher.mockRestore(); }
   });
 
@@ -78,7 +92,7 @@ describe('bounded conventional CRM lead list', () => {
     const commandCenter = readFileSync('src/components/school-command-center.tsx', 'utf8');
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
     expect(source).toContain('Prepare trial appointment');
-    expect(source).toContain('does not load or create an appointment');
+    expect(source).toContain('trialHref(organizationId, schoolId, lead.id)');
     expect(source).not.toMatch(/localStorage|sessionStorage|invokeLLM|sendMessage|executeAction|fetch\(/);
     expect(trial).toContain('initialScope');
     expect(trialRoute).toContain("dynamic = 'force-dynamic'");

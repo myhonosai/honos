@@ -8,6 +8,7 @@ import { membershipActivationPath, type KnownMembership } from './membership-act
 import { useLocale } from './localization/provider';
 import { membershipJourneyText } from './crm-membership-journey-copy';
 import styles from './crm-membership-journey.module.css';
+import { useSchoolShell } from './school-shell/context';
 
 /** A local navigation handoff. Its selectors carry no record, receipt or activation authority. */
 export function CrmMembershipJourney({ sessionSubject, initialScope = {} }: { sessionSubject?: string; initialScope?: CrmLeadsInitialScope }): React.ReactElement {
@@ -18,6 +19,12 @@ export function CrmMembershipJourney({ sessionSubject, initialScope = {} }: { se
   const t = (key: Parameters<typeof membershipJourneyText>[1]) => membershipJourneyText(preferences?.language, key);
   const session = sessionSubject === undefined ? {} : { sessionSubject };
   const current = instance;
+  // With no school in the address, use the school the shell verified for this session (a navigation selector only:
+  // every read below re-authorizes on the server).
+  const shell = useSchoolShell();
+  const shellSchool = !initialScope.organizationId && !initialScope.schoolId && shell.phase === 'READY' && shell.selection ? shell.selection : null;
+  const scope: CrmLeadsInitialScope = shellSchool ? { organizationId: shellSchool.organizationId, schoolId: shellSchool.schoolId, fromSession: true } : initialScope;
+  const scopeKey = shellSchool ? `${shellSchool.organizationId}:${shellSchool.schoolId}` : 'url';
   function review(input: KnownMembership): void {
     if (navigation.current.instance !== current || navigation.current.selection) return;
     // Reuse the existing destination's pure selector validation, without performing a read.
@@ -43,6 +50,6 @@ export function CrmMembershipJourney({ sessionSubject, initialScope = {} }: { se
     <aside className={styles.progress} aria-label={t('title')}><ol><li aria-current={!selection ? 'step' : undefined}>{t('registration')}</li><li aria-current={selection && stage === 'activation' ? 'step' : undefined}>{t('activation')}</li><li aria-current={selection && stage === 'dates' ? 'step' : undefined}>{t('dates')}</li></ol><p>{t('note')}</p></aside>
     {selection ? stage === 'dates' ? <MembershipDatesWorkbench key={`dates:${current}:${selection.organizationId}:${selection.schoolId}:${selection.membershipId}`} {...session} initialMembership={selection} onReturn={returnToActivation} onAbandon={returnToCrm} />
       : <MembershipActivationWorkbench key={`activation:${current}:${selection.organizationId}:${selection.schoolId}:${selection.membershipId}`} {...session} initialMembership={selection} onReturn={returnToCrm} onManageDates={manageDates} />
-      : <CrmLeadsWorkbench key={`crm:${current}`} {...session} initialScope={initialScope} onMembershipReview={review} />}
+      : <CrmLeadsWorkbench key={`crm:${current}:${scopeKey}`} {...session} initialScope={scope} onMembershipReview={review} />}
   </>;
 }

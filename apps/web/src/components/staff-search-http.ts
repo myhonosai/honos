@@ -27,9 +27,9 @@ export function safeSearchResults(value: unknown, org: string, school: string): 
   return cards;
 }
 export function searchFailure(status: number): string {
-  if (status === 401) return 'Sign in with a verified staff session, then search again.';
-  if (status === 403) return 'Search is not authorized for this school. Ask your administrator about search.global access; no plan upgrade is needed.';
-  if (status === 400) return 'Enter 1–120 characters and select known result types.';
-  if (status === 404) return 'This scoped record is no longer available.';
-  return 'Search is temporarily unavailable. No changes were made; try again.';
+  if (status === 401) return 'Your session ended. Sign in again, then search.';
+  if (status === 403) return 'Your role does not include search at this school. Ask a school owner to add it (no plan upgrade is needed).';
+  if (status === 400) return 'Type up to 120 characters and keep at least one type ticked.';
+  if (status === 404) return 'This record is no longer available.';
+  return 'Search is not available right now. Nothing was changed; try again in a moment.';
 }
