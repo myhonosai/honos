@@ -93,6 +93,28 @@ Changes to 0216 behaviour (replacement bodies in 0354):
   still `PERMITTED` (no provider job id yet, so only the API knows what happened), the requester may record NOT_SENT,
   FAILED or UNKNOWN, but never SUCCEEDED or INTERRUPTED, and the job closes as `RECORDED`. So only the worker (`true`) records a submitted job.
 
+## 3b. Self-review corrections (before the PR)
+
+- **The permit re-decides at the live clock**, under the creative pause gate. It checks the requester's exact-school
+  authority, the S4 / per-school `CREATIVE_MEDIA` decision and creative eligibility. Only a generation created
+  within the last 120 seconds can be permitted (`CREATIVE_GENERATION_STALE`); an abandoned one is recorded
+  INTERRUPTED and never sent.
+- **A real result needs a permit.** A runtime SUCCEEDED for a generation with no provider job is accepted only when the
+  server's model code is `synthetic-*`, the synchronous test runtimes. Otherwise it is refused with
+  `CREATIVE_PROVIDER_PERMIT_REQUIRED`, so the daily provider limit cannot be skipped.
+- **Results recorded through a job are `PROVIDER` assets**; the synthetic path stays `SYNTHETIC`. The asset origin
+  check allows both.
+- **A provider answer that cannot be recorded is kept on the job** (`provider_result`) and shown in the HQ list for
+  the resolution. This covers a requester who is gone and a reservation finished elsewhere.
+- **Only those two cases close a job without settling.** Any other refusal propagates. One job's refusal in the
+  deadline sweep never blocks the other timeouts or the leases.
+- `avatar.create` is not counted in the daily image cap, because it keeps its own 12-avatar limit.
+- Web: the three new pre-acceptance refusals show as refusals ("nothing reserved"), not as unknown outcomes, in
+  EN/KO/ES.
+
+Known limit: a `REQUESTER_UNAVAILABLE` reservation still counts toward the school's 3-in-progress cap until the HQ
+owner resolves it. It is listed in the HQ read for that reason.
+
 ## 4. API (C1b, next PR)
 
 C1a already maps the new refusals in `SaasBillingService`: `CREATIVE_DAILY_LIMIT_REACHED`, `CREATIVE_PROVIDER_DAILY_LIMIT` and
@@ -117,7 +139,7 @@ C1a already maps the new refusals in `SaasBillingService`: `CREATIVE_DAILY_LIMIT
 
 ## 5. Tests
 
-C1a ran: `test-creative-provider-jobs.mjs` J1-J11 pass 11/11. The CS1, A1, A2, HQ Creative Studio and CW1 review
+C1a ran: `test-creative-provider-jobs.mjs` J1-J12 pass 12/12. The CS1, A1, A2, HQ Creative Studio and CW1 review
 regression proofs pass unchanged. `pnpm test`, `pnpm check` and the staging pins test pass.
 The HQ read also lists `requesterUnavailable` jobs whose reservation is still RESERVED, so HQ can resolve them.
 

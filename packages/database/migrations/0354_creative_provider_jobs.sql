@@ -15,6 +15,7 @@ BEGIN;
 --
 -- Daily caps (proposal, HQ editable per school): 50 images, 12 videos, 10 avatar videos per UTC day, counted on
 -- generations that were not refunded (NOT_SENT / PROVIDER_FAILED), checked on insert under the school's wallet lock.
+-- avatar.create keeps only its own 12-avatar limit (0276).
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND (rolsuper OR rolbypassrls)
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN
@@ -108,6 +109,9 @@ CREATE TABLE hon.creative_provider_jobs (
   closed_at timestamptz,
   -- Integration source of the close: the requester's own API request, the worker's leased poll, or the deadline sweep.
   closed_by text CHECK (closed_by IN ('REQUESTER','WORKER','DEADLINE')),
+  -- The provider's final answer when it could not be recorded (requester gone, or the reservation finished elsewhere):
+  -- kept as evidence for the HQ resolution so paid output is never lost. Same closed shape as a 0216 outcome.
+  provider_result jsonb CHECK (provider_result IS NULL OR jsonb_typeof(provider_result) = 'object'),
   version integer NOT NULL CHECK (version >= 1),
   UNIQUE (provider_id, provider_job_id),
   FOREIGN KEY (generation_id, school_id) REFERENCES hon.creative_generations(id, school_id) ON DELETE RESTRICT,
@@ -117,7 +121,8 @@ CREATE TABLE hon.creative_provider_jobs (
   CHECK ((lease_token IS NULL) = (lease_expires_at IS NULL)),
   CHECK (lease_token IS NULL OR status = 'SUBMITTED'),
   CHECK ((closed_at IS NULL) = (status IN ('PERMITTED','SUBMITTED'))),
-  CHECK ((closed_by IS NULL) = (closed_at IS NULL))
+  CHECK ((closed_by IS NULL) = (closed_at IS NULL)),
+  CHECK (provider_result IS NULL OR status IN ('REQUESTER_UNAVAILABLE','RESOLVED_ELSEWHERE'))
 );
 CREATE INDEX creative_provider_jobs_open ON hon.creative_provider_jobs (deadline_at) WHERE status IN ('PERMITTED','SUBMITTED');
 CREATE INDEX creative_provider_jobs_due ON hon.creative_provider_jobs (next_poll_at) WHERE status = 'SUBMITTED';
@@ -128,8 +133,8 @@ CREATE FUNCTION hon.guard_creative_provider_job() RETURNS trigger LANGUAGE plpgs
 DECLARE fixed text[] := ARRAY['id','generation_id','school_id','organization_id','provider_id','worst_case_micros','permitted_at','deadline_at'];
 BEGIN
   IF TG_OP = 'UPDATE' AND NEW.version = OLD.version + 1
-    AND (to_jsonb(NEW) - ARRAY['provider_job_id','status','submitted_at','next_poll_at','poll_count','lease_token','lease_expires_at','closed_at','closed_by','version'])
-      = (to_jsonb(OLD) - ARRAY['provider_job_id','status','submitted_at','next_poll_at','poll_count','lease_token','lease_expires_at','closed_at','closed_by','version'])
+    AND (to_jsonb(NEW) - ARRAY['provider_job_id','status','submitted_at','next_poll_at','poll_count','lease_token','lease_expires_at','closed_at','closed_by','provider_result','version'])
+      = (to_jsonb(OLD) - ARRAY['provider_job_id','status','submitted_at','next_poll_at','poll_count','lease_token','lease_expires_at','closed_at','closed_by','provider_result','version'])
     AND (OLD.provider_job_id IS NULL OR NEW.provider_job_id = OLD.provider_job_id)
     AND (OLD.submitted_at IS NULL OR NEW.submitted_at = OLD.submitted_at)
     AND NEW.poll_count >= OLD.poll_count
@@ -142,9 +147,21 @@ END $$;
 CREATE TRIGGER creative_provider_job_guarded BEFORE UPDATE OR DELETE ON hon.creative_provider_jobs FOR EACH ROW EXECUTE FUNCTION hon.guard_creative_provider_job();
 CREATE TRIGGER creative_provider_job_no_truncate BEFORE TRUNCATE ON hon.creative_provider_jobs FOR EACH STATEMENT EXECUTE FUNCTION hon.guard_creative_limit_commands();
 
+-- ---------- real provider results ----------
+-- Assets recorded through a provider job are PROVIDER results; the synchronous synthetic path stays SYNTHETIC.
+DO $$ DECLARE c text; BEGIN
+  SELECT conname INTO c FROM pg_constraint WHERE conrelid = 'hon.creative_generation_assets'::regclass AND contype = 'c'
+    AND pg_get_constraintdef(oid) LIKE '%origin%SYNTHETIC%';
+  IF c IS NULL THEN RAISE EXCEPTION 'creative_generation_assets origin check not found'; END IF;
+  EXECUTE format('ALTER TABLE hon.creative_generation_assets DROP CONSTRAINT %I', c);
+END $$;
+ALTER TABLE hon.creative_generation_assets ADD CONSTRAINT creative_generation_assets_origin CHECK (origin IN ('SYNTHETIC','PROVIDER'));
+
 -- ---------- daily caps on generations ----------
 CREATE FUNCTION hon.creative_cap_class(p_operation text, p_media text) RETURNS text LANGUAGE sql IMMUTABLE SET search_path = pg_catalog AS $$
-  SELECT CASE WHEN p_media = 'VIDEO' AND p_operation LIKE 'avatar.%' THEN 'AVATAR_VIDEO' WHEN p_media = 'VIDEO' THEN 'VIDEO' ELSE 'IMAGE' END
+  -- avatar.create has its own 12-avatar limit (0276) and is not counted here (NULL = no daily class).
+  SELECT CASE WHEN p_operation = 'avatar.create' THEN NULL WHEN p_media = 'VIDEO' AND p_operation LIKE 'avatar.%' THEN 'AVATAR_VIDEO'
+    WHEN p_media = 'VIDEO' THEN 'VIDEO' ELSE 'IMAGE' END
 $$;
 CREATE FUNCTION hon.creative_utc_day(p_at timestamptz) RETURNS tstzrange LANGUAGE sql IMMUTABLE SET search_path = pg_catalog AS $$
   SELECT tstzrange(date_trunc('day', p_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC', (date_trunc('day', p_at AT TIME ZONE 'UTC') + interval '1 day') AT TIME ZONE 'UTC', '[)')
@@ -158,6 +175,7 @@ $$;
 CREATE FUNCTION hon.guard_creative_generation_daily_cap() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, hon AS $$
 DECLARE cls text := hon.creative_cap_class(NEW.operation_code, NEW.media_kind); used integer; day tstzrange := hon.creative_utc_day(NEW.created_at);
 BEGIN
+  IF cls IS NULL THEN RETURN NEW; END IF;
   SELECT count(*) INTO used FROM hon.creative_generations g
    WHERE g.school_id = NEW.school_id AND g.created_at >= lower(day) AND g.created_at < upper(day)
      AND g.phase NOT IN ('NOT_SENT','PROVIDER_FAILED') AND hon.creative_cap_class(g.operation_code, g.media_kind) = cls;
@@ -189,12 +207,26 @@ $$;
 CREATE FUNCTION hon.begin_creative_provider_submission(p_subject text, p_generation uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
 DECLARE g hon.creative_generations%ROWTYPE; r hon.saas_creative_reservations%ROWTYPE; j hon.creative_provider_jobs%ROWTYPE;
-  lim hon.creative_provider_daily_limits%ROWTYPE; at timestamptz; worst bigint;
+  lim hon.creative_provider_daily_limits%ROWTYPE; at timestamptz; worst bigint; again record; why text; e jsonb;
 BEGIN
   IF p_generation IS NULL THEN RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE = '22023'; END IF;
   SELECT * INTO g FROM hon.creative_generations WHERE id = p_generation;
   IF NOT FOUND THEN RAISE EXCEPTION 'SAAS_UNAVAILABLE' USING ERRCODE = 'P0002'; END IF;
   PERFORM hon.saas_creative_evidence_actor(p_subject, g.requested_by_principal_id);
+  -- A permit is the last decision before money leaves HON, so everything the create decided is decided again at the
+  -- live clock, under the creative pause gate (shared; an HQ pause waits for it): the requester's exact-school
+  -- authority, the S4 / per-school CREATIVE_MEDIA spend decision and creative eligibility. Only a fresh generation
+  -- (created within 120 seconds, the 0216 INTERRUPTED window) can be permitted, so an abandoned one never reaches a
+  -- provider later; it is recorded INTERRUPTED instead.
+  PERFORM hon.saas_creative_pause_gate(g.organization_id);
+  SELECT * INTO again FROM hon.require_saas_school_actor(p_subject, g.school_id) LIMIT 1;
+  IF again.principal_id IS DISTINCT FROM g.requested_by_principal_id THEN RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE = '42501'; END IF;
+  at := clock_timestamp();
+  IF at > g.created_at + interval '120 seconds' THEN RAISE EXCEPTION 'CREATIVE_GENERATION_STALE' USING ERRCODE = '40001'; END IF;
+  why := hon.ai_spend_allowed(g.organization_id, g.school_id, at, 'CREATIVE_MEDIA');
+  IF why IS NOT NULL THEN RAISE EXCEPTION '%', 'SAAS_CREATIVE_' || why USING ERRCODE = '23514'; END IF;
+  e := hon.saas_creative_eligibility(g.school_id, at);
+  IF NOT (e->>'eligible')::boolean THEN RAISE EXCEPTION '%', 'SAAS_CREATIVE_' || (e->>'reason') USING ERRCODE = '23514'; END IF;
   SELECT * INTO r FROM hon.saas_creative_reservations WHERE id = g.reservation_id AND school_id = g.school_id;
   SELECT * INTO lim FROM hon.creative_provider_daily_limits WHERE provider_id = r.provider_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'CREATIVE_PROVIDER_LIMIT_NOT_SET' USING ERRCODE = '23514'; END IF;
@@ -228,11 +260,11 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'SAAS_UNAVAILABLE' USING ERRCODE = 'P0002'; END IF;
   IF j.provider_job_id IS NOT NULL THEN
     IF j.provider_job_id = p_provider_job_id THEN RETURN hon.creative_provider_job_json(j) || jsonb_build_object('replayed', true); END IF;
-    RAISE EXCEPTION 'CREATIVE_PROVIDER_JOB_MISMATCH' USING ERRCODE = '23505';
+    RAISE EXCEPTION 'CREATIVE_PROVIDER_JOB_MISMATCH' USING ERRCODE = '40001';
   END IF;
   IF j.status <> 'PERMITTED' THEN RAISE EXCEPTION 'SAAS_TRANSITION_NOT_ALLOWED' USING ERRCODE = '40001'; END IF;
   IF EXISTS (SELECT 1 FROM hon.creative_provider_jobs x WHERE x.provider_id = j.provider_id AND x.provider_job_id = p_provider_job_id) THEN
-    RAISE EXCEPTION 'CREATIVE_PROVIDER_JOB_MISMATCH' USING ERRCODE = '23505';
+    RAISE EXCEPTION 'CREATIVE_PROVIDER_JOB_MISMATCH' USING ERRCODE = '40001';
   END IF;
   UPDATE hon.creative_provider_jobs SET status = 'SUBMITTED', provider_job_id = p_provider_job_id, submitted_at = at,
       next_poll_at = at + interval '10 seconds', version = version + 1
@@ -280,6 +312,11 @@ BEGIN
     END IF;
   ELSIF p_job_status IS NOT NULL THEN
     RAISE EXCEPTION 'SAAS_UNAVAILABLE' USING ERRCODE = 'P0002';
+  ELSIF outcome = 'SUCCEEDED' AND NOT EXISTS (SELECT 1 FROM hon.saas_creative_reservations x WHERE x.id = g.reservation_id AND x.school_id = g.school_id
+      AND x.model_code ~ '^synthetic-') THEN
+    -- A real provider result is recorded only through a provider job, so the HQ daily provider limit can never be
+    -- skipped. The synchronous path stays for the server's synthetic runtimes (model codes synthetic-*).
+    RAISE EXCEPTION 'CREATIVE_PROVIDER_PERMIT_REQUIRED' USING ERRCODE = '40001';
   END IF;
   IF reason = 'INTERRUPTED' AND clock_timestamp() < g.created_at + interval '120 seconds' THEN
     RAISE EXCEPTION 'CREATIVE_GENERATION_IN_PROGRESS' USING ERRCODE = '40001';
@@ -330,7 +367,8 @@ BEGIN
     FOR a IN SELECT x FROM jsonb_array_elements(p->'assets') x LOOP
       i := i + 1;
       INSERT INTO hon.creative_generation_assets(generation_id, school_id, ordinal, media_type, width, height, duration_seconds, origin, provider_asset_reference, created_at)
-        VALUES (g.id, g.school_id, i, a->>'mediaType', (a->>'width')::integer, (a->>'height')::integer, (a->>'durationSeconds')::integer, 'SYNTHETIC',
+        VALUES (g.id, g.school_id, i, a->>'mediaType', (a->>'width')::integer, (a->>'height')::integer, (a->>'durationSeconds')::integer,
+          CASE WHEN p_job_status IS NULL THEN 'SYNTHETIC' ELSE 'PROVIDER' END,
           a->>'providerAssetReference', at);
     END LOOP;
   END IF;
@@ -353,26 +391,30 @@ CREATE FUNCTION hon.creative_requester_subject(p_principal uuid) RETURNS text LA
      AND (SELECT count(*) FROM hon.principals o WHERE o.user_id = u.id AND o.is_active) = 1
 $$;
 
--- Close one open job through the 0216 rules with the given outcome; a requester who is no longer usable, or a
--- reservation already finished elsewhere (HQ resolution), closes the job without settling anything.
+-- Close one open job through the 0216 rules with the given outcome. A requester who is no longer usable, or a reservation
+-- already finished elsewhere (an HQ resolution, possibly racing this close), closes the job without settling anything and
+-- keeps the provider's answer on the job as evidence for HQ. Any other refusal propagates (nothing is hidden).
 CREATE FUNCTION hon.creative_close_provider_job(j hon.creative_provider_jobs, p jsonb, p_status text) RETURNS text
 LANGUAGE plpgsql VOLATILE SET search_path = pg_catalog, hon AS $$
-DECLARE g hon.creative_generations%ROWTYPE; r hon.saas_creative_reservations%ROWTYPE; subject text; final text;
+DECLARE g hon.creative_generations%ROWTYPE; r_status text; subject text; final text;
 BEGIN
   SELECT * INTO g FROM hon.creative_generations WHERE id = j.generation_id AND school_id = j.school_id;
-  SELECT * INTO r FROM hon.saas_creative_reservations WHERE id = g.reservation_id AND school_id = g.school_id;
+  SELECT status INTO r_status FROM hon.saas_creative_reservations WHERE id = g.reservation_id AND school_id = g.school_id;
   subject := hon.creative_requester_subject(g.requested_by_principal_id);
-  IF g.phase <> 'SUBMITTING' OR r.status <> 'RESERVED' THEN final := 'RESOLVED_ELSEWHERE';
+  IF g.phase <> 'SUBMITTING' OR r_status <> 'RESERVED' THEN final := 'RESOLVED_ELSEWHERE';
   ELSIF subject IS NULL THEN final := 'REQUESTER_UNAVAILABLE';
   ELSE
     BEGIN
       PERFORM hon.creative_record_generation_result(subject, g.id, p, p_status);
       RETURN p_status;
-    EXCEPTION WHEN insufficient_privilege THEN final := 'REQUESTER_UNAVAILABLE';
+    EXCEPTION WHEN serialization_failure THEN
+      SELECT status INTO r_status FROM hon.saas_creative_reservations WHERE id = g.reservation_id AND school_id = g.school_id;
+      IF r_status = 'RESERVED' THEN RAISE; END IF;
+      final := 'RESOLVED_ELSEWHERE';
     END;
   END IF;
   UPDATE hon.creative_provider_jobs SET status = final, lease_token = NULL, lease_expires_at = NULL, closed_at = clock_timestamp(),
-      closed_by = CASE WHEN p_status = 'TIMED_OUT' THEN 'DEADLINE' ELSE 'WORKER' END, version = version + 1
+      closed_by = CASE WHEN p_status = 'TIMED_OUT' THEN 'DEADLINE' ELSE 'WORKER' END, provider_result = p, version = version + 1
     WHERE id = j.id AND status IN ('PERMITTED','SUBMITTED');
   RETURN final;
 END $$;
@@ -391,8 +433,12 @@ BEGIN
   END IF;
   FOR j IN SELECT * FROM hon.creative_provider_jobs x WHERE x.status IN ('PERMITTED','SUBMITTED') AND x.deadline_at <= at
       AND (x.lease_expires_at IS NULL OR x.lease_expires_at <= at) ORDER BY x.deadline_at, x.id LIMIT 100 FOR UPDATE SKIP LOCKED LOOP
-    PERFORM hon.creative_close_provider_job(j, jsonb_build_object('outcome','UNKNOWN','finalUnits',NULL,'providerCostMicrounits',NULL,
-      'failureReason','PROVIDER_UNKNOWN','assets',NULL), 'TIMED_OUT');
+    -- One job's refusal never blocks the sweep or the leases: it is left for the next claim.
+    BEGIN
+      PERFORM hon.creative_close_provider_job(j, jsonb_build_object('outcome','UNKNOWN','finalUnits',NULL,'providerCostMicrounits',NULL,
+        'failureReason','PROVIDER_UNKNOWN','assets',NULL), 'TIMED_OUT');
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
   END LOOP;
   FOR j IN SELECT * FROM hon.creative_provider_jobs x WHERE x.status = 'SUBMITTED' AND x.next_poll_at <= at AND x.deadline_at > at
       AND (x.lease_expires_at IS NULL OR x.lease_expires_at <= at) ORDER BY x.next_poll_at, x.id LIMIT p_limit FOR UPDATE SKIP LOCKED LOOP
@@ -545,8 +591,8 @@ BEGIN
     -- Jobs whose requester was gone when the result came: the reservation is still RESERVED and the HQ owner resolves it
     -- with evidence through the existing CW1 command (resolve_saas_creative_reservation_from_hq accepts RESERVED).
     'requesterUnavailable', (SELECT coalesce(jsonb_agg(jsonb_build_object('jobId', x.id, 'schoolId', x.school_id, 'reservationId', x.reservation_id,
-        'providerId', x.provider_id, 'closedAt', hon.saas_ts(x.closed_at)) ORDER BY x.closed_at, x.id), '[]'::jsonb)
-      FROM (SELECT j.id, j.school_id, g.reservation_id, j.provider_id, j.closed_at FROM hon.creative_provider_jobs j
+        'providerId', x.provider_id, 'closedAt', hon.saas_ts(x.closed_at), 'providerResult', x.provider_result) ORDER BY x.closed_at, x.id), '[]'::jsonb)
+      FROM (SELECT j.id, j.school_id, g.reservation_id, j.provider_id, j.closed_at, j.provider_result FROM hon.creative_provider_jobs j
           JOIN hon.creative_generations g ON g.id = j.generation_id AND g.school_id = j.school_id
           JOIN hon.saas_creative_reservations r ON r.id = g.reservation_id AND r.school_id = g.school_id
          WHERE j.status = 'REQUESTER_UNAVAILABLE' AND r.status = 'RESERVED' ORDER BY j.closed_at, j.id LIMIT 100) x),

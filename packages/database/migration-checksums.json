@@ -288,6 +288,6 @@
     "0324_hon_os_schedule_renewals_suspension.sql": "6348290ebb2786e32489e2119be51300d6e12ba8e16a3f50e1f50d8e0c967cbe",
     "0347_school_social_connections.sql": "3375d997e29ac054c358c94a721473dba99634ad90c1e5ff23dfbb3fd3f7cd79",
     "0351_school_twilio_subaccounts.sql": "ff9bca68045b9d5f593c56faa97d0cff5c0d408d9f2cbe97287514fda2f25f88",
-    "0354_creative_provider_jobs.sql": "9b68c89f38c3d740ea7f8a653b0b3d36e41a4b2b703ae7620ae00fd62e950080"
+    "0354_creative_provider_jobs.sql": "ebfdba128f6009bcac502064784f5c12f27a5dc173dd8a46cc93b741d3a89cc0"
   }
 }

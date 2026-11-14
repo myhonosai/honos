@@ -267,6 +267,7 @@ try{
   await refuse(result(j.id,c.lease_token,interrupted),'INVALID_SAAS_INPUT');
   const r=await result(j.id,c.lease_token,success(1));
   assert.equal(r.status,'RECORDED');
+  assert.deepEqual((await admin.query('SELECT origin FROM hon.creative_generation_assets WHERE generation_id=$1',[S1.g])).rows.map(x=>x.origin),['PROVIDER']);
   const g=await studio.read(H('ownerA'),S.A1,S1.g);
   assert.deepEqual([g.status,g.chargedCredits,g.assets.length],['SUCCEEDED',10,1]);
   const after=await job(S1.g);assert.deepEqual([after.status,after.closed_by,after.lease_token],['RECORDED','WORKER',null]);
@@ -285,7 +286,8 @@ try{
   const r=await res(g.generationId);assert.equal(r.status,'RESERVED');
   assert.equal(await gphase(g.generationId),'SUBMITTING');
   const listed=(await readHq()).requesterUnavailable;
-  assert.ok(listed.some(x=>x.jobId===j.id&&x.reservationId===r.id&&x.schoolId===S.A2));
+  assert.ok(listed.some(x=>x.jobId===j.id&&x.reservationId===r.id&&x.schoolId===S.A2&&x.providerResult.outcome==='SUCCEEDED'&&x.providerResult.assets.length===1),
+   'the paid provider answer is kept on the job for HQ');
   await wallet.resolveReservation(H('owner'),r.id,{resolution:'NOT_CHARGED',expectedVersion:r.version,finalUnits:null,providerCostMicrounits:null,evidenceReference:'Fixture provider dashboard export'},K());
   assert.equal((await studio.read(H('staffA2'),S.A2,g.generationId)).status,'RESOLVED_NOT_CHARGED');
   assert.ok(!(await readHq()).requesterUnavailable.some(x=>x.jobId===j.id),'resolved jobs leave the HQ list');
@@ -350,6 +352,26 @@ try{
   await setCaps(S.B,{images:50,videos:12,avatarVideos:10},1);
   assert.equal((await gen('B',{units:1})).generation.status,'SUCCEEDED','raising the cap allows it again');
   assert.equal((await readHq()).schoolCaps.find(c=>c.schoolId===S.B).images,50);
+  assert.equal((await row("SELECT hon.creative_cap_class('avatar.create','IMAGE') c")).c,null,'avatar.create keeps only its own 12-avatar limit');
+  assert.equal((await row("SELECT hon.creative_cap_class('avatar.video','VIDEO') c")).c,'AVATAR_VIDEO');
+ });
+
+ await check('J12','a permit re-decides at the live clock: a stale generation (over 120 s), an HQ creative pause and a different staff member are refused; a real model needs a permit to record success',async()=>{
+  const g=(await createOnly('B')).generation.generationId;
+  await admin.query('BEGIN');await admin.query('ALTER TABLE hon.creative_generations DISABLE TRIGGER USER');
+  await admin.query("UPDATE hon.creative_generations SET created_at=created_at-interval '121 seconds' WHERE id=$1",[g]);
+  await admin.query('ALTER TABLE hon.creative_generations ENABLE TRIGGER USER');await admin.query('COMMIT');
+  await refuse(begin('ownerB',g),'CREATIVE_GENERATION_STALE');
+  assert.equal((await rec('ownerB',g,interrupted)).generation.status,'UNDER_REVIEW','an abandoned one is recorded INTERRUPTED, never sent');
+  const g2=(await createOnly('B')).generation.generationId;
+  await pause('PAUSE',S.orgB,'CREATIVE_MEDIA');
+  try{await refuse(begin('ownerB',g2),'SAAS_CREATIVE_AI_PAUSED_BY_HQ');}
+  finally{await pause('RESUME',S.orgB,'CREATIVE_MEDIA');}
+  await rec('ownerB',g2,notSent);
+  const real=(await billing.call('createCreativeGeneration',[H('ownerB'),S.B,JSON.stringify({operationCode:'image.generate',units:1,format:'SQUARE',prompt:'Real model fixture request'}),
+   JSON.stringify({providerId:'HIGGSFIELD',modelCode:'hf-image-model'}),K(),K(),K()],contracts.validateCreativeGenerationReceipt)).generation.generationId;
+  await refuse(rec('ownerB',real,success(1)),'CREATIVE_PROVIDER_PERMIT_REQUIRED');
+  assert.equal((await rec('ownerB',real,notSent)).generation.status,'FAILED');
  });
 
  await check('J11','ACL: runtime has EXECUTE only on its entry points, the worker functions and private helpers are not granted to the runtime, no table access',async()=>{

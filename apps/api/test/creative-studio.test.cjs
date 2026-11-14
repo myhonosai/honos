@@ -46,7 +46,7 @@ test('CS1 school view fails closed on provider/cost leakage, inconsistent status
     succeeded({ chargedCredits: 101 }), succeeded({ chargedCredits: null }), succeeded({ assets: [] }), succeeded({ failureReason: 'PROVIDER_UNKNOWN' }),
     succeeded({ completedAt: null }), generation({ completedAt: T2 }), generation({ chargedCredits: 0 }), generation({ assets: [asset()] }),
     generation({ status: 'FAILED', completedAt: T2 }), generation({ status: 'UNDER_REVIEW', completedAt: T2 }), generation({ status: 'FAILED', failureReason: 'PROVIDER_REJECTED', completedAt: T2, chargedCredits: 1 }),
-    succeeded({ assets: [asset(2), asset(1)] }), succeeded({ assets: [asset(1, { origin: 'PROVIDER' })] }), succeeded({ assets: [asset(1, { mediaType: 'video/mp4', durationSeconds: 3 })] }),
+    succeeded({ assets: [asset(2), asset(1)] }), succeeded({ assets: [asset(1, { origin: 'REAL' })] }), succeeded({ assets: [asset(1, { mediaType: 'video/mp4', durationSeconds: 3 })] }),
     succeeded({ assets: [asset(1, { url: 'https://cdn.example/x.png' })] }), succeeded({ completedAt: '2026-11-07T11:00:00.000Z' }), generation({ status: 'QUEUED' })])
     assert.throws(() => contracts.validateCreativeGeneration(bad), JSON.stringify(bad));
   const school = U(), a = generation({ schoolId: school, createdAt: T2 }), b = generation({ schoolId: school });
