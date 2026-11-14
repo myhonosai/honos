@@ -3498,3 +3498,14 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.cancel_parent_class_booking(text,jsonb,text,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
+-- 0347 school social connections: exactly six runtime entry points, no table privilege.
+DO $$ DECLARE r text; BEGIN
+  IF to_regclass('hon.school_social_accounts') IS NULL THEN RAISE EXCEPTION 'Apply migration 0347 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_social_profiles, hon.school_social_accounts, hon.school_social_connect_intents, hon.school_social_commands FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_social_profiles, hon.school_social_accounts, hon.school_social_connect_intents, hon.school_social_commands FROM '||quote_ident(r);
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.read_school_social_accounts(text), hon.start_school_social_connect(text,jsonb,text,uuid,uuid),
+    hon.record_school_social_profile(text,uuid,text,uuid,uuid), hon.claim_school_social_connect(text,text,uuid,uuid),
+    hon.record_school_social_accounts(text,uuid,jsonb,uuid,uuid), hon.change_school_social_account(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
+END $$;

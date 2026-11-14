@@ -63,6 +63,8 @@ export function validateDeploymentConfiguration(env: DatabaseEnvironment = proce
     }
     // The deterministic fake message provider never runs in production or staging.
     if (env.HON_COMMUNICATION_FAKE_PROVIDER !== undefined) failures.push('COMMUNICATION_FAKE_PROVIDER_FORBIDDEN');
+    // 0347: the deterministic fake Zernio social adapter never runs in production or staging either.
+    if (env.HON_ZERNIO_FAKE_PROVIDER !== undefined) failures.push('ZERNIO_FAKE_PROVIDER_FORBIDDEN');
     if (env.HON_AUTH_MODE !== 'OIDC') failures.push('OIDC_AUTH_REQUIRED');
     else {
       // The API verifies HON session cookies only; OIDC endpoints are web-server configuration.
