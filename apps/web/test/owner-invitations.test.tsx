@@ -19,20 +19,20 @@ function fill(){for(const e of nodes(render()).filter(e=>e.type==='input')){if(e
 beforeEach(()=>{hqMode=false;hooks.values=[];hooks.cursor=0;hooks.effects=[];vi.stubGlobal('window',Object.assign(new EventTarget(),{confirm:()=>true}));vi.stubGlobal('document',new EventTarget());});
 afterEach(()=>{for(const v of hooks.values)v?.cleanup?.();vi.unstubAllGlobals();vi.restoreAllMocks();});
 it('no automatic reads/commands; empty blur causes no unnecessary shield',()=>{const f=vi.spyOn(globalThis,'fetch');render();window.dispatchEvent(new Event('blur'));expect(text(render())).not.toContain('is concealed');expect(f).not.toHaveBeenCalled();});
-it.each(['blur','pagehide','hon:session-invalidated','hon:school-context-changed'])('conceals immediately on %s and ignores late reads',async signal=>{
+it.each(['pagehide','hon:session-invalidated','hon:school-context-changed'])('conceals immediately on %s and ignores late reads',async signal=>{
  let yes!:(r:Response)=>void;const f=vi.spyOn(globalThis,'fetch').mockImplementation(()=>new Promise(r=>yes=r));click('Verify access');window.dispatchEvent(new Event(signal));yes(response({externalSubject:'canary'}));await settle();expect(text(render())).toContain('is concealed');expect(nodes(render()).some(e=>e.type==='input')).toBe(false);expect(f).toHaveBeenCalledTimes(1);
 });
 it('command settles behind shield; restoration requires explicit fresh auth; exact retry key/body survive; duplicate click blocked',async()=>{
  let finish!:(r:Response)=>void;const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({externalSubject:'oidc:fixture:owner'}));click('Verify access');await settle();fill();
  f.mockImplementationOnce(()=>new Promise(r=>finish=r));click('Accept invitation');click('Accept invitation');expect(f).toHaveBeenCalledTimes(2);
- window.dispatchEvent(new Event('blur'));expect(button('Verify access').props.disabled).toBe(true);
+ window.dispatchEvent(new Event('pagehide'));expect(button('Verify access').props.disabled).toBe(true);
  finish(response({invitationId:id,organizationId:id,schoolId:id,accountStatus:'OWNER_BOUND',accessGranted:false,billingActivated:false,aiCreditsGranted:false}));await settle();expect(button('Verify access').props.disabled).toBe(false);expect(text(render())).not.toContain('account bound');
  f.mockResolvedValueOnce(response({externalSubject:'oidc:fixture:owner'}));click('Verify access');await settle();expect(f).toHaveBeenCalledTimes(3);expect(text(render())).toContain('exact request remains');
  f.mockResolvedValueOnce(response({invitationId:id,organizationId:id,schoolId:id,accountStatus:'OWNER_BOUND',accessGranted:false,billingActivated:false,aiCreditsGranted:false}));click('Retry exact request');await settle();expect(f.mock.calls[1]![1]!.body).toBe(f.mock.calls[3]![1]!.body);expect(f.mock.calls[1]![1]!.headers).toEqual(f.mock.calls[3]![1]!.headers);expect(text(render())).toContain('account bound');
 });
 it('401 broadcasts shared invalidation; 403 remains local and neither automatically retries',async()=>{let invalidations=0;window.addEventListener('hon:session-invalidated',()=>invalidations++);for(const status of [403,401]){const f=vi.spyOn(globalThis,'fetch').mockResolvedValue(response({},status));await expect(accountRequest('hq/session',new AbortController().signal)).rejects.toMatchObject({status});expect(f).toHaveBeenCalledTimes(1);f.mockRestore();expect(invalidations).toBe(status===401?1:0);}});
 it('different signed identity cannot recover or reveal the original capsule',async()=>{
- const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({externalSubject:'first'}));click('Verify access');await settle();fill();window.dispatchEvent(new Event('blur'));f.mockResolvedValueOnce(response({externalSubject:'second'}));click('Verify access');await settle();expect(text(render())).toContain('ACCOUNT_CHANGED_RESTART_REQUIRED');expect(nodes(render()).some(e=>e.type==='input')).toBe(false);
+ const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({externalSubject:'first'}));click('Verify access');await settle();fill();window.dispatchEvent(new Event('pagehide'));f.mockResolvedValueOnce(response({externalSubject:'second'}));click('Verify access');await settle();expect(text(render())).toContain('ACCOUNT_CHANGED_RESTART_REQUIRED');expect(nodes(render()).some(e=>e.type==='input')).toBe(false);
 });
 
 it('a throttled retry retains the exact unknown request and never retries automatically',async()=>{
@@ -60,4 +60,54 @@ it.each([{organizationId:id},{invitationId:id},{createdAt:undefined}])('rejects 
  hqMode=true;const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({externalSubject:'hq-owner'})).mockResolvedValueOnce(response({hqRole:'HON_HQ_OWNER'}));click('Verify access');await settle();
  f.mockResolvedValueOnce(response({directory:{schools:[{...productionRow,...patch}]}}));click('Load approved schools');await settle();
  expect(nodes(render()).filter(e=>e.type==='option')).toHaveLength(1);expect(button('Record owner invitation').props.disabled).toBe(true);expect(f).toHaveBeenCalledTimes(3);expect(f.mock.calls.every(([,options])=>options?.method!=='POST')).toBe(true);
+});
+
+// Go-live regressions (2026-11-14): focus loss wiped the form, the confirm dialog's own blur
+// hid the form so "Record" silently did nothing, and the HQ token could not be copied back.
+const fieldValue=(type:string)=>nodes(render()).find(e=>e.type==='input'&&e.props.type===type)?.props.value;
+async function hqReady(){
+ hqMode=true;const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({externalSubject:'hq-owner'})).mockResolvedValueOnce(response({hqRole:'HON_HQ_OWNER'}));
+ click('Verify access');await settle();f.mockResolvedValueOnce(response({directory:{schools:[productionRow]}}));click('Load approved schools');await settle();
+ nodes(render()).find(e=>e.type==='select')!.props.onChange({target:{value:id}});
+ nodes(render()).find(e=>e.type==='input'&&e.props.type==='email')!.props.onChange({target:{value:'owner@example.invalid'}});click('Generate private token');
+ return f;
+}
+const labelled=(label:string)=>nodes(nodes(render()).find(e=>e.type==='label'&&text(e)===label)!.props.children).find(e=>e.type==='input')!;
+const tokenField=()=>labelled('Private invitation token');
+const invitationReceipt={invitationId:id,schoolId:id,organizationId:'00000000-0000-4000-8000-000000000002',email:'owner@example.invalid',expiresAt:'2026-11-01T00:00:00.000Z',status:'PENDING'};
+it.each(['blur','visibilitychange'])('switching windows (%s) keeps the HQ form and its token intact',async signal=>{
+ await hqReady();const token=tokenField().props.value;expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+ Object.assign(document,{visibilityState:'hidden'});(signal==='blur'?window:document).dispatchEvent(new Event(signal));
+ expect(text(render())).not.toContain('is concealed');expect(tokenField().props.value).toBe(token);expect(fieldValue('email')).toBe('owner@example.invalid');
+ expect(button('Record owner invitation').props.disabled).toBe(false);
+});
+it('switching windows keeps the owner acceptance form intact',async()=>{
+ vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({externalSubject:'oidc:fixture:owner'}));click('Verify access');await settle();fill();
+ window.dispatchEvent(new Event('blur'));Object.assign(document,{visibilityState:'hidden'});document.dispatchEvent(new Event('visibilitychange'));
+ expect(text(render())).not.toContain('is concealed');expect(fieldValue('password')).toBe('A'.repeat(43));expect(button('Accept invitation').props.disabled).toBe(false);
+});
+it('the confirm dialog taking focus does not stop Record from submitting',async()=>{
+ const f=await hqReady();window.confirm=()=>{window.dispatchEvent(new Event('blur'));return true;};
+ f.mockResolvedValueOnce(response(invitationReceipt));click('Record owner invitation');await settle();
+ expect(f).toHaveBeenCalledTimes(4);expect(f.mock.calls[3]![1]!.method).toBe('POST');expect(text(render())).toContain('Invitation recorded.');
+});
+it('a command blocked by concealment says so instead of failing silently',async()=>{
+ const f=await hqReady();window.confirm=()=>{window.dispatchEvent(new Event('hon:school-context-changed'));return true;};
+ click('Record owner invitation');await settle();
+ expect(f).toHaveBeenCalledTimes(3);expect(text(render())).toContain('Not submitted');
+});
+it('HQ can copy the token, and the receipt keeps the exact recorded ID and token after a new token is generated',async()=>{
+ const writeText=vi.fn(async()=>{});vi.stubGlobal('navigator',{clipboard:{writeText}});
+ const f=await hqReady();const token=tokenField().props.value;
+ click('Copy token');await settle();expect(writeText).toHaveBeenCalledWith(token);expect(text(render())).toContain('Token copied');
+ f.mockResolvedValueOnce(response(invitationReceipt));click('Record owner invitation');await settle();
+ expect(JSON.parse(f.mock.calls[3]![1]!.body as string).token).toBe(token);
+ click('Generate private token');expect(tokenField().props.value).not.toBe(token);
+ expect(labelled('Invitation ID').props.value).toBe(id);expect(labelled('Recorded invitation token').props.value).toBe(token);
+ click('Copy invitation ID');click('Copy recorded token');await settle();expect(writeText).toHaveBeenNthCalledWith(2,id);expect(writeText).toHaveBeenNthCalledWith(3,token);
+});
+it('a failed copy tells HQ to copy by hand and the token field selects itself on focus',async()=>{
+ vi.stubGlobal('navigator',{clipboard:{writeText:vi.fn(async()=>{throw new Error('denied');})}});
+ await hqReady();click('Copy token');await settle();expect(text(render())).toContain('Copy failed');
+ const select=vi.fn();tokenField().props.onFocus({target:{select}});expect(select).toHaveBeenCalled();
 });
