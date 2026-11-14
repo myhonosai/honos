@@ -132,5 +132,6 @@ export function SchoolSocialReturn({ api = socialApi }: { api?: SocialApi }): Re
       (result) => setState({ state: 'DONE', result }),
       (error) => setState({ state: 'FAILED', kind: error instanceof SocialError && error.kind !== 'SESSION' ? error.kind : 'UNKNOWN' }));
   }, [api, orgId, schoolId]);
-  return <div data-shell-private=""><SocialReturnView language={locale.preferences.language} state={state} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} /></div>;
+  return <div data-shell-private=""><SocialReturnView language={locale.preferences.language} state={state} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'}
+    concealed={shell.phase === 'CONCEALED'} hasSchool={!!schoolId} /></div>;
 }

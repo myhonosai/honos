@@ -65,7 +65,7 @@ export function SocialView(p: SocialViewProps): React.ReactElement {
   return <section className={styles.page}>
     {head}
     {o && o.kind !== 'SENDING' && <div className={`${styles.notice} ${o.kind === 'DONE' && o.removal !== 'NOT_REMOVED' ? '' : styles.warn}`} role={o.kind === 'DONE' ? 'status' : 'alert'} data-social-outcome={o.kind}>
-      <p>{o.kind === 'DONE' ? t(o.action === 'disconnect' ? 'done_disconnect' : 'done_change') : t(`e_${o.kind}`)}{removal ? ' ' + removal : ''}</p>
+      <p>{o.kind === 'DONE' ? t(o.action === 'disconnect' ? 'done_disconnect' : 'done_change') : t(o.kind === 'UNKNOWN' && o.action === 'connect' ? 'e_UNKNOWN_connect' : `e_${o.kind}`)}{removal ? ' ' + removal : ''}</p>
       {p.canRetry && <button type="button" className={styles.primary} onClick={p.onTryAgain}>{t('tryAgain')}</button>}</div>}
     {p.canManage && <div className={styles.card} data-social-connect>
       <h2>{t('connectTitle')}</h2>
@@ -84,13 +84,16 @@ export function SocialView(p: SocialViewProps): React.ReactElement {
 
 export type ReturnState = { state: 'WORKING' | 'MISSING' } | { state: 'FAILED'; kind: SocialErrorKind } | { state: 'DONE'; result: SocialConnectResult };
 
-export function SocialReturnView({ language, state, waiting }: { language: string; state: ReturnState; waiting: boolean }): React.ReactElement {
+export function SocialReturnView({ language, state, waiting, concealed = false, hasSchool = true }: { language: string; state: ReturnState; waiting: boolean; concealed?: boolean; hasSchool?: boolean }): React.ReactElement {
   const t: T = (key, vars) => socialText(language, key, vars);
   const back = <a className={styles.secondary} href="/staff/marketing/social">{t('back')}</a>;
   let body: React.ReactNode;
-  if (waiting || state.state === 'WORKING') body = <p className={styles.meta} role="status">{t('returnWorking')}</p>;
-  else if (state.state === 'MISSING') body = <p className={styles.notice} role="alert">{t('returnMissing')}</p>;
-  else if (state.state === 'FAILED') body = <p className={`${styles.notice} ${styles.warn}`} role="alert" data-social-outcome={state.kind}>{t(`e_${state.kind}`)}</p>;
+  if (state.state === 'MISSING') body = <p className={styles.notice} role="alert">{t('returnMissing')}</p>;
+  else if (waiting) body = <p className={styles.meta} role="status">{t('returnWorking')}</p>;
+  else if (concealed) body = <p className={styles.notice}>{t('concealed')}</p>;
+  else if (!hasSchool) body = <p className={styles.notice}>{t('noSchool')}</p>;
+  else if (state.state === 'WORKING') body = <p className={styles.meta} role="status">{t('returnWorking')}</p>;
+  else if (state.state === 'FAILED') body = <p className={`${styles.notice} ${styles.warn}`} role="alert" data-social-outcome={state.kind}>{t(state.kind === 'UNKNOWN' ? 'e_UNKNOWN_return' : `e_${state.kind}`)}</p>;
   else if (state.state === 'DONE') body = <div className={styles.notice} role="status" data-social-outcome="DONE">
     <p>{state.result.connected > 0 ? t('returnDone', { count: String(state.result.connected) }) : t('returnNone')}</p>
     {state.result.conflicts > 0 && <p className={styles.warnText}>{t('returnConflict', { count: String(state.result.conflicts) })}</p>}</div>;

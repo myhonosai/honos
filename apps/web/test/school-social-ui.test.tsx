@@ -96,6 +96,16 @@ it('return page reports connected and conflicting counts without naming another 
   expect(html).toContain('Connected 1 account(s).'); expect(html).toContain('2 account(s) belong to another school');
   expect(renderToStaticMarkup(<SocialReturnView language="ko" waiting={false} state={{ state: 'MISSING' }} />)).toContain('소셜 계정에서 다시 시작하세요');
   expect(renderToStaticMarkup(<SocialReturnView language="es" waiting={false} state={{ state: 'FAILED', kind: 'STATE' }} />)).toContain('caducó');
+  // A lost answer points back to Social accounts (there is no Try again here), and the page never stays on "Checking" without a school.
+  const lost = renderToStaticMarkup(<SocialReturnView language="en" waiting={false} state={{ state: 'FAILED', kind: 'UNKNOWN' }} />);
+  expect(lost).toContain('Check the list on Social accounts'); expect(lost).not.toContain('Try again');
+  expect(renderToStaticMarkup(<SocialReturnView language="en" waiting={false} hasSchool={false} state={{ state: 'WORKING' }} />)).toContain('Choose a school');
+  expect(renderToStaticMarkup(<SocialReturnView language="en" waiting={false} concealed state={{ state: 'WORKING' }} />)).toContain('Hidden while you were away');
+});
+
+it('a lost connect answer says to start again, not Try again', () => {
+  const html = renderToStaticMarkup(<SocialView {...props({ outcome: { kind: 'UNKNOWN', action: 'connect' } })} />);
+  expect(html).toContain('Start again from Social accounts');
 });
 
 it('has every phrase in Korean and Spanish and is listed under Marketing', () => {
