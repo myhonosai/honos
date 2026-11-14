@@ -62,6 +62,13 @@ export interface CommunicationWorkerStore {
   recordSocialPostResult?(targetId: string, leaseToken: string, outcome: 'PUBLISHED' | 'FAILED' | 'UNKNOWN', providerPostId: string | null):
     Promise<{ status: string; accepted: boolean }>;
   recordSocialPostEvent?(event: ZernioSocialEventRecord): Promise<{ outcome: 'APPLIED' | 'IGNORED' | 'UNMATCHED' | 'REPLAYED' }>;
+  /** 0349 school inbox: record one signed inbound DM or comment. */
+  recordSocialInboxEvent?(event: ZernioInboxEventRecord): Promise<{ outcome: SocialInboxEventOutcome }>;
+}
+export type SocialInboxEventOutcome = 'APPLIED' | 'IGNORED' | 'UNMATCHED' | 'DUPLICATE' | 'REPLAYED';
+export interface ZernioInboxEventRecord {
+  eventId: string; eventType: 'message.received' | 'comment.received'; platform: 'FACEBOOK' | 'INSTAGRAM'; providerAccountId: string;
+  providerConversationId: string; providerMessageId: string; providerPostId: string | null; participantName: string; text: string; occurredAt: string;
 }
 
 export interface ClaimedSocialPostTarget {
@@ -285,5 +292,13 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
       [result.orderId, result.leaseToken, result.outcome, result.numberSid ?? null, result.serviceSid ?? null, result.accountSid ?? null, result.failureCode ?? null]))[0];
     if (!row?.data) throw new Error('NUMBER_PURCHASE_NOT_RECORDED');
     return row.data;
+  }
+
+  async recordSocialInboxEvent(event: ZernioInboxEventRecord) {
+    const row = (await this.query<{ outcome: SocialInboxEventOutcome }>('SELECT * FROM hon.record_school_social_inbox_event($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
+      [event.eventId, event.eventType, event.platform, event.providerAccountId, event.providerConversationId, event.providerMessageId,
+        event.providerPostId, event.participantName, event.text, event.occurredAt]))[0];
+    if (!row) throw new Error('COMMUNICATION_SOCIAL_INBOX_EVENT_NOT_RECORDED');
+    return { outcome: row.outcome };
   }
 }

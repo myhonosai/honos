@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   SOCIAL_ACCOUNT_CHANGE_COMMAND, SOCIAL_CONNECT_COMMAND, SOCIAL_CONNECT_COMPLETE_COMMAND, SOCIAL_POST_APPROVE_COMMAND, SOCIAL_POST_CANCEL_COMMAND,
   SOCIAL_POST_CREATE_COMMAND, SOCIAL_POST_EDIT_COMMAND, SOCIAL_POST_RESOLVE_COMMAND, SOCIAL_READ_COMMAND,
+  SOCIAL_INBOX_CHANGE_COMMAND, SOCIAL_INBOX_COMMENT_COMMAND, SOCIAL_INBOX_REPLY_COMMAND, SOCIAL_INBOX_RESOLVE_COMMAND,
 } from '@hon/contracts';
 import { MembershipActivationHumanUiGuard } from '../../billing/membership-activation-human-ui.guard.js';
 
@@ -43,4 +44,22 @@ export class SchoolSocialPostCancelHumanUiGuard extends MembershipActivationHuma
 @Injectable()
 export class SchoolSocialPostResolveHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = SOCIAL_POST_RESOLVE_COMMAND;
+}
+
+/** 0349 inbox: reads are same-origin GETs (the 0347 read command); each inbox change is its own browser command. */
+@Injectable()
+export class SchoolSocialInboxChangeHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = SOCIAL_INBOX_CHANGE_COMMAND;
+}
+@Injectable()
+export class SchoolSocialInboxReplyHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = SOCIAL_INBOX_REPLY_COMMAND;
+}
+@Injectable()
+export class SchoolSocialInboxResolveHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = SOCIAL_INBOX_RESOLVE_COMMAND;
+}
+@Injectable()
+export class SchoolSocialInboxCommentHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = SOCIAL_INBOX_COMMENT_COMMAND;
 }

@@ -37,7 +37,22 @@ export interface ZernioSocialEvent {
   /** The Zernio post id HON recorded when it published; null for account.disconnected. */
   providerPostId: string | null;
 }
-export type ZernioWebhookDelivery = { kind: 'LEAD'; lead: ZernioLeadEvent } | { kind: 'SOCIAL'; event: ZernioSocialEvent } | null;
+/** 0349 inbound messages and comments. Text only; attachments, Meta user ids and other payload fields are dropped. */
+export interface ZernioInboxEvent {
+  eventId: string;
+  eventType: 'message.received' | 'comment.received';
+  platform: 'FACEBOOK' | 'INSTAGRAM';
+  providerAccountId: string;
+  /** The DM conversation id, or the top-level comment id for a comment. */
+  providerConversationId: string;
+  providerMessageId: string;
+  /** The post commented on; null for a DM. */
+  providerPostId: string | null;
+  participantName: string;
+  text: string;
+  occurredAt: string;
+}
+export type ZernioWebhookDelivery = { kind: 'LEAD'; lead: ZernioLeadEvent } | { kind: 'SOCIAL'; event: ZernioSocialEvent } | { kind: 'INBOX'; event: ZernioInboxEvent } | null;
 
 /**
  * 0348: post and account receipts are taken only when ZERNIO_WEBHOOK_SECRET (at least 32 characters) is set AND
@@ -47,6 +62,18 @@ export type ZernioWebhookDelivery = { kind: 'LEAD'; lead: ZernioLeadEvent } | { 
 export function zernioSocialEventsReady(env: Env): boolean {
   if ((env.ZERNIO_WEBHOOK_SECRET?.trim().length ?? 0) < 32) return false;
   if (API_KEY.test(env.ZERNIO_API_KEY ?? '') && env.HON_ZERNIO_PUBLISH_APPROVED === 'true') return true;
+  const deployment = env.HON_DEPLOYMENT_ENVIRONMENT;
+  return env.HON_ZERNIO_FAKE_PROVIDER === '1' && deployment !== 'production' && deployment !== 'staging'
+    && !(deployment === undefined && env.NODE_ENV === 'production');
+}
+
+/**
+ * 0349: inbound messages and comments are taken only when ZERNIO_WEBHOOK_SECRET (at least 32 characters) is set AND the
+ * inbox is approved (HON_ZERNIO_INBOX_APPROVED=true with a Zernio key), or the fake provider runs outside production.
+ */
+export function zernioInboxEventsReady(env: Env): boolean {
+  if ((env.ZERNIO_WEBHOOK_SECRET?.trim().length ?? 0) < 32) return false;
+  if (API_KEY.test(env.ZERNIO_API_KEY ?? '') && env.HON_ZERNIO_INBOX_APPROVED === 'true') return true;
   const deployment = env.HON_DEPLOYMENT_ENVIRONMENT;
   return env.HON_ZERNIO_FAKE_PROVIDER === '1' && deployment !== 'production' && deployment !== 'staging'
     && !(deployment === undefined && env.NODE_ENV === 'production');
@@ -74,15 +101,21 @@ export class ZernioLeadWebhookVerifier {
    */
   receive(rawBody: Buffer, signature: string | undefined): ZernioWebhookDelivery {
     const env = this.environment();
-    const leads = zernioLeadIntakeReady(env), social = zernioSocialEventsReady(env);
-    if (!leads && !social) throw new ZernioWebhookError('NOT_CONFIGURED');
+    const leads = zernioLeadIntakeReady(env), social = zernioSocialEventsReady(env), inbox = zernioInboxEventsReady(env);
+    if (!leads && !social && !inbox) throw new ZernioWebhookError('NOT_CONFIGURED');
     const body = this.envelope(env, rawBody, signature);
     if (body.event === 'lead.received') {
       if (!leads) throw new ZernioWebhookError('NOT_CONFIGURED');
       const lead = this.lead(body);
       return lead ? { kind: 'LEAD', lead } : null;
     }
-    if (!social || body.test === true || !['post.published', 'post.failed', 'account.disconnected'].includes(body.event as string)) return null;
+    if (body.test === true) return null;
+    if (body.event === 'message.received' || body.event === 'comment.received') {
+      if (!inbox) return null;
+      const event = inboxEvent(body);
+      return event ? { kind: 'INBOX', event } : null;
+    }
+    if (!social || !['post.published', 'post.failed', 'account.disconnected'].includes(body.event as string)) return null;
     return { kind: 'SOCIAL', event: socialEvent(body) };
   }
 
@@ -141,6 +174,43 @@ function socialEvent(body: Record<string, unknown>): ZernioSocialEvent {
   if (typeof body.id !== 'string' || !EVENT_ID.test(body.id) || typeof accountId !== 'string' || !ID.test(accountId) || !platform
     || (eventType !== 'account.disconnected' && (typeof postId !== 'string' || !POST_ID.test(postId)))) throw new ZernioWebhookError('MALFORMED');
   return { eventId: body.id, eventType, platform, providerAccountId: accountId, providerPostId: eventType === 'account.disconnected' ? null : postId as string };
+}
+
+// eslint-disable-next-line no-control-regex
+const TEXT_CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
+// eslint-disable-next-line no-control-regex
+const NAME_CONTROL = /[\u0000-\u001f\u007f]/g;
+const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/;
+
+/**
+ * Assumed Zernio shapes (SOCIAL_POSTING_INBOX_ADS.md §5, to confirm before activation):
+ * message.received `{ id, event, account: { id|_id, platform }, conversation: { id|_id }, message: { id|_id, text, createdAt,
+ * isEcho?, from: { name } } }`; comment.received `{ id, event, account, comment: { id|_id, text, createdAt, parentId?,
+ * postId, from: { id?, name } } }`. Echoes of the school's own messages, and messages with no text (stickers, photos),
+ * are acknowledged and not stored. Only these fields are read.
+ */
+function inboxEvent(body: Record<string, unknown>): ZernioInboxEvent | null {
+  const obj = (v: unknown) => (v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : undefined);
+  const idOf = (v: Record<string, unknown> | undefined) => (v ? (v.id ?? v._id) : undefined);
+  const account = obj(body.account), comment = body.event === 'comment.received';
+  const item = obj(comment ? body.comment : body.message), from = obj(item?.from);
+  const accountId = idOf(account), platform = account?.platform === 'facebook' ? 'FACEBOOK' : account?.platform === 'instagram' ? 'INSTAGRAM' : null;
+  const messageId = idOf(item);
+  const conversationId = comment ? (typeof item?.parentId === 'string' ? item.parentId : messageId) : idOf(obj(body.conversation));
+  const postId = comment ? item?.postId : null;
+  if (typeof body.id !== 'string' || !EVENT_ID.test(body.id) || typeof accountId !== 'string' || !ID.test(accountId) || !platform || !item
+    || typeof messageId !== 'string' || !POST_ID.test(messageId) || typeof conversationId !== 'string' || !POST_ID.test(conversationId)
+    || (comment && (typeof postId !== 'string' || !POST_ID.test(postId)))) throw new ZernioWebhookError('MALFORMED');
+  // The school's own messages and comments come back as echoes; they are already in HON (or were sent elsewhere).
+  if (item.isEcho === true || item.direction === 'outgoing' || (comment && from && (from.id === accountId))) return null;
+  const text = typeof item.text === 'string' ? item.text.replace(TEXT_CONTROL, '').trim().slice(0, 2000) : '';
+  if (!text) return null;
+  const rawName = typeof from?.name === 'string' ? from.name.replace(NAME_CONTROL, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) : '';
+  const createdAt = typeof item.createdAt === 'string' && ISO_TIME.test(item.createdAt) && !Number.isNaN(Date.parse(item.createdAt))
+    ? new Date(item.createdAt).toISOString() : new Date().toISOString();
+  return { eventId: body.id, eventType: comment ? 'comment.received' : 'message.received', platform, providerAccountId: accountId,
+    providerConversationId: conversationId, providerMessageId: messageId, providerPostId: comment ? postId as string : null,
+    participantName: rawName || (platform === 'FACEBOOK' ? 'Facebook user' : 'Instagram user'), text, occurredAt: createdAt };
 }
 
 export interface ZernioLeadFormInput {
