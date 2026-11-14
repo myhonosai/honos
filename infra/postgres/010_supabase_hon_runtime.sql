@@ -3525,6 +3525,17 @@ DO $$ DECLARE r text; BEGIN
     hon.record_school_social_profile(text,uuid,text,uuid,uuid), hon.claim_school_social_connect(text,text,uuid,uuid),
     hon.record_school_social_accounts(text,uuid,jsonb,uuid,uuid), hon.change_school_social_account(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
 END $$;
+-- 0348 school social posts: exactly six runtime entry points, no table privilege (the worker functions go to the 013 worker role only).
+DO $$ DECLARE r text; BEGIN
+  IF to_regclass('hon.school_social_posts') IS NULL THEN RAISE EXCEPTION 'Apply migration 0348 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_social_posts, hon.school_social_post_targets, hon.school_social_post_receipts FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_social_posts, hon.school_social_post_targets, hon.school_social_post_receipts FROM '||quote_ident(r);
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.read_school_social_posts(text,timestamptz,timestamptz), hon.create_school_social_post(text,jsonb,text,uuid,uuid),
+    hon.edit_school_social_post(text,uuid,jsonb,text,uuid,uuid), hon.approve_school_social_post(text,uuid,jsonb,text,uuid,uuid),
+    hon.cancel_school_social_post(text,uuid,jsonb,text,uuid,uuid), hon.resolve_school_social_post_target(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
+END $$;
 -- 0352 school number orders: six runtime entry points (owner request/cancel/read/search scope, HQ decide/read), no
 -- table privilege; claim/record are worker-only (013); the actor check and JSON helper are private.
 DO $$ DECLARE r text; f text; BEGIN
