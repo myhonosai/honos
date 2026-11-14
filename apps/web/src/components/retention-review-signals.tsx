@@ -6,6 +6,7 @@ import { RETENTION_ATTENTION_RESOLUTION_REASONS, type RetentionAttentionEvidence
 import { loadRetentionReviewSignals, loadRetentionReviewAcknowledgementEvidence, acknowledgeRetentionReviewEvidence, RetentionReviewUiError } from './retention-review-signals-http';
 import { loadRetentionAttentionAlerts, loadRetentionAttentionEvidence, recordRetentionAttentionAlert, resolveRetentionAttentionAlert } from './retention-attention-http';
 import styles from './billing-renewals-workbench.module.css';
+import { ManualSchoolFields, useShellSchoolInto } from './school-shell/page-school';
 
 function utc(value: string | null) { return value ? `${value.replace('T', ' ').replace('.000Z', ' UTC')}` : 'Not recorded'; }
 function unavailable(value: string | null) { return value ? value.replaceAll('_', ' ').toLowerCase() : 'No limitation recorded.'; }
@@ -14,6 +15,7 @@ function Status({ value }: { value: string }) { return <strong>{value.replaceAll
 /** A conventional staff evidence view. It deliberately never suggests or executes an action. */
 export function RetentionReviewSignalsWorkbench() {
   const [schoolId, setSchoolId] = useState('');
+  useShellSchoolInto(school => { setSchoolId(school.schoolId); });
   const [membershipId, setMembershipId] = useState('');
   const [signals, setSignals] = useState<RetentionReviewSignals | null>(null);
   const [error, setError] = useState('');
@@ -108,7 +110,7 @@ export function RetentionReviewSignalsWorkbench() {
   return <main className={styles.page}>
     <header><p className={styles.eyebrow}>RETENTION REVIEW SIGNALS</p><h1>Retention Review Signals</h1><p>Human-controlled, read-only observed facts for one known membership. This is evidence only: no score, prediction, readiness claim, financial recommendation, or automatic action.</p></header>
     <section className={styles.notice}><strong>Known-ID review only</strong><p>Enter an already-known current-school membership UUID. This page is not a student, family, membership, or staff directory; selectors never grant authority. Big-Button, Modern, and Classic modes only change presentation.</p></section>
-    <form onSubmit={submit}><fieldset disabled={loading}><legend>Current school scope</legend><label>School UUID<input required autoComplete="off" spellCheck={false} value={schoolId} onChange={event => { setSchoolId(event.target.value); clear(); }} /></label><label>Known membership UUID<input required autoComplete="off" spellCheck={false} value={membershipId} onChange={event => { setMembershipId(event.target.value); clear(); }} /></label><div className={styles.actions}><button type="submit">{loading ? 'Loading observed facts…' : 'Load Retention Review Signals'}</button></div></fieldset></form>
+    <form onSubmit={submit}><fieldset disabled={loading}><legend>Current school scope</legend><ManualSchoolFields><label>School UUID<input required autoComplete="off" spellCheck={false} value={schoolId} onChange={event => { setSchoolId(event.target.value); clear(); }} /></label></ManualSchoolFields><label>Known membership UUID<input required autoComplete="off" spellCheck={false} value={membershipId} onChange={event => { setMembershipId(event.target.value); clear(); }} /></label><div className={styles.actions}><button type="submit">{loading ? 'Loading observed facts…' : 'Load Retention Review Signals'}</button></div></fieldset></form>
     {!signals && !loading && !error && <p className={styles.notice} role="status">No verified school and membership are selected. No Retention Review Signals data is shown.</p>}
     {loading && <p className={styles.notice} role="status">Verifying direct human staff access and loading bounded observed facts…</p>}
     {error && <p className={styles.error} role="alert">{error}</p>}

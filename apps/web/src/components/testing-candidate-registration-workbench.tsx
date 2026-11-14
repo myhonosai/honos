@@ -5,6 +5,7 @@ import { TestingCandidateAccessError, TestingCandidateUncertainError, prepareTes
   type TestingCandidateKnownIds, type TestingCandidateRegistrationReceipt, type PreparedTestingCandidateRegistration } from './testing-candidate-registration-http';
 import { pendingCandidateScorecardHref } from './testing-scorecard-handoff';
 import styles from './attendance-workbench.module.css';
+import { useShellSchoolInto } from './school-shell/page-school';
 
 const EMPTY_IDS: TestingCandidateKnownIds = { organizationId: '', schoolId: '', testingEventId: '', studentCurriculumEnrollmentId: '', targetRankId: '' };
 const LABELS: Record<keyof TestingCandidateKnownIds, string> = { organizationId: 'Organization UUID', schoolId: 'School UUID', testingEventId: 'Testing event UUID', studentCurriculumEnrollmentId: 'Student curriculum enrollment UUID', targetRankId: 'Target rank UUID' };
@@ -12,6 +13,7 @@ const LABELS: Record<keyof TestingCandidateKnownIds, string> = { organizationId:
 /** One direct-human known-ID command only: no discovery, read or outcome inference. */
 export function TestingCandidateRegistrationWorkbench(): React.ReactElement {
   const [ids, setIds] = useState<TestingCandidateKnownIds>(EMPTY_IDS);
+  const shellSchool = useShellSchoolInto(school => setIds(current => ({ ...current, organizationId: school.organizationId, schoolId: school.schoolId })));
   const [note, setNote] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -88,7 +90,7 @@ export function TestingCandidateRegistrationWorkbench(): React.ReactElement {
     </aside>
     <section aria-labelledby="candidate-command"><h2 id="candidate-command">Register one known-ID candidate</h2>
       <form autoComplete="off" onSubmit={submit}><fieldset disabled={busy}>
-        <div className={styles.scopeGrid}>{(Object.keys(LABELS) as (keyof TestingCandidateKnownIds)[]).map(field =>
+        <div className={styles.scopeGrid}>{(Object.keys(LABELS) as (keyof TestingCandidateKnownIds)[]).filter(field => !shellSchool || (field !== 'organizationId' && field !== 'schoolId')).map(field =>
           <label key={field}>{LABELS[field]}<input name={field} required autoComplete="off" spellCheck={false} maxLength={36} value={ids[field]} onChange={event => edit(() => setIds({ ...ids, [field]: event.target.value }))} /></label>)}</div>
         <label>Optional private instructor notes (maximum 2000 characters)<textarea name="instructorNotes" autoComplete="off" maxLength={2000} value={note} onChange={event => edit(() => setNote(event.target.value))} /></label>
         <p>Local UUID syntax and note bounds do not verify existence, eligibility, readiness or capacity. Only the existing server command can accept these IDs together.</p>

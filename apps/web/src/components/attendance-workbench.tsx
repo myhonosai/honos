@@ -25,6 +25,7 @@ import {
   type AttendanceKnownScope,
 } from './attendance-workbench-http';
 import styles from './attendance-workbench.module.css';
+import { useShellSchoolInto } from './school-shell/page-school';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type RecordDraft = { status: AttendanceStatus | ''; category: AttendanceCategory | ''; note: string };
@@ -54,6 +55,7 @@ function recordDraftOf(record: AttendanceRecordSummary | null): RecordDraft {
 
 export function AttendanceWorkbench({ initialScope = {} }: { initialScope?: AttendanceInitialScope } = {}): React.ReactElement {
   const [scope, setScope] = useState<AttendanceKnownScope>(() => blankScope(initialScope));
+  const shellSchool = useShellSchoolInto(school => setScope(current => ({ ...current, organizationId: school.organizationId, schoolId: school.schoolId })));
   const [policy, setPolicy] = useState<AttendanceProgressionPolicy | null>(null);
   const [policyDraft, setPolicyDraft] = useState<AttendanceCategoryPolicy[]>([]);
   const [record, setRecord] = useState<AttendanceRecordSummary | null>(null);
@@ -188,7 +190,7 @@ export function AttendanceWorkbench({ initialScope = {} }: { initialScope?: Atte
       <div className={styles.scopeGrid}>
         {([
           ['organizationId', 'Organization UUID'], ['schoolId', 'School UUID'], ['programId', 'Program UUID'], ['sessionId', 'Class session UUID'], ['studentProfileId', 'Student profile UUID'],
-        ] as Array<[keyof AttendanceKnownScope, string]>).map(([field, label]) => <label key={field}>{label}<input value={scope[field]} disabled={busy} autoComplete="off" maxLength={36} placeholder="Exact known UUID; not a search" onChange={event => changeScope(field, event.target.value)} /></label>)}
+        ] as Array<[keyof AttendanceKnownScope, string]>).filter(([field]) => !shellSchool || (field !== 'organizationId' && field !== 'schoolId')).map(([field, label]) => <label key={field}>{label}<input value={scope[field]} disabled={busy} autoComplete="off" maxLength={36} placeholder="Exact known UUID; not a search" onChange={event => changeScope(field, event.target.value)} /></label>)}
       </div>
       <p>{scopeReady ? 'Five UUIDs are locally well-formed. The server remains authoritative for every human staff permission and tenant boundary.' : 'All five values must be exact UUIDs before any fixed-path request is enabled.'}</p>
     </section>
