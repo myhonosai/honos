@@ -107,15 +107,20 @@ export class ZernioHttpSocialAdapter implements ZernioSocialAdapter {
     const list = Array.isArray(answer) ? answer : (answer as { accounts?: unknown })?.accounts;
     if (!Array.isArray(list)) throw new SocialProviderError('UNKNOWN');
     const out: ProviderSocialAccount[] = [];
+    let owned = 0;
     for (const item of list.slice(0, 100)) {
       if (!item || typeof item !== 'object') continue;
       const a = item as Record<string, unknown>;
+      const owner = typeof a.profileId === 'string' ? a.profileId : (a.profileId as { _id?: unknown } | null | undefined)?._id;
+      if (typeof owner === 'string') owned += 1;
+      // Fail closed: only an account that names exactly this profile is the school's. A missing owner could be an
+      // account another school connected at Zernio and has not recorded yet, so it is never taken.
       const platform = platformOf(a.platform), rawId = a._id ?? a.id, name = displayName(a.displayName ?? a.name ?? a.username);
-      // Only accounts on exactly this profile; anything else in the answer is ignored.
-      const owner = typeof a.profileId === 'string' ? a.profileId : (a.profileId as { _id?: unknown } | undefined)?._id;
-      if (!platform || typeof rawId !== 'string' || !ID.test(rawId) || !name || (owner !== undefined && owner !== profileId)) continue;
+      if (owner !== profileId || !platform || typeof rawId !== 'string' || !ID.test(rawId) || !name) continue;
       out.push({ providerAccountId: rawId, platform, displayName: name });
     }
+    // An answer whose accounts carry no owner at all means the assumed shape is wrong: unknown, never "no accounts".
+    if (list.length > 0 && owned === 0) throw new SocialProviderError('UNKNOWN');
     return out;
   }
 

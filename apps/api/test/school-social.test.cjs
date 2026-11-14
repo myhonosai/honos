@@ -200,9 +200,16 @@ test('HTTP adapter: refuses to call unless approved; fixed origin, no redirects,
   routes.push(reply(200, { accounts: [
     { _id: 'fb1', platform: 'facebook', displayName: 'Dojo\u0007 Page', profileId: 'prof_1', accessToken: 'secret' },
     { _id: 'fb2', platform: 'facebook', displayName: 'Other school', profileId: 'prof_OTHER' },
-    { _id: 'tt1', platform: 'tiktok', displayName: 'nope' }, { _id: 'bad id!', platform: 'instagram', name: 'x' }, { _id: 'ig1', platform: 'instagram', username: 'dojo.ig', profileId: { _id: 'prof_1' } },
+    { _id: 'tt1', platform: 'tiktok', displayName: 'nope', profileId: 'prof_1' }, { _id: 'bad id!', platform: 'instagram', name: 'x', profileId: 'prof_1' },
+    { _id: 'fbNoOwner', platform: 'facebook', displayName: 'Unrecorded page of another school' },
+    { _id: 'fbNullOwner', platform: 'facebook', displayName: 'Null owner', profileId: null },
+    { _id: 'ig1', platform: 'instagram', username: 'dojo.ig', profileId: { _id: 'prof_1' } },
   ] }));
   assert.deepEqual(await adapter.listAccounts('prof_1'), [{ providerAccountId: 'fb1', platform: 'FACEBOOK', displayName: 'Dojo Page' }, { providerAccountId: 'ig1', platform: 'INSTAGRAM', displayName: 'dojo.ig' }]);
+  // If Zernio's answer names no owner on any account (the assumed shape is wrong, or the profile filter was ignored), nothing is taken.
+  routes.push(reply(200, { accounts: [{ _id: 'fbA', platform: 'facebook', displayName: 'A' }, { _id: 'fbB', platform: 'facebook', displayName: 'B' }] }));
+  await assert.rejects(adapter.listAccounts('prof_1'), e => e instanceof SocialProviderError && e.failure === 'UNKNOWN');
+  routes.push(reply(200, { accounts: [] })); assert.deepEqual(await adapter.listAccounts('prof_1'), []);
   for (const [r, failure] of [[reply(401, { error: 'bad key ' + KEY }), 'REJECTED'], [reply(429, {}), 'RATE_LIMITED'], [reply(500, {}), 'UNAVAILABLE'], [reply(200, '<html>', 'text/html'), 'UNKNOWN'],
     [() => { throw new Error('socket ' + KEY); }, 'UNKNOWN']]) {
     routes.push(r);

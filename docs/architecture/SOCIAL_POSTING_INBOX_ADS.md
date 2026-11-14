@@ -116,7 +116,7 @@ allowed) before activation:
 1. Profile create/list endpoints and that a profile name can hold `hon-school-<uuid>`.
 2. The connect endpoint for `facebook` / `instagram` that takes `profileId` and a redirect URL and returns an auth
    URL; that HON's `state` survives the round trip (otherwise HON adds it to its own return URL).
-3. Account list per profile: field names for the account id, platform and display name.
+3. Account list per profile: field names for the account id, platform, display name and the owning profile id. HON takes only accounts whose own `profileId` equals the school's profile, and treats an answer with no owner fields as unknown.
 4. Account disconnect endpoint.
 5. (S2–S4) post create/schedule/cancel fields and statuses, inbox send/reply endpoints, ad create/budget units
    (cents vs currency), PAUSED creation, insights, and webhook event names.
