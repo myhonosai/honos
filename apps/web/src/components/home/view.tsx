@@ -128,8 +128,8 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
 }
 
 function Agent({ agent, t }: { agent: AgentCard; t: (key: HomeKey) => string }): React.ReactElement {
-  // A link only for someone readiness actually lists for this school (a refusal still links, so the page can explain it).
-  const live = agent.href !== null && !['NOT_AVAILABLE', 'UNKNOWN', 'HIDDEN', 'CHECKING'].includes(agent.status);
+  // One rule with the AI team page: link only an agent that is ready to use now.
+  const live = agent.href !== null && agent.status === 'READY';
   return <li className={styles.agent} data-agent={agent.id} data-status={agent.status} style={{ '--agent': agent.color } as React.CSSProperties}>
     <span className={styles.portrait}><img src={agent.portrait} alt="" width={280} height={350} loading="lazy" /></span>
     <span className={styles.agentText}>
