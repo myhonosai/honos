@@ -3525,3 +3525,27 @@ DO $$ DECLARE r text; BEGIN
     hon.record_school_social_profile(text,uuid,text,uuid,uuid), hon.claim_school_social_connect(text,text,uuid,uuid),
     hon.record_school_social_accounts(text,uuid,jsonb,uuid,uuid), hon.change_school_social_account(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
 END $$;
+-- 0354 creative provider jobs: four private forced-RLS tables, private helpers and the three worker functions (013
+-- grants those to hon_communication_worker only); six runtime entry points.
+DO $$ DECLARE r text; t text; f text; BEGIN
+  IF to_regclass('hon.creative_provider_jobs') IS NULL THEN RAISE EXCEPTION 'Apply migration 0354 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['creative_provider_daily_limits','creative_school_daily_caps','creative_limit_commands','creative_provider_jobs'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC', t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I', t, r);
+    END LOOP;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p WHERE p.pronamespace = 'hon'::regnamespace
+      AND p.proname IN ('guard_creative_limit_commands','guard_creative_limit_rows','guard_creative_provider_job','creative_cap_class','creative_utc_day',
+        'creative_school_daily_cap','guard_creative_generation_daily_cap','creative_provider_committed_micros','creative_provider_job_json',
+        'creative_record_generation_result','creative_requester_subject','creative_close_provider_job','creative_leased_job','creative_limit_reason_ok',
+        'claim_creative_provider_jobs','record_creative_provider_job_poll','record_creative_provider_job_result') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I', f, r);
+    END LOOP;
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.begin_creative_provider_submission(text,uuid), hon.record_creative_provider_submission(text,uuid,text),
+    hon.command_creative_provider_daily_limit(text,jsonb,uuid), hon.command_creative_school_daily_caps(text,jsonb,uuid),
+    hon.read_creative_limits_from_hq(text) TO hon_runtime;
+END $$;
