@@ -85,7 +85,8 @@ export function oidcConfig(env: Environment = process.env): OidcConfig {
   const algorithms = (env.HON_OIDC_ID_TOKEN_ALGORITHMS ?? 'RS256').split(',');
   const supported = ['RS256', 'RS384', 'RS512', 'PS256', 'PS384', 'PS512', 'ES256', 'ES384', 'ES512', 'EdDSA'];
   if (!algorithms.length || algorithms.some((alg) => !supported.includes(alg)) || new Set(algorithms).size !== algorithms.length) throw new AuthConfigurationError();
-  const endSessionEndpoint = env.HON_OIDC_END_SESSION_ENDPOINT === undefined ? undefined : protectedUrl(required(env, 'HON_OIDC_END_SESSION_ENDPOINT'));
+  // An empty dashboard slot means "not set": it must not take sign-in down with it.
+  const endSessionEndpoint = env.HON_OIDC_END_SESSION_ENDPOINT === undefined || env.HON_OIDC_END_SESSION_ENDPOINT === '' ? undefined : protectedUrl(required(env, 'HON_OIDC_END_SESSION_ENDPOINT'));
   return { ...session, mode: 'OIDC', publicOrigin, issuer, authorizationEndpoint, tokenEndpoint, jwksUri, clientId, scopes, redirectUri, tokenEndpointAuthMethod: method, algorithms, ...(clientSecret === undefined ? {} : { clientSecret }), ...(endSessionEndpoint === undefined ? {} : { endSessionEndpoint }) };
 }
 

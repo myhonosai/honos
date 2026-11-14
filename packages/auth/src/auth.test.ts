@@ -140,9 +140,11 @@ describe('CSRF/state/PKCE and origin binding', () => {
     expect(url.searchParams.getAll('client_id')).toEqual([config.clientId]);
     expect(url.searchParams.getAll('post_logout_redirect_uri')).toEqual(['https://hon.example/']);
     expect(url.searchParams.getAll('returnTo')).toEqual(['https://hon.example/']);
-    for (const bad of ['http://issuer.example/logout', 'https://user:pw@issuer.example/logout', 'https://issuer.example/logout#x', ' https://issuer.example/logout', '']) {
+    for (const bad of ['http://issuer.example/logout', 'https://user:pw@issuer.example/logout', 'https://issuer.example/logout#x', ' https://issuer.example/logout']) {
       expect(() => oidcConfig({ ...env, HON_OIDC_END_SESSION_ENDPOINT: bad })).toThrow(AuthConfigurationError);
     }
+    // An empty Render dashboard slot is treated as not set, so sign-in keeps working.
+    expect(oidcLogoutUrl(oidcConfig({ ...env, HON_OIDC_END_SESSION_ENDPOINT: '' }))).toBeNull();
   });
   it('preserves safe HTTPS preview origin and refuses forwarded host/protocol injection', () => {
     expect(publicOrigin(new Headers({ 'x-forwarded-host': '3000-preview.example', 'x-forwarded-proto': 'https' }), {})).toBe('https://3000-preview.example');
