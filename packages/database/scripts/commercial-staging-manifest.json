@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "3b1c69a743f3e6aacf73f0603fdab6508b4035403d9a690ea8ab56a869c17a83",
+  "chainSha256": "41aeca5bcd29d455bcf61d6daf310eda9d8657c8ef88375aeec11d128de560a4",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -461,6 +461,18 @@
     {
       "file": "0348_school_social_posts.sql",
       "sha256": "333c9a09e36a52f7eb1748c7b8f1425b27d4ea61ceb815054f7b864c13295c25"
+    },
+    {
+      "file": "0351_school_twilio_subaccounts.sql",
+      "sha256": "ff9bca68045b9d5f593c56faa97d0cff5c0d408d9f2cbe97287514fda2f25f88"
+    },
+    {
+      "file": "0352_school_number_orders.sql",
+      "sha256": "66707e67a865b901425603ac7f23127291e44faaf5a9cdcad75648c6feff18a9"
+    },
+    {
+      "file": "0353_ai_exception_school_allowance.sql",
+      "sha256": "b46e8aa76543fe0bd1f4881d7882f7369dcd9ce20c138511238c3334d57ec6a5"
     }
   ]
 }

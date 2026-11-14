@@ -1,6 +1,6 @@
 /** HQ access overview wording (en / ko / es). Labels only; nothing here is authority or an outcome. */
 const en = {
-  title: 'School access', intro: 'Every customer organization and whether its schools can use HON OS right now. Exceptions give one school free, time-limited access for testing, a demonstration or an approved pilot. They never include AI credits and never charge anyone.',
+  title: 'School access', intro: 'Every customer organization and whether its schools can use HON OS right now. Exceptions give one school free, time-limited access for testing, a demonstration or an approved pilot. They never charge anyone, and they include no AI unless the HQ owner sets a monthly AI limit below.',
   refresh: 'Refresh', all: 'All', loading: 'Reading access for every organization…', denied: 'Your HQ access does not include the access overview. Nothing is shown.',
   unavailable: 'The access overview could not be read or checked. Nothing is shown.', none: 'No organizations match this filter.', more: 'Show more',
   concealed: 'Customer access is hidden while this tab is in the background.', reveal: 'Show again',
@@ -35,7 +35,7 @@ const en = {
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
-  title: '도장 접근', intro: '모든 고객 조직과 해당 도장이 지금 HON OS를 쓸 수 있는지 보여 줍니다. 예외는 테스트, 시연 또는 승인된 파일럿을 위해 한 도장에 무료 기간 한정 접근을 줍니다. AI 크레딧은 포함되지 않으며 누구에게도 요금을 청구하지 않습니다.',
+  title: '도장 접근', intro: '모든 고객 조직과 해당 도장이 지금 HON OS를 쓸 수 있는지 보여 줍니다. 예외는 테스트, 시연 또는 승인된 파일럿을 위해 한 도장에 무료 기간 한정 접근을 줍니다. 누구에게도 요금을 청구하지 않으며, HQ 소유자가 아래에서 월 AI 한도를 정하지 않으면 AI는 포함되지 않습니다.',
   refresh: '새로 고침', all: '전체', loading: '모든 조직의 접근 상태를 읽는 중…', denied: 'HQ 권한에 접근 현황이 포함되어 있지 않습니다. 아무것도 표시되지 않습니다.',
   unavailable: '접근 현황을 읽거나 확인할 수 없습니다. 아무것도 표시되지 않습니다.', none: '이 필터와 일치하는 조직이 없습니다.', more: '더 보기',
   concealed: '이 탭이 백그라운드에 있는 동안 고객 접근 정보가 숨겨집니다.', reveal: '다시 보기',
@@ -69,7 +69,7 @@ const ko: Record<Key, string> = {
   localInvalidRevoke: '10~500자의 사유를 입력하세요.', policyLink: '예외 정책', summary: '접근 상태별 조직', total: '조직 {n}곳',
 };
 const es: Record<Key, string> = {
-  title: 'Acceso de escuelas', intro: 'Cada organización cliente y si sus escuelas pueden usar HON OS ahora mismo. Las excepciones dan a una escuela acceso gratuito y limitado en el tiempo para pruebas, una demostración o un piloto aprobado. Nunca incluyen créditos de IA ni cobran a nadie.',
+  title: 'Acceso de escuelas', intro: 'Cada organización cliente y si sus escuelas pueden usar HON OS ahora mismo. Las excepciones dan a una escuela acceso gratuito y limitado en el tiempo para pruebas, una demostración o un piloto aprobado. Nunca cobran a nadie y no incluyen IA a menos que el dueño de HQ fije abajo un límite mensual de IA.',
   refresh: 'Actualizar', all: 'Todas', loading: 'Leyendo el acceso de cada organización…', denied: 'Tu acceso de HQ no incluye el resumen de acceso. No se muestra nada.',
   unavailable: 'No se pudo leer ni comprobar el resumen de acceso. No se muestra nada.', none: 'Ninguna organización coincide con este filtro.', more: 'Ver más',
   concealed: 'El acceso de clientes está oculto mientras esta pestaña está en segundo plano.', reveal: 'Mostrar de nuevo',

@@ -3498,6 +3498,22 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.cancel_parent_class_booking(text,jsonb,text,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
+-- 0351 school Twilio subaccounts: no runtime access to the table or any of its five worker functions (013 grants them
+-- to hon_communication_worker only).
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regclass('hon.school_twilio_accounts') IS NULL THEN RAISE EXCEPTION 'Apply migration 0351 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_twilio_accounts FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_twilio_accounts FROM '||quote_ident(r);
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.begin_school_twilio_account(uuid,integer)','hon.complete_school_twilio_account(uuid,uuid,text,text,text)',
+    'hon.read_twilio_webhook_account(text)','hon.read_twilio_send_account(uuid,text)','hon.twilio_number_in_account(text,text)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+END $$;
 -- 0347 school social connections: exactly six runtime entry points, no table privilege.
 DO $$ DECLARE r text; BEGIN
   IF to_regclass('hon.school_social_accounts') IS NULL THEN RAISE EXCEPTION 'Apply migration 0347 first'; END IF;
@@ -3519,4 +3535,43 @@ DO $$ DECLARE r text; BEGIN
   GRANT EXECUTE ON FUNCTION hon.read_school_social_posts(text,timestamptz,timestamptz), hon.create_school_social_post(text,jsonb,text,uuid,uuid),
     hon.edit_school_social_post(text,uuid,jsonb,text,uuid,uuid), hon.approve_school_social_post(text,uuid,jsonb,text,uuid,uuid),
     hon.cancel_school_social_post(text,uuid,jsonb,text,uuid,uuid), hon.resolve_school_social_post_target(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
+END $$;
+-- 0352 school number orders: six runtime entry points (owner request/cancel/read/search scope, HQ decide/read), no
+-- table privilege; claim/record are worker-only (013); the actor check and JSON helper are private.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regclass('hon.school_number_orders') IS NULL THEN RAISE EXCEPTION 'Apply migration 0352 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_number_orders FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_number_orders FROM '||quote_ident(r);
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.require_school_sender_manager(text)','hon.school_number_order_json(hon.school_number_orders)',
+    'hon.claim_school_number_purchases(integer,integer)','hon.record_school_number_purchase(uuid,uuid,text,text,text,text,text)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.authorize_school_number_search(text), hon.request_school_number(text,jsonb,text),
+    hon.cancel_school_number_order(text,uuid,integer), hon.read_school_number_orders(text),
+    hon.decide_school_number_order_from_hq(text,uuid,text,text,integer), hon.read_hq_school_number_orders(text,text) TO hon_runtime;
+END $$;
+-- 0353 AI on HQ access-exception schools under an HQ-owner monthly limit: only the HQ command and read reach the
+-- runtime; the two tables and the decision helpers are internal.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.command_ai_exception_school_allowance(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0353 first'; END IF;
+  REVOKE ALL ON TABLE hon.ai_exception_school_allowances, hon.ai_exception_school_allowance_commands FROM PUBLIC;
+  FOREACH f IN ARRAY ARRAY['ai_exception_default_allowance_micros()','ai_exception_allowance_micros(uuid,uuid)',
+    'ai_org_spend_allowed_for_school(uuid,uuid,timestamptz,text)','guard_ai_exception_school_allowances()','guard_ai_exception_school_allowance_commands()'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+  END LOOP;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.ai_exception_school_allowances, hon.ai_exception_school_allowance_commands FROM '||quote_ident(r);
+    FOREACH f IN ARRAY ARRAY['ai_exception_default_allowance_micros()','ai_exception_allowance_micros(uuid,uuid)',
+      'ai_org_spend_allowed_for_school(uuid,uuid,timestamptz,text)','guard_ai_exception_school_allowances()','guard_ai_exception_school_allowance_commands()'] LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.command_ai_exception_school_allowance(text,jsonb,uuid), hon.read_ai_exception_school_allowances_from_hq(text) TO hon_runtime;
+  END IF;
 END $$;

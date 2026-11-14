@@ -48,6 +48,7 @@ export const SAAS_PLAN_CAPABILITIES: Record<SaasPlanCode, readonly string[]> = {
 /** Human-command header values, one per command route. */
 export const SAAS_COMMANDS = {
   setSchoolTextSender: 'hq-school-text-sender-set',
+  decideSchoolNumberOrder: 'hq-school-number-order-decide',
   setSchoolMissedCallSettings: 'hq-school-missed-call-settings-set',
   setZernioLeadForm: 'hq-zernio-lead-form-set',
   recordSubscriptionGeneration: 'saas-subscription-generation-record',
@@ -103,6 +104,7 @@ export const SAAS_COMMANDS = {
   decideExceptionPolicy: 'saas-access-exception-policy-decision',
   aiSpendPause: 'ai-spend-pause',
   aiSchoolCostLimit: 'ai-school-cost-limit',
+  aiExceptionAllowance: 'ai-exception-allowance',
   aiUnknownResolve: 'ai-unknown-resolve',
   aiLateProviderExpense: 'ai-late-provider-expense',
   setCreativeProgram: 'saas-creative-program',
