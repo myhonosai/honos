@@ -127,6 +127,9 @@ import { SchoolOnboardingController } from './onboarding/school-onboarding.contr
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
 import { SchoolSupportController } from './support/school-support.controller.js';
 import { SchoolSupportService } from './support/school-support.service.js';
+import { SchoolSocialController } from './marketing/social/school-social.controller.js';
+import { SchoolSocialService } from './marketing/social/school-social.service.js';
+import { ZERNIO_SOCIAL_ADAPTER, zernioSocialAdapterFactory } from './marketing/social/zernio-social-adapter.js';
 import { SchoolMembershipListController, SchoolMembershipListHumanUiGuard } from './billing/school-membership-list.controller.js';
 import { SchoolMembershipListService } from './billing/school-membership-list.service.js';
 import { CrmSchoolClockController, CrmSchoolClockHumanUiGuard, CrmSessionSchoolClockController } from './crm/crm-school-clock.controller.js';
@@ -479,6 +482,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     StudentImportController,
     SchoolOnboardingController,
     SchoolSupportController,
+    SchoolSocialController,
     TuitionPaymentController,
     SchoolPaymentController,
     SchoolPayMethodController,
@@ -643,6 +647,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     StudentImportService,
     SchoolOnboardingService,
     SchoolSupportService,
+    SchoolSocialService,
     ClassSeriesService,
     SchoolReportsService,
     SchoolEventService,
@@ -697,6 +702,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqAiProviderService,
     ZernioIntegrationService, ZernioHumanUiGuard,
     { provide: ZERNIO_RUNTIME, useFactory: () => new ZernioCredentialRuntime() },
+    { provide: ZERNIO_SOCIAL_ADAPTER, useFactory: () => zernioSocialAdapterFactory() },
     A2pPreparationService, A2pPreparationHumanGuard,
     {provide:A2P_WEBSITE_INSPECTOR,useFactory:()=>new UnavailableA2pWebsiteInspector()},
     HqEntitlementService,
