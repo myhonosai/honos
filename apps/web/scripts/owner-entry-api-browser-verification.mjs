@@ -126,7 +126,7 @@ try {
   const before = await snapshot();
   for (const who of [hq, a, b]) {
     const r = await originalFetch(`${origin}/auth/continue`, { headers: headers(who), redirect: 'manual' });
-    assert.equal(r.status, 303); assert.equal(r.headers.get('location'), who === hq ? '/hq' : '/staff/entry');
+    assert.equal(r.status, 303); assert.equal(r.headers.get('location'), who === hq ? '/hq' : '/staff/dashboard');
     assert.equal(await r.text(), ''); assert.equal(r.headers.get('cache-control'), 'no-store');
   }
   pass('real signed HQ/A/B sessions reach separate fixed authorized landing routes');
@@ -194,8 +194,10 @@ try {
     await context.route('**/*', async route => { if (!await blockExternal(route)) return route.continue(); });
     const page = await context.newPage(), errors = []; page.on('pageerror', e => errors.push(e.message));
     await page.goto(`${origin}/auth/continue`);
-    assert.equal(new URL(page.url()).pathname, who === hq ? '/hq' : '/staff/entry');
+    assert.equal(new URL(page.url()).pathname, who === hq ? '/hq' : '/staff/dashboard');
     if (who !== hq) {
+      // A single verified school lands on its home; the school entry hub stays one click away.
+      await page.goto(`${origin}/staff/entry`);
       await page.getByTestId('entry-crm').waitFor(); const own = new URL(await page.getByTestId('entry-crm').getAttribute('href'), origin);
       assert.equal(own.searchParams.get('schoolId'), who.school); assert.equal(own.searchParams.get('organizationId'), who.org);
       for (const [key, path] of [['team', '/staff/team/invitations'], ['family', '/staff/family-access'], ['dashboard', '/staff/dashboard']]) {
@@ -206,7 +208,7 @@ try {
       const denial = await page.evaluate(async path => (await fetch(path, { credentials: 'same-origin', cache: 'no-store' })).status, `/api/v1/organizations/${other.org}/schools/${other.school}/reports/operations`);
       assert.equal(denial, 403); assert(!(await page.getByTestId('entry-private').innerText()).includes(other.school));
     } else await page.getByRole('heading', { level: 1 }).first().waitFor();
-    assert.equal(errors.length, 0); identityChecks.push({ label, expectedLanding: who === hq ? '/hq' : '/staff/entry', actualIamAndDatabase: true, crossSchoolDenied: who === hq ? 'HQ separate plane' : true }); await context.close();
+    assert.equal(errors.length, 0); identityChecks.push({ label, expectedLanding: who === hq ? '/hq' : '/staff/dashboard', actualIamAndDatabase: true, crossSchoolDenied: who === hq ? 'HQ separate plane' : true }); await context.close();
   }
   pass('mounted HQ/School A/School B navigation and actual cross-school denial preserve separate identity contexts');
   {
