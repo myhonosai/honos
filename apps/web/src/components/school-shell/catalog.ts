@@ -37,7 +37,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/testing/readiness', 'routeReadiness'), r('/staff/testing/scorecards', 'routeScorecards'), r('/staff/testing/promotion-decisions', 'routePromotions'),
     r('/staff/testing/certificates', 'routeCertificates')] },
   { key: 'marketing', titleKey: 'navMarketing', routes: [r('/staff/marketing', 'routeMarketingHome'), r('/staff/marketing/campaigns', 'routeCampaigns'), r('/staff/marketing/forms', 'routeForms'),
-    r('/staff/marketing/intake', 'routeIntake'), r('/staff/creative-studio', 'routeCreativeStudio')] },
+    r('/staff/marketing/intake', 'routeIntake'), r('/staff/marketing/social', 'routeSocial'), r('/staff/creative-studio', 'routeCreativeStudio')] },
   { key: 'referrals', titleKey: 'navReferrals', routes: [r('/staff/champions-club', 'routeChampions')] },
   { key: 'community', titleKey: 'navCommunity', routes: [r('/community', 'routeCommunity'), r('/community/marketplace', 'routeMarketplace')] },
   { key: 'analytics', titleKey: 'navAnalytics', routes: [r('/staff/reports', 'routeSchoolReports'), r('/staff/health-score', 'routeHealthScore'), r('/staff/planning/revenue', 'routeRevenuePlanning')] },
@@ -55,6 +55,8 @@ export const SCHOOL_SHELL_UNLISTED_ROUTES: readonly string[] = [
   '/staff/testing/candidates/register',
   '/staff/testing/candidates/grade',
   '/staff/search/[organizationId]/[schoolId]/[kind]/[entityId]',
+  // The page Facebook or Instagram returns to after a social connection (0347); reached only from Social accounts.
+  '/staff/marketing/social/return',
 ];
 
 /** Mobile bottom bar: four primary destinations plus "More". */

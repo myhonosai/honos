@@ -2,6 +2,7 @@ import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Pool } from 'pg';
 import { runtimePoolOptions } from '../../foundation/runtime-pool-options.js';
 import type { CommunicationProviderName, DeliverableChannel } from './communication-provider.js';
+import type { TwilioSubaccountStore } from './twilio-subaccounts.js';
 
 export interface ClaimedCommunicationDelivery {
   deliveryId: string;
@@ -83,7 +84,7 @@ export const COMMUNICATION_WORKER_STORE = Symbol('COMMUNICATION_WORKER_STORE');
  * superuser, bypasses RLS, or is the runtime login.
  */
 @Injectable()
-export class CommunicationWorkerDatabase implements CommunicationWorkerStore, OnModuleDestroy {
+export class CommunicationWorkerDatabase implements CommunicationWorkerStore, TwilioSubaccountStore, OnModuleDestroy {
   private pool: Pool | undefined;
   private posture: Promise<void> | undefined;
 
@@ -197,5 +198,40 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, On
       [lead.eventId, lead.leadgenId, lead.accountId, lead.formId, JSON.stringify(lead.fields), JSON.stringify(lead.ad)]))[0];
     if (!row) throw new Error('COMMUNICATION_ZERNIO_LEAD_NOT_RECORDED');
     return { outcome: row.outcome, leadId: row.lead_id };
+  }
+
+  /** T1 (0351): an ACTIVE school subaccount's sealed token, for webhook signature checks only. */
+  async readTwilioWebhookAccount(accountSid: string) {
+    const row = (await this.query<{ school_id: string; organization_id: string; sealed_auth_token: string; vault_key_id: string }>(
+      'SELECT * FROM hon.read_twilio_webhook_account($1)', [accountSid]))[0];
+    return row ? { schoolId: row.school_id, organizationId: row.organization_id, sealedAuthToken: row.sealed_auth_token, vaultKeyId: row.vault_key_id } : null;
+  }
+
+  /** T1 (0351): the subaccount a school Messaging Service is on; none means the parent account. */
+  async readTwilioSendAccount(schoolId: string, serviceSid: string) {
+    const row = (await this.query<{ account_sid: string; account_status: 'ACTIVE' | 'SUSPENDED' | 'CLOSED' }>(
+      'SELECT * FROM hon.read_twilio_send_account($1, $2)', [schoolId, serviceSid]))[0];
+    return row ? { accountSid: row.account_sid, status: row.account_status } : null;
+  }
+
+  async twilioNumberInAccount(accountSid: string, phoneE164: string) {
+    const row = (await this.query<{ owned: boolean }>('SELECT hon.twilio_number_in_account($1, $2) AS owned', [accountSid, phoneE164]))[0];
+    return row?.owned === true;
+  }
+
+  async beginSchoolTwilioAccount(schoolId: string, leaseSeconds: number) {
+    const row = (await this.query<{ state: 'ACTIVE' | 'CLAIMED' | 'BUSY'; account_sid: string | null; claim_token: string | null }>(
+      'SELECT * FROM hon.begin_school_twilio_account($1, $2)', [schoolId, leaseSeconds]))[0];
+    if (!row) throw new Error('TWILIO_ACCOUNT_NOT_CLAIMED');
+    if (row.state === 'ACTIVE' && row.account_sid) return { state: 'ACTIVE' as const, accountSid: row.account_sid };
+    if (row.state === 'CLAIMED' && row.claim_token) return { state: 'CLAIMED' as const, claimToken: row.claim_token };
+    return { state: 'BUSY' as const };
+  }
+
+  async completeSchoolTwilioAccount(schoolId: string, claimToken: string, accountSid: string, sealedAuthToken: string, vaultKeyId: string) {
+    const row = (await this.query<{ account_sid: string }>('SELECT * FROM hon.complete_school_twilio_account($1, $2, $3, $4, $5)',
+      [schoolId, claimToken, accountSid, sealedAuthToken, vaultKeyId]))[0];
+    if (!row) throw new Error('TWILIO_ACCOUNT_NOT_RECORDED');
+    return { accountSid: row.account_sid };
   }
 }

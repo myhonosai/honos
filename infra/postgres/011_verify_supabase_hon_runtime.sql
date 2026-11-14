@@ -3603,3 +3603,18 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END LOOP;
 END $$;
 -- End parent class booking exact verification.
+-- School Twilio subaccounts exact verification (T1 0351): a private forced-RLS table the runtime cannot touch and five
+-- worker-only definer functions the runtime cannot run.
+DO $$ DECLARE f text; BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.school_twilio_accounts'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR has_table_privilege('hon_runtime','hon.school_twilio_accounts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+    RAISE EXCEPTION 'Unsafe school Twilio subaccount table posture'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.begin_school_twilio_account(uuid,integer)','hon.complete_school_twilio_account(uuid,uuid,text,text,text)',
+    'hon.read_twilio_webhook_account(text)','hon.read_twilio_send_account(uuid,text)','hon.twilio_number_in_account(text,text)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef
+        AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND (owner.rolsuper OR owner.rolbypassrls))
+      OR has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') THEN
+      RAISE EXCEPTION 'Unsafe school Twilio subaccount function: %',f; END IF;
+  END LOOP;
+END $$;
+-- End school Twilio subaccounts exact verification.
