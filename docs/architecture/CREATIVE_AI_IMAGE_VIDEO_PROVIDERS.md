@@ -108,7 +108,10 @@ Per school (most already enforced):
 Platform wide (new, protects HON's provider balances):
 
 - **Daily provider spend guard** per provider, set by the HQ owner (proposed defaults: Higgsfield $25/day,
-  HeyGen $50/day). Every submit counts its worst-case cost first; at the limit new submissions are refused with
+  HeyGen $50/day). No limit set means no real submissions. Every submit counts its worst-case cost first, under one
+  lock per provider. Today's committed cost is every job permitted today: its recorded cost where one is recorded, and
+  its worst case (reserved credits × $0.01) for jobs still permitted, submitted or unknown, or whose cost is
+  unrecorded; at the limit new submissions are refused with
   `CREATIVE_PROVIDER_DAILY_LIMIT` (credits never reserved) and HQ sees an alert. Jobs already submitted finish.
 
 ## 5. How a generation runs (asynchronous)
@@ -127,13 +130,24 @@ flow becomes asynchronous. The money rules do not change.
    records the stored object, its SHA-256, size, dimensions and duration. The provider URL is never stored or shown.
    A download failure keeps the generation in `SUBMITTED` for a retry by the worker (the provider is not called
    again); after the 30-minute limit it becomes `UNKNOWN`.
-5. **Settle.** The existing `record_creative_generation_result` charges the actual units (never more than reserved)
-   and records the provider cost. The asset starts as **`PENDING_REVIEW`**.
+5. **Settle.** The existing 0216 `record_creative_generation_result` is human-bound: it proves the caller is the
+   requester's own active subject. A worker that finishes minutes later has no such subject, so C1 adds
+   **worker-only, lease-bound recording functions** (granted to the worker login only, never to `hon_runtime`) for
+   success, failure, unknown and the 30-minute timeout. Download failures from C3 use the same functions. These
+   functions do not take a subject from the caller; they act only on the leased job. Inside the database they run the
+   same 0216 validation and the same CW1 settle (wallet lock, finalize actual units never above the reservation,
+   release, unknown held), recording the **requester as the original actor**. The job row records that the
+   **worker** (or the deadline) closed it, as the integration source. If the requester is no longer an active
+   single-principal person, nothing is settled: the job closes as `REQUESTER_UNAVAILABLE` and the reservation stays
+   RESERVED for the existing HQ resolution. The human-bound function stays for the synchronous path, and refuses a
+   generation whose provider job was submitted, so only the worker can record it. The asset starts as
+   **`PENDING_REVIEW`**.
 
 Storage: one private Supabase Storage bucket `creative-media` on the existing Supabase Pro project, object keys
 `<orgId>/<schoolId>/<generationId>/<n>`, written only by `hon-api` with the service key. Reads are short-lived (5 min)
 signed URLs issued by the API after an exact-school permission check. HQ Creative Studio assets use an `hq/` prefix
-and never mix with school keys. Deleting an asset removes the object and keeps an identifier-only audit record.
+and never mix with school keys. A signed read is authorized against the **asset row** (its school, organization or
+HQ ownership, and its review status), never from the object key or its prefix. Deleting an asset removes the object and keeps an identifier-only audit record.
 *To confirm with David: storage size on Supabase Pro (100 GB included) is enough; retention proposal: delete unused
 assets after 12 months.*
 
@@ -158,8 +172,13 @@ route under the school's normal AI limits, `HON_CREATIVE_AI_MODERATION_APPROVED`
 
 **After generation (human approval, always on):**
 - Every new asset is `PENDING_REVIEW`. Only the person who asked and staff with `marketing.social.manage` can view it.
+- The blocklist cannot see a picture, so the rule that children appear only in illustrated or chibi styles is
+  **enforced by this human review** (and by HON's prompt wording for each style). The prompt checks only reduce what
+  reaches review.
 - A person with `marketing.social.manage` marks it `APPROVED` or `REJECTED` (human command). AI team members can
-  never approve.
+  never approve. Proposed: the requester may approve their own asset when they hold that permission, because most
+  schools have one or two marketing people. A school can still require a second person later. This is an owner
+  decision (§10).
 - Only `APPROVED` assets can be attached to a post or an ad, downloaded at full size, or used as an avatar look.
   Approval is re-checked when a post is published, so a later rejection or deletion stops a scheduled post.
 - Approving records who approved it and when, kept as evidence. A rejected asset can be deleted at once.
@@ -210,7 +229,8 @@ timeout, lost submit, bad download, oversized file, wrong host), and browser che
 
 1. Credit rates in §3 (10 per image, 20 per video second, 15 per avatar-video second, 8 per photo-avatar second).
 2. Daily caps per school and the platform daily provider guard in §4.
-3. Human approval of every asset before it can be posted (recommended always on).
+3. Human approval of every asset before it can be posted (recommended always on), and whether the requester may approve
+   their own asset (proposed yes).
 4. Media retention (12 months for unused assets) and the 30-minute timeout.
 
 Risky items for the final pre-launch review: real provider calls and spend, the storage service key in `hon-api`,
