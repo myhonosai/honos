@@ -111,4 +111,14 @@ BEGIN
 END;
 $$;
 
+-- 0354 creative provider jobs: claim, poll and record leased jobs (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.claim_creative_provider_jobs(integer,integer)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.claim_creative_provider_jobs(integer, integer), hon.record_creative_provider_job_poll(uuid, uuid),
+      hon.record_creative_provider_job_result(uuid, uuid, jsonb) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 COMMIT;

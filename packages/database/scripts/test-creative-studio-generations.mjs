@@ -333,7 +333,7 @@ try{
   await assert.rejects(admin.query("UPDATE hon.creative_generations SET prompt='changed' WHERE id=$1",[g.generationId]),e=>e.code==='42501');
   await assert.rejects(admin.query('DELETE FROM hon.creative_generations WHERE id=$1',[g.generationId]),e=>e.code==='42501');
   await assert.rejects(admin.query("UPDATE hon.creative_generation_assets SET width=1 WHERE generation_id=$1",[g.generationId]),e=>/IMMUTABLE|42501/.test(e.code+e.message));
-  await assert.rejects(admin.query("INSERT INTO hon.creative_generation_assets(generation_id,school_id,ordinal,media_type,width,height,origin,provider_asset_reference,created_at) VALUES($1,$2,3,'image/png',1,1,'PROVIDER','x',now())",[g.generationId,S.A1]),e=>e.code==='23514','only SYNTHETIC results in CS1');
+  await assert.rejects(admin.query("INSERT INTO hon.creative_generation_assets(generation_id,school_id,ordinal,media_type,width,height,origin,provider_asset_reference,created_at) VALUES($1,$2,3,'image/png',1,1,'REAL','x',now())",[g.generationId,S.A1]),e=>e.code==='23514','only SYNTHETIC or PROVIDER (0354) results in CS1');
  });
 
  // ---------- P2-162-1 (Manus): authority is final for the generation write, not only for the CW1 reserve ----------
