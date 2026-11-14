@@ -37,14 +37,21 @@ describe('school home model', () => {
     expect(myTasks(work()).map(item => item.workItemId)).toEqual(['w1', 'w2']);
   });
 
-  it('shows the owner roster: Kai for teaching, then the seven specialists, with Claire as Business Performance', () => {
+  it('shows the owner roster: Kai for teaching, then the seven specialists, each linked to where they work', () => {
     const team = homeAiTeam({ state: 'READY', value: readiness() }, 'realistic');
     expect(team.map(card => card.name)).toEqual(['Kai', 'Chad', 'Marcus', 'Alex', 'Maya', 'Jordan', 'Claire', 'Lena']);
-    expect(team.find(card => card.id === 'claire')).toMatchObject({ title: 'agentClaire', status: 'NOT_AVAILABLE', href: null });
     expect(team.find(card => card.id === 'kai')).toMatchObject({ href: '/staff/teaching-assistant', portrait: '/ai/kai.webp' });
+    expect(team.find(card => card.id === 'maya')).toMatchObject({ href: '/staff/retention/at-risk' });
+    // Alex, Jordan, Claire and Lena answer in Ask HON (0260), opened with that specialist picked.
+    for (const id of ['alex', 'jordan', 'claire', 'lena']) expect(team.find(card => card.id === id)).toMatchObject({ href: `/staff/hon?ask=${id}` });
     expect(team.some(card => card.id === 'eian')).toBe(false);
-    for (const id of ['alex', 'maya', 'jordan', 'lena']) expect(team.find(card => card.id === id)).toMatchObject({ status: 'NOT_AVAILABLE', href: null });
     for (const member of HON_AI_TEAM) expect(team.find(card => card.id === member.id)?.portrait).toBe(member.portrait);
+  });
+
+  it('never shows an agent as available when readiness does not list them', () => {
+    // The fixture lists only Marcus, Kai and Chad: everyone else is unverified, never ready.
+    const team = homeAiTeam({ state: 'READY', value: readiness() }, 'realistic');
+    for (const id of ['alex', 'maya', 'jordan', 'claire', 'lena']) expect(team.find(card => card.id === id)?.status).toBe('UNKNOWN');
   });
 
   it('draws every agent in the chosen art style without changing who is available', () => {
@@ -62,7 +69,7 @@ describe('school home model', () => {
       readinessAgent('chad', 'CHAD_FOLLOW_UP', 3, { spendDecision: 'AI_PAUSED_BY_HQ', available: false, blockedBy: 'AI_PAUSED_BY_HQ' })]);
     const team = homeAiTeam({ state: 'READY', value: live }, 'realistic');
     expect(team.find(card => card.id === 'kai')?.status).toBe('READY');
-    expect(team.find(card => card.id === 'claire')?.status).toBe('NOT_AVAILABLE');
+    expect(team.find(card => card.id === 'claire')?.status).toBe('UNKNOWN');
     expect(team.find(card => card.id === 'marcus')?.status).toBe('NO_PERMISSION');
     expect(team.find(card => card.id === 'chad')?.status).toBe('AI_OFF');
     expect(agentStatus({ state: 'READY', value: readiness() }, 'chad')).toBe('PROVIDER_OFF');
@@ -71,6 +78,8 @@ describe('school home model', () => {
     expect(agentStatus({ state: 'LOADING' }, 'chad')).toBe('CHECKING');
     const budget = readiness([readinessAgent('marcus', 'MARKETING', 6, { blockedBy: 'ORGANIZATION_AI_BUDGET_REACHED' }), readinessAgent('kai', 'TEACHING', 6, { route: 'NO_ELIGIBLE_ROUTE', blockedBy: 'NO_ELIGIBLE_ROUTE' }), readinessAgent('chad', 'CHAD_FOLLOW_UP', 3)]);
     expect(agentStatus({ state: 'READY', value: budget }, 'marcus')).toBe('BUDGET');
-    expect(agentStatus({ state: 'READY', value: budget }, 'claire')).toBe('NO_ROUTE');
+    expect(agentStatus({ state: 'READY', value: budget }, 'kai')).toBe('NO_ROUTE');
+    // Claire is Business Performance: the teaching row is Kai's and never answers for her.
+    expect(agentStatus({ state: 'READY', value: budget }, 'claire')).toBe('UNKNOWN');
   });
 });

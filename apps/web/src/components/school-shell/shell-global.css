@@ -3,3 +3,12 @@ body:has([data-hon-ui='school']) > [data-locale-utility] { display: none; }
 body:has([data-hon-ui='school']) { margin: 0; background: #050a18; }
 /* One Ask HON entry point: the shell's top-bar button replaces the floating launcher inside the shell. */
 body:has([data-hon-ui='school']) [data-hon-launcher] { display: none; }
+/*
+ * One navigation (owner, 2026-11-14). Pages written before the shell carry their own row of staff links and a
+ * sign-in link; inside the shell the menu, the section tabs and the school strip already do both jobs. Hidden
+ * here only: the shell catalog test keeps every one of those pages reachable from the menu.
+ */
+[data-hon-ui='school'] #hon-main nav[aria-label='Staff navigation'],
+[data-hon-ui='school'] #hon-main nav[data-testid='school-operations-navigation'],
+[data-hon-ui='school'] #hon-main nav:has(> a[href='/staff/dashboard']),
+[data-hon-ui='school'] #hon-main nav a[href='/auth/login'] { display: none; }

@@ -21,8 +21,9 @@ const r = (href: string, titleKey: ShellKey, scoped = false): SchoolShellRoute =
 export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'home', titleKey: 'navHome', routes: [r('/staff/dashboard', 'routeOverview', true), r('/staff/operations', 'routeOperationsReport', true), r('/staff/command-center', 'routeCommandCenter')] },
   { key: 'hon', titleKey: 'navHon', routes: [r('/staff/hon', 'routeHon'), r('/staff/action-center/approvals', 'routeApprovals'), r('/staff/ai-work', 'routeAiWork')] },
-  { key: 'aiTeam', titleKey: 'navAiTeam', routes: [r('/staff/leads/assistant', 'routeLeadAssistant'), r('/staff/marketing/assistant', 'routeMarketingAssistant'),
-    r('/staff/teaching-assistant', 'routeKai'), r('/staff/teaching-studio', 'routeTeachingStudio'), r('/staff/retention/at-risk', 'routeMayaAtRisk')] },
+  // The whole launch roster lives on the AI Team page; the four specialists with their own workspace follow it.
+  { key: 'aiTeam', titleKey: 'navAiTeam', routes: [r('/staff/ai-team', 'routeAiTeam'), r('/staff/leads/assistant', 'routeLeadAssistant'), r('/staff/marketing/assistant', 'routeMarketingAssistant'),
+    r('/staff/teaching-assistant', 'routeKai'), r('/staff/retention/at-risk', 'routeMayaAtRisk')] },
   { key: 'crm', titleKey: 'navCrm', routes: [r('/staff/crm', 'routeLeadsHome'), r('/staff/crm/leads', 'routeLeads', true), r('/staff/crm/journey', 'routeJourney', true), r('/staff/crm/follow-ups', 'routeFollowUps'),
     r('/staff/crm/trials', 'routeTrials', true), r('/staff/crm/lead-memberships', 'routeLeadMemberships'), r('/staff/migration/leads', 'routeLeadImport')] },
   { key: 'students', titleKey: 'navStudents', routes: [r('/staff/search', 'routeStudentSearch'), r('/staff/people', 'routePeople'), r('/staff/family-access', 'routeFamilyAccess', true),
@@ -33,7 +34,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'classes', titleKey: 'navClasses', routes: [r('/staff/schedule', 'routeRosters'), r('/staff/schedule/sessions', 'routeSessions'), r('/staff/schedule/timetable', 'routeTimetable'), r('/staff/schedule/events', 'routeEvents'), r('/staff/schedule/bookings', 'routeBookings'),
     r('/staff/classpass', 'routeClassPass', true), r('/staff/kiosk', 'routeKiosk')] },
   { key: 'attendance', titleKey: 'navAttendance', routes: [r('/staff/attendance', 'routeAttendance', true), r('/staff/attendance/planned-absences', 'routePlannedAbsences'),
-    r('/staff/curriculum/library', 'routeCurriculumLibrary'), r('/staff/curriculum/progress', 'routeProgress'), r('/staff/testing/registrations', 'routeTesting'),
+    r('/staff/curriculum/library', 'routeCurriculumLibrary'), r('/staff/curriculum/progress', 'routeProgress'), r('/staff/teaching-studio', 'routeTeachingStudio'), r('/staff/testing/registrations', 'routeTesting'),
     r('/staff/testing/readiness', 'routeReadiness'), r('/staff/testing/scorecards', 'routeScorecards'), r('/staff/testing/promotion-decisions', 'routePromotions'),
     r('/staff/testing/certificates', 'routeCertificates')] },
   { key: 'marketing', titleKey: 'navMarketing', routes: [r('/staff/marketing', 'routeMarketingHome'), r('/staff/marketing/campaigns', 'routeCampaigns'), r('/staff/marketing/forms', 'routeForms'),
