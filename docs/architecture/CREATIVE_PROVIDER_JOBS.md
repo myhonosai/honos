@@ -75,8 +75,8 @@ HQ (human HQ owner, `require_saas_hq_actor(subject, true)`, reason 10..500, `exp
 
 6. `command_creative_provider_daily_limit(subject, {providerId, dailyLimitMicros, reason, expectedVersion}, key)`.
 7. `command_creative_school_daily_caps(subject, {schoolId, images, videos, avatarVideos, reason, expectedVersion}, key)`.
-8. `read_creative_limits_from_hq(subject)`: provider limits with today's committed cost and open jobs, plus school
-   overrides.
+8. `read_creative_limits_from_hq(subject)`: provider limits with today's committed cost, open jobs and overdue jobs, plus
+   school overrides.
 
 Changes to 0216 behaviour (replacement bodies in 0354):
 
@@ -111,6 +111,20 @@ Changes to 0216 behaviour (replacement bodies in 0354):
 - `avatar.create` is not counted in the daily image cap, because it keeps its own 12-avatar limit.
 - Web: the three new pre-acceptance refusals show as refusals ("nothing reserved"), not as unknown outcomes, in
   EN/KO/ES.
+
+## 3c. Review corrections (#345, first independent review)
+
+- Inventories: `begin_creative_provider_submission` is listed in the AI-0 spend references (it reads `reserved_credits`),
+  and the Creative Studio security proof tracks `guard_creative_generation_daily_cap()` (not definer, no runtime EXECUTE)
+  and its `creative_generation_daily_cap` BEFORE INSERT trigger.
+- The HQ read gives each provider `overdueJobs`: jobs still open past their deadline because the claim sweep skipped a
+  refusal. They stay committed at worst case (safe on spend) and are now visible to HQ.
+- The `synthetic-*` exception for a runtime SUCCEEDED without a permit rests on the server-set `model_code` of the
+  reservation, which no client can choose (the API routes; CS1 input is closed). Only the test runtimes use that prefix,
+  and the C2 adapters must never.
+- The worst case of an open job is its reserved credits × $0.01. That is an upper bound only while every published rate
+  is at or above provider cost; if a rate were ever set below cost, open jobs could pass the daily limit by that gap.
+  The approved rates (2026-11-14) are above the provider prices in the design doc.
 
 Known limit: a `REQUESTER_UNAVAILABLE` reservation still counts toward the school's 3-in-progress cap until the HQ
 owner resolves it. It is listed in the HQ read for that reason.

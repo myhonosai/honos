@@ -87,6 +87,7 @@
     "hon.ai_trial_ceiling_terms(uuid,timestamp with time zone)",
     "hon.ai_unknown_receipt(hon.ai_unknown_resolutions,boolean)",
     "hon.ask_hq_hon(text,jsonb,uuid)",
+    "hon.begin_creative_provider_submission(text,uuid)",
     "hon.command_saas_credit_allowance(text,jsonb,uuid,uuid,uuid)",
     "hon.create_hq_creative_generation(text,jsonb,jsonb,uuid)",
     "hon.creative_generation_json(hon.creative_generations)",

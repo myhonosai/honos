@@ -585,7 +585,11 @@ BEGIN
     'providers', (SELECT coalesce(jsonb_agg(jsonb_build_object('providerId', p.id,
         'dailyLimitMicros', l.daily_limit_micros, 'version', coalesce(l.version, 0), 'reason', l.reason,
         'committedTodayMicros', hon.creative_provider_committed_micros(p.id, at),
-        'openJobs', (SELECT count(*) FROM hon.creative_provider_jobs j WHERE j.provider_id = p.id AND j.status IN ('PERMITTED','SUBMITTED')))
+        'openJobs', (SELECT count(*) FROM hon.creative_provider_jobs j WHERE j.provider_id = p.id AND j.status IN ('PERMITTED','SUBMITTED')),
+        -- Open past the deadline: the claim sweep could not close them (its refusal is skipped so the others proceed).
+        -- Safe on spend (their worst case stays committed) but listed so HQ sees them.
+        'overdueJobs', (SELECT count(*) FROM hon.creative_provider_jobs j WHERE j.provider_id = p.id AND j.status IN ('PERMITTED','SUBMITTED')
+          AND j.deadline_at <= at))
       ORDER BY p.id), '[]'::jsonb)
       FROM unnest(ARRAY['HEYGEN','HIGGSFIELD']) p(id) LEFT JOIN hon.creative_provider_daily_limits l ON l.provider_id = p.id),
     -- Jobs whose requester was gone when the result came: the reservation is still RESERVED and the HQ owner resolves it
