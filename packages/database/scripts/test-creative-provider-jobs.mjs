@@ -301,7 +301,10 @@ try{
    const j=await job(g.generationId);ids.push([g.generationId,j.id]);
    await travel(j.id,"permitted_at=permitted_at-interval '31 minutes',deadline_at=deadline_at-interval '31 minutes'");
   }
+  const overdue=async()=>(await readHq()).providers.reduce((n,p)=>n+Number(p.overdueJobs),0);
+  const before=await overdue();assert.ok(before>=2,'open jobs past their deadline are listed for HQ before the sweep');
   assert.equal((await ourJobs(ids.map(x=>x[1]))).length,0,'expired jobs are swept, not leased');
+  assert.ok(await overdue()<=before-2,'swept jobs leave the overdue count');
   for(const [gid] of ids){
    const j=await job(gid);assert.deepEqual([j.status,j.closed_by],['TIMED_OUT','DEADLINE']);
    assert.equal((await studio.read(H('ownerB'),S.B,gid)).status,'UNDER_REVIEW');
