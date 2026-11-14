@@ -208,9 +208,9 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
   }
 
   /** T1 (0351): the subaccount a school Messaging Service is on; none means the parent account. */
-  async readTwilioSendAccount(serviceSid: string) {
+  async readTwilioSendAccount(schoolId: string, serviceSid: string) {
     const row = (await this.query<{ account_sid: string; account_status: 'ACTIVE' | 'SUSPENDED' | 'CLOSED' }>(
-      'SELECT * FROM hon.read_twilio_send_account($1)', [serviceSid]))[0];
+      'SELECT * FROM hon.read_twilio_send_account($1, $2)', [schoolId, serviceSid]))[0];
     return row ? { accountSid: row.account_sid, status: row.account_status } : null;
   }
 

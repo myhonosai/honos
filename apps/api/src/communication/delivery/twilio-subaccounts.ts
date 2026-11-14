@@ -67,7 +67,7 @@ export function twilioSubaccountVaultFromEnvironment(env: NodeJS.ProcessEnv = pr
 export interface TwilioSubaccountStore {
   isConfigured(): boolean;
   readTwilioWebhookAccount?(accountSid: string): Promise<{ schoolId: string; organizationId: string; sealedAuthToken: string; vaultKeyId: string } | null>;
-  readTwilioSendAccount?(serviceSid: string): Promise<{ accountSid: string; status: 'ACTIVE' | 'SUSPENDED' | 'CLOSED' } | null>;
+  readTwilioSendAccount?(schoolId: string, serviceSid: string): Promise<{ accountSid: string; status: 'ACTIVE' | 'SUSPENDED' | 'CLOSED' } | null>;
   twilioNumberInAccount?(accountSid: string, phoneE164: string): Promise<boolean>;
   beginSchoolTwilioAccount?(schoolId: string, leaseSeconds: number):
     Promise<{ state: 'ACTIVE'; accountSid: string } | { state: 'CLAIMED'; claimToken: string } | { state: 'BUSY' }>;
@@ -79,8 +79,8 @@ export interface TwilioSubaccountStore {
 export interface TwilioSubaccountDirectory {
   /** The ACTIVE subaccount's token and school, or null (unknown, not ACTIVE, or the sealed token does not open). */
   webhookCredential(accountSid: string): Promise<(TwilioSubaccountCredential & { schoolId: string }) | null>;
-  /** The subaccount a school Messaging Service lives on, or null when it is on the parent account (0248 hand-entered). */
-  sendAccount(serviceSid: string): Promise<{ accountSid: string; status: 'ACTIVE' | 'SUSPENDED' | 'CLOSED' } | null>;
+  /** The subaccount the school's Messaging Service lives on, or null when it is on the parent account (0248 hand-entered). */
+  sendAccount(schoolId: string, serviceSid: string): Promise<{ accountSid: string; status: 'ACTIVE' | 'SUSPENDED' | 'CLOSED' } | null>;
   /** True when the number is a sender of that subaccount's school, on that subaccount. */
   numberInAccount(accountSid: string, phoneE164: string): Promise<boolean>;
 }
@@ -104,9 +104,9 @@ export class WorkerTwilioSubaccountDirectory implements TwilioSubaccountDirector
     } catch { return null; }
   }
 
-  async sendAccount(serviceSid: string) {
-    if (!SERVICE_SID.test(serviceSid)) return null;
-    return this.require('readTwilioSendAccount')(serviceSid);
+  async sendAccount(schoolId: string, serviceSid: string) {
+    if (!SERVICE_SID.test(serviceSid) || !UUID.test(schoolId.toLowerCase())) return null;
+    return this.require('readTwilioSendAccount')(schoolId, serviceSid);
   }
 
   async numberInAccount(accountSid: string, phoneE164: string) {

@@ -88,7 +88,7 @@ export class TwilioTextProvider implements CommunicationProviderAdapter {
     let sendAccount = account;
     if (request.origin !== 'HQ' && this.subaccounts) {
       let sub: Awaited<ReturnType<TwilioSubaccountDirectory['sendAccount']>>;
-      try { sub = await this.subaccounts.sendAccount(request.senderServiceId!); }
+      try { sub = await this.subaccounts.sendAccount(request.schoolId, request.senderServiceId!); }
       catch { throw new CommunicationProviderError('RETRYABLE', 'PROVIDER_FAILED', 300); }
       if (sub && sub.status !== 'ACTIVE') throw new CommunicationProviderError('RETRYABLE', 'PROVIDER_FAILED', 900);
       if (sub) sendAccount = sub.accountSid;

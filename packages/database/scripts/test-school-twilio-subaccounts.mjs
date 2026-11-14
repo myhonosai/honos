@@ -65,7 +65,7 @@ try {
   await expectError('42501', () => runtime.query('SELECT count(*) FROM hon.school_twilio_accounts'), 'runtime cannot read subaccounts');
   await expectError('42501', () => runtime.query('SELECT * FROM hon.begin_school_twilio_account($1, 60)', [ids.schoolA]), 'runtime cannot claim a subaccount');
   await expectError('42501', () => runtime.query('SELECT * FROM hon.read_twilio_webhook_account($1)', [acct('a')]), 'runtime cannot read a sealed token');
-  await expectError('42501', () => runtime.query('SELECT * FROM hon.read_twilio_send_account($1)', [service('a')]), 'runtime cannot read send accounts');
+  await expectError('42501', () => runtime.query('SELECT * FROM hon.read_twilio_send_account($1, $2)', [ids.schoolA, service('a')]), 'runtime cannot read send accounts');
   await expectError('42501', () => runtime.query('SELECT hon.twilio_number_in_account($1, $2)', [acct('a'), '+15555559001']), 'runtime cannot check numbers');
   await expectError('42501', () => worker.query('SELECT count(*) FROM hon.school_twilio_accounts'), 'worker cannot read the table directly');
   await expectError('42501', () => worker.query('INSERT INTO hon.school_twilio_accounts (organization_id, school_id, status, claim_token, claim_expires_at) VALUES ($1,$2,$3,$4, now())',
@@ -92,6 +92,18 @@ try {
   check((await admin.query('SELECT next_state FROM hon.audit_events WHERE organization_id = $1 AND action_code = $2', [ids.org, 'communication.twilio_account.created'])).rows[0].next_state.sealedAuthToken === undefined,
     'the audit record holds no token');
 
+  // Two first claims at once: the second waits on the insert and comes back BUSY, not an error.
+  const worker2 = new Client(local(process.env.HON_COMMUNICATION_WORKER_DATABASE_URL));
+  await worker2.connect();
+  try {
+    await worker.query('BEGIN');
+    const winner = (await worker.query('SELECT * FROM hon.begin_school_twilio_account($1, 60)', [ids.schoolC])).rows[0];
+    const loser = worker2.query('SELECT * FROM hon.begin_school_twilio_account($1, 60)', [ids.schoolC]).then((r) => r.rows[0].state, (e) => e.code);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await worker.query('COMMIT');
+    check(winner.state === 'CLAIMED' && await loser === 'BUSY', 'two concurrent first claims: one CLAIMED, the other BUSY');
+  } finally { await worker2.end(); }
+
   // 3. One SID per school; a SID cannot be recorded for two schools.
   const b = await begin(ids.schoolB);
   await expectError('23505', () => complete(ids.schoolB, b.claim_token, acct('a')), "school B cannot record school A's subaccount");
@@ -115,9 +127,11 @@ try {
   const hook = (await worker.query('SELECT * FROM hon.read_twilio_webhook_account($1)', [acct('a')])).rows;
   check(hook.length === 1 && hook[0].school_id === ids.schoolA && hook[0].sealed_auth_token === sealed(1) && hook[0].vault_key_id === 'staging-1', 'webhook read returns the sealed token for the ACTIVE subaccount');
   check((await worker.query('SELECT * FROM hon.read_twilio_webhook_account($1)', [acct('e')])).rows.length === 0, 'an unknown SID returns nothing');
-  const send = (await worker.query('SELECT * FROM hon.read_twilio_send_account($1)', [service('a')])).rows;
+  const send = (await worker.query('SELECT * FROM hon.read_twilio_send_account($1, $2)', [ids.schoolA, service('a')])).rows;
   check(send.length === 1 && send[0].account_sid === acct('a') && send[0].account_status === 'ACTIVE', 'a subaccount service sends on its subaccount');
-  check((await worker.query('SELECT * FROM hon.read_twilio_send_account($1)', [service('b')])).rows.length === 0, 'a parent-account (0248 hand-entered) service has no subaccount');
+  check((await worker.query('SELECT * FROM hon.read_twilio_send_account($1, $2)', [ids.schoolB, service('b')])).rows.length === 0, 'a parent-account (0248 hand-entered) service has no subaccount');
+  check((await worker.query('SELECT * FROM hon.read_twilio_send_account($1, $2)', [ids.schoolB, service('a')])).rows.length === 0,
+    "school A's service SID asked for school B returns nothing, so B's texts never go out on A's subaccount");
   const owns = async (sid, phone) => (await worker.query('SELECT hon.twilio_number_in_account($1, $2) AS owned', [sid, phone])).rows[0].owned;
   check(await owns(acct('a'), '+15555559001') === true, "school A's number is in school A's subaccount");
   check(await owns(acct('a'), '+15555559002') === false, "school B's number is not in school A's subaccount");
@@ -128,7 +142,7 @@ try {
   // 7. A suspended subaccount: no webhook token, sends report SUSPENDED (the adapter refuses), numbers no longer verify.
   await admin.query("UPDATE hon.school_twilio_accounts SET status = 'SUSPENDED' WHERE school_id = $1", [ids.schoolA]);
   check((await worker.query('SELECT * FROM hon.read_twilio_webhook_account($1)', [acct('a')])).rows.length === 0, 'a suspended subaccount has no webhook token');
-  check((await worker.query('SELECT * FROM hon.read_twilio_send_account($1)', [service('a')])).rows[0].account_status === 'SUSPENDED', 'send read reports SUSPENDED');
+  check((await worker.query('SELECT * FROM hon.read_twilio_send_account($1, $2)', [ids.schoolA, service('a')])).rows[0].account_status === 'SUSPENDED', 'send read reports SUSPENDED');
   check(await owns(acct('a'), '+15555559001') === false, 'numbers of a suspended subaccount do not verify');
   await expectError('55000', () => begin(ids.schoolA), 'a suspended subaccount is not re-created');
 

@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "2b013f10b07a59762a53c80b2954acc5b9d0a77a6026a82510054651ef605e8b",
+  "chainSha256": "42f82aa235bb545933c65f7d9cc2b25daa3391d5da8c7fd618ce9d5935f0de97",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -456,7 +456,7 @@
     },
     {
       "file": "0351_school_twilio_subaccounts.sql",
-      "sha256": "2e4f723cc97dea59861d0fe3b9603d0678373a128a3b7782bd5dc0b665be9498"
+      "sha256": "ff9bca68045b9d5f593c56faa97d0cff5c0d408d9f2cbe97287514fda2f25f88"
     }
   ]
 }

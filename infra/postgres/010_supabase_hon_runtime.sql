@@ -3507,7 +3507,7 @@ DO $$ DECLARE r text; f text; BEGIN
     EXECUTE 'REVOKE ALL ON TABLE hon.school_twilio_accounts FROM '||quote_ident(r);
   END LOOP;
   FOREACH f IN ARRAY ARRAY['hon.begin_school_twilio_account(uuid,integer)','hon.complete_school_twilio_account(uuid,uuid,text,text,text)',
-    'hon.read_twilio_webhook_account(text)','hon.read_twilio_send_account(text)','hon.twilio_number_in_account(text,text)'] LOOP
+    'hon.read_twilio_webhook_account(text)','hon.read_twilio_send_account(uuid,text)','hon.twilio_number_in_account(text,text)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM PUBLIC';
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
       EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM '||quote_ident(r);

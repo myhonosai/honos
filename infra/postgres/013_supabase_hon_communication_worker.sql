@@ -84,7 +84,7 @@ DO $$
 BEGIN
   IF to_regprocedure('hon.begin_school_twilio_account(uuid,integer)') IS NOT NULL THEN
     GRANT EXECUTE ON FUNCTION hon.begin_school_twilio_account(uuid, integer), hon.complete_school_twilio_account(uuid, uuid, text, text, text),
-      hon.read_twilio_webhook_account(text), hon.read_twilio_send_account(text), hon.twilio_number_in_account(text, text) TO hon_communication_worker;
+      hon.read_twilio_webhook_account(text), hon.read_twilio_send_account(uuid, text), hon.twilio_number_in_account(text, text) TO hon_communication_worker;
   END IF;
 END;
 $$;

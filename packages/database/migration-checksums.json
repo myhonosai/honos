@@ -286,6 +286,6 @@
     "0338_hq_executive_performance.sql": "36efc3eafd9ab2bd4e6a9b549d973e50e7ac9e57b7fa6a5bbfd79c29748f04d0",
     "0309_hon_os_lifetime_refund_ends_access.sql": "810a648cf0c9faec1f458e841b2710d609982d6f911674c57cc352687c6e562c",
     "0324_hon_os_schedule_renewals_suspension.sql": "6348290ebb2786e32489e2119be51300d6e12ba8e16a3f50e1f50d8e0c967cbe",
-    "0351_school_twilio_subaccounts.sql": "2e4f723cc97dea59861d0fe3b9603d0678373a128a3b7782bd5dc0b665be9498"
+    "0351_school_twilio_subaccounts.sql": "ff9bca68045b9d5f593c56faa97d0cff5c0d408d9f2cbe97287514fda2f25f88"
   }
 }

@@ -59,8 +59,13 @@ BEGIN
   IF s.status::text <> 'ACTIVE' OR org_status IS DISTINCT FROM 'ACTIVE' THEN RAISE EXCEPTION 'SCHOOL_INACTIVE' USING ERRCODE = '55000'; END IF;
   SELECT * INTO row FROM hon.school_twilio_accounts a WHERE a.school_id = p_school FOR UPDATE;
   IF row.id IS NULL THEN
-    INSERT INTO hon.school_twilio_accounts (organization_id, school_id, status, claim_token, claim_expires_at)
-    VALUES (s.organization_id, s.id, 'PENDING', token, now() + make_interval(secs => p_lease_seconds));
+    BEGIN
+      INSERT INTO hon.school_twilio_accounts (organization_id, school_id, status, claim_token, claim_expires_at)
+      VALUES (s.organization_id, s.id, 'PENDING', token, now() + make_interval(secs => p_lease_seconds));
+    EXCEPTION WHEN unique_violation THEN
+      -- Another worker's first claim committed between our read and insert: it holds the claim.
+      state := 'BUSY'; account_sid := NULL; claim_token := NULL; RETURN NEXT; RETURN;
+    END;
     state := 'CLAIMED'; account_sid := NULL; claim_token := token; RETURN NEXT; RETURN;
   END IF;
   IF row.status = 'ACTIVE' THEN state := 'ACTIVE'; account_sid := row.account_sid; claim_token := NULL; RETURN NEXT; RETURN; END IF;
@@ -109,13 +114,15 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
   FROM hon.school_twilio_accounts a WHERE a.account_sid = p_account_sid AND a.status = 'ACTIVE';
 $$;
 
--- Worker: which subaccount a school Messaging Service is on (none = HON's parent account) and that account's status.
-CREATE FUNCTION hon.read_twilio_send_account(p_service_sid text)
+-- Worker: which subaccount the sending school's Messaging Service is on (none = HON's parent account) and that account's
+-- status. Keyed on the school as well as the service SID, so a service SID entered for two schools never sends (or bills)
+-- one school's texts on the other's subaccount.
+CREATE FUNCTION hon.read_twilio_send_account(p_school uuid, p_service_sid text)
 RETURNS TABLE (account_sid text, account_status text)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
   SELECT a.account_sid, a.status FROM hon.school_text_senders sender
   JOIN hon.school_twilio_accounts a ON a.account_sid = sender.twilio_account_sid AND a.school_id = sender.school_id
-  WHERE sender.messaging_service_sid = p_service_sid;
+  WHERE sender.school_id = p_school AND sender.messaging_service_sid = p_service_sid;
 $$;
 
 -- Worker: the number is a sender (any status, so a STOP to a disabled number still verifies) of that subaccount.
@@ -131,7 +138,7 @@ $$;
 REVOKE ALL ON FUNCTION hon.begin_school_twilio_account(uuid, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.complete_school_twilio_account(uuid, uuid, text, text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.read_twilio_webhook_account(text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION hon.read_twilio_send_account(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION hon.read_twilio_send_account(uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.twilio_number_in_account(text, text) FROM PUBLIC;
 DO $$
 DECLARE r text;
@@ -140,11 +147,11 @@ BEGIN
     EXECUTE format('REVOKE ALL ON TABLE hon.school_twilio_accounts FROM %I', r);
     EXECUTE format('REVOKE ALL ON FUNCTION hon.begin_school_twilio_account(uuid, integer), '
       || 'hon.complete_school_twilio_account(uuid, uuid, text, text, text), hon.read_twilio_webhook_account(text), '
-      || 'hon.read_twilio_send_account(text), hon.twilio_number_in_account(text, text) FROM %I', r);
+      || 'hon.read_twilio_send_account(uuid, text), hon.twilio_number_in_account(text, text) FROM %I', r);
   END LOOP;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_communication_worker') THEN
     GRANT EXECUTE ON FUNCTION hon.begin_school_twilio_account(uuid, integer), hon.complete_school_twilio_account(uuid, uuid, text, text, text),
-      hon.read_twilio_webhook_account(text), hon.read_twilio_send_account(text), hon.twilio_number_in_account(text, text)
+      hon.read_twilio_webhook_account(text), hon.read_twilio_send_account(uuid, text), hon.twilio_number_in_account(text, text)
       TO hon_communication_worker;
   END IF;
 END;

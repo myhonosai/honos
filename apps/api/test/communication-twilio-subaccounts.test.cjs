@@ -83,11 +83,11 @@ function directoryStore() {
     [subB, { schoolId: schoolB, organizationId: '33333333-3333-4333-8333-333333333334', sealedAuthToken: vault.seal({ schoolId: schoolB, accountSid: subB }, 'sub-b-token'), vaultKeyId: 'staging-1' }],
   ]);
   const numbers = new Map([['+15555559001', subA], ['+15555559002', subB]]);
-  const services = new Map([[`MG${'a'.repeat(32)}`, { accountSid: subA, status: 'ACTIVE' }], [`MG${'e'.repeat(32)}`, { accountSid: subB, status: 'SUSPENDED' }]]);
+  const services = new Map([[`${schoolA}:MG${'a'.repeat(32)}`, { accountSid: subA, status: 'ACTIVE' }], [`${schoolA}:MG${'e'.repeat(32)}`, { accountSid: subB, status: 'SUSPENDED' }]]);
   const store = {
     isConfigured: () => true,
     readTwilioWebhookAccount: async (sid) => accounts.get(sid) ?? null,
-    readTwilioSendAccount: async (service) => services.get(service) ?? null,
+    readTwilioSendAccount: async (school, service) => services.get(`${school}:${service}`) ?? null,
     twilioNumberInAccount: async (sid, phone) => numbers.get(phone) === sid,
   };
   return { store, directory: new WorkerTwilioSubaccountDirectory(store, () => vault) };
@@ -183,6 +183,9 @@ test('send: a school service on a subaccount posts to that subaccount with paren
   const parentAuth = `Basic ${Buffer.from(`${parent}:parent-token`).toString('base64')}`;
   await adapter.send(request());
   assert.deepEqual(urls.pop(), [`https://api.twilio.com/2010-04-01/Accounts/${subA}/Messages.json`, parentAuth]);
+  // The same service SID for another school is not that school's subaccount (parent account, which Twilio then refuses).
+  await adapter.send(request({ schoolId: schoolB }));
+  assert.equal(urls.pop()[0], `https://api.twilio.com/2010-04-01/Accounts/${parent}/Messages.json`);
   // A service with no subaccount (hand-entered 0248 sender) and HQ sends use the parent account.
   await adapter.send(request({ senderServiceId: `MG${'9'.repeat(32)}` }));
   assert.equal(urls.pop()[0], `https://api.twilio.com/2010-04-01/Accounts/${parent}/Messages.json`);
