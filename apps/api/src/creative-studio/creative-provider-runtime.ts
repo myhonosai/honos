@@ -38,8 +38,13 @@ export interface CreativeSubmission { providerJobId: string }
 export interface CreativeProviderJob extends CreativeProviderRoute {
   providerJobId: string; operationCode: string; mediaKind: SaasCreativeMediaKind; units: number; format: CreativeGenerationFormat;
 }
+/**
+ * A provider's temporary result file (C2). Held in memory only for the storage step (C3): never stored, logged or shown.
+ * A DONE answer that carries downloads is recorded only after its files are copied into HON's storage.
+ */
+export interface CreativeDownload { url: string; mediaType: CreativeAssetMediaType }
 /** PENDING = still running. A final failure is thrown as a CreativeProviderRuntimeError (FAILED or UNKNOWN). */
-export type CreativePollResult = { state: 'PENDING' } | { state: 'DONE'; result: CreativeResult };
+export type CreativePollResult = { state: 'PENDING' } | { state: 'DONE'; result: CreativeResult; downloads?: CreativeDownload[] };
 export type AsyncCreativeProviderRuntime = CreativeProviderRuntime & Required<Pick<CreativeProviderRuntime, 'submit' | 'poll'>>;
 export function isAsyncCreativeProviderRuntime(runtime: CreativeProviderRuntime): runtime is AsyncCreativeProviderRuntime {
   return typeof runtime.submit === 'function' && typeof runtime.poll === 'function';

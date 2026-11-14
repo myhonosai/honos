@@ -120,7 +120,15 @@ export class CreativeJobWorker {
       return null;
     }
     if (answer?.state === 'PENDING') return null;
-    if (answer?.state === 'DONE') return verifiedOutcome(answer.result, { mediaKind, units });
+    if (answer?.state === 'DONE') {
+      // A real provider's result is recorded only once its files are copied into HON's storage (C3). Until that exists the
+      // job stays open and, at its deadline, becomes UNKNOWN for HQ: credits are never charged for media HON does not hold.
+      if (answer.downloads?.length) {
+        emitTelemetry('warn', 'creative.result_storage_unavailable', { component: 'creative-jobs' });
+        return null;
+      }
+      return verifiedOutcome(answer.result, { mediaKind, units });
+    }
     return null;
   }
 }
