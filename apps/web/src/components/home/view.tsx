@@ -6,7 +6,7 @@ import { shellText } from '../school-shell/copy';
 import { HON_ART_STYLES, defaultArtStyle, type HonArtStyle } from '../hon-command/roster';
 import { ShellIcon } from '../school-shell/icons';
 import { homeText, type HomeKey } from './copy';
-import { homeAiTeam, homeKpis, leadOutcomes, membershipMix, myTasks, recentLeads, todaySessions, sessionSnapshotSaturated, type AgentCard, type Bar, type HomeSources, type Kpi, type Panel } from './model';
+import { ASK_HON_AGENTS, homeAiTeam, homeKpis, leadOutcomes, membershipMix, myTasks, recentLeads, todaySessions, sessionSnapshotSaturated, type AgentCard, type Bar, type HomeSources, type Kpi, type Panel } from './model';
 import styles from './home.module.css';
 
 export type SchoolHomeViewProps = Readonly<{
@@ -128,7 +128,8 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
 }
 
 function Agent({ agent, t }: { agent: AgentCard; t: (key: HomeKey) => string }): React.ReactElement {
-  const live = agent.href !== null && agent.status !== 'NOT_AVAILABLE';
+  // A link only for someone readiness actually lists for this school (a refusal still links, so the page can explain it).
+  const live = agent.href !== null && !['NOT_AVAILABLE', 'UNKNOWN', 'HIDDEN', 'CHECKING'].includes(agent.status);
   return <li className={styles.agent} data-agent={agent.id} data-status={agent.status} style={{ '--agent': agent.color } as React.CSSProperties}>
     <span className={styles.portrait}><img src={agent.portrait} alt="" width={280} height={350} loading="lazy" /></span>
     <span className={styles.agentText}>
@@ -136,7 +137,7 @@ function Agent({ agent, t }: { agent: AgentCard; t: (key: HomeKey) => string }):
       <span className={styles.agentTitle}>{t(agent.title)}</span>
       <span className={styles.agentStatus}><i aria-hidden="true" />{t(`status${agent.status}` as HomeKey)}</span>
     </span>
-    {live && <a className={styles.agentLink} href={agent.href!} aria-label={`${t('openWorkspace')}: ${agent.name}`}>{t('openWorkspace')}</a>}
+    {live && <a className={styles.agentLink} href={agent.href!} aria-label={`${t(ASK_HON_AGENTS.has(agent.id) ? 'askAgent' : 'openWorkspace')}: ${agent.name}`}>{t(ASK_HON_AGENTS.has(agent.id) ? 'askAgent' : 'openWorkspace')}</a>}
   </li>;
 }
 

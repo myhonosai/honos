@@ -1,0 +1,28 @@
+.page { display: grid; gap: var(--hon-space-5); color: var(--hon-text); }
+.header h1 { margin: 0; font-family: var(--hon-font-display); font-size: var(--hon-text-2xl, 28px); }
+.header p { margin: var(--hon-space-2) 0 0; max-width: 72ch; color: var(--hon-text-muted); line-height: 1.55; }
+.notice { margin: 0; padding: var(--hon-space-3) var(--hon-space-4); border-radius: var(--hon-radius-md); background: var(--hon-surface); border: 1px solid var(--hon-border); color: var(--hon-text); }
+.grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--hon-space-4); }
+.card {
+  display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--hon-space-4); padding: var(--hon-space-4); border-radius: var(--hon-radius-lg);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--agent) 14%, transparent), var(--hon-surface) 60%);
+  border: 1px solid color-mix(in srgb, var(--agent) 40%, transparent);
+}
+.portrait { display: block; width: 96px; aspect-ratio: 4 / 5; border-radius: var(--hon-radius-md); overflow: hidden; }
+.portrait img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 18%; }
+.body { display: grid; align-content: start; gap: var(--hon-space-2); min-width: 0; }
+.body h2 { margin: 0; display: grid; font-family: var(--hon-font-display); font-size: var(--hon-text-lg); }
+.body h2 small { font-family: var(--hon-font-sans); font-weight: 500; font-size: var(--hon-text-sm); color: var(--hon-text-muted); }
+.body p { margin: 0; color: var(--hon-text); line-height: 1.5; font-size: var(--hon-text-sm); }
+.status { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; color: var(--hon-text-muted) !important; }
+.status span { color: var(--hon-text-muted); }
+.status i { width: 8px; height: 8px; border-radius: 50%; background: var(--hon-text-subtle); flex: none; }
+.card[data-status='READY'] .status { color: var(--hon-success) !important; }
+.card[data-status='READY'] .status i { background: var(--hon-success); box-shadow: 0 0 8px var(--hon-success); }
+.card[data-status='PROVIDER_OFF'] .status i, .card[data-status='AI_OFF'] .status i, .card[data-status='BUDGET'] .status i, .card[data-status='NO_ROUTE'] .status i { background: var(--hon-warning); }
+.action {
+  justify-self: start; display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; margin-top: var(--hon-space-1);
+  background: var(--hon-accent); color: #fff !important; font-weight: 600; font-size: var(--hon-text-sm); text-decoration: none;
+}
+.action:hover { filter: brightness(1.1); }
+@media (max-width: 560px) { .grid { grid-template-columns: minmax(0, 1fr); } .card { grid-template-columns: 72px minmax(0, 1fr); } .portrait { width: 72px; } }

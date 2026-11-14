@@ -62,6 +62,9 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
         aria-current={active?.key === item.key ? 'page' : undefined} onClick={() => onMenu(false)}>
         <ShellIcon name={item.key} /><span>{t(item.titleKey)}</span></a>)}
     </nav>
+    {/* Top bar only: the areas that do not fit stay one click away in the Menu instead of silently disappearing. */}
+    {mode === 'modern' && <button type="button" className={styles.navMore} data-nav-more="" aria-expanded={menuOpen} onClick={() => onMenu(true)}>
+      <ShellIcon name="more" /><span>{t('more')}</span></button>}
     <footer className={styles.railFoot}>
       <a href="/settings/language-region">{t('account')}</a>
       <a href="/hq">{t('hq')}</a>
@@ -82,7 +85,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
       <ul className={styles.menuGrid}>
         {SCHOOL_SHELL_NAV.map(item => <li key={item.key} data-menu={item.key} aria-current={active?.key === item.key ? 'true' : undefined}>
           <a href={schoolShellHref(item.routes[0]!, verified)} onClick={() => onMenu(false)}><span className={styles.menuIcon} aria-hidden="true"><ShellIcon name={item.key} size={24} /></span><strong>{t(item.titleKey)}</strong></a>
-          <ul>{item.routes.slice(1, 5).map(route => <li key={route.href}><a href={schoolShellHref(route, verified)} onClick={() => onMenu(false)}>{t(route.titleKey)}</a></li>)}</ul>
+          <ul>{item.routes.map(route => <li key={route.href}><a href={schoolShellHref(route, verified)} onClick={() => onMenu(false)}>{t(route.titleKey)}</a></li>)}</ul>
         </li>)}
       </ul>
       <footer className={styles.menuFoot}><SignOutButton label={t('signOut')} className={styles.signOut} /></footer>

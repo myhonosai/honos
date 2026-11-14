@@ -33,12 +33,13 @@ describe('school home view', () => {
     expect(html).toMatch(/data-kpi="revenue"[^>]*data-state="NOT_CONNECTED"/);
     expect(html).toMatch(/data-kpi="attendanceRate"[^>]*data-state="NOT_CONNECTED"/);
     expect(html).toContain(homeText('en', 'honStatus'));
-    for (const id of ['alex', 'maya', 'jordan', 'claire', 'lena']) expect(html).toMatch(new RegExp(`data-agent="${id}" data-status="NOT_AVAILABLE"`));
+    // The fixture's readiness lists only Marcus, Kai and Chad: nobody else is claimed as available.
+    for (const id of ['alex', 'maya', 'jordan', 'claire', 'lena']) expect(html).toMatch(new RegExp(`data-agent="${id}" data-status="UNKNOWN"`));
     expect(html).toMatch(/data-agent="kai" data-status="PROVIDER_OFF"/);
     expect(html).not.toMatch(/\$\s?\d/);
     expect(html).not.toContain('eian');
-    // No workspace link on an agent that has no backend.
-    expect(html).not.toMatch(/Open workspace: (Alex|Maya|Jordan|Claire|Lena)/);
+    // No link to an agent readiness does not list.
+    expect(html).not.toMatch(/(Open workspace|Ask): (Alex|Maya|Jordan|Claire|Lena)/);
     expect(html).toContain('Open workspace: Kai');
   });
 
