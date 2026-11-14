@@ -155,7 +155,7 @@ function page({ lang, path, title, description, ogType, home, main }) {
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(description)}">
 ${c.robots}
-<meta name="theme-color" content="#0a0b0a">
+<meta name="theme-color" content="#0a1122">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(description)}">
 <meta property="og:type" content="${ogType}">
