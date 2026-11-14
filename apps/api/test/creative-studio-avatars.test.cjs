@@ -194,3 +194,21 @@ test('A1 HTTP: list/read/create avatars with the exact command header; no settle
     assert.ok(!/providerId|modelCode|providerCost|synthetic:/.test(made.body), 'no provider identity, cost or reference reaches the school');
   } finally { await app.close(); if (previous === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = previous; }
 });
+
+test('C1 async provider for avatar.create: permit, one submit with the look, the job id recorded; the avatar is returned as it is, still generating', async () => {
+  const { SyntheticAsyncCreativeProviderRuntime } = require('../dist/creative-studio/creative-provider-runtime.js');
+  const db = fakeDatabase(), base = db.callSaasBilling, runtime = new SyntheticAsyncCreativeProviderRuntime();
+  db.callSaasBilling = async (operation, params) => {
+    if (operation === 'beginCreativeProviderSubmission' || operation === 'recordCreativeProviderSubmission') {
+      db.calls.push([operation, params]);
+      return { jobId: U(), generationId: params[1], status: operation === 'beginCreativeProviderSubmission' ? 'PERMITTED' : 'SUBMITTED',
+        submitted: operation !== 'beginCreativeProviderSubmission', deadlineAt: new Date(Date.now() + 1_800_000).toISOString(), replayed: false };
+    }
+    return base(operation, params);
+  };
+  const out = await service(db, runtime).createAvatar('verified-human', U(), avatarInput(), U());
+  assert.equal(out.avatar.generation.status, 'GENERATING'); assert.equal(out.replayed, false);
+  assert.deepEqual(db.calls.map(([op]) => op), ['createCreativeAvatar', 'beginCreativeProviderSubmission', 'recordCreativeProviderSubmission']);
+  assert.equal(runtime.submits.length, 1); assert.deepEqual(runtime.submits[0].avatar, { name: avatarInput().name, style: avatarInput().style });
+  assert.equal(JSON.parse(db.calls[0][1][3]).providerId, 'HEYGEN');
+});

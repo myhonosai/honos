@@ -393,6 +393,44 @@ try{
   if((await row("SELECT count(*)::int n FROM pg_roles WHERE rolname='hon_communication_worker'")).n)
    assert.equal(await can('hon_communication_worker','hon.claim_creative_provider_jobs(integer,integer)'),true);
  });
+ await check('J13','C1b API: an async provider is permitted and submitted once through the API, the worker polls and records the result for the requester, and the HQ read and commands pass the contracts',async()=>{
+  const {SyntheticAsyncCreativeProviderRuntime}=await import('../../../apps/api/dist/creative-studio/creative-provider-runtime.js');
+  const {CreativeJobWorker}=await import('../../../apps/api/dist/creative-studio/creative-job-worker.js');
+  const {CreativeLimitsService}=await import('../../../apps/api/dist/creative-studio/creative-limits.controller.js');
+  const limits=new CreativeLimitsService(billing);
+  await deny(limits.read(H('ownerB')),403,'SAAS_FORBIDDEN');
+  const view=await limits.read(H('owner'));
+  const hf=view.providers.find(p=>p.providerId==='HIGGSFIELD');
+  limitVersion=(await limits.setProviderLimit(H('owner'),{providerId:'HIGGSFIELD',dailyLimitMicros:hf.committedTodayMicros+5_000_000,
+   reason:'Fixture C1b end-to-end provider limit',expectedVersion:hf.version},K())).version;
+  const capsB=view.schoolCaps.find(c=>c.schoolId===S.B);
+  await limits.setSchoolCaps(H('owner'),{schoolId:S.B,images:1000,videos:12,avatarVideos:10,reason:'Fixture C1b end-to-end school caps',expectedVersion:capsB?.version??0},K());
+  await deny(limits.setSchoolCaps(H('ownerB'),{schoolId:S.B,images:1,videos:1,avatarVideos:1,reason:'Fixture school owner cannot set caps',expectedVersion:1},K()),403,'SAAS_FORBIDDEN');
+  const after=await limits.read(H('owner'));
+  assert.equal(after.schoolCaps.find(c=>c.schoolId===S.B).images,1000);
+  const asyncRuntime=new SyntheticAsyncCreativeProviderRuntime('ACCEPT',['PENDING','SUCCEED'],{providerId:'HIGGSFIELD'});
+  const before=(await bal('B')).availableCredits;
+  const out=await new CreativeStudioService(billing,asyncRuntime).create(H('ownerB'),S.B,{operationCode:'image.generate',units:2,format:'SQUARE',prompt:PROMPT},K());
+  assert.deepEqual([out.generation.status,asyncRuntime.submits.length],['GENERATING',1]);
+  const j=await job(out.generation.generationId);
+  assert.deepEqual([j.status,j.provider_job_id],['SUBMITTED',`job-${out.generation.generationId}`]);
+  // The fixture has no worker login: the same three worker functions over the owner connection, mapped like CreativeJobWorkerDatabase.
+  const store={isConfigured:()=>true,
+   claim:async(n,l)=>(await claim(n,l)).filter(r=>r.job_id===j.id).map(r=>({jobId:r.job_id,leaseToken:r.lease_token,providerId:r.provider_id,providerJobId:r.provider_job_id,
+    modelCode:r.model_code,operationCode:r.operation_code,mediaKind:r.media_kind,units:r.units,format:r.format,pollCount:r.poll_count,deadlineAt:iso(r.deadline_at)})),
+   recordPoll:(id,l)=>poll(id,l),recordResult:(id,l,o)=>result(id,l,o)};
+  const worker=new CreativeJobWorker(store,asyncRuntime);
+  await due(j.id);
+  assert.deepEqual(await worker.runOnce(),{claimed:1,recorded:0,heldForHq:0,pending:1,errors:0});
+  assert.equal((await job(out.generation.generationId)).poll_count,1);
+  await due(j.id);
+  assert.deepEqual(await worker.runOnce(),{claimed:1,recorded:1,heldForHq:0,pending:0,errors:0});
+  const g=await studio.read(H('ownerB'),S.B,out.generation.generationId);
+  assert.deepEqual([g.status,g.chargedCredits,g.assets.length,g.assets.every(a=>a.origin==='PROVIDER')],['SUCCEEDED',20,2,true]);
+  assert.equal((await bal('B')).availableCredits,before-20);
+  assert.equal((await job(out.generation.generationId)).status,'RECORDED');
+  assert.deepEqual([asyncRuntime.submits.length,asyncRuntime.polls.length],[1,2],'never resent');
+ });
  await setAccessProgram(false);programTouched=false;
 }finally{
  if(programTouched)await setAccessProgram(false).catch(e=>console.error('RESTORE FAILED',e));
