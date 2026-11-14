@@ -3509,3 +3509,23 @@ DO $$ DECLARE r text; BEGIN
     hon.record_school_social_profile(text,uuid,text,uuid,uuid), hon.claim_school_social_connect(text,text,uuid,uuid),
     hon.record_school_social_accounts(text,uuid,jsonb,uuid,uuid), hon.change_school_social_account(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
 END $$;
+-- 0353 AI on HQ access-exception schools under an HQ-owner monthly limit: only the HQ command and read reach the
+-- runtime; the two tables and the decision helpers are internal.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.command_ai_exception_school_allowance(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0353 first'; END IF;
+  REVOKE ALL ON TABLE hon.ai_exception_school_allowances, hon.ai_exception_school_allowance_commands FROM PUBLIC;
+  FOREACH f IN ARRAY ARRAY['ai_exception_default_allowance_micros()','ai_exception_allowance_micros(uuid,uuid)',
+    'ai_org_spend_allowed_for_school(uuid,uuid,timestamptz,text)','guard_ai_exception_school_allowances()','guard_ai_exception_school_allowance_commands()'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+  END LOOP;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.ai_exception_school_allowances, hon.ai_exception_school_allowance_commands FROM '||quote_ident(r);
+    FOREACH f IN ARRAY ARRAY['ai_exception_default_allowance_micros()','ai_exception_allowance_micros(uuid,uuid)',
+      'ai_org_spend_allowed_for_school(uuid,uuid,timestamptz,text)','guard_ai_exception_school_allowances()','guard_ai_exception_school_allowance_commands()'] LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.command_ai_exception_school_allowance(text,jsonb,uuid), hon.read_ai_exception_school_allowances_from_hq(text) TO hon_runtime;
+  END IF;
+END $$;
