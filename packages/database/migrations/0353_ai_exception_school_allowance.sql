@@ -22,7 +22,7 @@ CREATE FUNCTION hon.ai_exception_default_allowance_micros() RETURNS bigint LANGU
 CREATE TABLE hon.ai_exception_school_allowances (
   school_id uuid PRIMARY KEY,
   organization_id uuid NOT NULL,
-  exception_id uuid NOT NULL REFERENCES hon.saas_access_exceptions(id) ON DELETE RESTRICT,
+  exception_id uuid NOT NULL, -- no FK: saas_access_exceptions must stay un-referenced (its TRUNCATE guard, 0185); the decision joins on id
   -- NULL = cleared (no AI on the exception). Otherwise $1 to $1,000 a month in micro-USD.
   ceiling_micros bigint CHECK (ceiling_micros IS NULL OR ceiling_micros BETWEEN 1000000 AND 1000000000),
   reason text NOT NULL CHECK (reason = btrim(reason) AND length(reason) BETWEEN 10 AND 500),
@@ -39,7 +39,7 @@ CREATE TABLE hon.ai_exception_school_allowance_commands (
   actor_principal_id uuid NOT NULL REFERENCES hon.principals(id) ON DELETE RESTRICT,
   school_id uuid NOT NULL,
   organization_id uuid NOT NULL,
-  exception_id uuid NOT NULL REFERENCES hon.saas_access_exceptions(id) ON DELETE RESTRICT,
+  exception_id uuid NOT NULL, -- no FK: saas_access_exceptions must stay un-referenced (its TRUNCATE guard, 0185); the decision joins on id
   ceiling_micros bigint,
   reason text NOT NULL,
   prior_version integer NOT NULL CHECK (prior_version >= 0),
