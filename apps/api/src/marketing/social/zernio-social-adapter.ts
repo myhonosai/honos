@@ -18,7 +18,7 @@ export class SocialProviderError extends Error {
 export interface ProviderSocialAccount { providerAccountId: string; platform: SocialPlatform; displayName: string }
 
 /**
- * The only Zernio operations S1 uses. Callers pass HON's own values; nothing a browser sent reaches these methods.
+ * The only Zernio operations S1 and S2 use. Callers pass HON's own values; nothing a browser sent reaches these methods.
  * Every method throws SocialProviderError, never a raw provider body, header or key.
  */
 export interface ZernioSocialAdapter {
@@ -32,10 +32,22 @@ export interface ZernioSocialAdapter {
   /** Accounts connected on one profile. Provider order and extra fields are dropped. */
   listAccounts(profileId: string): Promise<ProviderSocialAccount[]>;
   removeAccount(providerAccountId: string): Promise<void>;
+  /** S2: READY only when publishing is approved (or the fake runs outside production). */
+  publishReady(): boolean;
+  /**
+   * S2: publish one text post now to one connected account. `idempotencyKey` is HON's target id. Resolves with the
+   * provider post id; a lost or unclear answer throws UNKNOWN (the caller never sends it again).
+   */
+  publishPost(input: PublishPostInput): Promise<{ providerPostId: string }>;
 }
+export interface PublishPostInput { profileId: string | null; providerAccountId: string; platform: SocialPlatform; text: string; linkUrl: string | null; idempotencyKey: string }
+const POST_ID = /^[0-9A-Za-z_:.-]{1,128}$/;
 
 export function zernioConnectApproved(env: Env): boolean {
   return KEY.test(env.ZERNIO_API_KEY ?? '') && env.HON_ZERNIO_CONNECT_APPROVED === 'true';
+}
+export function zernioPublishApproved(env: Env): boolean {
+  return KEY.test(env.ZERNIO_API_KEY ?? '') && env.HON_ZERNIO_PUBLISH_APPROVED === 'true';
 }
 /** The deterministic fake runs only with HON_ZERNIO_FAKE_PROVIDER=1 outside production and staging. */
 export function zernioFakeEnabled(env: Env): boolean {
@@ -76,6 +88,20 @@ export class ZernioHttpSocialAdapter implements ZernioSocialAdapter {
     private readonly send: typeof fetch = (...args) => fetch(...args)) {}
 
   ready(): boolean { return zernioConnectApproved(this.environment()); }
+  publishReady(): boolean { return zernioPublishApproved(this.environment()); }
+
+  async publishPost(input: PublishPostInput): Promise<{ providerPostId: string }> {
+    if (!this.publishReady()) throw new SocialProviderError('NOT_ENABLED');
+    if (!ID.test(input.providerAccountId) || input.platform !== 'FACEBOOK') throw new SocialProviderError('REJECTED');
+    const content = input.linkUrl ? `${input.text}\n\n${input.linkUrl}` : input.text;
+    const answer = await this.call('POST', '/posts', {
+      content, publishNow: true, platforms: [{ platform: 'facebook', accountId: input.providerAccountId }],
+    }, 'publish', input.idempotencyKey);
+    const post = ((answer as { post?: unknown })?.post ?? answer) as Record<string, unknown> | null;
+    const id = post && typeof post === 'object' ? (post._id ?? post.id) : undefined;
+    if (typeof id !== 'string' || !POST_ID.test(id)) throw new SocialProviderError('UNKNOWN');
+    return { providerPostId: id };
+  }
 
   async findOrCreateProfile(name: string): Promise<string> {
     const listed = await this.call('GET', '/profiles');
@@ -129,19 +155,21 @@ export class ZernioHttpSocialAdapter implements ZernioSocialAdapter {
     await this.call('DELETE', `/accounts/${providerAccountId}`);
   }
 
-  private async call(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
+  private async call(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown, purpose: 'connect' | 'publish' = 'connect', idempotencyKey?: string): Promise<unknown> {
     const env = this.environment(), key = env.ZERNIO_API_KEY;
-    if (!this.ready() || !key) throw new SocialProviderError('NOT_ENABLED');
+    if (!(purpose === 'publish' ? this.publishReady() : this.ready()) || !key) throw new SocialProviderError('NOT_ENABLED');
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), 8000);
     try {
       const response = await this.send(API + path, { method, redirect: 'error', credentials: 'omit', referrerPolicy: 'no-referrer', signal: abort.signal,
-        headers: { Accept: 'application/json', Authorization: `Bearer ${key}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+        headers: { Accept: 'application/json', Authorization: `Bearer ${key}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+          ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
       if (response.status < 200 || response.status > 299) {
         await response.body?.cancel();
         if (response.status === 401 || response.status === 403) throw new SocialProviderError('REJECTED');
         if (response.status === 429) throw new SocialProviderError('RATE_LIMITED');
+        if (purpose === 'publish' && response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 409) throw new SocialProviderError('REJECTED');
         // A 5xx on a write may still have happened: the caller treats it as unknown, never as "nothing happened".
         throw new SocialProviderError(method === 'GET' ? 'UNAVAILABLE' : 'UNKNOWN');
       }
@@ -177,7 +205,9 @@ export class FakeZernioSocialAdapter implements ZernioSocialAdapter {
   readonly connected = new Map<string, ProviderSocialAccount[]>();
   readonly removed: string[] = [];
   /** Test hooks: make the next call of a method fail. */
-  failNext: Partial<Record<'findOrCreateProfile' | 'connectUrl' | 'listAccounts' | 'removeAccount', SocialProviderFailure>> = {};
+  failNext: Partial<Record<'findOrCreateProfile' | 'connectUrl' | 'listAccounts' | 'removeAccount' | 'publishPost', SocialProviderFailure>> = {};
+  /** Every publish the fake accepted, in order (HON's target id -> the fake post id). */
+  readonly published: { idempotencyKey: string; providerAccountId: string; text: string; linkUrl: string | null; providerPostId: string }[] = [];
   /** Extra accounts a test wants a profile to report (for example an account another school holds). */
   extra = new Map<string, ProviderSocialAccount[]>();
   constructor(private readonly environment: () => Env = () => process.env) {}
@@ -208,6 +238,17 @@ export class FakeZernioSocialAdapter implements ZernioSocialAdapter {
     this.check('listAccounts');
     return [...(this.connected.get(profileId) ?? []), ...(this.extra.get(profileId) ?? [])];
   }
+  publishReady(): boolean { return this.ready(); }
+  async publishPost(input: PublishPostInput): Promise<{ providerPostId: string }> {
+    this.check('publishPost');
+    if (input.platform !== 'FACEBOOK') throw new SocialProviderError('REJECTED');
+    // Same key, same post: a fake retry never makes a second post (HON itself never retries).
+    const prior = this.published.find(p => p.idempotencyKey === input.idempotencyKey);
+    if (prior) return { providerPostId: prior.providerPostId };
+    const providerPostId = 'fakepost_' + createHash('sha256').update(input.idempotencyKey).digest('hex').slice(0, 24);
+    this.published.push({ idempotencyKey: input.idempotencyKey, providerAccountId: input.providerAccountId, text: input.text, linkUrl: input.linkUrl, providerPostId });
+    return { providerPostId };
+  }
   async removeAccount(providerAccountId: string): Promise<void> {
     this.check('removeAccount');
     this.removed.push(providerAccountId);
@@ -215,11 +256,12 @@ export class FakeZernioSocialAdapter implements ZernioSocialAdapter {
   }
 }
 
-/** Chooses the real adapter when connecting is approved, else the fake when allowed, else none (always not ready). */
+/** Chooses the real adapter when connecting or publishing is approved, else the fake when allowed, else none (never ready). */
 export function zernioSocialAdapterFactory(env: Env = process.env): ZernioSocialAdapter {
-  if (zernioConnectApproved(env)) return new ZernioHttpSocialAdapter();
+  if (zernioConnectApproved(env) || zernioPublishApproved(env)) return new ZernioHttpSocialAdapter();
   if (zernioFakeEnabled(env)) return new FakeZernioSocialAdapter();
-  return { kind: 'NONE', ready: () => false,
+  return { kind: 'NONE', ready: () => false, publishReady: () => false,
+    publishPost: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),
     findOrCreateProfile: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),
     connectUrl: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),
     listAccounts: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),

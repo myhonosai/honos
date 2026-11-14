@@ -238,6 +238,9 @@ const SAAS_BILLING_CALLS = {
   readAccessOverview: { sql: 'SELECT hon.read_saas_access_overview_from_hq($1,$2,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },
   // C-HQ-3 (0225): read-only HQ detail of one school; names, statuses and counts only.
   // 0248: the HQ owner sets or disables a school's Twilio sending number; nothing is bought or sent.
+  // T2 (0352): HQ reads every school's number orders; a human HQ owner approves or rejects one. Nothing is bought here.
+  readHqSchoolNumberOrders: { sql: 'SELECT hon.read_hq_school_number_orders($1,$2) AS data', arity: 2, readOnly: true },
+  decideSchoolNumberOrder: { sql: 'SELECT hon.decide_school_number_order_from_hq($1,$2::uuid,$3,$4,$5::integer) AS data', arity: 5, readOnly: false },
   setSchoolTextSender: { sql: 'SELECT hon.set_school_text_sender_from_hq($1,$2::uuid,$3,$4,$5,$6::boolean,$7::integer) AS data', arity: 7, readOnly: false },
   // 0249: the HQ owner sets the school's forwarding phone and the missed-call text-back switch.
   setSchoolMissedCallSettings: { sql: 'SELECT hon.set_school_missed_call_settings_from_hq($1,$2::uuid,$3,$4::boolean,$5::integer) AS data', arity: 5, readOnly: false },
