@@ -3498,3 +3498,19 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.cancel_parent_class_booking(text,jsonb,text,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
+-- 0351 school Twilio subaccounts: no runtime access to the table or any of its five worker functions (013 grants them
+-- to hon_communication_worker only).
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regclass('hon.school_twilio_accounts') IS NULL THEN RAISE EXCEPTION 'Apply migration 0351 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_twilio_accounts FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_twilio_accounts FROM '||quote_ident(r);
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.begin_school_twilio_account(uuid,integer)','hon.complete_school_twilio_account(uuid,uuid,text,text,text)',
+    'hon.read_twilio_webhook_account(text)','hon.read_twilio_send_account(text)','hon.twilio_number_in_account(text,text)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+END $$;
