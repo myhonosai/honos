@@ -22,6 +22,7 @@ const ERRORS: Record<string, [string[], (code: string) => HttpException]> = {
   INVALID_NUMBER_ORDER: [['22023'], code => new BadRequestException({ code })],
   IDEMPOTENCY_KEY_REUSED: [['22023'], code => new ConflictException({ code, detail: 'This key was already used for a different number.' })],
   SCHOOL_NUMBER_EXISTS: [['55000'], code => new ConflictException({ code, detail: 'This school already has its own number.' })],
+  NUMBER_ORDER_UNSETTLED: [['55000'], code => new ConflictException({ code, detail: 'HON is still checking an earlier number order with Twilio. HQ will settle it first.' })],
   NUMBER_ORDER_OPEN: [['55000'], code => new ConflictException({ code, detail: 'This school already has a number order in progress.' })],
   NUMBER_UNAVAILABLE: [['55000'], code => new ConflictException({ code, detail: 'That number is no longer available. Search again.' })],
   NUMBER_ORDER_NOT_CANCELLABLE: [['55000'], code => new ConflictException({ code, detail: 'HON has already started buying this number.' })],
@@ -71,6 +72,7 @@ export class SchoolNumberService {
     const scope = await this.authorize(context);
     // A replay of the open order goes straight to the database (same key returns it); anything else is refused before Twilio.
     if (scope.openOrder?.phoneE164 === input.phoneE164) return this.request(context, scope.openOrder);
+    if (scope.openOrder?.status === 'FAILED') throw ERRORS.NUMBER_ORDER_UNSETTLED![1]('NUMBER_ORDER_UNSETTLED');
     if (scope.openOrder) throw ERRORS.NUMBER_ORDER_OPEN![1]('NUMBER_ORDER_OPEN');
     if (scope.hasOwnNumber) throw ERRORS.SCHOOL_NUMBER_EXISTS![1]('SCHOOL_NUMBER_EXISTS');
     let quote: AvailableSchoolNumber | null;

@@ -54,11 +54,12 @@ CREATE TABLE hon.school_number_orders (
   CONSTRAINT school_number_orders_purchased CHECK (status <> 'PURCHASED'
     OR (provider_number_sid IS NOT NULL AND messaging_service_sid IS NOT NULL AND twilio_account_sid IS NOT NULL))
 );
--- One open order per school, and a number can be on only one open or bought order.
+-- One open order per school, and a number can be on only one open, bought or unsettled order. An unsettled order is a
+-- FAILED one whose buy may have happened (outcome_unknown): HQ must reconcile it with Twilio before anything else.
 CREATE UNIQUE INDEX school_number_orders_one_open ON hon.school_number_orders(school_id)
   WHERE status IN ('REQUESTED','APPROVED','PURCHASING');
 CREATE UNIQUE INDEX school_number_orders_one_number ON hon.school_number_orders(phone_e164)
-  WHERE status IN ('REQUESTED','APPROVED','PURCHASING','PURCHASED');
+  WHERE status IN ('REQUESTED','APPROVED','PURCHASING','PURCHASED') OR (status = 'FAILED' AND outcome_unknown);
 -- An order's school, number, quoted price, requester and key never change; status moves only forward, and a finished
 -- order (PURCHASED, FAILED, REJECTED, CANCELLED) never changes again. No order is ever deleted.
 CREATE FUNCTION hon.guard_school_number_order() RETURNS trigger
@@ -139,7 +140,7 @@ CREATE FUNCTION hon.school_number_order_json(o hon.school_number_orders) RETURNS
 LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,hon AS $$
   SELECT jsonb_build_object('orderId',o.id,'schoolId',o.school_id,'phoneE164',o.phone_e164,'locality',o.locality,'region',o.region,
     'monthlyPriceMicrounits',o.monthly_price_microunits,'status',o.status,'decisionNote',o.decision_note,'decidedAt',o.decided_at,
-    'failureCode',o.failure_code,'version',o.version,'createdAt',o.created_at,'updatedAt',o.updated_at);
+    'failureCode',o.failure_code,'outcomeUnknown',o.outcome_unknown,'version',o.version,'createdAt',o.created_at,'updatedAt',o.updated_at);
 $$;
 
 -- Owner: the scope check alone (search runs in the API, then calls this to prove authority first).
@@ -151,7 +152,7 @@ BEGIN
   RETURN jsonb_build_object('organizationId',hon.current_organization_id(),'schoolId',hon.current_school_id(),
     'hasProvisionedSender',EXISTS(SELECT 1 FROM hon.school_text_senders t WHERE t.school_id=hon.current_school_id() AND t.twilio_account_sid IS NOT NULL),
     'openOrder',(SELECT hon.school_number_order_json(o) FROM hon.school_number_orders o WHERE o.school_id=hon.current_school_id()
-      AND o.status IN ('REQUESTED','APPROVED','PURCHASING')));
+      AND (o.status IN ('REQUESTED','APPROVED','PURCHASING') OR (o.status='FAILED' AND o.outcome_unknown)) ORDER BY o.created_at DESC LIMIT 1));
 END $$;
 
 -- Owner: request one number. The API passes the number's locality and monthly price from its own fresh Twilio lookup.
@@ -185,6 +186,10 @@ BEGIN
   END IF;
   IF EXISTS(SELECT 1 FROM hon.school_number_orders o WHERE o.school_id=school AND o.status IN ('REQUESTED','APPROVED','PURCHASING')) THEN
     RAISE EXCEPTION 'NUMBER_ORDER_OPEN' USING ERRCODE='55000';
+  END IF;
+  -- A failed order that may still have bought a number blocks a second order until HQ reconciles it.
+  IF EXISTS(SELECT 1 FROM hon.school_number_orders o WHERE o.school_id=school AND o.status='FAILED' AND o.outcome_unknown) THEN
+    RAISE EXCEPTION 'NUMBER_ORDER_UNSETTLED' USING ERRCODE='55000';
   END IF;
   BEGIN
     INSERT INTO hon.school_number_orders (organization_id, school_id, phone_e164, locality, region, monthly_price_microunits, requested_by, idempotency_key)
@@ -287,7 +292,10 @@ BEGIN
     token := gen_random_uuid();
     IF o.attempts >= 5 THEN
       -- Five tries without a result: stop and leave it for an HQ operator (never buys again on its own).
-      UPDATE hon.school_number_orders SET status='FAILED', failure_code='ATTEMPTS_EXHAUSTED', lease_token=NULL, lease_expires_at=NULL,
+      -- If any attempt may have bought the number, it says so: RECONCILE_REQUIRED keeps the number and the school blocked.
+      UPDATE hon.school_number_orders SET status='FAILED',
+        failure_code=CASE WHEN o.outcome_unknown OR o.status='PURCHASING' OR o.provider_number_sid IS NOT NULL THEN 'RECONCILE_REQUIRED' ELSE 'ATTEMPTS_EXHAUSTED' END,
+        outcome_unknown = o.outcome_unknown OR o.status='PURCHASING' OR o.provider_number_sid IS NOT NULL, lease_token=NULL, lease_expires_at=NULL,
         version=version+1, updated_at=now() WHERE id=o.id;
       CONTINUE;
     END IF;
@@ -330,15 +338,25 @@ BEGIN
       twilio_account_sid=p_account_sid, lease_token=NULL, lease_expires_at=NULL, outcome_unknown=false, failure_code=NULL,
       version=version+1, updated_at=now() WHERE id=o.id RETURNING * INTO next;
   ELSIF p_outcome='FAILED' THEN
+    IF p_number_sid IS NOT NULL AND p_number_sid !~ '^PN[0-9a-f]{32}$' THEN RAISE EXCEPTION 'INVALID_PURCHASE_RESULT' USING ERRCODE='22023'; END IF;
+    -- A failure after the number was bought (p_number_sid given) leaves it unsettled for HQ. Only Twilio refusing the buy
+    -- itself, right after this attempt found no such number on the subaccount, proves nothing was bought.
     UPDATE hon.school_number_orders SET status='FAILED', failure_code=coalesce(p_failure_code,'PROVIDER_REJECTED'), lease_token=NULL, lease_expires_at=NULL,
+      provider_number_sid=coalesce(p_number_sid, provider_number_sid),
+      outcome_unknown = p_number_sid IS NOT NULL OR (outcome_unknown AND coalesce(p_failure_code,'') <> 'NUMBER_UNAVAILABLE'),
       version=version+1, updated_at=now() WHERE id=o.id RETURNING * INTO next;
+  ELSIF p_outcome IN ('UNKNOWN','RETRY') AND p_number_sid IS NOT NULL AND p_number_sid !~ '^PN[0-9a-f]{32}$' THEN
+    RAISE EXCEPTION 'INVALID_PURCHASE_RESULT' USING ERRCODE='22023';
   ELSIF p_outcome='UNKNOWN' THEN
     -- Stays PURCHASING; the lease runs out and the next claim reads the subaccount before doing anything.
     UPDATE hon.school_number_orders SET outcome_unknown=true, failure_code=coalesce(p_failure_code,'OUTCOME_UNKNOWN'), lease_expires_at=now(),
+      provider_number_sid=coalesce(p_number_sid, provider_number_sid),
       version=version+1, updated_at=now() WHERE id=o.id RETURNING * INTO next;
   ELSE
-    -- RETRY: Twilio certainly did nothing (switch off, unreachable); back to APPROVED for a later attempt.
+    -- RETRY: this step certainly did nothing (switch off, unreachable); back to APPROVED for a later attempt. A number
+    -- already bought in an earlier step (p_number_sid) keeps the order marked as possibly holding one.
     UPDATE hon.school_number_orders SET status='APPROVED', failure_code=p_failure_code, lease_token=NULL, lease_expires_at=NULL,
+      provider_number_sid=coalesce(p_number_sid, provider_number_sid), outcome_unknown = outcome_unknown OR p_number_sid IS NOT NULL,
       version=version+1, updated_at=now() WHERE id=o.id RETURNING * INTO next;
   END IF;
   IF p_outcome IN ('PURCHASED','FAILED') THEN
@@ -346,7 +364,8 @@ BEGIN
       prior_state, next_state, result, request_id, correlation_id, occurred_at)
     VALUES (next.organization_id, next.school_id, '00000000-0000-4000-8000-00000000c043', 'INTEGRATION', 'communication.number_order.' || lower(p_outcome),
       'SCHOOL_NUMBER_ORDER', next.id, jsonb_build_object('status', 'PURCHASING'),
-      jsonb_build_object('status', next.status, 'phone', next.phone_e164, 'failureCode', next.failure_code, 'version', next.version), 'SUCCEEDED', req, req, now());
+      jsonb_build_object('status', next.status, 'phone', next.phone_e164, 'failureCode', next.failure_code, 'outcomeUnknown', next.outcome_unknown,
+        'version', next.version), 'SUCCEEDED', req, req, now());
   END IF;
   RETURN jsonb_build_object('status', next.status, 'version', next.version);
 END $$;

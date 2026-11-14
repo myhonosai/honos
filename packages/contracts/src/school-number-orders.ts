@@ -10,14 +10,17 @@ export const SCHOOL_NUMBER_CANCEL_COMMAND = 'communication.number.cancel';
 export interface AvailableSchoolNumber { phoneE164: string; locality: string | null; region: string | null; monthlyPriceMicrounits: number }
 export interface SchoolNumberOrder {
   orderId: string; schoolId: string; phoneE164: string; locality: string | null; region: string | null; monthlyPriceMicrounits: number;
-  status: SchoolNumberOrderStatus; decisionNote: string | null; decidedAt: string | null; failureCode: string | null; version: number;
+  status: SchoolNumberOrderStatus; decisionNote: string | null; decidedAt: string | null; failureCode: string | null;
+  /** True when a purchase step may have bought the number without a recorded result; a FAILED order with it set is
+   * unsettled: it keeps the number and blocks a new order until HQ reconciles it with Twilio. */
+  outcomeUnknown: boolean; version: number;
   createdAt: string; updatedAt: string;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const NANP = /^\+1[2-9][0-9]{9}$/;
 const KEYS = ['orderId', 'schoolId', 'phoneE164', 'locality', 'region', 'monthlyPriceMicrounits', 'status', 'decisionNote', 'decidedAt',
-  'failureCode', 'version', 'createdAt', 'updatedAt'].sort().join(',');
+  'failureCode', 'outcomeUnknown', 'version', 'createdAt', 'updatedAt'].sort().join(',');
 const nullableString = (value: unknown) => value === null || typeof value === 'string';
 
 /** Strict shape check of one order as the database returns it; anything else is refused. */
@@ -28,7 +31,7 @@ export function verifySchoolNumberOrder(value: unknown): SchoolNumberOrder {
     || typeof o.phoneE164 !== 'string' || !NANP.test(o.phoneE164) || !nullableString(o.locality) || !nullableString(o.region)
     || !Number.isSafeInteger(o.monthlyPriceMicrounits) || (o.monthlyPriceMicrounits as number) < 0
     || !SCHOOL_NUMBER_ORDER_STATUSES.includes(o.status as SchoolNumberOrderStatus)
-    || !nullableString(o.decisionNote) || !nullableString(o.decidedAt) || !nullableString(o.failureCode)
+    || !nullableString(o.decisionNote) || !nullableString(o.decidedAt) || !nullableString(o.failureCode) || typeof o.outcomeUnknown !== 'boolean'
     || !Number.isSafeInteger(o.version) || (o.version as number) < 1 || typeof o.createdAt !== 'string' || typeof o.updatedAt !== 'string') {
     throw new Error('Unverified school number order.');
   }

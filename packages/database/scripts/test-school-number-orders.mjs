@@ -198,11 +198,37 @@ try {
   const [cb] = await claim();
   check((await record(cb, 'FAILED', { failure: 'NUMBER_NO_LONGER_AVAILABLE' })).status === 'FAILED', 'a refused purchase is FAILED');
   check((await order(b3.orderId)).failure_code === 'NUMBER_NO_LONGER_AVAILABLE', 'with the failure code');
-  // Five attempts without a result stop for an operator.
+  // An unknown buy settled by Twilio refusing the number (after this attempt found it on no subaccount) frees the school.
+  const b5 = await owner('SELECT hon.request_school_number($1,$2::jsonb,$3) AS data', [subject.owner, JSON.stringify({ ...number, phoneE164: '+12065550105' }), `key-${randomUUID()}`], ids.schoolB, ids.org2);
+  await decide(b5.orderId, 'APPROVE', 1);
+  { const [c] = await claim(); await record(c, 'UNKNOWN'); }
+  { const [c] = await claim(); check(c.outcome_unknown === true, 'the next claim is told the last outcome is unknown'); await record(c, 'FAILED', { failure: 'NUMBER_UNAVAILABLE' }); }
+  check((await order(b5.orderId)).outcome_unknown === false, 'Twilio refusing the buy settles an unknown order');
+  // Reviewer P2: a lost buy followed by four RETRYs must not end as an ordinary failure that frees the school and number.
   const b4 = await owner('SELECT hon.request_school_number($1,$2::jsonb,$3) AS data', [subject.owner, JSON.stringify({ ...number, phoneE164: '+12065550104' }), `key-${randomUUID()}`], ids.schoolB, ids.org2);
   await decide(b4.orderId, 'APPROVE', 1);
-  for (let i = 0; i < 5; i += 1) { const [c] = await claim(); await record(c, 'UNKNOWN'); }
-  check((await claim()).length === 0 && (await order(b4.orderId)).status === 'FAILED' && (await order(b4.orderId)).failure_code === 'ATTEMPTS_EXHAUSTED', 'five unknown attempts end FAILED for an operator, never a sixth buy');
+  { const [c] = await claim(); await record(c, 'UNKNOWN'); }
+  for (let i = 0; i < 4; i += 1) { const [c] = await claim(); await record(c, 'RETRY', { failure: 'PROVIDER_UNREACHABLE' }); }
+  check((await order(b4.orderId)).outcome_unknown === true, 'RETRY never clears an earlier unknown buy');
+  check((await claim()).length === 0, 'the sixth claim does not buy');
+  const settled = await order(b4.orderId);
+  check(settled.status === 'FAILED' && settled.failure_code === 'RECONCILE_REQUIRED' && settled.outcome_unknown === true, 'it ends FAILED RECONCILE_REQUIRED, still marked unknown');
+  const listed = (await owner('SELECT hon.read_school_number_orders($1) AS data', [subject.owner], ids.schoolB, ids.org2)).orders.find((o) => o.orderId === b4.orderId);
+  check(listed.outcomeUnknown === true, 'the order JSON shows outcomeUnknown');
+  await expectError('55000', () => owner('SELECT hon.request_school_number($1,$2::jsonb,$3) AS data', [subject.owner, JSON.stringify({ ...number, phoneE164: '+12065550106' }), `key-${randomUUID()}`], ids.schoolB, ids.org2),
+    'an unsettled order blocks a second number for that school');
+  const scopeB = await owner('SELECT hon.authorize_school_number_search($1) AS data', [subject.owner], ids.schoolB, ids.org2);
+  check(scopeB.openOrder?.orderId === b4.orderId, 'the search scope reports the unsettled order');
+  const heldIndex = (await admin.query("SELECT count(*)::int n FROM pg_indexes WHERE indexname = 'school_number_orders_one_number' AND indexdef LIKE '%outcome_unknown%'")).rows[0].n;
+  check(heldIndex === 1, 'an unsettled order keeps its number reserved');
+  // Five attempts with nothing ever sent (no unknown, no number) end as an ordinary ATTEMPTS_EXHAUSTED failure.
+  await admin.query('ALTER TABLE hon.school_number_orders DISABLE TRIGGER guarded');
+  await admin.query("UPDATE hon.school_number_orders SET status = 'CANCELLED', outcome_unknown = false WHERE id = $1", [b4.orderId]);
+  await admin.query('ALTER TABLE hon.school_number_orders ENABLE TRIGGER guarded');
+  const b7 = await owner('SELECT hon.request_school_number($1,$2::jsonb,$3) AS data', [subject.owner, JSON.stringify({ ...number, phoneE164: '+12065550107' }), `key-${randomUUID()}`], ids.schoolB, ids.org2);
+  await decide(b7.orderId, 'APPROVE', 1);
+  for (let i = 0; i < 5; i += 1) { const [c] = await claim(); await record(c, 'RETRY', { failure: 'SUBACCOUNT_BUSY' }); }
+  check((await claim()).length === 0 && (await order(b7.orderId)).failure_code === 'ATTEMPTS_EXHAUSTED' && (await order(b7.orderId)).outcome_unknown === false, 'five plain retries end ATTEMPTS_EXHAUSTED');
 
   // 7b. Guard triggers: even the table owner cannot rewrite an order, reopen a finished one, or move a subaccount.
   await expectError('42501', () => admin.query("UPDATE hon.school_number_orders SET phone_e164 = '+15125550177', version = version + 1 WHERE id = $1", [b2.orderId]), 'an order\'s number never changes');

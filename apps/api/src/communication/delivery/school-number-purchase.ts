@@ -74,6 +74,8 @@ export class SchoolNumberPurchaseWorker {
 
   private async purchase(claim: SchoolNumberPurchaseClaim, vault: TwilioSubaccountVault, origin: string): Promise<SchoolNumberPurchaseResult> {
     const base = { orderId: claim.orderId, leaseToken: claim.leaseToken };
+    // Once the number is on the subaccount, every later result carries its SID so the order stays visibly holding it.
+    let held: { numberSid: string } | Record<string, never> = {};
     try {
       const account = await new SchoolTwilioAccounts(this.store, this.setup.provisioning, vault).ensure(claim.schoolId);
       if (account.outcome === 'BUSY') return { ...base, outcome: 'RETRY', failureCode: 'SUBACCOUNT_BUSY' };
@@ -86,6 +88,7 @@ export class SchoolNumberPurchaseWorker {
       const sub = { accountSid: account.accountSid, authToken };
       const number = await this.numbers.findIncomingNumber(sub, claim.phoneE164)
         ?? await this.numbers.buyNumber(sub, claim.phoneE164, `${origin}${TWILIO_VOICE_PATH}`);
+      held = { numberSid: number.numberSid };
       const name = schoolServiceFriendlyName(claim.schoolId);
       const service = await this.numbers.findService(sub, name)
         ?? await this.numbers.createService(sub, name, { inboundUrl: `${origin}${TWILIO_INBOUND_PATH}`, statusUrl: `${origin}${TWILIO_STATUS_PATH}` });
@@ -96,12 +99,12 @@ export class SchoolNumberPurchaseWorker {
     } catch (error) {
       if (error instanceof TwilioProvisioningError) {
         const failureCode = CODE.test(error.code) ? error.code : 'TWILIO_PROVISIONING_FAILED';
-        if (error.outcome === 'RETRYABLE') return { ...base, outcome: 'RETRY', failureCode };
-        if (error.outcome === 'FAILED') return { ...base, outcome: 'FAILED', failureCode };
-        return { ...base, outcome: 'UNKNOWN', failureCode: 'OUTCOME_UNKNOWN' };
+        if (error.outcome === 'RETRYABLE') return { ...base, ...held, outcome: 'RETRY', failureCode };
+        if (error.outcome === 'FAILED') return { ...base, ...held, outcome: 'FAILED', failureCode };
+        return { ...base, ...held, outcome: 'UNKNOWN', failureCode: 'OUTCOME_UNKNOWN' };
       }
       // A database or local error after a Twilio step: the next attempt re-reads Twilio, so mark it for reconciling.
-      return { ...base, outcome: 'UNKNOWN', failureCode: 'OUTCOME_UNKNOWN' };
+      return { ...base, ...held, outcome: 'UNKNOWN', failureCode: 'OUTCOME_UNKNOWN' };
     }
   }
 }

@@ -209,6 +209,21 @@ records a per-school count of accepted emails for HQ visibility only; a school's
   `HON_TWILIO_PROVISIONING_APPROVED=true`) and `FakeTwilioProvisioningClient` exist but no route calls `ensure` yet (T2).
 - Open for T2: the 0248 HQ manual setter must refuse to change the phone or service of a sender that has a subaccount.
 
+## 8b. T2 as built (0352)
+- Orders: REQUESTED (school owner, price = the API's own Twilio quote) -> APPROVED or REJECTED (human HQ owner) ->
+  PURCHASING (worker lease) -> PURCHASED, FAILED or back to APPROVED on RETRY. The owner may cancel before buying starts.
+- Every purchase step reads Twilio before it creates: subaccount, number, Messaging Service, number-in-service.
+- `outcomeUnknown`: set when a step may have acted without a recorded result (lost response, lost lease) or once the
+  number is bought and a later step fails. It is never cleared by RETRY; only PURCHASED, or Twilio refusing the buy right
+  after this attempt found no such number on the subaccount, clears it. Five attempts end FAILED: `RECONCILE_REQUIRED`
+  when `outcomeUnknown`, else `ATTEMPTS_EXHAUSTED`.
+- A FAILED order with `outcomeUnknown` is **unsettled**: it keeps the number reserved and blocks a new order for the
+  school (`NUMBER_ORDER_UNSETTLED`) until HQ reconciles it with Twilio. The HQ reconcile action is a later piece; until
+  then an operator checks the subaccount in Twilio.
+- A bought number becomes the school's 0248 sender as DISABLED. The HQ setter refuses a phone or service change on it
+  (`PROVISIONED_SENDER_LOCKED`) but can still switch it ACTIVE. HQ must not do that before the school's A2P campaign is
+  approved; T3 adds the A2P check to that switch.
+
 ## 9. Security and failure rules
 
 - No permission is inferred from the selected school, URL, form value or AI persona. Owner actions re-resolve the live

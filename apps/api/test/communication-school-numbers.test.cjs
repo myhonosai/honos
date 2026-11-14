@@ -19,7 +19,7 @@ const origin = 'https://api.hon.example';
 
 function order(over = {}) {
   return { orderId, schoolId: school, phoneE164: phone, locality: 'New York', region: 'NY', monthlyPriceMicrounits: 1150000, status: 'REQUESTED',
-    decisionNote: null, decidedAt: null, failureCode: null, version: 1, createdAt: '2026-11-14T05:00:00Z', updatedAt: '2026-11-14T05:00:00Z', ...over };
+    decisionNote: null, decidedAt: null, failureCode: null, outcomeUnknown: false, version: 1, createdAt: '2026-11-14T05:00:00Z', updatedAt: '2026-11-14T05:00:00Z', ...over };
 }
 
 /** A fake runtime database that records each SQL call and answers the 0352 functions. */
@@ -266,6 +266,38 @@ test('purchase worker: a number Twilio already sold is FAILED NUMBER_UNAVAILABLE
   lost.recordSchoolNumberPurchase = async () => { throw Object.assign(new Error('PURCHASE_LEASE_LOST'), { code: '40001' }); };
   const summary = await new SchoolNumberPurchaseWorker(lost, new FakeTwilioNumberClient(), setup(new FakeTwilioProvisioningClient(), vault)).runOnce();
   assert.equal(summary.leaseLost, 1);
+});
+
+test('purchase worker: once the number is bought, a later failure or retry carries its SID so the order stays unsettled', async () => {
+  const vault = new TwilioSubaccountVault(randomBytes(32), 'test-1');
+  const numbers = new FakeTwilioNumberClient();
+  numbers.createService = async () => { numbers.calls.push('createService'); throw new TwilioProvisioningError('FAILED', 'PROVIDER_REJECTED'); };
+  const claims = [claim()];
+  const store = workerStore(claims);
+  const worker = new SchoolNumberPurchaseWorker(store, numbers, setup(new FakeTwilioProvisioningClient(), vault));
+  await worker.runOnce();
+  const sub = store.accounts.get(school).accountSid;
+  assert.equal(store.recorded[0].outcome, 'FAILED');
+  assert.equal(store.recorded[0].numberSid, numbers.owned.get(sub).get(phone));
+  numbers.createService = async () => { numbers.calls.push('createService'); throw new TwilioProvisioningError('RETRYABLE', 'PROVIDER_UNREACHABLE'); };
+  claims.push(claim({ attempt: 2 }));
+  await worker.runOnce();
+  assert.deepEqual([store.recorded[1].outcome, store.recorded[1].numberSid], ['RETRY', numbers.owned.get(sub).get(phone)]);
+  // Before the buy, a retry carries no SID.
+  const early = workerStore([claim()]);
+  const fresh = new FakeTwilioNumberClient();
+  fresh.findIncomingNumber = async () => { throw new TwilioProvisioningError('RETRYABLE', 'PROVIDER_UNREACHABLE'); };
+  await new SchoolNumberPurchaseWorker(early, fresh, setup(new FakeTwilioProvisioningClient(), vault)).runOnce();
+  assert.equal(early.recorded[0].outcome, 'RETRY');
+  assert.equal(early.recorded[0].numberSid, undefined);
+});
+
+test('school service: an unsettled earlier order blocks a new one before Twilio is asked', async () => {
+  const numbers = new FakeTwilioNumberClient();
+  const unsettled = order({ status: 'FAILED', failureCode: 'RECONCILE_REQUIRED', outcomeUnknown: true, phoneE164: '+13125550111' });
+  await assert.rejects(new SchoolNumberService(fakeDatabase({ scope: { organizationId: org, schoolId: school, hasProvisionedSender: false, openOrder: unsettled } }), numbers)
+    .order(context({ idempotencyKey: 'order-key-9' }), { phoneE164: phone }), (e) => e.getResponse().code === 'NUMBER_ORDER_UNSETTLED');
+  assert.deepEqual(numbers.calls, []);
 });
 
 test('fake number client is refused in production and staging', () => {
