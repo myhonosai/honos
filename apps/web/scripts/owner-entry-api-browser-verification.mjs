@@ -250,7 +250,7 @@ try {
       calls.push({ path: url.pathname, method: route.request().method() }); return route.continue();
     });
     const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
-    await page.goto(`${origin}/auth/continue`); await page.getByTestId('entry-crm').waitFor();
+    await page.goto(`${origin}/staff/entry`); await page.getByTestId('entry-crm').waitFor();
     await page.getByRole('button', { name: entryText(language, mode), exact: true }).click();
     assert.equal(await page.getByTestId('school-entry').getAttribute('data-interface-theme'), mode);
     assert.equal(await page.getByRole('heading', { level: 1 }).innerText(), entryText(language, 'title'));
@@ -287,7 +287,7 @@ try {
       assert(await page.getByTestId('entry-private').isHidden());
       await page.getByTestId('verify-entry').click(); await page.getByTestId('entry-crm').waitFor();
       await page.evaluate(() => window.dispatchEvent(new Event('hon:session-invalidated'))); assert(await page.getByTestId('entry-private').isHidden()); assert(await page.getByTestId('verify-entry').isDisabled());
-      await page.goto(`${origin}/auth/continue`); await page.getByTestId('entry-crm').waitFor();
+      await page.goto(`${origin}/staff/entry`); await page.getByTestId('entry-crm').waitFor();
       await page.getByTestId('entry-crm').click(); assert.equal(new URL(page.url()).pathname, '/staff/crm/journey');
       assert.equal(await page.getByTestId('organization').inputValue(), a.org); assert.equal(await page.getByTestId('school').inputValue(), a.school);
     }
