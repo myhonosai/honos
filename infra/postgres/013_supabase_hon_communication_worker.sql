@@ -79,4 +79,16 @@ BEGIN
 END;
 $$;
 
+-- 0348 school social posts: lease due post targets, record each publish result, and record signed Zernio post/account
+-- receipts, when 0348 is applied.
+DO $$
+BEGIN
+  IF to_regprocedure('hon.claim_school_social_post_targets(integer,integer)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.claim_school_social_post_targets(integer, integer),
+      hon.record_school_social_post_result(uuid, uuid, text, text, text),
+      hon.record_school_social_post_event(text, text, text, text, text) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 COMMIT;

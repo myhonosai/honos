@@ -105,19 +105,32 @@ export class CommunicationWebhookController {
 
   /**
    * 0250 Zernio `lead.received`: a signed Meta Lead Gen lead becomes a CRM lead only through an HQ-mapped form.
+   * 0348 adds signed `post.published`, `post.failed` and `account.disconnected` receipts on the same endpoint.
    * An unmapped form answers 422 (Zernio does not retry; the event waits in its dead-letter queue for redelivery
    * once HQ maps the form). A rate limit answers 429 and database trouble 503, which Zernio retries.
    */
   @Post('zernio') @HttpCode(200)
   async zernioLead(@Req() req: Request, @Headers('x-zernio-signature') signature: string | undefined): Promise<{ received: true }> {
     if (!Buffer.isBuffer(req.body)) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
-    let lead;
-    try { lead = this.zernio.verify(req.body, signature); }
+    let delivery;
+    try { delivery = this.zernio.receive(req.body, signature); }
     catch (error) {
       if (error instanceof ZernioWebhookError && error.reason === 'NOT_CONFIGURED') throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
       throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
     }
-    if (!lead) return { received: true };
+    if (!delivery) return { received: true };
+    if (delivery.kind === 'SOCIAL') {
+      // 0348: a post or account receipt. Unmatched receipts are acknowledged (they are not HON's posts); database
+      // trouble answers 503 so Zernio retries.
+      if (!this.store.isConfigured() || !this.store.recordSocialPostEvent) throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
+      try { await this.store.recordSocialPostEvent(delivery.event); }
+      catch (error) {
+        if ((error as { code?: string })?.code === '22023') throw new UnprocessableEntityException({ code: 'ZERNIO_EVENT_INVALID' });
+        throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' });
+      }
+      return { received: true };
+    }
+    const lead = delivery.lead;
     if (!this.store.isConfigured() || !this.store.recordZernioLead) throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
     let result;
     try { result = await this.store.recordZernioLead(lead); }

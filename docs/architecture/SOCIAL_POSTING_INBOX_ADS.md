@@ -107,6 +107,57 @@ callers are refused. Authority is re-checked after the writes.
 Account webhooks (token expiry, `account.disconnected`) arrive with S2's webhook events; until then a reconnect is
 manual. No posting, inbox or ads code runs in S1.
 
+## 4A. S2 design (0348): posts
+
+### 4A.1 Scope
+
+Text posts, with an optional https link, to the school's own Facebook Pages. Instagram requires an image or video on
+every post, and HON has no reviewed real-media storage yet (Creative Studio results are synthetic only, 0216), so an
+Instagram target is refused with `SOCIAL_MEDIA_REQUIRED` until a later media piece (its own migration number) lets
+staff upload an image to Zernio. Agent drafts come with the AI Action Engine hook in a later piece; S2 is human drafts
+only.
+
+### 4A.2 Records
+
+- `hon.school_social_posts`: one per post: `text` (1 to 2,200 characters), optional `link_url` (https, at most 2,000),
+  `status` (`DRAFT`, `APPROVED`, `CANCELLED`), `publish_at` (set on approval), who drafted and who approved, `version`.
+  The text, link and targets are frozen once approved.
+- `hon.school_social_post_targets`: one per (post, connected account): `status` (`PENDING`, `PUBLISHING`,
+  `PUBLISHED`, `FAILED`, `UNKNOWN`, `SKIPPED`), the lease (`lease_token`, `lease_expires_at`), `provider_post_id`,
+  `failure_code` (a fixed HON code, never provider text), `skip_reason` (`ACCOUNT_OFF`, `SCHOOL_INACTIVE`),
+  `resolved_by` for a person's resolution of an UNKNOWN.
+- `hon.school_social_post_receipts`: one per Zernio webhook event id (dedup).
+- `hon.school_social_commands`: idempotency (reused from 0347).
+
+### 4A.3 Who
+
+New permission `marketing.social.post` (write and edit drafts; staff assignable). Approving, cancelling an approved
+post and resolving an UNKNOWN need `marketing.social.manage`. Reads need `marketing.social.read`. Same 0331 actor
+checks as S1, re-checked after the writes.
+
+### 4A.4 Flow
+
+1. **Draft** `POST …/marketing/social/posts {text, linkUrl?, accountIds}`: 1 to 4 accounts, each a CONNECTED
+   Facebook account of this exact school. Edit with `expectedVersion` while DRAFT.
+2. **Approve** `POST …/posts/:id/approve {publishAt?, expectedVersion}`: every target must still be CONNECTED with
+   publishing on. `publishAt` empty means now; otherwise between now and 90 days ahead. The approver may be the
+   drafter (one-person schools).
+3. **Cancel** a DRAFT, or an APPROVED post while every target is still PENDING.
+4. **Publish worker** (only when publishing is READY): runs as `hon_communication_worker`. It claims due PENDING
+   targets with a 60-second lease. At claim time the account must still be CONNECTED with publishing on and the
+   school, organization and HON entitlement active, or the target becomes SKIPPED. The worker asks Zernio to publish
+   to that one account with the target id as idempotency key, then records PUBLISHED (with the provider post id),
+   FAILED or UNKNOWN. A timeout or lost answer is UNKNOWN. A PUBLISHING target whose lease ran out becomes UNKNOWN,
+   never claimed again.
+5. **Webhooks** on the existing signed endpoint: `post.published` / `post.failed` settle a target found by provider
+   post id and the school binding of its account. A PUBLISHING or UNKNOWN target takes the reported outcome; a
+   PUBLISHED target becomes FAILED if Zernio later reports the platform refused it; nothing moves from FAILED back to
+   PUBLISHED, and a person's resolution stands. `account.disconnected` marks the bound account DISCONNECTED with every switch off.
+   Receipts are deduplicated by event id. These events are handled only when publishing is READY.
+6. **Resolve UNKNOWN** a person who checked the Page marks an UNKNOWN target PUBLISHED or NOT_PUBLISHED. HON never
+   resends it.
+7. **Read** `GET …/marketing/social/posts?from&to`: the calendar list with targets and statuses, at most 200.
+
 ## 5. Provider facts to confirm before any switch is turned on
 
 docs.zernio.com is blocked from the build container, so the adapter is written against these assumptions, each one
