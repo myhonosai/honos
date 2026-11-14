@@ -150,12 +150,16 @@ checks as S1, re-checked after the writes.
    FAILED or UNKNOWN. A timeout or lost answer is UNKNOWN. A PUBLISHING target whose lease ran out becomes UNKNOWN,
    never claimed again.
 5. **Webhooks** on the existing signed endpoint: `post.published` / `post.failed` settle a target found by provider
-   post id and the school binding of its account. A PUBLISHING or UNKNOWN target takes the reported outcome; a
+   post id and the school binding of its account, so they reach only a target that already holds its provider post
+   id. An UNKNOWN target never received one, so only a person settles it (step 6). A
    PUBLISHED target becomes FAILED if Zernio later reports the platform refused it; nothing moves from FAILED back to
    PUBLISHED, and a person's resolution stands. `account.disconnected` marks the bound account DISCONNECTED with every switch off.
    Receipts are deduplicated by event id. These events are handled only when publishing is READY.
 6. **Resolve UNKNOWN** a person who checked the Page marks an UNKNOWN target PUBLISHED or NOT_PUBLISHED. HON never
    resends it.
+   An approval stands until the post is cancelled: a post approved ahead of time still goes out if the approver later
+   loses `marketing.social.manage`; anyone who still holds it can cancel the post before it is due. A Zernio 429 is
+   recorded as a definite refusal (FAILED); a later piece may return it to PENDING with a later due time instead.
 7. **Read** `GET …/marketing/social/posts?from&to`: the calendar list with targets and statuses, at most 200.
 
 ## 5. Provider facts to confirm before any switch is turned on

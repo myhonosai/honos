@@ -10,7 +10,10 @@ BEGIN;
 -- - One target per (post, account). The publish worker (hon_communication_worker) leases a due target; at claim time
 --   the account must still be CONNECTED with publishing on, and the school, organization and HON entitlement active,
 --   or the target is SKIPPED. A lost answer, or a lease that ran out, is UNKNOWN and is never sent again. A person can
---   settle an UNKNOWN after checking the Page; a signed Zernio post.published / post.failed receipt can too.
+--   settle an UNKNOWN after checking the Page. A signed Zernio post.published / post.failed receipt settles only a
+--   target that already holds its provider post id, so an UNKNOWN (which has none) is settled by a person.
+-- - An approval stands until the post is cancelled: a post approved ahead of time still goes out if the approver
+--   later loses marketing.social.manage. Anyone who still holds manage can cancel it before it is due.
 -- - account.disconnected from Zernio turns the bound account DISCONNECTED with every switch off.
 -- - Identifier-only audit and inert outbox. No provider text is stored; failure codes are HON's own.
 DO $$ BEGIN
