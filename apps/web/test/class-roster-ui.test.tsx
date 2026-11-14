@@ -165,18 +165,41 @@ it('picks the attendance category from the record or the booking, so a trial is 
   expect(rosterCategory(entry(1, { booking: booking('BOOKED', 'TRIAL'), attendance: { ...recorded(), category: 'OBSERVER' } }))).toBe('OBSERVER');
 });
 
-it('marks one student through the existing attendance command: fixed path, human marker, retained key, observed version', async () => {
-  const f = stub(json({ data: savedRecord('LATE'), meta: { requestId: id(5), correlationId: id(5), replayed: false } }, 201));
-  const saved = await rosterApi.mark(scope, id(71), entry(1, { booking: booking('BOOKED', 'TRIAL'), attendance: recorded() }), 'LATE', 'retained-key-1');
-  expect(saved).toEqual({ id: id(95), status: 'LATE', category: 'REGULAR_PARTICIPANT', recordedAt: '2026-11-08T12:10:00.000Z', version: 2 });
+const meta5 = { requestId: id(5), correlationId: id(5) };
+const sequence = (...responses: Response[]) => { const f = vi.fn(async () => responses.shift() as Response); vi.stubGlobal('fetch', f); return f; };
+
+it('marks a student with no record through the existing attendance command: fixed path, human marker, retained key, no read first', async () => {
+  const f = stub(json({ data: savedRecord('PRESENT'), meta: { ...meta5, replayed: false } }, 201));
+  await rosterApi.mark(scope, id(71), entry(1, { booking: booking('BOOKED', 'TRIAL') }), 'PRESENT', 'retained-key-1');
+  expect(f).toHaveBeenCalledTimes(1);
   const [path, init] = f.mock.calls[0] as unknown as [string, RequestInit];
   expect(path).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/schedule/sessions/${id(71)}/attendance`);
   expect(init.method).toBe('POST'); expect(init.credentials).toBe('same-origin');
   expect(init.headers).toMatchObject({ 'X-HON-Human-Command': 'attendance', 'Idempotency-Key': 'retained-key-1' });
-  // An existing record keeps its own category; the observed version makes the change conditional.
-  expect(JSON.parse(init.body as string)).toEqual({ studentProfileId: id(101), status: 'LATE', category: 'REGULAR_PARTICIPANT', note: '', expectedVersion: 1 });
-  stub(json({ data: savedRecord('PRESENT', { studentProfileId: id(102) }), meta: { requestId: id(5), correlationId: id(5), replayed: false } }, 201));
+  expect(JSON.parse(init.body as string)).toEqual({ studentProfileId: id(101), status: 'PRESENT', category: 'TRIAL_STUDENT', note: '' });
+  stub(json({ data: savedRecord('PRESENT', { studentProfileId: id(102) }), meta: { ...meta5, replayed: false } }, 201));
   await expect(rosterApi.mark(scope, id(71), entry(1), 'PRESENT', 'k')).rejects.toEqual(new MarkError('UNKNOWN'));
+});
+
+it('changing an existing record reads it first and sends its own note, category and version back, so a roster change never erases a note', async () => {
+  const exact = savedRecord('PRESENT', { version: 1, category: 'OBSERVER', note: 'Left early, ankle' });
+  const f = sequence(json({ data: exact, meta: meta5 }), json({ data: savedRecord('LATE', { category: 'OBSERVER', note: 'Left early, ankle' }), meta: { ...meta5, replayed: false } }, 201));
+  const saved = await rosterApi.mark(scope, id(71), entry(1, { booking: booking('BOOKED', 'TRIAL'), attendance: recorded() }), 'LATE', 'retained-key-1');
+  expect(saved).toEqual({ id: id(95), status: 'LATE', category: 'OBSERVER', recordedAt: '2026-11-08T12:10:00.000Z', version: 2 });
+  const [readPath, readInit] = f.mock.calls[0] as unknown as [string, RequestInit];
+  expect(readPath).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/schedule/sessions/${id(71)}/attendance?studentProfileId=${id(101)}`);
+  expect(readInit.method ?? 'GET').toBe('GET');
+  const [, init] = f.mock.calls[1] as unknown as [string, RequestInit];
+  expect(JSON.parse(init.body as string)).toEqual({ studentProfileId: id(101), status: 'LATE', category: 'OBSERVER', note: 'Left early, ankle', expectedVersion: 1 });
+  // A record that changed (or vanished) since the roster was read is a conflict: nothing is written, the roster reloads.
+  for (const current of [savedRecord('PRESENT', { version: 3 }), null]) {
+    const g = sequence(json({ data: current, meta: meta5 }));
+    await expect(rosterApi.mark(scope, id(71), entry(1, { attendance: recorded() }), 'LATE', 'k')).rejects.toEqual(new MarkError('CONFLICT'));
+    expect(g).toHaveBeenCalledTimes(1);
+  }
+  // A refused read maps like a refused save.
+  sequence(json({ code: 'X' }, 403));
+  await expect(rosterApi.mark(scope, id(71), entry(1, { attendance: recorded() }), 'LATE', 'k')).rejects.toEqual(new MarkError('DENIED'));
 });
 
 it('maps a refused mark to a plain outcome; only a 401 ends the session', async () => {

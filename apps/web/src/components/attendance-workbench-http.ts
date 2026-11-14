@@ -238,6 +238,13 @@ export async function saveAttendanceRecord(scope: AttendanceKnownScope, input: R
  * saveAttendanceRecord, without the program selector (recording never needs it; only the policy does).
  */
 export type RosterAttendanceTarget = Pick<AttendanceKnownScope, 'organizationId' | 'schoolId' | 'sessionId' | 'studentProfileId'>;
+/** The exact current record for one roster student (same lookup as the exact page), so a roster change keeps its note. */
+export async function loadRosterAttendance(target: RosterAttendanceTarget): Promise<AttendanceRecordSummary | null> {
+  for (const value of [target.organizationId, target.schoolId, target.sessionId, target.studentProfileId]) if (!UUID.test(value)) invalid();
+  const response = await request(`${recordPath({ ...target, programId: '' })}?studentProfileId=${target.studentProfileId}`, 'RECORD_LOAD');
+  if (response.data === null) return null;
+  return attendance(response.data, target);
+}
 export async function saveRosterAttendance(target: RosterAttendanceTarget, input: RecordAttendanceInput, idempotencyKey: string): Promise<{ attendance: AttendanceRecordSummary; replayed: boolean }> {
   for (const value of [target.organizationId, target.schoolId, target.sessionId, target.studentProfileId]) if (!UUID.test(value)) invalid();
   if (input.studentProfileId !== target.studentProfileId) invalid();

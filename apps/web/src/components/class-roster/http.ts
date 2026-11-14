@@ -1,7 +1,7 @@
 import { CLASS_SESSION_ROSTER_ATTENDANCE_STATUSES, CLASS_SESSION_ROSTER_BOOKING_STATUSES, verifyCurrentSchoolClassSessionItems, type ClassSessionRosterEntry, type CurrentSchoolClassSession } from '@hon/contracts';
 import { ATTENDANCE_CATEGORIES, type AttendanceCategory, type ClassSessionRosterAttendance } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
-import { AttendanceWorkbenchUiError, saveRosterAttendance } from '../attendance-workbench-http';
+import { AttendanceWorkbenchUiError, loadRosterAttendance, saveRosterAttendance } from '../attendance-workbench-http';
 
 /**
  * U5 class rosters. The class list is the forward-paging session list (0221, schedule.session.read) from a
@@ -156,11 +156,20 @@ export const rosterApi: RosterApi = {
     try { return verifyRosterPage(value); } catch { throw new RosterError('UNAVAILABLE'); }
   },
   async mark(scope, sessionId, entry, status, key) {
+    const target = { organizationId: scope.organizationId.toLowerCase(), schoolId: scope.schoolId.toLowerCase(), sessionId: sessionId.toLowerCase(), studentProfileId: entry.studentProfileId.toLowerCase() };
     let saved;
     try {
-      saved = await saveRosterAttendance({ organizationId: scope.organizationId.toLowerCase(), schoolId: scope.schoolId.toLowerCase(), sessionId: sessionId.toLowerCase(), studentProfileId: entry.studentProfileId.toLowerCase() },
-        { studentProfileId: entry.studentProfileId.toLowerCase(), status, category: rosterCategory(entry), note: '', ...(entry.attendance ? { expectedVersion: entry.attendance.version } : {}) }, key);
+      // A change to an existing record re-reads it first: the roster does not carry the note, and the server replaces the
+      // note on every save, so the exact record's own note, category and version go back with the new status.
+      let note = '', category = rosterCategory(entry), expectedVersion: number | undefined;
+      if (entry.attendance) {
+        const current = await loadRosterAttendance(target);
+        if (!current || current.id.toLowerCase() !== entry.attendance.id.toLowerCase() || current.version !== entry.attendance.version) throw new MarkError('CONFLICT');
+        note = current.note ?? ''; category = current.category; expectedVersion = current.version;
+      }
+      saved = await saveRosterAttendance(target, { studentProfileId: target.studentProfileId, status, category, note, ...(expectedVersion !== undefined ? { expectedVersion } : {}) }, key);
     } catch (error) {
+      if (error instanceof MarkError) throw error;
       const code = error instanceof AttendanceWorkbenchUiError ? error.status : 0;
       if (code === 401) { reportConfirmedSessionInvalidation(); throw new MarkError('SESSION'); }
       throw new MarkError(code === 403 ? 'DENIED' : code === 409 ? 'CONFLICT' : code === 400 || code === 404 || code === 422 ? 'REJECTED' : 'UNKNOWN');
