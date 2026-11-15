@@ -22,7 +22,7 @@ const g = (group: ShellKey, ...routes: SchoolShellRoute[]): SchoolShellRoute[] =
  */
 export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'home', titleKey: 'navHome', routes: [r('/staff/dashboard', 'routeOverview', true), r('/staff/command-center', 'routeCommandCenter'), r('/staff/work', 'routeWork')] },
-  { key: 'students', titleKey: 'navStudents', routes: [...g('groupPeople', r('/staff/search', 'routeStudentSearch'), r('/staff/people', 'routePeople'), r('/staff/family-access', 'routeFamilyAccess', true),
+  { key: 'students', titleKey: 'navStudents', routes: [...g('groupPeople', r('/staff/search', 'routeStudentSearch'), r('/staff/people', 'routePeople'), r('/staff/family-access', 'routeFamilyAccess', true), r('/staff/family-messages', 'routeFamilyMessages'),
     r('/staff/students/achievements', 'routeAchievements'), r('/staff/retention/review', 'routeRetention'), r('/staff/migration/students', 'routeStudentImport')),
     ...g('groupStaff', r('/staff/team/invitations', 'routeTeam', true), r('/staff/roles', 'routeRoles'), r('/staff/team/availability', 'routeAvailability'), r('/staff/instructor-qualifications', 'routeQualifications'),
     r('/staff/documents', 'routeDocuments'))] },
