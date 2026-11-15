@@ -139,4 +139,29 @@ describe('school shell frame', () => {
     expect(render()).not.toMatch(/<dialog[^>]* open/);
     expect(render({ menuOpen: true })).toContain('data-drawer="open"');
   });
+
+  it('splits a long area into named groups and shows only the current group\'s pages', () => {
+    const tabs = (html: string) => [...(html.match(/data-shell-tabs="">(.*?)<\/nav>/s)?.[1] ?? '').matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]);
+    const groupRow = (html: string) => html.match(/data-shell-groups="">(.*?)<\/nav>/s)?.[1] ?? '';
+    const progress = render({ path: '/staff/curriculum/progress' });
+    expect([...groupRow(progress).matchAll(/>([^<]+)<\/a>/g)].map(m => m[1])).toEqual(['Schedule', 'Attendance', 'Curriculum &amp; testing', 'Community']);
+    expect(groupRow(progress)).toMatch(/aria-current="true"[^>]*>Curriculum &amp; testing|>Curriculum &amp; testing/);
+    expect(progress).toMatch(/href="\/staff\/curriculum\/library"[^>]*aria-current="true">Curriculum &amp; testing/);
+    expect(tabs(progress)).toEqual(['Curriculum library', 'Curriculum progress', 'Teaching studio', 'Testing', 'Readiness', 'Scorecards', 'Promotions', 'Certificates']);
+    const invoices = render({ path: '/staff/billing/invoices' });
+    expect(tabs(invoices)).toEqual(['Invoices', 'Tuition balances', 'Payment processors', 'Checkout pages', 'Saved payment methods']);
+    // Short areas keep one flat row with no group row.
+    const reports = render({ path: '/staff/reports' });
+    expect(reports).not.toContain('data-shell-groups'); expect(tabs(reports)).toHaveLength(4);
+  });
+
+  it('names the current area in the phone bar when it is not one of the four shortcuts', () => {
+    const mobile = (html: string) => html.match(/aria-label="Quick navigation"[^>]*>(.*?)<\/nav>/s)?.[1] ?? '';
+    const billing = mobile(render({ path: '/staff/billing/invoices' }));
+    expect(billing).toContain('data-mobile-current=""'); expect(billing).toContain('<span>Billing</span>'); expect(billing).not.toContain('<span>More</span>');
+    expect(billing).toContain('aria-label="More: You are in Billing"');
+    const classes = mobile(render({ path: '/staff/schedule' }));
+    expect(classes).not.toContain('data-mobile-current'); expect(classes).toContain('<span>More</span>');
+    expect(classes).toMatch(/aria-current="page"[^>]*>.*?<span>Classes<\/span>/s);
+  });
 });
