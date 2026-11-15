@@ -30,6 +30,7 @@ describe('settings summary', () => {
     expect(card(html, 'language')).toContain('English'); expect(card(html, 'language')).toContain('Time zone: UTC'); expect(card(html, 'language')).toContain('href="/settings/language-region"');
     expect(card(html, 'texts')).toContain('Texts on to +15555550100');
     for (const id of ['usage', 'automation', 'help']) expect(card(html, id)).toContain('>Open<');
+    expect(card(html, 'tour')).toContain('href="/staff/settings?tour=1"'); expect(card(html, 'tour')).toContain('>Start<');
     for (const id of ['plan', 'branding', 'owners', 'language', 'texts']) expect(card(html, id)).toContain('>Change<');
     // Setup lives in onboarding: one link to it, not three Settings tabs.
     expect(html).toContain('href="/staff/welcome"'); expect(html).not.toContain('href="/staff/launch"'); expect(html).not.toContain('href="/staff/founder-setup"');
