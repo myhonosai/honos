@@ -20,7 +20,7 @@ const {SchoolWebsiteController,PublishedSchoolWebsiteController}=require('./dist
 const {SchoolWebsiteService}=require('./dist/website/school-website.service.js');
 const guards=require('./dist/website/school-website-human-ui.guard.js');
 const {publicSiteTransport}=require('./dist/website/public-site-transport.js');
-const {SIGNUP_CONFIRMATION,verifySchoolWebsite,verifyPublishedSchoolWebsite}=require('@hon/contracts');
+const {SIGNUP_CONFIRMATION,verifySchoolWebsite,verifyPublishedSchoolWebsite,validateWebsiteDocument,WEBSITE_MAX_DOCUMENT_BYTES}=require('@hon/contracts');
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false});
 const database=new RuntimeDatabaseService();let app,groups=0,origin;
 const session={mode:'OIDC',audience:'school-website-disposable',secret:createHash('sha256').update(K()).digest('hex')};
@@ -65,7 +65,7 @@ try{
  }
  const entry=['read_school_website','mutate_school_website','read_published_school_website'];
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname LIKE '%school_website%'");
- assert.equal(fns.length,15);
+ assert.equal(fns.length,16);
  for(const f of fns)assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entry.includes(f.proname),f.proname);
  for(const f of fns)assert.equal((await q("SELECT has_function_privilege('public',$1,'EXECUTE') ok",[f.oid]))[0].ok,false,f.proname);
  assert.deepEqual((await q("SELECT code FROM hon.permissions WHERE code LIKE 'website.%' ORDER BY code")).map(r=>r.code),['website.edit','website.publish','website.read']);
@@ -97,9 +97,25 @@ try{
   d=>{d.pages.push(...Array.from({length:19},(_,i)=>({...structuredClone(d.pages[1]),slug:'p'+i})));},
   d=>{d.schemaVersion=2;},
   d=>{d.pages[0].sections.push({id:'v',type:'VIDEO',props:{provider:'YOUTUBE',videoId:'bad id!',title:''}});},
+  d=>{d.pages[0].sections[0].props.heading='line\u2028separator';},
+  d=>{d.pages[0].sections[0].props.subheading='paragraph\u2029separator';},
  ];
- for(const [i,change]of bad.entries()){const d=structuredClone(good);change(d);assert.equal((await q('SELECT hon.school_website_document_ok($1::jsonb) ok',[d]))[0].ok,false,'bad document '+i);}
- pass('database rules refuse script links, data/http images, unknown fields and types, bidi/newline in single lines, bad colours, page and link rules, limits');
+ for(const [i,change]of bad.entries()){const d=structuredClone(good);change(d);assert.equal((await q('SELECT hon.school_website_document_ok($1::jsonb) ok',[d]))[0].ok,false,'bad document '+i);
+  assert.throws(()=>validateWebsiteDocument(d),/Invalid website/,'shared validator, bad document '+i);}
+ // Only link fields are links: text that starts with '/' is just text, for the database and the shared validator alike.
+ const slashText=structuredClone(good);slashText.pages[0].sections.push({id:'about',type:'TEXT',props:{heading:'/about us',body:'/ Classes start at 4 PM.'}});
+ assert.equal((await q('SELECT hon.school_website_document_ok($1::jsonb) ok',[slashText]))[0].ok,true);assert.doesNotThrow(()=>validateWebsiteDocument(slashText));
+ // The size limit is measured the same way on both sides (PostgreSQL's jsonb text), right at the boundary.
+ const sized=n=>{const d=structuredClone(good);d.pages.push(...Array.from({length:8},(_,i)=>({slug:'faq-'+i,kind:'CUSTOM',title:'FAQ',inNav:false,seo:{title:'',description:''},campaignId:null,
+  sections:Array.from({length:30},(_,j)=>({id:'f'+j,type:'FAQ',props:{heading:'',items:Array.from({length:20},()=>({question:'',answer:''}))}}))})));
+  d.pages.push({slug:'pad',kind:'CUSTOM',title:'Pad',inNav:false,seo:{title:'',description:''},campaignId:null,
+   sections:Array.from({length:30},(_,j)=>({id:'t'+j,type:'TEXT',props:{heading:'',body:'x'.repeat(Math.max(0,Math.min(4000,n-4000*j)))}}))});return d;};
+ const base0=(await q('SELECT octet_length($1::jsonb::text) n',[sized(0)]))[0].n;const room=WEBSITE_MAX_DOCUMENT_BYTES-base0;assert(room>0&&room<30*4000,'boundary fixture '+room);
+ assert(Buffer.byteLength(JSON.stringify(sized(room+1)))<WEBSITE_MAX_DOCUMENT_BYTES,'compact JSON would wrongly pass');
+ for(const [n,expected]of [[room,true],[room+1,false]]){const d=sized(n);
+  assert.equal((await q('SELECT hon.school_website_document_ok($1::jsonb) ok',[d]))[0].ok,expected,'database size '+n);
+  if(expected)assert.doesNotThrow(()=>validateWebsiteDocument(d));else assert.throws(()=>validateWebsiteDocument(d),/document size/);}
+ pass('database and shared rules refuse script links, data/http images, unknown fields and types, bidi/newline/line-separator characters, bad colours, page and link rules, limits; agree on text starting with / and on the exact size boundary');
 
  const module=await Test.createTestingModule({controllers:[SchoolWebsiteController,PublishedSchoolWebsiteController],providers:[SchoolWebsiteService,...Object.values(guards),HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
  app=module.createNestApplication({logger:false});app.use(publicSiteTransport());app.setGlobalPrefix('v1');await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;
@@ -178,6 +194,33 @@ try{
  refused(await cmd(a,'publish',{expectedRevision:r1.data.draftRevision,note:''}),409,'SCHOOL_WEBSITE_REFERENCE_NOT_LIVE');
  pass('a booking page that is no longer live is emptied in the public copy; republishing it is refused; history unchanged');
 
+ // 7b. A form is offered to visitors exactly when the public form intake (0075) would serve it. The 0073/0075 guard
+ // triggers only allow those records through their own human command paths, so this fixture disables them inside one
+ // transaction on the owner connection and rolls everything back.
+ await q('BEGIN');
+ try{
+  for(const t of ['crm_pipelines','crm_pipeline_stages','marketing_campaigns','public_lead_forms'])await q(`ALTER TABLE hon.${t} DISABLE TRIGGER USER`);
+  const pl=(await q("INSERT INTO hon.crm_pipelines(organization_id,school_id,name) VALUES($1,$2,'Synthetic pipeline') RETURNING id",[a.org,a.school]))[0].id;
+  const open=(await q("INSERT INTO hon.crm_pipeline_stages(organization_id,school_id,pipeline_id,name,position) VALUES($1,$2,$3,'New',1) RETURNING id",[a.org,a.school,pl]))[0].id;
+  const won=(await q("INSERT INTO hon.crm_pipeline_stages(organization_id,school_id,pipeline_id,name,position,terminal_status) VALUES($1,$2,$3,'Won',2,'WON') RETURNING id",[a.org,a.school,pl]))[0].id;
+  const camp=(await q("INSERT INTO hon.marketing_campaigns(organization_id,school_id,version,code,name,goal,offer_label,channel,status,starts_at,ends_at,planned_budget_minor,currency) VALUES($1,$2,1,'SYN-WEB','Synthetic','Leads','Free class','WEBSITE','ACTIVE',date_trunc('milliseconds',clock_timestamp()),date_trunc('milliseconds',clock_timestamp()+interval '30 days'),0,'USD') RETURNING id",[a.org,a.school]))[0].id;
+  const form=(await q("INSERT INTO hon.public_lead_forms(organization_id,school_id,status,title,description,optional_fields,pipeline_id,pipeline_stage_id,campaign_id) VALUES($1,$2,'PUBLISHED','Ask us','','[]',$3,$4,$5) RETURNING id,public_id",[a.org,a.school,pl,open,camp]))[0];
+  const withForm=doc('Form check',{homeSections:[{id:'ask',type:'LEAD_FORM',props:{heading:'Ask us',body:'',publicFormId:form.public_id}}]});
+  const state=async()=>{const r=(await q('SELECT hon.school_website_form_live($1,$2,$3) live,hon.school_website_refs_ok($1,$2,$4::jsonb,true) publishable,hon.school_website_refs_ok($1,$2,$4::jsonb,false) saveable,hon.school_website_public_document($1,$2,$4::jsonb) pub',[a.org,a.school,form.public_id,withForm]))[0];
+   return {live:r.live,publishable:r.publishable,saveable:r.saveable,shown:r.pub.pages[0].sections.find(x=>x.id==='ask').props.publicFormId};};
+  const served=async()=>(await q('SELECT hon.read_published_form($1) f',[form.public_id]))[0].f!==null;
+  assert.deepEqual(await state(),{live:true,publishable:true,saveable:true,shown:form.public_id});assert.equal(await served(),true);
+  await q("UPDATE hon.marketing_campaigns SET status='PAUSED' WHERE id=$1",[camp]);
+  assert.deepEqual(await state(),{live:false,publishable:false,saveable:true,shown:''});assert.equal(await served(),false);
+  await q("UPDATE hon.marketing_campaigns SET status='ACTIVE' WHERE id=$1",[camp]);await q('UPDATE hon.public_lead_forms SET pipeline_stage_id=$2 WHERE id=$1',[form.id,won]);
+  assert.deepEqual(await state(),{live:false,publishable:false,saveable:true,shown:''});assert.equal(await served(),false);
+  await q('UPDATE hon.public_lead_forms SET pipeline_stage_id=$2,campaign_id=NULL WHERE id=$1',[form.id,open]);
+  assert.deepEqual(await state(),{live:true,publishable:true,saveable:true,shown:form.public_id});
+  await q("UPDATE hon.public_lead_forms SET status='DISABLED' WHERE id=$1",[form.id]);
+  assert.deepEqual(await state(),{live:false,publishable:false,saveable:true,shown:''});
+ }finally{await q('ROLLBACK');}
+ pass('a lead form is shown and publishable exactly when the public form intake serves it (paused campaign, closed stage or disabled form hide it)');
+
  // 8. Isolation and authority: other schools, suspended subscriptions, missing permission, no HQ or family authority.
  assert.equal((await read(b)).website,null);
  refused(await send(base({...b,org:a.org,school:a.school}),{identity:b}),403);
@@ -213,7 +256,8 @@ try{
  assert.equal((await q("SELECT count(*) n FROM hon.school_website_requests WHERE response IS NULL"))[0].n,'0');
  pass('unpublish takes the site offline; versions and identity immutable; identifier-only audit and inert outbox; no lead created');
 
- console.log(`PASS: ${groups}/9 school website groups`);
+ assert.equal(groups,10);
+ console.log(`PASS: ${groups}/10 school website groups`);
 }finally{
  await app?.close();await Promise.allSettled([admin.end(),restricted.end()]);
 }

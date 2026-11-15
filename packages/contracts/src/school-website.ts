@@ -83,13 +83,19 @@ const HTTPS = /^https:\/\/[A-Za-z0-9.-]+(?::\d{1,5})?(?:\/[A-Za-z0-9\-._~%!$&'()
 const PUBLIC_ID = /^[a-f0-9]{48}$/;
 const VIDEO_ID = /^[A-Za-z0-9_-]{6,20}$/;
 // Control characters (newline allowed only in paragraphs), bidi controls, zero-width characters and BOM.
-const BAD_LINE = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁯﻿]/;
-const BAD_PARA = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f​-‏‪-‮⁠-⁯﻿]/;
+const BAD_LINE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029​-‏‪-‮⁠-⁯﻿]/;
+const BAD_PARA = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u2028\u2029​-‏‪-‮⁠-⁯﻿]/;
 
 function utf8Bytes(text: string): number {
   let n = 0;
   for (const ch of text) { const c = ch.codePointAt(0)!; n += c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4; }
   return n;
+}
+/** The document as PostgreSQL prints jsonb (", " and ": " separators), so the size limit matches the database's. */
+function jsonbText(value: unknown): string {
+  if (Array.isArray(value)) return '[' + value.map(jsonbText).join(', ') + ']';
+  if (value && typeof value === 'object') return '{' + Object.entries(value).map(([k, v]) => JSON.stringify(k) + ': ' + jsonbText(v)).join(', ') + '}';
+  return JSON.stringify(value) ?? 'null';
 }
 function fail(what: string): never { throw new Error(`Invalid website ${what}.`); }
 function object(value: unknown, keys: readonly string[], what: string): Record<string, unknown> {
@@ -167,9 +173,13 @@ export function validateWebsiteDocument(value: unknown): WebsiteDocument {
   const pages = d.pages.map(pageOk);
   if (new Set(pages.map(p => p.slug)).size !== pages.length) fail('page slugs');
   if (pages[0]!.slug !== 'home' || pages[0]!.kind !== 'HOME' || pages.filter(p => p.kind === 'HOME').length !== 1) fail('home page');
-  if (utf8Bytes(JSON.stringify(value)) > WEBSITE_MAX_DOCUMENT_BYTES) fail('document size');
-  for (const page of pages) for (const s of page.sections) for (const v of Object.values(s.props)) {
-    if (typeof v === 'string' && v.startsWith('/') && v !== '/' && !pages.some(p => '/' + p.slug === v)) fail('link to a missing page');
+  if (utf8Bytes(jsonbText(value)) > WEBSITE_MAX_DOCUMENT_BYTES) fail('document size');
+  for (const page of pages) for (const s of page.sections) {
+    const fields: Record<string, Field> = WEBSITE_SECTION_SPECS[s.type].fields;
+    for (const [name, v] of Object.entries(s.props)) {
+      if (fields[name]?.kind !== 'href') continue;
+      if (typeof v === 'string' && v.startsWith('/') && v !== '/' && !pages.some(p => '/' + p.slug === v)) fail('link to a missing page');
+    }
   }
   return value as WebsiteDocument;
 }

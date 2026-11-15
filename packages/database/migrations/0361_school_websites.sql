@@ -44,9 +44,9 @@ BEGIN
   IF v IS NULL OR jsonb_typeof(v) IS DISTINCT FROM 'string' THEN RETURN false; END IF;
   s:=v#>>'{}';
   IF p_kind ~ '^l[0-9]+$' THEN
-    RETURN length(s)<=substr(p_kind,2)::integer AND s !~ '[\x01-\x1f\x7f-\x9f​-‏‪-‮⁠-⁯﻿]';
+    RETURN length(s)<=substr(p_kind,2)::integer AND s !~ '[\x01-\x1f\x7f-\x9f\u2028\u2029​-‏‪-‮⁠-⁯﻿]';
   ELSIF p_kind ~ '^p[0-9]+$' THEN
-    RETURN length(s)<=substr(p_kind,2)::integer AND s !~ '[\x01-\x09\x0b-\x1f\x7f-\x9f​-‏‪-‮⁠-⁯﻿]';
+    RETURN length(s)<=substr(p_kind,2)::integer AND s !~ '[\x01-\x09\x0b-\x1f\x7f-\x9f\u2028\u2029​-‏‪-‮⁠-⁯﻿]';
   ELSIF p_kind='href' THEN
     RETURN s='' OR s='/' OR (left(s,1)='/' AND substr(s,2) ~ '^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$')
       OR (left(s,1)='#' AND substr(s,2) ~ '^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$') OR hon.school_website_https_ok(s);
@@ -150,9 +150,9 @@ BEGIN
       ids:=ids||(s->>'id');
     END LOOP;
   END LOOP;
-  -- Internal links point at pages of this document.
+  -- Internal links (href fields only) point at pages of this document.
   IF EXISTS(SELECT 1 FROM jsonb_array_elements(d->'pages') pg_, jsonb_array_elements(pg_.value->'sections') sc, jsonb_each(sc.value->'props') pr
-    WHERE jsonb_typeof(pr.value)='string' AND left(pr.value#>>'{}',1)='/' AND (pr.value#>>'{}')<>'/' AND NOT (substr(pr.value#>>'{}',2)=ANY(slugs))) THEN RETURN false; END IF;
+    WHERE hon.school_website_section_spec(sc.value->>'type')->'f'->>pr.key='href' AND left(pr.value#>>'{}',1)='/' AND (pr.value#>>'{}')<>'/' AND NOT (substr(pr.value#>>'{}',2)=ANY(slugs))) THEN RETURN false; END IF;
   RETURN true;
 END $$;
 
@@ -278,14 +278,26 @@ BEGIN
   RETURN actor;
 END $$;
 
+-- A form is live for visitors exactly when read_published_form (0075) would serve it: PUBLISHED, its pipeline stage not
+-- terminal, and its campaign (if any) ACTIVE. Subscription and school status are checked by the public site read itself.
+CREATE FUNCTION hon.school_website_form_live(p_org uuid,p_school uuid,p_public_id text) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+  SELECT EXISTS(SELECT 1 FROM hon.public_lead_forms f
+    WHERE f.public_id=p_public_id AND f.organization_id=p_org AND f.school_id=p_school AND f.status='PUBLISHED'
+      AND EXISTS(SELECT 1 FROM hon.crm_pipeline_stages st WHERE st.id=f.pipeline_stage_id AND st.pipeline_id=f.pipeline_id AND st.terminal_status IS NULL)
+      AND (f.campaign_id IS NULL OR EXISTS(SELECT 1 FROM hon.marketing_campaigns c WHERE c.id=f.campaign_id AND c.organization_id=f.organization_id
+        AND c.school_id=f.school_id AND c.status='ACTIVE')))
+$$;
+
 -- Every form, booking type and campaign a document names belongs to this exact school; when p_live, each is also live
--- now (form PUBLISHED, booking type ACTIVE, campaign ACTIVE).
+-- now (form served by read_published_form, booking type ACTIVE, campaign ACTIVE).
 CREATE FUNCTION hon.school_website_refs_ok(p_org uuid,p_school uuid,d jsonb,p_live boolean) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
   SELECT NOT EXISTS(
     SELECT 1 FROM jsonb_array_elements(d->'pages') pg_, jsonb_array_elements(pg_.value->'sections') sc
-    WHERE (sc.value->>'type'='LEAD_FORM' AND sc.value->'props'->>'publicFormId'<>'' AND NOT EXISTS(SELECT 1 FROM hon.public_lead_forms f
-        WHERE f.public_id=sc.value->'props'->>'publicFormId' AND f.organization_id=p_org AND f.school_id=p_school AND (NOT p_live OR f.status='PUBLISHED')))
+    WHERE (sc.value->>'type'='LEAD_FORM' AND sc.value->'props'->>'publicFormId'<>'' AND (NOT EXISTS(SELECT 1 FROM hon.public_lead_forms f
+        WHERE f.public_id=sc.value->'props'->>'publicFormId' AND f.organization_id=p_org AND f.school_id=p_school)
+        OR (p_live AND NOT hon.school_website_form_live(p_org,p_school,sc.value->'props'->>'publicFormId'))))
       OR (sc.value->>'type'='BOOKING' AND sc.value->'props'->>'bookingPublicId'<>'' AND NOT EXISTS(SELECT 1 FROM hon.school_booking_types b
         WHERE b.public_id=sc.value->'props'->>'bookingPublicId' AND b.organization_id=p_org AND b.school_id=p_school AND (NOT p_live OR b.status='ACTIVE'))))
   AND NOT EXISTS(
@@ -300,8 +312,7 @@ CREATE FUNCTION hon.school_website_public_document(p_org uuid,p_school uuid,d js
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
   SELECT jsonb_set(d,'{pages}',(SELECT jsonb_agg(jsonb_set(jsonb_set(pg_.value,'{campaignId}','null'::jsonb),'{sections}',
     (SELECT jsonb_agg(CASE
-      WHEN sc.value->>'type'='LEAD_FORM' AND sc.value->'props'->>'publicFormId'<>'' AND NOT EXISTS(SELECT 1 FROM hon.public_lead_forms f
-        WHERE f.public_id=sc.value->'props'->>'publicFormId' AND f.organization_id=p_org AND f.school_id=p_school AND f.status='PUBLISHED')
+      WHEN sc.value->>'type'='LEAD_FORM' AND sc.value->'props'->>'publicFormId'<>'' AND NOT hon.school_website_form_live(p_org,p_school,sc.value->'props'->>'publicFormId')
         THEN jsonb_set(sc.value,'{props,publicFormId}','""'::jsonb)
       WHEN sc.value->>'type'='BOOKING' AND sc.value->'props'->>'bookingPublicId'<>'' AND NOT EXISTS(SELECT 1 FROM hon.school_booking_types b
         WHERE b.public_id=sc.value->'props'->>'bookingPublicId' AND b.organization_id=p_org AND b.school_id=p_school AND b.status='ACTIVE')
@@ -448,7 +459,7 @@ DO $$ DECLARE r text; t text; f regprocedure; BEGIN
   END LOOP;
   FOREACH f IN ARRAY ARRAY['hon.school_website_https_ok(text)','hon.school_website_field_ok(text,jsonb)','hon.school_website_section_spec(text)',
     'hon.school_website_keys_are(jsonb,text[])','hon.school_website_section_ok(jsonb)','hon.school_website_document_ok(jsonb)','hon.school_website_slug_ok(text)',
-    'hon.guard_school_website()','hon.require_school_website_actor(text,text)','hon.school_website_refs_ok(uuid,uuid,jsonb,boolean)',
+    'hon.guard_school_website()','hon.require_school_website_actor(text,text)','hon.school_website_form_live(uuid,uuid,text)','hon.school_website_refs_ok(uuid,uuid,jsonb,boolean)',
     'hon.school_website_public_document(uuid,uuid,jsonb)','hon.school_website_record(uuid)','hon.read_school_website(text)',
     'hon.mutate_school_website(text,text,jsonb,text,uuid,uuid)','hon.read_published_school_website(text)']::regprocedure[] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
