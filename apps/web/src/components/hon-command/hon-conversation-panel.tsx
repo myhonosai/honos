@@ -17,6 +17,9 @@ import {
   type HonDelegateTarget,
 } from './hon-suggestions';
 import styles from './hon-conversation.module.css';
+import { useLocale } from '../localization/provider';
+import { HonVoiceControls, useHonVoice } from './hon-voice-controls';
+import { honVoiceLang, honVoiceLine, honVoiceReplyText } from './hon-voice';
 
 // A 'claire' turn is Claire, Business Performance (K2); legacy claire teaching turns are already presented as 'kai' by the server.
 const AGENT_NAME: Record<string, string> = { hon: 'HON', marcus: 'Marcus', claire: 'Claire', kai: 'Kai', chad: 'Chad', alex: 'Alex', jordan: 'Jordan', lena: 'Lena', maya: 'Maya', HUMAN: 'You' };
@@ -98,6 +101,8 @@ type Pending = { prepared: PreparedHonCommand; kind: 'create' | 'turn'; label: s
   /** The question as typed, restored to the composer after a definitive refusal so nothing typed is lost. */
   text?: string;
   first?: Readonly<{ text: string; replyMode: HonReplyMode; ask: HonComposerAsk }>;
+  /** Spoken through voice: HON reads this command's answer aloud. Same request, same server checks as typing. */
+  voice?: boolean;
   /** A confirmed suggestion, reopened with what was chosen after a definitive refusal (the target list is read again). */
   confirm?: ConfirmChoice };
 
@@ -120,7 +125,14 @@ export type HonConversationViewProps = {
   /** C3b: ask HON (as a new question) to summarize what a finished group of specialists recorded. */
   onSummarize?(sourceTurnId: string): void;
   onRetry(): void; onDismiss(): void; onRefresh(): void;
+  /** Talk to HON by voice: the controls shown in the composer (absent where voice is not offered). */
+  voice?: React.ReactNode;
 };
+
+/** A spoken question is taken only when a typed one would be: ready, HON admitted, shown, and nothing in flight or unknown. */
+export function voiceCanAsk(phase: ConversationPhase, readiness: HonConversationReadiness | null, pending: Pick<Pending, 'state'> | null): boolean {
+  return phase === 'READY' && readiness?.honReply === true && !(pending && (pending.state === 'SENDING' || pending.state === 'UNKNOWN'));
+}
 
 const TARGET_FAILURE: Partial<Record<HonConversationFailure, string>> = {
   FORBIDDEN: 'Your role cannot see this specialist’s list at this school, so it can’t be asked from here. Nothing was sent.',
@@ -333,6 +345,7 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
           </div>
           {ask === 'claire' ? <p className={styles.note} data-claire-note="">{ANALYST_CHOICE.claire.note}</p> : null}
           {analyst && ask !== 'claire' ? <p className={styles.note} data-analyst-note={ask}>{ANALYST_CHOICE[ask].note}</p> : null}
+          {props.voice ?? null}
           <p id={`${id}-help`} className={styles.meta}>{left.toLocaleString()} characters left. Don’t include passwords, card numbers or medical details.</p>
         </form>
       </div>
@@ -364,6 +377,13 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   // the confirm sequence names the one open target list. A retired request never ends this session.
   const privacy = useRef(0), pendingKey = useRef<string | null>(null), confirmSeq = useRef(0), targetRead = useRef<AbortController | null>(null);
   const readOwned = (current: number, shown: number): Owned => () => mounted.current && current === generation.current && shown === privacy.current;
+  // Talk to HON by voice: a spoken question goes through sendText below, exactly like a typed one.
+  const lang = honVoiceLang(useLocale().preferences.language);
+  const sendTextRef = useRef<(text: string, voice: boolean) => boolean>(() => false);
+  const voiceAllowed = useRef(false);
+  const voice = useHonVoice(lang, (text) => voiceAllowed.current && !concealed.current && sendTextRef.current(text, true));
+  const voiceShutdown = useRef(voice.shutdown); voiceShutdown.current = voice.shutdown;
+  const voiceReply = useRef(voice.reply); voiceReply.current = voice.reply;
 
   const closeConfirm = useCallback(() => { confirmSeq.current++; targetRead.current?.abort(); targetRead.current = null; setConfirm(null); }, []);
 
@@ -398,7 +418,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
     mounted.current = true; load();
     const conceal = (event: Event) => {
       if (event.type === 'visibilitychange' && document.visibilityState === 'visible') return;
-      concealed.current = true; generation.current++; privacy.current++; reads.current?.abort(); closeConfirm();
+      concealed.current = true; generation.current++; privacy.current++; reads.current?.abort(); closeConfirm(); voiceShutdown.current();
       for (const node of document.querySelectorAll<HTMLElement>('[data-hon-private]')) { node.hidden = true; node.inert = true; }
       setConversations([]); setThread(null); setThreadPhase('NONE'); setGroups(new Map()); setGroupPhase('NONE');
       if (event.type === HON_SESSION_INVALIDATED_EVENT) { ended.current = true; setPhase('SESSION'); } else setPhase((now) => now === 'SESSION' ? now : 'CONCEALED');
@@ -439,14 +459,16 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
         const created = result as HonConversationSummary; openId.current = created.id;
         const first = next.first;
         if (first) {
-          try { run({ prepared: prepareTurn(school, created.id, composerTurnRequest(first.text, first.ask, first.replyMode)), kind: 'turn', label: `Your message to ${askName(first.ask)}`, state: 'SENDING', conversationId: created.id, text: first.text }); return; }
+          try { run({ prepared: prepareTurn(school, created.id, composerTurnRequest(first.text, first.ask, first.replyMode)), kind: 'turn', label: `Your message to ${askName(first.ask)}`, state: 'SENDING', conversationId: created.id, text: first.text, ...(next.voice ? { voice: true } : {}) }); return; }
           catch { /* fall through to refresh */ }
         }
       }
+      if (next.voice && shown === privacy.current) voiceReply.current(next.kind === 'turn' ? honVoiceReplyText(result as HonTurnReceipt, lang) : honVoiceLine(lang, 'failed'));
       afterSuccess();
     }, (error) => {
       if (!mounted.current) return;
       const kind = error instanceof HonConversationError ? error.kind : 'UNKNOWN';
+      if (next.voice && shown === privacy.current) voiceReply.current(honVoiceLine(lang, 'failed'));
       if (kind === 'SESSION' && owned()) ended.current = true;
       setPending({ ...next, state: kind, code: error instanceof HonConversationError ? error.code : null });
       if (kind === 'UNKNOWN') return;
@@ -454,7 +476,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
       if (next.confirm) { if (kind !== 'SESSION' && !concealed.current && openId.current === next.conversationId) openConfirm(next.confirm); }
       else if (next.text) { const typed = next.text; setDraft((now) => now || typed); }
     });
-  }, [api, school, afterSuccess, openConfirm]);
+  }, [api, school, afterSuccess, openConfirm, lang]);
 
   const sendConfirm = () => {
     const current = confirm;
@@ -471,27 +493,35 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
     run({ prepared, kind: 'turn', label: `Your request to ${SUGGESTION_AGENT[current.agent].name}`, state: 'SENDING', conversationId: thread.id, confirm: choice });
   };
 
-  const send = () => {
-    const text = draft.trim();
-    if (!text || concealed.current) return;
+  const send = () => { if (sendText(draft, false)) setDraft(''); };
+
+  /** Typed (the composer) or spoken (voice): one path, one prepared request, the same server checks. True when sent. */
+  const sendText = (raw: string, spoken: boolean): boolean => {
+    const text = raw.trim();
+    if (!text || concealed.current) return false;
+    const voiceFlag = spoken ? { voice: true } : {};
     // An analysis specialist only while the latest readiness offers it; otherwise the question goes to HON exactly as before.
     const who: HonComposerAsk = ask !== 'hon' && offeredAnalysts(readiness).includes(ask) ? ask : 'hon';
     try {
       if (thread) {
         openId.current = thread.id;
-        run({ prepared: prepareTurn(school, thread.id, composerTurnRequest(text, who, mode)), kind: 'turn', label: `Your message to ${askName(who)}`, state: 'SENDING', conversationId: thread.id, text });
+        run({ prepared: prepareTurn(school, thread.id, composerTurnRequest(text, who, mode)), kind: 'turn', label: `Your message to ${askName(who)}`, state: 'SENDING', conversationId: thread.id, text, ...voiceFlag });
       } else {
         const title = text.length > 60 ? `${text.slice(0, 57).trimEnd()}…` : text;
         const pendingCreate: Pending = { prepared: prepareConversation(school, title), kind: 'create', label: 'Starting a conversation with HON', state: 'SENDING', conversationId: null, text,
-          first: Object.freeze({ text, replyMode: mode, ask: who }) };
+          first: Object.freeze({ text, replyMode: mode, ask: who }), ...voiceFlag };
         run(pendingCreate);
       }
-      setDraft('');
-    } catch { setPending({ prepared: { path: '', key: '', body: '' }, kind: 'turn', label: 'Your message to HON', state: 'INVALID', conversationId: null }); return; }
+      return true;
+    } catch { setPending({ prepared: { path: '', key: '', body: '' }, kind: 'turn', label: 'Your message to HON', state: 'INVALID', conversationId: null }); return false; }
   };
+  sendTextRef.current = sendText;
+  const canVoice = voiceCanAsk(phase, readiness, pending);
+  voiceAllowed.current = canVoice;
 
   return <HonConversationView presentation={presentation} phase={phase} readiness={readiness} conversations={conversations} thread={thread} threadPhase={threadPhase}
     pending={pending} draft={draft} mode={mode} ask={ask} onAsk={setAsk} onDraft={setDraft} onMode={setMode} onSend={send}
+    voice={<HonVoiceControls {...voice.controls(canVoice)} />}
     groups={groups} groupPhase={groupPhase} confirm={confirm}
     onSuggest={(sourceTurnId, agent) => {
       if (!thread || (pending && (pending.state === 'SENDING' || pending.state === 'UNKNOWN')) || groupPhase !== 'READY') return;
