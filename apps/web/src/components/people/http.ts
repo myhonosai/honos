@@ -30,7 +30,7 @@ const JSON_TYPE = /^application\/json(?:\s*;|$)/i;
 
 type Sent = Readonly<{ path: string; body: string; key: string; owned: () => boolean }>;
 /** A bounded, same-origin, no-redirect JSON exchange. Returns the status and the parsed body (null when not JSON). */
-async function exchange(path: string, signal: AbortSignal, command?: Sent): Promise<{ status: number; value: unknown }> {
+export async function exchange(path: string, signal: AbortSignal, command?: Sent): Promise<{ status: number; value: unknown }> {
   signal.throwIfAborted();
   const r = await fetch(path, { method: command ? 'POST' : 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
     referrerPolicy: 'no-referrer', signal,
@@ -60,7 +60,7 @@ const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
  * address is unchanged apart from case. A clear (null) matches only null.
  */
 export const sameEmail = (a: string | null, b: string | null) => a === null || b === null ? a === b : same(a, b);
-const codeOf = (value: unknown): string | null =>
+export const codeOf = (value: unknown): string | null =>
   value && typeof value === 'object' && !Array.isArray(value) && typeof (value as { code?: unknown }).code === 'string' ? (value as { code: string }).code : null;
 
 /** What a refused read or command means. Only these exact answers are definitive; anything else is UNKNOWN. */

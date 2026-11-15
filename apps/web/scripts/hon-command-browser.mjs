@@ -281,7 +281,7 @@ async function api(route) {
   if (path === `${prefix}/billing/memberships`) { const answered = await membershipListApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.startsWith(`${prefix}/crm/leads`)) { const answered = await leadsApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.startsWith(`/api/v1/schools/${scope.schoolId}/champions/`)) { const answered = await championsApiRoute(route, path, method, url); if (answered !== null) return answered; }
-  if (path.includes('/people')) { const answered = await peopleApiRoute(route, path, method, url); if (answered !== null) return answered; }
+  if (path.includes('/people') || path.endsWith('/contacts')) { const answered = await peopleApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path === `/api/v1/schools/${scope.schoolId}/creative-studio/generations`) {
     if (method === 'GET') return json(route, 200, { data: { provider: creative.provider, generations: creative.items, limit: 50 } });
     const request = route.request();
@@ -1196,6 +1196,17 @@ const pplRead = (r) => ({ ...r, student: r.student && { ...r.student }, consents
 async function peopleApiRoute(route, path, method, url) {
   const consent = path.match(new RegExp(`^/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/people/([0-9a-f-]{36})/communication-consents(?:/([A-Z]+))?$`));
   if (consent) return consentApiRoute(route, method, url, consent[1], consent[2] ?? null);
+  // C1 (0373): the People page lists contacts with segment counts; the synthetic people are students or other contacts.
+  if (path === `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/contacts` && method === 'GET') {
+    const q = (url.searchParams.get('query') ?? '').toLowerCase(), segment = url.searchParams.get('segment') ?? 'ALL';
+    const all = [...ppl.records.values()].filter((r) => !q || [r.givenName, r.familyName, r.email, r.phoneE164].join(' ').toLowerCase().includes(q))
+      .map((r) => ({ personId: r.personId, version: r.version, givenName: r.givenName, familyName: r.familyName, email: r.email, phoneE164: r.phoneE164,
+        segment: r.student ? 'STUDENT' : 'OTHER', planName: null, planCode: null, programName: null, membershipEndsAt: null, ranks: [] }));
+    const counts = { ALL: all.length, STUDENT: all.filter((r) => r.segment === 'STUDENT').length, TRIAL: 0, PROSPECT: 0, INACTIVE: 0 };
+    const rows = all.filter((r) => segment === 'ALL' || r.segment === segment);
+    return json(route, 200, { data: { generatedAt: iso(0), segment, counts, rows, hasMore: false, nextCursor: null,
+      options: url.searchParams.get('options') === 'true' ? { ranks: [], programs: [], plans: [] } : null }, meta: { requestId: id(900), correlationId: id(900) } });
+  }
   if (path === `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/people` && method === 'GET') {
     const q = (url.searchParams.get('query') ?? '').toLowerCase();
     const items = [...ppl.records.values()].filter((r) => !q || [r.givenName, r.familyName, r.email, r.phoneE164].join(' ').toLowerCase().includes(q))

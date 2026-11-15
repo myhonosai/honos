@@ -1,7 +1,7 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { validatePersonRecordUpdateInput, validateStudentBirthDateUpdateInput, type PersonRecord, type PersonRecordUpdateInput,
-  type StudentBirthDateUpdateInput } from '@hon/contracts';
+  type SchoolContactOptions, type StudentBirthDateUpdateInput } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
@@ -11,6 +11,7 @@ import { attemptOutcome, type ListState, type RecordState, type SaveOutcome } fr
 import { PeopleView, type BirthDraft, type ContactDraft } from './view';
 import { PersonConsents } from './consents';
 import { consentApi, type ConsentApi } from './consent-http';
+import { NO_CONTACT_FILTERS, contactsApi, type ContactFilters, type ContactsApi } from './contacts-http';
 
 /**
  * A save whose outcome is not known yet: the exact request and key, in memory only, so "Try again" replays it.
@@ -49,12 +50,14 @@ export function birthDateInput(schoolId: string, record: PersonRecord, draft: Bi
  * a child's birth date. Blur, a hidden tab, page hide, a school change or a session end hide the page at once, retire
  * every read and drop any kept save; reads start again only after the shell re-verifies the school.
  */
-export function People({ api = peopleApi, consents = consentApi }: { api?: PeopleApi; consents?: ConsentApi }): React.ReactElement {
+export function People({ api = peopleApi, consents = consentApi, contacts = contactsApi }: { api?: PeopleApi; consents?: ConsentApi; contacts?: ContactsApi }): React.ReactElement {
   const { preferences } = useLocale();
   const shell = useSchoolShell();
   const selection = shell.phase === 'READY' ? shell.selection : null;
   const [list, setList] = useState<ListState>({ state: 'LOADING' });
-  const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState<ContactFilters>(NO_CONTACT_FILTERS);
+  // The rank, program and plan choices, read once with the first page for this school.
+  const [options, setOptions] = useState<SchoolContactOptions | null>(null);
   const [listRefresh, setListRefresh] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [record, setRecord] = useState<RecordState>({ state: 'NONE' });
@@ -81,7 +84,7 @@ export function People({ api = peopleApi, consents = consentApi }: { api?: Peopl
   const school = selection ? lower(selection.schoolId) : null;
   useEffect(() => {
     if (school !== null && lastSchool.current !== null && school !== lastSchool.current) {
-      selected.current = null; setSelectedId(null); setQuery(''); setOutcome(null); drop();
+      selected.current = null; setSelectedId(null); setFilters(NO_CONTACT_FILTERS); setOptions(null); setOutcome(null); drop();
     }
     if (school !== null) lastSchool.current = school;
   }, [school, drop]);
@@ -91,11 +94,29 @@ export function People({ api = peopleApi, consents = consentApi }: { api?: Peopl
     setList({ state: 'LOADING' });
     if (!selection) return;
     const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
-    api.search({ organizationId: selection.organizationId, schoolId: selection.schoolId }, query, signal).then(
-      items => { if (current === listGeneration.current) setList({ state: 'READY', query, items }); },
+    contacts.list({ organizationId: selection.organizationId, schoolId: selection.schoolId }, filters, null, options === null, signal).then(
+      page => {
+        if (current !== listGeneration.current) return;
+        if (page.options) setOptions(page.options);
+        setList({ state: 'READY', filters, counts: page.counts, rows: page.rows, nextCursor: page.nextCursor, more: 'IDLE' });
+      },
       error => { if (current === listGeneration.current) setList({ state: error instanceof PersonRecordError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
     return () => { abort.abort(); };
-  }, [selection?.organizationId, selection?.schoolId, query, listRefresh, api]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selection?.organizationId, selection?.schoolId, filters, listRefresh, contacts]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The next page continues the same filters; a filter change, a reload or concealment retires it (the generation moves on).
+  const onMore = useCallback(() => {
+    if (!selection || list.state !== 'READY' || !list.nextCursor || list.more === 'LOADING') return;
+    const current = listGeneration.current, shown = list;
+    setList({ ...shown, more: 'LOADING' });
+    contacts.list({ organizationId: selection.organizationId, schoolId: selection.schoolId }, shown.filters, shown.nextCursor, false, AbortSignal.timeout(15000)).then(
+      page => {
+        if (current !== listGeneration.current) return;
+        const seen = new Set(shown.rows.map(r => r.personId));
+        setList({ ...shown, counts: page.counts, rows: [...shown.rows, ...page.rows.filter(r => !seen.has(r.personId))], nextCursor: page.nextCursor, more: 'IDLE' });
+      },
+      () => { if (current === listGeneration.current) setList({ ...shown, more: 'FAILED' }); });
+  }, [selection?.organizationId, selection?.schoolId, list, contacts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const current = ++recordGeneration.current;
@@ -167,7 +188,7 @@ export function People({ api = peopleApi, consents = consentApi }: { api?: Peopl
   }, [drop]);
   const onDiscard = useCallback(() => { setOutcome(null); drop(); setRecordRefresh(value => value + 1); }, [drop]);
   const onTryAgain = useCallback(() => { void send(); }, [send]);
-  const onSearch = useCallback((value: string) => { setQuery(value.trim()); setListRefresh(n => n + 1); }, []);
+  const onFilters = useCallback((next: ContactFilters) => { setFilters({ ...next, query: next.query.trim() }); setListRefresh(n => n + 1); }, []);
   const onReload = useCallback(() => setRecordRefresh(value => value + 1), []);
   // A recorded consent changes only that channel's summary, taken from the server's answer, so the contact form's consent rule is current.
   const onConsentRecorded = useCallback((channel: 'EMAIL' | 'SMS', status: 'OPTED_IN' | 'OPTED_OUT') => {
@@ -181,6 +202,6 @@ export function People({ api = peopleApi, consents = consentApi }: { api?: Peopl
   return <div key={shell.phase} data-shell-private="">
     <PeopleView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       hasSchool={selection !== null} list={list} record={record} selectedId={selectedId} outcome={outcome} locked={lock !== 'NONE'} canRetry={lock === 'KEPT'}
-      onSearch={onSearch} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot}/>
+      filters={filters} options={options} onFilters={onFilters} onMore={onMore} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot}/>
   </div>;
 }

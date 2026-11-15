@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { PERSON_RECORD_HUMAN_COMMAND, validatePersonRecord, type PersonRecord } from '@hon/contracts';
 import { PersonRecordError, peopleApi, personErrorFor } from '../src/components/people/http';
+import { NO_CONTACT_FILTERS } from '../src/components/people/contacts-http';
 import { attemptOutcome } from '../src/components/people/model';
 import { birthDateInput, contactInput } from '../src/components/people/people';
 import { PeopleView, outcomeText, type PeopleViewProps } from '../src/components/people/view';
@@ -175,9 +176,12 @@ it('sends a birth date correction and requires the saved date and a newer studen
 });
 
 const base: PeopleViewProps = { language: 'en', waiting: false, concealed: false, hasSchool: true,
-  list: { state: 'READY', query: '', items: [{ personId: person, givenName: 'Ana', familyName: 'Rivera', email: 'ana@example.invalid', phoneE164: null }] },
+  list: { state: 'READY', filters: NO_CONTACT_FILTERS, counts: { ALL: 1, STUDENT: 0, TRIAL: 0, PROSPECT: 0, INACTIVE: 0 }, nextCursor: null, more: 'IDLE',
+    rows: [{ personId: person, version: 1, givenName: 'Ana', familyName: 'Rivera', email: 'ana@example.invalid', phoneE164: null, segment: 'OTHER', planName: null,
+      planCode: null, programName: null, membershipEndsAt: null, ranks: [] }] },
+  filters: NO_CONTACT_FILTERS, options: null,
   record: { state: 'READY', record: rec() }, selectedId: person, outcome: null, locked: false, canRetry: false,
-  onSearch: () => {}, onOpen: () => {}, onSaveContact: () => {}, onSaveBirth: () => {}, onTryAgain: () => {}, onDiscard: () => {} };
+  onFilters: () => {}, onMore: () => {}, onOpen: () => {}, onSaveContact: () => {}, onSaveBirth: () => {}, onTryAgain: () => {}, onDiscard: () => {} };
 const view = (over: Partial<PeopleViewProps> = {}) => renderToStaticMarkup(<PeopleView {...base} {...over}/>);
 
 it('shows nothing private before the school is verified, while hidden, or without a school', () => {
