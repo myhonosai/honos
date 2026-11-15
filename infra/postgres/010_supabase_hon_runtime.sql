@@ -3651,3 +3651,21 @@ DO $$ DECLARE r text; f text; t text; BEGIN
     FOREACH f IN ARRAY ARRAY['hon.read_parent_family_messages(text)','hon.send_parent_family_message(text,jsonb,text,uuid,uuid)','hon.read_family_message_inbox(text)','hon.read_family_message_thread(text,uuid)','hon.mark_family_message_thread_read(text,jsonb,uuid,uuid)','hon.reply_family_message(text,jsonb,text,uuid,uuid)'] LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+
+-- 0364 school conversations: private helpers, two private tables and seven staff runtime entry points (list, detail, reply, update, mark read, link, create lead).
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.read_school_conversations(text,jsonb)','hon.read_school_conversation(text,uuid,uuid)','hon.reply_school_conversation(text,jsonb,text,uuid,uuid)','hon.update_school_conversation(text,jsonb,text,uuid,uuid)','hon.mark_school_conversation_read(text,jsonb,uuid,uuid)','hon.link_school_conversation(text,jsonb,text,uuid,uuid)','hon.create_school_conversation_lead(text,jsonb,text,uuid,uuid)'];
+BEGIN
+  IF to_regprocedure('hon.reply_school_conversation(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0364 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.conversation_body_ok(text)','hon.conversation_tags_ok(text[])','hon.guard_school_conversation()','hon.conversation_staff_has(uuid,uuid,uuid,text)','hon.require_conversation_actor(text,boolean)','hon.conversation_time(timestamp with time zone)','hon.conversation_row_json(hon.school_conversations)','hon.conversation_message_json(hon.school_conversation_messages)','hon.conversation_contact_json(hon.school_conversations)','hon.conversation_command_begin(uuid,text,text)','hon.conversation_command_finish(uuid,text,hon.school_conversations,text,jsonb,jsonb,text,jsonb,uuid,uuid)','hon.conversation_lock(uuid,integer)','hon.conversation_input_ok(jsonb,text[],text[])','hon.conversation_uuid_ok(jsonb)','hon.record_inbound_conversation_text(text,text,text,integer,text,timestamp with time zone)']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['school_conversations','school_conversation_messages'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;

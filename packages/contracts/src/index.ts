@@ -1106,6 +1106,7 @@ export * from './school-branding.js';
 export * from './school-booking-types.js';
 export * from './parent-class-booking.js';
 export * from './family-messages.js';
+export * from './school-conversations.js';
 export * from './school-pay-autopay.js';
 export * from './hq-school-health.js';
 export * from './school-reports.js';
