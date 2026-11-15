@@ -26,6 +26,21 @@ export class SchoolReportsController {
   @Header('Referrer-Policy', 'no-referrer')
   async read(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
     @Headers('idempotency-key') idempotencyKey: string | undefined, @Query() query: Record<string, unknown>, @Req() request: HonRequest) {
+    const { context, input } = await this.context(organizationId, schoolId, idempotencyKey, query, request);
+    return { data: await this.reports.read(context, input), meta: { requestId: context.requestId, correlationId: context.correlationId } };
+  }
+
+  /** R2 (0332): every location of this organization where the same person may see reports, read from the school in use. */
+  @Get('locations')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  async locations(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined, @Query() query: Record<string, unknown>, @Req() request: HonRequest) {
+    const { context, input } = await this.context(organizationId, schoolId, idempotencyKey, query, request);
+    return { data: await this.reports.readLocations(context, input), meta: { requestId: context.requestId, correlationId: context.correlationId } };
+  }
+
+  private async context(organizationId: string, schoolId: string, idempotencyKey: string | undefined, query: Record<string, unknown>, request: HonRequest) {
     if (idempotencyKey !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
     if (Object.keys(query ?? {}).some(key => key !== 'months') || Object.values(query ?? {}).some(value => typeof value !== 'string')) {
       throw new BadRequestException({ code: 'VALIDATION_FAILED' });
@@ -39,7 +54,6 @@ export class SchoolReportsController {
     const requestId = randomUUID();
     const context = { ...scope, principalType: 'HUMAN_USER' as const, requestId, correlationId: requestId, idempotencyKey: '', source: 'HUMAN_UI' as const,
       externalSubject: identity.externalSubject };
-    const data = await this.reports.read(context, query.months === undefined ? {} : { months: query.months });
-    return { data, meta: { requestId, correlationId: requestId } };
+    return { context, input: query.months === undefined ? {} : { months: query.months } };
   }
 }
