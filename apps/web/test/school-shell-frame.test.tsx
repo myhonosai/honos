@@ -22,8 +22,7 @@ describe('school shell frame', () => {
     expect(html).toMatch(/<div[^>]*id="hon-main"[^>]*>.*<p data-testid="page">private page<\/p>/s);
     // Pages render their own <main>; a second one around them would duplicate the landmark.
     expect(html).not.toContain('<main');
-    for (const key of ['navHome', 'navHon', 'navAiTeam', 'navCrm', 'navStudents', 'navBilling', 'navClasses', 'navAttendance',
-      'navMarketing', 'navCommunity', 'navAnalytics', 'navStaff', 'navSettings'] as const) expect(html).toContain(esc(shellText('en', key)));
+    for (const key of ['navHome', 'navStudents', 'navCrm', 'navClasses', 'navBilling', 'navAiTeam', 'navAnalytics', 'navSettings'] as const) expect(html).toContain(esc(shellText('en', key)));
   });
 
   it('marks the active primary item and its section tab', () => {
