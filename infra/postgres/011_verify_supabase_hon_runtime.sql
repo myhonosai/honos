@@ -3735,3 +3735,51 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
   END LOOP;
 END $$;
 -- End family messages exact verification.
+
+-- School conversations exact verification (0364): private helpers, two private forced-RLS tables, seven staff runtime entry
+-- points; the inbound intake is runnable only by hon_communication_worker (013), never by the runtime.
+DO $$ DECLARE f record; safe boolean; t text; worker_oid oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_communication_worker'); BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.conversation_body_ok(text)',false,false,false,'search_path=pg_catalog','53dfa913f9ff8f68060d53a6b2b66a2c0831568e388ca92e60742f22b590162e'),
+('hon.conversation_tags_ok(text[])',false,false,false,'search_path=pg_catalog','dec73cf1312918d4c380e47fd3ee49e210bf95163c664d1d739e5b35d14071c7'),
+('hon.guard_school_conversation()',false,false,false,'search_path=pg_catalog, hon','ac36a3a2ccb1d1975a38a7465c21619c9ecc177054b07e8f72f300d8f036055b'),
+('hon.conversation_staff_has(uuid,uuid,uuid,text)',true,false,false,'search_path=pg_catalog, hon','7abb6d93e5f4376fc97e013c7a30952353784fb4eac1ea308874063b7d076054'),
+('hon.require_conversation_actor(text,boolean)',true,false,false,'search_path=pg_catalog, hon','edae19e955bee3b56686346f1da36671937638e54b9d5e26ba6475cebbe829d9'),
+('hon.conversation_time(timestamp with time zone)',false,false,false,'search_path=pg_catalog','e4a86c6f3c7e0d57791518a05be7b1552ebb4b274f34c42dc0e8b86bf6a93d46'),
+('hon.conversation_row_json(hon.school_conversations)',true,false,false,'search_path=pg_catalog, hon','c5f308674824deb7c11243a12a618768aea35d2e3306aebbc774461e3032e73a'),
+('hon.conversation_message_json(hon.school_conversation_messages)',true,false,false,'search_path=pg_catalog, hon','a20b62d3e23323bbc459db8f02084618e2e620cd4df3f4cf7cd249c0e79b9881'),
+('hon.conversation_contact_json(hon.school_conversations)',true,false,false,'search_path=pg_catalog, hon','ad40a3bbdd7fa13c368753de22ae909ef2a9af15c689459400adeacf42705429'),
+('hon.conversation_command_begin(uuid,text,text)',true,false,false,'search_path=pg_catalog, hon','ab1a5d9b6f613a0882b3d242846da5cbaa3f5c5487410b76e0969d02494762d6'),
+('hon.conversation_command_finish(uuid,text,hon.school_conversations,text,jsonb,jsonb,text,jsonb,uuid,uuid)',true,false,false,'search_path=pg_catalog, hon','282f93a23aee60b82021287a1e749c262feb4be4b64f62e20dd7b73657cb1060'),
+('hon.conversation_lock(uuid,integer)',true,false,false,'search_path=pg_catalog, hon','5ce2e4cbe2ea3b846812129706723a12869189503758c7f3753238d61cdc9f91'),
+('hon.conversation_input_ok(jsonb,text[],text[])',false,false,false,'search_path=pg_catalog','40ee2f41174c7ac30097f1bf4998f9b74d3665fbd14c0a1de0aa559132d84161'),
+('hon.conversation_uuid_ok(jsonb)',false,false,false,'search_path=pg_catalog','f1a9de559daef6acb8f68bedde192f716654ecc0d8401c3c95da92c4fe26cc9f'),
+('hon.record_inbound_conversation_text(text,text,text,integer,text,timestamp with time zone)',true,false,true,'search_path=pg_catalog, hon','921f318c14478446e461d6bad2471004f2db30ba878f8bdd8358ec41b4e7765b'),
+('hon.read_school_conversations(text,jsonb)',true,true,false,'search_path=pg_catalog, hon','c80d2f9b41e31c7adeb5e7e4c0ae20f474c5475de2bb901197af93a23b73429d'),
+('hon.read_school_conversation(text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','19d0090964fc107f4f20aa7d7ac80bf3b7635c4d8be1d839b25ec6a193875501'),
+('hon.reply_school_conversation(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','b54d6237a05a1cfc800508d54c7ff43d36933a51da533877b8d6b962a25d5c40'),
+('hon.update_school_conversation(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','f197b90014fd5eb9037473da92ca7eae2b651107b0133b05612030e4e3d28117'),
+('hon.mark_school_conversation_read(text,jsonb,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','404969e8ff05628486e02f3115ed22a562a5e605c8b9e021af5067be97f32d44'),
+('hon.link_school_conversation(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','0118b5cc31a599a80cb9e08fa49489089cb5d0ab2b5dec0b2152e6559e730603'),
+('hon.create_school_conversation_lead(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','7f250d1096a83eb0c2da67066403b07ec031f341ae4d9ab490709381a6e93b74')) e(signature,definer,runtime_allowed,worker_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.is_grantable OR a.privilege_type<>'EXECUTE'
+          OR NOT ((a.grantee=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') AND f.runtime_allowed)
+            OR (a.grantee IS NOT DISTINCT FROM worker_oid AND f.worker_allowed))))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school conversation function: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['school_conversations','school_conversation_messages'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe school conversation table: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End school conversations exact verification.

@@ -201,6 +201,10 @@
       "title": "Book a time"
     },
     {
+      "path": "/book/t/:publicId",
+      "title": "Book a time"
+    },
+    {
       "path": "/staff/team/availability",
       "title": "Human Staff Availability and Qualifications"
     },
@@ -311,6 +315,10 @@
     {
       "path": "/staff/settings/branding",
       "title": "HON | School branding"
+    },
+    {
+      "path": "/staff/settings/booking-types",
+      "title": "HON | Booking types"
     },
     {
       "path": "/staff/settings/texting-number",
