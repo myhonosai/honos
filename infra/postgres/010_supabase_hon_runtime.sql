@@ -3662,6 +3662,7 @@ DO $$ DECLARE r text; t text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.stage_billing_import(text,jsonb,text,uuid,uuid),hon.decide_billing_import(text,jsonb,text,uuid,uuid),
       hon.finalize_billing_import(text,jsonb,text,uuid,uuid),hon.read_billing_imports(text),hon.read_billing_import(text,uuid) TO hon_runtime;
   END IF;
+END $$;
 -- 0362 custom tools (AI Customizer CM-1): exactly eight runtime entry points, no table privilege.
 DO $$ DECLARE r text; BEGIN
   IF to_regclass('hon.custom_tools') IS NULL THEN RAISE EXCEPTION 'Apply migration 0362 first'; END IF;
