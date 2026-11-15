@@ -43,7 +43,9 @@ weekly hours and stays open until the school pauses it.
 - **T7 Staff view.** Staff see the upcoming bookings per type with each family's name, contact, answers and waiver time. Staff
   can cancel a booking or mark the family as arrived.
 - **T8 Limits.** Public reads show only open spots, never names. Per type, at most 600 booking attempts and 300 cancel
-  attempts an hour. Per contact, at most 5 booking attempts an hour. No message, no charge, no AI. In v1 a booking also
+  attempts an hour. Per contact, at most 5 booking attempts an hour. Per client (network address, behind the API's
+  trusted proxies), at most 120 reads a minute, 20 booking attempts and 30 cancel attempts an hour, shared with event
+  links (see `docs/operations/RENDER_DEPLOYMENT.md`, `HON_PUBLIC_CLIENT_IP_HOPS`). No message, no charge, no AI. In v1 a booking also
   creates no CRM lead, appointment or student record.
 
 ## Security boundary
