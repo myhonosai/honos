@@ -174,9 +174,10 @@ async function staff(label, roles, { org = ids.organization, school = ids.school
   return { subject, principal, grants, org, school };
 }
 
-let OWN, READER, CARD, NONE, MIXED, OTHER_SCHOOL, HQ;
+let OWN, READER, CARD, NONE, MIXED, OTHER_SCHOOL, HQ, MEMBERSHIP_ONLY;
 const seeded = {};
-const CARD_PERMISSIONS = ['people.read', 'family.read', 'crm.lead.read', 'billing.membership.read', 'communication.message.read', 'attendance.record'];
+const CARD_PERMISSIONS = ['people.read', 'family.read', 'crm.lead.read', 'billing.membership.read', 'communication.message.read', 'attendance.record',
+  'billing.invoice.payment.record', 'family_messages.manage'];
 
 async function seed() {
   await sql("INSERT INTO hon.organizations(id,legal_name,display_name) VALUES($1,'Card Org','Card Org'),($2,'Card Other Org','Card Other Org')", orgs());
@@ -186,6 +187,7 @@ async function seed() {
   }
   OWN = await staff('owner', [await role(ids.organization, allPermissions, 'OWNER')]);
   READER = await staff('reader', [await role(ids.organization, ['people.read'])]);
+  MEMBERSHIP_ONLY = await staff('membership-only', [await role(ids.organization, ['people.read', 'billing.membership.read', 'communication.message.read'])]);
   CARD = await staff('card', [await role(ids.organization, CARD_PERMISSIONS)]);
   NONE = await staff('none', [await role(ids.organization, CARD_PERMISSIONS.filter((p) => p !== 'people.read'))]);
   MIXED = await staff('mixed', [await role(ids.organization, CARD_PERMISSIONS), await role(ids.organization, ['people.read'], 'PARENT_PORTAL')]);
@@ -300,6 +302,12 @@ try {
   const R = (await success(() => call(READER, A.avery), 'people.read only')).data;
   ok(['family', 'appointments', 'tasks', 'membership', 'billing', 'messages'].every((k) => json(R[k]) === '{"allowed":false}'), 'every other section says not allowed');
   ok(R.overview.segment === 'STUDENT' && json(R.timeline.map((e) => e.kind)) === json(['PERSON_ADDED']), 'overview and person-added only');
+  // A membership-read-only role sees memberships but never invoice or payment amounts (the 0280 receivables codes), and the
+  // family-thread count only with family_messages.manage.
+  const M = (await success(() => call(MEMBERSHIP_ONLY, A.avery), 'membership read only')).data;
+  ok(M.membership.allowed && M.membership.items.length === 1 && json(M.billing) === '{"allowed":false}', 'membership shown, billing not allowed without an invoice code');
+  ok(json(M.timeline.map((e) => e.kind)) === json(['PERSON_ADDED', 'MEMBERSHIP_STARTED']) && !/12900|5000|USD/.test(json(M)), `no payment rows or amounts ${json(M.timeline)}`);
+  ok(json(M.messages) === json({ allowed: true, direct: 1, family: null }), 'family-thread count needs family_messages.manage');
   const own = (await success(() => call(OWN, A.avery), 'owner')).data;
   ok(json({ ...own, generatedAt: 0 }) === json({ ...C, generatedAt: 0 }), 'the owner sees the same card');
   const b = (await success(() => call(OTHER_SCHOOL, seeded.B.avery), 'school B')).data;

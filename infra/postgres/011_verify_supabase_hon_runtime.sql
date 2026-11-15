@@ -3736,9 +3736,9 @@ END $$;
 -- School contact card exact verification (C2 0374): one runtime read and two private helpers.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.school_contact_card_can(uuid,uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','a12b352978a8ccdadc354e3af7fde724f2ca8057cd9502e8719f332650234a62'),
+('hon.school_contact_card_can(uuid,uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','51833fe5d339195ff9309001d6a460bd2070d6fcebe8a1d8bc6f5c26c6aba616'),
 ('hon.school_contact_card_time(timestamp with time zone)',true,false,'search_path=pg_catalog, hon','e4a86c6f3c7e0d57791518a05be7b1552ebb4b274f34c42dc0e8b86bf6a93d46'),
-('hon.read_school_contact_card(text,jsonb)',true,true,'search_path=pg_catalog, hon','49d9de8f955ed5d5094c9ddc0d49d9a6c3d058b68033332a05997c2648540261')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+('hon.read_school_contact_card(text,jsonb)',true,true,'search_path=pg_catalog, hon','66be110863b1387e2892614f418047c50413d1939554495ec92dc117f56439a3')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config] AND p.provolatile='s'
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash

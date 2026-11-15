@@ -10,18 +10,23 @@ BEGIN;
 --   appointments  crm.lead.read
 --   tasks         crm.lead.read (open follow-ups on the person's leads: subject, priority, due date; never the note)
 --   membership    billing.membership.read
---   billing       billing.membership.read
---   messages      communication.message.read (counts only, never message text)
---   timeline      past events only, of the kinds the viewer may read (leads and appointments, memberships and payments, attendance)
+--   billing       one of billing.invoice.create / billing.invoice.issue / billing.invoice.payment.record (the 0280
+--                 receivables-reader codes), so a membership-only role never sees invoice or payment amounts
+--   messages      communication.message.read for the direct count; the family-thread count also needs the 0330
+--                 family_messages.manage (else null). Counts only, never message text
+--   timeline      past events only, of the kinds the viewer may read (leads and appointments, memberships, payments under
+--                 the billing codes, attendance)
 -- Lists are the newest 20 (timeline 30). Notes, staff-only comments and message text are never returned. Nothing is written,
 -- sent or charged. Merging or deleting a contact is not part of this card.
 
 -- One live permission at the session school for an already-proved staff actor (private).
 CREATE FUNCTION hon.school_contact_card_can(actor uuid, org uuid, school uuid, permission text) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-  SELECT permission IN ('family.read','crm.lead.read','billing.membership.read','communication.message.read','attendance.record')
+  SELECT permission IN ('family.read','crm.lead.read','billing.membership.read','communication.message.read','attendance.record',
+      'billing.invoice.create','billing.invoice.issue','billing.invoice.payment.record','family_messages.manage')
     AND EXISTS(SELECT 1 FROM hon.principal_role_grants g JOIN hon.roles r ON r.id=g.role_id AND r.organization_id=g.organization_id
       JOIN hon.role_permissions rp ON rp.role_id=r.id AND rp.organization_id=r.organization_id
+      JOIN hon.permissions x ON x.code=rp.permission_code AND x.is_staff_assignable
       WHERE g.principal_id=actor AND g.organization_id=org AND g.school_id=school AND rp.permission_code=permission
         AND g.revoked_at IS NULL AND g.effective_from<=clock_timestamp() AND (g.effective_until IS NULL OR g.effective_until>clock_timestamp())
         AND (r.management_school_id IS NULL OR r.management_school_id=school)
@@ -38,7 +43,7 @@ CREATE FUNCTION hon.read_school_contact_card(p_subject text, p_input jsonb) RETU
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); as_of timestamptz:=statement_timestamp();
   actor uuid; pid uuid; person hon.people; fact record;
-  can_family boolean; can_leads boolean; can_billing boolean; can_messages boolean; can_attendance boolean;
+  can_family boolean; can_leads boolean; can_billing boolean; can_messages boolean; can_attendance boolean; can_invoices boolean; can_family_messages boolean;
   lead_ids uuid[]; profile_ids uuid[]; account_ids uuid[]; membership_ids uuid[];
   overview jsonb; family jsonb; appointments jsonb; tasks jsonb; membership jsonb; billing jsonb; messages jsonb; timeline jsonb;
   uuid_re constant text:='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
@@ -57,6 +62,10 @@ BEGIN
   can_billing:=hon.school_contact_card_can(actor,org,school,'billing.membership.read');
   can_messages:=hon.school_contact_card_can(actor,org,school,'communication.message.read');
   can_attendance:=hon.school_contact_card_can(actor,org,school,'attendance.record');
+  can_invoices:=hon.school_contact_card_can(actor,org,school,'billing.invoice.create')
+    OR hon.school_contact_card_can(actor,org,school,'billing.invoice.issue')
+    OR hon.school_contact_card_can(actor,org,school,'billing.invoice.payment.record');
+  can_family_messages:=hon.school_contact_card_can(actor,org,school,'family_messages.manage');
 
   SELECT f.segment, f.plan_name, f.program_name, f.ends_at INTO fact FROM hon.school_contact_facts(org,school,as_of) f WHERE f.person_id=pid;
   lead_ids:=ARRAY(SELECT l.id FROM hon.crm_leads l WHERE l.organization_id=org AND l.school_id=school AND l.primary_person_id=pid);
@@ -105,7 +114,7 @@ BEGIN
     LEFT JOIN hon.membership_plan_selections s ON s.membership_id=x.id AND s.organization_id=org AND s.school_id=school
     LEFT JOIN hon.membership_plan_versions v ON v.plan_id=s.plan_id AND v.version=s.plan_version AND v.organization_id=org AND v.school_id=school), '[]'::jsonb)) END;
 
-  billing:=CASE WHEN NOT can_billing THEN denied ELSE jsonb_build_object('allowed', true,
+  billing:=CASE WHEN NOT can_invoices THEN denied ELSE jsonb_build_object('allowed', true,
     'open', coalesce((SELECT jsonb_agg(jsonb_build_object('currency', o.currency, 'dueMinor', o.due) ORDER BY o.currency) FROM (
       SELECT i.currency::text AS currency, sum(greatest(i.total_minor - coalesce(pd.paid,0), 0)) AS due FROM hon.invoices i
       LEFT JOIN LATERAL (SELECT sum(r.amount_minor) AS paid FROM hon.invoice_payment_records r WHERE r.invoice_id=i.id AND r.organization_id=org AND r.school_id=school AND r.voided_at IS NULL) pd ON true
@@ -119,25 +128,25 @@ BEGIN
 
   messages:=CASE WHEN NOT can_messages THEN denied ELSE jsonb_build_object('allowed', true,
     'direct', (SELECT count(*) FROM hon.communication_messages c WHERE c.organization_id=org AND c.school_id=school AND c.recipient_person_id=pid),
-    'family', coalesce((SELECT sum(t.message_count) FROM hon.family_message_threads t WHERE t.organization_id=org AND t.school_id=school
-      AND t.family_id IN (SELECT m.family_id FROM hon.family_members m WHERE m.person_id=pid AND m.organization_id=org AND m.school_id=school)), 0)) END;
+    'family', CASE WHEN can_family_messages THEN coalesce((SELECT sum(t.message_count) FROM hon.family_message_threads t WHERE t.organization_id=org AND t.school_id=school
+      AND t.family_id IN (SELECT m.family_id FROM hon.family_members m WHERE m.person_id=pid AND m.organization_id=org AND m.school_id=school)), 0) END) END;
 
-  timeline:=coalesce((SELECT jsonb_agg(jsonb_build_object('kind', e.kind, 'at', hon.school_contact_card_time(e.at), 'detail', e.detail) ORDER BY e.at DESC, e.kind, e.detail)
+  timeline:=coalesce((SELECT jsonb_agg(jsonb_build_object('kind', e.kind, 'at', hon.school_contact_card_time(e.at), 'detail', e.detail) ORDER BY e.at DESC, e.kind, e.id)
     FROM (SELECT * FROM (
-      SELECT 'PERSON_ADDED' AS kind, person.created_at AS at, NULL::text AS detail
-      UNION ALL SELECT 'LEAD_OPENED', l.created_at, NULL FROM hon.crm_leads l WHERE can_leads AND l.id=ANY(lead_ids)
-      UNION ALL SELECT 'LEAD_WON', l.won_at, NULL FROM hon.crm_leads l WHERE can_leads AND l.id=ANY(lead_ids) AND l.won_at IS NOT NULL
-      UNION ALL SELECT 'LEAD_LOST', l.lost_at, NULL FROM hon.crm_leads l WHERE can_leads AND l.id=ANY(lead_ids) AND l.lost_at IS NOT NULL
-      UNION ALL SELECT 'APPOINTMENT', a.starts_at, a.appointment_type::text||' '||a.status::text FROM hon.crm_appointments a
+      SELECT 'PERSON_ADDED' AS kind, person.created_at AS at, NULL::text AS detail, person.id AS id
+      UNION ALL SELECT 'LEAD_OPENED', l.created_at, NULL, l.id FROM hon.crm_leads l WHERE can_leads AND l.id=ANY(lead_ids)
+      UNION ALL SELECT 'LEAD_WON', l.won_at, NULL, l.id FROM hon.crm_leads l WHERE can_leads AND l.id=ANY(lead_ids) AND l.won_at IS NOT NULL
+      UNION ALL SELECT 'LEAD_LOST', l.lost_at, NULL, l.id FROM hon.crm_leads l WHERE can_leads AND l.id=ANY(lead_ids) AND l.lost_at IS NOT NULL
+      UNION ALL SELECT 'APPOINTMENT', a.starts_at, a.appointment_type::text||' '||a.status::text, a.id FROM hon.crm_appointments a
         WHERE can_leads AND a.organization_id=org AND a.school_id=school AND a.crm_lead_id=ANY(lead_ids)
-      UNION ALL SELECT 'MEMBERSHIP_STARTED', x.term_started_at, x.plan_code FROM hon.memberships x WHERE can_billing AND x.id=ANY(membership_ids) AND x.term_started_at IS NOT NULL
-      UNION ALL SELECT 'MEMBERSHIP_ENDED', x.term_ends_at, x.plan_code FROM hon.memberships x WHERE can_billing AND x.id=ANY(membership_ids) AND x.term_ends_at IS NOT NULL
-      UNION ALL SELECT 'PAYMENT', (r.received_on::timestamp AT TIME ZONE 'UTC'), r.currency::text||' '||r.amount_minor FROM hon.invoice_payment_records r
+      UNION ALL SELECT 'MEMBERSHIP_STARTED', x.term_started_at, x.plan_code, x.id FROM hon.memberships x WHERE can_billing AND x.id=ANY(membership_ids) AND x.term_started_at IS NOT NULL
+      UNION ALL SELECT 'MEMBERSHIP_ENDED', x.term_ends_at, x.plan_code, x.id FROM hon.memberships x WHERE can_billing AND x.id=ANY(membership_ids) AND x.term_ends_at IS NOT NULL
+      UNION ALL SELECT 'PAYMENT', (r.received_on::timestamp AT TIME ZONE 'UTC'), r.currency::text||' '||r.amount_minor, r.id FROM hon.invoice_payment_records r
         JOIN hon.invoices i ON i.id=r.invoice_id AND i.organization_id=org AND i.school_id=school
-        WHERE can_billing AND r.organization_id=org AND r.school_id=school AND r.voided_at IS NULL AND i.billing_account_id=ANY(account_ids)
-      UNION ALL SELECT 'ATTENDANCE', ar.recorded_at, ar.status::text FROM hon.attendance_records ar
+        WHERE can_invoices AND r.organization_id=org AND r.school_id=school AND r.voided_at IS NULL AND i.billing_account_id=ANY(account_ids)
+      UNION ALL SELECT 'ATTENDANCE', ar.recorded_at, ar.status::text, ar.id FROM hon.attendance_records ar
         WHERE can_attendance AND ar.organization_id=org AND ar.school_id=school AND ar.student_profile_id=ANY(profile_ids)
-    ) z WHERE z.at <= as_of ORDER BY z.at DESC, z.kind, z.detail LIMIT 30) e), '[]'::jsonb);
+    ) z WHERE z.at <= as_of ORDER BY z.at DESC, z.kind, z.id LIMIT 30) e), '[]'::jsonb);
 
   RETURN jsonb_build_object('generatedAt', hon.school_contact_card_time(as_of),
     'person', jsonb_build_object('personId', person.id, 'version', person.version, 'givenName', person.given_name, 'familyName', person.family_name,

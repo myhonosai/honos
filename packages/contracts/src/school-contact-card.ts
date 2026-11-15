@@ -13,7 +13,7 @@ export interface SchoolContactCard {
   tasks: Section<{ items: { title: string; status: string; priority: string; dueAt: string | null }[] }>;
   membership: Section<{ items: { membershipId: string; state: string; planCode: string; planName: string | null; startedAt: string | null; endsAt: string | null }[] }>;
   billing: Section<{ open: { currency: string; dueMinor: number }[]; invoices: { status: string; currency: string; totalMinor: number; paidMinor: number; dueAt: string | null; createdAt: string }[] }>;
-  messages: Section<{ direct: number; family: number }>;
+  messages: Section<{ direct: number; family: number | null }>;
   timeline: { kind: SchoolContactTimelineKind; at: string; detail: string | null }[];
 }
 export const SCHOOL_CONTACT_TIMELINE_KINDS = ['PERSON_ADDED', 'LEAD_OPENED', 'LEAD_WON', 'LEAD_LOST', 'APPOINTMENT', 'MEMBERSHIP_STARTED', 'MEMBERSHIP_ENDED', 'PAYMENT', 'ATTENDANCE'] as const;
@@ -81,7 +81,7 @@ export function verifySchoolContactCard(value: unknown, personId: string): Schoo
     open: list(b.open, 20, x => { const y = exact(x, ['currency', 'dueMinor']); return { currency: currency(y.currency), dueMinor: money(y.dueMinor) }; }),
     invoices: list(b.invoices, 20, x => { const y = exact(x, ['status', 'currency', 'totalMinor', 'paidMinor', 'dueAt', 'createdAt']);
       return { status: code(y.status), currency: currency(y.currency), totalMinor: money(y.totalMinor), paidMinor: money(y.paidMinor), dueAt: maybeInstant(y.dueAt), createdAt: instant(y.createdAt) }; }) }));
-  const messages = section(s.messages, ['direct', 'family'], m => ({ direct: count(m.direct), family: count(m.family) }));
+  const messages = section(s.messages, ['direct', 'family'], m => ({ direct: count(m.direct), family: m.family === null ? null : count(m.family) }));
   const timeline = list(s.timeline, 30, x => { const y = exact(x, ['kind', 'at', 'detail']);
     if (!(SCHOOL_CONTACT_TIMELINE_KINDS as readonly string[]).includes(y.kind as string)) fail();
     return { kind: y.kind as SchoolContactTimelineKind, at: instant(y.at), detail: maybe(y.detail, 200) }; });

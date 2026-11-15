@@ -127,6 +127,17 @@ it('shows each tab, says when the role does not include one, and formats money i
   expect(renderToStaticMarkup(<ContactCard language="en" card={{ state: 'NONE' }}/>)).toBe('');
 });
 
+it('a membership-only role sees memberships but a not-allowed billing tab and no family-thread count', async () => {
+  const { verifySchoolContactCard } = await import('@hon/contracts');
+  const body = cardBody({ membership: { allowed: true, items: [] }, billing: { allowed: false }, messages: { allowed: true, direct: 2, family: null }, timeline: [] });
+  const card = { state: 'READY', card: verifySchoolContactCard(body, person) } as const;
+  const tab = (initialTab: CardTab) => renderToStaticMarkup(<ContactCard language="en" card={card} initialTab={initialTab}/>);
+  expect(tab('billing')).toContain('Your role doesn’t include this.'); expect(tab('billing')).not.toContain('$');
+  expect(tab('overview')).toMatch(/data-tab="billing" data-allowed="false"/); expect(tab('overview')).toMatch(/Messages<span[^>]*>2<\/span>/);
+  const messages = tab('messages');
+  expect(messages).toContain('2'); expect(messages.match(/<li>/g)).toHaveLength(1);
+});
+
 it('has the same card wording keys in every language', () => {
   const keys = Object.keys(CARD_COPY.en).sort();
   expect(Object.keys(CARD_COPY.ko).sort()).toEqual(keys); expect(Object.keys(CARD_COPY.es).sort()).toEqual(keys);

@@ -38,7 +38,7 @@ export function ContactCard({ language, card, initialTab = 'overview' }: { langu
     </header>
     <div className={styles.tabs} role="group" aria-label={t('tabsLabel')}>
       {CARD_TABS.map(k => <button key={k} type="button" className={styles.tab} aria-pressed={tab === k} data-tab={k} data-allowed={allowed(k) ? 'true' : 'false'}
-        onClick={() => setTab(k)}>{t(k)}{k === 'messages' && c.messages.allowed ? <span className={styles.count}>{c.messages.direct + c.messages.family}</span> : null}</button>)}
+        onClick={() => setTab(k)}>{t(k)}{k === 'messages' && c.messages.allowed ? <span className={styles.count}>{c.messages.direct + (c.messages.family ?? 0)}</span> : null}</button>)}
     </div>
     <div className={styles.tabBody} data-testid={`contact-tab-${tab}`}><Body language={language} c={c} tab={tab} t={t}/></div>
   </article>;
@@ -90,7 +90,7 @@ function Body({ language, c, tab, t }: { language: string; c: SchoolContactCard;
       </>;
     case 'messages':
       if (!c.messages.allowed) return denied;
-      return <ul className={styles.plain}><li>{t('directMessages', { n: c.messages.direct })}</li><li>{t('familyMessages', { n: c.messages.family })}</li></ul>;
+      return <ul className={styles.plain}><li>{t('directMessages', { n: c.messages.direct })}</li>{c.messages.family === null ? null : <li>{t('familyMessages', { n: c.messages.family })}</li>}</ul>;
     case 'timeline':
       return <>
         <p className={styles.meta}>{t('timelineNote')}</p>
