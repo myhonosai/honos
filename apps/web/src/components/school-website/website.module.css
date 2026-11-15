@@ -98,3 +98,12 @@
 .srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .page[data-mode="big-button"] .primary, .page[data-mode="big-button"] .secondary, .page[data-mode="big-button"] .tab { min-height: 60px; font-size: 18px; padding: 12px 20px; }
 .page[data-mode="big-button"] .field input, .page[data-mode="big-button"] .field select, .page[data-mode="big-button"] .field textarea { min-height: 56px; font-size: 18px; }
+/* WB5 conversation with Marcus */
+.chat { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.chat > li { display: grid; gap: 6px; }
+.bubbleMe { justify-self: end; max-width: 85%; margin: 0; padding: 10px 12px; border-radius: 14px 14px 4px 14px; background: #1d4ed8; color: #fff; font-size: 14px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.bubbleMarcus { justify-self: start; display: grid; gap: 8px; max-width: 100%; margin: 0; padding: 10px 12px; border: 1px solid #35506d; border-radius: 14px 14px 14px 4px; background: #13263a; color: #e2ecf7; font-size: 14px; overflow-wrap: anywhere; }
+.bubbleMarcus > p { margin: 0; }
+.bubbleMarcus summary { cursor: pointer; font-size: 14px; }
+.compose { display: grid; gap: 8px; }
+.describe textarea { min-height: 96px; }

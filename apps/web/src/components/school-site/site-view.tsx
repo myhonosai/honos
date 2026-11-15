@@ -19,6 +19,14 @@ const FONTS: Record<WebsiteDocument['theme']['font'], string> = {
   CLASSIC: 'var(--site-font-classic)',
 };
 
+/** White or near-black text, whichever reads better on a palette colour (#rrggbb, validated upstream). */
+export function readableOn(hex: string): string {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return '#ffffff';
+  const [r, g, b] = m.slice(1).map((x) => { const c = parseInt(x, 16) / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }) as [number, number, number];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? '#111111' : '#ffffff';
+}
+
 export function findSitePage(document: WebsiteDocument, slug: string): WebsitePage | null {
   return document.pages.find(page => page.slug === slug) ?? null;
 }
@@ -37,8 +45,13 @@ function Img({ src, alt, className }: { src: unknown; alt: string; className?: s
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 const items = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]) : []);
 function Heading({ text }: { text: unknown }) { return str(text).trim() ? <h2>{str(text)}</h2> : null; }
+/** Designed artwork for a card with no picture yet: the palette, a belt stripe and the first letter. Decorative only. */
+function CardArt({ index, label }: { index: number; label: string }) {
+  return <div className={styles.cardArt} data-art={index % 4} aria-hidden="true"><span>{label.trim().charAt(0).toUpperCase()}</span></div>;
+}
+type Ctx = Readonly<{ schoolName: string; programsId: string | null; programsLabel: string }>;
 
-function Section({ section, base, mode, pageSlug }: { section: WebsiteSection; base: string; mode: SiteMode; pageSlug: string }): ReactNode {
+function Section({ section, base, mode, pageSlug, ctx }: { section: WebsiteSection; base: string; mode: SiteMode; pageSlug: string; ctx: Ctx }): ReactNode {
   const p = section.props;
   // Visitors never see an empty block: a list section with no items (and no text), or contact details with none filled in.
   if (mode === 'public') {
@@ -50,15 +63,22 @@ function Section({ section, base, mode, pageSlug }: { section: WebsiteSection; b
   }
   switch (section.type) {
     case 'HERO': {
-      const image = siteImage(p.imageUrl);
-      return <section id={section.id} data-section="HERO" className={`${styles.hero} ${p.layout === 'SPLIT' && image ? styles.heroSplit : ''}`}>
-        <div className={styles.heroText}><h1>{str(p.heading)}</h1><Paras text={p.subheading} /><Action link={siteHref(p.ctaHref, base)} label={str(p.ctaLabel)} /></div>
-        {image && <Img src={image} alt="" className={styles.heroImage} />}
+      const image = siteImage(p.imageUrl), split = p.layout === 'SPLIT' && !!image;
+      return <section id={section.id} data-section="HERO" className={`${styles.hero} ${split ? styles.heroSplit : image ? styles.heroPhoto : styles.heroArt}`}>
+        {image && !split && <><Img src={image} alt="" className={styles.heroBackdrop} /><span className={styles.heroShade} aria-hidden="true" /></>}
+        <div className={styles.heroText}>
+          {ctx.schoolName && <p className={styles.eyebrow}>{ctx.schoolName}</p>}
+          <h1>{str(p.heading)}</h1><Paras text={p.subheading} />
+          <div className={styles.actions}><Action link={siteHref(p.ctaHref, base)} label={str(p.ctaLabel)} />
+            {ctx.programsId && <a className={styles.buttonGhost} href={`#${ctx.programsId}`}>{ctx.programsLabel}</a>}</div>
+        </div>
+        {split && <Img src={image} alt="" className={styles.heroImage} />}
       </section>;
     }
     case 'PROGRAMS':
       return <section id={section.id} data-section="PROGRAMS" className={styles.block}><Heading text={p.heading} /><Paras text={p.intro} />
-        <ul className={styles.cards}>{items(p.items).map((it, i) => <li key={i} className={styles.card}><Img src={it.imageUrl} alt="" className={styles.cardImage} />
+        <ul className={styles.cards}>{items(p.items).map((it, i) => <li key={i} className={styles.card}>
+          {siteImage(it.imageUrl) ? <Img src={it.imageUrl} alt="" className={styles.cardImage} /> : <CardArt index={i} label={str(it.name)} />}
           <h3>{str(it.name)}</h3>{str(it.ages) && <p className={styles.meta}>{str(it.ages)}</p>}<Paras text={it.description} /></li>)}</ul></section>;
     case 'SCHEDULE':
       return <section id={section.id} data-section="SCHEDULE" className={styles.block}><Heading text={p.heading} />
@@ -80,7 +100,7 @@ function Section({ section, base, mode, pageSlug }: { section: WebsiteSection; b
         {items(p.items).map((it, i) => <details key={i} className={styles.faq}><summary>{str(it.question)}</summary><Paras text={it.answer} /></details>)}</section>;
     case 'TESTIMONIALS':
       return <section id={section.id} data-section="TESTIMONIALS" className={styles.block}><Heading text={p.heading} />
-        <ul className={styles.cards}>{items(p.items).map((it, i) => <li key={i} className={styles.card}><blockquote><Paras text={it.quote} /></blockquote>{str(it.author) && <p className={styles.meta}>{str(it.author)}</p>}</li>)}</ul></section>;
+        <ul className={styles.cards}>{items(p.items).map((it, i) => <li key={i} className={`${styles.card} ${styles.quote}`}><blockquote><Paras text={it.quote} /></blockquote>{str(it.author) && <p className={styles.meta}>{str(it.author)}</p>}</li>)}</ul></section>;
     case 'INSTRUCTORS':
       return <section id={section.id} data-section="INSTRUCTORS" className={styles.block}><Heading text={p.heading} />
         <ul className={styles.cards}>{items(p.items).map((it, i) => <li key={i} className={styles.card}><Img src={it.imageUrl} alt={str(it.name)} className={styles.cardImage} />
@@ -121,16 +141,34 @@ export function SiteView({ schoolName, document, pageSlug, base, mode }: SiteVie
   if (!page) return null;
   const { palette, font } = document.theme;
   const theme = { '--site-primary': palette.primary, '--site-accent': palette.accent, '--site-bg': palette.background,
-    '--site-surface': palette.surface, '--site-text': palette.text, '--site-font': FONTS[font] } as CSSProperties;
+    '--site-surface': palette.surface, '--site-text': palette.text, '--site-font': FONTS[font], '--site-on-primary': readableOn(palette.primary) } as CSSProperties;
   const nav = document.pages.filter(p => p.inNav);
   const logo = siteImage(document.theme.logoUrl);
+  const programs = page.sections.find(x => x.type === 'PROGRAMS' && (items(x.props.items).length > 0 || mode === 'preview'));
+  const ctx: Ctx = { schoolName, programsId: programs?.id ?? null, programsLabel: str(programs?.props.heading).trim() || 'Programs' };
+  // The site's main action (the first hero or trial button on this page, else on the home page) sits in the header and,
+  // on phones, in a bar that stays at the bottom of the screen.
+  const actionOf = (sections: readonly WebsiteSection[]) => {
+    for (const x of sections) if ((x.type === 'HERO' || x.type === 'TRIAL_CTA') && str(x.props.ctaLabel).trim()) { const link = siteHref(x.props.ctaHref, base); if (link) return { link, label: str(x.props.ctaLabel) }; }
+    return null;
+  };
+  const main = actionOf(page.sections) ?? actionOf(findSitePage(document, 'home')?.sections ?? []);
+  const contact = document.pages.flatMap(p => p.sections).find(x => x.type === 'CONTACT');
   return <div className={styles.site} style={theme} data-template={document.theme.template} data-mode={mode}>
     <header className={styles.header}>
-      <a className={styles.brand} href={base}>{logo && <img src={logo} alt="" referrerPolicy="no-referrer" />}<span>{schoolName}</span></a>
+      <a className={styles.brand} href={base}>{logo ? <img src={logo} alt="" referrerPolicy="no-referrer" /> : <span className={styles.monogram} aria-hidden="true">{schoolName.trim().charAt(0).toUpperCase()}</span>}<span>{schoolName}</span></a>
       {nav.length > 1 && <nav aria-label="Site"><ul>{nav.map(p => <li key={p.slug}>
         <a href={p.slug === 'home' ? base : `${base}/${p.slug}`} aria-current={p.slug === page.slug ? 'page' : undefined}>{p.title}</a></li>)}</ul></nav>}
+      {main && <span className={styles.headerAction}><Action link={main.link} label={main.label} /></span>}
     </header>
-    <main className={styles.main}>{page.sections.map(s => <Section key={s.id} section={s} base={base} mode={mode} pageSlug={page.slug} />)}</main>
-    <footer className={styles.footer}><p>© {schoolName}</p></footer>
+    <main className={styles.main}>{page.sections.map(s => <Section key={s.id} section={s} base={base} mode={mode} pageSlug={page.slug} ctx={ctx} />)}</main>
+    <footer className={styles.footer}>
+      <div><p className={styles.footerName}>{schoolName}</p>
+        {contact && str(contact.props.phone) && <p><a href={`tel:${str(contact.props.phone).replace(/[^0-9+]/g, '')}`}>{str(contact.props.phone)}</a></p>}
+        {contact && str(contact.props.address) && <Paras text={contact.props.address} />}</div>
+      {nav.length > 1 && <ul className={styles.footerNav}>{nav.map(p => <li key={p.slug}><a href={p.slug === 'home' ? base : `${base}/${p.slug}`}>{p.title}</a></li>)}</ul>}
+      <p className={styles.meta}>© {schoolName}</p>
+    </footer>
+    {main && <div className={styles.stickyAction}><Action link={main.link} label={main.label} /></div>}
   </div>;
 }

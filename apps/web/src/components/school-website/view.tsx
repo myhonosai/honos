@@ -14,7 +14,7 @@ type SectionSpec = { fields: Record<string, FieldSpec>; items?: { max: number; f
 export type ReadState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; website: SchoolWebsite | null };
 export type Outcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | WebsiteErrorKind; command: WebsiteCommand }> | Readonly<{ kind: 'EDIT_REFUSED' }>;
 export type Device = 'desktop' | 'mobile';
-export type StartForm = Readonly<{ name: string; slug: string; template: WebsiteTemplate }>;
+export type StartForm = Readonly<{ name: string; slug: string; template: WebsiteTemplate; describe: string }>;
 
 export type WebsiteViewProps = Readonly<{
   language: string; locale: string; mode: string; waiting: boolean; concealed: boolean; hasSchool: boolean; schoolName: string;
@@ -149,7 +149,10 @@ export function WebsiteView(p: WebsiteViewProps): React.ReactElement {
   const site = p.read.website;
   if (!site || !p.draft) return shell(<form className={styles.card} onSubmit={e => { e.preventDefault(); p.on.create(); }}>
     <h2>{t('startTitle')}</h2><p className={styles.meta}>{t('startHelp')}</p>
-    <fieldset className={styles.templates} disabled={p.locked}><legend className={styles.srOnly}>{t('template')}</legend>
+    <label className={`${styles.field} ${styles.describe}`}>{t('describe')}
+      <textarea rows={4} maxLength={1000} value={p.start.describe} disabled={p.locked} placeholder={t('describePlaceholder')} data-website-describe=""
+        onChange={e => p.on.start({ ...p.start, describe: e.target.value })} /></label>
+    <fieldset className={styles.templates} disabled={p.locked}><legend>{t('startLook')}</legend>
       {WEBSITE_TEMPLATES.map(x => <label key={x} className={styles.templateCard} data-template={x}>
         <input type="radio" name="template" value={x} checked={p.start.template === x} onChange={() => p.on.start({ ...p.start, template: x })} />
         <span className={styles.swatch} data-template={x} aria-hidden="true" /><strong>{t(`t_${x}`)}</strong><span className={styles.meta}>{t(`td_${x}`)}</span></label>)}
@@ -161,7 +164,7 @@ export function WebsiteView(p: WebsiteViewProps): React.ReactElement {
         <span className={styles.meta}>{t('addressHelp', { url: siteUrl(p.origin, p.start.slug || '…') })}</span></label>
     </div>
     <Message p={p} t={t} />
-    <div className={styles.row}><button type="submit" className={styles.primary} disabled={p.locked}>{p.locked ? t('creating') : t('create')}</button></div>
+    <div className={styles.row}><button type="submit" className={styles.primary} disabled={p.locked}>{p.locked ? t('creating') : p.start.describe.trim() ? t('build') : t('create')}</button></div>
   </form>);
 
   const url = siteUrl(p.origin, site.publicSlug), status = <div className={styles.chips}>

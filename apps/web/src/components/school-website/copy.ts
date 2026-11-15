@@ -1,9 +1,11 @@
 /** School website workspace wording (en / ko / es). Labels only; nothing here is authority or an outcome. */
 const en = {
-  title: 'Website', intro: 'Build your school\'s website from a template, edit every section, check it on a computer and a phone, then publish it to its HON web address.',
+  title: 'Website', intro: 'Describe your school and Marcus builds your website, then keep talking to him or edit any section yourself. Check it on a computer and a phone, then publish it to its HON web address.',
   waiting: 'Checking your school…', noSchool: 'Choose a school to manage its website.', concealed: 'Hidden while you were away. It shows again once your school is checked.',
   loading: 'Reading your website…', denied: 'You cannot manage this school\'s website. Ask the school owner for access.', unavailable: 'Your website could not be loaded.', refresh: 'Check again',
-  startTitle: 'Start your website', startHelp: 'Pick a look. HON fills it with your school\'s name and contact details; you change anything afterwards. This is a template, not AI.',
+  startTitle: 'Start your website', startHelp: 'Tell Marcus about your school and the website you want, and he builds the first draft for you to preview and apply. Leave it empty to start from the look you pick.',
+  describe: 'Describe your school and the website you want', describePlaceholder: 'For example: taekwondo school in Austin for kids and families, free first class, after-school program, warm and energetic.',
+  startLook: 'Starting look (Marcus can change it)', build: 'Build my website with Marcus',
   siteName: 'Website name', address: 'Web address', addressHelp: 'Lower-case letters, numbers and hyphens. Visitors will open {url}.', create: 'Create website', creating: 'Creating…',
   t_MODERN_CLEAN: 'Modern and clean', t_FAMILY_FRIENDLY: 'Family friendly', t_BOLD_POWERFUL: 'Bold and powerful', t_TRADITIONAL: 'Traditional', t_HIGH_CONVERSION: 'High conversion',
   td_MODERN_CLEAN: 'Calm, simple and professional.', td_FAMILY_FRIENDLY: 'Warm colours for parents and kids.', td_BOLD_POWERFUL: 'High contrast and intense.',
@@ -35,10 +37,12 @@ const en = {
 export type WebsiteKey = keyof typeof en;
 
 const ko: Record<WebsiteKey, string> = {
-  title: '웹사이트', intro: '템플릿으로 도장 웹사이트를 만들고, 모든 섹션을 편집하고, 컴퓨터와 휴대폰에서 확인한 뒤 HON 웹 주소에 게시하세요.',
+  title: '웹사이트', intro: '도장을 설명하면 Marcus가 웹사이트를 만들어 줍니다. 계속 대화하거나 섹션을 직접 편집하고, 컴퓨터와 휴대폰에서 확인한 뒤 HON 웹 주소에 게시하세요.',
   waiting: '도장을 확인하는 중…', noSchool: '웹사이트를 관리할 도장을 선택하세요.', concealed: '자리를 비운 동안 숨겼습니다. 도장 확인 후 다시 표시됩니다.',
   loading: '웹사이트를 불러오는 중…', denied: '이 도장의 웹사이트를 관리할 수 없습니다. 도장 대표에게 권한을 요청하세요.', unavailable: '웹사이트를 불러오지 못했습니다.', refresh: '다시 확인',
-  startTitle: '웹사이트 시작하기', startHelp: '디자인을 고르세요. HON이 도장 이름과 연락처로 채우며 나중에 무엇이든 바꿀 수 있습니다. AI가 아닌 템플릿입니다.',
+  startTitle: '웹사이트 시작하기', startHelp: '도장과 원하는 웹사이트를 Marcus에게 설명하면 미리 보고 적용할 수 있는 첫 초안을 만들어 줍니다. 비워 두면 고른 디자인으로 시작합니다.',
+  describe: '도장과 원하는 웹사이트를 설명해 주세요', describePlaceholder: '예: 오스틴의 어린이·가족 태권도장, 첫 수업 무료, 방과 후 프로그램, 따뜻하고 활기찬 분위기.',
+  startLook: '시작 디자인 (Marcus가 바꿀 수 있음)', build: 'Marcus와 웹사이트 만들기',
   siteName: '웹사이트 이름', address: '웹 주소', addressHelp: '영문 소문자, 숫자, 하이픈만 사용합니다. 방문자는 {url} 주소로 엽니다.', create: '웹사이트 만들기', creating: '만드는 중…',
   t_MODERN_CLEAN: '모던하고 깔끔하게', t_FAMILY_FRIENDLY: '가족 친화', t_BOLD_POWERFUL: '강렬하고 힘있게', t_TRADITIONAL: '전통', t_HIGH_CONVERSION: '등록 전환 중심',
   td_MODERN_CLEAN: '차분하고 단순하며 전문적입니다.', td_FAMILY_FRIENDLY: '부모와 아이를 위한 따뜻한 색감.', td_BOLD_POWERFUL: '대비가 강하고 역동적입니다.',
@@ -69,10 +73,12 @@ const ko: Record<WebsiteKey, string> = {
 };
 
 const es: Record<WebsiteKey, string> = {
-  title: 'Sitio web', intro: 'Cree el sitio web de su escuela con una plantilla, edite cada sección, revíselo en computadora y teléfono, y publíquelo en su dirección de HON.',
+  title: 'Sitio web', intro: 'Describa su escuela y Marcus crea su sitio web; siga conversando con él o edite cualquier sección usted mismo. Revíselo en computadora y teléfono, y publíquelo en su dirección de HON.',
   waiting: 'Comprobando su escuela…', noSchool: 'Elija una escuela para administrar su sitio web.', concealed: 'Oculto mientras no estaba. Se muestra de nuevo al comprobar su escuela.',
   loading: 'Leyendo su sitio web…', denied: 'No puede administrar el sitio web de esta escuela. Pida acceso al dueño de la escuela.', unavailable: 'No se pudo cargar su sitio web.', refresh: 'Comprobar de nuevo',
-  startTitle: 'Empiece su sitio web', startHelp: 'Elija un estilo. HON lo llena con el nombre y los datos de contacto de su escuela; después puede cambiar todo. Es una plantilla, no IA.',
+  startTitle: 'Empiece su sitio web', startHelp: 'Cuéntele a Marcus sobre su escuela y el sitio que quiere, y él crea el primer borrador para que lo vea y lo aplique. Déjelo vacío para empezar con el estilo que elija.',
+  describe: 'Describa su escuela y el sitio web que quiere', describePlaceholder: 'Por ejemplo: escuela de taekwondo en Austin para niños y familias, primera clase gratis, programa después de clases, cálida y con energía.',
+  startLook: 'Estilo inicial (Marcus puede cambiarlo)', build: 'Crear mi sitio con Marcus',
   siteName: 'Nombre del sitio', address: 'Dirección web', addressHelp: 'Minúsculas, números y guiones. Los visitantes abrirán {url}.', create: 'Crear sitio web', creating: 'Creando…',
   t_MODERN_CLEAN: 'Moderno y limpio', t_FAMILY_FRIENDLY: 'Para familias', t_BOLD_POWERFUL: 'Audaz y potente', t_TRADITIONAL: 'Tradicional', t_HIGH_CONVERSION: 'Alta conversión',
   td_MODERN_CLEAN: 'Tranquilo, sencillo y profesional.', td_FAMILY_FRIENDLY: 'Colores cálidos para padres e hijos.', td_BOLD_POWERFUL: 'Alto contraste e intensidad.',
