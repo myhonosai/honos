@@ -1,4 +1,5 @@
-import { accountUuid, validateSchoolContactQuery, verifySchoolContactList, type SchoolContactList, type SchoolContactQuery, type SchoolContactSegment } from '@hon/contracts';
+import { accountUuid, validateSchoolContactQuery, verifySchoolContactCard, verifySchoolContactList, type SchoolContactCard, type SchoolContactList, type SchoolContactQuery,
+  type SchoolContactSegment } from '@hon/contracts';
 import { PersonRecordError, codeOf, exchange, personErrorFor, type PeopleScope } from './http';
 
 /**
@@ -40,6 +41,16 @@ export const contactsApi = {
       if (next !== null && (typeof next !== 'string' || next.length < 1 || next.length > 2000)) throw new Error('cursor');
       if ((next !== null) !== list.hasMore) throw new Error('cursor');
       return { ...list, nextCursor: next };
+    } catch { throw new PersonRecordError('UNKNOWN'); }
+  },
+  /** C2 (0374): one contact's card; sections the viewer's role does not include come back as not allowed. */
+  async card(scope: PeopleScope, personId: string, signal: AbortSignal): Promise<SchoolContactCard> {
+    const path = `/api/v1/organizations/${accountUuid(scope.organizationId)}/schools/${accountUuid(scope.schoolId)}/contacts/${accountUuid(personId)}`;
+    const { status, value } = await exchange(path, signal);
+    if (status !== 200) throw personErrorFor(status, codeOf(value));
+    try {
+      if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.hasOwn(value, 'data')) throw new Error('shape');
+      return verifySchoolContactCard((value as { data: unknown }).data, personId);
     } catch { throw new PersonRecordError('UNKNOWN'); }
   },
 };

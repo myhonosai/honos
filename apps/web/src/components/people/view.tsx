@@ -3,6 +3,7 @@ import type { PersonRecord, SchoolContactOptions } from '@hon/contracts';
 import { accountValue } from '../account-status/copy';
 import { peopleText, type PeopleKey } from './copy';
 import { ContactsList } from './contacts-list';
+import { ContactCard as ContactCardTabs, type CardState } from './contact-card';
 import type { ContactFilters } from './contacts-http';
 import { localToday, type CommandKind, type ListState, type RecordState, type SaveOutcome } from './model';
 import styles from './people.module.css';
@@ -17,6 +18,8 @@ export type PeopleViewProps = Readonly<{
   locked: boolean; canRetry: boolean;
   /** The contacts list filters (C1, 0373) and the rank, program and plan choices read with the first page. */
   filters: ContactFilters; options: SchoolContactOptions | null;
+  /** The open person's contact card (C2, 0374), read beside the editable record. */
+  card?: CardState | undefined;
   onFilters?: ((filters: ContactFilters) => void) | undefined; onMore?: (() => void) | undefined; onOpen?: ((personId: string) => void) | undefined; onReload?: (() => void) | undefined;
   onSaveContact?: ((draft: ContactDraft) => void) | undefined; onSaveBirth?: ((draft: BirthDraft) => void) | undefined;
   onTryAgain?: (() => void) | undefined; onDiscard?: (() => void) | undefined;
@@ -64,6 +67,7 @@ export function PeopleView(props: PeopleViewProps): React.ReactElement {
           onOpen={onOpen} onFilters={props.onFilters} onMore={props.onMore}/>
       </article>
       <div className={styles.detail}>
+        {props.card && selectedId ? <ContactCardTabs key={selectedId} language={language} card={props.card}/> : null}
         <RecordPanel {...props} t={t} onReload={onReload}/>
       </div>
     </div> : null}

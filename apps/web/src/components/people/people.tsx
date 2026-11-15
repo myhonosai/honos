@@ -12,6 +12,7 @@ import { PeopleView, type BirthDraft, type ContactDraft } from './view';
 import { PersonConsents } from './consents';
 import { consentApi, type ConsentApi } from './consent-http';
 import { NO_CONTACT_FILTERS, contactsApi, type ContactFilters, type ContactsApi } from './contacts-http';
+import type { CardState } from './contact-card';
 
 /**
  * A save whose outcome is not known yet: the exact request and key, in memory only, so "Try again" replays it.
@@ -62,6 +63,8 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [record, setRecord] = useState<RecordState>({ state: 'NONE' });
   const [recordRefresh, setRecordRefresh] = useState(0);
+  const [card, setCard] = useState<CardState>({ state: 'NONE' });
+  const cardGeneration = useRef(0);
   const [outcome, setOutcome] = useState<SaveOutcome>(null);
   const [lock, setLock] = useState<Lock>('NONE');
   const listGeneration = useRef(0), recordGeneration = useRef(0);
@@ -78,7 +81,8 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
 
   useEffect(() => onShellPrivacyEvent(() => {
     concealShellPrivateNow(); listGeneration.current++; recordGeneration.current++; privacy.current++;
-    setList({ state: 'LOADING' }); setRecord(prior => prior.state === 'NONE' ? prior : { state: 'LOADING' }); setOutcome(null); drop();
+    cardGeneration.current++;
+    setList({ state: 'LOADING' }); setRecord(prior => prior.state === 'NONE' ? prior : { state: 'LOADING' }); setCard(prior => prior.state === 'NONE' ? prior : { state: 'LOADING' }); setOutcome(null); drop();
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), [drop]);
 
   const school = selection ? lower(selection.schoolId) : null;
@@ -133,6 +137,23 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
       });
     return () => { abort.abort(); };
   }, [selection?.schoolId, selectedId, recordRefresh, api]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The contact card is read with the record and again after a save; a denied or missing person shows the record's own message.
+  useEffect(() => {
+    const current = ++cardGeneration.current;
+    if (!selectedId) { setCard({ state: 'NONE' }); return; }
+    setCard({ state: 'LOADING' });
+    if (!selection) return;
+    const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
+    contacts.card({ organizationId: selection.organizationId, schoolId: selection.schoolId }, selectedId, signal).then(
+      value => { if (current === cardGeneration.current) setCard({ state: 'READY', card: value }); },
+      error => {
+        if (current !== cardGeneration.current) return;
+        const kind = error instanceof PersonRecordError ? error.kind : 'UNKNOWN';
+        setCard(kind === 'DENIED' || kind === 'MISSING' || kind === 'SESSION' ? { state: 'NONE' } : { state: 'UNAVAILABLE' });
+      });
+    return () => { abort.abort(); };
+  }, [selection?.organizationId, selection?.schoolId, selectedId, recordRefresh, contacts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const send = useCallback(async () => {
     const request = pending.current;
@@ -202,6 +223,6 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   return <div key={shell.phase} data-shell-private="">
     <PeopleView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       hasSchool={selection !== null} list={list} record={record} selectedId={selectedId} outcome={outcome} locked={lock !== 'NONE'} canRetry={lock === 'KEPT'}
-      filters={filters} options={options} onFilters={onFilters} onMore={onMore} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot}/>
+      filters={filters} options={options} card={card} onFilters={onFilters} onMore={onMore} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot}/>
   </div>;
 }

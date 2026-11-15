@@ -82,3 +82,52 @@ it('has the same wording keys in every language', () => {
   const keys = Object.keys(CONTACTS_COPY.en).sort();
   expect(Object.keys(CONTACTS_COPY.ko).sort()).toEqual(keys); expect(Object.keys(CONTACTS_COPY.es).sort()).toEqual(keys);
 });
+
+// C2 (0374): the contact card.
+import { ContactCard, formatMinor, type CardTab } from '../src/components/people/contact-card';
+import { CARD_COPY } from '../src/components/people/contact-card-copy';
+const person = id(410);
+const cardBody = (over: Record<string, unknown> = {}) => ({ generatedAt: '2026-11-15T10:00:00.000Z',
+  person: { personId: person, version: 1, givenName: 'Avery', familyName: 'Able', email: null, phoneE164: null, createdAt: '2026-08-01T10:00:00.000Z' },
+  overview: { segment: 'STUDENT', planName: 'Kids monthly', programName: 'Little Tigers', membershipEndsAt: soon, ranks: [{ curriculum: 'Karate', rank: 'White', color: '#ffffff' }], openLead: false },
+  family: { allowed: true, families: [{ familyId: id(411), name: 'Able family', members: [{ personId: id(412), givenName: 'Gale', familyName: 'Able', role: 'GUARDIAN', billingContact: true }] }] },
+  appointments: { allowed: false }, tasks: { allowed: true, items: [{ title: 'Call about the belt test', status: 'OPEN', priority: 'HIGH', dueAt: '2026-12-01T17:00:00.000Z' }] },
+  membership: { allowed: false }, billing: { allowed: true, open: [{ currency: 'USD', dueMinor: 7900 }], invoices: [{ status: 'ISSUED', currency: 'USD', totalMinor: 12900, paidMinor: 5000, dueAt: '2026-10-08T16:00:00.000Z', createdAt: '2026-10-01T16:00:00.000Z' }] },
+  messages: { allowed: true, direct: 1, family: 3 }, timeline: [{ kind: 'PAYMENT', at: '2026-10-05T00:00:00.000Z', detail: 'USD 5000' }, { kind: 'PERSON_ADDED', at: '2026-08-01T10:00:00.000Z', detail: null }], ...over });
+
+it('reads one card by path and refuses a card for another person or with an unknown section', async () => {
+  const fetch = stub(json({ data: cardBody(), meta: {} }));
+  const card = await contactsApi.card(scope, person, signal());
+  expect((fetch.mock.calls[0] as unknown as [string])[0]).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/contacts/${person}`);
+  expect(card.billing).toMatchObject({ allowed: true });
+  for (const body of [cardBody({ person: { ...cardBody().person, personId: id(499) } }), cardBody({ notes: [] }), cardBody({ family: { allowed: false, families: [] } })]) {
+    stub(json({ data: body, meta: {} }));
+    await expect(contactsApi.card(scope, person, signal())).rejects.toMatchObject({ kind: 'UNKNOWN' });
+  }
+  stub(json({ code: 'SCHOOL_CONTACT_NOT_FOUND' }, 404));
+  await expect(contactsApi.card(scope, person, signal())).rejects.toMatchObject({ kind: 'UNKNOWN' });
+});
+
+it('shows each tab, says when the role does not include one, and formats money in the currency', async () => {
+  const { verifySchoolContactCard } = await import('@hon/contracts');
+  const card = { state: 'READY', card: verifySchoolContactCard(cardBody(), person) } as const;
+  const tab = (initialTab: CardTab) => renderToStaticMarkup(<ContactCard language="en" card={card} initialTab={initialTab}/>);
+  const overview = tab('overview');
+  expect(overview).toContain('Kids monthly · Little Tigers'); expect(overview).toContain('Karate: White'); expect(overview).toContain('data-tone="soon"');
+  expect(overview).toMatch(/data-tab="appointments" data-allowed="false"/); expect(overview).toMatch(/Messages<span[^>]*>4<\/span>/);
+  expect(tab('appointments')).toContain('Your role doesn’t include this.'); expect(tab('membership')).toContain('Your role doesn’t include this.');
+  expect(tab('family')).toContain('Gale Able'); expect(tab('family')).toContain('billing contact');
+  expect(tab('tasks')).toContain('Call about the belt test');
+  const billing = tab('billing');
+  expect(billing).toContain('$79.00'); expect(billing).toContain('$50.00 paid of $129.00');
+  expect(tab('timeline')).toContain('Payment recorded'); expect(tab('timeline')).not.toContain('5000');
+  expect(overview).toContain('<h2>Avery Able</h2>'); expect(overview).toContain('In your records');
+  expect(formatMinor('en', 'JPY', 500)).toBe('¥500');
+  expect(renderToStaticMarkup(<ContactCard language="en" card={{ state: 'UNAVAILABLE' }}/>)).toContain('could not be loaded');
+  expect(renderToStaticMarkup(<ContactCard language="en" card={{ state: 'NONE' }}/>)).toBe('');
+});
+
+it('has the same card wording keys in every language', () => {
+  const keys = Object.keys(CARD_COPY.en).sort();
+  expect(Object.keys(CARD_COPY.ko).sort()).toEqual(keys); expect(Object.keys(CARD_COPY.es).sort()).toEqual(keys);
+});
