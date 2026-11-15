@@ -92,13 +92,13 @@ export function CurriculumProgressWorkbench(): React.ReactElement {
 
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">Staff dashboard</a><a href="/staff/command-center">Command Center</a></nav>
-    <header><p>HON / CONVENTIONAL INSTRUCTOR OPERATIONS</p><h1>Human curriculum progress</h1>
-      <p>Choose a student from your school, then load their current enrollment and current-rank requirements. Without a school selected, enter the exact organization, school, curriculum and enrollment IDs instead.</p>
+    <header><p>Curriculum &amp; testing</p><h1>Curriculum progress</h1>
+      <p>Choose a student from your school, then mark which requirements they have shown in class.</p>
     </header>
-    <aside><strong>MET is a human observation, never an outcome in another workflow.</strong>
+    <aside data-plain-note=""><strong>Marking a requirement as met is your observation only. It never promotes a student or changes attendance.</strong><details><summary>What this page never does</summary><p><strong>MET is a human observation, never an outcome in another workflow.</strong></p>
       <p>No status here grants promotion, rank, belt, certificate, testing readiness or eligibility, grade, attendance, booking, membership, payment, family or parent access, communication, provider, AI, Action Engine or automation outcome. Even an ATTENDANCE requirement kind is curriculum observation evidence only, not attendance credit.</p>
       <p>UUIDs are untrusted selectors, not authority. Existing tenant RLS, current human identity, exact <code>curriculum.progress.record</code> permission, school entitlement and version rechecks remain server-owned on every read, submit and replay. The inert curriculum outbox event gains no consumer.</p>
-    </aside>
+    </details></aside>
     <section aria-labelledby="enrollment-read"><h2 id="enrollment-read">Exact current enrollment read</h2>
       <fieldset disabled={busy}>
         {shellSchool && <EnrollmentPicker scope={shellSchool} purpose="progress" value={ids.enrollmentId} disabled={busy}

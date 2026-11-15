@@ -121,6 +121,14 @@
       "title": "HON | Import students"
     },
     {
+      "path": "/staff/migration/classes",
+      "title": "HON | Import classes and attendance"
+    },
+    {
+      "path": "/staff/migration/memberships",
+      "title": "HON | Import memberships and balances"
+    },
+    {
       "path": "/staff/welcome",
       "title": "HON | Welcome and setup"
     },
@@ -153,6 +161,18 @@
       "title": "HON | Finishing connection"
     },
     {
+      "path": "/staff/marketing/website",
+      "title": "HON | Website"
+    },
+    {
+      "path": "/sites/:slug",
+      "title": "School website"
+    },
+    {
+      "path": "/sites/:slug/:page",
+      "title": "School website"
+    },
+    {
       "path": "/staff/creative-studio",
       "title": "HON | Creative Studio"
     },
@@ -178,6 +198,10 @@
     },
     {
       "path": "/book/:publicId",
+      "title": "Book a time"
+    },
+    {
+      "path": "/book/t/:publicId",
       "title": "Book a time"
     },
     {
@@ -289,8 +313,20 @@
       "title": "HON | Family messages"
     },
     {
+      "path": "/staff/conversations",
+      "title": "HON | Conversations"
+    },
+    {
       "path": "/staff/settings/branding",
       "title": "HON | School branding"
+    },
+    {
+      "path": "/staff/settings/booking-types",
+      "title": "HON | Booking types"
+    },
+    {
+      "path": "/staff/settings/texting-number",
+      "title": "HON | Texting number"
     },
     {
       "path": "/staff/champions-club",
@@ -463,6 +499,10 @@
     {
       "path": "/hq/communications/:messageId",
       "title": "HON HQ | HQ message"
+    },
+    {
+      "path": "/hq/communications/numbers",
+      "title": "HON HQ | School texting numbers"
     },
     {
       "path": "/hq/growth/prospects",

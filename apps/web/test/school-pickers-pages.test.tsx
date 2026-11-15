@@ -12,7 +12,7 @@ const { TestingCandidateGradeWorkbench } = await import('../src/components/testi
 const { PromotionDecisionWorkbench } = await import('../src/components/promotion-decision-workbench');
 afterEach(() => { vi.restoreAllMocks(); });
 
-const fallback = (html: string) => html.slice(html.indexOf('<details data-id-fields="fallback"'), html.indexOf('</details>'));
+const fallback = (html: string) => { const start = html.indexOf('<details data-id-fields="fallback"'); return html.slice(start, html.indexOf('</details>', start)); };
 
 it.each([
   ['curriculum progress', () => <CurriculumProgressWorkbench />, 'Reading students…', ['curriculumId', 'enrollmentId']],

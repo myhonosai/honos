@@ -73,13 +73,13 @@ export function ClassSessionWorkbench(): React.ReactElement {
 
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">Staff dashboard</a><a href="/staff/command-center">Command Center</a></nav>
-    <header><p>HON / CONVENTIONAL STAFF OPERATIONS</p><h1>Create one class session</h1>
-      <p>Record one current-school operational class session through the existing canonical command. This workbench starts blank and idle: it performs no lookup, list, search, directory, calendar request or automatic I/O.</p>
+    <header><p>Schedule</p><h1>Add a class session</h1>
+      <p>Add one class to the schedule.</p>
     </header>
-    <aside><strong>Current school authority remains server-owned.</strong>
+    <aside data-plain-note=""><strong>This adds a single class. It does not set up a repeating schedule or book students.</strong><details><summary>What this page never does</summary><p><strong>Current school authority remains server-owned.</strong></p>
       <p>The organization, school and program UUIDs are untrusted exact selectors. The canonical API scope check, service/RLS boundaries and <code>schedule.session.manage</code> authorization remain authoritative; this page does not establish program validity or permission.</p>
       <p>This is not recurring scheduling, calendar integration, instructor availability or assignment, booking, attendance, roster, capacity guarantee, ClassPass, payment, membership, provider, AI, Action Engine, automation or communication. No external delivery is activated.</p>
-    </aside>
+    </details></aside>
     <section aria-labelledby="session-command"><h2 id="session-command">Exact-known-ID class-session command</h2>
       <p>Enter already-known organization, current school and program UUIDs; a bounded session name, optional room name, canonical UTC start/end timestamps, positive bounded capacity and one existing booking policy. These entries never query or discover a record.</p>
       <form onSubmit={submit}><fieldset disabled={busy}>

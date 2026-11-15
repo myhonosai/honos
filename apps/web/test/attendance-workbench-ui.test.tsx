@@ -38,7 +38,7 @@ describe('human staff attendance workbench', () => {
     try {
       const html = renderToStaticMarkup(<AttendanceWorkbench />);
       expect(fetcher).not.toHaveBeenCalled();
-      for (const phrase of ['Attendance workbench', 'Conventional staff recordkeeping only.', 'existing server authorization, tenant RLS', 'no Action Engine, AI, provider, payment, message', 'Organization UUID', 'Student profile UUID', 'No policy is loaded', 'No current record lookup has completed']) expect(html).toContain(phrase);
+      for (const phrase of ['Record who was at class', 'Conventional staff recordkeeping only.', 'existing server authorization, tenant RLS', 'no Action Engine, AI, provider, payment, message', 'Organization UUID', 'Student profile UUID', 'No policy is loaded', 'No current record lookup has completed']) expect(html).toContain(phrase);
       expect(html).not.toContain('11111111-1111-4111-8111-111111111111');
       expect(html).not.toContain('PRESENT');
       expect(html).not.toMatch(/type="(?:email|file)"/);

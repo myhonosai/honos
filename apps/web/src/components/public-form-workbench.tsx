@@ -47,8 +47,8 @@ export function PublicFormWorkbench() {
   }
   return <main className={styles.page}>
     <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/marketing/campaigns">Campaign plans</a><a href="/auth/login">Sign in</a></nav>
-    <header><p>HUMAN SCHOOL MARKETING / PUBLIC INTAKE</p><h1>Published lead forms</h1><p>Essential, Core and Complete. Your verified session determines one exact authorized school.</p></header>
-    <aside><strong>Intake only, not messaging permission.</strong> Each valid new enquiry creates a new CRM lead; exact bounded retries are deduplicated. Never merges a matching contact, opts in to communication, sends a message, spends, invokes AI or executes payments/actions. Disable before changing a published form. Only vetted optional choices are available; this is not a website builder.</aside>
+    <header><p>Marketing</p><h1>Lead forms</h1><p>Publish a form for your website. Each new enquiry becomes a lead.</p></header>
+    <aside data-plain-note=""><strong>A form enquiry does not give permission to send marketing messages.</strong><details><summary>What this page never does</summary><p><strong>Intake only, not messaging permission.</strong></p> Each valid new enquiry creates a new CRM lead; exact bounded retries are deduplicated. Never merges a matching contact, opts in to communication, sends a message, spends, invokes AI or executes payments/actions. Disable before changing a published form. Only vetted optional choices are available; this is not a website builder.</details></aside>
     {error && <p role="alert" className={styles.error}>{error}</p>}{notice && <p role="status">{notice}</p>}
     {!current && <p role="status">No current form state is verified. Mutation controls are disabled until a fresh authorized read succeeds.</p>}
     {retry.current && <button disabled={busy} onClick={() => { const pending = retry.current; if (pending) void run(() => mutate(pending.path, pending.input)); }}>Retry unchanged command</button>}

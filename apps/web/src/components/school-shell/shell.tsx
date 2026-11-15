@@ -15,6 +15,7 @@ import { schoolEntryApi } from '../school-entry/http';
 import { SCHOOL_SHELL_NAV, schoolShellHref } from './catalog';
 import { concealShellPrivateNow, onShellPrivacyEvent } from './privacy';
 import { SchoolShellFrame, type ShellViewState } from './frame';
+import { SCHOOL_TOUR_OPEN_EVENT, markSchoolTourSeen } from './tour';
 import { SchoolShellProvider, type SchoolShellState } from './context';
 import { defaultArtStyle, isHonArtStyle, type HonArtStyle } from '../hon-command/roster';
 
@@ -87,6 +88,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   const [mode, setMode] = useState<HonInterfaceTheme>(DEFAULT_HON_INTERFACE_THEME);
   const [viewState, setViewState] = useState<ShellViewState>('LOCAL');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [tourStep, setTourStep] = useState<number | null>(null);
   const [artChoice, setArtChoice] = useState<HonArtStyle | null>(null);
   useEffect(() => { setArtChoice(readStoredArtStyle()); }, []);
   const chooseArtStyle = useCallback((style: HonArtStyle) => { setArtChoice(style); storeArtStyle(style); }, []);
@@ -128,6 +130,25 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   }, [selection?.organizationId, selection?.schoolId, schoolName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { setMenuOpen(false); }, [path]);
+  // Guided tour: opened from Home's invitation, the Menu or Settings (event), or a `?tour=1` link. Seen is per device only.
+  const tourOpener = useRef<HTMLElement | null>(null);
+  const tourNow = useRef<number | null>(null);
+  const tour = useCallback((step: number | null) => {
+    if (tourNow.current === null && step !== null) tourOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (tourNow.current !== null && step === null) markSchoolTourSeen();
+    tourNow.current = step; setTourStep(step);
+  }, []);
+  useEffect(() => {
+    const open = () => tour(0);
+    window.addEventListener(SCHOOL_TOUR_OPEN_EVENT, open);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tour') === '1') {
+      params.delete('tour');
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`);
+      open();
+    }
+    return () => window.removeEventListener(SCHOOL_TOUR_OPEN_EVENT, open);
+  }, [tour]);
   // Where am I: a long tab row scrolls so the current page and group are in view (no page scroll).
   useEffect(() => {
     for (const selector of ['[data-shell-groups] [aria-current]', '[data-shell-tabs] [aria-current]']) {
@@ -155,11 +176,12 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
     observer.observe(main, { childList: true, subtree: true });
     return () => { observer.disconnect(); if (frame) cancelAnimationFrame(frame); };
   }, [path]);
+  const dialogOpen = menuOpen || tourStep !== null;
   useEffect(() => {
-    if (!menuOpen) return;
-    const opener = menuOpener.current;
+    if (!dialogOpen) return;
+    const opener = tourStep !== null ? tourOpener.current : menuOpener.current;
     const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { setMenuOpen(false); return; }
+      if (event.key === 'Escape') { setMenuOpen(false); tour(null); return; }
       if (event.key !== 'Tab') return;
       // Keyboard focus wraps inside the modal Menu panel (the page behind it is inert).
       const dialog = document.querySelector<HTMLElement>('[data-hon-ui="school"] [role="dialog"][aria-modal="true"]');
@@ -173,7 +195,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
     };
     window.addEventListener('keydown', escape);
     return () => { window.removeEventListener('keydown', escape); if (opener?.isConnected) opener.focus(); };
-  }, [menuOpen]);
+  }, [dialogOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveMode = useCallback((next: HonInterfaceTheme, via: 'ONBOARDING' | 'SETTINGS'): Promise<boolean> => {
     setMode(next);
@@ -207,7 +229,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
 
   return <SchoolShellFrame path={path} language={preferences.language} phase={snapshot.phase} selection={snapshot.selection} schoolName={schoolName}
     choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility inShell />}
-    onMode={chooseMode} onMenu={openMenu} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
+    tourStep={tourStep} onTour={tour} onMode={chooseMode} onMenu={openMenu} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
     <SchoolShellProvider value={shared}>{children}</SchoolShellProvider>
   </SchoolShellFrame>;
 }
