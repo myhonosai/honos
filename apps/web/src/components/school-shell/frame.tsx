@@ -125,7 +125,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
     <nav className={styles.mobileNav} aria-label={t('mobileNav')} inert={modal}>
       {SCHOOL_SHELL_MOBILE.map(key => { const item = SCHOOL_SHELL_NAV.find(candidate => candidate.key === key)!;
         return <a key={key} href={schoolShellHref(item.routes[0]!, verified)} aria-current={active?.key === key ? 'page' : undefined}><ShellIcon name={key} /><span>{t(item.titleKey)}</span></a>; })}
-      {offBar ? <button type="button" aria-expanded={menuOpen} aria-current="page" aria-label={`${t('more')}: ${t('currentArea')} ${t(offBar.titleKey)}`} data-mobile-current="" onClick={() => onMenu(true)}>
+      {offBar ? <button type="button" aria-expanded={menuOpen} aria-current="true" aria-label={`${t('more')}: ${t('currentArea')} ${t(offBar.titleKey)}`} data-mobile-current="" onClick={() => onMenu(true)}>
         <ShellIcon name={offBar.key} /><span>{t(offBar.titleKey)}</span></button>
         : <button type="button" aria-expanded={menuOpen} onClick={() => onMenu(true)}><ShellIcon name="more" /><span>{t('more')}</span></button>}
     </nav>

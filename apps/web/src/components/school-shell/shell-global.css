@@ -14,11 +14,15 @@ body:has([data-hon-ui='school']) [data-hon-launcher] { display: none; }
 [data-hon-ui='school'] #hon-main nav a[href='/auth/login'] { display: none; }
 /*
  * Two type families inside the school app (design pass, 2026-11-15): Plus Jakarta Sans for headings, Inter for
- * everything else. Older pages brought their own Georgia, Arial and monospace labels; code samples keep monospace.
+ * everything else. Zero specificity on purpose: every element gets the pair instead of inheriting an older page's
+ * Georgia or Arial, while any element a page deliberately styles (a monospace referral code or ID) keeps its font.
  */
-[data-hon-ui='school'] #hon-main :where(*):not(code, pre, kbd, samp, code *, pre *, h1, h2, h3, h1 *, h2 *, h3 *) {
+:where([data-hon-ui='school'] #hon-main *) {
   font-family: var(--hon-font-sans, Inter, ui-sans-serif, system-ui, 'Noto Sans KR', sans-serif);
 }
-[data-hon-ui='school'] #hon-main :is(h1, h2, h3, h1 *, h2 *, h3 *) {
+:where([data-hon-ui='school'] #hon-main :is(h1, h2, h3), [data-hon-ui='school'] #hon-main :is(h1, h2, h3) *) {
   font-family: var(--hon-font-display, 'Plus Jakarta Sans', Inter, ui-sans-serif, system-ui, 'Noto Sans KR', sans-serif);
+}
+:where([data-hon-ui='school'] #hon-main :is(code, pre, kbd, samp), [data-hon-ui='school'] #hon-main :is(code, pre) *) {
+  font-family: var(--hon-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
 }
