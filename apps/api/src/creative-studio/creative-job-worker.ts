@@ -1,6 +1,6 @@
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Pool } from 'pg';
-import { CREATIVE_GENERATION_FORMATS, CREATIVE_PROVIDER_JOB_ID, type CreativeGenerationFormat, type SaasCreativeMediaKind } from '@hon/contracts';
+import { CREATIVE_GENERATION_FORMATS, CREATIVE_PROVIDER_JOB_ID, type CreativeGenerationFormat, type CreativeMediaKind } from '@hon/contracts';
 import { runtimePoolOptions } from '../foundation/runtime-pool-options.js';
 import { emitTelemetry } from '../observability/telemetry.js';
 import {
@@ -59,7 +59,7 @@ export class CreativeJobWorkerDatabase implements CreativeJobWorkerStore, OnModu
       media_kind: string; units: number; format: string; poll_count: number; deadline_at: Date | string }>(
       'SELECT * FROM hon.claim_creative_provider_jobs($1, $2)', [limit, leaseSeconds]);
     return rows.map(r => ({ jobId: r.job_id, leaseToken: r.lease_token, providerId: r.provider_id, providerJobId: r.provider_job_id, modelCode: r.model_code,
-      operationCode: r.operation_code, mediaKind: r.media_kind as SaasCreativeMediaKind, units: r.units, format: r.format as CreativeGenerationFormat,
+      operationCode: r.operation_code, mediaKind: r.media_kind as CreativeMediaKind, units: r.units, format: r.format as CreativeGenerationFormat,
       pollCount: r.poll_count, deadlineAt: new Date(r.deadline_at).toISOString() }));
   }
   async recordPoll(jobId: string, leaseToken: string): Promise<{ status: string; nextPollAt: string }> {

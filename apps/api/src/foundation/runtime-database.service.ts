@@ -183,6 +183,11 @@ const SAAS_BILLING_CALLS = {
   commandCreativeProviderDailyLimit: { sql: 'SELECT hon.command_creative_provider_daily_limit($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   commandCreativeSchoolDailyCaps: { sql: 'SELECT hon.command_creative_school_daily_caps($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readCreativeLimitsFromHq: { sql: 'SELECT hon.read_creative_limits_from_hq($1) AS data', arity: 1, readOnly: true },
+  // WB1 (0344): AI website drafts on the school's creative wallet (no provider is called by the database).
+  createCreativeWebsiteDraft: { sql: 'SELECT hon.create_creative_website_draft($1,$2::uuid,$3::jsonb,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
+  recordCreativeWebsiteDraftResult: { sql: 'SELECT hon.record_creative_website_draft_result($1,$2::uuid,$3::jsonb) AS data', arity: 3, readOnly: false },
+  readCreativeWebsiteDrafts: { sql: 'SELECT hon.read_creative_website_drafts($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readCreativeWebsiteDraft: { sql: 'SELECT hon.read_creative_website_draft($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
   // B4: refund guarantee records and Champions reward application (no refund execution, payout or prize).
   readRefundEligibility: { sql: 'SELECT hon.read_saas_refund_eligibility_from_hq($1,$2::uuid,$3::timestamptz) AS data', arity: 3, readOnly: true },
   readRefundRequests: { sql: 'SELECT hon.read_saas_refund_requests_from_hq($1,$2) AS data', arity: 2, readOnly: true },

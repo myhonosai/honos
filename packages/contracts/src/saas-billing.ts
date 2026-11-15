@@ -121,6 +121,8 @@ export const SAAS_COMMANDS = {
   createCreativeAvatar: 'saas-creative-avatar-create', createCreativeAvatarVideo: 'saas-creative-avatar-video-create',
   // C1 (0354): HON's daily provider spend guard and per-school daily caps (HQ owner).
   creativeProviderDailyLimit: 'saas-creative-provider-daily-limit', creativeSchoolDailyCaps: 'saas-creative-school-daily-caps',
+  // WB1 (0344): AI website drafts on the school's creative credits.
+  createCreativeWebsiteDraft: 'saas-creative-website-draft-create',
   // B-HQ-2 (0232): HQ support records; same values as HQ_SUPPORT_COMMANDS.
   openSupportCase: 'hq-support-case-open',
   addSupportNote: 'hq-support-case-note',
