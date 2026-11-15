@@ -259,5 +259,7 @@ try{
  assert.equal(groups,10);
  console.log(`PASS: ${groups}/10 school website groups`);
 }finally{
+ // The shared fixture's sign-up program goes back to CLOSED for the proofs that follow (0241 expects it).
+ await q("UPDATE hon.hon_os_signup_program SET status='CLOSED',recorded_at=clock_timestamp() WHERE program_id=1").catch(()=>{});
  await app?.close();await Promise.allSettled([admin.end(),restricted.end()]);
 }
