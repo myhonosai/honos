@@ -9,13 +9,14 @@ const response = () => { const headers = {}; return { headers, setHeader: (k, v)
 const status = (expected) => (e) => typeof e.getStatus === 'function' && e.getStatus() === expected;
 
 /** A fake database that records every statement; the first query is the in-transaction authority re-check. */
-function fakeDb({ grant = () => scope, again = () => scope, rows = [] } = {}) {
+function fakeDb({ grant = () => scope, again = () => scope, rows = [], entitled = true } = {}) {
   const calls = { resolve: [], sql: [] };
   return { calls, db: {
     resolveAuthorizedScope: async (subject, school, permission) => { calls.resolve.push({ subject, school, permission }); return grant(permission); },
     withTenantTransaction: async (context, work) => work({ query: async (sql, values) => {
       calls.sql.push({ sql, values });
       if (sql.includes('resolve_authorized_scope')) { const s = again(values[2]); return { rows: s ? [{ principal_id: s.principalId, organization_id: s.organizationId, school_id: s.schoolId }] : [] }; }
+      if (sql.includes('read_current_organization_entitlement')) return { rows: entitled ? [{ tier: entitled === true ? 'CORE' : entitled }] : [] };
       if (sql.startsWith('SET LOCAL')) return { rows: [] };
       return { rows };
     } }),
@@ -72,7 +73,29 @@ test('reads are exact-school, active-only, bounded, private, and treat search as
   const grade = g.calls.sql.find((c) => c.sql.includes('testing_candidates'));
   assert.match(grade.sql, /k\.result = 'PENDING'/); assert.equal(grade.values[2], null);
   const d = fakeDb(); await controller(d).candidates(scope.organizationId, scope.schoolId, 'decision', undefined, request, response());
-  assert.match(d.calls.sql.find((c) => c.sql.includes('testing_candidates')).sql, /NOT EXISTS \(SELECT 1 FROM hon\.promotion_decisions/);
+  const decision = d.calls.sql.find((c) => c.sql.includes('testing_candidates')).sql;
+  assert.match(decision, /NOT EXISTS \(SELECT 1 FROM hon\.promotion_decisions/);
+  assert.ok(!decision.includes('PENDING_INSTRUCTOR_DECISION'), 'any decision row hides the candidate, as the decide command refuses it');
   const t = fakeDb(); await controller(t).testingEvents(scope.organizationId, scope.schoolId, request, response());
   assert.match(t.calls.sql.find((c) => c.sql.includes('testing_events')).sql, /t\.status IN \('DRAFT', 'OPEN', 'CLOSED'\)/);
+});
+
+test('a school without an active, in-window entitlement lists nothing on every endpoint', async () => {
+  const calls = [
+    (c) => c.enrollments(scope.organizationId, scope.schoolId, 'progress', undefined, undefined, request, response()),
+    (c) => c.enrollments(scope.organizationId, scope.schoolId, 'readiness', undefined, undefined, request, response()),
+    (c) => c.testingEvents(scope.organizationId, scope.schoolId, request, response()),
+    (c) => c.candidates(scope.organizationId, scope.schoolId, 'grade', undefined, request, response()),
+    (c) => c.candidates(scope.organizationId, scope.schoolId, 'decision', undefined, request, response()),
+  ];
+  for (const call of calls) {
+    for (const entitled of [false, 'UNKNOWN_TIER']) {
+      const f = fakeDb({ entitled, rows: [{ enrollmentId: randomUUID() }] });
+      await assert.rejects(call(controller(f)), (e) => status(403)(e) && e.getResponse().code === 'TIER_ENTITLEMENT_REQUIRED');
+      assert.equal(f.calls.sql.length, 2, 'only the authority and entitlement checks ran');
+      assert.equal(f.calls.sql[1].sql, 'SELECT tier FROM hon.read_current_organization_entitlement()');
+      assert.deepEqual(f.calls.sql[1].values, [], 'the boundary takes no organization, school, tier or time selector');
+    }
+    for (const tier of ['ESSENTIAL', 'CORE', 'COMPLETE']) await call(controller(fakeDb({ entitled: tier })));
+  }
 });

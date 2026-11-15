@@ -47,6 +47,13 @@ export class SchoolPickersService {
       if (!again || again.principal_id !== context.principalId || again.organization_id !== context.organizationId || again.school_id !== context.schoolId) {
         throw new ForbiddenException('This list is no longer authorized for this school.');
       }
+      // Same live entitlement the screens require (0070 require_curriculum_actor, 0116 readiness): a lapsed or suspended
+      // school lists nothing, matching the owner's suspension policy. Tenant RLS alone would not stop it. Read through the
+      // no-argument boundary, which takes the organization from this transaction only.
+      const entitled = await client.query<{ tier: string }>('SELECT tier FROM hon.read_current_organization_entitlement()', []);
+      if (!entitled.rows.some((row) => ['ESSENTIAL', 'CORE', 'COMPLETE'].includes(row.tier))) {
+        throw new ForbiddenException({ code: 'TIER_ENTITLEMENT_REQUIRED', detail: 'This school does not have an active subscription.' });
+      }
       await client.query("SET LOCAL statement_timeout='5s'");
       return work(async (sql, values) => (await client.query<T>(sql, values)).rows);
     });
@@ -93,7 +100,7 @@ export class SchoolPickersService {
     const waiting = purpose === 'grade'
       ? `k.result = 'PENDING'`
       : `k.result IN ('PASSED', 'DEFERRED', 'NOT_PASSED') AND NOT EXISTS (SELECT 1 FROM hon.promotion_decisions AS d
-           WHERE d.testing_candidate_id = k.id AND d.organization_id = k.organization_id AND d.school_id = k.school_id AND d.status <> 'PENDING_INSTRUCTOR_DECISION')`;
+           WHERE d.testing_candidate_id = k.id AND d.organization_id = k.organization_id AND d.school_id = k.school_id)`;
     return this.read<PickerCandidate>(context, subject, CANDIDATE_PURPOSES[purpose], (query) => query(
       `SELECT k.id AS "candidateId", k.version AS "version", k.result::text AS "result", t.id AS "testingEventId", t.name AS "testingEventName",
               to_char(t.starts_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "startsAt", s.id AS "studentProfileId",
@@ -122,6 +129,8 @@ export class SchoolPickersController {
     const scope: Scope | undefined = await this.database.resolveAuthorizedScope(identity.externalSubject, schoolId, permission);
     if (!scope || scope.organizationId !== organizationId || scope.schoolId !== schoolId) throw new ForbiddenException('This list is not authorized for this school.');
     const requestId = randomUUID();
+    // These lists are for a signed-in person on a school screen only: the read runs as HUMAN_UI, never as an agent,
+    // delegated or automation context, so no AI or Action Engine path can use them to enumerate students.
     return { subject: identity.externalSubject, context: { organizationId: scope.organizationId, schoolId: scope.schoolId, principalId: scope.principalId, principalType: 'HUMAN_USER',
       requestId, correlationId: requestId, idempotencyKey: `read:${requestId}`, source: 'HUMAN_UI' } };
   }
