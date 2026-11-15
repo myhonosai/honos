@@ -81,13 +81,13 @@ export function PromotionDecisionWorkbench(): React.ReactElement {
 
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">Staff dashboard</a></nav>
-    <header><p>HON / FINAL HUMAN INSTRUCTOR DECISION</p><h1>Final promotion decision</h1>
-      <p>This page starts blank and idle. Supply the exact already-known organization, school and testing-candidate UUIDs, current expected candidate version, one final status and a required rationale. There is no query prefill, automatic load, directory, search, list, candidate/rank read, staff/family directory, scorecard action or readiness calculation.</p>
+    <header><p>Promotions</p><h1>Promotion decision</h1>
+      <p>Choose a student who has finished testing and record your final decision, with a reason.</p>
     </header>
-    <aside><strong>PROMOTED is a final human instructor decision, never an AI or scorecard action.</strong>
+    <aside data-plain-note=""><strong>Only an instructor decides a promotion. HON and the AI team never promote a student.</strong><details><summary>What this page never does</summary><p><strong>PROMOTED is a final human instructor decision, never an AI or scorecard action.</strong></p>
       <p>This page submits only the existing canonical promotion-decision command. The API independently validates the terminal candidate, current enrollment, target rank and promotion prerequisites. Only after that server validation may its existing canonical <code>PROMOTED</code> decision perform the canonical rank change. Entered IDs and version are untrusted selectors, not authority or verified current facts.</p>
       <p>No external certificate, parent notice, attendance record, billing/payment change, message, provider, AI, Action Engine, automation or effect consumer is created, activated or invoked. No certificate issuance, parent/family access, notification or downstream command occurs here.</p>
-    </aside>
+    </details></aside>
     <section aria-labelledby="promotion-decision-command"><h2 id="promotion-decision-command">Record one final known-ID promotion decision</h2>
       <form autoComplete="off" onSubmit={submit}><fieldset disabled={busy}>
         <div className={styles.scopeGrid}>{(Object.keys(LABELS) as (keyof PromotionDecisionIds)[]).filter(field => !shellSchool || (field !== 'organizationId' && field !== 'schoolId')).map(field =>
