@@ -3692,3 +3692,21 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+
+-- 0365 conversation AI training: private helpers, five private tables, seven staff entry points (overview, knowledge preview, settings, upload, original file, save item, item status) and two HQ program entry points.
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.read_school_conversation_ai(text)','hon.read_school_ai_knowledge(text)','hon.set_school_conversation_ai_settings(text,jsonb,text,uuid,uuid)','hon.upload_school_ai_training_file(text,jsonb,text,uuid,uuid)','hon.read_school_ai_training_file(text,uuid)','hon.save_school_ai_training_item(text,jsonb,text,uuid,uuid)','hon.set_school_ai_training_item_status(text,jsonb,text,uuid,uuid)','hon.read_conversation_ai_program_from_hq(text)','hon.command_conversation_ai_program(text,jsonb,uuid)'];
+BEGIN
+  IF to_regprocedure('hon.command_conversation_ai_program(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0365 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.conversation_ai_text_ok(text,integer)','hon.conversation_ai_words_ok(text[])','hon.conversation_ai_languages_ok(text[])','hon.guard_conversation_ai_row()','hon.guard_conversation_ai_program_changes()','hon.require_conversation_ai_actor(text,boolean)','hon.conversation_ai_finish(uuid,text,text,uuid,integer,text,jsonb,jsonb,text,jsonb,uuid,uuid)','hon.conversation_ai_settings_json(hon.school_conversation_ai_settings)','hon.conversation_ai_item_json(hon.school_ai_training_items)','hon.school_ai_knowledge(uuid,uuid)']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['conversation_ai_program','conversation_ai_program_changes','school_conversation_ai_settings','school_ai_training_files','school_ai_training_items'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;

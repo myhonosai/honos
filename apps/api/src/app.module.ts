@@ -215,6 +215,8 @@ import { FamilyMessagesInboxController, FamilyMessagesInboxReadGuard, FamilyMess
 import { FamilyMessagesService } from './families/family-messages.service.js';
 import { ConversationCreateLeadGuard, ConversationLinkGuard, ConversationMarkReadGuard, ConversationReadGuard, ConversationReplyGuard, ConversationUpdateGuard, SchoolConversationsController } from './conversations/school-conversations.controller.js';
 import { SchoolConversationsService } from './conversations/school-conversations.service.js';
+import { ConversationAiController, ConversationAiFileGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard, ConversationAiKnowledgeGuard, ConversationAiProgramHqController, ConversationAiReadGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard } from './conversations/conversation-ai.controller.js';
+import { ConversationAiProgramService, ConversationAiService } from './conversations/conversation-ai.service.js';
 import { ParentMessageHistoryController, ParentMessageHistoryReadGuard } from './families/parent-message-history.controller.js';
 import { ParentMessageHistoryService } from './families/parent-message-history.service.js';
 import { CrmLeadActionTool } from './crm/crm-lead-action.tool.js';
@@ -452,6 +454,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentFamilyMessagesController,
     FamilyMessagesInboxController,
     SchoolConversationsController,
+    ConversationAiController,
+    ConversationAiProgramHqController,
     ParentMessageHistoryController,
     LeadController,
     LeadCloseController,
@@ -612,6 +616,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     FamilyMessagesMarkReadGuard,
     FamilyMessagesReplyGuard,
     SchoolConversationsService,
+    ConversationAiService,
+    ConversationAiProgramService,
+    ConversationAiReadGuard, ConversationAiKnowledgeGuard, ConversationAiFileGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard,
     ConversationReadGuard,
     ConversationReplyGuard,
     ConversationUpdateGuard,

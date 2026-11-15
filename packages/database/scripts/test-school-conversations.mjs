@@ -71,7 +71,7 @@ try{
    assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[role,'hon.'+t,p]))[0].ok,false,role+':'+t+':'+p);
  }
  const runtimeEntry=['read_school_conversations','read_school_conversation','reply_school_conversation','update_school_conversation','mark_school_conversation_read','link_school_conversation','create_school_conversation_lead'];
- const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE '%conversation%' AND p.proname NOT LIKE '%hon_conversation%' AND p.proname NOT LIKE 'hq_%' AND p.proname NOT LIKE '%social%') AND p.oid>=(SELECT oid FROM pg_proc WHERE proname='conversation_body_ok')");
+ const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE '%conversation%' AND p.proname NOT LIKE '%hon_conversation%' AND p.proname NOT LIKE 'hq_%' AND p.proname NOT LIKE '%social%' AND p.proname NOT LIKE '%conversation_ai%') AND p.oid>=(SELECT oid FROM pg_proc WHERE proname='conversation_body_ok')");
  assert.equal(fns.length,22,fns.map(f=>f.proname).join());
  for(const f of fns){
   assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,runtimeEntry.includes(f.proname),'runtime '+f.proname);
