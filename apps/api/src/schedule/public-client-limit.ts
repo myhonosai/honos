@@ -11,8 +11,9 @@ import { isIP } from 'node:net';
  * by the client, so they are never used. On Render the API is private and only reachable through the hon-web rewrite, so the
  * expected value is 2 (Render's edge appends the client, the web rewrite appends Render's edge): confirm it on staging before
  * launch. With the setting absent or invalid, or a header that does not hold a valid address at that position, no per-client
- * limit applies and the SQL limits stay the only ones (the behavior before this change), so a misconfiguration can never put
- * every family in one shared bucket.
+ * limit applies and the SQL limits stay the only ones (the behavior before this change). A valid but wrong value is not caught
+ * here: too low reads a proxy's address, so families share a few buckets; too high reads an entry the client wrote, so the
+ * limit can be dodged. The staging checks in docs/operations/RENDER_DEPLOYMENT.md test both before the value is relied on.
  *
  * Addresses are kept only as keyed hashes in process memory (an IPv6 address counts by its /64). Memory is fixed: when a window
  * already tracks MAX_CLIENTS addresses, a new address is let through untracked rather than refused.

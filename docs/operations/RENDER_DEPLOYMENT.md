@@ -71,12 +71,21 @@ the header. On this Blueprint the expected value is **`2`**: Render's edge appen
 appends the edge. It is not in `render.yaml` yet, so adding it is a deliberate step at deploy time:
 
 1. On staging, add `HON_PUBLIC_CLIENT_IP_HOPS=2` to `hon-api` and redeploy it.
-2. Confirm from two different networks that one network going over the limit (a 429 with `Retry-After`) leaves the other
-   network able to book. If every request shares one limit, the value is too high: remove the variable and report it.
+2. **Not pooled:** confirm from two different networks that one network going over the limit (a 429 with `Retry-After`)
+   leaves the other network able to book. If both networks share one limit, the value is **too low** (it reads a proxy's
+   address, so every family shares a few buckets): remove the variable and report it.
+3. **Not spoofable:** from one network, send requests that each carry a different made-up left-most `X-Forwarded-For`
+   entry, and confirm they still reach the 429. If they never do, the value is **too high** (it reads an entry the client
+   wrote): remove the variable and report it.
 
-Without the variable, or with any value other than 1 to 5, no per-client limit applies and only the per-link and
-per-contact limits in the database do. That is the behavior before this change, so a missing or wrong setting can never
-put every family into one shared limit.
+What each setting does:
+
+- **Absent, or any value other than 1 to 5:** no per-client limit. Only the per-link and per-contact limits in the database
+  apply, which is the behavior before this change.
+- **Too low** for the real proxy chain: the limiter reads a proxy's address, so families share a few buckets and one busy
+  network can block others. This is why steps 2 and 3 must pass before relying on it.
+- **Too high:** the limiter reads an entry the client can write, so a sender can dodge the per-client limit (the database
+  limits still apply).
 
 Related: `DATABASE_TLS_AND_CONNECTIONS.md` (TLS, pooler sizing, startup codes),
 `BACKUP_RESTORE_AND_RECOVERY.md` (migrations, rollback, restore), `MONITORING_AND_ALERTING.md`.
