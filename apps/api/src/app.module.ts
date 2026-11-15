@@ -211,6 +211,8 @@ import { ParentPlannedAbsenceRequestController, ParentPlannedAbsenceRequestGuard
 import { ParentPlannedAbsenceRequestService } from './families/parent-planned-absence-request.service.js';
 import { ParentClassBookingBookGuard, ParentClassBookingCancelGuard, ParentClassBookingController, ParentClassBookingReadGuard } from './families/parent-class-booking.controller.js';
 import { ParentClassBookingService } from './families/parent-class-booking.service.js';
+import { ParentSchoolBookingBookGuard, ParentSchoolBookingCancelGuard, ParentSchoolBookingController, ParentSchoolBookingReadGuard } from './families/parent-school-bookings.controller.js';
+import { ParentSchoolBookingService } from './families/parent-school-bookings.service.js';
 import { FamilyMessagesInboxController, FamilyMessagesInboxReadGuard, FamilyMessagesMarkReadGuard, FamilyMessagesReplyGuard, ParentFamilyMessagesController, ParentFamilyMessagesReadGuard, ParentFamilyMessagesSendGuard } from './families/family-messages.controller.js';
 import { FamilyMessagesService } from './families/family-messages.service.js';
 import { ParentMessageHistoryController, ParentMessageHistoryReadGuard } from './families/parent-message-history.controller.js';
@@ -447,6 +449,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentPlannedAbsenceHistoryController,
     ParentPlannedAbsenceRequestController,
     ParentClassBookingController,
+    ParentSchoolBookingController,
     ParentFamilyMessagesController,
     FamilyMessagesInboxController,
     ParentMessageHistoryController,
@@ -599,7 +602,11 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentPlannedAbsenceHistoryReadGuard,
     ParentPlannedAbsenceRequestService,
     ParentClassBookingService,
+    ParentSchoolBookingService,
     ParentClassBookingReadGuard,
+    ParentSchoolBookingReadGuard,
+    ParentSchoolBookingBookGuard,
+    ParentSchoolBookingCancelGuard,
     ParentClassBookingBookGuard,
     ParentClassBookingCancelGuard,
     FamilyMessagesService,
