@@ -79,8 +79,11 @@ async function read(scope: PickerScope, list: string, query: Record<string, stri
 const search = (value: string) => { const s = value.trim().slice(0, 120); return s ? { search: s } : {}; };
 
 export const pickerApi = {
-  async enrollments(scope: PickerScope, purpose: EnrollmentPurpose, find: string, signal: AbortSignal): Promise<PickerEnrollment[]> {
-    return verifyEnrollments(await read(scope, 'enrollments', { for: purpose, ...search(find) }, signal));
+  async enrollments(scope: PickerScope, purpose: EnrollmentPurpose, find: string, signal: AbortSignal, curriculumId = ''): Promise<PickerEnrollment[]> {
+    if (curriculumId && !uuid(curriculumId)) fail();
+    const rows = verifyEnrollments(await read(scope, 'enrollments', { for: purpose, ...(curriculumId ? { curriculumId: curriculumId.toLowerCase() } : {}), ...search(find) }, signal));
+    if (curriculumId && rows.some((r) => r.curriculumId.toLowerCase() !== curriculumId.toLowerCase())) fail();
+    return rows;
   },
   async testingEvents(scope: PickerScope, signal: AbortSignal): Promise<PickerTestingEvent[]> {
     return verifyTestingEvents(await read(scope, 'testing-events', {}, signal));

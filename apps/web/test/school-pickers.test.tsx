@@ -23,12 +23,17 @@ it('reads each list for the verified school with a fixed purpose and a bounded s
   const [path, init] = f.mock.calls[0] as unknown as [string, RequestInit];
   expect(path).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/pickers/enrollments?for=testing&search=Ave`);
   expect(init).toMatchObject({ method: 'GET', credentials: 'same-origin', cache: 'no-store', redirect: 'error' });
+  await pickerApi.enrollments(scope, 'testing', '', signal(), id(200).toUpperCase());
+  expect((f.mock.calls[1] as unknown as [string])[0]).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/pickers/enrollments?for=testing&curriculumId=${id(200)}`);
+  await expect(pickerApi.enrollments(scope, 'testing', '', signal(), id(201))).rejects.toMatchObject({ kind: 'UNAVAILABLE' });
+  await expect(pickerApi.enrollments(scope, 'testing', '', signal(), 'nope')).rejects.toMatchObject({ kind: 'UNAVAILABLE' });
+  f.mockClear();
   vi.stubGlobal('fetch', f.mockImplementation(async () => json({ data: [candidate(1)], meta })));
   await pickerApi.candidates(scope, 'grade', 'x'.repeat(200), signal());
-  expect((f.mock.calls[1] as unknown as [string])[0]).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/pickers/testing-candidates?for=grade&search=${'x'.repeat(120)}`);
+  expect((f.mock.calls[0] as unknown as [string])[0]).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/pickers/testing-candidates?for=grade&search=${'x'.repeat(120)}`);
   vi.stubGlobal('fetch', f.mockImplementation(async () => json({ data: [event], meta })));
   await expect(pickerApi.testingEvents(scope, signal())).resolves.toEqual([event]);
-  expect((f.mock.calls[2] as unknown as [string])[0]).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/pickers/testing-events`);
+  expect((f.mock.calls[1] as unknown as [string])[0]).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/pickers/testing-events`);
 });
 
 it('maps refusals to DENIED and anything unexpected to UNAVAILABLE, never to a partial list', async () => {

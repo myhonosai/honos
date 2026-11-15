@@ -64,7 +64,7 @@ export function EnrollmentPicker({ scope, purpose, curriculumId = '', value, dis
   scope: PickerScope; purpose: EnrollmentPurpose; curriculumId?: string; value: string; disabled: boolean; onPick: (item: PickerEnrollment | null) => void;
 }): React.ReactElement {
   const [search, setSearch] = useState('');
-  const list = useList((signal) => pickerApi.enrollments(scope, purpose, search, signal).then((items) => curriculumId ? items.filter((i) => i.curriculumId === curriculumId) : items),
+  const list = useList((signal) => pickerApi.enrollments(scope, purpose, search, signal, curriculumId),
     [scope.organizationId, scope.schoolId, purpose, search, curriculumId], search ? 250 : 0);
   return <PickListView copy={ENROLLMENT_COPY[purpose]} list={list} keyOf={(i) => i.enrollmentId} describe={(i) => enrollmentLabel(i, purpose !== 'progress')}
     value={value} search={search} disabled={disabled} onSearch={setSearch} onPick={onPick} />;
