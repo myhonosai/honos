@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "66a29910103abdeb6e898fddf025bcfc51a4964ac321851f86276ced2e54ec7c",
+  "chainSha256": "b32ed79fd21be76bff2f9fd50dffe37ab7fb9a4cf626d57c64981719554a7b30",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -439,8 +439,16 @@
       "sha256": "28650fbd310da68a4a9bbbe8a670c74cb07269010b6f512b2c2b8f2f1da379f9"
     },
     {
+      "file": "0330_family_messages.sql",
+      "sha256": "c7b6d13412905cfb0f23128ea509829f5a2deddfa5eab8385f0a0d9124ea2315"
+    },
+    {
       "file": "0331_school_reports.sql",
       "sha256": "a5480e9eef175e40a64f58343ee9f9a550f2470b4bf98c97452e0405df60c130"
+    },
+    {
+      "file": "0332_school_reports_locations.sql",
+      "sha256": "e32748c44c865ee67062ad535fd29d3c39532f2a5f94afeac9f5e2f68894dae2"
     },
     {
       "file": "0333_school_class_attendance_import.sql",

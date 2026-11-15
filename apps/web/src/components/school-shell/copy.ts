@@ -1,5 +1,6 @@
 /** School shell copy. ko/es are typed against en, so a missing key fails `pnpm check`. */
 const en = {
+  groupPeople: 'Students & families', groupStaff: 'Staff', groupLeads: 'Leads', groupMarketing: 'Marketing', groupSchedule: 'Schedule', groupAttendance: 'Attendance', groupCurriculum: 'Curriculum & testing', groupCommunity: 'Community', groupMemberships: 'Memberships', groupPayments: 'Payments', groupTeam: 'Team & approvals', groupSpecialists: 'Specialists', groupNav: 'Groups in this section', currentArea: 'You are in',
   brand: 'HON OS', brandTagline: 'For martial arts schools', skip: 'Skip to main content', primaryNav: 'School navigation', sectionNav: 'Pages in this section',
   openMenu: 'Open navigation', closeMenu: 'Close navigation', more: 'More', mobileNav: 'Quick navigation',
   askHon: 'Ask HON', honLauncher: 'HON is ready to help on this page', menuTitle: 'Menu', menuLead: 'Every area of your school', search: 'Search students and families', account: 'Account', signOut: 'Sign out', signIn: 'Sign in again', hq: 'HON HQ',
@@ -13,7 +14,7 @@ const en = {
   navAnalytics: 'Reports', navSettings: 'Settings', routeCommunity: 'Owner community', routeMarketplace: 'Marketplace', routeLanguage: 'Language & region', routeBranding: 'School branding', routeTextsFromHon: 'Texts from HON',
   routeOverview: 'Overview', routeOperationsReport: 'Operations report', routeCommandCenter: 'Command Center', routeHealthScore: 'Health Score', routeSchoolReports: 'Reports',
   routeLeadsHome: 'Leads', routeLeads: 'Enroll a lead', routeJourney: 'Enrollment journey', routeFollowUps: 'Follow-ups', routeLeadMemberships: 'Lead memberships', routeLeadAssistant: 'Chad: lead follow-ups', routeAiTeam: 'Meet the team', routeLeadImport: 'Import leads',
-  routeTrials: 'Trial appointments', routeBookings: 'Class bookings',
+  routeTrials: 'Trial appointments', routeBookings: 'Class bookings', routeFamilyMessages: 'Family messages',
   routeStudentSearch: 'Search', routePeople: 'People', routeFamilyAccess: 'Family access', routeProgress: 'Curriculum progress', routeAchievements: 'Achievements', routeRetention: 'Retention review', routeStudentImport: 'Import students',
   routeTesting: 'Testing', routeReadiness: 'Readiness', routeScorecards: 'Scorecards', routePromotions: 'Promotions', routeCertificates: 'Certificates',
   routeMembershipList: 'Memberships', routeMemberships: 'Activation', routePlans: 'Plans', routeDates: 'Dates & history', routeChanges: 'Pause, cancel & refunds', routeRenewals: 'Renewals', routeInvoices: 'Invoices', routeReceivables: 'Tuition balances', routePaymentProcessors: 'Payment processors', routeCheckoutPages: 'Checkout pages', routeSavedMethods: 'Saved payment methods',
@@ -26,6 +27,7 @@ const en = {
 } as const;
 export type ShellKey = keyof typeof en;
 const ko: Record<ShellKey, string> = {
+  groupPeople: '학생 및 가족', groupStaff: '직원', groupLeads: '문의', groupMarketing: '마케팅', groupSchedule: '일정', groupAttendance: '출석', groupCurriculum: '커리큘럼 및 심사', groupCommunity: '커뮤니티', groupMemberships: '회원권', groupPayments: '결제', groupTeam: '팀 및 승인', groupSpecialists: '전문 AI', groupNav: '이 메뉴의 그룹', currentArea: '현재 위치',
   brand: 'HON OS', brandTagline: '무술 도장을 위한 운영 시스템', skip: '본문으로 건너뛰기', primaryNav: '도장 메뉴', sectionNav: '이 메뉴의 페이지',
   openMenu: '메뉴 열기', closeMenu: '메뉴 닫기', more: '더보기', mobileNav: '빠른 메뉴',
   askHon: 'HON에게 묻기', honLauncher: 'HON이 이 페이지에서 도와드릴 준비가 되어 있습니다', menuTitle: '메뉴', menuLead: '도장의 모든 영역', search: '학생 및 가족 검색', account: '계정', signOut: '로그아웃', signIn: '다시 로그인', hq: 'HON HQ',
@@ -39,7 +41,7 @@ const ko: Record<ShellKey, string> = {
   navAnalytics: '보고서', navSettings: '설정', routeCommunity: '관장 커뮤니티', routeMarketplace: '마켓플레이스', routeLanguage: '언어 및 지역', routeBranding: '학교 브랜딩', routeTextsFromHon: 'HON 문자',
   routeOverview: '개요', routeOperationsReport: '운영 보고서', routeCommandCenter: '커맨드 센터', routeHealthScore: '건강 점수', routeSchoolReports: '보고서',
   routeLeadsHome: '문의', routeLeads: '문의 등록', routeJourney: '등록 여정', routeFollowUps: '후속 조치', routeLeadMemberships: '문의별 회원권', routeLeadAssistant: 'Chad: 상담 후속 연락', routeAiTeam: '팀 소개', routeLeadImport: '문의 가져오기',
-  routeTrials: '체험 수업 예약', routeBookings: '수업 예약',
+  routeTrials: '체험 수업 예약', routeBookings: '수업 예약', routeFamilyMessages: '가족 메시지',
   routeStudentSearch: '검색', routePeople: '사람', routeFamilyAccess: '가족 접근', routeProgress: '커리큘럼 진도', routeAchievements: '성취', routeRetention: '재등록 검토', routeStudentImport: '학생 가져오기',
   routeTesting: '승급 심사', routeReadiness: '심사 준비', routeScorecards: '채점표', routePromotions: '승급 결정', routeCertificates: '수료증',
   routeMembershipList: '회원권', routeMemberships: '회원권 활성화', routePlans: '요금제', routeDates: '날짜 및 이력', routeChanges: '일시정지·취소·환불', routeRenewals: '갱신', routeInvoices: '청구서', routeReceivables: '수강료 잔액', routePaymentProcessors: '결제 처리업체', routeCheckoutPages: '결제 페이지', routeSavedMethods: '저장된 결제 수단',
@@ -51,6 +53,7 @@ const ko: Record<ShellKey, string> = {
   routeTeam: '팀 및 초대', routeRoles: '역할', routeAvailability: '근무 가능 시간', routeQualifications: '사범 자격', routeAccount: '계정 및 사용량', routeOwners: '도장 소유자', routeSubscription: 'HON 구독', routeLaunch: '도장 개설', routeFounderSetup: '창업 설정 가이드', routeWelcome: '환영 및 설정', routeHelp: 'HON에 도움 요청',
 };
 const es: Record<ShellKey, string> = {
+  groupPeople: 'Alumnos y familias', groupStaff: 'Personal', groupLeads: 'Prospectos', groupMarketing: 'Marketing', groupSchedule: 'Horario', groupAttendance: 'Asistencia', groupCurriculum: 'Plan de estudios y exámenes', groupCommunity: 'Comunidad', groupMemberships: 'Membresías', groupPayments: 'Pagos', groupTeam: 'Equipo y aprobaciones', groupSpecialists: 'Especialistas', groupNav: 'Grupos de esta sección', currentArea: 'Estás en',
   brand: 'HON OS', brandTagline: 'Para escuelas de artes marciales', skip: 'Saltar al contenido principal', primaryNav: 'Navegación de la escuela', sectionNav: 'Páginas de esta sección',
   openMenu: 'Abrir navegación', closeMenu: 'Cerrar navegación', more: 'Más', mobileNav: 'Navegación rápida',
   askHon: 'Preguntar a HON', honLauncher: 'HON está listo para ayudarte en esta página', menuTitle: 'Menú', menuLead: 'Todas las áreas de tu escuela', search: 'Buscar alumnos y familias', account: 'Cuenta', signOut: 'Cerrar sesión', signIn: 'Volver a iniciar sesión', hq: 'HON HQ',
@@ -64,7 +67,7 @@ const es: Record<ShellKey, string> = {
   navAnalytics: 'Informes', navSettings: 'Ajustes', routeCommunity: 'Comunidad de dueños', routeMarketplace: 'Mercado', routeLanguage: 'Idioma y región', routeBranding: 'Marca de la escuela', routeTextsFromHon: 'Textos de HON',
   routeOverview: 'Resumen', routeOperationsReport: 'Informe de operaciones', routeCommandCenter: 'Centro de mando', routeHealthScore: 'Índice de salud', routeSchoolReports: 'Informes',
   routeLeadsHome: 'Prospectos', routeLeads: 'Inscribir un prospecto', routeJourney: 'Proceso de inscripción', routeFollowUps: 'Seguimientos', routeLeadMemberships: 'Membresías por prospecto', routeLeadAssistant: 'Chad: seguimiento de prospectos', routeAiTeam: 'Conoce al equipo', routeLeadImport: 'Importar prospectos',
-  routeTrials: 'Citas de prueba', routeBookings: 'Reservas de clases',
+  routeTrials: 'Citas de prueba', routeBookings: 'Reservas de clases', routeFamilyMessages: 'Mensajes de familias',
   routeStudentSearch: 'Buscar', routePeople: 'Personas', routeFamilyAccess: 'Acceso familiar', routeProgress: 'Progreso del plan de estudios', routeAchievements: 'Logros', routeRetention: 'Revisión de retención', routeStudentImport: 'Importar alumnos',
   routeTesting: 'Exámenes', routeReadiness: 'Preparación', routeScorecards: 'Hojas de evaluación', routePromotions: 'Promociones', routeCertificates: 'Certificados',
   routeMembershipList: 'Membresías', routeMemberships: 'Activación', routePlans: 'Planes', routeDates: 'Fechas e historial', routeChanges: 'Pausas, cancelaciones y reembolsos', routeRenewals: 'Renovaciones', routeInvoices: 'Facturas', routeReceivables: 'Saldos de cuotas', routePaymentProcessors: 'Procesadores de pago', routeCheckoutPages: 'Páginas de pago', routeSavedMethods: 'Métodos de pago guardados',
