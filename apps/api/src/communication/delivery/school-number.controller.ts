@@ -97,6 +97,18 @@ export class SchoolNumberOrderHqController {
     } catch (error) { return hqError(error); }
   }
 
+  /** T2c (0358): after checking the school's Twilio subaccount, the HQ owner says whether the number was bought. */
+  @Post(':orderId/settle') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.settleSchoolNumberOrder)
+  async settle(@Req() req: HonRequest, @Param('orderId') orderId: string, @Body() body: unknown) {
+    if (!req.honIdentity) throw new ForbiddenException({ code: 'SAAS_FORBIDDEN' });
+    if (!UUID.test(orderId)) throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' });
+    const input = validateNumberOrderSettle(body);
+    try {
+      return { data: await this.database.callSaasBilling('settleSchoolNumberOrder', [req.honIdentity.externalSubject, orderId, input.finding,
+        input.note, String(input.expectedVersion)]) };
+    } catch (error) { return hqError(error); }
+  }
+
   @Post(':orderId/decision') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.decideSchoolNumberOrder)
   async decide(@Req() req: HonRequest, @Param('orderId') orderId: string, @Body() body: unknown) {
     if (!req.honIdentity) throw new ForbiddenException({ code: 'SAAS_FORBIDDEN' });
@@ -107,6 +119,17 @@ export class SchoolNumberOrderHqController {
         input.note ?? null, String(input.expectedVersion)]) };
     } catch (error) { return hqError(error); }
   }
+}
+
+export function validateNumberOrderSettle(body: unknown): { finding: 'BOUGHT' | 'NOT_BOUGHT'; note: string; expectedVersion: number } {
+  const input = body as Record<string, unknown> | null;
+  if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).sort().join(',') !== 'expectedVersion,finding,note'
+    || (input.finding !== 'BOUGHT' && input.finding !== 'NOT_BOUGHT')
+    || typeof input.note !== 'string' || input.note.trim().length < 1 || input.note.length > 500
+    || !Number.isSafeInteger(input.expectedVersion) || (input.expectedVersion as number) < 1) {
+    throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' });
+  }
+  return { finding: input.finding, note: input.note.trim(), expectedVersion: input.expectedVersion as number };
 }
 
 export function validateNumberOrderDecision(body: unknown): { decision: 'APPROVE' | 'REJECT'; note?: string; expectedVersion: number } {
@@ -128,7 +151,7 @@ function hqError(error: unknown): never {
   if (code === '42501') throw new ForbiddenException({ code: 'SAAS_FORBIDDEN' });
   if (code === 'P0002') throw new NotFoundException({ code: 'NUMBER_ORDER_NOT_FOUND' });
   if (code === '40001') throw new ConflictException({ code: 'VERSION_CONFLICT' });
-  if (code === '55000') throw new ConflictException({ code: message === 'NUMBER_ORDER_NOT_PENDING' ? 'NUMBER_ORDER_NOT_PENDING' : 'NUMBER_ORDER_CONFLICT' });
+  if (code === '55000') throw new ConflictException({ code: message === 'NUMBER_ORDER_NOT_PENDING' || message === 'NUMBER_ORDER_NOT_UNSETTLED' || message === 'NUMBER_ORDER_OPEN' ? message : 'NUMBER_ORDER_CONFLICT' });
   if (code === '22023') throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' });
   throw new ServiceUnavailableException({ code: 'SAAS_UNAVAILABLE' });
 }

@@ -3642,6 +3642,18 @@ DO $$ DECLARE f record; BEGIN
     RAISE EXCEPTION 'Unsafe school number order table posture'; END IF;
 END $$;
 -- End school number orders exact verification.
+-- School number order settle exact verification (T2c 0358): the HQ-owner settle entry point is a trusted definer the
+-- runtime may call; the settle columns are covered by the forced-RLS table posture above.
+DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner
+      WHERE p.oid='hon.settle_school_number_order_from_hq(text,uuid,text,text,integer)'::regprocedure AND p.prosecdef
+      AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND (owner.rolsuper OR owner.rolbypassrls))
+    OR NOT has_function_privilege('hon_runtime','hon.settle_school_number_order_from_hq(text,uuid,text,text,integer)','EXECUTE')
+    OR has_function_privilege('hon_runtime','hon.guard_school_number_order()','EXECUTE')
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='school_number_orders_settled' AND conrelid='hon.school_number_orders'::regclass) THEN
+    RAISE EXCEPTION 'Unsafe school number order settle posture'; END IF;
+END $$;
+-- End school number order settle exact verification.
 -- Creative provider jobs exact verification (C1 0354): four private forced-RLS tables the runtime cannot touch, five
 -- runtime entry points (plus the 0216 record wrapper above), worker functions and private helpers not runnable by it.
 DO $$ DECLARE t text; f text; BEGIN
