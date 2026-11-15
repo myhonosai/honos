@@ -128,6 +128,13 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   }, [selection?.organizationId, selection?.schoolId, schoolName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { setMenuOpen(false); }, [path]);
+  // Where am I: a long tab row scrolls so the current page and group are in view (no page scroll).
+  useEffect(() => {
+    for (const selector of ['[data-shell-groups] [aria-current]', '[data-shell-tabs] [aria-current]']) {
+      const link = document.querySelector<HTMLElement>(selector), row = link?.parentElement;
+      if (link && row) row.scrollLeft = Math.max(0, link.offsetLeft - (row.clientWidth - link.offsetWidth) / 2);
+    }
+  }, [path]);
   // Focus returns to whatever opened the menu once it closes (recorded before the panel takes focus).
   const menuOpener = useRef<HTMLElement | null>(null);
   const openMenu = useCallback((open: boolean) => {
