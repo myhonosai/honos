@@ -1,10 +1,12 @@
 import { CLASS_SESSION_ROSTER_ATTENDANCE_STATUSES, CLASS_SESSION_ROSTER_BOOKING_STATUSES, verifyCurrentSchoolClassSessionItems, type ClassSessionRosterEntry, type CurrentSchoolClassSession } from '@hon/contracts';
+import { ATTENDANCE_CATEGORIES, type AttendanceCategory, type ClassSessionRosterAttendance } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
+import { AttendanceWorkbenchUiError, loadRosterAttendance, saveRosterAttendance } from '../attendance-workbench-http';
 
 /**
- * U5 class rosters: read-only. The class list is the forward-paging session list (0221, schedule.session.read) from a
+ * U5 class rosters. The class list is the forward-paging session list (0221, schedule.session.read) from a
  * school-local date; a roster is the U5 read (attendance.record). Both are re-decided live on every page. The browser names only the verified school and one
- * session; nothing here books, records attendance or changes a session.
+ * session. The one write is `mark`, through the existing attendance command; nothing here books or changes a session.
  */
 export type RosterErrorKind = 'SESSION' | 'DENIED' | 'CURSOR' | 'TIMEZONE' | 'UNAVAILABLE';
 export class RosterError extends Error { constructor(readonly kind: RosterErrorKind) { super(kind); } }
@@ -106,9 +108,32 @@ async function read(path: string, signal: AbortSignal, owned: Owned, headers: Re
 }
 const codeOf = (v: unknown) => v && typeof v === 'object' && !Array.isArray(v) && typeof (v as { code?: unknown }).code === 'string' ? (v as { code: string }).code : null;
 
+/** Statuses staff mark from the roster. Make-up is left to the exact attendance page, which also sets its category. */
+export const ROSTER_MARKS = ['PRESENT', 'LATE', 'EXCUSED_ABSENCE', 'UNEXCUSED_ABSENCE'] as const;
+export type RosterMark = (typeof ROSTER_MARKS)[number];
+export type MarkErrorKind = 'SESSION' | 'DENIED' | 'CONFLICT' | 'REJECTED' | 'UNKNOWN';
+export class MarkError extends Error { constructor(readonly kind: MarkErrorKind) { super(kind); } }
+/**
+ * Attendance category for a roster mark: an existing record keeps its own; otherwise the booking says what kind of visit
+ * it was (a trial is never counted as a regular member's class). Walk-ins and regular bookings are regular participants,
+ * the server's own default.
+ */
+export function rosterCategory(entry: Pick<ClassSessionRosterEntry, 'booking' | 'attendance'>): AttendanceCategory {
+  if (entry.attendance && (ATTENDANCE_CATEGORIES as readonly string[]).includes(entry.attendance.category)) return entry.attendance.category as AttendanceCategory;
+  switch (entry.booking?.kind) {
+    case 'TRIAL': return 'TRIAL_STUDENT';
+    case 'MAKEUP': return 'MAKEUP_CLASS';
+    case 'PRIVATE_LESSON': return 'PRIVATE_LESSON';
+    case 'EVENT': return 'SPECIAL_EVENT';
+    case 'CLASS_PASS': return 'GUEST_DROP_IN';
+    default: return 'REGULAR_PARTICIPANT';
+  }
+}
 export interface RosterApi {
   sessions(scope: RosterScope, from: string | null, cursor: string | null, signal: AbortSignal, owned: Owned): Promise<SessionPage>;
   roster(scope: RosterScope, sessionId: string, cursor: string | null, signal: AbortSignal, owned: Owned): Promise<RosterPage>;
+  /** One attendance command (attendance.record, re-checked by the server). The same key is reused for the same unchanged mark. */
+  mark(scope: RosterScope, sessionId: string, entry: ClassSessionRosterEntry, status: RosterMark, key: string): Promise<ClassSessionRosterAttendance>;
 }
 export const rosterApi: RosterApi = {
   async sessions(scope, from, cursor, signal, owned) {
@@ -129,6 +154,28 @@ export const rosterApi: RosterApi = {
     if (status === 400 && codeOf(value) === 'INVALID_CURSOR') throw new RosterError('CURSOR');
     if (status !== 200) throw new RosterError('UNAVAILABLE');
     try { return verifyRosterPage(value); } catch { throw new RosterError('UNAVAILABLE'); }
+  },
+  async mark(scope, sessionId, entry, status, key) {
+    const target = { organizationId: scope.organizationId.toLowerCase(), schoolId: scope.schoolId.toLowerCase(), sessionId: sessionId.toLowerCase(), studentProfileId: entry.studentProfileId.toLowerCase() };
+    let saved;
+    try {
+      // A change to an existing record re-reads it first: the roster does not carry the note, and the server replaces the
+      // note on every save, so the exact record's own note, category and version go back with the new status.
+      let note = '', category = rosterCategory(entry), expectedVersion: number | undefined;
+      if (entry.attendance) {
+        const current = await loadRosterAttendance(target);
+        if (!current || current.id.toLowerCase() !== entry.attendance.id.toLowerCase() || current.version !== entry.attendance.version) throw new MarkError('CONFLICT');
+        note = current.note ?? ''; category = current.category; expectedVersion = current.version;
+      }
+      saved = await saveRosterAttendance(target, { studentProfileId: target.studentProfileId, status, category, note, ...(expectedVersion !== undefined ? { expectedVersion } : {}) }, key);
+    } catch (error) {
+      if (error instanceof MarkError) throw error;
+      const code = error instanceof AttendanceWorkbenchUiError ? error.status : 0;
+      if (code === 401) { reportConfirmedSessionInvalidation(); throw new MarkError('SESSION'); }
+      throw new MarkError(code === 403 ? 'DENIED' : code === 409 ? 'CONFLICT' : code === 400 || code === 404 || code === 422 ? 'REJECTED' : 'UNKNOWN');
+    }
+    const a = saved.attendance;
+    return { id: a.id, status: a.status as ClassSessionRosterAttendance['status'], category: a.category, recordedAt: a.recordedAt, version: a.version };
   },
 };
 

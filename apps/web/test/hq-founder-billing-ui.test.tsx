@@ -119,3 +119,10 @@ it('offers the record step for an open item and the verify step for an awaiting 
   expect(renderToStaticMarkup(<ReviewActions item={{ ...item, allowedDecisions: [], blocker: 'DISPUTE_POLICY_REQUIRED' } as never} api={founderBillingApi} onChanged={noop}/>)).toBe('');
   expect(renderToStaticMarkup(<ReviewActions item={{ ...awaiting, openResolution: resolution(true) } as never} api={founderBillingApi} onChanged={noop}/>)).toBe('');
 });
+
+it('labels money that reached a lifetime plan after an in-window refund ended it (0309)', () => {
+  const ended = { ...item, billingStatus: 'REFUNDED_ENDED', reason: 'LIFETIME_REFUND_IN_WINDOW', heldAmountMinor: 357600 };
+  const html = renderToStaticMarkup(<FounderBillingScreen read={{ state: 'READY', view: { pool: pool(0) as never, reviews: queue([ended]) as never } }} onRefresh={() => {}}/>);
+  for (const s of ['Paid after this lifetime plan was refunded and ended', 'Held $3,576 in 1 payment']) expect(html).toContain(s);
+  expect(html).not.toMatch(/<form|type="submit"/);
+});

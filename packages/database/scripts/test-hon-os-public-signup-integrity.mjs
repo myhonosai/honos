@@ -212,12 +212,18 @@ try{
 
  // 12 (0274). HQ sees the limits, usage and cap hits; only the HQ owner changes the limits, idempotently, with history and audit.
  const hqSend=(identity,{body,key,method='POST'}={})=>send('hq/admission'+(method==='POST'?'/limits':''),{identity,body,key,method,headers:method==='POST'?{'x-hon-human-command':ADMISSION_LIMITS_COMMAND}:{}});
+ // Refusals are counted per UTC hour, so a run that crosses an hour mark splits them across two buckets. Add one
+ // earlier synthetic bucket so the view is always checked with several hours, then compare bucket by bucket.
+ await q("INSERT INTO hon.hon_os_admission_refusals(kind,hour_start,refused_count,first_refused_at,last_refused_at) SELECT 'SIGNUP',h,3,h,h+interval '5 minutes' FROM (SELECT date_trunc('hour',clock_timestamp() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'-interval '3 hours' h) x ON CONFLICT DO NOTHING");
  const view=ok(await hqSend(hqPerson,{method:'GET'}));
+ const buckets=(await q("SELECT hour_start,refused_count FROM hon.hon_os_admission_refusals WHERE kind='SIGNUP' AND hour_start>$1::timestamptz-interval '7 days' ORDER BY hour_start DESC",[view.asOf])).map(r=>[r.hour_start.toISOString(),r.refused_count]);
  const current=await latest();
  assert.equal(view.limits.version,current.version);assert.equal(view.limits.signupsPerHour,current.signups_per_hour);assert.equal(view.limits.recordedBy,'MIGRATION_OWNER');
  assert.equal(view.history[0].version,current.version);assert(view.history.length>=2&&view.history.length<=50);assert.equal(view.programs.signup,'TEST_MODE');
  assert.equal(view.usage.signups.lastHour,await recent('1 hour'));assert.equal(view.usage.signups.full,view.usage.signups.lastHour>=current.signups_per_hour||view.usage.signups.lastDay>=current.signups_per_day);
- assert(view.refusals.some(r=>r.kind==='SIGNUP'&&r.count>=capRefusals));assert(view.blockedEmailDomains>=36);
+ // HQ sees every recorded SIGNUP hour exactly (this run's cap hits are in them: group 11 proved the table grew by capRefusals).
+ assert.deepEqual(view.refusals.filter(r=>r.kind==='SIGNUP').map(r=>[r.hourStart,r.count]),buckets);assert(buckets.length>=2);
+ assert(buckets.reduce((n,[,c])=>n+c,0)>=capRefusals);assert(view.blockedEmailDomains>=36);
  const operatorPerson=person('hq-billing'),operatorP=await human(operatorPerson,'Synthetic HQ billing');
  await q("INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from) VALUES($1,'HON_HQ_OPERATOR',ARRAY['hq.billing.manage'],clock_timestamp()-interval '1 day')",[operatorP]);
  assert.equal(ok(await hqSend(operatorPerson,{method:'GET'})).limits.version,current.version);

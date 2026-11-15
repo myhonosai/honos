@@ -10,7 +10,7 @@ import { SchoolHome, panelFromError } from '../src/components/home/home';
 import { CommandCenterAccessError } from '../src/components/command-center-http';
 import { CrmLeadAccessError } from '../src/components/crm-leads-http';
 import { AiTeamReadinessAccessError } from '../src/components/ai-team-readiness-http';
-import { NOW, ORG, SCHOOL, ready, sessions } from './school-home-fixtures';
+import { NOW, ORG, SCHOOL, ready, readiness, readinessAgent, sessions } from './school-home-fixtures';
 
 const esc = (value: string) => value.replaceAll('&', '&amp;').replaceAll('’', '’');
 const base: SchoolHomeViewProps = { language: 'en', mode: 'modern', schoolName: 'Sunrise Taekwondo', selection: { organizationId: ORG, schoolId: SCHOOL }, sources: ready(), now: NOW };
@@ -33,13 +33,19 @@ describe('school home view', () => {
     expect(html).toMatch(/data-kpi="revenue"[^>]*data-state="NOT_CONNECTED"/);
     expect(html).toMatch(/data-kpi="attendanceRate"[^>]*data-state="NOT_CONNECTED"/);
     expect(html).toContain(homeText('en', 'honStatus'));
-    for (const id of ['alex', 'maya', 'jordan', 'claire', 'lena']) expect(html).toMatch(new RegExp(`data-agent="${id}" data-status="NOT_AVAILABLE"`));
+    // The fixture's readiness lists only Marcus, Kai and Chad: nobody else is claimed as available.
+    for (const id of ['alex', 'maya', 'jordan', 'claire', 'lena']) expect(html).toMatch(new RegExp(`data-agent="${id}" data-status="UNKNOWN"`));
     expect(html).toMatch(/data-agent="kai" data-status="PROVIDER_OFF"/);
     expect(html).not.toMatch(/\$\s?\d/);
     expect(html).not.toContain('eian');
-    // No workspace link on an agent that has no backend.
-    expect(html).not.toMatch(/Open workspace: (Alex|Maya|Jordan|Claire|Lena)/);
-    expect(html).toContain('Open workspace: Kai');
+    // No link to an agent readiness does not list.
+    expect(html).not.toMatch(/(Open workspace|Ask): (Alex|Maya|Jordan|Claire|Lena)/);
+    // Kai is listed but AI is not switched on: shown, with no link (the same rule as the AI team page).
+    expect(html).not.toContain('Open workspace: Kai');
+    const on = render({ sources: { ...ready(), readiness: { state: 'READY', value: readiness([readinessAgent('marcus', 'MARKETING', 6),
+      readinessAgent('kai', 'TEACHING', 6, { providerRuntime: 'READY', available: true, blockedBy: null }), readinessAgent('chad', 'CHAD_FOLLOW_UP', 3)]) } } });
+    expect(on).toContain('Open workspace: Kai');
+    expect(on).not.toContain('Open workspace: Chad');
   });
 
   it('never claims there are no classes today from a bounded snapshot, and labels capacity as capacity', () => {
