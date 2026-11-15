@@ -3616,7 +3616,7 @@ await check('Pause, cancel & refunds: turning pauses off removes Pause; leaving 
 
 // ---------- Champions Club school page ----------
 const chpPage = (page) => page.getByTestId('champions-school');
-const CHP_TEXT = { en: ['Champions Club', 'Your school is #2 with 4 qualified referrals.', 'Referrals & Rewards'], ko: ['챔피언스 클럽', '4', '추천 및 보상'] };
+const CHP_TEXT = { en: ['Champions Club', 'Your school is #2 with 4 qualified referrals.', 'Enrollment'], ko: ['챔피언스 클럽', '4', '등록'] };
 for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko']]) {
   await check(`Champions Club ${nextTheme} ${language} ${name}: code, referrals, rewards, leaderboard, contests and history from the reads`, async () => {
     resetChampions({ code: 'K7M2Q9X4PA' });

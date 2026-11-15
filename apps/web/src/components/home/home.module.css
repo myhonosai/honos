@@ -181,13 +181,11 @@
   [data-hon-mode='big-button'] .honCore { grid-column: 1 / -1; order: -1; }
 }
 @media (max-width: 1280px) {
-  .agentTitle { display: none; }
   [data-hon-mode='big-button'] .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 1099px) {
   .stage { grid-template-columns: 1fr; }
   .honCore { order: -1; }
-  .agentTitle { display: block; }
   .grid, [data-hon-mode='big-button'] .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
@@ -197,7 +195,7 @@
   .agents { gap: 6px; }
   .agentText { padding: 0 3px; }
   .agent strong { font-size: var(--hon-text-sm); }
-  .agentTitle { display: none; }
+  .agentTitle { font-size: 10px; }
   .agentStatus { font-size: 10px; gap: 4px; }
   .agentLink, [data-hon-mode='big-button'] .agentLink { padding: 3px 6px; min-height: 32px; font-size: 10px; }
   [data-hon-mode='big-button'] .agent strong { font-size: var(--hon-text-sm); }

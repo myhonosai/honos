@@ -198,14 +198,14 @@ export function honAgent(id: string | null | undefined): HonCommandAgent | null 
 export const HON_DRAFT_WORK_SOURCES: Readonly<Record<AiDraftWorkAgentKey, { label: string; detail: string; destination: string; agentId: HonAiTeamId | null }>> = {
   chad: { label: 'Chad · Follow-up draft', detail: 'CRM follow-up content proposal', destination: '/staff/leads/assistant', agentId: 'chad' },
   marcus: { label: 'Marcus · Marketing draft', detail: 'Campaign content proposal', destination: '/staff/marketing/assistant', agentId: 'marcus' },
-  claire: { label: 'Teaching draft assistant (legacy)', detail: 'Curriculum teaching draft recorded under a legacy key; not Claire’s Business Performance work', destination: '/staff/teaching-assistant', agentId: null },
+  claire: { label: 'Teaching drafts', detail: 'Lesson drafts written from your curriculum', destination: '/staff/teaching-assistant', agentId: null },
 };
 
 /** Known Action Engine proposal codes from the existing governed draft slices. */
 export function approvalSourceLabel(actionCode: string): string {
   if (actionCode === 'crm.follow_up_draft.propose') return 'Chad · Follow-up draft';
   if (actionCode === 'marketing.draft.save') return 'Marcus · Marketing draft';
-  if (actionCode === 'teaching.draft.save') return 'Teaching draft assistant (legacy)';
+  if (actionCode === 'teaching.draft.save') return 'Teaching drafts';
   return 'School workflow';
 }
 
@@ -245,7 +245,7 @@ export const HON_TEACHING_AI = {
     { label: 'Curriculum library', href: '/staff/curriculum/library' },
     { label: 'Curriculum progress', href: '/staff/curriculum/progress' },
     { label: 'Scheduled classes', href: '/staff/schedule/sessions' },
-    { label: 'Teaching draft assistant (legacy)', href: '/staff/teaching-assistant' },
+    { label: 'Teaching drafts', href: '/staff/teaching-assistant' },
   ],
 } as const;
 

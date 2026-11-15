@@ -103,6 +103,8 @@ const SAAS_BILLING_CALLS = {
   recordScheduleBindingObservation: { sql: 'SELECT hon.record_saas_schedule_binding_observation($1::uuid,$2::jsonb,$3::uuid,$4::uuid) AS data', arity: 4, readOnly: false },
   recordScheduleBindingReconciliation: { sql: 'SELECT hon.record_saas_schedule_binding_reconciliation($1::uuid,$2::jsonb) AS data', arity: 2, readOnly: false },
   recordScheduleBindingExpiry: { sql: 'SELECT hon.record_saas_schedule_binding_expiry($1::uuid,$2::jsonb) AS data', arity: 2, readOnly: false },
+  recordSchedulePastDueSuspension: { sql: 'SELECT hon.record_saas_schedule_past_due_suspension($1::uuid) AS data', arity: 1, readOnly: false },
+  listSchedulePastDueBindings: { sql: 'SELECT hon.list_saas_schedule_past_due_bindings($1::integer) AS data', arity: 1, readOnly: true },
   retryScheduleAccess: { sql: 'SELECT hon.retry_saas_schedule_access($1::text,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   readPaidReviews: { sql: 'SELECT hon.read_saas_paid_reviews($1::text,$2::text) AS data', arity: 2, readOnly: true },
   readFounderPoolHq: { sql: 'SELECT hon.read_saas_founder_pool_from_hq($1::text) AS data', arity: 1, readOnly: true },
@@ -175,6 +177,12 @@ const SAAS_BILLING_CALLS = {
   createCreativeAvatarVideo: { sql: 'SELECT hon.create_creative_avatar_video($1,$2::uuid,$3::jsonb,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
   readCreativeAvatarVideos: { sql: 'SELECT hon.read_creative_avatar_videos($1,$2::uuid) AS data', arity: 2, readOnly: true },
   readCreativeAvatarVideo: { sql: 'SELECT hon.read_creative_avatar_video($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
+  // C1 (0354): asynchronous provider jobs (permit before sending, then the provider's job id) and the HQ daily limits.
+  beginCreativeProviderSubmission: { sql: 'SELECT hon.begin_creative_provider_submission($1,$2::uuid) AS data', arity: 2, readOnly: false },
+  recordCreativeProviderSubmission: { sql: 'SELECT hon.record_creative_provider_submission($1,$2::uuid,$3) AS data', arity: 3, readOnly: false },
+  commandCreativeProviderDailyLimit: { sql: 'SELECT hon.command_creative_provider_daily_limit($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  commandCreativeSchoolDailyCaps: { sql: 'SELECT hon.command_creative_school_daily_caps($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  readCreativeLimitsFromHq: { sql: 'SELECT hon.read_creative_limits_from_hq($1) AS data', arity: 1, readOnly: true },
   // WB1 (0344): AI website drafts on the school's creative wallet (no provider is called by the database).
   createCreativeWebsiteDraft: { sql: 'SELECT hon.create_creative_website_draft($1,$2::uuid,$3::jsonb,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
   recordCreativeWebsiteDraftResult: { sql: 'SELECT hon.record_creative_website_draft_result($1,$2::uuid,$3::jsonb) AS data', arity: 3, readOnly: false },
@@ -222,6 +230,8 @@ const SAAS_BILLING_CALLS = {
   // R2 (0288): per-school internal AI cost ceiling and single-school pause (HQ only).
   readAiSchoolCostLimits: { sql: 'SELECT hon.read_ai_school_cost_limits_from_hq($1) AS data', arity: 1, readOnly: true },
   commandAiSchoolCostLimit: { sql: 'SELECT hon.command_ai_school_cost_limit($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  readAiExceptionAllowances: { sql: 'SELECT hon.read_ai_exception_school_allowances_from_hq($1) AS data', arity: 1, readOnly: true },
+  commandAiExceptionAllowance: { sql: 'SELECT hon.command_ai_exception_school_allowance($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readAccessExceptions: { sql: 'SELECT hon.read_saas_access_exceptions_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   grantAccessException: { sql: 'SELECT hon.grant_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   revokeAccessException: { sql: 'SELECT hon.revoke_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
@@ -239,6 +249,11 @@ const SAAS_BILLING_CALLS = {
   readAccessOverview: { sql: 'SELECT hon.read_saas_access_overview_from_hq($1,$2,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },
   // C-HQ-3 (0225): read-only HQ detail of one school; names, statuses and counts only.
   // 0248: the HQ owner sets or disables a school's Twilio sending number; nothing is bought or sent.
+  // T2 (0352): HQ reads every school's number orders; a human HQ owner approves or rejects one. Nothing is bought here.
+  readHqSchoolNumberOrders: { sql: 'SELECT hon.read_hq_school_number_orders($1,$2) AS data', arity: 2, readOnly: true },
+  // T2c (0358): the HQ owner records what the school's Twilio subaccount shows for an unsettled order. Calls no provider.
+  settleSchoolNumberOrder: { sql: 'SELECT hon.settle_school_number_order_from_hq($1,$2::uuid,$3,$4,$5::integer) AS data', arity: 5, readOnly: false },
+  decideSchoolNumberOrder: { sql: 'SELECT hon.decide_school_number_order_from_hq($1,$2::uuid,$3,$4,$5::integer) AS data', arity: 5, readOnly: false },
   setSchoolTextSender: { sql: 'SELECT hon.set_school_text_sender_from_hq($1,$2::uuid,$3,$4,$5,$6::boolean,$7::integer) AS data', arity: 7, readOnly: false },
   // 0249: the HQ owner sets the school's forwarding phone and the missed-call text-back switch.
   setSchoolMissedCallSettings: { sql: 'SELECT hon.set_school_missed_call_settings_from_hq($1,$2::uuid,$3,$4::boolean,$5::integer) AS data', arity: 5, readOnly: false },

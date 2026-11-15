@@ -2,7 +2,8 @@ import { BadRequestException, Inject, Injectable, ServiceUnavailableException, U
 import type { SaasScheduleBinding } from '@hon/contracts';
 import { randomUUID } from 'node:crypto';
 import { saasUuid, validateSaasScheduleAccessRetryInput, validateSaasScheduleAccessRetryReceipt, validateSaasScheduleBindingInput,
-  validateSaasScheduleBindingReceipt, validateSaasScheduleBindingView, validateSaasScheduleEvidenceReceipt, type SaasScheduleRequirements } from '@hon/contracts';
+  validateSaasScheduleBindingReceipt, validateSaasScheduleBindingView, validateSaasScheduleEvidenceReceipt, validateSaasSchedulePastDueList,
+  validateSaasSchedulePastDueSuspension, type SaasScheduleRequirements } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
 import { SUBSCRIPTION_SCHEDULE_PROVIDER, type ProviderScheduleRequirements, type ProviderSubscriptionScheduleAdapter } from '../payments/subscription-schedule-provider.js';
 
@@ -94,6 +95,21 @@ export class SaasScheduleBillingService {
     } catch { throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_PROVIDER_UNAVAILABLE' }); }
     if (observed.outcome !== 'CANCELLED_NOTHING_COLLECTED') throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_BINDING_RECONCILIATION_REQUIRED' });
     return this.billing.call('recordScheduleBindingExpiry', [binding.bindingId,JSON.stringify(observed)], validateSaasScheduleBindingReceipt);
+  }
+
+  /**
+   * Worker (0324): plans whose 7-day grace after the last paid period has passed with no renewal. Ids only; each one is
+   * suspended by its own command, which rechecks everything under the organization and binding locks.
+   */
+  listPastDue(limit = 50) {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' });
+    return this.billing.call('listSchedulePastDueBindings', [String(limit)], validateSaasSchedulePastDueList);
+  }
+
+  /** Worker (0324): suspend one past-due plan (owner terms v2). The database decides from its own clock; safe to repeat. */
+  suspendPastDue(bindingId: unknown) {
+    const id = parse(() => saasUuid(bindingId));
+    return this.billing.call('recordSchedulePastDueSuspension', [id], validateSaasSchedulePastDueSuspension);
   }
 
   /**
