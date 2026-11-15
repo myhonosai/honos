@@ -13,7 +13,10 @@ test('C4 prompt check: martial arts marketing passes; contact details, blocked t
   const { checkCreativePrompt: check } = contracts;
   for (const ok of ['Adult kickboxing class sparring at sunset, energetic poster', 'Illustrated kids karate class celebrating new belts',
     '어린이 태권도 수업, 귀여운 일러스트', '무술 기술 연습하는 성인 수련생 사진', 'Clase de karate para adultos, foto dinámica', 'Bo staff and nunchaku forms demo, photo',
-    'A kid-friendly chibi mascot doing a front kick', 'Photo of the dojo at sunrise, 2026 open house'])
+    'A kid-friendly chibi mascot doing a front kick', 'Photo of the dojo at sunrise, 2026 open house',
+    // P2-A regressions: no refusals inside common words, dates, forms or idioms.
+    '대회 전에 연습을 해야한다', 'Kids camp 2026-2027 illustrated poster', 'Open house on 2026-11-15 at 10:30', 'Belt test 11/15/2026', 'Precise execution of forms',
+    'Our club president presenting black belts', 'Una famosa clase de karate para adultos', 'Our adult class is killing it this season', 'Sparring night 15.11.2026'])
     assert.deepEqual(check(ok), { allowed: true, reason: null }, ok);
   for (const [text, reason] of [['Visit www.example.com for a free class', 'CONTACT_OR_LINK'], ['Call 555-123-4567 today', 'CONTACT_OR_LINK'],
     ['email coach@school.test', 'CONTACT_OR_LINK'], ['https://evil.test/x.png', 'CONTACT_OR_LINK'],

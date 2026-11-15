@@ -15,11 +15,11 @@ export interface CreativePromptVerdict { allowed: boolean; reason: CreativePromp
 export const CREATIVE_BLOCKED_TERMS: { readonly latin: readonly string[]; readonly korean: readonly string[] } = {
   latin: [
     // sexual content and nudity (EN / ES)
-    'nude', 'naked', 'nsfw', 'porn', 'porno', 'pornographic', 'sexy', 'sexual', 'erotic', 'lingerie', 'topless', 'bikini', 'underwear', 'fetish', 'seductive',
+    'nude', 'naked', 'nsfw', 'porn', 'porno', 'pornographic', 'sexy', 'erotic', 'lingerie', 'topless', 'bikini', 'underwear', 'fetish', 'seductive',
     'desnudo', 'desnuda', 'desnudos', 'desnudas', 'sexual', 'erotico', 'erótico', 'erotica', 'erótica', 'lenceria', 'lencería', 'ropa interior',
     // graphic injury and violence against people
     'blood', 'bloody', 'gore', 'gory', 'corpse', 'dead body', 'decapitated', 'mutilated', 'stabbing', 'stabbed', 'gun', 'guns', 'rifle', 'pistol', 'firearm',
-    'shooting a', 'murder', 'killing', 'torture', 'execution', 'beaten up', 'bruised face', 'broken bones',
+    'shooting a', 'murder', 'murdered', 'torture', 'beaten up', 'bruised face', 'broken bones',
     'sangre', 'sangriento', 'cadaver', 'cadáver', 'apuñalado', 'pistola', 'rifle', 'arma de fuego', 'asesinato', 'tortura',
     // hate
     'nazi', 'swastika', 'kkk', 'white power', 'racist', 'racista',
@@ -28,16 +28,16 @@ export const CREATIVE_BLOCKED_TERMS: { readonly latin: readonly string[]; readon
     'suicide', 'self harm', 'self-harm', 'cutting herself', 'cutting himself',
     'cocaina', 'cocaína', 'heroina', 'heroína', 'droga', 'drogas', 'cerveza', 'cigarrillo', 'suicidio', 'autolesion', 'autolesión',
     // real people and brands (generated people are fictional; logos and marks are never generated)
-    'celebrity', 'famous person', 'lookalike', 'look-alike', 'deepfake', 'president', 'politician', 'celebridad', 'famoso', 'famosa', 'presidente',
+    'celebrity', 'famous person', 'lookalike', 'look-alike', 'deepfake', 'politician', 'celebridad', 'político', 'politico',
     'logo of', 'trademark', 'nike', 'adidas', 'ufc', 'disney', 'marvel', 'pokemon', 'pokémon', 'nintendo', 'coca-cola', 'mcdonalds', "mcdonald's",
     'bruce lee', 'jackie chan', 'chuck norris', 'conor mcgregor', 'ronda rousey',
   ],
   korean: [
-    '누드', '나체', '알몸', '야한', '성인물', '포르노', '섹시', '속옷', '란제리', '선정적',
+    '누드', '나체', '알몸', '성인물', '포르노', '섹시', '속옷', '란제리', '선정적',
     '피투성이', '유혈', '시체', '살인', '고문', '총기', '권총', '소총', '칼에 찔',
     '나치', '인종차별',
     '마약', '대마초', '코카인', '필로폰', '음주', '소주', '맥주', '담배', '전자담배', '자살', '자해',
-    '연예인', '유명인', '대통령', '정치인', '딥페이크', '상표', '나이키', '아디다스', '디즈니', '마블', '포켓몬', '이소룡', '성룡',
+    '연예인', '유명인', '정치인', '딥페이크', '상표', '나이키', '아디다스', '디즈니', '마블', '포켓몬', '이소룡', '성룡',
   ],
 };
 /** A child in a photorealistic prompt: children may appear only in illustrated or chibi styles (§6). */
@@ -56,6 +56,8 @@ const URL = /(https?:\/\/|www\.|\b[a-z0-9-]+\.(com|net|org|io|co|kr|es|mx|app|ly
 const EMAIL = /[^\s@]+@[^\s@]+\.[^\s@]+/;
 // Seven or more digits, allowing spaces, dots, dashes and parentheses between them.
 const PHONE = /(?:\d[\s().-]*){7,}/;
+// Dates and year ranges are not phone numbers: 2026-2027, 2026-11-15, 11/15/2026, 15.11.2026.
+const DATES = /\b(?:(?:19|20)\d{2}\s*[-–/]\s*(?:(?:19|20)?\d{2})(?:\s*[-–/]\s*\d{1,2})?|\d{1,2}\s*[-/.]\s*\d{1,2}\s*[-/.]\s*(?:19|20)?\d{2})\b/g;
 const escape = (term: string) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const latinPattern = (terms: readonly string[]) =>
   new RegExp(`(?<![\\p{L}\\p{N}])(?:${terms.map(escape).sort((a, b) => b.length - a.length).join('|')})(?:s|es|ed|ing)?(?![\\p{L}\\p{N}])`, 'u');
@@ -70,7 +72,7 @@ const anyKorean = (text: string, terms: readonly string[]) => terms.some(term =>
  */
 export function checkCreativePrompt(text: string, options: { realisticStyle?: boolean } = {}): CreativePromptVerdict {
   const t = text.normalize('NFKC').toLowerCase();
-  if (URL.test(t) || EMAIL.test(t) || PHONE.test(t)) return { allowed: false, reason: 'CONTACT_OR_LINK' };
+  if (URL.test(t) || EMAIL.test(t) || PHONE.test(t.replace(DATES, ' '))) return { allowed: false, reason: 'CONTACT_OR_LINK' };
   if (BLOCKED_LATIN.test(t) || anyKorean(t, CREATIVE_BLOCKED_TERMS.korean)) return { allowed: false, reason: 'BLOCKED_TERM' };
   const child = CHILD_LATIN.test(t) || anyKorean(t, CREATIVE_CHILD_TERMS.korean);
   const realism = options.realisticStyle === true || REALISM_LATIN.test(t) || anyKorean(t, CREATIVE_REALISM_TERMS.korean);

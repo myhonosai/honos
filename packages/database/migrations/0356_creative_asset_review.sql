@@ -9,7 +9,7 @@ BEGIN;
 -- review: the SaaS actor refuses every delegated, action-request or session context (0154 saas_refuse_context).
 -- Decisions are append-only evidence (who and when). An approval can later be withdrawn by a rejection; a rejection is
 -- final. While an asset is not APPROVED, only its requester and reviewers may view it; once APPROVED, the school's
--- creative staff may. Later slices (C5 posts and ads, avatar looks) accept only APPROVED assets and re-check at use.
+-- creative staff may. Only the requester or a reviewer may delete an asset. Later slices (C5 posts and ads, avatar looks) accept only APPROVED assets and re-check at use.
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND (rolsuper OR rolbypassrls)
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN
@@ -106,6 +106,25 @@ BEGIN
   RETURN jsonb_build_object('assetId', obj.asset_id, 'storageKey', obj.storage_key, 'mediaType', obj.media_type, 'byteSize', obj.byte_size);
 END $$;
 
+-- DELETE (0355 replaced, same shape): only the asset's requester or a reviewer of the school may delete it.
+CREATE OR REPLACE FUNCTION hon.delete_creative_asset(p_subject text, p_school uuid, p_asset uuid) RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
+DECLARE obj hon.creative_stored_objects%ROWTYPE; scope record; requester uuid;
+BEGIN
+  obj := hon.creative_school_object(p_subject, p_school, p_asset, true);
+  SELECT * INTO scope FROM hon.require_saas_school_actor(p_subject, p_school) LIMIT 1;
+  SELECT g.requested_by_principal_id INTO requester FROM hon.creative_generation_assets a
+    JOIN hon.creative_generations g ON g.id = a.generation_id AND g.school_id = a.school_id WHERE a.id = obj.asset_id;
+  IF requester IS DISTINCT FROM scope.principal_id AND NOT hon.creative_reviewer_holds(scope.principal_id, scope.organization_id, scope.school_id) THEN
+    RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE = '42501';
+  END IF;
+  IF obj.deleted_at IS NULL THEN
+    UPDATE hon.creative_stored_objects SET deleted_at = clock_timestamp(), deleted_by_principal_id = scope.principal_id WHERE id = obj.id RETURNING * INTO obj;
+  END IF;
+  RETURN jsonb_build_object('assetId', obj.asset_id, 'storageKey', CASE WHEN obj.removed_at IS NULL THEN obj.storage_key END,
+    'deletedAt', hon.saas_ts(obj.deleted_at), 'removed', obj.removed_at IS NOT NULL);
+END $$;
+
 -- The review queue: the school's stored, undeleted assets waiting for review, oldest first (reviewers only).
 CREATE FUNCTION hon.list_creative_review_queue(p_subject text, p_school uuid, p_limit integer) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
@@ -117,15 +136,16 @@ BEGIN
   IF NOT hon.creative_reviewer_holds(scope.principal_id, scope.organization_id, scope.school_id) THEN
     RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE = '42501';
   END IF;
-  RETURN jsonb_build_object('limit', p_limit, 'assets', coalesce((SELECT jsonb_agg(q.item ORDER BY q.stored_at, q.asset_id) FROM (
-      SELECT o.stored_at, o.asset_id, jsonb_build_object('assetId', a.id, 'generationId', a.generation_id, 'ordinal', a.ordinal,
+  -- Ordered by the millisecond the answer shows (saas_ts), then the id, so the order a client sees is strictly increasing.
+  RETURN jsonb_build_object('limit', p_limit, 'assets', coalesce((SELECT jsonb_agg(q.item ORDER BY q.stored_ms, q.asset_id) FROM (
+      SELECT date_trunc('milliseconds', o.stored_at) AS stored_ms, o.asset_id, jsonb_build_object('assetId', a.id, 'generationId', a.generation_id, 'ordinal', a.ordinal,
         'mediaType', a.media_type, 'width', a.width, 'height', a.height, 'durationSeconds', a.duration_seconds,
         'storedAt', hon.saas_ts(o.stored_at), 'requestedBySelf', g.requested_by_principal_id = scope.principal_id) AS item
       FROM hon.creative_stored_objects o JOIN hon.creative_generation_assets a ON a.id = o.asset_id AND a.school_id = o.school_id
       JOIN hon.creative_generations g ON g.id = a.generation_id AND g.school_id = a.school_id
       WHERE o.school_id = scope.school_id AND o.deleted_at IS NULL
         AND NOT EXISTS (SELECT 1 FROM hon.creative_asset_reviews r WHERE r.asset_id = a.id)
-      ORDER BY o.stored_at, o.asset_id LIMIT p_limit) q), '[]'::jsonb));
+      ORDER BY date_trunc('milliseconds', o.stored_at), o.asset_id LIMIT p_limit) q), '[]'::jsonb));
 END $$;
 
 -- School view (0355 replaced): each listed asset carries its review status.
@@ -165,14 +185,14 @@ DO $$ DECLARE r text; col text; f text; BEGIN
   END LOOP;
   FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p WHERE p.pronamespace = 'hon'::regnamespace
       AND p.proname IN ('guard_creative_asset_review','creative_asset_review_status','creative_reviewer_holds','review_creative_asset',
-        'authorize_creative_asset_read','list_creative_review_queue','creative_generation_json') LOOP
+        'authorize_creative_asset_read','delete_creative_asset','list_creative_review_queue','creative_generation_json') LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
       EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I', f, r);
     END LOOP;
   END LOOP;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
-    GRANT EXECUTE ON FUNCTION hon.authorize_creative_asset_read(text,uuid,uuid), hon.review_creative_asset(text,uuid,uuid,text),
+    GRANT EXECUTE ON FUNCTION hon.authorize_creative_asset_read(text,uuid,uuid), hon.delete_creative_asset(text,uuid,uuid), hon.review_creative_asset(text,uuid,uuid,text),
       hon.list_creative_review_queue(text,uuid,integer) TO hon_runtime;
   END IF;
 END $$;

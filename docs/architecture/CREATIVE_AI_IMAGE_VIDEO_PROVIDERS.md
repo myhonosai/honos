@@ -316,7 +316,7 @@ the HeyGen webhook endpoint, and moderation coverage.
     spar, fight, belt, weapons forms) are not listed, and neither are Korean syllables that sit inside common words
     (술 in 무술, 아이 in 아이디어);
   - a child together with a photorealistic cue, or any child in a REALISTIC-style avatar.
-  The text is NFKC-normalised first, so full-width letters do not get around it. The optional AI moderation call is not
+  Dates and year ranges (2026-2027, 2026-11-15, 11/15/2026) are not counted as phone numbers. The text is NFKC-normalised first, so full-width letters do not get around it. The optional AI moderation call is not
   built.
 - **Review** (`hon.creative_asset_reviews`, forced RLS, append-only): every stored asset starts `PENDING_REVIEW`.
   - Who can review: a direct human at the asset's exact school who is a creative actor (`ai.premium.request`) and holds
@@ -330,8 +330,9 @@ the HeyGen webhook endpoint, and moderation coverage.
 - **Viewing:** while an asset is not `APPROVED`, only its requester and the school's reviewers get a signed read. Anyone
   else gets 404, as if it were not listed. Once `APPROVED`, the school's creative staff can view it. Generation reads
   now carry `review` on each asset.
+- **Delete:** only the asset's requester or a reviewer may delete it (0355 allowed any creative actor).
 - **Review queue:** `GET .../assets/review-queue?limit=1..50` (reviewers only) lists the school's stored, undeleted,
-  unreviewed assets, oldest first. It carries no prompt and no storage key.
+  unreviewed assets, oldest first (ordered by the millisecond the answer shows, then the id). It carries no prompt and no storage key.
 - **Only stored provider media can be reviewed.** Synthetic CS1 results have no stored file, so they stay
   `PENDING_REVIEW` and can never be used.
 - **Still to come:** C5 accepts only `APPROVED` assets for posts and ads and re-checks at publish. Requiring an

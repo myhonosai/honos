@@ -584,6 +584,20 @@ try{
   const listed=(await admin.query('SELECT o.asset_id FROM hon.creative_stored_objects o WHERE o.school_id=$1 AND o.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM hon.creative_asset_reviews r WHERE r.asset_id=o.asset_id) ORDER BY o.stored_at,o.asset_id',[S.B])).rows.map(r=>r.asset_id);
   assert.deepEqual(ids,listed.slice(0,50));
   assert.equal((await media.queue(H('ownerB'),S.B,'1')).assets.length,Math.min(1,listed.length));
+  // Two items stored in the same millisecond (the answer shows milliseconds): ordered by that millisecond, then id, so the
+  // validated order never drifts whatever the microseconds say.
+  {const x=(await storedJob('ownerB')).assets[0].assetId,y=(await storedJob('ownerB')).assets[0].assetId;
+   const [lo,hi]=[x,y].sort();
+   await admin.query('BEGIN');await admin.query('ALTER TABLE hon.creative_stored_objects DISABLE TRIGGER USER');
+   await admin.query("UPDATE hon.creative_stored_objects SET stored_at=date_trunc('milliseconds',clock_timestamp()-interval '1 day')+interval '900 microseconds' WHERE asset_id=$1",[lo]);
+   await admin.query("UPDATE hon.creative_stored_objects SET stored_at=date_trunc('milliseconds',clock_timestamp()-interval '1 day')+interval '100 microseconds' WHERE asset_id=$1",[hi]);
+   await admin.query('ALTER TABLE hon.creative_stored_objects ENABLE TRIGGER USER');await admin.query('COMMIT');
+   const order=(await media.queue(H('ownerB'),S.B,'50')).assets.map(a=>a.assetId).filter(id=>id===lo||id===hi);
+   assert.deepEqual(order,[lo,hi],'same millisecond: id order');
+   // Delete: only the requester or a reviewer; a creative actor who is neither is refused.
+   await deny(media.remove(H('creatorB'),S.B,lo,{}),403,'SAAS_FORBIDDEN');
+   assert.equal((await row('SELECT deleted_at FROM hon.creative_stored_objects WHERE asset_id=$1',[lo])).deleted_at,null);
+   assert.equal((await media.remove(H('ownerB'),S.B,lo,{})).fileRemoved,true,'a reviewer deletes it');}
   await deny(media.queue(H('creatorB'),S.B,'50'),403,'SAAS_FORBIDDEN');
   await deny(media.queue(H('ownerA'),S.B,'50'),403,'SAAS_FORBIDDEN');
   assert.deepEqual((await media.queue(H('ownerA'),S.A1,'50')).assets.filter(x=>listed.includes(x.assetId)),[],'no other school\'s assets');
@@ -591,7 +605,7 @@ try{
    await assert.rejects(admin.query(sql,[byOwner]),/append-only/);
   await assert.rejects(pool.query('SELECT 1 FROM hon.creative_asset_reviews LIMIT 1'),/permission denied/);
   const can=async(role,f)=>(await row('SELECT has_function_privilege($1,$2,$3) r',[role,f,'EXECUTE'])).r;
-  for(const f of ['hon.review_creative_asset(text,uuid,uuid,text)','hon.list_creative_review_queue(text,uuid,integer)','hon.authorize_creative_asset_read(text,uuid,uuid)'])
+  for(const f of ['hon.review_creative_asset(text,uuid,uuid,text)','hon.list_creative_review_queue(text,uuid,integer)','hon.authorize_creative_asset_read(text,uuid,uuid)','hon.delete_creative_asset(text,uuid,uuid)'])
    assert.equal(await can(CHAMPIONS_RUNTIME_ROLE,f),true,f);
   for(const f of ['hon.creative_asset_review_status(uuid)','hon.creative_reviewer_holds(uuid,uuid,uuid)','hon.guard_creative_asset_review()'])
    assert.equal(await can(CHAMPIONS_RUNTIME_ROLE,f),false,f);
