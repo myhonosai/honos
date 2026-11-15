@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "763175c2c77097b543193c48e2570a6dd4d2e5df4f9a2b32686bdb2ce4280912",
+  "chainSha256": "0c5fd30a9d511dfd5777bd541505d20a9b2f1fb1afbd6544f00618c64a26c007",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -395,6 +395,10 @@
       "sha256": "13ddea1cc69c6ee892e775a333a1eb6bd4eb74f5e96c16c13d4cc45380d394bb"
     },
     {
+      "file": "0309_hon_os_lifetime_refund_ends_access.sql",
+      "sha256": "810a648cf0c9faec1f458e841b2710d609982d6f911674c57cc352687c6e562c"
+    },
+    {
       "file": "0310_ai_org_agent_ceiling_removed.sql",
       "sha256": "3427f3424c2e61ed9b12e5a8d8c0ac02b431fcbe7c14c7ab110d293ab08802bc"
     },
@@ -413,6 +417,10 @@
     {
       "file": "0323_school_onboarding_progress.sql",
       "sha256": "282ebdfcbb78a7a38e10c19007f5f100a1f810944bb7c5cd82b5c97ee2580dc9"
+    },
+    {
+      "file": "0324_hon_os_schedule_renewals_suspension.sql",
+      "sha256": "6348290ebb2786e32489e2119be51300d6e12ba8e16a3f50e1f50d8e0c967cbe"
     },
     {
       "file": "0326_hq_business_numbers.sql",
@@ -449,6 +457,34 @@
     {
       "file": "0338_hq_executive_performance.sql",
       "sha256": "36efc3eafd9ab2bd4e6a9b549d973e50e7ac9e57b7fa6a5bbfd79c29748f04d0"
+    },
+    {
+      "file": "0347_school_social_connections.sql",
+      "sha256": "3375d997e29ac054c358c94a721473dba99634ad90c1e5ff23dfbb3fd3f7cd79"
+    },
+    {
+      "file": "0348_school_social_posts.sql",
+      "sha256": "333c9a09e36a52f7eb1748c7b8f1425b27d4ea61ceb815054f7b864c13295c25"
+    },
+    {
+      "file": "0351_school_twilio_subaccounts.sql",
+      "sha256": "ff9bca68045b9d5f593c56faa97d0cff5c0d408d9f2cbe97287514fda2f25f88"
+    },
+    {
+      "file": "0352_school_number_orders.sql",
+      "sha256": "66707e67a865b901425603ac7f23127291e44faaf5a9cdcad75648c6feff18a9"
+    },
+    {
+      "file": "0353_ai_exception_school_allowance.sql",
+      "sha256": "b46e8aa76543fe0bd1f4881d7882f7369dcd9ce20c138511238c3334d57ec6a5"
+    },
+    {
+      "file": "0354_creative_provider_jobs.sql",
+      "sha256": "51d614822499ff9c8c894f2ff73853c19dfad33c677b6a741329556cb460be67"
+    },
+    {
+      "file": "0358_school_number_order_settle.sql",
+      "sha256": "04aec55d14c81c53b4012377c9ad610221cfacf53ed3fb8a23a12cb9d98afdc0"
     }
   ]
 }

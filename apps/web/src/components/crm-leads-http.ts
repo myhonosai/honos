@@ -31,7 +31,7 @@ function verifyLead(value: unknown): LeadListItem {
 export async function loadCrmLeads(organizationId: string, schoolId: string, status?: CrmLeadStatus, signal?: AbortSignal): Promise<LeadListItem[]> {
   const response = await fetch(crmLeadListPath(organizationId, schoolId, status), { method: 'GET', credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'no-referrer', headers: { Accept: 'application/json' }, ...(signal ? { signal } : {}) });
   if (!response.ok) {
-    const message = response.status === 401 ? 'Sign in with a verified human school session.' : response.status === 403 ? 'Current CRM lead permission or exact school scope is unavailable.' : 'CRM lead list is unavailable. No list result is assumed.';
+    const message = response.status === 401 ? 'Your session ended. Sign in again to see your leads.' : response.status === 403 ? 'Your role does not include leads at this school. Ask a school owner to add it.' : 'Your leads could not be loaded. Nothing was changed; try again in a moment.';
     throw new (response.status === 401 || response.status === 403 ? CrmLeadAccessError : Error)(message);
   }
   const envelope: unknown = await response.json();
