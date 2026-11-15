@@ -24,7 +24,7 @@ const database = (value) => ({
   inputs: [],
   async withTenantReadOnlyTransaction(_context, work) {
     const self = this;
-    return work({ async query(text, values) { if (/read_school_contact_list/.test(text)) { self.inputs.push(JSON.parse(values[1])); return { rows: [{ data: typeof value === 'function' ? value() : value }] }; } return { rows: [] }; } });
+    return work({ async query(text, values) { if (/read_school_contact_(list|card)/.test(text)) { if (/list/.test(text)) self.inputs.push(JSON.parse(values[1])); return { rows: [{ data: typeof value === 'function' ? value() : value }] }; } return { rows: [] }; } });
   },
 });
 const failingDatabase = (error) => ({ async withTenantReadOnlyTransaction() { throw error; } });
@@ -75,4 +75,30 @@ test('school contacts service: bad input is refused before the database; errors 
   }
   const wrongSegment = new SchoolContactsService(database(page('ALL')));
   assert.equal(await code(wrongSegment.list(context, { segment: 'STUDENT' }, undefined)), 'SCHOOL_CONTACTS_UNAVAILABLE');
+});
+
+const card = () => ({ generatedAt: '2026-11-15T10:00:00.000Z',
+  person: { personId: PERSON, version: 1, givenName: 'Avery', familyName: 'Able', email: null, phoneE164: null, createdAt: '2026-08-01T10:00:00.000Z' },
+  overview: { segment: 'STUDENT', planName: null, programName: null, membershipEndsAt: null, ranks: [], openLead: false },
+  family: { allowed: false }, appointments: { allowed: true, items: [] }, tasks: { allowed: false }, membership: { allowed: false },
+  billing: { allowed: true, open: [{ currency: 'USD', dueMinor: 7900 }], invoices: [] }, messages: { allowed: false }, timeline: [{ kind: 'PERSON_ADDED', at: '2026-08-01T10:00:00.000Z', detail: null }] });
+
+test('school contact card (0374): the person id comes from the path, no query is accepted, and the answer is verified', async () => {
+  const db = scopeDatabase(), contacts = { calls: [], async card(ctx, personId) { this.calls.push([ctx, personId]); return { ok: true }; } };
+  const controller = new SchoolContactsController(db, contacts);
+  await controller.card(ORG, SCHOOL, PERSON, undefined, {}, request);
+  assert.equal(contacts.calls[0][1], PERSON); assert.deepEqual(db.calls[0], ['staff-subject', SCHOOL, 'people.read']);
+  assert.equal(await code(controller.card(ORG, SCHOOL, PERSON, undefined, { tab: 'billing' }, request)), 'VALIDATION_FAILED');
+  assert.equal(await code(controller.card(ORG, SCHOOL, PERSON, 'key', {}, request)), 'IDEMPOTENCY_KEY_NOT_ACCEPTED');
+
+  const db2 = database(card());
+  const result = await new SchoolContactsService(db2).card(context, PERSON.toUpperCase());
+  assert.equal(result.billing.allowed, true); assert.deepEqual(result.family, { allowed: false });
+  assert.deepEqual(db2.inputs, []); // the card input is not a list input
+  for (const [value, expected] of [[{ ...card(), person: { ...card().person, personId: '66666666-6666-4666-8666-666666666666' } }, 'SCHOOL_CONTACTS_UNAVAILABLE'],
+    [{ ...card(), family: { allowed: false, families: [] } }, 'SCHOOL_CONTACTS_UNAVAILABLE'], [{ ...card(), timeline: [{ kind: 'NOTE', at: '2026-08-01T10:00:00.000Z', detail: 'x' }] }, 'SCHOOL_CONTACTS_UNAVAILABLE']]) {
+    assert.equal(await code(new SchoolContactsService(database(value)).card(context, PERSON)), expected);
+  }
+  assert.equal(await code(new SchoolContactsService(failingDatabase(pgError('P0002', 'SCHOOL_CONTACT_NOT_FOUND'))).card(context, PERSON)), 'SCHOOL_CONTACT_NOT_FOUND');
+  assert.equal(await code(new SchoolContactsService(failingDatabase(new Error('x'))).card(context, 'nope')), 'VALIDATION_FAILED');
 });

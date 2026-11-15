@@ -1116,3 +1116,4 @@ export * from './school-social.js';
 export * from './school-social-posts.js';
 export * from './school-number-orders.js';
 export * from './school-contacts.js';
+export * from './school-contact-card.js';

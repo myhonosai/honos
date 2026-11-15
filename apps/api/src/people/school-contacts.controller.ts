@@ -44,4 +44,25 @@ export class SchoolContactsController {
     const { cursor, ...filters } = query as Record<string, string | undefined>;
     return { data: await this.contacts.list(context, filters, cursor), meta: { requestId, correlationId: requestId } };
   }
+
+  /** C2 (0374): one contact's card; each section is re-checked against its own live permission in the database. */
+  @Get(':personId')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  async card(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('personId', new ParseUUIDPipe()) personId: string, @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Query() query: Record<string, unknown>, @Req() request: HonRequest) {
+    if (idempotencyKey !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
+    if (Object.keys(query ?? {}).length) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
+    const identity = request.honIdentity;
+    if (!identity) throw new ForbiddenException('HON identity context is missing.');
+    const scope = await this.database.resolveAuthorizedScope(identity.externalSubject, schoolId, 'people.read');
+    if (!scope || scope.organizationId.toLowerCase() !== organizationId.toLowerCase() || scope.schoolId.toLowerCase() !== schoolId.toLowerCase()) {
+      throw new ForbiddenException({ code: 'SCHOOL_CONTACTS_FORBIDDEN' });
+    }
+    const requestId = randomUUID();
+    const context = { ...scope, principalType: 'HUMAN_USER' as const, requestId, correlationId: requestId, idempotencyKey: '', source: 'HUMAN_UI' as const,
+      externalSubject: identity.externalSubject };
+    return { data: await this.contacts.card(context, personId), meta: { requestId, correlationId: requestId } };
+  }
 }
