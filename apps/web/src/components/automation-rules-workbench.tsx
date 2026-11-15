@@ -28,7 +28,7 @@ export function AutomationRulesWorkbench({ initialTrigger = DEFAULT_TRIGGER }: {
   }); }
   return <main className={styles.page}>
     <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/team/availability">Staff availability</a><a href="/auth/login">Sign in</a></nav>
-    <header><p>Settings</p><h1>Automation rules</h1><p>Set up rules that suggest a follow-up when something happens at your school, and test them.</p></header>
+    <header><p>Settings</p><h1>Automation rules</h1><p>Write rules for follow-ups and try them on a test run. Rules do not run on their own yet.</p></header>
     <aside data-plain-note=""><strong>Rules here are settings only. Nothing runs or sends on its own.</strong><details><summary>What this page never does</summary><p><strong>No scheduler, subscription or worker</strong></p><p>{AUTOMATION_RULE_HELP}</p><p>Exact permissions: automation.rule.read, automation.rule.manage and automation.rule.dry_run. Parent, HQ, public and AI authority cannot access this surface.</p></details></aside>
     <button disabled={busy} onClick={load}>Load authorized school rules</button>
     {error && <p role="alert" className={styles.error}>{error} No save is assumed after an uncertain response.</p>}
