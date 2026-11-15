@@ -293,6 +293,10 @@
       "title": "HON | School branding"
     },
     {
+      "path": "/staff/settings/texting-number",
+      "title": "HON | Texting number"
+    },
+    {
       "path": "/staff/champions-club",
       "title": "HON | Champions Club"
     },
@@ -463,6 +467,10 @@
     {
       "path": "/hq/communications/:messageId",
       "title": "HON HQ | HQ message"
+    },
+    {
+      "path": "/hq/communications/numbers",
+      "title": "HON HQ | School texting numbers"
     },
     {
       "path": "/hq/growth/prospects",
