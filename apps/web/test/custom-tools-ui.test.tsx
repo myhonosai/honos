@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { customToolDefinitionProblems, type CustomToolDefinition, type CustomToolList, type CustomToolRecord } from '@hon/contracts';
 import { CUSTOM_TOOL_LANGUAGES, textFor } from '../src/components/custom-tools/copy';
 import { describeDesign } from '../src/components/custom-tools/describe';
+import { applyChange, cleanPrompt, standInDrafter } from '../src/components/custom-tools/drafter';
 import { customToolApi, keepForRetry, ToolError, toolErrorFor } from '../src/components/custom-tools/http';
 import { DesignEditor, finalizeKeys, tidyDefinition } from '../src/components/custom-tools/maker-editor';
 import { designProblems, makeKey, parseForm, problemPlace, reconcile, retypeField, valueText } from '../src/components/custom-tools/model';
@@ -242,6 +243,35 @@ describe('tool screens', () => {
       { key: 'top', label: { en: 'Top students' }, kind: 'LEADERBOARD', value: null, rows: [{ key: id(70), value: 40, label: 'Ava Stone' }] }] }}/>);
     expect(html).toContain('1,250');
     expect(html).toContain('Ava Stone: <strong>40</strong>');
+  });
+});
+
+describe('plain-language drafting (stand-in, no AI)', () => {
+  const ok = (o: Awaited<ReturnType<typeof standInDrafter.create>>) => { if (o.kind !== 'OK') throw new Error('not drafted'); return o; };
+  it('builds a valid design from a description, with no access and a free short name', async () => {
+    const points = ok(await standInDrafter.create('Track leadership points for students with a leaderboard', ['leadership_points']));
+    expect(points.definition.name.en).toBe('Leadership Points');
+    expect(points.toolKey).not.toBe('leadership_points');
+    expect(ok(await standInDrafter.create('시범단 단원 관리', [])).definition.icon).toBe('star');
+    const loans = ok(await standInDrafter.create('Equipment loans with student, item and return date', []));
+    expect(loans.definition.name.en).toBe('Equipment Loans');
+    expect(loans.definition.entities[0]!.fields.map(f => [f.label.en, f.type])).toEqual([['Student', 'STUDENT_REF'], ['Item', 'TEXT'], ['Return Date', 'DATE'], ['Notes', 'LONG_TEXT']]);
+    for (const d of [points, loans]) { expect(customToolDefinitionProblems(d.definition)).toEqual([]); expect(d.definition.access).toEqual([]); }
+    expect((await standInDrafter.create('  ', [])).kind).toBe('UNSURE');
+    expect(cleanPrompt('a\u202eb\u200b  c\n')).toBe('a b c');
+  });
+  it('makes simple changes it understands, keeps the design valid, and says when it does not understand', async () => {
+    const base = templateCopy('leadership_points').definition;
+    const { definition, changed } = applyChange('add belt color and stripe count. remove awarded by. rename date to awarded on. make reason optional. call it Star Students', base);
+    expect(changed).toEqual(['add:belt_color', 'add:stripe_count', 'remove:awarded_by', 'rename:awarded_on', 'required:reason', 'name:Star Students']);
+    const fields = definition.entities[0]!.fields;
+    expect(fields.find(f => f.key === 'stripe_count')!.type).toBe('INTEGER');
+    expect(fields.some(f => f.key === 'awarded_by')).toBe(false);
+    expect(fields.find(f => f.key === 'reason')!.required).toBeUndefined();
+    expect(definition.views.find(v => v.type === 'FORM')!.fields).toContain('belt_color');
+    expect(customToolDefinitionProblems(definition)).toEqual([]);
+    expect(base.entities[0]!.fields.some(f => f.key === 'belt_color')).toBe(false);
+    expect((await standInDrafter.change('make it look nicer', base)).kind).toBe('UNSURE');
   });
 });
 
