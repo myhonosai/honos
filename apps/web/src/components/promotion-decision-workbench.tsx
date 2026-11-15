@@ -82,13 +82,13 @@ export function PromotionDecisionWorkbench(): React.ReactElement {
 
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">Staff dashboard</a></nav>
-    <header><p>HON / FINAL HUMAN INSTRUCTOR DECISION</p><h1>Final promotion decision</h1>
-      <p>Choose a graded candidate, then record one final decision with a rationale. Without a school selected, enter the exact organization, school and candidate IDs and the candidate version instead.</p>
+    <header><p>Curriculum &amp; testing</p><h1>Promotion decision</h1>
+      <p>Choose a student whose test has a result, then record your final decision with a reason.</p>
     </header>
-    <aside><strong>PROMOTED is a final human instructor decision, never an AI or scorecard action.</strong>
+    <aside data-plain-note=""><strong>Only an instructor decides a promotion. HON and the AI team never promote a student.</strong><details><summary>What this page never does</summary><p><strong>PROMOTED is a final human instructor decision, never an AI or scorecard action.</strong></p>
       <p>This page submits only the existing canonical promotion-decision command. The API independently validates the terminal candidate, current enrollment, target rank and promotion prerequisites. Only after that server validation may its existing canonical <code>PROMOTED</code> decision perform the canonical rank change. Entered IDs and version are untrusted selectors, not authority or verified current facts.</p>
       <p>No external certificate, parent notice, attendance record, billing/payment change, message, provider, AI, Action Engine, automation or effect consumer is created, activated or invoked. No certificate issuance, parent/family access, notification or downstream command occurs here.</p>
-    </aside>
+    </details></aside>
     <section aria-labelledby="promotion-decision-command"><h2 id="promotion-decision-command">Record one final known-ID promotion decision</h2>
       <form autoComplete="off" onSubmit={submit}><fieldset disabled={busy}>
         {shellSchool && <CandidatePicker scope={shellSchool} purpose="decision" value={ids.candidateId} disabled={busy}
