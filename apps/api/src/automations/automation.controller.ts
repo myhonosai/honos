@@ -27,8 +27,9 @@ abstract class AutomationScope {
     const identity = request.honIdentity;
     if (!identity) throw new ForbiddenException('HON identity context is missing.');
     if (Object.keys(request.query ?? {}).length) throw new BadRequestException({ code: 'AUTOMATION_INVALID' });
-    const scope = await this.database.resolveAuthorizedScope(identity.externalSubject, schoolId, permission);
-    if (!scope || scope.organizationId !== organizationId || scope.schoolId !== schoolId) throw new ForbiddenException({ code: 'AUTOMATION_FORBIDDEN' });
+    const school = schoolId.toLowerCase(), organization = organizationId.toLowerCase();
+    const scope = await this.database.resolveAuthorizedScope(identity.externalSubject, school, permission);
+    if (!scope || scope.organizationId.toLowerCase() !== organization || scope.schoolId.toLowerCase() !== school) throw new ForbiddenException({ code: 'AUTOMATION_FORBIDDEN' });
     const requestId = randomUUID();
     return { ...scope, principalType: 'HUMAN_USER', requestId, correlationId: requestId, idempotencyKey, source: 'HUMAN_UI', externalSubject: identity.externalSubject };
   }
