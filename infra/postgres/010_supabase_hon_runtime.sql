@@ -3663,3 +3663,19 @@ DO $$ DECLARE r text; t text; BEGIN
       hon.finalize_billing_import(text,jsonb,text,uuid,uuid),hon.read_billing_imports(text),hon.read_billing_import(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- G1 0370 monthly goal plan: one read-only runtime entry point; the shared renewals-due helper and the rate and pace
+-- builders are private. The runtime gains no table privilege.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.read_monthly_goal_plan(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0370 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.school_renewals_due(uuid,uuid,timestamptz,timestamptz,timestamptz)','hon.monthly_goal_rate(bigint,bigint,integer,numeric)',
+    'hon.monthly_goal_pace(numeric,numeric,numeric,integer)','hon.read_monthly_goal_plan(text,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_monthly_goal_plan(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;
