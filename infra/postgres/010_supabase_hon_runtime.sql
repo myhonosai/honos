@@ -3608,3 +3608,17 @@ DO $$ DECLARE r text; t text; f text; BEGIN
     hon.command_creative_provider_daily_limit(text,jsonb,uuid), hon.command_creative_school_daily_caps(text,jsonb,uuid),
     hon.read_creative_limits_from_hq(text) TO hon_runtime;
 END $$;
+
+-- R2 0332 school reports across locations: one read-only runtime entry point; the per-location check is private.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.read_school_reports_locations(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0332 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.school_reports_location_allowed(uuid,uuid,uuid)','hon.read_school_reports_locations(text,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_reports_locations(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;
