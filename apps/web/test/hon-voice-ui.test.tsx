@@ -94,3 +94,13 @@ describe('Ask HON with voice', () => {
     expect(renderToStaticMarkup(<HonConversationView {...base} />)).not.toContain('data-voice');
   });
 });
+
+describe('review fixes (controls)', () => {
+  it('hands-free can always be switched off, even when HON cannot take a question', () => {
+    const html = render({ canAsk: false, onDeviceStatus: 'available', snapshot: snap({ onDevice: true, handsFree: true, state: 'WAITING_WAKE' }) });
+    expect(html).toMatch(/<input type="checkbox" checked=""\/?>/);
+  });
+  it('Talk stays tappable after the microphone was blocked, so a person can try again', () => {
+    expect(render({ snapshot: snap({ state: 'BLOCKED', message: 'blocked' }) })).toMatch(/<button type="button" data-voice="talk">Talk to HON<\/button>/);
+  });
+});

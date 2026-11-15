@@ -46,9 +46,13 @@ export function parseWake(transcript: string, lang: HonVoiceLang): { woke: boole
   const match = WAKE[lang].exec(flat);
   if (!match) return { woke: false, question: '' };
   // Count the words up to the end of the wake phrase, then take the same number of words off the original text.
+  // Count the words through the wake phrase, then cut the original text right after that many words. Words are found the
+  // same way normalize() separates them, so punctuation between words ("Hey,HON") never shifts the count.
   const wordsThrough = flat.slice(0, match.index + match[0].length).trim().split(' ').length;
-  const original = transcript.trim().split(/\s+/).filter((word) => /[\p{L}\p{N}]/u.test(word));
-  const question = original.slice(wordsThrough).join(' ').replace(/^[\s,.;:!?¡¿-]+/u, '').replace(/[\s,.;:!?¡¿]+$/u, '').trim();
+  const words = [...transcript.matchAll(/[\p{L}\p{N}']+/gu)].filter((m) => m[0].replace(/'/g, '').length > 0);
+  if (words.length <= wordsThrough) return { woke: true, question: '' };
+  const after = words[wordsThrough - 1]!; const rest = transcript.slice(after.index! + after[0].length);
+  const question = rest.replace(/^[\s,.;:!?¡¿-]+/u, '').replace(/[\s,.;:!?¡¿]+$/u, '').trim();
   return { woke: true, question };
 }
 
@@ -169,28 +173,48 @@ export function browserRecognition(win: VoiceWindow): RecognitionAdapter {
 type Synth = { speak(u: unknown): void; cancel(): void; getVoices(): { lang: string; localService: boolean }[] };
 type Utterance = { lang: string; voice: unknown; rate: number; onend: (() => void) | null; onerror: (() => void) | null };
 
+/** A run of text with no sentence end is cut at commas or spaces into pieces of at most 200 characters. */
+export function splitLong(chunk: string): string[] {
+  const out: string[] = []; let rest = chunk;
+  while (rest.length > 200) {
+    const window = rest.slice(0, 200);
+    const at = Math.max(window.lastIndexOf(', '), window.lastIndexOf('، '), window.lastIndexOf(' '));
+    const cut = at > 40 ? at + 1 : 200;
+    out.push(rest.slice(0, cut)); rest = rest.slice(cut);
+  }
+  if (rest) out.push(rest);
+  return out;
+}
+
 /** Splits into short chunks (browsers cut long single utterances) and prefers on-device voices for the language. */
 export function browserSpeech(win: VoiceWindow): SpeechAdapter {
   const synth = win.speechSynthesis as Synth; const Utter = win.SpeechSynthesisUtterance as new (text: string) => Utterance;
   let generation = 0;
+  // Utterances are kept referenced until spoken: some browsers drop the end event of an utterance nothing holds on to.
+  let held: Utterance[] = []; let watchdog: ReturnType<typeof setTimeout> | null = null;
   return {
     speak(text, lang, onDone) {
-      const mine = ++generation;
+      const mine = ++generation; held = [];
+      if (watchdog) clearTimeout(watchdog);
+      let finished = false;
+      const finish = () => { if (finished || mine !== generation) return; finished = true; if (watchdog) clearTimeout(watchdog); watchdog = null; held = []; onDone(); };
+      // If the browser never reports the end, carry on after a generous estimate of the speaking time.
+      watchdog = setTimeout(finish, 5000 + text.length * 90);
       const voices = synth.getVoices().filter((v) => v.lang.replace('_', '-').toLowerCase().startsWith(lang.slice(0, 2).toLowerCase()));
       const voice = voices.find((v) => v.localService && v.lang.replace('_', '-') === lang) ?? voices.find((v) => v.localService) ?? voices[0] ?? null;
       const chunks = text.match(/[^.!?。]+[.!?。]*\s*/g)?.reduce<string[]>((all, piece) => {
         const last = all[all.length - 1];
         if (last !== undefined && (last + piece).length <= 200) all[all.length - 1] = last + piece; else all.push(piece);
         return all;
-      }, []).map((c) => c.trim()).filter(Boolean) ?? [];
-      if (chunks.length === 0) { queueMicrotask(() => { if (mine === generation) onDone(); }); return; }
+      }, []).flatMap(splitLong).map((c) => c.trim()).filter(Boolean) ?? [];
+      if (chunks.length === 0) { queueMicrotask(finish); return; }
       chunks.forEach((chunk, index) => {
         const u = new Utter(chunk); u.lang = lang; u.rate = 1; if (voice) u.voice = voice;
-        if (index === chunks.length - 1) { u.onend = () => { if (mine === generation) onDone(); }; u.onerror = u.onend; }
-        synth.speak(u);
+        if (index === chunks.length - 1) { u.onend = finish; u.onerror = finish; }
+        held.push(u); synth.speak(u);
       });
     },
-    cancel() { generation++; try { synth.cancel(); } catch { /* nothing speaking */ } },
+    cancel() { generation++; held = []; if (watchdog) clearTimeout(watchdog); watchdog = null; try { synth.cancel(); } catch { /* nothing speaking */ } },
   };
 }
 
@@ -206,6 +230,7 @@ const MESSAGE = {
   noSpeech: 'I didn’t hear anything.',
   blocked: 'Microphone access is blocked for this site. Allow it in your browser settings to talk to HON.',
   busy: 'HON can’t take a question right now. Check the screen.',
+  network: 'Voice needs an internet connection in this browser right now. Type your question instead.',
   quiet: 'Hands-free listening stopped. Turn it on again when you need it.',
   paused: `Paused after ${HON_VOICE_LIMITS.questionsInARow} spoken questions. Tap Talk or turn hands-free on to keep going.`,
   failed: 'Voice stopped because the microphone could not be used.',
@@ -246,7 +271,7 @@ export class HonVoiceController {
 
   /** A human tap: listen for one question. Resets the spoken-questions-in-a-row count. */
   talk(): void {
-    if (this.current.state === 'BLOCKED' || this.current.state === 'SENDING') return;
+    if (this.current.state === 'SENDING') return;
     if (this.current.state === 'SPEAKING') this.deps.speech.cancel();
     this.awaiting = false; this.clearFollow(); this.inARow = 0;
     this.listen('LISTENING', false);
@@ -288,7 +313,7 @@ export class HonVoiceController {
   /** Conceal, close or unmount: stop everything at once. Hands-free must be turned on again by a person. */
   shutdown(): void {
     this.sessionId++; this.awaiting = false; this.clearFollow(); this.endSession(); this.deps.speech.cancel();
-    this.set({ state: this.current.state === 'BLOCKED' ? 'BLOCKED' : 'IDLE', handsFree: false, heard: '', message: null });
+    this.set({ state: 'IDLE', handsFree: false, heard: '', message: null });
   }
 
   private afterSpeaking(): void {
@@ -329,8 +354,9 @@ export class HonVoiceController {
       const wake = parseWake(text, this.deps.lang);
       if (!wake.woke) return;
       this.quietRestarts = 0;
-      if (wake.question && !isStopPhrase(wake.question, this.deps.lang)) { this.endSession(); this.send(wake.question); }
-      else if (!wake.question) this.listen('LISTENING', false);
+      if (isStopPhrase(wake.question, this.deps.lang)) return;
+      // "Hey HON, uh…": the wake counted, the mumble did not; listen for the real question instead of sending it.
+      if (meaningfulQuestion(wake.question)) { this.endSession(); this.send(wake.question); } else this.listen('LISTENING', false);
       return;
     }
     if (state !== 'LISTENING' && state !== 'FOLLOW_UP') return;
@@ -355,6 +381,7 @@ export class HonVoiceController {
       return;
     }
     if (code === 'no-speech' && this.current.state === 'LISTENING') { this.sessionId++; this.endSession(); this.rest(MESSAGE.noSpeech); return; }
+    if (code === 'network' && (this.current.state === 'LISTENING' || this.current.state === 'FOLLOW_UP')) { this.sessionId++; this.endSession(); this.clearFollow(); this.set({ handsFree: false }); this.rest(MESSAGE.network); return; }
     if (code === 'language-not-supported' && this.current.state === 'WAITING_WAKE') { this.sessionId++; this.endSession(); this.set({ handsFree: false, onDevice: false }); this.rest(MESSAGE.quiet); }
   }
 
@@ -363,7 +390,12 @@ export class HonVoiceController {
     const state = this.current.state;
     if (state === 'WAITING_WAKE') {
       if (this.quietRestarts >= HON_VOICE_LIMITS.maxQuietRestarts) { this.set({ handsFree: false }); this.rest(MESSAGE.quiet); return; }
-      this.quietRestarts++; this.listen('WAITING_WAKE', true); return;
+      // Restart after a short, growing pause so a recogniser that fails at once never spins in a tight loop.
+      this.quietRestarts++;
+      const mine = this.sessionId;
+      this.followTimer = this.deps.timer.set(() => { this.followTimer = null; if (mine === this.sessionId && this.current.state === 'WAITING_WAKE') this.listen('WAITING_WAKE', true); },
+        Math.min(250 * this.quietRestarts, 3000));
+      return;
     }
     if ((state === 'LISTENING' || state === 'FOLLOW_UP') && !this.heardFinal) { this.rest(state === 'LISTENING' ? MESSAGE.noSpeech : null); }
   }

@@ -20,6 +20,8 @@ describe('wake phrase', () => {
     expect(parseWake('hey hun', 'en-US')).toEqual({ woke: true, question: '' });
     expect(parseWake('OK Hon what is on today', 'en-US')).toEqual({ woke: true, question: 'what is on today' });
     expect(parseWake('so, hey Hahn. Who missed class?', 'en-US')).toEqual({ woke: true, question: 'Who missed class' });
+    expect(parseWake('Hey,HON how many trials today', 'en-US')).toEqual({ woke: true, question: 'how many trials today' });
+    expect(parseWake('um-hmm hey hon who is new', 'en-US')).toEqual({ woke: true, question: 'who is new' });
   });
   it('ignores speech without the wake phrase', () => {
     expect(parseWake('honestly the class was great', 'en-US').woke).toBe(false);
@@ -173,12 +175,11 @@ describe('HonVoiceController: tap to talk', () => {
     expect(f.controller.snapshot()).toMatchObject({ state: 'IDLE', message: 'I didn’t hear anything.' });
   });
 
-  it('stops for good when the microphone is refused', () => {
+  it('explains when the microphone is refused and stops listening', () => {
     const f = fakes();
     f.controller.talk(); f.last().handlers.onError('not-allowed');
     expect(f.controller.snapshot()).toMatchObject({ state: 'BLOCKED', message: 'Microphone access is blocked for this site. Allow it in your browser settings to talk to HON.' });
-    f.controller.talk();
-    expect(f.sessions).toHaveLength(1);
+    expect(f.sessions[0]!.aborted).toBe(true);
   });
 
   it('keeps the question out of the composer when the panel cannot take it right now', () => {
@@ -248,7 +249,13 @@ describe('HonVoiceController: Hey HON hands-free', () => {
 
   it('restarts the wake listener when the browser ends it, up to a limit', () => {
     const f = handsFree();
-    for (let i = 0; i < HON_VOICE_LIMITS.maxQuietRestarts; i++) f.last().handlers.onEnd();
+    for (let i = 0; i < HON_VOICE_LIMITS.maxQuietRestarts; i++) {
+      const before = f.sessions.length;
+      f.last().handlers.onEnd();
+      expect(f.sessions).toHaveLength(before); // waits before restarting: never a tight loop
+      f.fireTimers();
+      expect(f.sessions).toHaveLength(before + 1);
+    }
     expect(f.controller.snapshot().state).toBe('WAITING_WAKE');
     f.last().handlers.onEnd();
     expect(f.controller.snapshot()).toMatchObject({ state: 'IDLE', handsFree: false, message: 'Hands-free listening stopped. Turn it on again when you need it.' });
@@ -315,5 +322,44 @@ describe('HonVoiceController: cancel listening and reply text', () => {
     expect(honVoiceReplyText({ status: 'AWAITING_APPROVAL', reply: null }, 'en-US')).toBe('Done. The details are on screen.');
     expect(honVoiceReplyText({ status: 'FAILED', reply: null }, 'es-US')).toBe('No pude responder eso. Los detalles están en pantalla.');
     expect(honVoiceReplyText({ status: 'COMPLETED', reply: '  ' }, 'en-US')).toBe('Done. The details are on screen.');
+  });
+});
+
+describe('review fixes', () => {
+  it('a mumble after "Hey HON" is not sent; HON listens for the real question', () => {
+    const f = fakes(); f.controller.setOnDevice(true); f.controller.setHandsFree(true);
+    f.last().handlers.onFinal('hey hon uh');
+    expect(f.asked).toEqual([]);
+    expect(f.controller.snapshot().state).toBe('LISTENING');
+  });
+  it('"Hey HON, thanks" in the room is ignored', () => {
+    const f = fakes(); f.controller.setOnDevice(true); f.controller.setHandsFree(true);
+    f.last().handlers.onFinal('hey hon thanks');
+    expect(f.asked).toEqual([]);
+    expect(f.controller.snapshot().state).toBe('WAITING_WAKE');
+  });
+  it('a blocked microphone recovers after a tap (or turning voice off and on)', () => {
+    const f = fakes();
+    f.controller.talk(); f.last().handlers.onError('audio-capture');
+    expect(f.controller.snapshot().state).toBe('BLOCKED');
+    f.controller.talk();
+    expect(f.controller.snapshot().state).toBe('LISTENING');
+    f.last().handlers.onError('not-allowed');
+    f.controller.shutdown();
+    expect(f.controller.snapshot().state).toBe('IDLE');
+  });
+  it('a network failure says so instead of "I didn’t hear anything"', () => {
+    const f = fakes();
+    f.controller.talk(); f.last().handlers.onError('network'); f.last().handlers.onEnd();
+    expect(f.controller.snapshot()).toMatchObject({ state: 'IDLE', message: 'Voice needs an internet connection in this browser right now. Type your question instead.' });
+  });
+  it('splits a long run without sentence ends into short pieces', async () => {
+    const { splitLong } = await import('../src/components/hon-command/hon-voice');
+    const run = Array.from({ length: 60 }, (_, i) => `word${i}`).join(' ');
+    const pieces = splitLong(run);
+    expect(pieces.length).toBeGreaterThan(1);
+    expect(pieces.every((p) => p.length <= 200)).toBe(true);
+    expect(pieces.join('')).toBe(run);
+    expect(splitLong('x'.repeat(450)).map((p) => p.length)).toEqual([200, 200, 50]);
   });
 });

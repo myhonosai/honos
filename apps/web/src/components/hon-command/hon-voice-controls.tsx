@@ -30,7 +30,8 @@ export function HonVoiceControls(props: HonVoiceControlsProps): React.ReactEleme
     </div>;
   }
   const listening = snapshot.state === 'LISTENING' || snapshot.state === 'FOLLOW_UP';
-  const busy = snapshot.state === 'SENDING' || snapshot.state === 'BLOCKED';
+  // A tap while the microphone is blocked tries it again (permission may have been granted since).
+  const busy = snapshot.state === 'SENDING';
   return <div className={styles.voice} data-voice={snapshot.state}>
     <div className={styles.actions}>
       {listening
@@ -40,7 +41,7 @@ export function HonVoiceControls(props: HonVoiceControlsProps): React.ReactEleme
       <button type="button" className={styles.secondary} data-voice="disable" onClick={props.onDisable}>Turn off voice</button>
     </div>
     {props.onDeviceStatus === 'available'
-      ? <label className={styles.voiceSwitch}><input type="checkbox" checked={snapshot.handsFree} disabled={!props.canAsk || snapshot.state === 'BLOCKED'} onChange={(event) => props.onHandsFree(event.target.checked)} />
+      ? <label className={styles.voiceSwitch}><input type="checkbox" checked={snapshot.handsFree} disabled={!snapshot.handsFree && (!props.canAsk || snapshot.state === 'BLOCKED')} onChange={(event) => props.onHandsFree(event.target.checked)} />
         Hands-free: listen for “Hey HON” while this panel is open</label>
       : props.onDeviceStatus === 'downloadable'
         ? <button type="button" className={styles.secondary} data-voice="install" onClick={props.onInstall}>Set up private hands-free listening</button>
@@ -92,7 +93,12 @@ export function useHonVoice(lang: HonVoiceLang, ask: (text: string) => boolean) 
   const shutdown = useCallback(() => { controller.current?.shutdown(); }, []);
   const reply = useCallback((text: string) => { controller.current?.reply(text); }, []);
   const install = useCallback(() => {
-    void installOnDeviceSpeech(window as never, lang).then(() => onDeviceSpeech(window as never, lang)).then((status) => { setOnDeviceStatus(status); controller.current?.setOnDevice(status === 'available'); });
+    // The answer counts only for the controller (and language) that asked: a language change meanwhile discards it.
+    const asked = controller.current;
+    void installOnDeviceSpeech(window as never, lang).then(() => onDeviceSpeech(window as never, lang)).then((status) => {
+      if (!asked || controller.current !== asked) return;
+      setOnDeviceStatus(status); asked.setOnDevice(status === 'available');
+    });
   }, [lang]);
 
   return {

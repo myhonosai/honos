@@ -129,9 +129,13 @@ export type HonConversationViewProps = {
   voice?: React.ReactNode;
 };
 
-/** A spoken question is taken only when a typed one would be: ready, HON admitted, shown, and nothing in flight or unknown. */
+/** The composer takes a question: shown, HON admitted by the server's readiness, and nothing being sent. */
+export function composerCanAsk(phase: ConversationPhase, readiness: HonConversationReadiness | null, pending: Pick<Pending, 'state'> | null): boolean {
+  return phase === 'READY' && readiness?.honReply === true && !(pending !== null && pending.state === 'SENDING');
+}
+/** A spoken question is taken only when a typed one would be, and never while an unknown outcome waits for its exact retry. */
 export function voiceCanAsk(phase: ConversationPhase, readiness: HonConversationReadiness | null, pending: Pick<Pending, 'state'> | null): boolean {
-  return phase === 'READY' && readiness?.honReply === true && !(pending && (pending.state === 'SENDING' || pending.state === 'UNKNOWN'));
+  return composerCanAsk(phase, readiness, pending) && !(pending !== null && pending.state === 'UNKNOWN');
 }
 
 const TARGET_FAILURE: Partial<Record<HonConversationFailure, string>> = {
@@ -284,7 +288,7 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
   const suggestLocked = pending !== null && (pending.state === 'SENDING' || pending.state === 'UNKNOWN');
   // The delegates the server says this human may ask, and Claire when readiness offers Business Performance (K2c).
   const available: readonly HonSuggestedAgentKey[] = [...(readiness?.availableAgentKeys ?? []), ...(readiness?.businessPerformance ? ['claire' as const] : [])];
-  const canAsk = phase === 'READY' && readiness?.honReply === true && !locked;
+  const canAsk = composerCanAsk(phase, readiness, pending);
   const offered = offeredAnalysts(readiness);
   const ask: HonComposerAsk = props.ask !== 'hon' && offered.includes(props.ask) ? props.ask : 'hon';
   const analyst = ask !== 'hon';
@@ -382,8 +386,9 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   const sendTextRef = useRef<(text: string, voice: boolean) => boolean>(() => false);
   const voiceAllowed = useRef(false);
   const voice = useHonVoice(lang, (text) => voiceAllowed.current && !concealed.current && sendTextRef.current(text, true));
-  const voiceShutdown = useRef(voice.shutdown); voiceShutdown.current = voice.shutdown;
-  const voiceReply = useRef(voice.reply); voiceReply.current = voice.reply;
+  const { shutdown: voiceShutdown, reply: voiceReply } = voice;
+  /** A spoken answer waits until the reload after it settles, so a follow-up lands in the same, freshly read conversation. */
+  const voiceAnswer = useRef<string | null>(null);
 
   const closeConfirm = useCallback(() => { confirmSeq.current++; targetRead.current?.abort(); targetRead.current = null; setConfirm(null); }, []);
 
@@ -418,7 +423,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
     mounted.current = true; load();
     const conceal = (event: Event) => {
       if (event.type === 'visibilitychange' && document.visibilityState === 'visible') return;
-      concealed.current = true; generation.current++; privacy.current++; reads.current?.abort(); closeConfirm(); voiceShutdown.current();
+      concealed.current = true; generation.current++; privacy.current++; reads.current?.abort(); closeConfirm(); voiceAnswer.current = null; voiceShutdown();
       for (const node of document.querySelectorAll<HTMLElement>('[data-hon-private]')) { node.hidden = true; node.inert = true; }
       setConversations([]); setThread(null); setThreadPhase('NONE'); setGroups(new Map()); setGroupPhase('NONE');
       if (event.type === HON_SESSION_INVALIDATED_EVENT) { ended.current = true; setPhase('SESSION'); } else setPhase((now) => now === 'SESSION' ? now : 'CONCEALED');
@@ -427,7 +432,14 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
     for (const name of windowEvents) window.addEventListener(name, conceal);
     document.addEventListener('visibilitychange', conceal);
     return () => { mounted.current = false; generation.current++; privacy.current++; pendingKey.current = null; confirmSeq.current++; targetRead.current?.abort(); reads.current?.abort(); for (const name of windowEvents) window.removeEventListener(name, conceal); document.removeEventListener('visibilitychange', conceal); };
-  }, [load, closeConfirm]);
+  }, [load, closeConfirm, voiceShutdown]);
+
+  useEffect(() => {
+    const text = voiceAnswer.current;
+    if (text === null || phase === 'LOADING' || threadPhase === 'LOADING') return;
+    voiceAnswer.current = null;
+    if (!concealed.current) voiceReply(text);
+  }, [phase, threadPhase, voiceReply]);
 
   const afterSuccess = useCallback(() => { pendingKey.current = null; setPending(null); if (!concealed.current) load(); }, [load]);
 
@@ -463,12 +475,12 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
           catch { /* fall through to refresh */ }
         }
       }
-      if (next.voice && shown === privacy.current) voiceReply.current(next.kind === 'turn' ? honVoiceReplyText(result as HonTurnReceipt, lang) : honVoiceLine(lang, 'failed'));
+      if (next.voice && shown === privacy.current) voiceAnswer.current = next.kind === 'turn' ? honVoiceReplyText(result as HonTurnReceipt, lang) : honVoiceLine(lang, 'failed');
       afterSuccess();
     }, (error) => {
       if (!mounted.current) return;
       const kind = error instanceof HonConversationError ? error.kind : 'UNKNOWN';
-      if (next.voice && shown === privacy.current) voiceReply.current(honVoiceLine(lang, 'failed'));
+      if (next.voice && shown === privacy.current) voiceReply(honVoiceLine(lang, 'failed'));
       if (kind === 'SESSION' && owned()) ended.current = true;
       setPending({ ...next, state: kind, code: error instanceof HonConversationError ? error.code : null });
       if (kind === 'UNKNOWN') return;
@@ -476,7 +488,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
       if (next.confirm) { if (kind !== 'SESSION' && !concealed.current && openId.current === next.conversationId) openConfirm(next.confirm); }
       else if (next.text) { const typed = next.text; setDraft((now) => now || typed); }
     });
-  }, [api, school, afterSuccess, openConfirm, lang]);
+  }, [api, school, afterSuccess, openConfirm, lang, voiceReply]);
 
   const sendConfirm = () => {
     const current = confirm;
