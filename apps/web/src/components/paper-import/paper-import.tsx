@@ -5,7 +5,7 @@ import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
-import { PaperError, cleanCell, keepForRetry, paperImportApi, preparePhoto, type PaperErrorKind, type PaperImportApi, type PaperScope } from './http';
+import { PaperError, cleanCell, clipCell, keepForRetry, paperImportApi, preparePhoto, type PaperErrorKind, type PaperImportApi, type PaperScope } from './http';
 import { PaperImportView, shownDetail, type PageImage, type PaperAction, type PaperDetailState, type PaperDraft, type PaperListState, type PaperOutcome } from './view';
 
 /** A command whose outcome is not known: the exact request and key, in memory only, so Try again replays it (the server returns the first receipt). */
@@ -114,7 +114,7 @@ export function PaperImport({ api = paperImportApi }: { api?: PaperImportApi }):
       const owned = () => mounted.current && shown === privacy.current;
       api.page({ organizationId: orgId, schoolId }, setId, pg.pageNo, AbortSignal.timeout(20000), owned).then(
         (page) => { if (owned()) setImages((m) => ({ ...m, [tag]: { state: 'READY', src: `data:${page.mediaType};base64,${page.data}` } })); },
-        () => { if (owned()) setImages((m) => ({ ...m, [tag]: { state: 'UNAVAILABLE' } })); });
+        () => { fetched.current.delete(tag); if (owned()) setImages((m) => ({ ...m, [tag]: { state: 'UNAVAILABLE' } })); });
     }
     if (ready.pages.length && viewing > ready.pages.length) setViewing(ready.pages.length);
   }, [api, ready, orgId, schoolId, viewing]);
@@ -148,7 +148,12 @@ export function PaperImport({ api = paperImportApi }: { api?: PaperImportApi }):
       const value = result.value;
       if (request.action === 'create' && 'id' in value) { forget(); setSelected(value.id); }
       if (request.action === 'read' && 'set' in value) setDetail({ state: 'READY', detail: value });
-      if (request.action === 'save') setDraft((d) => d ? { ...d, dirty: false } : d);
+      if (request.action === 'save' && 'version' in value) {
+        const saved = request.body as { rows: string[][]; unsure: boolean[][] };
+        setDetail((d) => d.state === 'READY' && d.detail.set.id.toLowerCase() === value.id.toLowerCase() && value.version > d.detail.set.version
+          ? { state: 'READY', detail: { ...d.detail, set: value, rows: saved.rows, unsure: saved.unsure } } : d);
+        setDraft(null);
+      }
       if (request.action === 'remove') { setConfirmDelete(false); setDraft(null); setImages({}); }
     } else if (!FIXABLE.includes(next.kind as PaperErrorKind)) setDraft(null);
     setRefresh((n) => n + 1);
@@ -171,8 +176,8 @@ export function PaperImport({ api = paperImportApi }: { api?: PaperImportApi }):
       for (const blob of blobs.slice(0, Math.max(0, room))) {
         const photo = await preparePhoto(blob);
         if (shown !== privacy.current || !mounted.current) return;
-        if (!photo) { setOutcome({ kind: 'TOO_BIG', action: 'page' }); return; }
-        const result = await start('page', set.id, null, { expectedVersion: version, ...photo });
+        if (!photo.ok) { setOutcome({ kind: photo.problem === 'TOO_BIG' ? 'TOO_BIG' : 'IMAGE', action: 'page' }); return; }
+        const result = await start('page', set.id, null, { expectedVersion: version, mediaType: photo.mediaType, data: photo.data });
         if (!result.ok || !('version' in result.value)) return;
         version = result.value.version;
       }
@@ -200,7 +205,7 @@ export function PaperImport({ api = paperImportApi }: { api?: PaperImportApi }):
     if (!idle) return;
     setDraft((d) => {
       if (!d || !d.rows[row] || column < 0 || column >= d.rows[row]!.length) return d;
-      const rows = d.rows.map((r, i) => i === row ? r.map((c, j) => j === column ? value.slice(0, 200) : c) : r);
+      const rows = d.rows.map((r, i) => i === row ? r.map((c, j) => j === column ? clipCell(value) : c) : r);
       const unsure = d.unsure.map((u, i) => i === row ? u.map((x, j) => j === column ? false : x) : u);
       return { ...d, rows, unsure, dirty: true };
     });

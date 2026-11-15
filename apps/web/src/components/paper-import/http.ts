@@ -143,26 +143,30 @@ export type PaperImportApi = typeof paperImportApi;
 export const keepForRetry = (error: unknown) => !(error instanceof PaperError) || error.kind === 'UNKNOWN' || error.kind === 'RATE';
 
 /**
- * A photo ready to send: an accepted type at most 1.4 MB as it is, or else redrawn as a JPEG of at most 2400 px on the long
- * side (which also drops the camera's metadata). The server strips metadata again whatever is sent.
+ * A photo ready to send. A JPEG is always redrawn (which turns it the way the camera held it, since the server removes the
+ * camera's orientation tag with the rest of its metadata); a PNG or WebP of at most 1.4 MB is sent as it is; anything
+ * larger is redrawn as a JPEG of at most 2400 px on the long side. The server strips metadata again whatever is sent.
  */
 export const PHOTO_LONG_SIDE = 2400;
-export async function preparePhoto(file: Blob, maxBytes = 1400000): Promise<{ mediaType: PaperImportMediaType; data: string } | null> {
-  const type = file.type as PaperImportMediaType;
-  if (['image/jpeg', 'image/png', 'image/webp'].includes(type) && file.size <= maxBytes) return { mediaType: type, data: await toBase64(file) };
-  if (!file.type.startsWith('image/') || typeof createImageBitmap !== 'function') return null;
+export type PreparedPhoto = { ok: true; mediaType: PaperImportMediaType; data: string } | { ok: false; problem: 'TOO_BIG' | 'UNREADABLE' };
+export async function preparePhoto(file: Blob, maxBytes = 1400000): Promise<PreparedPhoto> {
+  const type = file.type as PaperImportMediaType, accepted = ['image/jpeg', 'image/png', 'image/webp'].includes(type);
+  const canDraw = typeof createImageBitmap === 'function' && typeof document !== 'undefined';
+  if (accepted && file.size <= maxBytes && (type !== 'image/jpeg' || !canDraw)) return { ok: true, mediaType: type, data: await toBase64(file) };
+  if (!file.type.startsWith('image/') || !canDraw) return { ok: false, problem: accepted ? 'TOO_BIG' : 'UNREADABLE' };
   let bitmap: ImageBitmap;
-  try { bitmap = await createImageBitmap(file); } catch { return null; }
-  for (const side of [PHOTO_LONG_SIDE, 1800, 1400]) {
-    const scale = Math.min(1, side / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, 'image/jpeg', 0.85));
-    if (blob && blob.size <= maxBytes) { bitmap.close(); return { mediaType: 'image/jpeg', data: await toBase64(blob) }; }
-  }
-  bitmap.close();
-  return null;
+  try { bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch { return { ok: false, problem: 'UNREADABLE' }; }
+  try {
+    for (const side of [PHOTO_LONG_SIDE, 1800, 1400]) {
+      const scale = Math.min(1, side / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, 'image/jpeg', 0.85));
+      if (blob && blob.size <= maxBytes) return { ok: true, mediaType: 'image/jpeg', data: await toBase64(blob) };
+    }
+    return { ok: false, problem: 'TOO_BIG' };
+  } finally { bitmap.close(); }
 }
 async function toBase64(blob: Blob): Promise<string> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -171,7 +175,15 @@ async function toBase64(blob: Blob): Promise<string> {
   return btoa(binary);
 }
 
-/** The table as staff edit it: trimmed cells, one row per student or attendance line. */
+/** At most 200 UTF-16 units, never ending in half of a surrogate pair. */
+export function clipCell(value: string): string {
+  if (value.length <= 200) return value;
+  const cut = value.slice(0, 200);
+  return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;
+}
+/** The table as staff edit it: one line of plain text per cell, trimmed, with nothing the server refuses. */
 export function cleanCell(value: string): string {
-  return value.replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁯﻿]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+  const plain = value.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff\ufffd]/g, ' ').replace(/\s+/g, ' ').trim();
+  return clipCell(plain).trim();
 }

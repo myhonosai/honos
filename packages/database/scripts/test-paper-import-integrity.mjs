@@ -198,6 +198,10 @@ const CARD = await sample('student-card.png'), CONTRACT = await sample('contract
 const PHOTO = await fixture('paper-page.jpg');
 const exif = Buffer.concat([Buffer.from([0xff, 0xe1, 0x00, 0x1e]), Buffer.from('Exif\0\0GPS 34.05N 118.24W cam', 'latin1')]);
 const DIRTY_JPEG = Buffer.concat([PHOTO.subarray(0, 2), exif, PHOTO.subarray(2), Buffer.from('trailing Exif preview', 'latin1')]);
+const seg = (marker, body) => { const head = Buffer.from([0xff, marker, 0, 0]); head.writeUInt16BE(body.length + 2, 2); return Buffer.concat([head, body]); };
+const APP12_JPEG = Buffer.concat([PHOTO.subarray(0, 2), seg(0xec, Buffer.from('Ducky\0Owner: Grace Park', 'latin1')), PHOTO.subarray(2)]);
+const ICC_JPEG = Buffer.concat([PHOTO.subarray(0, 2), seg(0xe2, Buffer.from('ICC_PROFILE\0\x01\x01profile', 'latin1')), PHOTO.subarray(2)]);
+const LATE_EXIF_JPEG = Buffer.concat([PHOTO.subarray(0, -2), exif, Buffer.from([0xff, 0xd9])]);
 const ihdrEnd = 8 + 12 + CARD.readUInt32BE(8);
 const DIRTY_CARD = Buffer.concat([CARD.subarray(0, ihdrEnd), pngChunk('tEXt', Buffer.from('Author\0Grace Park', 'latin1')), CARD.subarray(ihdrEnd)]);
 const pageBody = (bytes, type, version) => ({ expectedVersion: version, mediaType: type, data: bytes.toString('base64') });
@@ -259,10 +263,18 @@ try {
   await refused(() => addPage(IMPORTER, cards.id, pageBody(Buffer.from('%PDF-1.7 not an image'), 'image/jpeg', v)), 400, 'PAPER_IMPORT_IMAGE_REFUSED', 'a PDF');
   await refused(() => addPage(IMPORTER, cards.id, pageBody(CONTRACT, 'image/png', 1)), 409, 'VERSION_CONFLICT', 'a stale version');
   await refused(() => addPage(OTHER_SCHOOL, cards.id, pageBody(CONTRACT, 'image/png', v)), 404, 'PAPER_IMPORT_NOT_FOUND', 'a page from another school');
+  for (const [bytes, label] of [[APP12_JPEG, 'an APP12 comment'], [LATE_EXIF_JPEG, 'EXIF placed after the image data']]) {
+    const scratch = (await success(() => create(IMPORTER, { kind: 'STUDENT_CARDS' }), `a set for ${label}`)).data;
+    await success(() => addPage(IMPORTER, scratch.id, pageBody(bytes, 'image/jpeg', 1)), `a JPEG with ${label} is cleaned`);
+    const kept = (await sql('SELECT content FROM hon.paper_import_pages WHERE set_id=$1', [scratch.id])).rows[0].content;
+    ok(!kept.includes(Buffer.from('Grace')) && !kept.includes(Buffer.from('GPS')) && kept.equals(stored[1].content), `${label} is removed before storage`);
+  }
   // The database refuses metadata and malformed images itself, even past the API.
   await sql('BEGIN');
   ok((await sql("SELECT hon.paper_import_image_clean('image/png',$1) a, hon.paper_import_image_clean('image/jpeg',$2) b, hon.paper_import_image_clean('image/png',$3) c, hon.paper_import_image_clean('image/jpeg',$4) d, hon.paper_import_image_clean('image/webp',$5) e",
     [DIRTY_CARD, DIRTY_JPEG, CARD, stored[1].content, await fixture('paper-page.webp')])).rows.every((r) => r.a === false && r.b === false && r.c === true && r.d === true && r.e === true), 'the database structure check refuses metadata and accepts clean pages');
+  ok((await sql("SELECT hon.paper_import_image_clean('image/jpeg',$1) a, hon.paper_import_image_clean('image/jpeg',$2) b, hon.paper_import_image_clean('image/jpeg',$3) c",
+    [APP12_JPEG, LATE_EXIF_JPEG, ICC_JPEG])).rows.every((r) => r.a === false && r.b === false && r.c === true), 'the database refuses any other APPn segment and metadata after the first scan, and keeps an ICC profile');
   await sql('ROLLBACK');
 
   // 4. The page image is returned only to import staff at that school, never cached.
@@ -281,6 +293,11 @@ try {
   ok(readerCalls === 0 && (await sql('SELECT reading_id FROM hon.paper_import_sets WHERE id=$1', [cards.id])).rows[0].reading_id === null, 'nothing was read or started');
   await sql('ALTER TABLE hon.ai_spend_pauses DISABLE TRIGGER USER'); await sql('DELETE FROM hon.ai_spend_pauses WHERE id=$1', [pause]); await sql('ALTER TABLE hon.ai_spend_pauses ENABLE TRIGGER USER');
   await refused(() => readSet(IMPORTER, cards.id, { expectedVersion: v }, { key: randomUUID() }), 409, 'IDEMPOTENCY_KEY_NOT_ACCEPTED', 'reading takes no key');
+  // A reading that began (and did not finish) fixes the pages: none may be added, and Read begins it again.
+  await sql('ALTER TABLE hon.paper_import_sets DISABLE TRIGGER USER');
+  await sql('UPDATE hon.paper_import_sets SET reading_id=gen_random_uuid(), reading_started_at=clock_timestamp() WHERE id=$1', [cards.id]);
+  await sql('ALTER TABLE hon.paper_import_sets ENABLE TRIGGER USER');
+  await refused(() => addPage(IMPORTER, cards.id, pageBody(CONTRACT, 'image/png', v)), 409, 'PAPER_IMPORT_ALREADY_READ', 'no page once a reading has begun');
   const read = (await success(() => readSet(IMPORTER, cards.id, { expectedVersion: v }), 'read the student cards')).data;
   ok(readerCalls === 1 && read.set.status === 'READ' && read.set.reader === 'SYNTHETIC' && read.set.readOutcome === 'SAMPLE_READ', 'the stand-in read the sample');
   ok(read.rows.length === 1 && read.rows[0][0] === 'Mina' && read.rows[0][8] === '+12135550142' && read.unsure[0][8] === true, 'the sample card became one row, its phone marked unsure');
@@ -379,7 +396,7 @@ try {
   await refused(() => detail(IMPORTER, sheet.id), 403, undefined, 'a revoked grant cannot read');
   await sql('UPDATE hon.principal_role_grants SET revoked_at=NULL, revoked_by_principal_id=NULL WHERE id=$1', [IMPORTER.grants[0]]);
   const mine = (await success(() => list(OWN), 'owner list')).data.sets;
-  ok(mine.length === 5 && mine.every((x) => x.id !== undefined), 'the school list holds this school\'s five sets only');
+  ok(mine.length === 7 && mine.every((x) => x.id !== undefined), 'the school list holds this school\'s seven sets only (two hold the cleaned JPEGs)');
 
   // 12. Evidence guards (settings-free).
   await sql('BEGIN');

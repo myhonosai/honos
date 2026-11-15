@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { paperCopy } from '../src/components/paper-import/copy';
-import { PaperError, cleanCell, keepForRetry, paperErrorFor, paperImportApi } from '../src/components/paper-import/http';
+import { PaperError, cleanCell, clipCell, keepForRetry, paperErrorFor, paperImportApi } from '../src/components/paper-import/http';
 import { PaperImportView, filledRows, type PaperImportViewProps } from '../src/components/paper-import/view';
 import { SCHOOL_SHELL_NAV, schoolShellActiveRoute } from '../src/components/school-shell/catalog';
 import { shellText } from '../src/components/school-shell/copy';
@@ -86,6 +86,9 @@ it('maps refusals to definitive outcomes, including an AI pause, and keeps only 
   expect(keepForRetry(new PaperError('UNKNOWN'))).toBe(true);
   expect(keepForRetry(new PaperError('CHANGED'))).toBe(false);
   expect(cleanCell('  Mina\u0000  Park‮ ')).toBe('Mina Park');
+  expect(cleanCell('Mi\ufffdna \ud800')).toBe('Mi na');
+  const long = 'a'.repeat(199) + '\u{1F600}';
+  expect(clipCell(long)).toBe('a'.repeat(199)); expect(cleanCell(long + 'b')).toBe('a'.repeat(199));
   expect(filledRows([['', ' '], ['a', '']])).toBe(1);
 });
 

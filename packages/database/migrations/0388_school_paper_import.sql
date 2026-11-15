@@ -176,11 +176,21 @@ BEGIN
       m:=get_byte(p,pos+1);
       IF m=255 THEN pos:=pos+1; CONTINUE; END IF;
       IF m BETWEEN 208 AND 215 OR m=1 THEN pos:=pos+2; CONTINUE; END IF;
-      IF m=225 OR m=237 OR m=254 THEN RETURN false; END IF;
+      -- Only JFIF (APP0), an ICC profile (APP2) and Adobe (APP14) may stay; every other APPn and COM can carry metadata.
+      IF m=254 OR (m BETWEEN 224 AND 239 AND m NOT IN (224,226,238)) THEN RETURN false; END IF;
+      IF m=226 AND (pos+16>n OR substring(p FROM pos+5 FOR 12)<>'\x4943435f50524f46494c4500'::bytea) THEN RETURN false; END IF;
       IF m=217 THEN RETURN false; END IF;
       len:=get_byte(p,pos+2)*256+get_byte(p,pos+3);
       IF len<2 OR pos+2+len>n THEN RETURN false; END IF;
-      IF m=218 THEN RETURN get_byte(p,n-2)=255 AND get_byte(p,n-1)=217; END IF;
+      IF m=218 THEN
+        -- After the first scan only scan data, restarts and table segments follow: no APPn or COM marker may appear
+        -- anywhere (entropy data never holds 0xFF before 0xE0..0xEF or 0xFE).
+        FOR m IN 224..239 LOOP
+          IF position(set_byte('\xff00'::bytea,1,m) IN substring(p FROM pos+3)) > 0 THEN RETURN false; END IF;
+        END LOOP;
+        IF position('\xfffe'::bytea IN substring(p FROM pos+3)) > 0 THEN RETURN false; END IF;
+        RETURN get_byte(p,n-2)=255 AND get_byte(p,n-1)=217;
+      END IF;
       pos:=pos+2+len;
     END LOOP;
   ELSIF p_type='image/png' THEN
@@ -366,6 +376,9 @@ BEGIN
     OR length(p_input->>'data')%4<>0 OR (p_input->>'data') !~ '^[A-Za-z0-9+/]+={0,2}$' THEN RAISE EXCEPTION 'PAPER_IMPORT_INVALID' USING ERRCODE='22023'; END IF;
   r:=hon.paper_import_lock(p_set,p_input->'expectedVersion');
   IF r.status<>'OPEN' THEN RAISE EXCEPTION 'PAPER_IMPORT_ALREADY_READ' USING ERRCODE='40001'; END IF;
+  -- Once a reading has begun, the pages are fixed: a page added now would never be read yet sit beside the table.
+  -- (A reading that never finished is begun again with Read, which still reads exactly these pages.)
+  IF r.reading_id IS NOT NULL THEN RAISE EXCEPTION 'PAPER_IMPORT_ALREADY_READ' USING ERRCODE='40001'; END IF;
   IF r.page_count>=10 THEN RAISE EXCEPTION 'PAPER_IMPORT_TOO_MANY_PAGES' USING ERRCODE='22023'; END IF;
   bytes:=decode(p_input->>'data','base64');
   IF octet_length(bytes) NOT BETWEEN 1 AND 1400000 OR NOT hon.paper_import_image_clean(p_input->>'mediaType',bytes) THEN

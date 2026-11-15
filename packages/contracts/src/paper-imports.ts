@@ -35,8 +35,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const HEX64 = /^[a-f0-9]{64}$/;
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
-// A cell is one line of plain text: no control, bidi-override or zero-width characters.
-const UNSAFE_CELL = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁯﻿]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+// A cell is one line of plain text: no control, bidi-override, zero-width or replacement (U+FFFD) characters, and no lone surrogate.
+const UNSAFE_CELL = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁯﻿\uFFFD]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 
 function fail(what: string): never { throw new Error(`Unverified paper import ${what}.`); }
 function record(value: unknown, keys: readonly string[], what: string): Record<string, unknown> {
