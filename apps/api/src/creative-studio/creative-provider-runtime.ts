@@ -42,7 +42,7 @@ export interface CreativeProviderJob extends CreativeProviderRoute {
  * A provider's temporary result file (C2). Held in memory only for the storage step (C3): never stored, logged or shown.
  * A DONE answer that carries downloads is recorded only after its files are copied into HON's storage.
  */
-export interface CreativeDownload { url: string; mediaType: CreativeAssetMediaType }
+export interface CreativeDownload { url: string; mediaType: CreativeAssetMediaType; allowedHosts: readonly string[] }
 /** PENDING = still running. A final failure is thrown as a CreativeProviderRuntimeError (FAILED or UNKNOWN). */
 export type CreativePollResult = { state: 'PENDING' } | { state: 'DONE'; result: CreativeResult; downloads?: CreativeDownload[] };
 export type AsyncCreativeProviderRuntime = CreativeProviderRuntime & Required<Pick<CreativeProviderRuntime, 'submit' | 'poll'>>;
@@ -141,7 +141,9 @@ export class SyntheticAsyncCreativeProviderRuntime implements AsyncCreativeProvi
     const video = job.mediaKind === 'VIDEO';
     const assets = Array.from({ length: video ? 1 : Math.min(job.units, 8) }, (_, i) => ({ mediaType: video ? 'video/mp4' as const : 'image/png' as const, width, height,
       durationSeconds: video ? Math.min(job.units, 600) : null, providerAssetReference: `async:${job.providerJobId}:${i + 1}` }));
-    return { state: 'DONE', result: { finalUnits: step === 'UNVERIFIED' ? job.units + 1 : job.units,
+    // Synthetic file locations on a reserved test-only host; a test injects the downloader that answers them (C3).
+    const downloads = assets.map((a, i) => ({ url: `https://synthetic.invalid/${job.providerJobId}/${i + 1}`, mediaType: a.mediaType, allowedHosts: ['synthetic.invalid'] }));
+    return { state: 'DONE', downloads, result: { finalUnits: step === 'UNVERIFIED' ? job.units + 1 : job.units,
       providerCostMicrounits: job.units * (this.options.costMicrounitsPerUnit ?? 1000), assets } };
   }
 }

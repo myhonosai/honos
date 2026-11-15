@@ -3599,3 +3599,21 @@ DO $$ DECLARE r text; t text; f text; BEGIN
     hon.command_creative_provider_daily_limit(text,jsonb,uuid), hon.command_creative_school_daily_caps(text,jsonb,uuid),
     hon.read_creative_limits_from_hq(text) TO hon_runtime;
 END $$;
+-- 0355 creative media storage: one private forced-RLS table, private helpers and the stored-result worker function (013
+-- grants it to hon_communication_worker only); three runtime entry points.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regclass('hon.creative_stored_objects') IS NULL THEN RAISE EXCEPTION 'Apply migration 0355 first'; END IF;
+  EXECUTE 'REVOKE ALL ON TABLE hon.creative_stored_objects FROM PUBLIC';
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.creative_stored_objects FROM %I', r);
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p WHERE p.pronamespace = 'hon'::regnamespace
+      AND p.proname IN ('guard_creative_stored_object','creative_school_object','record_creative_provider_job_stored_result') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I', f, r);
+    END LOOP;
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.authorize_creative_asset_read(text,uuid,uuid), hon.delete_creative_asset(text,uuid,uuid),
+    hon.confirm_creative_asset_removed(text,uuid,uuid) TO hon_runtime;
+END $$;

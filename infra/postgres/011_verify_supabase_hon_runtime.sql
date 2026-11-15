@@ -3666,3 +3666,23 @@ DO $$ DECLARE t text; f text; BEGIN
   END LOOP;
 END $$;
 -- End creative provider jobs exact verification.
+-- Creative media storage exact verification (C3 0355): one private forced-RLS table the runtime cannot touch, three
+-- runtime entry points, the stored-result worker function and private helpers not runnable by it.
+DO $$ DECLARE f text; BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.creative_stored_objects'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid='hon.creative_stored_objects'::regclass)
+    OR has_table_privilege('hon_runtime','hon.creative_stored_objects','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+    RAISE EXCEPTION 'Unsafe creative stored object table posture'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.authorize_creative_asset_read(text,uuid,uuid)','hon.delete_creative_asset(text,uuid,uuid)',
+    'hon.confirm_creative_asset_removed(text,uuid,uuid)','hon.record_creative_provider_job_stored_result(uuid,uuid,jsonb,jsonb)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef
+        AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND (owner.rolsuper OR owner.rolbypassrls)) THEN
+      RAISE EXCEPTION 'Unsafe creative media function: %',f; END IF;
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') <> (f NOT LIKE 'hon.record_creative_provider_job_%') THEN
+      RAISE EXCEPTION 'Wrong runtime EXECUTE on creative media function: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.creative_school_object(text,uuid,uuid,boolean)','hon.guard_creative_stored_object()'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') THEN RAISE EXCEPTION 'Creative media helper runnable by runtime: %',f; END IF;
+  END LOOP;
+END $$;
+-- End creative media storage exact verification.

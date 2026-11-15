@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "dd903e004fbee0a7136241dc98de6f366fe14129d733a03182208fdfba40e97b",
+  "chainSha256": "e0da4c3afb80705899efa1b1237ef2e0ffd913b95958f4cdeff200d2c1d7c061",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -477,6 +477,10 @@
     {
       "file": "0354_creative_provider_jobs.sql",
       "sha256": "51d614822499ff9c8c894f2ff73853c19dfad33c677b6a741329556cb460be67"
+    },
+    {
+      "file": "0355_creative_media_storage.sql",
+      "sha256": "2a70c6114c5fc93a2aabc6eae175a9337811a6b51410c7b85f907e4262f8be6b"
     }
   ]
 }

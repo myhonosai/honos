@@ -183,6 +183,9 @@ const SAAS_BILLING_CALLS = {
   commandCreativeProviderDailyLimit: { sql: 'SELECT hon.command_creative_provider_daily_limit($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   commandCreativeSchoolDailyCaps: { sql: 'SELECT hon.command_creative_school_daily_caps($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readCreativeLimitsFromHq: { sql: 'SELECT hon.read_creative_limits_from_hq($1) AS data', arity: 1, readOnly: true },
+  authorizeCreativeAssetRead: { sql: 'SELECT hon.authorize_creative_asset_read($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
+  deleteCreativeAsset: { sql: 'SELECT hon.delete_creative_asset($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: false },
+  confirmCreativeAssetRemoved: { sql: 'SELECT hon.confirm_creative_asset_removed($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: false },
   // B4: refund guarantee records and Champions reward application (no refund execution, payout or prize).
   readRefundEligibility: { sql: 'SELECT hon.read_saas_refund_eligibility_from_hq($1,$2::uuid,$3::timestamptz) AS data', arity: 3, readOnly: true },
   readRefundRequests: { sql: 'SELECT hon.read_saas_refund_requests_from_hq($1,$2) AS data', arity: 2, readOnly: true },
