@@ -239,8 +239,9 @@
   .shell[data-hon-layout='topnav'] .navMore:hover { background: var(--hon-surface); }
   .shell[data-hon-layout='topnav'] .navMore svg { width: 16px; height: 16px; }
 }
+/* Eight main areas: all of them fit the bar on a wide screen, so the More button is not needed there. */
 @media (min-width: 1400px) { .shell[data-hon-layout='topnav'] .nav a:nth-child(n+5):not([aria-current='page']) { display: flex; }
-  .shell[data-hon-layout='topnav'] .nav a:nth-child(n+7):not([aria-current='page']) { display: none; } }
+  .shell[data-hon-layout='topnav'] .navMore { display: none; } }
 @media (max-width: 1099px) { .shell[data-hon-layout='topnav'] .rail { display: none; } }
 
 .schoolStrip { padding: var(--hon-space-2) var(--hon-space-6) 0; }

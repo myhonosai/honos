@@ -222,13 +222,58 @@ try {
   const heldIndex = (await admin.query("SELECT count(*)::int n FROM pg_indexes WHERE indexname = 'school_number_orders_one_number' AND indexdef LIKE '%outcome_unknown%'")).rows[0].n;
   check(heldIndex === 1, 'an unsettled order keeps its number reserved');
   // Five attempts with nothing ever sent (no unknown, no number) end as an ordinary ATTEMPTS_EXHAUSTED failure.
-  await admin.query('ALTER TABLE hon.school_number_orders DISABLE TRIGGER guarded');
-  await admin.query("UPDATE hon.school_number_orders SET status = 'CANCELLED', outcome_unknown = false WHERE id = $1", [b4.orderId]);
-  await admin.query('ALTER TABLE hon.school_number_orders ENABLE TRIGGER guarded');
+  // 7a. T2c (0358): a human HQ owner settles the unsettled order after checking the school's Twilio subaccount.
+  const settle = async (id, finding, version, note = 'Checked the subaccount in the Twilio console', who = subject.hq) =>
+    (await runtime.query('SELECT hon.settle_school_number_order_from_hq($1,$2,$3,$4,$5) AS data', [who, id, finding, note, version])).rows[0].data;
+  const v4 = (await order(b4.orderId)).version;
+  await expectError('42501', () => settle(b4.orderId, 'NOT_BOUGHT', v4, undefined, subject.owner), 'a school owner cannot settle');
+  await expectError('42501', () => settle(b4.orderId, 'NOT_BOUGHT', v4, undefined, subject.staff), 'staff cannot settle');
+  await expectError('40001', () => settle(b4.orderId, 'NOT_BOUGHT', v4 - 1), 'a stale version is refused');
+  await expectError('22023', () => settle(b4.orderId, 'MAYBE', v4), 'an unknown finding is refused');
+  await expectError('22023', () => settle(b4.orderId, 'NOT_BOUGHT', v4, ' padded '), 'an untrimmed note is refused');
+  await expectError('22023', () => settle(b4.orderId, 'NOT_BOUGHT', v4, ''), 'an empty note is refused');
+  await expectError('P0002', () => settle(randomUUID(), 'NOT_BOUGHT', 1), 'a missing order is refused');
+  await expectError('55000', async () => settle(b5.orderId, 'NOT_BOUGHT', (await order(b5.orderId)).version), 'a settled FAILED order is not unsettled');
+  await expectError('55000', async () => settle(first.orderId, 'BOUGHT', (await order(first.orderId)).version), 'a PURCHASED order cannot be settled');
+  // The guard: even the table owner cannot free an unsettled order without a full settle record, or forge one.
+  await expectError('42501', () => admin.query('UPDATE hon.school_number_orders SET outcome_unknown = false, version = version + 1 WHERE id = $1', [b4.orderId]), 'clearing the unknown flag needs a settle record');
+  await expectError('42501', () => admin.query("UPDATE hon.school_number_orders SET settled_by = $2, settled_at = now(), settle_finding = 'NOT_BOUGHT', settle_note = 'x', failure_code = 'SETTLED_NOT_BOUGHT', version = version + 1 WHERE id = $1", [b5.orderId, ids.hqPrincipal]), 'a settle record cannot be written on an order that is not unsettled');
+  await expectError('42501', () => admin.query("UPDATE hon.school_number_orders SET settled_by = $2, settled_at = now(), settle_finding = 'NOT_BOUGHT', settle_note = 'x', failure_code = 'SETTLED_NOT_BOUGHT', status = 'CANCELLED', outcome_unknown = false, version = version + 1 WHERE id = $1", [b4.orderId, ids.hqPrincipal]), 'NOT_BOUGHT keeps the order FAILED');
+  await expectError('42501', () => admin.query("UPDATE hon.school_number_orders SET settled_by = $2, settle_finding = 'NOT_BOUGHT', settle_note = 'x', failure_code = 'SETTLED_NOT_BOUGHT', outcome_unknown = false, version = version + 1 WHERE id = $1", [b4.orderId, ids.hqPrincipal]), 'a settle record without its time is refused (the guard first, then the all-or-none CHECK)');
+  const notBought = await settle(b4.orderId, 'NOT_BOUGHT', v4);
+  check(notBought.status === 'FAILED' && notBought.outcomeUnknown === false && notBought.version === v4 + 1 && notBought.schoolName, 'NOT_BOUGHT settles the order and returns it with the school name');
+  const r4 = await order(b4.orderId);
+  check(r4.failure_code === 'SETTLED_NOT_BOUGHT' && r4.settle_finding === 'NOT_BOUGHT' && r4.settled_by === ids.hqPrincipal && r4.settled_at, 'the settle record names the HQ owner and the finding');
+  check((await admin.query("SELECT count(*)::int n FROM hon.audit_events WHERE entity_id = $1 AND action_code = 'communication.number_order.settled' AND actor_principal_id = $2 AND next_state->>'finding' = 'NOT_BOUGHT'", [b4.orderId, ids.hqPrincipal])).rows[0].n === 1, 'the settle is audited');
+  await expectError('55000', () => settle(b4.orderId, 'NOT_BOUGHT', v4 + 1), 'a settled order cannot be settled twice');
+  await expectError('42501', () => admin.query("UPDATE hon.school_number_orders SET status = 'APPROVED', version = version + 1 WHERE id = $1", [b4.orderId]), 'a NOT_BOUGHT order never reopens');
+  check((await owner('SELECT hon.authorize_school_number_search($1) AS data', [subject.owner], ids.schoolB, ids.org2)).openOrder === null, 'NOT_BOUGHT frees the school');
   const b7 = await owner('SELECT hon.request_school_number($1,$2::jsonb,$3) AS data', [subject.owner, JSON.stringify({ ...number, phoneE164: '+12065550107' }), `key-${randomUUID()}`], ids.schoolB, ids.org2);
   await decide(b7.orderId, 'APPROVE', 1);
   for (let i = 0; i < 5; i += 1) { const [c] = await claim(); await record(c, 'RETRY', { failure: 'SUBACCOUNT_BUSY' }); }
   check((await claim()).length === 0 && (await order(b7.orderId)).failure_code === 'ATTEMPTS_EXHAUSTED' && (await order(b7.orderId)).outcome_unknown === false, 'five plain retries end ATTEMPTS_EXHAUSTED');
+  // BOUGHT: the number is on the subaccount. The order goes back to APPROVED, the worker finds it (never buys again) and finishes.
+  const reuse = await owner('SELECT hon.request_school_number($1,$2::jsonb,$3) AS data', [subject.owner, JSON.stringify({ ...number, phoneE164: '+12065550104' }), `key-${randomUUID()}`], ids.schoolB, ids.org2);
+  check(reuse.status === 'REQUESTED', 'NOT_BOUGHT frees the number for a new order');
+  await owner('SELECT hon.cancel_school_number_order($1,$2,$3) AS data', [subject.owner, reuse.orderId, 1], ids.schoolB, ids.org2);
+  const b8 = await owner('SELECT hon.request_school_number($1,$2::jsonb,$3) AS data', [subject.owner, JSON.stringify({ ...number, phoneE164: '+12065550108' }), `key-${randomUUID()}`], ids.schoolB, ids.org2);
+  await decide(b8.orderId, 'APPROVE', 1);
+  { const [c] = await claim(); await record(c, 'UNKNOWN'); }
+  for (let i = 0; i < 4; i += 1) { const [c] = await claim(); await record(c, 'RETRY', { failure: 'PROVIDER_UNREACHABLE', number: pn('2') }); }
+  check((await claim()).length === 0, 'the sixth claim ends it');
+  const u8 = await order(b8.orderId);
+  check(u8.status === 'FAILED' && u8.failure_code === 'RECONCILE_REQUIRED' && u8.outcome_unknown, 'a second order ends unsettled');
+  await expectError('42501', () => admin.query("UPDATE hon.school_number_orders SET settled_by = $2, settled_at = now(), settle_finding = 'BOUGHT', settle_note = 'x', failure_code = 'SETTLED_BOUGHT', status = 'APPROVED', attempts = 3, version = version + 1 WHERE id = $1", [b8.orderId, ids.hqPrincipal]), 'BOUGHT always restarts the attempts');
+  await expectError('42501', () => admin.query("UPDATE hon.school_number_orders SET settled_by = $2, settled_at = now(), settle_finding = 'BOUGHT', settle_note = 'x', failure_code = 'SETTLED_BOUGHT', status = 'APPROVED', attempts = 0, outcome_unknown = false, version = version + 1 WHERE id = $1", [b8.orderId, ids.hqPrincipal]), 'BOUGHT keeps the order marked unknown');
+  const bought = await settle(b8.orderId, 'BOUGHT', u8.version, 'Number is on the subaccount');
+  check(bought.status === 'APPROVED' && bought.outcomeUnknown === true, 'BOUGHT moves the order back to APPROVED, still marked unknown');
+  const r8 = await order(b8.orderId);
+  check(r8.attempts === 0 && r8.failure_code === 'SETTLED_BOUGHT' && r8.settle_finding === 'BOUGHT', 'with fresh attempts and the finding recorded');
+  const [c8] = await claim();
+  check(c8?.order_id === b8.orderId && c8.outcome_unknown === true && c8.attempt === 1, 'the worker claims it told to find the number on the subaccount');
+  check((await record(c8, 'PURCHASED', { number: pn('2'), service: mg('2'), account: acct('b') })).status === 'PURCHASED', 'the worker finishes the order');
+  check((await admin.query('SELECT count(*)::int n FROM hon.school_text_senders WHERE school_id = $1 AND phone_e164 = $2', [ids.schoolB, '+12065550108'])).rows[0].n === 1, 'the found number becomes the school sender');
+  await expectError('42501', () => admin.query("UPDATE hon.school_number_orders SET settle_note = 'rewritten', version = version + 1 WHERE id = $1", [b8.orderId]), 'a settle record is never rewritten');
 
   // 7b. Guard triggers: even the table owner cannot rewrite an order, reopen a finished one, or move a subaccount.
   await expectError('42501', () => admin.query("UPDATE hon.school_number_orders SET phone_e164 = '+15125550177', version = version + 1 WHERE id = $1", [b2.orderId]), 'an order\'s number never changes');
@@ -247,6 +292,15 @@ try {
     const section = verify.slice(start, verify.indexOf('-- End school number orders exact verification', start));
     const role = (await runtime.query('SELECT current_user AS r')).rows[0].r;
     check(start >= 0 && section.includes('DO $$'), 'the 011 section exists');
+    await admin.query(section.replaceAll('hon_runtime', role));
+    passed += 1;
+  }
+  {
+    const verify = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
+    const start = verify.indexOf('-- School number order settle exact verification');
+    const section = verify.slice(start, verify.indexOf('-- End school number order settle exact verification', start));
+    const role = (await runtime.query('SELECT current_user AS r')).rows[0].r;
+    check(start >= 0 && section.includes('DO $$'), 'the 011 settle section exists');
     await admin.query(section.replaceAll('hon_runtime', role));
     passed += 1;
   }

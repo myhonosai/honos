@@ -235,3 +235,38 @@ timeout, lost submit, bad download, oversized file, wrong host), and browser che
 
 Risky items for the final pre-launch review: real provider calls and spend, the storage service key in `hon-api`,
 the HeyGen webhook endpoint, and moderation coverage.
+
+## 11. C2 as built (adapters, no migration)
+
+- `apps/api/src/creative-studio/providers/`:
+  - `higgsfield-runtime.ts`: `image.generate`, `avatar.create` (look style phrase + description, square, one image; the
+    avatar's name is never sent) and `video.generate` (duration = reserved seconds).
+  - `heygen-runtime.ts`: `avatar.video` with a server-configured stock avatar per look style
+    (`HON_CREATIVE_HEYGEN_AVATAR_REALISTIC|ILLUSTRATED|CHIBI`) and one stock voice (`HON_CREATIVE_HEYGEN_VOICE_ID`).
+    An unconfigured style is never sent (NOT_SENT, credits back). Charged by the seconds actually generated (rounded
+    up); a video longer than reserved fails verification and is held UNKNOWN for HQ.
+  - `creative-provider-router.ts`: one runtime over both; the server picks the provider per operation and each job is
+    polled only at the provider recorded on it. `createCreativeProviderRuntime({ mediaStorageReady })` is the production
+    wiring and returns the unconfigured runtime unless storage is ready, **so production stays NOT_CONNECTED in C2
+    whatever keys or switches are set.**
+  - `creative-provider-http.ts`: one bounded JSON request (no redirects, no cookies, timeout, 16 KB / 64 KB body cap);
+    nothing about provider traffic, headers or bodies is logged or returned.
+- Readiness: key(s) well-formed **and** the switch exactly `true`. Polling needs only the key, so a job already
+  submitted is still followed after a switch is turned off (while the other provider keeps the worker running).
+- Submit answers: 400/401/402/403/404/413/415/422/429 are a clear refusal (FAILED, credits back); a 5xx, 409, timeout,
+  dropped connection, redirect, oversize or malformed answer is UNKNOWN (held for HQ, never resent).
+- Poll answers: only an explicit final status closes a job (failed / nsfw / canceled = FAILED; an unrecognised status
+  or a completed answer without acceptable files = UNKNOWN). Any HTTP or transport error is retried until the deadline.
+- Result files: download URLs must be https on the provider's host list (exact host or subdomain, no port, no
+  userinfo). They are handed back in memory as `downloads` and are never part of the recorded result. **The worker
+  never records a result that carries downloads until C3 copies the files into HON storage**; until then the job stays
+  open and becomes UNKNOWN at its deadline (telemetry `creative.result_storage_unavailable`).
+- Provider cost recorded on success is HON's upper estimate per unit from §3 (image $0.016, video $0.12/s, avatar
+  video $0.0805/s) until a real invoice is linked; rates stay PROVISIONAL. Image dimensions, type and video duration
+  are provisional in C2 and are replaced by the measured file values in C3.
+- **Still to confirm against the live docs before any switch is turned on** (all in the `HIGGSFIELD_API` /
+  `HEYGEN_API` objects): base URLs, model paths, auth header format, request field names, status values, result
+  shape, download hosts, and whether refused jobs are charged.
+- Not in C2: the HeyGen webhook (C2b, a hint that only wakes the worker sooner), the `HON_CREATIVE_FAKE_PROVIDER`
+  environment fake (tests inject fakes directly), and `avatar.photo.video` (needs A3, #294).
+- Tests: `apps/api/test/creative-provider-adapters.test.cjs` (9) against fake HTTP providers on 127.0.0.1.

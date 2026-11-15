@@ -158,7 +158,7 @@ test('C1 worker: unusable jobs, no async provider, refused records and held answ
 
 test('C1 wiring: no provider is connected, the loop is off by default and the worker never uses the runtime login', async () => {
   const wiring = readFileSync(join(__dirname, '../src/app.module.ts'), 'utf8');
-  assert.match(wiring, /provide: CREATIVE_PROVIDER_RUNTIME, useFactory: \(\) => new UnconfiguredCreativeProviderRuntime\(\)/);
+  assert.match(wiring, /provide: CREATIVE_PROVIDER_RUNTIME, useFactory: \(\) => createCreativeProviderRuntime\(\{ mediaStorageReady: false \}\)/);
   assert.doesNotMatch(wiring, /SyntheticAsyncCreativeProviderRuntime|SyntheticCreativeProviderRuntime/);
   assert.match(wiring, /provide: CREATIVE_JOB_WORKER_STORE, useExisting: CreativeJobWorkerDatabase/);
   const saved = { ...process.env };

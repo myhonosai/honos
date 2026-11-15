@@ -5,7 +5,7 @@ const { randomBytes } = require('node:crypto');
 const { TwilioRestNumberClient, FakeTwilioNumberClient, priceToMicrounits, schoolServiceFriendlyName } = require('../dist/communication/delivery/twilio-numbers.js');
 const { SchoolNumberPurchaseWorker } = require('../dist/communication/delivery/school-number-purchase.js');
 const { SchoolNumberService } = require('../dist/communication/delivery/school-number.service.js');
-const { validateNumberOrderDecision } = require('../dist/communication/delivery/school-number.controller.js');
+const { validateNumberOrderDecision, validateNumberOrderSettle, SchoolNumberOrderHqController } = require('../dist/communication/delivery/school-number.controller.js');
 const { TwilioSubaccountVault, FakeTwilioProvisioningClient, TwilioProvisioningError } = require('../dist/communication/delivery/twilio-subaccounts.js');
 
 const parent = `AC${'c'.repeat(32)}`;
@@ -298,6 +298,21 @@ test('school service: an unsettled earlier order blocks a new one before Twilio 
   await assert.rejects(new SchoolNumberService(fakeDatabase({ scope: { organizationId: org, schoolId: school, hasProvisionedSender: false, openOrder: unsettled } }), numbers)
     .order(context({ idempotencyKey: 'order-key-9' }), { phoneE164: phone }), (e) => e.getResponse().code === 'NUMBER_ORDER_UNSETTLED');
   assert.deepEqual(numbers.calls, []);
+});
+
+test('HQ settle: only BOUGHT or NOT_BOUGHT with a note and version, passed to the 0358 function; refusals are translated', async () => {
+  assert.deepEqual(validateNumberOrderSettle({ finding: 'NOT_BOUGHT', note: ' Not on the subaccount ', expectedVersion: 7 }), { finding: 'NOT_BOUGHT', note: 'Not on the subaccount', expectedVersion: 7 });
+  for (const bad of [null, {}, { finding: 'BOUGHT', expectedVersion: 1 }, { finding: 'MAYBE', note: 'x', expectedVersion: 1 }, { finding: 'BOUGHT', note: ' ', expectedVersion: 1 },
+    { finding: 'BOUGHT', note: 'x', expectedVersion: 0 }, { finding: 'BOUGHT', note: 'x', expectedVersion: 1, schoolId: school }]) assert.throws(() => validateNumberOrderSettle(bad));
+  const calls = [];
+  const database = { callSaasBilling: async (name, params) => { calls.push([name, params]); if (params[1] === lease) throw Object.assign(new Error('NUMBER_ORDER_NOT_UNSETTLED'), { code: '55000' }); return { ok: true }; } };
+  const controller = new SchoolNumberOrderHqController(database);
+  const req = { honIdentity: { externalSubject: 'hq-subject' } };
+  assert.deepEqual(await controller.settle(req, orderId, { finding: 'BOUGHT', note: 'PN found on the subaccount', expectedVersion: 3 }), { data: { ok: true } });
+  assert.deepEqual(calls[0], ['settleSchoolNumberOrder', ['hq-subject', orderId, 'BOUGHT', 'PN found on the subaccount', '3']]);
+  await assert.rejects(controller.settle(req, lease, { finding: 'NOT_BOUGHT', note: 'x', expectedVersion: 1 }), (e) => e.getResponse().code === 'NUMBER_ORDER_NOT_UNSETTLED');
+  await assert.rejects(controller.settle(req, 'not-a-uuid', { finding: 'NOT_BOUGHT', note: 'x', expectedVersion: 1 }), (e) => e.getStatus() === 400);
+  await assert.rejects(controller.settle({}, orderId, { finding: 'NOT_BOUGHT', note: 'x', expectedVersion: 1 }), (e) => e.getStatus() === 403);
 });
 
 test('fake number client is refused in production and staging', () => {

@@ -16,9 +16,9 @@ const pageExists = (href: string) => existsSync(join(APP, href.split('?')[0]!, '
 const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222';
 
 describe('school shell navigation catalog', () => {
-  it('follows the owner blueprint areas, in order, with unique keys and no duplicated route', () => {
-    expect(SCHOOL_SHELL_NAV.map(item => item.key)).toEqual(['home', 'hon', 'aiTeam', 'crm', 'students', 'billing', 'classes', 'attendance',
-      'marketing', 'referrals', 'community', 'analytics', 'staff', 'settings']);
+  it('has the owner\'s eight main areas, in order, with unique keys and no duplicated route', () => {
+    expect(SCHOOL_SHELL_NAV.map(item => item.key)).toEqual(['home', 'students', 'crm', 'classes', 'billing', 'aiTeam', 'analytics', 'settings']);
+    expect(SCHOOL_SHELL_NAV.map(item => shellText('en', item.titleKey))).toEqual(['Home', 'Contacts', 'Enrollment', 'Classes', 'Billing', 'AI Team', 'Reports', 'Settings']);
     const hrefs = SCHOOL_SHELL_NAV.flatMap(item => item.routes.map(route => route.href));
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });
@@ -54,10 +54,22 @@ describe('school shell navigation catalog', () => {
     expect(schoolShellHref(scoped, { organizationId: A, schoolId: `${B}&role=owner` })).toBe(scoped.href);
   });
 
-  it('lists the whole AI team page first under AI Team, and keeps the human-only Teaching studio out of it', () => {
+  it('lists the whole AI team page first under AI Team with HON beside it, and keeps the human-only Teaching studio out of it', () => {
     const ai = SCHOOL_SHELL_NAV.find(item => item.key === 'aiTeam')!;
-    expect(ai.routes.map(route => route.href)).toEqual(['/staff/ai-team', '/staff/leads/assistant', '/staff/marketing/assistant', '/staff/teaching-assistant', '/staff/retention/at-risk']);
-    expect(schoolShellActiveItem('/staff/teaching-studio')?.key).toBe('attendance');
+    expect(ai.routes.map(route => route.href)).toEqual(['/staff/ai-team', '/staff/hon', '/staff/action-center/approvals', '/staff/ai-work', '/staff/leads/assistant',
+      '/staff/marketing/assistant', '/staff/teaching-assistant', '/staff/retention/at-risk', '/staff/voice']);
+    expect(schoolShellActiveItem('/staff/teaching-studio')?.key).toBe('classes');
+  });
+
+  it('puts staff under Contacts, marketing and referrals under Enrollment, and reports under Reports', () => {
+    expect(schoolShellActiveItem('/staff/team/invitations')?.key).toBe('students');
+    expect(schoolShellActiveItem('/staff/roles')?.key).toBe('students');
+    expect(schoolShellActiveItem('/staff/marketing/campaigns')?.key).toBe('crm');
+    expect(schoolShellActiveItem('/staff/champions-club')?.key).toBe('crm');
+    expect(schoolShellActiveItem('/staff/operations')?.key).toBe('analytics');
+    expect(schoolShellActiveItem('/staff/health-score')?.key).toBe('analytics');
+    expect(schoolShellActiveItem('/community/marketplace')?.key).toBe('classes');
+    expect(schoolShellActiveItem('/staff/automation/rules')?.key).toBe('settings');
   });
 
   it('resolves the active primary item from the path, including sub-routes and dynamic detail pages', () => {

@@ -95,7 +95,7 @@ test('CS1 production wiring is NOT_CONNECTED: nothing is reserved and the synthe
   assert.equal(db.calls.length, 0, 'no reservation without a connected provider');
   assert.equal((await service(db, never).list('verified-human', U())).provider, 'NOT_CONNECTED');
   const wiring = readFileSync(join(__dirname, '../src/app.module.ts'), 'utf8');
-  assert.match(wiring, /provide: CREATIVE_PROVIDER_RUNTIME, useFactory: \(\) => new UnconfiguredCreativeProviderRuntime\(\)/);
+  assert.match(wiring, /provide: CREATIVE_PROVIDER_RUNTIME, useFactory: \(\) => createCreativeProviderRuntime\(\{ mediaStorageReady: false \}\)/);
   assert.doesNotMatch(wiring, /SyntheticCreativeProviderRuntime/);
 });
 
