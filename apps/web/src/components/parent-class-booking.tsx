@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { ParentClassBookingChoices, ParentClassSessionChoice } from '@hon/contracts';
-import { bookParentClass, bookingAttempt, cancelParentClass, loadParentClassBookingChoices, ParentClassBookingAccessError } from './parent-class-booking-http';
+import { bookParentClass, bookingAttempt, cancelParentClass, loadParentClassBookingChoices, ParentClassBookingAccessError, ParentClassBookingRefusal } from './parent-class-booking-http';
 import s from './testing-registration.module.css';
 
 function when(value: string, zone: string) {
@@ -48,7 +48,8 @@ export function ParentClassBooking(): React.ReactElement {
       await load();
     } catch (problem) {
       setError(failure(problem));
-      if (problem instanceof ParentClassBookingAccessError) { setLost(true); setView(null); } else if (!/try again with the same/.test(failure(problem))) attempt.current = null;
+      // An unknown outcome (5xx or no answer) keeps the key so the same action retries exactly; a definite refusal does not.
+      if (problem instanceof ParentClassBookingAccessError) { setLost(true); setView(null); attempt.current = null; } else if (problem instanceof ParentClassBookingRefusal) attempt.current = null;
     } finally { setActing(''); }
   }
 
@@ -72,7 +73,7 @@ export function ParentClassBooking(): React.ReactElement {
           <p><span className={s.badge}>{booked ? (session.booking!.status === 'CHECKED_IN' ? 'Checked in' : session.booking!.status === 'WAITLISTED' ? 'Waitlisted' : 'Booked') : session.spotsLeft === 0 ? 'Full' : `${session.spotsLeft} ${session.spotsLeft === 1 ? 'spot' : 'spots'} left`}</span></p>
           {view.canBook && !booked && session.spotsLeft > 0 && <button type="button" disabled={!!acting} onClick={() => void act(session, 'book')}>{acting === session.sessionId ? 'Booking…' : 'Book'}</button>}
           {view.canBook && booked && session.booking!.canCancel && <button type="button" disabled={!!acting} onClick={() => void act(session, 'cancel')}>{acting === session.sessionId ? 'Cancelling…' : 'Cancel booking'}</button>}
-          {booked && !session.booking!.canCancel && <p className={s.subtle}>Booked by the school. Contact the school to change it.</p>}
+          {booked && !session.booking!.canCancel && <p className={s.subtle}>{session.booking!.source === 'PARENT_APP' ? 'This booking can no longer be changed here. Contact the school to change it.' : 'Booked by the school. Contact the school to change it.'}</p>}
         </li>; })}</ul>}</section>}
     </>)}
     <footer className={s.footer}>Bookings go straight to your school’s schedule. No payment is taken and no message is sent.</footer>

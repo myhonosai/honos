@@ -6,6 +6,7 @@ vi.mock('next/headers', () => ({ headers: async () => new Headers({ cookie: requ
 vi.mock('next/navigation', () => ({ redirect: (path: string) => { throw new Error(`REDIRECT:${path}`); } }));
 import ParentMessageHistoryPage from '../src/app/parent/messages/page';
 import { ParentMessageHistory } from '../src/components/parent-message-history';
+import { ParentSchoolMessages } from '../src/components/family-messages/parent-school-messages';
 
 describe('server-protected Parent Message History route', () => {
   beforeEach(() => {
@@ -27,11 +28,13 @@ describe('server-protected Parent Message History route', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it('renders only the live fixed reader for a verified session, without deriving family, child, recipient, or message authority from the session', async () => {
+  it('renders only the live fixed readers (school conversation, then history) for a verified session, without deriving family, child, recipient, or message authority from the session', async () => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
     request.cookie = `${HON_SESSION_COOKIE}=${issueSession({ externalSubject: 'verified-parent' }, sessionConfig())}`;
     const element = await ParentMessageHistoryPage();
-    expect(React.isValidElement(element)).toBe(true); expect(element.type).toBe(ParentMessageHistory); expect(element.props).toEqual({});
+    expect(React.isValidElement(element)).toBe(true); expect(element.type).toBe(React.Fragment);
+    const children = React.Children.toArray((element.props as { children: React.ReactNode }).children) as React.ReactElement[];
+    expect(children.map(c => c.type)).toEqual([ParentSchoolMessages, ParentMessageHistory]); expect(children.map(c => Object.keys(c.props as object))).toEqual([[], []]);
     expect(fetcher).not.toHaveBeenCalled();
   });
 
