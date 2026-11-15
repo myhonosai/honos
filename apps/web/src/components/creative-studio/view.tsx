@@ -20,6 +20,8 @@ export type CreativeStudioViewProps = Readonly<{
   /** A2 (0277) talking avatar videos: the read, this tab's video request outcome and lock. */
   videos?: VideosState; videoOutcome?: CreateOutcome; videoLocked?: boolean | undefined; hideVideoText?: ((v: CreativeAvatarVideo) => boolean) | undefined;
   onCreateVideo?: ((input: CreativeAvatarVideoInput) => void) | undefined; onCheckVideoAgain?: (() => void) | undefined;
+  /** C6: the stored images and videos and, for reviewers, the approval queue (rendered only with a readable wallet). */
+  media?: React.ReactNode;
 }>;
 
 const UNIT: Record<StudioRate['billingUnit'], StudioKey> = { IMAGE: 'perImage', VIDEO_SECOND: 'perSecond', REQUEST: 'perRequest' };
@@ -27,7 +29,7 @@ const UNIT: Record<StudioRate['billingUnit'], StudioKey> = { IMAGE: 'perImage', 
 /** Pure view. Every number comes from the school's wallet read; generation is shown as not connected. */
 export function CreativeStudioView({ language, waiting, concealed, hasSchool, studio, onRefresh, generations = { state: 'UNAVAILABLE' }, outcome = null, locked = false, hidePrompt, onCreate, onCheckAgain,
   avatars = { state: 'UNAVAILABLE' }, avatarOutcome = null, avatarLocked = false, hideAvatarText, onCreateAvatar, onCheckAvatarAgain,
-  videos = { state: 'UNAVAILABLE' }, videoOutcome = null, videoLocked = false, hideVideoText, onCreateVideo, onCheckVideoAgain }: CreativeStudioViewProps): React.ReactElement {
+  videos = { state: 'UNAVAILABLE' }, videoOutcome = null, videoLocked = false, hideVideoText, onCreateVideo, onCheckVideoAgain, media }: CreativeStudioViewProps): React.ReactElement {
   const t = (key: StudioKey, vars?: Record<string, string>) => studioText(language, key, vars);
   const number = (n: number) => new Intl.NumberFormat(language).format(n);
   const notice = waiting ? t('waiting') : concealed ? t('concealed') : !hasSchool ? t('noSchool')
@@ -48,6 +50,7 @@ export function CreativeStudioView({ language, waiting, concealed, hasSchool, st
     {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
     {wallet ? <WalletCards wallet={wallet} language={language} t={t} number={number}/> : null}
     {wallet ? <GenerationsPanel language={language} generations={generations} hidePrompt={hidePrompt}/> : null}
+    {wallet && media ? media : null}
   </section>;
 }
 

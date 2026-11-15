@@ -45,6 +45,7 @@ export const HQ_AI = [
   { path: '/hq/executives', title: 'Executive Team', icon: 'team' },
   { path: '/hq/ai-costs', title: 'AI Costs', icon: 'database' },
   { path: '/hq/creative-credits', title: 'Creative Credits', icon: 'chart' },
+  { path: '/hq/creative-limits', title: 'Creative Spend Limits', icon: 'settings' },
   { path: '/hq/ai-safety', title: 'AI Safety', icon: 'check' },
   { path: '/hq/ai-providers', title: 'AI Providers', icon: 'settings' },
 ] as const;

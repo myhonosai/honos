@@ -144,7 +144,7 @@ it('offers the create form only when a provider is connected and the school can 
 
 it('says what happened, and offers Check again only for an unknown outcome', () => {
   const connected: GenerationsState = { state: 'READY', provider: 'CONNECTED', items: [] };
-  expect(view(connected, { kind: 'DONE' })).toContain('Done. The result is listed below.');
+  expect(view(connected, { kind: 'DONE' })).toContain('Done. It is listed below and waits for approval before it can be used.');
   expect(view(connected, { kind: 'HELD' })).toContain('credits are held while HQ checks it');
   expect(view(connected, { kind: 'FAILED' })).toContain('Your credits were returned.');
   expect(view(connected, { kind: 'REFUSED', code: 'SAAS_CREATIVE_AI_PAUSED_BY_HQ' })).toContain('HQ has paused creative work');
