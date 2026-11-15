@@ -5,8 +5,8 @@ import type { CreativeAssetMediaType, SaasCreativeMediaKind } from '@hon/contrac
  * removed. Only PNG and WebP still images and MP4 video are accepted; anything else, or anything malformed, is refused.
  *
  * - PNG: only image-critical chunks are kept (text, EXIF, time and every other ancillary chunk is dropped).
- * - WebP: single-frame only; EXIF and XMP chunks are dropped and their flags cleared.
- * - MP4: `udta` and `meta` boxes are overwritten in place as `free` boxes of the same size, so no sample offset moves.
+ * - WebP: single-frame only; only image chunks (VP8X, VP8, VP8L, ALPH, ICCP) are kept, EXIF/XMP flags cleared.
+ * - MP4: `udta`, `meta` and `uuid` (XMP, C2PA and other vendor) boxes are overwritten in place as `free` boxes of the same size, so no sample offset moves.
  */
 export interface InspectedCreativeMedia {
   mediaType: CreativeAssetMediaType; width: number; height: number; durationSeconds: number | null; bytes: Buffer;
@@ -16,6 +16,13 @@ const reject = (why: string): never => { throw new CreativeMediaRejected(why); }
 const MAX_SIDE = 8192;
 
 export function inspectCreativeMedia(input: Buffer, kind: SaasCreativeMediaKind): InspectedCreativeMedia {
+  // Any read past a box or chunk is a malformed file (a rejection), never an error that would retry the download.
+  try { return inspect(input, kind); } catch (error) {
+    if (error instanceof CreativeMediaRejected) throw error;
+    return reject('malformed file');
+  }
+}
+function inspect(input: Buffer, kind: SaasCreativeMediaKind): InspectedCreativeMedia {
   if (!Buffer.isBuffer(input) || input.length < 16) reject('too small');
   if (kind === 'IMAGE') {
     if (input.subarray(0, 8).equals(PNG_SIGNATURE)) return png(input);
@@ -53,6 +60,7 @@ function png(b: Buffer): InspectedCreativeMedia {
 }
 
 // ---------- WebP ----------
+const WEBP_KEEP = new Set(['VP8X', 'VP8 ', 'VP8L', 'ALPH', 'ICCP']);
 function webp(b: Buffer): InspectedCreativeMedia {
   if (b.readUInt32LE(4) + 8 !== b.length) reject('WebP size mismatch');
   const chunks: { type: string; data: Buffer; raw: Buffer }[] = [];
@@ -80,7 +88,7 @@ function webp(b: Buffer): InspectedCreativeMedia {
   }
   const out: Buffer[] = [];
   for (const c of chunks) {
-    if (c.type === 'EXIF' || c.type === 'XMP ') continue;
+    if (!WEBP_KEEP.has(c.type)) continue; // EXIF, XMP and any unknown chunk
     if (c.type === 'VP8X') {
       if (c.data.length < 10) reject('malformed VP8X');
       const copy = Buffer.from(c.raw);
@@ -128,6 +136,7 @@ function mp4(input: Buffer): InspectedCreativeMedia {
   const moov = moovs[0]!;
   const mvhd = child(b, moov, 'mvhd')[0] ?? reject('MP4 without mvhd');
   const v = b[mvhd.content];
+  if (mvhd.content + (v === 1 ? 32 : 20) > mvhd.end) reject('truncated mvhd');
   const timescale = v === 1 ? b.readUInt32BE(mvhd.content + 20) : b.readUInt32BE(mvhd.content + 12);
   const duration = v === 1 ? Number(b.readBigUInt64BE(mvhd.content + 24)) : b.readUInt32BE(mvhd.content + 16);
   if (!timescale || !Number.isFinite(duration) || duration <= 0) reject('MP4 duration unknown');
@@ -136,6 +145,7 @@ function mp4(input: Buffer): InspectedCreativeMedia {
   let width = 0, height = 0;
   for (const trak of child(b, moov, 'trak')) {
     const mdia = child(b, trak, 'mdia')[0]; const hdlr = mdia ? child(b, mdia, 'hdlr')[0] : undefined;
+    if (hdlr && hdlr.content + 12 > hdlr.end) reject('truncated hdlr');
     if (!hdlr || b.toString('latin1', hdlr.content + 8, hdlr.content + 12) !== 'vide') continue;
     const tkhd = child(b, trak, 'tkhd')[0] ?? reject('video track without tkhd');
     const at = b[tkhd.content] === 1 ? tkhd.content + 88 : tkhd.content + 76;
@@ -146,10 +156,11 @@ function mp4(input: Buffer): InspectedCreativeMedia {
   if (!side(width) || !side(height)) reject('MP4 without a video track of valid size');
   // Metadata boxes become free space of the same size (no offsets move).
   const blank = (x: Box) => { b.write('free', x.start + 4, 'latin1'); b.fill(0, x.content, x.end); };
-  for (const x of top) if (x.type === 'udta' || x.type === 'meta') blank(x);
+  const metadata = (x: Box) => x.type === 'udta' || x.type === 'meta' || x.type === 'uuid';
+  for (const x of top) if (metadata(x)) blank(x);
   for (const x of boxes(b, moov.content, moov.end)) {
-    if (x.type === 'udta' || x.type === 'meta') blank(x);
-    if (x.type === 'trak') for (const y of boxes(b, x.content, x.end)) if (y.type === 'udta' || y.type === 'meta') blank(y);
+    if (metadata(x)) blank(x);
+    if (x.type === 'trak') for (const y of boxes(b, x.content, x.end)) if (metadata(y)) blank(y);
   }
   return { mediaType: 'video/mp4', width, height, durationSeconds: Math.ceil(seconds), bytes: b };
 }

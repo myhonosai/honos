@@ -304,3 +304,43 @@ the HeyGen webhook endpoint, and moderation coverage.
 - Not in C3: retention/expiry of stored files (owner decision), a removal sweep (repeating the delete is the retry),
   and the school gallery screens (C6).
 - Tests: `apps/api/test/creative-media.test.cjs` (7) and DB proofs J14 to J16 in `test-creative-provider-jobs.mjs`.
+
+## 13. C4 as built (prompt check and human approval, migration 0356)
+
+- **Prompt check** (`packages/contracts/src/creative-prompt-policy.ts`, free and deterministic): runs in the API on the
+  generation prompt, the avatar name and description, and the avatar-video script, **before anything is reserved**. A
+  refusal is 400 `CREATIVE_PROMPT_NOT_ALLOWED` (the reason stays on the server). It refuses:
+  - links, email addresses and phone numbers (seven or more digits);
+  - one reviewed EN/KO/ES list of blocked terms: sexual content and nudity, graphic injury and violence against people,
+    hate, drugs, alcohol, tobacco, self-harm, real public figures, and brands and logos. Martial arts words (kick, punch,
+    spar, fight, belt, weapons forms) are not listed, and neither are Korean syllables that sit inside common words
+    (술 in 무술, 아이 in 아이디어);
+  - a child together with a photorealistic cue, or any child in a REALISTIC-style avatar.
+  Dates and year ranges (2026-2027, 2026-11-15, 11/15/2026) are not counted as phone numbers. The text is NFKC-normalised first, so full-width letters do not get around it. The optional AI moderation call is not
+  built.
+- **Review** (`hon.creative_asset_reviews`, forced RLS, append-only): every stored asset starts `PENDING_REVIEW`.
+  - Who can review: a direct human at the asset's exact school who is a creative actor (`ai.premium.request`) and holds
+    `marketing.social.manage`. They record `APPROVED` or `REJECTED` with `POST .../assets/:assetId/review` (body
+    `{"decision":"APPROVED"}`, command `saas-creative-asset-review`).
+  - Self-approval is allowed (owner decision §10.3, pending; the default proposed in the design).
+  - The AI team can never review: the SaaS actor refuses every action-request, delegated or session context.
+  - The same decision again is idempotent. A rejection can withdraw an approval, and a rejection is final.
+  - Each decision is kept as evidence: who made it and when.
+  - A deleted asset cannot be reviewed.
+- **Viewing:** while an asset is not `APPROVED`, only its requester and the school's reviewers get a signed read. Anyone
+  else gets 404, as if it were not listed. Once `APPROVED`, the school's creative staff can view it. Generation reads
+  now carry `review` on each asset.
+- **Delete:** only the asset's requester or a reviewer may delete it (0355 allowed any creative actor).
+- **Review queue:** `GET .../assets/review-queue?limit=1..50` (reviewers only) lists the school's stored, undeleted,
+  unreviewed assets, oldest first (ordered by the millisecond the answer shows, then the id). It carries no prompt and no storage key.
+- **Only stored provider media can be reviewed.** Synthetic CS1 results have no stored file, so they stay
+  `PENDING_REVIEW` and can never be used.
+- **Still to come:** C5 accepts only `APPROVED` assets for posts and ads and re-checks at publish. Requiring an
+  approved image before an avatar look can make videos (A1/A2) is also still to come.
+- **C3 review follow-ups included here:**
+  - A truncated box or chunk is a rejection, not a retried download.
+  - WebP keeps only image chunks.
+  - MP4 `uuid` boxes (XMP, C2PA) are blanked.
+  - Files already stored for a result that is then rejected are removed.
+  - The 120-second worker lease is unchanged; a retried ingest overwrites the same keys.
+- Tests: `apps/api/test/creative-moderation.test.cjs` (7) and DB proofs J17 and J18.
