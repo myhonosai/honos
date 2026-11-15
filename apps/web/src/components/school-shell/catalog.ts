@@ -50,7 +50,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/voice', 'routeVoice'))] },
   { key: 'analytics', titleKey: 'navAnalytics', routes: [r('/staff/reports', 'routeSchoolReports'), r('/staff/operations', 'routeOperationsReport', true), r('/staff/health-score', 'routeHealthScore'), r('/staff/planning/revenue', 'routeRevenuePlanning')] },
   { key: 'settings', titleKey: 'navSettings', routes: [r('/staff/settings', 'routeSettingsSummary'), r('/staff/account-status', 'routeAccount'), r('/staff/owners', 'routeOwners'), r('/staff/subscription', 'routeSubscription'),
-    r('/staff/settings/branding', 'routeBranding'), r('/staff/settings/texting-number', 'routeTextingNumber'), r('/settings/language-region', 'routeLanguage'), r('/settings/texts-from-hon', 'routeTextsFromHon'),
+    r('/staff/settings/branding', 'routeBranding'), r('/staff/settings/booking-types', 'routeBookingTypes'), r('/staff/settings/texting-number', 'routeTextingNumber'), r('/settings/language-region', 'routeLanguage'), r('/settings/texts-from-hon', 'routeTextsFromHon'),
     r('/staff/automation/rules', 'routeAutomation'), r('/staff/help', 'routeHelp')] },
 ];
 
