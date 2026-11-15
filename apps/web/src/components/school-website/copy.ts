@@ -1,0 +1,137 @@
+/** School website workspace wording (en / ko / es). Labels only; nothing here is authority or an outcome. */
+const en = {
+  title: 'Website', intro: 'Build your school\'s website from a template, edit every section, check it on a computer and a phone, then publish it to its HON web address.',
+  waiting: 'Checking your school…', noSchool: 'Choose a school to manage its website.', concealed: 'Hidden while you were away. It shows again once your school is checked.',
+  loading: 'Reading your website…', denied: 'You cannot manage this school\'s website. Ask the school owner for access.', unavailable: 'Your website could not be loaded.', refresh: 'Check again',
+  startTitle: 'Start your website', startHelp: 'Pick a look. HON fills it with your school\'s name and contact details; you change anything afterwards. This is a template, not AI.',
+  siteName: 'Website name', address: 'Web address', addressHelp: 'Lower-case letters, numbers and hyphens. Visitors will open {url}.', create: 'Create website', creating: 'Creating…',
+  t_MODERN_CLEAN: 'Modern and clean', t_FAMILY_FRIENDLY: 'Family friendly', t_BOLD_POWERFUL: 'Bold and powerful', t_TRADITIONAL: 'Traditional', t_HIGH_CONVERSION: 'High conversion',
+  td_MODERN_CLEAN: 'Calm, simple and professional.', td_FAMILY_FRIENDLY: 'Warm colours for parents and kids.', td_BOLD_POWERFUL: 'High contrast and intense.',
+  td_TRADITIONAL: 'Heritage, values and respect.', td_HIGH_CONVERSION: 'Sign-up first, with an offer banner.',
+  st_DRAFT: 'Not published yet', st_PUBLISHED: 'Live', st_UNPUBLISHED: 'Offline', revision: 'Draft {n}', liveVersion: 'Live version {n}', open: 'Open the live site',
+  tabEdit: 'Edit', tabHistory: 'Published versions', desktop: 'Computer', mobile: 'Phone', preview: 'Preview of your draft', previewHelp: 'Only you see this preview. Forms load on the live site.',
+  pages: 'Pages', page: 'Page', addPage: 'Add page', pageTitle: 'Page title', pageAddress: 'Page address', pageKind: 'Kind', inNav: 'Show in the menu',
+  k_PROGRAM: 'Program page', k_LANDING: 'Landing page', k_PROMOTION: 'Promotion page', k_CUSTOM: 'Other page', k_HOME: 'Home page',
+  seoTitle: 'Search title', seoDescription: 'Search description', removePage: 'Remove page',
+  sections: 'Sections', addSection: 'Add section', add: 'Add', up: 'Move up', down: 'Move down', remove: 'Remove', editing: 'Editing: {name}', done: 'Done',
+  items: 'Items', addItem: 'Add item', removeItem: 'Remove item', noneChosen: 'Not connected', chooseForm: 'Choose a published form', chooseBooking: 'Choose an active booking page',
+  noForms: 'No published forms yet. Publish one under Lead forms.', noBookings: 'No active booking pages yet.',
+  theme: 'Look', template: 'Template', font: 'Font', logo: 'Logo image (https address)', f_MODERN: 'Modern', f_FRIENDLY: 'Friendly', f_BOLD: 'Bold', f_CLASSIC: 'Classic',
+  c_primary: 'Main colour', c_accent: 'Button colour', c_background: 'Background', c_surface: 'Panels', c_text: 'Text',
+  unsaved: 'You have changes that are not saved.', saved: 'All changes saved.', save: 'Save draft', saving: 'Saving…', discard: 'Undo unsaved changes',
+  publishTitle: 'Publish', publishHelp: 'Publishing makes this draft the live site at {url}. Earlier versions are kept.', note: 'Note for your records (optional)',
+  publish: 'Publish', publishing: 'Publishing…', saveFirst: 'Save your changes before publishing.',
+  unpublish: 'Take the site offline', confirmUnpublish: 'Take the website offline? Visitors will see nothing until you publish again.', yes: 'Yes', cancel: 'Cancel',
+  historyNone: 'Nothing published yet.', v_PUBLISH: 'Published', v_ROLLBACK: 'Restored from version {n}', restore: 'Put this version live',
+  confirmRestore: 'Put version {n} live again? Your current draft is replaced by that version, so save anything you want to keep first.',
+  invalidEdit: 'That change does not fit the website rules, so it was not made.',
+  done_create: 'Website created. It is not live yet.', done_save: 'Draft saved.', done_publish: 'Published. Your site is live.', done_rollback: 'That version is live again.', done_unpublish: 'Your website is offline.',
+  e_DENIED: 'You are not allowed to do this at this school. Nothing changed.', e_STALE: 'Someone changed the website first. Reload and try again. Nothing changed.',
+  e_TAKEN: 'Another school already uses that web address. Choose a different one.', e_NOT_LIVE: 'A form, booking page or campaign on the site is not live. Publish or reconnect it, then publish the site.',
+  e_REFERENCE: 'A form, booking page or campaign on the site does not belong to this school. Nothing changed.', e_GONE: 'That is no longer available. Reload.',
+  e_INVALID: 'This was not accepted. Nothing changed.', e_SESSION: 'Your session ended. Sign in again.',
+  e_UNKNOWN: 'We could not confirm whether this went through. While this page stays open, Try again sends exactly the same request, so it cannot happen twice.', tryAgain: 'Try again',
+};
+export type WebsiteKey = keyof typeof en;
+
+const ko: Record<WebsiteKey, string> = {
+  title: '웹사이트', intro: '템플릿으로 도장 웹사이트를 만들고, 모든 섹션을 편집하고, 컴퓨터와 휴대폰에서 확인한 뒤 HON 웹 주소에 게시하세요.',
+  waiting: '도장을 확인하는 중…', noSchool: '웹사이트를 관리할 도장을 선택하세요.', concealed: '자리를 비운 동안 숨겼습니다. 도장 확인 후 다시 표시됩니다.',
+  loading: '웹사이트를 불러오는 중…', denied: '이 도장의 웹사이트를 관리할 수 없습니다. 도장 대표에게 권한을 요청하세요.', unavailable: '웹사이트를 불러오지 못했습니다.', refresh: '다시 확인',
+  startTitle: '웹사이트 시작하기', startHelp: '디자인을 고르세요. HON이 도장 이름과 연락처로 채우며 나중에 무엇이든 바꿀 수 있습니다. AI가 아닌 템플릿입니다.',
+  siteName: '웹사이트 이름', address: '웹 주소', addressHelp: '영문 소문자, 숫자, 하이픈만 사용합니다. 방문자는 {url} 주소로 엽니다.', create: '웹사이트 만들기', creating: '만드는 중…',
+  t_MODERN_CLEAN: '모던하고 깔끔하게', t_FAMILY_FRIENDLY: '가족 친화', t_BOLD_POWERFUL: '강렬하고 힘있게', t_TRADITIONAL: '전통', t_HIGH_CONVERSION: '등록 전환 중심',
+  td_MODERN_CLEAN: '차분하고 단순하며 전문적입니다.', td_FAMILY_FRIENDLY: '부모와 아이를 위한 따뜻한 색감.', td_BOLD_POWERFUL: '대비가 강하고 역동적입니다.',
+  td_TRADITIONAL: '전통, 가치, 예절을 강조합니다.', td_HIGH_CONVERSION: '등록을 먼저, 혜택 배너와 함께.',
+  st_DRAFT: '아직 게시 안 됨', st_PUBLISHED: '게시됨', st_UNPUBLISHED: '오프라인', revision: '초안 {n}', liveVersion: '게시 버전 {n}', open: '게시된 사이트 열기',
+  tabEdit: '편집', tabHistory: '게시 버전', desktop: '컴퓨터', mobile: '휴대폰', preview: '초안 미리보기', previewHelp: '이 미리보기는 본인에게만 보입니다. 양식은 게시된 사이트에서 표시됩니다.',
+  pages: '페이지', page: '페이지', addPage: '페이지 추가', pageTitle: '페이지 제목', pageAddress: '페이지 주소', pageKind: '종류', inNav: '메뉴에 표시',
+  k_PROGRAM: '프로그램 페이지', k_LANDING: '랜딩 페이지', k_PROMOTION: '프로모션 페이지', k_CUSTOM: '기타 페이지', k_HOME: '홈 페이지',
+  seoTitle: '검색 제목', seoDescription: '검색 설명', removePage: '페이지 삭제',
+  sections: '섹션', addSection: '섹션 추가', add: '추가', up: '위로', down: '아래로', remove: '삭제', editing: '편집 중: {name}', done: '완료',
+  items: '항목', addItem: '항목 추가', removeItem: '항목 삭제', noneChosen: '연결 안 됨', chooseForm: '게시된 양식 선택', chooseBooking: '활성 예약 페이지 선택',
+  noForms: '게시된 양식이 없습니다. 리드 양식에서 게시하세요.', noBookings: '활성 예약 페이지가 없습니다.',
+  theme: '디자인', template: '템플릿', font: '글꼴', logo: '로고 이미지 (https 주소)', f_MODERN: '모던', f_FRIENDLY: '친근한', f_BOLD: '굵은', f_CLASSIC: '클래식',
+  c_primary: '주 색상', c_accent: '버튼 색상', c_background: '배경', c_surface: '패널', c_text: '글자',
+  unsaved: '저장하지 않은 변경 사항이 있습니다.', saved: '모든 변경 사항이 저장되었습니다.', save: '초안 저장', saving: '저장 중…', discard: '저장 안 한 변경 취소',
+  publishTitle: '게시', publishHelp: '게시하면 이 초안이 {url} 주소의 사이트가 됩니다. 이전 버전은 보관됩니다.', note: '기록용 메모 (선택)',
+  publish: '게시', publishing: '게시 중…', saveFirst: '게시하기 전에 변경 사항을 저장하세요.',
+  unpublish: '사이트 오프라인으로 전환', confirmUnpublish: '웹사이트를 오프라인으로 전환할까요? 다시 게시할 때까지 방문자에게 아무것도 보이지 않습니다.', yes: '예', cancel: '취소',
+  historyNone: '아직 게시된 버전이 없습니다.', v_PUBLISH: '게시됨', v_ROLLBACK: '버전 {n}에서 복원', restore: '이 버전을 다시 게시',
+  confirmRestore: '버전 {n}을 다시 게시할까요? 현재 초안이 그 버전으로 바뀌므로 남기고 싶은 내용은 먼저 저장하세요.',
+  invalidEdit: '웹사이트 규칙에 맞지 않아 변경하지 않았습니다.',
+  done_create: '웹사이트를 만들었습니다. 아직 게시되지 않았습니다.', done_save: '초안을 저장했습니다.', done_publish: '게시했습니다. 사이트가 공개되었습니다.', done_rollback: '해당 버전을 다시 게시했습니다.', done_unpublish: '웹사이트가 오프라인입니다.',
+  e_DENIED: '이 도장에서 이 작업을 할 수 없습니다. 변경된 것은 없습니다.', e_STALE: '다른 사람이 먼저 웹사이트를 바꿨습니다. 새로고침 후 다시 시도하세요. 변경된 것은 없습니다.',
+  e_TAKEN: '다른 도장이 이미 그 웹 주소를 사용합니다. 다른 주소를 고르세요.', e_NOT_LIVE: '사이트의 양식, 예약 페이지 또는 캠페인이 활성 상태가 아닙니다. 먼저 게시하거나 다시 연결한 뒤 사이트를 게시하세요.',
+  e_REFERENCE: '사이트의 양식, 예약 페이지 또는 캠페인이 이 도장 것이 아닙니다. 변경된 것은 없습니다.', e_GONE: '더 이상 사용할 수 없습니다. 새로고침하세요.',
+  e_INVALID: '받아들여지지 않았습니다. 변경된 것은 없습니다.', e_SESSION: '세션이 끝났습니다. 다시 로그인하세요.',
+  e_UNKNOWN: '처리되었는지 확인할 수 없습니다. 이 페이지가 열려 있는 동안 다시 시도는 똑같은 요청을 보내므로 두 번 처리되지 않습니다.', tryAgain: '다시 시도',
+};
+
+const es: Record<WebsiteKey, string> = {
+  title: 'Sitio web', intro: 'Cree el sitio web de su escuela con una plantilla, edite cada sección, revíselo en computadora y teléfono, y publíquelo en su dirección de HON.',
+  waiting: 'Comprobando su escuela…', noSchool: 'Elija una escuela para administrar su sitio web.', concealed: 'Oculto mientras no estaba. Se muestra de nuevo al comprobar su escuela.',
+  loading: 'Leyendo su sitio web…', denied: 'No puede administrar el sitio web de esta escuela. Pida acceso al dueño de la escuela.', unavailable: 'No se pudo cargar su sitio web.', refresh: 'Comprobar de nuevo',
+  startTitle: 'Empiece su sitio web', startHelp: 'Elija un estilo. HON lo llena con el nombre y los datos de contacto de su escuela; después puede cambiar todo. Es una plantilla, no IA.',
+  siteName: 'Nombre del sitio', address: 'Dirección web', addressHelp: 'Minúsculas, números y guiones. Los visitantes abrirán {url}.', create: 'Crear sitio web', creating: 'Creando…',
+  t_MODERN_CLEAN: 'Moderno y limpio', t_FAMILY_FRIENDLY: 'Para familias', t_BOLD_POWERFUL: 'Audaz y potente', t_TRADITIONAL: 'Tradicional', t_HIGH_CONVERSION: 'Alta conversión',
+  td_MODERN_CLEAN: 'Tranquilo, sencillo y profesional.', td_FAMILY_FRIENDLY: 'Colores cálidos para padres e hijos.', td_BOLD_POWERFUL: 'Alto contraste e intensidad.',
+  td_TRADITIONAL: 'Herencia, valores y respeto.', td_HIGH_CONVERSION: 'Primero la inscripción, con una oferta destacada.',
+  st_DRAFT: 'Aún sin publicar', st_PUBLISHED: 'Publicado', st_UNPUBLISHED: 'Fuera de línea', revision: 'Borrador {n}', liveVersion: 'Versión publicada {n}', open: 'Abrir el sitio publicado',
+  tabEdit: 'Editar', tabHistory: 'Versiones publicadas', desktop: 'Computadora', mobile: 'Teléfono', preview: 'Vista previa del borrador', previewHelp: 'Solo usted ve esta vista previa. Los formularios se cargan en el sitio publicado.',
+  pages: 'Páginas', page: 'Página', addPage: 'Agregar página', pageTitle: 'Título de la página', pageAddress: 'Dirección de la página', pageKind: 'Tipo', inNav: 'Mostrar en el menú',
+  k_PROGRAM: 'Página de programa', k_LANDING: 'Página de destino', k_PROMOTION: 'Página de promoción', k_CUSTOM: 'Otra página', k_HOME: 'Página de inicio',
+  seoTitle: 'Título para buscadores', seoDescription: 'Descripción para buscadores', removePage: 'Quitar página',
+  sections: 'Secciones', addSection: 'Agregar sección', add: 'Agregar', up: 'Subir', down: 'Bajar', remove: 'Quitar', editing: 'Editando: {name}', done: 'Listo',
+  items: 'Elementos', addItem: 'Agregar elemento', removeItem: 'Quitar elemento', noneChosen: 'Sin conectar', chooseForm: 'Elija un formulario publicado', chooseBooking: 'Elija una página de reservas activa',
+  noForms: 'Aún no hay formularios publicados. Publique uno en Formularios.', noBookings: 'Aún no hay páginas de reservas activas.',
+  theme: 'Estilo', template: 'Plantilla', font: 'Letra', logo: 'Imagen del logo (dirección https)', f_MODERN: 'Moderna', f_FRIENDLY: 'Amigable', f_BOLD: 'Gruesa', f_CLASSIC: 'Clásica',
+  c_primary: 'Color principal', c_accent: 'Color de botones', c_background: 'Fondo', c_surface: 'Paneles', c_text: 'Texto',
+  unsaved: 'Tiene cambios sin guardar.', saved: 'Todos los cambios están guardados.', save: 'Guardar borrador', saving: 'Guardando…', discard: 'Deshacer cambios sin guardar',
+  publishTitle: 'Publicar', publishHelp: 'Al publicar, este borrador será el sitio en {url}. Las versiones anteriores se conservan.', note: 'Nota para su registro (opcional)',
+  publish: 'Publicar', publishing: 'Publicando…', saveFirst: 'Guarde sus cambios antes de publicar.',
+  unpublish: 'Desconectar el sitio', confirmUnpublish: '¿Desconectar el sitio web? Los visitantes no verán nada hasta que vuelva a publicar.', yes: 'Sí', cancel: 'Cancelar',
+  historyNone: 'Aún no hay nada publicado.', v_PUBLISH: 'Publicado', v_ROLLBACK: 'Restaurado de la versión {n}', restore: 'Publicar esta versión otra vez',
+  confirmRestore: '¿Publicar otra vez la versión {n}? Su borrador actual se reemplaza por esa versión; guarde antes lo que quiera conservar.',
+  invalidEdit: 'Ese cambio no cumple las reglas del sitio, así que no se hizo.',
+  done_create: 'Sitio creado. Aún no está publicado.', done_save: 'Borrador guardado.', done_publish: 'Publicado. Su sitio está en línea.', done_rollback: 'Esa versión está publicada otra vez.', done_unpublish: 'Su sitio web está fuera de línea.',
+  e_DENIED: 'No puede hacer esto en esta escuela. No cambió nada.', e_STALE: 'Alguien cambió el sitio primero. Recargue e inténtelo de nuevo. No cambió nada.',
+  e_TAKEN: 'Otra escuela ya usa esa dirección web. Elija otra.', e_NOT_LIVE: 'Un formulario, página de reservas o campaña del sitio no está activo. Publíquelo o vuelva a conectarlo y luego publique el sitio.',
+  e_REFERENCE: 'Un formulario, página de reservas o campaña del sitio no es de esta escuela. No cambió nada.', e_GONE: 'Ya no está disponible. Recargue.',
+  e_INVALID: 'No se aceptó. No cambió nada.', e_SESSION: 'Su sesión terminó. Inicie sesión de nuevo.',
+  e_UNKNOWN: 'No pudimos confirmar si se completó. Mientras esta página siga abierta, Intentar de nuevo envía exactamente la misma solicitud, así que no puede ocurrir dos veces.', tryAgain: 'Intentar de nuevo',
+};
+
+const TABLES: Record<string, Record<WebsiteKey, string>> = { en, ko, es };
+export function websiteText(language: string, key: WebsiteKey, vars?: Record<string, string>): string {
+  let text = (TABLES[language.slice(0, 2)] ?? en)[key] ?? en[key];
+  for (const [k, v] of Object.entries(vars ?? {})) text = text.split(`{${k}}`).join(v);
+  return text;
+}
+
+/** Section and field names shown in the editor. */
+const SECTION_NAMES: Record<string, Record<string, string>> = {
+  en: { HERO: 'Main banner', PROGRAMS: 'Programs', SCHEDULE: 'Schedule', TRIAL_CTA: 'Trial offer', LEAD_FORM: 'Enquiry form', BOOKING: 'Booking button', FAQ: 'Questions',
+    TESTIMONIALS: 'Reviews', INSTRUCTORS: 'Instructors', TEXT: 'Text', IMAGE: 'Image', VIDEO: 'Video', CONTACT: 'Contact', PROMO_BANNER: 'Offer banner', CHAT: 'Website chat' },
+  ko: { HERO: '메인 배너', PROGRAMS: '프로그램', SCHEDULE: '시간표', TRIAL_CTA: '체험 안내', LEAD_FORM: '문의 양식', BOOKING: '예약 버튼', FAQ: '자주 묻는 질문',
+    TESTIMONIALS: '후기', INSTRUCTORS: '사범', TEXT: '글', IMAGE: '이미지', VIDEO: '동영상', CONTACT: '연락처', PROMO_BANNER: '혜택 배너', CHAT: '웹사이트 채팅' },
+  es: { HERO: 'Banner principal', PROGRAMS: 'Programas', SCHEDULE: 'Horario', TRIAL_CTA: 'Oferta de prueba', LEAD_FORM: 'Formulario de consulta', BOOKING: 'Botón de reserva', FAQ: 'Preguntas',
+    TESTIMONIALS: 'Opiniones', INSTRUCTORS: 'Instructores', TEXT: 'Texto', IMAGE: 'Imagen', VIDEO: 'Video', CONTACT: 'Contacto', PROMO_BANNER: 'Banner de oferta', CHAT: 'Chat del sitio' },
+};
+const FIELD_NAMES: Record<string, Record<string, string>> = {
+  en: { heading: 'Heading', subheading: 'Text under the heading', ctaLabel: 'Button text', ctaHref: 'Button link (#section, /page or https://)', imageUrl: 'Image (https address)', layout: 'Layout',
+    intro: 'Introduction', name: 'Name', ages: 'Ages', description: 'Description', note: 'Note', day: 'Day', time: 'Time', className: 'Class', body: 'Text', publicFormId: 'Form',
+    bookingPublicId: 'Booking page', question: 'Question', answer: 'Answer', quote: 'Quote', author: 'Who said it', title: 'Title', bio: 'About', alt: 'Image description', caption: 'Caption',
+    provider: 'Video site', videoId: 'Video id', address: 'Address', phone: 'Phone', email: 'Email', hours: 'Hours', text: 'Text', CENTER: 'Centered', SPLIT: 'Text beside image', YOUTUBE: 'YouTube', VIMEO: 'Vimeo' },
+  ko: { heading: '제목', subheading: '제목 아래 글', ctaLabel: '버튼 글자', ctaHref: '버튼 링크 (#섹션, /페이지, https://)', imageUrl: '이미지 (https 주소)', layout: '배치',
+    intro: '소개', name: '이름', ages: '나이', description: '설명', note: '안내', day: '요일', time: '시간', className: '수업', body: '글', publicFormId: '양식',
+    bookingPublicId: '예약 페이지', question: '질문', answer: '답변', quote: '후기', author: '작성자', title: '직함', bio: '소개', alt: '이미지 설명', caption: '설명 문구',
+    provider: '동영상 사이트', videoId: '동영상 ID', address: '주소', phone: '전화', email: '이메일', hours: '운영 시간', text: '글', CENTER: '가운데', SPLIT: '이미지 옆 글', YOUTUBE: 'YouTube', VIMEO: 'Vimeo' },
+  es: { heading: 'Título', subheading: 'Texto bajo el título', ctaLabel: 'Texto del botón', ctaHref: 'Enlace del botón (#sección, /página o https://)', imageUrl: 'Imagen (dirección https)', layout: 'Diseño',
+    intro: 'Introducción', name: 'Nombre', ages: 'Edades', description: 'Descripción', note: 'Nota', day: 'Día', time: 'Hora', className: 'Clase', body: 'Texto', publicFormId: 'Formulario',
+    bookingPublicId: 'Página de reservas', question: 'Pregunta', answer: 'Respuesta', quote: 'Cita', author: 'Quién lo dijo', title: 'Cargo', bio: 'Acerca de', alt: 'Descripción de la imagen', caption: 'Pie de foto',
+    provider: 'Sitio de video', videoId: 'Id del video', address: 'Dirección', phone: 'Teléfono', email: 'Correo', hours: 'Horario', text: 'Texto', CENTER: 'Centrado', SPLIT: 'Texto junto a la imagen', YOUTUBE: 'YouTube', VIMEO: 'Vimeo' },
+};
+const lang = (language: string) => (['ko', 'es'].includes(language.slice(0, 2)) ? language.slice(0, 2) : 'en');
+export const sectionName = (language: string, type: string) => SECTION_NAMES[lang(language)]![type] ?? type;
+export const fieldName = (language: string, field: string) => FIELD_NAMES[lang(language)]![field] ?? FIELD_NAMES.en![field] ?? field;

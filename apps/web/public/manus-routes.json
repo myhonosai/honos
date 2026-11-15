@@ -161,6 +161,18 @@
       "title": "HON | Finishing connection"
     },
     {
+      "path": "/staff/marketing/website",
+      "title": "HON | Website"
+    },
+    {
+      "path": "/sites/:slug",
+      "title": "School website"
+    },
+    {
+      "path": "/sites/:slug/:page",
+      "title": "School website"
+    },
+    {
       "path": "/staff/creative-studio",
       "title": "HON | Creative Studio"
     },

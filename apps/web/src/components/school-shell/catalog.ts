@@ -32,7 +32,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/documents', 'routeDocuments'))] },
   { key: 'crm', titleKey: 'navCrm', routes: [...g('groupLeads', r('/staff/crm', 'routeLeadsHome'), r('/staff/crm/leads', 'routeLeads', true), r('/staff/crm/journey', 'routeJourney', true), r('/staff/crm/follow-ups', 'routeFollowUps'),
     r('/staff/crm/trials', 'routeTrials', true), r('/staff/crm/lead-memberships', 'routeLeadMemberships'), r('/staff/migration/leads', 'routeLeadImport')),
-    ...g('groupMarketing', r('/staff/marketing', 'routeMarketingHome'), r('/staff/marketing/campaigns', 'routeCampaigns'), r('/staff/marketing/forms', 'routeForms'),
+    ...g('groupMarketing', r('/staff/marketing', 'routeMarketingHome'), r('/staff/marketing/campaigns', 'routeCampaigns'), r('/staff/marketing/forms', 'routeForms'), r('/staff/marketing/website', 'routeWebsite'),
     r('/staff/marketing/intake', 'routeIntake'), r('/staff/marketing/social', 'routeSocial'), r('/staff/creative-studio', 'routeCreativeStudio'), r('/staff/champions-club', 'routeChampions'))] },
   { key: 'classes', titleKey: 'navClasses', routes: [...g('groupSchedule', r('/staff/schedule', 'routeRosters'), r('/staff/schedule/sessions', 'routeSessions'), r('/staff/schedule/timetable', 'routeTimetable'), r('/staff/schedule/events', 'routeEvents'), r('/staff/schedule/bookings', 'routeBookings'),
     r('/staff/classpass', 'routeClassPass', true), r('/staff/kiosk', 'routeKiosk'), r('/staff/migration/classes', 'routeHistoryImport')),
