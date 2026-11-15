@@ -132,6 +132,8 @@ import { SchoolOnboardingController } from './onboarding/school-onboarding.contr
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
 import { SchoolSupportController } from './support/school-support.controller.js';
 import { SchoolSupportService } from './support/school-support.service.js';
+import { CustomToolController } from './custom-tools/custom-tool.controller.js';
+import { CustomToolService } from './custom-tools/custom-tool.service.js';
 import { SchoolSocialController } from './marketing/social/school-social.controller.js';
 import { SchoolSocialService } from './marketing/social/school-social.service.js';
 import { SchoolSocialPostsController } from './marketing/social/school-social-posts.controller.js';
@@ -504,6 +506,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HistoryImportController,
     SchoolOnboardingController,
     SchoolSupportController,
+    CustomToolController,
     SchoolSocialController,
     SchoolSocialPostsController,
     TuitionPaymentController,
@@ -697,6 +700,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HistoryImportService,
     SchoolOnboardingService,
     SchoolSupportService,
+    CustomToolService,
     SchoolSocialService,
     SchoolSocialPostsService,
     SocialPostDispatcher,
