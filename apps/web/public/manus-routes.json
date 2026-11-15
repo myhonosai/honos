@@ -313,6 +313,10 @@
       "title": "HON | Family messages"
     },
     {
+      "path": "/staff/conversations",
+      "title": "HON | Conversations"
+    },
+    {
       "path": "/staff/settings/branding",
       "title": "HON | School branding"
     },
