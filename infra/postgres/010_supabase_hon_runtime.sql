@@ -3690,6 +3690,8 @@ BEGIN
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
 -- 0380 shared AI text proposals: two private tables; the runtime reaches the WEBSITE_EDIT kind through seven entry points.
 DO $$ DECLARE r text; t text; BEGIN
   IF to_regclass('hon.ai_text_proposals') IS NULL THEN RAISE EXCEPTION 'Apply migration 0380 first'; END IF;
