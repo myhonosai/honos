@@ -108,7 +108,21 @@ describe('school shell frame', () => {
 
   it('lists every page of every area in the Menu, not a cut-down few', () => {
     const panel = render({ mode: 'modern', menuOpen: true }).split('aria-label="Menu"')[1]!;
-    for (const item of SCHOOL_SHELL_NAV) for (const route of item.routes) expect(panel, route.href).toContain(`href="${route.href}`);
+    for (const item of SCHOOL_SHELL_NAV) for (const route of item.routes) {
+      if (route.hidden) expect(panel, route.href).not.toContain(`href="${route.href}"`);
+      else expect(panel, route.href).toContain(`href="${route.href}`);
+    }
+  });
+
+  it('keeps onboarding pages out of tabs and the menu while Home still owns them for "where am I"', () => {
+    const html = render({ path: '/staff/welcome' });
+    expect(html).toMatch(/aria-current="page"[^>]*data-nav="home"|data-nav="home"[^>]*aria-current="page"/);
+    expect(html).toContain('>Welcome and setup</p>');
+    const tabs = html.match(/data-shell-tabs="">(.*?)<\/nav>/s)?.[1] ?? '';
+    expect(tabs).not.toContain('/staff/welcome'); expect(tabs).not.toContain('/staff/launch'); expect(tabs).not.toContain('/staff/founder-setup');
+    const settings = render({ path: '/staff/settings' });
+    expect(settings.match(/data-shell-tabs="">(.*?)<\/nav>/s)?.[1]).toMatch(/href="\/staff\/settings" aria-current="page">Summary</);
+    expect(render({ path: '/staff/settings/branding' }).match(/data-shell-tabs="">(.*?)<\/nav>/s)?.[1]).toMatch(/aria-current="page">School branding</);
   });
 
   it('offers a More button in the Modern top bar so areas that do not fit stay one click away', () => {
@@ -138,5 +152,30 @@ describe('school shell frame', () => {
   it('keeps the drawer closed unless the menu is open', () => {
     expect(render()).not.toMatch(/<dialog[^>]* open/);
     expect(render({ menuOpen: true })).toContain('data-drawer="open"');
+  });
+
+  it('splits a long area into named groups and shows only the current group\'s pages', () => {
+    const tabs = (html: string) => [...(html.match(/data-shell-tabs="">(.*?)<\/nav>/s)?.[1] ?? '').matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]);
+    const groupRow = (html: string) => html.match(/data-shell-groups="">(.*?)<\/nav>/s)?.[1] ?? '';
+    const progress = render({ path: '/staff/curriculum/progress' });
+    expect([...groupRow(progress).matchAll(/>([^<]+)<\/a>/g)].map(m => m[1])).toEqual(['Schedule', 'Attendance', 'Curriculum &amp; testing', 'Community']);
+    expect(groupRow(progress)).toMatch(/aria-current="true"[^>]*>Curriculum &amp; testing|>Curriculum &amp; testing/);
+    expect(progress).toMatch(/href="\/staff\/curriculum\/library"[^>]*aria-current="true">Curriculum &amp; testing/);
+    expect(tabs(progress)).toEqual(['Curriculum library', 'Curriculum progress', 'Teaching studio', 'Testing', 'Readiness', 'Scorecards', 'Promotions', 'Certificates']);
+    const invoices = render({ path: '/staff/billing/invoices' });
+    expect(tabs(invoices)).toEqual(['Invoices', 'Tuition balances', 'Payment processors', 'Checkout pages', 'Saved payment methods']);
+    // Short areas keep one flat row with no group row.
+    const reports = render({ path: '/staff/reports' });
+    expect(reports).not.toContain('data-shell-groups'); expect(tabs(reports)).toHaveLength(4);
+  });
+
+  it('names the current area in the phone bar when it is not one of the four shortcuts', () => {
+    const mobile = (html: string) => html.match(/aria-label="Quick navigation"[^>]*>(.*?)<\/nav>/s)?.[1] ?? '';
+    const billing = mobile(render({ path: '/staff/billing/invoices' }));
+    expect(billing).toContain('data-mobile-current=""'); expect(billing).toContain('<span>Billing</span>'); expect(billing).not.toContain('<span>More</span>');
+    expect(billing).toContain('aria-label="More: You are in Billing"');
+    const classes = mobile(render({ path: '/staff/schedule' }));
+    expect(classes).not.toContain('data-mobile-current'); expect(classes).toContain('<span>More</span>');
+    expect(classes).toMatch(/aria-current="page"[^>]*>.*?<span>Classes<\/span>/s);
   });
 });
