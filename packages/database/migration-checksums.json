@@ -296,6 +296,7 @@
     "0358_school_number_order_settle.sql": "04aec55d14c81c53b4012377c9ad610221cfacf53ed3fb8a23a12cb9d98afdc0",
     "0332_school_reports_locations.sql": "e32748c44c865ee67062ad535fd29d3c39532f2a5f94afeac9f5e2f68894dae2",
     "0333_school_class_attendance_import.sql": "f2be82bb3d64d2079ba5df9efa8c911acf9173909e857a7a89d440b2911d8ced",
-    "0334_school_membership_balance_import.sql": "c3cd842298cea1d168b08e7b21c8c0cded0f48df081c32cc8692087d248cae9c"
+    "0334_school_membership_balance_import.sql": "c3cd842298cea1d168b08e7b21c8c0cded0f48df081c32cc8692087d248cae9c",
+    "0361_school_websites.sql": "262d9768dc26fb197cac0ba0da3a77e31442f4dfb006571a74a6f3b016eba221"
   }
 }
