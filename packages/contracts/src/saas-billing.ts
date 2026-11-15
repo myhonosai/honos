@@ -50,6 +50,7 @@ export const SAAS_COMMANDS = {
   setSchoolTextSender: 'hq-school-text-sender-set',
   decideSchoolNumberOrder: 'hq-school-number-order-decide',
   settleSchoolNumberOrder: 'hq-school-number-order-settle',
+  decideSchoolA2pRegistration: 'hq-school-a2p-registration-decide',
   setSchoolMissedCallSettings: 'hq-school-missed-call-settings-set',
   setZernioLeadForm: 'hq-zernio-lead-form-set',
   recordSubscriptionGeneration: 'saas-subscription-generation-record',

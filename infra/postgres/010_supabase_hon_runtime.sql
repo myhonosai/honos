@@ -3577,6 +3577,26 @@ DO $$ DECLARE r text; BEGIN
   END LOOP;
   GRANT EXECUTE ON FUNCTION hon.settle_school_number_order_from_hq(text,uuid,text,text,integer) TO hon_runtime;
 END $$;
+-- 0379 school A2P registrations: five runtime entry points (owner request/cancel/read, HQ decide/read), no table
+-- privilege; claim/record are worker-only (013); the owner check, JSON and business helpers and the guard are private.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regclass('hon.school_a2p_registrations') IS NULL THEN RAISE EXCEPTION 'Apply migration 0379 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_a2p_registrations FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_a2p_registrations FROM '||quote_ident(r);
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.require_school_a2p_owner(text)','hon.school_a2p_registration_json(hon.school_a2p_registrations)',
+    'hon.school_a2p_business(jsonb)','hon.guard_school_a2p_registration()',
+    'hon.claim_school_a2p_registrations(integer,integer)','hon.record_school_a2p_progress(uuid,uuid,text,jsonb,text,integer)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.request_school_a2p_registration(text,jsonb,text), hon.cancel_school_a2p_registration(text,uuid,integer),
+    hon.read_school_a2p_registrations(text), hon.decide_school_a2p_registration_from_hq(text,uuid,text,text,integer),
+    hon.read_hq_school_a2p_registrations(text,text) TO hon_runtime;
+END $$;
 -- 0353 AI on HQ access-exception schools under an HQ-owner monthly limit: only the HQ command and read reach the
 -- runtime; the two tables and the decision helpers are internal.
 DO $$ DECLARE r text; f text; BEGIN

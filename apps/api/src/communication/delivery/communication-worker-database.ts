@@ -1,4 +1,5 @@
 import type { SchoolNumberPurchaseResult } from './school-number-purchase.js';
+import type { SchoolA2pClaim, SchoolA2pResult } from './school-a2p.js';
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Pool } from 'pg';
 import { runtimePoolOptions } from '../../foundation/runtime-pool-options.js';
@@ -284,6 +285,23 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
     const row = (await this.query<{ data: { status: string; version: number } }>('SELECT hon.record_school_number_purchase($1, $2, $3, $4, $5, $6, $7) AS data',
       [result.orderId, result.leaseToken, result.outcome, result.numberSid ?? null, result.serviceSid ?? null, result.accountSid ?? null, result.failureCode ?? null]))[0];
     if (!row?.data) throw new Error('NUMBER_PURCHASE_NOT_RECORDED');
+    return row.data;
+  }
+  /** T3a (0379): approved A2P registrations to submit or check, each under a fresh lease, with the frozen facts. */
+  async claimSchoolA2pRegistrations(limit: number, leaseSeconds: number): Promise<SchoolA2pClaim[]> {
+    const rows = await this.query<{ registration_id: string; lease_token: string; school_id: string; organization_id: string; stage: string; attempt: number;
+      outcome_unknown: boolean; account_sid: string; brand_type: SchoolA2pClaim['brandType']; use_case: SchoolA2pClaim['useCase']; draft: SchoolA2pClaim['draft'];
+      business: SchoolA2pClaim['business']; customer_profile_sid: string | null; a2p_profile_sid: string | null; brand_sid: string | null; campaign_sid: string | null;
+      messaging_service_sid: string | null }>('SELECT * FROM hon.claim_school_a2p_registrations($1, $2)', [limit, leaseSeconds]);
+    return rows.map((r) => ({ registrationId: r.registration_id, leaseToken: r.lease_token, schoolId: r.school_id, organizationId: r.organization_id, stage: r.stage,
+      attempt: r.attempt, outcomeUnknown: r.outcome_unknown, accountSid: r.account_sid, brandType: r.brand_type, useCase: r.use_case, draft: r.draft, business: r.business,
+      customerProfileSid: r.customer_profile_sid, a2pProfileSid: r.a2p_profile_sid, brandSid: r.brand_sid, campaignSid: r.campaign_sid, messagingServiceSid: r.messaging_service_sid }));
+  }
+
+  async recordSchoolA2pProgress(result: SchoolA2pResult) {
+    const row = (await this.query<{ data: { status: string; version: number } }>('SELECT hon.record_school_a2p_progress($1, $2, $3, $4::jsonb, $5, $6) AS data',
+      [result.registrationId, result.leaseToken, result.outcome, JSON.stringify(result.sids), result.failureCode ?? null, result.waitSeconds ?? null]))[0];
+    if (!row?.data) throw new Error('A2P_PROGRESS_NOT_RECORDED');
     return row.data;
   }
 }

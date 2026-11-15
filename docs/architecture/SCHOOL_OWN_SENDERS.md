@@ -230,6 +230,30 @@ records a per-school count of accepted emails for HQ visibility only; a school's
   (`PROVISIONED_SENDER_LOCKED`) but can still switch it ACTIVE. HQ must not do that before the school's A2P campaign is
   approved; T3 adds the A2P check to that switch.
 
+## 8c. T3a as built (0379)
+
+- `hon.school_a2p_registrations`: REQUESTED (school OWNER: communication.sender.manage plus a live OWNER role) ->
+  SUBMIT_APPROVED or REJECTED (human HQ owner; a rejection needs a reason) -> SUBMITTING (worker lease) -> BRAND_PENDING ->
+  CAMPAIGN_PENDING -> APPROVED, or FAILED. The owner may withdraw before submitting starts. One registration in progress or
+  approved per school. (The spec's `DRAFT` is named `REQUESTED`, as in number orders.)
+- Frozen per registration: the 0190 draft input (with the owner confirmation), the engine's draft (answers, samples,
+  HELP/STOP replies), its digest, the brand type (Standard or Low-Volume Standard) and the business facts (legal name, EIN,
+  business type, address, authorized contact). The API regenerates the draft from the input and refuses it if the digest
+  the owner saw changed or the draft is incomplete. The EIN is stored as nine digits; every read shows only its last four.
+  Sole proprietors are not offered.
+- Worker (`SchoolA2pWorker`): claims only for an ACTIVE, entitled school with an ACTIVE subaccount; every step finds the
+  school's existing object before creating one (customer profile, A2P profile, brand, campaign), so a lost create is
+  `UNKNOWN` and found next time. Twilio's review is polled every 6 hours; progress resets the attempt count, six attempts
+  without progress end FAILED `ATTEMPTS_EXHAUSTED`. No campaign until the school's number is bought (`WAITING_FOR_NUMBER`).
+  A SID once recorded never changes; a subaccount change fails the registration (`TWILIO_ACCOUNT_MISMATCH`).
+- Activation: only `APPROVED` with the campaign on the school's own sender service (same subaccount) switches its 0248
+  sender ACTIVE. The HQ setter now refuses ACTIVE on a HON-bought sender without that (`A2P_NOT_APPROVED`).
+- Switches: the worker runs only with `HON_TWILIO_A2P_SUBMIT_APPROVED=true` and a READY A2P client. Production wires
+  `UnavailableTwilioA2pClient` (never READY); the fake is for tests and local environments. Still to build: T3b screens,
+  T3c the Twilio REST client (with David's go-ahead), Twilio status callbacks, and the A2P fee lines (T4).
+- Routes: `GET/POST /v1/organizations/:org/schools/:school/communications/a2p-registrations`, `POST .../:id/cancel`,
+  `GET /v1/hq/saas/school-a2p-registrations?status=`, `POST /v1/hq/saas/school-a2p-registrations/:id/decision`.
+
 ## 9. Security and failure rules
 
 - No permission is inferred from the selected school, URL, form value or AI persona. Owner actions re-resolve the live

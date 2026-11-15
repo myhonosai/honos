@@ -249,6 +249,9 @@ const SAAS_BILLING_CALLS = {
   // T2c (0358): the HQ owner records what the school's Twilio subaccount shows for an unsettled order. Calls no provider.
   settleSchoolNumberOrder: { sql: 'SELECT hon.settle_school_number_order_from_hq($1,$2::uuid,$3,$4,$5::integer) AS data', arity: 5, readOnly: false },
   decideSchoolNumberOrder: { sql: 'SELECT hon.decide_school_number_order_from_hq($1,$2::uuid,$3,$4,$5::integer) AS data', arity: 5, readOnly: false },
+  // T3a (0379): HQ reads every school's A2P registrations; a human HQ owner approves or rejects one submission. Calls no provider.
+  readHqSchoolA2pRegistrations: { sql: 'SELECT hon.read_hq_school_a2p_registrations($1,$2) AS data', arity: 2, readOnly: true },
+  decideSchoolA2pRegistration: { sql: 'SELECT hon.decide_school_a2p_registration_from_hq($1,$2::uuid,$3,$4,$5::integer) AS data', arity: 5, readOnly: false },
   setSchoolTextSender: { sql: 'SELECT hon.set_school_text_sender_from_hq($1,$2::uuid,$3,$4,$5,$6::boolean,$7::integer) AS data', arity: 7, readOnly: false },
   // 0249: the HQ owner sets the school's forwarding phone and the missed-call text-back switch.
   setSchoolMissedCallSettings: { sql: 'SELECT hon.set_school_missed_call_settings_from_hq($1,$2::uuid,$3,$4::boolean,$5::integer) AS data', arity: 5, readOnly: false },

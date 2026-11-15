@@ -1115,3 +1115,4 @@ export * from './billing-imports.js';
 export * from './school-social.js';
 export * from './school-social-posts.js';
 export * from './school-number-orders.js';
+export * from './school-a2p-registrations.js';
