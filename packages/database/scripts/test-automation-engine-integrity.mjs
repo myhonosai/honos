@@ -129,12 +129,19 @@ try{
  r=await post(b,base(b)+'/'+welcome.workflowId+'/activate',{expectedRevision:live.revision,version:1},C.AUTOMATION_ACTIVATE_COMMAND);assert.equal(r.status,404);
  assert.equal(Number(before[0].n),0);
  assert.equal((await q("SELECT count(*) n FROM hon.audit_events WHERE organization_id=$1 AND action_code='automation.workflow.activated'",[a.org]))[0].n,'1');
- pass('turning on names the part HON does not run yet (approval step, booking link, reply exit) and refuses another school\'s stage; exact replay, stale revision, closed input, wrong command and other school refused; one activation record');
+ // Turning on also needs communication.message.queue: automated sends act on the activator's authority.
+ const bwf=await create(b,'Needs messaging',def(lead(),[{id:'stop',type:'STOP'}]));
+ const queuePerm=await q("DELETE FROM hon.role_permissions rp USING hon.roles r WHERE r.id=rp.role_id AND r.organization_id=$1 AND r.code='OWNER' AND rp.permission_code='communication.message.queue' RETURNING rp.*",[b.org]);
+ assert.equal(queuePerm.length,1);
+ r=await activate(b,bwf);assert.equal(r.status,403);assert.equal((await wfRow(bwf.workflowId)).status,'DRAFT');
+ await q('INSERT INTO hon.role_permissions SELECT * FROM jsonb_populate_record(NULL::hon.role_permissions,$1::jsonb)',[JSON.stringify(queuePerm[0])]);
+ const bOn=C.verifyAutomationWorkflowDetail(ok(await activate(b,bwf))).workflow;ok(await pause(b,bOn));
+ pass('turning on names the part HON does not run yet (approval step, booking link, reply exit) and refuses another school\'s stage and an activator without communication.message.queue; exact replay, stale revision, closed input, wrong command and other school refused; one activation record');
 
  // 3. A real lead event runs the workflow end to end: SMS queued with merge fields, tag, wait, condition, task, email; 0243 creates deliveries.
  const pat=await contact(a,'Pat');
  const e1=await event(a,'crm.lead.created',pat.lead);
- let c=await consume();assert.deepEqual(c,{consumed:1,runsStarted:1});
+ let c=await consume();assert.deepEqual(c,{consumed:1,runsStarted:1,failed:0});
  let [run]=await runsOf(welcome.workflowId);assert.equal(run.person_id,pat.person);assert.equal(run.trigger_key,'lead:'+pat.lead);assert.equal(run.trigger_event_id,e1);assert.equal(run.status,'RUNNING');
  assert.equal((await q('SELECT runs_started n FROM hon.automation_event_receipts WHERE outbox_event_id=$1',[e1]))[0].n,1);
  let d=await drain();assert.deepEqual(d,{ran:3,failed:0,exited:0,paused:0});
@@ -162,10 +169,10 @@ try{
 
  // 4. Exactly once: replays, a second event about the same lead, and two engines racing on one event.
  // The tag the run added is itself an event; it matches no TAG_ADDED workflow and is receipted with zero runs.
- assert.deepEqual(await consume(),{consumed:1,runsStarted:0});
- assert.deepEqual(await consume(),{consumed:0,runsStarted:0});
+ assert.deepEqual(await consume(),{consumed:1,runsStarted:0,failed:0});
+ assert.deepEqual(await consume(),{consumed:0,runsStarted:0,failed:0});
  const e2=await event(a,'crm.lead.created',pat.lead);
- assert.deepEqual(await consume(),{consumed:1,runsStarted:0});
+ assert.deepEqual(await consume(),{consumed:1,runsStarted:0,failed:0});
  assert.equal((await q('SELECT runs_started n FROM hon.automation_event_receipts WHERE outbox_event_id=$1',[e2]))[0].n,0);
  const sam=await contact(a,'Sam');await event(a,'crm.lead.created',sam.lead);
  const racers=[new pg.Client({connectionString:owner.toString(),ssl:false}),new pg.Client({connectionString:owner.toString(),ssl:false})];
@@ -276,6 +283,38 @@ try{
  for(const x of await runsOf(tasks.workflowId)){assert.equal(x.status,'FAILED');assert.equal(x.end_code,'STEP_FAILED');assert.deepEqual((await stepsOf(x.id)).map(s=>s.status+':'+s.outcome_code),['FAILED:STEP_ERROR']);}
  assert.equal((await q("SELECT count(*) n FROM hon.work_items WHERE organization_id=$1 AND title LIKE 'Follow up %'",[a.org]))[0].n,'0');
  pass('an error in a step fails that run only (nothing it wrote is kept); ten failures out of ten finished steps pause the workflow (FAILURE_RATE)');
+
+ // 10b. Stage moves are audited per lead; one event that cannot be processed is receipted as failed and blocks nothing behind it.
+ const mover=await on(a,'Move stage',def({kind:'TAG_ADDED',config:{tag:'move me'}},[{id:'move',type:'MOVE_STAGE',stageId:a.stage2,next:null}]));
+ const mo=await contact(a,'Mo'),bad=await contact(a,'Badevent');
+ ok(await post(a,`organizations/${a.org}/schools/${a.school}/people/${bad.person}/tags`,{tag:'Move me'},C.CONTACT_TAG_ADD_COMMAND));
+ ok(await post(a,`organizations/${a.org}/schools/${a.school}/people/${mo.person}/tags`,{tag:'Move me'},C.CONTACT_TAG_ADD_COMMAND));
+ // Fixture-only fault: starting a run for this one contact errors.
+ await q(`CREATE FUNCTION hon.au2_event_fault() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN IF NEW.person_id='${bad.person}' THEN RAISE EXCEPTION 'FIXTURE_FAULT'; END IF; RETURN NEW; END $f$`);
+ await q('CREATE TRIGGER au2_event_fault BEFORE INSERT ON hon.automation_runs FOR EACH ROW EXECUTE FUNCTION hon.au2_event_fault()');
+ try{c=await consume();}finally{await q('DROP TRIGGER au2_event_fault ON hon.automation_runs');await q('DROP FUNCTION hon.au2_event_fault()');}
+ assert.equal(c.failed,1);assert.equal(c.runsStarted,1);
+ const badReceipt=(await q("SELECT r.runs_started,r.failure_code FROM hon.automation_event_receipts r JOIN hon.outbox_events e ON e.id=r.outbox_event_id WHERE e.aggregate_id=$1 AND e.event_type='contact.tag.added'",[bad.person]))[0];
+ assert.deepEqual(badReceipt,{runs_started:0,failure_code:'EVENT_ERROR'});
+ assert.equal((await runsOf(mover.workflowId,bad.person)).length,0);
+ await drain();
+ assert.equal((await q('SELECT pipeline_stage_id s FROM hon.crm_leads WHERE id=$1',[mo.lead]))[0].s,a.stage2);
+ const [moRun]=await runsOf(mover.workflowId,mo.person);
+ const moved=await q("SELECT actor_principal_id a,source,entity_type,entity_id,prior_state,next_state FROM hon.audit_events WHERE action_code='crm.lead.stage_moved' AND entity_id=$1",[mo.lead]);
+ assert.equal(moved.length,1);assert.equal(moved[0].a,AUTOMATION);assert.equal(moved[0].source,'AUTOMATION');assert.equal(moved[0].entity_type,'CRM_LEAD');
+ assert.equal(moved[0].prior_state.stageId,a.stage);assert.equal(moved[0].next_state.stageId,a.stage2);assert.equal(moved[0].next_state.automationRunId,moRun.id);
+ assert.equal(moved[0].next_state.workflowId,mover.workflowId);
+ // A workflow locked by a staff command is skipped, never waited on (no lock-order deadlock with archive); its step stays due.
+ const lockedWf=await on(a,'Locked',def({kind:'TAG_ADDED',config:{tag:'lock me'}},[{id:'stop',type:'STOP'}]));
+ const lo=await contact(a,'Lo');ok(await post(a,`organizations/${a.org}/schools/${a.school}/people/${lo.person}/tags`,{tag:'lock me'},C.CONTACT_TAG_ADD_COMMAND));
+ await consume();const [loRun]=await runsOf(lockedWf.workflowId,lo.person);
+ const holder=new pg.Client({connectionString:owner.toString(),ssl:false});await holder.connect();
+ try{await holder.query('BEGIN');await holder.query('SELECT 1 FROM hon.automation_workflows WHERE id=$1 FOR UPDATE',[lockedWf.workflowId]);
+  await admin.query("SET statement_timeout='5s'");try{await runDue();}finally{await admin.query('RESET statement_timeout');}
+  assert.equal((await stepsOf(loRun.id))[0].status,'PENDING');}
+ finally{await holder.query('ROLLBACK').catch(()=>{});await holder.end();}
+ await drain();assert.equal((await stepsOf(loRun.id))[0].outcome_code,'STOPPED');
+ pass('each automated stage move writes one identifier-only audit row (prior and next stage, run and workflow); an event that errors is receipted EVENT_ERROR with nothing kept and the next event still starts its run; a workflow locked by a staff command is skipped without waiting');
 
  // 11. Other schools: events of school B never start school A's workflows; B cannot read A's runs; A's history reads through the API.
  const bob=await contact(b,'Bob');await event(b,'crm.lead.created',bob.lead);

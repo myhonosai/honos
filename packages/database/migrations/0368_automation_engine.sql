@@ -53,6 +53,7 @@ CREATE TABLE hon.automation_event_receipts (
   organization_id uuid NOT NULL, school_id uuid NOT NULL,
   event_type text NOT NULL CHECK (event_type ~ '^[a-z_]+(\.[a-z_]+)+$'),
   runs_started integer NOT NULL CHECK (runs_started BETWEEN 0 AND 100),
+  failure_code text CHECK (failure_code IS NULL OR failure_code ~ '^[A-Z_]{1,40}$'),
   consumed_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   FOREIGN KEY (school_id,organization_id) REFERENCES hon.schools(id,organization_id)
 );
@@ -191,13 +192,14 @@ LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
       AND EXISTS(SELECT 1 FROM hon.schools s WHERE s.id=p_school AND s.organization_id=p_org AND s.status='ACTIVE')
       AND NOT EXISTS(SELECT 1 FROM hon.hq_operator_grants h WHERE h.principal_id=p.id)
       AND hon.staff_member_eligible(p.id,p_org,p_school)
-      AND EXISTS(SELECT 1 FROM hon.principal_role_grants g JOIN hon.roles r ON r.id=g.role_id AND r.organization_id=g.organization_id
+      -- Both turning workflows on and queuing messages, live at the school (automated sends act on the activator's authority).
+      AND (SELECT count(DISTINCT x.code) FROM hon.principal_role_grants g JOIN hon.roles r ON r.id=g.role_id AND r.organization_id=g.organization_id
         JOIN hon.role_permissions rp ON rp.role_id=r.id AND rp.organization_id=r.organization_id JOIN hon.permissions x ON x.code=rp.permission_code
         WHERE g.principal_id=p.id AND g.organization_id=p_org AND g.school_id=p_school AND g.revoked_at IS NULL
           AND g.effective_from<=clock_timestamp() AND (g.effective_until IS NULL OR g.effective_until>clock_timestamp())
           AND (r.management_school_id IS NULL OR r.management_school_id=p_school)
           AND r.code !~* '^(PARENT|GUARDIAN|STUDENT|FAMILY|HQ|HON_|PLATFORM|SYSTEM)'
-          AND x.code='automation.workflow.activate' AND x.is_staff_assignable)
+          AND x.code IN ('automation.workflow.activate','communication.message.queue') AND x.is_staff_assignable)=2
       AND EXISTS(SELECT 1 FROM hon.organization_entitlements e WHERE e.organization_id=p_org AND e.status='ACTIVE'
         AND e.tier='COMPLETE' AND e.effective_from<=clock_timestamp() AND (e.effective_until IS NULL OR e.effective_until>clock_timestamp())))
 $$;
@@ -269,6 +271,7 @@ BEGIN
   IF d->'entry'->>'reentry'='ONCE_EVER' AND EXISTS(SELECT 1 FROM hon.automation_runs r WHERE r.workflow_id=w.id AND r.person_id=p_person) THEN RETURN NULL; END IF;
   IF d->'entry'->>'reentry'='ONCE_PER_PERIOD' AND EXISTS(SELECT 1 FROM hon.automation_runs r WHERE r.workflow_id=w.id AND r.person_id=p_person
       AND r.started_at>clock_timestamp()-make_interval(days=>(d->'entry'->>'reentryDays')::integer)) THEN RETURN NULL; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('automation-run-cap:'||w.id::text,0));
   IF (SELECT count(*) FROM hon.automation_runs r WHERE r.workflow_id=w.id AND r.started_at>clock_timestamp()-interval '1 day')>=500 THEN RETURN NULL; END IF;
   FOR c IN SELECT x FROM jsonb_array_elements(d->'entry'->'conditions') x LOOP
     IF NOT hon.automation_condition_holds(w.organization_id,w.school_id,p_person,p_since,c) THEN RETURN NULL; END IF;
@@ -330,7 +333,7 @@ END $$;
 -- school was turned on; start the runs they qualify for. Returns counts only.
 CREATE FUNCTION hon.consume_automation_events(p_limit integer) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-DECLARE e hon.outbox_events%ROWTYPE; s record; w hon.automation_workflows%ROWTYPE; started integer; consumed integer:=0; total integer:=0; d jsonb;
+DECLARE e hon.outbox_events%ROWTYPE; s record; w hon.automation_workflows%ROWTYPE; started integer; consumed integer:=0; total integer:=0; failed_events integer:=0; d jsonb;
 BEGIN
   IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 500 THEN RAISE EXCEPTION 'AUTOMATION_INVALID' USING ERRCODE='22023'; END IF;
   FOR e IN SELECT x.* FROM hon.outbox_events x
@@ -344,10 +347,13 @@ BEGIN
     PERFORM pg_advisory_xact_lock(hashtextextended('hon.automation_event:'||e.id::text,0));
     CONTINUE WHEN EXISTS(SELECT 1 FROM hon.automation_event_receipts r WHERE r.outbox_event_id=e.id);
     consumed:=consumed+1; started:=0;
+    -- Each event in its own subtransaction: an event that cannot be processed is receipted as failed (nothing it
+    -- started is kept) and never blocks the events behind it. Serialization failures and deadlocks end the batch.
+    BEGIN
     s:=hon.automation_event_subject(e);
     IF s.person_id IS NOT NULL THEN
       FOR w IN SELECT * FROM hon.automation_workflows aw WHERE aw.organization_id=e.organization_id AND aw.school_id=e.school_id AND aw.status='ACTIVE'
-          AND aw.activated_at<=e.occurred_at AND aw.trigger_kind=ANY(s.kinds) ORDER BY aw.activated_at,aw.id LIMIT 100 LOOP
+          AND aw.activated_at<=e.occurred_at AND aw.trigger_kind=ANY(s.kinds) ORDER BY aw.activated_at,aw.id LOOP
         -- No run starts for a workflow whose activator no longer may run it; it is paused instead.
         IF NOT hon.automation_activator_ok(w.activated_by_principal_id,w.organization_id,w.school_id) THEN
           PERFORM hon.automation_engine_pause(w.id,'AUTHORITY_LOST'); CONTINUE; END IF;
@@ -361,8 +367,14 @@ BEGIN
     INSERT INTO hon.automation_event_receipts(outbox_event_id,organization_id,school_id,event_type,runs_started)
       VALUES(e.id,e.organization_id,e.school_id,e.event_type,least(started,100));
     total:=total+started;
+    EXCEPTION WHEN serialization_failure OR deadlock_detected OR lock_not_available OR query_canceled THEN RAISE;
+      WHEN OTHERS THEN
+        INSERT INTO hon.automation_event_receipts(outbox_event_id,organization_id,school_id,event_type,runs_started,failure_code)
+          VALUES(e.id,e.organization_id,e.school_id,e.event_type,0,'EVENT_ERROR');
+        failed_events:=failed_events+1;
+    END;
   END LOOP;
-  RETURN jsonb_build_object('consumed',consumed,'runsStarted',total);
+  RETURN jsonb_build_object('consumed',consumed,'runsStarted',total,'failed',failed_events);
 END $$;
 
 -- ---------------------------------------------------------------------------------------------------------------------
@@ -403,7 +415,7 @@ END $$;
 CREATE FUNCTION hon.automation_execute_step(st hon.automation_run_steps,r hon.automation_runs,w hon.automation_workflows,d jsonb) RETURNS text
 LANGUAGE plpgsql VOLATILE SET search_path=pg_catalog,hon AS $$
 DECLARE s jsonb; person hon.people%ROWTYPE; school hon.schools%ROWTYPE; chan text; content jsonb; body text; subject text; msg uuid; item uuid;
-  outcome text; res text:='DONE'; br text; nxt text; due timestamptz:=clock_timestamp(); waited boolean; child uuid; tw hon.automation_workflows%ROWTYPE;
+  outcome text; res text:='DONE'; br text; moved integer; lead_row record; nxt text; due timestamptz:=clock_timestamp(); waited boolean; child uuid; tw hon.automation_workflows%ROWTYPE;
   automation constant uuid:='00000000-0000-4000-8000-000000000368';
 BEGIN
   SELECT x INTO s FROM jsonb_array_elements(d->'steps') x WHERE x->>'id'=st.step_id;
@@ -412,6 +424,8 @@ BEGIN
   CASE s->>'type'
     WHEN 'SEND_SMS','SEND_EMAIL' THEN
       chan:=CASE s->>'type' WHEN 'SEND_SMS' THEN 'SMS' ELSE 'EMAIL' END; content:=s->'content';
+      -- The per-contact daily cap is counted under a per-contact lock so concurrent engines cannot exceed it.
+      PERFORM pg_advisory_xact_lock(hashtextextended('automation-message-cap:'||r.person_id::text,0));
       body:=hon.automation_render(CASE content->>'mode' WHEN 'FIXED' THEN content->>'text' ELSE content->>'fallbackText' END,person.given_name,school.name);
       IF chan='EMAIL' THEN subject:=left(hon.automation_render(CASE content->>'mode' WHEN 'FIXED' THEN content->>'subject' ELSE content->>'fallbackSubject' END,person.given_name,school.name),150); END IF;
       outcome:=CASE
@@ -453,12 +467,22 @@ BEGIN
       IF NOT EXISTS(SELECT 1 FROM hon.crm_pipeline_stages x WHERE x.id=(s->>'stageId')::uuid AND x.organization_id=r.organization_id AND x.school_id=r.school_id) THEN
         outcome:='STAGE_NOT_IN_SCHOOL'; res:='SKIPPED';
       ELSE
-        UPDATE hon.crm_leads l SET pipeline_stage_id=(s->>'stageId')::uuid,version=l.version+1,updated_at=clock_timestamp()
-          WHERE l.organization_id=r.organization_id AND l.school_id=r.school_id AND l.primary_person_id=r.person_id AND l.status='OPEN'
-            AND l.pipeline_stage_id<>(s->>'stageId')::uuid
-            AND EXISTS(SELECT 1 FROM hon.crm_pipeline_stages x WHERE x.id=(s->>'stageId')::uuid AND x.pipeline_id=l.pipeline_id AND x.terminal_status IS NULL);
-        outcome:=CASE WHEN FOUND THEN 'STAGE_MOVED' ELSE 'NO_OPEN_LEAD_IN_PIPELINE' END;
-        IF NOT FOUND THEN res:='SKIPPED'; END IF;
+        moved:=0;
+        FOR lead_row IN SELECT l.id,l.pipeline_stage_id,l.version FROM hon.crm_leads l
+            WHERE l.organization_id=r.organization_id AND l.school_id=r.school_id AND l.primary_person_id=r.person_id AND l.status='OPEN'
+              AND l.pipeline_stage_id<>(s->>'stageId')::uuid
+              AND EXISTS(SELECT 1 FROM hon.crm_pipeline_stages x WHERE x.id=(s->>'stageId')::uuid AND x.pipeline_id=l.pipeline_id AND x.terminal_status IS NULL)
+            ORDER BY l.id FOR UPDATE LOOP
+          UPDATE hon.crm_leads l SET pipeline_stage_id=(s->>'stageId')::uuid,version=l.version+1,updated_at=clock_timestamp() WHERE l.id=lead_row.id;
+          -- Identifier-only evidence of each automated stage move.
+          INSERT INTO hon.audit_events(organization_id,school_id,actor_principal_id,source,action_code,entity_type,entity_id,prior_state,next_state,result,request_id,correlation_id)
+            VALUES(r.organization_id,r.school_id,automation,'AUTOMATION','crm.lead.stage_moved','CRM_LEAD',lead_row.id,
+              jsonb_build_object('stageId',lead_row.pipeline_stage_id,'version',lead_row.version),
+              jsonb_build_object('stageId',s->>'stageId','version',lead_row.version+1,'automationRunId',r.id,'workflowId',w.id),'SUCCEEDED',st.id,r.id);
+          moved:=moved+1;
+        END LOOP;
+        outcome:=CASE WHEN moved>0 THEN 'STAGE_MOVED' ELSE 'NO_OPEN_LEAD_IN_PIPELINE' END;
+        IF moved=0 THEN res:='SKIPPED'; END IF;
       END IF;
       nxt:=s->>'next';
     WHEN 'START_WORKFLOW' THEN
@@ -514,19 +538,23 @@ END $$;
 CREATE FUNCTION hon.run_due_automation_steps(p_limit integer) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE st hon.automation_run_steps%ROWTYPE; r hon.automation_runs%ROWTYPE; w hon.automation_workflows%ROWTYPE; d jsonb; ex text; res text;
-  ran integer:=0; failed integer:=0; exited integer:=0; paused integer:=0; i integer:=0;
+  ran integer:=0; failed integer:=0; exited integer:=0; paused integer:=0; i integer:=0; busy uuid[]:='{}';
 BEGIN
   IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 500 THEN RAISE EXCEPTION 'AUTOMATION_INVALID' USING ERRCODE='22023'; END IF;
   WHILE i<p_limit LOOP
     SELECT x.* INTO st FROM hon.automation_run_steps x JOIN hon.automation_runs rr ON rr.id=x.run_id
       JOIN hon.automation_workflows ww ON ww.id=rr.workflow_id
       WHERE x.status IN ('PENDING','WAITING') AND x.due_at<=clock_timestamp() AND rr.status='RUNNING' AND ww.status='ACTIVE'
+        AND NOT (ww.id=ANY(busy))
       ORDER BY x.due_at,x.id LIMIT 1 FOR UPDATE OF x SKIP LOCKED;
     EXIT WHEN st.id IS NULL;
     i:=i+1;
-    SELECT * INTO w FROM hon.automation_workflows x WHERE x.id=(SELECT workflow_id FROM hon.automation_runs WHERE id=st.run_id) FOR UPDATE;
+    -- Staff commands lock the workflow first; never wait for it here (that order could deadlock). A workflow someone
+    -- is changing is skipped for the rest of this batch and its step stays due.
+    SELECT * INTO w FROM hon.automation_workflows x WHERE x.id=(SELECT workflow_id FROM hon.automation_runs WHERE id=st.run_id) FOR UPDATE SKIP LOCKED;
+    IF w.id IS NULL THEN busy:=busy||(SELECT workflow_id FROM hon.automation_runs WHERE id=st.run_id); st:=NULL; CONTINUE; END IF;
     SELECT * INTO r FROM hon.automation_runs x WHERE x.id=st.run_id FOR UPDATE;
-    IF w.status<>'ACTIVE' OR r.status<>'RUNNING' THEN st:=NULL; CONTINUE; END IF;
+    IF w.status<>'ACTIVE' OR r.status<>'RUNNING' THEN st:=NULL; w:=NULL; CONTINUE; END IF;
     IF NOT hon.automation_activator_ok(w.activated_by_principal_id,w.organization_id,w.school_id) THEN
       PERFORM hon.automation_engine_pause(w.id,'AUTHORITY_LOST'); paused:=paused+1; st:=NULL; CONTINUE;
     END IF;
@@ -539,7 +567,9 @@ BEGIN
     BEGIN
       res:=hon.automation_execute_step(st,r,w,d);
       ran:=ran+1;
-    EXCEPTION WHEN OTHERS THEN
+    -- Transient database conflicts are not step failures: they end the batch and the step is retried next time.
+    EXCEPTION WHEN serialization_failure OR deadlock_detected OR lock_not_available OR query_canceled THEN RAISE;
+    WHEN OTHERS THEN
       UPDATE hon.automation_run_steps SET status='FAILED',outcome_code='STEP_ERROR',finished_at=clock_timestamp(),wait_until=NULL WHERE id=st.id;
       PERFORM hon.automation_end_run(r.id,'FAILED','STEP_FAILED'); failed:=failed+1;
       IF (SELECT count(*) FILTER (WHERE status='FAILED')*5>=count(*) AND count(*)>=10 FROM (SELECT x.status FROM hon.automation_run_steps x JOIN hon.automation_runs rr ON rr.id=x.run_id
@@ -547,7 +577,7 @@ BEGIN
         PERFORM hon.automation_engine_pause(w.id,'FAILURE_RATE'); paused:=paused+1;
       END IF;
     END;
-    st:=NULL;
+    st:=NULL; w:=NULL;
   END LOOP;
   RETURN jsonb_build_object('ran',ran,'failed',failed,'exited',exited,'paused',paused);
 END $$;
@@ -574,6 +604,8 @@ BEGIN
   missing:=hon.automation_unavailable(d);
   IF missing IS NOT NULL THEN RAISE EXCEPTION 'AUTOMATION_NOT_AVAILABLE_YET' USING ERRCODE='0A000', DETAIL=missing; END IF;
   IF NOT hon.automation_references_ok(org,school,w.id,d) THEN RAISE EXCEPTION 'AUTOMATION_REFERENCE_INVALID' USING ERRCODE='23503'; END IF;
+  -- The same standard the engine re-proves before every run and step (also needs communication.message.queue).
+  IF NOT hon.automation_activator_ok(actor,org,school) THEN RAISE EXCEPTION 'AUTOMATION_FORBIDDEN' USING ERRCODE='42501'; END IF;
   UPDATE hon.automation_workflows SET status='ACTIVE',active_version=(p_input->>'version')::integer,activated_by_principal_id=actor,activated_at=at,
     paused_reason=NULL,revision=w.revision+1,updated_at=at WHERE id=w.id RETURNING * INTO w;
   result:=hon.automation_detail_json(w);

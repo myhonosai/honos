@@ -99,7 +99,7 @@ const fakePool = (role, answers) => { const calls = []; return { calls, async qu
   if (sql.includes('pg_roles')) return { rows: role ? [role] : [] };
   const fn = /hon\.(\w+)\(/.exec(sql)[1]; return { rows: answers[fn] === undefined ? [] : [{ data: answers[fn] }] }; }, async end() {} }; };
 const safeRole = { rolsuper: false, rolbypassrls: false, rolinherit: false };
-const good = { consume_automation_events: { consumed: 2, runsStarted: 1 }, run_due_automation_steps: { ran: 3, failed: 0, exited: 1, paused: 0 } };
+const good = { consume_automation_events: { consumed: 2, runsStarted: 1, failed: 0 }, run_due_automation_steps: { ran: 3, failed: 0, exited: 1, paused: 0 } };
 
 test('the engine worker refuses another login, an unsafe role and unverified counts; it calls only the two engine functions', async () => {
   const url = 'postgresql://hon_automation_worker:x@db.example.test:5432/postgres?sslmode=verify-full';
@@ -112,10 +112,10 @@ test('the engine worker refuses another login, an unsafe role and unverified cou
       await assert.rejects(w.runOnce(), /AUTOMATION_WORKER_ROLE_UNSAFE/); assert.equal(pool.calls.some(c => c.sql.includes('hon.')), false);
     }
     const w = new AutomationWorkerDatabase(), pool = fakePool(safeRole, good); w.pool = pool;
-    assert.deepEqual(await w.runOnce(50), { consumed: 2, runsStarted: 1, ran: 3, failed: 0, exited: 1, paused: 0 });
+    assert.deepEqual(await w.runOnce(50), { consumed: 2, runsStarted: 1, eventsFailed: 0, ran: 3, failed: 0, exited: 1, paused: 0 });
     assert.deepEqual(pool.calls.filter(c => c.sql.includes('hon.')).map(c => [c.sql, c.args]),
       [['SELECT hon.consume_automation_events($1::integer) AS data', [50]], ['SELECT hon.run_due_automation_steps($1::integer) AS data', [50]]]);
-    for (const bad of [{ ...good, consume_automation_events: { consumed: -1, runsStarted: 0 } }, { ...good, run_due_automation_steps: { ran: 1.5, failed: 0, exited: 0, paused: 0 } },
+    for (const bad of [{ ...good, consume_automation_events: { consumed: -1, runsStarted: 0, failed: 0 } }, { ...good, run_due_automation_steps: { ran: 1.5, failed: 0, exited: 0, paused: 0 } },
       { ...good, run_due_automation_steps: { ran: '1', failed: 0, exited: 0, paused: 0 } }, { ...good, consume_automation_events: undefined }]) {
       const x = new AutomationWorkerDatabase(); x.pool = fakePool(safeRole, bad); await assert.rejects(x.runOnce(), /AUTOMATION_ENGINE_UNVERIFIED/);
     }

@@ -81,27 +81,31 @@ AI-mode messages send their fixed fallback wording (`QUEUED_FALLBACK_WORDING`).
 **Events.** `hon.consume_automation_events(limit)` reads outbox events of ten types from the last 7 days that occurred
 after a matching workflow was turned on, resolves the contact from the event's own records (lead, appointment, booking,
 membership, registration, person), never from the payload, and writes one receipt per event
-(`hon.automation_event_receipts`) under a per-event lock, so each event is consumed once even with two engines. A run
+(`hon.automation_event_receipts`) under a per-event lock, so each event is consumed once even with two engines. Each
+event runs in its own subtransaction: one that errors is receipted `EVENT_ERROR` with nothing it started kept, and the
+events behind it still run; serialization failures and deadlocks end the batch instead and are retried. A run
 starts only when the workflow is ACTIVE, its activator still may run it, the contact is at the school, there is no open
 run for that contact, the trigger key (`lead:`, `appt:…:STATUS`, `book:`, `mact:`/`mcan:`, `test:`, `tag:<event>`,
 `run:<parent>`) has not started one before, the reentry rule allows it, the workflow started fewer than 500 runs in the
-last day and the entry conditions hold. A tag event caused by a workflow's own run never starts that workflow.
+last day (counted under a per-workflow lock) and the entry conditions hold. A tag event caused by a workflow's own run never starts that workflow.
 
 **Steps.** `hon.run_due_automation_steps(limit)` takes due steps (`FOR UPDATE SKIP LOCKED`) of RUNNING runs of ACTIVE
-workflows. Before each step it re-proves the activator (active human staff with `automation.workflow.activate` at the
-school, active organization and school, active COMPLETE entitlement; otherwise the workflow pauses `AUTHORITY_LOST`) and
+workflows; a workflow a staff command has locked is skipped for that batch, never waited on. Before each step it
+re-proves the activator (active human staff with `automation.workflow.activate` and `communication.message.queue` at the
+school, the same check as at turn-on, active organization and school, active COMPLETE entitlement; otherwise the workflow pauses `AUTHORITY_LOST`) and
 the exit rules (trial booked, enrolled, lead closed, opted out → run EXITED `EXIT_<rule>`). Each step runs in its own
-subtransaction; an error fails that run only (`STEP_ERROR`), and when at least 20% of the workflow's last 50 finished
+subtransaction; an error fails that run only (`STEP_ERROR`; serialization failures and deadlocks are re-raised, not counted), and when at least 20% of the workflow's last 50 finished
 steps (at least 10) failed the workflow pauses `FAILURE_RATE`.
 
 - SEND_SMS / SEND_EMAIL: checked at send time for OPTED_IN consent on the channel, an address, at most 3 automated
-  messages per contact per 24 hours and length; then one QUEUED `hon.communication_messages` row with
+  messages per contact per 24 hours (counted under a per-contact lock) and length; then one QUEUED `hon.communication_messages` row with
   `origin_kind='AUTOMATION'`, `origin_id` = the run step and (email) `email_subject`, created by the fixed AUTOMATION
   principal `00000000-0000-4000-8000-000000000368`. The 0243 delivery worker sends it with its own consent, address,
   quiet-hours and STOP checks. A skipped send records why (`NO_CONSENT`, `NO_ADDRESS`, `DAILY_CAP`, `TEXT_TOO_LONG`).
   SendGrid delivery still uses its fixed subject; delivering `email_subject` is a follow-up.
 - CREATE_TASK / NOTIFY_STAFF: one READY HUMAN_UI work item (with its history row) for the school's owners.
-- ADD_TAG / REMOVE_TAG (20-tag limit → `TAG_LIMIT_REACHED`), MOVE_STAGE (open lead in that stage's pipeline only),
+- ADD_TAG / REMOVE_TAG (20-tag limit → `TAG_LIMIT_REACHED`), MOVE_STAGE (open lead in that stage's pipeline only; one identifier-only `crm.lead.stage_moved` audit row per lead with
+  prior and next stage, run and workflow),
   START_WORKFLOW (at most depth 3; never a workflow already in the chain: `CHAIN_LIMIT`).
 - WAIT (minutes, or the next school-local time), WAIT_FOR trial booked / enrolled (re-checked every 5 minutes until the
   timeout, then the `no` branch), IF, STOP.
@@ -118,7 +122,7 @@ configuration) and a role that is a superuser, bypasses RLS or inherits. Nothing
 ## Validation
 
 - `packages/database/scripts/test-automation-workflows-integrity.mjs` (champions-club fixture, 8 groups).
-- `packages/database/scripts/test-automation-engine-integrity.mjs` (champions-club fixture, 14 groups, incl. the 011
+- `packages/database/scripts/test-automation-engine-integrity.mjs` (champions-club fixture, 15 groups, incl. the 011
   exact verification for 0367 and 0368 and drift refusals).
 - `apps/api/test/automation-workflows.test.cjs`, `apps/api/test/automation-engine.test.cjs` (mocked boundary, worker,
   scheduler and deployment configuration).

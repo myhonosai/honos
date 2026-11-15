@@ -3,7 +3,7 @@ import { Pool } from 'pg';
 import { runtimePoolOptions } from '../foundation/runtime-pool-options.js';
 import { emitTelemetry } from '../observability/telemetry.js';
 
-export interface AutomationEngineCounts { consumed: number; runsStarted: number; ran: number; failed: number; exited: number; paused: number }
+export interface AutomationEngineCounts { consumed: number; runsStarted: number; eventsFailed: number; ran: number; failed: number; exited: number; paused: number }
 
 /**
  * Connects as hon_automation_worker (HON_AUTOMATION_WORKER_DATABASE_URL), never as the runtime, migration or communication
@@ -54,7 +54,7 @@ export class AutomationWorkerDatabase implements OnModuleDestroy {
     };
     const events = await this.call('consume_automation_events', limit);
     const steps = await this.call('run_due_automation_steps', limit);
-    return { consumed: count(events, 'consumed'), runsStarted: count(events, 'runsStarted'), ran: count(steps, 'ran'),
+    return { consumed: count(events, 'consumed'), runsStarted: count(events, 'runsStarted'), eventsFailed: count(events, 'failed'), ran: count(steps, 'ran'),
       failed: count(steps, 'failed'), exited: count(steps, 'exited'), paused: count(steps, 'paused') };
   }
 }
@@ -88,7 +88,7 @@ export class AutomationEngineScheduler implements OnModuleInit, OnModuleDestroy 
     this.running = true;
     try {
       const counts = await this.worker.runOnce();
-      if (counts.consumed || counts.ran || counts.exited || counts.paused) {
+      if (counts.consumed || counts.eventsFailed || counts.ran || counts.failed || counts.exited || counts.paused) {
         emitTelemetry('info', 'automation.engine_completed', { component: 'automation-engine', message: JSON.stringify(counts) });
       }
       return counts;
