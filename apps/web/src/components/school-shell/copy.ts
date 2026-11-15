@@ -1,5 +1,6 @@
 /** School shell copy. ko/es are typed against en, so a missing key fails `pnpm check`. */
 const en = {
+  routeSettingsSummary: 'Summary',
   groupPeople: 'Students & families', groupStaff: 'Staff', groupLeads: 'Leads', groupMarketing: 'Marketing', groupSchedule: 'Schedule', groupAttendance: 'Attendance', groupCurriculum: 'Curriculum & testing', groupCommunity: 'Community', groupMemberships: 'Memberships', groupPayments: 'Payments', groupTeam: 'Team & approvals', groupSpecialists: 'Specialists', groupNav: 'Groups in this section', currentArea: 'You are in',
   brand: 'HON OS', brandTagline: 'For martial arts schools', skip: 'Skip to main content', primaryNav: 'School navigation', sectionNav: 'Pages in this section',
   openMenu: 'Open navigation', closeMenu: 'Close navigation', more: 'More', mobileNav: 'Quick navigation',
@@ -27,6 +28,7 @@ const en = {
 } as const;
 export type ShellKey = keyof typeof en;
 const ko: Record<ShellKey, string> = {
+  routeSettingsSummary: '요약',
   groupPeople: '학생 및 가족', groupStaff: '직원', groupLeads: '문의', groupMarketing: '마케팅', groupSchedule: '일정', groupAttendance: '출석', groupCurriculum: '커리큘럼 및 심사', groupCommunity: '커뮤니티', groupMemberships: '회원권', groupPayments: '결제', groupTeam: '팀 및 승인', groupSpecialists: '전문 AI', groupNav: '이 메뉴의 그룹', currentArea: '현재 위치',
   brand: 'HON OS', brandTagline: '무술 도장을 위한 운영 시스템', skip: '본문으로 건너뛰기', primaryNav: '도장 메뉴', sectionNav: '이 메뉴의 페이지',
   openMenu: '메뉴 열기', closeMenu: '메뉴 닫기', more: '더보기', mobileNav: '빠른 메뉴',
@@ -53,6 +55,7 @@ const ko: Record<ShellKey, string> = {
   routeTeam: '팀 및 초대', routeRoles: '역할', routeAvailability: '근무 가능 시간', routeQualifications: '사범 자격', routeAccount: '계정 및 사용량', routeOwners: '도장 소유자', routeSubscription: 'HON 구독', routeLaunch: '도장 개설', routeFounderSetup: '창업 설정 가이드', routeWelcome: '환영 및 설정', routeHelp: 'HON에 도움 요청',
 };
 const es: Record<ShellKey, string> = {
+  routeSettingsSummary: 'Resumen',
   groupPeople: 'Alumnos y familias', groupStaff: 'Personal', groupLeads: 'Prospectos', groupMarketing: 'Marketing', groupSchedule: 'Horario', groupAttendance: 'Asistencia', groupCurriculum: 'Plan de estudios y exámenes', groupCommunity: 'Comunidad', groupMemberships: 'Membresías', groupPayments: 'Pagos', groupTeam: 'Equipo y aprobaciones', groupSpecialists: 'Especialistas', groupNav: 'Grupos de esta sección', currentArea: 'Estás en',
   brand: 'HON OS', brandTagline: 'Para escuelas de artes marciales', skip: 'Saltar al contenido principal', primaryNav: 'Navegación de la escuela', sectionNav: 'Páginas de esta sección',
   openMenu: 'Abrir navegación', closeMenu: 'Cerrar navegación', more: 'Más', mobileNav: 'Navegación rápida',

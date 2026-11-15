@@ -7,11 +7,13 @@ import type { ShellKey } from './copy';
  * prefill, which the destination re-verifies server-side.
  */
 export type SchoolShellIcon = 'home' | 'students' | 'crm' | 'classes' | 'billing' | 'aiTeam' | 'analytics' | 'settings';
-export type SchoolShellRoute = Readonly<{ href: string; titleKey: ShellKey; scoped: boolean; group?: ShellKey }>;
+export type SchoolShellRoute = Readonly<{ href: string; titleKey: ShellKey; scoped: boolean; group?: ShellKey; hidden?: boolean }>;
 export type SchoolShellItem = Readonly<{ key: SchoolShellIcon; titleKey: ShellKey; routes: readonly SchoolShellRoute[] }>;
 
 const r = (href: string, titleKey: ShellKey, scoped = false): SchoolShellRoute => ({ href, titleKey, scoped });
 /** Design pass (2026-11-15): long areas split their section tabs into a few named groups, so a row never scrolls far. */
+/** Owned by an area for "where am I", but reached from a workflow (onboarding), never from tabs or the menu. */
+const h = (href: string, titleKey: ShellKey): SchoolShellRoute => ({ href, titleKey, scoped: false, hidden: true });
 const g = (group: ShellKey, ...routes: SchoolShellRoute[]): SchoolShellRoute[] => routes.map(route => ({ ...route, group }));
 
 /**
@@ -21,7 +23,9 @@ const g = (group: ShellKey, ...routes: SchoolShellRoute[]): SchoolShellRoute[] =
  * Stable keys (`crm`, `students`, `analytics`) are kept so links and browser checks keep working.
  */
 export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
-  { key: 'home', titleKey: 'navHome', routes: [r('/staff/dashboard', 'routeOverview', true), r('/staff/command-center', 'routeCommandCenter'), r('/staff/work', 'routeWork')] },
+  // Setup (Welcome, School launch, Founder Setup) is onboarding (owner, 2026-11-14): reached from Home's setup card and Settings, not tabs.
+  { key: 'home', titleKey: 'navHome', routes: [r('/staff/dashboard', 'routeOverview', true), r('/staff/command-center', 'routeCommandCenter'), r('/staff/work', 'routeWork'),
+    h('/staff/welcome', 'routeWelcome'), h('/staff/launch', 'routeLaunch'), h('/staff/founder-setup', 'routeFounderSetup')] },
   { key: 'students', titleKey: 'navStudents', routes: [...g('groupPeople', r('/staff/search', 'routeStudentSearch'), r('/staff/people', 'routePeople'), r('/staff/family-access', 'routeFamilyAccess', true),
     r('/staff/students/achievements', 'routeAchievements'), r('/staff/retention/review', 'routeRetention'), r('/staff/migration/students', 'routeStudentImport')),
     ...g('groupStaff', r('/staff/team/invitations', 'routeTeam', true), r('/staff/roles', 'routeRoles'), r('/staff/team/availability', 'routeAvailability'), r('/staff/instructor-qualifications', 'routeQualifications'),
@@ -45,9 +49,9 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     ...g('groupSpecialists', r('/staff/leads/assistant', 'routeLeadAssistant'), r('/staff/marketing/assistant', 'routeMarketingAssistant'), r('/staff/teaching-assistant', 'routeKai'), r('/staff/retention/at-risk', 'routeMayaAtRisk'),
     r('/staff/voice', 'routeVoice'))] },
   { key: 'analytics', titleKey: 'navAnalytics', routes: [r('/staff/reports', 'routeSchoolReports'), r('/staff/operations', 'routeOperationsReport', true), r('/staff/health-score', 'routeHealthScore'), r('/staff/planning/revenue', 'routeRevenuePlanning')] },
-  { key: 'settings', titleKey: 'navSettings', routes: [r('/staff/account-status', 'routeAccount'), r('/staff/owners', 'routeOwners'), r('/staff/subscription', 'routeSubscription'),
-    r('/staff/welcome', 'routeWelcome'), r('/staff/launch', 'routeLaunch'), r('/staff/founder-setup', 'routeFounderSetup'), r('/staff/help', 'routeHelp'), r('/staff/settings/branding', 'routeBranding'), r('/settings/language-region', 'routeLanguage'), r('/settings/texts-from-hon', 'routeTextsFromHon'),
-    r('/staff/automation/rules', 'routeAutomation')] },
+  { key: 'settings', titleKey: 'navSettings', routes: [r('/staff/settings', 'routeSettingsSummary'), r('/staff/account-status', 'routeAccount'), r('/staff/owners', 'routeOwners'), r('/staff/subscription', 'routeSubscription'),
+    r('/staff/settings/branding', 'routeBranding'), r('/settings/language-region', 'routeLanguage'), r('/settings/texts-from-hon', 'routeTextsFromHon'),
+    r('/staff/automation/rules', 'routeAutomation'), r('/staff/help', 'routeHelp')] },
 ];
 
 /** Reached from a workflow, never from primary navigation. */
@@ -66,8 +70,10 @@ export const SCHOOL_SHELL_MOBILE: readonly SchoolShellIcon[] = ['home', 'student
 
 /** The named groups of an area's section tabs, in catalog order; empty when the area is short enough to show flat. */
 export function schoolShellGroups(item: SchoolShellItem): ShellKey[] {
-  return [...new Set(item.routes.flatMap(route => route.group ? [route.group] : []))];
+  return [...new Set(item.routes.flatMap(route => route.group && !route.hidden ? [route.group] : []))];
 }
+/** The routes an area lists in its tabs and in the menu. */
+export const schoolShellListed = (item: SchoolShellItem): SchoolShellRoute[] => item.routes.filter(route => !route.hidden);
 
 export function schoolShellHref(route: SchoolShellRoute, selection: OperationalSchoolScope | null): string {
   if (!route.scoped || !selection) return route.href;
