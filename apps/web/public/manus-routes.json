@@ -125,6 +125,10 @@
       "title": "HON | Import classes and attendance"
     },
     {
+      "path": "/staff/migration/memberships",
+      "title": "HON | Import memberships and balances"
+    },
+    {
       "path": "/staff/welcome",
       "title": "HON | Welcome and setup"
     },

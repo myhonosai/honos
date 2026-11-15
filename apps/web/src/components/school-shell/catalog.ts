@@ -41,7 +41,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/testing/readiness', 'routeReadiness'), r('/staff/testing/scorecards', 'routeScorecards'), r('/staff/testing/promotion-decisions', 'routePromotions'),
     r('/staff/testing/certificates', 'routeCertificates')), ...g('groupCommunity', r('/community', 'routeCommunity'), r('/community/marketplace', 'routeMarketplace'))] },
   { key: 'billing', titleKey: 'navBilling', routes: [...g('groupMemberships', r('/staff/memberships', 'routeMembershipList'), r('/staff/billing/memberships', 'routeMemberships'), r('/staff/billing/membership-plans', 'routePlans'),
-    r('/staff/billing/membership-dates', 'routeDates'), r('/staff/billing/membership-changes', 'routeChanges'), r('/staff/billing/renewals', 'routeRenewals')),
+    r('/staff/billing/membership-dates', 'routeDates'), r('/staff/billing/membership-changes', 'routeChanges'), r('/staff/billing/renewals', 'routeRenewals'), r('/staff/migration/memberships', 'routeBillingImport')),
     ...g('groupPayments', r('/staff/billing/invoices', 'routeInvoices'), r('/staff/billing/receivables', 'routeReceivables'),
     r('/staff/billing/payment-processors', 'routePaymentProcessors'), r('/staff/billing/checkout-pages', 'routeCheckoutPages'), r('/staff/billing/saved-payment-methods', 'routeSavedMethods'))] },
   // The whole launch roster lives on the AI Team page; HON, approvals and the specialists with their own workspace follow it.
