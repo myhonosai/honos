@@ -2,7 +2,7 @@
 
 Status: gap audit, spec and plan, 2026-11-15. Asked for by David in the "Complete AI platform handoff" (section 1, plus
 the Conversation AI parts of sections 5 to 8). Migration numbers from the coordinator: CA1 **0364**, CA2 **0365**,
-CA3 **0366**; later pieces ask for theirs. Sibling threads own the Website Builder, the AI Customizer and Automation.
+CA2b **0383**, CA3 **0384**; later pieces ask for theirs. Sibling threads own the Website Builder, the AI Customizer and Automation.
 
 ## 1. Gap audit (main fbc9102, 2026-11-15)
 
@@ -96,7 +96,7 @@ Guardrails decide when Chad hands a conversation to a person instead of answerin
 |---|---|---|
 | **CA1** | Conversation store; every non-keyword text to an ACTIVE school number becomes a conversation message; contact match by phone to the school's people and their open lead; staff inbox read (list with filters/search, thread, contact panel); staff reply through the 0047 queue; assign, tag, open/close, mark read, link person/lead, create lead from a conversation. Backend PR, then the **Conversations** screen (en/ko/es) as its own PR. | 0364 |
 | **CA2** | **Train AI section** (David 2026-11-15 08:06Z: "needs a section for uploading schedule or scripts and more"): per-school settings (mode per channel, languages, evaluation booking type, escalation topics, staff to notify); **uploaded training material** (class schedules, sales and phone scripts, price sheets, policies, FAQs: PDF, Word, text, CSV; the text is extracted on the server, shown to the owner to check, and only owner-approved text is used; the original file is not kept); owner instructions (plain sentences, versioned, owner-approved; HON can turn "make it friendlier with parents" into a proposed instruction); the knowledge pack function over all of it; the AI turn engine: each inbound message starts a turn (plan, budget, fake/real provider, usage evidence); Automatic sends, Assist leaves a draft staff send as is, edit or discard; human takeover pauses Chad for that conversation.| 0365 |
-| **CA3** | Actions and guardrails: guardrails (prices and dates must match the pack, money and promise words, low confidence, opt-out, quiet hours) decide send vs. hand to a person; **Chad books appointments on the scheduler by itself** (David 2026-11-15 08:06Z): offers real open times of the owner-chosen booking type (0286) or trial slots and books them directly, creating or matching the lead first (asks for a name); confirmation text; escalation creates a staff notification and a work item; per-conversation and per-school auto-reply limits; outbox `conversation.reply.sent` / `conversation.escalated` / `conversation.appointment.booked` for Automation.| 0366 |
+| **CA3** | Actions and guardrails: guardrails (prices and dates must match the pack, money and promise words, low confidence, opt-out, quiet hours) decide send vs. hand to a person; **Chad books appointments on the scheduler by itself** (David 2026-11-15 08:06Z): offers real open times of the owner-chosen booking type (0286) or trial slots and books them directly, creating or matching the lead first (asks for a name); confirmation text; escalation creates a staff notification and a work item; per-conversation and per-school auto-reply limits; outbox `conversation.reply.sent` / `conversation.escalated` / `conversation.appointment.booked` for Automation.| 0384 |
 | CA4 | Website live chat: public chat id per school (like 0075 public forms), signed visitor session, rate limits, embeddable script for the Website Builder, same AI and inbox. | ask |
 | CA5 | Email: SendGrid Inbound Parse on a HON reply domain per school, threading by reply-to token, same inbox and AI. | ask |
 | CA6 | Social and family in the unified inbox: overlay for AI mode/takeover/tags on 0349 and 0330 threads; Chad drafts and (when David switches it on) automatic replies within Messenger's 24-hour window. Waits for #349. | ask |
@@ -281,5 +281,7 @@ Each fact carries its source id, so a reply can show what it used. Nothing outsi
   - inbox AI state: takeover and hand-back, needs staff, the needs-attention count.
 
   No AI is called.
-- **CA2b** (migration number to ask) covers the shared S4 core, the system turn planner and recorder, the worker,
+- **CA2b** (0383) adds the CONVERSATION_REPLY kind to the shared AI text caller (0380 `hon.ai_text_proposals`, Website Builder;
+  docs/architecture/AI_TEXT_PROPOSALS.md), which owns the one S4 wiring. CA2b adds its own worker-only planning path, the HIGH
+  CONVERSATION_REPLY task profile, its gate (the 0365 program switch and school settings, run before core prepare), the system turn planner and recorder, the worker,
   ASSIST drafts, TEST_MODE automatic replies, and the test bench.
