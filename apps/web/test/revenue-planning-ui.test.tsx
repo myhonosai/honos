@@ -10,7 +10,7 @@ const snapshot:RevenuePlanSnapshot={plan:{id:plan,version:1,algorithmVersion:'sc
 describe('deterministic school revenue planning UI',()=>{
  it('loads no data or providers by default, keeps assumptions blank, and never promises financial or execution success',()=>{
   const fetcher=vi.spyOn(globalThis,'fetch');try{const html=renderToStaticMarkup(<RevenuePlanningWorkbench/>);expect(fetcher).not.toHaveBeenCalled();
-   for(const text of ['No verified school evidence loaded','no financial quantities or sample plans are substituted','planning.revenue.manage','Essential, Core and Complete','No AI/provider calls','financial advice or guarantees','Blank means unavailable','Save human plan and evidence only'])expect(html).toContain(text);
+   for(const text of ['No verified school evidence loaded','no financial quantities or sample plans are substituted','planning.revenue.manage','Set a revenue goal','No AI/provider calls','financial advice or guarantees','Blank means unavailable','Save human plan and evidence only'])expect(html).toContain(text);
    expect(html).not.toContain('Revenue gap');expect(html).not.toContain('Human plan and immutable evidence saved');expect(html).not.toContain('aria-label="Revenue plan projection"');expect(html).toContain('<fieldset disabled=""');
   }finally{fetcher.mockRestore();}
  });
