@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "c729a7d472d3316c5990c096a9d57dbc21379c6762065c2d649bb3f10365065a",
+  "chainSha256": "5c41e67a1e296b880496ea439d6aaf3b052cef720ee2c86cb923a1c0b7f93c4e",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -508,7 +508,7 @@
     },
     {
       "file": "0365_conversation_ai_training.sql",
-      "sha256": "59ef392dffa5ef6ea65e9ba8b520ff83022aa78b81b3a47957c254f94d6c18f1"
+      "sha256": "b6a9608a0f0032cad8ffebe2ab6cf88e8666952aa724cd44a85824506a8edccb"
     }
   ]
 }

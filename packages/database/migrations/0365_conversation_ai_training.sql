@@ -52,7 +52,7 @@ LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
 $$;
 
 -- One to three distinct supported reply languages.
-CREATE FUNCTION hon.conversation_ai_languages_ok(v text[]) RETURNS boolean
+CREATE FUNCTION hon.conversation_ai_locales_ok(v text[]) RETURNS boolean
 LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
   SELECT v IS NOT NULL AND cardinality(v) BETWEEN 1 AND 3 AND v <@ ARRAY['en','ko','es']::text[] AND array_position(v,NULL) IS NULL
     AND (SELECT count(DISTINCT x)=count(*) FROM unnest(v) x)
@@ -97,7 +97,7 @@ CREATE TABLE hon.school_conversation_ai_settings (
   after_hours_text text CHECK (after_hours_text IS NULL OR hon.conversation_ai_text_ok(after_hours_text,320)),
   sms_max_chars integer NOT NULL DEFAULT 500 CHECK (sms_max_chars BETWEEN 160 AND 1600),
   chat_max_chars integer NOT NULL DEFAULT 900 CHECK (chat_max_chars BETWEEN 160 AND 1600),
-  languages text[] NOT NULL DEFAULT ARRAY['en']::text[] CHECK (hon.conversation_ai_languages_ok(languages)),
+  languages text[] NOT NULL DEFAULT ARRAY['en']::text[] CHECK (hon.conversation_ai_locales_ok(languages)),
   enabled_by_principal_id uuid REFERENCES hon.principals(id) ON DELETE RESTRICT,
   enabled_at timestamptz,
   version integer NOT NULL DEFAULT 1 CHECK (version>=1),
@@ -541,7 +541,7 @@ DO $$ DECLARE r text; f text; t text;
     'hon.read_school_ai_training_file(text,uuid)','hon.save_school_ai_training_item(text,jsonb,text,uuid,uuid)',
     'hon.set_school_ai_training_item_status(text,jsonb,text,uuid,uuid)','hon.read_conversation_ai_program_from_hq(text)',
     'hon.command_conversation_ai_program(text,jsonb,uuid)'];
-  fns text[]:=ARRAY['hon.conversation_ai_text_ok(text,integer)','hon.conversation_ai_words_ok(text[])','hon.conversation_ai_languages_ok(text[])','hon.guard_conversation_ai_row()',
+  fns text[]:=ARRAY['hon.conversation_ai_text_ok(text,integer)','hon.conversation_ai_words_ok(text[])','hon.conversation_ai_locales_ok(text[])','hon.guard_conversation_ai_row()',
     'hon.require_conversation_ai_actor(text,boolean)','hon.guard_conversation_ai_program_changes()','hon.conversation_ai_finish(uuid,text,text,uuid,integer,text,jsonb,jsonb,text,jsonb,uuid,uuid)',
     'hon.conversation_ai_settings_json(hon.school_conversation_ai_settings)','hon.conversation_ai_item_json(hon.school_ai_training_items)',
     'hon.school_ai_knowledge(uuid,uuid)']||entry; BEGIN

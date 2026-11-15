@@ -3790,7 +3790,7 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.conversation_ai_text_ok(text,integer)',false,false,'search_path=pg_catalog','d4a113ad9c58a2668356d92d9772cec0f4b5e291e3249e283c6ecce2f7505657'),
 ('hon.conversation_ai_words_ok(text[])',false,false,'search_path=pg_catalog','266cb23a85acc955d62d82d4f59d93b0bd9979b5dc89f1346a98c9d1f1d1c2cc'),
-('hon.conversation_ai_languages_ok(text[])',false,false,'search_path=pg_catalog','c7c2f5045b68e3601a8803dc13f1ccd37e92b99210cdf36c4fc562993f04fe86'),
+('hon.conversation_ai_locales_ok(text[])',false,false,'search_path=pg_catalog','c7c2f5045b68e3601a8803dc13f1ccd37e92b99210cdf36c4fc562993f04fe86'),
 ('hon.guard_conversation_ai_program_changes()',false,false,'search_path=pg_catalog','70037e443cda7813204dc1fd7061086c36783179711426a26261fdebd1b9e623'),
 ('hon.guard_conversation_ai_row()',false,false,'search_path=pg_catalog, hon','89b9608c2dc6519af65ca86ebc77a14ba2f8e694d9a642c6e302b5f275e872ac'),
 ('hon.require_conversation_ai_actor(text,boolean)',true,false,'search_path=pg_catalog, hon','9be646d3c4c142a547ca795ea0081c72f8b4b574fe3d80438451608924b4ebf8'),
