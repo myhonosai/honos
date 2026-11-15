@@ -3758,7 +3758,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.require_school_contact_admin(text,text)',true,false,'search_path=pg_catalog, hon','v','d8408f3c3eb366cb55c011b5979aeafdfe2d3f88dfdb5ae08ebf68907027ef48'),
 ('hon.school_contact_admin_begin(uuid,text,text)',true,false,'search_path=pg_catalog, hon','v','ab1a5d9b6f613a0882b3d242846da5cbaa3f5c5487410b76e0969d02494762d6'),
 ('hon.school_contact_archive_plan(uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','s','be7c9a3e0cf0b99511fe49612d6e2a6423ab7af175db26c2cd327fd88e57b27d'),
-('hon.school_contact_merge_plan(uuid,uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','s','4c85b4673deb9638d98cb6b4f8f80d75fb17c0f01b26e68d630076ffb3424fca'),
+('hon.school_contact_merge_plan(uuid,uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','s','138d72cc623f45f64ae4f2471507cb2e2e6f502b2e95aaf2155fed3f7b899844'),
 ('hon.school_contact_admin_person(uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','s','ddf78a33ee8f8d7771b6c60fbaef4535d3f296f28a93dec6aef684c44e6f2cbe'),
 ('hon.read_school_contact_archive(text,jsonb)',true,true,'search_path=pg_catalog, hon','v','e76ccda135666363f12bfd010bdcb61c13b7652f5a9c1980b649526bdbecd0af'),
 ('hon.school_contact_archive_command(text,jsonb,text,uuid,uuid,boolean)',true,false,'search_path=pg_catalog, hon','v','43eb4068f3d0813ea045f60b38fe642ffbc3925c2dad921204dad94fdfd7c542'),

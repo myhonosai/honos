@@ -207,9 +207,12 @@ async function records(org, school) {
   }
   await raw('crm_appointments', `INSERT INTO hon.crm_appointments(organization_id,school_id,crm_lead_id,appointment_type,status,starts_at,ends_at,created_by_principal_id)
     VALUES($1,$2,$3,'TRIAL','SCHEDULED',clock_timestamp()+interval '2 days',clock_timestamp()+interval '2 days 1 hour',$4)`, [org, school, dupLead, OWN.principal]);
-  const consent = (who, channel) => raw('communication_consents', `INSERT INTO hon.communication_consents(organization_id,school_id,person_id,channel,status,source,captured_at,updated_by_principal_id)
-    VALUES($1,$2,$3,$4,'OPTED_IN','STAFF',clock_timestamp(),$5)`, [org, school, who, channel, OWN.principal]);
+  const consent = (who, channel, status = 'OPTED_IN') => raw('communication_consents', `INSERT INTO hon.communication_consents(organization_id,school_id,person_id,channel,status,source,captured_at,updated_by_principal_id)
+    VALUES($1,$2,$3,$4,$6::hon.communication_consent_status,'STAFF',clock_timestamp(),$5)`, [org, school, who, channel, OWN.principal, status]);
   await consent(kim, 'EMAIL'); await consent(dup, 'EMAIL'); await consent(dup, 'SMS');
+  // One replied STOP by text, the other opted in: a merge would leave the opt-out behind on the archived record.
+  const optedIn = await person(org, school, 'Opal', 'Texts'), stopped = await person(org, school, 'Opal', 'Stopped');
+  await consent(optedIn, 'SMS'); await consent(stopped, 'SMS', 'OPTED_OUT');
   const conversation = randomUUID();
   await raw('school_conversations', `INSERT INTO hon.school_conversations(id,organization_id,school_id,channel,contact_address,person_id,lead_id,last_message_at)
     VALUES($1,$2,$3,'SMS',$4,$5,$6,date_trunc('milliseconds',clock_timestamp()))`, [conversation, org, school, `+1555${school.slice(0, 7).replace(/\D/g, '7').padEnd(7, '7')}`, dup, dupLead]);
@@ -220,7 +223,7 @@ async function records(org, school) {
     VALUES($1,$2,$3,$4,'[]','{}',1,0,current_date,$5,$6)`, [batch, org, school, 'a'.repeat(64), LA, OWN.principal]);
   await raw('billing_import_rows', `INSERT INTO hon.billing_import_rows(batch_id,organization_id,school_id,row_index,source_row,normalized,validation_errors,payer_person_id)
     VALUES($1,$2,$3,1,'[]','{}','["UNMATCHED"]',$4)`, [batch, org, school, imported]);
-  return { kim, dup, sam, leadOnly, owing, sib1, sib2, imported, dupLead, conversation, dupAccount, kimAccount };
+  return { kim, dup, sam, leadOnly, owing, sib1, sib2, imported, optedIn, stopped, dupLead, conversation, dupAccount, kimAccount };
 }
 
 const sorted = (v) => Array.isArray(v) ? v.map(sorted) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sorted(v[k])])) : v;
@@ -299,6 +302,10 @@ try {
   await blocked(A.sib1, A.sib2, ['BOTH_IN_SAME_FAMILY'], 'two people of one family');
   await blocked(A.sam, A.imported, ['MERGED_HAS_REGISTRATION_HISTORY'], 'a person named by an import');
   await blocked(A.kim, A.owing, ['BOTH_HAVE_BILLING_ACCOUNTS'], 'two canonical billing accounts');
+  await blocked(A.optedIn, A.stopped, ['CONSENT_CONFLICT'], 'an SMS opt-out (STOP) against an opt-in');
+  await blocked(A.stopped, A.optedIn, ['CONSENT_CONFLICT'], 'the same conflict kept the other way');
+  const kept = (await sql("SELECT person_id, status::text FROM hon.communication_consents WHERE person_id IN ($1,$2) AND channel='SMS'", [A.optedIn, A.stopped])).rows;
+  ok(kept.length === 2 && kept.some((r) => r.person_id === A.stopped && r.status === 'OPTED_OUT'), 'the opt-out stays where it was after both refusals');
   await refused(() => preview(OWN, A.kim, B.dup), 404, 'SCHOOL_CONTACT_NOT_FOUND', 'a person of another school');
   await refused(() => preview(OWN, A.kim, A.kim), 400, 'VALIDATION_FAILED', 'the same person');
 

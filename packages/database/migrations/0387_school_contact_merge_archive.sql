@@ -170,7 +170,12 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
         WHERE m.organization_id=org AND m.school_id=school AND m.person_id=mrg) THEN 'BOTH_IN_SAME_FAMILY' END,
       CASE WHEN EXISTS(SELECT 1 FROM hon.billing_accounts b WHERE b.organization_id=org AND b.school_id=school AND b.responsible_person_id=mrg AND b.account_classification='CANONICAL')
         AND EXISTS(SELECT 1 FROM hon.billing_accounts b WHERE b.organization_id=org AND b.school_id=school AND b.responsible_person_id=keep AND b.account_classification='CANONICAL')
-        THEN 'BOTH_HAVE_BILLING_ACCOUNTS' END], NULL)),
+        THEN 'BOTH_HAVE_BILLING_ACCOUNTS' END,
+      -- Both answered differently on one channel (say B replied STOP, A opted in): staff settle it on A first, so a merge never
+      -- drops an opt-out behind the archived record while the conversation moves to A.
+      CASE WHEN EXISTS(SELECT 1 FROM hon.communication_consents c JOIN hon.communication_consents k ON k.organization_id=c.organization_id
+          AND k.school_id=c.school_id AND k.person_id=keep AND k.channel=c.channel AND k.status<>c.status
+        WHERE c.organization_id=org AND c.school_id=school AND c.person_id=mrg) THEN 'CONSENT_CONFLICT' END], NULL)),
     'moves', jsonb_build_object(
       'leads', (SELECT count(*) FROM hon.crm_leads l WHERE l.organization_id=org AND l.school_id=school AND l.primary_person_id=mrg),
       'familyLinks', (SELECT count(*) FROM hon.family_members m WHERE m.organization_id=org AND m.school_id=school AND m.person_id=mrg),

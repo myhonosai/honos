@@ -121,13 +121,13 @@ export function ContactActions({ language, scope, card, onChanged, api = contact
     body = <div className={styles.subsection} data-testid="contact-merge-preview">
       {p ? <h3>{t('mergeTitle', vars)}</h3> : null}
       {mode.phase === 'LOADING' ? <p className={styles.meta} role="status">{t('previewing')}</p> : null}
-      {mode.failure ? <Problem t={t} failure={mode.failure} merge={mergeName} title="cannotMerge" name=""/> : null}
+      {mode.failure ? <Problem t={t} failure={mode.failure} merge={mergeName} keep={keepName} title="cannotMerge" name=""/> : null}
       {p ? <>
         <dl className={styles.facts2}>
           <div><dt>{t('keeps')}</dt><dd>{keepName}</dd></div>
           <div><dt>{t('mergesAway')}</dt><dd>{mergeName}</dd></div>
         </dl>
-        {p.blockers.length && !mode.failure ? <Blockers t={t} title={t('cannotMerge')} codes={p.blockers} merge={mergeName}/> : null}
+        {p.blockers.length && !mode.failure ? <Blockers t={t} title={t('cannotMerge')} codes={p.blockers} merge={mergeName} keep={keepName}/> : null}
         {!p.blockers.length ? <>
           <p className={styles.meta}>{t('moves', vars)}</p>
           {moved.length ? <ul className={styles.plain}>{moved.map(k => <li key={k}>{t(`m_${k}`, { n: p.moves[k] })}</li>)}</ul> : <p className={styles.meta}>{t('nothingMoves')}</p>}
@@ -161,12 +161,12 @@ export function ContactActions({ language, scope, card, onChanged, api = contact
   </section>;
 }
 
-function Blockers({ t, title, codes, merge }: { t: T; title: string; codes: readonly string[]; merge: string }): React.ReactElement {
+function Blockers({ t, title, codes, merge, keep = '' }: { t: T; title: string; codes: readonly string[]; merge: string; keep?: string }): React.ReactElement {
   return <div className={styles.blockers} role="note"><p>{title}</p>
-    <ul>{codes.map(c => <li key={c}>{t(`b_${c}` as ActionKey, { merge })}</li>)}</ul></div>;
+    <ul>{codes.map(c => <li key={c}>{t(`b_${c}` as ActionKey, { merge, keep })}</li>)}</ul></div>;
 }
-function Problem({ t, failure, merge, title, name }: { t: T; failure: Failure; merge: string; title: ActionKey; name: string }): React.ReactElement {
-  if (failure.kind === 'BLOCKED' && failure.blockers.length) return <Blockers t={t} title={t(title, { name })} codes={failure.blockers} merge={merge}/>;
+function Problem({ t, failure, merge, keep = '', title, name }: { t: T; failure: Failure; merge: string; keep?: string; title: ActionKey; name: string }): React.ReactElement {
+  if (failure.kind === 'BLOCKED' && failure.blockers.length) return <Blockers t={t} title={t(title, { name })} codes={failure.blockers} merge={merge} keep={keep}/>;
   const key: ActionKey = failure.kind === 'DENIED' ? 'denied' : failure.kind === 'MISSING' ? 'missing' : failure.kind === 'STALE' ? 'stale'
     : failure.kind === 'SESSION' ? 'session' : 'unknown';
   return <p className={styles.meta} role="alert">{t(key)}</p>;
