@@ -47,7 +47,7 @@ export function panelFromError(error: unknown): Panel<never> {
 
 type Line = { text: string; swatch?: string };
 function Card({ id, title, href, lines, panel, t, action = 'change' }: {
-  id: string; title: string; href: string; lines?: Line[]; panel?: Panel<unknown>; t: (key: SettingsKey) => string; action?: 'change' | 'open';
+  id: string; title: string; href: string; lines?: Line[]; panel?: Panel<unknown>; t: (key: SettingsKey) => string; action?: 'change' | 'open' | 'start';
 }): React.ReactElement {
   const body = !panel || panel.state === 'READY' ? lines ?? [] : [{ text: t(panel.state === 'LOADING' ? 'loading' : panel.state === 'DENIED' ? 'denied' : 'unavailable') }];
   return <article className={styles.card} data-setting={id} data-state={panel?.state ?? 'READY'}>
@@ -86,6 +86,7 @@ export function SettingsSummaryView({ language, preferences, sources }: { langua
       <Card id="usage" title={t('usage')} href="/staff/account-status" lines={[{ text: t('usageLine') }]} t={t} action="open" />
       <Card id="automation" title={t('automation')} href="/staff/automation/rules" lines={[{ text: t('automationLine') }]} t={t} action="open" />
       <Card id="help" title={t('help')} href="/staff/help" lines={[{ text: t('helpLine') }]} t={t} action="open" />
+      <Card id="tour" title={t('tour')} href="/staff/settings?tour=1" lines={[{ text: t('tourLine') }]} t={t} action="start" />
     </section>
     <p className={styles.setup}><strong>{t('setupTitle')}</strong> {t('setupLine')} <a href="/staff/welcome">{t('setupOpen')}</a></p>
   </main>;
