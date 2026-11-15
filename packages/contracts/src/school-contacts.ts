@@ -1,8 +1,9 @@
 /**
  * C1 (0373): the contacts list with segments and filters for one school. Names, email and phone as in the people
  * directory (people.read), plus segment, ranks, current plan and when it ends. Staff live on the Team page.
+ * C3 (0387): archived and merged contacts are segment ARCHIVED, counted on their own and left out of ALL.
  */
-export const SCHOOL_CONTACT_SEGMENTS = ['ALL', 'STUDENT', 'TRIAL', 'PROSPECT', 'INACTIVE'] as const;
+export const SCHOOL_CONTACT_SEGMENTS = ['ALL', 'STUDENT', 'TRIAL', 'PROSPECT', 'INACTIVE', 'ARCHIVED'] as const;
 export type SchoolContactSegment = typeof SCHOOL_CONTACT_SEGMENTS[number];
 export type SchoolContactRowSegment = Exclude<SchoolContactSegment, 'ALL'> | 'OTHER';
 export const SCHOOL_CONTACT_ENDS_WITHIN = [7, 30, 60, 90] as const;
@@ -61,8 +62,8 @@ export function validateSchoolContactQuery(value: unknown): SchoolContactQuery {
 export function verifySchoolContactList(value: unknown, query: SchoolContactQuery): Omit<SchoolContactList, 'nextCursor'> {
   const source = exact(value, ['generatedAt', 'segment', 'counts', 'rows', 'hasMore', 'options']);
   if (source.segment !== (query.segment ?? 'ALL') || typeof source.hasMore !== 'boolean') fail();
-  const c = exact(source.counts, ['ALL', 'STUDENT', 'TRIAL', 'PROSPECT', 'INACTIVE']);
-  const counts = { ALL: count(c.ALL), STUDENT: count(c.STUDENT), TRIAL: count(c.TRIAL), PROSPECT: count(c.PROSPECT), INACTIVE: count(c.INACTIVE) };
+  const c = exact(source.counts, ['ALL', 'STUDENT', 'TRIAL', 'PROSPECT', 'INACTIVE', 'ARCHIVED']);
+  const counts = { ALL: count(c.ALL), STUDENT: count(c.STUDENT), TRIAL: count(c.TRIAL), PROSPECT: count(c.PROSPECT), INACTIVE: count(c.INACTIVE), ARCHIVED: count(c.ARCHIVED) };
   if (counts.STUDENT + counts.TRIAL + counts.PROSPECT + counts.INACTIVE > counts.ALL) fail();
   if (!Array.isArray(source.rows) || source.rows.length > SCHOOL_CONTACT_PAGE) fail();
   const seen = new Set<string>();
@@ -72,7 +73,8 @@ export function verifySchoolContactList(value: unknown, query: SchoolContactQuer
     if (seen.has(personId)) fail();
     seen.add(personId);
     const segment = r.segment;
-    if (!['STUDENT', 'TRIAL', 'PROSPECT', 'INACTIVE', 'OTHER'].includes(segment as string) || (query.segment && query.segment !== 'ALL' && segment !== query.segment)) fail();
+    if (!['STUDENT', 'TRIAL', 'PROSPECT', 'INACTIVE', 'OTHER', 'ARCHIVED'].includes(segment as string) || (query.segment && query.segment !== 'ALL' && segment !== query.segment)
+      || ((query.segment ?? 'ALL') === 'ALL' && segment === 'ARCHIVED')) fail();
     if (!Array.isArray(r.ranks) || r.ranks.length > 20) fail();
     const ranks = r.ranks.map(x => { const k = exact(x, ['rank', 'color']); const color = maybe(k.color, 9); if (color !== null && !COLOR.test(color)) fail(); return { rank: text(k.rank, 200), color }; });
     return { personId, version: count(r.version), givenName: text(r.givenName, 200), familyName: text(r.familyName, 200), email: maybe(r.email, 320),

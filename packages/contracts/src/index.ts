@@ -1120,3 +1120,4 @@ export * from './school-website.js';
 export * from './school-website-templates.js';
 export * from './school-contacts.js';
 export * from './school-contact-card.js';
+export * from './school-contact-admin.js';

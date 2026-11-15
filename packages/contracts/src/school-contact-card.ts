@@ -61,7 +61,7 @@ export function verifySchoolContactCard(value: unknown, personId: string): Schoo
     email: maybe(p.email, 320), phoneE164: maybe(p.phoneE164, 20), createdAt: instant(p.createdAt) };
   if (person.personId !== personId.toLowerCase()) fail();
   const o = exact(s.overview, ['segment', 'planName', 'programName', 'membershipEndsAt', 'ranks', 'openLead']);
-  if (!['STUDENT', 'TRIAL', 'PROSPECT', 'INACTIVE', 'OTHER'].includes(o.segment as string)) fail();
+  if (!['STUDENT', 'TRIAL', 'PROSPECT', 'INACTIVE', 'OTHER', 'ARCHIVED'].includes(o.segment as string)) fail();
   const overview = { segment: o.segment as SchoolContactRowSegment, planName: maybe(o.planName, 200), programName: maybe(o.programName, 200),
     membershipEndsAt: maybeInstant(o.membershipEndsAt), openLead: bool(o.openLead),
     ranks: list(o.ranks, 20, x => { const r = exact(x, ['curriculum', 'rank', 'color']); const color = maybe(r.color, 9); if (color !== null && !COLOR.test(color)) fail();

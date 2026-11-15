@@ -288,8 +288,9 @@ try {
   }
 
   // 2. All contacts: counts per segment, name order, 50 per page, options for the filters.
+  // 0387 adds the ARCHIVED count (archived and merged contacts, left out of ALL); the merge proof covers it.
   const F = first.data;
-  ok(json(F.counts) === json({ ALL: 62, STUDENT: 2, TRIAL: 1, PROSPECT: 2, INACTIVE: 1 }), `counts ${json(F.counts)}`);
+  ok(json(F.counts) === json({ ALL: 62, STUDENT: 2, TRIAL: 1, PROSPECT: 2, INACTIVE: 1, ARCHIVED: 0 }), `counts ${json(F.counts)}`);
   ok(F.segment === 'ALL' && F.rows.length === 50 && F.hasMore === true && typeof F.nextCursor === 'string', 'first page of 50 with a cursor');
   ok(json(names(first).slice(0, 7)) === json(['Avery Able', 'Blake Brown', 'Casey Cole', 'Drew Dunn', 'Eli East', 'Finn Ford', 'Gale Gray']), `name order ${names(first).slice(0, 7)}`);
   const row = (body, given) => body.data.rows.find((r) => r.givenName === given);
@@ -316,7 +317,7 @@ try {
   ok(json(names(await read('segment=PROSPECT', 'prospects'))) === json(['Drew Dunn', 'Eli East']), 'prospects');
   ok(json(names(await read('segment=INACTIVE', 'inactive'))) === json(['Finn Ford']), 'inactive');
   const soon = await read('endsWithinDays=30', 'ends within 30 days');
-  ok(json(names(soon)) === json(['Avery Able']) && json(soon.data.counts) === json({ ALL: 1, STUDENT: 1, TRIAL: 0, PROSPECT: 0, INACTIVE: 0 }), 'ends within 30 days narrows the counts too');
+  ok(json(names(soon)) === json(['Avery Able']) && json(soon.data.counts) === json({ ALL: 1, STUDENT: 1, TRIAL: 0, PROSPECT: 0, INACTIVE: 0, ARCHIVED: 0 }), 'ends within 30 days narrows the counts too');
   ok(json(names(await read('endsWithinDays=7', 'ends within 7 days'))) === '[]', 'nothing ends within 7 days');
   ok(json(names(await read(`planId=${A.plan}`, 'plan'))) === json(['Avery Able']) && json(names(await read(`programId=${A.program}`, 'program'))) === json(['Avery Able']), 'plan and program');
   ok(json(names(await read(`rankId=${A.yellow}`, 'rank'))) === json(['Blake Brown']), 'an archived enrollment never matches a rank');

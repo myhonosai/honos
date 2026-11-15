@@ -673,7 +673,7 @@ try {
     'read_crm_guardian_child_enrollment', 'read_crm_lead_memberships', 'read_crm_lead_registration_recovery', 'read_maya_at_risk_students', 'read_membership_date_confirmation_queue', 'read_membership_date_history', 'read_membership_pauses_and_refunds',
     'read_owner_launch_membership_draft', 'read_parent_billing_view', 'read_parent_testing_status',
     'read_retention_review_signals', 'read_school_command_center', 'read_school_contact_card', 'read_school_health_score', 'read_school_membership_list', 'read_school_membership_status_summary', 'read_school_reports', 'read_school_reports_locations', 'read_specialist_school_facts', 'record_membership_refund', 'record_retention_attention_alert',
-    'renewal_membership_facts', 'resolve_retention_attention_alert', 'resume_school_membership', 'revenue_plan_snapshot', 'revise_membership_dates', 'save_school_onboarding', 'school_contact_facts', 'school_dashboard_kpis', 'school_dashboard_members', 'school_pay_autopay_due', 'school_report_periods']);
+    'renewal_membership_facts', 'resolve_retention_attention_alert', 'resume_school_membership', 'revenue_plan_snapshot', 'revise_membership_dates', 'save_school_onboarding', 'school_contact_archive_plan', 'school_contact_facts', 'school_contact_merge_plan', 'school_dashboard_kpis', 'school_dashboard_members', 'school_pay_autopay_due', 'school_report_periods']);
   // 0323 save_school_onboarding names the closed import-wish code 'MEMBERSHIPS' only; it never reads hon.memberships.
   // 0220 (U6) read_school_membership_list is a read-only school list: no booking, check-in or benefit path.
   // 0224 pause, resume, refund-record and pause-history paths and the pause guard: FROZEN is not ACTIVE, so a pause
@@ -694,6 +694,8 @@ try {
   // checks in, records attendance and grants nothing.
   // 0373 (C1) school_contact_facts is the read-only contacts list: it sorts people into student / trial / prospect / inactive
   // by the same 0331 membership rule and reads the current membership's plan and end date; it books, checks in and grants nothing.
+  // 0387 (C3) school_contact_archive_plan and school_contact_merge_plan only test whether a person holds memberships (a
+  // current one blocks archive; any one blocks being merged away); they never move, change or grant a membership.
   // 0259 (Maya M1) read_maya_at_risk_students is a read-only retention signal: it books, checks in and grants nothing,
   // and reads only ACTIVE, FROZEN and CANCELLATION_PENDING memberships (no DRAFT); a SCHEDULED (future-dated) ACTIVE
   // membership can at most appear as a staff-only list row, which grants no benefit.

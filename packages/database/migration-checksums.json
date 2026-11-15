@@ -301,6 +301,7 @@
     "0361_school_websites.sql": "262d9768dc26fb197cac0ba0da3a77e31442f4dfb006571a74a6f3b016eba221",
     "0371_school_reports_dashboard.sql": "40957ba1b06acf4a76286eb429665d2207b549d9361db9c8d5d6492e9d21834f",
     "0373_school_contact_list.sql": "aa008abd033645f58f554a0f7d516be452a7435dcd0d729e0bf4dee8b86aaf80",
-    "0374_school_contact_card.sql": "997d55281d11a71ecd265bfd224660d90a112a3ad2d9229fad7f2a0613f6ec70"
+    "0374_school_contact_card.sql": "997d55281d11a71ecd265bfd224660d90a112a3ad2d9229fad7f2a0613f6ec70",
+    "0387_school_contact_merge_archive.sql": "088d66ee55db13df5bdde3400bfe8de029d148b82564e18333cd2aaaec782b2f"
   }
 }

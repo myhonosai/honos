@@ -16,7 +16,7 @@ const code = async (promise) => { try { await promise; return null; } catch (err
 const context = { organizationId: ORG, schoolId: SCHOOL, principalId: 'p', principalType: 'HUMAN_USER', source: 'HUMAN_UI', externalSubject: 'staff-subject',
   requestId: 'r', correlationId: 'r', idempotencyKey: '' };
 const page = (segment = 'ALL', hasMore = true) => ({
-  generatedAt: '2026-11-15T10:00:00.000Z', segment, counts: { ALL: 3, STUDENT: 1, TRIAL: 0, PROSPECT: 1, INACTIVE: 0 }, hasMore, options: null,
+  generatedAt: '2026-11-15T10:00:00.000Z', segment, counts: { ALL: 3, STUDENT: 1, TRIAL: 0, PROSPECT: 1, INACTIVE: 0, ARCHIVED: 0 }, hasMore, options: null,
   rows: [{ personId: PERSON, version: 1, givenName: 'Avery', familyName: 'Able', email: null, phoneE164: null, segment: 'STUDENT', planName: 'Kids monthly',
     planCode: 'KIDS', programName: null, membershipEndsAt: '2026-12-01T08:00:00.000Z', ranks: [{ rank: 'White', color: '#ffffff' }] }],
 });

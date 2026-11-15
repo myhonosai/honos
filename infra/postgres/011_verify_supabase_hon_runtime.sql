@@ -3719,8 +3719,8 @@ END $$;
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.require_school_contacts_actor(text)',true,false,'search_path=pg_catalog, hon','d428974c62fe5e652b4470356505c174fd3b6431a3f07dd753ef47f79b1107a4'),
-('hon.school_contact_facts(uuid,uuid,timestamp with time zone)',true,false,'search_path=pg_catalog, hon','7065cf0a8b23e183307abb8a7fc4bf1c8fc73b7b507f419f18a3f38d64200776'),
-('hon.read_school_contact_list(text,jsonb)',true,true,'search_path=pg_catalog, hon','75b998aa80a733778fd8284f48f989f522806786b12ee60c622f6930a7234bef')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+('hon.school_contact_facts(uuid,uuid,timestamp with time zone)',true,false,'search_path=pg_catalog, hon','f481befbcea6c9e50078c3e0cddd8d26561814a339a7a8617152c109f0cd48dd'),
+('hon.read_school_contact_list(text,jsonb)',true,true,'search_path=pg_catalog, hon','063bee418609311e9b6c1d8a1120aac203f881724bfbaa760c4fbc57c08f58f3')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config] AND p.provolatile='s'
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
@@ -3750,6 +3750,36 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END LOOP;
 END $$;
 -- End school contact card exact verification.
+
+-- School contact merge and archive exact verification (C3 0387): five runtime entry points, private helpers, a private table.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_school_contact_archive()',false,false,'search_path=pg_catalog, hon','v','d34a1772d3f162a2f59a512845bb16e4342714ca299f24641eef51bad73535e8'),
+('hon.require_school_contact_admin(text,text)',true,false,'search_path=pg_catalog, hon','v','d8408f3c3eb366cb55c011b5979aeafdfe2d3f88dfdb5ae08ebf68907027ef48'),
+('hon.school_contact_admin_begin(uuid,text,text)',true,false,'search_path=pg_catalog, hon','v','ab1a5d9b6f613a0882b3d242846da5cbaa3f5c5487410b76e0969d02494762d6'),
+('hon.school_contact_archive_plan(uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','s','be7c9a3e0cf0b99511fe49612d6e2a6423ab7af175db26c2cd327fd88e57b27d'),
+('hon.school_contact_merge_plan(uuid,uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','s','4c85b4673deb9638d98cb6b4f8f80d75fb17c0f01b26e68d630076ffb3424fca'),
+('hon.school_contact_admin_person(uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','s','ddf78a33ee8f8d7771b6c60fbaef4535d3f296f28a93dec6aef684c44e6f2cbe'),
+('hon.read_school_contact_archive(text,jsonb)',true,true,'search_path=pg_catalog, hon','v','e76ccda135666363f12bfd010bdcb61c13b7652f5a9c1980b649526bdbecd0af'),
+('hon.school_contact_archive_command(text,jsonb,text,uuid,uuid,boolean)',true,false,'search_path=pg_catalog, hon','v','43eb4068f3d0813ea045f60b38fe642ffbc3925c2dad921204dad94fdfd7c542'),
+('hon.archive_school_contact(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','v','c723295a67b8cfa6741d94efeb228b3158990f15b6fa84c167cf2e5496f4f13b'),
+('hon.restore_school_contact(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','v','8cfaeaf075de3d326f3d96bce295d7f0dc4ef61b30a922df631d194e1d464d96'),
+('hon.read_school_contact_merge(text,jsonb)',true,true,'search_path=pg_catalog, hon','v','37f31569cf3f1b6656e0c8cb55645549b8b4f410bcfd23412099f1cafbb363ad'),
+('hon.merge_school_contacts(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','v','9effc199602403682164653ef4d627501b1d5f35ecb201f58594ea059a96b383')) e(signature,definer,runtime_allowed,config,volatility,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config] AND p.provolatile=f.volatility
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school contact merge/archive function: %',f.signature; END IF;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') AND (has_table_privilege('hon_runtime','hon.school_contact_archives','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+    OR NOT (SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid='hon.school_contact_archives'::regclass)) THEN
+    RAISE EXCEPTION 'hon.school_contact_archives must stay private with forced RLS'; END IF;
+END $$;
+-- End school contact merge and archive exact verification.
 
 -- Family messages exact verification (0330): private helpers, private forced-RLS tables and six runtime entry points.
 DO $$ DECLARE f record; safe boolean; t text; BEGIN
