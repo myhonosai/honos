@@ -151,14 +151,22 @@ export class CreativeMediaIngest {
   async ingest(job: CreativeIngestJob, downloads: CreativeDownload[], claimed: CreativeResultAsset[]): Promise<{ assets: CreativeResultAsset[]; objects: StoredCreativeObject[] }> {
     if (!downloads.length || downloads.length !== claimed.length || downloads.length > 8) throw new CreativeMediaRejected('file count does not match the result');
     const max = job.mediaKind === 'VIDEO' ? CREATIVE_MEDIA_LIMITS.videoBytes : CREATIVE_MEDIA_LIMITS.imageBytes;
-    const assets: CreativeResultAsset[] = [], objects: StoredCreativeObject[] = [];
-    for (const [i, download] of downloads.entries()) {
-      const media = inspectCreativeMedia(await downloadCreativeFile(this.send, download, max), job.mediaKind);
-      const key = `creative/${job.jobId}/${i + 1}`;
-      await this.store.put(key, media.bytes, media.mediaType);
-      assets.push({ mediaType: media.mediaType, width: media.width, height: media.height, durationSeconds: media.durationSeconds,
-        providerAssetReference: claimed[i]!.providerAssetReference });
-      objects.push({ byteSize: media.bytes.length, sha256: createHash('sha256').update(media.bytes).digest('hex') });
+    const assets: CreativeResultAsset[] = [], objects: StoredCreativeObject[] = [], stored: string[] = [];
+    try {
+      for (const [i, download] of downloads.entries()) {
+        const media = inspectCreativeMedia(await downloadCreativeFile(this.send, download, max), job.mediaKind);
+        const key = `creative/${job.jobId}/${i + 1}`;
+        await this.store.put(key, media.bytes, media.mediaType);
+        stored.push(key);
+        assets.push({ mediaType: media.mediaType, width: media.width, height: media.height, durationSeconds: media.durationSeconds,
+          providerAssetReference: claimed[i]!.providerAssetReference });
+        objects.push({ byteSize: media.bytes.length, sha256: createHash('sha256').update(media.bytes).digest('hex') });
+      }
+    } catch (error) {
+      // A rejected result is never recorded, so files already stored for it would have no row: remove them (best effort;
+      // a retry of the same job overwrites the same keys anyway).
+      if (error instanceof CreativeMediaRejected) for (const key of stored) await this.store.remove(key).catch(() => undefined);
+      throw error;
     }
     return { assets, objects };
   }

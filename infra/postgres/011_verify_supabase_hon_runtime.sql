@@ -3698,3 +3698,21 @@ DO $$ DECLARE f text; BEGIN
   END LOOP;
 END $$;
 -- End creative media storage exact verification.
+-- Creative asset review exact verification (C4 0356): one private forced-RLS append-only table the runtime cannot touch,
+-- two runtime entry points, private helpers not runnable by it.
+DO $$ DECLARE f text; BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.creative_asset_reviews'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid='hon.creative_asset_reviews'::regclass)
+    OR has_table_privilege('hon_runtime','hon.creative_asset_reviews','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+    RAISE EXCEPTION 'Unsafe creative asset review table posture'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.review_creative_asset(text,uuid,uuid,text)','hon.list_creative_review_queue(text,uuid,integer)','hon.authorize_creative_asset_read(text,uuid,uuid)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef
+        AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND (owner.rolsuper OR owner.rolbypassrls)) THEN
+      RAISE EXCEPTION 'Unsafe creative review function: %',f; END IF;
+    IF NOT has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') THEN RAISE EXCEPTION 'Missing runtime EXECUTE on creative review function: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.creative_asset_review_status(uuid)','hon.creative_reviewer_holds(uuid,uuid,uuid)','hon.guard_creative_asset_review()'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') THEN RAISE EXCEPTION 'Creative review helper runnable by runtime: %',f; END IF;
+  END LOOP;
+END $$;
+-- End creative asset review exact verification.

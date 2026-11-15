@@ -185,6 +185,8 @@ const SAAS_BILLING_CALLS = {
   readCreativeLimitsFromHq: { sql: 'SELECT hon.read_creative_limits_from_hq($1) AS data', arity: 1, readOnly: true },
   authorizeCreativeAssetRead: { sql: 'SELECT hon.authorize_creative_asset_read($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
   deleteCreativeAsset: { sql: 'SELECT hon.delete_creative_asset($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: false },
+  reviewCreativeAsset: { sql: 'SELECT hon.review_creative_asset($1,$2::uuid,$3::uuid,$4) AS data', arity: 4, readOnly: false },
+  listCreativeReviewQueue: { sql: 'SELECT hon.list_creative_review_queue($1,$2::uuid,$3::integer) AS data', arity: 3, readOnly: true },
   confirmCreativeAssetRemoved: { sql: 'SELECT hon.confirm_creative_asset_removed($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: false },
   // B4: refund guarantee records and Champions reward application (no refund execution, payout or prize).
   readRefundEligibility: { sql: 'SELECT hon.read_saas_refund_eligibility_from_hq($1,$2::uuid,$3::timestamptz) AS data', arity: 3, readOnly: true },

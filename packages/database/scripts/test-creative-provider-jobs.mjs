@@ -28,7 +28,7 @@ const synthetic=new SyntheticCreativeProviderRuntime('SUCCEED'),studio=new Creat
 const payments=new SaasPaymentsService(billing,database,new StripeTestModeAdapter({secretKey:KEY,webhookSecret:SECRET,provider:'STRIPE_SIMULATED',transport:sim.transport}));
 const admin=new pg.Client(targets.owner);
 const ownerPool=new pg.Pool({...targets.owner,max:8});
-const creativeTables=['creative_stored_objects','creative_provider_jobs','creative_generation_assets','creative_generations','saas_creative_ledger','saas_creative_reservations','saas_creative_lots','saas_creative_adjustments','saas_creative_topup_purchases',
+const creativeTables=['creative_asset_reviews','creative_stored_objects','creative_provider_jobs','creative_generation_assets','creative_generations','saas_creative_ledger','saas_creative_reservations','saas_creative_lots','saas_creative_adjustments','saas_creative_topup_purchases',
  'saas_creative_wallets','saas_creative_rates','saas_creative_rate_versions'];
 // creative_avatars (0276) and creative_avatar_videos (0277) reference generations: delete them first when present.
 const optionalCreativeTables=['saas_creative_cost_events','creative_avatars','creative_avatar_videos'];
@@ -42,7 +42,7 @@ const saasTables=['saas_access_transitions','saas_access_states','saas_provider_
 const http=(n,code)=>e=>{assert.equal(e?.getStatus?.(),n,e?.stack??String(e));if(code)assert.equal(e.getResponse().code,code,e.stack);return true;};
 const deny=(p,n,code)=>assert.rejects(p,http(n,code));
 const K=()=>randomUUID(),iso=d=>new Date(d).toISOString(),NOW=Date.now(),HOUR=3600_000,DAY=24*HOUR;
-const humans=Object.fromEntries(['owner','ownerA','ownerB','staffA2'].map(k=>[k,{id:randomUUID(),user:randomUUID(),subject:`c1j-${k}-${randomUUID()}`}]));
+const humans=Object.fromEntries(['owner','ownerA','ownerB','staffA2','creatorB'].map(k=>[k,{id:randomUUID(),user:randomUUID(),subject:`c1j-${k}-${randomUUID()}`}]));
 const H=k=>humans[k].subject;
 const S={},created=[];
 let createdProvider=false,programTouched=false;
@@ -519,6 +519,82 @@ try{
    assert.equal(await can('hon_communication_worker','hon.record_creative_provider_job_stored_result(uuid,uuid,jsonb,jsonb)'),true);
    assert.equal(await can('hon_communication_worker','hon.delete_creative_asset(text,uuid,uuid)'),false);
   }
+ });
+ // ---------- C4 (0356) human review ----------
+ // creatorB: a creative actor at school B (ai.premium.request) who is NOT a reviewer (no marketing.social.manage).
+ {const roleB=randomUUID();
+  await admin.query("INSERT INTO hon.roles(id,organization_id,code,name,is_system_role) VALUES($1,$2,'C4_CREATOR','Fixture creator',false)",[roleB,S.orgB]);
+  await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'ai.premium.request')",[roleB,S.orgB]);
+  await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$3,clock_timestamp()-interval '1 hour')",[S.orgB,S.B,humans.creatorB.id,roleB]);}
+ const holds=async who=>(await row('SELECT hon.creative_reviewer_holds($1,$2,$3) r',[humans[who].id,S.orgB,S.B])).r;
+ if(!await holds('ownerB'))await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) SELECT g.role_id,g.organization_id,'marketing.social.manage' FROM hon.principal_role_grants g WHERE g.principal_id=$1 AND g.school_id=$2 AND g.revoked_at IS NULL ON CONFLICT DO NOTHING",[humans.ownerB.id,S.B]);
+ const reviewCall=(who,school,asset,decision)=>billing.call('reviewCreativeAsset',[H(who),school,asset,decision],contracts.validateCreativeAssetReview);
+ const storedJob=async(who='ownerB',n=1)=>{const rt=new Async('ACCEPT',['SUCCEED'],{providerId:'HIGGSFIELD'});
+  const out=await new CreativeStudioService(billing,rt).create(H(who),S.B,{operationCode:'image.generate',units:n,format:'SQUARE',prompt:PROMPT},K());
+  const j=await job(out.generation.generationId);await due(j.id);
+  const lease=(await claim(25,60)).find(r=>r.job_id===j.id).lease_token;
+  assert.deepEqual(await stored(j.id,lease,okAssets(n),objs(n)),{status:'RECORDED'});
+  return (await studio.read(H(who),S.B,out.generation.generationId));};
+ let pendingByCreator;
+ await check('J17','C4: every stored asset starts PENDING_REVIEW; only a creative actor who holds marketing.social.manage at the exact school approves or rejects; self-approval allowed; a rejection is final; the AI team (any delegated or action-request context) never reviews',async()=>{
+  assert.equal(await holds('ownerB'),true);assert.equal(await holds('creatorB'),false);
+  const mine=await storedJob('ownerB');const a=mine.assets[0].assetId;
+  assert.equal(mine.assets[0].review,'PENDING_REVIEW');
+  const self=await reviewCall('ownerB',S.B,a,'APPROVED');
+  assert.deepEqual([self.assetId,self.review,self.reviewedBySelf],[a,'APPROVED',true]);
+  assert.deepEqual(await reviewCall('ownerB',S.B,a,'APPROVED'),self,'idempotent');
+  assert.equal((await studio.read(H('ownerB'),S.B,mine.generationId)).assets[0].review,'APPROVED');
+  const theirs=await storedJob('creatorB');pendingByCreator=theirs.assets[0].assetId;
+  await deny(reviewCall('creatorB',S.B,pendingByCreator,'APPROVED'),403,'SAAS_FORBIDDEN');
+  await deny(reviewCall('ownerA',S.B,pendingByCreator,'APPROVED'),403,'SAAS_FORBIDDEN');
+  await deny(reviewCall('ownerB',S.A1,pendingByCreator,'APPROVED'),403,'SAAS_FORBIDDEN');
+  await deny(reviewCall('ownerB',S.B,randomUUID(),'APPROVED'),404,'SAAS_UNAVAILABLE');
+  await deny(reviewCall('ownerB',S.B,pendingByCreator,'PENDING_REVIEW'),400,'INVALID_SAAS_INPUT');
+  // An approval can be withdrawn by a rejection; a rejection is final.
+  const rej=await reviewCall('ownerB',S.B,a,'REJECTED');assert.deepEqual([rej.review,rej.reviewedBySelf],['REJECTED',true]);
+  await deny(reviewCall('ownerB',S.B,a,'APPROVED'),409,'SAAS_TRANSITION_NOT_ALLOWED');
+  assert.equal((await studio.read(H('ownerB'),S.B,mine.generationId)).assets[0].review,'REJECTED');
+  const evidence=(await admin.query('SELECT decision,reviewed_by_principal_id FROM hon.creative_asset_reviews WHERE asset_id=$1 ORDER BY reviewed_at',[a])).rows;
+  assert.deepEqual(evidence.map(r=>[r.decision,r.reviewed_by_principal_id]),[['APPROVED',humans.ownerB.id],['REJECTED',humans.ownerB.id]]);
+  // AI team: any action-request or delegated context is refused before anything is read.
+  for(const setting of ['app.hon_action_request_id','app.hon_delegated_by_principal_id','app.hon_principal_id']){
+   const c=await pool.connect();
+   try{await c.query('BEGIN');await c.query('SELECT set_config($1,$2,true)',[setting,randomUUID()]);
+    await refuse(c.query('SELECT hon.review_creative_asset($1,$2,$3,$4)',[H('ownerB'),S.B,pendingByCreator,'APPROVED']),'SAAS_FORBIDDEN');}
+   finally{await c.query('ROLLBACK').catch(()=>{});c.release();}
+  }
+  // A deleted asset cannot be reviewed.
+  const gone=(await storedJob('ownerB')).assets[0].assetId;
+  await new CreativeMediaService(billing,memory()).remove(H('ownerB'),S.B,gone,{});
+  await deny(reviewCall('ownerB',S.B,gone,'APPROVED'),404,'SAAS_UNAVAILABLE');
+ });
+ await check('J18','C4: an asset that is not APPROVED is viewable only by its requester and reviewers; the review queue lists only this school\'s stored, undeleted, unreviewed assets, oldest first, for reviewers only; reviews are append-only and the runtime cannot touch the table',async()=>{
+  const media=new CreativeMediaService(billing,memory());
+  const byOwner=(await storedJob('ownerB')).assets[0].assetId;
+  await deny(media.view(H('creatorB'),S.B,byOwner),404,'SAAS_UNAVAILABLE');
+  assert.ok((await media.view(H('ownerB'),S.B,byOwner)).url);
+  assert.ok((await media.view(H('creatorB'),S.B,pendingByCreator)).url,'the requester sees their own pending asset');
+  assert.ok((await media.view(H('ownerB'),S.B,pendingByCreator)).url,'a reviewer sees it');
+  await reviewCall('ownerB',S.B,byOwner,'APPROVED');
+  assert.ok((await media.view(H('creatorB'),S.B,byOwner)).url,'approved: the school\'s creative staff see it');
+  const q=await media.queue(H('ownerB'),S.B,'50');
+  const ids=q.assets.map(x=>x.assetId);
+  assert.ok(ids.includes(pendingByCreator)&&!ids.includes(byOwner),'reviewed assets leave the queue');
+  assert.equal(q.assets.find(x=>x.assetId===pendingByCreator).requestedBySelf,false);
+  const listed=(await admin.query('SELECT o.asset_id FROM hon.creative_stored_objects o WHERE o.school_id=$1 AND o.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM hon.creative_asset_reviews r WHERE r.asset_id=o.asset_id) ORDER BY o.stored_at,o.asset_id',[S.B])).rows.map(r=>r.asset_id);
+  assert.deepEqual(ids,listed.slice(0,50));
+  assert.equal((await media.queue(H('ownerB'),S.B,'1')).assets.length,Math.min(1,listed.length));
+  await deny(media.queue(H('creatorB'),S.B,'50'),403,'SAAS_FORBIDDEN');
+  await deny(media.queue(H('ownerA'),S.B,'50'),403,'SAAS_FORBIDDEN');
+  assert.deepEqual((await media.queue(H('ownerA'),S.A1,'50')).assets.filter(x=>listed.includes(x.assetId)),[],'no other school\'s assets');
+  for(const sql of ["UPDATE hon.creative_asset_reviews SET decision='APPROVED' WHERE asset_id=$1","DELETE FROM hon.creative_asset_reviews WHERE asset_id=$1"])
+   await assert.rejects(admin.query(sql,[byOwner]),/append-only/);
+  await assert.rejects(pool.query('SELECT 1 FROM hon.creative_asset_reviews LIMIT 1'),/permission denied/);
+  const can=async(role,f)=>(await row('SELECT has_function_privilege($1,$2,$3) r',[role,f,'EXECUTE'])).r;
+  for(const f of ['hon.review_creative_asset(text,uuid,uuid,text)','hon.list_creative_review_queue(text,uuid,integer)','hon.authorize_creative_asset_read(text,uuid,uuid)'])
+   assert.equal(await can(CHAMPIONS_RUNTIME_ROLE,f),true,f);
+  for(const f of ['hon.creative_asset_review_status(uuid)','hon.creative_reviewer_holds(uuid,uuid,uuid)','hon.guard_creative_asset_review()'])
+   assert.equal(await can(CHAMPIONS_RUNTIME_ROLE,f),false,f);
  });
  await setAccessProgram(false);programTouched=false;
 }finally{

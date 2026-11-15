@@ -293,6 +293,7 @@
     "0352_school_number_orders.sql": "66707e67a865b901425603ac7f23127291e44faaf5a9cdcad75648c6feff18a9",
     "0354_creative_provider_jobs.sql": "51d614822499ff9c8c894f2ff73853c19dfad33c677b6a741329556cb460be67",
     "0358_school_number_order_settle.sql": "04aec55d14c81c53b4012377c9ad610221cfacf53ed3fb8a23a12cb9d98afdc0",
-    "0355_creative_media_storage.sql": "2a70c6114c5fc93a2aabc6eae175a9337811a6b51410c7b85f907e4262f8be6b"
+    "0355_creative_media_storage.sql": "2a70c6114c5fc93a2aabc6eae175a9337811a6b51410c7b85f907e4262f8be6b",
+    "0356_creative_asset_review.sql": "c023a8db4ceb361ae27e99a17b49307d4ab119017ff2f145d4620d452ed1cc42"
   }
 }
