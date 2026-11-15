@@ -385,11 +385,21 @@ try {
   ok((await sql('SELECT count(*)::int n FROM hon.paper_import_pages WHERE set_id=$1', [old.id])).rows[0].n === 1, 'bytes still there until the next command');
   await success(() => create(OTHER_SCHOOL, { kind: 'STUDENT_CARDS' }, { school: ids.schoolB }), 'a command at another school');
   ok((await sql('SELECT count(*)::int n FROM hon.paper_import_pages WHERE set_id=$1', [old.id])).rows[0].n === 1, 'another school\'s command does not touch this school');
-  await success(() => create(IMPORTER, { kind: 'STUDENT_CARDS' }), 'a command at the same school');
+  await success(() => list(OTHER_SCHOOL, { school: ids.schoolB }), 'opening the list at another school');
+  ok((await sql('SELECT count(*)::int n FROM hon.paper_import_pages WHERE set_id=$1', [old.id])).rows[0].n === 1, 'another school\'s list does not touch this school');
+  await success(() => list(IMPORTER), 'opening the list at the same school');
   const purged = (await sql('SELECT status,delete_reason,deleted_by_principal_id FROM hon.paper_import_sets WHERE id=$1', [old.id])).rows[0];
   ok(purged.status === 'DELETED' && purged.delete_reason === 'EXPIRED' && purged.deleted_by_principal_id === null, 'the set was erased as EXPIRED');
   ok((await sql('SELECT count(*)::int n FROM hon.paper_import_pages WHERE set_id=$1', [old.id])).rows[0].n === 0, 'its bytes are gone');
-  ok(typeof (await sql('SELECT hon.purge_expired_paper_imports() n')).rows[0].n === 'number', 'the owner-only school-wide purge runs');
+  // The owner's daily sweep erases expired sets of a school nobody opens again.
+  const idle = (await success(() => create(IMPORTER, { kind: 'STUDENT_CARDS' }), 'create a set nobody comes back to')).data;
+  await success(() => addPage(IMPORTER, idle.id, pageBody(CARD, 'image/png', 1)), 'add a page nobody comes back to');
+  await sql('BEGIN'); await sql('ALTER TABLE hon.paper_import_sets DISABLE TRIGGER USER');
+  await sql("UPDATE hon.paper_import_sets s SET created_at=x.t,expires_at=x.t+interval '30 days' FROM (SELECT clock_timestamp()-interval '31 days' t) x WHERE s.id=$1", [idle.id]);
+  await sql('ALTER TABLE hon.paper_import_sets ENABLE TRIGGER USER'); await sql('COMMIT');
+  ok((await sql('SELECT hon.purge_expired_paper_imports() n')).rows[0].n >= 1, 'the owner-only sweep erased at least one set');
+  ok((await sql('SELECT count(*)::int n FROM hon.paper_import_pages WHERE set_id=$1', [idle.id])).rows[0].n === 0
+    && (await sql('SELECT status FROM hon.paper_import_sets WHERE id=$1', [idle.id])).rows[0].status === 'DELETED', 'the sweep erased the idle school set and its bytes');
 
   // 11. Live permission loss is seen; list scoping.
   await sql('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(), revoked_by_principal_id=$2 WHERE id=$1', [IMPORTER.grants[0], OWN.principal]);

@@ -105,7 +105,7 @@ it('shows nothing private before the school is verified, and the start card only
   }
   const home = html();
   expect(home).toContain('What are you photographing?'); expect(home).toContain('HON can read only the sample pages for now.');
-  expect(home).toContain('Location and camera details are removed');
+  expect(home).toContain('Location and camera details are removed'); expect(home).toContain('erased the next time anyone at this school opens Import from photos');
   const denied = html({ list: { state: 'DENIED' } });
   expect(denied).toContain('You cannot import students at this school.'); expect(denied).not.toContain('What are you photographing?');
 });
@@ -133,7 +133,7 @@ it('says where a sent table went, what deleted or expired photos mean, and offer
   const sent = opened(detail({ rows: [row], unsure: [row.map(() => false)] }, { ...read, status: 'SENT', version: 4, sentAt: at, sentBatchId: id(60) }));
   expect(sent).toContain('Sent 1 rows to the student import review.'); expect(sent).toContain('href="/staff/migration/students"');
   const gone = opened(detail({ pages: [] }, { status: 'DELETED', pageCount: 0, deletedAt: at, deleteReason: 'EXPIRED' }));
-  expect(gone).toContain('erased automatically'); expect(gone).not.toContain('Delete photos');
+  expect(gone).toContain('expired on'); expect(gone).not.toContain('Delete photos');
   expect(opened(detail(), { confirmDelete: true })).toContain('Yes, delete');
   expect(html({ outcome: { kind: 'UNKNOWN', action: 'send' }, canRetry: true, locked: true })).toContain('Try again');
   expect(html({ outcome: { kind: 'AI_BLOCKED', action: 'read' } })).toContain('Nothing was read');

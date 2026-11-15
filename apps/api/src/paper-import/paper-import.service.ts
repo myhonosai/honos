@@ -87,7 +87,8 @@ export class PaperImportService {
 
   async list(context: PaperImportContext): Promise<PaperImportList> {
     this.assertHuman(context, false);
-    return this.read(context, async client => verifyPaperImportList(
+    // A write transaction: opening the list erases this school's expired photo sets (see 0388 read_paper_imports).
+    return this.transaction(context, async client => verifyPaperImportList(
       (await client.query<{ data: unknown }>('SELECT hon.read_paper_imports($1) AS data', [context.externalSubject])).rows[0]?.data));
   }
 

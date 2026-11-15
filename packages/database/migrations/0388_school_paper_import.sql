@@ -506,13 +506,16 @@ BEGIN
   RETURN hon.paper_import_finish(p_subject,s.actor,'delete',r.id,p_key,p_request,p_correlation,hon.paper_import_summary(r));
 END $$;
 
--- Reads: the 25 most recent sets, one set with its table and page list, or one page image. All need the same live
+-- Reads (the list runs in a write transaction because it erases expired sets): the 25 most recent sets, one set with its table and page list, or one page image. All need the same live
 -- import authority as the commands. A deleted or expired set returns no page.
 CREATE FUNCTION hon.read_paper_imports(p_subject text) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE result jsonb;
 BEGIN
   PERFORM hon.require_paper_import_actor(p_subject);
+  -- Opening the screen erases this school's expired sets too, so expiry does not wait for a command. A school that
+  -- never comes back needs the owner's daily sweep, hon.purge_expired_paper_imports() (a deployment requirement).
+  PERFORM hon.paper_import_purge_school(hon.current_organization_id(),hon.current_school_id());
   SELECT jsonb_build_object('sets',coalesce(jsonb_agg(hon.paper_import_summary(x) ORDER BY x.created_at DESC,x.id),'[]'::jsonb),
     'maxPages',10,'maxPageBytes',1400000,'maxRows',200,'retentionDays',30) INTO result
   FROM (SELECT * FROM hon.paper_import_sets WHERE organization_id=hon.current_organization_id() AND school_id=hon.current_school_id()
