@@ -6,6 +6,7 @@ import { CurriculumProgressAccessError, CurriculumProgressUncertainError, HUMAN_
   submitCurriculumObservation, validateCurriculumObservationDraft, validateCurriculumProgressIds, type CurriculumProgressKnownIds, type CurriculumObservationReceipt, type PreparedCurriculumObservation } from './curriculum-progress-workbench-http';
 import styles from './attendance-workbench.module.css';
 import { useShellSchoolInto } from './school-shell/page-school';
+import { EnrollmentPicker, IdFields } from './school-pickers/pickers';
 
 const EMPTY_IDS: CurriculumProgressKnownIds = { organizationId: '', schoolId: '', curriculumId: '', enrollmentId: '' };
 const LABELS: Record<keyof CurriculumProgressKnownIds, string> = { organizationId: 'Organization UUID', schoolId: 'School UUID', curriculumId: 'Curriculum UUID', enrollmentId: 'Enrollment UUID' };
@@ -92,15 +93,18 @@ export function CurriculumProgressWorkbench(): React.ReactElement {
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">Staff dashboard</a><a href="/staff/command-center">Command Center</a></nav>
     <header><p>Curriculum &amp; testing</p><h1>Curriculum progress</h1>
-      <p>Choose a student’s curriculum, then mark which requirements they have shown in class.</p>
+      <p>Choose a student from your school, then mark which requirements they have shown in class.</p>
     </header>
     <aside data-plain-note=""><strong>Marking a requirement as met is your observation only. It never promotes a student or changes attendance.</strong><details><summary>What this page never does</summary><p><strong>MET is a human observation, never an outcome in another workflow.</strong></p>
       <p>No status here grants promotion, rank, belt, certificate, testing readiness or eligibility, grade, attendance, booking, membership, payment, family or parent access, communication, provider, AI, Action Engine or automation outcome. Even an ATTENDANCE requirement kind is curriculum observation evidence only, not attendance credit.</p>
       <p>UUIDs are untrusted selectors, not authority. Existing tenant RLS, current human identity, exact <code>curriculum.progress.record</code> permission, school entitlement and version rechecks remain server-owned on every read, submit and replay. The inert curriculum outbox event gains no consumer.</p>
     </details></aside>
     <section aria-labelledby="enrollment-read"><h2 id="enrollment-read">Exact current enrollment read</h2>
-      <fieldset disabled={busy}><div className={styles.scopeGrid}>{(Object.keys(LABELS) as (keyof CurriculumProgressKnownIds)[]).filter(field => !shellSchool || (field !== 'organizationId' && field !== 'schoolId')).map(field =>
-        <label key={field}>{LABELS[field]}<input name={field} required autoComplete="off" spellCheck={false} maxLength={36} value={ids[field]} onChange={event => edit(() => setIds({ ...ids, [field]: event.target.value }), true)} /></label>)}</div>
+      <fieldset disabled={busy}>
+        {shellSchool && <EnrollmentPicker scope={shellSchool} purpose="progress" value={ids.enrollmentId} disabled={busy}
+          onPick={picked => edit(() => setIds(current => ({ ...current, curriculumId: picked?.curriculumId ?? '', enrollmentId: picked?.enrollmentId ?? '' })), true)} />}
+        <IdFields manual={!shellSchool}><div className={styles.scopeGrid}>{(Object.keys(LABELS) as (keyof CurriculumProgressKnownIds)[]).filter(field => !shellSchool || (field !== 'organizationId' && field !== 'schoolId')).map(field =>
+        <label key={field}>{LABELS[field]}<input name={field} required autoComplete="off" spellCheck={false} maxLength={36} value={ids[field]} onChange={event => edit(() => setIds({ ...ids, [field]: event.target.value }), true)} /></label>)}</div></IdFields>
         <div className={styles.actions}><button type="button" disabled={!validIds} onClick={() => void load()}>Load current enrollment</button><button type="button" onClick={discard}>Discard inputs / start over</button></div>
       </fieldset>
       <p>Loading again clears the prior snapshot, draft, confirmation, receipt and retry before the request. Read failures never keep stale facts on screen.</p>

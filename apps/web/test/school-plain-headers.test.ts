@@ -11,6 +11,8 @@ describe('plain-language page headers', () => {
     const source = readFileSync(`src/components/${page}.tsx`, 'utf8');
     const header = source.match(/<header>.*?<\/header>/s)![0];
     expect(header).not.toMatch(/HON \/|HUMAN|CONVENTIONAL|UUID|canonical|untrusted|idle|selector/i);
+    // A lead that says "Choose" is only true where the page offers a list to choose from (#369 review P2).
+    if (/Choose/.test(header)) expect(source).toMatch(/Picker|setSelected/);
     expect(source).toMatch(/<aside data-plain-note=""><strong>[^<]{20,140}<\/strong><details><summary>What this page never does<\/summary>/);
   });
 });

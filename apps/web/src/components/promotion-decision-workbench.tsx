@@ -6,6 +6,7 @@ import { PromotionDecisionAccessError, PromotionDecisionUncertainError, prepareP
   type PromotionDecisionIds, type PromotionDecisionReceipt, type PreparedPromotionDecision } from './promotion-decision-http';
 import styles from './attendance-workbench.module.css';
 import { useShellSchoolInto } from './school-shell/page-school';
+import { CandidatePicker, IdFields } from './school-pickers/pickers';
 
 const EMPTY_IDS: PromotionDecisionIds = { organizationId: '', schoolId: '', candidateId: '' };
 const LABELS: Record<keyof PromotionDecisionIds, string> = { organizationId: 'Organization UUID', schoolId: 'School UUID', candidateId: 'Testing candidate UUID' };
@@ -81,8 +82,8 @@ export function PromotionDecisionWorkbench(): React.ReactElement {
 
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">Staff dashboard</a></nav>
-    <header><p>Promotions</p><h1>Promotion decision</h1>
-      <p>Choose a student who has finished testing and record your final decision, with a reason.</p>
+    <header><p>Curriculum &amp; testing</p><h1>Promotion decision</h1>
+      <p>Choose a student whose test has a result, then record your final decision with a reason.</p>
     </header>
     <aside data-plain-note=""><strong>Only an instructor decides a promotion. HON and the AI team never promote a student.</strong><details><summary>What this page never does</summary><p><strong>PROMOTED is a final human instructor decision, never an AI or scorecard action.</strong></p>
       <p>This page submits only the existing canonical promotion-decision command. The API independently validates the terminal candidate, current enrollment, target rank and promotion prerequisites. Only after that server validation may its existing canonical <code>PROMOTED</code> decision perform the canonical rank change. Entered IDs and version are untrusted selectors, not authority or verified current facts.</p>
@@ -90,9 +91,11 @@ export function PromotionDecisionWorkbench(): React.ReactElement {
     </details></aside>
     <section aria-labelledby="promotion-decision-command"><h2 id="promotion-decision-command">Record one final known-ID promotion decision</h2>
       <form autoComplete="off" onSubmit={submit}><fieldset disabled={busy}>
-        <div className={styles.scopeGrid}>{(Object.keys(LABELS) as (keyof PromotionDecisionIds)[]).filter(field => !shellSchool || (field !== 'organizationId' && field !== 'schoolId')).map(field =>
+        {shellSchool && <CandidatePicker scope={shellSchool} purpose="decision" value={ids.candidateId} disabled={busy}
+          onPick={picked => edit(() => { setIds(current => ({ ...current, candidateId: picked?.candidateId ?? '' })); setVersion(picked ? String(picked.version) : ''); })} />}
+        <IdFields manual={!shellSchool}><div className={styles.scopeGrid}>{(Object.keys(LABELS) as (keyof PromotionDecisionIds)[]).filter(field => !shellSchool || (field !== 'organizationId' && field !== 'schoolId')).map(field =>
           <label key={field}>{LABELS[field]}<input name={field} required autoComplete="off" spellCheck={false} maxLength={36} value={ids[field]} onChange={event => edit(() => setIds({ ...ids, [field]: event.target.value }))} /></label>)}</div>
-        <label>Expected candidate version (positive whole number)<input name="expectedVersion" required autoComplete="off" inputMode="numeric" pattern="[1-9][0-9]*" maxLength={16} value={version} onChange={event => edit(() => setVersion(event.target.value))} /></label>
+        <label>Expected candidate version (positive whole number)<input name="expectedVersion" required autoComplete="off" inputMode="numeric" pattern="[1-9][0-9]*" maxLength={16} value={version} onChange={event => edit(() => setVersion(event.target.value))} /></label></IdFields>
         <label>Final promotion decision<select name="status" required value={status} onChange={event => edit(() => setStatus(event.target.value))}><option value="">Choose a final human decision</option>{PROMOTION_DECISION_STATUSES.map(decision => <option key={decision} value={decision}>{decision}</option>)}</select></label>
         <label>Required private instructor rationale (maximum 2000 characters)<textarea name="rationale" required autoComplete="off" maxLength={2000} value={rationale} onChange={event => edit(() => setRationale(event.target.value))} /></label>
         <p>Local validation checks only command syntax. The server owns candidate finality, current enrollment, target rank, prerequisites, direct-human authorization, tenant scope, idempotency and whether a <code>PROMOTED</code> decision can change rank.</p>
