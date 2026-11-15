@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "9899403c35e5cbe8a88bdfce4e64b99ac3d5c90b88ce83211fda3b0dcd092626",
+  "chainSha256": "6ab88a6665432d0bf233a282e7962b166cf7e1779e9157306d0951a1c614f164",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -497,6 +497,10 @@
     {
       "file": "0358_school_number_order_settle.sql",
       "sha256": "04aec55d14c81c53b4012377c9ad610221cfacf53ed3fb8a23a12cb9d98afdc0"
+    },
+    {
+      "file": "0361_school_websites.sql",
+      "sha256": "262d9768dc26fb197cac0ba0da3a77e31442f4dfb006571a74a6f3b016eba221"
     },
     {
       "file": "0364_school_conversations.sql",
