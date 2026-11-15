@@ -29,7 +29,9 @@ stampede. Number 0261 was assigned by the coordinator.
 - **E6 Staff view.** Staff see each event with booked and open spots per slot and, per slot, who is coming (name and
   contact). Staff can cancel a booking or mark a family as arrived.
 - **E7 Limits.** Public reads show only open spots, never names. Per event at most 1,000 booking attempts and 300 cancel
-  attempts an hour; per email or mobile at most 5 booking attempts an hour. No message, no charge, no CRM lead, no AI, no
+  attempts an hour; per email or mobile at most 5 booking attempts an hour; per client (network address, behind the API's
+  trusted proxies) at most 120 reads a minute, 20 booking attempts and 30 cancel attempts an hour, shared with booking-type
+  links. No message, no charge, no CRM lead, no AI, no
   student record. Paid bookings come later through the tuition payments work.
 
 ## Security boundary

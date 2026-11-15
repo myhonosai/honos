@@ -307,3 +307,44 @@
   .honLauncher span { display: none; }
 }
 @media (max-width: 1099px) { .shell[data-hon-mode='big-button'] .honLauncher { bottom: 92px; } }
+
+/* Guided tour (owner, 2026-11-14): one centered step card; the matching area in the menu is outlined. */
+.tourScrim { position: fixed; inset: 0; z-index: 39; background: rgba(0, 3, 12, 0.55); }
+.tour {
+  position: fixed; z-index: 40; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto;
+  padding: var(--hon-space-5); border-radius: var(--hon-radius-lg); border: 1px solid var(--hon-border-strong);
+  background: var(--hon-surface-solid); color: var(--hon-text); box-shadow: var(--hon-shadow-2);
+}
+.tour > header { display: flex; align-items: center; gap: var(--hon-space-3); margin-bottom: var(--hon-space-4); }
+.tour > header small { color: var(--hon-text-subtle); font-size: var(--hon-text-sm); }
+.tour > header .closeMenu { display: grid; margin-left: auto; place-items: center; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--hon-border); background: transparent; color: var(--hon-text); cursor: pointer; }
+.tourBody { display: flex; gap: var(--hon-space-4); align-items: flex-start; }
+.tourBody h2 { margin: 0 0 var(--hon-space-2); font-family: var(--hon-font-display); font-size: var(--hon-text-xl); line-height: 1.2; }
+.tourBody p { margin: 0 0 var(--hon-space-3); color: var(--hon-text-muted); line-height: 1.55; }
+.tourBody ul { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0 0 var(--hon-space-3); padding: 0; }
+.tourBody ul li { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--hon-border); background: var(--hon-surface-2); font-size: var(--hon-text-sm); }
+.tourBody .tourInside { margin: 0 0 6px; color: var(--hon-text-subtle); font-size: var(--hon-text-xs, 12px); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.tourOpen { color: var(--hon-accent); font-weight: 700; text-decoration: none; }
+.tourOpen:hover { text-decoration: underline; }
+.tourDots { display: flex; justify-content: center; gap: 6px; list-style: none; margin: var(--hon-space-4) 0 var(--hon-space-3); padding: 0; }
+.tourDots li { width: 7px; height: 7px; border-radius: 50%; background: var(--hon-border-strong); }
+.tourDots li[data-on='true'] { width: 20px; border-radius: 4px; background: var(--hon-accent); }
+.tour > footer { display: flex; justify-content: space-between; gap: var(--hon-space-3); }
+.tour > footer button { min-height: 40px; padding: 0 18px; border-radius: 999px; border: 1px solid var(--hon-border-strong); background: transparent; color: var(--hon-text); font-weight: 700; cursor: pointer; }
+.tour > footer button:disabled { opacity: .4; cursor: default; }
+.tour > footer button[data-tour-next] { border-color: transparent; background: var(--hon-accent-strong); color: #fff; }
+.tour button:focus-visible, .tourOpen:focus-visible, .tourStart:focus-visible, .tourInvite button:focus-visible { outline: none; box-shadow: var(--hon-focus); }
+.nav a[data-tour-current='true'] { outline: 3px solid var(--hon-accent); outline-offset: 2px; border-radius: 999px; position: relative; z-index: 41; }
+.tourStart { margin-right: auto; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--hon-border-strong); background: transparent; color: var(--hon-text); font: inherit; font-weight: 700; cursor: pointer; }
+.shell[data-hon-layout='cards'] .tourBody h2 { font-size: var(--hon-text-2xl, 28px); }
+.shell[data-hon-layout='cards'] .tourBody p { font-size: var(--hon-text-lg); }
+@media (max-width: 560px) { .tourBody { flex-direction: column; } .tour { padding: var(--hon-space-4); } }
+
+.tourInvite { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 16px; padding: 14px 18px;
+  border: 1px solid var(--hon-border-strong); border-radius: 12px; background: var(--hon-surface-2); color: var(--hon-text); }
+.tourInvite strong { display: block; font-size: 15px; }
+.tourInvite span { color: var(--hon-text-muted); font-size: 14px; }
+.tourInvite > div:last-child { display: flex; gap: 8px; }
+.tourInvite button { padding: 9px 16px; border-radius: 999px; border: 1px solid var(--hon-border-strong); background: transparent; color: var(--hon-text); font: inherit; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.tourInvite button:first-child { border-color: transparent; background: var(--hon-accent-strong); color: #fff; }
