@@ -90,7 +90,10 @@ export async function uploadTrainingFile(scope: TrainAiScope, input: Conversatio
   const body = validateConversationAiUploadInput(input);
   const out = await call(`${base(scope)}/files`, 'POST', CONVERSATION_AI_UPLOAD_COMMAND, body, key);
   const receipt = checked(() => verifyConversationAiUploadReceipt(out.data));
-  if (receipt.file.fileName !== body.fileName || receipt.file.mediaType !== body.mediaType) invalid();
+  // The server keeps one copy of identical bytes and returns that file under its first name, so the name may differ;
+  // the type and the exact byte count must match what was sent.
+  const bytes = body.contentBase64.length / 4 * 3 - (body.contentBase64.endsWith('==') ? 2 : body.contentBase64.endsWith('=') ? 1 : 0);
+  if (receipt.file.mediaType !== body.mediaType || receipt.file.byteSize !== bytes) invalid();
   return { receipt, replayed: replayed(out.meta) };
 }
 export async function saveTrainingItem(scope: TrainAiScope, input: ConversationAiItemInput, key: string): Promise<{ receipt: ConversationAiItemReceipt; replayed: boolean }> {

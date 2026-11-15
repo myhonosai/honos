@@ -72,12 +72,15 @@ describe('train AI http', () => {
     // Wrong item back, wrong file back, or bad input: refused, and bad input never reaches the network.
     fetcher.mockReset();
     fetcher.mockResolvedValueOnce(json(200, { data: { item: item({ title: 'Other' }) }, meta: { replayed: false } }))
-      .mockResolvedValueOnce(json(201, { data: { file: { fileId: C, fileName: 'other.txt', mediaType: 'text/plain', byteSize: 3 }, extractedText: null }, meta: { replayed: false } }));
+      .mockResolvedValueOnce(json(201, { data: { file: { fileId: C, fileName: 'other.txt', mediaType: 'text/plain', byteSize: 4 }, extractedText: null }, meta: { replayed: false } }))
+      .mockResolvedValueOnce(json(200, { data: { file: { fileId: C, fileName: 'first-name.txt', mediaType: 'text/plain', byteSize: 3 }, extractedText: 'abc' }, meta: { replayed: false } }));
     await expect(saveTrainingItem(scope, { kind: 'FAQ', title: 'Parking', question: 'q', body: 'b' }, 'k')).rejects.toBeInstanceOf(TrainAiUnknown);
     await expect(uploadTrainingFile(scope, { fileName: 'schedule.txt', mediaType: 'text/plain', contentBase64: 'YWJj' }, 'k')).rejects.toBeInstanceOf(TrainAiUnknown);
+    // The same bytes uploaded again under a new name come back under their first name: accepted.
+    expect((await uploadTrainingFile(scope, { fileName: 'schedule.txt', mediaType: 'text/plain', contentBase64: 'YWJj' }, 'k')).receipt.file.fileName).toBe('first-name.txt');
     await expect(saveTrainingItem(scope, { kind: 'FAQ', title: 'No question', body: 'b' }, 'k')).rejects.toThrow();
     await expect(uploadTrainingFile(scope, { fileName: '../x.txt', mediaType: 'text/plain', contentBase64: 'YWJj' }, 'k')).rejects.toThrow();
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
   it('tells definite refusals from unknown outcomes', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json(422, { code: 'CONVERSATION_AI_LIBRARY_FULL' })).mockResolvedValueOnce(json(503, { code: 'CONVERSATION_AI_UNAVAILABLE' }))
