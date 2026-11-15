@@ -6,6 +6,7 @@ import { SCHOOL_SHELL_NAV } from '../src/components/school-shell/catalog';
 import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
 import { ReportsError, schoolReportsApi } from '../src/components/school-reports/http';
 import { SchoolReportsView, money, monthLabel, type SchoolReportsViewProps } from '../src/components/school-reports/view';
+import { sumSchoolReportLocations } from '@hon/contracts';
 import { REPORTS_COPY, reportsText } from '../src/components/school-reports/copy';
 import { id } from './account-status-fixtures';
 
@@ -121,4 +122,45 @@ it('is a protected no-index route in the analytics menu and the manifest, with n
   expect(manifest.routes.filter((item: { path: string }) => item.path === '/staff/reports')).toHaveLength(1);
   const code = ['http.ts', 'school-reports.tsx', 'view.tsx'].map((f) => readFileSync(`src/components/school-reports/${f}`, 'utf8')).join('\n');
   expect(code).not.toMatch(/method:\s*'POST'|Idempotency-Key|X-HON-Human-Command|localStorage|sendMessage|from ['"][^'"]*(ai-|llm|stripe|square|payment)[^'"]*['"]/i);
+});
+
+// R2 (0332): every location where the reader may see reports.
+const school2 = id(3);
+const locationsRaw = (over: Record<string, unknown> = {}) => ({ organizationId: org, months: 3, generatedAt: '2026-11-13T18:00:00.000Z', locations: [
+  { schoolId: school2, schoolName: 'Eastside Dojo', timezone: 'America/New_York', cancelledWithoutDate: 1, periods: raw().periods },
+  { schoolId: school, schoolName: 'Westside Dojo', timezone: 'America/Los_Angeles', cancelledWithoutDate: 0, periods: raw().periods }], ...over });
+
+it('reads the locations as a plain GET and refuses anything it cannot verify', async () => {
+  const f = stub(json({ data: locationsRaw(), meta }));
+  const read = await schoolReportsApi.locations(scope, 3, signal(), () => true);
+  expect(read.locations).toHaveLength(2);
+  const [path, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+  expect(path).toBe(`/api/v1/organizations/${org}/schools/${school}/reports/monthly/locations?months=3`);
+  expect(init).toMatchObject({ method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store' });
+  stub(json({ code: 'SCHOOL_REPORTS_TOO_MANY_LOCATIONS' }, 422));
+  expect((await fails(schoolReportsApi.locations(scope, 3, signal(), () => true))).kind).toBe('TOO_MANY');
+  for (const bad of [locationsRaw({ organizationId: id(9) }), locationsRaw({ locations: [] }), locationsRaw({ locations: [locationsRaw().locations[0]] }),
+    locationsRaw({ locations: [locationsRaw().locations[1], locationsRaw().locations[1]] }), locationsRaw({ months: 6 })]) {
+    stub(json({ data: bad, meta }));
+    expect((await fails(schoolReportsApi.locations(scope, 3, signal(), () => true))).kind).toBe('UNAVAILABLE');
+  }
+});
+
+it('adds the locations up per month and shows them side by side', async () => {
+  stub(json({ data: locationsRaw(), meta }));
+  const read = await schoolReportsApi.locations(scope, 3, signal(), () => true);
+  const totals = sumSchoolReportLocations(read.locations);
+  expect(totals.map((x) => x.month)).toEqual(['2026-09', '2026-10', '2026-11']);
+  expect(totals[0]?.attendance.checkIns).toBe(10);
+  expect(totals[0]?.retention).toEqual({ activeAtStart: 80, activeAtEnd: 82, ended: 6, retainedFromStart: 74 });
+  expect(totals[0]?.revenue).toEqual([{ currency: 'USD', billedMinor: 2500000, recordedPaymentsMinor: 1800000, onlinePaymentsMinor: 100000, refundsMinor: 30000 }]);
+  expect(totals[2]?.partial).toBe(true);
+  const html = renderToStaticMarkup(<SchoolReportsView language="en" waiting={false} concealed={false} hasSchool months={3} report={{ state: 'LOADING' }}
+    scope="ALL" locations={{ state: 'READY', read }}/>);
+  for (const text of ['Eastside Dojo', 'Westside Dojo', '2 locations', 'By location', 'data-testid="report-attendance"', 'Not counted: 1 cancelled']) expect(html).toContain(text);
+  expect(html).toContain('<option value="2026-10" selected="">'); // the latest full month
+  expect(html).toContain('$18,700.00'); // organization net for September: 2 x (9,000 + 500 - 150)
+  const tooMany = renderToStaticMarkup(<SchoolReportsView language="es" waiting={false} concealed={false} hasSchool months={3} report={{ state: 'LOADING' }}
+    scope="ALL" locations={{ state: 'TOO_MANY' }}/>);
+  expect(tooMany).toContain('más de 20 sedes');
 });

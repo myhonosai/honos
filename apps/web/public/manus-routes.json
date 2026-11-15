@@ -121,6 +121,14 @@
       "title": "HON | Import students"
     },
     {
+      "path": "/staff/migration/classes",
+      "title": "HON | Import classes and attendance"
+    },
+    {
+      "path": "/staff/migration/memberships",
+      "title": "HON | Import memberships and balances"
+    },
+    {
       "path": "/staff/welcome",
       "title": "HON | Welcome and setup"
     },
@@ -285,8 +293,16 @@
       "title": "HON | Students at risk"
     },
     {
+      "path": "/staff/family-messages",
+      "title": "HON | Family messages"
+    },
+    {
       "path": "/staff/settings/branding",
       "title": "HON | School branding"
+    },
+    {
+      "path": "/staff/settings/texting-number",
+      "title": "HON | Texting number"
     },
     {
       "path": "/staff/champions-club",
@@ -459,6 +475,10 @@
     {
       "path": "/hq/communications/:messageId",
       "title": "HON HQ | HQ message"
+    },
+    {
+      "path": "/hq/communications/numbers",
+      "title": "HON HQ | School texting numbers"
     },
     {
       "path": "/hq/growth/prospects",

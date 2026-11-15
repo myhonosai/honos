@@ -1,7 +1,7 @@
 import {
-  BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, ServiceUnavailableException,
+  BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, ServiceUnavailableException, UnprocessableEntityException,
 } from '@nestjs/common';
-import { validateSchoolReportsQuery, verifySchoolReports, type SchoolReports } from '@hon/contracts';
+import { validateSchoolReportsQuery, verifySchoolReportLocations, verifySchoolReports, type SchoolReportLocations, type SchoolReports } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import type { MembershipLifecycleContext } from '../billing/membership.service.js';
 
@@ -16,6 +16,9 @@ function translate(error: unknown): never {
   if (message === 'SCHOOL_TIMEZONE_INVALID' && sqlState === '22023') {
     throw new ConflictException({ code: 'SCHOOL_TIMEZONE_INVALID', detail: 'The school timezone is not a valid IANA timezone.' });
   }
+  if (message === 'SCHOOL_REPORTS_TOO_MANY_LOCATIONS' && sqlState === '22023') {
+    throw new UnprocessableEntityException({ code: 'SCHOOL_REPORTS_TOO_MANY_LOCATIONS', detail: 'More than 20 locations: open each school report instead.' });
+  }
   if (['22023', '22P02'].includes(sqlState)) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
   throw new ServiceUnavailableException({ code: 'SCHOOL_REPORTS_UNAVAILABLE' });
 }
@@ -29,20 +32,31 @@ export class SchoolReportsService {
   constructor(private readonly database: RuntimeDatabaseService) {}
 
   async read(context: MembershipLifecycleContext, value: unknown): Promise<SchoolReports> {
+    return this.run(context, value, 'SELECT hon.read_school_reports($1,$2::jsonb) AS data', (data, query) => verifySchoolReports(data, context.schoolId, query));
+  }
+
+  /** R2 (0332): the same totals for every location of the organization where this person may see reports. */
+  async readLocations(context: MembershipLifecycleContext, value: unknown): Promise<SchoolReportLocations> {
+    return this.run(context, value, 'SELECT hon.read_school_reports_locations($1,$2::jsonb) AS data',
+      (data, query) => verifySchoolReportLocations(data, context.organizationId, context.schoolId, query));
+  }
+
+  private async run<T>(context: MembershipLifecycleContext, value: unknown, statement: string,
+    verify: (data: unknown, query: ReturnType<typeof validateSchoolReportsQuery>) => T): Promise<T> {
     if (context.principalType !== 'HUMAN_USER' || context.source !== 'HUMAN_UI' || context.actionRequestId || context.delegatedByPrincipalId) {
       throw new ForbiddenException({ code: 'HUMAN_COMMAND_REQUIRED', detail: 'School reports are for a signed-in staff member only.' });
     }
     const subject = context.externalSubject;
     if (typeof subject !== 'string' || !subject || subject.trim() !== subject || subject.length > 200) throw new ForbiddenException({ code: 'SCHOOL_REPORTS_FORBIDDEN' });
-    let query;
+    let query: ReturnType<typeof validateSchoolReportsQuery>;
     try { query = validateSchoolReportsQuery(value); } catch { throw new BadRequestException({ code: 'VALIDATION_FAILED' }); }
     try {
       return await this.database.withTenantReadOnlyTransaction(context, async client => {
         await client.query(READ_LIMITS);
         await client.query(HUMAN_SETTINGS, [subject]);
-        const result = await client.query<{ data: unknown }>('SELECT hon.read_school_reports($1,$2::jsonb) AS data', [subject, JSON.stringify(query)]);
+        const result = await client.query<{ data: unknown }>(statement, [subject, JSON.stringify(query)]);
         if (result.rows.length !== 1) throw new Error('Unverified school reports.');
-        return verifySchoolReports(result.rows[0]!.data, context.schoolId, query);
+        return verify(result.rows[0]!.data, query);
       });
     } catch (error) { return translate(error); }
   }
