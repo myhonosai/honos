@@ -126,6 +126,8 @@ import { MembershipPauseController } from './billing/membership-pause.controller
 import { MembershipPauseService } from './billing/membership-pause.service.js';
 import { StudentImportController } from './migration/student-import.controller.js';
 import { StudentImportService } from './migration/student-import.service.js';
+import { HistoryImportController } from './migration/history-import.controller.js';
+import { HistoryImportService } from './migration/history-import.service.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
 import { SchoolSupportController } from './support/school-support.controller.js';
@@ -499,6 +501,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipDateRevisionController,
     MembershipPauseController,
     StudentImportController,
+    HistoryImportController,
     SchoolOnboardingController,
     SchoolSupportController,
     SchoolSocialController,
@@ -691,6 +694,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipDateRevisionService,
     MembershipPauseService,
     StudentImportService,
+    HistoryImportService,
     SchoolOnboardingService,
     SchoolSupportService,
     SchoolSocialService,
