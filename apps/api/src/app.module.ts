@@ -256,6 +256,7 @@ import { AttendancePolicyController } from './schedule/attendance-policy.control
 import { AttendanceHumanUiGuard } from './schedule/attendance-human-ui.guard.js';
 import { ClassBookingController } from './schedule/class-booking.controller.js';
 import { BookableStudentsController, BookableStudentsService } from './schedule/bookable-students.js';
+import { SchoolPickersController, SchoolPickersService } from './school-pickers/school-pickers.js';
 import { ClassBookingHumanUiGuard } from './schedule/class-booking-human-ui.guard.js';
 import { ClassBookingService } from './schedule/class-booking.service.js';
 import { PlannedAbsenceReviewController } from './schedule/planned-absence-review.controller.js';
@@ -461,6 +462,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     AttendancePolicyController,
     ClassBookingController,
     BookableStudentsController,
+    SchoolPickersController,
     PlannedAbsenceReviewController,
     PlannedAbsenceReviewQueueController,
     KnowledgeArticleController,
@@ -525,7 +527,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SaasSubscriptionGenerationHqController, HqHonController, SaasSubscriptionGenerationSchoolController, SaasScheduleBindingHqController, SaasScheduleBindingSchoolController, SaasPaidReviewHqController, SaasFounderPoolHqController, SaasFounderAvailabilitySchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, CreativeStudioAvatarsController, CreativeStudioAvatarVideosController, CreativeLimitsHqController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, CommunicationWebhookController, SchoolTextSenderHqController, SchoolNumberController, SchoolNumberOrderHqController, SchoolMissedCallHqController, SchoolMissedCallsController, ZernioLeadFormHqController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqBusinessNumbersController, HqSupportController, HqMarketingController, HqPlanPromotionsController, SchoolPlanPromotionsController, HqCreativeController, AiSpendPauseHqController, AiSchoolCostLimitHqController, AiExceptionAllowanceHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController, HqCommunicationsController, HqContactController, HqProspectsController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
-  providers: [BookableStudentsService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard,
+  providers: [BookableStudentsService, SchoolPickersService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard,
     SaasSubscriptionGenerationService, SaasScheduleBillingService, SaasPaidReviewService, SaasFounderService, SaasPriceAcceptanceService, SaasTrialsService, OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
     CurrentStaffReportingSchoolNoStoreGuard,
     CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard,
