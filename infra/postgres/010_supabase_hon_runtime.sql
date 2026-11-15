@@ -3663,6 +3663,18 @@ DO $$ DECLARE r text; t text; BEGIN
       hon.finalize_billing_import(text,jsonb,text,uuid,uuid),hon.read_billing_imports(text),hon.read_billing_import(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+-- 0361 school websites: three private tables reached only through three runtime entry points.
+DO $$ DECLARE r text; t text; BEGIN
+  IF to_regclass('hon.school_websites') IS NULL THEN RAISE EXCEPTION 'Apply migration 0361 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['school_websites','school_website_versions','school_website_requests'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_website(text),hon.mutate_school_website(text,text,jsonb,text,uuid,uuid),
+      hon.read_published_school_website(text) TO hon_runtime;
+  END IF;
+END $$;
 -- 0367 automation workflows and contact tags: five private tables reached only through twelve runtime entry points.
 DO $$ DECLARE r text; t text; BEGIN
   IF to_regprocedure('hon.create_automation_workflow(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0367 first'; END IF;
