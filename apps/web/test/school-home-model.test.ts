@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { HON_AI_TEAM } from '@hon/design-system';
+import { homeText } from '../src/components/home/copy';
 import { agentStatus, homeAiTeam, homeKpis, leadOutcomes, membershipMix, myTasks, recentLeads, reportDays, todaySessions } from '../src/components/home/model';
 import { command, leads, NOW, operations, readiness, readinessAgent, sessions, work } from './school-home-fixtures';
 
@@ -46,6 +47,19 @@ describe('school home model', () => {
     for (const id of ['alex', 'jordan', 'claire', 'lena']) expect(team.find(card => card.id === id)).toMatchObject({ href: `/staff/hon?ask=${id}` });
     expect(team.some(card => card.id === 'eian')).toBe(false);
     for (const member of HON_AI_TEAM) expect(team.find(card => card.id === member.id)?.portrait).toBe(member.portrait);
+  });
+
+  it('says under each name what that agent is for, in every language, and shows all eight as ready when readiness says so', () => {
+    const team = homeAiTeam({ state: 'READY', value: readiness() }, 'realistic');
+    for (const language of ['en', 'ko', 'es'] as const) for (const card of team) expect(homeText(language, card.purpose)).toBeTruthy();
+    expect(homeText('en', team.find(card => card.id === 'chad')!.purpose)).toBe('Drafts follow-ups for every lead');
+    expect(new Set(team.map(card => card.purpose)).size).toBe(8);
+    // Readiness that lists the whole launch roster as available: every card says Ready, none says "Not available yet".
+    const on = { providerRuntime: 'READY' as const, available: true, blockedBy: null };
+    const allOn = readiness([readinessAgent('marcus', 'MARKETING', 6, on), readinessAgent('kai', 'TEACHING', 6, on), readinessAgent('chad', 'CHAD_FOLLOW_UP', 3, on),
+      readinessAgent('alex', 'GENERAL_MANAGEMENT', 15, on), readinessAgent('maya', 'RETENTION', 15, on), readinessAgent('jordan', 'OPERATIONS', 15, on),
+      readinessAgent('claire', 'BUSINESS_PERFORMANCE', 15, on), readinessAgent('lena', 'CREATIVE_COMMERCE', 15, on)]);
+    expect(homeAiTeam({ state: 'READY', value: allOn }, 'realistic').filter(card => card.status !== 'READY').map(card => card.id)).toEqual([]);
   });
 
   it('never shows an agent as available when readiness does not list them', () => {

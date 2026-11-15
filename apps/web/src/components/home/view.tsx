@@ -134,7 +134,7 @@ function Agent({ agent, t }: { agent: AgentCard; t: (key: HomeKey) => string }):
     <span className={styles.portrait}><img src={agent.portrait} alt="" width={280} height={350} loading="lazy" /></span>
     <span className={styles.agentText}>
       <strong>{agent.name}</strong>
-      <span className={styles.agentTitle}>{t(agent.title)}</span>
+      <span className={styles.agentTitle} title={t(agent.title)}>{t(agent.purpose)}</span>
       <span className={styles.agentStatus}><i aria-hidden="true" />{t(`status${agent.status}` as HomeKey)}</span>
     </span>
     {live && <a className={styles.agentLink} href={agent.href!} aria-label={`${t(ASK_HON_AGENTS.has(agent.id) ? 'askAgent' : 'openWorkspace')}: ${agent.name}`}>{t(ASK_HON_AGENTS.has(agent.id) ? 'askAgent' : 'openWorkspace')}</a>}
