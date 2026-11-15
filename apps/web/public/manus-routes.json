@@ -646,7 +646,7 @@
     },
     {
       "path": "/hq/pricing-offers",
-      "title": "HON HQ | Pricing & Offers · Design review"
+      "title": "HON HQ | Pricing & Offers \u00b7 Design review"
     },
     {
       "path": "/reference/classic-dashboard",
@@ -703,6 +703,14 @@
     {
       "path": "/staff/settings",
       "title": "HON | Settings"
+    },
+    {
+      "path": "/staff/tools",
+      "title": "HON | Custom tools"
+    },
+    {
+      "path": "/staff/tool-maker",
+      "title": "HON | Tool Maker"
     }
   ]
 }
