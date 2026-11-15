@@ -3651,6 +3651,17 @@ DO $$ DECLARE r text; f text; t text; BEGIN
     FOREACH f IN ARRAY ARRAY['hon.read_parent_family_messages(text)','hon.send_parent_family_message(text,jsonb,text,uuid,uuid)','hon.read_family_message_inbox(text)','hon.read_family_message_thread(text,uuid)','hon.mark_family_message_thread_read(text,jsonb,uuid,uuid)','hon.reply_family_message(text,jsonb,text,uuid,uuid)'] LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+-- 0334 membership and opening-balance import: three private tables reached only through five runtime entry points.
+DO $$ DECLARE r text; t text; BEGIN
+  IF to_regclass('hon.billing_import_batches') IS NULL THEN RAISE EXCEPTION 'Apply migration 0334 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['billing_import_batches','billing_import_rows','billing_import_requests'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.stage_billing_import(text,jsonb,text,uuid,uuid),hon.decide_billing_import(text,jsonb,text,uuid,uuid),
+      hon.finalize_billing_import(text,jsonb,text,uuid,uuid),hon.read_billing_imports(text),hon.read_billing_import(text,uuid) TO hon_runtime;
+  END IF;
 -- 0362 custom tools (AI Customizer CM-1): exactly eight runtime entry points, no table privilege.
 DO $$ DECLARE r text; BEGIN
   IF to_regclass('hon.custom_tools') IS NULL THEN RAISE EXCEPTION 'Apply migration 0362 first'; END IF;
