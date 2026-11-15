@@ -1,0 +1,70 @@
+/** School reports wording (en / ko / es). Labels only; nothing here is authority or an outcome. */
+const en = {
+  pageTitle: 'School reports',
+  pageIntro: 'Month by month attendance, enrollment, retention and revenue for this school, in school time. Counts and totals only; no names.',
+  concealed: 'Hidden while this page is not in view.', waiting: 'Checking your school…', noSchool: 'Choose a school to see its reports.',
+  loading: 'Reading the reports…', denied: 'You need the reporting permission at this school to see its reports.',
+  timezone: 'The school time zone is not set correctly, so months cannot be shown.', unavailable: 'The reports are not available right now.',
+  tryAgain: 'Read again', range: 'Show', months: '{n} months', partial: 'so far', asOf: 'Read at {time}. Months follow school time ({zone}).',
+  month: 'Month',
+  attendanceTitle: 'Attendance', classesHeld: 'Classes held', checkIns: 'Check-ins', absences: 'Absences', studentsAttended: 'Students who attended',
+  perClass: 'Check-ins per class',
+  attendanceHelp: 'Classes not cancelled that started in the month. Check-ins are present, late and make-up marks.',
+  enrollmentTitle: 'Enrollment', newLeads: 'New leads', leadsWon: 'Leads won', newMemberships: 'New memberships',
+  enrollmentHelp: 'New memberships are memberships whose term started in the month (drafts are not counted).',
+  retentionTitle: 'Retention', activeAtStart: 'Members at start', activeAtEnd: 'Members at end', ended: 'Ended', retained: 'Kept from start',
+  retentionHelp: 'A membership counts from its start until its end date or its cancellation. Paused memberships still count. Kept from start is the share of members at the start of the month who were still members at its end.',
+  undated: 'Not counted: {n} cancelled memberships with no recorded cancellation time.',
+  revenueTitle: 'Revenue', currency: 'Currency', billed: 'Billed', recorded: 'Payments recorded', online: 'Online payments', refunds: 'Refunds', net: 'Net collected',
+  revenueHelp: 'Totals from HON records: invoices issued in the month, payments staff recorded, successful online payments and recorded refunds. Not accounting or bank figures.',
+  noRevenue: 'No billing activity in these months.', none: '—',
+};
+export type ReportsKey = keyof typeof en;
+const ko: Record<ReportsKey, string> = {
+  pageTitle: '학교 보고서',
+  pageIntro: '이 학교의 월별 출석, 등록, 유지, 매출입니다(학교 시간 기준). 건수와 합계만 표시하며 이름은 없습니다.',
+  concealed: '이 페이지가 보이지 않는 동안 숨겨집니다.', waiting: '학교를 확인하는 중…', noSchool: '보고서를 보려면 학교를 선택하세요.',
+  loading: '보고서를 읽는 중…', denied: '이 학교의 보고서를 보려면 보고서 권한이 필요합니다.',
+  timezone: '학교 시간대가 올바르게 설정되지 않아 월을 표시할 수 없습니다.', unavailable: '지금은 보고서를 볼 수 없습니다.',
+  tryAgain: '다시 읽기', range: '기간', months: '{n}개월', partial: '현재까지', asOf: '{time}에 읽음. 월은 학교 시간({zone}) 기준입니다.',
+  month: '월',
+  attendanceTitle: '출석', classesHeld: '진행한 수업', checkIns: '출석 체크', absences: '결석', studentsAttended: '출석한 학생',
+  perClass: '수업당 출석',
+  attendanceHelp: '그 달에 시작했고 취소되지 않은 수업입니다. 출석 체크는 출석, 지각, 보충 표시입니다.',
+  enrollmentTitle: '등록', newLeads: '새 리드', leadsWon: '성사된 리드', newMemberships: '새 회원권',
+  enrollmentHelp: '새 회원권은 그 달에 기간이 시작된 회원권입니다(초안은 제외).',
+  retentionTitle: '유지', activeAtStart: '월초 회원', activeAtEnd: '월말 회원', ended: '종료', retained: '월초 회원 유지율',
+  retentionHelp: '회원권은 시작부터 종료일 또는 취소 시점까지 회원으로 셉니다. 일시정지 중인 회원권도 포함됩니다. 유지율은 월초 회원 중 월말에도 회원인 비율입니다.',
+  undated: '제외됨: 취소 시점이 기록되지 않은 취소 회원권 {n}건.',
+  revenueTitle: '매출', currency: '통화', billed: '청구', recorded: '기록된 결제', online: '온라인 결제', refunds: '환불', net: '순 수금',
+  revenueHelp: 'HON 기록의 합계입니다: 그 달에 발행된 청구서, 직원이 기록한 결제, 성공한 온라인 결제, 기록된 환불. 회계나 은행 수치가 아닙니다.',
+  noRevenue: '이 기간에는 청구 활동이 없습니다.', none: '—',
+};
+const es: Record<ReportsKey, string> = {
+  pageTitle: 'Informes de la escuela',
+  pageIntro: 'Asistencia, inscripciones, retención e ingresos de esta escuela mes a mes, en la hora de la escuela. Solo cifras y totales; sin nombres.',
+  concealed: 'Oculto mientras esta página no está a la vista.', waiting: 'Comprobando su escuela…', noSchool: 'Elija una escuela para ver sus informes.',
+  loading: 'Leyendo los informes…', denied: 'Necesita el permiso de informes en esta escuela para ver sus informes.',
+  timezone: 'La zona horaria de la escuela no está bien configurada, así que no se pueden mostrar los meses.', unavailable: 'Los informes no están disponibles ahora.',
+  tryAgain: 'Leer de nuevo', range: 'Mostrar', months: '{n} meses', partial: 'hasta hoy', asOf: 'Leído a las {time}. Los meses siguen la hora de la escuela ({zone}).',
+  month: 'Mes',
+  attendanceTitle: 'Asistencia', classesHeld: 'Clases dadas', checkIns: 'Asistencias', absences: 'Ausencias', studentsAttended: 'Alumnos que asistieron',
+  perClass: 'Asistencias por clase',
+  attendanceHelp: 'Clases no canceladas que empezaron en el mes. Las asistencias son marcas de presente, tarde y recuperación.',
+  enrollmentTitle: 'Inscripciones', newLeads: 'Nuevos interesados', leadsWon: 'Interesados ganados', newMemberships: 'Nuevas membresías',
+  enrollmentHelp: 'Las nuevas membresías son las que empezaron su plazo en el mes (los borradores no cuentan).',
+  retentionTitle: 'Retención', activeAtStart: 'Miembros al inicio', activeAtEnd: 'Miembros al final', ended: 'Terminadas', retained: 'Retenidos desde el inicio',
+  retentionHelp: 'Una membresía cuenta desde su inicio hasta su fecha de fin o su cancelación. Las membresías en pausa siguen contando. Retenidos es la parte de los miembros al inicio del mes que seguían siéndolo al final.',
+  undated: 'No contadas: {n} membresías canceladas sin hora de cancelación registrada.',
+  revenueTitle: 'Ingresos', currency: 'Moneda', billed: 'Facturado', recorded: 'Pagos registrados', online: 'Pagos en línea', refunds: 'Reembolsos', net: 'Cobrado neto',
+  revenueHelp: 'Totales de los registros de HON: facturas emitidas en el mes, pagos registrados por el personal, pagos en línea correctos y reembolsos registrados. No son cifras contables ni bancarias.',
+  noRevenue: 'No hubo facturación en estos meses.', none: '—',
+};
+
+/** Picks wording by language prefix, so 'ko-KR' is Korean and 'en-US' or anything unknown is English. */
+export function reportsText(language: string, key: ReportsKey, vars: Readonly<Record<string, string | number>> = {}): string {
+  const base = language.toLowerCase().split('-')[0];
+  const text = (base === 'ko' ? ko : base === 'es' ? es : en)[key];
+  return text.replace(/\{(\w+)\}/g, (_, name: string) => String(vars[name] ?? ''));
+}
+export const REPORTS_COPY = { en, ko, es } as const;

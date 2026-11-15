@@ -34,6 +34,11 @@ test('S4-e contracts: per-school totals add up per class and per agent; credits 
   const withClaire = school(U(), { byClass: { AGENT_INFERENCE: { ...amt(7, 6000, 3, 900, 1), byAgent: { BUSINESS_PERFORMANCE: amt(4, 4000, 2, 900, 1), HON_REPLY: amt(3, 2000, 1) } },
     CREATIVE_MEDIA: { ...amt(50, 3000, 1), byAgent: null } } });
   assert.deepEqual(Object.keys(contracts.validateAiSchoolUsageReport(report({ schools: [withClaire], organizations: [org(withClaire.organizationId)] })).schools[0].byClass.AGENT_INFERENCE.byAgent).sort(), ['BUSINESS_PERFORMANCE', 'HON_REPLY']);
+  // 0328: Alex, Jordan, Lena and Maya are their own agents too.
+  const withTeam = school(U(), { ...totals(10000, 0, 5, 0), byClass: { AGENT_INFERENCE: { ...amt(10, 10000, 5), byAgent: { GENERAL_MANAGEMENT: amt(2, 2000, 1), OPERATIONS: amt(2, 2000, 1),
+    CREATIVE_COMMERCE: amt(2, 2000, 1), RETENTION: amt(2, 2000, 1), HON_REPLY: amt(2, 2000, 1) } } } });
+  assert.deepEqual(Object.keys(contracts.validateAiSchoolUsageReport(report({ schools: [withTeam], organizations: [org(withTeam.organizationId)] })).schools[0].byClass.AGENT_INFERENCE.byAgent).sort(),
+    ['CREATIVE_COMMERCE', 'GENERAL_MANAGEMENT', 'HON_REPLY', 'OPERATIONS', 'RETENTION']);
   const o = U();
   // Manus delta review P2: a school with only unresolved calls is listed with every amount zero and no class; it must
   // carry at least one unresolved call, and no amount may appear without a class (no invented cost).

@@ -32,12 +32,34 @@ export function shellPreferredSchool(search: string): { organizationId: string; 
   return parsed.initialOrganizationId && parsed.initialSchoolId ? { organizationId: parsed.initialOrganizationId, schoolId: parsed.initialSchoolId } : null;
 }
 
-/** A page root with no own background (and no UI-system marker) was designed for the old light body. */
-export function shellNeedsLegacyCanvas(root: Element | null): boolean {
-  if (!root || root.closest('[data-hon-native]') || root.hasAttribute('data-hon-native')) return false;
-  const background = getComputedStyle(root).backgroundColor;
-  const image = getComputedStyle(root).backgroundImage;
-  return (background === 'transparent' || background === 'rgba(0, 0, 0, 0)') && (!image || image === 'none');
+const paints = (element: Element): boolean => {
+  const style = getComputedStyle(element);
+  const background = style.backgroundColor, image = style.backgroundImage;
+  return !(background === 'transparent' || background === 'rgba(0, 0, 0, 0)') || Boolean(image && image !== 'none');
+};
+/** Relative lightness 0..1 of a computed `rgb()`/`rgba()` colour; null when it cannot be read. */
+export function shellColorLightness(color: string): number | null {
+  const match = /^rgba?\(\s*(\d+(?:\.\d+)?)[,\s]+(\d+(?:\.\d+)?)[,\s]+(\d+(?:\.\d+)?)/.exec(color.trim());
+  if (!match) return null;
+  const [r, g, b] = [match[1], match[2], match[3]].map(Number) as [number, number, number];
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+}
+
+/**
+ * A page written for the old light body needs the light canvas; a page with its own surface, or with light text
+ * written for the dark theme, must not get it. Decided from the page's main heading (the text people read first)
+ * and the surfaces between it and the shell, not only from the page's outer element: an unpainted wrapper can hold
+ * either kind of page, and a page can open with a side panel before its heading. The shell's own `main` is never
+ * counted (the light canvas paints it).
+ */
+export function shellNeedsLegacyCanvas(main: Element | null): boolean {
+  const first = main?.firstElementChild ?? null;
+  if (!main || !first || first.closest('[data-hon-native]') || first.hasAttribute('data-hon-native')) return false;
+  const heading = main.querySelector('h1') ?? main.querySelector('h2');
+  if (!heading) return !paints(first);
+  for (let node: Element | null = heading; node && node !== main; node = node.parentElement) if (paints(node)) return false;
+  const lightness = shellColorLightness(getComputedStyle(heading).color);
+  return lightness === null || lightness < 0.5;
 }
 
 /**
@@ -118,11 +140,13 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   useEffect(() => {
     const main = document.getElementById('hon-main');
     if (!main) return;
-    const classify = () => main.setAttribute('data-canvas', shellNeedsLegacyCanvas(main.firstElementChild) ? 'legacy-light' : 'native');
+    const classify = () => main.setAttribute('data-canvas', shellNeedsLegacyCanvas(main) ? 'legacy-light' : 'native');
     classify();
-    const observer = new MutationObserver(classify);
-    observer.observe(main, { childList: true });
-    return () => observer.disconnect();
+    // Pages render their heading after their own reads; re-check (once per frame) as the page fills in.
+    let frame = 0;
+    const observer = new MutationObserver(() => { if (!frame) frame = requestAnimationFrame(() => { frame = 0; classify(); }); });
+    observer.observe(main, { childList: true, subtree: true });
+    return () => { observer.disconnect(); if (frame) cancelAnimationFrame(frame); };
   }, [path]);
   useEffect(() => {
     if (!menuOpen) return;
@@ -144,16 +168,17 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
     return () => { window.removeEventListener('keydown', escape); if (opener?.isConnected) opener.focus(); };
   }, [menuOpen]);
 
-  const chooseMode = useCallback((next: HonInterfaceTheme) => {
+  const saveMode = useCallback((next: HonInterfaceTheme, via: 'ONBOARDING' | 'SETTINGS'): Promise<boolean> => {
     setMode(next);
     const scope = entry.snapshot().phase === 'READY' ? entry.snapshot().selection : null;
-    if (!scope) { setViewState('LOCAL'); return; }
+    if (!scope) { setViewState('LOCAL'); return Promise.resolve(false); }
     const generation = ++themeGeneration.current;
     setViewState('SAVING');
-    saveInterfaceThemePreference(scope, next, crypto.randomUUID(), 'SETTINGS').then(
-      () => { if (generation === themeGeneration.current) setViewState('SAVED'); },
-      () => { if (generation === themeGeneration.current) setViewState('ERROR'); });
+    return saveInterfaceThemePreference(scope, next, crypto.randomUUID(), via).then(
+      () => { if (generation === themeGeneration.current) setViewState('SAVED'); return true; },
+      () => { if (generation === themeGeneration.current) setViewState('ERROR'); return false; });
   }, [entry]);
+  const chooseMode = useCallback((next: HonInterfaceTheme) => { void saveMode(next, 'SETTINGS'); }, [saveMode]);
 
   const choose = useCallback((schoolId: string) => {
     const current = entry.snapshot();
@@ -170,8 +195,8 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   }, [entry]);
 
   const shared = useMemo<SchoolShellState>(() => ({ phase: snapshot.phase, selection: snapshot.phase === 'READY' ? snapshot.selection : null,
-    schoolName: snapshot.phase === 'READY' ? schoolName : null, mode, artStyle: artChoice ?? defaultArtStyle(mode), onArtStyle: chooseArtStyle }),
-  [snapshot, schoolName, mode, artChoice, chooseArtStyle]);
+    schoolName: snapshot.phase === 'READY' ? schoolName : null, mode, artStyle: artChoice ?? defaultArtStyle(mode), onArtStyle: chooseArtStyle, onMode: saveMode }),
+  [snapshot, schoolName, mode, artChoice, chooseArtStyle, saveMode]);
 
   return <SchoolShellFrame path={path} language={preferences.language} phase={snapshot.phase} selection={snapshot.selection} schoolName={schoolName}
     choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility inShell />}

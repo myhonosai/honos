@@ -197,3 +197,20 @@ export function validateHqHonBudgetReceipt(value: unknown): HqHonBudgetReceipt {
   if (budget(r.budget).creditCap === null) drift();
   return r as unknown as HqHonBudgetReceipt;
 }
+
+// ---------- 0338 (HX-1): an HQ agent's performance this UTC month ----------
+/** Aggregates only: no question text, answer, name, provider, model or provider cost. underReview includes interrupted turns. */
+export interface HqHonAgentPerformance {
+  agentKey: HqHonAgentKey; periodStart: string; asked: number; answered: number; failed: number; underReview: number; inProgress: number;
+  resolved: number; askers: number; chargedCredits: number; lastAskedAt: string | null; asOf: string;
+}
+const count = (v: unknown): v is number => isInt(v, 0, 2_000_000_000);
+export function validateHqHonAgentPerformance(value: unknown): HqHonAgentPerformance {
+  const r = record(value, drift);
+  exactKeys(r, ['agentKey', 'periodStart', 'asked', 'answered', 'failed', 'underReview', 'inProgress', 'resolved', 'askers', 'chargedCredits', 'lastAskedAt', 'asOf'], drift);
+  if (!isHqHonAgent(r.agentKey) || !isMonth(r.periodStart) || !isTimestamp(r.asOf) || (r.lastAskedAt !== null && !isTimestamp(r.lastAskedAt))) drift();
+  for (const k of ['asked', 'answered', 'failed', 'underReview', 'inProgress', 'resolved', 'askers', 'chargedCredits'] as const) if (!count(r[k])) drift();
+  const n = r as unknown as HqHonAgentPerformance;
+  if (n.answered + n.failed + n.underReview + n.inProgress + n.resolved !== n.asked || n.askers > n.asked || (n.asked === 0) !== (n.lastAskedAt === null)) drift();
+  return n;
+}

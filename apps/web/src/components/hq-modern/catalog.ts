@@ -30,9 +30,11 @@ export const HQ_SCHOOLS = [
   { path: '/hq/schools/access', title: 'School Access', icon: 'check' },
   { path: '/hq/schools/access/policy', title: 'Exception Policy', icon: 'settings' },
   { path: '/hq/schools/owners', title: 'School Owners', icon: 'team' },
+  { path: '/hq/schools/attention', title: 'Needs Attention', icon: 'flag' },
 ] as const;
 export const HQ_REVENUE = [
   { path: '/hq/revenue', title: 'Subscriptions', icon: 'chart' },
+  { path: '/hq/revenue/business-numbers', title: 'Business Numbers', icon: 'chart' },
   { path: '/hq/revenue/invoices', title: 'Invoices', icon: 'database' },
   { path: '/hq/revenue/trials', title: 'Free Trials', icon: 'flag' },
   { path: '/hq/revenue/sign-up-limits', title: 'Sign-up Limits', icon: 'settings' },

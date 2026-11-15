@@ -253,3 +253,61 @@ test('0320 service: state checked before the exchange, credential stored with th
   const module = fs.readFileSync(path.join(__dirname, '../src/app.module.ts'), 'utf8');
   assert.match(module, /provide: SCHOOL_PAYMENT_VAULT, useFactory: \(\) => schoolPaymentVaultForProcess\(\)/);
 });
+
+// 0321 saved methods on the real Stripe Connect test adapter: every call on the school's own account (Stripe-Account),
+// idempotent creates, Stripe-hosted setup page, method facts read back with the platform key. Square refuses pre-send.
+test('0321 Stripe saved methods: customer and setup on the school account, idempotent, facts from Stripe, detach', async () => {
+  const { StripeConnectTestAdapter, SquareSandboxAdapter } = await loadSandbox();
+  const ACCOUNT = 'acct_1TestSchool0001', PAYER = '55555555-5555-4555-8555-555555555555', SETUP = '66666666-6666-4666-8666-666666666666';
+  const session = (patch = {}) => ({ id: 'cs_test_abc123', mode: 'setup', customer: 'cus_Test123', status: 'complete',
+    setup_intent: { status: 'succeeded', payment_method: { id: 'pm_Test123', customer: 'cus_Test123', type: 'card', card: { brand: 'visa', last4: '4242', exp_month: 12, exp_year: 2034 } } }, ...patch });
+  let reply = session();
+  const t = fakeTransport([
+    { method: 'POST', url: 'https://api.stripe.com/v1/customers', reply: { status: 200, body: { id: 'cus_Test123' } } },
+    { method: 'POST', url: 'https://api.stripe.com/v1/checkout/sessions', reply: { status: 200, body: { id: 'cs_test_abc123', url: 'https://checkout.stripe.com/c/pay/cs_test_abc123' } } },
+    { method: 'GET', url: /^https:\/\/api\.stripe\.com\/v1\/checkout\/sessions\/cs_test_abc123\?expand\[\]=setup_intent\.payment_method$/, reply: () => ({ status: 200, body: reply }) },
+    { method: 'POST', url: 'https://api.stripe.com/v1/payment_methods/pm_Test123/detach', reply: { status: 200, body: { id: 'pm_Test123' } } },
+  ]);
+  const stripe = new StripeConnectTestAdapter(STRIPE_KEY, t.send);
+  assert.deepEqual(await stripe.ensureCustomer({ accountRef: ACCOUNT, billingAccountId: PAYER, customerRef: 'cus_Existing1' }), { customerRef: 'cus_Existing1' });
+  assert.equal(t.calls.length, 0, 'an existing customer is never created again');
+  assert.deepEqual(await stripe.ensureCustomer({ accountRef: ACCOUNT, billingAccountId: PAYER, customerRef: null }), { customerRef: 'cus_Test123' });
+  const begun = await stripe.beginMethodSetup({ accountRef: ACCOUNT, customerRef: 'cus_Test123', setupId: SETUP, methodKinds: ['US_BANK_ACCOUNT', 'CARD'], state: STATE, returnUrl: RETURN });
+  assert.deepEqual(begun, { setupRef: 'cs_test_abc123', setupUrl: 'https://checkout.stripe.com/c/pay/cs_test_abc123' });
+  const [customer, checkout] = t.calls;
+  for (const call of [customer, checkout]) { assert.equal(call.headers['Stripe-Account'], ACCOUNT); assert.equal(call.headers.Authorization, `Bearer ${STRIPE_KEY}`); }
+  assert.equal(customer.headers['Idempotency-Key'], `hon-school-pay-customer-${ACCOUNT}-${PAYER}`);
+  assert.equal(checkout.headers['Idempotency-Key'], `hon-school-pay-setup-${SETUP}`);
+  const body = form(checkout.body);
+  assert.equal(body.mode, 'setup'); assert.equal(body.customer, 'cus_Test123');
+  assert.deepEqual([body['payment_method_types[0]'], body['payment_method_types[1]']], ['card', 'us_bank_account']);
+  assert.equal(new URL(body.success_url).searchParams.get('state'), STATE);
+  assert.equal(new URL(body.cancel_url).searchParams.get('state'), null, 'a cancelled setup never carries the state');
+  for (const call of t.calls) assert.doesNotMatch(call.body ?? '', /application_fee|fee_amount|card\[number\]|cvc/);
+
+  const read = (patch) => { reply = session(patch); return stripe.retrieveMethodSetup({ accountRef: ACCOUNT, customerRef: 'cus_Test123', setupRef: 'cs_test_abc123' }); };
+  assert.deepEqual(await read({}), { customerRef: 'cus_Test123', methodRef: 'pm_Test123', kind: 'CARD', brand: 'VISA', last4: '4242', expMonth: 12, expYear: 2034 });
+  assert.deepEqual(await read({ setup_intent: { status: 'succeeded', payment_method: { id: 'pm_Bank1', customer: 'cus_Test123', type: 'us_bank_account', us_bank_account: { last4: '6789' } } } }),
+    { customerRef: 'cus_Test123', methodRef: 'pm_Bank1', kind: 'US_BANK_ACCOUNT', brand: 'BANK', last4: '6789', expMonth: null, expYear: null });
+  assert.equal((await read({ setup_intent: { status: 'succeeded', payment_method: { id: 'pm_X', customer: 'cus_Test123', type: 'card', card: { brand: 'cartes_bancaires', last4: '1111', exp_month: 1, exp_year: 2030 } } } })).brand, 'OTHER');
+  await assert.rejects(read({ status: 'open', setup_intent: null }), (e) => e.reason === 'SETUP_INCOMPLETE');
+  await assert.rejects(read({ setup_intent: { status: 'requires_payment_method', payment_method: null } }), (e) => e.reason === 'SETUP_INCOMPLETE');
+  await assert.rejects(read({ customer: 'cus_Other' }), (e) => e.outcome === 'UNKNOWN', 'another customer');
+  await assert.rejects(read({ setup_intent: { status: 'succeeded', payment_method: { id: 'pm_X', customer: 'cus_Other', type: 'card', card: {} } } }), (e) => e.outcome === 'UNKNOWN');
+  await assert.rejects(read({ setup_intent: { status: 'succeeded', payment_method: { id: 'pm_X', customer: 'cus_Test123', type: 'sepa_debit' } } }), (e) => e.outcome === 'UNKNOWN');
+  await stripe.detachMethod({ accountRef: ACCOUNT, methodRef: 'pm_Test123' });
+  assert.equal(t.calls.at(-1).headers['Stripe-Account'], ACCOUNT);
+
+  const bad = fakeTransport([{ method: 'POST', url: 'https://api.stripe.com/v1/checkout/sessions', reply: { status: 200, body: { id: 'cs_test_abc123', url: 'https://evil.example.test/pay' } } }]);
+  await assert.rejects(new StripeConnectTestAdapter(STRIPE_KEY, bad.send).beginMethodSetup({ accountRef: ACCOUNT, customerRef: 'cus_Test123', setupId: SETUP, methodKinds: ['CARD'], state: STATE, returnUrl: RETURN }),
+    (e) => e.outcome === 'UNKNOWN', 'a setup page off checkout.stripe.com');
+  const down = fakeTransport([{ method: 'POST', url: 'https://api.stripe.com/v1/customers', reply: { status: 502, body: null } }]);
+  await assert.rejects(new StripeConnectTestAdapter(STRIPE_KEY, down.send).ensureCustomer({ accountRef: ACCOUNT, billingAccountId: PAYER, customerRef: null }), (e) => e.outcome === 'UNKNOWN');
+
+  const none = fakeTransport([]);
+  const square = new SquareSandboxAdapter(SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_ID, SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_SECRET, none.send);
+  for (const call of [() => square.ensureCustomer(), () => square.beginMethodSetup(), () => square.retrieveMethodSetup(), () => square.detachMethod()]) {
+    await assert.rejects(call(), (e) => e.outcome === 'PRE_SEND' && e.reason === 'NOT_CONFIGURED');
+  }
+  assert.equal(none.calls.length, 0, 'Square saved methods send nothing yet');
+});
