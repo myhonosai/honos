@@ -78,7 +78,7 @@ events. It never depends on a browser tab, and the owner can always see what ran
 `marketing.zernio.lead_received`), trial booked/cancelled, trial outcome (attended / no-show), class or event
 booking created/cancelled, membership activated/cancelled, missed call, conversation message received /
 escalated (Conversation AI thread), testing registration submitted, custom tool record created/updated
-(`custom_module.record.*`, CM-1). **Time-based** (daily school-local scan): absent N days, membership ends in N
+(`custom_tool.record.*`, CM-1). **Time-based** (daily school-local scan): absent N days, membership ends in N
 days, birthday, membership anniversary, scheduled date or weekly recurring time. **Manual** staff start.
 Payment failed waits until billing emits a stable event; it stays listed as "coming" and does not appear in the editor.
 

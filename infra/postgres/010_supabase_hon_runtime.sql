@@ -3663,3 +3663,18 @@ DO $$ DECLARE r text; t text; BEGIN
       hon.finalize_billing_import(text,jsonb,text,uuid,uuid),hon.read_billing_imports(text),hon.read_billing_import(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+-- 0367 automation workflows and contact tags: five private tables reached only through twelve runtime entry points.
+DO $$ DECLARE r text; t text; BEGIN
+  IF to_regprocedure('hon.create_automation_workflow(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0367 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['automation_workflows','automation_workflow_versions','automation_commands','contact_tags','contact_tag_events'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.create_automation_workflow(text,jsonb,text,uuid,uuid),
+      hon.save_automation_workflow_version(text,uuid,jsonb,text,uuid,uuid),hon.restore_automation_workflow_version(text,uuid,jsonb,text,uuid,uuid),
+      hon.archive_automation_workflow(text,uuid,jsonb,text,uuid,uuid),hon.read_automation_workflows(text),hon.read_automation_workflow(text,uuid),
+      hon.read_automation_workflow_version(text,uuid,integer),hon.add_contact_tag(text,uuid,jsonb,text,uuid,uuid),hon.remove_contact_tag(text,uuid,jsonb,text,uuid,uuid),
+      hon.read_school_contact_tags(text),hon.read_person_contact_tags(text,uuid),hon.lookup_contact_tags(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;
