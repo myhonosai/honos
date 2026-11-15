@@ -269,10 +269,19 @@ try {
   ok(gone.data.booking.status === 'CANCELLED' && gone.data.booking.version === 2 && gone.data.booking.canCancel === false && gone.data.spotsLeft === 1, 'cancelled and the spot is free');
   ok((await success(() => cancel(GUARDIAN, B.bookingId, { expectedVersion: 1 }, { key: cancelKey }), 'cancel replay')).meta.replayed === true, 'cancel replay');
   ok((await sql("SELECT count(*)::int n FROM hon.outbox_events WHERE aggregate_id=$1 AND event_type='class_booking.parent_cancelled'", [B.bookingId])).rows[0].n === 1, 'one cancel event');
+  ok((await sql("SELECT prior_state->>'status' s, (prior_state->>'version')::int v FROM hon.audit_events WHERE entity_id=$1 AND action_code='class_booking.parent_cancel'", [B.bookingId])).rows
+    .every((r) => r.s === 'BOOKED' && r.v === 1), 'the cancel audit records the real prior status and version');
+  const waiting = randomUUID();
+  await sql("INSERT INTO hon.class_bookings(id,organization_id,school_id,class_session_id,student_profile_id,booking_kind,status,source) VALUES($1,$2,$3,$4,$5,'REGULAR','WAITLISTED','PARENT_APP')", [waiting, ids.organization, ids.school, S.optional, kid]);
+  ok((await success(() => cancel(GUARDIAN, waiting, { expectedVersion: 1 }), 'cancel a waitlisted app booking')).data.booking.status === 'CANCELLED', 'a waitlisted app booking is cancelled');
+  ok((await sql("SELECT prior_state->>'status' s FROM hon.audit_events WHERE entity_id=$1 AND action_code='class_booking.parent_cancel'", [waiting])).rows[0]?.s === 'WAITLISTED', 'the cancel audit says WAITLISTED, not BOOKED');
   const again = await success(() => book(GUARDIAN, { studentProfileId: kid, sessionId: S.open }), 'book again after cancelling', 201);
   ok(again.data.booking.bookingId === B.bookingId && again.data.booking.version === 3 && again.data.booking.status === 'BOOKED', 'booking again reuses the same row');
 
   // 5. Live authority: grant end, suspended school and lapsed entitlement are refused.
+  await sql("UPDATE hon.families SET status='SUSPENDED' WHERE id=$1", [ids.family]);
+  await refused(() => book(GUARDIAN, { studentProfileId: kid, sessionId: S.optional }), 403, 'PARENT_CLASS_BOOKING_FORBIDDEN', 'an inactive family');
+  await sql("UPDATE hon.families SET status='ACTIVE' WHERE id=$1", [ids.family]);
   await sql("UPDATE hon.schools SET status='SUSPENDED' WHERE id=$1", [ids.school]);
   await refused(() => choices(GUARDIAN), 403, 'PARENT_CLASS_BOOKING_FORBIDDEN', 'suspended school read');
   await refused(() => book(GUARDIAN, { studentProfileId: kid, sessionId: S.optional }), 403, 'PARENT_CLASS_BOOKING_FORBIDDEN', 'suspended school book');

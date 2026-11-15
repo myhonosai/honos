@@ -84,10 +84,10 @@ describe('idle direct-human CRM intake', () => {
   let tree = render(view); const panel = () => elements(tree).find(e => e.type === CrmLeadCreatePanel)!;
   expect(f).not.toHaveBeenCalled(); const initialKey = panel().key; submit(tree); await settle(); tree = render(view);
   const loaded = hooks.values[3]; panel().props.onStarted(); tree = render(view);
-  expect(hooks.values[3]).toBe(loaded); expect(text(tree)).toContain('1 verified CRM lead'); expect(button(tree, 'Prepare CRM-only close')!.props.disabled).toBe(true); expect(elements(tree).some(e => e.type === CrmLeadClosePanel)).toBe(false); expect(f).toHaveBeenCalledTimes(1);
+  expect(hooks.values[3]).toBe(loaded); expect(text(tree)).toContain('1 lead'); expect(button(tree, 'Prepare CRM-only close')!.props.disabled).toBe(true); expect(elements(tree).some(e => e.type === CrmLeadClosePanel)).toBe(false); expect(f).toHaveBeenCalledTimes(1);
   const beforeReload = panel().key; submit(tree); await settle(); tree = render(view); expect(panel().key).not.toBe(beforeReload); expect(panel().key).not.toBe(initialKey); expect(button(tree, 'Prepare CRM-only close')!.props.disabled).toBe(false);
   button(tree, 'Prepare CRM-only close')!.props.onClick(); tree = render(view); const oldClose = elements(tree).find(e => e.type === CrmLeadClosePanel)!;
-  elements(tree).find(e => e.type === 'input')!.props.onChange({ target: { value: school } }); tree = render(view); expect(text(tree)).toContain('No verified school list is loaded.'); expect(button(tree, 'Prepare CRM-only close')).toBeUndefined();
+  elements(tree).find(e => e.type === 'input')!.props.onChange({ target: { value: school } }); tree = render(view); expect(text(tree)).toContain('No list loaded yet.'); expect(button(tree, 'Prepare CRM-only close')).toBeUndefined();
   oldClose.props.onBusy(true); tree = render(view); expect(elements(tree).find(e => e.type === 'fieldset')!.props.disabled).toBe(false);
  });
  it('invalidates all local state on pagehide/hidden session view, suppresses stale list results, and keys server renders by session only', async () => {
@@ -97,7 +97,7 @@ describe('idle direct-human CRM intake', () => {
   let tree = render(view); submit(tree); tree = render(view); const key = elements(tree).find(e => e.type === CrmLeadCreatePanel)!.key;
   documentEvents.visibilityState = 'hidden'; documentEvents.dispatchEvent(new Event('visibilitychange')); tree = render(view);
   expect(elements(tree).find(e => e.type === CrmLeadCreatePanel)!.key).not.toBe(key);
-  release(new Response(JSON.stringify({ data: [row], meta: {} }), { status: 200 })); await settle(); tree = render(view); expect(text(tree)).toContain('No verified school list is loaded.'); expect(text(tree)).not.toContain('Ari Stone'); expect(f).toHaveBeenCalledTimes(1);
+  release(new Response(JSON.stringify({ data: [row], meta: {} }), { status: 200 })); await settle(); tree = render(view); expect(text(tree)).toContain('No list loaded yet.'); expect(text(tree)).not.toContain('Ari Stone'); expect(f).toHaveBeenCalledTimes(1);
   const afterHidden = elements(tree).find(e => e.type === CrmLeadCreatePanel)!.key; windowEvents.dispatchEvent(new Event('pagehide')); tree = render(view); expect(elements(tree).find(e => e.type === CrmLeadCreatePanel)!.key).not.toBe(afterHidden);
   const beforeBlur = elements(tree).find(e => e.type === CrmLeadCreatePanel)!.key; windowEvents.dispatchEvent(new Event('blur')); tree = render(view); expect(elements(tree).find(e => e.type === CrmLeadCreatePanel)!.key).not.toBe(beforeBlur);
   const first = await LeadPage({ searchParams: Promise.resolve({ organizationId: org, schoolId: school, pipelineId: stage } as any) }); session.token=issueSession({externalSubject:'second-fixture-staff'},signedConfig); const second = await LeadPage({ searchParams: Promise.resolve({ organizationId: org, schoolId: school }) });

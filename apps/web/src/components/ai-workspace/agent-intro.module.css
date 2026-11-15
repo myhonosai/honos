@@ -1,0 +1,12 @@
+.intro { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 20px; align-items: start; padding: 8px 0 24px; }
+.portrait { width: 96px; height: 120px; object-fit: cover; object-position: center 18%; border-radius: 12px; }
+.intro h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 2.4rem) !important; line-height: 1.1; }
+.role { margin: 0 0 4px; font-size: .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .75; }
+.lead { margin: 8px 0 0; max-width: 64ch; }
+.status { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-weight: 600; }
+.status i { width: 9px; height: 9px; border-radius: 50%; background: #8a94a6; }
+.intro[data-agent-status='READY'] .status i { background: #1c9b5f; }
+.intro[data-agent-status='READY'] .status { color: #137a49; }
+.intro[data-agent-status='PROVIDER_OFF'] .status i, .intro[data-agent-status='AI_OFF'] .status i, .intro[data-agent-status='BUDGET'] .status i, .intro[data-agent-status='NO_ROUTE'] .status i { background: #c27a16; }
+.links { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; font-size: .95rem; }
+@media (max-width: 560px) { .intro { grid-template-columns: 64px minmax(0, 1fr); gap: 14px; } .portrait { width: 64px; height: 80px; } }
