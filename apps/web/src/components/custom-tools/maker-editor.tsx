@@ -262,21 +262,22 @@ export function tidyDefinition(def: CustomToolDefinition): CustomToolDefinition 
   return out;
 }
 
+const PLACEHOLDER = /^(?:new_field|new_record)(?:_\d+)?$/;
 /**
- * Keys for parts the server has never held, taken from their English names just before saving, so stored data and
- * automations read "points" rather than "new_field_2". Saved keys never change.
+ * Keys for parts added in the editor and never saved, taken from their English names just before saving, so stored
+ * data and automations read "bonus_points" rather than "new_field_2". Saved keys and template keys never change.
  */
 export function finalizeKeys(def: CustomToolDefinition, saved: ReadonlyMap<string, ReadonlySet<string>>): CustomToolDefinition {
   let out = def;
   for (const e of def.entities) {
-    if (saved.has(e.key) || !e.label.en.trim()) continue;
+    if (saved.has(e.key) || !PLACEHOLDER.test(e.key) || !e.label.en.trim()) continue;
     const key = makeKey(e.label.en, out.entities.map(x => x.key).filter(k => k !== e.key), 'record');
     out = rekeyEntity(out, e.key, key);
   }
   for (const e of out.entities) {
     const kept = saved.get(e.key);
     for (const f of e.fields) {
-      if (kept?.has(f.key) || !f.label.en.trim()) continue;
+      if (kept?.has(f.key) || !PLACEHOLDER.test(f.key) || !f.label.en.trim()) continue;
       const current = out.entities.find(x => x.key === e.key)!;
       const key = makeKey(f.label.en, current.fields.map(x => x.key).filter(k => k !== f.key), 'field');
       out = rekeyField(out, e.key, f.key, key);

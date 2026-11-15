@@ -130,9 +130,10 @@ describe('designs', () => {
     const out = finalizeKeys(def, saved);
     expect(out.entities[0]!.fields.map(f => f.key)).toEqual(['student', 'points', 'reason', 'awarded_by', 'awarded_on', 'bonus_points']);
     expect(out.views[1]!.columns).toContain('bonus_points');
-    // A saved field keeps its key even after its name changes.
+    // A saved field, and a template's own field, keep their key even after their name changes.
     def.entities[0]!.fields[1]!.label = { en: 'Score' };
     expect(finalizeKeys(def, saved).entities[0]!.fields[1]!.key).toBe('points');
+    expect(finalizeKeys(def, new Map()).entities[0]!.fields.map(f => f.key)).toEqual(['student', 'points', 'reason', 'awarded_by', 'awarded_on', 'bonus_points']);
     expect(designProblems(out)).toEqual([]);
   });
 
