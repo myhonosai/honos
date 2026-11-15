@@ -4,6 +4,7 @@
   "baselineCommit": "b234be7f14c49d07349219dfb4ae3b9c2a05d3f9",
   "migrationFiles": 183,
   "spendTables": [
+    "ai_text_proposals",
     "ai_usage_ledger",
     "chad_follow_up_invocations",
     "hon_reply_invocations",
@@ -39,6 +40,7 @@
     "hon.settle_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)"
   ],
   "ledgerWriters": [
+    "hon.ai_text_record(uuid,uuid,jsonb,jsonb,jsonb)",
     "hon.record_chad_follow_up_result(text,uuid,jsonb)",
     "hon.record_hon_reply_result(text,uuid,jsonb)",
     "hon.record_marketing_result(text,uuid,jsonb)",
@@ -48,6 +50,9 @@
     "hon.saas_record_provider_usage(hon.saas_credit_reservations,uuid,bigint,bigint,bigint)"
   ],
   "reservationWriters": [
+    "hon.ai_text_fail(uuid,uuid,text,text)",
+    "hon.ai_text_prepare(uuid,uuid,uuid,boolean,text)",
+    "hon.ai_text_record(uuid,uuid,jsonb,jsonb,jsonb)",
     "hon.fail_chad_follow_up_invocation(text,uuid,text,text)",
     "hon.fail_hon_reply(text,uuid,text,text)",
     "hon.fail_marketing_invocation(text,uuid,text,text)",
@@ -84,6 +89,9 @@
     "hon.ai_school_committed_cost_micros(uuid,uuid,timestamp with time zone)",
     "hon.ai_spend_reserve_guard()",
     "hon.ai_stamp_hold_origin()",
+    "hon.ai_text_fail(uuid,uuid,text,text)",
+    "hon.ai_text_prepare(uuid,uuid,uuid,boolean,text)",
+    "hon.ai_text_record(uuid,uuid,jsonb,jsonb,jsonb)",
     "hon.ai_trial_ceiling_terms(uuid,timestamp with time zone)",
     "hon.ai_unknown_receipt(hon.ai_unknown_resolutions,boolean)",
     "hon.ask_hq_hon(text,jsonb,uuid)",
@@ -96,6 +104,7 @@
     "hon.fail_hon_reply(text,uuid,text,text)",
     "hon.fail_marketing_invocation(text,uuid,text,text)",
     "hon.fail_teaching_invocation(text,uuid,text,text)",
+    "hon.guard_ai_text_proposals()",
     "hon.guard_chad_follow_up()",
     "hon.guard_marketing_invocation()",
     "hon.guard_saas_credits()",
@@ -171,6 +180,26 @@
       "runtime": false,
       "public": false,
       "security_definer": false
+    },
+    "hon.ai_org_display_ceiling(uuid,timestamp with time zone)": {
+      "runtime": false,
+      "public": false,
+      "security_definer": false
+    },
+    "hon.ai_text_fail(uuid,uuid,text,text)": {
+      "runtime": false,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.ai_text_prepare(uuid,uuid,uuid,boolean,text)": {
+      "runtime": false,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.ai_text_record(uuid,uuid,jsonb,jsonb,jsonb)": {
+      "runtime": false,
+      "public": false,
+      "security_definer": true
     },
     "hon.begin_chad_follow_up_request(text,jsonb,uuid)": {
       "runtime": true,
@@ -301,14 +330,16 @@
       "runtime": true,
       "public": false,
       "security_definer": true
-    },
-    "hon.ai_org_display_ceiling(uuid,timestamp with time zone)": {
-      "runtime": false,
-      "public": false,
-      "security_definer": false
     }
   },
   "runtimeSpendTablePrivileges": {
+    "ai_text_proposals": {
+      "select": false,
+      "insert": false,
+      "update": false,
+      "delete": false,
+      "truncate": false
+    },
     "ai_usage_ledger": {
       "select": true,
       "insert": false,
@@ -374,6 +405,14 @@
     }
   },
   "spendTableTriggers": {
+    "ai_text_proposals": [
+      "ai_spend_reserve_guard",
+      "ai_spend_reserve_guard_insert",
+      "ai_spend_start_guard",
+      "ai_text_proposals_guard",
+      "ai_text_proposals_no_truncate",
+      "zz_ai_hold_origin"
+    ],
     "ai_usage_ledger": [],
     "chad_follow_up_invocations": [
       "ai_spend_reserve_guard",
