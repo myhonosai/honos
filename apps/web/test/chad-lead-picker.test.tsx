@@ -42,5 +42,7 @@ it('with a shell school the Chad page shows the picker instead of UUID and versi
   const html = renderToStaticMarkup(<ChadFollowUpAssistantWorkbench shellScope={scope}/>);
   expect(html).toContain('Reading open leads');
   expect(html).not.toMatch(/Known CRM lead UUID|Observed lead version/);
-  expect(renderToStaticMarkup(<ChadFollowUpAssistantWorkbench/>)).toContain('Known CRM lead UUID');
+  const none = renderToStaticMarkup(<ChadFollowUpAssistantWorkbench/>);
+  expect(none).toContain('Choose your school at the top');
+  expect(none).not.toMatch(/Known CRM lead UUID|Observed lead version/);
 });

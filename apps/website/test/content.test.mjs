@@ -46,13 +46,15 @@ test('makes no claim the owner has not approved yet', () => {
   }
 });
 
-test('marks unfinished AI specialists coming soon and the rest as launching', () => {
-  for (const name of ['maya', 'alex', 'jordan', 'lena']) {
-    assert.match(agentCard(name), /coming soon/i, `${name} is coming soon`);
-  }
-  for (const name of ['chad', 'marcus', 'claire', 'kai']) {
+test('marks every AI specialist as launching, since all eight answer in the app', () => {
+  for (const name of ['chad', 'marcus', 'claire', 'kai', 'maya', 'alex', 'jordan', 'lena']) {
+    assert.match(agentCard(name), /data-status="launch"/, `${name} is shown at launch`);
     assert.match(agentCard(name), /at launch/i, `${name} is shown at launch, not as live`);
+    assert.doesNotMatch(agentCard(name), /coming soon|class="card mate later"/i, `${name} is no longer coming soon`);
   }
+  // Only claim what the specialists do today: no staffing or merchandise work exists.
+  assert.doesNotMatch(agentCard('jordan'), /staffing/i);
+  assert.doesNotMatch(agentCard('lena'), /merchandise/i);
   assert.match(agentCard('hon'), /launching with hon os/i);
 });
 

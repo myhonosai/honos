@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const hooks = vi.hoisted(() => ({ cells: [] as unknown[], cursor: 0 }));
 vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ preferences: { language: 'en' } }) }));
+vi.mock('../src/components/school-shell/page-school', () => ({ useShellSchool: () => null, useShellSchoolInto: () => null, ManualSchoolFields: ({ children }: { children?: unknown }) => children }));
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react');

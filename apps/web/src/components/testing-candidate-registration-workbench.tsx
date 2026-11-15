@@ -5,6 +5,8 @@ import { TestingCandidateAccessError, TestingCandidateUncertainError, prepareTes
   type TestingCandidateKnownIds, type TestingCandidateRegistrationReceipt, type PreparedTestingCandidateRegistration } from './testing-candidate-registration-http';
 import { pendingCandidateScorecardHref } from './testing-scorecard-handoff';
 import styles from './attendance-workbench.module.css';
+import { useShellSchoolInto } from './school-shell/page-school';
+import { EnrollmentPicker, IdFields, TestingEventPicker } from './school-pickers/pickers';
 
 const EMPTY_IDS: TestingCandidateKnownIds = { organizationId: '', schoolId: '', testingEventId: '', studentCurriculumEnrollmentId: '', targetRankId: '' };
 const LABELS: Record<keyof TestingCandidateKnownIds, string> = { organizationId: 'Organization UUID', schoolId: 'School UUID', testingEventId: 'Testing event UUID', studentCurriculumEnrollmentId: 'Student curriculum enrollment UUID', targetRankId: 'Target rank UUID' };
@@ -12,7 +14,10 @@ const LABELS: Record<keyof TestingCandidateKnownIds, string> = { organizationId:
 /** One direct-human known-ID command only: no discovery, read or outcome inference. */
 export function TestingCandidateRegistrationWorkbench(): React.ReactElement {
   const [ids, setIds] = useState<TestingCandidateKnownIds>(EMPTY_IDS);
+  const shellSchool = useShellSchoolInto(school => setIds(current => ({ ...current, organizationId: school.organizationId, schoolId: school.schoolId })));
   const [note, setNote] = useState('');
+  const [eventCurriculumId, setEventCurriculumId] = useState('');
+  const [noNextRank, setNoNextRank] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [retry, setRetry] = useState<PreparedTestingCandidateRegistration | null>(null);
@@ -41,7 +46,7 @@ export function TestingCandidateRegistrationWorkbench(): React.ReactElement {
   }
   function discard(): void {
     if (active.current || !mounted.current || renderedEpoch !== epoch.current) return;
-    reset(); setIds(EMPTY_IDS);
+    reset(); setIds(EMPTY_IDS); setEventCurriculumId(''); setNoNextRank(false);
   }
   function confirm(checked: boolean): void {
     if (active.current || attempted.current || !mounted.current || renderedEpoch !== epoch.current) return;
@@ -58,7 +63,7 @@ export function TestingCandidateRegistrationWorkbench(): React.ReactElement {
       if (mounted.current && generation === epoch.current) setReceipt(returned);
     } catch (caught) {
       if (!mounted.current || generation !== epoch.current) return;
-      if (caught instanceof TestingCandidateAccessError) { reset(); setIds(EMPTY_IDS); }
+      if (caught instanceof TestingCandidateAccessError) { reset(); setIds(EMPTY_IDS); setEventCurriculumId(''); setNoNextRank(false); }
       else if (caught instanceof TestingCandidateUncertainError) { retained.current = command; setRetry(command); }
       setError(caught instanceof Error ? caught.message : 'No verified candidate receipt. Review before another explicit command.');
     } finally { active.current = false; if (mounted.current) setBusy(false); }
@@ -80,7 +85,7 @@ export function TestingCandidateRegistrationWorkbench(): React.ReactElement {
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">Staff dashboard</a></nav>
     <header><p>HON / CONVENTIONAL INSTRUCTOR OPERATIONS</p><h1>Human testing candidate registration</h1>
-      <p>This page starts blank and idle. Supply the exact already-known organization, school, testing event, student curriculum enrollment and target rank UUIDs. There is no directory, search, list, automatic request or eligibility selection.</p>
+      <p>Choose a testing event and a student. The student's next rank in that curriculum becomes the target rank. Without a school selected, enter the exact organization, school, testing event, enrollment and target rank IDs instead. The lists are not an eligibility check.</p>
     </header>
     <aside><strong>PENDING is candidate evidence only, not eligibility or testing completion.</strong>
       <p>This command creates only a PENDING candidate, canonical audit and inert outbox evidence. It does not establish testing eligibility or readiness, a roster, place or capacity; score, grade, pass/fail/defer; promotion, rank, belt or certificate; family or parent access; attendance, billing, payment, message, provider, AI, Action Engine, automation or external effect.</p>
@@ -88,10 +93,21 @@ export function TestingCandidateRegistrationWorkbench(): React.ReactElement {
     </aside>
     <section aria-labelledby="candidate-command"><h2 id="candidate-command">Register one known-ID candidate</h2>
       <form autoComplete="off" onSubmit={submit}><fieldset disabled={busy}>
-        <div className={styles.scopeGrid}>{(Object.keys(LABELS) as (keyof TestingCandidateKnownIds)[]).map(field =>
-          <label key={field}>{LABELS[field]}<input name={field} required autoComplete="off" spellCheck={false} maxLength={36} value={ids[field]} onChange={event => edit(() => setIds({ ...ids, [field]: event.target.value }))} /></label>)}</div>
+        {shellSchool && <>
+          <TestingEventPicker scope={shellSchool} value={ids.testingEventId} disabled={busy} onPick={picked => edit(() => {
+            setEventCurriculumId(picked?.curriculumId ?? ''); setNoNextRank(false);
+            setIds(current => ({ ...current, testingEventId: picked?.testingEventId ?? '', studentCurriculumEnrollmentId: '', targetRankId: '' }));
+          })} />
+          {eventCurriculumId && <EnrollmentPicker scope={shellSchool} purpose="testing" curriculumId={eventCurriculumId} value={ids.studentCurriculumEnrollmentId} disabled={busy} onPick={picked => edit(() => {
+            setNoNextRank(Boolean(picked && !picked.nextRankId));
+            setIds(current => ({ ...current, studentCurriculumEnrollmentId: picked?.enrollmentId ?? '', targetRankId: picked?.nextRankId ?? '' }));
+          })} />}
+          {noNextRank && <p role="status">This student is already at the last rank of this curriculum, so there is no next rank to test for.</p>}
+        </>}
+        <IdFields manual={!shellSchool}><div className={styles.scopeGrid}>{(Object.keys(LABELS) as (keyof TestingCandidateKnownIds)[]).filter(field => !shellSchool || (field !== 'organizationId' && field !== 'schoolId')).map(field =>
+          <label key={field}>{LABELS[field]}<input name={field} required autoComplete="off" spellCheck={false} maxLength={36} value={ids[field]} onChange={event => edit(() => { if (field === 'testingEventId') setEventCurriculumId(''); setIds({ ...ids, [field]: event.target.value }); })} /></label>)}</div></IdFields>
         <label>Optional private instructor notes (maximum 2000 characters)<textarea name="instructorNotes" autoComplete="off" maxLength={2000} value={note} onChange={event => edit(() => setNote(event.target.value))} /></label>
-        <p>Local UUID syntax and note bounds do not verify existence, eligibility, readiness or capacity. Only the existing server command can accept these IDs together.</p>
+        <p>Picking from the lists does not verify eligibility, readiness or capacity. Only the server command can accept this registration.</p>
         <label className={styles.check}><input name="confirmRegistration" type="checkbox" checked={confirmed} disabled={!validDraft || attempted.current} onChange={event => confirm(event.target.checked)} />I explicitly confirm this exact PENDING candidate registration only, not eligibility, testing completion or any downstream effect.</label>
         <div className={styles.actions}><button type="submit" disabled={!validDraft || !confirmed || attempted.current}>Register PENDING candidate</button><button type="button" onClick={discard}>Discard inputs / start over</button></div>
       </fieldset></form>

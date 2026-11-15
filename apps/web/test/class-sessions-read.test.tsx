@@ -1,5 +1,7 @@
 import React, { type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// Outside the shell (no verified school): the page keeps its own ID fields, which these tests cover.
+vi.mock('../src/components/school-shell/page-school', () => ({ useShellSchool: () => null, useShellSchoolInto: () => null, ManualSchoolFields: ({ children }: { children?: unknown }) => children }));
 import { readFileSync } from 'node:fs';
 import { ClassSessionsReadAccessError, classSessionsReadPath, loadCurrentSchoolClassSessions, parseClassSessionsRead } from '../src/components/class-sessions-read-http';
 const hooks = vi.hoisted(() => ({ cells: [] as unknown[], cursor: 0, effects: [] as (() => void)[] }));

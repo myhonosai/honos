@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "9fc67cfaeae1f4588fe41968006d604a3a58c78726a91a124fa452990b948394",
+  "chainSha256": "b32ed79fd21be76bff2f9fd50dffe37ab7fb9a4cf626d57c64981719554a7b30",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -395,6 +395,10 @@
       "sha256": "13ddea1cc69c6ee892e775a333a1eb6bd4eb74f5e96c16c13d4cc45380d394bb"
     },
     {
+      "file": "0309_hon_os_lifetime_refund_ends_access.sql",
+      "sha256": "810a648cf0c9faec1f458e841b2710d609982d6f911674c57cc352687c6e562c"
+    },
+    {
       "file": "0310_ai_org_agent_ceiling_removed.sql",
       "sha256": "3427f3424c2e61ed9b12e5a8d8c0ac02b431fcbe7c14c7ab110d293ab08802bc"
     },
@@ -403,8 +407,92 @@
       "sha256": "42194542aa26affc6ce836fd06fbce0210d30a7ed79989d6182b966c50a2bf56"
     },
     {
+      "file": "0321_school_payer_saved_methods.sql",
+      "sha256": "5de27cdfc04af16d057dc62da3d11fdc02e4106dbbcbcefcc6460edf8cc6c4fc"
+    },
+    {
+      "file": "0322_school_pay_autopay_sibling_discounts.sql",
+      "sha256": "9bbb358a89cf566f1480ff55e0bdaed5d09356f314e22b7fbff4c947a5e576d0"
+    },
+    {
+      "file": "0323_school_onboarding_progress.sql",
+      "sha256": "282ebdfcbb78a7a38e10c19007f5f100a1f810944bb7c5cd82b5c97ee2580dc9"
+    },
+    {
+      "file": "0324_hon_os_schedule_renewals_suspension.sql",
+      "sha256": "6348290ebb2786e32489e2119be51300d6e12ba8e16a3f50e1f50d8e0c967cbe"
+    },
+    {
+      "file": "0326_hq_business_numbers.sql",
+      "sha256": "3578cb98353a3d7e3f53af4ebc75e9f725971e32d538f79f070ce02a97edec8d"
+    },
+    {
+      "file": "0327_hq_school_health.sql",
+      "sha256": "444c4cb9c52e514aa3336280d20c7442a3878c12144800a9f719d59e6b2575e5"
+    },
+    {
+      "file": "0328_hq_usage_specialist_attribution.sql",
+      "sha256": "2537a3f1a116c3b81ad4682308ebfb9d4a57fd9ff1b7bf29018a69729ce74447"
+    },
+    {
+      "file": "0329_parent_class_booking.sql",
+      "sha256": "28650fbd310da68a4a9bbbe8a670c74cb07269010b6f512b2c2b8f2f1da379f9"
+    },
+    {
+      "file": "0330_family_messages.sql",
+      "sha256": "c7b6d13412905cfb0f23128ea509829f5a2deddfa5eab8385f0a0d9124ea2315"
+    },
+    {
+      "file": "0331_school_reports.sql",
+      "sha256": "a5480e9eef175e40a64f58343ee9f9a550f2470b4bf98c97452e0405df60c130"
+    },
+    {
+      "file": "0332_school_reports_locations.sql",
+      "sha256": "e32748c44c865ee67062ad535fd29d3c39532f2a5f94afeac9f5e2f68894dae2"
+    },
+    {
       "file": "0333_school_class_attendance_import.sql",
       "sha256": "f2be82bb3d64d2079ba5df9efa8c911acf9173909e857a7a89d440b2911d8ced"
+    },
+    {
+      "file": "0335_school_support_requests.sql",
+      "sha256": "4361133db9255836187b05cad0b11e877ed3fe6d895722bad07859c2b8f98f58"
+    },
+    {
+      "file": "0336_ai_reduced_mode_fallback.sql",
+      "sha256": "3e83f6db003e7888dfba22a00d5a0593b4604265314abce73cd80fff612959df"
+    },
+    {
+      "file": "0338_hq_executive_performance.sql",
+      "sha256": "36efc3eafd9ab2bd4e6a9b549d973e50e7ac9e57b7fa6a5bbfd79c29748f04d0"
+    },
+    {
+      "file": "0347_school_social_connections.sql",
+      "sha256": "3375d997e29ac054c358c94a721473dba99634ad90c1e5ff23dfbb3fd3f7cd79"
+    },
+    {
+      "file": "0348_school_social_posts.sql",
+      "sha256": "333c9a09e36a52f7eb1748c7b8f1425b27d4ea61ceb815054f7b864c13295c25"
+    },
+    {
+      "file": "0351_school_twilio_subaccounts.sql",
+      "sha256": "ff9bca68045b9d5f593c56faa97d0cff5c0d408d9f2cbe97287514fda2f25f88"
+    },
+    {
+      "file": "0352_school_number_orders.sql",
+      "sha256": "66707e67a865b901425603ac7f23127291e44faaf5a9cdcad75648c6feff18a9"
+    },
+    {
+      "file": "0353_ai_exception_school_allowance.sql",
+      "sha256": "b46e8aa76543fe0bd1f4881d7882f7369dcd9ce20c138511238c3334d57ec6a5"
+    },
+    {
+      "file": "0354_creative_provider_jobs.sql",
+      "sha256": "51d614822499ff9c8c894f2ff73853c19dfad33c677b6a741329556cb460be67"
+    },
+    {
+      "file": "0358_school_number_order_settle.sql",
+      "sha256": "04aec55d14c81c53b4012377c9ad610221cfacf53ed3fb8a23a12cb9d98afdc0"
     }
   ]
 }

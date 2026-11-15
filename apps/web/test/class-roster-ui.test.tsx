@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ClassSessionRosterEntry, CurrentSchoolClassSession } from '@hon/contracts';
 import { ROSTER_LANGUAGES, rosterText } from '../src/components/class-roster/copy';
-import { RosterError, rosterApi, rosterCounts, validFromDate, verifyRosterPage, verifySessionPage } from '../src/components/class-roster/http';
+import { MarkError, RosterError, rosterApi, rosterCategory, rosterCounts, validFromDate, verifyRosterPage, verifySessionPage } from '../src/components/class-roster/http';
 import { RosterView, type RosterViewProps } from '../src/components/class-roster/view';
 import { SCHOOL_SHELL_NAV, schoolShellActiveRoute } from '../src/components/school-shell/catalog';
 import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
@@ -150,4 +150,89 @@ it('has every phrase in Korean and Spanish; the page is first in the Classes gro
   expect(schoolShellActiveRoute('/staff/schedule/sessions')?.href).toBe('/staff/schedule/sessions');
   const manifest = JSON.parse(readFileSync(new URL('../public/manus-routes.json', import.meta.url), 'utf8')) as { routes: { path: string; title: string }[] };
   expect(manifest.routes).toContainEqual({ path: '/staff/schedule', title: 'HON | Class rosters' });
+});
+
+const savedRecord = (status = 'PRESENT', over: Record<string, unknown> = {}) => ({ id: id(95), classSessionId: id(71), studentProfileId: id(101), status, category: 'REGULAR_PARTICIPANT',
+  progressionPolicyVersion: 1, progressionEnabled: true, progressionWeightMilli: 1000, progressionCreditMilli: 1000, recordedAt: '2026-11-08T12:10:00.000Z', version: 2,
+  createdAt: '2026-11-08T12:10:00.000Z', updatedAt: '2026-11-08T12:10:00.000Z', ...over });
+
+it('picks the attendance category from the record or the booking, so a trial is never counted as a regular class', () => {
+  expect(rosterCategory(entry(1))).toBe('REGULAR_PARTICIPANT');
+  expect(rosterCategory(entry(1, { booking: null }))).toBe('REGULAR_PARTICIPANT');
+  expect(rosterCategory(entry(1, { booking: booking('BOOKED', 'TRIAL') }))).toBe('TRIAL_STUDENT');
+  expect(rosterCategory(entry(1, { booking: booking('BOOKED', 'MAKEUP') }))).toBe('MAKEUP_CLASS');
+  expect(rosterCategory(entry(1, { booking: booking('BOOKED', 'CLASS_PASS') }))).toBe('GUEST_DROP_IN');
+  expect(rosterCategory(entry(1, { booking: booking('BOOKED', 'TRIAL'), attendance: { ...recorded(), category: 'OBSERVER' } }))).toBe('OBSERVER');
+});
+
+const meta5 = { requestId: id(5), correlationId: id(5) };
+const sequence = (...responses: Response[]) => { const f = vi.fn(async () => responses.shift() as Response); vi.stubGlobal('fetch', f); return f; };
+
+it('marks a student with no record through the existing attendance command: fixed path, human marker, retained key, no read first', async () => {
+  const f = stub(json({ data: savedRecord('PRESENT'), meta: { ...meta5, replayed: false } }, 201));
+  await rosterApi.mark(scope, id(71), entry(1, { booking: booking('BOOKED', 'TRIAL') }), 'PRESENT', 'retained-key-1');
+  expect(f).toHaveBeenCalledTimes(1);
+  const [path, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+  expect(path).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/schedule/sessions/${id(71)}/attendance`);
+  expect(init.method).toBe('POST'); expect(init.credentials).toBe('same-origin');
+  expect(init.headers).toMatchObject({ 'X-HON-Human-Command': 'attendance', 'Idempotency-Key': 'retained-key-1' });
+  expect(JSON.parse(init.body as string)).toEqual({ studentProfileId: id(101), status: 'PRESENT', category: 'TRIAL_STUDENT', note: '' });
+  stub(json({ data: savedRecord('PRESENT', { studentProfileId: id(102) }), meta: { ...meta5, replayed: false } }, 201));
+  await expect(rosterApi.mark(scope, id(71), entry(1), 'PRESENT', 'k')).rejects.toEqual(new MarkError('UNKNOWN'));
+});
+
+it('changing an existing record reads it first and sends its own note, category and version back, so a roster change never erases a note', async () => {
+  const exact = savedRecord('PRESENT', { version: 1, category: 'OBSERVER', note: 'Left early, ankle' });
+  const f = sequence(json({ data: exact, meta: meta5 }), json({ data: savedRecord('LATE', { category: 'OBSERVER', note: 'Left early, ankle' }), meta: { ...meta5, replayed: false } }, 201));
+  const saved = await rosterApi.mark(scope, id(71), entry(1, { booking: booking('BOOKED', 'TRIAL'), attendance: recorded() }), 'LATE', 'retained-key-1');
+  expect(saved).toEqual({ id: id(95), status: 'LATE', category: 'OBSERVER', recordedAt: '2026-11-08T12:10:00.000Z', version: 2 });
+  const [readPath, readInit] = f.mock.calls[0] as unknown as [string, RequestInit];
+  expect(readPath).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/schedule/sessions/${id(71)}/attendance?studentProfileId=${id(101)}`);
+  expect(readInit.method ?? 'GET').toBe('GET');
+  const [, init] = f.mock.calls[1] as unknown as [string, RequestInit];
+  expect(JSON.parse(init.body as string)).toEqual({ studentProfileId: id(101), status: 'LATE', category: 'OBSERVER', note: 'Left early, ankle', expectedVersion: 1 });
+  // A record that changed (or vanished) since the roster was read is a conflict: nothing is written, the roster reloads.
+  for (const current of [savedRecord('PRESENT', { version: 3 }), null]) {
+    const g = sequence(json({ data: current, meta: meta5 }));
+    await expect(rosterApi.mark(scope, id(71), entry(1, { attendance: recorded() }), 'LATE', 'k')).rejects.toEqual(new MarkError('CONFLICT'));
+    expect(g).toHaveBeenCalledTimes(1);
+  }
+  // A refused read maps like a refused save.
+  sequence(json({ code: 'X' }, 403));
+  await expect(rosterApi.mark(scope, id(71), entry(1, { attendance: recorded() }), 'LATE', 'k')).rejects.toEqual(new MarkError('DENIED'));
+});
+
+it('maps a refused mark to a plain outcome; only a 401 ends the session', async () => {
+  for (const [status, kind] of [[403, 'DENIED'], [409, 'CONFLICT'], [404, 'REJECTED'], [400, 'REJECTED'], [500, 'UNKNOWN'], [503, 'UNKNOWN']] as const) {
+    stub(json({ code: 'X' }, status));
+    await expect(rosterApi.mark(scope, id(71), entry(1), 'PRESENT', 'k')).rejects.toEqual(new MarkError(kind));
+  }
+  const ended = vi.fn(); (window as unknown as EventTarget).addEventListener(HON_SESSION_INVALIDATED_EVENT, ended);
+  stub(json({ code: 'X' }, 401));
+  await expect(rosterApi.mark(scope, id(71), entry(1), 'PRESENT', 'k')).rejects.toEqual(new MarkError('SESSION'));
+  expect(ended).toHaveBeenCalledTimes(1);
+});
+
+it('offers Present, Late, Excused and Absent per student on a scheduled class, shows the recorded one as pressed, and says what happened', () => {
+  const onMark = vi.fn();
+  const html = render({ selectedId: id(71), onMark, roster: ready([entry(1, { attendance: recorded('LATE') }), entry(2)]),
+    marks: { [id(102)]: { state: 'UNKNOWN', status: 'PRESENT' } } });
+  expect(html.match(/role="group" aria-label="Attendance for Ana\d Rivera"/g)).toHaveLength(2);
+  expect(html).toMatch(/aria-pressed="true"[^>]*>Late</);
+  const table = html.slice(html.indexOf('data-testid="roster-table"'));
+  expect(table.match(/aria-pressed="true"/g)).toHaveLength(1);
+  expect(html).toContain('Not confirmed yet. Press Present again; it will not be recorded twice.');
+  expect(html).toContain('Correct a past attendance record');
+  // No marking on a cancelled class, and none without the handler (read-only use).
+  const cancelled = render({ selectedId: id(71), onMark, list: listReady([session(1, 1, { status: 'CANCELLED' })]), roster: ready([entry(1)]) });
+  expect(cancelled).not.toContain('role="group"');
+  expect(render({ selectedId: id(71), roster: ready([entry(1)]) })).not.toContain('role="group"');
+  expect(render({ selectedId: id(71), onMark, roster: ready([entry(1)]), marks: { [id(101)]: { state: 'SAVING', status: 'PRESENT' } } })).toMatch(/disabled=""[^>]*>Present</);
+});
+
+it('keeps a retry key only for an unconfirmed mark, and reloads the roster on a version conflict', () => {
+  const source = readFileSync(new URL('../src/components/class-roster/class-roster.tsx', import.meta.url), 'utf8');
+  expect(source).toContain("if (kind !== 'UNKNOWN') markKeys.current.delete(fingerprint);");
+  expect(source).toContain("if (kind === 'CONFLICT') { setRosterRefresh((n) => n + 1); return; }");
+  expect(source).toMatch(/const fingerprint = `\$\{sessionId\}:\$\{student\}:\$\{status\}:\$\{entry\.attendance\?\.version \?\? 0\}`/);
 });

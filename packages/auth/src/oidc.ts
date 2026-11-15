@@ -19,6 +19,20 @@ export function oidcAuthorizationUrl(config: OidcConfig, transaction: AuthTransa
   for (const [key, value] of Object.entries({ response_type: 'code', client_id: config.clientId, redirect_uri: config.redirectUri, scope: config.scopes, state: transaction.state, nonce: transaction.nonce, code_challenge: transaction.challenge, code_challenge_method: 'S256', response_mode: 'query' })) url.searchParams.set(key, value);
   return url;
 }
+/**
+ * Where to send the browser after HON's own session cookies are cleared, so the provider session ends too
+ * and the next sign-in can pick a different account. Built only from protected config. Sets both the OIDC
+ * RP-initiated logout parameter (post_logout_redirect_uri) and Auth0's /v2/logout parameter (returnTo);
+ * providers ignore the one they do not use. The return address is HON's home page and must be registered
+ * with the provider as an allowed logout URL. Null when no provider logout endpoint is configured.
+ */
+export function oidcLogoutUrl(config: OidcConfig): URL | null {
+  if (!config.endSessionEndpoint) return null;
+  const url = new URL(config.endSessionEndpoint);
+  const home = `${config.publicOrigin}/`;
+  for (const [key, value] of Object.entries({ client_id: config.clientId, post_logout_redirect_uri: home, returnTo: home })) url.searchParams.set(key, value);
+  return url;
+}
 export async function verifyIdToken(token: string, config: OidcConfig, nonce: string, key: JWTVerifyGetKey = configuredJwks(config)): Promise<NormalizedIdentity> {
   try {
     if (token.length > 32_768) throw new Error();

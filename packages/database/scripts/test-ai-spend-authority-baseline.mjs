@@ -167,11 +167,14 @@ function fakeHonProvider() {
   provider.suggestions = [];
   // followUps / sources (0254): the closing ASK and SOURCES lines, already parsed to their closed rules.
   provider.followUps = []; provider.sources = [];
+  provider.unavailableModels = new Set(); provider.beforeUnavailable = null;
   const result = () => ({ reply: provider.reply, inputTokens: 300, outputTokens: 120, providerCostMicrounits: 900, truncated: false, suggestions: [...provider.suggestions],
     followUps: [...provider.followUps], sources: [...provider.sources] });
   provider.readiness = () => provider.ready;
   provider.generate = async (input) => {
     provider.calls += 1; providerCalls += 1; provider.inputs.push(input);
+    // 0336 (RA-1): a model listed here is definitely unavailable (404/429/OpenRouter 503); beforeUnavailable runs first.
+    if (provider.unavailableModels.has(input.modelId)) { await provider.beforeUnavailable?.(input); throw new HonReplyProviderRuntimeError('FAILED', 'PROVIDER_UNAVAILABLE'); }
     if (provider.mode === 'HOLD') return new Promise((resolve, reject) => provider.held.push({ resolve, reject }));
     if (provider.mode === 'UNKNOWN') throw new HonReplyProviderRuntimeError('UNKNOWN', 'PROVIDER_UNKNOWN');
     if (provider.mode === 'FAILED') throw new HonReplyProviderRuntimeError('FAILED', 'PROVIDER_REJECTED');
@@ -249,6 +252,19 @@ const tenant = (c, work) => db.withTenantTransaction(c, async (client) => { awai
 const settle = (promise) => promise.then((value) => ({ value }), (error) => ({ error }));
 
 /** A further disposable human HQ owner whose authority the race proofs change (the shared `hq` is never touched). */
+// 0328: the HQ usage read attributes every reply-table specialist to its own agent; returns [usage agent entries, ledger rows] per specialist.
+async function usageBySpecialist(orgId, schoolId, specialists) {
+  const r = (await row('SELECT hon.read_ai_school_usage_from_hq($1,$2::timestamptz,$3::timestamptz) r',
+    [hq.subject, new Date(Date.now() - 86_400_000).toISOString(), new Date(Date.now() + 3_600_000).toISOString()])).r;
+  const by = r.schools.find((x) => x.schoolId === schoolId).byClass.AGENT_INFERENCE.byAgent;
+  const out = {};
+  for (const [specialist, agent] of specialists) {
+    const n = (await row('SELECT count(*)::int n FROM hon.ai_usage_ledger u JOIN hon.hon_reply_invocations i ON i.id = u.source_invocation_id WHERE i.specialist=$1 AND u.organization_id=$2', [specialist, orgId])).n;
+    out[specialist] = [by[agent]?.entries ?? 0, n];
+  }
+  return { by, out };
+}
+
 async function makeHqOwner(label, untilSql = 'NULL') {
   const h = { id: K(), user: K(), subject: `ai0-hq-${label}-${K()}` };
   await admin.query('BEGIN');
@@ -3282,7 +3298,13 @@ try {
     const r8 = (await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data.agents;
     assert.deepEqual(['alex', 'jordan', 'lena'].map((k) => r8.find((x) => x.agentKey === k).blockedBy), [null, 'NOT_AUTHORIZED', null]);
   } finally { await add('schedule.session.manage'); }
-  pass('INV-36', "0260: Alex (general management, reporting.view), Jordan (operations, schedule.session.manage) and Lena (creative & commerce, marketing.campaign.read) each answer a question in text from their own aggregate school facts (planned as <agent>/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays; no record names); Alex's operations and commerce sections follow those permissions; each is refused at begin without its capability (nothing recorded) and blocked in prepare on a lapse (nothing reserved or sent); answers are concealed when any permission their facts used lapses while usage evidence stays; HON sees their turns without their text; never continued, confirmed from suggestions or given a target; rows are single DETAILED analyses, source permissions are a closed set, plans are ANALYZE only, the fact readers are internal; readiness lists GENERAL_MANAGEMENT, OPERATIONS and CREATIVE_COMMERCE gated on each capability");
+  // 9. HQ usage (0328): each specialist's calls count under its own agent, never HON_REPLY.
+  {
+    const { by, out } = await usageBySpecialist(o.id, o.school, [['alex', 'GENERAL_MANAGEMENT'], ['jordan', 'OPERATIONS'], ['lena', 'CREATIVE_COMMERCE'], ['hon', 'HON_REPLY']]);
+    for (const k of ['alex', 'jordan', 'lena']) assert.ok(out[k][1] >= 1 && out[k][0] === out[k][1], `${k}: ${JSON.stringify(out)} ${JSON.stringify(by)}`);
+    assert.equal(out.hon[0], out.hon[1], `HON_REPLY counts only HON's own rows: ${JSON.stringify(out)}`);
+  }
+  pass('INV-36', "0260: Alex (general management, reporting.view), Jordan (operations, schedule.session.manage) and Lena (creative & commerce, marketing.campaign.read) each answer a question in text from their own aggregate school facts (planned as <agent>/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays; no record names); Alex's operations and commerce sections follow those permissions; each is refused at begin without its capability (nothing recorded) and blocked in prepare on a lapse (nothing reserved or sent); answers are concealed when any permission their facts used lapses while usage evidence stays; HON sees their turns without their text; never continued, confirmed from suggestions or given a target; rows are single DETAILED analyses, source permissions are a closed set, plans are ANALYZE only, the fact readers are internal; readiness lists GENERAL_MANAGEMENT, OPERATIONS and CREATIVE_COMMERCE gated on each capability; HQ usage (0328) counts their calls under those agents, never HON_REPLY");
   }
 
   // ---- INV-32 (R1, 0287): routing by task class through the HQ task profile ----
@@ -3497,6 +3519,115 @@ try {
   pass('INV-38', 'R2: each school may have an internal monthly agent-AI cost ceiling (none by default for a paying school, $15 on a live trial, HQ-owner editable, versioned, idempotent, immutable command log) counted as verified ledger cost plus every counting hold at its plan maximum; HQ reads NO_CEILING/NORMAL/WARNING_75/WARNING_90/CEILING_REACHED per school; at the ceiling new work is refused before any reservation or provider call (HON prepare, specialist begin, readiness, reserve guard) as AI_PAUSED_BY_HQ while other schools are unaffected and a raised ceiling restores it at once; an HQ single-school pause covers agent and creative AI; only the HQ command and read reach the runtime');
   }
 
+  // ---- INV-43 (0353): AI on a free HQ access exception only under an HQ-owner monthly dollar limit ----
+  {
+  const o = await makeOrg('inv-43', { orgCeiling: null }), plain = await makeOrg('inv-43-plain', { orgCeiling: null });
+  const scopeOf = (z) => ({ organizationId: z.id, schoolId: z.school, principalId: z.principal, externalSubject: z.subject });
+  const conversations = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const convs = new Map();
+  const ask = async (z = o) => {
+    if (!convs.has(z.id)) convs.set(z.id, (await conversations.create(scopeOf(z), { title: 'Exception AI' }, K())).id);
+    const r = await settle(conversations.sendTurn(scopeOf(z), convs.get(z.id), { text: `Exception question ${K()}`, delegation: null }, K()));
+    if (r.error?.getResponse?.().code === 'HON_AI_SPEND_REFUSED') return { refused: r.error.getResponse().reason };
+    if (r.error) throw r.error;
+    return row('SELECT status, reason FROM hon.hon_reply_invocations WHERE turn_id=$1', [r.value.turnId]);
+  };
+  const explicit = async (z = o, cls = 'AGENT_INFERENCE', school = z.school) => (await row('SELECT hon.ai_spend_allowed($1,$2::uuid,clock_timestamp(),$3) d', [z.id, school, cls])).d;
+  const cmdSql = 'SELECT hon.command_ai_exception_school_allowance($1,$2::jsonb,$3::uuid) r';
+  const input = (patch = {}, z = o) => ({ schoolId: z.school, ceilingMicros: 25000000, reason: 'Synthetic exception AI limit', expectedVersion: 0, ...patch });
+  const command = async (body, key = K(), subject = hq.subject) => (await admin.query(cmdSql, [subject, JSON.stringify(body), key])).rows[0].r;
+  const errCode = async (p) => { const r = await settle(p); return r.error ? `${r.error.code}:${r.error.message}` : 'OK'; };
+  const read = async () => (await row('SELECT hon.read_ai_exception_school_allowances_from_hq($1) r', [hq.subject])).r;
+  const entry = async (z = o) => (await read()).schools.find((s) => s.schoolId === z.school);
+  const spendCost = (micros, z = o) => admin.query("INSERT INTO hon.ai_usage_ledger(organization_id,school_id,provider_code,model_code,modality,customer_credits,provider_cost_microunits,correlation_id,spend_class) VALUES($1,$2,'OPENROUTER','ai0-exception-cost','TEXT',0,$3,$4,'AGENT_INFERENCE')", [z.id, z.school, micros, K()]);
+  // 1. A live COMPLETE exception without a limit: no AI (AI-D1 unchanged), HQ sees the school with no limit and the $25 suggestion.
+  for (const z of [o, plain]) { await admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [z.id]); await grantFor(z, 'COMPLETE', 86_400_000); }
+  assert.equal(await explicit(), 'AI_EXCEPTION_NO_AI');
+  assert.deepEqual(await ask(), { refused: 'AI_EXCEPTION_NO_AI' });
+  // The AI team status (dashboard and onboarding) reads the same school decision as the reply path.
+  const spendOf = async (z = o) => [...new Set((await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scopeOf(z))).data.agents.map((x) => x.spendDecision))];
+  assert.deepEqual(await spendOf(), ['AI_EXCEPTION_NO_AI']);
+  let e = await entry();
+  assert.deepEqual([e.ceilingMicros, e.aiAllowed, e.version, e.exceptionLive, e.level], [null, false, 0, true, 'NO_CEILING']);
+  assert.equal((await read()).defaultCeilingMicros, 25000000);
+  // 2. Only the human HQ owner sets it; then HON answers, while creative media, no-school decisions and another exception school stay refused.
+  assert.equal(await errCode(command(input(), K(), o.subject)), '42501:SAAS_FORBIDDEN');
+  let v = (await command(input())).version;
+  assert.equal(v, 1);
+  assert.equal(await explicit(), null);
+  assert.equal(await explicit(o, 'CREATIVE_MEDIA'), 'AI_EXCEPTION_NO_AI', 'image and video stay off on an exception');
+  assert.equal(await explicit(o, 'AGENT_INFERENCE', null), 'AI_EXCEPTION_NO_AI', 'no school named: still refused');
+  assert.equal(await explicit(o, 'AGENT_INFERENCE', plain.school), 'AI_EXCEPTION_NO_AI', 'another school never borrows the limit');
+  assert.deepEqual(await spendOf(), ['ALLOWED'], 'readiness shows the AI team on for the exception school with a limit');
+  assert.deepEqual(await spendOf(plain), ['AI_EXCEPTION_NO_AI'], 'readiness still shows AI off for an exception school without a limit');
+  let calls = fakes.hon.calls;
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null });
+  assert.equal(fakes.hon.calls, calls + 1);
+  assert.deepEqual(await ask(plain), { refused: 'AI_EXCEPTION_NO_AI' });
+  e = await entry();
+  assert.deepEqual([e.ceilingMicros, e.aiAllowed, e.version, e.committedCostMicros, e.level, e.reason], [25000000, true, 1, 900, 'NORMAL', 'Synthetic exception AI limit']);
+  // 3. At the limit the next request is refused before any provider call (the R2 ceiling, AI_PAUSED_BY_HQ); raising it restores AI.
+  v = (await command(input({ ceilingMicros: 1000000, expectedVersion: v }))).version;
+  await spendCost(1000000 - 900);
+  assert.equal((await entry()).level, 'CEILING_REACHED');
+  calls = fakes.hon.calls;
+  assert.deepEqual(await ask(), { refused: 'AI_PAUSED_BY_HQ' });
+  assert.equal(fakes.hon.calls, calls, 'no provider call at the limit');
+  v = (await command(input({ ceilingMicros: 25000000, expectedVersion: v }))).version;
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null });
+  // 4. A lower R2 school ceiling (0288) still wins; removing it restores the exception limit.
+  const lim = (patch) => admin.query('SELECT hon.command_ai_school_cost_limit($1,$2::jsonb,$3::uuid) r', [hq.subject, JSON.stringify({ schoolId: o.school, ceilingMicros: 1000, paused: false, reason: 'Synthetic lower R2 ceiling', expectedVersion: 0, ...patch }), K()]);
+  await lim({});
+  assert.equal(await explicit(), 'AI_PAUSED_BY_HQ');
+  await lim({ ceilingMicros: 1000000000, expectedVersion: 1 });
+  assert.equal(await explicit(), null);
+  // 5. Clearing returns the school to no AI at once, including the reserve guard outside the prepare path.
+  v = (await command(input({ ceilingMicros: null, expectedVersion: v }))).version;
+  assert.equal(await explicit(), 'AI_EXCEPTION_NO_AI');
+  assert.deepEqual(await spendOf(), ['AI_EXCEPTION_NO_AI'], 'clearing the limit shows AI off again');
+  assert.deepEqual(await ask(), { refused: 'AI_EXCEPTION_NO_AI' });
+  e = await entry(); assert.deepEqual([e.ceilingMicros, e.aiAllowed, e.version], [null, false, v]);
+  const raw = await row("SELECT id FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='COMPLETED' LIMIT 1", [o.id]);
+  assert.match(await errCode(admin.query('UPDATE hon.hon_reply_invocations SET reserved_credits=reserved_credits+1 WHERE id=$1', [raw.id])), /AI_EXCEPTION_NO_AI|immutable|IMMUTABLE/);
+  // 6. Ending the exception ends the limit; a new exception never inherits it; setting needs a live exception for this school.
+  v = (await command(input({ expectedVersion: v }))).version;
+  assert.equal(await explicit(), null);
+  const xid = (await row("SELECT id FROM hon.saas_access_exceptions WHERE organization_id=$1 AND status='GRANTED'", [o.id])).id;
+  await schoolBilling.revokeAccessException(hq.subject, xid, { reason: 'Disposable synthetic AI-0 revocation' }, K());
+  // The revoke restores the suspended entitlement (the entitlement gate refuses the school, INV-9); the limit is inert.
+  assert.equal((await row('SELECT status FROM hon.organization_entitlements WHERE organization_id=$1', [o.id])).status, 'SUSPENDED');
+  assert.equal((await row('SELECT hon.ai_exception_allowance_micros($1,$2) m', [o.id, o.school])).m, null);
+  assert.equal(await errCode(command(input({ expectedVersion: v }))), '23514:AI_EXCEPTION_NOT_LIVE');
+  await grantFor(o, 'COMPLETE', 86_400_000);
+  assert.equal(await explicit(), 'AI_EXCEPTION_NO_AI', 'a new exception starts with no AI');
+  e = await entry(); assert.deepEqual([e.ceilingMicros, e.aiAllowed, e.version], [null, false, v]);
+  v = (await command(input({ ceilingMicros: 30000000, expectedVersion: v }))).version;
+  assert.equal(await explicit(), null);
+  // 7. Command shape, versions, idempotency, immutable log and limits.
+  assert.equal(await errCode(command(input({ expectedVersion: v - 1 }))), '40001:SAAS_VERSION_CONFLICT');
+  for (const bad of [{ reason: 'short' }, { ceilingMicros: 999999 }, { ceilingMicros: 1000000001 }, { ceilingMicros: 1500000.5 }, { ceilingMicros: '25' }, { schoolId: 'school' }, { organizationId: o.id }])
+    assert.match(await errCode(command(input({ expectedVersion: v, ...bad }))), /^22023:/, JSON.stringify(bad));
+  assert.equal(await errCode(command(input({ schoolId: K(), expectedVersion: 0 }))), 'P0002:AI_SCHOOL_NOT_FOUND');
+  assert.equal(await errCode(command(input({ ceilingMicros: null }, plain))), '23514:AI_EXCEPTION_ALLOWANCE_NOT_SET');
+  const key = K(), body = input({ ceilingMicros: 20000000, expectedVersion: v });
+  const first = await command(body, key);
+  assert.deepEqual(await command(body, key), { ...first, replayed: true });
+  assert.equal(await errCode(command({ ...body, ceilingMicros: 21000000 }, key)), '23505:AI_EXCEPTION_ALLOWANCE_KEY_REUSED');
+  assert.equal((await row('SELECT count(*)::int n FROM hon.ai_exception_school_allowance_commands WHERE school_id=$1', [o.school])).n, 7);
+  assert.match(await errCode(admin.query('DELETE FROM hon.ai_exception_school_allowance_commands WHERE school_id=$1', [o.school])), /IMMUTABLE/);
+  assert.match(await errCode(admin.query('DELETE FROM hon.ai_exception_school_allowances WHERE school_id=$1', [o.school])), /IMMUTABLE/);
+  assert.match(await errCode(admin.query('UPDATE hon.ai_exception_school_allowances SET ceiling_micros=1000000 WHERE school_id=$1', [o.school])), /IMMUTABLE/, 'only the command bumps the version');
+  // 8. Only the HQ command and read reach the runtime.
+  const acl = await rows(`SELECT p.oid::regprocedure::text f, has_function_privilege($1,p.oid,'EXECUTE') x FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace
+    AND p.proname IN ('command_ai_exception_school_allowance','read_ai_exception_school_allowances_from_hq','ai_exception_allowance_micros','ai_org_spend_allowed_for_school','ai_exception_default_allowance_micros') ORDER BY 1`, [runtimeRole]);
+  assert.deepEqual(acl.map((a) => `${a.f}=${a.x}`), ['hon.ai_exception_allowance_micros(uuid,uuid)=false', 'hon.ai_exception_default_allowance_micros()=false',
+    'hon.ai_org_spend_allowed_for_school(uuid,uuid,timestamp with time zone,text)=false', 'hon.command_ai_exception_school_allowance(text,jsonb,uuid)=true',
+    'hon.read_ai_exception_school_allowances_from_hq(text)=true']);
+  assert.equal((await row("SELECT has_table_privilege($1,'hon.ai_exception_school_allowances','SELECT') OR has_table_privilege($1,'hon.ai_exception_school_allowance_commands','SELECT') x", [runtimeRole])).x, false);
+  pass('INV-43', '0353: a free HQ access exception still grants no AI unless the HQ owner sets a monthly dollar limit ($1-$1,000, $25 suggested) for that exception and its own school; then HON and the AI team answer, the R2 per-school ceiling enforces the limit (the lower of both applies) and refuses at it before any provider call; image/video, other schools and no-school decisions stay refused; clearing, revoking or a new exception returns AI_EXCEPTION_NO_AI at once; HQ-owner only, versioned, idempotent, immutable command log; only the HQ command and read reach the runtime');
+  }
+
   // ---- INV-39 (0310): a paying organization has no organization agent budget ----
   {
   const o = await makeOrg('inv-39', { orgCeiling: null });
@@ -3536,6 +3667,96 @@ try {
     assert.equal((await row('SELECT has_function_privilege($1,$2,\'EXECUTE\') x', [runtimeRole, f])).x, false, f);
   assert.deepEqual((await row("SELECT relrowsecurity r, relforcerowsecurity f FROM pg_class WHERE oid='hon.ai_org_agent_ceiling_overrides'::regclass")), { r: true, f: true });
   pass('INV-39', '0310: an organization a trial does not own has no organization agent budget (ceiling and display read the no-ceiling value 2,147,483,647; readiness shows it); past the former 12,000 units HON still answers with one provider call; a migration-owner override restores a ceiling at once (refused at plan or prepare before any provider call) and removing it lifts it; the override table (forced RLS) and helpers never reach the runtime');
+  }
+
+  // ---- INV-41 (0336, RA-1): reduced-AI mode: one automatic fallback when the default model is definitely unavailable ----
+  {
+  const o = await makeOrg('inv-41');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const conv = await hon.create(scope, { title: 'Reduced AI' }, K());
+  const m = {};
+  for (const name of ['primary', 'backup']) {
+    m[name] = K();
+    await admin.query("INSERT INTO hon.hq_ai_model_catalog(catalog_id,provider_id,model_id,display_name,capabilities,modalities,privacy_controls,active,minimum_tier,unit_cost_micros,cost_unit,effective_from) VALUES($1,'OPENROUTER',$2,'AI-0 RA-1 model',ARRAY['TEXT'],ARRAY['TEXT'],'{}',true,'COMPLETE',1,'TOKEN','2020-01-01')", [m[name], `ra1/${name}`]);
+    await admin.query('INSERT INTO hon.hq_ai_routing_candidates(policy_id,ordinal,catalog_id) VALUES($1,(SELECT max(ordinal)+1 FROM hon.hq_ai_routing_candidates WHERE policy_id=$1),$2)', [o.policy, m[name]]);
+  }
+  const profileId = K();
+  await admin.query(`INSERT INTO hon.hq_ai_task_profiles(profile_id,routing_policy_id,agent_key,task_category,cost_unit,active,max_cost_micros,required_capabilities,required_modalities,allowed_provider_ids,privacy_controls,timeout_category,retry_category,effective_from,effective_until)
+    VALUES($1,$2,'hon','HON_STANDARD','TOKEN',true,80000,ARRAY['TEXT'],ARRAY['TEXT'],ARRAY['OPENROUTER'],'{}','STANDARD','TRANSIENT_ONCE','2020-01-01',NULL)`, [profileId, o.policy]);
+  for (const [selection, ordinal, catalogId] of [['DEFAULT', 0, m.primary], ['FALLBACK', 1, m.backup]]) {
+    await admin.query('INSERT INTO hon.hq_ai_task_profile_candidates(profile_id,routing_policy_id,selection,ordinal,catalog_id) VALUES($1,$2,$3,$4,$5)', [profileId, o.policy, selection, ordinal, catalogId]);
+  }
+  const state = async (turn) => row(`SELECT r.id, r.status, r.reason, r.reserved_credits, r.provider_request_id, p.model_id, p.route_selection,
+      (SELECT count(*)::int FROM hon.ai_route_unavailable_attempts a WHERE a.invocation_id = r.id) attempts,
+      (SELECT count(*)::int FROM hon.ai_usage_ledger u WHERE u.source_invocation_id = r.id) ledger,
+      (SELECT count(*)::int FROM hon.ai_invocation_plans x WHERE x.work_item_id = r.work_item_id) plans
+    FROM hon.hon_reply_invocations r LEFT JOIN hon.ai_invocation_plans p ON p.id = r.plan_id WHERE r.turn_id=$1`, [turn.turnId]);
+  const ask = async () => { const turn = await hon.sendTurn(scope, conv.id, { text: `Reduced AI question ${K()}`, delegation: null }, K()); return { turn, s: await state(turn) }; };
+  const pick = (s) => [s.status, s.reason, s.model_id, s.route_selection, s.reserved_credits, s.attempts, s.ledger, s.plans];
+  const unavailable = (...names) => { fakes.hon.unavailableModels = new Set(names.map((n) => `ra1/${n}`)); };
+  try {
+    // 0. Normally the default answers in one call.
+    let calls = fakes.hon.calls;
+    let r = await ask();
+    assert.deepEqual([...pick(r.s), fakes.hon.calls - calls], ['COMPLETED', null, 'ra1/primary', 'PROFILE_DEFAULT', 0, 0, 1, 1, 1]);
+    // 1. Default definitely unavailable: one fallback call on the profile's FALLBACK model; the turn completes; one ledger
+    //    row (the failed attempt cost nothing); the attempt is recorded once with the failed model and request id.
+    unavailable('primary'); calls = fakes.hon.calls;
+    r = await ask();
+    assert.equal(r.turn.status, 'COMPLETED', JSON.stringify(r.turn));
+    assert.deepEqual([...pick(r.s), fakes.hon.calls - calls], ['COMPLETED', null, 'ra1/backup', 'PROFILE_FALLBACK', 0, 1, 1, 2, 2], JSON.stringify(r.s));
+    const attempt = await row('SELECT a.*, p.model_id FROM hon.ai_route_unavailable_attempts a JOIN hon.ai_invocation_plans p ON p.id=a.plan_id WHERE a.invocation_id=$1', [r.s.id]);
+    assert.deepEqual([attempt.model_id, attempt.catalog_id, attempt.reason], ['ra1/primary', m.primary, 'PROVIDER_UNAVAILABLE']);
+    assert.notEqual(attempt.failed_provider_request_id, r.s.provider_request_id, 'the fallback call has a new provider request id');
+    const sent = fakes.hon.inputs.slice(-2).map((x) => [x.modelId, x.providerRequestId]);
+    assert.deepEqual(sent, [['ra1/primary', attempt.failed_provider_request_id], ['ra1/backup', r.s.provider_request_id]]);
+    // A resend of the same turn replays: no plan, no call.
+    calls = fakes.hon.calls;
+    await honReplies.run(scope, r.turn.turnId);
+    assert.equal(fakes.hon.calls, calls, 'a finished turn never calls again');
+    // 2. Both unavailable: exactly two calls, then FAILED as PROVIDER_UNAVAILABLE with nothing held; never a third call.
+    unavailable('primary', 'backup'); calls = fakes.hon.calls;
+    r = await ask();
+    assert.deepEqual([...pick(r.s), fakes.hon.calls - calls], ['FAILED', 'PROVIDER_UNAVAILABLE', 'ra1/backup', 'PROFILE_FALLBACK', 0, 1, 0, 2, 2], JSON.stringify(r.s));
+    assert.equal(r.turn.reason, 'PROVIDER_UNAVAILABLE', JSON.stringify(r.turn));
+    assert.equal((await tenant(context(o), async (c) => { await c.query("SELECT set_config('app.hon_source','HUMAN_UI',true)"); return (await c.query('SELECT hon.reopen_hon_reply_for_fallback($1,$2::uuid) r', [o.subject, r.turn.turnId])).rows[0].r; })), false, 'never reopened twice');
+    // 3. The fallback plan is made live: a backup made inactive between the attempts gives no route and no second call.
+    unavailable('primary'); calls = fakes.hon.calls;
+    fakes.hon.beforeUnavailable = () => admin.query('UPDATE hon.hq_ai_model_catalog SET active=false WHERE catalog_id=$1', [m.backup]);
+    try { r = await ask(); } finally { fakes.hon.beforeUnavailable = null; await admin.query('UPDATE hon.hq_ai_model_catalog SET active=true WHERE catalog_id=$1', [m.backup]); }
+    assert.deepEqual([...pick(r.s), fakes.hon.calls - calls], ['BLOCKED', 'NO_ELIGIBLE_ROUTE', null, null, 0, 1, 0, 1, 1], JSON.stringify(r.s));
+    // 4. An HQ pause between the attempts stops the fallback before any reservation or call.
+    calls = fakes.hon.calls;
+    const ra1Pause = (action) => admin.query('SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) r', [hq.subject, JSON.stringify({ action, organizationId: o.id, spendClass: 'AGENT_INFERENCE', reason: 'Synthetic AI-0 RA-1 pause between attempts' }), K()]);
+    fakes.hon.beforeUnavailable = () => ra1Pause('PAUSE');
+    try { r = await ask(); } finally { fakes.hon.beforeUnavailable = null; await ra1Pause('RESUME'); }
+    assert.equal(fakes.hon.calls - calls, 1, JSON.stringify(r.s));
+    assert.deepEqual([r.s.status, r.s.reserved_credits, r.s.ledger], ['BLOCKED', 0, 0], JSON.stringify(r.s));
+    // 5. No fallback when the profile retry is NONE, for UNKNOWN or a rejection, or on the legacy policy order: one call each.
+    await admin.query("UPDATE hon.hq_ai_task_profiles SET retry_category='NONE', version=version+1 WHERE profile_id=$1", [profileId]);
+    calls = fakes.hon.calls; r = await ask();
+    assert.deepEqual([r.s.status, r.s.reason, r.s.attempts, fakes.hon.calls - calls], ['FAILED', 'PROVIDER_UNAVAILABLE', 0, 1], 'retry NONE');
+    await admin.query("UPDATE hon.hq_ai_task_profiles SET retry_category='TRANSIENT_ONCE', version=version+1 WHERE profile_id=$1", [profileId]);
+    unavailable();
+    for (const [mode, status, reason] of [['UNKNOWN', 'UNKNOWN', 'PROVIDER_UNKNOWN'], ['FAILED', 'FAILED', 'PROVIDER_REJECTED']]) {
+      fakes.hon.mode = mode; calls = fakes.hon.calls;
+      try { r = await ask(); } finally { fakes.hon.mode = 'RESULT'; }
+      assert.deepEqual([r.s.status, r.s.reason, r.s.attempts, fakes.hon.calls - calls], [status, reason, 0, 1], mode);
+    }
+    await admin.query('UPDATE hon.hq_ai_task_profiles SET active=false WHERE profile_id=$1', [profileId]);
+    fakes.hon.unavailableModels = new Set(['approved/ai0-baseline']); calls = fakes.hon.calls;
+    r = await ask();
+    assert.deepEqual([r.s.status, r.s.reason, r.s.route_selection, r.s.attempts, fakes.hon.calls - calls], ['FAILED', 'PROVIDER_UNAVAILABLE', 'POLICY_ORDER', 0, 1], 'legacy order');
+  } finally { unavailable(); fakes.hon.mode = 'RESULT'; }
+  // 6. Evidence is immutable and migration-owner only; the runtime may only call the reopen function.
+  const anyAttempt = await row('SELECT id FROM hon.ai_route_unavailable_attempts WHERE organization_id=$1 LIMIT 1', [o.id]);
+  await assert.rejects(admin.query("UPDATE hon.ai_route_unavailable_attempts SET reason='PROVIDER_UNAVAILABLE' WHERE id=$1", [anyAttempt.id]), /AI_ROUTE_ATTEMPT_IMMUTABLE/);
+  await assert.rejects(admin.query('DELETE FROM hon.ai_route_unavailable_attempts WHERE id=$1', [anyAttempt.id]), /AI_ROUTE_ATTEMPT_IMMUTABLE/);
+  assert.deepEqual(await row(`SELECT has_table_privilege($1,'hon.ai_route_unavailable_attempts','SELECT') s, has_function_privilege($1,'hon.reopen_hon_reply_for_fallback(text,uuid)','EXECUTE') e,
+    (SELECT relforcerowsecurity FROM pg_class WHERE oid='hon.ai_route_unavailable_attempts'::regclass) f`, [runtimeRole]), { s: false, e: true, f: true });
+  pass('INV-41', "0336 (RA-1): when HON's default model is definitely unavailable (PROVIDER_UNAVAILABLE) and its HQ task profile is TRANSIENT_ONCE, the reply is reopened once: the failed attempt is recorded immutably, the next plan never picks that model again and uses the profile's fallback with a new provider request id, and the turn completes with one ledger row; both models unavailable ends FAILED/PROVIDER_UNAVAILABLE after exactly two calls with nothing held; the fallback is planned and prepared live (an inactive backup gives no route, an HQ pause blocks it, no call); retry NONE, UNKNOWN, a rejection and the legacy policy order never fall back; evidence is migration-owner only");
   }
 
   // ---- INV-37 (0284): Maya answers about one at-risk student from that student's 0259 factors only ----
@@ -3651,7 +3872,14 @@ try {
   await drop('retention.review.read');
   try { assert.equal((await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data.agents.find((x) => x.agentKey === 'maya').blockedBy, 'NOT_AUTHORIZED'); }
   finally { await add('retention.review.read'); }
-  pass('INV-37', "0284: Maya answers one question about one at-risk membership of this exact school from that student's 0259 row only (factor codes and numbers, state, score, level, step; no name or contact), planned as maya/ANALYZE with the fixed DETAILED budgets, one call, resend replays; a student off the list is reported as onAtRiskList false and a student past the first page is still found; another organization's or an unknown membership, a missing or extra target key, empty text and a suggestion confirmation are refused at begin with nothing recorded; without retention.review.read she is refused at begin, blocked in prepare (nothing reserved or sent) and her answer is concealed, as it is when the tuition permission her facts used lapses; source permissions are a closed set, plans are ANALYZE only, both fact readers are internal; readiness lists RETENTION gated on the capability");
+  // 8. HQ usage (0328): Maya's calls count under RETENTION, never HON_REPLY.
+  {
+    const { by, out } = await usageBySpecialist(o.id, o.school, [['maya', 'RETENTION'], ['hon', 'HON_REPLY']]);
+    assert.ok(out.maya[1] >= 1 && out.maya[0] === out.maya[1], `maya: ${JSON.stringify(out)} ${JSON.stringify(by)}`);
+    assert.equal(out.hon[0], out.hon[1], `HON_REPLY counts only HON's own rows: ${JSON.stringify(out)}`);
+    assert.equal((await row("SELECT has_function_privilege($1,'hon.ai_usage_reply_agent(text)','EXECUTE') x", [runtimeRole])).x, false, 'the attribution helper is internal');
+  }
+  pass('INV-37', "0284: Maya answers one question about one at-risk membership of this exact school from that student's 0259 row only (factor codes and numbers, state, score, level, step; no name or contact), planned as maya/ANALYZE with the fixed DETAILED budgets, one call, resend replays; a student off the list is reported as onAtRiskList false and a student past the first page is still found; another organization's or an unknown membership, a missing or extra target key, empty text and a suggestion confirmation are refused at begin with nothing recorded; without retention.review.read she is refused at begin, blocked in prepare (nothing reserved or sent) and her answer is concealed, as it is when the tuition permission her facts used lapses; source permissions are a closed set, plans are ANALYZE only, both fact readers are internal; readiness lists RETENTION gated on the capability; HQ usage (0328) counts her calls under RETENTION, never HON_REPLY");
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----

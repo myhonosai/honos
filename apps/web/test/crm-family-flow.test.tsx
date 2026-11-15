@@ -205,7 +205,7 @@ it('leaves an empty idle view unshielded and ignores a late lead read after blur
   let finish!: (r: Response) => void;const f=vi.spyOn(globalThis,'fetch').mockImplementationOnce(()=>new Promise(yes=>{finish=yes;}));
   view=()=>CrmLeadsWorkbench({initialScope:scope,sessionSubject:'family-staff'});render();window.dispatchEvent(new Event('blur'));expect(privacyHidden()).toBe(false);expect(f).not.toHaveBeenCalled();
   elements(render()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});window.dispatchEvent(new Event('blur'));finish(response([row]));await settle();
-  expect(privacyHidden()).toBe(false);expect(text(render())).not.toContain('Ari Stone');expect(text(render())).toContain('No verified school list');
+  expect(privacyHidden()).toBe(false);expect(text(render())).not.toContain('Ari Stone');expect(text(render())).toContain('No list loaded yet');
 });
 it('does not shield an empty authorized list, but shields typed sensitive input before any server load', async () => {
   vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response([]));view=()=>CrmLeadsWorkbench({initialScope:scope,sessionSubject:'family-staff'});render();
