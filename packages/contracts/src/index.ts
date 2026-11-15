@@ -1093,6 +1093,7 @@ export * from './hq-prospects.js';
 export * from './hq-creative.js';
 export * from './student-imports.js';
 export * from './history-imports.js';
+export * from './paper-imports.js';
 export * from './class-series.js';
 export * from './school-events.js';
 export * from './tuition-payments.js';
