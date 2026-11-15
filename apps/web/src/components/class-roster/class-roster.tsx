@@ -4,8 +4,9 @@ import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
-import { RosterError, rosterApi, type RosterApi, type RosterPage, type RosterScope, type SessionPage } from './http';
-import { RosterView, type RosterState, type SessionListState } from './view';
+import { MarkError, RosterError, rosterApi, type RosterApi, type RosterMark, type RosterPage, type RosterScope, type SessionPage } from './http';
+import type { ClassSessionRosterEntry } from '@hon/contracts';
+import { RosterView, type MarkState, type RosterState, type SessionListState } from './view';
 
 const kindOf = (error: unknown) => error instanceof RosterError ? error.kind : 'UNAVAILABLE';
 
@@ -26,9 +27,13 @@ export function ClassRoster({ api = rosterApi }: { api?: RosterApi }): React.Rea
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [roster, setRoster] = useState<RosterState>({ state: 'NONE' });
   const [rosterRefresh, setRosterRefresh] = useState(0);
+  // Per student on the open roster: the last mark's outcome. Retry keys are kept per exact unchanged command, so pressing
+  // the same button after an unconfirmed save replays it (the server answers once) instead of recording twice.
+  const [marks, setMarks] = useState<Readonly<Record<string, MarkState>>>({});
+  const markKeys = useRef(new Map<string, string>());
   const listGeneration = useRef(0), rosterGeneration = useRef(0), privacy = useRef(0), mounted = useRef(false), lastSchool = useRef<string | null>(null);
   const moreAbort = useRef<AbortController | null>(null), classesAbort = useRef<AbortController | null>(null);
-  const retire = () => { listGeneration.current++; rosterGeneration.current++; moreAbort.current?.abort(); moreAbort.current = null; classesAbort.current?.abort(); classesAbort.current = null; };
+  const retire = () => { markKeys.current.clear(); listGeneration.current++; rosterGeneration.current++; moreAbort.current?.abort(); moreAbort.current = null; classesAbort.current?.abort(); classesAbort.current = null; };
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; privacy.current++; retire(); }; }, []);
 
   useEffect(() => onShellPrivacyEvent(() => {
@@ -93,7 +98,7 @@ export function ClassRoster({ api = rosterApi }: { api?: RosterApi }): React.Rea
     if (!scope) return () => {};
     moreAbort.current?.abort(); moreAbort.current = null;
     const current = ++rosterGeneration.current, shown = privacy.current;
-    setRoster({ state: 'LOADING' });
+    setRoster({ state: 'LOADING' }); setMarks({});
     const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
     const owned = () => mounted.current && current === rosterGeneration.current && shown === privacy.current;
     api.roster(scope, sessionId, null, signal, owned).then(
@@ -139,6 +144,33 @@ export function ClassRoster({ api = rosterApi }: { api?: RosterApi }): React.Rea
       });
   }, [api, roster, selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const onMark = useCallback((entry: ClassSessionRosterEntry, status: RosterMark) => {
+    if (roster.state !== 'READY' || !scope) return;
+    const student = entry.studentProfileId.toLowerCase(), sessionId = roster.sessionId;
+    if (marks[student]?.state === 'SAVING' || entry.attendance?.status === status) return;
+    const fingerprint = `${sessionId}:${student}:${status}:${entry.attendance?.version ?? 0}`;
+    const key = markKeys.current.get(fingerprint) ?? crypto.randomUUID(); markKeys.current.set(fingerprint, key);
+    const current = rosterGeneration.current, shown = privacy.current;
+    const owned = () => mounted.current && current === rosterGeneration.current && shown === privacy.current;
+    setMarks((m) => ({ ...m, [student]: { state: 'SAVING', status } }));
+    api.mark(scope, sessionId, entry, status, key).then(
+      (attendance) => {
+        if (!owned()) return;
+        markKeys.current.delete(fingerprint);
+        setRoster((r) => r.state === 'READY' && r.sessionId === sessionId
+          ? { ...r, entries: r.entries.map((e) => e.studentProfileId.toLowerCase() === student ? { ...e, attendance } : e) } : r);
+        setMarks((m) => ({ ...m, [student]: { state: 'SAVED', status } }));
+      },
+      (error) => {
+        if (!owned()) return;
+        const kind = error instanceof MarkError ? error.kind : 'UNKNOWN';
+        // A definite refusal frees the key; only an unconfirmed outcome keeps it for the same retry.
+        if (kind !== 'UNKNOWN') markKeys.current.delete(fingerprint);
+        if (kind === 'CONFLICT') { setRosterRefresh((n) => n + 1); return; }
+        setMarks((m) => ({ ...m, [student]: { state: kind, status } }));
+      });
+  }, [api, roster, marks, selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const onFrom = useCallback((next: string | null) => { setFrom(next); }, []);
   const onOpen = useCallback((id: string) => { setSelectedId(id); setRosterRefresh((n) => n + 1); }, []);
   const onRefresh = useCallback(() => { setListRefresh((n) => n + 1); setRosterRefresh((n) => n + 1); }, []);
@@ -148,6 +180,7 @@ export function ClassRoster({ api = rosterApi }: { api?: RosterApi }): React.Rea
   return <div key={shell.phase} data-shell-private="">
     <RosterView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       scope={scope} from={from} list={list} selectedId={selectedId} roster={roster}
-      onFrom={onFrom} onOpen={onOpen} onRefresh={onRefresh} onMoreClasses={onMoreClasses} onMore={onMore} onReloadRoster={onReloadRoster}/>
+      onFrom={onFrom} onOpen={onOpen} onRefresh={onRefresh} onMoreClasses={onMoreClasses} onMore={onMore} onReloadRoster={onReloadRoster}
+      marks={marks} onMark={onMark}/>
   </div>;
 }

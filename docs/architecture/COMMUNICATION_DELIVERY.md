@@ -117,8 +117,9 @@ receipt timeline. No address, no provider IDs, no cost.
   HON HQ owner (`POST /v1/hq/saas/schools/:schoolId/text-sender`, same human-command guard as other HQ
   commands). Recording a number buys nothing. A text from a school without an ACTIVE sender waits as
   `SENDER_NOT_READY`; the claim returns the sender's service SID for the send.
-- v1 uses one HON Twilio account (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`); per-school subaccounts are a
-  later step because callback signatures are per account. READY also needs an https `HON_PUBLIC_API_ORIGIN`
+- v1 uses one HON Twilio account (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`). Per-school subaccounts (owner decision
+  2026-11-14) are built in [SCHOOL_OWN_SENDERS.md](SCHOOL_OWN_SENDERS.md): 0351 records them, verifies their webhooks with
+  each subaccount's sealed token and sends a subaccount's Messaging Service on that subaccount. READY also needs an https `HON_PUBLIC_API_ORIGIN`
   (status callback URL) and `HON_SMS_SEND_APPROVED=true`.
 - The Messaging Service must have the MMS converter and Smart Encoding on. HON never changes a Twilio service, so
   the HQ owner must send `mmsConverterConfirmed: true` to make a sender ACTIVE (API 400

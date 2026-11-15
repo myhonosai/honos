@@ -131,4 +131,8 @@ services:
         value: openid email profile
       - key: HON_OIDC_TOKEN_ENDPOINT_AUTH_METHOD
         value: client_secret_basic
+      # Provider logout so Sign out ends the provider session too (Auth0: https://<tenant>/v2/logout).
+      # Its return address <HON_PUBLIC_ORIGIN>/ must be an allowed logout URL at the provider.
+      - key: HON_OIDC_END_SESSION_ENDPOINT
+        sync: false
       - fromGroup: hon-session

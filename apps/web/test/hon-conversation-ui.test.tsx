@@ -5,7 +5,7 @@ import type { HonAnalystAgentKey, HonConversationThread, HonConversationTurn, Ho
 import {
   HON_CONVERSATION_API, HON_CONVERSATION_COMMAND, HonConversationError, honConversationBase, prepareConversation, prepareTurn, verifyHonPage, verifyHonReadiness,
 } from '../src/components/hon-command/hon-conversation-http';
-import { FollowUps, HonConversationView, composerTurnRequest, offeredAnalysts, type HonConversationViewProps } from '../src/components/hon-command/hon-conversation-panel';
+import { FollowUps, HonConversationView, composerAskFromQuery, composerTurnRequest, honAskHref, offeredAnalysts, type HonConversationViewProps } from '../src/components/hon-command/hon-conversation-panel';
 import { HonWorkspaceView } from '../src/components/hon-command/hon-workspace-view';
 import { initialHonCommandSnapshot } from '../src/components/hon-command/hon-command-data';
 import { honTargetPath } from '../src/components/hon-command/hon-conversation-http';
@@ -437,5 +437,15 @@ describe('Ask next and Based on (0254)', () => {
     expect([picked, sent]).toEqual([['How many trials are booked?'], []]);
     const lockedEl = FollowUps({ turn, locked: true, onPick: () => {} });
     expect(renderToStaticMarkup(<>{lockedEl}</>)).toMatch(/disabled=""/);
+  });
+});
+
+describe('Ask HON preselected specialist (?ask=)', () => {
+  it('accepts only the four Ask HON specialists; anything else asks HON', () => {
+    for (const key of ['claire', 'alex', 'jordan', 'lena'] as const) expect(composerAskFromQuery(key)).toBe(key);
+    for (const bad of [undefined, '', 'hon', 'maya', 'marcus', 'ALEX', 'alex ', 'x'.repeat(200)]) expect(composerAskFromQuery(bad)).toBe('hon');
+  });
+  it('builds the link the AI Team menu uses', () => {
+    expect(honAskHref('jordan')).toBe('/staff/hon?ask=jordan');
   });
 });

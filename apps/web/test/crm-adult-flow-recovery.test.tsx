@@ -44,7 +44,7 @@ it.each([409, 503])('retains no state after %s and retries only after another ex
 it.each([401, 403])('discards scope/list/recovery on %s without displaying private details', async status => {
   vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response([row])).mockResolvedValueOnce(response({ private: 'canary' }, status));
   await load(); button(render(), 'Resume setup').props.onClick(); await settle();
-  expect(panel()).toBeUndefined(); expect(pending()).toBeUndefined(); expect(text(render())).toContain('Scoped list, draft, retry and receipt discarded');
+  expect(panel()).toBeUndefined(); expect(pending()).toBeUndefined(); expect(text(render())).toContain('Nothing was saved from this page');
   expect(text(render())).not.toContain('canary'); expect(elements(render()).filter(e => e.type === 'input').map(e => e.props.value)).toEqual(['', '']);
 });
 it('returns to the list on 404 and requires an explicit reload before another selection', async () => {

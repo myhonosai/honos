@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { SchoolShellFrame, type SchoolShellFrameProps } from '../src/components/school-shell/frame';
 import { shellText } from '../src/components/school-shell/copy';
+import { SCHOOL_SHELL_NAV } from '../src/components/school-shell/catalog';
 
 const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222';
 const base: SchoolShellFrameProps = {
@@ -21,8 +22,7 @@ describe('school shell frame', () => {
     expect(html).toMatch(/<div[^>]*id="hon-main"[^>]*>.*<p data-testid="page">private page<\/p>/s);
     // Pages render their own <main>; a second one around them would duplicate the landmark.
     expect(html).not.toContain('<main');
-    for (const key of ['navHome', 'navHon', 'navAiTeam', 'navCrm', 'navStudents', 'navBilling', 'navClasses', 'navAttendance',
-      'navMarketing', 'navCommunity', 'navAnalytics', 'navStaff', 'navSettings'] as const) expect(html).toContain(esc(shellText('en', key)));
+    for (const key of ['navHome', 'navStudents', 'navCrm', 'navClasses', 'navBilling', 'navAiTeam', 'navAnalytics', 'navSettings'] as const) expect(html).toContain(esc(shellText('en', key)));
   });
 
   it('marks the active primary item and its section tab', () => {
@@ -106,6 +106,18 @@ describe('school shell frame', () => {
     expect(render({ mode: 'modern' })).not.toContain('role="dialog"');
   });
 
+  it('lists every page of every area in the Menu, not a cut-down few', () => {
+    const panel = render({ mode: 'modern', menuOpen: true }).split('aria-label="Menu"')[1]!;
+    for (const item of SCHOOL_SHELL_NAV) for (const route of item.routes) expect(panel, route.href).toContain(`href="${route.href}`);
+  });
+
+  it('offers a More button in the Modern top bar so areas that do not fit stay one click away', () => {
+    expect(render({ mode: 'modern' })).toMatch(/data-nav-more=""[^>]*aria-expanded="false"/);
+    expect(render({ mode: 'modern' })).toContain(`>${shellText('en', 'more')}</span></button>`);
+    expect(render({ mode: 'classic' })).not.toContain('data-nav-more');
+    expect(render({ mode: 'big-button' })).not.toContain('data-nav-more');
+  });
+
   it('makes the page behind the Menu panel inert and marks private school content for synchronous concealment', () => {
     const open = render({ mode: 'modern', menuOpen: true, path: '/staff/work' });
     expect(open).toContain('aria-modal="true"');
@@ -126,5 +138,30 @@ describe('school shell frame', () => {
   it('keeps the drawer closed unless the menu is open', () => {
     expect(render()).not.toMatch(/<dialog[^>]* open/);
     expect(render({ menuOpen: true })).toContain('data-drawer="open"');
+  });
+
+  it('splits a long area into named groups and shows only the current group\'s pages', () => {
+    const tabs = (html: string) => [...(html.match(/data-shell-tabs="">(.*?)<\/nav>/s)?.[1] ?? '').matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]);
+    const groupRow = (html: string) => html.match(/data-shell-groups="">(.*?)<\/nav>/s)?.[1] ?? '';
+    const progress = render({ path: '/staff/curriculum/progress' });
+    expect([...groupRow(progress).matchAll(/>([^<]+)<\/a>/g)].map(m => m[1])).toEqual(['Schedule', 'Attendance', 'Curriculum &amp; testing', 'Community']);
+    expect(groupRow(progress)).toMatch(/aria-current="true"[^>]*>Curriculum &amp; testing|>Curriculum &amp; testing/);
+    expect(progress).toMatch(/href="\/staff\/curriculum\/library"[^>]*aria-current="true">Curriculum &amp; testing/);
+    expect(tabs(progress)).toEqual(['Curriculum library', 'Curriculum progress', 'Teaching studio', 'Testing', 'Readiness', 'Scorecards', 'Promotions', 'Certificates']);
+    const invoices = render({ path: '/staff/billing/invoices' });
+    expect(tabs(invoices)).toEqual(['Invoices', 'Tuition balances', 'Payment processors', 'Checkout pages', 'Saved payment methods']);
+    // Short areas keep one flat row with no group row.
+    const reports = render({ path: '/staff/reports' });
+    expect(reports).not.toContain('data-shell-groups'); expect(tabs(reports)).toHaveLength(4);
+  });
+
+  it('names the current area in the phone bar when it is not one of the four shortcuts', () => {
+    const mobile = (html: string) => html.match(/aria-label="Quick navigation"[^>]*>(.*?)<\/nav>/s)?.[1] ?? '';
+    const billing = mobile(render({ path: '/staff/billing/invoices' }));
+    expect(billing).toContain('data-mobile-current=""'); expect(billing).toContain('<span>Billing</span>'); expect(billing).not.toContain('<span>More</span>');
+    expect(billing).toContain('aria-label="More: You are in Billing"');
+    const classes = mobile(render({ path: '/staff/schedule' }));
+    expect(classes).not.toContain('data-mobile-current'); expect(classes).toContain('<span>More</span>');
+    expect(classes).toMatch(/aria-current="page"[^>]*>.*?<span>Classes<\/span>/s);
   });
 });

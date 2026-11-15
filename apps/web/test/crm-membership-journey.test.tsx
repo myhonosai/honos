@@ -11,7 +11,9 @@ import { AdultMembershipPlanPicker } from '../src/components/membership-plans/pi
 import { membershipJourneyCopy } from '../src/components/crm-membership-journey-copy';
 import { family, scope, row, id, receipt, plan, date, response } from './crm-family-fixtures';
 
-const hooks = vi.hoisted(() => ({ values: [] as unknown[], cursor: 0, effects: [] as (() => void)[], language: 'en' as 'en' | 'ko' | 'es' }));
+const hooks = vi.hoisted(() => ({ values: [] as unknown[], cursor: 0, effects: [] as (() => void)[], language: 'en' as 'en' | 'ko' | 'es',
+  shell: { phase: 'IDLE', selection: null } as { phase: string; selection: { organizationId: string; schoolId: string } | null } }));
+vi.mock('../src/components/school-shell/context', () => ({ useSchoolShell: () => hooks.shell }));
 vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ date: (value: string) => value, preferences: { language: hooks.language } }) }));
 vi.mock('react', async () => { const actual = await vi.importActual<typeof import('react')>('react'); return { ...actual,
   useState: (initial: unknown) => { const i = hooks.cursor++; if (!(i in hooks.values)) hooks.values[i] = typeof initial === 'function' ? (initial as () => unknown)() : initial; return [hooks.values[i], (value: unknown) => { hooks.values[i] = typeof value === 'function' ? (value as (v: unknown) => unknown)(hooks.values[i]) : value; }]; },
@@ -114,7 +116,21 @@ it('switches only on explicit callback, passes frozen selectors and returns to a
   expect(activation.props.sessionSubject).toBe('synthetic-staff'); expect(component(CrmLeadsWorkbench)).toBeUndefined(); expect(fetch).not.toHaveBeenCalled();
   activation.props.onReturn(); const returned = component(CrmLeadsWorkbench); expect(returned.key).not.toBe(first.key); expect(returned.props.initialScope).toEqual(scope);
   stale(target); activation.props.onReturn(); expect(component(MembershipActivationWorkbench)).toBeUndefined();
-  reset(); view = () => CrmLeadsWorkbench(returned.props); render(); expect(fetch).not.toHaveBeenCalled(); expect(text(render())).toContain('No verified school list is loaded.');
+  reset(); view = () => CrmLeadsWorkbench(returned.props); render(); expect(fetch).not.toHaveBeenCalled(); expect(text(render())).toContain('No list loaded yet.');
+});
+it('uses the school the shell verified only when the address names none, and remounts the list when it arrives', () => {
+  const fetch = vi.spyOn(globalThis, 'fetch'); view = () => CrmMembershipJourney({ sessionSubject: 'synthetic-staff' });
+  const idle = component(CrmLeadsWorkbench); expect(idle.props.initialScope).toEqual({});
+  hooks.shell = { phase: 'READY', selection: { organizationId: scope.organizationId, schoolId: scope.schoolId } };
+  try {
+    const shell = component(CrmLeadsWorkbench);
+    expect(shell.props.initialScope).toEqual({ organizationId: scope.organizationId, schoolId: scope.schoolId, fromSession: true }); expect(shell.key).not.toBe(idle.key);
+    view = () => CrmMembershipJourney({ sessionSubject: 'synthetic-staff', initialScope: { organizationId: id(7), schoolId: id(8) } });
+    expect(component(CrmLeadsWorkbench).props.initialScope).toEqual({ organizationId: id(7), schoolId: id(8) });
+    hooks.shell = { phase: 'CONCEALED', selection: null }; view = () => CrmMembershipJourney({ sessionSubject: 'synthetic-staff' });
+    expect(component(CrmLeadsWorkbench).props.initialScope).toEqual({});
+    expect(fetch).not.toHaveBeenCalled();
+  } finally { hooks.shell = { phase: 'IDLE', selection: null }; }
 });
 it('does not accept invalid selectors or synthesize a preview when navigation is requested', () => {
   const fetch = vi.spyOn(globalThis, 'fetch'); view = () => CrmMembershipJourney({ sessionSubject: 'synthetic-staff' });

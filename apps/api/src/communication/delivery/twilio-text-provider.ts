@@ -7,6 +7,7 @@ import {
   type CommunicationSendRequest,
 } from './communication-provider.js';
 import type { VerifiedProviderReceipt } from './communication-worker-database.js';
+import type { TwilioSubaccountCredential, TwilioSubaccountDirectory } from './twilio-subaccounts.js';
 
 type Env = Record<string, string | undefined>;
 const ACCOUNT_SID = /^AC[0-9a-f]{32}$/;
@@ -58,7 +59,9 @@ export class TwilioTextProvider implements CommunicationProviderAdapter {
   readonly channel = 'SMS' as const;
   /** 0281: HQ sends go from the HQ Messaging Service (senderServiceId) with the HQ status callback path. */
   readonly hqSender = true;
-  constructor(private readonly environment: () => Env = () => process.env, private readonly transport: typeof fetch = fetch) {}
+  /** T1 (0351): `subaccounts` finds the school subaccount a Messaging Service lives on; without it every send uses the parent. */
+  constructor(private readonly environment: () => Env = () => process.env, private readonly transport: typeof fetch = fetch,
+    private readonly subaccounts?: TwilioSubaccountDirectory) {}
 
   readiness() {
     const env = this.environment();
@@ -80,9 +83,19 @@ export class TwilioTextProvider implements CommunicationProviderAdapter {
       To: request.recipientAddress, MessagingServiceSid: request.senderServiceId!, Body: smartEncodeText(request.content),
     });
     if (request.statusCallback !== false) form.set('StatusCallback', `${base}${request.origin === 'HQ' ? TWILIO_HQ_STATUS_PATH : TWILIO_STATUS_PATH}`);
+    // A school service on a subaccount is sent on that subaccount (authenticated as the parent, which Twilio allows).
+    // A suspended or closed subaccount, or a failed lookup, never falls back to the parent account.
+    let sendAccount = account;
+    if (request.origin !== 'HQ' && this.subaccounts) {
+      let sub: Awaited<ReturnType<TwilioSubaccountDirectory['sendAccount']>>;
+      try { sub = await this.subaccounts.sendAccount(request.schoolId, request.senderServiceId!); }
+      catch { throw new CommunicationProviderError('RETRYABLE', 'PROVIDER_FAILED', 300); }
+      if (sub && sub.status !== 'ACTIVE') throw new CommunicationProviderError('RETRYABLE', 'PROVIDER_FAILED', 900);
+      if (sub) sendAccount = sub.accountSid;
+    }
     let response: Response;
     try {
-      response = await this.transport(`https://api.twilio.com/2010-04-01/Accounts/${account}/Messages.json`, {
+      response = await this.transport(`https://api.twilio.com/2010-04-01/Accounts/${sendAccount}/Messages.json`, {
         method: 'POST',
         headers: { authorization: `Basic ${Buffer.from(`${account}:${token}`).toString('base64')}`, 'content-type': 'application/x-www-form-urlencoded' },
         body: form.toString(), redirect: 'error', signal: AbortSignal.timeout(15_000),
@@ -136,11 +149,35 @@ export interface InboundTextKeyword { to: string; from: string; keyword: 'STOP' 
 export class TwilioWebhookVerifier {
   constructor(private readonly environment: () => Env = () => process.env, private readonly now: () => number = Date.now) {}
 
-  private params(rawBody: Buffer, path: string, signature: string | undefined): URLSearchParams {
+  /**
+   * The AccountSid a form body claims, before any check: it only chooses which account's token to verify with
+   * (T1, 0351). Null when absent or malformed.
+   */
+  accountSidOf(rawBody: Buffer): string | null {
+    let text: string;
+    try { text = new TextDecoder('utf-8', { fatal: true }).decode(rawBody); } catch { return null; }
+    const values = new URLSearchParams(text).getAll('AccountSid');
+    return values.length === 1 && ACCOUNT_SID.test(values[0]!) ? values[0]! : null;
+  }
+
+  isParentAccount(accountSid: string): boolean {
+    return accountSid === this.environment().TWILIO_ACCOUNT_SID;
+  }
+
+  /**
+   * With `subaccount`, the body must name exactly that subaccount and be signed with its token; without it, the
+   * parent account and token, as before. The parent credentials and public base must be configured either way.
+   */
+  private params(rawBody: Buffer, path: string, signature: string | undefined, subaccount?: TwilioSubaccountCredential): URLSearchParams {
     const env = this.environment();
-    const token = env.TWILIO_AUTH_TOKEN?.trim();
+    const parentToken = env.TWILIO_AUTH_TOKEN?.trim();
     const base = origin(env);
-    if (!token || !base) throw new TwilioWebhookError('NOT_CONFIGURED');
+    if (!parentToken || !base || !ACCOUNT_SID.test(env.TWILIO_ACCOUNT_SID ?? '')) throw new TwilioWebhookError('NOT_CONFIGURED');
+    if (subaccount && (!ACCOUNT_SID.test(subaccount.accountSid) || subaccount.accountSid === env.TWILIO_ACCOUNT_SID || !subaccount.authToken)) {
+      throw new TwilioWebhookError('SIGNATURE_INVALID');
+    }
+    const token = subaccount ? subaccount.authToken : parentToken;
+    const expectedAccount = subaccount ? subaccount.accountSid : env.TWILIO_ACCOUNT_SID;
     let text: string;
     try { text = new TextDecoder('utf-8', { fatal: true }).decode(rawBody); } catch { throw new TwilioWebhookError('MALFORMED'); }
     const params = new URLSearchParams(text);
@@ -151,13 +188,13 @@ export class TwilioWebhookVerifier {
     const expected = createHmac('sha1', token).update(data, 'utf8').digest();
     const given = Buffer.from(signature ?? '', 'base64');
     if (!signature || given.length !== expected.length || !timingSafeEqual(given, expected)) throw new TwilioWebhookError('SIGNATURE_INVALID');
-    if (params.get('AccountSid') !== env.TWILIO_ACCOUNT_SID) throw new TwilioWebhookError('SIGNATURE_INVALID');
+    if (params.getAll('AccountSid').length !== 1 || params.get('AccountSid') !== expectedAccount) throw new TwilioWebhookError('SIGNATURE_INVALID');
     return params;
   }
 
   /** A status callback as a receipt, or null for statuses HON does not store (queued, sending, read). */
-  status(rawBody: Buffer, signature: string | undefined): VerifiedProviderReceipt | null {
-    return this.statusAt(rawBody, TWILIO_STATUS_PATH, signature);
+  status(rawBody: Buffer, signature: string | undefined, subaccount?: TwilioSubaccountCredential): VerifiedProviderReceipt | null {
+    return this.statusAt(rawBody, TWILIO_STATUS_PATH, signature, subaccount);
   }
 
   /** 0281: the same status callback for an HQ send, signed over the HQ path and marked scope HQ. */
@@ -166,8 +203,8 @@ export class TwilioWebhookVerifier {
     return receipt ? { ...receipt, scope: 'HQ' } : null;
   }
 
-  private statusAt(rawBody: Buffer, path: string, signature: string | undefined): VerifiedProviderReceipt | null {
-    const params = this.params(rawBody, path, signature);
+  private statusAt(rawBody: Buffer, path: string, signature: string | undefined, subaccount?: TwilioSubaccountCredential): VerifiedProviderReceipt | null {
+    const params = this.params(rawBody, path, signature, subaccount);
     const sid = params.get('MessageSid') ?? '';
     const status = params.get('MessageStatus') ?? '';
     if (!MESSAGE_SID.test(sid)) throw new TwilioWebhookError('MALFORMED');
@@ -177,8 +214,8 @@ export class TwilioWebhookVerifier {
   }
 
   /** An inbound message that is exactly one opt-out, opt-in or help keyword; anything else is null and is not stored. */
-  inbound(rawBody: Buffer, signature: string | undefined): InboundTextKeyword | null {
-    const params = this.params(rawBody, TWILIO_INBOUND_PATH, signature);
+  inbound(rawBody: Buffer, signature: string | undefined, subaccount?: TwilioSubaccountCredential): InboundTextKeyword | null {
+    const params = this.params(rawBody, TWILIO_INBOUND_PATH, signature, subaccount);
     const sid = params.get('MessageSid') ?? '';
     const from = params.get('From') ?? '';
     const to = params.get('To') ?? '';
@@ -192,8 +229,8 @@ export class TwilioWebhookVerifier {
    * 0282: the same signed inbound text for the HQ check: the Messaging Service it reached and the raw body (classified
    * in the database, never stored). Null when Twilio sent no Messaging Service SID (a number outside any service).
    */
-  inboundText(rawBody: Buffer, signature: string | undefined): { eventId: string; from: string; toService: string; body: string; receivedAt: string } | null {
-    const params = this.params(rawBody, TWILIO_INBOUND_PATH, signature);
+  inboundText(rawBody: Buffer, signature: string | undefined, subaccount?: TwilioSubaccountCredential): { eventId: string; from: string; toService: string; body: string; receivedAt: string } | null {
+    const params = this.params(rawBody, TWILIO_INBOUND_PATH, signature, subaccount);
     const sid = params.get('MessageSid') ?? '';
     const from = params.get('From') ?? '';
     const to = params.get('To') ?? '';
@@ -204,8 +241,8 @@ export class TwilioWebhookVerifier {
   }
 
   /** 0249: an incoming call to a school number. A withheld caller ID is null (it is forwarded, never texted). */
-  voice(rawBody: Buffer, signature: string | undefined): IncomingCall {
-    const params = this.params(rawBody, TWILIO_VOICE_PATH, signature);
+  voice(rawBody: Buffer, signature: string | undefined, subaccount?: TwilioSubaccountCredential): IncomingCall {
+    const params = this.params(rawBody, TWILIO_VOICE_PATH, signature, subaccount);
     const callSid = params.get('CallSid') ?? '';
     const from = params.get('From') ?? '';
     const to = params.get('To') ?? '';
@@ -214,8 +251,8 @@ export class TwilioWebhookVerifier {
   }
 
   /** 0249: the forwarded leg's outcome. Only an unanswered, busy, failed or canceled call is a missed call; anything else is null. */
-  voiceResult(rawBody: Buffer, signature: string | undefined): MissedCallReport | null {
-    const params = this.params(rawBody, TWILIO_VOICE_RESULT_PATH, signature);
+  voiceResult(rawBody: Buffer, signature: string | undefined, subaccount?: TwilioSubaccountCredential): MissedCallReport | null {
+    const params = this.params(rawBody, TWILIO_VOICE_RESULT_PATH, signature, subaccount);
     const callSid = params.get('CallSid') ?? '';
     const from = params.get('From') ?? '';
     const to = params.get('To') ?? '';

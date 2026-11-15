@@ -1281,7 +1281,7 @@ async function axe(page, name) {
 // phone width; it is recorded as a pre-existing finding and excluded from this gate.
 /**
  * Horizontal overflow, measured in the page. The document itself must fit the viewport. Only one container may
- * hold content past the edge: the shell's section tabs ([data-shell-tabs]), and only while that nav is itself a
+ * hold content past the edge: the shell's section tabs ([data-shell-tabs]) and group row ([data-shell-groups]), and only while that nav is itself a
  * scroll container inside the viewport and the item is laid out in its normal flow (so the nav clips it).
  * The existing Platform View picker is reported separately as a pre-existing finding; the page-width check in
  * noOverflow excludes only that picker.
@@ -1289,7 +1289,7 @@ async function axe(page, name) {
 function overflowAudit() {
   const width = window.innerWidth;
   const clippedByShellTabs = (e) => {
-    const nav = e.closest('[data-shell-tabs]');
+    const nav = e.closest('[data-shell-tabs], [data-shell-groups]');
     if (!nav || nav === e) return false;
     const style = getComputedStyle(nav), box = nav.getBoundingClientRect();
     if (!['auto', 'scroll', 'hidden', 'clip'].includes(style.overflowX) || box.left < -1 || box.right > width + 1) return false;
@@ -3616,7 +3616,7 @@ await check('Pause, cancel & refunds: turning pauses off removes Pause; leaving 
 
 // ---------- Champions Club school page ----------
 const chpPage = (page) => page.getByTestId('champions-school');
-const CHP_TEXT = { en: ['Champions Club', 'Your school is #2 with 4 qualified referrals.', 'Referrals & Rewards'], ko: ['챔피언스 클럽', '4', '추천 및 보상'] };
+const CHP_TEXT = { en: ['Champions Club', 'Your school is #2 with 4 qualified referrals.', 'Enrollment'], ko: ['챔피언스 클럽', '4', '등록'] };
 for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko']]) {
   await check(`Champions Club ${nextTheme} ${language} ${name}: code, referrals, rewards, leaderboard, contests and history from the reads`, async () => {
     resetChampions({ code: 'K7M2Q9X4PA' });

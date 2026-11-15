@@ -4,7 +4,7 @@ import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type CryptoKey,
 import { AuthConfigurationError, AuthValidationError, authMode, authReadiness, oidcConfig, manusConfig, sessionConfig, type Environment } from './config.js';
 import { issueSession, verifySession, issueManusSession, verifyManusSession, cookieValue, SESSION_SECONDS } from './session.js';
 import { callbackParameters, createTransaction, issueTransaction, pkceChallenge, publicOrigin, verifyTransaction } from './transaction.js';
-import { exchangeOidcCode, oidcAuthorizationUrl, verifyIdToken } from './oidc.js';
+import { exchangeOidcCode, oidcAuthorizationUrl, oidcLogoutUrl, verifyIdToken } from './oidc.js';
 import { exchangeManusCode, manusAuthorizationUrl, manusState } from './manus.js';
 
 const secret = 'TEST_ONLY_HON_KEY_123456789012345678901234';
@@ -130,6 +130,21 @@ describe('CSRF/state/PKCE and origin binding', () => {
     expect(url.searchParams.get('state')).toBe(tx.state); expect(url.searchParams.get('nonce')).toBe(tx.nonce);
     expect(url.searchParams.get('code_challenge')).toBe(tx.challenge); expect(url.searchParams.get('code_challenge_method')).toBe('S256');
     expect(url.href).not.toContain('NEVER_BROWSER_SECRET'); expect(url.href).not.toContain(tx.verifier);
+  });
+  it('builds the provider logout URL only from protected config, returning to the HON home page', () => {
+    expect(config.endSessionEndpoint).toBeUndefined();
+    expect(oidcLogoutUrl(config)).toBeNull();
+    const withLogout = oidcConfig({ ...env, HON_OIDC_END_SESSION_ENDPOINT: 'https://issuer.example/v2/logout?client_id=evil&returnTo=https://evil.example' });
+    const url = oidcLogoutUrl(withLogout)!;
+    expect(url.origin + url.pathname).toBe('https://issuer.example/v2/logout');
+    expect(url.searchParams.getAll('client_id')).toEqual([config.clientId]);
+    expect(url.searchParams.getAll('post_logout_redirect_uri')).toEqual(['https://hon.example/']);
+    expect(url.searchParams.getAll('returnTo')).toEqual(['https://hon.example/']);
+    for (const bad of ['http://issuer.example/logout', 'https://user:pw@issuer.example/logout', 'https://issuer.example/logout#x', ' https://issuer.example/logout']) {
+      expect(() => oidcConfig({ ...env, HON_OIDC_END_SESSION_ENDPOINT: bad })).toThrow(AuthConfigurationError);
+    }
+    // An empty Render dashboard slot is treated as not set, so sign-in keeps working.
+    expect(oidcLogoutUrl(oidcConfig({ ...env, HON_OIDC_END_SESSION_ENDPOINT: '' }))).toBeNull();
   });
   it('preserves safe HTTPS preview origin and refuses forwarded host/protocol injection', () => {
     expect(publicOrigin(new Headers({ 'x-forwarded-host': '3000-preview.example', 'x-forwarded-proto': 'https' }), {})).toBe('https://3000-preview.example');

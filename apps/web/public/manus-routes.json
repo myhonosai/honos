@@ -145,6 +145,14 @@
       "title": "HON | Lead Sources & Intake Monitor"
     },
     {
+      "path": "/staff/marketing/social",
+      "title": "HON | Social accounts"
+    },
+    {
+      "path": "/staff/marketing/social/return",
+      "title": "HON | Finishing connection"
+    },
+    {
       "path": "/staff/creative-studio",
       "title": "HON | Creative Studio"
     },
@@ -269,8 +277,16 @@
       "title": "HON | Saved payment methods"
     },
     {
+      "path": "/staff/ai-team",
+      "title": "HON | AI team"
+    },
+    {
       "path": "/staff/retention/at-risk",
       "title": "HON | Students at risk"
+    },
+    {
+      "path": "/staff/family-messages",
+      "title": "HON | Family messages"
     },
     {
       "path": "/staff/settings/branding",
@@ -346,7 +362,7 @@
     },
     {
       "path": "/staff/teaching-assistant",
-      "title": "HON | Teaching draft assistant (legacy)"
+      "title": "HON | Kai teaching drafts"
     },
     {
       "path": "/staff/retention/review",
