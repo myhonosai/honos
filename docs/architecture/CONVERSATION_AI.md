@@ -190,3 +190,69 @@ conflicting reuse, version conflicts, reply without consent refused, reply queue
 person, delivery status shown, append-only and no-truncate guards, runtime has no table privilege. API unit tests for
 the webhook branch (keyword vs conversation text, Twilio not retried twice), controllers' closed input, and the
 contract validators.
+
+## 7. CA2 design (0365): Train AI and Chad's replies
+
+### 7.1 Safety switches (three, all off by default)
+1. **HQ program switch** `conversation_ai_program` (HQ owner only, audited): OFF, TEST_MODE (fake provider only), LIVE.
+   The OpenRouter switch is already on for the text agents, so this switch is what keeps automatic replies from making
+   real calls or sending texts until David turns it on.
+2. **School switch** in `school_conversation_ai_settings`: enabled plus a mode per channel (OFF, ASSIST, AUTOMATIC),
+   set by staff with `conversation.ai.configure` (OWNER only by default). The setting row records who turned it on and
+   when. That record is the standing authority for automatic turns. Turning it off stops new turns at once.
+3. **Per-conversation takeover**: `ai_state` AI or STAFF. A staff reply or "Take over" sets STAFF, and only "Hand back
+   to Chad" returns it to AI. A conversation with `needs_staff` is never answered automatically.
+
+### 7.2 Training library (David 08:06Z "a section for uploading schedule or scripts and more"; Manus ideas #4 and #5)
+`school_ai_training_items`:
+- **Fields:** type (FAQ, DOCUMENT, IMAGE, INSTRUCTION, COACHING), title, owner-checked text (at most 8,000 characters),
+  short summary, ACTIVE or PAUSED (on/off switch), soft delete, version, updated by and at.
+- **Files:** the original file sits in private school storage under a content hash, so "Open original file" works.
+- **Extraction:** text, CSV, PDF and Word text is extracted on the server. For a photo of the schedule, the owner types
+  or corrects the text. A later step may read the image with AI, behind its own switch.
+- **What Chad may use:** only ACTIVE, owner-approved text reaches the knowledge pack.
+- **Coaching cards (#4):** a test question, the preferred answer and an optional staff note, saved from "Improve this
+  reply". They are versioned and can be paused or deleted.
+- **Instructions:** plain sentences from the owner, versioned. HON may propose wording, and the owner approves it.
+
+### 7.3 Knowledge pack
+`hon.school_ai_knowledge(school)` returns customer-safe facts:
+- the school name, tone (0256) and languages;
+- programs and membership plans at the prices recorded;
+- the evaluation booking type and its next open times (CA3 uses these to book);
+- active promotions with their dates;
+- public knowledge articles;
+- ACTIVE training items and coaching cards.
+
+Each fact carries its source id, so a reply can show what it used. Nothing outside the pack reaches an answer.
+
+### 7.4 Turn engine
+- **Turn record:** `school_conversation_ai_turns` holds one turn per inbound message: conversation, message, status,
+  plan and usage evidence ids, structured result, outbound message id and reviewer.
+- **Three steps:** `conversation.message.received` → worker `prepare_conversation_ai_turn` (all switches, the
+  takeover and needs-staff flags, school access and the AI ceiling, then a plan through the 0287 router as agent `chad`
+  with the new task class CONVERSATION_REPLY) → provider (fake unless LIVE) → `record_conversation_ai_turn_result`.
+- **S4 evidence:** usage evidence is recorded in its own transaction, the same way as the other agents. A lost answer
+  is UNKNOWN and is never resent.
+- **Model output** is data only: `{reply, language, intent, needsStaff, reason, usedFacts[]}`. The database decides
+  what happens next:
+  - **ASSIST:** the reply becomes a draft on the thread. Staff can send it as is, edit it or discard it, and sending is
+    an ordinary CA1 reply.
+  - **AUTOMATIC:** CA2 checks the basic rules: length cap per channel (#9), reply consent (D1), quiet hours and the
+    after-hours text. If they pass, it queues the reply through 0047 as the system principal "HON conversation AI".
+    Anything else is a draft marked `needs_staff`.
+  - The full guardrails and booking come in CA3.
+- **Test bench (#4):** a staff command (`conversation.ai.configure`) runs a turn on a test question with no
+  conversation and no send. It uses the same metering and is labeled TEST.
+- **Inbox state (#8):** AI or Staff on each thread, a "Needs staff" filter, and a needs-attention count in the list read.
+
+### 7.5 Spend
+- **Trial school:** turns count toward the existing $15 ceiling.
+- **Paying school:** no conversation cap, as David decided on 2026-11-13.
+- **Every school:** a per-conversation limit of 10 automatic replies per hour and a per-school limit of 300 per day.
+  When a limit is hit, Chad hands the conversation to staff.
+
+### 7.6 Owner decisions this needs
+- **D5:** when should David turn the HQ program switch to LIVE, and for which schools first? The recommendation is
+  his own test school only, after a fake-provider week.
+- **D1** (still open) decides whether Chad may answer a first-time texter who has no recorded consent.
