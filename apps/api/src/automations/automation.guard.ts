@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
-  AUTOMATION_ARCHIVE_COMMAND, AUTOMATION_CREATE_COMMAND, AUTOMATION_RESTORE_COMMAND, AUTOMATION_SAVE_COMMAND,
+  AUTOMATION_ACTIVATE_COMMAND, AUTOMATION_ARCHIVE_COMMAND, AUTOMATION_CREATE_COMMAND, AUTOMATION_PAUSE_COMMAND, AUTOMATION_RESTORE_COMMAND, AUTOMATION_SAVE_COMMAND,
   CONTACT_TAG_ADD_COMMAND, CONTACT_TAG_LOOKUP_COMMAND, CONTACT_TAG_REMOVE_COMMAND,
 } from '@hon/contracts';
 import { MembershipActivationHumanUiGuard } from '../billing/membership-activation-human-ui.guard.js';
@@ -37,4 +37,12 @@ export class ContactTagRemoveHumanUiGuard extends MembershipActivationHumanUiGua
 @Injectable()
 export class ContactTagLookupHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = CONTACT_TAG_LOOKUP_COMMAND;
+}
+@Injectable()
+export class AutomationActivateHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = AUTOMATION_ACTIVATE_COMMAND;
+}
+@Injectable()
+export class AutomationPauseHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = AUTOMATION_PAUSE_COMMAND;
 }

@@ -4168,7 +4168,7 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
 ('hon.automation_append_version(hon.automation_workflows,text,jsonb,integer,uuid,uuid)',false,false,'search_path=pg_catalog, hon','ced296a8261b9c624a2d0b9cc9ae1eb21efe25dd2ee7db44536920f9deb7463f'),
 ('hon.save_automation_workflow_version(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','a6e8df351debd63ca719f3ef34ee23a136e3a6888f692fe32bda56bc234034fe'),
 ('hon.restore_automation_workflow_version(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','a5421cddb45f1c547a3d355fe2f5ce564f80c48bf5d16bab643e1c524ecf5f2c'),
-('hon.archive_automation_workflow(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','fc8f51dcbb27da5098cf3562f8f63d8636eeacf6e9e85e0897ba74185f18fd14'),
+('hon.archive_automation_workflow(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','7f83d88e6fde8c3149d4c8920f12d7dbd260ce581690e1898b96aa807e0444ea'),
 ('hon.read_automation_workflows(text)',true,true,'search_path=pg_catalog, hon','dcefc51d72473a215c2b51bf5a46875561e20c6bae0aaee641906ded1d4cff24'),
 ('hon.read_automation_workflow(text,uuid)',true,true,'search_path=pg_catalog, hon','8485d3677a4fa8903f69af8bf4b2d11f0335ee06eeb8c37e40bba42104ecb0d3'),
 ('hon.read_automation_workflow_version(text,uuid,integer)',true,true,'search_path=pg_catalog, hon','0601497452f7c676efeed5f48940475744389349ac2dffa92b1190f7959b5421'),
@@ -4207,3 +4207,67 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
     RAISE EXCEPTION 'Unsafe automation workflow table posture: guard triggers'; END IF;
 END $$;
 -- End automation workflows and contact tags exact verification.
+-- Automation engine exact verification (AU-2 0368): three private forced-RLS engine tables nobody but the owner touches, four runtime
+-- entry points (turn on, pause, run history), two definer engine functions only the hon_automation_worker login (014) may call,
+-- private helpers, forward-only guards, the AUTOMATION principal and the message origin columns.
+DO $$ DECLARE f record; safe boolean; t text; worker oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_automation_worker'); BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_automation_run()',true,false,false,'search_path=pg_catalog, hon','a6bd54cdb04bfbe34a3a7ec951404996b4e889343e3eccf8c180b15ada293b5f'),
+('hon.automation_unavailable(jsonb)',false,false,false,'search_path=pg_catalog, hon','84aeceae6da7a4aa63f8bd43167713dd1d61beefe566c68baad79e08236dfad9'),
+('hon.automation_references_ok(uuid,uuid,uuid,jsonb)',false,false,false,'search_path=pg_catalog, hon','af5fd466e05f55bd1afad7b4515edcc9606e71a86cb59dc4150e1d744b8976eb'),
+('hon.automation_activator_ok(uuid,uuid,uuid)',false,false,false,'search_path=pg_catalog, hon','676430a93938362c0ac0f741597ff268593340bb695f11a85b9145cc831bf7ab'),
+('hon.automation_trial_booked(uuid,uuid,uuid,timestamp with time zone)',false,false,false,'search_path=pg_catalog, hon','8c640f7d5e3056dfde834c683dfea98e68c609d89cc6fa13c21a5d4eec9acbb6'),
+('hon.automation_enrolled(uuid,uuid,uuid,timestamp with time zone)',false,false,false,'search_path=pg_catalog, hon','eaf38840dd7fb0de0866919f56d8d9636338545083cacc8cf4054e62f9361251'),
+('hon.automation_condition_holds(uuid,uuid,uuid,timestamp with time zone,jsonb)',false,false,false,'search_path=pg_catalog, hon','16d3b51b7a8a8b5030afef5719c62efcbb815c7c459cfac1ad1d133669bd2538'),
+('hon.automation_exit_reached(uuid,uuid,uuid,timestamp with time zone,jsonb)',false,false,false,'search_path=pg_catalog, hon','45607ebf5b8c08f2470501eb7886a37024d7a398992c2dd8b828d2d99e6a38b0'),
+('hon.automation_start_run(hon.automation_workflows,uuid,text,uuid,uuid,integer,timestamp with time zone)',false,false,false,'search_path=pg_catalog, hon','506019ace4facee30457dab0de6e6b4f0f709d4b3421fc1d4f3dabb136596b84'),
+('hon.automation_event_subject(hon.outbox_events)',false,false,false,'search_path=pg_catalog, hon','1296bc299e7375525760dab00eab860121fa686e03ee2f7eaa1c1ca0287e71af'),
+('hon.consume_automation_events(integer)',true,false,true,'search_path=pg_catalog, hon','a00ee20d008604535a84a0da1b3350ac7b5180e05d3b956db35a1fca8b866b3a'),
+('hon.automation_render(text,text,text)',false,false,false,'search_path=pg_catalog, hon','932d44db812e9a31d07e4b8aba02cb3282b6ed865696cc148fc9627e0e667acf'),
+('hon.automation_next_local_time(text,text)',false,false,false,'search_path=pg_catalog, hon','27a2abf40c7f022c0f2c412971924af141a652bc2d421d7eb02b6edabe6857b7'),
+('hon.automation_end_run(uuid,text,text)',false,false,false,'search_path=pg_catalog, hon','d5241ff75d5dcae0896e26b28d5446771430d479d3d21296521a9d0bafec8ca1'),
+('hon.automation_engine_pause(uuid,text)',false,false,false,'search_path=pg_catalog, hon','f32c46e1b872cc41c16e6641b379f62c1b171cdec3315efb26bda435c78185f7'),
+('hon.automation_execute_step(hon.automation_run_steps,hon.automation_runs,hon.automation_workflows,jsonb)',false,false,false,'search_path=pg_catalog, hon','f024347003b6c9223274643fb272d8c0d5e288d48094aff5fac6581988f29a92'),
+('hon.run_due_automation_steps(integer)',true,false,true,'search_path=pg_catalog, hon','65ff149262f1a3639dc45afd49aa157e823917d84f308949dd8a2e1f7e07c071'),
+('hon.activate_automation_workflow(text,uuid,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','ad9fc559eb6ca8c290c22ac92e348dcf77956a19a432046dd07cbf4d91578835'),
+('hon.pause_automation_workflow(text,uuid,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','58a18e20d5c235bef7f381423733f845f5a792ee42841ff4b175b2f378d7ecef'),
+('hon.automation_run_json(hon.automation_runs)',false,false,false,'search_path=pg_catalog, hon','020200561dae1423bd5d28222a408e3b6b136dd37ced035078caffa1762abde2'),
+('hon.read_automation_runs(text,uuid)',true,true,false,'search_path=pg_catalog, hon','bea0d2780b582e32d5f7792a3a5d6aa88bf4b28db81af52f4dc4fdb9759a7564'),
+('hon.read_automation_run(text,uuid)',true,true,false,'search_path=pg_catalog, hon','c117ec20a209b32f71b486457615596b4a55201c149e1bd87e0e410fe6780d45')) e(signature,definer,runtime_allowed,worker_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND (worker IS NULL OR has_function_privilege(worker,p.oid,'EXECUTE')=f.worker_allowed)
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.is_grantable OR a.privilege_type<>'EXECUTE'
+          OR NOT ((a.grantee=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') AND f.runtime_allowed) OR (a.grantee=worker AND f.worker_allowed))))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe automation engine function: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['automation_event_receipts','automation_runs','automation_run_steps'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES')
+      OR (worker IS NOT NULL AND (has_table_privilege(worker,'hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+        OR has_any_column_privilege(worker,'hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES'))) THEN
+      RAISE EXCEPTION 'Unsafe automation engine table: %',t;
+    END IF;
+  END LOOP;
+  -- Guard triggers: receipts never change; runs and steps only move forward; nothing is truncated.
+  IF (SELECT count(*) FROM pg_trigger g WHERE NOT g.tgisinternal AND g.tgenabled='O' AND (g.tgrelid::regclass::text,g.tgname,g.tgfoid::regproc::text) IN (
+      ('hon.automation_event_receipts','guarded','hon.guard_automation_workflow_history'),('hon.automation_event_receipts','no_truncate','hon.guard_automation_workflow_history'),
+      ('hon.automation_runs','guarded','hon.guard_automation_run'),('hon.automation_runs','no_truncate','hon.guard_automation_workflow_history'),
+      ('hon.automation_run_steps','guarded','hon.guard_automation_run'),('hon.automation_run_steps','no_truncate','hon.guard_automation_workflow_history'))) <> 6 THEN
+    RAISE EXCEPTION 'Unsafe automation engine table posture: guard triggers'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM hon.principals WHERE id='00000000-0000-4000-8000-000000000368' AND principal_type='AUTOMATION')
+    OR (SELECT count(*) FROM pg_attribute WHERE attrelid='hon.communication_messages'::regclass AND NOT attisdropped
+      AND attname IN ('origin_kind','origin_id','email_subject'))<>3
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.communication_messages'::regclass AND conname='communication_messages_origin_shape' AND convalidated) THEN
+    RAISE EXCEPTION 'Unsafe automation engine posture: principal or message origin'; END IF;
+  IF worker IS NOT NULL AND (SELECT r.rolsuper OR r.rolbypassrls OR r.rolinherit OR r.rolcreaterole OR r.rolcreatedb OR r.rolreplication
+      OR EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid) FROM pg_roles r WHERE r.oid=worker) THEN
+    RAISE EXCEPTION 'Unsafe automation engine posture: hon_automation_worker role'; END IF;
+END $$;
+-- End automation engine exact verification.

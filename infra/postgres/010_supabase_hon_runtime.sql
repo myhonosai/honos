@@ -3945,3 +3945,17 @@ DO $$ DECLARE r text; t text; BEGIN
       hon.read_school_contact_tags(text),hon.read_person_contact_tags(text,uuid),hon.lookup_contact_tags(text,jsonb) TO hon_runtime;
   END IF;
 END $$;
+-- 0368 automation engine: three private tables; runtime turns workflows on, pauses them and reads run history. The two
+-- engine functions belong to hon_automation_worker (014) and are never granted to the runtime.
+DO $$ DECLARE r text; t text; BEGIN
+  IF to_regprocedure('hon.activate_automation_workflow(text,uuid,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0368 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['automation_event_receipts','automation_runs','automation_run_steps'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    REVOKE ALL ON FUNCTION hon.consume_automation_events(integer),hon.run_due_automation_steps(integer) FROM hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.activate_automation_workflow(text,uuid,jsonb,text,uuid,uuid),hon.pause_automation_workflow(text,uuid,jsonb,text,uuid,uuid),
+      hon.archive_automation_workflow(text,uuid,jsonb,text,uuid,uuid),hon.read_automation_runs(text,uuid),hon.read_automation_run(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
