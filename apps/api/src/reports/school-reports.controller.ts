@@ -57,3 +57,36 @@ export class SchoolReportsController {
     return { context, input: query.months === undefined ? {} : { months: query.months } };
   }
 }
+
+/**
+ * R3 (0371): the reports dashboard for one school: a range in school time (?range=THIS_MONTH|LAST_MONTH|D30|D90|M12|ALL),
+ * KPI counts against the previous equal range, income over time, belts and open leads by stage. The same authority as the
+ * monthly reports: the scope comes from the verified session and the database function re-proves reporting.view.
+ */
+@Controller('organizations/:organizationId/schools/:schoolId/reports/dashboard')
+@UseGuards(HonIdentityGuard, SchoolReportsHumanUiGuard)
+export class SchoolReportsDashboardController {
+  constructor(private readonly database: RuntimeDatabaseService, private readonly reports: SchoolReportsService) {}
+
+  @Get()
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  async read(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined, @Query() query: Record<string, unknown>, @Req() request: HonRequest) {
+    if (idempotencyKey !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
+    if (Object.keys(query ?? {}).some(key => key !== 'range') || Object.values(query ?? {}).some(value => typeof value !== 'string')) {
+      throw new BadRequestException({ code: 'VALIDATION_FAILED' });
+    }
+    const identity = request.honIdentity;
+    if (!identity) throw new ForbiddenException('HON identity context is missing.');
+    const scope = await this.database.resolveAuthorizedScope(identity.externalSubject, schoolId, 'reporting.view');
+    if (!scope || scope.organizationId.toLowerCase() !== organizationId.toLowerCase() || scope.schoolId.toLowerCase() !== schoolId.toLowerCase()) {
+      throw new ForbiddenException({ code: 'SCHOOL_REPORTS_FORBIDDEN' });
+    }
+    const requestId = randomUUID();
+    const context = { ...scope, principalType: 'HUMAN_USER' as const, requestId, correlationId: requestId, idempotencyKey: '', source: 'HUMAN_UI' as const,
+      externalSubject: identity.externalSubject };
+    return { data: await this.reports.readDashboard(context, query.range === undefined ? {} : { range: query.range }),
+      meta: { requestId: context.requestId, correlationId: context.correlationId } };
+  }
+}

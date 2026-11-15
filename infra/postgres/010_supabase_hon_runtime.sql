@@ -3636,6 +3636,21 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 
+-- R3 0371 school reports dashboard: one read-only runtime entry point; the members, income and KPI helpers are private.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.read_school_reports_dashboard(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0371 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.school_dashboard_members(uuid,uuid)','hon.school_dashboard_income(uuid,uuid,text,timestamp with time zone,timestamp with time zone)',
+    'hon.school_dashboard_kpis(uuid,uuid,text,timestamp with time zone,timestamp with time zone)','hon.read_school_reports_dashboard(text,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_reports_dashboard(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;
+
 -- 0330 family messages: private helpers, two private tables and six runtime entry points (parent read/send; staff inbox, thread, mark read, reply).
 DO $$ DECLARE r text; f text; t text; BEGIN
   IF to_regprocedure('hon.reply_family_message(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0330 first'; END IF;

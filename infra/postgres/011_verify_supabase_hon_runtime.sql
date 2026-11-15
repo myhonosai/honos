@@ -3696,6 +3696,25 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 END $$;
 -- End school reports locations exact verification.
 
+-- School reports dashboard exact verification (R3 0371): one runtime read and three private helpers.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.school_dashboard_members(uuid,uuid)',true,false,'search_path=pg_catalog, hon','128ad76ba2cc03f7f668ea88048f1196838ff26d96ff61e88ffb036c28839977'),
+('hon.school_dashboard_income(uuid,uuid,text,timestamp with time zone,timestamp with time zone)',true,false,'search_path=pg_catalog, hon','97e9aaf00e48d6ee39041ac4a4e02cf82a5b9b60bcb6fdd9340164a5b3dd7fc0'),
+('hon.school_dashboard_kpis(uuid,uuid,text,timestamp with time zone,timestamp with time zone)',true,false,'search_path=pg_catalog, hon','3f83288d46756613d7bf35ac981780ab360e384592261dc944c2cb7e3e0ede73'),
+('hon.read_school_reports_dashboard(text,jsonb)',true,true,'search_path=pg_catalog, hon','3176cb4114cd70d547242cba063d2dbd140d45cf716dfae2b735dc4d06a3d503')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config] AND p.provolatile='s'
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school reports dashboard function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End school reports dashboard exact verification.
+
 -- Family messages exact verification (0330): private helpers, private forced-RLS tables and six runtime entry points.
 DO $$ DECLARE f record; safe boolean; t text; BEGIN
   FOR f IN SELECT * FROM (VALUES

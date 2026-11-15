@@ -145,7 +145,7 @@ import { SchoolMembershipListService } from './billing/school-membership-list.se
 import { CrmSchoolClockController, CrmSchoolClockHumanUiGuard, CrmSessionSchoolClockController } from './crm/crm-school-clock.controller.js';
 import { CrmSchoolClockService } from './crm/crm-school-clock.service.js';
 import { MembershipStatusReportController } from './reports/membership-status-report.controller.js';
-import { SchoolReportsController } from './reports/school-reports.controller.js';
+import { SchoolReportsController, SchoolReportsDashboardController } from './reports/school-reports.controller.js';
 import { SchoolReportsService } from './reports/school-reports.service.js';
 import { MembershipActivationHumanUiGuard, TuitionPaymentRecordHumanUiGuard, TuitionPaymentVoidHumanUiGuard, TuitionReadHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { TuitionPaymentController } from './billing/tuition-payment.controller.js';
@@ -521,6 +521,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     CrmSessionSchoolClockController,
     MembershipStatusReportController,
     SchoolReportsController,
+    SchoolReportsDashboardController,
     CrmAdultMembershipDraftController,
     CrmAdultMembershipDraftFromPlanController,
     MembershipPlanController,
