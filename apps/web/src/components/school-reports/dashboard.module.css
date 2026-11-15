@@ -3,7 +3,7 @@
 .kpis { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--hon-space-3, 12px); }
 .kpi { display: grid; gap: 4px; align-content: start; padding: var(--hon-space-4, 16px); border-radius: var(--hon-radius-md, 12px); background: var(--hon-surface, #0f2033); border: 1px solid var(--hon-border, #1c3349); min-width: 0; }
 .kpiLabel { color: var(--hon-text-muted, #b6c8da); font-size: var(--hon-text-xs, 12px); font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
-.kpiValue { font-family: var(--hon-font-display, inherit); font-size: var(--hon-text-2xl, 26px); font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.kpiValue { font-family: var(--hon-font-display, inherit); font-size: clamp(20px, 5.4vw, var(--hon-text-2xl, 26px)); font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kpi small { color: var(--hon-text-muted, #b6c8da); font-size: var(--hon-text-xs, 12px); line-height: 1.4; }
 .kpiHelp { opacity: .85; }
 .trend { font-size: var(--hon-text-sm, 13px); font-weight: 700; color: var(--hon-text, #f2f6ff); }
@@ -47,5 +47,5 @@
 .next a:hover, .next a:focus-visible { border-color: var(--hon-accent, #5aa9ff); }
 .next span { color: var(--hon-text-muted, #b6c8da); font-size: var(--hon-text-sm, 13px); }
 @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 760px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kpi[data-kpi='income'] { grid-column: 1 / -1; } .grid { grid-template-columns: minmax(0, 1fr); } }
 @media (forced-colors: active) { .bar, .won { fill: Highlight; background: Highlight; } .track span { background: Highlight; } }

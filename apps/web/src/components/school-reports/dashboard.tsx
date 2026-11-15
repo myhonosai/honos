@@ -97,6 +97,7 @@ function IncomeChart({ p, read, t }: { p: SchoolDashboardViewProps; read: School
   const other = read.series.points.some((point) => point.income.some((x) => x.currency !== currency));
   return <article className={base.card} aria-labelledby="dash-income-title" data-testid="dash-income">
     <div className={base.cardHead}><h2 id="dash-income-title">{t('incomeTitle')}</h2><span className={base.meta}>{t(`income${read.series.bucket}` as DashboardKey)}</span></div>
+    {max > 0 ? <p className={base.meta} data-testid="dash-income-top">{t('incomeTop', { amount: fmt(max) })}</p> : null}
     {read.series.truncated ? <p className={base.meta}>{t('incomeTruncated')}</p> : null}
     {other && currency ? <p className={base.meta}>{t('incomeOnly', { currency })}</p> : null}
     <figure className={styles.chart}>
@@ -110,7 +111,7 @@ function IncomeChart({ p, read, t }: { p: SchoolDashboardViewProps; read: School
           </g>;
         })}
       </svg>
-      <figcaption className={styles.axis}><span>{points[0]?.label}</span><span>{fmt(max)}</span><span>{points.at(-1)?.label}</span></figcaption>
+      <figcaption className={styles.axis}><span>{points[0]?.label}</span><span>{points.at(-1)?.label}</span></figcaption>
     </figure>
     <details className={styles.table}><summary>{t('chartTable')}</summary>
       <table><thead><tr><th scope="col">{t('colPeriod')}</th><th scope="col">{t('colPayments')}</th><th scope="col">{t('colRefunds')}</th><th scope="col">{t('colNet')}</th></tr></thead>
@@ -180,7 +181,6 @@ export function SchoolDashboardView(p: SchoolDashboardViewProps): React.ReactEle
   const t: T = (key, vars) => dashboardText(p.language, key, vars);
   const d = p.dashboard;
   return <section className={styles.dashboard} aria-label={t('viewOverview')} data-testid="reports-dashboard">
-    <p className={base.meta}>{t('overviewIntro')}</p>
     <div className={base.tabs} role="group" aria-label={t('rangeLabel')}>
       {SCHOOL_DASHBOARD_RANGES.map((range) => <button type="button" key={range} className={base.tab} aria-pressed={p.range === range} disabled={d.state === 'LOADING'}
         onClick={() => p.onRange?.(range)}>{t(range)}</button>)}
