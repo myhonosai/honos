@@ -57,6 +57,14 @@ it('renders every section type as escaped text with site links, theme variables 
   // Unconnected form and the chat placeholder are invisible to visitors.
   expect(html).not.toContain('Not connected');
   expect(html).not.toContain('data-section="CHAT"');
+  // Empty list or contact sections are hidden from visitors but stay visible to the owner in preview.
+  const empty = doc(); const home = empty.pages[0]!.sections;
+  (home.find(s => s.id === 'quotes')!.props as Record<string, unknown>).items = [];
+  Object.assign(home.find(s => s.id === 'contact')!.props, { address: '', phone: '', email: '', hours: '' });
+  const hidden = render('public', 'home', empty);
+  expect(hidden).not.toContain('data-section="TESTIMONIALS"');
+  expect(hidden).not.toContain('data-section="CONTACT"');
+  expect(render('preview', 'home', empty)).toContain('data-section="TESTIMONIALS"');
 });
 
 it('preview shows owner notes and never loads the live form; other pages render on their own address', () => {

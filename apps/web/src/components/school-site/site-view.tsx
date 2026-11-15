@@ -40,6 +40,14 @@ function Heading({ text }: { text: unknown }) { return str(text).trim() ? <h2>{s
 
 function Section({ section, base, mode, pageSlug }: { section: WebsiteSection; base: string; mode: SiteMode; pageSlug: string }): ReactNode {
   const p = section.props;
+  // Visitors never see an empty block: a list section with no items (and no text), or contact details with none filled in.
+  if (mode === 'public') {
+    const listEmpty = items(p.items).length === 0;
+    if (['TESTIMONIALS', 'INSTRUCTORS', 'FAQ'].includes(section.type) && listEmpty) return null;
+    if (section.type === 'PROGRAMS' && listEmpty && !str(p.intro).trim()) return null;
+    if (section.type === 'SCHEDULE' && listEmpty && !str(p.note).trim()) return null;
+    if (section.type === 'CONTACT' && !['address', 'phone', 'email', 'hours'].some(k => str(p[k]).trim())) return null;
+  }
   switch (section.type) {
     case 'HERO': {
       const image = siteImage(p.imageUrl);
