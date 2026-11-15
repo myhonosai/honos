@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { SchoolShellFrame, type SchoolShellFrameProps } from '../src/components/school-shell/frame';
 import { shellText } from '../src/components/school-shell/copy';
+import { SCHOOL_SHELL_NAV } from '../src/components/school-shell/catalog';
 
 const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222';
 const base: SchoolShellFrameProps = {
@@ -21,8 +22,7 @@ describe('school shell frame', () => {
     expect(html).toMatch(/<div[^>]*id="hon-main"[^>]*>.*<p data-testid="page">private page<\/p>/s);
     // Pages render their own <main>; a second one around them would duplicate the landmark.
     expect(html).not.toContain('<main');
-    for (const key of ['navHome', 'navHon', 'navAiTeam', 'navCrm', 'navStudents', 'navBilling', 'navClasses', 'navAttendance',
-      'navMarketing', 'navCommunity', 'navAnalytics', 'navStaff', 'navSettings'] as const) expect(html).toContain(esc(shellText('en', key)));
+    for (const key of ['navHome', 'navStudents', 'navCrm', 'navClasses', 'navBilling', 'navAiTeam', 'navAnalytics', 'navSettings'] as const) expect(html).toContain(esc(shellText('en', key)));
   });
 
   it('marks the active primary item and its section tab', () => {
@@ -104,6 +104,18 @@ describe('school shell frame', () => {
     expect(render({ mode: 'big-button', menuOpen: true })).toContain('aria-label="Menu"');
     expect(render({ mode: 'classic', menuOpen: true })).not.toContain('aria-label="Menu"');
     expect(render({ mode: 'modern' })).not.toContain('role="dialog"');
+  });
+
+  it('lists every page of every area in the Menu, not a cut-down few', () => {
+    const panel = render({ mode: 'modern', menuOpen: true }).split('aria-label="Menu"')[1]!;
+    for (const item of SCHOOL_SHELL_NAV) for (const route of item.routes) expect(panel, route.href).toContain(`href="${route.href}`);
+  });
+
+  it('offers a More button in the Modern top bar so areas that do not fit stay one click away', () => {
+    expect(render({ mode: 'modern' })).toMatch(/data-nav-more=""[^>]*aria-expanded="false"/);
+    expect(render({ mode: 'modern' })).toContain(`>${shellText('en', 'more')}</span></button>`);
+    expect(render({ mode: 'classic' })).not.toContain('data-nav-more');
+    expect(render({ mode: 'big-button' })).not.toContain('data-nav-more');
   });
 
   it('makes the page behind the Menu panel inert and marks private school content for synchronous concealment', () => {

@@ -39,6 +39,7 @@ const DASHBOARD = {
   HON_OIDC_CLIENT_ID: 'synthetic-client',
   HON_OIDC_CLIENT_SECRET: 'synthetic-client-secret-value',
   HON_OIDC_REDIRECT_URI: 'https://app.example.test/auth/callback',
+  HON_OIDC_END_SESSION_ENDPOINT: 'https://id.example.test/v2/logout',
 };
 const GENERATED = 'c3ludGhldGljLWdlbmVyYXRlZC1zZXNzaW9uLXNlY3JldA==';
 

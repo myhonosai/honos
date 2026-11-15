@@ -46,6 +46,7 @@ export function ParentHomeCards({ journey, testing, billing, plannedAbsences, cu
   return <div className={s.cards}>
     {journey.kind === 'ready' && <>
       <HomeCard title="Schedule" eyebrow="AUTHORIZED BOOKINGS" description="View the current family schedule in Student Journey." href="/parent/journey#schedule" note="The Journey read chooses the authorized family and its bounded window. No booking, cancellation, check-in, or attendance action starts here." />
+      <HomeCard title="Book a class" eyebrow="OPEN CLASSES" description="Book your child into open classes for the next two weeks, or cancel a booking you made." href="/parent/classes" note="Only classes your child is enrolled in that take bookings are shown. Guardians can book; viewers can look." />
       <HomeCard title="Student Journey" eyebrow="CURRENT PROGRESS" description="Review current curriculum, shared recognition, and authorized bookings." href="/parent/journey" note="Only current family-safe observations are shown there. Progress, readiness, promotion, and testing outcomes are never inferred." />
       <HomeCard title="Documents" eyebrow="CURRENT PUBLICATIONS" description="Open the existing family document review and acknowledgement desk." href="/parent/documents" note="Document access is checked again by its own family-safe route. This Home never assumes an acknowledgement or creates one." />
     </>}

@@ -3632,3 +3632,90 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END LOOP;
 END $$;
 -- End school reports exact verification.
+-- Parent class booking exact verification (0329): private helpers and three runtime entry points.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.parent_class_booking_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','4ece4170e73ae487d017f6a394a3757547a18f0fc08b91f6e7956ff6877d4d64'),
+('hon.parent_class_booking_child_ok(uuid,uuid)',true,false,'search_path=pg_catalog, hon','237a329c4db7c485ffa5521d1a4028ed443de87e157873ac4e2b17fdc11110d7'),
+('hon.parent_class_booking_session_ok(uuid,hon.class_sessions)',true,false,'search_path=pg_catalog, hon','34c305ae6857963bed97c48089b88563e20dfd2091d60888830d6cfedb7cc183'),
+('hon.parent_class_booking_seats(uuid)',true,false,'search_path=pg_catalog, hon','d05efcb128c7e55cfef7d12d6db9d25bd8c314bc20305ad2cc38055123f4f3eb'),
+('hon.parent_class_booking_json(hon.class_bookings,hon.class_sessions)',true,false,'search_path=pg_catalog, hon','d753781cf05db78ddc2525f62e8ecf36aaa4b0a63432578c7155bed238c1ff37'),
+('hon.parent_class_booking_begin(text,text,text)',true,false,'search_path=pg_catalog, hon','d66182b548222ae12d0d1cc3e027279005c55389277c37718c2476595384215a'),
+('hon.parent_class_booking_finish(text,text,uuid,jsonb,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)',true,false,'search_path=pg_catalog, hon','a9ddf831453529fd97154ae53e60eb65f1e023218b332008491e172d3a97e5e0'),
+('hon.read_parent_class_booking_choices(text)',true,true,'search_path=pg_catalog, hon','edd9ec2e0d2c427c5ab4ea2e44be2d7c7b42fc702ec897b6d96187a7459318d4'),
+('hon.book_parent_class_session(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','3370b119da07e09107e79c289f816b6e5a89313503f71cdfefefb8e8b8f7a70e'),
+('hon.cancel_parent_class_booking(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','a9d03e032c77500b5dcc82411c750507b689472d6efed7ba86eb38842dec5e2d')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe parent class booking function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End parent class booking exact verification.
+-- School Twilio subaccounts exact verification (T1 0351): a private forced-RLS table the runtime cannot touch and five
+-- worker-only definer functions the runtime cannot run.
+DO $$ DECLARE f text; BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.school_twilio_accounts'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR has_table_privilege('hon_runtime','hon.school_twilio_accounts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+    RAISE EXCEPTION 'Unsafe school Twilio subaccount table posture'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.begin_school_twilio_account(uuid,integer)','hon.complete_school_twilio_account(uuid,uuid,text,text,text)',
+    'hon.read_twilio_webhook_account(text)','hon.read_twilio_send_account(uuid,text)','hon.twilio_number_in_account(text,text)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef
+        AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND (owner.rolsuper OR owner.rolbypassrls))
+      OR has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') THEN
+      RAISE EXCEPTION 'Unsafe school Twilio subaccount function: %',f; END IF;
+  END LOOP;
+END $$;
+-- End school Twilio subaccounts exact verification.
+-- School number orders exact verification (T2 0352): private forced-RLS table, six runtime entry points, worker-only
+-- claim/record and private helpers.
+DO $$ DECLARE f record; BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.school_number_orders'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR has_table_privilege('hon_runtime','hon.school_number_orders','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+    RAISE EXCEPTION 'Unsafe school number order table posture'; END IF;
+  FOR f IN SELECT * FROM (VALUES
+    ('hon.authorize_school_number_search(text)',true),('hon.request_school_number(text,jsonb,text)',true),
+    ('hon.cancel_school_number_order(text,uuid,integer)',true),('hon.read_school_number_orders(text)',true),
+    ('hon.decide_school_number_order_from_hq(text,uuid,text,text,integer)',true),('hon.read_hq_school_number_orders(text,text)',true),
+    ('hon.require_school_sender_manager(text)',false),('hon.claim_school_number_purchases(integer,integer)',false),
+    ('hon.record_school_number_purchase(uuid,uuid,text,text,text,text,text)',false),
+    ('hon.guard_school_number_order()',false),('hon.guard_school_twilio_account()',false)) e(signature,runtime_allowed) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure AND p.prosecdef
+        AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND (owner.rolsuper OR owner.rolbypassrls))
+      OR has_function_privilege('hon_runtime',f.signature::regprocedure,'EXECUTE') IS DISTINCT FROM f.runtime_allowed THEN
+      RAISE EXCEPTION 'Unsafe school number order function: %',f.signature; END IF;
+  END LOOP;
+  -- Both tables keep their guard triggers (no delete, no truncate, forward-only status, fixed school and SID).
+  IF (SELECT count(*) FROM pg_trigger t WHERE NOT t.tgisinternal AND t.tgenabled='O' AND t.tgname IN ('guarded','no_truncate')
+      AND t.tgrelid IN ('hon.school_number_orders'::regclass,'hon.school_twilio_accounts'::regclass)) <> 4 THEN
+    RAISE EXCEPTION 'Unsafe school number order table posture'; END IF;
+END $$;
+-- End school number orders exact verification.
+-- Creative provider jobs exact verification (C1 0354): four private forced-RLS tables the runtime cannot touch, five
+-- runtime entry points (plus the 0216 record wrapper above), worker functions and private helpers not runnable by it.
+DO $$ DECLARE t text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['creative_provider_daily_limits','creative_school_daily_caps','creative_limit_commands','creative_provider_jobs'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+      RAISE EXCEPTION 'Unsafe creative provider job table posture: %',t; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.begin_creative_provider_submission(text,uuid)','hon.record_creative_provider_submission(text,uuid,text)',
+    'hon.command_creative_provider_daily_limit(text,jsonb,uuid)','hon.command_creative_school_daily_caps(text,jsonb,uuid)','hon.read_creative_limits_from_hq(text)',
+    'hon.claim_creative_provider_jobs(integer,integer)','hon.record_creative_provider_job_poll(uuid,uuid)','hon.record_creative_provider_job_result(uuid,uuid,jsonb)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef
+        AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND (owner.rolsuper OR owner.rolbypassrls)) THEN
+      RAISE EXCEPTION 'Unsafe creative provider job function: %',f; END IF;
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') <> (f NOT LIKE 'hon.claim_creative%' AND f NOT LIKE 'hon.record_creative_provider_job_%') THEN
+      RAISE EXCEPTION 'Wrong runtime EXECUTE on creative provider job function: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.creative_record_generation_result(text,uuid,jsonb,text)','hon.creative_requester_subject(uuid)',
+    'hon.creative_close_provider_job(hon.creative_provider_jobs,jsonb,text)','hon.creative_leased_job(uuid,uuid)','hon.creative_provider_committed_micros(text,timestamptz)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') THEN RAISE EXCEPTION 'Creative provider job helper runnable by runtime: %',f; END IF;
+  END LOOP;
+END $$;
+-- End creative provider jobs exact verification.

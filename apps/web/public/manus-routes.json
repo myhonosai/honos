@@ -85,6 +85,10 @@
       "title": "HON | Planned absence history"
     },
     {
+      "path": "/parent/classes",
+      "title": "HON | Book a class"
+    },
+    {
       "path": "/parent/messages",
       "title": "HON | School message history"
     },
@@ -117,6 +121,14 @@
       "title": "HON | Import students"
     },
     {
+      "path": "/staff/welcome",
+      "title": "HON | Welcome and setup"
+    },
+    {
+      "path": "/staff/help",
+      "title": "HON | Ask for help"
+    },
+    {
       "path": "/staff/planning/revenue",
       "title": "HON | Human Revenue Planning"
     },
@@ -131,6 +143,14 @@
     {
       "path": "/staff/marketing/intake",
       "title": "HON | Lead Sources & Intake Monitor"
+    },
+    {
+      "path": "/staff/marketing/social",
+      "title": "HON | Social accounts"
+    },
+    {
+      "path": "/staff/marketing/social/return",
+      "title": "HON | Finishing connection"
     },
     {
       "path": "/staff/creative-studio",
@@ -257,6 +277,10 @@
       "title": "HON | Saved payment methods"
     },
     {
+      "path": "/staff/ai-team",
+      "title": "HON | AI team"
+    },
+    {
       "path": "/staff/retention/at-risk",
       "title": "HON | Students at risk"
     },
@@ -334,7 +358,7 @@
     },
     {
       "path": "/staff/teaching-assistant",
-      "title": "HON | Teaching draft assistant (legacy)"
+      "title": "HON | Kai teaching drafts"
     },
     {
       "path": "/staff/retention/review",
@@ -503,6 +527,10 @@
     {
       "path": "/hq/growth/champions-club/schools",
       "title": "HON HQ | School referrals"
+    },
+    {
+      "path": "/hq/revenue/business-numbers",
+      "title": "HON HQ | Business numbers"
     },
     {
       "path": "/hq/revenue/invoices",

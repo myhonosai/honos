@@ -33,10 +33,10 @@ describe('explicit direct-human row close UI',()=>{
   expect(f).toHaveBeenCalledTimes(1);expect(elements(tree).filter(e=>e.type==='button'&&text(e)==='Prepare CRM-only close')).toHaveLength(1);
   button(tree,'Prepare CRM-only close').props.onClick();tree=render(view);
   const panel=elements(tree).find(e=>e.type===CrmLeadClosePanel)!;expect(panel.props.row.id).toBe(row.id);expect(panel.props.row.version).toBe(3);expect(f).toHaveBeenCalledTimes(1);
-  const originalList=hooks.values[3];panel.props.onStarted();tree=render(view);expect(hooks.values[3]).toBe(originalList);expect(text(tree)).toContain('Status: OPEN');expect(text(tree)).toContain('2 verified CRM leads');expect(text(tree)).toContain('Loaded list snapshot only');expect(button(tree,'Prepare CRM-only close').props.disabled).toBe(true);
+  const originalList=hooks.values[3];panel.props.onStarted();tree=render(view);expect(hooks.values[3]).toBe(originalList);expect(text(tree)).toContain('Status: OPEN');expect(text(tree)).toContain('2 leads');expect(text(tree)).toContain('This list may be out of date');expect(button(tree,'Prepare CRM-only close').props.disabled).toBe(true);
   expect(button(tree,'Load CRM leads').props.disabled).toBe(true);panel.props.onCancel();tree=render(view);
   elements(tree).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();tree=render(view);expect(elements(tree).some(e=>e.type===CrmLeadClosePanel)).toBe(false);expect(f).toHaveBeenCalledTimes(2);
-  elements(tree).find(e=>e.type==='input')!.props.onChange({target:{value:school}});tree=render(view);expect(text(tree)).toContain('No verified school list is loaded.');expect(button(tree,'Prepare CRM-only close')).toBeUndefined();
+  elements(tree).find(e=>e.type==='input')!.props.onChange({target:{value:school}});tree=render(view);expect(text(tree)).toContain('No list loaded yet.');expect(button(tree,'Prepare CRM-only close')).toBeUndefined();
  });
  it('requires explicit choice and confirmation; clears confirmation on edit; only uncertain requests expose exact retained retry',async()=>{
   const started=vi.fn(),onBusy=vi.fn(),props={row,organizationId:org,schoolId:school,onStarted:started,onBusy,onCancel:vi.fn()};
@@ -60,6 +60,6 @@ describe('explicit direct-human row close UI',()=>{
  it('has no persistence, inferred list rewrite, automatic work or cross-domain command capability',()=>{
   const panel=readFileSync('src/components/crm-lead-close-panel.tsx','utf8'),http=readFileSync('src/components/crm-lead-close-http.ts','utf8'),list=readFileSync('src/components/crm-leads-workbench.tsx','utf8');
   expect(panel+http).not.toMatch(/localStorage|sessionStorage|useEffect|setInterval|sendMessage|executeAction|invokeLLM|\/trials|\/appointments|\/enroll|\/billing|\/automation/);
-  expect(panel).not.toMatch(/setLeads|loadCrmLeads/);expect(list).toContain("lead.status === 'OPEN'");expect(list).toContain('onStarted={() => setNeedsReload(true)}');expect(list).toContain('Explicitly reload');
+  expect(panel).not.toMatch(/setLeads|loadCrmLeads/);expect(list).toContain("lead.status === 'OPEN'");expect(list).toContain('onStarted={() => setNeedsReload(true)}');expect(list).toContain('Press Refresh list to see the latest');
  });
 });

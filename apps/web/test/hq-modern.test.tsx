@@ -68,13 +68,14 @@ describe('HQ Modern foundation', () => {
     expect(Object.keys(HQ_PLANNED)).not.toContain('/hq/growth/contests');
   });
 
-  it('keeps every executive workspace unavailable rather than inventing histories or recommendations', () => {
+  it('shows each executive workspace from recorded data only (0338): history and performance load, nothing is invented', () => {
     for (const executive of HQ_EXECUTIVES) {
       const html = renderToStaticMarkup(<HqExecutiveWorkspace executiveKey={executive.executiveKey}/>);
       expect(html).toContain(executive.title);
-      expect(html).toContain('Task history unavailable');
-      expect(html).toContain('No recorded work');
-      expect(html).toContain('Planned integration');
+      for (const tab of ['Task history', 'Recommendations', 'Approvals', 'Performance']) expect(html).toContain(tab);
+      expect(html).toContain('Reading HQ Ask HON');
+      expect(html).not.toContain('Planned integration');
+      expect(html).not.toMatch(/\$[\d,]+|Working|Your AI team is on it/);
     }
   });
 

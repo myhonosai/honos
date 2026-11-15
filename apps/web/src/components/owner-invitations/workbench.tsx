@@ -8,16 +8,19 @@ import { verifyHqSchoolDirectorySnapshot } from '../hq-school-directory-http';
 type School=HqSchoolDirectoryEntry;
 type Command=Readonly<{path:string;body:Readonly<Record<string,unknown>>;key:string;identity:string;kind:'invite'|'revoke'|'accept'}>;
 export function SchoolOwnerInvitations({hq=false}:{hq?:boolean}) {
-  const [hidden,setHidden]=useState(false),[verified,setVerified]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[schools,setSchools]=useState<School[]>([]),[school,setSchool]=useState(''),[items,setItems]=useState<OwnerInvitation[]>([]),[email,setEmail]=useState(''),[token,setToken]=useState(''),[invitation,setInvitation]=useState(''),[confirmed,setConfirmed]=useState(false),[retry,setRetry]=useState(false),[receipt,setReceipt]=useState('');
+  const [hidden,setHidden]=useState(false),[verified,setVerified]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[schools,setSchools]=useState<School[]>([]),[school,setSchool]=useState(''),[items,setItems]=useState<OwnerInvitation[]>([]),[email,setEmail]=useState(''),[token,setToken]=useState(''),[invitation,setInvitation]=useState(''),[confirmed,setConfirmed]=useState(false),[retry,setRetry]=useState(false),[receipt,setReceipt]=useState(''),[shared,setShared]=useState<Readonly<{invitationId:string;token:string}>|null>(null);
   const life=useRef({mounted:false,concealed:false,busy:false,epoch:0,identity:'',sensitive:false,mountId:0});
   const pending=useRef<Command|null>(null),read=useRef<AbortController|null>(null);
-  const conceal=()=>{ const s=life.current; if(!s.sensitive&&!s.identity&&!pending.current&&!s.busy)return; s.concealed=true;s.epoch++;read.current?.abort();setHidden(true);setVerified(false);setSchools([]);setItems([]);setReceipt('');setMessage('');setToken('');setEmail('');setInvitation('');setConfirmed(false); };
+  const conceal=()=>{ const s=life.current; if(!s.sensitive&&!s.identity&&!pending.current&&!s.busy)return; s.concealed=true;s.epoch++;read.current?.abort();setHidden(true);setVerified(false);setSchools([]);setItems([]);setReceipt('');setShared(null);setMessage('');setToken('');setEmail('');setInvitation('');setConfirmed(false); };
   useEffect(()=>{
     life.current.mounted=true;life.current.mountId++;
-    const visibility=()=>{if(document.visibilityState==='hidden')conceal();};
-    const events=[['blur',conceal],['pagehide',conceal],[HON_SESSION_INVALIDATED_EVENT,conceal],[HON_SCHOOL_CONTEXT_CHANGED_EVENT,conceal]] as const;
-    for(const [e,h] of events)window.addEventListener(e,h);document.addEventListener('visibilitychange',visibility);
-    return ()=>{life.current.mounted=false;life.current.epoch++;read.current?.abort();pending.current=null;for(const[e,h]of events)window.removeEventListener(e,h);document.removeEventListener('visibilitychange',visibility);};
+    // Focus loss (window blur, tab hidden) deliberately does NOT conceal: it fires for window.confirm,
+    // copying the token into another app and ordinary tab switches, and wiping the form there lost
+    // owner work and silently dropped commands. Concealment stays on leaving the page, session
+    // invalidation and school-context change.
+    const events=[['pagehide',conceal],[HON_SESSION_INVALIDATED_EVENT,conceal],[HON_SCHOOL_CONTEXT_CHANGED_EVENT,conceal]] as const;
+    for(const [e,h] of events)window.addEventListener(e,h);
+    return ()=>{life.current.mounted=false;life.current.epoch++;read.current?.abort();pending.current=null;for(const[e,h]of events)window.removeEventListener(e,h);};
   },[]);
   async function verify() {
     if(life.current.busy)return;
@@ -41,13 +44,16 @@ export function SchoolOwnerInvitations({hq=false}:{hq?:boolean}) {
     finally{if(s.mounted&&s.mountId===instance){s.busy=false;setBusy(false);}}
   }
   async function execute(command:Command){
-    const s=life.current;if(s.busy||s.concealed||!verified||command.identity!==s.identity)return;
+    const s=life.current;if(s.busy)return;
+    if(s.concealed||!verified||command.identity!==s.identity){setMessage('Not submitted. Access must be verified again before this action can run. Select Verify access, then try again.');return;}
     const instance=s.mountId;pending.current=command;s.busy=true;s.sensitive=true;setBusy(true);setRetry(true);setMessage('Command in progress. Do not discard this view.');
     // Command lifetime is independent of read epochs/focus loss; never abort an unsettled consequential request.
     try{const result=await accountRequest(command.path,new AbortController().signal,{body:command.body,key:command.key});
       if(!s.mounted||s.mountId!==instance||s.concealed)return;
       if(command.kind==='accept'){validateOwnerAccountReceipt(result);setReceipt('School-owner account bound. Operating access depends on separate authorized entitlements. No payment or AI credits were activated.');}
-      else{const i=validateOwnerInvitation(result);setItems([i]);setReceipt(command.kind==='invite'?'Invitation recorded. Securely share its ID and the token you entered with the intended owner. Nothing was sent.':'Invitation and its own owner grant revoked. Other authority is unchanged.');}
+      else{const i=validateOwnerInvitation(result);setItems([i]);
+        if(command.kind==='invite'){setShared(Object.freeze({invitationId:i.invitationId,token:String(command.body.token)}));setReceipt('Invitation recorded. Securely share the invitation ID and token below with the intended owner. Nothing was sent.');}
+        else{setShared(null);setReceipt('Invitation and its own owner grant revoked. Other authority is unchanged.');}}
       pending.current=null;setRetry(false);setMessage('Verified command receipt received.');
     }catch(e){if(!s.mounted||s.mountId!==instance||s.concealed)return;
       setMessage(e instanceof AccountError?(e.status===429?'Please wait up to 60 seconds, then explicitly retry the exact request. This attempt was not submitted; any earlier unknown outcome remains unresolved.':e.code):'Outcome unknown. Retry the exact request explicitly after checking access.');
@@ -58,6 +64,11 @@ export function SchoolOwnerInvitations({hq=false}:{hq?:boolean}) {
     if(pending.current||life.current.busy)return;
     void execute(Object.freeze({kind,path:kind==='accept'?'account/school-owner-invitations/accept':kind==='revoke'?'hq/school-owner-invitations/revoke':'hq/school-owner-invitations',body:Object.freeze({...body}),key:crypto.randomUUID(),identity:life.current.identity}));
   };
+  async function copy(value:string,what:string){
+    try{if(!navigator.clipboard?.writeText)throw new Error('clipboard unavailable');await navigator.clipboard.writeText(value);if(life.current.mounted)setMessage(what+' copied. Paste it only into your approved secure channel.');}
+    catch{if(life.current.mounted)setMessage('Copy failed. Select the '+what.toLowerCase()+' text and copy it by hand.');}
+  }
+  const selectAll=(e:{target:{select:()=>void}})=>e.target.select();
   return <section className={styles.page} aria-label={hq?'School-owner invitations':'Accept school-owner invitation'}>
     <h1>{hq?'School-owner invitations':'Welcome to HON OS'}</h1>
     <p>{hq?'Invite an owner to an existing HQ-approved school. Roles and school authority are assigned by the server.':'Sign in using the verified email named in your invitation, then accept it explicitly.'}</p>
@@ -67,6 +78,13 @@ export function SchoolOwnerInvitations({hq=false}:{hq?:boolean}) {
     {(!verified||hidden)&&<div><p>{hidden?'Private account information is concealed. Verify access to continue.':'Verify your account before continuing.'}</p><button disabled={busy} onClick={()=>void verify()}>Verify access</button></div>}
     {verified&&!hidden&&<>
       {receipt&&<p className={styles.notice}>{receipt}</p>}
+      {hq&&shared&&<aside aria-label="Recorded invitation to share">
+        <label>Invitation ID<input value={shared.invitationId} readOnly autoComplete="off" onFocus={selectAll}/></label>
+        <button type="button" onClick={()=>void copy(shared.invitationId,'Invitation ID')}>Copy invitation ID</button>
+        <label>Recorded invitation token<input value={shared.token} readOnly autoComplete="off" spellCheck={false} onFocus={selectAll}/></label>
+        <button type="button" onClick={()=>void copy(shared.token,'Recorded token')}>Copy recorded token</button>
+        <p>This is the exact token recorded for this invitation. It stays here until you leave this page.</p>
+      </aside>}
       {retry&&<aside><p>The exact request remains in private memory. Retry requires your action. Abandoning local recovery cannot reverse a server action; a full page reload loses this request.</p><button disabled={busy} onClick={()=>pending.current&&void execute(pending.current)}>Retry exact request</button><button disabled={busy} onClick={()=>{if(window.confirm('Abandon local recovery? This cannot reverse an action already committed by HON.')){pending.current=null;setRetry(false);}}}>Abandon local recovery</button></aside>}
       <fieldset disabled={busy||retry}>
         {hq?<>
@@ -74,7 +92,8 @@ export function SchoolOwnerInvitations({hq=false}:{hq?:boolean}) {
           <label>Approved school<select value={school} onChange={e=>{setSchool(e.target.value);setItems([]);setReceipt('');}}><option value="">Select a school</option>{schools.map(s=><option value={s.schoolId} key={s.schoolId}>{s.organizationDisplayName} — {s.schoolDisplayName}</option>)}</select></label>
           <button type="button" disabled={!school} onClick={()=>void load('hq/schools/'+school+'/owner-invitations',v=>{if(!Array.isArray(v))throw new Error();setItems(v.map(validateOwnerInvitation));})}>Review invitations (latest 50)</button>
           <label>Owner email<input type="email" value={email} onChange={e=>setEmail(e.target.value.toLowerCase())}/></label>
-          <label>Private invitation token<input value={token} readOnly autoComplete="off"/></label>
+          <label>Private invitation token<input value={token} readOnly autoComplete="off" spellCheck={false} onFocus={selectAll}/></label>
+          <button type="button" disabled={!token} onClick={()=>void copy(token,'Token')}>Copy token</button>
           <button type="button" onClick={()=>{const b=crypto.getRandomValues(new Uint8Array(32));setToken(btoa(String.fromCharCode(...b)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''));}}>Generate private token</button>
           <p>Keep this token out of URLs, logs and browser storage. Send the ID and token through your approved secure channel. Expires in 24 hours.</p>
           <button type="button" disabled={!school||!email||!token} onClick={()=>{const s=schools.find(x=>x.schoolId===school);if(s&&window.confirm('Invite this email as owner of the selected school?'))start('invite',{schoolId:s.schoolId,email,token,ttlHours:24});}}>Record owner invitation</button>

@@ -67,9 +67,21 @@ test('HON reply runtime records a verified stop at the output limit as truncated
 });
 
 test('HON reply runtime maps rejections to FAILED and every uncertain outcome to UNKNOWN (never resent)', async () => {
-  for (const status of [400, 401, 402, 429]) {
+  for (const status of [400, 401, 402, 403, 422]) {
     await assert.rejects(new OpenRouterHonReplyRuntime(approved, async () => ({ status, ok: false })).generate(input), isErr('FAILED', 'PROVIDER_REJECTED'));
   }
+  // 0336 (RA-1): model not available (404), rate limited (429) and OpenRouter's own 503 body are definite and may fall back once.
+  const body = (status, json) => async () => ({ status, ok: false, text: async () => (typeof json === 'string' ? json : JSON.stringify(json)) });
+  for (const transport of [async () => ({ status: 404, ok: false }), async () => ({ status: 429, ok: false }),
+    body(503, { error: { code: 503, message: 'No available model provider that meets your routing requirements' } })]) {
+    await assert.rejects(new OpenRouterHonReplyRuntime(approved, transport).generate(input), isErr('FAILED', 'PROVIDER_UNAVAILABLE'));
+  }
+  // Any other 503 is not proof that nothing was generated: UNKNOWN, never resent.
+  for (const transport of [async () => ({ status: 503, ok: false }), body(503, '<html>Service Unavailable</html>'), body(503, { error: { code: 502, message: 'x' } }),
+    body(503, { error: { code: 503 } }), body(503, { error: { code: 503, message: 'x' }, choices: [] }), body(503, 'x'.repeat(5000))]) {
+    await assert.rejects(new OpenRouterHonReplyRuntime(approved, transport).generate(input), isErr('UNKNOWN', 'PROVIDER_UNKNOWN'));
+  }
+  for (const status of [502, 504]) await assert.rejects(new OpenRouterHonReplyRuntime(approved, async () => ({ status, ok: false })).generate(input), isErr('UNKNOWN', 'PROVIDER_UNKNOWN'));
   const uncertain = [
     async () => ({ status: 500, ok: false }),
     async () => { throw Error('socket reset'); },

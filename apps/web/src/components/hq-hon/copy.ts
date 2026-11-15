@@ -2,6 +2,14 @@
 import type { Language } from '@hon/design-system';
 
 const en = {
+  // 0338 (HX-1): executive workspace tabs.
+  tasksTitle: 'Your questions to {name}', tasksNone: 'You have not asked {name} anything yet.', colAsked: 'Asked', colQuestion: 'Question', colStatus: 'Status', colCredits: 'Credits',
+  perfTitle: '{name} this month', perfIntro: 'Every HQ question to {name} since {month}. Counts only: no question, answer or person is shown.',
+  perfAsked: 'Questions asked', perfAnswered: 'Answered', perfFailed: 'Not answered (not charged)', perfReview: 'Held for HQ owner review', perfInProgress: 'In progress',
+  perfResolved: 'Resolved by the HQ owner', perfAskers: 'HQ people who asked', perfCredits: 'HQ AI text credits charged', perfLast: 'Last question: {when}',
+  perfNone: 'No HQ questions to {name} this month.', perfDenied: "Your HQ access does not include {name}'s area, so this is not shown.", perfUnavailable: 'Performance could not be read. Nothing is shown.',
+  recsNone: '{name} answers questions only. It does not keep recommendations or act on its own, so there is nothing to list here.',
+  approvalsNone: '{name} never takes an action, so nothing waits for approval. HQ decisions stay in the HQ screens.',
   setBudget: 'Set this month\'s HQ AI text budget', capLabel: 'Credit cap for this month', capHelp: 'A whole number. Setting the cap does not connect a provider or spend anything: it only limits what questions may reserve.',
   reasonLabel: 'Reason (3 to 300 characters)', saveBudget: 'Save budget', savingBudget: 'Saving…', budgetSaved: 'Budget saved.', budgetNotSaved: 'Not saved: {reason}',
   budgetHistory: 'Budget changes', budgetHistoryRow: '{month}: {cap} credits by {name} ({reason})',
@@ -25,6 +33,13 @@ const en = {
 };
 type Copy = typeof en;
 const ko: Copy = {
+  tasksTitle: '{name}에게 한 질문', tasksNone: '아직 {name}에게 질문한 적이 없습니다.', colAsked: '질문 시각', colQuestion: '질문', colStatus: '상태', colCredits: '크레딧',
+  perfTitle: '이번 달 {name}', perfIntro: '{month} 이후 {name}에게 온 모든 HQ 질문입니다. 수치만 보여 주며 질문, 답변, 사람은 표시하지 않습니다.',
+  perfAsked: '질문 수', perfAnswered: '답변함', perfFailed: '답변 못 함 (청구 없음)', perfReview: 'HQ 소유자 검토 대기', perfInProgress: '진행 중',
+  perfResolved: 'HQ 소유자가 처리함', perfAskers: '질문한 HQ 인원', perfCredits: '청구된 HQ AI 텍스트 크레딧', perfLast: '마지막 질문: {when}',
+  perfNone: '이번 달 {name}에게 온 HQ 질문이 없습니다.', perfDenied: 'HQ 권한에 {name}의 영역이 없어 표시하지 않습니다.', perfUnavailable: '성과를 읽을 수 없습니다. 아무것도 표시하지 않습니다.',
+  recsNone: '{name}은(는) 질문에 답하기만 합니다. 추천을 저장하거나 스스로 행동하지 않으므로 여기에 표시할 것이 없습니다.',
+  approvalsNone: '{name}은(는) 어떤 작업도 하지 않으므로 승인을 기다리는 것이 없습니다. HQ 결정은 HQ 화면에서 합니다.',
   setBudget: '이번 달 HQ AI 텍스트 예산 설정', capLabel: '이번 달 크레딧 한도', capHelp: '정수로 입력하세요. 한도를 정해도 제공자가 연결되거나 비용이 쓰이지 않습니다. 질문이 예약할 수 있는 양만 제한합니다.',
   reasonLabel: '사유 (3~300자)', saveBudget: '예산 저장', savingBudget: '저장 중…', budgetSaved: '예산이 저장되었습니다.', budgetNotSaved: '저장하지 않음: {reason}',
   budgetHistory: '예산 변경 기록', budgetHistoryRow: '{month}: {cap} 크레딧, {name} ({reason})',
@@ -47,6 +62,13 @@ const ko: Copy = {
   HQ_HON_PROVIDER_NOT_CONNECTED: 'AI 제공자가 연결되지 않았습니다.', refresh: '새로고침',
 };
 const es: Copy = {
+  tasksTitle: 'Tus preguntas a {name}', tasksNone: 'Aún no le has preguntado nada a {name}.', colAsked: 'Fecha', colQuestion: 'Pregunta', colStatus: 'Estado', colCredits: 'Créditos',
+  perfTitle: '{name} este mes', perfIntro: 'Todas las preguntas de HQ a {name} desde {month}. Solo cifras: no se muestra ninguna pregunta, respuesta ni persona.',
+  perfAsked: 'Preguntas', perfAnswered: 'Respondidas', perfFailed: 'Sin respuesta (sin cobro)', perfReview: 'Retenidas para revisión del propietario de HQ', perfInProgress: 'En curso',
+  perfResolved: 'Resueltas por el propietario de HQ', perfAskers: 'Personas de HQ que preguntaron', perfCredits: 'Créditos de texto de IA de HQ cobrados', perfLast: 'Última pregunta: {when}',
+  perfNone: 'No hay preguntas de HQ a {name} este mes.', perfDenied: 'Tu acceso de HQ no incluye el área de {name}, así que no se muestra.', perfUnavailable: 'No se pudo leer el rendimiento. No se muestra nada.',
+  recsNone: '{name} solo responde preguntas. No guarda recomendaciones ni actúa por su cuenta, así que no hay nada que mostrar aquí.',
+  approvalsNone: '{name} nunca realiza acciones, así que nada espera aprobación. Las decisiones de HQ se toman en las pantallas de HQ.',
   setBudget: 'Fijar el presupuesto de texto de IA de HQ de este mes', capLabel: 'Límite de créditos de este mes', capHelp: 'Un número entero. Fijar el límite no conecta ningún proveedor ni gasta nada: solo limita lo que pueden reservar las preguntas.',
   reasonLabel: 'Motivo (de 3 a 300 caracteres)', saveBudget: 'Guardar presupuesto', savingBudget: 'Guardando…', budgetSaved: 'Presupuesto guardado.', budgetNotSaved: 'No se guardó: {reason}',
   budgetHistory: 'Cambios de presupuesto', budgetHistoryRow: '{month}: {cap} créditos por {name} ({reason})',
