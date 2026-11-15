@@ -1,0 +1,4 @@
+.picker { display: grid; gap: 8px; margin: 0 0 18px; }
+.picker label { font-weight: 700; }
+.idFields { margin: 4px 0 18px; }
+.idFields > summary { cursor: pointer; font-weight: 600; margin-bottom: 12px; }
