@@ -11,6 +11,7 @@ import { CreativeGenerationError, createCreativeAvatar, createCreativeAvatarVide
   listCreativeGenerations } from './generation-http';
 import { studioWallet, type AvatarsState, type VideosState, type CreateLock, type CreateOutcome, type GenerationsState, type StudioState, type StudioWallet } from './model';
 import { CreativeStudioView } from './view';
+import { CREATIVE_MEDIA_API, CreativeMedia, type CreativeMediaApi } from './media';
 
 type Scope = Readonly<{ organizationId: string; schoolId: string }>;
 export type CreativeStudioApi = {
@@ -23,6 +24,8 @@ export type CreativeStudioApi = {
   /** A2 (0277) talking avatar videos: optional for the same reason. */
   videos?(scope: Scope, signal: AbortSignal): Promise<CreativeAvatarVideoRecords>;
   createVideo?(scope: Scope, input: CreativeAvatarVideoInput, idempotencyKey: string, signal: AbortSignal): Promise<CreativeAvatarVideoReceipt>;
+  /** C6 stored media (view, delete, review, queue): optional for the same reason. */
+  media?: CreativeMediaApi;
 };
 /** The wallet and generation reads plus the one closed create command. The server authorizes the exact school for each. */
 export const CREATIVE_STUDIO_API: CreativeStudioApi = {
@@ -33,6 +36,7 @@ export const CREATIVE_STUDIO_API: CreativeStudioApi = {
   createAvatar: (scope, input, key, signal) => createCreativeAvatar(scope.schoolId, input, key, signal),
   videos: (scope, signal) => listCreativeAvatarVideos(scope.schoolId, signal),
   createVideo: (scope, input, key, signal) => createCreativeAvatarVideo(scope.schoolId, input, key, signal),
+  media: CREATIVE_MEDIA_API,
 };
 
 /**
@@ -63,6 +67,8 @@ export function outcomeFromAttempt(error: unknown, unresolved: boolean): Readonl
     case 'DENIED': return { outcome: { kind: 'RETRY_BLOCKED', cause: 'DENIED', code: error.code }, release: false };
     case 'REFUSED': case 'NOT_CONNECTED': case 'INVALID':
       if (unresolved) return { outcome: { kind: 'RETRY_BLOCKED', cause: error.kind, code: error.code }, release: false };
+      // C4: the free prompt check refused the wording before anything was reserved.
+      if (error.kind === 'INVALID' && error.code === 'CREATIVE_PROMPT_NOT_ALLOWED') return { outcome: { kind: 'PROMPT_REFUSED' }, release: true };
       return { outcome: error.kind === 'REFUSED' ? { kind: 'REFUSED', code: error.code } : { kind: error.kind }, release: true };
     default: return { outcome: { kind: 'UNKNOWN' }, release: false };
   }
@@ -268,6 +274,9 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
     <CreativeStudioView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       hasSchool={selection !== null} studio={studio} onRefresh={onRefresh} generations={generations} outcome={shownOutcome} locked={lock !== 'NONE'} hidePrompt={hidePrompt} onCreate={onCreate} onCheckAgain={onCheckAgain}
       avatars={avatars} avatarOutcome={shownAvatarOutcome} avatarLocked={avatarLock !== 'NONE'} hideAvatarText={hideAvatarText} onCreateAvatar={onCreateAvatar} onCheckAvatarAgain={onCheckAvatarAgain}
-      videos={videos} videoOutcome={shownVideoOutcome} videoLocked={videoLock !== 'NONE'} hideVideoText={hideVideoText} onCreateVideo={onCreateVideo} onCheckVideoAgain={onCheckVideoAgain}/>
+      videos={videos} videoOutcome={shownVideoOutcome} videoLocked={videoLock !== 'NONE'} hideVideoText={hideVideoText} onCreateVideo={onCreateVideo} onCheckVideoAgain={onCheckVideoAgain}
+      media={api.media && selection && generations.state === 'READY' && shell.phase === 'READY'
+        ? <CreativeMedia key={selection.schoolId.toLowerCase()} language={preferences.language} schoolId={selection.schoolId.toLowerCase()} generations={generations.items} api={api.media} onChanged={onRefresh}/>
+        : null}/>
   </div>;
 }
