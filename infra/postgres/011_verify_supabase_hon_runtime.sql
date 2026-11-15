@@ -3742,7 +3742,7 @@ DO $$ DECLARE f record; safe boolean; t text; worker_oid oid:=(SELECT oid FROM p
   FOR f IN SELECT * FROM (VALUES
 ('hon.conversation_body_ok(text)',false,false,false,'search_path=pg_catalog','53dfa913f9ff8f68060d53a6b2b66a2c0831568e388ca92e60742f22b590162e'),
 ('hon.conversation_tags_ok(text[])',false,false,false,'search_path=pg_catalog','dec73cf1312918d4c380e47fd3ee49e210bf95163c664d1d739e5b35d14071c7'),
-('hon.guard_school_conversation()',false,false,false,'search_path=pg_catalog, hon','d4e577c1406c0ccede4559097ddf1c3dcdcc3b7e21dbb2e04f488bc25b08c156'),
+('hon.guard_school_conversation()',false,false,false,'search_path=pg_catalog, hon','ac36a3a2ccb1d1975a38a7465c21619c9ecc177054b07e8f72f300d8f036055b'),
 ('hon.conversation_staff_has(uuid,uuid,uuid,text)',true,false,false,'search_path=pg_catalog, hon','7abb6d93e5f4376fc97e013c7a30952353784fb4eac1ea308874063b7d076054'),
 ('hon.require_conversation_actor(text,boolean)',true,false,false,'search_path=pg_catalog, hon','edae19e955bee3b56686346f1da36671937638e54b9d5e26ba6475cebbe829d9'),
 ('hon.conversation_time(timestamp with time zone)',false,false,false,'search_path=pg_catalog','e4a86c6f3c7e0d57791518a05be7b1552ebb4b274f34c42dc0e8b86bf6a93d46'),
@@ -3754,7 +3754,7 @@ DO $$ DECLARE f record; safe boolean; t text; worker_oid oid:=(SELECT oid FROM p
 ('hon.conversation_lock(uuid,integer)',true,false,false,'search_path=pg_catalog, hon','5ce2e4cbe2ea3b846812129706723a12869189503758c7f3753238d61cdc9f91'),
 ('hon.conversation_input_ok(jsonb,text[],text[])',false,false,false,'search_path=pg_catalog','40ee2f41174c7ac30097f1bf4998f9b74d3665fbd14c0a1de0aa559132d84161'),
 ('hon.conversation_uuid_ok(jsonb)',false,false,false,'search_path=pg_catalog','f1a9de559daef6acb8f68bedde192f716654ecc0d8401c3c95da92c4fe26cc9f'),
-('hon.record_inbound_conversation_text(text,text,text,integer,text,timestamp with time zone)',true,false,true,'search_path=pg_catalog, hon','3ab532cb49c5190d70fc0595747ef3a81661457f438c0f312e4c0bc758c0677a'),
+('hon.record_inbound_conversation_text(text,text,text,integer,text,timestamp with time zone)',true,false,true,'search_path=pg_catalog, hon','921f318c14478446e461d6bad2471004f2db30ba878f8bdd8358ec41b4e7765b'),
 ('hon.read_school_conversations(text,jsonb)',true,true,false,'search_path=pg_catalog, hon','c80d2f9b41e31c7adeb5e7e4c0ae20f474c5475de2bb901197af93a23b73429d'),
 ('hon.read_school_conversation(text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','19d0090964fc107f4f20aa7d7ac80bf3b7635c4d8be1d839b25ec6a193875501'),
 ('hon.reply_school_conversation(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','b54d6237a05a1cfc800508d54c7ff43d36933a51da533877b8d6b962a25d5c40'),

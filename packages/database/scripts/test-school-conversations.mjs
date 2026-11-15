@@ -164,6 +164,15 @@ try{
  const p1=await list(a);assert.equal(p1.conversations.length,50);assert(p1.nextCursor);
  const p2=await list(a,{beforeAt:p1.nextCursor.at,beforeId:p1.nextCursor.id});assert.equal(p2.conversations.length,8);assert.equal(p2.nextCursor,null);
  assert.equal(new Set([...p1.conversations,...p2.conversations].map(x=>x.conversationId)).size,58);
+ // All 58 within one millisecond (sub-millisecond writes): stored to whole milliseconds, and the pages still split exactly by id.
+ await q("UPDATE hon.school_conversations x SET last_message_at=(date_trunc('second',clock_timestamp())+interval '1 hour')+(r.n*interval '7 microseconds'),version=x.version+1 FROM (SELECT id,row_number() OVER (ORDER BY id) n FROM hon.school_conversations WHERE school_id=$1) r WHERE r.id=x.id",[a.school]);
+ assert.equal((await q("SELECT count(DISTINCT last_message_at) n, bool_and(last_message_at=date_trunc('milliseconds',last_message_at)) ms FROM hon.school_conversations WHERE school_id=$1",[a.school]))[0].n,'1');
+ const s1=await list(a);assert.equal(s1.conversations.length,50);
+ const s2=await list(a,{beforeAt:s1.nextCursor.at,beforeId:s1.nextCursor.id});assert.equal(s2.conversations.length,8,'no conversation in the anchor millisecond is skipped');
+ assert.equal(new Set([...s1.conversations,...s2.conversations].map(x=>x.conversationId)).size,58);
+ await q('ALTER TABLE hon.school_conversations DISABLE TRIGGER school_conversations_guard');
+ try{await assert.rejects(q("UPDATE hon.school_conversations SET last_message_at=last_message_at+interval '3 microseconds' WHERE school_id=$1",[a.school]),/check constraint/);}
+ finally{await q('ALTER TABLE hon.school_conversations ENABLE TRIGGER school_conversations_guard');}
  pass('staff list newest first with unread counts, filters and search by name, digits or tag, exact keyset pages; thread oldest first with media counts and contact panel; other schools 404/403; strict queries');
 
  // 5. Permission split: read-only staff read but cannot change; no permission sees nothing; revoked and lapsed refused.

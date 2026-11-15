@@ -223,7 +223,9 @@ export class TwilioWebhookVerifier {
     const from = params.get('From') ?? '';
     const to = params.get('To') ?? '';
     if (!MESSAGE_SID.test(sid) || !E164.test(from) || !E164.test(to)) throw new TwilioWebhookError('MALFORMED');
-    const word = (params.get('Body') ?? '').trim().replace(/[.!]+$/, '').toUpperCase();
+    // Control characters are dropped first, exactly as the 0364 conversation intake does, so "ST\u0001OP" is still an opt-out.
+    // eslint-disable-next-line no-control-regex
+    const word = (params.get('Body') ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().replace(/[.!]+$/, '').toUpperCase();
     const keyword = KEYWORDS[word];
     return keyword ? { to, from, keyword, providerMessageId: sid, receivedAt: new Date(this.now()).toISOString() } : null;
   }
@@ -254,7 +256,7 @@ export class TwilioWebhookVerifier {
     const to = params.get('To') ?? '';
     if (!MESSAGE_SID.test(sid) || !E164.test(from) || !E164.test(to)) throw new TwilioWebhookError('MALFORMED');
     const media = Number.parseInt(params.get('NumMedia') ?? '0', 10);
-    return { to, from, body: (params.get('Body') ?? '').slice(0, 1600), mediaCount: Number.isInteger(media) && media > 0 ? Math.min(media, 10) : 0,
+    return { to, from, body: (params.get('Body') ?? '').replace(/\u0000/g, '').slice(0, 1600), mediaCount: Number.isInteger(media) && media > 0 ? Math.min(media, 10) : 0,
       providerMessageId: sid, receivedAt: new Date(this.now()).toISOString() };
   }
 

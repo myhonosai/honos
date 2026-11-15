@@ -54,6 +54,13 @@ test('0364 webhook: keywords stay keywords, other texts go to the conversations 
   assert.equal(await run.controller.twilioInbound({ body: question.body }, question.signature), empty, 'no automatic answer from the webhook');
   assert.deepEqual(run.keywords, ['STOP']);
   assert.deepEqual(run.texts.map((t) => [t.to, t.from, t.body, t.providerMessageId]), [['+15555559001', '+15555550101', 'What time is the adult class?', sid]]);
+  // A keyword with control characters in it is still the keyword (the intake drops them too), so an opt-out is never lost.
+  const hidden = text('ST\u0001OP\u0000');
+  assert.equal(await run.controller.twilioInbound({ body: hidden.body }, hidden.signature), empty);
+  assert.deepEqual([run.keywords, run.texts.length], [['STOP', 'STOP'], 1]);
+  const nul = text('Hi\u0000 there');
+  await run.controller.twilioInbound({ body: nul.body }, nul.signature);
+  assert.equal(run.texts.at(-1).body, 'Hi there', 'NUL never reaches the database');
   // An older store without the intake keeps the old behavior: empty answer, nothing recorded.
   run = make({ intake: false });
   assert.equal(await run.controller.twilioInbound({ body: question.body }, question.signature), empty);

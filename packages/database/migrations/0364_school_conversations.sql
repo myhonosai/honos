@@ -71,8 +71,9 @@ CREATE TABLE hon.school_conversations (
   assigned_principal_id uuid REFERENCES hon.principals(id) ON DELETE RESTRICT,
   tags text[] NOT NULL DEFAULT '{}' CHECK (hon.conversation_tags_ok(tags)),
   unread integer NOT NULL DEFAULT 0 CHECK (unread BETWEEN 0 AND 100000),
-  last_inbound_at timestamptz,
-  last_message_at timestamptz NOT NULL,
+  last_inbound_at timestamptz CHECK (last_inbound_at=date_trunc('milliseconds',last_inbound_at)),
+  -- Whole milliseconds, like every time the API returns, so the list cursor (lastMessageAt, id) is exact.
+  last_message_at timestamptz NOT NULL CHECK (last_message_at=date_trunc('milliseconds',last_message_at)),
   version integer NOT NULL DEFAULT 1 CHECK (version>=1),
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
@@ -131,6 +132,9 @@ CREATE FUNCTION hon.guard_school_conversation() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,hon AS $$
 BEGIN
   IF TG_OP='DELETE' THEN RAISE EXCEPTION 'School conversations are never deleted' USING ERRCODE='55000'; END IF;
+  -- Times are kept to whole milliseconds (the API's precision) so keyset pages never skip a conversation.
+  NEW.last_message_at:=date_trunc('milliseconds',NEW.last_message_at);
+  NEW.last_inbound_at:=date_trunc('milliseconds',NEW.last_inbound_at);
   IF TG_OP='INSERT' THEN
     IF NEW.version<>1 THEN RAISE EXCEPTION 'A new school conversation starts at version 1' USING ERRCODE='55000'; END IF;
     RETURN NEW;
@@ -311,7 +315,7 @@ BEGIN
   -- Control characters other than line breaks and tabs are dropped; a blank text counts only with media.
   v_body:=btrim(regexp_replace(p_body,E'[\\x01-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]','','g'),E' \t\r\n');
   IF v_body='' AND p_media_count=0 THEN outcome:='EMPTY'; conversation_id:=NULL; RETURN NEXT; RETURN; END IF;
-  IF upper(regexp_replace(v_body,'[.!]+$','')) IN ('STOP','START','HELP','STOPALL','UNSUBSCRIBE','CANCEL','END','QUIT','UNSTOP','YES','INFO')
+  IF upper(regexp_replace(v_body,'[.!]+$','')) IN ('STOP','START','HELP','STOPALL','UNSUBSCRIBE','CANCEL','END','QUIT','OPTOUT','REVOKE','UNSTOP','YES','INFO')
     AND p_media_count=0 THEN outcome:='KEYWORD'; conversation_id:=NULL; RETURN NEXT; RETURN; END IF;
   SELECT x.conversation_id INTO conversation_id FROM hon.school_conversation_messages x WHERE x.provider_message_id=p_provider_message_id;
   IF FOUND THEN outcome:='REPLAYED'; RETURN NEXT; RETURN; END IF;
