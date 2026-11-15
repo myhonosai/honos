@@ -1,5 +1,5 @@
 import React, { useId } from 'react';
-import type { PersonRecord, SchoolContactOptions } from '@hon/contracts';
+import type { PersonRecord, SchoolContactCard, SchoolContactOptions } from '@hon/contracts';
 import { accountValue } from '../account-status/copy';
 import { peopleText, type PeopleKey } from './copy';
 import { ContactsList } from './contacts-list';
@@ -20,6 +20,8 @@ export type PeopleViewProps = Readonly<{
   filters: ContactFilters; options: SchoolContactOptions | null;
   /** The open person's contact card (C2, 0374), read beside the editable record. */
   card?: CardState | undefined;
+  /** C3 (0387): delete, restore and merge for the open contact (its own reads and commands), and what the last one did. */
+  actionsSlot?: ((card: SchoolContactCard) => React.ReactNode) | undefined; actionNotice?: string | null | undefined;
   onFilters?: ((filters: ContactFilters) => void) | undefined; onMore?: (() => void) | undefined; onOpen?: ((personId: string) => void) | undefined; onReload?: (() => void) | undefined;
   onSaveContact?: ((draft: ContactDraft) => void) | undefined; onSaveBirth?: ((draft: BirthDraft) => void) | undefined;
   onTryAgain?: (() => void) | undefined; onDiscard?: (() => void) | undefined;
@@ -67,7 +69,9 @@ export function PeopleView(props: PeopleViewProps): React.ReactElement {
           onOpen={onOpen} onFilters={props.onFilters} onMore={props.onMore}/>
       </article>
       <div className={styles.detail}>
+        {props.actionNotice ? <p className={styles.notice} role="status" data-testid="contact-action-done">{props.actionNotice}</p> : null}
         {props.card && selectedId ? <ContactCardTabs key={selectedId} language={language} card={props.card}/> : null}
+        {props.card?.state === 'READY' && props.actionsSlot ? props.actionsSlot(props.card.card) : null}
         <RecordPanel {...props} t={t} onReload={onReload}/>
       </div>
     </div> : null}

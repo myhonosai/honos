@@ -1,7 +1,7 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { validatePersonRecordUpdateInput, validateStudentBirthDateUpdateInput, type PersonRecord, type PersonRecordUpdateInput,
-  type SchoolContactOptions, type StudentBirthDateUpdateInput } from '@hon/contracts';
+  type SchoolContactCard, type SchoolContactOptions, type StudentBirthDateUpdateInput } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
@@ -11,7 +11,8 @@ import { attemptOutcome, type ListState, type RecordState, type SaveOutcome } fr
 import { PeopleView, type BirthDraft, type ContactDraft } from './view';
 import { PersonConsents } from './consents';
 import { consentApi, type ConsentApi } from './consent-http';
-import { NO_CONTACT_FILTERS, contactsApi, type ContactFilters, type ContactsApi } from './contacts-http';
+import { NO_CONTACT_FILTERS, contactAdminApi, contactsApi, type ContactAdminApi, type ContactFilters, type ContactsApi } from './contacts-http';
+import { ContactActions, type ContactChange } from './contact-actions';
 import type { CardState } from './contact-card';
 
 /**
@@ -51,7 +52,8 @@ export function birthDateInput(schoolId: string, record: PersonRecord, draft: Bi
  * a child's birth date. Blur, a hidden tab, page hide, a school change or a session end hide the page at once, retire
  * every read and drop any kept save; reads start again only after the shell re-verifies the school.
  */
-export function People({ api = peopleApi, consents = consentApi, contacts = contactsApi }: { api?: PeopleApi; consents?: ConsentApi; contacts?: ContactsApi }): React.ReactElement {
+export function People({ api = peopleApi, consents = consentApi, contacts = contactsApi, admin = contactAdminApi }: { api?: PeopleApi; consents?: ConsentApi; contacts?: ContactsApi;
+  admin?: ContactAdminApi }): React.ReactElement {
   const { preferences } = useLocale();
   const shell = useSchoolShell();
   const selection = shell.phase === 'READY' ? shell.selection : null;
@@ -65,6 +67,7 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   const [recordRefresh, setRecordRefresh] = useState(0);
   const [card, setCard] = useState<CardState>({ state: 'NONE' });
   const cardGeneration = useRef(0);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<SaveOutcome>(null);
   const [lock, setLock] = useState<Lock>('NONE');
   const listGeneration = useRef(0), recordGeneration = useRef(0);
@@ -82,7 +85,7 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   useEffect(() => onShellPrivacyEvent(() => {
     concealShellPrivateNow(); listGeneration.current++; recordGeneration.current++; privacy.current++;
     cardGeneration.current++;
-    setList({ state: 'LOADING' }); setRecord(prior => prior.state === 'NONE' ? prior : { state: 'LOADING' }); setCard(prior => prior.state === 'NONE' ? prior : { state: 'LOADING' }); setOutcome(null); drop();
+    setList({ state: 'LOADING' }); setRecord(prior => prior.state === 'NONE' ? prior : { state: 'LOADING' }); setCard(prior => prior.state === 'NONE' ? prior : { state: 'LOADING' }); setOutcome(null); setActionNotice(null); drop();
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), [drop]);
 
   const school = selection ? lower(selection.schoolId) : null;
@@ -205,8 +208,19 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
     start({ schoolId: lower(selection.schoolId), personId: current.personId, key: newKey(), command: 'birthDate', input });
   }, [lock, selection?.schoolId, current, start]); // eslint-disable-line react-hooks/exhaustive-deps
   const onOpen = useCallback((personId: string) => {
-    selected.current = personId; setSelectedId(personId); setOutcome(null); drop(); setRecordRefresh(value => value + 1);
+    selected.current = personId; setSelectedId(personId); setOutcome(null); setActionNotice(null); drop(); setRecordRefresh(value => value + 1);
   }, [drop]);
+  // After a delete, restore or merge: read the list and the card again; a merge opens the person who was kept.
+  const onContactChanged = useCallback((change: ContactChange, notice: string) => {
+    if (!mounted.current) return;
+    setListRefresh(n => n + 1);
+    if (change.kind === 'MERGED' && change.keepPersonId !== selected.current) { selected.current = change.keepPersonId; setSelectedId(change.keepPersonId); setOutcome(null); drop(); }
+    setRecordRefresh(n => n + 1); setActionNotice(notice);
+  }, [drop]);
+  const actionsSlot = useCallback((c: SchoolContactCard) => selection ? <ContactActions key={`${lower(selection.schoolId)}:${c.person.personId}:${c.overview.segment}`}
+    language={preferences.language} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} card={c} onChanged={onContactChanged}
+    api={admin} contacts={contacts}/> : null,
+  [selection?.organizationId, selection?.schoolId, preferences.language, onContactChanged, admin, contacts]); // eslint-disable-line react-hooks/exhaustive-deps
   const onDiscard = useCallback(() => { setOutcome(null); drop(); setRecordRefresh(value => value + 1); }, [drop]);
   const onTryAgain = useCallback(() => { void send(); }, [send]);
   const onFilters = useCallback((next: ContactFilters) => { setFilters({ ...next, query: next.query.trim() }); setListRefresh(n => n + 1); }, []);
@@ -223,6 +237,6 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   return <div key={shell.phase} data-shell-private="">
     <PeopleView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       hasSchool={selection !== null} list={list} record={record} selectedId={selectedId} outcome={outcome} locked={lock !== 'NONE'} canRetry={lock === 'KEPT'}
-      filters={filters} options={options} card={card} onFilters={onFilters} onMore={onMore} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot}/>
+      filters={filters} options={options} card={card} actionsSlot={actionsSlot} actionNotice={actionNotice} onFilters={onFilters} onMore={onMore} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot}/>
   </div>;
 }

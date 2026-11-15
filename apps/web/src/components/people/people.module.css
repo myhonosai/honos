@@ -106,3 +106,13 @@
 .timeline > li { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; font-size: 13px; }
 .timeline time { color: var(--hon-muted, #9fb4c8); }
 @media (max-width: 520px) { .facts2 > div, .timeline > li { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+/* C3 (0387): delete, restore and merge on the contact card. */
+.contactActions { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--hon-line, #24405a); border-radius: 12px; background: #0d1d2e; }
+.danger { min-height: var(--hon-target, 44px); padding: 8px 14px; border: 1px solid #7a3a4d; border-radius: 10px; background: #2a1520; color: #f2c3d0; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.danger:hover { border-color: #f2a9bd; }
+.danger:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
+.blockers { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid #7c6125; border-radius: 10px; background: #251d0c; color: #f3e2b6; font-size: 14px; }
+.blockers p { margin: 0; font-weight: 700; }
+.blockers ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.choice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.segment[data-segment="ARCHIVED"] { background: #1c2430; color: #b8c4d0; box-shadow: inset 0 0 0 1px #3b4a5c; }

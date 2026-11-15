@@ -28,13 +28,13 @@ export const PEOPLE_QUERY_MAX = 160;
 const RESPONSE_MAX_BYTES = 131072;
 const JSON_TYPE = /^application\/json(?:\s*;|$)/i;
 
-type Sent = Readonly<{ path: string; body: string; key: string; owned: () => boolean }>;
+type Sent = Readonly<{ path: string; body: string; key: string; owned: () => boolean; command?: string }>;
 /** A bounded, same-origin, no-redirect JSON exchange. Returns the status and the parsed body (null when not JSON). */
 export async function exchange(path: string, signal: AbortSignal, command?: Sent): Promise<{ status: number; value: unknown }> {
   signal.throwIfAborted();
   const r = await fetch(path, { method: command ? 'POST' : 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
     referrerPolicy: 'no-referrer', signal,
-    headers: { Accept: 'application/json', ...(command ? { 'Content-Type': 'application/json', 'X-HON-Human-Command': PERSON_RECORD_HUMAN_COMMAND, 'Idempotency-Key': command.key } : {}) },
+    headers: { Accept: 'application/json', ...(command ? { 'Content-Type': 'application/json', 'X-HON-Human-Command': command.command ?? PERSON_RECORD_HUMAN_COMMAND, 'Idempotency-Key': command.key } : {}) },
     ...(command ? { body: command.body } : {}) });
   // A retired read or command must not invalidate the newer session that replaced it. A command has no abort signal of its
   // own (cancelling it would not prove it was not saved), so its caller says whether it is still the one being shown.

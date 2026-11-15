@@ -13,7 +13,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const stub = (...answers: Response[]) => { const fetch = vi.fn(async () => answers.shift()!); vi.stubGlobal('fetch', fetch); return fetch; };
 const signal = () => new AbortController().signal;
-const counts = { ALL: 62, STUDENT: 2, TRIAL: 1, PROSPECT: 2, INACTIVE: 1 };
+const counts = { ALL: 62, STUDENT: 2, TRIAL: 1, PROSPECT: 2, INACTIVE: 1, ARCHIVED: 0 };
 const soon = new Date(Date.now() + 10 * 86_400_000).toISOString(), later = new Date(Date.now() + 80 * 86_400_000).toISOString();
 const row = (n: number, over: Record<string, unknown> = {}) => ({ personId: id(400 + n), version: 1, givenName: `Avery${n}`, familyName: 'Able', email: null, phoneE164: null,
   segment: 'STUDENT', planName: 'Kids monthly', planCode: 'KIDS', programName: 'Little Tigers', membershipEndsAt: soon, ranks: [{ rank: 'White', color: '#ffffff' }], ...over });
