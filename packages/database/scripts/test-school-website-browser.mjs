@@ -153,5 +153,6 @@ try {
   throw error;
 } finally {
   for (const c of children) c.kill('SIGTERM');
+  await q("UPDATE hon.hon_os_signup_program SET status='CLOSED',recorded_at=clock_timestamp() WHERE program_id=1").catch(() => undefined);
   await Promise.allSettled([admin.end(), restricted.end()]);
 }
