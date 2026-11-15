@@ -6,6 +6,8 @@ import type { OperationalSchoolScope } from '../operational-navigation';
 import { SCHOOL_SHELL_MOBILE, SCHOOL_SHELL_NAV, schoolShellActiveItem, schoolShellActiveRoute, schoolShellGroups, schoolShellHref, schoolShellListed } from './catalog';
 import { shellText, type ShellKey } from './copy';
 import { ShellIcon } from './icons';
+import { SCHOOL_TOUR_STEPS, SchoolTourDialog } from './tour';
+import { tourCopy } from './tour-copy';
 import { SignOutButton } from '../auth/sign-out-button';
 import styles from './shell.module.css';
 
@@ -15,6 +17,8 @@ export type SchoolShellFrameProps = {
   choices: readonly StaffReportingSchoolChoice[]; mode: HonInterfaceTheme; viewState: ShellViewState; menuOpen: boolean;
   onMode: (mode: HonInterfaceTheme) => void; onMenu: (open: boolean) => void; onSwitch: () => void; onChoose: (schoolId: string) => void; onRestore: () => void;
   utility?: ReactNode; children?: ReactNode;
+  /** Guided tour step, or null when closed. */
+  tourStep?: number | null; onTour?: (step: number | null) => void;
 };
 const MODES: readonly HonInterfaceTheme[] = ['big-button', 'modern', 'classic'];
 const VIEW_STATE: Record<ShellViewState, ShellKey> = { LOCAL: 'viewLocal', SAVING: 'viewSaving', SAVED: 'viewSaved', ERROR: 'viewError' };
@@ -22,6 +26,8 @@ const VIEW_STATE: Record<ShellViewState, ShellKey> = { LOCAL: 'viewLocal', SAVIN
 /** Pure presentation. Never reads, commands or derives authority; the selection only becomes the closed URL prefill. */
 export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactElement {
   const { path, language, phase, mode, menuOpen, onMenu, children } = props;
+  const tourStep = props.tourStep ?? null, onTour = props.onTour ?? (() => {});
+  const tourArea = tourStep === null ? null : (s => s?.kind === 'area' ? s.item.key : null)(SCHOOL_TOUR_STEPS[tourStep]);
   const t = (key: ShellKey) => shellText(language, key);
   const verified = phase === 'READY' ? props.selection : null;
   const active = schoolShellActiveItem(path), activeRoute = schoolShellActiveRoute(path);
@@ -40,7 +46,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
   const honHere = path === '/staff/dashboard' || path === '/staff/hon' || path.startsWith('/staff/hon/');
 
   // The Menu panel is modal: everything behind it is inert, so keyboard focus stays inside it.
-  const modal = menuOpen && !sidebar;
+  const modal = (menuOpen && !sidebar) || tourStep !== null;
 
   const school = <section className={styles.school} aria-label={t('schoolRegion')} data-phase={phase}>
     <span className={styles.schoolMark} aria-hidden="true"><ShellIcon name="school" /></span>
@@ -66,7 +72,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
     {sidebar && school}
     <nav className={styles.nav} aria-label={t('primaryNav')}>
       {SCHOOL_SHELL_NAV.map(item => <a key={item.key} data-nav={item.key} href={schoolShellHref(item.routes[0]!, verified)}
-        aria-current={active?.key === item.key ? 'page' : undefined} onClick={() => onMenu(false)}>
+        aria-current={active?.key === item.key ? 'page' : undefined} data-tour-current={tourArea === item.key ? 'true' : undefined} onClick={() => onMenu(false)}>
         <ShellIcon name={item.key} /><span>{t(item.titleKey)}</span></a>)}
     </nav>
     {/* Top bar only: the areas that do not fit stay one click away in the Menu instead of silently disappearing. */}
@@ -86,7 +92,9 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
       {rail}
     </aside>
     {menuOpen && <div className={styles.scrim} aria-hidden="true" onClick={() => onMenu(false)} />}
-    {modal && <div className={styles.menuPanel} role="dialog" aria-modal="true" aria-label={t('menuTitle')}>
+    {tourStep !== null && <><div className={styles.tourScrim} aria-hidden="true" onClick={() => onTour(null)} />
+      <SchoolTourDialog language={language} step={tourStep} verified={verified} onStep={onTour} onClose={() => onTour(null)} /></>}
+    {menuOpen && !sidebar && tourStep === null && <div className={styles.menuPanel} role="dialog" aria-modal="true" aria-label={t('menuTitle')}>
       <header><strong>{t('menuTitle')}</strong><small>{t('menuLead')}</small>
         <button type="button" className={styles.closeMenu} aria-label={t('closeMenu')} onClick={() => onMenu(false)} autoFocus><ShellIcon name="close" /></button></header>
       <ul className={styles.menuGrid}>
@@ -95,7 +103,9 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
           <ul>{schoolShellListed(item).map(route => <li key={route.href}><a href={schoolShellHref(route, verified)} onClick={() => onMenu(false)}>{t(route.titleKey)}</a></li>)}</ul>
         </li>)}
       </ul>
-      <footer className={styles.menuFoot}><SignOutButton label={t('signOut')} className={styles.signOut} /></footer>
+      <footer className={styles.menuFoot}>
+        <button type="button" className={styles.tourStart} data-tour-start="" onClick={() => { onMenu(false); onTour(0); }}>{tourCopy(language).start}</button>
+        <SignOutButton label={t('signOut')} className={styles.signOut} /></footer>
     </div>}
     <div className={styles.workspace} inert={modal}>
       <header className={styles.topbar}>
