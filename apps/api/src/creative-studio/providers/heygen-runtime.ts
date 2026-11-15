@@ -95,14 +95,15 @@ export class HeyGenCreativeRuntime implements AsyncCreativeProviderRuntime {
     if (HEYGEN_API.pendingStatuses.includes(status)) return { state: 'PENDING' };
     if (HEYGEN_API.refusedStatuses.includes(status)) throw new CreativeProviderRuntimeError('FAILED', 'PROVIDER_REJECTED');
     if (status !== HEYGEN_API.completedStatus) throw new CreativeProviderRuntimeError('UNKNOWN', 'PROVIDER_UNKNOWN');
-    const url = allowedDownloadUrl(data.video_url, this.options.downloadHosts ?? HEYGEN_API.downloadHosts);
+    const hosts = this.options.downloadHosts ?? HEYGEN_API.downloadHosts;
+    const url = allowedDownloadUrl(data.video_url, hosts);
     const duration = data.duration;
     if (!url || typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0 || duration > 600) throw new CreativeProviderRuntimeError('UNKNOWN', 'PROVIDER_UNKNOWN');
-    // Charged by the second actually generated. Longer than reserved is never charged silently: the result fails
-    // verification and is held UNKNOWN for HQ.
-    const seconds = Math.ceil(duration);
+    // Charged by the second actually generated, rounded up. A fraction of a second over the reservation (a 10.2 s video
+    // for 10 reserved seconds) is charged as reserved; anything longer fails verification and is held UNKNOWN for HQ.
+    const seconds = duration <= job.units + 1 ? Math.min(Math.ceil(duration), job.units) : Math.ceil(duration);
     const [width, height] = SIZE[job.format];
-    return { state: 'DONE', downloads: [{ url, mediaType: 'video/mp4' }], result: { finalUnits: seconds,
+    return { state: 'DONE', downloads: [{ url, mediaType: 'video/mp4', allowedHosts: hosts }], result: { finalUnits: seconds,
       providerCostMicrounits: (HEYGEN_API.costMicrosPerSecond[job.operationCode] ?? 0) * seconds,
       assets: [{ mediaType: 'video/mp4', width, height, durationSeconds: seconds, providerAssetReference: `heygen:${job.providerJobId}:1` }] } };
   }

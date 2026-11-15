@@ -270,3 +270,37 @@ the HeyGen webhook endpoint, and moderation coverage.
 - Not in C2: the HeyGen webhook (C2b, a hint that only wakes the worker sooner), the `HON_CREATIVE_FAKE_PROVIDER`
   environment fake (tests inject fakes directly), and `avatar.photo.video` (needs A3, #294).
 - Tests: `apps/api/test/creative-provider-adapters.test.cjs` (9) against fake HTTP providers on 127.0.0.1.
+
+## 12. C3 as built (HON media storage, migration 0355)
+
+- **Where files live:** one private Supabase Storage bucket (`SupabaseCreativeMediaStore`). READY only with
+  `HON_CREATIVE_MEDIA_STORAGE_APPROVED` exactly `true`, an https project origin in `HON_CREATIVE_MEDIA_STORAGE_URL`,
+  a service key in `HON_CREATIVE_MEDIA_STORAGE_KEY` (owner-pasted, API server only) and `HON_CREATIVE_MEDIA_BUCKET`
+  (default `creative-media`). Store errors never carry the key, URL or response body.
+- **Object keys are fixed by the database:** `creative/<jobId>/<ordinal>` (a CHECK on `hon.creative_stored_objects`).
+  Keys carry no school id; every read and delete is authorized from the asset row, never from the key. The key never
+  leaves the server.
+- **Ingest (worker):** each provider file is downloaded with `redirect: 'manual'` (at most 3 hops, the provider host
+  rule re-checked on every hop), no cookies or HON credentials, a timeout and a hard size cap (25 MB image, 200 MB
+  video). The bytes are inspected (`creative-media-inspect.ts`): PNG keeps only critical chunks; WebP keeps the
+  bitmap (animation refused, EXIF/XMP dropped); MP4 needs ftyp first, one moov and mdat, and its `udta`/`meta` boxes
+  are blanked to `free` boxes of the same size (metadata removed, offsets unchanged). Width, height and duration come
+  from the file, not the provider's claim. A video up to 1 s longer than reserved is charged at the reserved seconds;
+  more is UNKNOWN for HQ. Upload uses upsert, so a retried job after a lost lease overwrites the same object.
+- **Recording:** `record_creative_provider_job_stored_result` is the only way to record SUCCEEDED (the plain result
+  function now takes FAILED or UNKNOWN only). It needs exactly one `{byteSize, sha256}` per asset and inserts the object
+  rows in the same transaction as the 0216 settle. A download, network or store failure leaves the job open for the next
+  poll; an untrustworthy file is UNKNOWN for HQ.
+- **Reads:** `GET /schools/:schoolId/creative-studio/assets/:assetId/view` (exact school, the 0216 creative actor,
+  `ai.premium.request`) returns a 5-minute signed URL with `Cache-Control: private, no-store`. Storage not ready = 503
+  `CREATIVE_STORAGE_NOT_CONNECTED`.
+- **Deletes:** `POST .../assets/:assetId/delete` (body `{}`, command `saas-creative-asset-delete`) marks the object
+  deleted (reads stop at once, the asset disappears from generation reads), removes the file, then confirms removal. A
+  failed removal is logged (`creative.asset_file_removal_pending`) and the same delete retries it. Object rows are
+  append-only apart from those two marks; no DELETE or TRUNCATE. Credits are never refunded by a delete.
+- **Generation reads after a delete:** a SUCCEEDED generation may list fewer assets (gaps in ordinals) or none.
+- **Production still NOT_CONNECTED:** `createCreativeProviderRuntime({ mediaStorageReady: false })` stays in
+  `app.module.ts` until moderation and approval (C4) exist, whatever storage or provider switches are set.
+- Not in C3: retention/expiry of stored files (owner decision), a removal sweep (repeating the delete is the retry),
+  and the school gallery screens (C6).
+- Tests: `apps/api/test/creative-media.test.cjs` (7) and DB proofs J14 to J16 in `test-creative-provider-jobs.mjs`.

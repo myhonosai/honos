@@ -144,6 +144,7 @@ const expectedRlsTables = [
   'creative_school_daily_caps',
   'creative_limit_commands',
   'creative_provider_jobs',
+  'creative_stored_objects',
   'zernio_lead_forms',
   'zernio_lead_receipts',
   'crm_activities',

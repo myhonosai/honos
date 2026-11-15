@@ -79,7 +79,8 @@ test('Higgsfield image: one submit with only the prompt and fixed parameters, th
     const done = await r.poll(job);
     assert.equal(fake.requests[2].url, '/requests/req_abc123/status'); assert.equal(fake.requests[2].method, 'GET');
     assert.equal(done.state, 'DONE');
-    assert.deepEqual(done.downloads, [{ url: 'https://cdn.example.test/a.png', mediaType: 'image/png' }, { url: 'https://img.cdn.example.test/b.png', mediaType: 'image/png' }]);
+    assert.deepEqual(done.downloads, [{ url: 'https://cdn.example.test/a.png', mediaType: 'image/png', allowedHosts: HOSTS },
+      { url: 'https://img.cdn.example.test/b.png', mediaType: 'image/png', allowedHosts: HOSTS }]);
     assert.equal(done.result.finalUnits, 2); assert.equal(done.result.providerCostMicrounits, 32000);
     assert.ok(!JSON.stringify(done.result).includes('cdn.example.test'), 'the provider URL is never part of the recorded result');
     const outcome = verifiedOutcome(done.result, { mediaKind: 'IMAGE', units: 2 });
@@ -174,10 +175,12 @@ test('HeyGen: stock avatar per look style and stock voice, X-Api-Key, charged by
     assert.equal(fake.requests[1].url, '/v1/video_status.get?video_id=vid_123');
     script.push({ body: { code: 100, data: { status: 'completed', video_url: 'https://cdn.example.test/v.mp4', duration: 28.4 } } });
     const done = await r.poll(job);
-    assert.deepEqual(done.downloads, [{ url: 'https://cdn.example.test/v.mp4', mediaType: 'video/mp4' }]);
+    assert.deepEqual(done.downloads, [{ url: 'https://cdn.example.test/v.mp4', mediaType: 'video/mp4', allowedHosts: HOSTS }]);
     assert.equal(done.result.finalUnits, 29); assert.equal(done.result.providerCostMicrounits, 29 * 80500);
     const ok = verifiedOutcome(done.result, { mediaKind: 'VIDEO', units: 30 });
     assert.equal(ok.outcome, 'SUCCEEDED'); assert.equal(ok.assets[0].providerAssetReference, 'heygen:vid_123:1');
+    script.push({ body: { data: { status: 'completed', video_url: 'https://cdn.example.test/v.mp4', duration: 30.8 } } });
+    assert.equal((await r.poll(job)).result.finalUnits, 30, 'a fraction of a second over is charged as reserved');
     script.push({ body: { data: { status: 'completed', video_url: 'https://cdn.example.test/v.mp4', duration: 31.2 } } });
     assert.equal(verifiedOutcome((await r.poll(job)).result, { mediaKind: 'VIDEO', units: 30 }).outcome, 'UNKNOWN', 'longer than reserved is held for HQ, never charged silently');
     script.push({ body: { data: { status: 'failed', error: { message: 'policy' } } } }); await rejects(r.poll(job), 'FAILED', 'PROVIDER_REJECTED');

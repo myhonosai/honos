@@ -113,7 +113,14 @@ function fakeStore(jobs, { recordStatus = 'RECORDED', recordError, configured = 
   return { calls, isConfigured: () => configured,
     claim: async (limit, lease) => { calls.push(['claim', limit, lease]); return jobs; },
     recordPoll: async (job, lease) => { calls.push(['poll', job, lease]); return { status: 'SUBMITTED', nextPollAt: new Date().toISOString() }; },
-    recordResult: async (job, lease, outcome) => { calls.push(['result', job, lease, outcome]); if (recordError) throw recordError; return { status: recordStatus }; } };
+    recordResult: async (job, lease, outcome) => { calls.push(['result', job, lease, outcome]); if (recordError) throw recordError; return { status: recordStatus }; },
+    recordStoredResult: async (job, lease, outcome, objects) => { calls.push(['stored', job, lease, outcome, objects]); if (recordError) throw recordError; return { status: recordStatus }; } };
+}
+/** C3: a ready media ingest that "stores" each file and reports the claimed asset back as measured. */
+function fakeIngest() {
+  const calls = [];
+  return { calls, readiness: () => 'READY', ingest: async (j, downloads, claimed) => { calls.push([j, downloads, claimed]);
+    return { assets: claimed, objects: claimed.map(() => ({ byteSize: 100, sha256: 'a'.repeat(64) })) }; } };
 }
 const job = (patch = {}) => ({ jobId: U(), leaseToken: U(), providerId: 'HIGGSFIELD', providerJobId: `job-${U()}`, modelCode: 'async-image-generate-1',
   operationCode: 'image.generate', mediaKind: 'IMAGE', units: 2, format: 'SQUARE', pollCount: 0, deadlineAt: new Date(Date.now() + 600_000).toISOString(), ...patch });
@@ -123,7 +130,7 @@ test('C1 worker: claim -> poll -> record; PENDING and poll errors back off, fina
     ['REJECT_WITH_COST', ['FAILED', 'PROVIDER_REJECTED']], ['UNKNOWN', ['UNKNOWN', 'PROVIDER_UNKNOWN']], ['UNVERIFIED', ['UNKNOWN', 'UNVERIFIED_RESULT']]];
   for (const [step, expected] of cases) {
     const j = job(), store = fakeStore([j]), runtime = new SyntheticAsyncCreativeProviderRuntime('ACCEPT', [step]);
-    const summary = await new CreativeJobWorker(store, runtime).runOnce();
+    const summary = await new CreativeJobWorker(store, runtime, fakeIngest()).runOnce();
     assert.deepEqual(store.calls[0], ['claim', 10, 120], step);
     assert.equal(runtime.polls.length, 1, step);
     assert.deepEqual(Object.keys(runtime.polls[0]).sort(), ['format', 'mediaKind', 'modelCode', 'operationCode', 'providerId', 'providerJobId', 'units'], 'no prompt, school or lease');
@@ -134,7 +141,10 @@ test('C1 worker: claim -> poll -> record; PENDING and poll errors back off, fina
     }
     const [, id, lease, outcome] = store.calls[1];
     assert.deepEqual([id, lease, outcome.outcome, outcome.failureReason], [j.jobId, j.leaseToken, ...expected], step);
-    if (step === 'SUCCEED') assert.deepEqual([outcome.finalUnits, outcome.providerCostMicrounits, outcome.assets.length], [2, 2000, 2]);
+    if (step === 'SUCCEED') {
+      assert.deepEqual([store.calls[1][0], outcome.finalUnits, outcome.providerCostMicrounits, outcome.assets.length], ['stored', 2, 2000, 2], 'a success is recorded with its stored files');
+      assert.deepEqual(store.calls[1][4], [{ byteSize: 100, sha256: 'a'.repeat(64) }, { byteSize: 100, sha256: 'a'.repeat(64) }]);
+    } else assert.equal(store.calls[1][0], 'result', step);
     if (step === 'REJECT_WITH_COST') assert.equal(outcome.providerCostMicrounits, 250);
     assert.deepEqual(summary, { claimed: 1, recorded: 1, heldForHq: 0, pending: 0, errors: 0 }, step);
   }
@@ -142,18 +152,18 @@ test('C1 worker: claim -> poll -> record; PENDING and poll errors back off, fina
 
 test('C1 worker: unusable jobs, no async provider, refused records and held answers never stop the run', async () => {
   const off = fakeStore([job()], { configured: false });
-  assert.deepEqual(await new CreativeJobWorker(off, new SyntheticAsyncCreativeProviderRuntime()).runOnce(), { claimed: 0, recorded: 0, heldForHq: 0, pending: 0, errors: 0 });
+  assert.deepEqual(await new CreativeJobWorker(off, new SyntheticAsyncCreativeProviderRuntime(), fakeIngest()).runOnce(), { claimed: 0, recorded: 0, heldForHq: 0, pending: 0, errors: 0 });
   assert.equal(off.calls.length, 0, 'no worker login: nothing is claimed');
   // Production wiring (no provider connected): claimed jobs are only released, never answered, so the deadline sweep decides.
   const sync = fakeStore([job(), job()]);
-  assert.equal((await new CreativeJobWorker(sync, new UnconfiguredCreativeProviderRuntime()).runOnce()).pending, 2);
+  assert.equal((await new CreativeJobWorker(sync, new UnconfiguredCreativeProviderRuntime(), fakeIngest()).runOnce()).pending, 2);
   assert.deepEqual(sync.calls.slice(1).map(c => c[0]), ['poll', 'poll']);
   const bad = fakeStore([job({ providerJobId: '../x' }), job({ mediaKind: 'AUDIO' }), job({ format: 'BANNER' }), job({ units: 0 })]), r = new SyntheticAsyncCreativeProviderRuntime();
-  assert.equal((await new CreativeJobWorker(bad, r).runOnce()).pending, 4); assert.equal(r.polls.length, 0, 'never asks the provider about an unsafe job');
+  assert.equal((await new CreativeJobWorker(bad, r, fakeIngest()).runOnce()).pending, 4); assert.equal(r.polls.length, 0, 'never asks the provider about an unsafe job');
   const refused = fakeStore([job(), job()], { recordError: sqlError('CREATIVE_JOB_LEASE_LOST', '40001') });
-  assert.deepEqual(await new CreativeJobWorker(refused, new SyntheticAsyncCreativeProviderRuntime()).runOnce(), { claimed: 2, recorded: 0, heldForHq: 0, pending: 0, errors: 2 });
+  assert.deepEqual(await new CreativeJobWorker(refused, new SyntheticAsyncCreativeProviderRuntime(), fakeIngest()).runOnce(), { claimed: 2, recorded: 0, heldForHq: 0, pending: 0, errors: 2 });
   const held = fakeStore([job()], { recordStatus: 'REQUESTER_UNAVAILABLE' });
-  assert.equal((await new CreativeJobWorker(held, new SyntheticAsyncCreativeProviderRuntime()).runOnce()).heldForHq, 1);
+  assert.equal((await new CreativeJobWorker(held, new SyntheticAsyncCreativeProviderRuntime(), fakeIngest()).runOnce()).heldForHq, 1);
 });
 
 test('C1 wiring: no provider is connected, the loop is off by default and the worker never uses the runtime login', async () => {
