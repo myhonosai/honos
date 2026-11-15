@@ -97,7 +97,7 @@ export function myTasks(items: readonly HumanWorkQueueItem[]): HumanWorkQueueIte
 // ---------------------------------------------------------------- AI team
 
 export type AgentStatus = 'READY' | 'PROVIDER_OFF' | 'AI_OFF' | 'BUDGET' | 'NO_ROUTE' | 'NO_PERMISSION' | 'HIDDEN' | 'CHECKING' | 'UNKNOWN' | 'NOT_AVAILABLE';
-export type AgentCard = Readonly<{ id: string; name: string; title: HomeKey; portrait: string; color: string; status: AgentStatus; href: string | null }>;
+export type AgentCard = Readonly<{ id: string; name: string; title: HomeKey; purpose: HomeKey; portrait: string; color: string; status: AgentStatus; href: string | null }>;
 
 /**
  * The owner roster (2026-11-06): Kai teaches; seven business specialists; Claire is Business Performance only.
@@ -117,6 +117,8 @@ const LIVE: Record<string, { key: ReadyKey; href: string }> = {
 };
 /** Specialists who answer in Ask HON rather than in a workspace of their own. */
 export const ASK_HON_AGENTS: ReadonlySet<string> = new Set(['alex', 'jordan', 'claire', 'lena']);
+/** What each one is for, in a few words, shown under the name on the home cards (owner ask 2026-11-15). */
+const PURPOSE: Record<string, HomeKey> = { kai: 'purposeKai', alex: 'purposeAlex', chad: 'purposeChad', maya: 'purposeMaya', marcus: 'purposeMarcus', jordan: 'purposeJordan', claire: 'purposeClaire', lena: 'purposeLena' };
 const TITLES: Record<string, HomeKey> = { kai: 'agentKai', alex: 'agentAlex', chad: 'agentChad', maya: 'agentMaya', marcus: 'agentMarcus', jordan: 'agentJordan', claire: 'agentClaire', lena: 'agentLena' };
 
 export function agentStatus(readiness: Panel<AiTeamReadiness>, key: ReadyKey): AgentStatus {
@@ -137,11 +139,11 @@ export function agentStatus(readiness: Panel<AiTeamReadiness>, key: ReadyKey): A
 
 /** Kai and the seven specialists in the viewer's art style. Status is readiness only; the style never changes it. */
 export function homeAiTeam(readiness: Panel<AiTeamReadiness>, style: HonArtStyle): AgentCard[] {
-  const kai: AgentCard = { id: 'kai', name: 'Kai', title: TITLES.kai!, portrait: aiTeamPortrait('kai', style)!, color: '#34d6e8', status: agentStatus(readiness, 'kai'), href: LIVE.kai!.href };
+  const kai: AgentCard = { id: 'kai', name: 'Kai', title: TITLES.kai!, purpose: PURPOSE.kai!, portrait: aiTeamPortrait('kai', style)!, color: '#34d6e8', status: agentStatus(readiness, 'kai'), href: LIVE.kai!.href };
   const order = ['chad', 'marcus', 'alex', 'maya', 'jordan', 'claire', 'lena'];
   const team = order.map(id => HON_AI_TEAM.find(member => member.id === id)!).map((member): AgentCard => {
     const live = LIVE[member.id];
-    return { id: member.id, name: member.name, title: TITLES[member.id]!, portrait: aiTeamPortrait(member.id, style) ?? member.portrait, color: member.color,
+    return { id: member.id, name: member.name, title: TITLES[member.id]!, purpose: PURPOSE[member.id]!, portrait: aiTeamPortrait(member.id, style) ?? member.portrait, color: member.color,
       status: live ? agentStatus(readiness, live.key) : 'NOT_AVAILABLE', href: live?.href ?? null };
   });
   return [kai, ...team];
