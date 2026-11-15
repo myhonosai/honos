@@ -256,3 +256,30 @@ Each fact carries its source id, so a reply can show what it used. Nothing outsi
 - **D5:** when should David turn the HQ program switch to LIVE, and for which schools first? The recommendation is
   his own test school only, after a fake-provider week.
 - **D1** (still open) decides whether Chad may answer a first-time texter who has no recorded consent.
+
+### 7.7 Design read (review thread, 2026-11-15; full notes in /mnt/project-files/conversation-ai/CA2_S4_DESIGN_READ.md), accepted
+- System turns get their own planner, `plan_conversation_ai_turn`. It is worker-only and its only input is the inbound
+  message id, with one turn per message (UNIQUE). Both it and `plan_ai_invocation` call one shared, non-granted S4
+  core: route, unavailable model, org ceiling, budget lock first, access and pause, UNKNOWN window. Both paths are in
+  the AI-0 inventory.
+- Standing authority is proved again on every turn, both when it is planned and when its result is recorded. That
+  covers the HQ switch, the school mode, takeover and needs-staff, entitlement, and the enabling owner still holding
+  `conversation.ai.configure`. A switch or takeover that happens during the provider call wins.
+- `CONVERSATION_REPLY` is HIGH risk and has its own HQ task profile. Without that profile the turn fails closed.
+- Audit source is SYSTEM, under a fixed system principal. When the reply is queued, consent, address and quiet hours
+  are checked again.
+- AUTOMATIC is allowed only while the HQ program is in TEST_MODE until CA3's guardrails land. Otherwise turns produce
+  ASSIST drafts only.
+- Chad hands off to staff after 5 AI replies in a row with no staff message in between.
+- The S4 org ceiling applies to every turn. "No cap for paying schools" means no extra cap from conversations only.
+
+### 7.8 Split
+- **CA2a (0365)** covers:
+  - the HQ program switch and school settings;
+  - the training library with coaching cards and the on/off switch;
+  - the knowledge pack read;
+  - inbox AI state: takeover and hand-back, needs staff, the needs-attention count.
+
+  No AI is called.
+- **CA2b** (migration number to ask) covers the shared S4 core, the system turn planner and recorder, the worker,
+  ASSIST drafts, TEST_MODE automatic replies, and the test bench.
