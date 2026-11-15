@@ -3,7 +3,7 @@ import type { ConversationDeliveryState } from '@hon/contracts';
 
 export type ConversationsCopy = {
   title: string; intro: string; chooseSchool: string; loading: string; hidden: string; show: string; refresh: string;
-  deniedTitle: string; denied: string; sessionEnded: string; unavailable: string; unknownSend: string;
+  deniedTitle: string; denied: string; sessionEnded: string; unavailable: string; unknownSend: string; unknownUpdate: string;
   inbox: string; unread: (n: number) => string; empty: string; emptyFiltered: string; more: string;
   filterStatus: string; statusOpen: string; statusClosed: string; statusAll: string; unreadOnly: string; search: string; searchHint: string; apply: string;
   unknownContact: string; theyWrote: string; youReplied: string; media: (n: number) => string; closedBadge: string; newBadge: (n: number) => string;
@@ -25,6 +25,7 @@ const en: ConversationsCopy = {
   deniedTitle: 'Not available for your role', denied: 'You need the conversations permission at this school.', sessionEnded: 'Your session has ended. Sign in again.',
   unavailable: 'Conversations are unavailable right now. Try again in a moment.',
   unknownSend: 'We could not confirm the reply. It may or may not be queued. Refresh before sending again; sending the same text again will not send it twice.',
+  unknownUpdate: 'We could not confirm the change. It may have been saved. Refresh to see the current state.',
   inbox: 'Inbox', unread: n => (n === 1 ? '1 unread' : `${n} unread`), empty: 'No one has texted the school number yet.', emptyFiltered: 'No conversations match these filters.', more: 'Show more',
   filterStatus: 'Status', statusOpen: 'Open', statusClosed: 'Closed', statusAll: 'All', unreadOnly: 'Unread only', search: 'Search', searchHint: 'Name, number or tag', apply: 'Apply',
   unknownContact: 'Unknown number', theyWrote: 'They wrote', youReplied: 'School replied', media: n => (n === 1 ? '1 picture' : `${n} pictures`), closedBadge: 'Closed', newBadge: n => `${n} new`,
@@ -63,6 +64,7 @@ const ko: ConversationsCopy = {
   deniedTitle: '현재 역할로는 사용할 수 없습니다', denied: '이 학교의 대화 권한이 필요합니다.', sessionEnded: '세션이 끝났습니다. 다시 로그인하세요.',
   unavailable: '지금은 대화를 불러올 수 없습니다. 잠시 후 다시 시도하세요.',
   unknownSend: '답장을 확인하지 못했습니다. 대기열에 들어갔는지 알 수 없습니다. 다시 보내기 전에 새로고침하세요. 같은 내용을 다시 보내도 두 번 발송되지 않습니다.',
+  unknownUpdate: '변경 사항을 확인하지 못했습니다. 저장되었을 수 있습니다. 새로고침하여 현재 상태를 확인하세요.',
   inbox: '받은 대화', unread: n => `읽지 않음 ${n}`, empty: '아직 학교 번호로 문자를 보낸 사람이 없습니다.', emptyFiltered: '조건에 맞는 대화가 없습니다.', more: '더 보기',
   filterStatus: '상태', statusOpen: '진행 중', statusClosed: '종료', statusAll: '전체', unreadOnly: '읽지 않은 대화만', search: '검색', searchHint: '이름, 번호 또는 태그', apply: '적용',
   unknownContact: '알 수 없는 번호', theyWrote: '받은 문자', youReplied: '학교 답장', media: n => `사진 ${n}장`, closedBadge: '종료', newBadge: n => `새 문자 ${n}`,
@@ -101,6 +103,7 @@ const es: ConversationsCopy = {
   deniedTitle: 'No disponible para tu función', denied: 'Necesitas el permiso de conversaciones en esta escuela.', sessionEnded: 'Tu sesión terminó. Inicia sesión otra vez.',
   unavailable: 'Las conversaciones no están disponibles ahora. Inténtalo de nuevo en un momento.',
   unknownSend: 'No pudimos confirmar la respuesta. Puede que esté o no en la cola. Actualiza antes de enviarla otra vez; enviar el mismo texto otra vez no la enviará dos veces.',
+  unknownUpdate: 'No pudimos confirmar el cambio. Puede que se haya guardado. Actualiza para ver el estado actual.',
   inbox: 'Bandeja', unread: n => (n === 1 ? '1 sin leer' : `${n} sin leer`), empty: 'Nadie ha escrito todavía al número de la escuela.', emptyFiltered: 'Ninguna conversación coincide con estos filtros.', more: 'Mostrar más',
   filterStatus: 'Estado', statusOpen: 'Abiertas', statusClosed: 'Cerradas', statusAll: 'Todas', unreadOnly: 'Solo sin leer', search: 'Buscar', searchHint: 'Nombre, número o etiqueta', apply: 'Aplicar',
   unknownContact: 'Número desconocido', theyWrote: 'Escribió', youReplied: 'La escuela respondió', media: n => (n === 1 ? '1 imagen' : `${n} imágenes`), closedBadge: 'Cerrada', newBadge: n => `${n} nuevos`,

@@ -111,6 +111,13 @@ describe('school conversations screen', () => {
     const routes = SCHOOL_SHELL_NAV.flatMap(item => item.routes.map(r => r.href));
     expect(routes).toContain('/staff/conversations');
   });
+  it('keeps a separate retry key per command kind, so an update cannot replace an unconfirmed reply key', () => {
+    const source = readFileSync(resolve('src/components/conversations/staff-conversations.tsx'), 'utf8');
+    expect(source).toMatch(/updateAttempt\.current = commandAttempt\(fingerprint, updateAttempt\.current,/);
+    expect(source).toMatch(/attempt\.current = commandAttempt\(`reply:/);
+    expect(source).not.toMatch(/attempt\.current\?\.fingerprint\.startsWith\('update:'\)/);
+    expect(source).toContain('setError(copy.unknownUpdate)');
+  });
   it('never stores, injects HTML or calls a provider from the browser', () => {
     for (const file of ['conversations/staff-conversations.tsx', 'conversations/http.ts']) {
       const source = readFileSync(resolve('src/components', file), 'utf8');

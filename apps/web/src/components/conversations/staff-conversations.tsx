@@ -52,13 +52,15 @@ export function StaffConversations(): React.ReactElement {
   const [text, setText] = useState(''), [tagText, setTagText] = useState('');
   const [busy, setBusy] = useState(false), [acting, setActing] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [denied, setDenied] = useState(false), [hidden, setHidden] = useState(false);
-  const generation = useRef(0), attempt = useRef<{ fingerprint: string; key: string } | null>(null);
+  const generation = useRef(0);
+  // One retry key per command kind, so an update never replaces the key an unconfirmed reply must retry with.
+  const attempt = useRef<{ fingerprint: string; key: string } | null>(null), updateAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const scopeOf = useCallback((): ConversationsScope | null => {
     const [organizationId, schoolId] = scopeKey.split('/');
     return organizationId && schoolId ? { organizationId, schoolId } : null;
   }, [scopeKey]);
-  const clear = useCallback(() => { ++generation.current; setList(null); setOpen(null); setText(''); setTagText(''); attempt.current = null; }, []);
+  const clear = useCallback(() => { ++generation.current; setList(null); setOpen(null); setText(''); setTagText(''); attempt.current = null; updateAttempt.current = null; }, []);
   const refresh = useCallback(async (conversationId?: string, nextFilters?: Filters) => {
     const scope = scopeOf();
     if (!scope) return;
@@ -85,7 +87,7 @@ export function StaffConversations(): React.ReactElement {
       const page = await loadConversations(scope, query(filters, list.nextCursor));
       if (generation.current !== token) return;
       setList({ ...page, conversations: [...list.conversations, ...page.conversations.filter(c => !list.conversations.some(x => x.conversationId === c.conversationId))] });
-    } catch (problem) { setError(message(problem, copy)); }
+    } catch (problem) { if (generation.current === token) setError(message(problem, copy)); }
   }
   async function older() {
     const scope = scopeOf();
@@ -96,7 +98,7 @@ export function StaffConversations(): React.ReactElement {
       const page = await loadConversation(scope, open.conversation.conversationId, first.messageId);
       if (generation.current !== token) return;
       setOpen({ ...page, messages: [...page.messages, ...open.messages] });
-    } catch (problem) { setError(message(problem, copy)); }
+    } catch (problem) { if (generation.current === token) setError(message(problem, copy)); }
   }
   async function command(run: (scope: ConversationsScope) => Promise<unknown>, done: string, conversationId: string): Promise<true | unknown> {
     const scope = scopeOf();
@@ -123,10 +125,11 @@ export function StaffConversations(): React.ReactElement {
   }
   async function change(c: ConversationRow, body: { status?: 'OPEN' | 'CLOSED'; tags?: string[] }, done: string) {
     const fingerprint = `update:${c.conversationId}:${c.version}:${JSON.stringify(body)}`;
-    attempt.current = commandAttempt(fingerprint, attempt.current?.fingerprint.startsWith('update:') ? attempt.current : null, () => crypto.randomUUID());
-    const key = attempt.current.key;
+    updateAttempt.current = commandAttempt(fingerprint, updateAttempt.current, () => crypto.randomUUID());
+    const key = updateAttempt.current.key;
     const result = await command(scope => updateConversation(scope, c.conversationId, c.version, body, key), done, c.conversationId);
-    if (result === true || result instanceof ConversationsRefusal) attempt.current = null;
+    if (result === true || result instanceof ConversationsRefusal) updateAttempt.current = null;
+    else if (!(result instanceof ConversationsAccessError)) setError(copy.unknownUpdate);
   }
   function applyFilters(event: React.FormEvent) { event.preventDefault(); setFilters(draft); void refresh(open?.conversation.conversationId, draft); }
 
