@@ -97,7 +97,7 @@ export const SCHOOL_SHELL_UNLISTED_ROUTES: readonly string[] = [
   '/staff/schedule/timetable',
   '/staff/schedule/events',
   '/staff/search/[organizationId]/[schoolId]/[kind]/[entityId]',
-  // One custom tool's own section (0362); reached from Custom tools, never from the static menu.
+  // One custom tool's own section (0415); reached from Custom tools, never from the static menu.
   '/staff/tools/[toolKey]',
   // The page Facebook or Instagram returns to after a social connection (0347); reached only from Social accounts.
   '/staff/marketing/social/return',

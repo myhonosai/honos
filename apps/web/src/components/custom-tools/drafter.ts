@@ -3,7 +3,7 @@ import { defaultViews, makeKey, reconcile } from './model';
 import { templateCopy, type ToolTemplateKey } from './templates';
 
 /**
- * Turns an owner's plain-language request into a closed tool design (0362 definition). The drafter only ever returns a
+ * Turns an owner's plain-language request into a closed tool design (0415 definition). The drafter only ever returns a
  * definition; the browser and the server both check it before anything is saved, so a drafter can never add code, SQL
  * or permissions. Access is never set by a drafter: the owner answers "who can use it" separately.
  *

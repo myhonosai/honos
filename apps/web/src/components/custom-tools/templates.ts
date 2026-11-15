@@ -1,7 +1,7 @@
 import type { CustomToolDefinition } from '@hon/contracts';
 
 /**
- * Starting designs for the Tool Maker. Each is an ordinary closed definition (0362) that the owner edits before saving;
+ * Starting designs for the Tool Maker. Each is an ordinary closed definition (0415) that the owner edits before saving;
  * none is published or shared with staff until the owner adds access and publishes it. Text is English with Korean and
  * Spanish where the meaning is fixed; owners can change every label.
  */

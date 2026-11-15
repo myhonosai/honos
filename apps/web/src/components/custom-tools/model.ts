@@ -4,7 +4,7 @@ import {
 } from '@hon/contracts';
 
 /**
- * Pure helpers for the Tool Maker and the tool screens. A design is a closed JSON definition (0362): nothing here runs
+ * Pure helpers for the Tool Maker and the tool screens. A design is a closed JSON definition (0415): nothing here runs
  * code, and the server validates every design and every value again. Keys are generated once and never renamed, so a
  * field keeps its stored values across versions (the database refuses a type change of a published field).
  */

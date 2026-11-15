@@ -8,7 +8,7 @@ import {
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * AI Customizer custom tools (0362). Reads are same-origin GETs with no Idempotency-Key; each command sends its own
+ * AI Customizer custom tools (0415). Reads are same-origin GETs with no Idempotency-Key; each command sends its own
  * X-HON-Human-Command and a fresh Idempotency-Key, so no call can be replayed as another. The server validates every
  * design and every record value again and decides every permission; nothing in this file is authority.
  */
