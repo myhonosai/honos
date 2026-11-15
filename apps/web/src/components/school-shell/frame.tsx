@@ -3,7 +3,7 @@ import type { HonInterfaceTheme } from '@hon/design-system';
 import type { EntryPhase } from '../school-entry/controller';
 import type { StaffReportingSchoolChoice } from '../staff-reporting-schools-http';
 import type { OperationalSchoolScope } from '../operational-navigation';
-import { SCHOOL_SHELL_MOBILE, SCHOOL_SHELL_NAV, schoolShellActiveItem, schoolShellActiveRoute, schoolShellGroups, schoolShellHref } from './catalog';
+import { SCHOOL_SHELL_MOBILE, SCHOOL_SHELL_NAV, schoolShellActiveItem, schoolShellActiveRoute, schoolShellGroups, schoolShellHref, schoolShellListed } from './catalog';
 import { shellText, type ShellKey } from './copy';
 import { ShellIcon } from './icons';
 import { SignOutButton } from '../auth/sign-out-button';
@@ -29,7 +29,8 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
   // Long areas show their groups first, then only the pages of the current group.
   const groups = active ? schoolShellGroups(active) : [];
   const activeGroup = activeRoute?.group ?? null;
-  const tabRoutes = active ? (activeGroup ? active.routes.filter(route => route.group === activeGroup) : active.routes) : [];
+  const listed = active ? schoolShellListed(active) : [];
+  const tabRoutes = activeGroup ? listed.filter(route => route.group === activeGroup) : listed;
   // Phone "where am I": when the current area is not one of the four bottom shortcuts, the last slot names it.
   const offBar = active && !SCHOOL_SHELL_MOBILE.includes(active.key) ? active : null;
   // Owner direction 2026-11-06: Classic keeps the left sidebar, Modern a top navigation bar with a
@@ -91,7 +92,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
       <ul className={styles.menuGrid}>
         {SCHOOL_SHELL_NAV.map(item => <li key={item.key} data-menu={item.key} aria-current={active?.key === item.key ? 'true' : undefined}>
           <a href={schoolShellHref(item.routes[0]!, verified)} onClick={() => onMenu(false)}><span className={styles.menuIcon} aria-hidden="true"><ShellIcon name={item.key} size={24} /></span><strong>{t(item.titleKey)}</strong></a>
-          <ul>{item.routes.map(route => <li key={route.href}><a href={schoolShellHref(route, verified)} onClick={() => onMenu(false)}>{t(route.titleKey)}</a></li>)}</ul>
+          <ul>{schoolShellListed(item).map(route => <li key={route.href}><a href={schoolShellHref(route, verified)} onClick={() => onMenu(false)}>{t(route.titleKey)}</a></li>)}</ul>
         </li>)}
       </ul>
       <footer className={styles.menuFoot}><SignOutButton label={t('signOut')} className={styles.signOut} /></footer>

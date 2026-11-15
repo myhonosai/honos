@@ -1,0 +1,7 @@
+.card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 16px; padding: 14px 18px;
+  border: 1px solid rgba(47, 123, 255, 0.45); border-radius: 12px; background: rgba(47, 123, 255, 0.12); color: inherit; }
+.card strong { display: block; font-size: 15px; }
+.card span { color: inherit; opacity: 0.85; font-size: 14px; }
+.card a { padding: 9px 16px; border-radius: 999px; background: #2f7bff; color: #fff; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.card a span { opacity: 1; }
+.card a:focus-visible { outline: 3px solid #9cc0ff; outline-offset: 2px; }

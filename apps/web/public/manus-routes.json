@@ -639,6 +639,10 @@
     {
       "path": "/hq/founder-setup",
       "title": "HON HQ | Founder Setup"
+    },
+    {
+      "path": "/staff/settings",
+      "title": "HON | Settings"
     }
   ]
 }

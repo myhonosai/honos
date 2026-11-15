@@ -86,7 +86,7 @@ it('searches, then confirms the quoted monthly price before ordering, and says n
   html = renderToStaticMarkup(<NumberView {...base({ search: { state: 'READY', numbers: [avail], hasOwnNumber: false } })} />);
   expect(html).toContain('(512) 555-0199'); expect(html).toContain('$1.15 a month'); expect(html).toContain('Pick (512) 555-0199');
   html = renderToStaticMarkup(<NumberView {...base({ picked: avail })} />);
-  expect(html).toContain('Order this number?'); expect(html).toContain('$1.15 a month, billed to your school. Texting is included.');
+  expect(html).toContain('Order this number?'); expect(html).toContain('$1.15 a month, billed to your school once billing for numbers is switched on. Texting is included.');
   expect(html).toContain('Nothing is charged today'); expect(html).toContain('Order (512) 555-0199');
   expect(renderToStaticMarkup(<NumberView {...base({ search: { state: 'OFF' } })} />)).toContain('not switched on yet');
   expect(renderToStaticMarkup(<NumberView {...base({ search: { state: 'READY', numbers: [], hasOwnNumber: false } })} />)).toContain('No numbers found');
