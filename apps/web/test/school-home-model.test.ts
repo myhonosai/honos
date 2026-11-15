@@ -52,7 +52,7 @@ describe('school home model', () => {
   it('says under each name what that agent is for, in every language, and shows all eight as ready when readiness says so', () => {
     const team = homeAiTeam({ state: 'READY', value: readiness() }, 'realistic');
     for (const language of ['en', 'ko', 'es'] as const) for (const card of team) expect(homeText(language, card.purpose)).toBeTruthy();
-    expect(homeText('en', team.find(card => card.id === 'chad')!.purpose)).toBe('Follows up every lead');
+    expect(homeText('en', team.find(card => card.id === 'chad')!.purpose)).toBe('Drafts follow-ups for every lead');
     expect(new Set(team.map(card => card.purpose)).size).toBe(8);
     // Readiness that lists the whole launch roster as available: every card says Ready, none says "Not available yet".
     const on = { providerRuntime: 'READY' as const, available: true, blockedBy: null };
