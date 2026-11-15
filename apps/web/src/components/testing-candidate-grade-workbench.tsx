@@ -5,6 +5,7 @@ import { TESTING_CANDIDATE_GRADE_RESULTS } from '@hon/contracts';
 import { TestingCandidateGradeAccessError, TestingCandidateGradeUncertainError, prepareTestingCandidateGrade, submitTestingCandidateGrade, validateTestingCandidateGradeDraft,
   type TestingCandidateGradeIds, type TestingCandidateGradeReceipt, type PreparedTestingCandidateGrade } from './testing-candidate-grade-http';
 import styles from './attendance-workbench.module.css';
+import { useShellSchoolInto } from './school-shell/page-school';
 
 const EMPTY_IDS: TestingCandidateGradeIds = { organizationId: '', schoolId: '', candidateId: '' };
 const LABELS: Record<keyof TestingCandidateGradeIds, string> = { organizationId: 'Organization UUID', schoolId: 'School UUID', candidateId: 'Testing candidate UUID' };
@@ -13,6 +14,7 @@ function versionNumber(value: string): number { return value === value.trim() &&
 /** One known-ID candidate outcome command only, with no candidate read or downstream handoff. */
 export function TestingCandidateGradeWorkbench(): React.ReactElement {
   const [ids, setIds] = useState<TestingCandidateGradeIds>(EMPTY_IDS);
+  const shellSchool = useShellSchoolInto(school => setIds(current => ({ ...current, organizationId: school.organizationId, schoolId: school.schoolId })));
   const [version, setVersion] = useState('');
   const [result, setResult] = useState('');
   const [note, setNote] = useState('');
@@ -88,7 +90,7 @@ export function TestingCandidateGradeWorkbench(): React.ReactElement {
     </aside>
     <section aria-labelledby="candidate-outcome-command"><h2 id="candidate-outcome-command">Record one known-ID candidate outcome</h2>
       <form autoComplete="off" onSubmit={submit}><fieldset disabled={busy}>
-        <div className={styles.scopeGrid}>{(Object.keys(LABELS) as (keyof TestingCandidateGradeIds)[]).map(field =>
+        <div className={styles.scopeGrid}>{(Object.keys(LABELS) as (keyof TestingCandidateGradeIds)[]).filter(field => !shellSchool || (field !== 'organizationId' && field !== 'schoolId')).map(field =>
           <label key={field}>{LABELS[field]}<input name={field} required autoComplete="off" spellCheck={false} maxLength={36} value={ids[field]} onChange={event => edit(() => setIds({ ...ids, [field]: event.target.value }))} /></label>)}</div>
         <label>Expected candidate version (positive whole number)<input name="expectedVersion" required autoComplete="off" inputMode="numeric" pattern="[1-9][0-9]*" maxLength={16} value={version} onChange={event => edit(() => setVersion(event.target.value))} /></label>
         <label>Candidate outcome<select name="result" required value={result} onChange={event => edit(() => setResult(event.target.value))}><option value="">Choose an explicit outcome</option>{TESTING_CANDIDATE_GRADE_RESULTS.map(outcome => <option key={outcome} value={outcome}>{outcome}</option>)}</select></label>

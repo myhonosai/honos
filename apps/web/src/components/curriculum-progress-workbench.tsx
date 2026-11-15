@@ -5,6 +5,7 @@ import type { CurriculumProgressStatus, StaffCurriculumEnrollmentDetails } from 
 import { CurriculumProgressAccessError, CurriculumProgressUncertainError, HUMAN_PROGRESS_STATUSES, loadCurriculumEnrollment, prepareCurriculumObservation,
   submitCurriculumObservation, validateCurriculumObservationDraft, validateCurriculumProgressIds, type CurriculumProgressKnownIds, type CurriculumObservationReceipt, type PreparedCurriculumObservation } from './curriculum-progress-workbench-http';
 import styles from './attendance-workbench.module.css';
+import { useShellSchoolInto } from './school-shell/page-school';
 
 const EMPTY_IDS: CurriculumProgressKnownIds = { organizationId: '', schoolId: '', curriculumId: '', enrollmentId: '' };
 const LABELS: Record<keyof CurriculumProgressKnownIds, string> = { organizationId: 'Organization UUID', schoolId: 'School UUID', curriculumId: 'Curriculum UUID', enrollmentId: 'Enrollment UUID' };
@@ -12,6 +13,7 @@ const LABELS: Record<keyof CurriculumProgressKnownIds, string> = { organizationI
 /** One current enrollment and one appended human observation. No placement or history command. */
 export function CurriculumProgressWorkbench(): React.ReactElement {
   const [ids, setIds] = useState<CurriculumProgressKnownIds>(EMPTY_IDS);
+  const shellSchool = useShellSchoolInto(school => setIds(current => ({ ...current, organizationId: school.organizationId, schoolId: school.schoolId })));
   const [snapshot, setSnapshot] = useState<StaffCurriculumEnrollmentDetails | null>(null);
   const [requirementId, setRequirementId] = useState('');
   const [chosenStatus, setChosenStatus] = useState('');
@@ -97,7 +99,7 @@ export function CurriculumProgressWorkbench(): React.ReactElement {
       <p>UUIDs are untrusted selectors, not authority. Existing tenant RLS, current human identity, exact <code>curriculum.progress.record</code> permission, school entitlement and version rechecks remain server-owned on every read, submit and replay. The inert curriculum outbox event gains no consumer.</p>
     </aside>
     <section aria-labelledby="enrollment-read"><h2 id="enrollment-read">Exact current enrollment read</h2>
-      <fieldset disabled={busy}><div className={styles.scopeGrid}>{(Object.keys(LABELS) as (keyof CurriculumProgressKnownIds)[]).map(field =>
+      <fieldset disabled={busy}><div className={styles.scopeGrid}>{(Object.keys(LABELS) as (keyof CurriculumProgressKnownIds)[]).filter(field => !shellSchool || (field !== 'organizationId' && field !== 'schoolId')).map(field =>
         <label key={field}>{LABELS[field]}<input name={field} required autoComplete="off" spellCheck={false} maxLength={36} value={ids[field]} onChange={event => edit(() => setIds({ ...ids, [field]: event.target.value }), true)} /></label>)}</div>
         <div className={styles.actions}><button type="button" disabled={!validIds} onClick={() => void load()}>Load current enrollment</button><button type="button" onClick={discard}>Discard inputs / start over</button></div>
       </fieldset>

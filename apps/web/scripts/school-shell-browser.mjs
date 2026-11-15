@@ -156,7 +156,7 @@ for (const mode of ['modern', 'classic', 'big-button']) for (const [size, viewpo
     assert.equal(await page.locator('[data-locale-utility] select').count(), 1, 'exactly one language selector');
     assert.equal(await page.locator('[data-locale-utility] select').isVisible(), true, 'language selector reachable at every width');
     assert.equal(await page.locator('[data-kpi="revenue"]').getAttribute('data-state'), 'NOT_CONNECTED');
-    assert.equal(await page.locator('[data-agent="claire"]').getAttribute('data-status'), 'NOT_AVAILABLE');
+    assert.equal(await page.locator('[data-agent="claire"]').getAttribute('data-status'), 'UNKNOWN');
     await page.waitForTimeout(150);
     await noOverflow(page);
     await axeScan(page, `home-${mode}-${size}`);
@@ -174,7 +174,7 @@ await check('art style chip redraws the team without changing availability, and 
     await page.waitForSelector(`[data-art="${style}"]`);
     assert.equal(await page.locator('[data-agent="chad"] img').getAttribute('src'), `/ai/chad-${style}.webp`);
     assert.equal(await page.locator('[data-agent="kai"]').getAttribute('data-status'), 'PROVIDER_OFF');
-    assert.equal(await page.locator('[data-agent="claire"]').getAttribute('data-status'), 'NOT_AVAILABLE');
+    assert.equal(await page.locator('[data-agent="claire"]').getAttribute('data-status'), 'UNKNOWN');
     await page.waitForTimeout(300); await shot(page, `u2-home-art-${style}-desktop`);
   }
   await page.reload(); await page.waitForSelector('[data-art="chibi"]');

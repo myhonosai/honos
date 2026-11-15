@@ -15,6 +15,7 @@ import { useLocale } from './localization/provider';
 import { entryText } from './school-entry/copy';
 import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT } from './session-invalidation';
 import styles from './staff-dashboard.module.css';
+import { ManualSchoolFields, useShellSchoolInto } from './school-shell/page-school';
 
 type VerifiedSelection = Pick<OperationalSnapshot, 'organizationId' | 'schoolId' | 'generatedAt' | 'from' | 'to'>;
 type InterfaceThemeState = 'UNAVAILABLE' | 'LOADING' | 'READY' | 'SAVING' | 'ERROR';
@@ -196,6 +197,7 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
   const { preferences } = useLocale();
   const [organizationId, setOrganizationId] = useState(initialScope.organizationId ?? '');
   const [schoolId, setSchoolId] = useState(initialScope.schoolId ?? '');
+  useShellSchoolInto(school => { setOrganizationId(school.organizationId); setSchoolId(school.schoolId); });
   const [selection, setSelection] = useState<VerifiedSelection | null>(null);
   const [snapshot, setSnapshot] = useState<OperationalSnapshot | null>(null);
   const [ownerWorkflowProgress, setOwnerWorkflowProgress] = useState<OwnerWorkflowProgress | null>(null);
@@ -455,7 +457,7 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
         <button type="button" onClick={() => { clear(); setManualEntry(!manualEntry); }}>{manualEntry ? 'Choose from authorized schools' : 'Use manual known-ID entry'}</button>
       </>}
       {(manualEntry || schoolChoices.length === 0) && <form onSubmit={submit} aria-busy={loading}>
-        <fieldset disabled={loading || sessionEnded.current}><label>Organization UUID<input required autoComplete="off" spellCheck={false} value={organizationId} onChange={(event) => { setOrganizationId(event.target.value); clear(); }} /></label><label>School UUID<input required autoComplete="off" spellCheck={false} value={schoolId} onChange={(event) => { setSchoolId(event.target.value); clear(); }} /></label><button type="submit">{loading ? 'Verifying school…' : 'Load verified dashboard'}</button></fieldset>
+        <fieldset disabled={loading || sessionEnded.current}><ManualSchoolFields current={schoolId}><label>Organization UUID<input required autoComplete="off" spellCheck={false} value={organizationId} onChange={(event) => { setOrganizationId(event.target.value); clear(); }} /></label><label>School UUID<input required autoComplete="off" spellCheck={false} value={schoolId} onChange={(event) => { setSchoolId(event.target.value); clear(); }} /></label></ManualSchoolFields><button type="submit">{loading ? 'Verifying school…' : 'Load verified dashboard'}</button></fieldset>
       </form>}
       {!selection && !loading && !error && <p className={styles.scopeState} role="status">{scopeMessage}</p>}
       {loading && <p className={styles.scopeState} role="status">Checking current school access and loading the aggregate-only operations report…</p>}

@@ -36,3 +36,7 @@
 .error { background: #fff0ed; color: #92351f; border: 1px solid #efc1b6; }
 .notice { background: #eaf8f1; color: #166142; border: 1px solid #bae1ce; }
 @media (max-width: 720px) { .page { padding: 24px 14px 50px; } .page section { padding: 18px; } .scopeGrid, .recordForm, .rules { grid-template-columns: 1fr; } .scopeGrid label:last-child, .note { grid-column: auto; } .record dl { grid-template-columns: 1fr; gap: 3px; } .record dd { margin-bottom: 11px; } .actions button, .page button { width: 100%; } }
+.page a.primaryLink, .primaryLink { display: inline-block; padding: 12px 18px; border-radius: 10px; background: #1f5fd1; color: #fff; font-weight: 700; text-decoration: none; }
+.page a.primaryLink:focus-visible, .primaryLink:focus-visible { outline: 3px solid #f0b44c; outline-offset: 3px; }
+.advanced { margin-top: 24px; }
+.advanced > summary { cursor: pointer; font-weight: 700; padding: 12px 0; }

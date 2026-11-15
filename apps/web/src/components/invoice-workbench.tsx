@@ -8,6 +8,7 @@ import {
 } from './invoice-workbench-http';
 import styles from './attendance-workbench.module.css';
 import { InvoicePickers, amountToMinor, endOfSchoolDay, formatMinor } from './invoice-pickers';
+import { ManualSchoolFields, useShellSchoolInto } from './school-shell/page-school';
 
 type Fields = { organizationId: string; schoolId: string; billingAccountId: string; membershipId: string; currency: string; subtotalMinor: string; dueAt: string; amountText: string; dueDate: string };
 const EMPTY: Fields = { organizationId: '', schoolId: '', billingAccountId: '', membershipId: '', currency: '', subtotalMinor: '', dueAt: '', amountText: '', dueDate: '' };
@@ -31,6 +32,7 @@ function input(fields: Fields): CreateInvoiceDraftInput {
 
 export function InvoiceWorkbench({ shellScope = null }: { shellScope?: InvoiceShellScope | null } = {}): React.ReactElement {
   const [rawFields, setFields] = useState<Fields>(EMPTY);
+  const shellSchool = useShellSchoolInto(school => setFields(current => ({ ...current, organizationId: school.organizationId, schoolId: school.schoolId })));
   const fields = shellInvoiceFields(rawFields, shellScope);
   const [createConfirmed, setCreateConfirmed] = useState(false);
   const [issueConfirmed, setIssueConfirmed] = useState(false);
@@ -122,7 +124,7 @@ export function InvoiceWorkbench({ shellScope = null }: { shellScope?: InvoiceSh
             onAmount={text => edit(() => setFields({ ...fields, amountText: text }))}
             onDueDate={(date, zone) => edit(() => setFields({ ...fields, dueDate: date, dueAt: endOfSchoolDay(date, zone) ?? '' }))}/>
           <label>Currency<input name="currency" required autoComplete="off" spellCheck={false} maxLength={3} value={fields.currency} onChange={event => edit(() => setFields({ ...fields, currency: event.target.value }))} /></label>
-        </div> : <div className={styles.scopeGrid}>{(Object.keys(ID_LABELS) as (keyof typeof ID_LABELS)[]).map(name =>
+        </div> : <div className={styles.scopeGrid}>{(Object.keys(ID_LABELS) as (keyof typeof ID_LABELS)[]).filter(name => !shellSchool || (name !== 'organizationId' && name !== 'schoolId')).map(name =>
           <label key={name}>{ID_LABELS[name]}<input name={name} required={name !== 'membershipId'} autoComplete="off" spellCheck={false} maxLength={36} value={fields[name]} onChange={event => edit(() => setFields({ ...fields, [name]: event.target.value }))} /></label>)}
           <label>ISO 4217 currency<input name="currency" required autoComplete="off" spellCheck={false} maxLength={3} placeholder="USD" value={fields.currency} onChange={event => edit(() => setFields({ ...fields, currency: event.target.value }))} /></label>
           <label>Subtotal (minor-unit integer)<input name="subtotalMinor" required autoComplete="off" inputMode="numeric" maxLength={10} placeholder="0–2147483647" value={fields.subtotalMinor} onChange={event => edit(() => setFields({ ...fields, subtotalMinor: event.target.value }))} /></label>

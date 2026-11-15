@@ -114,7 +114,7 @@ it('has every phrase in Korean and Spanish and is listed under Marketing', () =>
     if (SOCIAL_LANGUAGES.en[k as keyof typeof SOCIAL_LANGUAGES.en] !== '') expect(v, `${language}:${k}`).not.toBe('');
   }
   expect(socialText('ko', 'returnDone', { count: '2' })).toContain('2');
-  const marketing = SCHOOL_SHELL_NAV.find(g => g.key === 'marketing');
+  const marketing = SCHOOL_SHELL_NAV.find(g => g.key === 'crm');
   expect(marketing?.routes.some(r => r.href === '/staff/marketing/social')).toBe(true);
   expect(schoolShellActiveRoute('/staff/marketing/social/return')?.href).toBe('/staff/marketing/social');
 });

@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { DEFAULT_HON_INTERFACE_THEME, type HonInterfaceTheme } from '@hon/design-system';
 import { HonCommandController, initialHonCommandSnapshot, type HonCommandApi, type HonCommandSnapshot, type HonScope } from './hon-command-data';
-import { HonConversation } from './hon-conversation-panel';
+import { HonConversation, composerAskFromQuery } from './hon-conversation-panel';
 import { HonSchoolNotes } from './hon-school-notes';
 import { HonSchoolTone } from './hon-school-tone';
 import { HonWeeklyBriefing } from './hon-weekly-briefing';
@@ -45,10 +45,10 @@ interface HonPanelProps {
 }
 
 /** The live Ask HON conversation, only for a server-verified school; a school change remounts it. */
-function verifiedConversation(scope: HonCommandSnapshot['scope'], presentation: 'panel' | 'full'): React.ReactNode {
+function verifiedConversation(scope: HonCommandSnapshot['scope'], presentation: 'panel' | 'full', ask?: string): React.ReactNode {
   if (scope.state !== 'VERIFIED') return null;
   const key = `${scope.organizationId}/${scope.schoolId}`, school = { organizationId: scope.organizationId, schoolId: scope.schoolId };
-  const conversation = <HonConversation key={key} school={school} presentation={presentation} />;
+  const conversation = <HonConversation key={key} school={school} presentation={presentation} initialAsk={composerAskFromQuery(ask)} />;
   // 0255: the full workspace also shows what HON remembers about this school.
   // 0256: and how HON talks at this school.
   return presentation === 'full' ? <>{conversation}<HonSchoolNotes key={`${key}/notes`} school={school} /><HonSchoolTone key={`${key}/tone`} school={school} /><HonWeeklyBriefing key={`${key}/briefing`} school={school} /></> : conversation;
@@ -168,7 +168,7 @@ export function HonTeamBand({ scope, variant, api }: { scope: HonScope; variant:
 }
 
 /** `/staff/hon` full workspace. URL values select presentation only. */
-export function HonFullWorkspace({ returnPath, agentId: initialAgent, api }: { returnPath?: string | undefined; agentId?: string | undefined; api?: HonCommandApi | undefined }): React.ReactElement {
+export function HonFullWorkspace({ returnPath, agentId: initialAgent, ask, api }: { returnPath?: string | undefined; agentId?: string | undefined; ask?: string | undefined; api?: HonCommandApi | undefined }): React.ReactElement {
   const { controller, snapshot } = useHonController(api);
   const [tab, setTab] = useState<HonTab>('team');
   const [agentId, setAgentId] = useState<string | null>(honAgent(initialAgent)?.id ?? null);
@@ -187,7 +187,7 @@ export function HonFullWorkspace({ returnPath, agentId: initialAgent, api }: { r
       onSelectAgent={(id) => { setAgentId(id); setTab('team'); }}
       onRefresh={() => void controller.refresh()}
       returnHref={safeHonReturnPath(returnPath)}
-      conversation={verifiedConversation(snapshot.scope, 'full')}
+      conversation={verifiedConversation(snapshot.scope, 'full', ask)}
     />
   </main>;
 }

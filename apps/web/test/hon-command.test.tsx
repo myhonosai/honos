@@ -79,8 +79,8 @@ describe('HON command roster', () => {
     expect(claire.title).toBe('Business Performance Manager');
     expect(claire.draftWorkKey).toBeNull();
     expect(JSON.stringify(claire)).not.toMatch(/teaching|curriculum/i);
-    expect(HON_DRAFT_WORK_SOURCES.claire).toEqual(expect.objectContaining({ agentId: null, destination: '/staff/teaching-assistant', label: 'Teaching draft assistant (legacy)' }));
-    expect(approvalSourceLabel('teaching.draft.save')).toBe('Teaching draft assistant (legacy)');
+    expect(HON_DRAFT_WORK_SOURCES.claire).toEqual(expect.objectContaining({ agentId: null, destination: '/staff/teaching-assistant', label: 'Teaching drafts' }));
+    expect(approvalSourceLabel('teaching.draft.save')).toBe('Teaching drafts');
     expect(approvalSourceLabel('crm.follow_up_draft.propose')).toBe('Chad · Follow-up draft');
     expect(approvalSourceLabel('marketing.draft.save')).toBe('Marcus · Marketing draft');
     expect(approvalSourceLabel('anything.else')).toBe('School workflow');
@@ -102,7 +102,7 @@ describe('HON command roster', () => {
     expect(HON_TEACHING_AI.portrait).toBe('/ai/kai.webp');
     expect(existsSync(join('public', HON_TEACHING_AI.portrait))).toBe(true);
     expect(HON_AI_TEAM.map((member) => member.portrait)).not.toContain(HON_TEACHING_AI.portrait);
-    expect(HON_TEACHING_AI.tools.map((tool) => tool.label)).toEqual(['Teaching Studio', 'Curriculum library', 'Curriculum progress', 'Scheduled classes', 'Teaching draft assistant (legacy)']);
+    expect(HON_TEACHING_AI.tools.map((tool) => tool.label)).toEqual(['Teaching Studio', 'Curriculum library', 'Curriculum progress', 'Scheduled classes', 'Teaching drafts']);
   });
 
   it('maps only server-reported conversation states and keeps the composer off without full readiness', () => {
@@ -291,12 +291,12 @@ describe('HON workspace presentation', () => {
   it('labels legacy claire-keyed work as teaching drafts and approvals by their source workflow', async () => {
     const { snapshot } = await loaded();
     const work = view(snapshot, 'work');
-    expect(work).toContain('Teaching draft assistant (legacy)');
+    expect(work).toContain('Teaching drafts');
     expect(work).toContain(`/staff/teaching-assistant#invocation=${id(33)}`);
     expect(work).not.toContain('Claire ·');
     const approvals = view(snapshot, 'approvals');
     expect(approvals).toContain('Chad · Follow-up draft');
-    expect(approvals).toContain('Teaching draft assistant (legacy)');
+    expect(approvals).toContain('Teaching drafts');
     expect(approvals).toContain('href="/staff/action-center/approvals"');
     expect(approvals).not.toMatch(/Approve exact|Refuse exact/);
   });
@@ -388,7 +388,9 @@ describe('HON integration boundaries', () => {
     expect(inbox).toContain("claire: { name: 'Teaching drafts', role: 'Legacy curriculum drafts'");
     expect(inbox).not.toContain("name: 'Claire'");
     const teaching = readFileSync('src/components/teaching-assistant-workbench.tsx', 'utf8');
-    expect(teaching).toContain('not the work of Claire, HON’s Business Performance Manager');
+    // The teaching page is Kai's; it never presents itself as Claire's Business Performance work.
+    expect(teaching).toContain('<AgentIntro agent="kai" name="Kai"');
+    expect(teaching).not.toContain('Claire');
     expect(teaching).not.toContain('CLAIRE — CURRICULUM SUPPORT GUIDE');
     expect(readFileSync('src/components/ai-draft-work-http.ts', 'utf8')).toContain("claire: '/api/v1/staff/teaching-assistant/mine'");
   });
