@@ -139,6 +139,19 @@ Pause control. A run detail page shows each step, when it ran, why, and the mess
 performance strip shows runs, completed, messages sent and goal reached (for example trial booked). It gets a nav
 entry next to Marketing, plus an "Ask HON" entry.
 
+### 5.7 Added by David 2026-11-15 08:23Z (Manus CRM ideas #10 to #12, "apply all")
+
+- **Results card** (campaigns and each workflow's send steps): accepted, delivered, skipped (with reason: no
+  consent, cap, quiet hours, duplicate household), failed, not delivered, all read from 0243 receipts.
+  "Read" is shown as *not available for SMS*, never guessed.
+- **Audience by household**: audience chips for active students, all contacts, prospects, trial, former students, or one person,
+  filtered by belt rank and tag. Recipients are deduplicated to one per household using the primary number or email
+  by default, and the screen shows the count after deduplication ("157 numbers after household deduplication").
+  Used by blasts (which still need approval when AI helps write them) and by time-based/scheduled workflow triggers.
+- **Catch-up list**: leads that arrived before a workflow (or Conversation AI auto-texting) was switched on are
+  listed. Staff pick some and send the first message once. Consent and STOP still apply, each lead can be caught up
+  only once per workflow, and leads arriving after activation never appear (they get the live workflow).
+
 ## 6. Pull requests (each with tests; migration numbers from the coordinator)
 
 | PR | Content |
@@ -148,6 +161,7 @@ entry next to Marketing, plus an "Ask HON" entry.
 | AU-3 | Time triggers (absence, membership ends, birthday, anniversary, schedule) and manual start. |
 | AU-4 | Automations screens: lists, editor, run history, failed/scheduled, versions, 13 templates, nav. |
 | AU-5 | HON / agent builder and AI-written message step (fake provider). |
+| AU-7 | Results card, household audience (belt rank, tag, dedup count), catch-up list for older leads. |
 | AU-6 | Cross-system: conversation and custom-tool triggers, request-approval step, start-another-workflow, end-to-end journey with the Website and Conversation AI threads. |
 
 ## 7. Acceptance (handoff section 8)
