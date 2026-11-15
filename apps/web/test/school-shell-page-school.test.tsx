@@ -45,9 +45,9 @@ describe('pages take the school from the shell', () => {
     const html = inShell(<AttendanceWorkbench />);
     expect(html).toContain('href="/staff/schedule"'); expect(html).toContain('<h1>Attendance</h1>');
     expect(html).toMatch(/<details[^>]*><summary>Advanced: correct one exact record/);
-    expect(html).not.toContain('HUMAN STAFF / ATTENDANCE OPERATIONS');
-    expect(renderToStaticMarkup(<AttendanceWorkbench />)).toContain('HUMAN STAFF / ATTENDANCE OPERATIONS');
-    expect(renderToStaticMarkup(<AttendanceWorkbench />)).not.toContain('<details');
+    expect(html).not.toContain('set each program’s attendance rules');
+    expect(renderToStaticMarkup(<AttendanceWorkbench />)).toContain('set each program’s attendance rules');
+    expect(renderToStaticMarkup(<AttendanceWorkbench />)).not.toContain('<summary>Advanced');
   });
 
   it('every school page that had school ID boxes now uses the shell school', () => {

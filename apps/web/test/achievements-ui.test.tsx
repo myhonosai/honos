@@ -26,7 +26,7 @@ describe('human student achievements UI', () => {
       const staff = renderToStaticMarkup(<AchievementsWorkbench/>);
       const parent = renderToStaticMarkup(<ParentAchievements/>);
       expect(fetchSpy).not.toHaveBeenCalled();
-      for (const text of ['Recognize effort. Keep judgment human.', 'Known school and student', 'No child social feed, AI, actions, providers, communications or payments.', 'These selectors are not authorization']) expect(staff).toContain(text);
+      for (const text of ['Create your school’s achievements and award them to students.', 'Known school and student', 'No child social feed, AI, actions, providers, communications or payments.', 'These selectors are not authorization']) expect(staff).toContain(text);
       for (const text of ['Your child’s human-recorded achievements', 'No social feed or sibling records.', 'Private staff reasons and revision history are never shared here.', 'Current authorized child']) expect(parent).toContain(text);
       expect(staff).not.toContain('Careful practice');
       expect(parent).not.toContain('Private staff observation');

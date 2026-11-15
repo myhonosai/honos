@@ -13,7 +13,7 @@ describe('private descriptive marketplace',()=>{
  it('starts without content, network calls, purchasing/installing or unverified creator controls',()=>{
   const f=vi.spyOn(globalThis,'fetch');try{
    const html=renderToStaticMarkup(<MarketplaceWorkbench/>);expect(f).not.toHaveBeenCalled();
-   for(const text of ['Blueprints, not installations','Browse and save for review only','No purchase, installation or automation','School UUID','explicit community','descriptive templates','customer PII','No AI'])expect(html).toContain(text);
+   for(const text of ['Marketplace','save the ones you want to review','Nothing is bought, installed or switched on','School UUID','explicit community','descriptive templates','customer PII','No AI'])expect(html).toContain(text);
    expect(html).not.toContain('General owner blueprint');expect(html).not.toContain('Save private draft');expect(html).not.toMatch(/type="(?:email|file)"/);
   }finally{f.mockRestore();}
  });

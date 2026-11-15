@@ -125,6 +125,10 @@
       "title": "HON | Import classes and attendance"
     },
     {
+      "path": "/staff/migration/memberships",
+      "title": "HON | Import memberships and balances"
+    },
+    {
       "path": "/staff/welcome",
       "title": "HON | Welcome and setup"
     },
@@ -157,6 +161,18 @@
       "title": "HON | Finishing connection"
     },
     {
+      "path": "/staff/marketing/website",
+      "title": "HON | Website"
+    },
+    {
+      "path": "/sites/:slug",
+      "title": "School website"
+    },
+    {
+      "path": "/sites/:slug/:page",
+      "title": "School website"
+    },
+    {
       "path": "/staff/creative-studio",
       "title": "HON | Creative Studio"
     },
@@ -182,6 +198,10 @@
     },
     {
       "path": "/book/:publicId",
+      "title": "Book a time"
+    },
+    {
+      "path": "/book/t/:publicId",
       "title": "Book a time"
     },
     {
@@ -295,6 +315,10 @@
     {
       "path": "/staff/settings/branding",
       "title": "HON | School branding"
+    },
+    {
+      "path": "/staff/settings/booking-types",
+      "title": "HON | Booking types"
     },
     {
       "path": "/staff/settings/texting-number",

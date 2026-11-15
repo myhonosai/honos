@@ -82,13 +82,13 @@ export function TestingCandidateGradeWorkbench(): React.ReactElement {
 
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">Staff dashboard</a></nav>
-    <header><p>HON / CONVENTIONAL INSTRUCTOR OPERATIONS</p><h1>Human testing candidate outcome</h1>
-      <p>Choose a candidate who is waiting for a grade, then record one explicit outcome. Without a school selected, enter the exact organization, school and candidate IDs and the candidate version instead.</p>
+    <header><p>Testing</p><h1>Record a testing result</h1>
+      <p>Choose a student who is waiting for a test result, then record how the test went.</p>
     </header>
-    <aside><strong>PASSED is neither promotion nor certificate issuance.</strong>
+    <aside data-plain-note=""><strong>A pass here is a result only. Promotion and certificates are separate steps.</strong><details><summary>What this page never does</summary><p><strong>PASSED is neither promotion nor certificate issuance.</strong></p>
       <p>This command records candidate outcome evidence, canonical audit and inert outbox only. It does not grade a scorecard or score observations; infer readiness or eligibility; create a roster, place or capacity; change promotion, rank or belt; issue a certificate; grant parent or family access; record attendance; change billing or payment; send communication; invoke a provider, AI, Action Engine or automation. No downstream command or outbox consumer is activated.</p>
       <p>UUIDs and entered versions are untrusted selectors, not authority or verified current facts. Current direct HUMAN_USER / HUMAN_UI identity, exact <code>testing.manage</code> school scope, delegation rejection, tenant RLS, locked authority/candidate and version integrity remain server-owned on every submit and replay.</p>
-    </aside>
+    </details></aside>
     <section aria-labelledby="candidate-outcome-command"><h2 id="candidate-outcome-command">Record one known-ID candidate outcome</h2>
       <form autoComplete="off" onSubmit={submit}><fieldset disabled={busy}>
         {shellSchool && <CandidatePicker scope={shellSchool} purpose="grade" value={ids.candidateId} disabled={busy}

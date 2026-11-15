@@ -144,7 +144,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
     const params = new URLSearchParams(window.location.search);
     if (params.get('tour') === '1') {
       params.delete('tour');
-      window.history.replaceState(window.history.state, '', `${window.location.pathname}${params.size ? `?${params}` : ''}${window.location.hash}`);
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`);
       open();
     }
     return () => window.removeEventListener(SCHOOL_TOUR_OPEN_EVENT, open);
