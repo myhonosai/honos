@@ -4081,3 +4081,16 @@ BEGIN
     RAISE EXCEPTION 'Membership list body drift: %',f; END IF;
 END $$;
 -- End retention review member list exact verification.
+-- Staff assignable permissions list exact verification (0412)
+DO $$ DECLARE f constant text:='hon.list_assignable_staff_permissions(text)'; expected constant text:='765e1c4afc6138d1f2394033308a77c8';
+BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+        AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+    RAISE EXCEPTION 'Unsafe staff permissions list entry point: %',f; END IF;
+  IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM expected
+    OR (SELECT proconfig FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon'] THEN
+    RAISE EXCEPTION 'Staff permissions list body drift: %',f; END IF;
+END $$;
+-- End staff assignable permissions list exact verification.
