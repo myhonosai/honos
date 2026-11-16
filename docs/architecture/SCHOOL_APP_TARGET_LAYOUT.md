@@ -175,9 +175,11 @@ users or role grants directly (0001/010 revoke), so this slice needs a read-only
 names only, gated per screen permission. L5 waits for #403 to merge and adds no migration (coordinator had reserved 0411;
 released).
 
-**Page:** Staff opens on the list of names with the existing "Invite" button at
-the top right. Clicking a person opens a slide-out card with links that open the existing Roles,
-Availability, Qualifications and Documents pages already filled with that person's principal id, so nobody types a UUID.
+**Page:** Staff opens on the list of names with the existing invitations below. Clicking a person opens a slide-out
+card with plain links to the existing Roles, Availability, Qualifications and Documents pages. The card passes no id in
+the link: each page picks the person by name from its own 0404 pick list, so nobody types a UUID and no id travels in a
+URL. The heading shows "200+" when the list reaches the read's 200-row cap. Focus moves into the card when it opens and
+back to the person's name when it closes.
 The tab row stays (≤5 tabs). Read access follows the server (the picker's per-screen permission); without it the page says so and
 keeps the tabs.
 
