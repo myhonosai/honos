@@ -193,13 +193,13 @@ it('offers Finish saving only with a return, lists expiring cards, and shows out
   expect(hidden).not.toContain('4242'); expect(hidden).toContain('Hidden while');
 });
 
-it('is a protected dynamic noindex no-referrer page in the billing menu and the route manifest, with nothing kept in storage', () => {
+it('is a protected dynamic noindex no-referrer page in the settings menu and the route manifest, with nothing kept in storage', () => {
   const page = readFileSync('src/app/staff/billing/saved-payment-methods/page.tsx', 'utf8');
   expect(page).toContain("export const dynamic = 'force-dynamic'"); expect(page).toContain('requireVerifiedWebSession'); expect(page).toContain('index: false');
   expect(page).toContain("referrer: 'no-referrer'");
   expect(page).not.toMatch(/searchParams|organizationId|schoolId|fetch\(/);
   expect(schoolShellActiveRoute('/staff/billing/saved-payment-methods')?.href).toBe('/staff/billing/saved-payment-methods');
-  expect(SCHOOL_SHELL_NAV.find((n) => n.key === 'billing')?.routes.some((r) => r.href === '/staff/billing/saved-payment-methods')).toBe(true);
+  expect(SCHOOL_SHELL_NAV.find((n) => n.key === 'settings')?.routes.some((r) => r.href === '/staff/billing/saved-payment-methods')).toBe(true);
   const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
   expect(manifest.routes.filter((r: { path: string }) => r.path === '/staff/billing/saved-payment-methods')).toEqual([{ path: '/staff/billing/saved-payment-methods', title: 'HON | Saved payment methods' }]);
   const source = ['saved-methods.tsx', 'http.ts', 'view.tsx'].map((f) => readFileSync(`src/components/saved-methods/${f}`, 'utf8')).join('\n');
