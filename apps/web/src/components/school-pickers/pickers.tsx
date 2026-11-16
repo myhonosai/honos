@@ -119,11 +119,11 @@ const STAFF_DENIED: Record<StaffPurpose, string> = {
   availability: 'Only managers can open another person’s availability.',
 };
 /** People with a role at this school, by name (0404). The list is only for screens whose own command manages a teammate. */
-export function StaffPicker({ scope, purpose, label = 'Staff member', value, disabled, onPick, onState }: { scope: PickerScope; purpose: StaffPurpose; label?: string; value: string; disabled: boolean;
-  onPick: (item: PickerStaff | null) => void; onState?: (state: ListState<PickerStaff>['state']) => void }): React.ReactElement {
+export function StaffPicker({ scope, purpose, label = 'Staff member', value, disabled, onPick, onState, onItems }: { scope: PickerScope; purpose: StaffPurpose; label?: string; value: string; disabled: boolean;
+  onPick: (item: PickerStaff | null) => void; onState?: (state: ListState<PickerStaff>['state']) => void; onItems?: (items: readonly PickerStaff[]) => void }): React.ReactElement {
   const [search, setSearch] = useState('');
   const list = useList((signal) => pickerApi.staff(scope, purpose, signal), [scope.organizationId, scope.schoolId, purpose], 0);
-  useEffect(() => { onState?.(list.state); }, [list.state]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onState?.(list.state); if (list.state === 'READY') onItems?.(list.items); }, [list]); // eslint-disable-line react-hooks/exhaustive-deps
   const copy: Copy = { label, choose: 'Choose a person', search: 'Find a person', loading: 'Reading staff…', empty: 'No one matches.', denied: STAFF_DENIED[purpose], unavailable: 'Staff could not be loaded. Reload the page to try again.' };
   const shown: ListState<PickerStaff> = list.state === 'READY' ? { state: 'READY', items: list.items.filter((r) => r.displayName.toLowerCase().includes(search.trim().toLowerCase())) } : list;
   return <PickListView copy={copy} list={shown} keyOf={(i) => i.principalId} describe={staffLabel} value={value} search={search} disabled={disabled} onSearch={setSearch} onPick={onPick} />;
@@ -138,7 +138,7 @@ export function filterLeads<T extends LeadRow>(leads: readonly T[], find: string
 }
 const LEAD_COPY: Copy = { label: 'Lead', choose: 'Choose a lead', search: 'Find a lead', loading: 'Reading leads…', empty: 'No open leads match.', denied: 'Your role does not include reading leads at this school.', unavailable: 'Leads could not be loaded. Reload the page to try again.' };
 /** The school's newest open leads (the CRM lead list, crm.lead.read), picked by name. */
-export function LeadPicker({ scope, value, disabled, onPick, onState }: { scope: PickerScope; value: string; disabled: boolean; onPick: (lead: LeadListItem | null) => void; onState?: (state: ListState<LeadListItem>['state']) => void }): React.ReactElement {
+export function LeadPicker({ scope, value, disabled, onPick, onState, onItems }: { scope: PickerScope; value: string; disabled: boolean; onPick: (lead: LeadListItem | null) => void; onState?: (state: ListState<LeadListItem>['state']) => void; onItems?: (items: readonly LeadListItem[]) => void }): React.ReactElement {
   const [search, setSearch] = useState('');
   const [list, setList] = useState<ListState<LeadListItem>>({ state: 'LOADING' });
   useEffect(() => {
@@ -148,7 +148,7 @@ export function LeadPicker({ scope, value, disabled, onPick, onState }: { scope:
       (error) => { if (current && !abort.signal.aborted) setList({ state: error instanceof CrmLeadAccessError ? 'DENIED' : 'UNAVAILABLE' }); });
     return () => { current = false; abort.abort(); };
   }, [scope.organizationId, scope.schoolId]);
-  useEffect(() => { onState?.(list.state); }, [list.state]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onState?.(list.state); if (list.state === 'READY') onItems?.(list.items); }, [list]); // eslint-disable-line react-hooks/exhaustive-deps
   const shown: ListState<LeadListItem> = list.state === 'READY' ? { state: 'READY', items: filterLeads(list.items, search) } : list;
   return <PickListView copy={LEAD_COPY} list={shown} keyOf={(i) => i.id} describe={leadLabel} value={value} search={search} disabled={disabled} onSearch={setSearch} onPick={onPick} />;
 }
