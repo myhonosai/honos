@@ -38,7 +38,7 @@ describe('human staff attendance workbench', () => {
     try {
       const html = renderToStaticMarkup(<AttendanceWorkbench />);
       expect(fetcher).not.toHaveBeenCalled();
-      for (const phrase of ['Attendance workbench', 'Conventional staff recordkeeping only.', 'existing server authorization, tenant RLS', 'no Action Engine, AI, provider, payment, message', 'Organization UUID', 'Student profile UUID', 'No policy is loaded', 'No current record lookup has completed']) expect(html).toContain(phrase);
+      for (const phrase of ['Record who was at class', 'Organization UUID', 'Student profile UUID', 'No policy is loaded', 'No current record lookup has completed']) expect(html).toContain(phrase);
       expect(html).not.toContain('11111111-1111-4111-8111-111111111111');
       expect(html).not.toContain('PRESENT');
       expect(html).not.toMatch(/type="(?:email|file)"/);
@@ -131,7 +131,7 @@ describe('human staff attendance workbench', () => {
   it('keeps retry keys only in memory for unchanged bodies, clears stale loaded facts on selectors, and makes no unsafe operational claim', () => {
     const workbench = readFileSync('src/components/attendance-workbench.tsx', 'utf8');
     const http = readFileSync('src/components/attendance-workbench-http.ts', 'utf8');
-    for (const token of ['retries.current', 'retainedKey', 'fingerprint !== fingerprint', 'clearLoaded()', 'expectedVersion: policy.version', 'expectedVersion: record.version', 'ATTENDANCE_CATEGORIES', 'does not auto-progress or pass anyone', 'does not determine class eligibility']) expect(workbench).toContain(token);
+    for (const token of ['retries.current', 'retainedKey', 'fingerprint !== fingerprint', 'clearLoaded()', 'expectedVersion: policy.version', 'expectedVersion: record.version', 'ATTENDANCE_CATEGORIES', 'does not auto-progress or pass anyone']) expect(workbench).toContain(token);
     for (const token of ["'X-HON-Human-Command': 'attendance'", "credentials: 'same-origin'", "mode: 'same-origin'", 'assertAttendanceEndpoint', 'progressionCreditMilli']) expect(http).toContain(token);
     expect([workbench, http].join('\n')).not.toMatch(/localStorage|sessionStorage|invokeLLM|executeAction|fetch\(['"]https?:\/\//);
     const route = readFileSync('src/app/staff/attendance/page.tsx', 'utf8');

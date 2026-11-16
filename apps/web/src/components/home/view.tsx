@@ -1,7 +1,7 @@
 import React, { type ReactNode } from 'react';
 import type { HonInterfaceTheme } from '@hon/design-system';
 import type { OperationalSchoolScope } from '../operational-navigation';
-import { SCHOOL_SHELL_NAV, schoolShellHref } from '../school-shell/catalog';
+import { SCHOOL_SHELL_SECTIONS, schoolShellHref, schoolShellListed, schoolShellSectionItems } from '../school-shell/catalog';
 import { shellText } from '../school-shell/copy';
 import { HON_ART_STYLES, defaultArtStyle, type HonArtStyle } from '../hon-command/roster';
 import { ShellIcon } from '../school-shell/icons';
@@ -79,10 +79,15 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
 
     {mode === 'big-button' && <section className={styles.areas} aria-labelledby="home-areas">
       <header className={styles.sectionHead}><h2 id="home-areas">{t('areasTitle')}</h2><p>{t('areasLead')}</p></header>
-      <ul>{SCHOOL_SHELL_NAV.filter(item => item.key !== 'home').map(item => <li key={item.key} data-area={item.key}>
-        <a href={schoolShellHref(item.routes[0]!, selection)}><span className={styles.areaIcon} aria-hidden="true"><ShellIcon name={item.key} size={30} /></span>
-          <strong>{shellText(language, item.titleKey)}</strong><small>{item.routes.slice(0, 2).map(route => shellText(language, route.titleKey)).join(' · ')}</small></a>
-      </li>)}</ul>
+      {/* Owner menu (2026-11-16): the same headings as the menu, each with its page cards. */}
+      {SCHOOL_SHELL_SECTIONS.map(section => { const items = schoolShellSectionItems(section.key).filter(item => item.key !== 'home');
+        return items.length > 0 && <section key={section.key} className={styles.areaGroup} data-area-section={section.key} aria-labelledby={`home-area-${section.key}`}>
+          <h3 id={`home-area-${section.key}`}>{shellText(language, section.titleKey)}</h3>
+          <ul>{items.map(item => <li key={item.key} data-area={item.key}>
+            <a href={schoolShellHref(item.routes[0]!, selection)}><span className={styles.areaIcon} aria-hidden="true"><ShellIcon name={item.key} size={30} /></span>
+              <strong>{shellText(language, item.titleKey)}</strong><small>{schoolShellListed(item).slice(0, 2).map(route => shellText(language, route.titleKey)).join(' · ')}</small></a>
+          </li>)}</ul>
+        </section>; })}
     </section>}
 
     <section aria-labelledby="home-kpis">

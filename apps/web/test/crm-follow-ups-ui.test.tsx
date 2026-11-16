@@ -12,7 +12,7 @@ const queue={schoolId:school,principalId:principal,canManage:false,humanOnly:tru
 const response=(data:unknown)=>({ok:true,json:async()=>({data})}) as Response;
 describe('human CRM follow-up workbench',()=>{
  it('starts honest and empty, without fetching, execution or fake saved rows',()=>{
-  const f=vi.spyOn(globalThis,'fetch');try{const html=renderToStaticMarkup(<CrmFollowUpsWorkbench/>);expect(f).not.toHaveBeenCalled();for(const text of ['CRM follow-ups','No automated outreach','Essential','crm.follow_up.self_manage','crm.follow_up.manage','No staff directory','Load / refresh queue'])expect(html.toLowerCase()).toContain(text.toLowerCase());expect(html).not.toContain('Private follow-up note');expect(html).not.toContain('Create follow-up record');expect(html).not.toContain('type="email"');}finally{f.mockRestore();}
+  const f=vi.spyOn(globalThis,'fetch');try{const html=renderToStaticMarkup(<CrmFollowUpsWorkbench/>);expect(f).not.toHaveBeenCalled();for(const text of ['Follow-ups','Refresh'])expect(html.toLowerCase()).toContain(text.toLowerCase());expect(html).not.toContain('Private follow-up note');expect(html).not.toContain('Create follow-up');expect(html).not.toContain('type="email"');}finally{f.mockRestore();}
  });
  it('verifies exact saved field/version/state and uses same-origin retained-key human commands',async()=>{
   const f=vi.spyOn(globalThis,'fetch').mockResolvedValue(response(saved));try{

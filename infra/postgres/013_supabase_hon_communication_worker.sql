@@ -121,4 +121,13 @@ BEGIN
 END;
 $$;
 
+-- 0364 school conversations: record an inbound non-keyword text into the school's conversation inbox (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.record_inbound_conversation_text(text,text,text,integer,text,timestamptz)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.record_inbound_conversation_text(text, text, text, integer, text, timestamptz) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 COMMIT;

@@ -45,8 +45,8 @@ export function StaffRoleAdmin(): React.ReactElement {
   }
   return <main className={styles.page}>
     <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/team/availability">Staff availability</a><a href="/staff/team/invitations">Staff invitations</a><a href="/staff/automation/rules">Automation configuration</a><a href="/auth/login">Sign in</a></nav>
-    <header><p>HUMAN STAFF ADMINISTRATION</p><h1>Roles, with clear boundaries.</h1><p>Create a school-scoped custom role, grant an existing permitted role to a registered human, or end one grant. Every change is permission-checked and evidenced.</p></header>
-    <aside>Not an invitation or directory. Use identifiers already verified through your authorized onboarding process. OWNER, HQ, platform and system roles are protected. No payroll, employment decisions, messaging, AI or external delivery occurs.</aside>
+    <header><p>Staff</p><h1>Roles</h1><p>Make a custom role for your school, give a role to someone on your team, or end it.</p></header>
+    <aside data-plain-note=""><strong>Roles control what each person can see and do. This page does not invite people or change pay.</strong></aside>
     <form onSubmit={submit}>
       <fieldset disabled={busy}><legend>Authorized school scope</legend><ManualSchoolFields current={school}><label>Organization UUID<input required value={org} onChange={e=>setOrg(e.target.value)} /></label><label>School UUID<input required value={school} onChange={e=>setSchool(e.target.value)} /></label></ManualSchoolFields></fieldset>
       <label>Operation<select value={mode} disabled={busy} onChange={e=>{setMode(e.target.value as Mode);setResult('');setError('');}}><option value="create">Create custom role</option><option value="update">Update custom role</option><option value="grant">Grant registered human role</option><option value="revoke">End / revoke grant</option><option value="read-role">Read known role</option><option value="read-grant">Read known grant</option></select></label>

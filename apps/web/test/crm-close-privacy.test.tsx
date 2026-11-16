@@ -6,6 +6,8 @@ import { CrmEnrollmentDiscard } from '../src/components/crm-enrollment-discard';
 import { CrmLeadCreatePanel } from '../src/components/crm-lead-create-panel';
 import { loadMyLanguage, updateMyLanguage } from '../src/components/localization/http';
 import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
+// The stage list read is its own request (tested in add-lead tests); keep these exact-request counts about the create command.
+vi.mock('../src/components/leads/add-lead-http', async () => { const actual = await vi.importActual<typeof import('../src/components/leads/add-lead-http')>('../src/components/leads/add-lead-http'); return { ...actual, addLeadApi: { ...actual.addLeadApi, pipelines: () => new Promise(() => {}) } }; });
 vi.mock('../src/components/localization/provider',()=>({useLocale:()=>({date:(v:string)=>v})}));
 type Frame={values:unknown[];cursor:number;effects:(()=>void)[]};
 const hooks=vi.hoisted(()=>({frame:null as Frame|null}));
@@ -126,15 +128,15 @@ it('preserves an already-uncertain lead-create capsule through invalidation, rep
  const f=vi.spyOn(globalThis,'fetch').mockRejectedValueOnce(new Error('unknown'));
  const creation=frame();const element=()=>elements(workbench()).find(e=>e.type===CrmLeadCreatePanel)!;
  const view=()=>run(creation,()=>CrmLeadCreatePanel(element().props as Parameters<typeof CrmLeadCreatePanel>[0]));
- for(const [label,value] of [['Known pipeline UUID',id(8)],['Known non-terminal stage UUID',id(9)],['Primary contact given name','Private'],['Primary contact family name','Contact']]){
+ for(const [label,value] of [['Pipeline record ID',id(8)],['Stage record ID',id(9)],['First name','Private'],['Last name','Contact']]){
   const field=elements(view()).find(e=>e.type==='label'&&text(e)===label)!;
   elements(field).find(e=>e.type==='input')!.props.onChange({target:{value}});
  }
  elements(view()).find(e=>e.type==='input'&&e.props.type==='checkbox')!.props.onChange({target:{checked:true}});
  const key=element().key;elements(view()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();
- expect(button(view(),'Retry exact retained lead-create request')).toBeDefined();expect(f).toHaveBeenCalledTimes(1);
+ expect(button(view(),'Try again')).toBeDefined();expect(f).toHaveBeenCalledTimes(1);
  f.mockResolvedValueOnce(response({},401));await expect(loadMyLanguage()).rejects.toThrow();window.dispatchEvent(new Event('blur'));
  expect(hidden()).toBe(true);expect(element().key).toBe(key);
  authorize(f,'OPEN');click('Verify access and resume');await settle();expect(hidden()).toBe(false);expect(element().key).toBe(key);expect(f).toHaveBeenCalledTimes(5);
- f.mockRejectedValueOnce(new Error('still unknown'));button(view(),'Retry exact retained lead-create request').props.onClick();await settle();expect(f.mock.calls[5]).toEqual(f.mock.calls[0]);cleanup(creation);
+ f.mockRejectedValueOnce(new Error('still unknown'));button(view(),'Try again').props.onClick();await settle();expect(f.mock.calls[5]).toEqual(f.mock.calls[0]);cleanup(creation);
 });
