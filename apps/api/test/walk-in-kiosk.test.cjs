@@ -4,7 +4,7 @@ const contracts = require('@hon/contracts');
 const { WalkInKioskService, walkInTokenDigest } = require('../dist/walk-in-kiosk/walk-in-kiosk.service.js');
 const { walkInKioskTransport } = require('../dist/walk-in-kiosk/walk-in-kiosk-transport.js');
 
-// 0396 walk-in kiosk: the shared validators match the database rules, the service refuses before any database call, the
+// 0414 walk-in kiosk: the shared validators match the database rules, the service refuses before any database call, the
 // tablet only ever sends the token digest, public failures never leak detail, and the tablet transport is strict.
 
 const ID = '11111111-1111-4111-8111-111111111111';
@@ -24,7 +24,7 @@ const visit = (patch = {}) => ({
   ...patch,
 });
 
-test('0396 settings input: closed shape, English required, 1-6 unique offers, plain text', () => {
+test('0414 settings input: closed shape, English required, 1-6 unique offers, plain text', () => {
   assert.deepEqual(contracts.validateWalkInSettingsInput(settings), settings);
   for (const patch of [{ waiver: { en: '' } }, { waiver: { ko: 'x' } }, { waiver: { en: 'x', fr: 'x' } }, { offers: [] }, { offers: Array(7).fill(settings.offers[0]) },
     { offers: [settings.offers[0], settings.offers[0]] }, { offers: [{ ...settings.offers[0], kind: 'MEMBERSHIP' }] }, { offers: [{ ...settings.offers[0], priceMinor: -1 }] },
@@ -39,7 +39,7 @@ test('0396 settings input: closed shape, English required, 1-6 unique offers, pl
   assert.throws(() => contracts.validateWalkInDeskPaidInput({ expectedVersion: 1, method: 'STRIPE' }), undefined, 'desk paid is never a card charge in HON');
 });
 
-test('0396 visit input: who trains, minors, contact, waiver signature', () => {
+test('0414 visit input: who trains, minors, contact, waiver signature', () => {
   assert.equal(contracts.validateWalkInVisitInput(visit(), TODAY).contact.email, 'kim@example.test');
   const adult = visit({ contact: { ...visit().contact, isParticipant: true, birthDate: '1990-01-01' }, children: [], relationship: null });
   assert.equal(contracts.validateWalkInVisitInput(adult, TODAY).children.length, 0);
@@ -59,13 +59,13 @@ test('0396 visit input: who trains, minors, contact, waiver signature', () => {
   assert.deepEqual(contracts.walkInText({ en: 'Hello', es: 'Hola' }, 'es'), { text: 'Hola', fallback: false });
 });
 
-test('0396 visit outcome carries no visitor data beyond the first name', () => {
+test('0414 visit outcome carries no visitor data beyond the first name', () => {
   assert.deepEqual(contracts.verifyWalkInVisitOutcome({ result: 'CLOSED' }), { result: 'CLOSED' });
   assert.throws(() => contracts.verifyWalkInVisitOutcome({ result: 'CLOSED', firstName: 'Kim' }), undefined, 'a refusal carries nothing');
   assert.throws(() => contracts.verifyWalkInVisitOutcome({ result: 'RECORDED', firstName: 'Kim', paymentState: 'FREE', priceMinor: 0, thankYou: null, leadId: ID }));
 });
 
-test('0396 service refuses before any database call and the tablet only sends the digest', async () => {
+test('0414 service refuses before any database call and the tablet only sends the digest', async () => {
   let calls = 0;
   const database = new Proxy({}, { get: () => () => { calls += 1; throw new Error('database must not be reached'); } });
   const service = new WalkInKioskService(database);
@@ -97,7 +97,7 @@ test('0396 service refuses before any database call and the tablet only sends th
   await assert.rejects(() => failing.terminal({ device: TOKEN }), (e) => JSON.stringify(e.response) === '{"result":"UNAVAILABLE"}');
 });
 
-test('0396 device start: token minted in the API, shown once, never on replay', async () => {
+test('0414 device start: token minted in the API, shown once, never on replay', async () => {
   const sent = [];
   const make = (replayed) => new WalkInKioskService({
     withTenantTransaction: async (_context, run) => run({ query: async (statement, values) => {
@@ -124,7 +124,7 @@ function run(middleware, req) {
     middleware({ headers: {}, originalUrl: req.path, ...req }, res, () => resolve({ next: true, headers: res.headers }));
   });
 }
-test('0396 tablet transport: two POST paths, no session, same origin, JSON only', async () => {
+test('0414 tablet transport: two POST paths, no session, same origin, JSON only', async () => {
   const previous = process.env.HON_PUBLIC_ORIGIN;
   process.env.HON_PUBLIC_ORIGIN = 'https://app.example.test';
   try {

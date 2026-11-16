@@ -27,7 +27,7 @@ describe('Human Action Engine approval workbench', () => {
     try {
       const html = renderToStaticMarkup(<ActionApprovalsWorkbench />);
       expect(fetchSpy).not.toHaveBeenCalled();
-      for (const text of ['Action Center', 'second person’s approval', 'No execution', 'No provider or AI call', 'action.approve', 'Already-known school UUID', 'Load / refresh queue']) expect(html.toLowerCase()).toContain(text.toLowerCase());
+      for (const text of ['Action Center', 'second person’s approval', 'School UUID', 'Refresh']) expect(html.toLowerCase()).toContain(text.toLowerCase());
       expect(html).not.toContain('Exact human review');
       expect(html).not.toContain('exact@example.test');
       expect(html).not.toMatch(/type="(?:email|file)"/);
@@ -77,5 +77,12 @@ describe('Human Action Engine approval workbench', () => {
     expect(manifest.routes.filter((r: { path: string }) => r.path === '/staff/action-center/approvals')).toHaveLength(1);
     expect(readFileSync('src/components/hon-reference-suite.tsx', 'utf8')).toContain("item === 'Action Center' ? '/staff/action-center/approvals'");
     expect(readFileSync('src/components/hon-control-shell.tsx', 'utf8')).toContain("label === 'Action Center' ? '/staff/action-center/approvals'");
+  });
+  it('names you as You and anyone else neutrally (a request may come from an AI teammate) and keeps record IDs and hashes under Technical details (owner 2026-11-16)', () => {
+    const source = readFileSync('src/components/action-approvals-workbench.tsx', 'utf8');
+    expect(source).not.toMatch(/Organization \{queue\.organizationId\}|Human reviewer \{queue\.reviewerPrincipalId\}|Request \{item\.id\}|reviewer \{decision\.reviewerPrincipalId\}|Already-known school UUID/);
+    expect(source).toContain('<summary>Technical details</summary>');
+    expect(source).toContain("'Another account (a person or an AI teammate)'");
+    expect(source).not.toContain("'A teammate'");
   });
 });

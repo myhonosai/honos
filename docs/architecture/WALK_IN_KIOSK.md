@@ -118,7 +118,7 @@ transaction; a full class shows as unavailable.
 
 | # | Piece | Migration | Contents |
 | --- | --- | --- | --- |
-| WK1 | Kiosk settings, tablet sessions, intake + waiver + visit | 0396 | Tables, permissions, settings/offer/waiver versions, start/end tablet, public visit submit (FREE / PAY_AT_DESK), today's walk-ins, mark paid at desk, signed waiver read, DB proof, API, contracts. |
+| WK1 | Kiosk settings, tablet sessions, intake + waiver + visit | 0414 | Tables, permissions, settings/offer/waiver versions, start/end tablet, public visit submit (FREE / PAY_AT_DESK), today's walk-ins, mark paid at desk, signed waiver read, DB proof, API, contracts. |
 | WK2 | Kiosk screens | — | Visitor flow (3 themes, EN/KO/ES, signature pad), staff kiosk page + settings, Classes tab change (old screens to Settings > Advanced). Browser screenshots at phone/tablet/desktop. |
 | WK3 | Pay on the tablet (sandbox) | 0397 | Stripe embedded Checkout + Square card form, confirm/reconcile, PAID_ON_TABLET / PAYMENT_UNKNOWN, simulators for tests. |
 | WK4 | Trial class pick | maybe | Trial-eligible sessions read + CRM trial scheduling inside the visit. |

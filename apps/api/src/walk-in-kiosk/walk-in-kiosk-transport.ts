@@ -3,7 +3,7 @@ import { configuredPublicOrigin } from '@hon/auth';
 import { parsePublicFormJson } from '../marketing/public-form-transport.js';
 
 /**
- * Walk-in kiosk (0396): strict transport for the tablet calls under /v1/walk-in-kiosk. Only the two fixed POST paths, no query
+ * Walk-in kiosk (0414): strict transport for the tablet calls under /v1/walk-in-kiosk. Only the two fixed POST paths, no query
  * string, same-origin JSON of at most 32 KiB without duplicate keys, and no cookie, Authorization, Referer or X-HON-* header:
  * the tablet's only authority is the device token in the body. A fixed-memory process cap (well-formed calls only) backs the per-device and per-contact limits kept in SQL
  * (a school's tablets share one address, so no per-address limit applies here).

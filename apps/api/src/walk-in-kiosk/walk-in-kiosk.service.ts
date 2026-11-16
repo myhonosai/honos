@@ -19,7 +19,7 @@ const HUMAN_SETTINGS = "SELECT set_config('app.hon_source','HUMAN_UI',true),set_
 const READ_LIMITS = "SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0";
 const WRITE_LIMITS = "SET LOCAL statement_timeout='15s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0";
 
-// Exact 0396 error codes; every unknown database failure is unavailable, never success.
+// Exact 0414 error codes; every unknown database failure is unavailable, never success.
 const ERRORS: Record<string, (code: string) => HttpException> = {
   VALIDATION_FAILED: code => new BadRequestException({ code }),
   WALKIN_KIOSK_FORBIDDEN: code => new ForbiddenException({ code }),
@@ -49,7 +49,7 @@ function translate(error: unknown): never {
 export function walkInTokenDigest(token: string): string { return createHash('sha256').update(token, 'utf8').digest('hex'); }
 
 /**
- * Walk-in kiosk (0396). Staff calls run one protected definer function that re-proves the direct human subject and live
+ * Walk-in kiosk (0414). Staff calls run one protected definer function that re-proves the direct human subject and live
  * walkin_kiosk.manage or walkin_kiosk.run; tablet calls run the two fixed public functions as the restricted runtime with only
  * the SHA-256 digest of the device token. No message, charge or AI.
  */

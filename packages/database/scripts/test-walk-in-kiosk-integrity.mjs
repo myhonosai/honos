@@ -1,5 +1,5 @@
 /**
- * Walk-in kiosk proof (0396) over signed HTTP for staff (HON session cookie -> HonIdentityGuard + human UI guards ->
+ * Walk-in kiosk proof (0414) over signed HTTP for staff (HON session cookie -> HonIdentityGuard + human UI guards ->
  * WalkInKioskController -> protected definer functions on the restricted runtime role with forced RLS) and over the strict
  * tablet transport (no session -> PublicWalkInKioskController -> the two fixed public functions), on the guarded disposable
  * CRM-close fixture only. Synthetic names and example.test contacts only; nothing is sent or charged.
@@ -475,15 +475,15 @@ try {
     ok(row.forced && !row.runtime, `${table}: forced RLS, no runtime privilege`);
   }
   await assert.rejects(runtime.query('SELECT * FROM hon.walkin_waiver_signatures LIMIT 1'), /permission denied/); checks += 1;
-  ok((await sql("SELECT count(*)::int n FROM hon.principal_role_grants WHERE principal_id='00000000-0000-4000-8000-000000000396'")).rows[0].n === 0, 'the kiosk intake principal holds no role');
+  ok((await sql("SELECT count(*)::int n FROM hon.principal_role_grants WHERE principal_id='00000000-0000-4000-8000-000000000414'")).rows[0].n === 0, 'the kiosk intake principal holds no role');
   ok((await sql("SELECT count(*)::int n FROM hon.outbox_events WHERE school_id=$1 AND event_type LIKE 'walkin_kiosk.%' AND (payload::text LIKE '%example.test%' OR payload::text LIKE '%Rivera%')", [ids.schoolA])).rows[0].n === 0, 'no contact data in the outbox');
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const startMark = '-- Walk-in kiosk exact verification (0396)', endMark = '-- End walk-in kiosk exact verification.';
+    const startMark = '-- Walk-in kiosk exact verification (0414)', endMark = '-- End walk-in kiosk exact verification.';
     const section = verify.split(startMark)[1]?.split(endMark)[0];
     ok(section, startMark);
     await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
-  console.log(`PASS: walk-in kiosk (0396): ${checks} checks.`);
+  console.log(`PASS: walk-in kiosk (0414): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

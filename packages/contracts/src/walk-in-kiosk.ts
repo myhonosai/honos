@@ -1,5 +1,5 @@
 /**
- * Walk-in kiosk (0396, docs/architecture/WALK_IN_KIOSK.md). A school tablet where a visitor fills a short form, signs the
+ * Walk-in kiosk (0414, docs/architecture/WALK_IN_KIOSK.md). A school tablet where a visitor fills a short form, signs the
  * school's waiver and picks a day pass or a trial. Staff with walkin_kiosk.run start tablets and see walk-ins; the owner
  * (walkin_kiosk.manage) sets the waiver, offers and prices. The tablet can only create a new walk-in; it never reads people.
  * Paying on the tablet or by QR comes in 0397; here a paid offer is "pay at the front desk".

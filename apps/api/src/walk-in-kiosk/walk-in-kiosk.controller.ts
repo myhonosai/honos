@@ -14,7 +14,7 @@ const RUN = 'walkin_kiosk.run';
 const MANAGE = 'walkin_kiosk.manage';
 
 /**
- * Walk-in kiosk (0396): staff side (Classes > Walk-in kiosk). Route identifiers are never authority: the guarded boundary resolves
+ * Walk-in kiosk (0414): staff side (Classes > Walk-in kiosk). Route identifiers are never authority: the guarded boundary resolves
  * the scope from the verified session, and each protected database function re-proves the direct human subject and the live
  * permission at the school. Nothing here sends a message or charges anyone.
  */
@@ -126,7 +126,7 @@ export class WalkInKioskController {
   }
 }
 
-/** Walk-in kiosk (0396): the tablet side. No session, cookie or tenant id is read; the device token in the body is the only selector. */
+/** Walk-in kiosk (0414): the tablet side. No session, cookie or tenant id is read; the device token in the body is the only selector. */
 @Controller('walk-in-kiosk')
 export class PublicWalkInKioskController {
   constructor(private readonly kiosk: WalkInKioskService) {}

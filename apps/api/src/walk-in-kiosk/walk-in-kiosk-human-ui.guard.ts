@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { MembershipActivationHumanUiGuard } from '../billing/membership-activation-human-ui.guard.js';
 
-/** Walk-in kiosk (0396): each staff command is its own same-origin browser command; the reads are GET only. */
+/** Walk-in kiosk (0414): each staff command is its own same-origin browser command; the reads are GET only. */
 @Injectable()
 export class WalkInKioskReadHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'walkin_kiosk.read';

@@ -1,6 +1,6 @@
 BEGIN;
 
--- Walk-in kiosk WK1 (0396, assigned by the coordinator 2026-11-16). Owner request (David, 2026-11-16): the Classes
+-- Walk-in kiosk WK1 (0414, assigned by the coordinator 2026-11-16). Owner request (David, 2026-11-16): the Classes
 -- "ClassPass & walk-in" page "meant to be kiosk style quick intake form and waiver and day pass or trial purchase".
 -- Spec: docs/architecture/WALK_IN_KIOSK.md. Rules:
 --   W1  One kiosk settings row per school (walkin_kiosk.manage, OWNER): on/off, the waiver (English required, Korean and
@@ -56,7 +56,7 @@ SELECT r.id,r.organization_id,'walkin_kiosk.run' FROM hon.roles r WHERE r.is_sys
 
 -- Code-owned tablet intake. No user, role, HQ, family or delegated authority belongs to it.
 INSERT INTO hon.principals(id,principal_type,display_name)
-  VALUES('00000000-0000-4000-8000-000000000396','SYSTEM_SERVICE','Code-owned walk-in kiosk intake');
+  VALUES('00000000-0000-4000-8000-000000000414','SYSTEM_SERVICE','Code-owned walk-in kiosk intake');
 
 -- A {en, ko?, es?} text: English required (min..max), Korean and Spanish optional (0..max); multiline allows line breaks.
 CREATE FUNCTION hon.walkin_text_ok(v jsonb,min_length integer,max_length integer,multiline boolean) RETURNS boolean
@@ -716,7 +716,7 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE d hon.walkin_kiosk_devices%ROWTYPE; k hon.walkin_kiosk_settings%ROWTYPE; v jsonb; kh text; ph text; tz text; today date;
   x hon.walkin_visits%ROWTYPE; contact uuid; lead uuid:=gen_random_uuid(); visit uuid:=gen_random_uuid(); child jsonb; person uuid; n integer:=1;
   ch text; request uuid:=gen_random_uuid(); waiver_text text; first_name text; secret text;
-  svc constant uuid:='00000000-0000-4000-8000-000000000396';
+  svc constant uuid:='00000000-0000-4000-8000-000000000414';
 BEGIN
   IF digest IS NULL OR digest !~ '^[a-f0-9]{64}$' OR key IS NULL OR key !~ '^[A-Za-z0-9_-]{16,100}$' THEN RETURN jsonb_build_object('result','INVALID'); END IF;
   d:=hon.walkin_live_device(digest);
@@ -821,13 +821,13 @@ BEGIN
     'thankYou',k.thank_you->>x.language);
 END $$;
 
-COMMENT ON TABLE hon.walkin_kiosk_settings IS '0396 walk-in kiosk settings per school (W1). Private.';
-COMMENT ON TABLE hon.walkin_waiver_texts IS '0396 every waiver text version a school has had (W1). Insert only. Private.';
-COMMENT ON TABLE hon.walkin_kiosk_devices IS '0396 started kiosk tablets; token digest only (W2). Private.';
-COMMENT ON TABLE hon.walkin_visits IS '0396 walk-in visits with the frozen offer and payment state (W3/W4). Never deleted. Private.';
-COMMENT ON TABLE hon.walkin_visit_participants IS '0396 the people on a walk-in visit (W3). Insert only. Private.';
-COMMENT ON TABLE hon.walkin_waiver_signatures IS '0396 signed walk-in waivers: version, language, text hash, typed name, strokes (W3). Insert only. Private.';
-COMMENT ON TABLE hon.walkin_kiosk_rates IS '0396 hourly tablet counters. Private.';
+COMMENT ON TABLE hon.walkin_kiosk_settings IS '0414 walk-in kiosk settings per school (W1). Private.';
+COMMENT ON TABLE hon.walkin_waiver_texts IS '0414 every waiver text version a school has had (W1). Insert only. Private.';
+COMMENT ON TABLE hon.walkin_kiosk_devices IS '0414 started kiosk tablets; token digest only (W2). Private.';
+COMMENT ON TABLE hon.walkin_visits IS '0414 walk-in visits with the frozen offer and payment state (W3/W4). Never deleted. Private.';
+COMMENT ON TABLE hon.walkin_visit_participants IS '0414 the people on a walk-in visit (W3). Insert only. Private.';
+COMMENT ON TABLE hon.walkin_waiver_signatures IS '0414 signed walk-in waivers: version, language, text hash, typed name, strokes (W3). Insert only. Private.';
+COMMENT ON TABLE hon.walkin_kiosk_rates IS '0414 hourly tablet counters. Private.';
 COMMENT ON FUNCTION hon.submit_walkin_visit(text,jsonb,text) IS
 'Tablet walk-in intake (W3): people, one WALK_IN_KIOSK lead, optional opt-in, the visit and the append-only signed waiver in one transaction. No message, charge or AI.';
 
