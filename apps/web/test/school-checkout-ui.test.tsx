@@ -185,12 +185,12 @@ it('shows outcomes plainly and hides everything when concealed or not allowed', 
   expect(hidden).not.toContain('Uniform'); expect(hidden).toContain('Hidden while this tab');
 });
 
-it('is a protected dynamic noindex page in the billing menu and the route manifest, with nothing kept in storage', () => {
+it('is a protected dynamic noindex page in the finance menu and the route manifest, with nothing kept in storage', () => {
   const pageSource = readFileSync('src/app/staff/billing/checkout-pages/page.tsx', 'utf8');
   expect(pageSource).toContain("export const dynamic = 'force-dynamic'"); expect(pageSource).toContain('requireVerifiedWebSession'); expect(pageSource).toContain('index: false');
   expect(pageSource).not.toMatch(/searchParams|organizationId|schoolId|fetch\(/);
   expect(schoolShellActiveRoute('/staff/billing/checkout-pages')?.href).toBe('/staff/billing/checkout-pages');
-  expect(SCHOOL_SHELL_NAV.find((n) => n.key === 'billing')?.routes.some((r) => r.href === '/staff/billing/checkout-pages')).toBe(true);
+  expect(SCHOOL_SHELL_NAV.find((n) => n.key === 'checkout')?.routes.some((r) => r.href === '/staff/billing/checkout-pages')).toBe(true);
   const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
   expect(manifest.routes.filter((r: { path: string }) => r.path === '/staff/billing/checkout-pages')).toEqual([{ path: '/staff/billing/checkout-pages', title: 'HON | Checkout pages' }]);
   const source = ['school-checkout.tsx', 'http.ts', 'view.tsx', 'draft.ts'].map((f) => readFileSync(`src/components/school-checkout/${f}`, 'utf8')).join('\n');

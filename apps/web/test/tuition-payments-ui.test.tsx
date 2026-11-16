@@ -163,12 +163,12 @@ it('shows each refusal plainly and offers Try again only for a kept request', ()
   expect(exceeds).toContain('more than what is left'); expect(exceeds).not.toContain('Try again');
 });
 
-it('is a protected dynamic noindex page in the billing menu and the route manifest', () => {
+it('is a protected dynamic noindex page in the finance menu and the route manifest', () => {
   const page = readFileSync('src/app/staff/billing/receivables/page.tsx', 'utf8');
   expect(page).toContain("export const dynamic = 'force-dynamic'"); expect(page).toContain('requireVerifiedWebSession'); expect(page).toContain('index: false');
   expect(page).not.toMatch(/searchParams|organizationId|schoolId|fetch\(/);
   expect(schoolShellActiveRoute('/staff/billing/receivables')?.href).toBe('/staff/billing/receivables');
-  expect(SCHOOL_SHELL_NAV.find((n) => n.key === 'billing')?.routes.some((r) => r.href === '/staff/billing/receivables')).toBe(true);
+  expect(SCHOOL_SHELL_NAV.find((n) => n.key === 'invoices')?.routes.some((r) => r.href === '/staff/billing/receivables')).toBe(true);
   const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
   expect(manifest.routes.filter((r: { path: string }) => r.path === '/staff/billing/receivables')).toEqual([{ path: '/staff/billing/receivables', title: 'HON | Tuition balances' }]);
 });
