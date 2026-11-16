@@ -298,9 +298,11 @@ END $$;
 -- sync in six hours. A store another worker holds is skipped. Returns the sealed credential to the API.
 CREATE FUNCTION hon.claim_shopify_background_sync() RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-DECLARE c hon.shopify_connections%ROWTYPE; y hon.shopify_syncs%ROWTYPE; k hon.shopify_credentials%ROWTYPE; requested boolean;
+DECLARE c hon.shopify_connections%ROWTYPE; y hon.shopify_syncs%ROWTYPE; k hon.shopify_credentials%ROWTYPE; requested boolean; found boolean:=false;
 BEGIN
-  SELECT x.* INTO c FROM hon.shopify_connections x
+  -- Up to 20 due stores, most urgent first. Never wait for a person's command: a store whose school is busy is skipped
+  -- (tried again on the next run) and the next due store is claimed instead.
+  FOR c IN SELECT x.* FROM hon.shopify_connections x
     LEFT JOIN hon.shopify_sync_requests r ON r.connection_id=x.id
     LEFT JOIN LATERAL (SELECT max(z.started_at) started FROM hon.shopify_syncs z WHERE z.connection_id=x.id) last ON true
     WHERE x.status='CONNECTED' AND hon.shopify_school_live(x.school_id)
@@ -308,10 +310,10 @@ BEGIN
       AND NOT EXISTS(SELECT 1 FROM hon.shopify_syncs z WHERE z.connection_id=x.id AND z.outcome='RUNNING' AND z.started_at>clock_timestamp()-interval '15 minutes')
       AND (r.requested_at>coalesce(last.started,'-infinity'::timestamptz) OR coalesce(x.last_sync_at,'-infinity'::timestamptz)<clock_timestamp()-interval '6 hours')
     ORDER BY (r.requested_at>coalesce(last.started,'-infinity'::timestamptz)) IS TRUE DESC,x.last_sync_at NULLS FIRST,x.id
-    LIMIT 1 FOR UPDATE OF x SKIP LOCKED;
-  IF c.id IS NULL THEN RETURN NULL; END IF;
-  -- Never wait for a person's command while holding the row: a busy school is tried again on the next run.
-  IF NOT pg_try_advisory_xact_lock(hashtextextended('shopify-school:'||c.school_id::text,0)) THEN RETURN NULL; END IF;
+    LIMIT 20 FOR UPDATE OF x SKIP LOCKED LOOP
+    IF pg_try_advisory_xact_lock(hashtextextended('shopify-school:'||c.school_id::text,0)) THEN found:=true; EXIT; END IF;
+  END LOOP;
+  IF NOT found THEN RETURN NULL; END IF;
   requested:=EXISTS(SELECT 1 FROM hon.shopify_sync_requests r WHERE r.connection_id=c.id
     AND r.requested_at>coalesce((SELECT max(z.started_at) FROM hon.shopify_syncs z WHERE z.connection_id=c.id),'-infinity'::timestamptz));
   UPDATE hon.shopify_syncs SET outcome='ABANDONED',finished_at=clock_timestamp()

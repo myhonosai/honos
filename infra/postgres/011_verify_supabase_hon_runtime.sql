@@ -3915,6 +3915,13 @@ DO $$ DECLARE f text; t text; w oid:=(SELECT oid FROM pg_roles WHERE rolname='ho
   worker text[]:=ARRAY['hon.record_shopify_webhook(jsonb)','hon.claim_shopify_background_sync()','hon.rotate_shopify_background_credential(jsonb)',
     'hon.record_shopify_background_page(jsonb)','hon.finish_shopify_background_sync(jsonb)'];
 BEGIN
+  -- Exact bodies: a worker function or its lease check changed outside migrations is refused.
+  FOR f,t IN SELECT * FROM (VALUES ('hon.record_shopify_webhook(jsonb)','9b84cd3885681f1b6543817686360178'),
+      ('hon.claim_shopify_background_sync()','ee5655e217df75581d8158322fbebbdb'),('hon.rotate_shopify_background_credential(jsonb)','1adddb8980963336ffce32e7b5b1ff5e'),
+      ('hon.record_shopify_background_page(jsonb)','d9650d9b91ba44f99483bc4cd5143e5b'),('hon.finish_shopify_background_sync(jsonb)','a4cc3fd3ac5218cb53bbfeac24ee4f54'),
+      ('hon.shopify_leased_sync(jsonb,text[],boolean)','c48ec46f82d55eacc7f5ca74d55d02b8')) v LOOP
+    IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM t THEN RAISE EXCEPTION 'Shopify worker function body drift: %',f; END IF;
+  END LOOP;
   FOREACH f IN ARRAY worker LOOP
     IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
         AND NOT has_function_privilege('hon_runtime',p.oid,'EXECUTE')

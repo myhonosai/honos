@@ -177,7 +177,15 @@ links orders to HON contacts.
 - Webhooks are not replayed into partial updates. Any change report triggers a full re-read, which keeps one code path
   and Shopify as the source of truth, at the cost of a full sync per burst of changes (at most one per store every two
   minutes).
-- Webhook receipts are kept forever (ids and topics only). A retention rule can come with the HQ data-retention work.
+- Webhook receipts are kept forever (ids, topics and times only, no payload). Shopify retries a delivery for up to
+  48 hours, so a later retention rule may remove receipts older than 30 days without weakening replay protection; it
+  comes with the HQ data-retention work and needs a new migration (receipts cannot be deleted today).
+- If Shopify issues a refreshed token pair and HON then refuses to store it (version conflict, lease lost), the new
+  pair is lost and the store needs reconnecting on its next run (same as Sync now since SH1). Rare; a later piece can
+  hold the pair for one retry.
+- The background proof runs the five worker functions over the fixture owner connection. Their grant to the real
+  `hon_communication_worker` login (013) was checked by hand on the communication fixture; a fixture that runs the
+  proof as that login is a follow-up.
 - The `shopify.app.toml` and the Partner app itself are created only with David's approval, together with the real keys.
 
 ## Plan (TDD)

@@ -194,6 +194,19 @@ try{
  assert.equal(await store.claim(),null);
  await q("UPDATE hon.organization_entitlements SET status='ACTIVE' WHERE organization_id=$1",[A.organizationId]);
  await lastSyncAgo(CA,1);
+ // A school busy with a person's command is skipped, not waited for: the next due store is claimed instead.
+ await lastSyncAgo(CA,9);await lastSyncAgo(CB,7);await age(CA,3);await age(CB,3);
+ const holder=new pg.Client({connectionString:owner.toString(),ssl:false});await holder.connect();
+ try{
+  await holder.query('BEGIN');await holder.query("SELECT pg_advisory_xact_lock(hashtextextended('shopify-school:'||$1::text,0))",[A.schoolId]);
+  const next=await store.claim();assert.equal(next.connectionId,CB,'the busy school is skipped for the next due store');
+  assert.equal(await store.claim(),null,'store B is running and A is still busy');
+  assert.equal((await store.finish({syncId:next.syncId,leaseToken:next.leaseToken,outcome:'FAILED',failureCode:'SHOPIFY_UNAVAILABLE'})).connectionStatus,'CONNECTED');
+  await holder.query('ROLLBACK');
+ }finally{await holder.end();}
+ const freed=await store.claim();assert.equal(freed.connectionId,CA,'once free, the busy school is claimed on the next run');
+ await store.finish({syncId:freed.syncId,leaseToken:freed.leaseToken,outcome:'FAILED',failureCode:'SHOPIFY_UNAVAILABLE'});
+ await age(CA,3);await age(CB,3);await lastSyncAgo(CA,1);await lastSyncAgo(CB,1);
  // The guard keeps a run's source and lease, and receipts are never changed or deleted.
  await assert.rejects(()=>q("UPDATE hon.shopify_syncs SET lease_token=gen_random_uuid() WHERE connection_id=$1",[CA]),e=>e.message==='SHOPIFY_RECORD_IMMUTABLE');
  await assert.rejects(()=>q("UPDATE hon.shopify_webhook_receipts SET outcome='IGNORED' WHERE webhook_id=$1",[w1]),e=>e.message==='SHOPIFY_RECORD_IMMUTABLE');
@@ -203,7 +216,7 @@ try{
   ['a background run is started by the code-owned principal only',"INSERT INTO hon.shopify_syncs(connection_id,organization_id,school_id,started_by_principal_id,source,lease_token) VALUES($1,$2,$3,$4,'SCHEDULED',gen_random_uuid())",[CA,A.organizationId,A.schoolId,hqPrincipal]],
   ['a person\'s run carries no lease',"INSERT INTO hon.shopify_syncs(connection_id,organization_id,school_id,started_by_principal_id,lease_token) VALUES($1,$2,$3,$4,gen_random_uuid())",[CA,A.organizationId,A.schoolId,hqPrincipal]]])
   await assert.rejects(()=>q(sql,args),e=>e.code==='23514',why);
- pass('the worker claims a store Shopify reported, or one not synced in six hours, one at a time and never twice in two minutes; it runs under a lease as the code-owned principal with INTEGRATION evidence; a person cannot write to it; a wrong or missing lease, bad page or stale version is refused; it refreshes the token; a school without live access is skipped');
+ pass('the worker claims a store Shopify reported, or one not synced in six hours, one at a time and never twice in two minutes; it runs under a lease as the code-owned principal with INTEGRATION evidence; a person cannot write to it; a wrong or missing lease, bad page or stale version is refused; it refreshes the token; a school without live access is skipped; a school busy with a person\'s command is skipped for the next due store, never waited for');
 
  // 4. shop/redact for a store still connected changes nothing; app/uninstalled disconnects at once, even mid-run.
  before=await counts();
