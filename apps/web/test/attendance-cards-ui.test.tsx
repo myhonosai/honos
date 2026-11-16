@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { attendanceCardCheckDigits, isAttendanceCardCode, normalizeAttendanceCardCode } from '@hon/contracts';
+import { attendanceCardCheckDigits, isAttendanceCardCode, normalizeAttendanceCardCode, type AttendanceCard, type AttendanceCardsRead, type AttendanceCheckInResult } from '@hon/contracts';
 import { code128cWidths, qrMatrix, qrNumericCodewords, reedSolomon } from '../src/components/attendance-cards/codes';
 import { CardsError, cardsApi, cardsErrorFor, keepForRetry } from '../src/components/attendance-cards/http';
 import { CardFace, CardsView, type CardsViewProps, type Look } from '../src/components/attendance-cards/cards';
@@ -19,9 +19,9 @@ const signal = () => new AbortController().signal;
 const fails = async (p: Promise<unknown>) => { try { await p; } catch (e) { return e as CardsError; } throw new Error('expected a failure'); };
 const body24 = '012345678901234567890123', CODE = body24 + attendanceCardCheckDigits(body24);
 const settings = { codeType: 'QR', showPhoto: true, showLogo: true, design: 'CLASSIC', version: 0, updatedAt: null, schoolName: 'Synthetic Dojo', logoUrl: 'https://example.invalid/logo.png', accentColor: '#112233' } as const;
-const card = (studentProfileId: string, last4: string) => ({ cardId: id(60), studentProfileId, last4, status: 'ACTIVE', version: 1, issuedAt: at, endedAt: null });
+const card = (studentProfileId: string, last4: string): AttendanceCard => ({ cardId: id(60), studentProfileId, last4, status: 'ACTIVE', version: 1, issuedAt: at, endedAt: null });
 const student = (n: number, withCard = false) => ({ studentProfileId: id(n), personId: id(n + 100), givenName: `Kid${n}`, familyName: 'Synthetic', studentStatus: 'ACTIVE', hasPhoto: n % 2 === 0, card: withCard ? card(id(n), '4321') : null });
-const read = { settings, maxPerPrint: 40, students: [student(10), student(11, true)] };
+const read: AttendanceCardsRead = { settings, maxPerPrint: 40, students: [student(10), student(11, true)] };
 const look: Look = { codeType: 'QR', showPhoto: true, showLogo: true, design: 'CLASSIC' };
 
 it('QR encoder matches the ISO 18004 example (01234567, version 1-M) and builds a 21 x 21 symbol', () => {
@@ -112,9 +112,9 @@ const scanView = (over: Partial<ScanViewProps> = {}) => renderToStaticMarkup(<Sc
 it('the scan screen says what happened in plain words and never records an unknown card', () => {
   expect(scanView()).toContain('No classes today'); expect(scanView()).toContain('not a self-service kiosk'); expect(scanView()).toContain('USB scanner');
   const s = { outcome: 'RECORDED', student: { studentProfileId: id(10), personId: id(110), givenName: 'Mina', familyName: 'Synthetic', studentStatus: 'ACTIVE' },
-    card: card(id(10), '1234'), attendance: { id: id(90), status: 'LATE', version: 1, recordedAt: at } } as const;
+    card: card(id(10), '1234'), attendance: { id: id(90), status: 'LATE', version: 1, recordedAt: at } } satisfies AttendanceCheckInResult;
   expect(scanView({ result: { kind: 'ANSWER', answer: s, photo: null } })).toContain('Mina Synthetic checked in (Late).');
-  expect(scanView({ result: { kind: 'ANSWER', answer: { ...s, outcome: 'ALREADY_RECORDED' }, photo: null } })).toContain('already checked in');
+  expect(scanView({ result: { kind: 'ANSWER', answer: { ...s, outcome: 'ALREADY_RECORDED' as const }, photo: null } })).toContain('already checked in');
   expect(scanView({ result: { kind: 'ANSWER', answer: { outcome: 'NOT_RECOGNIZED', student: null, card: null, attendance: null }, photo: null } })).toContain('Nothing was recorded');
   expect(scanView({ result: { kind: 'NOT_A_CODE' } })).toContain('not a card code');
   for (const l of ['ko', 'es']) expect(cardsText(l, 'RECORDED', { name: 'A', status: 'B' })).not.toBe(cardsText('en', 'RECORDED', { name: 'A', status: 'B' }));
