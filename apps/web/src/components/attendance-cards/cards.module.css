@@ -54,7 +54,7 @@
 .face[data-photo="false"] .faceCode { justify-items: center; }
 
 @media print {
-  :global(body) * { visibility: hidden !important; }
+  :global(body):has(.sheet) * { visibility: hidden !important; }
   .sheet, .sheet * { visibility: visible !important; }
   .sheet { position: absolute; left: 0; top: 0; padding: 0; gap: 3mm; border-radius: 0; }
   .face { border-color: #b7c3cf; }
