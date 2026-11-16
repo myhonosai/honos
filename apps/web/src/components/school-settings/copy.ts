@@ -12,7 +12,7 @@ const en = {
   texts: 'Texts from HON', textsOn: 'Texts on to {phone}', textsOff: 'Number {phone} confirmed, texts off', textsPending: 'Number {phone} waiting for its code', textsNone: 'No number added',
   automation: 'Automation rules', automationLine: 'Follow-up rules you can try on a test run. They do not run on their own yet.',
   help: 'Help & support', helpLine: 'Guides and a way to ask the HON team.',
-  tour: 'App tour', tourLine: 'A two-minute walk through the eight areas and what each one is for.', start: 'Start',
+  tour: 'App tour', tourLine: 'A two-minute walk through the nine areas and what each one is for.', start: 'Start',
   setupTitle: 'School setup', setupLine: 'Welcome questions, school launch and Founder Setup live in onboarding.', setupOpen: 'Open setup',
 } as const;
 export type SettingsKey = keyof typeof en;
@@ -29,7 +29,7 @@ const ko: Record<SettingsKey, string> = {
   texts: 'HON 문자', textsOn: '{phone}(으)로 문자 받는 중', textsOff: '{phone} 번호 확인됨, 문자 꺼짐', textsPending: '{phone} 번호 인증 코드 대기 중', textsNone: '등록된 번호 없음',
   automation: '자동화 규칙', automationLine: '테스트 실행으로 시험해 볼 수 있는 후속 조치 규칙. 아직 자동으로 실행되지 않습니다.',
   help: '도움말 및 지원', helpLine: '가이드와 HON 팀에 문의하는 방법.',
-  tour: '앱 둘러보기', tourLine: '여덟 개 영역과 각각의 용도를 2분 만에 둘러봅니다.', start: '시작',
+  tour: '앱 둘러보기', tourLine: '아홉 개 영역과 각각의 용도를 2분 만에 둘러봅니다.', start: '시작',
   setupTitle: '도장 설정 시작', setupLine: '환영 질문, 도장 시작, 파운더 설정은 온보딩에 있습니다.', setupOpen: '설정 시작 열기',
 };
 const es: Record<SettingsKey, string> = {
@@ -45,7 +45,7 @@ const es: Record<SettingsKey, string> = {
   texts: 'Mensajes de HON', textsOn: 'Mensajes activados a {phone}', textsOff: 'Número {phone} confirmado, mensajes desactivados', textsPending: 'Número {phone} esperando su código', textsNone: 'No hay número agregado',
   automation: 'Reglas de automatización', automationLine: 'Reglas de seguimiento que puedes probar en una prueba. Todavía no se ejecutan solas.',
   help: 'Ayuda y soporte', helpLine: 'Guías y una forma de preguntar al equipo de HON.',
-  tour: 'Recorrido por la app', tourLine: 'Dos minutos por las ocho áreas y para qué sirve cada una.', start: 'Empezar',
+  tour: 'Recorrido por la app', tourLine: 'Dos minutos por las nueve áreas y para qué sirve cada una.', start: 'Empezar',
   setupTitle: 'Configuración inicial', setupLine: 'Las preguntas de bienvenida, el lanzamiento y Founder Setup están en la configuración inicial.', setupOpen: 'Abrir configuración inicial',
 };
 const catalogs: Record<string, Record<SettingsKey, string>> = { en, ko, es };
