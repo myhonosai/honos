@@ -193,6 +193,8 @@ const expectedRlsTables = [
   'shopify_variants',
   'shopify_orders',
   'shopify_order_lines',
+  'shopify_sync_requests',
+  'shopify_webhook_receipts',
   'school_websites',
   'school_website_versions',
   'school_website_requests',

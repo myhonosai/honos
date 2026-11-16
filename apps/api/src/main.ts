@@ -9,6 +9,7 @@ import { publicEventTransport } from './schedule/public-event-transport.js';
 import { publicBookingTypeTransport } from './schedule/public-booking-type-transport.js';
 import { kioskTransport } from './kiosk/kiosk-transport.js';
 import { paymentWebhookTransport } from './payments/payment-webhook-transport.js';
+import { shopifyWebhookTransport } from './commerce/shopify/shopify-webhook.js';
 import { communicationWebhookTransport } from './communication/delivery/communication-webhook.controller.js';
 import { validateDeploymentConfiguration } from './foundation/production-config.js';
 import { emitTelemetry, HonTelemetryLogger } from './observability/telemetry.js';
@@ -32,6 +33,7 @@ async function bootstrap(): Promise<void> {
   app.use(publicEventTransport());
   app.use(publicBookingTypeTransport());
   app.use(paymentWebhookTransport());
+  app.use(shopifyWebhookTransport());
   app.use(communicationWebhookTransport());
   app.use(json({ limit: '2mb', strict: true }));
   app.use(transportErrorHandler());
