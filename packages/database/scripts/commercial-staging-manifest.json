@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "8674d81f252f6ae91dfa39711056b9479a30a4a1c24af7d55d140e2fae07baca",
+  "chainSha256": "14f3da80e50a93156d738c524c3aaa300662016fb1600edd5089612b647d8a08",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -511,10 +511,6 @@
       "sha256": "2a1cd6c62aec0d6781a1aad202b347abc2ac65bf67441ba4be880f5c0b7e4613"
     },
     {
-      "file": "0367_automation_workflows.sql",
-      "sha256": "98eb59caf84ab3e5a5d7ab625affc65f4aa0a0127313a0f0390061ec0a9e8301"
-    },
-    {
       "file": "0388_school_paper_import.sql",
       "sha256": "4f556472acba21133dd5f8f644e461608969343d65cfcd21348590586c6c3ab5"
     },
@@ -549,6 +545,10 @@
     {
       "file": "0407_retention_review_member_list.sql",
       "sha256": "88ee6b0f21d71289f02036e36d50644a960ff7eeb620d542afda2303c76d1606"
+    },
+    {
+      "file": "0416_automation_workflows.sql",
+      "sha256": "f5461d07dec493477c2c5af02e03f1f0107cbc722b1e505b13631953cc39de8c"
     }
   ]
 }

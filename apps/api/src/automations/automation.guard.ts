@@ -5,7 +5,7 @@ import {
 } from '@hon/contracts';
 import { MembershipActivationHumanUiGuard } from '../billing/membership-activation-human-ui.guard.js';
 
-/** 0367: reads are same-origin GETs; every command (and the batch tag lookup) is its own browser command. */
+/** 0416: reads are same-origin GETs; every command (and the batch tag lookup) is its own browser command. */
 @Injectable()
 export class AutomationReadHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'automation.workflow.read';

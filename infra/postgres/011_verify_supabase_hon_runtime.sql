@@ -4081,7 +4081,7 @@ BEGIN
     RAISE EXCEPTION 'Membership list body drift: %',f; END IF;
 END $$;
 -- End retention review member list exact verification.
--- Automation workflows and contact tags exact verification (AU-1 0367): five private forced-RLS tables the runtime cannot
+-- Automation workflows and contact tags exact verification (AU-1 0416): five private forced-RLS tables the runtime cannot
 -- touch, twelve runtime entry points, and private helpers, guards, the actor check and the engine-only contact_tag_apply.
 DO $$ DECLARE f record; safe boolean; t text; BEGIN
   FOR f IN SELECT * FROM (VALUES

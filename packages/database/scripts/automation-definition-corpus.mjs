@@ -1,4 +1,4 @@
-// Shared AU-1 (0367) corpus: every case is checked against BOTH validateAutomationDefinition (@hon/contracts) and
+// Shared AU-1 (0416) corpus: every case is checked against BOTH validateAutomationDefinition (@hon/contracts) and
 // hon.validate_automation_definition (PostgreSQL), which must agree. Synthetic ids only.
 const U = '3f0b6a2e-5d1c-4e8f-9a7b-2c4d6e8f0a1b';
 const smsFixed = (id, next, text = 'Hi {{first_name}}, thanks for your interest in {{school_name}}!') => ({ id, type: 'SEND_SMS', content: { mode: 'FIXED', text }, next });

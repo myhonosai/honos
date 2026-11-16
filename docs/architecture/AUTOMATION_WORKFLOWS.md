@@ -1,8 +1,7 @@
-# Automation workflows and contact tags (AU-1, migration 0367)
+# Automation workflows and contact tags (AU-1, migration 0416)
 
 Design: [docs/superpowers/specs/2026-11-15-automation-builder-design.md](../superpowers/specs/2026-11-15-automation-builder-design.md).
-This piece stores and versions workflow definitions and the shared contact tags. **Nothing runs.** The engine (AU-2,
-0368) consumes events, turns workflows on and executes steps.
+This piece stores and versions workflow definitions and the shared contact tags. **Nothing runs.** The engine (AU-2) consumes events, turns workflows on and executes steps.
 
 ## Definition (schema version 1)
 

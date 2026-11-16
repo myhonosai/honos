@@ -3883,9 +3883,9 @@ BEGIN
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END IF;
 END $$;
--- 0367 automation workflows and contact tags: five private tables reached only through twelve runtime entry points.
+-- 0416 automation workflows and contact tags: five private tables reached only through twelve runtime entry points.
 DO $$ DECLARE r text; t text; BEGIN
-  IF to_regprocedure('hon.create_automation_workflow(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0367 first'; END IF;
+  IF to_regprocedure('hon.create_automation_workflow(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0416 first'; END IF;
   FOREACH t IN ARRAY ARRAY['automation_workflows','automation_workflow_versions','automation_commands','contact_tags','contact_tag_events'] LOOP
     EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;

@@ -1,8 +1,8 @@
-// Automation Builder workflow definitions (AU-1, migration 0367). One definition model for the visual editor and for
+// Automation Builder workflow definitions (AU-1, migration 0416). One definition model for the visual editor and for
 // workflows that HON or an AI agent proposes: one trigger, entry rules, exit rules and a step graph, all from closed
 // catalogues. validateAutomationDefinition mirrors hon.validate_automation_definition exactly; the database proof runs a
 // shared corpus through both. No expressions, code, SQL, URLs or tool calls; text is plain with closed {{merge_fields}}.
-// Saving a definition runs nothing: the engine (0368) turns workflows on.
+// Saving a definition runs nothing: the engine (AU-2) turns workflows on.
 
 export const AUTOMATION_SCHEMA_VERSION = 1;
 export const AUTOMATION_CREATE_COMMAND = 'automation.workflow.create';

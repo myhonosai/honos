@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { AutomationService } = require('../dist/automations/automation.service.js');
 
-// Mocked boundary tests for the 0367 automation API. Authority, validation parity with SQL, isolation and limits are
+// Mocked boundary tests for the 0416 automation API. Authority, validation parity with SQL, isolation and limits are
 // proven against PostgreSQL by packages/database/scripts/test-automation-workflows-integrity.mjs.
 const scope = { organizationId: randomUUID(), schoolId: randomUUID(), principalId: randomUUID() };
 const context = (patch = {}) => ({ ...scope, principalType: 'HUMAN_USER', source: 'HUMAN_UI', requestId: randomUUID(), correlationId: randomUUID(), idempotencyKey: 'aut-key', externalSubject: 'verified-human', ...patch });

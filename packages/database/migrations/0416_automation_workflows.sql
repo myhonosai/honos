@@ -1,13 +1,13 @@
 BEGIN;
 
--- AU-1 (0367, coordinator-allocated 2026-11-15): Automation Builder workflow definitions and contact tags.
+-- AU-1 (0416; allocated as 0367 on 2026-11-15, renumbered 2026-11-16 to run after main's 0407): Automation Builder workflow definitions and contact tags.
 -- Design: docs/superpowers/specs/2026-11-15-automation-builder-design.md.
 -- - A workflow is a school's versioned definition: one trigger, entry rules, exit rules and a step graph, all from closed
 --   catalogues validated here and, identically, in @hon/contracts (automation-workflows.ts). No expressions, code, SQL,
 --   URLs or tool calls. Text is plain with a closed list of {{merge_fields}}.
 -- - Versions are immutable. Saving appends a version; restore appends a copy of an older one. A school has at most
 --   100 workflows that are not archived, a workflow at most 500 versions and 50 steps.
--- - This migration runs nothing. Status is DRAFT or ARCHIVED here; ACTIVE and PAUSED are reserved for the engine (0368),
+-- - This migration runs nothing. Status is DRAFT or ARCHIVED here; ACTIVE and PAUSED are reserved for the engine (AU-2),
 --   which alone may set them. No event is consumed, no message, task or AI call is created.
 -- - Contact tags (the one tags model, shared with the contact list): a person at one school carries up to 20 tags, a
 --   school up to 200 distinct tags. Every add and remove is recorded in contact_tag_events. Staff add/remove through
@@ -18,7 +18,7 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'Trusted migration owner required'; END IF;
   IF to_regprocedure('hon.staff_member_eligible(uuid,uuid,uuid)') IS NULL OR to_regprocedure('hon.saas_ts(timestamptz)') IS NULL
-    OR to_regclass('hon.people') IS NULL THEN RAISE EXCEPTION '0367 requires 0154 and 0204'; END IF;
+    OR to_regclass('hon.people') IS NULL THEN RAISE EXCEPTION '0416 requires 0154 and 0204'; END IF;
 END $$;
 
 INSERT INTO hon.permissions(code,description,is_sensitive,is_staff_assignable) VALUES
@@ -504,7 +504,7 @@ BEGIN
   RETURN w;
 END $$;
 
--- Appends a version. A workflow that is on keeps running its active version until someone turns on the new one (0368).
+-- Appends a version. A workflow that is on keeps running its active version until someone turns on the new one (AU-2).
 CREATE FUNCTION hon.automation_append_version(w hon.automation_workflows,p_name text,p_definition jsonb,p_restored integer,p_actor uuid,p_request uuid) RETURNS hon.automation_workflows
 LANGUAGE plpgsql VOLATILE SET search_path=pg_catalog,hon AS $$
 DECLARE v_kind text:=hon.validate_automation_definition(p_definition); at timestamptz:=clock_timestamp(); r hon.automation_workflows%ROWTYPE;
@@ -561,7 +561,7 @@ BEGIN
   RETURN jsonb_build_object('record',result,'replayed',false);
 END $$;
 
--- ARCHIVE {expectedRevision}: only a DRAFT. A workflow that is on or paused is turned off first (0368). Final.
+-- ARCHIVE {expectedRevision}: only a DRAFT. A workflow that is on or paused is turned off first (AU-2). Final.
 CREATE FUNCTION hon.archive_automation_workflow(p_subject text,p_id uuid,p_input jsonb,p_key text,p_request uuid,p_correlation uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); actor uuid; replay jsonb;

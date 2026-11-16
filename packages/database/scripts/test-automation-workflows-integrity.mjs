@@ -1,4 +1,4 @@
-/** Automation workflows and contact tags (AU-1, 0367): real signed HON sessions -> Nest/guard -> fixed runtime SQL -> marked disposable PostgreSQL.
+/** Automation workflows and contact tags (AU-1, 0416): real signed HON sessions -> Nest/guard -> fixed runtime SQL -> marked disposable PostgreSQL.
  *  No provider, message, payment or AI. Schools are SYNTHETIC sign-ups made through the 0241 runtime entry point (the sign-up program is opened
  *  to TEST_MODE by this proof's owner connection only); the owner connection stands in for HON OS access by writing the entitlement row. */
 import assert from 'node:assert/strict';
@@ -122,7 +122,7 @@ try{
  assert.equal(d.workflow.status,'DRAFT');
  r=await post(a,base(a)+'/'+id+'/archive',{expectedRevision:d.workflow.revision},C.AUTOMATION_ARCHIVE_COMMAND);d=ok(r);assert.equal(d.workflow.status,'ARCHIVED');
  r=await post(a,base(a)+'/'+id+'/versions',{expectedRevision:d.workflow.revision,name:'After archive',definition:changed},C.AUTOMATION_SAVE_COMMAND);assert.equal(r.status,409);assert.equal(r.body.code,'AUTOMATION_ARCHIVED');
- // A PAUSED/ACTIVE workflow (set only by the 0368 engine) cannot be archived as a draft.
+ // A PAUSED/ACTIVE workflow (set only by the AU-2 engine) cannot be archived as a draft.
  const live=C.verifyAutomationWorkflowDetail(ok(await create(a,{name:'Live one',definition:evaluationFollowUp})));
  await q("UPDATE hon.automation_workflows SET status='ACTIVE',active_version=1,activated_by_principal_id=created_by_principal_id,activated_at=clock_timestamp(),revision=revision+1 WHERE id=$1",[live.workflow.workflowId]);
  r=await post(a,base(a)+'/'+live.workflow.workflowId+'/archive',{expectedRevision:2},C.AUTOMATION_ARCHIVE_COMMAND);assert.equal(r.status,409);assert.equal(r.body.code,'AUTOMATION_NOT_DRAFT');
@@ -190,5 +190,5 @@ try{
  await assert.rejects(q("UPDATE hon.automation_commands SET fingerprint=repeat('0',64) WHERE organization_id=$1",[a.org]),/AUTOMATION_HISTORY_IMMUTABLE/);
  await assert.rejects(q('TRUNCATE hon.automation_commands CASCADE'),/AUTOMATION_HISTORY_IMMUTABLE|cannot truncate/);
  pass('versions, tag history and command receipts cannot be edited or deleted; a workflow is never deleted, moved or reopened after archive');
- console.log('PASS: automation workflows and contact tags (0367), '+groups+' groups');
+ console.log('PASS: automation workflows and contact tags (0416), '+groups+' groups');
 }finally{await q("UPDATE hon.hon_os_signup_program SET status='CLOSED',recorded_at=clock_timestamp() WHERE program_id=1").catch(()=>{});await app?.close();await Promise.allSettled([admin.end(),restricted.end()]);}

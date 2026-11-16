@@ -44,9 +44,9 @@ function receipt<T>(data: Record<string, unknown> | undefined, rows: number, ver
 function invalid(): never { throw new BadRequestException({ code: 'AUTOMATION_INVALID' }); }
 
 /**
- * Automation workflow definitions and contact tags (0367). Each call runs one protected definer function that re-proves
+ * Automation workflow definitions and contact tags (0416). Each call runs one protected definer function that re-proves
  * the direct human subject, the exact permission at the session school and active HON OS (COMPLETE) access. Saving a
- * workflow runs nothing; the engine (0368) turns workflows on.
+ * workflow runs nothing; the engine (AU-2) turns workflows on.
  */
 @Injectable()
 export class AutomationService {

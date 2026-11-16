@@ -38,7 +38,7 @@ abstract class AutomationScope {
   }
 }
 
-/** Automation workflow definitions (0367): list, read, create, save a version, restore a version, archive a draft. Nothing runs. */
+/** Automation workflow definitions (0416): list, read, create, save a version, restore a version, archive a draft. Nothing runs. */
 @Controller('organizations/:organizationId/schools/:schoolId/automations')
 @UseGuards(HonIdentityGuard)
 export class AutomationWorkflowController extends AutomationScope {
@@ -125,7 +125,7 @@ export class AutomationWorkflowController extends AutomationScope {
   }
 }
 
-/** Contact tags (0367), the one tags model shared by the contact list and Automation. */
+/** Contact tags (0416), the one tags model shared by the contact list and Automation. */
 @Controller('organizations/:organizationId/schools/:schoolId')
 @UseGuards(HonIdentityGuard)
 export class ContactTagController extends AutomationScope {
