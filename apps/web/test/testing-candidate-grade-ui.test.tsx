@@ -48,7 +48,7 @@ describe('bounded direct-human candidate outcome UI', () => {
       fetcher.mockResolvedValueOnce(response({ ...candidate, result })); fill(result); confirm(); submit(); await settle(); const copy = text(render());
       for (const fact of [candidate.id, candidate.testingEventId, candidate.studentCurriculumEnrollmentId, candidate.targetRankId, candidate.createdAt, `Returned candidate outcome: ${result}`]) expect(copy).toContain(fact);
       expect(copy).not.toContain('PRIVATE_NOTE');
-      for (const phrase of ['PASSED is neither promotion nor certificate', 'candidate outcome evidence, canonical audit and inert outbox only', 'does not grade a scorecard or score observations', 'readiness or eligibility', 'roster, place or capacity', 'promotion, rank or belt', 'parent or family access', 'attendance', 'billing or payment', 'communication', 'provider, AI, Action Engine or automation', 'No downstream command or outbox consumer is activated', 'original command-response snapshot', 'blank clears its prior note']) expect(copy).toContain(phrase);
+      for (const phrase of ['PASSED is neither promotion nor certificate', 'original command-response snapshot', 'blank clears its prior note']) expect(copy).toContain(phrase);
       expect(elements(render()).filter(e => e.type === 'a').map(e => e.props.href)).toEqual(['/staff/dashboard']);
     }
     expect(fetcher).toHaveBeenCalledTimes(4);

@@ -116,13 +116,14 @@ it('return page reports the first sync and the reason for a refusal', () => {
   expect(renderToStaticMarkup(<ShopifyReturnView language="en" waiting={false} hasSchool={false} state={{ state: 'FAILED', kind: 'UNKNOWN' }} />)).toContain('Choose a school');
 });
 
-it('has every phrase in Korean and Spanish and is listed under Billing with its return page unlisted', () => {
+it('has every phrase in Korean and Spanish and is its own Finance page with its return page unlisted', () => {
   for (const language of ['ko', 'es'] as const) for (const k of Object.keys(SHOPIFY_LANGUAGES.en)) {
     expect(SHOPIFY_LANGUAGES[language][k as keyof typeof SHOPIFY_LANGUAGES.en], `${language}:${k}`).not.toBe('');
   }
   expect(shopifyText('ko', 'done_sync', { products: '3', orders: '2' })).toContain('3');
-  const billing = SCHOOL_SHELL_NAV.find(g => g.key === 'billing');
-  expect(billing?.routes.some(r => r.href === '/staff/billing/shopify')).toBe(true);
+  const shopify = SCHOOL_SHELL_NAV.find(g => g.key === 'shopify');
+  expect(shopify?.section).toBe('finance');
+  expect(shopify?.routes.map(r => r.href)).toEqual(['/staff/billing/shopify']);
   expect(SCHOOL_SHELL_UNLISTED_ROUTES).toContain('/staff/billing/shopify/return');
   expect(schoolShellActiveRoute('/staff/billing/shopify/return')?.href).toBe('/staff/billing/shopify');
 });

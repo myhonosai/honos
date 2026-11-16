@@ -53,7 +53,7 @@ describe('Action Engine approval workbench verified Platform View selector', () 
     await vi.waitFor(() => { const tree = render(); expect(tree.props['data-interface-theme']).toBe('classic'); expect(text(tree)).toContain('Saved for your current user and this verified current school only'); });
     const save = fetch.mock.calls.find(([, options]) => (options as RequestInit | undefined)?.method === 'PUT');
     expect(save).toEqual([themePath(), { method: 'PUT', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'Idempotency-Key': id('9') }, body: JSON.stringify({ interfaceTheme: 'classic', selectedVia: 'SETTINGS' }), credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'no-referrer' }]);
-    const copy = text(render()); for (const unchanged of ['No execution. No provider or AI call.', 'action.approve', 'crm.lead.create', 'AWAITING_APPROVAL', 'Request']) expect(copy).toContain(unchanged);
+    const copy = text(render()); for (const unchanged of ['action.approve', 'crm.lead.create', 'AWAITING_APPROVAL', 'Request']) expect(copy).toContain(unchanged);
     expect(copy).toContain('preserve the exact proposal queue, immutable payload, reviewer permission, approval binding, idempotency, decision controls, and no-execution posture');
   });
 

@@ -195,12 +195,32 @@ await check('HON waits in the corner on other pages', async () => {
   assert.equal(await page.locator('a[href="/staff/hon"][class*="honLauncher"]').isVisible(), true);
   await page.waitForTimeout(500); await shot(page, 'u2-hon-corner-classic-desktop'); await ctx.close();
 });
+await check('classic sidebar shows the owner menu headings with their pages, and the current page', async () => {
+  theme = 'classic'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/billing/invoices');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  const nav = page.locator('nav[aria-label="School navigation"]');
+  assert.equal(await nav.locator('[data-nav-section]').count(), 12);
+  assert.equal(await nav.locator('a[data-nav="invoices"]').getAttribute('aria-current'), 'page');
+  assert.equal(await page.locator('[data-shell-groups]').count(), 0, 'no third level');
+  await page.waitForTimeout(250); await axeScan(page, 'sidebar-classic'); await shot(page, 'l1-sidebar-classic-desktop');
+  await page.setViewportSize({ width: 1440, height: 1600 }); await page.waitForTimeout(150); await shot(page, 'l1-sidebar-classic-desktop-tall');
+  await ctx.close();
+});
+await check('modern top bar shows the everyday pages and More', async () => {
+  theme = 'modern'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/crm/follow-ups');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  const visible = await page.locator('nav[aria-label="School navigation"] a[data-nav]').evaluateAll((links) => links.filter((a) => a.offsetParent !== null).map((a) => a.dataset.nav));
+  assert.deepEqual(visible, ['home', 'conversationAi', 'classes', 'attendance', 'students', 'crm']);
+  await noOverflow(page); await shot(page, 'l1-topbar-modern-desktop'); await ctx.close();
+});
 for (const mode of ['modern', 'big-button']) await check(`${mode} menu panel lists every area`, async () => {
   theme = mode; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/work');
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
   await page.getByRole('button', { name: 'Open navigation' }).click();
   const panel = page.getByRole('dialog', { name: 'Menu' }); await panel.waitFor();
-  assert.equal(await panel.locator('[data-menu]').count(), 13);
+  // Owner menu (2026-11-16): eleven headings plus Settings; one card per page (24 pages).
+  assert.equal(await panel.locator('[data-menu-section]').count(), 12);
+  assert.equal(await panel.locator('[data-menu]').count(), 24);
   await page.waitForTimeout(250); await axeScan(page, `menu-${mode}`); await shot(page, `u2-menu-${mode}-desktop`);
   await page.keyboard.press('Escape'); await panel.waitFor({ state: 'detached' }); await ctx.close();
 });

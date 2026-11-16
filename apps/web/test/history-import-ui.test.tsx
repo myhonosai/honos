@@ -173,7 +173,7 @@ it('has every wording in English, Korean and Spanish, and a staff classes route'
   const keys = Object.keys(HISTORY_IMPORT_LANGUAGES.en).sort();
   expect(Object.keys(HISTORY_IMPORT_LANGUAGES.ko).sort()).toEqual(keys); expect(Object.keys(HISTORY_IMPORT_LANGUAGES.es).sort()).toEqual(keys);
   expect(historyImportText('ko', 'title')).toBe('수업 및 출석 가져오기');
-  const classes = SCHOOL_SHELL_NAV.find(g => g.key === 'classes');
+  const classes = SCHOOL_SHELL_NAV.find(g => g.key === 'attendance');
   expect(classes?.routes.map(r => r.href)).toContain('/staff/migration/classes');
   expect(schoolShellActiveRoute('/staff/migration/classes')?.href).toBe('/staff/migration/classes');
   const page = readFileSync('src/app/staff/migration/classes/page.tsx', 'utf8');
