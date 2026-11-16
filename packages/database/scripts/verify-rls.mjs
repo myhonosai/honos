@@ -238,6 +238,7 @@ const expectedRlsTables = [
   'school_conversations',
   'school_conversation_messages',
   'school_contact_archives',
+  'person_membership_starts',
   'hq_ai_provider_connections',
   'hq_ai_model_catalog',
   'hq_ai_routing_policies',

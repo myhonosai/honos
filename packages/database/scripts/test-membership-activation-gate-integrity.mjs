@@ -79,8 +79,10 @@ try {
   }
   // The transition trigger reads no session, transaction or custom setting: nothing a caller sets authorizes a transition.
   assert.doesNotMatch(bodyOf('guard_membership_state_transition'), /current_setting|set_config|session_user|current_user|pg_has_role/i);
-  assert.deepEqual((await admin.query(`SELECT tgname,tgenabled,pg_get_triggerdef(oid) def FROM pg_trigger WHERE tgrelid='hon.memberships'::regclass AND NOT tgisinternal`)).rows,
-    [{ tgname: 'membership_state_transition_guard', tgenabled: 'O', def: 'CREATE TRIGGER membership_state_transition_guard BEFORE INSERT OR UPDATE ON hon.memberships FOR EACH ROW EXECUTE FUNCTION hon.guard_membership_state_transition()' }]);
+  // 0398 adds one AFTER UPDATE check that only refuses (one membership per program); it authorizes nothing.
+  assert.deepEqual((await admin.query(`SELECT tgname,tgenabled,pg_get_triggerdef(oid) def FROM pg_trigger WHERE tgrelid='hon.memberships'::regclass AND NOT tgisinternal ORDER BY tgname`)).rows,
+    [{ tgname: 'membership_state_transition_guard', tgenabled: 'O', def: 'CREATE TRIGGER membership_state_transition_guard BEFORE INSERT OR UPDATE ON hon.memberships FOR EACH ROW EXECUTE FUNCTION hon.guard_membership_state_transition()' },
+      { tgname: 'memberships_one_per_program', tgenabled: 'O', def: 'CREATE TRIGGER memberships_one_per_program AFTER UPDATE OF state, term_started_at, term_ends_at ON hon.memberships FOR EACH ROW EXECUTE FUNCTION hon.guard_person_membership_overlap()' }]);
   assert.doesNotMatch(bodyOf('preview_school_membership_activation') + bodyOf('evaluate_membership_activation'), /\b(INSERT|UPDATE|DELETE|TRUNCATE|MERGE|LOCK)\b/, 'preview and evaluation are DML- and lock-free');
   // rules.manage and change.approve are reserved for E1c: no function uses them.
   assert.equal((await sql(`SELECT count(*)::int n FROM pg_proc WHERE pronamespace='hon'::regnamespace AND (prosrc LIKE '%${RULES}%' OR prosrc LIKE '%${APPROVE}%')`))[0].n, 0);
@@ -669,11 +671,11 @@ try {
   assert.deepEqual(readers, ['acknowledge_retention_review_evidence', 'activate_school_membership', 'apply_billing_import_row', 'begin_hon_turn', 'billing_import_has_membership', 'cancel_school_membership', 'crm_adult_membership_draft_is_current',
     'crm_guardian_child_membership_draft_current', 'draft_crm_adult_membership', 'draft_crm_adult_membership_from_plan', 'draft_crm_guardian_child_membership_from_plan',
     'draft_owner_launch_membership', 'evaluate_membership_activation', 'evaluate_membership_date_revision', 'guard_membership_date_revision_insert',
-    'guard_membership_pause', 'pause_school_membership', 'prepare_school_pay_autopay_cycle', 'read_crm_adult_membership_draft_confirmation', 'read_crm_adult_membership_preparation',
+    'guard_membership_pause', 'guard_person_membership_overlap', 'pause_school_membership', 'person_membership_start_item', 'prepare_school_pay_autopay_cycle', 'read_crm_adult_membership_draft_confirmation', 'read_crm_adult_membership_preparation',
     'read_crm_guardian_child_enrollment', 'read_crm_lead_memberships', 'read_crm_lead_registration_recovery', 'read_maya_at_risk_students', 'read_membership_date_confirmation_queue', 'read_membership_date_history', 'read_membership_pauses_and_refunds',
-    'read_owner_launch_membership_draft', 'read_parent_billing_view', 'read_parent_testing_status',
+    'read_owner_launch_membership_draft', 'read_parent_billing_view', 'read_parent_testing_status', 'read_person_membership_start',
     'read_retention_review_signals', 'read_school_command_center', 'read_school_contact_card', 'read_school_health_score', 'read_school_membership_list', 'read_school_membership_status_summary', 'read_school_reports', 'read_school_reports_locations', 'read_specialist_school_facts', 'record_membership_refund', 'record_retention_attention_alert',
-    'renewal_membership_facts', 'resolve_retention_attention_alert', 'resume_school_membership', 'revenue_plan_snapshot', 'revise_membership_dates', 'save_school_onboarding', 'school_contact_archive_plan', 'school_contact_facts', 'school_contact_merge_plan', 'school_dashboard_kpis', 'school_dashboard_members', 'school_pay_autopay_due', 'school_report_periods']);
+    'renewal_membership_facts', 'resolve_retention_attention_alert', 'resume_school_membership', 'revenue_plan_snapshot', 'revise_membership_dates', 'save_school_onboarding', 'school_contact_archive_plan', 'school_contact_facts', 'school_contact_merge_plan', 'school_dashboard_kpis', 'school_dashboard_members', 'school_pay_autopay_due', 'school_report_periods', 'start_person_membership']);
   // 0323 save_school_onboarding names the closed import-wish code 'MEMBERSHIPS' only; it never reads hon.memberships.
   // 0220 (U6) read_school_membership_list is a read-only school list: no booking, check-in or benefit path.
   // 0224 pause, resume, refund-record and pause-history paths and the pause guard: FROZEN is not ACTIVE, so a pause
@@ -694,6 +696,9 @@ try {
   // checks in, records attendance and grants nothing.
   // 0373 (C1) school_contact_facts is the read-only contacts list: it sorts people into student / trial / prospect / inactive
   // by the same 0331 membership rule and reads the current membership's plan and end date; it books, checks in and grants nothing.
+  // 0398 (M-B) start_person_membership writes one DRAFT (never ACTIVE) for the card; it is started only by the unchanged 0177
+  // confirm. read_person_membership_start and person_membership_start_item list one person's memberships for staff, and
+  // guard_person_membership_overlap only refuses an overlapping update. None books, checks in or grants a benefit.
   // 0387 (C3) school_contact_archive_plan and school_contact_merge_plan only test whether a person holds memberships (a
   // current one blocks archive; any one blocks being merged away); they never move, change or grant a membership.
   // 0259 (Maya M1) read_maya_at_risk_students is a read-only retention signal: it books, checks in and grants nothing,
