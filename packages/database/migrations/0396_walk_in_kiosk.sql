@@ -728,6 +728,16 @@ BEGIN
   SELECT * INTO k FROM hon.walkin_kiosk_settings WHERE organization_id=d.organization_id AND school_id=d.school_id FOR SHARE;
   SELECT * INTO d FROM hon.walkin_kiosk_devices WHERE id=d.id FOR SHARE;
   IF NOT k.enabled OR d.ended_at IS NOT NULL OR d.ends_at<=clock_timestamp() THEN RETURN jsonb_build_object('result','CLOSED'); END IF;
+  -- The starter's authority, held still for this transaction: row locks (not table locks, on this public path) on the starter's
+  -- principal, live grants at this school, their matching role permissions and the entitlement rows, then decided again. A
+  -- revocation or an entitlement end waits for this visit, or this visit waits for it and then sees it.
+  PERFORM 1 FROM hon.principals WHERE id=d.started_by FOR SHARE;
+  PERFORM 1 FROM hon.principal_role_grants g WHERE g.principal_id=d.started_by AND g.organization_id=d.organization_id AND g.revoked_at IS NULL ORDER BY g.id FOR SHARE;
+  PERFORM 1 FROM hon.role_permissions rp WHERE rp.organization_id=d.organization_id AND rp.permission_code='walkin_kiosk.run'
+    AND rp.role_id IN (SELECT g.role_id FROM hon.principal_role_grants g WHERE g.principal_id=d.started_by AND g.organization_id=d.organization_id)
+    ORDER BY rp.role_id FOR SHARE;
+  PERFORM 1 FROM hon.organization_entitlements e WHERE e.organization_id=d.organization_id FOR SHARE;
+  IF NOT hon.walkin_principal_holds(d.started_by,d.organization_id,d.school_id,'walkin_kiosk.run') THEN RETURN jsonb_build_object('result','CLOSED'); END IF;
   PERFORM 1 FROM hon.principals WHERE id=svc AND principal_type='SYSTEM_SERVICE' AND user_id IS NULL AND is_active FOR SHARE;
   IF NOT FOUND OR EXISTS(SELECT 1 FROM hon.principal_role_grants WHERE principal_id=svc) OR EXISTS(SELECT 1 FROM hon.hq_operator_grants WHERE principal_id=svc)
     OR EXISTS(SELECT 1 FROM hon.family_access_grants WHERE principal_id=svc) THEN RETURN jsonb_build_object('result','CLOSED'); END IF;
@@ -804,6 +814,8 @@ BEGIN
   INSERT INTO hon.outbox_events(organization_id,school_id,event_type,schema_version,aggregate_type,aggregate_id,aggregate_version,correlation_id,causation_id,payload)
     VALUES(d.organization_id,d.school_id,'walkin_kiosk.visit_recorded',1,'WALKIN_VISIT',visit,1,request,request,
       jsonb_build_object('visitId',visit,'leadId',lead,'internalOnly',true));
+  -- Decided again after the last write: if the tablet is no longer live, nothing above commits.
+  IF (hon.walkin_live_device(digest)).id IS DISTINCT FROM d.id THEN RAISE EXCEPTION 'WALKIN_KIOSK_CLOSED' USING ERRCODE='42501'; END IF;
   first_name:=CASE WHEN (v->'contact'->>'isParticipant')::boolean THEN v->'contact'->>'givenName' ELSE v->'children'->0->>'givenName' END;
   RETURN jsonb_build_object('result','RECORDED','firstName',first_name,'paymentState',x.payment_state,'priceMinor',x.price_minor,
     'thankYou',k.thank_you->>x.language);

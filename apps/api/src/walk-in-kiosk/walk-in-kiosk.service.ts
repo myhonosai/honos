@@ -128,7 +128,11 @@ export class WalkInKioskService {
     try {
       return verifyWalkInVisitOutcome(await this.database.runPublicEventCall('SELECT hon.submit_walkin_visit($1,$2::jsonb,$3) AS data',
         [walkInTokenDigest(token), JSON.stringify(visit), key]));
-    } catch { return { result: 'UNAVAILABLE' }; } // Never propagate PostgreSQL detail or visitor data.
+    } catch (error) {
+      // The tablet stopped being live during this visit (decided again after the last write): nothing was kept.
+      if ((error as { code?: string; message?: string })?.code === '42501' && (error as { message?: string }).message === 'WALKIN_KIOSK_CLOSED') return { result: 'CLOSED' };
+      return { result: 'UNAVAILABLE' }; // Never propagate PostgreSQL detail or visitor data.
+    }
   }
 
   private token(value: unknown, keys: string[]): string | null {

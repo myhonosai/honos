@@ -284,7 +284,7 @@ try {
   ok(read.data.schoolName === 'Walk-in Dojo a' && read.data.settingsVersion === 2 && read.data.offers.length === 2 && read.data.waiver.ko === WAIVER.ko && read.data.emergencyRequired === true, 'tablet shows the settings');
   ok(!JSON.stringify(read.data).includes(pipeline) && !JSON.stringify(read.data).includes(ids.schoolA), 'no ids on the tablet');
   for (const [label, token] of [['unknown', randomBytes(32).toString('base64url')], ['short', 'abc'], ['digest instead of token', digest(TOKEN)]]) {
-    await refused(() => terminal(token), token.length === 43 ? 404 : 404, 'CLOSED', `tablet read: ${label}`);
+    await refused(() => terminal(token), token.length === 43 ? 404 : 400, token.length === 43 ? 'CLOSED' : 'INVALID', `tablet read: ${label}`);
   }
 
   // 5. A visit: a parent signs for a child on a free trial.
@@ -373,6 +373,40 @@ try {
   await sql(`INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from)
     SELECT organization_id,school_id,principal_id,role_id,$2,clock_timestamp()-interval '1 second' FROM hon.principal_role_grants WHERE id=$1`, [DESK.grants[0], OWNER.principal]);
   ok((await success(() => terminal(third.token), 'tablet back')).data.settingsVersion === 2, 'the tablet works again once the grant is back');
+  // 9b. Barrier: a revocation or an entitlement end that is still in flight when a visit arrives decides that visit. The visit
+  // waits on its row locks for the change, then sees it and keeps nothing (without the locks it would commit on its old snapshot).
+  { const barrier = new pg.Client(targets.owner);
+    await barrier.connect();
+    const visitsOf = async () => (await sql('SELECT count(*)::int n FROM hon.walkin_visits WHERE device_id=$1', [third.device.deviceId])).rows[0].n;
+    const peopleOf = async () => (await sql('SELECT count(*)::int n FROM hon.people WHERE school_id=$1', [ids.schoolA])).rows[0].n;
+    const waitingOnLock = async () => {
+      for (let i = 0; i < 200; i += 1) {
+        const n = (await sql('SELECT count(*)::int n FROM pg_locks l WHERE NOT l.granted')).rows[0].n;
+        if (n > 0) return true;
+        await new Promise((done) => setTimeout(done, 25));
+      }
+      return false;
+    };
+    const contact = (n) => ({ contact: { ...visitInput().contact, email: `barrier${n}@example.test`, mobile: `+1555555020${n}` } });
+    try {
+      for (const [label, change, restore] of [
+        ['starter loses walkin_kiosk.run', () => barrier.query('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=$2 WHERE principal_id=$1 AND revoked_at IS NULL', [DESK.principal, OWNER.principal]),
+          () => sql(`INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from)
+            SELECT DISTINCT ON (role_id) organization_id,school_id,principal_id,role_id,$2,clock_timestamp()-interval '1 second' FROM hon.principal_role_grants WHERE principal_id=$1`, [DESK.principal, OWNER.principal])],
+        ['school entitlement ends', () => barrier.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [ids.organization]),
+          () => sql("UPDATE hon.organization_entitlements SET status='ACTIVE' WHERE organization_id=$1", [ids.organization])]]) {
+        const visits = await visitsOf(), people = await peopleOf();
+        await barrier.query('BEGIN');
+        await change();
+        const pending = submit(third.token, visitInput(contact(label.length % 10)));
+        ok(await waitingOnLock(), `barrier (${label}): the visit waits for the in-flight change`);
+        await barrier.query('COMMIT');
+        await refused(() => pending, 404, 'CLOSED', `barrier (${label}): the visit sees the change`);
+        ok(await visitsOf() === visits && await peopleOf() === people, `barrier (${label}): no visit, person, lead or waiver kept`);
+        await restore();
+        ok((await success(() => terminal(third.token), `barrier (${label}): tablet back`)).data.settingsVersion === 2, `barrier (${label}): restored`);
+      }
+    } finally { await barrier.query('ROLLBACK').catch(() => undefined); await barrier.end(); } }
   await sql("UPDATE hon.walkin_kiosk_devices SET ends_at=started_at+interval '1 second' WHERE id=$1", [third.device.deviceId]).catch(() => undefined);
   await success(() => saveSettings(OWNER, { ...goodSettings(), expectedVersion: 2, enabled: false, waiver: { en: 'New waiver text.' } }), 'turn the kiosk off and change the waiver');
   await refused(() => terminal(TOKEN), 404, 'CLOSED', 'kiosk off: tablet closed');

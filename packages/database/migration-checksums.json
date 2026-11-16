@@ -302,6 +302,6 @@
     "0388_school_paper_import.sql": "4f556472acba21133dd5f8f644e461608969343d65cfcd21348590586c6c3ab5",
     "0390_school_person_photos.sql": "d80b9e611e0a0035809d4174afe0cc35265d2ad67395b8c3127a89819ff683a6",
     "0392_school_location_biometric_notice.sql": "1dd2614732160985e3592e46699670682cfbcfc0bcf9a7e3973381f8acfec411",
-    "0396_walk_in_kiosk.sql": "e43fbb9325c1051b199cd28d5ff502c467aa780a16d406f3389737b7ebd1848f"
+    "0396_walk_in_kiosk.sql": "6ac9c8f888510d64caecd8f01a767952c880934812ae8bfa179df671c783dd82"
   }
 }

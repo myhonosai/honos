@@ -5,7 +5,7 @@ import { parsePublicFormJson } from '../marketing/public-form-transport.js';
 /**
  * Walk-in kiosk (0396): strict transport for the tablet calls under /v1/walk-in-kiosk. Only the two fixed POST paths, no query
  * string, same-origin JSON of at most 32 KiB without duplicate keys, and no cookie, Authorization, Referer or X-HON-* header:
- * the tablet's only authority is the device token in the body. A fixed-memory process cap backs the per-device and per-contact limits kept in SQL
+ * the tablet's only authority is the device token in the body. A fixed-memory process cap (well-formed calls only) backs the per-device and per-contact limits kept in SQL
  * (a school's tablets share one address, so no per-address limit applies here).
  */
 export function walkInKioskTransport() {
@@ -27,11 +27,15 @@ export function walkInKioskTransport() {
       || (req.headers['content-encoding'] !== undefined && req.headers['content-encoding'] !== 'identity')) {
       res.status(400).json({ result: 'INVALID' }); return;
     }
-    if (Date.now() - start >= 60000) { start = Date.now(); attempts = 0; }
-    if (++attempts > 600) { res.setHeader('Retry-After', '60'); res.status(429).json({ result: 'RATE_LIMITED' }); return; }
     parser(req, res, error => {
       if (error) { res.status(400).json({ result: 'INVALID' }); return; }
       try { req.body = parsePublicFormJson(req.body as Buffer); } catch { res.status(400).json({ result: 'INVALID' }); return; }
+      // Only a well-formed tablet call (an object naming a token-shaped device) reaches the cap, so malformed traffic can never
+      // use it up for the real tablets; the per-device and per-contact limits in SQL do the rest.
+      const device = (req.body as { device?: unknown } | null)?.device;
+      if (typeof device !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(device)) { res.status(400).json({ result: 'INVALID' }); return; }
+      if (Date.now() - start >= 60000) { start = Date.now(); attempts = 0; }
+      if (++attempts > 1200) { res.setHeader('Retry-After', '60'); res.status(429).json({ result: 'RATE_LIMITED' }); return; }
       next();
     });
   };
