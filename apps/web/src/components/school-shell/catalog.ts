@@ -34,7 +34,9 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/crm/trials', 'routeTrials', true), r('/staff/crm/lead-memberships', 'routeLeadMemberships'), r('/staff/migration/leads', 'routeLeadImport')),
     ...g('groupMarketing', r('/staff/marketing', 'routeMarketingHome'), r('/staff/marketing/campaigns', 'routeCampaigns'), r('/staff/marketing/forms', 'routeForms'), r('/staff/marketing/website', 'routeWebsite'),
     r('/staff/marketing/intake', 'routeIntake'), r('/staff/marketing/social', 'routeSocial'), r('/staff/creative-studio', 'routeCreativeStudio'), r('/staff/champions-club', 'routeChampions'))] },
-  { key: 'classes', titleKey: 'navClasses', routes: [...g('groupSchedule', r('/staff/schedule', 'routeRosters'), r('/staff/schedule/sessions', 'routeSessions'), r('/staff/schedule/timetable', 'routeTimetable'), r('/staff/schedule/events', 'routeEvents'), r('/staff/schedule/bookings', 'routeBookings'),
+  // Owner ask (2026-11-16): rosters, class schedule, weekly timetable, sale days and events and class booking are one
+  // Calendar page; /staff/schedule owns every /staff/schedule/* path, so the old pages and workflow pages still mark Classes.
+  { key: 'classes', titleKey: 'navClasses', routes: [...g('groupSchedule', r('/staff/schedule', 'routeCalendar'),
     r('/staff/classpass', 'routeClassPass', true), r('/staff/kiosk', 'routeKiosk'), r('/staff/migration/classes', 'routeHistoryImport')),
     ...g('groupAttendance', r('/staff/attendance', 'routeAttendance', true), r('/staff/attendance/planned-absences', 'routePlannedAbsences')),
     ...g('groupCurriculum', r('/staff/curriculum/library', 'routeCurriculumLibrary'), r('/staff/curriculum/progress', 'routeProgress'), r('/staff/teaching-studio', 'routeTeachingStudio'), r('/staff/testing/registrations', 'routeTesting'),
@@ -58,6 +60,12 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
 export const SCHOOL_SHELL_UNLISTED_ROUTES: readonly string[] = [
   '/staff/entry',
   '/staff/schedule/sessions/create',
+  // Part of Classes > Calendar (2026-11-16): the booking page is opened from other pages with a class chosen; the other
+  // three redirect to the matching Calendar tab for old links and bookmarks.
+  '/staff/schedule/bookings',
+  '/staff/schedule/sessions',
+  '/staff/schedule/timetable',
+  '/staff/schedule/events',
   '/staff/testing/candidates/register',
   '/staff/testing/candidates/grade',
   '/staff/search/[organizationId]/[schoolId]/[kind]/[entityId]',
