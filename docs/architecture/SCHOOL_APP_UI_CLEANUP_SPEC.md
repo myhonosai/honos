@@ -39,3 +39,48 @@ Frontend copy and layout only. No API, database, billing, entitlement, AI-spend 
 - The shell's selection stays a navigation selector only; every page API re-authorizes the exact school.
 - Status never claims availability without a verified readiness read: loading, denied and unverifiable are distinct.
 - Hiding legacy navigation removes no route: every page stays reachable from the shell catalog (test-enforced).
+
+## Follow-up (2026-11-16): no record IDs, no policy walls
+
+Owner request (David, 2026-11-16, Teaching studio screenshot): "There is so many verification on page. School has
+logged in. They shouldn't verify so much. ... these ids doesn't make sense. They are logging into their own
+school/organization. Make that connection right away."
+
+Goal: a signed-in staff member never types a school, organization, student, lead, curriculum or other record ID, and
+pages do not show internal guarantees ("Known selectors never grant access", "What this page never does"). The
+security stays where it is: the school comes from the verified session, every API re-checks the exact school and
+permission, and each pick list is read-only, exact-school, permission-checked twice (controller and inside the read),
+entitlement-gated, HUMAN_UI only and capped at 50 rows.
+
+### Audit (main 2948d4d)
+
+| Page | Record-ID inputs while signed in | Policy copy |
+|---|---|---|
+| Teaching studio | student, target curriculum, target rank | "What this page never does", "Known selectors never grant access...", per-form disclaimers |
+| Documents | publication, family | disclosure + disclaimers |
+| Instructor qualifications | staff, qualification, evidence, course | disclosure |
+| Achievements | definition, student | disclosure |
+| Trial appointments | CRM lead | disclosure |
+| Follow-ups | lead, follow-up, assignee | disclosure |
+| Work items | work item, assignee | disclosure |
+| Billing renewals | membership, renewal review | disclosure |
+| Retention signals | membership | prose |
+| Staff roles | target person | disclosure |
+| Lead create panel, public form | pipeline, stage, campaign | prose |
+| ~20 other pages | none | "What this page never does" disclosures |
+| ClassPass, kiosk | owned by the walk-in kiosk thread; not touched here | |
+
+### Slices (one PR each)
+
+A. **Teaching studio**: two new read-only lists on the existing pickers controller (no migration):
+   `GET .../pickers/students?for=teaching[&search]` (active student profiles by name; `teaching.studio.read`) and
+   `GET .../pickers/ranks?for=teaching` (rank by curriculum, non-archived curricula; `teaching.studio.read`). The page
+   loads on open from the session's school, picks a student by name, picks "Curriculum · Rank" from one list (fills
+   the paired curriculum and rank), and drops the ID boxes and policy text. Status/skill codes get plain labels.
+B. **Copy sweep**: remove every "What this page never does" disclosure and the remaining guarantee paragraphs on
+   staff pages; keep at most one short helpful sentence. Tests that pinned the old wording follow.
+C+. **Remaining record-ID pages** from the table, smallest first, reusing the pickers (adding a list only where a
+   screen has no name source yet). Typed IDs remain only behind "Enter record IDs instead" when a list cannot load.
+
+Out of scope: ClassPass and kiosk pages (walk-in kiosk thread), conceal behaviour (screensaver thread), schedule pages
+(calendar thread), menu (screens thread). No billing, entitlement, AI-spend or deployment change.

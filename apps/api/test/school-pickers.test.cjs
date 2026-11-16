@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
-const { SchoolPickersService, SchoolPickersController, ENROLLMENT_PURPOSES, CANDIDATE_PURPOSES } = require('../dist/school-pickers/school-pickers.js');
+const { SchoolPickersService, SchoolPickersController, ENROLLMENT_PURPOSES, CANDIDATE_PURPOSES, STUDENT_PURPOSES, RANK_PURPOSES } = require('../dist/school-pickers/school-pickers.js');
 
 const scope = { organizationId: randomUUID(), schoolId: randomUUID(), principalId: randomUUID() };
 const request = { honIdentity: { externalSubject: 'verified-human' } };
@@ -87,6 +87,8 @@ test('a school without an active, in-window entitlement lists nothing on every e
     (c) => c.testingEvents(scope.organizationId, scope.schoolId, request, response()),
     (c) => c.candidates(scope.organizationId, scope.schoolId, 'grade', undefined, request, response()),
     (c) => c.candidates(scope.organizationId, scope.schoolId, 'decision', undefined, request, response()),
+    (c) => c.students(scope.organizationId, scope.schoolId, 'teaching', undefined, request, response()),
+    (c) => c.ranks(scope.organizationId, scope.schoolId, 'teaching', request, response()),
   ];
   for (const call of calls) {
     for (const entitled of [false, 'UNKNOWN_TIER']) {
@@ -97,5 +99,34 @@ test('a school without an active, in-window entitlement lists nothing on every e
       assert.deepEqual(f.calls.sql[1].values, [], 'the boundary takes no organization, school, tier or time selector');
     }
     for (const tier of ['ESSENTIAL', 'CORE', 'COMPLETE']) await call(controller(fakeDb({ entitled: tier })));
+  }
+});
+
+test('Teaching studio lists: students and ranks by name, checked against teaching.studio.read before and inside the read', async () => {
+  assert.deepEqual(STUDENT_PURPOSES, { teaching: 'teaching.studio.read' });
+  assert.deepEqual(RANK_PURPOSES, { teaching: 'teaching.studio.read' });
+  const f = fakeDb({ rows: [{ studentProfileId: 's' }] }); const res = response();
+  const body = await controller(f).students(scope.organizationId, scope.schoolId, 'teaching', '  Kim_%  ', request, res);
+  assert.deepEqual(body.data, [{ studentProfileId: 's' }]); assert.equal(body.meta.limit, 50); assert.equal(res.headers['Cache-Control'], 'private, no-store');
+  assert.equal(f.calls.resolve[0].permission, 'teaching.studio.read'); assert.deepEqual(f.calls.sql[0].values, ['verified-human', scope.schoolId, 'teaching.studio.read']);
+  const read = f.calls.sql.find((c) => c.sql.includes('hon.student_profiles'));
+  assert.deepEqual(read.values, [scope.organizationId, scope.schoolId, 'Kim_%']);
+  assert.match(read.sql, /s\.organization_id = \$1 AND s\.school_id = \$2 AND s\.status = 'ACTIVE'/);
+  assert.match(read.sql, /LIMIT 50/); assert.match(read.sql, /replace\(replace\(replace\(\$3::text/);
+  const r = fakeDb({ rows: [{ rankId: 'r' }] });
+  const ranks = await controller(r).ranks(scope.organizationId, scope.schoolId, 'teaching', request, response());
+  assert.deepEqual(ranks.data, [{ rankId: 'r' }]); assert.equal(ranks.meta.limit, 200); assert.equal(r.calls.resolve[0].permission, 'teaching.studio.read');
+  const rankRead = r.calls.sql.find((c) => c.sql.includes('hon.curriculum_ranks'));
+  assert.deepEqual(rankRead.values, [scope.organizationId, scope.schoolId]); assert.match(rankRead.sql, /LIMIT 200/);
+  assert.match(rankRead.sql, /c\.organization_id = \$1 AND c\.school_id = \$2 AND c\.lifecycle <> 'ARCHIVED'/);
+  assert.match(rankRead.sql, /r\.curriculum_id = c\.id AND r\.organization_id = c\.organization_id AND r\.school_id = c\.school_id/);
+  assert.ok(!/\b(INSERT|UPDATE|DELETE)\b/.test([...f.calls.sql, ...r.calls.sql].map((c) => c.sql).join('\n')), 'read-only');
+  for (const bad of [undefined, 'progress', 'toString', ['teaching']]) {
+    const g = fakeDb(); await assert.rejects(controller(g).students(scope.organizationId, scope.schoolId, bad, undefined, request, response()), status(400)); assert.equal(g.calls.resolve.length, 0);
+    const h = fakeDb(); await assert.rejects(controller(h).ranks(scope.organizationId, scope.schoolId, bad, request, response()), status(400)); assert.equal(h.calls.resolve.length, 0);
+  }
+  for (const f2 of [fakeDb({ grant: () => undefined }), fakeDb({ again: () => undefined })]) {
+    await assert.rejects(controller(f2).students(scope.organizationId, scope.schoolId, 'teaching', undefined, request, response()), status(403));
+    assert.ok(!f2.calls.sql.some((c) => c.sql.includes('hon.student_profiles')));
   }
 });
