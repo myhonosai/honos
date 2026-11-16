@@ -3758,20 +3758,6 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
--- B-TUI-2 checkout pages CP1 0402: three private tables reached only through three runtime entry points (staff read, page
--- save, settings save); validators, guards and helpers are migration-owner only.
-DO $$ DECLARE r text; t text; f text;
-  entry text[]:=ARRAY['hon.read_school_checkouts(text)','hon.save_school_checkout(text,jsonb,text,uuid,uuid)','hon.save_school_checkout_settings(text,jsonb,text,uuid,uuid)'];
-  helpers text[]:=ARRAY['hon.checkout_int_ok(jsonb,bigint,bigint)','hon.checkout_fields_ok(jsonb)','hon.checkout_option_ok(jsonb)','hon.school_checkout_content_ok(jsonb)',
-    'hon.school_checkout_groups_ok(jsonb)','hon.school_checkout_default_groups()','hon.guard_school_checkout()','hon.school_checkout_json(hon.school_checkouts)',
-    'hon.school_checkout_settings_json(uuid,uuid)','hon.school_checkout_begin(text,text,jsonb,text)','hon.school_checkout_finish(text,uuid,text,jsonb)'];
-BEGIN
-  IF to_regclass('hon.school_checkouts') IS NULL THEN RAISE EXCEPTION 'Apply migration 0402 first'; END IF;
-  FOREACH t IN ARRAY ARRAY['school_checkouts','school_checkout_versions','school_checkout_settings'] LOOP
-    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
-    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
-  END LOOP;
-  FOREACH f IN ARRAY helpers||entry LOOP
 
 -- 0405 Shopify Connected (SH1): eight private tables reached only through eleven runtime entry points; the guard,
 -- helpers and evidence writers are migration-owner only.
@@ -3789,6 +3775,27 @@ BEGIN
   END LOOP;
   FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
     WHERE n.nspname='hon' AND (p.proname LIKE 'shopify\_%' OR p.proname='guard_shopify' OR p.oid::regprocedure::text=ANY(entry)) LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+-- B-TUI-2 checkout pages CP1 0402: three private tables reached only through three runtime entry points (staff read, page
+-- save, settings save); validators, guards and helpers are migration-owner only.
+DO $$ DECLARE r text; t text; f text;
+  entry text[]:=ARRAY['hon.read_school_checkouts(text)','hon.save_school_checkout(text,jsonb,text,uuid,uuid)','hon.save_school_checkout_settings(text,jsonb,text,uuid,uuid)'];
+  helpers text[]:=ARRAY['hon.checkout_int_ok(jsonb,bigint,bigint)','hon.checkout_fields_ok(jsonb)','hon.checkout_option_ok(jsonb)','hon.school_checkout_content_ok(jsonb)',
+    'hon.school_checkout_groups_ok(jsonb)','hon.school_checkout_default_groups()','hon.guard_school_checkout()','hon.school_checkout_json(hon.school_checkouts)',
+    'hon.school_checkout_settings_json(uuid,uuid)','hon.school_checkout_begin(text,text,jsonb,text)','hon.school_checkout_finish(text,uuid,text,jsonb)'];
+BEGIN
+  IF to_regclass('hon.school_checkouts') IS NULL THEN RAISE EXCEPTION 'Apply migration 0402 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['school_checkouts','school_checkout_versions','school_checkout_settings'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY helpers||entry LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
   END LOOP;

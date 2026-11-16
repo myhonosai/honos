@@ -3925,6 +3925,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
     RAISE EXCEPTION 'school_checkout.manage must exist as a sensitive staff-assignable permission'; END IF;
 END $$;
 -- End school checkouts exact verification.
+
 -- Shopify Connected exact verification (0405)
 DO $$ DECLARE f text; t text;
   entry text[]:=ARRAY['hon.read_shopify(text,uuid)','hon.read_shopify_catalog(text,uuid)','hon.read_shopify_orders(text,uuid)',
