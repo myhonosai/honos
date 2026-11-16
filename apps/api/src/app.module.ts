@@ -126,6 +126,9 @@ import { MembershipPauseController } from './billing/membership-pause.controller
 import { MembershipPauseService } from './billing/membership-pause.service.js';
 import { StudentImportController } from './migration/student-import.controller.js';
 import { StudentImportService } from './migration/student-import.service.js';
+import { PaperImportController } from './paper-import/paper-import.controller.js';
+import { PaperImportService } from './paper-import/paper-import.service.js';
+import { PAPER_READER_RUNTIME, SyntheticPaperReader } from './paper-import/paper-reader.js';
 import { BillingImportController } from './migration/billing-import.controller.js';
 import { BillingImportService } from './migration/billing-import.service.js';
 import { HistoryImportController } from './migration/history-import.controller.js';
@@ -508,6 +511,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipDateRevisionController,
     MembershipPauseController,
     StudentImportController,
+    PaperImportController,
     BillingImportController,
     HistoryImportController,
     SchoolWebsiteController,
@@ -711,6 +715,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipDateRevisionService,
     MembershipPauseService,
     StudentImportService,
+    PaperImportService,
+    // 0388: the stand-in reader is the only paper reader; a real vision provider needs owner approval.
+    { provide: PAPER_READER_RUNTIME, useFactory: () => new SyntheticPaperReader() },
     BillingImportService,
     HistoryImportService,
     SchoolWebsiteService,
