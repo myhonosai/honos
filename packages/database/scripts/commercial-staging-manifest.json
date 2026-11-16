@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "c4a7889250eb17bc66adb5a5d79be935bcd8a0d079519b67f1c3de9183f80730",
+  "chainSha256": "3956cdccf666eceeb4b6c3490eef6f8d244a4727570604059b8b372518f1b1ff",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -467,6 +467,10 @@
       "sha256": "3e83f6db003e7888dfba22a00d5a0593b4604265314abce73cd80fff612959df"
     },
     {
+      "file": "0337_school_pay_autopay_charges.sql",
+      "sha256": "f3c9646fb394c6d8137fb33e941225c83151384fe58dbe7b147c19c90a0fa0bf"
+    },
+    {
       "file": "0338_hq_executive_performance.sql",
       "sha256": "36efc3eafd9ab2bd4e6a9b549d973e50e7ac9e57b7fa6a5bbfd79c29748f04d0"
     },
@@ -517,6 +521,10 @@
     {
       "file": "0392_school_location_biometric_notice.sql",
       "sha256": "1dd2614732160985e3592e46699670682cfbcfc0bcf9a7e3973381f8acfec411"
+    },
+    {
+      "file": "0394_attendance_cards_scan_check_in.sql",
+      "sha256": "16afebd48ff7fe3754de97bdcfb9aeb36ef3f766de9d30c136e950c58af9ed73"
     },
     {
       "file": "0402_school_checkouts.sql",

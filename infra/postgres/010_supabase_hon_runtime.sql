@@ -3097,6 +3097,39 @@ DO $$ DECLARE r text; t text; col text; f text; BEGIN
   END IF;
 END $$;
 
+-- B-TUI-2 piece 5a 0337 autopay charges (test mode only): two private tables reached only through four runtime entry
+-- points; the attempt, payment-record and invoice guards and the helpers are private. HON takes no fee.
+DO $$ DECLARE r text; t text; col text; f text; BEGIN
+  IF to_regclass('hon.school_pay_charge_attempts') IS NULL THEN RAISE EXCEPTION 'Apply migration 0337 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.school_pay_charge_attempts','hon.school_pay_charge_events'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid=t::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON %s FROM PUBLIC',col,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+        EXECUTE format('REVOKE ALL (%I) ON %s FROM %I',col,t,r);
+      END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_school_pay_charge_attempt()','hon.school_pay_invoice_charge_open(uuid)','hon.guard_school_pay_charge_payment_record()',
+    'hon.guard_school_pay_charge_invoice()','hon.school_pay_charge_json(hon.school_pay_charge_attempts)',
+    'hon.school_pay_charge_record(uuid,hon.school_pay_charge_attempts,text,jsonb,text,uuid,uuid)','hon.school_pay_lock_charge(uuid,integer)',
+    'hon.school_pay_charge_outcome_ok(jsonb)','hon.school_pay_charge_settle(hon.school_pay_charge_attempts,jsonb,uuid,text,uuid,uuid)',
+    'hon.read_school_pay_autopay_charges(text,uuid)','hon.read_school_pay_charge_attempt(text,uuid)',
+    'hon.begin_school_pay_charge(text,uuid,jsonb,text,uuid,uuid)','hon.finish_school_pay_charge(text,uuid,jsonb,text,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_pay_autopay_charges(text,uuid),hon.read_school_pay_charge_attempt(text,uuid),
+      hon.begin_school_pay_charge(text,uuid,jsonb,text,uuid,uuid),hon.finish_school_pay_charge(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
 -- D11-B 0246 HON OS free trial: two private forced-RLS tables; starting a trial and its read are the only runtime entry
 -- points. The trial program row has no runtime write path (TEST_MODE only by the migration owner of a test database).
 DO $$ DECLARE t text; r text; f text; c text; BEGIN
@@ -3775,6 +3808,27 @@ BEGIN
   END LOOP;
   FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
     WHERE n.nspname='hon' AND (p.proname LIKE 'shopify\_%' OR p.proname='guard_shopify' OR p.oid::regprocedure::text=ANY(entry)) LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+-- 0394 attendance cards and scan check-in: six private tables reached only through six runtime entry points; the guard,
+-- helpers and the shared check-in path are migration-owner only.
+DO $$ DECLARE r text; t text; f text;
+  entry text[]:=ARRAY['hon.read_attendance_cards(text)','hon.configure_attendance_cards(text,jsonb,text,uuid,uuid)','hon.issue_attendance_cards(text,jsonb,text,uuid,uuid)','hon.revoke_attendance_card(text,jsonb,text,uuid,uuid)','hon.check_in_with_attendance_card(text,uuid,jsonb,text,uuid,uuid)','hon.set_student_photo_consent(text,jsonb,text,uuid,uuid)'];
+BEGIN
+  IF to_regclass('hon.attendance_cards') IS NULL THEN RAISE EXCEPTION 'Apply migration 0394 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['attendance_card_settings','attendance_cards','attendance_check_ins','attendance_card_requests','student_photo_consent_rules','student_photo_consents'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_attendance_card()','hon.attendance_cards_actor(text)','hon.attendance_card_settings_json(uuid,uuid)','hon.attendance_card_json(hon.attendance_cards)',
+    'hon.attendance_card_begin(text,text,jsonb,text,uuid,uuid)','hon.attendance_card_finish(text,uuid,text,text,uuid,jsonb,text,uuid,uuid,jsonb)',
+    'hon.attendance_check_in_student(text,uuid,uuid,text,uuid,text,text,uuid,uuid)','hon.attendance_photo_consent_rule(uuid,uuid)',
+    'hon.attendance_photo_consent_state(boolean,hon.student_photo_consents)']||entry LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
   END LOOP;

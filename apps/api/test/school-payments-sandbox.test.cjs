@@ -311,3 +311,91 @@ test('0321 Stripe saved methods: customer and setup on the school account, idemp
   }
   assert.equal(none.calls.length, 0, 'Square saved methods send nothing yet');
 });
+
+test('0337 Stripe charges: off-session direct charge on the school account, attempt key, outcomes and lookup', async () => {
+  const { StripeConnectTestAdapter, SquareSandboxAdapter } = await loadSandbox();
+  const ACCOUNT = 'acct_1TestSchool0001', ATTEMPT = '77777777-7777-4777-8777-777777777777';
+  const intent = (patch = {}) => ({ id: 'pi_Test123', amount: 20000, currency: 'usd', status: 'succeeded', metadata: { hon_attempt_id: ATTEMPT }, ...patch });
+  let reply = { status: 200, body: intent() };
+  let list = { status: 200, body: { data: [intent()], has_more: false } };
+  const t = fakeTransport([
+    { method: 'POST', url: 'https://api.stripe.com/v1/payment_intents', reply: () => reply },
+    { method: 'GET', url: /^https:\/\/api\.stripe\.com\/v1\/payment_intents\?/, reply: () => list },
+  ]);
+  const stripe = new StripeConnectTestAdapter(STRIPE_KEY, t.send);
+  const request = { accountRef: ACCOUNT, customerRef: 'cus_Test123', methodRef: 'pm_Test123', methodKind: 'CARD', attemptId: ATTEMPT, amountMinor: 20000, currency: 'USD' };
+  assert.deepEqual(await stripe.chargeOffSession(request), { outcome: 'SUCCEEDED', chargeRef: 'pi_Test123', failureClass: null, amountMinor: 20000, currency: 'USD' });
+  const sent = t.calls[0];
+  assert.equal(sent.headers['Stripe-Account'], ACCOUNT, 'a direct charge on the school account');
+  assert.equal(sent.headers['Idempotency-Key'], `hon-school-pay-charge-${ATTEMPT}`);
+  const body = form(sent.body);
+  assert.deepEqual(body, { amount: '20000', currency: 'usd', customer: 'cus_Test123', payment_method: 'pm_Test123', 'payment_method_types[0]': 'card', off_session: 'true', confirm: 'true',
+    'metadata[hon_attempt_id]': ATTEMPT }, 'exactly these fields: no fee, no transfer, no on_behalf_of');
+  reply = { status: 200, body: intent({ status: 'processing' }) };
+  assert.equal((await stripe.chargeOffSession({ ...request, methodKind: 'US_BANK_ACCOUNT' })).outcome, 'PROCESSING');
+  assert.equal(form(t.calls.at(-1).body)['payment_method_types[0]'], 'us_bank_account');
+  reply = { status: 200, body: intent({ status: 'requires_action' }) };
+  assert.deepEqual(await stripe.chargeOffSession(request), { outcome: 'FAILED', chargeRef: 'pi_Test123', failureClass: 'AUTHENTICATION_REQUIRED', amountMinor: 20000, currency: 'USD' });
+  const declined = (code, decline) => ({ status: 402, body: { error: { type: 'card_error', code, decline_code: decline,
+    payment_intent: intent({ status: 'requires_payment_method', last_payment_error: { code, decline_code: decline } }) } } });
+  for (const [code, decline, expected] of [['card_declined', 'insufficient_funds', 'INSUFFICIENT_FUNDS'], ['expired_card', undefined, 'EXPIRED_CARD'],
+    ['card_declined', 'generic_decline', 'DECLINED'], ['authentication_required', 'authentication_required', 'AUTHENTICATION_REQUIRED'], ['processing_error', undefined, 'OTHER']]) {
+    reply = declined(code, decline);
+    const seen = await stripe.chargeOffSession(request);
+    assert.equal(seen.outcome, 'FAILED'); assert.equal(seen.failureClass, expected, `${code}/${decline}`); assert.equal(seen.chargeRef, 'pi_Test123');
+  }
+  reply = { status: 402, body: { error: { type: 'card_error', code: 'card_declined' } } };
+  assert.deepEqual(await stripe.chargeOffSession(request), { outcome: 'FAILED', chargeRef: null, failureClass: 'DECLINED', amountMinor: 20000, currency: 'USD' });
+  for (const [bad, label] of [[intent({ amount: 19999 }), 'another amount'], [intent({ currency: 'eur' }), 'another currency'], [intent({ metadata: { hon_attempt_id: 'x' } }), 'another attempt'],
+    [intent({ status: 'requires_capture' }), 'an unexpected status'], [intent({ id: 'ch_123' }), 'not a PaymentIntent']]) {
+    reply = { status: 200, body: bad };
+    await assert.rejects(stripe.chargeOffSession(request), (e) => e.outcome === 'UNKNOWN', label);
+  }
+  for (const status of [500, 502, 429, 409]) { reply = { status, body: { error: { code: 'idempotency_key_in_use' } } }; await assert.rejects(stripe.chargeOffSession(request), (e) => e.outcome === 'UNKNOWN', `HTTP ${status}`); }
+  reply = { status: 400, body: { error: { type: 'invalid_request_error', code: 'resource_missing' } } };
+  await assert.rejects(stripe.chargeOffSession(request), (e) => e.outcome === 'FAILED' && e.reason === 'PROVIDER_REJECTED');
+  const timeout = fakeTransport([{ method: 'POST', url: 'https://api.stripe.com/v1/payment_intents', throws: new Error('timeout') }]);
+  await assert.rejects(new StripeConnectTestAdapter(STRIPE_KEY, timeout.send).chargeOffSession(request), (e) => e.outcome === 'UNKNOWN', 'a timeout is UNKNOWN, never success');
+  await assert.rejects(stripe.chargeOffSession({ ...request, amountMinor: 0 }), (e) => e.outcome === 'PRE_SEND');
+
+  const lookup = { accountRef: ACCOUNT, customerRef: 'cus_Test123', attemptId: ATTEMPT, amountMinor: 20000, currency: 'USD', createdAt: '2026-11-13T07:00:00.000Z' };
+  const before = t.calls.length;
+  assert.equal((await stripe.findCharge(lookup)).outcome, 'SUCCEEDED');
+  const q = new URL(t.calls[before].url);
+  assert.equal(t.calls[before].headers['Stripe-Account'], ACCOUNT);
+  assert.equal(q.searchParams.get('customer'), 'cus_Test123');
+  assert.equal(q.searchParams.get('created[gte]'), String(Date.parse(lookup.createdAt) / 1000 - 600));
+  list = { status: 200, body: { data: [intent({ metadata: { hon_attempt_id: 'other' } })], has_more: false } };
+  assert.equal(await stripe.findCharge(lookup), null, 'none for this attempt');
+  list = { status: 200, body: { data: [], has_more: true } };
+  await assert.rejects(stripe.findCharge(lookup), (e) => e.outcome === 'UNKNOWN', 'a further page might hold it');
+  list = { status: 200, body: { data: [intent(), intent({ id: 'pi_Test456' })], has_more: false } };
+  await assert.rejects(stripe.findCharge(lookup), (e) => e.outcome === 'UNKNOWN', 'two intents for one attempt');
+
+  const none = fakeTransport([]);
+  const square = new SquareSandboxAdapter(SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_ID, SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_SECRET, none.send);
+  for (const call of [() => square.chargeOffSession(request), () => square.findCharge(lookup)]) await assert.rejects(call(), (e) => e.outcome === 'PRE_SEND' && e.reason === 'NOT_CONFIGURED');
+  assert.equal(none.calls.length, 0, 'Square charges send nothing yet');
+});
+
+test('0337 simulators: one charge per attempt key, lost answers, settling a debit, unconfigured refuses', async () => {
+  const { SimulatedStripeConnectAdapter, SimulatedSquareAdapter, UnconfiguredSchoolPaymentAdapter } = await loadAdapters();
+  const sim = new SimulatedStripeConnectAdapter();
+  const base = { accountRef: 'acct_sim1', customerRef: 'cus_sim1', methodRef: 'pm_sim1', methodKind: 'CARD', attemptId: '88888888-8888-4888-8888-888888888888', amountMinor: 500, currency: 'USD' };
+  const first = await sim.chargeOffSession(base);
+  assert.equal(first.outcome, 'SUCCEEDED');
+  assert.deepEqual(await sim.chargeOffSession(base), first, 'a resend returns the same charge');
+  assert.equal(sim.charges.size, 1);
+  const lost = { ...base, attemptId: '99999999-9999-4999-8999-999999999999' };
+  sim.chargeOutcomes.set(lost.attemptId, { lostAnswer: true });
+  await assert.rejects(sim.chargeOffSession(lost), (e) => e.outcome === 'UNKNOWN');
+  assert.equal((await sim.findCharge({ ...lost, createdAt: new Date().toISOString() })).outcome, 'SUCCEEDED', 'the processor charged');
+  const bank = { ...base, methodKind: 'US_BANK_ACCOUNT', attemptId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' };
+  assert.equal((await sim.chargeOffSession(bank)).outcome, 'PROCESSING');
+  sim.settleCharge(bank.attemptId, 'FAILED');
+  assert.deepEqual((await sim.findCharge({ ...bank, createdAt: new Date().toISOString() })).failureClass, 'INSUFFICIENT_FUNDS');
+  await assert.rejects(new SimulatedSquareAdapter().chargeOffSession(bank), (e) => e.outcome === 'PRE_SEND', 'Square takes cards only');
+  const off = new UnconfiguredSchoolPaymentAdapter('STRIPE_CONNECT');
+  await assert.rejects(off.chargeOffSession(base), (e) => e.outcome === 'PRE_SEND' && e.reason === 'NOT_CONFIGURED');
+  await assert.rejects(off.findCharge(), (e) => e.outcome === 'PRE_SEND');
+});

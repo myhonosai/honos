@@ -241,6 +241,14 @@
       "title": "HON | Human Planned Absence Review"
     },
     {
+      "path": "/staff/attendance/cards",
+      "title": "HON | Attendance cards"
+    },
+    {
+      "path": "/staff/attendance/scan",
+      "title": "HON | Scan check-in"
+    },
+    {
       "path": "/staff/instructor-qualifications",
       "title": "HON | Human instructor qualification evidence"
     },

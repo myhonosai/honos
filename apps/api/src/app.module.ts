@@ -171,6 +171,8 @@ import { SchoolPayMethodController } from './school-payments/school-pay-method.c
 import { SchoolPayMethodService } from './school-payments/school-pay-method.service.js';
 import { SchoolPayAutopayController } from './school-payments/school-pay-autopay.controller.js';
 import { SchoolPayAutopayService } from './school-payments/school-pay-autopay.service.js';
+import { SchoolPayChargeController } from './school-payments/school-pay-charge.controller.js';
+import { SchoolPayChargeService } from './school-payments/school-pay-charge.service.js';
 import { SchoolCheckoutController } from './school-checkout/school-checkout.controller.js';
 import { SchoolCheckoutService } from './school-checkout/school-checkout.service.js';
 import { ShopifyController, ShopifyHumanGuard } from './commerce/shopify/shopify.controller.js';
@@ -202,6 +204,8 @@ import { SchoolPersonRecordController, SchoolPersonRecordHumanGuard } from './pe
 import { SchoolPersonRecordService } from './people/school-person-record.service.js';
 import { SchoolPersonPhotoController, SchoolPersonPhotoHumanGuard } from './people/school-person-photo.controller.js';
 import { SchoolPersonPhotoService } from './people/school-person-photo.service.js';
+import { AttendanceCardsController, AttendanceCardsHumanGuard, AttendanceScanController, AttendanceScanHumanGuard } from './schedule/attendance-cards.controller.js';
+import { AttendanceCardsService } from './schedule/attendance-cards.service.js';
 import { PersonService } from './people/person.service.js';
 import { ActionReviewController, ActionApprovalWorkbenchController } from './action/action-review.controller.js';
 import { FamilyController } from './families/family.controller.js';
@@ -449,7 +453,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     FoundationController,
     SessionContextController,
     IdentityController,
-    PersonController, SchoolPersonRecordController, SchoolPersonPhotoController,
+    PersonController, SchoolPersonRecordController, SchoolPersonPhotoController, AttendanceCardsController, AttendanceScanController,
     FamilyController,
     ParentJourneyViewController,
     ParentBillingViewController,
@@ -532,6 +536,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPaymentController,
     SchoolPayMethodController,
     SchoolPayAutopayController,
+    SchoolPayChargeController,
     SchoolCheckoutController,
     ShopifyController,
     MayaAtRiskController,
@@ -559,7 +564,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SaasSubscriptionGenerationHqController, HqHonController, SaasSubscriptionGenerationSchoolController, SaasScheduleBindingHqController, SaasScheduleBindingSchoolController, SaasPaidReviewHqController, SaasFounderPoolHqController, SaasFounderAvailabilitySchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, CreativeStudioAvatarsController, CreativeStudioAvatarVideosController, CreativeLimitsHqController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, CommunicationWebhookController, SchoolTextSenderHqController, SchoolNumberController, SchoolNumberOrderHqController, SchoolMissedCallHqController, SchoolMissedCallsController, ZernioLeadFormHqController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqBusinessNumbersController, HqSupportController, HqMarketingController, HqPlanPromotionsController, SchoolPlanPromotionsController, HqCreativeController, AiSpendPauseHqController, AiSchoolCostLimitHqController, AiExceptionAllowanceHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController, HqCommunicationsController, HqContactController, HqProspectsController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
-  providers: [BookableStudentsService, SchoolPickersService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard, SchoolPersonPhotoService, SchoolPersonPhotoHumanGuard,
+  providers: [BookableStudentsService, SchoolPickersService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard, SchoolPersonPhotoService, SchoolPersonPhotoHumanGuard, AttendanceCardsService, AttendanceCardsHumanGuard, AttendanceScanHumanGuard,
     SaasSubscriptionGenerationService, SaasScheduleBillingService, SaasPaidReviewService, SaasFounderService, SaasPriceAcceptanceService, SaasTrialsService, OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
     CurrentStaffReportingSchoolNoStoreGuard,
     CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard,
@@ -759,6 +764,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPaymentService,
     SchoolPayMethodService,
     SchoolPayAutopayService,
+    SchoolPayChargeService,
     { provide: SCHOOL_PAYMENT_ADAPTERS, useFactory: () => schoolPaymentAdaptersFromEnvironment() },
     { provide: SCHOOL_PAYMENT_VAULT, useFactory: () => schoolPaymentVaultForProcess() },
     SchoolPayReadHumanUiGuard, SchoolPayStartHumanUiGuard, SchoolPayOnboardingLinkHumanUiGuard, SchoolPayFinishHumanUiGuard,
