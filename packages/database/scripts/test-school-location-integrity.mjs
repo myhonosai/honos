@@ -108,8 +108,9 @@ async function rejectsSql(run, pattern, label) {
   assert.fail(`${label}: expected a refusal`);
 }
 
-// Disposable-fixture cleanup only (as in the 0240 proof).
-async function cleanup() {
+// Disposable-fixture cleanup only (as in the 0240 proof). The sign-up check creates its own organization; it goes too.
+let signupOrg = null;
+async function cleanup(orgs = [ids.organization, ids.otherOrganization, ...(signupOrg ? [signupOrg] : [])], subjects = `%location-${ids.organization}-%`) {
   const tables = (await sql(`SELECT c.relname FROM pg_class c JOIN pg_attribute a ON a.attrelid=c.oid AND a.attname='organization_id' AND NOT a.attisdropped
     WHERE c.relnamespace='hon'::regnamespace AND c.relkind='r' ORDER BY 1`)).rows.map((row) => row.relname);
   await sql('BEGIN');
@@ -120,20 +121,22 @@ async function cleanup() {
         await sql('SAVEPOINT cleanup_table');
         try {
           await sql(`ALTER TABLE hon.${table} DISABLE TRIGGER USER`);
-          await sql(`DELETE FROM hon.${table} WHERE organization_id = ANY($1::uuid[])`, [[ids.organization, ids.otherOrganization]]);
+          await sql(`DELETE FROM hon.${table} WHERE organization_id = ANY($1::uuid[])`, [orgs]);
           await sql(`ALTER TABLE hon.${table} ENABLE TRIGGER USER`);
           await sql('RELEASE SAVEPOINT cleanup_table');
         } catch { failed += 1; await sql('ROLLBACK TO SAVEPOINT cleanup_table'); }
       }
       if (!failed) break;
     }
-    const left = (await sql('SELECT count(*)::int n FROM hon.school_locations WHERE organization_id = ANY($1::uuid[])', [[ids.organization, ids.otherOrganization]])).rows[0].n;
+    const left = (await sql('SELECT count(*)::int n FROM hon.school_locations WHERE organization_id = ANY($1::uuid[])', [orgs])).rows[0].n;
     if (left) throw new Error('fixture cleanup left a location behind');
-    await sql('DELETE FROM hon.principal_role_grants WHERE principal_id IN (SELECT p.id FROM hon.principals p JOIN hon.users u ON u.id=p.user_id WHERE u.external_subject LIKE $1)', [`location-${ids.organization}-%`]);
-    await sql('DELETE FROM hon.principals WHERE user_id IN (SELECT id FROM hon.users WHERE external_subject LIKE $1)', [`location-${ids.organization}-%`]);
-    await sql('DELETE FROM hon.users WHERE external_subject LIKE $1', [`location-${ids.organization}-%`]);
-    await sql('DELETE FROM hon.schools WHERE organization_id = ANY($1::uuid[])', [[ids.organization, ids.otherOrganization]]);
-    await sql('DELETE FROM hon.organizations WHERE id = ANY($1::uuid[])', [[ids.organization, ids.otherOrganization]]);
+    await sql('DELETE FROM hon.principal_role_grants WHERE principal_id IN (SELECT p.id FROM hon.principals p JOIN hon.users u ON u.id=p.user_id WHERE u.external_subject LIKE $1)', [subjects]);
+    await sql('DELETE FROM hon.principals WHERE user_id IN (SELECT id FROM hon.users WHERE external_subject LIKE $1)', [subjects]);
+    await sql('DELETE FROM hon.users WHERE external_subject LIKE $1', [subjects]);
+    await sql('DELETE FROM hon.schools WHERE organization_id = ANY($1::uuid[])', [orgs]);
+    await sql('DELETE FROM hon.organizations WHERE id = ANY($1::uuid[])', [orgs]);
+    const roles = (await sql('SELECT count(*)::int n FROM hon.roles WHERE organization_id = ANY($1::uuid[])', [orgs])).rows[0].n;
+    if (roles) throw new Error('fixture cleanup left a role behind');
     await sql('COMMIT');
   } catch (error) { await sql('ROLLBACK'); throw error; }
 }
@@ -304,7 +307,6 @@ try {
   const register = (input, key) => runtime.query('SELECT hon.register_hon_os_school_with_location($1,$2,$3::jsonb,$4::uuid) data', [signupSubject, signupEmail, JSON.stringify(input), key]);
   const program = (await sql('SELECT status FROM hon.hon_os_signup_program')).rows[0].status;
   await sql("UPDATE hon.hon_os_signup_program SET status='TEST_MODE',recorded_at=clock_timestamp()");
-  let signupOrg;
   try {
     for (const bad of [(({ location, ...rest }) => rest)(form()), form({ location: null }), form({ location: loc({ region: null }) }), form({ location: { ...loc(), extra: 1 } })]) {
       await assert.rejects(register(bad, randomUUID()), (e) => e.code === '22023'); checks += 1;
@@ -321,13 +323,7 @@ try {
     ok((await sql("SELECT (SELECT count(*) FROM hon.audit_events WHERE organization_id=$1)+(SELECT count(*) FROM hon.outbox_events WHERE organization_id=$1) n", [signupOrg])).rows[0].n === '0', 'sign-up keeps its shape: no audit or outbox event');
   } finally {
     await sql('UPDATE hon.hon_os_signup_program SET status=$1,recorded_at=clock_timestamp()', [program]);
-    if (signupOrg) {
-      await sql('BEGIN');
-      for (const t of (await sql(`SELECT c.relname FROM pg_class c JOIN pg_attribute a ON a.attrelid=c.oid AND a.attname='organization_id' WHERE c.relnamespace='hon'::regnamespace AND c.relkind='r'`)).rows.map((r) => r.relname)) {
-        await sql('SAVEPOINT s'); try { await sql(`ALTER TABLE hon.${t} DISABLE TRIGGER USER`); await sql(`DELETE FROM hon.${t} WHERE organization_id=$1`, [signupOrg]); await sql(`ALTER TABLE hon.${t} ENABLE TRIGGER USER`); await sql('RELEASE SAVEPOINT s'); } catch { await sql('ROLLBACK TO SAVEPOINT s'); }
-      }
-      await sql('COMMIT');
-    }
+    if (signupOrg) { await cleanup([signupOrg], `%location-${ids.organization}-signup`); signupOrg = null; }
   }
 
   // 9. Runtime ACL: three definer entry points only; helpers and tables private.
