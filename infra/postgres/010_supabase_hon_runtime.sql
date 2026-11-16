@@ -3721,6 +3721,32 @@ DO $$ DECLARE r text; f text;
   END IF;
 END $$;
 
+-- M-E 0410 membership agreement: six runtime entry points (agreement read/save, card read, send, public link read, public sign);
+-- the actor, document, item, current, texts check and both guards are private; the three agreement tables have no runtime privilege.
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.read_membership_agreement_template(text)','hon.save_membership_agreement_template(text,jsonb,text,uuid,uuid)',
+    'hon.read_membership_agreement(text,jsonb)','hon.send_membership_agreement(text,jsonb,text,uuid,uuid)',
+    'hon.read_membership_agreement_link(text)','hon.sign_membership_agreement(text,jsonb,uuid)'];
+  fns text[]:=ARRAY['hon.membership_agreement_texts_ok(jsonb)','hon.guard_membership_agreement_record()','hon.guard_membership_agreement_signed()',
+    'hon.require_membership_agreement_actor(text,text)','hon.membership_agreement_current(uuid,uuid)',
+    'hon.membership_agreement_document(hon.memberships,hon.membership_agreement_texts,text)',
+    'hon.membership_agreement_request_item(hon.membership_agreement_requests)']||entry; BEGIN
+  IF to_regprocedure('hon.sign_membership_agreement(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0410 first'; END IF;
+  FOREACH f IN ARRAY fns LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['membership_agreement_texts','membership_agreement_requests','membership_agreement_signatures'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
 -- 0330 family messages: private helpers, two private tables and six runtime entry points (parent read/send; staff inbox, thread, mark read, reply).
 DO $$ DECLARE r text; f text; t text; BEGIN
   IF to_regprocedure('hon.reply_family_message(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0330 first'; END IF;

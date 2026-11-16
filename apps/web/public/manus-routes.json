@@ -201,6 +201,10 @@
       "title": "School Enquiry Form"
     },
     {
+      "path": "/agreement/:token",
+      "title": "Membership agreement"
+    },
+    {
       "path": "/book/:publicId",
       "title": "Book a time"
     },
@@ -287,6 +291,10 @@
     {
       "path": "/staff/billing/membership-changes",
       "title": "HON | Pause, cancel & refunds"
+    },
+    {
+      "path": "/staff/billing/membership-agreement",
+      "title": "HON | Membership agreement"
     },
     {
       "path": "/staff/billing/receivables",

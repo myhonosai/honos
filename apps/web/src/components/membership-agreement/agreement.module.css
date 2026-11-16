@@ -1,0 +1,29 @@
+.page { display: grid; gap: 16px; max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+.page h1 { margin: 0; font-size: 24px; }
+.page h2 { margin: 0; font-size: 17px; }
+.card { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--hon-line, #24405a); border-radius: 14px; background: var(--hon-raised, #13263a); }
+.field { display: grid; gap: 6px; font-size: 14px; }
+.field input, .field textarea, .field select { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--hon-line, #24405a); background: var(--hon-surface, #0c1a2a); color: inherit; }
+.field textarea { min-height: 220px; line-height: 1.5; resize: vertical; }
+.check { display: flex; gap: 10px; align-items: flex-start; line-height: 1.4; font-size: 14px; }
+.check input { width: 20px; height: 20px; margin-top: 1px; flex: none; }
+.meta { margin: 0; color: var(--hon-muted, #9fb4c8); font-size: 13px; line-height: 1.5; }
+.notice { margin: 0; padding: 12px; border: 1px solid #35506d; border-radius: 12px; background: #10243a; color: #cfe0f2; font-size: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.primary { min-height: 44px; padding: 8px 18px; border: 0; border-radius: 10px; background: linear-gradient(135deg, #8de3d8, #5fb8f0); color: #04202a; font: inherit; font-size: 15px; font-weight: 800; cursor: pointer; }
+.secondary { min-height: 44px; padding: 8px 14px; border: 1px solid var(--hon-line, #24405a); border-radius: 10px; background: transparent; color: inherit; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.primary:disabled, .secondary:disabled { opacity: .55; cursor: not-allowed; }
+.agreementText { white-space: pre-wrap; line-height: 1.6; margin: 0; max-height: 50vh; overflow: auto; padding: 12px; border-radius: 10px; background: var(--hon-surface, #0c1a2a); }
+.terms { display: grid; gap: 6px; margin: 0; }
+.terms > div { display: grid; grid-template-columns: minmax(100px, 35%) 1fr; gap: 8px; }
+.terms dt { color: var(--hon-muted, #9fb4c8); font-size: 13px; }
+.terms dd { margin: 0; }
+.pad { width: 100%; height: 180px; touch-action: none; border-radius: 10px; border: 1px dashed #5fb8f0; background: #fff; cursor: crosshair; }
+.signing { background: #f6f8fb; color: #0e1b2a; min-height: 100vh; }
+.signing .card { background: #fff; border-color: #d6dee8; }
+.signing .meta { color: #4b5d70; }
+.signing .notice { background: #eef5ff; border-color: #bcd3ee; color: #0e1b2a; }
+.signing .agreementText { background: #f6f8fb; }
+.signing .field input, .signing .field select { background: #fff; border-color: #c4d0dc; }
+.signing .secondary { border-color: #c4d0dc; }
+.signing .terms dt { color: #4b5d70; }

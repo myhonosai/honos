@@ -2625,10 +2625,10 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; cols text[]; BEGI
     IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
       RAISE EXCEPTION 'Missing membership activation guard: %',expected.name; END IF;
   END LOOP;
-  -- 0398 adds exactly one more: the one-per-program overlap check (AFTER UPDATE, verified in the 0398 section).
-  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.memberships'::regclass AND NOT tgisinternal)<>2
-    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.memberships'::regclass AND NOT tgisinternal AND tgname NOT IN ('membership_state_transition_guard','memberships_one_per_program'))<>0 THEN
-    RAISE EXCEPTION 'hon.memberships must carry exactly the 0177 transition guard (body replaced by 0178) and the 0398 one-per-program check'; END IF;
+  -- 0398 adds the one-per-program overlap check and 0410 the agreement start gate (both AFTER, verified in their sections).
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.memberships'::regclass AND NOT tgisinternal)<>3
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.memberships'::regclass AND NOT tgisinternal AND tgname NOT IN ('membership_state_transition_guard','memberships_one_per_program','memberships_agreement_signed'))<>0 THEN
+    RAISE EXCEPTION 'hon.memberships must carry exactly the 0177 transition guard (body replaced by 0178), the 0398 one-per-program check and the 0410 agreement gate'; END IF;
   -- D41 option C: SELECT; no table INSERT, no UPDATE at any level, no DELETE/TRUNCATE; INSERT on exactly the seven DRAFT columns.
   SELECT array_agg(attname::text ORDER BY attname) INTO cols FROM pg_attribute
     WHERE attrelid='hon.memberships'::regclass AND attnum>0 AND NOT attisdropped AND has_column_privilege('hon_runtime',attrelid,attnum,'INSERT');
@@ -3813,6 +3813,49 @@ DO $$ DECLARE f record; safe boolean; BEGIN
     RAISE EXCEPTION 'Missing card membership start guard triggers'; END IF;
 END $$;
 -- End new membership and renew from the contact card exact verification.
+
+-- Digital membership agreement exact verification (M-E 0410): six runtime entry points (two public signing-link calls), private
+-- helpers, three private append-only tables and the agreement start gate on hon.memberships.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.membership_agreement_texts_ok(jsonb)',false,false,'search_path=pg_catalog, hon','i','0e544a1738f8164f716f37fe4c67cc6608667f3a6780ec8392227ed5c9011d77'),
+('hon.guard_membership_agreement_record()',false,false,'search_path=pg_catalog, hon','v','fdaa7080f6ba006f8e975062f07eb7353595d30cc0806f86d04e6d23fa2b52a2'),
+('hon.guard_membership_agreement_signed()',true,false,'search_path=pg_catalog, hon','v','c6f81f1af2b5363c7a41951d43978b949261def7eaf8dd76204a6d32063554d6'),
+('hon.require_membership_agreement_actor(text,text)',true,false,'search_path=pg_catalog, hon','v','646ab5ff0748852c84df3b62cab42f6f58241c27947c1b779a292eda8764709c'),
+('hon.membership_agreement_current(uuid,uuid)',true,false,'search_path=pg_catalog, hon','s','a8c7f261625f70128fc133aa076c3550f7c4af0ae9a2d6ac7624faae1cd27be3'),
+('hon.membership_agreement_document(hon.memberships,hon.membership_agreement_texts,text)',true,false,'search_path=pg_catalog, hon','s','b2e613d4d05159c27393619877cd7568d07cadf1c74492baf1f96dfcce3c290d'),
+('hon.membership_agreement_request_item(hon.membership_agreement_requests)',true,false,'search_path=pg_catalog, hon','s','40a57f7237c3e8a5edc2c8cf986e64472103fdd09f0c769b16fde77f9afa9ffe'),
+('hon.read_membership_agreement_template(text)',true,true,'search_path=pg_catalog, hon','v','7e361b1162f46d3eca32494487bef8c4e8d0efd814593c02d5096812f78791f4'),
+('hon.save_membership_agreement_template(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','v','2fba7166e5da04d7db6f57bdbbdff65c4544b29ac9a992596cbeca9907c1a464'),
+('hon.read_membership_agreement(text,jsonb)',true,true,'search_path=pg_catalog, hon','v','819c1180b3a9c55105d03a03985e512db726376b008518d762625cb508275cad'),
+('hon.send_membership_agreement(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','v','f59779ceaa3f6a6945e101dd08ddf41a594cc1bc58e479de0ecea3da391f480a'),
+('hon.read_membership_agreement_link(text)',true,true,'search_path=pg_catalog, hon','s','865f21b4ea5d3a4e96357af5194f7bf9afee1e25823a916c34bfb70cc4a9fe50'),
+('hon.sign_membership_agreement(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','v','a38bbee1c37eb012a0d95d1bff84ce17bedef4c2b7f3d3b70a2c5b4fa0f452fd')) e(signature,definer,runtime_allowed,config,volatility,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config] AND p.provolatile=f.volatility
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe membership agreement function: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['membership_agreement_texts','membership_agreement_requests','membership_agreement_signatures'] LOOP
+    IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') AND has_table_privilege('hon_runtime',format('hon.%I',t),'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+      RAISE EXCEPTION 'hon.% must stay private',t; END IF;
+    IF NOT (SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid=format('hon.%I',t)::regclass) THEN RAISE EXCEPTION 'hon.% must keep forced RLS',t; END IF;
+    IF (SELECT count(*) FROM pg_trigger WHERE tgrelid=format('hon.%I',t)::regclass AND NOT tgisinternal AND tgenabled='O'
+        AND tgfoid='hon.guard_membership_agreement_record()'::regprocedure AND tgtype IN (27,34))<>2 THEN
+      RAISE EXCEPTION 'hon.% must keep its append-only guards',t; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.memberships'::regclass AND tgname='memberships_agreement_signed'
+      AND tgfoid='hon.guard_membership_agreement_signed()'::regprocedure AND tgtype=17 AND tgenabled='O' AND NOT tgisinternal) THEN
+    RAISE EXCEPTION 'Missing membership agreement start gate'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM hon.principals WHERE id='00000000-0000-4000-8000-000000000410' AND principal_type='SYSTEM_SERVICE' AND user_id IS NULL AND is_active)
+    OR EXISTS(SELECT 1 FROM hon.principal_role_grants WHERE principal_id='00000000-0000-4000-8000-000000000410') THEN
+    RAISE EXCEPTION 'The membership agreement link principal must be the code-owned service with no role'; END IF;
+END $$;
+-- End digital membership agreement exact verification.
 
 -- Family messages exact verification (0330): private helpers, private forced-RLS tables and six runtime entry points.
 DO $$ DECLARE f record; safe boolean; t text; BEGIN

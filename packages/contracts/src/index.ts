@@ -1125,3 +1125,4 @@ export * from './school-contacts.js';
 export * from './school-contact-card.js';
 export * from './school-contact-admin.js';
 export * from './person-membership-start.js';
+export * from './membership-agreement.js';

@@ -65,7 +65,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'testing', titleKey: 'navTesting', section: 'ranks', routes: [r('/staff/testing/registrations', 'routeTesting'), r('/staff/testing/readiness', 'routeReadiness'),
     r('/staff/testing/scorecards', 'routeScorecards'), r('/staff/testing/certificates', 'routeCertificates')] },
   { key: 'promotions', titleKey: 'navPromotions', section: 'ranks', routes: [r('/staff/testing/promotion-decisions', 'routePromotions')] },
-  { key: 'billing', titleKey: 'navBilling', section: 'business', routes: [r('/staff/billing/membership-plans', 'routePlans'), r('/staff/memberships', 'routeMembershipList'),
+  { key: 'billing', titleKey: 'navBilling', section: 'business', routes: [r('/staff/billing/membership-plans', 'routePlans'), r('/staff/billing/membership-agreement', 'routeAgreement'), r('/staff/memberships', 'routeMembershipList'),
     // Owner (2026-11-16): a membership is started, paused and cancelled on the contact card; old links to these two still work.
     h('/staff/billing/memberships', 'routeMemberships'), r('/staff/billing/membership-dates', 'routeDates'), h('/staff/billing/membership-changes', 'routeChanges'),
     r('/staff/billing/renewals', 'routeRenewals'), r('/staff/migration/memberships', 'routeBillingImport')] },

@@ -8,6 +8,8 @@ import {
   MembershipActivationError, activateKnownMembership, prepareMembershipActivation, previewMembershipActivation,
   type ActivationRequest, type KnownMembership,
 } from '../membership-activation-http';
+import { AgreementPanel, type AgreementPanelApi } from '../membership-agreement/card-panel';
+import { agreementText } from '../membership-agreement/copy';
 import { startText, type StartKey } from './start-membership-copy';
 import styles from './people.module.css';
 
@@ -16,10 +18,11 @@ export { START_COPY } from './start-membership-copy';
 /**
  * Starting a membership from the contact card. Under the hood this is the existing two-step server check (0177): the server
  * previews the dates, warnings and blocks, and the confirmation must match that preview exactly. Staff see one review and one
- * Start membership button. Nothing here charges, signs an agreement or records consent.
+ * Start membership button. While the school requires a signed membership agreement (0410), the agreement panel sits above the
+ * review and the button waits for the signature; the server refuses an unsigned start either way. Nothing here charges.
  */
 export type StartFields = Readonly<{ checked: readonly string[]; note: string; overrideReason: string }>;
-export type StartProblem = 'UNCHECKED' | 'NOTE_REQUIRED' | 'OVERRIDE_REASON_REQUIRED' | 'NOT_ALLOWED' | 'BLOCKED' | 'STALE' | 'DENIED' | 'REFUSED' | 'UNKNOWN' | 'SESSION';
+export type StartProblem = 'UNCHECKED' | 'NOTE_REQUIRED' | 'OVERRIDE_REASON_REQUIRED' | 'NOT_ALLOWED' | 'BLOCKED' | 'STALE' | 'DENIED' | 'REFUSED' | 'UNKNOWN' | 'SESSION' | 'AGREEMENT';
 type BodyProblem = Extract<StartProblem, 'UNCHECKED' | 'NOTE_REQUIRED' | 'OVERRIDE_REASON_REQUIRED' | 'NOT_ALLOWED' | 'BLOCKED'>;
 
 /** The confirmation body for exactly this preview, or why it cannot be sent yet. */
@@ -49,7 +52,7 @@ export type StartState = Readonly<{ kind: 'LOADING' | 'UNAVAILABLE' | 'DENIED' |
 export type StartDates = Readonly<{ startDate: string; endDate: string | null }>;
 export type StartMembershipViewProps = Readonly<{
   language: string; state: StartState; dates: StartDates; checked: readonly string[]; note: string; overrideReason: string;
-  problem: StartProblem | null; busy: boolean; canRetry: boolean;
+  problem: StartProblem | null; busy: boolean; canRetry: boolean; agreementWaits?: boolean | undefined;
   onDates?: ((dates: StartDates) => void) | undefined; onCheck?: ((code: string, on: boolean) => void) | undefined; onNote?: ((note: string) => void) | undefined;
   onOverrideReason?: ((reason: string) => void) | undefined; onSubmit?: (() => void) | undefined; onRetry?: (() => void) | undefined; onClose?: (() => void) | undefined;
 }>;
@@ -75,7 +78,7 @@ export function StartMembershipView(p: StartMembershipViewProps): React.ReactEle
   }
   const v = s.preview, unchecked = v.warnings.some(w => !p.checked.includes(w.code));
   const needsOverride = v.overridableWarnings.length > 0, overrideAllowed = needsOverride && v.overridableWarnings.every(c => v.availableOverrides.includes(c));
-  const disabled = p.busy || !v.canConfirm || v.blocks.length > 0 || unchecked || (needsOverride && !overrideAllowed);
+  const disabled = !!p.agreementWaits || p.busy || !v.canConfirm || v.blocks.length > 0 || unchecked || (needsOverride && !overrideAllowed);
   return <section className={styles.subsection} data-testid="start-membership" aria-labelledby="start-membership-title">
     <h3 id="start-membership-title">{t('title')}</h3>
     <dl className={styles.facts2}>
@@ -97,6 +100,7 @@ export function StartMembershipView(p: StartMembershipViewProps): React.ReactEle
       <label>{t('note')}<textarea maxLength={500} value={p.note} onChange={e => p.onNote?.(e.target.value)}/><span className={styles.meta}>{t('noteHelp')}</span></label>
     </fieldset>
     <p className={styles.meta}>{t('nothingCharged')}</p>
+    {p.agreementWaits ? <p className={styles.meta} role="note" data-testid="start-membership-agreement-waits">{agreementText(p.language, 'startWaits')}</p> : null}
     {problem}
     <div className={styles.row}>
       <button type="button" className={styles.primary} data-testid="start-membership-submit" disabled={disabled} onClick={p.onSubmit}>{p.busy ? t('starting') : t('submit')}</button>
@@ -112,6 +116,7 @@ function problemOf(error: unknown): StartProblem {
   if (error.uncertain) return 'UNKNOWN';
   if (STALE_CODES.includes(error.code)) return 'STALE';
   if (error.status === 403 || error.code === 'ACTIVATION_OVERRIDE_FORBIDDEN') return 'DENIED';
+  if (error.code === 'MEMBERSHIP_AGREEMENT_REQUIRED') return 'AGREEMENT';
   if (error.code === 'ACTIVATION_BLOCKED' || error.code === 'MEMBERSHIP_NOT_DRAFT') return 'BLOCKED';
   return 'REFUSED';
 }
@@ -127,8 +132,9 @@ const defaultApi: StartMembershipApi = { preview: previewMembershipActivation, s
  * again), and sends one start request. A request whose outcome is unknown is kept in memory only, so Try again resends the
  * identical request and key; the server never starts it twice.
  */
-export function StartMembership({ language, scope, onStarted, onClose, api = defaultApi }: { language: string; scope: KnownMembership;
-  onStarted?: (() => void) | undefined; onClose?: (() => void) | undefined; api?: StartMembershipApi }): React.ReactElement {
+export function StartMembership({ language, scope, onStarted, onClose, api = defaultApi, agreementApi }: { language: string; scope: KnownMembership;
+  onStarted?: (() => void) | undefined; onClose?: (() => void) | undefined; api?: StartMembershipApi; agreementApi?: AgreementPanelApi | undefined }): React.ReactElement {
+  const [agreementWaits, setAgreementWaits] = useState(false), [agreementReads, setAgreementReads] = useState(0);
   const [state, setState] = useState<StartState>({ kind: 'LOADING' });
   const [dates, setDates] = useState<StartDates>({ startDate: '', endDate: null });
   const [checked, setChecked] = useState<readonly string[]>([]);
@@ -181,6 +187,7 @@ export function StartMembership({ language, scope, onStarted, onClose, api = def
       if (!mounted.current) return;
       setProblem(kind);
       if (kind === 'STALE') setAsk(prior => ({ n: prior.n + 1, input: prior.input }));
+      if (kind === 'AGREEMENT') setAgreementReads(n => n + 1);
     } finally { if (mounted.current) setBusy(false); }
   }, [api, onStarted]);
 
@@ -195,7 +202,13 @@ export function StartMembership({ language, scope, onStarted, onClose, api = def
   }, [busy, previewing, state, checked, note, overrideReason, organizationId, schoolId, membershipId, send]);
   const onRetry = useCallback(() => { if (kept.current && !busy) void send(kept.current); }, [busy, send]);
 
-  return <StartMembershipView language={language} state={state} dates={dates} checked={checked} note={note} overrideReason={overrideReason}
+  const view = <StartMembershipView language={language} state={state} dates={dates} checked={checked} note={note} overrideReason={overrideReason}
     problem={problem} busy={busy || previewing} canRetry={kept.current !== null} onDates={onDates} onCheck={onCheck} onNote={setNote} onOverrideReason={setOverrideReason}
-    onSubmit={onSubmit} onRetry={onRetry} onClose={onClose}/>;
+    onSubmit={onSubmit} onRetry={onRetry} onClose={onClose} agreementWaits={state.kind === 'READY' && agreementWaits}/>;
+  if (state.kind !== 'READY') return view;
+  return <>
+    <AgreementPanel key={agreementReads} language={language} scope={{ organizationId, schoolId }} membershipId={membershipId} onBlocking={setAgreementWaits}
+      {...(agreementApi ? { api: agreementApi } : {})}/>
+    {view}
+  </>;
 }
