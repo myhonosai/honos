@@ -325,6 +325,10 @@
       "title": "HON | School branding"
     },
     {
+      "path": "/staff/settings/location",
+      "title": "HON | School location"
+    },
+    {
       "path": "/staff/settings/booking-types",
       "title": "HON | Booking types"
     },
