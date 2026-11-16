@@ -453,7 +453,8 @@ BEGIN
     OR jsonb_typeof(p->'tokenDigest') IS DISTINCT FROM 'string' OR (p->>'tokenDigest') !~ '^[a-f0-9]{64}$'
     OR NOT hon.membership_command_args_ok(subject,key,request,correlation) THEN
     RAISE EXCEPTION 'VALIDATION_FAILED' USING ERRCODE='22023'; END IF;
-  fp:=encode(sha256(convert_to(jsonb_build_object('operation','walkin_kiosk.device.start','input',p)::text,'UTF8')),'hex');
+  -- The token is minted fresh per call, so a replay is matched on the label and hours only and never returns a token.
+  fp:=encode(sha256(convert_to(jsonb_build_object('operation','walkin_kiosk.device.start','input',p-'tokenDigest')::text,'UTF8')),'hex');
   replay:=hon.walkin_command_begin(subject,'walkin_kiosk.run',key,fp);
   actor:=hon.require_walkin_actor(subject,'walkin_kiosk.run');
   IF replay IS NOT NULL THEN RETURN jsonb_build_object('receipt',replay,'replayed',true); END IF;
@@ -614,7 +615,7 @@ END $$;
 
 -- One name, birth date or contact field from the tablet input.
 CREATE FUNCTION hon.walkin_name_ok(v jsonb) RETURNS boolean
-LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,hon AS $$ SELECT jsonb_typeof(v)='string' AND hon.school_event_text_ok(v#>>'{}',1,60) $$;
+LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,hon AS $$ SELECT jsonb_typeof(v)='string' AND hon.school_event_text_ok(v#>>'{}',1,60) AND (v#>>'{}') !~ '[<>]' $$;
 CREATE FUNCTION hon.walkin_birth_date(v jsonb,today date) RETURNS date
 LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog AS $$
 DECLARE d date;
@@ -689,7 +690,7 @@ BEGIN
   IF jsonb_typeof(w) IS DISTINCT FROM 'object' OR NOT w ?& ARRAY['accepted','signerName','strokes']
     OR EXISTS(SELECT 1 FROM jsonb_object_keys(w) x WHERE x NOT IN ('accepted','signerName','strokes'))
     OR w->'accepted' IS DISTINCT FROM 'true'::jsonb OR jsonb_typeof(w->'signerName') IS DISTINCT FROM 'string'
-    OR NOT hon.school_event_text_ok(w->>'signerName',1,120) OR jsonb_typeof(w->'strokes') IS DISTINCT FROM 'array'
+    OR NOT hon.school_event_text_ok(w->>'signerName',1,120) OR (w->>'signerName') ~ '[<>]' OR jsonb_typeof(w->'strokes') IS DISTINCT FROM 'array'
     OR jsonb_array_length(w->'strokes') NOT BETWEEN 1 AND 40 OR octet_length((w->'strokes')::text)>16384 THEN RETURN NULL; END IF;
   FOR s IN SELECT x FROM jsonb_array_elements(w->'strokes') x LOOP
     IF jsonb_typeof(s) IS DISTINCT FROM 'array' OR jsonb_array_length(s)<1 THEN RETURN NULL; END IF;
