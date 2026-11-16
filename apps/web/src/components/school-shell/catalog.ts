@@ -7,7 +7,7 @@ import type { ShellKey } from './copy';
  * prefill, which the destination re-verifies server-side.
  */
 export type SchoolShellIcon = 'home' | 'hon' | 'aiTeam' | 'conversationAi' | 'classes' | 'attendance' | 'students' | 'staff' | 'crm' | 'automation' | 'messages'
-  | 'social' | 'checkout' | 'invoices' | 'website' | 'marketing' | 'creative' | 'ranks' | 'testing' | 'promotions' | 'billing' | 'analytics' | 'community' | 'settings';
+  | 'social' | 'checkout' | 'shopify' | 'invoices' | 'website' | 'marketing' | 'creative' | 'ranks' | 'testing' | 'promotions' | 'billing' | 'analytics' | 'community' | 'settings';
 /** Owner menu (David, 2026-11-16 07:52Z): eleven headings, each with its few pages under it. */
 export type SchoolShellSection = 'dashboard' | 'ai' | 'calendar' | 'contacts' | 'leads' | 'communication' | 'finance' | 'marketing' | 'ranks' | 'business' | 'community';
 export type SchoolShellRoute = Readonly<{ href: string; titleKey: ShellKey; scoped: boolean; hidden?: boolean }>;
@@ -58,6 +58,8 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'messages', titleKey: 'navMessages', section: 'communication', routes: [r('/staff/family-messages', 'routeFamilyMessages')] },
   { key: 'social', titleKey: 'navSocial', section: 'communication', routes: [r('/staff/marketing/social', 'routeSocial')] },
   { key: 'checkout', titleKey: 'navCheckout', section: 'finance', routes: [r('/staff/billing/checkout-pages', 'routeCheckoutPages')] },
+  // Shopify (0405): the school's own store, read-only mirror plus connect, sync and disconnect.
+  { key: 'shopify', titleKey: 'navShopify', section: 'finance', routes: [r('/staff/billing/shopify', 'routeShopify')] },
   { key: 'invoices', titleKey: 'navInvoices', section: 'finance', routes: [r('/staff/billing/invoices', 'routeInvoices'), r('/staff/billing/receivables', 'routeReceivables')] },
   { key: 'website', titleKey: 'navWebsite', section: 'marketing', routes: [r('/staff/marketing/website', 'routeWebsite'), r('/staff/marketing/forms', 'routeForms'), r('/staff/marketing/intake', 'routeIntake')] },
   { key: 'marketing', titleKey: 'navMarketing', section: 'marketing', routes: [r('/staff/marketing', 'routeMarketingHome'), r('/staff/marketing/campaigns', 'routeCampaigns'), r('/staff/champions-club', 'routeChampions')] },
@@ -88,6 +90,8 @@ export const SCHOOL_SHELL_UNLISTED_ROUTES: readonly string[] = [
   '/staff/search/[organizationId]/[schoolId]/[kind]/[entityId]',
   // The page Facebook or Instagram returns to after a social connection (0347); reached only from Social accounts.
   '/staff/marketing/social/return',
+  // The page Shopify returns to after the owner approves a store connection (0405); reached only from Shopify.
+  '/staff/billing/shopify/return',
 ];
 
 /** Mobile bottom bar: four primary destinations plus "More". */

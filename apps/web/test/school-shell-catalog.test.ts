@@ -22,7 +22,7 @@ describe('school shell navigation catalog', () => {
     const menu = Object.fromEntries(SCHOOL_SHELL_SECTIONS.map(section => [section.key, schoolShellSectionItems(section.key).map(item => shellText('en', item.titleKey))]));
     expect(menu).toEqual({
       dashboard: ['Dashboard', 'Ask HON'], ai: ['AI Team', 'Conversation AI'], calendar: ['Calendar', 'Attendance'], contacts: ['Contact list', 'Staff'],
-      leads: ['Lead pipeline', 'Automations'], communication: ['Texts & email', 'Facebook & Instagram'], finance: ['Checkout Pages', 'Invoices'],
+      leads: ['Lead pipeline', 'Automations'], communication: ['Texts & email', 'Facebook & Instagram'], finance: ['Checkout Pages', 'Shopify', 'Invoices'],
       marketing: ['Website', 'Marketing', 'Creative Studio'], ranks: ['Rank setup', 'Tests', 'Mass rank promotion'], business: ['Membership', 'Reports'], community: ['Community'],
     });
     expect(SCHOOL_SHELL_NAV.filter(item => !item.section).map(item => item.key)).toEqual(['settings']);
