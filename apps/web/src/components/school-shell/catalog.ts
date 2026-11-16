@@ -43,7 +43,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'billing', titleKey: 'navBilling', routes: [...g('groupMemberships', r('/staff/memberships', 'routeMembershipList'), r('/staff/billing/memberships', 'routeMemberships'), r('/staff/billing/membership-plans', 'routePlans'),
     r('/staff/billing/membership-dates', 'routeDates'), r('/staff/billing/membership-changes', 'routeChanges'), r('/staff/billing/renewals', 'routeRenewals'), r('/staff/migration/memberships', 'routeBillingImport')),
     ...g('groupPayments', r('/staff/billing/invoices', 'routeInvoices'), r('/staff/billing/receivables', 'routeReceivables'),
-    r('/staff/billing/payment-processors', 'routePaymentProcessors'), r('/staff/billing/checkout-pages', 'routeCheckoutPages'), r('/staff/billing/saved-payment-methods', 'routeSavedMethods'))] },
+    r('/staff/billing/payment-processors', 'routePaymentProcessors'), r('/staff/billing/checkout-pages', 'routeCheckoutPages'), r('/staff/billing/pos', 'routePointOfSale'), r('/staff/billing/saved-payment-methods', 'routeSavedMethods'))] },
   // The whole launch roster lives on the AI Team page; HON, approvals and the specialists with their own workspace follow it.
   { key: 'aiTeam', titleKey: 'navAiTeam', routes: [...g('groupTeam', r('/staff/ai-team', 'routeAiTeam'), r('/staff/hon', 'routeHon'), r('/staff/action-center/approvals', 'routeApprovals'), r('/staff/ai-work', 'routeAiWork')),
     ...g('groupSpecialists', r('/staff/leads/assistant', 'routeLeadAssistant'), r('/staff/marketing/assistant', 'routeMarketingAssistant'), r('/staff/teaching-assistant', 'routeKai'), r('/staff/retention/at-risk', 'routeMayaAtRisk'),
