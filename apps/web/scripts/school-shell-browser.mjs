@@ -399,7 +399,9 @@ for (const mode of ['modern', 'classic', 'big-button']) for (const size of ['des
   const box = await card.boundingBox(); const width = page.viewportSize().width;
   assert.ok(box && box.x >= 0 && box.x + box.width <= width + 1, 'card fits on screen');
   await noOverflow(page); await shot(page, `l5-staff-card-${mode}-${size}`);
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'staff-card-close', 'focus moves into the card');
   await page.keyboard.press('Escape'); await card.waitFor({ state: 'detached' });
+  assert.equal(await page.evaluate(() => document.activeElement?.textContent), 'Rowan Example', 'focus returns to the name');
   await ctx.close();
 });
 for (const size of ['desktop', 'phone']) await check(`Settings tabs wrap instead of scrolling (${size})`, async () => {
