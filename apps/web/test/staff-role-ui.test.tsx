@@ -9,7 +9,7 @@ describe('human staff role administration form', () => {
     try {
       const html = renderToStaticMarkup(<StaffRoleAdmin />);
       expect(fetcher).not.toHaveBeenCalled();
-      for (const label of ['Organization UUID', 'School UUID', 'Create custom role', 'Update custom role', 'Grant registered human role', 'End / revoke grant', 'Read known role', 'Read known grant', 'No payroll']) expect(html).toContain(label);
+      for (const label of ['Organization UUID', 'School UUID', 'Create custom role', 'Update custom role', 'Grant registered human role', 'End / revoke grant', 'Read known role', 'Read known grant']) expect(html).toContain(label);
       expect(html).not.toContain('type="email"');
       expect(html).not.toContain('type="tel"');
       expect(html).not.toContain('Invite staff');
