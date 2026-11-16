@@ -93,6 +93,17 @@ describe('school shell navigation catalog', () => {
     }
   });
 
+  it('makes Tests one page of six ordered steps that opens at "Who is ready" (L3)', () => {
+    const testing = SCHOOL_SHELL_NAV.find(item => item.key === 'testing')!;
+    expect(testing.steps).toBe(true);
+    expect(schoolShellListed(testing).map(route => route.href)).toEqual(['/staff/testing/readiness', '/staff/testing/registrations',
+      '/staff/testing/candidates/register', '/staff/testing/candidates/grade', '/staff/testing/scorecards', '/staff/testing/certificates']);
+    expect(SCHOOL_SHELL_UNLISTED_ROUTES).not.toContain('/staff/testing/candidates/register');
+    expect(SCHOOL_SHELL_UNLISTED_ROUTES).not.toContain('/staff/testing/candidates/grade');
+    expect(schoolShellActiveItem('/staff/testing/candidates/grade')?.key).toBe('testing');
+    expect(SCHOOL_SHELL_NAV.filter(item => item.steps).map(item => item.key)).toEqual(['testing']);
+  });
+
   it('resolves the active primary item from the path, including sub-routes and dynamic detail pages', () => {
     expect(schoolShellActiveItem('/staff/dashboard')?.key).toBe('home');
     expect(schoolShellActiveItem('/staff/crm/follow-ups')?.key).toBe('crm');
