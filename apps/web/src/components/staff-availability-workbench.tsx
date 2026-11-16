@@ -47,7 +47,7 @@ export function StaffAvailabilityWorkbench(): React.ReactElement {
     <section><h2>Whose availability</h2><div className={styles.actions}><button disabled={busy} onClick={() => void run(() => load('self'))}>Show my availability</button></div>
       {pickScope && staffList !== 'DENIED' && <StaffPicker scope={pickScope} purpose="availability" label="Or a team member" value={profile && !profile.own ? profile.principalId : ''} disabled={busy} onState={setStaffList} onItems={items => setNames(m => new Map([...m, ...items.map(p => [p.principalId, p.displayName] as const)]))} onPick={person => { if (person) void run(() => load(person.principalId)); }} />}
       {(() => { const form = <form onSubmit={e => { e.preventDefault(); void run(() => load(knownId)); }}><label>Staff record ID<input autoComplete="off" maxLength={36} required value={knownId} onChange={e => setKnownId(e.target.value)} /></label><button disabled={busy || !knownId}>Open</button></form>;
-        return !pickScope ? (profile ? <IdFields manual={false}>{form}</IdFields> : null) : staffList === 'UNAVAILABLE' ? form : staffList === 'DENIED' ? null : <IdFields manual={false}>{form}</IdFields>; })()}
+        return !pickScope ? <IdFields manual={false}>{form}</IdFields> : staffList === 'UNAVAILABLE' ? form : staffList === 'DENIED' ? null : <IdFields manual={false}>{form}</IdFields>; })()}
       {profile && <p>Showing {profile.own ? 'your availability' : `availability for ${names.get(profile.principalId) ?? 'a team member'}`}. Times are in {profile.timezone}.</p>}
     </section>
     {profile && <>
