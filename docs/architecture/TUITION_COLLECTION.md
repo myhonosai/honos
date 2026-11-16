@@ -182,7 +182,9 @@ seven piece 1 routes.
 
 ## 9. Piece 9a as built (0269): checkout page settings
 
-Status: source only, not deployed. Nothing is public yet; the family-facing checkout page and its public read come in a
+Status: superseded by section 21 (0402). 0402 copies every 0269 page into the new model as a draft and retires the
+runtime's EXECUTE on both 0269 entry points; the 0269 tables stay as history. The text below describes 0269 as built.
+Source only, not deployed. Nothing is public yet; the family-facing checkout page and its public read come in a
 later piece, together with promo codes and the sibling-discount display (P4).
 
 - **Database:** `school_checkout_pages` (one row per school and kind, `ENROLLMENT` or `TUITION`, `DRAFT` or `PUBLISHED`) and
@@ -197,12 +199,11 @@ later piece, together with promo codes and the sibling-discount display (P4).
   parent principals are refused.
 - **API:** `GET` and `POST organizations/:organizationId/schools/:schoolId/payments/checkout-pages` (save needs
   Idempotency-Key and the `school_checkout.page.save` human-command header).
-- **Evidence:** `pnpm --filter @hon/database db:test-school-checkout-pages` (CI: `run-db-proofs.sh`), 94 checks over signed
-  HTTP; `apps/api/test/school-checkout.test.cjs`.
+- **Evidence (at 0269):** 94 checks over signed HTTP in the 0269 proof, since renamed and rewritten for 0402 (section 21).
 
 ## 10. Piece 9b as built: checkout settings page for staff
 
-Status: source only, not deployed. Web only, over the 0269 routes; no migration and no API change.
+Status: superseded by section 21 (the same route now edits the 0402 pages). Source only, not deployed. Web only, over the 0269 routes; no migration and no API change.
 
 - **Page:** `/staff/billing/checkout-pages` (Billing menu, "Checkout pages"; EN/KO/ES menu label), protected, dynamic,
   noindex, no-referrer. Tabs for the enrollment checkout and the tuition payment page.
@@ -217,7 +218,7 @@ Status: source only, not deployed. Web only, over the 0269 routes; no migration 
   keeps the exact request and key for Try again. Every answer is followed by a fresh read.
 - **Privacy:** blur or a hidden tab hides the page but keeps unsaved edits in memory; a school change or session end drops
   them. Nothing is kept in browser storage.
-- **Evidence:** `apps/web/test/school-checkout-ui.test.tsx` (9 tests).
+- **Evidence (at 0269):** 9 tests, since rewritten for 0402 (section 21).
 
 ## 11. Piece 2 design (0320): real sandbox adapters and the credential vault
 
@@ -446,3 +447,40 @@ sends the cycle to the processor. No message is sent and HON takes no fee.
 - **Evidence:** `packages/database/scripts/test-school-pay-autopay-integrity.mjs` (246 checks over signed HTTP, including month-end,
   leap-year and daylight-saving periods);
   `apps/api/test/school-payments.test.cjs` (0322 contract, discount and route tests).
+
+## 21. Checkout pages as built (0402, CP1 + CP2): many named pages, modeled on the owner's current CRM
+
+Status: source only, not deployed. Staff only: families cannot open these pages yet (the family page, its public link and
+promo codes are CP3 and CP4). Nothing here takes a payment, and HON adds no fee.
+
+- **Database (0402):** `school_checkouts` (many pages per school: a fixed address `slug`, a group, `DRAFT`, `PUBLISHED` or
+  `ARCHIVED`, closed content, optimistic version; up to 200 pages), the append-only `school_checkout_versions`, and
+  `school_checkout_settings` (the school's page groups and the staff order of the grid; defaults Trial, Membership, Event,
+  Tournament, Test, Equipment, Camp, Sales). Private, forced RLS, no table privilege for the runtime; no delete.
+- **Content (closed shape, CHECKed in the table):** title and description, text sections above or below the options,
+  multi-participant (2 to 20 per order), questions (with uniform, belt, shoe and T-shirt size presets), add-ons in the page
+  currency, an optional page waiver, receipt note and thank-you. Pricing options (up to 20): one-time (0 allowed for a
+  free trial) or monthly (amount, 0 to 120 payments where 0 is ongoing, collection AUTO_CHARGE, IN_HOUSE or
+  REVIEW_REQUIRED, optional down payment with its own label), an optional extra-participant fee, capacity, "available
+  through" date, at most one "Most popular", and an optional catalog plan with "creates membership". An option is a copy
+  for the page: editing it never changes the catalog plan. A live page needs at least one option; a named plan must be
+  AVAILABLE unless the page is archived.
+- **Entry points:** `read_school_checkouts`, `save_school_checkout` (create with no page id and version 0, then optimistic
+  version; refusals VERSION_CONFLICT, CHECKOUT_SLUG_TAKEN, CHECKOUT_SLUG_FIXED, CHECKOUT_NOT_FOUND, CHECKOUT_GROUP_UNKNOWN,
+  CHECKOUT_PLAN_UNAVAILABLE, CHECKOUT_OPTIONS_REQUIRED, CHECKOUT_LIMIT_REACHED) and `save_school_checkout_settings`
+  (refuses removing a group a page still uses). Idempotent, audited, with an outbox event. Permission
+  `school_checkout.manage`, as in 0269.
+- **Carry-over:** each 0269 page becomes a draft 0402 page (address `enrollment` or `tuition`, group Membership, no options,
+  its add-ons, questions and texts kept), so staff choose prices and publish it themselves.
+- **API:** `GET` and `POST organizations/:organizationId/schools/:schoolId/payments/checkout-pages`, and `POST .../settings`
+  (`school_checkout.page.save` and `school_checkout.settings.save` human-command headers, each with an Idempotency-Key).
+- **Staff page (CP2):** the same route `/staff/billing/checkout-pages`. A grid of page cards with group filters (and
+  Archived), the "From" price, status, Edit, Duplicate page, Publish or Put in draft, Archive or Restore, and Earlier or
+  Later; Manage groups. The editor has Page details, Pricing options and Agreement tabs, one language switch, the plain
+  summary under each monthly option ("Customer pays ... today, then .../mo ..."), and a display-only family preview.
+  Unsaved edits stay in memory only; an unknown result keeps the exact request and key for Try again.
+- **Later, by other pieces:** the membership thread's shared payment options and agreement signing replace the page copy
+  and the page waiver; the family page and the shared one-time sandbox payment (CP3), promo codes (CP4).
+- **Evidence:** `pnpm --filter @hon/database db:test-school-checkouts` (CI: `run-db-proofs.sh`), 157 checks including the
+  carry-over in a rolled-back transaction; `apps/api/test/school-checkout.test.cjs` (3 tests);
+  `apps/web/test/school-checkout-ui.test.tsx` (11 tests); 011 exact verification passes.
