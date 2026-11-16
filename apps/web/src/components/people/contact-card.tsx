@@ -23,7 +23,11 @@ const day = (language: string, at: string) => new Intl.DateTimeFormat(language, 
 const when = (language: string, at: string) => new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(at));
 
 /** Tabs for one contact. A tab the viewer's role does not include says so; nothing is guessed. */
-export function ContactCard({ language, card, initialTab = 'overview' }: { language: string; card: CardState; initialTab?: CardTab }): React.ReactElement | null {
+export type MembershipItem = SchoolContactCard['membership'] extends infer M ? M extends { items: readonly (infer I)[] } ? I : never : never;
+/** The People page puts each membership's actions here (pause, cancel, start, …); the card itself only shows what the server read. */
+export type MembershipSlot = (item: MembershipItem) => React.ReactNode;
+export function ContactCard({ language, card, initialTab = 'overview', membershipSlot }: { language: string; card: CardState; initialTab?: CardTab;
+  membershipSlot?: MembershipSlot | undefined }): React.ReactElement | null {
   const [tab, setTab] = useState<CardTab>(initialTab);
   const t: T = (key, vars) => cardText(language, key, vars);
   if (card.state === 'NONE') return null;
@@ -40,11 +44,11 @@ export function ContactCard({ language, card, initialTab = 'overview' }: { langu
       {CARD_TABS.map(k => <button key={k} type="button" className={styles.tab} aria-pressed={tab === k} data-tab={k} data-allowed={allowed(k) ? 'true' : 'false'}
         onClick={() => setTab(k)}>{t(k)}{k === 'messages' && c.messages.allowed ? <span className={styles.count}>{c.messages.direct + (c.messages.family ?? 0)}</span> : null}</button>)}
     </div>
-    <div className={styles.tabBody} data-testid={`contact-tab-${tab}`}><Body language={language} c={c} tab={tab} t={t}/></div>
+    <div className={styles.tabBody} data-testid={`contact-tab-${tab}`}><Body language={language} c={c} tab={tab} t={t} slot={membershipSlot}/></div>
   </article>;
 }
 
-function Body({ language, c, tab, t }: { language: string; c: SchoolContactCard; tab: CardTab; t: T }): React.ReactElement {
+function Body({ language, c, tab, t, slot }: { language: string; c: SchoolContactCard; tab: CardTab; t: T; slot?: MembershipSlot | undefined }): React.ReactElement {
   const denied = <p className={styles.meta} role="note">{t('notAllowed')}</p>;
   const none = <p className={styles.meta}>{t('none')}</p>;
   switch (tab) {
@@ -77,9 +81,9 @@ function Body({ language, c, tab, t }: { language: string; c: SchoolContactCard;
     case 'membership':
       if (!c.membership.allowed) return denied;
       if (!c.membership.items.length) return none;
-      return <ul className={styles.plain}>{c.membership.items.map(m => <li key={m.membershipId}>
+      return <ul className={styles.plain}>{c.membership.items.map(m => <li key={m.membershipId} data-testid="card-membership">
         <strong>{m.planName ?? m.planCode}</strong> · {codeLabel(language, m.state)}
-        {m.startedAt ? ` · ${day(language, m.startedAt)}` : ''}{m.endsAt ? ` – ${day(language, m.endsAt)}` : ''}</li>)}</ul>;
+        {m.startedAt ? ` · ${day(language, m.startedAt)}` : ''}{m.endsAt ? ` – ${day(language, m.endsAt)}` : ''}{slot ? slot(m) : null}</li>)}</ul>;
     case 'billing':
       if (!c.billing.allowed) return denied;
       return <>

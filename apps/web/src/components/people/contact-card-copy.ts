@@ -50,7 +50,7 @@ const CODES: Readonly<Record<string, readonly [string, string, string]>> = {
   SCHEDULED: ['Scheduled', '예정', 'Programada'], COMPLETED: ['Completed', '완료', 'Completada'], CANCELLED: ['Cancelled', '취소됨', 'Cancelada'], NO_SHOW: ['No-show', '불참', 'No asistió'],
   PRESENT: ['Present', '출석', 'Presente'], LATE: ['Late', '지각', 'Tarde'], EXCUSED_ABSENCE: ['Excused absence', '사유 결석', 'Ausencia justificada'],
   UNEXCUSED_ABSENCE: ['Absent', '결석', 'Ausente'], MAKEUP: ['Make-up class', '보강', 'Clase de recuperación'],
-  ACTIVE: ['Active', '활성', 'Activa'], FROZEN: ['Paused', '일시정지', 'En pausa'], CANCELLATION_PENDING: ['Cancelling', '취소 예정', 'Cancelación pendiente'], EXPIRED: ['Ended', '만료', 'Terminada'],
+  DRAFT: ['Not started yet', '아직 시작 전', 'Aún sin empezar'], ACTIVE: ['Active', '활성', 'Activa'], FROZEN: ['Paused', '일시정지', 'En pausa'], CANCELLATION_PENDING: ['Cancelling', '취소 예정', 'Cancelación pendiente'], EXPIRED: ['Ended', '만료', 'Terminada'],
   ISSUED: ['Open', '미결제', 'Pendiente'], PAID: ['Paid', '결제 완료', 'Pagada'], VOID: ['Void', '무효', 'Anulada'], UNCOLLECTIBLE: ['Written off', '회수 불가', 'Incobrable'],
 };
 export function codeLabel(language: string, code: string): string {
