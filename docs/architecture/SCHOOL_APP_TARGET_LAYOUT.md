@@ -63,7 +63,7 @@ opened from a link on its page, not from the menu.
 | Contacts | **Staff** | `/staff/team/invitations` | Team · Roles · Availability · Qualifications · Documents | this thread |
 | Lead | **Lead pipeline** | `/staff/crm` | Pipeline · Follow-ups · Trials · Lead memberships · Import leads (Enroll a lead / Journey hidden after the board lands) | pipeline thread |
 | Lead | **Automations** | `/staff/automation/rules` | Rules (AU-1 builder joins later) | AU thread |
-| Communication | **Texts & email** | `/staff/family-messages` | Family messages (SMS blasts and email join here) | this thread |
+| Communication | **Texts & email** | `/staff/family-messages` | New text or email (composer on top, see L4) · Family messages | this thread |
 | Communication | **Facebook & Instagram** | `/staff/marketing/social` | Social inbox and accounts | social thread |
 | Finance | **Checkout Pages** | `/staff/billing/checkout-pages` | (inside the page) | tuition thread |
 | Finance | **Point of Sale** | `/staff/billing/pos` | Register · History · Inventory (inside the page) | POS thread (added when it merges) |
@@ -73,8 +73,8 @@ opened from a link on its page, not from the menu.
 | Marketing | **Marketing** | `/staff/marketing` | Overview · Campaigns · Champions Club | this thread |
 | Marketing | **Creative Studio** | `/staff/creative-studio` | (inside the page) | creative thread |
 | Ranks | **Rank setup** | `/staff/curriculum/library` | Curriculum library · Progress · Teaching studio · Achievements | this thread |
-| Ranks | **Tests** | `/staff/testing/registrations` | Testing · Readiness · Scorecards · Certificates | this thread |
-| Ranks | **Mass rank promotion** | `/staff/testing/promotion-decisions` | Promotions | this thread |
+| Ranks | **Tests** | `/staff/testing/readiness` | Numbered steps, not tabs: 1 Who is ready · 2 Sign-ups · 3 Register · 4 Grade · 5 Scorecards · 6 Certificates (see L3) | this thread |
+| Ranks | **Mass rank promotion** | `/staff/testing/promotion-decisions` | Pick students, one decision for all (one student at a time below it) | this thread |
 | Business | **Membership** | `/staff/billing/membership-plans` | Plans · Memberships · Dates & history · Renewals · Import (Activation and Changes hidden once #399 lands) | membership thread |
 | Business | **Agreement** | none yet | Agreement & waiver page arrives with the membership thread's slice E | membership thread |
 | Business | **Reports** | `/staff/reports` | Reports · Operations · Health score · Revenue planning · Retention review | this thread |
@@ -118,5 +118,50 @@ Settings, as today.
   promotes a picked group of students in one action.
 - **L4 Texts & email and Settings tidy**: one composer (SMS / email) at the top of Texts & email; Settings tabs in a wrapped row.
 - **L5 Staff**: one Staff list with role, availability and qualifications on a slide-out card.
+
+### L3 spec: Tests as one page, and Mass rank promotion
+
+**Tests.** A belt test is one job done in order, so the Tests page shows its routes as numbered steps instead of tabs:
+1 Who is ready (`/staff/testing/readiness`) · 2 Sign-ups (`/staff/testing/registrations`) · 3 Register
+(`/staff/testing/candidates/register`) · 4 Grade (`/staff/testing/candidates/grade`) · 5 Scorecards · 6 Certificates.
+The page opens at step 1. The catalog marks the page `steps: true`; the shell draws the same links as an ordered step
+row ("Step 2 of 6", current step marked) in all three views, and the Register and Grade pages (unlisted until now) join
+the page so "where am I" names Tests. Steps are exempt from the five-tab rule. Deciding the promotion is the next page,
+Mass rank promotion.
+
+**Mass rank promotion.** Opens on the list of graded students waiting for a decision (the existing candidate picker read,
+`for=decision`, up to 50 rows), each with a checkbox, plus "Pick everyone who passed". One decision (default Promoted)
+and one reason apply to all picked students. After a confirm box, one button records the decision for each picked student.
+Under the hood it is the existing per-student command, sent one after another, each with its own idempotency key and the
+version the list returned; nothing new on the server, no migration. Each row then shows Recorded, Already recorded,
+Not recorded (rejected, for example the test changed), or Not sure (network/unknown), and only a Not sure row offers an
+exact retry of its own unchanged command. A lost session or permission stops the run at once and clears the picks and
+reason. Changing picks, decision or reason clears the confirm. The existing one-student form stays below the list for a
+student who needs a different decision. Without a verified school the page shows only the one-student form, as today.
+Only an instructor decides: HON and the AI team never promote.
+
+### L4 spec: Texts & email composer, Settings tidy
+
+**Texts & email** opens with one composer, "New text or email", above the family-messages inbox:
+1. Find a contact (the existing people search, up to 50 matches by name, email or phone) and pick one.
+2. Choose **Text** (needs a mobile number on the contact) or **Email** (needs an email address); a channel the contact
+   has no address for is shown but cannot be chosen.
+3. Write the message (1 to 4,000 characters).
+4. Tick "Send this to NAME by text/email" and press **Send**.
+
+Under the hood this is the existing communication-message API (migration 0047/0243, no server change): create a DRAFT
+(`communication.message.create`), then queue it with the version it returned (`communication.message.queue`), each with
+its own idempotency key. The server checks the school permission and the contact's current consent for that channel at
+queue time; HON's delivery worker sends only queued messages, and only where the owner has turned delivery on.
+Outcomes: "Queued to send", "NAME has not agreed to receive texts/emails" (with a link to their contact card, where staff
+record consent), "Not available for your role", or "Not sure it went through" with an exact retry of the same step and key
+(a draft that was created but not queued is retried by queueing it, never by creating a second one). Any edit after a
+send starts a new message. Nothing is stored in the browser.
+
+**Settings** keeps its tabs, but the row wraps onto two lines instead of scrolling sideways, like the owner's CRM.
+
+**Mass rank promotion polish (review P3s from #425):** an invalid draft at send shows a plain alert instead of doing
+nothing; when access is lost mid-run, the students not yet sent are marked "Not sent"; after a stop the form stays
+disabled until the page is reloaded.
 
 Each slice: spec section here, tests first, independent review, standing merge rule.

@@ -121,9 +121,24 @@
   flex: none; padding: var(--hon-space-2) var(--hon-space-3) 10px; color: var(--hon-text-muted); text-decoration: none; font-size: var(--hon-text-sm); font-weight: 500;
   border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
-/* Group row: a short segmented row above the page tabs of long areas. */
 .tabs a:hover { color: var(--hon-text); }
 .tabs a[aria-current='page'] { color: var(--hon-text); border-bottom-color: var(--hon-accent-2); }
+/* Settings: one page with many tabs, wrapped onto a second line like the owner's CRM (L4). */
+.tabs[data-wrap='true'] { flex-wrap: wrap; overflow-x: visible; row-gap: 0; }
+/* Numbered steps (Tests): one job in order, so the row reads 1 → 6 instead of tabs. */
+.steps { position: relative; padding: var(--hon-space-2) var(--hon-space-6); border-bottom: 1px solid var(--hon-border); overflow-x: auto; scrollbar-width: thin; }
+.steps ol { display: flex; gap: var(--hon-space-1); margin: 0; padding: 0; list-style: none; }
+.steps li { flex: none; }
+.steps a {
+  display: inline-flex; align-items: center; gap: var(--hon-space-2); padding: var(--hon-space-2) var(--hon-space-3); border-radius: 999px;
+  color: var(--hon-text-muted); text-decoration: none; font-size: var(--hon-text-sm); font-weight: 500;
+}
+.steps a:hover { color: var(--hon-text); }
+.steps [data-step-number] {
+  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--hon-border); font-size: 12px; font-weight: 600;
+}
+.steps a[aria-current='step'] { color: var(--hon-text); background: var(--hon-surface-2); }
+.steps a[aria-current='step'] [data-step-number] { background: var(--hon-accent); border-color: var(--hon-accent); color: var(--hon-accent-contrast); }
 
 .main { flex: 1; min-width: 0; width: 100%; max-width: var(--hon-content-max); margin: 0 auto; padding: var(--hon-space-6); outline: none; }
 
@@ -146,6 +161,7 @@
   .menuButton { display: grid; }
   .topbar { padding: var(--hon-space-3) var(--hon-space-4); }
   .tabs { padding: var(--hon-space-2) var(--hon-space-4) 0; }
+  .steps { padding: var(--hon-space-2) var(--hon-space-4); }
   .main { padding: var(--hon-space-4); }
 }
 @media (max-width: 760px) {
