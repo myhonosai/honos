@@ -26,8 +26,8 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   // Setup (Welcome, School launch, Founder Setup) is onboarding (owner, 2026-11-14): reached from Home's setup card and Settings, not tabs.
   { key: 'home', titleKey: 'navHome', routes: [r('/staff/dashboard', 'routeOverview', true), r('/staff/command-center', 'routeCommandCenter'), r('/staff/work', 'routeWork'),
     h('/staff/welcome', 'routeWelcome'), h('/staff/launch', 'routeLaunch'), h('/staff/founder-setup', 'routeFounderSetup')] },
-  { key: 'students', titleKey: 'navStudents', routes: [...g('groupPeople', r('/staff/search', 'routeStudentSearch'), r('/staff/people', 'routePeople'), r('/staff/family-access', 'routeFamilyAccess', true), r('/staff/family-messages', 'routeFamilyMessages'),
-    r('/staff/students/achievements', 'routeAchievements'), r('/staff/retention/review', 'routeRetention'), r('/staff/migration/students', 'routeStudentImport')),
+  { key: 'students', titleKey: 'navStudents', routes: [...g('groupPeople', r('/staff/search', 'routeStudentSearch'), r('/staff/people', 'routePeople'), r('/staff/family-access', 'routeFamilyAccess', true), r('/staff/conversations', 'routeConversations'), r('/staff/family-messages', 'routeFamilyMessages'),
+    r('/staff/students/achievements', 'routeAchievements'), r('/staff/retention/review', 'routeRetention'), r('/staff/migration/students', 'routeStudentImport'), r('/staff/migration/photos', 'routePaperImport')),
     ...g('groupStaff', r('/staff/team/invitations', 'routeTeam', true), r('/staff/roles', 'routeRoles'), r('/staff/team/availability', 'routeAvailability'), r('/staff/instructor-qualifications', 'routeQualifications'),
     r('/staff/documents', 'routeDocuments'))] },
   { key: 'crm', titleKey: 'navCrm', routes: [...g('groupLeads', r('/staff/crm', 'routeLeadsHome'), r('/staff/crm/leads', 'routeLeads', true), r('/staff/crm/journey', 'routeJourney', true), r('/staff/crm/follow-ups', 'routeFollowUps'),
@@ -50,7 +50,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/voice', 'routeVoice'))] },
   { key: 'analytics', titleKey: 'navAnalytics', routes: [r('/staff/reports', 'routeSchoolReports'), r('/staff/operations', 'routeOperationsReport', true), r('/staff/health-score', 'routeHealthScore'), r('/staff/planning/revenue', 'routeRevenuePlanning')] },
   { key: 'settings', titleKey: 'navSettings', routes: [r('/staff/settings', 'routeSettingsSummary'), r('/staff/account-status', 'routeAccount'), r('/staff/owners', 'routeOwners'), r('/staff/subscription', 'routeSubscription'),
-    r('/staff/settings/branding', 'routeBranding'), r('/staff/settings/booking-types', 'routeBookingTypes'), r('/staff/settings/texting-number', 'routeTextingNumber'), r('/settings/language-region', 'routeLanguage'), r('/settings/texts-from-hon', 'routeTextsFromHon'),
+    r('/staff/settings/branding', 'routeBranding'), r('/staff/settings/location', 'routeLocation'), r('/staff/settings/booking-types', 'routeBookingTypes'), r('/staff/settings/texting-number', 'routeTextingNumber'), r('/settings/language-region', 'routeLanguage'), r('/settings/texts-from-hon', 'routeTextsFromHon'),
     r('/staff/automation/rules', 'routeAutomation'), r('/staff/help', 'routeHelp')] },
 ];
 

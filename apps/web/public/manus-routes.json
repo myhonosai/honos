@@ -121,6 +121,10 @@
       "title": "HON | Import students"
     },
     {
+      "path": "/staff/migration/photos",
+      "title": "HON | Import from photos"
+    },
+    {
       "path": "/staff/migration/classes",
       "title": "HON | Import classes and attendance"
     },
@@ -313,8 +317,16 @@
       "title": "HON | Family messages"
     },
     {
+      "path": "/staff/conversations",
+      "title": "HON | Conversations"
+    },
+    {
       "path": "/staff/settings/branding",
       "title": "HON | School branding"
+    },
+    {
+      "path": "/staff/settings/location",
+      "title": "HON | School location"
     },
     {
       "path": "/staff/settings/booking-types",
