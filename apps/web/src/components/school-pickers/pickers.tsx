@@ -1,6 +1,8 @@
 'use client';
 import React, { useEffect, useId, useState } from 'react';
 import styles from './pickers.module.css';
+import type { LeadListItem } from '@hon/contracts';
+import { CrmLeadAccessError, loadCrmLeads } from '../crm-leads-http';
 import { PickerError, pickerApi, type CandidatePurpose, type EnrollmentPurpose, type PickerCandidate, type PickerEnrollment, type PickerRank, type PickerScope, type PickerStudent, type PickerTestingEvent, type RankPurpose, type StudentPurpose } from './http';
 
 /**
@@ -108,6 +110,30 @@ export function RankPicker({ scope, purpose, value, disabled, onPick, onItems }:
   const list = useList((signal) => pickerApi.ranks(scope, purpose, signal), [scope.organizationId, scope.schoolId, purpose], 0);
   useEffect(() => { if (list.state === 'READY') onItems?.(list.items); }, [list]); // eslint-disable-line react-hooks/exhaustive-deps
   return <PickListView copy={RANK_COPY[purpose]} list={list} keyOf={(i) => i.rankId} describe={rankLabel} value={value} disabled={disabled} onPick={onPick} />;
+}
+
+type LeadRow = Pick<LeadListItem, 'id' | 'givenName' | 'familyName'>;
+export const leadLabel = (lead: LeadRow): string => name(lead);
+/** The lead list has no server search, so the newest open leads are filtered by name on the page. */
+export function filterLeads<T extends LeadRow>(leads: readonly T[], find: string): T[] {
+  const needle = find.trim().toLowerCase();
+  return needle ? leads.filter((lead) => leadLabel(lead).toLowerCase().includes(needle)) : [...leads];
+}
+const LEAD_COPY: Copy = { label: 'Lead', choose: 'Choose a lead', search: 'Find a lead', loading: 'Reading leads…', empty: 'No open leads match.', denied: 'Your role does not include reading leads at this school.', unavailable: 'Leads could not be loaded. Reload the page to try again.' };
+/** The school's newest open leads (the CRM lead list, crm.lead.read), picked by name. */
+export function LeadPicker({ scope, value, disabled, onPick, onState }: { scope: PickerScope; value: string; disabled: boolean; onPick: (lead: LeadListItem | null) => void; onState?: (state: ListState<LeadListItem>['state']) => void }): React.ReactElement {
+  const [search, setSearch] = useState('');
+  const [list, setList] = useState<ListState<LeadListItem>>({ state: 'LOADING' });
+  useEffect(() => {
+    let current = true; const abort = new AbortController();
+    loadCrmLeads(scope.organizationId, scope.schoolId, 'OPEN', abort.signal).then(
+      (items) => { if (current) setList({ state: 'READY', items }); },
+      (error) => { if (current && !abort.signal.aborted) setList({ state: error instanceof CrmLeadAccessError ? 'DENIED' : 'UNAVAILABLE' }); });
+    return () => { current = false; abort.abort(); };
+  }, [scope.organizationId, scope.schoolId]);
+  useEffect(() => { onState?.(list.state); }, [list.state]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shown: ListState<LeadListItem> = list.state === 'READY' ? { state: 'READY', items: filterLeads(list.items, search) } : list;
+  return <PickListView copy={LEAD_COPY} list={shown} keyOf={(i) => i.id} describe={leadLabel} value={value} search={search} disabled={disabled} onSearch={setSearch} onPick={onPick} />;
 }
 
 /** Record-ID inputs: shown directly when no school is selected, otherwise tucked under a fallback disclosure. */
