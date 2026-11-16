@@ -16,3 +16,12 @@ describe('work items by name', () => {
       'Expected version', 'Authorized school queue', 'Checking current human school authority', 'ordered by stable ID', 'Human assignee ${']) expect(source).not.toContain(text);
   });
 });
+
+describe('staff availability by name', () => {
+  it('opens on the signed-in staff member, picks a teammate by name, and shows no IDs or permission codes', () => {
+    const source = readFileSync('src/components/staff-availability-workbench.tsx', 'utf8');
+    for (const text of ['useShellSchool', '<StaffPicker', 'purpose="availability"', '<IdFields', "load('self')"]) expect(source).toContain(text);
+    for (const text of ['already-known staff principal UUID', '{profile.principalId} / {profile.schoolId}', 'staff.availability.self_manage', 'staff.qualification.manage', 'Load exact authorized', 'ISO weekdays', 'Exclusive end HH:mm', 'Read immutable version'])
+      expect(source).not.toContain(text);
+  });
+});
