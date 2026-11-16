@@ -36,7 +36,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/marketing/intake', 'routeIntake'), r('/staff/marketing/social', 'routeSocial'), r('/staff/creative-studio', 'routeCreativeStudio'), r('/staff/champions-club', 'routeChampions'))] },
   { key: 'classes', titleKey: 'navClasses', routes: [...g('groupSchedule', r('/staff/schedule', 'routeRosters'), r('/staff/schedule/sessions', 'routeSessions'), r('/staff/schedule/timetable', 'routeTimetable'), r('/staff/schedule/events', 'routeEvents'), r('/staff/schedule/bookings', 'routeBookings'),
     r('/staff/classpass', 'routeClassPass', true), r('/staff/kiosk', 'routeKiosk'), r('/staff/migration/classes', 'routeHistoryImport')),
-    ...g('groupAttendance', r('/staff/attendance', 'routeAttendance', true), r('/staff/attendance/planned-absences', 'routePlannedAbsences')),
+    ...g('groupAttendance', r('/staff/attendance', 'routeAttendance', true), r('/staff/attendance/planned-absences', 'routePlannedAbsences'), r('/staff/attendance/scan', 'routeScanCheckIn'), r('/staff/attendance/cards', 'routeAttendanceCards')),
     ...g('groupCurriculum', r('/staff/curriculum/library', 'routeCurriculumLibrary'), r('/staff/curriculum/progress', 'routeProgress'), r('/staff/teaching-studio', 'routeTeachingStudio'), r('/staff/testing/registrations', 'routeTesting'),
     r('/staff/testing/readiness', 'routeReadiness'), r('/staff/testing/scorecards', 'routeScorecards'), r('/staff/testing/promotion-decisions', 'routePromotions'),
     r('/staff/testing/certificates', 'routeCertificates')), ...g('groupCommunity', r('/community', 'routeCommunity'), r('/community/marketplace', 'routeMarketplace'))] },

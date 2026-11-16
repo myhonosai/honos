@@ -64,18 +64,22 @@ separate photo summary read (`read_person_photo_summary`), so 0217 is not replac
 - Internal `hon.attendance_check_in_student(subject, session, student, method, method_ref, status, key, request, correlation)`:
   if the student already has a record for the session it returns `ALREADY_RECORDED` with the current status and changes
   nothing; otherwise it calls `hon.record_attendance` (PRESENT or LATE) and logs the check-in. Not granted to the app.
-- Entry points: `read_attendance_card_settings`, `configure_attendance_card_settings`, `issue_attendance_cards` (1..40
-  students, digests from the API), `revoke_attendance_card`, `read_attendance_cards` (students' card status, no codes),
+- Entry points as built: `read_attendance_cards` (look + students' card status, no codes), `configure_attendance_cards`,
+  `issue_attendance_cards` (1..40 students, digests from the API), `revoke_attendance_card`,
   `check_in_with_attendance_card(subject, session, input{codeDigest,status}, key, request, correlation)`.
+- A print's receipt fingerprint covers the student list only (the API draws new random codes on each attempt), so a
+  retry of an unknown outcome replays the saved print without codes; the screen then asks for new cards.
+- Scan authority is held, not re-checked: `hon.lock_attendance_actor` locks the staff grant for the transaction, so a
+  revocation waits for an in-flight scan and the next scan is refused (proved in group 8).
 
 ## Screens
 
 - People contact card: Photo panel (take/upload, replace, remove) in en/ko/es.
 - `/staff/attendance/cards`: owner settings (barcode/QR, show photo/logo, design), student list with card status, select
-  and "Print cards" (issue then print sheet, CR80 85.6 × 54 mm, 10 per A4/Letter), cancel card.
+  and "Print cards" (issue then print sheet, CR80 85.6 × 54 mm, two across), cancel card.
 - `/staff/attendance/scan`: pick a class session of today, Present/Late toggle, scanner input always focused, optional
   camera; result card shows photo, name and RECORDED / ALREADY (status) / NOT RECOGNISED.
-- Barcode (Code 128 set C) and QR (byte/numeric, ECC M) are drawn by small in-repo SVG encoders; no new dependency.
+- Barcode (Code 128 set C) and QR (version 1-M, numeric) are drawn by small in-repo SVG encoders; no new dependency.
 
 ## Plan
 
@@ -87,3 +91,6 @@ separate photo summary read (`read_person_photo_summary`), so 0217 is not replac
 ## Open owner questions (not blocking)
 
 - iPad/Safari camera scanning needs a JS decoder library (Safari has no `BarcodeDetector`); USB scanners work everywhere.
+- Staff on the scan screen also need `schedule.session.read` to list today's classes (existing read).
+- New organizations: like 0364, the migration adds `attendance.cards.manage` to existing OWNER system roles; whether
+  system roles created later receive it depends on the role template (owner check before launch).
