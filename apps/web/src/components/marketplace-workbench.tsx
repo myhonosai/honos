@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import React, { useRef, useState } from 'react';
-import { MARKETPLACE_HELP, MARKETPLACE_CATEGORIES, MARKETPLACE_MODULES, MARKETPLACE_REQUIRED_PERMISSIONS, type MarketplaceAccess, type MarketplaceAsset, type MarketplaceInput, type MarketplaceSelection, type MarketplaceHistory } from '@hon/contracts';
+import { MARKETPLACE_CATEGORIES, MARKETPLACE_MODULES, MARKETPLACE_REQUIRED_PERMISSIONS, type MarketplaceAccess, type MarketplaceAsset, type MarketplaceInput, type MarketplaceSelection, type MarketplaceHistory } from '@hon/contracts';
 import { loadMarketplaceAccess, loadMarketplace, loadMarketplaceSelections, loadMarketplaceHistory, saveMarketplace, marketplaceFingerprint, type MarketplaceMutation } from './marketplace-http';
 import s from './community-workbench.module.css';
 import { ManualSchoolFields, useShellSchoolInto } from './school-shell/page-school';
@@ -59,7 +59,7 @@ export function MarketplaceWorkbench() {
   return <main className={s.page}>
     <nav><Link href="/community">Community membership and opt-in</Link><Link href="/staff/dashboard">School workspace</Link></nav>
     <header><p>Community</p><h1>Marketplace</h1><p>Browse ready-made setups and save the ones you want to review.</p></header>
-    <aside data-plain-note=""><strong>Saving is for review only. Nothing is bought, installed or switched on.</strong><details><summary>What this page never does</summary><p>{MARKETPLACE_HELP}</p></details></aside>
+    <aside data-plain-note=""><strong>Saving is for review only. Nothing is bought, installed or switched on.</strong></aside>
     <section><h2>Current school access</h2><ManualSchoolFields current={school}><label>School UUID<input value={school} onChange={e => { ++generation.current; setSchool(e.target.value); clear(); setPending(null); setBusy(false); setError(''); setNotice(''); }}/></label></ManualSchoolFields><button disabled={busy} onClick={() => void load()}>Load current access</button><p>A school selector is not authority. Community membership and organization/profile opt-in must already be enabled.</p></section>
     {error && <p role="alert" className={s.error}>{error}</p>}{notice && <p role="status" className={s.notice}>{notice}</p>}
     {pending && <section><h2>Uncertain request</h2><p>Keep the original key. Reload current access for the same school, then retry the exact unchanged request. Nothing is automatically retried.</p><button disabled={busy || scope !== pending.scope || !access} onClick={() => void mutate(pending.m, true)}>Retry unchanged request</button><button disabled={busy} onClick={() => setPending(null)}>Discard retained retry</button></section>}

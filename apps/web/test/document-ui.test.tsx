@@ -6,7 +6,7 @@ describe('internal human document UI',()=>{
   it('renders deliberate append/publish controls without automatic requests or legal claims',()=>{
     const fetcher=vi.spyOn(globalThis,'fetch');
     try{const html=renderToStaticMarkup(<DocumentWorkbench/>);expect(fetcher).not.toHaveBeenCalled();
-      for(const label of ['Append new content version','Publish immutable version','Plain-text content','Internal acknowledgement evidence only','Read current publication'])expect(html).toContain(label);
+      for(const label of ['Append new content version','Publish immutable version','Plain-text content','Read current publication'])expect(html).toContain(label);
       const publishing=renderToStaticMarkup(<DocumentWorkbench initialMode="publish"/>);expect(publishing).toContain('Expected template version');expect(publishing).toContain('Exact latest content version UUID');expect(publishing).toContain('type="checkbox"');
       expect(html).not.toContain('<canvas');expect(html).not.toContain('type="file"');expect(html).not.toContain('ESIGN');expect(html).not.toContain('UETA');
     }finally{fetcher.mockRestore();}

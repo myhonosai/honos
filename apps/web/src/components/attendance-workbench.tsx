@@ -186,7 +186,7 @@ export function AttendanceWorkbench({ initialScope = {} }: { initialScope?: Atte
     {shellSchool ? <header><h1>Attendance</h1><p>Mark attendance from the class roster: open a class and tap Present, Late, Excused or Absent for each student.</p><p><a className={styles.primaryLink} href="/staff/schedule">Open class rosters</a></p></header>
       : <header><p>Attendance</p><h1>Attendance</h1><p>Record who was at class and set each program’s attendance rules.</p></header>}
     <AdvancedAttendance inShell={Boolean(shellSchool)}>
-    <aside data-plain-note=""><strong>Attendance is a record only. It does not decide promotion, testing or progress.</strong><details><summary>What this page never does</summary><p><strong>Conventional staff recordkeeping only.</strong></p><p>Each request uses existing server authorization, tenant RLS, category and policy-snapshot validation, plus audit/outbox evidence. This workbench has no Action Engine, AI, provider, payment, message, membership, capacity, schedule, or external-network path. It does not determine class eligibility, program suitability, readiness, progress, pass credit, or any automatic progression outcome.</p></details></aside>
+    <aside data-plain-note=""><strong>Attendance is a record only. It does not decide promotion, testing or progress.</strong></aside>
     {busy && <p role="status">Checking the current exact human-staff scope and requested attendance fact…</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {notice && <p role="status" className={styles.notice}>{notice}</p>}

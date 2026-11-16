@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { SchoolShellFrame, type SchoolShellFrameProps } from '../src/components/school-shell/frame';
 import { shellText } from '../src/components/school-shell/copy';
-import { SCHOOL_SHELL_NAV } from '../src/components/school-shell/catalog';
+import { SCHOOL_SHELL_NAV, SCHOOL_SHELL_SECTIONS } from '../src/components/school-shell/catalog';
 
 const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222';
 const base: SchoolShellFrameProps = {
@@ -22,7 +22,8 @@ describe('school shell frame', () => {
     expect(html).toMatch(/<div[^>]*id="hon-main"[^>]*>.*<p data-testid="page">private page<\/p>/s);
     // Pages render their own <main>; a second one around them would duplicate the landmark.
     expect(html).not.toContain('<main');
-    for (const key of ['navHome', 'navStudents', 'navCrm', 'navClasses', 'navBilling', 'navAiTeam', 'navAnalytics', 'navSettings'] as const) expect(html).toContain(esc(shellText('en', key)));
+    for (const item of SCHOOL_SHELL_NAV) expect(html).toContain(esc(shellText('en', item.titleKey)));
+    for (const section of SCHOOL_SHELL_SECTIONS) expect(html).toContain(`>${esc(shellText('en', section.titleKey))}</p>`);
   });
 
   it('marks the active primary item and its section tab', () => {
@@ -35,7 +36,7 @@ describe('school shell frame', () => {
   it('adds the verified prefill to scoped links only when READY', () => {
     const ready = render();
     expect(ready).toContain(`href="/staff/dashboard?organizationId=${A}&amp;schoolId=${B}"`);
-    expect(ready).toContain('href="/staff/memberships"');
+    expect(ready).toContain('href="/staff/billing/membership-plans"');
     for (const phase of ['IDLE', 'LOADING', 'CHOICE', 'CONCEALED', 'SESSION', 'DENIED', 'UNAVAILABLE', 'IDENTITY'] as const) {
       const html = render({ phase, selection: phase === 'CONCEALED' ? null : base.selection });
       expect(html, phase).not.toContain('organizationId=');
@@ -106,12 +107,31 @@ describe('school shell frame', () => {
     expect(render({ mode: 'modern' })).not.toContain('role="dialog"');
   });
 
-  it('lists every page of every area in the Menu, not a cut-down few', () => {
-    const panel = render({ mode: 'modern', menuOpen: true }).split('aria-label="Menu"')[1]!;
-    for (const item of SCHOOL_SHELL_NAV) for (const route of item.routes) {
-      if (route.hidden) expect(panel, route.href).not.toContain(`href="${route.href}"`);
-      else expect(panel, route.href).toContain(`href="${route.href}`);
+  it('lists every menu page under its heading in the Menu, like the owner\'s CRM, and keeps tabs inside the pages', () => {
+    for (const mode of ['modern', 'big-button'] as const) {
+      const panel = render({ mode, menuOpen: true }).split('aria-label="Menu"')[1]!;
+      for (const section of SCHOOL_SHELL_SECTIONS) {
+        const block = panel.match(new RegExp(`data-menu-section="${section.key}"[^>]*>(.*?)</section>`, 's'))?.[1] ?? '';
+        expect(block, section.key).toContain(`>${esc(shellText('en', section.titleKey))}</h2>`);
+        for (const item of SCHOOL_SHELL_NAV.filter(candidate => candidate.section === section.key)) expect(block, item.key).toContain(`data-menu="${item.key}"`);
+      }
+      expect(panel).toContain('data-menu="settings"');
+      // Second-level tabs are not repeated in the Menu: one link per page.
+      expect(panel).not.toContain('href="/staff/crm/follow-ups"');
     }
+  });
+
+  it('shows the headings in the Classic sidebar with their pages under them, and Settings at the bottom', () => {
+    const html = render({ mode: 'classic' });
+    const ai = html.match(/data-nav-section="ai"[^>]*>(.*?)<\/div>/s)?.[1] ?? '';
+    expect(ai).toContain('>AI</p>'); expect(ai).toContain('data-nav="aiTeam"'); expect(ai).toContain('data-nav="conversationAi"');
+    expect(html).toMatch(/data-nav-section="footer"[^>]*><a[^>]*data-nav="settings"/);
+  });
+
+  it('marks only the everyday pages for the Modern top bar; the rest stay in the Menu', () => {
+    const html = render({ mode: 'modern' });
+    for (const key of ['home', 'classes', 'attendance', 'students', 'crm', 'conversationAi']) expect(html).toMatch(new RegExp(`data-nav="${key}" data-everyday="true"`));
+    expect(html).toMatch(/data-nav="billing" data-everyday="false"/);
   });
 
   it('keeps onboarding pages out of tabs and the menu while Home still owns them for "where am I"', () => {
@@ -154,28 +174,24 @@ describe('school shell frame', () => {
     expect(render({ menuOpen: true })).toContain('data-drawer="open"');
   });
 
-  it('splits a long area into named groups and shows only the current group\'s pages', () => {
+  it('shows only the current page\'s tabs, with no group row (two levels only)', () => {
     const tabs = (html: string) => [...(html.match(/data-shell-tabs="">(.*?)<\/nav>/s)?.[1] ?? '').matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]);
-    const groupRow = (html: string) => html.match(/data-shell-groups="">(.*?)<\/nav>/s)?.[1] ?? '';
     const progress = render({ path: '/staff/curriculum/progress' });
-    expect([...groupRow(progress).matchAll(/>([^<]+)<\/a>/g)].map(m => m[1])).toEqual(['Schedule', 'Attendance', 'Curriculum &amp; testing', 'Community']);
-    expect(groupRow(progress)).toMatch(/aria-current="true"[^>]*>Curriculum &amp; testing|>Curriculum &amp; testing/);
-    expect(progress).toMatch(/href="\/staff\/curriculum\/library"[^>]*aria-current="true">Curriculum &amp; testing/);
-    expect(tabs(progress)).toEqual(['Curriculum library', 'Curriculum progress', 'Teaching studio', 'Testing', 'Readiness', 'Scorecards', 'Promotions', 'Certificates']);
-    const invoices = render({ path: '/staff/billing/invoices' });
-    expect(tabs(invoices)).toEqual(['Invoices', 'Tuition balances', 'Payment processors', 'Checkout pages', 'Saved payment methods']);
-    // Short areas keep one flat row with no group row.
-    const reports = render({ path: '/staff/reports' });
-    expect(reports).not.toContain('data-shell-groups'); expect(tabs(reports)).toHaveLength(4);
+    expect(progress).not.toContain('data-shell-groups');
+    expect(tabs(progress)).toEqual(['Curriculum library', 'Curriculum progress', 'Teaching studio', 'Achievements']);
+    expect(tabs(render({ path: '/staff/testing/scorecards' }))).toEqual(['Testing', 'Readiness', 'Scorecards', 'Certificates']);
+    expect(tabs(render({ path: '/staff/billing/invoices' }))).toEqual(['Invoices', 'Tuition balances']);
+    // A one-page item shows no tab row at all.
+    expect(render({ path: '/staff/billing/checkout-pages' })).not.toContain('data-shell-tabs');
   });
 
   it('names the current area in the phone bar when it is not one of the four shortcuts', () => {
     const mobile = (html: string) => html.match(/aria-label="Quick navigation"[^>]*>(.*?)<\/nav>/s)?.[1] ?? '';
     const billing = mobile(render({ path: '/staff/billing/invoices' }));
-    expect(billing).toContain('data-mobile-current=""'); expect(billing).toContain('<span>Billing</span>'); expect(billing).not.toContain('<span>More</span>');
-    expect(billing).toContain('aria-label="More: You are in Billing"');
+    expect(billing).toContain('data-mobile-current=""'); expect(billing).toContain('<span>Invoices</span>'); expect(billing).not.toContain('<span>More</span>');
+    expect(billing).toContain('aria-label="More: You are in Invoices"');
     const classes = mobile(render({ path: '/staff/schedule' }));
     expect(classes).not.toContain('data-mobile-current'); expect(classes).toContain('<span>More</span>');
-    expect(classes).toMatch(/aria-current="page"[^>]*>.*?<span>Classes<\/span>/s);
+    expect(classes).toMatch(/aria-current="page"[^>]*>.*?<span>Calendar<\/span>/s);
   });
 });

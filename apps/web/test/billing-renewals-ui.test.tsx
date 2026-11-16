@@ -13,7 +13,7 @@ const queue={schoolId:school,principalId:principal,humanOnly:true,executionAllow
 const response=(data:unknown)=>({ok:true,json:async()=>({data})}) as Response;
 describe('human membership renewal review workbench',()=>{
  it('starts honest and empty with no fetches, fake writes or billing execution UI',()=>{
-  const f=vi.spyOn(globalThis,'fetch');try{const html=renderToStaticMarkup(<BillingRenewalsWorkbench/>);expect(f).not.toHaveBeenCalled();for(const text of ['coming up for renewal','No collection','No notices','No automatic renewal','Essential','billing.renewal.manage','billing.membership.read','No payer directory','Load / refresh reviews'])expect(html.toLowerCase()).toContain(text.toLowerCase());expect(html).not.toContain('Private human review note');expect(html).not.toContain('Create renewal review record');expect(html).not.toContain('type="email"');}finally{f.mockRestore();}
+  const f=vi.spyOn(globalThis,'fetch');try{const html=renderToStaticMarkup(<BillingRenewalsWorkbench/>);expect(f).not.toHaveBeenCalled();for(const text of ['coming up for renewal','Load / refresh reviews'])expect(html.toLowerCase()).toContain(text.toLowerCase());expect(html).not.toContain('Private human review note');expect(html).not.toContain('Create renewal review record');expect(html).not.toContain('type="email"');}finally{f.mockRestore();}
  });
  it('uses closed same-origin human requests and verifies exact saved fields/version/state',async()=>{
   const f=vi.spyOn(globalThis,'fetch').mockResolvedValue(response(saved));try{
