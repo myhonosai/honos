@@ -204,6 +204,11 @@ describe('school shell frame', () => {
     expect(shellText('es', 'routeTestRegister')).not.toBe(shellText('en', 'routeTestRegister'));
   });
 
+  it('wraps the Settings tab row onto more lines instead of scrolling sideways (L4)', () => {
+    expect(render({ path: '/staff/settings/branding' })).toMatch(/<nav[^>]*data-shell-tabs=""[^>]*data-wrap="true"|<nav[^>]*data-wrap="true"[^>]*data-shell-tabs=""/);
+    expect(render({ path: '/staff/billing/invoices' })).not.toContain('data-wrap');
+  });
+
   it('names the current area in the phone bar when it is not one of the four shortcuts', () => {
     const mobile = (html: string) => html.match(/aria-label="Quick navigation"[^>]*>(.*?)<\/nav>/s)?.[1] ?? '';
     const billing = mobile(render({ path: '/staff/billing/invoices' }));

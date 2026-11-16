@@ -63,7 +63,7 @@ opened from a link on its page, not from the menu.
 | Contacts | **Staff** | `/staff/team/invitations` | Team · Roles · Availability · Qualifications · Documents | this thread |
 | Lead | **Lead pipeline** | `/staff/crm` | Pipeline · Follow-ups · Trials · Lead memberships · Import leads (Enroll a lead / Journey hidden after the board lands) | pipeline thread |
 | Lead | **Automations** | `/staff/automation/rules` | Rules (AU-1 builder joins later) | AU thread |
-| Communication | **Texts & email** | `/staff/family-messages` | Family messages (SMS blasts and email join here) | this thread |
+| Communication | **Texts & email** | `/staff/family-messages` | New text or email (composer on top, see L4) · Family messages | this thread |
 | Communication | **Facebook & Instagram** | `/staff/marketing/social` | Social inbox and accounts | social thread |
 | Finance | **Checkout Pages** | `/staff/billing/checkout-pages` | (inside the page) | tuition thread |
 | Finance | **Point of Sale** | `/staff/billing/pos` | Register · History · Inventory (inside the page) | POS thread (added when it merges) |
@@ -139,5 +139,29 @@ exact retry of its own unchanged command. A lost session or permission stops the
 reason. Changing picks, decision or reason clears the confirm. The existing one-student form stays below the list for a
 student who needs a different decision. Without a verified school the page shows only the one-student form, as today.
 Only an instructor decides: HON and the AI team never promote.
+
+### L4 spec: Texts & email composer, Settings tidy
+
+**Texts & email** opens with one composer, "New text or email", above the family-messages inbox:
+1. Find a contact (the existing people search, up to 50 matches by name, email or phone) and pick one.
+2. Choose **Text** (needs a mobile number on the contact) or **Email** (needs an email address); a channel the contact
+   has no address for is shown but cannot be chosen.
+3. Write the message (1 to 4,000 characters).
+4. Tick "Send this to NAME by text/email" and press **Send**.
+
+Under the hood this is the existing communication-message API (migration 0047/0243, no server change): create a DRAFT
+(`communication.message.create`), then queue it with the version it returned (`communication.message.queue`), each with
+its own idempotency key. The server checks the school permission and the contact's current consent for that channel at
+queue time; HON's delivery worker sends only queued messages, and only where the owner has turned delivery on.
+Outcomes: "Queued to send", "NAME has not agreed to receive texts/emails" (with a link to their contact card, where staff
+record consent), "Not available for your role", or "Not sure it went through" with an exact retry of the same step and key
+(a draft that was created but not queued is retried by queueing it, never by creating a second one). Any edit after a
+send starts a new message. Nothing is stored in the browser.
+
+**Settings** keeps its tabs, but the row wraps onto two lines instead of scrolling sideways, like the owner's CRM.
+
+**Mass rank promotion polish (review P3s from #425):** an invalid draft at send shows a plain alert instead of doing
+nothing; when access is lost mid-run, the students not yet sent are marked "Not sent"; after a stop the form stays
+disabled until the page is reloaded.
 
 Each slice: spec section here, tests first, independent review, standing merge rule.

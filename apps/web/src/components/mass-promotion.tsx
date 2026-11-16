@@ -9,10 +9,11 @@ import { candidateLabel } from './school-pickers/pickers';
 import styles from './attendance-workbench.module.css';
 
 type ListState = Readonly<{ state: 'LOADING' } | { state: 'READY'; items: readonly PickerCandidate[] } | { state: 'DENIED' } | { state: 'UNAVAILABLE' }>;
-type Outcome = Readonly<{ state: 'RECORDED' | 'REPLAYED' | 'REJECTED' } | { state: 'UNCERTAIN'; command: PreparedPromotionDecision }>;
+type Outcome = Readonly<{ state: 'RECORDED' | 'REPLAYED' | 'REJECTED' | 'NOT_SENT' } | { state: 'UNCERTAIN'; command: PreparedPromotionDecision }>;
 const OUTCOME: Record<Outcome['state'], string> = {
   RECORDED: 'Recorded', REPLAYED: 'Already recorded', REJECTED: 'Not recorded: the test or student changed. Read the list again.',
   UNCERTAIN: 'Not sure it was recorded. Retry sends the same decision again.',
+  NOT_SENT: 'Not sent: the run stopped before this student.',
 };
 const DECISION_LABEL: Record<string, string> = { PROMOTED: 'Promoted', DEFERRED: 'Deferred', NOT_PROMOTED: 'Not promoted' };
 const done = (outcome: Outcome | undefined) => outcome?.state === 'RECORDED' || outcome?.state === 'REPLAYED';
@@ -32,6 +33,7 @@ export function MassPromotion({ scope }: { scope: PickerScope }): React.ReactEle
   const [busy, setBusy] = useState(false);
   const [outcomes, setOutcomes] = useState<Readonly<Record<string, Outcome>>>({});
   const [stopped, setStopped] = useState(false);
+  const [invalid, setInvalid] = useState(false);
   const active = useRef(false);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -49,8 +51,8 @@ export function MassPromotion({ scope }: { scope: PickerScope }): React.ReactEle
   const ready = chosen.length > 0 && rationale.trim().length > 0 && rationale.length <= 2000 && PROMOTION_DECISION_STATUSES.includes(status as never);
 
   function edit(change: () => void): void {
-    if (active.current) return;
-    setConfirmed(false); setStopped(false); change();
+    if (active.current || stopped) return;
+    setConfirmed(false); setInvalid(false); change();
   }
   function toggle(candidateId: string, checked: boolean): void {
     edit(() => setPicked(current => checked ? [...current.filter(value => value !== candidateId), candidateId] : current.filter(value => value !== candidateId)));
@@ -77,25 +79,29 @@ export function MassPromotion({ scope }: { scope: PickerScope }): React.ReactEle
         if (!mounted.current) return;
         const command = preparePromotionDecision({ organizationId: scope.organizationId, schoolId: scope.schoolId, candidateId: candidate.candidateId },
           candidate.version, decision, reason, crypto.randomUUID());
-        if (await sendOne(candidate.candidateId, command) === 'STOP') return;
+        if (await sendOne(candidate.candidateId, command) === 'STOP') {
+          const rest = batch.slice(batch.indexOf(candidate) + 1);
+          if (mounted.current && rest.length) setOutcomes(current => ({ ...current, ...Object.fromEntries(rest.map(c => [c.candidateId, { state: 'NOT_SENT' } as Outcome])) }));
+          return;
+        }
       }
     } finally { active.current = false; if (mounted.current) { setBusy(false); setPicked(current => current.filter(value => !batch.some(c => c.candidateId === value))); } }
   }
   function submit(event: FormEvent): void {
     event.preventDefault();
-    if (active.current || !confirmed || !ready) return;
+    if (active.current || stopped || !confirmed || !ready) return;
     let batch: readonly PickerCandidate[] = chosen;
     try { batch.forEach(candidate => validatePromotionDecisionDraft({ ...scope, candidateId: candidate.candidateId }, candidate.version, status, rationale)); }
-    catch { batch = []; }
+    catch { batch = []; setInvalid(true); setConfirmed(false); }
     if (batch.length) void run(batch, status, rationale);
   }
   async function retry(candidateId: string, command: PreparedPromotionDecision): Promise<void> {
     const outcome = outcomes[candidateId];
-    if (active.current || outcome?.state !== 'UNCERTAIN' || outcome.command !== command) return;
+    if (active.current || stopped || outcome?.state !== 'UNCERTAIN' || outcome.command !== command) return;
     active.current = true; setBusy(true);
     try { await sendOne(candidateId, command); } finally { active.current = false; if (mounted.current) setBusy(false); }
   }
-  function reread(): void { if (active.current) return; setOutcomes({}); setPicked([]); setConfirmed(false); setList({ state: 'LOADING' }); setReads(value => value + 1); }
+  function reread(): void { if (active.current || stopped) return; setOutcomes({}); setPicked([]); setConfirmed(false); setList({ state: 'LOADING' }); setReads(value => value + 1); }
 
   const recorded = Object.values(outcomes).filter(done).length;
   const attempted = Object.keys(outcomes).length;
@@ -107,7 +113,7 @@ export function MassPromotion({ scope }: { scope: PickerScope }): React.ReactEle
     {list.state === 'UNAVAILABLE' && <p role="alert">Graded students could not be loaded. <button type="button" onClick={reread}>Read the list again</button></p>}
     {list.state === 'READY' && items.length === 0 && <p className={styles.empty}>No graded students are waiting for a promotion decision.</p>}
     {stopped && <p role="alert">Your access changed, so the run stopped. Picks and reason were cleared. Reload the page before trying again.</p>}
-    {list.state === 'READY' && items.length > 0 && <form autoComplete="off" onSubmit={submit}><fieldset disabled={busy}>
+    {list.state === 'READY' && items.length > 0 && <form autoComplete="off" onSubmit={submit}><fieldset disabled={busy || stopped}>
       <div className={styles.actions}>
         <button type="button" onClick={() => edit(() => setPicked(items.filter(candidate => candidate.result === 'PASSED' && open(candidate)).map(candidate => candidate.candidateId)))}>Pick everyone who passed</button>
         <button type="button" onClick={() => edit(() => setPicked([]))}>Clear picks</button>
@@ -127,6 +133,7 @@ export function MassPromotion({ scope }: { scope: PickerScope }): React.ReactEle
         {`I confirm this decision (${DECISION_LABEL[status] ?? status}) and reason for the ${chosen.length} picked students as my final instructor decision.`}</label>
       <div className={styles.actions}><button type="submit" disabled={!ready || !confirmed || busy}>{`Record decision for ${chosen.length} students`}</button></div>
     </fieldset></form>}
+    {invalid && <p role="alert">Nothing was sent: check the decision and the reason (up to 2000 characters, no special control characters), then confirm again.</p>}
     {busy && <p role="status">Recording decisions one student at a time…</p>}
     {attempted > 0 && !busy && <p role="status">{`Recorded for ${recorded} of ${attempted}`}</p>}
   </section>;
