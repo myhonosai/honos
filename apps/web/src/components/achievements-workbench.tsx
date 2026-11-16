@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import React, { useRef, useState } from 'react';
-import { ACHIEVEMENT_HELP, ACHIEVEMENT_CATEGORIES, ACHIEVEMENT_AGE_BANDS, ACHIEVEMENT_VISUALS, type AchievementDefinitionInput, type AchievementAwardInput, type AchievementDefinition, type AchievementAward, type AchievementAccess } from '@hon/contracts';
+import { ACHIEVEMENT_CATEGORIES, ACHIEVEMENT_AGE_BANDS, ACHIEVEMENT_VISUALS, type AchievementDefinitionInput, type AchievementAwardInput, type AchievementDefinition, type AchievementAward, type AchievementAccess } from '@hon/contracts';
 import { AchievementAccessError, achievementFingerprint, loadAchievementAccess, loadAchievementDefinitions, loadAchievementAwards, loadAchievementHistory, saveAchievement, type AchievementMutation } from './achievements-http';
 import s from './community-workbench.module.css';
 import { ManualSchoolFields, useShellSchoolInto } from './school-shell/page-school';
@@ -68,7 +68,7 @@ export function AchievementsWorkbench() {
   return <main className={s.page}>
     <nav><Link href="/staff/dashboard">School workspace</Link><Link href="/parent/achievements">Separate family recognition view</Link></nav>
     <header><p>Students &amp; families</p><h1>Achievements</h1><p>Create your school’s achievements and award them to students.</p></header>
-    <aside data-plain-note=""><strong>An achievement recognizes effort. It is not a grade, a test result or a promotion.</strong><details><summary>What this page never does</summary><p>{ACHIEVEMENT_HELP}</p></details></aside>
+    <aside data-plain-note=""><strong>An achievement recognizes effort. It is not a grade, a test result or a promotion.</strong></aside>
     <section><h2>Known school and student</h2><ManualSchoolFields current={school}><label>School UUID<input value={school} onChange={e => { changed(); setSchool(e.target.value); }}/></label></ManualSchoolFields><label>Known student profile UUID (optional for definitions)<input value={student} onChange={e => { changed(); setStudent(e.target.value); }}/></label><button disabled={busy} onClick={() => void load()}>Load current permissions and records</button><p>Use an already-known school and student record. These selectors are not authorization; there is no student directory here.</p></section>
     {error && <p role="alert" className={s.error}>{error}</p>}{notice && <p role="status" className={s.notice}>{notice}</p>}
     {pending && <section><h2>Uncertain request retained</h2><p>Reload the same school and child access, then retry the exact unchanged request with its original key. Nothing is automatically retried. Access denial or changing scope clears the private draft.</p><button disabled={busy || !canRetry} onClick={() => void mutate(pending.mutation, true)}>Retry unchanged request</button><button disabled={busy} onClick={() => setPending(null)}>Discard retained retry</button></section>}
