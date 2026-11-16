@@ -241,6 +241,14 @@
       "title": "HON | Human Planned Absence Review"
     },
     {
+      "path": "/staff/attendance/cards",
+      "title": "HON | Attendance cards"
+    },
+    {
+      "path": "/staff/attendance/scan",
+      "title": "HON | Scan check-in"
+    },
+    {
       "path": "/staff/instructor-qualifications",
       "title": "HON | Human instructor qualification evidence"
     },
@@ -303,6 +311,14 @@
     {
       "path": "/staff/billing/saved-payment-methods",
       "title": "HON | Saved payment methods"
+    },
+    {
+      "path": "/staff/billing/shopify",
+      "title": "HON | Shopify"
+    },
+    {
+      "path": "/staff/billing/shopify/return",
+      "title": "HON | Finishing Shopify connection"
     },
     {
       "path": "/staff/ai-team",

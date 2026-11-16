@@ -4,11 +4,15 @@ import React, { useEffect, useRef, useState, type FormEvent } from 'react';
 import { validateCreateHumanCrmLeadInput, type CreateHumanCrmLeadInput } from '@hon/contracts';
 import { CrmLeadCreateAccessError, CrmLeadCreateUncertainError, crmLeadCreatePath, prepareCrmLeadCreate, submitCrmLeadCreate, type CrmLeadCreateResult, type PreparedCrmLeadCreate } from './crm-lead-create-http';
 import styles from './staff-availability-workbench.module.css';
+import { addLeadApi, openStageChoices, type StageChoice } from './leads/add-lead-http';
+import { IdFields } from './school-pickers/pickers';
 
 /** Uses only the canonical create path. Scope entries and drafts never confer authority. */
-export function CrmLeadCreatePanel({ organizationId, schoolId, disabled = false, onStarted, onBusy, onAccessLost }: {
+/** The page's own memory of a school's open stages, so a panel remounted to discard a draft (for example on blur) reads nothing again. */
+export type StageCache = Map<string, Promise<readonly StageChoice[]>>;
+export function CrmLeadCreatePanel({ organizationId, schoolId, disabled = false, onStarted, onBusy, onAccessLost, stageCache }: {
   organizationId: string; schoolId: string; disabled?: boolean;
-  onStarted: () => void; onBusy: (busy: boolean) => void; onAccessLost: () => void;
+  onStarted: () => void; onBusy: (busy: boolean) => void; onAccessLost: () => void; stageCache?: StageCache;
 }): React.ReactElement {
   const [pipelineId, setPipelineId] = useState('');
   const [pipelineStageId, setPipelineStageId] = useState('');
@@ -25,6 +29,25 @@ export function CrmLeadCreatePanel({ organizationId, schoolId, disabled = false,
   const active = useRef(false);
   const epoch = useRef(0);
   useEffect(() => () => { epoch.current++; }, []);
+  // The school's open stages by name, read for the school this list already shows; the server re-checks the stage on save.
+  const [stages, setStages] = useState<readonly StageChoice[] | null>(null), [stagesFailed, setStagesFailed] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController(); let live = true; setStages(null); setStagesFailed(false);
+    const cacheKey = `${organizationId}:${schoolId}`;
+    // A read still in flight is shared too: the cache holds the promise. A failed read stays failed until the page reloads,
+    // as its message says, so a blur never re-reads.
+    let read = stageCache?.get(cacheKey);
+    if (!read) {
+      const fresh: Promise<readonly StageChoice[]> = addLeadApi.pipelines({ organizationId, schoolId }, stageCache ? new AbortController().signal : controller.signal, stageCache ? () => true : () => live).then((items) => openStageChoices(items));
+      if (stageCache) { stageCache.set(cacheKey, fresh); fresh.catch(() => undefined); }
+      read = fresh;
+    }
+    read
+      .then((choices) => { if (!live) return; setStages(choices); if (choices.length === 1) { setPipelineId(choices[0]!.pipelineId); setPipelineStageId(choices[0]!.stageId); } })
+      .catch(() => { if (live) setStagesFailed(true); });
+    return () => { live = false; controller.abort(); };
+  }, [organizationId, schoolId]);
+  const stageKey = pipelineId && pipelineStageId ? `${pipelineId}:${pipelineStageId}` : '';
 
   function edit(change: () => void): void {
     if (active.current || disabled) return;
@@ -67,26 +90,26 @@ export function CrmLeadCreatePanel({ organizationId, schoolId, disabled = false,
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Invalid lead-create draft.'); }
   }
   return <section aria-labelledby="crm-lead-create">
-    <h2 id="crm-lead-create">Create CRM lead</h2>
-    <p>Enter this school’s already-known pipeline and non-terminal stage UUIDs and minimal primary contact. The server independently verifies current <code>crm.lead.create</code> scope, entitlement and stage. No pipeline list, editor, contact directory or duplicate search is provided.</p>
-    <p>This creates a canonical CRM lead and primary contact only. It does not resolve duplicates, contact anyone, create a task/reminder, record a trial conclusion, enroll a student/family, create membership/payment, consent or attendance, invoke a provider, AI, Action Engine or automation, or establish conversion/revenue facts.</p>
+    <h2 id="crm-lead-create">Add a lead</h2>
+    <p>Adds the person to your leads list. It does not message them or enroll them.</p>
     <form onSubmit={submit}><fieldset disabled={busy || disabled}>
       <div className={styles.row}>
-        <label>Known pipeline UUID<input required autoComplete="off" maxLength={36} value={pipelineId} onChange={e => edit(() => setPipelineId(e.target.value))} /></label>
-        <label>Known non-terminal stage UUID<input required autoComplete="off" maxLength={36} value={pipelineStageId} onChange={e => edit(() => setPipelineStageId(e.target.value))} /></label>
-        <label>Primary contact given name<input required autoComplete="off" maxLength={120} value={givenName} onChange={e => edit(() => setGivenName(e.target.value))} /></label>
-        <label>Primary contact family name<input required autoComplete="off" maxLength={120} value={familyName} onChange={e => edit(() => setFamilyName(e.target.value))} /></label>
-        <label>Optional primary contact email<input type="email" autoComplete="off" maxLength={320} value={email} onChange={e => edit(() => setEmail(e.target.value))} /></label>
-        <label>Optional primary contact phone (E.164)<input type="tel" autoComplete="off" maxLength={16} value={phoneE164} onChange={e => edit(() => setPhoneE164(e.target.value))} /></label>
+        {stages && stages.length > 0 && <label>Stage<select required value={stageKey} onChange={e => { const choice = stages.find(c => `${c.pipelineId}:${c.stageId}` === e.target.value); edit(() => { setPipelineId(choice?.pipelineId ?? ''); setPipelineStageId(choice?.stageId ?? ''); }); }}><option value="">Choose a stage</option>{stages.map(c => <option key={`${c.pipelineId}:${c.stageId}`} value={`${c.pipelineId}:${c.stageId}`}>{c.label}</option>)}</select></label>}
+        {stages && stages.length === 0 && <p>Your school has no open lead stages yet.</p>}
+        {stagesFailed && <p role="status">Stages could not be loaded. Reload the page to try again.</p>}
+        <IdFields manual={stagesFailed}><label>Pipeline record ID<input required autoComplete="off" maxLength={36} value={pipelineId} onChange={e => edit(() => setPipelineId(e.target.value))} /></label>
+        <label>Stage record ID<input required autoComplete="off" maxLength={36} value={pipelineStageId} onChange={e => edit(() => setPipelineStageId(e.target.value))} /></label></IdFields>
+        <label>First name<input required autoComplete="off" maxLength={120} value={givenName} onChange={e => edit(() => setGivenName(e.target.value))} /></label>
+        <label>Last name<input required autoComplete="off" maxLength={120} value={familyName} onChange={e => edit(() => setFamilyName(e.target.value))} /></label>
+        <label>Email (optional)<input type="email" autoComplete="off" maxLength={320} value={email} onChange={e => edit(() => setEmail(e.target.value))} /></label>
+        <label>Phone (optional, like +15551234567)<input type="tel" autoComplete="off" maxLength={16} value={phoneE164} onChange={e => edit(() => setPhoneE164(e.target.value))} /></label>
       </div>
-      <label><input type="checkbox" checked={confirmed} disabled={attempted} onChange={e => setConfirmed(e.target.checked)} />I explicitly confirm this current-school CRM-only intake draft. This is not duplicate resolution, outreach or enrollment.</label>
-      <div className={styles.actions}><button disabled={!confirmed || attempted}>Confirm create CRM lead</button><button type="button" onClick={discard}>Discard draft / start new lead</button></div>
+      <label><input type="checkbox" checked={confirmed} disabled={attempted} onChange={e => setConfirmed(e.target.checked)} />These details are correct.</label>
+      <div className={styles.actions}><button disabled={!confirmed || attempted}>Add lead</button><button type="button" onClick={discard}>Clear</button></div>
     </fieldset></form>
-    {busy && <p role="status">Submitting the exact human CRM lead-create command…</p>}
+    {busy && <p role="status">Saving…</p>}
     {error && <p role="alert">{error}</p>}
-    {retry && <><p>Only the exact in-memory body/key is retained. Editing or discarding removes this retry; the earlier uncertain command may still have created a lead. Verify through an explicit list load before starting a different command.</p><button disabled={busy || disabled} type="button" onClick={() => void send(retry)}>Retry exact retained lead-create request</button></>}
-    {result && <section aria-label="CRM lead creation receipt"><h3>Returned CRM creation receipt</h3><p>Lead <code>{result.lead.id}</code> · returned {result.lead.status} · creation v{result.lead.version} · {result.lead.createdAt} · {result.replayed ? 'replayed creation receipt' : 'recorded creation receipt'}</p><p>Returned stage <code>{result.lead.pipelineStageId}</code> · primary person <code>{result.lead.primaryPersonId}</code>. No contact details or later current lead state are returned by this command.</p></section>}
-    {attempted && <p>The list has not been rewritten or refreshed. Explicitly use Load CRM leads to authorize a fresh list before preparing a separate row/version-bound close. Creation receipts never offer close.</p>}
-    <p>Drafts and retries are memory-only and discarded on scope changes, explicit list reload, access loss, navigation, a changed session on server render, or leaving this page’s active view.</p>
+    {retry && <><p>We couldn’t confirm that save. Try it again before changing anything.</p><button disabled={busy || disabled} type="button" onClick={() => void send(retry)}>Try again</button></>}
+    {result && <section aria-label="Lead added"><p role="status">{result.replayed ? 'This lead was already added.' : 'Lead added.'} Refresh the list to see it.</p></section>}
   </section>;
 }
