@@ -179,10 +179,29 @@ describe('school shell frame', () => {
     const progress = render({ path: '/staff/curriculum/progress' });
     expect(progress).not.toContain('data-shell-groups');
     expect(tabs(progress)).toEqual(['Curriculum library', 'Curriculum progress', 'Teaching studio', 'Achievements']);
-    expect(tabs(render({ path: '/staff/testing/scorecards' }))).toEqual(['Testing', 'Readiness', 'Scorecards', 'Certificates']);
     expect(tabs(render({ path: '/staff/billing/invoices' }))).toEqual(['Invoices', 'Tuition balances']);
     // A one-page item shows no tab row at all.
     expect(render({ path: '/staff/billing/checkout-pages' })).not.toContain('data-shell-tabs');
+  });
+
+  it('shows Tests as numbered steps in order, not tabs, with the current step marked (L3)', () => {
+    for (const mode of ['modern', 'classic', 'big-button'] as const) {
+      const html = render({ path: '/staff/testing/candidates/grade', mode });
+      expect(html).not.toContain('data-shell-tabs');
+      const row = html.match(/data-shell-steps="">(.*?)<\/nav>/s)?.[1] ?? '';
+      expect(row).toMatch(/^<ol>/);
+      const steps = [...row.matchAll(/<a href="([^"]+)"([^>]*)><span data-step-number="">(\d)<\/span>([^<]+)<\/a>/g)].map(m => [m[1], m[3], m[4], (m[2] ?? '').includes('aria-current="step"')]);
+      expect(steps).toEqual([
+        ['/staff/testing/readiness', '1', 'Who is ready', false], ['/staff/testing/registrations', '2', 'Sign-ups', false],
+        ['/staff/testing/candidates/register', '3', 'Register', false], ['/staff/testing/candidates/grade', '4', 'Grade', true],
+        ['/staff/testing/scorecards', '5', 'Scorecards', false], ['/staff/testing/certificates', '6', 'Certificates', false],
+      ]);
+      expect(html).toContain('aria-label="Test steps"');
+    }
+    // Other pages keep a plain tab row and no step row.
+    expect(render({ path: '/staff/billing/invoices' })).not.toContain('data-shell-steps');
+    expect(shellText('ko', 'stepsNav')).not.toBe(shellText('en', 'stepsNav'));
+    expect(shellText('es', 'routeTestRegister')).not.toBe(shellText('en', 'routeTestRegister'));
   });
 
   it('names the current area in the phone bar when it is not one of the four shortcuts', () => {

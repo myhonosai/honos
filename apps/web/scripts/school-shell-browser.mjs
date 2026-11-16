@@ -100,6 +100,9 @@ function api(route) {
     if (path === `${prefix}/ai/team/capabilities`) return readinessDenied ? json(route, 403, { code: 'AI_TEAM_READINESS_FORBIDDEN' }) : json(route, 200, { data: readiness(scope), meta: { requestId: 'r', correlationId: 'r' } });
     if (path === `${prefix}/crm/leads`) return leadsGate ? leadsGate.then(() => json(route, 200, { data: leads(), meta: {} })) : json(route, 200, { data: leads(), meta: {} });
     if (path === `${prefix}/schedule/sessions`) return json(route, 200, { data: sessions(), meta: { requestId: id(700), correlationId: id(700) } });
+    if (path === `${prefix}/pickers/testing-candidates`) return json(route, 200, { data: [['Avery', 'Sample', 'PASSED'], ['Rowan', 'Example', 'PASSED'], ['Kim', 'Placeholder', 'DEFERRED']]
+      .map(([givenName, familyName, result], i) => ({ candidateId: id(800 + i), version: 2, result, testingEventId: id(810), testingEventName: 'Synthetic spring test', startsAt: at(-day),
+        studentProfileId: id(820 + i), givenName, familyName, curriculumName: 'Synthetic curriculum', targetRankId: id(830), targetRankName: 'Yellow belt' })), meta: { requestId: id(840), correlationId: id(840), limit: 50 } });
     if (path === `${prefix}/reports/operations`) return json(route, 200, { data: { operationalSnapshot: snapshot(scope) }, meta: {} });
     if (path === `${prefix}/interface-theme`) {
       if (method === 'PUT') theme = JSON.parse(route.request().postData() ?? '{}').interfaceTheme ?? theme;
@@ -341,6 +344,26 @@ await check('section tabs on follow-ups (desktop)', async () => {
   assert.equal(await page.locator('nav[aria-label="Pages in this section"] a[aria-current="page"]').textContent(), 'Follow-ups');
   assert.equal(await page.locator('a[data-nav="crm"]').getAttribute('aria-current'), 'page');
   await shot(page, 'u1-follow-ups-tabs-desktop'); await ctx.close();
+});
+for (const mode of ['modern', 'classic', 'big-button']) for (const size of ['desktop', 'phone']) await check(`Tests shows six numbered steps, not tabs (${mode} ${size})`, async () => {
+  theme = mode; const { ctx, page } = await open(viewports[size], '/staff/testing/candidates/grade');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  assert.deepEqual(await page.locator('nav[data-shell-steps] a').evaluateAll(links => links.map(a => a.textContent)),
+    ['1Who is ready', '2Sign-ups', '3Register', '4Grade', '5Scorecards', '6Certificates']);
+  assert.equal(await page.locator('nav[data-shell-steps] a[aria-current="step"]').textContent(), '4Grade');
+  assert.equal(await page.locator('[data-shell-tabs]').count(), 0);
+  await noOverflow(page); await shot(page, `l3-test-steps-${mode}-${size}`); await ctx.close();
+});
+await check('Mass rank promotion opens on the graded students with one decision for a picked group', async () => {
+  theme = 'modern'; const { ctx, page } = await open(viewports.desktop, '/staff/testing/promotion-decisions');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByText('Rowan Example', { exact: false }).first().waitFor();
+  await page.getByRole('button', { name: 'Pick everyone who passed' }).click();
+  assert.equal(await page.locator('[data-mass-promotion] input[type="checkbox"][name^="pick-"]:checked').count(), 2);
+  await page.locator('textarea[name="massRationale"]').fill('Synthetic reason');
+  assert.equal(await page.getByRole('button', { name: 'Record decision for 2 students' }).isDisabled(), true, 'needs the confirm first');
+  assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('promotion-decision')), false);
+  await shot(page, 'l3-mass-promotion-desktop'); await ctx.close();
 });
 await check('Classic drawer opens and closes with Escape (phone)', async () => {
   theme = 'classic'; const { ctx, page } = await open(viewports.phone, '/staff/crm/leads');
