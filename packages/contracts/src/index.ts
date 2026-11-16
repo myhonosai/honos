@@ -1106,6 +1106,7 @@ export * from './maya-at-risk.js';
 export * from './text-pieces.js';
 export * from './hq-hon.js';
 export * from './school-branding.js';
+export * from './school-location.js';
 export * from './school-booking-types.js';
 export * from './parent-class-booking.js';
 export * from './family-messages.js';
