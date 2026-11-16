@@ -1,6 +1,6 @@
 # AI Customizer / Tool Maker: gap audit and spec
 
-Main checked at `fbc9102` (2026-11-15). Migrations allocated by the coordinator: **0362 (CM-1)**, **0363 (CM-3, reserved)**.
+Main checked at `fbc9102` (2026-11-15). Migrations allocated by the coordinator: **0415 (CM-1)**, **0363 (CM-3, reserved)**.
 
 ## 1. Gap audit (section 9 of David's 2026-11-15 handoff)
 
@@ -42,7 +42,7 @@ The AI never writes code or SQL. Everything a school builds is a **module defini
 
 ## 3. Slices (small PRs)
 
-1. **CM-1 (0362)** DB + API + contracts: modules, versions, validator, publish/restore, records with per-module access, preview records, audit/outbox, DB proof.
+1. **CM-1 (0415)** DB + API + contracts: modules, versions, validator, publish/restore, records with per-module access, preview records, audit/outbox, DB proof.
 2. **CM-2** Web: Tool Maker workspace (list, plain-language design review, preview, publish, version history, restore) and the runtime section `/staff/tools/[key]` (table, form, dashboard), plus a dynamic "Custom tools" nav entry from the API.
 3. **CM-3 (0363)** AI proposals: "describe a tool" and "change my tool" through the AI invocation path (stand-in provider until David approves real calls); the output is only a draft definition through the same validator. Ask HON hook.
 4. **CM-4** Customize existing features: extension entities attached to a student/lead (one record per student) and placements on the student profile and dashboard.

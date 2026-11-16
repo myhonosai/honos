@@ -45,7 +45,7 @@ function receipt<T>(data: Record<string, unknown> | undefined, rows: number, ver
 function invalid(): never { throw new BadRequestException({ code: 'CUSTOM_TOOL_INVALID' }); }
 
 /**
- * AI Customizer CM-1 (0362): a school's own custom tools. Every call runs one protected definer function that re-proves
+ * AI Customizer CM-1 (0415): a school's own custom tools. Every call runs one protected definer function that re-proves
  * the direct human, live custom_tool.use / custom_tool.design at the session school, and live entitlement, and validates
  * every definition and record itself. This service never builds SQL from a definition.
  */

@@ -1,4 +1,4 @@
-/** AI Customizer CM-1 custom tools (0362): real signed HON sessions -> Nest/guards -> fixed runtime SQL -> marked disposable PostgreSQL.
+/** AI Customizer CM-1 custom tools (0415): real signed HON sessions -> Nest/guards -> fixed runtime SQL -> marked disposable PostgreSQL.
  *  No provider, payment, message or AI. Schools are SYNTHETIC sign-ups made through the 0241 runtime entry point; the sign-up program is opened
  *  to TEST_MODE by this proof's owner connection only, and the owner connection stands in for paid access with an ACTIVE entitlement. */
 import assert from 'node:assert/strict';
@@ -264,5 +264,5 @@ try{
  await assert.rejects(q("UPDATE hon.custom_tool_record_events SET kind='UPDATED' WHERE record_id=$1",[m1.recordId]),/CUSTOM_TOOL_IMMUTABLE/);
  await assert.rejects(q('TRUNCATE hon.custom_tool_commands CASCADE'),/CUSTOM_TOOL_IMMUTABLE|cannot truncate/);
  pass('published versions, record history, tool ownership and command receipts cannot be edited, deleted or truncated');
- console.log('PASS: custom tools (0362), '+groups+' groups');
+ console.log('PASS: custom tools (0415), '+groups+' groups');
 }finally{await q("UPDATE hon.hon_os_signup_program SET status='CLOSED',recorded_at=clock_timestamp() WHERE program_id=1").catch(()=>{});await app?.close();await Promise.allSettled([admin.end(),restricted.end()]);}

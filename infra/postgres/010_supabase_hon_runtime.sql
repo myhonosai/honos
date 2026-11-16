@@ -3675,9 +3675,9 @@ DO $$ DECLARE r text; t text; BEGIN
       hon.read_published_school_website(text) TO hon_runtime;
   END IF;
 END $$;
--- 0362 custom tools (AI Customizer CM-1): exactly eight runtime entry points, no table privilege.
+-- 0415 custom tools (AI Customizer CM-1): exactly eight runtime entry points, no table privilege.
 DO $$ DECLARE r text; BEGIN
-  IF to_regclass('hon.custom_tools') IS NULL THEN RAISE EXCEPTION 'Apply migration 0362 first'; END IF;
+  IF to_regclass('hon.custom_tools') IS NULL THEN RAISE EXCEPTION 'Apply migration 0415 first'; END IF;
   REVOKE ALL ON TABLE hon.custom_tools, hon.custom_tool_versions, hon.custom_tool_records, hon.custom_tool_record_events, hon.custom_tool_commands FROM PUBLIC;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
     EXECUTE 'REVOKE ALL ON TABLE hon.custom_tools, hon.custom_tool_versions, hon.custom_tool_records, hon.custom_tool_record_events, hon.custom_tool_commands FROM '||quote_ident(r);

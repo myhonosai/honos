@@ -1,6 +1,6 @@
 BEGIN;
 
--- AI Customizer CM-1 (0362, coordinator-allocated 2026-11-15): the custom tool framework. A school builds its own tool
+-- AI Customizer CM-1 (0415, coordinator-allocated 2026-11-16; first drafted as 0362): the custom tool framework. A school builds its own tool
 -- (for example a Demo Team or Leadership Points section) as a closed, versioned JSON definition: record types and their
 -- fields, tables, forms and dashboards, the tool's own navigation, and access per school role. Fixed reviewed code runs
 -- every definition; nothing here lets an AI model or a person write code, SQL, a policy or a permission.
@@ -22,7 +22,7 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'Trusted migration owner required'; END IF;
   IF to_regprocedure('hon.staff_member_eligible(uuid,uuid,uuid)') IS NULL OR to_regprocedure('hon.saas_ts(timestamp with time zone)') IS NULL
-    OR to_regclass('hon.student_profiles') IS NULL THEN RAISE EXCEPTION '0362 requires 0023, 0059 and 0154'; END IF;
+    OR to_regclass('hon.student_profiles') IS NULL THEN RAISE EXCEPTION '0415 requires 0023, 0059 and 0154'; END IF;
 END $$;
 
 INSERT INTO hon.permissions(code,description,is_sensitive,is_staff_assignable) VALUES

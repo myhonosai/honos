@@ -4,7 +4,7 @@ const { randomUUID } = require('node:crypto');
 const { CustomToolService } = require('../dist/custom-tools/custom-tool.service.js');
 const { customToolDefinitionProblems } = require('@hon/contracts');
 
-// Mocked boundary tests for the 0362 custom tools API. Authority, validation, versions, records and isolation are proven
+// Mocked boundary tests for the 0415 custom tools API. Authority, validation, versions, records and isolation are proven
 // against PostgreSQL by test-custom-tools-integrity.mjs.
 const scope = { organizationId: randomUUID(), schoolId: randomUUID(), principalId: randomUUID() };
 const context = (patch = {}) => ({ ...scope, principalType: 'HUMAN_USER', source: 'HUMAN_UI', requestId: randomUUID(), correlationId: randomUUID(), idempotencyKey: 'ct-key', externalSubject: 'verified-human', ...patch });

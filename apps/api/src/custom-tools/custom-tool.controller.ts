@@ -32,7 +32,7 @@ function int(v: string | undefined, fallback: number | null, max: number): numbe
   return Number(v);
 }
 
-/** AI Customizer custom tools (0362). Route ids are never authority: scope comes from the verified session and the database re-proves it. */
+/** AI Customizer custom tools (0415). Route ids are never authority: scope comes from the verified session and the database re-proves it. */
 @Controller('organizations/:organizationId/schools/:schoolId/custom-tools')
 @UseGuards(HonIdentityGuard)
 export class CustomToolController {
