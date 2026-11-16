@@ -7,8 +7,9 @@ import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 export type PickerScope = Readonly<{ organizationId: string; schoolId: string }>;
 export type EnrollmentPurpose = 'progress' | 'readiness' | 'testing';
 export type CandidatePurpose = 'grade' | 'decision';
-export type StudentPurpose = 'teaching';
+export type StudentPurpose = 'teaching' | 'achievements';
 export type RankPurpose = 'teaching';
+export type StaffPurpose = 'followups' | 'work' | 'qualifications' | 'roles' | 'availability';
 export type PickerEnrollment = Readonly<{ enrollmentId: string; curriculumId: string; curriculumName: string; studentProfileId: string; givenName: string; familyName: string;
   currentRankId: string | null; currentRankName: string | null; nextRankId: string | null; nextRankName: string | null; version: number }>;
 export type PickerTestingEvent = Readonly<{ testingEventId: string; name: string; curriculumId: string; curriculumName: string; startsAt: string; status: string }>;
@@ -16,11 +17,14 @@ export type PickerCandidate = Readonly<{ candidateId: string; version: number; r
   studentProfileId: string; givenName: string; familyName: string; curriculumName: string; targetRankId: string; targetRankName: string }>;
 export type PickerStudent = Readonly<{ studentProfileId: string; givenName: string; familyName: string }>;
 export type PickerRank = Readonly<{ curriculumId: string; curriculumName: string; rankId: string; rankName: string; progressionOrder: number }>;
+export type PickerStaff = Readonly<{ principalId: string; displayName: string }>;
 export type PickerErrorKind = 'DENIED' | 'UNAVAILABLE';
 export class PickerError extends Error { constructor(readonly kind: PickerErrorKind) { super(kind); } }
 export const PICKER_LIMIT = 50;
 /** Ranks across all of a school's curricula: a larger cap, matching the API. */
 export const RANK_LIMIT = 200;
+/** Everyone with a role at the school (0404 list), matching the API. */
+export const STAFF_LIMIT = 200;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fail = (): never => { throw new PickerError('UNAVAILABLE'); };
@@ -84,6 +88,14 @@ export function verifyRanks(value: unknown): PickerRank[] {
   }), (r) => r.rankId);
 }
 
+export function verifyStaff(value: unknown): PickerStaff[] {
+  return unique(rows(value, STAFF_LIMIT).map((item) => {
+    const r = closed(item, ['principalId', 'displayName']);
+    if (!uuid(r.principalId) || typeof r.displayName !== 'string' || !r.displayName.trim() || r.displayName.length > 120) fail();
+    return Object.freeze(r as unknown as PickerStaff);
+  }), (r) => r.principalId);
+}
+
 async function read(scope: PickerScope, list: string, query: Record<string, string>, signal: AbortSignal): Promise<unknown> {
   if (!uuid(scope.organizationId) || !uuid(scope.schoolId)) fail();
   const params = new URLSearchParams(query);
@@ -114,6 +126,9 @@ export const pickerApi = {
   },
   async ranks(scope: PickerScope, purpose: RankPurpose, signal: AbortSignal): Promise<PickerRank[]> {
     return verifyRanks(await read(scope, 'ranks', { for: purpose }, signal));
+  },
+  async staff(scope: PickerScope, purpose: StaffPurpose, signal: AbortSignal): Promise<PickerStaff[]> {
+    return verifyStaff(await read(scope, 'staff', { for: purpose }, signal));
   },
   async candidates(scope: PickerScope, purpose: CandidatePurpose, find: string, signal: AbortSignal): Promise<PickerCandidate[]> {
     return verifyCandidates(await read(scope, 'testing-candidates', { for: purpose, ...search(find) }, signal), purpose);

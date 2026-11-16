@@ -1,0 +1,13 @@
+/* New text or email (L4): same look as the inbox forms, with a text input and plain channel choices. */
+.form { display: grid; gap: 12px; margin-top: 12px; }
+.form fieldset { display: grid; gap: 12px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.form label { display: grid; gap: 6px; font-size: 14px; font-weight: 700; }
+.form input[type='text'], .form input:not([type]), .form textarea {
+  font: inherit; color: var(--text); border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 12px; min-height: 48px; width: 100%; box-sizing: border-box;
+}
+.form textarea { min-height: 108px; resize: vertical; }
+.choices { display: flex; flex-wrap: wrap; gap: 8px 20px; border: 0; padding: 0; }
+.form .choices label, .form .check { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.people { display: grid; gap: 8px; list-style: none; padding: 0; margin: 12px 0 0; }
+.people li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.people button[aria-pressed='true'] { border-color: var(--teal); }
