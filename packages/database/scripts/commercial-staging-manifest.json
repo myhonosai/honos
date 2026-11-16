@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "960e1d18fa287d53fd533f56cb65ae015fa0c8853dc2fd3884193bc42c5db8ed",
+  "chainSha256": "7c5e20807ae745a8712905298b7a519e182ff7b7f5d6a6cb1cc3b28c579e0a87",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -521,6 +521,10 @@
     {
       "file": "0394_attendance_cards_scan_check_in.sql",
       "sha256": "16afebd48ff7fe3754de97bdcfb9aeb36ef3f766de9d30c136e950c58af9ed73"
+    },
+    {
+      "file": "0405_school_shopify_connections.sql",
+      "sha256": "aee51924fe2b2b8e9ce57bedd25962d6242b462cf3facbe5183cadf60262871d"
     }
   ]
 }

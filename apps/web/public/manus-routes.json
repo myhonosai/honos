@@ -313,6 +313,14 @@
       "title": "HON | Saved payment methods"
     },
     {
+      "path": "/staff/billing/shopify",
+      "title": "HON | Shopify"
+    },
+    {
+      "path": "/staff/billing/shopify/return",
+      "title": "HON | Finishing Shopify connection"
+    },
+    {
       "path": "/staff/ai-team",
       "title": "HON | AI team"
     },
