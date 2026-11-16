@@ -7,8 +7,10 @@ import {readSessionSchoolClock,SESSION_SCHOOL_CLOCK_PATH} from '../src/component
 const h=vi.hoisted(()=>({values:[] as any[],cursor:0}));
 vi.mock('react',async()=>{const r=await vi.importActual<typeof import('react')>('react');return {...r,
  useState:(initial:unknown)=>{const i=h.cursor++;if(!(i in h.values))h.values[i]=typeof initial==='function'?(initial as ()=>unknown)():initial;return [h.values[i],(v:any)=>{h.values[i]=typeof v==='function'?v(h.values[i]):v;}];},
+ useEffect:()=>{},
  useRef:(initial:unknown)=>{const i=h.cursor++;if(!(i in h.values))h.values[i]={current:initial};return h.values[i];},
 };});
+vi.mock('../src/components/school-shell/page-school',()=>({useShellSchool:()=>null}));
 type El=ReactElement<Record<string,any>>;
 const nodes=(v:unknown):El[]=>Array.isArray(v)?v.flatMap(nodes):React.isValidElement(v)?[v as El,...nodes((v as El).props.children)]:[];
 const text=(v:unknown):string=>Array.isArray(v)?v.map(text).join(''):React.isValidElement(v)?text((v as El).props.children):typeof v==='string'||typeof v==='number'?String(v):'';
@@ -26,7 +28,7 @@ const field=(label:string)=>nodes(render()).filter(e=>e.type==='label').find(e=>
 const set=(label:string,value:string)=>nodes(field(label).props.children).find(e=>e.type==='input'||e.type==='textarea')!.props.onChange({target:{value}});
 async function loaded(){
  const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response(queue));
- nodes(render()).find(e=>e.type==='button'&&text(e)==='Load / refresh queue')!.props.onClick();await settle();return f;
+ nodes(render()).find(e=>e.type==='button'&&text(e)==='Refresh')!.props.onClick();await settle();return f;
 }
 beforeEach(()=>{h.values=[];h.cursor=0;clock.reader=async()=>({state:'UNAVAILABLE'});clock.reads=[];});
 afterEach(()=>{vi.restoreAllMocks();vi.unstubAllGlobals();});
@@ -36,7 +38,7 @@ it('reads the clock for the verified queue school and takes due times in school 
  expect(clock.reads).toEqual([school]);
  expect(text(basis())).toContain('America/Los_Angeles');expect(text(render())).toContain('Due dates use school time (America/Los_Angeles)');
  expect(text(render())).toMatch(/due Jul 1, 2026,? 10:00\s?AM PDT/);
- set('Known lead ID',lead);set('Subject','Call back');dueInput().props.onChange({target:{value:'2026-12-01T10:00'}});
+ set('Lead record ID',lead);set('Subject','Call back');dueInput().props.onChange({target:{value:'2026-12-01T10:00'}});
  f.mockResolvedValueOnce(response({followUpId:id,schoolId:school,leadId:lead,assigneeId:principal,subject:'Call back',note:'',dueAt:'2026-12-01T18:00:00.000Z',priority:'NORMAL',version:1,status:'OPEN',recordedAt:'2026-06-30T17:00:00.000Z',completedAt:null,cancelledAt:null,humanOnly:true}));
  await form().props.onSubmit({preventDefault(){}});await settle();
  const sent=JSON.parse(String((f.mock.calls[1]![1] as RequestInit).body));expect(sent.dueAt).toBe('2026-12-01T18:00:00.000Z');
@@ -44,7 +46,7 @@ it('reads the clock for the verified queue school and takes due times in school 
 
 it('refuses a school time skipped by daylight saving before any command',async()=>{
  clock.reader=async()=>LA;const f=await loaded();
- set('Known lead ID',lead);set('Subject','Call back');dueInput().props.onChange({target:{value:'2027-03-14T02:30'}});
+ set('Lead record ID',lead);set('Subject','Call back');dueInput().props.onChange({target:{value:'2027-03-14T02:30'}});
  await form().props.onSubmit({preventDefault(){}});await settle();
  expect(f).toHaveBeenCalledTimes(1);expect(text(render())).toContain('skipped by a daylight-saving change');
 });
@@ -52,7 +54,7 @@ it('refuses a school time skipped by daylight saving before any command',async()
 it('keeps explicit UTC entry when the clock is unavailable',async()=>{
  const f=await loaded();expect(clock.reads).toEqual([school]);
  expect(text(basis())).toContain('Due at UTC');expect(text(render())).toContain('Due dates use UTC');expect(text(render())).toContain('due 2026-07-01T17:00:00.000Z');
- set('Known lead ID',lead);set('Subject','Call back');dueInput().props.onChange({target:{value:'2026-12-01T10:00'}});
+ set('Lead record ID',lead);set('Subject','Call back');dueInput().props.onChange({target:{value:'2026-12-01T10:00'}});
  f.mockResolvedValueOnce(response({followUpId:id,schoolId:school,leadId:lead,assigneeId:principal,subject:'Call back',note:'',dueAt:'2026-12-01T10:00:00.000Z',priority:'NORMAL',version:1,status:'OPEN',recordedAt:'2026-06-30T17:00:00.000Z',completedAt:null,cancelledAt:null,humanOnly:true}));
  await form().props.onSubmit({preventDefault(){}});await settle();
  expect(JSON.parse(String((f.mock.calls[1]![1] as RequestInit).body)).dueAt).toBe('2026-12-01T10:00:00.000Z');

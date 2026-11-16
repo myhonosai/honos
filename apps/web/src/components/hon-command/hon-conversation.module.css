@@ -83,3 +83,9 @@
 .notesList { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .notesList li { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; color: #d4e2ef; font-size: 14px; line-height: 1.5; }
 .notesList li span { overflow-wrap: anywhere; }
+
+/* Talk to HON by voice (browser speech only). */
+.voice { display: grid; gap: 8px; padding: 10px 12px; border: 1px dashed var(--hon-line, #24405a); border-radius: 12px; }
+.voiceSwitch { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.voiceSwitch input { width: 20px; height: 20px; }
+.voiceStatus { margin: 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }

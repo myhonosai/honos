@@ -12,7 +12,7 @@ const { TestingCandidateGradeWorkbench } = await import('../src/components/testi
 const { PromotionDecisionWorkbench } = await import('../src/components/promotion-decision-workbench');
 afterEach(() => { vi.restoreAllMocks(); });
 
-const fallback = (html: string) => html.slice(html.indexOf('<details data-id-fields="fallback"'), html.indexOf('</details>'));
+const fallback = (html: string) => { const start = html.indexOf('<details data-id-fields="fallback"'); return html.slice(start, html.indexOf('</details>', start)); };
 
 it.each([
   ['curriculum progress', () => <CurriculumProgressWorkbench />, 'Reading students…', ['curriculumId', 'enrollmentId']],
@@ -29,4 +29,14 @@ it.each([
   for (const field of fields) expect(fallback(html)).toContain(`name="${field}"`);
   expect(html).not.toContain('name="organizationId"'); expect(html).not.toContain('name="schoolId"');
   expect(html).not.toMatch(/no directory, search/i);
+});
+
+it('Mass rank promotion opens on the group list, with the one-student form below it (L3)', () => {
+  const fetcher = vi.spyOn(globalThis, 'fetch');
+  const html = renderToStaticMarkup(<PromotionDecisionWorkbench />);
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(html).toContain('<h1>Mass rank promotion</h1>');
+  expect(html.indexOf('data-mass-promotion')).toBeGreaterThan(-1);
+  expect(html.indexOf('data-mass-promotion')).toBeLessThan(html.indexOf('One student at a time'));
+  expect(html).toContain('Reading graded students…');
 });

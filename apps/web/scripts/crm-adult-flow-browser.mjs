@@ -364,7 +364,10 @@ try {
   });
   for(const [size,viewport] of [['desktop',{width:1440,height:1000}],['mobile',{width:390,height:844}]]) {
     await check(`${size}: an empty idle CRM view does not require privacy restoration`,async()=>{
-      reset();const {context,page}=await open(viewport);try{
+      reset();const stageReads=()=>report.requests.filter(r=>r.path.startsWith(prefix+'/crm/pipelines')).length,stagesBefore=stageReads();const {context,page}=await open(viewport);try{
+        // The add-lead panel reads the school's stages once on open; take the baseline only after that one read arrived.
+        for(const until=Date.now()+15000;stageReads()===stagesBefore&&Date.now()<until;)await page.waitForTimeout(50);
+        assert.equal(stageReads()-stagesBefore,1,'one stage read on open');
         const crmReads=()=>report.requests.filter(r=>r.path.startsWith(prefix+'/crm/')).length;const count=crmReads();await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
         assert.equal(await page.getByRole('heading',{name:'CRM information hidden',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Verify access and resume',exact:true}).count(),0);assert.equal(crmReads(),count);assert.equal(commands.length,0);
         await visual(page,`${size}-empty-crm-focus`);
