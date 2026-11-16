@@ -18,4 +18,6 @@ export const AI_INVOCATION_PLANNING_TASKS: Record<AiInvocationTaskClass, {
   DRAFT_MARKETING: { workType: 'AI_DRAFT_MARKETING', riskClass: 'MODERATE' },
   DRAFT_TEACHING: { workType: 'AI_DRAFT_TEACHING', riskClass: 'MODERATE' },
   DRAFT_FOLLOW_UP: { workType: 'AI_DRAFT_FOLLOW_UP', riskClass: 'MODERATE' },
+  // 0389: HON reads paper import photos (page images on a DOCUMENT_READING profile that requires IMAGE).
+  READ_DOCUMENT: { workType: 'AI_READ_DOCUMENT', riskClass: 'MODERATE' },
 };

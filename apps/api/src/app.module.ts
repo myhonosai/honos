@@ -138,6 +138,7 @@ import { SchoolWebsiteService } from './website/school-website.service.js';
 import { SchoolWebsiteAiController } from './website/website-ai.controller.js';
 import { WebsiteAiService } from './website/website-ai.service.js';
 import { WEBSITE_PROVIDER_RUNTIME, OpenRouterWebsiteRuntime } from './ai/website-provider-runtime.js';
+import { PAPER_VISION_RUNTIME, OpenRouterPaperVisionRuntime } from './ai/paper-vision-runtime.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
 import { SchoolSupportController } from './support/school-support.controller.js';
@@ -720,8 +721,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipPauseService,
     StudentImportService,
     PaperImportService,
-    // 0388: the stand-in reader is the only paper reader; a real vision provider needs owner approval.
+    // 0388: the stand-in reads only the built-in sample pages. 0389: HON reads real photos on the AI team's route; no call is
+    // made until HQ keeps a DOCUMENT_READING profile on an image model and the existing OpenRouter key and approval are set.
     { provide: PAPER_READER_RUNTIME, useFactory: () => new SyntheticPaperReader() },
+    { provide: PAPER_VISION_RUNTIME, useFactory: () => new OpenRouterPaperVisionRuntime() },
     BillingImportService,
     HistoryImportService,
     SchoolWebsiteService,

@@ -27,6 +27,8 @@ export const AI_MODEL_EVALUATION_TASK_CATEGORIES = Object.freeze([
   'HON_DETAILED',
   'BUSINESS_PERFORMANCE',
   'KAI_TEACHING',
+  // 0389: HON reading paper import photos; the HQ profile must require TEXT and IMAGE.
+  'DOCUMENT_READING',
 ] as const);
 export type AiModelEvaluationTaskCategory = (typeof AI_MODEL_EVALUATION_TASK_CATEGORIES)[number];
 

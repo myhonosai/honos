@@ -11,6 +11,7 @@ import {
   PaperImportReadingHumanUiGuard,
   PaperImportSaveHumanUiGuard,
   PaperImportSendHumanUiGuard,
+  PaperImportTypedHumanUiGuard,
 } from './paper-import-human-ui.guard.js';
 import { PaperImportService, type PaperImportContext } from './paper-import.service.js';
 
@@ -93,6 +94,17 @@ export class PaperImportController {
     return { data: await this.imports.readPages(context, setId, input), meta: this.meta(context) };
   }
 
+  /** "Type the rows myself" (0389): no AI, nothing spent. Keyless like the reading: a repeat returns the set unchanged. */
+  @Post(':setId/typed')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  @UseGuards(PaperImportTypedHumanUiGuard)
+  async typed(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('setId', new ParseUUIDPipe()) setId: string, @Headers('idempotency-key') idempotencyKey: string | undefined, @Body() input: unknown, @Req() request: HonRequest) {
+    const context = await this.context(request, organizationId, schoolId, this.noKey(idempotencyKey));
+    return { data: await this.imports.typeRows(context, setId, input), meta: this.meta(context) };
+  }
   @Post(':setId/table')
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'private, no-store')
