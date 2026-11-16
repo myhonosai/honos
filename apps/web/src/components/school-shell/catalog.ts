@@ -52,7 +52,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   // Owner (2026-11-16): the owner community and marketplace are their own area, not part of Classes.
   { key: 'community', titleKey: 'navCommunity', routes: [r('/community', 'routeCommunity'), r('/community/marketplace', 'routeMarketplace')] },
   { key: 'settings', titleKey: 'navSettings', routes: [r('/staff/settings', 'routeSettingsSummary'), r('/staff/account-status', 'routeAccount'), r('/staff/owners', 'routeOwners'), r('/staff/subscription', 'routeSubscription'),
-    r('/staff/settings/branding', 'routeBranding'), r('/staff/settings/booking-types', 'routeBookingTypes'), r('/staff/settings/texting-number', 'routeTextingNumber'), r('/settings/language-region', 'routeLanguage'), r('/settings/texts-from-hon', 'routeTextsFromHon'),
+    r('/staff/settings/branding', 'routeBranding'), r('/staff/settings/location', 'routeLocation'), r('/staff/settings/booking-types', 'routeBookingTypes'), r('/staff/settings/texting-number', 'routeTextingNumber'), r('/settings/language-region', 'routeLanguage'), r('/settings/texts-from-hon', 'routeTextsFromHon'),
     r('/staff/automation/rules', 'routeAutomation'), r('/staff/help', 'routeHelp')] },
 ];
 
