@@ -308,6 +308,7 @@
     "0402_school_checkouts.sql": "ea76852ef6f2b3aaab427f070106fa09e1d7f874019155ea3f141b155349846c",
     "0404_school_staff_pick_list.sql": "7c4116df35139b07b406ee304b162acc45871ac5a8ce225985865979a511181e",
     "0406_staff_qualification_and_role_lists.sql": "d131e376033198ca638c2b9aabc2c3ea9b7a93295d116dcd5aaedbc19ee8112f",
-    "0407_retention_review_member_list.sql": "88ee6b0f21d71289f02036e36d50644a960ff7eeb620d542afda2303c76d1606"
+    "0407_retention_review_member_list.sql": "88ee6b0f21d71289f02036e36d50644a960ff7eeb620d542afda2303c76d1606",
+    "0413_attendance_card_photo_us_policy.sql": "ec9b09a43167fb95cba503c2d4ff670099cf69c25410e41680f0f1d79489d887"
   }
 }
