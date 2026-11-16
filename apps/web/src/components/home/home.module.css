@@ -85,10 +85,12 @@
 }
 .help ul a:hover { border-color: var(--hon-accent-2); }
 
-/* Big Button: every area as a large card */
+/* Big Button: every page as a large card, under the menu's headings */
 .sectionHead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--hon-space-2); margin-bottom: var(--hon-space-3); }
 .sectionHead h2 { margin: 0; font-family: var(--hon-font-display); font-size: var(--hon-text-xl); }
 .sectionHead p { margin: 0; color: var(--hon-text-subtle); font-size: var(--hon-text-sm); }
+.areaGroup { margin-bottom: var(--hon-space-5); }
+.areaGroup h3 { margin: 0 0 var(--hon-space-2); color: var(--hon-text-subtle); font-size: var(--hon-text-sm); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
 .areas ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: var(--hon-space-3); }
 .areas a {
   display: grid; gap: 6px; min-height: 150px; align-content: start; padding: var(--hon-space-5); border-radius: var(--hon-radius-lg);

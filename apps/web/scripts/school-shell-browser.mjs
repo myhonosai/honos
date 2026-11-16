@@ -100,6 +100,11 @@ function api(route) {
     if (path === `${prefix}/ai/team/capabilities`) return readinessDenied ? json(route, 403, { code: 'AI_TEAM_READINESS_FORBIDDEN' }) : json(route, 200, { data: readiness(scope), meta: { requestId: 'r', correlationId: 'r' } });
     if (path === `${prefix}/crm/leads`) return leadsGate ? leadsGate.then(() => json(route, 200, { data: leads(), meta: {} })) : json(route, 200, { data: leads(), meta: {} });
     if (path === `${prefix}/schedule/sessions`) return json(route, 200, { data: sessions(), meta: { requestId: id(700), correlationId: id(700) } });
+    if (path === `${prefix}/people`) return json(route, 200, { data: [['Avery', 'Sample', '+15555550101', 'avery@example.test'], ['Rowan', 'Example', null, 'rowan@example.test']]
+      .map(([givenName, familyName, phoneE164, email], i) => ({ id: id(850 + i), givenName, familyName, email, phoneE164, version: 1, createdAt: iso() })), meta: { requestId: id(860), correlationId: id(860) } });
+    if (path === `${prefix}/pickers/testing-candidates`) return json(route, 200, { data: [['Avery', 'Sample', 'PASSED'], ['Rowan', 'Example', 'PASSED'], ['Kim', 'Placeholder', 'DEFERRED']]
+      .map(([givenName, familyName, result], i) => ({ candidateId: id(800 + i), version: 2, result, testingEventId: id(810), testingEventName: 'Synthetic spring test', startsAt: at(-day),
+        studentProfileId: id(820 + i), givenName, familyName, curriculumName: 'Synthetic curriculum', targetRankId: id(830), targetRankName: 'Yellow belt' })), meta: { requestId: id(840), correlationId: id(840), limit: 50 } });
     if (path === `${prefix}/reports/operations`) return json(route, 200, { data: { operationalSnapshot: snapshot(scope) }, meta: {} });
     if (path === `${prefix}/interface-theme`) {
       if (method === 'PUT') theme = JSON.parse(route.request().postData() ?? '{}').interfaceTheme ?? theme;
@@ -195,12 +200,32 @@ await check('HON waits in the corner on other pages', async () => {
   assert.equal(await page.locator('a[href="/staff/hon"][class*="honLauncher"]').isVisible(), true);
   await page.waitForTimeout(500); await shot(page, 'u2-hon-corner-classic-desktop'); await ctx.close();
 });
+await check('classic sidebar shows the owner menu headings with their pages, and the current page', async () => {
+  theme = 'classic'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/billing/invoices');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  const nav = page.locator('nav[aria-label="School navigation"]');
+  assert.equal(await nav.locator('[data-nav-section]').count(), 12);
+  assert.equal(await nav.locator('a[data-nav="invoices"]').getAttribute('aria-current'), 'page');
+  assert.equal(await page.locator('[data-shell-groups]').count(), 0, 'no third level');
+  await page.waitForTimeout(250); await axeScan(page, 'sidebar-classic'); await shot(page, 'l1-sidebar-classic-desktop');
+  await page.setViewportSize({ width: 1440, height: 1600 }); await page.waitForTimeout(150); await shot(page, 'l1-sidebar-classic-desktop-tall');
+  await ctx.close();
+});
+await check('modern top bar shows the everyday pages and More', async () => {
+  theme = 'modern'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/crm/follow-ups');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  const visible = await page.locator('nav[aria-label="School navigation"] a[data-nav]').evaluateAll((links) => links.filter((a) => a.offsetParent !== null).map((a) => a.dataset.nav));
+  assert.deepEqual(visible, ['home', 'conversationAi', 'classes', 'attendance', 'students', 'crm']);
+  await noOverflow(page); await shot(page, 'l1-topbar-modern-desktop'); await ctx.close();
+});
 for (const mode of ['modern', 'big-button']) await check(`${mode} menu panel lists every area`, async () => {
   theme = mode; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/work');
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
   await page.getByRole('button', { name: 'Open navigation' }).click();
   const panel = page.getByRole('dialog', { name: 'Menu' }); await panel.waitFor();
-  assert.equal(await panel.locator('[data-menu]').count(), 13);
+  // Owner menu (2026-11-16): eleven headings plus Settings; one card per page (25 pages, Shopify added under Finance).
+  assert.equal(await panel.locator('[data-menu-section]').count(), 12);
+  assert.equal(await panel.locator('[data-menu]').count(), 25);
   await page.waitForTimeout(250); await axeScan(page, `menu-${mode}`); await shot(page, `u2-menu-${mode}-desktop`);
   await page.keyboard.press('Escape'); await panel.waitFor({ state: 'detached' }); await ctx.close();
 });
@@ -321,6 +346,47 @@ await check('section tabs on follow-ups (desktop)', async () => {
   assert.equal(await page.locator('nav[aria-label="Pages in this section"] a[aria-current="page"]').textContent(), 'Follow-ups');
   assert.equal(await page.locator('a[data-nav="crm"]').getAttribute('aria-current'), 'page');
   await shot(page, 'u1-follow-ups-tabs-desktop'); await ctx.close();
+});
+for (const mode of ['modern', 'classic', 'big-button']) for (const size of ['desktop', 'phone']) await check(`Tests shows six numbered steps, not tabs (${mode} ${size})`, async () => {
+  theme = mode; const { ctx, page } = await open(viewports[size], '/staff/testing/candidates/grade');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  assert.deepEqual(await page.locator('nav[data-shell-steps] a').evaluateAll(links => links.map(a => a.textContent)),
+    ['1Who is ready', '2Sign-ups', '3Register', '4Grade', '5Scorecards', '6Certificates']);
+  assert.equal(await page.locator('nav[data-shell-steps] a[aria-current="step"]').textContent(), '4Grade');
+  assert.equal(await page.locator('[data-shell-tabs]').count(), 0);
+  await noOverflow(page); await shot(page, `l3-test-steps-${mode}-${size}`); await ctx.close();
+});
+await check('Mass rank promotion opens on the graded students with one decision for a picked group', async () => {
+  theme = 'modern'; const { ctx, page } = await open(viewports.desktop, '/staff/testing/promotion-decisions');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByText('Rowan Example', { exact: false }).first().waitFor();
+  await page.getByRole('button', { name: 'Pick everyone who passed' }).click();
+  assert.equal(await page.locator('[data-mass-promotion] input[type="checkbox"][name^="pick-"]:checked').count(), 2);
+  await page.locator('textarea[name="massRationale"]').fill('Synthetic reason');
+  assert.equal(await page.getByRole('button', { name: 'Record decision for 2 students' }).isDisabled(), true, 'needs the confirm first');
+  assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('promotion-decision')), false);
+  await shot(page, 'l3-mass-promotion-desktop'); await ctx.close();
+});
+await check('Texts & email opens with the composer: find a contact, Text or Email, nothing sent before Send', async () => {
+  theme = 'modern'; const { ctx, page } = await open(viewports.desktop, '/staff/family-messages');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'New text or email' }).waitFor();
+  await page.locator('input[name="composeQuery"]').fill('Sample');
+  await page.getByRole('button', { name: 'Find' }).click();
+  await page.getByRole('button', { name: 'Rowan Example' }).click();
+  assert.equal(await page.locator('input[name="composeChannel"][value="SMS"]').isDisabled(), true, 'no mobile number, no text');
+  assert.equal(await page.locator('input[name="composeChannel"][value="EMAIL"]').isChecked(), true);
+  await page.locator('textarea[name="composeContent"]').fill('Synthetic message');
+  assert.equal(await page.getByRole('button', { name: 'Send', exact: true }).isDisabled(), true, 'needs the confirm');
+  assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('communications/messages')), false);
+  await shot(page, 'l4-texts-email-desktop'); await ctx.close();
+});
+for (const size of ['desktop', 'phone']) await check(`Settings tabs wrap instead of scrolling (${size})`, async () => {
+  theme = 'classic'; const { ctx, page } = await open(viewports[size], '/staff/settings/branding');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  const row = page.locator('nav[data-shell-tabs][data-wrap="true"]');
+  assert.equal(await row.evaluate(nav => nav.scrollWidth <= nav.clientWidth + 1), true, 'no sideways scroll');
+  await noOverflow(page); await shot(page, `l4-settings-tabs-${size}`); await ctx.close();
 });
 await check('Classic drawer opens and closes with Escape (phone)', async () => {
   theme = 'classic'; const { ctx, page } = await open(viewports.phone, '/staff/crm/leads');
