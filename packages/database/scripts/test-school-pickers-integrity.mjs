@@ -86,11 +86,12 @@ try{
 
  // 3. Staff list: active role holders at this school only, display names only, blank names shown as Staff member.
  const staff=ok(await get(base(A)+'staff?for=work',manager));
- // The provisioning HQ principal holds a role at the new school, so it is staff there too.
- assert.deepEqual(staff.map(r=>r.displayName),['Coach Teacher','Morgan Manager','Pickers synthetic HQ','Staff member']);
+ // The provisioning HQ principal holds a role at the new school but is an HQ operator, so it is not listed as staff.
+ assert.deepEqual(staff.map(r=>r.displayName),['Coach Teacher','Morgan Manager','Staff member']);
  for(const r of staff){assert.deepEqual(Object.keys(r).sort(),['displayName','principalId']);assert(r.principalId!==gonePrincipal);}
- assert.deepEqual(ok(await get(base(A)+'staff?for=followups',manager)).map(r=>r.principalId).sort(),[teacherPrincipal,managerPrincipal,quietPrincipal,hqPrincipal].sort());
- pass('the staff list returns active role holders at the exact school, by display name only');
+ assert.deepEqual(ok(await get(base(A)+'staff?for=followups',manager)).map(r=>r.principalId).sort(),[teacherPrincipal,managerPrincipal,quietPrincipal].sort());
+ assert(!staff.some(r=>r.principalId===hqPrincipal),'HQ operators are not school staff');
+ pass('the staff list returns eligible staff at the exact school (no HQ operators), by display name only');
 
  // 4. Refusals: wrong permission, other school, outsider, unknown purpose, signed out.
  for(const [path,who] of [[base(A)+'staff?for=work',teacher],[base(A)+'staff?for=roles',manager],[base(A)+'students?for=teaching',manager],[base(A)+'staff?for=work',managerB],[base(A)+'staff?for=work',outsider],[base(B)+'students?for=teaching',teacher]]){

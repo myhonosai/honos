@@ -2,15 +2,15 @@ BEGIN;
 
 -- 0404 (owner 2026-11-16): staff pick a teammate by name instead of typing a staff principal UUID.
 -- One closed, read-only list of the people who currently hold an active role at the caller's own school
--- (the tenant transaction's school), returning only principal id and display name: no email, external
+-- (the tenant transaction's school) and are eligible staff there (hon.staff_member_eligible), returning only principal id and display name: no email, external
 -- subject, roles, grants or history. The caller must be a signed-in human (HUMAN_UI) who holds, at this
 -- exact school, the permission of the screen asking (an allow-listed manage/grant permission), and the
 -- organization must have a live ESSENTIAL/CORE/COMPLETE entitlement. Nothing here writes.
 
-CREATE OR REPLACE FUNCTION hon.list_school_staff_for_picker(p_subject text, p_permission text)
+CREATE FUNCTION hon.list_school_staff_for_picker(p_subject text, p_permission text)
 RETURNS jsonb
 LANGUAGE plpgsql
-STABLE
+VOLATILE
 SECURITY DEFINER
 SET search_path = pg_catalog, hon
 AS $$
@@ -42,10 +42,13 @@ BEGIN
         FROM hon.principals AS p
         JOIN hon.users AS u ON u.id = p.user_id
        WHERE p.principal_type = 'HUMAN_USER' AND p.is_active
+         -- 0077's staff eligibility: a staff-assignable role grant live at this school, excluding HQ operators and
+         -- family, student, HQ and platform role codes.
          AND EXISTS (SELECT 1 FROM hon.principal_role_grants AS g
                       WHERE g.principal_id = p.id AND g.organization_id = v_org AND g.school_id = v_school
                         AND g.revoked_at IS NULL AND g.effective_from <= statement_timestamp()
                         AND (g.effective_until IS NULL OR g.effective_until > statement_timestamp()))
+         AND hon.staff_member_eligible(p.id, v_org, v_school)
        ORDER BY 2, p.id
        LIMIT 200
     ) AS rows;
