@@ -157,3 +157,8 @@ export function LeadPicker({ scope, value, disabled, onPick, onState, onItems }:
 export function IdFields({ manual, children }: { manual: boolean; children: React.ReactNode }): React.ReactElement {
   return manual ? <>{children}</> : <details data-id-fields="fallback" className={styles.idFields}><summary>Enter record IDs instead</summary>{children}</details>;
 }
+
+/** A staff member in words for signed-in staff: "You", their listed name, or a neutral fallback; never a record ID. */
+export function personLabel(id: string | null, me: string, staff: ReadonlyMap<string, string>, none = 'Unassigned'): string {
+  return id === null ? none : id === me ? 'You' : staff.get(id) ?? 'A teammate';
+}
