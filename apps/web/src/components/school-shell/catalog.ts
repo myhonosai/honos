@@ -26,7 +26,9 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   // Setup (Welcome, School launch, Founder Setup) is onboarding (owner, 2026-11-14): reached from Home's setup card and Settings, not tabs.
   { key: 'home', titleKey: 'navHome', routes: [r('/staff/dashboard', 'routeOverview', true), r('/staff/command-center', 'routeCommandCenter'), r('/staff/work', 'routeWork'),
     h('/staff/welcome', 'routeWelcome'), h('/staff/launch', 'routeLaunch'), h('/staff/founder-setup', 'routeFounderSetup')] },
-  { key: 'students', titleKey: 'navStudents', routes: [...g('groupPeople', r('/staff/search', 'routeStudentSearch'), r('/staff/people', 'routePeople'), r('/staff/family-access', 'routeFamilyAccess', true), r('/staff/conversations', 'routeConversations'), r('/staff/family-messages', 'routeFamilyMessages'),
+  // Owner (2026-11-16): one Contacts page. The list opens each person's card, which holds their texts, family messages and
+  // family app access; Search, Family access, Conversations and Family messages leave the tabs (pages kept for old links and inboxes).
+  { key: 'students', titleKey: 'navStudents', routes: [...g('groupPeople', r('/staff/people', 'routePeople'), h('/staff/search', 'routeStudentSearch'), h('/staff/family-access', 'routeFamilyAccess'), h('/staff/conversations', 'routeConversations'), h('/staff/family-messages', 'routeFamilyMessages'),
     r('/staff/students/achievements', 'routeAchievements'), r('/staff/retention/review', 'routeRetention'), r('/staff/migration/students', 'routeStudentImport')),
     ...g('groupStaff', r('/staff/team/invitations', 'routeTeam', true), r('/staff/roles', 'routeRoles'), r('/staff/team/availability', 'routeAvailability'), r('/staff/instructor-qualifications', 'routeQualifications'),
     r('/staff/documents', 'routeDocuments'))] },

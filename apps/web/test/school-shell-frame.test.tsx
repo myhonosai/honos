@@ -109,7 +109,9 @@ describe('school shell frame', () => {
   it('lists every page of every area in the Menu, not a cut-down few', () => {
     const panel = render({ mode: 'modern', menuOpen: true }).split('aria-label="Menu"')[1]!;
     for (const item of SCHOOL_SHELL_NAV) for (const route of item.routes) {
-      if (route.hidden) expect(panel, route.href).not.toContain(`href="${route.href}"`);
+      // School-wide search left the Contacts tabs (owner, 2026-11-16) but stays one tap away from the top bar's search button.
+      if (route.hidden && route.href !== '/staff/search') expect(panel, route.href).not.toContain(`href="${route.href}"`);
+      else if (route.hidden) continue;
       else expect(panel, route.href).toContain(`href="${route.href}`);
     }
   });
