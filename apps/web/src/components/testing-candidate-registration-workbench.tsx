@@ -87,10 +87,7 @@ export function TestingCandidateRegistrationWorkbench(): React.ReactElement {
     <header><p>Testing</p><h1>Register a student for testing</h1>
       <p>Choose a testing event and a student. They test for the next rank in their curriculum.</p>
     </header>
-    <aside data-plain-note=""><strong>Registering only adds the student to the testing list. It does not decide eligibility, grades or promotion.</strong><details><summary>What this page never does</summary><p><strong>PENDING is candidate evidence only, not eligibility or testing completion.</strong></p>
-      <p>This command creates only a PENDING candidate, canonical audit and inert outbox evidence. It does not establish testing eligibility or readiness, a roster, place or capacity; score, grade, pass/fail/defer; promotion, rank, belt or certificate; family or parent access; attendance, billing, payment, message, provider, AI, Action Engine, automation or external effect.</p>
-      <p>UUIDs are untrusted selectors, not authority. Current direct HUMAN_USER / HUMAN_UI identity, exact <code>testing.manage</code> school scope, tenant RLS, event/enrollment/rank curriculum integrity and unique candidate rechecks remain server-owned on every submit and replay. No outbox consumer is activated.</p>
-    </details></aside>
+    <aside data-plain-note=""><strong>Registering only adds the student to the testing list. It does not decide eligibility, grades or promotion.</strong></aside>
     <section aria-labelledby="candidate-command"><h2 id="candidate-command">Register one known-ID candidate</h2>
       <form autoComplete="off" onSubmit={submit}><fieldset disabled={busy}>
         {shellSchool && <>

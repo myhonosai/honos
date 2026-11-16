@@ -157,8 +157,8 @@ it('says what an answer means, and offers Try again and Stop only for a kept req
   expect(view({ copy: 'COPIED' })).toContain('Copied.'); expect(view({ copy: 'FAILED' })).toContain('Could not copy.');
 });
 
-it('lists the page under Enrollment, with every wording in each language', () => {
-  const group = SCHOOL_SHELL_NAV.find((g) => g.key === 'crm');
+it('lists the page under Marketing, with every wording in each language', () => {
+  const group = SCHOOL_SHELL_NAV.find((g) => g.key === 'marketing');
   expect(group?.routes.map((r) => r.href)).toContain('/staff/champions-club');
   const en = Object.keys(CHAMPIONS_LANGUAGES.en).sort();
   for (const lang of ['ko', 'es'] as const) expect(Object.keys(CHAMPIONS_LANGUAGES[lang]).sort()).toEqual(en);

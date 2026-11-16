@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, ServiceUnavailableException } from '@nestjs/common';
-import { accountUuid, validateSignupInput, validateSignupRegistration, validateSignupStatus } from '@hon/contracts';
+import { accountUuid, validateSignupInput, validateSignupResult, validateSignupStatus } from '@hon/contracts';
 import { cookieValue, HON_SESSION_COOKIE, sessionConfig, verifySession } from '@hon/auth';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
@@ -47,7 +47,7 @@ export class HonOsSignupService {
     if (config.mode !== 'OIDC' || proof.emailVerified !== true || !proof.email || proof.externalSubject !== subject) throw new ForbiddenException({ code: 'VERIFIED_EMAIL_REQUIRED' });
     this.admit(req, 'accept');
     const data = await this.run('register', [subject, proof.email.toLowerCase().trim(), JSON.stringify(input), key as string]);
-    try { return validateSignupRegistration(data); } catch { throw new ServiceUnavailableException({ code: 'ACCOUNT_UNAVAILABLE' }); }
+    try { return validateSignupResult(data); } catch { throw new ServiceUnavailableException({ code: 'ACCOUNT_UNAVAILABLE' }); }
   }
   async status(req: HonRequest) {
     this.admit(req, 'list');

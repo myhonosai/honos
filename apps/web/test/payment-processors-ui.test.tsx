@@ -194,13 +194,13 @@ it('offers Finish connecting only for a pending connection the return names, and
   expect(renderToStaticMarkup(<PaymentProcessorsView {...props({ concealed: true })}/>)).not.toContain('account ending');
 });
 
-it('is a protected dynamic noindex no-referrer page in the billing menu and the route manifest', () => {
+it('is a protected dynamic noindex no-referrer page in the settings menu and the route manifest', () => {
   const page = readFileSync('src/app/staff/billing/payment-processors/page.tsx', 'utf8');
   expect(page).toContain("export const dynamic = 'force-dynamic'"); expect(page).toContain('requireVerifiedWebSession'); expect(page).toContain('index: false');
   expect(page).toContain("referrer: 'no-referrer'");
   expect(page).not.toMatch(/searchParams|organizationId|schoolId|fetch\(/);
   expect(schoolShellActiveRoute('/staff/billing/payment-processors')?.href).toBe('/staff/billing/payment-processors');
-  expect(SCHOOL_SHELL_NAV.find((n) => n.key === 'billing')?.routes.some((r) => r.href === '/staff/billing/payment-processors')).toBe(true);
+  expect(SCHOOL_SHELL_NAV.find((n) => n.key === 'settings')?.routes.some((r) => r.href === '/staff/billing/payment-processors')).toBe(true);
   const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
   expect(manifest.routes.filter((r: { path: string }) => r.path === '/staff/billing/payment-processors')).toEqual([{ path: '/staff/billing/payment-processors', title: 'HON | Payment processors' }]);
   // The page never stores the return anywhere but memory.

@@ -299,6 +299,16 @@
     "0332_school_reports_locations.sql": "e32748c44c865ee67062ad535fd29d3c39532f2a5f94afeac9f5e2f68894dae2",
     "0333_school_class_attendance_import.sql": "f2be82bb3d64d2079ba5df9efa8c911acf9173909e857a7a89d440b2911d8ced",
     "0334_school_membership_balance_import.sql": "c3cd842298cea1d168b08e7b21c8c0cded0f48df081c32cc8692087d248cae9c",
-    "0361_school_websites.sql": "262d9768dc26fb197cac0ba0da3a77e31442f4dfb006571a74a6f3b016eba221"
+    "0361_school_websites.sql": "262d9768dc26fb197cac0ba0da3a77e31442f4dfb006571a74a6f3b016eba221",
+    "0388_school_paper_import.sql": "4f556472acba21133dd5f8f644e461608969343d65cfcd21348590586c6c3ab5",
+    "0390_school_person_photos.sql": "d80b9e611e0a0035809d4174afe0cc35265d2ad67395b8c3127a89819ff683a6",
+    "0392_school_location_biometric_notice.sql": "1dd2614732160985e3592e46699670682cfbcfc0bcf9a7e3973381f8acfec411",
+    "0337_school_pay_autopay_charges.sql": "f3c9646fb394c6d8137fb33e941225c83151384fe58dbe7b147c19c90a0fa0bf",
+    "0405_school_shopify_connections.sql": "aee51924fe2b2b8e9ce57bedd25962d6242b462cf3facbe5183cadf60262871d",
+    "0394_attendance_cards_scan_check_in.sql": "16afebd48ff7fe3754de97bdcfb9aeb36ef3f766de9d30c136e950c58af9ed73",
+    "0402_school_checkouts.sql": "ea76852ef6f2b3aaab427f070106fa09e1d7f874019155ea3f141b155349846c",
+    "0404_school_staff_pick_list.sql": "7c4116df35139b07b406ee304b162acc45871ac5a8ce225985865979a511181e",
+    "0406_staff_qualification_and_role_lists.sql": "d131e376033198ca638c2b9aabc2c3ea9b7a93295d116dcd5aaedbc19ee8112f",
+    "0407_retention_review_member_list.sql": "88ee6b0f21d71289f02036e36d50644a960ff7eeb620d542afda2303c76d1606"
   }
 }

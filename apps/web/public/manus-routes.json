@@ -121,6 +121,10 @@
       "title": "HON | Import students"
     },
     {
+      "path": "/staff/migration/photos",
+      "title": "HON | Import from photos"
+    },
+    {
       "path": "/staff/migration/classes",
       "title": "HON | Import classes and attendance"
     },
@@ -237,6 +241,14 @@
       "title": "HON | Human Planned Absence Review"
     },
     {
+      "path": "/staff/attendance/cards",
+      "title": "HON | Attendance cards"
+    },
+    {
+      "path": "/staff/attendance/scan",
+      "title": "HON | Scan check-in"
+    },
+    {
       "path": "/staff/instructor-qualifications",
       "title": "HON | Human instructor qualification evidence"
     },
@@ -301,6 +313,14 @@
       "title": "HON | Saved payment methods"
     },
     {
+      "path": "/staff/billing/shopify",
+      "title": "HON | Shopify"
+    },
+    {
+      "path": "/staff/billing/shopify/return",
+      "title": "HON | Finishing Shopify connection"
+    },
+    {
       "path": "/staff/ai-team",
       "title": "HON | AI team"
     },
@@ -323,6 +343,10 @@
     {
       "path": "/staff/settings/branding",
       "title": "HON | School branding"
+    },
+    {
+      "path": "/staff/settings/location",
+      "title": "HON | School location"
     },
     {
       "path": "/staff/settings/booking-types",

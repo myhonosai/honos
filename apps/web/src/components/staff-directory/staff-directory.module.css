@@ -1,0 +1,17 @@
+/* Staff list with a slide-out card (L5). Uses the shell's tokens so it reads the same in all three views. */
+.section { display: grid; gap: var(--hon-space-3, 12px); margin-bottom: var(--hon-space-6, 24px); }
+.head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.head h2 { margin: 0; }
+.search { font: inherit; padding: 10px 12px; min-height: 44px; border-radius: 10px; border: 1px solid var(--hon-border, #ccd); background: var(--hon-surface, #fff); color: var(--hon-text, inherit); width: min(100%, 320px); box-sizing: border-box; }
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.person { width: 100%; text-align: left; font: inherit; font-weight: 600; padding: 14px 16px; min-height: 52px; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--hon-border, #ccd); background: var(--hon-surface-2, #f6f7fb); color: var(--hon-text, inherit); }
+.person[aria-expanded='true'] { border-color: var(--hon-accent, #2563eb); }
+.card { position: fixed; z-index: 45; inset: 0 0 0 auto; width: min(380px, 100vw); box-sizing: border-box; overflow-y: auto; padding: 24px;
+  background: var(--hon-surface-solid, #fff); color: var(--hon-text, inherit); border-left: 1px solid var(--hon-border, #ccd); box-shadow: var(--hon-shadow-2, 0 8px 32px rgba(0,0,0,.25)); display: grid; align-content: start; gap: 16px; }
+.card h2 { margin: 0; }
+.links { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.links a { display: block; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--hon-border, #ccd); color: inherit; text-decoration: none; font-weight: 600; }
+.links a:hover { border-color: var(--hon-accent, #2563eb); }
+.close { justify-self: end; font: inherit; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--hon-border, #ccd); background: transparent; color: inherit; cursor: pointer; }
+.note { margin: 0; color: var(--hon-text-muted, #556); font-size: 14px; }
