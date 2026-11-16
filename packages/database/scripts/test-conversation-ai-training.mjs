@@ -1,4 +1,4 @@
-/** Conversation AI training (0365, CA2a): real signed HON sessions -> Nest/guards -> fixed runtime SQL for Train AI (settings,
+/** Conversation AI training (0420, CA2a): real signed HON sessions -> Nest/guards -> fixed runtime SQL for Train AI (settings,
  *  training library, original files, knowledge preview) and the HQ program switch, on the marked disposable communication
  *  delivery database. Schools are SYNTHETIC sign-ups made through the 0241 runtime entry point. No AI provider is called and
  *  nothing is sent anywhere. */
@@ -248,7 +248,7 @@ try{
  pass('authority is decided again after the writes: a role that ends during the command leaves nothing behind');
  // 9. The canonical 011 exact verification section passes with the fixture's roles and catches drift.
  {const verify=await readText(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql',import.meta.url),'utf8');
-  const section=verify.split('-- Conversation AI training exact verification (0365)')[1]?.split('-- End conversation AI training exact verification.')[0];
+  const section=verify.split('-- Conversation AI training exact verification (0420)')[1]?.split('-- End conversation AI training exact verification.')[0];
   assert(section,'011 section');
   const body=section.replace(/^[^\n]*\n[^\n]*\n/,'').replaceAll('hon_runtime',runtime.username);
   await q(body);
@@ -262,7 +262,7 @@ try{
   await assert.rejects(q(body),/Unsafe conversation AI table: school_ai_training_files/);
   await q(`REVOKE SELECT ON hon.school_ai_training_files FROM ${runtime.username}`);
   await q(body);}
- pass('the canonical 011 verification of the 0365 functions, ACLs and tables passes and refuses an extra runtime or worker grant or a table privilege');
+ pass('the canonical 011 verification of the 0420 functions, ACLs and tables passes and refuses an extra runtime or worker grant or a table privilege');
  console.log('PASS conversation AI training proof: '+groups+' groups');
 }finally{
  if(app)await app.close();else await database.onModuleDestroy?.();

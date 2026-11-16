@@ -295,7 +295,6 @@
     "0354_creative_provider_jobs.sql": "51d614822499ff9c8c894f2ff73853c19dfad33c677b6a741329556cb460be67",
     "0358_school_number_order_settle.sql": "04aec55d14c81c53b4012377c9ad610221cfacf53ed3fb8a23a12cb9d98afdc0",
     "0364_school_conversations.sql": "2a1cd6c62aec0d6781a1aad202b347abc2ac65bf67441ba4be880f5c0b7e4613",
-    "0365_conversation_ai_training.sql": "b6a9608a0f0032cad8ffebe2ab6cf88e8666952aa724cd44a85824506a8edccb",
     "0332_school_reports_locations.sql": "e32748c44c865ee67062ad535fd29d3c39532f2a5f94afeac9f5e2f68894dae2",
     "0333_school_class_attendance_import.sql": "f2be82bb3d64d2079ba5df9efa8c911acf9173909e857a7a89d440b2911d8ced",
     "0334_school_membership_balance_import.sql": "c3cd842298cea1d168b08e7b21c8c0cded0f48df081c32cc8692087d248cae9c",
@@ -309,6 +308,7 @@
     "0402_school_checkouts.sql": "ea76852ef6f2b3aaab427f070106fa09e1d7f874019155ea3f141b155349846c",
     "0404_school_staff_pick_list.sql": "7c4116df35139b07b406ee304b162acc45871ac5a8ce225985865979a511181e",
     "0406_staff_qualification_and_role_lists.sql": "d131e376033198ca638c2b9aabc2c3ea9b7a93295d116dcd5aaedbc19ee8112f",
-    "0407_retention_review_member_list.sql": "88ee6b0f21d71289f02036e36d50644a960ff7eeb620d542afda2303c76d1606"
+    "0407_retention_review_member_list.sql": "88ee6b0f21d71289f02036e36d50644a960ff7eeb620d542afda2303c76d1606",
+    "0420_conversation_ai_training.sql": "6b2108d753b262700a83f90ecdd425969decea84d77b3f1c6ff0d4628775dbf7"
   }
 }

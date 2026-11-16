@@ -13,7 +13,7 @@ import { MembershipActivationHumanUiGuard } from '../billing/membership-activati
 import { SaasCommandGuard, SaasCommandName, SaasReadGuard } from '../saas-billing/saas-billing.guards.js';
 import { ConversationAiProgramService, ConversationAiService } from './conversation-ai.service.js';
 
-/** 0365: each Train AI call is its own same-origin browser command; reads are GET only. */
+/** 0420: each Train AI call is its own same-origin browser command; reads are GET only. */
 @Injectable()
 export class ConversationAiReadGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = CONVERSATION_AI_READ_COMMAND;

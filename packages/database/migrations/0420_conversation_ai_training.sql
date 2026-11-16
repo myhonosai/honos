@@ -1,6 +1,6 @@
 BEGIN;
 
--- 0365 Conversation AI piece CA2a (allocated by the coordinator 2026-11-15; docs/architecture/CONVERSATION_AI.md §7).
+-- 0420 Conversation AI piece CA2a (allocated by the coordinator 2026-11-15; docs/architecture/CONVERSATION_AI.md §7).
 -- Train AI: the switches and the school's training material. Nothing here calls an AI provider or sends anything.
 --   T1  One HQ program switch (OFF, TEST_MODE, LIVE), set only by a human HON HQ owner, audited. It starts OFF.
 --       CA2b will refuse every Chad turn while it is OFF, and every real provider call or automatic send unless LIVE.

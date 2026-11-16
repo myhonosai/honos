@@ -11,7 +11,7 @@ import {
 } from '@hon/contracts';
 
 /**
- * Train AI (0365): same-origin browser calls only. The shell's school scope is sent and checked again by the server
+ * Train AI (0420): same-origin browser calls only. The shell's school scope is sent and checked again by the server
  * (conversation.read to look, conversation.ai.configure to change); nothing here decides permission, and no AI is called.
  * Reads are plain GETs with no command marker or Idempotency-Key; every change sends its own X-HON-Human-Command and one.
  */

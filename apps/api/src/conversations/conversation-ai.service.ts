@@ -46,7 +46,7 @@ function keyOk(key: unknown): key is string {
 }
 
 /**
- * 0365 Train AI. The guarded route scope plus the live conversation.read (reads) or conversation.ai.configure (changes,
+ * 0420 Train AI. The guarded route scope plus the live conversation.read (reads) or conversation.ai.configure (changes,
  * knowledge preview, original files) permission, re-proved by every database call. Nothing here calls an AI provider.
  */
 @Injectable()

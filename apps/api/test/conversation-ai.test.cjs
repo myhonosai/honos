@@ -9,7 +9,7 @@ const settings = (patch = {}) => ({ expectedVersion: 0, enabled: true, modes: { 
   afterHoursText: null, smsMaxChars: 320, chatMaxChars: 800, languages: ['en', 'ko'], ...patch });
 const refused = (fn) => { try { fn(); return false; } catch { return true; } };
 
-test('0365 settings, upload, item and program inputs are closed', () => {
+test('0420 settings, upload, item and program inputs are closed', () => {
   assert.equal(contracts.validateConversationAiSettingsInput(settings()).expectedVersion, 0, 'first save uses version 0');
   for (const bad of [
     settings({ extra: 1 }), settings({ handoffWords: ['Human'] }), settings({ handoffWords: ['a', 'a'] }), settings({ handoffWords: Array.from({ length: 21 }, (_, i) => `w${i}`) }),
@@ -39,7 +39,7 @@ test('0365 settings, upload, item and program inputs are closed', () => {
     assert.ok(refused(() => contracts.validateConversationAiProgramInput(bad)));
 });
 
-test('0365 receipts are verified: a file read must be the asked file and settings must say when AI was turned on', () => {
+test('0420 receipts are verified: a file read must be the asked file and settings must say when AI was turned on', () => {
   const content = { fileId: A, fileName: 'a.txt', mediaType: 'text/plain', byteSize: 3, contentBase64: 'YWJj\n' };
   assert.equal(contracts.verifyConversationAiFileContent(content, A).contentBase64, 'YWJj', 'base64 line breaks are removed');
   assert.ok(refused(() => contracts.verifyConversationAiFileContent(content, B)));
@@ -49,7 +49,7 @@ test('0365 receipts are verified: a file read must be the asked file and setting
   assert.equal(contracts.verifyConversationAiSettings({ ...stored, enabledAt: '2026-11-15T00:00:00.000Z' }).enabled, true);
 });
 
-test('0365 service and controller refuse before any database call', async () => {
+test('0420 service and controller refuse before any database call', async () => {
   let calls = 0;
   const database = { withTenantReadOnlyTransaction: async () => { calls++; }, withTenantTransaction: async () => { calls++; }, resolveAuthorizedScope: async () => { calls++; return null; } };
   const service = new ConversationAiService(database);
@@ -93,7 +93,7 @@ test('0365 service and controller refuse before any database call', async () => 
   await assert.rejects(() => scoped.setItemStatus(A, B, {}, {}, 'k', req, res), (e) => e.response.code === 'CONVERSATION_AI_FORBIDDEN');
 });
 
-test('0365 HQ program switch: inputs and keys checked before the database, the subject comes only from the session', async () => {
+test('0420 HQ program switch: inputs and keys checked before the database, the subject comes only from the session', async () => {
   const seen = [];
   const billing = { call: async (name, args) => { seen.push([name, args]); return { status: 'TEST_MODE', version: 2, changedAt: '2026-11-15T00:00:00.000Z', replayed: false }; } };
   const program = new ConversationAiProgramService(billing);

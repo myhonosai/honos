@@ -14,7 +14,7 @@ import { NO_SCHOOL_SHELL, SchoolShellProvider } from '../src/components/school-s
 import { SCHOOL_SHELL_NAV } from '../src/components/school-shell/catalog';
 import { HQ_AI } from '../src/components/hq-modern/catalog';
 
-// 0365 Train AI: fixed same-origin calls with the shell scope, verified answers, definite refusals vs unknown outcomes. No AI is called.
+// 0420 Train AI: fixed same-origin calls with the shell scope, verified answers, definite refusals vs unknown outcomes. No AI is called.
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222', C = '33333333-3333-4333-8333-333333333333';
 const T = '2026-11-20T17:00:00.000Z';

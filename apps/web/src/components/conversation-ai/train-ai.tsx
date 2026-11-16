@@ -57,7 +57,7 @@ export function itemInput(draft: ItemDraft): ConversationAiItemInput | null {
 }
 
 /**
- * 0365 Train AI. Every call carries the shell's school scope, which the server re-checks (conversation.read to look,
+ * 0420 Train AI. Every call carries the shell's school scope, which the server re-checks (conversation.read to look,
  * conversation.ai.configure to change). Nothing here calls an AI: the library and settings are what a later AI turn reads.
  */
 export function TrainAi(): React.ReactElement {

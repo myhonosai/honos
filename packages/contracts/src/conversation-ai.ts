@@ -1,5 +1,5 @@
 /**
- * Conversation AI training (0365, piece CA2a; docs/architecture/CONVERSATION_AI.md §7). The switches and the school's
+ * Conversation AI training (0420, piece CA2a; docs/architecture/CONVERSATION_AI.md §7). The switches and the school's
  * training material: an HQ program switch (OFF, TEST_MODE, LIVE), per-school settings (on/off, a mode per channel,
  * hand-off words, an after-hours text, a length cap per channel, languages), and a training library (FAQ, document, image,
  * instruction and coaching items with an on/off switch, plus the original file). Nothing here calls an AI provider.

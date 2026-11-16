@@ -227,7 +227,7 @@ const SAAS_BILLING_CALLS = {
   commandAiSchoolCostLimit: { sql: 'SELECT hon.command_ai_school_cost_limit($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readAiExceptionAllowances: { sql: 'SELECT hon.read_ai_exception_school_allowances_from_hq($1) AS data', arity: 1, readOnly: true },
   commandAiExceptionAllowance: { sql: 'SELECT hon.command_ai_exception_school_allowance($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
-  // CA2a (0365): the Conversation AI program switch (HQ readers read; a human HQ owner changes it).
+  // CA2a (0420): the Conversation AI program switch (HQ readers read; a human HQ owner changes it).
   readConversationAiProgram: { sql: 'SELECT hon.read_conversation_ai_program_from_hq($1) AS data', arity: 1, readOnly: true },
   commandConversationAiProgram: { sql: 'SELECT hon.command_conversation_ai_program($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readAccessExceptions: { sql: 'SELECT hon.read_saas_access_exceptions_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
