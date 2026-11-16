@@ -334,6 +334,8 @@ export type LanguageOperation = keyof typeof LANGUAGE_CALLS;
 
 export type SchoolOwnershipOperation = 'hqRead'|'setPrimary'|'ownerRead';
 
+export type ShopifyOperation = 'read'|'catalog'|'orders'|'start'|'claim'|'record'|'beginSync'|'rotate'|'page'|'finishSync'|'disconnect';
+
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
   private pool: Pool | undefined;
@@ -1438,6 +1440,26 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('PERSON_PHOTO_UNAVAILABLE');
     return this.callFixedSubjectFunction(call,params,'PERSON_PHOTO_UNAVAILABLE');
+  }
+
+  /** 0405 Shopify: eleven fixed definer functions; the subject comes only from the signed HON session. */
+  async callShopify(operation: ShopifyOperation, params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      read: {sql: 'SELECT hon.read_shopify($1,$2::uuid) data',arity:2,readOnly:true},
+      catalog: {sql: 'SELECT hon.read_shopify_catalog($1,$2::uuid) data',arity:2,readOnly:true},
+      orders: {sql: 'SELECT hon.read_shopify_orders($1,$2::uuid) data',arity:2,readOnly:true},
+      start: {sql: 'SELECT hon.start_shopify_connect($1,$2::jsonb,$3) data',arity:3,readOnly:false},
+      claim: {sql: 'SELECT hon.claim_shopify_connect($1,$2::jsonb) data',arity:2,readOnly:false},
+      record: {sql: 'SELECT hon.record_shopify_connection($1,$2::jsonb) data',arity:2,readOnly:false},
+      beginSync: {sql: 'SELECT hon.begin_shopify_sync($1,$2::jsonb) data',arity:2,readOnly:false},
+      rotate: {sql: 'SELECT hon.rotate_shopify_credential($1,$2::jsonb) data',arity:2,readOnly:false},
+      page: {sql: 'SELECT hon.record_shopify_sync_page($1,$2::jsonb) data',arity:2,readOnly:false},
+      finishSync: {sql: 'SELECT hon.finish_shopify_sync($1,$2::jsonb) data',arity:2,readOnly:false},
+      disconnect: {sql: 'SELECT hon.disconnect_shopify($1,$2::jsonb) data',arity:2,readOnly:false},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('SHOPIFY_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call,params,'SHOPIFY_UNAVAILABLE');
   }
 
   private async callFixedSubjectFunction(call: { sql: string; readOnly: boolean }, params: readonly (string | null)[], unavailable: string): Promise<unknown> {

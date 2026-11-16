@@ -166,6 +166,7 @@
     "db:test-person-photo": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-person-photo-integrity.mjs",
     "db:test-paper-import": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-paper-import-integrity.mjs",
     "db:test-school-location": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-location-integrity.mjs",
+    "db:test-shopify": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-shopify-commerce-integrity.mjs",
     "db:test-class-series": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-series-integrity.mjs",
     "db:test-tuition-payments": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-tuition-payment-integrity.mjs",
     "db:test-school-payment-connections": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-payment-connections-integrity.mjs",
