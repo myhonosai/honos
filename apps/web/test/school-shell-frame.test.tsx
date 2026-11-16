@@ -22,7 +22,7 @@ describe('school shell frame', () => {
     expect(html).toMatch(/<div[^>]*id="hon-main"[^>]*>.*<p data-testid="page">private page<\/p>/s);
     // Pages render their own <main>; a second one around them would duplicate the landmark.
     expect(html).not.toContain('<main');
-    for (const key of ['navHome', 'navStudents', 'navCrm', 'navClasses', 'navBilling', 'navAiTeam', 'navAnalytics', 'navSettings'] as const) expect(html).toContain(esc(shellText('en', key)));
+    for (const key of ['navHome', 'navStudents', 'navCrm', 'navClasses', 'navBilling', 'navAiTeam', 'navAnalytics', 'navCommunity', 'navSettings'] as const) expect(html).toContain(esc(shellText('en', key)));
   });
 
   it('marks the active primary item and its section tab', () => {
@@ -158,7 +158,7 @@ describe('school shell frame', () => {
     const tabs = (html: string) => [...(html.match(/data-shell-tabs="">(.*?)<\/nav>/s)?.[1] ?? '').matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]);
     const groupRow = (html: string) => html.match(/data-shell-groups="">(.*?)<\/nav>/s)?.[1] ?? '';
     const progress = render({ path: '/staff/curriculum/progress' });
-    expect([...groupRow(progress).matchAll(/>([^<]+)<\/a>/g)].map(m => m[1])).toEqual(['Schedule', 'Attendance', 'Curriculum &amp; testing', 'Community']);
+    expect([...groupRow(progress).matchAll(/>([^<]+)<\/a>/g)].map(m => m[1])).toEqual(['Schedule', 'Attendance', 'Curriculum &amp; testing']);
     expect(groupRow(progress)).toMatch(/aria-current="true"[^>]*>Curriculum &amp; testing|>Curriculum &amp; testing/);
     expect(progress).toMatch(/href="\/staff\/curriculum\/library"[^>]*aria-current="true">Curriculum &amp; testing/);
     expect(tabs(progress)).toEqual(['Curriculum library', 'Curriculum progress', 'Teaching studio', 'Testing', 'Readiness', 'Scorecards', 'Promotions', 'Certificates']);
