@@ -163,7 +163,7 @@ describe('school shell frame', () => {
     expect(progress).toMatch(/href="\/staff\/curriculum\/library"[^>]*aria-current="true">Curriculum &amp; testing/);
     expect(tabs(progress)).toEqual(['Curriculum library', 'Curriculum progress', 'Teaching studio', 'Testing', 'Readiness', 'Scorecards', 'Promotions', 'Certificates']);
     const invoices = render({ path: '/staff/billing/invoices' });
-    expect(tabs(invoices)).toEqual(['Invoices', 'Tuition balances', 'Payment processors', 'Checkout pages', 'Saved payment methods']);
+    expect(tabs(invoices)).toEqual(['Invoices', 'Tuition balances', 'Payment processors', 'Checkout pages', 'Point of Sale', 'Saved payment methods']);
     // Short areas keep one flat row with no group row.
     const reports = render({ path: '/staff/reports' });
     expect(reports).not.toContain('data-shell-groups'); expect(tabs(reports)).toHaveLength(4);
