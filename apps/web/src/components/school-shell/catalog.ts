@@ -47,7 +47,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   // Calendar page; /staff/schedule owns every /staff/schedule/* path, so the old pages and workflow pages still mark Classes.
   { key: 'classes', titleKey: 'navClasses', section: 'calendar', routes: [r('/staff/schedule', 'routeCalendar')] },
   { key: 'attendance', titleKey: 'navAttendance', section: 'calendar', routes: [r('/staff/attendance', 'routeAttendance', true), r('/staff/attendance/planned-absences', 'routePlannedAbsences'), r('/staff/attendance/scan', 'routeScanCheckIn'), r('/staff/attendance/cards', 'routeAttendanceCards'),
-    r('/staff/kiosk', 'routeKiosk'), r('/staff/classpass', 'routeClassPass', true), r('/staff/migration/classes', 'routeHistoryImport')] },
+    r('/staff/walk-in', 'routeWalkIn'), r('/staff/migration/classes', 'routeHistoryImport'), h('/staff/kiosk', 'routeKiosk'), h('/staff/classpass', 'routeClassPass')] },
   // Search is the search button in the top bar.
   { key: 'students', titleKey: 'navStudents', section: 'contacts', routes: [r('/staff/people', 'routePeople'), r('/staff/family-access', 'routeFamilyAccess', true),
     r('/staff/migration/students', 'routeStudentImport'), r('/staff/migration/photos', 'routePaperImport'), h('/staff/search', 'routeStudentSearch')] },
