@@ -9,6 +9,8 @@ import { CARD_MODE_KEY, cardUrl, readCardMode, writeCardMode } from '../src/comp
 import { PANEL_COPY } from '../src/components/people/panel-copy';
 import { familyThreads, CardFamilyMessagesView } from '../src/components/people/card-family-messages';
 import { familyInvitations } from '../src/components/people/card-family-access';
+import { CardTextsView, canReplyTo, personConversations } from '../src/components/people/card-texts';
+import { loadConversations } from '../src/components/conversations/http';
 import { SCHOOL_SHELL_NAV } from '../src/components/school-shell/catalog';
 import { id, scope } from './account-status-fixtures';
 
@@ -140,4 +142,53 @@ it('takes Search, Family access, Conversations and Family messages out of the Co
     expect(route!.hidden, href).toBe(true);
   }
   expect(contacts.routes.find(r => r.href === '/staff/people')!.hidden).toBeFalsy();
+});
+
+// Slice B: this person's texts inline in the card (0401 personId filter).
+const conv = (conversationId: string, personId: string | null) => ({ conversationId, channel: 'SMS' as const, contactAddress: '+15555550100', contactName: 'Ana Rivera',
+  personId, leadId: null, leadStatus: null, leadStage: null, status: 'OPEN' as const, unread: 2, tags: [], assignedTo: null,
+  lastMessage: { direction: 'INBOUND' as const, preview: 'See you Monday', mediaCount: 0, at: '2026-11-15T10:00:00.000Z' },
+  lastMessageAt: '2026-11-15T10:00:00.000Z', lastInboundAt: '2026-11-15T10:00:00.000Z', version: 1 });
+const detail = (over: { canManage?: boolean; consent?: 'OPTED_IN' | 'OPTED_OUT' | 'NONE'; canText?: boolean } = {}) => ({
+  conversation: conv(id(70), person), canManage: over.canManage ?? true, hasOlder: false,
+  contact: { person: { personId: person, givenName: 'Ana', familyName: 'Rivera', phone: '+15555550100', email: null, smsConsent: over.consent ?? 'OPTED_IN' },
+    lead: null, nextAppointment: null, peopleWithNumber: 1, schoolCanText: over.canText ?? true },
+  messages: [{ messageId: id(80), direction: 'INBOUND' as const, author: 'CONTACT' as const, staffName: null, body: 'See you Monday', mediaCount: 0,
+    at: '2026-11-15T10:00:00.000Z', delivery: null }] });
+
+it('keeps only this person\'s texts and lists them in the card', () => {
+  const rows = [conv(id(70), person), conv(id(71), id(31)), conv(id(72), null)];
+  expect(personConversations(rows, person.toUpperCase()).map(r => r.conversationId)).toEqual([id(70)]);
+  const html = renderToStaticMarkup(<CardTextsView language="en" state={{ state: 'READY', conversations: personConversations(rows, person), more: true }} open={null}/>);
+  expect(html.match(/data-testid="card-text-thread"/g)).toHaveLength(1);
+  expect(html).toContain('href="/staff/conversations"');
+  expect(renderToStaticMarkup(<CardTextsView language="en" state={{ state: 'READY', conversations: [], more: false }} open={null}/>)).toContain('No texts with this person yet.');
+  expect(renderToStaticMarkup(<CardTextsView language="en" state={{ state: 'DENIED' }} open={null}/>)).toContain('role="note"');
+});
+
+it('offers a reply only under the inbox rules: manage, SMS consent and an active sender', () => {
+  expect(canReplyTo(detail() as never)).toBe(true);
+  expect(canReplyTo(detail({ canManage: false }) as never)).toBe(false);
+  expect(canReplyTo(detail({ consent: 'NONE' }) as never)).toBe(false);
+  expect(canReplyTo(detail({ consent: 'OPTED_OUT' }) as never)).toBe(false);
+  expect(canReplyTo(detail({ canText: false }) as never)).toBe(false);
+  const open = renderToStaticMarkup(<CardTextsView language="en" state={{ state: 'READY', conversations: [], more: false }} open={detail() as never} text="Hi"/>);
+  expect(open).toContain('data-testid="card-text-open"');
+  expect(open).toContain('id="card-text-reply"');
+  expect(open).toContain('See you Monday');
+  const blocked = renderToStaticMarkup(<CardTextsView language="en" state={{ state: 'READY', conversations: [], more: false }} open={detail({ consent: 'NONE' }) as never}/>);
+  expect(blocked).not.toContain('id="card-text-reply"');
+  expect(blocked).toContain('data-testid="card-text-no-reply"');
+});
+
+it('asks the server for this person\'s texts of any status', async () => {
+  const fetchMock = vi.fn(async (_url: string) => new Response(JSON.stringify({ data: { conversations: [], nextCursor: null, unreadConversations: 0, canManage: true } }),
+    { status: 200, headers: { 'content-type': 'application/json' } }));
+  vi.stubGlobal('fetch', fetchMock);
+  await loadConversations(scope, { personId: person, status: 'ALL' });
+  const url = new URL(String(fetchMock.mock.calls[0]![0]), 'https://x.invalid');
+  expect(url.searchParams.get('personId')).toBe(person);
+  expect(url.searchParams.get('status')).toBe('ALL');
+  await expect(loadConversations(scope, { personId: 'nope' })).rejects.toThrow();
+  expect(fetchMock).toHaveBeenCalledTimes(1);
 });

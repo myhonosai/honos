@@ -14,13 +14,12 @@ import { consentApi, type ConsentApi } from './consent-http';
 import { NO_CONTACT_FILTERS, contactAdminApi, contactsApi, type ContactAdminApi, type ContactFilters, type ContactsApi } from './contacts-http';
 import { ContactActions, type ContactChange } from './contact-actions';
 import type { CardState, CardTab, FamilyItem, MembershipItem } from './contact-card';
-import peopleStyles from './people.module.css';
 import { MembershipPanel } from './membership-panel';
 import { initialCardTarget } from './card-link';
 import { cardUrl, readCardMode, writeCardMode, type CardMode } from './card-panel';
 import { CardFamilyAccess } from './card-family-access';
 import { CardFamilyMessages } from './card-family-messages';
-import { panelText } from './panel-copy';
+import { CardTexts } from './card-texts';
 
 /** Keeps the open card (or none) in the address without a navigation, so a reload or a shared link reopens it. */
 function showCardInAddress(target: { personId: string; tab: CardTab } | null): void {
@@ -276,8 +275,8 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
     language={preferences.language} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} sessionSubject={sessionSubject} familyId={family.familyId}/> : null,
   [selection?.organizationId, selection?.schoolId, preferences.language, sessionSubject]); // eslint-disable-line react-hooks/exhaustive-deps
   const messagesSlot = useCallback((c: SchoolContactCard) => selection ? <>
-    <section className={peopleStyles.subsection} data-testid="card-texts"><h3>{panelText(preferences.language, 'textsTitle')}</h3>
-      <a className={peopleStyles.secondary} href="/staff/conversations">{panelText(preferences.language, 'textsOpen')}</a></section>
+    <CardTexts key={`${lower(selection.schoolId)}:${c.person.personId}`} language={preferences.language}
+      scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} personId={c.person.personId}/>
     {c.family.allowed && c.family.families.length ? <CardFamilyMessages key={`${lower(selection.schoolId)}:${c.person.personId}`} language={preferences.language}
       scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} familyIds={c.family.families.map(f => f.familyId)}/> : null}
   </> : null, [selection?.organizationId, selection?.schoolId, preferences.language]); // eslint-disable-line react-hooks/exhaustive-deps
