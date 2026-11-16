@@ -18,9 +18,10 @@ const stub = (response: Response) => { const f = vi.fn(async () => response); vi
 const signal = () => new AbortController().signal;
 const fails = async (p: Promise<unknown>) => { try { await p; } catch (e) { return e as CardsError; } throw new Error('expected a failure'); };
 const body24 = '012345678901234567890123', CODE = body24 + attendanceCardCheckDigits(body24);
-const settings = { codeType: 'QR', showPhoto: true, showLogo: true, design: 'CLASSIC', version: 0, updatedAt: null, schoolName: 'Synthetic Dojo', logoUrl: 'https://example.invalid/logo.png', accentColor: '#112233' } as const;
+const settings = { codeType: 'QR', showPhoto: true, showLogo: true, design: 'CLASSIC', version: 0, updatedAt: null, schoolName: 'Synthetic Dojo', logoUrl: 'https://example.invalid/logo.png', accentColor: '#112233',
+  photoConsent: { required: false, profile: null, reason: 'NO_LOCATION' } } as const;
 const card = (studentProfileId: string, last4: string): AttendanceCard => ({ cardId: id(60), studentProfileId, last4, status: 'ACTIVE', version: 1, issuedAt: at, endedAt: null });
-const student = (n: number, withCard = false) => ({ studentProfileId: id(n), personId: id(n + 100), givenName: `Kid${n}`, familyName: 'Synthetic', studentStatus: 'ACTIVE', hasPhoto: n % 2 === 0, card: withCard ? card(id(n), '4321') : null });
+const student = (n: number, withCard = false) => ({ studentProfileId: id(n), personId: id(n + 100), givenName: `Kid${n}`, familyName: 'Synthetic', studentStatus: 'ACTIVE', hasPhoto: n % 2 === 0, card: withCard ? card(id(n), '4321') : null, photoConsent: 'NOT_REQUIRED' as const, photoConsentVersion: 0 });
 const read: AttendanceCardsRead = { settings, maxPerPrint: 40, students: [student(10), student(11, true)] };
 const look: Look = { codeType: 'QR', showPhoto: true, showLogo: true, design: 'CLASSIC' };
 
@@ -61,16 +62,16 @@ it('only exact refusals are definitive; unknown and busy keep the exact request'
 });
 
 it('a print sends one closed body with the cards marker and key; the code comes back once', async () => {
-  const f = stub(json({ data: { printId: id(70), replaced: 0, replayed: false, cards: [{ ...card(id(10), CODE.slice(-4)), code: CODE }] } }));
+  const f = stub(json({ data: { printId: id(70), replaced: 0, replayed: false, cards: [{ ...card(id(10), CODE.slice(-4)), code: CODE, printPhoto: true }] } }));
   const out = await cardsApi.print(school, [id(10)], key, signal(), () => true);
   expect(out.cards[0]!.code).toBe(CODE);
   const [path, init] = f.mock.calls[0] as unknown as [string, RequestInit];
   expect(path).toBe('/api/v1/school/attendance/cards/print');
   expect(init.headers).toMatchObject({ 'X-HON-Human-Command': 'attendance-cards', 'Idempotency-Key': key });
   expect(JSON.parse(init.body as string)).toEqual({ schoolId: school, studentProfileIds: [id(10)] });
-  stub(json({ data: { printId: id(70), replaced: 0, replayed: false, cards: [{ ...card(id(12), CODE.slice(-4)), code: CODE }] } }));
+  stub(json({ data: { printId: id(70), replaced: 0, replayed: false, cards: [{ ...card(id(12), CODE.slice(-4)), code: CODE, printPhoto: true }] } }));
   expect((await fails(cardsApi.print(school, [id(10)], key, signal(), () => true))).kind).toBe('UNKNOWN');
-  stub(json({ data: { printId: id(70), replaced: 0, replayed: true, cards: [{ ...card(id(10), CODE.slice(-4)), code: CODE }] } }));
+  stub(json({ data: { printId: id(70), replaced: 0, replayed: true, cards: [{ ...card(id(10), CODE.slice(-4)), code: CODE, printPhoto: true }] } }));
   expect((await fails(cardsApi.print(school, [id(10)], key, signal(), () => true))).kind).toBe('UNKNOWN');
 });
 
@@ -114,6 +115,27 @@ it('cards print only in the saved look', () => {
   expect(changed).toContain('Save the card look before printing'); expect(changed).toMatch(/disabled=""[^>]*data-testid="print-new"/);
   const sheet = view({ look: { ...look, codeType: 'BARCODE' }, sheet: [{ studentProfileId: id(10), name: 'Kid10 Synthetic', initials: 'KS', code: CODE, photo: null }] });
   expect(sheet).toContain('data-code-type="QR"');
+});
+
+it('where the place needs photo consent, staff see who has it and record or withdraw it', () => {
+  const rule = { required: true, profile: 'EU_GDPR', reason: 'PROFILE' } as const;
+  const students = [{ ...student(10), photoConsent: 'GIVEN' as const, photoConsentVersion: 1 }, { ...student(12), photoConsent: 'MISSING' as const }];
+  const html = view({ read: { state: 'READY', read: { ...read, settings: { ...settings, photoConsent: rule }, students } } });
+  expect(html).toContain('must agree before a photo is printed'); expect(html).toContain('Photo consent');
+  expect(html).toContain('On file'); expect(html).toContain('Withdraw'); expect(html).toContain('Not on file (initials)'); expect(html).toContain('Record consent');
+  expect(view()).not.toContain('data-testid="consent-cell"');
+  for (const l of ['ko', 'es']) expect(cardsText(l, 'consentNeeded')).not.toBe(cardsText('en', 'consentNeeded'));
+});
+
+it('photo consent is sent as one closed command and the reply is checked', async () => {
+  const f = stub(json({ data: { studentProfileId: id(10), photoConsent: 'GIVEN', photoConsentVersion: 1, recordedAt: at, replayed: false } }));
+  expect((await cardsApi.photoConsent(school, id(10), true, 0, key, signal(), () => true)).photoConsent).toBe('GIVEN');
+  const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+  expect(url).toBe('/api/v1/school/attendance/cards/photo-consent'); expect(JSON.parse(init.body as string)).toEqual({ schoolId: school, studentProfileId: id(10), given: true, expectedVersion: 0 });
+  expect((init.headers as Record<string, string>)['X-HON-Human-Command']).toBe('attendance-cards');
+  stub(json({ data: { studentProfileId: id(11), photoConsent: 'GIVEN', photoConsentVersion: 1, recordedAt: at, replayed: false } }));
+  expect((await fails(cardsApi.photoConsent(school, id(10), true, 0, key, signal(), () => true))).kind).toBe('UNKNOWN');
+  expect((await fails(cardsApi.photoConsent(school, id(10), false, 0, key, signal(), () => true))).kind).toBe('INVALID');
 });
 
 const scanView = (over: Partial<ScanViewProps> = {}) => renderToStaticMarkup(<ScanView language="en" sessions={{ state: 'READY', sessions: [] }} sessionId="" status="PRESENT" code=""

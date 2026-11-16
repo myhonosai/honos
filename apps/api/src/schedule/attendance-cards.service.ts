@@ -4,6 +4,7 @@ import {
   accountUuid, attendanceCardCheckDigits, validateAttendanceCard, validateAttendanceCardIssueInput, validateAttendanceCardIssueResult,
   validateAttendanceCardRevokeInput, validateAttendanceCardRevokeResult, validateAttendanceCardSettings, validateAttendanceCardSettingsInput,
   validateAttendanceCardSettingsResult, validateAttendanceCardsRead, validateAttendanceCheckInInput, validateAttendanceCheckInResult,
+  validateAttendancePhotoConsentInput, validateAttendancePhotoConsentResult, type AttendancePhotoConsentResult,
   type AttendanceCardIssueResult, type AttendanceCardRevokeResult, type AttendanceCardSettingsResult, type AttendanceCardsRead,
   type AttendanceCheckInResult, type AttendanceCommandContext,
 } from '@hon/contracts';
@@ -49,7 +50,7 @@ const invalid = () => new BadRequestException({ code: 'ATTENDANCE_CARDS_INVALID'
 const unavailable = () => new ServiceUnavailableException({ code: 'ATTENDANCE_CARDS_UNAVAILABLE', outcome: 'UNKNOWN_OR_RETRY_REQUIRED' });
 
 /**
- * 0391 attendance cards and scan check-in. The subject comes only from the signed HON session. The school the browser
+ * 0394 attendance cards and scan check-in. The subject comes only from the signed HON session. The school the browser
  * names is only a selector: the API resolves the staff member's scope for that school with the needed permission
  * (attendance.cards.manage for cards, attendance.record for a scan) and the database decides it again with live
  * authority. Codes are made here, shown once and never stored; only their SHA-256 digest reaches the database.
@@ -111,7 +112,11 @@ export class AttendanceCardsService {
       const replayed = raw?.replayed, saved = raw?.record?.cards;
       if (typeof replayed !== 'boolean' || !Array.isArray(saved)) throw new Error('shape');
       const out = validateAttendanceCardIssueResult({ printId: raw?.record?.printId, replaced: raw?.record?.replaced, replayed,
-        cards: saved.map(s => { const card = validateAttendanceCard(s); return { ...card, code: replayed ? null : codes.get(card.studentProfileId) ?? 'missing' }; }) });
+        cards: saved.map(s => {
+          const { printPhoto, ...rest } = (s && typeof s === 'object' ? s : {}) as Record<string, unknown>;
+          const card = validateAttendanceCard(rest);
+          return { ...card, code: replayed ? null : codes.get(card.studentProfileId) ?? 'missing', printPhoto };
+        }) });
       const named = new Set(out.cards.map(x => x.studentProfileId));
       if (named.size !== input.studentProfileIds.length || input.studentProfileIds.some(id => !named.has(id))) throw new Error('mismatch');
       return out;
@@ -127,6 +132,20 @@ export class AttendanceCardsService {
     try {
       const out = validateAttendanceCardRevokeResult({ card: raw?.record, replayed: raw?.replayed });
       if (out.card.cardId !== input.cardId) throw new Error('mismatch');
+      return out;
+    } catch { throw unavailable(); }
+  }
+
+  /** Records that a parent (or the adult student) agreed to the photo on the card, or withdrew. */
+  async photoConsent(req: HonRequest, body: unknown, key: unknown): Promise<AttendancePhotoConsentResult> {
+    const k = AttendanceCardsService.key(key);
+    let input; try { input = validateAttendancePhotoConsentInput(body); } catch { throw invalid(); }
+    const c = await this.context(req, input.schoolId, 'attendance.cards.manage', k);
+    const raw = await this.call(c, 'SELECT hon.set_student_photo_consent($1,$2::jsonb,$3,$4::uuid,$5::uuid) data',
+      [c.externalSubject, JSON.stringify({ studentProfileId: input.studentProfileId, given: input.given, expectedVersion: input.expectedVersion }), k, c.requestId, c.correlationId]) as { record?: Record<string, unknown>; replayed?: unknown };
+    try {
+      const out = validateAttendancePhotoConsentResult({ ...(raw?.record ?? {}), replayed: raw?.replayed });
+      if (out.studentProfileId !== input.studentProfileId) throw new Error('mismatch');
       return out;
     } catch { throw unavailable(); }
   }

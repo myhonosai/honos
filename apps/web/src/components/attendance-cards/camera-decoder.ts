@@ -1,6 +1,6 @@
 /**
  * Camera code reading for browsers without BarcodeDetector (Safari, iPad). It reads one video frame at a time on the
- * device with the open-source ZXing decoder (Apache-2.0, pinned). It is loaded only when needed, and makes no network calls.
+ * device with the open-source ZXing decoder (pinned; npm lists MIT, the package ships the upstream ZXing Apache-2.0 LICENSE). It is loaded only when needed, and makes no network calls.
  * It reads only the two formats cards print: QR and Code128.
  */
 export type FrameDetector = { detect(source: CanvasImageSource): Promise<readonly { rawValue: string }[]> };

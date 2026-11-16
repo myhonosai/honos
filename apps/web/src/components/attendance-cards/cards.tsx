@@ -40,10 +40,10 @@ export function CardFace({ language, settings, look, card }: { language: string;
 }
 
 export type CardsReadState = Readonly<{ state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' | 'NO_SCHOOL' }> | Readonly<{ state: 'READY'; read: AttendanceCardsRead }>;
-export type CardsOutcome = null | Readonly<{ kind: 'SENDING' | 'LOOK_SAVED' | 'CANCELED' | 'REPLAYED' | Exclude<CardsErrorKind, 'SESSION'> }>;
-const OUTCOME: Record<NonNullable<CardsOutcome>['kind'], CardsKey> = { SENDING: 'sending', LOOK_SAVED: 'lookSaved', CANCELED: 'canceled', REPLAYED: 'replayed',
+export type CardsOutcome = null | Readonly<{ kind: 'SENDING' | 'LOOK_SAVED' | 'CANCELED' | 'CONSENT_SAVED' | 'REPLAYED' | Exclude<CardsErrorKind, 'SESSION'> }>;
+const OUTCOME: Record<NonNullable<CardsOutcome>['kind'], CardsKey> = { SENDING: 'sending', LOOK_SAVED: 'lookSaved', CANCELED: 'canceled', CONSENT_SAVED: 'consentSaved', REPLAYED: 'replayed',
   DENIED: 'outDenied', MISSING: 'outMissing', CONFLICT: 'outConflict', INVALID: 'outInvalid', BUSY: 'outBusy', UNKNOWN: 'outUnknown' };
-const tone = (k: NonNullable<CardsOutcome>['kind']) => k === 'LOOK_SAVED' || k === 'CANCELED' ? 'ok' : k === 'SENDING' || k === 'UNKNOWN' || k === 'BUSY' || k === 'REPLAYED' ? 'waiting' : 'blocked';
+const tone = (k: NonNullable<CardsOutcome>['kind']) => k === 'LOOK_SAVED' || k === 'CANCELED' || k === 'CONSENT_SAVED' ? 'ok' : k === 'SENDING' || k === 'UNKNOWN' || k === 'BUSY' || k === 'REPLAYED' ? 'waiting' : 'blocked';
 const nameOf = (s: Pick<AttendanceCardStudent, 'givenName' | 'familyName'>) => `${s.givenName} ${s.familyName}`;
 
 export type CardsViewProps = Readonly<{
@@ -52,6 +52,7 @@ export type CardsViewProps = Readonly<{
   onLook?: ((look: Look) => void) | undefined; onSaveLook?: (() => void) | undefined; onToggle?: ((id: string) => void) | undefined;
   onSelectAll?: (() => void) | undefined; onClear?: (() => void) | undefined; onPrintNew?: (() => void) | undefined;
   onAskCancel?: ((id: string) => void) | undefined; onCancel?: (() => void) | undefined; onKeep?: (() => void) | undefined;
+  onConsent?: ((studentProfileId: string, given: boolean) => void) | undefined;
   onReload?: (() => void) | undefined; onTryAgain?: (() => void) | undefined; onStop?: (() => void) | undefined; onPrint?: (() => void) | undefined; onDone?: (() => void) | undefined;
 }>;
 
@@ -63,6 +64,7 @@ export function CardsView(p: CardsViewProps): React.ReactElement {
   const o = p.outcome;
   // Cards print in the saved look only, so a sheet never shows a look the school did not choose.
   const saved = r ? lookOf(r.settings) : null;
+  const consentNeeded = r?.settings.photoConsent.required === true;
   const unsaved = saved !== null && (Object.keys(saved) as (keyof Look)[]).some(k => saved[k] !== p.look[k]);
   return <section className={styles.page} aria-labelledby={`${base}-title`} data-testid="attendance-cards">
     <header><h1 id={`${base}-title`}>{t('cardsTitle')}</h1><p className={styles.intro}>{t('cardsIntro')}</p></header>
@@ -90,6 +92,7 @@ export function CardsView(p: CardsViewProps): React.ReactElement {
       <div className={styles.panel}>
         <h2>{t('lookTitle')}</h2>
         {r.settings.version === 0 ? <p className={styles.meta}>{t('defaults')}</p> : null}
+        {consentNeeded ? <p className={styles.meta} data-testid="consent-needed">{t('consentNeeded')}</p> : null}
         <div className={styles.form}>
           <fieldset><legend>{t('codeType')}</legend>
             {ATTENDANCE_CARD_CODE_TYPES.map(c => <label key={c} className={styles.choice}>
@@ -117,12 +120,15 @@ export function CardsView(p: CardsViewProps): React.ReactElement {
         {unsaved ? <p className={styles.meta} data-testid="save-first">{t('saveFirst')}</p> : null}
         <p className={styles.meta}>{t('replaceNote')}</p>
         <div className={styles.tableWrap}><table className={styles.table}>
-          <thead><tr><th scope="col"><span className={styles.meta}>✓</span></th><th scope="col">{t('colName')}</th><th scope="col">{t('colPhoto')}</th><th scope="col">{t('colCard')}</th><th scope="col"></th></tr></thead>
+          <thead><tr><th scope="col"><span className={styles.meta}>✓</span></th><th scope="col">{t('colName')}</th><th scope="col">{t('colPhoto')}</th><th scope="col">{t('colCard')}</th>{consentNeeded ? <th scope="col">{t('colConsent')}</th> : null}<th scope="col"></th></tr></thead>
           <tbody>{r.students.map(s => <tr key={s.studentProfileId} data-testid="card-student">
             <td><input type="checkbox" aria-label={nameOf(s)} checked={p.selected.has(s.studentProfileId)} disabled={p.locked || (!p.selected.has(s.studentProfileId) && p.selected.size >= ATTENDANCE_CARD_MAX_PER_PRINT)}
               onChange={() => p.onToggle?.(s.studentProfileId)}/></td>
             <td>{nameOf(s)}</td><td>{t(s.hasPhoto ? 'hasPhoto' : 'noPhoto')}</td>
             <td>{s.card ? t('activeCard', { last4: s.card.last4 }) : t('noCard')}</td>
+            {consentNeeded ? <td data-testid="consent-cell">{s.photoConsent === 'GIVEN'
+              ? <>{t('consentGiven')} <button type="button" className={styles.secondary} disabled={p.locked} onClick={() => p.onConsent?.(s.studentProfileId, false)}>{t('consentWithdraw')}</button></>
+              : <>{t('consentMissing')} <button type="button" className={styles.secondary} disabled={p.locked} onClick={() => p.onConsent?.(s.studentProfileId, true)}>{t('consentRecord')}</button></>}</td> : null}
             <td>{s.card ? p.confirmCancel === s.card.cardId ? <div className={styles.form}><p>{t('cancelAsk', { last4: s.card.last4, name: nameOf(s) })}</p>
               <div className={styles.actions}><button type="button" className={styles.primary} disabled={p.locked} onClick={p.onCancel}>{t('cancelYes')}</button>
                 <button type="button" className={styles.secondary} disabled={p.locked} onClick={p.onKeep}>{t('keep')}</button></div></div>
@@ -134,7 +140,8 @@ export function CardsView(p: CardsViewProps): React.ReactElement {
   </section>;
 }
 
-type Request = { op: 'look'; look: Look; expectedVersion: number } | { op: 'print'; ids: readonly string[] } | { op: 'cancel'; cardId: string; expectedVersion: number };
+type Request = { op: 'look'; look: Look; expectedVersion: number } | { op: 'print'; ids: readonly string[] } | { op: 'cancel'; cardId: string; expectedVersion: number }
+  | { op: 'consent'; studentProfileId: string; given: boolean; expectedVersion: number };
 type Pending = Readonly<{ key: string; schoolId: string } & Request>;
 type Lock = 'NONE' | 'SENDING' | 'KEPT';
 const lookOf = (s: AttendanceCardSettings): Look => ({ codeType: s.codeType, showPhoto: s.showPhoto, showLogo: s.showLogo, design: s.design });
@@ -184,7 +191,8 @@ export function AttendanceCards({ api = cardsApi, photos = photoApi }: { api?: C
       const s = byId.get(c.studentProfileId);
       const name = s ? nameOf(s) : '', initials = s ? initialsOf(s.givenName, s.familyName) : '';
       let photo: string | null = null;
-      if (lookOf(data.settings).showPhoto && s?.hasPhoto) {
+      // The server decided whether this card carries the photo (saved look, photo on file, consent where the place needs it).
+      if (c.printPhoto && s?.hasPhoto) {
         try { const r = await photos.read({ schoolId: school }, s.personId, AbortSignal.timeout(15000), owned); photo = r.photo ? `data:${r.photo.mediaType};base64,${r.photo.data}` : null; } catch { photo = null; }
       }
       return { studentProfileId: c.studentProfileId, name, initials, code: c.code!, photo };
@@ -202,6 +210,9 @@ export function AttendanceCards({ api = cardsApi, photos = photoApi }: { api?: C
       if (request.op === 'look') {
         await api.configure({ schoolId: request.schoolId, expectedVersion: request.expectedVersion, ...request.look }, request.key, signal, owned);
         next = { kind: 'LOOK_SAVED' };
+      } else if (request.op === 'consent') {
+        await api.photoConsent(request.schoolId, request.studentProfileId, request.given, request.expectedVersion, request.key, signal, owned);
+        next = { kind: 'CONSENT_SAVED' };
       } else if (request.op === 'cancel') {
         await api.cancel(request.schoolId, request.cardId, request.expectedVersion, request.key, signal, owned);
         next = { kind: 'CANCELED' }; setConfirmCancel(null);
@@ -240,6 +251,10 @@ export function AttendanceCards({ api = cardsApi, photos = photoApi }: { api?: C
     onCancel={() => {
       const card = ready?.students.find(s => s.card?.cardId === confirmCancel)?.card;
       if (card) start({ op: 'cancel', cardId: card.cardId, expectedVersion: card.version });
+    }}
+    onConsent={(studentProfileId, given) => {
+      const student = ready?.students.find(s => s.studentProfileId === studentProfileId);
+      if (student) start({ op: 'consent', studentProfileId, given, expectedVersion: student.photoConsentVersion });
     }}
     onKeep={() => setConfirmCancel(null)} onReload={() => setRefresh(n => n + 1)} onTryAgain={() => { void send(); }}
     onStop={() => { if (lock !== 'KEPT' || sending.current) return; pending.current = null; setLock('NONE'); setOutcome(null); setRefresh(n => n + 1); }}

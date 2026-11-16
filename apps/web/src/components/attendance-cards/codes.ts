@@ -1,5 +1,5 @@
 /**
- * In-repo encoders for attendance card codes (0391), with no extra dependency and no network.
+ * In-repo encoders for attendance card codes (0394), with no extra dependency and no network.
  *
  * Both encoders take the 26-digit card code. Code 128 uses code set C (two digits per symbol). QR uses version 1 with
  * error correction level M in numeric mode, which holds up to 34 digits: room to spare for 26. Either kind is read by the

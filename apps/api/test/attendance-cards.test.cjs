@@ -4,7 +4,7 @@ const { randomUUID, createHash } = require('node:crypto');
 const { AttendanceCardsService, newAttendanceCardCode, attendanceCardDigest } = require('../dist/schedule/attendance-cards.service.js');
 const { isAttendanceCardCode, normalizeAttendanceCardCode, attendanceCardCheckDigits } = require('@hon/contracts');
 
-// Mocked boundary tests for the 0391 card and scan API. Authority, school scope, card replacement and the attendance
+// Mocked boundary tests for the 0394 card and scan API. Authority, school scope, card replacement and the attendance
 // write are proven against PostgreSQL by test-attendance-cards-integrity.mjs.
 const status = (value, code) => (error) => { assert.equal(error.getStatus(), value); if (code) assert.equal(error.getResponse().code, code); return true; };
 const req = { honIdentity: { externalSubject: 'subject-1' } };
@@ -39,7 +39,7 @@ test('a print sends only digests and last four digits, and returns each code onc
   const a = randomUUID(), b = randomUUID();
   const db = fakeDatabase((sql, args) => {
     const sent = JSON.parse(args[1]);
-    return { record: { printId: randomUUID(), replaced: 0, cards: sent.cards.map(x => card(x.studentProfileId, x.last4)) }, replayed: false };
+    return { record: { printId: randomUUID(), replaced: 0, cards: sent.cards.map(x => ({ ...card(x.studentProfileId, x.last4), printPhoto: false })) }, replayed: false };
   });
   const key = randomUUID();
   const out = await new AttendanceCardsService(db).issue(req, { schoolId: school, studentProfileIds: [a, b] }, key);
@@ -49,7 +49,7 @@ test('a print sends only digests and last four digits, and returns each code onc
   const sent = JSON.parse(body);
   assert.deepEqual(Object.keys(sent), ['cards']);
   for (const x of sent.cards) { assert.deepEqual(Object.keys(x).sort(), ['codeDigest', 'last4', 'studentProfileId']); assert.match(x.codeDigest, /^[0-9a-f]{64}$/); }
-  assert.equal(out.cards.length, 2);
+  assert.equal(out.cards.length, 2); assert(out.cards.every(c => c.printPhoto === false));
   for (const c of out.cards) {
     assert(isAttendanceCardCode(c.code)); assert.equal(c.code.slice(-4), c.last4);
     assert.equal(body.includes(c.code), false, 'the code itself never reaches the database');
@@ -59,9 +59,23 @@ test('a print sends only digests and last four digits, and returns each code onc
 
 test('a replayed print has no codes', async () => {
   const a = randomUUID();
-  const db = fakeDatabase({ record: { printId: randomUUID(), replaced: 1, cards: [card(a, '1234')] }, replayed: true });
+  const db = fakeDatabase({ record: { printId: randomUUID(), replaced: 1, cards: [{ ...card(a, '1234'), printPhoto: true }] }, replayed: true });
   const out = await new AttendanceCardsService(db).issue(req, { schoolId: school, studentProfileIds: [a] }, randomUUID());
-  assert.equal(out.replayed, true); assert.equal(out.cards[0].code, null);
+  assert.equal(out.replayed, true); assert.equal(out.cards[0].code, null); assert.equal(out.cards[0].printPhoto, true);
+});
+
+test('photo consent: closed input with attendance.cards.manage scope, checked reply, withdraw-before-given never reaches the database', async () => {
+  const a = randomUUID();
+  const db = fakeDatabase({ record: { studentProfileId: a, photoConsent: 'GIVEN', photoConsentVersion: 1, recordedAt: '2026-11-16T05:00:00.000Z' }, replayed: false });
+  const service = new AttendanceCardsService(db);
+  await assert.rejects(service.photoConsent(req, { schoolId: school, studentProfileId: a, given: false, expectedVersion: 0 }, randomUUID()), status(400, 'ATTENDANCE_CARDS_INVALID'));
+  await assert.rejects(service.photoConsent(req, { schoolId: school, studentProfileId: a, given: true, expectedVersion: 0, name: 'x' }, randomUUID()), status(400, 'ATTENDANCE_CARDS_INVALID'));
+  assert.equal(db.calls.length, 0);
+  const out = await service.photoConsent(req, { schoolId: school, studentProfileId: a, given: true, expectedVersion: 0 }, randomUUID());
+  assert.equal(db.scopes[0].permission, 'attendance.cards.manage');
+  assert.match(db.calls[0].sql, /hon\.set_student_photo_consent/);
+  assert.deepEqual(JSON.parse(db.calls[0].args[1]), { studentProfileId: a, given: true, expectedVersion: 0 });
+  assert.equal(out.photoConsent, 'GIVEN'); assert.equal(out.replayed, false);
 });
 
 test('a scan with wrong check digits never reaches the database; a good one sends only the digest with attendance.record scope', async () => {

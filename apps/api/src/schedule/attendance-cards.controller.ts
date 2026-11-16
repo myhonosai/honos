@@ -5,7 +5,7 @@ import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { AttendanceCardsService } from './attendance-cards.service.js';
 
-/** 0391: same-origin human browser requests only, each command with its own header; never cached. */
+/** 0394: same-origin human browser requests only, each command with its own header; never cached. */
 @Injectable()
 export class AttendanceCardsHumanGuard implements CanActivate {
   canActivate(c: ExecutionContext) { return assertSchoolAccountHumanRequest(c, ATTENDANCE_CARDS_HUMAN_COMMAND); }
@@ -26,6 +26,8 @@ export class AttendanceCardsController {
   issue(@Req() r: HonRequest, @Body() b: unknown, @Headers('idempotency-key') k: string) { return this.cards.issue(r, b, k).then(data => ({ data })); }
   @Post('school/attendance/cards/cancel') @HttpCode(200)
   revoke(@Req() r: HonRequest, @Body() b: unknown, @Headers('idempotency-key') k: string) { return this.cards.revoke(r, b, k).then(data => ({ data })); }
+  @Post('school/attendance/cards/photo-consent') @HttpCode(200)
+  photoConsent(@Req() r: HonRequest, @Body() b: unknown, @Headers('idempotency-key') k: string) { return this.cards.photoConsent(r, b, k).then(data => ({ data })); }
 }
 
 @Controller() @UseGuards(AttendanceScanHumanGuard, HonIdentityGuard)

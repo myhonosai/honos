@@ -1,13 +1,14 @@
 import {
   ATTENDANCE_CARDS_HUMAN_COMMAND, ATTENDANCE_SCAN_HUMAN_COMMAND, accountClosed, accountUuid, validateAttendanceCardIssueInput, validateAttendanceCardIssueResult,
   validateAttendanceCardRevokeInput, validateAttendanceCardRevokeResult, validateAttendanceCardSettingsInput, validateAttendanceCardSettingsResult,
-  validateAttendanceCardsRead, validateAttendanceCheckInInput, validateAttendanceCheckInResult, type AttendanceCardIssueResult, type AttendanceCardRevokeResult,
+  validateAttendanceCardsRead, validateAttendanceCheckInInput, validateAttendanceCheckInResult, validateAttendancePhotoConsentInput,
+  validateAttendancePhotoConsentResult, type AttendancePhotoConsentResult, type AttendanceCardIssueResult, type AttendanceCardRevokeResult,
   type AttendanceCardSettingsInput, type AttendanceCardSettingsResult, type AttendanceCardsRead, type AttendanceCheckInResult, type AttendanceCheckInStatus,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * Attendance cards and scan check-in (0391). The server decides authority from the verified session; the browser names
+ * Attendance cards and scan check-in (0394). The server decides authority from the verified session; the browser names
  * the school and sends one closed body per command with its exact human-command marker and an idempotency key.
  */
 export type CardsErrorKind =
@@ -88,6 +89,13 @@ export const cardsApi = {
     const body = valid(() => validateAttendanceCardRevokeInput({ schoolId, cardId, expectedVersion }));
     return command('/api/v1/school/attendance/cards/cancel', ATTENDANCE_CARDS_HUMAN_COMMAND, body, key, signal, owned, v => {
       const out = validateAttendanceCardRevokeResult(v); if (out.card.cardId !== body.cardId) throw new Error('mismatch'); return out;
+    });
+  },
+  /** Records that a parent (or the adult student) agreed to the photo on the card, or withdrew. */
+  async photoConsent(schoolId: string, studentProfileId: string, given: boolean, expectedVersion: number, key: string, signal: AbortSignal, owned: Owned): Promise<AttendancePhotoConsentResult> {
+    const body = valid(() => validateAttendancePhotoConsentInput({ schoolId, studentProfileId, given, expectedVersion }));
+    return command('/api/v1/school/attendance/cards/photo-consent', ATTENDANCE_CARDS_HUMAN_COMMAND, body, key, signal, owned, v => {
+      const out = validateAttendancePhotoConsentResult(v); if (out.studentProfileId !== body.studentProfileId) throw new Error('mismatch'); return out;
     });
   },
   /** One scan. The code is checked here first (a misread never leaves the browser). */

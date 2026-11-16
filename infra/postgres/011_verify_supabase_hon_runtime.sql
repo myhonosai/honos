@@ -2597,7 +2597,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; cols text[]; BEGI
 ('hon.guard_membership_state_transition()',false,false,'search_path=pg_catalog, hon','1e860ef88864ffe8e61ebe064cba7cf4458df30ef6189cef96e859239dbbd28e'),
 ('hon.membership_local_date(timestamptz,text)',false,false,'search_path=pg_catalog','60fb21bff4757c407e3acddc061c304629f0f035145d633924461e75090ad465'),
 ('hon.membership_local_day_start(date,text)',false,false,'search_path=pg_catalog, hon','7d311eb5b3ec550b13b360c747cc628fc8d13369e2984c01a12cbd2c3794e4ec'),
-('hon.membership_effective_status_at(hon.membership_state,timestamptz,timestamptz,timestamptz)',false,false,'search_path=pg_catalog, hon','1430f67da4c27d157e9d520ac4b50e04c750391b22680ca21553fb7dfc33d613'),
+('hon.membership_effective_status_at(hon.membership_state,timestamptz,timestamptz,timestamptz)',false,false,'search_path=pg_catalog, hon','1430f67da4c27d157e9d520ac4b50e04c750394b22680ca21553fb7dfc33d613'),
 ('hon.membership_activation_text_ok(text,integer)',false,false,'search_path=pg_catalog','da4065773ea5ed7bf34267f0ff311863463c5d168d8ec8c0ad97a506677dbfe3'),
 ('hon.membership_activation_date(jsonb)',false,false,'search_path=pg_catalog','70dfaa487da94917b5204642ac4dd5685870f65062c9026e979e5919289b4963'),
 ('hon.membership_lifecycle_permission(uuid,uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','1aaff531834840168bff93e5786e9956669fdb636b74c7d0c4f43dc245586f7f'),
@@ -3877,12 +3877,13 @@ BEGIN
   END LOOP;
 END $$;
 -- End school location exact verification.
--- Attendance card exact verification (0391)
+-- Attendance card exact verification (0394)
 DO $$ DECLARE f text; t text;
-  entry text[]:=ARRAY['hon.read_attendance_cards(text)','hon.configure_attendance_cards(text,jsonb,text,uuid,uuid)','hon.issue_attendance_cards(text,jsonb,text,uuid,uuid)','hon.revoke_attendance_card(text,jsonb,text,uuid,uuid)','hon.check_in_with_attendance_card(text,uuid,jsonb,text,uuid,uuid)'];
+  entry text[]:=ARRAY['hon.read_attendance_cards(text)','hon.configure_attendance_cards(text,jsonb,text,uuid,uuid)','hon.issue_attendance_cards(text,jsonb,text,uuid,uuid)','hon.revoke_attendance_card(text,jsonb,text,uuid,uuid)','hon.check_in_with_attendance_card(text,uuid,jsonb,text,uuid,uuid)','hon.set_student_photo_consent(text,jsonb,text,uuid,uuid)'];
   helpers text[]:=ARRAY['hon.guard_attendance_card()','hon.attendance_cards_actor(text)','hon.attendance_card_settings_json(uuid,uuid)','hon.attendance_card_json(hon.attendance_cards)',
     'hon.attendance_card_begin(text,text,jsonb,text,uuid,uuid)','hon.attendance_card_finish(text,uuid,text,text,uuid,jsonb,text,uuid,uuid,jsonb)',
-    'hon.attendance_check_in_student(text,uuid,uuid,text,uuid,text,text,uuid,uuid)'];
+    'hon.attendance_check_in_student(text,uuid,uuid,text,uuid,text,text,uuid,uuid)','hon.attendance_photo_consent_rule(uuid,uuid)',
+    'hon.attendance_photo_consent_state(boolean,hon.student_photo_consents)'];
 BEGIN
   FOREACH f IN ARRAY entry LOOP
     IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
@@ -3896,7 +3897,7 @@ BEGIN
         OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
       RAISE EXCEPTION 'Unsafe attendance card helper: %',f; END IF;
   END LOOP;
-  FOREACH t IN ARRAY ARRAY['attendance_card_settings','attendance_cards','attendance_check_ins','attendance_card_requests'] LOOP
+  FOREACH t IN ARRAY ARRAY['attendance_card_settings','attendance_cards','attendance_check_ins','attendance_card_requests','student_photo_consent_rules','student_photo_consents'] LOOP
     IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
       OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
       OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')

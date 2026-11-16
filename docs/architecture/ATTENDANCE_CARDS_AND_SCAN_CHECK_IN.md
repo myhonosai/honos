@@ -1,4 +1,4 @@
-# Attendance cards and scan check-in (0390, 0391)
+# Attendance cards and scan check-in (0390, 0394)
 
 Status: spec + plan, owner request 2026-11-16 ("make attendance cards; barcode or QR, school owner chooses; card has the
 school logo and the student's picture from the contact card; the scanner picks up which one automatically").
@@ -7,12 +7,12 @@ Face matching is a separate thread ("Add face check-in with parent consent") tha
 ## Goals
 
 1. **Student photo on the contact card (0390).** Staff take or upload one photo per person on the People contact card.
-2. **Card maker (0391).** The school owner chooses BARCODE (Code 128) or QR for the school. Staff with card permission
+2. **Card maker (0394).** The school owner chooses BARCODE (Code 128) or QR for the school. Staff with card permission
    print one card or a sheet of cards: school logo (existing 0285 branding `logoUrl`), student photo (0390), name,
    school name, the code. Printing a card issues a new code; the student's previous card stops working.
-3. **Scan check-in (0391).** A signed-in staff "front desk" screen: pick today's class, scan. A USB/Bluetooth scanner
+3. **Scan check-in (0394).** A signed-in staff "front desk" screen: pick today's class, scan. A USB/Bluetooth scanner
    (keyboard input) or the device camera is read without choosing the type (browser `BarcodeDetector` where it reads
-   both QR and Code 128; otherwise, as on Safari and iPad, the open-source ZXing decoder `@zxing/library` 0.21.3, Apache-2.0,
+   both QR and Code 128; otherwise, as on Safari and iPad, the open-source ZXing decoder `@zxing/library` 0.21.3 (npm lists MIT; it ships the upstream ZXing Apache-2.0 LICENSE),
    loaded only then and run on the device with no network calls):
    both symbologies carry the same digits. Staff see the student's photo and name, and attendance is written by the
    existing `hon.record_attendance` (0115). No parallel attendance model.
@@ -57,7 +57,7 @@ Functions: `read_person_photo(subject, school, person)`, `set_person_photo(subje
 `remove_person_photo(subject, input, key)`. The People record read gains `photo: {version, checksum} | null` through a
 separate photo summary read (`read_person_photo_summary`), so 0217 is not replaced.
 
-## Data (0391)
+## Data (0394)
 
 - `hon.attendance_card_settings(school PK, code_type BARCODE|QR, show_photo, show_logo, design CLASSIC|BOLD|MINIMAL, version)`.
 - `hon.attendance_cards(id, school, student_profile_id, code_digest bytea UNIQUE, code_last4, status ACTIVE|REPLACED|REVOKED, issued/ended by/at)`.
@@ -88,15 +88,21 @@ separate photo summary read (`read_person_photo_summary`), so 0217 is not replac
 ## Plan
 
 1. 0390 photos: contracts, migration, API (strip + call), web Photo panel, DB proof, API + UI tests. PR 1.
-2. 0391 cards + scan: contracts (code + checksum helpers shared), migration, API, encoders with tests, card maker and
+2. 0394 cards + scan: contracts (code + checksum helpers shared), migration, API, encoders with tests, card maker and
    scan screens, DB proof, tests. PR 2 (stacked on PR 1).
 3. Later, no migration: Creative Studio image as card background (Higgsfield off; fakes in tests).
 
 ## Open owner questions (not blocking)
 
 - Owner decision 2026-11-16: add a free decoder for iPad/Safari (done, see above).
-- Owner decision 2026-11-16: no parent consent for card photos unless the school's state requires it. The state comes
-  from the face thread's school location and jurisdiction rules (0392); the photo-consent rule is a follow-up after it.
+- Owner decision 2026-11-16: no parent consent for card photos unless the school's place requires it; a school with
+  no address needs none (owner choice on the decision card). Built in 0394: `hon.student_photo_consent_rules`
+  (one immutable TEST_ONLY_DRAFT row per 0392 profile; consent required for EU_GDPR, UK_GDPR, KR_PIPA and NOT_REVIEWED,
+  so an unreviewed place fails closed), `hon.student_photo_consents` (GIVEN/WITHDRAWN, versioned) and the entry point
+  `set_student_photo_consent` (attendance.cards.manage, POST school/attendance/cards/photo-consent). The print decides
+  `printPhoto` per card on the server: saved look shows photos, a photo is on file, and consent is given where needed;
+  otherwise the card shows initials. The list of places is a draft for lawyer review. City matching follows 0392
+  (exact text), and an ordinary photo is not a biometric template, so the 0392 face rules do not carry over.
 - Staff on the scan screen also need `schedule.session.read` to list today's classes (existing read).
 - New organizations: like 0364, the migration adds `attendance.cards.manage` to existing OWNER system roles; whether
   system roles created later receive it depends on the role template (owner check before launch).

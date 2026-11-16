@@ -189,6 +189,8 @@ const expectedRlsTables = [
   'attendance_cards',
   'attendance_check_ins',
   'attendance_card_requests',
+  'student_photo_consent_rules',
+  'student_photo_consents',
   'school_websites',
   'school_website_versions',
   'school_website_requests',

@@ -1,6 +1,6 @@
 BEGIN;
 
--- Attendance cards and scan check-in (0391, coordinator-allocated 2026-11-16).
+-- Attendance cards and scan check-in (0394, coordinator-allocated 2026-11-16).
 --
 -- * The school owner chooses how cards are printed (BARCODE = Code 128, or QR) and what they show (school logo from the
 --   0285 branding, the 0390 contact photo). Both kinds carry the same 26 digits, so a scanner reads either without being
@@ -12,14 +12,21 @@ BEGIN;
 --   after the live attendance.record decision for that staff member at that school (hon.lock_attendance_actor), and
 --   attendance is written only by the existing hon.record_attendance (0115): no parallel attendance model. Each scan that
 --   records attendance adds one provenance row (method, card) to hon.attendance_check_ins.
+-- * Photo consent (owner decision 2026-11-16): no parent consent unless the school's place requires it. The place comes
+--   from the 0392 school location and its jurisdiction profile; hon.student_photo_consent_rules says which profiles need
+--   consent (TEST_ONLY_DRAFT, lawyer review before real use). A school with no location needs none (owner choice); an
+--   unreviewed place needs it (fail closed). Where consent is needed, a card prints the photo only when staff recorded the
+--   parent's (or adult student's) consent; otherwise it prints initials. An ordinary photo is not a biometric template, so
+--   the 0392 face rules do not carry over.
 -- * hon.attendance_check_in_student is the shared internal path (not granted to the app); a later check-in method calls it
 --   with its own method value after widening attendance_check_ins_method_check.
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'Trusted migration owner required'; END IF;
   IF to_regprocedure('hon.record_attendance(text,uuid,jsonb,text,uuid,uuid)') IS NULL OR to_regprocedure('hon.lock_attendance_actor(text,text)') IS NULL
-    OR to_regclass('hon.school_page_branding') IS NULL OR to_regclass('hon.person_photos') IS NULL OR to_regprocedure('hon.saas_ts(timestamptz)') IS NULL THEN
-    RAISE EXCEPTION '0391 requires 0115, 0285, 0390 and the saas timestamp helper'; END IF;
+    OR to_regclass('hon.school_page_branding') IS NULL OR to_regclass('hon.person_photos') IS NULL OR to_regprocedure('hon.saas_ts(timestamptz)') IS NULL
+    OR to_regclass('hon.school_locations') IS NULL OR to_regprocedure('hon.biometric_profile_for(text,text,text)') IS NULL THEN
+    RAISE EXCEPTION '0394 requires 0115, 0285, 0390, 0392 and the saas timestamp helper'; END IF;
 END $$;
 
 INSERT INTO hon.permissions(code,description,is_sensitive,is_staff_assignable) VALUES
@@ -80,7 +87,7 @@ CREATE INDEX attendance_check_ins_scope_idx ON hon.attendance_check_ins(organiza
 CREATE TABLE hon.attendance_card_requests (
   organization_id uuid NOT NULL, school_id uuid NOT NULL, principal_id uuid NOT NULL REFERENCES hon.principals(id),
   idempotency_key text NOT NULL CHECK (length(idempotency_key) BETWEEN 1 AND 200),
-  operation text NOT NULL CHECK (operation IN ('settings','issue','revoke')),
+  operation text NOT NULL CHECK (operation IN ('settings','issue','revoke','consent')),
   fingerprint text NOT NULL CHECK (fingerprint ~ '^[a-f0-9]{64}$'),
   response jsonb, created_at timestamptz NOT NULL DEFAULT clock_timestamp(), completed_at timestamptz,
   PRIMARY KEY (organization_id,school_id,principal_id,idempotency_key),
@@ -88,6 +95,35 @@ CREATE TABLE hon.attendance_card_requests (
   CHECK ((response IS NULL)=(completed_at IS NULL))
 );
 
+-- Which jurisdiction profiles need consent before a student's photo is printed on a card. Immutable draft rows: a change
+-- is a new migration. Every 0392 profile has a row (checked below).
+CREATE TABLE hon.student_photo_consent_rules (
+  profile_code text PRIMARY KEY REFERENCES hon.biometric_jurisdiction_profiles(code),
+  consent_required boolean NOT NULL,
+  review_status text NOT NULL CHECK (review_status='TEST_ONLY_DRAFT')
+);
+INSERT INTO hon.student_photo_consent_rules(profile_code,consent_required,review_status)
+SELECT code,code IN ('EU_GDPR','UK_GDPR','KR_PIPA','NOT_REVIEWED'),'TEST_ONLY_DRAFT' FROM hon.biometric_jurisdiction_profiles;
+DO $$ BEGIN
+  IF EXISTS(SELECT 1 FROM hon.biometric_jurisdiction_profiles p WHERE NOT EXISTS(SELECT 1 FROM hon.student_photo_consent_rules r WHERE r.profile_code=p.code))
+    OR (SELECT count(*) FROM hon.student_photo_consent_rules WHERE consent_required)<>4 THEN
+    RAISE EXCEPTION '0394 photo consent rules do not cover the 0392 profiles'; END IF;
+END $$;
+
+-- The consent staff recorded for one student (GIVEN or WITHDRAWN), versioned; history is the audit trail.
+CREATE TABLE hon.student_photo_consents (
+  student_profile_id uuid PRIMARY KEY, organization_id uuid NOT NULL, school_id uuid NOT NULL,
+  status text NOT NULL CHECK (status IN ('GIVEN','WITHDRAWN')),
+  version integer NOT NULL DEFAULT 1 CHECK (version BETWEEN 1 AND 999999999),
+  recorded_by_principal_id uuid NOT NULL REFERENCES hon.principals(id),
+  recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  FOREIGN KEY (student_profile_id,organization_id,school_id) REFERENCES hon.student_profiles(id,organization_id,school_id)
+);
+
+ALTER TABLE hon.student_photo_consent_rules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hon.student_photo_consent_rules FORCE ROW LEVEL SECURITY;
+ALTER TABLE hon.student_photo_consents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hon.student_photo_consents FORCE ROW LEVEL SECURITY;
 ALTER TABLE hon.attendance_card_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hon.attendance_card_settings FORCE ROW LEVEL SECURITY;
 ALTER TABLE hon.attendance_cards ENABLE ROW LEVEL SECURITY;
@@ -104,7 +140,12 @@ CREATE FUNCTION hon.guard_attendance_card() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 BEGIN
   IF TG_OP IN ('TRUNCATE','DELETE') THEN RAISE EXCEPTION 'ATTENDANCE_CARD_IMMUTABLE' USING ERRCODE='42501'; END IF;
-  IF TG_TABLE_NAME='attendance_check_ins' THEN RAISE EXCEPTION 'ATTENDANCE_CARD_IMMUTABLE' USING ERRCODE='42501'; END IF;
+  IF TG_TABLE_NAME IN ('attendance_check_ins','student_photo_consent_rules') THEN RAISE EXCEPTION 'ATTENDANCE_CARD_IMMUTABLE' USING ERRCODE='42501'; END IF;
+  IF TG_TABLE_NAME='student_photo_consents' THEN
+    IF NEW.version<>OLD.version+1 OR (NEW.student_profile_id,NEW.organization_id,NEW.school_id) IS DISTINCT FROM (OLD.student_profile_id,OLD.organization_id,OLD.school_id) THEN
+      RAISE EXCEPTION 'ATTENDANCE_CARD_IMMUTABLE' USING ERRCODE='42501'; END IF;
+    RETURN NEW;
+  END IF;
   IF TG_TABLE_NAME='attendance_card_requests' THEN
     IF OLD.response IS NOT NULL OR NEW.response IS NULL OR NEW.completed_at IS NULL
       OR (NEW.organization_id,NEW.school_id,NEW.principal_id,NEW.idempotency_key,NEW.operation,NEW.fingerprint,NEW.created_at)
@@ -129,6 +170,10 @@ CREATE TRIGGER attendance_card_requests_guard BEFORE UPDATE OR DELETE ON hon.att
 CREATE TRIGGER attendance_card_settings_no_truncate BEFORE TRUNCATE ON hon.attendance_card_settings FOR EACH STATEMENT EXECUTE FUNCTION hon.guard_attendance_card();
 CREATE TRIGGER attendance_cards_no_truncate BEFORE TRUNCATE ON hon.attendance_cards FOR EACH STATEMENT EXECUTE FUNCTION hon.guard_attendance_card();
 CREATE TRIGGER attendance_check_ins_no_truncate BEFORE TRUNCATE ON hon.attendance_check_ins FOR EACH STATEMENT EXECUTE FUNCTION hon.guard_attendance_card();
+CREATE TRIGGER student_photo_consent_rules_guard BEFORE UPDATE OR DELETE ON hon.student_photo_consent_rules FOR EACH ROW EXECUTE FUNCTION hon.guard_attendance_card();
+CREATE TRIGGER student_photo_consents_guard BEFORE UPDATE OR DELETE ON hon.student_photo_consents FOR EACH ROW EXECUTE FUNCTION hon.guard_attendance_card();
+CREATE TRIGGER student_photo_consent_rules_no_truncate BEFORE TRUNCATE ON hon.student_photo_consent_rules FOR EACH STATEMENT EXECUTE FUNCTION hon.guard_attendance_card();
+CREATE TRIGGER student_photo_consents_no_truncate BEFORE TRUNCATE ON hon.student_photo_consents FOR EACH STATEMENT EXECUTE FUNCTION hon.guard_attendance_card();
 CREATE TRIGGER attendance_card_requests_no_truncate BEFORE TRUNCATE ON hon.attendance_card_requests FOR EACH STATEMENT EXECUTE FUNCTION hon.guard_attendance_card();
 
 -- Card authority: the direct human of this request (principal id bound by the API's tenant context), one active human
@@ -161,12 +206,29 @@ BEGIN
   RETURN actor;
 END $$;
 
+-- Whether this school's place needs photo consent: no location row = not required (owner choice); a located school uses
+-- its 0392 profile, and a profile without a rule fails closed.
+CREATE FUNCTION hon.attendance_photo_consent_rule(p_org uuid,p_school uuid) RETURNS jsonb
+LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
+  SELECT CASE WHEN l.school_id IS NULL THEN jsonb_build_object('required',false,'profile',NULL,'reason','NO_LOCATION')
+    ELSE (SELECT jsonb_build_object('required',coalesce(r.consent_required,true),'profile',x.code,'reason','PROFILE')
+      FROM (SELECT hon.biometric_profile_for(l.country_code,l.region_code,l.city) code) x
+      LEFT JOIN hon.student_photo_consent_rules r ON r.profile_code=x.code) END
+  FROM (SELECT p_school sid) q LEFT JOIN hon.school_locations l ON l.school_id=q.sid AND l.organization_id=p_org
+$$;
+
+-- One student's photo consent state for cards: NOT_REQUIRED, GIVEN or MISSING (never recorded or withdrawn).
+CREATE FUNCTION hon.attendance_photo_consent_state(p_required boolean,c hon.student_photo_consents) RETURNS text
+LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,hon AS $$
+  SELECT CASE WHEN NOT p_required THEN 'NOT_REQUIRED' WHEN c.status='GIVEN' THEN 'GIVEN' ELSE 'MISSING' END
+$$;
+
 -- The school's card look. A school that never chose gets QR with photo and logo (version 0, not saved).
 CREATE FUNCTION hon.attendance_card_settings_json(p_org uuid,p_school uuid) RETURNS jsonb
 LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
   SELECT jsonb_build_object('codeType',coalesce(s.code_type,'QR'),'showPhoto',coalesce(s.show_photo,true),'showLogo',coalesce(s.show_logo,true),
     'design',coalesce(s.design,'CLASSIC'),'version',coalesce(s.version,0),'updatedAt',hon.saas_ts(s.updated_at),
-    'schoolName',sc.name,'logoUrl',b.logo_url,'accentColor',b.accent_color)
+    'schoolName',sc.name,'logoUrl',b.logo_url,'accentColor',b.accent_color,'photoConsent',hon.attendance_photo_consent_rule(p_org,p_school))
   FROM hon.schools sc LEFT JOIN hon.attendance_card_settings s ON s.school_id=sc.id AND s.organization_id=sc.organization_id
     LEFT JOIN hon.school_page_branding b ON b.school_id=sc.id AND b.organization_id=sc.organization_id
   WHERE sc.id=p_school AND sc.organization_id=p_org
@@ -183,7 +245,7 @@ CREATE FUNCTION hon.attendance_card_begin(p_subject text,p_operation text,p_inpu
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); fp text; prior hon.attendance_card_requests%ROWTYPE;
 BEGIN
-  IF p_operation NOT IN ('settings','issue','revoke') OR p_input IS NULL OR jsonb_typeof(p_input)<>'object'
+  IF p_operation NOT IN ('settings','issue','revoke','consent') OR p_input IS NULL OR jsonb_typeof(p_input)<>'object'
     OR p_key IS NULL OR length(p_key) NOT BETWEEN 1 AND 200 OR btrim(p_key)<>p_key OR p_key ~ '[[:cntrl:]]'
     OR p_request IS NULL OR p_correlation IS NULL OR p_request::text IS DISTINCT FROM current_setting('app.hon_request_id',true) THEN
     RAISE EXCEPTION 'ATTENDANCE_CARDS_INVALID' USING ERRCODE='22023'; END IF;
@@ -222,15 +284,18 @@ END $$;
 -- Read: the card look plus the school's students (at most 500, by name) and each one's active card (no code).
 CREATE FUNCTION hon.read_attendance_cards(p_subject text) RETURNS jsonb
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-DECLARE org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); result jsonb;
+DECLARE org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); result jsonb; required boolean;
 BEGIN
   PERFORM hon.attendance_cards_actor(p_subject);
+  required:=(hon.attendance_photo_consent_rule(org,school)->>'required')::boolean;
   SELECT jsonb_build_object('settings',hon.attendance_card_settings_json(org,school),'maxPerPrint',40,
     'students',coalesce(jsonb_agg(jsonb_build_object('studentProfileId',x.id,'personId',x.person_id,'givenName',x.given_name,'familyName',x.family_name,
-      'studentStatus',x.status,'hasPhoto',x.has_photo,'card',x.card) ORDER BY x.family_name,x.given_name,x.id),'[]'::jsonb)) INTO result
+      'studentStatus',x.status,'hasPhoto',x.has_photo,'card',x.card,
+      'photoConsent',hon.attendance_photo_consent_state(required,x.consent),'photoConsentVersion',coalesce((x.consent).version,0)) ORDER BY x.family_name,x.given_name,x.id),'[]'::jsonb)) INTO result
   FROM (SELECT sp.id,sp.person_id,p.given_name,p.family_name,sp.status::text status,
       EXISTS(SELECT 1 FROM hon.person_photos ph WHERE ph.person_id=sp.person_id AND ph.organization_id=org AND ph.school_id=school) has_photo,
-      (SELECT hon.attendance_card_json(c) FROM hon.attendance_cards c WHERE c.student_profile_id=sp.id AND c.organization_id=org AND c.school_id=school AND c.status='ACTIVE') card
+      (SELECT hon.attendance_card_json(c) FROM hon.attendance_cards c WHERE c.student_profile_id=sp.id AND c.organization_id=org AND c.school_id=school AND c.status='ACTIVE') card,
+      (SELECT pc FROM hon.student_photo_consents pc WHERE pc.student_profile_id=sp.id AND pc.organization_id=org AND pc.school_id=school) consent
     FROM hon.student_profiles sp JOIN hon.people p ON p.id=sp.person_id AND p.organization_id=sp.organization_id AND p.school_id=sp.school_id
     WHERE sp.organization_id=org AND sp.school_id=school ORDER BY p.family_name,p.given_name,sp.id LIMIT 500) x;
   RETURN result;
@@ -269,7 +334,7 @@ END $$;
 CREATE FUNCTION hon.issue_attendance_cards(p_subject text,p_input jsonb,p_key text,p_request uuid,p_correlation uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE s record; org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); item jsonb; student uuid; c hon.attendance_cards%ROWTYPE;
-  issued jsonb:='[]'::jsonb; replaced integer:=0; n integer; batch uuid:=gen_random_uuid();
+  issued jsonb:='[]'::jsonb; replaced integer:=0; n integer; batch uuid:=gen_random_uuid(); show_photo boolean; required boolean; consent text;
   uuid_re constant text:='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 BEGIN
   SELECT * INTO s FROM hon.attendance_card_begin(p_subject,'issue',p_input,p_key,p_request,p_correlation);
@@ -284,6 +349,9 @@ BEGIN
     OR (SELECT count(DISTINCT x->>'studentProfileId') FROM jsonb_array_elements(p_input->'cards') x)<>n
     OR (SELECT count(DISTINCT x->>'codeDigest') FROM jsonb_array_elements(p_input->'cards') x)<>n THEN
     RAISE EXCEPTION 'ATTENDANCE_CARDS_INVALID' USING ERRCODE='22023'; END IF;
+  -- Whether each card may carry the photo is decided here, from the saved look and the school's consent rule.
+  show_photo:=coalesce((SELECT st.show_photo FROM hon.attendance_card_settings st WHERE st.school_id=school AND st.organization_id=org),true);
+  required:=(hon.attendance_photo_consent_rule(org,school)->>'required')::boolean;
   -- Students in a fixed order so two prints of overlapping students cannot deadlock.
   FOR item IN SELECT x FROM jsonb_array_elements(p_input->'cards') x ORDER BY x->>'studentProfileId' LOOP
     student:=(item->>'studentProfileId')::uuid;
@@ -298,7 +366,11 @@ BEGIN
         VALUES(org,school,student,decode(item->>'codeDigest','hex'),item->>'last4',s.actor) RETURNING * INTO c;
     EXCEPTION WHEN unique_violation THEN RAISE EXCEPTION 'ATTENDANCE_CARD_CODE_TAKEN' USING ERRCODE='23505';
     END;
-    issued:=issued||hon.attendance_card_json(c);
+    SELECT hon.attendance_photo_consent_state(required,pc) INTO consent FROM (SELECT 1) one
+      LEFT JOIN hon.student_photo_consents pc ON pc.student_profile_id=student AND pc.organization_id=org AND pc.school_id=school;
+    issued:=issued||(hon.attendance_card_json(c)||jsonb_build_object('printPhoto',show_photo AND consent<>'MISSING'
+      AND EXISTS(SELECT 1 FROM hon.person_photos ph JOIN hon.student_profiles sp ON sp.person_id=ph.person_id AND sp.organization_id=ph.organization_id AND sp.school_id=ph.school_id
+        WHERE sp.id=student AND ph.organization_id=org AND ph.school_id=school)));
   END LOOP;
   RETURN hon.attendance_card_finish(p_subject,s.actor,'issue','ATTENDANCE_CARD_PRINT',batch,
     jsonb_build_object('cardIds',(SELECT jsonb_agg(x->'cardId') FROM jsonb_array_elements(issued) x),'replaced',replaced,'version',1),
@@ -384,9 +456,46 @@ BEGIN
   RETURN result||jsonb_build_object('student',who,'card',hon.attendance_card_json(c));
 END $$;
 
--- Deny first, then exactly the five entry points for the runtime role. No table privilege for any client role.
+-- Input: exactly {studentProfileId, given (boolean), expectedVersion (0 when never recorded)}. Staff record that the
+-- parent (or the adult student) agreed to the photo on the card, or that they withdrew. Allowed even where the place does
+-- not need it, so a school can keep a record anyway. Identifier-only audit.
+CREATE FUNCTION hon.set_student_photo_consent(p_subject text,p_input jsonb,p_key text,p_request uuid,p_correlation uuid) RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE s record; org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); student uuid; cur hon.student_photo_consents%ROWTYPE;
+  nxt hon.student_photo_consents%ROWTYPE; required boolean;
+BEGIN
+  SELECT * INTO s FROM hon.attendance_card_begin(p_subject,'consent',p_input,p_key,p_request,p_correlation);
+  IF s.replay IS NOT NULL THEN RETURN jsonb_build_object('record',s.replay,'replayed',true); END IF;
+  IF (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p_input) k) IS DISTINCT FROM ARRAY['expectedVersion','given','studentProfileId']
+    OR jsonb_typeof(p_input->'studentProfileId') IS DISTINCT FROM 'string' OR p_input->>'studentProfileId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    OR jsonb_typeof(p_input->'given') IS DISTINCT FROM 'boolean'
+    OR jsonb_typeof(p_input->'expectedVersion') IS DISTINCT FROM 'number' OR p_input->>'expectedVersion' !~ '^(0|[1-9][0-9]{0,8})$' THEN
+    RAISE EXCEPTION 'ATTENDANCE_CARDS_INVALID' USING ERRCODE='22023'; END IF;
+  student:=(p_input->>'studentProfileId')::uuid;
+  PERFORM 1 FROM hon.student_profiles WHERE id=student AND organization_id=org AND school_id=school FOR KEY SHARE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'ATTENDANCE_CARD_STUDENT_NOT_FOUND' USING ERRCODE='P0002'; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('attendance-card:'||student::text,0));
+  SELECT * INTO cur FROM hon.student_photo_consents WHERE student_profile_id=student AND organization_id=org AND school_id=school FOR UPDATE;
+  IF cur.student_profile_id IS NULL AND NOT (p_input->>'given')::boolean THEN RAISE EXCEPTION 'ATTENDANCE_CARDS_INVALID' USING ERRCODE='22023'; END IF;
+  IF coalesce(cur.version,0)<>(p_input->>'expectedVersion')::integer THEN RAISE EXCEPTION 'VERSION_CONFLICT' USING ERRCODE='40001'; END IF;
+  IF cur.student_profile_id IS NULL THEN
+    INSERT INTO hon.student_photo_consents(student_profile_id,organization_id,school_id,status,recorded_by_principal_id)
+      VALUES(student,org,school,'GIVEN',s.actor) RETURNING * INTO nxt;
+  ELSE
+    UPDATE hon.student_photo_consents SET status=CASE WHEN (p_input->>'given')::boolean THEN 'GIVEN' ELSE 'WITHDRAWN' END,version=version+1,
+      recorded_by_principal_id=s.actor,recorded_at=clock_timestamp() WHERE student_profile_id=student RETURNING * INTO nxt;
+  END IF;
+  required:=(hon.attendance_photo_consent_rule(org,school)->>'required')::boolean;
+  RETURN hon.attendance_card_finish(p_subject,s.actor,'consent','STUDENT_PHOTO_CONSENT',student,
+    jsonb_build_object('studentProfileId',student,'status',nxt.status,'version',nxt.version),p_key,p_request,p_correlation,
+    jsonb_build_object('studentProfileId',student,'photoConsent',hon.attendance_photo_consent_state(required,nxt),'photoConsentVersion',nxt.version,
+      'recordedAt',hon.saas_ts(nxt.recorded_at)));
+END $$;
+
+-- Deny first, then exactly the six entry points for the runtime role. No table privilege for any client role.
 DO $$ DECLARE r text; t text; f regprocedure; BEGIN
-  FOREACH t IN ARRAY ARRAY['attendance_card_settings','attendance_cards','attendance_check_ins','attendance_card_requests'] LOOP
+  FOREACH t IN ARRAY ARRAY['attendance_card_settings','attendance_cards','attendance_check_ins','attendance_card_requests',
+      'student_photo_consent_rules','student_photo_consents'] LOOP
     EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
       EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r);
@@ -397,7 +506,8 @@ DO $$ DECLARE r text; t text; f regprocedure; BEGIN
     'hon.attendance_card_finish(text,uuid,text,text,uuid,jsonb,text,uuid,uuid,jsonb)','hon.read_attendance_cards(text)',
     'hon.configure_attendance_cards(text,jsonb,text,uuid,uuid)','hon.issue_attendance_cards(text,jsonb,text,uuid,uuid)',
     'hon.revoke_attendance_card(text,jsonb,text,uuid,uuid)','hon.attendance_check_in_student(text,uuid,uuid,text,uuid,text,text,uuid,uuid)',
-    'hon.check_in_with_attendance_card(text,uuid,jsonb,text,uuid,uuid)']::regprocedure[] LOOP
+    'hon.check_in_with_attendance_card(text,uuid,jsonb,text,uuid,uuid)','hon.attendance_photo_consent_rule(uuid,uuid)',
+    'hon.attendance_photo_consent_state(boolean,hon.student_photo_consents)','hon.set_student_photo_consent(text,jsonb,text,uuid,uuid)']::regprocedure[] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
       EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
@@ -406,7 +516,7 @@ DO $$ DECLARE r text; t text; f regprocedure; BEGIN
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.read_attendance_cards(text),hon.configure_attendance_cards(text,jsonb,text,uuid,uuid),
       hon.issue_attendance_cards(text,jsonb,text,uuid,uuid),hon.revoke_attendance_card(text,jsonb,text,uuid,uuid),
-      hon.check_in_with_attendance_card(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
+      hon.check_in_with_attendance_card(text,uuid,jsonb,text,uuid,uuid),hon.set_student_photo_consent(text,jsonb,text,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
 
