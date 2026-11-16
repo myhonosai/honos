@@ -6,7 +6,7 @@ import {
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * 0400 lead pipeline board calls. The school is the one the shell verified; ids are selectors only and the API re-derives
+ * 0417 lead pipeline board calls. The school is the one the shell verified; ids are selectors only and the API re-derives
  * the human, school and permission from the signed session. The two commands are same-origin browser commands, each with
  * a key made on the press and reused only to retry that same uncertain press.
  */

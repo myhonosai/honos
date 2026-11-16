@@ -218,7 +218,7 @@ try {
     assert.equal(await submit(f,body(),key),'invalid'); assert.equal(await forms.published(f.publicId),null);
     await admin.query(`UPDATE hon.${table} SET status='ACTIVE' WHERE id=$1`,[target]);
   }
-  // 0400 guards stage rows; this fixture-only flip of a stage to terminal bypasses it for the admin connection only.
+  // 0417 guards stage rows; this fixture-only flip of a stage to terminal bypasses it for the admin connection only.
   await admin.query('ALTER TABLE hon.crm_pipeline_stages DISABLE TRIGGER crm_pipeline_stage_update_guard');
   await admin.query("UPDATE hon.crm_pipeline_stages SET terminal_status='WON' WHERE id=$1",[id.stage]);
   assert.equal(await submit(f,body(),key),'invalid'); assert.equal(await forms.published(f.publicId),null);

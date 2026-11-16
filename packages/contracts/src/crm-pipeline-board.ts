@@ -1,5 +1,5 @@
 /**
- * 0400: the lead pipeline board. One pipeline's stages, totals and up to 500 leads of one status; moving an open lead to
+ * 0417: the lead pipeline board. One pipeline's stages, totals and up to 500 leads of one status; moving an open lead to
  * another stage; saving the ordered list of non-terminal stages. The database validates every rule here again.
  */
 export const CRM_STAGE_COLORS = ['BLUE', 'SKY', 'CYAN', 'VIOLET', 'GREEN', 'RED', 'AMBER', 'SLATE'] as const;

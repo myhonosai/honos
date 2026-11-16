@@ -4081,7 +4081,7 @@ BEGIN
     RAISE EXCEPTION 'Membership list body drift: %',f; END IF;
 END $$;
 -- End retention review member list exact verification.
--- Lead pipeline board exact verification (0400)
+-- Lead pipeline board exact verification (0417)
 DO $$ DECLARE f text;
   entry text[]:=ARRAY['hon.read_crm_pipeline_board(text,uuid,text)','hon.move_crm_lead_stage(text,uuid,jsonb,text,uuid,uuid)',
     'hon.save_crm_pipeline_stages(text,uuid,jsonb,text,uuid,uuid)'];

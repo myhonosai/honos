@@ -16,7 +16,7 @@ function definedFields(input: object): Record<string, unknown> {
 }
 
 /**
- * 0400: the lead pipeline board. Route identifiers are never authority: the guarded boundary resolves the route scope from
+ * 0417: the lead pipeline board. Route identifiers are never authority: the guarded boundary resolves the route scope from
  * the verified session, and each protected database function re-proves the human subject and the live permission.
  */
 @Controller('organizations/:organizationId/schools/:schoolId/crm')

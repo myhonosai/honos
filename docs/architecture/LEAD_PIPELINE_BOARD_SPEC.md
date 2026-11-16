@@ -1,8 +1,8 @@
-# Lead pipeline board (0400)
+# Lead pipeline board (0417)
 
 Owner request (David, 2026-11-16 05:54Z): "These 3 can be on one page. Use pipeline format like this." The three pages are
 Leads (`/staff/crm`), Enroll a lead (`/staff/crm/leads`) and Enrollment journey (`/staff/crm/journey`). The reference is the
-lead section of his Manus CRM, adapted rather than copied. Migration number 0400 was allocated by the coordinator.
+lead section of his Manus CRM, adapted rather than copied. Migration number 0417 was allocated by the coordinator.
 
 ## What exists today (verified on main dc8408a)
 
@@ -44,7 +44,7 @@ One Leads page, a pipeline board, that replaces the three menu entries.
 The Leads group keeps "Leads" and drops "Enroll a lead" and "Enrollment journey". Those routes keep working as deep links from
 the side panel until enrolling moves onto the contact card ("Move membership actions onto the contact card" thread).
 
-## Backend (migration 0400)
+## Backend (migration 0417)
 
 - `crm_pipeline_stages`: add `color` (one of BLUE, SKY, CYAN, VIOLET, GREEN, RED, AMBER, SLATE; default BLUE) and `hidden_at`.
 - Permission `crm.lead.stage.move` (staff assignable, not sensitive), granted to OWNER and to every role that already holds

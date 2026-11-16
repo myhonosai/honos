@@ -1,5 +1,5 @@
 /**
- * Lead pipeline board proof (0400) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global
+ * Lead pipeline board proof (0417) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global
  * ValidationPipe + HonExceptionFilter -> CrmPipelineBoardController -> protected definer functions on the restricted runtime
  * role with forced RLS), on the guarded disposable CRM-close fixture only. Synthetic names only; nothing sends a message,
  * enrolls, takes a payment or calls AI.
@@ -215,7 +215,7 @@ try {
   const open = (await success(() => board(OWN), 'owner board')).data;
   ok(open.pipeline.id === P.id && open.pipelines.length === 2 && open.status === 'OPEN', 'first pipeline by default, both listed');
   ok(open.stages.map((s) => s.name).join('|') === 'Lead|Appointment booked|Showed|Enrolled|Not now', `stage order ${open.stages.map((s) => s.name)}`);
-  // Stages inserted after 0400 take the default colour; 0400 only recoloured terminal stages that already existed.
+  // Stages inserted after 0417 take the default colour; 0417 only recoloured terminal stages that already existed.
   ok(open.stages.every((s) => s.color === 'BLUE'), 'new stages default to blue');
   ok(open.stages.find((s) => s.id === P.stages.lead).openCount === 2 && open.stages.find((s) => s.id === P.stages.booked).openCount === 1, 'open counts per stage');
   ok(open.totals.open === 3 && open.totals.won === 1 && open.totals.lost === 1, `totals ${JSON.stringify(open.totals)}`);
@@ -320,12 +320,12 @@ try {
 
   // 6. 011 verification section.
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const begin = '-- Lead pipeline board exact verification (0400)', end = '-- End lead pipeline board exact verification.';
+    const begin = '-- Lead pipeline board exact verification (0417)', end = '-- End lead pipeline board exact verification.';
     const section = verify.split(begin)[1]?.split(end)[0];
     ok(section, begin);
     await sql(section.replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
-  console.log(`PASS: lead pipeline board (0400): ${checks} checks.`);
+  console.log(`PASS: lead pipeline board (0417): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

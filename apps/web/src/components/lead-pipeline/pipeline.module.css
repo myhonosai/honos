@@ -1,4 +1,4 @@
-/* Lead pipeline board (0400). HON design tokens only; [data-hon-mode] on the shell resizes them per theme. */
+/* Lead pipeline board (0417). HON design tokens only; [data-hon-mode] on the shell resizes them per theme. */
 .page { --won: var(--hon-success, #2fd28a); --lost: var(--hon-danger, #ff6b81);
   display: grid; gap: var(--hon-space-4, 16px); min-width: 0; color: var(--hon-text, #eef3ff); font-size: var(--hon-text-md, 15px); }
 .page [data-color='BLUE'] { --stage: #4b8dff; }

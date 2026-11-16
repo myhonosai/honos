@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),{randomUU
 const {CrmPipelineBoardService}=require('../dist/crm-pipeline-board/crm-pipeline-board.service.js');
 const {CrmPipelineBoardReadHumanUiGuard,CrmLeadStageMoveHumanUiGuard,CrmPipelineStagesSaveHumanUiGuard}=require('../dist/crm-pipeline-board/crm-pipeline-board-human-ui.guard.js');
 const c=require('@hon/contracts');
-// 0400: the lead pipeline board.
+// 0417: the lead pipeline board.
 const ids={pipe:randomUUID(),lead:randomUUID(),won:randomUUID(),person:randomUUID(),lead2:randomUUID(),org:randomUUID(),school:randomUUID()};
 const stage=(id,name,position,terminalStatus=null,openCount=0)=>({id,name,position,color:'BLUE',hidden:false,terminalStatus,openCount});
 const card={id:randomUUID(),version:1,status:'OPEN',stageId:ids.lead,personId:ids.person,givenName:'Ava',familyName:'Synthetic',email:null,phoneE164:null,
@@ -12,7 +12,7 @@ const board={pipelines:[{id:ids.pipe,name:'New students',version:1}],pipeline:{i
 const ctx=(over={})=>({organizationId:ids.org,schoolId:ids.school,principalId:randomUUID(),principalType:'HUMAN_USER',source:'HUMAN_UI',requestId:randomUUID(),correlationId:randomUUID(),externalSubject:'oidc:owner',idempotencyKey:'',...over});
 function db(rows,calls=[]){const run=async(_c,f)=>f({query:async(sql,args)=>{calls.push([sql,args]);return /hon\.(read_crm_pipeline_board|move_crm_lead_stage|save_crm_pipeline_stages)/.test(sql)?{rows}:{rows:[]};}});
  return {withTenantReadOnlyTransaction:run,withTenantTransaction:run};}
-test('read calls only the 0400 board function with the session subject and verifies the answer',async()=>{
+test('read calls only the 0417 board function with the session subject and verifies the answer',async()=>{
  const calls=[];const s=new CrmPipelineBoardService(db([{data:board}],calls));
  assert.equal((await s.read(ctx(),null,'OPEN')).leads[0].givenName,'Ava');
  assert(calls.some(([sql,args])=>sql.includes('hon.read_crm_pipeline_board($1,$2::uuid,$3)')&&args[0]==='oidc:owner'&&args[1]===null&&args[2]==='OPEN'));

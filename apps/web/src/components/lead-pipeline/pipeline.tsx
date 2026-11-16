@@ -25,7 +25,7 @@ function closeRow(lead: { id: string; status: LeadListItem['status']; version: n
 }
 
 /**
- * Leads as one pipeline board (0400) for the school the shell verified: stats, filters, board and list, a lead panel,
+ * Leads as one pipeline board (0417) for the school the shell verified: stats, filters, board and list, a lead panel,
  * moving a lead between stages, closing it as won or lost through the existing close command, editing the stages and
  * adding a lead. Blur, a hidden tab, page hide, a school change or a session end hide the page at once, retire every read
  * and drop every retained command; reads start again only after the shell re-verifies the school.

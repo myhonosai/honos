@@ -11,7 +11,7 @@ const HUMAN_SETTINGS = "SELECT set_config('app.hon_source','HUMAN_UI',true),set_
 const READ_LIMITS = "SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0";
 const WRITE_LIMITS = "SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0";
 
-// Exact 0400 error codes; every unknown database failure is unavailable, never success.
+// Exact 0417 error codes; every unknown database failure is unavailable, never success.
 const ERRORS: Record<string, (code: string) => HttpException> = {
   VALIDATION_FAILED: code => new BadRequestException({ code }),
   CRM_STAGE_NOT_ALLOWED: code => new BadRequestException({ code, detail: 'Choose a visible stage of this lead\'s pipeline that is not its current stage.' }),
@@ -39,7 +39,7 @@ function translate(error: unknown): never {
 }
 
 /**
- * 0400: the lead pipeline board. Each read and command is one protected definer call that re-proves the direct human
+ * 0417: the lead pipeline board. Each read and command is one protected definer call that re-proves the direct human
  * subject, the exact school, the live permission and the CRM entitlement. Closing a lead stays the 0145 close command.
  */
 @Injectable()

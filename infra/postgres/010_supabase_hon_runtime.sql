@@ -3883,7 +3883,7 @@ BEGIN
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END IF;
 END $$;
--- 0400 lead pipeline board: three runtime entry points; the actor checks, stage json, name check, timestamp helper and
+-- 0417 lead pipeline board: three runtime entry points; the actor checks, stage json, name check, timestamp helper and
 -- the two update guards are migration-owner only. No new table.
 DO $$ DECLARE r text; f text;
   entry text[]:=ARRAY['hon.read_crm_pipeline_board(text,uuid,text)','hon.move_crm_lead_stage(text,uuid,jsonb,text,uuid,uuid)',
@@ -3891,7 +3891,7 @@ DO $$ DECLARE r text; f text;
   helpers text[]:=ARRAY['hon.crm_board_ts(timestamptz)','hon.require_crm_board_actor(text,text)','hon.lock_crm_board_actor(text,text)',
     'hon.crm_board_stages_json(uuid)','hon.guard_crm_lead_stage_update()','hon.guard_crm_pipeline_stage_update()','hon.crm_stage_name_ok(jsonb)'];
 BEGIN
-  IF to_regprocedure('hon.read_crm_pipeline_board(text,uuid,text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0400 first'; END IF;
+  IF to_regprocedure('hon.read_crm_pipeline_board(text,uuid,text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0417 first'; END IF;
   FOREACH f IN ARRAY helpers||entry LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;

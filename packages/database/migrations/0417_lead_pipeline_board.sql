@@ -1,6 +1,6 @@
 BEGIN;
 
--- Lead pipeline board (0400, coordinator-allocated 2026-11-16).
+-- Lead pipeline board (0417, coordinator-allocated 2026-11-16).
 -- Owner request (David, 2026-11-16): Leads, Enroll a lead and Enrollment journey become one pipeline (kanban) page.
 -- Verified 2026-11-16 on main dc8408a: pipelines and stages exist since 0002, but nothing could move a lead between stages
 -- or rename, recolour, reorder, add or hide a stage. Spec: docs/architecture/LEAD_PIPELINE_BOARD_SPEC.md.
@@ -20,9 +20,9 @@ DO $$ BEGIN
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'Trusted migration owner required'; END IF;
   IF to_regprocedure('hon.close_crm_lead(text,uuid,jsonb,uuid,uuid,uuid)') IS NULL OR to_regprocedure('hon.membership_command_args_ok(text,text,uuid,uuid)') IS NULL
     OR to_regprocedure('hon.staff_member_eligible(uuid,uuid,uuid)') IS NULL THEN
-    RAISE EXCEPTION '0400 requires 0145, 0224 and the staff eligibility helper'; END IF;
+    RAISE EXCEPTION '0417 requires 0145, 0224 and the staff eligibility helper'; END IF;
   IF NOT EXISTS (SELECT 1 FROM hon.permissions WHERE code='crm.pipeline.manage') OR NOT EXISTS (SELECT 1 FROM hon.permissions WHERE code='crm.lead.read') THEN
-    RAISE EXCEPTION '0400 requires crm.pipeline.manage and crm.lead.read'; END IF;
+    RAISE EXCEPTION '0417 requires crm.pipeline.manage and crm.lead.read'; END IF;
 END $$;
 
 INSERT INTO hon.permissions(code,description,is_sensitive,is_staff_assignable) VALUES

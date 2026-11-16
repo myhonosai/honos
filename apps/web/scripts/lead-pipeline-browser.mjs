@@ -1,5 +1,5 @@
 /**
- * Disposable local browser proof for the lead pipeline board (0400). Synthetic fixtures only: every /api request is
+ * Disposable local browser proof for the lead pipeline board (0417). Synthetic fixtures only: every /api request is
  * answered in the browser by this script, which keeps one in-memory pipeline the way the server does (versions, moves,
  * close, stage save). No database, provider, payment or production backend is used. Requires `pnpm build` first.
  *

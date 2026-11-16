@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "9e1dbdfd5860f79a1ab5db25dabbc35fbdc78d5b99d62ea5dae5787b1ec0576f",
+  "chainSha256": "f32e999ef7144765b8efdc262c7a8cd2ed971638d3869aa4167bcb7eb9ddfa59",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -527,10 +527,6 @@
       "sha256": "16afebd48ff7fe3754de97bdcfb9aeb36ef3f766de9d30c136e950c58af9ed73"
     },
     {
-      "file": "0400_lead_pipeline_board.sql",
-      "sha256": "58ec76be62692d95e4bcba28149beb92a5908e8785418f6f674f827daebcdb68"
-    },
-    {
       "file": "0402_school_checkouts.sql",
       "sha256": "ea76852ef6f2b3aaab427f070106fa09e1d7f874019155ea3f141b155349846c"
     },
@@ -549,6 +545,10 @@
     {
       "file": "0407_retention_review_member_list.sql",
       "sha256": "88ee6b0f21d71289f02036e36d50644a960ff7eeb620d542afda2303c76d1606"
+    },
+    {
+      "file": "0417_lead_pipeline_board.sql",
+      "sha256": "071c1a65518bbf64d034885f6cebca9d9c579d4352b25af0d90dcb9e7176d3cc"
     }
   ]
 }
