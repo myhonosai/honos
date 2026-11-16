@@ -179,6 +179,8 @@ const expectedRlsTables = [
   'paper_import_sets',
   'paper_import_pages',
   'paper_import_requests',
+  'person_photos',
+  'person_photo_requests',
   'school_locations',
   'school_location_versions',
   'biometric_jurisdiction_profiles',
