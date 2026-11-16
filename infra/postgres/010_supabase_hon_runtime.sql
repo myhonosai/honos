@@ -3003,8 +3003,8 @@ DO $$ DECLARE r text; t text; col text; f text; BEGIN
   END IF;
 END $$;
 
--- B-TUI-2 piece 9a 0269 school checkout page settings: two private tables reached only through two runtime entry points;
--- guards, validators and helpers are private.
+-- B-TUI-2 piece 9a 0269 school checkout page settings: two private history tables; their two entry points were retired by
+-- 0402, so every function here is migration-owner only.
 DO $$ DECLARE r text; t text; col text; f text; BEGIN
   IF to_regclass('hon.school_checkout_pages') IS NULL THEN RAISE EXCEPTION 'Apply migration 0269 first'; END IF;
   FOREACH t IN ARRAY ARRAY['hon.school_checkout_pages','hon.school_checkout_page_versions'] LOOP
@@ -3027,9 +3027,7 @@ DO $$ DECLARE r text; t text; col text; f text; BEGIN
       EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
     END LOOP;
   END LOOP;
-  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
-    GRANT EXECUTE ON FUNCTION hon.read_school_checkout_pages(text),hon.save_school_checkout_page(text,jsonb,text,uuid,uuid) TO hon_runtime;
-  END IF;
+  -- 0402 retired the two 0269 entry points (many named pages replaced one page per kind); the runtime keeps no grant.
 END $$;
 
 -- B-SCH-3 part 3a 0285 school page branding: two private forced-RLS tables reached only through three runtime entry points
@@ -3749,6 +3747,27 @@ DO $$ DECLARE r text; t text; f text;
 BEGIN
   IF to_regclass('hon.school_locations') IS NULL THEN RAISE EXCEPTION 'Apply migration 0392 first'; END IF;
   FOREACH t IN ARRAY ARRAY['school_locations','school_location_versions','biometric_jurisdiction_profiles','biometric_jurisdiction_rules'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY helpers||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+-- B-TUI-2 checkout pages CP1 0402: three private tables reached only through three runtime entry points (staff read, page
+-- save, settings save); validators, guards and helpers are migration-owner only.
+DO $$ DECLARE r text; t text; f text;
+  entry text[]:=ARRAY['hon.read_school_checkouts(text)','hon.save_school_checkout(text,jsonb,text,uuid,uuid)','hon.save_school_checkout_settings(text,jsonb,text,uuid,uuid)'];
+  helpers text[]:=ARRAY['hon.checkout_int_ok(jsonb,bigint,bigint)','hon.checkout_fields_ok(jsonb)','hon.checkout_option_ok(jsonb)','hon.school_checkout_content_ok(jsonb)',
+    'hon.school_checkout_groups_ok(jsonb)','hon.school_checkout_default_groups()','hon.guard_school_checkout()','hon.school_checkout_json(hon.school_checkouts)',
+    'hon.school_checkout_settings_json(uuid,uuid)','hon.school_checkout_begin(text,text,jsonb,text)','hon.school_checkout_finish(text,uuid,text,jsonb)'];
+BEGIN
+  IF to_regclass('hon.school_checkouts') IS NULL THEN RAISE EXCEPTION 'Apply migration 0402 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['school_checkouts','school_checkout_versions','school_checkout_settings'] LOOP
     EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
   END LOOP;

@@ -3331,8 +3331,8 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 ('hon.guard_school_checkout_page()',false,false,'search_path=pg_catalog, hon','63a5a8ae76a8592e09e86b0a47741beb44d41b4536012714d3357dc75dd8efe4'),
 ('hon.require_school_checkout_actor(text)',true,false,'search_path=pg_catalog, hon','0cf880596410ab036049602a0e90267c5690976b5d10036c1a00a240c97b1988'),
 ('hon.school_checkout_page_json(hon.school_checkout_pages)',false,false,'search_path=pg_catalog, hon','39f46e65b834fb8f1137ccfae9ae58d9069a7639e3538af084c420b3c88d68e1'),
-('hon.read_school_checkout_pages(text)',true,true,'search_path=pg_catalog, hon','02f443483ac4bd2750ebf6278e3283f86baf8e58e6715cd9c59134e617731f6d'),
-('hon.save_school_checkout_page(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','2ee3c365baacab116aad18fe0c37eb591db7258d7209c627c1ced7d45d1dcf53')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+('hon.read_school_checkout_pages(text)',true,false,'search_path=pg_catalog, hon','02f443483ac4bd2750ebf6278e3283f86baf8e58e6715cd9c59134e617731f6d'),
+('hon.save_school_checkout_page(text,jsonb,text,uuid,uuid)',true,false,'search_path=pg_catalog, hon','2ee3c365baacab116aad18fe0c37eb591db7258d7209c627c1ced7d45d1dcf53')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
@@ -3877,3 +3877,51 @@ BEGIN
   END LOOP;
 END $$;
 -- End school location exact verification.
+
+-- School checkouts exact verification (B-TUI-2 0402): three private forced-RLS tables, the guards, private validators
+-- and helpers, three runtime entry points and the permission.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['hon.school_checkouts','hon.school_checkout_versions','hon.school_checkout_settings'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=t::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'School checkouts table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.checkout_int_ok(jsonb,bigint,bigint)',false,false,'search_path=pg_catalog','b60376389be8213423f78f85adc8194cb4e078f77ba88646934f78840511e504'),
+('hon.checkout_fields_ok(jsonb)',false,false,'search_path=pg_catalog, hon','06f2d8a77242a42a61ff0972f8d221e50cca8ed93cf34be0815391daef17e769'),
+('hon.checkout_option_ok(jsonb)',false,false,'search_path=pg_catalog, hon','d8d827fafd027d6942bfbdcb329d2acc8678388aecdbb1a85e685023d7838439'),
+('hon.school_checkout_content_ok(jsonb)',false,false,'search_path=pg_catalog, hon','7242765ce3e618d1aa2e9a561be2c2316cd276adaa43c63e2be8d40f9b253957'),
+('hon.school_checkout_groups_ok(jsonb)',false,false,'search_path=pg_catalog, hon','81ca19d07350af1c8c3ca4d209c70ad6a0e2ff945298e7a49f5f549a42955c66'),
+('hon.school_checkout_default_groups()',false,false,'search_path=pg_catalog','9c59014bad6b190b53fcdc835255f7d8dfc1b6f9871fa8b54291646b9a03cdf4'),
+('hon.guard_school_checkout()',false,false,'search_path=pg_catalog, hon','fefe8437e69c1b12024051864d826cf87c7c3a6f6647dc90b89e8343c7ea2c0e'),
+('hon.school_checkout_json(hon.school_checkouts)',false,false,'search_path=pg_catalog, hon','b9278fd23ff56b533fd5af59d9323ca30a145cff6d0cad42380e0bdf33d3e995'),
+('hon.school_checkout_settings_json(uuid,uuid)',false,false,'search_path=pg_catalog, hon','a5ff6ebae9fd5fe65797e68bb32dcad5ce646195b1e4c68515e89ba40836a95f'),
+('hon.school_checkout_begin(text,text,jsonb,text)',false,false,'search_path=pg_catalog, hon','ada2403285fb29a1cd8eeaf628d0e283d86a861e90dca6bb8864f48d675d5ab0'),
+('hon.school_checkout_finish(text,uuid,text,jsonb)',false,false,'search_path=pg_catalog, hon','9fe0f76d0c160ea4e92c9a1b8a971df8de6d1cd34ae4ef0996c81237e0ff4c21'),
+('hon.read_school_checkouts(text)',true,true,'search_path=pg_catalog, hon','9d4269b690fbe64b2de0b5e6c6bc7cc692001b47a76ac1b4a4206357aaab4771'),
+('hon.save_school_checkout(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','038935b36bf304c4ad4942468d0c420ecdaf04e288e93e3ce0ae8e6efe69a1da'),
+('hon.save_school_checkout_settings(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','bfb98d55afd4801a4b7b807360c5991bee2f3ed0fa0bd23a9e98dab4bf0204a2')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school checkouts function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('school_checkouts','school_checkout_guard','hon.guard_school_checkout()'),
+    ('school_checkouts','school_checkouts_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('school_checkout_settings','school_checkout_settings_guard','hon.guard_school_checkout()'),
+    ('school_checkout_settings','school_checkout_settings_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('school_checkout_versions','school_checkout_versions_immutable','hon.guard_membership_activation_evidence()'),
+    ('school_checkout_versions','school_checkout_versions_no_truncate','hon.guard_membership_activation_evidence()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing school checkouts guard: %',expected.name; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='school_checkout.manage' AND is_sensitive AND is_staff_assignable) THEN
+    RAISE EXCEPTION 'school_checkout.manage must exist as a sensitive staff-assignable permission'; END IF;
+END $$;
+-- End school checkouts exact verification.
