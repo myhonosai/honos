@@ -26,8 +26,10 @@ const when = (language: string, at: string) => new Intl.DateTimeFormat(language,
 export type MembershipItem = SchoolContactCard['membership'] extends infer M ? M extends { items: readonly (infer I)[] } ? I : never : never;
 /** The People page puts each membership's actions here (pause, cancel, start, …); the card itself only shows what the server read. */
 export type MembershipSlot = (item: MembershipItem) => React.ReactNode;
-export function ContactCard({ language, card, initialTab = 'overview', membershipSlot }: { language: string; card: CardState; initialTab?: CardTab;
-  membershipSlot?: MembershipSlot | undefined }): React.ReactElement | null {
+/** The People page puts New membership and Renew here, at the top of the membership tab (shown even before the first membership). */
+export type MembershipToolsSlot = (items: readonly MembershipItem[]) => React.ReactNode;
+export function ContactCard({ language, card, initialTab = 'overview', membershipSlot, membershipTools }: { language: string; card: CardState; initialTab?: CardTab;
+  membershipSlot?: MembershipSlot | undefined; membershipTools?: MembershipToolsSlot | undefined }): React.ReactElement | null {
   const [tab, setTab] = useState<CardTab>(initialTab);
   const t: T = (key, vars) => cardText(language, key, vars);
   if (card.state === 'NONE') return null;
@@ -44,11 +46,12 @@ export function ContactCard({ language, card, initialTab = 'overview', membershi
       {CARD_TABS.map(k => <button key={k} type="button" className={styles.tab} aria-pressed={tab === k} data-tab={k} data-allowed={allowed(k) ? 'true' : 'false'}
         onClick={() => setTab(k)}>{t(k)}{k === 'messages' && c.messages.allowed ? <span className={styles.count}>{c.messages.direct + (c.messages.family ?? 0)}</span> : null}</button>)}
     </div>
-    <div className={styles.tabBody} data-testid={`contact-tab-${tab}`}><Body language={language} c={c} tab={tab} t={t} slot={membershipSlot}/></div>
+    <div className={styles.tabBody} data-testid={`contact-tab-${tab}`}><Body language={language} c={c} tab={tab} t={t} slot={membershipSlot} tools={membershipTools}/></div>
   </article>;
 }
 
-function Body({ language, c, tab, t, slot }: { language: string; c: SchoolContactCard; tab: CardTab; t: T; slot?: MembershipSlot | undefined }): React.ReactElement {
+function Body({ language, c, tab, t, slot, tools }: { language: string; c: SchoolContactCard; tab: CardTab; t: T; slot?: MembershipSlot | undefined;
+  tools?: MembershipToolsSlot | undefined }): React.ReactElement {
   const denied = <p className={styles.meta} role="note">{t('notAllowed')}</p>;
   const none = <p className={styles.meta}>{t('none')}</p>;
   switch (tab) {
@@ -80,10 +83,9 @@ function Body({ language, c, tab, t, slot }: { language: string; c: SchoolContac
         <strong>{a.title}</strong> · {t(`priority_${a.priority}` as CardKey)}{a.dueAt ? ` · ${t('due', { date: day(language, a.dueAt) })}` : ''}</li>)}</ul>;
     case 'membership':
       if (!c.membership.allowed) return denied;
-      if (!c.membership.items.length) return none;
-      return <ul className={styles.plain}>{c.membership.items.map(m => <li key={m.membershipId} data-testid="card-membership">
+      return <>{tools ? tools(c.membership.items) : null}{c.membership.items.length ? <ul className={styles.plain}>{c.membership.items.map(m => <li key={m.membershipId} data-testid="card-membership">
         <strong>{m.planName ?? m.planCode}</strong> · {codeLabel(language, m.state)}
-        {m.startedAt ? ` · ${day(language, m.startedAt)}` : ''}{m.endsAt ? ` – ${day(language, m.endsAt)}` : ''}{slot ? slot(m) : null}</li>)}</ul>;
+        {m.startedAt ? ` · ${day(language, m.startedAt)}` : ''}{m.endsAt ? ` – ${day(language, m.endsAt)}` : ''}{slot ? slot(m) : null}</li>)}</ul> : none}</>;
     case 'billing':
       if (!c.billing.allowed) return denied;
       return <>

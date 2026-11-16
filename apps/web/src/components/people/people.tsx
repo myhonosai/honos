@@ -15,6 +15,7 @@ import { NO_CONTACT_FILTERS, contactAdminApi, contactsApi, type ContactAdminApi,
 import { ContactActions, type ContactChange } from './contact-actions';
 import type { CardState, CardTab, MembershipItem } from './contact-card';
 import { MembershipPanel } from './membership-panel';
+import { NewMembershipTools } from './new-membership';
 import { initialCardTarget } from './card-link';
 
 /**
@@ -243,6 +244,11 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   const membershipSlot = useCallback((m: MembershipItem) => selection ? <MembershipPanel key={`${lower(selection.schoolId)}:${m.membershipId}`} language={preferences.language}
     scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} item={m} onChanged={onMembershipChanged}/> : null,
   [selection?.organizationId, selection?.schoolId, preferences.language, onMembershipChanged]); // eslint-disable-line react-hooks/exhaustive-deps
+  // New membership and Renew (0398) at the top of the membership tab; the server decides who can have which plan.
+  const membershipTools = useCallback((items: readonly MembershipItem[]) => selection && selectedId ? <NewMembershipTools key={`${lower(selection.schoolId)}:${selectedId}`}
+    language={preferences.language} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId, personId: selectedId }} items={items}
+    onChanged={onMembershipChanged}/> : null,
+  [selection?.organizationId, selection?.schoolId, selectedId, preferences.language, onMembershipChanged]); // eslint-disable-line react-hooks/exhaustive-deps
   const onDiscard = useCallback(() => { setOutcome(null); drop(); setRecordRefresh(value => value + 1); }, [drop]);
   const onTryAgain = useCallback(() => { void send(); }, [send]);
   const onFilters = useCallback((next: ContactFilters) => { setFilters({ ...next, query: next.query.trim() }); setListRefresh(n => n + 1); }, []);
@@ -259,6 +265,6 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   return <div key={shell.phase} data-shell-private="">
     <PeopleView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       hasSchool={selection !== null} list={list} record={record} selectedId={selectedId} outcome={outcome} locked={lock !== 'NONE'} canRetry={lock === 'KEPT'}
-      filters={filters} options={options} card={card} cardTab={cardTab} membershipSlot={membershipSlot} actionsSlot={actionsSlot} actionNotice={actionNotice} onFilters={onFilters} onMore={onMore} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot}/>
+      filters={filters} options={options} card={card} cardTab={cardTab} membershipSlot={membershipSlot} membershipTools={membershipTools} actionsSlot={actionsSlot} actionNotice={actionNotice} onFilters={onFilters} onMore={onMore} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot}/>
   </div>;
 }
