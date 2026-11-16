@@ -1,4 +1,4 @@
-import React, { type ReactNode } from 'react';
+import React, { useEffect, useState, type ReactNode } from 'react';
 import type { HonInterfaceTheme } from '@hon/design-system';
 import type { EntryPhase } from '../school-entry/controller';
 import type { StaffReportingSchoolChoice } from '../staff-reporting-schools-http';
@@ -19,6 +19,8 @@ export type SchoolShellFrameProps = {
   utility?: ReactNode; children?: ReactNode;
   /** Guided tour step, or null when closed. */
   tourStep?: number | null; onTour?: (step: number | null) => void;
+  /** Screensaver over the whole app (away or idle). The page behind it stays mounted and inert. */
+  asleep?: boolean; onWake?: () => void;
 };
 const MODES: readonly HonInterfaceTheme[] = ['big-button', 'modern', 'classic'];
 const VIEW_STATE: Record<ShellViewState, ShellKey> = { LOCAL: 'viewLocal', SAVING: 'viewSaving', SAVED: 'viewSaved', ERROR: 'viewError' };
@@ -46,7 +48,8 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
   const honHere = path === '/staff/dashboard' || path === '/staff/hon' || path.startsWith('/staff/hon/');
 
   // The Menu panel is modal: everything behind it is inert, so keyboard focus stays inside it.
-  const modal = (menuOpen && !sidebar) || tourStep !== null;
+  const asleep = props.asleep ?? false, onWake = props.onWake ?? (() => {});
+  const modal = (menuOpen && !sidebar) || tourStep !== null || asleep;
 
   const school = <section className={styles.school} aria-label={t('schoolRegion')} data-phase={phase}>
     <span className={styles.schoolMark} aria-hidden="true"><ShellIcon name="school" /></span>
@@ -92,9 +95,10 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
       {rail}
     </aside>
     {menuOpen && <div className={styles.scrim} aria-hidden="true" onClick={() => onMenu(false)} />}
-    {tourStep !== null && <><div className={styles.tourScrim} aria-hidden="true" onClick={() => onTour(null)} />
-      <SchoolTourDialog language={language} step={tourStep} verified={verified} onStep={onTour} onClose={() => onTour(null)} /></>}
-    {menuOpen && !sidebar && tourStep === null && <div className={styles.menuPanel} role="dialog" aria-modal="true" aria-label={t('menuTitle')}>
+    {asleep && <SchoolScreensaver language={language} schoolName={phase === 'READY' ? props.schoolName ?? t('READY') : t('brand')} onWake={onWake} />}
+    {tourStep !== null && <div inert={asleep} style={{ display: 'contents' }}><div className={styles.tourScrim} aria-hidden="true" onClick={() => onTour(null)} />
+      <SchoolTourDialog language={language} step={tourStep} verified={verified} onStep={onTour} onClose={() => onTour(null)} /></div>}
+    {menuOpen && !sidebar && tourStep === null && <div className={styles.menuPanel} role="dialog" aria-modal="true" aria-label={t('menuTitle')} inert={asleep}>
       <header><strong>{t('menuTitle')}</strong><small>{t('menuLead')}</small>
         <button type="button" className={styles.closeMenu} aria-label={t('closeMenu')} onClick={() => onMenu(false)} autoFocus><ShellIcon name="close" /></button></header>
       <ul className={styles.menuGrid}>
@@ -140,5 +144,37 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
         <ShellIcon name={offBar.key} /><span>{t(offBar.titleKey)}</span></button>
         : <button type="button" aria-expanded={menuOpen} onClick={() => onMenu(true)}><ShellIcon name="more" /><span>{t('more')}</span></button>}
     </nav>
+  </div>;
+}
+
+/** Clock shown on the screensaver; device time, minutes only. */
+function ScreensaverClock({ language }: { language: string }): React.ReactElement {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 15_000); return () => window.clearInterval(timer); }, []);
+  let time: string;
+  try { time = now.toLocaleTimeString(language, { hour: 'numeric', minute: '2-digit' }); } catch { time = now.toLocaleTimeString(); }
+  return <time className={styles.screensaverClock} dateTime={now.toISOString()} suppressHydrationWarning>{time}</time>;
+}
+
+/**
+ * The screensaver (owner request 2026-11-16, replaces "School hidden while away"). Shows only the
+ * HON mark, the school name the shell already shows, and the time: never page content. Any tap,
+ * click or key lifts it; the same page and school are underneath.
+ */
+export function SchoolScreensaver({ language, schoolName, onWake }: { language: string; schoolName: string; onWake: () => void }): React.ReactElement {
+  const t = (key: ShellKey) => shellText(language, key);
+  // Focus goes back to where the viewer was once the screensaver lifts.
+  useEffect(() => {
+    const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    return () => { if (before?.isConnected) before.focus({ preventScroll: true }); };
+  }, []);
+  return <div className={styles.screensaver} role="dialog" aria-modal="true" aria-label={t('screensaverLabel')} data-screensaver=""
+    onClick={onWake} onKeyDown={onWake}>
+    <span className={styles.screensaverGlow} aria-hidden="true" />
+    <img className={styles.screensaverMark} src="/ai/hon-core.webp" alt="" width={132} height={132} />
+    <ScreensaverClock language={language} />
+    <p className={styles.screensaverSchool}>{schoolName}</p>
+    <button type="button" className={styles.screensaverTap} autoFocus onClick={onWake}>{t('screensaverTap')}</button>
+    <small className={styles.screensaverHint}>{t('screensaverHint')}</small>
   </div>;
 }

@@ -16,9 +16,9 @@ const pageExists = (href: string) => existsSync(join(APP, href.split('?')[0]!, '
 const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222';
 
 describe('school shell navigation catalog', () => {
-  it('has the owner\'s eight main areas, in order, with unique keys and no duplicated route', () => {
-    expect(SCHOOL_SHELL_NAV.map(item => item.key)).toEqual(['home', 'students', 'crm', 'classes', 'billing', 'aiTeam', 'analytics', 'settings']);
-    expect(SCHOOL_SHELL_NAV.map(item => shellText('en', item.titleKey))).toEqual(['Home', 'Contacts', 'Enrollment', 'Classes', 'Billing', 'AI Team', 'Reports', 'Settings']);
+  it('has the owner\'s nine main areas, in order, with unique keys and no duplicated route', () => {
+    expect(SCHOOL_SHELL_NAV.map(item => item.key)).toEqual(['home', 'students', 'crm', 'classes', 'billing', 'aiTeam', 'analytics', 'community', 'settings']);
+    expect(SCHOOL_SHELL_NAV.map(item => shellText('en', item.titleKey))).toEqual(['Home', 'Contacts', 'Enrollment', 'Classes', 'Billing', 'AI Team', 'Reports', 'Community', 'Settings']);
     const hrefs = SCHOOL_SHELL_NAV.flatMap(item => item.routes.map(route => route.href));
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });
@@ -68,7 +68,8 @@ describe('school shell navigation catalog', () => {
     expect(schoolShellActiveItem('/staff/champions-club')?.key).toBe('crm');
     expect(schoolShellActiveItem('/staff/operations')?.key).toBe('analytics');
     expect(schoolShellActiveItem('/staff/health-score')?.key).toBe('analytics');
-    expect(schoolShellActiveItem('/community/marketplace')?.key).toBe('classes');
+    expect(schoolShellActiveItem('/community/marketplace')?.key).toBe('community');
+    expect(schoolShellActiveItem('/community')?.key).toBe('community');
     expect(schoolShellActiveItem('/staff/automation/rules')?.key).toBe('settings');
   });
 
