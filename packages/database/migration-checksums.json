@@ -301,6 +301,6 @@
     "0361_school_websites.sql": "262d9768dc26fb197cac0ba0da3a77e31442f4dfb006571a74a6f3b016eba221",
     "0380_ai_text_proposals.sql": "1e2791126181efd750a396d16d204972005242443cf6731bc85e9ffd09bc438e",
     "0388_school_paper_import.sql": "4f556472acba21133dd5f8f644e461608969343d65cfcd21348590586c6c3ab5",
-    "0389_paper_import_ai_reader.sql": "553037e90dad2cf6d1fb9e33b2b24cdab09d38ef9e4e3bd28c6b28d6d48a5d47"
+    "0389_paper_import_ai_reader.sql": "a28931e464dd480f614f51bfc08f7ad27e0fed16df93a81cb6f704b4677bcb02"
   }
 }

@@ -77,11 +77,11 @@ export class OpenRouterPaperVisionRuntime implements PaperVisionRuntime {
     ];
     const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 60000);
     try {
-      // Fixed URL, no redirects or tools, no provider fallbacks, no automatic retry once sent: a network error or timeout may still be paid.
+      // Fixed URL, no redirects or tools, no provider fallbacks, only providers that do not keep or train on the data, no automatic retry once sent: a network error or timeout may still be paid.
       const response = await this.transport(ENDPOINT, { method: 'POST', redirect: 'error', signal: controller.signal,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}`, 'X-Request-Id': input.providerRequestId, 'Idempotency-Key': input.providerRequestId },
         body: JSON.stringify({ model: input.modelId, messages: [{ role: 'system', content: PAPER_READING_SYSTEM_PROMPT }, { role: 'user', content }],
-          max_tokens: input.outputBudget, temperature: 0, stream: false, response_format: { type: 'json_object' }, provider: { allow_fallbacks: false } }) });
+          max_tokens: input.outputBudget, temperature: 0, stream: false, response_format: { type: 'json_object' }, provider: { allow_fallbacks: false, data_collection: 'deny' } }) });
       if ([400, 401, 402, 403, 404, 413, 422, 429].includes(response.status)) { await response.body?.cancel().catch(() => {}); throw new PaperVisionRuntimeError('FAILED', 'PROVIDER_REJECTED'); }
       if (!response.ok) throw new Error('UNCERTAIN_RESPONSE');
       const data = await boundedJson(response) as { model?: string; choices?: { finish_reason?: string; message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number } };

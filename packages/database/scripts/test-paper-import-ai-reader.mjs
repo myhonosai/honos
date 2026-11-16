@@ -82,9 +82,9 @@ async function makeOrg(label, { profile = 'VISION', tier = 'COMPLETE' } = {}) {
 async function addProfile(o, profile) {
   await admin.query('BEGIN');
   await admin.query(`INSERT INTO hon.hq_ai_task_profiles(profile_id,routing_policy_id,agent_key,task_category,cost_unit,active,max_cost_micros,required_capabilities,required_modalities,allowed_provider_ids,privacy_controls,timeout_category,retry_category,effective_from)
-    VALUES($1,$2,'hon','DOCUMENT_READING','TOKEN',true,250000,ARRAY['TEXT'],$3::text[],ARRAY['OPENROUTER'],ARRAY[]::text[],'EXTENDED','NONE','2020-01-01')`,
-    [o.profile, o.policy, profile === 'VISION' ? ['TEXT', 'IMAGE'] : ['TEXT']]);
-  await admin.query("INSERT INTO hon.hq_ai_task_profile_candidates(profile_id,routing_policy_id,selection,ordinal,catalog_id) VALUES($1,$2,'DEFAULT',0,$3)", [o.profile, o.policy, profile === 'VISION' ? visionModel : textModel]);
+    VALUES($1,$2,'hon','DOCUMENT_READING','TOKEN',true,250000,ARRAY['TEXT'],$3::text[],ARRAY['OPENROUTER'],$4::text[],'EXTENDED','NONE','2020-01-01')`,
+    [o.profile, o.policy, profile === 'TEXT_ONLY' ? ['TEXT'] : ['TEXT', 'IMAGE'], profile === 'VISION' ? ['NO_TRAINING', 'ZERO_RETENTION'] : []]);
+  await admin.query("INSERT INTO hon.hq_ai_task_profile_candidates(profile_id,routing_policy_id,selection,ordinal,catalog_id) VALUES($1,$2,'DEFAULT',0,$3)", [o.profile, o.policy, profile === 'TEXT_ONLY' ? textModel : visionModel]);
   await admin.query('COMMIT');
 }
 /** A second person at the same school with the listed permissions only. */
@@ -135,7 +135,7 @@ try {
   await admin.query('BEGIN');
   await admin.query("INSERT INTO hon.hq_ai_provider_connections(provider_id,display_name,state,credential_secret_ref) VALUES('OPENROUTER','Paper AI synthetic route','HEALTHY',$1)", [`hon-secret:${K()}`]);
   await admin.query("INSERT INTO hon.hq_ai_model_catalog(catalog_id,provider_id,model_id,display_name,capabilities,modalities,active,minimum_tier,unit_cost_micros,cost_unit,effective_from) VALUES($1,'OPENROUTER','approved/pr-ai-text','Paper AI text model',ARRAY['TEXT'],ARRAY['TEXT'],true,'COMPLETE',2,'TOKEN','2020-01-01')", [textModel]);
-  await admin.query("INSERT INTO hon.hq_ai_model_catalog(catalog_id,provider_id,model_id,display_name,capabilities,modalities,active,minimum_tier,unit_cost_micros,cost_unit,effective_from) VALUES($1,'OPENROUTER','approved/pr-ai-vision','Paper AI vision model',ARRAY['TEXT','IMAGE'],ARRAY['TEXT','IMAGE'],true,'COMPLETE',2,'TOKEN','2020-01-01')", [visionModel]);
+  await admin.query("INSERT INTO hon.hq_ai_model_catalog(catalog_id,provider_id,model_id,display_name,capabilities,modalities,privacy_controls,active,minimum_tier,unit_cost_micros,cost_unit,effective_from) VALUES($1,'OPENROUTER','approved/pr-ai-vision','Paper AI vision model',ARRAY['TEXT','IMAGE'],ARRAY['TEXT','IMAGE'],ARRAY['NO_TRAINING','ZERO_RETENTION'],true,'COMPLETE',2,'TOKEN','2020-01-01')", [visionModel]);
   await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1::uuid,$2,$1::uuid::text||'@example.test','Paper AI synthetic HQ owner')", [hq.user, hq.subject]);
   await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,'HUMAN_USER','Paper AI synthetic HQ owner',true)", [hq.id, hq.user]);
   await admin.query("INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from) VALUES($1,'HON_HQ_OWNER','{}',clock_timestamp()-interval '2 days')", [hq.id]);
@@ -154,8 +154,15 @@ try {
   const blockedC = await readIt(c, sc);
   assert.deepEqual([blockedC.aiReading?.status, blockedC.aiReading?.reason, fake.calls], ['BLOCKED', 'NO_ELIGIBLE_ROUTE', 0]);
   assert.equal((await row("SELECT count(*)::int n FROM hon.ai_invocation_plans WHERE organization_id=$1", [c.id])).n, 0);
+  // An image profile without the no-training and zero-retention controls: the planner would pick the image model, but
+  // the plan guard refuses it (the pages can show minors' details), so nothing is planned or sent.
+  const v = await makeOrg('v', { profile: 'VISION_NO_PRIVACY' });
+  const sv = await newSet(v, 'STUDENT_CARDS', [[PHOTO, 'image/jpeg']]);
+  const blockedV = await readIt(v, sv);
+  assert.deepEqual([blockedV.aiReading?.status, blockedV.aiReading?.reason, fake.calls], ['BLOCKED', 'NO_ELIGIBLE_ROUTE', 0], JSON.stringify(blockedV));
+  assert.equal((await row("SELECT count(*)::int n FROM hon.ai_invocation_plans WHERE organization_id=$1", [v.id])).n, 0);
   await assert.rejects(admin.query("INSERT INTO hon.ai_invocation_plans(organization_id,school_id,work_item_id,work_item_version,work_item_state,agent_key,modality,task_class,risk_class,input_budget,output_budget,max_provider_cost_microunits,estimated_provider_cost_microunits,customer_credit_estimate,provider_id,model_id,catalog_id,catalog_version,routing_policy_id,routing_policy_version,provider_version,request_hash) SELECT organization_id,school_id,work_item_id,1,'READY','hon','TEXT','READ_DOCUMENT','MODERATE',40000,16000,250000,1,56,'OPENROUTER','approved/pr-ai-text',$2,1,$3,1,1,repeat('a',64) FROM hon.ai_text_proposals WHERE id=$1", [p0.id, textModel, a.policy]), /AI_DOCUMENT_ROUTE_REQUIRED/);
-  pass('route: with no DOCUMENT_READING profile, or one that does not require IMAGE, the planner never stores a plan (the text-only model is refused even first in the policy order); the reading is BLOCKED NO_ELIGIBLE_ROUTE with nothing held and the set open');
+  pass('route: with no DOCUMENT_READING profile, one that does not require IMAGE, or one without NO_TRAINING and ZERO_RETENTION, the planner never stores a plan (the text-only model is refused even first in the policy order); the reading is BLOCKED NO_ELIGIBLE_ROUTE with nothing held and the set open');
 
   // 3. HQ adds the image profile: the same set is read once, on the image model, with only the pages and columns sent.
   await addProfile(a, 'VISION');

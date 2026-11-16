@@ -184,9 +184,10 @@ CREATE FUNCTION hon.ai_plan_document_reading_guard() RETURNS trigger LANGUAGE pl
 BEGIN
   IF NEW.task_class='READ_DOCUMENT' AND NOT (NEW.agent_key='hon' AND NEW.route_selection IN ('PROFILE_DEFAULT','PROFILE_FALLBACK')
       AND EXISTS(SELECT 1 FROM hon.hq_ai_task_profiles tp WHERE tp.profile_id=NEW.task_profile_id AND tp.version=NEW.task_profile_version
-        AND tp.agent_key='hon' AND tp.task_category='DOCUMENT_READING' AND ARRAY['TEXT','IMAGE'] <@ tp.required_modalities)
+        AND tp.agent_key='hon' AND tp.task_category='DOCUMENT_READING' AND ARRAY['TEXT','IMAGE'] <@ tp.required_modalities
+        AND ARRAY['NO_TRAINING','ZERO_RETENTION'] <@ tp.privacy_controls)
       AND EXISTS(SELECT 1 FROM hon.hq_ai_model_catalog c WHERE c.catalog_id=NEW.catalog_id AND c.version=NEW.catalog_version
-        AND ARRAY['TEXT','IMAGE'] <@ c.modalities)) THEN
+        AND ARRAY['TEXT','IMAGE'] <@ c.modalities AND ARRAY['NO_TRAINING','ZERO_RETENTION'] <@ c.privacy_controls)) THEN
     RAISE EXCEPTION 'AI_DOCUMENT_ROUTE_REQUIRED';
   END IF;
   RETURN NEW;
@@ -302,8 +303,9 @@ BEGIN
   i:=hon.ai_text_row(pid,actor);
   SELECT * INTO s FROM hon.paper_import_sets WHERE id=p_set AND organization_id=i.organization_id AND school_id=i.school_id FOR SHARE;
   IF NOT FOUND OR s.status<>'OPEN' OR s.expires_at<=clock_timestamp() OR to_jsonb(s.page_checksums) IS DISTINCT FROM i.request->'checksums' THEN block:='SUBJECT_STALE';
-  ELSIF p_plan IS NOT NULL AND NOT EXISTS(SELECT 1 FROM hon.ai_invocation_plans p JOIN hon.hq_ai_model_catalog c ON c.catalog_id=p.catalog_id
-      WHERE p.id=p_plan AND p.task_class='READ_DOCUMENT' AND ARRAY['TEXT','IMAGE'] <@ c.modalities) THEN block:='GATE_CLOSED';
+  ELSIF p_plan IS NOT NULL AND NOT EXISTS(SELECT 1 FROM hon.ai_invocation_plans p JOIN hon.hq_ai_model_catalog c ON c.catalog_id=p.catalog_id AND c.version=p.catalog_version
+      WHERE p.id=p_plan AND p.task_class='READ_DOCUMENT' AND ARRAY['TEXT','IMAGE'] <@ c.modalities
+        AND ARRAY['NO_TRAINING','ZERO_RETENTION'] <@ c.privacy_controls) THEN block:='GATE_CLOSED';
   END IF;
   inv:=hon.ai_text_prepare(pid,actor,p_plan,p_ready,block);
   IF inv IS NULL THEN RETURN NULL; END IF;

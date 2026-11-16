@@ -30,7 +30,7 @@ test('one fixed request: the pages as image data URLs, the kind and columns as t
     const body = JSON.parse(o.body);
     assert.deepEqual(Object.keys(body).sort(), ['max_tokens', 'messages', 'model', 'provider', 'response_format', 'stream', 'temperature']);
     assert.equal(body.model, 'approved/vision'); assert.equal(body.max_tokens, 16000); assert.equal(body.temperature, 0); assert.equal(body.stream, false);
-    assert.deepEqual(body.provider, { allow_fallbacks: false }); assert.deepEqual(body.response_format, { type: 'json_object' });
+    assert.deepEqual(body.provider, { allow_fallbacks: false, data_collection: 'deny' }); assert.deepEqual(body.response_format, { type: 'json_object' });
     assert.equal(body.messages.length, 2); assert.equal(body.messages[0].content, PAPER_READING_SYSTEM_PROMPT);
     const [text, ...images] = body.messages[1].content;
     assert.equal(text.type, 'text'); assert.deepEqual(JSON.parse(text.text).columns, input.columns); assert.match(JSON.parse(text.text).kind, /student cards/);
