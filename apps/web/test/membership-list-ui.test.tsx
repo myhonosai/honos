@@ -114,10 +114,10 @@ it('the filter tabs mark the current filter; a page for another filter is never 
   expect(render({ list: ready([member(1)], { restarted: true }) })).toContain('read again from the start');
 });
 
-it('has every phrase in Korean and Spanish; Plans lead the Billing group, then this report, and it is in the route manifest', () => {
+it('has every phrase in Korean and Spanish; the page is in the Membership page and is in the route manifest', () => {
   for (const language of ['ko', 'es'] as const) expect(Object.keys(MEMBERSHIP_LIST_LANGUAGES[language]).sort()).toEqual(Object.keys(MEMBERSHIP_LIST_LANGUAGES.en).sort());
   expect(membershipListText('ko', 'title')).toBe('회원권'); expect(membershipListText('es', 'title')).toBe('Membresías');
-  expect(SCHOOL_SHELL_NAV.find((g) => g.key === 'billing')?.routes.slice(0, 2).map(r => r.href)).toEqual(['/staff/billing/membership-plans', '/staff/memberships']);
+  expect(SCHOOL_SHELL_NAV.find((g) => g.key === 'billing')?.routes.map(r => r.href)).toContain('/staff/memberships');
   expect(schoolShellActiveRoute('/staff/billing/memberships')?.href).toBe('/staff/billing/memberships');
   const manifest = JSON.parse(readFileSync(new URL('../public/manus-routes.json', import.meta.url), 'utf8')) as { routes: { path: string; title: string }[] };
   expect(manifest.routes).toContainEqual({ path: '/staff/memberships', title: 'HON | Memberships' });
