@@ -228,9 +228,11 @@ await check('away shows a screensaver instead of hiding the school; tapping retu
   const url = page.url(), identities = () => report.apiRequests.filter((line) => line === 'GET /api/identity/me').length;
   // Blur (another window, the address bar) does nothing at all.
   assert.deepEqual(await saverNow(page, 'blur'), { saver: false, phase: 'READY' });
+  await page.evaluate(() => { window.__saverShown = 0; window.addEventListener('hon:screensaver-shown', () => { window.__saverShown += 1; }); });
   // Hidden (phone backgrounded, tab switched): screensaver at once, school kept.
   assert.deepEqual(await saverNow(page, 'hidden'), { saver: true, phase: 'READY' }, 'screensaver covers the app synchronously');
   assert.equal(await page.locator('[data-home="ready"]').count(), 1, 'the page stays mounted under the screensaver');
+  assert.equal(await page.evaluate(() => window.__saverShown), 1, 'the shell announces the screensaver so hands-free voice turns off');
   // Back within 30 seconds: lifts by itself, quietly re-checks, nothing to re-choose.
   let before = identities();
   assert.deepEqual(await saverNow(page, 'visible'), { saver: true, phase: 'READY' });
@@ -242,6 +244,7 @@ await check('away shows a screensaver instead of hiding the school; tapping retu
   // Five idle minutes: screensaver; a tap returns to the same page and school.
   await page.clock.fastForward('05:01');
   await page.waitForSelector('[data-screensaver]');
+  assert.equal(await page.evaluate(() => window.__saverShown), 2, 'idle also announces the screensaver');
   await page.waitForTimeout(400); await axeScan(page, 'screensaver'); await shot(page, 'screensaver-modern-desktop');
   before = identities();
   await page.getByRole('dialog', { name: 'Screensaver' }).click({ position: { x: 40, y: 40 } });

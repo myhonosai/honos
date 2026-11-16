@@ -6,6 +6,23 @@
 export const SCREENSAVER_IDLE_MS = 5 * 60_000;
 /** Back within this long (and not restored from the back/forward cache): the screensaver lifts by itself. */
 export const SCREENSAVER_BRIEF_AWAY_MS = 30_000;
+/** Fired on window each time the screensaver covers the app (hidden, page hide or idle). Carries nothing. */
+export const HON_SCREENSAVER_SHOWN_EVENT = 'hon:screensaver-shown';
+
+/**
+ * Calls `stop` whenever the app is put away: a hidden tab or app, page hide, or the screensaver
+ * showing (which also covers 5 idle minutes). For things that must never keep running behind the
+ * screensaver, such as hands-free HON voice listening and speaking. Page content is not touched.
+ */
+export function onAppPutAway(stop: () => void): () => void {
+  const visibility = () => { if (document.visibilityState === 'hidden') stop(); };
+  document.addEventListener('visibilitychange', visibility);
+  window.addEventListener('pagehide', stop); window.addEventListener(HON_SCREENSAVER_SHOWN_EVENT, stop);
+  return () => {
+    document.removeEventListener('visibilitychange', visibility);
+    window.removeEventListener('pagehide', stop); window.removeEventListener(HON_SCREENSAVER_SHOWN_EVENT, stop);
+  };
+}
 
 export type ScreensaverClock = { now(): number; set(fn: () => void, ms: number): unknown; clear(handle: unknown): void };
 const browserClock: ScreensaverClock = {

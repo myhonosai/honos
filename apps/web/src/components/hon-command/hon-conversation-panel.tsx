@@ -7,6 +7,7 @@ import {
   HON_REPLY_SOURCE_LABELS,
 } from '@hon/contracts';
 import { HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
+import { onAppPutAway } from '../school-shell/screensaver';
 import {
   HON_CONVERSATION_API, HonConversationError, prepareConversation, prepareTurn, type HonConversationApi, type HonConversationFailure,
   type HonSchool, type Owned, type PreparedHonCommand,
@@ -432,6 +433,9 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
     for (const name of windowEvents) window.addEventListener(name, conceal);
     return () => { mounted.current = false; generation.current++; privacy.current++; pendingKey.current = null; confirmSeq.current++; targetRead.current?.abort(); reads.current?.abort(); for (const name of windowEvents) window.removeEventListener(name, conceal); };
   }, [load, closeConfirm, voiceShutdown]);
+  // Hands-free voice never keeps listening or speaking behind the screensaver: putting the app away
+  // (hidden, page hide, screensaver incl. idle) turns it off; a person turns it on again. Content stays.
+  useEffect(() => onAppPutAway(voiceShutdown), [voiceShutdown]);
 
   useEffect(() => {
     const text = voiceAnswer.current;

@@ -15,7 +15,7 @@ import { SchoolEntryController, type EntrySnapshot } from '../school-entry/contr
 import { schoolEntryApi } from '../school-entry/http';
 import { SCHOOL_SHELL_NAV, schoolShellHref } from './catalog';
 import { concealShellPrivateNow, onShellPrivacyEvent } from './privacy';
-import { ScreensaverController } from './screensaver';
+import { HON_SCREENSAVER_SHOWN_EVENT, ScreensaverController } from './screensaver';
 import { SchoolShellFrame, type ShellViewState } from './frame';
 import { SCHOOL_TOUR_OPEN_EVENT, markSchoolTourSeen } from './tour';
 import { SchoolShellProvider, type SchoolShellState } from './context';
@@ -136,7 +136,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   const [asleep, setAsleep] = useState(false);
   const saver = useRef<ScreensaverController | null>(null);
   useEffect(() => {
-    const controller = new ScreensaverController(show => { if (show) flushSync(() => setAsleep(true)); else setAsleep(false); }, () => void entry.recheck());
+    const controller = new ScreensaverController(show => { if (!show) { setAsleep(false); return; } flushSync(() => setAsleep(true)); window.dispatchEvent(new Event(HON_SCREENSAVER_SHOWN_EVENT)); }, () => void entry.recheck());
     saver.current = controller;
     const visibility = () => { if (document.visibilityState === 'hidden') controller.hidden(); else controller.visible(); };
     const hide = () => controller.hidden();

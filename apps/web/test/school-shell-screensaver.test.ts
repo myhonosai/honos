@@ -72,3 +72,23 @@ describe('school screensaver', () => {
     saver.stop(); expect(timers.size).toBe(0); advance(SCREENSAVER_IDLE_MS * 2); expect(shown).toEqual([]);
   });
 });
+
+describe('putting the app away', () => {
+  it('stops voice on a hidden tab, page hide or the screensaver showing, but not on blur or a visible return', async () => {
+    const { onAppPutAway, HON_SCREENSAVER_SHOWN_EVENT } = await import('../src/components/school-shell/screensaver');
+    const win = new EventTarget(), doc = Object.assign(new EventTarget(), { visibilityState: 'visible' });
+    vi.stubGlobal('window', win); vi.stubGlobal('document', doc);
+    const stop = vi.fn(), off = onAppPutAway(stop);
+    win.dispatchEvent(new Event('blur')); doc.dispatchEvent(new Event('visibilitychange')); expect(stop).not.toHaveBeenCalled();
+    doc.visibilityState = 'hidden'; doc.dispatchEvent(new Event('visibilitychange')); expect(stop).toHaveBeenCalledTimes(1);
+    win.dispatchEvent(new Event('pagehide')); win.dispatchEvent(new Event(HON_SCREENSAVER_SHOWN_EVENT)); expect(stop).toHaveBeenCalledTimes(3);
+    off(); win.dispatchEvent(new Event(HON_SCREENSAVER_SHOWN_EVENT)); expect(stop).toHaveBeenCalledTimes(3);
+    vi.unstubAllGlobals();
+  });
+
+  it('the Ask HON panel turns hands-free voice off when the app is put away', async () => {
+    const { readFileSync } = await import('node:fs');
+    const source = readFileSync(new URL('../src/components/hon-command/hon-conversation-panel.tsx', import.meta.url), 'utf8');
+    expect(source).toMatch(/useEffect\(\(\) => onAppPutAway\(voiceShutdown\), \[voiceShutdown\]\)/);
+  });
+});
