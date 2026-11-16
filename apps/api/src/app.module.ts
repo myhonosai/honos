@@ -199,6 +199,8 @@ import { SchoolPersonRecordController, SchoolPersonRecordHumanGuard } from './pe
 import { SchoolPersonRecordService } from './people/school-person-record.service.js';
 import { SchoolPersonPhotoController, SchoolPersonPhotoHumanGuard } from './people/school-person-photo.controller.js';
 import { SchoolPersonPhotoService } from './people/school-person-photo.service.js';
+import { SchoolPosController, SchoolPosHumanGuard } from './pos/school-pos.controller.js';
+import { SchoolPosService } from './pos/school-pos.service.js';
 import { PersonService } from './people/person.service.js';
 import { ActionReviewController, ActionApprovalWorkbenchController } from './action/action-review.controller.js';
 import { FamilyController } from './families/family.controller.js';
@@ -446,7 +448,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     FoundationController,
     SessionContextController,
     IdentityController,
-    PersonController, SchoolPersonRecordController, SchoolPersonPhotoController,
+    PersonController, SchoolPersonRecordController, SchoolPersonPhotoController, SchoolPosController,
     FamilyController,
     ParentJourneyViewController,
     ParentBillingViewController,
@@ -555,7 +557,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SaasSubscriptionGenerationHqController, HqHonController, SaasSubscriptionGenerationSchoolController, SaasScheduleBindingHqController, SaasScheduleBindingSchoolController, SaasPaidReviewHqController, SaasFounderPoolHqController, SaasFounderAvailabilitySchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, CreativeStudioAvatarsController, CreativeStudioAvatarVideosController, CreativeLimitsHqController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, CommunicationWebhookController, SchoolTextSenderHqController, SchoolNumberController, SchoolNumberOrderHqController, SchoolMissedCallHqController, SchoolMissedCallsController, ZernioLeadFormHqController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqBusinessNumbersController, HqSupportController, HqMarketingController, HqPlanPromotionsController, SchoolPlanPromotionsController, HqCreativeController, AiSpendPauseHqController, AiSchoolCostLimitHqController, AiExceptionAllowanceHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController, HqCommunicationsController, HqContactController, HqProspectsController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
-  providers: [BookableStudentsService, SchoolPickersService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard, SchoolPersonPhotoService, SchoolPersonPhotoHumanGuard,
+  providers: [BookableStudentsService, SchoolPickersService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard, SchoolPersonPhotoService, SchoolPersonPhotoHumanGuard, SchoolPosService, SchoolPosHumanGuard,
     SaasSubscriptionGenerationService, SaasScheduleBillingService, SaasPaidReviewService, SaasFounderService, SaasPriceAcceptanceService, SaasTrialsService, OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
     CurrentStaffReportingSchoolNoStoreGuard,
     CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard,

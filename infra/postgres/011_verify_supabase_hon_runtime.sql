@@ -3877,3 +3877,33 @@ BEGIN
   END LOOP;
 END $$;
 -- End school location exact verification.
+
+-- Point of Sale exact verification (0403)
+DO $$ DECLARE f text; t text;
+  entry text[]:=ARRAY['hon.read_pos(text,uuid)','hon.read_pos_sales(text,uuid,date,date)','hon.read_pos_sale(text,uuid,uuid)',
+    'hon.save_pos_settings(text,jsonb,uuid)','hon.save_pos_item(text,jsonb,uuid)','hon.adjust_pos_stock(text,jsonb,uuid)',
+    'hon.record_pos_sale(text,jsonb,uuid)','hon.refund_pos_sale(text,jsonb,uuid)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe point of sale entry point: %',f; END IF;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='hon' AND (p.proname LIKE 'pos\_%' OR p.proname='guard_pos_evidence') LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe point of sale helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['pos_settings','pos_items','pos_sales','pos_sale_lines','pos_refunds','pos_stock_moves','pos_requests'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe point of sale table: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End point of sale exact verification.
