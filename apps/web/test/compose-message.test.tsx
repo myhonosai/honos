@@ -66,7 +66,11 @@ describe('New text or email: http (L4)', () => {
     fetcher.mockResolvedValueOnce(problem(403));
     await expect(queueDraft(scope, { messageId: id('d'), version: 1 }, id('e'))).rejects.toMatchObject({ reason: 'ACCESS' });
     fetcher.mockResolvedValueOnce(problem(409, 'VERSION_CONFLICT'));
-    await expect(queueDraft(scope, { messageId: id('d'), version: 1 }, id('e'))).rejects.toBeInstanceOf(ComposeRefusal);
+    await expect(queueDraft(scope, { messageId: id('d'), version: 1 }, id('e'))).rejects.toMatchObject({ reason: 'CONFLICT' });
+    fetcher.mockResolvedValueOnce(problem(409, 'MESSAGE_NOT_DRAFT'));
+    await expect(queueDraft(scope, { messageId: id('d'), version: 1 }, id('e'))).rejects.toMatchObject({ reason: 'NOT_DRAFT' });
+    fetcher.mockResolvedValueOnce(problem(409));
+    await expect(queueDraft(scope, { messageId: id('d'), version: 1 }, id('e'))).rejects.toBeInstanceOf(ComposeUncertain);
     fetcher.mockResolvedValueOnce(problem(500));
     await expect(createDraft(scope, ana.personId, 'SMS', 'Hi', id('e'))).rejects.toBeInstanceOf(ComposeUncertain);
     fetcher.mockRejectedValueOnce(new TypeError('network'));
@@ -125,6 +129,18 @@ describe('New text or email: composer (L4)', () => {
     expect(sent.map(c => c.path)).toEqual([base, `${base}/${id('d')}/queue`, `${base}/${id('d')}/queue`]);
     expect(sent[2]!.key).toBe(sent[1]!.key);
     expect(text(render())).toContain('Queued to send');
+  });
+
+  it('a retry answered "no longer a draft" says it may already have been queued, not "write it again" (#427 P3)', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(ok(msg())).mockRejectedValueOnce(new TypeError('network'))
+      .mockResolvedValueOnce(problem(409, 'MESSAGE_NOT_DRAFT'));
+    await findAndPick(ana); write('Class is cancelled tonight'); confirm(); send(); await settle();
+    all().find(e => e.type === 'button' && text(e) === 'Retry the same message')!.props.onClick(); await settle();
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    const copy = text(render());
+    expect(copy).toContain('It may already have been queued');
+    expect(copy).not.toContain('Write it again');
+    expect(all().some(e => e.type === 'button' && text(e).startsWith('Retry'))).toBe(false);
   });
 
   it('locks the message after an uncertain step: edits are ignored, and only Retry or an explicit Discard is offered (review P2)', async () => {

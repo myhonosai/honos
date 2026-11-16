@@ -13,7 +13,7 @@ export const COMPOSE_MAX = 4000;
 
 /** The server refused for a definite reason: nothing more happened, and a retry is a new message. */
 export class ComposeRefusal extends Error {
-  constructor(readonly reason: 'CONSENT' | 'ACCESS' | 'INVALID' | 'CONFLICT') { super(reason); }
+  constructor(readonly reason: 'CONSENT' | 'ACCESS' | 'INVALID' | 'CONFLICT' | 'NOT_DRAFT') { super(reason); }
 }
 /** The outcome is unknown: only the same step with the same key may be retried. */
 export class ComposeUncertain extends Error {}
@@ -40,7 +40,9 @@ async function post(path: string, key: string, body: unknown): Promise<Record<st
   if (response.status === 401) { reportConfirmedSessionInvalidation(); throw new ComposeRefusal('ACCESS'); }
   if (response.status === 403) throw new ComposeRefusal(code === 'COMMUNICATION_CONSENT_REQUIRED' ? 'CONSENT' : 'ACCESS');
   if (response.status === 400 || response.status === 404) throw new ComposeRefusal('INVALID');
-  if (response.status === 409 && (code === 'VERSION_CONFLICT' || code === 'MESSAGE_NOT_DRAFT')) throw new ComposeRefusal('CONFLICT');
+  if (response.status === 409 && code === 'VERSION_CONFLICT') throw new ComposeRefusal('CONFLICT');
+  // No longer a draft: after a retry this usually means the first attempt already queued it, so it must not read as "write it again".
+  if (response.status === 409 && code === 'MESSAGE_NOT_DRAFT') throw new ComposeRefusal('NOT_DRAFT');
   if (!response.ok || !value || typeof value !== 'object' || Array.isArray(value)) throw new ComposeUncertain('The answer could not be checked.');
   return value as Record<string, unknown>;
 }

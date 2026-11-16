@@ -6,7 +6,7 @@ import s from '../testing-registration.module.css';
 import c from './compose.module.css';
 
 type Step = Readonly<{ kind: 'create'; key: string } | { kind: 'queue'; draft: ComposeDraft; key: string }>;
-type Outcome = 'QUEUED' | 'CONSENT' | 'ACCESS' | 'INVALID' | 'CONFLICT' | 'UNCERTAIN';
+type Outcome = 'QUEUED' | 'CONSENT' | 'ACCESS' | 'INVALID' | 'CONFLICT' | 'NOT_DRAFT' | 'UNCERTAIN';
 type Search = Readonly<{ state: 'IDLE' | 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; items: readonly PersonSummary[] }>;
 const CHANNEL: Record<ComposeChannel, string> = { SMS: 'Text', EMAIL: 'Email' };
 const BY: Record<ComposeChannel, string> = { SMS: 'texts', EMAIL: 'emails' };
@@ -120,6 +120,7 @@ export function ComposeMessage({ scope }: { scope: ComposeScope }): React.ReactE
       {outcome === 'ACCESS' && <p role="alert">Not available for your role: you need permission to send messages at this school.</p>}
       {outcome === 'INVALID' && <p role="alert">That message could not be sent. Check the contact and the message, then try again.</p>}
       {outcome === 'CONFLICT' && <p role="alert">This message changed before it was sent. Write it again.</p>}
+      {outcome === 'NOT_DRAFT' && <p role="alert">This message is no longer a draft. It may already have been queued, so check the messages below before writing it again.</p>}
       {outcome === 'UNCERTAIN' && <div role="alert"><p>Not sure it went through. It may already be on its way, so the message is locked. Retry sends the same message again without a duplicate.</p>
         <p className={s.actions}><button type="button" disabled={busy} onClick={retry}>Retry the same message</button>{' '}
           <button type="button" disabled={busy} onClick={discard}>Discard and write a new one (the first may already be on its way)</button></p></div>}
