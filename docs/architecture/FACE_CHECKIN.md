@@ -26,7 +26,7 @@ Rather than a different standard per state, every school that turns this on gets
 
 1. Written (electronic) consent before any face data is made. For anyone under 18, or with no birth date on file, only
    a parent or guardian can sign. Adults sign for themselves, and a guardian cannot sign for a student who is 18 or
-   older (0409 refuses it with FACE_CHECKIN_ADULT_SIGNS). Age is counted on the school's own calendar date (its time zone).
+   older (0426 refuses it with FACE_CHECKIN_ADULT_SIGNS). Age is counted on the school's own calendar date (its time zone).
 2. A published retention and deletion policy shown before signing.
 3. Face data is never sold, shared, or used for anything except check-in at that one school.
 4. Anyone can refuse or withdraw at any time and still check in another way (card, name list). Refusing never blocks
@@ -36,7 +36,7 @@ Rather than a different standard per state, every school that turns this on gets
 
 The school's location picks a **jurisdiction profile**, which adds the local form wording and any extra steps:
 
-**United States only for now (owner decision 2026-11-16).** HON OS launches with US schools, so 0409 reports every
+**United States only for now (owner decision 2026-11-16).** HON OS launches with US schools, so 0426 reports every
 non-US profile as `NOT_LAUNCHED` and refuses to turn face check-in on there. The EU, UK and Korea drafts stay in the
 database, unused, for a later launch (after legal review).
 
@@ -91,7 +91,7 @@ migration, not code.
   record keeps no image.
 - **Retention**: the template is deleted at the earliest of: consent withdrawn, photo removed or replaced, school turns
   it off or moves to a different profile, 30 days after the student is no longer ACTIVE (measured from the student
-  record's last change in 0409, so a later edit restarts the clock; a status-change timestamp is a follow-up), 12 months without a
+  record's last change in 0426, so a later edit restarts the clock; a status-change timestamp is a follow-up), 12 months without a
   face check-in. An identifier-only record (who, when, why deleted) remains. Sweep runs on access and as a daily job
   (deployment requirement, like 0388).
 

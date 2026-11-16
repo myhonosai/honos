@@ -6,7 +6,7 @@ const { FaceCheckInService, faceCheckInPictureDigest, translateFaceCheckInError 
 const { FaceCheckInHumanGuard, FaceCheckInScanHumanGuard, FamilyFaceCheckInSignGuard, FamilyFaceCheckInWithdrawGuard } = require('../dist/face-checkin/face-checkin.controller.js');
 const { FACE_CHECKIN_HUMAN_COMMAND, FACE_CHECKIN_SCAN_COMMAND, FAMILY_FACE_CHECKIN_COMMAND, FAMILY_FACE_CHECKIN_WITHDRAW_COMMAND } = require('@hon/contracts');
 
-// Mocked boundary tests for the 0409 face check-in API. Authority, consent, templates, matching, retention and the
+// Mocked boundary tests for the 0426 face check-in API. Authority, consent, templates, matching, retention and the
 // attendance write are proven against PostgreSQL by test-face-checkin-integrity.mjs.
 const status = (value, code) => (error) => { assert.equal(error.getStatus(), value, JSON.stringify(error.getResponse?.())); if (code) assert.equal(error.getResponse().code, code); return true; };
 const req = { honIdentity: { externalSubject: 'subject-1' } };

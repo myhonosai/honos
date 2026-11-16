@@ -6,7 +6,7 @@ import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { FaceCheckInService } from './face-checkin.service.js';
 
-/** 0409: same-origin human browser requests only, managing and scanning each with their own command header; never cached. */
+/** 0426: same-origin human browser requests only, managing and scanning each with their own command header; never cached. */
 @Injectable()
 export class FaceCheckInHumanGuard implements CanActivate {
   canActivate(c: ExecutionContext) { return assertSchoolAccountHumanRequest(c, FACE_CHECKIN_HUMAN_COMMAND); }

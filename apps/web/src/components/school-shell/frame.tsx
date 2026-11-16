@@ -135,7 +135,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
       {active?.steps && <nav className={styles.steps} aria-label={t('stepsNav')} data-shell-steps=""><ol>
         {tabRoutes.map((route, index) => <li key={route.href}><a href={schoolShellHref(route, verified)} aria-current={activeRoute?.href === route.href ? 'step' : undefined}><span data-step-number="">{index + 1}</span>{t(route.titleKey)}</a></li>)}
       </ol></nav>}
-      {active && !active.steps && tabRoutes.length > 1 && <nav className={styles.tabs} aria-label={t('sectionNav')} data-shell-tabs="">
+      {active && !active.steps && tabRoutes.length > 1 && <nav className={styles.tabs} aria-label={t('sectionNav')} data-wrap={active.key === 'settings' ? 'true' : undefined} data-shell-tabs="">
         {tabRoutes.map(route => <a key={route.href} href={schoolShellHref(route, verified)} aria-current={activeRoute?.href === route.href ? 'page' : undefined}>{t(route.titleKey)}</a>)}
       </nav>}
       <div id="hon-main" tabIndex={-1} className={styles.main}>{children}</div>

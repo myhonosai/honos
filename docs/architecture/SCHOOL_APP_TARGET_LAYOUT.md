@@ -63,7 +63,7 @@ opened from a link on its page, not from the menu.
 | Contacts | **Staff** | `/staff/team/invitations` | Team · Roles · Availability · Qualifications · Documents | this thread |
 | Lead | **Lead pipeline** | `/staff/crm` | Pipeline · Follow-ups · Trials · Lead memberships · Import leads (Enroll a lead / Journey hidden after the board lands) | pipeline thread |
 | Lead | **Automations** | `/staff/automation/rules` | Rules (AU-1 builder joins later) | AU thread |
-| Communication | **Texts & email** | `/staff/family-messages` | Family messages (SMS blasts and email join here) | this thread |
+| Communication | **Texts & email** | `/staff/family-messages` | New text or email (composer on top, see L4) · Family messages | this thread |
 | Communication | **Facebook & Instagram** | `/staff/marketing/social` | Social inbox and accounts | social thread |
 | Finance | **Checkout Pages** | `/staff/billing/checkout-pages` | (inside the page) | tuition thread |
 | Finance | **Point of Sale** | `/staff/billing/pos` | Register · History · Inventory (inside the page) | POS thread (added when it merges) |
@@ -139,5 +139,50 @@ exact retry of its own unchanged command. A lost session or permission stops the
 reason. Changing picks, decision or reason clears the confirm. The existing one-student form stays below the list for a
 student who needs a different decision. Without a verified school the page shows only the one-student form, as today.
 Only an instructor decides: HON and the AI team never promote.
+
+### L4 spec: Texts & email composer, Settings tidy
+
+**Texts & email** opens with one composer, "New text or email", above the family-messages inbox:
+1. Find a contact (the existing people search, up to 50 matches by name, email or phone) and pick one.
+2. Choose **Text** (needs a mobile number on the contact) or **Email** (needs an email address); a channel the contact
+   has no address for is shown but cannot be chosen.
+3. Write the message (1 to 4,000 characters).
+4. Tick "Send this to NAME by text/email" and press **Send**.
+
+Under the hood this is the existing communication-message API (migration 0047/0243, no server change): create a DRAFT
+(`communication.message.create`), then queue it with the version it returned (`communication.message.queue`), each with
+its own idempotency key. The server checks the school permission and the contact's current consent for that channel at
+queue time; HON's delivery worker sends only queued messages, and only where the owner has turned delivery on.
+Outcomes: "Queued to send", "NAME has not agreed to receive texts/emails" (with a link to their contact card, where staff
+record consent), "Not available for your role", or "Not sure it went through" with an exact retry of the same step and key
+(a draft that was created but not queued is retried by queueing it, never by creating a second one). Any edit after a
+send starts a new message. Nothing is stored in the browser.
+
+**Settings** keeps its tabs, but the row wraps onto two lines instead of scrolling sideways, like the owner's CRM.
+
+**Mass rank promotion polish (review P3s from #425):** an invalid draft at send shows a plain alert instead of doing
+nothing; when access is lost mid-run, the students not yet sent are marked "Not sent"; after a stop the form stays
+disabled until the page is reloaded.
+
+### L5 spec: Staff as one list with a slide-out card
+
+Today the Staff page's tabs (Team, Roles, Availability, Qualifications, Documents) each ask for record UUIDs; there is
+no list of the people on staff. HON has no staff read the school app can use: the runtime role cannot read principals,
+users or role grants directly (0001/010 revoke), so this slice needs a read-only staff list.
+
+**Backend: none new.** Reuse PR #403's read (migration 0404, `hon.list_school_staff_for_picker`, API
+`GET .../pickers/staff?for=roles|availability|qualifications`): active human staff with a live grant at the exact school,
+names only, gated per screen permission. L5 waits for #403 to merge and adds no migration (coordinator had reserved 0411;
+released).
+
+**Page:** Staff opens on the list of names with the existing invitations below. Clicking a person opens a slide-out
+card with plain links to the existing Roles, Availability, Qualifications and Documents pages. The card passes no id in
+the link: each page picks the person by name from its own 0404 pick list, so nobody types a UUID and no id travels in a
+URL. The heading shows "200+" when the list reaches the read's 200-row cap. Focus moves into the card when it opens and
+back to the person's name when it closes.
+The tab row stays (≤5 tabs). Read access follows the server (the picker's per-screen permission); without it the page says so and
+keeps the tabs.
+
+Carry: on Texts & email, a 409 `MESSAGE_NOT_DRAFT` after a retry says "It may already have been queued" (review P3 of #427).
 
 Each slice: spec section here, tests first, independent review, standing merge rule.

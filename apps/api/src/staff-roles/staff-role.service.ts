@@ -38,6 +38,52 @@ function boundaryError(error: unknown): never {
   throw error;
 }
 
+export type StaffRoleListRole = { id: string; code: string; name: string; version: number; permissionCodes: string[] };
+export type StaffRoleListGrant = { id: string; roleId: string; roleName: string; principalId: string; displayName: string; version: number; effectiveFrom: string; effectiveUntil: string | null };
+export type StaffRoleLists = { roles: StaffRoleListRole[]; grants: StaffRoleListGrant[] };
+export const STAFF_ROLE_LIST_LIMIT = 200;
+function unsafe(): never { throw new Error('Unsafe staff role list response.'); }
+function closed(value: unknown, keys: string[]): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).sort().join('|') !== [...keys].sort().join('|')) unsafe();
+  return value as Record<string, unknown>;
+}
+const isId = (v: unknown) => typeof v === 'string' && UUID.test(v);
+const isText = (v: unknown, max: number) => typeof v === 'string' && v.length >= 1 && v.length <= max && !/[\u0000-\u001f\u007f]/.test(v);
+const isVersion = (v: unknown) => Number.isSafeInteger(v) && (v as number) >= 1 && (v as number) <= 999999999;
+const isInstant = (v: unknown) => typeof v === 'string' && v.length <= 40 && Number.isFinite(Date.parse(v));
+function bounded<T>(value: unknown, row: (item: unknown) => T, id: (item: T) => string): T[] {
+  if (!Array.isArray(value) || value.length > STAFF_ROLE_LIST_LIMIT) unsafe();
+  const rows = value.map(row); if (new Set(rows.map(id)).size !== rows.length) unsafe(); return rows;
+}
+export type AssignableStaffPermission = { code: string; description: string; sensitive: boolean };
+/** 0412 output check: staff-assignable permissions the caller holds, closed shapes, bounded, unique, never hq/platform/system. */
+export function parseAssignableStaffPermissions(value: unknown): AssignableStaffPermission[] {
+  const x = closed(value, ['permissions']);
+  return bounded(x.permissions, (item) => {
+    const p = closed(item, ['code', 'description', 'sensitive']);
+    if (typeof p.code !== 'string' || !/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/.test(p.code) || p.code.length > 100 || /^(hq|platform|system)\./.test(p.code)
+      || !isText(p.description, 300) || typeof p.sensitive !== 'boolean') unsafe();
+    return p as unknown as AssignableStaffPermission;
+  }, (p) => p.code);
+}
+/** 0406 output check: custom roles and current grants only, closed shapes, bounded, unique. */
+export function parseStaffRoleLists(value: unknown): StaffRoleLists {
+  const x = closed(value, ['roles', 'grants']);
+  const roles = bounded(x.roles, (item) => {
+    const r = closed(item, ['id', 'code', 'name', 'version', 'permissionCodes']);
+    if (!isId(r.id) || typeof r.code !== 'string' || !/^[A-Z][A-Z0-9_]{0,63}$/.test(r.code) || /^(OWNER|HON_|HQ|PLATFORM|SYSTEM)/.test(r.code) || !isText(r.name, 100) || !isVersion(r.version)
+      || !Array.isArray(r.permissionCodes) || r.permissionCodes.length > 100 || r.permissionCodes.some((c) => !isText(c, 100))) unsafe();
+    return r as unknown as StaffRoleListRole;
+  }, (r) => r.id);
+  const grants = bounded(x.grants, (item) => {
+    const g = closed(item, ['id', 'roleId', 'roleName', 'principalId', 'displayName', 'version', 'effectiveFrom', 'effectiveUntil']);
+    if (!isId(g.id) || !isId(g.roleId) || !isText(g.roleName, 100) || !isId(g.principalId) || !isText(g.displayName, 120) || !isVersion(g.version) || !isInstant(g.effectiveFrom)
+      || !(g.effectiveUntil === null || isInstant(g.effectiveUntil))) unsafe();
+    return g as unknown as StaffRoleListGrant;
+  }, (g) => g.id);
+  return { roles, grants };
+}
+
 @Injectable()
 export class StaffRoleService {
   constructor(private readonly database: RuntimeDatabaseService) {}
@@ -75,6 +121,30 @@ export class StaffRoleService {
         await client.query("SELECT set_config('app.hon_source','HUMAN_UI',true), set_config('app.hon_action_request_id','',true), set_config('app.hon_delegated_by_principal_id','',true)");
         const result = await client.query<{ data: CustomRoleSummary | StaffRoleGrantSummary }>('SELECT hon.read_staff_role($1,$2,$3::uuid) AS data', [context.externalSubject, kind, id]);
         return result.rows[0]!.data;
+      });
+    } catch (error) { return boundaryError(error); }
+  }
+  /** 0412: the permissions the caller may put in a custom role here, with their descriptions, for a checklist. */
+  async assignablePermissions(context: StaffRoleCommandContext): Promise<AssignableStaffPermission[]> {
+    human(context);
+    try {
+      return await this.database.withTenantTransaction(context, async (client) => {
+        await client.query("SELECT set_config('app.hon_source','HUMAN_UI',true), set_config('app.hon_action_request_id','',true), set_config('app.hon_delegated_by_principal_id','',true)");
+        await client.query("SET LOCAL statement_timeout='5s'");
+        const result = await client.query<{ data: unknown }>('SELECT hon.list_assignable_staff_permissions($1) AS data', [context.externalSubject]);
+        return parseAssignableStaffPermissions(result.rows[0]?.data);
+      });
+    } catch (error) { return boundaryError(error); }
+  }
+  /** 0406: the school's custom roles and current grants, by name, for picking instead of typing IDs. */
+  async lists(context: StaffRoleCommandContext): Promise<StaffRoleLists> {
+    human(context);
+    try {
+      return await this.database.withTenantTransaction(context, async (client) => {
+        await client.query("SELECT set_config('app.hon_source','HUMAN_UI',true), set_config('app.hon_action_request_id','',true), set_config('app.hon_delegated_by_principal_id','',true)");
+        await client.query("SET LOCAL statement_timeout='5s'");
+        const result = await client.query<{ data: unknown }>('SELECT hon.list_staff_roles($1) AS data', [context.externalSubject]);
+        return parseStaffRoleLists(result.rows[0]?.data);
       });
     } catch (error) { return boundaryError(error); }
   }
