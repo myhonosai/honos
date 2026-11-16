@@ -3846,6 +3846,7 @@ BEGIN
   END LOOP;
 END $$;
 -- End contact photo exact verification.
+<<<<<<< HEAD
 -- Walk-in kiosk exact verification (0396)
 DO $$ DECLARE f text; t text;
   entry text[]:=ARRAY['hon.save_walkin_kiosk_settings(text,jsonb,text,uuid,uuid)','hon.start_walkin_kiosk_device(text,jsonb,text,uuid,uuid)',
@@ -3860,26 +3861,54 @@ DO $$ DECLARE f text; t text;
     'hon.walkin_visit_json(hon.walkin_visits)','hon.walkin_settings_input(jsonb)','hon.walkin_live_device(text)',
     'hon.take_walkin_kiosk_rate(uuid,text,integer)','hon.walkin_name_ok(jsonb)','hon.walkin_birth_date(jsonb,date)',
     'hon.walkin_visit_input(hon.walkin_kiosk_settings,jsonb,date)'];
+=======
+-- School location exact verification (0392)
+DO $$ DECLARE f text; t text;
+  entry text[]:=ARRAY['hon.read_school_location(text)','hon.save_school_location(text,jsonb,text,uuid,uuid)',
+    'hon.register_hon_os_school_with_location(text,text,jsonb,uuid)'];
+  helpers text[]:=ARRAY['hon.guard_biometric_jurisdiction_data()','hon.school_location_region_ok(text,text)','hon.school_location_text_ok(jsonb,integer,boolean)',
+    'hon.school_location_input_ok(jsonb)','hon.guard_school_location()','hon.biometric_locality(text)','hon.biometric_profile_for(text,text,text)',
+    'hon.biometric_notice_json(text)','hon.school_location_json(hon.school_locations)','hon.school_location_view(hon.school_locations)',
+    'hon.require_school_location_actor(text)','hon.school_location_write(uuid,uuid,uuid,jsonb,integer,text,uuid,uuid)'];
+>>>>>>> origin/main
 BEGIN
   FOREACH f IN ARRAY entry LOOP
     IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
         AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
         AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
           AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+<<<<<<< HEAD
       RAISE EXCEPTION 'Unsafe walk-in kiosk entry point: %',f; END IF;
+=======
+      RAISE EXCEPTION 'Unsafe school location entry point: %',f; END IF;
+>>>>>>> origin/main
   END LOOP;
   FOREACH f IN ARRAY helpers LOOP
     IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
         OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+<<<<<<< HEAD
       RAISE EXCEPTION 'Unsafe walk-in kiosk helper: %',f; END IF;
   END LOOP;
   FOREACH t IN ARRAY ARRAY['walkin_kiosk_settings','walkin_waiver_texts','walkin_kiosk_devices','walkin_visits','walkin_visit_participants','walkin_waiver_signatures','walkin_kiosk_rates'] LOOP
+=======
+      RAISE EXCEPTION 'Unsafe school location helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['school_locations','school_location_versions','biometric_jurisdiction_profiles','biometric_jurisdiction_rules'] LOOP
+>>>>>>> origin/main
     IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
       OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
       OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
       OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+<<<<<<< HEAD
       RAISE EXCEPTION 'Unsafe walk-in kiosk table: %',t;
     END IF;
   END LOOP;
 END $$;
 -- End walk-in kiosk exact verification.
+=======
+      RAISE EXCEPTION 'Unsafe school location table: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End school location exact verification.
+>>>>>>> origin/main

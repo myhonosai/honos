@@ -1374,7 +1374,8 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
 
   async callHonOsSignup(operation: 'register'|'read', params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
-      register: {sql: 'SELECT hon.register_hon_os_school($1,$2,$3::jsonb,$4::uuid) data',arity:4,readOnly:false},
+      // 0392: sign-up records the school address in the same transaction (wraps the unchanged 0241 function).
+      register: {sql: 'SELECT hon.register_hon_os_school_with_location($1,$2,$3::jsonb,$4::uuid) data',arity:4,readOnly:false},
       read: {sql: 'SELECT hon.read_hon_os_registration($1) data',arity:1,readOnly:true},
     } as const;
     const call=calls[operation];
