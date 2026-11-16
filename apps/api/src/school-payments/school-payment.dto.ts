@@ -60,3 +60,8 @@ export class CancelSchoolPayAutopayDto {
   @Allow() expectedVersion?: unknown;
   @Allow() reason?: unknown;
 }
+export class StartSchoolPayChargeDto {
+  @Allow() totalMinor?: unknown;
+  @Allow() currency?: unknown;
+}
+export class ReconcileSchoolPayChargeDto {}
