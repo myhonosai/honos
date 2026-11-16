@@ -458,8 +458,8 @@ promo codes are CP3 and CP4). Nothing here takes a payment, and HON adds no fee.
   `school_checkout_settings` (the school's page groups and the staff order of the grid; defaults Trial, Membership, Event,
   Tournament, Test, Equipment, Camp, Sales). Private, forced RLS, no table privilege for the runtime; no delete.
 - **Content (closed shape, CHECKed in the table):** title and description, text sections above or below the options,
-  multi-participant (2 to 20 per order), questions (with uniform, belt, shoe and T-shirt size presets), add-ons in the page
-  currency, an optional page waiver, receipt note and thank-you. Pricing options (up to 20): one-time (0 allowed for a
+  multi-participant (2 to 10 per order), questions (with uniform, belt, shoe and T-shirt size presets), add-ons in the page
+  currency, an optional page waiver, receipt note and thank-you. Pricing options (up to 10): one-time (0 allowed for a
   free trial) or monthly (amount, 0 to 120 payments where 0 is ongoing, collection AUTO_CHARGE, IN_HOUSE or
   REVIEW_REQUIRED, optional down payment with its own label), an optional extra-participant fee, capacity, "available
   through" date, at most one "Most popular", and an optional catalog plan with "creates membership". An option is a copy
