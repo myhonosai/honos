@@ -90,7 +90,11 @@ export async function runDateBrowserChecks({ fixture, open, visual, check, origi
         await begin(page);
         const synchronous = await page.evaluate(name => {
           window.dispatchEvent(new Event(name));
-          return [...document.querySelectorAll('main [hidden][inert]')].some(node => node.textContent.includes('Synthetic Morgan Lee'));
+          // Hidden+inert in place, or already gone: on pagehide the shell's synchronous screensaver render
+          // also flushes this page's own concealment render in the same task. Either way nothing is readable.
+          const main = document.querySelector('main');
+          return [...document.querySelectorAll('main [hidden][inert]')].some(node => node.textContent.includes('Synthetic Morgan Lee'))
+            || (name === 'pagehide' && Boolean(main) && !main.innerText.includes('Synthetic Morgan Lee') && Boolean(document.querySelector('[data-screensaver]')));
         }, event);
         assert.equal(synchronous, true, 'Protected DOM must be hidden before a React rerender');
         await page.getByRole('heading', { name: 'Membership information hidden' }).waitFor();
