@@ -111,6 +111,19 @@ describe('school home view', () => {
     expect(html).toContain(mode === 'classic' ? '/ai/kai-illustrated.webp' : mode === 'big-button' ? '/ai/kai-chibi.webp' : '/ai/kai.webp');
   });
 
+  it('in Big Button, groups the page cards under the owner\'s menu headings, never one long list', () => {
+    const html = render({ mode: 'big-button' });
+    const groups = [...html.matchAll(/data-area-section="([a-z]+)"/g)].map(m => m[1]);
+    expect(groups).toEqual(['dashboard', 'ai', 'calendar', 'contacts', 'leads', 'communication', 'finance', 'marketing', 'ranks', 'business', 'community']);
+    const ranks = html.match(/data-area-section="ranks"[^>]*>(.*?)<\/section>/s)?.[1] ?? '';
+    expect(ranks).toContain('>Ranks</h3>');
+    for (const key of ['ranks', 'testing', 'promotions']) expect(ranks).toContain(`data-area="${key}"`);
+    // The Dashboard card is the page you are on; hidden routes never show as a card's subtitle.
+    expect(html).not.toContain('data-area="home"');
+    expect(html).not.toContain('Chad: lead follow-ups');
+    expect(render({ mode: 'modern' })).not.toContain('data-area-section');
+  });
+
   it('first container render performs no read and shows no school content', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
     const html = renderToStaticMarkup(<SchoolHome />);
