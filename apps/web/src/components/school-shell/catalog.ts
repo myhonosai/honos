@@ -7,12 +7,14 @@ import type { ShellKey } from './copy';
  * prefill, which the destination re-verifies server-side.
  */
 export type SchoolShellIcon = 'home' | 'hon' | 'aiTeam' | 'conversationAi' | 'classes' | 'attendance' | 'students' | 'staff' | 'crm' | 'automation' | 'messages'
-  | 'social' | 'checkout' | 'invoices' | 'website' | 'marketing' | 'creative' | 'ranks' | 'testing' | 'promotions' | 'billing' | 'analytics' | 'community' | 'settings';
+  | 'social' | 'checkout' | 'shopify' | 'invoices' | 'website' | 'marketing' | 'creative' | 'ranks' | 'testing' | 'promotions' | 'billing' | 'analytics' | 'community' | 'settings';
 /** Owner menu (David, 2026-11-16 07:52Z): eleven headings, each with its few pages under it. */
 export type SchoolShellSection = 'dashboard' | 'ai' | 'calendar' | 'contacts' | 'leads' | 'communication' | 'finance' | 'marketing' | 'ranks' | 'business' | 'community';
 export type SchoolShellRoute = Readonly<{ href: string; titleKey: ShellKey; scoped: boolean; hidden?: boolean }>;
 /** One menu page. Its routes are the tabs inside the page; `section` is absent only for Settings, which sits at the bottom. */
-export type SchoolShellItem = Readonly<{ key: SchoolShellIcon; titleKey: ShellKey; section?: SchoolShellSection; routes: readonly SchoolShellRoute[] }>;
+export type SchoolShellItem = Readonly<{ key: SchoolShellIcon; titleKey: ShellKey; section?: SchoolShellSection; routes: readonly SchoolShellRoute[];
+  /** One job done in order (Tests): the shell shows the routes as numbered steps instead of tabs. */
+  steps?: true }>;
 
 const r = (href: string, titleKey: ShellKey, scoped = false): SchoolShellRoute => ({ href, titleKey, scoped });
 /** Owned by a page for "where am I", but opened from a link on a page (or onboarding), never from tabs or the menu. */
@@ -44,7 +46,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   // Owner ask (2026-11-16): rosters, class schedule, weekly timetable, sale days and events and class booking are one
   // Calendar page; /staff/schedule owns every /staff/schedule/* path, so the old pages and workflow pages still mark Classes.
   { key: 'classes', titleKey: 'navClasses', section: 'calendar', routes: [r('/staff/schedule', 'routeCalendar')] },
-  { key: 'attendance', titleKey: 'navAttendance', section: 'calendar', routes: [r('/staff/attendance', 'routeAttendance', true), r('/staff/attendance/planned-absences', 'routePlannedAbsences'),
+  { key: 'attendance', titleKey: 'navAttendance', section: 'calendar', routes: [r('/staff/attendance', 'routeAttendance', true), r('/staff/attendance/planned-absences', 'routePlannedAbsences'), r('/staff/attendance/scan', 'routeScanCheckIn'), r('/staff/attendance/cards', 'routeAttendanceCards'),
     r('/staff/kiosk', 'routeKiosk'), r('/staff/classpass', 'routeClassPass', true), r('/staff/migration/classes', 'routeHistoryImport')] },
   // Search is the search button in the top bar.
   { key: 'students', titleKey: 'navStudents', section: 'contacts', routes: [r('/staff/people', 'routePeople'), r('/staff/family-access', 'routeFamilyAccess', true),
@@ -57,13 +59,17 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'messages', titleKey: 'navMessages', section: 'communication', routes: [r('/staff/family-messages', 'routeFamilyMessages')] },
   { key: 'social', titleKey: 'navSocial', section: 'communication', routes: [r('/staff/marketing/social', 'routeSocial')] },
   { key: 'checkout', titleKey: 'navCheckout', section: 'finance', routes: [r('/staff/billing/checkout-pages', 'routeCheckoutPages')] },
+  // Shopify (0405): the school's own store, read-only mirror plus connect, sync and disconnect.
+  { key: 'shopify', titleKey: 'navShopify', section: 'finance', routes: [r('/staff/billing/shopify', 'routeShopify')] },
   { key: 'invoices', titleKey: 'navInvoices', section: 'finance', routes: [r('/staff/billing/invoices', 'routeInvoices'), r('/staff/billing/receivables', 'routeReceivables')] },
   { key: 'website', titleKey: 'navWebsite', section: 'marketing', routes: [r('/staff/marketing/website', 'routeWebsite'), r('/staff/marketing/forms', 'routeForms'), r('/staff/marketing/intake', 'routeIntake')] },
   { key: 'marketing', titleKey: 'navMarketing', section: 'marketing', routes: [r('/staff/marketing', 'routeMarketingHome'), r('/staff/marketing/campaigns', 'routeCampaigns'), r('/staff/champions-club', 'routeChampions')] },
   { key: 'creative', titleKey: 'navCreative', section: 'marketing', routes: [r('/staff/creative-studio', 'routeCreativeStudio')] },
   { key: 'ranks', titleKey: 'navRanks', section: 'ranks', routes: [r('/staff/curriculum/library', 'routeCurriculumLibrary'), r('/staff/curriculum/progress', 'routeProgress'),
     r('/staff/teaching-studio', 'routeTeachingStudio'), r('/staff/students/achievements', 'routeAchievements')] },
-  { key: 'testing', titleKey: 'navTesting', section: 'ranks', routes: [r('/staff/testing/registrations', 'routeTesting'), r('/staff/testing/readiness', 'routeReadiness'),
+  // A belt test is one job in order (L3): who is ready, sign-ups, register, grade, scorecards, certificates.
+  { key: 'testing', titleKey: 'navTesting', section: 'ranks', steps: true, routes: [r('/staff/testing/readiness', 'routeTestReady'), r('/staff/testing/registrations', 'routeTestSignups'),
+    r('/staff/testing/candidates/register', 'routeTestRegister'), r('/staff/testing/candidates/grade', 'routeTestGrade'),
     r('/staff/testing/scorecards', 'routeScorecards'), r('/staff/testing/certificates', 'routeCertificates')] },
   { key: 'promotions', titleKey: 'navPromotions', section: 'ranks', routes: [r('/staff/testing/promotion-decisions', 'routePromotions')] },
   { key: 'billing', titleKey: 'navBilling', section: 'business', routes: [r('/staff/billing/membership-plans', 'routePlans'), r('/staff/memberships', 'routeMembershipList'),
@@ -88,11 +94,11 @@ export const SCHOOL_SHELL_UNLISTED_ROUTES: readonly string[] = [
   '/staff/schedule/sessions',
   '/staff/schedule/timetable',
   '/staff/schedule/events',
-  '/staff/testing/candidates/register',
-  '/staff/testing/candidates/grade',
   '/staff/search/[organizationId]/[schoolId]/[kind]/[entityId]',
   // The page Facebook or Instagram returns to after a social connection (0347); reached only from Social accounts.
   '/staff/marketing/social/return',
+  // The page Shopify returns to after the owner approves a store connection (0405); reached only from Shopify.
+  '/staff/billing/shopify/return',
 ];
 
 /** Mobile bottom bar: four primary destinations plus "More". */

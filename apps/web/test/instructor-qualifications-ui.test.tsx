@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { InstructorQualificationsWorkbench } from '../src/components/instructor-qualifications-workbench';
-import { createInstructorQualification, InstructorQualificationsUiError, instructorQualificationPaths, loadInstructorQualification, loadInstructorQualificationAccess, loadInstructorQualificationEvidence, recordInstructorQualificationEvidence, retireInstructorQualification, reviewInstructorQualificationEvidence } from '../src/components/instructor-qualifications-http';
+import { evidenceLabel, definitionLabel } from '../src/components/instructor-qualifications-workbench';
+import { loadInstructorQualificationList, loadInstructorQualificationStaff, loadInstructorQualificationEvidenceList, createInstructorQualification, InstructorQualificationsUiError, instructorQualificationPaths, loadInstructorQualification, loadInstructorQualificationAccess, loadInstructorQualificationEvidence, recordInstructorQualificationEvidence, retireInstructorQualification, reviewInstructorQualificationEvidence } from '../src/components/instructor-qualifications-http';
 
 const staff = '11111111-1111-4111-8111-111111111111';
 const program = '22222222-2222-4222-8222-222222222222';
@@ -53,12 +54,13 @@ describe('instructor qualification evidence UI', () => {
     } finally { fetcher.mockRestore(); }
   });
 
-  it('starts empty, exposes only known-ID human record controls and makes explicit non-eligibility/no-downstream-effect statements', () => {
+  it('starts empty on the server render, with plain lists and the ID fallback tucked away, and makes explicit non-eligibility/no-downstream-effect statements', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
     try {
       const html = renderToStaticMarkup(<InstructorQualificationsWorkbench/>);
       expect(fetcher).not.toHaveBeenCalled();
-      for (const phrase of ['Known qualification UUID', 'No school selector', 'Record immutable evidence', 'No save is assumed']) expect(html).toContain(phrase);
+      for (const phrase of ['Your school’s qualifications', 'Team records', 'Enter record IDs instead', 'No save is assumed']) expect(html).toContain(phrase);
+      for (const phrase of ['UUID', 'No school selector', 'direct-human', 'Known staff principal']) expect(html).not.toContain(phrase);
       expect(html).not.toMatch(/type="file"|payment|provider success|send message/i);
     } finally { fetcher.mockRestore(); }
   });
@@ -71,5 +73,34 @@ describe('instructor qualification evidence UI', () => {
     expect(route).toContain('InstructorQualificationsWorkbench');
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
     expect(manifest.routes.filter((route: { path: string }) => route.path === '/staff/instructor-qualifications')).toHaveLength(1);
+  });
+
+  it('reads the 0406 lists on fixed routes and accepts only closed, bounded, unique rows', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch');
+    try {
+      fetcher.mockResolvedValue(response([definition]));
+      await expect(loadInstructorQualificationList()).resolves.toEqual([definition]);
+      expect(fetcher).toHaveBeenLastCalledWith('/api/v1/staff/instructor-qualifications/qualifications', expect.objectContaining({ method: 'GET' }));
+      fetcher.mockResolvedValue(response([{ principalId: staff, displayName: 'Coach Rae', evidenceCount: 2 }]));
+      await expect(loadInstructorQualificationStaff()).resolves.toEqual([{ principalId: staff, displayName: 'Coach Rae', evidenceCount: 2 }]);
+      expect(fetcher).toHaveBeenLastCalledWith('/api/v1/staff/instructor-qualifications/staff', expect.anything());
+      fetcher.mockResolvedValue(response([record]));
+      await expect(loadInstructorQualificationEvidenceList(staff.toUpperCase())).resolves.toEqual([record]);
+      expect(fetcher).toHaveBeenLastCalledWith(`/api/v1/staff/instructor-qualifications/staff/${staff}/evidence`, expect.anything());
+      for (const [load, bad] of [
+        [loadInstructorQualificationList, [definition, definition]], [loadInstructorQualificationList, Array.from({ length: 201 }, (_, i) => ({ ...definition, id: `33333333-3333-4333-8333-${String(i).padStart(12, '0')}` }))],
+        [loadInstructorQualificationList, { items: [definition] }], [loadInstructorQualificationStaff, [{ principalId: staff, displayName: 'Coach Rae', evidenceCount: 1, email: 'x@example.test' }]],
+        [() => loadInstructorQualificationEvidenceList(staff), [{ ...record, staffPrincipalId: program }]], [() => loadInstructorQualificationEvidenceList(staff), [{ ...record, reviewNote: 'private' }]],
+      ] as const) { fetcher.mockResolvedValue(response(bad)); await expect((load as () => Promise<unknown>)()).rejects.toThrow(); }
+    } finally { fetcher.mockRestore(); }
+  });
+
+  it('labels qualifications and records by name and date, never by record ID', () => {
+    expect(definitionLabel(definition)).toBe('First aid training (FIRST_AID)');
+    expect(definitionLabel({ ...definition, status: 'RETIRED' })).toBe('First aid training (FIRST_AID) · retired');
+    const label = evidenceLabel({ ...record, expiredOnRead: true, reviewStatus: 'REVIEWED' }, new Map([[qualification, 'First aid training']]));
+    expect(label).toBe('First aid training · attained 2026-01-10 · expires 2028-01-10 (past expiry) · Reviewed');
+    expect(evidenceLabel(record, new Map())).toMatch(/^A qualification/);
+    expect(label).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}/);
   });
 });

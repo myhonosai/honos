@@ -17,7 +17,7 @@ function fakeDb({ grant = () => scope, again = () => scope, rows = [], entitled 
       calls.sql.push({ sql, values });
       if (sql.includes('resolve_authorized_scope')) { const s = again(values[2]); return { rows: s ? [{ principal_id: s.principalId, organization_id: s.organizationId, school_id: s.schoolId }] : [] }; }
       if (sql.includes('read_current_organization_entitlement')) return { rows: entitled ? [{ tier: entitled === true ? 'CORE' : entitled }] : [] };
-      if (sql.startsWith('SET LOCAL')) return { rows: [] };
+      if (sql.startsWith('SET LOCAL') || sql.includes("set_config('app.hon_source'")) return { rows: [] };
       return { rows };
     } }),
   } };
@@ -103,7 +103,7 @@ test('a school without an active, in-window entitlement lists nothing on every e
 });
 
 test('Teaching studio lists: students and ranks by name, checked against teaching.studio.read before and inside the read', async () => {
-  assert.deepEqual(STUDENT_PURPOSES, { teaching: 'teaching.studio.read' });
+  assert.deepEqual(STUDENT_PURPOSES, { teaching: 'teaching.studio.read', achievements: 'achievement.award.read' });
   assert.deepEqual(RANK_PURPOSES, { teaching: 'teaching.studio.read' });
   const f = fakeDb({ rows: [{ studentProfileId: 's' }] }); const res = response();
   const body = await controller(f).students(scope.organizationId, scope.schoolId, 'teaching', '  Kim_%  ', request, res);
@@ -129,4 +129,38 @@ test('Teaching studio lists: students and ranks by name, checked against teachin
     await assert.rejects(controller(f2).students(scope.organizationId, scope.schoolId, 'teaching', undefined, request, response()), status(403));
     assert.ok(!f2.calls.sql.some((c) => c.sql.includes('hon.student_profiles')));
   }
+});
+
+test('staff list: teammates by name through the fixed 0404 boundary, checked against each screen permission', async () => {
+  const { STAFF_PURPOSES } = require('../dist/school-pickers/school-pickers.js');
+  assert.deepEqual(STAFF_PURPOSES, { followups: 'crm.follow_up.manage', work: 'work_item.manage', qualifications: 'staff.instructor_qualification.manage',
+    roles: 'iam.staff_role.grant', availability: 'staff.availability.manage' });
+  for (const [purpose, permission] of Object.entries(STAFF_PURPOSES)) {
+    const items = [{ principalId: randomUUID(), displayName: 'Coach Kim' }];
+    const f = fakeDb({ rows: [{ data: { items } }] }); const res = response();
+    const body = await controller(f).staff(scope.organizationId, scope.schoolId, purpose, request, res);
+    assert.deepEqual(body.data, items); assert.equal(body.meta.limit, 200); assert.equal(res.headers['Cache-Control'], 'private, no-store');
+    assert.equal(f.calls.resolve[0].permission, permission); assert.equal(f.calls.sql[0].values[2], permission);
+    const read = f.calls.sql.find((c) => c.sql.includes('list_school_staff_for_picker'));
+    assert.equal(read.sql, 'SELECT hon.list_school_staff_for_picker($1, $2) AS data'); assert.deepEqual(read.values, ['verified-human', permission]);
+  }
+  for (const bad of [undefined, 'teaching', 'toString', ['work']]) {
+    const g = fakeDb(); await assert.rejects(controller(g).staff(scope.organizationId, scope.schoolId, bad, request, response()), status(400)); assert.equal(g.calls.resolve.length, 0);
+  }
+  const revoked = fakeDb({ again: () => undefined });
+  await assert.rejects(controller(revoked).staff(scope.organizationId, scope.schoolId, 'work', request, response()), status(403));
+  assert.ok(!revoked.calls.sql.some((c) => c.sql.includes('list_school_staff_for_picker')));
+  const lapsed = fakeDb({ entitled: false });
+  await assert.rejects(controller(lapsed).staff(scope.organizationId, scope.schoolId, 'work', request, response()), status(403));
+  for (const data of [null, { items: 'x' }, { items: [{ principalId: 'x', displayName: 'A' }] }, { items: [{ principalId: randomUUID(), displayName: '' }] }, { items: [{ principalId: randomUUID(), displayName: 'A', email: 'a@b' }] }]) {
+    await assert.rejects(controller(fakeDb({ rows: [{ data }] })).staff(scope.organizationId, scope.schoolId, 'work', request, response()));
+  }
+});
+test('Achievements student list: checked against achievement.award.read before and inside the read', async () => {
+  const f = fakeDb({ rows: [{ studentProfileId: 's' }] });
+  const body = await controller(f).students(scope.organizationId, scope.schoolId, 'achievements', undefined, request, response());
+  assert.deepEqual(body.data, [{ studentProfileId: 's' }]);
+  assert.equal(f.calls.resolve[0].permission, 'achievement.award.read');
+  assert.deepEqual(f.calls.sql[0].values, ['verified-human', scope.schoolId, 'achievement.award.read']);
+  assert.ok(f.calls.sql.some((c) => c.sql.includes('hon.student_profiles') && /s\.status = 'ACTIVE'/.test(c.sql)));
 });
