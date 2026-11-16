@@ -359,7 +359,7 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
 
 /**
  * Container. Every read is for exactly the verified school passed in; a school change remounts it (keyed by the parent).
- * Private conversation content is concealed synchronously on blur, a hidden tab, page hide or session end, and shown again
+ * Private conversation content is concealed synchronously on session end (away only shows the school screensaver), and shown again
  * only after an explicit Refresh. A sent message is never cancelled: its outcome and exact retry are kept.
  */
 export function HonConversation({ school, presentation, api = HON_CONVERSATION_API, initialAsk = 'hon' }: { school: HonSchool; presentation: 'panel' | 'full'; api?: HonConversationApi; initialAsk?: HonComposerAsk }): React.ReactElement {
@@ -422,16 +422,15 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   useEffect(() => {
     mounted.current = true; load();
     const conceal = (event: Event) => {
-      if (event.type === 'visibilitychange' && document.visibilityState === 'visible') return;
       concealed.current = true; generation.current++; privacy.current++; reads.current?.abort(); closeConfirm(); voiceAnswer.current = null; voiceShutdown();
       for (const node of document.querySelectorAll<HTMLElement>('[data-hon-private]')) { node.hidden = true; node.inert = true; }
       setConversations([]); setThread(null); setThreadPhase('NONE'); setGroups(new Map()); setGroupPhase('NONE');
       if (event.type === HON_SESSION_INVALIDATED_EVENT) { ended.current = true; setPhase('SESSION'); } else setPhase((now) => now === 'SESSION' ? now : 'CONCEALED');
     };
-    const windowEvents = ['blur', 'pagehide', HON_SESSION_INVALIDATED_EVENT];
+    // Away (blur, hidden tab, page hide) only shows the school screensaver; the session end still clears everything.
+    const windowEvents = [HON_SESSION_INVALIDATED_EVENT];
     for (const name of windowEvents) window.addEventListener(name, conceal);
-    document.addEventListener('visibilitychange', conceal);
-    return () => { mounted.current = false; generation.current++; privacy.current++; pendingKey.current = null; confirmSeq.current++; targetRead.current?.abort(); reads.current?.abort(); for (const name of windowEvents) window.removeEventListener(name, conceal); document.removeEventListener('visibilitychange', conceal); };
+    return () => { mounted.current = false; generation.current++; privacy.current++; pendingKey.current = null; confirmSeq.current++; targetRead.current?.abort(); reads.current?.abort(); for (const name of windowEvents) window.removeEventListener(name, conceal); };
   }, [load, closeConfirm, voiceShutdown]);
 
   useEffect(() => {

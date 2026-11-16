@@ -38,7 +38,7 @@ async function axeScan(page, name) {
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const schoolA = { organizationId: id(1), schoolId: id(2) }, schoolB = { organizationId: id(1), schoolId: id(3) };
 const report = { syntheticFixturesOnly: true, databaseAccess: false, providerCalls: false, checks: [], failures: [], screenshots: [], pageErrors: [], apiRequests: [] };
-let theme = 'modern', multi = false, readinessDenied = false, leadsGate = null;
+let theme = 'modern', multi = false, readinessDenied = false, leadsGate = null, sessionEnded = false;
 const iso = () => '2026-11-06T09:00:00.000Z';
 const snapshot = (scope) => ({
   organizationId: scope.organizationId, schoolId: scope.schoolId, generatedAt: iso(), from: '2026-10-07T09:00:00.000Z', to: iso(),
@@ -87,6 +87,7 @@ const json = (route, status, body) => route.fulfill({ status, headers: { 'Conten
 function api(route) {
   const url = new URL(route.request().url()), path = url.pathname, method = route.request().method();
   report.apiRequests.push(`${method} ${path}`);
+  if (path === '/api/identity/me' && sessionEnded) return json(route, 401, { error: { code: 'UNAUTHENTICATED' } });
   if (path === '/api/identity/me') return json(route, 200, { data: { externalSubject: 'shell-synthetic-owner', displayName: 'Synthetic Owner' } });
   if (path === '/api/v1/staff/current-reporting-school') return json(route, 200, { data: multi ? { state: 'MANUAL_ENTRY_REQUIRED' } : { state: 'RESOLVED', ...schoolA } });
   if (path === '/api/v1/staff/reporting-schools') return json(route, 200, { data: multi
@@ -116,7 +117,7 @@ let serverLog = ''; server.stdout.on('data', (d) => { serverLog += d; }); server
 for (let i = 0; i < 240; i += 1) { try { const r = await fetch(`${origin}/auth/login`); if (r.status < 500) break; } catch { /* starting */ } await new Promise((done) => setTimeout(done, 500)); }
 
 const browser = await chromium.launch();
-async function open(viewport, path, { language } = {}) {
+async function open(viewport, path, { language, clock } = {}) {
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1, reducedMotion: 'reduce' });
   await ctx.addCookies([{ name: HON_SESSION_COOKIE, value: issueSession({ externalSubject: 'shell-synthetic-owner' }, session), url: origin, httpOnly: true, sameSite: 'Lax' }]);
   await ctx.route('**/*', (route) => {
@@ -126,6 +127,7 @@ async function open(viewport, path, { language } = {}) {
     return route.continue();
   });
   const page = await ctx.newPage();
+  if (clock) await page.clock.install();
   page.on('pageerror', (error) => report.pageErrors.push(String(error)));
   await page.goto(`${origin}${path}`);
   if (language) await page.evaluate((l) => { document.documentElement.lang = l; }, language);
@@ -211,34 +213,65 @@ const privateNow = (page, trigger) => page.evaluate((how) => {
   return { count: nodes.length, concealed: nodes.every((node) => node.hidden && node.inert) };
 }, trigger);
 const phaseIs = (page, phase) => page.waitForFunction((value) => document.querySelector('[data-phase]')?.getAttribute('data-phase') === value, phase);
-await check('blur, a hidden tab and session end conceal the school and dashboard at once; a late read never repaints; only re-verification restores', async () => {
-  theme = 'modern'; multi = false; let release = () => {}; leadsGate = new Promise((done) => { release = done; });
-  const { ctx, page } = await open(viewports.desktop, '/staff/dashboard');
+const saverNow = (page, how) => page.evaluate((how) => {
+  if (how === 'hidden' || how === 'visible') {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => how });
+    document.dispatchEvent(new Event('visibilitychange')); delete document.visibilityState;
+  } else window.dispatchEvent(new Event(how));
+  // Read in the same task as the event: the screensaver must not wait for a later render.
+  return { saver: Boolean(document.querySelector('[data-screensaver]')), phase: document.querySelector('[data-phase]')?.getAttribute('data-phase') };
+}, how);
+await check('away shows a screensaver instead of hiding the school; tapping returns to the same page and school with a quiet re-check', async () => {
+  theme = 'modern'; multi = false;
+  const { ctx, page } = await open(viewports.desktop, '/staff/dashboard', { clock: true });
   await phaseIs(page, 'READY'); await page.waitForSelector('[data-kpi="students"][data-state="VALUE"]');
-  const blur = await privateNow(page, 'blur');
-  assert.equal(blur.count >= 2 && blur.concealed, true, `blur hides private content synchronously: ${JSON.stringify(blur)}`);
-  await phaseIs(page, 'CONCEALED');
-  const requestsAfterConceal = report.apiRequests.length;
-  release(); leadsGate = null; await page.waitForTimeout(600);
-  assert.equal(await page.locator('[data-home="ready"]').count(), 0, 'no dashboard while concealed');
-  assert.equal(await page.getByText('Avery Sample').count(), 0, 'the pending lead read that settled after concealment is never shown');
-  assert.equal(report.apiRequests.length, requestsAfterConceal, 'no reads while concealed');
-  await page.waitForSelector('[data-home="no-school"]'); await shot(page, 'u3-home-concealed-desktop');
-  const identities = () => report.apiRequests.filter((line) => line === 'GET /api/identity/me').length, before = identities();
-  await page.getByRole('button', { name: 'Show school', exact: true }).click();
-  await phaseIs(page, 'READY'); await page.waitForSelector('[data-home="ready"]');
-  assert.equal(identities() > before, true, 'restoring re-verifies the current identity');
-  const hidden = await privateNow(page, 'hidden');
-  assert.equal(hidden.count >= 2 && hidden.concealed, true, `a hidden tab hides private content synchronously: ${JSON.stringify(hidden)}`);
-  await phaseIs(page, 'CONCEALED');
-  await page.getByRole('button', { name: 'Show school', exact: true }).click(); await phaseIs(page, 'READY'); await page.waitForSelector('[data-home="ready"]');
-  const ended = await privateNow(page, 'hon:session-invalidated');
-  assert.equal(ended.concealed, true, 'session end hides private content synchronously');
-  await phaseIs(page, 'SESSION');
+  const url = page.url(), identities = () => report.apiRequests.filter((line) => line === 'GET /api/identity/me').length;
+  // Blur (another window, the address bar) does nothing at all.
+  assert.deepEqual(await saverNow(page, 'blur'), { saver: false, phase: 'READY' });
+  // Hidden (phone backgrounded, tab switched): screensaver at once, school kept.
+  assert.deepEqual(await saverNow(page, 'hidden'), { saver: true, phase: 'READY' }, 'screensaver covers the app synchronously');
+  assert.equal(await page.locator('[data-home="ready"]').count(), 1, 'the page stays mounted under the screensaver');
+  // Back within 30 seconds: lifts by itself, quietly re-checks, nothing to re-choose.
+  let before = identities();
+  assert.deepEqual(await saverNow(page, 'visible'), { saver: true, phase: 'READY' });
+  await page.waitForSelector('[data-screensaver]', { state: 'detached' });
+  await page.waitForTimeout(300);
+  assert.equal(identities() > before, true, 'returning re-checks the signed-in identity');
+  assert.equal(page.url(), url); await phaseIs(page, 'READY'); assert.equal(await page.locator('[data-home="ready"]').count(), 1);
+  assert.equal(await page.getByRole('button', { name: 'Show school', exact: true }).count(), 0, 'no Show school step any more');
+  // Five idle minutes: screensaver; a tap returns to the same page and school.
+  await page.clock.fastForward('05:01');
+  await page.waitForSelector('[data-screensaver]');
+  await page.waitForTimeout(400); await axeScan(page, 'screensaver'); await shot(page, 'screensaver-modern-desktop');
+  before = identities();
+  await page.getByRole('dialog', { name: 'Screensaver' }).click({ position: { x: 40, y: 40 } });
+  await page.waitForSelector('[data-screensaver]', { state: 'detached' }); await page.waitForTimeout(300);
+  assert.equal(identities() > before, true, 'a tap re-checks the signed-in identity');
+  await phaseIs(page, 'READY'); assert.equal(page.url(), url); assert.equal(await page.locator('[data-home="ready"]').count(), 1);
+  // Any key lifts it too.
+  await saverNow(page, 'hidden'); await page.clock.fastForward('01:00'); await saverNow(page, 'visible');
+  assert.equal(await page.locator('[data-screensaver]').count(), 1, 'a long absence waits for a tap');
+  await page.keyboard.press('Enter'); await page.waitForSelector('[data-screensaver]', { state: 'detached' });
+  // Session end still clears everything and asks for sign-in.
+  await saverNow(page, 'hon:session-invalidated'); await phaseIs(page, 'SESSION');
+  assert.equal(await page.locator('[data-home="ready"]').count(), 0, 'session end still hides the dashboard');
   assert.equal(await page.getByRole('button', { name: 'Show school', exact: true }).count(), 0, 'an ended session cannot be restored in place');
-  await privateNow(page, 'blur'); await page.waitForTimeout(200);
+  await saverNow(page, 'blur'); await page.waitForTimeout(200);
   assert.equal(await page.locator('[data-phase]').getAttribute('data-phase'), 'SESSION', 'a later blur never downgrades an ended session');
   await ctx.close();
+});
+await check('quiet re-check after the screensaver moves an ended session to sign in again', async () => {
+  theme = 'modern'; multi = false;
+  const { ctx, page } = await open(viewports.desktop, '/staff/dashboard');
+  await phaseIs(page, 'READY'); await page.waitForSelector('[data-home="ready"]');
+  await saverNow(page, 'hidden'); sessionEnded = true; await saverNow(page, 'visible');
+  await phaseIs(page, 'SESSION'); sessionEnded = false;
+  assert.equal(await page.locator('[data-home="ready"]').count(), 0); await ctx.close();
+});
+for (const mode of ['modern', 'big-button', 'classic']) await check(`screensaver on a phone (${mode})`, async () => {
+  theme = mode; multi = false; const { ctx, page } = await open(viewports.phone, '/staff/dashboard');
+  await phaseIs(page, 'READY'); await saverNow(page, 'hidden');
+  await page.waitForTimeout(400); await noOverflow(page); await shot(page, `screensaver-${mode}-phone`); await ctx.close();
 });
 await check('menu panel keeps keyboard focus inside and returns it to the opener', async () => {
   theme = 'modern'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/work');
