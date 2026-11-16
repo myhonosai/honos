@@ -137,6 +137,31 @@ describe('Mass rank promotion: pick students, one decision for all (L3)', () => 
     expect(field('massRationale')!.props.value).toBe('');
   });
 
+  it('after a stop, marks the students not yet sent and keeps the form disabled until reload (#425 P3)', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(null, { status: 401 }));
+    await loaded();
+    pick('a'); pick('b'); pick('c'); edit('massRationale', 'Ready for yellow'); confirm(); submit(); await settle();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const row = (n: string) => text(all().find(e => e.props['data-row'] === id(n)));
+    expect(row('a')).not.toContain('Not sent');
+    expect(row('b')).toContain('Not sent');
+    expect(row('c')).toContain('Not sent');
+    expect(all().find(e => e.type === 'fieldset')!.props.disabled).toBe(true);
+    pick('a'); edit('massRationale', 'Again');
+    expect(field(`pick-${id('a')}`)!.props.checked).toBe(false);
+    expect(field('massRationale')!.props.value).toBe('');
+  });
+
+  it('shows a plain alert when the draft fails validation at send, and sends nothing (#425 P3)', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch');
+    await loaded();
+    pick('a'); edit('massRationale', 'Ready\u0001'); confirm(); submit(); await settle();
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(text(render())).toContain('Nothing was sent');
+    edit('massRationale', 'Ready');
+    expect(text(render())).not.toContain('Nothing was sent');
+  });
+
   it('says plainly when nobody is waiting, or access or the list is unavailable', async () => {
     await loaded([]);
     expect(text(render())).toContain('No graded students are waiting for a promotion decision.');

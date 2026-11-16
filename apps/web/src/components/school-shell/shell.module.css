@@ -123,6 +123,8 @@
 }
 .tabs a:hover { color: var(--hon-text); }
 .tabs a[aria-current='page'] { color: var(--hon-text); border-bottom-color: var(--hon-accent-2); }
+/* Settings: one page with many tabs, wrapped onto a second line like the owner's CRM (L4). */
+.tabs[data-wrap='true'] { flex-wrap: wrap; overflow-x: visible; row-gap: 0; }
 /* Numbered steps (Tests): one job in order, so the row reads 1 → 6 instead of tabs. */
 .steps { position: relative; padding: var(--hon-space-2) var(--hon-space-6); border-bottom: 1px solid var(--hon-border); overflow-x: auto; scrollbar-width: thin; }
 .steps ol { display: flex; gap: var(--hon-space-1); margin: 0; padding: 0; list-style: none; }
