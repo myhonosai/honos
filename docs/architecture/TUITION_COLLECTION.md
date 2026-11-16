@@ -446,3 +446,60 @@ sends the cycle to the processor. No message is sent and HON takes no fee.
 - **Evidence:** `packages/database/scripts/test-school-pay-autopay-integrity.mjs` (246 checks over signed HTTP, including month-end,
   leap-year and daylight-saving periods);
   `apps/api/test/school-payments.test.cjs` (0322 contract, discount and route tests).
+
+## 16. Piece 5a as built (0337): charging a prepared autopay cycle, test mode only
+
+Status: source only, not deployed, test/sandbox mode only (live keys stay refused, 0320). HON takes no fee, so no charge
+request carries one. Webhook inboxes (5b) and the retry schedule plus failed-payments list (5c) follow as separate PRs on
+the same tables. Owner check still open: the autopay defaults listed in section 14.
+
+- **What is charged:** one prepared cycle (0322) as one off-session charge of its total, on the plan's current saved
+  method, into the school's own account: Stripe direct charge (`Stripe-Account`, PaymentIntent with `off_session` and
+  `confirm`, no fee field). Square's sandbox adapter refuses before sending until its card page exists (the simulator
+  covers the flow). 0322 cycles stay immutable; a cycle's paid state is derived from its attempts.
+- **Who starts it:** a direct human command, `POST .../payments/autopay/cycles/:cycleId/charge` with the cycle total and
+  currency the staff member confirmed (`{ totalMinor, currency }`), permission `school_pay.autopay.manage`,
+  Idempotency-Key required, live authority re-checked before and after, like 0321/0322. An unattended runner is 5c.
+- **Three steps, never a guessed outcome:**
+  1. `begin_school_pay_charge` checks the total, the plan ACTIVE, its method usable (0322 rule) on a TEST connection,
+     no attempt for the cycle that is not FAILED, and every cycle invoice still ISSUED with nothing recorded; it writes
+     the attempt `PENDING` and commits.
+  2. The API calls `chargeOffSession` with the provider key `hon-school-pay-charge-<attemptId>` (no transaction open).
+  3. `finish_school_pay_charge` records the answer: `SUCCEEDED` (charge id; amount and currency must equal the
+     attempt), `PROCESSING` (a bank debit still clearing), `FAILED` with a class (`DECLINED`,
+     `AUTHENTICATION_REQUIRED`, `INSUFFICIENT_FUNDS`, `EXPIRED_CARD`, `NOT_SENT`, `OTHER`; never provider text), or
+     `UNKNOWN` (timeout, 5xx, 429, a concurrent key, a malformed or mismatched answer).
+- **Paid:** on `SUCCEEDED` each cycle invoice gets one `invoice_payment_records` row with the new method `PROVIDER`
+  (0240 CHECK replaced; a PROVIDER row must carry the processor's charge id as its reference), received on the school's
+  today, and becomes `PAID` through the 0240 status guard. Staff entry stays manual-only, and a PROVIDER row cannot be
+  voided by hand (refunds are a later piece).
+- **Open attempts hold the invoices:** while an attempt is PENDING, PROCESSING or UNKNOWN, its cycle invoices take no
+  manual payment and only move from ISSUED to PAID (two settings-free triggers), and the cycle cannot be charged again.
+- **Reconcile:** `POST .../payments/autopay/charges/:attemptId/reconcile` (body `{}`; the browser never sends an
+  outcome) looks the attempt up at the processor (Stripe: PaymentIntents of the payer's customer from ten minutes before
+  the attempt, matched by metadata `hon_attempt_id`; more than one, or a further page, is UNKNOWN). Found: recorded as
+  the processor says. Not found: inside 23 hours (Stripe keeps idempotency keys 24 hours) the charge is resent with the
+  same key; after that it is `FAILED NOT_SENT`. A replay of the charge request that finds its attempt still PENDING
+  (the earlier request stopped after step 1) does the same lookup before any resend. A provider with no test credentials
+  in the environment is `FAILED NOT_SENT` before anything is sent.
+- **Failed:** invoices stay ISSUED and the cycle can be charged again with a new attempt (the 5c retry schedule will
+  automate that).
+- **Data (private, forced RLS, EXECUTE-only runtime):** `school_pay_charge_attempts` (cycle, plan, method, connection,
+  provider, amount, currency, state, failure class, processor charge id, version; one non-FAILED attempt per cycle; a
+  settled attempt never changes; nothing returns to PENDING), `school_pay_charge_events` (append-only), with audit rows
+  and inert outbox events per change and per paid invoice. Runtime entry points: `read_school_pay_autopay_charges`
+  (staff list without references), `read_school_pay_charge_attempt` (manage only; the API's references, never sent on),
+  `begin_school_pay_charge`, `finish_school_pay_charge`. Read route: `GET .../payers/:billingAccountId/autopay/charges`.
+- **Consent and time zone at begin (review P3s):** a charge starts only under the plan's `autopay-v1` agreement and the
+  method's own mandate for its kind (`card-on-file-v1`, `ach-mandate-v1`); the school time zone is checked before
+  sending so a confirmed success can always be recorded. The version check names the text, it does not prove the payer
+  saw it: staff still enter consent, which stays a gate before any live use.
+- **Known follow-ups:** an off-session `requires_action` is recorded FAILED while the PaymentIntent stays open at Stripe;
+  5c cancels it before a new attempt and 5b holds a late success on a FAILED attempt for review. A same-key double
+  submit can record UNKNOWN first and drop the original's answer; reconcile recovers it.
+- **Evidence:** `packages/database/scripts/test-school-pay-charges-integrity.mjs` (195 checks over signed HTTP with the
+  simulators: success, replay, re-charge refused, bank debit PROCESSING then cleared, decline then a new attempt, lost
+  answer reconciled without a resend, a request that never arrived resent once, a stopped request recovered or FAILED
+  NOT_SENT after the key window, Square, an unconfigured provider, paused plan, changed invoice, guards, ACL, 011);
+  `apps/api/test/school-payments-sandbox.test.cjs` (Stripe request fields, outcomes, decline classes, UNKNOWN cases,
+  lookup) and `apps/api/test/school-payments.test.cjs` (contracts and routes); verify-rls; 010/011; staging pin 0337.

@@ -171,6 +171,8 @@ import { SchoolPayMethodController } from './school-payments/school-pay-method.c
 import { SchoolPayMethodService } from './school-payments/school-pay-method.service.js';
 import { SchoolPayAutopayController } from './school-payments/school-pay-autopay.controller.js';
 import { SchoolPayAutopayService } from './school-payments/school-pay-autopay.service.js';
+import { SchoolPayChargeController } from './school-payments/school-pay-charge.controller.js';
+import { SchoolPayChargeService } from './school-payments/school-pay-charge.service.js';
 import { SchoolCheckoutController } from './school-checkout/school-checkout.controller.js';
 import { SchoolCheckoutService } from './school-checkout/school-checkout.service.js';
 import { ShopifyController, ShopifyHumanGuard } from './commerce/shopify/shopify.controller.js';
@@ -534,6 +536,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPaymentController,
     SchoolPayMethodController,
     SchoolPayAutopayController,
+    SchoolPayChargeController,
     SchoolCheckoutController,
     ShopifyController,
     MayaAtRiskController,
@@ -761,6 +764,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPaymentService,
     SchoolPayMethodService,
     SchoolPayAutopayService,
+    SchoolPayChargeService,
     { provide: SCHOOL_PAYMENT_ADAPTERS, useFactory: () => schoolPaymentAdaptersFromEnvironment() },
     { provide: SCHOOL_PAYMENT_VAULT, useFactory: () => schoolPaymentVaultForProcess() },
     SchoolPayReadHumanUiGuard, SchoolPayStartHumanUiGuard, SchoolPayOnboardingLinkHumanUiGuard, SchoolPayFinishHumanUiGuard,

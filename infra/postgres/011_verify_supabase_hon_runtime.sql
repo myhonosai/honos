@@ -3066,7 +3066,8 @@ DO $$ DECLARE f record; safe boolean; expected record; BEGIN
     IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
       RAISE EXCEPTION 'Missing tuition payment guard: %',expected.name; END IF;
   END LOOP;
-  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.invoices'::regclass AND NOT tgisinternal)<>1 THEN
+  -- 0337 adds one more invoice guard (an open autopay charge holds its invoices), verified in its own section.
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.invoices'::regclass AND NOT tgisinternal AND tgname<>'school_pay_charge_invoice_guard')<>1 THEN
     RAISE EXCEPTION 'hon.invoices must carry exactly the tuition payment status guard'; END IF;
   IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='billing.invoice.payment.record' AND is_sensitive AND is_staff_assignable) THEN
     RAISE EXCEPTION 'billing.invoice.payment.record must exist as a sensitive staff-assignable permission'; END IF;
@@ -3267,6 +3268,58 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
     RAISE EXCEPTION 'school_pay.autopay.manage and school_pay.discount.manage must exist as sensitive staff-assignable permissions'; END IF;
 END $$;
 -- End school autopay exact verification.
+
+-- School autopay charges exact verification (B-TUI-2 0337): two private forced-RLS tables, the attempt, payment-record
+-- and invoice guards, private helpers, four runtime entry points and the PROVIDER payment method.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['hon.school_pay_charge_attempts','hon.school_pay_charge_events'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=t::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'School autopay charge table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_school_pay_charge_attempt()',true,false,'search_path=pg_catalog, hon','b39973b7357e39d0e0ed08bb459c8677d4dff795ac30bca2c64e0b0b9fb42e3a'),
+('hon.school_pay_invoice_charge_open(uuid)',true,false,'search_path=pg_catalog, hon','3a9692741e5149599d60f4c55faa420296ce6b4cb462d3803ea39f4cab461012'),
+('hon.guard_school_pay_charge_payment_record()',true,false,'search_path=pg_catalog, hon','ca717afb2623fa3f05d78a1ccda763edf8083460036fe7125def6473ad6d3d1f'),
+('hon.guard_school_pay_charge_invoice()',true,false,'search_path=pg_catalog, hon','662e92f463cfba1a4b30fc96fddcfc3e7e4bb87a41724b7407f618457a514f04'),
+('hon.school_pay_charge_json(hon.school_pay_charge_attempts)',true,false,'search_path=pg_catalog, hon','b3942ee06b7967e19bb772404c29dca8c0d6372f0737735401a603cde89f8a69'),
+('hon.school_pay_charge_record(uuid,hon.school_pay_charge_attempts,text,jsonb,text,uuid,uuid)',true,false,'search_path=pg_catalog, hon','40f2e7b4b62daffca89ea3f5250e3907ab8163b38738d3359d9e92f802a402b4'),
+('hon.school_pay_lock_charge(uuid,integer)',true,false,'search_path=pg_catalog, hon','76a8a8127041c700b95b9899553c96a002ab8f8a5e2af506987ca83c9ff1b266'),
+('hon.read_school_pay_autopay_charges(text,uuid)',true,true,'search_path=pg_catalog, hon','dbcfd342b3691421dd85a9d68cb5f9262096e7ed3500304f48e9d54d19234c0c'),
+('hon.read_school_pay_charge_attempt(text,uuid)',true,true,'search_path=pg_catalog, hon','54e5f715f65db777d5b1caef2b528793defb63efe51eaaa4e15c41e5f2297856'),
+('hon.begin_school_pay_charge(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','dcfb154ad5b2b0ecd4c26b032bf2041430b04c6ebb37734fc2348927928d1e1c'),
+('hon.school_pay_charge_outcome_ok(jsonb)',false,false,'search_path=pg_catalog, hon','eef349a8e5589c75110a4eb198a111f23d23c615400bc8fcaa37e7e904bf4357'),
+('hon.school_pay_charge_settle(hon.school_pay_charge_attempts,jsonb,uuid,text,uuid,uuid)',true,false,'search_path=pg_catalog, hon','82c1ecde9a5cb1a7c9a52fb79c4af29ce00f14564138616f1a3dd7a87bd9b91f'),
+('hon.finish_school_pay_charge(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','2d46ece141220939210c3a8908da1065f78d75f774541a6e9a01b2d632465bfc')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school autopay charge function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('school_pay_charge_attempts','school_pay_charge_attempt_guard','hon.guard_school_pay_charge_attempt()'),
+    ('school_pay_charge_attempts','school_pay_charge_attempts_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('school_pay_charge_events','school_pay_charge_events_immutable','hon.guard_membership_activation_evidence()'),
+    ('school_pay_charge_events','school_pay_charge_events_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('invoice_payment_records','school_pay_charge_payment_record_guard','hon.guard_school_pay_charge_payment_record()'),
+    ('invoices','school_pay_charge_invoice_guard','hon.guard_school_pay_charge_invoice()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing school autopay charge guard: %',expected.name; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.invoice_payment_records'::regclass AND conname='invoice_payment_records_provider_reference_check' AND convalidated)
+    OR (SELECT count(*) FROM pg_constraint WHERE conrelid='hon.invoice_payment_records'::regclass AND contype='c' AND pg_get_constraintdef(oid) LIKE '%CARD_TERMINAL%')<>1
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.invoice_payment_records'::regclass AND conname='invoice_payment_records_method_check'
+      AND pg_get_constraintdef(oid) LIKE '%PROVIDER%') THEN
+    RAISE EXCEPTION 'Invoice payment records must allow exactly the manual methods and PROVIDER with a processor reference'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname='hon' AND indexname='school_pay_charge_attempts_one_live_idx') THEN
+    RAISE EXCEPTION 'A cycle must have at most one charge attempt that is not FAILED'; END IF;
+END $$;
+-- End school autopay charges exact verification.
 
 -- School payment credential vault exact verification (B-TUI-2 0320): two private forced-RLS tables, the guards, the
 -- deferred credential check, private validators, four runtime entry points, and only Square keeping credentials.
