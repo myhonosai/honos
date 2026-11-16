@@ -296,6 +296,12 @@ END $$;
 CREATE FUNCTION hon.face_checkin_open() RETURNS boolean
 LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$ SELECT coalesce((SELECT status='TEST_MODE' FROM hon.face_checkin_program),false) $$;
 
+-- Today's date in the school's own time zone, so an 18th birthday never depends on the database session TimeZone.
+CREATE FUNCTION hon.face_checkin_today(p_org uuid,p_school uuid) RETURNS date
+LANGUAGE sql VOLATILE SET search_path=pg_catalog,hon AS $$
+  SELECT (clock_timestamp() AT TIME ZONE coalesce((SELECT timezone FROM hon.schools WHERE id=p_school AND organization_id=p_org),'UTC'))::date
+$$;
+
 -- Staff authority for face check-in management: the direct human of this request, one active human principal, active
 -- organization and school, paid access, face_checkin.manage at this exact school through a staff role, no family access
 -- at the school. Read-only.
@@ -564,7 +570,7 @@ BEGIN
       'adult',x.adult,'hasPhoto',x.has_photo,'consent',hon.face_checkin_consent_json(st,x.consent),'enrolled',x.enrolled,'enrolledAt',x.enrolled_at)
       ORDER BY x.family_name,x.given_name,x.id),'[]'::jsonb)) INTO result
   FROM (SELECT sp.id,p.given_name,p.family_name,sp.status::text status,
-      coalesce(sp.birth_date<=(current_date-interval '18 years')::date,false) adult,
+      coalesce(sp.birth_date<=(hon.face_checkin_today(org,school)-interval '18 years')::date,false) adult,
       EXISTS(SELECT 1 FROM hon.person_photos ph WHERE ph.person_id=sp.person_id AND ph.organization_id=org AND ph.school_id=school) has_photo,
       (SELECT c FROM hon.face_checkin_consents c WHERE c.student_profile_id=sp.id AND c.organization_id=org AND c.school_id=school ORDER BY c.signed_at DESC,c.id LIMIT 1) consent,
       EXISTS(SELECT 1 FROM hon.face_templates t WHERE t.student_profile_id=sp.id AND t.organization_id=org AND t.school_id=school) enrolled,
@@ -640,13 +646,16 @@ DECLARE org uuid:=hon.current_organization_id(); school uuid:=hon.current_school
 BEGIN
   IF NOT hon.face_checkin_open() THEN RAISE EXCEPTION 'FACE_CHECKIN_CLOSED' USING ERRCODE='42501'; END IF;
   PERFORM pg_advisory_xact_lock_shared(hashtextextended('face-checkin:'||school::text,0));
+  PERFORM 1 FROM hon.school_locations WHERE school_id=school AND organization_id=org FOR SHARE;
   SELECT * INTO st FROM hon.face_checkin_settings WHERE school_id=school AND organization_id=org;
   IF st.status IS DISTINCT FROM 'ON' THEN RAISE EXCEPTION 'FACE_CHECKIN_OFF' USING ERRCODE='42501'; END IF;
   SELECT birth_date INTO birth FROM hon.student_profiles WHERE id=p_student AND organization_id=org AND school_id=school FOR KEY SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION 'FACE_CHECKIN_STUDENT_NOT_FOUND' USING ERRCODE='P0002'; END IF;
-  -- Under 18, or no birth date on file: only a parent or guardian signs.
-  IF p_signer_kind='ADULT_STUDENT' AND (birth IS NULL OR birth>(current_date-interval '18 years')::date) THEN
+  -- Under 18, or no birth date on file: only a parent or guardian signs. 18 or older: only the student signs.
+  IF p_signer_kind='ADULT_STUDENT' AND (birth IS NULL OR birth>(hon.face_checkin_today(org,school)-interval '18 years')::date) THEN
     RAISE EXCEPTION 'FACE_CHECKIN_GUARDIAN_REQUIRED' USING ERRCODE='22023'; END IF;
+  IF p_signer_kind='GUARDIAN' AND birth IS NOT NULL AND birth<=(hon.face_checkin_today(org,school)-interval '18 years')::date THEN
+    RAISE EXCEPTION 'FACE_CHECKIN_ADULT_SIGNS' USING ERRCODE='22023'; END IF;
   SELECT * INTO f FROM hon.face_checkin_forms WHERE id=(p_input->>'formId')::smallint;
   IF f.id IS NULL OR f.profile_code<>st.profile_code OR f.digest<>p_input->>'formDigest' THEN RAISE EXCEPTION 'FACE_CHECKIN_FORM_CHANGED' USING ERRCODE='40001'; END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended('face-checkin-student:'||p_student::text,0));
@@ -746,6 +755,7 @@ BEGIN
   IF NOT hon.face_checkin_open() THEN RAISE EXCEPTION 'FACE_CHECKIN_CLOSED' USING ERRCODE='42501'; END IF;
   student:=(p_input->>'studentProfileId')::uuid;
   PERFORM pg_advisory_xact_lock_shared(hashtextextended('face-checkin:'||school::text,0));
+  PERFORM 1 FROM hon.school_locations WHERE school_id=school AND organization_id=org FOR SHARE;
   SELECT * INTO st FROM hon.face_checkin_settings WHERE school_id=school AND organization_id=org;
   IF st.status IS DISTINCT FROM 'ON' THEN RAISE EXCEPTION 'FACE_CHECKIN_OFF' USING ERRCODE='42501'; END IF;
   SELECT * INTO sp FROM hon.student_profiles WHERE id=student AND organization_id=org AND school_id=school FOR KEY SHARE;
@@ -793,6 +803,7 @@ BEGIN
   PERFORM 1 FROM hon.class_sessions WHERE id=p_session AND organization_id=org AND school_id=school;
   IF NOT FOUND THEN RAISE EXCEPTION 'SESSION_NOT_FOUND' USING ERRCODE='P0002'; END IF;
   PERFORM pg_advisory_xact_lock_shared(hashtextextended('face-checkin:'||school::text,0));
+  PERFORM 1 FROM hon.school_locations WHERE school_id=school AND organization_id=org FOR SHARE;
   SELECT * INTO st FROM hon.face_checkin_settings WHERE school_id=school AND organization_id=org;
   IF st.status IS DISTINCT FROM 'ON' THEN RAISE EXCEPTION 'FACE_CHECKIN_OFF' USING ERRCODE='42501'; END IF;
   PERFORM hon.face_checkin_sweep(org,school);
@@ -828,6 +839,7 @@ BEGIN
   IF m.id IS NULL THEN RAISE EXCEPTION 'FACE_CHECKIN_MATCH_NOT_FOUND' USING ERRCODE='P0002'; END IF;
   IF m.outcome<>'PROPOSED' THEN RAISE EXCEPTION 'VERSION_CONFLICT' USING ERRCODE='40001'; END IF;
   PERFORM pg_advisory_xact_lock_shared(hashtextextended('face-checkin:'||school::text,0));
+  PERFORM 1 FROM hon.school_locations WHERE school_id=school AND organization_id=org FOR SHARE;
   SELECT * INTO st FROM hon.face_checkin_settings WHERE school_id=school AND organization_id=org;
   IF m.proposed_at<=clock_timestamp()-interval '10 minutes' OR NOT hon.face_checkin_open() OR st.status IS DISTINCT FROM 'ON'
     OR NOT EXISTS(SELECT 1 FROM hon.face_templates t JOIN hon.face_checkin_consents c ON c.id=t.consent_id

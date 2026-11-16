@@ -26,6 +26,7 @@ const ERRORS: Record<string, (code: string) => HttpException> = {
   FACE_CHECKIN_CITY_LIMITS_REQUIRED: code => new BadRequestException({ code, detail: 'Answer whether the school is inside the city limits.' }),
   FACE_CHECKIN_ACKNOWLEDGEMENTS_REQUIRED: code => new BadRequestException({ code, detail: 'Confirm every step this location requires.' }),
   FACE_CHECKIN_GUARDIAN_REQUIRED: code => new BadRequestException({ code, detail: 'A parent or guardian must sign for a student under 18.' }),
+  FACE_CHECKIN_ADULT_SIGNS: code => new BadRequestException({ code, detail: 'A student who is 18 or older signs for themselves.' }),
   FACE_CHECKIN_STUDENT_NOT_ACTIVE: code => new BadRequestException({ code }),
   FACE_CHECKIN_PHOTO_REQUIRED: code => new BadRequestException({ code, detail: 'Add a profile photo first.' }),
   FACE_CHECKIN_FORBIDDEN: code => new ForbiddenException({ code }),

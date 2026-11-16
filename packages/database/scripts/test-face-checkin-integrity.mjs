@@ -216,10 +216,14 @@ try{
  await denied(()=>record(manager,{...rb(adult.studentProfileId,'ADULT_STUDENT'),witnessAttested:false}),400,'FACE_CHECKIN_INVALID');
  await denied(()=>record(managerB,{...rb(adult.studentProfileId,'ADULT_STUDENT'),schoolId:B.schoolId,formId:nycForm.id,formDigest:nycForm.digest}),404,'FACE_CHECKIN_STUDENT_NOT_FOUND');
  await denied(()=>record(scanner,rb(adult.studentProfileId,'ADULT_STUDENT')),403,'FACE_CHECKIN_FORBIDDEN');
+ // 18 or older: only the student signs, in the portal and in person.
+ const grownUp=await addStudent(A,'Joon','Park',{birth:'1999-02-02',familyId:park});
+ await denied(()=>sign(guardian,sb(grownUp.studentProfileId)),400,'FACE_CHECKIN_ADULT_SIGNS');
+ await denied(()=>record(manager,rb(adult.studentProfileId,'GUARDIAN')),400,'FACE_CHECKIN_ADULT_SIGNS');
  const paper=ok(await record(manager,rb(adult.studentProfileId,'ADULT_STUDENT')));
  assert.equal(paper.consent.method,'IN_PERSON');assert.equal(paper.consent.signerKind,'ADULT_STUDENT');
  assert.equal((await q('SELECT witnessed_by_principal_id w FROM hon.face_checkin_consents WHERE id=$1',[paper.consent.consentId]))[0].w,managerPrincipal);
- pass('a guardian signs the current form for their own child only (typed name, exact digest); staff record a witnessed paper form; a minor needs a guardian; consents carry the form digest and audit carries no names');
+ pass('a guardian signs the current form for their own child only (typed name, exact digest); staff record a witnessed paper form; a minor needs a guardian and an adult signs for themselves; consents carry the form digest and audit carries no names');
 
  // 5. Enrollment from the profile photo: consent and a photo first; one template per photo.
  await denied(()=>enroll(manager,{schoolId:A.schoolId,studentProfileId:noPhoto.studentProfileId}),403,'FACE_CHECKIN_CONSENT_REQUIRED');
@@ -271,7 +275,7 @@ try{
 
  // 7. Withdrawal, photo changes, turning off, an address change and retention all delete templates at once.
  const pending=ok(await match(scanner,mb(png(1))));
- const fam2=ok(await familyRead(guardian)).children[0];assert.equal(fam2.enrolled,true);
+ const fam2=ok(await familyRead(guardian)).children.find(c=>c.givenName==='Mina');assert.equal(fam2.enrolled,true);
  await denied(()=>unsign(guardian,{consentId:fam2.consent.consentId,expectedVersion:2}),409,'FACE_CHECKIN_VERSION_CONFLICT');
  await denied(()=>unsign(leeParent,{consentId:fam2.consent.consentId,expectedVersion:1}),404,'FACE_CHECKIN_CONSENT_NOT_FOUND');
  const gone=ok(await unsign(guardian,{consentId:fam2.consent.consentId,expectedVersion:1}));assert.equal(gone.consent.state,'WITHDRAWN');
