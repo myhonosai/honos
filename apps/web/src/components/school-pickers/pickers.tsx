@@ -3,7 +3,7 @@ import React, { useEffect, useId, useState } from 'react';
 import styles from './pickers.module.css';
 import type { LeadListItem } from '@hon/contracts';
 import { CrmLeadAccessError, loadCrmLeads } from '../crm-leads-http';
-import { PickerError, pickerApi, type CandidatePurpose, type EnrollmentPurpose, type PickerCandidate, type PickerEnrollment, type PickerRank, type PickerScope, type PickerStudent, type PickerTestingEvent, type RankPurpose, type StudentPurpose } from './http';
+import { PickerError, pickerApi, type CandidatePurpose, type EnrollmentPurpose, type PickerCandidate, type PickerEnrollment, type PickerRank, type PickerScope, type PickerStaff, type PickerStudent, type PickerTestingEvent, type RankPurpose, type StaffPurpose, type StudentPurpose } from './http';
 
 /**
  * Pick-from-list controls for curriculum, testing and promotion screens. Choosing a row only fills the screen's own
@@ -14,6 +14,7 @@ type Copy = Readonly<{ label: string; choose: string; loading: string; empty: st
 
 const name = (r: { givenName: string; familyName: string }) => `${r.givenName} ${r.familyName}`;
 export const studentLabel = (r: PickerStudent): string => name(r);
+export const staffLabel = (r: PickerStaff): string => r.displayName;
 export const rankLabel = (r: PickerRank): string => `${r.curriculumName} · ${r.rankName}`;
 export function enrollmentLabel(r: PickerEnrollment, showNext: boolean): string {
   const rank = r.currentRankName ?? 'No rank yet';
@@ -110,6 +111,22 @@ export function RankPicker({ scope, purpose, value, disabled, onPick, onItems }:
   const list = useList((signal) => pickerApi.ranks(scope, purpose, signal), [scope.organizationId, scope.schoolId, purpose], 0);
   useEffect(() => { if (list.state === 'READY') onItems?.(list.items); }, [list]); // eslint-disable-line react-hooks/exhaustive-deps
   return <PickListView copy={RANK_COPY[purpose]} list={list} keyOf={(i) => i.rankId} describe={rankLabel} value={value} disabled={disabled} onPick={onPick} />;
+}
+
+const STAFF_DENIED: Record<StaffPurpose, string> = {
+  followups: 'Only managers can assign follow-ups to someone else.', work: 'Only managers can assign work to someone else.',
+  qualifications: 'Your role does not include managing instructor qualifications.', roles: 'Your role does not include giving staff roles.',
+  availability: 'Only managers can open another person’s availability.',
+};
+/** People with a role at this school, by name (0404). The list is only for screens whose own command manages a teammate. */
+export function StaffPicker({ scope, purpose, label = 'Staff member', value, disabled, onPick, onState }: { scope: PickerScope; purpose: StaffPurpose; label?: string; value: string; disabled: boolean;
+  onPick: (item: PickerStaff | null) => void; onState?: (state: ListState<PickerStaff>['state']) => void }): React.ReactElement {
+  const [search, setSearch] = useState('');
+  const list = useList((signal) => pickerApi.staff(scope, purpose, signal), [scope.organizationId, scope.schoolId, purpose], 0);
+  useEffect(() => { onState?.(list.state); }, [list.state]); // eslint-disable-line react-hooks/exhaustive-deps
+  const copy: Copy = { label, choose: 'Choose a person', search: 'Find a person', loading: 'Reading staff…', empty: 'No one matches.', denied: STAFF_DENIED[purpose], unavailable: 'Staff could not be loaded. Reload the page to try again.' };
+  const shown: ListState<PickerStaff> = list.state === 'READY' ? { state: 'READY', items: list.items.filter((r) => r.displayName.toLowerCase().includes(search.trim().toLowerCase())) } : list;
+  return <PickListView copy={copy} list={shown} keyOf={(i) => i.principalId} describe={staffLabel} value={value} search={search} disabled={disabled} onSearch={setSearch} onPick={onPick} />;
 }
 
 type LeadRow = Pick<LeadListItem, 'id' | 'givenName' | 'familyName'>;

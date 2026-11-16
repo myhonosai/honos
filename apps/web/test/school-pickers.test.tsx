@@ -1,8 +1,8 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { PICKER_LIMIT, RANK_LIMIT, pickerApi, verifyCandidates, verifyEnrollments, verifyRanks, verifyStudents, verifyTestingEvents, type PickerCandidate, type PickerEnrollment } from '../src/components/school-pickers/http';
-import { IdFields, PickListView, candidateLabel, enrollmentLabel, filterLeads, leadLabel, rankLabel, studentLabel, testingEventLabel } from '../src/components/school-pickers/pickers';
+import { PICKER_LIMIT, RANK_LIMIT, STAFF_LIMIT, pickerApi, verifyCandidates, verifyEnrollments, verifyRanks, verifyStaff, verifyStudents, verifyTestingEvents, type PickerCandidate, type PickerEnrollment } from '../src/components/school-pickers/http';
+import { IdFields, PickListView, candidateLabel, enrollmentLabel, filterLeads, leadLabel, rankLabel, staffLabel, studentLabel, testingEventLabel } from '../src/components/school-pickers/pickers';
 import { id, scope } from './account-status-fixtures';
 
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
@@ -111,4 +111,16 @@ it('filters open leads by name on the page and labels them by name only', () => 
   expect(filterLeads(leads, '').map(leadLabel)).toEqual(['Avery Kim', 'Blake Park', 'Casey Kimball']);
   expect(filterLeads(leads, '  kim ').map(leadLabel)).toEqual(['Avery Kim', 'Casey Kimball']);
   expect(filterLeads(leads, 'zzz')).toEqual([]);
+});
+
+it('reads the staff list for a fixed screen purpose and accepts only principal id and display name', async () => {
+  const row = { principalId: id(950), displayName: 'Coach Kim' };
+  const f = vi.fn(async () => json({ data: [row], meta: { ...meta, limit: STAFF_LIMIT } }));
+  vi.stubGlobal('fetch', f);
+  await expect(pickerApi.staff(scope, 'followups', signal())).resolves.toEqual([row]);
+  expect((f.mock.calls[0] as unknown as [string])[0]).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/pickers/staff?for=followups`);
+  const body = (data: unknown[]) => ({ data, meta: { ...meta, limit: STAFF_LIMIT } });
+  for (const bad of [{ ...row, email: 'a@b.test' }, { ...row, principalId: 'x' }, { ...row, displayName: '' }]) expect(() => verifyStaff(body([bad]))).toThrow();
+  expect(() => verifyStaff(body([row, row]))).toThrow();
+  expect(staffLabel(row)).toBe('Coach Kim');
 });
