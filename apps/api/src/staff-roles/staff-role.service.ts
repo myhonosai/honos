@@ -55,6 +55,17 @@ function bounded<T>(value: unknown, row: (item: unknown) => T, id: (item: T) => 
   if (!Array.isArray(value) || value.length > STAFF_ROLE_LIST_LIMIT) unsafe();
   const rows = value.map(row); if (new Set(rows.map(id)).size !== rows.length) unsafe(); return rows;
 }
+export type AssignableStaffPermission = { code: string; description: string; sensitive: boolean };
+/** 0412 output check: staff-assignable permissions the caller holds, closed shapes, bounded, unique, never hq/platform/system. */
+export function parseAssignableStaffPermissions(value: unknown): AssignableStaffPermission[] {
+  const x = closed(value, ['permissions']);
+  return bounded(x.permissions, (item) => {
+    const p = closed(item, ['code', 'description', 'sensitive']);
+    if (typeof p.code !== 'string' || !/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/.test(p.code) || p.code.length > 100 || /^(hq|platform|system)\./.test(p.code)
+      || !isText(p.description, 300) || typeof p.sensitive !== 'boolean') unsafe();
+    return p as unknown as AssignableStaffPermission;
+  }, (p) => p.code);
+}
 /** 0406 output check: custom roles and current grants only, closed shapes, bounded, unique. */
 export function parseStaffRoleLists(value: unknown): StaffRoleLists {
   const x = closed(value, ['roles', 'grants']);
@@ -110,6 +121,18 @@ export class StaffRoleService {
         await client.query("SELECT set_config('app.hon_source','HUMAN_UI',true), set_config('app.hon_action_request_id','',true), set_config('app.hon_delegated_by_principal_id','',true)");
         const result = await client.query<{ data: CustomRoleSummary | StaffRoleGrantSummary }>('SELECT hon.read_staff_role($1,$2,$3::uuid) AS data', [context.externalSubject, kind, id]);
         return result.rows[0]!.data;
+      });
+    } catch (error) { return boundaryError(error); }
+  }
+  /** 0412: the permissions the caller may put in a custom role here, with their descriptions, for a checklist. */
+  async assignablePermissions(context: StaffRoleCommandContext): Promise<AssignableStaffPermission[]> {
+    human(context);
+    try {
+      return await this.database.withTenantTransaction(context, async (client) => {
+        await client.query("SELECT set_config('app.hon_source','HUMAN_UI',true), set_config('app.hon_action_request_id','',true), set_config('app.hon_delegated_by_principal_id','',true)");
+        await client.query("SET LOCAL statement_timeout='5s'");
+        const result = await client.query<{ data: unknown }>('SELECT hon.list_assignable_staff_permissions($1) AS data', [context.externalSubject]);
+        return parseAssignableStaffPermissions(result.rows[0]?.data);
       });
     } catch (error) { return boundaryError(error); }
   }

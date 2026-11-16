@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "f2576d305f64e2ed55cf4eed789ca5ce1054e958e436def8822a089194388d65",
+  "chainSha256": "7ebdf3c8c563dfb3a0bff5e0277ed36718e336cfc783905fe5afb4b30ece529b",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -545,6 +545,10 @@
     {
       "file": "0407_retention_review_member_list.sql",
       "sha256": "88ee6b0f21d71289f02036e36d50644a960ff7eeb620d542afda2303c76d1606"
+    },
+    {
+      "file": "0412_staff_assignable_permissions_list.sql",
+      "sha256": "5691c6871ad27b49385868c502922578926637dbc57b55924422bb07fde69db3"
     },
     {
       "file": "0420_conversation_ai_training.sql",
