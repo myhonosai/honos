@@ -89,11 +89,6 @@ function object(value: unknown, keys: readonly string[], optional: readonly stri
   return record;
 }
 /** One-line text: trimmed, no angle brackets or control characters (the 0261 rule); multiline allows line breaks. */
-/** A person's name: plain one-line text with no angle brackets, so it can never read as markup in a CRM screen, export or message. */
-export function isWalkInName(value: unknown, max: number): value is string {
-  return isWalkInText(value, 1, max) && !/[<>]/.test(value);
-}
-
 export function isWalkInText(value: unknown, min: number, max: number, multiline = false): value is string {
   if (typeof value !== 'string' || value.length < min || value.length > max) return false;
   if (value.length && value.trim() !== value) return false;
@@ -156,7 +151,7 @@ function birthDate(value: unknown, today: string): string {
 export function validateWalkInVisitInput(value: unknown, today: string): WalkInVisitInput {
   const p = object(value, ['settingsVersion', 'language', 'contact', 'children', 'relationship', 'emergency', 'heardFrom', 'marketingOptIn', 'offerKey', 'waiver', 'website']);
   const c = object(p.contact, ['givenName', 'familyName', 'email', 'mobile', 'birthDate', 'isParticipant', 'adultConfirmed']);
-  if (!isWalkInName(c.givenName, WALKIN_LIMITS.name) || !isWalkInName(c.familyName, WALKIN_LIMITS.name) || typeof c.email !== 'string'
+  if (!isWalkInText(c.givenName, 1, WALKIN_LIMITS.name) || !isWalkInText(c.familyName, 1, WALKIN_LIMITS.name) || typeof c.email !== 'string'
     || typeof c.mobile !== 'string' || typeof c.isParticipant !== 'boolean' || c.adultConfirmed !== true) fail();
   const email = c.email.toLowerCase(), mobile = c.mobile;
   if ((!email && !mobile) || (email && (email.length > 254 || !EMAIL.test(email))) || (mobile && !E164.test(mobile))) fail();
@@ -166,7 +161,7 @@ export function validateWalkInVisitInput(value: unknown, today: string): WalkInV
   if (!Array.isArray(p.children) || p.children.length > WALKIN_LIMITS.children) fail();
   const children = (p.children as unknown[]).map(entry => {
     const ch = object(entry, ['givenName', 'familyName', 'birthDate']);
-    if (!isWalkInName(ch.givenName, WALKIN_LIMITS.name) || !isWalkInName(ch.familyName, WALKIN_LIMITS.name)) fail();
+    if (!isWalkInText(ch.givenName, 1, WALKIN_LIMITS.name) || !isWalkInText(ch.familyName, 1, WALKIN_LIMITS.name)) fail();
     const born = birthDate(ch.birthDate, today);
     if (walkInAge(born, today) >= 18) fail();
     return { givenName: ch.givenName as string, familyName: ch.familyName as string, birthDate: born };
@@ -177,7 +172,7 @@ export function validateWalkInVisitInput(value: unknown, today: string): WalkInV
   if (!isWalkInText(e.name, 0, WALKIN_LIMITS.emergencyName) || typeof e.phone !== 'string' || (e.phone && !E164.test(e.phone)) || (!e.name !== !e.phone)) fail();
   if (typeof p.marketingOptIn !== 'boolean' || typeof p.offerKey !== 'string' || !OFFER_KEY.test(p.offerKey) || p.website !== '') fail();
   const w = object(p.waiver, ['accepted', 'signerName', 'strokes']);
-  if (w.accepted !== true || !isWalkInName(w.signerName, WALKIN_LIMITS.signerName)) fail();
+  if (w.accepted !== true || !isWalkInText(w.signerName, 1, WALKIN_LIMITS.signerName)) fail();
   const strokes = validateWalkInStrokes(w.strokes);
   return {
     settingsVersion: integer(p.settingsVersion, 1, 999_999_999), language: oneOf(p.language, WALKIN_LANGUAGES),

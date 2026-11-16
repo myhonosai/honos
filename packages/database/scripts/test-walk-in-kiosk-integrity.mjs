@@ -332,7 +332,8 @@ try {
     ['unknown offer', { offerKey: 'membership' }], ['waiver not accepted', { waiver: { ...visitInput().waiver, accepted: false } }],
     ['no signature', { waiver: { ...visitInput().waiver, strokes: [] } }], ['one-point signature', { waiver: { ...visitInput().waiver, strokes: [[[1, 1]]] } }],
     ['signature off the pad', { waiver: { ...visitInput().waiver, strokes: [[[1, 1], [1001, 5]]] } }], ['fractional point', { waiver: { ...visitInput().waiver, strokes: [[[1, 1], [2.5, 5]]] } }],
-    ['honeypot', { website: 'spam' }], ['unknown language', { language: 'fr' }], ['angle bracket name', { contact: { ...visitInput().contact, givenName: '<b>' } }],
+    ['honeypot', { website: 'spam' }], ['unknown language', { language: 'fr' }], ['angle bracket name', { contact: { ...visitInput().contact, givenName: '<b>' } }], ['angle bracket child', { children: [{ givenName: 'Sam', familyName: '<i>R', birthDate: yearsAgo(8) }] }],
+    ['angle bracket signer', { waiver: { ...visitInput().waiver, signerName: 'Kim <x>' } }], ['angle bracket emergency', { emergency: { name: '<Jo>', phone: '+15555550199' } }],
     ['extra key', { notes: 'x' }], ['bad heard from', { heardFrom: 'TV' }]]) {
     await refused(() => submit(TOKEN, visitInput(patch)), 400, 'INVALID', `visit validation: ${label}`);
   }

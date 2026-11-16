@@ -680,7 +680,7 @@ BEGIN
   e:=p->'emergency';
   IF jsonb_typeof(e) IS DISTINCT FROM 'object' OR NOT e ?& ARRAY['name','phone'] OR EXISTS(SELECT 1 FROM jsonb_object_keys(e) x WHERE x NOT IN ('name','phone'))
     OR jsonb_typeof(e->'name') IS DISTINCT FROM 'string' OR jsonb_typeof(e->'phone') IS DISTINCT FROM 'string'
-    OR NOT hon.school_event_text_ok(e->>'name',0,120) OR (e->>'phone'<>'' AND (e->>'phone') !~ '^\+[1-9][0-9]{6,14}$')
+    OR NOT hon.school_event_text_ok(e->>'name',0,120) OR (e->>'name') ~ '[<>]' OR (e->>'phone'<>'' AND (e->>'phone') !~ '^\+[1-9][0-9]{6,14}$')
     OR ((e->>'name'='')<>(e->>'phone'='')) OR (k.emergency_required AND e->>'name'='') THEN RETURN NULL; END IF;
   -- Offer.
   SELECT o INTO offer FROM jsonb_array_elements(k.offers) o WHERE o->>'key'=p->>'offerKey';
