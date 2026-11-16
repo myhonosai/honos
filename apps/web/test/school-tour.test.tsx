@@ -38,7 +38,7 @@ describe('school guided tour', () => {
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-modal="true"');
     expect(html).toContain('Welcome to HON OS');
-    expect(html).toContain('1 of 10');
+    expect(html).toContain('1 of 11');
     expect(html).toMatch(/<button type="button" disabled="">Back<\/button>/);
     expect(html).toMatch(/data-tour-next=""[^>]*>Next</);
   });
@@ -50,7 +50,7 @@ describe('school guided tour', () => {
     expect(html).toContain(`href="/staff/dashboard?organizationId=${A}&amp;schoolId=${B}"`);
     expect(html).toContain('Open Home');
     const classes = dialog(1 + SCHOOL_SHELL_NAV.findIndex(item => item.key === 'classes'));
-    for (const name of ['Schedule', 'Attendance', 'Curriculum &amp; testing', 'Community']) expect(classes).toContain(`<li>${name}</li>`);
+    for (const name of ['Schedule', 'Attendance', 'Curriculum &amp; testing']) expect(classes).toContain(`<li>${name}</li>`);
     // A flat area lists its pages, never hidden onboarding routes.
     const home = schoolTourInside(SCHOOL_SHELL_NAV[0]!, 'en');
     expect(home).not.toContain(shellText('en', 'routeWelcome'));
