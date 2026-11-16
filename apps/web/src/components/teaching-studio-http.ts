@@ -3,7 +3,7 @@ import { communityUuid, validateTeachingAssessment, validateTeachingLesson, vali
 const base = '/api/v1/staff/teaching-studio';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export class TeachingStudioUiError extends Error { constructor(message: string, readonly status: number) { super(message); } }
-function id(value: unknown): asserts value is string { try { communityUuid(value); } catch { throw new Error('Use an already-known school, student, plan, resource, or assessment UUID.'); } }
+function id(value: unknown): asserts value is string { try { communityUuid(value); } catch { throw new Error('That record could not be found. Reload the page and try again.'); } }
 function schoolQuery(school: string) { id(school); return `schoolId=${encodeURIComponent(school)}`; }
 function endpoint(path: string) {
   const parsed = new URL(path, 'http://hon.invalid');
@@ -13,7 +13,7 @@ function endpoint(path: string) {
 async function request<T>(path: string, verify: (value: unknown) => T, body?: unknown, key?: string): Promise<T> {
   endpoint(path); if (body !== undefined && !key) throw new Error('A retained idempotency key is required for human Teaching Studio changes.');
   const response = await fetch(path, { method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'no-referrer', headers: body === undefined ? {} : { 'Content-Type': 'application/json', 'X-HON-Human-Command': 'teaching-studio', 'Idempotency-Key': key! }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
-  if (!response.ok) throw new TeachingStudioUiError(response.status === 401 ? 'Sign in with a verified human staff session.' : response.status === 403 ? 'Current exact school permission or active entitlement is unavailable.' : response.status === 409 ? 'A version or retry conflict occurred. Refresh before changing the record.' : 'No verified result. Check the bounded fields and retry only the unchanged saved request.', response.status);
+  if (!response.ok) throw new TeachingStudioUiError(response.status === 401 ? 'Your sign-in ended. Sign in again to continue.' : response.status === 403 ? 'Your role does not include this at your school, or the school’s plan is not active.' : response.status === 409 ? 'Someone else changed this first. Reload and try again.' : 'That did not save. Check the fields and try again.', response.status);
   const envelope = await response.json() as { data?: unknown }; return verify(envelope.data);
 }
 export const teachingStudioPath = {

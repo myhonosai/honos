@@ -56,6 +56,7 @@ describe('pages take the school from the shell', () => {
       'promotion-readiness-workbench', 'retention-review-signals', 'revenue-planning-workbench', 'school-command-center', 'school-health-score', 'staff-dashboard',
       'staff-role-admin', 'teaching-studio-workbench', 'testing-candidate-grade-workbench', 'testing-candidate-registration-workbench', 'testing-certificate-workbench',
       'testing-scorecard-workbench', 'trial-appointment-workbench'];
-    for (const page of pages) expect(readFileSync(`src/components/${page}.tsx`, 'utf8'), page).toContain('useShellSchoolInto(');
+    // Teaching studio opens itself from the shell school (useShellSchool) instead of copying it into a form.
+    for (const page of pages) expect(readFileSync(`src/components/${page}.tsx`, 'utf8'), page).toMatch(page === 'teaching-studio-workbench' ? /useShellSchool\(\)/ : /useShellSchoolInto\(/);
   });
 });
