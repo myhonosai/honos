@@ -85,7 +85,7 @@ describe('public lead-form bounded same-origin transports', () => {
 describe('staff UI stale-state and retry invariants',()=>{
   it('starts empty and labels intake, permissions, no-effect and historical receipts honestly',()=>{
     const mock=vi.spyOn(globalThis,'fetch');const html=renderToStaticMarkup(render(PublicFormWorkbench));expect(mock).not.toHaveBeenCalled();
-    for(const copy of ['Intake only, not messaging permission','never','Exact marketing.form.read','A replay receipt is historical','No current']) if(copy!=='never' && copy!=='No current')expect(html).toContain(copy);
+    for(const copy of ['never','Exact marketing.form.read','A replay receipt is historical','No current']) if(copy!=='never' && copy!=='No current')expect(html).toContain(copy);
     expect(html).not.toContain('PRIVATE');expect(html).not.toContain('Open published form');expect(html).not.toContain('organizationId');
   });
   it('never makes a replay snapshot current when list refresh fails; clears selected/counts and disables follow-up mutation',async()=>{

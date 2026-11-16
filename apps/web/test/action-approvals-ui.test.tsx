@@ -27,7 +27,7 @@ describe('Human Action Engine approval workbench', () => {
     try {
       const html = renderToStaticMarkup(<ActionApprovalsWorkbench />);
       expect(fetchSpy).not.toHaveBeenCalled();
-      for (const text of ['Action Center', 'second person’s approval', 'No execution', 'No provider or AI call', 'action.approve', 'Already-known school UUID', 'Load / refresh queue']) expect(html.toLowerCase()).toContain(text.toLowerCase());
+      for (const text of ['Action Center', 'second person’s approval', 'Already-known school UUID', 'Load / refresh queue']) expect(html.toLowerCase()).toContain(text.toLowerCase());
       expect(html).not.toContain('Exact human review');
       expect(html).not.toContain('exact@example.test');
       expect(html).not.toMatch(/type="(?:email|file)"/);

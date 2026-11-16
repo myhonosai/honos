@@ -111,10 +111,7 @@ export function InvoiceWorkbench({ shellScope = null }: { shellScope?: InvoiceSh
     <header><p>Billing</p><h1>Invoices</h1>
       <p>{shellScope ? 'Make an invoice for a membership, then issue it once it is right. Every invoice for your school is listed below.' : 'Make an invoice, then issue it once it is right.'}</p>
     </header>
-    <aside data-plain-note=""><strong>Issuing an invoice records it. It does not charge a card or send anything to the family.</strong><details><summary>What this page never does</summary><p><strong>Invoice record only — issuing is not delivery or collection.</strong></p>
-      <p>Neither command creates payment authorization or a payment attempt, checkout or card capture, a recurring schedule, provider execution or reconciliation, a financial adjustment, refund, credit or discount, an agreement, a membership change, communications, schedule or attendance changes, or any provider, AI, Action Engine or automation effect.</p>
-      <p>Exact known IDs are untrusted selectors, not authority. Existing current human scope, permissions <code>billing.invoice.create</code> / <code>billing.invoice.issue</code>, entitlement, tenant RLS, billing-account currency and linked-membership checks remain decisive. Issuance independently rechecks the current DRAFT state and returned version.</p>
-    </details></aside>
+    <aside data-plain-note=""><strong>Issuing an invoice records it. It does not charge a card or send anything to the family.</strong></aside>
     <section aria-labelledby="invoice-create"><h2 id="invoice-create">Create one DRAFT invoice</h2>
       <p>{shellScope ? 'Choosing a membership fills its billing account and links the membership.' : 'Use only IDs already known through an authorized staff workflow.'} Total, discount, status, version and audit attribution are server-owned. Earlier drafts are in the school's invoice list below, where they can be issued.</p>
       <form onSubmit={create}><fieldset disabled={busy}>

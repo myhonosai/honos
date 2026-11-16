@@ -1,6 +1,6 @@
 'use client';
 import React, { useRef, useState, type FormEvent } from 'react';
-import { HUMAN_WORK_HELP, HUMAN_WORK_STATUSES, type HumanWorkInput, type HumanWorkTransition, type HumanWorkOperation, type HumanWorkQueue, type HumanWorkRecord, type HumanWorkStatus } from '@hon/contracts';
+import { HUMAN_WORK_STATUSES, type HumanWorkInput, type HumanWorkTransition, type HumanWorkOperation, type HumanWorkQueue, type HumanWorkRecord, type HumanWorkStatus } from '@hon/contracts';
 import { loadHumanWork, readHumanWork, mutateHumanWork, workFingerprint, WorkAccessError } from './work-items-http';
 import styles from './staff-availability-workbench.module.css';
 const initial = (assigneeId: string|null = null): HumanWorkInput => ({expectedVersion:0,title:'',description:'',priority:'NORMAL',dueAt:null,assigneeId});
@@ -46,7 +46,7 @@ export function WorkItemsWorkbench(): React.ReactElement {
   return <main className={styles.page}>
     <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/hon">Ask HON</a><a href="/staff/search">Staff search</a><a href="/auth/login">Sign in</a></nav>
     <header><p>Home</p><h1>Work</h1><p>Your team’s to-do list: what needs doing, who has it, and where it stands.</p></header>
-    <aside data-plain-note=""><strong>Work items are for people. The AI team does not run them.</strong><details><summary>What this page never does</summary><p><strong>Human work, not an AI execution queue.</strong></p><p>{HUMAN_WORK_HELP}</p><p>Exact school work_item.manage for team detail/revisions/assignment; work_item.self_manage for current-assignee state updates. work_item.create for self/unassigned creation and creator visibility. No identity directory. Avoid personal/contact data or raw AI prompts in titles and descriptions.</p></details></aside>
+    <aside data-plain-note=""><strong>Work items are for people. The AI team does not run them.</strong></aside>
     <section><h2>Authorized school queue</h2><div className={styles.row}>
       <label>Queue<select disabled={busy||uncertain} value={queue} onChange={e=>{setQueue(e.target.value as 'mine'|'team');resetFilter();}}><option value="mine">My assignments / created records</option><option value="team">School team · managers only</option></select></label>
       <label>Status<select disabled={busy||uncertain} value={status} onChange={e=>{setStatus(e.target.value as HumanWorkStatus|'ACTIVE'|'ALL');resetFilter();}}><option value="ACTIVE">Active work</option>{HUMAN_WORK_STATUSES.map(s=><option key={s} value={s}>{labels[s]}</option>)}<option value="ALL">All states</option></select></label>
