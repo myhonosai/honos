@@ -10,7 +10,6 @@ const PAGES = ['invoice-workbench', 'curriculum-progress-workbench', 'testing-ca
   'community-workbench', 'achievements-workbench', 'instructor-qualifications-workbench', 'billing-renewals-workbench', 'revenue-planning-workbench',
   'action-approvals-workbench', 'crm-follow-ups-workbench', 'staff-availability-workbench'];
 
-// Owner 2026-11-16 ("so many verification on page"): these pages carry no policy note at all.
 describe('plain-language page headers', () => {
   for (const page of PAGES) it(page, () => {
     const source = readFileSync(`src/components/${page}.tsx`, 'utf8');
