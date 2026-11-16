@@ -98,6 +98,8 @@ export async function runDateBrowserChecks({ fixture, open, visual, check, origi
         const reads = fixture.reads.length;
         await page.evaluate(() => window.dispatchEvent(new Event('focus')));
         assert.equal(fixture.reads.length, reads, 'Focus alone must not read or reveal');
+        // Page hide also shows the school screensaver (a back/forward-cache return waits for a tap); lift it first.
+        if (event === 'pagehide') { await page.getByRole('dialog', { name: 'Screensaver' }).click(); await page.locator('[data-screensaver]').waitFor({ state: 'detached' }); }
         await page.getByRole('button', { name: 'Verify access and resume' }).click();
         await page.getByRole('heading', { name: 'Verified current membership' }).waitFor();
         assert(fixture.reads.length > reads); assert.equal(fixture.commands.length, 0);
