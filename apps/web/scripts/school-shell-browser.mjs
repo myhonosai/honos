@@ -102,6 +102,8 @@ function api(route) {
     if (path === `${prefix}/schedule/sessions`) return json(route, 200, { data: sessions(), meta: { requestId: id(700), correlationId: id(700) } });
     if (path === `${prefix}/people`) return json(route, 200, { data: [['Avery', 'Sample', '+15555550101', 'avery@example.test'], ['Rowan', 'Example', null, 'rowan@example.test']]
       .map(([givenName, familyName, phoneE164, email], i) => ({ id: id(850 + i), givenName, familyName, email, phoneE164, version: 1, createdAt: iso() })), meta: { requestId: id(860), correlationId: id(860) } });
+    if (path === `${prefix}/pickers/staff`) return json(route, 200, { data: [['Avery Sample', 870], ['Rowan Example', 871], ['Kim Placeholder', 872]]
+      .map(([displayName, n]) => ({ principalId: id(n), displayName })), meta: { requestId: id(875), correlationId: id(875), limit: 200 } });
     if (path === `${prefix}/pickers/testing-candidates`) return json(route, 200, { data: [['Avery', 'Sample', 'PASSED'], ['Rowan', 'Example', 'PASSED'], ['Kim', 'Placeholder', 'DEFERRED']]
       .map(([givenName, familyName, result], i) => ({ candidateId: id(800 + i), version: 2, result, testingEventId: id(810), testingEventName: 'Synthetic spring test', startsAt: at(-day),
         studentProfileId: id(820 + i), givenName, familyName, curriculumName: 'Synthetic curriculum', targetRankId: id(830), targetRankName: 'Yellow belt' })), meta: { requestId: id(840), correlationId: id(840), limit: 50 } });
@@ -380,6 +382,25 @@ await check('Texts & email opens with the composer: find a contact, Text or Emai
   assert.equal(await page.getByRole('button', { name: 'Send', exact: true }).isDisabled(), true, 'needs the confirm');
   assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('communications/messages')), false);
   await shot(page, 'l4-texts-email-desktop'); await ctx.close();
+});
+for (const mode of ['modern', 'classic', 'big-button']) for (const size of ['desktop', 'phone']) await check(`Staff opens on names; a name opens its card (${mode} ${size})`, async () => {
+  theme = mode; const { ctx, page } = await open(viewports[size], '/staff/team/invitations');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Your staff (3)' }).waitFor();
+  assert.ok(report.apiRequests.some(r => r.startsWith('GET') && r.endsWith('/pickers/staff')));
+  assert.equal(await page.locator('[data-staff-directory]').evaluate(el => /[0-9a-f]{8}-[0-9a-f]{4}/i.test(el.textContent ?? '')), false, 'no IDs shown');
+  await page.locator('input[name="staffSearch"]').fill('rowan');
+  assert.deepEqual(await page.locator('[data-staff-directory] ul[aria-label="Staff"] button').evaluateAll(b => b.map(x => x.textContent)), ['Rowan Example']);
+  await page.getByRole('button', { name: 'Rowan Example' }).click();
+  const card = page.locator('[data-staff-card]');
+  await card.waitFor();
+  assert.deepEqual(await card.locator('a').evaluateAll(a => a.map(x => [x.getAttribute('href'), x.textContent])),
+    [['/staff/roles', 'Roles'], ['/staff/team/availability', 'Availability'], ['/staff/instructor-qualifications', 'Qualifications'], ['/staff/documents', 'Documents']]);
+  const box = await card.boundingBox(); const width = page.viewportSize().width;
+  assert.ok(box && box.x >= 0 && box.x + box.width <= width + 1, 'card fits on screen');
+  await noOverflow(page); await shot(page, `l5-staff-card-${mode}-${size}`);
+  await page.keyboard.press('Escape'); await card.waitFor({ state: 'detached' });
+  await ctx.close();
 });
 for (const size of ['desktop', 'phone']) await check(`Settings tabs wrap instead of scrolling (${size})`, async () => {
   theme = 'classic'; const { ctx, page } = await open(viewports[size], '/staff/settings/branding');
