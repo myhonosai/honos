@@ -3890,3 +3890,18 @@ BEGIN
     RAISE EXCEPTION 'Staff pick list body drift: %',f; END IF;
 END $$;
 -- End school staff pick list exact verification.
+-- Staff qualification and role lists exact verification (0406)
+DO $$ DECLARE f text; expected jsonb:='{"hon.list_instructor_qualifications(text,text,uuid)":"2b09093c624579f8a92b9da60b8689e7","hon.list_staff_roles(text)":"22f6493edb52503e3b8dd96a94ef76d7"}';
+BEGIN
+  FOR f IN SELECT jsonb_object_keys(expected) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe staff list entry point: %',f; END IF;
+    IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM expected->>f
+      OR (SELECT proconfig FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon'] THEN
+      RAISE EXCEPTION 'Staff list body drift: %',f; END IF;
+  END LOOP;
+END $$;
+-- End staff qualification and role lists exact verification.

@@ -3768,3 +3768,13 @@ BEGIN
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END IF;
 END $$;
+-- 0406 staff qualification and role lists: two read-only definer entry points; the runtime may only execute them.
+DO $$ DECLARE r text; f text;
+BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.list_instructor_qualifications(text,text,uuid)','hon.list_staff_roles(text)'] LOOP
+    IF to_regprocedure(f) IS NULL THEN RAISE EXCEPTION 'Apply migration 0406 first'; END IF;
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+    IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END IF;
+  END LOOP;
+END $$;
