@@ -99,7 +99,8 @@ it('reads only the fixed school wallet GET and refuses a response for another sc
   await expect(CREATIVE_STUDIO_API.wallet(scope, new AbortController().signal)).rejects.toMatchObject({ kind: 'DENIED' });
 });
 
-it('lists Creative Studio with marketing under Enrollment in the school navigation', () => {
-  const marketing = SCHOOL_SHELL_NAV.find(item => item.key === 'crm');
+it('lists Creative Studio as its own page under the Marketing heading', () => {
+  const marketing = SCHOOL_SHELL_NAV.find(item => item.key === 'creative');
+  expect(marketing?.section).toBe('marketing');
   expect(marketing?.routes.map(route => route.href)).toContain('/staff/creative-studio');
 });
