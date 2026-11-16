@@ -7,6 +7,7 @@ export function AddressFields({ draft, language, disabled, onEdit, fieldClassNam
   draft: LocationDraft; language: string; disabled?: boolean | undefined; onEdit: (field: LocationField, value: string) => void; fieldClassName?: string | undefined;
 }): React.ReactElement {
   const c = locationCopy(language), regions = regionsFor(draft.country);
+  const regionLabel = draft.country === 'CA' ? c.regionNames.CA : c.regionNames.US;
   const countries = [...LOCATION_COUNTRIES].sort((a, b) => countryName(a, language).localeCompare(countryName(b, language), language));
   const text = (name: LocationField, label: string, max: number, optional: boolean, autoComplete: string) =>
     <label className={fieldClassName}>{label}{optional ? ` ${c.optional}` : ''}
@@ -16,13 +17,13 @@ export function AddressFields({ draft, language, disabled, onEdit, fieldClassNam
     <legend>{c.addressTitle}</legend>
     <p>{c.addressHelp}</p>
     <label className={fieldClassName}>{c.country}
-      <select value={draft.country} data-location-field="country" autoComplete="country"
+      <select value={draft.country} aria-label={c.country} data-location-field="country" autoComplete="country"
         onChange={e => onEdit('country', e.currentTarget.value)}>
         <option value="">{c.chooseCountry}</option>
         {countries.map(code => <option key={code} value={code}>{countryName(code, language)}</option>)}
       </select></label>
-    {regions.length ? <label className={fieldClassName}>{draft.country === 'CA' ? c.regionNames.CA : c.regionNames.US}
-      <select value={draft.region} data-location-field="region" autoComplete="address-level1" onChange={e => onEdit('region', e.currentTarget.value)}>
+    {regions.length ? <label className={fieldClassName}>{regionLabel}
+      <select value={draft.region} aria-label={regionLabel} data-location-field="region" autoComplete="address-level1" onChange={e => onEdit('region', e.currentTarget.value)}>
         <option value="">{c.chooseRegion}</option>
         {regions.map(r => <option key={r} value={r}>{r}</option>)}
       </select></label> : null}
