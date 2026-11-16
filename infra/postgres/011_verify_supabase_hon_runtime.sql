@@ -3788,12 +3788,12 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_person_membership_start()',false,false,'search_path=pg_catalog, hon','v','778a1f0da886a102416515b7fddaf20f1fbd4442450a7bd598cfbc393f1d0a14'),
 ('hon.membership_program_group(uuid)',true,false,'search_path=pg_catalog, hon','s','22bc641d28bcd4afaa522d080918b158ed1f2bc89eeae4a547a4279c0f3060f2'),
-('hon.guard_person_membership_overlap()',false,false,'search_path=pg_catalog, hon','v','cf89da7a07c68c673c504e82aa64a037b7c2a646cf7bec4e88bbe4e2dad8582a'),
+('hon.guard_person_membership_overlap()',false,false,'search_path=pg_catalog, hon','v','60249362e907a9e11fa91ebd837d3d1f8d86470b4414e7acd3e8a6ceec314457'),
 ('hon.require_person_membership_actor(text)',true,false,'search_path=pg_catalog, hon','v','437b0820c5be45ff8100b2aaef9884a2cc559e87cd1575cb8f0b770c0eff7e13'),
 ('hon.person_membership_start_facts(uuid,date)',true,false,'search_path=pg_catalog, hon','s','4a9e7833b68b007062e11c5afe1d203faa2cfd970ad776fe756307c1415e5666'),
 ('hon.person_membership_start_item(hon.memberships,text)',true,false,'search_path=pg_catalog, hon','s','c5750ccc97cf64271794abc290420a20a106381674882c491f00ece2f722af4b'),
 ('hon.read_person_membership_start(text,jsonb)',true,true,'search_path=pg_catalog, hon','v','5e159c6728b25979dbe9a1360d7c335cb11c3a61a90da227a258bb552bba31b4'),
-('hon.start_person_membership(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','v','9ff556e14e875ae2d57c43d0a7b0cf1cd71d41418e9eecd6666a7cb74200dc90')) e(signature,definer,runtime_allowed,config,volatility,body_hash) LOOP
+('hon.start_person_membership(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','v','67a9828cb5d1969af3b55c746ec976ce95a6143251724031ea5a7c2c3a692195')) e(signature,definer,runtime_allowed,config,volatility,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config] AND p.provolatile=f.volatility
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
@@ -3807,7 +3807,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
     OR NOT (SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid='hon.person_membership_starts'::regclass)) THEN
     RAISE EXCEPTION 'hon.person_membership_starts must stay private with forced RLS'; END IF;
   IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.memberships'::regclass AND tgname='memberships_one_per_program'
-      AND tgfoid='hon.guard_person_membership_overlap()'::regprocedure AND tgenabled='O' AND NOT tgisinternal)
+      AND tgfoid='hon.guard_person_membership_overlap()'::regprocedure AND tgtype=21 AND tgenabled='O' AND NOT tgisinternal)
     OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.person_membership_starts'::regclass AND NOT tgisinternal
       AND tgfoid='hon.guard_person_membership_start()'::regprocedure AND tgenabled='O')<>2 THEN
     RAISE EXCEPTION 'Missing card membership start guard triggers'; END IF;

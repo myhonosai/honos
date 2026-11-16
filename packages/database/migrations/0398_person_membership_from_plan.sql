@@ -70,6 +70,9 @@ LANGUAGE plpgsql SET search_path=pg_catalog,hon AS $$
 DECLARE grp uuid; card boolean;
 BEGIN
   IF NEW.state NOT IN ('ACTIVE','FROZEN','CANCELLATION_PENDING') THEN RETURN NULL; END IF;
+  -- One lock per student: two changes to this student's memberships (an activation and a date change, say) never check at once,
+  -- and the check below runs after the earlier change committed (each statement reads afresh under READ COMMITTED).
+  PERFORM pg_advisory_xact_lock(hashtextextended('hon.membership_one_per_program:'||NEW.organization_id||':'||NEW.school_id||':'||NEW.participant_person_id,0));
   grp:=hon.membership_program_group(NEW.id);
   card:=EXISTS(SELECT 1 FROM hon.person_membership_starts s WHERE s.membership_id=NEW.id);
   IF EXISTS(SELECT 1 FROM hon.memberships o
@@ -83,7 +86,7 @@ BEGIN
   END IF;
   RETURN NULL;
 END $$;
-CREATE TRIGGER memberships_one_per_program AFTER UPDATE OF state,term_started_at,term_ends_at ON hon.memberships
+CREATE TRIGGER memberships_one_per_program AFTER INSERT OR UPDATE OF state,term_started_at,term_ends_at ON hon.memberships
   FOR EACH ROW EXECUTE FUNCTION hon.guard_person_membership_overlap();
 
 -- Live direct-human staff authority with billing.membership.create at the session school (the 0387 rules).
@@ -231,6 +234,8 @@ BEGIN
   LOCK TABLE hon.users,hon.principals,hon.principal_role_grants,hon.roles,hon.role_permissions,hon.permissions,hon.family_access_grants,hon.hq_operator_grants,hon.organizations,hon.schools,hon.organization_entitlements IN SHARE MODE;
   LOCK TABLE hon.people,hon.student_profiles,hon.families,hon.family_members,hon.billing_accounts,hon.memberships,hon.person_membership_starts IN SHARE ROW EXCLUSIVE MODE;
   LOCK TABLE hon.membership_plans,hon.membership_plan_versions IN SHARE MODE;
+  -- The same per-student lock the one-per-program trigger takes, after the table locks (the trigger's callers hold theirs first).
+  PERFORM pg_advisory_xact_lock(hashtextextended('hon.membership_one_per_program:'||org||':'||school||':'||pid,0));
   IF hon.require_person_membership_actor(p_subject) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'PERSON_MEMBERSHIP_FORBIDDEN' USING ERRCODE='42501'; END IF;
   IF NOT reserved THEN
     SELECT * INTO prior FROM hon.idempotency_records WHERE organization_id=org AND school_id=school AND principal_id=actor AND idempotency_key=p_key FOR UPDATE;

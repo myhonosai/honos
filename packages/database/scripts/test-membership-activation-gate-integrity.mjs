@@ -82,7 +82,7 @@ try {
   // 0398 adds one AFTER UPDATE check that only refuses (one membership per program); it authorizes nothing.
   assert.deepEqual((await admin.query(`SELECT tgname,tgenabled,pg_get_triggerdef(oid) def FROM pg_trigger WHERE tgrelid='hon.memberships'::regclass AND NOT tgisinternal ORDER BY tgname`)).rows,
     [{ tgname: 'membership_state_transition_guard', tgenabled: 'O', def: 'CREATE TRIGGER membership_state_transition_guard BEFORE INSERT OR UPDATE ON hon.memberships FOR EACH ROW EXECUTE FUNCTION hon.guard_membership_state_transition()' },
-      { tgname: 'memberships_one_per_program', tgenabled: 'O', def: 'CREATE TRIGGER memberships_one_per_program AFTER UPDATE OF state, term_started_at, term_ends_at ON hon.memberships FOR EACH ROW EXECUTE FUNCTION hon.guard_person_membership_overlap()' }]);
+      { tgname: 'memberships_one_per_program', tgenabled: 'O', def: 'CREATE TRIGGER memberships_one_per_program AFTER INSERT OR UPDATE OF state, term_started_at, term_ends_at ON hon.memberships FOR EACH ROW EXECUTE FUNCTION hon.guard_person_membership_overlap()' }]);
   assert.doesNotMatch(bodyOf('preview_school_membership_activation') + bodyOf('evaluate_membership_activation'), /\b(INSERT|UPDATE|DELETE|TRUNCATE|MERGE|LOCK)\b/, 'preview and evaluation are DML- and lock-free');
   // rules.manage and change.approve are reserved for E1c: no function uses them.
   assert.equal((await sql(`SELECT count(*)::int n FROM pg_proc WHERE pronamespace='hon'::regnamespace AND (prosrc LIKE '%${RULES}%' OR prosrc LIKE '%${APPROVE}%')`))[0].n, 0);

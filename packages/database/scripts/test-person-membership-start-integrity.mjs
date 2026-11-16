@@ -33,6 +33,7 @@ const { HonExceptionFilter } = await load('observability/http-telemetry.js');
 const { PersonMembershipStartController } = await load('billing/person-membership-start.controller.js');
 const { PersonMembershipStartService } = await load('billing/person-membership-start.service.js');
 const { MembershipService } = await load('billing/membership.service.js');
+const { MembershipDateRevisionService } = await load('billing/membership-date-revision.service.js');
 
 const admin = new pg.Client(targets.owner);
 await admin.connect();
@@ -53,6 +54,7 @@ const ok = (condition, message) => { checks += 1; assert.ok(condition, message);
 let app, origin;
 const database = new RuntimeDatabaseService();
 const memberships = new MembershipService(database);
+const dateRevisions = new MembershipDateRevisionService(database);
 
 async function startApp() {
   const module = await Test.createTestingModule({
@@ -374,6 +376,54 @@ try {
     /MEMBERSHIP_PROGRAM_OVERLAP/, 'extending the first membership into its renewal is refused');
   await rejectsSql(admin, () => membershipFixtureStatement(admin, "UPDATE hon.memberships SET term_started_at=term_started_at-interval '30 days' WHERE id=$1", [renewal.membershipId]),
     /MEMBERSHIP_PROGRAM_OVERLAP/, 'moving the renewal back into the first membership is refused');
+
+  // 10b. Two connections at once: extending the current membership into its renewal while the renewal starts. Both reach the
+  // one-per-program check while an outside holder keeps the per-student lock; once it lets go exactly one wins, in either order.
+  const DATE_CONFIRMATION = 'I_CONFIRM_MEMBERSHIP_DATE_CHANGE_NO_PAYMENT_INVOICE_REFUND_OR_AGREEMENT_CHANGE';
+  const studentLock = (pid) => `SELECT pg_advisory_xact_lock(hashtextextended('hon.membership_one_per_program:'||$1||':'||$2||':'||$3,0))`;
+  const waiting = async () => (await sql("SELECT count(*)::int n FROM pg_locks WHERE locktype='advisory' AND NOT granted")).rows[0].n;
+  for (const order of ['extension first', 'activation first']) {
+    const who = await person(order === 'extension first' ? 'Rae' : 'Sol', { birthDate: addDays(today, -365 * 30) });
+    const first = (await success(() => start(CREATOR, who, body(plans.tkd12)), `${order}: first membership`, 201)).data;
+    await activate(OWN, first.membershipId);
+    const firstItem = (await success(() => options(CREATOR, who), `${order}: options`)).data.memberships.find((x) => x.membershipId === first.membershipId);
+    const next = (await success(() => start(CREATOR, who, body(plans.tkd12, { kind: 'RENEW', renewsMembershipId: first.membershipId, startDate: firstItem.renewStartDate })),
+      `${order}: renewal`, 201)).data;
+    const extension = await dateRevisions.preview(OWN.read(), first.membershipId, { changeKind: 'EXTENSION', startDate: firstItem.startDate, endDate: addDays(firstItem.endDate, 60) });
+    const extensionBody = { expectedVersion: extension.version, expectedPeriodVersion: extension.currentPeriod?.periodVersion ?? null, previewDigest: extension.previewDigest,
+      changeKind: extension.changeKind, startDate: extension.proposedDates.startDate, endDate: extension.proposedDates.endDate, dateSource: extension.proposedDates.dateSource,
+      acknowledgedWarnings: extension.warnings.map((w) => w.code), reasonCode: 'MEMBER_REQUESTED', reasonText: 'Staff reviewed the membership dates with the member.', confirmation: DATE_CONFIRMATION };
+    if (extensionBody.dateSource === 'STAFF_ADJUSTED') extensionBody.dateAdjustmentReason = 'Member asked for a later last day.';
+    const startPreview = await memberships.previewActivation(OWN.read(), next.membershipId, {});
+    const holder = new pg.Client(targets.owner);
+    await holder.connect();
+    try {
+      await holder.query('BEGIN');
+      await holder.query(studentLock(), [ids.organization, ids.schoolA, who]);
+      const runExtension = () => dateRevisions.revise(OWN.context(), first.membershipId, extensionBody);
+      const runStart = () => memberships.activate(OWN.context(), next.membershipId, confirmationFor(startPreview));
+      const settle = (promise) => promise.then((value) => ({ ok: true, value }), (error) => ({ ok: false, error }));
+      const until = async (n) => { for (let i = 0; i < 200 && await waiting() < n; i += 1) await new Promise((r) => setTimeout(r, 25)); return waiting(); };
+      const a = settle(order === 'extension first' ? runExtension() : runStart());
+      ok(await until(1) === 1, `${order}: the first change waits for the per-student lock inside the check`);
+      const b = settle(order === 'extension first' ? runStart() : runExtension());
+      ok(await until(2) === 2, `${order}: the second change waits too (without the lock both would check at once)`);
+      await holder.query('COMMIT');
+      const [ra, rb] = await Promise.all([a, b]);
+      const loser = [ra, rb].filter((x) => !x.ok);
+      ok(ra.ok && loser.length === 1 && loser[0].error?.getResponse?.().code === 'MEMBERSHIP_PROGRAM_OVERLAP' && loser[0].error.getStatus() === 409,
+        `${order}: the first in line wins, the second is refused as an overlap (${JSON.stringify(loser.map((x) => x.error?.getResponse?.() ?? x.error?.message))})`);
+    } finally { await holder.query('ROLLBACK').catch(() => {}); await holder.end(); }
+    ok(await count(`SELECT count(*)::int n FROM hon.memberships a JOIN hon.memberships b ON a.participant_person_id=b.participant_person_id AND a.id<b.id
+      WHERE a.participant_person_id=$1 AND a.state IN ('ACTIVE','FROZEN','CANCELLATION_PENDING') AND b.state IN ('ACTIVE','FROZEN','CANCELLATION_PENDING')
+        AND tstzrange(a.term_started_at,coalesce(a.term_ends_at,'infinity'),'[)') && tstzrange(b.term_started_at,coalesce(b.term_ends_at,'infinity'),'[)')`, [who]) === 0,
+      `${order}: never two current Taekwondo memberships on the same day`);
+  }
+  // A direct insert of a current membership is checked too: a no-program copy of the started no-program card membership overlaps it.
+  await activate(OWN, general.membershipId);
+  await rejectsSql(admin, () => membershipFixtureStatement(admin, `INSERT INTO hon.memberships(organization_id,school_id,participant_person_id,billing_account_id,plan_code,state,term_started_at,term_ends_at)
+    SELECT organization_id,school_id,participant_person_id,billing_account_id,plan_code,'ACTIVE',term_started_at,term_ends_at FROM hon.memberships WHERE id=$1`, [general.membershipId]),
+    /MEMBERSHIP_PROGRAM_OVERLAP/, 'inserting a current membership that overlaps a card membership in its group is refused');
 
   // 11. Guardians pay for a minor: the billing contact by default, or the guardian chosen.
   const kid = (await success(() => start(CREATOR, people.child, body(plans.tkd12)), 'child Taekwondo', 201)).data;
