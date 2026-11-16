@@ -121,7 +121,7 @@ BEGIN
 END;
 $$;
 
--- 0408 Shopify: record verified webhook deliveries, and claim, rotate, write and finish background syncs under a lease
+-- 0425 Shopify: record verified webhook deliveries, and claim, rotate, write and finish background syncs under a lease
 -- (when applied).
 DO $$
 BEGIN

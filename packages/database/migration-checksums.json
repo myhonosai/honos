@@ -309,6 +309,7 @@
     "0404_school_staff_pick_list.sql": "7c4116df35139b07b406ee304b162acc45871ac5a8ce225985865979a511181e",
     "0406_staff_qualification_and_role_lists.sql": "d131e376033198ca638c2b9aabc2c3ea9b7a93295d116dcd5aaedbc19ee8112f",
     "0407_retention_review_member_list.sql": "88ee6b0f21d71289f02036e36d50644a960ff7eeb620d542afda2303c76d1606",
-    "0408_school_shopify_background_sync.sql": "2a09af42d70bb14df6956af38e09878f9611e5fa8e84ee221c8d3355129977ea"
+    "0412_staff_assignable_permissions_list.sql": "5691c6871ad27b49385868c502922578926637dbc57b55924422bb07fde69db3",
+    "0425_school_shopify_background_sync.sql": "0d413b1d571490f7433cf745eb82a7d643a78769baa7bf6d51f71b6967543a95"
   }
 }

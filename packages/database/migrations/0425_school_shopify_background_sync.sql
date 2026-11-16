@@ -1,6 +1,6 @@
 BEGIN;
 
--- HON Shopify Connected, piece SH1b (0408, coordinator-allocated 2026-11-16). Spec: docs/architecture/SHOPIFY_COMMERCE.md.
+-- HON Shopify Connected, piece SH1b (0425, coordinator-allocated 2026-11-16; first allocated 0408). Spec: docs/architecture/SHOPIFY_COMMERCE.md.
 -- Builds on 0405 (SH1). Two things happen without a person pressing Sync now:
 -- * Signed Shopify webhooks. The API checks Shopify's HMAC over the exact body before anything reaches the database,
 --   and passes only the delivery id, topic, shop domain and trigger time. No payload is stored. Catalog, inventory and
@@ -20,7 +20,7 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'Trusted migration owner required'; END IF;
   IF to_regclass('hon.shopify_connections') IS NULL OR to_regprocedure('hon.record_shopify_sync_page(text,jsonb)') IS NULL THEN
-    RAISE EXCEPTION '0408 requires 0405 (Shopify connection)'; END IF;
+    RAISE EXCEPTION '0425 requires 0405 (Shopify connection)'; END IF;
 END $$;
 
 -- The code-owned actor of background syncs and webhook effects. It holds no role at any school.

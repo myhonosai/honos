@@ -3883,7 +3883,15 @@ BEGIN
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END IF;
 END $$;
--- 0408 Shopify background sync and webhooks (SH1b): two more private tables; the five worker functions belong to
+-- 0412 staff assignable permissions list: one read-only definer entry point; the runtime may only execute it.
+DO $$ DECLARE r text; f constant text:='hon.list_assignable_staff_permissions(text)';
+BEGIN
+  IF to_regprocedure(f) IS NULL THEN RAISE EXCEPTION 'Apply migration 0412 first'; END IF;
+  EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END IF;
+END $$;
+-- 0425 Shopify background sync and webhooks (SH1b): two more private tables; the five worker functions belong to
 -- hon_communication_worker (013) and, like every helper, are never granted to the runtime.
 DO $$ DECLARE r text; t text; f text;
   entry text[]:=ARRAY['hon.read_shopify(text,uuid)','hon.read_shopify_catalog(text,uuid)','hon.read_shopify_orders(text,uuid)',
@@ -3891,7 +3899,7 @@ DO $$ DECLARE r text; t text; f text;
     'hon.begin_shopify_sync(text,jsonb)','hon.rotate_shopify_credential(text,jsonb)','hon.record_shopify_sync_page(text,jsonb)',
     'hon.finish_shopify_sync(text,jsonb)','hon.disconnect_shopify(text,jsonb)'];
 BEGIN
-  IF to_regclass('hon.shopify_webhook_receipts') IS NULL THEN RAISE EXCEPTION 'Apply migration 0408 first'; END IF;
+  IF to_regclass('hon.shopify_webhook_receipts') IS NULL THEN RAISE EXCEPTION 'Apply migration 0425 first'; END IF;
   FOREACH t IN ARRAY ARRAY['shopify_sync_requests','shopify_webhook_receipts'] LOOP
     EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
