@@ -182,7 +182,9 @@ seven piece 1 routes.
 
 ## 9. Piece 9a as built (0269): checkout page settings
 
-Status: source only, not deployed. Nothing is public yet; the family-facing checkout page and its public read come in a
+Status: superseded by section 21 (0402). 0402 copies every 0269 page into the new model as a draft and retires the
+runtime's EXECUTE on both 0269 entry points; the 0269 tables stay as history. The text below describes 0269 as built.
+Source only, not deployed. Nothing is public yet; the family-facing checkout page and its public read come in a
 later piece, together with promo codes and the sibling-discount display (P4).
 
 - **Database:** `school_checkout_pages` (one row per school and kind, `ENROLLMENT` or `TUITION`, `DRAFT` or `PUBLISHED`) and
@@ -197,12 +199,11 @@ later piece, together with promo codes and the sibling-discount display (P4).
   parent principals are refused.
 - **API:** `GET` and `POST organizations/:organizationId/schools/:schoolId/payments/checkout-pages` (save needs
   Idempotency-Key and the `school_checkout.page.save` human-command header).
-- **Evidence:** `pnpm --filter @hon/database db:test-school-checkout-pages` (CI: `run-db-proofs.sh`), 94 checks over signed
-  HTTP; `apps/api/test/school-checkout.test.cjs`.
+- **Evidence (at 0269):** 94 checks over signed HTTP in the 0269 proof, since renamed and rewritten for 0402 (section 21).
 
 ## 10. Piece 9b as built: checkout settings page for staff
 
-Status: source only, not deployed. Web only, over the 0269 routes; no migration and no API change.
+Status: superseded by section 21 (the same route now edits the 0402 pages). Source only, not deployed. Web only, over the 0269 routes; no migration and no API change.
 
 - **Page:** `/staff/billing/checkout-pages` (Billing menu, "Checkout pages"; EN/KO/ES menu label), protected, dynamic,
   noindex, no-referrer. Tabs for the enrollment checkout and the tuition payment page.
@@ -217,7 +218,7 @@ Status: source only, not deployed. Web only, over the 0269 routes; no migration 
   keeps the exact request and key for Try again. Every answer is followed by a fresh read.
 - **Privacy:** blur or a hidden tab hides the page but keeps unsaved edits in memory; a school change or session end drops
   them. Nothing is kept in browser storage.
-- **Evidence:** `apps/web/test/school-checkout-ui.test.tsx` (9 tests).
+- **Evidence (at 0269):** 9 tests, since rewritten for 0402 (section 21).
 
 ## 11. Piece 2 design (0320): real sandbox adapters and the credential vault
 
@@ -446,3 +447,99 @@ sends the cycle to the processor. No message is sent and HON takes no fee.
 - **Evidence:** `packages/database/scripts/test-school-pay-autopay-integrity.mjs` (246 checks over signed HTTP, including month-end,
   leap-year and daylight-saving periods);
   `apps/api/test/school-payments.test.cjs` (0322 contract, discount and route tests).
+
+## 16. Piece 5a as built (0337): charging a prepared autopay cycle, test mode only
+
+Status: source only, not deployed, test/sandbox mode only (live keys stay refused, 0320). HON takes no fee, so no charge
+request carries one. Webhook inboxes (5b) and the retry schedule plus failed-payments list (5c) follow as separate PRs on
+the same tables. Owner check still open: the autopay defaults listed in section 14.
+
+- **What is charged:** one prepared cycle (0322) as one off-session charge of its total, on the plan's current saved
+  method, into the school's own account: Stripe direct charge (`Stripe-Account`, PaymentIntent with `off_session` and
+  `confirm`, no fee field). Square's sandbox adapter refuses before sending until its card page exists (the simulator
+  covers the flow). 0322 cycles stay immutable; a cycle's paid state is derived from its attempts.
+- **Who starts it:** a direct human command, `POST .../payments/autopay/cycles/:cycleId/charge` with the cycle total and
+  currency the staff member confirmed (`{ totalMinor, currency }`), permission `school_pay.autopay.manage`,
+  Idempotency-Key required, live authority re-checked before and after, like 0321/0322. An unattended runner is 5c.
+- **Three steps, never a guessed outcome:**
+  1. `begin_school_pay_charge` checks the total, the plan ACTIVE, its method usable (0322 rule) on a TEST connection,
+     no attempt for the cycle that is not FAILED, and every cycle invoice still ISSUED with nothing recorded; it writes
+     the attempt `PENDING` and commits.
+  2. The API calls `chargeOffSession` with the provider key `hon-school-pay-charge-<attemptId>` (no transaction open).
+  3. `finish_school_pay_charge` records the answer: `SUCCEEDED` (charge id; amount and currency must equal the
+     attempt), `PROCESSING` (a bank debit still clearing), `FAILED` with a class (`DECLINED`,
+     `AUTHENTICATION_REQUIRED`, `INSUFFICIENT_FUNDS`, `EXPIRED_CARD`, `NOT_SENT`, `OTHER`; never provider text), or
+     `UNKNOWN` (timeout, 5xx, 429, a concurrent key, a malformed or mismatched answer).
+- **Paid:** on `SUCCEEDED` each cycle invoice gets one `invoice_payment_records` row with the new method `PROVIDER`
+  (0240 CHECK replaced; a PROVIDER row must carry the processor's charge id as its reference), received on the school's
+  today, and becomes `PAID` through the 0240 status guard. Staff entry stays manual-only, and a PROVIDER row cannot be
+  voided by hand (refunds are a later piece).
+- **Open attempts hold the invoices:** while an attempt is PENDING, PROCESSING or UNKNOWN, its cycle invoices take no
+  manual payment and only move from ISSUED to PAID (two settings-free triggers), and the cycle cannot be charged again.
+- **Reconcile:** `POST .../payments/autopay/charges/:attemptId/reconcile` (body `{}`; the browser never sends an
+  outcome) looks the attempt up at the processor (Stripe: PaymentIntents of the payer's customer from ten minutes before
+  the attempt, matched by metadata `hon_attempt_id`; more than one, or a further page, is UNKNOWN). Found: recorded as
+  the processor says. Not found: inside 23 hours (Stripe keeps idempotency keys 24 hours) the charge is resent with the
+  same key; after that it is `FAILED NOT_SENT`. A replay of the charge request that finds its attempt still PENDING
+  (the earlier request stopped after step 1) does the same lookup before any resend. A provider with no test credentials
+  in the environment is `FAILED NOT_SENT` before anything is sent.
+- **Failed:** invoices stay ISSUED and the cycle can be charged again with a new attempt (the 5c retry schedule will
+  automate that).
+- **Data (private, forced RLS, EXECUTE-only runtime):** `school_pay_charge_attempts` (cycle, plan, method, connection,
+  provider, amount, currency, state, failure class, processor charge id, version; one non-FAILED attempt per cycle; a
+  settled attempt never changes; nothing returns to PENDING), `school_pay_charge_events` (append-only), with audit rows
+  and inert outbox events per change and per paid invoice. Runtime entry points: `read_school_pay_autopay_charges`
+  (staff list without references), `read_school_pay_charge_attempt` (manage only; the API's references, never sent on),
+  `begin_school_pay_charge`, `finish_school_pay_charge`. Read route: `GET .../payers/:billingAccountId/autopay/charges`.
+- **Consent and time zone at begin (review P3s):** a charge starts only under the plan's `autopay-v1` agreement and the
+  method's own mandate for its kind (`card-on-file-v1`, `ach-mandate-v1`); the school time zone is checked before
+  sending so a confirmed success can always be recorded. The version check names the text, it does not prove the payer
+  saw it: staff still enter consent, which stays a gate before any live use.
+- **Known follow-ups:** an off-session `requires_action` is recorded FAILED while the PaymentIntent stays open at Stripe;
+  5c cancels it before a new attempt and 5b holds a late success on a FAILED attempt for review. A same-key double
+  submit can record UNKNOWN first and drop the original's answer; reconcile recovers it.
+- **Evidence:** `packages/database/scripts/test-school-pay-charges-integrity.mjs` (195 checks over signed HTTP with the
+  simulators: success, replay, re-charge refused, bank debit PROCESSING then cleared, decline then a new attempt, lost
+  answer reconciled without a resend, a request that never arrived resent once, a stopped request recovered or FAILED
+  NOT_SENT after the key window, Square, an unconfigured provider, paused plan, changed invoice, guards, ACL, 011);
+  `apps/api/test/school-payments-sandbox.test.cjs` (Stripe request fields, outcomes, decline classes, UNKNOWN cases,
+  lookup) and `apps/api/test/school-payments.test.cjs` (contracts and routes); verify-rls; 010/011; staging pin 0337.
+
+## 21. Checkout pages as built (0402, CP1 + CP2): many named pages, modeled on the owner's current CRM
+
+Status: source only, not deployed. Staff only: families cannot open these pages yet (the family page, its public link and
+promo codes are CP3 and CP4). Nothing here takes a payment, and HON adds no fee.
+
+- **Database (0402):** `school_checkouts` (many pages per school: a fixed address `slug`, a group, `DRAFT`, `PUBLISHED` or
+  `ARCHIVED`, closed content, optimistic version; up to 200 pages), the append-only `school_checkout_versions`, and
+  `school_checkout_settings` (the school's page groups and the staff order of the grid; defaults Trial, Membership, Event,
+  Tournament, Test, Equipment, Camp, Sales). Private, forced RLS, no table privilege for the runtime; no delete.
+- **Content (closed shape, CHECKed in the table):** title and description, text sections above or below the options,
+  multi-participant (2 to 10 per order), questions (with uniform, belt, shoe and T-shirt size presets), add-ons in the page
+  currency, an optional page waiver, receipt note and thank-you. Pricing options (up to 10): one-time (0 allowed for a
+  free trial) or monthly (amount, 0 to 120 payments where 0 is ongoing, collection AUTO_CHARGE, IN_HOUSE or
+  REVIEW_REQUIRED, optional down payment with its own label), an optional extra-participant fee, capacity, "available
+  through" date, at most one "Most popular", and an optional catalog plan with "creates membership". An option is a copy
+  for the page: editing it never changes the catalog plan. A live page needs at least one option; a named plan must be
+  AVAILABLE unless the page is archived.
+- **Entry points:** `read_school_checkouts`, `save_school_checkout` (create with no page id and version 0, then optimistic
+  version; refusals VERSION_CONFLICT, CHECKOUT_SLUG_TAKEN, CHECKOUT_SLUG_FIXED, CHECKOUT_NOT_FOUND, CHECKOUT_GROUP_UNKNOWN,
+  CHECKOUT_PLAN_UNAVAILABLE, CHECKOUT_OPTIONS_REQUIRED, CHECKOUT_LIMIT_REACHED) and `save_school_checkout_settings`
+  (refuses removing a group a page still uses). Idempotent, audited, with an outbox event. Permission
+  `school_checkout.manage`, as in 0269.
+- **Carry-over:** each 0269 page becomes a draft 0402 page (address `enrollment` or `tuition`, group Membership, no options,
+  its add-ons, questions and texts kept), so staff choose prices and publish it themselves.
+- **API:** `GET` and `POST organizations/:organizationId/schools/:schoolId/payments/checkout-pages`, and `POST .../settings`
+  (`school_checkout.page.save` and `school_checkout.settings.save` human-command headers, each with an Idempotency-Key).
+- **Staff page (CP2):** the same route `/staff/billing/checkout-pages`. A grid of page cards with group filters (and
+  Archived), the "From" price, status, Edit, Duplicate page, Publish or Put in draft, Archive or Restore, and Earlier or
+  Later; Manage groups. The editor has Page details, Pricing options and Agreement tabs, one language switch, the plain
+  summary under each monthly option ("Customer pays ... today, then .../mo ..."), and a display-only family preview.
+  Unsaved edits stay in memory only; an unknown result keeps the exact request and key for Try again.
+- **Later, by other pieces:** the membership thread's shared payment options and agreement signing replace the page copy
+  and the page waiver; the family page and the shared one-time sandbox payment (CP3), promo codes (CP4).
+  A plan can become unavailable after a page is published (0402 checks availability only when saving), so the family
+  checkout (CP3) must check the option's plan again, under lock, at purchase.
+- **Evidence:** `pnpm --filter @hon/database db:test-school-checkouts` (CI: `run-db-proofs.sh`), 157 checks including the
+  carry-over in a rolled-back transaction; `apps/api/test/school-checkout.test.cjs` (3 tests);
+  `apps/web/test/school-checkout-ui.test.tsx` (11 tests); 011 exact verification passes.

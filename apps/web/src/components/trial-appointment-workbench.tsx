@@ -129,6 +129,7 @@ export function TrialAppointmentWorkbench({ initialScope = {} }: { initialScope?
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">School dashboard</a><a href="/staff/search">Staff search</a><a href="/staff/crm/leads">CRM leads</a><a href="/staff/crm/follow-ups">CRM follow-ups</a><a href="/staff/command-center">School Command Center</a><a href="/auth/login">Sign in</a></nav>
     <header><p>Leads</p><h1>Trial appointments</h1><p>Schedule a trial class for a lead, then record how it went.</p></header>
+    <aside data-plain-note=""><strong>Scheduling a trial records it. It does not message the lead or reserve a place in class.</strong></aside>
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {notice && <p role="status" className={styles.notice}>{notice}</p>}
     {uncertain && pending.current && <aside><strong>We couldn’t confirm that save.</strong><p>Try it again before changing anything.</p><button type="button" disabled={busy} onClick={() => void retry()}>Try again</button></aside>}

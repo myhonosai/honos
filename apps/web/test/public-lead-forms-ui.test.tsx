@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { PublicFormWorkbench } from '../src/components/public-form-workbench';
 import { PublishedLeadFormView } from '../src/components/published-lead-form';
+import { IdFields } from '../src/components/school-pickers/pickers';
 import { formStaffRequest, loadPublicLeadForm, sendPublicLeadForm } from '../src/components/public-form-client';
 
 // Deterministic hook/event renderer: no DOM/browser installation or network is needed.
@@ -26,6 +27,10 @@ vi.mock('react', async importOriginal => {
     },
   };
 });
+const shell = vi.hoisted(() => ({ school: null as null | { organizationId: string; schoolId: string }, stages: null as any, campaigns: null as any }));
+vi.mock('../src/components/school-shell/page-school', () => ({ useShellSchool: () => shell.school, useShellSchoolInto: () => shell.school, ManualSchoolFields: ({ children }: { children?: unknown }) => children }));
+vi.mock('../src/components/leads/add-lead-http', async importOriginal => ({ ...(await importOriginal<object>()), addLeadApi: { pipelines: () => shell.stages ? Promise.resolve(shell.stages) : Promise.reject(new Error('down')), setUpStarter: () => Promise.reject(new Error('unused')) } }));
+vi.mock('../src/components/campaign-workbench', () => ({ campaignRequest: () => shell.campaigns ? Promise.resolve(shell.campaigns) : Promise.reject(new Error('denied')) }));
 const id = '11111111-1111-4111-8111-111111111111', other = '22222222-2222-4222-8222-222222222222', publicId = 'a'.repeat(48), base = '/api/v1/marketing/forms';
 const config = { expectedVersion:0, title:'Enquiries', description:'Enquiry only', pipelineId:id, pipelineStageId:other, campaignId:null, optionalFields:['ageBand'] };
 const form = { id, publicId, version:1, status:'DRAFT', title:'Enquiries', description:'Enquiry only', pipelineId:id, pipelineStageId:other, campaignId:null, optionalFields:['ageBand'], acceptedCount:0, updatedAt:'2026-10-01T00:00:00.000Z' };
@@ -43,7 +48,7 @@ function button(tree: any, label: string) { const node = all(tree).find(n => n.t
 function field(tree: any, label: string) { const node = all(tree).find(n => n.type === 'label' && text(n).startsWith(label)); expect(node, label).toBeTruthy(); return all(node).find(n => n.type === 'input' || n.type === 'select'); }
 async function settle() { for (let i = 0; i < 5; i++) await new Promise(resolve => setTimeout(resolve, 0)); }
 async function effect() { for (const run of hooks.pending.splice(0)) run(); await settle(); }
-beforeEach(() => { hooks.slots = []; hooks.cursor = 0; hooks.pending = []; });
+beforeEach(() => { hooks.slots = []; hooks.cursor = 0; hooks.pending = []; shell.school = null; shell.stages = null; shell.campaigns = null; });
 afterEach(() => { for (const slot of hooks.slots) slot?.cleanup?.(); vi.restoreAllMocks(); });
 
 describe('public lead-form bounded same-origin transports', () => {
@@ -85,27 +90,63 @@ describe('public lead-form bounded same-origin transports', () => {
 describe('staff UI stale-state and retry invariants',()=>{
   it('starts empty and labels intake, permissions, no-effect and historical receipts honestly',()=>{
     const mock=vi.spyOn(globalThis,'fetch');const html=renderToStaticMarkup(render(PublicFormWorkbench));expect(mock).not.toHaveBeenCalled();
-    for(const copy of ['never','Exact marketing.form.read','A replay receipt is historical','No current']) if(copy!=='never' && copy!=='No current')expect(html).toContain(copy);
+    expect(html).toContain('The count is new leads each form has added.');
+    for(const word of ['marketing.form.read','authorized','authority','replay','Human command','verified','Sign in'])expect(html).not.toContain(word);
     expect(html).not.toContain('PRIVATE');expect(html).not.toContain('Open published form');expect(html).not.toContain('organizationId');
   });
   it('never makes a replay snapshot current when list refresh fails; clears selected/counts and disables follow-up mutation',async()=>{
     const mock=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({data:[form]}));
-    let tree=render(PublicFormWorkbench);button(tree,'Load authorized school forms').props.onClick();await settle();tree=render(PublicFormWorkbench);
-    all(tree).find(n=>n.type==='button'&&text(n).includes('Enquiries · DRAFT')).props.onClick();tree=render(PublicFormWorkbench);
+    let tree=render(PublicFormWorkbench);button(tree,'Refresh').props.onClick();await settle();tree=render(PublicFormWorkbench);
+    all(tree).find(n=>n.type==='button'&&text(n).includes('Enquiries · Draft')).props.onClick();tree=render(PublicFormWorkbench);
     mock.mockResolvedValueOnce(response({data:{...form,status:'PUBLISHED',version:2},meta:{replayed:true}})).mockRejectedValueOnce(Error('PRIVATE_CONTACT'));
     button(tree,'Publish this form').props.onClick();await settle();tree=render(PublicFormWorkbench);const html=renderToStaticMarkup(tree);
-    expect(html).toContain('Command receipt confirmed, but current state is unavailable');expect(html).toContain('No current form state is verified');expect(html).not.toContain('PUBLISHED / v2');expect(html).not.toContain('Open published form');expect(all(tree).find(n=>n.type==='fieldset').props.disabled).toBe(true);expect(all(tree).some(n=>n.type==='button'&&text(n)==='Publish this form')).toBe(false);
-    mock.mockResolvedValueOnce(response({data:[{...form,status:'DISABLED',version:3}]}));button(tree,'Load authorized school forms').props.onClick();await settle();tree=render(PublicFormWorkbench);expect(text(tree)).toContain('DISABLED · v3');expect(text(tree)).not.toContain('PUBLISHED · v2');
+    expect(html).toContain('Saved, but the list could not be refreshed');expect(html).toContain('This list is out of date');expect(html).not.toContain('Enquiries (Live)');expect(html).not.toContain('Open published form');expect(all(tree).find(n=>n.type==='fieldset').props.disabled).toBe(true);expect(all(tree).some(n=>n.type==='button'&&text(n)==='Publish this form')).toBe(false);
+    mock.mockResolvedValueOnce(response({data:[{...form,status:'DISABLED',version:3}]}));button(tree,'Refresh').props.onClick();await settle();tree=render(PublicFormWorkbench);expect(text(tree)).toContain('Enquiries · Turned off');expect(text(tree)).not.toContain('Enquiries · Live');
   });
   it('uses a fresh authorized list rather than a successful historical replay response and clears everything on permission denial',async()=>{
-    const mock=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({data:[form]}));let tree=render(PublicFormWorkbench);button(tree,'Load authorized school forms').props.onClick();await settle();tree=render(PublicFormWorkbench);all(tree).find(n=>n.type==='button'&&text(n).includes('Enquiries · DRAFT')).props.onClick();tree=render(PublicFormWorkbench);
-    mock.mockResolvedValueOnce(response({data:{...form,status:'PUBLISHED',version:2},meta:{replayed:true}})).mockResolvedValueOnce(response({data:[{...form,status:'DISABLED',version:4,acceptedCount:7}]}));button(tree,'Publish this form').props.onClick();await settle();tree=render(PublicFormWorkbench);expect(text(tree)).toContain('DISABLED / v4');expect(text(tree)).toContain('7 accepted leads');expect(text(tree)).not.toContain('PUBLISHED / v2');
-    mock.mockResolvedValueOnce(response({detail:'PRIVATE_CONTACT'},403));button(tree,'Publish this form').props.onClick();await settle();tree=render(PublicFormWorkbench);expect(text(tree)).toContain('Exact current human school permission');expect(text(tree)).not.toContain('PRIVATE_CONTACT');expect(text(tree)).not.toContain('7 accepted leads');expect(text(tree)).not.toContain('Retry unchanged command');
+    const mock=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({data:[form]}));let tree=render(PublicFormWorkbench);button(tree,'Refresh').props.onClick();await settle();tree=render(PublicFormWorkbench);all(tree).find(n=>n.type==='button'&&text(n).includes('Enquiries · Draft')).props.onClick();tree=render(PublicFormWorkbench);
+    mock.mockResolvedValueOnce(response({data:{...form,status:'PUBLISHED',version:2},meta:{replayed:true}})).mockResolvedValueOnce(response({data:[{...form,status:'DISABLED',version:4,acceptedCount:7}]}));button(tree,'Publish this form').props.onClick();await settle();tree=render(PublicFormWorkbench);expect(text(tree)).toContain('Enquiries (Turned off)');expect(text(tree)).toContain('7 new leads');expect(text(tree)).not.toContain('Enquiries (Live)');
+    mock.mockResolvedValueOnce(response({detail:'PRIVATE_CONTACT'},403));button(tree,'Publish this form').props.onClick();await settle();tree=render(PublicFormWorkbench);expect(text(tree)).toContain("You don't have permission to manage lead forms");expect(text(tree)).not.toContain('PRIVATE_CONTACT');expect(text(tree)).not.toContain('7 new leads');expect(text(tree)).not.toContain('Try again');
   });
   it('retains the exact body/key after uncertain outcome, serializes clicks and retries without inventing success',async()=>{
-    const mock=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({data:[form]}));let tree=render(PublicFormWorkbench);button(tree,'Load authorized school forms').props.onClick();await settle();tree=render(PublicFormWorkbench);all(tree).find(n=>n.type==='button'&&text(n).includes('Enquiries · DRAFT')).props.onClick();tree=render(PublicFormWorkbench);
-    mock.mockRejectedValueOnce(Error('network'));button(tree,'Publish this form').props.onClick();button(tree,'Publish this form').props.onClick();await settle();tree=render(PublicFormWorkbench);expect(mock.mock.calls).toHaveLength(2);const first=mock.mock.calls[1];expect(text(tree)).toContain('Retry unchanged command');expect(text(tree)).not.toContain('Human command recorded');
-    mock.mockResolvedValueOnce(response({data:{...form,status:'PUBLISHED',version:2},meta:{replayed:true}})).mockResolvedValueOnce(response({data:[{...form,status:'PUBLISHED',version:2}]}));button(tree,'Retry unchanged command').props.onClick();await settle();tree=render(PublicFormWorkbench);const retry=mock.mock.calls[2];expect(retry?.[0]).toBe(first?.[0]);expect(retry?.[1]?.body).toBe(first?.[1]?.body);expect(retry?.[1]?.headers).toEqual(first?.[1]?.headers);expect(text(tree)).toContain('PUBLISHED / v2');
+    const mock=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({data:[form]}));let tree=render(PublicFormWorkbench);button(tree,'Refresh').props.onClick();await settle();tree=render(PublicFormWorkbench);all(tree).find(n=>n.type==='button'&&text(n).includes('Enquiries · Draft')).props.onClick();tree=render(PublicFormWorkbench);
+    mock.mockRejectedValueOnce(Error('network'));button(tree,'Publish this form').props.onClick();button(tree,'Publish this form').props.onClick();await settle();tree=render(PublicFormWorkbench);expect(mock.mock.calls).toHaveLength(2);const first=mock.mock.calls[1];expect(text(tree)).toContain('Try again');expect(text(tree)).not.toContain('Saved');
+    mock.mockResolvedValueOnce(response({data:{...form,status:'PUBLISHED',version:2},meta:{replayed:true}})).mockResolvedValueOnce(response({data:[{...form,status:'PUBLISHED',version:2}]}));button(tree,'Try again').props.onClick();await settle();tree=render(PublicFormWorkbench);const retry=mock.mock.calls[2];expect(retry?.[0]).toBe(first?.[0]);expect(retry?.[1]?.body).toBe(first?.[1]?.body);expect(retry?.[1]?.headers).toEqual(first?.[1]?.headers);expect(text(tree)).toContain('Enquiries (Live)');
+  });
+});
+
+describe('staff UI uses the signed-in school',()=>{
+  const school={organizationId:'33333333-3333-4333-8333-333333333333',schoolId:'44444444-4444-4444-8444-444444444444'};
+  const pipeline={id,name:'Enquiries',version:1,createdAt:'2026-10-01T00:00:00.000Z',stages:[{id:other,name:'New',position:1},{id:'55555555-5555-4555-8555-555555555555',name:'Won',position:9,terminalStatus:'WON'}]};
+  const campaign=(cid:string,name:string,status:string)=>({id:cid,name,status});
+  it('loads forms on open and picks the lead stage and campaign by name, with record IDs only as a fallback',async()=>{
+    shell.school=school;shell.stages=[pipeline];shell.campaigns=[campaign('66666666-6666-4666-8666-666666666666','Spring open day','ACTIVE'),campaign('77777777-7777-4777-8777-777777777777','Old flyer','PAUSED')];
+    const mock=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({data:[form]}));
+    render(PublicFormWorkbench);await effect();let tree=render(PublicFormWorkbench);
+    expect(mock.mock.calls[0]?.[0]).toBe(base);expect(text(tree)).toContain('Enquiries · Draft');
+    const stage=field(tree,'New leads start in');expect(all(stage).filter(n=>n.type==='option').map(text)).toEqual(['Choose a stage','New']);
+    const camp=field(tree,'Campaign (optional)');expect(all(camp).filter(n=>n.type==='option').map(text)).toEqual(['No campaign','Spring open day']);
+    expect(all(tree).find(n=>n.type===IdFields)?.props.manual).toBe(false);
+    field(tree,'Title people see').props.onChange({target:{value:'Enquiries'}});tree=render(PublicFormWorkbench);
+    stage.props.onChange({target:{value:`${id}:${other}`}});tree=render(PublicFormWorkbench);
+    field(tree,'Campaign (optional)').props.onChange({target:{value:'66666666-6666-4666-8666-666666666666'}});tree=render(PublicFormWorkbench);
+    mock.mockResolvedValueOnce(response({data:form,meta:{replayed:false}})).mockResolvedValueOnce(response({data:[form]}));
+    all(tree).find(n=>n.type==='form').props.onSubmit({preventDefault(){}});await settle();
+    const sent=JSON.parse(String(mock.mock.calls[1]?.[1]?.body));expect(sent).toEqual(expect.objectContaining({pipelineId:id,pipelineStageId:other,campaignId:'66666666-6666-4666-8666-666666666666'}));
+    tree=render(PublicFormWorkbench);expect(text(tree)).toContain('Saved.');
+  });
+  it('keeps a saved stage or campaign that is no longer offered visible instead of dropping it',async()=>{
+    shell.school=school;shell.stages=[{...pipeline,stages:[{id:'88888888-8888-4888-8888-888888888888',name:'Contacted',position:2}]}];shell.campaigns=[];
+    vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({data:[{...form,campaignId:'77777777-7777-4777-8777-777777777777'}]}));
+    render(PublicFormWorkbench);await effect();let tree=render(PublicFormWorkbench);
+    all(tree).find(n=>n.type==='button'&&text(n).includes('Enquiries · Draft')).props.onClick();tree=render(PublicFormWorkbench);
+    expect(field(tree,'New leads start in').props.value).toBe(`${id}:${other}`);expect(text(field(tree,'New leads start in'))).toContain('Current stage (no longer open)');
+    expect(field(tree,'Campaign (optional)').props.value).toBe('77777777-7777-4777-8777-777777777777');expect(text(field(tree,'Campaign (optional)'))).toContain('Current campaign (not active)');
+  });
+  it('falls back to record IDs when the stage list cannot be read',async()=>{
+    shell.school=school;vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({data:[]}));
+    render(PublicFormWorkbench);await effect();const tree=render(PublicFormWorkbench);
+    expect(all(tree).find(n=>n.type===IdFields)?.props.manual).toBe(true);expect(field(tree,'Pipeline record ID')).toBeTruthy();expect(all(tree).some(n=>n.type==='label'&&text(n).startsWith('New leads start in'))).toBe(false);
   });
 });
 
