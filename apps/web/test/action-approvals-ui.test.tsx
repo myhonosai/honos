@@ -78,10 +78,11 @@ describe('Human Action Engine approval workbench', () => {
     expect(readFileSync('src/components/hon-reference-suite.tsx', 'utf8')).toContain("item === 'Action Center' ? '/staff/action-center/approvals'");
     expect(readFileSync('src/components/hon-control-shell.tsx', 'utf8')).toContain("label === 'Action Center' ? '/staff/action-center/approvals'");
   });
-  it('names people as You or A teammate and keeps record IDs and hashes under Technical details (owner 2026-11-16)', () => {
+  it('names you as You and anyone else neutrally (a request may come from an AI teammate) and keeps record IDs and hashes under Technical details (owner 2026-11-16)', () => {
     const source = readFileSync('src/components/action-approvals-workbench.tsx', 'utf8');
     expect(source).not.toMatch(/Organization \{queue\.organizationId\}|Human reviewer \{queue\.reviewerPrincipalId\}|Request \{item\.id\}|reviewer \{decision\.reviewerPrincipalId\}|Already-known school UUID/);
     expect(source).toContain('<summary>Technical details</summary>');
-    expect(source).toMatch(/'You' : 'A teammate'/);
+    expect(source).toContain("'Another account (a person or an AI teammate)'");
+    expect(source).not.toContain("'A teammate'");
   });
 });
