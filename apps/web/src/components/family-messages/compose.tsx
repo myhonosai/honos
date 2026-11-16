@@ -37,11 +37,13 @@ export function ComposeMessage({ scope }: { scope: ComposeScope }): React.ReactE
   const ready = Boolean(person && channel && addressOf(person, channel) && composeOk(person.personId, channel, content));
   function edit(change: () => void): void {
     if (active.current) return;
-    retained.current = null; setConfirmed(false); setOutcome(null); change();
+    // While a send is uncertain the first message may already be queued: nothing changes until Retry or an explicit Discard.
+    if (retained.current) return;
+    setConfirmed(false); setOutcome(null); change();
   }
   function find(event: FormEvent): void {
     event.preventDefault();
-    if (active.current) return;
+    if (active.current || retained.current) return;
     lookup.current?.abort(); const controller = new AbortController(); lookup.current = controller;
     setSearch({ state: 'LOADING' });
     peopleApi.search(scope, query, controller.signal)
@@ -75,6 +77,10 @@ export function ComposeMessage({ scope }: { scope: ComposeScope }): React.ReactE
     if (active.current || !confirmed || !ready || !person || !channel || retained.current) return;
     void run({ kind: 'create', key: crypto.randomUUID() }, person, channel, content);
   }
+  function discard(): void {
+    if (active.current || outcome !== 'UNCERTAIN') return;
+    retained.current = null; setOutcome(null); setConfirmed(false); setContent('');
+  }
   function retry(): void {
     const step = retained.current;
     if (active.current || !step || outcome !== 'UNCERTAIN' || !person || !channel) return;
@@ -85,17 +91,17 @@ export function ComposeMessage({ scope }: { scope: ComposeScope }): React.ReactE
   return <section className={s.card} aria-labelledby="compose-title" data-compose="">
     <h2 id="compose-title">New text or email</h2>
     <form className={c.form} onSubmit={find} role="search" aria-label="Find a contact">
-      <label>Find a contact (name, email or phone)<input name="composeQuery" value={query} maxLength={120} autoComplete="off" disabled={busy} onChange={event => setQuery(event.target.value)} /></label>
-      <p className={s.actions}><button type="submit" disabled={busy}>Find</button></p>
+      <label>Find a contact (name, email or phone)<input name="composeQuery" value={query} maxLength={120} autoComplete="off" disabled={busy || outcome === 'UNCERTAIN'} onChange={event => setQuery(event.target.value)} /></label>
+      <p className={s.actions}><button type="submit" disabled={busy || outcome === 'UNCERTAIN'}>Find</button></p>
     </form>
     {search.state === 'LOADING' && <p role="status">Finding contacts…</p>}
     {search.state === 'DENIED' && <p role="alert">Your access does not include contacts at this school.</p>}
     {search.state === 'UNAVAILABLE' && <p role="alert">Contacts could not be loaded. Try Find again.</p>}
     {search.state === 'READY' && search.items.length === 0 && <p className={s.empty}>No contact matches.</p>}
     {search.state === 'READY' && search.items.length > 0 && <ul className={c.people} aria-label="Matching contacts">{search.items.map(item =>
-      <li key={item.personId}><button type="button" disabled={busy} aria-pressed={person?.personId === item.personId} data-person={item.personId} onClick={() => pick(item)}>{nameOf(item)}</button>
+      <li key={item.personId}><button type="button" disabled={busy || outcome === 'UNCERTAIN'} aria-pressed={person?.personId === item.personId} data-person={item.personId} onClick={() => pick(item)}>{nameOf(item)}</button>
         {' '}<span className={s.subtle}>{[item.phoneE164 ?? 'No mobile number', item.email ?? 'No email'].join(' · ')}</span></li>)}</ul>}
-    {person && <form className={c.form} onSubmit={send} aria-label={`Message to ${who}`}><fieldset disabled={busy}>
+    {person && <form className={c.form} onSubmit={send} aria-label={`Message to ${who}`}><fieldset disabled={busy || outcome === 'UNCERTAIN'}>
       <p><strong>To: {who}</strong></p>
       <div role="radiogroup" aria-label="Send as" className={c.choices}>
         {(['SMS', 'EMAIL'] as const).map(value => <label key={value}>
@@ -114,7 +120,9 @@ export function ComposeMessage({ scope }: { scope: ComposeScope }): React.ReactE
       {outcome === 'ACCESS' && <p role="alert">Not available for your role: you need permission to send messages at this school.</p>}
       {outcome === 'INVALID' && <p role="alert">That message could not be sent. Check the contact and the message, then try again.</p>}
       {outcome === 'CONFLICT' && <p role="alert">This message changed before it was sent. Write it again.</p>}
-      {outcome === 'UNCERTAIN' && <p role="alert">Not sure it went through. <button type="button" disabled={busy} onClick={retry}>Retry the same message</button></p>}
+      {outcome === 'UNCERTAIN' && <div role="alert"><p>Not sure it went through. It may already be on its way, so the message is locked. Retry sends the same message again without a duplicate.</p>
+        <p className={s.actions}><button type="button" disabled={busy} onClick={retry}>Retry the same message</button>{' '}
+          <button type="button" disabled={busy} onClick={discard}>Discard and write a new one (the first may already be on its way)</button></p></div>}
     </div>
   </section>;
 }

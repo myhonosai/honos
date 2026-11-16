@@ -127,17 +127,31 @@ describe('New text or email: composer (L4)', () => {
     expect(text(render())).toContain('Queued to send');
   });
 
-  it('any edit after an uncertain step drops the retry and starts a new message', async () => {
-    const fetcher = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('network'));
+  it('locks the message after an uncertain step: edits are ignored, and only Retry or an explicit Discard is offered (review P2)', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(ok(msg())).mockRejectedValueOnce(new TypeError('network'));
     await findAndPick(ana); write('Class is cancelled tonight'); confirm(); send(); await settle();
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    // A keystroke, a channel change or another contact must not drop the retry or allow a second message.
     write('Class is cancelled tonight!');
+    field('composeChannel', 'EMAIL')!.props.onChange();
+    all().find(e => e.props['data-person'] === ben.personId)!.props.onClick();
+    expect(field('composeContent')!.props.value).toBe('Class is cancelled tonight');
+    expect(field('composeChannel', 'SMS')!.props.checked).toBe(true);
+    expect(text(render())).toMatch(/To:\s+Ana Rivera/);
+    expect(all().find(e => e.type === 'fieldset')!.props.disabled).toBe(true);
+    expect(all().some(e => e.type === 'button' && text(e) === 'Retry the same message')).toBe(true);
+    send(); await settle(); expect(fetcher).toHaveBeenCalledTimes(2);
+    // Discard is explicit, warns that the first may already be on its way, and only then starts a new message with a new key.
+    const discard = all().find(e => e.type === 'button' && text(e).startsWith('Discard and write a new one'))!;
+    expect(text(discard)).toContain('may already be on its way');
+    discard.props.onClick();
     expect(all().some(e => e.type === 'button' && text(e).startsWith('Retry'))).toBe(false);
-    expect(field('confirmCompose')!.props.checked).toBe(false);
-    fetcher.mockResolvedValueOnce(ok(msg({ content: 'Class is cancelled tonight!' }))).mockResolvedValueOnce(ok(msg({ lifecycle: 'QUEUED', version: 2 }), 200));
-    confirm(); send(); await settle();
+    expect(field('composeContent')!.props.value).toBe('');
+    fetcher.mockResolvedValueOnce(ok(msg({ content: 'New note' }))).mockResolvedValueOnce(ok(msg({ lifecycle: 'QUEUED', version: 2 }), 200));
+    write('New note'); confirm(); send(); await settle();
     const sent = calls(fetcher);
-    expect(sent[1]!.path).toBe(base);
-    expect(sent[1]!.key).not.toBe(sent[0]!.key);
+    expect(sent[2]!.path).toBe(base);
+    expect(new Set(sent.map(c => c.key)).size).toBe(4);
   });
 
   it('shows denied and unavailable contact searches plainly', async () => {

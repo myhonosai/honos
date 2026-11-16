@@ -4,6 +4,8 @@
  * the contact's current consent for the channel at queue time. Nothing here delivers; HON's delivery worker sends queued
  * messages only where delivery is turned on.
  */
+import { reportConfirmedSessionInvalidation } from '../session-invalidation';
+
 export type ComposeScope = Readonly<{ organizationId: string; schoolId: string }>;
 export type ComposeChannel = 'SMS' | 'EMAIL';
 export type ComposeDraft = Readonly<{ messageId: string; version: number }>;
@@ -35,7 +37,7 @@ async function post(path: string, key: string, body: unknown): Promise<Record<st
   let value: unknown = null;
   if (/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '')) value = await response.json().catch(() => null);
   const code = value && typeof value === 'object' && !Array.isArray(value) ? (value as { code?: unknown }).code : undefined;
-  if (response.status === 401) throw new ComposeRefusal('ACCESS');
+  if (response.status === 401) { reportConfirmedSessionInvalidation(); throw new ComposeRefusal('ACCESS'); }
   if (response.status === 403) throw new ComposeRefusal(code === 'COMMUNICATION_CONSENT_REQUIRED' ? 'CONSENT' : 'ACCESS');
   if (response.status === 400 || response.status === 404) throw new ComposeRefusal('INVALID');
   if (response.status === 409 && (code === 'VERSION_CONFLICT' || code === 'MESSAGE_NOT_DRAFT')) throw new ComposeRefusal('CONFLICT');
