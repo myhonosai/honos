@@ -85,10 +85,7 @@ export function PromotionDecisionWorkbench(): React.ReactElement {
     <header><p>Curriculum &amp; testing</p><h1>Promotion decision</h1>
       <p>Choose a student whose test has a result, then record your final decision with a reason.</p>
     </header>
-    <aside data-plain-note=""><strong>Only an instructor decides a promotion. HON and the AI team never promote a student.</strong><details><summary>What this page never does</summary><p><strong>PROMOTED is a final human instructor decision, never an AI or scorecard action.</strong></p>
-      <p>This page submits only the existing canonical promotion-decision command. The API independently validates the terminal candidate, current enrollment, target rank and promotion prerequisites. Only after that server validation may its existing canonical <code>PROMOTED</code> decision perform the canonical rank change. Entered IDs and version are untrusted selectors, not authority or verified current facts.</p>
-      <p>No external certificate, parent notice, attendance record, billing/payment change, message, provider, AI, Action Engine, automation or effect consumer is created, activated or invoked. No certificate issuance, parent/family access, notification or downstream command occurs here.</p>
-    </details></aside>
+    <aside data-plain-note=""><strong>Only an instructor decides a promotion. HON and the AI team never promote a student.</strong></aside>
     <section aria-labelledby="promotion-decision-command"><h2 id="promotion-decision-command">Record one final known-ID promotion decision</h2>
       <form autoComplete="off" onSubmit={submit}><fieldset disabled={busy}>
         {shellSchool && <CandidatePicker scope={shellSchool} purpose="decision" value={ids.candidateId} disabled={busy}

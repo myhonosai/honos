@@ -1,6 +1,6 @@
 'use client';
 import React, { useRef, useState, type FormEvent } from 'react';
-import { CRM_FOLLOW_UP_HELP, type FollowUpInput, type FollowUpRecord, type FollowUpQueue, type FollowUpStatus, type FollowUpOperation, type FollowUpTransition } from '@hon/contracts';
+import { type FollowUpInput, type FollowUpRecord, type FollowUpQueue, type FollowUpStatus, type FollowUpOperation, type FollowUpTransition } from '@hon/contracts';
 import { loadFollowUps, readFollowUp, mutateFollowUp, followUpFingerprint, FollowUpAccessError } from './crm-follow-ups-http';
 import { crmFollowUpLeadId } from './crm-follow-up-handoff';
 import { formatInSchool, instantToSchoolLocal, readSessionSchoolClock, schoolLocalToInstant } from './school-time';
@@ -53,7 +53,7 @@ export function CrmFollowUpsWorkbench({ initialLeadId, clockReader = readSession
   return <main className={styles.page}>
     <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/search">Staff search</a><a href="/auth/login">Sign in</a></nav>
     <header><p>Leads</p><h1>Follow-ups</h1><p>Your next step with each lead, kept in one place.</p></header>
-    <aside data-plain-note=""><strong>Follow-ups are reminders for your team. Nothing is sent to leads automatically.</strong><details><summary>What this page never does</summary><p><strong>Records only. No automated outreach.</strong></p><p>{CRM_FOLLOW_UP_HELP}</p><p>Permissions: crm.follow_up.self_manage for your current assignments; crm.follow_up.manage for team records and assigning other known eligible staff. Both require exact school crm.lead.read. No staff directory or external recipients.</p></details></aside>
+    <aside data-plain-note=""><strong>Follow-ups are reminders for your team. Nothing is sent to leads automatically.</strong></aside>
     <section><h2>Authorized school queue</h2><div className={styles.row}><label>Queue<select disabled={busy} value={queue} onChange={e => {pendingLeadId.current='';setQueue(e.target.value as 'mine'|'team');setContext(null);setSelected(null);resetDraft(initial());}}><option value="mine">My assignments</option><option value="team">Team · managers only</option></select></label><label>Status<select disabled={busy} value={status} onChange={e => {pendingLeadId.current='';setStatus(e.target.value as FollowUpStatus|'ALL');setContext(null);setSelected(null);resetDraft(initial());}}><option>OPEN</option><option>COMPLETED</option><option>CANCELLED</option><option>ALL</option></select></label><button disabled={busy} onClick={() => void load()}>Load / refresh queue</button></div><p>Up to 50 records per page, ordered by record ID. {tz ? `Due dates use school time (${tz}); they do not trigger work.` : 'Due dates use UTC; they do not trigger work.'} Queue content omits subject, private note and lead contact data.</p></section>
     {busy && <p role="status">Checking the current human school boundary…</p>}
     {error && <p role="alert" className={styles.error}>{error} No save is assumed after an uncertain response.</p>}
