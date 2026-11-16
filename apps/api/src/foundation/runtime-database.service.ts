@@ -837,6 +837,10 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       ? this.withTenantReadOnlyTransaction(context, scopedWork)
       : this.withTenantTransaction(context, scopedWork);
   }
+  /** 0407: current-school memberships by participant name for the retention page's member list. */
+  async listRetentionReviewMemberships(context: RetentionReviewSignalsContext): Promise<unknown> {
+    return this.retentionAttentionTransaction(context, true, async client => (await client.query("SELECT hon.list_retention_review_members($1) AS data", [context.externalSubject])).rows[0]?.data);
+  }
   async readRetentionAttentionAlerts(context: RetentionReviewSignalsContext, membershipId: string): Promise<unknown> {
     return this.retentionAttentionTransaction(context, true, async client => (await client.query('SELECT hon.read_retention_attention_alerts($1,$2::uuid) AS data', [context.externalSubject, membershipId])).rows[0]?.data);
   }

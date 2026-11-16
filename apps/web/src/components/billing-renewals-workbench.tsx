@@ -1,12 +1,26 @@
 'use client';
-import React, { useRef, useState, type FormEvent } from 'react';
+import React, { useEffect, useRef, useState, type FormEvent } from 'react';
 import { RENEWAL_STATUSES, type RenewalInput, type RenewalRecord, type RenewalQueue, type RenewalStatus, type RenewalOperation, type RenewalMembershipFacts, type RenewalHistory } from '@hon/contracts';
 import { loadRenewals, readRenewal, readRenewalMembership, loadRenewalHistory, mutateRenewal, renewalFingerprint, RenewalAccessError } from './billing-renewals-http';
 import styles from './billing-renewals-workbench.module.css';
+import { membershipListApi } from './membership-list/http';
+import { useShellSchool } from './school-shell/page-school';
+import { IdFields } from './school-pickers/pickers';
+type Member = Readonly<{ id: string; name: string }>;
+/** Up to 200 of the signed-in school's memberships by participant name (existing 0220 list, billing.membership.read). */
+async function loadMembers(scope: { organizationId: string; schoolId: string }, signal: AbortSignal, owned: () => boolean): Promise<Member[]> {
+  const out: Member[] = []; let cursor: string | null = null;
+  for (let page = 0; page < 4; page++) {
+    const result = await membershipListApi.page(scope, null, cursor, signal, owned);
+    for (const item of result.items) if (item.participant && item.state !== 'DRAFT') out.push({ id: item.membershipId, name: `${item.participant.givenName} ${item.participant.familyName}`.trim() || 'Member' });
+    cursor = result.nextCursor; if (!cursor) break;
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+}
 const initial = (): RenewalInput => ({ expectedVersion: 0, membershipId: '', reviewFrom: '', reviewTo: '', status: 'OPEN', note: '', reason: '', reminderNeeded: null });
 const fields = (r: RenewalRecord): RenewalInput => ({ expectedVersion: r.version, membershipId: r.membershipId, reviewFrom: r.reviewFrom, reviewTo: r.reviewTo, status: r.status, note: r.note, reason: r.reason, reminderNeeded: r.reminderNeeded });
-function Facts({ facts, title }: { facts: RenewalMembershipFacts; title: string }) {
-  return <section><h2>{title}</h2><p>Membership {facts.membershipId} · {facts.state} · membership version {facts.membershipVersion}</p>
+function Facts({ facts, title, name }: { facts: RenewalMembershipFacts; title: string; name?: string | undefined }) {
+  return <section><h2>{title}</h2><p>{name ?? 'This membership'} · {facts.state}</p>
     <p>Term start: {facts.termStartedAt ?? 'Not recorded'}<br/>Term end: {facts.termEndsAt ?? 'Not recorded / open-ended'}</p>
     <p>{facts.scheduleCount} existing schedules. {facts.schedulesTruncated ? 'Only the first 20 by schedule ID are shown; not a complete schedule list.' : 'All recorded schedules shown.'} These are observations, not invoices, receipts or a collection plan.</p>
     <ul>{facts.schedules.map(s => <li key={s.scheduleId}>{s.frequency} · {s.status} · {s.amountMinor} minor units {s.currency}<br/>Recorded next-charge fact: {s.nextChargeAt ?? 'Not recorded'}<br/>Observed auto-renew flag: {s.autoRenew ? 'true' : 'false'} — no execution or renewal promise.</li>)}</ul>
@@ -18,6 +32,19 @@ export function BillingRenewalsWorkbench(): React.ReactElement {
   const [currentFacts, setCurrentFacts] = useState<RenewalMembershipFacts | null>(null), [history, setHistory] = useState<RenewalHistory | null>(null), [historical, setHistorical] = useState(false);
   const retry = useRef<{ fingerprint: string; key: string; op: RenewalOperation; id: string | null; input: RenewalInput } | null>(null);
   const [uncertain, setUncertain] = useState(false), [needsRefresh, setNeedsRefresh] = useState(false);
+  const shell = useShellSchool();
+  const [members, setMembers] = useState<Member[] | null>(null);
+  // Open on the signed-in school right away: the queue, and the school's members by name for choosing one.
+  useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!shell) { setMembers(null); return; }
+    const controller = new AbortController(); let live = true;
+    loadMembers({ organizationId: shell.organizationId, schoolId: shell.schoolId }, controller.signal, () => live).then(list => { if (live) setMembers(list); }, () => { if (live) setMembers(null); });
+    return () => { live = false; controller.abort(); };
+  }, [shell?.organizationId, shell?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const names = context && shell && context.schoolId === shell.schoolId && members ? new Map(members.map(m => [m.id, m.name])) : null;
+  const nameOf = (id: string) => names?.get(id.toLowerCase());
+  async function chooseMember(id: string) { edit({ membershipId: id }); if (id) await run(async () => { setCurrentFacts(await readRenewalMembership(id)); }); }
   function clearDetail() { setSelected(null); setDraft(initial()); setCurrentFacts(null); setHistory(null); setHistorical(false); setNeedsRefresh(false); }
   async function run(work: () => Promise<void>) {
     setBusy(true); setError(''); setNotice('');
@@ -61,19 +88,19 @@ export function BillingRenewalsWorkbench(): React.ReactElement {
     {notice && <p role="status" className={styles.notice}>{notice}</p>}
     {uncertain && retry.current && <aside><p>An unverified request is retained in memory for this page only. Changing fields is not a retry. No automatic resubmission.</p><button disabled={busy || !context} onClick={() => void run(async () => { const r = retry.current!; await submit(r.op, r.id, r.input); })}>Retry exact retained request</button></aside>}
     {context && <>
-      <section><h2>Shared school finance queue</h2><p>School {context.schoolId}. Signed-in staff {context.principalId}.</p><button disabled={busy} onClick={clearDetail}>New renewal review</button>
+      <section><h2>Shared school finance queue</h2><button disabled={busy} onClick={clearDetail}>New renewal review</button>
         {context.items.length === 0 && <p>No reviews on this page. Create a human review or choose another status.</p>}
-        <div className={styles.actions}>{context.items.map(r => <button key={r.renewalId} disabled={busy} onClick={() => void open(r.renewalId)}>{r.status} · v{r.version}<br/>Membership {r.membershipId}<br/>{r.reviewFrom} to {r.reviewTo}<br/>Manual reminder needed: {r.reminderNeeded === null ? 'not recorded' : r.reminderNeeded ? 'yes (fact only)' : 'no'}</button>)}</div>
+        <div className={styles.actions}>{context.items.map(r => <button key={r.renewalId} disabled={busy} onClick={() => void open(r.renewalId)}>{r.status} · v{r.version}<br/>{nameOf(r.membershipId) ?? 'A member'}<br/>{r.reviewFrom} to {r.reviewTo}<br/>Manual reminder needed: {r.reminderNeeded === null ? 'not recorded' : r.reminderNeeded ? 'yes (fact only)' : 'no'}</button>)}</div>
         {context.nextAfter && <button disabled={busy} onClick={() => void load(context.nextAfter)}>Next 50 reviews</button>}
-        <form onSubmit={e => { e.preventDefault(); void open(knownId); }}><label>Already-known renewal review ID<input required value={knownId} onChange={e => setKnownId(e.target.value)} placeholder="Review UUID"/></label><button disabled={busy}>Load current detail</button></form>
+        <IdFields manual={false}><form onSubmit={e => { e.preventDefault(); void open(knownId); }}><label>Review record ID<input required value={knownId} onChange={e => setKnownId(e.target.value)}/></label><button disabled={busy}>Open</button></form></IdFields>
       </section>
       {selected && <section><h2>{historical ? 'Historical saved revision · read only' : 'Saved review'} · v{selected.version}</h2><p>{selected.renewalId} · {selected.status} · recorded {selected.recordedAt}</p>
         <h3>Private review note</h3><p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{selected.note}</p><h3>Explicit review reason</h3><p style={{ overflowWrap: 'anywhere' }}>{selected.reason}</p>
         <p>Review window {selected.reviewFrom} (inclusive) to {selected.reviewTo} (exclusive). Reminder needed: {selected.reminderNeeded === null ? 'not recorded' : String(selected.reminderNeeded)} (manual fact only).</p>
         <div className={styles.actions}><button disabled={busy} onClick={() => void open(selected.renewalId)}>Reload current detail</button><button disabled={busy} onClick={() => void loadHistory()}>Load revision history</button></div>
       </section>}
-      {selected && <Facts facts={selected.membershipFacts} title="Membership facts captured at this saved revision"/>}
-      {currentFacts && <Facts facts={currentFacts} title="Current known membership facts · observed on human read"/>}
+      {selected && <Facts facts={selected.membershipFacts} name={nameOf(selected.membershipId)} title="Membership when this review was saved"/>}
+      {currentFacts && <Facts facts={currentFacts} name={nameOf(currentFacts.membershipId)} title="Membership now"/>}
       {history && <section><h2>Immutable revision history</h2><p>Metadata only here. Open an exact saved revision to inspect its private note, reason and captured facts; current membership facts remain separate.</p>
         <div className={styles.actions}>{history.items.map(r => <button key={r.version} disabled={busy} onClick={() => void open(r.renewalId, r.version)}>v{r.version} · {r.status} · {r.recordedAt}<br/>{r.reviewFrom} to {r.reviewTo}</button>)}</div>
         {history.nextBefore && <button disabled={busy} onClick={() => void loadHistory(history.nextBefore)}>Older 50 revisions</button>}
@@ -81,8 +108,9 @@ export function BillingRenewalsWorkbench(): React.ReactElement {
       {!historical && <section><h2>{selected ? selected.status === 'CLOSED' ? 'Explicitly reopen closed review' : 'Revise human review' : 'Create human renewal review'}</h2>
         <p>Expected review version {draft.expectedVersion}. Membership linkage cannot change. Every save captures current facts; it never changes the membership. All statuses are human recordkeeping, not eligibility decisions. CLOSED requires a reasoned OPEN revision to reopen.</p>
         <form onSubmit={save}><fieldset disabled={busy || needsRefresh}>
-          <label>Already-known membership ID<input required readOnly={!!selected} value={draft.membershipId} onChange={e => edit({ membershipId: e.target.value })}/></label>
-          {!selected && <button type="button" onClick={() => void knownMembership()}>Read known membership summary</button>}
+          {selected ? <p>Member: {nameOf(selected.membershipId) ?? 'This membership'}</p> : names && members && <label>Member<select value={names.has(draft.membershipId.toLowerCase()) ? draft.membershipId.toLowerCase() : ''} onChange={e => void chooseMember(e.target.value)}><option value="">Choose a member</option>{members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>}
+          <IdFields manual={!names && !selected}><label>Membership record ID<input required readOnly={!!selected} value={draft.membershipId} onChange={e => edit({ membershipId: e.target.value })}/></label>
+          {!selected && <button type="button" onClick={() => void knownMembership()}>Read membership</button>}</IdFields>
           <div className={styles.row}>{(['reviewFrom', 'reviewTo'] as const).map(k => <label key={k}>{k === 'reviewFrom' ? 'Review from UTC (inclusive)' : 'Review to UTC (exclusive)'}<input required type="datetime-local" step="0.001" min="2000-01-01T00:00" max="2099-12-31T23:59:59.999" value={draft[k]?.slice(0, -1) ?? ''} onChange={e => edit({ [k]: e.target.value ? new Date(`${e.target.value}Z`).toISOString() : '' })}/></label>)}</div>
           <label>Human review status<select value={draft.status} onChange={e => edit({ status: e.target.value as RenewalStatus })}>{(selected?.status === 'CLOSED' || !selected ? ['OPEN'] : RENEWAL_STATUSES).map(s => <option key={s}>{s}</option>)}</select></label>
           <label>Explicit private review note<textarea required maxLength={2000} rows={5} value={draft.note} onChange={e => edit({ note: e.target.value })}/></label>

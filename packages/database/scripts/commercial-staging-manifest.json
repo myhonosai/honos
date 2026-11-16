@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "c2ba37cc36b73074129478eb5b1246cef921a2e070c5608d323dc2ba20b9b591",
+  "chainSha256": "ba11dc19633247822465dbe91edf54a4588969b1622462dc2d43d94d885d82a0",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -541,6 +541,10 @@
     {
       "file": "0406_staff_qualification_and_role_lists.sql",
       "sha256": "d131e376033198ca638c2b9aabc2c3ea9b7a93295d116dcd5aaedbc19ee8112f"
+    },
+    {
+      "file": "0407_retention_review_member_list.sql",
+      "sha256": "88ee6b0f21d71289f02036e36d50644a960ff7eeb620d542afda2303c76d1606"
     }
   ]
 }
