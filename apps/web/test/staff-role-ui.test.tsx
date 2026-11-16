@@ -18,8 +18,10 @@ describe('staff roles page', () => {
       expect(html).not.toContain('type="email"');
       expect(html).not.toContain('type="tel"');
       expect(html).not.toContain('Invite staff');
-      expect(html).toContain('CUSTOM_');
-      expect(html).toContain('Allowed permission codes');
+      // Before the school is known nothing is read; the checklist says it is loading, and no role code is typed.
+      expect(html).toContain('Reading the permissions you can give');
+      expect(html).not.toContain('CUSTOM_');
+      expect(html).toContain('Roles &amp; permissions');
     } finally { fetcher.mockRestore(); }
   });
 

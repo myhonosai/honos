@@ -102,6 +102,9 @@ function api(route) {
     if (path === `${prefix}/schedule/sessions`) return json(route, 200, { data: sessions(), meta: { requestId: id(700), correlationId: id(700) } });
     if (path === `${prefix}/people`) return json(route, 200, { data: [['Avery', 'Sample', '+15555550101', 'avery@example.test'], ['Rowan', 'Example', null, 'rowan@example.test']]
       .map(([givenName, familyName, phoneE164, email], i) => ({ id: id(850 + i), givenName, familyName, email, phoneE164, version: 1, createdAt: iso() })), meta: { requestId: id(860), correlationId: id(860) } });
+    if (path === `${prefix}/staff-roles/lists`) return json(route, 200, { data: { roles: [{ id: id(880), code: 'CUSTOM_FRONT_DESK', name: 'Front desk', version: 1, permissionCodes: ['school.view', 'crm.lead.read'] }], grants: [] }, meta: {} });
+    if (path === `${prefix}/staff-roles/permissions`) return json(route, 200, { data: [['school.view', 'View the school', false], ['attendance.record', 'Record attendance', false], ['attendance.cards.manage', 'Choose how attendance cards look', true], ['crm.lead.read', 'Read leads', false], ['billing.refund.create', 'Create refunds', true]]
+      .map(([code, description, sensitive]) => ({ code, description, sensitive })), meta: {} });
     if (path === `${prefix}/pickers/staff`) return json(route, 200, { data: [['Avery Sample', 870], ['Rowan Example', 871], ['Kim Placeholder', 872]]
       .map(([displayName, n]) => ({ principalId: id(n), displayName })), meta: { requestId: id(875), correlationId: id(875), limit: 200 } });
     if (path === `${prefix}/pickers/testing-candidates`) return json(route, 200, { data: [['Avery', 'Sample', 'PASSED'], ['Rowan', 'Example', 'PASSED'], ['Kim', 'Placeholder', 'DEFERRED']]
@@ -395,7 +398,7 @@ for (const mode of ['modern', 'classic', 'big-button']) for (const size of ['des
   const card = page.locator('[data-staff-card]');
   await card.waitFor();
   assert.deepEqual(await card.locator('a').evaluateAll(a => a.map(x => [x.getAttribute('href'), x.textContent])),
-    [['/staff/roles', 'Roles'], ['/staff/team/availability', 'Availability'], ['/staff/instructor-qualifications', 'Qualifications'], ['/staff/documents', 'Documents']]);
+    [['/staff/roles', 'Roles & permissions'], ['/staff/team/availability', 'Availability'], ['/staff/instructor-qualifications', 'Qualifications'], ['/staff/documents', 'Documents']]);
   const box = await card.boundingBox(); const width = page.viewportSize().width;
   assert.ok(box && box.x >= 0 && box.x + box.width <= width + 1, 'card fits on screen');
   await noOverflow(page); await shot(page, `l5-staff-card-${mode}-${size}`);
@@ -403,6 +406,20 @@ for (const mode of ['modern', 'classic', 'big-button']) for (const size of ['des
   await page.keyboard.press('Escape'); await card.waitFor({ state: 'detached' });
   assert.equal(await page.evaluate(() => document.activeElement?.textContent), 'Rowan Example', 'focus returns to the name');
   await ctx.close();
+});
+for (const mode of ['modern', 'classic', 'big-button']) for (const size of ['desktop', 'phone']) await check(`Roles & permissions shows a checklist by area, not typed codes (${mode} ${size})`, async () => {
+  theme = mode; const { ctx, page } = await open(viewports[size], '/staff/roles');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Roles & permissions', level: 1 }).waitFor();
+  const list = page.locator('[data-permission-checklist=""]'); await list.waitFor();
+  assert.deepEqual(await list.locator('fieldset').evaluateAll(f => f.map(x => x.getAttribute('data-area'))), ['general', 'attendance', 'leads', 'finance']);
+  assert.ok((await list.locator('fieldset[data-area="attendance"]').textContent()).includes('Take attendance, including scan check-in'));
+  assert.equal(await page.locator('textarea').count(), 0, 'no typed codes');
+  assert.equal(await page.getByText('CUSTOM_', { exact: false }).count(), 0, 'no role code to type');
+  await page.locator('input[name="permission-attendance.cards.manage"]').check();
+  assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('staff-roles')), false);
+  assert.equal(await page.locator('nav[data-shell-tabs] a[aria-current="page"]').textContent(), 'Roles & permissions');
+  await noOverflow(page); await shot(page, `perm-checklist-${mode}-${size}`); await ctx.close();
 });
 for (const size of ['desktop', 'phone']) await check(`Settings tabs wrap instead of scrolling (${size})`, async () => {
   theme = 'classic'; const { ctx, page } = await open(viewports[size], '/staff/settings/branding');
