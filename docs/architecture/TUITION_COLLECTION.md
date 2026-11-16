@@ -481,6 +481,8 @@ promo codes are CP3 and CP4). Nothing here takes a payment, and HON adds no fee.
   Unsaved edits stay in memory only; an unknown result keeps the exact request and key for Try again.
 - **Later, by other pieces:** the membership thread's shared payment options and agreement signing replace the page copy
   and the page waiver; the family page and the shared one-time sandbox payment (CP3), promo codes (CP4).
+  A plan can become unavailable after a page is published (0402 checks availability only when saving), so the family
+  checkout (CP3) must check the option's plan again, under lock, at purchase.
 - **Evidence:** `pnpm --filter @hon/database db:test-school-checkouts` (CI: `run-db-proofs.sh`), 157 checks including the
   carry-over in a rolled-back transaction; `apps/api/test/school-checkout.test.cjs` (3 tests);
   `apps/web/test/school-checkout-ui.test.tsx` (11 tests); 011 exact verification passes.

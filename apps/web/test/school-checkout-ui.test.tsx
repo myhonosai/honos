@@ -164,6 +164,8 @@ it('round-trips a saved page through the draft, leaves empty translations out an
   // Addresses: from a title, and the first free one.
   expect(slugFrom('  Green Belt — Kids!  ')).toBe('green-belt-kids'); expect(slugFrom('Taekwondo Niños')).toBe('taekwondo-ninos');
   expect(freeSlug('Green Belt', ['green-belt', 'green-belt-2'])).toBe('green-belt-3'); expect(freeSlug('!', [])).toBe('page');
+  const long = `${'a'.repeat(54)}-bcd`;
+  expect(freeSlug(long, [long])).toBe(`${'a'.repeat(54)}-2`);
 });
 
 it('edits page details, options, questions and add-ons as pure steps', () => {
@@ -272,7 +274,7 @@ it('edits a page in tabs with a family preview, in the language chosen', () => {
   expect(details).toContain('Shirt size'); expect(details).toContain('Family preview'); expect(details).toContain('Due today for one participant: $1,260.00');
   expect(details).toContain('Most popular'); expect(details).not.toContain('data-testid="checkout-pricing"');
   const pricing = renderToStaticMarkup(<SchoolCheckoutView {...editing({ editor: { draft: draftFrom(first()), dirty: true, tab: 'PRICING' } })}/>);
-  expect(pricing).toContain('data-testid="checkout-pricing"'); expect(pricing).toContain('value="1215.00"'); expect(pricing).toContain('value="225.00"');
+  expect(pricing).toContain('data-testid="checkout-pricing"'); expect(pricing).toMatch(/aria-pressed="true"[^>]*>Pricing options/); expect(pricing).not.toContain('role="tab"'); expect(pricing).toContain('value="1215.00"'); expect(pricing).toContain('value="225.00"');
   expect(pricing).toContain('Auto charge with HON autopay (test mode only)'); expect(pricing).toContain('10 monthly payments in all');
   expect(pricing).toContain('Little Dragons · $150.00'); expect(pricing).not.toContain('Old Summer Camp');
   expect(pricing).toContain('you have unsaved changes'); expect(pricing).toContain('Close without saving');

@@ -81,7 +81,7 @@ export function slugFrom(text: string): string {
 export function freeSlug(base: string, taken: readonly string[]): string {
   const clean = checkoutSlugOk(slugFrom(base)) ? slugFrom(base) : 'page';
   if (!taken.includes(clean)) return clean;
-  for (let n = 2; ; n++) { const next = `${clean.slice(0, 55)}-${n}`; if (!taken.includes(next)) return next; }
+  for (let n = 2; ; n++) { const next = `${clean.slice(0, 55).replace(/-+$/g, '')}-${n}`; if (!taken.includes(next)) return next; }
 }
 
 /** A typed amount in minor units, or null when it does not fit the currency or the range (0 allowed only when said so). */

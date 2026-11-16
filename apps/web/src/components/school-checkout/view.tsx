@@ -322,8 +322,8 @@ function Editor({ p, read, editor }: { p: SchoolCheckoutViewProps; read: SchoolC
       <button type="button" className={styles.secondary} disabled={p.locked} onClick={p.onClose}>{editor.dirty ? 'Close without saving' : 'Close'}</button></div>
     <p className={styles.meta} data-testid="checkout-status">{page ? `${STATUS_LABEL[page.status]} · version ${page.version} · saved ${instant(p.language, page.updatedAt)}` : 'Not saved yet.'}
       {editor.dirty ? ' · you have unsaved changes' : ''}</p>
-    <div className={styles.tabs} role="tablist" aria-label="Editor section">{(Object.keys(TAB_LABEL) as EditorTab[]).map((t) =>
-      <button key={t} type="button" role="tab" className={styles.tab} aria-selected={editor.tab === t} onClick={() => p.onTab?.(t)}>{TAB_LABEL[t]}</button>)}</div>
+    <div className={styles.tabs} role="group" aria-label="Editor section">{(Object.keys(TAB_LABEL) as EditorTab[]).map((t) =>
+      <button key={t} type="button" className={styles.tab} aria-pressed={editor.tab === t} onClick={() => p.onTab?.(t)}>{TAB_LABEL[t]}</button>)}</div>
     <div className={styles.tabs} role="group" aria-label="Language you are editing">{(Object.keys(LANGUAGE_LABEL) as CheckoutLanguage[]).map((l) =>
       <button key={l} type="button" className={styles.tab} aria-pressed={p.editLanguage === l} disabled={p.locked} onClick={() => p.onEditLanguage?.(l)}>{LANGUAGE_LABEL[l]}</button>)}</div>
     <p className={styles.meta}>English is required. Korean and Spanish are optional; where they are empty, families see the English text.</p>
