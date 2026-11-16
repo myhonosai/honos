@@ -395,8 +395,10 @@ LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
     SELECT NULL::text answer,(SELECT hon.biometric_profile_for(l.country_code,l.region_code,l.city) FROM l) profile WHERE NOT EXISTS(SELECT 1 FROM cities)
     UNION ALL SELECT c.profile_code,c.profile_code FROM cities c WHERE NOT EXISTS(SELECT 1 FROM named) OR c.profile_code=(SELECT profile_code FROM named)
     UNION ALL SELECT 'NONE',(SELECT hon.biometric_profile_for(l.country_code,l.region_code,NULL) FROM l) WHERE EXISTS(SELECT 1 FROM cities) AND NOT EXISTS(SELECT 1 FROM named))
+  -- Owner decision 2026-11-16: HON OS launches in the United States only, so face check-in cannot be turned on elsewhere
+  -- yet (NOT_LAUNCHED). The other countries' draft forms stay, unused, for later.
   SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM l) THEN '[]'::jsonb ELSE coalesce((SELECT jsonb_agg(jsonb_build_object('cityLimits',a.answer,'profile',a.profile,
-      'status',p.status,'acknowledgements',to_jsonb(hon.face_checkin_required_acks(a.profile))) ORDER BY a.answer NULLS FIRST)
+      'status',CASE WHEN (SELECT country_code FROM l)<>'US' THEN 'NOT_LAUNCHED' ELSE p.status END,'acknowledgements',to_jsonb(hon.face_checkin_required_acks(a.profile))) ORDER BY a.answer NULLS FIRST)
     FROM answers a JOIN hon.biometric_jurisdiction_profiles p ON p.code=a.profile),'[]'::jsonb) END
 $$;
 

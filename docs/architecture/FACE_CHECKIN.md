@@ -36,6 +36,10 @@ Rather than a different standard per state, every school that turns this on gets
 
 The school's location picks a **jurisdiction profile**, which adds the local form wording and any extra steps:
 
+**United States only for now (owner decision 2026-11-16).** HON OS launches with US schools, so 0409 reports every
+non-US profile as `NOT_LAUNCHED` and refuses to turn face check-in on there. The EU, UK and Korea drafts stay in the
+database, unused, for a later launch (after legal review).
+
 | Profile | Where | Status | Local add-ons |
 |---|---|---|---|
 | US_IL_BIPA | Illinois | Available with consent | Written release naming purpose and length of storage; public retention schedule; private right of action warning to school |

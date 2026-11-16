@@ -97,7 +97,7 @@ export interface FaceCheckInChoice { cityLimits: string | null; profile: string;
 function choice(v: unknown): FaceCheckInChoice {
   const o = closed(v, ['cityLimits', 'profile', 'status', 'acknowledgements'], true);
   return Object.freeze({ cityLimits: code(o.cityLimits, true, true), profile: code(o.profile, true) as string,
-    status: oneOf(o.status, ['AVAILABLE_WITH_CONSENT', 'BLOCKED', 'NOT_REVIEWED'] as const, true),
+    status: oneOf(o.status, ['AVAILABLE_WITH_CONSENT', 'BLOCKED', 'NOT_REVIEWED', 'NOT_LAUNCHED'] as const, true),
     acknowledgements: list(o.acknowledgements, 4, a => oneOf(a, FACE_CHECKIN_ACKNOWLEDGEMENTS, true), true) });
 }
 

@@ -115,14 +115,15 @@ try{
  const hq={subject:'face-hq-'+K()};const hqPrincipal=await human({externalSubject:hq.subject,email:K()+'@example.invalid'},'Face synthetic HQ');
  await q("INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from) VALUES($1,'HON_HQ_OWNER',ARRAY['hq.onboarding.manage'],clock_timestamp()-interval '2 days')",[hqPrincipal]);
  const provision=async()=>(await q("SELECT organization_id AS \"organizationId\",school_id AS \"schoolId\" FROM hon.provision_school_from_hq($1,'Face synthetic','Face synthetic','Face school',$2,'UTC','COMPLETE',$3,$3,$4,$4)",[hq.subject,'face-'+K(),K(),K()]))[0];
- const A=await provision(),B=await provision(),C=await provision();
- for(const o of [A,B,C])await q("UPDATE hon.organization_entitlements SET status='ACTIVE',effective_from=clock_timestamp()-interval '1 day',effective_until=NULL WHERE organization_id=$1",[o.organizationId]);
+ const A=await provision(),B=await provision(),C=await provision(),D=await provision();
+ for(const o of [A,B,C,D])await q("UPDATE hon.organization_entitlements SET status='ACTIVE',effective_from=clock_timestamp()-interval '1 day',effective_until=NULL WHERE organization_id=$1",[o.organizationId]);
  assert.equal((await q("SELECT count(*)::int n FROM hon.role_permissions rp JOIN hon.roles r ON r.id=rp.role_id WHERE r.organization_id=$1 AND r.is_system_role AND r.code='OWNER' AND rp.permission_code='face_checkin.manage'",[A.organizationId]))[0].n,1);
  const faceRole=await customRole(A,'CUSTOM_FACE',['school.view','face_checkin.manage']);
  const manager=person('manager'),managerPrincipal=await human(manager,'Manager');const managerGrant=await grant(A,managerPrincipal,faceRole);
  const manager2=person('manager-2');await grant(A,await human(manager2,'Manager 2'),faceRole);
  const scanner=person('scanner'),scannerPrincipal=await human(scanner,'Scanner');const scannerGrant=await grant(A,scannerPrincipal,await customRole(A,'CUSTOM_SCAN',['school.view','attendance.record']));
  const managerB=person('manager-b');await grant(B,await human(managerB,'Manager B'),await customRole(B,'CUSTOM_FACE',['school.view','face_checkin.manage','attendance.record']));
+ const managerD=person('manager-d');await grant(D,await human(managerD,'Manager D'),await customRole(D,'CUSTOM_FACE',['school.view','face_checkin.manage']));
  const managerC=person('manager-c');await grant(C,await human(managerC,'Manager C'),await customRole(C,'CUSTOM_FACE',['school.view','face_checkin.manage']));
  const outsider=person('outsider');await human(outsider,'Outsider');
  // Families at school A: the Park family (guardian + a viewer) and the Lee family.
@@ -188,7 +189,12 @@ try{
  const rC=ok(await read(managerC,C.schoolId));
  assert.deepEqual(rC.choices.map(c=>[c.cityLimits,c.profile,c.status]),[['NONE','US_GENERAL','AVAILABLE_WITH_CONSENT'],['US_PORTLAND_BAN','US_PORTLAND_BAN','BLOCKED']]);
  await denied(()=>settings(managerC,turnOn(C.schoolId,0,'US_PORTLAND_BAN',[])),403,'FACE_CHECKIN_NOT_AVAILABLE');
- pass('the address decides the profile; the owner answers the city-limits question (New York City, Portland ban) and confirms exactly the required steps; version-checked, exact replay, key reuse refused');
+ // United States only for now (owner decision 2026-11-16): a school in Germany cannot turn it on although a GDPR draft exists.
+ await locate(D,'DE',null,'Berlin',managerPrincipal);
+ const rD=ok(await read(managerD,D.schoolId));
+ assert.deepEqual(rD.choices.map(c=>[c.cityLimits,c.profile,c.status]),[[null,'EU_GDPR','NOT_LAUNCHED']]);
+ await denied(()=>settings(managerD,turnOn(D.schoolId,0,null,['ALTERNATIVE_CHECK_IN_OFFERED','IMPACT_ASSESSMENT_DONE','RETENTION_POLICY_PUBLISHED'])),403,'FACE_CHECKIN_NOT_AVAILABLE');
+ pass('the address decides the profile; US schools only for now; the owner answers the city-limits question (New York City, Portland ban) and confirms exactly the required steps; version-checked, exact replay, key reuse refused');
 
  // 4. Consent: parents sign the school's current form in the portal, staff record a signed paper form; minors need a guardian.
  const ilEn=forms[0],nycForm=(await q("SELECT id,digest FROM hon.face_checkin_forms WHERE profile_code='US_NYC' AND language='en'"))[0];
