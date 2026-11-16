@@ -177,9 +177,17 @@ try{
   const nr=ok(await scan(scanner,sb(code)));assert.deepEqual(nr,{outcome:'NOT_RECOGNIZED',student:null,card:null,attendance:null});}
  const unknown=(()=>{for(;;){const b=String(Math.floor(Math.random()*1e12)).padStart(12,'0').repeat(2);const r=[...b+'00'].reduce((a,d)=>(a*10+Number(d))%97,0);const c=b+String(98-r).padStart(2,'0');if(isAttendanceCardCode(c))return c;}})();
  assert.deepEqual(ok(await scan(scanner,sb(unknown))),{outcome:'NOT_RECOGNIZED',student:null,card:null,attendance:null});
- assert.equal(ok(await scan(scanner,sb(newLeo))).outcome,'RECORDED');
+ // Leo was marked absent (with a note) before arriving: the scan corrects the record and keeps the rest.
+ const markReq=K();await admin.query('BEGIN');
+ await admin.query("SELECT set_config('app.hon_organization_id',$1,true),set_config('app.hon_school_id',$2,true),set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_principal_type','HUMAN_USER',true),set_config('app.hon_principal_id',$5,true),set_config('app.hon_external_subject',$3,true),set_config('app.hon_request_id',$4,true),set_config('app.hon_correlation_id',$4,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)",[A.organizationId,A.schoolId,scanner.externalSubject,markReq,scannerPrincipal]);
+ const absent=(await admin.query('SELECT hon.record_attendance($1,$2::uuid,$3::jsonb,$4,$5::uuid,$5::uuid) AS d',[scanner.externalSubject,sessionA,JSON.stringify({studentProfileId:leo.studentProfileId,status:'UNEXCUSED_ABSENCE',note:'Synthetic note'}),K(),markReq])).rows[0].d.attendance;
+ await admin.query('COMMIT');
+ const arrived=ok(await scan(scanner,sb(newLeo)));
+ assert.equal(arrived.outcome,'RECORDED');assert.equal(arrived.attendance.status,'PRESENT');assert.equal(arrived.attendance.id,absent.id);assert.equal(arrived.attendance.version,absent.version+1);
+ assert.deepEqual((await q('SELECT status::text s,category::text c,note n FROM hon.attendance_records WHERE id=$1',[absent.id]))[0],{s:'PRESENT',c:'REGULAR_PARTICIPANT',n:'Synthetic note'});
+ assert.equal(ok(await scan(scanner,sb(newLeo,'LATE'))).outcome,'ALREADY_RECORDED');
  assert.equal((await q("SELECT count(*)::int n FROM hon.attendance_check_ins WHERE school_id=$1",[A.schoolId]))[0].n,2);
- pass('a scan needs live attendance.record at the school, then writes through record_attendance with one CARD provenance row; repeats, replaced cards and other schools record nothing');
+ pass('a scan needs live attendance.record at the school, then writes through record_attendance with one CARD provenance row; repeats, replaced cards and other schools record nothing; an arrival corrects an absence');
 
  // 6. Cancel a card: it stops working at once.
  const minaCard=printed.cards.find(c=>c.studentProfileId===mina.studentProfileId);

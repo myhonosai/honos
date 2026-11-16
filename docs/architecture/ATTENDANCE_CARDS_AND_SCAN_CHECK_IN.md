@@ -11,7 +11,9 @@ Face matching is a separate thread ("Add face check-in with parent consent") tha
    print one card or a sheet of cards: school logo (existing 0285 branding `logoUrl`), student photo (0390), name,
    school name, the code. Printing a card issues a new code; the student's previous card stops working.
 3. **Scan check-in (0391).** A signed-in staff "front desk" screen: pick today's class, scan. A USB/Bluetooth scanner
-   (keyboard input) or the device camera (browser `BarcodeDetector`, QR + Code 128) is read without choosing the type:
+   (keyboard input) or the device camera is read without choosing the type (browser `BarcodeDetector` where it reads
+   both QR and Code 128; otherwise, as on Safari and iPad, the open-source ZXing decoder `@zxing/library` 0.21.3, Apache-2.0,
+   loaded only then and run on the device with no network calls):
    both symbologies carry the same digits. Staff see the student's photo and name, and attendance is written by the
    existing `hon.record_attendance` (0115). No parallel attendance model.
 
@@ -63,7 +65,8 @@ separate photo summary read (`read_person_photo_summary`), so 0217 is not replac
   with named constraint `attendance_check_ins_method_check CHECK (method IN ('CARD'))` (the face thread widens it).
 - Internal `hon.attendance_check_in_student(subject, session, student, method, method_ref, status, key, request, correlation)`:
   if the student already has a record for the session it returns `ALREADY_RECORDED` with the current status and changes
-  nothing; otherwise it calls `hon.record_attendance` (PRESENT or LATE) and logs the check-in. Not granted to the app.
+  nothing, except an absence (EXCUSED_ABSENCE or UNEXCUSED_ABSENCE): an arrival corrects that record to PRESENT or LATE
+  through `hon.record_attendance` at its saved version, keeping category and note; otherwise it calls `hon.record_attendance` (PRESENT or LATE) and logs the check-in. Not granted to the app.
 - Entry points as built: `read_attendance_cards` (look + students' card status, no codes), `configure_attendance_cards`,
   `issue_attendance_cards` (1..40 students, digests from the API), `revoke_attendance_card`,
   `check_in_with_attendance_card(subject, session, input{codeDigest,status}, key, request, correlation)`.
@@ -76,7 +79,8 @@ separate photo summary read (`read_person_photo_summary`), so 0217 is not replac
 
 - People contact card: Photo panel (take/upload, replace, remove) in en/ko/es.
 - `/staff/attendance/cards`: owner settings (barcode/QR, show photo/logo, design), student list with card status, select
-  and "Print cards" (issue then print sheet, CR80 85.6 × 54 mm, two across), cancel card.
+  and "Print cards" (issue then print sheet, CR80 85.6 × 54 mm, two across), cancel card. Cards print only in the saved
+  look: printing is off while the look has unsaved changes.
 - `/staff/attendance/scan`: pick a class session of today, Present/Late toggle, scanner input always focused, optional
   camera; result card shows photo, name and RECORDED / ALREADY (status) / NOT RECOGNISED.
 - Barcode (Code 128 set C) and QR (version 1-M, numeric) are drawn by small in-repo SVG encoders; no new dependency.
@@ -90,7 +94,9 @@ separate photo summary read (`read_person_photo_summary`), so 0217 is not replac
 
 ## Open owner questions (not blocking)
 
-- iPad/Safari camera scanning needs a JS decoder library (Safari has no `BarcodeDetector`); USB scanners work everywhere.
+- Owner decision 2026-11-16: add a free decoder for iPad/Safari (done, see above).
+- Owner decision 2026-11-16: no parent consent for card photos unless the school's state requires it. The state comes
+  from the face thread's school location and jurisdiction rules (0392); the photo-consent rule is a follow-up after it.
 - Staff on the scan screen also need `schedule.session.read` to list today's classes (existing read).
 - New organizations: like 0364, the migration adds `attendance.cards.manage` to existing OWNER system roles; whether
   system roles created later receive it depends on the role template (owner check before launch).

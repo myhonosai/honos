@@ -107,6 +107,15 @@ it('the card maker lists students with their card and offers the owner choice of
   expect(sheet).toContain('Cards ready to print'); expect(sheet).toContain('data-testid="card-face"'); expect(sheet).not.toContain('Save look');
 });
 
+it('cards print only in the saved look', () => {
+  const picked = new Set([id(10)]);
+  expect(view({ selected: picked })).not.toContain('data-testid="save-first"');
+  const changed = view({ selected: picked, look: { ...look, codeType: 'BARCODE' } });
+  expect(changed).toContain('Save the card look before printing'); expect(changed).toMatch(/disabled=""[^>]*data-testid="print-new"/);
+  const sheet = view({ look: { ...look, codeType: 'BARCODE' }, sheet: [{ studentProfileId: id(10), name: 'Kid10 Synthetic', initials: 'KS', code: CODE, photo: null }] });
+  expect(sheet).toContain('data-code-type="QR"');
+});
+
 const scanView = (over: Partial<ScanViewProps> = {}) => renderToStaticMarkup(<ScanView language="en" sessions={{ state: 'READY', sessions: [] }} sessionId="" status="PRESENT" code=""
   result={null} locked={false} canRetry={false} camera="UNSUPPORTED" {...over}/>);
 it('the scan screen says what happened in plain words and never records an unknown card', () => {

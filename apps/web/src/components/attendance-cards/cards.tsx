@@ -61,6 +61,9 @@ export function CardsView(p: CardsViewProps): React.ReactElement {
   const base = useId();
   const r = p.read.state === 'READY' ? p.read.read : null;
   const o = p.outcome;
+  // Cards print in the saved look only, so a sheet never shows a look the school did not choose.
+  const saved = r ? lookOf(r.settings) : null;
+  const unsaved = saved !== null && (Object.keys(saved) as (keyof Look)[]).some(k => saved[k] !== p.look[k]);
   return <section className={styles.page} aria-labelledby={`${base}-title`} data-testid="attendance-cards">
     <header><h1 id={`${base}-title`}>{t('cardsTitle')}</h1><p className={styles.intro}>{t('cardsIntro')}</p></header>
     {p.read.state === 'LOADING' ? <p className={styles.meta} role="status">{t('loading')}</p> : null}
@@ -81,7 +84,7 @@ export function CardsView(p: CardsViewProps): React.ReactElement {
         <button type="button" className={styles.primary} onClick={p.onPrint}>{t('print')}</button>
         <button type="button" className={styles.secondary} onClick={p.onDone}>{t('done')}</button>
       </div>
-      <div className={styles.sheet}>{p.sheet.map(c => <CardFace key={c.studentProfileId} language={p.language} settings={r.settings} look={p.look} card={c}/>)}</div>
+      <div className={styles.sheet}>{p.sheet.map(c => <CardFace key={c.studentProfileId} language={p.language} settings={r.settings} look={lookOf(r.settings)} card={c}/>)}</div>
     </div> : null}
     {r && !p.sheet ? <>
       <div className={styles.panel}>
@@ -109,8 +112,9 @@ export function CardsView(p: CardsViewProps): React.ReactElement {
         <div className={styles.actions}>
           <button type="button" className={styles.secondary} disabled={p.locked} onClick={p.onSelectAll}>{t('selectAll')}</button>
           <button type="button" className={styles.secondary} disabled={p.locked || p.selected.size === 0} onClick={p.onClear}>{t('clear')}</button>
-          <button type="button" className={styles.primary} disabled={p.locked || p.selected.size === 0} onClick={p.onPrintNew} data-testid="print-new">{t('printNew')}</button>
+          <button type="button" className={styles.primary} disabled={p.locked || p.selected.size === 0 || unsaved} onClick={p.onPrintNew} data-testid="print-new">{t('printNew')}</button>
         </div>
+        {unsaved ? <p className={styles.meta} data-testid="save-first">{t('saveFirst')}</p> : null}
         <p className={styles.meta}>{t('replaceNote')}</p>
         <div className={styles.tableWrap}><table className={styles.table}>
           <thead><tr><th scope="col"><span className={styles.meta}>✓</span></th><th scope="col">{t('colName')}</th><th scope="col">{t('colPhoto')}</th><th scope="col">{t('colCard')}</th><th scope="col"></th></tr></thead>
@@ -174,13 +178,13 @@ export function AttendanceCards({ api = cardsApi, photos = photoApi }: { api?: C
   }, [api, schoolId, refresh, shell.phase]);
 
   const ready = read.state === 'READY' ? read.read : null;
-  const showSheet = useCallback(async (result: AttendanceCardIssueResult, data: AttendanceCardsRead, currentLook: Look, school: string, owned: () => boolean) => {
+  const showSheet = useCallback(async (result: AttendanceCardIssueResult, data: AttendanceCardsRead, school: string, owned: () => boolean) => {
     const byId = new Map(data.students.map(s => [s.studentProfileId, s]));
     const cards = await Promise.all(result.cards.map(async c => {
       const s = byId.get(c.studentProfileId);
       const name = s ? nameOf(s) : '', initials = s ? initialsOf(s.givenName, s.familyName) : '';
       let photo: string | null = null;
-      if (currentLook.showPhoto && s?.hasPhoto) {
+      if (lookOf(data.settings).showPhoto && s?.hasPhoto) {
         try { const r = await photos.read({ schoolId: school }, s.personId, AbortSignal.timeout(15000), owned); photo = r.photo ? `data:${r.photo.mediaType};base64,${r.photo.data}` : null; } catch { photo = null; }
       }
       return { studentProfileId: c.studentProfileId, name, initials, code: c.code!, photo };
@@ -204,7 +208,7 @@ export function AttendanceCards({ api = cardsApi, photos = photoApi }: { api?: C
       } else {
         const result = await api.print(request.schoolId, request.ids, request.key, signal, owned);
         if (result.replayed) next = { kind: 'REPLAYED' };
-        else { await showSheet(result, ready, look, request.schoolId, () => mounted.current); next = null; }
+        else { await showSheet(result, ready, request.schoolId, () => mounted.current); next = null; }
         setSelected(new Set());
       }
     } catch (error) {

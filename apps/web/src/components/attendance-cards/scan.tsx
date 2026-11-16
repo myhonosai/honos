@@ -7,6 +7,7 @@ import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from 
 import { ClassSessionsReadAccessError, loadCurrentSchoolClassSessions } from '../class-sessions-read-http';
 import { initialsOf } from '../people/photo';
 import { photoApi, type PhotoApi } from '../people/photo-http';
+import { openFallbackDetector, type FrameDetector } from './camera-decoder';
 import { cardsText, type CardsKey } from './copy';
 import { CardsError, cardsApi, keepForRetry, type CardsApi, type CardsErrorKind } from './http';
 import styles from './cards.module.css';
@@ -93,9 +94,18 @@ export function ScanView(p: ScanViewProps): React.ReactElement {
 }
 
 type Pending = Readonly<{ key: string; schoolId: string; sessionId: string; code: string; status: AttendanceCheckInStatus }>;
-type Detector = { detect(source: CanvasImageSource): Promise<readonly { rawValue: string }[]> };
-type DetectorClass = { new(options: { formats: string[] }): Detector; getSupportedFormats?: () => Promise<string[]> };
+type DetectorClass = { new(options: { formats: string[] }): FrameDetector; getSupportedFormats?: () => Promise<string[]> };
 const detectorClass = (): DetectorClass | null => typeof window !== 'undefined' && 'BarcodeDetector' in window ? (window as unknown as { BarcodeDetector: DetectorClass }).BarcodeDetector : null;
+const canUseCamera = () => typeof navigator !== 'undefined' && typeof navigator.mediaDevices?.getUserMedia === 'function';
+/** The browser's own reader when it has one for both formats; otherwise the on-device ZXing reader (Safari, iPad). */
+async function openDetector(): Promise<FrameDetector | null> {
+  const Class = detectorClass();
+  if (Class) {
+    const formats = await Class.getSupportedFormats?.().catch(() => null) ?? ['qr_code', 'code_128'];
+    if (formats.includes('qr_code') && formats.includes('code_128')) return new Class({ formats: ['qr_code', 'code_128'] });
+  }
+  return openFallbackDetector();
+}
 
 /**
  * Front-desk scan check-in. A USB scanner types the code and Enter into the focused field; a camera is used where the
@@ -116,7 +126,7 @@ export function AttendanceScan({ api = cardsApi, photos = photoApi, loadSessions
   const [camera, setCamera] = useState<'OFF' | 'ON' | 'UNSUPPORTED' | 'FAILED'>('OFF');
   const mounted = useRef(false), pending = useRef<Pending | null>(null), sending = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null), videoRef = useRef<HTMLVideoElement>(null), stream = useRef<MediaStream | null>(null);
-  useEffect(() => { mounted.current = true; if (!detectorClass()) setCamera('UNSUPPORTED'); return () => { mounted.current = false; pending.current = null; stream.current?.getTracks().forEach(t => t.stop()); }; }, []);
+  useEffect(() => { mounted.current = true; if (!canUseCamera()) setCamera('UNSUPPORTED'); return () => { mounted.current = false; pending.current = null; stream.current?.getTracks().forEach(t => t.stop()); }; }, []);
   const stopCamera = useCallback(() => { stream.current?.getTracks().forEach(t => t.stop()); stream.current = null; setCamera(c => c === 'ON' ? 'OFF' : c); }, []);
   const drop = useCallback(() => { pending.current = null; setResult(null); setCode(''); setLock(sending.current ? 'SENDING' : 'NONE'); stopCamera(); }, [stopCamera]);
   useEffect(() => {
@@ -170,11 +180,12 @@ export function AttendanceScan({ api = cardsApi, photos = photoApi, loadSessions
   const submitRef = useRef(submit); submitRef.current = submit;
   useEffect(() => {
     if (camera !== 'ON') return;
-    const Class = detectorClass(); if (!Class) return;
     let live = true, last = '', lastAt = 0;
-    const detector = new Class({ formats: ['qr_code', 'code_128'] });
     void (async () => {
       try {
+        const detector = await openDetector();
+        if (!live) return;
+        if (!detector) { setCamera('UNSUPPORTED'); return; }
         const media = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
         if (!live) { media.getTracks().forEach(t => t.stop()); return; }
         stream.current = media;

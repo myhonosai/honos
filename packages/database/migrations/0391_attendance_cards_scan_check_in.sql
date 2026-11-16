@@ -326,7 +326,8 @@ END $$;
 
 -- Shared internal check-in path (not granted to the app). The caller has already decided who the student is by its own
 -- method. Live attendance.record authority comes first; the session and student must be at this school. A student who
--- already has attendance for the session is left unchanged (ALREADY_RECORDED with the saved status); otherwise the
+-- already has attendance for the session is left unchanged (ALREADY_RECORDED with the saved status), except an absence,
+-- which the arrival corrects; otherwise the
 -- existing hon.record_attendance writes PRESENT or LATE (its own idempotency, audit and outbox) and one provenance row
 -- records the method. The per session/student advisory lock is the same one hon.record_attendance takes.
 CREATE FUNCTION hon.attendance_check_in_student(p_subject text,p_session uuid,p_student uuid,p_method text,p_method_ref uuid,p_status text,
@@ -343,11 +344,14 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'STUDENT_NOT_FOUND' USING ERRCODE='P0002'; END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended(p_session::text || ':' || p_student::text,0));
   SELECT * INTO existing FROM hon.attendance_records WHERE organization_id=org AND school_id=school AND class_session_id=p_session AND student_profile_id=p_student;
-  IF existing.id IS NOT NULL THEN
+  IF existing.id IS NOT NULL AND existing.status::text NOT IN ('EXCUSED_ABSENCE','UNEXCUSED_ABSENCE') THEN
     RETURN jsonb_build_object('outcome','ALREADY_RECORDED','attendance',jsonb_build_object('id',existing.id,'status',existing.status::text,'version',existing.version,
       'recordedAt',hon.saas_ts(existing.recorded_at)));
   END IF;
-  recorded:=hon.record_attendance(p_subject,p_session,jsonb_build_object('studentProfileId',p_student::text,'status',p_status),p_key,p_request,p_correlation)->'attendance';
+  -- A student marked absent who then arrives and checks in is corrected to the scan's status, at the saved version,
+  -- keeping the saved category and note.
+  recorded:=hon.record_attendance(p_subject,p_session,jsonb_build_object('studentProfileId',p_student::text,'status',p_status)
+    ||CASE WHEN existing.id IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('expectedVersion',existing.version,'category',existing.category::text,'note',existing.note) END,p_key,p_request,p_correlation)->'attendance';
   INSERT INTO hon.attendance_check_ins(organization_id,school_id,class_session_id,student_profile_id,method,method_ref,attendance_record_id,attendance_status,recorded_by_principal_id)
     VALUES(org,school,p_session,p_student,p_method,p_method_ref,(recorded->>'id')::uuid,recorded->>'status',actor);
   RETURN jsonb_build_object('outcome','RECORDED','attendance',jsonb_build_object('id',recorded->>'id','status',recorded->>'status','version',(recorded->>'version')::integer,

@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "f2184a73f89926b5a506c28d443fef8486aa10bac7a6be043953f4e1b0b0c477",
+  "chainSha256": "06fe33f5cc9b7961cd651cb1049d47e486a33372fdd791b7fb1b2012a3eb867c",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -516,7 +516,7 @@
     },
     {
       "file": "0391_attendance_cards_scan_check_in.sql",
-      "sha256": "24b92e5103001664c72005e71f471786dbbe500ae0e771218664b711e6456d01"
+      "sha256": "b1ce449c1f96e09a4ad6f3cfa4edeb74833f1c23f3914c86d11629ec7a46a28f"
     }
   ]
 }
