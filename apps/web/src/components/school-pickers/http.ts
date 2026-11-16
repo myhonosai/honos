@@ -7,7 +7,7 @@ import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 export type PickerScope = Readonly<{ organizationId: string; schoolId: string }>;
 export type EnrollmentPurpose = 'progress' | 'readiness' | 'testing';
 export type CandidatePurpose = 'grade' | 'decision';
-export type StudentPurpose = 'teaching';
+export type StudentPurpose = 'teaching' | 'achievements';
 export type RankPurpose = 'teaching';
 export type PickerEnrollment = Readonly<{ enrollmentId: string; curriculumId: string; curriculumName: string; studentProfileId: string; givenName: string; familyName: string;
   currentRankId: string | null; currentRankName: string | null; nextRankId: string | null; nextRankName: string | null; version: number }>;
