@@ -10,6 +10,9 @@ const PAGES = ['invoice-workbench', 'curriculum-progress-workbench', 'testing-ca
   'community-workbench', 'achievements-workbench', 'instructor-qualifications-workbench', 'billing-renewals-workbench', 'revenue-planning-workbench',
   'action-approvals-workbench', 'crm-follow-ups-workbench', 'staff-availability-workbench'];
 
+// Owner 2026-11-16 ("so many verification on page"): these pages carry no policy note at all.
+const NO_POLICY_NOTE = new Set(['teaching-studio-workbench']);
+
 describe('plain-language page headers', () => {
   for (const page of PAGES) it(page, () => {
     const source = readFileSync(`src/components/${page}.tsx`, 'utf8');
@@ -17,6 +20,7 @@ describe('plain-language page headers', () => {
     expect(header).not.toMatch(/HON \/|HUMAN|CONVENTIONAL|UUID|canonical|untrusted|idle|selector/i);
     // A lead that says "Choose" is only true where the page offers a list to choose from (#369 review P2).
     if (/Choose/.test(header)) expect(source).toMatch(/Picker|setSelected/);
+    if (NO_POLICY_NOTE.has(page)) { expect(source).not.toMatch(/What this page never does|data-plain-note/); return; }
     expect(source).toMatch(/<aside[^>]* data-plain-note=""><strong>[^<]{20,140}<\/strong><details><summary>What this page never does<\/summary>/);
   });
 });
