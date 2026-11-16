@@ -1120,3 +1120,4 @@ export * from './school-social-posts.js';
 export * from './school-number-orders.js';
 export * from './school-website.js';
 export * from './school-website-templates.js';
+export * from './walk-in-kiosk.js';

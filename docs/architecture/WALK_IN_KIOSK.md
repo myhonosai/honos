@@ -125,7 +125,9 @@ transaction; a full class shows as unavailable.
 
 ## 6. Open owner items
 
-1. How walk-ins pay (decision card, 2026-11-16): on the tablet with desk fallback (recommended), QR to the visitor's
-   phone, or desk only for now. WK1/WK2 work for all three.
+1. How walk-ins pay: **decided (David, 2026-11-16, "Can you do both of these")**: pay on the tablet with the front desk
+   as backup, **and** a QR code so the visitor can pay on their own phone. Both test mode only. The QR opens a
+   provider-hosted checkout page (Stripe Checkout `ui_mode=hosted`; Square through the same card-form page hosted by HON
+   at a one-time, short-lived link) and the kiosk waits for the confirmed result. Built in WK3.
 2. Real Stripe publishable test key for WK3 (owner sets in Project settings).
 3. The waiver wording is the school's own text; HON ships a plain sample marked "have your lawyer review".
