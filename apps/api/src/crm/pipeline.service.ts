@@ -25,7 +25,8 @@ export const STARTER_PIPELINE: CreatePipelineInput = Object.freeze({
 const LIST_SQL = `SELECT pipeline.id, pipeline.name, pipeline.version, pipeline.created_at AS "createdAt",
     COALESCE((SELECT jsonb_agg(jsonb_build_object('id', stage.id, 'name', stage.name, 'position', stage.position, 'terminalStatus', stage.terminal_status) ORDER BY stage.position)
       FROM hon.crm_pipeline_stages AS stage
-      WHERE stage.pipeline_id = pipeline.id AND stage.organization_id = pipeline.organization_id AND stage.school_id = pipeline.school_id), '[]'::jsonb) AS stages
+      WHERE stage.pipeline_id = pipeline.id AND stage.organization_id = pipeline.organization_id AND stage.school_id = pipeline.school_id
+        AND stage.hidden_at IS NULL), '[]'::jsonb) AS stages
   FROM hon.crm_pipelines AS pipeline
   WHERE pipeline.organization_id = $1 AND pipeline.school_id = $2
   ORDER BY pipeline.created_at, pipeline.id

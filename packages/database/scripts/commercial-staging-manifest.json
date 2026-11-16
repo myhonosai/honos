@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "48e7cae40a2713b2f6cce98158591d5282a574b343a6841cbfecce016ff9adbc",
+  "chainSha256": "9bb24cb69db054036b5de8d6bb5b9d5a9a02493b351ce802805dfac588f9da09",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -517,6 +517,10 @@
     {
       "file": "0392_school_location_biometric_notice.sql",
       "sha256": "1dd2614732160985e3592e46699670682cfbcfc0bcf9a7e3973381f8acfec411"
+    },
+    {
+      "file": "0400_lead_pipeline_board.sql",
+      "sha256": "58ec76be62692d95e4bcba28149beb92a5908e8785418f6f674f827daebcdb68"
     }
   ]
 }
