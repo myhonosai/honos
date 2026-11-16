@@ -12,7 +12,9 @@ export type SchoolShellIcon = 'home' | 'hon' | 'aiTeam' | 'conversationAi' | 'cl
 export type SchoolShellSection = 'dashboard' | 'ai' | 'calendar' | 'contacts' | 'leads' | 'communication' | 'finance' | 'marketing' | 'ranks' | 'business' | 'community';
 export type SchoolShellRoute = Readonly<{ href: string; titleKey: ShellKey; scoped: boolean; hidden?: boolean }>;
 /** One menu page. Its routes are the tabs inside the page; `section` is absent only for Settings, which sits at the bottom. */
-export type SchoolShellItem = Readonly<{ key: SchoolShellIcon; titleKey: ShellKey; section?: SchoolShellSection; routes: readonly SchoolShellRoute[] }>;
+export type SchoolShellItem = Readonly<{ key: SchoolShellIcon; titleKey: ShellKey; section?: SchoolShellSection; routes: readonly SchoolShellRoute[];
+  /** One job done in order (Tests): the shell shows the routes as numbered steps instead of tabs. */
+  steps?: true }>;
 
 const r = (href: string, titleKey: ShellKey, scoped = false): SchoolShellRoute => ({ href, titleKey, scoped });
 /** Owned by a page for "where am I", but opened from a link on a page (or onboarding), never from tabs or the menu. */
@@ -62,7 +64,9 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'creative', titleKey: 'navCreative', section: 'marketing', routes: [r('/staff/creative-studio', 'routeCreativeStudio')] },
   { key: 'ranks', titleKey: 'navRanks', section: 'ranks', routes: [r('/staff/curriculum/library', 'routeCurriculumLibrary'), r('/staff/curriculum/progress', 'routeProgress'),
     r('/staff/teaching-studio', 'routeTeachingStudio'), r('/staff/students/achievements', 'routeAchievements')] },
-  { key: 'testing', titleKey: 'navTesting', section: 'ranks', routes: [r('/staff/testing/registrations', 'routeTesting'), r('/staff/testing/readiness', 'routeReadiness'),
+  // A belt test is one job in order (L3): who is ready, sign-ups, register, grade, scorecards, certificates.
+  { key: 'testing', titleKey: 'navTesting', section: 'ranks', steps: true, routes: [r('/staff/testing/readiness', 'routeTestReady'), r('/staff/testing/registrations', 'routeTestSignups'),
+    r('/staff/testing/candidates/register', 'routeTestRegister'), r('/staff/testing/candidates/grade', 'routeTestGrade'),
     r('/staff/testing/scorecards', 'routeScorecards'), r('/staff/testing/certificates', 'routeCertificates')] },
   { key: 'promotions', titleKey: 'navPromotions', section: 'ranks', routes: [r('/staff/testing/promotion-decisions', 'routePromotions')] },
   { key: 'billing', titleKey: 'navBilling', section: 'business', routes: [r('/staff/billing/membership-plans', 'routePlans'), r('/staff/memberships', 'routeMembershipList'),
@@ -81,8 +85,6 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
 export const SCHOOL_SHELL_UNLISTED_ROUTES: readonly string[] = [
   '/staff/entry',
   '/staff/schedule/sessions/create',
-  '/staff/testing/candidates/register',
-  '/staff/testing/candidates/grade',
   '/staff/search/[organizationId]/[schoolId]/[kind]/[entityId]',
   // The page Facebook or Instagram returns to after a social connection (0347); reached only from Social accounts.
   '/staff/marketing/social/return',
