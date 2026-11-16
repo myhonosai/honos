@@ -47,7 +47,7 @@ describe('human membership renewal review workbench',()=>{
   }finally{f.mockRestore();}
  });
  it('retains uncertain requests in memory, clears sensitive state and requires reload before another mutation',()=>{
-  const source=readFileSync('src/components/billing-renewals-workbench.tsx','utf8');for(const text of ['Retry exact retained request','retry.current','No save is assumed','needsRefresh','Reload current detail','setContext(null)','New renewal review','No reviews on this page','readOnly','Read known membership summary','Historical saved revision','Manual reminder-needed fact'])expect(source.toLowerCase()).toContain(text.toLowerCase());expect(source).not.toMatch(/localStorage|sessionStorage|setInterval|setTimeout|invokeLLM|sendMessage|executeAction|type="email"/);
+  const source=readFileSync('src/components/billing-renewals-workbench.tsx','utf8');for(const text of ['Retry exact retained request','retry.current','No save is assumed','needsRefresh','Reload current detail','setContext(null)','New renewal review','No reviews on this page','readOnly','Read membership','Choose a member','Membership record ID','Historical saved revision','Manual reminder-needed fact'])expect(source.toLowerCase()).toContain(text.toLowerCase());expect(source).not.toMatch(/School \{context\.schoolId\}|Signed-in staff \{context\.principalId\}|Membership \{r\.membershipId\}|Membership \{facts\.membershipId\}/);expect(source).not.toMatch(/localStorage|sessionStorage|setInterval|setTimeout|invokeLLM|sendMessage|executeAction|type="email"/);
   const manifest=JSON.parse(readFileSync('public/manus-routes.json','utf8'));expect(manifest.routes.filter((r:{path:string})=>r.path==='/staff/billing/renewals')).toHaveLength(1);
  });
 });

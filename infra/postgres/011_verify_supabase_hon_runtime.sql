@@ -3877,3 +3877,16 @@ BEGIN
   END LOOP;
 END $$;
 -- End school location exact verification.
+-- Retention review member list exact verification (0407)
+DO $$ DECLARE f text := 'hon.list_retention_review_members(text)';
+BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+        AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+    RAISE EXCEPTION 'Unsafe membership list entry point: %',f; END IF;
+  IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM '53d3658e70cc67c51eaeb9a76c8d0d0b'
+    OR (SELECT proconfig FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon'] THEN
+    RAISE EXCEPTION 'Membership list body drift: %',f; END IF;
+END $$;
+-- End retention review member list exact verification.
