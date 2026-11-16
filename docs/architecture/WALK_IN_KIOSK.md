@@ -62,7 +62,7 @@ A returning visitor fills the form again; staff merge duplicates with the existi
 
 ### 3.2 Intake, waiver and visit (one public call)
 
-`POST /api/v1/walk-in-kiosk/visits` with header `X-HON-Kiosk-Device: <token>` and an `Idempotency-Key`. Same public
+`POST /api/v1/walk-in-kiosk/visits` with body `{device: <token>, visit: {...}}` and an `Idempotency-Key` (the token travels in the body, never a header, URL or cookie; `POST /api/v1/walk-in-kiosk/terminal` with `{device}` reads the tablet's settings). Same public
 endpoint posture as 0122 (no cookies/Authorization, JSON only, same-origin, fixed errors). The database function runs as a
 code-owned SYSTEM_SERVICE principal (the 0075/0286 shape) and, in one transaction:
 
