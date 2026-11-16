@@ -94,6 +94,13 @@ try{
  assert.deepEqual({...r0,today:'x'},{schoolId:A.schoolId,timezone:'America/Los_Angeles',today:'x',canManage:false,settings:{currency:'USD',taxRateBps:0,version:null},items:[],todaySales:{count:0,totalMinor:0}});
  assert.equal(ok(await read(manager,A.schoolId)).canManage,true);
  for(const who of [staff,outsider,managerB])await denied(()=>read(who,A.schoolId),403,'POS_FORBIDDEN');
+ // Staff only: an HQ operator or a family-coded role holding pos.manage at this school is still refused.
+ const hqop=person('hq-operator'),hqopPrincipal=await human(hqop,'HQ operator');
+ await q("INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from) VALUES($1,'HON_HQ_SUPPORT',ARRAY[]::text[],clock_timestamp()-interval '1 day')",[hqopPrincipal]);
+ await grant(A,hqopPrincipal,await customRole(A,'CUSTOM_HQ_POS',['school.view','pos.manage']));
+ await denied(()=>read(hqop,A.schoolId),403,'POS_FORBIDDEN');
+ const parent=person('parent');await grant(A,await human(parent,'Parent'),await customRole(A,'FAMILY_POS',['pos.manage']));
+ await denied(()=>read(parent,A.schoolId),403,'POS_FORBIDDEN');
  for(const who of [cashier,staff])await denied(()=>saveItem(who,newItem(A.schoolId)),403,'POS_FORBIDDEN');
  await denied(()=>saveSettings(cashier,{schoolId:A.schoolId,expectedVersion:null,currency:'USD',taxRateBps:800}),403,'POS_FORBIDDEN');
  await denied(()=>saveItem(manager,newItem(A.schoolId),{command:'school-person-photo'}),403,'HUMAN_UI_REQUIRED');
@@ -199,6 +206,11 @@ try{
  await denied(()=>sales(manager,A.schoolId,'2026-01-01','2027-06-01'),400,'POS_INVALID');
  await denied(()=>sales(managerB,A.schoolId,today,today),403,'POS_FORBIDDEN');
  pass('history lists the day newest first for sellers; the report (managers only) sums sales, discounts, tax, refunds, net and per method');
+ // An item that stopped tracking stock after the sale cannot be restocked (no stock move could record it).
+ const belt=ok(await saveItem(manager,newItem(A.schoolId,{name:'Belt',sku:'BT-1',startingStock:1,lowStockAt:null}))).item;
+ const bs=ok(await sell(cashier,saleBody(A.schoolId,[{itemId:belt.itemId,quantity:1}],{expectedTotalMinor:computePosTotals([{unitPriceMinor:10000,quantity:1,taxable:true}],null,825).totalMinor}))).sale;
+ ok(await saveItem(manager,newItem(A.schoolId,{itemId:belt.itemId,expectedVersion:(await q('SELECT version FROM hon.pos_items WHERE id=$1',[belt.itemId]))[0].version,name:'Belt',sku:'BT-1',trackStock:false,lowStockAt:null,startingStock:0})));
+ await denied(()=>refund(manager,{schoolId:A.schoolId,saleId:bs.saleId,amountMinor:100,method:'CASH',reason:'x',restock:[{lineId:bs.lines[0].lineId,quantity:1}]}),400,'POS_RESTOCK_INVALID');
 
  // 8. Evidence cannot be changed even by the owner.
  for(const st of ["UPDATE hon.pos_sales SET total_minor=1 WHERE id='"+s1.saleId+"'","UPDATE hon.pos_sales SET refunded_minor=0 WHERE id='"+s1.saleId+"'",

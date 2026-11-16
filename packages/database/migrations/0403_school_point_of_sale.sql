@@ -181,7 +181,7 @@ END $$;
 -- a line only by a growing restocked quantity; refunds, stock moves and completed requests never change. Items and
 -- settings keep their identity and advance their version by one on every change.
 CREATE FUNCTION hon.guard_pos_evidence() RETURNS trigger
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+LANGUAGE plpgsql SET search_path=pg_catalog,hon AS $$
 BEGIN
   IF TG_OP IN ('TRUNCATE','DELETE') THEN RAISE EXCEPTION 'POS_EVIDENCE_IMMUTABLE' USING ERRCODE='42501'; END IF;
   IF TG_TABLE_NAME IN ('pos_refunds','pos_stock_moves') THEN RAISE EXCEPTION 'POS_EVIDENCE_IMMUTABLE' USING ERRCODE='42501'; END IF;
@@ -225,6 +225,8 @@ END $$;
 
 -- The acting principal when the subject holds live POS authority at this exact school, else NULL.
 -- p_manage=false: pos.sell or pos.manage. p_manage=true: pos.manage.
+-- Staff only: HQ operators and family/student/HQ/platform roles never hold POS authority, and the
+-- permission must be staff-assignable on a role scoped to this school (same rule as staff_member_eligible).
 CREATE FUNCTION hon.pos_actor(p_subject text,p_school uuid,p_manage boolean) RETURNS uuid
 LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
   SELECT p.id FROM hon.users u
@@ -235,9 +237,13 @@ LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
     AND (SELECT count(*) FROM hon.principals x WHERE x.user_id=u.id AND x.principal_type='HUMAN_USER' AND x.is_active)=1
     AND EXISTS(SELECT 1 FROM hon.organization_entitlements e WHERE e.organization_id=s.organization_id AND e.status='ACTIVE'
       AND e.effective_from<=clock_timestamp() AND (e.effective_until IS NULL OR e.effective_until>clock_timestamp()))
+    AND NOT EXISTS(SELECT 1 FROM hon.hq_operator_grants h WHERE h.principal_id=p.id)
     AND EXISTS(SELECT 1 FROM hon.principal_role_grants g
+      JOIN hon.roles r ON r.id=g.role_id AND r.organization_id=g.organization_id
       JOIN hon.role_permissions rp ON rp.role_id=g.role_id AND rp.organization_id=s.organization_id
-      WHERE g.principal_id=p.id AND g.organization_id=s.organization_id AND g.school_id=s.id AND g.revoked_at IS NULL
+      JOIN hon.permissions pm ON pm.code=rp.permission_code AND pm.is_staff_assignable
+      WHERE g.principal_id=p.id AND (r.management_school_id IS NULL OR r.management_school_id=s.id)
+        AND r.code !~* '^(PARENT|GUARDIAN|STUDENT|FAMILY|HQ|HON_|PLATFORM|SYSTEM)' AND g.organization_id=s.organization_id AND g.school_id=s.id AND g.revoked_at IS NULL
         AND g.effective_from<=clock_timestamp() AND (g.effective_until IS NULL OR g.effective_until>clock_timestamp())
         AND rp.permission_code=ANY(CASE WHEN p_manage THEN ARRAY['pos.manage'] ELSE ARRAY['pos.sell','pos.manage'] END))
   LIMIT 1
@@ -648,8 +654,13 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'POS_NOT_FOUND' USING ERRCODE='P0002'; END IF;
   amount:=(p_input->>'amountMinor')::integer;
   IF amount>sale.total_minor-sale.refunded_minor THEN RAISE EXCEPTION 'POS_REFUND_TOO_LARGE' USING ERRCODE='22023'; END IF;
+  -- Lock restocked items in id order (same lock order as a sale).
+  PERFORM 1 FROM hon.pos_items WHERE id IN (SELECT l.item_id FROM hon.pos_sale_lines l JOIN jsonb_array_elements(p_input->'restock') e ON l.id=(e->>'lineId')::uuid WHERE l.sale_id=sale.id)
+    ORDER BY id FOR UPDATE;
+  -- Restock only lines whose item still tracks stock, so every restocked unit has a stock move.
   IF EXISTS(SELECT 1 FROM jsonb_array_elements(p_input->'restock') e LEFT JOIN hon.pos_sale_lines l ON l.id=(e->>'lineId')::uuid AND l.sale_id=sale.id
-      WHERE l.id IS NULL OR NOT l.stock_tracked OR l.restocked_quantity+(e->>'quantity')::int>l.quantity) THEN
+      LEFT JOIN hon.pos_items i ON i.id=l.item_id
+      WHERE l.id IS NULL OR NOT l.stock_tracked OR i.id IS NULL OR NOT i.track_stock OR l.restocked_quantity+(e->>'quantity')::int>l.quantity) THEN
     RAISE EXCEPTION 'POS_RESTOCK_INVALID' USING ERRCODE='22023'; END IF;
   tz:=hon.pos_school_tz(b.school);
   UPDATE hon.pos_sales SET refunded_minor=refunded_minor+amount WHERE id=sale.id RETURNING * INTO nxt;
@@ -658,9 +669,6 @@ BEGIN
       (SELECT coalesce(jsonb_agg(jsonb_build_object('lineId',(e->>'lineId')::uuid,'quantity',(e->>'quantity')::int) ORDER BY e->>'lineId'),'[]'::jsonb)
         FROM jsonb_array_elements(p_input->'restock') e),b.actor)
     RETURNING * INTO ref;
-  -- Restock in item id order (same lock order as a sale).
-  PERFORM 1 FROM hon.pos_items WHERE id IN (SELECT l.item_id FROM hon.pos_sale_lines l JOIN jsonb_array_elements(p_input->'restock') e ON l.id=(e->>'lineId')::uuid)
-    ORDER BY id FOR UPDATE;
   UPDATE hon.pos_sale_lines l SET restocked_quantity=l.restocked_quantity+(e->>'quantity')::int
     FROM jsonb_array_elements(p_input->'restock') e WHERE l.id=(e->>'lineId')::uuid AND l.sale_id=sale.id;
   WITH t AS (SELECT l.item_id item,sum((e->>'quantity')::int)::int q FROM hon.pos_sale_lines l JOIN jsonb_array_elements(p_input->'restock') e ON l.id=(e->>'lineId')::uuid
