@@ -122,6 +122,27 @@ describe('Staff list with a slide-out card per person (L5)', () => {
     expect(card()).toBeUndefined();
   });
 
+  it('a list at the 200-row cap shows 200+, not an understated count (review P3)', async () => {
+    api.staff.mockResolvedValue(Array.from({ length: 200 }, (_, i) => ({ principalId: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`, displayName: `Person ${i}` })));
+    await loaded();
+    expect(text(render())).toContain('Your staff (200+)');
+    api.staff.mockReset(); hooks.cells = []; hooks.effects = [];
+    api.staff.mockResolvedValue(PEOPLE.slice(0, 2));
+    await loaded();
+    expect(text(render())).toContain('Your staff (2)');
+  });
+
+  it('aria-controls names the card only while that card is open (review P3)', async () => {
+    api.staff.mockResolvedValue(PEOPLE);
+    await loaded();
+    expect(person('a')!.props['aria-controls']).toBeUndefined();
+    person('a')!.props.onClick();
+    expect(person('a')!.props['aria-controls']).toBe('staff-card');
+    expect(person('b')!.props['aria-controls']).toBeUndefined();
+    expect(card()!.props.id).toBe('staff-card');
+    expect(all().find(e => e.type === 'button' && text(e) === 'Close')!.props.id).toBe('staff-card-close');
+  });
+
   it('a late answer after unmount changes nothing', async () => {
     let resolve!: (value: unknown) => void;
     api.staff.mockReturnValue(new Promise(r => { resolve = r; }));
