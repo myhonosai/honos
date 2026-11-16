@@ -6,52 +6,77 @@ import type { ShellKey } from './copy';
  * authority. `scoped` routes accept the existing `organizationId` + `schoolId`
  * prefill, which the destination re-verifies server-side.
  */
-export type SchoolShellIcon = 'home' | 'students' | 'crm' | 'classes' | 'billing' | 'aiTeam' | 'analytics' | 'settings';
-export type SchoolShellRoute = Readonly<{ href: string; titleKey: ShellKey; scoped: boolean; group?: ShellKey; hidden?: boolean }>;
-export type SchoolShellItem = Readonly<{ key: SchoolShellIcon; titleKey: ShellKey; routes: readonly SchoolShellRoute[] }>;
+export type SchoolShellIcon = 'home' | 'hon' | 'aiTeam' | 'conversationAi' | 'classes' | 'attendance' | 'students' | 'staff' | 'crm' | 'automation' | 'messages'
+  | 'social' | 'checkout' | 'shopify' | 'invoices' | 'website' | 'marketing' | 'creative' | 'ranks' | 'testing' | 'promotions' | 'billing' | 'analytics' | 'community' | 'settings';
+/** Owner menu (David, 2026-11-16 07:52Z): eleven headings, each with its few pages under it. */
+export type SchoolShellSection = 'dashboard' | 'ai' | 'calendar' | 'contacts' | 'leads' | 'communication' | 'finance' | 'marketing' | 'ranks' | 'business' | 'community';
+export type SchoolShellRoute = Readonly<{ href: string; titleKey: ShellKey; scoped: boolean; hidden?: boolean }>;
+/** One menu page. Its routes are the tabs inside the page; `section` is absent only for Settings, which sits at the bottom. */
+export type SchoolShellItem = Readonly<{ key: SchoolShellIcon; titleKey: ShellKey; section?: SchoolShellSection; routes: readonly SchoolShellRoute[] }>;
 
 const r = (href: string, titleKey: ShellKey, scoped = false): SchoolShellRoute => ({ href, titleKey, scoped });
-/** Design pass (2026-11-15): long areas split their section tabs into a few named groups, so a row never scrolls far. */
-/** Owned by an area for "where am I", but reached from a workflow (onboarding), never from tabs or the menu. */
+/** Owned by a page for "where am I", but opened from a link on a page (or onboarding), never from tabs or the menu. */
 const h = (href: string, titleKey: ShellKey): SchoolShellRoute => ({ href, titleKey, scoped: false, hidden: true });
-const g = (group: ShellKey, ...routes: SchoolShellRoute[]): SchoolShellRoute[] => routes.map(route => ({ ...route, group }));
+
+export const SCHOOL_SHELL_SECTIONS: readonly Readonly<{ key: SchoolShellSection; titleKey: ShellKey }>[] = [
+  { key: 'dashboard', titleKey: 'sectionDashboard' }, { key: 'ai', titleKey: 'sectionAi' }, { key: 'calendar', titleKey: 'sectionCalendar' },
+  { key: 'contacts', titleKey: 'sectionContacts' }, { key: 'leads', titleKey: 'sectionLeads' }, { key: 'communication', titleKey: 'sectionCommunication' },
+  { key: 'finance', titleKey: 'sectionFinance' }, { key: 'marketing', titleKey: 'sectionMarketing' }, { key: 'ranks', titleKey: 'sectionRanks' },
+  { key: 'business', titleKey: 'sectionBusiness' }, { key: 'community', titleKey: 'sectionCommunity' },
+];
 
 /**
- * Owner decision (2026-11-15): eight main areas. Contacts holds students, families and staff; Enrollment holds leads,
- * marketing and referrals; Reports holds the school's reports and analytics; HON and the AI work queues live with the
- * AI team. Areas with no route yet are absent until a connected page exists; nothing links to an inert screen.
- * Stable keys (`crm`, `students`, `analytics`) are kept so links and browser checks keep working.
+ * Owner menu (2026-11-16, docs/architecture/SCHOOL_APP_TARGET_LAYOUT.md): headings, then pages; a page's tabs are its routes.
+ * No third level. Nothing is removed: every existing page is a tab, or hidden with a link to it from its page. Stable keys
+ * (`crm`, `students`, `classes`, `billing`, `analytics`) are kept so links and browser checks keep working.
  */
 export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
-  // Setup (Welcome, School launch, Founder Setup) is onboarding (owner, 2026-11-14): reached from Home's setup card and Settings, not tabs.
-  { key: 'home', titleKey: 'navHome', routes: [r('/staff/dashboard', 'routeOverview', true), r('/staff/command-center', 'routeCommandCenter'), r('/staff/work', 'routeWork'),
+  // Setup (Welcome, School launch, Founder Setup) is onboarding (owner, 2026-11-14): reached from Home's setup card and Settings.
+  { key: 'home', titleKey: 'navHome', section: 'dashboard', routes: [r('/staff/dashboard', 'routeOverview', true), r('/staff/work', 'routeWork'), r('/staff/command-center', 'routeCommandCenter'),
     h('/staff/welcome', 'routeWelcome'), h('/staff/launch', 'routeLaunch'), h('/staff/founder-setup', 'routeFounderSetup')] },
-  { key: 'students', titleKey: 'navStudents', routes: [...g('groupPeople', r('/staff/search', 'routeStudentSearch'), r('/staff/people', 'routePeople'), r('/staff/family-access', 'routeFamilyAccess', true), r('/staff/conversations', 'routeConversations'), r('/staff/family-messages', 'routeFamilyMessages'),
-    r('/staff/students/achievements', 'routeAchievements'), r('/staff/retention/review', 'routeRetention'), r('/staff/migration/students', 'routeStudentImport'), r('/staff/migration/photos', 'routePaperImport')),
-    ...g('groupStaff', r('/staff/team/invitations', 'routeTeam', true), r('/staff/roles', 'routeRoles'), r('/staff/team/availability', 'routeAvailability'), r('/staff/instructor-qualifications', 'routeQualifications'),
-    r('/staff/documents', 'routeDocuments'))] },
-  { key: 'crm', titleKey: 'navCrm', routes: [...g('groupLeads', r('/staff/crm', 'routeLeadsHome'), r('/staff/crm/leads', 'routeLeads', true), r('/staff/crm/journey', 'routeJourney', true), r('/staff/crm/follow-ups', 'routeFollowUps'),
-    r('/staff/crm/trials', 'routeTrials', true), r('/staff/crm/lead-memberships', 'routeLeadMemberships'), r('/staff/migration/leads', 'routeLeadImport')),
-    ...g('groupMarketing', r('/staff/marketing', 'routeMarketingHome'), r('/staff/marketing/campaigns', 'routeCampaigns'), r('/staff/marketing/forms', 'routeForms'), r('/staff/marketing/website', 'routeWebsite'),
-    r('/staff/marketing/intake', 'routeIntake'), r('/staff/marketing/social', 'routeSocial'), r('/staff/creative-studio', 'routeCreativeStudio'), r('/staff/champions-club', 'routeChampions'))] },
-  { key: 'classes', titleKey: 'navClasses', routes: [...g('groupSchedule', r('/staff/schedule', 'routeRosters'), r('/staff/schedule/sessions', 'routeSessions'), r('/staff/schedule/timetable', 'routeTimetable'), r('/staff/schedule/events', 'routeEvents'), r('/staff/schedule/bookings', 'routeBookings'),
-    r('/staff/classpass', 'routeClassPass', true), r('/staff/kiosk', 'routeKiosk'), r('/staff/migration/classes', 'routeHistoryImport')),
-    ...g('groupAttendance', r('/staff/attendance', 'routeAttendance', true), r('/staff/attendance/planned-absences', 'routePlannedAbsences')),
-    ...g('groupCurriculum', r('/staff/curriculum/library', 'routeCurriculumLibrary'), r('/staff/curriculum/progress', 'routeProgress'), r('/staff/teaching-studio', 'routeTeachingStudio'), r('/staff/testing/registrations', 'routeTesting'),
-    r('/staff/testing/readiness', 'routeReadiness'), r('/staff/testing/scorecards', 'routeScorecards'), r('/staff/testing/promotion-decisions', 'routePromotions'),
-    r('/staff/testing/certificates', 'routeCertificates')), ...g('groupCommunity', r('/community', 'routeCommunity'), r('/community/marketplace', 'routeMarketplace'))] },
-  { key: 'billing', titleKey: 'navBilling', routes: [...g('groupMemberships', r('/staff/memberships', 'routeMembershipList'), r('/staff/billing/memberships', 'routeMemberships'), r('/staff/billing/membership-plans', 'routePlans'),
-    r('/staff/billing/membership-dates', 'routeDates'), r('/staff/billing/membership-changes', 'routeChanges'), r('/staff/billing/renewals', 'routeRenewals'), r('/staff/migration/memberships', 'routeBillingImport')),
-    ...g('groupPayments', r('/staff/billing/invoices', 'routeInvoices'), r('/staff/billing/receivables', 'routeReceivables'),
-    r('/staff/billing/payment-processors', 'routePaymentProcessors'), r('/staff/billing/checkout-pages', 'routeCheckoutPages'), r('/staff/billing/saved-payment-methods', 'routeSavedMethods'))] },
-  // The whole launch roster lives on the AI Team page; HON, approvals and the specialists with their own workspace follow it.
-  { key: 'aiTeam', titleKey: 'navAiTeam', routes: [...g('groupTeam', r('/staff/ai-team', 'routeAiTeam'), r('/staff/hon', 'routeHon'), r('/staff/action-center/approvals', 'routeApprovals'), r('/staff/ai-work', 'routeAiWork')),
-    ...g('groupSpecialists', r('/staff/leads/assistant', 'routeLeadAssistant'), r('/staff/marketing/assistant', 'routeMarketingAssistant'), r('/staff/teaching-assistant', 'routeKai'), r('/staff/retention/at-risk', 'routeMayaAtRisk'),
-    r('/staff/voice', 'routeVoice'))] },
-  { key: 'analytics', titleKey: 'navAnalytics', routes: [r('/staff/reports', 'routeSchoolReports'), r('/staff/operations', 'routeOperationsReport', true), r('/staff/health-score', 'routeHealthScore'), r('/staff/planning/revenue', 'routeRevenuePlanning')] },
-  { key: 'settings', titleKey: 'navSettings', routes: [r('/staff/settings', 'routeSettingsSummary'), r('/staff/account-status', 'routeAccount'), r('/staff/owners', 'routeOwners'), r('/staff/subscription', 'routeSubscription'),
-    r('/staff/settings/branding', 'routeBranding'), r('/staff/settings/location', 'routeLocation'), r('/staff/settings/booking-types', 'routeBookingTypes'), r('/staff/settings/texting-number', 'routeTextingNumber'), r('/settings/language-region', 'routeLanguage'), r('/settings/texts-from-hon', 'routeTextsFromHon'),
-    r('/staff/automation/rules', 'routeAutomation'), r('/staff/help', 'routeHelp')] },
+  { key: 'hon', titleKey: 'navHon', section: 'dashboard', routes: [r('/staff/hon', 'routeHon')] },
+  // Each specialist's workspace opens from that specialist's card on the AI Team page.
+  { key: 'aiTeam', titleKey: 'navAiTeam', section: 'ai', routes: [r('/staff/ai-team', 'routeAiTeam'), r('/staff/action-center/approvals', 'routeApprovals'), r('/staff/ai-work', 'routeAiWork'),
+    r('/staff/voice', 'routeVoice'), h('/staff/leads/assistant', 'routeLeadAssistant'), h('/staff/marketing/assistant', 'routeMarketingAssistant'),
+    h('/staff/teaching-assistant', 'routeKai'), h('/staff/retention/at-risk', 'routeMayaAtRisk')] },
+  // Conversation AI answers the school's texts in this inbox (0364); staff take over any thread.
+  { key: 'conversationAi', titleKey: 'navConversationAi', section: 'ai', routes: [r('/staff/conversations', 'routeConversations')] },
+  { key: 'classes', titleKey: 'navClasses', section: 'calendar', routes: [r('/staff/schedule', 'routeRosters'), r('/staff/schedule/sessions', 'routeSessions'), r('/staff/schedule/timetable', 'routeTimetable'),
+    r('/staff/schedule/events', 'routeEvents'), r('/staff/schedule/bookings', 'routeBookings')] },
+  { key: 'attendance', titleKey: 'navAttendance', section: 'calendar', routes: [r('/staff/attendance', 'routeAttendance', true), r('/staff/attendance/planned-absences', 'routePlannedAbsences'),
+    r('/staff/kiosk', 'routeKiosk'), r('/staff/classpass', 'routeClassPass', true), r('/staff/migration/classes', 'routeHistoryImport')] },
+  // Search is the search button in the top bar.
+  { key: 'students', titleKey: 'navStudents', section: 'contacts', routes: [r('/staff/people', 'routePeople'), r('/staff/family-access', 'routeFamilyAccess', true),
+    r('/staff/migration/students', 'routeStudentImport'), r('/staff/migration/photos', 'routePaperImport'), h('/staff/search', 'routeStudentSearch')] },
+  { key: 'staff', titleKey: 'navStaff', section: 'contacts', routes: [r('/staff/team/invitations', 'routeTeam', true), r('/staff/roles', 'routeRoles'), r('/staff/team/availability', 'routeAvailability'),
+    r('/staff/instructor-qualifications', 'routeQualifications'), r('/staff/documents', 'routeDocuments')] },
+  { key: 'crm', titleKey: 'navCrm', section: 'leads', routes: [r('/staff/crm', 'routeLeadsHome'), r('/staff/crm/leads', 'routeLeads', true), r('/staff/crm/journey', 'routeJourney', true),
+    r('/staff/crm/follow-ups', 'routeFollowUps'), r('/staff/crm/trials', 'routeTrials', true), r('/staff/crm/lead-memberships', 'routeLeadMemberships'), r('/staff/migration/leads', 'routeLeadImport')] },
+  { key: 'automation', titleKey: 'navAutomation', section: 'leads', routes: [r('/staff/automation/rules', 'routeAutomation')] },
+  { key: 'messages', titleKey: 'navMessages', section: 'communication', routes: [r('/staff/family-messages', 'routeFamilyMessages')] },
+  { key: 'social', titleKey: 'navSocial', section: 'communication', routes: [r('/staff/marketing/social', 'routeSocial')] },
+  { key: 'checkout', titleKey: 'navCheckout', section: 'finance', routes: [r('/staff/billing/checkout-pages', 'routeCheckoutPages')] },
+  // Shopify (0405): the school's own store, read-only mirror plus connect, sync and disconnect.
+  { key: 'shopify', titleKey: 'navShopify', section: 'finance', routes: [r('/staff/billing/shopify', 'routeShopify')] },
+  { key: 'invoices', titleKey: 'navInvoices', section: 'finance', routes: [r('/staff/billing/invoices', 'routeInvoices'), r('/staff/billing/receivables', 'routeReceivables')] },
+  { key: 'website', titleKey: 'navWebsite', section: 'marketing', routes: [r('/staff/marketing/website', 'routeWebsite'), r('/staff/marketing/forms', 'routeForms'), r('/staff/marketing/intake', 'routeIntake')] },
+  { key: 'marketing', titleKey: 'navMarketing', section: 'marketing', routes: [r('/staff/marketing', 'routeMarketingHome'), r('/staff/marketing/campaigns', 'routeCampaigns'), r('/staff/champions-club', 'routeChampions')] },
+  { key: 'creative', titleKey: 'navCreative', section: 'marketing', routes: [r('/staff/creative-studio', 'routeCreativeStudio')] },
+  { key: 'ranks', titleKey: 'navRanks', section: 'ranks', routes: [r('/staff/curriculum/library', 'routeCurriculumLibrary'), r('/staff/curriculum/progress', 'routeProgress'),
+    r('/staff/teaching-studio', 'routeTeachingStudio'), r('/staff/students/achievements', 'routeAchievements')] },
+  { key: 'testing', titleKey: 'navTesting', section: 'ranks', routes: [r('/staff/testing/registrations', 'routeTesting'), r('/staff/testing/readiness', 'routeReadiness'),
+    r('/staff/testing/scorecards', 'routeScorecards'), r('/staff/testing/certificates', 'routeCertificates')] },
+  { key: 'promotions', titleKey: 'navPromotions', section: 'ranks', routes: [r('/staff/testing/promotion-decisions', 'routePromotions')] },
+  { key: 'billing', titleKey: 'navBilling', section: 'business', routes: [r('/staff/billing/membership-plans', 'routePlans'), r('/staff/memberships', 'routeMembershipList'),
+    r('/staff/billing/memberships', 'routeMemberships'), r('/staff/billing/membership-dates', 'routeDates'), r('/staff/billing/membership-changes', 'routeChanges'),
+    r('/staff/billing/renewals', 'routeRenewals'), r('/staff/migration/memberships', 'routeBillingImport')] },
+  { key: 'analytics', titleKey: 'navAnalytics', section: 'business', routes: [r('/staff/reports', 'routeSchoolReports'), r('/staff/operations', 'routeOperationsReport', true), r('/staff/health-score', 'routeHealthScore'),
+    r('/staff/planning/revenue', 'routeRevenuePlanning'), r('/staff/retention/review', 'routeRetention')] },
+  { key: 'community', titleKey: 'navCommunity', section: 'community', routes: [r('/community', 'routeCommunity'), r('/community/marketplace', 'routeMarketplace')] },
+  { key: 'settings', titleKey: 'navSettings', routes: [r('/staff/settings', 'routeSettingsSummary'), r('/staff/settings/location', 'routeLocation'), r('/staff/settings/branding', 'routeBranding'),
+    r('/staff/settings/booking-types', 'routeBookingTypes'), r('/staff/settings/texting-number', 'routeTextingNumber'), r('/staff/billing/payment-processors', 'routePaymentProcessors'),
+    r('/staff/billing/saved-payment-methods', 'routeSavedMethods'), r('/settings/language-region', 'routeLanguage'), r('/settings/texts-from-hon', 'routeTextsFromHon'),
+    r('/staff/account-status', 'routeAccount'), r('/staff/owners', 'routeOwners'), r('/staff/subscription', 'routeSubscription'), r('/staff/help', 'routeHelp')] },
 ];
 
 /** Reached from a workflow, never from primary navigation. */
@@ -63,15 +88,20 @@ export const SCHOOL_SHELL_UNLISTED_ROUTES: readonly string[] = [
   '/staff/search/[organizationId]/[schoolId]/[kind]/[entityId]',
   // The page Facebook or Instagram returns to after a social connection (0347); reached only from Social accounts.
   '/staff/marketing/social/return',
+  // The page Shopify returns to after the owner approves a store connection (0405); reached only from Shopify.
+  '/staff/billing/shopify/return',
 ];
 
 /** Mobile bottom bar: four primary destinations plus "More". */
 export const SCHOOL_SHELL_MOBILE: readonly SchoolShellIcon[] = ['home', 'students', 'crm', 'classes'];
+/** Modern top bar: the everyday pages; every other page is one click away in the Menu (owner layout, 2026-11-16). */
+export const SCHOOL_SHELL_EVERYDAY: readonly SchoolShellIcon[] = ['home', 'classes', 'attendance', 'students', 'crm', 'conversationAi'];
 
-/** The named groups of an area's section tabs, in catalog order; empty when the area is short enough to show flat. */
-export function schoolShellGroups(item: SchoolShellItem): ShellKey[] {
-  return [...new Set(item.routes.flatMap(route => route.group && !route.hidden ? [route.group] : []))];
-}
+/** The menu pages under one heading, in catalog order. */
+export const schoolShellSectionItems = (section: SchoolShellSection): SchoolShellItem[] => SCHOOL_SHELL_NAV.filter(item => item.section === section);
+/** Pages that sit at the bottom of the menu, not under a heading (Settings). */
+export const schoolShellFooterItems = (): SchoolShellItem[] => SCHOOL_SHELL_NAV.filter(item => !item.section);
+
 /** The routes an area lists in its tabs and in the menu. */
 export const schoolShellListed = (item: SchoolShellItem): SchoolShellRoute[] => item.routes.filter(route => !route.hidden);
 

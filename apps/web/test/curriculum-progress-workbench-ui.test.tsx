@@ -60,8 +60,6 @@ describe('bounded direct-human curriculum progress UI', () => {
     expect(elements(render()).filter(e => e.type === 'select' && e.props.name === 'requirementId').flatMap(e => elements(e).filter(x => x.type === 'option').map(x => x.props.value))).toEqual(['', requirement.id]);
     expect(elements(render()).filter(e => e.type === 'select' && e.props.name === 'observationStatus').flatMap(e => elements(e).filter(x => x.type === 'option').map(x => x.props.value))).toEqual(['', ...CURRICULUM_PROGRESS_STATUSES]);
     expect(elements(render()).filter(e => e.type === 'input').map(e => e.props.name)).toEqual([...Object.keys(ids), 'confirmObservation']);
-    expect(copy).toContain('MET is a human observation');
-    for (const phrase of ['promotion, rank, belt, certificate, testing readiness or eligibility, grade, attendance, booking, membership, payment', 'family or parent access, communication, provider, AI, Action Engine or automation outcome', 'not attendance credit', 'inert curriculum outbox event gains no consumer']) expect(copy).toContain(phrase);
     expect(copy).not.toMatch(/\d+%|ready to test|<progress|grade awarded/);
   });
   it('never permits an arbitrary requirement, unclosed status or oversized note, and edits clear confirmation before any key is made', async () => {

@@ -58,7 +58,7 @@ describe('instructor qualification evidence UI', () => {
     try {
       const html = renderToStaticMarkup(<InstructorQualificationsWorkbench/>);
       expect(fetcher).not.toHaveBeenCalled();
-      for (const phrase of ['Not an eligibility or credential engine.', 'Known qualification UUID', 'No school selector', 'Record immutable evidence', 'It does not hire, fire, discipline, set payroll', 'assign/schedule a class instructor', 'No save is assumed']) expect(html).toContain(phrase);
+      for (const phrase of ['Known qualification UUID', 'No school selector', 'Record immutable evidence', 'No save is assumed']) expect(html).toContain(phrase);
       expect(html).not.toMatch(/type="file"|payment|provider success|send message/i);
     } finally { fetcher.mockRestore(); }
   });

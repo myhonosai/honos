@@ -1,16 +1,18 @@
 'use client';
 import React, { useEffect, useId, useState } from 'react';
 import styles from './pickers.module.css';
-import { PickerError, pickerApi, type CandidatePurpose, type EnrollmentPurpose, type PickerCandidate, type PickerEnrollment, type PickerScope, type PickerTestingEvent } from './http';
+import { PickerError, pickerApi, type CandidatePurpose, type EnrollmentPurpose, type PickerCandidate, type PickerEnrollment, type PickerRank, type PickerScope, type PickerStudent, type PickerTestingEvent, type RankPurpose, type StudentPurpose } from './http';
 
 /**
  * Pick-from-list controls for curriculum, testing and promotion screens. Choosing a row only fills the screen's own
  * fields, which the screen then reads or submits as before; the server re-checks every record on each command.
  */
 export type ListState<T> = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; items: readonly T[] };
-type Copy = Readonly<{ label: string; choose: string; loading: string; empty: string; denied: string; search?: string }>;
+type Copy = Readonly<{ label: string; choose: string; loading: string; empty: string; denied: string; search?: string; unavailable?: string }>;
 
 const name = (r: { givenName: string; familyName: string }) => `${r.givenName} ${r.familyName}`;
+export const studentLabel = (r: PickerStudent): string => name(r);
+export const rankLabel = (r: PickerRank): string => `${r.curriculumName} · ${r.rankName}`;
 export function enrollmentLabel(r: PickerEnrollment, showNext: boolean): string {
   const rank = r.currentRankName ?? 'No rank yet';
   return [name(r), r.curriculumName, showNext && r.nextRankName ? `${rank} → ${r.nextRankName}` : rank].join(' · ');
@@ -39,7 +41,7 @@ export function PickListView<T>({ copy, list, keyOf, describe, value, search, di
         if (list.state !== 'READY') return; onPick?.(list.items.find((item) => keyOf(item) === e.target.value) ?? null);
       }}><option value="">{copy.choose}</option>{list.items.map((item) => <option key={keyOf(item)} value={keyOf(item)}>{describe(item)}</option>)}</select></>
       : <p role="status">{copy.empty}</p>)
-      : <p role="status">{list.state === 'LOADING' ? copy.loading : 'This list could not be loaded. You can still enter record IDs below.'}</p>}
+      : <p role="status">{list.state === 'LOADING' ? copy.loading : copy.unavailable ?? 'This list could not be loaded. You can still enter record IDs below.'}</p>}
   </div>;
 }
 
@@ -87,6 +89,26 @@ export function CandidatePicker({ scope, purpose, value, disabled, onPick }: {
   const [search, setSearch] = useState('');
   const list = useList((signal) => pickerApi.candidates(scope, purpose, search, signal), [scope.organizationId, scope.schoolId, purpose, search], search ? 250 : 0);
   return <PickListView copy={CANDIDATE_COPY[purpose]} list={list} keyOf={(i) => i.candidateId} describe={candidateLabel} value={value} search={search} disabled={disabled} onSearch={setSearch} onPick={onPick} />;
+}
+
+const STUDENT_COPY: Record<StudentPurpose, Copy> = {
+  teaching: { label: 'Student', choose: 'Choose a student (optional)', search: 'Find a student', loading: 'Reading students…', empty: 'No students match.', denied: 'Your access does not include student notes at this school.', unavailable: 'Students could not be loaded. Reload the page to try again.' },
+  achievements: { label: 'Student', choose: 'Choose a student (optional)', search: 'Find a student', loading: 'Reading students…', empty: 'No students match.', denied: 'Your access does not include student achievements at this school.', unavailable: 'Students could not be loaded. Reload the page to try again.' },
+};
+export function StudentPicker({ scope, purpose, value, disabled, onPick }: { scope: PickerScope; purpose: StudentPurpose; value: string; disabled: boolean; onPick: (item: PickerStudent | null) => void }): React.ReactElement {
+  const [search, setSearch] = useState('');
+  const list = useList((signal) => pickerApi.students(scope, purpose, search, signal), [scope.organizationId, scope.schoolId, purpose, search], search ? 250 : 0);
+  return <PickListView copy={STUDENT_COPY[purpose]} list={list} keyOf={(i) => i.studentProfileId} describe={studentLabel} value={value} search={search} disabled={disabled} onSearch={setSearch} onPick={onPick} />;
+}
+
+const RANK_COPY: Record<RankPurpose, Copy> = {
+  teaching: { label: 'Target belt (optional)', choose: 'No target belt', loading: 'Reading belts…', empty: 'No belts are set up yet.', denied: 'Your access does not include this school’s belts.', unavailable: 'Belts could not be loaded. Reload the page to try again.' },
+};
+/** One list of "Curriculum · Belt"; choosing a row fills both the curriculum and the rank, so they always match. */
+export function RankPicker({ scope, purpose, value, disabled, onPick, onItems }: { scope: PickerScope; purpose: RankPurpose; value: string; disabled: boolean; onPick: (item: PickerRank | null) => void; onItems?: (items: readonly PickerRank[]) => void }): React.ReactElement {
+  const list = useList((signal) => pickerApi.ranks(scope, purpose, signal), [scope.organizationId, scope.schoolId, purpose], 0);
+  useEffect(() => { if (list.state === 'READY') onItems?.(list.items); }, [list]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <PickListView copy={RANK_COPY[purpose]} list={list} keyOf={(i) => i.rankId} describe={rankLabel} value={value} disabled={disabled} onPick={onPick} />;
 }
 
 /** Record-ID inputs: shown directly when no school is selected, otherwise tucked under a fallback disclosure. */

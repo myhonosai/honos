@@ -1,6 +1,6 @@
 'use client';
 import React, { useRef, useState, type FormEvent } from 'react';
-import { STAFF_AVAILABILITY_HELP, validateStaffRevision, type StaffAvailabilityProfile, type StaffRevision, type StaffRevisionInput, type StaffRevisionKind, type StaffQualification, type WeeklyStaffWindow } from '@hon/contracts';
+import { validateStaffRevision, type StaffAvailabilityProfile, type StaffRevision, type StaffRevisionInput, type StaffRevisionKind, type StaffQualification, type WeeklyStaffWindow } from '@hon/contracts';
 import { StaffAvailabilityUiError, staffAvailabilityPath, staffAvailabilityRequest } from './staff-availability-http';
 import styles from './staff-availability-workbench.module.css';
 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -36,7 +36,7 @@ export function StaffAvailabilityWorkbench(): React.ReactElement {
   return <main className={styles.page}>
     <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/roles">Staff role permissions</a><a href="/auth/login">Sign in</a></nav>
     <header><p>Staff</p><h1>Availability</h1><p>Set the weekly times you or a team member can teach.</p></header>
-    <aside data-plain-note=""><strong>Availability is a record only. It does not schedule classes or change pay.</strong><details><summary>What this page never does</summary><p><strong>No scheduling or employment decisions.</strong></p><p>{STAFF_AVAILABILITY_HELP}</p></details></aside>
+    <aside data-plain-note=""><strong>Availability is a record only. It does not schedule classes or change pay.</strong></aside>
     {error && <p className={styles.error} role="alert">{error}</p>}{notice && <p className={styles.notice} role="status">{notice}</p>}
     <section><h2>1 / Load exact authorized staff metadata</h2><div className={styles.actions}><button disabled={busy} onClick={() => void run(() => load('self'))}>Load my own staff profile</button><form onSubmit={e => { e.preventDefault(); void run(() => load(knownId)); }}><label>Manager: already-known staff principal UUID<input autoComplete="off" maxLength={36} required value={knownId} placeholder="Known principal UUID, not a search" onChange={e => setKnownId(e.target.value)} /></label><button disabled={busy || !knownId}>Load known staff member</button></form></div><p>Your verified session must resolve to one exact school. No directory, name/email search, parent, mobile or HQ access. An active human with a current staff role is required on every read/save. A missing profile means no metadata has been saved, not that this person is unavailable.</p>
       {profile && <dl><dt>Loaded mode</dt><dd>{profile.own ? 'Own staff profile' : 'Manager known-ID view'}</dd><dt>Principal / school</dt><dd>{profile.principalId} / {profile.schoolId}</dd><dt>School-local timezone</dt><dd>{profile.timezone}</dd></dl>}

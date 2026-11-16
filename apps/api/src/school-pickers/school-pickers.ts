@@ -14,9 +14,15 @@ import { RuntimeDatabaseService } from '../foundation/runtime-database.service.j
  * every command these screens send still re-checks the record, school and permission itself.
  */
 export const PICKER_LIMIT = 50;
+/** A school's belt list across all its curricula is longer than one page of students, so ranks get a larger cap. */
+export const RANK_LIMIT = 200;
 export const ENROLLMENT_PURPOSES = { progress: 'curriculum.progress.record', readiness: 'testing.promotion.readiness.read', testing: 'testing.manage' } as const;
 export const CANDIDATE_PURPOSES = { grade: 'testing.manage', decision: 'testing.promotion.decide' } as const;
+export const STUDENT_PURPOSES = { teaching: 'teaching.studio.read', achievements: 'achievement.award.read' } as const;
+export const RANK_PURPOSES = { teaching: 'teaching.studio.read' } as const;
 export type EnrollmentPurpose = keyof typeof ENROLLMENT_PURPOSES;
+export type StudentPurpose = keyof typeof STUDENT_PURPOSES;
+export type RankPurpose = keyof typeof RANK_PURPOSES;
 export type CandidatePurpose = keyof typeof CANDIDATE_PURPOSES;
 type Scope = { organizationId: string; schoolId: string; principalId: string };
 
@@ -25,6 +31,9 @@ export interface PickerEnrollment extends QueryResultRow { enrollmentId: string;
 export interface PickerTestingEvent extends QueryResultRow { testingEventId: string; name: string; curriculumId: string; curriculumName: string; startsAt: string; status: string }
 export interface PickerCandidate extends QueryResultRow { candidateId: string; version: number; result: string; testingEventId: string; testingEventName: string; startsAt: string;
   studentProfileId: string; givenName: string; familyName: string; curriculumName: string; targetRankId: string; targetRankName: string }
+
+export interface PickerStudent extends QueryResultRow { studentProfileId: string; givenName: string; familyName: string }
+export interface PickerRank extends QueryResultRow { curriculumId: string; curriculumName: string; rankId: string; rankName: string; progressionOrder: number }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function needle(search: unknown): string | null {
@@ -78,6 +87,29 @@ export class SchoolPickersService {
           AND ($3::text IS NULL OR (p.given_name || ' ' || p.family_name) ILIKE ${LIKE})
         ORDER BY p.family_name, p.given_name, c.name, e.id
         LIMIT ${PICKER_LIMIT}`, [context.organizationId, context.schoolId, search, curriculumId]));
+  }
+
+  /** Active students at this school, by name (for screens that note something about one student). */
+  async students(context: CommandContext, subject: string, purpose: StudentPurpose, search: string | null): Promise<PickerStudent[]> {
+    return this.read<PickerStudent>(context, subject, STUDENT_PURPOSES[purpose], (query) => query(
+      `SELECT s.id AS "studentProfileId", p.given_name AS "givenName", p.family_name AS "familyName"
+         FROM hon.student_profiles AS s
+         JOIN hon.people AS p ON p.id = s.person_id AND p.organization_id = s.organization_id AND p.school_id = s.school_id
+        WHERE s.organization_id = $1 AND s.school_id = $2 AND s.status = 'ACTIVE'
+          AND ($3::text IS NULL OR (p.given_name || ' ' || p.family_name) ILIKE ${LIKE})
+        ORDER BY p.family_name, p.given_name, s.id
+        LIMIT ${PICKER_LIMIT}`, [context.organizationId, context.schoolId, search]));
+  }
+
+  /** Ranks of this school's draft and published curricula, by curriculum then belt order. */
+  async ranks(context: CommandContext, subject: string, purpose: RankPurpose): Promise<PickerRank[]> {
+    return this.read<PickerRank>(context, subject, RANK_PURPOSES[purpose], (query) => query(
+      `SELECT c.id AS "curriculumId", c.name AS "curriculumName", r.id AS "rankId", r.name AS "rankName", r.progression_order AS "progressionOrder"
+         FROM hon.curricula AS c
+         JOIN hon.curriculum_ranks AS r ON r.curriculum_id = c.id AND r.organization_id = c.organization_id AND r.school_id = c.school_id
+        WHERE c.organization_id = $1 AND c.school_id = $2 AND c.lifecycle <> 'ARCHIVED'
+        ORDER BY c.name, r.progression_order, r.id
+        LIMIT ${RANK_LIMIT}`, [context.organizationId, context.schoolId]));
   }
 
   /** Testing events that are not finished or cancelled, soonest first. */
@@ -163,5 +195,24 @@ export class SchoolPickersController {
     const text = needle(search);
     const { context, subject } = await this.scope(request, organizationId, schoolId, CANDIDATE_PURPOSES[purpose as CandidatePurpose]);
     return { data: await this.pickers.candidates(context, subject, purpose as CandidatePurpose, text), meta: { requestId: context.requestId, correlationId: context.correlationId, limit: PICKER_LIMIT } };
+  }
+
+  @Get('students')
+  async students(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Query('for') purpose: unknown, @Query('search') search: unknown, @Req() request: HonRequest, @Res({ passthrough: true }) response: Response) {
+    response.setHeader('Cache-Control', 'private, no-store');
+    if (typeof purpose !== 'string' || !Object.hasOwn(STUDENT_PURPOSES, purpose)) throw new BadRequestException({ code: 'PURPOSE_INVALID', detail: 'Say which screen this list is for.' });
+    const text = needle(search);
+    const { context, subject } = await this.scope(request, organizationId, schoolId, STUDENT_PURPOSES[purpose as StudentPurpose]);
+    return { data: await this.pickers.students(context, subject, purpose as StudentPurpose, text), meta: { requestId: context.requestId, correlationId: context.correlationId, limit: PICKER_LIMIT } };
+  }
+
+  @Get('ranks')
+  async ranks(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Query('for') purpose: unknown, @Req() request: HonRequest, @Res({ passthrough: true }) response: Response) {
+    response.setHeader('Cache-Control', 'private, no-store');
+    if (typeof purpose !== 'string' || !Object.hasOwn(RANK_PURPOSES, purpose)) throw new BadRequestException({ code: 'PURPOSE_INVALID', detail: 'Say which screen this list is for.' });
+    const { context, subject } = await this.scope(request, organizationId, schoolId, RANK_PURPOSES[purpose as RankPurpose]);
+    return { data: await this.pickers.ranks(context, subject, purpose as RankPurpose), meta: { requestId: context.requestId, correlationId: context.correlationId, limit: RANK_LIMIT } };
   }
 }

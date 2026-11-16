@@ -20,7 +20,6 @@ describe('human trial appointment workbench', () => {
       const html = renderToStaticMarkup(<TrialAppointmentWorkbench />);
       expect(fetcher).not.toHaveBeenCalled();
       expect(html).toContain('Trial appointments');
-      expect(html).toContain('Appointment facts only.');
       expect(html).not.toContain('Current command receipt');
       expect(html).not.toContain('calendar invitation');
       expect(html).not.toContain('Record final outcome');

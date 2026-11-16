@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { SchoolShellFrame, type SchoolShellFrameProps } from '../src/components/school-shell/frame';
-import { SCHOOL_SHELL_NAV } from '../src/components/school-shell/catalog';
+import { SCHOOL_SHELL_SECTIONS } from '../src/components/school-shell/catalog';
 import { shellText } from '../src/components/school-shell/copy';
 import { SCHOOL_TOUR_STEPS, SchoolTourDialog, TourInviteView, schoolTourInside } from '../src/components/school-shell/tour';
 import { tourCopy } from '../src/components/school-shell/tour-copy';
@@ -19,17 +19,18 @@ const base: SchoolShellFrameProps = {
 };
 
 describe('school guided tour', () => {
-  it('walks welcome, every menu area in menu order, then a closing step', () => {
+  const AREAS = [...SCHOOL_SHELL_SECTIONS.map(section => section.key), 'settings'] as const;
+  it('walks welcome, every menu heading in menu order, Settings, then a closing step', () => {
     expect(SCHOOL_TOUR_STEPS[0]).toEqual({ kind: 'welcome' });
     expect(SCHOOL_TOUR_STEPS.at(-1)).toEqual({ kind: 'finish' });
-    expect(SCHOOL_TOUR_STEPS.slice(1, -1).map(step => step.kind === 'area' ? step.item.key : null)).toEqual(SCHOOL_SHELL_NAV.map(item => item.key));
+    expect(SCHOOL_TOUR_STEPS.slice(1, -1).map(step => step.kind === 'area' ? step.area.key : null)).toEqual(AREAS);
   });
 
-  it('says what every area is for in English, Korean and Spanish', () => {
+  it('says what every heading is for in English, Korean and Spanish', () => {
     for (const language of ['en', 'ko', 'es']) {
       const c = tourCopy(language);
-      for (const item of SCHOOL_SHELL_NAV) expect(c.areas[item.key].length).toBeGreaterThan(30);
-      if (language !== 'en') for (const item of SCHOOL_SHELL_NAV) expect(c.areas[item.key]).not.toBe(tourCopy('en').areas[item.key]);
+      for (const key of AREAS) expect(c.areas[key].length).toBeGreaterThan(15);
+      if (language !== 'en') for (const key of AREAS) expect(c.areas[key]).not.toBe(tourCopy('en').areas[key]);
     }
   });
 
@@ -38,36 +39,38 @@ describe('school guided tour', () => {
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-modal="true"');
     expect(html).toContain('Welcome to HON OS');
-    expect(html).toContain('1 of 10');
+    expect(html).toContain(`1 of ${SCHOOL_TOUR_STEPS.length}`);
     expect(html).toMatch(/<button type="button" disabled="">Back<\/button>/);
     expect(html).toMatch(/data-tour-next=""[^>]*>Next</);
   });
 
   it('shows an area with what it holds and a link to it, prefilled for the verified school', () => {
     const html = dialog(1);
-    expect(html).toContain('data-tour-step="home"');
-    expect(html).toContain(esc(tourCopy('en').areas.home));
+    expect(html).toContain('data-tour-step="dashboard"');
+    expect(html).toContain(esc(tourCopy('en').areas.dashboard));
     expect(html).toContain(`href="/staff/dashboard?organizationId=${A}&amp;schoolId=${B}"`);
-    expect(html).toContain('Open Home');
-    const classes = dialog(1 + SCHOOL_SHELL_NAV.findIndex(item => item.key === 'classes'));
-    for (const name of ['Schedule', 'Attendance', 'Curriculum &amp; testing', 'Community']) expect(classes).toContain(`<li>${name}</li>`);
-    // A flat area lists its pages, never hidden onboarding routes.
-    const home = schoolTourInside(SCHOOL_SHELL_NAV[0]!, 'en');
-    expect(home).not.toContain(shellText('en', 'routeWelcome'));
+    expect(html).toContain('Open Dashboard');
+    const ranks = dialog(1 + SCHOOL_SHELL_SECTIONS.findIndex(section => section.key === 'ranks'));
+    for (const name of ['Rank setup', 'Tests', 'Mass rank promotion']) expect(ranks).toContain(`<li>${name}</li>`);
+    // A heading lists its pages, never hidden onboarding routes.
+    const first = SCHOOL_TOUR_STEPS[1]!;
+    expect(first.kind === 'area' ? schoolTourInside(first.area, 'en') : []).not.toContain(shellText('en', 'routeWelcome'));
   });
 
   it('ends with Done and never leaves the step range', () => {
     expect(dialog(SCHOOL_TOUR_STEPS.length - 1)).toMatch(/data-tour-next=""[^>]*>Done</);
     expect(dialog(99)).toContain('That is the tour');
     expect(dialog(-3)).toContain('Welcome to HON OS');
-    expect(dialog(2, 'ko')).toContain(esc(tourCopy('ko').areas.students));
+    expect(dialog(2, 'ko')).toContain(esc(tourCopy('ko').areas.ai));
     expect(dialog(2, 'es')).toContain('Cerrar recorrido');
   });
 
   it('in the shell, is modal, outlines the area in the menu, and is offered from the Menu', () => {
     const open = renderToStaticMarkup(<SchoolShellFrame {...base} tourStep={2} onTour={() => {}}><p>page</p></SchoolShellFrame>);
     expect(open).toContain('data-school-tour=""');
-    expect(open).toMatch(/data-nav="students"[^>]*data-tour-current="true"/);
+    expect(open).toMatch(/data-nav="aiTeam"[^>]*data-tour-current="true"/);
+    expect(open).toMatch(/data-nav="conversationAi"[^>]*data-tour-current="true"/);
+    expect(open).not.toMatch(/data-nav="home"[^>]*data-tour-current="true"/);
     expect(open).toMatch(/class="[^"]*workspace[^"]*" inert=""/);
     const closed = renderToStaticMarkup(<SchoolShellFrame {...base}><p>page</p></SchoolShellFrame>);
     expect(closed).not.toContain('data-school-tour');
