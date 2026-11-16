@@ -6,7 +6,7 @@ import type { ShellKey } from './copy';
  * authority. `scoped` routes accept the existing `organizationId` + `schoolId`
  * prefill, which the destination re-verifies server-side.
  */
-export type SchoolShellIcon = 'home' | 'students' | 'crm' | 'classes' | 'billing' | 'aiTeam' | 'analytics' | 'settings';
+export type SchoolShellIcon = 'home' | 'students' | 'crm' | 'classes' | 'billing' | 'aiTeam' | 'analytics' | 'community' | 'settings';
 export type SchoolShellRoute = Readonly<{ href: string; titleKey: ShellKey; scoped: boolean; group?: ShellKey; hidden?: boolean }>;
 export type SchoolShellItem = Readonly<{ key: SchoolShellIcon; titleKey: ShellKey; routes: readonly SchoolShellRoute[] }>;
 
@@ -17,7 +17,7 @@ const h = (href: string, titleKey: ShellKey): SchoolShellRoute => ({ href, title
 const g = (group: ShellKey, ...routes: SchoolShellRoute[]): SchoolShellRoute[] => routes.map(route => ({ ...route, group }));
 
 /**
- * Owner decision (2026-11-15): eight main areas. Contacts holds students, families and staff; Enrollment holds leads,
+ * Owner decision (2026-11-15): eight main areas, plus Community as its own area (2026-11-16). Contacts holds students, families and staff; Enrollment holds leads,
  * marketing and referrals; Reports holds the school's reports and analytics; HON and the AI work queues live with the
  * AI team. Areas with no route yet are absent until a connected page exists; nothing links to an inert screen.
  * Stable keys (`crm`, `students`, `analytics`) are kept so links and browser checks keep working.
@@ -27,7 +27,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'home', titleKey: 'navHome', routes: [r('/staff/dashboard', 'routeOverview', true), r('/staff/command-center', 'routeCommandCenter'), r('/staff/work', 'routeWork'),
     h('/staff/welcome', 'routeWelcome'), h('/staff/launch', 'routeLaunch'), h('/staff/founder-setup', 'routeFounderSetup')] },
   { key: 'students', titleKey: 'navStudents', routes: [...g('groupPeople', r('/staff/search', 'routeStudentSearch'), r('/staff/people', 'routePeople'), r('/staff/family-access', 'routeFamilyAccess', true), r('/staff/conversations', 'routeConversations'), r('/staff/family-messages', 'routeFamilyMessages'),
-    r('/staff/students/achievements', 'routeAchievements'), r('/staff/retention/review', 'routeRetention'), r('/staff/migration/students', 'routeStudentImport')),
+    r('/staff/students/achievements', 'routeAchievements'), r('/staff/retention/review', 'routeRetention'), r('/staff/migration/students', 'routeStudentImport'), r('/staff/migration/photos', 'routePaperImport')),
     ...g('groupStaff', r('/staff/team/invitations', 'routeTeam', true), r('/staff/roles', 'routeRoles'), r('/staff/team/availability', 'routeAvailability'), r('/staff/instructor-qualifications', 'routeQualifications'),
     r('/staff/documents', 'routeDocuments'))] },
   { key: 'crm', titleKey: 'navCrm', routes: [...g('groupLeads', r('/staff/crm', 'routeLeadsHome'), r('/staff/crm/leads', 'routeLeads', true), r('/staff/crm/journey', 'routeJourney', true), r('/staff/crm/follow-ups', 'routeFollowUps'),
@@ -39,7 +39,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     ...g('groupAttendance', r('/staff/attendance', 'routeAttendance', true), r('/staff/attendance/planned-absences', 'routePlannedAbsences')),
     ...g('groupCurriculum', r('/staff/curriculum/library', 'routeCurriculumLibrary'), r('/staff/curriculum/progress', 'routeProgress'), r('/staff/teaching-studio', 'routeTeachingStudio'), r('/staff/testing/registrations', 'routeTesting'),
     r('/staff/testing/readiness', 'routeReadiness'), r('/staff/testing/scorecards', 'routeScorecards'), r('/staff/testing/promotion-decisions', 'routePromotions'),
-    r('/staff/testing/certificates', 'routeCertificates')), ...g('groupCommunity', r('/community', 'routeCommunity'), r('/community/marketplace', 'routeMarketplace'))] },
+    r('/staff/testing/certificates', 'routeCertificates'))] },
   // Owner (2026-11-16): a person's membership is started, paused and cancelled on their contact card; Billing sets up plans.
   // The old activation and pause/cancel pages stay reachable (old links), but leave the tabs and the menu.
   { key: 'billing', titleKey: 'navBilling', routes: [...g('groupMemberships', r('/staff/billing/membership-plans', 'routePlans'), r('/staff/memberships', 'routeMembershipList'),
@@ -52,8 +52,10 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     ...g('groupSpecialists', r('/staff/leads/assistant', 'routeLeadAssistant'), r('/staff/marketing/assistant', 'routeMarketingAssistant'), r('/staff/teaching-assistant', 'routeKai'), r('/staff/retention/at-risk', 'routeMayaAtRisk'),
     r('/staff/voice', 'routeVoice'))] },
   { key: 'analytics', titleKey: 'navAnalytics', routes: [r('/staff/reports', 'routeSchoolReports'), r('/staff/operations', 'routeOperationsReport', true), r('/staff/health-score', 'routeHealthScore'), r('/staff/planning/revenue', 'routeRevenuePlanning')] },
+  // Owner (2026-11-16): the owner community and marketplace are their own area, not part of Classes.
+  { key: 'community', titleKey: 'navCommunity', routes: [r('/community', 'routeCommunity'), r('/community/marketplace', 'routeMarketplace')] },
   { key: 'settings', titleKey: 'navSettings', routes: [r('/staff/settings', 'routeSettingsSummary'), r('/staff/account-status', 'routeAccount'), r('/staff/owners', 'routeOwners'), r('/staff/subscription', 'routeSubscription'),
-    r('/staff/settings/branding', 'routeBranding'), r('/staff/settings/booking-types', 'routeBookingTypes'), r('/staff/settings/texting-number', 'routeTextingNumber'), r('/settings/language-region', 'routeLanguage'), r('/settings/texts-from-hon', 'routeTextsFromHon'),
+    r('/staff/settings/branding', 'routeBranding'), r('/staff/settings/location', 'routeLocation'), r('/staff/settings/booking-types', 'routeBookingTypes'), r('/staff/settings/texting-number', 'routeTextingNumber'), r('/settings/language-region', 'routeLanguage'), r('/settings/texts-from-hon', 'routeTextsFromHon'),
     r('/staff/automation/rules', 'routeAutomation'), r('/staff/help', 'routeHelp')] },
 ];
 

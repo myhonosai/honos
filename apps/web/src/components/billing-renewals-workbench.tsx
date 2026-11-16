@@ -1,6 +1,6 @@
 'use client';
 import React, { useRef, useState, type FormEvent } from 'react';
-import { BILLING_RENEWAL_HELP, RENEWAL_STATUSES, type RenewalInput, type RenewalRecord, type RenewalQueue, type RenewalStatus, type RenewalOperation, type RenewalMembershipFacts, type RenewalHistory } from '@hon/contracts';
+import { RENEWAL_STATUSES, type RenewalInput, type RenewalRecord, type RenewalQueue, type RenewalStatus, type RenewalOperation, type RenewalMembershipFacts, type RenewalHistory } from '@hon/contracts';
 import { loadRenewals, readRenewal, readRenewalMembership, loadRenewalHistory, mutateRenewal, renewalFingerprint, RenewalAccessError } from './billing-renewals-http';
 import styles from './billing-renewals-workbench.module.css';
 const initial = (): RenewalInput => ({ expectedVersion: 0, membershipId: '', reviewFrom: '', reviewTo: '', status: 'OPEN', note: '', reason: '', reminderNeeded: null });
@@ -51,8 +51,7 @@ export function BillingRenewalsWorkbench(): React.ReactElement {
   return <main className={styles.page}>
     <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/search">Staff search</a><a href="/auth/login">Sign in</a></nav>
     <header><p>Memberships</p><h1>Renewals</h1><p>A shared list for reviewing memberships that are coming up for renewal.</p></header>
-    <aside data-plain-note=""><strong>Nothing is charged, sent or renewed automatically from here.</strong><details><summary>What this page never does</summary><p><strong>No collection. No notices. No automatic renewal.</strong></p><p>{BILLING_RENEWAL_HELP}</p>
-      <p>Exact school permissions: billing.renewal.manage and billing.membership.read, for verified human staff. Shared school records, not self assignments. No payer directory or customer contact lookup. Do not enter card details, payment-method tokens or provider secrets in private notes.</p></details></aside>
+    <aside data-plain-note=""><strong>Nothing is charged, sent or renewed automatically from here.</strong></aside>
     <section><h2>Authorized school reviews</h2><div className={styles.row}>
       <label>Status<select disabled={busy} value={status} onChange={e => { setStatus(e.target.value as RenewalStatus | 'ALL'); setContext(null); clearDetail(); }}>{[...RENEWAL_STATUSES, 'ALL'].map(s => <option key={s}>{s}</option>)}</select></label>
       <button disabled={busy} onClick={() => void load()}>Load / refresh reviews</button></div>

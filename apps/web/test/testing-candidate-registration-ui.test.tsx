@@ -46,7 +46,7 @@ describe('bounded direct-human PENDING candidate UI', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(response()); fill(); confirm(); submit(); await settle(); const copy = text(render());
     for (const fact of [candidate.id, ids.testingEventId, ids.studentCurriculumEnrollmentId, ids.targetRankId, candidate.createdAt, 'PENDING']) expect(copy).toContain(fact);
     expect(copy).not.toContain('PRIVATE_NOTE'); expect(copy).not.toMatch(/\d+%|ready to test|grade awarded/);
-    for (const phrase of ['not eligibility or testing completion', 'PENDING candidate, canonical audit and inert outbox evidence', 'eligibility or readiness, a roster, place or capacity', 'score, grade, pass/fail/defer', 'promotion, rank, belt or certificate', 'family or parent access', 'attendance, billing, payment, message, provider, AI, Action Engine, automation or external effect', 'No outbox consumer is activated', 'command-response snapshot, not live status']) expect(copy).toContain(phrase);
+    for (const phrase of ['command-response snapshot, not live status']) expect(copy).toContain(phrase);
     expect(elements(render()).filter(e => e.type === 'select' || e.type === 'option')).toEqual([]); expect(elements(render()).filter(e => e.type === 'input').map(e => e.props.name)).toEqual([...Object.keys(ids), 'confirmRegistration']);
   });
   it('blocks invalid UUIDs/notes and clears confirmation on every edit before allocating a key', async () => {

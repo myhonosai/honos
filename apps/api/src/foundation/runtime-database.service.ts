@@ -1372,7 +1372,8 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
 
   async callHonOsSignup(operation: 'register'|'read', params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
-      register: {sql: 'SELECT hon.register_hon_os_school($1,$2,$3::jsonb,$4::uuid) data',arity:4,readOnly:false},
+      // 0392: sign-up records the school address in the same transaction (wraps the unchanged 0241 function).
+      register: {sql: 'SELECT hon.register_hon_os_school_with_location($1,$2,$3::jsonb,$4::uuid) data',arity:4,readOnly:false},
       read: {sql: 'SELECT hon.read_hon_os_registration($1) data',arity:1,readOnly:true},
     } as const;
     const call=calls[operation];
@@ -1425,6 +1426,18 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('PERSON_UNAVAILABLE');
     return this.callFixedSubjectFunction(call,params,'PERSON_UNAVAILABLE');
+  }
+
+  /** 0390 contact photos: three fixed definer functions; the subject comes only from the signed HON session. */
+  async callSchoolPersonPhoto(operation: 'read'|'set'|'remove', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      read: {sql: 'SELECT hon.read_person_photo($1,$2::uuid,$3::uuid) data',arity:3,readOnly:true},
+      set: {sql: 'SELECT hon.set_person_photo($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      remove: {sql: 'SELECT hon.remove_person_photo($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('PERSON_PHOTO_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call,params,'PERSON_PHOTO_UNAVAILABLE');
   }
 
   private async callFixedSubjectFunction(call: { sql: string; readOnly: boolean }, params: readonly (string | null)[], unavailable: string): Promise<unknown> {

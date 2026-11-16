@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "260b82c5eb080641c53f994a1c407aef4b15ef63f4967ac9ebf522aeee8c251f",
+  "chainSha256": "a21f0836f524dd07e03e208040aaf2512d8d5e97121969c0247ffc576971cc1f",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -521,6 +521,18 @@
     {
       "file": "0387_school_contact_merge_archive.sql",
       "sha256": "ba2a922ff550a5441cd4d3f286f0a51cb4785872b28dc3a54de0a1715da23bef"
+    },
+    {
+      "file": "0388_school_paper_import.sql",
+      "sha256": "4f556472acba21133dd5f8f644e461608969343d65cfcd21348590586c6c3ab5"
+    },
+    {
+      "file": "0390_school_person_photos.sql",
+      "sha256": "d80b9e611e0a0035809d4174afe0cc35265d2ad67395b8c3127a89819ff683a6"
+    },
+    {
+      "file": "0392_school_location_biometric_notice.sql",
+      "sha256": "1dd2614732160985e3592e46699670682cfbcfc0bcf9a7e3973381f8acfec411"
     },
     {
       "file": "0398_person_membership_from_plan.sql",
