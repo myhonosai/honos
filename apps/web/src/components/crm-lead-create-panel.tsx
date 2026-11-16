@@ -8,9 +8,11 @@ import { addLeadApi, openStageChoices, type StageChoice } from './leads/add-lead
 import { IdFields } from './school-pickers/pickers';
 
 /** Uses only the canonical create path. Scope entries and drafts never confer authority. */
-export function CrmLeadCreatePanel({ organizationId, schoolId, disabled = false, onStarted, onBusy, onAccessLost }: {
+/** The page's own memory of a school's open stages, so a panel remounted to discard a draft (for example on blur) reads nothing again. */
+export type StageCache = Map<string, Promise<readonly StageChoice[]>>;
+export function CrmLeadCreatePanel({ organizationId, schoolId, disabled = false, onStarted, onBusy, onAccessLost, stageCache }: {
   organizationId: string; schoolId: string; disabled?: boolean;
-  onStarted: () => void; onBusy: (busy: boolean) => void; onAccessLost: () => void;
+  onStarted: () => void; onBusy: (busy: boolean) => void; onAccessLost: () => void; stageCache?: StageCache;
 }): React.ReactElement {
   const [pipelineId, setPipelineId] = useState('');
   const [pipelineStageId, setPipelineStageId] = useState('');
@@ -31,8 +33,17 @@ export function CrmLeadCreatePanel({ organizationId, schoolId, disabled = false,
   const [stages, setStages] = useState<readonly StageChoice[] | null>(null), [stagesFailed, setStagesFailed] = useState(false);
   useEffect(() => {
     const controller = new AbortController(); let live = true; setStages(null); setStagesFailed(false);
-    addLeadApi.pipelines({ organizationId, schoolId }, controller.signal, () => live)
-      .then((items) => { if (!live) return; const choices = openStageChoices(items); setStages(choices); if (choices.length === 1) { setPipelineId(choices[0]!.pipelineId); setPipelineStageId(choices[0]!.stageId); } })
+    const cacheKey = `${organizationId}:${schoolId}`;
+    // A read still in flight is shared too: the cache holds the promise. A failed read stays failed until the page reloads,
+    // as its message says, so a blur never re-reads.
+    let read = stageCache?.get(cacheKey);
+    if (!read) {
+      const fresh: Promise<readonly StageChoice[]> = addLeadApi.pipelines({ organizationId, schoolId }, stageCache ? new AbortController().signal : controller.signal, stageCache ? () => true : () => live).then((items) => openStageChoices(items));
+      if (stageCache) { stageCache.set(cacheKey, fresh); fresh.catch(() => undefined); }
+      read = fresh;
+    }
+    read
+      .then((choices) => { if (!live) return; setStages(choices); if (choices.length === 1) { setPipelineId(choices[0]!.pipelineId); setPipelineStageId(choices[0]!.stageId); } })
       .catch(() => { if (live) setStagesFailed(true); });
     return () => { live = false; controller.abort(); };
   }, [organizationId, schoolId]);
