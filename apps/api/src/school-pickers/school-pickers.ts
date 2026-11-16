@@ -18,7 +18,7 @@ export const PICKER_LIMIT = 50;
 export const RANK_LIMIT = 200;
 export const ENROLLMENT_PURPOSES = { progress: 'curriculum.progress.record', readiness: 'testing.promotion.readiness.read', testing: 'testing.manage' } as const;
 export const CANDIDATE_PURPOSES = { grade: 'testing.manage', decision: 'testing.promotion.decide' } as const;
-export const STUDENT_PURPOSES = { teaching: 'teaching.studio.read' } as const;
+export const STUDENT_PURPOSES = { teaching: 'teaching.studio.read', achievements: 'achievement.award.read' } as const;
 export const RANK_PURPOSES = { teaching: 'teaching.studio.read' } as const;
 /** Screens that assign or manage a teammate, each with the permission that screen's own command needs (0404 allow-list). */
 export const STAFF_PURPOSES = { followups: 'crm.follow_up.manage', work: 'work_item.manage', qualifications: 'staff.instructor_qualification.manage',

@@ -5,7 +5,7 @@ import type { LeadListItem, CrmLeadRegistrationRecovery, CrmGuardianChildEnrollm
 import { CrmLeadAccessError, loadCrmLeads, type CrmLeadStatus } from './crm-leads-http';
 import { crmFollowUpHref } from './crm-follow-up-handoff';
 import { CrmLeadClosePanel } from './crm-lead-close-panel';
-import { CrmLeadCreatePanel } from './crm-lead-create-panel';
+import { CrmLeadCreatePanel, type StageCache } from './crm-lead-create-panel';
 import { CrmAdultFlow } from './crm-adult-flow';
 import { CrmAdultRecoveryPending } from './crm-adult-recovery-pending';
 import { AdultAccessError, AdultRecoveryError, readAdultRecovery } from './crm-adult-flow-http';
@@ -50,6 +50,8 @@ export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject, onMembers
   const [needsReload, setNeedsReload] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [draftEpoch, setDraftEpoch] = useState(0);
+  // Survives the draft reset on blur, so an idle page reads the stage list once; dropped when access changes.
+  const stageCache = useRef<StageCache>(new Map());
   const [adult, setAdult] = useState<LeadListItem | null>(null);
   const [adultBusy, setAdultBusy] = useState(false);
   const adultOpen = useRef(false); adultOpen.current = adult !== null;
@@ -96,7 +98,7 @@ export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject, onMembers
     setLeads(null); setError(''); setSelected(null); setNeedsReload(false); setAdult(null); setAdultBusy(false); setDraftEpoch(value => value + 1);
   }
   function accessLost(reason?: string): void {
-    clear(); shielded.current = false; setConcealed(false); setOrganizationId(''); setSchoolId(''); setCreateBusy(false); setCloseBusy(false);
+    clear(); stageCache.current.clear(); shielded.current = false; setConcealed(false); setOrganizationId(''); setSchoolId(''); setCreateBusy(false); setCloseBusy(false);
     setError(reason ?? 'Your sign-in or access to this school changed. Nothing was saved from this page; reload it to continue.');
   }
   useEffect(() => {
@@ -249,7 +251,7 @@ export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject, onMembers
     <section aria-labelledby="crm-lead-scope"><h2 id="crm-lead-scope">{fromSession ? 'Your leads' : 'Choose a school'}</h2><form onSubmit={(event) => void load(event)}><fieldset disabled={loading || closeBusy || createBusy || adultBusy || familyBusy || familyLoading}><div className={styles.row}>{!fromSession && <><label>Organization UUID<input required autoComplete="off" value={organizationId} onChange={(event) => { setOrganizationId(event.target.value); clear(); }} /></label><label>School UUID<input required autoComplete="off" value={schoolId} onChange={(event) => { setSchoolId(event.target.value); clear(); }} /></label></>}<label>Status filter<select value={status} onChange={(event) => { setStatus(event.target.value as CrmLeadStatus | ''); clear(); }}><option value="">All leads</option><option value="OPEN">Open</option><option value="WON">Won</option><option value="LOST">Lost</option><option value="ARCHIVED">Archived</option></select></label></div><button disabled={adult !== null || familyRow !== null || selected !== null}>{loading ? 'Loading…' : fromSession ? 'Refresh list' : 'Load CRM leads'}</button></fieldset></form>{error && <p className={styles.error} role="alert">{error}</p>}{!leads && !loading && !error && <p role="status">{fromSession && !schoolId ? <>Your access changed, so this page stopped. <button type="button" onClick={() => window.location.reload()}>Reload page</button></> : 'No list loaded yet.'}</p>}</section>
     {fromSession
       ? <section aria-labelledby="crm-lead-add" hidden={adult !== null || familyRow !== null}><h2 id="crm-lead-add">New lead?</h2><p>Add new leads on the Leads page, where you pick their stage by name. Then come back here to set up their membership.</p><a href="/staff/crm">Add a lead on the Leads page</a></section>
-      : <div hidden={adult !== null || familyRow !== null}><CrmLeadCreatePanel key={`${organizationId}:${schoolId}:${draftEpoch}`} organizationId={organizationId} schoolId={schoolId} disabled={loading || closeBusy || selected !== null || adult !== null || familyRow !== null} onStarted={() => { setNeedsReload(true); setSelected(null); }} onBusy={value => busy('create', value)} onAccessLost={accessLost} /></div>}
+      : <div hidden={adult !== null || familyRow !== null}><CrmLeadCreatePanel key={`${organizationId}:${schoolId}:${draftEpoch}`} stageCache={stageCache.current} organizationId={organizationId} schoolId={schoolId} disabled={loading || closeBusy || selected !== null || adult !== null || familyRow !== null} onStarted={() => { setNeedsReload(true); setSelected(null); }} onBusy={value => busy('create', value)} onAccessLost={accessLost} /></div>}
     {needsReload && <p role="status">This list may be out of date after that change. Press Refresh list to see the latest. {familyRow ? 'Close family setup first if it is open.' : 'Close adult setup first if it is open.'}</p>}
     {adult && (resuming && !recovery ? <CrmAdultRecoveryPending row={adult} busy={recovering} error={recoveryError} onRetry={() => void resume(adult)} onCancel={closeAdult} />
       : <CrmAdultFlow key={`${organizationId}:${schoolId}:${adult.id}:${draftEpoch}`} row={adult} organizationId={organizationId} schoolId={schoolId} {...(recovery ? { initialRecovery: recovery } : {})} onRecover={() => void resume(adult)} {...(onMembershipReview ? { onMembershipReview: (selectors: KnownMembership) => reviewMembership('adult', adult.id, selectors) } : {})} onCancel={closeAdult} onBusy={value => busy('adult', value)} onStarted={() => setNeedsReload(true)} onAccessLost={accessLost} />)}
