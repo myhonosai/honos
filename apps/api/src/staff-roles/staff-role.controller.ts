@@ -1,4 +1,4 @@
-import { Body, ConflictException, Controller, ForbiddenException, Get, Headers, HttpCode, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, ConflictException, Controller, ForbiddenException, Get, Header, Headers, HttpCode, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { StaffRoleActionCode, StaffRoleCommandContext } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
@@ -43,6 +43,11 @@ export class StaffRoleController {
   async revoke(@Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Param('grantId', new ParseUUIDPipe()) id: string, @Headers('idempotency-key') key: string | undefined, @Body() input: RevokeStaffRoleDto, @Req() request: HonRequest) {
     const context = await this.context(org, school, request, key, 'iam.staff_role.revoke');
     return this.envelope(context, await this.roles.revoke(context, id, input));
+  }
+  @Get('lists') @Header('Cache-Control', 'private, no-store')
+  async lists(@Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Req() request: HonRequest) {
+    const context = await this.context(org, school, request, 'read', 'iam.staff_role.manage');
+    return this.envelope(context, { record: await this.roles.lists(context), replayed: false });
   }
   @Get('custom/:roleId')
   async readRole(@Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Param('roleId', new ParseUUIDPipe()) id: string, @Req() request: HonRequest) {

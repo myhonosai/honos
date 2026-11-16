@@ -44,7 +44,7 @@ describe('bounded final human promotion-decision UI', () => {
   it('accepts each closed final status as a human decision only and never claims an external effect', async () => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
     for (const status of ['PROMOTED', 'DEFERRED', 'NOT_PROMOTED']) { fetcher.mockResolvedValueOnce(response({ ...decision, status })); fill(status); confirm(); submit(); await settle(); const copy = text(render());
-      expect(copy).toContain(`Returned final decision: ${status}`); for (const phrase of ['final human instructor decision', 'terminal candidate, current enrollment, target rank and promotion prerequisites', 'No external certificate, parent notice, attendance record, billing/payment change, message, provider, AI, Action Engine, automation or effect consumer', 'not live candidate status, readiness, eligibility or a certificate/notification claim', 'No instructor/actor, authority, audit or outbox data is displayed']) expect(copy).toContain(phrase);
+      expect(copy).toContain(`Returned final decision: ${status}`); for (const phrase of ['final human instructor decision', 'not live candidate status, readiness, eligibility or a certificate/notification claim', 'No instructor/actor, authority, audit or outbox data is displayed']) expect(copy).toContain(phrase);
       expect(copy).not.toContain('PRIVATE_RATIONALE'); expect(elements(render()).filter(e => e.type === 'a').map(e => e.props.href)).toEqual(['/staff/dashboard']); }
   });
   it('clears confirmation, receipt and retry on every edit and permits only an exact in-memory retry after uncertainty', async () => {

@@ -1,8 +1,8 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { PICKER_LIMIT, pickerApi, verifyCandidates, verifyEnrollments, verifyTestingEvents, type PickerCandidate, type PickerEnrollment } from '../src/components/school-pickers/http';
-import { IdFields, PickListView, candidateLabel, enrollmentLabel, testingEventLabel } from '../src/components/school-pickers/pickers';
+import { PICKER_LIMIT, RANK_LIMIT, STAFF_LIMIT, pickerApi, verifyCandidates, verifyEnrollments, verifyRanks, verifyStaff, verifyStudents, verifyTestingEvents, type PickerCandidate, type PickerEnrollment } from '../src/components/school-pickers/http';
+import { IdFields, PickListView, candidateLabel, enrollmentLabel, filterLeads, leadLabel, rankLabel, staffLabel, studentLabel, testingEventLabel } from '../src/components/school-pickers/pickers';
 import { id, scope } from './account-status-fixtures';
 
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
@@ -83,4 +83,44 @@ it('renders loading, empty, denied, unavailable and ready states, and tucks ID i
   const denied = view({ state: 'DENIED' }); expect(denied).toContain('No access here.'); expect(denied).not.toContain('<select');
   expect(renderToStaticMarkup(<IdFields manual={false}><input name="x" /></IdFields>)).toMatch(/^<details data-id-fields="fallback" class="[^"]+"><summary>Enter record IDs instead<\/summary><input name="x"\/><\/details>$/);
   expect(renderToStaticMarkup(<IdFields manual><input name="x" /></IdFields>)).toBe('<input name="x"/>');
+});
+
+it('reads students and ranks for Teaching studio and accepts only their closed shapes', async () => {
+  const student = { studentProfileId: id(300), givenName: 'Avery', familyName: 'Sample' };
+  const rank = { curriculumId: id(200), curriculumName: 'Kids Karate', rankId: id(401), rankName: 'Yellow', progressionOrder: 2 };
+  const f = vi.fn(async () => json({ data: [student], meta }));
+  vi.stubGlobal('fetch', f);
+  await expect(pickerApi.students(scope, 'teaching', ' Ave ', signal())).resolves.toEqual([student]);
+  expect((f.mock.calls[0] as unknown as [string])[0]).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/pickers/students?for=teaching&search=Ave`);
+  vi.stubGlobal('fetch', vi.fn(async () => json({ data: [rank], meta: { ...meta, limit: RANK_LIMIT } })));
+  await expect(pickerApi.ranks(scope, 'teaching', signal())).resolves.toEqual([rank]);
+  vi.stubGlobal('fetch', vi.fn(async () => json({ data: [rank], meta })));
+  await expect(pickerApi.ranks(scope, 'teaching', signal())).rejects.toMatchObject({ kind: 'UNAVAILABLE' });
+  const body = (data: unknown[], limit = PICKER_LIMIT) => ({ data, meta: { ...meta, limit } });
+  for (const bad of [{ ...student, extra: 1 }, { ...student, studentProfileId: 'x' }, { ...student, givenName: '' }]) expect(() => verifyStudents(body([bad]))).toThrow();
+  expect(() => verifyStudents(body([student, student]))).toThrow();
+  for (const bad of [{ ...rank, progressionOrder: 0 }, { ...rank, rankName: '' }, { ...rank, curriculumId: 'x' }]) expect(() => verifyRanks(body([bad], RANK_LIMIT))).toThrow();
+  expect(verifyRanks(body(Array.from({ length: 120 }, (_, i) => ({ ...rank, rankId: id(1000 + i) })), RANK_LIMIT))).toHaveLength(120);
+  expect(studentLabel(student)).toBe('Avery Sample');
+  expect(rankLabel(rank)).toBe('Kids Karate · Yellow');
+});
+
+it('filters open leads by name on the page and labels them by name only', () => {
+  const lead = (n: number, givenName: string, familyName: string) => ({ id: id(700 + n), status: 'OPEN' as const, pipelineStageId: id(800), primaryPersonId: id(900 + n), version: 1, createdAt: '2026-11-01T00:00:00.000Z', givenName, familyName });
+  const leads = [lead(1, 'Avery', 'Kim'), lead(2, 'Blake', 'Park'), lead(3, 'Casey', 'Kimball')];
+  expect(filterLeads(leads, '').map(leadLabel)).toEqual(['Avery Kim', 'Blake Park', 'Casey Kimball']);
+  expect(filterLeads(leads, '  kim ').map(leadLabel)).toEqual(['Avery Kim', 'Casey Kimball']);
+  expect(filterLeads(leads, 'zzz')).toEqual([]);
+});
+
+it('reads the staff list for a fixed screen purpose and accepts only principal id and display name', async () => {
+  const row = { principalId: id(950), displayName: 'Coach Kim' };
+  const f = vi.fn(async () => json({ data: [row], meta: { ...meta, limit: STAFF_LIMIT } }));
+  vi.stubGlobal('fetch', f);
+  await expect(pickerApi.staff(scope, 'followups', signal())).resolves.toEqual([row]);
+  expect((f.mock.calls[0] as unknown as [string])[0]).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/pickers/staff?for=followups`);
+  const body = (data: unknown[]) => ({ data, meta: { ...meta, limit: STAFF_LIMIT } });
+  for (const bad of [{ ...row, email: 'a@b.test' }, { ...row, principalId: 'x' }, { ...row, displayName: '' }]) expect(() => verifyStaff(body([bad]))).toThrow();
+  expect(() => verifyStaff(body([row, row]))).toThrow();
+  expect(staffLabel(row)).toBe('Coach Kim');
 });
