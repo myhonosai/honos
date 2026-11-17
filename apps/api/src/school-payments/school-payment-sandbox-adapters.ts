@@ -284,7 +284,7 @@ export class StripeConnectTestAdapter implements SchoolPaymentAdapter {
   oneTimeSurfaces(): readonly SchoolPayOnceSurface[] { return STRIPE_ONCE_SURFACES; }
 
   /**
-   * 0458: a Checkout Session in payment mode on the school's own account (a direct charge, no application fee), card
+   * 0462: a Checkout Session in payment mode on the school's own account (a direct charge, no application fee), card
    * only, one line with the payment's label and amount, the payment id in client_reference_id and in the session and
    * PaymentIntent metadata, the expiry HON fixed at start, and the payment's idempotency key (every parameter comes from
    * the stored start, so a resend is identical). EMBEDDED returns the client secret, HOSTED Stripe's checkout URL.
@@ -315,7 +315,7 @@ export class StripeConnectTestAdapter implements SchoolPaymentAdapter {
     return { sessionRef: providerRef(session.id), clientSecret: null, url: hostedUrl(session.url, 'checkout.stripe.com') };
   }
 
-  /** 0458: the session as Stripe holds it. complete + paid is SUCCEEDED with its PaymentIntent; complete + unpaid PROCESSING. */
+  /** 0462: the session as Stripe holds it. complete + paid is SUCCEEDED with its PaymentIntent; complete + unpaid PROCESSING. */
   async findOneTimePayment({ accountRef: account, paymentId, sessionRef, amountMinor, currency }: SchoolPayOnceLookup): Promise<SchoolPayOnceObservation> {
     const response = await this.call('GET', `/v1/checkout/sessions/${encodeURIComponent(providerRef(sessionRef))}`, undefined, undefined, account);
     if (response.status !== 200) return rejected();
@@ -332,7 +332,7 @@ export class StripeConnectTestAdapter implements SchoolPaymentAdapter {
     return verifySchoolPayOnceObservation({ ...base, outcome: 'SUCCEEDED', paymentRef: providerRef(intent) });
   }
 
-  /** 0458: expire an open session. Stripe answers 400 for a session that is no longer open; the caller retrieves it next. */
+  /** 0462: expire an open session. Stripe answers 400 for a session that is no longer open; the caller retrieves it next. */
   async expireOneTimePayment({ accountRef: account, sessionRef }: SchoolPayOnceLookup): Promise<void> {
     const response = await this.call('POST', `/v1/checkout/sessions/${encodeURIComponent(providerRef(sessionRef))}/expire`, {}, undefined, account);
     if (response.status === 200 || response.status === 400) return;
@@ -446,7 +446,7 @@ export class SquareSandboxAdapter implements SchoolPaymentAdapter {
   async chargeOffSession(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
   async findCharge(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
   /**
-   * 0458: a Square one-time payment is a payment link on the seller's location (the processor's own page), which needs
+   * 0462: a Square one-time payment is a payment link on the seller's location (the processor's own page), which needs
    * the seller's token from the vault and a location; that is a later piece. Until then it is not offered (no surface)
    * and every call is refused before anything is sent (the simulator covers the flow).
    */

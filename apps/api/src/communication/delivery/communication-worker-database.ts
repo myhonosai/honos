@@ -77,11 +77,11 @@ export interface ZernioInboxEventRecord {
 }
 
 export interface ClaimedSocialPostTarget {
-  targetId: string; leaseToken: string; organizationId: string; schoolId: string; platform: 'FACEBOOK' | 'INSTAGRAM';
+  targetId: string; leaseToken: string; organizationId: string; schoolId: string; platform: 'FACEBOOK' | 'INSTAGRAM' | 'GOOGLE_BUSINESS';
   providerAccountId: string; providerProfileId: string | null; text: string; linkUrl: string | null;
 }
 export interface ZernioSocialEventRecord {
-  eventId: string; eventType: 'post.published' | 'post.failed' | 'account.disconnected'; platform: 'FACEBOOK' | 'INSTAGRAM';
+  eventId: string; eventType: 'post.published' | 'post.failed' | 'account.disconnected'; platform: 'FACEBOOK' | 'INSTAGRAM' | 'GOOGLE_BUSINESS';
   providerAccountId: string; providerPostId: string | null;
 }
 
@@ -238,7 +238,7 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
   }
 
   async claimSocialPostTargets(limit: number, leaseSeconds: number): Promise<ClaimedSocialPostTarget[]> {
-    const rows = await this.query<{ target_id: string; lease_token: string; organization_id: string; school_id: string; platform: 'FACEBOOK' | 'INSTAGRAM';
+    const rows = await this.query<{ target_id: string; lease_token: string; organization_id: string; school_id: string; platform: 'FACEBOOK' | 'INSTAGRAM' | 'GOOGLE_BUSINESS';
       provider_account_id: string; provider_profile_id: string | null; body: string; link_url: string | null }>(
       'SELECT * FROM hon.claim_school_social_post_targets($1, $2)', [limit, leaseSeconds]);
     return rows.map((row) => ({ targetId: row.target_id, leaseToken: row.lease_token, organizationId: row.organization_id, schoolId: row.school_id,

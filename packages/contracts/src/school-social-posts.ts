@@ -1,7 +1,8 @@
 // School social posts (0348, docs/architecture/SOCIAL_POSTING_INBOX_ADS.md §4A): staff write text posts for the school's
 // own Facebook Pages, a manager approves each one with a publish time, and HON publishes it through Zernio only when
-// HON_ZERNIO_PUBLISH_APPROVED is set on the API server. Instagram needs media, which this piece does not carry.
-import { SOCIAL_PLATFORMS, type SocialPlatform } from './school-social.js';
+// HON_ZERNIO_PUBLISH_APPROVED is set on the API server. Instagram needs media, which this piece does not carry. 0455 adds the
+// school's Google Business Profile as a target (text up to 1,500 characters).
+import { SOCIAL_POST_PLATFORMS, type SocialPostPlatform } from './school-social.js';
 
 export const SOCIAL_POST_STATUSES = ['DRAFT', 'APPROVED', 'CANCELLED'] as const;
 export const SOCIAL_POST_TARGET_STATUSES = ['PENDING', 'PUBLISHING', 'PUBLISHED', 'FAILED', 'UNKNOWN', 'SKIPPED', 'CANCELLED'] as const;
@@ -24,7 +25,7 @@ export type SocialPostTargetStatus = typeof SOCIAL_POST_TARGET_STATUSES[number];
 export type SocialPostFailureCode = typeof SOCIAL_POST_FAILURE_CODES[number];
 export type SocialPostSkipReason = typeof SOCIAL_POST_SKIP_REASONS[number];
 export interface SocialPostTarget {
-  targetId: string; accountId: string; platform: SocialPlatform; displayName: string; status: SocialPostTargetStatus;
+  targetId: string; accountId: string; platform: SocialPostPlatform; displayName: string; status: SocialPostTargetStatus;
   failureCode: SocialPostFailureCode | null; skipReason: SocialPostSkipReason | null; resolvedByPerson: boolean; settledAt: string | null; version: number;
 }
 export interface SocialPost {
@@ -96,7 +97,7 @@ export function verifySocialPostTarget(v: unknown): SocialPostTarget {
   const settledAt = time(o.settledAt, 'post target', true);
   if ((status === 'FAILED') !== (failureCode !== null) || (status === 'SKIPPED') !== (skipReason !== null)
     || ['PUBLISHED', 'FAILED', 'SKIPPED', 'CANCELLED'].includes(status) !== (settledAt !== null)) fail('post target');
-  return { targetId: o.targetId, accountId: o.accountId, platform: oneOf(o.platform, SOCIAL_PLATFORMS, 'post target')!, displayName: o.displayName,
+  return { targetId: o.targetId, accountId: o.accountId, platform: oneOf(o.platform, SOCIAL_POST_PLATFORMS, 'post target')!, displayName: o.displayName,
     status, failureCode, skipReason, resolvedByPerson: o.resolvedByPerson, settledAt, version: version(o.version, 'post target') };
 }
 

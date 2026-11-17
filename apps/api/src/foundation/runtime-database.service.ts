@@ -656,7 +656,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
   }
 
   /**
-   * B-TUI-2 0458 shared one-time payment: the API's four fixed calls (read, start, record, list due), one short
+   * B-TUI-2 0462 shared one-time payment: the API's four fixed calls (read, start, record, list due), one short
    * transaction each, no tenant settings. The payment id is the only scope; opening a payment is never a runtime call.
    */
   async runSchoolPayOnceCall(statement: string, values: unknown[]): Promise<unknown> {
