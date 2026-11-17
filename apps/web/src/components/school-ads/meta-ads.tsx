@@ -37,9 +37,10 @@ export function money(locale: string, cents: number, currency: string): string {
 const DONE: Record<AdsAction, AdsKey> = { budget: 'done_budget', draft: 'done_draft', CREATE: 'done_CREATE', ACTIVATE: 'done_ACTIVATE', PAUSE: 'done_PAUSE', cancel: 'done_cancel', resolve: 'done_resolve' };
 
 function AdRow({ ad, p, t }: { ad: SocialAd; p: MetaAdsProps; t: (k: AdsKey) => string }): React.ReactElement {
-  const on = p.ads.state === 'READY' && p.ads.view.adsEnabled, busy = p.locked;
+  // Pausing only lowers spend, so it needs only pauseEnabled (true whenever a Zernio key exists), not the ads switch.
+  const on = p.ads.state === 'READY' && p.ads.view.adsEnabled, canPause = p.ads.state === 'READY' && p.ads.view.pauseEnabled, busy = p.locked;
   const op = (operation: 'CREATE' | 'ACTIVATE' | 'PAUSE', label: AdsKey, primary = false) =>
-    <button type="button" className={primary ? styles.primary : styles.secondary} disabled={busy || !on} data-ads-op={operation} onClick={() => p.onOperation?.(ad, operation)}>{t(label)}</button>;
+    <button type="button" className={primary ? styles.primary : styles.secondary} disabled={busy || !(operation === 'PAUSE' ? canPause : on)} data-ads-op={operation} onClick={() => p.onOperation?.(ad, operation)}>{t(label)}</button>;
   let actions: React.ReactNode = null;
   if (ad.status === 'DRAFT') actions = <>{op('CREATE', 'approve', true)}
     <button type="button" className={styles.secondary} disabled={busy} data-ads-cancel onClick={() => p.onCancel?.(ad)}>{t('cancelDraft')}</button></>;

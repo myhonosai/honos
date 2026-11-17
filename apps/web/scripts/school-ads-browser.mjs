@@ -39,7 +39,7 @@ const posts = { publishEnabled: true, checkedAt: at, posts: [{ postId: id(51), t
   targets: [{ targetId: id(50), accountId: id(40), platform: 'FACEBOOK', displayName: 'Synthetic Dojo Page', status: 'PUBLISHED', failureCode: null, skipReason: null,
     resolvedByPerson: false, settledAt: at, version: 2 }] }] };
 const committed = () => fixture.ads.filter((a) => !['DRAFT', 'CANCELLED', 'FAILED'].includes(a.status)).reduce((n, a) => n + a.budgetCents, 0);
-const adsView = () => ({ budget: fixture.budget, committedThisMonthCents: committed(), ads: [...fixture.ads].reverse(), today: TODAY, checkedAt: at, adsEnabled: fixture.adsEnabled });
+const adsView = () => ({ budget: fixture.budget, committedThisMonthCents: committed(), ads: [...fixture.ads].reverse(), today: TODAY, checkedAt: at, adsEnabled: fixture.adsEnabled, pauseEnabled: true });
 /** A tiny stand-in for 0437: versions, the cap rule, PAUSED creation, ACTIVATE/PAUSE, one answer per key. */
 function adsCommand(path, body, headers) {
   fixture.commands.push({ path, command: headers['x-hon-human-command'], key: headers['idempotency-key'], body });
@@ -55,7 +55,7 @@ function adsCommand(path, body, headers) {
   if (body.expectedVersion !== ad.version) return [409, { code: 'SOCIAL_VERSION_CONFLICT' }];
   if (path.endsWith('/cancel')) Object.assign(ad, { status: 'CANCELLED' });
   else if (path.endsWith('/operation')) {
-    if (!fixture.adsEnabled) return [503, { code: 'SOCIAL_ADS_NOT_ENABLED' }];
+    if (!fixture.adsEnabled && body.operation !== 'PAUSE') return [503, { code: 'SOCIAL_ADS_NOT_ENABLED' }];
     const next = { CREATE: ['DRAFT', 'PAUSED'], ACTIVATE: ['PAUSED', 'ACTIVE'], PAUSE: ['ACTIVE', 'PAUSED'] }[body.operation];
     if (ad.status !== next[0]) return [409, { code: 'SOCIAL_AD_STATE' }];
     Object.assign(ad, { status: next[1], operation: body.operation });

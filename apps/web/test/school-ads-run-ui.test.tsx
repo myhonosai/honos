@@ -19,7 +19,7 @@ const signal = () => new AbortController().signal;
 const ad = (over: Partial<SocialAd> = {}): SocialAd => ({ adId: id(60), accountId: id(40), targetId: id(50), postId: id(51), accountName: 'Synthetic Dojo Page', budgetCents: 5000,
   currency: 'USD', startsOn: '2026-11-17', endsOn: '2026-11-23', status: 'DRAFT', operation: null, resolvedByPerson: false, createdAt: at, version: 1, ...over });
 const view = (over: Partial<SocialAdsView> = {}): SocialAdsView => ({ budget: { monthlyCapCents: 30000, currency: 'USD', version: 1 }, committedThisMonthCents: 5000,
-  ads: [ad()], today: '2026-11-17', checkedAt: at, adsEnabled: true, ...over });
+  ads: [ad()], today: '2026-11-17', checkedAt: at, adsEnabled: true, pauseEnabled: true, ...over });
 const props = (over: Partial<MetaAdsProps> = {}): MetaAdsProps => ({ language: 'en', locale: 'en-US',
   ads: { state: 'READY', view: view(), boostable: [{ targetId: id(50), pageName: 'Synthetic Dojo Page', excerpt: 'Free trial week' }] },
   budgetForm: { amount: '300.00', currency: 'USD' }, draftForm: { targetId: '', amount: '', startsOn: '2026-11-17', endsOn: '2026-11-17' },
@@ -124,6 +124,15 @@ it('while ads are off at HON OS the page says so and every Meta step is disabled
   expect(html).toContain('data-ads-off');
   expect(html).toMatch(/<button[^>]*disabled=""[^>]*data-ads-op="CREATE"/);
   expect(html).toContain('No published Facebook posts yet');
+});
+
+it('Pause still works while ads are off, whenever the server says pausing is possible', () => {
+  const running = [ad({ status: 'ACTIVE', operation: 'ACTIVATE', version: 5 })];
+  let html = render({ ads: { state: 'READY', view: view({ adsEnabled: false, pauseEnabled: true, ads: running }), boostable: [] } });
+  expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*data-ads-op="PAUSE"/);
+  expect(html).toContain('data-ads-op="PAUSE"');
+  html = render({ ads: { state: 'READY', view: view({ adsEnabled: false, pauseEnabled: false, ads: running }), boostable: [] } });
+  expect(html).toMatch(/<button[^>]*disabled=""[^>]*data-ads-op="PAUSE"/);
 });
 
 it('hides ads from people without ad permission and offers Try again only for a kept unknown request', () => {
