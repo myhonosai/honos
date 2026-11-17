@@ -54,7 +54,7 @@ it('asks one turn delegated to the specialist and shows the answer as a suggesti
     const tree = await settle();
     const created = api.create.mock.calls[0]![0] as PreparedHonCommand, turn = api.sendTurn.mock.calls[0]![0] as PreparedHonCommand;
     expect(created.path).toBe(`/api/v1/organizations/${org}/schools/${school}/hon/conversations`);
-    expect(JSON.parse(created.body)).toEqual({ title: `${label}: workspace question` });
+    expect(JSON.parse(created.body)).toEqual({ title: `${label}: workspace questions` });
     expect(turn.path).toBe(`/api/v1/organizations/${org}/schools/${school}/hon/conversations/${conversationId}/turns`);
     expect(JSON.parse(turn.body)).toEqual({ text: 'How busy is Saturday?', delegation: { agentKey: key } });
     const answer = nodes(tree).find((n) => n.props['data-testid'] === 'specialist-answer')!;
@@ -96,4 +96,25 @@ it('a refusal says the role or AI access does not allow it, and offers no retry'
   expect(text(nodes(tree).find((n) => n.props['data-testid'] === 'specialist-ask-failed'))).toMatch(/does not allow asking Jordan/);
   expect(nodes(tree).some((n) => n.type === 'button' && /Try again/.test(text(n)))).toBe(false);
   expect(api.sendTurn).not.toHaveBeenCalled();
+});
+
+it('keeps one ongoing conversation: a second question continues it instead of starting a new one', async () => {
+  type('First question?'); submit(); await settle();
+  nodes(render()).find((n) => n.type === 'button' && /Ask another question/.test(text(n)))!.props.onClick();
+  type('Second question?'); submit(); await settle();
+  expect(api.create).toHaveBeenCalledTimes(1);
+  expect(api.sendTurn).toHaveBeenCalledTimes(2);
+  const second = api.sendTurn.mock.calls[1]![0] as PreparedHonCommand;
+  expect(second.path).toBe(`/api/v1/organizations/${org}/schools/${school}/hon/conversations/${conversationId}/turns`);
+  expect(JSON.parse(second.body)).toEqual({ text: 'Second question?', delegation: { agentKey: 'jordan' } });
+});
+
+it('a definitive conflict (such as a full conversation) starts a new conversation on the next question', async () => {
+  type('First?'); submit(); await settle();
+  nodes(render()).find((n) => n.type === 'button' && /Ask another question/.test(text(n)))!.props.onClick();
+  api.sendTurn.mockRejectedValueOnce(new HonConversationError('CONFLICT', 'HON_CONVERSATION_FULL'));
+  type('Second?'); submit(); await settle();
+  nodes(render()).find((n) => n.type === 'button' && /Try again/.test(text(n)))!.props.onClick();
+  await settle();
+  expect(api.create).toHaveBeenCalledTimes(2);
 });

@@ -25,7 +25,10 @@ type Loader<K extends WorkspaceSourceKey> = (scope: Scope, signal: AbortSignal) 
 export type WorkspaceApi = { [K in WorkspaceSourceKey]: Loader<K> };
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
-/** Existing protected GET reads only. Each API re-authorizes the exact school; nothing here writes or invokes AI. */
+/**
+ * The panels' existing protected GET reads. Each API re-authorizes the exact school; none of these reads writes or starts
+ * AI work. Only the Ask box (SpecialistAsk) starts a governed Ask HON turn, and only when a person sends a question.
+ */
 export const WORKSPACE_API: WorkspaceApi = {
   readiness: (scope, signal) => loadAiTeamReadiness(scope.organizationId, scope.schoolId, signal),
   command: scope => loadCommandCenter(scope.organizationId, scope.schoolId),

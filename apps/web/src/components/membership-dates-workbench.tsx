@@ -50,7 +50,7 @@ export function MembershipDatesWorkbench({ sessionSubject, initialMembership, in
   const locked = busy || pending !== null;
   // Inside the school shell the signed-in school is used and the member is chosen by name; the server still authorizes every read and command.
   const signedInSchool = useShellSchool(), shellSchool = initialMembership ? null : signedInSchool;
-  const [members, setMembers] = useState<readonly SchoolMembershipListItem[] | 'LOADING' | 'DENIED' | 'UNAVAILABLE'>('LOADING'), [memberSearch, setMemberSearch] = useState('');
+  const [members, setMembers] = useState<readonly SchoolMembershipListItem[] | 'LOADING' | 'DENIED' | 'UNAVAILABLE'>('LOADING'), [memberSearch, setMemberSearch] = useState(''), [moreMembers, setMoreMembers] = useState(false);
   const memberLabel = (m: SchoolMembershipListItem) => `${m.participant ? `${m.participant.givenName} ${m.participant.familyName}` : t('No name on file')} · ${m.planCode}`;
   sensitive.current = !!(scope.organizationId || scope.schoolId || scope.membershipId || history || preview || queue || report || saved || pending || reading);
   const school = () => ({ organizationId: scope.organizationId, schoolId: scope.schoolId });
@@ -73,8 +73,8 @@ export function MembershipDatesWorkbench({ sessionSubject, initialMembership, in
   useEffect(() => {
     if (!shellSchool) return;
     setScope(old => ({ ...old, organizationId: shellSchool.organizationId, schoolId: shellSchool.schoolId }));
-    const controller = new AbortController(); setMembers('LOADING');
-    membershipListApi.page(shellSchool, null, null, controller.signal, () => !controller.signal.aborted).then(page => { if (!controller.signal.aborted) setMembers(page.items); })
+    const controller = new AbortController(); setMembers('LOADING'); setMoreMembers(false);
+    membershipListApi.page(shellSchool, null, null, controller.signal, () => !controller.signal.aborted).then(page => { if (!controller.signal.aborted) { setMembers(page.items); setMoreMembers(page.nextCursor !== null); } })
       .catch(e => { if (!controller.signal.aborted) setMembers(e instanceof MembershipListError && e.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE'); });
     return () => controller.abort();
   }, [shellSchool?.organizationId, shellSchool?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -253,6 +253,7 @@ export function MembershipDatesWorkbench({ sessionSubject, initialMembership, in
             {members === 'LOADING' ? <p role="status">{t("Reading memberships…")}</p> : members === 'DENIED' ? <p role="status">{t("Your role cannot list memberships. Enter the membership ID instead.")}</p> : members === 'UNAVAILABLE' ? <p role="status">{t("Memberships could not be loaded. Enter the membership ID instead.")}</p> : <div className={styles.row}>
               <label>{t("Find a member")}<input autoComplete="off" value={memberSearch} onChange={event => setMemberSearch(event.target.value)} /></label>
               <label>{t("Member")}<select required value={scope.membershipId} onChange={event => editScope('membershipId', event.target.value)}><option value="">{t("Choose a member")}</option>{members.filter(m => m.membershipId === scope.membershipId || memberLabel(m).toLowerCase().includes(memberSearch.trim().toLowerCase())).map(m => <option key={m.membershipId} value={m.membershipId}>{memberLabel(m)}</option>)}</select></label></div>}
+            {moreMembers && Array.isArray(members) && <p role="note">{t("Showing the first 50 memberships. Enter the membership ID for others.")}</p>}
             <IdFields manual={members === 'DENIED' || members === 'UNAVAILABLE'}><label>{t("Already-known membership ID")}<input autoComplete="off" maxLength={36} value={scope.membershipId} onChange={event => editScope('membershipId', event.target.value)} /></label></IdFields>
           </> : <div className={styles.row}>{(['organizationId', 'schoolId', 'membershipId'] as const).map(key => <label key={key}>{key === 'organizationId' ? t("Organization ID") : key === 'schoolId' ? t("School ID") : t("Already-known membership ID")}<input autoComplete="off" maxLength={36} required readOnly={Boolean(initialMembership)} value={scope[key]} onChange={event => editScope(key, event.target.value)} /></label>)}</div>}
           <button type="submit" disabled={reading}>{t("Load membership dates")}</button>
