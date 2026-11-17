@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "HON Parent",
+    "slug": "hon-parent",
+    "scheme": "honparent",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": { "image": "./assets/splash-icon.png", "resizeMode": "contain", "backgroundColor": "#050A18" },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.myhonos.parent",
+      "infoPlist": { "ITSAppUsesNonExemptEncryption": false }
+    },
+    "android": {
+      "package": "com.myhonos.parent",
+      "adaptiveIcon": {
+        "backgroundColor": "#050A18",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "allowBackup": false,
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": ["expo-secure-store"]
+  }
+}
