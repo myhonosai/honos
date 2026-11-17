@@ -207,10 +207,10 @@ try{
  // 7. The database refuses unguarded changes even for the owner.
  for(const st of ["UPDATE hon.attendance_cards SET code_digest=sha256('x'::bytea) WHERE id='"+minaCard.cardId+"'","UPDATE hon.attendance_cards SET status='ACTIVE',version=version+1,ended_at=NULL,ended_by_principal_id=NULL WHERE id='"+minaCard.cardId+"'",
   "DELETE FROM hon.attendance_cards","UPDATE hon.attendance_check_ins SET attendance_status='PRESENT'","DELETE FROM hon.attendance_check_ins","UPDATE hon.attendance_card_requests SET response='{}'::jsonb",
-  "INSERT INTO hon.attendance_check_ins(organization_id,school_id,class_session_id,student_profile_id,method,method_ref,attendance_record_id,attendance_status,recorded_by_principal_id) SELECT organization_id,school_id,class_session_id,student_profile_id,'FACE',method_ref,attendance_record_id,attendance_status,recorded_by_principal_id FROM hon.attendance_check_ins LIMIT 1",
+  "INSERT INTO hon.attendance_check_ins(organization_id,school_id,class_session_id,student_profile_id,method,method_ref,attendance_record_id,attendance_status,recorded_by_principal_id) SELECT organization_id,school_id,class_session_id,student_profile_id,'PIN',method_ref,attendance_record_id,attendance_status,recorded_by_principal_id FROM hon.attendance_check_ins LIMIT 1",
   "TRUNCATE hon.attendance_cards","TRUNCATE hon.attendance_check_ins","TRUNCATE hon.attendance_card_settings","TRUNCATE hon.attendance_card_requests"]){
   await admin.query('BEGIN');await assert.rejects(()=>admin.query(st),e=>['42501','23503','23514','23505'].includes(e.code),st);await admin.query('ROLLBACK');}
- pass('cards cannot be re-activated, re-coded or deleted; check-in rows and receipts are immutable; no other method yet');
+ pass('cards cannot be re-activated, re-coded or deleted; check-in rows and receipts are immutable; no unknown method (0443 adds FACE)');
 
  // 8. U.S.-only photo policy (0413, owner 2026-11-16 21:44Z): the photo prints by default, wherever the school is; a
  //    school may turn on parent photo approval, and then the card carries the photo only with recorded approval.
