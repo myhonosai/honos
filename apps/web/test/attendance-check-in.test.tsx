@@ -46,7 +46,8 @@ describe('choosing the class by the time of day', () => {
     expect(classForNow(day, at('2026-11-17T15:00:00.000Z'))).toBe(kids.sessionId); // before any class: the next one
     expect(classForNow(day, at('2026-11-17T16:35:00.000Z'))).toBe(kids.sessionId);
     expect(classForNow(day, at('2026-11-17T17:20:00.000Z'))).toBe(kids.sessionId);
-    expect(classForNow(day, at('2026-11-17T17:40:00.000Z'))).toBe(teens.sessionId); // teens opened while kids finishes
+    expect(classForNow(day, at('2026-11-17T17:35:00.000Z'))).toBe(kids.sessionId); // a late arrival still joins kids
+    expect(classForNow(day, at('2026-11-17T17:45:00.000Z'))).toBe(teens.sessionId); // teens takes over 15 minutes before it starts
     expect(classForNow(day, at('2026-11-17T19:10:00.000Z'))).toBe(adults.sessionId); // between classes: the next one
     expect(classForNow(day, at('2026-11-17T23:00:00.000Z'))).toBe(adults.sessionId); // after the last: the last one
   });
@@ -121,7 +122,7 @@ describe('check-in panel', () => {
   it('chooses the class by the time, lets staff pick any student by name and checks them in', async () => {
     await flush();
     const select = elements(render()).find((e) => e.type === 'select')!;
-    expect(select.props.value).toBe(id('b')); // Teens opened for check-in at 17:30
+    expect(select.props.value).toBe(id('b')); // Teens takes over at 17:45
     expect(elements(render()).find((e) => e.type === 'input' && e.props.type === 'checkbox')!.props.checked).toBe(true);
     const picker = elements(render()).find((e) => e.type === StudentPicker)!;
     expect(picker.props.purpose).toBe('attendance');
@@ -136,6 +137,13 @@ describe('check-in panel', () => {
     expect(calls(fetcher)[1]).toBe(`POST ${base}/schedule/sessions/${id('b')}/attendance`);
     expect(text(render())).toContain('Avery Lane is checked in.');
     expect(api.roster.mock.calls.length).toBeGreaterThanOrEqual(2); // the class list refreshes after a check-in
+  });
+
+  it('waits for the chosen class’s list before a check-in can be sent, so a booked trial keeps its category', async () => {
+    api.roster.mockReturnValue(new Promise(() => {}));
+    await flush();
+    elements(render()).find((e) => e.type === StudentPicker)!.props.onPick({ studentProfileId: id('5'), givenName: 'Avery', familyName: 'Lane' });
+    expect(elements(render()).find((e) => e.type === 'button')!.props.disabled).toBe(true);
   });
 
   it('a class chosen by hand turns the time-of-day choice off', async () => {

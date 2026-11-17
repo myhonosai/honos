@@ -121,12 +121,14 @@ export function CheckInPanel({ scope, api = rosterApi }: { scope: RosterScope; a
     return () => { current = false; abort.abort(); };
   }, [scope.organizationId, scope.schoolId, sessionId, rosterTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The class list (for a booked student's category) must be the chosen class's before a check-in is sent.
+  const rosterReady = roster?.sessionId === sessionId;
   async function checkIn(): Promise<void> {
-    if (busy || !student || !sessionId) return;
+    if (busy || !student || !sessionId || !rosterReady) return;
     const who = `${student.givenName} ${student.familyName}`, slot = `${sessionId}/${student.studentProfileId.toLowerCase()}`;
     const key = retained.current.get(slot) ?? globalThis.crypto.randomUUID();
     retained.current.set(slot, key);
-    const entry = roster?.sessionId === sessionId ? roster.entries.find((e) => e.studentProfileId.toLowerCase() === student.studentProfileId.toLowerCase()) ?? null : null;
+    const entry = roster!.entries.find((e) => e.studentProfileId.toLowerCase() === student.studentProfileId.toLowerCase()) ?? null;
     setBusy(true); setMessage(null);
     try {
       const result = await checkInStudent(scope, sessionId, student.studentProfileId, entry, key);
@@ -160,7 +162,7 @@ export function CheckInPanel({ scope, api = rosterApi }: { scope: RosterScope; a
       </div>
       {sessionId && <>
         <StudentPicker scope={scope} purpose="attendance" value={student?.studentProfileId ?? ''} disabled={busy} onPick={(s) => { setStudent(s); setMessage(null); }} />
-        <div className={styles.actions}><button type="button" disabled={busy || !student} onClick={() => void checkIn()}>{busy ? 'Checking in…' : student ? `Check in ${student.givenName} ${student.familyName}` : 'Check in'}</button></div>
+        <div className={styles.actions}><button type="button" disabled={busy || !student || !rosterReady} onClick={() => void checkIn()}>{busy ? 'Checking in…' : student ? `Check in ${student.givenName} ${student.familyName}` : 'Check in'}</button></div>
       </>}
       {message && <p role={message.kind === 'error' ? 'alert' : 'status'} className={message.kind === 'error' ? styles.error : styles.notice}>{message.text}</p>}
       {sessionId && <p>{checkedIn.length ? `Checked in (${checkedIn.length}): ${checkedIn.join(', ')}` : 'No one is checked in to this class yet.'}</p>}
