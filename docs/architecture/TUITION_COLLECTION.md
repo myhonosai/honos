@@ -598,6 +598,11 @@ from their own database function and their own route, which decide who may pay a
   `school_pay_once_events` (append-only), an audit row per change by the code-owned principal
   `00000000-0000-4000-8000-000000000430`, and an inert outbox event `school_pay_once.settled` when a payment settles.
   Results and history carry no provider reference and no payer email.
+- **Rule for every caller route (review P3):** the four API entry points are scoped by the payment id alone, and the read
+  returns the school's account reference and the payer email to the API. A caller route (CP3, WK3, POS) must therefore
+  never take a payment id from the browser or the URL: it gets the id only from its own scoped definer read (the visit,
+  checkout order or sale it is allowed to act on), and its PR must include a negative proof that a foreign payment id
+  (another record, school or organization) is refused before the service is called.
 - **How a caller uses it (kiosk example):** its definer opens the payment with the frozen offer price and returns the id;
   its route calls `start` and hands the tablet the client secret; after the form returns, its route calls `confirm`, then
   its own definer reads `school_pay_once_state` under lock and moves the visit to paid only on SUCCEEDED. To switch to
