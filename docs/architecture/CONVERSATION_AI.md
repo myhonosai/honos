@@ -1,8 +1,8 @@
 # Conversation AI: one school inbox, every channel, an AI receptionist the owner trains
 
 Status: gap audit, spec and plan, 2026-11-15. Asked for by David in the "Complete AI platform handoff" (section 1, plus
-the Conversation AI parts of sections 5 to 8). Migration numbers from the coordinator: CA1 **0364**, CA2 **0365**,
-CA2b **0383**, CA3 **0384**; later pieces ask for theirs. Sibling threads own the Website Builder, the AI Customizer and Automation.
+the Conversation AI parts of sections 5 to 8). Migration numbers from the coordinator (register, 2026-11-16): CA1 **0364**, CA2a **0420**,
+CA2b **0421**, CA3 **0422**, CA1b **0424** (after Automation's AU-2 **0423**); later pieces ask for theirs. Sibling threads own the Website Builder, the AI Customizer and Automation.
 
 ## 1. Gap audit (main fbc9102, 2026-11-15)
 
@@ -95,8 +95,8 @@ Guardrails decide when Chad hands a conversation to a person instead of answerin
 | Piece | What | Migration |
 |---|---|---|
 | **CA1** | Conversation store; every non-keyword text to an ACTIVE school number becomes a conversation message; contact match by phone to the school's people and their open lead; staff inbox read (list with filters/search, thread, contact panel); staff reply through the 0047 queue; assign, tag, open/close, mark read, link person/lead, create lead from a conversation. Backend PR, then the **Conversations** screen (en/ko/es) as its own PR. | 0364 |
-| **CA2** | **Train AI section** (David 2026-11-15 08:06Z: "needs a section for uploading schedule or scripts and more"): per-school settings (mode per channel, languages, evaluation booking type, escalation topics, staff to notify); **uploaded training material** (class schedules, sales and phone scripts, price sheets, policies, FAQs: PDF, Word, text, CSV; the text is extracted on the server, shown to the owner to check, and only owner-approved text is used; the original file is not kept); owner instructions (plain sentences, versioned, owner-approved; HON can turn "make it friendlier with parents" into a proposed instruction); the knowledge pack function over all of it; the AI turn engine: each inbound message starts a turn (plan, budget, fake/real provider, usage evidence); Automatic sends, Assist leaves a draft staff send as is, edit or discard; human takeover pauses Chad for that conversation.| 0365 |
-| **CA3** | Actions and guardrails: guardrails (prices and dates must match the pack, money and promise words, low confidence, opt-out, quiet hours) decide send vs. hand to a person; **Chad books appointments on the scheduler by itself** (David 2026-11-15 08:06Z): offers real open times of the owner-chosen booking type (0286) or trial slots and books them directly, creating or matching the lead first (asks for a name); confirmation text; escalation creates a staff notification and a work item; per-conversation and per-school auto-reply limits; outbox `conversation.reply.sent` / `conversation.escalated` / `conversation.appointment.booked` for Automation.| 0384 |
+| **CA2** | **Train AI section** (David 2026-11-15 08:06Z: "needs a section for uploading schedule or scripts and more"): per-school settings (mode per channel, languages, evaluation booking type, escalation topics, staff to notify); **uploaded training material** (class schedules, sales and phone scripts, price sheets, policies, FAQs: PDF, Word, text, CSV; the text is extracted on the server, shown to the owner to check, and only owner-approved text is used; the original file is not kept); owner instructions (plain sentences, versioned, owner-approved; HON can turn "make it friendlier with parents" into a proposed instruction); the knowledge pack function over all of it; the AI turn engine: each inbound message starts a turn (plan, budget, fake/real provider, usage evidence); Automatic sends, Assist leaves a draft staff send as is, edit or discard; human takeover pauses Chad for that conversation.| 0420 |
+| **CA3** | Actions and guardrails: guardrails (prices and dates must match the pack, money and promise words, low confidence, opt-out, quiet hours) decide send vs. hand to a person; **Chad books appointments on the scheduler by itself** (David 2026-11-15 08:06Z): offers real open times of the owner-chosen booking type (0286) or trial slots and books them directly, creating or matching the lead first (asks for a name); confirmation text; escalation creates a staff notification and a work item; per-conversation and per-school auto-reply limits; outbox `conversation.reply.sent` / `conversation.escalated` / `conversation.appointment.booked` for Automation.| 0422 |
 | CA4 | Website live chat: public chat id per school (like 0075 public forms), signed visitor session, rate limits, embeddable script for the Website Builder, same AI and inbox. | ask |
 | CA5 | Email: SendGrid Inbound Parse on a HON reply domain per school, threading by reply-to token, same inbox and AI. | ask |
 | CA6 | Social and family in the unified inbox: overlay for AI mode/takeover/tags on 0349 and 0330 threads; Chad drafts and (when David switches it on) automatic replies within Messenger's 24-hour window. Waits for #349. | ask |
@@ -191,7 +191,7 @@ person, delivery status shown, append-only and no-truncate guards, runtime has n
 the webhook branch (keyword vs conversation text, Twilio not retried twice), controllers' closed input, and the
 contract validators.
 
-## 7. CA2 design (0365): Train AI and Chad's replies
+## 7. CA2 design (0420): Train AI and Chad's replies
 
 ### 7.1 Safety switches (three, all off by default)
 1. **HQ program switch** `conversation_ai_program` (HQ owner only, audited): OFF, TEST_MODE (fake provider only), LIVE.
@@ -274,14 +274,39 @@ Each fact carries its source id, so a reply can show what it used. Nothing outsi
 - The S4 org ceiling applies to every turn. "No cap for paying schools" means no extra cap from conversations only.
 
 ### 7.8 Split
-- **CA2a (0365)** covers:
+- **CA2a (0420)** covers:
   - the HQ program switch and school settings;
   - the training library with coaching cards and the on/off switch;
   - the knowledge pack read;
   - inbox AI state: takeover and hand-back, needs staff, the needs-attention count.
 
   No AI is called.
-- **CA2b** (0383) adds the CONVERSATION_REPLY kind to the shared AI text caller (0380 `hon.ai_text_proposals`, Website Builder;
+- **CA2b** (0421) adds the CONVERSATION_REPLY kind to the shared AI text caller (0380 `hon.ai_text_proposals`, Website Builder;
   docs/architecture/AI_TEXT_PROPOSALS.md), which owns the one S4 wiring. CA2b adds its own worker-only planning path, the HIGH
-  CONVERSATION_REPLY task profile, its gate (the 0365 program switch and school settings, run before core prepare), the system turn planner and recorder, the worker,
+  CONVERSATION_REPLY task profile, its gate (the 0420 program switch and school settings, run before core prepare), the system turn planner and recorder, the worker,
   ASSIST drafts, TEST_MODE automatic replies, and the test bench.
+
+## 8. CA1b design (0424): one person's message history and the exact email
+
+- **History** (`GET /v1/organizations/:org/schools/:school/people/:person/messages`, conversation.read): every non-draft 0047
+  message to the person (texts and emails from staff, conversations, campaigns and automations, with the 0243 delivery
+  state), the texts the person sent the school number (0364) and, only for staff who also hold `family_messages.manage`,
+  the family app messages of the person's families (0330). Each row: channel, Sent or Received, origin (Staff, Conversation,
+  Campaign, Automation, Family), subject for emails, a 160-character plain preview, who sent it and "resent copy". Plain-text
+  search over body and subject, All / Today (school time zone) / 7 days / 30 days, total count, 50-row keyset pages ordered by
+  millisecond time then id. Drafts never appear; another school's person is not found.
+- **Email view** (`GET …/messages/:message/email`): the subject that is sent (the author's 0423 subject, or the adapter's
+  standard subject "A message from <school>") and the plain-text body exactly as stored, rendered as text, never HTML; the
+  delivery status, attempts and provider events; the person's saved address now; resends. From 0424 the delivery worker
+  reads the author's subject for the email it holds the lease for (`hon.communication_email_subject`, worker only), so the
+  subject shown is the subject sent.
+- **Resend to saved address** (`POST …/messages/:message/resend`, conversation.manage and communication.message.queue,
+  Idempotency-Key): a new QUEUED 0047 email with the same subject and body to the same person; the 0243 worker sends it to
+  the address saved now. Refused unless the original was queued (never draft or cancelled), the person has an email address
+  and EMAIL consent is OPTED_IN (an unsubscribe or spam report records OPTED_OUT). At most 3 resends of one email and 10
+  email resends to one person in 24 hours, counted under a lock on the person. Recorded in the append-only
+  `hon.communication_message_resends`; audited, outbox `communication.message.resent` with ids only; authority re-proved
+  after the writes.
+- **Screens**: the "Message history" section on People (the contact card) and in the Conversations contact panel, opened on
+  request, in en/ko/es.
+- Proof: `test-contact-message-history.mjs` (7 groups). Not deployed; nothing is sent by this piece.

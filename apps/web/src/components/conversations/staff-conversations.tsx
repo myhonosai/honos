@@ -8,6 +8,7 @@ import { useSchoolShell } from '../school-shell/context';
 import { onShellPrivacyEvent } from '../school-shell/privacy';
 import { useLocale } from '../localization/provider';
 import { conversationsCopy, type ConversationsCopy } from './copy';
+import { ContactMessageHistory } from '../contact-history/contact-history';
 import {
   ConversationsAccessError, ConversationsRefusal, commandAttempt, loadConversation, loadConversations, markConversationRead, replyConversation,
   updateConversation, type ConversationsScope,
@@ -177,6 +178,8 @@ export function StaffConversations(): React.ReactElement {
         <p><strong>{copy.appointment}:</strong> {open.contact.nextAppointment ? `${open.contact.nextAppointment.type} · ${date(open.contact.nextAppointment.startsAt)}` : copy.noAppointment}</p>
         {!open.contact.schoolCanText && <p className={s.subtle}>{copy.noSender}</p>}
         <p className={s.actions}><a href="/staff/crm/leads">{copy.openLeads}</a> <a href="/staff/people">{copy.openPeople}</a></p>
+        {open.contact.person && selection && <ContactMessageHistory key={`${scopeKey}/${open.contact.person.personId}`}
+          scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} personId={open.contact.person.personId}/>}
       </aside>
       {open.hasOlder && <p className={s.actions}><button type="button" onClick={() => void older()}>{copy.older}</button></p>}
       <ol className={s.list}>{open.messages.map(m => <li key={m.messageId}>

@@ -16,6 +16,8 @@ export interface ClaimedCommunicationDelivery {
   content: string;
   schoolName: string;
   attempt: number;
+  /** 0424: the email subject the author wrote (absent: the adapter's standard subject). */
+  subject?: string | undefined;
   senderAddress?: string | undefined;
   senderServiceId?: string | undefined;
 }
@@ -142,12 +144,14 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
     const rows = await this.query<{
       delivery_id: string; lease_token: string; organization_id: string; school_id: string; message_id: string; channel: DeliverableChannel;
       recipient_address: string; content: string; school_name: string; attempt: number;
-      sender_address: string | null; sender_service_id: string | null;
-    }>('SELECT * FROM hon.claim_communication_deliveries($1::text[], $2, $3)', [channels, limit, leaseSeconds]);
+      sender_address: string | null; sender_service_id: string | null; email_subject: string | null;
+    }>(`SELECT c.*, CASE WHEN c.channel = 'EMAIL' THEN hon.communication_email_subject(c.delivery_id, c.lease_token) END AS email_subject
+      FROM hon.claim_communication_deliveries($1::text[], $2, $3) c`, [channels, limit, leaseSeconds]);
     return rows.map((row) => ({
       deliveryId: row.delivery_id, leaseToken: row.lease_token, organizationId: row.organization_id, schoolId: row.school_id,
       messageId: row.message_id, channel: row.channel, recipientAddress: row.recipient_address, content: row.content,
       schoolName: row.school_name, attempt: row.attempt,
+      ...(row.channel === 'EMAIL' && row.email_subject ? { subject: row.email_subject } : {}),
       ...(row.sender_address ? { senderAddress: row.sender_address } : {}),
       ...(row.sender_service_id ? { senderServiceId: row.sender_service_id } : {}),
     }));

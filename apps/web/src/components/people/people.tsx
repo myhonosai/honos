@@ -12,6 +12,7 @@ import { PeopleView, type BirthDraft, type ContactDraft } from './view';
 import { PersonConsents } from './consents';
 import { consentApi, type ConsentApi } from './consent-http';
 import { PersonPhoto } from './photo';
+import { ContactMessageHistory } from '../contact-history/contact-history';
 import { photoApi, type PhotoApi } from './photo-http';
 
 /**
@@ -180,6 +181,8 @@ export function People({ api = peopleApi, consents = consentApi, photos = photoA
     <PersonPhoto key={`photo:${lower(selection.schoolId)}:${r.personId}`} language={preferences.language} schoolId={selection.schoolId} record={r} canEdit={r.canEdit} api={photos}/>
     <PersonConsents key={`${lower(selection.schoolId)}:${r.personId}`} language={preferences.language}
       scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} record={r} canEdit={r.canEdit} onRecorded={onConsentRecorded} api={consents}/>
+    {/* 0424: this person's texts, emails and messages (opened on request; needs the conversations permission). */}
+    <ContactMessageHistory key={`history:${lower(selection.schoolId)}:${r.personId}`} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} personId={r.personId}/>
   </> : null,
   [selection?.organizationId, selection?.schoolId, preferences.language, onConsentRecorded, consents, photos]); // eslint-disable-line react-hooks/exhaustive-deps
 

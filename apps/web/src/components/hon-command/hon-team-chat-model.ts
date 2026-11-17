@@ -4,7 +4,7 @@
  * One HON conversation is shown as a group chat. "Everyone" sends the same question to HON and then to every specialist
  * who can answer in text for this person now (readiness decides); "take turns" sends to one teammate. Every message is
  * an ordinary turn on the existing conversation API, so the server re-checks the person, school, capability and AI
- * limits for each one. "Make a plan together" asks HON (detailed) to combine the team's answers (migration 0429 lets HON
+ * limits for each one. "Make a plan together" asks HON (detailed) to combine the team's answers (migration 0436 lets HON
  * read the answers this person may see).
  */
 import {

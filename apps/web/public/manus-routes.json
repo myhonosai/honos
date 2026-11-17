@@ -341,6 +341,10 @@
       "title": "HON | Conversations"
     },
     {
+      "path": "/staff/conversations/train-ai",
+      "title": "HON | Train AI"
+    },
+    {
       "path": "/staff/settings/branding",
       "title": "HON | School branding"
     },
@@ -513,6 +517,10 @@
       "title": "HON HQ | Ai Costs"
     },
     {
+      "path": "/hq/conversation-ai",
+      "title": "HON HQ | Conversation AI"
+    },
+    {
       "path": "/hq/ai-safety",
       "title": "HON HQ | Ai Safety"
     },
@@ -646,7 +654,7 @@
     },
     {
       "path": "/hq/pricing-offers",
-      "title": "HON HQ | Pricing & Offers · Design review"
+      "title": "HON HQ | Pricing & Offers \u00b7 Design review"
     },
     {
       "path": "/reference/classic-dashboard",
@@ -703,6 +711,26 @@
     {
       "path": "/staff/settings",
       "title": "HON | Settings"
+    },
+    {
+      "path": "/staff/tools",
+      "title": "HON | Custom tools"
+    },
+    {
+      "path": "/staff/tools/:toolKey",
+      "title": "HON | Custom tool"
+    },
+    {
+      "path": "/staff/tool-maker",
+      "title": "HON | Tool Maker"
+    },
+    {
+      "path": "/staff/walk-in",
+      "title": "HON | Walk-in kiosk"
+    },
+    {
+      "path": "/kiosk/walk-in",
+      "title": "HON | Walk-in"
     }
   ]
 }
