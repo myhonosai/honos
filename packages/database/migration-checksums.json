@@ -329,6 +329,7 @@
     "0460_agent_voice_preferences.sql": "f79897d2f18da3a2cd7fed4a135e377ede91dffb407db5baa35c7632817cf0d6",
     "0463_membership_agreement.sql": "966b67ddb1ebec3a7884b2a824f2af070430e513e66af5683a01f19522484edf",
     "0466_parent_school_bookings.sql": "e51fcf1be375d96fbc954bc6533d0f11ad86069972684b51f04cde38fe5a85de",
-    "0467_staff_shift_schedule.sql": "21b4813e18092224182c3064d15e6fdd0506f9f4165b6e988091ebb60b9841fb"
+    "0467_staff_shift_schedule.sql": "21b4813e18092224182c3064d15e6fdd0506f9f4165b6e988091ebb60b9841fb",
+    "0468_staff_time_clock.sql": "8347408c955a4df5cb086606385218bef016a106263c3b20ffe17052cfe6e112"
   }
 }
