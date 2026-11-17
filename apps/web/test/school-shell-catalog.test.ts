@@ -23,7 +23,7 @@ describe('school shell navigation catalog', () => {
     expect(menu).toEqual({
       dashboard: ['Dashboard', 'Ask HON'], ai: ['AI Team', 'Conversation AI'], calendar: ['Calendar', 'Attendance'], contacts: ['Contact list', 'Staff'],
       leads: ['Lead pipeline', 'Automations'], communication: ['Texts & email', 'Facebook & Instagram'], finance: ['Checkout Pages', 'Shopify', 'Invoices'],
-      marketing: ['Website', 'Marketing', 'Creative Studio'], ranks: ['Rank setup', 'Tests', 'Mass rank promotion'], business: ['Membership', 'Reports'], community: ['Community'],
+      marketing: ['Website', 'Marketing', 'Ads', 'Creative Studio'], ranks: ['Rank setup', 'Tests', 'Mass rank promotion'], business: ['Membership', 'Reports'], community: ['Community'],
     });
     expect(SCHOOL_SHELL_NAV.filter(item => !item.section).map(item => item.key)).toEqual(['settings']);
     expect(SCHOOL_SHELL_NAV.at(-1)?.key).toBe('settings');
@@ -73,7 +73,7 @@ describe('school shell navigation catalog', () => {
   it('puts every former page where the owner\'s menu says', () => {
     const where: Record<string, string> = {
       '/staff/team/invitations': 'staff', '/staff/roles': 'staff', '/staff/conversations': 'conversationAi', '/staff/family-messages': 'messages',
-      '/staff/marketing/social': 'social', '/staff/marketing/campaigns': 'marketing', '/staff/champions-club': 'marketing', '/staff/creative-studio': 'creative',
+      '/staff/marketing/social': 'social', '/staff/marketing/campaigns': 'marketing', '/staff/champions-club': 'marketing', '/staff/creative-studio': 'creative', '/staff/marketing/ads': 'ads',
       '/staff/automation/rules': 'automation', '/staff/operations': 'analytics', '/staff/retention/review': 'analytics', '/community/marketplace': 'community',
       '/staff/testing/promotion-decisions': 'promotions', '/staff/billing/payment-processors': 'settings', '/staff/attendance/planned-absences': 'attendance',
     };

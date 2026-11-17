@@ -217,6 +217,15 @@ describe('staff page', () => {
     const ko = renderToStaticMarkup(<WalkInStaffView {...base} language="ko"/>);
     expect(ko).toContain(WALK_IN_COPY.ko.startTitle);
     expect(renderToStaticMarkup(<WalkInStaffView {...base} overview={{ state: 'DENIED' }}/>)).toContain(WALK_IN_COPY.en.denied);
+    expect(renderToStaticMarkup(<WalkInStaffView {...base} outcome={{ kind: 'START_REPLAYED' }}/>)).toContain(WALK_IN_COPY.en.startReplayed);
+  });
+});
+
+describe('visitor retry key', () => {
+  it('a changed form or language drops the kept key, so an edited visit is never sent under the old key', () => {
+    const source = readFileSync(new URL('../src/components/walk-in-kiosk/visitor.tsx', import.meta.url), 'utf8');
+    expect(source).toContain('onDraft={d => { key.current = null; setDraft(d); }}');
+    expect(source).toContain('onLanguage={l => { key.current = null; setLanguage(l); }}');
   });
 });
 

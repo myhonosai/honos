@@ -260,6 +260,6 @@ export function WalkInVisitorPage({ api = walkInTabletApi, now = () => new Date(
 
   return <WalkInVisitorView read={read} mode={handoff?.mode ?? 'big-button'} language={language} step={step} draft={draft} today={localToday(now())} tried={tried}
     sending={sending} outcome={outcome} countdown={countdown}
-    onLanguage={setLanguage} onStep={s => { setTried(false); if (s !== 'OFFER') setOutcome(null); setStep(s); }} onDraft={setDraft} onTried={() => setTried(true)}
+    onLanguage={l => { key.current = null; setLanguage(l); }} onStep={s => { setTried(false); if (s !== 'OFFER') setOutcome(null); setStep(s); }} onDraft={d => { key.current = null; setDraft(d); }} onTried={() => setTried(true)}
     onSend={() => { void send(); }} onReset={reset}/>;
 }

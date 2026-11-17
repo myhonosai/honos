@@ -17,7 +17,7 @@ import { strokePath } from './signature-pad';
 import styles from './walk-in-kiosk.module.css';
 
 export type Read<T> = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; read: T };
-export type Outcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | 'SIGN_OUT_FAILED' | WalkInErrorKind }>;
+export type Outcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | 'SIGN_OUT_FAILED' | 'START_REPLAYED' | WalkInErrorKind }>;
 type T = (key: WalkInKey, vars?: Readonly<Record<string, string | number>>) => string;
 
 export type OfferDraft = Readonly<{ key: string; kind: WalkInOfferKind; name: WalkInText; description: WalkInText; price: string }>;
@@ -93,7 +93,7 @@ export function WalkInStaffView(p: WalkInStaffViewProps): React.ReactElement {
   }
   const o = p.overview.read;
   const outcome = p.outcome && p.outcome.kind !== 'SENDING' ? <p className={styles.notice} role={p.outcome.kind === 'DONE' ? 'status' : 'alert'} data-testid="walkin-outcome">
-    {p.outcome.kind === 'DONE' ? t('saved') : p.outcome.kind === 'SIGN_OUT_FAILED' ? t('signOutFailed') : t(`o${p.outcome.kind}` as WalkInKey)}</p> : null;
+    {p.outcome.kind === 'DONE' ? t('saved') : p.outcome.kind === 'SIGN_OUT_FAILED' ? t('signOutFailed') : p.outcome.kind === 'START_REPLAYED' ? t('startReplayed') : t(`o${p.outcome.kind}` as WalkInKey)}</p> : null;
   const ready = o.configured && o.enabled;
   const start = <section className={styles.card} aria-labelledby="walkin-start"><h2 id="walkin-start">{t('startTitle')}</h2>
     {!o.configured ? <p className={styles.meta}>{t('notSetUp')} {t(o.canManage ? 'notSetUpOwner' : 'notSetUpStaff')}</p> : !o.enabled ? <p className={styles.meta}>{t('isOff')}</p> : null}
@@ -237,7 +237,7 @@ export function WalkInKioskPage({ api = walkInApi, signOut = signOutThisBrowser 
     if (!scope) return;
     const started = await run(`start:${label}:${hours}`, (key, signal, owned) => api.start(scope, { label: label.trim(), hours }, key, signal, owned));
     if (!started) return;
-    if (!started.token) { setOutcome({ kind: 'UNKNOWN' }); setRefresh(n => n + 1); return; }
+    if (!started.token) { setOutcome({ kind: 'START_REPLAYED' }); setRefresh(n => n + 1); return; }
     // Sign this browser out first, so the visitor screen can never lead back into staff pages.
     if (!(await signOut())) { setOutcome({ kind: 'SIGN_OUT_FAILED' }); setRefresh(n => n + 1); return; }
     handOffWalkInTablet({ token: started.token, mode: shell.mode ?? DEFAULT_HON_INTERFACE_THEME, language: preferences.language });

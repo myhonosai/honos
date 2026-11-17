@@ -7,7 +7,7 @@ import type { ShellKey } from './copy';
  * prefill, which the destination re-verifies server-side.
  */
 export type SchoolShellIcon = 'home' | 'hon' | 'aiTeam' | 'conversationAi' | 'classes' | 'attendance' | 'students' | 'staff' | 'crm' | 'automation' | 'messages'
-  | 'social' | 'checkout' | 'shopify' | 'invoices' | 'website' | 'marketing' | 'creative' | 'ranks' | 'testing' | 'promotions' | 'billing' | 'analytics' | 'community' | 'settings';
+  | 'social' | 'checkout' | 'shopify' | 'invoices' | 'website' | 'marketing' | 'ads' | 'creative' | 'ranks' | 'testing' | 'promotions' | 'billing' | 'analytics' | 'community' | 'settings';
 /** Owner menu (David, 2026-11-16 07:52Z): eleven headings, each with its few pages under it. */
 export type SchoolShellSection = 'dashboard' | 'ai' | 'calendar' | 'contacts' | 'leads' | 'communication' | 'finance' | 'marketing' | 'ranks' | 'business' | 'community';
 export type SchoolShellRoute = Readonly<{ href: string; titleKey: ShellKey; scoped: boolean; hidden?: boolean }>;
@@ -64,6 +64,8 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'invoices', titleKey: 'navInvoices', section: 'finance', routes: [r('/staff/billing/invoices', 'routeInvoices'), r('/staff/billing/receivables', 'routeReceivables')] },
   { key: 'website', titleKey: 'navWebsite', section: 'marketing', routes: [r('/staff/marketing/website', 'routeWebsite'), r('/staff/marketing/forms', 'routeForms'), r('/staff/marketing/intake', 'routeIntake')] },
   { key: 'marketing', titleKey: 'navMarketing', section: 'marketing', routes: [r('/staff/marketing', 'routeMarketingHome'), r('/staff/marketing/campaigns', 'routeCampaigns'), r('/staff/champions-club', 'routeChampions')] },
+  // Owner ask (2026-11-17): Meta Ads and Google Ads are connected and set up from Marketing, with Marcus drafting each ad.
+  { key: 'ads', titleKey: 'navAds', section: 'marketing', routes: [r('/staff/marketing/ads', 'routeAds')] },
   { key: 'creative', titleKey: 'navCreative', section: 'marketing', routes: [r('/staff/creative-studio', 'routeCreativeStudio')] },
   { key: 'ranks', titleKey: 'navRanks', section: 'ranks', routes: [r('/staff/curriculum/library', 'routeCurriculumLibrary'), r('/staff/curriculum/progress', 'routeProgress'),
     r('/staff/teaching-studio', 'routeTeachingStudio'), r('/staff/students/achievements', 'routeAchievements')] },
@@ -123,9 +125,11 @@ export function schoolShellHref(route: SchoolShellRoute, selection: OperationalS
 
 const owns = (href: string, path: string) => path === href || path.startsWith(`${href}/`);
 
-/** The primary item that owns the path. */
+/** The primary item that owns the path: the one with the longest matching route, so /staff/marketing/ads is Ads, not Marketing. */
 export function schoolShellActiveItem(path: string): SchoolShellItem | null {
-  return SCHOOL_SHELL_NAV.find(item => item.routes.some(route => owns(route.href, path))) ?? null;
+  let best: SchoolShellItem | null = null, length = -1;
+  for (const item of SCHOOL_SHELL_NAV) for (const route of item.routes) if (owns(route.href, path) && route.href.length > length) { best = item; length = route.href.length; }
+  return best;
 }
 
 export function schoolShellActiveRoute(path: string): SchoolShellRoute | null {

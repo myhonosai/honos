@@ -14,6 +14,7 @@ const paths = {
   website: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.8 3.5 5.8 3.5 9s-1 6.2-3.5 9c-2.5-2.8-3.5-5.8-3.5-9S9.5 5.8 12 3Z" /></>,
   conversationAi: <><path d="M4 5h16v11H9l-5 4Z" /><path d="m12 7.5 1 2 2 1-2 1-1 2-1-2-2-1 2-1Z" /></>,
   social: <><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="0.8" /></>,
+  ads: <><path d="M4 15V9l13-5v16Z" /><path d="M7 15v4a1.5 1.5 0 0 0 3 0v-3" /><path d="M20 10v4" /></>,
   creative: <><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="m3 17 5-4 4 3 3-2 6 4" /></>,
   promotions: <><path d="M12 20V5m-6 6 6-6 6 6" /><path d="M5 21h14" /></>,
   automation: <><path d="M13 2 4 14h7l-1 8 9-12h-7Z" /></>,

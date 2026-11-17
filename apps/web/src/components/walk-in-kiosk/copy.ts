@@ -29,6 +29,7 @@ const en = {
   oGONE: 'That is not in this school any more. Nothing changed.', oCHANGED: 'It changed since it was shown. Reload and try again. Nothing changed.',
   oREFUSED: 'That is not allowed right now (the kiosk must be on, and at most 10 tablets can run). Nothing changed.',
   oINVALID: 'Check the details and try again. Nothing changed.', oUNKNOWN: 'The result is not known yet. Try again sends the exact same request, so it can never happen twice.',
+  startReplayed: 'This tablet was already started and its code was shown only once. End that tablet below and start a new one.',
   tryAgain: 'Try again', signOutFailed: 'This browser could not be signed out, so the kiosk did not start. End that tablet below and try again.',
   // Visitor screen
   vNotStarted: 'This tablet is not running the kiosk. Ask the front desk to start it.', vSignIn: 'Staff sign in',
@@ -83,6 +84,7 @@ const ko: Record<WalkInKey, string> = {
   oGONE: '더 이상 이 학교에 없습니다. 변경된 것은 없습니다.', oCHANGED: '표시된 뒤에 바뀌었습니다. 새로고침 후 다시 시도하세요. 변경된 것은 없습니다.',
   oREFUSED: '지금은 할 수 없습니다 (키오스크가 켜져 있어야 하고, 태블릿은 최대 10대까지 실행됩니다). 변경된 것은 없습니다.',
   oINVALID: '내용을 확인하고 다시 시도하세요. 변경된 것은 없습니다.', oUNKNOWN: '아직 결과를 알 수 없습니다. 다시 시도하면 같은 요청을 보내므로 두 번 처리되지 않습니다.',
+  startReplayed: '이 태블릿은 이미 시작되었고 코드는 한 번만 표시됩니다. 아래에서 해당 태블릿을 종료하고 새로 시작하세요.',
   tryAgain: '다시 시도', signOutFailed: '이 브라우저를 로그아웃할 수 없어 키오스크를 시작하지 않았습니다. 아래에서 해당 태블릿을 종료하고 다시 시도하세요.',
   vNotStarted: '이 태블릿에서 키오스크가 실행되고 있지 않습니다. 프런트 데스크에 시작을 요청하세요.', vSignIn: '직원 로그인',
   vClosed: '이 태블릿의 키오스크가 닫혔습니다. 프런트 데스크로 와 주세요.', vUnavailable: '문제가 생겼습니다. 프런트 데스크로 와 주세요.',
@@ -135,6 +137,7 @@ const es: Record<WalkInKey, string> = {
   oGONE: 'Eso ya no está en esta escuela. No cambió nada.', oCHANGED: 'Cambió desde que se mostró. Recargue e inténtelo de nuevo. No cambió nada.',
   oREFUSED: 'Eso no está permitido ahora (el quiosco debe estar encendido y pueden funcionar como máximo 10 tabletas). No cambió nada.',
   oINVALID: 'Revise los datos e inténtelo de nuevo. No cambió nada.', oUNKNOWN: 'Aún no se sabe el resultado. Intentar de nuevo envía la misma solicitud, así que nunca ocurre dos veces.',
+  startReplayed: 'Esta tableta ya se inició y su código solo se mostró una vez. Termine esa tableta abajo e inicie una nueva.',
   tryAgain: 'Intentar de nuevo', signOutFailed: 'No se pudo cerrar la sesión de este navegador, así que el quiosco no se inició. Termine esa tableta abajo e inténtelo de nuevo.',
   vNotStarted: 'Esta tableta no tiene el quiosco en marcha. Pida a la recepción que lo inicie.', vSignIn: 'Acceso del personal',
   vClosed: 'El quiosco está cerrado en esta tableta. Pase por la recepción.', vUnavailable: 'Algo salió mal. Pase por la recepción.',
