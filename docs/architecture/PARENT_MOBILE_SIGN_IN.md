@@ -20,7 +20,7 @@ identity-provider registration and no provider secret on the phone.
 3. Normal OIDC login runs. `/auth/continue` with intent `mobile` redirects to `/auth/mobile/finish`.
 4. `GET /auth/mobile/finish` requires a valid `hon_session` cookie **and** the start cookie, and the web session must
    be issued at or after the start cookie (`mobileHandoffForBrowser`). It hands nothing to the app: it shows a
-   confirmation page ("Continue to the HON Parent app? You are signed in as <name>", no framing, strict CSP).
+   confirmation page ("Continue to the HON Family app? You are signed in as <name>", no framing, strict CSP).
    The parent's **Continue** button POSTs to `/auth/mobile/finish`, which re-checks both cookies, requires
    `Origin == HON_PUBLIC_ORIGIN` (or a null/absent Origin only with `Sec-Fetch-Site: same-origin`, the sign-out
    rule), then issues a hand-off code (HS256 JWT, typ `hon-mobile-handoff+jwt`, aud `${aud}:mobile-handoff`, 60 s,
