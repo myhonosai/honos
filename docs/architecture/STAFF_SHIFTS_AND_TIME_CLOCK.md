@@ -9,8 +9,8 @@ Two migrations, two PRs:
 
 | Piece | Migration | What |
 |---|---|---|
-| SH shift schedule | 0464 | Owners/managers put staff on shifts in a week view; staff see their own shifts. |
-| TC time clock | 0465 | Staff clock in/out (and breaks) from their own signed-in app; owners review, correct, approve and export timesheets. |
+| SH shift schedule | 0467 | Owners/managers put staff on shifts in a week view; staff see their own shifts. |
+| TC time clock | 0468 | Staff clock in/out (and breaks) from their own signed-in app; owners review, correct, approve and export timesheets. |
 
 Out of scope: payroll providers, pay rates and pay calculation, paid services, texting/emailing staff about shifts,
 a shared front-desk PIN tablet, GPS/location checks. Nothing here sends a message, charges, or calls AI.
@@ -62,7 +62,7 @@ to instructor/front-desk roles with the existing Roles & permissions checklist (
   saves cannot both pass the overlap check.
 - Read windows are bounded (one week per read, at most 500 shifts / 1,000 time entries).
 
-## 3. SH (0464) data and functions
+## 3. SH (0467) data and functions
 
 - Permissions: `staff.shift.manage` (sensitive, staff-assignable; OWNER), `staff.shift.view_own` (staff-assignable; OWNER).
 - `hon.staff_shifts(id, organization_id, school_id, principal_id, starts_at, ends_at, local_date, position, note,
@@ -76,7 +76,7 @@ to instructor/front-desk roles with the existing Roles & permissions checklist (
   Errors: `VALIDATION_FAILED`, `STAFF_SHIFT_FORBIDDEN`, `STAFF_MEMBER_UNAVAILABLE`, `SHIFT_OVERLAP`, `VERSION_CONFLICT`,
   `IDEMPOTENCY_KEY_REUSED`, `IDEMPOTENCY_IN_PROGRESS`, `TIER_ENTITLEMENT_REQUIRED`.
 
-## 4. TC (0465) data and functions
+## 4. TC (0468) data and functions
 
 - Permissions: `staff.time.clock` (staff-assignable; OWNER), `staff.timesheet.manage` (sensitive, staff-assignable; OWNER).
 - `hon.staff_time_entries(id, org, school, principal_id, clock_in_at, clock_out_at, origin CLOCK|MANAGER, shift_id,
@@ -107,7 +107,7 @@ to instructor/front-desk roles with the existing Roles & permissions checklist (
 
 ## 6. Plan
 
-1. SH: contracts (`staff-shifts.ts`) + tests → 0464 + DB proof → API controller/service/guards + tests → web page
+1. SH: contracts (`staff-shifts.ts`) + tests → 0467 + DB proof → API controller/service/guards + tests → web page
    (`staff-shifts/`) + route + catalog labels + tests → docs/plumbing (checksums, staging manifest, 010/011, verify-rls,
    proof runner) → PR, independent review.
-2. TC: same order for 0465 on top of SH (stacked branch), then PR, independent review.
+2. TC: same order for 0468 on top of SH (stacked branch), then PR, independent review.

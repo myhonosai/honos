@@ -1,5 +1,5 @@
 /**
- * Staff shift schedule (0464). Owner request (David, 2026-11-17): "staff doesn't have scheduler for shifts and hour
+ * Staff shift schedule (0467). Owner request (David, 2026-11-17): "staff doesn't have scheduler for shifts and hour
  * tracking". Managers (staff.shift.manage) put eligible staff on shifts in a Monday-to-Sunday week; staff with
  * staff.shift.view_own see only their own row. Times are school-local (date + HH:MM) and the database converts them with
  * the school's time zone. The database checks every rule here again. Spec: docs/architecture/STAFF_SHIFTS_AND_TIME_CLOCK.md.

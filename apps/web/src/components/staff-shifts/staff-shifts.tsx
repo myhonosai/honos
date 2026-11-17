@@ -17,7 +17,7 @@ type Lock = 'NONE' | 'SENDING' | 'KEPT';
 const browserToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 /**
- * Staff > Shifts (0464). Managers put staff on shifts in a Monday-to-Sunday week; staff with view_own see their own row.
+ * Staff > Shifts (0467). Managers put staff on shifts in a Monday-to-Sunday week; staff with view_own see their own row.
  * The form stays in memory only; a school change or session end drops it. Every save answer is followed by a fresh read.
  */
 export function StaffShifts({ api = shiftApi, initialToday }: { api?: ShiftApi; initialToday?: string }): React.ReactElement {

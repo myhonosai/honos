@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),{randomUU
 const {StaffShiftService}=require('../dist/staff-shifts/staff-shifts.service.js');
 const {StaffShiftReadHumanUiGuard,StaffShiftSaveHumanUiGuard}=require('../dist/staff-shifts/staff-shifts-human-ui.guard.js');
 const c=require('@hon/contracts');
-// 0464: the staff shift schedule.
+// 0467: the staff shift schedule.
 const person=randomUUID(),shiftId=randomUUID();
 const shift=(over={})=>({shiftId,staffPrincipalId:person,date:'2026-11-18',start:'09:00',end:'17:00',startsAt:'2026-11-18T17:00:00.000Z',endsAt:'2026-11-19T01:00:00.000Z',
  position:'Front desk',note:null,status:'SCHEDULED',version:1,updatedAt:'2026-11-17T10:00:00.000Z',...over});
@@ -13,7 +13,7 @@ const ctx=(over={})=>({organizationId:randomUUID(),schoolId:randomUUID(),princip
 function db(rows,calls=[]){const q=async(sql,args)=>{calls.push([sql,args]);return /hon\.(read_staff_shift_week|save_staff_shift)/.test(sql)?{rows}:{rows:[]};};
  return {withTenantReadOnlyTransaction:async(_c,f)=>f({query:q}),withTenantTransaction:async(_c,f)=>f({query:q})};}
 
-test('week and save call only the 0464 functions with the session subject and verify the answer',async()=>{
+test('week and save call only the 0467 functions with the session subject and verify the answer',async()=>{
  const calls=[];const s=new StaffShiftService(db([{data:week()}],calls));
  const w=await s.week(ctx(),'2026-11-16');
  assert.equal(w.shifts[0].position,'Front desk');

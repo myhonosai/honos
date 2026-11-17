@@ -5,7 +5,7 @@ import {
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * Staff > Shifts (0464). The week read sends no Idempotency-Key; a save sends its own X-HON-Human-Command and an
+ * Staff > Shifts (0467). The week read sends no Idempotency-Key; a save sends its own X-HON-Human-Command and an
  * Idempotency-Key. The server decides the permission, the person, the times and the version again.
  */
 export type ShiftErrorKind =

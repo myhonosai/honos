@@ -32,7 +32,7 @@ function timeLabel(language: string, hhmm: string): string {
 }
 const minutes = (s: StaffShift) => staffShiftMinutes(s.start, s.end) ?? 0;
 
-/** Staff > Shifts (0464): pure, every state comes from props. Managers add and change shifts; view_own sees one row. */
+/** Staff > Shifts (0467): pure, every state comes from props. Managers add and change shifts; view_own sees one row. */
 export function StaffShiftsView(p: StaffShiftsViewProps): React.ReactElement {
   const c = shiftCopy(p.language), read = p.read;
   const week = read.state === 'READY' ? read.week : null;

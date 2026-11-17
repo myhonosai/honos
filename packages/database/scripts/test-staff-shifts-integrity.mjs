@@ -1,5 +1,5 @@
 /**
- * Staff shift schedule proof (0464) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global
+ * Staff shift schedule proof (0467) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global
  * ValidationPipe + HonExceptionFilter -> StaffShiftController -> protected definer functions on the restricted runtime role
  * with forced RLS), on the guarded disposable CRM-close fixture only. Synthetic staff only; nothing messages anyone, pays
  * anyone or calls a provider.
@@ -346,7 +346,7 @@ try {
     await assert.rejects(runtime.query('SELECT * FROM hon.staff_shifts LIMIT 1'), /permission denied/); checks += 1; }
   await assert.rejects(runtime.query("SELECT hon.read_staff_shift_week('x','2026-11-16')"), /STAFF_SHIFT_FORBIDDEN/); checks += 1;
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const begin = '-- Staff shift schedule exact verification (0464)', end = '-- End staff shift exact verification.';
+    const begin = '-- Staff shift schedule exact verification (0467)', end = '-- End staff shift exact verification.';
     const section = verify.split(begin)[1]?.split(end)[0];
     ok(section, begin);
     await sql(section.replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
@@ -355,7 +355,7 @@ try {
   ok((await sql("SELECT (SELECT count(*) FROM hon.payment_attempts WHERE organization_id=ANY($1::uuid[])) + (SELECT count(*) FROM hon.invoices WHERE organization_id=ANY($1::uuid[])) + (SELECT count(*) FROM hon.communication_messages WHERE organization_id=ANY($1::uuid[])) n",
     [[ids.organization, ids.otherOrganization]])).rows[0].n === '0', 'no message, payment attempt or invoice was created');
 
-  console.log(`PASS: staff shift schedule (0464): ${checks} checks.`);
+  console.log(`PASS: staff shift schedule (0467): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

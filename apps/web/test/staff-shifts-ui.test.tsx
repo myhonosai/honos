@@ -10,7 +10,7 @@ import { draftOf, draftProblems, newDraft, saveInput } from '../src/components/s
 import { StaffShiftsView, type StaffShiftsViewProps } from '../src/components/staff-shifts/view';
 import { id } from './account-status-fixtures';
 
-// 0464: Staff > Shifts. Managers schedule the week; staff with view_own see their own row.
+// 0467: Staff > Shifts. Managers schedule the week; staff with view_own see their own row.
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 

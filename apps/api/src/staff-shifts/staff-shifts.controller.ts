@@ -17,7 +17,7 @@ function definedFields(input: object): Record<string, unknown> {
 }
 
 /**
- * 0464: the staff shift schedule. Route identifiers are never authority: the boundary resolves the route scope from the
+ * 0467: the staff shift schedule. Route identifiers are never authority: the boundary resolves the route scope from the
  * verified session, and each protected database function re-proves the direct human subject and the live permission
  * (staff.shift.manage, or staff.shift.view_own for one's own week). Nothing here messages staff or pays anyone.
  */

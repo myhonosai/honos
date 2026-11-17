@@ -1,6 +1,6 @@
 BEGIN;
 
--- Staff shift schedule SH (0464, coordinator-allocated 2026-11-17). Owner request (David, 2026-11-17): "staff doesn't have
+-- Staff shift schedule SH (0467, allocated 2026-11-17 as 0464 and renumbered above main ceiling 0466 per the ledger rule). Owner request (David, 2026-11-17): "staff doesn't have
 -- scheduler for shifts and hour tracking". Verified on main a1d8d29: no shift, time clock or timesheet exists. Spec:
 -- docs/architecture/STAFF_SHIFTS_AND_TIME_CLOCK.md. Rules:
 --   S1  staff.shift.manage (OWNER by default, staff-assignable): add, change and cancel shifts for eligible staff at the
@@ -21,7 +21,7 @@ DO $$ BEGIN
     RAISE EXCEPTION 'Staff shifts require a restricted runtime'; END IF;
   IF to_regprocedure('hon.membership_command_args_ok(text,text,uuid,uuid)') IS NULL OR to_regprocedure('hon.staff_member_eligible(uuid,uuid,uuid)') IS NULL
     OR to_regprocedure('hon.saas_ts(timestamptz)') IS NULL OR to_regclass('hon.staff_planning_revisions') IS NULL THEN
-    RAISE EXCEPTION '0464 requires 0077, 0154 and 0224'; END IF;
+    RAISE EXCEPTION '0467 requires 0077, 0154 and 0224'; END IF;
 END $$;
 
 INSERT INTO hon.permissions(code,description,is_sensitive,is_staff_assignable) VALUES
