@@ -165,7 +165,7 @@ try{
  const p2=await list(a,{beforeAt:p1.nextCursor.at,beforeId:p1.nextCursor.id});assert.equal(p2.conversations.length,8);assert.equal(p2.nextCursor,null);
  assert.equal(new Set([...p1.conversations,...p2.conversations].map(x=>x.conversationId)).size,58);
  // All 58 within one millisecond (sub-millisecond writes): stored to whole milliseconds, and the pages still split exactly by id.
- await q("UPDATE hon.school_conversations x SET last_message_at=(date_trunc('second',clock_timestamp())+interval '1 hour')+(r.n*interval '7 microseconds'),version=x.version+1 FROM (SELECT id,row_number() OVER (ORDER BY id) n FROM hon.school_conversations WHERE school_id=$1) r WHERE r.id=x.id",[a.school]);
+ await q("UPDATE hon.school_conversations x SET last_message_at=(date_trunc('second',statement_timestamp())+interval '1 hour')+(r.n*interval '7 microseconds'),version=x.version+1 FROM (SELECT id,row_number() OVER (ORDER BY id) n FROM hon.school_conversations WHERE school_id=$1) r WHERE r.id=x.id",[a.school]);
  assert.equal((await q("SELECT count(DISTINCT last_message_at) n, bool_and(last_message_at=date_trunc('milliseconds',last_message_at)) ms FROM hon.school_conversations WHERE school_id=$1",[a.school]))[0].n,'1');
  const s1=await list(a);assert.equal(s1.conversations.length,50);
  const s2=await list(a,{beforeAt:s1.nextCursor.at,beforeId:s1.nextCursor.id});assert.equal(s2.conversations.length,8,'no conversation in the anchor millisecond is skipped');
