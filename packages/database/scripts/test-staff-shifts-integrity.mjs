@@ -310,7 +310,9 @@ try {
 
   // 8. Audit and inert outbox for every write.
   const writes = await count() + (await sql("SELECT coalesce(sum(version-1),0)::int n FROM hon.staff_shifts WHERE organization_id=$1", [ids.organization])).rows[0].n;
-  const audit = (await sql("SELECT count(*)::int n FROM hon.audit_events WHERE organization_id=$1 AND entity_type='STAFF_SHIFT'", [ids.organization])).rows[0].n;
+  const auditRow = (await sql("SELECT count(*)::int n, bool_and(NOT next_state ? 'note' AND NOT next_state ? 'position' AND NOT coalesce(prior_state ? 'note' OR prior_state ? 'position',false) AND next_state ? 'startsAt') shape FROM hon.audit_events WHERE organization_id=$1 AND entity_type='STAFF_SHIFT'", [ids.organization])).rows[0];
+  const audit = auditRow.n;
+  ok(auditRow.shape, 'the audit keeps times but never the free-text note or position');
   const outbox = (await sql("SELECT count(*)::int n, bool_and(NOT payload ? 'note' AND NOT payload ? 'position') shape FROM hon.outbox_events WHERE organization_id=$1 AND aggregate_type='STAFF_SHIFT' AND status='PENDING'", [ids.organization])).rows[0];
   ok(audit === writes && outbox.n === writes && outbox.shape, `one audit and one pending outbox event (no free text) per write (${writes}/${audit}/${outbox.n})`);
 

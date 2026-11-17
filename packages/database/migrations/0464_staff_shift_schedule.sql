@@ -283,8 +283,9 @@ BEGIN
     END IF;
   END IF;
   result:=hon.staff_shift_json(s);
+  -- The audit keeps times, person, status and version; the free-text note and position stay only on the shift.
   INSERT INTO hon.audit_events(organization_id,school_id,actor_principal_id,source,action_code,entity_type,entity_id,prior_state,next_state,result,request_id,correlation_id)
-    VALUES(org,school,actor,'HUMAN_UI',action,'STAFF_SHIFT',s.id,before,result,'SUCCEEDED',request,correlation);
+    VALUES(org,school,actor,'HUMAN_UI',action,'STAFF_SHIFT',s.id,before-'note'-'position',result-'note'-'position','SUCCEEDED',request,correlation);
   INSERT INTO hon.outbox_events(organization_id,school_id,event_type,schema_version,aggregate_type,aggregate_id,aggregate_version,correlation_id,causation_id,payload)
     VALUES(org,school,'staff_shift.saved',1,'STAFF_SHIFT',s.id,s.version,correlation,request,
       jsonb_build_object('shiftId',s.id,'staffPrincipalId',s.principal_id,'version',s.version,'status',s.status));
