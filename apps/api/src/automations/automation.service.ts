@@ -1,9 +1,9 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, HttpStatus, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import {
-  validateAutomationArchiveInput, validateAutomationCreateInput, validateAutomationRestoreInput, validateAutomationSaveInput,
-  validateContactTagInput, validateContactTagLookupInput, verifyAutomationVersion, verifyAutomationWorkflowDetail, verifyAutomationWorkflowList,
+  validateAutomationActivateInput, validateAutomationArchiveInput, validateAutomationCreateInput, validateAutomationPauseInput, validateAutomationRestoreInput, validateAutomationSaveInput,
+  validateContactTagInput, validateContactTagLookupInput, verifyAutomationRunDetail, verifyAutomationRunList, verifyAutomationVersion, verifyAutomationWorkflowDetail, verifyAutomationWorkflowList,
   verifyContactTagChange, verifyContactTagLookup, verifyPersonContactTags, verifySchoolContactTags,
-  type AutomationVersion, type AutomationWorkflowDetail, type AutomationWorkflowList, type ContactTagChange, type ContactTagLookup,
+  type AutomationRunDetail, type AutomationRunList, type AutomationVersion, type AutomationWorkflowDetail, type AutomationWorkflowList, type ContactTagChange, type ContactTagLookup,
   type PersonContactTags, type SchoolContactTags,
 } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
@@ -23,7 +23,11 @@ const ERRORS: Record<string, [string[], (code: string) => HttpException]> = {
   CONTACT_TAG_LIMIT_REACHED: [['54000'], code => new HttpException({ code, detail: 'A contact can have 20 tags and a school 200 different tags.' }, HttpStatus.UNPROCESSABLE_ENTITY)],
   AUTOMATION_STALE: [['40001'], code => new ConflictException({ code, detail: 'Someone changed this workflow. Reload it and try again.' })],
   AUTOMATION_ARCHIVED: [['23514'], code => new ConflictException({ code, detail: 'This workflow is archived and can no longer change.' })],
-  AUTOMATION_NOT_DRAFT: [['23514'], code => new ConflictException({ code, detail: 'Only a draft can be archived. Turn the workflow off first.' })],
+  AUTOMATION_NOT_DRAFT: [['23514'], code => new ConflictException({ code, detail: 'Only a draft or paused workflow can be archived. Pause it first.' })],
+  AUTOMATION_NOT_ACTIVE: [['23514'], code => new ConflictException({ code, detail: 'This workflow is not on.' })],
+  AUTOMATION_NOT_AVAILABLE_YET: [['0A000'], code => new HttpException({ code, detail: 'This workflow uses a part HON does not run yet. Change that part, then turn it on.' }, HttpStatus.UNPROCESSABLE_ENTITY)],
+  AUTOMATION_REFERENCE_INVALID: [['23503'], code => new HttpException({ code, detail: 'A stage, form or workflow this workflow names is not at this school.' }, HttpStatus.UNPROCESSABLE_ENTITY)],
+  AUTOMATION_RUN_NOT_FOUND: [['P0002'], code => new NotFoundException({ code })],
   AUTOMATION_NOT_FOUND: [['P0002'], code => new NotFoundException({ code })],
   AUTOMATION_VERSION_NOT_FOUND: [['P0002'], code => new NotFoundException({ code })],
   CONTACT_NOT_FOUND: [['P0002'], code => new NotFoundException({ code })],
@@ -32,6 +36,11 @@ function translate(error: unknown): never {
   if (error instanceof HttpException) throw error;
   const sqlState = (error as { code?: string })?.code ?? '', message = (error as { message?: string })?.message ?? '';
   const known = ERRORS[message];
+  if (message === 'AUTOMATION_NOT_AVAILABLE_YET' && sqlState === '0A000') {
+    const part = (error as { detail?: string })?.detail ?? '';
+    throw new HttpException({ code: message, detail: 'This workflow uses a part HON does not run yet. Change that part, then turn it on.',
+      ...(/^[a-z ]{1,30} [A-Za-z_]{1,40}$/.test(part) ? { part } : {}) }, HttpStatus.UNPROCESSABLE_ENTITY);
+  }
   if (known && known[0].includes(sqlState)) throw known[1](message);
   if (sqlState === '42501') throw new ForbiddenException({ code: 'AUTOMATION_FORBIDDEN' });
   if (['22023', '22P02', '22003'].includes(sqlState)) throw new BadRequestException({ code: 'AUTOMATION_INVALID' });
@@ -80,6 +89,25 @@ export class AutomationService {
   async archive(context: AutomationContext, workflowId: string, value: unknown) {
     let input; try { input = validateAutomationArchiveInput(value); } catch { invalid(); }
     return this.workflowCommand(context, 'archive_automation_workflow', workflowId, input);
+  }
+
+  async activate(context: AutomationContext, workflowId: string, value: unknown) {
+    let input; try { input = validateAutomationActivateInput(value); } catch { invalid(); }
+    return this.workflowCommand(context, 'activate_automation_workflow', workflowId, input);
+  }
+  async pause(context: AutomationContext, workflowId: string, value: unknown) {
+    let input; try { input = validateAutomationPauseInput(value); } catch { invalid(); }
+    return this.workflowCommand(context, 'pause_automation_workflow', workflowId, input);
+  }
+  async runs(context: AutomationContext, workflowId: string): Promise<AutomationRunList> {
+    const list = await this.read(context, 'SELECT hon.read_automation_runs($1,$2::uuid) AS data', [workflowId], verifyAutomationRunList);
+    if (list.workflowId.toLowerCase() !== workflowId.toLowerCase()) throw new Error('Unverified automation receipt.');
+    return list;
+  }
+  async run(context: AutomationContext, runId: string): Promise<AutomationRunDetail> {
+    const detail = await this.read(context, 'SELECT hon.read_automation_run($1,$2::uuid) AS data', [runId], verifyAutomationRunDetail);
+    if (detail.run.runId.toLowerCase() !== runId.toLowerCase()) throw new Error('Unverified automation receipt.');
+    return detail;
   }
 
   schoolTags(context: AutomationContext): Promise<SchoolContactTags> {

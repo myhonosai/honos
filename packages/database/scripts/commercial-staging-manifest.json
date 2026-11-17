@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "a16baac4e54b4969376da89ffb57533b459546195e04cd822ebc730b052bb9c6",
+  "chainSha256": "1afb267a66b1b0972867c4862842f54ed04874b5dbc2cc09b50b1e6d929de1e1",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -565,6 +565,22 @@
     {
       "file": "0416_automation_workflows.sql",
       "sha256": "f5461d07dec493477c2c5af02e03f1f0107cbc722b1e505b13631953cc39de8c"
+    },
+    {
+      "file": "0417_lead_pipeline_board.sql",
+      "sha256": "071c1a65518bbf64d034885f6cebca9d9c579d4352b25af0d90dcb9e7176d3cc"
+    },
+    {
+      "file": "0420_conversation_ai_training.sql",
+      "sha256": "6b2108d753b262700a83f90ecdd425969decea84d77b3f1c6ff0d4628775dbf7"
+    },
+    {
+      "file": "0423_automation_engine.sql",
+      "sha256": "18fbac749087e7991fa73f98999d46f1a70c65ce805d7e8e0ceba1afc835d9bd"
+    },
+    {
+      "file": "0424_contact_message_history.sql",
+      "sha256": "dfae0a22b7b64cc79dd396ada7fc6a3f1b763bb84a13ec4632e29375f01d5a39"
     },
     {
       "file": "0430_school_pay_once.sql",

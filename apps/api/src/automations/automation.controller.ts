@@ -4,12 +4,12 @@ import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import {
-  AutomationArchiveHumanUiGuard, AutomationCreateHumanUiGuard, AutomationReadHumanUiGuard, AutomationRestoreHumanUiGuard, AutomationSaveHumanUiGuard,
+  AutomationActivateHumanUiGuard, AutomationArchiveHumanUiGuard, AutomationCreateHumanUiGuard, AutomationPauseHumanUiGuard, AutomationReadHumanUiGuard, AutomationRestoreHumanUiGuard, AutomationSaveHumanUiGuard,
   ContactTagAddHumanUiGuard, ContactTagLookupHumanUiGuard, ContactTagRemoveHumanUiGuard,
 } from './automation.guard.js';
 import { AutomationService, type AutomationContext } from './automation.service.js';
 
-type Permission = 'automation.workflow.read' | 'automation.workflow.manage' | 'contact.tag.read' | 'contact.tag.manage';
+type Permission = 'automation.workflow.read' | 'automation.workflow.manage' | 'automation.workflow.activate' | 'contact.tag.read' | 'contact.tag.manage';
 
 /** Shared scope resolution: route ids are never authority; the verified session decides and the database re-proves it. */
 abstract class AutomationScope {
@@ -122,6 +122,50 @@ export class AutomationWorkflowController extends AutomationScope {
     const context = await this.context(request, organizationId, schoolId, 'automation.workflow.manage', this.key(key));
     const result = await this.automations.archive(context, workflowId, input);
     return { data: result.record, meta: this.meta(context, result.replayed) };
+  }
+
+  @Post(':workflowId/activate')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  @UseGuards(AutomationActivateHumanUiGuard)
+  async activate(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('workflowId', new ParseUUIDPipe()) workflowId: string, @Headers('idempotency-key') key: string | undefined, @Body() input: unknown, @Req() request: HonRequest) {
+    const context = await this.context(request, organizationId, schoolId, 'automation.workflow.activate', this.key(key));
+    const result = await this.automations.activate(context, workflowId, input);
+    return { data: result.record, meta: this.meta(context, result.replayed) };
+  }
+
+  @Post(':workflowId/pause')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  @UseGuards(AutomationPauseHumanUiGuard)
+  async pause(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('workflowId', new ParseUUIDPipe()) workflowId: string, @Headers('idempotency-key') key: string | undefined, @Body() input: unknown, @Req() request: HonRequest) {
+    const context = await this.context(request, organizationId, schoolId, 'automation.workflow.activate', this.key(key));
+    const result = await this.automations.pause(context, workflowId, input);
+    return { data: result.record, meta: this.meta(context, result.replayed) };
+  }
+
+  @Get(':workflowId/runs')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  @UseGuards(AutomationReadHumanUiGuard)
+  async runs(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('workflowId', new ParseUUIDPipe()) workflowId: string, @Headers('idempotency-key') key: string | undefined, @Req() request: HonRequest) {
+    const context = await this.context(request, organizationId, schoolId, 'automation.workflow.read', this.noKey(key));
+    return { data: await this.automations.runs(context, workflowId), meta: this.meta(context) };
+  }
+
+  @Get('runs/:runId')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  @UseGuards(AutomationReadHumanUiGuard)
+  async run(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('runId', new ParseUUIDPipe()) runId: string, @Headers('idempotency-key') key: string | undefined, @Req() request: HonRequest) {
+    const context = await this.context(request, organizationId, schoolId, 'automation.workflow.read', this.noKey(key));
+    return { data: await this.automations.run(context, runId), meta: this.meta(context) };
   }
 }
 

@@ -358,3 +358,68 @@ export function verifyContactTagLookup(v: unknown): ContactTagLookup {
     if (!Array.isArray(x.tags) || x.tags.length > 20 || !x.tags.every(contactTagOk)) unverified('tag lookup');
     return { personId: vuuid(x.personId, 'tag lookup'), tags: x.tags as string[] }; }) };
 }
+
+// ---- Engine (AU-2, 0423): turn on, pause, run history ---------------------------------------------------------------
+export const AUTOMATION_ACTIVATE_COMMAND = 'automation.workflow.activate';
+export const AUTOMATION_PAUSE_COMMAND = 'automation.workflow.pause';
+export const AUTOMATION_RUN_STATUSES = ['RUNNING', 'COMPLETED', 'EXITED', 'STOPPED', 'FAILED', 'CANCELLED'] as const;
+export const AUTOMATION_STEP_STATUSES = ['PENDING', 'WAITING', 'DONE', 'SKIPPED', 'FAILED'] as const;
+export const AUTOMATION_DELIVERY_STATUSES = ['PENDING', 'SENDING', 'ACCEPTED', 'DELIVERED', 'SUPPRESSED', 'FAILED', 'UNKNOWN', 'BOUNCED'] as const;
+export type AutomationRunStatus = typeof AUTOMATION_RUN_STATUSES[number];
+export type AutomationStepStatus = typeof AUTOMATION_STEP_STATUSES[number];
+
+export interface AutomationActivateInput { expectedRevision: number; version: number }
+export function validateAutomationActivateInput(v: unknown): AutomationActivateInput {
+  if (!keys(v, ['expectedRevision', 'version']) || !int(v.version, 1, 500)) bad('input');
+  return { expectedRevision: revision(v.expectedRevision), version: v.version };
+}
+export const validateAutomationPauseInput = validateAutomationArchiveInput;
+
+export interface AutomationRun {
+  runId: string; workflowId: string; workflowVersion: number; personId: string; contactFirstName: string | null; status: AutomationRunStatus;
+  endCode: string | null; depth: number; parentRunId: string | null; startedAt: string; endedAt: string | null;
+}
+export interface AutomationRunStep {
+  stepId: string; type: AutomationStepType; status: AutomationStepStatus; outcome: string | null; branch: 'YES' | 'NO' | null;
+  messageId: string | null; deliveryStatus: string | null; workItemId: string | null; startedRunId: string | null;
+  dueAt: string; createdAt: string; finishedAt: string | null;
+}
+export interface AutomationRunList { workflowId: string; runs: AutomationRun[]; counts: { running: number; completed: number; exited: number; failed: number }; checkedAt: string }
+export interface AutomationRunDetail { run: AutomationRun; steps: AutomationRunStep[]; checkedAt: string }
+
+const CODE = /^[A-Z_]{1,40}$/;
+const code = (v: unknown, what: string): string | null => { if (v === null) return null; if (typeof v !== 'string' || !CODE.test(v)) unverified(what); return v; };
+const nuuid = (v: unknown, what: string): string | null => (v === null ? null : vuuid(v, what));
+export function verifyAutomationRun(v: unknown): AutomationRun {
+  const o = rec(v, ['runId', 'workflowId', 'workflowVersion', 'personId', 'contactFirstName', 'status', 'endCode', 'depth', 'parentRunId', 'startedAt', 'endedAt'], 'run');
+  if (!oneOf(o.status, AUTOMATION_RUN_STATUSES) || !(o.contactFirstName === null || (typeof o.contactFirstName === 'string' && o.contactFirstName.length <= 60))) unverified('run');
+  const depth = vint(o.depth, 0, 3, 'run')!, parent = nuuid(o.parentRunId, 'run'), ended = iso(o.endedAt, 'run', true), endCode = code(o.endCode, 'run');
+  if ((depth === 0) !== (parent === null) || (o.status === 'RUNNING') !== (ended === null) || (['RUNNING', 'COMPLETED'].includes(o.status as string)) !== (endCode === null)) unverified('run');
+  return { runId: vuuid(o.runId, 'run'), workflowId: vuuid(o.workflowId, 'run'), workflowVersion: vint(o.workflowVersion, 1, 500, 'run')!, personId: vuuid(o.personId, 'run'),
+    contactFirstName: o.contactFirstName as string | null, status: o.status as AutomationRunStatus, endCode, depth, parentRunId: parent,
+    startedAt: iso(o.startedAt, 'run')!, endedAt: ended };
+}
+function runStep(v: unknown): AutomationRunStep {
+  const o = rec(v, ['stepId', 'type', 'status', 'outcome', 'branch', 'messageId', 'deliveryStatus', 'workItemId', 'startedRunId', 'dueAt', 'createdAt', 'finishedAt'], 'run step');
+  if (typeof o.stepId !== 'string' || !STEP_ID.test(o.stepId) || !oneOf(o.type, AUTOMATION_STEP_TYPES) || !oneOf(o.status, AUTOMATION_STEP_STATUSES)
+    || !(o.branch === null || oneOf(o.branch, ['YES', 'NO'])) || !(o.deliveryStatus === null || oneOf(o.deliveryStatus, AUTOMATION_DELIVERY_STATUSES))) unverified('run step');
+  const finished = iso(o.finishedAt, 'run step', true), outcome = code(o.outcome, 'run step');
+  if ((['PENDING', 'WAITING'].includes(o.status as string)) !== (finished === null) || (finished === null) !== (outcome === null)) unverified('run step');
+  return { stepId: o.stepId, type: o.type as AutomationStepType, status: o.status as AutomationStepStatus, outcome, branch: o.branch as 'YES' | 'NO' | null,
+    messageId: nuuid(o.messageId, 'run step'), deliveryStatus: o.deliveryStatus as string | null, workItemId: nuuid(o.workItemId, 'run step'),
+    startedRunId: nuuid(o.startedRunId, 'run step'), dueAt: iso(o.dueAt, 'run step')!, createdAt: iso(o.createdAt, 'run step')!, finishedAt: finished };
+}
+export function verifyAutomationRunList(v: unknown): AutomationRunList {
+  const o = rec(v, ['workflowId', 'runs', 'counts', 'checkedAt'], 'runs');
+  const c = rec(o.counts, ['running', 'completed', 'exited', 'failed'], 'runs');
+  if (!Array.isArray(o.runs) || o.runs.length > 100) unverified('runs');
+  const workflowId = vuuid(o.workflowId, 'runs'), runs = o.runs.map(verifyAutomationRun);
+  if (runs.some(r => r.workflowId.toLowerCase() !== workflowId.toLowerCase())) unverified('runs');
+  const n = (x: unknown) => vint(x, 0, 2147483647, 'runs')!;
+  return { workflowId, runs, counts: { running: n(c.running), completed: n(c.completed), exited: n(c.exited), failed: n(c.failed) }, checkedAt: iso(o.checkedAt, 'runs')! };
+}
+export function verifyAutomationRunDetail(v: unknown): AutomationRunDetail {
+  const o = rec(v, ['run', 'steps', 'checkedAt'], 'run detail');
+  if (!Array.isArray(o.steps) || o.steps.length > AUTOMATION_LIMITS.steps) unverified('run detail');
+  return { run: verifyAutomationRun(o.run), steps: o.steps.map(runStep), checkedAt: iso(o.checkedAt, 'run detail')! };
+}
