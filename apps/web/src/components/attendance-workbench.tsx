@@ -192,8 +192,8 @@ export function AttendanceWorkbench({ initialScope = {} }: { initialScope?: Atte
     {notice && <p role="status" className={styles.notice}>{notice}</p>}
 
     <section>
-      <h2>1 / Exact already-known scope</h2>
-      <p>Enter the five UUIDs you already know. A verified dashboard or Command Center may prefill only the organization and school selectors as untrusted URL values; it grants no authority and does not load anything. Program, class session, and student profile always start blank and must be manually entered as already-known IDs. There is no directory, name search, freeform route, query authority, parent access, HQ access, or AI selector. Changing any selector clears loaded policy, current record, command result, and retained retry keys.</p>
+      <h2>{shellSchool ? 'Record to correct' : '1 / Exact already-known scope'}</h2>
+      <p>{shellSchool ? 'Enter the program, class and student record IDs for the attendance record you want to correct.' : 'Enter the five UUIDs you already know. A verified dashboard or Command Center may prefill only the organization and school selectors as untrusted URL values; it grants no authority and does not load anything. Program, class session, and student profile always start blank and must be manually entered as already-known IDs. There is no directory, name search, freeform route, query authority, parent access, HQ access, or AI selector. Changing any selector clears loaded policy, current record, command result, and retained retry keys.'}</p>
       <div className={styles.scopeGrid}>
         {([
           ['organizationId', 'Organization UUID'], ['schoolId', 'School UUID'], ['programId', 'Program UUID'], ['sessionId', 'Class session UUID'], ['studentProfileId', 'Student profile UUID'],

@@ -43,8 +43,8 @@ describe('school home model', () => {
     expect(team.map(card => card.name)).toEqual(['Kai', 'Chad', 'Marcus', 'Alex', 'Maya', 'Jordan', 'Claire', 'Lena']);
     expect(team.find(card => card.id === 'kai')).toMatchObject({ href: '/staff/teaching-assistant', portrait: '/ai/kai.webp' });
     expect(team.find(card => card.id === 'maya')).toMatchObject({ href: '/staff/retention/at-risk' });
-    // Alex, Jordan, Claire and Lena answer in Ask HON (0260), opened with that specialist picked.
-    for (const id of ['alex', 'jordan', 'claire', 'lena']) expect(team.find(card => card.id === id)).toMatchObject({ href: `/staff/hon?ask=${id}` });
+    // Alex, Jordan, Claire and Lena have their own workspace too (owner, 2026-11-17).
+    for (const id of ['alex', 'jordan', 'claire', 'lena']) expect(team.find(card => card.id === id)).toMatchObject({ href: `/staff/ai-team/${id}` });
     expect(team.some(card => card.id === 'eian')).toBe(false);
     for (const member of HON_AI_TEAM) expect(team.find(card => card.id === member.id)?.portrait).toBe(member.portrait);
   });

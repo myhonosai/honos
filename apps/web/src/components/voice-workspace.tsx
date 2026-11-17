@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { VOICE_AGENT_CATALOG_IDS, VOICE_DRAFT_NOTICE, VOICE_REASON_CODES, VOICE_UUID, safeVoiceDraft, type VoiceOperation, type VoiceReasonCode, type VoiceSession } from '@hon/contracts';
 import { changeVoiceSession, readVoiceSession, VoiceAccessError, VoiceConflictError } from './voice-http';
+import { useShellSchoolInto } from './school-shell/page-school';
 import styles from './voice-workspace.module.css';
 interface Pending { school: string; operation: VoiceOperation; id: string | null; input: unknown; key: string }
 export function VoiceWorkspace(): React.ReactElement {
@@ -10,6 +11,8 @@ export function VoiceWorkspace(): React.ReactElement {
   const [session,setSession] = useState<VoiceSession|null>(null), [draft,setDraft] = useState(''), [reason,setReason] = useState<VoiceReasonCode>('NOT_CONFIGURED');
   const [busy,setBusy] = useState(false), [error,setError] = useState(''), [notice,setNotice] = useState(''), [uncertain,setUncertain] = useState(false), [offline,setOffline] = useState(false);
   const pending = useRef<Pending|null>(null), epoch = useRef(0), active = useRef(false);
+  // Inside the school shell the signed-in school is used; the server still authorizes it on every request.
+  const shellSchool = useShellSchoolInto(signedIn => { if (signedIn.schoolId !== school) scope(signedIn.schoolId); });
   useEffect(() => { const update = () => setOffline(!navigator.onLine); update(); window.addEventListener('online',update); window.addEventListener('offline',update); return () => { active.current = false; epoch.current++; window.removeEventListener('online',update); window.removeEventListener('offline',update); }; },[]);
   function clearPrivate() { setSession(null); setDraft(''); pending.current=null; setUncertain(false); setNotice(''); setResumeId(''); setWorkId(''); setActionId(''); setApprovalId(''); }
   function scope(value: string) { epoch.current++; active.current=false; setBusy(false); clearPrivate(); setError(''); setSchool(value); }
@@ -38,8 +41,8 @@ export function VoiceWorkspace(): React.ReactElement {
     <header className={styles.header}><a href="/">HON / School OS</a><nav><a href="/staff/search">Find work context</a><a href="/staff/action-center/approvals">Human approvals</a><a href="/">School overview</a></nav></header>
     <section className={styles.hero}><p className={styles.kicker}>COMPLETE / HUMAN HANDOFF FOUNDATION</p><h1>Voice, with an honest text fallback.</h1><p>Keep your place without granting an agent authority. This foundation stores human interaction evidence only.</p><div className={styles.warning}><strong>Voice unavailable — no provider is connected</strong><p>No microphone access, recording, audio, transcription, AI response or tool execution. A catalog selection does not invoke an employee.</p></div></section>
     <div className={styles.layout}>
-      <section className={styles.card}><h2>School and selected employee</h2><p>Exact active Complete and current human school permission are checked on every request. Parent, Eian, HQ and public use are not supported here.</p>
-        <label>School ID<input value={school} onChange={e=>scope(e.target.value)} placeholder="Authorized school UUID" autoComplete="off" spellCheck={false}/></label>
+      <section className={styles.card}><h2>{shellSchool?'Selected employee':'School and selected employee'}</h2>{shellSchool?<p>For staff at your school on the Complete plan.</p>:<><p>Exact active Complete and current human school permission are checked on every request. Parent, Eian, HQ and public use are not supported here.</p>
+        <label>School ID<input value={school} onChange={e=>scope(e.target.value)} placeholder="Authorized school UUID" autoComplete="off" spellCheck={false}/></label></>}
         <label>Approved catalog ID<select value={agent} disabled={busy||uncertain} onChange={e=>setAgent(e.target.value as typeof agent)}>{VOICE_AGENT_CATALOG_IDS.map(a=><option key={a} value={a}>{a}</option>)}</select></label>
         <details><summary>Optional stable context IDs</summary><p>No action payload, private work content, credentials or conversation text is accepted.</p><label>Work item ID<input value={workId} disabled={busy||uncertain} onChange={e=>setWorkId(e.target.value)}/></label><label>Action request ID<input value={actionId} disabled={busy||uncertain} onChange={e=>setActionId(e.target.value)}/></label><label>Approval evidence ID<input value={approvalId} disabled={busy||uncertain} onChange={e=>setApprovalId(e.target.value)}/></label></details>
         <button disabled={!ready||!refsValid} onClick={()=>change('create',{agentCatalogId:agent,...(workId?{workItemId:workId}:{}),...(actionId?{actionRequestId:actionId}:{}),...(approvalId?{approvalId}: {})},null)}>Request inert voice session</button>
