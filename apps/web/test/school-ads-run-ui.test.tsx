@@ -16,8 +16,8 @@ const at = '2026-11-17T05:00:00.000Z';
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const stub = (response: Response) => { const f = vi.fn(async () => response); vi.stubGlobal('fetch', f); return f; };
 const signal = () => new AbortController().signal;
-const ad = (over: Partial<SocialAd> = {}): SocialAd => ({ adId: id(60), accountId: id(40), targetId: id(50), postId: id(51), accountName: 'Synthetic Dojo Page', budgetCents: 5000,
-  currency: 'USD', startsOn: '2026-11-17', endsOn: '2026-11-23', status: 'DRAFT', operation: null, resolvedByPerson: false, createdAt: at, version: 1, ...over });
+const ad = (over: Partial<SocialAd> = {}): SocialAd => ({ adId: id(60), channel: 'META_BOOST', accountId: id(40), targetId: id(50), postId: id(51), accountName: 'Synthetic Dojo Page', budgetCents: 5000,
+  currency: 'USD', startsOn: '2026-11-17', endsOn: '2026-11-23', status: 'DRAFT', operation: null, resolvedByPerson: false, createdAt: at, version: 1, google: null, ...over });
 const view = (over: Partial<SocialAdsView> = {}): SocialAdsView => ({ budget: { monthlyCapCents: 30000, currency: 'USD', version: 1 }, committedThisMonthCents: 5000,
   ads: [ad()], today: '2026-11-17', checkedAt: at, adsEnabled: true, pauseEnabled: true, ...over });
 const props = (over: Partial<MetaAdsProps> = {}): MetaAdsProps => ({ language: 'en', locale: 'en-US',
@@ -62,6 +62,7 @@ it('refuses an answer about another ad, maps refusals to closed kinds and keeps 
   expect(adsErrorFor(409, 'SOCIAL_AD_OVER_CAP').kind).toBe('OVER_CAP');
   expect(adsErrorFor(409, 'SOCIAL_ADS_OFF').kind).toBe('ADS_OFF');
   expect(adsErrorFor(409, 'SOCIAL_AD_NO_BUDGET').kind).toBe('NO_BUDGET');
+  expect(adsErrorFor(409, 'SOCIAL_AD_NO_ADDRESS').kind).toBe('NO_ADDRESS');
   expect(adsErrorFor(409, 'SOCIAL_VERSION_CONFLICT').kind).toBe('STALE');
   expect(adsErrorFor(503, 'SOCIAL_ADS_NOT_ENABLED').kind).toBe('NOT_ENABLED');
   expect(adsErrorFor(503, 'OTHER').kind).toBe('UNKNOWN');

@@ -46,8 +46,8 @@ function adsCommand(path, body, headers) {
   if (path.endsWith('/ads/budget')) { fixture.budget = { monthlyCapCents: body.monthlyCapCents, currency: body.currency, version: (fixture.budget?.version ?? 0) + 1 }; return [200, adsView()]; }
   if (path.endsWith('/ads')) {
     if (!fixture.budget || body.budgetCents > fixture.budget.monthlyCapCents) return [409, { code: 'SOCIAL_AD_OVER_CAP' }];
-    const ad = { adId: id(60 + fixture.ads.length), accountId: id(40), targetId: body.targetId, postId: id(51), accountName: 'Synthetic Dojo Page', budgetCents: body.budgetCents,
-      currency: fixture.budget.currency, startsOn: body.startsOn, endsOn: body.endsOn, status: 'DRAFT', operation: null, resolvedByPerson: false, createdAt: at, version: 1 };
+    const ad = { adId: id(60 + fixture.ads.length), channel: 'META_BOOST', accountId: id(40), targetId: body.targetId, postId: id(51), accountName: 'Synthetic Dojo Page', budgetCents: body.budgetCents,
+      currency: fixture.budget.currency, startsOn: body.startsOn, endsOn: body.endsOn, status: 'DRAFT', operation: null, resolvedByPerson: false, createdAt: at, version: 1, google: null };
     fixture.ads.push(ad); return [200, ad];
   }
   const ad = fixture.ads.find((a) => path.includes(a.adId));

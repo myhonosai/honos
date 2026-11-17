@@ -4,6 +4,8 @@
 // sends or spends.
 
 export const SOCIAL_PLATFORMS = ['FACEBOOK', 'INSTAGRAM'] as const;
+/** Platforms a school can connect (0453 adds Google Ads, which only runs ads: never posts or an inbox). */
+export const SOCIAL_ACCOUNT_PLATFORMS = ['FACEBOOK', 'INSTAGRAM', 'GOOGLE_ADS'] as const;
 export const SOCIAL_ACCOUNT_STATUSES = ['CONNECTED', 'DISCONNECTED'] as const;
 export const SOCIAL_CONNECT_COMMAND = 'marketing.social.connect';
 export const SOCIAL_CONNECT_COMPLETE_COMMAND = 'marketing.social.connect.complete';
@@ -15,17 +17,18 @@ export const SOCIAL_CONNECT_RETURN_PATH = '/staff/marketing/social/return';
 export const SOCIAL_CONNECT_STATE = /^[A-Za-z0-9_-]{43}$/;
 
 export type SocialPlatform = typeof SOCIAL_PLATFORMS[number];
+export type SocialAccountPlatform = typeof SOCIAL_ACCOUNT_PLATFORMS[number];
 export type SocialAccountStatus = typeof SOCIAL_ACCOUNT_STATUSES[number];
 export type SocialProviderRemoval = 'REMOVED' | 'NOT_REMOVED' | 'NOT_ATTEMPTED';
 export interface SocialAccount {
-  accountId: string; platform: SocialPlatform; displayName: string; status: SocialAccountStatus;
+  accountId: string; platform: SocialAccountPlatform; displayName: string; status: SocialAccountStatus;
   publishEnabled: boolean; inboxEnabled: boolean; adsEnabled: boolean; version: number;
   connectedAt: string; updatedAt: string; disconnectedAt: string | null;
 }
 export interface SocialAccountList { profileLinked: boolean; connectEnabled: boolean; accounts: SocialAccount[]; checkedAt: string }
-export interface SocialConnectStart { authUrl: string; platform: SocialPlatform; expiresAt: string }
-export interface SocialConnectResult { platform: SocialPlatform; connected: number; conflicts: number; accounts: SocialAccount[] }
-export interface SocialConnectInput { platform: SocialPlatform }
+export interface SocialConnectStart { authUrl: string; platform: SocialAccountPlatform; expiresAt: string }
+export interface SocialConnectResult { platform: SocialAccountPlatform; connected: number; conflicts: number; accounts: SocialAccount[] }
+export interface SocialConnectInput { platform: SocialAccountPlatform }
 export interface SocialConnectCompleteInput { state: string }
 export type SocialAccountChangeInput =
   | { expectedVersion: number; publishEnabled: boolean; inboxEnabled: boolean; adsEnabled: boolean }
@@ -55,7 +58,7 @@ function count(v: unknown, what: string): number {
 
 export function verifySocialAccount(v: unknown): SocialAccount {
   const o = record(v, ['accountId', 'platform', 'displayName', 'status', 'publishEnabled', 'inboxEnabled', 'adsEnabled', 'version', 'connectedAt', 'updatedAt', 'disconnectedAt'], 'account');
-  if (typeof o.accountId !== 'string' || !UUID.test(o.accountId) || !SOCIAL_PLATFORMS.includes(o.platform as SocialPlatform)
+  if (typeof o.accountId !== 'string' || !UUID.test(o.accountId) || !SOCIAL_ACCOUNT_PLATFORMS.includes(o.platform as SocialAccountPlatform)
     || typeof o.displayName !== 'string' || o.displayName.length < 1 || o.displayName.length > 120 || CONTROL.test(o.displayName)
     || !SOCIAL_ACCOUNT_STATUSES.includes(o.status as SocialAccountStatus)
     || typeof o.publishEnabled !== 'boolean' || typeof o.inboxEnabled !== 'boolean' || typeof o.adsEnabled !== 'boolean'
@@ -63,9 +66,10 @@ export function verifySocialAccount(v: unknown): SocialAccount {
   const disconnectedAt = time(o.disconnectedAt, 'account', true);
   // A disconnected account never has a switch on, and only a disconnected account has a disconnect time.
   if ((o.status === 'DISCONNECTED') !== (disconnectedAt !== null)
-    || (o.status === 'DISCONNECTED' && (o.publishEnabled || o.inboxEnabled || o.adsEnabled))) fail('account');
+    || (o.status === 'DISCONNECTED' && (o.publishEnabled || o.inboxEnabled || o.adsEnabled))
+    || (o.platform === 'GOOGLE_ADS' && (o.publishEnabled || o.inboxEnabled))) fail('account');
   return {
-    accountId: o.accountId, platform: o.platform as SocialPlatform, displayName: o.displayName, status: o.status as SocialAccountStatus,
+    accountId: o.accountId, platform: o.platform as SocialAccountPlatform, displayName: o.displayName, status: o.status as SocialAccountStatus,
     publishEnabled: o.publishEnabled, inboxEnabled: o.inboxEnabled, adsEnabled: o.adsEnabled, version: o.version as number,
     connectedAt: time(o.connectedAt, 'account')!, updatedAt: time(o.updatedAt, 'account')!, disconnectedAt,
   };
@@ -83,13 +87,13 @@ export function verifySocialConnectStart(v: unknown): SocialConnectStart {
   const o = record(v, ['authUrl', 'platform', 'expiresAt'], 'connect start');
   // https only; plain http is accepted solely for a loopback development return page (the fake provider).
   if (typeof o.authUrl !== 'string' || o.authUrl.length > 4096 || !(o.authUrl.startsWith('https://') || /^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?\//.test(o.authUrl))
-    || !SOCIAL_PLATFORMS.includes(o.platform as SocialPlatform)) fail('connect start');
-  return { authUrl: o.authUrl, platform: o.platform as SocialPlatform, expiresAt: time(o.expiresAt, 'connect start')! };
+    || !SOCIAL_ACCOUNT_PLATFORMS.includes(o.platform as SocialAccountPlatform)) fail('connect start');
+  return { authUrl: o.authUrl, platform: o.platform as SocialAccountPlatform, expiresAt: time(o.expiresAt, 'connect start')! };
 }
 export function verifySocialConnectResult(v: unknown): SocialConnectResult {
   const o = record(v, ['platform', 'connected', 'conflicts', 'accounts'], 'connect result');
-  if (!SOCIAL_PLATFORMS.includes(o.platform as SocialPlatform)) fail('connect result');
-  return { platform: o.platform as SocialPlatform, connected: count(o.connected, 'connect result'), conflicts: count(o.conflicts, 'connect result'), accounts: accounts(o.accounts) };
+  if (!SOCIAL_ACCOUNT_PLATFORMS.includes(o.platform as SocialAccountPlatform)) fail('connect result');
+  return { platform: o.platform as SocialAccountPlatform, connected: count(o.connected, 'connect result'), conflicts: count(o.conflicts, 'connect result'), accounts: accounts(o.accounts) };
 }
 export function verifySocialAccountChange(v: unknown): SocialAccountChange {
   const o = record(v, ['account', 'providerRemoval'], 'account change');
@@ -99,8 +103,8 @@ export function verifySocialAccountChange(v: unknown): SocialAccountChange {
 
 export function validateSocialConnectInput(v: unknown): SocialConnectInput {
   const o = record(v, ['platform'], 'connect input');
-  if (!SOCIAL_PLATFORMS.includes(o.platform as SocialPlatform)) fail('connect input');
-  return { platform: o.platform as SocialPlatform };
+  if (!SOCIAL_ACCOUNT_PLATFORMS.includes(o.platform as SocialAccountPlatform)) fail('connect input');
+  return { platform: o.platform as SocialAccountPlatform };
 }
 export function validateSocialConnectCompleteInput(v: unknown): SocialConnectCompleteInput {
   const o = record(v, ['state'], 'connect complete input');

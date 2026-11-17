@@ -70,7 +70,7 @@ export function MetaAds(p: MetaAdsProps): React.ReactElement {
   if (a.state === 'LOADING') return <p className={styles.meta} role="status">{t('adsLoading')}</p>;
   if (a.state === 'DENIED') return <p className={styles.notice} data-ads-run="DENIED">{t('adsDenied')}</p>;
   if (a.state !== 'READY') return <p className={`${styles.notice} ${styles.warn}`} role="alert" data-ads-run="UNAVAILABLE">{t('adsUnavailable')}</p>;
-  const v = a.view, o = p.outcome, cap = v.budget, boostable = a.boostable;
+  const v = a.view, o = p.outcome, cap = v.budget, boostable = a.boostable, metaAds = v.ads.filter(ad => ad.channel === 'META_BOOST');
   return <div className={styles.actions} data-ads-run={v.adsEnabled ? 'ON' : 'OFF'}>
     {!v.adsEnabled && <p className={styles.notice} data-ads-off>{t('runOff')}</p>}
     {o && o.kind !== 'SENDING' && <div className={`${styles.notice} ${o.kind === 'DONE' ? '' : styles.warn}`} role={o.kind === 'DONE' ? 'status' : 'alert'} data-ads-outcome={o.kind}>
@@ -103,7 +103,7 @@ export function MetaAds(p: MetaAdsProps): React.ReactElement {
     </div>
     <div data-ads-list>
       <h3>{t('adsTitle')}</h3>
-      {v.ads.length === 0 ? <p className={styles.meta}>{t('noAds')}</p> : <ul className={styles.list}>{v.ads.map(ad => <AdRow key={ad.adId} ad={ad} p={p} t={t} />)}</ul>}
+      {metaAds.length === 0 ? <p className={styles.meta}>{t('noAds')}</p> : <ul className={styles.list}>{metaAds.map(ad => <AdRow key={ad.adId} ad={ad} p={p} t={t} />)}</ul>}
     </div>
   </div>;
 }
