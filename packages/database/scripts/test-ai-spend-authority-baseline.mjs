@@ -2664,7 +2664,7 @@ try {
   assert.equal(fakes.hon.calls - before.hon, 1, 'no second call');
   const thread = await hon.read(scope, conv.id);
   assert.deepEqual([thread.turns.at(-1).role, thread.turns.at(-1).text], ['claire', fakes.hon.reply]);
-  // HON's next answer sees Claire's turn as Claire's (not Kai's); 0444 (INV-44): with her answer while it is visible.
+  // HON's next answer sees Claire's turn as Claire's (not Kai's); 0451 (INV-44): with her answer while it is visible.
   await hon.sendTurn(scope, conv.id, { text: 'And what next?', delegation: null }, K());
   const hist = JSON.parse(fakes.hon.inputs.at(-1).facts).history;
   assert.deepEqual(hist.at(-1), { question: 'How is retention this month?', answer: fakes.hon.reply.slice(0, 900), delegatedTo: 'claire' });
@@ -2768,7 +2768,7 @@ try {
     by = (await usageOf()).byClass.AGENT_INFERENCE.byAgent;
     assert.deepEqual([by.BUSINESS_PERFORMANCE?.entries, by.HON_REPLY?.entries], [claireLedger + 1, honLedger + 1], 'a HON answer stays HON_REPLY');
   }
-  pass('INV-31', "K2: Claire (Business Performance) answers a question in text from the school's aggregate metrics only (planned as claire/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays); she needs reporting.view at begin (refused, nothing recorded, also when it lapses while the reply row write waits) and in prepare (a lapse reserves and calls nothing); her answer is concealed when reporting.view lapses while usage evidence stays; HON sees her turn as Claire's (0444: with her answer while visible to this human); the legacy 'claire' teaching alias is refused; Claire answers are never continued, summarized from or used as a suggestion source; rows are single DETAILED analyses without suggestions and 'claire' plans are ANALYZE only; readiness lists BUSINESS_PERFORMANCE gated on reporting.view; HQ usage counts her calls (and a late provider expense after an HQ write-off) under BUSINESS_PERFORMANCE, never HON_REPLY");
+  pass('INV-31', "K2: Claire (Business Performance) answers a question in text from the school's aggregate metrics only (planned as claire/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays); she needs reporting.view at begin (refused, nothing recorded, also when it lapses while the reply row write waits) and in prepare (a lapse reserves and calls nothing); her answer is concealed when reporting.view lapses while usage evidence stays; HON sees her turn as Claire's (0451: with her answer while visible to this human); the legacy 'claire' teaching alias is refused; Claire answers are never continued, summarized from or used as a suggestion source; rows are single DETAILED analyses without suggestions and 'claire' plans are ANALYZE only; readiness lists BUSINESS_PERFORMANCE gated on reporting.view; HQ usage counts her calls (and a late provider expense after an HQ write-off) under BUSINESS_PERFORMANCE, never HON_REPLY");
   }
 
   // ---- INV-40 (K2c, 0266): HON may suggest Claire; confirming her is an ordinary K2 analysis grouped under the answer ----
@@ -2868,7 +2868,7 @@ try {
   const facts = fakes.hon.inputs.at(-1).facts;
   assert.deepEqual(JSON.parse(facts).group.members, [{ agentKey: 'claire', status: 'COMPLETED' }], facts);
   assert.ok(!JSON.stringify(JSON.parse(facts).group).includes('CLAIRE-ONLY-ANALYSIS-TEXT'), 'Claire text never reaches the group facts');
-  // 0444 (INV-44): her visible answer may reach HON as earlier conversation (with who gave it), never as a group outcome.
+  // 0451 (INV-44): her visible answer may reach HON as earlier conversation (with who gave it), never as a group outcome.
   assert.ok(JSON.parse(facts).history.some((h) => h.delegatedTo === 'claire' && h.answer === 'CLAIRE-ONLY-ANALYSIS-TEXT: churn is low.'), facts);
   // 7. Table rules: members and suggestions accept claire; Claire's own rows still carry no suggestions.
   assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{maya}' WHERE turn_id=$1", [src.turnId]))).error?.code, '23514');
@@ -2876,7 +2876,7 @@ try {
   assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{kai}' WHERE turn_id=$1", [c1.turnId]))).error?.code, '23514', 'Claire never suggests');
   assert.equal((await row("SELECT has_function_privilege($1,'hon.hon_reply_allowed_suggestions(uuid,uuid,uuid,text[])','EXECUTE') s", [runtimeRole])).s, false, 'internal helper');
   void m1;
-  pass('INV-40', "K2c: HON may suggest Claire (closed set marcus, kai, chad, claire), stored and shown only for a reporting.view holder; confirming her from this human's own whole, visible HON answer is an ordinary K2 analysis (one call, claire/ANALYZE, metrics only, resend replays) grouped under that answer with a status derived from her reply; she is confirmed once, only where suggested and never from a Claire answer; the source is re-checked after the group and work writes wait (a lapse persists no turn, member or reply and calls nothing); a C3b summary's group facts carry her agent, status and reason but never her text (0444: her visible answer may appear as earlier conversation); Claire rows still never suggest; Alex, Jordan and Lena (0260) are neither suggested nor confirmed from a suggestion");
+  pass('INV-40', "K2c: HON may suggest Claire (closed set marcus, kai, chad, claire), stored and shown only for a reporting.view holder; confirming her from this human's own whole, visible HON answer is an ordinary K2 analysis (one call, claire/ANALYZE, metrics only, resend replays) grouped under that answer with a status derived from her reply; she is confirmed once, only where suggested and never from a Claire answer; the source is re-checked after the group and work writes wait (a lapse persists no turn, member or reply and calls nothing); a C3b summary's group facts carry her agent, status and reason but never her text (0451: her visible answer may appear as earlier conversation); Claire rows still never suggest; Alex, Jordan and Lena (0260) are neither suggested nor confirmed from a suggestion");
   }
 
   // ---- INV-32 (0254): "Ask next" follow-ups and "Based on" sources are presentation data only ----
@@ -3228,10 +3228,10 @@ try {
   assert.deepEqual(Object.keys(answered.alex.facts).sort(), ['commandCenter', 'creativeCommerce', 'operations']);
   assert.deepEqual([answered.alex.facts.operations, answered.alex.facts.creativeCommerce], [ops, com], 'Alex sees the same sections when he holds their permissions');
   assert.doesNotMatch(JSON.stringify([ops, com]), /Synthetic class|Synthetic campaign|AI0INV36/, 'no record names leave the database');
-  // HON's next answer sees each turn as that specialist's; 0444 (INV-44): with their answer while this human may see it.
+  // HON's next answer sees each turn as that specialist's; 0451 (INV-44): with their answer while this human may see it.
   await hon.sendTurn(scope, conv.id, { text: 'And what next?', delegation: null }, K());
   assert.deepEqual(JSON.parse(fakes.hon.inputs.at(-1).facts).history.map((h) => h.delegatedTo ?? null).slice(-3), ['alex', 'jordan', 'lena']);
-  assert.ok(JSON.parse(fakes.hon.inputs.at(-1).facts).history.slice(-3).every((h) => h.answer === fakes.hon.reply.slice(0, 900)), '0444: team answers reach HON');
+  assert.ok(JSON.parse(fakes.hon.inputs.at(-1).facts).history.slice(-3).every((h) => h.answer === fakes.hon.reply.slice(0, 900)), '0451: team answers reach HON');
   // 2. Without the capability each one is refused at begin and nothing is recorded.
   for (const agent of ['alex', 'jordan', 'lena']) {
     await drop(CAP[agent]);
@@ -3306,10 +3306,10 @@ try {
     for (const k of ['alex', 'jordan', 'lena']) assert.ok(out[k][1] >= 1 && out[k][0] === out[k][1], `${k}: ${JSON.stringify(out)} ${JSON.stringify(by)}`);
     assert.equal(out.hon[0], out.hon[1], `HON_REPLY counts only HON's own rows: ${JSON.stringify(out)}`);
   }
-  pass('INV-36', "0260: Alex (general management, reporting.view), Jordan (operations, schedule.session.manage) and Lena (creative & commerce, marketing.campaign.read) each answer a question in text from their own aggregate school facts (planned as <agent>/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays; no record names); Alex's operations and commerce sections follow those permissions; each is refused at begin without its capability (nothing recorded) and blocked in prepare on a lapse (nothing reserved or sent); answers are concealed when any permission their facts used lapses while usage evidence stays; HON sees their turns (0444: with their answers while visible to this human); never continued, confirmed from suggestions or given a target; rows are single DETAILED analyses, source permissions are a closed set, plans are ANALYZE only, the fact readers are internal; readiness lists GENERAL_MANAGEMENT, OPERATIONS and CREATIVE_COMMERCE gated on each capability; HQ usage (0328) counts their calls under those agents, never HON_REPLY");
+  pass('INV-36', "0260: Alex (general management, reporting.view), Jordan (operations, schedule.session.manage) and Lena (creative & commerce, marketing.campaign.read) each answer a question in text from their own aggregate school facts (planned as <agent>/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays; no record names); Alex's operations and commerce sections follow those permissions; each is refused at begin without its capability (nothing recorded) and blocked in prepare on a lapse (nothing reserved or sent); answers are concealed when any permission their facts used lapses while usage evidence stays; HON sees their turns (0451: with their answers while visible to this human); never continued, confirmed from suggestions or given a target; rows are single DETAILED analyses, source permissions are a closed set, plans are ANALYZE only, the fact readers are internal; readiness lists GENERAL_MANAGEMENT, OPERATIONS and CREATIVE_COMMERCE gated on each capability; HQ usage (0328) counts their calls under those agents, never HON_REPLY");
   }
 
-  // ---- INV-44 (0444): team chat: HON reads the team's visible answers and turns them into one plan ----
+  // ---- INV-44 (0451): team chat: HON reads the team's visible answers and turns them into one plan ----
   {
   const o = await makeOrg('inv-44');
   const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
@@ -3397,7 +3397,7 @@ try {
   const solo = await hon.sendTurn(scope, conv.id, { text: 'Jordan, anything else?', delegation: { agentKey: 'jordan' } }, K());
   assert.equal(solo.status, 'COMPLETED');
   assert.deepEqual(Object.keys(JSON.parse(fakes.hon.inputs.at(-1).facts)), ['school']);
-  pass('INV-44', "0444 team chat: HON's history is the last 6 turns and includes each COMPLETED Claire, Alex, Jordan or Lena answer (first 900 characters, with who gave it) only while this human may see it, so HON can turn a team round into one plan (one call); the permissions behind those answers are stored on HON's invocation (a later lapse conceals the plan, restored it shows) and an answer no longer visible (a teammate's or an earlier HON plan) stays out with its permission, while a plan built on a visible earlier plan inherits that plan's permissions; 'specialistResults' marks the source; HON rows never carry Maya's retention or tuition permissions; Maya and draft specialists never reach HON as text; analysts' own turns still get no history");
+  pass('INV-44', "0451 team chat: HON's history is the last 6 turns and includes each COMPLETED Claire, Alex, Jordan or Lena answer (first 900 characters, with who gave it) only while this human may see it, so HON can turn a team round into one plan (one call); the permissions behind those answers are stored on HON's invocation (a later lapse conceals the plan, restored it shows) and an answer no longer visible (a teammate's or an earlier HON plan) stays out with its permission, while a plan built on a visible earlier plan inherits that plan's permissions; 'specialistResults' marks the source; HON rows never carry Maya's retention or tuition permissions; Maya and draft specialists never reach HON as text; analysts' own turns still get no history");
   }
 
   // ---- INV-32 (R1, 0287): routing by task class through the HQ task profile ----

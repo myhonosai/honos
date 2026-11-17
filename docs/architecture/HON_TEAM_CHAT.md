@@ -19,7 +19,7 @@ shown as a group chat:
 - **Take turns**: tap a teammate (or start a message with "@Jordan" / say "Jordan, ...") and the next messages go to
   that teammate only, until you pick someone else. Topic changes are just picking another teammate.
 - **Make a plan together**: after the team answered, one tap asks HON (detailed answer) to combine what everyone said
-  into one plan that names which teammate each point comes from. This needs migration 0444 (below).
+  into one plan that names which teammate each point comes from. This needs migration 0451 (below).
 - **Voice for every agent**: tap-to-talk sends the spoken question exactly like a typed one; each answer is read
   aloud in the browser with the teammate's name first ("Jordan says: ...") and a slightly different browser voice per
   teammate. "Hey HON" hands-free works as in Ask HON (on-device recognition only).
@@ -39,10 +39,10 @@ later backend piece (needs its own migration number).
   per-school limits apply to every turn.
 - The browser decides nothing: who may answer comes from the server's readiness.
 
-## Backend: migration 0444 (HON reads the team's answers)
+## Backend: migration 0451 (HON reads the team's answers)
 
-Before 0444 HON's history showed a specialist's turn only as `delegatedTo` (never the answer), so HON could not
-combine the team's views. 0444 changes `hon.prepare_hon_reply` (0284 body plus this change only):
+Before 0451 HON's history showed a specialist's turn only as `delegatedTo` (never the answer), so HON could not
+combine the team's views. 0451 changes `hon.prepare_hon_reply` (0284 body plus this change only):
 
 1. HON's history is the last 6 turns (was 3). An earlier COMPLETED Claire, Alex, Jordan or Lena answer is included as
    `answer` (first 900 characters) next to `delegatedTo`, only while `hon.hon_reply_source_allowed` says this person
@@ -59,7 +59,7 @@ Evidence: AI-0 INV-44 (new) and INV-36 (updated: HON now sees visible team answe
 
 ## Plan (slices)
 
-1. **0444 backend** (this PR): prepare change, table check, prompt, AI-0 INV-44.
+1. **0451 backend** (this PR): prepare change, table check, prompt, AI-0 INV-44.
 2. **Team chat web** (next PR): `hon-team-chat.tsx` card on Home for all three modes, Everyone/Take turns,
    Make a plan together, member strip with readiness, voice per agent (agent voice profiles in `hon-voice.ts`),
    en/ko/es copy, unit tests and browser screenshots.
