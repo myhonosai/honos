@@ -313,6 +313,7 @@
     "0413_attendance_card_photo_us_policy.sql": "ec9b09a43167fb95cba503c2d4ff670099cf69c25410e41680f0f1d79489d887",
     "0414_walk_in_kiosk.sql": "e393385043538425f8a9c09b50d9aa5f3bb73f71731d017b692175e38f2bda29",
     "0415_custom_tools.sql": "57ac8f806710e4c7cd489f5e228400051ffad6c3f76dc7891cb8f039ef3bab9d",
-    "0416_automation_workflows.sql": "f5461d07dec493477c2c5af02e03f1f0107cbc722b1e505b13631953cc39de8c"
+    "0416_automation_workflows.sql": "f5461d07dec493477c2c5af02e03f1f0107cbc722b1e505b13631953cc39de8c",
+    "0423_automation_engine.sql": "a43d9111e3533d6b0161654b4515b102874316a4641874c3524017d8346f0e1c"
   }
 }

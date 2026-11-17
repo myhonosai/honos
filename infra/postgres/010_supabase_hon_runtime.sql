@@ -3945,10 +3945,10 @@ DO $$ DECLARE r text; t text; BEGIN
       hon.read_school_contact_tags(text),hon.read_person_contact_tags(text,uuid),hon.lookup_contact_tags(text,jsonb) TO hon_runtime;
   END IF;
 END $$;
--- 0368 automation engine: three private tables; runtime turns workflows on, pauses them and reads run history. The two
+-- 0423 automation engine: three private tables; runtime turns workflows on, pauses them and reads run history. The two
 -- engine functions belong to hon_automation_worker (014) and are never granted to the runtime.
 DO $$ DECLARE r text; t text; BEGIN
-  IF to_regprocedure('hon.activate_automation_workflow(text,uuid,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0368 first'; END IF;
+  IF to_regprocedure('hon.activate_automation_workflow(text,uuid,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0423 first'; END IF;
   FOREACH t IN ARRAY ARRAY['automation_event_receipts','automation_runs','automation_run_steps'] LOOP
     EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;

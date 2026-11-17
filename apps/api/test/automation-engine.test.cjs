@@ -5,7 +5,7 @@ const { AutomationService } = require('../dist/automations/automation.service.js
 const { AutomationWorkerDatabase, AutomationEngineScheduler } = require('../dist/automations/automation-engine.js');
 const { validateDeploymentConfiguration } = require('../dist/foundation/production-config.js');
 
-// Mocked boundary tests for the 0368 engine API and worker. The engine itself (events, runs, guards, isolation) is proven
+// Mocked boundary tests for the 0423 engine API and worker. The engine itself (events, runs, guards, isolation) is proven
 // against PostgreSQL by packages/database/scripts/test-automation-engine-integrity.mjs.
 const scope = { organizationId: randomUUID(), schoolId: randomUUID(), principalId: randomUUID() };
 const context = (patch = {}) => ({ ...scope, principalType: 'HUMAN_USER', source: 'HUMAN_UI', requestId: randomUUID(), correlationId: randomUUID(), idempotencyKey: 'eng-key', externalSubject: 'verified-human', ...patch });

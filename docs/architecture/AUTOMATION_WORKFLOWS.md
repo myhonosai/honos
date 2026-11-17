@@ -1,8 +1,8 @@
-# Automation workflows, contact tags and the engine (AU-1 0367, AU-2 0368)
+# Automation workflows, contact tags and the engine (AU-1 0416, AU-2 0423)
 
 Design: [docs/superpowers/specs/2026-11-15-automation-builder-design.md](../superpowers/specs/2026-11-15-automation-builder-design.md).
-0367 stores and versions workflow definitions and the shared contact tags. 0368 adds the engine: staff turn a workflow
-on or pause it, qualifying events start runs, and due steps run with durable per-step history. See "Engine (0368)".
+0416 stores and versions workflow definitions and the shared contact tags. 0423 adds the engine: staff turn a workflow
+on or pause it, qualifying events start runs, and due steps run with durable per-step history. See "Engine (0423)".
 
 ## Definition (schema version 1)
 
@@ -68,7 +68,7 @@ COMPLETE entitlement. Delegation and Action Engine contexts are refused.
 Commands need an `Idempotency-Key`; replay returns the first answer, other content under the same key is refused.
 Audit and outbox payloads carry ids, versions and trigger kinds only, never message text.
 
-## Engine (0368)
+## Engine (0423)
 
 **What runs today.** Turning on refuses, by name (`422 AUTOMATION_NOT_AVAILABLE_YET` with `part`), anything this engine
 does not run yet: triggers other than lead created, form lead, Meta lead, trial booked/cancelled/attended/no-show, class
@@ -123,6 +123,6 @@ configuration) and a role that is a superuser, bypasses RLS or inherits. Nothing
 
 - `packages/database/scripts/test-automation-workflows-integrity.mjs` (champions-club fixture, 8 groups).
 - `packages/database/scripts/test-automation-engine-integrity.mjs` (champions-club fixture, 15 groups, incl. the 011
-  exact verification for 0367 and 0368 and drift refusals).
+  exact verification for 0416 and 0423 and drift refusals).
 - `apps/api/test/automation-workflows.test.cjs`, `apps/api/test/automation-engine.test.cjs` (mocked boundary, worker,
   scheduler and deployment configuration).

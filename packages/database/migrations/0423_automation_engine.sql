@@ -1,6 +1,6 @@
 BEGIN;
 
--- AU-2 (0368, coordinator-allocated 2026-11-15): the Automation Builder engine.
+-- AU-2 (0423; allocated as 0368 on 2026-11-15, renumbered 2026-11-16 to run after AU-1 0416): the Automation Builder engine.
 -- Design: docs/superpowers/specs/2026-11-15-automation-builder-design.md (5.3, 5.4).
 -- - A human with automation.workflow.activate turns a DRAFT or PAUSED workflow on at one of its versions, or pauses it.
 --   Turning on checks that every id in the definition belongs to the school and that every trigger, step, condition,
@@ -21,7 +21,7 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'Trusted migration owner required'; END IF;
   IF to_regprocedure('hon.validate_automation_definition(jsonb)') IS NULL OR to_regclass('hon.communication_deliveries') IS NULL
-    OR to_regclass('hon.work_items') IS NULL OR to_regclass('hon.crm_appointments') IS NULL THEN RAISE EXCEPTION '0368 requires 0367, 0243, 0084 and 0043'; END IF;
+    OR to_regclass('hon.work_items') IS NULL OR to_regclass('hon.crm_appointments') IS NULL THEN RAISE EXCEPTION '0423 requires 0416, 0243, 0084 and 0043'; END IF;
 END $$;
 
 -- The HON Automation principal: creates automated messages and tasks, never signs in.

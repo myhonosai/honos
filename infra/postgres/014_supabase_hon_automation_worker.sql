@@ -1,5 +1,5 @@
--- HON / Supabase automation engine role (0368, docs/architecture/AUTOMATION_WORKFLOWS.md)
--- Run after HON migrations through 0368 have completed. Replace the placeholder with a freshly generated
+-- HON / Supabase automation engine role (0423, docs/architecture/AUTOMATION_WORKFLOWS.md)
+-- Run after HON migrations through 0423 have completed. Replace the placeholder with a freshly generated
 -- base64url password; do not save it in Git. Store the Session Pooler URI only as
 -- HON_AUTOMATION_WORKER_DATABASE_URL (never DATABASE_URL, HON_RUNTIME_DATABASE_URL or the communication worker URL).
 ROLLBACK;
@@ -11,7 +11,7 @@ BEGIN
     RAISE EXCEPTION 'Role hon_automation_worker already exists. Inspect and rotate it deliberately rather than overwriting it.';
   END IF;
   IF to_regprocedure('hon.run_due_automation_steps(integer)') IS NULL THEN
-    RAISE EXCEPTION 'Apply automation engine migration 0368 first.';
+    RAISE EXCEPTION 'Apply automation engine migration 0423 first.';
   END IF;
 END;
 $$;

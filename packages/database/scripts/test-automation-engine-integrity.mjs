@@ -1,4 +1,4 @@
-/** Automation engine (AU-2, 0368): real signed HON sessions -> Nest/guard -> fixed runtime SQL for turning workflows on, pausing and reading
+/** Automation engine (AU-2, 0423): real signed HON sessions -> Nest/guard -> fixed runtime SQL for turning workflows on, pausing and reading
  *  history; the two engine functions are driven from this proof's owner connection exactly as the dedicated worker login calls them.
  *  Events are synthetic outbox rows about synthetic contacts. Messages are only QUEUED (the 0243 claim creates their delivery records);
  *  no provider, payment or AI is called. Schools are SYNTHETIC sign-ups made through the 0241 runtime entry point. */
@@ -356,11 +356,11 @@ try{
  await assert.rejects(q("UPDATE hon.automation_runs SET person_id=$2,version=version+1 WHERE id=$1",[anaRun.id,ben.person]),/AUTOMATION_HISTORY_IMMUTABLE/);
  for(const t of ['automation_event_receipts','automation_runs','automation_run_steps'])await assert.rejects(q(`TRUNCATE hon.${t} CASCADE`),/AUTOMATION_HISTORY_IMMUTABLE|cannot truncate/);
  pass('event receipts, finished runs and finished steps cannot be edited, reopened, moved or deleted');
- // 14. The canonical 011 exact verification for 0367 and 0368 passes on this database and refuses drift.
+ // 14. The canonical 011 exact verification for 0416 and 0423 passes on this database and refuses drift.
  const verify=await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql',import.meta.url),'utf8');
  const section=(begin,end)=>{const x=verify.split(begin)[1]?.split(end)[0];assert(x,begin);return x.replace(/^[^\n]*\n/,'').replaceAll('hon_runtime',runtime.username);};
- const s367=section('-- Automation workflows and contact tags exact verification (AU-1 0367)','-- End automation workflows and contact tags exact verification.');
- const s368=section('-- Automation engine exact verification (AU-2 0368)','-- End automation engine exact verification.');
+ const s367=section('-- Automation workflows and contact tags exact verification (AU-1 0416)','-- End automation workflows and contact tags exact verification.');
+ const s368=section('-- Automation engine exact verification (AU-2 0423)','-- End automation engine exact verification.');
  await admin.query(s367);await admin.query(s368);
  for(const [drift,pattern] of [
   [`GRANT EXECUTE ON FUNCTION hon.consume_automation_events(integer) TO ${runtime.username}`,/Unsafe automation engine function/],
@@ -370,6 +370,6 @@ try{
   await admin.query('BEGIN');try{await admin.query(drift);await assert.rejects(admin.query(s368),pattern);}finally{await admin.query('ROLLBACK');}
   await admin.query(s368);
  }
- pass('the canonical 011 exact verification for 0367 and 0368 passes here and refuses a runtime engine grant, a disabled guard, unforced RLS and a table grant');
- console.log('PASS: automation engine (0368), '+groups+' groups');
+ pass('the canonical 011 exact verification for 0416 and 0423 passes here and refuses a runtime engine grant, a disabled guard, unforced RLS and a table grant');
+ console.log('PASS: automation engine (0423), '+groups+' groups');
 }finally{await q("UPDATE hon.hon_os_signup_program SET status='CLOSED',recorded_at=clock_timestamp() WHERE program_id=1").catch(()=>{});await app?.close();await Promise.allSettled([admin.end(),restricted.end()]);}

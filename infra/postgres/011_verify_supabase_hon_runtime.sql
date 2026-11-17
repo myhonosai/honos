@@ -4207,7 +4207,7 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
     RAISE EXCEPTION 'Unsafe automation workflow table posture: guard triggers'; END IF;
 END $$;
 -- End automation workflows and contact tags exact verification.
--- Automation engine exact verification (AU-2 0368): three private forced-RLS engine tables nobody but the owner touches, four runtime
+-- Automation engine exact verification (AU-2 0423): three private forced-RLS engine tables nobody but the owner touches, four runtime
 -- entry points (turn on, pause, run history), two definer engine functions only the hon_automation_worker login (014) may call,
 -- private helpers, forward-only guards, the AUTOMATION principal and the message origin columns.
 DO $$ DECLARE f record; safe boolean; t text; worker oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_automation_worker'); BEGIN

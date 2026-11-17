@@ -51,7 +51,7 @@ export function validateDeploymentConfiguration(env: DatabaseEnvironment = proce
     }
   }
 
-  // 0368 automation engine login (infra 014): its own role, never the runtime, migration or communication worker login.
+  // 0423 automation engine login (infra 014): its own role, never the runtime, migration or communication worker login.
   const automationUrl = env.HON_AUTOMATION_WORKER_DATABASE_URL;
   if (automationUrl) {
     try { verifiedDatabaseConnection(automationUrl, env); } catch { failures.push('AUTOMATION_WORKER_DATABASE_TLS_INVALID'); }
