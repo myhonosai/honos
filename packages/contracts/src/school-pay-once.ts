@@ -1,5 +1,5 @@
 /**
- * B-TUI-2 shared one-time payment (0430): one whole payment of a server-decided amount on the school's own processor
+ * B-TUI-2 shared one-time payment (0440): one whole payment of a server-decided amount on the school's own processor
  * (Stripe Connect direct charge or Square), TEST/SANDBOX mode only, used by the family checkout page, the walk-in kiosk
  * tablet and the point of sale. A caller's own database function opens it; the API starts it at the processor and
  * records only what the processor itself answers on retrieval. HON takes no fee.

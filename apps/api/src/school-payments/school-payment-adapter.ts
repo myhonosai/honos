@@ -63,16 +63,16 @@ export interface SchoolPaymentAdapter {
   chargeOffSession(input: SchoolPayChargeRequest): Promise<SchoolPayChargeObservation>;
   /** 0337: the provider's own record of the charge made for one attempt, or null when the provider has none. */
   findCharge(input: SchoolPayChargeLookup): Promise<SchoolPayChargeObservation | null>;
-  /** 0430: the surfaces this adapter can show a one-time payment on in this environment (none: not offered). */
+  /** 0440: the surfaces this adapter can show a one-time payment on in this environment (none: not offered). */
   oneTimeSurfaces(): readonly SchoolPayOnceSurface[];
   /**
-   * 0430: create (or, with the same idempotency key hon-school-pay-once-<paymentId> and the same parameters, get back) the
+   * 0440: create (or, with the same idempotency key hon-school-pay-once-<paymentId> and the same parameters, get back) the
    * provider session of one one-time payment on the school's account: a direct charge, no application fee.
    */
   beginOneTimePayment(input: SchoolPayOnceRequest): Promise<SchoolPayOnceSession>;
-  /** 0430: authenticated retrieval of one session; never derived from a browser return. */
+  /** 0440: authenticated retrieval of one session; never derived from a browser return. */
   findOneTimePayment(input: SchoolPayOnceLookup): Promise<SchoolPayOnceObservation>;
-  /** 0430: close an open session so it can no longer be paid. A session that is already closed is not an error. */
+  /** 0440: close an open session so it can no longer be paid. A session that is already closed is not an error. */
   expireOneTimePayment(input: SchoolPayOnceLookup): Promise<void>;
 }
 
@@ -233,7 +233,7 @@ abstract class SimulatedSchoolPaymentAdapter implements SchoolPaymentAdapter {
     return { outcome: held.outcome, chargeRef: held.chargeRef, failureClass: held.failureClass, amountMinor: held.amountMinor, currency: held.currency };
   }
   /**
-   * 0430: one-time payment sessions the simulated processor holds, by provider idempotency key (a resend returns the
+   * 0440: one-time payment sessions the simulated processor holds, by provider idempotency key (a resend returns the
    * first session). Test hooks below pay, fail or expire a session as the payer or the processor would.
    */
   readonly onceSessions = new Map<string, { accountRef: string; paymentId: string; sessionRef: string; amountMinor: number; currency: string; surface: SchoolPayOnceSurface;

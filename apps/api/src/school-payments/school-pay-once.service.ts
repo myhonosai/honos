@@ -34,7 +34,7 @@ const START = 'SELECT hon.start_school_pay_once($1::uuid,$2::jsonb) AS data';
 const RECORD = 'SELECT hon.record_school_pay_once($1::uuid,$2::jsonb) AS data';
 const DUE = 'SELECT hon.list_due_school_pay_once($1::integer) AS data';
 
-// Exact 0430 error codes; every unknown database failure is unavailable, never success.
+// Exact 0440 error codes; every unknown database failure is unavailable, never success.
 const ERRORS: Record<string, (code: string) => HttpException> = {
   VALIDATION_FAILED: code => new BadRequestException({ code }),
   SCHOOL_PAY_ONCE_NOT_FOUND: code => new NotFoundException({ code, detail: 'This payment is not available.' }),
@@ -51,7 +51,7 @@ const unavailable = (): never => {
 };
 
 /**
- * B-TUI-2 0430: the shared one-time payment, TEST/SANDBOX mode only, for callers that already opened a payment in their
+ * B-TUI-2 0440: the shared one-time payment, TEST/SANDBOX mode only, for callers that already opened a payment in their
  * own database function (checkout page, walk-in kiosk, point of sale). This service holds no authority of its own: a
  * caller's route decides who may ask, and it only ever records what the processor itself answers on retrieval.
  *   start   fixes the surface and return address once (before any provider call), then creates or gets back the provider

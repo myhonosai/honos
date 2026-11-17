@@ -1125,6 +1125,7 @@ export * from './custom-tools.js';
 export * from './school-social.js';
 export * from './school-social-posts.js';
 export * from './school-number-orders.js';
+export * from './school-social-inbox.js';
 export * from './school-website.js';
 export * from './school-website-templates.js';
 export * from './school-pay-charges.js';

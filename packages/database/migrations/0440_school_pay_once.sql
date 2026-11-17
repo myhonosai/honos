@@ -1,6 +1,6 @@
 BEGIN;
 
--- B-TUI-2 shared one-time payment (0430, assigned by the coordinator 2026-11-17): one whole payment of a server-decided
+-- B-TUI-2 shared one-time payment (0440: the coordinator assigned 0430 on 2026-11-17, renumbered after 0435 merged): one whole payment of a server-decided
 -- amount on the school's own connected processor (Stripe Connect direct charge or Square), TEST/SANDBOX mode only, for
 -- the family checkout page (CP3), the walk-in kiosk tablet (WK3) and the point of sale. Spec: TUITION_COLLECTION.md
 -- section 22.
@@ -33,7 +33,7 @@ END $$;
 
 -- Code-owned recorder of provider answers. No user, role, HQ, family or delegated authority belongs to it.
 INSERT INTO hon.principals(id,principal_type,display_name)
-  VALUES('00000000-0000-4000-8000-000000000430','SYSTEM_SERVICE','Code-owned school one-time payment recorder');
+  VALUES('00000000-0000-4000-8000-000000000440','SYSTEM_SERVICE','Code-owned school one-time payment recorder');
 
 CREATE TABLE hon.school_pay_once (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -139,7 +139,7 @@ $$;
 -- One history row with its audit row; a settled payment also gets its inert outbox event.
 CREATE FUNCTION hon.school_pay_once_record(x hon.school_pay_once,kind text,prior jsonb) RETURNS void
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-DECLARE snapshot jsonb:=hon.school_pay_once_json(x); svc constant uuid:='00000000-0000-4000-8000-000000000430'; request uuid:=gen_random_uuid();
+DECLARE snapshot jsonb:=hon.school_pay_once_json(x); svc constant uuid:='00000000-0000-4000-8000-000000000440'; request uuid:=gen_random_uuid();
 BEGIN
   INSERT INTO hon.school_pay_once_events(organization_id,school_id,payment_id,payment_version,kind,snapshot,actor_principal_id)
     VALUES(x.organization_id,x.school_id,x.id,x.version,kind,snapshot,svc);
@@ -353,9 +353,9 @@ BEGIN
 END $$;
 
 COMMENT ON TABLE hon.school_pay_once IS
-'0430 one whole one-time payment on the school''s own processor (test mode) for a checkout page, a walk-in visit or a point-of-sale sale: OPEN, PROCESSING, SUCCEEDED, FAILED, EXPIRED or CANCELED. One live payment per caller record. Private.';
+'0440 one whole one-time payment on the school''s own processor (test mode) for a checkout page, a walk-in visit or a point-of-sale sale: OPEN, PROCESSING, SUCCEEDED, FAILED, EXPIRED or CANCELED. One live payment per caller record. Private.';
 COMMENT ON TABLE hon.school_pay_once_events IS
-'0430 append-only history of every one-time payment change. Private.';
+'0440 append-only history of every one-time payment change. Private.';
 COMMENT ON FUNCTION hon.school_pay_once_open(uuid,uuid,text,uuid,bigint,text,jsonb,jsonb,timestamptz) IS
 'INTERNAL (callers'' SECURITY DEFINER functions only, never the runtime): open one payment for a caller record whose authority and amount the caller decided.';
 COMMENT ON FUNCTION hon.school_pay_once_state(uuid) IS
