@@ -642,7 +642,7 @@
     },
     {
       "path": "/hq/pricing-offers",
-      "title": "HON HQ | Pricing & Offers · Design review"
+      "title": "HON HQ | Pricing & Offers \u00b7 Design review"
     },
     {
       "path": "/reference/classic-dashboard",
@@ -699,6 +699,14 @@
     {
       "path": "/staff/settings",
       "title": "HON | Settings"
+    },
+    {
+      "path": "/staff/walk-in",
+      "title": "HON | Walk-in kiosk"
+    },
+    {
+      "path": "/kiosk/walk-in",
+      "title": "HON | Walk-in"
     }
   ]
 }
