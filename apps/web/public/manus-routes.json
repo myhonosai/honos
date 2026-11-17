@@ -253,6 +253,10 @@
       "title": "HON | Scan check-in"
     },
     {
+      "path": "/staff/attendance/face",
+      "title": "HON | Face check-in"
+    },
+    {
       "path": "/staff/instructor-qualifications",
       "title": "HON | Human instructor qualification evidence"
     },
@@ -351,6 +355,10 @@
     {
       "path": "/staff/settings/location",
       "title": "HON | School location"
+    },
+    {
+      "path": "/staff/settings/face-check-in",
+      "title": "HON | Face check-in"
     },
     {
       "path": "/staff/settings/booking-types",
@@ -487,6 +495,10 @@
     {
       "path": "/parent/classpass",
       "title": "HON | Family ClassPass Observations"
+    },
+    {
+      "path": "/parent/face-check-in",
+      "title": "HON | Face check-in consent"
     },
     {
       "path": "/kiosk",
