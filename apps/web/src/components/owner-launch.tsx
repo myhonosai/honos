@@ -63,11 +63,12 @@ export function OwnerLaunch() {
   const retry=useRef<{operation:string;fingerprint:string;key:string}|null>(null);
   // Inside the school shell the page loads the signed-in school's receipts by itself (on open and on return);
   // the server still derives and authorizes the school on every read.
-  const shellSchool=useShellSchool(),inShell=useRef(false),reloadQueued=useRef(false);inShell.current=shellSchool!==null;
-  // focus and visibilitychange both fire on return; one queued reload covers both.
+  const shellSchool=useShellSchool(),inShell=useRef(false),lastReturnReload=useRef(0);inShell.current=shellSchool!==null;
+  // focus and visibilitychange both fire on return (as separate tasks); reload once per second at most.
   function clearPrivateInput() {setGivenName('');setFamilyName('');setBirthDate('');setGuardianGivenName('');setGuardianFamilyName('');setGuardianBirthDate('');setAttested(false);setPlanCode('');setTermStart('');setTermEnd('');setCurrency('');setMembershipDraft(null);setDraftState('DRAFT_UNAVAILABLE');retry.current=null;}
   useEffect(()=>{
-    const stale=()=>{generation.current++;setContext(null);setBooking(null);setBookingState('BOOKING_UNAVAILABLE');setMembershipDraft(null);setBusy(false);setMessage('School state may have changed. Reload saved receipts before continuing.');clearPrivateInput();if(inShell.current&&document.visibilityState==='visible'&&!reloadQueued.current){reloadQueued.current=true;queueMicrotask(()=>{reloadQueued.current=false;void reload();});};};
+    const stale=()=>{if(inShell.current&&document.visibilityState==='visible'&&Date.now()-lastReturnReload.current<=1000)return; // the reload just started covers this return
+      generation.current++;setContext(null);setBooking(null);setBookingState('BOOKING_UNAVAILABLE');setMembershipDraft(null);setBusy(false);setMessage('School state may have changed. Reload saved receipts before continuing.');clearPrivateInput();if(inShell.current&&document.visibilityState==='visible'){lastReturnReload.current=Date.now();void reload();};};
     window.addEventListener('focus',stale);document.addEventListener('visibilitychange',stale);
     return ()=>{generation.current++;window.removeEventListener('focus',stale);document.removeEventListener('visibilitychange',stale);};
   },[]);
