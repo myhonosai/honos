@@ -1110,6 +1110,7 @@ export * from './school-location.js';
 export * from './crm-pipeline-board.js';
 export * from './school-booking-types.js';
 export * from './parent-class-booking.js';
+export * from './parent-family-picker.js';
 export * from './family-messages.js';
 export * from './school-conversations.js';
 export * from './conversation-ai.js';

@@ -243,6 +243,8 @@ import { ParentPlannedAbsenceRequestController, ParentPlannedAbsenceRequestGuard
 import { ParentPlannedAbsenceRequestService } from './families/parent-planned-absence-request.service.js';
 import { ParentClassBookingBookGuard, ParentClassBookingCancelGuard, ParentClassBookingController, ParentClassBookingReadGuard } from './families/parent-class-booking.controller.js';
 import { ParentClassBookingService } from './families/parent-class-booking.service.js';
+import { ParentFamilyPickerController, ParentFamilyPickerReadGuard, ParentFamilyPickerSelectGuard } from './families/parent-family-picker.controller.js';
+import { ParentFamilyPickerService } from './families/parent-family-picker.service.js';
 import { FamilyMessagesInboxController, FamilyMessagesInboxReadGuard, FamilyMessagesMarkReadGuard, FamilyMessagesReplyGuard, ParentFamilyMessagesController, ParentFamilyMessagesReadGuard, ParentFamilyMessagesSendGuard } from './families/family-messages.controller.js';
 import { FamilyMessagesService } from './families/family-messages.service.js';
 import { ConversationCreateLeadGuard, ConversationLinkGuard, ConversationMarkReadGuard, ConversationReadGuard, ConversationReplyGuard, ConversationUpdateGuard, SchoolConversationsController } from './conversations/school-conversations.controller.js';
@@ -488,6 +490,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentPlannedAbsenceHistoryController,
     ParentPlannedAbsenceRequestController,
     ParentClassBookingController,
+    ParentFamilyPickerController,
     ParentFamilyMessagesController,
     FamilyMessagesInboxController,
     SchoolConversationsController,
@@ -660,6 +663,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentClassBookingReadGuard,
     ParentClassBookingBookGuard,
     ParentClassBookingCancelGuard,
+    ParentFamilyPickerService,
+    ParentFamilyPickerReadGuard,
+    ParentFamilyPickerSelectGuard,
     FamilyMessagesService,
     ParentFamilyMessagesReadGuard,
     ParentFamilyMessagesSendGuard,

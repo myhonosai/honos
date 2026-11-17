@@ -1047,6 +1047,37 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     finally { client.release(); }
   }
 
+  /** 0456: the families this parent is linked to now. Subject only; no tenant setting, read-only. */
+  async readParentFamilyChoices(externalSubject: string): Promise<unknown> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>('SELECT hon.read_parent_family_choices($1) AS data', [externalSubject]);
+      if (result.rows.length !== 1) throw new Error('HON parent family choices unavailable.');
+      await client.query('COMMIT');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
+  /** 0456: choose one of the parent's live families. The database re-proves the choice after its lock and write. */
+  async selectParentFamily(externalSubject: string, input: { schoolId: string; familyId: string }, requestId: string): Promise<unknown> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0");
+      await client.query("SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_external_subject',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)", [externalSubject]);
+      const result = await client.query<{ data: unknown }>('SELECT hon.select_parent_family($1,$2::jsonb,$3::uuid) AS data', [externalSubject, JSON.stringify(input), requestId]);
+      if (result.rows.length !== 1) throw new Error('HON parent family choice unavailable.');
+      await client.query('COMMIT');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
   async resolveParentJourneyScopes(externalSubject: string): Promise<ResolvedParentFamilyScope[]> {
     await this.assertRuntimePosture();
     const result = await this.getPool().query<ResolvedParentFamilyScope>(

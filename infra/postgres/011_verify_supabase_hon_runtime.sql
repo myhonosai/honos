@@ -3635,7 +3635,7 @@ END $$;
 -- Parent class booking exact verification (0329): private helpers and three runtime entry points.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.parent_class_booking_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','743cf1c21f074a7a4dbc413e04aa8c2deb59ea68cbc7845ea37dbc0213e19933'),
+('hon.parent_class_booking_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','cb18dc6356494af40a5b1af73147d4dd8d1bbafefab492439f51180e63fcac15'),
 ('hon.parent_class_booking_child_ok(uuid,uuid)',true,false,'search_path=pg_catalog, hon','237a329c4db7c485ffa5521d1a4028ed443de87e157873ac4e2b17fdc11110d7'),
 ('hon.parent_class_booking_session_ok(uuid,hon.class_sessions)',true,false,'search_path=pg_catalog, hon','34c305ae6857963bed97c48089b88563e20dfd2091d60888830d6cfedb7cc183'),
 ('hon.parent_class_booking_seats(uuid)',true,false,'search_path=pg_catalog, hon','d05efcb128c7e55cfef7d12d6db9d25bd8c314bc20305ad2cc38055123f4f3eb'),
@@ -4440,3 +4440,31 @@ BEGIN
   END LOOP;
 END $$;
 -- End face check-in exact verification.
+
+-- Parent family picker exact verification (0456): the private selection table, the private helper, the redefined family scopes and two runtime entry points.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.parent_live_family_scopes(text)',true,false,'search_path=pg_catalog, hon','fe4e64801e394c4b75e7e2d9951f02314d949717810d52d386d72602f6b0ee9f'),
+('hon.parent_class_booking_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','cb18dc6356494af40a5b1af73147d4dd8d1bbafefab492439f51180e63fcac15'),
+('hon.face_checkin_family_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','e4d3454467f9f1c1290ab6a6b84a627dd2e3ba8a865ef1072ea710351fdfb652'),
+('hon.school_family_acceptor_conflict(text,text,hon.school_family_access_invitations)',false,false,'search_path=pg_catalog, hon','06a988bb21c29c801f959aee91de9bb179fcb6d353e7f30351163fb3061bacfd'),
+('hon.read_parent_family_choices(text)',true,true,'search_path=pg_catalog, hon','b2f7f4c031f49c6fd1b42aa34a9ce63f201ef94322c8fed2b199364ff47fe349'),
+('hon.select_parent_family(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','eb84302e40ca74ea17dedf1a67d665f7fb31333600f098d7c7fd890b690b962d'),
+('hon.resolve_parent_journey_scopes(text)',true,true,'search_path=pg_catalog, hon','ab8a77665e9ece9980c971453e05a04d12ebc118c79ee6310a36c1f62797f303')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe parent family picker function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.parent_family_selections'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.parent_family_selections'::regclass)
+    OR has_table_privilege('hon_runtime','hon.parent_family_selections','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.parent_family_selections','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe parent family picker table';
+  END IF;
+END $$;
+-- End parent family picker exact verification.
