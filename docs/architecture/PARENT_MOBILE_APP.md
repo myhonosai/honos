@@ -1,4 +1,4 @@
-# HON Parent mobile app — audit, architecture and plan
+# HON Family (parent) mobile app — audit, architecture and plan
 
 Status: spec + plan (2026-11-17). Owner vision: `/mnt/project-files/parent-app/VISION.md` (David, 2026-11-17).
 The vision describes the intended final product. Nothing below claims a feature exists unless the audit says so,
@@ -109,7 +109,8 @@ or HQ agent tools (Alex, Kai, Marcus, Chad, Lena, …). Every tool is the same e
 | Refused | other families, CRM leads, revenue, staff data, rank changes, fee waivers, makeup credits, SQL | — | Server-side tool absence, not prompt text. |
 
 Cost: uses the existing S4 AI spend guard and school budget; no per-message parent charge; does not draw on the
-creative-credit wallet. Limits need an owner decision (open). No real AI provider until David authorizes it.
+creative-credit wallet. David (2026-11-17): Eian is included for families with **no per-family cap**; the school AI
+budget and server-side safety controls still apply. No real AI provider until David separately authorizes it.
 
 ## 5. Phased plan with verifiable milestones
 
@@ -123,5 +124,6 @@ creative-credit wallet. Limits need an owner decision (open). No real AI provide
 | M6 | Makeup policy engine, events registration, testing fees/payments, renewals, referrals, store, community | Each needs its own backend contract; payments need owner approval |
 | M7 | Store distribution: EAS profiles, shared HON app listing, branded-app pipeline | Manus builds/submits from David's accounts after his OK |
 
-Open owner decisions: Eian usage limits; branded-app pricing; whether VIEWER sees billing; makeup policy defaults
+Decided 2026-11-17: app id `com.myhonos.family`, store name "HON Family", test builds on app.myhonos.com, Eian
+with no per-family cap. Open owner decisions: branded-app pricing; whether VIEWER sees billing; makeup policy defaults
 (none assumed); push provider (Expo push service vs direct APNs/FCM).

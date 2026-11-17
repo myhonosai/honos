@@ -15,15 +15,15 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_HON_API_URL": "https://REPLACE-WITH-STAGING-API",
-        "EXPO_PUBLIC_HON_WEB_URL": "https://REPLACE-WITH-STAGING-WEB"
+        "EXPO_PUBLIC_HON_API_URL": "https://app.myhonos.com/api",
+        "EXPO_PUBLIC_HON_WEB_URL": "https://app.myhonos.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_HON_API_URL": "https://REPLACE-WITH-PRODUCTION-API",
-        "EXPO_PUBLIC_HON_WEB_URL": "https://REPLACE-WITH-PRODUCTION-WEB"
+        "EXPO_PUBLIC_HON_API_URL": "https://app.myhonos.com/api",
+        "EXPO_PUBLIC_HON_WEB_URL": "https://app.myhonos.com"
       }
     }
   },

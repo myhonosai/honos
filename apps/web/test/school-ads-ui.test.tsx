@@ -37,9 +37,12 @@ it('shows Meta Ads and Google Ads side by side, with a connect button only where
   html = renderToStaticMarkup(<AdsView {...props({ list: { state: 'READY', list: list({ accounts: [], connectEnabled: false }) } })} />);
   expect(html).not.toContain('data-ads-connect-meta');
   expect(html).toContain('not turned on for HON OS yet');
-  // Google Ads has no backend yet: never a button, always an honest status.
+  // Google Ads follows the same rule as Meta: a button only while connecting is on, otherwise an honest status.
   expect(html).not.toContain('data-ads-connect-google');
-  expect(html).toContain('data-ads-google="NOT_AVAILABLE"');
+  expect(html).toContain('data-ads-google="NOT_CONNECTED"');
+  html = renderToStaticMarkup(<AdsView {...props({ list: { state: 'READY', list: list({ accounts: [] }) } })} />);
+  expect(html).toContain('data-ads-connect-google');
+  expect(html).toContain('Connect Google Ads');
 });
 
 it('lists each connected Facebook Page with its real ads switch and sends changes to Social accounts', () => {
