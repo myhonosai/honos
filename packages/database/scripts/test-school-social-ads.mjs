@@ -134,7 +134,7 @@ try{
 
  // 2. The cap: none at first; set by version with exact replay; the currency stays fixed once ads exist.
  let V=await view(a);
- assert.deepEqual([V.budget,V.committedThisMonthCents,V.ads.length,V.adsEnabled,V.today],[null,0,0,false,today]);
+ assert.deepEqual([V.budget,V.committedThisMonthCents,V.ads.length,V.adsEnabled,V.pauseEnabled,V.today],[null,0,0,false,false,today]);
  let r=await draft(a,{targetId:T.p1,budgetCents:5000,startsOn:today,endsOn:today});refused(r,409,'SOCIAL_AD_NO_BUDGET');
  const bkey=K();
  V=C.verifySocialAdsView(ok(r=await budget(a,{monthlyCapCents:10000,currency:'USD'},{key:bkey})));
@@ -178,7 +178,7 @@ try{
  // 4. Operations: nothing is recorded while ads are off; approval creates the ad PAUSED once; turning on and pausing are each one call.
  r=await operate(a,ad1.adId,{operation:'CREATE',expectedVersion:1});refused(r,503,'SOCIAL_ADS_NOT_ENABLED');
  assert.deepEqual([(await row(ad1.adId)).status,(await row(ad1.adId)).version],['DRAFT',1]);
- fakeEnv.HON_ZERNIO_FAKE_PROVIDER='1';assert.equal((await view(a)).adsEnabled,true);
+ fakeEnv.HON_ZERNIO_FAKE_PROVIDER='1';{const W=await view(a);assert.deepEqual([W.adsEnabled,W.pauseEnabled],[true,true]);}
  // A budget whose currency no longer matches the ad (only possible outside the API) refuses approval.
  await q("UPDATE hon.school_social_ad_budgets SET currency='EUR',version=version+1 WHERE school_id=$1",[a.school]);
  r=await operate(a,ad1.adId,{operation:'CREATE',expectedVersion:1});refused(r,409,'SOCIAL_AD_STATE');
