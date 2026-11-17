@@ -7,6 +7,7 @@ import { SCHOOL_SHELL_EVERYDAY, SCHOOL_SHELL_MOBILE, SCHOOL_SHELL_NAV, SCHOOL_SH
   schoolShellListed, schoolShellSectionItems, type SchoolShellItem } from './catalog';
 import { shellText, type ShellKey } from './copy';
 import { ShellIcon } from './icons';
+import { HonOrb } from '../hon-command/hon-orb';
 import { SCHOOL_TOUR_STEPS, SchoolTourDialog } from './tour';
 import { tourCopy } from './tour-copy';
 import { SignOutButton } from '../auth/sign-out-button';
@@ -181,7 +182,7 @@ export function SchoolScreensaver({ language, schoolName, onWake }: { language: 
   return <div className={styles.screensaver} role="dialog" aria-modal="true" aria-label={t('screensaverLabel')} data-screensaver=""
     onClick={onWake} onKeyDown={onWake}>
     <span className={styles.screensaverGlow} aria-hidden="true" />
-    <img className={styles.screensaverMark} src="/ai/hon-core.webp" alt="" width={132} height={132} />
+    <HonOrb className={styles.screensaverMark} />
     <ScreensaverClock language={language} />
     <p className={styles.screensaverSchool}>{schoolName}</p>
     <button type="button" className={styles.screensaverTap} autoFocus onClick={onWake}>{t('screensaverTap')}</button>

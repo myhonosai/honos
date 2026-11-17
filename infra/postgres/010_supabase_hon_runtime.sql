@@ -4045,6 +4045,18 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+-- 0445 school social ads: exactly seven runtime entry points, no table privilege.
+DO $$ DECLARE r text; BEGIN
+  IF to_regclass('hon.school_social_ads') IS NULL THEN RAISE EXCEPTION 'Apply migration 0445 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_social_ad_budgets, hon.school_social_ads FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_social_ad_budgets, hon.school_social_ads FROM '||quote_ident(r);
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.read_school_social_ads(text), hon.set_school_social_ad_budget(text,jsonb,text,uuid,uuid),
+    hon.create_school_social_ad(text,jsonb,text,uuid,uuid), hon.cancel_school_social_ad(text,uuid,jsonb,text,uuid,uuid),
+    hon.start_school_social_ad_operation(text,uuid,jsonb,text,uuid,uuid), hon.record_school_social_ad_result(text,uuid,uuid,text,text,uuid,uuid),
+    hon.resolve_school_social_ad(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
+END $$;
 -- 0446 school demo data: two private tables reached only through three runtime entry points (read, load, remove); the
 -- removal check inside the patched append-only guards is runnable by the roles that can fire those guards.
 DO $$ DECLARE r text; t text; f text;

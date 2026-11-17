@@ -1,9 +1,9 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const hooks = vi.hoisted(() => ({ cells: [] as unknown[], cursor: 0 }));
+const hooks = vi.hoisted(() => ({ cells: [] as unknown[], cursor: 0, shell: null as null | { organizationId: string; schoolId: string } }));
 vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ preferences: { language: 'en' } }) }));
-vi.mock('../src/components/school-shell/page-school', () => ({ useShellSchool: () => null, useShellSchoolInto: () => null, ManualSchoolFields: ({ children }: { children?: unknown }) => children }));
+vi.mock('../src/components/school-shell/page-school', () => ({ useShellSchool: () => hooks.shell, useShellSchoolInto: () => hooks.shell, ManualSchoolFields: ({ children }: { children?: unknown }) => children }));
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react');
@@ -102,9 +102,24 @@ function pickerButton(label: string): React.ReactElement<Props> {
 beforeEach(() => {
   hooks.cells = [];
   hooks.cursor = 0;
+  hooks.shell = null;
   vi.stubGlobal('crypto', { randomUUID: () => id('9') });
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+describe('Dashboard inside the school shell', () => {
+  it('opens on the signed-in school without the resolver, school chooser, ID fields or ID notice', async () => {
+    hooks.shell = { organizationId, schoolId };
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async path => path === reportPath() ? response({ operationalSnapshot: report() }) : { ok: false, status: 403 } as Response);
+    render(); await vi.waitFor(() => expect(fetch.mock.calls.some(([path]) => path === reportPath())).toBe(true));
+    expect(fetch.mock.calls.some(([path]) => path === resolverPath || path === selectorPath)).toBe(false);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    const tree = render(), copy = text(tree);
+    expect(elements(tree).filter(element => element.type === 'input')).toHaveLength(0);
+    expect(copy).not.toContain('IDs below select a school'); expect(copy).not.toContain('Manual fallback'); expect(copy).not.toContain(schoolId);
+    expect(copy).toContain('Your school');
+  });
+});
 
 describe('Verified dashboard operational navigation', () => {
   function accountLink(key: 'team' | 'family') {

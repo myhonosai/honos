@@ -83,10 +83,11 @@ try{
  const s1Entry=['read_school_social_accounts','start_school_social_connect','record_school_social_profile','claim_school_social_connect','record_school_social_accounts','change_school_social_account'];
  // 0435 inbox entry points (proven in test-school-social-inbox.mjs).
  const inboxEntry=['read_school_social_inbox','read_school_social_conversation','change_school_social_conversation','start_school_social_reply','record_school_social_reply_result','resolve_school_social_message','start_school_social_comment_action','record_school_social_comment_action_result'],inboxWorker=['record_school_social_inbox_event'];
+ const adsEntry=['read_school_social_ads','set_school_social_ad_budget','create_school_social_ad','cancel_school_social_ad','start_school_social_ad_operation','record_school_social_ad_result','resolve_school_social_ad'];
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname LIKE '%school_social%'");
- assert.equal(fns.length,12+16+14,fns.map(f=>f.proname).join());
+ assert.equal(fns.length,12+16+14+12,fns.map(f=>f.proname).join());
  for(const f of fns){
-  assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,[...s1Entry,...runtimeEntry,...inboxEntry].includes(f.proname),'runtime '+f.proname);
+  assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,[...s1Entry,...runtimeEntry,...inboxEntry,...adsEntry].includes(f.proname),'runtime '+f.proname);
   assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[workerUrl.username,f.oid]))[0].ok,[...workerEntry,...inboxWorker].includes(f.proname),'worker '+f.proname);
  }
  await assert.rejects(worker.query('SELECT hon.read_school_social_posts($1,now(),now())',['x']),/permission denied/);

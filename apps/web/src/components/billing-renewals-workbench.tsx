@@ -79,9 +79,9 @@ export function BillingRenewalsWorkbench(): React.ReactElement {
     <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/search">Staff search</a><a href="/auth/login">Sign in</a></nav>
     <header><p>Memberships</p><h1>Renewals</h1><p>A shared list for reviewing memberships that are coming up for renewal.</p></header>
     <aside data-plain-note=""><strong>Nothing is charged, sent or renewed automatically from here.</strong></aside>
-    <section><h2>Authorized school reviews</h2><div className={styles.row}>
+    <section><h2>Renewal reviews</h2><div className={styles.row}>
       <label>Status<select disabled={busy} value={status} onChange={e => { setStatus(e.target.value as RenewalStatus | 'ALL'); setContext(null); clearDetail(); }}>{[...RENEWAL_STATUSES, 'ALL'].map(s => <option key={s}>{s}</option>)}</select></label>
-      <button disabled={busy} onClick={() => void load()}>Load / refresh reviews</button></div>
+      <button disabled={busy} onClick={() => void load()}>Refresh reviews</button></div>
       <p>Up to 50 records per page, ordered by review ID. Half-open review windows use UTC and may be past or future, from 1 minute to 366 days in 2000–2099. They do not trigger work. The queue omits private notes and reasons.</p></section>
     {busy && <p role="status">Checking the current human school boundary…</p>}
     {error && <p role="alert" className={styles.error}>{error} No save is assumed after an uncertain response.</p>}

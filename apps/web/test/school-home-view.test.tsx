@@ -21,6 +21,7 @@ const render = (props: Partial<SchoolHomeViewProps> = {}) => renderToStaticMarku
 describe('school home view', () => {
   it('renders the reference layout from verified reads: greeting, HON, AI team, KPIs, lists', () => {
     const html = render();
+    expect(html).toContain('data-orb-state="idle"'); // the living HON orb on the HON card
     expect(html).toContain('Good morning, <span>Sunrise Taekwondo</span>');
     for (const text of ['Ask HON', 'Your AI team', 'Kai', 'Chad', 'Marcus', 'Claire', 'Lena', '286', '412', '1,257', 'Little Tigers', 'Adult Sparring', 'Jordan Example', 'Call back trial family'])
       expect(html).toContain(text);

@@ -375,8 +375,7 @@
   transform: translate(-50%, -62%); background: radial-gradient(circle, rgba(64, 156, 255, 0.28) 0%, rgba(64, 156, 255, 0) 65%);
   animation: screensaverBreathe 7s ease-in-out infinite; pointer-events: none;
 }
-.screensaverMark { position: relative; width: 132px; height: 132px; border-radius: 50%; box-shadow: 0 0 60px rgba(64, 156, 255, 0.45);
-  animation: screensaverFloat 9s ease-in-out infinite; }
+.screensaverMark { position: relative; width: 168px; height: 168px; margin-bottom: 8px; animation: screensaverFloat 9s ease-in-out infinite; }
 .screensaverClock { position: relative; margin-top: 10px; font-size: clamp(3rem, 14vw, 5.5rem); font-weight: 300; letter-spacing: 0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
 .screensaverSchool { position: relative; margin: 0; font-size: 1.25rem; font-weight: 600; color: #cfe2ff; max-width: 36ch; overflow-wrap: anywhere; }
 .screensaverTap {
