@@ -103,4 +103,12 @@ describe('Parent app shell', () => {
     await waitFor(() => expect(session.clear).toHaveBeenCalled());
     expect(await screen.findByText(/Sign in to your school/)).toBeTruthy();
   });
+
+  it('sign in: the button starts native sign-in and a failure is explained without signing in', async () => {
+    const onSignIn = jest.fn(async () => 'failed' as const);
+    await render(<ParentApp api={fakeApi(ok)} session={fakeSession(null)} now={now} onSignIn={onSignIn} />);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Sign in' }));
+    expect(onSignIn).toHaveBeenCalled();
+    expect(await screen.findByText(/couldn't finish signing in/)).toBeTruthy();
+  });
 });
