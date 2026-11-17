@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "7ebdf3c8c563dfb3a0bff5e0277ed36718e336cfc783905fe5afb4b30ece529b",
+  "chainSha256": "d00b1a0bd73c80d212ea18b6c10d8cedbaa800021361003e7904e0beb2d1fb7f",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -549,6 +549,26 @@
     {
       "file": "0412_staff_assignable_permissions_list.sql",
       "sha256": "5691c6871ad27b49385868c502922578926637dbc57b55924422bb07fde69db3"
+    },
+    {
+      "file": "0413_attendance_card_photo_us_policy.sql",
+      "sha256": "ec9b09a43167fb95cba503c2d4ff670099cf69c25410e41680f0f1d79489d887"
+    },
+    {
+      "file": "0414_walk_in_kiosk.sql",
+      "sha256": "e393385043538425f8a9c09b50d9aa5f3bb73f71731d017b692175e38f2bda29"
+    },
+    {
+      "file": "0415_custom_tools.sql",
+      "sha256": "57ac8f806710e4c7cd489f5e228400051ffad6c3f76dc7891cb8f039ef3bab9d"
+    },
+    {
+      "file": "0416_automation_workflows.sql",
+      "sha256": "f5461d07dec493477c2c5af02e03f1f0107cbc722b1e505b13631953cc39de8c"
+    },
+    {
+      "file": "0417_lead_pipeline_board.sql",
+      "sha256": "071c1a65518bbf64d034885f6cebca9d9c579d4352b25af0d90dcb9e7176d3cc"
     },
     {
       "file": "0420_conversation_ai_training.sql",

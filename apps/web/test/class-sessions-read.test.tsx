@@ -7,7 +7,7 @@ import { ClassSessionsReadAccessError, classSessionsReadPath, loadCurrentSchoolC
 const hooks = vi.hoisted(() => ({ cells: [] as unknown[], cursor: 0, effects: [] as (() => void)[] }));
 vi.mock('react', async () => { const actual = await vi.importActual<typeof import('react')>('react'); return { ...actual, useState: (initial: unknown) => { const i = hooks.cursor++; if (!(i in hooks.cells)) hooks.cells[i] = initial; return [hooks.cells[i], (value: unknown) => { hooks.cells[i] = typeof value === 'function' ? (value as (v: unknown) => unknown)(hooks.cells[i]) : value; }]; }, useRef: (initial: unknown) => { const i = hooks.cursor++; if (!(i in hooks.cells)) hooks.cells[i] = { current: initial }; return hooks.cells[i]; }, useEffect: (effect: () => (() => void) | void) => { const i = hooks.cursor++; if (!(i in hooks.cells)) { hooks.cells[i] = { setup: effect }; hooks.effects.push(() => { (hooks.cells[i] as { cleanup?: (() => void) | undefined }).cleanup = effect() || undefined; }); } } }; });
 import { ClassSessionsRead, classBookingHandoffHref } from '../src/components/class-sessions-read';
-import Page, { dynamic, metadata } from '../src/app/staff/schedule/sessions/page';
+import Page, { dynamic } from '../src/app/staff/schedule/sessions/page';
 const id = (n: string) => `${n.repeat(8)}-${n.repeat(4)}-4${n.repeat(3)}-8${n.repeat(3)}-${n.repeat(12)}`;
 const scope = { organizationId: id('1'), schoolId: id('2') };
 const session = { sessionId: id('3'), name: 'Morning fundamentals', startsAt: '2026-10-16T12:00:00.000Z', endsAt: '2026-10-16T13:00:00.000Z', roomName: null, capacity: 12, bookingPolicy: 'REQUIRED_BOOKING', status: 'SCHEDULED', createdAt: '2026-10-10T12:00:00.000Z' };
@@ -49,7 +49,8 @@ describe('bounded current-school Class Sessions browser read', () => {
     expect(classBookingHandoffHref(scope, `${session.sessionId}?studentProfileId=${id('5')}`)).toBeUndefined();
   });
   it('is protected dynamic/noindex, listed once, and declares no search, booking, mutation, roster, availability or downstream executor', () => {
-    const page = Page(); expect(page.type).toBe(ClassSessionsRead); expect(dynamic).toBe('force-dynamic'); expect(metadata.robots).toEqual({ index: false, follow: false });
+    // The address is now part of Classes > Calendar and redirects there; the component stays covered here.
+    let moved: unknown; try { Page(); } catch (error) { moved = error; } expect(String((moved as { digest?: string }).digest)).toContain('/staff/schedule;'); expect(dynamic).toBe('force-dynamic');
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8')); expect(manifest.routes.filter((route: { path: string }) => route.path === '/staff/schedule/sessions')).toEqual([{ path: '/staff/schedule/sessions', title: 'HON | Bounded Class Sessions' }]);
     const ui = readFileSync('src/components/class-sessions-read.tsx', 'utf8'); const http = readFileSync('src/components/class-sessions-read-http.ts', 'utf8'); const source = `${ui}\n${http}`;
     expect(source).not.toMatch(/localStorage|sessionStorage|indexedDB|setInterval|setTimeout|dangerouslySetInnerHTML|@Post|method: 'POST'|invokeLLM|searchParams|\/search/); expect(ui).not.toMatch(/fetch\(/); expect(http.match(/fetch\(/g)).toHaveLength(1);

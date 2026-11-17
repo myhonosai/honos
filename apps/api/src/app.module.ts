@@ -138,7 +138,12 @@ import { SchoolWebsiteService } from './website/school-website.service.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
 import { SchoolSupportController } from './support/school-support.controller.js';
+import { AutomationWorkflowController, ContactTagController } from './automations/automation.controller.js';
+import { AutomationService } from './automations/automation.service.js';
+import { AutomationArchiveHumanUiGuard, AutomationCreateHumanUiGuard, AutomationReadHumanUiGuard, AutomationRestoreHumanUiGuard, AutomationSaveHumanUiGuard, ContactTagAddHumanUiGuard, ContactTagLookupHumanUiGuard, ContactTagRemoveHumanUiGuard } from './automations/automation.guard.js';
 import { SchoolSupportService } from './support/school-support.service.js';
+import { CustomToolController } from './custom-tools/custom-tool.controller.js';
+import { CustomToolService } from './custom-tools/custom-tool.service.js';
 import { SchoolSocialController } from './marketing/social/school-social.controller.js';
 import { SchoolSocialService } from './marketing/social/school-social.service.js';
 import { SchoolSocialPostsController } from './marketing/social/school-social-posts.controller.js';
@@ -185,6 +190,9 @@ import { SchoolBrandingController } from './school-branding/school-branding.cont
 import { SchoolBrandingService } from './school-branding/school-branding.service.js';
 import { SchoolBrandingReadHumanUiGuard, SchoolBrandingSaveHumanUiGuard } from './school-branding/school-branding-human-ui.guard.js';
 import { SchoolLocationController } from './school-location/school-location.controller.js';
+import { CrmPipelineBoardController } from './crm-pipeline-board/crm-pipeline-board.controller.js';
+import { CrmPipelineBoardService } from './crm-pipeline-board/crm-pipeline-board.service.js';
+import { CrmLeadStageMoveHumanUiGuard, CrmPipelineBoardReadHumanUiGuard, CrmPipelineStagesSaveHumanUiGuard } from './crm-pipeline-board/crm-pipeline-board-human-ui.guard.js';
 import { SchoolLocationService } from './school-location/school-location.service.js';
 import { SchoolLocationReadHumanUiGuard, SchoolLocationSaveHumanUiGuard } from './school-location/school-location-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
@@ -271,6 +279,9 @@ import { PublicSchoolEventController, SchoolEventController } from './schedule/s
 import { SchoolEventService } from './schedule/school-event.service.js';
 import { BookingTypeController, PublicBookingTypeController } from './schedule/booking-type.controller.js';
 import { BookingTypeService } from './schedule/booking-type.service.js';
+import { PublicWalkInKioskController, WalkInKioskController } from './walk-in-kiosk/walk-in-kiosk.controller.js';
+import { WalkInKioskService } from './walk-in-kiosk/walk-in-kiosk.service.js';
+import { WalkInKioskDeskPaidHumanUiGuard, WalkInKioskDeviceEndHumanUiGuard, WalkInKioskDeviceStartHumanUiGuard, WalkInKioskReadHumanUiGuard, WalkInKioskSettingsHumanUiGuard } from './walk-in-kiosk/walk-in-kiosk-human-ui.guard.js';
 import { BookingTypeBookingStatusHumanUiGuard, BookingTypeReadHumanUiGuard, BookingTypeSaveHumanUiGuard, BookingTypeStatusHumanUiGuard } from './schedule/booking-type-human-ui.guard.js';
 import { SchoolEventBookingStatusHumanUiGuard, SchoolEventReadHumanUiGuard, SchoolEventSaveHumanUiGuard, SchoolEventStatusHumanUiGuard } from './schedule/school-event-human-ui.guard.js';
 import { ClassSeriesCreateHumanUiGuard, ClassSeriesEndHumanUiGuard, ClassSeriesFillHumanUiGuard, ClassSeriesOngoingHumanUiGuard, ClassSeriesReadHumanUiGuard, ClassSeriesReviseHumanUiGuard, ClassSeriesTopUpHumanUiGuard } from './schedule/class-series-human-ui.guard.js';
@@ -490,6 +501,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     PublicSchoolEventController,
     BookingTypeController,
     PublicBookingTypeController,
+    WalkInKioskController,
+    PublicWalkInKioskController,
     AttendanceController,
     ClassSessionRosterController,
     AttendancePolicyController,
@@ -534,6 +547,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     PublishedSchoolWebsiteController,
     SchoolOnboardingController,
     SchoolSupportController,
+    CustomToolController,
+    AutomationWorkflowController,
+    ContactTagController,
     SchoolSocialController,
     SchoolSocialPostsController,
     TuitionPaymentController,
@@ -546,6 +562,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MayaAtRiskController,
     SchoolBrandingController,
     SchoolLocationController,
+    CrmPipelineBoardController,
     SchoolMembershipListController,
     CrmSchoolClockController,
     CrmSessionSchoolClockController,
@@ -745,6 +762,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolWebsiteService,
     SchoolOnboardingService,
     SchoolSupportService,
+    CustomToolService,
+    AutomationService,
+    AutomationReadHumanUiGuard, AutomationCreateHumanUiGuard, AutomationSaveHumanUiGuard, AutomationRestoreHumanUiGuard, AutomationArchiveHumanUiGuard,
+    ContactTagAddHumanUiGuard, ContactTagRemoveHumanUiGuard, ContactTagLookupHumanUiGuard,
     SchoolSocialService,
     SchoolSocialPostsService,
     SocialPostDispatcher,
@@ -756,6 +777,12 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolEventStatusHumanUiGuard,
     SchoolEventBookingStatusHumanUiGuard,
     BookingTypeService,
+    WalkInKioskService,
+    WalkInKioskReadHumanUiGuard,
+    WalkInKioskSettingsHumanUiGuard,
+    WalkInKioskDeviceStartHumanUiGuard,
+    WalkInKioskDeviceEndHumanUiGuard,
+    WalkInKioskDeskPaidHumanUiGuard,
     BookingTypeReadHumanUiGuard,
     BookingTypeSaveHumanUiGuard,
     BookingTypeStatusHumanUiGuard,
@@ -786,6 +813,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MayaAtRiskReadHumanUiGuard,
     SchoolBrandingService, SchoolBrandingReadHumanUiGuard, SchoolBrandingSaveHumanUiGuard,
     SchoolLocationService, SchoolLocationReadHumanUiGuard, SchoolLocationSaveHumanUiGuard,
+    CrmPipelineBoardService, CrmPipelineBoardReadHumanUiGuard, CrmLeadStageMoveHumanUiGuard, CrmPipelineStagesSaveHumanUiGuard,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,
     CrmSchoolClockService,

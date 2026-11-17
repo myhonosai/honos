@@ -10,6 +10,7 @@ import { AiTeamReadinessAccessError, loadAiTeamReadiness } from '../ai-team-read
 import { CrmLeadAccessError, loadCrmLeads } from '../crm-leads-http';
 import { ClassSessionsReadAccessError, loadCurrentSchoolClassSessions } from '../class-sessions-read-http';
 import { WorkAccessError, loadHumanWork } from '../work-items-http';
+import { HON_CONVERSATION_API, HonConversationError } from '../hon-command/hon-conversation-http';
 import { HOME_LOADING, type HomeSources, type Panel } from './model';
 import { SchoolHomeView } from './view';
 import { PlanPromotionBanner } from '../school-plan-promotions/banner';
@@ -27,6 +28,7 @@ export const HOME_API: HomeApi = {
   command: scope => loadCommandCenter(scope.organizationId, scope.schoolId),
   operations: scope => loadStaffDashboard(scope.organizationId, scope.schoolId),
   readiness: (scope, signal) => loadAiTeamReadiness(scope.organizationId, scope.schoolId, signal),
+  hon: (scope, signal) => HON_CONVERSATION_API.readiness(scope, signal),
   leads: (scope, signal) => loadCrmLeads(scope.organizationId, scope.schoolId, 'OPEN', signal),
   sessions: (scope, signal) => loadCurrentSchoolClassSessions(scope.organizationId, scope.schoolId, signal),
   // The work queue is the caller's current school; it is shown only when it is this school.
@@ -38,7 +40,7 @@ export const HOME_API: HomeApi = {
 };
 
 export function panelFromError(error: unknown): Panel<never> {
-  return DENIED.some(type => error instanceof type) ? { state: 'DENIED' } : { state: 'UNAVAILABLE' };
+  return DENIED.some(type => error instanceof type) || (error instanceof HonConversationError && (error.kind === 'FORBIDDEN' || error.kind === 'SESSION')) ? { state: 'DENIED' } : { state: 'UNAVAILABLE' };
 }
 
 /**

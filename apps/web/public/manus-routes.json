@@ -157,6 +157,10 @@
       "title": "HON | Lead Sources & Intake Monitor"
     },
     {
+      "path": "/staff/marketing/ads",
+      "title": "HON | Ads"
+    },
+    {
       "path": "/staff/marketing/social",
       "title": "HON | Social accounts"
     },
@@ -190,7 +194,7 @@
     },
     {
       "path": "/staff/schedule",
-      "title": "HON | Class rosters"
+      "title": "HON | Calendar"
     },
     {
       "path": "/staff/marketing",
@@ -650,7 +654,7 @@
     },
     {
       "path": "/hq/pricing-offers",
-      "title": "HON HQ | Pricing & Offers · Design review"
+      "title": "HON HQ | Pricing & Offers \u00b7 Design review"
     },
     {
       "path": "/reference/classic-dashboard",
@@ -707,6 +711,26 @@
     {
       "path": "/staff/settings",
       "title": "HON | Settings"
+    },
+    {
+      "path": "/staff/tools",
+      "title": "HON | Custom tools"
+    },
+    {
+      "path": "/staff/tools/:toolKey",
+      "title": "HON | Custom tool"
+    },
+    {
+      "path": "/staff/tool-maker",
+      "title": "HON | Tool Maker"
+    },
+    {
+      "path": "/staff/walk-in",
+      "title": "HON | Walk-in kiosk"
+    },
+    {
+      "path": "/kiosk/walk-in",
+      "title": "HON | Walk-in"
     }
   ]
 }

@@ -630,7 +630,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     finally { client.release(); }
   }
 
-  /** B-SCH-3 (0261): the three fixed public event calls, one short transaction each, no tenant settings. */
+  /** B-SCH-3 (0261), 0286 and the 0414 walk-in kiosk tablet: the fixed public calls, one short transaction each, no tenant settings. */
   async runPublicEventCall(statement: string, values: unknown[]): Promise<unknown> {
     if (![
       'SELECT hon.read_public_school_event($1) AS data',
@@ -639,6 +639,8 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT hon.read_public_school_booking_type($1) AS data',
       'SELECT hon.book_public_school_booking_type($1,$2::jsonb,$3) AS data',
       'SELECT hon.cancel_public_school_booking_type_booking($1,$2::jsonb) AS data',
+      'SELECT hon.read_walkin_kiosk_terminal($1) AS data',
+      'SELECT hon.submit_walkin_visit($1,$2::jsonb,$3) AS data',
     ].includes(statement)) throw new Error('Unknown public event call.');
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();

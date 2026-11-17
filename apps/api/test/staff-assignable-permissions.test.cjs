@@ -10,15 +10,20 @@ const id = () => randomUUID();
 const qContext = (patch = {}) => ({ organizationId: id(), schoolId: id(), principalId: id(), externalSubject: 'verified-human', principalType: 'HUMAN_USER', source: 'HUMAN_UI', requestId: id(), correlationId: id(), idempotencyKey: 'read', ...patch });
 const perm = (patch = {}) => ({ code: 'attendance.cards.manage', description: 'Choose how attendance cards look', sensitive: true, ...patch });
 
-test('assignable permissions accept only closed, bounded, unique, staff-level codes', async () => {
+test('assignable permissions keep only closed, unique, staff-level rows and fail only on a bad envelope', async () => {
   const list = { permissions: [perm(), perm({ code: 'attendance.record', description: 'Record attendance', sensitive: false }), perm({ code: 'iam.staff_role.manage' })] };
   assert.deepEqual(parseAssignableStaffPermissions(list), list.permissions);
   assert.deepEqual(parseAssignableStaffPermissions({ permissions: [] }), []);
-  for (const bad of [{ ...list, extra: 1 }, {}, { permissions: [perm({ code: 'hq.billing.manage' })] }, { permissions: [perm({ code: 'platform.thing.read' })] }, { permissions: [perm({ code: 'system.x' })] },
-    { permissions: [perm({ code: 'NotACode' })] }, { permissions: [perm({ code: 'single' })] }, { permissions: [perm({ description: '' })] }, { permissions: [perm({ description: 'x'.repeat(301) })] },
-    { permissions: [perm({ sensitive: 'yes' })] }, { permissions: [perm({ roleId: id() })] }, { permissions: [perm(), perm()] },
-    { permissions: Array.from({ length: 201 }, (_, i) => perm({ code: `area.p${i}` })) }])
+  // A bad envelope fails the read.
+  for (const bad of [{ ...list, extra: 1 }, {}, { permissions: 'x' }, { permissions: Array.from({ length: 201 }, (_, i) => perm({ code: `area.p${i}` })) }])
     assert.throws(() => parseAssignableStaffPermissions(bad), /Unsafe/);
+  // An odd row is left out (and reported by code), never guessed; the rest of the list still shows.
+  const skipped = [];
+  const rows = parseAssignableStaffPermissions({ permissions: [perm({ code: 'hq.billing.manage' }), perm({ code: 'platform.thing.read' }), perm({ code: 'system.x' }), perm({ code: 'NotACode' }),
+    perm({ code: 'single' }), perm({ description: '' }), perm({ code: 'a.long', description: 'x'.repeat(301) }), perm({ code: 'a.flag', sensitive: 'yes' }), perm({ code: 'a.extra', roleId: id() }), perm(), perm(), 'junk',
+    perm({ code: 'attendance.record', description: 'Record attendance', sensitive: false })] }, (code) => skipped.push(code));
+  assert.deepEqual(rows.map((p) => p.code), ['attendance.cards.manage', 'attendance.record']);
+  assert.deepEqual(skipped, ['hq.billing.manage', 'platform.thing.read', 'system.x', 'unreadable row', 'single', 'attendance.cards.manage', 'a.long', 'a.flag', 'a.extra', 'attendance.cards.manage', 'unreadable row']);
   const calls = [], c = qContext();
   const service = new StaffRoleService({ withTenantTransaction: async (ctx, work) => { assert.equal(ctx, c); return work({ query: async (sql, args) => { calls.push([sql, args]); return { rows: [{ data: list }] }; } }); } });
   assert.deepEqual(await service.assignablePermissions(c), list.permissions);

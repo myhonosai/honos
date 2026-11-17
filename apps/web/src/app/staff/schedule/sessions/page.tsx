@@ -1,8 +1,6 @@
-import React from 'react';
-import { ClassSessionsRead } from '../../../../components/class-sessions-read';
+import { redirect } from 'next/navigation';
 
-// The staff layout requires the signed session; browser/API/database checks then
-// independently establish direct human current-school read authority.
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'HON | Bounded Class Sessions', robots: { index: false, follow: false } };
-export default function StaffClassSessionsPage() { return <ClassSessionsRead />; }
+
+/** This page is now part of Classes > Calendar (2026-11-16); old links and bookmarks land on the matching place there. */
+export default function MovedToCalendar(): never { redirect('/staff/schedule'); }
