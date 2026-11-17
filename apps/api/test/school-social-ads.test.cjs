@@ -15,11 +15,17 @@ const context = (patch = {}) => ({ ...scope, principalType: 'HUMAN_USER', source
 const readContext = () => context({ idempotencyKey: '' });
 const status = (value, code) => (error) => { assert.equal(error.getStatus(), value, JSON.stringify(error.getResponse?.())); if (code) assert.equal(error.getResponse().code, code); return true; };
 const adId = randomUUID(), accountId = randomUUID(), targetId = randomUUID(), postId = randomUUID(), leaseToken = randomUUID();
-const ad = (patch = {}) => ({ adId, accountId, targetId, postId, accountName: 'Synthetic Dojo Page', budgetCents: 5000, currency: 'USD', startsOn: '2026-11-15', endsOn: '2026-11-21',
-  status: 'DRAFT', operation: null, resolvedByPerson: false, createdAt: at, version: 1, ...patch });
+const ad = (patch = {}) => ({ adId, channel: 'META_BOOST', accountId, targetId, postId, accountName: 'Synthetic Dojo Page', budgetCents: 5000, currency: 'USD', startsOn: '2026-11-15', endsOn: '2026-11-21',
+  status: 'DRAFT', operation: null, resolvedByPerson: false, createdAt: at, version: 1, google: null, ...patch });
 const view = (patch = {}) => ({ budget: { monthlyCapCents: 20000, currency: 'USD', version: 1 }, committedThisMonthCents: 0, ads: [ad()], today: '2026-11-14', checkedAt: at, ...patch });
-const adSend = (operation, patch = {}) => ({ adId, leaseToken, operation, providerAccountId: 'fb1', providerPostId: 'fbpost_1', providerAdId: operation === 'CREATE' ? null : 'ad_1',
+const adSend = (operation, patch = {}) => ({ adId, leaseToken, operation, channel: 'META_BOOST', google: null, dailyBudgetCents: null, providerAccountId: 'fb1', providerPostId: 'fbpost_1', providerAdId: operation === 'CREATE' ? null : 'ad_1',
   budgetCents: 5000, currency: 'USD', startsOn: '2026-11-15', endsOn: '2026-11-21', timezone: 'America/Los_Angeles', ...patch });
+// 0453 Google Search ads: no post; the school's own text; a daily budget of total / days.
+const google = { headlines: ['Synthetic Kids Karate', 'Free Trial Week', 'Book Today'], descriptions: ['Synthetic classes for all ages.', 'First week free.'],
+  finalUrl: 'https://dojo.example.invalid/trial', keywords: ['kids karate', 'martial arts near me'] };
+const gad = (patch = {}) => ad({ channel: 'GOOGLE_SEARCH', targetId: null, postId: null, accountName: 'Synthetic Dojo Google Ads', budgetCents: 7000, google, ...patch });
+const gSend = (operation, patch = {}) => adSend(operation, { channel: 'GOOGLE_SEARCH', providerAccountId: '1234567890', providerPostId: null, google, dailyBudgetCents: 1000, budgetCents: 7000, ...patch });
+const gDraft = { accountId, budgetCents: 7000, startsOn: '2026-11-15', endsOn: '2026-11-21', ...google };
 const nextStatus = { CREATE: ['CREATING', 'PAUSED'], ACTIVATE: ['ACTIVATING', 'ACTIVE'], PAUSE: ['PAUSING', 'PAUSED'] };
 
 function fixture(options = {}) {
@@ -35,6 +41,7 @@ function fixture(options = {}) {
         if (/read_school_social_ads\(/.test(sql)) return answer('read', view());
         if (/set_school_social_ad_budget\(/.test(sql)) return answer('budget', { record: view({ budget: { monthlyCapCents: 30000, currency: 'USD', version: 2 } }), replayed: false });
         if (/create_school_social_ad\(/.test(sql)) return answer('create', { record: ad(), replayed: false });
+        if (/create_school_social_google_ad\(/.test(sql)) return answer('google', { record: gad(), replayed: false });
         if (/cancel_school_social_ad\(/.test(sql)) return answer('cancel', { record: ad({ status: 'CANCELLED', version: 2 }), replayed: false });
         if (/resolve_school_social_ad\(/.test(sql)) return answer('resolve', { record: ad({ status: 'PAUSED', operation: 'CREATE', resolvedByPerson: true, version: 3 }), replayed: false });
         if (/start_school_social_ad_operation\(/.test(sql)) {
@@ -290,4 +297,100 @@ test('HTTP adapter ad calls: refuse unless ads are approved; created PAUSED with
     routes.push(r);
     await assert.rejects(adapter.createBoost(boost), e => e instanceof SocialProviderError && e.failure === failure && !e.message.includes(KEY), failure);
   }
+});
+
+test('Google drafts (0453): strict body, exact arguments, no provider call; an answer about another channel or account is refused', async () => {
+  const { db, queries } = fixture();
+  const out = await new SchoolSocialAdsService(db, off).createGoogle(context(), gDraft);
+  assert.deepEqual([out.ad.channel, out.ad.targetId, out.ad.google, out.replayed], ['GOOGLE_SEARCH', null, google, false]);
+  const call = queries.find(q => /create_school_social_google_ad\(/.test(q.sql));
+  assert.deepEqual(JSON.parse(call.args[1]), gDraft); assert.deepEqual([call.args[0], call.args[2], call.readOnly], ['verified-human', 'ads-key', false]);
+  const many = n => Array.from({ length: n }, (_, i) => 'Synthetic ' + i);
+  for (const body of [{ ...gDraft, budgetCents: 699 }, { ...gDraft, headlines: ['One', 'Two'] }, { ...gDraft, headlines: many(16) }, { ...gDraft, headlines: ['A', 'B', 'x'.repeat(31)] },
+    { ...gDraft, headlines: ['Same', 'same', 'Other'] }, { ...gDraft, headlines: [' Padded', 'B', 'C'] }, { ...gDraft, descriptions: ['Only one'] }, { ...gDraft, descriptions: ['A', 'y'.repeat(91)] },
+    { ...gDraft, keywords: [] }, { ...gDraft, keywords: ['[exact]'] }, { ...gDraft, keywords: ['"phrase"'] }, { ...gDraft, keywords: many(21) }, { ...gDraft, finalUrl: 'http://dojo.example.invalid' },
+    { ...gDraft, finalUrl: 'javascript:alert(1)' }, { ...gDraft, endsOn: '2026-12-16' }, { ...gDraft, targetId }, { ...gDraft, accountId: 'acct' }, { ...gDraft, headlines: ['A\nB', 'C', 'D'] }]) {
+    await assert.rejects(new SchoolSocialAdsService(fixture().db, off).createGoogle(context(), body), status(400, 'SOCIAL_INVALID'), JSON.stringify(body));
+  }
+  for (const record of [ad(), gad({ accountId: randomUUID() })]) {
+    await assert.rejects(new SchoolSocialAdsService(fixture({ google: { record, replayed: false } }).db, off).createGoogle(context(), gDraft), /Unverified|SOCIAL_UNAVAILABLE/);
+  }
+  // A Meta draft answered with a Google ad is refused too.
+  await assert.rejects(new SchoolSocialAdsService(fixture({ create: { record: gad(), replayed: false } }).db, off)
+    .create(context(), { targetId, budgetCents: 5000, startsOn: '2026-11-15', endsOn: '2026-11-21' }), /Unverified|SOCIAL_UNAVAILABLE/);
+  await assert.rejects(new SchoolSocialAdsService(fixture().db, off).createGoogle(readContext(), gDraft), status(403, 'SOCIAL_FORBIDDEN'));
+});
+
+test('Google operations (0453): approval creates one PAUSED Search ad with the approved text and total / days a day; on and pause use the same calls as Meta', async () => {
+  const provider = fake(), { db, queries } = fixture({ start: () => ({ record: gad({ status: 'CREATING', operation: 'CREATE', version: 2 }), replayed: false, send: gSend('CREATE') }),
+    record: () => ({ ad: gad({ status: 'PAUSED', operation: 'CREATE', version: 3 }), accepted: true }) });
+  const out = await new SchoolSocialAdsService(db, provider).operation(context(), adId, { operation: 'CREATE', expectedVersion: 1 });
+  assert.equal(provider.boosts.length, 0); assert.equal(provider.googleAds.length, 1);
+  assert.deepEqual({ ...provider.googleAds[0], providerAdId: undefined }, { providerAccountId: '1234567890', dailyBudgetCents: 1000, currency: 'USD', startsOn: '2026-11-15',
+    endsOn: '2026-11-21', timezone: 'America/Los_Angeles', ...google, idempotencyKey: adId, providerAdId: undefined });
+  assert.deepEqual(queries.find(q => /record_school_social_ad_result/.test(q.sql)).args.slice(3, 5), ['DONE', provider.googleAds[0].providerAdId]);
+  assert.equal(out.ad.status, 'PAUSED');
+  const p = fake(), f = fixture({ start: () => ({ record: gad({ status: 'ACTIVATING', operation: 'ACTIVATE', version: 2 }), replayed: false, send: gSend('ACTIVATE') }),
+    record: () => ({ ad: gad({ status: 'ACTIVE', operation: 'ACTIVATE', version: 3 }), accepted: true }) });
+  await new SchoolSocialAdsService(f.db, p).operation(context(), adId, { operation: 'ACTIVATE', expectedVersion: 2 });
+  assert.deepEqual([p.googleAds.length, p.adStatusChanges], [0, [{ providerAdId: 'ad_1', active: true, idempotencyKey: `${adId}:${leaseToken}` }]]);
+  // A send that disagrees with the approved Google ad is refused before Zernio is called.
+  for (const send of [gSend('CREATE', { dailyBudgetCents: 1001 }), gSend('CREATE', { dailyBudgetCents: 99 }), gSend('CREATE', { google: { ...google, finalUrl: 'https://other.example.invalid' } }),
+    gSend('CREATE', { providerPostId: 'fbpost_1' }), gSend('CREATE', { channel: 'META_BOOST' }), gSend('CREATE', { google: null }), gSend('CREATE', { dailyBudgetCents: null })]) {
+    const q = fake(), g = fixture({ start: () => ({ record: gad({ status: 'CREATING', operation: 'CREATE', version: 2 }), replayed: false, send }) });
+    await assert.rejects(new SchoolSocialAdsService(g.db, q).operation(context(), adId, { operation: 'CREATE', expectedVersion: 1 }), /Unverified|SOCIAL_UNAVAILABLE/, JSON.stringify(send));
+    assert.equal(q.googleAds.length + q.boosts.length, 0);
+  }
+  // A Meta send carrying Google text is refused too.
+  const m = fake(), mf = fixture({ start: () => ({ record: ad({ status: 'CREATING', operation: 'CREATE', version: 2 }), replayed: false, send: adSend('CREATE', { google }) }) });
+  await assert.rejects(new SchoolSocialAdsService(mf.db, m).operation(context(), adId, { operation: 'CREATE', expectedVersion: 1 }), /Unverified|SOCIAL_UNAVAILABLE/);
+  assert.equal(m.boosts.length, 0);
+  // A lost Google answer is UNKNOWN and nothing is resent.
+  const lost = fake(); lost.failNext.createGoogleSearchAd = 'UNKNOWN';
+  const lf = fixture({ start: () => ({ record: gad({ status: 'CREATING', operation: 'CREATE', version: 2 }), replayed: false, send: gSend('CREATE') }),
+    record: () => ({ ad: gad({ status: 'UNKNOWN', operation: 'CREATE', version: 3 }), accepted: true }) });
+  assert.equal((await new SchoolSocialAdsService(lf.db, lost).operation(context(), adId, { operation: 'CREATE', expectedVersion: 1 })).ad.status, 'UNKNOWN');
+  assert.deepEqual(lf.queries.find(q => /record_school_social_ad_result/.test(q.sql)).args.slice(3, 5), ['UNKNOWN', null]);
+  assert.equal(lost.googleAds.length, 0);
+});
+
+test('HTTP adapter Google calls (0453): refuse unless ads are approved; one POST /ads/create, PAUSED, daily budget, exact text; Google sign-in allowed for connecting', async () => {
+  const calls = [], routes = [];
+  const reply = (code, body) => new Response(body === undefined ? null : JSON.stringify(body), { status: code, headers: { 'content-type': 'application/json' } });
+  const send = async (url, init) => { calls.push({ url, init }); return routes.shift(); };
+  let env = { ZERNIO_API_KEY: KEY, HON_ZERNIO_CONNECT_APPROVED: 'true' };
+  const adapter = new ZernioHttpSocialAdapter(() => env, send);
+  const input = { providerAccountId: '1234567890', dailyBudgetCents: 1000, currency: 'USD', startsOn: '2026-11-15', endsOn: '2026-11-21', timezone: 'America/Los_Angeles', ...google, idempotencyKey: adId };
+  await assert.rejects(adapter.createGoogleSearchAd(input), e => e instanceof SocialProviderError && e.failure === 'NOT_ENABLED');
+  routes.push(reply(200, { authUrl: 'https://accounts.google.com/o/oauth2/v2/auth?state=x' }));
+  assert.equal(await adapter.connectUrl({ profileId: 'prof1', platform: 'GOOGLE_ADS', redirectUrl: 'https://hon.example.invalid/staff/marketing/social/return', state: 's' }),
+    'https://accounts.google.com/o/oauth2/v2/auth?state=x');
+  assert.match(calls.at(-1).url, /^https:\/\/zernio\.com\/api\/v1\/connect\/googleads\?/);
+  routes.push(reply(200, { authUrl: 'https://accounts.google.com.evil.example/x' }));
+  await assert.rejects(adapter.connectUrl({ profileId: 'prof1', platform: 'GOOGLE_ADS', redirectUrl: 'https://hon.example.invalid/r', state: 's' }), e => e.failure === 'UNKNOWN');
+  routes.push(reply(200, { accounts: [{ _id: '1234567890', platform: 'googleads', profileId: 'prof1', name: 'Synthetic Dojo Ads' }, { _id: 'x1', platform: 'tiktok', profileId: 'prof1', name: 'Other' }] }));
+  assert.deepEqual(await adapter.listAccounts('prof1'), [{ providerAccountId: '1234567890', platform: 'GOOGLE_ADS', displayName: 'Synthetic Dojo Ads' }]);
+  env = { ZERNIO_API_KEY: KEY, HON_ZERNIO_ADS_APPROVED: 'true' };
+  routes.push(reply(201, { ad: { id: 'gad_1' } }));
+  assert.deepEqual(await adapter.createGoogleSearchAd(input), { providerAdId: 'gad_1' });
+  const call = calls.at(-1);
+  assert.equal(call.url, 'https://zernio.com/api/v1/ads/create'); assert.equal(call.init.headers['Idempotency-Key'], adId);
+  assert.deepEqual(JSON.parse(call.init.body), { platform: 'googleads', accountId: '1234567890', campaignType: 'SEARCH', status: 'PAUSED',
+    budget: { type: 'daily', amount: 1000, currency: 'USD' }, schedule: { startDate: '2026-11-15', endDate: '2026-11-21', timezone: 'America/Los_Angeles' },
+    ad: { headlines: google.headlines, descriptions: google.descriptions, finalUrl: google.finalUrl }, keywords: google.keywords });
+  const before = calls.length;
+  for (const bad of [{ ...input, providerAccountId: '../x' }, { ...input, dailyBudgetCents: 99 }, { ...input, currency: 'usd' }, { ...input, timezone: 'x; DROP' }]) {
+    await assert.rejects(adapter.createGoogleSearchAd(bad), e => e.failure === 'REJECTED', JSON.stringify(bad));
+  }
+  assert.equal(calls.length, before);
+  for (const [r, failure] of [[reply(400, {}), 'REJECTED'], [reply(500, {}), 'UNKNOWN'], [reply(201, {}), 'UNKNOWN']]) {
+    routes.push(r); await assert.rejects(adapter.createGoogleSearchAd(input), e => e.failure === failure, failure);
+  }
+  // The fake: deterministic Google Ads account on connect; one ad per HON ad id.
+  const f = fake();
+  await f.connectUrl({ profileId: 'prof1', platform: 'GOOGLE_ADS', redirectUrl: 'http://127.0.0.1/r', state: 's' });
+  const [account] = await f.listAccounts('prof1');
+  assert.deepEqual([account.platform, account.providerAccountId.startsWith('gads_'), account.displayName], ['GOOGLE_ADS', true, 'Synthetic Dojo Google Ads']);
+  const one = await f.createGoogleSearchAd(input), two = await f.createGoogleSearchAd(input);
+  assert.deepEqual([one, f.googleAds.length], [two, 1]);
 });

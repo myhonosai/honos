@@ -4057,3 +4057,8 @@ DO $$ DECLARE r text; BEGIN
     hon.start_school_social_ad_operation(text,uuid,jsonb,text,uuid,uuid), hon.record_school_social_ad_result(text,uuid,uuid,text,text,uuid,uuid),
     hon.resolve_school_social_ad(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
 END $$;
+-- 0453 school Google ads: one more runtime entry point (drafting a Google Search ad); no table privilege.
+DO $$ BEGIN
+  IF to_regprocedure('hon.create_school_social_google_ad(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0453 first'; END IF;
+  GRANT EXECUTE ON FUNCTION hon.create_school_social_google_ad(text,jsonb,text,uuid,uuid) TO hon_runtime;
+END $$;

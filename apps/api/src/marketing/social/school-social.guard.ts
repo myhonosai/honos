@@ -3,7 +3,7 @@ import {
   SOCIAL_ACCOUNT_CHANGE_COMMAND, SOCIAL_CONNECT_COMMAND, SOCIAL_CONNECT_COMPLETE_COMMAND, SOCIAL_POST_APPROVE_COMMAND, SOCIAL_POST_CANCEL_COMMAND,
   SOCIAL_POST_CREATE_COMMAND, SOCIAL_POST_EDIT_COMMAND, SOCIAL_POST_RESOLVE_COMMAND, SOCIAL_READ_COMMAND,
   SOCIAL_INBOX_CHANGE_COMMAND, SOCIAL_INBOX_COMMENT_COMMAND, SOCIAL_INBOX_REPLY_COMMAND, SOCIAL_INBOX_RESOLVE_COMMAND,
-  SOCIAL_ADS_BUDGET_COMMAND, SOCIAL_AD_CANCEL_COMMAND, SOCIAL_AD_CREATE_COMMAND, SOCIAL_AD_OPERATION_COMMAND, SOCIAL_AD_RESOLVE_COMMAND,
+  SOCIAL_ADS_BUDGET_COMMAND, SOCIAL_AD_CANCEL_COMMAND, SOCIAL_AD_CREATE_COMMAND, SOCIAL_AD_OPERATION_COMMAND, SOCIAL_AD_RESOLVE_COMMAND, SOCIAL_GOOGLE_AD_CREATE_COMMAND,
 } from '@hon/contracts';
 import { MembershipActivationHumanUiGuard } from '../../billing/membership-activation-human-ui.guard.js';
 
@@ -73,6 +73,11 @@ export class SchoolSocialAdBudgetHumanUiGuard extends MembershipActivationHumanU
 @Injectable()
 export class SchoolSocialAdCreateHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = SOCIAL_AD_CREATE_COMMAND;
+}
+/** 0453: drafting a Google Search ad is its own browser command. */
+@Injectable()
+export class SchoolSocialGoogleAdCreateHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = SOCIAL_GOOGLE_AD_CREATE_COMMAND;
 }
 @Injectable()
 export class SchoolSocialAdOperationHumanUiGuard extends MembershipActivationHumanUiGuard {
