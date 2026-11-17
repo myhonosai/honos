@@ -42,7 +42,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/voice', 'routeVoice'), h('/staff/leads/assistant', 'routeLeadAssistant'), h('/staff/marketing/assistant', 'routeMarketingAssistant'),
     h('/staff/teaching-assistant', 'routeKai'), h('/staff/retention/at-risk', 'routeMayaAtRisk')] },
   // Conversation AI answers the school's texts in this inbox (0364); staff take over any thread.
-  { key: 'conversationAi', titleKey: 'navConversationAi', section: 'ai', routes: [r('/staff/conversations', 'routeConversations')] },
+  { key: 'conversationAi', titleKey: 'navConversationAi', section: 'ai', routes: [r('/staff/conversations', 'routeConversations'), r('/staff/conversations/train-ai', 'routeTrainAi')] },
   // Owner ask (2026-11-16): rosters, class schedule, weekly timetable, sale days and events and class booking are one
   // Calendar page; /staff/schedule owns every /staff/schedule/* path, so the old pages and workflow pages still mark Classes.
   { key: 'classes', titleKey: 'navClasses', section: 'calendar', routes: [r('/staff/schedule', 'routeCalendar')] },
