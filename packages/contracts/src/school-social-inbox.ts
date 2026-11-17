@@ -1,4 +1,4 @@
-// School social inbox (0427, docs/architecture/SOCIAL_POSTING_INBOX_ADS.md §4B): Messenger conversations, Instagram DMs
+// School social inbox (0435, docs/architecture/SOCIAL_POSTING_INBOX_ADS.md §4B): Messenger conversations, Instagram DMs
 // and comments on the school's own posts in one school inbox. Staff reply, hide comments, mark read, assign and link to a
 // CRM lead or person. Receiving and sending need HON_ZERNIO_INBOX_APPROVED on the API server.
 import { SOCIAL_PLATFORMS, type SocialPlatform } from './school-social.js';

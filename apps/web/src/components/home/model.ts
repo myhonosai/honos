@@ -1,4 +1,4 @@
-import type { AiTeamReadiness, CurrentSchoolClassSession, HumanWorkQueueItem, LeadListItem, OperationalSnapshot, SchoolCommandCenterSnapshot } from '@hon/contracts';
+import type { AiTeamReadiness, CurrentSchoolClassSession, HonConversationReadiness, HumanWorkQueueItem, LeadListItem, OperationalSnapshot, SchoolCommandCenterSnapshot } from '@hon/contracts';
 import { HON_AI_TEAM } from '@hon/design-system';
 import { aiTeamPortrait, type HonArtStyle } from '../hon-command/roster';
 import type { HomeKey } from './copy';
@@ -14,9 +14,11 @@ export type HomeSources = Readonly<{
   leads: Panel<readonly LeadListItem[]>;
   sessions: Panel<readonly CurrentSchoolClassSession[]>;
   work: Panel<readonly HumanWorkQueueItem[]>;
+  /** Whether a question to HON would be admitted now, from the same read Ask HON uses (hon readiness). */
+  hon: Panel<HonConversationReadiness>;
 }>;
 
-export const HOME_LOADING: HomeSources = { command: LOADING, operations: LOADING, readiness: LOADING, leads: LOADING, sessions: LOADING, work: LOADING };
+export const HOME_LOADING: HomeSources = { command: LOADING, operations: LOADING, readiness: LOADING, leads: LOADING, sessions: LOADING, work: LOADING, hon: LOADING };
 
 // ---------------------------------------------------------------- KPI tiles
 
@@ -147,4 +149,17 @@ export function homeAiTeam(readiness: Panel<AiTeamReadiness>, style: HonArtStyle
       status: live ? agentStatus(readiness, live.key) : 'NOT_AVAILABLE', href: live?.href ?? null };
   });
   return [kai, ...team];
+}
+
+export type HonLine = Readonly<{ status: 'checking' | 'ready' | 'off' | 'unknown'; key: HomeKey }> | null;
+/**
+ * The line under HON on the home card. It reads the same server answer the Ask HON composer uses (honReply), so the card
+ * never says "not connected" when HON can answer, nor "ready" when it cannot. Hidden when this person may not see it.
+ */
+export function honLine(hon: Panel<HonConversationReadiness>): HonLine {
+  if (hon.state === 'LOADING') return { status: 'checking', key: 'honChecking' };
+  if (hon.state === 'DENIED') return null;
+  if (hon.state === 'UNAVAILABLE') return { status: 'unknown', key: 'honUnknown' };
+  if (hon.value.honReply) return { status: 'ready', key: 'honReady' };
+  return { status: 'off', key: hon.value.providerRoute ? 'honOff' : 'honNotOn' };
 }

@@ -37,7 +37,7 @@ export interface ZernioSocialEvent {
   /** The Zernio post id HON recorded when it published; null for account.disconnected. */
   providerPostId: string | null;
 }
-/** 0427 inbound messages and comments. Text only; attachments, Meta user ids and other payload fields are dropped. */
+/** 0435 inbound messages and comments. Text only; attachments, Meta user ids and other payload fields are dropped. */
 export interface ZernioInboxEvent {
   eventId: string;
   eventType: 'message.received' | 'comment.received';
@@ -68,7 +68,7 @@ export function zernioSocialEventsReady(env: Env): boolean {
 }
 
 /**
- * 0427: inbound messages and comments are taken only when ZERNIO_WEBHOOK_SECRET (at least 32 characters) is set AND the
+ * 0435: inbound messages and comments are taken only when ZERNIO_WEBHOOK_SECRET (at least 32 characters) is set AND the
  * inbox is approved (HON_ZERNIO_INBOX_APPROVED=true with a Zernio key), or the fake provider runs outside production.
  */
 export function zernioInboxEventsReady(env: Env): boolean {

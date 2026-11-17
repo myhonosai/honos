@@ -10,6 +10,8 @@ import type { VerifiedProviderReceipt } from './communication-worker-database.js
 export const SENDGRID_MAIL_SEND_URL = 'https://api.sendgrid.com/v3/mail/send';
 const ADDRESS = /^[^\s@<>()",;:]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}$/;
 const PROVIDER_ID = /^[A-Za-z0-9._:@<>+=-]{1,200}$/;
+/** 0423 email_subject shape: one trimmed line of 1-150 characters with no control characters. */
+const SUBJECT = /^(?=\S)[^\u0000-\u001f\u007f]{1,150}(?<=\S)$/;
 
 type Env = Record<string, string | undefined>;
 
@@ -51,7 +53,8 @@ export class SendGridEmailProvider implements CommunicationProviderAdapter {
         hon_delivery_id: request.deliveryId, ...(purpose ? { hon_purpose: purpose } : {}),
       } }],
       from: { email: from, name: hq ? name : `${name} via HON` },
-      subject: `A message from ${name}`,
+      // 0424: a school email carries its author's subject when there is one (one line, 150 characters, checked in 0423).
+      subject: !hq && request.subject && SUBJECT.test(request.subject) ? request.subject : `A message from ${name}`,
       content: [{ type: 'text/plain', value: request.content }],
       mail_settings: { sandbox_mode: { enable: this.sandbox() }, ...(requiredNotice ? { bypass_unsubscribe_management: { enable: true } } : {}) },
       tracking_settings: { subscription_tracking: { enable: true }, open_tracking: { enable: false }, click_tracking: { enable: false } },

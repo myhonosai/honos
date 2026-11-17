@@ -78,6 +78,23 @@ test('photo consent: closed input with attendance.cards.manage scope, checked re
   assert.equal(out.photoConsent, 'GIVEN'); assert.equal(out.replayed, false);
 });
 
+test('card look: parent photo approval is a required closed field, and the reply must agree with the school rule', async () => {
+  const saved = (approval, rule) => ({ record: { codeType: 'QR', showPhoto: true, showLogo: true, design: 'CLASSIC', photoApprovalRequired: approval, version: 1, updatedAt: at,
+    schoolName: 'Synthetic Dojo', logoUrl: null, accentColor: null, photoConsent: rule }, replayed: false });
+  const look = { schoolId: school, expectedVersion: 0, codeType: 'QR', showPhoto: true, showLogo: true, design: 'CLASSIC' };
+  let db = fakeDatabase(saved(true, { required: true, profile: null, reason: 'SCHOOL_POLICY' }));
+  let service = new AttendanceCardsService(db);
+  await assert.rejects(service.configure(req, look, randomUUID()), status(400, 'ATTENDANCE_CARDS_INVALID'));
+  assert.equal(db.calls.length, 0);
+  const out = await service.configure(req, { ...look, photoApprovalRequired: true }, randomUUID());
+  assert.deepEqual(JSON.parse(db.calls[0].args[1]), { expectedVersion: 0, codeType: 'QR', showPhoto: true, showLogo: true, design: 'CLASSIC', photoApprovalRequired: true });
+  assert.equal(out.settings.photoConsent.required, true);
+  for (const rule of [{ required: false, profile: null, reason: 'OFF' }, { required: true, profile: 'EU_GDPR', reason: 'PROFILE' }]) {
+    service = new AttendanceCardsService(fakeDatabase(saved(true, rule)));
+    await assert.rejects(service.configure(req, { ...look, photoApprovalRequired: true }, randomUUID()), status(503));
+  }
+});
+
 test('a scan with wrong check digits never reaches the database; a good one sends only the digest with attendance.record scope', async () => {
   const db = fakeDatabase({ outcome: 'NOT_RECOGNIZED', student: null, card: null, attendance: null });
   const service = new AttendanceCardsService(db);

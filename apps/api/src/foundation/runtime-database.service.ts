@@ -227,6 +227,9 @@ const SAAS_BILLING_CALLS = {
   commandAiSchoolCostLimit: { sql: 'SELECT hon.command_ai_school_cost_limit($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readAiExceptionAllowances: { sql: 'SELECT hon.read_ai_exception_school_allowances_from_hq($1) AS data', arity: 1, readOnly: true },
   commandAiExceptionAllowance: { sql: 'SELECT hon.command_ai_exception_school_allowance($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  // CA2a (0420): the Conversation AI program switch (HQ readers read; a human HQ owner changes it).
+  readConversationAiProgram: { sql: 'SELECT hon.read_conversation_ai_program_from_hq($1) AS data', arity: 1, readOnly: true },
+  commandConversationAiProgram: { sql: 'SELECT hon.command_conversation_ai_program($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readAccessExceptions: { sql: 'SELECT hon.read_saas_access_exceptions_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   grantAccessException: { sql: 'SELECT hon.grant_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   revokeAccessException: { sql: 'SELECT hon.revoke_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
@@ -627,7 +630,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     finally { client.release(); }
   }
 
-  /** B-SCH-3 (0261): the three fixed public event calls, one short transaction each, no tenant settings. */
+  /** B-SCH-3 (0261), 0286 and the 0414 walk-in kiosk tablet: the fixed public calls, one short transaction each, no tenant settings. */
   async runPublicEventCall(statement: string, values: unknown[]): Promise<unknown> {
     if (![
       'SELECT hon.read_public_school_event($1) AS data',
@@ -636,6 +639,8 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT hon.read_public_school_booking_type($1) AS data',
       'SELECT hon.book_public_school_booking_type($1,$2::jsonb,$3) AS data',
       'SELECT hon.cancel_public_school_booking_type_booking($1,$2::jsonb) AS data',
+      'SELECT hon.read_walkin_kiosk_terminal($1) AS data',
+      'SELECT hon.submit_walkin_visit($1,$2::jsonb,$3) AS data',
     ].includes(statement)) throw new Error('Unknown public event call.');
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();

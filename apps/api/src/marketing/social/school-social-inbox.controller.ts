@@ -13,7 +13,7 @@ import type { SchoolSocialContext } from './school-social.service.js';
 const INBOX = 'marketing.social.inbox';
 
 /**
- * School social inbox (0427). Route ids are never authority: scope comes from the verified session and every database
+ * School social inbox (0435). Route ids are never authority: scope comes from the verified session and every database
  * call re-proves the person with marketing.social.inbox at the session school.
  */
 @Controller('organizations/:organizationId/schools/:schoolId/marketing/social/inbox')
