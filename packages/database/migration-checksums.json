@@ -322,6 +322,7 @@
     "0443_face_checkin_program.sql": "e2b4d638fd1e889522364fb10e0960ac6bd39e1b1d2043fe7cd189419019829a",
     "0445_school_social_ads.sql": "ae19bd0b2f0f21bec60dac532ff9e2229171518ec2704578427ef022aeea98be",
     "0449_school_shopify_background_sync.sql": "966b0eb8f5c4a4e42907eda77858ca2ddea220383f635582f630d1b32215e559",
-    "0451_hon_team_chat_answers.sql": "8a639924e09baffd6e8252fb1a2fa0c428aaeff09ac7dc22bd8ce9555a5fe98e"
+    "0451_hon_team_chat_answers.sql": "8a639924e09baffd6e8252fb1a2fa0c428aaeff09ac7dc22bd8ce9555a5fe98e",
+    "0453_school_google_ads.sql": "fde9c8a9f893c7b0ad13b29f0942fea66291a0316915a9659211b449d0f68363"
   }
 }
