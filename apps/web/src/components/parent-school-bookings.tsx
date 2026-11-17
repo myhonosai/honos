@@ -55,7 +55,7 @@ export function ParentSchoolBookingsView(p: ParentSchoolBookingsViewProps): Reac
     <header className={s.header}><p>YOUR FAMILY</p><h1>Events &amp; bookings</h1><p>School events with open times, and bookings your school offers to current families, like a belt test. Times are in the school’s time zone.</p></header>
     <p className={s.actions}><button type="button" disabled={p.busy || !!p.acting} onClick={p.onRefresh}>{p.busy ? 'Loading…' : 'Refresh'}</button></p>
     <div aria-live="polite" aria-atomic="true">
-      {p.error && <div className={s.error} role="alert"><strong>{p.lost ? 'Not available on this account' : 'That did not go through'}</strong><p>{p.error}</p>{p.lost && <Link href="/auth/login" prefetch={false}>Sign in again</Link>}</div>}
+      {p.error && <div className={s.error} role="alert"><strong>{p.lost ? 'Not available on this account' : 'That did not go through'}</strong><p>{p.error}</p>{p.lost && <Link href="/auth/login?for=parent" prefetch={false}>Sign in again</Link>}</div>}
       {p.notice && <p className={s.notice} role="status">{p.notice}</p>}
     </div>
     {!p.busy && v && <>
