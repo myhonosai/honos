@@ -76,7 +76,7 @@ export function familyPhotoClean(mediaType: Parameters<typeof stripImageMetadata
 }
 
 /**
- * 0454 membership agreement. The subject comes only from the signed HON session. For staff the school in the request is
+ * 0463 membership agreement. The subject comes only from the signed HON session. For staff the school in the request is
  * only a selector: the API resolves the staff scope (membership.agreement.manage) and the database decides authority again,
  * live, before and after each write. For parents no school, family or child selector is trusted: their one live family
  * grant decides the tenant, and the database checks every child against that family.

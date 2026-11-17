@@ -1,4 +1,4 @@
-/** 0454 membership agreement with one signing. Real signed HON sessions -> Nest/guard -> fixed runtime SQL -> marked disposable PostgreSQL (Champions Club fixture). */
+/** 0463 membership agreement with one signing. Real signed HON sessions -> Nest/guard -> fixed runtime SQL -> marked disposable PostgreSQL (Champions Club fixture). */
 import assert from 'node:assert/strict';
 import {randomUUID as K,randomBytes,createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
@@ -86,7 +86,7 @@ try{
  await assert.rejects(()=>restricted.query('SELECT * FROM hon.membership_agreement_signatures'),e=>e.code==='42501');
  assert.equal((await q("SELECT is_sensitive AND is_staff_assignable ok FROM hon.permissions WHERE code='membership.agreement.manage'"))[0].ok,true);
  {const verify=readFileSync(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql',import.meta.url),'utf8');
-  const section=verify.split('-- Membership agreement exact verification (0454)')[1]?.split('-- End membership agreement exact verification.')[0];
+  const section=verify.split('-- Membership agreement exact verification (0463)')[1]?.split('-- End membership agreement exact verification.')[0];
   assert(section);await q(section.replaceAll('hon_runtime',runtime.username));}
  pass('five forced-RLS private tables; the runtime executes only the seven entry points; the deployment verifier section passes');
 
@@ -289,7 +289,7 @@ try{
   ()=>q("UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=principal_id WHERE id=$1",[managerGrant]));
  await denied(()=>read(manager),403,'MEMBERSHIP_AGREEMENT_FORBIDDEN');
  pass('a signing whose family grant ends, and a draft whose staff grant is revoked, while they wait commit nothing');
- console.log('Membership agreement proof (0454): '+groups+' groups passed');
+ console.log('Membership agreement proof (0463): '+groups+' groups passed');
 }finally{
  await app?.close();
  await Promise.allSettled([admin.end(),restricted.end()]);

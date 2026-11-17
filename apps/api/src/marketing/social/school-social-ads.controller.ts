@@ -5,7 +5,7 @@ import type { HonRequest } from '../../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../../foundation/runtime-database.service.js';
 import {
   SchoolSocialAdBudgetHumanUiGuard, SchoolSocialAdCancelHumanUiGuard, SchoolSocialAdCreateHumanUiGuard, SchoolSocialAdOperationHumanUiGuard,
-  SchoolSocialAdResolveHumanUiGuard, SchoolSocialReadHumanUiGuard,
+  SchoolSocialAdResolveHumanUiGuard, SchoolSocialGoogleAdCreateHumanUiGuard, SchoolSocialReadHumanUiGuard,
 } from './school-social.guard.js';
 import { SchoolSocialAdsService } from './school-social-ads.service.js';
 import type { SchoolSocialContext } from './school-social.service.js';
@@ -14,7 +14,7 @@ const ADS = 'marketing.social.ads';
 const BUDGET = 'marketing.social.ads.budget';
 
 /**
- * School ads (0445). Route ids are never authority: scope comes from the verified session and every database call
+ * School ads (0445; Google Search drafts 0453). Route ids are never authority: scope comes from the verified session and every database call
  * re-proves the person at the session school (marketing.social.ads, or marketing.social.ads.budget for the cap).
  */
 @Controller('organizations/:organizationId/schools/:schoolId/marketing/social/ads')
@@ -54,6 +54,19 @@ export class SchoolSocialAdsController {
     @Headers('idempotency-key') idempotencyKey: string | undefined, @Body() input: unknown, @Req() request: HonRequest) {
     const context = await this.command(request, organizationId, schoolId, idempotencyKey, ADS);
     const { ad, replayed } = await this.ads.create(context, input);
+    return { data: ad, meta: { ...this.meta(context), replayed } };
+  }
+
+  /** 0453: a Google Search ad draft on the school's connected Google Ads account. */
+  @Post('google')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  @UseGuards(SchoolSocialGoogleAdCreateHumanUiGuard)
+  async createGoogle(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined, @Body() input: unknown, @Req() request: HonRequest) {
+    const context = await this.command(request, organizationId, schoolId, idempotencyKey, ADS);
+    const { ad, replayed } = await this.ads.createGoogle(context, input);
     return { data: ad, meta: { ...this.meta(context), replayed } };
   }
 

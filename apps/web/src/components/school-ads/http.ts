@@ -17,6 +17,7 @@ export type AdsErrorKind =
   /** Ads from HON are not turned on yet. Nothing was created or spent. */ | 'NOT_ENABLED'
   /** No monthly limit set yet. */ | 'NO_BUDGET'
   /** Would go over the monthly limit. */ | 'OVER_CAP'
+  /** The school has no saved street address; ads reach 5 miles around it (0453). */ | 'NO_ADDRESS'
   /** Ads are off for that Facebook Page. */ | 'ADS_OFF'
   /** The post is not published on Facebook by HON. */ | 'NOT_PUBLISHED'
   /** The ad moved on or its dates passed. */ | 'STATE'
@@ -55,7 +56,7 @@ async function exchange(path: string, signal: AbortSignal, owned: Owned, command
   try { return { status: r.status, value: JSON.parse(text) as unknown }; } catch { return { status: r.status, value: null }; }
 }
 const CONFLICTS: Readonly<Record<string, AdsErrorKind>> = {
-  SOCIAL_AD_NO_BUDGET: 'NO_BUDGET', SOCIAL_AD_OVER_CAP: 'OVER_CAP', SOCIAL_ADS_OFF: 'ADS_OFF', SOCIAL_AD_POST_NOT_PUBLISHED: 'NOT_PUBLISHED',
+  SOCIAL_AD_NO_BUDGET: 'NO_BUDGET', SOCIAL_AD_NO_ADDRESS: 'NO_ADDRESS', SOCIAL_AD_OVER_CAP: 'OVER_CAP', SOCIAL_ADS_OFF: 'ADS_OFF', SOCIAL_AD_POST_NOT_PUBLISHED: 'NOT_PUBLISHED',
   SOCIAL_AD_STATE: 'STATE', SOCIAL_AD_CURRENCY_FIXED: 'CURRENCY_FIXED', SOCIAL_VERSION_CONFLICT: 'STALE',
   IDEMPOTENCY_KEY_REUSED: 'INVALID', IDEMPOTENCY_KEY_REQUIRED: 'INVALID',
 };

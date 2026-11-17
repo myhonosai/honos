@@ -6,7 +6,7 @@ import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { MembershipAgreementService } from './membership-agreement.service.js';
 
-/** 0454: same-origin human browser requests only, with the agreement's own command header; never cached. */
+/** 0463: same-origin human browser requests only, with the agreement's own command header; never cached. */
 @Injectable()
 export class MembershipAgreementHumanGuard implements CanActivate {
   canActivate(c: ExecutionContext) { return assertSchoolAccountHumanRequest(c, MEMBERSHIP_AGREEMENT_HUMAN_COMMAND); }

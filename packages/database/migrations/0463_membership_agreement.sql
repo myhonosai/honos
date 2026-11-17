@@ -1,6 +1,6 @@
 BEGIN;
 
--- Membership agreement with one signing (0454, coordinator-allocated 2026-11-17; owner decisions 2026-11-17:
+-- Membership agreement with one signing (0463, coordinator-allocated 2026-11-17; owner decisions 2026-11-17:
 -- /mnt/project-files/membership-agreement/SPEC.md). A school writes its own membership agreement; a parent reads it in the
 -- parent portal, ticks "I agree to sign electronically", types their full name and signs once for every child it covers.
 -- Face check-in is a separate, optional box on the same page: ticking it for a child writes that child's 0443 face consent
@@ -22,12 +22,12 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'Trusted migration owner required'; END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='hon_runtime' AND (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolinherit OR rolreplication)) THEN
-    RAISE EXCEPTION '0454 requires a restricted runtime'; END IF;
+    RAISE EXCEPTION '0463 requires a restricted runtime'; END IF;
   IF to_regprocedure('hon.face_checkin_write_consent(uuid,uuid,jsonb,text,text)') IS NULL
     OR to_regprocedure('hon.face_checkin_family_scope(text,boolean)') IS NULL OR to_regprocedure('hon.face_checkin_child_ok(uuid,uuid)') IS NULL
     OR to_regclass('hon.person_photos') IS NULL OR to_regprocedure('hon.paper_import_image_clean(text,bytea)') IS NULL
     OR to_regclass('hon.memberships') IS NULL THEN
-    RAISE EXCEPTION '0454 requires 0390 and 0443'; END IF;
+    RAISE EXCEPTION '0463 requires 0390 and 0443'; END IF;
 END $$;
 
 INSERT INTO hon.permissions(code,description,is_sensitive,is_staff_assignable) VALUES

@@ -6,7 +6,7 @@ const { MembershipAgreementService, familyPhotoClean, translateMembershipAgreeme
 const { MembershipAgreementHumanGuard, FamilyMembershipAgreementSignGuard, FamilyPersonPhotoGuard } = require('../dist/membership-agreement/membership-agreement.controller.js');
 const { MEMBERSHIP_AGREEMENT_HUMAN_COMMAND, FAMILY_MEMBERSHIP_AGREEMENT_SIGN_COMMAND, FAMILY_PERSON_PHOTO_COMMAND } = require('@hon/contracts');
 
-// Mocked boundary tests for the 0454 membership agreement API. Authority, versions, the one-transaction signing with the
+// Mocked boundary tests for the 0463 membership agreement API. Authority, versions, the one-transaction signing with the
 // face opt-in and parent photos are proven against PostgreSQL by test-membership-agreement-integrity.mjs.
 const status = (value, code) => (error) => { assert.equal(error.getStatus(), value, JSON.stringify(error.getResponse?.())); if (code) assert.equal(error.getResponse().code, code); return true; };
 const req = { honIdentity: { externalSubject: 'subject-1' } };

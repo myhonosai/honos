@@ -1,5 +1,5 @@
 /**
- * 0454: the school membership agreement, signed once in the parent portal for every child it covers, with face check-in as
+ * 0463: the school membership agreement, signed once in the parent portal for every child it covers, with face check-in as
  * a separate optional box on the same page (each ticked child gets its own 0443 face consent in the same transaction).
  * HON ships no agreement text: the school writes it and is responsible for its wording. Parents may also add or replace a
  * child's photo; the API strips image metadata first.

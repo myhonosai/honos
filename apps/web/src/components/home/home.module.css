@@ -210,3 +210,6 @@
   .areas a { min-height: 130px; padding: var(--hon-space-4); }
   [data-hon-mode='big-button'] .kpiValue { font-size: var(--hon-text-2xl); }
 }
+
+/* Team chat link under Ask HON (owner ask 2026-11-17). */
+.teamChatLink { display: inline-flex; align-items: center; min-height: 44px; font-weight: 700; text-underline-offset: 3px; }
