@@ -233,6 +233,34 @@ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
   INSERT INTO hon.school_demo_data_rows(table_name,row_id,set_id,organization_id,school_id,origin) VALUES(p_table,p_id,p_set,p_org,p_school,'LOADED') RETURNING row_id
 $$;
 
+-- Demo attendance for completed demo class sessions: about seven in ten students of the class's program, a few late, only
+-- while the student's age fitted the program that day. Every row is registered in the set. Grants nothing.
+CREATE FUNCTION hon.school_demo_data_attendance(p_org uuid,p_school uuid,p_actor uuid,p_set uuid,tz text,students jsonb,progs uuid[],
+    prog_min integer[],prog_max integer[]) RETURNS integer
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE sess record; s jsonb; j integer; p integer; age_months integer; rid uuid; c_attendance integer:=0;
+BEGIN
+  FOR sess IN SELECT x.id,x.program_id,x.starts_at,x.ends_at FROM hon.class_sessions x JOIN hon.school_demo_data_rows r ON r.table_name='class_sessions' AND r.row_id=x.id
+      WHERE r.set_id=p_set AND x.status='COMPLETED' ORDER BY x.starts_at LOOP
+    FOR s IN SELECT x FROM jsonb_array_elements(students) x WHERE progs[(x->>'program')::integer]=sess.program_id LOOP
+      j:=abs(hashtext(sess.id::text||(s->>'profile')))%100;
+      CONTINUE WHEN j>=70;
+      -- Only while the student's age fitted the program on that day (a birthday can fall inside the four weeks).
+      age_months:=extract(year FROM age((sess.starts_at AT TIME ZONE tz)::date,(s->>'birth')::date))::integer*12
+        +extract(month FROM age((sess.starts_at AT TIME ZONE tz)::date,(s->>'birth')::date))::integer;
+      p:=(s->>'program')::integer;
+      CONTINUE WHEN age_months<prog_min[p] OR age_months>coalesce(prog_max[p],2147483647);
+      INSERT INTO hon.attendance_records(organization_id,school_id,class_session_id,student_profile_id,status,recorded_by_principal_id,recorded_at,category,created_at)
+          VALUES(p_org,p_school,sess.id,(s->>'profile')::uuid,CASE WHEN j<5 THEN 'LATE' ELSE 'PRESENT' END::hon.attendance_status,p_actor,sess.ends_at,'REGULAR_PARTICIPANT',sess.ends_at)
+          RETURNING id INTO rid;
+      PERFORM hon.demo_data_register(p_set,p_org,p_school,'attendance_records',rid);
+      c_attendance:=c_attendance+1;
+    END LOOP;
+  END LOOP;
+
+  RETURN c_attendance;
+END $$;
+
 -- ---------- load ----------
 -- The demo school: 3 programs with weekly classes (4 weeks back, 2 ahead), 20 families with 30 children, 8 adult
 -- students, a membership and monthly schedule per student with paid, open and two overdue invoices (cash or card
@@ -397,24 +425,8 @@ BEGIN
     END LOOP;
   END LOOP;
 
-  -- Attendance for past classes: about seven in ten students of the class's program, a few late.
-  FOR sess IN SELECT x.id,x.program_id,x.starts_at,x.ends_at FROM hon.class_sessions x JOIN hon.school_demo_data_rows r ON r.table_name='class_sessions' AND r.row_id=x.id
-      WHERE r.set_id=p_set AND x.status='COMPLETED' ORDER BY x.starts_at LOOP
-    FOR s IN SELECT x FROM jsonb_array_elements(students) x WHERE progs[(x->>'program')::integer]=sess.program_id LOOP
-      j:=abs(hashtext(sess.id::text||(s->>'profile')))%100;
-      CONTINUE WHEN j>=70;
-      -- Only while the student's age fitted the program on that day (a birthday can fall inside the four weeks).
-      age_months:=extract(year FROM age((sess.starts_at AT TIME ZONE tz)::date,(s->>'birth')::date))::integer*12
-        +extract(month FROM age((sess.starts_at AT TIME ZONE tz)::date,(s->>'birth')::date))::integer;
-      p:=(s->>'program')::integer;
-      CONTINUE WHEN age_months<prog_min[p] OR age_months>coalesce(prog_max[p],2147483647);
-      INSERT INTO hon.attendance_records(organization_id,school_id,class_session_id,student_profile_id,status,recorded_by_principal_id,recorded_at,category,created_at)
-          VALUES(p_org,p_school,sess.id,(s->>'profile')::uuid,CASE WHEN j<5 THEN 'LATE' ELSE 'PRESENT' END::hon.attendance_status,p_actor,sess.ends_at,'REGULAR_PARTICIPANT',sess.ends_at)
-          RETURNING id INTO rid;
-    PERFORM hon.demo_data_register(p_set,p_org,p_school,'attendance_records',rid);
-      c_attendance:=c_attendance+1;
-    END LOOP;
-  END LOOP;
+  -- Attendance for past classes, in its own helper (it never reads billing or plan state).
+  c_attendance:=hon.school_demo_data_attendance(p_org,p_school,p_actor,p_set,tz,students,progs,prog_min,prog_max);
 
   -- Leads in the school's first pipeline (its open, visible stages), or a demo pipeline when it has none.
   SELECT x.id INTO pipeline FROM hon.crm_pipelines x WHERE x.organization_id=p_org AND x.school_id=p_school
@@ -645,7 +657,8 @@ DO $$ DECLARE r text; t text; f text;
   helpers text[]:=ARRAY['hon.guard_school_demo_data()','hon.demo_data_is_demo(text,uuid)','hon.refuse_demo_data_target()','hon.require_demo_data_actor(text)',
     'hon.school_demo_data_view(uuid,uuid)','hon.demo_data_register(uuid,uuid,uuid,text,uuid)','hon.school_demo_data_write(uuid,uuid,uuid,uuid,uuid,uuid)',
     'hon.school_demo_data_begin(text,text,jsonb,text,uuid,uuid)','hon.school_demo_data_finish(text,uuid,text,jsonb)','hon.demo_data_person_tables()',
-    'hon.school_demo_data_collect(uuid,uuid,uuid)','hon.school_demo_data_delete(uuid)'];
+    'hon.school_demo_data_collect(uuid,uuid,uuid)','hon.school_demo_data_delete(uuid)',
+    'hon.school_demo_data_attendance(uuid,uuid,uuid,uuid,text,jsonb,uuid[],integer[],integer[])'];
 BEGIN
   FOREACH t IN ARRAY ARRAY['school_demo_data_sets','school_demo_data_rows'] LOOP
     EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);

@@ -4408,7 +4408,7 @@ END $$;
 -- remove), the removal check that the 42 patched append-only guards call (runtime and the three workers may run it), the
 -- refusal triggers that keep demo people from messages and school-pay, and every other helper migration-owner only.
 DO $$ DECLARE f record; safe boolean; t text; workers oid[]:=ARRAY(SELECT oid FROM pg_roles WHERE rolname IN ('hon_outbox_worker','hon_communication_worker','hon_automation_worker')); BEGIN
-  IF (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname LIKE '%demo_data%')<>16 THEN
+  IF (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname LIKE '%demo_data%')<>17 THEN
     RAISE EXCEPTION 'Unexpected school demo data functions'; END IF;
   FOR f IN SELECT * FROM (VALUES
 ('hon.demo_data_is_demo(text,uuid)',true,false,false,'search_path=pg_catalog, hon','dd6c028771e5d9f92da9c48b29ed981b73e2082da851620fd3362446de7f53a7'),
@@ -4421,12 +4421,13 @@ DO $$ DECLARE f record; safe boolean; t text; workers oid[]:=ARRAY(SELECT oid FR
 ('hon.refuse_demo_data_target()',true,false,false,'search_path=pg_catalog, hon','3376565780adf45268abff3a6d8fe667ecdcb74e3ebc374d766008f22d24ea1a'),
 ('hon.remove_school_demo_data(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','ee275b954e2482f5ed925c2d15bc32ad7d27b72310f8854781449618f18187b9'),
 ('hon.require_demo_data_actor(text)',true,false,false,'search_path=pg_catalog, hon','a49eab0e1f81dbb1185e8dcfd39733ef3603732380460fd5ee61f8eccaa9aede'),
+('hon.school_demo_data_attendance(uuid,uuid,uuid,uuid,text,jsonb,uuid[],integer[],integer[])',true,false,false,'search_path=pg_catalog, hon','0669c55a5a5ba40d8281ceef5c064878ca7752b368a9034f626377665333427e'),
 ('hon.school_demo_data_begin(text,text,jsonb,text,uuid,uuid)',true,false,false,'search_path=pg_catalog, hon','d73fab306eafd34c8ad6340e1c6d3e833b185041a534848e23e1f18af6614574'),
 ('hon.school_demo_data_collect(uuid,uuid,uuid)',true,false,false,'search_path=pg_catalog, hon','265767a5f2608aa825871c8519171eea989c4a16edcda923deaec298e47a82fe'),
 ('hon.school_demo_data_delete(uuid)',true,false,false,'search_path=pg_catalog, hon','fe51977f55482eaa96325f0a8e898c1a5bb2dacee62c00c90b959e8bc885752c'),
 ('hon.school_demo_data_finish(text,uuid,text,jsonb)',true,false,false,'search_path=pg_catalog, hon','2db6dba17630bfcd60c5da56566743fce553eef9b9d95a7b0db7d594013fb9bf'),
 ('hon.school_demo_data_view(uuid,uuid)',true,false,false,'search_path=pg_catalog, hon','de29ae37237d85ab520b884e443fdfeee5c2a1628807faca2f7f39b8d5b48021'),
-('hon.school_demo_data_write(uuid,uuid,uuid,uuid,uuid,uuid)',true,false,false,'search_path=pg_catalog, hon','837783bed7d15033b4238befba0d092129362976db72db736b84b3e221ff25c3')) e(signature,definer,runtime_allowed,worker_allowed,config,body_hash) LOOP
+('hon.school_demo_data_write(uuid,uuid,uuid,uuid,uuid,uuid)',true,false,false,'search_path=pg_catalog, hon','40e0c7b8848710759d4467141467c7086570cc20ce2bf68abae50fd20a1758af')) e(signature,definer,runtime_allowed,worker_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash

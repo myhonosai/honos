@@ -4054,7 +4054,8 @@ DO $$ DECLARE r text; t text; f text;
   helpers text[]:=ARRAY['hon.guard_school_demo_data()','hon.demo_data_is_demo(text,uuid)','hon.refuse_demo_data_target()','hon.require_demo_data_actor(text)',
     'hon.school_demo_data_view(uuid,uuid)','hon.demo_data_register(uuid,uuid,uuid,text,uuid)','hon.school_demo_data_write(uuid,uuid,uuid,uuid,uuid,uuid)',
     'hon.school_demo_data_begin(text,text,jsonb,text,uuid,uuid)','hon.school_demo_data_finish(text,uuid,text,jsonb)','hon.demo_data_person_tables()',
-    'hon.school_demo_data_collect(uuid,uuid,uuid)','hon.school_demo_data_delete(uuid)'];
+    'hon.school_demo_data_collect(uuid,uuid,uuid)','hon.school_demo_data_delete(uuid)',
+    'hon.school_demo_data_attendance(uuid,uuid,uuid,uuid,text,jsonb,uuid[],integer[],integer[])'];
 BEGIN
   IF to_regprocedure('hon.remove_school_demo_data(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0446 first'; END IF;
   FOREACH t IN ARRAY ARRAY['school_demo_data_sets','school_demo_data_rows'] LOOP

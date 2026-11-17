@@ -670,13 +670,13 @@ try {
   // workflow run starts, branches or exits; they grant no booking, attendance or check-in benefit.
   const readers = (await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' ORDER BY proname")).map((r) => r.proname);
   assert.deepEqual(readers, ['acknowledge_retention_review_evidence', 'activate_school_membership', 'apply_billing_import_row', 'automation_condition_holds', 'automation_enrolled', 'automation_event_subject', 'begin_hon_turn', 'billing_import_has_membership', 'cancel_school_membership', 'crm_adult_membership_draft_is_current',
-    'crm_guardian_child_membership_draft_current', 'draft_crm_adult_membership', 'draft_crm_adult_membership_from_plan', 'draft_crm_guardian_child_membership_from_plan',
+    'crm_guardian_child_membership_draft_current', 'demo_data_person_tables', 'draft_crm_adult_membership', 'draft_crm_adult_membership_from_plan', 'draft_crm_guardian_child_membership_from_plan',
     'draft_owner_launch_membership', 'evaluate_membership_activation', 'evaluate_membership_date_revision', 'guard_membership_date_revision_insert',
     'guard_membership_pause', 'list_retention_review_members', 'pause_school_membership', 'prepare_school_pay_autopay_cycle', 'read_crm_adult_membership_draft_confirmation', 'read_crm_adult_membership_preparation',
     'read_crm_guardian_child_enrollment', 'read_crm_lead_memberships', 'read_crm_lead_registration_recovery', 'read_maya_at_risk_students', 'read_membership_date_confirmation_queue', 'read_membership_date_history', 'read_membership_pauses_and_refunds',
     'read_owner_launch_membership_draft', 'read_parent_billing_view', 'read_parent_testing_status',
     'read_retention_review_signals', 'read_school_command_center', 'read_school_health_score', 'read_school_membership_list', 'read_school_membership_status_summary', 'read_school_reports', 'read_school_reports_locations', 'read_specialist_school_facts', 'record_membership_refund', 'record_retention_attention_alert',
-    'renewal_membership_facts', 'resolve_retention_attention_alert', 'resume_school_membership', 'revenue_plan_snapshot', 'revise_membership_dates', 'save_school_onboarding', 'school_pay_autopay_due', 'school_report_periods']);
+    'renewal_membership_facts', 'resolve_retention_attention_alert', 'resume_school_membership', 'revenue_plan_snapshot', 'revise_membership_dates', 'save_school_onboarding', 'school_demo_data_write', 'school_pay_autopay_due', 'school_report_periods']);
   // 0323 save_school_onboarding names the closed import-wish code 'MEMBERSHIPS' only; it never reads hon.memberships.
   // 0220 (U6) read_school_membership_list is a read-only school list: no booking, check-in or benefit path.
   // 0407 list_retention_review_members is a read-only name list for the retention review picker: no booking, check-in or benefit path.
@@ -695,6 +695,10 @@ try {
   // 0259 (Maya M1) read_maya_at_risk_students is a read-only retention signal: it books, checks in and grants nothing,
   // and reads only ACTIVE, FROZEN and CANCELLATION_PENDING memberships (no DRAFT); a SCHEDULED (future-dated) ACTIVE
   // membership can at most appear as a staff-only list row, which grants no benefit.
+  // 0446 school demo data: demo_data_person_tables only names the tables (memberships among them) whose demo rows removal
+  // follows; school_demo_data_write inserts the demo school's own DRAFT memberships and activates them with 0177 evidence.
+  // Neither books, checks in or grants a benefit; demo attendance is written by school_demo_data_attendance, which never
+  // reads memberships.
   // 0423 automation_event_subject and automation_condition_holds only read a class booking event's own booking row (to
   // find its contact) and membership state (for entry/IF conditions); they book, check in and grant nothing.
   assert.deepEqual((await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' AND prosrc ~* '(class_bookings|attendance_records|class_pass|kiosk|check_in)' ORDER BY 1")).map((r) => r.proname),

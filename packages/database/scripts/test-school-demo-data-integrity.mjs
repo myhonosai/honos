@@ -73,7 +73,7 @@ try{
  }
  const entry=['read_school_demo_data','load_school_demo_data','remove_school_demo_data','demo_data_removal_allows'];
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE '%demo_data%')");
- assert.equal(fns.length,16,fns.map(f=>f.proname).join());
+ assert.equal(fns.length,17,fns.map(f=>f.proname).join());
  for(const f of fns)assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entry.includes(f.proname),f.proname);
  assert.equal((await q("SELECT count(*) n FROM hon.role_permissions rp JOIN hon.permissions p ON p.code=rp.permission_code WHERE p.code='school.demo_data.manage' AND NOT (p.is_sensitive AND p.is_staff_assignable)"))[0].n,'0');
  pass('forced deny-all RLS on two new tables; runtime executes exactly read, load, remove and the guard removal check');
