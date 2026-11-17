@@ -50,9 +50,8 @@ it('lists each connected Facebook Page with its real ads switch and sends change
   expect(html).toContain('Ads on');
   expect(html).toContain('href="/staff/marketing/social"');
   expect(html).toContain('data-ads-meta="READY_FOR_ADS"');
-  // Running ads is not built on main yet: the page says so instead of offering a fake button.
-  expect(html).toContain('every ad starts paused');
-  expect(html).not.toMatch(/data-ads-(create|activate|spend)/);
+  // Without the ads read wired in, no ad controls are shown.
+  expect(html).not.toMatch(/data-ads-(op|save-draft|save-budget)/);
 });
 
 it('opens Marcus for AI ad setup and never claims AI runs ads by itself', () => {

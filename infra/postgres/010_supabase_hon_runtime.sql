@@ -3957,12 +3957,12 @@ DO $$ DECLARE r text; t text; BEGIN
       hon.read_school_contact_tags(text),hon.read_person_contact_tags(text,uuid),hon.lookup_contact_tags(text,jsonb) TO hon_runtime;
   END IF;
 END $$;
--- B-TUI-2 0447 shared one-time payment (test mode only): two private tables reached only through four API entry points
+-- B-TUI-2 0458 shared one-time payment (test mode only): two private tables reached only through four API entry points
 -- (read, start, record, list due); the opener, state and cancel helpers are internal to callers' definers. HON takes no fee.
 DO $$ DECLARE r text; t text; col text; f text;
   entry text[]:=ARRAY['hon.read_school_pay_once(uuid)','hon.start_school_pay_once(uuid,jsonb)','hon.record_school_pay_once(uuid,jsonb)','hon.list_due_school_pay_once(integer)'];
 BEGIN
-  IF to_regclass('hon.school_pay_once') IS NULL THEN RAISE EXCEPTION 'Apply migration 0447 first'; END IF;
+  IF to_regclass('hon.school_pay_once') IS NULL THEN RAISE EXCEPTION 'Apply migration 0458 first'; END IF;
   FOREACH t IN ARRAY ARRAY['hon.school_pay_once','hon.school_pay_once_events'] LOOP
     EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
@@ -4075,4 +4075,35 @@ BEGIN
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
+END $$;
+-- 0445 school social ads: exactly seven runtime entry points, no table privilege.
+DO $$ DECLARE r text; BEGIN
+  IF to_regclass('hon.school_social_ads') IS NULL THEN RAISE EXCEPTION 'Apply migration 0445 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_social_ad_budgets, hon.school_social_ads FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_social_ad_budgets, hon.school_social_ads FROM '||quote_ident(r);
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.read_school_social_ads(text), hon.set_school_social_ad_budget(text,jsonb,text,uuid,uuid),
+    hon.create_school_social_ad(text,jsonb,text,uuid,uuid), hon.cancel_school_social_ad(text,uuid,jsonb,text,uuid,uuid),
+    hon.start_school_social_ad_operation(text,uuid,jsonb,text,uuid,uuid), hon.record_school_social_ad_result(text,uuid,uuid,text,text,uuid,uuid),
+    hon.resolve_school_social_ad(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
+END $$;
+-- 0449 Shopify background sync and webhooks (SH1b): two more private tables; the five worker functions belong to
+-- hon_communication_worker (013) and, like every helper, are never granted to the runtime.
+DO $$ DECLARE r text; t text; f text;
+  entry text[]:=ARRAY['hon.read_shopify(text,uuid)','hon.read_shopify_catalog(text,uuid)','hon.read_shopify_orders(text,uuid)',
+    'hon.start_shopify_connect(text,jsonb,text)','hon.claim_shopify_connect(text,jsonb)','hon.record_shopify_connection(text,jsonb)',
+    'hon.begin_shopify_sync(text,jsonb)','hon.rotate_shopify_credential(text,jsonb)','hon.record_shopify_sync_page(text,jsonb)',
+    'hon.finish_shopify_sync(text,jsonb)','hon.disconnect_shopify(text,jsonb)'];
+BEGIN
+  IF to_regclass('hon.shopify_webhook_receipts') IS NULL THEN RAISE EXCEPTION 'Apply migration 0449 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['shopify_sync_requests','shopify_webhook_receipts'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='hon' AND p.proname LIKE '%shopify%' AND NOT (p.oid::regprocedure::text=ANY(entry)) LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
 END $$;

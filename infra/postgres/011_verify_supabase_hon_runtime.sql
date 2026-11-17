@@ -4009,6 +4009,42 @@ BEGIN
     END IF;
   END LOOP;
 END $$;
+
+-- Shopify background sync and webhooks exact verification (0449): the runtime reaches no new table or function; the
+-- five worker functions are executable by hon_communication_worker only (when that login exists).
+DO $$ DECLARE f text; t text; w oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_communication_worker');
+  worker text[]:=ARRAY['hon.record_shopify_webhook(jsonb)','hon.claim_shopify_background_sync()','hon.rotate_shopify_background_credential(jsonb)',
+    'hon.record_shopify_background_page(jsonb)','hon.finish_shopify_background_sync(jsonb)'];
+BEGIN
+  -- Exact bodies: a worker function or its lease check changed outside migrations is refused.
+  FOR f,t IN SELECT * FROM (VALUES ('hon.record_shopify_webhook(jsonb)','9b84cd3885681f1b6543817686360178'),
+      ('hon.claim_shopify_background_sync()','ee5655e217df75581d8158322fbebbdb'),('hon.rotate_shopify_background_credential(jsonb)','1adddb8980963336ffce32e7b5b1ff5e'),
+      ('hon.record_shopify_background_page(jsonb)','d9650d9b91ba44f99483bc4cd5143e5b'),('hon.finish_shopify_background_sync(jsonb)','a4cc3fd3ac5218cb53bbfeac24ee4f54'),
+      ('hon.shopify_leased_sync(jsonb,text[],boolean)','c48ec46f82d55eacc7f5ca74d55d02b8')) v LOOP
+    IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM t THEN RAISE EXCEPTION 'Shopify worker function body drift: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY worker LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND NOT has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee IS DISTINCT FROM w))) THEN
+      RAISE EXCEPTION 'Unsafe Shopify worker function: %',f; END IF;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='hon' AND p.proname IN ('shopify_system_evidence','shopify_school_live','shopify_apply_page','shopify_leased_sync') LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe Shopify helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['shopify_sync_requests','shopify_webhook_receipts'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe Shopify table: %',t;
+    END IF;
+  END LOOP;
+END $$;
 -- End Shopify Connected exact verification.
 -- Attendance card exact verification (0394)
 DO $$ DECLARE f text; t text;
@@ -4207,7 +4243,7 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
     RAISE EXCEPTION 'Unsafe automation workflow table posture: guard triggers'; END IF;
 END $$;
 -- End automation workflows and contact tags exact verification.
--- School one-time payment exact verification (B-TUI-2 0447): two private forced-RLS tables, the payment guard, internal
+-- School one-time payment exact verification (B-TUI-2 0458): two private forced-RLS tables, the payment guard, internal
 -- opener/state/cancel helpers that the runtime can never call, four API entry points and one live payment per caller record.
 DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   FOREACH t IN ARRAY ARRAY['hon.school_pay_once','hon.school_pay_once_events'] LOOP
@@ -4220,7 +4256,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_school_pay_once()',true,false,'search_path=pg_catalog, hon','146eda805148cf8b04b17a50e115ad8d443ee60dc7ae377dbc1be092194a9406'),
 ('hon.school_pay_once_json(hon.school_pay_once)',true,false,'search_path=pg_catalog, hon','dada49e4219c0766b8b7b7f3c8e3f7583d9c87989011ec5bd3c8ec75e0b9f1fd'),
-('hon.school_pay_once_record(hon.school_pay_once,text,jsonb)',true,false,'search_path=pg_catalog, hon','53bc04f5223c6cbea3e9134199c650bb803196af60e58b1237410f528c26206a'),
+('hon.school_pay_once_record(hon.school_pay_once,text,jsonb)',true,false,'search_path=pg_catalog, hon','776bdace02d156e6e0d674223fba1839bad4409ec8c9bda54a2d6002fdfe05ef'),
 ('hon.school_pay_once_connection(uuid,uuid)',true,false,'search_path=pg_catalog, hon','79a382f793dde948ed35350c6680c7a82008eddd8d6466d903d9e5bdbde38a05'),
 ('hon.school_pay_once_provider(uuid,uuid)',true,false,'search_path=pg_catalog, hon','5181fd08f01fdf39baad56c02e5be4fa589b5a439128d438f94ad36ffa6bf2ad'),
 ('hon.school_pay_once_open(uuid,uuid,text,uuid,bigint,text,jsonb,jsonb,timestamp with time zone)',true,false,'search_path=pg_catalog, hon','567bf757d993dcfc4813039949d11d4e97cc855aac152307151c90575d36176b'),
@@ -4251,10 +4287,10 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname='hon' AND indexname='school_pay_once_one_live_idx'
       AND indexdef LIKE '%UNIQUE%(organization_id, school_id, source, source_id)%') THEN
     RAISE EXCEPTION 'A caller record must have at most one live one-time payment'; END IF;
-  IF NOT EXISTS(SELECT 1 FROM hon.principals WHERE id='00000000-0000-4000-8000-000000000447' AND principal_type='SYSTEM_SERVICE' AND user_id IS NULL)
-    OR EXISTS(SELECT 1 FROM hon.principal_role_grants WHERE principal_id='00000000-0000-4000-8000-000000000447')
-    OR EXISTS(SELECT 1 FROM hon.hq_operator_grants WHERE principal_id='00000000-0000-4000-8000-000000000447')
-    OR EXISTS(SELECT 1 FROM hon.family_access_grants WHERE principal_id='00000000-0000-4000-8000-000000000447') THEN
+  IF NOT EXISTS(SELECT 1 FROM hon.principals WHERE id='00000000-0000-4000-8000-000000000458' AND principal_type='SYSTEM_SERVICE' AND user_id IS NULL)
+    OR EXISTS(SELECT 1 FROM hon.principal_role_grants WHERE principal_id='00000000-0000-4000-8000-000000000458')
+    OR EXISTS(SELECT 1 FROM hon.hq_operator_grants WHERE principal_id='00000000-0000-4000-8000-000000000458')
+    OR EXISTS(SELECT 1 FROM hon.family_access_grants WHERE principal_id='00000000-0000-4000-8000-000000000458') THEN
     RAISE EXCEPTION 'The one-time payment recorder must be a code-owned service with no authority'; END IF;
 END $$;
 -- End school one-time payment exact verification.

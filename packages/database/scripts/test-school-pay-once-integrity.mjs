@@ -1,5 +1,5 @@
 /**
- * School one-time payment proof (B-TUI-2 0447): SchoolPayOnceService -> the four fixed API calls on the restricted
+ * School one-time payment proof (B-TUI-2 0458): SchoolPayOnceService -> the four fixed API calls on the restricted
  * runtime role -> protected definer functions with forced RLS, plus the internal opener/state/cancel helpers called as a
  * caller's definer would (migration owner), on the guarded disposable CRM-close fixture only. The processors are the
  * in-process simulators (no network, no credentials). Test mode only; synthetic data; nothing is sent; HON takes no fee.
@@ -35,7 +35,7 @@ const ids = Object.fromEntries(['organization', 'otherOrganization', 'schoolA', 
 const sql = (text, values = []) => admin.query(text, values);
 let checks = 0;
 const ok = (condition, message) => { checks += 1; assert.ok(condition, message); };
-const SVC = '00000000-0000-4000-8000-000000000447';
+const SVC = '00000000-0000-4000-8000-000000000458';
 
 const stripe = new SimulatedStripeConnectAdapter();
 const square = new SimulatedSquareAdapter();
@@ -344,7 +344,7 @@ try {
   await assert.rejects(runtime.query("SELECT hon.school_pay_once_open($1,$2,'WALKIN_VISIT',gen_random_uuid(),1,'USD','{\"name\":\"x\"}','{}',clock_timestamp()+interval '5 minutes')",
     [ids.organization, ids.schoolA]), /permission denied/); checks += 1;
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const begin = '-- School one-time payment exact verification (B-TUI-2 0447)', end = '-- End school one-time payment exact verification.';
+    const begin = '-- School one-time payment exact verification (B-TUI-2 0458)', end = '-- End school one-time payment exact verification.';
     const section = verify.split(begin)[1]?.split(end)[0];
     ok(section, begin);
     await sql(section.replace(/^[^\n]*\n[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
@@ -355,7 +355,7 @@ try {
     'every one-time payment audit row is the recorder');
   ok([...stripe.onceSessions.values(), ...square.onceSessions.values()].every((x) => !('applicationFee' in x)), 'no session carries an application fee');
 
-  console.log(`PASS: school one-time payments (0447): ${checks} checks.`);
+  console.log(`PASS: school one-time payments (0458): ${checks} checks.`);
 } finally {
   await cleanup().catch((error) => console.error('cleanup failed', error));
   await runtime.end();

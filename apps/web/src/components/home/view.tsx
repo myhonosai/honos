@@ -5,8 +5,9 @@ import { SCHOOL_SHELL_SECTIONS, schoolShellHref, schoolShellListed, schoolShellS
 import { shellText } from '../school-shell/copy';
 import { HON_ART_STYLES, defaultArtStyle, type HonArtStyle } from '../hon-command/roster';
 import { ShellIcon } from '../school-shell/icons';
+import { HonOrb } from '../hon-command/hon-orb';
 import { homeText, type HomeKey } from './copy';
-import { ASK_HON_AGENTS, homeAiTeam, honLine, homeKpis, leadOutcomes, membershipMix, myTasks, recentLeads, todaySessions, sessionSnapshotSaturated, type AgentCard, type Bar, type HomeSources, type Kpi, type Panel } from './model';
+import { homeAiTeam, honLine, homeKpis, leadOutcomes, membershipMix, myTasks, recentLeads, todaySessions, sessionSnapshotSaturated, type AgentCard, type Bar, type HomeSources, type Kpi, type Panel } from './model';
 import styles from './home.module.css';
 
 export type SchoolHomeViewProps = Readonly<{
@@ -14,6 +15,8 @@ export type SchoolHomeViewProps = Readonly<{
   sources: HomeSources; now: Date; timeZone?: string; waiting?: boolean; concealed?: boolean;
   /** The viewer's AI team art style; defaults to the mode's original pairing. */
   artStyle?: HonArtStyle; onArtStyle?: (style: HonArtStyle) => void;
+  /** The live Team chat (owner ask 2026-11-17), shown right under the AI team; absent in pure renders. */
+  teamChat?: ReactNode;
 }>;
 
 const LOCALES: Record<string, string> = { en: 'en-US', ko: 'ko-KR', es: 'es-US' };
@@ -28,7 +31,7 @@ function greetingKey(now: Date): HomeKey {
  * The school Home. Pure presentation of already verified reads: each panel shows its own
  * loading, denied or unverified state, and nothing is estimated or filled with samples.
  */
-export function SchoolHomeView({ language, mode, schoolName, selection, sources, now, timeZone, waiting = false, concealed = false, artStyle, onArtStyle }: SchoolHomeViewProps): React.ReactElement {
+export function SchoolHomeView({ language, mode, schoolName, selection, sources, now, timeZone, waiting = false, concealed = false, artStyle, onArtStyle, teamChat }: SchoolHomeViewProps): React.ReactElement {
   const t = (key: HomeKey, values?: Record<string, string | number>) => homeText(language, key, values);
   const locale = LOCALES[language] ?? 'en-US';
   const number = (value: number) => new Intl.NumberFormat(locale).format(value);
@@ -56,11 +59,12 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
       <div className={styles.stage}>
         <ul className={styles.agents} aria-label={t('teamTitle')}>{team.slice(0, half).map(agent => <Agent key={agent.id} agent={agent} t={t} />)}</ul>
         <article className={styles.honCore} aria-labelledby="home-hon">
-          <img className={styles.orb} src="/ai/hon-core.webp" alt="" width={168} height={168} />
+          <HonOrb className={styles.orb} />
           <h2 id="home-hon">{t('honTitle')}</h2>
           <p className={styles.honRole}>{t('honCore')}</p>
           {hon && <p className={styles.honStatus} data-status={hon.status}>{t(hon.key)}</p>}
           <a className={styles.primary} href="/staff/hon"><ShellIcon name="hon" /><span>{t('askHon')}</span></a>
+          {teamChat ? <a className={styles.teamChatLink} href="#team-chat">{t('teamChat')}</a> : null}
         </article>
         <ul className={styles.agents} aria-label={t('teamTitle')}>{team.slice(half).map(agent => <Agent key={agent.id} agent={agent} t={t} />)}</ul>
       </div>
@@ -72,6 +76,8 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
         </div>
       </footer>
     </section>
+
+    {teamChat}
 
     <nav className={styles.help} aria-labelledby="home-help">
       <a className={styles.helpAsk} href="/staff/hon"><span className={styles.helpMic} aria-hidden="true"><ShellIcon name="hon" /></span><strong id="home-help">{t('helpTitle')}</strong></a>
@@ -143,7 +149,7 @@ function Agent({ agent, t }: { agent: AgentCard; t: (key: HomeKey) => string }):
       <span className={styles.agentTitle} title={t(agent.title)}>{t(agent.purpose)}</span>
       <span className={styles.agentStatus}><i aria-hidden="true" />{t(`status${agent.status}` as HomeKey)}</span>
     </span>
-    {live && <a className={styles.agentLink} href={agent.href!} aria-label={`${t(ASK_HON_AGENTS.has(agent.id) ? 'askAgent' : 'openWorkspace')}: ${agent.name}`}>{t(ASK_HON_AGENTS.has(agent.id) ? 'askAgent' : 'openWorkspace')}</a>}
+    {live && <a className={styles.agentLink} href={agent.href!} aria-label={`${t('openWorkspace')}: ${agent.name}`}>{t('openWorkspace')}</a>}
   </li>;
 }
 

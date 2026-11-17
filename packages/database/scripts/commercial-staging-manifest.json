@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "b10446a333219ddfeb5f718a59b516e30f09ddba138e660c7a32d28b5b2348d0",
+  "chainSha256": "202c016c9a7fae139c6b4c52dc3374da5a5429c6a955c12dc88bb8aa001ada40",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -591,8 +591,20 @@
       "sha256": "e2b4d638fd1e889522364fb10e0960ac6bd39e1b1d2043fe7cd189419019829a"
     },
     {
-      "file": "0447_school_pay_once.sql",
-      "sha256": "0b31c4dccfcd886b4102bf173f75f3645856aefc091576650b8ed26c916b0bc1"
+      "file": "0445_school_social_ads.sql",
+      "sha256": "ae19bd0b2f0f21bec60dac532ff9e2229171518ec2704578427ef022aeea98be"
+    },
+    {
+      "file": "0449_school_shopify_background_sync.sql",
+      "sha256": "966b0eb8f5c4a4e42907eda77858ca2ddea220383f635582f630d1b32215e559"
+    },
+    {
+      "file": "0451_hon_team_chat_answers.sql",
+      "sha256": "8a639924e09baffd6e8252fb1a2fa0c428aaeff09ac7dc22bd8ce9555a5fe98e"
+    },
+    {
+      "file": "0458_school_pay_once.sql",
+      "sha256": "6c01416e01e972cb31e81d6a33cc13b1486296e392c5c1c95a3e92a5cb901c98"
     }
   ]
 }

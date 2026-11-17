@@ -48,8 +48,8 @@ turns it on. Results come back into the page.
 | Piece | What | Migration | Owner stop |
 |---|---|---|---|
 | **A1** (this PR) | Marketing > **Ads** page: Meta Ads card from the real S1 connection read (connected Facebook Pages, ads switch per Page, connect button, link to switches); Google Ads card (honest "not available yet"); "Set up an ad with AI" card that opens Marcus. Menu entry under Marketing. en/ko/es | none | no |
-| A2 | Land S4 (0350) Meta boost backend (social thread's patch) | 0350 (allocated) | merge slot from coordinator |
-| A3 | Ads page on S4: monthly cap, boost a published post (draft, approve, turn on, pause, resolve UNKNOWN), daily spend/clicks | none | no |
+| A2 | Land S4 Meta boost backend (social thread, PR #450) | 0445 | merge slot from coordinator |
+| A3 (this PR, stacked on #450) | Ads page on S4: monthly cap, boost a published post (draft, approve, turn on, pause, resolve UNKNOWN), daily spend/clicks | none | no |
 | A4 | Marcus ad plan: a person asks Marcus for an ad; Marcus returns a structured draft (post to boost, budget inside the cap, dates, text, audience note) through the governed AI path; a person applies it to an S4 draft. Agents still never call ad commands | new number (ask coordinator) | real AI provider stays off |
 | A5 | Google Ads through Zernio: connect a Google Ads customer account (GOOGLE_ADS platform on the school Zernio profile), simple Search/Performance Max campaign drafts, same cap, PAUSED, human turn-on, insights | new number(s) | **Zernio Ads add-on is paid; real connection and spend need David** |
 | A6 | HQ uses the same Zernio ads path for HON's own Google/Meta accounts (HQ Marketing M3) | later | David |
@@ -84,3 +84,21 @@ turns it on. Results come back into the page.
 1. Zernio Ads add-on (paid) before any real Meta or Google ad account connection (A5 and live A3).
 2. One `HON_ZERNIO_ADS_APPROVED` switch for both Meta and Google, or separate switches (built: one).
 3. Highest monthly cap a school may set (S4 built: 10,000.00).
+
+## 7. A3 design (frontend only, on the 0445 API)
+
+Shown inside the Meta Ads card once a Facebook Page is connected. Reads `GET …/marketing/social/ads` and the last 99 days
+of `GET …/marketing/social/posts` (only Facebook targets HON PUBLISHED can be boosted).
+
+- **Monthly ad limit**: amount + currency, `POST …/ads/budget` (expectedVersion once a limit exists).
+- **Boost a post**: published post, total budget, start/end dates (1 to 31 days from the school's today) →
+  `POST …/ads` (a draft; nothing is sent to Meta).
+- **Your ads**: DRAFT → Approve (`operation CREATE`, created PAUSED) or Cancel draft; PAUSED → Turn on, which asks
+  first ("Meta starts spending") and only the confirm step sends `ACTIVATE`; ACTIVE → Pause; UNKNOWN create → "I
+  checked: not created"; UNKNOWN turn-on/pause → Pause, or "I checked: running/paused".
+- When the server says ads are off (`adsEnabled: false`), the page says so and every Meta step is disabled; the limit
+  and drafts still work.
+- People without `marketing.social.ads` (403 on the read) see a plain note and no ad data.
+- One write at a time, each with its own idempotency key. Only an unknown outcome keeps the request for Try again,
+  which resends the identical body and key, so the server replays it rather than acting twice.
+- Wording: the review P3 from #435 is applied ("HON never holds the ad money"; no unapproved claim about markups).

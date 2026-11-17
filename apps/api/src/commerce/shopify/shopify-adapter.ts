@@ -1,6 +1,7 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { SHOPIFY_SCOPES } from '@hon/contracts';
 import { SHOP_DOMAIN, signShopifyQuery } from './shopify-oauth.js';
+import { signShopifyWebhook } from './shopify-webhook.js';
 import { ephemeralShopifyVault, shopifyVaultFromEnvironment, type ShopifyVault } from './shopify-vault.js';
 
 type Env = Record<string, string | undefined>;
@@ -328,6 +329,13 @@ export class FakeShopify implements ShopifyAdapter {
     this.codes.set(code, shop);
     const params = { code, host: Buffer.from(`admin.shopify.com/store/${shop.split('.')[0]}`).toString('base64url'), shop, state, timestamp: String(Math.floor(at / 1000)) };
     return new URLSearchParams({ ...params, hmac: signShopifyQuery(params, this.secret) }).toString();
+  }
+
+  /** A delivery signed as Shopify would sign it, for tests of HON's webhook endpoint (the payload is never read). */
+  webhook(topic: string, shop: string, webhookId: string = randomUUID(), at: number = this.now()): { body: Buffer; headers: Record<string, string> } {
+    const body = Buffer.from(JSON.stringify({ shop_domain: shop, sample: true }), 'utf8');
+    return { body, headers: { 'content-type': 'application/json', 'x-shopify-topic': topic, 'x-shopify-shop-domain': shop, 'x-shopify-webhook-id': webhookId,
+      'x-shopify-triggered-at': new Date(at).toISOString(), 'x-shopify-api-version': SHOPIFY_API_VERSION, 'x-shopify-hmac-sha256': signShopifyWebhook(body, this.secret) } };
   }
 
   private issue(shop: string): ShopifyTokens {

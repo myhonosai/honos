@@ -151,6 +151,8 @@ import { SchoolSocialPostsController } from './marketing/social/school-social-po
 import { SchoolSocialPostsService } from './marketing/social/school-social-posts.service.js';
 import { SchoolSocialInboxController } from './marketing/social/school-social-inbox.controller.js';
 import { SchoolSocialInboxService } from './marketing/social/school-social-inbox.service.js';
+import { SchoolSocialAdsController } from './marketing/social/school-social-ads.controller.js';
+import { SchoolSocialAdsService } from './marketing/social/school-social-ads.service.js';
 import { SocialPostDispatcher } from './marketing/social/social-post-dispatcher.js';
 import { ZERNIO_SOCIAL_ADAPTER, zernioSocialAdapterFactory } from './marketing/social/zernio-social-adapter.js';
 import { SchoolMembershipListController, SchoolMembershipListHumanUiGuard } from './billing/school-membership-list.controller.js';
@@ -187,6 +189,8 @@ import { SchoolCheckoutService } from './school-checkout/school-checkout.service
 import { ShopifyController, ShopifyHumanGuard } from './commerce/shopify/shopify.controller.js';
 import { ShopifyService } from './commerce/shopify/shopify.service.js';
 import { SHOPIFY_APP, shopifyAppFromEnvironment } from './commerce/shopify/shopify-adapter.js';
+import { ShopifyWebhookController } from './commerce/shopify/shopify-webhook.controller.js';
+import { SHOPIFY_WORKER_STORE, ShopifyBackgroundScheduler, ShopifyBackgroundSync, ShopifyWorkerDatabase } from './commerce/shopify/shopify-worker.js';
 import { SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard, SchoolCheckoutSettingsSaveHumanUiGuard } from './school-checkout/school-checkout-human-ui.guard.js';
 import { MayaAtRiskController, MayaAtRiskReadHumanUiGuard } from './maya/maya-at-risk.controller.js';
 import { MayaAtRiskService } from './maya/maya-at-risk.service.js';
@@ -562,6 +566,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolSocialController,
     SchoolSocialPostsController,
     SchoolSocialInboxController,
+    SchoolSocialAdsController,
     TuitionPaymentController,
     SchoolPaymentController,
     SchoolPayMethodController,
@@ -569,6 +574,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPayChargeController,
     SchoolCheckoutController,
     ShopifyController,
+    ShopifyWebhookController,
     MayaAtRiskController,
     SchoolBrandingController,
     SchoolLocationController,
@@ -782,6 +788,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolSocialService,
     SchoolSocialPostsService,
     SchoolSocialInboxService,
+    SchoolSocialAdsService,
     SocialPostDispatcher,
     ClassSeriesService,
     SchoolReportsService,
@@ -824,6 +831,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPayAutopayMethodHumanUiGuard, SchoolPayAutopayStateHumanUiGuard, SchoolPayAutopayCancelHumanUiGuard, SchoolPayAutopayCycleHumanUiGuard,
     SchoolCheckoutService, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard, SchoolCheckoutSettingsSaveHumanUiGuard,
     ShopifyService, ShopifyHumanGuard, { provide: SHOPIFY_APP, useFactory: () => shopifyAppFromEnvironment(process.env) },
+    ShopifyWorkerDatabase, { provide: SHOPIFY_WORKER_STORE, useExisting: ShopifyWorkerDatabase }, ShopifyBackgroundSync, ShopifyBackgroundScheduler,
     MayaAtRiskService,
     MayaAtRiskReadHumanUiGuard,
     SchoolBrandingService, SchoolBrandingReadHumanUiGuard, SchoolBrandingSaveHumanUiGuard,

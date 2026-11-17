@@ -12,7 +12,9 @@ import {
 } from '@hon/contracts';
 import type { HonRequest } from '../../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService, type ShopifyOperation } from '../../foundation/runtime-database.service.js';
-import { SHOPIFY_APP, ShopifyProviderError, type MirrorOrder, type MirrorProduct, type ShopifyApp, type ShopifyFailure } from './shopify-adapter.js';
+import { SHOPIFY_APP, ShopifyProviderError, type ShopifyApp } from './shopify-adapter.js';
+import { begunSync, runShopifySync } from './shopify-sync-engine.js';
+import { shopifyBackgroundEnabled } from './shopify-worker.js';
 import { scopesGranted, shopifyAuthorizeUrl, verifyShopifyCallback } from './shopify-oauth.js';
 
 const DETAIL: Record<string, string> = {
@@ -59,28 +61,6 @@ export function translateShopifyError(error: unknown): never {
   throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
 }
 
-const FAILURE_CODE: Record<ShopifyFailure, string> = {
-  AUTH: 'TOKEN_REJECTED', RATE_LIMITED: 'SHOPIFY_RATE_LIMITED', UNAVAILABLE: 'SHOPIFY_UNAVAILABLE', INVALID_RESPONSE: 'SHOPIFY_INVALID_RESPONSE',
-};
-/** Orders HON mirrors per sync (the summary covers 30 days; 60 keeps late edits). */
-export const SHOPIFY_ORDER_DAYS = 60;
-/** A token with less than this left is refreshed before the sync starts. */
-export const SHOPIFY_REFRESH_MARGIN_MS = 5 * 60_000;
-const PAGE = 50;
-
-interface Begun { syncId: string; connectionId: string; shopDomain: string; credential: { keyId: string; sealed: string; version: number } }
-function begun(v: unknown): Begun {
-  const o = v as Record<string, unknown> | null, k = (o?.credential ?? null) as Record<string, unknown> | null;
-  if (!o || !k || typeof o.syncId !== 'string' || typeof o.connectionId !== 'string' || typeof o.shopDomain !== 'string'
-    || typeof k.keyId !== 'string' || typeof k.sealed !== 'string' || !Number.isInteger(k.version)) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
-  return { syncId: o.syncId, connectionId: o.connectionId, shopDomain: o.shopDomain, credential: { keyId: k.keyId, sealed: k.sealed, version: k.version as number } };
-}
-function chunks<T>(items: readonly T[]): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += PAGE) out.push(items.slice(i, i + PAGE));
-  return out;
-}
-
 /**
  * 0405 Shopify connection (SH1). The subject comes only from the signed HON session; the database decides the school,
  * the organization and the permission (commerce.shopify.read / .manage). Tokens are opened only here, in memory, and
@@ -119,7 +99,7 @@ export class ShopifyService {
   async overview(req: HonRequest, schoolId: unknown): Promise<ShopifyOverview> {
     const school = this.school(schoolId);
     const raw = await this.call('read', [this.subject(req), school]);
-    const out = this.checked(verifyShopifyOverview, raw && typeof raw === 'object' ? { ...(raw as object), connectEnabled: this.app !== null } : raw);
+    const out = this.checked(verifyShopifyOverview, raw && typeof raw === 'object' ? { ...(raw as object), connectEnabled: this.app !== null, autoSync: this.app !== null && shopifyBackgroundEnabled(process.env) } : raw);
     if (out.schoolId !== school) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
     return out;
   }
@@ -199,50 +179,20 @@ export class ShopifyService {
     return this.checked(verifyShopifyDisconnectResult, await this.call('disconnect', [this.subject(req), JSON.stringify(input)]));
   }
 
-  /**
-   * One sync: the sealed pair is opened, refreshed when it is about to expire (rotated in the database under its
-   * version), then the catalog and the last 60 days of orders are written in pages of 50. Shopify refusing the token
-   * ends the connection as NEEDS_RECONNECT, which destroys the stored pair.
-   */
+  /** A person's sync (Sync now, and the first sync after connecting), bound to their session at this school. */
   private async runSync(subject: string, schoolId: string): Promise<ShopifySyncResult> {
     const app = this.requireApp();
-    const b = begun(await this.call('beginSync', [subject, JSON.stringify({ schoolId })]));
-    const finish = async (outcome: 'SUCCEEDED' | 'FAILED' | 'NEEDS_RECONNECT', failureCode: string | null): Promise<ShopifySyncResult> => {
-      const raw = await this.call('finishSync', [subject, JSON.stringify({ schoolId, syncId: b.syncId, outcome, failureCode })]);
-      const { syncId, ...rest } = (raw ?? {}) as Record<string, unknown>;
-      if (syncId !== b.syncId) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
-      return this.checked(verifyShopifySyncResult, rest);
-    };
-    const binding = { connectionId: b.connectionId, shopDomain: b.shopDomain };
-    try {
-      let credential;
-      try { credential = app.vault.open(binding, b.credential.keyId, b.credential.sealed); } catch { return await finish('NEEDS_RECONNECT', 'CREDENTIAL_UNREADABLE'); }
-      let token = credential.accessToken;
-      if (Date.parse(credential.accessExpiresAt) - this.now() < SHOPIFY_REFRESH_MARGIN_MS) {
-        if (Date.parse(credential.refreshExpiresAt) <= this.now()) return await finish('NEEDS_RECONNECT', 'REFRESH_EXPIRED');
-        const fresh = await app.adapter.refresh(b.shopDomain, credential.refreshToken);
-        const pair = { accessToken: fresh.accessToken, refreshToken: fresh.refreshToken, accessExpiresAt: fresh.accessExpiresAt, refreshExpiresAt: fresh.refreshExpiresAt };
-        await this.call('rotate', [subject, JSON.stringify({ schoolId, syncId: b.syncId, expectedVersion: b.credential.version,
-          credential: { keyId: app.vault.keyId, sealed: app.vault.seal(binding, pair), accessExpiresAt: pair.accessExpiresAt, refreshExpiresAt: pair.refreshExpiresAt } })]);
-        token = pair.accessToken;
-      }
-      const catalog = await app.adapter.catalog(b.shopDomain, token);
-      for (const products of chunks<MirrorProduct>(catalog.products)) {
-        await this.call('page', [subject, JSON.stringify({ schoolId, syncId: b.syncId, kind: 'PRODUCTS', products })]);
-      }
-      const since = new Date(this.now() - SHOPIFY_ORDER_DAYS * 86_400_000).toISOString();
-      const orders = await app.adapter.orders(b.shopDomain, token, since);
-      for (const page of chunks<MirrorOrder>(orders.orders)) {
-        await this.call('page', [subject, JSON.stringify({ schoolId, syncId: b.syncId, kind: 'ORDERS', orders: page })]);
-      }
-      if (!catalog.complete) return await finish('FAILED', 'CATALOG_TOO_LARGE');
-      if (!orders.complete) return await finish('FAILED', 'ORDERS_TOO_MANY');
-      return await finish('SUCCEEDED', null);
-    } catch (e) {
-      if (e instanceof ShopifyProviderError) return finish(e.failure === 'AUTH' ? 'NEEDS_RECONNECT' : 'FAILED', FAILURE_CODE[e.failure]);
-      // A HON-side refusal mid-run: close the run as FAILED when still allowed (else it is abandoned after 15 minutes).
-      await finish('FAILED', 'HON_REFUSED').catch(() => undefined);
-      throw e;
-    }
+    const b = begunSync(await this.call('beginSync', [subject, JSON.stringify({ schoolId })]));
+    if (!b) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
+    return runShopifySync(app, this.now, b, {
+      rotate: body => this.call('rotate', [subject, JSON.stringify({ schoolId, syncId: b.syncId, ...body })]),
+      page: body => this.call('page', [subject, JSON.stringify({ schoolId, syncId: b.syncId, ...body })]),
+      finish: async (outcome, failureCode) => {
+        const raw = await this.call('finishSync', [subject, JSON.stringify({ schoolId, syncId: b.syncId, outcome, failureCode })]);
+        const { syncId, ...rest } = (raw ?? {}) as Record<string, unknown>;
+        if (syncId !== b.syncId) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
+        return this.checked(verifyShopifySyncResult, rest);
+      },
+    });
   }
 }

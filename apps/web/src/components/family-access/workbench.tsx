@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FAMILY_ACCESS_LEVELS, type FamilyAccessLevel } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
 import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT } from '../session-invalidation';
@@ -7,6 +7,7 @@ import { FamilyAccessController } from './controller';
 import { familyScope, type FamilyScope } from './http';
 import { familyText } from './copy';
 import styles from './workbench.module.css';
+import { useShellSchool } from '../school-shell/page-school';
 
 /** Inert school selectors never confer authority or cause a read or command. */
 type Binding = { controller: FamilyAccessController; scope: FamilyScope | null };
@@ -15,6 +16,10 @@ export function FamilyAccessWorkspace({ sessionSubject, acceptance = false, init
   const [org, setOrg] = useState(initialOrganizationId), [school, setSchool] = useState(initialSchoolId), [scope, setScope] = useState<FamilyScope | null>(null), [known, setKnown] = useState(false);
   const [problem, setProblem] = useState(false), [scopeKey, setScopeKey] = useState(0), [isLocked, setIsLocked] = useState(false), [mode, setMode] = useState<'modern' | 'classic' | 'big'>('modern');
   const scopeFields = useRef<HTMLFieldSetElement | null>(null);
+  // Inside the school shell the page opens on the signed-in school; the server still authorizes every read and command.
+  const signedInSchool = useShellSchool(), shellSchool = acceptance ? null : signedInSchool;
+  const shellScope = useMemo(() => { try { return shellSchool ? familyScope(shellSchool) : null; } catch { return null; } }, [shellSchool?.organizationId, shellSchool?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const bound = shellScope ?? (shellSchool ? null : scope);
   const binding = useRef<Binding | null>(null);
   const generation = useRef(0), revision = generation.current;
   const change = (setter: (v: string) => void, value: string) => { if (binding.current?.controller.snapshot().active) return; binding.current?.controller.contextChanged(); generation.current++; setter(value); setProblem(false); };
@@ -41,13 +46,14 @@ export function FamilyAccessWorkspace({ sessionSubject, acceptance = false, init
   return <main className={`${styles.page} ${styles[mode]}`} data-testid="family-access" data-interface-theme={mode}>
     <h1>{t(acceptance ? 'acceptTitle' : 'title')}</h1><p>{t('intro')}</p>
     <div className={styles.modes} role="group" aria-label={t('mode')}>{(['modern', 'classic', 'big'] as const).map(value => <button type="button" key={value} aria-pressed={mode === value} onClick={() => setMode(value)}>{t(value)}</button>)}</div>
-    {!acceptance && <fieldset ref={scopeFields} disabled={isLocked}><legend>{t('scope')}</legend><label>{t('org')}<input autoComplete="off" value={org} onChange={e => change(setOrg, e.target.value)} /></label><label>{t('school')}<input autoComplete="off" value={school} onChange={e => change(setSchool, e.target.value)} /></label><button type="button" onClick={() => bind()}>{t('read')}</button><button type="button" onClick={() => bind(true)}>{t('knownVerify')}</button>{problem && <p role="alert">{t('ACCOUNT_INPUT_INVALID')}</p>}</fieldset>}
-    {(acceptance || scope) && <BoundFamilyAccess key={`${sessionSubject}:${scopeKey}:${scope?.organizationId ?? ''}:${scope?.schoolId ?? ''}`} sessionSubject={sessionSubject} scope={acceptance ? null : scope} autoLoad={!acceptance} known={known} binding={binding} onLock={(value, terminal) => { setIsLocked(binding.current?.controller.snapshot().active === true || terminal && !binding.current?.controller.snapshot().retained); }} />}
+    {!acceptance && !shellSchool && <fieldset ref={scopeFields} disabled={isLocked}><legend>{t('scope')}</legend><label>{t('org')}<input autoComplete="off" value={org} onChange={e => change(setOrg, e.target.value)} /></label><label>{t('school')}<input autoComplete="off" value={school} onChange={e => change(setSchool, e.target.value)} /></label><button type="button" onClick={() => bind()}>{t('read')}</button><button type="button" onClick={() => bind(true)}>{t('knownVerify')}</button>{problem && <p role="alert">{t('ACCOUNT_INPUT_INVALID')}</p>}</fieldset>}
+    {!acceptance && shellSchool && !shellScope && <p role="status">{t('shellUnavailable')} <button type="button" onClick={() => window.location.reload()}>{t('reloadPage')}</button></p>}
+    {(acceptance || bound) && <BoundFamilyAccess key={`${sessionSubject}:${scopeKey}:${bound?.organizationId ?? ''}:${bound?.schoolId ?? ''}`} sessionSubject={sessionSubject} scope={acceptance ? null : bound} autoLoad={!acceptance} known={shellScope ? false : known} inShell={Boolean(shellSchool)} binding={binding} onLock={(value, terminal) => { setIsLocked(binding.current?.controller.snapshot().active === true || terminal && !binding.current?.controller.snapshot().retained); }} />}
     <aside className={styles.notice}><p>{t('mixed')}</p><p>{t('suspension')}</p><p>{t('boundary')}</p></aside>
   </main>;
 }
 
-function BoundFamilyAccess({ sessionSubject, scope, autoLoad, known, onLock, binding }: { sessionSubject: string; scope: FamilyScope | null; autoLoad: boolean; known: boolean; onLock: (value: boolean, terminal: boolean) => void; binding: React.MutableRefObject<Binding | null> }): React.ReactElement {
+function BoundFamilyAccess({ sessionSubject, scope, autoLoad, known, inShell = false, onLock, binding }: { sessionSubject: string; scope: FamilyScope | null; autoLoad: boolean; known: boolean; inShell?: boolean; onLock: (value: boolean, terminal: boolean) => void; binding: React.MutableRefObject<Binding | null> }): React.ReactElement {
   const locale = useLocale(), t = (key: Parameters<typeof familyText>[1]) => familyText(locale.preferences.language, key);
   const familySelectId = useId(), levelSelectId = useId(), knownActionId = useId();
   const holder = useRef<FamilyAccessController | null>(null); if (!holder.current) holder.current = new FamilyAccessController(sessionSubject, scope);
@@ -86,17 +92,17 @@ function BoundFamilyAccess({ sessionSubject, scope, autoLoad, known, onLock, bin
     <p className={styles.status} role="status" aria-live="polite" aria-atomic="true" data-testid="family-access-status">{t(snapshot.phase)}</p>
     {snapshot.active && <p role="status">{t('pending')}</p>}
     <button type="button" disabled={snapshot.active || snapshot.phase === 'LOADING' || snapshot.phase === 'CONTEXT' && Boolean(scope) || ['SESSION', 'IDENTITY', 'REVIEW'].includes(snapshot.phase) && !snapshot.retained} onClick={() => execute(() => controller.load())}>{t(snapshot.phase === 'CONCEALED' ? 'restore' : scope ? 'read' : 'identity')}</button>
-    {scope && <button type="button" disabled={snapshot.active || snapshot.phase === 'LOADING' || snapshot.phase === 'CONTEXT' || ['SESSION', 'IDENTITY', 'REVIEW'].includes(snapshot.phase) && !snapshot.retained} onClick={() => execute(() => controller.verifyKnown())}>{t('knownVerify')}</button>}
+    {scope && !inShell && <button type="button" disabled={snapshot.active || snapshot.phase === 'LOADING' || snapshot.phase === 'CONTEXT' || ['SESSION', 'IDENTITY', 'REVIEW'].includes(snapshot.phase) && !snapshot.retained} onClick={() => execute(() => controller.verifyKnown())}>{t('knownVerify')}</button>}
     <div key={privateDomEpoch.current} ref={area} hidden={!visible} inert={!visible} data-testid="family-access-private">
       {scope && limited ? <>
-        <h2>{t('knownTitle')}</h2><p>{t('knownBoundary')}</p><p>{t('school')}: <code>{scope.schoolId}</code></p>
+        <h2>{t('knownTitle')}</h2><p>{t('knownBoundary')}</p>{!inShell && <p>{t('school')}: <code>{scope.schoolId}</code></p>}
         <form autoComplete="off" onSubmit={e => { e.preventDefault(); execute(() => controller.changeKnown(id, knownKind, confirmed, snapshot.revision)); }}><fieldset disabled={busy}>
           <legend>{t('knownTitle')}</legend><label>{t('id')}<input required autoComplete="off" value={id} onChange={e => edit(() => setId(e.target.value))}/></label>
           <label htmlFor={knownActionId}>{t('knownAction')}</label><select id={knownActionId} value={knownKind} onChange={e => edit(() => setKnownKind(e.target.value as 'revoke' | 'end'))}><option value="revoke">{t('revoke')}</option><option value="end">{t('end')}</option></select>
           <label><input type="checkbox" checked={confirmed} onChange={e => edit(() => setConfirmed(e.target.checked))}/>{t(knownKind === 'end' ? 'knownConfirmEnd' : 'knownConfirmRevoke')}</label><button disabled={!confirmed}>{t('apply')}</button>
         </fieldset></form>
       </> : scope ? <>
-        <section aria-label={t('verifiedScope')}><h2>{t('verifiedScope')}</h2><p>{t('org')}: <code>{scope.organizationId}</code><br/>{t('school')}: <code>{scope.schoolId}</code></p></section>
+        {!inShell && <section aria-label={t('verifiedScope')}><h2>{t('verifiedScope')}</h2><p>{t('org')}: <code>{scope.organizationId}</code><br/>{t('school')}: <code>{scope.schoolId}</code></p></section>}
         <label htmlFor={familySelectId}>{t('family')}</label><select id={familySelectId} value={snapshot.selected} disabled={busy} onChange={e => { controller.choose(e.target.value, snapshot.revision); setAction(null); }}><option value="">{t('choose')}</option>{snapshot.families.filter(f => f.status === 'ACTIVE').map(f => <option key={f.id} value={f.id}>{f.displayName}</option>)}</select>
         {snapshot.families.filter(f => f.status === 'ACTIVE').length === 0 && <p>{t('empty')}</p>}<p>{t('limit')}</p>
         {selected && <><h2>{selected.displayName}</h2><form autoComplete="off" onSubmit={e => { e.preventDefault(); execute(() => controller.invite(email, level, Number(hours), confirmed, snapshot.revision)); }}>
