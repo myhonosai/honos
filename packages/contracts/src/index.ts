@@ -43,6 +43,12 @@ export type HonTier = (typeof HON_TIERS)[number];
 
 export const HON_INTERFACE_THEME_IDS = ['big-button', 'modern', 'classic'] as const;
 export type HonInterfaceTheme = (typeof HON_INTERFACE_THEME_IDS)[number];
+/** 0460: each person picks one of three free browser voices per AI teammate (presentation only; 1 = the original voice). */
+export const HON_VOICE_AGENT_KEYS = ['hon', 'claire', 'alex', 'jordan', 'lena', 'marcus', 'chad', 'maya', 'kai'] as const;
+export type HonVoiceAgentKey = (typeof HON_VOICE_AGENT_KEYS)[number];
+export const HON_AGENT_VOICE_CHOICES = [1, 2, 3] as const;
+export type HonAgentVoiceChoice = (typeof HON_AGENT_VOICE_CHOICES)[number];
+export type HonAgentVoiceChoices = Record<HonVoiceAgentKey, HonAgentVoiceChoice>;
 
 export const PRINCIPAL_TYPES = [
   'HUMAN_USER',
@@ -1107,9 +1113,11 @@ export * from './text-pieces.js';
 export * from './hq-hon.js';
 export * from './school-branding.js';
 export * from './school-location.js';
+export * from './school-demo-data.js';
 export * from './crm-pipeline-board.js';
 export * from './school-booking-types.js';
 export * from './parent-class-booking.js';
+export * from './parent-school-bookings.js';
 export * from './family-messages.js';
 export * from './school-conversations.js';
 export * from './conversation-ai.js';
@@ -1132,4 +1140,5 @@ export * from './school-pay-charges.js';
 export * from './shopify.js';
 export * from './walk-in-kiosk.js';
 export * from './face-checkin.js';
+export * from './membership-agreement.js';
 export * from './school-social-ads.js';

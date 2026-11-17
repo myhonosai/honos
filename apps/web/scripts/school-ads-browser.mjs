@@ -32,6 +32,8 @@ const report = { syntheticFixturesOnly: true, databaseAccess: false, providerCal
 const at = '2026-11-16T18:00:00.000Z';
 const page = (n, name, adsEnabled) => ({ accountId: id(40 + n), platform: 'FACEBOOK', displayName: name, status: 'CONNECTED', publishEnabled: true, inboxEnabled: false, adsEnabled,
   version: 2, connectedAt: at, updatedAt: at, disconnectedAt: null });
+const googleAccount = (adsEnabled) => ({ accountId: id(45), platform: 'GOOGLE_ADS', displayName: 'Synthetic Dojo Google Ads', status: 'CONNECTED', publishEnabled: false, inboxEnabled: false,
+  adsEnabled, version: 2, connectedAt: at, updatedAt: at, disconnectedAt: null });
 const fixture = { accounts: [], connectEnabled: true, connects: [], adsEnabled: true, budget: null, ads: [], commands: [] };
 const TODAY = '2026-11-16';
 const posts = { publishEnabled: true, checkedAt: at, posts: [{ postId: id(51), text: 'Free trial week for kids 5-12: two classes on us, uniform included.', linkUrl: null, status: 'APPROVED',
@@ -44,10 +46,17 @@ const adsView = () => ({ budget: fixture.budget, committedThisMonthCents: commit
 function adsCommand(path, body, headers) {
   fixture.commands.push({ path, command: headers['x-hon-human-command'], key: headers['idempotency-key'], body });
   if (path.endsWith('/ads/budget')) { fixture.budget = { monthlyCapCents: body.monthlyCapCents, currency: body.currency, version: (fixture.budget?.version ?? 0) + 1 }; return [200, adsView()]; }
+  if (path.endsWith('/ads/google')) {
+    if (!fixture.budget || body.budgetCents > fixture.budget.monthlyCapCents) return [409, { code: 'SOCIAL_AD_OVER_CAP' }];
+    const ad = { adId: id(60 + fixture.ads.length), channel: 'GOOGLE_SEARCH', accountId: body.accountId, targetId: null, postId: null, accountName: 'Synthetic Dojo Google Ads', budgetCents: body.budgetCents,
+      currency: fixture.budget.currency, startsOn: body.startsOn, endsOn: body.endsOn, status: 'DRAFT', operation: null, resolvedByPerson: false, createdAt: at, version: 1,
+      google: { headlines: body.headlines, descriptions: body.descriptions, finalUrl: body.finalUrl, keywords: body.keywords } };
+    fixture.ads.push(ad); return [200, ad];
+  }
   if (path.endsWith('/ads')) {
     if (!fixture.budget || body.budgetCents > fixture.budget.monthlyCapCents) return [409, { code: 'SOCIAL_AD_OVER_CAP' }];
-    const ad = { adId: id(60 + fixture.ads.length), accountId: id(40), targetId: body.targetId, postId: id(51), accountName: 'Synthetic Dojo Page', budgetCents: body.budgetCents,
-      currency: fixture.budget.currency, startsOn: body.startsOn, endsOn: body.endsOn, status: 'DRAFT', operation: null, resolvedByPerson: false, createdAt: at, version: 1 };
+    const ad = { adId: id(60 + fixture.ads.length), channel: 'META_BOOST', accountId: id(40), targetId: body.targetId, postId: id(51), accountName: 'Synthetic Dojo Page', budgetCents: body.budgetCents,
+      currency: fixture.budget.currency, startsOn: body.startsOn, endsOn: body.endsOn, status: 'DRAFT', operation: null, resolvedByPerson: false, createdAt: at, version: 1, google: null };
     fixture.ads.push(ad); return [200, ad];
   }
   const ad = fixture.ads.find((a) => path.includes(a.adId));
@@ -63,6 +72,7 @@ function adsCommand(path, body, headers) {
   ad.version += 1; return [200, ad];
 }
 
+const CONSENT = { FACEBOOK: 'https://www.facebook.com/dialog/oauth?synthetic=1', GOOGLE_ADS: 'https://accounts.google.com/o/oauth2/v2/auth?synthetic=1' };
 const json = (route, status, body) => route.fulfill({ status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }, body: JSON.stringify(body) });
 const meta = { requestId: id(9000), correlationId: id(9000) };
 function api(route) {
@@ -80,7 +90,8 @@ function api(route) {
   if (path === `${prefix}/marketing/social/connect` && method === 'POST') {
     const headers = request.headers();
     fixture.connects.push({ command: headers['x-hon-human-command'], key: headers['idempotency-key'], body: request.postDataJSON() });
-    return json(route, 200, { data: { authUrl: 'https://www.facebook.com/dialog/oauth?synthetic=1', platform: 'FACEBOOK', expiresAt: '2026-11-16T18:10:00.000Z' }, meta });
+    const platform = request.postDataJSON().platform;
+    return json(route, 200, { data: { authUrl: CONSENT[platform], platform, expiresAt: '2026-11-16T18:10:00.000Z' }, meta });
   }
   if (path === `${prefix}/marketing/social/ads` && method === 'GET') return json(route, 200, { data: adsView(), meta });
   if (path === `${prefix}/marketing/social/posts` && method === 'GET') return json(route, 200, { data: posts, meta });
@@ -111,7 +122,7 @@ async function open(viewport, path, language) {
     const url = new URL(route.request().url());
     if (url.origin !== origin) {
       if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') return route.abort();
-      external.push(url.href); return route.fulfill({ status: 200, contentType: 'text/html', body: '<title>Synthetic Facebook consent</title>' });
+      external.push(url.href); return route.fulfill({ status: 200, contentType: 'text/html', body: '<title>Synthetic consent</title>' });
     }
     if (url.pathname.startsWith('/api/')) return api(route);
     return route.continue();
@@ -129,7 +140,7 @@ await check('Ads is in the menu under Marketing and shows Meta Ads and Google Ad
   const { ctx, page: p } = await open(viewports.desktop, '/staff/marketing/ads');
   await p.locator('[data-ads-meta="NOT_CONNECTED"]').waitFor();
   assert.ok(await p.getByRole('heading', { name: 'Google Ads' }).isVisible());
-  assert.equal(await p.locator('[data-ads-connect-google]').count(), 0);
+  await p.locator('[data-ads-google="NOT_CONNECTED"] [data-ads-connect-google]').waitFor();
   assert.ok(await p.getByRole('link', { name: 'Ask Marcus for an ad' }).isVisible());
   await shot(p, 'ads-not-connected-desktop-1440');
   await noOverflow(p); await ctx.close();
@@ -142,6 +153,16 @@ await check('Connect Facebook for Meta Ads sends one connect command and opens t
   assert.equal(fixture.connects[0].command, 'marketing.social.connect');
   assert.match(fixture.connects[0].key, /^[0-9a-f-]{36}$/);
   assert.deepEqual(fixture.connects[0].body, { platform: 'FACEBOOK' });
+  await ctx.close();
+});
+await check('Connect Google Ads sends one connect command for Google Ads and opens the Google consent page', async () => {
+  fixture.connects = [];
+  const { ctx, page: p } = await open(viewports.desktop, '/staff/marketing/ads');
+  await p.getByRole('button', { name: 'Connect Google Ads' }).click();
+  await p.waitForURL(/accounts\.google\.com/);
+  assert.equal(fixture.connects.length, 1);
+  assert.equal(fixture.connects[0].command, 'marketing.social.connect');
+  assert.deepEqual(fixture.connects[0].body, { platform: 'GOOGLE_ADS' });
   await ctx.close();
 });
 await check('connected Pages show their real ads switch and link to Social accounts', async () => {
@@ -157,8 +178,10 @@ await check('connected Pages show their real ads switch and link to Social accou
 await check('connecting off says so plainly with no button', async () => {
   fixture.accounts = []; fixture.connectEnabled = false;
   const { ctx, page: p } = await open(viewports.desktop, '/staff/marketing/ads');
-  await p.getByText('Connecting ad accounts is not turned on for HON OS yet.').waitFor();
+  await p.locator('[data-ads-meta]').getByText('Connecting ad accounts is not turned on for HON OS yet.').waitFor();
+  await p.locator('[data-ads-google]').getByText('Connecting ad accounts is not turned on for HON OS yet.').waitFor();
   assert.equal(await p.locator('[data-ads-connect-meta]').count(), 0);
+  assert.equal(await p.locator('[data-ads-connect-google]').count(), 0);
   await shot(p, 'ads-connect-off-desktop-1440');
   fixture.connectEnabled = true; await ctx.close();
 });
@@ -168,7 +191,7 @@ await check('a person sets the limit, saves a boost draft, approves it (created 
   await p.locator('[data-ads-run="ON"]').waitFor();
   await shot(p, 'ads-run-empty-desktop-1440');
   await p.getByLabel('Limit per month').fill('300');
-  await p.getByLabel('Currency (as in your Meta ad account)').fill('usd');
+  await p.getByLabel('Currency (as in your ad accounts)').fill('usd');
   await p.locator('[data-ads-save-budget]').click();
   await p.getByText('Monthly limit saved.').waitFor();
   await p.getByLabel('Post to boost').selectOption(id(50));
@@ -202,6 +225,49 @@ await check('while ads are off at HON OS, approving is disabled and the page say
   await shot(p, 'ads-run-off-desktop-1440');
   fixture.adsEnabled = true; await ctx.close();
 });
+await check('a person writes a Google Search ad (5 miles from the school), saves it, approves it (created paused) and turns it on after confirming', async () => {
+  fixture.accounts = [page(0, 'Synthetic Dojo Page', true), googleAccount(true)]; fixture.commands = [];
+  const { ctx, page: p } = await open(viewports.desktop, '/staff/marketing/ads');
+  await p.locator('[data-ads-google="READY_FOR_ADS"] [data-google-run="ON"]').waitFor();
+  // The Meta card already shows the shared limit, so the Google card only points to it.
+  await p.locator('[data-google-cap]').waitFor();
+  assert.match(await p.locator('[data-google-radius]').innerText(), /within 5 miles of your school/);
+  await p.locator('[data-google-headlines]').fill('Kids karate near you\nFree trial week\n\nClasses for ages 5-12');
+  await p.locator('[data-google-descriptions]').fill('Two free classes, uniform included.\nFriendly coaches, small classes.');
+  await p.locator('[data-google-url]').fill('https://dojo.example/trial');
+  await p.locator('[data-google-keywords]').fill('kids karate\nmartial arts classes');
+  await p.locator('[data-google-amount]').fill('70');
+  await p.locator('[data-google-draft]').getByLabel('Ends').fill('2026-11-22');
+  await shot(p, 'ads-google-form-desktop-1440');
+  await p.locator('[data-google-save]').click();
+  await p.getByText('Approve it to create the ad at Google, paused.').waitFor();
+  const list = p.locator('[data-google-list]');
+  await list.locator('[data-ad-status="DRAFT"]').waitFor();
+  await list.locator('[data-ads-op="CREATE"]').click();
+  await list.locator('[data-ad-status="PAUSED"]').waitFor();
+  await list.locator('[data-ads-op="ACTIVATE-ASK"]').click();
+  await p.getByText('Google starts spending').waitFor();
+  await shot(p, 'ads-google-confirm-desktop-1440');
+  await list.locator('[data-ads-op="ACTIVATE"]').click();
+  await list.locator('[data-ad-status="ACTIVE"]').waitFor();
+  assert.deepEqual(fixture.commands.map((c) => c.command), ['marketing.social.ads.google.create', 'marketing.social.ads.operation', 'marketing.social.ads.operation']);
+  assert.deepEqual(fixture.commands[0].body, { accountId: id(45), budgetCents: 7000, startsOn: TODAY, endsOn: '2026-11-22', finalUrl: 'https://dojo.example/trial',
+    headlines: ['Kids karate near you', 'Free trial week', 'Classes for ages 5-12'], descriptions: ['Two free classes, uniform included.', 'Friendly coaches, small classes.'],
+    keywords: ['kids karate', 'martial arts classes'] });
+  assert.equal(new Set(fixture.commands.map((c) => c.key)).size, fixture.commands.length, 'every write has its own key');
+  // Google ads stay out of the Meta list.
+  assert.equal(await p.locator('[data-ads-meta] [data-ad-status="ACTIVE"]').count(), 0);
+  await shot(p, 'ads-google-active-desktop-1440');
+  await noOverflow(p); await ctx.close();
+});
+await check('with only Google connected, the limit form is in the Google card', async () => {
+  fixture.accounts = [googleAccount(true)];
+  const { ctx, page: p } = await open(viewports.phone, '/staff/marketing/ads');
+  await p.locator('[data-ads-google="READY_FOR_ADS"] [data-ads-save-budget]').waitFor();
+  assert.equal(await p.locator('[data-google-cap]').count(), 0);
+  await noOverflow(p); await shot(p, 'ads-google-only-phone-390');
+  await ctx.close();
+});
 await check('phone and Korean fit the screen', async () => {
   fixture.accounts = [page(0, 'Synthetic Dojo Page', true)];
   const { ctx, page: p } = await open(viewports.phone, '/staff/marketing/ads');
@@ -212,7 +278,7 @@ await check('phone and Korean fit the screen', async () => {
 
 await browser.close(); server.kill('SIGTERM');
 report.pageErrors = [...new Set(report.pageErrors)];
-report.providerCalls = external.filter((href) => !href.startsWith('https://www.facebook.com/dialog/oauth?synthetic=1'));
+report.providerCalls = external.filter((href) => !Object.values(CONSENT).includes(href));
 await writeFile(join(results, 'school-ads-browser-report.json'), JSON.stringify(report, null, 2));
 console.log(JSON.stringify({ checks: report.checks.length, failures: report.failures, pageErrors: report.pageErrors.slice(0, 5), unexpectedExternal: report.providerCalls }, null, 2));
 if (report.failures.length || report.pageErrors.length || report.providerCalls.length) { console.error(serverLog.slice(-3000)); process.exitCode = 1; }

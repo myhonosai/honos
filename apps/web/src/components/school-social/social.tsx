@@ -1,6 +1,6 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { SocialAccount, SocialAccountChangeInput, SocialPlatform } from '@hon/contracts';
+import type { SocialAccount, SocialAccountChangeInput, SocialAccountPlatform } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
@@ -77,7 +77,7 @@ export function SchoolSocial({ api = socialApi, navigate = (url: string) => wind
     void send();
   }, [lock, orgId, schoolId, send]);
 
-  const onConnect = useCallback(async (platform: SocialPlatform) => {
+  const onConnect = useCallback(async (platform: SocialAccountPlatform) => {
     if (lock !== 'NONE' || sending.current || !orgId || !schoolId) return;
     sending.current = true; const shown = privacy.current;
     setLock('SENDING'); setOutcome({ kind: 'SENDING', action: 'connect' });

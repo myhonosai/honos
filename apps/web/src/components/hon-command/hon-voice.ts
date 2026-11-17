@@ -88,7 +88,7 @@ const LINE: Record<HonVoiceLang, { rest: string; link: string; failed: string; o
 export const honVoiceLine = (lang: HonVoiceLang, key: keyof (typeof LINE)['en-US']): string => LINE[lang][key];
 
 /** Plain sentences for speech: no markdown, no URLs, list items as sentences, trimmed at a sentence boundary. */
-export function speakableText(text: string, lang: HonVoiceLang): string {
+export function speakableText(text: string, lang: HonVoiceLang, max: number = HON_VOICE_LIMITS.spokenCharacters): string {
   const lines = text.replace(/https?:\/\/\S+/g, LINE[lang].link).split(/\r?\n/)
     .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '').replace(/^\s*#{1,6}\s*/, '').replace(/^\s*>\s?/, '').replace(/[*_`~]/g, '').trim())
     .filter(Boolean);
@@ -96,7 +96,6 @@ export function speakableText(text: string, lang: HonVoiceLang): string {
   for (const line of lines) joined += joined === '' ? line : /[.!?。:;]$/.test(joined) ? ` ${line}` : `. ${line}`;
   joined = joined.replace(/\s+/g, ' ').trim();
   if (lines.length > 1 && joined && !/[.!?。]$/.test(joined)) joined += '.';
-  const max = HON_VOICE_LIMITS.spokenCharacters;
   if (joined.length <= max) return joined;
   const cut = joined.slice(0, max);
   const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '), cut.lastIndexOf('。'));
@@ -137,7 +136,41 @@ export type RecognitionOptions = { lang: HonVoiceLang; continuous: boolean; onDe
 export type RecognitionHandlers = { onInterim(text: string): void; onFinal(text: string): void; onError(code: string): void; onEnd(): void };
 export interface RecognitionSession { stop(): void; abort(): void }
 export interface RecognitionAdapter { start(options: RecognitionOptions, handlers: RecognitionHandlers): RecognitionSession }
-export interface SpeechAdapter { speak(text: string, lang: HonVoiceLang, onDone: () => void): void; cancel(): void }
+/**
+ * Team chat: each teammate is read aloud with a slightly different browser voice. Presentation only: pitch, rate and
+ * which of the browser's own voices for the language (by position) to prefer. No paid or cloud voice.
+ */
+export type HonVoiceProfile = Readonly<{ pitch: number; rate: number; voiceIndex: number }>;
+/**
+ * 0460 (owner ask "choose voice for all AI agents, give few choices each"): three free browser voices per teammate.
+ * Choice 1 is the voice each teammate already had; 2 and 3 change pitch, pace and which of the device's own voices is
+ * used. The person's choice is saved to their account; the device decides which voices it actually has.
+ */
+export type HonVoiceStyle = 'standard' | 'warm' | 'bright' | 'deep' | 'calm' | 'lively';
+export type HonVoiceOption = Readonly<{ style: HonVoiceStyle; profile: HonVoiceProfile }>;
+const option = (style: HonVoiceStyle, pitch: number, rate: number, voiceIndex: number): HonVoiceOption => ({ style, profile: { pitch, rate, voiceIndex } });
+export const HON_AGENT_VOICE_OPTIONS: Readonly<Record<string, readonly [HonVoiceOption, HonVoiceOption, HonVoiceOption]>> = Object.freeze({
+  hon: [option('standard', 1, 1, 0), option('warm', 0.9, 0.95, 9), option('bright', 1.15, 1.05, 10)],
+  claire: [option('standard', 1.15, 1, 1), option('calm', 1, 0.9, 11), option('lively', 1.3, 1.1, 12)],
+  alex: [option('standard', 0.9, 1, 2), option('deep', 0.75, 0.95, 13), option('bright', 1.1, 1.05, 14)],
+  jordan: [option('standard', 0.8, 1.05, 3), option('calm', 0.95, 0.9, 15), option('lively', 1, 1.15, 16)],
+  lena: [option('standard', 1.25, 1.05, 4), option('warm', 1.05, 0.95, 17), option('bright', 1.4, 1.1, 18)],
+  marcus: [option('standard', 0.85, 0.95, 5), option('deep', 0.7, 0.9, 19), option('lively', 1.05, 1.1, 20)],
+  chad: [option('standard', 0.95, 1.1, 6), option('calm', 0.9, 0.95, 21), option('bright', 1.2, 1.1, 22)],
+  maya: [option('standard', 1.2, 0.95, 7), option('warm', 1.05, 0.9, 23), option('lively', 1.35, 1.05, 24)],
+  kai: [option('standard', 1.05, 1, 8), option('calm', 0.9, 0.9, 25), option('bright', 1.25, 1.05, 26)],
+});
+/** Each teammate's original voice (choice 1). */
+export const HON_AGENT_VOICES: Readonly<Record<string, HonVoiceProfile>> = Object.freeze(
+  Object.fromEntries(Object.entries(HON_AGENT_VOICE_OPTIONS).map(([k, options]) => [k, options[0].profile])));
+/** The voice for one teammate: their chosen option (1-3), else their original voice. */
+export const honAgentVoice = (key: string, choice: number = 1): HonVoiceProfile => {
+  const options = HON_AGENT_VOICE_OPTIONS[key] ?? HON_AGENT_VOICE_OPTIONS.hon!;
+  return (options[choice - 1] ?? options[0]).profile;
+};
+/** One spoken part of an answer: what to say and in whose voice. */
+export type HonSpokenPart = Readonly<{ text: string; profile?: HonVoiceProfile }>;
+export interface SpeechAdapter { speak(text: string, lang: HonVoiceLang, onDone: () => void, profile?: HonVoiceProfile): void; cancel(): void }
 export interface VoiceTimer { set(fn: () => void, ms: number): unknown; clear(handle: unknown): void }
 
 type BrowserRecognition = {
@@ -171,7 +204,7 @@ export function browserRecognition(win: VoiceWindow): RecognitionAdapter {
 }
 
 type Synth = { speak(u: unknown): void; cancel(): void; getVoices(): { lang: string; localService: boolean }[] };
-type Utterance = { lang: string; voice: unknown; rate: number; onend: (() => void) | null; onerror: (() => void) | null;
+type Utterance = { lang: string; voice: unknown; rate: number; pitch: number; onend: (() => void) | null; onerror: (() => void) | null;
   onstart?: (() => void) | null; onboundary?: ((event: { name?: string }) => void) | null };
 
 /** A run of text with no sentence end is cut at commas or spaces into pieces of at most 200 characters. */
@@ -197,7 +230,7 @@ export function browserSpeech(win: VoiceWindow, hooks: { onWord?: () => void } =
   // Utterances are kept referenced until spoken: some browsers drop the end event of an utterance nothing holds on to.
   let held: Utterance[] = []; let watchdog: ReturnType<typeof setTimeout> | null = null;
   return {
-    speak(text, lang, onDone) {
+    speak(text, lang, onDone, profile) {
       const mine = ++generation; held = [];
       if (watchdog) clearTimeout(watchdog);
       let finished = false;
@@ -205,7 +238,9 @@ export function browserSpeech(win: VoiceWindow, hooks: { onWord?: () => void } =
       // If the browser never reports the end, carry on after a generous estimate of the speaking time.
       watchdog = setTimeout(finish, 5000 + text.length * 90);
       const voices = synth.getVoices().filter((v) => v.lang.replace('_', '-').toLowerCase().startsWith(lang.slice(0, 2).toLowerCase()));
-      const voice = voices.find((v) => v.localService && v.lang.replace('_', '-') === lang) ?? voices.find((v) => v.localService) ?? voices[0] ?? null;
+      // A teammate's profile picks among this language's voices by position; HON keeps the on-device default.
+      const voice = (profile && profile.voiceIndex > 0 && voices.length > 1 ? voices[profile.voiceIndex % voices.length] : undefined)
+        ?? voices.find((v) => v.localService && v.lang.replace('_', '-') === lang) ?? voices.find((v) => v.localService) ?? voices[0] ?? null;
       const chunks = text.match(/[^.!?。]+[.!?。]*\s*/g)?.reduce<string[]>((all, piece) => {
         const last = all[all.length - 1];
         if (last !== undefined && (last + piece).length <= 200) all[all.length - 1] = last + piece; else all.push(piece);
@@ -213,7 +248,7 @@ export function browserSpeech(win: VoiceWindow, hooks: { onWord?: () => void } =
       }, []).flatMap(splitLong).map((c) => c.trim()).filter(Boolean) ?? [];
       if (chunks.length === 0) { queueMicrotask(finish); return; }
       chunks.forEach((chunk, index) => {
-        const u = new Utter(chunk); u.lang = lang; u.rate = 1; if (voice) u.voice = voice;
+        const u = new Utter(chunk); u.lang = lang; u.rate = profile?.rate ?? 1; u.pitch = profile?.pitch ?? 1; if (voice) u.voice = voice;
         const word = () => { if (mine === generation && !finished) hooks.onWord?.(); };
         u.onstart = word; u.onboundary = (event) => { if (!event?.name || event.name === 'word') word(); };
         if (index === chunks.length - 1) { u.onend = finish; u.onerror = finish; }
@@ -296,13 +331,28 @@ export class HonVoiceController {
   }
 
   /** The container's answer to the question this controller sent (the answer text, or a short status line). */
-  reply(text: string): void {
+  reply(text: string): void { this.replyParts([{ text }]); }
+
+  /**
+   * Team chat: several answers read one after another, each in its teammate's voice. The whole reply is capped at the
+   * same spoken length as one HON answer, shared between the parts; the rest stays on screen.
+   */
+  replyParts(parts: readonly HonSpokenPart[]): void {
     if (!this.awaiting || this.current.state !== 'SENDING') return;
     this.awaiting = false;
-    const spoken = speakableText(text, this.deps.lang);
+    const each = Math.max(160, Math.floor(HON_VOICE_LIMITS.spokenCharacters / Math.max(1, parts.length)));
+    const spoken = parts.map((part) => ({ text: speakableText(part.text, this.deps.lang, parts.length > 1 ? each : HON_VOICE_LIMITS.spokenCharacters), profile: part.profile }))
+      .filter((part) => part.text.length > 0);
     this.set({ state: 'SPEAKING', heard: '' });
     const mine = this.sessionId;
-    this.deps.speech.speak(spoken, this.deps.lang, () => { if (mine === this.sessionId && this.current.state === 'SPEAKING') this.afterSpeaking(); });
+    const next = (index: number) => {
+      if (mine !== this.sessionId || this.current.state !== 'SPEAKING') return;
+      if (index >= spoken.length) { this.afterSpeaking(); return; }
+      const part = spoken[index]!;
+      this.deps.speech.speak(part.text, this.deps.lang, () => next(index + 1), part.profile);
+    };
+    if (spoken.length === 0) { this.afterSpeaking(); return; }
+    next(0);
   }
 
   /** A tap on "Stop listening" while HON waits for one question. */

@@ -89,6 +89,10 @@
       "title": "HON | Book a class"
     },
     {
+      "path": "/parent/bookings",
+      "title": "HON | Events & bookings"
+    },
+    {
       "path": "/parent/messages",
       "title": "HON | School message history"
     },
@@ -383,6 +387,10 @@
     {
       "path": "/staff/settings/texting-number",
       "title": "HON | Texting number"
+    },
+    {
+      "path": "/staff/settings/demo-data",
+      "title": "HON | Demo data"
     },
     {
       "path": "/staff/champions-club",
