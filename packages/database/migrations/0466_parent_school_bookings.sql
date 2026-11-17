@@ -1,6 +1,6 @@
 BEGIN;
 
--- Parent account bookings of event slots and families-only booking types (0461, renumbered from 0360, 0431, 0441, 0448 and 0457 by the coordinator 2026-11-17;
+-- Parent account bookings of event slots and families-only booking types (0466, renumbered from 0360, 0431, 0441, 0448, 0457 and 0461 by the coordinator 2026-11-17;
 -- docs/architecture/PARENT_ACCOUNT_BOOKING_AND_MESSAGES.md A4, which is also booking types part 3's family path).
 --   P1  The same parent authority as 0329: a signed-in parent with exactly one live family grant, school, organization and
 --       entitlement live, checked again after the locks and writes. VIEWER grants read only.
@@ -316,7 +316,7 @@ BEGIN
   RETURN jsonb_build_object('receipt',result,'replayed',false);
 END $$;
 
-COMMENT ON TABLE hon.parent_school_bookings IS '0461 event and booking type bookings a family made from the parent account. Insert only, private.';
+COMMENT ON TABLE hon.parent_school_bookings IS '0466 event and booking type bookings a family made from the parent account. Insert only, private.';
 
 DO $$ DECLARE r text; f text; t text; entry text[]:=ARRAY['hon.read_parent_school_bookings(text)',
   'hon.book_parent_school_event_slot(text,jsonb,text,uuid,uuid)','hon.book_parent_school_booking_type(text,jsonb,text,uuid,uuid)',

@@ -170,6 +170,7 @@
     "db:test-person-photo": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-person-photo-integrity.mjs",
     "db:test-attendance-cards": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-attendance-cards-integrity.mjs",
     "db:test-face-checkin": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-face-checkin-integrity.mjs",
+    "db:test-membership-agreement": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-membership-agreement-integrity.mjs",
     "db:test-walk-in-kiosk": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-walk-in-kiosk-integrity.mjs",
     "db:test-paper-import": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-paper-import-integrity.mjs",
     "db:test-school-location": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-location-integrity.mjs",
