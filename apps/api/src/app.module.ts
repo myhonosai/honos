@@ -138,6 +138,9 @@ import { SchoolWebsiteService } from './website/school-website.service.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
 import { SchoolSupportController } from './support/school-support.controller.js';
+import { AutomationWorkflowController, ContactTagController } from './automations/automation.controller.js';
+import { AutomationService } from './automations/automation.service.js';
+import { AutomationArchiveHumanUiGuard, AutomationCreateHumanUiGuard, AutomationReadHumanUiGuard, AutomationRestoreHumanUiGuard, AutomationSaveHumanUiGuard, ContactTagAddHumanUiGuard, ContactTagLookupHumanUiGuard, ContactTagRemoveHumanUiGuard } from './automations/automation.guard.js';
 import { SchoolSupportService } from './support/school-support.service.js';
 import { CustomToolController } from './custom-tools/custom-tool.controller.js';
 import { CustomToolService } from './custom-tools/custom-tool.service.js';
@@ -538,6 +541,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolOnboardingController,
     SchoolSupportController,
     CustomToolController,
+    AutomationWorkflowController,
+    ContactTagController,
     SchoolSocialController,
     SchoolSocialPostsController,
     TuitionPaymentController,
@@ -747,6 +752,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolOnboardingService,
     SchoolSupportService,
     CustomToolService,
+    AutomationService,
+    AutomationReadHumanUiGuard, AutomationCreateHumanUiGuard, AutomationSaveHumanUiGuard, AutomationRestoreHumanUiGuard, AutomationArchiveHumanUiGuard,
+    ContactTagAddHumanUiGuard, ContactTagRemoveHumanUiGuard, ContactTagLookupHumanUiGuard,
     SchoolSocialService,
     SchoolSocialPostsService,
     SocialPostDispatcher,
