@@ -141,18 +141,33 @@ export interface RecognitionAdapter { start(options: RecognitionOptions, handler
  * which of the browser's own voices for the language (by position) to prefer. No paid or cloud voice.
  */
 export type HonVoiceProfile = Readonly<{ pitch: number; rate: number; voiceIndex: number }>;
-export const HON_AGENT_VOICES: Readonly<Record<string, HonVoiceProfile>> = Object.freeze({
-  hon: { pitch: 1, rate: 1, voiceIndex: 0 },
-  claire: { pitch: 1.15, rate: 1, voiceIndex: 1 },
-  alex: { pitch: 0.9, rate: 1, voiceIndex: 2 },
-  jordan: { pitch: 0.8, rate: 1.05, voiceIndex: 3 },
-  lena: { pitch: 1.25, rate: 1.05, voiceIndex: 4 },
-  marcus: { pitch: 0.85, rate: 0.95, voiceIndex: 5 },
-  chad: { pitch: 0.95, rate: 1.1, voiceIndex: 6 },
-  maya: { pitch: 1.2, rate: 0.95, voiceIndex: 7 },
-  kai: { pitch: 1.05, rate: 1, voiceIndex: 8 },
+/**
+ * 0452 (owner ask "choose voice for all AI agents, give few choices each"): three free browser voices per teammate.
+ * Choice 1 is the voice each teammate already had; 2 and 3 change pitch, pace and which of the device's own voices is
+ * used. The person's choice is saved to their account; the device decides which voices it actually has.
+ */
+export type HonVoiceStyle = 'standard' | 'warm' | 'bright' | 'deep' | 'calm' | 'lively';
+export type HonVoiceOption = Readonly<{ style: HonVoiceStyle; profile: HonVoiceProfile }>;
+const option = (style: HonVoiceStyle, pitch: number, rate: number, voiceIndex: number): HonVoiceOption => ({ style, profile: { pitch, rate, voiceIndex } });
+export const HON_AGENT_VOICE_OPTIONS: Readonly<Record<string, readonly [HonVoiceOption, HonVoiceOption, HonVoiceOption]>> = Object.freeze({
+  hon: [option('standard', 1, 1, 0), option('warm', 0.9, 0.95, 9), option('bright', 1.15, 1.05, 10)],
+  claire: [option('standard', 1.15, 1, 1), option('calm', 1, 0.9, 11), option('lively', 1.3, 1.1, 12)],
+  alex: [option('standard', 0.9, 1, 2), option('deep', 0.75, 0.95, 13), option('bright', 1.1, 1.05, 14)],
+  jordan: [option('standard', 0.8, 1.05, 3), option('calm', 0.95, 0.9, 15), option('lively', 1, 1.15, 16)],
+  lena: [option('standard', 1.25, 1.05, 4), option('warm', 1.05, 0.95, 17), option('bright', 1.4, 1.1, 18)],
+  marcus: [option('standard', 0.85, 0.95, 5), option('deep', 0.7, 0.9, 19), option('lively', 1.05, 1.1, 20)],
+  chad: [option('standard', 0.95, 1.1, 6), option('calm', 0.9, 0.95, 21), option('bright', 1.2, 1.1, 22)],
+  maya: [option('standard', 1.2, 0.95, 7), option('warm', 1.05, 0.9, 23), option('lively', 1.35, 1.05, 24)],
+  kai: [option('standard', 1.05, 1, 8), option('calm', 0.9, 0.9, 25), option('bright', 1.25, 1.05, 26)],
 });
-export const honAgentVoice = (key: string): HonVoiceProfile => HON_AGENT_VOICES[key] ?? HON_AGENT_VOICES.hon!;
+/** Each teammate's original voice (choice 1). */
+export const HON_AGENT_VOICES: Readonly<Record<string, HonVoiceProfile>> = Object.freeze(
+  Object.fromEntries(Object.entries(HON_AGENT_VOICE_OPTIONS).map(([k, options]) => [k, options[0].profile])));
+/** The voice for one teammate: their chosen option (1-3), else their original voice. */
+export const honAgentVoice = (key: string, choice: number = 1): HonVoiceProfile => {
+  const options = HON_AGENT_VOICE_OPTIONS[key] ?? HON_AGENT_VOICE_OPTIONS.hon!;
+  return (options[choice - 1] ?? options[0]).profile;
+};
 /** One spoken part of an answer: what to say and in whose voice. */
 export type HonSpokenPart = Readonly<{ text: string; profile?: HonVoiceProfile }>;
 export interface SpeechAdapter { speak(text: string, lang: HonVoiceLang, onDone: () => void, profile?: HonVoiceProfile): void; cancel(): void }

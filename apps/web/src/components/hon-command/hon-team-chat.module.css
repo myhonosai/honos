@@ -70,3 +70,15 @@
   .chat .member { width: 88px; min-height: 96px; }
   .you, .agent { max-width: 100%; }
 }
+
+/* 0452 voice picker: three voices per teammate with a small "hear it" button each. */
+.voicePicker summary { cursor: pointer; font-weight: 700; min-height: 32px; }
+.voiceList { display: grid; gap: 10px; margin: 10px 0 0; padding: 0; list-style: none; }
+.voiceList li { display: grid; gap: 6px; padding: 10px; border-radius: 12px; background: var(--hon-surface-2, #13263a); }
+.voiceWho span { color: var(--hon-text-muted, #a9bdd1); font-size: 13px; }
+.voiceChoices { display: flex; flex-wrap: wrap; gap: 8px; }
+.voiceChoice { display: inline-flex; gap: 4px; }
+.chat .voiceHear { min-width: var(--hon-target, 44px); padding: 8px; border: 1px solid var(--hon-border, #24405a); background: var(--hon-surface-solid, #0a1524); color: var(--hon-text, #eaf4fb); }
+.voiceFailed { color: #ffc3cf; }
+.chat[data-mode='classic'] .voiceList li { border-radius: 8px; }
+.chat[data-mode='big-button'] .voiceWho strong { font-size: 18px; }

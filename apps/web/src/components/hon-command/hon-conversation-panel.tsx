@@ -20,7 +20,9 @@ import {
 import styles from './hon-conversation.module.css';
 import { useLocale } from '../localization/provider';
 import { HonVoiceControls, useHonVoice } from './hon-voice-controls';
-import { honVoiceLang, honVoiceLine, honVoiceReplyText } from './hon-voice';
+import { honAgentVoice, honVoiceLang, honVoiceLine, honVoiceReplyText } from './hon-voice';
+import { useAgentVoices } from './hon-voice-picker';
+import { AGENT_VOICE_API, type AgentVoiceApi } from './agent-voice-preference';
 
 // A 'claire' turn is Claire, Business Performance (K2); legacy claire teaching turns are already presented as 'kai' by the server.
 const AGENT_NAME: Record<string, string> = { hon: 'HON', marcus: 'Marcus', claire: 'Claire', kai: 'Kai', chad: 'Chad', alex: 'Alex', jordan: 'Jordan', lena: 'Lena', maya: 'Maya', HUMAN: 'You' };
@@ -363,7 +365,7 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
  * Private conversation content is concealed synchronously on session end (away only shows the school screensaver), and shown again
  * only after an explicit Refresh. A sent message is never cancelled: its outcome and exact retry are kept.
  */
-export function HonConversation({ school, presentation, api = HON_CONVERSATION_API, initialAsk = 'hon' }: { school: HonSchool; presentation: 'panel' | 'full'; api?: HonConversationApi; initialAsk?: HonComposerAsk }): React.ReactElement {
+export function HonConversation({ school, presentation, api = HON_CONVERSATION_API, initialAsk = 'hon', voiceApi = AGENT_VOICE_API }: { school: HonSchool; presentation: 'panel' | 'full'; api?: HonConversationApi; initialAsk?: HonComposerAsk; voiceApi?: AgentVoiceApi }): React.ReactElement {
   const [phase, setPhase] = useState<ConversationPhase>('LOADING');
   const [readiness, setReadiness] = useState<HonConversationReadiness | null>(null);
   const [conversations, setConversations] = useState<HonConversationSummary[]>([]);
@@ -387,7 +389,11 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   const sendTextRef = useRef<(text: string, voice: boolean) => boolean>(() => false);
   const voiceAllowed = useRef(false);
   const voice = useHonVoice(lang, (text) => voiceAllowed.current && !concealed.current && sendTextRef.current(text, true));
-  const { shutdown: voiceShutdown, reply: voiceReply } = voice;
+  const { shutdown: voiceShutdown, replyParts } = voice;
+  // 0452: HON answers aloud in the voice this person chose for HON (the usual voice until the choices load).
+  const { choices: voiceChoices } = useAgentVoices(school, voiceApi);
+  const honVoiceChoice = useRef(voiceChoices.hon); honVoiceChoice.current = voiceChoices.hon;
+  const voiceReply = useCallback((text: string) => { replyParts([{ text, profile: honAgentVoice('hon', honVoiceChoice.current) }]); }, [replyParts]);
   /** A spoken answer waits until the reload after it settles, so a follow-up lands in the same, freshly read conversation. */
   const voiceAnswer = useRef<string | null>(null);
 

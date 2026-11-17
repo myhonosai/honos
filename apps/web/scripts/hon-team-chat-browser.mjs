@@ -84,6 +84,9 @@ const leads = () => [['Avery', 'Sample', 1], ['Rowan', 'Example', 2], ['Kim', 'P
 const work = (scope) => ({ schoolId: scope.schoolId, principalId: id(500), canManage: true, canCreate: true, humanOnly: true, executionAllowed: false, queue: 'mine', status: 'ACTIVE',
   items: [{ title: 'Call back trial family', workItemId: id(601), version: 1, status: 'READY', priority: 'HIGH', dueAt: at(day), assigneeId: id(500) },
     { title: 'Order new belts for testing', workItemId: id(602), version: 1, status: 'WAITING', priority: 'NORMAL', dueAt: null, assigneeId: id(500) }], nextAfter: null });
+// 0452 voice choices (synthetic server copy of this person's saved voices).
+let voiceChoices = { hon: 1, claire: 1, alex: 1, jordan: 1, lena: 1, marcus: 1, chad: 1, maya: 1, kai: 1 }, voiceFailNext = null;
+const voicePuts = [];
 const json = (route, status, body) => route.fulfill({ status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }, body: JSON.stringify(body) });
 /* ---------------- fake HON conversation API (synthetic) ---------------- */
 const ANALYSTS = ['claire', 'alex', 'jordan', 'lena'];
@@ -157,6 +160,14 @@ function api(route) {
       .map(([givenName, familyName, result], i) => ({ candidateId: id(800 + i), version: 2, result, testingEventId: id(810), testingEventName: 'Synthetic spring test', startsAt: at(-day),
         studentProfileId: id(820 + i), givenName, familyName, curriculumName: 'Synthetic curriculum', targetRankId: id(830), targetRankName: 'Yellow belt' })), meta: { requestId: id(840), correlationId: id(840), limit: 50 } });
     if (path === `${prefix}/reports/operations`) return json(route, 200, { data: { operationalSnapshot: snapshot(scope) }, meta: {} });
+    if (path === `${prefix}/agent-voices`) {
+      if (method === 'PUT') {
+        const b = JSON.parse(route.request().postData() ?? '{}'); voicePuts.push({ body: b, key: route.request().headers()['idempotency-key'] });
+        if (voiceFailNext) { const f = voiceFailNext; voiceFailNext = null; return json(route, f, { code: 'SYNTHETIC' }); }
+        voiceChoices = { ...voiceChoices, [b.agentKey]: b.voiceChoice };
+      }
+      return json(route, 200, { data: { choices: voiceChoices }, meta: { requestId: id(950), correlationId: id(950), replayed: false } });
+    }
     if (path === `${prefix}/interface-theme`) {
       if (method === 'PUT') theme = JSON.parse(route.request().postData() ?? '{}').interfaceTheme ?? theme;
       return json(route, 200, { data: { interfaceTheme: theme, selectedVia: 'SETTINGS', updatedAt: iso() }, meta: {} });
@@ -211,7 +222,7 @@ const FAKE_SPEECH = () => {
   window.SpeechRecognition = FakeRecognition; window.webkitSpeechRecognition = FakeRecognition;
   class FakeUtterance { constructor(text) { this.text = text; this.pitch = 1; this.rate = 1; this.onend = null; this.onerror = null; } }
   Object.defineProperty(window, 'SpeechSynthesisUtterance', { configurable: true, writable: true, value: FakeUtterance });
-  const synth = { getVoices: () => [], cancel() {}, speak(u) { window.__spoken.push({ text: u.text, pitch: u.pitch }); setTimeout(() => u.onend?.(), 10); } };
+  const synth = { getVoices: () => [], cancel() {}, speak(u) { window.__spoken.push({ text: u.text, pitch: u.pitch, rate: u.rate }); setTimeout(() => u.onend?.(), 10); } };
   Object.defineProperty(window, 'speechSynthesis', { configurable: true, get: () => synth });
 };
 
@@ -288,6 +299,54 @@ await check('voice: a spoken question goes to the whole team and each answer is 
   assert.match((await page.evaluate(() => window.__spoken[0].text)), /^Lena says:/);
   await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: join(results, 'team-chat-voice-desktop.png'), fullPage: true }); report.screenshots.push('team-chat-voice-desktop.png');
   await ctx.close();
+});
+
+await check('voices: choose a voice per teammate, hear it first, saved to the account and used for answers', async () => {
+  conversations.length = 0; turnBodies.length = 0; voicePuts.length = 0;
+  const { ctx, page } = await openChat(viewports.desktop, 'modern');
+  const picker = chat(page).locator('[data-voice-picker]');
+  await picker.locator('summary').click();
+  await page.waitForSelector('#team-chat [data-voice-picker][data-status="READY"]');
+  assert.equal(await picker.locator('[data-voice-agent]').count(), 9, 'all nine teammates');
+  assert.equal(await picker.locator('[data-voice-choice]').count(), 27, 'three voices each');
+  const jordan = picker.locator('[data-voice-agent="jordan"]');
+  // Hear it first: nothing is saved, the sample is spoken in that voice.
+  await page.evaluate(() => { window.__spoken = []; });
+  await jordan.locator('[data-voice-hear="2"]').click();
+  await page.waitForFunction(() => window.__spoken.length === 1);
+  const sample = await page.evaluate(() => window.__spoken[0]);
+  assert.match(sample.text, /^Hi, I’m Jordan\./); assert.deepEqual([sample.pitch, sample.rate], [0.95, 0.9]);
+  assert.equal(voicePuts.length, 0, 'hearing a voice saves nothing');
+  // Choose Lively (3) for Jordan: shown at once, saved with a retry key.
+  await jordan.locator('[data-voice-choice="3"]').click();
+  await page.waitForFunction(() => document.querySelector('#team-chat [data-voice-agent="jordan"] [data-voice-choice="3"]')?.getAttribute('aria-pressed') === 'true');
+  await page.waitForFunction(() => !document.querySelector('#team-chat [data-voice-agent="jordan"] [role="status"]'));
+  assert.equal(voicePuts.length, 1); assert.deepEqual(voicePuts[0].body, { agentKey: 'jordan', voiceChoice: 3 }); assert.match(voicePuts[0].key, /^[0-9a-f-]{36}$/);
+  await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: join(results, 'voice-picker-modern-desktop.png'), fullPage: true }); report.screenshots.push('voice-picker-modern-desktop.png');
+  // A failed save brings the previous voice back and says so.
+  voiceFailNext = 500;
+  await picker.locator('[data-voice-agent="lena"] [data-voice-choice="2"]').click();
+  await picker.locator('[data-voice-agent="lena"] [role="alert"]').waitFor();
+  assert.equal(await picker.locator('[data-voice-agent="lena"] [data-voice-choice="1"]').getAttribute('aria-pressed'), 'true', 'Lena back on her usual voice');
+  // The next spoken round uses Jordan's chosen voice.
+  await chat(page).getByRole('button', { name: 'Turn on voice' }).click();
+  await page.evaluate(() => { window.__say = 'Everyone, what should we focus on this week?'; window.__spoken = []; });
+  await chat(page).getByRole('button', { name: 'Talk to the team' }).click();
+  await page.waitForFunction(() => window.__spoken.length >= 1, null, { timeout: 15000 }); await page.evaluate(() => { window.__say = ''; });
+  await page.waitForFunction(() => window.__spoken.length >= 5, null, { timeout: 15000 });
+  assert.equal(turnBodies.length, 5, 'one round only');
+  const spokenJordan = (await page.evaluate(() => window.__spoken)).find((x) => x.text.startsWith('Jordan says:'));
+  assert.deepEqual([spokenJordan.pitch, spokenJordan.rate], [1, 1.15], 'Jordan answers in the Lively voice');
+  await ctx.close();
+  // Saved to the account: a new session on another device shows the same choice.
+  const again = await openChat(viewports.phone, 'big-button');
+  const p2 = chat(again.page).locator('[data-voice-picker]');
+  await p2.locator('summary').click();
+  await again.page.waitForFunction(() => document.querySelector('#team-chat [data-voice-agent="jordan"] [data-voice-choice="3"]')?.getAttribute('aria-pressed') === 'true');
+  await noOverflow(again.page);
+  await p2.locator('[data-voice-agent="alex"]').evaluate((el) => el.scrollIntoView({ block: 'start' })); await again.page.screenshot({ path: join(results, 'voice-picker-big-button-phone.png') }); report.screenshots.push('voice-picker-big-button-phone.png');
+  await again.ctx.close();
+  voiceChoices = { hon: 1, claire: 1, alex: 1, jordan: 1, lena: 1, marcus: 1, chad: 1, maya: 1, kai: 1 };
 });
 
 await check('an unknown outcome stops the round and Retry resends the exact same request', async () => {

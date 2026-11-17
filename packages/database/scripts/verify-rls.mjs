@@ -386,6 +386,7 @@ const expectedRlsTables = [
   'people',
   'planned_absence_requests',
   'principal_interface_preferences',
+  'principal_agent_voice_preferences',
   'principal_role_grants',
   'programs',
   'revenue_plans',
