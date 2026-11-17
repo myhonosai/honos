@@ -7,6 +7,7 @@ import { publicFormTransport } from './marketing/public-form-transport.js';
 import { publicSiteTransport } from './website/public-site-transport.js';
 import { publicEventTransport } from './schedule/public-event-transport.js';
 import { publicBookingTypeTransport } from './schedule/public-booking-type-transport.js';
+import { walkInKioskTransport } from './walk-in-kiosk/walk-in-kiosk-transport.js';
 import { kioskTransport } from './kiosk/kiosk-transport.js';
 import { paymentWebhookTransport } from './payments/payment-webhook-transport.js';
 import { shopifyWebhookTransport } from './commerce/shopify/shopify-webhook.js';
@@ -32,6 +33,7 @@ async function bootstrap(): Promise<void> {
   app.use(publicSiteTransport());
   app.use(publicEventTransport());
   app.use(publicBookingTypeTransport());
+  app.use(walkInKioskTransport());
   app.use(paymentWebhookTransport());
   app.use(shopifyWebhookTransport());
   app.use(communicationWebhookTransport());

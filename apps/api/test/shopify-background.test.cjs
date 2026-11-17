@@ -9,13 +9,13 @@ const worker = require('../dist/commerce/shopify/shopify-worker.js');
 const { ShopifyWebhookController } = require('../dist/commerce/shopify/shopify-webhook.controller.js');
 const { ShopifyService } = require('../dist/commerce/shopify/shopify.service.js');
 
-// 0425 SH1b: signed webhooks and background sync. Local only: the fake store and stub stores. Nothing calls Shopify.
+// 0433 SH1b: signed webhooks and background sync. Local only: the fake store and stub stores. Nothing calls Shopify.
 const SHOP = 'ima-test.myshopify.com';
 const SCHOOL = '11111111-1111-4111-8111-111111111111';
 const CONN = '22222222-2222-4222-8222-222222222222';
 const SECRET = 's'.repeat(40);
 
-test('0425 webhook signature: Shopify rule (base64 HMAC-SHA256 of the raw body), every refusal', () => {
+test('0433 webhook signature: Shopify rule (base64 HMAC-SHA256 of the raw body), every refusal', () => {
   const fake = new adapter.FakeShopify('app', SECRET);
   const d = fake.webhook('products/update', SHOP, 'b54557e4-bdd9-4b37-8a5f-bf7d70bcd043', Date.UTC(2026, 10, 16, 12));
   assert.equal(d.headers['x-shopify-hmac-sha256'], createHmac('sha256', SECRET).update(d.body).digest('base64'));
@@ -56,7 +56,7 @@ function send(server, { method = 'POST', path = '/v1/commerce/webhooks/shopify',
   });
 }
 
-test('0425 webhook transport keeps the exact bytes and refuses anything but a plain JSON POST to the one path', async () => {
+test('0433 webhook transport keeps the exact bytes and refuses anything but a plain JSON POST to the one path', async () => {
   const server = await serve();
   try {
     const ok = await send(server);
@@ -88,7 +88,7 @@ function store(over = {}) {
 }
 const fakeApp = () => { const app = adapter.shopifyAppFromEnvironment({ HON_SHOPIFY_FAKE: '1' }); return app; };
 
-test('0425 webhook endpoint: 401 on a bad signature, 200 after recording, 503 to be delivered again; only verified fields reach the database', async () => {
+test('0433 webhook endpoint: 401 on a bad signature, 200 after recording, 503 to be delivered again; only verified fields reach the database', async () => {
   const app = fakeApp(), s = store(), c = new ShopifyWebhookController(s, app);
   const d = app.fake.webhook('orders/create', SHOP, 'w-1');
   assert.deepEqual(await c.receive({ body: d.body, headers: d.headers }), { received: true, outcome: 'SYNC_REQUESTED', replayed: false });
@@ -116,7 +116,7 @@ async function claimFor(app, now, { expiresInMs = 3600_000 } = {}) {
     credential: { keyId: app.vault.keyId, sealed: app.vault.seal({ connectionId: CONN, shopDomain: SHOP }, pair), version: 1, accessExpiresAt: pair.accessExpiresAt, refreshExpiresAt: pair.refreshExpiresAt } };
 }
 
-test('0425 background sync: claims due stores, writes every page under the lease, refreshes near expiry, stops when nothing is due', async () => {
+test('0433 background sync: claims due stores, writes every page under the lease, refreshes near expiry, stops when nothing is due', async () => {
   let now = Date.UTC(2026, 10, 16, 12);
   const app = fakeApp(); app.fake.now = () => now;
   const first = await claimFor(app, now, { expiresInMs: 60_000 });
@@ -149,7 +149,7 @@ test('0425 background sync: claims due stores, writes every page under the lease
   assert.equal((await new worker.ShopifyBackgroundSync(off, app).runOnce()).claimed, 0);
 });
 
-test('0425 background sync is on only with the worker login and a valid poll interval; the page says so', async () => {
+test('0433 background sync is on only with the worker login and a valid poll interval; the page says so', async () => {
   const on = { HON_COMMUNICATION_WORKER_DATABASE_URL: 'postgresql://w@db/x', HON_SHOPIFY_SYNC_POLL_SECONDS: '60' };
   assert.equal(worker.shopifyBackgroundEnabled(on), true);
   for (const bad of [{}, { ...on, HON_COMMUNICATION_WORKER_DATABASE_URL: '' }, { ...on, HON_SHOPIFY_SYNC_POLL_SECONDS: '10' },

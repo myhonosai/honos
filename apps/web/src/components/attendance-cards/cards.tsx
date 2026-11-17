@@ -14,7 +14,7 @@ import { cardsText, type CardsKey } from './copy';
 import { CardsError, cardsApi, keepForRetry, type CardsApi, type CardsErrorKind } from './http';
 import styles from './cards.module.css';
 
-export type Look = Readonly<{ codeType: AttendanceCardCodeType; showPhoto: boolean; showLogo: boolean; design: AttendanceCardDesign }>;
+export type Look = Readonly<{ codeType: AttendanceCardCodeType; showPhoto: boolean; showLogo: boolean; design: AttendanceCardDesign; photoApprovalRequired: boolean }>;
 export type PrintedCard = Readonly<{ studentProfileId: string; name: string; initials: string; code: string; photo: string | null }>;
 
 /** One printed card (CR80 size). The code is drawn here from its digits; nothing is fetched by the face itself. */
@@ -100,6 +100,7 @@ export function CardsView(p: CardsViewProps): React.ReactElement {
           </fieldset>
           <p className={styles.meta}>{t('codeHelp')}</p>
           <label className={styles.choice}><input type="checkbox" checked={p.look.showPhoto} disabled={p.locked} onChange={e => p.onLook?.({ ...p.look, showPhoto: e.currentTarget.checked })}/>{t('showPhoto')}</label>
+          <label className={styles.choice}><input type="checkbox" checked={p.look.photoApprovalRequired} disabled={p.locked} onChange={e => p.onLook?.({ ...p.look, photoApprovalRequired: e.currentTarget.checked })} data-testid="photo-approval"/>{t('photoApproval')}</label>
           <label className={styles.choice}><input type="checkbox" checked={p.look.showLogo} disabled={p.locked} onChange={e => p.onLook?.({ ...p.look, showLogo: e.currentTarget.checked })}/>{t('showLogo')}</label>
           {p.look.showLogo && !r.settings.logoUrl ? <p className={styles.meta}>{t('noLogo')}</p> : null}
           <div className={styles.field}><label htmlFor={`${base}-design`}>{t('design')}</label>
@@ -144,7 +145,7 @@ type Request = { op: 'look'; look: Look; expectedVersion: number } | { op: 'prin
   | { op: 'consent'; studentProfileId: string; given: boolean; expectedVersion: number };
 type Pending = Readonly<{ key: string; schoolId: string } & Request>;
 type Lock = 'NONE' | 'SENDING' | 'KEPT';
-const lookOf = (s: AttendanceCardSettings): Look => ({ codeType: s.codeType, showPhoto: s.showPhoto, showLogo: s.showLogo, design: s.design });
+const lookOf = (s: AttendanceCardSettings): Look => ({ codeType: s.codeType, showPhoto: s.showPhoto, showLogo: s.showLogo, design: s.design, photoApprovalRequired: s.photoApprovalRequired });
 
 /**
  * The card maker for the school the shell verified. Codes live only in this tab's memory until printed: a school change,
@@ -191,7 +192,7 @@ export function AttendanceCards({ api = cardsApi, photos = photoApi }: { api?: C
       const s = byId.get(c.studentProfileId);
       const name = s ? nameOf(s) : '', initials = s ? initialsOf(s.givenName, s.familyName) : '';
       let photo: string | null = null;
-      // The server decided whether this card carries the photo (saved look, photo on file, consent where the place needs it).
+      // The server decided whether this card carries the photo (saved look, photo on file, approval when the school asks for it).
       if (c.printPhoto && s?.hasPhoto) {
         try { const r = await photos.read({ schoolId: school }, s.personId, AbortSignal.timeout(15000), owned); photo = r.photo ? `data:${r.photo.mediaType};base64,${r.photo.data}` : null; } catch { photo = null; }
       }
@@ -237,7 +238,7 @@ export function AttendanceCards({ api = cardsApi, photos = photoApi }: { api?: C
     pending.current = { ...request, key: globalThis.crypto.randomUUID(), schoolId };
     void send();
   };
-  const effectiveLook = look ?? (ready ? lookOf(ready.settings) : { codeType: 'QR', showPhoto: true, showLogo: true, design: 'CLASSIC' } as Look);
+  const effectiveLook = look ?? (ready ? lookOf(ready.settings) : { codeType: 'QR', showPhoto: true, showLogo: true, design: 'CLASSIC', photoApprovalRequired: false } as Look);
   const withoutCard = useMemo(() => ready?.students.filter(s => !s.card).map(s => s.studentProfileId).slice(0, ATTENDANCE_CARD_MAX_PER_PRINT) ?? [], [ready]);
 
   return <CardsView language={preferences.language} read={read} look={effectiveLook} selected={selected} confirmCancel={confirmCancel} outcome={outcome}

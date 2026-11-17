@@ -4010,7 +4010,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- Shopify background sync and webhooks exact verification (0425): the runtime reaches no new table or function; the
+-- Shopify background sync and webhooks exact verification (0433): the runtime reaches no new table or function; the
 -- five worker functions are executable by hon_communication_worker only (when that login exists).
 DO $$ DECLARE f text; t text; w oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_communication_worker');
   worker text[]:=ARRAY['hon.record_shopify_webhook(jsonb)','hon.claim_shopify_background_sync()','hon.rotate_shopify_background_credential(jsonb)',
@@ -4130,3 +4130,282 @@ BEGIN
     RAISE EXCEPTION 'Staff permissions list body drift: %',f; END IF;
 END $$;
 -- End staff assignable permissions list exact verification.
+-- Walk-in kiosk exact verification (0414)
+DO $$ DECLARE f text; t text;
+  entry text[]:=ARRAY['hon.save_walkin_kiosk_settings(text,jsonb,text,uuid,uuid)','hon.start_walkin_kiosk_device(text,jsonb,text,uuid,uuid)',
+    'hon.end_walkin_kiosk_device(text,uuid,jsonb,text,uuid,uuid)','hon.set_walkin_visit_desk_paid(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.read_walkin_kiosk(text)','hon.read_walkin_kiosk_settings(text)','hon.read_walkin_visit(text,uuid)',
+    'hon.read_walkin_kiosk_terminal(text)','hon.submit_walkin_visit(text,jsonb,text)'];
+  helpers text[]:=ARRAY['hon.walkin_text_ok(jsonb,integer,integer,boolean)','hon.guard_walkin_kiosk()','hon.walkin_utc(timestamp with time zone)',
+    'hon.walkin_principal_holds(uuid,uuid,uuid,text)','hon.require_walkin_actor(text,text)',
+    'hon.walkin_command_begin(text,text,text,text)',
+    'hon.walkin_command_finish(text,text,text,uuid,jsonb,text,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)',
+    'hon.walkin_settings_json(hon.walkin_kiosk_settings)','hon.walkin_device_json(hon.walkin_kiosk_devices)',
+    'hon.walkin_visit_json(hon.walkin_visits)','hon.walkin_settings_input(jsonb)','hon.walkin_live_device(text)',
+    'hon.take_walkin_kiosk_rate(uuid,text,integer)','hon.walkin_name_ok(jsonb)','hon.walkin_birth_date(jsonb,date)',
+    'hon.walkin_visit_input(hon.walkin_kiosk_settings,jsonb,date)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe walk-in kiosk entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY helpers LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe walk-in kiosk helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['walkin_kiosk_settings','walkin_waiver_texts','walkin_kiosk_devices','walkin_visits','walkin_visit_participants','walkin_waiver_signatures','walkin_kiosk_rates'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe walk-in kiosk table: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End walk-in kiosk exact verification.
+-- Automation workflows and contact tags exact verification (AU-1 0416): five private forced-RLS tables the runtime cannot
+-- touch, twelve runtime entry points, and private helpers, guards, the actor check and the engine-only contact_tag_apply.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_automation_workflow_history()',true,false,'search_path=pg_catalog, hon','286927d43da2244d7c976f4e14e3989a3506ca528fa4906b1b7e847e0305cf43'),
+('hon.guard_automation_workflow()',true,false,'search_path=pg_catalog, hon','81fe707261e528747c73e0b957d93cfcc57d69d1fd86309e3d8160420c7bef98'),
+('hon.require_automation_workflow_actor(text,text)',true,false,'search_path=pg_catalog, hon','258b1d6b6f0d2abd06636489969a351f27d3ae0a909a9ec06561acc4a3ae47bf'),
+('hon.automation_invalid(text)',false,false,'search_path=pg_catalog, hon','0f5d594cb0b1a5cd740550aa23bfbab0a61bf822f6bf380b824135a1a6acf5ef'),
+('hon.automation_keys(jsonb,text[])',false,false,'search_path=pg_catalog, hon','7fc8f80386425cd60f870a68b094bd0cf9872a639cffe1d102a52c25e0ceed2e'),
+('hon.automation_int(jsonb,integer,integer)',false,false,'search_path=pg_catalog, hon','764aedb78b2fed9116d90ad7dbc096dbde300580e5b95c6e1f128503dbc83a45'),
+('hon.automation_uuid(jsonb)',false,false,'search_path=pg_catalog, hon','7a661b3976739abb58c7969252328431a554fd9e9ebcb0f7672d3f7f346df3ba'),
+('hon.automation_enum(jsonb,text[])',false,false,'search_path=pg_catalog, hon','891c8038d1a890a45222528aafa9856eaa76b7c825d3fd5084d6f1bb74844e43'),
+('hon.automation_text(jsonb,integer,integer,boolean)',false,false,'search_path=pg_catalog, hon','cbb4cb9e2349fdc7c2422033afc0d1a77f273f2d409c0691629e8827742ac3a1'),
+('hon.automation_tag_ok(jsonb)',false,false,'search_path=pg_catalog, hon','985cf4e1bef08e166e5ba39d7e8fc3039b29d4c0e2e329f2fd71254d494171ed'),
+('hon.automation_tool_key_ok(jsonb)',false,false,'search_path=pg_catalog, hon','4f50dcf44e8b3cdb72c7d7646682ef4341834c0b197e992d4634dadf1d899191'),
+('hon.automation_local_time(jsonb)',false,false,'search_path=pg_catalog, hon','bdff9a57b7b35c3e473d96a5d07794441a3d8f268c29148bfe549c138aa46c0a'),
+('hon.automation_date(jsonb)',false,false,'search_path=pg_catalog, hon','2d19fde6d49d843494dc435c9e997868a340fcf2f3a2dc800df53c9b0a195711'),
+('hon.automation_list(jsonb,integer,integer,text,text[])',false,false,'search_path=pg_catalog, hon','b849daf47d93c984a9a9f435d708c56e842db0ecbb63d00fdc9dd078bcf98585'),
+('hon.automation_condition_ok(jsonb)',false,false,'search_path=pg_catalog, hon','eed03275166b416035957830f59432e09e9bcc87d0be47dece7f05c3e633d1a7'),
+('hon.automation_trigger_ok(jsonb)',false,false,'search_path=pg_catalog, hon','e24930c467c84a3d9f86b55e11e7c65ed3d302df9d76e9d9a5fb3e2771eac7e8'),
+('hon.automation_content_ok(jsonb,boolean)',false,false,'search_path=pg_catalog, hon','2c6f8abc08c73d81293577aecb30b681d721cc51b85b423028c525ac25b4200e'),
+('hon.automation_step_edges(jsonb)',false,false,'search_path=pg_catalog, hon','6176fc7b319072743308e16c750e597a27f6f4c3725393593a88153977702beb'),
+('hon.validate_automation_definition(jsonb)',false,false,'search_path=pg_catalog, hon','f55a4b450d85642b5515d5170bcd5e54649924ce1c5d2113a96587e81faf9898'),
+('hon.automation_name(jsonb)',false,false,'search_path=pg_catalog, hon','679b7fdace95f156667ebb956cdac2be8eff3aafac92dae9424ae823fa4158bc'),
+('hon.automation_check_call(text,uuid,uuid)',false,false,'search_path=pg_catalog, hon','512ab78b8f7d2e20aca3df3cb87164a4fc51a65891f129005440e313765f99ac'),
+('hon.automation_claim(uuid,uuid,uuid,text,text,text)',false,false,'search_path=pg_catalog, hon','f845c81992070380c473f0d785e5bbff0ec3f9a6c03157d3eb88e3aa4c9cd333'),
+('hon.automation_finish(uuid,uuid,uuid,text,jsonb)',false,false,'search_path=pg_catalog, hon','34dc06af5237a961fb6c53ae6a24441e606dd6a7f263267bc99d6c853ad23738'),
+('hon.automation_fp(text,text)',false,false,'search_path=pg_catalog, hon','96f163c8373d89eb9643ddab2a1bb03013522192a926ec29483c1deec61e3057'),
+('hon.automation_workflow_json(hon.automation_workflows)',false,false,'search_path=pg_catalog, hon','eee1fb610b04223cc5ea724c8db901042f459fb6235617f80253e46081e7f312'),
+('hon.automation_version_json(hon.automation_workflow_versions)',false,false,'search_path=pg_catalog, hon','4dd6d6539ae99d60ae096c8d00ac19c8f580cd5db302ca7b4597c26432207ce3'),
+('hon.automation_detail_json(hon.automation_workflows)',false,false,'search_path=pg_catalog, hon','0cc676b7c6f63af72d6d5b65b478ca5ba49e127783492897e4e4dfd0fd366165'),
+('hon.automation_evidence(uuid,uuid,uuid,text,text,uuid,integer,jsonb,uuid,uuid)',false,false,'search_path=pg_catalog, hon','b70340cfb8ebe3cb260c5701a60e87183a2f75433aa4b0cfedc688ec51abcf9f'),
+('hon.create_automation_workflow(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','5805e6d0fe967db896e8d9bbeef4e0f5ec61a6f5c5dc5a551ed60b99f464e7eb'),
+('hon.automation_lock_workflow(uuid,uuid,uuid,jsonb)',false,false,'search_path=pg_catalog, hon','c7eee4e87106cc4587adca944c3be8119bbc9490e4b36b43cba917ee3417347e'),
+('hon.automation_append_version(hon.automation_workflows,text,jsonb,integer,uuid,uuid)',false,false,'search_path=pg_catalog, hon','ced296a8261b9c624a2d0b9cc9ae1eb21efe25dd2ee7db44536920f9deb7463f'),
+('hon.save_automation_workflow_version(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','a6e8df351debd63ca719f3ef34ee23a136e3a6888f692fe32bda56bc234034fe'),
+('hon.restore_automation_workflow_version(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','a5421cddb45f1c547a3d355fe2f5ce564f80c48bf5d16bab643e1c524ecf5f2c'),
+('hon.archive_automation_workflow(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','7f83d88e6fde8c3149d4c8920f12d7dbd260ce581690e1898b96aa807e0444ea'),
+('hon.read_automation_workflows(text)',true,true,'search_path=pg_catalog, hon','dcefc51d72473a215c2b51bf5a46875561e20c6bae0aaee641906ded1d4cff24'),
+('hon.read_automation_workflow(text,uuid)',true,true,'search_path=pg_catalog, hon','8485d3677a4fa8903f69af8bf4b2d11f0335ee06eeb8c37e40bba42104ecb0d3'),
+('hon.read_automation_workflow_version(text,uuid,integer)',true,true,'search_path=pg_catalog, hon','0601497452f7c676efeed5f48940475744389349ac2dffa92b1190f7959b5421'),
+('hon.contact_tag_list_json(uuid,uuid,uuid)',false,false,'search_path=pg_catalog, hon','f93737e347664ae233ecd29bc6a43ac1407f9e65a4679b04cf497abe86b2eb06'),
+('hon.contact_tag_apply(uuid,uuid,uuid,text,boolean,uuid,text,uuid,uuid)',false,false,'search_path=pg_catalog, hon','20f2c6bbce37e5fcf443ec65bee77d098bbb57dfc49e92982159ff001fb20206'),
+('hon.change_contact_tag(text,uuid,jsonb,boolean,text,uuid,uuid)',true,false,'search_path=pg_catalog, hon','21f3d4f248df3b7eca44de3af71de322a2818e7386993c6a05ac6fd1958632fc'),
+('hon.add_contact_tag(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','250eabeb5df2d7511d881e3d3be408a0bbcca89339450e2438bd941b3ddceeac'),
+('hon.remove_contact_tag(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','c06d434e63fdb93c47f21c675bd35441aca7d9456ba19e7c95162c269244d5ad'),
+('hon.read_school_contact_tags(text)',true,true,'search_path=pg_catalog, hon','32c83a0c188d93e3e6776fa7733c4ed43e979d3c39486ffc5446e2a7c7ed0be2'),
+('hon.read_person_contact_tags(text,uuid)',true,true,'search_path=pg_catalog, hon','9376d063c5c7db766b1e4c5a83db9e00327036281b738ebbea8f57ab89f74627'),
+('hon.lookup_contact_tags(text,jsonb)',true,true,'search_path=pg_catalog, hon','1cba22acd17d524628af822f92673c098487f2645fb51b8775d1296e2ce66795')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe automation workflow function: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['automation_workflows','automation_workflow_versions','automation_commands','contact_tags','contact_tag_events'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe automation workflow table: %',t;
+    END IF;
+  END LOOP;
+  -- Guard triggers: no delete or truncate, immutable history and commands, forward-only workflows.
+  IF (SELECT count(*) FROM pg_trigger g WHERE NOT g.tgisinternal AND g.tgenabled='O' AND (g.tgrelid::regclass::text,g.tgname,g.tgfoid::regproc::text) IN (
+      ('hon.automation_workflows','guarded','hon.guard_automation_workflow'),('hon.automation_workflows','no_truncate','hon.guard_automation_workflow_history'),
+      ('hon.automation_workflow_versions','guarded','hon.guard_automation_workflow_history'),('hon.automation_workflow_versions','no_truncate','hon.guard_automation_workflow_history'),
+      ('hon.automation_commands','guarded','hon.guard_automation_workflow_history'),('hon.automation_commands','no_truncate','hon.guard_automation_workflow_history'),
+      ('hon.contact_tags','no_truncate','hon.guard_automation_workflow_history'),
+      ('hon.contact_tag_events','guarded','hon.guard_automation_workflow_history'),('hon.contact_tag_events','no_truncate','hon.guard_automation_workflow_history'))) <> 9 THEN
+    RAISE EXCEPTION 'Unsafe automation workflow table posture: guard triggers'; END IF;
+END $$;
+-- End automation workflows and contact tags exact verification.
+-- Lead pipeline board exact verification (0417)
+DO $$ DECLARE f text;
+  entry text[]:=ARRAY['hon.read_crm_pipeline_board(text,uuid,text)','hon.move_crm_lead_stage(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.save_crm_pipeline_stages(text,uuid,jsonb,text,uuid,uuid)'];
+  helpers text[]:=ARRAY['hon.crm_board_ts(timestamptz)','hon.require_crm_board_actor(text,text)','hon.lock_crm_board_actor(text,text)',
+    'hon.crm_board_stages_json(uuid)','hon.guard_crm_lead_stage_update()','hon.guard_crm_pipeline_stage_update()','hon.crm_stage_name_ok(jsonb)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe lead pipeline board entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY helpers LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe lead pipeline board helper: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='crm_lead_stage_update_guard' AND tgrelid='hon.crm_leads'::regclass AND tgenabled='O')
+    OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='crm_pipeline_stage_update_guard' AND tgrelid='hon.crm_pipeline_stages'::regclass AND tgenabled='O') THEN
+    RAISE EXCEPTION 'Lead pipeline board guards missing'; END IF;
+END $$;
+-- End lead pipeline board exact verification.
+-- Conversation AI training exact verification (0420): private helpers, five private forced-RLS tables, seven staff runtime
+-- entry points and two HQ program entry points; nothing is runnable by the communication worker.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.conversation_ai_text_ok(text,integer)',false,false,'search_path=pg_catalog','d4a113ad9c58a2668356d92d9772cec0f4b5e291e3249e283c6ecce2f7505657'),
+('hon.conversation_ai_words_ok(text[])',false,false,'search_path=pg_catalog','266cb23a85acc955d62d82d4f59d93b0bd9979b5dc89f1346a98c9d1f1d1c2cc'),
+('hon.conversation_ai_locales_ok(text[])',false,false,'search_path=pg_catalog','c7c2f5045b68e3601a8803dc13f1ccd37e92b99210cdf36c4fc562993f04fe86'),
+('hon.guard_conversation_ai_program_changes()',false,false,'search_path=pg_catalog','70037e443cda7813204dc1fd7061086c36783179711426a26261fdebd1b9e623'),
+('hon.guard_conversation_ai_row()',false,false,'search_path=pg_catalog, hon','89b9608c2dc6519af65ca86ebc77a14ba2f8e694d9a642c6e302b5f275e872ac'),
+('hon.require_conversation_ai_actor(text,boolean)',true,false,'search_path=pg_catalog, hon','9be646d3c4c142a547ca795ea0081c72f8b4b574fe3d80438451608924b4ebf8'),
+('hon.conversation_ai_finish(uuid,text,text,uuid,integer,text,jsonb,jsonb,text,jsonb,uuid,uuid)',true,false,'search_path=pg_catalog, hon','979e7d01ab0b86afb7fd11a391c54b5d469e75be3a4c58e3f3202f407135d1be'),
+('hon.conversation_ai_settings_json(hon.school_conversation_ai_settings)',true,false,'search_path=pg_catalog, hon','f2a08ffeeed1e5dc9686e76dee2eb7eda01700ade15faa9ce7aee02bd4a10876'),
+('hon.conversation_ai_item_json(hon.school_ai_training_items)',true,false,'search_path=pg_catalog, hon','a5c549b2a7a713e96bd8f27248408f7ffbf4d6827dda51f9b46869b54a204e49'),
+('hon.school_ai_knowledge(uuid,uuid)',true,false,'search_path=pg_catalog, hon','45250984d5ed3c5b04f6b3322b41e4440352c5115437114483299e44264363ca'),
+('hon.read_school_conversation_ai(text)',true,true,'search_path=pg_catalog, hon','030d7c4b604aa684cda7517cfc84bc50ae9c7a4da055886ab245d0ded1a130cd'),
+('hon.read_school_ai_knowledge(text)',true,true,'search_path=pg_catalog, hon','fa35c49e849ee56a6abbe1102abcaaf7418eff9393e6a9d5c4f164e87564c3b6'),
+('hon.set_school_conversation_ai_settings(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','e22a9be625f6ad1fdd2072b86efffbb56fe02e740fae1c88d11f0bfd6a093e72'),
+('hon.upload_school_ai_training_file(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','6cc5ad16f4d37e8b39a3d53f4a8e96ed9324f9df28cda1ad36f4d81c744f63b4'),
+('hon.read_school_ai_training_file(text,uuid)',true,true,'search_path=pg_catalog, hon','eb165a61d52883c3edebf72314b45945ecf85cd3f74ef5c6bc3ffdfec47b169b'),
+('hon.save_school_ai_training_item(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','4da9375ad2232cd6209811c17250a8d0a3ab2d0dab389f896977b1b37a9c99da'),
+('hon.set_school_ai_training_item_status(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','5e8900f5cbeb73f430ce8a3e07f3f977fe03193f194027041382147968a5202a'),
+('hon.read_conversation_ai_program_from_hq(text)',true,true,'search_path=pg_catalog, hon','6d656efff26b189c213664fc87d458a70adac3ef7faa5490dd9d4c64781822ba'),
+('hon.command_conversation_ai_program(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','dfca015e319d187c3c1ab44d552ca5d8ccc6407225ca2b8543fd6c3d5e1e91b9')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.is_grantable OR a.privilege_type<>'EXECUTE'
+          OR NOT (a.grantee=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') AND f.runtime_allowed)))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe conversation AI function: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['conversation_ai_program','conversation_ai_program_changes','school_conversation_ai_settings','school_ai_training_files','school_ai_training_items'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe conversation AI table: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End conversation AI training exact verification.
+-- Automation engine exact verification (AU-2 0423): three private forced-RLS engine tables nobody but the owner touches, four runtime
+-- entry points (turn on, pause, run history), two definer engine functions only the hon_automation_worker login (014) may call,
+-- private helpers, forward-only guards, the AUTOMATION principal and the message origin columns.
+DO $$ DECLARE f record; safe boolean; t text; worker oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_automation_worker'); BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_automation_run()',true,false,false,'search_path=pg_catalog, hon','a6bd54cdb04bfbe34a3a7ec951404996b4e889343e3eccf8c180b15ada293b5f'),
+('hon.automation_unavailable(jsonb)',false,false,false,'search_path=pg_catalog, hon','84aeceae6da7a4aa63f8bd43167713dd1d61beefe566c68baad79e08236dfad9'),
+('hon.automation_references_ok(uuid,uuid,uuid,jsonb)',false,false,false,'search_path=pg_catalog, hon','af5fd466e05f55bd1afad7b4515edcc9606e71a86cb59dc4150e1d744b8976eb'),
+('hon.automation_activator_ok(uuid,uuid,uuid)',false,false,false,'search_path=pg_catalog, hon','95ecbf01f8b3da3dcee453618794ffb01359d92f0c9e144f576591434ece9b39'),
+('hon.automation_trial_booked(uuid,uuid,uuid,timestamp with time zone)',false,false,false,'search_path=pg_catalog, hon','8c640f7d5e3056dfde834c683dfea98e68c609d89cc6fa13c21a5d4eec9acbb6'),
+('hon.automation_enrolled(uuid,uuid,uuid,timestamp with time zone)',false,false,false,'search_path=pg_catalog, hon','eaf38840dd7fb0de0866919f56d8d9636338545083cacc8cf4054e62f9361251'),
+('hon.automation_condition_holds(uuid,uuid,uuid,timestamp with time zone,jsonb)',false,false,false,'search_path=pg_catalog, hon','16d3b51b7a8a8b5030afef5719c62efcbb815c7c459cfac1ad1d133669bd2538'),
+('hon.automation_exit_reached(uuid,uuid,uuid,timestamp with time zone,jsonb)',false,false,false,'search_path=pg_catalog, hon','45607ebf5b8c08f2470501eb7886a37024d7a398992c2dd8b828d2d99e6a38b0'),
+('hon.automation_start_run(hon.automation_workflows,uuid,text,uuid,uuid,integer,timestamp with time zone)',false,false,false,'search_path=pg_catalog, hon','fbfddd89366633248d106c8421b85fe818d80bc59813d023a3d6f83a8eac1001'),
+('hon.automation_event_subject(hon.outbox_events)',false,false,false,'search_path=pg_catalog, hon','1296bc299e7375525760dab00eab860121fa686e03ee2f7eaa1c1ca0287e71af'),
+('hon.consume_automation_events(integer)',true,false,true,'search_path=pg_catalog, hon','473741f525f144d59fa64853053cdc73425a1a5546336a44a9cd6847eeca6f5c'),
+('hon.automation_render(text,text,text)',false,false,false,'search_path=pg_catalog, hon','932d44db812e9a31d07e4b8aba02cb3282b6ed865696cc148fc9627e0e667acf'),
+('hon.automation_next_local_time(text,text)',false,false,false,'search_path=pg_catalog, hon','27a2abf40c7f022c0f2c412971924af141a652bc2d421d7eb02b6edabe6857b7'),
+('hon.automation_end_run(uuid,text,text)',false,false,false,'search_path=pg_catalog, hon','d5241ff75d5dcae0896e26b28d5446771430d479d3d21296521a9d0bafec8ca1'),
+('hon.automation_engine_pause(uuid,text)',false,false,false,'search_path=pg_catalog, hon','f32c46e1b872cc41c16e6641b379f62c1b171cdec3315efb26bda435c78185f7'),
+('hon.automation_execute_step(hon.automation_run_steps,hon.automation_runs,hon.automation_workflows,jsonb)',false,false,false,'search_path=pg_catalog, hon','36158f398669f704dd5ccd404643bef493266323542c1d3a594038f16c19616a'),
+('hon.run_due_automation_steps(integer)',true,false,true,'search_path=pg_catalog, hon','37164b7b3a64f7a84c2ca363a15d089b5a17c32ca96ef04cbf90d20c62771b59'),
+('hon.activate_automation_workflow(text,uuid,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','f942e4fb0ac8486df045340583d11902b50e989855a9c6e7a17cc3e007b7c92c'),
+('hon.pause_automation_workflow(text,uuid,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','58a18e20d5c235bef7f381423733f845f5a792ee42841ff4b175b2f378d7ecef'),
+('hon.automation_run_json(hon.automation_runs)',false,false,false,'search_path=pg_catalog, hon','020200561dae1423bd5d28222a408e3b6b136dd37ced035078caffa1762abde2'),
+('hon.read_automation_runs(text,uuid)',true,true,false,'search_path=pg_catalog, hon','bea0d2780b582e32d5f7792a3a5d6aa88bf4b28db81af52f4dc4fdb9759a7564'),
+('hon.read_automation_run(text,uuid)',true,true,false,'search_path=pg_catalog, hon','c117ec20a209b32f71b486457615596b4a55201c149e1bd87e0e410fe6780d45')) e(signature,definer,runtime_allowed,worker_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND (worker IS NULL OR has_function_privilege(worker,p.oid,'EXECUTE')=f.worker_allowed)
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.is_grantable OR a.privilege_type<>'EXECUTE'
+          OR NOT ((a.grantee=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') AND f.runtime_allowed) OR (a.grantee=worker AND f.worker_allowed))))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe automation engine function: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['automation_event_receipts','automation_runs','automation_run_steps'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES')
+      OR (worker IS NOT NULL AND (has_table_privilege(worker,'hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+        OR has_any_column_privilege(worker,'hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES'))) THEN
+      RAISE EXCEPTION 'Unsafe automation engine table: %',t;
+    END IF;
+  END LOOP;
+  -- Guard triggers: receipts never change; runs and steps only move forward; nothing is truncated.
+  IF (SELECT count(*) FROM pg_trigger g WHERE NOT g.tgisinternal AND g.tgenabled='O' AND (g.tgrelid::regclass::text,g.tgname,g.tgfoid::regproc::text) IN (
+      ('hon.automation_event_receipts','guarded','hon.guard_automation_workflow_history'),('hon.automation_event_receipts','no_truncate','hon.guard_automation_workflow_history'),
+      ('hon.automation_runs','guarded','hon.guard_automation_run'),('hon.automation_runs','no_truncate','hon.guard_automation_workflow_history'),
+      ('hon.automation_run_steps','guarded','hon.guard_automation_run'),('hon.automation_run_steps','no_truncate','hon.guard_automation_workflow_history'))) <> 6 THEN
+    RAISE EXCEPTION 'Unsafe automation engine table posture: guard triggers'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM hon.principals WHERE id='00000000-0000-4000-8000-000000000368' AND principal_type='AUTOMATION')
+    OR (SELECT count(*) FROM pg_attribute WHERE attrelid='hon.communication_messages'::regclass AND NOT attisdropped
+      AND attname IN ('origin_kind','origin_id','email_subject'))<>3
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.communication_messages'::regclass AND conname='communication_messages_origin_shape' AND convalidated) THEN
+    RAISE EXCEPTION 'Unsafe automation engine posture: principal or message origin'; END IF;
+  IF worker IS NOT NULL AND (SELECT r.rolsuper OR r.rolbypassrls OR r.rolinherit OR r.rolcreaterole OR r.rolcreatedb OR r.rolreplication
+      OR EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid) FROM pg_roles r WHERE r.oid=worker) THEN
+    RAISE EXCEPTION 'Unsafe automation engine posture: hon_automation_worker role'; END IF;
+END $$;
+-- End automation engine exact verification.
+-- Contact message history exact verification (0424): private helpers, one private forced-RLS table, three staff runtime entry
+-- points; the email subject lookup is runnable only by hon_communication_worker (013), never by the runtime.
+DO $$ DECLARE f record; safe boolean; worker_oid oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_communication_worker'); BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.contact_message_standard_subject(text)',false,false,false,'search_path=pg_catalog','75a03c8ff8037f501859eac4177a9fe7350b2f57ad13777c78c376b5ce24b4f6'),
+('hon.communication_email_subject(uuid,uuid)',true,false,true,'search_path=pg_catalog, hon','3f8257e6fc567854999eca0621dd2dfd9ea9a381f7cd81c597d1878a8c5add44'),
+('hon.contact_message_delivery_state(hon.communication_messages)',true,false,false,'search_path=pg_catalog, hon','cbf1526b9d0ea8805b256bb9fcb81962eb8c7d8d60a8dfe9ee61c3e5368b0241'),
+('hon.contact_message_origin(hon.communication_messages)',true,false,false,'search_path=pg_catalog, hon','9ab3dda1fe1543626dffeda4e73aa4c8f8ddb86c50d97f42c937fb8f68770b35'),
+('hon.contact_message_rows(uuid,boolean)',true,false,false,'search_path=pg_catalog, hon','970a90640772f02c398e111b7e2f140d57551583664d11c04143952e386d537e'),
+('hon.contact_message_person(uuid)',true,false,false,'search_path=pg_catalog, hon','fc369b1b98107b0aa100f409cd25c2ced5ae8dfb506beff714d6cb8c18f3d7b0'),
+('hon.read_contact_message_history(text,uuid,jsonb)',true,true,false,'search_path=pg_catalog, hon','d54e8b766f98d310b9b55b9f2a78a8610ed182d3ea99ced4da6088a787532535'),
+('hon.contact_email_resend_block(hon.communication_messages,hon.people)',true,false,false,'search_path=pg_catalog, hon','15f4501bbe654b59c3b32e4e52331db2b71a88578762c3992374a78765c6614f'),
+('hon.contact_email_message(uuid,uuid)',true,false,false,'search_path=pg_catalog, hon','bf0fa3ee519710ba7f69aed199f0017675b0b91d5e50c1b04c69e54c386add63'),
+('hon.read_contact_message_email(text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','5ccccf124c9dba9bc07cc73c7976af21ee73f56f8b08b6015e3debabeaa1efa5'),
+('hon.require_contact_resend_actor(text)',true,false,false,'search_path=pg_catalog, hon','56e7d90453fb93a2bc16a9342be49c350c6ed5e5f38330248e8ee9107ce3019e'),
+('hon.resend_contact_message_email(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','9574a4eb384086f0f2fd0cef9c5c6cc17f253fb735324e4b9beb2aeef4f5e51a')) e(signature,definer,runtime_allowed,worker_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.is_grantable OR a.privilege_type<>'EXECUTE'
+          OR NOT ((a.grantee=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') AND f.runtime_allowed)
+            OR (a.grantee IS NOT DISTINCT FROM worker_oid AND f.worker_allowed))))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe contact message history function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.communication_message_resends'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.communication_message_resends'::regclass)
+    OR has_table_privilege('hon_runtime','hon.communication_message_resends','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.communication_message_resends','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe contact message history table: communication_message_resends';
+  END IF;
+END $$;
+-- End contact message history exact verification.

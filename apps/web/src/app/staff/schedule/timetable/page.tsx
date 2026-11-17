@@ -1,9 +1,6 @@
-import type { Metadata } from 'next';
-import { ClassSeriesPage } from '../../../../components/class-series/class-series';
-import { requireVerifiedWebSession } from '../../../../server/require-web-session';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'HON | Weekly timetable', referrer: 'no-referrer', robots: { index: false, follow: false } };
 
-/** The class series API decides every permission for the verified school; this page only asks. */
-export default async function WeeklyTimetablePage() { await requireVerifiedWebSession(); return <ClassSeriesPage />; }
+/** This page is now part of Classes > Calendar (2026-11-16); old links and bookmarks land on the matching place there. */
+export default function MovedToCalendar(): never { redirect('/staff/schedule?tab=timetable'); }
