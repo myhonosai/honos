@@ -312,6 +312,7 @@
     "0412_staff_assignable_permissions_list.sql": "5691c6871ad27b49385868c502922578926637dbc57b55924422bb07fde69db3",
     "0413_attendance_card_photo_us_policy.sql": "ec9b09a43167fb95cba503c2d4ff670099cf69c25410e41680f0f1d79489d887",
     "0414_walk_in_kiosk.sql": "e393385043538425f8a9c09b50d9aa5f3bb73f71731d017b692175e38f2bda29",
+    "0415_custom_tools.sql": "57ac8f806710e4c7cd489f5e228400051ffad6c3f76dc7891cb8f039ef3bab9d",
     "0429_hon_team_chat_answers.sql": "0e83c5b25c18118ab41c29b6fd534b3532989451692a39dec58a5ff1ce3cd116"
   }
 }

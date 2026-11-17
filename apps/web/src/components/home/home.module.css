@@ -52,7 +52,9 @@
 .honCore h2 { margin: 0; font-family: var(--hon-font-display); font-size: var(--hon-text-2xl); letter-spacing: 0.08em; }
 .honRole { margin: 0; color: var(--hon-text-muted); font-size: var(--hon-text-sm); }
 .honStatus { display: flex; gap: 6px; align-items: baseline; margin: 2px 0 var(--hon-space-2); color: var(--hon-warning); font-size: 11px; line-height: 1.4; max-width: 30ch; text-align: left; }
-.honStatus::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--hon-warning); }
+.honStatus::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.honStatus[data-status="ready"] { color: var(--hon-success); }
+.honStatus[data-status="checking"] { color: var(--hon-text-muted); }
 .primary {
   display: inline-flex; align-items: center; gap: 8px; min-height: calc(var(--hon-control-h) + 4px); padding: 0 var(--hon-space-5);
   border-radius: 999px; font-weight: 700; text-decoration: none; color: #fff !important;

@@ -6,7 +6,7 @@ import { shellText } from '../school-shell/copy';
 import { HON_ART_STYLES, defaultArtStyle, type HonArtStyle } from '../hon-command/roster';
 import { ShellIcon } from '../school-shell/icons';
 import { homeText, type HomeKey } from './copy';
-import { ASK_HON_AGENTS, homeAiTeam, homeKpis, leadOutcomes, membershipMix, myTasks, recentLeads, todaySessions, sessionSnapshotSaturated, type AgentCard, type Bar, type HomeSources, type Kpi, type Panel } from './model';
+import { ASK_HON_AGENTS, homeAiTeam, honLine, homeKpis, leadOutcomes, membershipMix, myTasks, recentLeads, todaySessions, sessionSnapshotSaturated, type AgentCard, type Bar, type HomeSources, type Kpi, type Panel } from './model';
 import styles from './home.module.css';
 
 export type SchoolHomeViewProps = Readonly<{
@@ -41,6 +41,7 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
 
   const style = artStyle ?? defaultArtStyle(mode);
   const team = homeAiTeam(sources.readiness, style);
+  const hon = honLine(sources.hon);
   const kpis = homeKpis(sources);
   const half = Math.ceil(team.length / 2);
   const today = new Intl.DateTimeFormat(locale, { weekday: 'long', month: 'short', day: 'numeric', ...(timeZone ? { timeZone } : {}) }).format(now);
@@ -60,7 +61,7 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
           <img className={styles.orb} src="/ai/hon-core.webp" alt="" width={168} height={168} />
           <h2 id="home-hon">{t('honTitle')}</h2>
           <p className={styles.honRole}>{t('honCore')}</p>
-          <p className={styles.honStatus} data-status="pending">{t('honStatus')}</p>
+          {hon && <p className={styles.honStatus} data-status={hon.status}>{t(hon.key)}</p>}
           <a className={styles.primary} href="/staff/hon"><ShellIcon name="hon" /><span>{t('askHon')}</span></a>
           {teamChat ? <a className={styles.teamChatLink} href="#team-chat">{t('teamChat')}</a> : null}
         </article>
