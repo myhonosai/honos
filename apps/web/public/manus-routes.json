@@ -715,6 +715,14 @@
     {
       "path": "/staff/tool-maker",
       "title": "HON | Tool Maker"
+    },
+    {
+      "path": "/staff/walk-in",
+      "title": "HON | Walk-in kiosk"
+    },
+    {
+      "path": "/kiosk/walk-in",
+      "title": "HON | Walk-in"
     }
   ]
 }
