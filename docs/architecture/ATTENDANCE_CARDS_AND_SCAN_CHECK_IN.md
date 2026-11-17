@@ -95,14 +95,25 @@ separate photo summary read (`read_person_photo_summary`), so 0217 is not replac
 ## Open owner questions (not blocking)
 
 - Owner decision 2026-11-16: add a free decoder for iPad/Safari (done, see above).
-- Owner decision 2026-11-16: no parent consent for card photos unless the school's place requires it; a school with
-  no address needs none (owner choice on the decision card). Built in 0394: `hon.student_photo_consent_rules`
-  (one immutable TEST_ONLY_DRAFT row per 0392 profile; consent required for EU_GDPR, UK_GDPR, KR_PIPA and NOT_REVIEWED,
-  so an unreviewed place fails closed), `hon.student_photo_consents` (GIVEN/WITHDRAWN, versioned) and the entry point
-  `set_student_photo_consent` (attendance.cards.manage, POST school/attendance/cards/photo-consent). The print decides
-  `printPhoto` per card on the server: saved look shows photos, a photo is on file, and consent is given where needed;
-  otherwise the card shows initials. The list of places is a draft for lawyer review. City matching follows 0392
-  (exact text), and an ordinary photo is not a biometric template, so the 0392 face rules do not carry over.
+- Superseded 2026-11-16 21:44Z by the U.S.-only photo policy below. 0394 had built place-based consent
+  (`hon.student_photo_consent_rules`, EU_GDPR/UK_GDPR/KR_PIPA/NOT_REVIEWED from the 0392 location); that table stays
+  as immutable history and is no longer read by cards.
 - Staff on the scan screen also need `schedule.session.read` to list today's classes (existing read).
 - New organizations: like 0364, the migration adds `attendance.cards.manage` to existing OWNER system roles; whether
   system roles created later receive it depends on the role template (owner check before launch).
+
+## U.S.-only card photo policy (0413, owner David 2026-11-16 21:44Z)
+
+HON OS serves U.S. martial arts schools first. For internal attendance cards:
+
+| Owner requirement | How it is met |
+| --- | --- |
+| 1. Staff upload photos; cards print them by default | 0390 photo on the contact card (staff with people.update only); `showPhoto` defaults on and no consent step is needed (0413). |
+| 2. No separate parental consent step just to print a card | `hon.attendance_photo_consent_rule` now reads only the school's own setting; place rules are no longer applied. |
+| 3. Optional parental photo-approval policy | `attendance_card_settings.photo_approval_required` (default off), part of the saved card look (`photoApprovalRequired`). While on, staff record approval per student (`set_student_photo_consent`, unchanged) and a card without it prints initials. Turning it off keeps the recorded history. |
+| 4. Initials when no photo or use is restricted | The server decides `printPhoto` per card: look shows photos, a photo is on file, and approval is recorded when the school asks for it. |
+| 5. School isolation, authenticated photo access | Forced RLS, no client table privilege, fixed definer entry points; photos are read only by signed-in staff with people.read at that school (0390). |
+| 6. Marketing/public use kept separate | Card photos are internal only; nothing in 0390/0394/0413 authorizes marketing or public use. Any marketing photo authorization must be its own record. |
+| 7. No direct photo upload by children under 13 | There is no family or student upload path: only signed-in staff can set a photo. A future family upload must add a COPPA-compliant flow first. |
+| 8. Privacy notices, retention, deletion, access | Deletion: remove is a hard delete of the bytes (0390), audit/outbox carry ids only. Access: as row 5. **Gaps:** no in-app privacy notice text for card photos yet, and no automatic retention rule (for example, deleting a photo some time after a student leaves). Both need owner policy. |
+| 9. Not legally approved | Compliance assessment stays pending U.S. legal review. |

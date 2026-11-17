@@ -82,10 +82,24 @@ function SessionList({ list, from, selectedId, onOpen, language, t }: RosterView
   </>;
 }
 
-function RosterDetail({ list, selectedId, roster, scope, language, onMore, onReloadRoster, marks, onMark, t }: RosterViewProps & { t: T }) {
+function RosterDetail({ list, selectedId, t, ...rest }: RosterViewProps & { t: T }) {
   const s = list.state === 'READY' ? list.items.find((item) => item.sessionId === selectedId) ?? null : null;
   const timeZone = list.state === 'READY' ? list.schoolTimezone : 'UTC';
-  if (!s || !scope) return <p className={styles.notice}>{t('pick')}</p>;
+  if (!s || !rest.scope) return <p className={styles.notice}>{t('pick')}</p>;
+  return <RosterSessionDetail {...rest} scope={rest.scope} session={s} timeZone={timeZone}/>;
+}
+
+export type RosterSessionDetailProps = Readonly<{
+  language: string; scope: RosterScope; session: CurrentSchoolClassSession; timeZone: string; roster: RosterState;
+  onMore?: (() => void) | undefined; onReloadRoster?: (() => void) | undefined;
+  marks?: Readonly<Record<string, MarkState>> | undefined; onMark?: ((entry: ClassSessionRosterEntry, status: RosterMark) => void) | undefined;
+  /** When given, "Book a student" opens booking in place instead of linking to the booking page. */
+  onBook?: (() => void) | undefined;
+}>;
+
+/** One class: its facts, its roster with attendance marks, and next steps. Shared by Class rosters and the School Calendar. */
+export function RosterSessionDetail({ language, scope, session: s, timeZone, roster, onMore, onReloadRoster, marks, onMark, onBook }: RosterSessionDetailProps): React.ReactElement {
+  const t: T = (key, vars) => rosterText(language, key, vars);
   const ready = roster.state === 'READY' && roster.sessionId === s.sessionId ? roster : null;
   const counts = ready ? rosterCounts(ready.entries) : null;
   const book = classBookingHandoffHref(scope, s.sessionId);
@@ -138,7 +152,8 @@ function RosterDetail({ list, selectedId, roster, scope, language, onMore, onRel
       <h2 id="roster-next-title">{t('nextSteps')}</h2>
       <ul className={styles.actions}>
         <li><a className={onMark ? styles.secondary : styles.primary} href={attendance}>{t(onMark ? 'correctAttendance' : 'recordAttendance')}</a></li>
-        {book && s.status !== 'CANCELLED' && s.status !== 'COMPLETED' ? <li><a className={styles.secondary} href={book}>{t('book')}</a></li> : null}
+        {s.status !== 'CANCELLED' && s.status !== 'COMPLETED' ? onBook ? <li><button type="button" className={styles.primary} onClick={onBook}>{t('book')}</button></li>
+          : book ? <li><a className={styles.secondary} href={book}>{t('book')}</a></li> : null : null}
       </ul>
     </article>
   </>;
