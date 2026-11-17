@@ -48,7 +48,7 @@ turns it on. Results come back into the page.
 | Piece | What | Migration | Owner stop |
 |---|---|---|---|
 | **A1** (this PR) | Marketing > **Ads** page: Meta Ads card from the real S1 connection read (connected Facebook Pages, ads switch per Page, connect button, link to switches); Google Ads card (honest "not available yet"); "Set up an ad with AI" card that opens Marcus. Menu entry under Marketing. en/ko/es | none | no |
-| A2 | Land S4 Meta boost backend (social thread, PR #450) | 0437 | merge slot from coordinator |
+| A2 | Land S4 Meta boost backend (social thread, PR #450) | 0445 | merge slot from coordinator |
 | A3 (this PR, stacked on #450) | Ads page on S4: monthly cap, boost a published post (draft, approve, turn on, pause, resolve UNKNOWN), daily spend/clicks | none | no |
 | A4 | Marcus ad plan: a person asks Marcus for an ad; Marcus returns a structured draft (post to boost, budget inside the cap, dates, text, audience note) through the governed AI path; a person applies it to an S4 draft. Agents still never call ad commands | new number (ask coordinator) | real AI provider stays off |
 | A5 | Google Ads through Zernio: connect a Google Ads customer account (GOOGLE_ADS platform on the school Zernio profile), simple Search/Performance Max campaign drafts, same cap, PAUSED, human turn-on, insights | new number(s) | **Zernio Ads add-on is paid; real connection and spend need David** |
@@ -85,7 +85,7 @@ turns it on. Results come back into the page.
 2. One `HON_ZERNIO_ADS_APPROVED` switch for both Meta and Google, or separate switches (built: one).
 3. Highest monthly cap a school may set (S4 built: 10,000.00).
 
-## 7. A3 design (frontend only, on the 0437 API)
+## 7. A3 design (frontend only, on the 0445 API)
 
 Shown inside the Meta Ads card once a Facebook Page is connected. Reads `GET …/marketing/social/ads` and the last 99 days
 of `GET …/marketing/social/posts` (only Facebook targets HON PUBLISHED can be boosted).

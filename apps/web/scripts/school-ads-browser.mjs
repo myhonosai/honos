@@ -40,7 +40,7 @@ const posts = { publishEnabled: true, checkedAt: at, posts: [{ postId: id(51), t
     resolvedByPerson: false, settledAt: at, version: 2 }] }] };
 const committed = () => fixture.ads.filter((a) => !['DRAFT', 'CANCELLED', 'FAILED'].includes(a.status)).reduce((n, a) => n + a.budgetCents, 0);
 const adsView = () => ({ budget: fixture.budget, committedThisMonthCents: committed(), ads: [...fixture.ads].reverse(), today: TODAY, checkedAt: at, adsEnabled: fixture.adsEnabled, pauseEnabled: true });
-/** A tiny stand-in for 0437: versions, the cap rule, PAUSED creation, ACTIVATE/PAUSE, one answer per key. */
+/** A tiny stand-in for 0445: versions, the cap rule, PAUSED creation, ACTIVATE/PAUSE, one answer per key. */
 function adsCommand(path, body, headers) {
   fixture.commands.push({ path, command: headers['x-hon-human-command'], key: headers['idempotency-key'], body });
   if (path.endsWith('/ads/budget')) { fixture.budget = { monthlyCapCents: body.monthlyCapCents, currency: body.currency, version: (fixture.budget?.version ?? 0) + 1 }; return [200, adsView()]; }

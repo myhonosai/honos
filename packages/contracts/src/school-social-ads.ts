@@ -1,4 +1,4 @@
-// School social ads (0437, docs/architecture/SOCIAL_POSTING_INBOX_ADS.md §4C): boost a Facebook post HON already
+// School social ads (0445, docs/architecture/SOCIAL_POSTING_INBOX_ADS.md §4C): boost a Facebook post HON already
 // published, inside the school's own monthly ad spend cap. Every ad is created PAUSED; turning it on is a separate
 // human command. Creating and turning on need HON_ZERNIO_ADS_APPROVED on the API server.
 export const SOCIAL_AD_STATUSES = ['DRAFT', 'CREATING', 'PAUSED', 'ACTIVATING', 'ACTIVE', 'PAUSING', 'FAILED', 'UNKNOWN', 'CANCELLED'] as const;

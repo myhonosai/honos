@@ -5,7 +5,7 @@ const { SchoolSocialAdsService } = require('../dist/marketing/social/school-soci
 const { SchoolSocialAdsController } = require('../dist/marketing/social/school-social-ads.controller.js');
 const { FakeZernioSocialAdapter, ZernioHttpSocialAdapter, SocialProviderError, zernioAdsApproved, zernioAdsPauseReady, zernioSocialAdapterFactory } = require('../dist/marketing/social/zernio-social-adapter.js');
 
-// Mocked boundary tests for the 0437 ads API and Zernio ad calls. The cap, authority, leases and evidence are proven
+// Mocked boundary tests for the 0445 ads API and Zernio ad calls. The cap, authority, leases and evidence are proven
 // against PostgreSQL by test-school-social-ads.mjs. Nothing reaches Zernio or Meta: the HTTP adapter gets a stub fetch
 // and the service gets the deterministic fake or a stub. No money moves anywhere in this file.
 const KEY = 'sk_' + 'd'.repeat(64);

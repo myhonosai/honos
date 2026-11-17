@@ -33,7 +33,7 @@ interface AdSend {
 }
 
 /**
- * School ads (0437). Every database call is one protected definer function that re-proves the direct human at the
+ * School ads (0445). Every database call is one protected definer function that re-proves the direct human at the
  * session school. Creating, turning on and pausing are recorded first under a 60-second lease, Zernio is called once
  * between transactions with HON's ad id as idempotency key, and the answer is recorded under that lease. A lost answer
  * is UNKNOWN and never resent; a person settles it. Only turning an ad on spends money.

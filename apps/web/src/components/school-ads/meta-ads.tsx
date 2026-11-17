@@ -63,7 +63,7 @@ function AdRow({ ad, p, t }: { ad: SocialAd; p: MetaAdsProps; t: (k: AdsKey) => 
   </li>;
 }
 
-/** Meta ads on the 0437 API: the monthly limit, boost drafts, approve (created paused), turn on (spends), pause, settle unknowns. */
+/** Meta ads on the 0445 API: the monthly limit, boost drafts, approve (created paused), turn on (spends), pause, settle unknowns. */
 export function MetaAds(p: MetaAdsProps): React.ReactElement {
   const t = (key: AdsKey) => adsText(p.language, key);
   const a = p.ads;

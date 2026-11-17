@@ -5,6 +5,7 @@ import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT } from 
 import { StaffInvitationController, newStaffInvitationToken } from './controller';
 import { staffInvitationText } from './copy';
 import { parseOperationalSchoolSelectors, type OperationalSchoolInitialSelectors } from '../operational-navigation';
+import { useShellSchool } from '../school-shell/page-school';
 import styles from './workbench.module.css';
 
 export function StaffInvitations({ sessionSubject, acceptance = false, initialOrganizationId, initialSchoolId }: { sessionSubject: string; acceptance?: boolean } & OperationalSchoolInitialSelectors): React.ReactElement {
@@ -12,6 +13,9 @@ export function StaffInvitations({ sessionSubject, acceptance = false, initialOr
   const controller = useRef<StaffInvitationController | null>(null);
   if (!controller.current) controller.current = new StaffInvitationController(sessionSubject, acceptance);
   const c = controller.current, [s, set] = useState(c.snapshot());
+  // Inside the school shell the signed-in school is the scope; acceptance never takes a school from anywhere.
+  const signedInSchool = useShellSchool(), shellSchool = acceptance ? null : signedInSchool;
+  const autoRead = useRef('');
   // Initial navigation is inert and never overwrites an existing mounted scope
   // or its retained request. Acceptance never takes a school from navigation.
   const initial = acceptance ? {} : parseOperationalSchoolSelectors({ organizationId: initialOrganizationId, schoolId: initialSchoolId });
@@ -34,6 +38,12 @@ export function StaffInvitations({ sessionSubject, acceptance = false, initialOr
     window.addEventListener('beforeunload', leaving);
     return () => { hideDom(); unsubscribe(); c.dispose(); for (const event of events) window.removeEventListener(event, hide); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('beforeunload', leaving); };
   }, [c]);
+  useEffect(() => {
+    // Open on the signed-in school once; the server still authorizes the exact school on every request.
+    const key = shellSchool ? `${shellSchool.organizationId}/${shellSchool.schoolId}` : '';
+    if (!shellSchool || autoRead.current === key || c.snapshot().phase !== 'IDLE') return;
+    autoRead.current = key; void c.verify(shellSchool);
+  }, [shellSchool?.organizationId, shellSchool?.schoolId, c]); // eslint-disable-line react-hooks/exhaustive-deps
   const privateVisible = s.revision === c.snapshot().revision && (s.phase === 'READY' || s.phase === 'IDLE');
   useEffect(() => {
     // Restore only the CURRENT reauthorized revision. Batching may omit an
@@ -50,7 +60,7 @@ export function StaffInvitations({ sessionSubject, acceptance = false, initialOr
   const locked = s.commandBusy || s.phase === 'READING';
   const edit = (fn: () => void, clearRole = false) => { if (c.retirePreparation(s.revision, clearRole)) { setConfirmed(false); fn(); } };
   const editScope = (fn: () => void) => { if (c.changeScope(s.revision)) { hideDom(); setConfirmed(false); setHandoff(null); setToken(''); setEmail(''); setRoleId(''); fn(); } };
-  const verify = () => { setHandoff(null); setRoleId(''); setConfirmed(false); setAbandonConfirmed(false); void c.verify(acceptance ? undefined : { organizationId: org, schoolId: school }); };
+  const verify = () => { setHandoff(null); setRoleId(''); setConfirmed(false); setAbandonConfirmed(false); void c.verify(acceptance ? undefined : shellSchool ?? { organizationId: org, schoolId: school }); };
   const finish = () => { if (c.abandon(s.revision, abandonConfirmed)) { setHandoff(null); setToken(''); setEmail(''); setInvitation(''); setRoleId(''); setConfirmed(false); setAbandonConfirmed(false); } };
   const stamp = (value: string) => new Intl.DateTimeFormat(locale.preferences.language, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(value)) + ' UTC';
   const errorHelp = (code: string) => code === 'ACCOUNT_REVIEW_REQUIRED' ? 'review' : code === 'ACCOUNT_INPUT_INVALID' ? 'validation'
@@ -59,24 +69,24 @@ export function StaffInvitations({ sessionSubject, acceptance = false, initialOr
   return <main className={`${styles.page} ${styles[mode]}`} data-testid="staff-invitations" data-interface-theme={mode}>
     <header><p>HON OS</p><h1>{t(acceptance ? 'acceptTitle' : 'title')}</h1><p>{t(acceptance ? 'acceptIntro' : 'intro')}</p></header>
     <fieldset className={styles.modes}><legend>{t('presentation')}</legend>{(['modern', 'classic', 'big'] as const).map(m => <button type="button" key={m} aria-pressed={mode === m} onClick={() => setMode(m)}>{t(m)}</button>)}</fieldset>
-    <p className={styles.notice}>{t('boundary')}</p>
-    <p ref={status} tabIndex={-1} role="status" aria-live="polite" aria-atomic="true" data-testid="staff-account-status">{t(s.phase)}</p>
+    {!shellSchool && <p className={styles.notice}>{t('boundary')}</p>}
+    <p ref={status} tabIndex={-1} role="status" aria-live="polite" aria-atomic="true" data-testid="staff-account-status">{t(shellSchool && s.phase === 'READING' ? 'loading' : shellSchool && s.phase === 'READY' ? 'loaded' : s.phase)}</p>
     {s.commandBusy && <p role="status">{t('sending')}</p>}
     {!['IDLE', 'READY'].includes(s.phase) && <button type="button" disabled={locked} onClick={verify}>{t('restore')}</button>}
     <div ref={privateArea} hidden={!privateVisible} inert={!privateVisible} data-testid="staff-account-private">
       {privateVisible && <>
-        {!acceptance && <fieldset disabled={locked || s.pending} className={styles.scope}><legend>{t('selectors')}</legend>
+        {!acceptance && !shellSchool && <fieldset disabled={locked || s.pending} className={styles.scope}><legend>{t('selectors')}</legend>
           <label>{t('org')}<input data-testid="staff-org" autoComplete="off" value={org} onChange={e => editScope(() => setOrg(e.target.value))}/></label>
           <label>{t('school')}<input data-testid="staff-school" autoComplete="off" value={school} onChange={e => editScope(() => setSchool(e.target.value))}/></label>
         </fieldset>}
-        <button type="button" disabled={locked} onClick={verify}>{t(acceptance ? 'verifyAccept' : 'verify')}</button>
+        <button type="button" disabled={locked} onClick={verify}>{t(acceptance ? 'verifyAccept' : shellSchool ? 'refresh' : 'verify')}</button>
         {s.phase === 'IDLE' && s.errorCode && <p role="alert">{t('validation')} <code>{s.errorCode}</code></p>}
         {s.phase === 'READY' && <>
           {s.outcome === 'UNKNOWN' && <p role="alert">{t(s.errorCode === 'ACCOUNT_REVIEW_REQUIRED' ? 'review' : 'unknown')}</p>}
           {s.outcome === 'REJECTED' && <p role="alert">{t('rejected')}</p>}
           {s.errorCode && <p role="alert">{t(errorHelp(s.errorCode))} <code>{s.errorCode}</code></p>}
           {s.receipt && <section className={styles.receipt} aria-label={t('success')}><h2 ref={receiptHeading} tabIndex={-1}>{t('success')}</h2>
-            <p>{t('invitation')}: {s.receipt.invitationId}</p><p>{t('school')}: {s.receipt.schoolId}</p>
+            {!shellSchool && <p>{t('invitation')}: {s.receipt.invitationId}</p>}{!shellSchool && <p>{t('school')}: {s.receipt.schoolId}</p>}
             {'status' in s.receipt && <p>{t(s.receipt.status)} — {stamp(s.receipt.expiresAt)}</p>}
             {acceptance && <a key={`workspace-${s.revision}`} href="/staff/dashboard" onClick={e => { if (c.snapshot().revision !== s.revision || c.snapshot().phase !== 'READY') e.preventDefault(); }}>{t('workspace')}</a>}
           </section>}

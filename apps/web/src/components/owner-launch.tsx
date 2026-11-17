@@ -7,6 +7,7 @@ import { OwnerLaunchAccessError, postOwnerLaunch, postOwnerLaunchFirstClassBooki
 import { InterfaceThemePicker } from './interface-theme-picker';
 import { loadInterfaceThemePreference, saveInterfaceThemePreference } from './interface-theme-preference';
 import progressStyles from './owner-launch-progress.module.css';
+import { useShellSchool } from './school-shell/page-school';
 
 export function ownerDashboardHandoffPath(context: Pick<OwnerLaunchProjection, 'organizationId' | 'schoolId'>): string {
   return `/staff/operations?${new URLSearchParams({ organizationId: context.organizationId, schoolId: context.schoolId }).toString()}`;
@@ -55,19 +56,22 @@ export function OwnerLaunch() {
   const [planCode,setPlanCode]=useState(''),[termStart,setTermStart]=useState(''),[termEnd,setTermEnd]=useState(''),[currency,setCurrency]=useState('');
   const [interfaceTheme,setInterfaceTheme]=useState<HonInterfaceTheme>(DEFAULT_HON_INTERFACE_THEME);
   const [interfaceThemeState,setInterfaceThemeState]=useState<'UNAVAILABLE'|'LOADING'|'READY'|'SAVING'|'ERROR'>('UNAVAILABLE');
-  const [interfaceThemeMessage,setInterfaceThemeMessage]=useState('Load verified school context to view or change your personal interface preference.');
+  const [interfaceThemeMessage,setInterfaceThemeMessage]=useState('Your interface preference appears once your school loads.');
   const generation=useRef(0);
   const interfaceThemeGeneration=useRef(0);
   const retry=useRef<{operation:string;fingerprint:string;key:string}|null>(null);
+  // Inside the school shell the page loads the signed-in school's receipts by itself (on open and on return);
+  // the server still derives and authorizes the school on every read.
+  const shellSchool=useShellSchool(),inShell=useRef(false);inShell.current=shellSchool!==null;
   function clearPrivateInput() {setGivenName('');setFamilyName('');setBirthDate('');setGuardianGivenName('');setGuardianFamilyName('');setGuardianBirthDate('');setAttested(false);setPlanCode('');setTermStart('');setTermEnd('');setCurrency('');setMembershipDraft(null);setDraftState('DRAFT_UNAVAILABLE');retry.current=null;}
   useEffect(()=>{
-    const stale=()=>{generation.current++;setContext(null);setBooking(null);setBookingState('BOOKING_UNAVAILABLE');setMembershipDraft(null);setBusy(false);setMessage('School state may have changed. Reload saved receipts before continuing.');clearPrivateInput();};
+    const stale=()=>{generation.current++;setContext(null);setBooking(null);setBookingState('BOOKING_UNAVAILABLE');setMembershipDraft(null);setBusy(false);setMessage('School state may have changed. Reload saved receipts before continuing.');clearPrivateInput();if(inShell.current&&document.visibilityState==='visible')void reload();};
     window.addEventListener('focus',stale);document.addEventListener('visibilitychange',stale);
     return ()=>{generation.current++;window.removeEventListener('focus',stale);document.removeEventListener('visibilitychange',stale);};
   },[]);
   useEffect(()=>{
     const organizationId=context?.organizationId,schoolId=context?.schoolId;
-    if(!organizationId||!schoolId){interfaceThemeGeneration.current++;setInterfaceTheme(DEFAULT_HON_INTERFACE_THEME);setInterfaceThemeState('UNAVAILABLE');setInterfaceThemeMessage('Load verified school context to view or change your personal interface preference.');return;}
+    if(!organizationId||!schoolId){interfaceThemeGeneration.current++;setInterfaceTheme(DEFAULT_HON_INTERFACE_THEME);setInterfaceThemeState('UNAVAILABLE');setInterfaceThemeMessage('Your interface preference appears once your school loads.');return;}
     const current=++interfaceThemeGeneration.current;
     setInterfaceTheme(DEFAULT_HON_INTERFACE_THEME);setInterfaceThemeState('LOADING');setInterfaceThemeMessage('Loading your personal presentation preference…');
     void loadInterfaceThemePreference({organizationId,schoolId}).then(preference=>{
@@ -79,6 +83,7 @@ export function OwnerLaunch() {
     });
     return ()=>{if(current===interfaceThemeGeneration.current)interfaceThemeGeneration.current++;};
   },[context?.organizationId,context?.schoolId]);
+  useEffect(()=>{if(shellSchool)void reload();},[shellSchool?.organizationId,shellSchool?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
   async function reload() {const current=++generation.current;setBusy(true);setContext(null);setBooking(null);setBookingState('BOOKING_UNAVAILABLE');setMembershipDraft(null);setDraftState('DRAFT_UNAVAILABLE');try {const loaded=await loadOwnerLaunchWithConfirmations();if(current!==generation.current)return;setContext(loaded.context);setBooking(loaded.bookingConfirmation.context);setBookingState(loaded.bookingConfirmation.state);setMembershipDraft(loaded.confirmation.receipt);setDraftState(loaded.confirmation.state);setMessage('Saved creation receipts loaded. Membership confirmation is DRAFT only: saved configuration, NOT active or an agreement/payment/invoice/schedule/communication outcome.');}catch(error){if(current!==generation.current)return;setMessage(error instanceof Error?error.message:'School launch is unavailable.');if(error instanceof OwnerLaunchAccessError&&[401,403].includes(error.status))clearPrivateInput();}finally{if(current===generation.current)setBusy(false);}}
   async function chooseInterfaceTheme(next:HonInterfaceTheme) {
     if(!context||interfaceThemeState!=='READY')return;
@@ -166,14 +171,14 @@ export function OwnerLaunch() {
   const field={display:'grid',gap:6,marginBottom:12} as const;
   const saved=context?.guardianChildRegistration??context?.registration;
   return <main className={`owner-launch owner-launch-${interfaceTheme}`} data-interface-theme={interfaceTheme} style={{maxWidth:840,margin:'2rem auto',padding:24}}>
-    <h1>Owner launch</h1><p>School context → first program → first class → student registration → saved receipt</p>
+    <h1>Owner launch</h1><p>{shellSchool?'Your school':'School context'} → first program → first class → student registration → saved receipt</p>
     <p>Conventional human setup only. No directory search or cross-school selection. HQ provisioning and owner grants remain a separate controlled workflow.</p>
     <p>Choose a new adult without a guardian, or exactly one new child with one new adult guardian. A recorded family relationship is not parent login, parent access or family readiness.</p>
     <section className="owner-launch-theme" aria-labelledby="owner-launch-interface-mode"><div><p className="owner-launch-theme-kicker">OPTIONAL PRESENTATION</p><h2 id="owner-launch-interface-mode">Choose your interface mode</h2><p>Big-Button / Phone favors large touch targets, Modern HON balances daily work, and Classic CRM favors dense keyboard-and-mouse controls.</p><p>This is a current-user presentation preference only. You can change it later; it never changes your school scope, tier, role, features, permissions, authority, data, or available launch actions.</p></div><InterfaceThemePicker current={interfaceTheme} onChange={theme=>void chooseInterfaceTheme(theme)} disabled={interfaceThemeState!=='READY'} busy={interfaceThemeState==='LOADING'||interfaceThemeState==='SAVING'} presentation="cards" ariaLabel="Optional interface mode for this owner launch" /><p className="owner-launch-theme-status" role="status" aria-live="polite">{interfaceThemeMessage}</p></section>
-    <p role="status" aria-live="polite">{message}</p><button type="button" disabled={busy} onClick={()=>void reload()}>{busy?'Verifying…':'Load / refresh saved receipts'}</button>
+    <p role="status" aria-live="polite">{shellSchool&&busy?'Loading your school…':message}</p><button type="button" disabled={busy} onClick={()=>void reload()}>{busy?(shellSchool?'Loading…':'Verifying…'):shellSchool?'Refresh':'Load / refresh saved receipts'}</button>
     {context&&<>
       <OwnerLaunchProgress context={context} booking={booking} bookingState={bookingState} draftState={draftState} />
-      <section aria-label="Verified school context"><h2>1. Verified school context</h2><p>{context.schoolName} · {context.tier}</p><p>School receipt context: <code>{context.schoolId}</code></p><p><Link href={ownerDashboardHandoffPath(context)}>Open verified operations dashboard</Link> — this only pre-fills school identifiers. The dashboard remains empty until it independently verifies current access and loads its report.</p></section>
+      <section aria-label="Verified school context"><h2>{shellSchool?'1. Your school':'1. Verified school context'}</h2><p>{context.schoolName} · {context.tier}</p>{!shellSchool&&<p>School receipt context: <code>{context.schoolId}</code></p>}<p><Link href={ownerDashboardHandoffPath(context)}>Open verified operations dashboard</Link> — this only pre-fills school identifiers. The dashboard remains empty until it independently verifies current access and loads its report.</p></section>
       <section><h2>2. First program</h2>{context.program?<p>Saved program receipt: <code>{context.program.id}</code> · {context.program.status} · version {context.program.version}</p>:<form onSubmit={e=>{e.preventDefault();void submit('program');}}><label style={field}>Program name<input value={programName} onChange={e=>setProgramName(e.target.value)} maxLength={160} required /></label><button disabled={busy}>Save first program</button></form>}</section>
       <section><h2>3. First class</h2>{context.classSession?<p>Saved class receipt: <code>{context.classSession.id}</code> · {context.classSession.status} · version {context.classSession.version}</p>:context.program?<form onSubmit={e=>{e.preventDefault();void submit('class');}}><label style={field}>Class name<input value={className} onChange={e=>setClassName(e.target.value)} maxLength={160} required /></label><label style={field}>Starts (your local time)<input type="datetime-local" value={startsAt} onChange={e=>setStartsAt(e.target.value)} required /></label><label style={field}>Ends (your local time)<input type="datetime-local" value={endsAt} onChange={e=>setEndsAt(e.target.value)} required /></label><label style={field}>Capacity<input type="number" min={1} max={1000} value={capacity} onChange={e=>setCapacity(Number(e.target.value))} required /></label><p>Optional booking policy. This step saves a class; it does not book a student.</p><button disabled={busy}>Save first class</button></form>:<p>Save a program first.</p>}</section>
       <section><h2>4. Register a real student</h2><p>The adult-only command is unchanged. The separate guardian-and-child command requires current family.manage authority, a guardian adult and child under 18 at the exact future class date. Existing or potentially matching people, families and uncertain eligibility need staff; no identity is merged or inferred.</p><p>Registration creates only existing person/student records and program-only enrollment. Child mode also records one new family with explicit GUARDIAN and STUDENT links. No curriculum/rank, billing contact or parent access is inferred.</p>

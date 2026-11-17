@@ -13,7 +13,7 @@ export type MetaAdsState = 'NOT_CONNECTED' | 'CONNECTED_ADS_OFF' | 'READY_FOR_AD
 export type AdsViewProps = Readonly<{
   language: string; locale?: string | undefined; waiting: boolean; concealed: boolean; hasSchool: boolean; list: AdsListState; connecting: boolean; outcome: AdsOutcome;
   onRefresh?: (() => void) | undefined; onConnectMeta?: (() => void) | undefined;
-  /** Running Meta ads (0437), shown once a Facebook Page is connected. */
+  /** Running Meta ads (0445), shown once a Facebook Page is connected. */
   run?: Omit<MetaAdsProps, 'language' | 'locale'> | undefined;
 }>;
 

@@ -7,7 +7,7 @@ import {
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * School Meta ads (0437). Reads are plain same-origin GETs; every write sends its own X-HON-Human-Command and an
+ * School Meta ads (0445). Reads are plain same-origin GETs; every write sends its own X-HON-Human-Command and an
  * Idempotency-Key, so a retried request with the same key is replayed, never sent twice. The server decides the
  * permission, the cap and whether ads are turned on. Nothing here is authority.
  */
