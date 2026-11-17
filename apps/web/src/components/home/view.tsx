@@ -6,7 +6,7 @@ import { shellText } from '../school-shell/copy';
 import { HON_ART_STYLES, defaultArtStyle, type HonArtStyle } from '../hon-command/roster';
 import { ShellIcon } from '../school-shell/icons';
 import { homeText, type HomeKey } from './copy';
-import { ASK_HON_AGENTS, homeAiTeam, honLine, homeKpis, leadOutcomes, membershipMix, myTasks, recentLeads, todaySessions, sessionSnapshotSaturated, type AgentCard, type Bar, type HomeSources, type Kpi, type Panel } from './model';
+import { homeAiTeam, honLine, homeKpis, leadOutcomes, membershipMix, myTasks, recentLeads, todaySessions, sessionSnapshotSaturated, type AgentCard, type Bar, type HomeSources, type Kpi, type Panel } from './model';
 import styles from './home.module.css';
 
 export type SchoolHomeViewProps = Readonly<{
@@ -143,7 +143,7 @@ function Agent({ agent, t }: { agent: AgentCard; t: (key: HomeKey) => string }):
       <span className={styles.agentTitle} title={t(agent.title)}>{t(agent.purpose)}</span>
       <span className={styles.agentStatus}><i aria-hidden="true" />{t(`status${agent.status}` as HomeKey)}</span>
     </span>
-    {live && <a className={styles.agentLink} href={agent.href!} aria-label={`${t(ASK_HON_AGENTS.has(agent.id) ? 'askAgent' : 'openWorkspace')}: ${agent.name}`}>{t(ASK_HON_AGENTS.has(agent.id) ? 'askAgent' : 'openWorkspace')}</a>}
+    {live && <a className={styles.agentLink} href={agent.href!} aria-label={`${t('openWorkspace')}: ${agent.name}`}>{t('openWorkspace')}</a>}
   </li>;
 }
 

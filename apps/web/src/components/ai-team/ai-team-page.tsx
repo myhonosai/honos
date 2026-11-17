@@ -5,7 +5,7 @@ import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { loadAiTeamReadiness } from '../ai-team-readiness-http';
 import { panelFromError } from '../home/home';
-import { ASK_HON_AGENTS, homeAiTeam, type AgentCard, type Panel } from '../home/model';
+import { homeAiTeam, type AgentCard, type Panel } from '../home/model';
 import { homeText, type HomeKey } from '../home/copy';
 import { aiTeamText, type AiTeamKey } from './copy';
 import styles from './ai-team.module.css';
@@ -40,15 +40,14 @@ export function AiTeamView({ language, hasSchool, readiness, team }: { language:
     {notice && <p className={styles.notice} role="status">{notice}</p>}
     <ul className={styles.grid}>
       {team.map(agent => {
-        const asks = ASK_HON_AGENTS.has(agent.id);
         const usable = hasSchool && agent.href !== null && agent.status === 'READY';
         return <li key={agent.id} className={styles.card} data-agent={agent.id} data-status={agent.status} style={{ '--agent': agent.color } as React.CSSProperties}>
           <span className={styles.portrait}><img src={agent.portrait} alt="" width={160} height={200} loading="lazy" /></span>
           <div className={styles.body}>
             <h2>{agent.name}<small>{homeText(language, agent.title)}</small></h2>
             <p>{t(agent.id as AiTeamKey)}</p>
-            <p className={styles.status}><i aria-hidden="true" />{homeText(language, `status${agent.status}` as HomeKey)}<span> · {t(asks ? 'answers' : 'workspace')}</span></p>
-            {usable && <a className={styles.action} href={agent.href!}>{asks ? t('ask', { name: agent.name }) : t('open')}</a>}
+            <p className={styles.status}><i aria-hidden="true" />{homeText(language, `status${agent.status}` as HomeKey)}<span> · {t('workspace')}</span></p>
+            {usable && <a className={styles.action} href={agent.href!}>{t('open')}</a>}
           </div>
         </li>;
       })}
