@@ -38,5 +38,5 @@ it('inside the shell loads the signed-in school by itself, hides its ID and relo
   const page = text(render()); expect(page).toContain('Sunrise Dojo'); expect(page).toContain('1. Your school'); expect(page).not.toContain(id('2'));
   expect(page).not.toContain('Load your verified school context'); expect(nodes(render()).some(n => n.type === 'button' && text(n) === 'Refresh')).toBe(true);
   h.visibility = 'hidden'; h.events.visibilitychange!(); await settle(); expect(launchReads(fetch)).toBe(1);
-  h.visibility = 'visible'; h.events.focus!(); await settle(); expect(launchReads(fetch)).toBe(2); expect(text(render())).toContain('Sunrise Dojo');
+  h.visibility = 'visible'; h.events.visibilitychange!(); h.events.focus!(); await settle(); expect(launchReads(fetch)).toBe(2); expect(text(render())).toContain('Sunrise Dojo');
 });
