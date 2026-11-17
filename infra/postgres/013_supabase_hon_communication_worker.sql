@@ -130,4 +130,13 @@ BEGIN
 END;
 $$;
 
+-- 0424 contact message history: the author's subject of the email a lease is sending (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.communication_email_subject(uuid,uuid)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.communication_email_subject(uuid, uuid) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 COMMIT;

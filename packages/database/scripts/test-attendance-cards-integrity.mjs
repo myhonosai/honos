@@ -62,7 +62,7 @@ const addSession=async o=>{
  const program=(await q("INSERT INTO hon.programs(organization_id,school_id,name,status) VALUES($1,$2,$3,'SCHEDULED') RETURNING id",[o.organizationId,o.schoolId,'Cards synthetic program '+K()]))[0].id;
  return (await q("INSERT INTO hon.class_sessions(organization_id,school_id,program_id,name,starts_at,ends_at,capacity,booking_policy) VALUES($1,$2,$3,'Cards synthetic class',clock_timestamp()-interval '10 minutes',clock_timestamp()+interval '50 minutes',20,'WALK_IN') RETURNING id",[o.organizationId,o.schoolId,program]))[0].id;
 };
-const settings0=(schoolId,expectedVersion,codeType='BARCODE')=>({schoolId,expectedVersion,codeType,showPhoto:true,showLogo:false,design:'BOLD'});
+const settings0=(schoolId,expectedVersion,codeType='BARCODE')=>({schoolId,expectedVersion,codeType,showPhoto:true,showLogo:false,design:'BOLD',photoApprovalRequired:false});
 
 try{
  await Promise.all([admin.connect(),restricted.connect()]);
@@ -105,7 +105,7 @@ try{
 
  // 2. Read: defaults before any choice, the school's own students only; refusals write nothing.
  const first=ok(await readCards(manager,A.schoolId));
- assert.deepEqual({...first.settings,schoolName:null},{codeType:'QR',showPhoto:true,showLogo:true,design:'CLASSIC',version:0,updatedAt:null,schoolName:null,logoUrl:null,accentColor:null,photoConsent:{required:false,profile:null,reason:'NO_LOCATION'}});
+ assert.deepEqual({...first.settings,schoolName:null},{codeType:'QR',showPhoto:true,showLogo:true,design:'CLASSIC',photoApprovalRequired:false,version:0,updatedAt:null,schoolName:null,logoUrl:null,accentColor:null,photoConsent:{required:false,profile:null,reason:'OFF'}});
  assert.equal(first.maxPerPrint,40);
  assert.deepEqual(first.students.map(s=>s.givenName).sort(),['Leo','Mina']);
  assert(first.students.every(s=>s.card===null&&s.hasPhoto===false&&s.photoConsent==='NOT_REQUIRED'&&s.photoConsentVersion===0));
@@ -210,24 +210,33 @@ try{
   "INSERT INTO hon.attendance_check_ins(organization_id,school_id,class_session_id,student_profile_id,method,method_ref,attendance_record_id,attendance_status,recorded_by_principal_id) SELECT organization_id,school_id,class_session_id,student_profile_id,'PIN',method_ref,attendance_record_id,attendance_status,recorded_by_principal_id FROM hon.attendance_check_ins LIMIT 1",
   "TRUNCATE hon.attendance_cards","TRUNCATE hon.attendance_check_ins","TRUNCATE hon.attendance_card_settings","TRUNCATE hon.attendance_card_requests"]){
   await admin.query('BEGIN');await assert.rejects(()=>admin.query(st),e=>['42501','23503','23514','23505'].includes(e.code),st);await admin.query('ROLLBACK');}
- pass('cards cannot be re-activated, re-coded or deleted; check-in rows and receipts are immutable; no unknown method (0426 adds FACE)');
+ pass('cards cannot be re-activated, re-coded or deleted; check-in rows and receipts are immutable; no unknown method (0434 adds FACE)');
 
- // 8. Photo consent by place (owner decision 2026-11-16): none without an address; where the place needs it, the card
- //    carries the photo only with recorded consent. The server decides printPhoto.
+ // 8. U.S.-only photo policy (0413, owner 2026-11-16 21:44Z): the photo prints by default, wherever the school is; a
+ //    school may turn on parent photo approval, and then the card carries the photo only with recorded approval.
  {const png=readFileSync(new URL('../../../apps/web/public/paper-import-samples/student-card.png',import.meta.url));
   const kid=await addStudent(A,'Ana','Lee');const kp=kid.studentProfileId;
   await q("INSERT INTO hon.person_photos(person_id,organization_id,school_id,media_type,content,checksum,created_by_principal_id,updated_by_principal_id) VALUES($1,$2,$3,'image/png',$4,encode(sha256($4),'hex'),$5,$5)",[kid.personId,A.organizationId,A.schoolId,png,managerPrincipal]);
-  const kidRow=async()=>{const r=ok(await readCards(manager,A.schoolId));return {rule:r.settings.photoConsent,kid:r.students.find(s=>s.studentProfileId===kp)};};
+  const kidRow=async()=>{const r=ok(await readCards(manager,A.schoolId));return {settings:r.settings,rule:r.settings.photoConsent,kid:r.students.find(s=>s.studentProfileId===kp)};};
   const printKid=async()=>ok(await print(manager,{schoolId:A.schoolId,studentProfileIds:[kp]})).cards[0].printPhoto;
-  let now=await kidRow();assert.deepEqual(now.rule,{required:false,profile:null,reason:'NO_LOCATION'});assert.equal(now.kid.photoConsent,'NOT_REQUIRED');assert.equal(now.kid.hasPhoto,true);
+  const OFF={required:false,profile:null,reason:'OFF'},ON={required:true,profile:null,reason:'SCHOOL_POLICY'};
+  let now=await kidRow();assert.deepEqual(now.rule,OFF);assert.equal(now.kid.photoConsent,'NOT_REQUIRED');assert.equal(now.kid.hasPhoto,true);
   assert.equal(await printKid(),true);
   assert.equal(ok(await print(manager,{schoolId:A.schoolId,studentProfileIds:[mina.studentProfileId]})).cards[0].printPhoto,false,'no photo, no photo on the card');
-  // Rules: every 0392 profile has a draft row; only EU, UK, Korea and unreviewed places need consent.
-  assert.deepEqual((await q("SELECT profile_code FROM hon.student_photo_consent_rules WHERE consent_required ORDER BY 1")).map(r=>r.profile_code),['EU_GDPR','KR_PIPA','NOT_REVIEWED','UK_GDPR']);
-  assert.equal((await q("SELECT count(*)::int n FROM hon.biometric_jurisdiction_profiles p LEFT JOIN hon.student_photo_consent_rules r ON r.profile_code=p.code WHERE r.profile_code IS NULL OR r.review_status<>'TEST_ONLY_DRAFT'"))[0].n,0);
+  // The place no longer matters: a school located in Germany (or Japan) prints the photo with no consent step.
   await q("INSERT INTO hon.school_locations(school_id,organization_id,country_code,city,created_by_principal_id,updated_by_principal_id) VALUES($1,$2,'DE','Berlin',$3,$3)",[A.schoolId,A.organizationId,managerPrincipal]);
-  now=await kidRow();assert.deepEqual(now.rule,{required:true,profile:'EU_GDPR',reason:'PROFILE'});assert.equal(now.kid.photoConsent,'MISSING');assert.equal(now.kid.photoConsentVersion,0);
-  assert.equal(await printKid(),false,'consent needed and missing: initials');
+  await q("INSERT INTO hon.school_locations(school_id,organization_id,country_code,city,created_by_principal_id,updated_by_principal_id) VALUES($1,$2,'JP','Tokyo',$3,$3)",[B.schoolId,B.organizationId,managerPrincipal]);
+  now=await kidRow();assert.deepEqual(now.rule,OFF);assert.equal(await printKid(),true);
+  assert.deepEqual(ok(await readCards(managerB,B.schoolId)).settings.photoConsent,OFF);
+  // The approval policy is a required closed field of the saved look.
+  const look=v=>({schoolId:A.schoolId,expectedVersion:v,codeType:now.settings.codeType,showPhoto:true,showLogo:now.settings.showLogo,design:now.settings.design});
+  await denied(()=>configure(manager,look(now.settings.version)),400,'ATTENDANCE_CARDS_INVALID');
+  await denied(()=>configure(manager,{...look(now.settings.version),photoApprovalRequired:'yes'}),400,'ATTENDANCE_CARDS_INVALID');
+  const on=ok(await configure(manager,{...look(now.settings.version),photoApprovalRequired:true}));
+  assert.equal(on.settings.photoApprovalRequired,true);assert.deepEqual(on.settings.photoConsent,ON);
+  assert.deepEqual(ok(await readCards(managerB,B.schoolId)).settings.photoConsent,OFF,'one school turning it on changes no other school');
+  now=await kidRow();assert.equal(now.kid.photoConsent,'MISSING');assert.equal(now.kid.photoConsentVersion,0);
+  assert.equal(await printKid(),false,'approval asked for and missing: initials');
   const cb=(given,expectedVersion,studentProfileId=kp,schoolId=A.schoolId)=>({schoolId,studentProfileId,given,expectedVersion});
   await denied(()=>consent(manager,cb(false,0)),400,'ATTENDANCE_CARDS_INVALID');
   await denied(()=>consent(scanner,cb(true,0)),403,'ATTENDANCE_CARDS_FORBIDDEN');
@@ -242,15 +251,16 @@ try{
   assert.deepEqual(Object.keys(audit).sort(),['internalOnly','status','studentProfileId','version']);
   const withdrawn=ok(await consent(manager,cb(false,1)));assert.equal(withdrawn.photoConsent,'MISSING');assert.equal(withdrawn.photoConsentVersion,2);
   assert.equal(await printKid(),false);
-  // An unreviewed place fails closed; a US state without a rule needs none.
-  await q("INSERT INTO hon.school_locations(school_id,organization_id,country_code,city,created_by_principal_id,updated_by_principal_id) VALUES($1,$2,'JP','Tokyo',$3,$3)",[B.schoolId,B.organizationId,managerPrincipal]);
-  assert.deepEqual(ok(await readCards(managerB,B.schoolId)).settings.photoConsent,{required:true,profile:'NOT_REVIEWED',reason:'PROFILE'});
-  assert.equal((await q("SELECT hon.attendance_photo_consent_rule(o.id,s.id)->>'required' r FROM hon.organizations o JOIN hon.schools s ON s.organization_id=o.id WHERE s.id=$1",[A.schoolId]))[0].r,'true');
-  assert.equal((await q("SELECT (SELECT consent_required FROM hon.student_photo_consent_rules WHERE profile_code=hon.biometric_profile_for('US','CA','Los Angeles')) r"))[0].r,false);
+  // Turning the policy off prints the photo again and keeps the approval history.
+  const off=ok(await configure(manager,{...look(on.settings.version),photoApprovalRequired:false}));assert.deepEqual(off.settings.photoConsent,OFF);
+  now=await kidRow();assert.equal(now.kid.photoConsent,'NOT_REQUIRED');assert.equal(now.kid.photoConsentVersion,2);assert.equal(await printKid(),true);
+  assert.equal((await q("SELECT status FROM hon.student_photo_consents WHERE student_profile_id=$1",[kp]))[0].status,'WITHDRAWN');
+  // The 0394 place rules stay as immutable history, no longer read by cards.
+  assert.match((await q("SELECT obj_description('hon.student_photo_consent_rules'::regclass,'pg_class') d"))[0].d,/Superseded by 0413/);
   for(const st of ["UPDATE hon.student_photo_consent_rules SET consent_required=NOT consent_required","DELETE FROM hon.student_photo_consent_rules","DELETE FROM hon.student_photo_consents",
-    "UPDATE hon.student_photo_consents SET status='GIVEN'","TRUNCATE hon.student_photo_consents"]){
+    "UPDATE hon.student_photo_consents SET status='GIVEN'","TRUNCATE hon.student_photo_consents","UPDATE hon.attendance_card_settings SET photo_approval_required=true"]){
    await admin.query('BEGIN');await assert.rejects(()=>admin.query(st),e=>e.code==='42501',st);await admin.query('ROLLBACK');}}
- pass('photo consent follows the place: none without an address, required for EU/UK/Korea/unreviewed (draft); the card carries the photo only with recorded consent; consent is version-checked, exact-school, replayable and immutable except by a new version');
+ pass('U.S.-only photo policy: the photo prints by default wherever the school is; a school may turn on parent approval (exact school), then the card carries the photo only with recorded approval; approval is version-checked, replayable and kept when the policy is turned off');
 
  // 9. Authority is decided again after the last write.
  {const blocker=new pg.Client({connectionString:owner.toString(),ssl:false});await blocker.connect();
@@ -275,7 +285,7 @@ try{
   await q("UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=principal_id WHERE id=$1",[scannerGrant]);
   await denied(()=>scan(scanner,sb(newLeo,'PRESENT',A.schoolId,session4)),403,'ATTENDANCE_CARDS_FORBIDDEN');}
  pass('a print whose grant is revoked while it waits commits nothing; a scan holds its grant so a revocation waits for it, and the next scan is refused');
- console.log('Attendance card proof (0394): '+groups+' groups passed');
+ console.log('Attendance card proof (0394, 0413): '+groups+' groups passed');
 }finally{
  await app?.close();
  await Promise.allSettled([admin.end(),restricted.end()]);

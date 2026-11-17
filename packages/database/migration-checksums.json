@@ -310,6 +310,14 @@
     "0406_staff_qualification_and_role_lists.sql": "d131e376033198ca638c2b9aabc2c3ea9b7a93295d116dcd5aaedbc19ee8112f",
     "0407_retention_review_member_list.sql": "88ee6b0f21d71289f02036e36d50644a960ff7eeb620d542afda2303c76d1606",
     "0412_staff_assignable_permissions_list.sql": "5691c6871ad27b49385868c502922578926637dbc57b55924422bb07fde69db3",
-    "0426_face_checkin_program.sql": "1ced17b35d052318733f0b7a1d8b55c701fd4f8b9a564ff20a6b14ef1d4cadae"
+    "0413_attendance_card_photo_us_policy.sql": "ec9b09a43167fb95cba503c2d4ff670099cf69c25410e41680f0f1d79489d887",
+    "0414_walk_in_kiosk.sql": "e393385043538425f8a9c09b50d9aa5f3bb73f71731d017b692175e38f2bda29",
+    "0415_custom_tools.sql": "57ac8f806710e4c7cd489f5e228400051ffad6c3f76dc7891cb8f039ef3bab9d",
+    "0416_automation_workflows.sql": "f5461d07dec493477c2c5af02e03f1f0107cbc722b1e505b13631953cc39de8c",
+    "0417_lead_pipeline_board.sql": "071c1a65518bbf64d034885f6cebca9d9c579d4352b25af0d90dcb9e7176d3cc",
+    "0420_conversation_ai_training.sql": "6b2108d753b262700a83f90ecdd425969decea84d77b3f1c6ff0d4628775dbf7",
+    "0423_automation_engine.sql": "18fbac749087e7991fa73f98999d46f1a70c65ce805d7e8e0ceba1afc835d9bd",
+    "0424_contact_message_history.sql": "dfae0a22b7b64cc79dd396ada7fc6a3f1b763bb84a13ec4632e29375f01d5a39",
+    "0434_face_checkin_program.sql": "f61de72cc736908d360681ede2f323f580bcdb7606963548f27bdd3fd719ed9c"
   }
 }

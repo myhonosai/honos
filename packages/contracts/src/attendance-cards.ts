@@ -19,7 +19,7 @@ export const ATTENDANCE_CARD_MAX_PER_PRINT = 40;
 export const ATTENDANCE_CARD_CODE_LENGTH = 26;
 export const ATTENDANCE_CHECK_IN_STATUSES = ['PRESENT', 'LATE'] as const;
 export type AttendanceCheckInStatus = typeof ATTENDANCE_CHECK_IN_STATUSES[number];
-/** A student's photo consent for printed cards. NOT_REQUIRED where the school's place does not need it. */
+/** A student's photo consent for printed cards. NOT_REQUIRED unless the school turned on parent photo approval. */
 export const ATTENDANCE_PHOTO_CONSENT_STATES = ['NOT_REQUIRED', 'GIVEN', 'MISSING'] as const;
 export type AttendancePhotoConsentState = typeof ATTENDANCE_PHOTO_CONSENT_STATES[number];
 export const ATTENDANCE_CHECK_IN_OUTCOMES = ['RECORDED', 'ALREADY_RECORDED', 'NOT_RECOGNIZED', 'CARD_NOT_ACTIVE'] as const;
@@ -68,26 +68,28 @@ export interface AttendanceCardSettings {
   codeType: AttendanceCardCodeType; showPhoto: boolean; showLogo: boolean; design: AttendanceCardDesign;
   /** 0 when the school never chose (defaults shown). */ version: number; updatedAt: string | null;
   schoolName: string; logoUrl: string | null; accentColor: string | null;
-  /** Whether this school's place needs consent before a photo is printed (draft rules, lawyer review before real use). */
+  /** The school's own optional policy: a card prints a photo only after staff record parent approval (default off). */
+  photoApprovalRequired: boolean;
+  /** Whether a printed photo needs recorded approval at this school (0413: the school's setting only, no place rules). */
   photoConsent: AttendancePhotoConsentRule;
 }
-export interface AttendancePhotoConsentRule { required: boolean; profile: string | null; reason: 'NO_LOCATION' | 'PROFILE' }
+export interface AttendancePhotoConsentRule { required: boolean; profile: null; reason: 'SCHOOL_POLICY' | 'OFF' }
 function consentRule(v: unknown): AttendancePhotoConsentRule {
   const o = closed(v, ['required', 'profile', 'reason'], true);
-  const reason = oneOf(o.reason, ['NO_LOCATION', 'PROFILE'] as const, true), profile = text(o.profile, 40, true, true);
-  if (profile !== null && !/^[A-Z][A-Z0-9_]*$/.test(profile)) fail(true);
-  const required = bool(o.required, true);
-  if ((reason === 'NO_LOCATION') !== (profile === null) || (reason === 'NO_LOCATION' && required)) fail(true);
-  return Object.freeze({ required, profile, reason });
+  const reason = oneOf(o.reason, ['SCHOOL_POLICY', 'OFF'] as const, true), required = bool(o.required, true);
+  if (o.profile !== null || required !== (reason === 'SCHOOL_POLICY')) fail(true);
+  return Object.freeze({ required, profile: null, reason });
 }
 function settings(v: unknown): AttendanceCardSettings {
-  const o = closed(v, ['codeType', 'showPhoto', 'showLogo', 'design', 'version', 'updatedAt', 'schoolName', 'logoUrl', 'accentColor', 'photoConsent'], true);
+  const o = closed(v, ['codeType', 'showPhoto', 'showLogo', 'design', 'photoApprovalRequired', 'version', 'updatedAt', 'schoolName', 'logoUrl', 'accentColor', 'photoConsent'], true);
   const logoUrl = text(o.logoUrl, 2048, true, true), accentColor = text(o.accentColor, 7, true, true);
   if (logoUrl !== null && !/^https:\/\/[^\s"'<>\\]+$/i.test(logoUrl)) fail(true);
   if (accentColor !== null && !/^#[0-9a-f]{6}$/i.test(accentColor)) fail(true);
+  const rule = consentRule(o.photoConsent);
+  if (rule.required !== o.photoApprovalRequired) fail(true);
   return Object.freeze({ codeType: oneOf(o.codeType, ATTENDANCE_CARD_CODE_TYPES, true), showPhoto: bool(o.showPhoto, true), showLogo: bool(o.showLogo, true),
     design: oneOf(o.design, ATTENDANCE_CARD_DESIGNS, true), version: int(o.version, 0, true), updatedAt: time(o.updatedAt, true, true),
-    schoolName: text(o.schoolName, 200, true) as string, logoUrl, accentColor, photoConsent: consentRule(o.photoConsent) });
+    schoolName: text(o.schoolName, 200, true) as string, logoUrl, accentColor, photoApprovalRequired: bool(o.photoApprovalRequired, true), photoConsent: rule });
 }
 export const validateAttendanceCardSettings = settings;
 
@@ -124,11 +126,12 @@ export function validateAttendanceCardsRead(v: unknown): AttendanceCardsRead {
   return Object.freeze({ settings: st, maxPerPrint: ATTENDANCE_CARD_MAX_PER_PRINT, students: Object.freeze(students) });
 }
 
-export interface AttendanceCardSettingsInput { schoolId: string; expectedVersion: number; codeType: AttendanceCardCodeType; showPhoto: boolean; showLogo: boolean; design: AttendanceCardDesign }
+export interface AttendanceCardSettingsInput { schoolId: string; expectedVersion: number; codeType: AttendanceCardCodeType; showPhoto: boolean; showLogo: boolean; design: AttendanceCardDesign; photoApprovalRequired: boolean }
 export function validateAttendanceCardSettingsInput(v: unknown): AttendanceCardSettingsInput {
-  const o = closed(v, ['schoolId', 'expectedVersion', 'codeType', 'showPhoto', 'showLogo', 'design'], false);
+  const o = closed(v, ['schoolId', 'expectedVersion', 'codeType', 'showPhoto', 'showLogo', 'design', 'photoApprovalRequired'], false);
   return Object.freeze({ schoolId: id(o.schoolId, false), expectedVersion: int(o.expectedVersion, 0, false), codeType: oneOf(o.codeType, ATTENDANCE_CARD_CODE_TYPES, false),
-    showPhoto: bool(o.showPhoto, false), showLogo: bool(o.showLogo, false), design: oneOf(o.design, ATTENDANCE_CARD_DESIGNS, false) });
+    showPhoto: bool(o.showPhoto, false), showLogo: bool(o.showLogo, false), design: oneOf(o.design, ATTENDANCE_CARD_DESIGNS, false),
+    photoApprovalRequired: bool(o.photoApprovalRequired, false) });
 }
 export interface AttendanceCardSettingsResult { settings: AttendanceCardSettings; replayed: boolean }
 export function validateAttendanceCardSettingsResult(v: unknown): AttendanceCardSettingsResult {
@@ -147,7 +150,7 @@ export function validateAttendanceCardIssueInput(v: unknown): AttendanceCardIssu
 }
 /**
  * A printed card. code is the full code on a fresh print, and null on a replay (codes are shown only once). printPhoto is
- * the server's decision: the saved look shows photos, the student has one, and consent is given where it is needed.
+ * the server's decision: the saved look shows photos, the student has one, and approval is recorded when the school asks for it.
  */
 export interface AttendanceIssuedCard extends AttendanceCard { code: string | null; printPhoto: boolean }
 export interface AttendanceCardIssueResult { printId: string; cards: readonly AttendanceIssuedCard[]; replaced: number; replayed: boolean }

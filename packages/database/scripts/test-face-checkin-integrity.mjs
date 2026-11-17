@@ -1,4 +1,4 @@
-/** 0426 face check-in. Real signed HON sessions -> Nest/guard -> fixed runtime SQL -> marked disposable PostgreSQL (Champions Club fixture). Synthetic matcher only. */
+/** 0434 face check-in. Real signed HON sessions -> Nest/guard -> fixed runtime SQL -> marked disposable PostgreSQL (Champions Club fixture). Synthetic matcher only. */
 import assert from 'node:assert/strict';
 import {randomUUID as K,randomBytes,createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
@@ -107,7 +107,7 @@ try{
  assert.equal((await q('SELECT status FROM hon.face_checkin_program'))[0].status,'CLOSED');
  assert.equal((await q("SELECT count(*)::int n FROM hon.face_checkin_forms WHERE review_status='TEST_ONLY_DRAFT' AND digest=encode(sha256(convert_to(title||E'\\n\\n'||body,'UTF8')),'hex')"))[0].n,30);
  {const verify=readFileSync(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql',import.meta.url),'utf8');
-  const section=verify.split('-- Face check-in exact verification (0426)')[1]?.split('-- End face check-in exact verification.')[0];
+  const section=verify.split('-- Face check-in exact verification (0434)')[1]?.split('-- End face check-in exact verification.')[0];
   assert(section);await q(section.replaceAll('hon_runtime',runtime.username));}
  pass('nine forced-RLS private tables; the runtime executes only the ten entry points; the program starts CLOSED; 30 draft forms with matching digests; the deployment verifier section passes');
 
@@ -345,7 +345,7 @@ try{
  await q("UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=principal_id WHERE id=$1",[scannerGrant]);
  await denied(()=>match(scanner,mb(png(1))),403,'FACE_CHECKIN_FORBIDDEN');
  pass('a settings change whose grant is revoked while it waits commits nothing; a revoked scanner is refused');
- console.log('Face check-in proof (0426): '+groups+' groups passed');
+ console.log('Face check-in proof (0434): '+groups+' groups passed');
 }finally{
  await app?.close();
  await Promise.allSettled([admin.end(),restricted.end()]);

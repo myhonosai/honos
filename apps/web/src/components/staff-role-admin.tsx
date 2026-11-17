@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, type FormEvent } from 'react';
 import styles from './staff-role-admin.module.css';
 import { ManualSchoolFields, useShellSchool, useShellSchoolInto } from './school-shell/page-school';
 import { IdFields, StaffPicker } from './school-pickers/pickers';
+import { PERMISSION_LABELS, groupPermissions, labelOf, verifyAssignablePermissions, type AssignablePermission } from './staff-permissions/catalog';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export type RoleRow = Readonly<{ id: string; code: string; name: string; version: number; permissionCodes: readonly string[] }>;
@@ -25,6 +26,15 @@ export function verifyRoleLists(value: unknown): RoleLists {
 }
 /** A grant in words: who, which role, and until when. Never record IDs. */
 export const grantLabel = (g: GrantRow): string => `${g.displayName} · ${g.roleName}${g.effectiveUntil ? ` · until ${g.effectiveUntil.slice(0, 10)}` : ''}`;
+/** A role code from its name, so nobody types one: CUSTOM_ plus the name in capitals. The server still checks it. */
+export function roleCodeFrom(name: string): string {
+  let core = name.toUpperCase().normalize('NFKD').replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 47);
+  // A name with no Latin letters (for example Korean) still gets a valid, distinct code.
+  if (!core) core = `ROLE_${Array.from(crypto.getRandomValues(new Uint8Array(3)), n => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[n % 24]).join('')}`;
+  if (!/^[A-Z]/.test(core)) core = `ROLE_${core}`;
+  if (core.length < 2) core = `${core}_ROLE`;
+  return `CUSTOM_${core.slice(0, 48)}`;
+}
 export const roleLabel = (r: RoleRow): string => `${r.name} · ${r.permissionCodes.length} permission${r.permissionCodes.length === 1 ? '' : 's'}`;
 
 type Command = { url: string; body: Record<string, unknown>; done: string };
@@ -33,7 +43,9 @@ export function StaffRoleAdmin(): React.ReactElement {
   useShellSchoolInto(s => { setOrg(s.organizationId); setSchool(s.schoolId); });
   const shell = useShellSchool(), pickScope = shell && shell.organizationId === org && shell.schoolId === school ? shell : null;
   const [lists, setLists] = useState<RoleLists | null>(null), [selected, setSelected] = useState<RoleRow | null>(null);
-  const [code, setCode] = useState('CUSTOM_'); const [name, setName] = useState(''); const [permissions, setPermissions] = useState('school.view');
+  const [name, setName] = useState(''); const [permissions, setPermissions] = useState('school.view');
+  // The checklist (0412): what this manager may give, and the codes ticked for the role being made or edited.
+  const [choices, setChoices] = useState<readonly AssignablePermission[] | null>(null), [choicesFailed, setChoicesFailed] = useState(false), [chosen, setChosen] = useState<readonly string[]>(['school.view']);
   const [grantRole, setGrantRole] = useState(''); const [target, setTarget] = useState(''); const [subject, setSubject] = useState(''); const [expiry, setExpiry] = useState('');
   const [knownId, setKnownId] = useState(''); const [busy, setBusy] = useState(false); const [notice, setNotice] = useState(''); const [error, setError] = useState('');
   // A retry of an uncertain identical request reuses its key; a changed command
@@ -51,29 +63,43 @@ export function StaffRoleAdmin(): React.ReactElement {
   }
   async function run(work: () => Promise<void>) { if (busy) return; setBusy(true); setError(''); setNotice(''); try { await work(); } catch (e) { setError(`${e instanceof Error ? e.message : 'That could not be done.'} No save is assumed until the page confirms it.`); } finally { setBusy(false); } }
   async function refresh() { setLists(verifyRoleLists(await call(`${base}/lists`))); }
-  useEffect(() => { setLists(null); setSelected(null); if (scoped) void run(refresh); }, [org, school]); // eslint-disable-line react-hooks/exhaustive-deps -- open on the signed-in school right away
+  // The checklist is a convenience: if it cannot load, the typed list stays and the server still decides.
+  async function loadChoices() { try { setChoices(verifyAssignablePermissions(await call(`${base}/permissions`))); setChoicesFailed(false); } catch { setChoices(null); setChoicesFailed(true); } }
+  useEffect(() => { setLists(null); setSelected(null); setChoices(null); setChoicesFailed(false); if (scoped) void run(async () => { await refresh(); await loadChoices(); }); }, [org, school]); // eslint-disable-line react-hooks/exhaustive-deps -- open on the signed-in school right away
   async function command(c: Command) { await call(c.url, c.body); last.current = null; await refresh(); setNotice(c.done); }
-  const codes = () => { const list = permissions.split(/[,\n]/).map(p => p.trim()).filter(Boolean); if (list.length < 1 || new Set(list).size !== list.length) throw new Error('List each permission once.'); return list; };
-  function pick(role: RoleRow | null) { setSelected(role); setName(role?.name ?? ''); setPermissions(role ? role.permissionCodes.join('\n') : 'school.view'); setCode('CUSTOM_'); }
+  const offered = new Set((choices ?? []).map(p => p.code));
+  // Codes already in the role that this manager cannot give stay as they are and are sent back unchanged.
+  const kept = selected && choices ? selected.permissionCodes.filter(c => !offered.has(c)) : [];
+  const codes = () => { if (!choices && !choicesFailed) throw new Error('The permission list is still loading.'); const list = choices ? [...kept, ...chosen.filter(c => offered.has(c))] : permissions.split(/[,\n]/).map(p => p.trim()).filter(Boolean); if (list.length < 1) throw new Error('Tick at least one permission.'); if (new Set(list).size !== list.length) throw new Error('List each permission once.'); return list; };
+  function pick(role: RoleRow | null) { setSelected(role); setName(role?.name ?? ''); setPermissions(role ? role.permissionCodes.join('\n') : 'school.view'); setChosen(role ? role.permissionCodes : ['school.view']); }
+  const tick = (code: string, on: boolean) => setChosen(current => on ? (current.includes(code) ? current : [...current, code]) : current.filter(c => c !== code));
   const save = (e: FormEvent) => { e.preventDefault(); void run(() => selected
     ? command({ url: `${base}/custom/${selected.id}/update`, body: { name, permissionCodes: codes(), expectedVersion: selected.version }, done: `Saved ${name}.` })
-    : command({ url: `${base}/custom`, body: { code, name, permissionCodes: codes() }, done: `Created ${name}.` })); };
+    : command({ url: `${base}/custom`, body: { code: roleCodeFrom(name), name, permissionCodes: codes() }, done: `Created ${name}.` })); };
   const give = (e: FormEvent) => { e.preventDefault(); void run(() => command({ url: `${base}/grants`, body: { roleId: grantRole, targetPrincipalId: target, targetExternalSubject: subject, ...(expiry ? { effectiveUntil: new Date(`${expiry}T23:59:59Z`).toISOString() } : {}) }, done: 'Role given.' }).then(() => { setSubject(''); setTarget(''); setExpiry(''); })); };
   const end = (g: GrantRow) => void run(() => command({ url: `${base}/grants/${g.id}/revoke`, body: { expectedVersion: g.version }, done: `Ended ${g.roleName} for ${g.displayName}.` }));
   async function openKnown() { const role = await call(`${base}/custom/${knownId}`) as RoleRow; pick(lists?.roles.find(r => r.id === role.id) ?? role); }
   const targetInput = <label>Staff record ID<input required value={target} onChange={e => setTarget(e.target.value)} /></label>;
   return <main className={styles.page}>
     <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/team/availability">Staff availability</a><a href="/staff/team/invitations">Staff invitations</a><a href="/staff/automation/rules">Automation configuration</a><a href="/auth/login">Sign in</a></nav>
-    <header><p>Staff</p><h1>Roles</h1><p>Make a custom role for your school, give a role to someone on your team, or end it.</p></header>
+    <header><p>Staff</p><h1>Roles &amp; permissions</h1><p>Give your staff permission to do things: make a role, tick what it lets people do, then give it to someone on your team.</p></header>
     <aside data-plain-note=""><strong>Roles control what each person can see and do. This page does not invite people or change pay.</strong></aside>
     <ManualSchoolFields current={school}><fieldset disabled={busy}><legend>School</legend><label>Organization UUID<input required value={org} onChange={e => setOrg(e.target.value)} /></label><label>School UUID<input required value={school} onChange={e => setSchool(e.target.value)} /></label></fieldset></ManualSchoolFields>
     {error && <p role="alert" className={styles.error}>{error}</p>}{notice && <p role="status" className={styles.result}>{notice}</p>}{busy && <p role="status">Working…</p>}
     <section><h2>Custom roles</h2>
       {lists && (lists.roles.length ? <ul>{lists.roles.map(r => <li key={r.id}><button type="button" disabled={busy} aria-pressed={selected?.id === r.id} onClick={() => pick(r)}>{roleLabel(r)}</button></li>)}</ul> : <p>No custom roles yet.</p>)}
       <form onSubmit={save}><fieldset disabled={busy || !scoped}><legend>{selected ? `Edit ${selected.name}` : 'Create custom role'}</legend>
-        {!selected && <label>Role code<input required pattern="CUSTOM_[A-Z][A-Z0-9_]{1,47}" maxLength={55} value={code} onChange={e => setCode(e.target.value)} /><small>CUSTOM_ plus an uppercase name. Codes cannot be renamed.</small></label>}
-        <label>Role name<input required maxLength={100} value={name} onChange={e => setName(e.target.value)} /></label>
-        <label>Allowed permission codes<textarea required rows={4} value={permissions} onChange={e => setPermissions(e.target.value)} /><small>One per line. You can only include permissions you have yourself.</small></label>
+        <label>Role name<input required maxLength={100} placeholder="Front desk" value={name} onChange={e => setName(e.target.value)} /></label>
+        {choices ? <div className={styles.checklist} role="group" aria-label="What this role can do" data-permission-checklist="">
+          <p><strong>What this role can do</strong> <small>You can only give permissions you have yourself.</small></p>
+          {groupPermissions(choices).map(group => <fieldset key={group.key} data-area={group.key}><legend>{group.label}</legend>
+            {group.items.map(p => <label key={p.code} className={styles.check}><input type="checkbox" name={`permission-${p.code}`} checked={chosen.includes(p.code)} onChange={e => tick(p.code, e.target.checked)} />
+              <span>{labelOf(p)}{p.sensitive && <small> · sensitive</small>}</span></label>)}
+          </fieldset>)}
+          {kept.length > 0 && <p data-kept-permissions=""><small>{`Also in this role, unchanged (you don't have these yourself): ${kept.map(c => PERMISSION_LABELS[c] ?? c).join(', ')}.`}</small></p>}
+        </div>
+          : !choicesFailed ? <p role="status" data-permission-checklist="loading">Reading the permissions you can give…</p>
+          : <label>Allowed permission codes<textarea required rows={4} value={permissions} onChange={e => setPermissions(e.target.value)} /><small>The permission list could not be loaded, so type one code per line. You can only include permissions you have yourself.</small></label>}
         <button type="submit">{selected ? 'Save role' : 'Create role'}</button>{selected && <button type="button" onClick={() => pick(null)}>New role instead</button>}
       </fieldset></form>
       <IdFields manual={false}><form onSubmit={e => { e.preventDefault(); void run(openKnown); }}><label>Role record ID<input required value={knownId} onChange={e => setKnownId(e.target.value)} /></label><button disabled={busy || !UUID.test(knownId) || !scoped}>Open</button></form></IdFields>
