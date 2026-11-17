@@ -17,6 +17,9 @@
       "env": {
         "EXPO_PUBLIC_HON_API_URL": "https://app.myhonos.com/api",
         "EXPO_PUBLIC_HON_WEB_URL": "https://app.myhonos.com"
+      },
+      "android": {
+        "buildType": "apk"
       }
     },
     "production": {
