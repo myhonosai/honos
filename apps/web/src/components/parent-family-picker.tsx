@@ -11,7 +11,7 @@ const key = (c: ParentFamilyChoice) => `${c.schoolId}/${c.familyId}`;
 export const familyLabel = (c: ParentFamilyChoice) => `${c.schoolName} · ${c.familyName}`;
 
 /**
- * 0456: shows the families this parent is linked to now. With several and none chosen, the parent must choose before any
+ * 0469: shows the families this parent is linked to now. With several and none chosen, the parent must choose before any
  * family page opens. With several and one chosen, a small switcher lets the parent change it without signing out. The choice
  * only names one of the listed families; the server checks it again on every page.
  */

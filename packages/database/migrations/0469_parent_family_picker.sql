@@ -1,6 +1,6 @@
 BEGIN;
 
--- Parent school and family picker (0456, coordinator-allocated 2026-11-17). The owner asked (2026-11-17) that a parent linked
+-- Parent school and family picker (0469, allocated as 0456 and renumbered by the coordinator rule 2026-11-17). The owner asked (2026-11-17) that a parent linked
 -- to more than one family, at two schools or as two households at one school, picks which one to view and switches without
 -- signing out. Spec: docs/architecture/PARENT_FAMILY_PICKER.md.
 --   F1  The choices are exactly the parent's live family scopes: 0071 hon.resolve_parent_family_scope over every school where
@@ -45,7 +45,7 @@ CREATE TABLE hon.parent_family_selections (
 );
 ALTER TABLE hon.parent_family_selections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hon.parent_family_selections FORCE ROW LEVEL SECURITY;
-COMMENT ON TABLE hon.parent_family_selections IS '0456 the family a parent chose to view when linked to more than one. Private; the live grants still decide access.';
+COMMENT ON TABLE hon.parent_family_selections IS '0469 the family a parent chose to view when linked to more than one. Private; the live grants still decide access.';
 
 -- F1: every live family scope of the signed-in parent, at most 20, in a stable order.
 CREATE FUNCTION hon.parent_live_family_scopes(subject text)

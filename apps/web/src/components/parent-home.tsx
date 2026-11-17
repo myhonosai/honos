@@ -20,7 +20,7 @@ export type ParentHomeReadState =
   | { kind: 'access-lost'; message: string };
 
 const loading: ParentHomeReadState = { kind: 'loading' };
-/** 0456: the families this parent is linked to. Hidden until verified; hidden again whenever content is concealed. */
+/** 0469: the families this parent is linked to. Hidden until verified; hidden again whenever content is concealed. */
 type FamilyState = { kind: 'hidden' } | ({ kind: 'ready' } & ParentFamilyChoices);
 const CHOOSE_FIRST: ParentHomeReadState = { kind: 'unavailable', message: 'Choose a school and family above to open this.' };
 
@@ -53,6 +53,7 @@ export function ParentHomeCards({ journey, testing, billing, plannedAbsences, cu
     {journey.kind === 'ready' && <>
       <HomeCard title="Schedule" eyebrow="AUTHORIZED BOOKINGS" description="View the current family schedule in Student Journey." href="/parent/journey#schedule" note="The Journey read chooses the authorized family and its bounded window. No booking, cancellation, check-in, or attendance action starts here." />
       <HomeCard title="Book a class" eyebrow="OPEN CLASSES" description="Book your child into open classes for the next two weeks, or cancel a booking you made." href="/parent/classes" note="Only classes your child is enrolled in that take bookings are shown. Guardians can book; viewers can look." />
+      <HomeCard title="Events & bookings" eyebrow="SCHOOL EVENTS" description="Book a time at a school event or a family booking such as a belt test, or cancel one you made." href="/parent/bookings" note="Bookings use your family name and sign-in email. Guardians can book; viewers can look." />
       <HomeCard title="Student Journey" eyebrow="CURRENT PROGRESS" description="Review current curriculum, shared recognition, and authorized bookings." href="/parent/journey" note="Only current family-safe observations are shown there. Progress, readiness, promotion, and testing outcomes are never inferred." />
       <HomeCard title="Face check-in consent" eyebrow="OPTIONAL" description="Read your school's face check-in consent form, sign it for your child, or withdraw." href="/parent/face-check-in" note="Nothing happens unless you sign. Your child can always check in with a card or by name instead." />
       <HomeCard title="Documents" eyebrow="CURRENT PUBLICATIONS" description="Open the existing family document review and acknowledgement desk." href="/parent/documents" note="Document access is checked again by its own family-safe route. This Home never assumes an acknowledgement or creates one." />
@@ -101,7 +102,7 @@ export function ParentHome(): React.ReactElement {
     pending.current = controller;
     setJourney(loading); setTesting(loading); setBilling(loading); setPlannedAbsences(loading); setCurriculumLibrary(loading);
 
-    // 0456: list the parent's families first. With several and none chosen, nothing else opens until the parent chooses.
+    // 0469: list the parent's families first. With several and none chosen, nothing else opens until the parent chooses.
     let families: ParentFamilyChoices | null = null;
     try { families = await loadParentFamilyChoices(controller.signal); } catch (error) {
       if (generation.current !== token || error instanceof DOMException && error.name === 'AbortError') return;

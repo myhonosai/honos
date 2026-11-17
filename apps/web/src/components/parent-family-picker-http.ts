@@ -3,7 +3,7 @@ import {
   type ParentFamilyChoices, type SelectParentFamilyInput,
 } from '@hon/contracts';
 
-/** 0456 parent family picker: same-origin browser calls only; the body names one of the families the server listed. */
+/** 0469 parent family picker: same-origin browser calls only; the body names one of the families the server listed. */
 export class ParentFamilyPickerAccessError extends Error { constructor(message: string, readonly status: number) { super(message); } }
 function invalid(): never { throw new Error('The family list could not be checked. Nothing was changed. Refresh to try again.'); }
 

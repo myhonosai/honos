@@ -20,7 +20,7 @@ function subjectOk(subject: unknown): subject is string {
 }
 
 /**
- * 0456 parent school and family picker. The list is the parent's live family grants; a choice only names one of them and is
+ * 0469 parent school and family picker. The list is the parent's live family grants; a choice only names one of them and is
  * proved again by the database, which then decides the tenant for every other parent read and command.
  */
 @Injectable()

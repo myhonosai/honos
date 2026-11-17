@@ -102,13 +102,15 @@ try{
   for(const role of [runtime.username,workerUrl.username])for(const p of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'])
    assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[role,'hon.'+t,p]))[0].ok,false,role+':'+t+':'+p);
  }
- const adsRuntime=['read_school_social_ads','set_school_social_ad_budget','create_school_social_ad','cancel_school_social_ad','start_school_social_ad_operation','record_school_social_ad_result','resolve_school_social_ad'];
+ const adsRuntime=['read_school_social_ads','set_school_social_ad_budget','create_school_social_ad','cancel_school_social_ad','start_school_social_ad_operation','record_school_social_ad_result','resolve_school_social_ad',
+  // 0453 Google ads (proven in test-school-social-google-ads.mjs).
+  'create_school_social_google_ad'];
  const earlierRuntime=['read_school_social_accounts','start_school_social_connect','record_school_social_profile','claim_school_social_connect','record_school_social_accounts','change_school_social_account',
   'read_school_social_posts','create_school_social_post','edit_school_social_post','approve_school_social_post','cancel_school_social_post','resolve_school_social_post_target',
   'read_school_social_inbox','read_school_social_conversation','change_school_social_conversation','start_school_social_reply','record_school_social_reply_result','resolve_school_social_message','start_school_social_comment_action','record_school_social_comment_action_result'];
  const workerEntry=['claim_school_social_post_targets','record_school_social_post_result','record_school_social_post_event','record_school_social_inbox_event'];
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname LIKE '%school_social%'");
- assert.equal(fns.length,12+16+14+12,fns.map(f=>f.proname).join());
+ assert.equal(fns.length,12+16+14+12+2,fns.map(f=>f.proname).join());
  for(const f of fns){
   assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,[...earlierRuntime,...adsRuntime].includes(f.proname),'runtime '+f.proname);
   assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[workerUrl.username,f.oid]))[0].ok,workerEntry.includes(f.proname),'worker '+f.proname);
@@ -179,6 +181,13 @@ try{
  r=await operate(a,ad1.adId,{operation:'CREATE',expectedVersion:1});refused(r,503,'SOCIAL_ADS_NOT_ENABLED');
  assert.deepEqual([(await row(ad1.adId)).status,(await row(ad1.adId)).version],['DRAFT',1]);
  fakeEnv.HON_ZERNIO_FAKE_PROVIDER='1';{const W=await view(a);assert.deepEqual([W.adsEnabled,W.pauseEnabled],[true,true]);}
+ // Owner decision (0453): every ad reaches people within 5 miles of the school's street address, so approval needs one.
+ r=await operate(a,ad1.adId,{operation:'CREATE',expectedVersion:1});refused(r,409,'SOCIAL_AD_NO_ADDRESS');
+ const ownerP=await principalOf(a);
+ await q("INSERT INTO hon.school_locations(school_id,organization_id,country_code,region_code,city,created_by_principal_id,updated_by_principal_id) VALUES($1,$2,'US','IL','Testville',$3,$3)",[a.school,a.org,ownerP]);
+ r=await operate(a,ad1.adId,{operation:'CREATE',expectedVersion:1});refused(r,409,'SOCIAL_AD_NO_ADDRESS');
+ await q("UPDATE hon.school_locations SET address_line1='100 Synthetic Way',postal_code='60000',version=version+1,updated_at=clock_timestamp() WHERE school_id=$1",[a.school]);
+ assert.deepEqual([(await row(ad1.adId)).status,(await row(ad1.adId)).version,fake.boosts.length],['DRAFT',1,0],'a refusal for a missing address records nothing');
  // A budget whose currency no longer matches the ad (only possible outside the API) refuses approval.
  await q("UPDATE hon.school_social_ad_budgets SET currency='EUR',version=version+1 WHERE school_id=$1",[a.school]);
  r=await operate(a,ad1.adId,{operation:'CREATE',expectedVersion:1});refused(r,409,'SOCIAL_AD_STATE');
@@ -188,7 +197,8 @@ try{
  assert.deepEqual([ad1.status,ad1.operation,r.body.meta.replayed],['PAUSED','CREATE',false]);
  assert.equal(fake.boosts.length,1);
  assert.deepEqual({...fake.boosts[0],providerAdId:undefined},{providerAccountId:A.fb.provider_account_id,providerPostId:(await q('SELECT provider_post_id p FROM hon.school_social_post_targets WHERE id=$1',[T.p1]))[0].p,
-  budgetCents:5000,currency:'USD',startsOn:today,endsOn:today,timezone:'America/Chicago',idempotencyKey:ad1.adId,providerAdId:undefined});
+  budgetCents:5000,currency:'USD',startsOn:today,endsOn:today,timezone:'America/Chicago',
+  location:{addressLine1:'100 Synthetic Way',addressLine2:null,city:'Testville',region:'IL',postalCode:'60000',country:'US',radiusMiles:5},idempotencyKey:ad1.adId,providerAdId:undefined});
  assert.equal((await row(ad1.adId)).provider_ad_id,fake.boosts[0].providerAdId);
  r=await operate(a,ad1.adId,{operation:'CREATE',expectedVersion:1},{key:okey});assert.equal(r.body.meta.replayed,true);assert.equal(fake.boosts.length,1,'a replay never calls again');
  r=await operate(a,ad1.adId,{operation:'CREATE',expectedVersion:ad1.version});refused(r,409,'SOCIAL_AD_STATE');
