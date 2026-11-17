@@ -4,6 +4,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { flexibleBillingAccountsFixture, requireFlexibleBillingAccountsLocalUrls } from './flexible-billing-accounts-local-guard.mjs';
 import { ACTIVATION_CONFIRMATION, ADULT_ATTESTATION, OVERRIDE_CONFIRMATION, confirmationFor, membershipFixtureQuery } from './membership-activation-test-support.mjs';
+import { bodyAfterDemoData } from './demo-data-guard-line.mjs';
 
 // Disposable-localhost proof for the 0177 membership activation gate (E1a). Every command runs through the real
 // MembershipService against the restricted runtime role; the owner connection only builds fixtures and observes.
@@ -72,7 +73,7 @@ try {
     assert.ok(body, `0177 or its 0178 replacement defines ${name}`);
     const row = (await admin.query(`SELECT p.prosrc=$2 exact,p.prosecdef definer,has_function_privilege($1,p.oid,'EXECUTE') runtime_execute,
       has_function_privilege('public',p.oid,'EXECUTE') public_execute,(SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)::int overloads,
-      p.proconfig config FROM pg_proc p WHERE p.oid=$3::regprocedure`, [runtimeUrl.username, body, `hon.${signature}`])).rows[0];
+      p.proconfig config FROM pg_proc p WHERE p.oid=$3::regprocedure`, [runtimeUrl.username, bodyAfterDemoData(name, body), `hon.${signature}`])).rows[0];
     assert.deepEqual({ ...row, config: undefined }, { exact: true, definer: !plain.includes(signature), runtime_execute: entry.includes(signature), public_execute: false, overloads: 1, config: undefined }, signature);
     assert.ok(row.config?.every((setting) => /^search_path=pg_catalog(, hon)?$/.test(setting)) && row.config.length === 1, `${signature} fixed search path`);
     assertions += 2;

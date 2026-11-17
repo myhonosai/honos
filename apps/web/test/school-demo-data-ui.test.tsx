@@ -9,7 +9,7 @@ import { SchoolDemoDataSettingsView, type SchoolDemoDataSettingsViewProps } from
 import { SchoolShellFrame } from '../src/components/school-shell/frame';
 import { id } from './account-status-fixtures';
 
-// 0439: Settings > Demo data. Load and remove are each one human command; remove asks once first.
+// 0446: Settings > Demo data. Load and remove are each one human command; remove asks once first.
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 

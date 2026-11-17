@@ -4045,7 +4045,7 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
--- 0439 school demo data: two private tables reached only through three runtime entry points (read, load, remove); the
+-- 0446 school demo data: two private tables reached only through three runtime entry points (read, load, remove); the
 -- removal check inside the patched append-only guards is runnable by the roles that can fire those guards.
 DO $$ DECLARE r text; t text; f text;
   entry text[]:=ARRAY['hon.read_school_demo_data(text)','hon.load_school_demo_data(text,jsonb,text,uuid,uuid)','hon.remove_school_demo_data(text,jsonb,text,uuid,uuid)'];
@@ -4056,7 +4056,7 @@ DO $$ DECLARE r text; t text; f text;
     'hon.school_demo_data_begin(text,text,jsonb,text,uuid,uuid)','hon.school_demo_data_finish(text,uuid,text,jsonb)','hon.demo_data_person_tables()',
     'hon.school_demo_data_collect(uuid,uuid,uuid)','hon.school_demo_data_delete(uuid)'];
 BEGIN
-  IF to_regprocedure('hon.remove_school_demo_data(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0439 first'; END IF;
+  IF to_regprocedure('hon.remove_school_demo_data(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0446 first'; END IF;
   FOREACH t IN ARRAY ARRAY['school_demo_data_sets','school_demo_data_rows'] LOOP
     EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP

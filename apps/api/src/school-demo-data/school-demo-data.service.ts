@@ -12,7 +12,7 @@ const READ_LIMITS = "SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3
 // A load writes about 1,500 rows and a removal finds and deletes them again; each is still one transaction or nothing.
 const WRITE_LIMITS = "SET LOCAL statement_timeout='60s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0";
 
-// Exact 0439 error codes; every unknown database failure is unavailable, never success.
+// Exact 0446 error codes; every unknown database failure is unavailable, never success.
 const ERRORS: Record<string, (code: string) => HttpException> = {
   VALIDATION_FAILED: code => new BadRequestException({ code }),
   DEMO_DATA_FORBIDDEN: code => new ForbiddenException({ code, detail: 'The demo data permission at this school and an active subscription or trial are required.' }),
@@ -45,7 +45,7 @@ function translate(error: unknown): never {
 }
 
 /**
- * 0439: school demo data. Each read, load and remove is one protected definer call that re-proves the direct human subject,
+ * 0446: school demo data. Each read, load and remove is one protected definer call that re-proves the direct human subject,
  * the live school.demo_data.manage permission and the school's access, before and after its writes. The runtime role has
  * no table privilege on the demo registry or on any table the demo rows live in.
  */

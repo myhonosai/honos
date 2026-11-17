@@ -134,7 +134,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   }, [selection?.organizationId, selection?.schoolId, schoolName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Screensaver: rendered synchronously on hide so the app switcher and onlookers see it, not records.
-  // 0439: a banner while this school has demo data loaded. Read for the verified school only; any refusal (a staff member
+  // 0446: a banner while this school has demo data loaded. Read for the verified school only; any refusal (a staff member
   // without the demo data permission included) shows no banner. A load or remove on the Settings page reads it again.
   const [demoLoaded, setDemoLoaded] = useState(false);
   const [demoCheck, setDemoCheck] = useState(0);

@@ -13,7 +13,7 @@ type Pending = Readonly<{ kind: 'LOAD'; key: string; scope: DemoScope } | { kind
 type Lock = 'NONE' | 'SENDING' | 'KEPT';
 
 /**
- * Settings > Demo data (0439). Load and Remove are each one command with its own key; Remove asks once first. Every answer
+ * Settings > Demo data (0446). Load and Remove are each one command with its own key; Remove asks once first. Every answer
  * is followed by a fresh read and tells the staff banner to read again. A school change or session end drops a kept retry.
  */
 export function SchoolDemoDataSettings({ api = demoDataApi }: { api?: DemoDataApi }): React.ReactElement {

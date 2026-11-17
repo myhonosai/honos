@@ -1,5 +1,5 @@
 /**
- * 0439: demo data a school owner can load to try HON and remove again with one action, before importing real records.
+ * 0446: demo data a school owner can load to try HON and remove again with one action, before importing real records.
  * Every demo row is registered in the database; removal deletes only those rows (and what staff added to demo people),
  * never a real record. Demo people are never texted, emailed or charged. The database validates every rule here again.
  */
