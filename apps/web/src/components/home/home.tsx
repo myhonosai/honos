@@ -16,6 +16,7 @@ import { SchoolHomeView } from './view';
 import { PlanPromotionBanner } from '../school-plan-promotions/banner';
 import { SetupCard } from '../school-onboarding/setup-card';
 import { TourInvite } from '../school-shell/tour';
+import { HonTeamChat } from '../hon-command/hon-team-chat';
 
 type Scope = Readonly<{ organizationId: string; schoolId: string }>;
 type Loader<K extends keyof HomeSources> = (scope: Scope, signal: AbortSignal) => Promise<HomeSources[K] extends Panel<infer T> ? T : never>;
@@ -81,6 +82,8 @@ export function SchoolHome({ api = HOME_API }: { api?: HomeApi }): React.ReactEl
     {shell.phase === 'READY' && <TourInvite language={preferences.language}/>}
     {shell.phase === 'READY' && <PlanPromotionBanner schoolId={selection?.schoolId ?? null} language={preferences.language} formattingLocale={formattingLocale}/>}
     <SchoolHomeView language={preferences.language} mode={shell.mode} artStyle={shell.artStyle} onArtStyle={shell.onArtStyle} schoolName={shell.schoolName} selection={selection} sources={sources} now={now}
-      waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'} />
+      waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
+      teamChat={shell.phase === 'READY' && selection ? <HonTeamChat key={`${selection.organizationId}:${selection.schoolId}`} school={{ organizationId: selection.organizationId, schoolId: selection.schoolId }}
+        mode={shell.mode} language={preferences.language} artStyle={shell.artStyle} /> : undefined} />
   </div>;
 }
