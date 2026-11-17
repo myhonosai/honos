@@ -248,6 +248,11 @@ try {
   await refused(() => save(OWN, shift(SELF, { start: '08:00', end: '18:00' })), 409, 'SHIFT_OVERLAP', 'containing shift');
   const after = (await success(() => save(MGR, shift(SELF, { start: '13:00', end: '17:00', position: 'Instructor' })), 'back-to-back')).data;
   await success(() => save(MGR, shift(MGR, { start: '09:00', end: '13:00' })), 'same time, another person');
+  // The same person may also work for another organization at the same time: that organization's shift neither blocks
+  // nor reveals anything here (the overlap check is scoped to this organization).
+  await sql("INSERT INTO hon.staff_shifts(organization_id,school_id,principal_id,local_date,start_time,end_time,timezone,starts_at,ends_at,status,created_by_principal_id,updated_by_principal_id) VALUES($1,$2,$3,'2026-11-18','15:00','16:00',$4,'2026-11-18T23:00:00Z','2026-11-19T00:00:00Z','SCHEDULED',$3,$3)",
+    [ids.otherOrganization, ids.otherSchool, NONE.principal, LA]);
+  await success(() => save(MGR, shift(NONE, { start: '15:00', end: '16:00' })), 'same person, same time, another organization');
   const race = await Promise.all([save(MGR, shift(NONE, { start: '10:00', end: '12:00' })), save(OWN, shift(NONE, { start: '11:00', end: '14:00' }))]);
   ok(race.map((r) => r.status).sort().join() === '200,409' && race.find((r) => r.status === 409).body.code === 'SHIFT_OVERLAP', `exactly one of two racing overlaps wins ${race.map((r) => r.status)}`);
 
@@ -267,7 +272,8 @@ try {
 
   // 6. The week read: shifts of the week in time order, own view, availability windows from 0077.
   const managed = (await success(() => read(MGR), 'managed week')).data;
-  ok(managed.shifts.length === 6 && managed.shifts.every((s, i, a) => i === 0 || a[i - 1].startsAt <= s.startsAt) && !managed.shifts.some((s) => s.date === '2026-03-08'), 'six shifts this week, in time order, March not included');
+  ok(managed.shifts.length === 7 && managed.shifts.every((s, i, a) => i === 0 || a[i - 1].startsAt <= s.startsAt) && !managed.shifts.some((s) => s.date === '2026-03-08')
+    && managed.shifts.filter((s) => s.staffPrincipalId === NONE.principal && s.start === '15:00').length === 1, 'seven shifts this week, in time order, March and the other organization not included');
   const mine = (await success(() => read(SELF), 'own week')).data;
   ok(mine.shifts.length === 3 && mine.shifts.every((s) => s.staffPrincipalId === SELF.principal), 'own view: only own shifts (including the cancelled one)');
   ok((await success(() => read(SELF, '2026-03-02'), 'own March week')).data.shifts.length === 1, 'the spring-forward shift is in its own week');

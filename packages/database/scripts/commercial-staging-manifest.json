@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "a2d0fcc8ed31a02eedbff8ef2d40da19a1e19c788a5dd2cf29e679cfa2b16b24",
+  "chainSha256": "5413b549cee8caeb4fa2df0db58a1641f3195715a0421a8dad013eaf2d1b19ee",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -616,7 +616,7 @@
     },
     {
       "file": "0464_staff_shift_schedule.sql",
-      "sha256": "af1d3084511b160d02c13a8bcbd371814db7b7590428c79496b9ed3ac843ae4e"
+      "sha256": "35a895835249e9e20642bee9d5ca99df1040d076854e6644a33d1b2aa6adc530"
     }
   ]
 }

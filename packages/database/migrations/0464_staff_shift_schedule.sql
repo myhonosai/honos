@@ -260,7 +260,8 @@ BEGIN
   -- Scheduling (new or changed times) needs a person who is staff here now; cancelling never does.
   IF p->>'status'='SCHEDULED' AND NOT hon.staff_member_eligible(target,org,school) THEN
     RAISE EXCEPTION 'STAFF_MEMBER_UNAVAILABLE' USING ERRCODE='42501'; END IF;
-  IF p->>'status'='SCHEDULED' AND EXISTS (SELECT 1 FROM hon.staff_shifts o WHERE o.principal_id=target AND o.status='SCHEDULED'
+  -- Only this organization's shifts count: one person may work for two organizations, and neither may see or block the other.
+  IF p->>'status'='SCHEDULED' AND EXISTS (SELECT 1 FROM hon.staff_shifts o WHERE o.organization_id=org AND o.principal_id=target AND o.status='SCHEDULED'
       AND o.id IS DISTINCT FROM s.id AND o.starts_at<ends AND starts<o.ends_at) THEN
     RAISE EXCEPTION 'SHIFT_OVERLAP' USING ERRCODE='23P01'; END IF;
   IF s.id IS NULL THEN
