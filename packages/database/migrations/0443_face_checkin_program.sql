@@ -1,6 +1,6 @@
 BEGIN;
 
--- Face check-in with parent consent (0434, coordinator-allocated 2026-11-16, renumbered 0409 -> 0426 -> 0434; owner approved the feature 2026-11-16;
+-- Face check-in with parent consent (0443, coordinator-allocated 2026-11-16, renumbered 0409 -> 0426 -> 0434 -> 0443; owner approved the feature 2026-11-16;
 -- docs/architecture/FACE_CHECKIN.md). A camera picture is matched to a student's 0390 profile photo and, after a staff
 -- member confirms, attendance is written through the 0394 shared check-in path with method FACE.
 --
@@ -23,12 +23,12 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'Trusted migration owner required'; END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='hon_runtime' AND (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolinherit OR rolreplication)) THEN
-    RAISE EXCEPTION '0434 requires a restricted runtime'; END IF;
+    RAISE EXCEPTION '0443 requires a restricted runtime'; END IF;
   IF to_regprocedure('hon.attendance_check_in_student(text,uuid,uuid,text,uuid,text,text,uuid,uuid)') IS NULL
     OR to_regprocedure('hon.lock_attendance_actor(text,text)') IS NULL OR to_regclass('hon.person_photos') IS NULL
     OR to_regclass('hon.school_locations') IS NULL OR to_regprocedure('hon.biometric_profile_for(text,text,text)') IS NULL
     OR to_regprocedure('hon.saas_ts(timestamptz)') IS NULL THEN
-    RAISE EXCEPTION '0434 requires 0390, 0392 and 0394'; END IF;
+    RAISE EXCEPTION '0443 requires 0390, 0392 and 0394'; END IF;
 END $$;
 
 INSERT INTO hon.permissions(code,description,is_sensitive,is_staff_assignable) VALUES
@@ -132,7 +132,7 @@ DO $$ BEGIN
   IF (SELECT count(*) FROM hon.face_checkin_forms)<>3*(SELECT count(*) FROM hon.biometric_jurisdiction_profiles WHERE status='AVAILABLE_WITH_CONSENT')
     OR EXISTS(SELECT 1 FROM hon.biometric_jurisdiction_profiles p, unnest(p.add_ons) a WHERE p.status='AVAILABLE_WITH_CONSENT'
       AND NOT EXISTS(SELECT 1 FROM hon.face_checkin_form_parts fp WHERE fp.part=a AND fp.language='en')) THEN
-    RAISE EXCEPTION '0434 forms do not cover every available profile and add-on'; END IF;
+    RAISE EXCEPTION '0443 forms do not cover every available profile and add-on'; END IF;
 END $$;
 
 -- The school's choice. ON names the profile it was turned on under, the city-limits answer and the acknowledgements.

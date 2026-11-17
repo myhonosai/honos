@@ -3628,6 +3628,18 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.command_ai_exception_school_allowance(text,jsonb,uuid), hon.read_ai_exception_school_allowances_from_hq(text) TO hon_runtime;
   END IF;
 END $$;
+-- 0435 school social inbox: exactly eight runtime entry points, no table privilege (the inbound receipt goes to the 013 worker role only).
+DO $$ DECLARE r text; BEGIN
+  IF to_regclass('hon.school_social_conversations') IS NULL THEN RAISE EXCEPTION 'Apply migration 0435 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_social_conversations, hon.school_social_messages, hon.school_social_comment_actions, hon.school_social_inbox_receipts FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_social_conversations, hon.school_social_messages, hon.school_social_comment_actions, hon.school_social_inbox_receipts FROM '||quote_ident(r);
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.read_school_social_inbox(text,jsonb), hon.read_school_social_conversation(text,uuid),
+    hon.change_school_social_conversation(text,uuid,jsonb,text,uuid,uuid), hon.start_school_social_reply(text,uuid,jsonb,text,uuid,uuid),
+    hon.record_school_social_reply_result(text,uuid,uuid,text,text,uuid,uuid), hon.resolve_school_social_message(text,uuid,jsonb,text,uuid,uuid),
+    hon.start_school_social_comment_action(text,uuid,jsonb,text,uuid,uuid), hon.record_school_social_comment_action_result(text,uuid,uuid,text,uuid,uuid) TO hon_runtime;
+END $$;
 -- 0354 creative provider jobs: four private forced-RLS tables, private helpers and the three worker functions (013
 -- grants those to hon_communication_worker only); six runtime entry points.
 DO $$ DECLARE r text; t text; f text; BEGIN
@@ -4010,7 +4022,7 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
--- 0434 face check-in (synthetic matcher, program CLOSED until the owner opens it): nine private tables reached only through
+-- 0443 face check-in (synthetic matcher, program CLOSED until the owner opens it): nine private tables reached only through
 -- ten runtime entry points; the guard, helpers, triggers and the daily retention job are migration-owner only.
 DO $$ DECLARE r text; t text; f text;
   entry text[]:=ARRAY['hon.read_face_checkin(text)','hon.save_face_checkin_settings(text,jsonb,text,uuid,uuid)','hon.record_face_checkin_consent(text,jsonb,text,uuid,uuid)',
@@ -4018,7 +4030,7 @@ DO $$ DECLARE r text; t text; f text;
     'hon.confirm_face_checkin_match(text,jsonb,text,uuid,uuid)','hon.read_family_face_checkin(text)','hon.sign_family_face_checkin_consent(text,jsonb,text,uuid,uuid)',
     'hon.withdraw_family_face_checkin_consent(text,jsonb,text,uuid,uuid)'];
 BEGIN
-  IF to_regclass('hon.face_templates') IS NULL THEN RAISE EXCEPTION 'Apply migration 0434 first'; END IF;
+  IF to_regclass('hon.face_templates') IS NULL THEN RAISE EXCEPTION 'Apply migration 0443 first'; END IF;
   FOREACH t IN ARRAY ARRAY['face_checkin_program','face_checkin_form_parts','face_checkin_forms','face_checkin_settings','face_checkin_consents',
       'face_templates','face_template_deletions','face_checkin_matches','face_checkin_requests'] LOOP
     EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);

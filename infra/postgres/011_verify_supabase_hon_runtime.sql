@@ -4373,7 +4373,7 @@ DO $$ DECLARE f record; safe boolean; worker_oid oid:=(SELECT oid FROM pg_roles 
   END IF;
 END $$;
 -- End contact message history exact verification.
--- Face check-in exact verification (0434)
+-- Face check-in exact verification (0443)
 DO $$ DECLARE f text; t text; n integer;
   entry text[]:=ARRAY['hon.read_face_checkin(text)','hon.save_face_checkin_settings(text,jsonb,text,uuid,uuid)','hon.record_face_checkin_consent(text,jsonb,text,uuid,uuid)',
     'hon.withdraw_face_checkin_consent(text,jsonb,text,uuid,uuid)','hon.enroll_face_checkin_student(text,jsonb,text,uuid,uuid)','hon.match_face_checkin(text,uuid,jsonb,text,uuid,uuid)',

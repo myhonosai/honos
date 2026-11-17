@@ -1,5 +1,5 @@
 /**
- * 0434: face check-in with parent consent. Opt-in per school, a draft consent form per jurisdiction profile and language
+ * 0443: face check-in with parent consent. Opt-in per school, a draft consent form per jurisdiction profile and language
  * (TEST_ONLY_DRAFT, lawyer review before real use), staff confirm every match, and a SYNTHETIC matcher only (a picture
  * "matches" when it is byte-identical, after metadata stripping, to the enrolled profile photo). The camera picture is
  * never stored: the API sends only its SHA-256 to the database.

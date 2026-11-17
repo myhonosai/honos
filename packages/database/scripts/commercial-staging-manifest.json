@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "b1e683676d9bd51715236dbaf8de2cd47ea379a1a7173a38951625b1c4bd2545",
+  "chainSha256": "62c7bc07cd59992cec902bfc7014ad9c74701185f6d5af42ff9b9b7e164b7081",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -583,8 +583,12 @@
       "sha256": "dfae0a22b7b64cc79dd396ada7fc6a3f1b763bb84a13ec4632e29375f01d5a39"
     },
     {
-      "file": "0434_face_checkin_program.sql",
-      "sha256": "f61de72cc736908d360681ede2f323f580bcdb7606963548f27bdd3fd719ed9c"
+      "file": "0435_school_social_inbox.sql",
+      "sha256": "c7c3e3c8304de287e2c5899b1f1fa888e132f32b5a16548974b8fe7b05ef6271"
+    },
+    {
+      "file": "0443_face_checkin_program.sql",
+      "sha256": "e2b4d638fd1e889522364fb10e0960ac6bd39e1b1d2043fe7cd189419019829a"
     }
   ]
 }

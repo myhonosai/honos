@@ -70,7 +70,7 @@ function subjectOk(subject: unknown): subject is string {
 function key(k: unknown): string { try { return accountUuid(k).toLowerCase(); } catch { throw invalid(); } }
 
 /**
- * The SHA-256 of the metadata-stripped camera picture: the only thing the synthetic matcher (0434) ever sees. The picture
+ * The SHA-256 of the metadata-stripped camera picture: the only thing the synthetic matcher (0443) ever sees. The picture
  * itself is never stored, logged or sent anywhere. Wrong-type or malformed pictures are refused before the database.
  */
 export function faceCheckInPictureDigest(mediaType: Parameters<typeof stripImageMetadata>[0], data: string): string {
@@ -85,7 +85,7 @@ export function faceCheckInPictureDigest(mediaType: Parameters<typeof stripImage
 }
 
 /**
- * 0434 face check-in. The subject comes only from the signed HON session. For staff the school in the request is only a
+ * 0443 face check-in. The subject comes only from the signed HON session. For staff the school in the request is only a
  * selector: the API resolves the staff scope for that school (face_checkin.manage to manage, attendance.record to scan)
  * and the database decides authority again, live, before and after each write. For parents no school, family or child
  * selector is trusted: their one live family grant decides the tenant. No real face provider is called: the matcher is
