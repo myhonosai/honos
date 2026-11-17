@@ -130,6 +130,18 @@ BEGIN
 END;
 $$;
 
+-- 0449 Shopify: record verified webhook deliveries, and claim, rotate, write and finish background syncs under a lease
+-- (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.claim_shopify_background_sync()') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.record_shopify_webhook(jsonb), hon.claim_shopify_background_sync(),
+      hon.rotate_shopify_background_credential(jsonb), hon.record_shopify_background_page(jsonb),
+      hon.finish_shopify_background_sync(jsonb) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 -- 0364 school conversations: record an inbound non-keyword text into the school's conversation inbox (when applied).
 DO $$
 BEGIN

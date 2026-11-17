@@ -223,6 +223,8 @@ const expectedRlsTables = [
   'walkin_visit_participants',
   'walkin_waiver_signatures',
   'walkin_kiosk_rates',
+  'shopify_sync_requests',
+  'shopify_webhook_receipts',
   'school_websites',
   'school_website_versions',
   'school_website_requests',
