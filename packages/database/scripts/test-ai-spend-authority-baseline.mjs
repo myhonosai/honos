@@ -3351,7 +3351,32 @@ try {
     const lena = h2.find((h) => h.delegatedTo === 'lena');
     assert.ok(lena && !('answer' in lena), JSON.stringify(h2));
     assert.ok(!p2.rec.source_permissions.includes('marketing.campaign.read'), JSON.stringify(p2.rec));
+    // The earlier plan (built on Lena's answer, so it carries her permission) is hidden now too: no text reaches HON.
+    const earlier = h2.find((h) => !h.delegatedTo && h.question === 'Make one plan from what the team said.');
+    assert.ok(earlier && !('answer' in earlier), JSON.stringify(h2));
   } finally { await add('marketing.campaign.read'); }
+  // 2b. A plan built on an earlier HON answer inherits that answer's permissions (isolated: only HON turns in the window).
+  {
+    const c2 = await hon.create(scope, { title: 'Team chat: plans on plans' }, K());
+    const first = await hon.sendTurn(scope, c2.id, { text: 'Earlier plan', delegation: null, replyMode: 'STANDARD' }, K());
+    assert.equal(first.status, 'COMPLETED');
+    await admin.query("UPDATE hon.hon_reply_invocations SET source_permissions='{marketing.campaign.read}' WHERE turn_id=$1", [first.turnId]);
+    const next = async (text) => {
+      const receipt = await hon.sendTurn(scope, c2.id, { text, delegation: null, replyMode: 'DETAILED' }, K());
+      return { receipt, history: JSON.parse(fakes.hon.inputs.at(-1).facts).history,
+        rec: await row('SELECT source_permissions FROM hon.hon_reply_invocations WHERE turn_id=$1', [receipt.turnId]) };
+    };
+    const built = await next('Build on that plan.');
+    assert.equal(built.receipt.status, 'COMPLETED');
+    assert.equal(built.history[0].answer, fakes.hon.reply.slice(0, 600), JSON.stringify(built.history));
+    assert.deepEqual(built.rec.source_permissions, ['marketing.campaign.read'], 'inherits the earlier plan permission');
+    await drop('marketing.campaign.read');
+    try {
+      const hidden = await next('Build on it again.');
+      assert.ok(hidden.history.length >= 2 && hidden.history.every((h) => !('answer' in h)), JSON.stringify(hidden.history));
+      assert.deepEqual(hidden.rec.source_permissions, [], 'a hidden plan passes on no permission');
+    } finally { await add('marketing.campaign.read'); }
+  }
   // 3. After the plan, a lapse of any permission behind it conceals HON's plan; restored, it shows again.
   const shown = async () => (await hon.read(scope, conv.id)).turns.find((t) => t.turnId === p1.receipt.turnId && t.role === 'hon');
   assert.equal((await shown()).text, fakes.hon.reply);
@@ -3365,12 +3390,14 @@ try {
   {
     const def = (await row("SELECT pg_get_functiondef('hon.prepare_hon_reply(text,uuid,uuid,boolean)'::regprocedure) d")).d;
     assert.match(def, /x\.agent_key IN \('claire', 'alex', 'jordan', 'lena'\) AND r\.specialist = x\.agent_key AND hon\.hon_reply_source_allowed\(r\)/, 'only the four analysts, only while visible');
+    assert.match(def, /x\.agent_key = 'hon' AND \(NOT r\.used_reporting OR has_reporting\) AND hon\.hon_reply_source_allowed\(r\)/, 'an earlier HON plan only while visible');
+    assert.match(def, /unnest\(r\.source_permissions\) q\(p\)/, 'every row passes on its permissions');
   }
   // 5. Analysts' own turns still get no history (unchanged).
   const solo = await hon.sendTurn(scope, conv.id, { text: 'Jordan, anything else?', delegation: { agentKey: 'jordan' } }, K());
   assert.equal(solo.status, 'COMPLETED');
   assert.deepEqual(Object.keys(JSON.parse(fakes.hon.inputs.at(-1).facts)), ['school']);
-  pass('INV-44', "0429 team chat: HON's history is the last 6 turns and includes each COMPLETED Claire, Alex, Jordan or Lena answer (first 900 characters, with who gave it) only while this human may see it, so HON can turn a team round into one plan (one call); the permissions behind those answers are stored on HON's invocation (a later lapse conceals the plan, restored it shows) and an answer no longer visible stays out with its permission; 'specialistResults' marks the source; HON rows never carry Maya's retention or tuition permissions; Maya and draft specialists never reach HON as text; analysts' own turns still get no history");
+  pass('INV-44', "0429 team chat: HON's history is the last 6 turns and includes each COMPLETED Claire, Alex, Jordan or Lena answer (first 900 characters, with who gave it) only while this human may see it, so HON can turn a team round into one plan (one call); the permissions behind those answers are stored on HON's invocation (a later lapse conceals the plan, restored it shows) and an answer no longer visible (a teammate's or an earlier HON plan) stays out with its permission, while a plan built on a visible earlier plan inherits that plan's permissions; 'specialistResults' marks the source; HON rows never carry Maya's retention or tuition permissions; Maya and draft specialists never reach HON as text; analysts' own turns still get no history");
   }
 
   // ---- INV-32 (R1, 0287): routing by task class through the HQ task profile ----

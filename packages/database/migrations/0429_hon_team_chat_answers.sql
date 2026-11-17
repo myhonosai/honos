@@ -134,7 +134,8 @@ BEGIN
   SELECT coalesce(jsonb_agg(z.h ORDER BY z.seq), '[]'::jsonb) INTO history FROM (
     SELECT x.seq, jsonb_strip_nulls(jsonb_build_object('question', left(x.text, 400),
         -- A reporting-derived earlier answer is reused only while this human still holds reporting.view.
-        'answer', CASE WHEN x.agent_key = 'hon' AND (NOT r.used_reporting OR has_reporting) THEN left(r.reply_text, 600)
+        -- 0429: an earlier HON answer (a team plan) is also reused only while hon_reply_source_allowed shows it.
+        'answer', CASE WHEN x.agent_key = 'hon' AND (NOT r.used_reporting OR has_reporting) AND hon.hon_reply_source_allowed(r) THEN left(r.reply_text, 600)
                        WHEN x.agent_key IN ('claire', 'alex', 'jordan', 'lena') AND r.specialist = x.agent_key AND hon.hon_reply_source_allowed(r)
                        THEN left(r.reply_text, 900) END,
       -- Owner blueprint: a legacy 'claire' teaching delegate (no reply row) is Kai; a K2 Claire analysis is Claire's.
@@ -150,8 +151,10 @@ BEGIN
     INTO derived, team_perms, team_answers FROM (
     SELECT x.id FROM hon.hon_conversation_turns x WHERE x.conversation_id = t.conversation_id AND x.seq < t.seq ORDER BY x.seq DESC LIMIT 6) z
     JOIN hon.hon_reply_invocations r ON r.turn_id = z.id AND r.status = 'COMPLETED'
-      AND (r.specialist = 'hon' OR (r.specialist IN ('claire', 'alex', 'jordan', 'lena') AND hon.hon_reply_source_allowed(r)))
-    LEFT JOIN LATERAL unnest(CASE WHEN r.specialist = 'hon' THEN '{}'::text[] ELSE r.source_permissions END) q(p) ON true;
+      AND r.specialist IN ('hon', 'claire', 'alex', 'jordan', 'lena') AND hon.hon_reply_source_allowed(r)
+      AND (r.specialist <> 'hon' OR NOT r.used_reporting OR has_reporting)
+    -- Every row's permissions, HON's too: a plan built on an earlier plan inherits what that plan depended on.
+    LEFT JOIN LATERAL unnest(r.source_permissions) q(p) ON true;
   END IF;
   -- A continuation also gets the answer's original question and the end of the part already given (data only).
   IF i.continues_turn_id IS NOT NULL THEN
