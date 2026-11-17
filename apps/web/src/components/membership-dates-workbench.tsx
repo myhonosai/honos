@@ -18,6 +18,10 @@ import { loadMembershipDateHistory, loadMembershipDateQueue, loadMembershipStatu
 import { dateText, dateCodeText } from './membership-dates-copy';
 import { activationRequirement } from './membership-activation-catalog';
 import styles from './membership-dates-workbench.module.css';
+import type { SchoolMembershipListItem } from '@hon/contracts';
+import { useShellSchool } from './school-shell/page-school';
+import { IdFields } from './school-pickers/pickers';
+import { membershipListApi, MembershipListError } from './membership-list/http';
 
 type Dates = { startDate: string; endDate: string | null };
 type View = 'membership' | 'queue' | 'summary';
@@ -44,6 +48,10 @@ export function MembershipDatesWorkbench({ sessionSubject, initialMembership, in
   const entryHeading = useRef<HTMLHeadingElement | null>(null);
   const privateView = useRef<HTMLDivElement | null>(null);
   const locked = busy || pending !== null;
+  // Inside the school shell the signed-in school is used and the member is chosen by name; the server still authorizes every read and command.
+  const signedInSchool = useShellSchool(), shellSchool = initialMembership ? null : signedInSchool;
+  const [members, setMembers] = useState<readonly SchoolMembershipListItem[] | 'LOADING' | 'DENIED' | 'UNAVAILABLE'>('LOADING'), [memberSearch, setMemberSearch] = useState('');
+  const memberLabel = (m: SchoolMembershipListItem) => `${m.participant ? `${m.participant.givenName} ${m.participant.familyName}` : t('No name on file')} · ${m.planCode}`;
   sensitive.current = !!(scope.organizationId || scope.schoolId || scope.membershipId || history || preview || queue || report || saved || pending || reading);
   const school = () => ({ organizationId: scope.organizationId, schoolId: scope.schoolId });
   function resetReview(): void { setSummary(null); setConfirmed(false); setAcknowledged([]); setReason(''); setReasonCode(''); setAdjustment(''); }
@@ -62,6 +70,14 @@ export function MembershipDatesWorkbench({ sessionSubject, initialMembership, in
     return () => { instance.current++; epoch.current++; abort.current?.abort(); active.current = null; for (const event of events) window.removeEventListener(event, blur); document.removeEventListener('visibilitychange', visibility); };
   }, [sessionSubject]);
   useEffect(() => { if (hidden) shieldHeading.current?.focus(); else if (summary) finalHeading.current?.focus(); }, [hidden, summary]);
+  useEffect(() => {
+    if (!shellSchool) return;
+    setScope(old => ({ ...old, organizationId: shellSchool.organizationId, schoolId: shellSchool.schoolId }));
+    const controller = new AbortController(); setMembers('LOADING');
+    membershipListApi.page(shellSchool, null, null, controller.signal, () => !controller.signal.aborted).then(page => { if (!controller.signal.aborted) setMembers(page.items); })
+      .catch(e => { if (!controller.signal.aborted) setMembers(e instanceof MembershipListError && e.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE'); });
+    return () => controller.abort();
+  }, [shellSchool?.organizationId, shellSchool?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (initialMembership) entryHeading.current?.focus(); }, []);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (active.current || retained.current) { event.preventDefault(); event.returnValue = ''; } };
@@ -231,9 +247,14 @@ export function MembershipDatesWorkbench({ sessionSubject, initialMembership, in
       <button type="button" disabled={busy || reading} onClick={() => void restore()}>{t("Verify access and resume")}</button><a href="/auth/login">{t("Sign in again")}</a>
       <CrmEnrollmentDiscard disabled={busy || reading} onDiscard={discard} label={t("Discard local date view")} copy={discardCopy} />
     </section> : <div ref={privateView} data-dates-private>
-      <section><h2>{t("School and membership reference")}</h2><p>{t(initialMembership ? 'Membership reference selected from an authorized current-state review. Load current history explicitly; this selection grants no authority.' : "Enter known identifiers. Selectors confer no authority. No data or command is loaded from a URL.")}</p>
+      <section><h2>{t(shellSchool ? "Membership" : "School and membership reference")}</h2><p>{t(initialMembership ? 'Membership reference selected from an authorized current-state review. Load current history explicitly; this selection grants no authority.' : shellSchool ? "Choose a member, then load their membership dates." : "Enter known identifiers. Selectors confer no authority. No data or command is loaded from a URL.")}</p>
         <form onSubmit={event => { event.preventDefault(); void load(); }}><fieldset disabled={locked}>
-          <div className={styles.row}>{(['organizationId', 'schoolId', 'membershipId'] as const).map(key => <label key={key}>{key === 'organizationId' ? t("Organization ID") : key === 'schoolId' ? t("School ID") : t("Already-known membership ID")}<input autoComplete="off" maxLength={36} required readOnly={Boolean(initialMembership)} value={scope[key]} onChange={event => editScope(key, event.target.value)} /></label>)}</div>
+          {shellSchool ? <>
+            {members === 'LOADING' ? <p role="status">{t("Reading memberships…")}</p> : members === 'DENIED' ? <p role="status">{t("Your role cannot list memberships. Enter the membership ID instead.")}</p> : members === 'UNAVAILABLE' ? <p role="status">{t("Memberships could not be loaded. Enter the membership ID instead.")}</p> : <div className={styles.row}>
+              <label>{t("Find a member")}<input autoComplete="off" value={memberSearch} onChange={event => setMemberSearch(event.target.value)} /></label>
+              <label>{t("Member")}<select required value={scope.membershipId} onChange={event => editScope('membershipId', event.target.value)}><option value="">{t("Choose a member")}</option>{members.filter(m => m.membershipId === scope.membershipId || memberLabel(m).toLowerCase().includes(memberSearch.trim().toLowerCase())).map(m => <option key={m.membershipId} value={m.membershipId}>{memberLabel(m)}</option>)}</select></label></div>}
+            <IdFields manual={members === 'DENIED' || members === 'UNAVAILABLE'}><label>{t("Already-known membership ID")}<input autoComplete="off" maxLength={36} value={scope.membershipId} onChange={event => editScope('membershipId', event.target.value)} /></label></IdFields>
+          </> : <div className={styles.row}>{(['organizationId', 'schoolId', 'membershipId'] as const).map(key => <label key={key}>{key === 'organizationId' ? t("Organization ID") : key === 'schoolId' ? t("School ID") : t("Already-known membership ID")}<input autoComplete="off" maxLength={36} required readOnly={Boolean(initialMembership)} value={scope[key]} onChange={event => editScope(key, event.target.value)} /></label>)}</div>}
           <button type="submit" disabled={reading}>{t("Load membership dates")}</button>
           <div className={styles.actions}><button type="button" disabled={reading} onClick={() => void auxiliary('queue')}>{t("Review legacy date queue")}</button><button type="button" disabled={reading} onClick={() => void auxiliary('summary')}>{t("Load status summary")}</button></div>
         </fieldset></form>
