@@ -163,12 +163,12 @@ export function ParentHome(): React.ReactElement {
   const familyAccessLost = journey.kind === 'access-lost';
 
   return <main className={`theme-${theme} ${s.page}`}><div className={s.shell}>
-    <nav className={s.nav} aria-label="Parent Home navigation"><Link href="/parent" aria-current="page" className={s.wordmark}>HON <span>Parent Home</span></Link><Link href="/auth/login" prefetch={false}>Sign in</Link></nav>
+    <nav className={s.nav} aria-label="Parent Home navigation"><Link href="/parent" aria-current="page" className={s.wordmark}>HON <span>Parent Home</span></Link><Link href="/auth/login?for=parent" prefetch={false}>Sign in</Link></nav>
     <header className={s.header}><p className={s.eyebrow}>YOUR FAMILY · VERIFIED READS ONLY</p><h1>One clear place to start.</h1><p>Open the family information that is currently available to you. This Home has no AI, messages, payments, booking controls, or actions.</p></header>
     <section className={s.controls} aria-label="Presentation and access"><div className={s.themes}><span>Presentation</span>{HON_INTERFACE_THEMES.map(item => <button key={item.id} type="button" aria-pressed={theme === item.id} onClick={() => setTheme(item.id)}>{item.label}</button>)}</div><button type="button" disabled={checking} onClick={() => void verify()}>{checking ? 'Checking verified access…' : 'Refresh verified access'}</button></section>
     <div aria-live="polite" aria-atomic="true">
       {checking && <p className={s.state} role="status">Loading Parent Home. Each available area is being checked through its existing family-safe read route; no previous family content is retained.</p>}
-      {familyAccessLost && <section className={s.error} role="alert"><strong>Family access unavailable</strong><p>{journey.message}</p><Link href="/auth/login" prefetch={false}>Sign in again</Link></section>}
+      {familyAccessLost && <section className={s.error} role="alert"><strong>Family access unavailable</strong><p>{journey.message}</p><Link href="/auth/login?for=parent" prefetch={false}>Sign in again</Link></section>}
     </div>
     {!familyAccessLost && <ParentHomeCards journey={journey} testing={testing} billing={billing} plannedAbsences={plannedAbsences} curriculumLibrary={curriculumLibrary} />}
     <footer className={s.footer}>Messages are intentionally not linked from Home until independently provable receipt evidence exists; queue intent is never presented as received content. Every destination independently verifies its own family scope. Presentation choices are visual only and do not change access, data, or actions.</footer>

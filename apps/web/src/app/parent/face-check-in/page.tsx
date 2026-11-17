@@ -8,6 +8,6 @@ export const metadata = { title: 'HON | Face check-in consent', description: 'Re
 export default async function ParentFaceCheckInPage() {
   let authenticated = false;
   try { const token = cookieValue((await headers()).get('cookie'), HON_SESSION_COOKIE); if (token) { verifySession(token, sessionConfig()); authenticated = true; } } catch { /* fail closed */ }
-  if (!authenticated) redirect('/auth/login');
+  if (!authenticated) redirect('/auth/login?for=parent');
   return <FamilyFaceCheckIn />;
 }

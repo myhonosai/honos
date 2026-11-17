@@ -96,7 +96,7 @@ describe('human student achievements UI', () => {
     expect(parent).not.toMatch(/\.reason|reason\s*:|recordedByPrincipalId|awardedByPrincipalId|items\.map\([^)]*version/);
     const staffRoute = readFileSync('src/app/staff/students/achievements/page.tsx', 'utf8');
     const parentRoute = readFileSync('src/app/parent/achievements/page.tsx', 'utf8');
-    for (const route of [staffRoute, parentRoute]) for (const text of ['verifySession', "redirect('/auth/login')", 'index: false', 'force-dynamic']) expect(route).toContain(text);
+    for (const route of [staffRoute, parentRoute]) for (const text of ['verifySession', "redirect('/auth/login", 'index: false', 'force-dynamic']) expect(route).toContain(text);
     const http = readFileSync('src/components/achievements-http.ts', 'utf8');
     expect(http).toContain("credentials: 'same-origin'");
     expect(http).not.toMatch(/https:\/\/|provider|invokeLLM|executeAction|sendMessage|payment/i);
