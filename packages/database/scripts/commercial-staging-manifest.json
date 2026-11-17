@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "ff41b008849cc644a3171d1033b775c951d9aee4f390cde019c7d43ad8bacbf3",
+  "chainSha256": "304cd605e6c93a377066561710e6c649e4269414ddde5e87a1c8e47f321dd87b",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -553,6 +553,10 @@
     {
       "file": "0413_attendance_card_photo_us_policy.sql",
       "sha256": "ec9b09a43167fb95cba503c2d4ff670099cf69c25410e41680f0f1d79489d887"
+    },
+    {
+      "file": "0414_walk_in_kiosk.sql",
+      "sha256": "e393385043538425f8a9c09b50d9aa5f3bb73f71731d017b692175e38f2bda29"
     }
   ]
 }
