@@ -57,11 +57,13 @@ try{
   for(const p of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'])assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[runtime.username,'hon.'+t,p]))[0].ok,false,t+':'+p);
  }
  const entry=['create_automation_workflow','save_automation_workflow_version','restore_automation_workflow_version','archive_automation_workflow','read_automation_workflows',
-  'read_automation_workflow','read_automation_workflow_version','add_contact_tag','remove_contact_tag','read_school_contact_tags','read_person_contact_tags','lookup_contact_tags'];
+  'read_automation_workflow','read_automation_workflow_version','add_contact_tag','remove_contact_tag','read_school_contact_tags','read_person_contact_tags','lookup_contact_tags',
+  // 0423 adds four staff entry points (turn on, pause, run history); its engine functions stay off the runtime.
+  'activate_automation_workflow','pause_automation_workflow','read_automation_runs','read_automation_run'];
  const mine=(await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE 'automation\\_%' OR p.proname LIKE '%automation_workflow%' OR p.proname LIKE '%contact\\_tag%' OR p.proname='validate_automation_definition')"));
  assert(mine.length>=40,String(mine.length));
  for(const f of mine)assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entry.includes(f.proname),f.proname);
- pass('forced deny-all RLS on five new tables; runtime executes exactly twelve entry points');
+ pass('forced deny-all RLS on five new tables; runtime executes exactly the twelve 0416 entry points plus four from 0423');
 
  // 2. One validator in two places: the shared corpus is accepted or refused identically by TypeScript and PostgreSQL.
  await admin.query('BEGIN');
