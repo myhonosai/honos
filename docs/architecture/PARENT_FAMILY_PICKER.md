@@ -20,12 +20,14 @@ Children within one family were already switchable inside Student Journey, and t
   - With several live scopes and a live choice, it returns the chosen one.
   - With one live scope, it returns that one, as before.
   - With several live scopes and no live choice, it still returns two, so everything refuses as before until the parent chooses.
-- **F3 One rule everywhere.** The booking and message scope and the face check-in scope take the one resolved scope. Their other checks are unchanged:
+- **F3 One rule for the resolver callers.** The booking and message scope and the face check-in scope take the one resolved scope. Their other checks are unchanged:
   - the API tenant must match;
   - the school, organization and entitlement must be live;
   - only a guardian may write.
 
   Each command still checks the scope again after its locks and writes. If a switch happens in another tab mid-command, that command refuses and rolls back.
+
+  Not covered yet: the older reads that take `?schoolId=` (schedule, journey, planned absences, documents, achievements, knowledge) call 0071 `resolve_parent_family_scope` directly, so they do not follow the choice. They are still limited to the parent's own live grants. Moving them onto the resolver is a follow-up.
 - **F4 Invitations.** A parent may hold families at more than one organization. These are still refused:
   - the same family twice;
   - staff and HQ accounts;
