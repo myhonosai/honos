@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "14eff5b5630886e7fddf4973674a9d1061dcc21208cb8601c8e11a809febe35c",
+  "chainSha256": "a16baac4e54b4969376da89ffb57533b459546195e04cd822ebc730b052bb9c6",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -565,6 +565,10 @@
     {
       "file": "0416_automation_workflows.sql",
       "sha256": "f5461d07dec493477c2c5af02e03f1f0107cbc722b1e505b13631953cc39de8c"
+    },
+    {
+      "file": "0430_school_pay_once.sql",
+      "sha256": "ae9c79d3b2408802a12c5caf746c666246cf2c978e2276025d66ae3065b85de8"
     }
   ]
 }

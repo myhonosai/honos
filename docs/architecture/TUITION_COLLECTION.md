@@ -543,3 +543,68 @@ promo codes are CP3 and CP4). Nothing here takes a payment, and HON adds no fee.
 - **Evidence:** `pnpm --filter @hon/database db:test-school-checkouts` (CI: `run-db-proofs.sh`), 157 checks including the
   carry-over in a rolled-back transaction; `apps/api/test/school-checkout.test.cjs` (3 tests);
   `apps/web/test/school-checkout-ui.test.tsx` (11 tests); 011 exact verification passes.
+
+## 22. Shared one-time payment as built (0430): one whole payment for checkout, the kiosk and the point of sale
+
+Status: source only, not deployed. TEST/SANDBOX mode only (the connection table already refuses LIVE). HON adds no fee.
+No route of its own: the family checkout page (CP3), the walk-in kiosk tablet (WK3) and the point of sale each call it
+from their own database function and their own route, which decide who may pay and how much.
+
+- **Open (internal, never the runtime):** a caller's SECURITY DEFINER function calls
+  `hon.school_pay_once_open(organization, school, source, source_id, amount_minor, currency, label, payer, expires_at)`
+  → payment id. `source` is `CHECKOUT_PAGE`, `WALKIN_VISIT` or `POS_SALE`; `label` is `{"name": "..."}` (1 to 120
+  characters, the line the payer sees); `payer` is `{}` or `{"email": "..."}` (the email is the only payer detail ever sent
+  to the processor); `expires_at` is 1 to 30 minutes ahead. It uses the school's default connection that is
+  `CONNECTED_ACTIVE`, test mode, charging and able to take a one-time card (`SCHOOL_PAY_ONCE_NOT_AVAILABLE` otherwise).
+  One live payment (OPEN, PROCESSING or SUCCEEDED) per caller record: the same call while it is OPEN returns the same id,
+  another amount, currency or label is `SCHOOL_PAY_ONCE_AMOUNT_MISMATCH`, a PROCESSING or SUCCEEDED one is
+  `SCHOOL_PAY_ONCE_EXISTS`. After FAILED, EXPIRED or CANCELED a new one can be opened.
+- **Other internal helpers:** `hon.school_pay_once_provider(organization, school)` → `STRIPE_CONNECT`, `SQUARE` or NULL
+  (whether to offer card payment at all); `hon.school_pay_once_state(payment)` → `{paymentId, organizationId, schoolId,
+  source, sourceId, state, amountMinor, currency, providerCode, providerOpen, settledAt}`, locked `FOR UPDATE` for the
+  caller's transaction, so no processor answer can be recorded while the caller acts on it; `providerOpen` means the
+  processor may still hold a payable session; `hon.school_pay_once_cancel(payment)` ends a payment that never reached the
+  processor (`SCHOOL_PAY_ONCE_PROVIDER_OPEN` for a started one, which must be cancelled through the API first;
+  `SCHOOL_PAY_ONCE_IN_PROGRESS` while PROCESSING; `SCHOOL_PAY_ONCE_PAID` after SUCCEEDED; an ended one is returned as is).
+- **States:** `OPEN`, `PROCESSING` (paid on the form but still clearing), `SUCCEEDED`, `FAILED` (`DECLINED` or `OTHER`),
+  `EXPIRED`, `CANCELED`. The last four are final; PROCESSING only moves on to SUCCEEDED or FAILED.
+- **API (`apps/api/src/school-payments/school-pay-once.service.ts`, no authority of its own):**
+  - `supports(providerCode, surface)`: whether the processor can show it here (`EMBEDDED` = the processor's form inside a
+    HON page; `HOSTED` = the processor's own page, for a QR or link). Today: Stripe both; Square none for real (a Square
+    payment link needs the seller token and location; a later piece) and HOSTED in the simulator.
+  - `start(paymentId, {surface, returnUrl})` → `{paymentId, providerCode, surface, clientSecret, url, accountRef,
+    expiresAt}`. First the database fixes the surface, the return address (https, or http on localhost) and the provider
+    session expiry (31 minutes after start, since Stripe needs at least 30) once, before any provider call; then the
+    processor session is created with the idempotency key `hon-school-pay-once-<paymentId>` from those stored values only,
+    so a resend is identical and returns the same session. Stripe: a Checkout Session `mode=payment`, card only, one line,
+    `client_reference_id` and metadata `hon_pay_once_id` on the session and the PaymentIntent, on the school's account
+    (`Stripe-Account`, a direct charge, no application fee). EMBEDDED returns `clientSecret` and the school's `accountRef`
+    for Stripe.js (`stripeAccount`); HOSTED returns Stripe's `url`. Refused after the payment's own expiry.
+  - `confirm(paymentId)` → `{paymentId, state, amountMinor, currency, settledAt}` from the processor's retrieved session
+    (Stripe: `complete` + `paid` with its PaymentIntent is SUCCEEDED, `complete` + `unpaid` PROCESSING, `expired`
+    EXPIRED). A payable session past the payment's expiry is expired at the processor first. A lost start answer is
+    recovered with the same key. A processor that does not answer is `503 SCHOOL_PAY_PROVIDER_UNKNOWN` and nothing changes.
+  - `cancel(paymentId)`: expires the session at the processor, retrieves it and records CANCELED, or SUCCEEDED when the
+    payer had already paid (so a caller switching to pay at the desk can never double charge). A session the processor
+    refused to create ends CANCELED without one. Refused while PROCESSING.
+  - `reconcileDue(limit)`: confirms every payment past its expiry that is still OPEN or PROCESSING (not scheduled yet).
+- **Database entry points for the API only** (EXECUTE for the runtime, through a fixed allow-list in
+  `RuntimeDatabaseService.runSchoolPayOnceCall`): `read_school_pay_once`, `start_school_pay_once`,
+  `record_school_pay_once` (amount, currency and session must match; SUCCEEDED needs the processor payment id; a settled
+  payment refuses any other answer), `list_due_school_pay_once`. The payment id is the only scope; nothing about people
+  or schools can be read through them, and none can open a payment or choose an amount.
+- **Data (private, forced RLS, no runtime table privilege):** `school_pay_once` (one row per payment; scope, caller
+  record, amount, label, payer email and expiry never change; start facts and each provider reference are written once),
+  `school_pay_once_events` (append-only), an audit row per change by the code-owned principal
+  `00000000-0000-4000-8000-000000000430`, and an inert outbox event `school_pay_once.settled` when a payment settles.
+  Results and history carry no provider reference and no payer email.
+- **How a caller uses it (kiosk example):** its definer opens the payment with the frozen offer price and returns the id;
+  its route calls `start` and hands the tablet the client secret; after the form returns, its route calls `confirm`, then
+  its own definer reads `school_pay_once_state` under lock and moves the visit to paid only on SUCCEEDED. To switch to
+  the desk: route calls `cancel`, then the definer records desk-paid only when the state is CANCELED, EXPIRED or FAILED.
+- **Evidence:** `packages/database/scripts/test-school-pay-once-integrity.mjs` (125 checks through the service with the
+  simulators: open rules and validation, embedded and hosted start, idempotent restart, start mismatch, paid, cancel to
+  the desk, cancel after paying, internal cancel, lost and refused session answers, PROCESSING then FAILED, expiry and the
+  sweep, Square hosted only, an unconfigured processor, caller lock, record misuse, guards, ACL, 011);
+  `apps/api/test/school-payments-sandbox.test.cjs` (Stripe Checkout fields, key, account header, outcomes, UNKNOWN
+  cases, expiry; Square not offered; simulators); 010/011; staging pin 0430.
