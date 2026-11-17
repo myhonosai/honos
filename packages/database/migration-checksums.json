@@ -322,6 +322,6 @@
     "0443_face_checkin_program.sql": "e2b4d638fd1e889522364fb10e0960ac6bd39e1b1d2043fe7cd189419019829a",
     "0445_school_social_ads.sql": "ae19bd0b2f0f21bec60dac532ff9e2229171518ec2704578427ef022aeea98be",
     "0449_school_shopify_background_sync.sql": "966b0eb8f5c4a4e42907eda77858ca2ddea220383f635582f630d1b32215e559",
-    "0454_membership_agreement.sql": "ef40c5c4b3c425af4db99c15dccbbf69e5dfb4a16cafb21deabea4bc054d3a54"
+    "0454_membership_agreement.sql": "52e3bc5e79326ee1f40661ad9e7c2d3277616c38897ab41c31f1c6f7c65d4cc1"
   }
 }

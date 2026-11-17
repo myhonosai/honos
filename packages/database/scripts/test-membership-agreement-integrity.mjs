@@ -215,9 +215,10 @@ try{
  const copy=ok(await familyRead(guardian));
  assert.deepEqual(copy.children.filter(c=>c.covered).map(c=>[c.givenName,c.agreement.status,c.faceConsent?.state??null]),[['Jun','SIGNED',null],['Mina','SIGNED','GIVEN'],['Tae','NOT_SIGNED',null]]);
  assert.equal(copy.signings.length,1);assert.equal(copy.signings[0].signerName,'Hana Park');
+ const viewerCopy=ok(await familyRead(viewer));assert.deepEqual(viewerCopy.signings,[],'the typed name reaches guardians only');assert.equal(viewerCopy.children.find(c=>c.studentProfileId===mina.studentProfileId).agreement.status,'SIGNED');
  assert.deepEqual(copy.signings[0].children.map(c=>[c.studentProfileId,c.faceOptIn]).sort(),[[mina.studentProfileId,true],[jun.studentProfileId,false]].sort());
  assert.deepEqual(ok(await read(manager)).summary,{covered:4,signed:2,needsNewVersion:0,notSigned:2});
- pass('one Sign records the agreement for each child and the face consent for the ticked child in one transaction; separate identifier-only trails; exact replay, key reuse and a second signing refused; the printable copy and staff summary follow');
+ pass('one Sign records the agreement for each child and the face consent for the ticked child in one transaction; separate identifier-only trails; exact replay, key reuse and a second signing refused; the printable copy (guardians only, never a VIEWER) and staff summary follow');
 
  // 7. Parent photo upload: guardian only, metadata stripped, a replacement deletes the face template.
  const tagged=png(7,'GPS 41.88,-87.63');

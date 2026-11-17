@@ -374,6 +374,9 @@ BEGIN
     RAISE EXCEPTION 'MEMBERSHIP_AGREEMENT_UNCHANGED' USING ERRCODE='22023'; END IF;
   INSERT INTO hon.membership_agreement_versions(organization_id,school_id,number,published_by_principal_id)
     VALUES(org,school,coalesce(cur.number,0)+1,actor) RETURNING * INTO nxt;
+  -- These inserts must stay in the same (sub)transaction as the version insert above: the texts guard admits a text only
+  -- when its version's xmin is the current transaction id, so moving them into a subtransaction (an EXCEPTION block or a
+  -- savepoint) would refuse every publish.
   FOR d IN SELECT dr.* FROM jsonb_array_elements(p_input->'drafts') x JOIN hon.membership_agreement_drafts dr
       ON dr.organization_id=org AND dr.school_id=school AND dr.language=x->>'language' ORDER BY dr.language LOOP
     INSERT INTO hon.membership_agreement_texts(version_id,organization_id,school_id,language,title,body,digest)
@@ -416,12 +419,13 @@ BEGIN
         FROM hon.student_profiles sp JOIN hon.people p ON p.id=sp.person_id AND p.organization_id=sp.organization_id AND p.school_id=sp.school_id
         WHERE sp.organization_id=sc.organization_id AND sp.school_id=sc.school_id AND hon.face_checkin_child_ok(sc.family_id,sp.id)
         ORDER BY p.given_name,sp.id LIMIT 20) x),'[]'::jsonb),
-    'signings',coalesce((SELECT jsonb_agg(jsonb_build_object('signingId',g.signing_id,'language',g.language,'digest',g.digest,'signerName',g.signer_name,
+    -- The printable copy carries the typed signer name, so only guardians receive it (a VIEWER sees statuses only).
+    'signings',CASE WHEN NOT guardian THEN '[]'::jsonb ELSE coalesce((SELECT jsonb_agg(jsonb_build_object('signingId',g.signing_id,'language',g.language,'digest',g.digest,'signerName',g.signer_name,
         'signedAt',hon.saas_ts(g.signed_at),'children',g.children) ORDER BY g.signed_at DESC,g.signing_id)
       FROM (SELECT s.signing_id,min(s.language) language,min(s.digest) digest,min(s.signer_name) signer_name,min(s.signed_at) signed_at,
           jsonb_agg(jsonb_build_object('studentProfileId',s.student_profile_id,'faceOptIn',s.face_consent_id IS NOT NULL) ORDER BY s.student_profile_id) children
         FROM hon.membership_agreement_signatures s WHERE s.version_id=cur AND s.family_id=sc.family_id
-        GROUP BY s.signing_id ORDER BY min(s.signed_at) DESC LIMIT 20) g),'[]'::jsonb)) INTO result;
+        GROUP BY s.signing_id ORDER BY min(s.signed_at) DESC LIMIT 20) g),'[]'::jsonb) END) INTO result;
   RETURN result;
 END $$;
 
