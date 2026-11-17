@@ -128,7 +128,8 @@ export function teamCanPlan(messages: readonly TeamChatMessage[]): boolean {
   return false;
 }
 
-/** What is read aloud after a round: each answer with the teammate's name first, in their own voice. */
-export function teamSpokenParts(answers: readonly { key: TeamTalker; reply: string | null }[], said: (name: string) => string): HonSpokenPart[] {
-  return answers.filter((a) => a.reply && a.reply.trim()).map((a) => ({ text: `${said(TEAM_NAMES[a.key])} ${a.reply!.trim()}`, profile: honAgentVoice(a.key) }));
+/** What is read aloud after a round: each answer with the teammate's name first, in their own (chosen) voice. */
+export function teamSpokenParts(answers: readonly { key: TeamTalker; reply: string | null }[], said: (name: string) => string,
+  choices: Readonly<Partial<Record<string, number>>> = {}): HonSpokenPart[] {
+  return answers.filter((a) => a.reply && a.reply.trim()).map((a) => ({ text: `${said(TEAM_NAMES[a.key])} ${a.reply!.trim()}`, profile: honAgentVoice(a.key, choices[a.key]) }));
 }

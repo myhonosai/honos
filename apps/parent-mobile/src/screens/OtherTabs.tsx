@@ -84,7 +84,7 @@ export function MoreScreen({ onSignOut, version }: { onSignOut: () => void; vers
       <Card><Body muted>Membership and billing, belt testing, documents, curriculum, events and settings will appear here as each one is connected.</Body></Card>
       <Section>Security</Section>
       <Button kind="quiet" label="Sign out" onPress={onSignOut} />
-      <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.xl, textAlign: 'center' }}>HON Parent {version}</Text>
+      <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.xl, textAlign: 'center' }}>HON Family {version}</Text>
     </Page>
   );
 }

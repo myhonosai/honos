@@ -4,7 +4,9 @@ export type TeamChatKey =
   | 'you' | 'toEveryone' | 'to' | 'asking' | 'waiting' | 'loading' | 'unavailable' | 'session' | 'forbidden' | 'concealed' | 'notReady'
   | 'empty' | 'retry' | 'dismiss' | 'unknown' | 'refused' | 'hidden' | 'notAnswered' | 'said' | 'planLabel' | 'help' | 'tipAddress'
   | 'whoMarcus' | 'whoChad' | 'whoMaya' | 'whoKai' | 'roleHon' | 'roleClaire' | 'roleAlex' | 'roleJordan' | 'roleLena' | 'roleMarcus' | 'roleChad'
-  | 'roleMaya' | 'roleKai' | 'open' | 'included';
+  | 'roleMaya' | 'roleKai' | 'open' | 'included'
+  | 'voicesTitle' | 'voicesLead' | 'voicesLoading' | 'voicesUnavailable' | 'voiceFor' | 'hearVoice' | 'voiceSaving' | 'voiceNotSaved' | 'voicesFree'
+  | 'voicesNoSpeech' | 'voiceSample' | 'voice_standard' | 'voice_warm' | 'voice_bright' | 'voice_deep' | 'voice_calm' | 'voice_lively';
 
 const EN: Record<TeamChatKey, string> = {
   title: 'Team chat', lead: 'Talk to the whole AI team at once, or one teammate at a time as the topic changes. Then make one plan together.',
@@ -25,6 +27,13 @@ const EN: Record<TeamChatKey, string> = {
   whoMaya: 'Maya answers about one student on the At-risk list. Open Retention to ask her.', whoKai: 'Kai prepares classes from your curriculum. Open Teaching to ask Kai.',
   roleHon: 'Your assistant', roleClaire: 'Business performance', roleAlex: 'General management', roleJordan: 'Operations', roleLena: 'Creative & commerce',
   roleMarcus: 'Marketing', roleChad: 'Enrollment', roleMaya: 'Retention', roleKai: 'Teaching', open: 'Open', included: 'Included in HON OS',
+  voicesTitle: 'Choose voices', voicesLead: 'Pick how each teammate sounds. Tap ▶ to hear a voice first. Your choice is saved to your account for this school.',
+  voicesLoading: 'Loading your voices…', voicesUnavailable: 'Your saved voices could not be loaded. Everyone uses their usual voice for now.',
+  voiceFor: 'Voice for {name}', hearVoice: 'Hear {name} in the {voice} voice', voiceSaving: 'Saving…', voiceNotSaved: 'Not saved. The previous voice is back; try again.',
+  voicesFree: 'These are your device’s own free voices, so they sound different on each phone or computer. Nothing is charged.',
+  voicesNoSpeech: 'This browser cannot speak, so voices cannot be heard here. Your choices still apply on devices that can.',
+  voiceSample: 'Hi, I’m {name}. This is how I will sound when I answer you.',
+  voice_standard: 'Usual', voice_warm: 'Warm', voice_bright: 'Bright', voice_deep: 'Deep', voice_calm: 'Calm', voice_lively: 'Lively',
 };
 const KO: Record<TeamChatKey, string> = {
   title: '팀 채팅', lead: 'AI 팀 전체와 한 번에 이야기하거나, 주제가 바뀔 때마다 한 명씩 이야기하세요. 그리고 함께 하나의 계획을 만드세요.',
@@ -45,6 +54,13 @@ const KO: Record<TeamChatKey, string> = {
   whoMaya: 'Maya는 위험 목록의 학생 한 명에 대해 답합니다. 유지 관리에서 물어보세요.', whoKai: 'Kai는 커리큘럼으로 수업을 준비합니다. 교육에서 Kai에게 물어보세요.',
   roleHon: '나의 비서', roleClaire: '사업 성과', roleAlex: '총괄 관리', roleJordan: '운영', roleLena: '크리에이티브 & 커머스',
   roleMarcus: '마케팅', roleChad: '등록', roleMaya: '유지', roleKai: '교육', open: '열기', included: 'HON OS에 포함',
+  voicesTitle: '목소리 선택', voicesLead: '팀원마다 목소리를 고르세요. ▶를 눌러 먼저 들어 보세요. 선택은 이 학교의 내 계정에 저장됩니다.',
+  voicesLoading: '목소리를 불러오는 중…', voicesUnavailable: '저장된 목소리를 불러올 수 없습니다. 지금은 모두 기본 목소리를 사용합니다.',
+  voiceFor: '{name}의 목소리', hearVoice: '{name}의 {voice} 목소리 듣기', voiceSaving: '저장 중…', voiceNotSaved: '저장되지 않았습니다. 이전 목소리로 돌아갔습니다. 다시 시도하세요.',
+  voicesFree: '기기에 있는 무료 목소리라서 휴대폰이나 컴퓨터마다 다르게 들립니다. 요금은 없습니다.',
+  voicesNoSpeech: '이 브라우저는 말할 수 없어 여기서는 들을 수 없습니다. 선택은 말할 수 있는 기기에서 적용됩니다.',
+  voiceSample: '안녕하세요, {name}입니다. 답할 때 이렇게 들립니다.',
+  voice_standard: '기본', voice_warm: '따뜻한', voice_bright: '밝은', voice_deep: '낮은', voice_calm: '차분한', voice_lively: '활기찬',
 };
 const ES: Record<TeamChatKey, string> = {
   title: 'Chat del equipo', lead: 'Habla con todo el equipo de IA a la vez, o con uno a la vez según cambie el tema. Luego hagan un plan juntos.',
@@ -65,6 +81,13 @@ const ES: Record<TeamChatKey, string> = {
   whoMaya: 'Maya responde sobre un alumno de la lista en riesgo. Abre Retención para preguntarle.', whoKai: 'Kai prepara clases con tu currículo. Abre Enseñanza para preguntarle.',
   roleHon: 'Tu asistente', roleClaire: 'Rendimiento del negocio', roleAlex: 'Gerencia general', roleJordan: 'Operaciones', roleLena: 'Creatividad y comercio',
   roleMarcus: 'Marketing', roleChad: 'Inscripciones', roleMaya: 'Retención', roleKai: 'Enseñanza', open: 'Abrir', included: 'Incluido en HON OS',
+  voicesTitle: 'Elegir voces', voicesLead: 'Elige cómo suena cada miembro del equipo. Toca ▶ para escuchar una voz primero. Tu elección se guarda en tu cuenta para esta escuela.',
+  voicesLoading: 'Cargando tus voces…', voicesUnavailable: 'No se pudieron cargar tus voces guardadas. Por ahora todos usan su voz habitual.',
+  voiceFor: 'Voz de {name}', hearVoice: 'Escuchar a {name} con la voz {voice}', voiceSaving: 'Guardando…', voiceNotSaved: 'No se guardó. Volvió la voz anterior; inténtalo de nuevo.',
+  voicesFree: 'Son las voces gratuitas de tu dispositivo, así que suenan distinto en cada teléfono o computadora. No se cobra nada.',
+  voicesNoSpeech: 'Este navegador no puede hablar, así que aquí no se pueden escuchar las voces. Tus elecciones se aplican en dispositivos que sí pueden.',
+  voiceSample: 'Hola, soy {name}. Así sonaré cuando te responda.',
+  voice_standard: 'Habitual', voice_warm: 'Cálida', voice_bright: 'Clara', voice_deep: 'Grave', voice_calm: 'Tranquila', voice_lively: 'Animada',
 };
 const TABLE: Record<string, Record<TeamChatKey, string>> = { en: EN, ko: KO, es: ES };
 

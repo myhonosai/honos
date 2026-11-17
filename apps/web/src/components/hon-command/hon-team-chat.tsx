@@ -10,6 +10,8 @@ import {
   type PreparedHonCommand,
 } from './hon-conversation-http';
 import { HonVoiceControls, useHonVoice } from './hon-voice-controls';
+import { HonVoicePicker, useAgentVoices } from './hon-voice-picker';
+import { AGENT_VOICE_API, type AgentVoiceApi } from './agent-voice-preference';
 import { honVoiceLang } from './hon-voice';
 import { HON_CORE_SOURCE, aiTeamPortrait, defaultArtStyle, type HonArtStyle } from './roster';
 import {
@@ -36,7 +38,7 @@ const HIDDEN_REASONS = new Set(['RESULT_CONCEALED', 'SOURCE_ACCESS_LAPSED', 'ACC
 /** The view: pure, so every mode and state can be rendered in tests. */
 export type HonTeamChatViewProps = {
   language: string; mode: HonInterfaceTheme; artStyle: HonArtStyle; phase: Phase; talkers: readonly TeamTalker[]; messages: readonly TeamChatMessage[];
-  to: TeamAddress; draft: string; busy: TeamTalker | 'create' | null; stalled: Stalled | null; voice?: React.ReactNode;
+  to: TeamAddress; draft: string; busy: TeamTalker | 'create' | null; stalled: Stalled | null; voice?: React.ReactNode; voicePicker?: React.ReactNode;
   onTo(to: TeamAddress): void; onDraft(text: string): void; onSend(): void; onPlan(): void; onNew(): void; onRetry(): void; onDismiss(): void; onRefresh(): void;
 };
 
@@ -122,6 +124,7 @@ export function HonTeamChatView(props: HonTeamChatViewProps): React.ReactElement
       <p id="team-plan-help" className={styles.meta}>{t('planHelp')} {t('tipAddress')}</p>
     </form>}
     {canTalk && props.voice}
+    {canTalk && props.voicePicker}
 
     <details className={styles.whoElse}>
       <summary>{t('throughHon')}: Marcus, Chad, Maya, Kai</summary>
@@ -137,8 +140,8 @@ export function HonTeamChatView(props: HonTeamChatViewProps): React.ReactElement
  * ordinary turn (the server re-checks everything). A school change, session end or unmount retires all reads and
  * pending answers; nothing is shown for another school or person.
  */
-export function HonTeamChat({ school, mode, language, artStyle, api = HON_CONVERSATION_API }: {
-  school: HonSchool; mode: HonInterfaceTheme; language: string; artStyle?: HonArtStyle; api?: TeamChatApi;
+export function HonTeamChat({ school, mode, language, artStyle, api = HON_CONVERSATION_API, voiceApi = AGENT_VOICE_API }: {
+  school: HonSchool; mode: HonInterfaceTheme; language: string; artStyle?: HonArtStyle; api?: TeamChatApi; voiceApi?: AgentVoiceApi;
 }): React.ReactElement {
   const [phase, setPhase] = useState<Phase>('LOADING');
   const [readiness, setReadiness] = useState<HonConversationReadiness | null>(null);
@@ -155,6 +158,9 @@ export function HonTeamChat({ school, mode, language, artStyle, api = HON_CONVER
   const sendRef = useRef<(text: string, spoken: boolean) => boolean>(() => false);
   const voice = useHonVoice(lang, (text) => sendRef.current(text, true));
   const { shutdown: voiceShutdown, replyParts } = voice;
+  // 0460: each teammate speaks in the voice this person chose (their usual voice until the choices load).
+  const voices = useAgentVoices(school, voiceApi);
+  const chosen = useRef(voices.choices); chosen.current = voices.choices;
 
   const owned = (shown: number): Owned => () => mounted.current && shown === privacy.current;
 
@@ -203,7 +209,7 @@ export function HonTeamChat({ school, mode, language, artStyle, api = HON_CONVER
         onBusy: (who) => { if (live()) setBusy(who); }, onConversation: (id) => { conversationId.current = id; },
       });
       if (outcome.kind === 'DONE') {
-        if (round.spoken) replyParts(teamSpokenParts(outcome.answers, (name) => teamChatText(language, 'said', { name })));
+        if (round.spoken) replyParts(teamSpokenParts(outcome.answers, (name) => teamChatText(language, 'said', { name }), chosen.current));
       } else if (outcome.kind === 'STALLED') {
         if (round.spoken) replyParts([{ text: teamChatText(language, 'notAnswered', { name: outcome.who ? TEAM_NAMES[outcome.who] : 'HON' }) }]);
         setStalled({ round, state: outcome.state, who: outcome.who });
@@ -237,6 +243,7 @@ export function HonTeamChat({ school, mode, language, artStyle, api = HON_CONVER
   return <HonTeamChatView language={language} mode={mode} artStyle={artStyle ?? defaultArtStyle(mode)} phase={phase} talkers={talkers} messages={teamChatMessages(thread)}
     to={talkers.length > 0 && (to === 'everyone' || talkers.includes(to)) ? to : 'everyone'} draft={draft} busy={busy} stalled={stalled}
     voice={<HonVoiceControls {...voice.controls(phase === 'READY' && talkers.length > 0 && busy === null && !(stalled && stalled.state === 'UNKNOWN'))} who="team" />}
+    voicePicker={<HonVoicePicker language={language} lang={lang} mode={mode} voices={voices} />}
     onTo={setTo} onDraft={setDraft} onSend={() => { if (send(draft, false)) setDraft(''); }} onPlan={plan}
     onNew={() => { if (running.current) return; conversationId.current = null; setThread(null); setStalled(null); }}
     onRetry={() => { if (stalled) void run(stalled.round); }}
