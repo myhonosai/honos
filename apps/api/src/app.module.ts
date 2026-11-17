@@ -138,7 +138,12 @@ import { SchoolWebsiteService } from './website/school-website.service.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
 import { SchoolSupportController } from './support/school-support.controller.js';
+import { AutomationWorkflowController, ContactTagController } from './automations/automation.controller.js';
+import { AutomationService } from './automations/automation.service.js';
+import { AutomationArchiveHumanUiGuard, AutomationCreateHumanUiGuard, AutomationReadHumanUiGuard, AutomationRestoreHumanUiGuard, AutomationSaveHumanUiGuard, ContactTagAddHumanUiGuard, ContactTagLookupHumanUiGuard, ContactTagRemoveHumanUiGuard } from './automations/automation.guard.js';
 import { SchoolSupportService } from './support/school-support.service.js';
+import { CustomToolController } from './custom-tools/custom-tool.controller.js';
+import { CustomToolService } from './custom-tools/custom-tool.service.js';
 import { SchoolSocialController } from './marketing/social/school-social.controller.js';
 import { SchoolSocialService } from './marketing/social/school-social.service.js';
 import { SchoolSocialPostsController } from './marketing/social/school-social-posts.controller.js';
@@ -272,6 +277,9 @@ import { PublicSchoolEventController, SchoolEventController } from './schedule/s
 import { SchoolEventService } from './schedule/school-event.service.js';
 import { BookingTypeController, PublicBookingTypeController } from './schedule/booking-type.controller.js';
 import { BookingTypeService } from './schedule/booking-type.service.js';
+import { PublicWalkInKioskController, WalkInKioskController } from './walk-in-kiosk/walk-in-kiosk.controller.js';
+import { WalkInKioskService } from './walk-in-kiosk/walk-in-kiosk.service.js';
+import { WalkInKioskDeskPaidHumanUiGuard, WalkInKioskDeviceEndHumanUiGuard, WalkInKioskDeviceStartHumanUiGuard, WalkInKioskReadHumanUiGuard, WalkInKioskSettingsHumanUiGuard } from './walk-in-kiosk/walk-in-kiosk-human-ui.guard.js';
 import { BookingTypeBookingStatusHumanUiGuard, BookingTypeReadHumanUiGuard, BookingTypeSaveHumanUiGuard, BookingTypeStatusHumanUiGuard } from './schedule/booking-type-human-ui.guard.js';
 import { SchoolEventBookingStatusHumanUiGuard, SchoolEventReadHumanUiGuard, SchoolEventSaveHumanUiGuard, SchoolEventStatusHumanUiGuard } from './schedule/school-event-human-ui.guard.js';
 import { ClassSeriesCreateHumanUiGuard, ClassSeriesEndHumanUiGuard, ClassSeriesFillHumanUiGuard, ClassSeriesOngoingHumanUiGuard, ClassSeriesReadHumanUiGuard, ClassSeriesReviseHumanUiGuard, ClassSeriesTopUpHumanUiGuard } from './schedule/class-series-human-ui.guard.js';
@@ -489,6 +497,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     PublicSchoolEventController,
     BookingTypeController,
     PublicBookingTypeController,
+    WalkInKioskController,
+    PublicWalkInKioskController,
     AttendanceController,
     ClassSessionRosterController,
     AttendancePolicyController,
@@ -533,6 +543,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     PublishedSchoolWebsiteController,
     SchoolOnboardingController,
     SchoolSupportController,
+    CustomToolController,
+    AutomationWorkflowController,
+    ContactTagController,
     SchoolSocialController,
     SchoolSocialPostsController,
     TuitionPaymentController,
@@ -742,6 +755,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolWebsiteService,
     SchoolOnboardingService,
     SchoolSupportService,
+    CustomToolService,
+    AutomationService,
+    AutomationReadHumanUiGuard, AutomationCreateHumanUiGuard, AutomationSaveHumanUiGuard, AutomationRestoreHumanUiGuard, AutomationArchiveHumanUiGuard,
+    ContactTagAddHumanUiGuard, ContactTagRemoveHumanUiGuard, ContactTagLookupHumanUiGuard,
     SchoolSocialService,
     SchoolSocialPostsService,
     SocialPostDispatcher,
@@ -753,6 +770,12 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolEventStatusHumanUiGuard,
     SchoolEventBookingStatusHumanUiGuard,
     BookingTypeService,
+    WalkInKioskService,
+    WalkInKioskReadHumanUiGuard,
+    WalkInKioskSettingsHumanUiGuard,
+    WalkInKioskDeviceStartHumanUiGuard,
+    WalkInKioskDeviceEndHumanUiGuard,
+    WalkInKioskDeskPaidHumanUiGuard,
     BookingTypeReadHumanUiGuard,
     BookingTypeSaveHumanUiGuard,
     BookingTypeStatusHumanUiGuard,

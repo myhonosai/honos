@@ -49,6 +49,11 @@ export class StaffRoleController {
     const context = await this.context(org, school, request, 'read', 'iam.staff_role.manage');
     return this.envelope(context, { record: await this.roles.lists(context), replayed: false });
   }
+  @Get('permissions') @Header('Cache-Control', 'private, no-store')
+  async permissions(@Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Req() request: HonRequest) {
+    const context = await this.context(org, school, request, 'read', 'iam.staff_role.manage');
+    return this.envelope(context, { record: await this.roles.assignablePermissions(context), replayed: false });
+  }
   @Get('custom/:roleId')
   async readRole(@Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Param('roleId', new ParseUUIDPipe()) id: string, @Req() request: HonRequest) {
     const context = await this.context(org, school, request, 'read', 'iam.staff_role.manage');

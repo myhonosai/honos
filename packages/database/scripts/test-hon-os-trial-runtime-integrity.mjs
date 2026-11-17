@@ -96,6 +96,12 @@ try{
   'hq_operator_grants','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications','saas_requests','saas_audit','saas_outbox']);
  const others=(await q("SELECT tablename FROM pg_tables WHERE schemaname='hon' ORDER BY tablename")).map(r=>r.tablename).filter(t=>!excluded.has(t));
  const snapshot=async()=>{const out={};for(const t of others){assert.match(t,/^[a-z_0-9]+$/);out[t]=hash(JSON.stringify(await q('SELECT to_jsonb(t)::text r FROM hon.'+t+' t ORDER BY 1')));}return out;};
+ // Earlier proofs on this shared fixture register schools too, which can use up the global hourly signup limit before this
+ // proof's own registrations. Give it signup headroom with a fixture-only limit version (trial limits unchanged; 0273 below still applies).
+ {const l=(await q('SELECT version v,signups_per_hour sh,signups_per_day sd,trials_per_hour h,trials_per_day d FROM hon.hon_os_admission_limit_versions ORDER BY version DESC LIMIT 1'))[0];
+  const used=(await q("SELECT count(*) FILTER (WHERE registered_at>clock_timestamp()-interval '1 hour') hr,count(*) FILTER (WHERE registered_at>clock_timestamp()-interval '1 day') dy FROM hon.hon_os_school_registrations"))[0];
+  const sh=Math.max(l.sh,Number(used.hr)+20),sd=Math.max(l.sd,Number(used.dy)+20,sh);
+  if(sh>l.sh||sd>l.sd)await q('INSERT INTO hon.hon_os_admission_limit_versions(version,signups_per_hour,signups_per_day,trials_per_hour,trials_per_day) VALUES($1,$2,$3,$4,$5)',[l.v+1,sh,sd,l.h,l.d]);}
  const baseline=await snapshot(),guarded=await counts();
  await setPrograms('TEST_MODE');
  terms=(await q('SELECT id FROM hon.hon_os_signup_terms_versions ORDER BY version DESC LIMIT 1'))[0].id;

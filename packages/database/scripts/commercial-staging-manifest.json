@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "f32e999ef7144765b8efdc262c7a8cd2ed971638d3869aa4167bcb7eb9ddfa59",
+  "chainSha256": "75ce4ef23e0c9a1effa8dc08f9e55346b2cea507708617d13ba562fa792428ac",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -545,6 +545,26 @@
     {
       "file": "0407_retention_review_member_list.sql",
       "sha256": "88ee6b0f21d71289f02036e36d50644a960ff7eeb620d542afda2303c76d1606"
+    },
+    {
+      "file": "0412_staff_assignable_permissions_list.sql",
+      "sha256": "5691c6871ad27b49385868c502922578926637dbc57b55924422bb07fde69db3"
+    },
+    {
+      "file": "0413_attendance_card_photo_us_policy.sql",
+      "sha256": "ec9b09a43167fb95cba503c2d4ff670099cf69c25410e41680f0f1d79489d887"
+    },
+    {
+      "file": "0414_walk_in_kiosk.sql",
+      "sha256": "e393385043538425f8a9c09b50d9aa5f3bb73f71731d017b692175e38f2bda29"
+    },
+    {
+      "file": "0415_custom_tools.sql",
+      "sha256": "57ac8f806710e4c7cd489f5e228400051ffad6c3f76dc7891cb8f039ef3bab9d"
+    },
+    {
+      "file": "0416_automation_workflows.sql",
+      "sha256": "f5461d07dec493477c2c5af02e03f1f0107cbc722b1e505b13631953cc39de8c"
     },
     {
       "file": "0417_lead_pipeline_board.sql",
