@@ -239,6 +239,8 @@ import { FamilyMessagesInboxController, FamilyMessagesInboxReadGuard, FamilyMess
 import { FamilyMessagesService } from './families/family-messages.service.js';
 import { ConversationCreateLeadGuard, ConversationLinkGuard, ConversationMarkReadGuard, ConversationReadGuard, ConversationReplyGuard, ConversationUpdateGuard, SchoolConversationsController } from './conversations/school-conversations.controller.js';
 import { SchoolConversationsService } from './conversations/school-conversations.service.js';
+import { ContactEmailResendGuard, ContactHistoryReadGuard, ContactMessagesController } from './conversations/contact-messages.controller.js';
+import { ContactMessagesService } from './conversations/contact-messages.service.js';
 import { ConversationAiController, ConversationAiFileGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard, ConversationAiKnowledgeGuard, ConversationAiProgramHqController, ConversationAiReadGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard } from './conversations/conversation-ai.controller.js';
 import { ConversationAiProgramService, ConversationAiService } from './conversations/conversation-ai.service.js';
 import { ParentMessageHistoryController, ParentMessageHistoryReadGuard } from './families/parent-message-history.controller.js';
@@ -481,6 +483,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentFamilyMessagesController,
     FamilyMessagesInboxController,
     SchoolConversationsController,
+    ContactMessagesController,
     ConversationAiController,
     ConversationAiProgramHqController,
     ParentMessageHistoryController,
@@ -653,6 +656,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     FamilyMessagesMarkReadGuard,
     FamilyMessagesReplyGuard,
     SchoolConversationsService,
+    ContactMessagesService,
+    ContactHistoryReadGuard,
+    ContactEmailResendGuard,
     ConversationAiService,
     ConversationAiProgramService,
     ConversationAiReadGuard, ConversationAiKnowledgeGuard, ConversationAiFileGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard,

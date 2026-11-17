@@ -4338,3 +4338,38 @@ DO $$ DECLARE f record; safe boolean; t text; worker oid:=(SELECT oid FROM pg_ro
     RAISE EXCEPTION 'Unsafe automation engine posture: hon_automation_worker role'; END IF;
 END $$;
 -- End automation engine exact verification.
+-- Contact message history exact verification (0424): private helpers, one private forced-RLS table, three staff runtime entry
+-- points; the email subject lookup is runnable only by hon_communication_worker (013), never by the runtime.
+DO $$ DECLARE f record; safe boolean; worker_oid oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_communication_worker'); BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.contact_message_standard_subject(text)',false,false,false,'search_path=pg_catalog','75a03c8ff8037f501859eac4177a9fe7350b2f57ad13777c78c376b5ce24b4f6'),
+('hon.communication_email_subject(uuid,uuid)',true,false,true,'search_path=pg_catalog, hon','3f8257e6fc567854999eca0621dd2dfd9ea9a381f7cd81c597d1878a8c5add44'),
+('hon.contact_message_delivery_state(hon.communication_messages)',true,false,false,'search_path=pg_catalog, hon','cbf1526b9d0ea8805b256bb9fcb81962eb8c7d8d60a8dfe9ee61c3e5368b0241'),
+('hon.contact_message_origin(hon.communication_messages)',true,false,false,'search_path=pg_catalog, hon','9ab3dda1fe1543626dffeda4e73aa4c8f8ddb86c50d97f42c937fb8f68770b35'),
+('hon.contact_message_rows(uuid,boolean)',true,false,false,'search_path=pg_catalog, hon','970a90640772f02c398e111b7e2f140d57551583664d11c04143952e386d537e'),
+('hon.contact_message_person(uuid)',true,false,false,'search_path=pg_catalog, hon','fc369b1b98107b0aa100f409cd25c2ced5ae8dfb506beff714d6cb8c18f3d7b0'),
+('hon.read_contact_message_history(text,uuid,jsonb)',true,true,false,'search_path=pg_catalog, hon','d54e8b766f98d310b9b55b9f2a78a8610ed182d3ea99ced4da6088a787532535'),
+('hon.contact_email_resend_block(hon.communication_messages,hon.people)',true,false,false,'search_path=pg_catalog, hon','15f4501bbe654b59c3b32e4e52331db2b71a88578762c3992374a78765c6614f'),
+('hon.contact_email_message(uuid,uuid)',true,false,false,'search_path=pg_catalog, hon','bf0fa3ee519710ba7f69aed199f0017675b0b91d5e50c1b04c69e54c386add63'),
+('hon.read_contact_message_email(text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','5ccccf124c9dba9bc07cc73c7976af21ee73f56f8b08b6015e3debabeaa1efa5'),
+('hon.require_contact_resend_actor(text)',true,false,false,'search_path=pg_catalog, hon','56e7d90453fb93a2bc16a9342be49c350c6ed5e5f38330248e8ee9107ce3019e'),
+('hon.resend_contact_message_email(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','9574a4eb384086f0f2fd0cef9c5c6cc17f253fb735324e4b9beb2aeef4f5e51a')) e(signature,definer,runtime_allowed,worker_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.is_grantable OR a.privilege_type<>'EXECUTE'
+          OR NOT ((a.grantee=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') AND f.runtime_allowed)
+            OR (a.grantee IS NOT DISTINCT FROM worker_oid AND f.worker_allowed))))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe contact message history function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.communication_message_resends'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.communication_message_resends'::regclass)
+    OR has_table_privilege('hon_runtime','hon.communication_message_resends','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.communication_message_resends','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe contact message history table: communication_message_resends';
+  END IF;
+END $$;
+-- End contact message history exact verification.

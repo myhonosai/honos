@@ -290,6 +290,7 @@ const expectedRlsTables = [
   'school_conversation_ai_settings',
   'school_ai_training_files',
   'school_ai_training_items',
+  'communication_message_resends',
   'hq_ai_provider_connections',
   'hq_ai_model_catalog',
   'hq_ai_routing_policies',
