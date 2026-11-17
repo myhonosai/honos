@@ -81,7 +81,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/planning/revenue', 'routeRevenuePlanning'), r('/staff/retention/review', 'routeRetention')] },
   { key: 'community', titleKey: 'navCommunity', section: 'community', routes: [r('/community', 'routeCommunity'), r('/community/marketplace', 'routeMarketplace')] },
   { key: 'settings', titleKey: 'navSettings', routes: [r('/staff/settings', 'routeSettingsSummary'), r('/staff/settings/location', 'routeLocation'), r('/staff/settings/branding', 'routeBranding'),
-    r('/staff/settings/booking-types', 'routeBookingTypes'), r('/staff/settings/texting-number', 'routeTextingNumber'), r('/staff/billing/payment-processors', 'routePaymentProcessors'),
+    r('/staff/settings/booking-types', 'routeBookingTypes'), r('/staff/settings/texting-number', 'routeTextingNumber'), r('/staff/settings/demo-data', 'routeDemoData'), r('/staff/billing/payment-processors', 'routePaymentProcessors'),
     r('/staff/billing/saved-payment-methods', 'routeSavedMethods'), r('/settings/language-region', 'routeLanguage'), r('/settings/texts-from-hon', 'routeTextsFromHon'),
     r('/staff/account-status', 'routeAccount'), r('/staff/owners', 'routeOwners'), r('/staff/subscription', 'routeSubscription'), r('/staff/tool-maker', 'routeToolMaker'), r('/staff/help', 'routeHelp')] },
 ];

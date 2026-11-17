@@ -55,6 +55,9 @@ with `tables`, 409 `VERSION_CONFLICT`, 409 `IDEMPOTENCY_KEY_REUSED`, 400 `VALIDA
 ## Evidence
 `packages/database/scripts/test-school-demo-data-integrity.mjs` (10 groups) and `apps/api/test/school-demo-data.test.cjs`.
 
+## Screen
+Settings > Demo data (`/staff/settings/demo-data`): Load, or the counts and Remove with one confirm step; a DEMO_DATA_IN_USE answer lists the tables to fix first. A card on the Settings summary links to it, and the staff shell shows a banner while demo data is loaded (read with the same permission, so only staff who can manage demo data see it).
+
 ## Not in this version
 - A "Demo" badge on each contact in lists (the Settings page and a staff banner say demo data is loaded).
 - Friendly messages in other screens when a command is refused for a demo person (the refusal code is returned).

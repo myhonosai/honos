@@ -20,6 +20,7 @@ import { SchoolShellFrame, type ShellViewState } from './frame';
 import { SCHOOL_TOUR_OPEN_EVENT, markSchoolTourSeen } from './tour';
 import { SchoolShellProvider, type SchoolShellState } from './context';
 import { defaultArtStyle, isHonArtStyle, type HonArtStyle } from '../hon-command/roster';
+import { HON_DEMO_DATA_CHANGED_EVENT, demoDataApi } from '../school-demo-data/http';
 
 /** Per-viewer convenience only (never authority, never shared): the chosen AI team art style. */
 export const HON_ART_STYLE_STORAGE_KEY = 'hon.ai-team.art-style';
@@ -133,6 +134,21 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   }, [selection?.organizationId, selection?.schoolId, schoolName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Screensaver: rendered synchronously on hide so the app switcher and onlookers see it, not records.
+  // 0439: a banner while this school has demo data loaded. Read for the verified school only; any refusal (a staff member
+  // without the demo data permission included) shows no banner. A load or remove on the Settings page reads it again.
+  const [demoLoaded, setDemoLoaded] = useState(false);
+  const [demoCheck, setDemoCheck] = useState(0);
+  useEffect(() => { const again = () => setDemoCheck(n => n + 1); window.addEventListener(HON_DEMO_DATA_CHANGED_EVENT, again); return () => window.removeEventListener(HON_DEMO_DATA_CHANGED_EVENT, again); }, []);
+  useEffect(() => {
+    setDemoLoaded(false);
+    if (!selection) return;
+    const abort = new AbortController();
+    const owned = () => !abort.signal.aborted;
+    demoDataApi.read({ organizationId: selection.organizationId, schoolId: selection.schoolId }, AbortSignal.any([abort.signal, AbortSignal.timeout(8000)]), owned)
+      .then(view => { if (owned()) setDemoLoaded(view.status === 'LOADED'); }, () => {});
+    return () => abort.abort();
+  }, [selection?.organizationId, selection?.schoolId, demoCheck]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [asleep, setAsleep] = useState(false);
   const saver = useRef<ScreensaverController | null>(null);
   useEffect(() => {
@@ -256,7 +272,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
 
   return <SchoolShellFrame path={path} language={preferences.language} phase={snapshot.phase} selection={snapshot.selection} schoolName={schoolName}
     choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility inShell />}
-    tourStep={tourStep} onTour={tour} asleep={asleep} onWake={wake} onMode={chooseMode} onMenu={openMenu} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
+    tourStep={tourStep} onTour={tour} asleep={asleep} onWake={wake} demoLoaded={demoLoaded} onMode={chooseMode} onMenu={openMenu} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
     <SchoolShellProvider value={shared}>{children}</SchoolShellProvider>
   </SchoolShellFrame>;
 }

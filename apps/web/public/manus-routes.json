@@ -361,6 +361,10 @@
       "title": "HON | Texting number"
     },
     {
+      "path": "/staff/settings/demo-data",
+      "title": "HON | Demo data"
+    },
+    {
       "path": "/staff/champions-club",
       "title": "HON | Champions Club"
     },

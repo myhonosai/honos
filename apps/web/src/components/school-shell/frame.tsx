@@ -10,6 +10,7 @@ import { ShellIcon } from './icons';
 import { SCHOOL_TOUR_STEPS, SchoolTourDialog } from './tour';
 import { tourCopy } from './tour-copy';
 import { SignOutButton } from '../auth/sign-out-button';
+import { demoCopy } from '../school-demo-data/copy';
 import styles from './shell.module.css';
 
 export type ShellViewState = 'LOCAL' | 'SAVING' | 'SAVED' | 'ERROR';
@@ -22,6 +23,8 @@ export type SchoolShellFrameProps = {
   tourStep?: number | null; onTour?: (step: number | null) => void;
   /** Screensaver over the whole app (away or idle). The page behind it stays mounted and inert. */
   asleep?: boolean; onWake?: () => void;
+  /** 0439: this school has demo data loaded (read for the verified school only). Presentation only. */
+  demoLoaded?: boolean;
 };
 const MODES: readonly HonInterfaceTheme[] = ['big-button', 'modern', 'classic'];
 const VIEW_STATE: Record<ShellViewState, ShellKey> = { LOCAL: 'viewLocal', SAVING: 'viewSaving', SAVED: 'viewSaved', ERROR: 'viewError' };
@@ -138,6 +141,8 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
       {active && !active.steps && tabRoutes.length > 1 && <nav className={styles.tabs} aria-label={t('sectionNav')} data-wrap={active.key === 'settings' ? 'true' : undefined} data-shell-tabs="">
         {tabRoutes.map(route => <a key={route.href} href={schoolShellHref(route, verified)} aria-current={activeRoute?.href === route.href ? 'page' : undefined}>{t(route.titleKey)}</a>)}
       </nav>}
+      {verified && props.demoLoaded ? <p className={styles.demoBanner} role="status" data-demo-banner="">
+        <span>{demoCopy(language).banner}</span>{path === '/staff/settings/demo-data' ? null : <a href="/staff/settings/demo-data">{demoCopy(language).bannerLink}</a>}</p> : null}
       <div id="hon-main" tabIndex={-1} className={styles.main}>{children}</div>
     </div>
     {!honHere && <a inert={modal} className={styles.honLauncher} href="/staff/hon" aria-label={t('askHon')} title={t('honLauncher')}>
