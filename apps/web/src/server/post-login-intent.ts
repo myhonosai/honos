@@ -4,7 +4,8 @@
  * cookie scoped to /auth, and /auth/continue maps it back to its fixed page and clears it.
  */
 export const POST_LOGIN_INTENT_COOKIE = 'hon_post_login';
-export const POST_LOGIN_INTENTS = { parent: '/parent', 'family-invitation': '/account/family-invitation' } as const;
+/** `mobile`: the HON Family app's sign-in (/auth/mobile/start) returns to the confirmation step, never straight to the app. */
+export const POST_LOGIN_INTENTS = { parent: '/parent', 'family-invitation': '/account/family-invitation', mobile: '/auth/mobile/finish' } as const;
 export type PostLoginIntent = keyof typeof POST_LOGIN_INTENTS;
 export type PostLoginIntentPath = (typeof POST_LOGIN_INTENTS)[PostLoginIntent];
 
