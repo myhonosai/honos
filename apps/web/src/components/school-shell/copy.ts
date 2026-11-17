@@ -28,7 +28,7 @@ const en = {
   routeChampions: 'Champions Club', routeMarketingHome: 'Marketing overview', routeCampaigns: 'Campaign planner', routeForms: 'Lead forms', routeIntake: 'Lead intake', routeSocial: 'Social accounts', routeAds: 'Meta and Google ads', routeWebsite: 'Website', routeCreativeStudio: 'Creative Studio', routeMarketingAssistant: 'Marcus: marketing drafts', routeRevenuePlanning: 'Revenue planning',
   routeVoice: 'Voice', routeDocuments: 'Documents',
   routeHon: 'HON workspace', routeAiWork: 'AI drafts', routeKai: 'Kai: teaching drafts', routeMayaAtRisk: 'Maya: students at risk', routeTeachingStudio: 'Teaching studio', routeCurriculumLibrary: 'Curriculum library',
-  routeApprovals: 'Action Center', routeWork: 'Work', routeAutomation: 'Automation rules',
+  routeApprovals: 'Action Center', routeWork: 'Work', routeAutomation: 'Automation rules', routeCustomTools: 'Custom tools', routeToolMaker: 'Tool Maker',
   routeTeam: 'Team & invitations', routeRoles: 'Roles & permissions', routeAvailability: 'Availability', routeQualifications: 'Instructor qualifications', routeAccount: 'Account & usage', routeOwners: 'School owners', routeSubscription: 'HON subscription', routeLaunch: 'School launch', routeFounderSetup: 'Founder Setup guide', routeWelcome: 'Welcome and setup', routeHelp: 'Ask HON for help',
 } as const;
 export type ShellKey = keyof typeof en;
@@ -61,7 +61,7 @@ const ko: Record<ShellKey, string> = {
   routeChampions: '챔피언스 클럽', routeMarketingHome: '마케팅 개요', routeCampaigns: '캠페인 플래너', routeForms: '문의 양식', routeIntake: '문의 접수', routeSocial: '소셜 계정', routeAds: 'Meta 및 Google 광고', routeWebsite: '웹사이트', routeCreativeStudio: '크리에이티브 스튜디오', routeMarketingAssistant: 'Marcus: 마케팅 초안', routeRevenuePlanning: '매출 계획',
   routeVoice: '음성', routeDocuments: '문서',
   routeHon: 'HON 업무 공간', routeAiWork: 'AI 초안', routeKai: 'Kai: 수업 초안', routeMayaAtRisk: 'Maya: 이탈 위험 학생', routeTeachingStudio: '교육 스튜디오', routeCurriculumLibrary: '커리큘럼 라이브러리',
-  routeApprovals: '액션 센터', routeWork: '업무 목록', routeAutomation: '자동화 규칙',
+  routeApprovals: '액션 센터', routeWork: '업무 목록', routeAutomation: '자동화 규칙', routeCustomTools: '맞춤 도구', routeToolMaker: '도구 만들기',
   routeTeam: '팀 및 초대', routeRoles: '역할 및 권한', routeAvailability: '근무 가능 시간', routeQualifications: '사범 자격', routeAccount: '계정 및 사용량', routeOwners: '도장 소유자', routeSubscription: 'HON 구독', routeLaunch: '도장 개설', routeFounderSetup: '창업 설정 가이드', routeWelcome: '환영 및 설정', routeHelp: 'HON에 도움 요청',
 };
 const es: Record<ShellKey, string> = {
@@ -93,7 +93,7 @@ const es: Record<ShellKey, string> = {
   routeChampions: 'Champions Club', routeMarketingHome: 'Resumen de marketing', routeCampaigns: 'Planificador de campañas', routeForms: 'Formularios', routeIntake: 'Entrada de prospectos', routeSocial: 'Cuentas sociales', routeAds: 'Anuncios de Meta y Google', routeWebsite: 'Sitio web', routeCreativeStudio: 'Estudio creativo', routeMarketingAssistant: 'Marcus: borradores de marketing', routeRevenuePlanning: 'Planificación de ingresos',
   routeVoice: 'Voz', routeDocuments: 'Documentos',
   routeHon: 'Espacio HON', routeAiWork: 'Borradores de IA', routeKai: 'Kai: borradores de clases', routeMayaAtRisk: 'Maya: alumnos en riesgo', routeTeachingStudio: 'Estudio de enseñanza', routeCurriculumLibrary: 'Biblioteca del plan de estudios',
-  routeApprovals: 'Centro de acciones', routeWork: 'Trabajo', routeAutomation: 'Reglas de automatización',
+  routeApprovals: 'Centro de acciones', routeWork: 'Trabajo', routeAutomation: 'Reglas de automatización', routeCustomTools: 'Herramientas propias', routeToolMaker: 'Creador de herramientas',
   routeTeam: 'Equipo e invitaciones', routeRoles: 'Roles y permisos', routeAvailability: 'Disponibilidad', routeQualifications: 'Certificaciones de instructores', routeAccount: 'Cuenta y uso', routeOwners: 'Propietarios de la escuela', routeSubscription: 'Suscripción HON', routeLaunch: 'Apertura de la escuela', routeFounderSetup: 'Guía de configuración inicial', routeWelcome: 'Bienvenida y configuración', routeHelp: 'Pedir ayuda a HON',
 };
 export const SHELL_LANGUAGES = ['en', 'ko', 'es'] as const;
