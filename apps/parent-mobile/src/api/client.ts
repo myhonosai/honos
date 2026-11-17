@@ -30,6 +30,7 @@ function checkedBaseUrl(raw: string): string {
   const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '10.0.2.2';
   if (url.protocol !== 'https:' && !(local && url.protocol === 'http:')) throw new Error('The HON API address must use https.');
   if (url.username || url.password || url.search || url.hash) throw new Error('The HON API address must be a plain origin.');
+  if (/REPLACE-WITH/i.test(raw)) throw new Error('The HON API address has not been configured for this build.');
   return url.origin + url.pathname.replace(/\/+$/, '');
 }
 
