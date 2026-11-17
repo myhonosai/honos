@@ -325,6 +325,7 @@
     "0451_hon_team_chat_answers.sql": "8a639924e09baffd6e8252fb1a2fa0c428aaeff09ac7dc22bd8ce9555a5fe98e",
     "0453_school_google_ads.sql": "fde9c8a9f893c7b0ad13b29f0942fea66291a0316915a9659211b449d0f68363",
     "0455_school_google_business_profile.sql": "ee8c0fb3049755948af71fdf689b4eb70e0925b1f1d8ce20557814fee29a394a",
-    "0459_school_demo_data.sql": "6708c6114653c3363c1bed171cce360ab591875cc8e1ae3edb9c572c096e1bee"
+    "0459_school_demo_data.sql": "6708c6114653c3363c1bed171cce360ab591875cc8e1ae3edb9c572c096e1bee",
+    "0464_staff_shift_schedule.sql": "af1d3084511b160d02c13a8bcbd371814db7b7590428c79496b9ed3ac843ae4e"
   }
 }
