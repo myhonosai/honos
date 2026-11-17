@@ -4010,7 +4010,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- Shopify background sync and webhooks exact verification (0433): the runtime reaches no new table or function; the
+-- Shopify background sync and webhooks exact verification (0442): the runtime reaches no new table or function; the
 -- five worker functions are executable by hon_communication_worker only (when that login exists).
 DO $$ DECLARE f text; t text; w oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_communication_worker');
   worker text[]:=ARRAY['hon.record_shopify_webhook(jsonb)','hon.claim_shopify_background_sync()','hon.rotate_shopify_background_credential(jsonb)',

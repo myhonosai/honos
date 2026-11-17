@@ -13,7 +13,7 @@ export const SHOPIFY_WORKER_CLOCK = Symbol('SHOPIFY_WORKER_CLOCK');
 export type ShopifyWebhookOutcome = 'SYNC_REQUESTED' | 'UNINSTALLED' | 'SHOP_ERASED' | 'NO_CUSTOMER_DATA' | 'IGNORED';
 export interface ShopifyFinished { syncId: string; source: string; outcome: SyncOutcome; failureCode: string | null; connectionStatus: string }
 
-/** The 0433 worker functions. Each takes one closed JSON input and answers JSON. */
+/** The 0442 worker functions. Each takes one closed JSON input and answers JSON. */
 export interface ShopifyWorkerStore {
   isConfigured(): boolean;
   recordWebhook(input: VerifiedShopifyWebhook): Promise<{ outcome: ShopifyWebhookOutcome; replayed: boolean }>;
@@ -50,7 +50,7 @@ export class ShopifyWorkerSql implements ShopifyWorkerStore {
 
 /**
  * Connects as hon_communication_worker (HON_COMMUNICATION_WORKER_DATABASE_URL), the existing worker login, never as
- * the runtime or migration role, and only executes the five 0433 functions. Refused if the login is a superuser,
+ * the runtime or migration role, and only executes the five 0442 functions. Refused if the login is a superuser,
  * bypasses RLS, inherits roles or is the runtime login.
  */
 @Injectable()
@@ -90,7 +90,7 @@ export function shopifyBackgroundEnabled(env: Env): boolean {
 export interface ShopifyBackgroundSummary { claimed: number; succeeded: number; failed: number; needsReconnect: number; errors: number }
 
 /**
- * SH1b (0433) background sync: claim one due store, run the same sync as Sync now under the claim's lease, repeat up to
+ * SH1b (0442) background sync: claim one due store, run the same sync as Sync now under the claim's lease, repeat up to
  * `limit` stores. The database decides which store is due and refuses any write without the lease. A run that breaks on
  * HON's side is closed as FAILED when it can be, else it is abandoned after 15 minutes and claimed again later.
  */

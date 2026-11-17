@@ -16,11 +16,11 @@ requirement; **open PR** = not on main; **absent** = nothing in the repository.
 | Inbound SMS | partial | `communication-webhook.controller.ts` `twilio/inbound` | Only STOP/START/HELP are recorded. Every other school text is dropped (not stored). |
 | Missed-call text-back | partial | 0249 | Fixed template, one per caller per day. Not part of any conversation. |
 | Inbound email | absent | — | SendGrid events only (delivered/bounced), no Inbound Parse. |
-| Messenger / Instagram DMs and comments | open PR | 0349, PR #349 | Separate social inbox; replies are human only and still switched off. |
+| Messenger / Instagram DMs and comments | open PR | 0435 (PR #349, first allocated 0349) | Separate social inbox; replies are human only and still switched off. |
 | Website live chat | absent | — | Public lead forms (0075) and booking links (0261/0286) exist; no chat. |
 | Family (parent app) messages | working | 0330 | Separate parent-to-school threads, staff reply inside HON, nothing texted. |
 | Unified inbox across channels | absent | — | Three separate stores (SMS keywords, social, family), no shared list. |
-| Assignment, tags, status, human takeover | partial | 0349 has assignment and unread for social only | Nothing for SMS/email/chat; no takeover or AI state anywhere. |
+| Assignment, tags, status, human takeover | partial | 0435 has assignment and unread for social only | Nothing for SMS/email/chat; no takeover or AI state anywhere. |
 | CRM contact match and lead dedup | absent | 0075/0250 always insert a new person | Nothing matches an incoming phone or email to an existing person or lead. |
 | School knowledge for AI | partial | 0036 knowledge articles (approved, two-person rule), 0255 school notes, 0256 tone | Only HON's staff answers read notes and tone. No owner instructions, no customer-facing knowledge pack. |
 | Real text AI | working | `ai/*-provider-runtime.ts`, 0242/0287 routing, 0244/0288 per-school ceilings | OpenRouter behind `OPENROUTER_PAID_CALL_APPROVED`; every agent so far answers staff, never a customer. |
@@ -64,7 +64,7 @@ Guardrails decide when Chad hands a conversation to a person instead of answerin
 ```
 
 - **One store for the new channels, links for the old ones.** SMS, email and web chat use the new conversation tables.
-  Social (0349) and family (0330) keep their stores; a small overlay table gives them the same AI mode, takeover and
+  Social (0435) and family (0330) keep their stores; a small overlay table gives them the same AI mode, takeover and
   tags, and the inbox read merges all of them. Nothing is copied twice.
 - **One send path.** A reply (staff or AI) is a QUEUED 0047 message delivered by the 0243 worker. Consent, quiet hours,
   retries, receipts and cost stay where they are. Automation uses the same path.
@@ -99,7 +99,7 @@ Guardrails decide when Chad hands a conversation to a person instead of answerin
 | **CA3** | Actions and guardrails: guardrails (prices and dates must match the pack, money and promise words, low confidence, opt-out, quiet hours) decide send vs. hand to a person; **Chad books appointments on the scheduler by itself** (David 2026-11-15 08:06Z): offers real open times of the owner-chosen booking type (0286) or trial slots and books them directly, creating or matching the lead first (asks for a name); confirmation text; escalation creates a staff notification and a work item; per-conversation and per-school auto-reply limits; outbox `conversation.reply.sent` / `conversation.escalated` / `conversation.appointment.booked` for Automation.| 0422 |
 | CA4 | Website live chat: public chat id per school (like 0075 public forms), signed visitor session, rate limits, embeddable script for the Website Builder, same AI and inbox. | ask |
 | CA5 | Email: SendGrid Inbound Parse on a HON reply domain per school, threading by reply-to token, same inbox and AI. | ask |
-| CA6 | Social and family in the unified inbox: overlay for AI mode/takeover/tags on 0349 and 0330 threads; Chad drafts and (when David switches it on) automatic replies within Messenger's 24-hour window. Waits for #349. | ask |
+| CA6 | Social and family in the unified inbox: overlay for AI mode/takeover/tags on 0435 and 0330 threads; Chad drafts and (when David switches it on) automatic replies within Messenger's 24-hour window. Waits for #349. | ask |
 | CA7 | Missed call into the conversation (Chad writes the text-back instead of the fixed template, when on), appointment reminders through Automation, conversation reporting (response time, AI share, booked evaluations, escalations), HON assistant access ("show me unanswered texts"). | ask |
 | Voice | Separate later piece; the voice handoff ledger stays as it is. | — |
 

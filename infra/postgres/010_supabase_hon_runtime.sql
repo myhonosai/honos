@@ -3628,6 +3628,18 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.command_ai_exception_school_allowance(text,jsonb,uuid), hon.read_ai_exception_school_allowances_from_hq(text) TO hon_runtime;
   END IF;
 END $$;
+-- 0435 school social inbox: exactly eight runtime entry points, no table privilege (the inbound receipt goes to the 013 worker role only).
+DO $$ DECLARE r text; BEGIN
+  IF to_regclass('hon.school_social_conversations') IS NULL THEN RAISE EXCEPTION 'Apply migration 0435 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_social_conversations, hon.school_social_messages, hon.school_social_comment_actions, hon.school_social_inbox_receipts FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_social_conversations, hon.school_social_messages, hon.school_social_comment_actions, hon.school_social_inbox_receipts FROM '||quote_ident(r);
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.read_school_social_inbox(text,jsonb), hon.read_school_social_conversation(text,uuid),
+    hon.change_school_social_conversation(text,uuid,jsonb,text,uuid,uuid), hon.start_school_social_reply(text,uuid,jsonb,text,uuid,uuid),
+    hon.record_school_social_reply_result(text,uuid,uuid,text,text,uuid,uuid), hon.resolve_school_social_message(text,uuid,jsonb,text,uuid,uuid),
+    hon.start_school_social_comment_action(text,uuid,jsonb,text,uuid,uuid), hon.record_school_social_comment_action_result(text,uuid,uuid,text,uuid,uuid) TO hon_runtime;
+END $$;
 -- 0354 creative provider jobs: four private forced-RLS tables, private helpers and the three worker functions (013
 -- grants those to hon_communication_worker only); six runtime entry points.
 DO $$ DECLARE r text; t text; f text; BEGIN
@@ -4010,7 +4022,7 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
--- 0433 Shopify background sync and webhooks (SH1b): two more private tables; the five worker functions belong to
+-- 0442 Shopify background sync and webhooks (SH1b): two more private tables; the five worker functions belong to
 -- hon_communication_worker (013) and, like every helper, are never granted to the runtime.
 DO $$ DECLARE r text; t text; f text;
   entry text[]:=ARRAY['hon.read_shopify(text,uuid)','hon.read_shopify_catalog(text,uuid)','hon.read_shopify_orders(text,uuid)',
@@ -4018,7 +4030,7 @@ DO $$ DECLARE r text; t text; f text;
     'hon.begin_shopify_sync(text,jsonb)','hon.rotate_shopify_credential(text,jsonb)','hon.record_shopify_sync_page(text,jsonb)',
     'hon.finish_shopify_sync(text,jsonb)','hon.disconnect_shopify(text,jsonb)'];
 BEGIN
-  IF to_regclass('hon.shopify_webhook_receipts') IS NULL THEN RAISE EXCEPTION 'Apply migration 0433 first'; END IF;
+  IF to_regclass('hon.shopify_webhook_receipts') IS NULL THEN RAISE EXCEPTION 'Apply migration 0442 first'; END IF;
   FOREACH t IN ARRAY ARRAY['shopify_sync_requests','shopify_webhook_receipts'] LOOP
     EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;

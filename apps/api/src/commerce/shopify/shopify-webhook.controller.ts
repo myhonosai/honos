@@ -7,7 +7,7 @@ import { SHOPIFY_WORKER_STORE, type ShopifyWebhookOutcome, type ShopifyWorkerSto
 export interface ShopifyWebhookAnswer { received: true; outcome: ShopifyWebhookOutcome; replayed: boolean }
 
 /**
- * SH1b (0433): Shopify's webhooks for the one HON Shopify app. No session and no school in the request: the signature
+ * SH1b (0442): Shopify's webhooks for the one HON Shopify app. No session and no school in the request: the signature
  * proves it came from Shopify, and the database finds the school from the shop domain. Answered 200 once recorded (or
  * deliberately ignored); 401 for a bad signature; 503 when HON cannot record it, so Shopify delivers it again.
  */
