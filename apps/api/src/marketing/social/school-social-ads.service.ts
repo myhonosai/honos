@@ -45,7 +45,7 @@ export class SchoolSocialAdsService {
   async read(context: SchoolSocialContext): Promise<SocialAdsView> {
     this.assertHuman(context, false);
     const data = await this.run(context, true, client => client.query<{ data: Data }>('SELECT hon.read_school_social_ads($1) AS data', [context.externalSubject]));
-    return verifySocialAdsView({ ...data, adsEnabled: this.adapter.adsReady() });
+    return verifySocialAdsView({ ...data, adsEnabled: this.adapter.adsReady(), pauseEnabled: this.adapter.adsPauseReady() });
   }
 
   async budget(context: SchoolSocialContext, value: unknown): Promise<{ view: SocialAdsView; replayed: boolean }> {
@@ -54,7 +54,7 @@ export class SchoolSocialAdsService {
     const { record, replayed } = this.command(await this.run(context, false, client => client.query<{ data: Data }>(
       'SELECT hon.set_school_social_ad_budget($1,$2::jsonb,$3,$4::uuid,$5::uuid) AS data',
       [context.externalSubject, JSON.stringify(input), context.idempotencyKey, context.requestId, context.correlationId])));
-    return { view: verifySocialAdsView({ ...(record as Data), adsEnabled: this.adapter.adsReady() }), replayed };
+    return { view: verifySocialAdsView({ ...(record as Data), adsEnabled: this.adapter.adsReady(), pauseEnabled: this.adapter.adsPauseReady() }), replayed };
   }
 
   async create(context: SchoolSocialContext, value: unknown): Promise<{ ad: SocialAd; replayed: boolean }> {
@@ -84,7 +84,8 @@ export class SchoolSocialAdsService {
   async operation(context: SchoolSocialContext, adId: string, value: unknown): Promise<{ ad: SocialAd; replayed: boolean }> {
     this.assertHuman(context, true);
     const input = this.validate(validateSocialAdOperationInput, value);
-    if (!this.adapter.adsReady()) notEnabled();
+    // Pausing only lowers spend: it never needs the ads approval, so an ad running at Meta can be paused after the switch goes off.
+    if (!(input.operation === 'PAUSE' ? this.adapter.adsPauseReady() : this.adapter.adsReady())) notEnabled();
     const started = await this.run(context, false, client => client.query<{ data: Data }>(
       'SELECT hon.start_school_social_ad_operation($1,$2::uuid,$3::jsonb,$4,$5::uuid,$6::uuid) AS data', this.args(context, adId, input)));
     const { record, replayed } = this.command(started, true);

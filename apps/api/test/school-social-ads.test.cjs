@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { SchoolSocialAdsService } = require('../dist/marketing/social/school-social-ads.service.js');
 const { SchoolSocialAdsController } = require('../dist/marketing/social/school-social-ads.controller.js');
-const { FakeZernioSocialAdapter, ZernioHttpSocialAdapter, SocialProviderError, zernioAdsApproved, zernioSocialAdapterFactory } = require('../dist/marketing/social/zernio-social-adapter.js');
+const { FakeZernioSocialAdapter, ZernioHttpSocialAdapter, SocialProviderError, zernioAdsApproved, zernioAdsPauseReady, zernioSocialAdapterFactory } = require('../dist/marketing/social/zernio-social-adapter.js');
 
 // Mocked boundary tests for the 0437 ads API and Zernio ad calls. The cap, authority, leases and evidence are proven
 // against PostgreSQL by test-school-social-ads.mjs. Nothing reaches Zernio or Meta: the HTTP adapter gets a stub fetch
@@ -54,7 +54,7 @@ function fixture(options = {}) {
   return { db, queries };
 }
 const fake = () => new FakeZernioSocialAdapter(() => ({ HON_ZERNIO_FAKE_PROVIDER: '1', HON_DEPLOYMENT_ENVIRONMENT: 'development' }));
-const off = { adsReady: () => false, createBoost: async () => { throw new Error('must not call'); }, setAdActive: async () => { throw new Error('must not call'); } };
+const off = { adsReady: () => false, adsPauseReady: () => false, createBoost: async () => { throw new Error('must not call'); }, setAdActive: async () => { throw new Error('must not call'); } };
 
 test('switches: ads need a well-formed key AND the exact approval; the ads switch turns on nothing else and nothing else turns it on', () => {
   assert.equal(zernioAdsApproved({}), false);
@@ -74,7 +74,7 @@ test('switches: ads need a well-formed key AND the exact approval; the ads switc
 test('reads: one read-only call; reports whether ads are on; a read answering with stray fields is refused; reads take no key', async () => {
   const { db, queries } = fixture();
   const out = await new SchoolSocialAdsService(db, off).read(readContext());
-  assert.deepEqual([out.ads.length, out.adsEnabled, out.budget.monthlyCapCents], [1, false, 20000]);
+  assert.deepEqual([out.ads.length, out.adsEnabled, out.pauseEnabled, out.budget.monthlyCapCents], [1, false, false, 20000]);
   assert.deepEqual(queries.find(q => /read_school_social_ads/.test(q.sql)).args, ['verified-human']);
   assert.ok(queries.find(q => /read_school_social_ads/.test(q.sql)).readOnly);
   assert.equal((await new SchoolSocialAdsService(fixture().db, fake()).read(readContext())).adsEnabled, true);
@@ -150,7 +150,7 @@ test('operations: refused before anything is recorded while ads are off; created
     }
   }
   // A thrown non-provider error is UNKNOWN too.
-  const odd = { adsReady: () => true, createBoost: async () => { throw new TypeError('boom'); }, setAdActive: async () => {} }, oddFixture = fixture();
+  const odd = { adsReady: () => true, adsPauseReady: () => true, createBoost: async () => { throw new TypeError('boom'); }, setAdActive: async () => {} }, oddFixture = fixture();
   await new SchoolSocialAdsService(oddFixture.db, odd).operation(context(), adId, { operation: 'CREATE', expectedVersion: 1 });
   assert.equal(oddFixture.queries.find(q => /record_school_social_ad_result/.test(q.sql)).args[3], 'UNKNOWN');
   // Recording fails after the call: the ad reads UNKNOWN and nothing is called again.
@@ -161,6 +161,43 @@ test('operations: refused before anything is recorded while ads are off; created
   const again = fake(), replay = fixture({ start: { record: ad({ status: 'ACTIVE', operation: 'ACTIVATE', version: 3 }), replayed: true } });
   const rr = await new SchoolSocialAdsService(replay.db, again).operation(context(), adId, { operation: 'ACTIVATE', expectedVersion: 2 });
   assert.deepEqual([rr.replayed, again.adStatusChanges.length, replay.queries.some(q => /record_school_social_ad_result/.test(q.sql))], [true, 0, false]);
+});
+
+test('pausing never needs the ads switch: a well-formed key alone lets PAUSE reach Zernio; CREATE and ACTIVATE still need the approval', async () => {
+  assert.equal(zernioAdsPauseReady({}), false);
+  assert.equal(zernioAdsPauseReady({ ZERNIO_API_KEY: 'zrk_short' }), false);
+  assert.equal(zernioAdsPauseReady({ ZERNIO_API_KEY: KEY }), true);
+  // A key with every switch off: the real adapter is chosen, but only pausing is ready.
+  const keyOnly = zernioSocialAdapterFactory({ ZERNIO_API_KEY: KEY });
+  assert.deepEqual([keyOnly.kind, keyOnly.adsPauseReady(), keyOnly.adsReady(), keyOnly.inboxReady(), keyOnly.publishReady(), keyOnly.ready()], ['ZERNIO', true, false, false, false, false]);
+  assert.equal(zernioSocialAdapterFactory({}).adsPauseReady(), false);
+  assert.equal(new FakeZernioSocialAdapter(() => ({ HON_ZERNIO_FAKE_PROVIDER: '1', HON_DEPLOYMENT_ENVIRONMENT: 'production' })).adsPauseReady(), false);
+  // The HTTP adapter with only the key: pausing calls Zernio once with PAUSED; turning on and creating are refused without a call.
+  const calls = [];
+  const http = new ZernioHttpSocialAdapter(() => ({ ZERNIO_API_KEY: KEY }), async (url, init) => { calls.push({ url, body: init.body, key: init.headers['Idempotency-Key'] }); return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }); });
+  await http.setAdActive({ providerAdId: 'ad_1', active: false, idempotencyKey: 'k1' });
+  assert.deepEqual(calls.map(c => [c.url.endsWith('/ads/ad_1/status'), JSON.parse(c.body).status, c.key]), [[true, 'PAUSED', 'k1']]);
+  await assert.rejects(http.setAdActive({ providerAdId: 'ad_1', active: true, idempotencyKey: 'k2' }), e => e instanceof SocialProviderError && e.failure === 'NOT_ENABLED');
+  await assert.rejects(http.createBoost({ providerAccountId: 'fb1', providerPostId: 'fbpost_1', budgetCents: 5000, currency: 'USD', startsOn: '2026-11-15', endsOn: '2026-11-21', timezone: 'America/Los_Angeles', idempotencyKey: adId }),
+    e => e instanceof SocialProviderError && e.failure === 'NOT_ENABLED');
+  assert.equal(calls.length, 1);
+  // The service: with pausing ready but ads off, PAUSE goes through under the lease; CREATE and ACTIVATE are refused with nothing recorded.
+  const pauseOnly = { adsReady: () => false, adsPauseReady: () => true, createBoost: async () => { throw new Error('must not call'); }, changes: [],
+    async setAdActive(input) { if (input.active) throw new Error('must not call'); this.changes.push(input); } };
+  const refused = fixture();
+  for (const operation of ['CREATE', 'ACTIVATE']) {
+    await assert.rejects(new SchoolSocialAdsService(refused.db, pauseOnly).operation(context(), adId, { operation, expectedVersion: 1 }), status(503, 'SOCIAL_ADS_NOT_ENABLED'));
+  }
+  assert.equal(refused.queries.length, 0);
+  const f = fixture();
+  const r = await new SchoolSocialAdsService(f.db, pauseOnly).operation(context(), adId, { operation: 'PAUSE', expectedVersion: 2 });
+  assert.deepEqual(pauseOnly.changes, [{ providerAdId: 'ad_1', active: false, idempotencyKey: `${adId}:${leaseToken}` }]);
+  assert.deepEqual(f.queries.find(q => /record_school_social_ad_result/.test(q.sql)).args.slice(3, 5), ['DONE', null]);
+  assert.equal(r.ad.status, 'PAUSED');
+  const v = await new SchoolSocialAdsService(fixture().db, pauseOnly).read(readContext());
+  assert.deepEqual([v.adsEnabled, v.pauseEnabled], [false, true]);
+  // An invalid body is refused before the switch is consulted.
+  await assert.rejects(new SchoolSocialAdsService(fixture().db, off).operation(context(), adId, { operation: 'STOP', expectedVersion: 1 }), status(400, 'SOCIAL_INVALID'));
 });
 
 test('operations: a send that disagrees with the recorded ad is refused before Zernio is called', async () => {

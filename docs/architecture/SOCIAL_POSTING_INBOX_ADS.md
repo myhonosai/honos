@@ -247,7 +247,8 @@ new approvals and turn-ons; it does not pause what is already on.
 
 ### 4C.5 Flow
 
-1. **Read** `GET …/marketing/social/ads`: the cap, what is committed this month, the newest 100 ads, `adsEnabled`.
+1. **Read** `GET …/marketing/social/ads`: the cap, what is committed this month, the newest 100 ads, `adsEnabled`
+   (CREATE and ACTIVATE can reach Zernio) and `pauseEnabled` (PAUSE can reach Zernio).
 2. **Cap** `POST …/ads/budget {monthlyCapCents, currency, expectedVersion?}` (expectedVersion once a cap exists).
 3. **Draft** `POST …/ads {targetId, budgetCents, startsOn, endsOn}`: the target must be PUBLISHED on a CONNECTED
    Facebook account of this school with ads on; the budget must fit the cap.
@@ -257,7 +258,8 @@ new approvals and turn-ons; it does not pause what is already on.
 5. **Turn on** `{operation: ACTIVATE}`: only a PAUSED ad not past its end date, account still on, cap rule re-checked.
    ACTIVATING, then ACTIVE, PAUSED (Zernio refused) or UNKNOWN. This is the only step that spends the school's money.
 6. **Pause** `{operation: PAUSE}`: from ACTIVE, or from UNKNOWN when HON holds the provider ad id. PAUSING, then
-   PAUSED, the earlier state (refused) or UNKNOWN. Pausing never needs the cap or the account switch. While a
+   PAUSED, the earlier state (refused) or UNKNOWN. Pausing never needs the cap, the account switch or
+   `HON_ZERNIO_ADS_APPROVED`: a well-formed Zernio key is enough, because pausing only lowers spend. While a
    turn-on is still in flight (its lease, up to 60 seconds) pausing waits for it; afterwards it is always allowed.
 7. **Cancel** `POST …/ads/:id/cancel {expectedVersion}`: drafts only. An ad that may exist at Meta is paused instead.
 8. **Resolve** `POST …/ads/:id/resolve {state, expectedVersion}`: a person who checked Meta Ads Manager settles an
@@ -311,7 +313,8 @@ allowed) before activation:
 - **Ads (S4) also need, outside Zernio:** the school's Facebook Page connected to a Meta ad account the school owns,
   with a payment method on file in Meta. Meta charges that account; HON never pays or holds ad money. Turning
   `HON_ZERNIO_ADS_APPROVED` off stops HON from creating or turning on ads, but does not pause ads already running at
-  Meta: pause those first (from HON or Ads Manager).
+  Meta. Staff can still pause them from HON while the Zernio key stays set (or from Ads Manager); removing the key
+  removes that too.
 - **Switch:** set only the approved piece's `HON_ZERNIO_*_APPROVED=true` in `hon-api`.
 
 ## 7. Tests (TDD)

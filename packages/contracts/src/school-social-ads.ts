@@ -22,6 +22,8 @@ export interface SocialAd {
 }
 export interface SocialAdsView {
   budget: SocialAdBudget | null; committedThisMonthCents: number; ads: SocialAd[]; today: string; checkedAt: string; adsEnabled: boolean;
+  /** True when PAUSE can reach Zernio. Pausing never needs the ads switch, so this can be true while adsEnabled is false. */
+  pauseEnabled: boolean;
 }
 export interface SocialAdBudgetInput { monthlyCapCents: number; currency: string; expectedVersion?: number }
 export interface SocialAdDraftInput { targetId: string; budgetCents: number; startsOn: string; endsOn: string }
@@ -68,15 +70,15 @@ export function verifySocialAd(v: unknown): SocialAd {
     operation: o.operation as SocialAdOperation | null, resolvedByPerson: o.resolvedByPerson, createdAt: o.createdAt, version: int(o.version, 'ad', 1, 999_999_999) };
 }
 export function verifySocialAdsView(v: unknown): SocialAdsView {
-  const o = record(v, ['budget', 'committedThisMonthCents', 'ads', 'today', 'checkedAt', 'adsEnabled'], 'ads');
+  const o = record(v, ['budget', 'committedThisMonthCents', 'ads', 'today', 'checkedAt', 'adsEnabled', 'pauseEnabled'], 'ads');
   let budget: SocialAdBudget | null = null;
   if (o.budget !== null) {
     const b = record(o.budget, ['monthlyCapCents', 'currency', 'version'], 'ad budget');
     budget = { monthlyCapCents: int(b.monthlyCapCents, 'ad budget', 0, SOCIAL_AD_CAP_MAX_CENTS), currency: currency(b.currency, 'ad budget'), version: int(b.version, 'ad budget', 1, 999_999_999) };
   }
-  if (!Array.isArray(o.ads) || o.ads.length > 100 || typeof o.adsEnabled !== 'boolean' || typeof o.checkedAt !== 'string' || !ISO.test(o.checkedAt)) fail('ads');
+  if (!Array.isArray(o.ads) || o.ads.length > 100 || typeof o.adsEnabled !== 'boolean' || typeof o.pauseEnabled !== 'boolean' || (o.adsEnabled === true && o.pauseEnabled !== true) || typeof o.checkedAt !== 'string' || !ISO.test(o.checkedAt)) fail('ads');
   return { budget, committedThisMonthCents: int(o.committedThisMonthCents, 'ads', 0, Number.MAX_SAFE_INTEGER), ads: o.ads.map(verifySocialAd), today: day(o.today, 'ads'),
-    checkedAt: o.checkedAt, adsEnabled: o.adsEnabled };
+    checkedAt: o.checkedAt, adsEnabled: o.adsEnabled, pauseEnabled: o.pauseEnabled };
 }
 
 export function validateSocialAdBudgetInput(v: unknown): SocialAdBudgetInput {
