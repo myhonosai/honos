@@ -123,7 +123,9 @@ export function FaceCheckInScan({ api = faceApi, loadSessions = loadCurrentSchoo
   }, []);
   // A kept unknown request names no student, so it stays for Try again; any other line (it may name one) is cleared.
   const commandsRef = useRef(commands); commandsRef.current = commands;
-  useEffect(() => onFaceScanPrivacy(() => { setProposal(null); setLocal(null); stopCamera(); if (!commandsRef.current.busy) commandsRef.current.clear(); }), [stopCamera]);
+  // Bumped on every drop: a match still in flight when the screen was hidden never shows its student afterwards.
+  const privacy = useRef(0);
+  useEffect(() => onFaceScanPrivacy(() => { privacy.current++; setProposal(null); setLocal(null); stopCamera(); if (!commandsRef.current.busy) commandsRef.current.clear(); }), [stopCamera]);
   useEffect(() => {
     if (!selection) { setSessions({ state: shell.phase === 'READY' ? 'NO_SCHOOL' : 'LOADING' }); return; }
     let live = true; const abort = new AbortController();
@@ -154,9 +156,11 @@ export function FaceCheckInScan({ api = faceApi, loadSessions = loadCurrentSchoo
     setLocal(null);
     const input = { schoolId: selection.schoolId, sessionId, mediaType: picture.mediaType, data: picture.data };
     const preview = `data:${picture.mediaType};base64,${picture.data}`;
+    const shown = privacy.current;
     commands.start(async (key, signal, owned) => {
       const match = await api.match(input, key, signal, owned);
       if (match.outcome === 'PROPOSED' && match.student) {
+        if (privacy.current !== shown) return { tone: 'blocked', text: faceText(language, 'EXPIRED') };
         if (owned()) setProposal({ match, preview });
         return { tone: 'ok', text: faceText(language, 'proposed', { name: `${match.student.givenName} ${match.student.familyName}` }) };
       }
