@@ -103,4 +103,14 @@ describe('review fixes (controls)', () => {
   it('Talk stays tappable after the microphone was blocked, so a person can try again', () => {
     expect(render({ snapshot: snap({ state: 'BLOCKED', message: 'blocked' }) })).toMatch(/<button type="button" data-voice="talk">Talk to HON<\/button>/);
   });
+
+  it('shows the live HON orb following the voice state, only once voice is on', () => {
+    expect(render({ enabled: false })).not.toContain('data-orb-state');
+    expect(render({ support: { checked: true, recognition: false, synthesis: true } })).not.toContain('data-orb-state');
+    expect(render({ snapshot: snap({ state: 'IDLE' }) })).toContain('data-orb-state="idle"');
+    expect(render({ snapshot: snap({ state: 'WAITING_WAKE', handsFree: true }) })).toContain('data-orb-state="standby"');
+    expect(render({ snapshot: snap({ state: 'LISTENING' }) })).toContain('data-orb-state="listening"');
+    expect(render({ snapshot: snap({ state: 'SENDING' }) })).toContain('data-orb-state="thinking"');
+    expect(render({ snapshot: snap({ state: 'SPEAKING' }) })).toContain('data-orb-state="speaking"');
+  });
 });
