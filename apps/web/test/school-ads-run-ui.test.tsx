@@ -62,6 +62,7 @@ it('refuses an answer about another ad, maps refusals to closed kinds and keeps 
   expect(adsErrorFor(409, 'SOCIAL_AD_OVER_CAP').kind).toBe('OVER_CAP');
   expect(adsErrorFor(409, 'SOCIAL_ADS_OFF').kind).toBe('ADS_OFF');
   expect(adsErrorFor(409, 'SOCIAL_AD_NO_BUDGET').kind).toBe('NO_BUDGET');
+  expect(adsErrorFor(409, 'SOCIAL_AD_NO_ADDRESS').kind).toBe('NO_ADDRESS');
   expect(adsErrorFor(409, 'SOCIAL_VERSION_CONFLICT').kind).toBe('STALE');
   expect(adsErrorFor(503, 'SOCIAL_ADS_NOT_ENABLED').kind).toBe('NOT_ENABLED');
   expect(adsErrorFor(503, 'OTHER').kind).toBe('UNKNOWN');
