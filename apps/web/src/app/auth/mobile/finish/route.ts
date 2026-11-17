@@ -27,7 +27,7 @@ function check(request: NextRequest): Checked {
     const { identity, challenge } = mobileHandoffForBrowser(cookieValue(cookies, HON_SESSION_COOKIE), cookieValue(cookies, MOBILE_START_COOKIE), config);
     return { identity, challenge, callback };
   } catch {
-    return { response: authError('MOBILE_SIGN_IN_INVALID', 'Open sign-in again from the HON Parent app.', 401) };
+    return { response: authError('MOBILE_SIGN_IN_INVALID', 'Open sign-in again from the HON Family app.', 401) };
   }
 }
 
@@ -42,11 +42,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const checked = check(request);
   if ('response' in checked) return checked.response;
   const name = escapeHtml(checked.identity.displayName ?? checked.identity.email ?? 'your HON account');
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Continue to the HON Parent app</title>
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Continue to the HON Family app</title>
 <style>body{font-family:system-ui,sans-serif;max-width:28rem;margin:4rem auto;padding:0 1rem;color:#111}button{font:inherit;padding:.75rem 1.25rem;border-radius:.5rem;border:0;background:#111;color:#fff}p.small{color:#555;font-size:.9rem}</style></head>
-<body><h1>Continue to the HON Parent app?</h1><p>You are signed in as <strong>${name}</strong>.</p>
+<body><h1>Continue to the HON Family app?</h1><p>You are signed in as <strong>${name}</strong>.</p>
 <form method="post" action="/auth/mobile/finish"><button type="submit">Continue</button></form>
-<p class="small">Only continue if you just tapped Sign in in the HON Parent app on this phone. If you did not, close this page.</p></body></html>`;
+<p class="small">Only continue if you just tapped Sign in in the HON Family app on this phone. If you did not, close this page.</p></body></html>`;
   return new NextResponse(html, { status: 200, headers: PAGE_HEADERS });
 }
 

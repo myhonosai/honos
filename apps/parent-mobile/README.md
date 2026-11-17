@@ -1,4 +1,4 @@
-# HON Parent (mobile)
+# HON Family (mobile)
 
 Native family app for HON OS: React Native + Expo + TypeScript. Plan, gap matrix, screen map, API plan and Eian
 authority map: [`docs/architecture/PARENT_MOBILE_APP.md`](../../docs/architecture/PARENT_MOBILE_APP.md).

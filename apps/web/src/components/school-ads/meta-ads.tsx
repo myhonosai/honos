@@ -7,8 +7,9 @@ import type { AdsErrorKind } from './http';
 /** A Facebook post HON published that can be boosted (its PUBLISHED target). */
 export type Boostable = Readonly<{ targetId: string; pageName: string; excerpt: string }>;
 export type AdsReadState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; view: SocialAdsView; boostable: readonly Boostable[] };
-export type AdsAction = 'budget' | 'draft' | 'CREATE' | 'ACTIVATE' | 'PAUSE' | 'cancel' | 'resolve';
-export type AdsActionOutcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | Exclude<AdsErrorKind, 'SESSION'>; action: AdsAction }>;
+export type AdsAction = 'budget' | 'draft' | 'googleDraft' | 'CREATE' | 'ACTIVATE' | 'PAUSE' | 'cancel' | 'resolve';
+/** `google` marks an outcome of a Google ads action (0453), shown in the Google card instead of the Meta one. */
+export type AdsActionOutcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | Exclude<AdsErrorKind, 'SESSION'>; action: AdsAction; google?: boolean }>;
 export type BudgetForm = Readonly<{ amount: string; currency: string }>;
 export type DraftForm = Readonly<{ targetId: string; amount: string; startsOn: string; endsOn: string }>;
 
@@ -34,9 +35,13 @@ export function boostableFrom(list: SocialPostList): Boostable[] {
 export function money(locale: string, cents: number, currency: string): string {
   try { return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(cents / 100); } catch { return `${(cents / 100).toFixed(2)} ${currency}`; }
 }
-const DONE: Record<AdsAction, AdsKey> = { budget: 'done_budget', draft: 'done_draft', CREATE: 'done_CREATE', ACTIVATE: 'done_ACTIVATE', PAUSE: 'done_PAUSE', cancel: 'done_cancel', resolve: 'done_resolve' };
+export const DONE: Record<AdsAction, AdsKey> = { budget: 'done_budget', draft: 'done_draft', googleDraft: 'done_googleDraft', CREATE: 'done_CREATE', ACTIVATE: 'done_ACTIVATE', PAUSE: 'done_PAUSE', cancel: 'done_cancel', resolve: 'done_resolve' };
 
-function AdRow({ ad, p, t }: { ad: SocialAd; p: MetaAdsProps; t: (k: AdsKey) => string }): React.ReactElement {
+/** Row wording that names Meta, replaced for a Google ad. */
+const GOOGLE_WORDS: Partial<Record<AdsKey, AdsKey>> = { confirmActivate: 'g_confirmActivate', unknownCreate: 'g_unknownCreate', unknownOther: 'g_unknownOther', ad_CREATING: 'g_ad_CREATING' };
+export type AdRowProps = Pick<MetaAdsProps, 'ads' | 'locale' | 'locked' | 'confirming' | 'onOperation' | 'onCancel' | 'onResolve' | 'onConfirm'>;
+export function AdRow({ ad, p, t: base }: { ad: SocialAd; p: AdRowProps; t: (k: AdsKey) => string }): React.ReactElement {
+  const t = (k: AdsKey) => base(ad.channel === 'GOOGLE_SEARCH' ? GOOGLE_WORDS[k] ?? k : k);
   // Pausing only lowers spend, so it needs only pauseEnabled (true whenever a Zernio key exists), not the ads switch.
   const on = p.ads.state === 'READY' && p.ads.view.adsEnabled, canPause = p.ads.state === 'READY' && p.ads.view.pauseEnabled, busy = p.locked;
   const op = (operation: 'CREATE' | 'ACTIVATE' | 'PAUSE', label: AdsKey, primary = false) =>
@@ -63,6 +68,22 @@ function AdRow({ ad, p, t }: { ad: SocialAd; p: MetaAdsProps; t: (k: AdsKey) => 
   </li>;
 }
 
+export type BudgetProps = Pick<MetaAdsProps, 'locale' | 'budgetForm' | 'locked' | 'onBudgetForm' | 'onSaveBudget'>;
+/** The school's one monthly ad limit (0445), shared by Meta and Google ads. */
+export function BudgetForm({ p, view: v, t }: { p: BudgetProps; view: SocialAdsView; t: (k: AdsKey) => string }): React.ReactElement {
+  const cap = v.budget;
+  return <div className={styles.form} data-ads-budget>
+    <h3>{t('capTitle')}</h3>
+    <p className={styles.meta}>{cap && cap.monthlyCapCents > 0 ? `${t('capNow')} ${money(p.locale, cap.monthlyCapCents, cap.currency)} · ${t('committed')} ${money(p.locale, v.committedThisMonthCents, cap.currency)}` : t('capNone')}</p>
+    <div className={styles.grid}>
+      <label className={styles.field}>{t('capAmount')}<input inputMode="decimal" value={p.budgetForm.amount} disabled={p.locked} onChange={(e) => p.onBudgetForm?.({ ...p.budgetForm, amount: e.target.value })} /></label>
+      <label className={styles.field}>{t('currency')}<input maxLength={3} value={p.budgetForm.currency} disabled={p.locked} onChange={(e) => p.onBudgetForm?.({ ...p.budgetForm, currency: e.target.value.toUpperCase() })} /></label>
+    </div>
+    <p className={styles.meta}>{t('capHelp')}</p>
+    <div className={styles.row}><button type="button" className={styles.primary} disabled={p.locked} data-ads-save-budget onClick={p.onSaveBudget}>{t('saveCap')}</button></div>
+  </div>;
+}
+
 /** Meta ads on the 0445 API: the monthly limit, boost drafts, approve (created paused), turn on (spends), pause, settle unknowns. */
 export function MetaAds(p: MetaAdsProps): React.ReactElement {
   const t = (key: AdsKey) => adsText(p.language, key);
@@ -70,22 +91,13 @@ export function MetaAds(p: MetaAdsProps): React.ReactElement {
   if (a.state === 'LOADING') return <p className={styles.meta} role="status">{t('adsLoading')}</p>;
   if (a.state === 'DENIED') return <p className={styles.notice} data-ads-run="DENIED">{t('adsDenied')}</p>;
   if (a.state !== 'READY') return <p className={`${styles.notice} ${styles.warn}`} role="alert" data-ads-run="UNAVAILABLE">{t('adsUnavailable')}</p>;
-  const v = a.view, o = p.outcome, cap = v.budget, boostable = a.boostable, metaAds = v.ads.filter(ad => ad.channel === 'META_BOOST');
+  const v = a.view, o = p.outcome, boostable = a.boostable, metaAds = v.ads.filter(ad => ad.channel === 'META_BOOST');
   return <div className={styles.actions} data-ads-run={v.adsEnabled ? 'ON' : 'OFF'}>
     {!v.adsEnabled && <p className={styles.notice} data-ads-off>{t('runOff')}</p>}
-    {o && o.kind !== 'SENDING' && <div className={`${styles.notice} ${o.kind === 'DONE' ? '' : styles.warn}`} role={o.kind === 'DONE' ? 'status' : 'alert'} data-ads-outcome={o.kind}>
+    {o && o.kind !== 'SENDING' && !o.google && <div className={`${styles.notice} ${o.kind === 'DONE' ? '' : styles.warn}`} role={o.kind === 'DONE' ? 'status' : 'alert'} data-ads-outcome={o.kind}>
       <p>{o.kind === 'DONE' ? t(DONE[o.action]) : t(`ae_${o.kind}`)}</p>
       {p.canRetry && <button type="button" className={styles.primary} onClick={p.onTryAgain}>{t('tryAgain')}</button>}</div>}
-    <div className={styles.form} data-ads-budget>
-      <h3>{t('capTitle')}</h3>
-      <p className={styles.meta}>{cap && cap.monthlyCapCents > 0 ? `${t('capNow')} ${money(p.locale, cap.monthlyCapCents, cap.currency)} · ${t('committed')} ${money(p.locale, v.committedThisMonthCents, cap.currency)}` : t('capNone')}</p>
-      <div className={styles.grid}>
-        <label className={styles.field}>{t('capAmount')}<input inputMode="decimal" value={p.budgetForm.amount} disabled={p.locked} onChange={(e) => p.onBudgetForm?.({ ...p.budgetForm, amount: e.target.value })} /></label>
-        <label className={styles.field}>{t('currency')}<input maxLength={3} value={p.budgetForm.currency} disabled={p.locked} onChange={(e) => p.onBudgetForm?.({ ...p.budgetForm, currency: e.target.value.toUpperCase() })} /></label>
-      </div>
-      <p className={styles.meta}>{t('capHelp')}</p>
-      <div className={styles.row}><button type="button" className={styles.primary} disabled={p.locked} data-ads-save-budget onClick={p.onSaveBudget}>{t('saveCap')}</button></div>
-    </div>
+    <BudgetForm p={p} view={v} t={t} />
     <div className={styles.form} data-ads-draft>
       <h3>{t('boostTitle')}</h3>
       {boostable.length === 0 ? <p className={styles.meta}>{t('noBoostable')}</p> : <>

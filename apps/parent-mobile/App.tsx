@@ -31,7 +31,7 @@ export default function App() {
   const web = webOrigin(WEB);
   if (!api) {
     // A build without a valid https API address must not start at all rather than talk to the wrong server.
-    return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}><Text>This build of HON Parent is not configured. Please update the app.</Text></View>;
+    return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}><Text>This build of HON Family is not configured. Please update the app.</Text></View>;
   }
   const onSignIn = web ? () => signIn({
     webOrigin: web,

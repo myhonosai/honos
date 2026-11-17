@@ -64,3 +64,13 @@ Evidence: AI-0 INV-44 (new) and INV-36 (updated: HON now sees visible team answe
    Make a plan together, member strip with readiness, voice per agent (agent voice profiles in `hon-voice.ts`),
    en/ko/es copy, unit tests and browser screenshots.
 3. **Later**: Chad and Marcus plain-question answers (new migration), Maya aggregate answers.
+
+## Voice choices per teammate (0460)
+
+Owner ask (2026-11-17): "choose voice for all AI agents, give few choices each".
+
+- **Choices:** three free browser voices per teammate (HON, Claire, Alex, Jordan, Lena, Marcus, Chad, Maya, Kai). Choice 1 is the voice each teammate already had; choices 2 and 3 change pitch, pace and which of the device's own voices is used (`HON_AGENT_VOICE_OPTIONS` in `hon-voice.ts`, labels Usual / Warm / Bright / Deep / Calm / Lively in en/ko/es). The device decides which voices it has, so the same choice can sound different on each phone or computer.
+- **Saved to the account:** `hon.principal_agent_voice_preferences` (migration 0460): one row per person, school and teammate, `voice_choice` 1-3, forced RLS per school, runtime SELECT/INSERT/UPDATE only. `GET/PUT /v1/organizations/:org/schools/:school/agent-voices` with the personal interface-preference permissions (`settings.interface_theme.read/update`), the scope from the verified identity, an Idempotency-Key per change, audit + outbox. No row means choice 1.
+- **Where:** "Choose voices" in the Team chat card: each teammate's three voices with a ▶ to hear a sample first (nothing is saved by hearing). A change shows at once and is saved; if saving fails the previous voice comes back with a note. Only the newest request may change what is shown.
+- **Used by:** the team chat reads each answer in the chosen voice; Ask HON reads HON's answers in HON's chosen voice.
+- **Not:** no paid or cloud voice, no provider, no AI call, no spend. Paid natural voices stay off until the owner approves them.
