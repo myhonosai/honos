@@ -695,7 +695,7 @@ try {
   // 0259 (Maya M1) read_maya_at_risk_students is a read-only retention signal: it books, checks in and grants nothing,
   // and reads only ACTIVE, FROZEN and CANCELLATION_PENDING memberships (no DRAFT); a SCHEDULED (future-dated) ACTIVE
   // membership can at most appear as a staff-only list row, which grants no benefit.
-  // 0446 school demo data: demo_data_person_tables only names the tables (memberships among them) whose demo rows removal
+  // 0459 school demo data: demo_data_person_tables only names the tables (memberships among them) whose demo rows removal
   // follows; school_demo_data_write inserts the demo school's own DRAFT memberships and activates them with 0177 evidence.
   // Neither books, checks in or grants a benefit; demo attendance is written by school_demo_data_attendance, which never
   // reads memberships.

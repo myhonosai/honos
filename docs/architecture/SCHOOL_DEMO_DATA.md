@@ -1,4 +1,4 @@
-# School demo data (0446)
+# School demo data (0459)
 
 Owner request (David, 2026-11-17): a school can fill its account with demo data to try HON, then remove all of it with
 one action before importing real records. It lives in **Settings > Demo data** for every school, so a school that does

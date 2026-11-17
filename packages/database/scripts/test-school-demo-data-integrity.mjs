@@ -1,4 +1,4 @@
-/** School demo data (0446): real signed HON sessions -> Nest/guards -> fixed runtime SQL -> marked disposable PostgreSQL. No provider,
+/** School demo data (0459): real signed HON sessions -> Nest/guards -> fixed runtime SQL -> marked disposable PostgreSQL. No provider,
  *  processor, charge, message or AI. Schools are SYNTHETIC sign-ups made through the 0241 runtime entry point; the sign-up program is
  *  opened to TEST_MODE and paid access is stood in by this proof's owner connection only. Synthetic names only. */
 import assert from 'node:assert/strict';
@@ -79,11 +79,11 @@ try{
  pass('forced deny-all RLS on two new tables; runtime executes exactly read, load, remove and the guard removal check');
 
  // 2. The 42 append-only guards carry exactly one added removal line before their unchanged body.
- const patched=await q("SELECT p.oid::regprocedure::text f,p.prosrc FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.prosrc LIKE '%0446 demo data removal%'");
+ const patched=await q("SELECT p.oid::regprocedure::text f,p.prosrc FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.prosrc LIKE '%0459 demo data removal%'");
  assert.equal(patched.length,42);
- for(const f of patched){assert.equal(f.prosrc.split('0446 demo data removal').length,2,f.f);assert.match(f.prosrc,/\bBEGIN\n {2}IF TG_OP='DELETE' AND hon\.demo_data_removal_allows\(TG_TABLE_NAME,to_jsonb\(OLD\)\) THEN RETURN OLD; END IF; -- 0446 demo data removal\n/,f.f);}
+ for(const f of patched){assert.equal(f.prosrc.split('0459 demo data removal').length,2,f.f);assert.match(f.prosrc,/\bBEGIN\n {2}IF TG_OP='DELETE' AND hon\.demo_data_removal_allows\(TG_TABLE_NAME,to_jsonb\(OLD\)\) THEN RETURN OLD; END IF; -- 0459 demo data removal\n/,f.f);}
  const canonical=readFileSync(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql',import.meta.url),'utf8');
- const section=canonical.slice(canonical.indexOf('-- School demo data exact verification (0446)'),canonical.indexOf('-- End school demo data exact verification.'));
+ const section=canonical.slice(canonical.indexOf('-- School demo data exact verification (0459)'),canonical.indexOf('-- End school demo data exact verification.'));
  assert(section.length>1000);await admin.query(section.replaceAll('hon_runtime',runtime.username));
  pass('42 append-only guards patched once each, original bodies after the added line; the canonical 011 section passes');
 

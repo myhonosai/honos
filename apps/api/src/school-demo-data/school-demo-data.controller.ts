@@ -10,7 +10,7 @@ import { SchoolDemoDataService } from './school-demo-data.service.js';
 const MANAGE = 'school.demo_data.manage';
 
 /**
- * 0446: Settings > Demo data. Route identifiers are never authority: the guarded boundary resolves the route scope from the
+ * 0459: Settings > Demo data. Route identifiers are never authority: the guarded boundary resolves the route scope from the
  * verified session, and each protected database function re-proves the direct human subject, the live
  * school.demo_data.manage permission and the school's access. Bodies are read raw and validated closed.
  */

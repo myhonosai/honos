@@ -18,7 +18,7 @@ const COUNT_ORDER: readonly SchoolDemoDataCountKey[] = ['students', 'families', 
   'programs', 'classes', 'classSessions', 'attendance', 'leads'];
 const CALM: readonly DemoOutcomeKind[] = ['LOADING', 'REMOVING', 'LOADED', 'REMOVED'];
 
-/** Settings > Demo data (0446): pure, every state comes from props. Remove always asks once before it sends. */
+/** Settings > Demo data (0459): pure, every state comes from props. Remove always asks once before it sends. */
 export function SchoolDemoDataSettingsView(p: SchoolDemoDataSettingsViewProps): React.ReactElement {
   const c = demoCopy(p.language), read = p.read;
   const view = read.state === 'READY' ? read.read : null;

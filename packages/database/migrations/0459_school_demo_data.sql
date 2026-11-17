@@ -1,6 +1,6 @@
 BEGIN;
 
--- School demo data (0446, coordinator-allocated 2026-11-17).
+-- School demo data (0459, coordinator-allocated 2026-11-17).
 -- Owner request (David, 2026-11-17): fill a school with fake contacts to try HON, then remove all of it with one action
 -- before importing real data; a Settings button for every school that wants to try HON before trusting it with a real
 -- import. Owner chose "everything at once": contacts, leads, classes, memberships, invoices and attendance.
@@ -24,7 +24,7 @@ DO $$ BEGIN
   IF to_regprocedure('hon.membership_command_args_ok(text,text,uuid,uuid)') IS NULL OR to_regprocedure('hon.staff_member_eligible(uuid,uuid,uuid)') IS NULL
     OR to_regprocedure('hon.membership_local_day_start(date,text)') IS NULL OR to_regprocedure('hon.saas_ts(timestamptz)') IS NULL
     OR to_regclass('hon.crm_pipeline_stages') IS NULL OR to_regclass('hon.communication_messages') IS NULL OR to_regclass('hon.school_pay_charge_attempts') IS NULL THEN
-    RAISE EXCEPTION '0446 requires the membership, pipeline, communication and school-pay migrations'; END IF;
+    RAISE EXCEPTION '0459 requires the membership, pipeline, communication and school-pay migrations'; END IF;
 END $$;
 
 INSERT INTO hon.permissions(code,description,is_sensitive,is_staff_assignable) VALUES
@@ -129,7 +129,7 @@ $$;
 -- D4: each append-only guard on a table that can point at demo rows lets exactly those rows go during removal. The
 -- original body is kept byte for byte after the one added line; every function is checked to have one top-level BEGIN.
 DO $$ DECLARE f regprocedure; src text; def text; pos integer; patched text; n integer:=0;
-  bypass text:=E'\n  IF TG_OP=''DELETE'' AND hon.demo_data_removal_allows(TG_TABLE_NAME,to_jsonb(OLD)) THEN RETURN OLD; END IF; -- 0446 demo data removal\n';
+  bypass text:=E'\n  IF TG_OP=''DELETE'' AND hon.demo_data_removal_allows(TG_TABLE_NAME,to_jsonb(OLD)) THEN RETURN OLD; END IF; -- 0459 demo data removal\n';
 BEGIN
   FOREACH f IN ARRAY ARRAY['hon.guard_achievement_history()','hon.guard_attendance_card()','hon.guard_automation_run()',
     'hon.guard_automation_workflow_history()','hon.guard_billing_import()','hon.guard_campaign_history()','hon.guard_chad_follow_up()',
@@ -146,15 +146,15 @@ BEGIN
     'hon.guard_testing_scorecard_history()','hon.guard_testing_scorecard_root()','hon.guard_walkin_kiosk()']::regprocedure[] LOOP
     SELECT p.prosrc INTO src FROM pg_proc p JOIN pg_language l ON l.oid=p.prolang WHERE p.oid=f AND l.lanname='plpgsql' AND p.prorettype='trigger'::regtype;
     IF src IS NULL OR (SELECT count(*) FROM regexp_matches(src,'\mBEGIN\M','gi'))<>1 OR position('$function$' IN src)>0 THEN
-      RAISE EXCEPTION '0446 cannot patch guard %',f; END IF;
+      RAISE EXCEPTION '0459 cannot patch guard %',f; END IF;
     pos:=regexp_instr(src,'\mBEGIN\M',1,1,1,'i');
     patched:=substr(src,1,pos-1)||bypass||substr(src,pos);
     def:=pg_get_functiondef(f);
-    IF position('$function$'||src||'$function$' IN def)=0 THEN RAISE EXCEPTION '0446 cannot patch guard %',f; END IF;
+    IF position('$function$'||src||'$function$' IN def)=0 THEN RAISE EXCEPTION '0459 cannot patch guard %',f; END IF;
     EXECUTE replace(def,'$function$'||src||'$function$','$function$'||patched||'$function$');
     n:=n+1;
   END LOOP;
-  IF n<>42 THEN RAISE EXCEPTION '0446 patched % guards, expected 42',n; END IF;
+  IF n<>42 THEN RAISE EXCEPTION '0459 patched % guards, expected 42',n; END IF;
 END $$;
 
 -- ---------- D3: never contact or charge demo people ----------

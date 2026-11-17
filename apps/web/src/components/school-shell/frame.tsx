@@ -24,7 +24,7 @@ export type SchoolShellFrameProps = {
   tourStep?: number | null; onTour?: (step: number | null) => void;
   /** Screensaver over the whole app (away or idle). The page behind it stays mounted and inert. */
   asleep?: boolean; onWake?: () => void;
-  /** 0446: this school has demo data loaded (read for the verified school only). Presentation only. */
+  /** 0459: this school has demo data loaded (read for the verified school only). Presentation only. */
   demoLoaded?: boolean;
 };
 const MODES: readonly HonInterfaceTheme[] = ['big-button', 'modern', 'classic'];

@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),{randomUU
 const {SchoolDemoDataService}=require('../dist/school-demo-data/school-demo-data.service.js');
 const g=require('../dist/school-demo-data/school-demo-data-human-ui.guard.js');
 const c=require('@hon/contracts');
-// 0446: Settings > Demo data (load and remove).
+// 0459: Settings > Demo data (load and remove).
 const counts={adultStudents:8,attendance:287,classSessions:49,classes:3,families:28,guardians:20,invoices:113,leads:15,memberships:38,overdueInvoices:2,payments:73,programs:3,students:38};
 const setId=randomUUID();
 const loaded={status:'LOADED',setId,version:1,loadedAt:'2026-11-17T07:00:00.000Z',counts,lastRemovedAt:null};
@@ -10,7 +10,7 @@ const none={status:'NONE',setId:null,version:null,loadedAt:null,counts:null,last
 const ctx=(over={})=>({organizationId:randomUUID(),schoolId:randomUUID(),principalId:randomUUID(),principalType:'HUMAN_USER',source:'HUMAN_UI',requestId:randomUUID(),correlationId:randomUUID(),externalSubject:'oidc:owner',idempotencyKey:'',...over});
 function db(rows,calls=[]){const client={query:async(sql,args)=>{calls.push([sql,args]);return /school_demo_data/.test(sql)?{rows}:{rows:[]};}};
  return {withTenantReadOnlyTransaction:async(_c,f)=>f(client),withTenantTransaction:async(_c,f)=>f(client)};}
-test('read, load and remove call only the 0446 functions with the session subject and verify the answer',async()=>{
+test('read, load and remove call only the 0459 functions with the session subject and verify the answer',async()=>{
  const calls=[];
  assert.equal((await new SchoolDemoDataService(db([{data:loaded}],calls)).read(ctx())).counts.students,38);
  assert(calls.some(([sql,args])=>sql.includes('hon.read_school_demo_data($1)')&&args[0]==='oidc:owner'));

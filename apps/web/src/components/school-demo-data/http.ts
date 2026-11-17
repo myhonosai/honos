@@ -3,7 +3,7 @@ import { SCHOOL_DEMO_DATA_LOAD_COMMAND, SCHOOL_DEMO_DATA_REMOVE_COMMAND, validat
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * Settings > Demo data (0446). The read sends no Idempotency-Key; load and remove each send their own X-HON-Human-Command
+ * Settings > Demo data (0459). The read sends no Idempotency-Key; load and remove each send their own X-HON-Human-Command
  * and an Idempotency-Key. The server decides the permission, the version and what removal may delete.
  */
 export type DemoErrorKind =

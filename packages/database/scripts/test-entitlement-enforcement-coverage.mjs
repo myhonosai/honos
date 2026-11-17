@@ -62,7 +62,7 @@ const OPEN_BY_DESIGN={
  'hon.teaching_action_is_current(uuid,jsonb)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.principal_has_school_permission(uuid,uuid,uuid,text)':'boolean permission predicate; grants nothing by itself',
  'hon.human_action_reviewer()':'returns the fixed reviewer identity; no school data',
- 'hon.demo_data_removal_allows(text,jsonb)':'0446 boolean guard predicate: true only for a registered demo row in a set the calling transaction is removing; returns no data and grants nothing',
+ 'hon.demo_data_removal_allows(text,jsonb)':'0459 boolean guard predicate: true only for a registered demo row in a set the calling transaction is removing; returns no data and grants nothing',
 };
 // Reviewed gaps: none open. The six staff scope resolvers recorded here before (achievements, staff reporting,
 // follow-ups, human work queue, teaching studio, testing registration review) are gated in 0172 and are now in
