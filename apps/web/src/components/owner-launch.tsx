@@ -68,6 +68,7 @@ export function OwnerLaunch() {
   function clearPrivateInput() {setGivenName('');setFamilyName('');setBirthDate('');setGuardianGivenName('');setGuardianFamilyName('');setGuardianBirthDate('');setAttested(false);setPlanCode('');setTermStart('');setTermEnd('');setCurrency('');setMembershipDraft(null);setDraftState('DRAFT_UNAVAILABLE');retry.current=null;}
   useEffect(()=>{
     const stale=()=>{if(inShell.current&&document.visibilityState==='visible'&&Date.now()-lastReturnReload.current<=1000)return; // the reload just started covers this return
+      if(document.visibilityState!=='visible')lastReturnReload.current=0; // a later return reloads again
       generation.current++;setContext(null);setBooking(null);setBookingState('BOOKING_UNAVAILABLE');setMembershipDraft(null);setBusy(false);setMessage('School state may have changed. Reload saved receipts before continuing.');clearPrivateInput();if(inShell.current&&document.visibilityState==='visible'){lastReturnReload.current=Date.now();void reload();};};
     window.addEventListener('focus',stale);document.addEventListener('visibilitychange',stale);
     return ()=>{generation.current++;window.removeEventListener('focus',stale);document.removeEventListener('visibilitychange',stale);};

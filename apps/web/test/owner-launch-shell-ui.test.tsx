@@ -41,4 +41,5 @@ it('inside the shell loads the signed-in school by itself, hides its ID and relo
   vi.spyOn(Date, 'now').mockReturnValue(10_000);
   h.visibility = 'visible'; h.events.visibilitychange!(); await settle(); h.events.focus!(); await settle(); expect(launchReads(fetch)).toBe(2); expect(text(render())).toContain('Sunrise Dojo');
   h.visibility = 'hidden'; h.events.visibilitychange!(); expect(text(render())).not.toContain('Sunrise Dojo'); // leaving still hides at once
+  h.visibility = 'visible'; h.events.visibilitychange!(); await settle(); expect(launchReads(fetch)).toBe(3); expect(text(render())).toContain('Sunrise Dojo'); // coming back within the second reloads
 });
