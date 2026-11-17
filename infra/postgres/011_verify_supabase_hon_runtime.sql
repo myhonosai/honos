@@ -4525,6 +4525,7 @@ BEGIN
   END LOOP;
 END $$;
 -- End membership agreement exact verification.
+
 -- Staff shift schedule exact verification (0464)
 DO $$ DECLARE f text;
   entry text[]:=ARRAY['hon.read_staff_shift_week(text,date)','hon.save_staff_shift(text,jsonb,text,uuid,uuid)'];
@@ -4552,3 +4553,33 @@ BEGIN
     RAISE EXCEPTION 'Staff shift permissions missing'; END IF;
 END $$;
 -- End staff shift exact verification.
+-- Parent school bookings exact verification (0466): private helpers, a private forced-RLS table and four runtime entry points.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_parent_school_booking()',true,false,'search_path=pg_catalog, hon','0579ae3d2ac21cb22c89211aaf75276a658420fdb0cd94b4aff6f00bf62f1e7f'),
+('hon.parent_school_booking_contact(uuid,uuid)',true,false,'search_path=pg_catalog, hon','cd9c648c49ffd7005f0b01765c9e320ac084b8dd5b5399fbba8309e879bd68c4'),
+('hon.parent_school_booking_json(text,uuid)',true,false,'search_path=pg_catalog, hon','a46e67aa7700482a4ef1870a0d7f3c61ba149508c0c2dfaa6c00cab67d3e3e30'),
+('hon.parent_school_booking_live(uuid,text,uuid)',true,false,'search_path=pg_catalog, hon','bcd126fbae3055be740d663b43d709210ce207d924a4b0dd2d9a51c9dfe0acae'),
+('hon.parent_school_booking_finish(text,text,uuid,uuid,text,uuid,jsonb,text,text,jsonb,jsonb,integer,uuid,uuid)',true,false,'search_path=pg_catalog, hon','38db66f77ebd07cb2ac7f6880bb0e856924709fe6835e5f58fe54af66e1d563b'),
+('hon.parent_school_booking_lock(text)',true,false,'search_path=pg_catalog, hon','c3c11d7443ffae5cf92366044243b94b577a2bd1c3ac09f475e2c24769a5bcf9'),
+('hon.read_parent_school_bookings(text)',true,true,'search_path=pg_catalog, hon','fe34a3d6a9c09950e527ddc86ea9ca486e86fced0baa0abc73cc5356fb67efb0'),
+('hon.book_parent_school_event_slot(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','f73e0430bfa3385a324f166957d584931c82d4c9979dac0090d1f3a2e9dcb259'),
+('hon.book_parent_school_booking_type(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','8538275c6056cebb29a4f738eed104e1c0c12a36f4116485e67340b3b1265017'),
+('hon.cancel_parent_school_booking(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','32eb7b0d3d32a736e480809eaba1841018ce8a789716924f8371899361283fb6')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe parent school booking function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.parent_school_bookings'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.parent_school_bookings'::regclass)
+    OR has_table_privilege('hon_runtime','hon.parent_school_bookings','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.parent_school_bookings','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe parent school booking table';
+  END IF;
+END $$;
+-- End parent school bookings exact verification.
