@@ -113,7 +113,7 @@ test('post commands: strict bodies, exact database arguments, a receipt for the 
 });
 
 test('database refusals map to closed codes', async () => {
-  const cases = [['SOCIAL_MEDIA_REQUIRED', '0A000', 422], ['SOCIAL_POST_NOT_FOUND', 'P0002', 404], ['SOCIAL_POST_STATE', '55000', 409], ['SOCIAL_PUBLISH_OFF', '23514', 409],
+  const cases = [['SOCIAL_MEDIA_REQUIRED', '0A000', 422], ['SOCIAL_TEXT_TOO_LONG', '22001', 400], ['SOCIAL_POST_NOT_FOUND', 'P0002', 404], ['SOCIAL_POST_STATE', '55000', 409], ['SOCIAL_PUBLISH_OFF', '23514', 409],
     ['SOCIAL_ACCOUNT_DISCONNECTED', '23514', 409], ['SOCIAL_VERSION_CONFLICT', '40001', 409], ['SOCIAL_FORBIDDEN', '42501', 403], ['SOCIAL_INVALID', '22023', 400],
     ['IDEMPOTENCY_KEY_REUSED', '23505', 409], ['SOCIAL_BUSY', '55P03', 409], ['SOCIAL_ACCOUNT_NOT_FOUND', 'P0002', 404]];
   for (const [message, code, http] of cases) {
@@ -197,6 +197,39 @@ test('HTTP adapter publish: refuses unless publishing is approved; Facebook only
   }
 });
 
+test('HTTP adapter publish (0455): a Google Business Profile update with the link as its Learn more button; over 1,500 characters refused before any call', async () => {
+  const calls = [], routes = [];
+  const reply = (code, body) => new Response(body === undefined ? null : JSON.stringify(body), { status: code, headers: { 'content-type': 'application/json' } });
+  const send = async (url, init) => { calls.push({ url, init }); return routes.shift(); };
+  const adapter = new ZernioHttpSocialAdapter(() => ({ ZERNIO_API_KEY: KEY, HON_ZERNIO_PUBLISH_APPROVED: 'true' }), send);
+  const input = { profileId: 'prof_1', providerAccountId: 'gbp1', platform: 'GOOGLE_BUSINESS', text: 'Free trial week', linkUrl: 'https://dojo.example.test/trial', idempotencyKey: targetId };
+  routes.push(reply(201, { post: { _id: 'zpost_g1' } }));
+  assert.deepEqual(await adapter.publishPost(input), { providerPostId: 'zpost_g1' });
+  let call = calls.at(-1);
+  assert.equal(call.url, 'https://zernio.com/api/v1/posts'); assert.equal(call.init.headers['Idempotency-Key'], targetId);
+  assert.deepEqual(JSON.parse(call.init.body), { content: 'Free trial week', publishNow: true, platforms: [{ platform: 'googlebusiness', accountId: 'gbp1',
+    platformSpecificData: { callToAction: { type: 'LEARN_MORE', url: 'https://dojo.example.test/trial' } } }] });
+  routes.push(reply(201, { post: { _id: 'zpost_g2' } }));
+  await adapter.publishPost({ ...input, linkUrl: null });
+  assert.deepEqual(JSON.parse(calls.at(-1).init.body).platforms, [{ platform: 'googlebusiness', accountId: 'gbp1' }]);
+  const before = calls.length;
+  await assert.rejects(adapter.publishPost({ ...input, text: 'x'.repeat(1501) }), e => e instanceof SocialProviderError && e.failure === 'REJECTED');
+  await assert.rejects(adapter.publishPost({ ...input, platform: 'GOOGLE_ADS' }), e => e.failure === 'REJECTED');
+  assert.equal(calls.length, before);
+  // The fake: same rules, and one post per HON target id.
+  const fake = new FakeZernioSocialAdapter(() => ({ HON_ZERNIO_FAKE_PROVIDER: '1', HON_DEPLOYMENT_ENVIRONMENT: 'development' }));
+  const first = await fake.publishPost(input);
+  assert.deepEqual(await fake.publishPost(input), first);
+  await assert.rejects(fake.publishPost({ ...input, idempotencyKey: 'other', text: 'x'.repeat(1501) }), e => e.failure === 'REJECTED');
+  // Connecting: Zernio's googlebusiness accounts are listed as GOOGLE_BUSINESS, and the Google sign-in host is allowed.
+  routes.push(reply(200, { accounts: [{ _id: 'gbp1', platform: 'googlebusiness', profileId: 'prof_1', name: 'Synthetic Dojo' }] }));
+  const lister = new ZernioHttpSocialAdapter(() => ({ ZERNIO_API_KEY: KEY, HON_ZERNIO_CONNECT_APPROVED: 'true' }), send);
+  assert.deepEqual(await lister.listAccounts('prof_1'), [{ providerAccountId: 'gbp1', platform: 'GOOGLE_BUSINESS', displayName: 'Synthetic Dojo' }]);
+  routes.push(reply(200, { authUrl: 'https://accounts.google.com/o/oauth2/v2/auth?state=x' }));
+  await lister.connectUrl({ profileId: 'prof_1', platform: 'GOOGLE_BUSINESS', redirectUrl: 'https://hon.example.invalid/staff/marketing/social/return', state: 's' });
+  assert.match(calls.at(-1).url, /^https:\/\/zernio\.com\/api\/v1\/connect\/googlebusiness\?/);
+});
+
 const sign = (body, key = secret) => createHmac('sha256', key).update(body).digest('hex');
 const raw = (value) => Buffer.from(JSON.stringify(value));
 const reason = (fn) => { try { fn(); return 'OK'; } catch (error) { return error instanceof ZernioWebhookError ? error.reason : error.message; } };
@@ -212,6 +245,8 @@ test('receipts: post and account events only when publishing is on; signed; iden
   const verifier = new ZernioLeadWebhookVerifier(() => publishEnv());
   let body = raw(published);
   assert.deepEqual(verifier.receive(body, sign(body)), { kind: 'SOCIAL', event: { eventId: 'evt_p1', eventType: 'post.published', platform: 'FACEBOOK', providerAccountId: 'fb1', providerPostId: 'zpost_1' } });
+  body = raw({ id: 'evt_g1', event: 'post.failed', post: { id: 'zpost_g1' }, account: { id: 'gbp1', platform: 'googlebusiness' } });
+  assert.deepEqual(verifier.receive(body, sign(body)), { kind: 'SOCIAL', event: { eventId: 'evt_g1', eventType: 'post.failed', platform: 'GOOGLE_BUSINESS', providerAccountId: 'gbp1', providerPostId: 'zpost_g1' } });
   body = raw({ id: 'evt_d1', event: 'account.disconnected', account: { id: 'ig9', platform: 'instagram' } });
   assert.deepEqual(verifier.receive(body, sign(body)).event, { eventId: 'evt_d1', eventType: 'account.disconnected', platform: 'INSTAGRAM', providerAccountId: 'ig9', providerPostId: null });
   assert.equal(reason(() => verifier.receive(body, sign(body, 'z'.repeat(40)))), 'SIGNATURE_INVALID');

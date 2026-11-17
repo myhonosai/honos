@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { SOCIAL_AD_RADIUS_MILES, type GoogleAdContent, type SocialAccountPlatform, type SocialAdLocation, type SocialPlatform } from '@hon/contracts';
+import { GOOGLE_BUSINESS_POST_MAX_LENGTH, SOCIAL_AD_RADIUS_MILES, type GoogleAdContent, type SocialAccountPlatform, type SocialAdLocation, type SocialPlatform, type SocialPostPlatform } from '@hon/contracts';
 
 type Env = Record<string, string | undefined>;
 export const ZERNIO_SOCIAL_ADAPTER = Symbol('ZERNIO_SOCIAL_ADAPTER');
@@ -87,7 +87,7 @@ function radiusTargeting(l: SocialAdLocation): Record<string, unknown> {
 export interface SendReplyInput {
   providerAccountId: string; platform: SocialPlatform; kind: 'DM' | 'COMMENT'; providerConversationId: string; text: string; idempotencyKey: string;
 }
-export interface PublishPostInput { profileId: string | null; providerAccountId: string; platform: SocialPlatform; text: string; linkUrl: string | null; idempotencyKey: string }
+export interface PublishPostInput { profileId: string | null; providerAccountId: string; platform: SocialPostPlatform; text: string; linkUrl: string | null; idempotencyKey: string }
 const POST_ID = /^[0-9A-Za-z_:.-]{1,128}$/;
 
 export function zernioConnectApproved(env: Env): boolean {
@@ -133,10 +133,11 @@ function displayName(value: unknown): string | null {
   return clean.length ? clean : null;
 }
 function platformOf(value: unknown): SocialAccountPlatform | null {
-  return value === 'facebook' ? 'FACEBOOK' : value === 'instagram' ? 'INSTAGRAM' : value === 'googleads' ? 'GOOGLE_ADS' : null;
+  return value === 'facebook' ? 'FACEBOOK' : value === 'instagram' ? 'INSTAGRAM' : value === 'googleads' ? 'GOOGLE_ADS'
+    : value === 'googlebusiness' ? 'GOOGLE_BUSINESS' : null;
 }
-/** Zernio's platform names (0453 assumption to confirm: Google Ads is `googleads`). */
-const ZERNIO_PLATFORM: Record<SocialAccountPlatform, string> = { FACEBOOK: 'facebook', INSTAGRAM: 'instagram', GOOGLE_ADS: 'googleads' };
+/** Zernio's platform names (assumptions to confirm: Google Ads is `googleads` (0453), Google Business Profile `googlebusiness` (0455)). */
+const ZERNIO_PLATFORM: Record<SocialAccountPlatform, string> = { FACEBOOK: 'facebook', INSTAGRAM: 'instagram', GOOGLE_ADS: 'googleads', GOOGLE_BUSINESS: 'googlebusiness' };
 const TZ = /^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+){0,2}$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -224,11 +225,18 @@ export class ZernioHttpSocialAdapter implements ZernioSocialAdapter {
 
   async publishPost(input: PublishPostInput): Promise<{ providerPostId: string }> {
     if (!this.publishReady()) throw new SocialProviderError('NOT_ENABLED');
-    if (!ID.test(input.providerAccountId) || input.platform !== 'FACEBOOK') throw new SocialProviderError('REJECTED');
-    const content = input.linkUrl ? `${input.text}\n\n${input.linkUrl}` : input.text;
-    const answer = await this.call('POST', '/posts', {
-      content, publishNow: true, platforms: [{ platform: 'facebook', accountId: input.providerAccountId }],
-    }, 'publish', input.idempotencyKey);
+    if (!ID.test(input.providerAccountId) || (input.platform !== 'FACEBOOK' && input.platform !== 'GOOGLE_BUSINESS')) throw new SocialProviderError('REJECTED');
+    let body: Record<string, unknown>;
+    if (input.platform === 'GOOGLE_BUSINESS') {
+      // 0455 assumed shape (spec §9, to confirm): a standard Google Business Profile update; the link is its "Learn more" button.
+      if (input.text.length > GOOGLE_BUSINESS_POST_MAX_LENGTH) throw new SocialProviderError('REJECTED');
+      body = { content: input.text, publishNow: true, platforms: [{ platform: 'googlebusiness', accountId: input.providerAccountId,
+        ...(input.linkUrl ? { platformSpecificData: { callToAction: { type: 'LEARN_MORE', url: input.linkUrl } } } : {}) }] };
+    } else {
+      body = { content: input.linkUrl ? `${input.text}\n\n${input.linkUrl}` : input.text, publishNow: true,
+        platforms: [{ platform: 'facebook', accountId: input.providerAccountId }] };
+    }
+    const answer = await this.call('POST', '/posts', body, 'publish', input.idempotencyKey);
     const post = ((answer as { post?: unknown })?.post ?? answer) as Record<string, unknown> | null;
     const id = post && typeof post === 'object' ? (post._id ?? post.id) : undefined;
     if (typeof id !== 'string' || !POST_ID.test(id)) throw new SocialProviderError('UNKNOWN');
@@ -368,8 +376,8 @@ export class FakeZernioSocialAdapter implements ZernioSocialAdapter {
   async connectUrl(input: { profileId: string; platform: SocialAccountPlatform; redirectUrl: string; state: string }): Promise<string> {
     this.check('connectUrl');
     const suffix = createHash('sha256').update(input.profileId + ':' + input.platform).digest('hex').slice(0, 20);
-    const account: ProviderSocialAccount = { providerAccountId: ({ FACEBOOK: 'fbpage_', INSTAGRAM: 'igbiz_', GOOGLE_ADS: 'gads_' })[input.platform] + suffix, platform: input.platform,
-      displayName: ({ FACEBOOK: 'Synthetic Dojo Page', INSTAGRAM: 'synthetic.dojo', GOOGLE_ADS: 'Synthetic Dojo Google Ads' })[input.platform] };
+    const account: ProviderSocialAccount = { providerAccountId: ({ FACEBOOK: 'fbpage_', INSTAGRAM: 'igbiz_', GOOGLE_ADS: 'gads_', GOOGLE_BUSINESS: 'gbp_' })[input.platform] + suffix, platform: input.platform,
+      displayName: ({ FACEBOOK: 'Synthetic Dojo Page', INSTAGRAM: 'synthetic.dojo', GOOGLE_ADS: 'Synthetic Dojo Google Ads', GOOGLE_BUSINESS: 'Synthetic Dojo (Google)' })[input.platform] };
     const list = (this.connected.get(input.profileId) ?? []).filter(a => a.providerAccountId !== account.providerAccountId);
     this.connected.set(input.profileId, [...list, account]);
     return `${input.redirectUrl}?${new URLSearchParams({ state: input.state, connected: input.platform.toLowerCase() })}`;
@@ -416,7 +424,8 @@ export class FakeZernioSocialAdapter implements ZernioSocialAdapter {
   }
   async publishPost(input: PublishPostInput): Promise<{ providerPostId: string }> {
     this.check('publishPost');
-    if (input.platform !== 'FACEBOOK') throw new SocialProviderError('REJECTED');
+    if ((input.platform !== 'FACEBOOK' && input.platform !== 'GOOGLE_BUSINESS')
+      || (input.platform === 'GOOGLE_BUSINESS' && input.text.length > GOOGLE_BUSINESS_POST_MAX_LENGTH)) throw new SocialProviderError('REJECTED');
     // Same key, same post: a fake retry never makes a second post (HON itself never retries).
     const prior = this.published.find(p => p.idempotencyKey === input.idempotencyKey);
     if (prior) return { providerPostId: prior.providerPostId };
