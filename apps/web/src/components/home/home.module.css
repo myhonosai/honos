@@ -47,8 +47,7 @@
 .agentLink:hover { background: color-mix(in srgb, var(--agent) 24%, transparent); }
 
 .honCore { display: grid; justify-items: center; text-align: center; gap: 4px; padding-bottom: var(--hon-space-2); }
-.orb { width: 168px; height: 168px; border-radius: 50%; filter: drop-shadow(0 0 28px rgba(64, 150, 255, 0.65)); animation: honPulse 5s ease-in-out infinite; }
-@keyframes honPulse { 50% { transform: scale(1.035); filter: drop-shadow(0 0 40px rgba(64, 170, 255, 0.8)); } }
+.orb { width: 168px; height: 168px; margin: 18px 0 14px; }
 .honCore h2 { margin: 0; font-family: var(--hon-font-display); font-size: var(--hon-text-2xl); letter-spacing: 0.08em; }
 .honRole { margin: 0; color: var(--hon-text-muted); font-size: var(--hon-text-sm); }
 .honStatus { display: flex; gap: 6px; align-items: baseline; margin: 2px 0 var(--hon-space-2); color: var(--hon-warning); font-size: 11px; line-height: 1.4; max-width: 30ch; text-align: left; }
@@ -211,4 +210,3 @@
   .areas a { min-height: 130px; padding: var(--hon-space-4); }
   [data-hon-mode='big-button'] .kpiValue { font-size: var(--hon-text-2xl); }
 }
-@media (prefers-reduced-motion: reduce) { .orb { animation: none; } }
