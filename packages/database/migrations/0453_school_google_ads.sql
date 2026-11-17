@@ -11,11 +11,14 @@ BEGIN;
 --   budget of at least 1.00 a day and a 1 to 31 day range. Its whole budget counts against every month its range
 --   touches, together with the school's Meta ads (0445 rule). Approving creates it PAUSED at Google; turning it on is
 --   a separate human command and the only spending step. The API sends Google a daily budget of total / days.
+-- - Owner decision (2026-11-17): every ad, Google and Meta, targets people within 5 miles of the school's street
+--   address (hon.school_locations, 0392). Approving an ad is refused until the school has saved a street address.
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'Trusted migration owner required'; END IF;
   IF to_regclass('hon.school_social_ads') IS NULL OR to_regprocedure('hon.start_school_social_ad_operation(text,uuid,jsonb,text,uuid,uuid)') IS NULL
     THEN RAISE EXCEPTION '0453 requires the 0445 school social ads records'; END IF;
+  IF to_regclass('hon.school_locations') IS NULL THEN RAISE EXCEPTION '0453 requires the 0392 school locations'; END IF;
 END $$;
 
 -- Connections: GOOGLE_ADS joins the platforms. A Google Ads account never publishes or reads an inbox.
@@ -243,6 +246,7 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); actor uuid; prior jsonb; d hon.school_social_ads%ROWTYPE;
   a hon.school_social_accounts%ROWTYPE; t hon.school_social_post_targets%ROWTYPE; b hon.school_social_ad_budgets%ROWTYPE; op text; next_status text;
   at timestamptz:=clock_timestamp(); today date; m date; extra integer; result jsonb; shown text;
+  l hon.school_locations%ROWTYPE; place jsonb;
 BEGIN
   IF p_ad IS NULL OR p_input IS NULL OR jsonb_typeof(p_input)<>'object'
     OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p_input) k) IS DISTINCT FROM ARRAY['expectedVersion','operation']
@@ -283,6 +287,14 @@ BEGIN
         RAISE EXCEPTION 'SOCIAL_AD_OVER_CAP' USING ERRCODE='23514'; END IF;
       m:=(m+interval '1 month')::date;
     END LOOP;
+    -- 0453 owner decision: an ad is created to reach people within 5 miles of the school's street address.
+    IF op='CREATE' THEN
+      SELECT * INTO l FROM hon.school_locations WHERE school_id=school AND organization_id=org;
+      IF l.school_id IS NULL OR l.address_line1 IS NULL OR btrim(l.address_line1)='' THEN
+        RAISE EXCEPTION 'SOCIAL_AD_NO_ADDRESS' USING ERRCODE='23514'; END IF;
+      place:=jsonb_build_object('addressLine1',l.address_line1,'addressLine2',l.address_line2,'city',l.city,'region',l.region_code,
+        'postalCode',l.postal_code,'country',l.country_code,'radiusMiles',5);
+    END IF;
     next_status:=CASE op WHEN 'CREATE' THEN 'CREATING' ELSE 'ACTIVATING' END;
   ELSE
     IF NOT (d.status='ACTIVE' OR (d.status='UNKNOWN' AND d.provider_ad_id IS NOT NULL)) THEN RAISE EXCEPTION 'SOCIAL_AD_STATE' USING ERRCODE='55000'; END IF;
@@ -303,9 +315,9 @@ BEGIN
   SELECT * INTO t FROM hon.school_social_post_targets WHERE id=d.target_id;
   -- 0453: the channel, and for Google the school's own ad text and a daily budget (total / days, rounded down). This
   -- keeps the expected spend inside the total counted against the cap; Google may still overdeliver up to 2x on a day
-  -- (spec 8.2 item 6 gates real use).
+  -- (spec 8.2 item 6 gates real use). On CREATE, both channels also get the 5-mile radius around the school's address.
   RETURN jsonb_build_object('record',result,'replayed',false,'send',jsonb_build_object('adId',d.id,'leaseToken',d.lease_token,'operation',op,
-    'channel',d.channel,'google',d.google_content,
+    'channel',d.channel,'google',d.google_content,'location',place,
     'dailyBudgetCents',CASE WHEN d.channel='GOOGLE_SEARCH' THEN d.budget_cents/(d.ends_on-d.starts_on+1) END,
     'providerAccountId',a.provider_account_id,'providerPostId',t.provider_post_id,'providerAdId',d.provider_ad_id,'budgetCents',d.budget_cents,
     'currency',d.currency,'startsOn',to_char(d.starts_on,'YYYY-MM-DD'),'endsOn',to_char(d.ends_on,'YYYY-MM-DD'),

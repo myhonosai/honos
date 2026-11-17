@@ -18,7 +18,9 @@ const adId = randomUUID(), accountId = randomUUID(), targetId = randomUUID(), po
 const ad = (patch = {}) => ({ adId, channel: 'META_BOOST', accountId, targetId, postId, accountName: 'Synthetic Dojo Page', budgetCents: 5000, currency: 'USD', startsOn: '2026-11-15', endsOn: '2026-11-21',
   status: 'DRAFT', operation: null, resolvedByPerson: false, createdAt: at, version: 1, google: null, ...patch });
 const view = (patch = {}) => ({ budget: { monthlyCapCents: 20000, currency: 'USD', version: 1 }, committedThisMonthCents: 0, ads: [ad()], today: '2026-11-14', checkedAt: at, ...patch });
-const adSend = (operation, patch = {}) => ({ adId, leaseToken, operation, channel: 'META_BOOST', google: null, dailyBudgetCents: null, providerAccountId: 'fb1', providerPostId: 'fbpost_1', providerAdId: operation === 'CREATE' ? null : 'ad_1',
+const location = { addressLine1: '100 Synthetic Way', addressLine2: null, city: 'Testville', region: 'CA', postalCode: '90000', country: 'US', radiusMiles: 5 };
+const targeting = { locations: [{ type: 'radius', radius: 5, unit: 'MILES', address: { line1: '100 Synthetic Way', line2: null, city: 'Testville', region: 'CA', postalCode: '90000', country: 'US' } }] };
+const adSend = (operation, patch = {}) => ({ adId, leaseToken, operation, location: operation === 'CREATE' ? location : null, channel: 'META_BOOST', google: null, dailyBudgetCents: null, providerAccountId: 'fb1', providerPostId: 'fbpost_1', providerAdId: operation === 'CREATE' ? null : 'ad_1',
   budgetCents: 5000, currency: 'USD', startsOn: '2026-11-15', endsOn: '2026-11-21', timezone: 'America/Los_Angeles', ...patch });
 // 0453 Google Search ads: no post; the school's own text; a daily budget of total / days.
 const google = { headlines: ['Synthetic Kids Karate', 'Free Trial Week', 'Book Today'], descriptions: ['Synthetic classes for all ages.', 'First week free.'],
@@ -134,7 +136,7 @@ test('operations: refused before anything is recorded while ads are off; created
   const out = await new SchoolSocialAdsService(db, provider).operation(context(), adId, { operation: 'CREATE', expectedVersion: 1 });
   assert.equal(provider.boosts.length, 1);
   assert.deepEqual({ ...provider.boosts[0], providerAdId: undefined }, { providerAccountId: 'fb1', providerPostId: 'fbpost_1', budgetCents: 5000, currency: 'USD',
-    startsOn: '2026-11-15', endsOn: '2026-11-21', timezone: 'America/Los_Angeles', idempotencyKey: adId, providerAdId: undefined });
+    startsOn: '2026-11-15', endsOn: '2026-11-21', timezone: 'America/Los_Angeles', location, idempotencyKey: adId, providerAdId: undefined });
   const record = queries.find(q => /record_school_social_ad_result/.test(q.sql));
   assert.deepEqual(record.args.slice(0, 5), ['verified-human', adId, leaseToken, 'DONE', provider.boosts[0].providerAdId]);
   assert.deepEqual([out.ad.status, provider.adStatusChanges.length], ['PAUSED', 0]);
@@ -185,7 +187,7 @@ test('pausing never needs the ads switch: a well-formed key alone lets PAUSE rea
   await http.setAdActive({ providerAdId: 'ad_1', active: false, idempotencyKey: 'k1' });
   assert.deepEqual(calls.map(c => [c.url.endsWith('/ads/ad_1/status'), JSON.parse(c.body).status, c.key]), [[true, 'PAUSED', 'k1']]);
   await assert.rejects(http.setAdActive({ providerAdId: 'ad_1', active: true, idempotencyKey: 'k2' }), e => e instanceof SocialProviderError && e.failure === 'NOT_ENABLED');
-  await assert.rejects(http.createBoost({ providerAccountId: 'fb1', providerPostId: 'fbpost_1', budgetCents: 5000, currency: 'USD', startsOn: '2026-11-15', endsOn: '2026-11-21', timezone: 'America/Los_Angeles', idempotencyKey: adId }),
+  await assert.rejects(http.createBoost({ providerAccountId: 'fb1', providerPostId: 'fbpost_1', budgetCents: 5000, currency: 'USD', startsOn: '2026-11-15', endsOn: '2026-11-21', timezone: 'America/Los_Angeles', location, idempotencyKey: adId }),
     e => e instanceof SocialProviderError && e.failure === 'NOT_ENABLED');
   assert.equal(calls.length, 1);
   // The service: with pausing ready but ads off, PAUSE goes through under the lease; CREATE and ACTIVATE are refused with nothing recorded.
@@ -225,7 +227,7 @@ test('operations: a send that disagrees with the recorded ad is refused before Z
 
 test('database refusals map to closed codes with no SQL text', async () => {
   const cases = [['SOCIAL_FORBIDDEN', '42501', 403], ['SOCIAL_AD_NOT_FOUND', 'P0002', 404], ['SOCIAL_POST_NOT_FOUND', 'P0002', 404], ['SOCIAL_AD_POST_NOT_PUBLISHED', '55000', 409],
-    ['SOCIAL_ADS_OFF', '23514', 409], ['SOCIAL_AD_NO_BUDGET', '23514', 409], ['SOCIAL_AD_OVER_CAP', '23514', 409], ['SOCIAL_AD_STATE', '55000', 409],
+    ['SOCIAL_ADS_OFF', '23514', 409], ['SOCIAL_AD_NO_BUDGET', '23514', 409], ['SOCIAL_AD_NO_ADDRESS', '23514', 409], ['SOCIAL_AD_OVER_CAP', '23514', 409], ['SOCIAL_AD_STATE', '55000', 409],
     ['SOCIAL_AD_CURRENCY_FIXED', '55000', 409], ['SOCIAL_VERSION_CONFLICT', '40001', 409]];
   for (const [message, code, httpStatus] of cases) {
     const error = Object.assign(new Error(message), { code });
@@ -267,7 +269,7 @@ test('HTTP adapter ad calls: refuse unless ads are approved; created PAUSED with
   const send = async (url, init) => { calls.push({ url, init }); const r = routes.shift(); return typeof r === 'function' ? r() : r; };
   let env = { ZERNIO_API_KEY: KEY, HON_ZERNIO_CONNECT_APPROVED: 'true', HON_ZERNIO_PUBLISH_APPROVED: 'true', HON_ZERNIO_INBOX_APPROVED: 'true' };
   const adapter = new ZernioHttpSocialAdapter(() => env, send);
-  const boost = { providerAccountId: 'fb1', providerPostId: 'fbpost_1', budgetCents: 5000, currency: 'USD', startsOn: '2026-11-15', endsOn: '2026-11-21', timezone: 'America/Los_Angeles', idempotencyKey: adId };
+  const boost = { providerAccountId: 'fb1', providerPostId: 'fbpost_1', budgetCents: 5000, currency: 'USD', startsOn: '2026-11-15', endsOn: '2026-11-21', timezone: 'America/Los_Angeles', location, idempotencyKey: adId };
   await assert.rejects(adapter.createBoost(boost), e => e instanceof SocialProviderError && e.failure === 'NOT_ENABLED');
   await assert.rejects(adapter.setAdActive({ providerAdId: 'ad_1', active: true, idempotencyKey: adId }), e => e.failure === 'NOT_ENABLED');
   assert.equal(calls.length, 0);
@@ -277,7 +279,7 @@ test('HTTP adapter ad calls: refuse unless ads are approved; created PAUSED with
   let call = calls.at(-1);
   assert.equal(call.url, 'https://zernio.com/api/v1/ads/boost'); assert.equal(call.init.headers['Idempotency-Key'], adId); assert.equal(call.init.redirect, 'error');
   assert.deepEqual(JSON.parse(call.init.body), { accountId: 'fb1', postId: 'fbpost_1', status: 'PAUSED', budget: { type: 'lifetime', amount: 5000, currency: 'USD' },
-    schedule: { startDate: '2026-11-15', endDate: '2026-11-21', timezone: 'America/Los_Angeles' } });
+    schedule: { startDate: '2026-11-15', endDate: '2026-11-21', timezone: 'America/Los_Angeles' }, targeting });
   routes.push(reply(200, {}));
   await adapter.setAdActive({ providerAdId: 'ad_1', active: true, idempotencyKey: `${adId}:${leaseToken}` });
   call = calls.at(-1);
@@ -287,7 +289,8 @@ test('HTTP adapter ad calls: refuse unless ads are approved; created PAUSED with
   await adapter.setAdActive({ providerAdId: 'ad_1', active: false, idempotencyKey: adId });
   assert.deepEqual(JSON.parse(calls.at(-1).init.body), { status: 'PAUSED' });
   const before = calls.length;
-  for (const bad of [{ ...boost, providerPostId: '../accounts' }, { ...boost, budgetCents: 50 }, { ...boost, currency: 'usd' }, { ...boost, timezone: 'x; DROP' }, { ...boost, startsOn: 'soon' }]) {
+  for (const bad of [{ ...boost, providerPostId: '../accounts' }, { ...boost, budgetCents: 50 }, { ...boost, currency: 'usd' }, { ...boost, timezone: 'x; DROP' }, { ...boost, startsOn: 'soon' },
+    { ...boost, location: { ...location, radiusMiles: 50 } }, { ...boost, location: { ...location, addressLine1: ' ' } }, { ...boost, location: { ...location, country: 'usa' } }]) {
     await assert.rejects(adapter.createBoost(bad), e => e.failure === 'REJECTED', JSON.stringify(bad));
   }
   await assert.rejects(adapter.setAdActive({ providerAdId: '../x', active: true, idempotencyKey: adId }), e => e.failure === 'REJECTED');
@@ -327,7 +330,7 @@ test('Google operations (0453): approval creates one PAUSED Search ad with the a
   const out = await new SchoolSocialAdsService(db, provider).operation(context(), adId, { operation: 'CREATE', expectedVersion: 1 });
   assert.equal(provider.boosts.length, 0); assert.equal(provider.googleAds.length, 1);
   assert.deepEqual({ ...provider.googleAds[0], providerAdId: undefined }, { providerAccountId: '1234567890', dailyBudgetCents: 1000, currency: 'USD', startsOn: '2026-11-15',
-    endsOn: '2026-11-21', timezone: 'America/Los_Angeles', ...google, idempotencyKey: adId, providerAdId: undefined });
+    endsOn: '2026-11-21', timezone: 'America/Los_Angeles', ...google, location, idempotencyKey: adId, providerAdId: undefined });
   assert.deepEqual(queries.find(q => /record_school_social_ad_result/.test(q.sql)).args.slice(3, 5), ['DONE', provider.googleAds[0].providerAdId]);
   assert.equal(out.ad.status, 'PAUSED');
   const p = fake(), f = fixture({ start: () => ({ record: gad({ status: 'ACTIVATING', operation: 'ACTIVATE', version: 2 }), replayed: false, send: gSend('ACTIVATE') }),
@@ -336,11 +339,17 @@ test('Google operations (0453): approval creates one PAUSED Search ad with the a
   assert.deepEqual([p.googleAds.length, p.adStatusChanges], [0, [{ providerAdId: 'ad_1', active: true, idempotencyKey: `${adId}:${leaseToken}` }]]);
   // A send that disagrees with the approved Google ad is refused before Zernio is called.
   for (const send of [gSend('CREATE', { dailyBudgetCents: 1001 }), gSend('CREATE', { dailyBudgetCents: 99 }), gSend('CREATE', { google: { ...google, finalUrl: 'https://other.example.invalid' } }),
-    gSend('CREATE', { providerPostId: 'fbpost_1' }), gSend('CREATE', { channel: 'META_BOOST' }), gSend('CREATE', { google: null }), gSend('CREATE', { dailyBudgetCents: null })]) {
+    gSend('CREATE', { providerPostId: 'fbpost_1' }), gSend('CREATE', { channel: 'META_BOOST' }), gSend('CREATE', { google: null }), gSend('CREATE', { dailyBudgetCents: null }),
+    gSend('CREATE', { location: null }), gSend('CREATE', { location: { ...location, radiusMiles: 25 } }), gSend('CREATE', { location: { ...location, extra: 1 } }),
+    gSend('CREATE', { location: { ...location, addressLine1: '' } })]) {
     const q = fake(), g = fixture({ start: () => ({ record: gad({ status: 'CREATING', operation: 'CREATE', version: 2 }), replayed: false, send }) });
     await assert.rejects(new SchoolSocialAdsService(g.db, q).operation(context(), adId, { operation: 'CREATE', expectedVersion: 1 }), /Unverified|SOCIAL_UNAVAILABLE/, JSON.stringify(send));
     assert.equal(q.googleAds.length + q.boosts.length, 0);
   }
+  // Only CREATE carries the 5-mile radius; an ACTIVATE carrying one is refused before Zernio is called.
+  const act = fake(), af = fixture({ start: () => ({ record: gad({ status: 'ACTIVATING', operation: 'ACTIVATE', version: 2 }), replayed: false, send: gSend('ACTIVATE', { location }) }) });
+  await assert.rejects(new SchoolSocialAdsService(af.db, act).operation(context(), adId, { operation: 'ACTIVATE', expectedVersion: 2 }), /Unverified|SOCIAL_UNAVAILABLE/);
+  assert.equal(act.adStatusChanges.length, 0);
   // A Meta send carrying Google text is refused too.
   const m = fake(), mf = fixture({ start: () => ({ record: ad({ status: 'CREATING', operation: 'CREATE', version: 2 }), replayed: false, send: adSend('CREATE', { google }) }) });
   await assert.rejects(new SchoolSocialAdsService(mf.db, m).operation(context(), adId, { operation: 'CREATE', expectedVersion: 1 }), /Unverified|SOCIAL_UNAVAILABLE/);
@@ -360,7 +369,7 @@ test('HTTP adapter Google calls (0453): refuse unless ads are approved; one POST
   const send = async (url, init) => { calls.push({ url, init }); return routes.shift(); };
   let env = { ZERNIO_API_KEY: KEY, HON_ZERNIO_CONNECT_APPROVED: 'true' };
   const adapter = new ZernioHttpSocialAdapter(() => env, send);
-  const input = { providerAccountId: '1234567890', dailyBudgetCents: 1000, currency: 'USD', startsOn: '2026-11-15', endsOn: '2026-11-21', timezone: 'America/Los_Angeles', ...google, idempotencyKey: adId };
+  const input = { providerAccountId: '1234567890', dailyBudgetCents: 1000, currency: 'USD', startsOn: '2026-11-15', endsOn: '2026-11-21', timezone: 'America/Los_Angeles', ...google, location, idempotencyKey: adId };
   await assert.rejects(adapter.createGoogleSearchAd(input), e => e instanceof SocialProviderError && e.failure === 'NOT_ENABLED');
   routes.push(reply(200, { authUrl: 'https://accounts.google.com/o/oauth2/v2/auth?state=x' }));
   assert.equal(await adapter.connectUrl({ profileId: 'prof1', platform: 'GOOGLE_ADS', redirectUrl: 'https://hon.example.invalid/staff/marketing/social/return', state: 's' }),
@@ -377,9 +386,10 @@ test('HTTP adapter Google calls (0453): refuse unless ads are approved; one POST
   assert.equal(call.url, 'https://zernio.com/api/v1/ads/create'); assert.equal(call.init.headers['Idempotency-Key'], adId);
   assert.deepEqual(JSON.parse(call.init.body), { platform: 'googleads', accountId: '1234567890', campaignType: 'SEARCH', status: 'PAUSED',
     budget: { type: 'daily', amount: 1000, currency: 'USD' }, schedule: { startDate: '2026-11-15', endDate: '2026-11-21', timezone: 'America/Los_Angeles' },
-    ad: { headlines: google.headlines, descriptions: google.descriptions, finalUrl: google.finalUrl }, keywords: google.keywords });
+    ad: { headlines: google.headlines, descriptions: google.descriptions, finalUrl: google.finalUrl }, keywords: google.keywords, targeting });
   const before = calls.length;
-  for (const bad of [{ ...input, providerAccountId: '../x' }, { ...input, dailyBudgetCents: 99 }, { ...input, currency: 'usd' }, { ...input, timezone: 'x; DROP' }]) {
+  for (const bad of [{ ...input, providerAccountId: '../x' }, { ...input, dailyBudgetCents: 99 }, { ...input, currency: 'usd' }, { ...input, timezone: 'x; DROP' },
+    { ...input, location: { ...location, radiusMiles: 10 } }, { ...input, location: { ...location, city: '' } }]) {
     await assert.rejects(adapter.createGoogleSearchAd(bad), e => e.failure === 'REJECTED', JSON.stringify(bad));
   }
   assert.equal(calls.length, before);

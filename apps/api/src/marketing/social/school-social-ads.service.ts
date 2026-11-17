@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Inject, Inj
 import type { PoolClient } from 'pg';
 import {
   validateSocialAdBudgetInput, validateSocialAdCancelInput, validateSocialAdDraftInput, validateSocialAdOperationInput, validateSocialAdResolveInput,
-  validateSocialGoogleAdDraftInput, verifySocialAd, verifySocialAdsView, type GoogleAdContent, type SocialAd, type SocialAdChannel, type SocialAdOperation, type SocialAdsView,
+  validateSocialGoogleAdDraftInput, verifySocialAd, verifySocialAdsView, SOCIAL_AD_RADIUS_MILES, type GoogleAdContent, type SocialAd, type SocialAdLocation, type SocialAdChannel, type SocialAdOperation, type SocialAdsView,
 } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../../foundation/runtime-database.service.js';
 import { SOCIAL_HUMAN_SETTINGS, SOCIAL_LIMITS, translateSocialError, type SchoolSocialContext, type SocialErrorTable } from './school-social.service.js';
@@ -16,6 +16,7 @@ const AD_ERRORS: SocialErrorTable = {
   SOCIAL_AD_POST_NOT_PUBLISHED: [['55000'], code => new ConflictException({ code, detail: 'Only a post HON already published on Facebook can be boosted.' })],
   SOCIAL_ADS_OFF: [['23514'], code => new ConflictException({ code, detail: 'Ads are turned off for this account. Turn them on in Social accounts first.' })],
   SOCIAL_AD_NO_BUDGET: [['23514'], code => new ConflictException({ code, detail: 'Set the school\'s monthly ad spend cap first.' })],
+  SOCIAL_AD_NO_ADDRESS: [['23514'], code => new ConflictException({ code, detail: 'Add the school\'s street address in school settings first. Ads reach people within 5 miles of it.' })],
   SOCIAL_AD_OVER_CAP: [['23514'], code => new ConflictException({ code, detail: 'This would go over the school\'s monthly ad spend cap.' })],
   SOCIAL_AD_STATE: [['55000'], code => new ConflictException({ code, detail: 'This ad already moved on, or its dates have passed. Reload to see where it is.' })],
   SOCIAL_AD_CURRENCY_FIXED: [['55000'], code => new ConflictException({ code, detail: 'The currency cannot change once the school has ads.' })],
@@ -31,6 +32,14 @@ function sameGoogle(a: GoogleAdContent | null, b: GoogleAdContent | null): boole
   const list = (x: unknown, y: string[]) => Array.isArray(x) && x.length === y.length && x.every((v, i) => v === y[i]);
   return a.finalUrl === b.finalUrl && list(a.headlines, b.headlines) && list(a.descriptions, b.descriptions) && list(a.keywords, b.keywords);
 }
+/** The 5-mile radius around the school's saved street address, exactly as the database sent it. */
+function locationOk(l: unknown): l is SocialAdLocation {
+  if (!l || typeof l !== 'object' || Object.keys(l).sort().join(',') !== 'addressLine1,addressLine2,city,country,postalCode,radiusMiles,region') return false;
+  const o = l as Record<string, unknown>;
+  const text = (v: unknown, nullable: boolean) => (nullable && v === null) || (typeof v === 'string' && v.trim().length > 0 && v.length <= 200);
+  return o.radiusMiles === SOCIAL_AD_RADIUS_MILES && text(o.addressLine1, false) && text(o.addressLine2, true) && text(o.city, false)
+    && text(o.region, true) && text(o.postalCode, true) && typeof o.country === 'string' && /^[A-Z]{2}$/.test(o.country);
+}
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Data = Record<string, unknown>;
@@ -41,6 +50,8 @@ interface AdSend {
   budgetCents: number; currency: string; startsOn: string; endsOn: string; timezone: string;
   /** 0453: Google only: the school's ad text and the daily budget (total / days, rounded down). */
   google: GoogleAdContent | null; dailyBudgetCents: number | null;
+  /** Owner decision 2026-11-17: on CREATE only, 5 miles around the school's street address; null otherwise. */
+  location: SocialAdLocation | null;
 }
 
 /**
@@ -120,10 +131,10 @@ export class SchoolSocialAdsService {
     try {
       if (send.operation === 'CREATE' && send.channel === 'GOOGLE_SEARCH') {
         ({ providerAdId } = await this.adapter.createGoogleSearchAd({ providerAccountId: send.providerAccountId, dailyBudgetCents: send.dailyBudgetCents!,
-          currency: send.currency, startsOn: send.startsOn, endsOn: send.endsOn, timezone: send.timezone, ...send.google!, idempotencyKey: send.adId }));
+          currency: send.currency, startsOn: send.startsOn, endsOn: send.endsOn, timezone: send.timezone, ...send.google!, location: send.location!, idempotencyKey: send.adId }));
       } else if (send.operation === 'CREATE') {
         ({ providerAdId } = await this.adapter.createBoost({ providerAccountId: send.providerAccountId, providerPostId: send.providerPostId!, budgetCents: send.budgetCents,
-          currency: send.currency, startsOn: send.startsOn, endsOn: send.endsOn, timezone: send.timezone, idempotencyKey: send.adId }));
+          currency: send.currency, startsOn: send.startsOn, endsOn: send.endsOn, timezone: send.timezone, location: send.location!, idempotencyKey: send.adId }));
       } else {
         await this.adapter.setAdActive({ providerAdId: send.providerAdId!, active: send.operation === 'ACTIVATE', idempotencyKey: `${send.adId}:${send.leaseToken}` });
       }
@@ -155,11 +166,12 @@ export class SchoolSocialAdsService {
 
   private adSend(value: unknown, ad: SocialAd, operation: SocialAdOperation): AdSend {
     const s = value as AdSend | undefined;
-    if (!s || typeof s !== 'object' || Object.keys(s).sort().join(',') !== 'adId,budgetCents,channel,currency,dailyBudgetCents,endsOn,google,leaseToken,operation,providerAccountId,providerAdId,providerPostId,startsOn,timezone'
+    if (!s || typeof s !== 'object' || Object.keys(s).sort().join(',') !== 'adId,budgetCents,channel,currency,dailyBudgetCents,endsOn,google,leaseToken,location,operation,providerAccountId,providerAdId,providerPostId,startsOn,timezone'
       || !UUID.test(s.adId) || s.adId.toLowerCase() !== ad.adId || !UUID.test(s.leaseToken) || s.operation !== operation || s.channel !== ad.channel
       || s.budgetCents !== ad.budgetCents || s.currency !== ad.currency || s.startsOn !== ad.startsOn || s.endsOn !== ad.endsOn
       || typeof s.providerAccountId !== 'string' || typeof s.timezone !== 'string'
-      || (operation === 'CREATE') !== (s.providerAdId === null) || (s.providerAdId !== null && typeof s.providerAdId !== 'string')) receipt();
+      || (operation === 'CREATE') !== (s.providerAdId === null) || (s.providerAdId !== null && typeof s.providerAdId !== 'string')
+      || (operation === 'CREATE' ? !locationOk(s.location) : s.location !== null)) receipt();
     if (s.channel === 'META_BOOST') {
       if (typeof s.providerPostId !== 'string' || s.google !== null || s.dailyBudgetCents !== null) receipt();
     } else {

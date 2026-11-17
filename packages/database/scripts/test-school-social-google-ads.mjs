@@ -88,6 +88,7 @@ const gbase=x=>base(x)+'/google';
 const gdraft=(x,body,extra={})=>send(gbase(x),{identity:x,method:'POST',command:C.SOCIAL_GOOGLE_AD_CREATE_COMMAND,body,...extra});
 const text={headlines:['Synthetic Kids Karate','Free Trial Week','Book A Class Today'],descriptions:['Synthetic classes for every age and level.','Your first week is free.'],
  finalUrl:'https://dojo.example.invalid/trial',keywords:['kids karate','martial arts classes']};
+const place={addressLine1:'100 Synthetic Way',addressLine2:'Suite 2',city:'Testville',region:'IL',postalCode:'60000',country:'US',radiusMiles:5};
 async function expireLease(adId){
  await q('ALTER TABLE hon.school_social_ads DISABLE TRIGGER guarded');
  try{await q("UPDATE hon.school_social_ads SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=$1",[adId]);}
@@ -164,10 +165,13 @@ try{
  // 4. Approve (created PAUSED once), turn on, pause: the same reviewed commands as Meta, with the Google text and total / days a day.
  r=await operate(a,g1.adId,{operation:'CREATE',expectedVersion:1});refused(r,503,'SOCIAL_ADS_NOT_ENABLED');
  fakeEnv.HON_ZERNIO_FAKE_PROVIDER='1';
+ r=await operate(a,g1.adId,{operation:'CREATE',expectedVersion:1});refused(r,409,'SOCIAL_AD_NO_ADDRESS');
+ assert.equal(fake.googleAds.length,0,'no street address, no Google ad');
+ await q("INSERT INTO hon.school_locations(school_id,organization_id,country_code,region_code,city,postal_code,address_line1,address_line2,created_by_principal_id,updated_by_principal_id) VALUES($1,$2,'US','IL','Testville','60000','100 Synthetic Way','Suite 2',$3,$3)",[a.school,a.org,ownerA]);
  g1=await op(a,g1,'CREATE');
  assert.deepEqual([g1.status,fake.googleAds.length,fake.boosts.length,fake.adStatusChanges.length],['PAUSED',1,0,0]);
  assert.deepEqual({...fake.googleAds[0],providerAdId:undefined},{providerAccountId:gA.provider_account_id,dailyBudgetCents:1000,currency:'USD',startsOn:today,endsOn:day(today,6),
-  timezone:'America/Chicago',...text,idempotencyKey:g1.adId,providerAdId:undefined});
+  timezone:'America/Chicago',...text,location:place,idempotencyKey:g1.adId,providerAdId:undefined});
  assert.equal((await row(g1.adId)).provider_ad_id,fake.googleAds[0].providerAdId);
  assert.equal((await view(a)).committedThisMonthCents,7000);
  g1=await op(a,g1,'ACTIVATE');assert.equal(g1.status,'ACTIVE');
@@ -176,8 +180,8 @@ try{
  // A 10-day ad of 25.55 sends 2.55 a day (rounded down), never more than its total.
  const g2=adOf(await gdraft(a,{...good,budgetCents:2555,endsOn:day(today,9)}));
  const started=await startDirect(a,g2,'CREATE');
- assert.deepEqual([started.send.channel,started.send.dailyBudgetCents,started.send.providerPostId,started.send.google],['GOOGLE_SEARCH',255,null,text]);
- pass('approval creates one PAUSED Search ad at the fake with the approved text and total / days a day (rounded down); turning on and pausing use the reviewed lease path');
+ assert.deepEqual([started.send.channel,started.send.dailyBudgetCents,started.send.providerPostId,started.send.google,started.send.location],['GOOGLE_SEARCH',255,null,text,place]);
+ pass('approval needs the school\'s street address and creates one PAUSED Search ad at the fake with the approved text, 5 miles around that address and total / days a day (rounded down); turning on and pausing use the reviewed lease path');
 
  // 5. One cap for both channels: Google and Meta ads that may spend count together in every month they touch.
  await expireLease(g2.adId);

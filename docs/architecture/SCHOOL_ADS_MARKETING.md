@@ -152,8 +152,11 @@ here and in the adapter, and must be checked against Zernio before `HON_ZERNIO_A
 3. The campaign can be created **paused** and stays paused until HON's turn-on call (if Google refuses ads inside a
    paused campaign, the adapter must create the campaign paused with the ad enabled instead; still no spend).
 4. Daily budget, start and end dates and currency in the account's own currency are accepted as sent.
-5. **Location targeting**: v1 sends none. Before any real ad is turned on, David decides the default (for example the
-   school's city and radius) and it is added; until then real Google ads stay off.
+5. **Location targeting** (decided by David 2026-11-17): every ad, Google and Meta, reaches people within **5 miles of
+   the school's street address** (`hon.school_locations`, 0392). Approving an ad is refused with `SOCIAL_AD_NO_ADDRESS`
+   until the school has saved a street address. The adapter sends `targeting.locations[{ type: radius, radius: 5,
+   unit: MILES, address }]` on create; that shape (and whether Zernio geocodes the address or needs coordinates) is
+   assumed and must be confirmed.
 6. **Budget units and overspend**: HON sends amounts in cents (same for the Meta boost); Zernio may expect currency
    units or Google micros, which must be confirmed in a sandbox. Google's daily overdelivery (up to 2x on a day) means a
    campaign total budget, if Zernio exposes one, is the safer setting.
@@ -169,6 +172,7 @@ pause, settle unknowns). Browser proof on synthetic fixtures; en/ko/es.
 
 ### 8.4 Owner stops
 
-- The Zernio Ads add-on is paid: buying it, connecting a real Google Ads account and any real spend need David.
-- Location targeting default (8.2 item 5).
+- The Zernio Ads add-on is paid: David decided (2026-11-17) to buy the paid plan himself. Connecting a real Google Ads
+  account, setting the keys and any real spend still need David.
+- Location targeting: decided 2026-11-17, 5 miles around the school's street address (8.2 item 5).
 - Whether Google uses the same `HON_ZERNIO_ADS_APPROVED` switch as Meta (built: same switch).

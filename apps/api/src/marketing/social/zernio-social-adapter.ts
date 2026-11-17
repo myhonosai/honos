@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { GoogleAdContent, SocialAccountPlatform, SocialPlatform } from '@hon/contracts';
+import { SOCIAL_AD_RADIUS_MILES, type GoogleAdContent, type SocialAccountPlatform, type SocialAdLocation, type SocialPlatform } from '@hon/contracts';
 
 type Env = Record<string, string | undefined>;
 export const ZERNIO_SOCIAL_ADAPTER = Symbol('ZERNIO_SOCIAL_ADAPTER');
@@ -67,10 +67,22 @@ export interface ZernioSocialAdapter {
   setAdActive(input: { providerAdId: string; active: boolean; idempotencyKey: string }): Promise<void>;
 }
 export interface CreateBoostInput {
-  providerAccountId: string; providerPostId: string; budgetCents: number; currency: string; startsOn: string; endsOn: string; timezone: string; idempotencyKey: string;
+  providerAccountId: string; providerPostId: string; budgetCents: number; currency: string; startsOn: string; endsOn: string; timezone: string;
+  location: SocialAdLocation; idempotencyKey: string;
 }
 export interface CreateGoogleSearchAdInput extends GoogleAdContent {
-  providerAccountId: string; dailyBudgetCents: number; currency: string; startsOn: string; endsOn: string; timezone: string; idempotencyKey: string;
+  providerAccountId: string; dailyBudgetCents: number; currency: string; startsOn: string; endsOn: string; timezone: string;
+  location: SocialAdLocation; idempotencyKey: string;
+}
+/**
+ * Owner decision 2026-11-17: a radius around the school's street address. Assumed Zernio shape (spec 8.2 item 5, to
+ * confirm before real use): targeting.locations[{ type: radius, address, radius, unit: MILES }].
+ */
+function radiusTargeting(l: SocialAdLocation): Record<string, unknown> {
+  if (l.radiusMiles !== SOCIAL_AD_RADIUS_MILES || typeof l.addressLine1 !== 'string' || !l.addressLine1.trim() || typeof l.city !== 'string' || !l.city.trim()
+    || !/^[A-Z]{2}$/.test(l.country)) throw new SocialProviderError('REJECTED');
+  return { locations: [{ type: 'radius', radius: l.radiusMiles, unit: 'MILES',
+    address: { line1: l.addressLine1, line2: l.addressLine2, city: l.city, region: l.region, postalCode: l.postalCode, country: l.country } }] };
 }
 export interface SendReplyInput {
   providerAccountId: string; platform: SocialPlatform; kind: 'DM' | 'COMMENT'; providerConversationId: string; text: string; idempotencyKey: string;
@@ -153,6 +165,7 @@ export class ZernioHttpSocialAdapter implements ZernioSocialAdapter {
       accountId: input.providerAccountId, postId: input.providerPostId, status: 'PAUSED',
       budget: { type: 'lifetime', amount: input.budgetCents, currency: input.currency },
       schedule: { startDate: input.startsOn, endDate: input.endsOn, timezone: input.timezone },
+      targeting: radiusTargeting(input.location),
     }, 'ads', input.idempotencyKey);
     const ad = ((answer as { ad?: unknown })?.ad ?? answer) as Record<string, unknown> | null;
     const id = ad && typeof ad === 'object' ? (ad.id ?? ad._id) : undefined;
@@ -162,8 +175,8 @@ export class ZernioHttpSocialAdapter implements ZernioSocialAdapter {
 
   /**
    * Assumed shape (SCHOOL_ADS_MARKETING.md §8.2, to confirm): POST /ads/create with platform googleads creates a Search
-   * campaign, ad group, responsive search ad and keywords in one call; answer { ad: { id|_id } }. Created PAUSED. No
-   * location is sent yet (owner decision before any real ad is turned on).
+   * campaign, ad group, responsive search ad and keywords in one call; answer { ad: { id|_id } }. Created PAUSED, shown
+   * within 5 miles of the school's street address.
    */
   async createGoogleSearchAd(input: CreateGoogleSearchAdInput): Promise<{ providerAdId: string }> {
     if (!this.adsReady()) throw new SocialProviderError('NOT_ENABLED');
@@ -174,6 +187,7 @@ export class ZernioHttpSocialAdapter implements ZernioSocialAdapter {
       budget: { type: 'daily', amount: input.dailyBudgetCents, currency: input.currency },
       schedule: { startDate: input.startsOn, endDate: input.endsOn, timezone: input.timezone },
       ad: { headlines: input.headlines, descriptions: input.descriptions, finalUrl: input.finalUrl }, keywords: input.keywords,
+      targeting: radiusTargeting(input.location),
     }, 'ads', input.idempotencyKey);
     const ad = ((answer as { ad?: unknown })?.ad ?? answer) as Record<string, unknown> | null;
     const id = ad && typeof ad === 'object' ? (ad.id ?? ad._id) : undefined;

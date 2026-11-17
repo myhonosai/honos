@@ -16,12 +16,19 @@ export const SOCIAL_GOOGLE_AD_CREATE_COMMAND = 'marketing.social.ads.google.crea
 export const SOCIAL_AD_CHANNELS = ['META_BOOST', 'GOOGLE_SEARCH'] as const;
 /** Google responsive search ad limits HON enforces before anything reaches Zernio. */
 export const GOOGLE_AD_LIMITS = { headlines: [3, 15, 30], descriptions: [2, 4, 90], keywords: [1, 20, 80] } as const;
+/** Owner decision 2026-11-17: every ad (Google and Meta) reaches people within this many miles of the school's street address. */
+export const SOCIAL_AD_RADIUS_MILES = 5;
 
 export type SocialAdStatus = typeof SOCIAL_AD_STATUSES[number];
 export type SocialAdOperation = typeof SOCIAL_AD_OPERATIONS[number];
 export type SocialAdResolveState = typeof SOCIAL_AD_RESOLVE_STATES[number];
 export type SocialAdChannel = typeof SOCIAL_AD_CHANNELS[number];
 export interface GoogleAdContent { headlines: string[]; descriptions: string[]; finalUrl: string; keywords: string[] }
+/** Where an ad is shown: a radius around the school's saved street address (hon.school_locations). */
+export interface SocialAdLocation {
+  addressLine1: string; addressLine2: string | null; city: string; region: string | null; postalCode: string | null; country: string;
+  radiusMiles: typeof SOCIAL_AD_RADIUS_MILES;
+}
 export interface SocialAdBudget { monthlyCapCents: number; currency: string; version: number }
 export interface SocialAd {
   adId: string; channel: SocialAdChannel; accountId: string;
