@@ -6,13 +6,13 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * M2: the HON Parent app opens this in the system browser with its PKCE challenge. Only the challenge is kept
+ * M2: the HON Family app opens this in the system browser with its PKCE challenge. Only the challenge is kept
  * (signed, 10 minutes, path /auth); the parent then signs in through the normal web OIDC flow.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const values = request.nextUrl.searchParams.getAll('challenge');
   if (values.length !== 1 || [...request.nextUrl.searchParams.keys()].length !== 1 || !/^[A-Za-z0-9_-]{43}$/.test(values[0]!)) {
-    return authError('MOBILE_SIGN_IN_INVALID', 'Open sign-in again from the HON Parent app.', 400);
+    return authError('MOBILE_SIGN_IN_INVALID', 'Open sign-in again from the HON Family app.', 400);
   }
   try {
     const config = webAuthConfig();

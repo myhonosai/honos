@@ -1,4 +1,4 @@
-# HON Parent — store build hand-off (for Manus)
+# HON Family — store build hand-off (for Manus)
 
 Owner rule: **no store submission, no paid account, no EAS plan purchase and no production API address without
 David's explicit OK.** Claude writes the app; Manus runs the builds and submissions from David's Apple and Google
@@ -8,14 +8,21 @@ developer accounts once he approves each step.
 - Expo SDK 58 app in `apps/parent-mobile` (React Native 0.88, TypeScript), own `package-lock.json`.
   It is deliberately **outside** the pnpm workspace (`pnpm-workspace.yaml` excludes it). Use `npm`, not `pnpm`.
 - `eas.json` with `development`, `preview` (internal distribution) and `production` profiles.
-- `app.json`: name "HON Parent", iOS bundle id and Android package `com.myhonos.parent`.
+- `app.json`: name "HON Family", iOS bundle id and Android package `com.myhonos.family` (David, 2026-11-17).
+- `eas.json`: `preview` and `production` use the live site, API `https://app.myhonos.com/api` (the web's `/api/v1`
+  proxy) and web `https://app.myhonos.com` (David, 2026-11-17: test builds use the live site). `development` stays local.
 
-## Decisions David must confirm before the first upload (cannot be changed after publishing)
-1. Bundle id / package name (`com.myhonos.parent` is a proposal).
-2. Store listing name ("HON Parent"?), seller name, support URL, privacy policy URL.
-3. Which API and web addresses each profile uses (`EXPO_PUBLIC_HON_API_URL` and `EXPO_PUBLIC_HON_WEB_URL`
-   placeholders in `eas.json`; a build with a `REPLACE-WITH` placeholder refuses to start).
-4. Expo account/organization that owns the project (`eas init` writes `extra.eas.projectId` into `app.json`).
+## Decided by David (2026-11-17)
+- Bundle id / package: `com.myhonos.family`. Store name: **HON Family**.
+- Test and store builds point at the live site, app.myhonos.com. Test builds therefore show real families' data to
+  whoever signs in: only install them for people who are themselves guardians at a school, signing in as themselves.
+
+## Still needed before the first upload
+1. Seller name, support URL, privacy policy URL.
+2. Expo account/organization that owns the project (`eas init` writes `extra.eas.projectId` into `app.json`).
+3. The live web deploy must include the mobile sign-in routes (#465) and the `mobile` login intent (pending the web
+   sign-in PR); until both are deployed, a build opens to sign-in but cannot finish it.
+4. Before a store release: a claimed https return address (Universal Links / App Links) replaces `honparent://`.
 
 ## Steps (each needs David's go-ahead)
 1. `cd apps/parent-mobile && npm ci`
