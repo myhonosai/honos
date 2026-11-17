@@ -112,11 +112,13 @@ export interface ShopifySummary {
   estimatedGrossProfit: number; topProducts: readonly { title: string; quantity: number; sales: number }[];
 }
 export interface ShopifyOverview {
-  schoolId: string; canManage: boolean; connectEnabled: boolean; connection: ShopifyConnection | null;
+  schoolId: string; canManage: boolean; connectEnabled: boolean;
+  /** SH1b: HON syncs on its own (Shopify change reports, plus a full sync every six hours). */
+  autoSync: boolean; connection: ShopifyConnection | null;
   counts: { products: number; variants: number; lowStock: number; orders: number } | null; summary: ShopifySummary | null;
 }
 export function verifyShopifyOverview(v: unknown): ShopifyOverview {
-  const o = closed(v, ['schoolId', 'canManage', 'connectEnabled', 'connection', 'counts', 'summary'], true);
+  const o = closed(v, ['schoolId', 'canManage', 'connectEnabled', 'autoSync', 'connection', 'counts', 'summary'], true);
   const connection = o.connection === null ? null : verifyShopifyConnection(o.connection);
   if ((connection === null) !== (o.counts === null) || (connection === null) !== (o.summary === null)) fail(true);
   let counts: ShopifyOverview['counts'] = null, summary: ShopifySummary | null = null;
@@ -130,7 +132,7 @@ export function verifyShopifyOverview(v: unknown): ShopifyOverview {
         return Object.freeze({ title: text(x.title, 255), quantity: int(x.quantity, 0, 1e9), sales: money(x.sales) }); })) });
     if (summary.coveredSales > summary.lineSales) fail(true);
   }
-  return Object.freeze({ schoolId: id(o.schoolId, true), canManage: bool(o.canManage), connectEnabled: bool(o.connectEnabled), connection, counts, summary });
+  return Object.freeze({ schoolId: id(o.schoolId, true), canManage: bool(o.canManage), connectEnabled: bool(o.connectEnabled), autoSync: bool(o.autoSync), connection, counts, summary });
 }
 
 export interface ShopifyVariant {

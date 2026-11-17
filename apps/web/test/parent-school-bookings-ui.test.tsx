@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { bookParentBookingType, bookParentEventSlot, cancelParentSchoolBooking, loadParentSchoolBookings, ParentSchoolBookingRefusal, schoolBookingAttempt } from '../src/components/parent-school-bookings-http';
 import { ParentSchoolBookingsView, type ParentSchoolBookingsViewProps } from '../src/components/parent-school-bookings';
 
-// 0448 parent school bookings web: same-origin commands with no family, name or contact sent; a refusal drops the key, an unknown outcome keeps it.
+// 0457 parent school bookings web: same-origin commands with no family, name or contact sent; a refusal drops the key, an unknown outcome keeps it.
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222', C = '33333333-3333-4333-8333-333333333333';
 const T1 = '2026-11-21T17:00:00.000Z', T2 = '2026-11-21T17:30:00.000Z';

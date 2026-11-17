@@ -4009,6 +4009,42 @@ BEGIN
     END IF;
   END LOOP;
 END $$;
+
+-- Shopify background sync and webhooks exact verification (0449): the runtime reaches no new table or function; the
+-- five worker functions are executable by hon_communication_worker only (when that login exists).
+DO $$ DECLARE f text; t text; w oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_communication_worker');
+  worker text[]:=ARRAY['hon.record_shopify_webhook(jsonb)','hon.claim_shopify_background_sync()','hon.rotate_shopify_background_credential(jsonb)',
+    'hon.record_shopify_background_page(jsonb)','hon.finish_shopify_background_sync(jsonb)'];
+BEGIN
+  -- Exact bodies: a worker function or its lease check changed outside migrations is refused.
+  FOR f,t IN SELECT * FROM (VALUES ('hon.record_shopify_webhook(jsonb)','9b84cd3885681f1b6543817686360178'),
+      ('hon.claim_shopify_background_sync()','ee5655e217df75581d8158322fbebbdb'),('hon.rotate_shopify_background_credential(jsonb)','1adddb8980963336ffce32e7b5b1ff5e'),
+      ('hon.record_shopify_background_page(jsonb)','d9650d9b91ba44f99483bc4cd5143e5b'),('hon.finish_shopify_background_sync(jsonb)','a4cc3fd3ac5218cb53bbfeac24ee4f54'),
+      ('hon.shopify_leased_sync(jsonb,text[],boolean)','c48ec46f82d55eacc7f5ca74d55d02b8')) v LOOP
+    IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM t THEN RAISE EXCEPTION 'Shopify worker function body drift: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY worker LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND NOT has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee IS DISTINCT FROM w))) THEN
+      RAISE EXCEPTION 'Unsafe Shopify worker function: %',f; END IF;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='hon' AND p.proname IN ('shopify_system_evidence','shopify_school_live','shopify_apply_page','shopify_leased_sync') LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe Shopify helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['shopify_sync_requests','shopify_webhook_receipts'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe Shopify table: %',t;
+    END IF;
+  END LOOP;
+END $$;
 -- End Shopify Connected exact verification.
 -- Attendance card exact verification (0394)
 DO $$ DECLARE f text; t text;
@@ -4405,7 +4441,7 @@ BEGIN
 END $$;
 -- End face check-in exact verification.
 
--- Parent school bookings exact verification (0448): private helpers, a private forced-RLS table and four runtime entry points.
+-- Parent school bookings exact verification (0457): private helpers, a private forced-RLS table and four runtime entry points.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_parent_school_booking()',true,false,'search_path=pg_catalog, hon','0579ae3d2ac21cb22c89211aaf75276a658420fdb0cd94b4aff6f00bf62f1e7f'),

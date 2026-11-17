@@ -4057,10 +4057,29 @@ DO $$ DECLARE r text; BEGIN
     hon.start_school_social_ad_operation(text,uuid,jsonb,text,uuid,uuid), hon.record_school_social_ad_result(text,uuid,uuid,text,text,uuid,uuid),
     hon.resolve_school_social_ad(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
 END $$;
+-- 0449 Shopify background sync and webhooks (SH1b): two more private tables; the five worker functions belong to
+-- hon_communication_worker (013) and, like every helper, are never granted to the runtime.
+DO $$ DECLARE r text; t text; f text;
+  entry text[]:=ARRAY['hon.read_shopify(text,uuid)','hon.read_shopify_catalog(text,uuid)','hon.read_shopify_orders(text,uuid)',
+    'hon.start_shopify_connect(text,jsonb,text)','hon.claim_shopify_connect(text,jsonb)','hon.record_shopify_connection(text,jsonb)',
+    'hon.begin_shopify_sync(text,jsonb)','hon.rotate_shopify_credential(text,jsonb)','hon.record_shopify_sync_page(text,jsonb)',
+    'hon.finish_shopify_sync(text,jsonb)','hon.disconnect_shopify(text,jsonb)'];
+BEGIN
+  IF to_regclass('hon.shopify_webhook_receipts') IS NULL THEN RAISE EXCEPTION 'Apply migration 0449 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['shopify_sync_requests','shopify_webhook_receipts'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='hon' AND p.proname LIKE '%shopify%' AND NOT (p.oid::regprocedure::text=ANY(entry)) LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+END $$;
 
--- 0448 parent school bookings: private helpers, one private table and four runtime entry points (parent read, book a slot, book a type time, cancel).
+-- 0457 parent school bookings: private helpers, one private table and four runtime entry points (parent read, book a slot, book a type time, cancel).
 DO $$ DECLARE r text; f text; BEGIN
-  IF to_regprocedure('hon.cancel_parent_school_booking(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0448 first'; END IF;
+  IF to_regprocedure('hon.cancel_parent_school_booking(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0457 first'; END IF;
   FOREACH f IN ARRAY ARRAY['hon.guard_parent_school_booking()','hon.parent_school_booking_contact(uuid,uuid)','hon.parent_school_booking_json(text,uuid)','hon.parent_school_booking_live(uuid,text,uuid)','hon.parent_school_booking_finish(text,text,uuid,uuid,text,uuid,jsonb,text,text,jsonb,jsonb,integer,uuid,uuid)','hon.parent_school_booking_lock(text)','hon.read_parent_school_bookings(text)','hon.book_parent_school_event_slot(text,jsonb,text,uuid,uuid)','hon.book_parent_school_booking_type(text,jsonb,text,uuid,uuid)','hon.cancel_parent_school_booking(text,jsonb,text,uuid,uuid)'] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;

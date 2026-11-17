@@ -47,7 +47,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   // Owner ask (2026-11-16): rosters, class schedule, weekly timetable, sale days and events and class booking are one
   // Calendar page; /staff/schedule owns every /staff/schedule/* path, so the old pages and workflow pages still mark Classes.
   { key: 'classes', titleKey: 'navClasses', section: 'calendar', routes: [r('/staff/schedule', 'routeCalendar')] },
-  { key: 'attendance', titleKey: 'navAttendance', section: 'calendar', routes: [r('/staff/attendance', 'routeAttendance', true), r('/staff/attendance/planned-absences', 'routePlannedAbsences'), r('/staff/attendance/scan', 'routeScanCheckIn'), r('/staff/attendance/cards', 'routeAttendanceCards'),
+  { key: 'attendance', titleKey: 'navAttendance', section: 'calendar', routes: [r('/staff/attendance', 'routeAttendance', true), r('/staff/attendance/planned-absences', 'routePlannedAbsences'), r('/staff/attendance/scan', 'routeScanCheckIn'), r('/staff/attendance/cards', 'routeAttendanceCards'), r('/staff/attendance/face', 'routeFaceCheckIn'),
     r('/staff/walk-in', 'routeWalkIn'), r('/staff/migration/classes', 'routeHistoryImport'), h('/staff/kiosk', 'routeKiosk'), h('/staff/classpass', 'routeClassPass')] },
   // Search is the search button in the top bar.
   { key: 'students', titleKey: 'navStudents', section: 'contacts', routes: [r('/staff/people', 'routePeople'), r('/staff/family-access', 'routeFamilyAccess', true),
@@ -81,7 +81,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'analytics', titleKey: 'navAnalytics', section: 'business', routes: [r('/staff/reports', 'routeSchoolReports'), r('/staff/operations', 'routeOperationsReport', true), r('/staff/health-score', 'routeHealthScore'),
     r('/staff/planning/revenue', 'routeRevenuePlanning'), r('/staff/retention/review', 'routeRetention')] },
   { key: 'community', titleKey: 'navCommunity', section: 'community', routes: [r('/community', 'routeCommunity'), r('/community/marketplace', 'routeMarketplace')] },
-  { key: 'settings', titleKey: 'navSettings', routes: [r('/staff/settings', 'routeSettingsSummary'), r('/staff/settings/location', 'routeLocation'), r('/staff/settings/branding', 'routeBranding'),
+  { key: 'settings', titleKey: 'navSettings', routes: [r('/staff/settings', 'routeSettingsSummary'), r('/staff/settings/location', 'routeLocation'), r('/staff/settings/face-check-in', 'routeFaceCheckIn'), r('/staff/settings/branding', 'routeBranding'),
     r('/staff/settings/booking-types', 'routeBookingTypes'), r('/staff/settings/texting-number', 'routeTextingNumber'), r('/staff/billing/payment-processors', 'routePaymentProcessors'),
     r('/staff/billing/saved-payment-methods', 'routeSavedMethods'), r('/settings/language-region', 'routeLanguage'), r('/settings/texts-from-hon', 'routeTextsFromHon'),
     r('/staff/account-status', 'routeAccount'), r('/staff/owners', 'routeOwners'), r('/staff/subscription', 'routeSubscription'), r('/staff/tool-maker', 'routeToolMaker'), r('/staff/help', 'routeHelp')] },

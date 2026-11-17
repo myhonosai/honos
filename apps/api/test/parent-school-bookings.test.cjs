@@ -3,13 +3,13 @@ const assert = require('node:assert/strict');
 const contracts = require('@hon/contracts');
 const { ParentSchoolBookingService } = require('../dist/families/parent-school-bookings.service.js');
 
-// 0448 parent school bookings: closed inputs, verified projections, and the service refuses before any database call.
+// 0457 parent school bookings: closed inputs, verified projections, and the service refuses before any database call.
 const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222', C = '33333333-3333-4333-8333-333333333333';
 const T1 = '2026-11-20T17:00:00.000Z', T2 = '2026-11-20T17:30:00.000Z';
 const booking = { kind: 'EVENT', bookingId: C, parentId: B, title: 'Black Friday Sale', localDate: '2026-11-20', localStart: '09:00', localEnd: '09:30',
   startsAt: T1, status: 'BOOKED', version: 1, canCancel: true };
 
-test('0448 inputs are closed: no name, contact, school or family is accepted from the parent', () => {
+test('0457 inputs are closed: no name, contact, school or family is accepted from the parent', () => {
   assert.deepEqual(contracts.validateBookParentSchoolEventSlotInput({ slotId: A }), { slotId: A });
   for (const value of [{}, { slotId: A, email: 'x@example.test' }, { slotId: 'x' }, { slotId: 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA' }, null]) {
     assert.throws(() => contracts.validateBookParentSchoolEventSlotInput(value), undefined, JSON.stringify(value));
@@ -24,7 +24,7 @@ test('0448 inputs are closed: no name, contact, school or family is accepted fro
   assert.throws(() => contracts.validateCancelParentSchoolBookingInput({ bookingId: C, expectedVersion: 0 }));
 });
 
-test('0448 choices and receipts are verified exactly', () => {
+test('0457 choices and receipts are verified exactly', () => {
   const view = { canBook: true, timezone: 'America/Los_Angeles', contact: { name: 'Kim Family', email: 'kim@example.test' },
     events: [{ eventId: B, title: 'Black Friday Sale', description: '', place: 'Lobby', localDate: '2026-11-20', bookingId: C,
       slots: [{ slotId: A, localStart: '09:00', localEnd: '09:30', startsAt: T1, spotsLeft: 1 }, { slotId: C, localStart: '09:30', localEnd: '10:00', startsAt: T2, spotsLeft: 0 }] }],
@@ -43,7 +43,7 @@ test('0448 choices and receipts are verified exactly', () => {
   assert.throws(() => contracts.verifyParentSchoolBookingReceipt({ booking, spotsLeft: 0 }, { bookingId: A }), undefined, 'bound to the requested booking');
 });
 
-test('0448 service refuses before any database call', async () => {
+test('0457 service refuses before any database call', async () => {
   let calls = 0;
   const database = new Proxy({}, { get: () => () => { calls += 1; throw new Error('database must not be reached'); } });
   const service = new ParentSchoolBookingService(database);
