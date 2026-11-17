@@ -1113,6 +1113,7 @@ export * from './parent-class-booking.js';
 export * from './family-messages.js';
 export * from './school-conversations.js';
 export * from './conversation-ai.js';
+export * from './contact-message-history.js';
 export * from './school-pay-autopay.js';
 export * from './hq-school-health.js';
 export * from './school-reports.js';

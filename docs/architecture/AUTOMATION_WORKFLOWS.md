@@ -102,7 +102,8 @@ steps (at least 10) failed the workflow pauses `FAILURE_RATE`.
   `origin_kind='AUTOMATION'`, `origin_id` = the run step and (email) `email_subject`, created by the fixed AUTOMATION
   principal `00000000-0000-4000-8000-000000000368`. The 0243 delivery worker sends it with its own consent, address,
   quiet-hours and STOP checks. A skipped send records why (`NO_CONSENT`, `NO_ADDRESS`, `DAILY_CAP`, `TEXT_TOO_LONG`).
-  SendGrid delivery still uses its fixed subject; delivering `email_subject` is a follow-up.
+  Since 0424 (CA1b) the delivery worker reads `email_subject` for the email it is sending (`hon.communication_email_subject`)
+  and SendGrid uses it; an email without one keeps the standard subject "A message from <school>".
 - CREATE_TASK / NOTIFY_STAFF: one READY HUMAN_UI work item (with its history row) for the school's owners.
 - ADD_TAG / REMOVE_TAG (20-tag limit → `TAG_LIMIT_REACHED`), MOVE_STAGE (open lead in that stage's pipeline only, never to a hidden (0417) stage, through the 0417 single-lead stage guard; one identifier-only `crm.lead.stage_moved` audit row per lead with
   prior and next stage, run and workflow),

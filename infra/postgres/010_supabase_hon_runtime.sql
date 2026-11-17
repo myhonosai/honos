@@ -3994,3 +3994,19 @@ DO $$ DECLARE r text; t text; BEGIN
       hon.archive_automation_workflow(text,uuid,jsonb,text,uuid,uuid),hon.read_automation_runs(text,uuid),hon.read_automation_run(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+-- 0424 contact message history: private helpers, one private table, three staff runtime entry points (history, email view, resend); the
+-- email subject lookup is runnable only by hon_communication_worker (013).
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_contact_message_history(text,uuid,jsonb)','hon.read_contact_message_email(text,uuid,uuid)','hon.resend_contact_message_email(text,jsonb,text,uuid,uuid)'];
+BEGIN
+  IF to_regprocedure('hon.resend_contact_message_email(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0424 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.contact_message_standard_subject(text)','hon.communication_email_subject(uuid,uuid)','hon.contact_message_delivery_state(hon.communication_messages)','hon.contact_message_origin(hon.communication_messages)','hon.contact_message_rows(uuid,boolean)','hon.contact_message_person(uuid)','hon.contact_email_resend_block(hon.communication_messages,hon.people)','hon.contact_email_message(uuid,uuid)','hon.require_contact_resend_actor(text)']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.communication_message_resends FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.communication_message_resends FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
