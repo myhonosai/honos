@@ -55,7 +55,7 @@ Each school connects its own Facebook Page and Instagram professional account th
 | S1-web | Marketing → Social accounts page (connect, switches, disconnect) and the return page; 3 languages | none |
 | S2 | Posts: drafts (staff and agent drafts), human approval, publish now / schedule, cancel, worker publish with lease, `post.*` webhook receipts, calendar list | 0348 |
 | S3 | Inbox: `message.received` / `comment.received` webhook into school conversations, staff replies (24-hour Messenger window and Instagram rules checked at send), comment reply/hide, link to CRM person/lead, unread/assignment | 0435 |
-| S4 | Ads: school monthly ad spend cap (set by owner), boost post / simple campaign drafts, human approval inside the cap, created PAUSED, separate human activate/pause, daily insights sync | 0437 |
+| S4 | Ads: school monthly ad spend cap (set by owner), boost post / simple campaign drafts, human approval inside the cap, created PAUSED, separate human activate/pause, daily insights sync | 0445 |
 
 Each PR gets its own section here before it is built, its own DB proof, API tests, and an independent review.
 
@@ -211,7 +211,7 @@ Linking also needs the lead or person to belong to the same school.
 5. **List** `GET …/inbox?view=ALL|UNREAD|MINE&before=` (at most 50 per page, newest activity first) and
    `GET …/inbox/conversations/:id` (the last 200 messages).
 
-## 4C. S4 design (0437): ads (boost a published post, inside a monthly cap)
+## 4C. S4 design (0445): ads (boost a published post, inside a monthly cap)
 
 ### 4C.1 Scope
 

@@ -319,6 +319,7 @@
     "0423_automation_engine.sql": "18fbac749087e7991fa73f98999d46f1a70c65ce805d7e8e0ceba1afc835d9bd",
     "0424_contact_message_history.sql": "dfae0a22b7b64cc79dd396ada7fc6a3f1b763bb84a13ec4632e29375f01d5a39",
     "0435_school_social_inbox.sql": "c7c3e3c8304de287e2c5899b1f1fa888e132f32b5a16548974b8fe7b05ef6271",
-    "0437_school_social_ads.sql": "226e198ade6332d1efa35b97b877088e4581a298b1a934ffd60466702c27cf83"
+    "0443_face_checkin_program.sql": "e2b4d638fd1e889522364fb10e0960ac6bd39e1b1d2043fe7cd189419019829a",
+    "0445_school_social_ads.sql": "ae19bd0b2f0f21bec60dac532ff9e2229171518ec2704578427ef022aeea98be"
   }
 }

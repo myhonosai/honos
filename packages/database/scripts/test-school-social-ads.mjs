@@ -1,4 +1,4 @@
-/** School social ads (0437): real signed HON sessions -> Nest/guards -> fixed runtime SQL -> marked disposable
+/** School social ads (0445): real signed HON sessions -> Nest/guards -> fixed runtime SQL -> marked disposable
  *  PostgreSQL (the communication delivery fixture). Zernio is the deterministic in-process fake adapter only; nothing is
  *  created, turned on or spent anywhere. Schools are SYNTHETIC sign-ups made through the 0241 runtime entry point; the
  *  owner connection stands in for paid access and seeds connected accounts and published posts (0347/0348 are proven
@@ -329,5 +329,5 @@ try{
  await assert.rejects(q('TRUNCATE hon.school_social_ads'),/SOCIAL_RECORD_IMMUTABLE|cannot truncate/);
  await assert.rejects(q("INSERT INTO hon.school_social_ads(organization_id,school_id,account_id,target_id,budget_cents,currency,starts_on,ends_on,status,created_by_principal_id) VALUES($1,$2,$3,$4,100,'USD',current_date,current_date+31,'DRAFT',$5)",[a.org,a.school,A.fb.id,T.p1,await principalOf(a)]),/check constraint/);
  pass('audit and outbox carry identifiers and amounts only (no post text, names or Meta ids); an ad\'s school, budget, dates and Meta id cannot change, status moves only along reviewed paths, and nothing is deleted or truncated');
- console.log('PASS: school social ads (0437), '+groups+' groups');
+ console.log('PASS: school social ads (0445), '+groups+' groups');
 }finally{await q("UPDATE hon.hon_os_signup_program SET status='CLOSED',recorded_at=clock_timestamp() WHERE program_id=1").catch(()=>{});await app?.close();await Promise.allSettled([admin.end(),restricted.end(),worker.end()]);}

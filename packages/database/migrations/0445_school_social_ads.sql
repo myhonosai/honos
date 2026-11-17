@@ -1,6 +1,6 @@
 BEGIN;
 
--- S4 (0437; allocated as 0350 on 2026-11-14, then 0428, renumbered 2026-11-17): a school boosts a Facebook post HON already published, inside the
+-- S4 (0445; allocated as 0350 on 2026-11-14, then 0428 and 0437, renumbered 2026-11-17): a school boosts a Facebook post HON already published, inside the
 -- school's own monthly ad spend cap, through Zernio (docs/architecture/SOCIAL_POSTING_INBOX_ADS.md §4C). Builds on
 -- 0347/0348. Nothing is created or spent unless the API server has HON_ZERNIO_ADS_APPROVED=true and a Zernio key; tests
 -- use the deterministic fake.
@@ -17,7 +17,7 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'Trusted migration owner required'; END IF;
   IF to_regclass('hon.school_social_post_targets') IS NULL OR to_regprocedure('hon.school_social_command_begin(uuid,uuid,uuid,text,text,text)') IS NULL
-    OR to_regclass('hon.school_social_conversations') IS NULL THEN RAISE EXCEPTION '0437 requires the 0347, 0348 and 0435 school social records'; END IF;
+    OR to_regclass('hon.school_social_conversations') IS NULL THEN RAISE EXCEPTION '0445 requires the 0347, 0348 and 0435 school social records'; END IF;
 END $$;
 
 INSERT INTO hon.permissions(code,description,is_sensitive,is_staff_assignable) VALUES
@@ -109,7 +109,7 @@ DO $$ DECLARE t text; BEGIN
   END LOOP;
 END $$;
 
--- 0437 adds the two ads permissions to the permissions the 0347 actor check accepts (otherwise unchanged).
+-- 0445 adds the two ads permissions to the permissions the 0347 actor check accepts (otherwise unchanged).
 CREATE OR REPLACE FUNCTION hon.require_school_social_actor(p_subject text,p_permission text) RETURNS uuid
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); actor uuid;

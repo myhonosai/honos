@@ -65,7 +65,7 @@ export class SchoolSocialInboxCommentHumanUiGuard extends MembershipActivationHu
   protected override readonly command: string = SOCIAL_INBOX_COMMENT_COMMAND;
 }
 
-/** 0437 ads: the read is a same-origin GET (the 0347 read command); the cap, drafts and each Zernio operation are their own browser commands. */
+/** 0445 ads: the read is a same-origin GET (the 0347 read command); the cap, drafts and each Zernio operation are their own browser commands. */
 @Injectable()
 export class SchoolSocialAdBudgetHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = SOCIAL_ADS_BUDGET_COMMAND;

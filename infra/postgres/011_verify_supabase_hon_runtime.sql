@@ -4373,3 +4373,34 @@ DO $$ DECLARE f record; safe boolean; worker_oid oid:=(SELECT oid FROM pg_roles 
   END IF;
 END $$;
 -- End contact message history exact verification.
+-- Face check-in exact verification (0443)
+DO $$ DECLARE f text; t text; n integer;
+  entry text[]:=ARRAY['hon.read_face_checkin(text)','hon.save_face_checkin_settings(text,jsonb,text,uuid,uuid)','hon.record_face_checkin_consent(text,jsonb,text,uuid,uuid)',
+    'hon.withdraw_face_checkin_consent(text,jsonb,text,uuid,uuid)','hon.enroll_face_checkin_student(text,jsonb,text,uuid,uuid)','hon.match_face_checkin(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.confirm_face_checkin_match(text,jsonb,text,uuid,uuid)','hon.read_family_face_checkin(text)','hon.sign_family_face_checkin_consent(text,jsonb,text,uuid,uuid)',
+    'hon.withdraw_family_face_checkin_consent(text,jsonb,text,uuid,uuid)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe face check-in entry point: %',f; END IF;
+  END LOOP;
+  SELECT count(*) INTO n FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace
+    AND (p.proname LIKE 'face\_checkin\_%' OR p.proname IN ('guard_face_checkin','purge_face_checkin_retention'))
+    AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE') OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner));
+  IF n<>0 THEN RAISE EXCEPTION 'Unsafe face check-in helper (% found)',n; END IF;
+  IF (SELECT count(*) FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace AND p.proname LIKE 'face\_checkin\_%')<15 THEN
+    RAISE EXCEPTION 'Face check-in helpers missing'; END IF;
+  FOREACH t IN ARRAY ARRAY['face_checkin_program','face_checkin_form_parts','face_checkin_forms','face_checkin_settings','face_checkin_consents',
+      'face_templates','face_template_deletions','face_checkin_matches','face_checkin_requests'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe face check-in table: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End face check-in exact verification.

@@ -34,8 +34,9 @@ function WorkflowLink({ href, children }: { href: string; children: React.ReactN
 function crmScopeHref(path: '/staff/crm/leads' | '/staff/crm/trials', organizationId: string, schoolId: string): string {
   return `${path}?${new URLSearchParams({ organizationId, schoolId }).toString()}`;
 }
-function classPassScopeHref(organizationId: string, schoolId: string): string {
-  return `/staff/classpass?${new URLSearchParams({ organizationId, schoolId }).toString()}`;
+/** ClassPass opens on the signed-in school, so its link carries no school IDs. */
+function classPassScopeHref(_organizationId: string, _schoolId: string): string {
+  return '/staff/classpass';
 }
 export function attendanceScopeHref(organizationId: string, schoolId: string): string {
   return `/staff/attendance?${new URLSearchParams({ organizationId, schoolId }).toString()}`;

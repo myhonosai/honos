@@ -14,7 +14,7 @@ const ADS = 'marketing.social.ads';
 const BUDGET = 'marketing.social.ads.budget';
 
 /**
- * School ads (0437). Route ids are never authority: scope comes from the verified session and every database call
+ * School ads (0445). Route ids are never authority: scope comes from the verified session and every database call
  * re-proves the person at the session school (marketing.social.ads, or marketing.social.ads.budget for the cap).
  */
 @Controller('organizations/:organizationId/schools/:schoolId/marketing/social/ads')
