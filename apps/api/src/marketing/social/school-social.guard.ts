@@ -46,7 +46,7 @@ export class SchoolSocialPostResolveHumanUiGuard extends MembershipActivationHum
   protected override readonly command: string = SOCIAL_POST_RESOLVE_COMMAND;
 }
 
-/** 0349 inbox: reads are same-origin GETs (the 0347 read command); each inbox change is its own browser command. */
+/** 0427 inbox: reads are same-origin GETs (the 0347 read command); each inbox change is its own browser command. */
 @Injectable()
 export class SchoolSocialInboxChangeHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = SOCIAL_INBOX_CHANGE_COMMAND;

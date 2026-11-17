@@ -51,7 +51,8 @@ import { ChadFollowUpAssistantService } from './chad-follow-up-assistant/chad-fo
 import { CHAD_PROVIDER_RUNTIME, OpenRouterChadRuntime } from './ai/chad-provider-runtime.js';
 import { HON_REPLY_PROVIDER_RUNTIME, OpenRouterHonReplyRuntime } from './ai/hon-reply-provider-runtime.js';
 import { HonReplyService } from './hon-conversation/hon-reply.service.js';
-import { CREATIVE_PROVIDER_RUNTIME, UnconfiguredCreativeProviderRuntime } from './creative-studio/creative-provider-runtime.js';
+import { CREATIVE_PROVIDER_RUNTIME } from './creative-studio/creative-provider-runtime.js';
+import { createCreativeProviderRuntime } from './creative-studio/providers/creative-provider-router.js';
 import { CreativeStudioService } from './creative-studio/creative-studio.service.js';
 import { CreativeStudioController } from './creative-studio/creative-studio.controller.js';
 import { CreativeStudioAvatarsController, CreativeStudioAvatarVideosController } from './creative-studio/creative-studio-avatars.controller.js';
@@ -125,6 +126,15 @@ import { MembershipPauseController } from './billing/membership-pause.controller
 import { MembershipPauseService } from './billing/membership-pause.service.js';
 import { StudentImportController } from './migration/student-import.controller.js';
 import { StudentImportService } from './migration/student-import.service.js';
+import { PaperImportController } from './paper-import/paper-import.controller.js';
+import { PaperImportService } from './paper-import/paper-import.service.js';
+import { PAPER_READER_RUNTIME, SyntheticPaperReader } from './paper-import/paper-reader.js';
+import { BillingImportController } from './migration/billing-import.controller.js';
+import { BillingImportService } from './migration/billing-import.service.js';
+import { HistoryImportController } from './migration/history-import.controller.js';
+import { HistoryImportService } from './migration/history-import.service.js';
+import { PublishedSchoolWebsiteController, SchoolWebsiteController } from './website/school-website.controller.js';
+import { SchoolWebsiteService } from './website/school-website.service.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
 import { SchoolSupportController } from './support/school-support.controller.js';
@@ -163,14 +173,22 @@ import { SchoolPayMethodController } from './school-payments/school-pay-method.c
 import { SchoolPayMethodService } from './school-payments/school-pay-method.service.js';
 import { SchoolPayAutopayController } from './school-payments/school-pay-autopay.controller.js';
 import { SchoolPayAutopayService } from './school-payments/school-pay-autopay.service.js';
+import { SchoolPayChargeController } from './school-payments/school-pay-charge.controller.js';
+import { SchoolPayChargeService } from './school-payments/school-pay-charge.service.js';
 import { SchoolCheckoutController } from './school-checkout/school-checkout.controller.js';
 import { SchoolCheckoutService } from './school-checkout/school-checkout.service.js';
-import { SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard } from './school-checkout/school-checkout-human-ui.guard.js';
+import { ShopifyController, ShopifyHumanGuard } from './commerce/shopify/shopify.controller.js';
+import { ShopifyService } from './commerce/shopify/shopify.service.js';
+import { SHOPIFY_APP, shopifyAppFromEnvironment } from './commerce/shopify/shopify-adapter.js';
+import { SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard, SchoolCheckoutSettingsSaveHumanUiGuard } from './school-checkout/school-checkout-human-ui.guard.js';
 import { MayaAtRiskController, MayaAtRiskReadHumanUiGuard } from './maya/maya-at-risk.controller.js';
 import { MayaAtRiskService } from './maya/maya-at-risk.service.js';
 import { SchoolBrandingController } from './school-branding/school-branding.controller.js';
 import { SchoolBrandingService } from './school-branding/school-branding.service.js';
 import { SchoolBrandingReadHumanUiGuard, SchoolBrandingSaveHumanUiGuard } from './school-branding/school-branding-human-ui.guard.js';
+import { SchoolLocationController } from './school-location/school-location.controller.js';
+import { SchoolLocationService } from './school-location/school-location.service.js';
+import { SchoolLocationReadHumanUiGuard, SchoolLocationSaveHumanUiGuard } from './school-location/school-location-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
 import { BillingAccountService } from './billing/billing-account.service.js';
 import { BillingAccountHumanUiGuard } from './billing/billing-account-human-ui.guard.js';
@@ -186,6 +204,10 @@ import { HqOnboardingService } from './hq/hq-onboarding.service.js';
 import { PersonController } from './people/person.controller.js';
 import { SchoolPersonRecordController, SchoolPersonRecordHumanGuard } from './people/school-person-record.controller.js';
 import { SchoolPersonRecordService } from './people/school-person-record.service.js';
+import { SchoolPersonPhotoController, SchoolPersonPhotoHumanGuard } from './people/school-person-photo.controller.js';
+import { SchoolPersonPhotoService } from './people/school-person-photo.service.js';
+import { AttendanceCardsController, AttendanceCardsHumanGuard, AttendanceScanController, AttendanceScanHumanGuard } from './schedule/attendance-cards.controller.js';
+import { AttendanceCardsService } from './schedule/attendance-cards.service.js';
 import { PersonService } from './people/person.service.js';
 import { ActionReviewController, ActionApprovalWorkbenchController } from './action/action-review.controller.js';
 import { FamilyController } from './families/family.controller.js';
@@ -206,6 +228,10 @@ import { ParentPlannedAbsenceRequestController, ParentPlannedAbsenceRequestGuard
 import { ParentPlannedAbsenceRequestService } from './families/parent-planned-absence-request.service.js';
 import { ParentClassBookingBookGuard, ParentClassBookingCancelGuard, ParentClassBookingController, ParentClassBookingReadGuard } from './families/parent-class-booking.controller.js';
 import { ParentClassBookingService } from './families/parent-class-booking.service.js';
+import { FamilyMessagesInboxController, FamilyMessagesInboxReadGuard, FamilyMessagesMarkReadGuard, FamilyMessagesReplyGuard, ParentFamilyMessagesController, ParentFamilyMessagesReadGuard, ParentFamilyMessagesSendGuard } from './families/family-messages.controller.js';
+import { FamilyMessagesService } from './families/family-messages.service.js';
+import { ConversationCreateLeadGuard, ConversationLinkGuard, ConversationMarkReadGuard, ConversationReadGuard, ConversationReplyGuard, ConversationUpdateGuard, SchoolConversationsController } from './conversations/school-conversations.controller.js';
+import { SchoolConversationsService } from './conversations/school-conversations.service.js';
 import { ParentMessageHistoryController, ParentMessageHistoryReadGuard } from './families/parent-message-history.controller.js';
 import { ParentMessageHistoryService } from './families/parent-message-history.service.js';
 import { CrmLeadActionTool } from './crm/crm-lead-action.tool.js';
@@ -258,6 +284,7 @@ import { AttendancePolicyController } from './schedule/attendance-policy.control
 import { AttendanceHumanUiGuard } from './schedule/attendance-human-ui.guard.js';
 import { ClassBookingController } from './schedule/class-booking.controller.js';
 import { BookableStudentsController, BookableStudentsService } from './schedule/bookable-students.js';
+import { SchoolPickersController, SchoolPickersService } from './school-pickers/school-pickers.js';
 import { ClassBookingHumanUiGuard } from './schedule/class-booking-human-ui.guard.js';
 import { ClassBookingService } from './schedule/class-booking.service.js';
 import { PlannedAbsenceReviewController } from './schedule/planned-absence-review.controller.js';
@@ -428,7 +455,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     FoundationController,
     SessionContextController,
     IdentityController,
-    PersonController, SchoolPersonRecordController,
+    PersonController, SchoolPersonRecordController, SchoolPersonPhotoController, AttendanceCardsController, AttendanceScanController,
     FamilyController,
     ParentJourneyViewController,
     ParentBillingViewController,
@@ -439,6 +466,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentPlannedAbsenceHistoryController,
     ParentPlannedAbsenceRequestController,
     ParentClassBookingController,
+    ParentFamilyMessagesController,
+    FamilyMessagesInboxController,
+    SchoolConversationsController,
     ParentMessageHistoryController,
     LeadController,
     LeadCloseController,
@@ -463,6 +493,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     AttendancePolicyController,
     ClassBookingController,
     BookableStudentsController,
+    SchoolPickersController,
     PlannedAbsenceReviewController,
     PlannedAbsenceReviewQueueController,
     KnowledgeArticleController,
@@ -494,6 +525,11 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipDateRevisionController,
     MembershipPauseController,
     StudentImportController,
+    PaperImportController,
+    BillingImportController,
+    HistoryImportController,
+    SchoolWebsiteController,
+    PublishedSchoolWebsiteController,
     SchoolOnboardingController,
     SchoolSupportController,
     SchoolSocialController,
@@ -503,9 +539,12 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPaymentController,
     SchoolPayMethodController,
     SchoolPayAutopayController,
+    SchoolPayChargeController,
     SchoolCheckoutController,
+    ShopifyController,
     MayaAtRiskController,
     SchoolBrandingController,
+    SchoolLocationController,
     SchoolMembershipListController,
     CrmSchoolClockController,
     CrmSessionSchoolClockController,
@@ -528,7 +567,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SaasSubscriptionGenerationHqController, HqHonController, SaasSubscriptionGenerationSchoolController, SaasScheduleBindingHqController, SaasScheduleBindingSchoolController, SaasPaidReviewHqController, SaasFounderPoolHqController, SaasFounderAvailabilitySchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, CreativeStudioAvatarsController, CreativeStudioAvatarVideosController, CreativeLimitsHqController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, CommunicationWebhookController, SchoolTextSenderHqController, SchoolNumberController, SchoolNumberOrderHqController, SchoolMissedCallHqController, SchoolMissedCallsController, ZernioLeadFormHqController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqBusinessNumbersController, HqSupportController, HqMarketingController, HqPlanPromotionsController, SchoolPlanPromotionsController, HqCreativeController, AiSpendPauseHqController, AiSchoolCostLimitHqController, AiExceptionAllowanceHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController, HqCommunicationsController, HqContactController, HqProspectsController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
-  providers: [BookableStudentsService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard,
+  providers: [BookableStudentsService, SchoolPickersService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard, SchoolPersonPhotoService, SchoolPersonPhotoHumanGuard, AttendanceCardsService, AttendanceCardsHumanGuard, AttendanceScanHumanGuard,
     SaasSubscriptionGenerationService, SaasScheduleBillingService, SaasPaidReviewService, SaasFounderService, SaasPriceAcceptanceService, SaasTrialsService, OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
     CurrentStaffReportingSchoolNoStoreGuard,
     CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard,
@@ -556,7 +595,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     { provide: CHAD_PROVIDER_RUNTIME, useFactory: () => new OpenRouterChadRuntime() },
     { provide: HON_REPLY_PROVIDER_RUNTIME, useFactory: () => new OpenRouterHonReplyRuntime() },
     // CS1: no creative provider is connected; the synthetic runtime is test-only and never selected here.
-    { provide: CREATIVE_PROVIDER_RUNTIME, useFactory: () => new UnconfiguredCreativeProviderRuntime() },
+    // C2: real adapters exist, but stay off until results can be copied into HON storage (C3).
+    { provide: CREATIVE_PROVIDER_RUNTIME, useFactory: () => createCreativeProviderRuntime({ mediaStorageReady: false }) },
     // C1 (0354): the provider job worker (worker login only; the loop is off unless its interval is set).
     CreativeJobWorkerDatabase,
     { provide: CREATIVE_JOB_WORKER_STORE, useExisting: CreativeJobWorkerDatabase },
@@ -587,6 +627,19 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentClassBookingReadGuard,
     ParentClassBookingBookGuard,
     ParentClassBookingCancelGuard,
+    FamilyMessagesService,
+    ParentFamilyMessagesReadGuard,
+    ParentFamilyMessagesSendGuard,
+    FamilyMessagesInboxReadGuard,
+    FamilyMessagesMarkReadGuard,
+    FamilyMessagesReplyGuard,
+    SchoolConversationsService,
+    ConversationReadGuard,
+    ConversationReplyGuard,
+    ConversationUpdateGuard,
+    ConversationMarkReadGuard,
+    ConversationLinkGuard,
+    ConversationCreateLeadGuard,
     ParentPlannedAbsenceRequestGuard,
     ParentMessageHistoryService,
     ParentMessageHistoryReadGuard,
@@ -680,6 +733,12 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipDateRevisionService,
     MembershipPauseService,
     StudentImportService,
+    PaperImportService,
+    // 0388: the stand-in reader is the only paper reader; a real vision provider needs owner approval.
+    { provide: PAPER_READER_RUNTIME, useFactory: () => new SyntheticPaperReader() },
+    BillingImportService,
+    HistoryImportService,
+    SchoolWebsiteService,
     SchoolOnboardingService,
     SchoolSupportService,
     SchoolSocialService,
@@ -709,6 +768,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPaymentService,
     SchoolPayMethodService,
     SchoolPayAutopayService,
+    SchoolPayChargeService,
     { provide: SCHOOL_PAYMENT_ADAPTERS, useFactory: () => schoolPaymentAdaptersFromEnvironment() },
     { provide: SCHOOL_PAYMENT_VAULT, useFactory: () => schoolPaymentVaultForProcess() },
     SchoolPayReadHumanUiGuard, SchoolPayStartHumanUiGuard, SchoolPayOnboardingLinkHumanUiGuard, SchoolPayFinishHumanUiGuard,
@@ -717,10 +777,12 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPayMethodDefaultHumanUiGuard, SchoolPayMethodRemoveHumanUiGuard,
     SchoolPayAutopayReadHumanUiGuard, SchoolPayDiscountReadHumanUiGuard, SchoolPayDiscountSetHumanUiGuard, SchoolPayAutopayEnrollHumanUiGuard,
     SchoolPayAutopayMethodHumanUiGuard, SchoolPayAutopayStateHumanUiGuard, SchoolPayAutopayCancelHumanUiGuard, SchoolPayAutopayCycleHumanUiGuard,
-    SchoolCheckoutService, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard,
+    SchoolCheckoutService, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard, SchoolCheckoutSettingsSaveHumanUiGuard,
+    ShopifyService, ShopifyHumanGuard, { provide: SHOPIFY_APP, useFactory: () => shopifyAppFromEnvironment(process.env) },
     MayaAtRiskService,
     MayaAtRiskReadHumanUiGuard,
     SchoolBrandingService, SchoolBrandingReadHumanUiGuard, SchoolBrandingSaveHumanUiGuard,
+    SchoolLocationService, SchoolLocationReadHumanUiGuard, SchoolLocationSaveHumanUiGuard,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,
     CrmSchoolClockService,

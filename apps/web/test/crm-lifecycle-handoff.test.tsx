@@ -40,14 +40,14 @@ describe('bounded CRM lifecycle handoff', () => {
     expect(source).toContain('appointment ? terminalTrialFollowUpHref(appointment) : undefined');
   });
 
-  it('keeps a valid follow-up prefill idle and out of the form until an explicit queue load', () => {
+  it('keeps a valid follow-up prefill out of the form until the queue has loaded', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
     try {
       const html = renderToStaticMarkup(<CrmFollowUpsWorkbench initialLeadId={leadId} />);
       expect(fetcher).not.toHaveBeenCalled();
-      expect(html).toContain('Load / refresh queue');
+      expect(html).toContain('Refresh');
       expect(html).not.toContain(leadId);
-      expect(html).not.toContain('Create follow-up record');
+      expect(html).not.toContain('Create follow-up');
     } finally { fetcher.mockRestore(); }
 
     const source = readFileSync('src/components/crm-follow-ups-workbench.tsx', 'utf8');

@@ -3066,7 +3066,8 @@ DO $$ DECLARE f record; safe boolean; expected record; BEGIN
     IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
       RAISE EXCEPTION 'Missing tuition payment guard: %',expected.name; END IF;
   END LOOP;
-  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.invoices'::regclass AND NOT tgisinternal)<>1 THEN
+  -- 0337 adds one more invoice guard (an open autopay charge holds its invoices), verified in its own section.
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.invoices'::regclass AND NOT tgisinternal AND tgname<>'school_pay_charge_invoice_guard')<>1 THEN
     RAISE EXCEPTION 'hon.invoices must carry exactly the tuition payment status guard'; END IF;
   IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='billing.invoice.payment.record' AND is_sensitive AND is_staff_assignable) THEN
     RAISE EXCEPTION 'billing.invoice.payment.record must exist as a sensitive staff-assignable permission'; END IF;
@@ -3268,6 +3269,58 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 END $$;
 -- End school autopay exact verification.
 
+-- School autopay charges exact verification (B-TUI-2 0337): two private forced-RLS tables, the attempt, payment-record
+-- and invoice guards, private helpers, four runtime entry points and the PROVIDER payment method.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['hon.school_pay_charge_attempts','hon.school_pay_charge_events'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=t::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'School autopay charge table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_school_pay_charge_attempt()',true,false,'search_path=pg_catalog, hon','b39973b7357e39d0e0ed08bb459c8677d4dff795ac30bca2c64e0b0b9fb42e3a'),
+('hon.school_pay_invoice_charge_open(uuid)',true,false,'search_path=pg_catalog, hon','3a9692741e5149599d60f4c55faa420296ce6b4cb462d3803ea39f4cab461012'),
+('hon.guard_school_pay_charge_payment_record()',true,false,'search_path=pg_catalog, hon','ca717afb2623fa3f05d78a1ccda763edf8083460036fe7125def6473ad6d3d1f'),
+('hon.guard_school_pay_charge_invoice()',true,false,'search_path=pg_catalog, hon','662e92f463cfba1a4b30fc96fddcfc3e7e4bb87a41724b7407f618457a514f04'),
+('hon.school_pay_charge_json(hon.school_pay_charge_attempts)',true,false,'search_path=pg_catalog, hon','b3942ee06b7967e19bb772404c29dca8c0d6372f0737735401a603cde89f8a69'),
+('hon.school_pay_charge_record(uuid,hon.school_pay_charge_attempts,text,jsonb,text,uuid,uuid)',true,false,'search_path=pg_catalog, hon','40f2e7b4b62daffca89ea3f5250e3907ab8163b38738d3359d9e92f802a402b4'),
+('hon.school_pay_lock_charge(uuid,integer)',true,false,'search_path=pg_catalog, hon','76a8a8127041c700b95b9899553c96a002ab8f8a5e2af506987ca83c9ff1b266'),
+('hon.read_school_pay_autopay_charges(text,uuid)',true,true,'search_path=pg_catalog, hon','dbcfd342b3691421dd85a9d68cb5f9262096e7ed3500304f48e9d54d19234c0c'),
+('hon.read_school_pay_charge_attempt(text,uuid)',true,true,'search_path=pg_catalog, hon','54e5f715f65db777d5b1caef2b528793defb63efe51eaaa4e15c41e5f2297856'),
+('hon.begin_school_pay_charge(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','dcfb154ad5b2b0ecd4c26b032bf2041430b04c6ebb37734fc2348927928d1e1c'),
+('hon.school_pay_charge_outcome_ok(jsonb)',false,false,'search_path=pg_catalog, hon','eef349a8e5589c75110a4eb198a111f23d23c615400bc8fcaa37e7e904bf4357'),
+('hon.school_pay_charge_settle(hon.school_pay_charge_attempts,jsonb,uuid,text,uuid,uuid)',true,false,'search_path=pg_catalog, hon','82c1ecde9a5cb1a7c9a52fb79c4af29ce00f14564138616f1a3dd7a87bd9b91f'),
+('hon.finish_school_pay_charge(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','2d46ece141220939210c3a8908da1065f78d75f774541a6e9a01b2d632465bfc')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school autopay charge function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('school_pay_charge_attempts','school_pay_charge_attempt_guard','hon.guard_school_pay_charge_attempt()'),
+    ('school_pay_charge_attempts','school_pay_charge_attempts_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('school_pay_charge_events','school_pay_charge_events_immutable','hon.guard_membership_activation_evidence()'),
+    ('school_pay_charge_events','school_pay_charge_events_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('invoice_payment_records','school_pay_charge_payment_record_guard','hon.guard_school_pay_charge_payment_record()'),
+    ('invoices','school_pay_charge_invoice_guard','hon.guard_school_pay_charge_invoice()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing school autopay charge guard: %',expected.name; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.invoice_payment_records'::regclass AND conname='invoice_payment_records_provider_reference_check' AND convalidated)
+    OR (SELECT count(*) FROM pg_constraint WHERE conrelid='hon.invoice_payment_records'::regclass AND contype='c' AND pg_get_constraintdef(oid) LIKE '%CARD_TERMINAL%')<>1
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.invoice_payment_records'::regclass AND conname='invoice_payment_records_method_check'
+      AND pg_get_constraintdef(oid) LIKE '%PROVIDER%') THEN
+    RAISE EXCEPTION 'Invoice payment records must allow exactly the manual methods and PROVIDER with a processor reference'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname='hon' AND indexname='school_pay_charge_attempts_one_live_idx') THEN
+    RAISE EXCEPTION 'A cycle must have at most one charge attempt that is not FAILED'; END IF;
+END $$;
+-- End school autopay charges exact verification.
+
 -- School payment credential vault exact verification (B-TUI-2 0320): two private forced-RLS tables, the guards, the
 -- deferred credential check, private validators, four runtime entry points, and only Square keeping credentials.
 DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
@@ -3331,8 +3384,8 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 ('hon.guard_school_checkout_page()',false,false,'search_path=pg_catalog, hon','63a5a8ae76a8592e09e86b0a47741beb44d41b4536012714d3357dc75dd8efe4'),
 ('hon.require_school_checkout_actor(text)',true,false,'search_path=pg_catalog, hon','0cf880596410ab036049602a0e90267c5690976b5d10036c1a00a240c97b1988'),
 ('hon.school_checkout_page_json(hon.school_checkout_pages)',false,false,'search_path=pg_catalog, hon','39f46e65b834fb8f1137ccfae9ae58d9069a7639e3538af084c420b3c88d68e1'),
-('hon.read_school_checkout_pages(text)',true,true,'search_path=pg_catalog, hon','02f443483ac4bd2750ebf6278e3283f86baf8e58e6715cd9c59134e617731f6d'),
-('hon.save_school_checkout_page(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','2ee3c365baacab116aad18fe0c37eb591db7258d7209c627c1ced7d45d1dcf53')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+('hon.read_school_checkout_pages(text)',true,false,'search_path=pg_catalog, hon','02f443483ac4bd2750ebf6278e3283f86baf8e58e6715cd9c59134e617731f6d'),
+('hon.save_school_checkout_page(text,jsonb,text,uuid,uuid)',true,false,'search_path=pg_catalog, hon','2ee3c365baacab116aad18fe0c37eb591db7258d7209c627c1ced7d45d1dcf53')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
@@ -3582,7 +3635,7 @@ END $$;
 -- Parent class booking exact verification (0329): private helpers and three runtime entry points.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.parent_class_booking_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','4ece4170e73ae487d017f6a394a3757547a18f0fc08b91f6e7956ff6877d4d64'),
+('hon.parent_class_booking_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','743cf1c21f074a7a4dbc413e04aa8c2deb59ea68cbc7845ea37dbc0213e19933'),
 ('hon.parent_class_booking_child_ok(uuid,uuid)',true,false,'search_path=pg_catalog, hon','237a329c4db7c485ffa5521d1a4028ed443de87e157873ac4e2b17fdc11110d7'),
 ('hon.parent_class_booking_session_ok(uuid,hon.class_sessions)',true,false,'search_path=pg_catalog, hon','34c305ae6857963bed97c48089b88563e20dfd2091d60888830d6cfedb7cc183'),
 ('hon.parent_class_booking_seats(uuid)',true,false,'search_path=pg_catalog, hon','d05efcb128c7e55cfef7d12d6db9d25bd8c314bc20305ad2cc38055123f4f3eb'),
@@ -3591,7 +3644,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.parent_class_booking_finish(text,text,uuid,jsonb,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)',true,false,'search_path=pg_catalog, hon','a9ddf831453529fd97154ae53e60eb65f1e023218b332008491e172d3a97e5e0'),
 ('hon.read_parent_class_booking_choices(text)',true,true,'search_path=pg_catalog, hon','edd9ec2e0d2c427c5ab4ea2e44be2d7c7b42fc702ec897b6d96187a7459318d4'),
 ('hon.book_parent_class_session(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','3370b119da07e09107e79c289f816b6e5a89313503f71cdfefefb8e8b8f7a70e'),
-('hon.cancel_parent_class_booking(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','a9d03e032c77500b5dcc82411c750507b689472d6efed7ba86eb38842dec5e2d')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+('hon.cancel_parent_class_booking(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','3ba7638f326952cc3589d28740abc64d8d45faf4f5527f667319e08bc6f88aee')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
@@ -3642,6 +3695,18 @@ DO $$ DECLARE f record; BEGIN
     RAISE EXCEPTION 'Unsafe school number order table posture'; END IF;
 END $$;
 -- End school number orders exact verification.
+-- School number order settle exact verification (T2c 0358): the HQ-owner settle entry point is a trusted definer the
+-- runtime may call; the settle columns are covered by the forced-RLS table posture above.
+DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner
+      WHERE p.oid='hon.settle_school_number_order_from_hq(text,uuid,text,text,integer)'::regprocedure AND p.prosecdef
+      AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND (owner.rolsuper OR owner.rolbypassrls))
+    OR NOT has_function_privilege('hon_runtime','hon.settle_school_number_order_from_hq(text,uuid,text,text,integer)','EXECUTE')
+    OR has_function_privilege('hon_runtime','hon.guard_school_number_order()','EXECUTE')
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='school_number_orders_settled' AND conrelid='hon.school_number_orders'::regclass) THEN
+    RAISE EXCEPTION 'Unsafe school number order settle posture'; END IF;
+END $$;
+-- End school number order settle exact verification.
 -- Creative provider jobs exact verification (C1 0354): four private forced-RLS tables the runtime cannot touch, five
 -- runtime entry points (plus the 0216 record wrapper above), worker functions and private helpers not runnable by it.
 DO $$ DECLARE t text; f text; BEGIN
@@ -3666,3 +3731,366 @@ DO $$ DECLARE t text; f text; BEGIN
   END LOOP;
 END $$;
 -- End creative provider jobs exact verification.
+
+-- School reports locations exact verification (R2 0332): one runtime read and the private per-location check.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.school_reports_location_allowed(uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','09ea5075a1e424962a80a8075be4e3d318a929867bab5ba534effdfad6491710'),
+('hon.read_school_reports_locations(text,jsonb)',true,true,'search_path=pg_catalog, hon','a7e4713c7c9ace670344f20125c0c6ae845feb274dfaf505e0ffc1a7c6d0ad74')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school reports locations function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End school reports locations exact verification.
+
+-- Family messages exact verification (0330): private helpers, private forced-RLS tables and six runtime entry points.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.family_message_body_ok(text)',false,false,'search_path=pg_catalog','911c8020274ce0bad19829ea68cafc456c16dd76f61ef1fbe827e68611e0b146'),
+('hon.guard_family_message_thread()',false,false,'search_path=pg_catalog, hon','f1492f25d9552a3a0c22e7094d719ac3775435655527c010d465a665961f9cbf'),
+('hon.family_message_parent_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','934532bf7f7ae9807bbc7692110f31a3aa0f3359250a578897d95f308e6c6c35'),
+('hon.require_family_messages_actor(text)',true,false,'search_path=pg_catalog, hon','29ee5eb47779b29faf23ddd1598712047d1bc04d905ab7e8bc1b30eae56f686b'),
+('hon.family_message_time(timestamp with time zone)',false,false,'search_path=pg_catalog','e4a86c6f3c7e0d57791518a05be7b1552ebb4b274f34c42dc0e8b86bf6a93d46'),
+('hon.family_message_json(hon.family_messages,uuid)',true,false,'search_path=pg_catalog, hon','baf138c7b630fcb89c0ec813fb95510288fbcf44700df03774940fd2477f0a74'),
+('hon.family_message_list(uuid,uuid)',true,false,'search_path=pg_catalog, hon','c37b4dea088a25f7a72fdffcbacaf890e3080d9d655120dae7d889888135614f'),
+('hon.family_message_unread(hon.family_message_threads)',true,false,'search_path=pg_catalog, hon','6b2760aeceef08a8cf14010c232d91a3af41e181dfc5c48faa438fab7b6cea81'),
+('hon.family_message_read_through(hon.family_message_threads,uuid)',true,false,'search_path=pg_catalog, hon','7c6743a71b1c4f248ff2ef17dbf48622d898689eb7b5027e3512c6bd91ba56c9'),
+('hon.family_message_begin(uuid,text,text)',true,false,'search_path=pg_catalog, hon','ab1a5d9b6f613a0882b3d242846da5cbaa3f5c5487410b76e0969d02494762d6'),
+('hon.family_message_append(hon.family_message_threads,uuid,text,text,text,uuid,uuid)',true,false,'search_path=pg_catalog, hon','3f1ef77db5d298e350ab36c269f6c614450cac712368eb0f9111db2a4591a57b'),
+('hon.read_parent_family_messages(text)',true,true,'search_path=pg_catalog, hon','1def9f2bc2adac08074493044c5212e4def48eaf4989a224878e0f2d202813e0'),
+('hon.send_parent_family_message(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','c55c87326a967de7c244a98197ac0c01c268be3d93e69a6c3d085625054f1f04'),
+('hon.read_family_message_inbox(text)',true,true,'search_path=pg_catalog, hon','bf49605bc28739c2b9fad8e9272d7de8a89726e059efd9a79cdd7442755fadc3'),
+('hon.read_family_message_thread(text,uuid)',true,true,'search_path=pg_catalog, hon','2a3e50dfdfd9e083baec07b7415b69d4d608b42dcd2423b3b0f62795aa594bcb'),
+('hon.mark_family_message_thread_read(text,jsonb,uuid,uuid)',true,true,'search_path=pg_catalog, hon','4a8709f673dad310ca48205c89698a47a3ede41ca75a4a8765919fb9b0599ac6'),
+('hon.reply_family_message(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','15319da45d4f9dfd4c979700a88010b4972d70f90e9594e9afb2887ce3147a7f')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe family message function: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['family_message_threads','family_messages'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe family message table: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End family messages exact verification.
+
+-- School conversations exact verification (0364): private helpers, two private forced-RLS tables, seven staff runtime entry
+-- points; the inbound intake is runnable only by hon_communication_worker (013), never by the runtime.
+DO $$ DECLARE f record; safe boolean; t text; worker_oid oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_communication_worker'); BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.conversation_body_ok(text)',false,false,false,'search_path=pg_catalog','53dfa913f9ff8f68060d53a6b2b66a2c0831568e388ca92e60742f22b590162e'),
+('hon.conversation_tags_ok(text[])',false,false,false,'search_path=pg_catalog','dec73cf1312918d4c380e47fd3ee49e210bf95163c664d1d739e5b35d14071c7'),
+('hon.guard_school_conversation()',false,false,false,'search_path=pg_catalog, hon','ac36a3a2ccb1d1975a38a7465c21619c9ecc177054b07e8f72f300d8f036055b'),
+('hon.conversation_staff_has(uuid,uuid,uuid,text)',true,false,false,'search_path=pg_catalog, hon','7abb6d93e5f4376fc97e013c7a30952353784fb4eac1ea308874063b7d076054'),
+('hon.require_conversation_actor(text,boolean)',true,false,false,'search_path=pg_catalog, hon','edae19e955bee3b56686346f1da36671937638e54b9d5e26ba6475cebbe829d9'),
+('hon.conversation_time(timestamp with time zone)',false,false,false,'search_path=pg_catalog','e4a86c6f3c7e0d57791518a05be7b1552ebb4b274f34c42dc0e8b86bf6a93d46'),
+('hon.conversation_row_json(hon.school_conversations)',true,false,false,'search_path=pg_catalog, hon','c5f308674824deb7c11243a12a618768aea35d2e3306aebbc774461e3032e73a'),
+('hon.conversation_message_json(hon.school_conversation_messages)',true,false,false,'search_path=pg_catalog, hon','a20b62d3e23323bbc459db8f02084618e2e620cd4df3f4cf7cd249c0e79b9881'),
+('hon.conversation_contact_json(hon.school_conversations)',true,false,false,'search_path=pg_catalog, hon','ad40a3bbdd7fa13c368753de22ae909ef2a9af15c689459400adeacf42705429'),
+('hon.conversation_command_begin(uuid,text,text)',true,false,false,'search_path=pg_catalog, hon','ab1a5d9b6f613a0882b3d242846da5cbaa3f5c5487410b76e0969d02494762d6'),
+('hon.conversation_command_finish(uuid,text,hon.school_conversations,text,jsonb,jsonb,text,jsonb,uuid,uuid)',true,false,false,'search_path=pg_catalog, hon','282f93a23aee60b82021287a1e749c262feb4be4b64f62e20dd7b73657cb1060'),
+('hon.conversation_lock(uuid,integer)',true,false,false,'search_path=pg_catalog, hon','5ce2e4cbe2ea3b846812129706723a12869189503758c7f3753238d61cdc9f91'),
+('hon.conversation_input_ok(jsonb,text[],text[])',false,false,false,'search_path=pg_catalog','40ee2f41174c7ac30097f1bf4998f9b74d3665fbd14c0a1de0aa559132d84161'),
+('hon.conversation_uuid_ok(jsonb)',false,false,false,'search_path=pg_catalog','f1a9de559daef6acb8f68bedde192f716654ecc0d8401c3c95da92c4fe26cc9f'),
+('hon.record_inbound_conversation_text(text,text,text,integer,text,timestamp with time zone)',true,false,true,'search_path=pg_catalog, hon','921f318c14478446e461d6bad2471004f2db30ba878f8bdd8358ec41b4e7765b'),
+('hon.read_school_conversations(text,jsonb)',true,true,false,'search_path=pg_catalog, hon','c80d2f9b41e31c7adeb5e7e4c0ae20f474c5475de2bb901197af93a23b73429d'),
+('hon.read_school_conversation(text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','19d0090964fc107f4f20aa7d7ac80bf3b7635c4d8be1d839b25ec6a193875501'),
+('hon.reply_school_conversation(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','b54d6237a05a1cfc800508d54c7ff43d36933a51da533877b8d6b962a25d5c40'),
+('hon.update_school_conversation(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','f197b90014fd5eb9037473da92ca7eae2b651107b0133b05612030e4e3d28117'),
+('hon.mark_school_conversation_read(text,jsonb,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','404969e8ff05628486e02f3115ed22a562a5e605c8b9e021af5067be97f32d44'),
+('hon.link_school_conversation(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','0118b5cc31a599a80cb9e08fa49489089cb5d0ab2b5dec0b2152e6559e730603'),
+('hon.create_school_conversation_lead(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','7f250d1096a83eb0c2da67066403b07ec031f341ae4d9ab490709381a6e93b74')) e(signature,definer,runtime_allowed,worker_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.is_grantable OR a.privilege_type<>'EXECUTE'
+          OR NOT ((a.grantee=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') AND f.runtime_allowed)
+            OR (a.grantee IS NOT DISTINCT FROM worker_oid AND f.worker_allowed))))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school conversation function: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['school_conversations','school_conversation_messages'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe school conversation table: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End school conversations exact verification.
+-- Paper import exact verification (0388)
+DO $$ DECLARE f text; t text;
+  entry text[]:=ARRAY['hon.create_paper_import(text,jsonb,text,uuid,uuid)','hon.add_paper_import_page(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.begin_paper_reading(text,uuid,jsonb,uuid,uuid)','hon.record_paper_reading(text,uuid,jsonb,uuid,uuid)',
+    'hon.save_paper_import_table(text,uuid,jsonb,text,uuid,uuid)','hon.send_paper_import(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.delete_paper_import(text,uuid,jsonb,text,uuid,uuid)','hon.read_paper_imports(text)','hon.read_paper_import(text,uuid)',
+    'hon.read_paper_import_page(text,uuid,integer)'];
+  helpers text[]:=ARRAY['hon.guard_paper_import()','hon.paper_import_columns(text)','hon.paper_import_cell_ok(jsonb)',
+    'hon.paper_import_table_ok(text,jsonb,jsonb)','hon.paper_import_image_clean(text,bytea)','hon.paper_import_summary(hon.paper_import_sets)',
+    'hon.paper_import_detail(hon.paper_import_sets)','hon.paper_import_erase(uuid,text,uuid)','hon.paper_import_purge_school(uuid,uuid)',
+    'hon.purge_expired_paper_imports()','hon.paper_import_begin(text,text,jsonb,text,uuid,uuid)','hon.require_paper_import_actor(text)',
+    'hon.paper_import_finish(text,uuid,text,uuid,text,uuid,uuid,jsonb)','hon.paper_import_lock(uuid,jsonb)','hon.paper_import_csv_field(text)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe paper import entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY helpers LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe paper import helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['paper_import_sets','paper_import_pages','paper_import_requests'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe paper import table: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End paper import exact verification.
+-- Contact photo exact verification (0390)
+DO $$ DECLARE f text; t text;
+  entry text[]:=ARRAY['hon.read_person_photo(text,uuid,uuid)','hon.set_person_photo(text,jsonb,uuid)','hon.remove_person_photo(text,jsonb,uuid)'];
+  helpers text[]:=ARRAY['hon.guard_person_photo()','hon.person_photo_summary(hon.person_photos)','hon.person_photo_begin(text,text,jsonb,uuid)',
+    'hon.person_photo_finish(text,uuid,uuid,uuid,uuid,text,uuid,jsonb,jsonb,jsonb)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe contact photo entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY helpers LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe contact photo helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['person_photos','person_photo_requests'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe contact photo table: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End contact photo exact verification.
+-- School location exact verification (0392)
+DO $$ DECLARE f text; t text;
+  entry text[]:=ARRAY['hon.read_school_location(text)','hon.save_school_location(text,jsonb,text,uuid,uuid)',
+    'hon.register_hon_os_school_with_location(text,text,jsonb,uuid)'];
+  helpers text[]:=ARRAY['hon.guard_biometric_jurisdiction_data()','hon.school_location_region_ok(text,text)','hon.school_location_text_ok(jsonb,integer,boolean)',
+    'hon.school_location_input_ok(jsonb)','hon.guard_school_location()','hon.biometric_locality(text)','hon.biometric_profile_for(text,text,text)',
+    'hon.biometric_notice_json(text)','hon.school_location_json(hon.school_locations)','hon.school_location_view(hon.school_locations)',
+    'hon.require_school_location_actor(text)','hon.school_location_write(uuid,uuid,uuid,jsonb,integer,text,uuid,uuid)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe school location entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY helpers LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe school location helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['school_locations','school_location_versions','biometric_jurisdiction_profiles','biometric_jurisdiction_rules'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe school location table: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End school location exact verification.
+
+-- School checkouts exact verification (B-TUI-2 0402): three private forced-RLS tables, the guards, private validators
+-- and helpers, three runtime entry points and the permission.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['hon.school_checkouts','hon.school_checkout_versions','hon.school_checkout_settings'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=t::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'School checkouts table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.checkout_int_ok(jsonb,bigint,bigint)',false,false,'search_path=pg_catalog','b60376389be8213423f78f85adc8194cb4e078f77ba88646934f78840511e504'),
+('hon.checkout_fields_ok(jsonb)',false,false,'search_path=pg_catalog, hon','06f2d8a77242a42a61ff0972f8d221e50cca8ed93cf34be0815391daef17e769'),
+('hon.checkout_option_ok(jsonb)',false,false,'search_path=pg_catalog, hon','d8d827fafd027d6942bfbdcb329d2acc8678388aecdbb1a85e685023d7838439'),
+('hon.school_checkout_content_ok(jsonb)',false,false,'search_path=pg_catalog, hon','7242765ce3e618d1aa2e9a561be2c2316cd276adaa43c63e2be8d40f9b253957'),
+('hon.school_checkout_groups_ok(jsonb)',false,false,'search_path=pg_catalog, hon','81ca19d07350af1c8c3ca4d209c70ad6a0e2ff945298e7a49f5f549a42955c66'),
+('hon.school_checkout_default_groups()',false,false,'search_path=pg_catalog','9c59014bad6b190b53fcdc835255f7d8dfc1b6f9871fa8b54291646b9a03cdf4'),
+('hon.guard_school_checkout()',false,false,'search_path=pg_catalog, hon','fefe8437e69c1b12024051864d826cf87c7c3a6f6647dc90b89e8343c7ea2c0e'),
+('hon.school_checkout_json(hon.school_checkouts)',false,false,'search_path=pg_catalog, hon','b9278fd23ff56b533fd5af59d9323ca30a145cff6d0cad42380e0bdf33d3e995'),
+('hon.school_checkout_settings_json(uuid,uuid)',false,false,'search_path=pg_catalog, hon','a5ff6ebae9fd5fe65797e68bb32dcad5ce646195b1e4c68515e89ba40836a95f'),
+('hon.school_checkout_begin(text,text,jsonb,text)',false,false,'search_path=pg_catalog, hon','ada2403285fb29a1cd8eeaf628d0e283d86a861e90dca6bb8864f48d675d5ab0'),
+('hon.school_checkout_finish(text,uuid,text,jsonb)',false,false,'search_path=pg_catalog, hon','9fe0f76d0c160ea4e92c9a1b8a971df8de6d1cd34ae4ef0996c81237e0ff4c21'),
+('hon.read_school_checkouts(text)',true,true,'search_path=pg_catalog, hon','9d4269b690fbe64b2de0b5e6c6bc7cc692001b47a76ac1b4a4206357aaab4771'),
+('hon.save_school_checkout(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','038935b36bf304c4ad4942468d0c420ecdaf04e288e93e3ce0ae8e6efe69a1da'),
+('hon.save_school_checkout_settings(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','bfb98d55afd4801a4b7b807360c5991bee2f3ed0fa0bd23a9e98dab4bf0204a2')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school checkouts function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('school_checkouts','school_checkout_guard','hon.guard_school_checkout()'),
+    ('school_checkouts','school_checkouts_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('school_checkout_settings','school_checkout_settings_guard','hon.guard_school_checkout()'),
+    ('school_checkout_settings','school_checkout_settings_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('school_checkout_versions','school_checkout_versions_immutable','hon.guard_membership_activation_evidence()'),
+    ('school_checkout_versions','school_checkout_versions_no_truncate','hon.guard_membership_activation_evidence()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing school checkouts guard: %',expected.name; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='school_checkout.manage' AND is_sensitive AND is_staff_assignable) THEN
+    RAISE EXCEPTION 'school_checkout.manage must exist as a sensitive staff-assignable permission'; END IF;
+END $$;
+-- End school checkouts exact verification.
+
+-- Shopify Connected exact verification (0405)
+DO $$ DECLARE f text; t text;
+  entry text[]:=ARRAY['hon.read_shopify(text,uuid)','hon.read_shopify_catalog(text,uuid)','hon.read_shopify_orders(text,uuid)',
+    'hon.start_shopify_connect(text,jsonb,text)','hon.claim_shopify_connect(text,jsonb)','hon.record_shopify_connection(text,jsonb)',
+    'hon.begin_shopify_sync(text,jsonb)','hon.rotate_shopify_credential(text,jsonb)','hon.record_shopify_sync_page(text,jsonb)',
+    'hon.finish_shopify_sync(text,jsonb)','hon.disconnect_shopify(text,jsonb)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe Shopify entry point: %',f; END IF;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='hon' AND (p.proname LIKE 'shopify\_%' OR p.proname='guard_shopify') LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe Shopify helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['shopify_connections','shopify_credentials','shopify_connect_intents','shopify_syncs','shopify_products',
+    'shopify_variants','shopify_orders','shopify_order_lines'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe Shopify table: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End Shopify Connected exact verification.
+-- Attendance card exact verification (0394)
+DO $$ DECLARE f text; t text;
+  entry text[]:=ARRAY['hon.read_attendance_cards(text)','hon.configure_attendance_cards(text,jsonb,text,uuid,uuid)','hon.issue_attendance_cards(text,jsonb,text,uuid,uuid)','hon.revoke_attendance_card(text,jsonb,text,uuid,uuid)','hon.check_in_with_attendance_card(text,uuid,jsonb,text,uuid,uuid)','hon.set_student_photo_consent(text,jsonb,text,uuid,uuid)'];
+  helpers text[]:=ARRAY['hon.guard_attendance_card()','hon.attendance_cards_actor(text)','hon.attendance_card_settings_json(uuid,uuid)','hon.attendance_card_json(hon.attendance_cards)',
+    'hon.attendance_card_begin(text,text,jsonb,text,uuid,uuid)','hon.attendance_card_finish(text,uuid,text,text,uuid,jsonb,text,uuid,uuid,jsonb)',
+    'hon.attendance_check_in_student(text,uuid,uuid,text,uuid,text,text,uuid,uuid)','hon.attendance_photo_consent_rule(uuid,uuid)',
+    'hon.attendance_photo_consent_state(boolean,hon.student_photo_consents)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe attendance card entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY helpers LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe attendance card helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['attendance_card_settings','attendance_cards','attendance_check_ins','attendance_card_requests','student_photo_consent_rules','student_photo_consents'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe attendance card table: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End attendance card exact verification.
+-- School staff pick list exact verification (0404)
+DO $$ DECLARE f text:='hon.list_school_staff_for_picker(text,text)';
+BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+        AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+    RAISE EXCEPTION 'Unsafe staff pick list entry point: %',f; END IF;
+  IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM '837904469250ef98c81a64773a9e350f'
+    OR (SELECT proconfig FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon'] THEN
+    RAISE EXCEPTION 'Staff pick list body drift: %',f; END IF;
+END $$;
+-- End school staff pick list exact verification.
+-- Staff qualification and role lists exact verification (0406)
+DO $$ DECLARE f text; expected jsonb:='{"hon.list_instructor_qualifications(text,text,uuid)":"2b09093c624579f8a92b9da60b8689e7","hon.list_staff_roles(text)":"22f6493edb52503e3b8dd96a94ef76d7"}';
+BEGIN
+  FOR f IN SELECT jsonb_object_keys(expected) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe staff list entry point: %',f; END IF;
+    IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM expected->>f
+      OR (SELECT proconfig FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon'] THEN
+      RAISE EXCEPTION 'Staff list body drift: %',f; END IF;
+  END LOOP;
+END $$;
+-- End staff qualification and role lists exact verification.
+-- Retention review member list exact verification (0407)
+DO $$ DECLARE f text := 'hon.list_retention_review_members(text)';
+BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+        AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+    RAISE EXCEPTION 'Unsafe membership list entry point: %',f; END IF;
+  IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM '53d3658e70cc67c51eaeb9a76c8d0d0b'
+    OR (SELECT proconfig FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon'] THEN
+    RAISE EXCEPTION 'Membership list body drift: %',f; END IF;
+END $$;
+-- End retention review member list exact verification.
+-- Staff assignable permissions list exact verification (0412)
+DO $$ DECLARE f constant text:='hon.list_assignable_staff_permissions(text)'; expected constant text:='765e1c4afc6138d1f2394033308a77c8';
+BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+        AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+    RAISE EXCEPTION 'Unsafe staff permissions list entry point: %',f; END IF;
+  IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM expected
+    OR (SELECT proconfig FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon'] THEN
+    RAISE EXCEPTION 'Staff permissions list body drift: %',f; END IF;
+END $$;
+-- End staff assignable permissions list exact verification.

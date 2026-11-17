@@ -33,7 +33,7 @@ interface ReplySend { messageId: string; leaseToken: string; platform: 'FACEBOOK
 interface CommentSend { actionId: string; leaseToken: string; platform: 'FACEBOOK' | 'INSTAGRAM'; providerAccountId: string; providerCommentId: string; hidden: boolean }
 
 /**
- * School social inbox (0349). Every database call is one protected definer function that re-proves the direct human
+ * School social inbox (0427). Every database call is one protected definer function that re-proves the direct human
  * at the session school. A reply or comment action is recorded first (SENDING under a 60-second lease), Zernio is
  * called once between transactions with the record id as idempotency key, and the answer is recorded under that
  * lease. A lost answer is UNKNOWN and never resent; a person settles it.

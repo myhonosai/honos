@@ -246,6 +246,8 @@ const SAAS_BILLING_CALLS = {
   // 0248: the HQ owner sets or disables a school's Twilio sending number; nothing is bought or sent.
   // T2 (0352): HQ reads every school's number orders; a human HQ owner approves or rejects one. Nothing is bought here.
   readHqSchoolNumberOrders: { sql: 'SELECT hon.read_hq_school_number_orders($1,$2) AS data', arity: 2, readOnly: true },
+  // T2c (0358): the HQ owner records what the school's Twilio subaccount shows for an unsettled order. Calls no provider.
+  settleSchoolNumberOrder: { sql: 'SELECT hon.settle_school_number_order_from_hq($1,$2::uuid,$3,$4,$5::integer) AS data', arity: 5, readOnly: false },
   decideSchoolNumberOrder: { sql: 'SELECT hon.decide_school_number_order_from_hq($1,$2::uuid,$3,$4,$5::integer) AS data', arity: 5, readOnly: false },
   setSchoolTextSender: { sql: 'SELECT hon.set_school_text_sender_from_hq($1,$2::uuid,$3,$4,$5,$6::boolean,$7::integer) AS data', arity: 7, readOnly: false },
   // 0249: the HQ owner sets the school's forwarding phone and the missed-call text-back switch.
@@ -331,6 +333,8 @@ const LANGUAGE_CALLS = {
 export type LanguageOperation = keyof typeof LANGUAGE_CALLS;
 
 export type SchoolOwnershipOperation = 'hqRead'|'setPrimary'|'ownerRead';
+
+export type ShopifyOperation = 'read'|'catalog'|'orders'|'start'|'claim'|'record'|'beginSync'|'rotate'|'page'|'finishSync'|'disconnect';
 
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
@@ -605,6 +609,11 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     await this.assertRuntimePosture();
     return (await this.getPool().query<{ data: import('@hon/contracts').PublishedLeadForm | null }>('SELECT hon.read_published_form($1) data', [publicId])).rows[0]!.data;
   }
+  /** WB2 (0361): the published copy of one school website, or null. One fixed call, no tenant settings. */
+  async readPublishedSchoolWebsite(slug: string): Promise<unknown> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<{ data: unknown }>('SELECT hon.read_published_school_website($1) data', [slug])).rows[0]!.data;
+  }
   async submitPublishedLeadForm(publicId: string, input: object, key: string): Promise<string> {
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
@@ -827,6 +836,10 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return readOnly
       ? this.withTenantReadOnlyTransaction(context, scopedWork)
       : this.withTenantTransaction(context, scopedWork);
+  }
+  /** 0407: current-school memberships by participant name for the retention page's member list. */
+  async listRetentionReviewMemberships(context: RetentionReviewSignalsContext): Promise<unknown> {
+    return this.retentionAttentionTransaction(context, true, async client => (await client.query("SELECT hon.list_retention_review_members($1) AS data", [context.externalSubject])).rows[0]?.data);
   }
   async readRetentionAttentionAlerts(context: RetentionReviewSignalsContext, membershipId: string): Promise<unknown> {
     return this.retentionAttentionTransaction(context, true, async client => (await client.query('SELECT hon.read_retention_attention_alerts($1,$2::uuid) AS data', [context.externalSubject, membershipId])).rows[0]?.data);
@@ -1365,7 +1378,8 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
 
   async callHonOsSignup(operation: 'register'|'read', params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
-      register: {sql: 'SELECT hon.register_hon_os_school($1,$2,$3::jsonb,$4::uuid) data',arity:4,readOnly:false},
+      // 0392: sign-up records the school address in the same transaction (wraps the unchanged 0241 function).
+      register: {sql: 'SELECT hon.register_hon_os_school_with_location($1,$2,$3::jsonb,$4::uuid) data',arity:4,readOnly:false},
       read: {sql: 'SELECT hon.read_hon_os_registration($1) data',arity:1,readOnly:true},
     } as const;
     const call=calls[operation];
@@ -1418,6 +1432,38 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('PERSON_UNAVAILABLE');
     return this.callFixedSubjectFunction(call,params,'PERSON_UNAVAILABLE');
+  }
+
+  /** 0390 contact photos: three fixed definer functions; the subject comes only from the signed HON session. */
+  async callSchoolPersonPhoto(operation: 'read'|'set'|'remove', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      read: {sql: 'SELECT hon.read_person_photo($1,$2::uuid,$3::uuid) data',arity:3,readOnly:true},
+      set: {sql: 'SELECT hon.set_person_photo($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      remove: {sql: 'SELECT hon.remove_person_photo($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('PERSON_PHOTO_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call,params,'PERSON_PHOTO_UNAVAILABLE');
+  }
+
+  /** 0405 Shopify: eleven fixed definer functions; the subject comes only from the signed HON session. */
+  async callShopify(operation: ShopifyOperation, params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      read: {sql: 'SELECT hon.read_shopify($1,$2::uuid) data',arity:2,readOnly:true},
+      catalog: {sql: 'SELECT hon.read_shopify_catalog($1,$2::uuid) data',arity:2,readOnly:true},
+      orders: {sql: 'SELECT hon.read_shopify_orders($1,$2::uuid) data',arity:2,readOnly:true},
+      start: {sql: 'SELECT hon.start_shopify_connect($1,$2::jsonb,$3) data',arity:3,readOnly:false},
+      claim: {sql: 'SELECT hon.claim_shopify_connect($1,$2::jsonb) data',arity:2,readOnly:false},
+      record: {sql: 'SELECT hon.record_shopify_connection($1,$2::jsonb) data',arity:2,readOnly:false},
+      beginSync: {sql: 'SELECT hon.begin_shopify_sync($1,$2::jsonb) data',arity:2,readOnly:false},
+      rotate: {sql: 'SELECT hon.rotate_shopify_credential($1,$2::jsonb) data',arity:2,readOnly:false},
+      page: {sql: 'SELECT hon.record_shopify_sync_page($1,$2::jsonb) data',arity:2,readOnly:false},
+      finishSync: {sql: 'SELECT hon.finish_shopify_sync($1,$2::jsonb) data',arity:2,readOnly:false},
+      disconnect: {sql: 'SELECT hon.disconnect_shopify($1,$2::jsonb) data',arity:2,readOnly:false},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('SHOPIFY_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call,params,'SHOPIFY_UNAVAILABLE');
   }
 
   private async callFixedSubjectFunction(call: { sql: string; readOnly: boolean }, params: readonly (string | null)[], unavailable: string): Promise<unknown> {

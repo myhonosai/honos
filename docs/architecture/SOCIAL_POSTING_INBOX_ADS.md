@@ -54,7 +54,7 @@ Each school connects its own Facebook Page and Instagram professional account th
 | S1 | School social connections: Zernio profile per school, connect hand-off with single-use state, account list, per-account capability switches, disconnect | 0347 |
 | S1-web | Marketing → Social accounts page (connect, switches, disconnect) and the return page; 3 languages | none |
 | S2 | Posts: drafts (staff and agent drafts), human approval, publish now / schedule, cancel, worker publish with lease, `post.*` webhook receipts, calendar list | 0348 |
-| S3 | Inbox: `message.received` / `comment.received` webhook into school conversations, staff replies (24-hour Messenger window and Instagram rules checked at send), comment reply/hide, link to CRM person/lead, unread/assignment | 0349 |
+| S3 | Inbox: `message.received` / `comment.received` webhook into school conversations, staff replies (24-hour Messenger window and Instagram rules checked at send), comment reply/hide, link to CRM person/lead, unread/assignment | 0427 |
 | S4 | Ads: school monthly ad spend cap (set by owner), boost post / simple campaign drafts, human approval inside the cap, created PAUSED, separate human activate/pause, daily insights sync | 0350 |
 
 Each PR gets its own section here before it is built, its own DB proof, API tests, and an independent review.
@@ -162,7 +162,7 @@ checks as S1, re-checked after the writes.
    recorded as a definite refusal (FAILED); a later piece may return it to PENDING with a later due time instead.
 7. **Read** `GET …/marketing/social/posts?from&to`: the calendar list with targets and statuses, at most 200.
 
-## 4B. S3 design (0349): inbox (Messenger, Instagram DMs and comments)
+## 4B. S3 design (0427): inbox (Messenger, Instagram DMs and comments)
 
 ### 4B.1 Scope
 

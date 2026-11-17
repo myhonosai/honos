@@ -50,6 +50,9 @@ export interface CommunicationWorkerStore {
   recordReceipt(receipt: VerifiedProviderReceipt): Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNMATCHED'; deliveryStatus: string | null }>;
   recordInboundKeyword?(keyword: { to: string; from: string; keyword: 'STOP' | 'START' | 'HELP'; providerMessageId: string; receivedAt: string }):
     Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNROUTED'; schoolName: string | null; consentsChanged: number }>;
+  /** 0364: a non-keyword text to a school number becomes a message in that school's conversations inbox. */
+  recordInboundConversationText?(text: { to: string; from: string; body: string; mediaCount: number; providerMessageId: string; receivedAt: string }):
+    Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNROUTED' | 'RATE_LIMITED' | 'KEYWORD' | 'EMPTY'; conversationId: string | null }>;
   readMissedCallRoute?(to: string): Promise<{ routed: boolean; forwardPhoneE164: string | null }>;
   recordMissedCall?(call: { to: string; from: string; callSid: string; dialStatus: string; receivedAt: string }):
     Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNROUTED'; textBackStatus: string | null }>;
@@ -62,7 +65,7 @@ export interface CommunicationWorkerStore {
   recordSocialPostResult?(targetId: string, leaseToken: string, outcome: 'PUBLISHED' | 'FAILED' | 'UNKNOWN', providerPostId: string | null):
     Promise<{ status: string; accepted: boolean }>;
   recordSocialPostEvent?(event: ZernioSocialEventRecord): Promise<{ outcome: 'APPLIED' | 'IGNORED' | 'UNMATCHED' | 'REPLAYED' }>;
-  /** 0349 school inbox: record one signed inbound DM or comment. */
+  /** 0427 school inbox: record one signed inbound DM or comment. */
   recordSocialInboxEvent?(event: ZernioInboxEventRecord): Promise<{ outcome: SocialInboxEventOutcome }>;
 }
 export type SocialInboxEventOutcome = 'APPLIED' | 'IGNORED' | 'UNMATCHED' | 'DUPLICATE' | 'REPLAYED';
@@ -185,6 +188,14 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
   }
 
   /** 0249: where to forward a call to a school number. */
+  async recordInboundConversationText(text: { to: string; from: string; body: string; mediaCount: number; providerMessageId: string; receivedAt: string }) {
+    const row = (await this.query<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNROUTED' | 'RATE_LIMITED' | 'KEYWORD' | 'EMPTY'; conversation_id: string | null }>(
+      'SELECT * FROM hon.record_inbound_conversation_text($1, $2, $3, $4, $5, $6)',
+      [text.to, text.from, text.body, text.mediaCount, text.providerMessageId, text.receivedAt]))[0];
+    if (!row) throw new Error('COMMUNICATION_INBOUND_CONVERSATION_NOT_RECORDED');
+    return { outcome: row.outcome, conversationId: row.conversation_id };
+  }
+
   async readMissedCallRoute(to: string) {
     const row = (await this.query<{ routed: boolean; forward_phone_e164: string | null }>('SELECT * FROM hon.read_missed_call_route($1)', [to]))[0];
     return { routed: Boolean(row?.routed), forwardPhoneE164: row?.forward_phone_e164 ?? null };

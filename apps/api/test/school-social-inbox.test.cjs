@@ -8,7 +8,7 @@ const { CommunicationWebhookController } = require('../dist/communication/delive
 const { SendGridEventWebhookVerifier } = require('../dist/communication/delivery/sendgrid-email-provider.js');
 const { TwilioWebhookVerifier } = require('../dist/communication/delivery/twilio-text-provider.js');
 
-// Mocked boundary tests for the 0349 inbox API, Zernio inbox calls and inbound events. Authority, leases, the reply
+// Mocked boundary tests for the 0427 inbox API, Zernio inbox calls and inbound events. Authority, leases, the reply
 // window and evidence are proven against PostgreSQL by test-school-social-inbox.mjs. Nothing reaches Zernio: the HTTP
 // adapter gets a stub fetch and the service gets the deterministic fake or a stub.
 const KEY = 'sk_' + 'c'.repeat(64);

@@ -111,7 +111,7 @@ BEGIN
 END;
 $$;
 
--- 0349 school social inbox: signed inbound Zernio messages and comments, when 0349 is applied.
+-- 0427 school social inbox: signed inbound Zernio messages and comments, when 0427 is applied.
 DO $$
 BEGIN
   IF to_regprocedure('hon.record_school_social_inbox_event(text,text,text,text,text,text,text,text,text,timestamptz)') IS NOT NULL THEN
@@ -126,6 +126,15 @@ BEGIN
   IF to_regprocedure('hon.claim_creative_provider_jobs(integer,integer)') IS NOT NULL THEN
     GRANT EXECUTE ON FUNCTION hon.claim_creative_provider_jobs(integer, integer), hon.record_creative_provider_job_poll(uuid, uuid),
       hon.record_creative_provider_job_result(uuid, uuid, jsonb) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
+-- 0364 school conversations: record an inbound non-keyword text into the school's conversation inbox (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.record_inbound_conversation_text(text,text,text,integer,text,timestamptz)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.record_inbound_conversation_text(text, text, text, integer, text, timestamptz) TO hon_communication_worker;
   END IF;
 END;
 $$;

@@ -1,6 +1,6 @@
 BEGIN;
 
--- S3 (0349, coordinator-allocated 2026-11-14): one school inbox for Messenger conversations, Instagram DMs and comments on
+-- S3 (0427; allocated as 0349 on 2026-11-14, renumbered 2026-11-17): one school inbox for Messenger conversations, Instagram DMs and comments on
 -- the school's own posts, through Zernio (docs/architecture/SOCIAL_POSTING_INBOX_ADS.md §4B). Builds on 0347/0348.
 -- Nothing is received or sent unless the API server has HON_ZERNIO_INBOX_APPROVED=true and a Zernio key; tests use the
 -- deterministic fake.
@@ -15,7 +15,7 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'Trusted migration owner required'; END IF;
   IF to_regclass('hon.school_social_posts') IS NULL OR to_regprocedure('hon.school_social_command_begin(uuid,uuid,uuid,text,text,text)') IS NULL
-    OR to_regclass('hon.crm_leads') IS NULL THEN RAISE EXCEPTION '0349 requires the 0347/0348 school social records and the CRM'; END IF;
+    OR to_regclass('hon.crm_leads') IS NULL THEN RAISE EXCEPTION '0427 requires the 0347/0348 school social records and the CRM'; END IF;
 END $$;
 
 INSERT INTO hon.permissions(code,description,is_sensitive,is_staff_assignable) VALUES
@@ -145,7 +145,7 @@ DO $$ DECLARE t text; BEGIN
   END LOOP;
 END $$;
 
--- 0349 adds marketing.social.inbox to the permissions the 0347 actor check accepts (otherwise unchanged).
+-- 0427 adds marketing.social.inbox to the permissions the 0347 actor check accepts (otherwise unchanged).
 CREATE OR REPLACE FUNCTION hon.require_school_social_actor(p_subject text,p_permission text) RETURNS uuid
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); actor uuid;

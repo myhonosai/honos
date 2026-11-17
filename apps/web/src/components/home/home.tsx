@@ -13,6 +13,8 @@ import { WorkAccessError, loadHumanWork } from '../work-items-http';
 import { HOME_LOADING, type HomeSources, type Panel } from './model';
 import { SchoolHomeView } from './view';
 import { PlanPromotionBanner } from '../school-plan-promotions/banner';
+import { SetupCard } from '../school-onboarding/setup-card';
+import { TourInvite } from '../school-shell/tour';
 
 type Scope = Readonly<{ organizationId: string; schoolId: string }>;
 type Loader<K extends keyof HomeSources> = (scope: Scope, signal: AbortSignal) => Promise<HomeSources[K] extends Panel<infer T> ? T : never>;
@@ -73,6 +75,8 @@ export function SchoolHome({ api = HOME_API }: { api?: HomeApi }): React.ReactEl
 
   // Keyed by the shell phase: a concealed node is replaced, never un-hidden in place.
   return <div key={shell.phase} data-shell-private="" data-hon-native="">
+    {shell.phase === 'READY' && <SetupCard scope={selection} language={preferences.language}/>}
+    {shell.phase === 'READY' && <TourInvite language={preferences.language}/>}
     {shell.phase === 'READY' && <PlanPromotionBanner schoolId={selection?.schoolId ?? null} language={preferences.language} formattingLocale={formattingLocale}/>}
     <SchoolHomeView language={preferences.language} mode={shell.mode} artStyle={shell.artStyle} onArtStyle={shell.onArtStyle} schoolName={shell.schoolName} selection={selection} sources={sources} now={now}
       waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'} />

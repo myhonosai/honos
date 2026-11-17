@@ -108,13 +108,13 @@ it('a lost connect answer says to start again, not Try again', () => {
   expect(html).toContain('Start again from Social accounts');
 });
 
-it('has every phrase in Korean and Spanish and is listed under Marketing', () => {
+it('has every phrase in Korean and Spanish and is listed under Communication', () => {
   for (const language of ['ko', 'es'] as const) for (const k of Object.keys(SOCIAL_LANGUAGES.en)) {
     const v = SOCIAL_LANGUAGES[language][k as keyof typeof SOCIAL_LANGUAGES.en];
     if (SOCIAL_LANGUAGES.en[k as keyof typeof SOCIAL_LANGUAGES.en] !== '') expect(v, `${language}:${k}`).not.toBe('');
   }
   expect(socialText('ko', 'returnDone', { count: '2' })).toContain('2');
-  const marketing = SCHOOL_SHELL_NAV.find(g => g.key === 'crm');
+  const marketing = SCHOOL_SHELL_NAV.find(g => g.key === 'social');
   expect(marketing?.routes.some(r => r.href === '/staff/marketing/social')).toBe(true);
   expect(schoolShellActiveRoute('/staff/marketing/social/return')?.href).toBe('/staff/marketing/social');
 });

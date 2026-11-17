@@ -1,4 +1,4 @@
-/** School social inbox (0349): real signed HON sessions -> Nest/guards -> fixed runtime SQL, and inbound Zernio events as
+/** School social inbox (0427): real signed HON sessions -> Nest/guards -> fixed runtime SQL, and inbound Zernio events as
  *  the 0243 worker role -> marked disposable PostgreSQL (the communication delivery fixture). Zernio is the deterministic
  *  in-process fake adapter only; nothing is sent anywhere. Schools are SYNTHETIC sign-ups made through the 0241 runtime
  *  entry point; the owner connection stands in for paid access and seeds connected accounts (0347 is proven separately).
@@ -292,5 +292,5 @@ try{
  await assert.rejects(q("UPDATE hon.school_social_inbox_receipts SET outcome='APPLIED'"),/SOCIAL_RECORD_IMMUTABLE/);
  await assert.rejects(q('TRUNCATE hon.school_social_inbox_receipts'),/SOCIAL_RECORD_IMMUTABLE/);
  pass('audit and outbox carry identifiers only (no message text, names or provider ids); messages, conversations, comment actions and receipts cannot be rewritten, moved, deleted or truncated');
- console.log('PASS: school social inbox (0349), '+groups+' groups');
+ console.log('PASS: school social inbox (0427), '+groups+' groups');
 }finally{await q("UPDATE hon.hon_os_signup_program SET status='CLOSED',recorded_at=clock_timestamp() WHERE program_id=1").catch(()=>{});await app?.close();await store.onModuleDestroy();await Promise.allSettled([admin.end(),restricted.end(),worker.end()]);}

@@ -1,64 +1,96 @@
 'use client';
 
-import React, { useRef, useState, type FormEvent } from 'react';
+import React, { useEffect, useRef, useState, type FormEvent } from 'react';
 import styles from './staff-role-admin.module.css';
-import { ManualSchoolFields, useShellSchoolInto } from './school-shell/page-school';
+import { ManualSchoolFields, useShellSchool, useShellSchoolInto } from './school-shell/page-school';
+import { IdFields, StaffPicker } from './school-pickers/pickers';
 
-type Mode = 'create' | 'update' | 'grant' | 'revoke' | 'read-role' | 'read-grant';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export type RoleRow = Readonly<{ id: string; code: string; name: string; version: number; permissionCodes: readonly string[] }>;
+export type GrantRow = Readonly<{ id: string; roleId: string; roleName: string; principalId: string; displayName: string; version: number; effectiveFrom: string; effectiveUntil: string | null }>;
+export type RoleLists = Readonly<{ roles: readonly RoleRow[]; grants: readonly GrantRow[] }>;
+export const ROLE_LIST_LIMIT = 200;
+function unsafe(): never { throw new Error('The role list could not be verified. Nothing is assumed.'); }
+const closed = (v: unknown, keys: string[]): Record<string, unknown> => { if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).sort().join('|') !== [...keys].sort().join('|')) unsafe(); return v as Record<string, unknown>; };
+const id = (v: unknown) => typeof v === 'string' && UUID.test(v), text = (v: unknown, max: number) => typeof v === 'string' && v.length >= 1 && v.length <= max;
+const version = (v: unknown) => Number.isSafeInteger(v) && (v as number) >= 1 && (v as number) <= 999999999, instant = (v: unknown) => typeof v === 'string' && v.length <= 40 && Number.isFinite(Date.parse(v));
+function bounded<T extends { id: string }>(v: unknown, row: (x: unknown) => T): T[] { if (!Array.isArray(v) || v.length > ROLE_LIST_LIMIT) unsafe(); const rows = v.map(row); if (new Set(rows.map(r => r.id)).size !== rows.length) unsafe(); return rows; }
+/** 0406 response check: custom roles and current grants, closed shapes, bounded and unique. */
+export function verifyRoleLists(value: unknown): RoleLists {
+  const x = closed(value, ['roles', 'grants']);
+  return {
+    roles: bounded(x.roles, (item) => { const r = closed(item, ['id', 'code', 'name', 'version', 'permissionCodes']); if (!id(r.id) || typeof r.code !== 'string' || !/^[A-Z][A-Z0-9_]{0,63}$/.test(r.code) || /^(OWNER|HON_|HQ|PLATFORM|SYSTEM)/.test(r.code) || !text(r.name, 100) || !version(r.version) || !Array.isArray(r.permissionCodes) || r.permissionCodes.length > 100 || r.permissionCodes.some(c => !text(c, 100))) unsafe(); return r as unknown as RoleRow; }),
+    grants: bounded(x.grants, (item) => { const g = closed(item, ['id', 'roleId', 'roleName', 'principalId', 'displayName', 'version', 'effectiveFrom', 'effectiveUntil']); if (!id(g.id) || !id(g.roleId) || !text(g.roleName, 100) || !id(g.principalId) || !text(g.displayName, 120) || !version(g.version) || !instant(g.effectiveFrom) || !(g.effectiveUntil === null || instant(g.effectiveUntil))) unsafe(); return g as unknown as GrantRow; }),
+  };
+}
+/** A grant in words: who, which role, and until when. Never record IDs. */
+export const grantLabel = (g: GrantRow): string => `${g.displayName} · ${g.roleName}${g.effectiveUntil ? ` · until ${g.effectiveUntil.slice(0, 10)}` : ''}`;
+export const roleLabel = (r: RoleRow): string => `${r.name} · ${r.permissionCodes.length} permission${r.permissionCodes.length === 1 ? '' : 's'}`;
+
+type Command = { url: string; body: Record<string, unknown>; done: string };
 export function StaffRoleAdmin(): React.ReactElement {
-  const [mode, setMode] = useState<Mode>('create');
   const [org, setOrg] = useState(''); const [school, setSchool] = useState('');
-  useShellSchoolInto(school => { setOrg(school.organizationId); setSchool(school.schoolId); });
-  const [id, setId] = useState(''); const [code, setCode] = useState('CUSTOM_'); const [name, setName] = useState('');
-  const [permissions, setPermissions] = useState('school.view'); const [version, setVersion] = useState('1');
-  const [target, setTarget] = useState(''); const [subject, setSubject] = useState(''); const [expiry, setExpiry] = useState('');
-  const [busy, setBusy] = useState(false); const [result, setResult] = useState(''); const [error, setError] = useState('');
+  useShellSchoolInto(s => { setOrg(s.organizationId); setSchool(s.schoolId); });
+  const shell = useShellSchool(), pickScope = shell && shell.organizationId === org && shell.schoolId === school ? shell : null;
+  const [lists, setLists] = useState<RoleLists | null>(null), [selected, setSelected] = useState<RoleRow | null>(null);
+  const [code, setCode] = useState('CUSTOM_'); const [name, setName] = useState(''); const [permissions, setPermissions] = useState('school.view');
+  const [grantRole, setGrantRole] = useState(''); const [target, setTarget] = useState(''); const [subject, setSubject] = useState(''); const [expiry, setExpiry] = useState('');
+  const [knownId, setKnownId] = useState(''); const [busy, setBusy] = useState(false); const [notice, setNotice] = useState(''); const [error, setError] = useState('');
   // A retry of an uncertain identical request reuses its key; a changed command
   // receives a fresh key. Never pretend network failure means nothing committed.
   const last = useRef<{ fingerprint: string; key: string } | null>(null);
-  const read = mode.startsWith('read-'); const role = mode === 'create' || mode === 'update';
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setError(''); setResult('');
-    if (!UUID.test(org) || !UUID.test(school) || (mode !== 'create' && !UUID.test(id)) || (mode === 'grant' && !UUID.test(target))) { setError('Enter valid, already-known organization, school and record UUIDs.'); return; }
-    let body: Record<string, unknown> | undefined;
-    const permissionCodes = permissions.split(/[,\n]/).map(p => p.trim()).filter(Boolean);
-    if (role && (permissionCodes.length < 1 || new Set(permissionCodes).size !== permissionCodes.length)) { setError('Provide unique allowed permission codes.'); return; }
-    if (mode === 'create') body = { code, name, permissionCodes };
-    if (mode === 'update') body = { name, permissionCodes, expectedVersion: Number(version) };
-    if (mode === 'grant') body = { roleId: id, targetPrincipalId: target, targetExternalSubject: subject, ...(expiry ? { effectiveUntil: expiry } : {}) };
-    if (mode === 'revoke') body = { expectedVersion: Number(version) };
-    const suffix = mode === 'create' ? '/custom' : mode === 'update' ? `/custom/${id}/update` : mode === 'grant' ? '/grants' : mode === 'revoke' ? `/grants/${id}/revoke` : mode === 'read-role' ? `/custom/${id}` : `/grants/${id}`;
-    const url = `/api/v1/organizations/${org}/schools/${school}/staff-roles${suffix}`;
-    const fingerprint = JSON.stringify({ url, body });
-    if (last.current?.fingerprint !== fingerprint) last.current = { fingerprint, key: crypto.randomUUID() };
-    setBusy(true);
-    try {
-      const response = await fetch(url, { method: read ? 'GET' : 'POST', credentials: 'same-origin', cache: 'no-store', headers: read ? {} : { 'Content-Type': 'application/json', 'Idempotency-Key': last.current!.key, 'X-HON-Human-Command': 'staff-role-admin' }, ...(body ? { body: JSON.stringify(body) } : {}) });
-      const payload = await response.json() as { data?: unknown; meta?: { replayed?: boolean }; detail?: string; message?: string };
-      if (!response.ok) { if (response.status === 401) throw new Error('Sign in with a verified human session.'); throw new Error(payload.detail ?? (typeof payload.message === 'string' ? payload.message : 'This command is unavailable or not authorized for this school.')); }
-      if (!payload.data) throw new Error('No verified result returned. Refresh the record before retrying.');
-      setResult(`${payload.meta?.replayed ? 'Existing result (no repeated mutation)' : read ? 'Scoped record' : 'Committed with audit and inert outbox evidence'}\n${JSON.stringify(payload.data, null, 2)}`);
-      setSubject('');
-    } catch (e) { setError(e instanceof Error ? e.message : 'Result unavailable. An identical retry reuses its command key.'); }
-    finally { setBusy(false); }
+  const base = `/api/v1/organizations/${org}/schools/${school}/staff-roles`, scoped = UUID.test(org) && UUID.test(school);
+  async function call(url: string, body?: Record<string, unknown>): Promise<unknown> {
+    let headers: Record<string, string> = { Accept: 'application/json' };
+    if (body) { const fingerprint = JSON.stringify({ url, body }); if (last.current?.fingerprint !== fingerprint) last.current = { fingerprint, key: crypto.randomUUID() }; headers = { ...headers, 'Content-Type': 'application/json', 'Idempotency-Key': last.current.key, 'X-HON-Human-Command': 'staff-role-admin' }; }
+    const response = await fetch(url, { method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store', headers, ...(body ? { body: JSON.stringify(body) } : {}) });
+    const payload = await response.json().catch(() => ({})) as { data?: unknown; detail?: string; message?: string };
+    if (!response.ok) { if (response.status === 401) throw new Error('Please sign in again.'); if (response.status === 403) throw new Error('Your role does not include managing roles at this school.'); throw new Error(payload.detail ?? (typeof payload.message === 'string' ? payload.message : 'That could not be done.')); }
+    if (payload.data === undefined) throw new Error('No confirmed result came back. Refresh before trying again.');
+    return payload.data;
   }
+  async function run(work: () => Promise<void>) { if (busy) return; setBusy(true); setError(''); setNotice(''); try { await work(); } catch (e) { setError(`${e instanceof Error ? e.message : 'That could not be done.'} No save is assumed until the page confirms it.`); } finally { setBusy(false); } }
+  async function refresh() { setLists(verifyRoleLists(await call(`${base}/lists`))); }
+  useEffect(() => { setLists(null); setSelected(null); if (scoped) void run(refresh); }, [org, school]); // eslint-disable-line react-hooks/exhaustive-deps -- open on the signed-in school right away
+  async function command(c: Command) { await call(c.url, c.body); last.current = null; await refresh(); setNotice(c.done); }
+  const codes = () => { const list = permissions.split(/[,\n]/).map(p => p.trim()).filter(Boolean); if (list.length < 1 || new Set(list).size !== list.length) throw new Error('List each permission once.'); return list; };
+  function pick(role: RoleRow | null) { setSelected(role); setName(role?.name ?? ''); setPermissions(role ? role.permissionCodes.join('\n') : 'school.view'); setCode('CUSTOM_'); }
+  const save = (e: FormEvent) => { e.preventDefault(); void run(() => selected
+    ? command({ url: `${base}/custom/${selected.id}/update`, body: { name, permissionCodes: codes(), expectedVersion: selected.version }, done: `Saved ${name}.` })
+    : command({ url: `${base}/custom`, body: { code, name, permissionCodes: codes() }, done: `Created ${name}.` })); };
+  const give = (e: FormEvent) => { e.preventDefault(); void run(() => command({ url: `${base}/grants`, body: { roleId: grantRole, targetPrincipalId: target, targetExternalSubject: subject, ...(expiry ? { effectiveUntil: new Date(`${expiry}T23:59:59Z`).toISOString() } : {}) }, done: 'Role given.' }).then(() => { setSubject(''); setTarget(''); setExpiry(''); })); };
+  const end = (g: GrantRow) => void run(() => command({ url: `${base}/grants/${g.id}/revoke`, body: { expectedVersion: g.version }, done: `Ended ${g.roleName} for ${g.displayName}.` }));
+  async function openKnown() { const role = await call(`${base}/custom/${knownId}`) as RoleRow; pick(lists?.roles.find(r => r.id === role.id) ?? role); }
+  const targetInput = <label>Staff record ID<input required value={target} onChange={e => setTarget(e.target.value)} /></label>;
   return <main className={styles.page}>
     <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/team/availability">Staff availability</a><a href="/staff/team/invitations">Staff invitations</a><a href="/staff/automation/rules">Automation configuration</a><a href="/auth/login">Sign in</a></nav>
-    <header><p>HUMAN STAFF ADMINISTRATION</p><h1>Roles, with clear boundaries.</h1><p>Create a school-scoped custom role, grant an existing permitted role to a registered human, or end one grant. Every change is permission-checked and evidenced.</p></header>
-    <aside>Not an invitation or directory. Use identifiers already verified through your authorized onboarding process. OWNER, HQ, platform and system roles are protected. No payroll, employment decisions, messaging, AI or external delivery occurs.</aside>
-    <form onSubmit={submit}>
-      <fieldset disabled={busy}><legend>Authorized school scope</legend><ManualSchoolFields current={school}><label>Organization UUID<input required value={org} onChange={e=>setOrg(e.target.value)} /></label><label>School UUID<input required value={school} onChange={e=>setSchool(e.target.value)} /></label></ManualSchoolFields></fieldset>
-      <label>Operation<select value={mode} disabled={busy} onChange={e=>{setMode(e.target.value as Mode);setResult('');setError('');}}><option value="create">Create custom role</option><option value="update">Update custom role</option><option value="grant">Grant registered human role</option><option value="revoke">End / revoke grant</option><option value="read-role">Read known role</option><option value="read-grant">Read known grant</option></select></label>
-      {mode !== 'create' && <label>{mode === 'revoke' || mode === 'read-grant' ? 'Grant' : 'Role'} UUID<input required value={id} onChange={e=>setId(e.target.value)} /></label>}
-      {mode === 'create' && <label>Custom role code<input required pattern="CUSTOM_[A-Z][A-Z0-9_]{1,47}" maxLength={55} value={code} onChange={e=>setCode(e.target.value)} /><small>Use CUSTOM_ plus an uppercase unique name. Codes cannot be renamed.</small></label>}
-      {role && <><label>Role name<input required maxLength={100} value={name} onChange={e=>setName(e.target.value)} /></label><label>Allowed permission codes<textarea required rows={4} value={permissions} onChange={e=>setPermissions(e.target.value)} /><small>One per line. All must be in the reviewed allowlist and within your current effective permissions at this school.</small></label></>}
-      {(mode === 'update' || mode === 'revoke') && <label>Expected current version<input required type="number" min={1} max={999999999} value={version} onChange={e=>setVersion(e.target.value)} /><small>Read the known record first. Stale versions fail without a change.</small></label>}
-      {mode === 'grant' && <><label>Registered target principal UUID<input required value={target} onChange={e=>setTarget(e.target.value)} /></label><label>Verified target external subject<input required autoComplete="off" maxLength={200} value={subject} onChange={e=>setSubject(e.target.value)} /><small>Exact match to the known registered human. Never enter an email or phone to create a user.</small></label><label>Optional expiry (UTC ISO timestamp)<input placeholder="2026-11-01T18:00:00Z" maxLength={40} value={expiry} onChange={e=>setExpiry(e.target.value)} /><small>Starts now. Optional end must be in the future and within 90 days.</small></label></>}
-      {mode === 'revoke' && <p>Ending removes only this grant’s authority. The row is retained; repeated ending has no additional effect. Protected owner coverage cannot be removed.</p>}
-      <button disabled={busy} type="submit">{busy ? 'Verifying and processing…' : read ? 'Read scoped record' : 'Submit human command'}</button>
-    </form>
-    {error && <p role="alert" className={styles.error}>{error}</p>}
-    {result && <pre aria-live="polite" className={styles.result}>{result}</pre>}
+    <header><p>Staff</p><h1>Roles</h1><p>Make a custom role for your school, give a role to someone on your team, or end it.</p></header>
+    <aside data-plain-note=""><strong>Roles control what each person can see and do. This page does not invite people or change pay.</strong></aside>
+    <ManualSchoolFields current={school}><fieldset disabled={busy}><legend>School</legend><label>Organization UUID<input required value={org} onChange={e => setOrg(e.target.value)} /></label><label>School UUID<input required value={school} onChange={e => setSchool(e.target.value)} /></label></fieldset></ManualSchoolFields>
+    {error && <p role="alert" className={styles.error}>{error}</p>}{notice && <p role="status" className={styles.result}>{notice}</p>}{busy && <p role="status">Working…</p>}
+    <section><h2>Custom roles</h2>
+      {lists && (lists.roles.length ? <ul>{lists.roles.map(r => <li key={r.id}><button type="button" disabled={busy} aria-pressed={selected?.id === r.id} onClick={() => pick(r)}>{roleLabel(r)}</button></li>)}</ul> : <p>No custom roles yet.</p>)}
+      <form onSubmit={save}><fieldset disabled={busy || !scoped}><legend>{selected ? `Edit ${selected.name}` : 'Create custom role'}</legend>
+        {!selected && <label>Role code<input required pattern="CUSTOM_[A-Z][A-Z0-9_]{1,47}" maxLength={55} value={code} onChange={e => setCode(e.target.value)} /><small>CUSTOM_ plus an uppercase name. Codes cannot be renamed.</small></label>}
+        <label>Role name<input required maxLength={100} value={name} onChange={e => setName(e.target.value)} /></label>
+        <label>Allowed permission codes<textarea required rows={4} value={permissions} onChange={e => setPermissions(e.target.value)} /><small>One per line. You can only include permissions you have yourself.</small></label>
+        <button type="submit">{selected ? 'Save role' : 'Create role'}</button>{selected && <button type="button" onClick={() => pick(null)}>New role instead</button>}
+      </fieldset></form>
+      <IdFields manual={false}><form onSubmit={e => { e.preventDefault(); void run(openKnown); }}><label>Role record ID<input required value={knownId} onChange={e => setKnownId(e.target.value)} /></label><button disabled={busy || !UUID.test(knownId) || !scoped}>Open</button></form></IdFields>
+    </section>
+    <section><h2>Who has which role</h2>
+      {lists && (lists.grants.length ? <ul>{lists.grants.map(g => <li key={g.id}>{grantLabel(g)} <button type="button" disabled={busy} onClick={() => end(g)}>End</button></li>)}</ul> : <p>No one has a custom role yet.</p>)}
+      <p>Ending removes only that role from that person. Protected owner coverage cannot be removed.</p>
+    </section>
+    <section><h2>Give a role</h2>
+      <form onSubmit={give}><fieldset disabled={busy || !scoped}>
+        <label>Role<select required value={grantRole} onChange={e => setGrantRole(e.target.value)}><option value="">Choose a role</option>{lists?.roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
+        {pickScope && <StaffPicker scope={pickScope} purpose="roles" label="Person" value={target} disabled={busy} onPick={p => setTarget(p?.principalId ?? '')} />}
+        {pickScope ? <IdFields manual={false}>{targetInput}</IdFields> : targetInput}
+        <label>Their sign-in ID<input required autoComplete="off" maxLength={200} value={subject} onChange={e => setSubject(e.target.value)} /><small>Must match the person's account exactly. Never enter an email or phone number.</small></label>
+        <label>Ends on (optional)<input type="date" value={expiry} onChange={e => setExpiry(e.target.value)} /><small>Starts now. An end date must be within 90 days.</small></label>
+        <button type="submit">Give role</button>
+      </fieldset></form>
+    </section>
   </main>;
 }
