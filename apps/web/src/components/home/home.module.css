@@ -210,3 +210,6 @@
   [data-hon-mode='big-button'] .kpiValue { font-size: var(--hon-text-2xl); }
 }
 @media (prefers-reduced-motion: reduce) { .orb { animation: none; } }
+
+/* Team chat link under Ask HON (owner ask 2026-11-17). */
+.teamChatLink { display: inline-flex; align-items: center; min-height: 44px; font-weight: 700; text-underline-offset: 3px; }

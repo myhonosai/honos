@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "304cd605e6c93a377066561710e6c649e4269414ddde5e87a1c8e47f321dd87b",
+  "chainSha256": "fb069fbe95d33b77c1c60d20bff1349b849aaeadcffc7083ec43a57e94d5edc9",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -557,6 +557,10 @@
     {
       "file": "0414_walk_in_kiosk.sql",
       "sha256": "e393385043538425f8a9c09b50d9aa5f3bb73f71731d017b692175e38f2bda29"
+    },
+    {
+      "file": "0429_hon_team_chat_answers.sql",
+      "sha256": "0e83c5b25c18118ab41c29b6fd534b3532989451692a39dec58a5ff1ce3cd116"
     }
   ]
 }
