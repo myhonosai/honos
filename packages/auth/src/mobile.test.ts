@@ -5,7 +5,7 @@ import { issueSession, verifySession, SESSION_SECONDS } from './session.js';
 import { pkceChallenge } from './transaction.js';
 import {
   MOBILE_HANDOFF_SECONDS, MOBILE_START_SECONDS, bearerToken, exchangeMobileHandoff, issueMobileHandoff, issueMobileSession,
-  issueMobileStart, verifyMobileSession, verifyMobileStart,
+  issueMobileStart, mobileHandoffForBrowser, verifyMobileSession, verifyMobileStart,
 } from './mobile.js';
 
 const secret = 'TEST_ONLY_HON_KEY_123456789012345678901234';
@@ -75,6 +75,24 @@ describe('mobile hand-off code', () => {
     expect(() => verifyMobileSession(code, config, now + 1)).toThrow(AuthValidationError);
     expect(() => verifySession(code, config, now + 1)).toThrow(AuthValidationError);
     expect(() => exchangeMobileHandoff(issueMobileSession(identity, config, now), verifier, config, now + 1)).toThrow(AuthValidationError);
+  });
+});
+
+describe('browser hand-off', () => {
+  const start = issueMobileStart(challenge, config, now);
+  it('accepts a web session issued at or after the app started sign-in', () => {
+    expect(mobileHandoffForBrowser(issueSession(identity, config, now), start, config, now + 1)).toEqual({ identity, challenge });
+    expect(mobileHandoffForBrowser(issueSession(identity, config, now + 30), start, config, now + 31)).toEqual({ identity, challenge });
+  });
+  it('refuses an older web session (a link to start opened in an already signed-in browser)', () => {
+    expect(() => mobileHandoffForBrowser(issueSession(identity, config, now - 1), start, config, now + 1)).toThrow(AuthValidationError);
+  });
+  it('refuses a missing or wrong-type start cookie or session', () => {
+    const session = issueSession(identity, config, now);
+    expect(() => mobileHandoffForBrowser(session, undefined, config, now + 1)).toThrow(AuthValidationError);
+    expect(() => mobileHandoffForBrowser(undefined, start, config, now + 1)).toThrow(AuthValidationError);
+    expect(() => mobileHandoffForBrowser(issueMobileSession(identity, config, now), start, config, now + 1)).toThrow(AuthValidationError);
+    expect(() => mobileHandoffForBrowser(session, session, config, now + 1)).toThrow(AuthValidationError);
   });
 });
 

@@ -18,9 +18,19 @@ identity-provider registration and no provider secret on the phone.
    (HS256, typ `hon-mobile-start+jwt`, aud `${aud}:mobile-start`, holds only the challenge) and redirects to
    `/auth/login?for=mobile` (the web thread's intent mechanism).
 3. Normal OIDC login runs. `/auth/continue` with intent `mobile` redirects to `/auth/mobile/finish`.
-4. `/auth/mobile/finish` requires a valid `hon_session` cookie **and** the start cookie, issues a hand-off code
-   (HS256 JWT, typ `hon-mobile-handoff+jwt`, aud `${aud}:mobile-handoff`, 60 s, claims: identity fields + challenge),
-   clears the start cookie and redirects to `honparent://auth?code=<code>` (fixed scheme from config, never from input).
+4. `GET /auth/mobile/finish` requires a valid `hon_session` cookie **and** the start cookie, and the web session must
+   be issued at or after the start cookie (`mobileHandoffForBrowser`). It hands nothing to the app: it shows a
+   confirmation page ("Continue to the HON Parent app? You are signed in as <name>", no framing, strict CSP).
+   The parent's **Continue** button POSTs to `/auth/mobile/finish`, which re-checks both cookies, requires
+   `Origin == HON_PUBLIC_ORIGIN` (or a null/absent Origin only with `Sec-Fetch-Site: same-origin`, the sign-out
+   rule), then issues a hand-off code (HS256 JWT, typ `hon-mobile-handoff+jwt`, aud `${aud}:mobile-handoff`, 60 s,
+   claims: identity fields + challenge), clears the start cookie and 303-redirects to `honparent://auth?code=<code>`
+   (fixed scheme, never from input).
+   Why (RFC 8252 §8.1, review of #465): anyone can link a signed-in parent to `/auth/mobile/start` with their own
+   challenge; another app that registered the `honparent` scheme would then receive a code the attacker can
+   exchange. The explicit, same-origin Continue stops a silent hand-off. The freshness rule additionally refuses an
+   older session in an everyday browser; it does not help when the identity provider signs the parent in silently,
+   which is why the confirmation is the main defence.
 5. App `POST /v1/auth/mobile/session` `{ code, verifier }` (JSON). API verifies the code, `S256(verifier) == challenge`
    (constant time), and returns `{ token, expiresAt }`: a mobile session JWT, typ `hon-mobile-session+jwt`,
    aud `${aud}:mobile`, same 12 h maximum as the web session, same claim allow-list.
@@ -49,8 +59,18 @@ identity-provider registration and no provider secret on the phone.
 - API: cookie+bearer → 401; bearer web token → 401; bearer mobile → identity; guard: mobile POST with
   Origin/Sec-Fetch-Site → refused, without → admitted with correct command, wrong command refused; web path unchanged;
   mobile on staff route → 403; exchange endpoint happy path / bad verifier / expired code / extra fields.
-- web: start validates challenge; finish requires session + start cookie, redirect fixed to app scheme.
+- web: start validates challenge; GET finish never redirects to the app (confirmation page only, name escaped,
+  no framing); POST finish needs session + start cookie + same-origin, refuses cross-site and an older session,
+  redirect fixed to app scheme.
 - app: sign-in builds the start URL from config only, exchanges, stores token; cancel/failed exchange → stays signed out.
+
+## Known limits (pre-launch risk list)
+- The hand-off code is not single-use: within its 60 s life it can be exchanged more than once, but only by the
+  holder of the verifier. A used-code record can be added later.
+- The mobile session gets a fresh 12 h at exchange, so it can outlive the web session it came from by up to the
+  start window (the web session is always fresh at hand-off).
+- Before a store release, replace the custom `honparent://` return with a claimed https address (iOS Universal
+  Links / Android App Links), so no other app can receive the code at all.
 
 ## Not in M2
 Biometric unlock, push, refresh tokens, server-side session revocation list, staff mobile use.

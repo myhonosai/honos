@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { AuthValidationError, type SessionConfig } from './config.js';
-import { normalizedIdentity, SESSION_SECONDS, type NormalizedIdentity } from './session.js';
+import { normalizedIdentity, SESSION_SECONDS, verifySession, type NormalizedIdentity } from './session.js';
 import { constantEqual, pkceChallenge } from './transaction.js';
 
 /**
@@ -65,6 +65,24 @@ export function issueMobileHandoff(identity: NormalizedIdentity, challenge: stri
   if (!PKCE.test(challenge)) throw new AuthValidationError();
   return sign(HANDOFF, { ...profile(identity), challenge }, config, now);
 }
+/**
+ * The browser side of the hand-off: the web session and the app's start cookie must both be valid, and the web
+ * session must have been issued at or after the start cookie. The app opens an ephemeral browser session, so a real
+ * app sign-in always produces a fresh web session; an older session already sitting in the parent's everyday browser
+ * (someone else's link to /auth/mobile/start) is refused and they must sign in again.
+ */
+export function mobileHandoffForBrowser(sessionToken: string | undefined, startToken: string | undefined, config: SessionConfig, now = Math.floor(Date.now() / 1000)): { identity: NormalizedIdentity; challenge: string } {
+  try {
+    const start = verify(START, startToken, config, now);
+    if (typeof start.challenge !== 'string' || !PKCE.test(start.challenge)) throw new Error();
+    if (typeof sessionToken !== 'string' || !sessionToken) throw new Error();
+    const { emailVerified: _drop, ...identity } = verifySession(sessionToken, config, now);
+    const sessionIat = (jwt.decode(sessionToken) as { iat?: unknown } | null)?.iat;
+    if (!Number.isSafeInteger(sessionIat) || (sessionIat as number) < (start.iat as number)) throw new Error();
+    return { identity, challenge: start.challenge };
+  } catch { throw new AuthValidationError(); }
+}
+
 /** Turns a hand-off code into a mobile session, only for the app that holds the PKCE verifier. */
 export function exchangeMobileHandoff(code: unknown, verifier: unknown, config: SessionConfig, now = Math.floor(Date.now() / 1000)): { token: string; expiresAt: string } {
   try {
