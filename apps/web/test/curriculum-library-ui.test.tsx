@@ -9,6 +9,14 @@ const school='22222222-2222-4222-8222-222222222222',id='33333333-3333-4333-8333-
 const parentData={resources:[{title:'Basics',description:'Optional approved reference.',kind:'VIDEO',url:'https://www.youtube.com/watch?v=approved',curriculumName:'Main',rankName:'White',childDisplayName:'Child Safe'}]};
 const record={id,curriculumId:id,rankId:null,kind:'VIDEO',url:'https://www.youtube.com/watch?v=approved',title:'Basics',description:'Optional approved reference.',audience:'PARENT',status:'ACTIVE',version:1};
 const response=(data:unknown,parent=true)=>({ok:true,headers:new Headers({'content-type':'application/json'}),json:async()=>({data,meta:{requestId:id,correlationId:id,...(parent?{}:{replayed:false})}})} as Response);
+describe('curriculum library inside the school shell',()=>{
+ it('shows no school UUID box; the signed-in school is used',async()=>{
+  const { SchoolShellProvider, NO_SCHOOL_SHELL } = await import('../src/components/school-shell/context');
+  const html=renderToStaticMarkup(<SchoolShellProvider value={{...NO_SCHOOL_SHELL,phase:'READY',selection:{organizationId:id,schoolId:school},schoolName:'Sunrise'}}><StaffCurriculumLibraryWorkbench/></SchoolShellProvider>);
+  for(const text of ['Known school UUID','Verify one known school','already-known school UUID',school])expect(html).not.toContain(text);
+  expect(html).toContain('Refresh library');
+ });
+});
 describe('metadata curriculum library',()=>{
  it('starts empty and explains scope, no preview/player and presentation-only modes',()=>{
   const fetch=vi.spyOn(globalThis,'fetch');try{for(const component of [<StaffCurriculumLibraryWorkbench/>,<ParentCurriculumLibraryPage/>]){const html=renderToStaticMarkup(component);expect(html).toContain('Metadata references only');expect(html).toContain('Big-Button');expect(html).toContain('Modern');expect(html).toContain('Classic');expect(html).not.toMatch(/<iframe|<video|<audio|<img|target="_blank"/);}expect(fetch).not.toHaveBeenCalled();}finally{fetch.mockRestore();}
