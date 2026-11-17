@@ -5,6 +5,7 @@ import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { ClassSessionsReadAccessError, loadCurrentSchoolClassSessions } from '../class-sessions-read-http';
 import { shrinkPhoto } from '../people/photo-http';
+import { onShellPrivacyEvent } from '../school-shell/privacy';
 import { todaysSessions, type SessionsState } from '../attendance-cards/scan';
 import { useClassByTime } from '../attendance-check-in/class-by-time';
 import { faceText, type FaceKey } from './copy';
@@ -18,6 +19,16 @@ export type Picture = Readonly<{ mediaType: PersonPhotoMediaType; data: string }
 export type Proposal = Readonly<{ match: FaceCheckInMatchResult; preview: string }>;
 type Status = 'PRESENT' | 'LATE';
 
+/**
+ * When the front desk stops looking at this screen (the tab is hidden, the page is left, the session ends or the school
+ * changes), the camera is stopped and the suggested student (their picture and name) is cleared. Returns the unsubscribe.
+ */
+export function onFaceScanPrivacy(drop: () => void, doc: Pick<Document, 'hidden' | 'addEventListener' | 'removeEventListener'> = document): () => void {
+  const hidden = () => { if (doc.hidden) drop(); };
+  const off = onShellPrivacyEvent(drop, ['pagehide']);
+  doc.addEventListener('visibilitychange', hidden);
+  return () => { off(); doc.removeEventListener('visibilitychange', hidden); };
+}
 /** A picked file sent as it is (test mode: the synthetic matcher only knows an exact copy of the profile photo). */
 export async function fileToPicture(file: Blob): Promise<Picture | null> {
   if (!(PERSON_PHOTO_MEDIA_TYPES as readonly string[]).includes(file.type) || file.size < 4 || file.size > PERSON_PHOTO_MAX_BYTES) return null;
@@ -114,10 +125,11 @@ export function FaceCheckInScan({ api = faceApi, loadSessions = loadCurrentSchoo
     if (typeof navigator === 'undefined' || typeof navigator.mediaDevices?.getUserMedia !== 'function') setCamera('UNSUPPORTED');
     return () => { stream.current?.getTracks().forEach(t => t.stop()); stream.current = null; };
   }, []);
-  useEffect(() => {
-    const drop = () => { setProposal(null); stopCamera(); };
-    window.addEventListener('pagehide', drop); return () => window.removeEventListener('pagehide', drop);
-  }, [stopCamera]);
+  // A kept unknown request names no student, so it stays for Try again; any other line (it may name one) is cleared.
+  const commandsRef = useRef(commands); commandsRef.current = commands;
+  // Bumped on every drop: a match still in flight when the screen was hidden never shows its student afterwards.
+  const privacy = useRef(0);
+  useEffect(() => onFaceScanPrivacy(() => { privacy.current++; setProposal(null); setLocal(null); stopCamera(); if (!commandsRef.current.busy) commandsRef.current.clear(); }), [stopCamera]);
   useEffect(() => {
     if (!selection) { setSessions({ state: shell.phase === 'READY' ? 'NO_SCHOOL' : 'LOADING' }); return; }
     let live = true; const abort = new AbortController();
@@ -148,9 +160,11 @@ export function FaceCheckInScan({ api = faceApi, loadSessions = loadCurrentSchoo
     setLocal(null);
     const input = { schoolId: selection.schoolId, sessionId, mediaType: picture.mediaType, data: picture.data };
     const preview = `data:${picture.mediaType};base64,${picture.data}`;
+    const shown = privacy.current;
     commands.start(async (key, signal, owned) => {
       const match = await api.match(input, key, signal, owned);
       if (match.outcome === 'PROPOSED' && match.student) {
+        if (privacy.current !== shown) return { tone: 'blocked', text: faceText(language, 'EXPIRED') };
         if (owned()) setProposal({ match, preview });
         return { tone: 'ok', text: faceText(language, 'proposed', { name: `${match.student.givenName} ${match.student.familyName}` }) };
       }

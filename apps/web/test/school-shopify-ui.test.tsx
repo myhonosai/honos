@@ -18,7 +18,7 @@ const signal = () => new AbortController().signal;
 const fails = async (p: Promise<unknown>) => { try { await p; } catch (e) { return e as ShopifyError; } throw new Error('expected a failure'); };
 const connection = (over: Partial<ShopifyConnection> = {}): ShopifyConnection => ({ connectionId: cid, shopDomain: SHOP, shopName: 'Synthetic Dojo Store', currency: 'USD',
   status: 'CONNECTED', version: 2, connectedAt: at, endedAt: null, lastSyncAt: at, lastSyncOutcome: 'SUCCEEDED', syncRunning: false, ...over });
-const overview = (over: Partial<ShopifyOverview> = {}): ShopifyOverview => ({ schoolId: school, canManage: true, connectEnabled: true, connection: connection(),
+const overview = (over: Partial<ShopifyOverview> = {}): ShopifyOverview => ({ schoolId: school, canManage: true, connectEnabled: true, autoSync: false, connection: connection(),
   counts: { products: 3, variants: 6, lowStock: 2, orders: 3 },
   summary: { days: 30, orders: 2, sales: 290.73, averageOrder: 145.37, itemsSold: 4, lineSales: 310, coveredSales: 175, estimatedGrossProfit: 99.75,
     topProducts: [{ title: 'Student uniform', quantity: 2, sales: 130 }] }, ...over });
@@ -89,6 +89,13 @@ it('shows the store, the 30-day summary with honest profit coverage, stock and m
   const reader = renderToStaticMarkup(<ShopifyView {...props({ overview: { state: 'READY', read: overview({ canManage: false }) } })} />);
   expect(reader).not.toContain('Sync now'); expect(reader).not.toContain('Disconnect');
   expect(renderToStaticMarkup(<ShopifyView {...props({ confirming: true })} />)).toContain('Yes, disconnect');
+});
+
+it('says HON syncs on its own only when background sync is on and the store is connected', () => {
+  expect(renderToStaticMarkup(<ShopifyView {...props()} />)).not.toContain('data-shopify-auto-sync');
+  expect(renderToStaticMarkup(<ShopifyView {...props({ overview: { state: 'READY', read: overview({ autoSync: true }) } })} />)).toContain('fully every six hours');
+  const ended = overview({ autoSync: true, connection: { ...connection(), status: 'NEEDS_RECONNECT', endedAt: connection().connectedAt } });
+  expect(renderToStaticMarkup(<ShopifyView {...props({ overview: { state: 'READY', read: ended } })} />)).not.toContain('data-shopify-auto-sync');
 });
 
 it('connect form only for managers and only when connecting is turned on; reconnect when Shopify refused access', () => {

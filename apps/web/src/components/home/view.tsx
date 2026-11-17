@@ -15,6 +15,8 @@ export type SchoolHomeViewProps = Readonly<{
   sources: HomeSources; now: Date; timeZone?: string; waiting?: boolean; concealed?: boolean;
   /** The viewer's AI team art style; defaults to the mode's original pairing. */
   artStyle?: HonArtStyle; onArtStyle?: (style: HonArtStyle) => void;
+  /** The live Team chat (owner ask 2026-11-17), shown right under the AI team; absent in pure renders. */
+  teamChat?: ReactNode;
 }>;
 
 const LOCALES: Record<string, string> = { en: 'en-US', ko: 'ko-KR', es: 'es-US' };
@@ -29,7 +31,7 @@ function greetingKey(now: Date): HomeKey {
  * The school Home. Pure presentation of already verified reads: each panel shows its own
  * loading, denied or unverified state, and nothing is estimated or filled with samples.
  */
-export function SchoolHomeView({ language, mode, schoolName, selection, sources, now, timeZone, waiting = false, concealed = false, artStyle, onArtStyle }: SchoolHomeViewProps): React.ReactElement {
+export function SchoolHomeView({ language, mode, schoolName, selection, sources, now, timeZone, waiting = false, concealed = false, artStyle, onArtStyle, teamChat }: SchoolHomeViewProps): React.ReactElement {
   const t = (key: HomeKey, values?: Record<string, string | number>) => homeText(language, key, values);
   const locale = LOCALES[language] ?? 'en-US';
   const number = (value: number) => new Intl.NumberFormat(locale).format(value);
@@ -62,6 +64,7 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
           <p className={styles.honRole}>{t('honCore')}</p>
           {hon && <p className={styles.honStatus} data-status={hon.status}>{t(hon.key)}</p>}
           <a className={styles.primary} href="/staff/hon"><ShellIcon name="hon" /><span>{t('askHon')}</span></a>
+          {teamChat ? <a className={styles.teamChatLink} href="#team-chat">{t('teamChat')}</a> : null}
         </article>
         <ul className={styles.agents} aria-label={t('teamTitle')}>{team.slice(half).map(agent => <Agent key={agent.id} agent={agent} t={t} />)}</ul>
       </div>
@@ -73,6 +76,8 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
         </div>
       </footer>
     </section>
+
+    {teamChat}
 
     <nav className={styles.help} aria-labelledby="home-help">
       <a className={styles.helpAsk} href="/staff/hon"><span className={styles.helpMic} aria-hidden="true"><ShellIcon name="hon" /></span><strong id="home-help">{t('helpTitle')}</strong></a>
