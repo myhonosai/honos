@@ -103,7 +103,7 @@ test('a school without an active, in-window entitlement lists nothing on every e
 });
 
 test('Teaching studio lists: students and ranks by name, checked against teaching.studio.read before and inside the read', async () => {
-  assert.deepEqual(STUDENT_PURPOSES, { teaching: 'teaching.studio.read', achievements: 'achievement.award.read' });
+  assert.deepEqual(STUDENT_PURPOSES, { teaching: 'teaching.studio.read', achievements: 'achievement.award.read', attendance: 'attendance.record' });
   assert.deepEqual(RANK_PURPOSES, { teaching: 'teaching.studio.read' });
   const f = fakeDb({ rows: [{ studentProfileId: 's' }] }); const res = response();
   const body = await controller(f).students(scope.organizationId, scope.schoolId, 'teaching', '  Kim_%  ', request, res);
@@ -113,6 +113,10 @@ test('Teaching studio lists: students and ranks by name, checked against teachin
   assert.deepEqual(read.values, [scope.organizationId, scope.schoolId, 'Kim_%']);
   assert.match(read.sql, /s\.organization_id = \$1 AND s\.school_id = \$2 AND s\.status = 'ACTIVE'/);
   assert.match(read.sql, /LIMIT 50/); assert.match(read.sql, /replace\(replace\(replace\(\$3::text/);
+  // Front-desk check-in lists any active student by name under the attendance command's own permission.
+  const a = fakeDb({ rows: [{ studentProfileId: 's' }] });
+  await controller(a).students(scope.organizationId, scope.schoolId, 'attendance', 'Avery', request, response());
+  assert.equal(a.calls.resolve[0].permission, 'attendance.record'); assert.deepEqual(a.calls.sql[0].values, ['verified-human', scope.schoolId, 'attendance.record']);
   const r = fakeDb({ rows: [{ rankId: 'r' }] });
   const ranks = await controller(r).ranks(scope.organizationId, scope.schoolId, 'teaching', request, response());
   assert.deepEqual(ranks.data, [{ rankId: 'r' }]); assert.equal(ranks.meta.limit, 200); assert.equal(r.calls.resolve[0].permission, 'teaching.studio.read');

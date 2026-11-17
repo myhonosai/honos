@@ -97,6 +97,7 @@ export function CandidatePicker({ scope, purpose, value, disabled, onPick }: {
 const STUDENT_COPY: Record<StudentPurpose, Copy> = {
   teaching: { label: 'Student', choose: 'Choose a student (optional)', search: 'Find a student', loading: 'Reading students…', empty: 'No students match.', denied: 'Your access does not include student notes at this school.', unavailable: 'Students could not be loaded. Reload the page to try again.' },
   achievements: { label: 'Student', choose: 'Choose a student (optional)', search: 'Find a student', loading: 'Reading students…', empty: 'No students match.', denied: 'Your access does not include student achievements at this school.', unavailable: 'Students could not be loaded. Reload the page to try again.' },
+  attendance: { label: 'Student', choose: 'Choose a student', search: 'Find a student', loading: 'Reading students…', empty: 'No students match.', denied: 'Your access does not include checking students in at this school.', unavailable: 'Students could not be loaded. Reload the page to try again.' },
 };
 export function StudentPicker({ scope, purpose, value, disabled, onPick }: { scope: PickerScope; purpose: StudentPurpose; value: string; disabled: boolean; onPick: (item: PickerStudent | null) => void }): React.ReactElement {
   const [search, setSearch] = useState('');
