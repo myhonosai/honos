@@ -176,3 +176,34 @@ pause, settle unknowns). Browser proof on synthetic fixtures; en/ko/es.
   account, setting the keys and any real spend still need David.
 - Location targeting: decided 2026-11-17, 5 miles around the school's street address (8.2 item 5).
 - Whether Google uses the same `HON_ZERNIO_ADS_APPROVED` switch as Meta (built: same switch).
+
+## 9. Google Business Profile (0455)
+
+David, 2026-11-17: "Let's add Google business as well." A school connects its own Google Business Profile through the
+same Zernio profile as Facebook and Google Ads, and HON publishes the school's approved posts to it.
+
+### 9.1 What is built
+
+- **Connections** (extends 0347/0453): `GOOGLE_BUSINESS` is a connectable platform. A profile only publishes: its inbox
+  and ads switches stay off (table check `school_social_accounts_google_business_only`, the change command and the
+  contract). The connect button is on Marketing > Social accounts.
+- **Posts** (extends 0348): a Google Business Profile is a post target next to Facebook Pages, through the same draft,
+  approve, one leased send, receipts and UNKNOWN handling. Text sent to a profile holds at most 1,500 characters
+  (`SOCIAL_TEXT_TOO_LONG`, 400, on create and edit); Facebook keeps 2,200. The worker claims profile targets like
+  Facebook ones, and signed `post.published` / `post.failed` / `account.disconnected` receipts settle them.
+- No new database entry points: 0455 replaces five reviewed functions, which keep their grants.
+
+### 9.2 Provider assumptions to confirm before any real use
+
+1. Zernio's platform name is `googlebusiness` (connect, account list and webhooks).
+2. A post is `POST /posts` with `platforms[{ platform: googlebusiness, accountId, platformSpecificData: { callToAction:
+   { type: LEARN_MORE, url } } }]`, a standard update with the post's link as its button.
+3. Google's own rules for profile posts (for example no phone numbers in the text) are not checked by HON; a refusal
+   comes back as FAILED.
+
+These gate turning `HON_ZERNIO_PUBLISH_APPROVED` on for Google Business Profile.
+
+### 9.3 Next
+
+- Google reviews in the HON inbox (read and reply), as its own piece.
+- A post composer screen in the school app (posts are API-only today).

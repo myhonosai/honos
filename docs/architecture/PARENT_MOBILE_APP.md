@@ -18,7 +18,7 @@ Legend: **Verified** = a parent-scoped endpoint + contract verifier + proofs on 
 | School identity/branding for parents | Partial | `schoolName` arrives with the picker. Logo/colors are staff-only (`school-branding.controller.ts`). Gap: parent-scoped branding read. |
 | Home aggregate | Verified | `GET /v1/parent/journey` → `verifyParentJourneyView` (children, programs, rank, requirements, 31-day schedule, achievements, documents). Display-only: no ids. |
 | Schedule read | Verified | Journey schedule + `GET /v1/parent/class-bookings` (14-day choices, school timezone, spots left). |
-| Class booking / cancel | Verified (web) | `POST /v1/parent/class-bookings`, `/:id/cancel` (0329), Idempotency-Key, versioned cancel. Needs M2 for mobile POST. |
+| Class booking / cancel | Verified (web + app) | `POST /v1/parent/class-bookings`, `/:id/cancel` (0329), Idempotency-Key, versioned cancel. App Schedule tab books/cancels natively (M3a); guards pass via the M2 native rule. |
 | ClassPass | Verified | `GET /v1/parent/classpass`. |
 | Planned absence | Verified | `GET /v1/parent/planned-absences/context`, `POST /v1/parent/planned-absences`, `GET .../history`. Status separate from makeup/booking. |
 | Makeup classes | Absent | No makeup entitlement/policy engine for parents. Booking `kind: MAKEUP` exists only as a session kind. |

@@ -6,6 +6,7 @@ import { bookingLabel, formatClassTime } from '../home/model';
 import { Body, Button, Card, Pill, Section, Title } from '../ui/parts';
 import { space, type, useColors } from '../ui/theme';
 import { FamilyGate } from './FamilyStates';
+import { BookClasses } from '../schedule/BookClasses';
 
 function Page({ title, eyebrow, children }: { title: string; eyebrow: string; children: React.ReactNode }) {
   const c = useColors();
@@ -19,7 +20,7 @@ function Page({ title, eyebrow, children }: { title: string; eyebrow: string; ch
   );
 }
 
-/** Read-only schedule from the verified journey (next four weeks). Booking from the app is milestone M3. */
+/** Schedule from the verified journey (next four weeks), then booking and cancelling from the class booking read. */
 export function ScheduleScreen() {
   const { state, selection, now } = useFamily();
   const c = useColors();
@@ -45,7 +46,8 @@ export function ScheduleScreen() {
           </Card>
         ))}
       </View>
-      <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.md }}>Booking, cancelling and reporting an absence from the app are coming in the next update. You can do them on the HON parent website today.</Text>
+      <BookClasses />
+      <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.md }}>Reporting an absence from the app is coming in the next update. You can do it on the HON parent website today.</Text>
     </Page>
   );
 }
@@ -87,16 +89,30 @@ export function MoreScreen({ onSignOut, version }: { onSignOut: () => void; vers
   );
 }
 
-export function SignInScreen() {
+export function SignInScreen({ onSignIn }: { onSignIn?: () => Promise<'signed-in' | 'cancelled' | 'failed'> }) {
   const c = useColors();
   const insets = useSafeAreaInsets();
+  const [busy, setBusy] = React.useState(false);
+  const [failed, setFailed] = React.useState(false);
+  const start = async () => {
+    if (!onSignIn || busy) return;
+    setBusy(true); setFailed(false);
+    const result = await onSignIn();
+    setBusy(false);
+    if (result === 'failed') setFailed(true);
+  };
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, padding: space.xl, paddingTop: insets.top + space.xxl, justifyContent: 'center' }}>
       <Text style={{ color: c.accent, fontSize: type.caption, fontWeight: '800', letterSpacing: 2 }}>HON</Text>
       <Title>Sign in to your school</Title>
       <View style={{ height: space.md }} />
-      <Body muted>Use the invitation your martial arts school sent you. Your family, children and school come from the school's records, never from what is typed on this phone.</Body>
-      <Card style={{ marginTop: space.xl }}><Body muted>Signing in from the app is being connected. Until then, please use the HON parent website your school shared.</Body></Card>
+      <Body muted>Use the account your martial arts school invited. Your family, children and school come from the school's records, never from what is typed on this phone.</Body>
+      {onSignIn ? (
+        <View style={{ marginTop: space.xl }}>
+          <Button label={busy ? 'Opening sign-in…' : 'Sign in'} accessibilityLabel="Sign in" onPress={() => { void start(); }} />
+          {failed ? <Card style={{ marginTop: space.lg }}><Body muted>We couldn't finish signing in. Please try again. If it keeps happening, contact your school.</Body></Card> : null}
+        </View>
+      ) : <Card style={{ marginTop: space.xl }}><Body muted>Signing in from the app is being connected. Until then, please use the HON parent website your school shared.</Body></Card>}
     </View>
   );
 }

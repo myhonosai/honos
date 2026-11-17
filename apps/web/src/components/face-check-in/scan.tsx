@@ -7,6 +7,7 @@ import { ClassSessionsReadAccessError, loadCurrentSchoolClassSessions } from '..
 import { shrinkPhoto } from '../people/photo-http';
 import { onShellPrivacyEvent } from '../school-shell/privacy';
 import { todaysSessions, type SessionsState } from '../attendance-cards/scan';
+import { useClassByTime } from '../attendance-check-in/class-by-time';
 import { faceText, type FaceKey } from './copy';
 import { OutcomeLine } from './settings';
 import { useFaceCommands, type FaceOutcome } from './commands';
@@ -47,6 +48,7 @@ export function decisionText(language: string, out: { outcome: string; checkIn: 
 export type FaceScanViewProps = Readonly<{
   language: string; sessions: SessionsState; sessionId: string; status: Status; camera: 'OFF' | 'ON' | 'UNSUPPORTED' | 'FAILED';
   proposal: Proposal | null; outcome: FaceOutcome; busy: boolean; videoRef?: React.Ref<HTMLVideoElement> | undefined;
+  /** The class follows the school's schedule by the time of day. */ autoClass?: boolean | undefined; onAutoClass?: ((on: boolean) => void) | undefined;
   onSession?: ((id: string) => void) | undefined; onStatus?: ((s: Status) => void) | undefined; onCamera?: (() => void) | undefined; onTake?: (() => void) | undefined;
   onFile?: ((file: File) => void) | undefined; onDecide?: ((accept: boolean) => void) | undefined; onTryAgain?: (() => void) | undefined; onStop?: (() => void) | undefined;
 }>;
@@ -67,7 +69,8 @@ export function FaceScanView(p: FaceScanViewProps): React.ReactElement {
           {sessions.length ? <select id={`${id}-session`} value={p.sessionId} disabled={p.busy || p.proposal !== null} onChange={e => p.onSession?.(e.currentTarget.value)} data-testid="face-session">
             <option value="">{t('chooseSession')}</option>
             {sessions.map(s => <option key={s.sessionId} value={s.sessionId}>{`${new Date(s.startsAt).toLocaleTimeString(p.language, { hour: 'numeric', minute: '2-digit' })} ${s.name}`}</option>)}
-          </select> : <p className={base.meta}>{t('noSessions')}</p>}</div>
+          </select> : <p className={base.meta}>{t('noSessions')}</p>}
+          {sessions.length ? <label className={base.choice}><input type="checkbox" checked={p.autoClass ?? false} onChange={e => p.onAutoClass?.(e.currentTarget.checked)} data-testid="face-auto-class"/>{t('autoClass')}</label> : null}</div>
         <fieldset><legend>{t('markAs')}</legend>
           {(['PRESENT', 'LATE'] as const).map(s => <label key={s} className={base.choice}>
             <input type="radio" name={`${id}-status`} value={s} checked={p.status === s} onChange={() => p.onStatus?.(s)}/>{t(s)}</label>)}
@@ -115,6 +118,7 @@ export function FaceCheckInScan({ api = faceApi, loadSessions = loadCurrentSchoo
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const commands = useFaceCommands(language, () => {});
   const [local, setLocal] = useState<FaceOutcome>(null);
+  const [autoClass, setAutoClass] = useClassByTime(sessions.state === 'READY' ? sessions.sessions : null, setSessionId, commands.busy || proposal !== null);
   const videoRef = useRef<HTMLVideoElement>(null), stream = useRef<MediaStream | null>(null);
   const stopCamera = useCallback(() => { stream.current?.getTracks().forEach(t => t.stop()); stream.current = null; setCamera(c => c === 'ON' ? 'OFF' : c); }, []);
   useEffect(() => {
@@ -193,7 +197,8 @@ export function FaceCheckInScan({ api = faceApi, loadSessions = loadCurrentSchoo
   return <FaceScanView language={language} sessions={sessions} sessionId={sessionId} status={status} camera={camera} proposal={proposal}
     outcome={local ?? commands.outcome}
     busy={commands.busy} videoRef={videoRef}
-    onSession={v => { setSessionId(v); setProposal(null); setLocal(null); commands.clear(); }} onStatus={setStatus}
+    autoClass={autoClass} onAutoClass={setAutoClass}
+    onSession={v => { setAutoClass(false); setSessionId(v); setProposal(null); setLocal(null); commands.clear(); }} onStatus={setStatus}
     onCamera={() => { if (camera === 'ON') stopCamera(); else setCamera('ON'); }} onTake={() => { void take(); }}
     onFile={f => { void fileToPicture(f).then(sendPicture); }} onDecide={decide}
     onTryAgain={commands.tryAgain} onStop={() => { commands.stop(); }}/>;

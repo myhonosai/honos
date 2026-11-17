@@ -14,6 +14,9 @@ interface FamilyContextValue {
   select: (s: ChildSelection) => void;
   refresh: () => void;
   now: () => Date;
+  api: ParentApi;
+  /** A fresh random Idempotency-Key for a new command. */
+  newKey: () => string;
 }
 const FamilyContext = createContext<FamilyContextValue | null>(null);
 
@@ -22,7 +25,7 @@ const FamilyContext = createContext<FamilyContextValue | null>(null);
  * a 401 clears the stored session, and the child selection resets whenever a new response arrives because
  * child positions are only meaningful within a single response.
  */
-export function FamilyProvider({ api, onSignedOut, now, children }: { api: ParentApi; onSignedOut: () => void; now: () => Date; children: React.ReactNode }) {
+export function FamilyProvider({ api, onSignedOut, now, newKey, children }: { api: ParentApi; onSignedOut: () => void; now: () => Date; newKey: () => string; children: React.ReactNode }) {
   const [state, setState] = useState<FamilyState>({ status: 'loading' });
   const [selection, setSelection] = useState<ChildSelection>('all');
   const generation = useRef(0);
@@ -46,7 +49,7 @@ export function FamilyProvider({ api, onSignedOut, now, children }: { api: Paren
     setSelection(prev => (state.status === 'ready' && (s === 'all' || state.view.children[s]) ? s : prev));
   }, [state]);
 
-  return <FamilyContext.Provider value={{ state, selection, select, refresh, now }}>{children}</FamilyContext.Provider>;
+  return <FamilyContext.Provider value={{ state, selection, select, refresh, now, api, newKey }}>{children}</FamilyContext.Provider>;
 }
 
 export function useFamily(): FamilyContextValue {

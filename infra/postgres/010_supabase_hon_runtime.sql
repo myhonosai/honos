@@ -4084,3 +4084,33 @@ DO $$ BEGIN
   IF to_regprocedure('hon.create_school_social_google_ad(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0453 first'; END IF;
   GRANT EXECUTE ON FUNCTION hon.create_school_social_google_ad(text,jsonb,text,uuid,uuid) TO hon_runtime;
 END $$;
+-- 0459 school demo data: two private tables reached only through three runtime entry points (read, load, remove); the
+-- removal check inside the patched append-only guards is runnable by the roles that can fire those guards.
+DO $$ DECLARE r text; t text; f text;
+  entry text[]:=ARRAY['hon.read_school_demo_data(text)','hon.load_school_demo_data(text,jsonb,text,uuid,uuid)','hon.remove_school_demo_data(text,jsonb,text,uuid,uuid)'];
+  -- Called from inside existing append-only guards, some of which run as the caller: the roles that can fire them may run it.
+  shared text[]:=ARRAY['hon.demo_data_removal_allows(text,jsonb)'];
+  helpers text[]:=ARRAY['hon.guard_school_demo_data()','hon.demo_data_is_demo(text,uuid)','hon.refuse_demo_data_target()','hon.require_demo_data_actor(text)',
+    'hon.school_demo_data_view(uuid,uuid)','hon.demo_data_register(uuid,uuid,uuid,text,uuid)','hon.school_demo_data_write(uuid,uuid,uuid,uuid,uuid,uuid)',
+    'hon.school_demo_data_begin(text,text,jsonb,text,uuid,uuid)','hon.school_demo_data_finish(text,uuid,text,jsonb)','hon.demo_data_person_tables()',
+    'hon.school_demo_data_collect(uuid,uuid,uuid)','hon.school_demo_data_delete(uuid)',
+    'hon.school_demo_data_attendance(uuid,uuid,uuid,uuid,text,jsonb,uuid[],integer[],integer[])'];
+BEGIN
+  IF to_regprocedure('hon.remove_school_demo_data(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0459 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['school_demo_data_sets','school_demo_data_rows'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY helpers||entry||shared LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry||shared LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+    FOREACH f IN ARRAY shared LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO %I',f,r); END LOOP;
+  END LOOP;
+END $$;

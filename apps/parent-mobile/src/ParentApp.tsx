@@ -20,9 +20,13 @@ export interface ParentAppProps {
   session: Pick<SessionStore, 'token' | 'clear' | 'subscribe'>;
   now?: () => Date;
   version?: string;
+  /** Native sign-in (M2). Omitted in builds where sign-in is not configured. */
+  onSignIn?: () => Promise<'signed-in' | 'cancelled' | 'failed'>;
+  /** Random Idempotency-Key source (expo-crypto randomUUID in the app). */
+  newKey?: () => string;
 }
 
-export function ParentApp({ api, session, now = () => new Date(), version = '0.1.0' }: ParentAppProps) {
+export function ParentApp({ api, session, now = () => new Date(), version = '0.1.0', onSignIn, newKey = missingKeySource }: ParentAppProps) {
   const [token, setToken] = useState<string | null | undefined>(undefined);
   useEffect(() => {
     let live = true;
@@ -35,10 +39,10 @@ export function ParentApp({ api, session, now = () => new Date(), version = '0.1
   return (
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
       {token === undefined ? <Loading label="Starting HON" />
-        : token === null ? <SignInScreen />
+        : token === null ? <SignInScreen onSignIn={onSignIn} />
         : (
           // Keyed by session so nothing from a previous sign-in survives into the next one.
-          <FamilyProvider key={token} api={api} onSignedOut={signOut} now={now}>
+          <FamilyProvider key={token} api={api} onSignedOut={signOut} now={now} newKey={newKey}>
             <NavigationContainer>
               <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={props => <TabBar {...props} />}>
                 <Tab.Screen name="Home" children={() => <HomeFromTab />} />
@@ -53,6 +57,8 @@ export function ParentApp({ api, session, now = () => new Date(), version = '0.1
     </SafeAreaProvider>
   );
 }
+
+function missingKeySource(): string { throw new Error('No Idempotency-Key source configured.'); }
 
 function HomeFromTab() {
   const navigation = useNavigation<{ navigate: (tab: keyof Tabs) => void }>();

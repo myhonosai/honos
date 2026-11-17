@@ -10,6 +10,7 @@ import { ZERNIO_SOCIAL_ADAPTER, type ZernioSocialAdapter } from './zernio-social
 
 const POST_ERRORS: SocialErrorTable = {
   SOCIAL_FORBIDDEN: [['42501'], code => new ForbiddenException({ code, detail: 'Social posting permission at this school is required.' })],
+  SOCIAL_TEXT_TOO_LONG: [['22001'], code => new BadRequestException({ code, detail: 'Google Business Profile posts can be at most 1,500 characters.' })],
   SOCIAL_MEDIA_REQUIRED: [['0A000'], code => new HttpException({ code, detail: 'Instagram posts need a photo or video, which HON cannot attach yet. Choose a Facebook Page.' }, HttpStatus.UNPROCESSABLE_ENTITY)],
   SOCIAL_POST_NOT_FOUND: [['P0002'], code => new NotFoundException({ code })],
   SOCIAL_POST_STATE: [['55000'], code => new ConflictException({ code, detail: 'This post already moved on. Reload to see where it is.' })],
