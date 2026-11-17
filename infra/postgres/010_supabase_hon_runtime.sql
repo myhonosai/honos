@@ -4170,3 +4170,14 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+-- 0470 Shopify order retention (SH1c): the trigger function and the worker purge are never granted to the runtime; the
+-- purge belongs to hon_communication_worker (013).
+DO $$ DECLARE r text; f text;
+BEGIN
+  IF to_regprocedure('hon.purge_expired_shopify_orders()') IS NULL THEN RAISE EXCEPTION 'Apply migration 0470 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.shopify_purge_expired_orders_on_success()','hon.purge_expired_shopify_orders()'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+END $$;

@@ -13,7 +13,7 @@ export const SHOPIFY_WORKER_CLOCK = Symbol('SHOPIFY_WORKER_CLOCK');
 export type ShopifyWebhookOutcome = 'SYNC_REQUESTED' | 'UNINSTALLED' | 'SHOP_ERASED' | 'NO_CUSTOMER_DATA' | 'IGNORED';
 export interface ShopifyFinished { syncId: string; source: string; outcome: SyncOutcome; failureCode: string | null; connectionStatus: string }
 
-/** The 0449 worker functions. Each takes one closed JSON input and answers JSON. */
+/** The 0449 and 0470 worker functions. Each takes one closed JSON input and answers JSON. */
 export interface ShopifyWorkerStore {
   isConfigured(): boolean;
   recordWebhook(input: VerifiedShopifyWebhook): Promise<{ outcome: ShopifyWebhookOutcome; replayed: boolean }>;
@@ -21,6 +21,8 @@ export interface ShopifyWorkerStore {
   rotate(input: object): Promise<unknown>;
   page(input: object): Promise<unknown>;
   finish(input: object): Promise<unknown>;
+  /** 0470: deletes up to 2,000 mirrored orders placed more than 60 days ago (any store) and their lines. */
+  purgeExpiredOrders(): Promise<{ orders: number; lines: number; more: boolean }>;
 }
 
 const SQL = {
@@ -29,6 +31,7 @@ const SQL = {
   rotate: 'SELECT hon.rotate_shopify_background_credential($1::jsonb) AS data',
   page: 'SELECT hon.record_shopify_background_page($1::jsonb) AS data',
   finish: 'SELECT hon.finish_shopify_background_sync($1::jsonb) AS data',
+  purge: 'SELECT hon.purge_expired_shopify_orders() AS data',
 } as const;
 export type ShopifyWorkerQuery = (sql: string, values: unknown[]) => Promise<{ data: unknown }[]>;
 
@@ -46,11 +49,16 @@ export class ShopifyWorkerSql implements ShopifyWorkerStore {
   rotate(input: object) { return this.one(SQL.rotate, [JSON.stringify(input)]); }
   page(input: object) { return this.one(SQL.page, [JSON.stringify(input)]); }
   finish(input: object) { return this.one(SQL.finish, [JSON.stringify(input)]); }
+  async purgeExpiredOrders() {
+    const r = await this.one(SQL.purge, []) as { orders?: unknown; lines?: unknown; more?: unknown } | null;
+    if (!r || !Number.isSafeInteger(r.orders) || !Number.isSafeInteger(r.lines) || typeof r.more !== 'boolean') throw new Error('SHOPIFY_WORKER_ANSWER_INVALID');
+    return { orders: r.orders as number, lines: r.lines as number, more: r.more };
+  }
 }
 
 /**
  * Connects as hon_communication_worker (HON_COMMUNICATION_WORKER_DATABASE_URL), the existing worker login, never as
- * the runtime or migration role, and only executes the five 0449 functions. Refused if the login is a superuser,
+ * the runtime or migration role, and only executes the 0449 and 0470 worker functions. Refused if the login is a superuser,
  * bypasses RLS, inherits roles or is the runtime login.
  */
 @Injectable()
@@ -87,7 +95,7 @@ export function shopifyBackgroundEnabled(env: Env): boolean {
   return Boolean(env.HON_COMMUNICATION_WORKER_DATABASE_URL) && Number.isSafeInteger(seconds) && seconds >= 30 && seconds <= 3600;
 }
 
-export interface ShopifyBackgroundSummary { claimed: number; succeeded: number; failed: number; needsReconnect: number; errors: number }
+export interface ShopifyBackgroundSummary { claimed: number; succeeded: number; failed: number; needsReconnect: number; errors: number; purgedOrders: number }
 
 /**
  * SH1b (0449) background sync: claim one due store, run the same sync as Sync now under the claim's lease, repeat up to
@@ -101,9 +109,17 @@ export class ShopifyBackgroundSync {
     @Optional() @Inject(SHOPIFY_WORKER_CLOCK) private readonly now: () => number = Date.now) {}
 
   async runOnce(limit = 5): Promise<ShopifyBackgroundSummary> {
-    const summary: ShopifyBackgroundSummary = { claimed: 0, succeeded: 0, failed: 0, needsReconnect: 0, errors: 0 };
+    const summary: ShopifyBackgroundSummary = { claimed: 0, succeeded: 0, failed: 0, needsReconnect: 0, errors: 0, purgedOrders: 0 };
     const app = this.app;
     if (!app || !this.store.isConfigured()) return summary;
+    // Retention first (0470): orders placed more than 60 days ago leave every store, connected or not. At most 5 batches a run.
+    for (let i = 0; i < 5; i++) {
+      try {
+        const p = await this.store.purgeExpiredOrders();
+        summary.purgedOrders += p.orders;
+        if (!p.more) break;
+      } catch { summary.errors += 1; break; }
+    }
     for (let i = 0; i < limit; i++) {
       const claimed = await this.store.claim() as Record<string, unknown> | null;
       if (!claimed) break;
@@ -153,7 +169,7 @@ export class ShopifyBackgroundScheduler implements OnModuleInit, OnModuleDestroy
     this.running = true;
     try {
       const summary = await this.worker.runOnce();
-      if (summary.claimed) emitTelemetry('info', 'shopify.background_synced', { component: 'shopify-sync', message: JSON.stringify(summary) });
+      if (summary.claimed || summary.purgedOrders) emitTelemetry('info', 'shopify.background_synced', { component: 'shopify-sync', message: JSON.stringify(summary) });
     } catch {
       emitTelemetry('error', 'shopify.background_sync_failed', { component: 'shopify-sync' });
     } finally { this.running = false; }
