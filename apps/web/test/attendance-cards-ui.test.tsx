@@ -18,12 +18,12 @@ const stub = (response: Response) => { const f = vi.fn(async () => response); vi
 const signal = () => new AbortController().signal;
 const fails = async (p: Promise<unknown>) => { try { await p; } catch (e) { return e as CardsError; } throw new Error('expected a failure'); };
 const body24 = '012345678901234567890123', CODE = body24 + attendanceCardCheckDigits(body24);
-const settings = { codeType: 'QR', showPhoto: true, showLogo: true, design: 'CLASSIC', version: 0, updatedAt: null, schoolName: 'Synthetic Dojo', logoUrl: 'https://example.invalid/logo.png', accentColor: '#112233',
-  photoConsent: { required: false, profile: null, reason: 'NO_LOCATION' } } as const;
+const settings = { codeType: 'QR', showPhoto: true, showLogo: true, design: 'CLASSIC', photoApprovalRequired: false, version: 0, updatedAt: null, schoolName: 'Synthetic Dojo', logoUrl: 'https://example.invalid/logo.png', accentColor: '#112233',
+  photoConsent: { required: false, profile: null, reason: 'OFF' } } as const;
 const card = (studentProfileId: string, last4: string): AttendanceCard => ({ cardId: id(60), studentProfileId, last4, status: 'ACTIVE', version: 1, issuedAt: at, endedAt: null });
 const student = (n: number, withCard = false) => ({ studentProfileId: id(n), personId: id(n + 100), givenName: `Kid${n}`, familyName: 'Synthetic', studentStatus: 'ACTIVE', hasPhoto: n % 2 === 0, card: withCard ? card(id(n), '4321') : null, photoConsent: 'NOT_REQUIRED' as const, photoConsentVersion: 0 });
 const read: AttendanceCardsRead = { settings, maxPerPrint: 40, students: [student(10), student(11, true)] };
-const look: Look = { codeType: 'QR', showPhoto: true, showLogo: true, design: 'CLASSIC' };
+const look: Look = { codeType: 'QR', showPhoto: true, showLogo: true, design: 'CLASSIC', photoApprovalRequired: false };
 
 it('QR encoder matches the ISO 18004 example (01234567, version 1-M) and builds a 21 x 21 symbol', () => {
   const data = qrNumericCodewords('01234567');
@@ -117,12 +117,13 @@ it('cards print only in the saved look', () => {
   expect(sheet).toContain('data-code-type="QR"');
 });
 
-it('where the place needs photo consent, staff see who has it and record or withdraw it', () => {
-  const rule = { required: true, profile: 'EU_GDPR', reason: 'PROFILE' } as const;
+it('photos print by default; a school that turns on parent approval sees who has it and records or withdraws it', () => {
+  expect(view()).toContain('data-testid="photo-approval"'); expect(view()).not.toContain('data-testid="consent-needed"');
+  const rule = { required: true, profile: null, reason: 'SCHOOL_POLICY' } as const;
   const students = [{ ...student(10), photoConsent: 'GIVEN' as const, photoConsentVersion: 1 }, { ...student(12), photoConsent: 'MISSING' as const }];
-  const html = view({ read: { state: 'READY', read: { ...read, settings: { ...settings, photoConsent: rule }, students } } });
-  expect(html).toContain('must agree before a photo is printed'); expect(html).toContain('Photo consent');
-  expect(html).toContain('On file'); expect(html).toContain('Withdraw'); expect(html).toContain('Not on file (initials)'); expect(html).toContain('Record consent');
+  const html = view({ read: { state: 'READY', read: { ...read, settings: { ...settings, photoApprovalRequired: true, photoConsent: rule }, students } } });
+  expect(html).toContain('to approve the photo before it prints on a card'); expect(html).toContain('Parent photo approval');
+  expect(html).toContain('On file'); expect(html).toContain('Withdraw'); expect(html).toContain('Not on file (initials)'); expect(html).toContain('Record approval');
   expect(view()).not.toContain('data-testid="consent-cell"');
   for (const l of ['ko', 'es']) expect(cardsText(l, 'consentNeeded')).not.toBe(cardsText('en', 'consentNeeded'));
 });
