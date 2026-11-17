@@ -106,6 +106,7 @@ GRANT SELECT ON TABLE
   hon.ai_invocation_plans,
   hon.idempotency_records,
   hon.principal_interface_preferences,
+  hon.principal_agent_voice_preferences,
   hon.curricula,
   hon.curriculum_ranks,
   hon.curriculum_requirements,
@@ -142,6 +143,7 @@ GRANT INSERT ON TABLE
   hon.outbox_events,
   hon.idempotency_records,
   hon.principal_interface_preferences,
+  hon.principal_agent_voice_preferences,
   hon.curricula,
   hon.curriculum_ranks,
   hon.curriculum_requirements,
@@ -164,6 +166,7 @@ GRANT UPDATE ON TABLE
  hon.action_requests,
  hon.idempotency_records,
  hon.principal_interface_preferences,
+ hon.principal_agent_voice_preferences,
   -- Human invoice issuance is the only reviewed invoice state transition.
   hon.invoices,
   -- hon.memberships has no runtime UPDATE (0177): activation and cancellation

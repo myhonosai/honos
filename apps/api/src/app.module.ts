@@ -116,6 +116,8 @@ import { TrialAppointmentOutcomeService } from './crm/trial-appointment-outcome.
 import { ActionEngineService } from './action/action-engine.service.js';
 import { InterfaceThemeController } from './preferences/interface-theme.controller.js';
 import { InterfaceThemeService } from './preferences/interface-theme.service.js';
+import { AgentVoiceController } from './preferences/agent-voice.controller.js';
+import { AgentVoiceService } from './preferences/agent-voice.service.js';
 import { MembershipController } from './billing/membership.controller.js';
 import { MembershipService } from './billing/membership.service.js';
 import { CrmLeadMembershipsController } from './billing/crm-lead-memberships.controller.js';
@@ -552,6 +554,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     StaffTestingRegistrationController,
     ParentTestingStatusController,
     InterfaceThemeController,
+    AgentVoiceController,
     MembershipController,
     CrmLeadMembershipsController,
     MembershipDateRevisionController,
@@ -773,6 +776,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentTestingStatusReadGuard,
     ActionEngineService,
     InterfaceThemeService,
+    AgentVoiceService,
     MembershipService,
     CrmLeadMembershipsService,
     MembershipDateRevisionService,
