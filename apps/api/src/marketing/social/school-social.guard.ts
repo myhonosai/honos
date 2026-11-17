@@ -3,6 +3,7 @@ import {
   SOCIAL_ACCOUNT_CHANGE_COMMAND, SOCIAL_CONNECT_COMMAND, SOCIAL_CONNECT_COMPLETE_COMMAND, SOCIAL_POST_APPROVE_COMMAND, SOCIAL_POST_CANCEL_COMMAND,
   SOCIAL_POST_CREATE_COMMAND, SOCIAL_POST_EDIT_COMMAND, SOCIAL_POST_RESOLVE_COMMAND, SOCIAL_READ_COMMAND,
   SOCIAL_INBOX_CHANGE_COMMAND, SOCIAL_INBOX_COMMENT_COMMAND, SOCIAL_INBOX_REPLY_COMMAND, SOCIAL_INBOX_RESOLVE_COMMAND,
+  SOCIAL_ADS_BUDGET_COMMAND, SOCIAL_AD_CANCEL_COMMAND, SOCIAL_AD_CREATE_COMMAND, SOCIAL_AD_OPERATION_COMMAND, SOCIAL_AD_RESOLVE_COMMAND,
 } from '@hon/contracts';
 import { MembershipActivationHumanUiGuard } from '../../billing/membership-activation-human-ui.guard.js';
 
@@ -62,4 +63,26 @@ export class SchoolSocialInboxResolveHumanUiGuard extends MembershipActivationHu
 @Injectable()
 export class SchoolSocialInboxCommentHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = SOCIAL_INBOX_COMMENT_COMMAND;
+}
+
+/** 0445 ads: the read is a same-origin GET (the 0347 read command); the cap, drafts and each Zernio operation are their own browser commands. */
+@Injectable()
+export class SchoolSocialAdBudgetHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = SOCIAL_ADS_BUDGET_COMMAND;
+}
+@Injectable()
+export class SchoolSocialAdCreateHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = SOCIAL_AD_CREATE_COMMAND;
+}
+@Injectable()
+export class SchoolSocialAdOperationHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = SOCIAL_AD_OPERATION_COMMAND;
+}
+@Injectable()
+export class SchoolSocialAdCancelHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = SOCIAL_AD_CANCEL_COMMAND;
+}
+@Injectable()
+export class SchoolSocialAdResolveHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = SOCIAL_AD_RESOLVE_COMMAND;
 }
