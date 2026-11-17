@@ -1,0 +1,20 @@
+/* Staff > Shifts week grid. Page chrome comes from membership-changes.module.css. */
+.scroll { overflow-x: auto; max-width: 100%; border: 1px solid #24405a; border-radius: 12px; }
+.grid { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 13px; }
+.grid th, .grid td { padding: 6px; border-bottom: 1px solid #1d3550; border-right: 1px solid #1d3550; vertical-align: top; text-align: left; }
+.grid thead th { position: sticky; top: 0; background: #10243a; font-weight: 800; }
+.grid tbody th { min-width: 130px; font-weight: 700; }
+.grid tfoot td, .grid tfoot th { background: #0d1d2e; color: #b6c8da; font-weight: 700; }
+.today { background: #0f2a3f; }
+.cell { display: grid; gap: 4px; min-height: 44px; }
+.shift { display: grid; gap: 2px; width: 100%; padding: 6px 8px; border: 1px solid #35506d; border-radius: 8px; background: #13324d; color: #eaf4fb; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.shift[data-status='CANCELLED'] { opacity: 0.6; text-decoration: line-through; cursor: default; }
+.shift:focus-visible, .add:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
+.time { font-weight: 800; }
+.tag { font-size: 12px; color: #ffe4a8; }
+.add { min-height: 32px; padding: 2px 8px; border: 1px dashed #35506d; border-radius: 8px; background: transparent; color: #9fb4c8; font: inherit; font-size: 12px; cursor: pointer; }
+.total { white-space: nowrap; font-weight: 800; }
+.fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.fields label { display: grid; gap: 4px; font-size: 13px; font-weight: 700; }
+.fields input, .fields select, .fields textarea { box-sizing: border-box; width: 100%; min-height: var(--hon-target, 44px); padding: 8px 10px; border: 1px solid #24405a; border-radius: 10px; background: #0d1d2e; color: #eaf4fb; font: inherit; }
+.problems { margin: 0; padding-left: 18px; color: #ffe4a8; font-size: 13px; }

@@ -205,6 +205,9 @@ import { CrmLeadStageMoveHumanUiGuard, CrmPipelineBoardReadHumanUiGuard, CrmPipe
 import { SchoolLocationService } from './school-location/school-location.service.js';
 import { SchoolLocationReadHumanUiGuard, SchoolLocationSaveHumanUiGuard } from './school-location/school-location-human-ui.guard.js';
 import { SchoolDemoDataController } from './school-demo-data/school-demo-data.controller.js';
+import { StaffShiftController } from './staff-shifts/staff-shifts.controller.js';
+import { StaffShiftService } from './staff-shifts/staff-shifts.service.js';
+import { StaffShiftReadHumanUiGuard, StaffShiftSaveHumanUiGuard } from './staff-shifts/staff-shifts-human-ui.guard.js';
 import { SchoolDemoDataService } from './school-demo-data/school-demo-data.service.js';
 import { SchoolDemoDataLoadHumanUiGuard, SchoolDemoDataReadHumanUiGuard, SchoolDemoDataRemoveHumanUiGuard } from './school-demo-data/school-demo-data-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
@@ -591,6 +594,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolBrandingController,
     SchoolLocationController,
     SchoolDemoDataController,
+    StaffShiftController,
     CrmPipelineBoardController,
     SchoolMembershipListController,
     CrmSchoolClockController,
@@ -854,6 +858,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolBrandingService, SchoolBrandingReadHumanUiGuard, SchoolBrandingSaveHumanUiGuard,
     SchoolLocationService, SchoolLocationReadHumanUiGuard, SchoolLocationSaveHumanUiGuard,
     SchoolDemoDataService, SchoolDemoDataReadHumanUiGuard, SchoolDemoDataLoadHumanUiGuard, SchoolDemoDataRemoveHumanUiGuard,
+    StaffShiftService, StaffShiftReadHumanUiGuard, StaffShiftSaveHumanUiGuard,
     CrmPipelineBoardService, CrmPipelineBoardReadHumanUiGuard, CrmLeadStageMoveHumanUiGuard, CrmPipelineStagesSaveHumanUiGuard,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,

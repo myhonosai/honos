@@ -217,6 +217,10 @@
       "title": "Book a time"
     },
     {
+      "path": "/staff/team/shifts",
+      "title": "HON | Shifts"
+    },
+    {
       "path": "/staff/team/availability",
       "title": "Human Staff Availability and Qualifications"
     },

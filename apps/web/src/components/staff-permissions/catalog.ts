@@ -69,6 +69,8 @@ export const PERMISSION_LABELS: Readonly<Record<string, string>> = {
   'iam.staff_role.grant': 'Give a role to a person',
   'iam.staff_role.revoke': 'End a person’s role',
   'staff.availability.manage': 'Manage staff availability',
+  'staff.shift.manage': 'Schedule staff shifts',
+  'staff.shift.view_own': 'See their own shifts',
   'staff.availability.self_manage': 'Set their own availability',
   'staff.instructor_qualification.read': 'See instructor qualifications',
   'staff.instructor_qualification.manage': 'Record instructor qualifications',
