@@ -70,6 +70,7 @@ function Upload({ p, t }: { p: StudentImportViewProps; t: T }) {
   return <article className={styles.card} aria-labelledby="student-import-upload-title" data-testid="student-import-upload">
     <h2 id="student-import-upload-title">{t('uploadTitle')}</h2>
     <p className={styles.meta}>{t('uploadHelp')}</p>
+    <p className={styles.meta}><a href="/staff/migration/photos" data-testid="student-import-from-photos">{t('fromPhotos')}</a></p>
     {u.phase !== 'MAPPING' ? <label className={styles.field}>{t('chooseFile')}
       <input type="file" accept=".csv,text/csv" disabled={p.locked} data-testid="student-import-file" onChange={(e) => { p.onFile?.(e.currentTarget.files?.[0] ?? null); e.currentTarget.value = ''; }}/></label> : null}
     {u.phase === 'FILE_ERROR' ? <p className={`${styles.notice} ${styles.warn}`} role="status">{t(u.problem === 'TOO_LARGE' ? 'fileTooLarge' : 'fileUnreadable')}</p> : null}

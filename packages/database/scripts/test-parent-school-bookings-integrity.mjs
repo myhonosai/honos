@@ -1,5 +1,5 @@
 /**
- * Parent school bookings proof (0360) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards ->
+ * Parent school bookings proof (0431) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards ->
  * ParentSchoolBookingController -> protected definer functions on the restricted runtime role with forced RLS), on the
  * guarded disposable CRM-close fixture only. Synthetic names only; nothing is sent.
  */
@@ -349,12 +349,12 @@ try {
   await assert.rejects(runtime.query('SELECT 1 FROM hon.parent_school_bookings')); checks += 1;
   await assert.rejects(runtime.query("SELECT hon.book_parent_school_event_slot($1,'{}'::jsonb,'k',gen_random_uuid(),gen_random_uuid())", [GUARDIAN.subject])); checks += 1;
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const startMark = '-- Parent school bookings exact verification (0360)', endMark = '-- End parent school bookings exact verification.';
+    const startMark = '-- Parent school bookings exact verification (0431)', endMark = '-- End parent school bookings exact verification.';
     const section = verify.split(startMark)[1]?.split(endMark)[0];
     ok(section, startMark);
     await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
-  console.log(`PASS: parent school bookings (0360): ${checks} checks.`);
+  console.log(`PASS: parent school bookings (0431): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch(() => {});

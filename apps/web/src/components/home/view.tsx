@@ -1,12 +1,12 @@
 import React, { type ReactNode } from 'react';
 import type { HonInterfaceTheme } from '@hon/design-system';
 import type { OperationalSchoolScope } from '../operational-navigation';
-import { SCHOOL_SHELL_NAV, schoolShellHref } from '../school-shell/catalog';
+import { SCHOOL_SHELL_SECTIONS, schoolShellHref, schoolShellListed, schoolShellSectionItems } from '../school-shell/catalog';
 import { shellText } from '../school-shell/copy';
 import { HON_ART_STYLES, defaultArtStyle, type HonArtStyle } from '../hon-command/roster';
 import { ShellIcon } from '../school-shell/icons';
 import { homeText, type HomeKey } from './copy';
-import { ASK_HON_AGENTS, homeAiTeam, homeKpis, leadOutcomes, membershipMix, myTasks, recentLeads, todaySessions, sessionSnapshotSaturated, type AgentCard, type Bar, type HomeSources, type Kpi, type Panel } from './model';
+import { ASK_HON_AGENTS, homeAiTeam, honLine, homeKpis, leadOutcomes, membershipMix, myTasks, recentLeads, todaySessions, sessionSnapshotSaturated, type AgentCard, type Bar, type HomeSources, type Kpi, type Panel } from './model';
 import styles from './home.module.css';
 
 export type SchoolHomeViewProps = Readonly<{
@@ -39,6 +39,7 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
 
   const style = artStyle ?? defaultArtStyle(mode);
   const team = homeAiTeam(sources.readiness, style);
+  const hon = honLine(sources.hon);
   const kpis = homeKpis(sources);
   const half = Math.ceil(team.length / 2);
   const today = new Intl.DateTimeFormat(locale, { weekday: 'long', month: 'short', day: 'numeric', ...(timeZone ? { timeZone } : {}) }).format(now);
@@ -58,7 +59,7 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
           <img className={styles.orb} src="/ai/hon-core.webp" alt="" width={168} height={168} />
           <h2 id="home-hon">{t('honTitle')}</h2>
           <p className={styles.honRole}>{t('honCore')}</p>
-          <p className={styles.honStatus} data-status="pending">{t('honStatus')}</p>
+          {hon && <p className={styles.honStatus} data-status={hon.status}>{t(hon.key)}</p>}
           <a className={styles.primary} href="/staff/hon"><ShellIcon name="hon" /><span>{t('askHon')}</span></a>
         </article>
         <ul className={styles.agents} aria-label={t('teamTitle')}>{team.slice(half).map(agent => <Agent key={agent.id} agent={agent} t={t} />)}</ul>
@@ -79,10 +80,15 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
 
     {mode === 'big-button' && <section className={styles.areas} aria-labelledby="home-areas">
       <header className={styles.sectionHead}><h2 id="home-areas">{t('areasTitle')}</h2><p>{t('areasLead')}</p></header>
-      <ul>{SCHOOL_SHELL_NAV.filter(item => item.key !== 'home').map(item => <li key={item.key} data-area={item.key}>
-        <a href={schoolShellHref(item.routes[0]!, selection)}><span className={styles.areaIcon} aria-hidden="true"><ShellIcon name={item.key} size={30} /></span>
-          <strong>{shellText(language, item.titleKey)}</strong><small>{item.routes.slice(0, 2).map(route => shellText(language, route.titleKey)).join(' · ')}</small></a>
-      </li>)}</ul>
+      {/* Owner menu (2026-11-16): the same headings as the menu, each with its page cards. */}
+      {SCHOOL_SHELL_SECTIONS.map(section => { const items = schoolShellSectionItems(section.key).filter(item => item.key !== 'home');
+        return items.length > 0 && <section key={section.key} className={styles.areaGroup} data-area-section={section.key} aria-labelledby={`home-area-${section.key}`}>
+          <h3 id={`home-area-${section.key}`}>{shellText(language, section.titleKey)}</h3>
+          <ul>{items.map(item => <li key={item.key} data-area={item.key}>
+            <a href={schoolShellHref(item.routes[0]!, selection)}><span className={styles.areaIcon} aria-hidden="true"><ShellIcon name={item.key} size={30} /></span>
+              <strong>{shellText(language, item.titleKey)}</strong><small>{schoolShellListed(item).slice(0, 2).map(route => shellText(language, route.titleKey)).join(' · ')}</small></a>
+          </li>)}</ul>
+        </section>; })}
     </section>}
 
     <section aria-labelledby="home-kpis">

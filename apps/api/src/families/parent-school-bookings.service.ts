@@ -38,7 +38,7 @@ function subjectOk(subject: unknown): subject is string {
   return typeof subject === 'string' && subject.length > 0 && subject.length <= 200 && subject.trim() === subject;
 }
 
-/** 0360 parent school bookings: the parent's one live family grant decides the tenant; no school, family, name or contact is taken from the request. */
+/** 0431 parent school bookings: the parent's one live family grant decides the tenant; no school, family, name or contact is taken from the request. */
 @Injectable()
 export class ParentSchoolBookingService {
   constructor(private readonly database: RuntimeDatabaseService) {}

@@ -23,8 +23,10 @@ export function leadMembershipPath(value: LeadMembershipScope): string {
 export function leadMembershipHref(value: LeadMembershipScope): string {
   return `/staff/crm/lead-memberships?${new URLSearchParams(leadMembershipScope(value))}`;
 }
+/** The enrollment journey page, linked from a lead on the Leads board (it is not its own tab). */
+const LEAD_JOURNEY_PAGE = '/staff/crm/journey';
 export function leadWorkflowHref(value: LeadMembershipScope): string {
-  return `/staff/crm/journey?${new URLSearchParams(leadMembershipScope(value))}`;
+  return `${LEAD_JOURNEY_PAGE}?${new URLSearchParams(leadMembershipScope(value))}`;
 }
 /** One lead only. No fallback lookup, read-side writes, query, body, key or provider call. */
 export async function readLeadMemberships(value: LeadMembershipScope, signal: AbortSignal): Promise<CrmLeadMemberships> {

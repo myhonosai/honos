@@ -4,9 +4,9 @@ import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
-import { MarkError, RosterError, rosterApi, type RosterApi, type RosterMark, type RosterPage, type RosterScope, type SessionPage } from './http';
-import type { ClassSessionRosterEntry } from '@hon/contracts';
-import { RosterView, type MarkState, type RosterState, type SessionListState } from './view';
+import { RosterError, rosterApi, type RosterApi, type RosterScope, type SessionPage } from './http';
+import { RosterView, type SessionListState } from './view';
+import { useRosterDetail } from './use-roster-detail';
 
 const kindOf = (error: unknown) => error instanceof RosterError ? error.kind : 'UNAVAILABLE';
 
@@ -25,20 +25,16 @@ export function ClassRoster({ api = rosterApi }: { api?: RosterApi }): React.Rea
   const [list, setList] = useState<SessionListState>({ state: 'LOADING' });
   const [listRefresh, setListRefresh] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [roster, setRoster] = useState<RosterState>({ state: 'NONE' });
-  const [rosterRefresh, setRosterRefresh] = useState(0);
-  // Per student on the open roster: the last mark's outcome. Retry keys are kept per exact unchanged command, so pressing
-  // the same button after an unconfirmed save replays it (the server answers once) instead of recording twice.
-  const [marks, setMarks] = useState<Readonly<Record<string, MarkState>>>({});
-  const markKeys = useRef(new Map<string, string>());
-  const listGeneration = useRef(0), rosterGeneration = useRef(0), privacy = useRef(0), mounted = useRef(false), lastSchool = useRef<string | null>(null);
-  const moreAbort = useRef<AbortController | null>(null), classesAbort = useRef<AbortController | null>(null);
-  const retire = () => { markKeys.current.clear(); listGeneration.current++; rosterGeneration.current++; moreAbort.current?.abort(); moreAbort.current = null; classesAbort.current?.abort(); classesAbort.current = null; };
+  const listGeneration = useRef(0), privacy = useRef(0), mounted = useRef(false), lastSchool = useRef<string | null>(null);
+  const classesAbort = useRef<AbortController | null>(null);
+  const detail = useRosterDetail(api, scope, selectedId, privacy, mounted);
+  const { roster, marks, onMore, onMark } = detail;
+  const retire = () => { detail.retire(); listGeneration.current++; classesAbort.current?.abort(); classesAbort.current = null; };
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; privacy.current++; retire(); }; }, []);
 
   useEffect(() => onShellPrivacyEvent(() => {
     concealShellPrivateNow(); retire(); privacy.current++;
-    setList({ state: 'LOADING' }); setRoster({ state: 'NONE' });
+    setList({ state: 'LOADING' }); detail.clear();
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), []);
 
   const school = selection ? selection.schoolId.toLowerCase() : null;
@@ -93,88 +89,11 @@ export function ClassRoster({ api = rosterApi }: { api?: RosterApi }): React.Rea
       });
   }, [api, list, selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Page one of the selected class's roster. A changed roster while paging restarts here with restarted=true.
-  const firstPage = useCallback((sessionId: string, restarted: boolean) => {
-    if (!scope) return () => {};
-    moreAbort.current?.abort(); moreAbort.current = null;
-    const current = ++rosterGeneration.current, shown = privacy.current;
-    setRoster({ state: 'LOADING' }); setMarks({});
-    const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
-    const owned = () => mounted.current && current === rosterGeneration.current && shown === privacy.current;
-    api.roster(scope, sessionId, null, signal, owned).then(
-      (page) => { if (owned()) setRoster({ state: 'READY', sessionId, entries: page.entries, nextCursor: page.nextCursor, more: 'IDLE', restarted }); },
-      (error) => {
-        if (!owned() || abort.signal.aborted) return;
-        const kind = kindOf(error);
-        setRoster({ state: kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' });
-      });
-    return () => { abort.abort(); };
-  }, [api, selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
-  const restart = useRef<((sessionId: string) => void) | null>(null);
-  restart.current = (sessionId) => { firstPage(sessionId, true); };
-
-  useEffect(() => {
-    if (!selectedId || !scope) { rosterGeneration.current++; setRoster({ state: 'NONE' }); return; }
-    return firstPage(selectedId, false);
-  }, [selection?.organizationId, selection?.schoolId, selectedId, rosterRefresh, firstPage]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const onMore = useCallback(() => {
-    if (roster.state !== 'READY' || !roster.nextCursor || roster.more === 'LOADING' || !scope) return;
-    const prior = roster, current = rosterGeneration.current, shown = privacy.current;
-    const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
-    moreAbort.current?.abort(); moreAbort.current = abort;
-    const owned = () => mounted.current && current === rosterGeneration.current && shown === privacy.current && moreAbort.current === abort;
-    setRoster({ ...prior, more: 'LOADING' });
-    const changed = () => { if (prior.restarted) setRoster({ state: 'UNAVAILABLE' }); else restart.current?.(prior.sessionId); };
-    api.roster(scope, prior.sessionId, prior.nextCursor, signal, owned).then(
-      (page: RosterPage) => {
-        if (!owned()) return;
-        moreAbort.current = null;
-        const seen = new Set(prior.entries.map((e) => e.studentProfileId.toLowerCase()));
-        // A student already shown on an earlier page means the roster moved under the cursor: start again.
-        if (page.entries.some((e) => seen.has(e.studentProfileId.toLowerCase()))) { changed(); return; }
-        setRoster({ ...prior, entries: [...prior.entries, ...page.entries], nextCursor: page.nextCursor, more: 'IDLE' });
-      },
-      (error) => {
-        if (!owned() || abort.signal.aborted) return;
-        moreAbort.current = null;
-        const kind = kindOf(error);
-        if (kind === 'CURSOR') { changed(); return; }
-        setRoster(kind === 'DENIED' ? { state: 'DENIED' } : { ...prior, more: 'FAILED' });
-      });
-  }, [api, roster, selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const onMark = useCallback((entry: ClassSessionRosterEntry, status: RosterMark) => {
-    if (roster.state !== 'READY' || !scope) return;
-    const student = entry.studentProfileId.toLowerCase(), sessionId = roster.sessionId;
-    if (marks[student]?.state === 'SAVING' || entry.attendance?.status === status) return;
-    const fingerprint = `${sessionId}:${student}:${status}:${entry.attendance?.version ?? 0}`;
-    const key = markKeys.current.get(fingerprint) ?? crypto.randomUUID(); markKeys.current.set(fingerprint, key);
-    const current = rosterGeneration.current, shown = privacy.current;
-    const owned = () => mounted.current && current === rosterGeneration.current && shown === privacy.current;
-    setMarks((m) => ({ ...m, [student]: { state: 'SAVING', status } }));
-    api.mark(scope, sessionId, entry, status, key).then(
-      (attendance) => {
-        if (!owned()) return;
-        markKeys.current.delete(fingerprint);
-        setRoster((r) => r.state === 'READY' && r.sessionId === sessionId
-          ? { ...r, entries: r.entries.map((e) => e.studentProfileId.toLowerCase() === student ? { ...e, attendance } : e) } : r);
-        setMarks((m) => ({ ...m, [student]: { state: 'SAVED', status } }));
-      },
-      (error) => {
-        if (!owned()) return;
-        const kind = error instanceof MarkError ? error.kind : 'UNKNOWN';
-        // A definite refusal frees the key; only an unconfirmed outcome keeps it for the same retry.
-        if (kind !== 'UNKNOWN') markKeys.current.delete(fingerprint);
-        if (kind === 'CONFLICT') { setRosterRefresh((n) => n + 1); return; }
-        setMarks((m) => ({ ...m, [student]: { state: kind, status } }));
-      });
-  }, [api, roster, marks, selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const onFrom = useCallback((next: string | null) => { setFrom(next); }, []);
-  const onOpen = useCallback((id: string) => { setSelectedId(id); setRosterRefresh((n) => n + 1); }, []);
-  const onRefresh = useCallback(() => { setListRefresh((n) => n + 1); setRosterRefresh((n) => n + 1); }, []);
-  const onReloadRoster = useCallback(() => setRosterRefresh((n) => n + 1), []);
+  const reloadRoster = detail.reload;
+  const onOpen = useCallback((id: string) => { setSelectedId(id); reloadRoster(); }, [reloadRoster]);
+  const onRefresh = useCallback(() => { setListRefresh((n) => n + 1); reloadRoster(); }, [reloadRoster]);
+  const onReloadRoster = reloadRoster;
 
   // Keyed by the shell phase: a concealed node is replaced, never un-hidden in place.
   return <div key={shell.phase} data-shell-private="">

@@ -143,13 +143,13 @@ it('a selected class shows its own roster, counts, a partial note, and links tha
   expect(render({ selectedId: id(71), roster: { state: 'DENIED' } })).toContain('who can record attendance');
 });
 
-it('has every phrase in Korean and Spanish; the page is first in the Classes group and in the route manifest', () => {
+it('has every phrase in Korean and Spanish; the Calendar page is first in the Classes group and in the route manifest', () => {
   for (const language of ['ko', 'es'] as const) expect(Object.keys(ROSTER_LANGUAGES[language]).sort()).toEqual(Object.keys(ROSTER_LANGUAGES.en).sort());
   expect(rosterText('ko', 'title')).toBe('수업 명단'); expect(rosterText('es', 'title')).toBe('Listas de clase');
   expect(SCHOOL_SHELL_NAV.find((g) => g.key === 'classes')?.routes[0]?.href).toBe('/staff/schedule');
-  expect(schoolShellActiveRoute('/staff/schedule/sessions')?.href).toBe('/staff/schedule/sessions');
+  expect(schoolShellActiveRoute('/staff/schedule/sessions')?.href).toBe('/staff/schedule');
   const manifest = JSON.parse(readFileSync(new URL('../public/manus-routes.json', import.meta.url), 'utf8')) as { routes: { path: string; title: string }[] };
-  expect(manifest.routes).toContainEqual({ path: '/staff/schedule', title: 'HON | Class rosters' });
+  expect(manifest.routes).toContainEqual({ path: '/staff/schedule', title: 'HON | Calendar' });
 });
 
 const savedRecord = (status = 'PRESENT', over: Record<string, unknown> = {}) => ({ id: id(95), classSessionId: id(71), studentProfileId: id(101), status, category: 'REGULAR_PARTICIPANT',
@@ -231,7 +231,7 @@ it('offers Present, Late, Excused and Absent per student on a scheduled class, s
 });
 
 it('keeps a retry key only for an unconfirmed mark, and reloads the roster on a version conflict', () => {
-  const source = readFileSync(new URL('../src/components/class-roster/class-roster.tsx', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../src/components/class-roster/use-roster-detail.ts', import.meta.url), 'utf8');
   expect(source).toContain("if (kind !== 'UNKNOWN') markKeys.current.delete(fingerprint);");
   expect(source).toContain("if (kind === 'CONFLICT') { setRosterRefresh((n) => n + 1); return; }");
   expect(source).toMatch(/const fingerprint = `\$\{sessionId\}:\$\{student\}:\$\{status\}:\$\{entry\.attendance\?\.version \?\? 0\}`/);
