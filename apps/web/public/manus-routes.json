@@ -705,6 +705,18 @@
       "title": "HON | Settings"
     },
     {
+      "path": "/staff/tools",
+      "title": "HON | Custom tools"
+    },
+    {
+      "path": "/staff/tools/:toolKey",
+      "title": "HON | Custom tool"
+    },
+    {
+      "path": "/staff/tool-maker",
+      "title": "HON | Tool Maker"
+    },
+    {
       "path": "/staff/walk-in",
       "title": "HON | Walk-in kiosk"
     },
