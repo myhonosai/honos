@@ -32,3 +32,9 @@ it.each(['en','ko','es'])('renders an idle localized %s screen with no fetch or 
 it('interpolates only explicit values and preserves unrecognized evidence verbatim',()=>{
   expect(dateText('ko','days {value}',{value:9})).toBe('9일');expect(dateText('es','version {value}',{value:2})).toBe('versión 2');expect(dateCodeText('ko','America/Los_Angeles')).toBe('America/Los_Angeles');
 });
+it('inside the school shell shows no organization or school ID fields and picks the member by name', async () => {
+  const { SchoolShellProvider, NO_SCHOOL_SHELL } = await import('../src/components/school-shell/context');
+  const html=renderToStaticMarkup(<SchoolShellProvider value={{...NO_SCHOOL_SHELL,phase:'READY',selection:{organizationId:'11111111-1111-4111-8111-111111111111',schoolId:'22222222-2222-4222-8222-222222222222'},schoolName:'Sunrise'}}><MembershipDatesWorkbench sessionSubject="synthetic-staff"/></SchoolShellProvider>);
+  for(const word of ['Organization ID','School ID','Selectors confer no authority','School and membership reference'])expect(html).not.toContain(word);
+  expect(html).toContain('Reading memberships…');expect(html).toContain('Enter record IDs instead');expect(html).toContain('Choose a member, then load their membership dates.');
+});
