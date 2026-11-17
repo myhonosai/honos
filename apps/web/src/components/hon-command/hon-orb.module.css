@@ -18,6 +18,10 @@
 /* The art is a sphere (about two-thirds of the picture) on a dark square: a soft round mask keeps only the sphere,
    so the orb sits on any background. */
 .core { position: absolute; inset: 0; transform: scale(calc(1 + var(--orb-level) * 0.09)); }
+/* The inner sphere turns slowly on its own; a second, paused spin adds speed while HON listens, thinks or speaks. */
+.swirl, .swirlBoost { position: absolute; inset: 0; }
+.swirl { animation: orbSpin 30s linear infinite; }
+.swirlBoost { animation: orbSpin 12s linear infinite paused; }
 .core img { display: block; width: 100%; height: 100%; object-fit: cover;
   -webkit-mask-image: radial-gradient(circle closest-side, #000 63%, transparent 73%);
   mask-image: radial-gradient(circle closest-side, #000 63%, transparent 73%); }
@@ -54,18 +58,18 @@
 .orb[data-orb-state='standby'] .dial { opacity: 0.85; }
 
 /* listening */
-.orb[data-orb-state='listening'] .boost { animation-play-state: running; }
+.orb[data-orb-state='listening'] .boost, .orb[data-orb-state='listening'] .swirlBoost { animation-play-state: running; }
 .orb[data-orb-state='listening'] .orbit { stroke: rgba(170, 240, 255, 0.8); }
 .orb[data-orb-state='listening'] .dial { opacity: 1; }
 
 /* thinking */
-.orb[data-orb-state='thinking'] .boost { animation-play-state: running; }
+.orb[data-orb-state='thinking'] .boost, .orb[data-orb-state='thinking'] .swirlBoost { animation-play-state: running; }
 .orb[data-orb-state='thinking'] .scan { opacity: 1; animation-play-state: running; }
 .orb[data-orb-state='thinking'] .shimmer { opacity: 0.85; }
 .orb[data-orb-state='thinking'] .aura { animation-duration: 1.6s; }
 
 /* speaking */
-.orb[data-orb-state='speaking'] .boost { animation-play-state: running; }
+.orb[data-orb-state='speaking'] .boost, .orb[data-orb-state='speaking'] .swirlBoost { animation-play-state: running; }
 .orb[data-orb-state='speaking'] .ripple { animation-play-state: running; }
 .orb[data-orb-state='speaking'] .orbit { stroke: rgba(170, 240, 255, 0.8); }
 
