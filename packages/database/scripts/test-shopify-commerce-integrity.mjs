@@ -95,7 +95,7 @@ try{
  const SHOP='ima-proof-'+K().slice(0,8)+'.myshopify.com';
 
  // 2. Before connecting: permissions and scope.
- assert.deepEqual(ok(await read(reader,A.schoolId)),{schoolId:A.schoolId,canManage:false,connectEnabled:true,connection:null,counts:null,summary:null});
+ assert.deepEqual(ok(await read(reader,A.schoolId)),{schoolId:A.schoolId,canManage:false,connectEnabled:true,autoSync:false,connection:null,counts:null,summary:null});
  assert.equal(ok(await read(manager,A.schoolId)).canManage,true);
  assert.deepEqual(ok(await read(reader,A.schoolId,'/catalog')),{schoolId:A.schoolId,currency:null,products:[]});
  for(const who of [staff,outsider,managerB])await denied(()=>read(who,A.schoolId),403,'SHOPIFY_FORBIDDEN');

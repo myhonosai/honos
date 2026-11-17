@@ -301,8 +301,9 @@ BEGIN
   PERFORM hon.school_social_command_finish(org,school,actor,p_key,result);
   IF hon.require_school_social_actor(p_subject,'marketing.social.ads') IS DISTINCT FROM actor THEN RAISE EXCEPTION 'SOCIAL_FORBIDDEN' USING ERRCODE='42501'; END IF;
   SELECT * INTO t FROM hon.school_social_post_targets WHERE id=d.target_id;
-  -- 0453: the channel, and for Google the school's own ad text and a daily budget (total / days, rounded down), so
-  -- Google's own charging limit (daily budget x days) stays inside the total counted against the cap.
+  -- 0453: the channel, and for Google the school's own ad text and a daily budget (total / days, rounded down). This
+  -- keeps the expected spend inside the total counted against the cap; Google may still overdeliver up to 2x on a day
+  -- (spec 8.2 item 6 gates real use).
   RETURN jsonb_build_object('record',result,'replayed',false,'send',jsonb_build_object('adId',d.id,'leaseToken',d.lease_token,'operation',op,
     'channel',d.channel,'google',d.google_content,
     'dailyBudgetCents',CASE WHEN d.channel='GOOGLE_SEARCH' THEN d.budget_cents/(d.ends_on-d.starts_on+1) END,

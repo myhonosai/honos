@@ -163,7 +163,8 @@ export class SchoolSocialAdsService {
     if (s.channel === 'META_BOOST') {
       if (typeof s.providerPostId !== 'string' || s.google !== null || s.dailyBudgetCents !== null) receipt();
     } else {
-      // The text sent to Google is exactly the verified text the person approved, and the daily budget never exceeds total / days.
+      // The text sent to Google is exactly the verified text the person approved, and the daily budget is at most total / days
+      // (expected spend; Google may overdeliver on a day, spec 8.2 item 6).
       const span = Math.round((Date.parse(ad.endsOn + 'T00:00:00Z') - Date.parse(ad.startsOn + 'T00:00:00Z')) / 86_400_000) + 1;
       if (s.providerPostId !== null || !sameGoogle(s.google, ad.google) || !Number.isSafeInteger(s.dailyBudgetCents)
         || s.dailyBudgetCents! < 100 || s.dailyBudgetCents! * span > ad.budgetCents) receipt();

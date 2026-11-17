@@ -127,9 +127,12 @@ command rules are the reviewed ones.
   school's CONNECTED `GOOGLE_ADS` account with ads on. Same date rules (1 to 31 days, from today up to 90 days ahead),
   same cap checks; the total budget must allow at least 1.00 a day.
 - **Approve / turn on / pause / cancel / resolve**: the existing 0445 commands, unchanged for people. The start step
-  hands the API the channel and, for Google, the content and a **daily budget = total ÷ days (rounded down)**, so
-  Google's own charging limit (never more than the daily budget × days in a month) stays inside the total HON counted
-  against the cap.
+  hands the API the channel and, for Google, the content and a **daily budget = total ÷ days (rounded down)**. Google
+  may spend up to twice the daily budget on a single day and settles against its monthly charging limit (daily budget
+  × days in the month), so over a short campaign the spend can run somewhat above total ÷ days on some days; HON's
+  daily figure keeps the *expected* spend at or under the total counted against the cap, but it is not a hard stop.
+  Before real use, either Zernio sets a Google campaign total budget, or the cap counts the ad at its worst case (see
+  8.2 item 6).
 - **Cap**: one limit per school for Meta and Google together; every ad that may still spend counts its whole budget in
   every month its dates touch (0445 rule, now across both channels).
 - **API**: `POST …/marketing/social/ads/google` (command `marketing.social.ads.google.create`), everything else on the
@@ -151,6 +154,11 @@ here and in the adapter, and must be checked against Zernio before `HON_ZERNIO_A
 4. Daily budget, start and end dates and currency in the account's own currency are accepted as sent.
 5. **Location targeting**: v1 sends none. Before any real ad is turned on, David decides the default (for example the
    school's city and radius) and it is added; until then real Google ads stay off.
+6. **Budget units and overspend**: HON sends amounts in cents (same for the Meta boost); Zernio may expect currency
+   units or Google micros, which must be confirmed in a sandbox. Google's daily overdelivery (up to 2x on a day) means a
+   campaign total budget, if Zernio exposes one, is the safer setting.
+
+Items 1 to 6 (from the independent review of #459, P3) gate turning `HON_ZERNIO_ADS_APPROVED` on for Google.
 
 ### 8.3 Frontend (one PR after the backend)
 
