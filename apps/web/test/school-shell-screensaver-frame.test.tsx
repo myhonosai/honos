@@ -21,6 +21,7 @@ describe('school shell screensaver', () => {
 
   it('covers the app with the school name and a tap prompt, keeps the page mounted and the school selected underneath', () => {
     const html = render({ asleep: true });
+    expect(html).toContain('data-orb-state="idle"'); // the living HON orb, decorative
     expect(html).toMatch(/<div[^>]*role="dialog"[^>]*aria-modal="true"[^>]*aria-label="Screensaver"[^>]*data-screensaver=""/);
     expect(html).toContain('Sunrise Taekwondo'); expect(html).toContain('Tap anywhere to continue');
     // Same page, same verified school and links: nothing to re-choose.

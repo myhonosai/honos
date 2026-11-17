@@ -171,7 +171,8 @@ export function browserRecognition(win: VoiceWindow): RecognitionAdapter {
 }
 
 type Synth = { speak(u: unknown): void; cancel(): void; getVoices(): { lang: string; localService: boolean }[] };
-type Utterance = { lang: string; voice: unknown; rate: number; onend: (() => void) | null; onerror: (() => void) | null };
+type Utterance = { lang: string; voice: unknown; rate: number; onend: (() => void) | null; onerror: (() => void) | null;
+  onstart?: (() => void) | null; onboundary?: ((event: { name?: string }) => void) | null };
 
 /** A run of text with no sentence end is cut at commas or spaces into pieces of at most 200 characters. */
 export function splitLong(chunk: string): string[] {
@@ -186,8 +187,11 @@ export function splitLong(chunk: string): string[] {
   return out;
 }
 
-/** Splits into short chunks (browsers cut long single utterances) and prefers on-device voices for the language. */
-export function browserSpeech(win: VoiceWindow): SpeechAdapter {
+/**
+ * Splits into short chunks (browsers cut long single utterances) and prefers on-device voices for the language.
+ * `onWord` (optional) hears each chunk start and spoken word of the current answer only; it drives the HON orb.
+ */
+export function browserSpeech(win: VoiceWindow, hooks: { onWord?: () => void } = {}): SpeechAdapter {
   const synth = win.speechSynthesis as Synth; const Utter = win.SpeechSynthesisUtterance as new (text: string) => Utterance;
   let generation = 0;
   // Utterances are kept referenced until spoken: some browsers drop the end event of an utterance nothing holds on to.
@@ -210,6 +214,8 @@ export function browserSpeech(win: VoiceWindow): SpeechAdapter {
       if (chunks.length === 0) { queueMicrotask(finish); return; }
       chunks.forEach((chunk, index) => {
         const u = new Utter(chunk); u.lang = lang; u.rate = 1; if (voice) u.voice = voice;
+        const word = () => { if (mine === generation && !finished) hooks.onWord?.(); };
+        u.onstart = word; u.onboundary = (event) => { if (!event?.name || event.name === 'word') word(); };
         if (index === chunks.length - 1) { u.onend = finish; u.onerror = finish; }
         held.push(u); synth.speak(u);
       });

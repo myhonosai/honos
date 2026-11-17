@@ -1,6 +1,7 @@
 import React, { type ReactElement } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-const h = vi.hoisted(() => ({ values: [] as any[], cursor: 0, effects: [] as (() => void)[], language: 'en' }));
+const h = vi.hoisted(() => ({ values: [] as any[], cursor: 0, effects: [] as (() => void)[], language: 'en', shell: null as null | { organizationId: string; schoolId: string } }));
+vi.mock('../src/components/school-shell/page-school', () => ({ useShellSchool: () => h.shell }));
 vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ preferences: { language: h.language } }) }));
 vi.mock('react', async () => { const actual = await vi.importActual<typeof import('react')>('react'); return { ...actual,
   useState: (initial: any) => { const i = h.cursor++; if (!(i in h.values)) h.values[i] = typeof initial === 'function' ? initial() : initial; return [h.values[i], (v: any) => { h.values[i] = typeof v === 'function' ? v(h.values[i]) : v; }]; },
@@ -29,7 +30,7 @@ async function ready() { render(); change('staff-org', id(1)); change('staff-sch
 async function prepare() { await ready(); change('staff-email', 'staff@example.test'); click('newToken'); change('staff-confirm', true); }
 function dom() { const node = { hidden: false, inert: false, querySelectorAll: () => [] }; byId('staff-account-private').props.ref.current = node; return node; }
 beforeEach(() => {
-  h.values = []; h.cursor = 0; h.effects = []; h.language = 'en'; acceptance = false; subject = 'manager-a'; identityStatus = 200; posts = [];
+  h.values = []; h.cursor = 0; h.effects = []; h.language = 'en'; h.shell = null; acceptance = false; subject = 'manager-a'; identityStatus = 200; posts = [];
   const w = Object.assign(new EventTarget(), { confirm: () => true }); vi.stubGlobal('window', w); vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'visible' }));
   list = async () => data([item]); roles = async () => data({ roles: [{ roleId: role.id, roleName: role.name, permissionCodes: role.permissionCodes }], truncated: false }); send = async () => data({ ...item, email: 'staff@example.test' });
   vi.stubGlobal('fetch', vi.fn(async (path: string, options: RequestInit) => {
@@ -164,4 +165,18 @@ it('an unmounted preparatory read cannot broadcast a late real-transport 401 int
 it('presentation and language changes do not read invitation data or dispatch commands', async () => {
   await ready(); const count = vi.mocked(fetch).mock.calls.length; click('classic'); render(); h.language = 'ko'; render(); click('big'); render(); h.language = 'es'; render();
   expect(vi.mocked(fetch)).toHaveBeenCalledTimes(count); expect(posts).toHaveLength(0); expect(text(render())).toContain(t('es', 'title'));
+});
+it('inside the school shell opens on the signed-in school once, with no school fields or IDs', async () => {
+  h.shell = { organizationId: id(1), schoolId: id(2) }; render(); await settle();
+  expect(byId('staff-org')).toBeUndefined(); expect(byId('staff-school')).toBeUndefined();
+  const reads = vi.mocked(fetch).mock.calls.filter(([path]) => !String(path).startsWith('/api/identity'));
+  expect(reads).toHaveLength(1); expect(String(reads[0]![0])).toContain(id(2));
+  const page = text(render()); expect(page).toContain(item.email); expect(page).toContain(t('en', 'loaded'));
+  expect(page).not.toContain(t('en', 'boundary')); expect(page).not.toContain(t('en', 'selectors'));
+  await settle(); expect(vi.mocked(fetch).mock.calls.filter(([path]) => !String(path).startsWith('/api/identity'))).toHaveLength(1);
+  click('refresh'); await settle(); expect(vi.mocked(fetch).mock.calls.filter(([path]) => !String(path).startsWith('/api/identity'))).toHaveLength(2); expect(posts).toHaveLength(0);
+});
+it('acceptance never takes the shell school', async () => {
+  acceptance = true; h.shell = { organizationId: id(1), schoolId: id(2) }; render(); await settle();
+  expect(fetch).not.toHaveBeenCalled(); expect(text(render())).toContain(t('en', 'IDLE'));
 });

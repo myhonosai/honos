@@ -103,8 +103,8 @@ export type AgentCard = Readonly<{ id: string; name: string; title: HomeKey; pur
 
 /**
  * The owner roster (2026-11-06): Kai teaches; seven business specialists; Claire is Business Performance only.
- * Status comes from AI team readiness, never from the portrait. Chad, Marcus, Kai and Maya have their own
- * workspace; Alex, Jordan, Lena and Claire answer inside Ask HON (0260), opened with that specialist picked.
+ * Status comes from AI team readiness, never from the portrait. Every specialist has a workspace of their own: Alex,
+ * Jordan, Claire and Lena (0260 analysts) show the facts they read and answer questions on that page (owner, 2026-11-17).
  */
 type ReadyKey = AiTeamReadiness['agents'][number]['agentKey'];
 const LIVE: Record<string, { key: ReadyKey; href: string }> = {
@@ -112,13 +112,11 @@ const LIVE: Record<string, { key: ReadyKey; href: string }> = {
   chad: { key: 'chad', href: '/staff/leads/assistant' },
   marcus: { key: 'marcus', href: '/staff/marketing/assistant' },
   maya: { key: 'maya', href: '/staff/retention/at-risk' },
-  alex: { key: 'alex', href: '/staff/hon?ask=alex' },
-  jordan: { key: 'jordan', href: '/staff/hon?ask=jordan' },
-  claire: { key: 'claire', href: '/staff/hon?ask=claire' },
-  lena: { key: 'lena', href: '/staff/hon?ask=lena' },
+  alex: { key: 'alex', href: '/staff/ai-team/alex' },
+  jordan: { key: 'jordan', href: '/staff/ai-team/jordan' },
+  claire: { key: 'claire', href: '/staff/ai-team/claire' },
+  lena: { key: 'lena', href: '/staff/ai-team/lena' },
 };
-/** Specialists who answer in Ask HON rather than in a workspace of their own. */
-export const ASK_HON_AGENTS: ReadonlySet<string> = new Set(['alex', 'jordan', 'claire', 'lena']);
 /** What each one is for, in a few words, shown under the name on the home cards (owner ask 2026-11-15). */
 const PURPOSE: Record<string, HomeKey> = { kai: 'purposeKai', alex: 'purposeAlex', chad: 'purposeChad', maya: 'purposeMaya', marcus: 'purposeMarcus', jordan: 'purposeJordan', claire: 'purposeClaire', lena: 'purposeLena' };
 const TITLES: Record<string, HomeKey> = { kai: 'agentKai', alex: 'agentAlex', chad: 'agentChad', maya: 'agentMaya', marcus: 'agentMarcus', jordan: 'agentJordan', claire: 'agentClaire', lena: 'agentLena' };
