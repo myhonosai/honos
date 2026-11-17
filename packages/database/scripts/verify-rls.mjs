@@ -307,6 +307,7 @@ const expectedRlsTables = [
   'family_members',
   'family_message_threads',
   'family_messages',
+  'parent_school_bookings',
   'school_conversations',
   'school_conversation_messages',
   'conversation_ai_program',

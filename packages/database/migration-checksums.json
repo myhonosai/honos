@@ -327,6 +327,7 @@
     "0455_school_google_business_profile.sql": "ee8c0fb3049755948af71fdf689b4eb70e0925b1f1d8ce20557814fee29a394a",
     "0459_school_demo_data.sql": "6708c6114653c3363c1bed171cce360ab591875cc8e1ae3edb9c572c096e1bee",
     "0460_agent_voice_preferences.sql": "f79897d2f18da3a2cd7fed4a135e377ede91dffb407db5baa35c7632817cf0d6",
-    "0463_membership_agreement.sql": "966b67ddb1ebec3a7884b2a824f2af070430e513e66af5683a01f19522484edf"
+    "0463_membership_agreement.sql": "966b67ddb1ebec3a7884b2a824f2af070430e513e66af5683a01f19522484edf",
+    "0466_parent_school_bookings.sql": "e51fcf1be375d96fbc954bc6533d0f11ad86069972684b51f04cde38fe5a85de"
   }
 }

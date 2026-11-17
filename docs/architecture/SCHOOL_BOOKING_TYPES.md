@@ -37,7 +37,8 @@ weekly hours and stays open until the school pauses it.
   gets a booking code (`XXXX-XXXX-XXXX`, shown once) and the thank-you message. A retry with the same request key returns the
   same code.
 - **T5 Families only.** A `FAMILIES_ONLY` link shows the type and "for current families: sign in to book" and refuses public
-  booking. Booking from a family sign-in comes in PR 3 (below).
+  booking. Families book it from the parent account at `/parent/bookings` (0466, see
+  PARENT_ACCOUNT_BOOKING_AND_MESSAGES.md A4).
 - **T6 Cancel.** The code cancels the family's own booking and frees the spot. To change the time, the family cancels and books
   again.
 - **T7 Staff view.** Staff see the upcoming bookings per type with each family's name, contact, answers and waiver time. Staff
