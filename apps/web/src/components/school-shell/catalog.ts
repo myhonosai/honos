@@ -53,7 +53,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/migration/students', 'routeStudentImport'), r('/staff/migration/photos', 'routePaperImport'), h('/staff/search', 'routeStudentSearch')] },
   { key: 'staff', titleKey: 'navStaff', section: 'contacts', routes: [r('/staff/team/invitations', 'routeTeam', true), r('/staff/roles', 'routeRoles'), r('/staff/team/availability', 'routeAvailability'),
     r('/staff/instructor-qualifications', 'routeQualifications'), r('/staff/documents', 'routeDocuments')] },
-  { key: 'crm', titleKey: 'navCrm', section: 'leads', routes: [r('/staff/crm', 'routeLeadsHome'), r('/staff/crm/leads', 'routeLeads', true), r('/staff/crm/journey', 'routeJourney', true),
+  { key: 'crm', titleKey: 'navCrm', section: 'leads', routes: [r('/staff/crm', 'routeLeadsHome'), h('/staff/crm/leads', 'routeLeads'), h('/staff/crm/journey', 'routeJourney'),
     r('/staff/crm/follow-ups', 'routeFollowUps'), r('/staff/crm/trials', 'routeTrials', true), r('/staff/crm/lead-memberships', 'routeLeadMemberships'), r('/staff/migration/leads', 'routeLeadImport')] },
   { key: 'automation', titleKey: 'navAutomation', section: 'leads', routes: [r('/staff/automation/rules', 'routeAutomation')] },
   { key: 'messages', titleKey: 'navMessages', section: 'communication', routes: [r('/staff/family-messages', 'routeFamilyMessages')] },

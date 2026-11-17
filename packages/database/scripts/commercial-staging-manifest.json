@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "14eff5b5630886e7fddf4973674a9d1061dcc21208cb8601c8e11a809febe35c",
+  "chainSha256": "75ce4ef23e0c9a1effa8dc08f9e55346b2cea507708617d13ba562fa792428ac",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -565,6 +565,10 @@
     {
       "file": "0416_automation_workflows.sql",
       "sha256": "f5461d07dec493477c2c5af02e03f1f0107cbc722b1e505b13631953cc39de8c"
+    },
+    {
+      "file": "0417_lead_pipeline_board.sql",
+      "sha256": "071c1a65518bbf64d034885f6cebca9d9c579d4352b25af0d90dcb9e7176d3cc"
     }
   ]
 }

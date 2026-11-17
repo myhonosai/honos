@@ -190,6 +190,9 @@ import { SchoolBrandingController } from './school-branding/school-branding.cont
 import { SchoolBrandingService } from './school-branding/school-branding.service.js';
 import { SchoolBrandingReadHumanUiGuard, SchoolBrandingSaveHumanUiGuard } from './school-branding/school-branding-human-ui.guard.js';
 import { SchoolLocationController } from './school-location/school-location.controller.js';
+import { CrmPipelineBoardController } from './crm-pipeline-board/crm-pipeline-board.controller.js';
+import { CrmPipelineBoardService } from './crm-pipeline-board/crm-pipeline-board.service.js';
+import { CrmLeadStageMoveHumanUiGuard, CrmPipelineBoardReadHumanUiGuard, CrmPipelineStagesSaveHumanUiGuard } from './crm-pipeline-board/crm-pipeline-board-human-ui.guard.js';
 import { SchoolLocationService } from './school-location/school-location.service.js';
 import { SchoolLocationReadHumanUiGuard, SchoolLocationSaveHumanUiGuard } from './school-location/school-location-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
@@ -555,6 +558,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MayaAtRiskController,
     SchoolBrandingController,
     SchoolLocationController,
+    CrmPipelineBoardController,
     SchoolMembershipListController,
     CrmSchoolClockController,
     CrmSessionSchoolClockController,
@@ -802,6 +806,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MayaAtRiskReadHumanUiGuard,
     SchoolBrandingService, SchoolBrandingReadHumanUiGuard, SchoolBrandingSaveHumanUiGuard,
     SchoolLocationService, SchoolLocationReadHumanUiGuard, SchoolLocationSaveHumanUiGuard,
+    CrmPipelineBoardService, CrmPipelineBoardReadHumanUiGuard, CrmLeadStageMoveHumanUiGuard, CrmPipelineStagesSaveHumanUiGuard,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,
     CrmSchoolClockService,
