@@ -97,6 +97,7 @@ export function AttendanceWorkbench({ initialScope = {} }: { initialScope?: Atte
   const [classDate, setClassDate] = useState(browserToday);
   const [names, setNames] = useState<Names>(NO_NAMES);
   const [lists, setLists] = useState<Record<'program' | 'session' | 'student', ChoiceState>>({ program: 'LOADING', session: 'LOADING', student: 'LOADING' });
+  const [schoolTimeZone, setSchoolTimeZone] = useState('');
   const inShell = Boolean(shellSchool);
 
   function clearLoaded(): void {
@@ -106,6 +107,13 @@ export function AttendanceWorkbench({ initialScope = {} }: { initialScope?: Atte
     setRecordChecked(false);
     setRecordDraft(blankRecord());
     retries.current.clear();
+  }
+
+  /** Shell pickers clear only their own section: a program change keeps a loaded record, a class or student change keeps loaded rules. */
+  function clearSection(section: 'policy' | 'record'): void {
+    if (section === 'policy') { setPolicy(null); setPolicyDraft([]); }
+    else { setRecord(null); setRecordChecked(false); setRecordDraft(blankRecord()); }
+    for (const slot of [...retries.current.keys()]) if (slot.startsWith(`${section}:`)) retries.current.delete(slot);
   }
 
   function changeScope(field: keyof AttendanceKnownScope, value: string): void {
@@ -120,7 +128,7 @@ export function AttendanceWorkbench({ initialScope = {} }: { initialScope?: Atte
   function choose(field: 'programId' | 'sessionId' | 'studentProfileId', choice: Choice | null): void {
     const value = choice?.id.toLowerCase() ?? '';
     const next: AttendanceKnownScope = { ...scope, [field]: value, ...(field === 'sessionId' ? { studentProfileId: '' } : {}) };
-    clearLoaded();
+    clearSection(field === 'programId' ? 'policy' : 'record');
     setNotice('');
     setError('');
     setScope(next);
@@ -254,7 +262,7 @@ export function AttendanceWorkbench({ initialScope = {} }: { initialScope?: Atte
       <p>Choose the day, the class and the student whose attendance you want to correct.</p>
       <div className={styles.scopeGrid}>
         <label>Class date<input type="date" value={classDate} disabled={busy} onChange={event => changeDate(event.target.value)} /></label>
-        <ClassChoice scope={shellSchool} date={classDate} value={scope.sessionId} disabled={busy} onPick={choice => choose('sessionId', choice)} onState={reportList('session')} />
+        <ClassChoice scope={shellSchool} date={classDate} value={scope.sessionId} disabled={busy} onPick={choice => choose('sessionId', choice)} onState={reportList('session')} onTimeZone={setSchoolTimeZone} />
         {UUID.test(scope.sessionId) && <StudentChoice scope={shellSchool} sessionId={scope.sessionId} value={scope.studentProfileId} disabled={busy} onPick={choice => choose('studentProfileId', choice)} onState={reportList('student')} />}
       </div>
       <IdFields manual={failed(lists.session) || failed(lists.student)}><div className={styles.scopeGrid}>{idInput('sessionId', 'Class ID')}{idInput('studentProfileId', 'Student ID')}</div></IdFields>
@@ -333,7 +341,7 @@ export function AttendanceWorkbench({ initialScope = {} }: { initialScope?: Atte
             Student: names.student || 'Entered by ID',
             Status: record.status,
             Category: record.category,
-            'Recorded at': new Date(record.recordedAt).toLocaleString(),
+            'Recorded at': new Date(record.recordedAt).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short', ...(schoolTimeZone ? { timeZone: schoolTimeZone } : {}) }),
             Note: record.note ?? 'No note',
           }).map(([label, value]) => <React.Fragment key={label}><dt>{label}</dt><dd>{value}</dd></React.Fragment>)}
         </dl>

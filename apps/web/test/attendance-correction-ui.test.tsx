@@ -96,6 +96,27 @@ describe('attendance correction inside the school shell', () => {
     expect(text(render())).not.toContain('No success, credit');
   });
 
+  it('a program pick keeps a loaded student record, and a class pick keeps loaded rules', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(Response.json({ data: record, meta }))
+      .mockResolvedValueOnce(Response.json({ data: { programId: program, version: 2, categories }, meta }));
+    render();
+    of(ClassChoice)!.props.onTimeZone('America/Los_Angeles');
+    of(ClassChoice)!.props.onPick({ id: session, label: 'Kids BJJ · 5:00 PM' });
+    of(StudentChoice)!.props.onPick({ id: student, label: 'Avery Lane' });
+    await settle();
+    of(ProgramChoice)!.props.onPick({ id: program, label: 'Kids Program' });
+    await settle();
+    let after = text(render());
+    expect(after).toContain('Current attendance');
+    expect(after).toContain('Save rules');
+    expect(after).toContain(new Date(record.recordedAt).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short', timeZone: 'America/Los_Angeles' }));
+    of(ClassChoice)!.props.onPick({ id: session, label: 'Kids BJJ · 5:00 PM' });
+    after = text(render());
+    expect(after).not.toContain('Current attendance');
+    expect(after).toContain('Save rules');
+  });
+
   it('a new class date clears the class and student', () => {
     of(ClassChoice)!.props.onPick({ id: session, label: 'Kids BJJ · 5:00 PM' });
     elements(render()).find((e) => e.type === 'input' && e.props.type === 'date')!.props.onChange({ target: { value: '2026-11-10' } });
@@ -119,9 +140,11 @@ describe('attendance correction lists', () => {
       sessionRow('b', 'Adults', '2026-11-17T03:30:00.000Z', { status: 'CANCELLED' }),
       sessionRow('c', 'Next day', '2026-11-17T17:00:00.000Z'),
     ]));
-    await expect(loadClassChoices({ sessions }, school, '2026-11-16', never, owned)).resolves.toEqual([
+    await expect(loadClassChoices({ sessions }, school, '2026-11-16', never, owned)).resolves.toEqual({ items: [
       { id: id('a'), label: 'Kids BJJ · 5:00 PM · Mat 1' }, { id: id('b'), label: 'Adults · 7:30 PM · Cancelled' },
-    ]);
+    ], truncated: false, timeZone: 'America/Los_Angeles' });
+    sessions.mockResolvedValueOnce(page([sessionRow('a', 'Kids BJJ', '2026-11-17T01:00:00.000Z', { sessionId: id('a').toUpperCase() })]));
+    await expect(loadClassChoices({ sessions }, school, '2026-11-16', never, owned)).resolves.toMatchObject({ items: [{ id: id('a') }] });
     expect(sessions).toHaveBeenCalledWith(school, '2026-11-16', null, never, owned);
     await expect(loadClassChoices({ sessions }, school, '16/11/2026', never, owned)).rejects.toBeInstanceOf(RosterError);
     expect(classLabel(sessionRow('d', 'Teens', '2026-11-16T18:00:00.000Z'), 'UTC')).toBe('Teens · 6:00 PM');
@@ -131,12 +154,18 @@ describe('attendance correction lists', () => {
     const roster = vi.fn<RosterApi['roster']>()
       .mockResolvedValueOnce({ entries: [entry('b', 'Avery', 'Lane')], nextCursor: 'next' })
       .mockResolvedValueOnce({ entries: [entry('b', 'Avery', 'Lane'), entry('c', 'Sam', 'Ortiz')], nextCursor: null });
-    await expect(loadStudentChoices({ roster }, school, session, never, owned)).resolves.toEqual([{ id: id('b'), label: 'Avery Lane' }, { id: id('c'), label: 'Sam Ortiz' }]);
+    await expect(loadStudentChoices({ roster }, school, session, never, owned)).resolves.toEqual({ items: [{ id: id('b'), label: 'Avery Lane' }, { id: id('c'), label: 'Sam Ortiz' }], truncated: false });
     expect(roster.mock.calls.map((c) => c[2])).toEqual([null, 'next']);
+  });
+
+  it('says when a roster has more than ten pages instead of hiding the rest', async () => {
+    const roster = vi.fn<RosterApi['roster']>().mockResolvedValue({ entries: [entry('b', 'Avery', 'Lane')], nextCursor: 'next' });
+    await expect(loadStudentChoices({ roster }, school, session, never, owned)).resolves.toEqual({ items: [{ id: id('b'), label: 'Avery Lane' }], truncated: true });
+    expect(roster).toHaveBeenCalledTimes(10);
   });
 
   it('lists the school’s programs by name', async () => {
     const list = vi.fn().mockResolvedValue({ localToday: '2026-11-17', timezone: 'UTC', fillLimit: '2027-02-09', topUpDue: false, series: [], programs: [{ programId: id('d'), name: 'Teens' }, { programId: id('e'), name: 'Kids' }] });
-    await expect(loadProgramChoices({ list }, school, never, owned)).resolves.toEqual([{ id: id('e'), label: 'Kids' }, { id: id('d'), label: 'Teens' }]);
+    await expect(loadProgramChoices({ list }, school, never, owned)).resolves.toEqual({ items: [{ id: id('e'), label: 'Kids' }, { id: id('d'), label: 'Teens' }], truncated: false });
   });
 });
