@@ -3957,12 +3957,12 @@ DO $$ DECLARE r text; t text; BEGIN
       hon.read_school_contact_tags(text),hon.read_person_contact_tags(text,uuid),hon.lookup_contact_tags(text,jsonb) TO hon_runtime;
   END IF;
 END $$;
--- B-TUI-2 0440 shared one-time payment (test mode only): two private tables reached only through four API entry points
+-- B-TUI-2 0447 shared one-time payment (test mode only): two private tables reached only through four API entry points
 -- (read, start, record, list due); the opener, state and cancel helpers are internal to callers' definers. HON takes no fee.
 DO $$ DECLARE r text; t text; col text; f text;
   entry text[]:=ARRAY['hon.read_school_pay_once(uuid)','hon.start_school_pay_once(uuid,jsonb)','hon.record_school_pay_once(uuid,jsonb)','hon.list_due_school_pay_once(integer)'];
 BEGIN
-  IF to_regclass('hon.school_pay_once') IS NULL THEN RAISE EXCEPTION 'Apply migration 0440 first'; END IF;
+  IF to_regclass('hon.school_pay_once') IS NULL THEN RAISE EXCEPTION 'Apply migration 0447 first'; END IF;
   FOREACH t IN ARRAY ARRAY['hon.school_pay_once','hon.school_pay_once_events'] LOOP
     EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
@@ -4049,6 +4049,29 @@ BEGIN
   END LOOP;
   REVOKE ALL ON TABLE hon.communication_message_resends FROM PUBLIC;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.communication_message_resends FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+-- 0443 face check-in (synthetic matcher, program CLOSED until the owner opens it): nine private tables reached only through
+-- ten runtime entry points; the guard, helpers, triggers and the daily retention job are migration-owner only.
+DO $$ DECLARE r text; t text; f text;
+  entry text[]:=ARRAY['hon.read_face_checkin(text)','hon.save_face_checkin_settings(text,jsonb,text,uuid,uuid)','hon.record_face_checkin_consent(text,jsonb,text,uuid,uuid)',
+    'hon.withdraw_face_checkin_consent(text,jsonb,text,uuid,uuid)','hon.enroll_face_checkin_student(text,jsonb,text,uuid,uuid)','hon.match_face_checkin(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.confirm_face_checkin_match(text,jsonb,text,uuid,uuid)','hon.read_family_face_checkin(text)','hon.sign_family_face_checkin_consent(text,jsonb,text,uuid,uuid)',
+    'hon.withdraw_family_face_checkin_consent(text,jsonb,text,uuid,uuid)'];
+BEGIN
+  IF to_regclass('hon.face_templates') IS NULL THEN RAISE EXCEPTION 'Apply migration 0443 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['face_checkin_program','face_checkin_form_parts','face_checkin_forms','face_checkin_settings','face_checkin_consents',
+      'face_templates','face_template_deletions','face_checkin_matches','face_checkin_requests'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace
+      AND (p.proname LIKE 'face\_checkin\_%' OR p.proname IN ('guard_face_checkin','purge_face_checkin_retention') OR p.oid::regprocedure::text=ANY(entry)) LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;

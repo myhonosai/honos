@@ -4207,7 +4207,7 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
     RAISE EXCEPTION 'Unsafe automation workflow table posture: guard triggers'; END IF;
 END $$;
 -- End automation workflows and contact tags exact verification.
--- School one-time payment exact verification (B-TUI-2 0440): two private forced-RLS tables, the payment guard, internal
+-- School one-time payment exact verification (B-TUI-2 0447): two private forced-RLS tables, the payment guard, internal
 -- opener/state/cancel helpers that the runtime can never call, four API entry points and one live payment per caller record.
 DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   FOREACH t IN ARRAY ARRAY['hon.school_pay_once','hon.school_pay_once_events'] LOOP
@@ -4220,7 +4220,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_school_pay_once()',true,false,'search_path=pg_catalog, hon','146eda805148cf8b04b17a50e115ad8d443ee60dc7ae377dbc1be092194a9406'),
 ('hon.school_pay_once_json(hon.school_pay_once)',true,false,'search_path=pg_catalog, hon','dada49e4219c0766b8b7b7f3c8e3f7583d9c87989011ec5bd3c8ec75e0b9f1fd'),
-('hon.school_pay_once_record(hon.school_pay_once,text,jsonb)',true,false,'search_path=pg_catalog, hon','6ffd399616257bdc7db875740d00707701a3090706a64e96167196c7d9712c97'),
+('hon.school_pay_once_record(hon.school_pay_once,text,jsonb)',true,false,'search_path=pg_catalog, hon','53bc04f5223c6cbea3e9134199c650bb803196af60e58b1237410f528c26206a'),
 ('hon.school_pay_once_connection(uuid,uuid)',true,false,'search_path=pg_catalog, hon','79a382f793dde948ed35350c6680c7a82008eddd8d6466d903d9e5bdbde38a05'),
 ('hon.school_pay_once_provider(uuid,uuid)',true,false,'search_path=pg_catalog, hon','5181fd08f01fdf39baad56c02e5be4fa589b5a439128d438f94ad36ffa6bf2ad'),
 ('hon.school_pay_once_open(uuid,uuid,text,uuid,bigint,text,jsonb,jsonb,timestamp with time zone)',true,false,'search_path=pg_catalog, hon','567bf757d993dcfc4813039949d11d4e97cc855aac152307151c90575d36176b'),
@@ -4251,10 +4251,10 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname='hon' AND indexname='school_pay_once_one_live_idx'
       AND indexdef LIKE '%UNIQUE%(organization_id, school_id, source, source_id)%') THEN
     RAISE EXCEPTION 'A caller record must have at most one live one-time payment'; END IF;
-  IF NOT EXISTS(SELECT 1 FROM hon.principals WHERE id='00000000-0000-4000-8000-000000000440' AND principal_type='SYSTEM_SERVICE' AND user_id IS NULL)
-    OR EXISTS(SELECT 1 FROM hon.principal_role_grants WHERE principal_id='00000000-0000-4000-8000-000000000440')
-    OR EXISTS(SELECT 1 FROM hon.hq_operator_grants WHERE principal_id='00000000-0000-4000-8000-000000000440')
-    OR EXISTS(SELECT 1 FROM hon.family_access_grants WHERE principal_id='00000000-0000-4000-8000-000000000440') THEN
+  IF NOT EXISTS(SELECT 1 FROM hon.principals WHERE id='00000000-0000-4000-8000-000000000447' AND principal_type='SYSTEM_SERVICE' AND user_id IS NULL)
+    OR EXISTS(SELECT 1 FROM hon.principal_role_grants WHERE principal_id='00000000-0000-4000-8000-000000000447')
+    OR EXISTS(SELECT 1 FROM hon.hq_operator_grants WHERE principal_id='00000000-0000-4000-8000-000000000447')
+    OR EXISTS(SELECT 1 FROM hon.family_access_grants WHERE principal_id='00000000-0000-4000-8000-000000000447') THEN
     RAISE EXCEPTION 'The one-time payment recorder must be a code-owned service with no authority'; END IF;
 END $$;
 -- End school one-time payment exact verification.
@@ -4424,3 +4424,34 @@ DO $$ DECLARE f record; safe boolean; worker_oid oid:=(SELECT oid FROM pg_roles 
   END IF;
 END $$;
 -- End contact message history exact verification.
+-- Face check-in exact verification (0443)
+DO $$ DECLARE f text; t text; n integer;
+  entry text[]:=ARRAY['hon.read_face_checkin(text)','hon.save_face_checkin_settings(text,jsonb,text,uuid,uuid)','hon.record_face_checkin_consent(text,jsonb,text,uuid,uuid)',
+    'hon.withdraw_face_checkin_consent(text,jsonb,text,uuid,uuid)','hon.enroll_face_checkin_student(text,jsonb,text,uuid,uuid)','hon.match_face_checkin(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.confirm_face_checkin_match(text,jsonb,text,uuid,uuid)','hon.read_family_face_checkin(text)','hon.sign_family_face_checkin_consent(text,jsonb,text,uuid,uuid)',
+    'hon.withdraw_family_face_checkin_consent(text,jsonb,text,uuid,uuid)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe face check-in entry point: %',f; END IF;
+  END LOOP;
+  SELECT count(*) INTO n FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace
+    AND (p.proname LIKE 'face\_checkin\_%' OR p.proname IN ('guard_face_checkin','purge_face_checkin_retention'))
+    AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE') OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner));
+  IF n<>0 THEN RAISE EXCEPTION 'Unsafe face check-in helper (% found)',n; END IF;
+  IF (SELECT count(*) FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace AND p.proname LIKE 'face\_checkin\_%')<15 THEN
+    RAISE EXCEPTION 'Face check-in helpers missing'; END IF;
+  FOREACH t IN ARRAY ARRAY['face_checkin_program','face_checkin_form_parts','face_checkin_forms','face_checkin_settings','face_checkin_consents',
+      'face_templates','face_template_deletions','face_checkin_matches','face_checkin_requests'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe face check-in table: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End face check-in exact verification.

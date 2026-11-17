@@ -400,7 +400,7 @@ test('0337 simulators: one charge per attempt key, lost answers, settling a debi
   await assert.rejects(off.findCharge(), (e) => e.outcome === 'PRE_SEND');
 });
 
-test('0440 Stripe one-time payment: Checkout Session on the school account, fixed parameters and key, retrieval and expiry', async () => {
+test('0447 Stripe one-time payment: Checkout Session on the school account, fixed parameters and key, retrieval and expiry', async () => {
   const { StripeConnectTestAdapter, SquareSandboxAdapter } = await loadSandbox();
   const ACCOUNT = 'acct_Test123', PAYMENT = '55555555-5555-4555-8555-555555555555', SESSION = 'cs_test_a1B2c3';
   const session = (over = {}) => ({ id: SESSION, object: 'checkout.session', mode: 'payment', status: 'open', payment_status: 'unpaid', amount_total: 2500, currency: 'usd',
@@ -473,7 +473,7 @@ test('0440 Stripe one-time payment: Checkout Session on the school account, fixe
   }
 });
 
-test('0440 simulators: one session per payment key, hosted-only Square, faults, unconfigured refuses', async () => {
+test('0447 simulators: one session per payment key, hosted-only Square, faults, unconfigured refuses', async () => {
   const { SimulatedStripeConnectAdapter, SimulatedSquareAdapter, UnconfiguredSchoolPaymentAdapter } = await loadAdapters();
   const stripe = new SimulatedStripeConnectAdapter(), square = new SimulatedSquareAdapter();
   const request = { accountRef: 'acct_simX', paymentId: '66666666-6666-4666-8666-666666666666', amountMinor: 900, currency: 'USD', label: 'Gi', payerEmail: null,
