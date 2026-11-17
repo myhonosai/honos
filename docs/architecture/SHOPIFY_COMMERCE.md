@@ -1,6 +1,6 @@
-# HON Shopify Connected (migration 0405, piece SH1)
+# HON Shopify Connected (migrations 0405 SH1, 0449 SH1b)
 
-Status: spec + plan, 2026-11-16. Owner vision: David's Oct 13–18 2026 Shopify recap (shared 2026-11-16), the master
+Status: SH1 merged (0405); SH1b built (0449), 2026-11-16. Owner vision: David's Oct 13–18 2026 Shopify recap (shared 2026-11-16), the master
 directive (ECOMMERCE: "Shopify may remain the source of truth for those commerce records"; "Shopify integration should
 be first-class where enabled"; "Shopify outage: commerce sync degraded") and the menu decision "Finance: checkout pages,
 POS, Shopify, invoices".
@@ -21,8 +21,8 @@ store is the test store.
 
 | Piece | What | Needs David |
 |---|---|---|
-| **SH1 (0405, this)** | Connect one store per school via the HON app (OAuth, expiring offline token sealed by the API), Sync now (products, variants, SKU, price, stock, unit cost; last 60 days of orders), Finance › Shopify page with catalog, margins and sales summary, disconnect. Fake Shopify only. | No |
-| SH1b | Signed webhooks: products, inventory levels, orders, `app/uninstalled`, and the three mandatory privacy topics; scheduled background sync that also keeps the refresh token alive. | No |
+| **SH1 (0405, merged)** | Connect one store per school via the HON app (OAuth, expiring offline token sealed by the API), Sync now (products, variants, SKU, price, stock, unit cost; last 60 days of orders), Finance › Shopify page with catalog, margins and sales summary, disconnect. Fake Shopify only. | No |
+| **SH1b (0449, this)** | Signed webhooks: products, inventory levels, orders, `app/uninstalled`, and the three mandatory privacy topics; scheduled background sync that also keeps the refresh token alive. | No |
 | SH2 | POS sells Shopify variants when connected (database reprices from the mirror) and each sale is pushed to Shopify (order + inventory) through a queued job. Coordinated with the POS thread (0403). | No |
 | SH3 | Parent App and HON website buy through Shopify Checkout (Storefront cart → Shopify-hosted checkout); orders link back to the HON contact. | No |
 | SH4 | Commerce Workspace writes: create/edit products and prices, artwork upload, mockups, publish; AI descriptions/pricing/promotions by plan (fake AI until approved). | Paid AI |
@@ -102,14 +102,91 @@ links orders to HON contacts.
 ### Known limits in SH1 (each named for a later piece)
 
 - Disconnect destroys HON's stored token pair but does not call Shopify to revoke it; without the refresh token, access
-  ends within an hour. Uninstall handling (`app/uninstalled`) comes with SH1b webhooks.
+  ends within an hour. Uninstalling HON from Shopify (`app/uninstalled`) is handled by SH1b.
 - If Shopify accepts a refresh but HON fails to record the rotated pair, the old pair is already spent: the next sync
   ends as Needs reconnect and the owner reconnects. Nothing is lost from the mirror.
 - A store is bound to the first school that connects it, forever (one row per shop). Moving a store between schools is
   an HQ action for a later piece.
-- Sync runs inside the request (Sync now and after connecting); background and scheduled sync are SH1b. Very large
+- In SH1, sync runs inside the request (Sync now and after connecting); SH1b adds background sync. Very large
   stores (over 2,000 products or 1,000 orders in 60 days) finish as FAILED with the reason shown, never as partial success.
 - No product search yet on the page.
+
+## SH1b behavior (0449)
+
+### Webhooks (`POST /v1/commerce/webhooks/shopify`)
+
+- Declared once for the HON Shopify app in `shopify.app.toml` (no per-store registration, nothing to set up at the
+  school):
+
+  ```toml
+  [webhooks]
+  api_version = "2026-10"
+
+  [[webhooks.subscriptions]]
+  topics = ["products/create", "products/update", "products/delete", "inventory_levels/update",
+            "orders/create", "orders/updated", "orders/cancelled", "orders/delete", "app/uninstalled"]
+  uri = "https://<HON API host>/v1/commerce/webhooks/shopify"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  uri = "https://<HON API host>/v1/commerce/webhooks/shopify"
+  ```
+
+- Transport: mounted before the JSON parser so the exact bytes are kept; POST to that one path only, JSON, no query
+  string, cookies, credentials or compression, at most 4 MiB.
+- Verification first: base64 HMAC-SHA256 of the raw body with the app's client secret (`X-Shopify-Hmac-SHA256`),
+  compared in constant time. Then `X-Shopify-Webhook-Id`, `X-Shopify-Shop-Domain` (myshopify.com only) and
+  `X-Shopify-Topic`. A bad signature is 401 and reaches nothing. An unknown topic is 200 and ignored.
+- Only the delivery id, topic, shop domain and trigger time reach the database. The payload is never read or stored:
+  HON re-reads Shopify for the change.
+- Recorded once per delivery id (`hon.shopify_webhook_receipts`, never changed). A repeat is answered with its first
+  outcome. HON answers 200 once recorded, and 503 when it cannot record, so Shopify delivers it again.
+- Effects:
+  - Catalog, inventory and order topics mark a CONNECTED store as needing a sync (`hon.shopify_sync_requests`).
+  - `app/uninstalled` disconnects the store at once. The sealed token pair is destroyed in the same transaction, and a
+    running sync ends as FAILED `UNINSTALLED`.
+  - `shop/redact` (Shopify sends it 48 hours after an uninstall) erases the store's products, variants, orders and
+    order lines and its shop name, once the store is no longer connected. The store record stays, so the shop still
+    belongs to that school, and reconnecting starts a fresh mirror.
+  - `customers/redact` and `customers/data_request` are recorded as `NO_CUSTOMER_DATA`. HON's Shopify mirror holds
+    no customer names, emails, phones or addresses, so there is nothing to send or erase.
+  - Uninstall and erase write audit and outbox evidence (ids, shop domain and counts only) as the code-owned
+    `SYSTEM_SERVICE` principal `00000000-0000-4000-8000-000000000408`, with source `INTEGRATION`.
+
+### Background sync
+
+- Runs in the API process when the worker login (`HON_COMMUNICATION_WORKER_DATABASE_URL`, the existing
+  `hon_communication_worker`, never the runtime) and `HON_SHOPIFY_SYNC_POLL_SECONDS` (30–3600) are both set, and
+  the Shopify app is configured. It is off otherwise. The Shopify page says "HON syncs on its own" only when it is on.
+- Each run claims up to 5 stores, one at a time. A store is due when all of these hold:
+  - it is CONNECTED;
+  - its school, organization and HON entitlement are active;
+  - no sync started in the last two minutes and none is running;
+  - either Shopify reported a change after its latest sync started, or it has not finished a sync in six hours.
+    The six-hour run also refreshes the token pair, which keeps the 90-day refresh token alive.
+- A store another worker holds, or whose school is in the middle of a person's command, is skipped and tried next run.
+- The sync is the same code as Sync now (`runShopifySync`): refresh-and-rotate under version, pages of 50 through the
+  same page rules, the same outcomes. The run is started by the code-owned principal with a lease token (`source`
+  WEBHOOK or SCHEDULED). Only that lease can rotate, write pages to or finish it. A person's sync commands cannot write
+  to it, and Sync now answers "A sync is already running".
+- Locks follow the person's order (school lock, then the run, then the store) so a background run and a person's
+  disconnect cannot deadlock.
+
+### Known limits in SH1b
+
+- Webhooks are not replayed into partial updates. Any change report triggers a full re-read, which keeps one code path
+  and Shopify as the source of truth, at the cost of a full sync per burst of changes (at most one per store every two
+  minutes).
+- Webhook receipts are kept forever (ids, topics and times only, no payload). Shopify retries a delivery for up to
+  48 hours, so a later retention rule may remove receipts older than 30 days without weakening replay protection; it
+  comes with the HQ data-retention work and needs a new migration (receipts cannot be deleted today).
+- If Shopify issues a refreshed token pair and HON then refuses to store it (version conflict, lease lost), the new
+  pair is lost and the store needs reconnecting on its next run (same as Sync now since SH1). Rare; a later piece can
+  hold the pair for one retry.
+- The background proof runs the five worker functions over the fixture owner connection. Their grant to the real
+  `hon_communication_worker` login (013) was checked by hand on the communication fixture; a fixture that runs the
+  proof as that login is a follow-up.
+- The `shopify.app.toml` and the Partner app itself are created only with David's approval, together with the real keys.
 
 ## Plan (TDD)
 
@@ -124,3 +201,14 @@ links orders to HON contacts.
    (next to Checkout pages); it moves to the Finance area with the menu rework (PR #407) when that lands.
 5. Runtime grants (010/011), verify-rls, staging pins, run-db-proofs; focused tests, `pnpm check`, build; independent
    review; PR.
+
+## SH1b plan (done)
+
+1. Migration 0449 + DB proof `test-shopify-background-integrity.mjs` (signed HTTP deliveries, worker functions over
+   the owner connection exactly as `ShopifyWorkerDatabase` maps them).
+2. API: `shopify-webhook.ts` (transport, verifier), `shopify-webhook.controller.ts`, `shopify-sync-engine.ts` (the one
+   sync used by both paths), `shopify-worker.ts` (worker store, background sync, scheduler); unit tests in
+   `apps/api/test/shopify-background.test.cjs`.
+3. Contract `autoSync` on the overview; the page line in en/ko/es.
+4. Grants: 010 (nothing for the runtime), 011 exact verification, 013 worker grants; verify-rls, staging pins,
+   run-db-proofs.

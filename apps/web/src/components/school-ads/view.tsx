@@ -3,6 +3,7 @@ import type { SocialAccountList } from '@hon/contracts';
 import type { SocialErrorKind } from '../school-social/http';
 import styles from '../school-social/social.module.css';
 import { adsText, type AdsKey } from './copy';
+import { MetaAds, type MetaAdsProps } from './meta-ads';
 
 export type AdsListState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; list: SocialAccountList };
 /** Only a failed connect start is shown; a lost answer is never resent (a fresh start is safe: the unused link expires). */
@@ -10,8 +11,10 @@ export type AdsOutcome = null | Exclude<SocialErrorKind, 'SESSION' | 'STATE' | '
 export type MetaAdsState = 'NOT_CONNECTED' | 'CONNECTED_ADS_OFF' | 'READY_FOR_ADS';
 
 export type AdsViewProps = Readonly<{
-  language: string; waiting: boolean; concealed: boolean; hasSchool: boolean; list: AdsListState; connecting: boolean; outcome: AdsOutcome;
+  language: string; locale?: string | undefined; waiting: boolean; concealed: boolean; hasSchool: boolean; list: AdsListState; connecting: boolean; outcome: AdsOutcome;
   onRefresh?: (() => void) | undefined; onConnectMeta?: (() => void) | undefined;
+  /** Running Meta ads (0445), shown once a Facebook Page is connected. */
+  run?: Omit<MetaAdsProps, 'language' | 'locale'> | undefined;
 }>;
 
 const facebookPages = (list: SocialAccountList) => list.accounts.filter(a => a.platform === 'FACEBOOK' && a.status === 'CONNECTED');
@@ -60,7 +63,7 @@ export function AdsView(p: AdsViewProps): React.ReactElement {
           <button type="button" className={styles.primary} data-ads-connect-meta disabled={p.connecting} onClick={p.onConnectMeta}>{p.connecting ? t('connecting') : t('connectMeta')}</button></div></>
         : <p className={styles.notice}>{t('connectOff')}</p>)}
       {pages.length > 0 && <div className={styles.row}><a className={styles.secondary} href="/staff/marketing/social">{t('changeOnSocial')}</a></div>}
-      <p className={styles.meta}>{t('metaNext')}</p>
+      {pages.length > 0 && p.run && <MetaAds {...p.run} language={p.language} locale={p.locale ?? 'en-US'} />}
     </div>
     {google}
     {ai}

@@ -117,6 +117,7 @@ export function ShopifyView(p: ShopifyViewProps): React.ReactElement {
       </div>
       <p className={styles.meta}>{t('since', { time: when(p.locale, c.connectedAt) })} · {c.syncRunning ? t('syncing')
         : c.lastSyncAt ? `${t('lastSync', { time: when(p.locale, c.lastSyncAt) })} (${t(`out_${c.lastSyncOutcome ?? 'SUCCEEDED'}`)})` : t('neverSynced')}</p>
+      {c.status === 'CONNECTED' && read.autoSync && <p className={styles.meta} data-shopify-auto-sync>{t('autoSync')}</p>}
       {c.status === 'NEEDS_RECONNECT' && <p className={styles.warnText}>{t('needsReconnect')}</p>}
       {c.status === 'DISCONNECTED' && <p className={styles.meta}>{t('disconnectedNote')}</p>}
       {read.canManage && c.status === 'CONNECTED' && <div className={styles.row}>

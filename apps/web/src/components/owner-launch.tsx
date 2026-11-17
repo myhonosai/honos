@@ -9,6 +9,7 @@ import { loadInterfaceThemePreference, saveInterfaceThemePreference } from './in
 import progressStyles from './owner-launch-progress.module.css';
 import { useShellSchool } from './school-shell/page-school';
 
+const OWNER_LAUNCH_START='Load your verified school context to begin. HQ provisioning is separate.';
 export function ownerDashboardHandoffPath(context: Pick<OwnerLaunchProjection, 'organizationId' | 'schoolId'>): string {
   return `/staff/operations?${new URLSearchParams({ organizationId: context.organizationId, schoolId: context.schoolId }).toString()}`;
 }
@@ -44,7 +45,7 @@ export function OwnerLaunchProgress({
 }
 
 export function OwnerLaunch() {
-  const [context,setContext]=useState<OwnerLaunchProjection|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState('Load your verified school context to begin. HQ provisioning is separate.');
+  const [context,setContext]=useState<OwnerLaunchProjection|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState(OWNER_LAUNCH_START);
   const [programName,setProgramName]=useState(''),[className,setClassName]=useState(''),[startsAt,setStartsAt]=useState(''),[endsAt,setEndsAt]=useState(''),[capacity,setCapacity]=useState(10);
   const [mode,setMode]=useState<'adult'|'guardian-child'>('adult');
   const [givenName,setGivenName]=useState(''),[familyName,setFamilyName]=useState(''),[birthDate,setBirthDate]=useState(''),[attested,setAttested]=useState(false);
@@ -62,10 +63,13 @@ export function OwnerLaunch() {
   const retry=useRef<{operation:string;fingerprint:string;key:string}|null>(null);
   // Inside the school shell the page loads the signed-in school's receipts by itself (on open and on return);
   // the server still derives and authorizes the school on every read.
-  const shellSchool=useShellSchool(),inShell=useRef(false);inShell.current=shellSchool!==null;
+  const shellSchool=useShellSchool(),inShell=useRef(false),lastReturnReload=useRef(0);inShell.current=shellSchool!==null;
+  // focus and visibilitychange both fire on return (as separate tasks); reload once per second at most.
   function clearPrivateInput() {setGivenName('');setFamilyName('');setBirthDate('');setGuardianGivenName('');setGuardianFamilyName('');setGuardianBirthDate('');setAttested(false);setPlanCode('');setTermStart('');setTermEnd('');setCurrency('');setMembershipDraft(null);setDraftState('DRAFT_UNAVAILABLE');retry.current=null;}
   useEffect(()=>{
-    const stale=()=>{generation.current++;setContext(null);setBooking(null);setBookingState('BOOKING_UNAVAILABLE');setMembershipDraft(null);setBusy(false);setMessage('School state may have changed. Reload saved receipts before continuing.');clearPrivateInput();if(inShell.current&&document.visibilityState==='visible')void reload();};
+    const stale=()=>{if(inShell.current&&document.visibilityState==='visible'&&Date.now()-lastReturnReload.current<=1000)return; // the reload just started covers this return
+      if(document.visibilityState!=='visible')lastReturnReload.current=0; // a later return reloads again
+      generation.current++;setContext(null);setBooking(null);setBookingState('BOOKING_UNAVAILABLE');setMembershipDraft(null);setBusy(false);setMessage('School state may have changed. Reload saved receipts before continuing.');clearPrivateInput();if(inShell.current&&document.visibilityState==='visible'){lastReturnReload.current=Date.now();void reload();};};
     window.addEventListener('focus',stale);document.addEventListener('visibilitychange',stale);
     return ()=>{generation.current++;window.removeEventListener('focus',stale);document.removeEventListener('visibilitychange',stale);};
   },[]);
@@ -175,7 +179,7 @@ export function OwnerLaunch() {
     <p>Conventional human setup only. No directory search or cross-school selection. HQ provisioning and owner grants remain a separate controlled workflow.</p>
     <p>Choose a new adult without a guardian, or exactly one new child with one new adult guardian. A recorded family relationship is not parent login, parent access or family readiness.</p>
     <section className="owner-launch-theme" aria-labelledby="owner-launch-interface-mode"><div><p className="owner-launch-theme-kicker">OPTIONAL PRESENTATION</p><h2 id="owner-launch-interface-mode">Choose your interface mode</h2><p>Big-Button / Phone favors large touch targets, Modern HON balances daily work, and Classic CRM favors dense keyboard-and-mouse controls.</p><p>This is a current-user presentation preference only. You can change it later; it never changes your school scope, tier, role, features, permissions, authority, data, or available launch actions.</p></div><InterfaceThemePicker current={interfaceTheme} onChange={theme=>void chooseInterfaceTheme(theme)} disabled={interfaceThemeState!=='READY'} busy={interfaceThemeState==='LOADING'||interfaceThemeState==='SAVING'} presentation="cards" ariaLabel="Optional interface mode for this owner launch" /><p className="owner-launch-theme-status" role="status" aria-live="polite">{interfaceThemeMessage}</p></section>
-    <p role="status" aria-live="polite">{shellSchool&&busy?'Loading your school…':message}</p><button type="button" disabled={busy} onClick={()=>void reload()}>{busy?(shellSchool?'Loading…':'Verifying…'):shellSchool?'Refresh':'Load / refresh saved receipts'}</button>
+    <p role="status" aria-live="polite">{shellSchool&&(busy||message===OWNER_LAUNCH_START)?'Loading your school…':message}</p><button type="button" disabled={busy} onClick={()=>void reload()}>{busy?(shellSchool?'Loading…':'Verifying…'):shellSchool?'Refresh':'Load / refresh saved receipts'}</button>
     {context&&<>
       <OwnerLaunchProgress context={context} booking={booking} bookingState={bookingState} draftState={draftState} />
       <section aria-label="Verified school context"><h2>{shellSchool?'1. Your school':'1. Verified school context'}</h2><p>{context.schoolName} · {context.tier}</p>{!shellSchool&&<p>School receipt context: <code>{context.schoolId}</code></p>}<p><Link href={ownerDashboardHandoffPath(context)}>Open verified operations dashboard</Link> — this only pre-fills school identifiers. The dashboard remains empty until it independently verifies current access and loads its report.</p></section>

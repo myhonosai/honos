@@ -32,7 +32,36 @@ const report = { syntheticFixturesOnly: true, databaseAccess: false, providerCal
 const at = '2026-11-16T18:00:00.000Z';
 const page = (n, name, adsEnabled) => ({ accountId: id(40 + n), platform: 'FACEBOOK', displayName: name, status: 'CONNECTED', publishEnabled: true, inboxEnabled: false, adsEnabled,
   version: 2, connectedAt: at, updatedAt: at, disconnectedAt: null });
-const fixture = { accounts: [], connectEnabled: true, connects: [] };
+const fixture = { accounts: [], connectEnabled: true, connects: [], adsEnabled: true, budget: null, ads: [], commands: [] };
+const TODAY = '2026-11-16';
+const posts = { publishEnabled: true, checkedAt: at, posts: [{ postId: id(51), text: 'Free trial week for kids 5-12: two classes on us, uniform included.', linkUrl: null, status: 'APPROVED',
+  publishAt: at, accountIds: [id(40)], version: 2, createdAt: at, updatedAt: at, approvedAt: at, cancelledAt: null,
+  targets: [{ targetId: id(50), accountId: id(40), platform: 'FACEBOOK', displayName: 'Synthetic Dojo Page', status: 'PUBLISHED', failureCode: null, skipReason: null,
+    resolvedByPerson: false, settledAt: at, version: 2 }] }] };
+const committed = () => fixture.ads.filter((a) => !['DRAFT', 'CANCELLED', 'FAILED'].includes(a.status)).reduce((n, a) => n + a.budgetCents, 0);
+const adsView = () => ({ budget: fixture.budget, committedThisMonthCents: committed(), ads: [...fixture.ads].reverse(), today: TODAY, checkedAt: at, adsEnabled: fixture.adsEnabled, pauseEnabled: true });
+/** A tiny stand-in for 0445: versions, the cap rule, PAUSED creation, ACTIVATE/PAUSE, one answer per key. */
+function adsCommand(path, body, headers) {
+  fixture.commands.push({ path, command: headers['x-hon-human-command'], key: headers['idempotency-key'], body });
+  if (path.endsWith('/ads/budget')) { fixture.budget = { monthlyCapCents: body.monthlyCapCents, currency: body.currency, version: (fixture.budget?.version ?? 0) + 1 }; return [200, adsView()]; }
+  if (path.endsWith('/ads')) {
+    if (!fixture.budget || body.budgetCents > fixture.budget.monthlyCapCents) return [409, { code: 'SOCIAL_AD_OVER_CAP' }];
+    const ad = { adId: id(60 + fixture.ads.length), accountId: id(40), targetId: body.targetId, postId: id(51), accountName: 'Synthetic Dojo Page', budgetCents: body.budgetCents,
+      currency: fixture.budget.currency, startsOn: body.startsOn, endsOn: body.endsOn, status: 'DRAFT', operation: null, resolvedByPerson: false, createdAt: at, version: 1 };
+    fixture.ads.push(ad); return [200, ad];
+  }
+  const ad = fixture.ads.find((a) => path.includes(a.adId));
+  if (!ad) return [404, { code: 'SOCIAL_AD_NOT_FOUND' }];
+  if (body.expectedVersion !== ad.version) return [409, { code: 'SOCIAL_VERSION_CONFLICT' }];
+  if (path.endsWith('/cancel')) Object.assign(ad, { status: 'CANCELLED' });
+  else if (path.endsWith('/operation')) {
+    if (!fixture.adsEnabled && body.operation !== 'PAUSE') return [503, { code: 'SOCIAL_ADS_NOT_ENABLED' }];
+    const next = { CREATE: ['DRAFT', 'PAUSED'], ACTIVATE: ['PAUSED', 'ACTIVE'], PAUSE: ['ACTIVE', 'PAUSED'] }[body.operation];
+    if (ad.status !== next[0]) return [409, { code: 'SOCIAL_AD_STATE' }];
+    Object.assign(ad, { status: next[1], operation: body.operation });
+  }
+  ad.version += 1; return [200, ad];
+}
 
 const json = (route, status, body) => route.fulfill({ status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }, body: JSON.stringify(body) });
 const meta = { requestId: id(9000), correlationId: id(9000) };
@@ -52,6 +81,12 @@ function api(route) {
     const headers = request.headers();
     fixture.connects.push({ command: headers['x-hon-human-command'], key: headers['idempotency-key'], body: request.postDataJSON() });
     return json(route, 200, { data: { authUrl: 'https://www.facebook.com/dialog/oauth?synthetic=1', platform: 'FACEBOOK', expiresAt: '2026-11-16T18:10:00.000Z' }, meta });
+  }
+  if (path === `${prefix}/marketing/social/ads` && method === 'GET') return json(route, 200, { data: adsView(), meta });
+  if (path === `${prefix}/marketing/social/posts` && method === 'GET') return json(route, 200, { data: posts, meta });
+  if (path.startsWith(`${prefix}/marketing/social/ads`) && method === 'POST') {
+    const [status, body] = adsCommand(path, request.postDataJSON(), request.headers());
+    return json(route, status, status === 200 ? { data: body, meta } : body);
   }
   return json(route, 403, { code: 'FORBIDDEN' });
 }
@@ -113,7 +148,7 @@ await check('connected Pages show their real ads switch and link to Social accou
   fixture.accounts = [page(0, 'Synthetic Dojo Page', true), page(1, 'Synthetic Second Location', false)];
   const { ctx, page: p } = await open(viewports.desktop, '/staff/marketing/ads');
   await p.locator('[data-ads-meta="READY_FOR_ADS"]').waitFor();
-  assert.ok(await p.getByText('Synthetic Dojo Page').isVisible());
+  assert.ok(await p.getByText('Synthetic Dojo Page', { exact: true }).first().isVisible());
   assert.ok(await p.getByRole('link', { name: 'Change on Social accounts' }).isVisible());
   assert.equal(await p.getByRole('button', { name: 'Connect Facebook for Meta Ads' }).count(), 0);
   await shot(p, 'ads-meta-connected-desktop-1440');
@@ -126,6 +161,46 @@ await check('connecting off says so plainly with no button', async () => {
   assert.equal(await p.locator('[data-ads-connect-meta]').count(), 0);
   await shot(p, 'ads-connect-off-desktop-1440');
   fixture.connectEnabled = true; await ctx.close();
+});
+await check('a person sets the limit, saves a boost draft, approves it (created paused), turns it on after confirming, and pauses it', async () => {
+  fixture.accounts = [page(0, 'Synthetic Dojo Page', true)]; fixture.connectEnabled = true;
+  const { ctx, page: p } = await open(viewports.desktop, '/staff/marketing/ads');
+  await p.locator('[data-ads-run="ON"]').waitFor();
+  await shot(p, 'ads-run-empty-desktop-1440');
+  await p.getByLabel('Limit per month').fill('300');
+  await p.getByLabel('Currency (as in your Meta ad account)').fill('usd');
+  await p.locator('[data-ads-save-budget]').click();
+  await p.getByText('Monthly limit saved.').waitFor();
+  await p.getByLabel('Post to boost').selectOption(id(50));
+  await p.getByLabel('Total budget').fill('50');
+  await p.getByLabel('Ends').fill('2026-11-22');
+  await p.locator('[data-ads-save-draft]').click();
+  await p.locator('[data-ad-status="DRAFT"]').waitFor();
+  await p.locator('[data-ads-op="CREATE"]').click();
+  await p.locator('[data-ad-status="PAUSED"]').waitFor();
+  await p.locator('[data-ads-op="ACTIVATE-ASK"]').click();
+  await p.getByText('Meta starts spending').waitFor();
+  await shot(p, 'ads-run-confirm-desktop-1440');
+  await p.locator('[data-ads-op="ACTIVATE"]').click();
+  await p.locator('[data-ad-status="ACTIVE"]').waitFor();
+  await shot(p, 'ads-run-active-desktop-1440');
+  await p.locator('[data-ads-op="PAUSE"]').click();
+  await p.locator('[data-ad-status="PAUSED"]').waitFor();
+  const sent = fixture.commands.map((c) => c.command);
+  assert.deepEqual(sent, ['marketing.social.ads.budget', 'marketing.social.ads.create', 'marketing.social.ads.operation', 'marketing.social.ads.operation', 'marketing.social.ads.operation']);
+  assert.deepEqual(fixture.commands.map((c) => c.body.operation ?? null).slice(2), ['CREATE', 'ACTIVATE', 'PAUSE']);
+  assert.deepEqual(fixture.commands[0].body, { monthlyCapCents: 30000, currency: 'USD' });
+  assert.deepEqual(fixture.commands[1].body, { targetId: id(50), budgetCents: 5000, startsOn: TODAY, endsOn: '2026-11-22' });
+  assert.equal(new Set(fixture.commands.map((c) => c.key)).size, fixture.commands.length, 'every write has its own key');
+  await noOverflow(p); await ctx.close();
+});
+await check('while ads are off at HON OS, approving is disabled and the page says so', async () => {
+  fixture.adsEnabled = false; fixture.ads.push({ ...fixture.ads[0], adId: id(70), status: 'DRAFT', operation: null, version: 1 });
+  const { ctx, page: p } = await open(viewports.desktop, '/staff/marketing/ads');
+  await p.locator('[data-ads-off]').waitFor();
+  assert.equal(await p.locator(`[data-ad="${id(70)}"] [data-ads-op="CREATE"]`).isDisabled(), true);
+  await shot(p, 'ads-run-off-desktop-1440');
+  fixture.adsEnabled = true; await ctx.close();
 });
 await check('phone and Korean fit the screen', async () => {
   fixture.accounts = [page(0, 'Synthetic Dojo Page', true)];

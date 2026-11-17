@@ -175,6 +175,7 @@
     "db:test-school-location": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-location-integrity.mjs",
     "db:test-lead-pipeline-board": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-lead-pipeline-board-integrity.mjs",
     "db:test-shopify": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-shopify-commerce-integrity.mjs",
+    "db:test-shopify-background": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-shopify-background-integrity.mjs",
     "db:test-class-series": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-series-integrity.mjs",
     "db:test-tuition-payments": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-tuition-payment-integrity.mjs",
     "db:test-school-payment-connections": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-payment-connections-integrity.mjs",
