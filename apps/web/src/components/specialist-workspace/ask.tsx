@@ -20,8 +20,8 @@ const STARTERS: Readonly<Record<SpecialistKey, readonly WorkspaceKey[]>> = {
 export const specialistStarters = (agent: SpecialistKey, language: string): string[] => STARTERS[agent].map(key => workspaceText(language, key));
 
 /**
- * Ask one analysis specialist (0260 / K2) from that specialist's workspace: one new Ask HON conversation and one turn
- * { text, delegation: { agentKey } }. The answer is shown only when COMPLETED. Nothing is sent or changed. An unknown
+ * Ask one analysis specialist (0260 / K2) from that specialist's workspace: the first question opens one Ask HON
+ * conversation and every later question on this page continues it, one turn { text, delegation: { agentKey } } each. The answer is shown only when COMPLETED. Nothing is sent or changed. An unknown
  * outcome keeps the exact prepared request so "Try again" never creates a second turn or a second provider call.
  */
 export function SpecialistAsk({ agent, name, language, school, api = HON_CONVERSATION_API }:
@@ -30,16 +30,19 @@ export function SpecialistAsk({ agent, name, language, school, api = HON_CONVERS
   const [question, setQuestion] = useState('');
   const [ask, setAsk] = useState<SpecialistAskState>({ state: 'IDLE' });
   const mounted = useRef(true);
+  /** One ongoing conversation per workspace visit: later questions continue it, so the specialist sees the earlier turns. */
+  const conversationRef = useRef<string | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const owned = () => mounted.current;
 
   const run = async (text: string, retry: Extract<SpecialistAskState, { state: 'FAILED' }>['retry']) => {
     setAsk({ state: 'ASKING' });
-    let conversation = retry?.conversation ?? null, conversationId = retry?.conversationId ?? null, turn = retry?.turn ?? null;
+    let conversation = retry?.conversation ?? null, conversationId = retry?.conversationId ?? conversationRef.current, turn = retry?.turn ?? null;
     try {
       if (!conversationId) {
-        conversation ??= prepareConversation(school, `${name}: workspace question`);
+        conversation ??= prepareConversation(school, `${name}: workspace questions`);
         conversationId = (await api.create(conversation, owned)).id;
+        if (owned()) conversationRef.current = conversationId;
       }
       turn ??= prepareTurn(school, conversationId, { text, delegation: { agentKey: agent } });
       const receipt = await api.sendTurn(turn, owned);
@@ -48,6 +51,8 @@ export function SpecialistAsk({ agent, name, language, school, api = HON_CONVERS
     } catch (error) {
       if (!owned()) return;
       const kind = error instanceof HonConversationError ? error.kind : 'UNKNOWN';
+      // A definitive conflict (for example a full conversation) starts a new conversation on the next question.
+      if (kind === 'CONFLICT') conversationRef.current = null;
       setAsk({ state: 'FAILED', denied: kind === 'FORBIDDEN', retry: kind === 'UNKNOWN' ? { conversation, conversationId, turn } : null });
     }
   };
