@@ -7,6 +7,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve, dirname, join } from 'node:path';
+import { isSchoolShellRead } from './school-shell-reads.mjs';
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 assert.equal(process.env.GITHUB_ACTIONS, 'true'); assert.equal(process.env.RUNNER_ENVIRONMENT, 'github-hosted'); assert.equal(process.env.HON_STAFF_INVITATIONS_TEST, '1');
 let owner, runtime; try { owner = new URL(process.env.DATABASE_URL ?? ''); runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? ''); } catch { throw new Error('Staff frontend disposable fixture target refused.'); }
@@ -212,6 +213,9 @@ try {
     const scope = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, school.who.externalSubject])).digest('hex');
     await context.addCookies([{ name: HON_SESSION_COOKIE, value: cookie(school.who).split('=')[1], url: origin, httpOnly: true, sameSite: 'Lax' }, { name: design.localeCookieName(scope), value: encodeURIComponent(JSON.stringify({ ...design.DEFAULT_LOCALE, language })), url: origin, sameSite: 'Lax' }]);
     const requests = [], errors = []; await context.route('**/*', async route => { const u = new URL(route.request().url()); if (u.origin !== origin) { await route.abort(); assert(['https://fonts.googleapis.com', 'https://fonts.gstatic.com'].includes(u.origin), 'Unexpected external operation'); blockedFonts.add(u.origin); return; }
+      // This harness covers the manual school entry: the shell's own reads are set aside so it never verifies a school
+      // (inside a verified shell the page uses the signed-in school; that path is covered by the component tests).
+      if (isSchoolShellRead(route.request().method(), u.pathname)) { await route.fulfill({ status: 404, body: '' }); return; }
       requests.push({ path: u.pathname, method: route.request().method() }); await route.continue(); });
     const page = await context.newPage(); activeBrowserPage = page; browserDiagnostic = { case: 'matrix-selector-entry', language, mode, width };
     page.on('pageerror', e => errors.push(e.message)); await page.goto(origin + '/staff/team/invitations'); await foreground(page, language);
@@ -302,7 +306,7 @@ try {
   {
     const context = await browser.newContext({ serviceWorkers: 'block' });
     const setActor = who => context.addCookies([{ name: HON_SESSION_COOKIE, value: cookie(who).split('=')[1], url: origin, httpOnly: true, sameSite: 'Lax' }]);
-    await setActor(A.who); await context.route('**/*', async route => { const u = new URL(route.request().url()); if (u.origin === origin) return route.continue(); await route.abort(); assert(['https://fonts.googleapis.com', 'https://fonts.gstatic.com'].includes(u.origin)); });
+    await setActor(A.who); await context.route('**/*', async route => { const u = new URL(route.request().url()); if (u.origin === origin && isSchoolShellRead(route.request().method(), u.pathname)) return route.fulfill({ status: 404, body: '' }); if (u.origin === origin) return route.continue(); await route.abort(); assert(['https://fonts.googleapis.com', 'https://fonts.gstatic.com'].includes(u.origin)); });
     const page = await context.newPage(); activeBrowserPage = page; browserDiagnostic = { case: 'silent-session-switch', language: 'en', mode: 'modern', width: 1280 }; await page.goto(origin + '/staff/team/invitations'); await scopeEntry(page, 'en');
     await page.getByTestId('staff-org').fill(A.organizationId); await page.getByTestId('staff-school').fill(A.schoolId); await page.getByRole('button', { name: t('en', 'verify'), exact: true }).click();
     await page.getByRole('button', { name: t('en', 'loadRoles'), exact: true }).click(); await page.getByTestId('staff-role-id').waitFor(); assert.equal(await page.getByTestId('staff-role-id').inputValue(), '');
