@@ -271,6 +271,9 @@ import { PublicSchoolEventController, SchoolEventController } from './schedule/s
 import { SchoolEventService } from './schedule/school-event.service.js';
 import { BookingTypeController, PublicBookingTypeController } from './schedule/booking-type.controller.js';
 import { BookingTypeService } from './schedule/booking-type.service.js';
+import { PublicWalkInKioskController, WalkInKioskController } from './walk-in-kiosk/walk-in-kiosk.controller.js';
+import { WalkInKioskService } from './walk-in-kiosk/walk-in-kiosk.service.js';
+import { WalkInKioskDeskPaidHumanUiGuard, WalkInKioskDeviceEndHumanUiGuard, WalkInKioskDeviceStartHumanUiGuard, WalkInKioskReadHumanUiGuard, WalkInKioskSettingsHumanUiGuard } from './walk-in-kiosk/walk-in-kiosk-human-ui.guard.js';
 import { BookingTypeBookingStatusHumanUiGuard, BookingTypeReadHumanUiGuard, BookingTypeSaveHumanUiGuard, BookingTypeStatusHumanUiGuard } from './schedule/booking-type-human-ui.guard.js';
 import { SchoolEventBookingStatusHumanUiGuard, SchoolEventReadHumanUiGuard, SchoolEventSaveHumanUiGuard, SchoolEventStatusHumanUiGuard } from './schedule/school-event-human-ui.guard.js';
 import { ClassSeriesCreateHumanUiGuard, ClassSeriesEndHumanUiGuard, ClassSeriesFillHumanUiGuard, ClassSeriesOngoingHumanUiGuard, ClassSeriesReadHumanUiGuard, ClassSeriesReviseHumanUiGuard, ClassSeriesTopUpHumanUiGuard } from './schedule/class-series-human-ui.guard.js';
@@ -488,6 +491,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     PublicSchoolEventController,
     BookingTypeController,
     PublicBookingTypeController,
+    WalkInKioskController,
+    PublicWalkInKioskController,
     AttendanceController,
     ClassSessionRosterController,
     AttendancePolicyController,
@@ -753,6 +758,12 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolEventStatusHumanUiGuard,
     SchoolEventBookingStatusHumanUiGuard,
     BookingTypeService,
+    WalkInKioskService,
+    WalkInKioskReadHumanUiGuard,
+    WalkInKioskSettingsHumanUiGuard,
+    WalkInKioskDeviceStartHumanUiGuard,
+    WalkInKioskDeviceEndHumanUiGuard,
+    WalkInKioskDeskPaidHumanUiGuard,
     BookingTypeReadHumanUiGuard,
     BookingTypeSaveHumanUiGuard,
     BookingTypeStatusHumanUiGuard,

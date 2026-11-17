@@ -9,7 +9,7 @@ type List = Readonly<{ state: 'LOADING' } | { state: 'READY'; items: readonly Pi
 const PURPOSES: readonly StaffPurpose[] = ['roles', 'availability', 'qualifications'];
 /** Where each staff job lives today; the destination page picks the person by name (0404 pick list), never by typed ID. */
 export const STAFF_CARD_LINKS: readonly Readonly<{ href: string; label: string }>[] = [
-  { href: '/staff/roles', label: 'Roles' },
+  { href: '/staff/roles', label: 'Roles & permissions' },
   { href: '/staff/team/availability', label: 'Availability' },
   { href: '/staff/instructor-qualifications', label: 'Qualifications' },
   { href: '/staff/documents', label: 'Documents' },

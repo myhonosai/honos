@@ -43,8 +43,9 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     h('/staff/teaching-assistant', 'routeKai'), h('/staff/retention/at-risk', 'routeMayaAtRisk')] },
   // Conversation AI answers the school's texts in this inbox (0364); staff take over any thread.
   { key: 'conversationAi', titleKey: 'navConversationAi', section: 'ai', routes: [r('/staff/conversations', 'routeConversations')] },
-  { key: 'classes', titleKey: 'navClasses', section: 'calendar', routes: [r('/staff/schedule', 'routeRosters'), r('/staff/schedule/sessions', 'routeSessions'), r('/staff/schedule/timetable', 'routeTimetable'),
-    r('/staff/schedule/events', 'routeEvents'), r('/staff/schedule/bookings', 'routeBookings')] },
+  // Owner ask (2026-11-16): rosters, class schedule, weekly timetable, sale days and events and class booking are one
+  // Calendar page; /staff/schedule owns every /staff/schedule/* path, so the old pages and workflow pages still mark Classes.
+  { key: 'classes', titleKey: 'navClasses', section: 'calendar', routes: [r('/staff/schedule', 'routeCalendar')] },
   { key: 'attendance', titleKey: 'navAttendance', section: 'calendar', routes: [r('/staff/attendance', 'routeAttendance', true), r('/staff/attendance/planned-absences', 'routePlannedAbsences'), r('/staff/attendance/scan', 'routeScanCheckIn'), r('/staff/attendance/cards', 'routeAttendanceCards'),
     r('/staff/kiosk', 'routeKiosk'), r('/staff/classpass', 'routeClassPass', true), r('/staff/migration/classes', 'routeHistoryImport')] },
   // Search is the search button in the top bar.
@@ -87,6 +88,12 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
 export const SCHOOL_SHELL_UNLISTED_ROUTES: readonly string[] = [
   '/staff/entry',
   '/staff/schedule/sessions/create',
+  // Part of Classes > Calendar (2026-11-16): the booking page is opened from other pages with a class chosen; the other
+  // three redirect to the matching Calendar tab for old links and bookmarks.
+  '/staff/schedule/bookings',
+  '/staff/schedule/sessions',
+  '/staff/schedule/timetable',
+  '/staff/schedule/events',
   '/staff/search/[organizationId]/[schoolId]/[kind]/[entityId]',
   // The page Facebook or Instagram returns to after a social connection (0347); reached only from Social accounts.
   '/staff/marketing/social/return',
