@@ -5,11 +5,15 @@ import {
   HON_VOICE_LIMITS, HonVoiceController, browserRecognition, browserSpeech, browserTimer, detectHonVoiceSupport, installOnDeviceSpeech, onDeviceSpeech,
   type HonSpokenPart, type HonVoiceLang, type HonVoiceSnapshot, type OnDeviceSpeech, type SpeechAdapter,
 } from './hon-voice';
+import { HonOrb } from './hon-orb';
+import { createHonOrbSignal, heardPulse, honOrbStateFor, type HonOrbSignal } from './hon-orb-signal';
 import styles from './hon-conversation.module.css';
 
 export type HonVoiceSupport = Readonly<{ checked: boolean; recognition: boolean; synthesis: boolean }>;
 export type HonVoiceControlsProps = {
   support: HonVoiceSupport; enabled: boolean; canAsk: boolean; onDeviceStatus: OnDeviceSpeech; snapshot: HonVoiceSnapshot;
+  /** Drives the live HON orb (heard words while listening, spoken words while answering). Optional for static renders. */
+  orbSignal?: HonOrbSignal;
   onEnable(): void; onDisable(): void; onTalk(): void; onCancelListening(): void; onHandsFree(on: boolean): void; onStopSpeaking(): void; onInstall(): void;
   /** Team chat: who the talk button and status lines name (default HON). */
   who?: 'hon' | 'team';
@@ -39,6 +43,7 @@ export function HonVoiceControls(props: HonVoiceControlsProps): React.ReactEleme
   // A tap while the microphone is blocked tries it again (permission may have been granted since).
   const busy = snapshot.state === 'SENDING';
   return <div className={styles.voice} data-voice={snapshot.state}>
+    <HonOrb state={honOrbStateFor(snapshot.state)} signal={props.orbSignal} className={styles.voiceOrb} />
     <div className={styles.actions}>
       {listening
         ? <button type="button" data-voice="stop-listening" onClick={props.onCancelListening}>Stop listening</button>
@@ -77,6 +82,14 @@ export function useHonVoice(lang: HonVoiceLang, ask: (text: string) => boolean) 
   const [enabled, setEnabled] = useState(false);
   const [onDeviceStatus, setOnDeviceStatus] = useState<OnDeviceSpeech>('unavailable');
   const [snapshot, setSnapshot] = useState<HonVoiceSnapshot>(IDLE);
+  // The orb's energy: one signal for this mounted conversation. No audio is read; only words already recognised or spoken.
+  const [orbSignal] = useState(() => createHonOrbSignal());
+  const heardBefore = useRef('');
+  useEffect(() => {
+    const pulse = heardPulse(heardBefore.current, snapshot.heard);
+    heardBefore.current = snapshot.heard;
+    if (pulse > 0) orbSignal.pulse(pulse);
+  }, [snapshot.heard, orbSignal]);
 
   useEffect(() => {
     const found = detectHonVoiceSupport(window as never);
@@ -84,7 +97,7 @@ export function useHonVoice(lang: HonVoiceLang, ask: (text: string) => boolean) 
     try { setEnabled(window.localStorage.getItem(STORAGE_KEY) === 'on'); } catch { /* storage unavailable: voice stays off */ }
     if (!found.recognition) return;
     const voice = new HonVoiceController({
-      recognition: browserRecognition(window as never), speech: found.synthesis ? browserSpeech(window as never) : silentSpeech, timer: browserTimer, lang,
+      recognition: browserRecognition(window as never), speech: found.synthesis ? browserSpeech(window as never, { onWord: () => orbSignal.pulse(0.55) }) : silentSpeech, timer: browserTimer, lang,
       ask: (text) => askRef.current(text),
     });
     controller.current = voice;
@@ -93,7 +106,7 @@ export function useHonVoice(lang: HonVoiceLang, ask: (text: string) => boolean) 
     let live = true;
     void onDeviceSpeech(window as never, lang).then((status) => { if (!live) return; setOnDeviceStatus(status); voice.setOnDevice(status === 'available'); });
     return () => { live = false; off(); voice.shutdown(); if (controller.current === voice) controller.current = null; setSnapshot(IDLE); };
-  }, [lang]);
+  }, [lang, orbSignal]);
 
   const remember = (on: boolean) => { try { window.localStorage.setItem(STORAGE_KEY, on ? 'on' : 'off'); } catch { /* per-device convenience only */ } };
   const shutdown = useCallback(() => { controller.current?.shutdown(); }, []);
@@ -111,7 +124,7 @@ export function useHonVoice(lang: HonVoiceLang, ask: (text: string) => boolean) 
   return {
     snapshot, shutdown, reply, replyParts,
     controls: (canAsk: boolean): HonVoiceControlsProps => ({
-      support, enabled, canAsk, onDeviceStatus, snapshot,
+      support, enabled, canAsk, onDeviceStatus, snapshot, orbSignal,
       onEnable: () => { remember(true); setEnabled(true); },
       onDisable: () => { remember(false); setEnabled(false); controller.current?.shutdown(); },
       onTalk: () => controller.current?.talk(),

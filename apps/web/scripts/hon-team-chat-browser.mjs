@@ -272,6 +272,8 @@ await check('voice: a spoken question goes to the whole team and each answer is 
   await chat(page).getByRole('button', { name: 'Turn on voice' }).click();
   await page.evaluate(() => { window.__say = 'Everyone, what should we focus on this week?'; });
   await chat(page).getByRole('button', { name: 'Talk to the team' }).click();
+  // The follow-up listen after the answers hears silence (the fake would otherwise repeat the question forever).
+  await page.waitForFunction(() => window.__spoken.length >= 1, null, { timeout: 15000 }); await page.evaluate(() => { window.__say = ''; });
   await page.waitForFunction(() => window.__spoken.length >= 5, null, { timeout: 15000 });
   assert.deepEqual(turnBodies.map((b) => [b.delegation?.agentKey ?? 'hon', b.text]), ['hon', 'claire', 'alex', 'jordan', 'lena'].map((k) => [k, 'what should we focus on this week?']));
   const spoken = await page.evaluate(() => window.__spoken);
@@ -281,7 +283,7 @@ await check('voice: a spoken question goes to the whole team and each answer is 
   await page.evaluate(() => { window.__say = 'Lena, one flyer idea please'; window.__spoken = []; });
   await page.waitForFunction(() => !document.querySelector('#team-chat [data-voice="SPEAKING"]'));
   await chat(page).getByRole('button', { name: /Talk to the team|Stop listening/ }).first().click();
-  await page.waitForFunction(() => window.__spoken.length >= 1, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__spoken.length >= 1, null, { timeout: 15000 }); await page.evaluate(() => { window.__say = ''; });
   assert.deepEqual(turnBodies.at(-1), { text: 'one flyer idea please', delegation: { agentKey: 'lena' } });
   assert.match((await page.evaluate(() => window.__spoken[0].text)), /^Lena says:/);
   await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: join(results, 'team-chat-voice-desktop.png'), fullPage: true }); report.screenshots.push('team-chat-voice-desktop.png');
