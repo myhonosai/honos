@@ -21,7 +21,8 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'Trusted migration owner required'; END IF;
   IF to_regprocedure('hon.validate_automation_definition(jsonb)') IS NULL OR to_regclass('hon.communication_deliveries') IS NULL
-    OR to_regclass('hon.work_items') IS NULL OR to_regclass('hon.crm_appointments') IS NULL THEN RAISE EXCEPTION '0423 requires 0416, 0243, 0084 and 0043'; END IF;
+    OR to_regclass('hon.work_items') IS NULL OR to_regclass('hon.crm_appointments') IS NULL
+    OR to_regprocedure('hon.guard_crm_lead_stage_update()') IS NULL THEN RAISE EXCEPTION '0423 requires 0417, 0416, 0243, 0084 and 0043'; END IF;
 END $$;
 
 -- The HON Automation principal: creates automated messages and tasks, never signs in.
@@ -471,9 +472,13 @@ BEGIN
         FOR lead_row IN SELECT l.id,l.pipeline_stage_id,l.version FROM hon.crm_leads l
             WHERE l.organization_id=r.organization_id AND l.school_id=r.school_id AND l.primary_person_id=r.person_id AND l.status='OPEN'
               AND l.pipeline_stage_id<>(s->>'stageId')::uuid
-              AND EXISTS(SELECT 1 FROM hon.crm_pipeline_stages x WHERE x.id=(s->>'stageId')::uuid AND x.pipeline_id=l.pipeline_id AND x.terminal_status IS NULL)
+              AND EXISTS(SELECT 1 FROM hon.crm_pipeline_stages x WHERE x.id=(s->>'stageId')::uuid AND x.pipeline_id=l.pipeline_id AND x.terminal_status IS NULL
+                AND x.hidden_at IS NULL)
             ORDER BY l.id FOR UPDATE LOOP
+          -- 0417 crm_lead_stage_update_guard: a stage change names its one lead for this statement only.
+          PERFORM set_config('app.hon_crm_stage_lead_id',lead_row.id::text,true);
           UPDATE hon.crm_leads l SET pipeline_stage_id=(s->>'stageId')::uuid,version=l.version+1,updated_at=clock_timestamp() WHERE l.id=lead_row.id;
+          PERFORM set_config('app.hon_crm_stage_lead_id','',true);
           -- Identifier-only evidence of each automated stage move.
           INSERT INTO hon.audit_events(organization_id,school_id,actor_principal_id,source,action_code,entity_type,entity_id,prior_state,next_state,result,request_id,correlation_id)
             VALUES(r.organization_id,r.school_id,automation,'AUTOMATION','crm.lead.stage_moved','CRM_LEAD',lead_row.id,

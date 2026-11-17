@@ -104,7 +104,7 @@ steps (at least 10) failed the workflow pauses `FAILURE_RATE`.
   quiet-hours and STOP checks. A skipped send records why (`NO_CONSENT`, `NO_ADDRESS`, `DAILY_CAP`, `TEXT_TOO_LONG`).
   SendGrid delivery still uses its fixed subject; delivering `email_subject` is a follow-up.
 - CREATE_TASK / NOTIFY_STAFF: one READY HUMAN_UI work item (with its history row) for the school's owners.
-- ADD_TAG / REMOVE_TAG (20-tag limit → `TAG_LIMIT_REACHED`), MOVE_STAGE (open lead in that stage's pipeline only; one identifier-only `crm.lead.stage_moved` audit row per lead with
+- ADD_TAG / REMOVE_TAG (20-tag limit → `TAG_LIMIT_REACHED`), MOVE_STAGE (open lead in that stage's pipeline only, never to a hidden (0417) stage, through the 0417 single-lead stage guard; one identifier-only `crm.lead.stage_moved` audit row per lead with
   prior and next stage, run and workflow),
   START_WORKFLOW (at most depth 3; never a workflow already in the chain: `CHAIN_LIMIT`).
 - WAIT (minutes, or the next school-local time), WAIT_FOR trial booked / enrolled (re-checked every 5 minutes until the
