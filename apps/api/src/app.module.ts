@@ -213,6 +213,7 @@ import { InvoiceService } from './billing/invoice.service.js';
 import { InvoiceHumanUiGuard } from './billing/invoice-human-ui.guard.js';
 import { HqController } from './hq/hq.controller.js';
 import { IdentityController } from './foundation/identity.controller.js';
+import { MobileSessionController } from './foundation/mobile-session.controller.js';
 import { PipelineController } from './crm/pipeline.controller.js';
 import { PipelineService } from './crm/pipeline.service.js';
 import { HqOnboardingController } from './hq/hq-onboarding.controller.js';
@@ -480,6 +481,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     FoundationController,
     SessionContextController,
     IdentityController,
+    MobileSessionController,
     PersonController, SchoolPersonRecordController, SchoolPersonPhotoController, AttendanceCardsController, AttendanceScanController, FaceCheckInController, FaceCheckInScanController, FamilyFaceCheckInController,
     FamilyController,
     ParentJourneyViewController,

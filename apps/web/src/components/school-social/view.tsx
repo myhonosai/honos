@@ -1,5 +1,5 @@
 import React from 'react';
-import { SOCIAL_PLATFORMS, type SocialAccount, type SocialAccountList, type SocialConnectResult, type SocialPlatform, type SocialProviderRemoval } from '@hon/contracts';
+import { SOCIAL_POST_PLATFORMS, type SocialAccount, type SocialAccountList, type SocialAccountPlatform, type SocialConnectResult, type SocialProviderRemoval } from '@hon/contracts';
 import { socialText, type SocialKey } from './copy';
 import type { SocialErrorKind } from './http';
 import styles from './social.module.css';
@@ -13,7 +13,7 @@ export type SocialOutcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | SocialE
 export type SocialViewProps = Readonly<{
   language: string; locale: string; waiting: boolean; concealed: boolean; hasSchool: boolean; canManage: boolean;
   list: ListState; edits: Readonly<Record<string, Switches>>; confirming: string | null; outcome: SocialOutcome; locked: boolean; canRetry: boolean;
-  onRefresh?: (() => void) | undefined; onConnect?: ((platform: SocialPlatform) => void) | undefined;
+  onRefresh?: (() => void) | undefined; onConnect?: ((platform: SocialAccountPlatform) => void) | undefined;
   onEdit?: ((accountId: string, next: Switches) => void) | undefined; onSave?: ((account: SocialAccount) => void) | undefined;
   onConfirm?: ((accountId: string | null) => void) | undefined; onDisconnect?: ((account: SocialAccount) => void) | undefined;
   onTryAgain?: (() => void) | undefined;
@@ -32,8 +32,9 @@ function AccountCard({ a, t, p }: { a: SocialAccount; t: T; p: SocialViewProps }
       <div className={styles.chips}><span className={styles.chip}>{t(`p_${a.platform}`)}</span><span className={styles.chip} data-state={a.status}>{t(`st_${a.status}`)}</span></div>
       <span className={styles.meta}>{live ? t('since', { time: when(p.locale, a.connectedAt) }) : t('ended', { time: when(p.locale, a.disconnectedAt ?? a.updatedAt) })}</span>
       {live && <fieldset className={styles.fieldset} disabled={p.locked || !p.canManage}>
-        {/* A Google Ads account only runs ads (0453): it never posts or reads an inbox. */}
-        <div className={styles.grid}>{SWITCHES.filter(([field]) => a.platform !== 'GOOGLE_ADS' || field === 'adsEnabled').map(([field, label]) => <label key={field} className={styles.check}>
+        {/* A Google Ads account only runs ads (0453); a Google Business Profile only posts (0455). */}
+        <div className={styles.grid}>{SWITCHES.filter(([field]) => (a.platform !== 'GOOGLE_ADS' || field === 'adsEnabled')
+          && (a.platform !== 'GOOGLE_BUSINESS' || field === 'publishEnabled')).map(([field, label]) => <label key={field} className={styles.check}>
           <input type="checkbox" checked={draft[field]} onChange={(e) => p.onEdit?.(a.accountId, { ...draft, [field]: e.target.checked })} />{t(label)}</label>)}</div>
       </fieldset>}
     </div>
@@ -71,7 +72,7 @@ export function SocialView(p: SocialViewProps): React.ReactElement {
     {p.canManage && <div className={styles.card} data-social-connect>
       <h2>{t('connectTitle')}</h2>
       {l.connectEnabled ? <><p className={styles.meta}>{t('connectHelp')}</p>
-        <div className={styles.row}>{SOCIAL_PLATFORMS.map((platform) => <button key={platform} type="button" className={styles.primary} disabled={p.locked}
+        <div className={styles.row}>{/* Google Ads connects from Marketing > Ads; a school's Google Business Profile connects here (0455). */}{SOCIAL_POST_PLATFORMS.map((platform) => <button key={platform} type="button" className={styles.primary} disabled={p.locked}
           onClick={() => p.onConnect?.(platform)}>{p.locked && o?.action === 'connect' ? t('connecting') : t(`connect_${platform}`)}</button>)}</div></>
         : <p className={styles.notice} data-social-not-enabled>{t('notEnabled')}</p>}
     </div>}

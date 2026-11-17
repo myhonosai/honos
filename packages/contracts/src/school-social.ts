@@ -4,8 +4,15 @@
 // sends or spends.
 
 export const SOCIAL_PLATFORMS = ['FACEBOOK', 'INSTAGRAM'] as const;
-/** Platforms a school can connect (0453 adds Google Ads, which only runs ads: never posts or an inbox). */
-export const SOCIAL_ACCOUNT_PLATFORMS = ['FACEBOOK', 'INSTAGRAM', 'GOOGLE_ADS'] as const;
+/**
+ * Platforms a school can connect. 0453 adds Google Ads, which only runs ads (never posts or an inbox); 0455 adds the
+ * school's Google Business Profile, which only publishes posts (no inbox or ads).
+ */
+export const SOCIAL_ACCOUNT_PLATFORMS = ['FACEBOOK', 'INSTAGRAM', 'GOOGLE_ADS', 'GOOGLE_BUSINESS'] as const;
+/** Platforms a post can target (0455 adds Google Business Profile). */
+export const SOCIAL_POST_PLATFORMS = ['FACEBOOK', 'INSTAGRAM', 'GOOGLE_BUSINESS'] as const;
+/** 0455: a Google Business Profile post holds at most this many characters. */
+export const GOOGLE_BUSINESS_POST_MAX_LENGTH = 1500;
 export const SOCIAL_ACCOUNT_STATUSES = ['CONNECTED', 'DISCONNECTED'] as const;
 export const SOCIAL_CONNECT_COMMAND = 'marketing.social.connect';
 export const SOCIAL_CONNECT_COMPLETE_COMMAND = 'marketing.social.connect.complete';
@@ -18,6 +25,7 @@ export const SOCIAL_CONNECT_STATE = /^[A-Za-z0-9_-]{43}$/;
 
 export type SocialPlatform = typeof SOCIAL_PLATFORMS[number];
 export type SocialAccountPlatform = typeof SOCIAL_ACCOUNT_PLATFORMS[number];
+export type SocialPostPlatform = typeof SOCIAL_POST_PLATFORMS[number];
 export type SocialAccountStatus = typeof SOCIAL_ACCOUNT_STATUSES[number];
 export type SocialProviderRemoval = 'REMOVED' | 'NOT_REMOVED' | 'NOT_ATTEMPTED';
 export interface SocialAccount {
@@ -67,7 +75,8 @@ export function verifySocialAccount(v: unknown): SocialAccount {
   // A disconnected account never has a switch on, and only a disconnected account has a disconnect time.
   if ((o.status === 'DISCONNECTED') !== (disconnectedAt !== null)
     || (o.status === 'DISCONNECTED' && (o.publishEnabled || o.inboxEnabled || o.adsEnabled))
-    || (o.platform === 'GOOGLE_ADS' && (o.publishEnabled || o.inboxEnabled))) fail('account');
+    || (o.platform === 'GOOGLE_ADS' && (o.publishEnabled || o.inboxEnabled))
+    || (o.platform === 'GOOGLE_BUSINESS' && (o.inboxEnabled || o.adsEnabled))) fail('account');
   return {
     accountId: o.accountId, platform: o.platform as SocialAccountPlatform, displayName: o.displayName, status: o.status as SocialAccountStatus,
     publishEnabled: o.publishEnabled, inboxEnabled: o.inboxEnabled, adsEnabled: o.adsEnabled, version: o.version as number,

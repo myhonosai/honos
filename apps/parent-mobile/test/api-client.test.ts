@@ -63,4 +63,8 @@ describe('parent API client', () => {
     expect(() => createParentApi({ baseUrl: 'http://api.example.test', getToken: async () => 't', fetchImpl: jest.fn() })).toThrow();
     expect(() => createParentApi({ baseUrl: 'http://localhost:4000', getToken: async () => 't', fetchImpl: jest.fn() })).not.toThrow();
   });
+
+  it('refuses the unfilled placeholder address from eas.json', () => {
+    expect(() => createParentApi({ baseUrl: 'https://REPLACE-WITH-PRODUCTION-API', getToken: async () => 't', fetchImpl: jest.fn() })).toThrow();
+  });
 });
