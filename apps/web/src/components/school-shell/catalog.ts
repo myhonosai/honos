@@ -34,7 +34,7 @@ export const SCHOOL_SHELL_SECTIONS: readonly Readonly<{ key: SchoolShellSection;
  */
 export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   // Setup (Welcome, School launch, Founder Setup) is onboarding (owner, 2026-11-14): reached from Home's setup card and Settings.
-  { key: 'home', titleKey: 'navHome', section: 'dashboard', routes: [r('/staff/dashboard', 'routeOverview', true), r('/staff/work', 'routeWork'), r('/staff/command-center', 'routeCommandCenter'),
+  { key: 'home', titleKey: 'navHome', section: 'dashboard', routes: [r('/staff/dashboard', 'routeOverview', true), r('/staff/work', 'routeWork'), r('/staff/command-center', 'routeCommandCenter'), r('/staff/tools', 'routeCustomTools'),
     h('/staff/welcome', 'routeWelcome'), h('/staff/launch', 'routeLaunch'), h('/staff/founder-setup', 'routeFounderSetup')] },
   { key: 'hon', titleKey: 'navHon', section: 'dashboard', routes: [r('/staff/hon', 'routeHon')] },
   // Each specialist's workspace opens from that specialist's card on the AI Team page.
@@ -83,7 +83,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'settings', titleKey: 'navSettings', routes: [r('/staff/settings', 'routeSettingsSummary'), r('/staff/settings/location', 'routeLocation'), r('/staff/settings/branding', 'routeBranding'),
     r('/staff/settings/booking-types', 'routeBookingTypes'), r('/staff/settings/texting-number', 'routeTextingNumber'), r('/staff/billing/payment-processors', 'routePaymentProcessors'),
     r('/staff/billing/saved-payment-methods', 'routeSavedMethods'), r('/settings/language-region', 'routeLanguage'), r('/settings/texts-from-hon', 'routeTextsFromHon'),
-    r('/staff/account-status', 'routeAccount'), r('/staff/owners', 'routeOwners'), r('/staff/subscription', 'routeSubscription'), r('/staff/help', 'routeHelp')] },
+    r('/staff/account-status', 'routeAccount'), r('/staff/owners', 'routeOwners'), r('/staff/subscription', 'routeSubscription'), r('/staff/tool-maker', 'routeToolMaker'), r('/staff/help', 'routeHelp')] },
 ];
 
 /** Reached from a workflow, never from primary navigation. */
@@ -97,6 +97,8 @@ export const SCHOOL_SHELL_UNLISTED_ROUTES: readonly string[] = [
   '/staff/schedule/timetable',
   '/staff/schedule/events',
   '/staff/search/[organizationId]/[schoolId]/[kind]/[entityId]',
+  // One custom tool's own section (0415); reached from Custom tools, never from the static menu.
+  '/staff/tools/[toolKey]',
   // The page Facebook or Instagram returns to after a social connection (0347); reached only from Social accounts.
   '/staff/marketing/social/return',
   // The page Shopify returns to after the owner approves a store connection (0405); reached only from Shopify.
