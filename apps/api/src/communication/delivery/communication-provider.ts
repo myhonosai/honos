@@ -18,6 +18,8 @@ export interface CommunicationSendRequest {
   content: string;
   schoolName: string;
   attempt: number;
+  /** 0424: a school email's subject as its author wrote it; absent, the adapter's standard subject. */
+  subject?: string | undefined;
   /**
    * Who the mail is for. Omitted or SCHOOL: a 0243 school delivery. INTERNAL (staff notices such as the weekly
    * briefing) and HQ (HQ messages) are tagged so the school receipt webhooks acknowledge and ignore them.

@@ -21,7 +21,7 @@ power and a staff role never acts as a parent. Every write has exact-request ide
   never exceeded and the same child is never booked twice. The booking is `REGULAR`, `source = PARENT_APP`.
 - **A3 Cancel.** The guardian may cancel a `PARENT_APP` booking of their own child until the session starts. A staff-made
   booking is cancelled only by staff.
-- **A4 Event slots and families-only booking types (0431).** The guardian can book a 0261 event slot or a 0286
+- **A4 Event slots and families-only booking types (0441).** The guardian can book a 0261 event slot or a 0286
   `FAMILIES_ONLY` booking type with the family's details filled in from the account, with the same capacity and
   one-booking rules as the public path. (This is booking types part 3's family path.)
   - The details are the family's display name and the signed-in parent's sign-in email; nothing about the family is

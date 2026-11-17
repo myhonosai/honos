@@ -111,6 +111,15 @@ BEGIN
 END;
 $$;
 
+-- 0435 school social inbox: signed inbound Zernio messages and comments, when 0435 is applied.
+DO $$
+BEGIN
+  IF to_regprocedure('hon.record_school_social_inbox_event(text,text,text,text,text,text,text,text,text,timestamptz)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.record_school_social_inbox_event(text, text, text, text, text, text, text, text, text, timestamptz) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 -- 0354 creative provider jobs: claim, poll and record leased jobs (when applied).
 DO $$
 BEGIN
@@ -126,6 +135,15 @@ DO $$
 BEGIN
   IF to_regprocedure('hon.record_inbound_conversation_text(text,text,text,integer,text,timestamptz)') IS NOT NULL THEN
     GRANT EXECUTE ON FUNCTION hon.record_inbound_conversation_text(text, text, text, integer, text, timestamptz) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
+-- 0424 contact message history: the author's subject of the email a lease is sending (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.communication_email_subject(uuid,uuid)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.communication_email_subject(uuid, uuid) TO hon_communication_worker;
   END IF;
 END;
 $$;

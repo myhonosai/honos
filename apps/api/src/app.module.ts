@@ -140,7 +140,8 @@ import { SchoolOnboardingService } from './onboarding/school-onboarding.service.
 import { SchoolSupportController } from './support/school-support.controller.js';
 import { AutomationWorkflowController, ContactTagController } from './automations/automation.controller.js';
 import { AutomationService } from './automations/automation.service.js';
-import { AutomationArchiveHumanUiGuard, AutomationCreateHumanUiGuard, AutomationReadHumanUiGuard, AutomationRestoreHumanUiGuard, AutomationSaveHumanUiGuard, ContactTagAddHumanUiGuard, ContactTagLookupHumanUiGuard, ContactTagRemoveHumanUiGuard } from './automations/automation.guard.js';
+import { AutomationEngineScheduler, AutomationWorkerDatabase } from './automations/automation-engine.js';
+import { AutomationActivateHumanUiGuard, AutomationPauseHumanUiGuard, AutomationArchiveHumanUiGuard, AutomationCreateHumanUiGuard, AutomationReadHumanUiGuard, AutomationRestoreHumanUiGuard, AutomationSaveHumanUiGuard, ContactTagAddHumanUiGuard, ContactTagLookupHumanUiGuard, ContactTagRemoveHumanUiGuard } from './automations/automation.guard.js';
 import { SchoolSupportService } from './support/school-support.service.js';
 import { CustomToolController } from './custom-tools/custom-tool.controller.js';
 import { CustomToolService } from './custom-tools/custom-tool.service.js';
@@ -148,6 +149,8 @@ import { SchoolSocialController } from './marketing/social/school-social.control
 import { SchoolSocialService } from './marketing/social/school-social.service.js';
 import { SchoolSocialPostsController } from './marketing/social/school-social-posts.controller.js';
 import { SchoolSocialPostsService } from './marketing/social/school-social-posts.service.js';
+import { SchoolSocialInboxController } from './marketing/social/school-social-inbox.controller.js';
+import { SchoolSocialInboxService } from './marketing/social/school-social-inbox.service.js';
 import { SocialPostDispatcher } from './marketing/social/social-post-dispatcher.js';
 import { ZERNIO_SOCIAL_ADAPTER, zernioSocialAdapterFactory } from './marketing/social/zernio-social-adapter.js';
 import { SchoolMembershipListController, SchoolMembershipListHumanUiGuard } from './billing/school-membership-list.controller.js';
@@ -240,6 +243,8 @@ import { FamilyMessagesInboxController, FamilyMessagesInboxReadGuard, FamilyMess
 import { FamilyMessagesService } from './families/family-messages.service.js';
 import { ConversationCreateLeadGuard, ConversationLinkGuard, ConversationMarkReadGuard, ConversationReadGuard, ConversationReplyGuard, ConversationUpdateGuard, SchoolConversationsController } from './conversations/school-conversations.controller.js';
 import { SchoolConversationsService } from './conversations/school-conversations.service.js';
+import { ContactEmailResendGuard, ContactHistoryReadGuard, ContactMessagesController } from './conversations/contact-messages.controller.js';
+import { ContactMessagesService } from './conversations/contact-messages.service.js';
 import { ConversationAiController, ConversationAiFileGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard, ConversationAiKnowledgeGuard, ConversationAiProgramHqController, ConversationAiReadGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard } from './conversations/conversation-ai.controller.js';
 import { ConversationAiProgramService, ConversationAiService } from './conversations/conversation-ai.service.js';
 import { ParentMessageHistoryController, ParentMessageHistoryReadGuard } from './families/parent-message-history.controller.js';
@@ -483,6 +488,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentFamilyMessagesController,
     FamilyMessagesInboxController,
     SchoolConversationsController,
+    ContactMessagesController,
     ConversationAiController,
     ConversationAiProgramHqController,
     ParentMessageHistoryController,
@@ -555,6 +561,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ContactTagController,
     SchoolSocialController,
     SchoolSocialPostsController,
+    SchoolSocialInboxController,
     TuitionPaymentController,
     SchoolPaymentController,
     SchoolPayMethodController,
@@ -659,6 +666,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     FamilyMessagesMarkReadGuard,
     FamilyMessagesReplyGuard,
     SchoolConversationsService,
+    ContactMessagesService,
+    ContactHistoryReadGuard,
+    ContactEmailResendGuard,
     ConversationAiService,
     ConversationAiProgramService,
     ConversationAiReadGuard, ConversationAiKnowledgeGuard, ConversationAiFileGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard,
@@ -770,11 +780,12 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolOnboardingService,
     SchoolSupportService,
     CustomToolService,
-    AutomationService,
+    AutomationService, AutomationWorkerDatabase, AutomationEngineScheduler, AutomationActivateHumanUiGuard, AutomationPauseHumanUiGuard,
     AutomationReadHumanUiGuard, AutomationCreateHumanUiGuard, AutomationSaveHumanUiGuard, AutomationRestoreHumanUiGuard, AutomationArchiveHumanUiGuard,
     ContactTagAddHumanUiGuard, ContactTagRemoveHumanUiGuard, ContactTagLookupHumanUiGuard,
     SchoolSocialService,
     SchoolSocialPostsService,
+    SchoolSocialInboxService,
     SocialPostDispatcher,
     ClassSeriesService,
     SchoolReportsService,

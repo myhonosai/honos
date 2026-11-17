@@ -3,7 +3,7 @@ import {
   verifyParentSchoolBookings, type BookParentSchoolBookingTypeInput, type ParentSchoolBookingReceipt, type ParentSchoolBookings,
 } from '@hon/contracts';
 
-/** 0431 parent school bookings: same-origin browser commands only; no school, family, name or contact is ever sent. */
+/** 0441 parent school bookings: same-origin browser commands only; no school, family, name or contact is ever sent. */
 export class ParentSchoolBookingAccessError extends Error { constructor(message: string, readonly status: number) { super(message); } }
 /** A definite refusal: nothing changed, so a retry is a new action with a new key. Other failures keep the key for an exact retry. */
 export class ParentSchoolBookingRefusal extends Error {}

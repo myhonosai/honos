@@ -3628,6 +3628,18 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.command_ai_exception_school_allowance(text,jsonb,uuid), hon.read_ai_exception_school_allowances_from_hq(text) TO hon_runtime;
   END IF;
 END $$;
+-- 0435 school social inbox: exactly eight runtime entry points, no table privilege (the inbound receipt goes to the 013 worker role only).
+DO $$ DECLARE r text; BEGIN
+  IF to_regclass('hon.school_social_conversations') IS NULL THEN RAISE EXCEPTION 'Apply migration 0435 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_social_conversations, hon.school_social_messages, hon.school_social_comment_actions, hon.school_social_inbox_receipts FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_social_conversations, hon.school_social_messages, hon.school_social_comment_actions, hon.school_social_inbox_receipts FROM '||quote_ident(r);
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.read_school_social_inbox(text,jsonb), hon.read_school_social_conversation(text,uuid),
+    hon.change_school_social_conversation(text,uuid,jsonb,text,uuid,uuid), hon.start_school_social_reply(text,uuid,jsonb,text,uuid,uuid),
+    hon.record_school_social_reply_result(text,uuid,uuid,text,text,uuid,uuid), hon.resolve_school_social_message(text,uuid,jsonb,text,uuid,uuid),
+    hon.start_school_social_comment_action(text,uuid,jsonb,text,uuid,uuid), hon.record_school_social_comment_action_result(text,uuid,uuid,text,uuid,uuid) TO hon_runtime;
+END $$;
 -- 0354 creative provider jobs: four private forced-RLS tables, private helpers and the three worker functions (013
 -- grants those to hon_communication_worker only); six runtime entry points.
 DO $$ DECLARE r text; t text; f text; BEGIN
@@ -3980,10 +3992,40 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+-- 0423 automation engine: three private tables; runtime turns workflows on, pauses them and reads run history. The two
+-- engine functions belong to hon_automation_worker (014) and are never granted to the runtime.
+DO $$ DECLARE r text; t text; BEGIN
+  IF to_regprocedure('hon.activate_automation_workflow(text,uuid,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0423 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['automation_event_receipts','automation_runs','automation_run_steps'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    REVOKE ALL ON FUNCTION hon.consume_automation_events(integer),hon.run_due_automation_steps(integer) FROM hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.activate_automation_workflow(text,uuid,jsonb,text,uuid,uuid),hon.pause_automation_workflow(text,uuid,jsonb,text,uuid,uuid),
+      hon.archive_automation_workflow(text,uuid,jsonb,text,uuid,uuid),hon.read_automation_runs(text,uuid),hon.read_automation_run(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- 0424 contact message history: private helpers, one private table, three staff runtime entry points (history, email view, resend); the
+-- email subject lookup is runnable only by hon_communication_worker (013).
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_contact_message_history(text,uuid,jsonb)','hon.read_contact_message_email(text,uuid,uuid)','hon.resend_contact_message_email(text,jsonb,text,uuid,uuid)'];
+BEGIN
+  IF to_regprocedure('hon.resend_contact_message_email(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0424 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.contact_message_standard_subject(text)','hon.communication_email_subject(uuid,uuid)','hon.contact_message_delivery_state(hon.communication_messages)','hon.contact_message_origin(hon.communication_messages)','hon.contact_message_rows(uuid,boolean)','hon.contact_message_person(uuid)','hon.contact_email_resend_block(hon.communication_messages,hon.people)','hon.contact_email_message(uuid,uuid)','hon.require_contact_resend_actor(text)']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.communication_message_resends FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.communication_message_resends FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
 
--- 0431 parent school bookings: private helpers, one private table and four runtime entry points (parent read, book a slot, book a type time, cancel).
+-- 0441 parent school bookings: private helpers, one private table and four runtime entry points (parent read, book a slot, book a type time, cancel).
 DO $$ DECLARE r text; f text; BEGIN
-  IF to_regprocedure('hon.cancel_parent_school_booking(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0431 first'; END IF;
+  IF to_regprocedure('hon.cancel_parent_school_booking(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0441 first'; END IF;
   FOREACH f IN ARRAY ARRAY['hon.guard_parent_school_booking()','hon.parent_school_booking_contact(uuid,uuid)','hon.parent_school_booking_json(text,uuid)','hon.parent_school_booking_live(uuid,text,uuid)','hon.parent_school_booking_finish(text,text,uuid,uuid,text,uuid,jsonb,text,text,jsonb,jsonb,integer,uuid,uuid)','hon.parent_school_booking_lock(text)','hon.read_parent_school_bookings(text)','hon.book_parent_school_event_slot(text,jsonb,text,uuid,uuid)','hon.book_parent_school_booking_type(text,jsonb,text,uuid,uuid)','hon.cancel_parent_school_booking(text,jsonb,text,uuid,uuid)'] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
