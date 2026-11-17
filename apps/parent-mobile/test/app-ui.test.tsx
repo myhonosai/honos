@@ -16,7 +16,7 @@ function fakeSession(token: string | null) {
   };
 }
 function fakeApi(journey: ParentRead<ReturnType<typeof verifyParentJourneyView>>, zone: string | null = 'America/Los_Angeles'): ParentApi {
-  return { journey: jest.fn(async () => journey), schoolTimeZone: jest.fn(async () => zone) } as unknown as ParentApi;
+  return { journey: jest.fn(async () => journey), schoolTimeZone: jest.fn(async () => zone), classBookings: jest.fn(async () => ({ ok: false, state: 'unavailable' })) } as unknown as ParentApi;
 }
 const ok = { ok: true as const, data: verifyParentJourneyView(journeyBody()) };
 const now = () => new Date(NOW);
@@ -102,5 +102,13 @@ describe('Parent app shell', () => {
     await fireEvent.press(await screen.findByRole('button', { name: 'Sign out' }));
     await waitFor(() => expect(session.clear).toHaveBeenCalled());
     expect(await screen.findByText(/Sign in to your school/)).toBeTruthy();
+  });
+
+  it('sign in: the button starts native sign-in and a failure is explained without signing in', async () => {
+    const onSignIn = jest.fn(async () => 'failed' as const);
+    await render(<ParentApp api={fakeApi(ok)} session={fakeSession(null)} now={now} onSignIn={onSignIn} />);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Sign in' }));
+    expect(onSignIn).toHaveBeenCalled();
+    expect(await screen.findByText(/couldn't finish signing in/)).toBeTruthy();
   });
 });

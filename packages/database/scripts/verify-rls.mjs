@@ -191,6 +191,8 @@ const expectedRlsTables = [
   'person_photo_requests',
   'school_locations',
   'school_location_versions',
+  'school_demo_data_sets',
+  'school_demo_data_rows',
   'biometric_jurisdiction_profiles',
   'biometric_jurisdiction_rules',
   'attendance_card_settings',

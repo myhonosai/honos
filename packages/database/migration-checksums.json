@@ -324,6 +324,8 @@
     "0449_school_shopify_background_sync.sql": "966b0eb8f5c4a4e42907eda77858ca2ddea220383f635582f630d1b32215e559",
     "0451_hon_team_chat_answers.sql": "8a639924e09baffd6e8252fb1a2fa0c428aaeff09ac7dc22bd8ce9555a5fe98e",
     "0453_school_google_ads.sql": "fde9c8a9f893c7b0ad13b29f0942fea66291a0316915a9659211b449d0f68363",
-    "0457_parent_school_bookings.sql": "8a8538e90e51f24486bce1a340c2e15ea5dc15715ee0b9a19e44010cbdf2facf"
+    "0455_school_google_business_profile.sql": "ee8c0fb3049755948af71fdf689b4eb70e0925b1f1d8ce20557814fee29a394a",
+    "0459_school_demo_data.sql": "6708c6114653c3363c1bed171cce360ab591875cc8e1ae3edb9c572c096e1bee",
+    "0461_parent_school_bookings.sql": "a223ad105f89b2324381167464db383cc819965d89572dfc25ec8276b293e42b"
   }
 }

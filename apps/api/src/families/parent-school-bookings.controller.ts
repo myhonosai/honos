@@ -5,7 +5,7 @@ import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { MembershipActivationHumanUiGuard } from '../billing/membership-activation-human-ui.guard.js';
 import { ParentSchoolBookingService } from './parent-school-bookings.service.js';
 
-/** 0457: each parent school booking call is its own same-origin browser command; the read is GET only. */
+/** 0461: each parent school booking call is its own same-origin browser command; the read is GET only. */
 @Injectable()
 export class ParentSchoolBookingReadGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'parent.school_booking.read';

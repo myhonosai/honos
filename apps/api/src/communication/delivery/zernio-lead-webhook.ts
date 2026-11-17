@@ -32,7 +32,7 @@ const API_KEY = /^(?:sk_|zrk_)[a-fA-F0-9]{64}$/;
 export interface ZernioSocialEvent {
   eventId: string;
   eventType: 'post.published' | 'post.failed' | 'account.disconnected';
-  platform: 'FACEBOOK' | 'INSTAGRAM';
+  platform: 'FACEBOOK' | 'INSTAGRAM' | 'GOOGLE_BUSINESS';
   providerAccountId: string;
   /** The Zernio post id HON recorded when it published; null for account.disconnected. */
   providerPostId: string | null;
@@ -168,7 +168,8 @@ function socialEvent(body: Record<string, unknown>): ZernioSocialEvent {
   const account = body.account as Record<string, unknown> | undefined;
   const post = body.post as Record<string, unknown> | undefined;
   const accountId = account && typeof account === 'object' ? (account.id ?? account._id) : undefined;
-  const platform = account?.platform === 'facebook' ? 'FACEBOOK' : account?.platform === 'instagram' ? 'INSTAGRAM' : null;
+  const platform = account?.platform === 'facebook' ? 'FACEBOOK' : account?.platform === 'instagram' ? 'INSTAGRAM'
+    : account?.platform === 'googlebusiness' ? 'GOOGLE_BUSINESS' : null;
   const eventType = body.event as ZernioSocialEvent['eventType'];
   const postId = post && typeof post === 'object' ? (post.id ?? post._id) : undefined;
   if (typeof body.id !== 'string' || !EVENT_ID.test(body.id) || typeof accountId !== 'string' || !ID.test(accountId) || !platform

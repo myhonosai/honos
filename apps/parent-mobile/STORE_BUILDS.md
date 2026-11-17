@@ -13,7 +13,8 @@ developer accounts once he approves each step.
 ## Decisions David must confirm before the first upload (cannot be changed after publishing)
 1. Bundle id / package name (`com.myhonos.parent` is a proposal).
 2. Store listing name ("HON Parent"?), seller name, support URL, privacy policy URL.
-3. Which API address each profile uses (`EXPO_PUBLIC_HON_API_URL` placeholders in `eas.json`).
+3. Which API and web addresses each profile uses (`EXPO_PUBLIC_HON_API_URL` and `EXPO_PUBLIC_HON_WEB_URL`
+   placeholders in `eas.json`; a build with a `REPLACE-WITH` placeholder refuses to start).
 4. Expo account/organization that owns the project (`eas init` writes `extra.eas.projectId` into `app.json`).
 
 ## Steps (each needs David's go-ahead)

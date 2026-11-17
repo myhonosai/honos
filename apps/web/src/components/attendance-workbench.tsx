@@ -31,6 +31,7 @@ import {
 import styles from './attendance-workbench.module.css';
 import { useShellSchoolInto } from './school-shell/page-school';
 import { IdFields } from './school-pickers/pickers';
+import { CheckInPanel } from './attendance-check-in/check-in';
 import { ClassChoice, ProgramChoice, StudentChoice, browserToday, type Choice, type ChoiceState } from './attendance-correction-pickers';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -249,7 +250,7 @@ export function AttendanceWorkbench({ initialScope = {} }: { initialScope?: Atte
   const idInput = (field: keyof AttendanceKnownScope, label: string) => <label key={field}>{label}<input value={scope[field]} disabled={busy} autoComplete="off" maxLength={36} placeholder="Exact known UUID; not a search" onChange={event => changeScope(field, event.target.value)} /></label>;
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">School dashboard</a><a href="/staff/attendance/planned-absences">Planned absence review</a><a href="/staff/team/availability">Availability</a><a href="/staff/instructor-qualifications">Qualifications</a><a href="/staff/roles">Roles</a><a href="/auth/login">Sign in</a></nav>
-    {shellSchool ? <header><h1>Attendance</h1><p>Mark attendance from the class roster: open a class and tap Present, Late, Excused or Absent for each student.</p><p><a className={styles.primaryLink} href="/staff/schedule">Open class rosters</a></p></header>
+    {shellSchool ? <><header><h1>Attendance</h1></header><CheckInPanel scope={shellSchool} /><p>To mark a whole class at once (Present, Late, Excused or Absent), <a href="/staff/schedule">open the class in the schedule</a>.</p></>
       : <header><p>Attendance</p><h1>Attendance</h1><p>Record who was at class and set each program’s attendance rules.</p></header>}
     <AdvancedAttendance inShell={inShell}>
     <aside data-plain-note=""><strong>Attendance is a record only. It does not decide promotion, testing or progress.</strong></aside>
