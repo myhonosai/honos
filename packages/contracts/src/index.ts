@@ -1132,3 +1132,4 @@ export * from './school-website-templates.js';
 export * from './school-pay-charges.js';
 export * from './shopify.js';
 export * from './walk-in-kiosk.js';
+export * from './face-checkin.js';

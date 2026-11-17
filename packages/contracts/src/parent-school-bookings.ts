@@ -1,5 +1,5 @@
 /**
- * Parent account bookings of event slots and families-only booking types (0441, A4). A signed-in guardian books a 0261 event
+ * Parent account bookings of event slots and families-only booking types (0448, A4). A signed-in guardian books a 0261 event
  * slot or a 0286 FAMILIES_ONLY booking type time with the family's details from the account, and cancels those bookings before
  * they start. VIEWER grants read only. Open spots only, never other families. No message, charge or AI.
  */
