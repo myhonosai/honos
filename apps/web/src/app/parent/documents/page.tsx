@@ -18,6 +18,6 @@ export default async function ParentDocumentsPage() {
     const token = cookieValue((await headers()).get('cookie'), HON_SESSION_COOKIE);
     if (token) { verifySession(token, sessionConfig()); authenticated = true; }
   } catch { /* fail closed, including duplicate, malformed, expired, or unconfigured cookies */ }
-  if (!authenticated) redirect('/auth/login');
+  if (!authenticated) redirect('/auth/login?for=parent');
   return <DocumentAcknowledgementDesk parent />;
 }
