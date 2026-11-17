@@ -25,7 +25,8 @@ until a later reviewed migration adds one.
 Rather than a different standard per state, every school that turns this on gets the strictest common baseline:
 
 1. Written (electronic) consent before any face data is made. For anyone under 18, or with no birth date on file, only
-   a parent or guardian can sign. Adults sign for themselves.
+   a parent or guardian can sign. Adults sign for themselves, and a guardian cannot sign for a student who is 18 or
+   older (0443 refuses it with FACE_CHECKIN_ADULT_SIGNS). Age is counted on the school's own calendar date (its time zone).
 2. A published retention and deletion policy shown before signing.
 3. Face data is never sold, shared, or used for anything except check-in at that one school.
 4. Anyone can refuse or withdraw at any time and still check in another way (card, name list). Refusing never blocks
@@ -34,6 +35,10 @@ Rather than a different standard per state, every school that turns this on gets
 6. A staff member confirms every match before attendance is recorded (no unattended kiosk in v1, same as 0391).
 
 The school's location picks a **jurisdiction profile**, which adds the local form wording and any extra steps:
+
+**United States only for now (owner decision 2026-11-16).** HON OS launches with US schools, so 0443 reports every
+non-US profile as `NOT_LAUNCHED` and refuses to turn face check-in on there. The EU, UK and Korea drafts stay in the
+database, unused, for a later launch (after legal review).
 
 | Profile | Where | Status | Local add-ons |
 |---|---|---|---|
@@ -72,7 +77,8 @@ migration, not code.
 - **Consent records**: student, signer (guardian with family access to that student, or the adult student), signer
   relationship, form version + digest, typed full name, signed time, method (PARENT_PORTAL, or IN_PERSON witnessed by
   staff who attests they checked the signer). Withdrawal by the signer in the portal or staff on request; withdrawal
-  deletes the template at once.
+  deletes the template at once. A guardian with family access may also withdraw an adult student's consent (withdrawal
+  only ever removes data, so it is allowed from any guardian of the family and from staff).
 - **Enrollment**: when the school is on, consent is active and a profile photo exists, staff enroll the student. The
   face template is made from the current photo. If the photo is removed or replaced, the template is deleted (re-enroll
   from the new photo).
@@ -84,7 +90,8 @@ migration, not code.
   `hon.attendance_check_in_student(..., 'FACE', match_id, ...)`. The picture is discarded after matching; the match
   record keeps no image.
 - **Retention**: the template is deleted at the earliest of: consent withdrawn, photo removed or replaced, school turns
-  it off or moves to a different profile, 30 days after the student has no active membership, 12 months without a
+  it off or moves to a different profile, 30 days after the student is no longer ACTIVE (measured from the student
+  record's last change in 0443, so a later edit restarts the clock; a status-change timestamp is a follow-up), 12 months without a
   face check-in. An identifier-only record (who, when, why deleted) remains. Sweep runs on access and as a daily job
   (deployment requirement, like 0388).
 

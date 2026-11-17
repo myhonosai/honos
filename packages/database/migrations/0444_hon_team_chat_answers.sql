@@ -1,6 +1,6 @@
 BEGIN;
 
--- 0436 (allocated by the coordinator 2026-11-17; renumbered from 0429): AI team group chat. The school Dashboard's team chat asks HON and
+-- 0444 (allocated by the coordinator 2026-11-17; renumbered from 0429, then 0436): AI team group chat. The school Dashboard's team chat asks HON and
 -- the read-only analysis specialists (Claire, Alex, Jordan, Lena) in one conversation, one turn each, through the
 -- unchanged turn and spend path. This migration lets HON read what that team answered, so the person can ask HON to
 -- turn a team round into one plan. Spec: docs/architecture/HON_TEAM_CHAT.md.
@@ -37,7 +37,7 @@ ALTER TABLE hon.hon_reply_invocations ADD CONSTRAINT hon_reply_invocations_sourc
          AND (specialist = 'maya' OR NOT source_permissions && ARRAY['retention.review.read', 'billing.invoice.payment.record',
                                                                      'billing.invoice.issue', 'billing.invoice.create']::text[]));
 
--- 0284 body plus the 0436 team answers (see header 1-3).
+-- 0284 body plus the 0444 team answers (see header 1-3).
 CREATE OR REPLACE FUNCTION hon.prepare_hon_reply(p_subject text, p_turn uuid, p_plan uuid, p_ready boolean) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE budget_locked boolean := hon.ai_budget_lock(hon.current_organization_id());
@@ -47,7 +47,7 @@ DECLARE budget_locked boolean := hon.ai_budget_lock(hon.current_organization_id(
   prior hon.hon_reply_invocations%ROWTYPE; grp jsonb; notes jsonb;
   -- 0260: Alex, Jordan and Lena read their own facts through hon.read_specialist_school_facts.
   analyst boolean; spec jsonb; spec_perms text[] := '{}'; metrics jsonb;
-  -- 0436: what the team (Claire, Alex, Jordan, Lena) answered earlier in this conversation, and the permissions it used.
+  -- 0444: what the team (Claire, Alex, Jordan, Lena) answered earlier in this conversation, and the permissions it used.
   team_perms text[] := '{}'; team_answers integer := 0;
 BEGIN
   SELECT * INTO i FROM hon.hon_reply_invocations WHERE turn_id = p_turn AND organization_id = hon.current_organization_id()
@@ -127,14 +127,14 @@ BEGIN
   SELECT * INTO STRICT t FROM hon.hon_conversation_turns WHERE id = i.turn_id;
   -- K2/0260: an analysis specialist gets its facts and the question only (no conversation history).
   IF i.specialist = 'hon' THEN
-  -- 0436 (team chat): the last 6 turns (was 3). An earlier answer from Claire, Alex, Jordan or Lena is included (as
+  -- 0444 (team chat): the last 6 turns (was 3). An earlier answer from Claire, Alex, Jordan or Lena is included (as
   -- 'answer' with 'delegatedTo' naming who gave it) only while it may be shown to this human now
   -- (hon.hon_reply_source_allowed: every permission its facts used is still held), so HON can turn a team round into one
   -- plan. Maya's answers (one named student's record) and draft specialists' work never reach HON as text.
   SELECT coalesce(jsonb_agg(z.h ORDER BY z.seq), '[]'::jsonb) INTO history FROM (
     SELECT x.seq, jsonb_strip_nulls(jsonb_build_object('question', left(x.text, 400),
         -- A reporting-derived earlier answer is reused only while this human still holds reporting.view.
-        -- 0436: an earlier HON answer (a team plan) is also reused only while hon_reply_source_allowed shows it.
+        -- 0444: an earlier HON answer (a team plan) is also reused only while hon_reply_source_allowed shows it.
         'answer', CASE WHEN x.agent_key = 'hon' AND (NOT r.used_reporting OR has_reporting) AND hon.hon_reply_source_allowed(r) THEN left(r.reply_text, 600)
                        WHEN x.agent_key IN ('claire', 'alex', 'jordan', 'lena') AND r.specialist = x.agent_key AND hon.hon_reply_source_allowed(r)
                        THEN left(r.reply_text, 900) END,
@@ -181,7 +181,7 @@ BEGIN
     WHEN analyst AND (spec IS NULL OR cardinality(spec_perms) = 0 OR EXISTS (SELECT 1 FROM unnest(spec_perms) q
       WHERE NOT hon.principal_has_school_permission(actor, i.organization_id, i.school_id, q))) THEN 'SOURCE_ACCESS_REFUSED'
     WHEN NOT analyst AND (school_facts IS NOT NULL OR derived) AND NOT hon.principal_has_school_permission(actor, i.organization_id, i.school_id, 'reporting.view') THEN 'SOURCE_ACCESS_REFUSED'
-    -- 0436: every permission the included team answers used, re-checked at the live clock.
+    -- 0444: every permission the included team answers used, re-checked at the live clock.
     WHEN NOT analyst AND EXISTS (SELECT 1 FROM unnest(team_perms) q
       WHERE NOT hon.principal_has_school_permission(actor, i.organization_id, i.school_id, q)) THEN 'SOURCE_ACCESS_REFUSED' END;
   IF why IS NOT NULL THEN
@@ -207,7 +207,7 @@ BEGIN
       ORDER BY n)
   WHERE id = i.id;
   UPDATE hon.hon_reply_invocations SET used_reporting = CASE WHEN analyst THEN 'reporting.view' = ANY (spec_perms) ELSE school_facts IS NOT NULL OR derived END,
-    -- 0436: HON's answer is concealed later if any permission behind the team answers it used lapses.
+    -- 0444: HON's answer is concealed later if any permission behind the team answers it used lapses.
     source_permissions = CASE WHEN analyst THEN spec_perms ELSE team_perms END, context_digest = encode(sha256(convert_to(jsonb_build_object('question', t.text, 'facts', facts)::text, 'UTF8')), 'hex')
   WHERE id = i.id;
   RETURN jsonb_build_object('providerId', p.provider_id, 'modelId', p.model_id, 'providerRequestId', i.provider_request_id,
