@@ -3945,6 +3945,41 @@ DO $$ DECLARE r text; t text; BEGIN
       hon.read_school_contact_tags(text),hon.read_person_contact_tags(text,uuid),hon.lookup_contact_tags(text,jsonb) TO hon_runtime;
   END IF;
 END $$;
+-- 0417 lead pipeline board: three runtime entry points; the actor checks, stage json, name check, timestamp helper and
+-- the two update guards are migration-owner only. No new table.
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_crm_pipeline_board(text,uuid,text)','hon.move_crm_lead_stage(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.save_crm_pipeline_stages(text,uuid,jsonb,text,uuid,uuid)'];
+  helpers text[]:=ARRAY['hon.crm_board_ts(timestamptz)','hon.require_crm_board_actor(text,text)','hon.lock_crm_board_actor(text,text)',
+    'hon.crm_board_stages_json(uuid)','hon.guard_crm_lead_stage_update()','hon.guard_crm_pipeline_stage_update()','hon.crm_stage_name_ok(jsonb)'];
+BEGIN
+  IF to_regprocedure('hon.read_crm_pipeline_board(text,uuid,text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0417 first'; END IF;
+  FOREACH f IN ARRAY helpers||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
+-- 0420 conversation AI training: private helpers, five private tables, seven staff entry points (overview, knowledge preview, settings, upload, original file, save item, item status) and two HQ program entry points.
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.read_school_conversation_ai(text)','hon.read_school_ai_knowledge(text)','hon.set_school_conversation_ai_settings(text,jsonb,text,uuid,uuid)','hon.upload_school_ai_training_file(text,jsonb,text,uuid,uuid)','hon.read_school_ai_training_file(text,uuid)','hon.save_school_ai_training_item(text,jsonb,text,uuid,uuid)','hon.set_school_ai_training_item_status(text,jsonb,text,uuid,uuid)','hon.read_conversation_ai_program_from_hq(text)','hon.command_conversation_ai_program(text,jsonb,uuid)'];
+BEGIN
+  IF to_regprocedure('hon.command_conversation_ai_program(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0420 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.conversation_ai_text_ok(text,integer)','hon.conversation_ai_words_ok(text[])','hon.conversation_ai_locales_ok(text[])','hon.guard_conversation_ai_row()','hon.guard_conversation_ai_program_changes()','hon.require_conversation_ai_actor(text,boolean)','hon.conversation_ai_finish(uuid,text,text,uuid,integer,text,jsonb,jsonb,text,jsonb,uuid,uuid)','hon.conversation_ai_settings_json(hon.school_conversation_ai_settings)','hon.conversation_ai_item_json(hon.school_ai_training_items)','hon.school_ai_knowledge(uuid,uuid)']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['conversation_ai_program','conversation_ai_program_changes','school_conversation_ai_settings','school_ai_training_files','school_ai_training_items'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
 -- 0423 automation engine: three private tables; runtime turns workflows on, pauses them and reads run history. The two
 -- engine functions belong to hon_automation_worker (014) and are never granted to the runtime.
 DO $$ DECLARE r text; t text; BEGIN

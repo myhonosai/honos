@@ -42,18 +42,18 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/voice', 'routeVoice'), h('/staff/leads/assistant', 'routeLeadAssistant'), h('/staff/marketing/assistant', 'routeMarketingAssistant'),
     h('/staff/teaching-assistant', 'routeKai'), h('/staff/retention/at-risk', 'routeMayaAtRisk')] },
   // Conversation AI answers the school's texts in this inbox (0364); staff take over any thread.
-  { key: 'conversationAi', titleKey: 'navConversationAi', section: 'ai', routes: [r('/staff/conversations', 'routeConversations')] },
+  { key: 'conversationAi', titleKey: 'navConversationAi', section: 'ai', routes: [r('/staff/conversations', 'routeConversations'), r('/staff/conversations/train-ai', 'routeTrainAi')] },
   // Owner ask (2026-11-16): rosters, class schedule, weekly timetable, sale days and events and class booking are one
   // Calendar page; /staff/schedule owns every /staff/schedule/* path, so the old pages and workflow pages still mark Classes.
   { key: 'classes', titleKey: 'navClasses', section: 'calendar', routes: [r('/staff/schedule', 'routeCalendar')] },
   { key: 'attendance', titleKey: 'navAttendance', section: 'calendar', routes: [r('/staff/attendance', 'routeAttendance', true), r('/staff/attendance/planned-absences', 'routePlannedAbsences'), r('/staff/attendance/scan', 'routeScanCheckIn'), r('/staff/attendance/cards', 'routeAttendanceCards'),
-    r('/staff/kiosk', 'routeKiosk'), r('/staff/classpass', 'routeClassPass', true), r('/staff/migration/classes', 'routeHistoryImport')] },
+    r('/staff/walk-in', 'routeWalkIn'), r('/staff/migration/classes', 'routeHistoryImport'), h('/staff/kiosk', 'routeKiosk'), h('/staff/classpass', 'routeClassPass')] },
   // Search is the search button in the top bar.
   { key: 'students', titleKey: 'navStudents', section: 'contacts', routes: [r('/staff/people', 'routePeople'), r('/staff/family-access', 'routeFamilyAccess', true),
     r('/staff/migration/students', 'routeStudentImport'), r('/staff/migration/photos', 'routePaperImport'), h('/staff/search', 'routeStudentSearch')] },
   { key: 'staff', titleKey: 'navStaff', section: 'contacts', routes: [r('/staff/team/invitations', 'routeTeam', true), r('/staff/roles', 'routeRoles'), r('/staff/team/availability', 'routeAvailability'),
     r('/staff/instructor-qualifications', 'routeQualifications'), r('/staff/documents', 'routeDocuments')] },
-  { key: 'crm', titleKey: 'navCrm', section: 'leads', routes: [r('/staff/crm', 'routeLeadsHome'), r('/staff/crm/leads', 'routeLeads', true), r('/staff/crm/journey', 'routeJourney', true),
+  { key: 'crm', titleKey: 'navCrm', section: 'leads', routes: [r('/staff/crm', 'routeLeadsHome'), h('/staff/crm/leads', 'routeLeads'), h('/staff/crm/journey', 'routeJourney'),
     r('/staff/crm/follow-ups', 'routeFollowUps'), r('/staff/crm/trials', 'routeTrials', true), r('/staff/crm/lead-memberships', 'routeLeadMemberships'), r('/staff/migration/leads', 'routeLeadImport')] },
   { key: 'automation', titleKey: 'navAutomation', section: 'leads', routes: [r('/staff/automation/rules', 'routeAutomation')] },
   { key: 'messages', titleKey: 'navMessages', section: 'communication', routes: [r('/staff/family-messages', 'routeFamilyMessages')] },

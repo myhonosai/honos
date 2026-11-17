@@ -148,7 +148,8 @@ export class LeadService {
            AND stage.pipeline_id = $2
            AND stage.organization_id = $3
            AND stage.school_id = $4
-           AND stage.terminal_status IS NULL`,
+           AND stage.terminal_status IS NULL
+           AND stage.hidden_at IS NULL`,
         [input.pipelineStageId, input.pipelineId, context.organizationId, context.schoolId],
       );
       if (!stage.rowCount) {
