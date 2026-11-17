@@ -2303,7 +2303,7 @@ END $$;
 DO $$ DECLARE f record; p record; runtime_oid oid := (SELECT oid FROM pg_roles WHERE rolname='hon_runtime'); BEGIN
  IF runtime_oid IS NULL OR EXISTS(SELECT 1 FROM pg_roles WHERE oid=runtime_oid AND (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication)) OR EXISTS(SELECT 1 FROM pg_auth_members WHERE member=runtime_oid) OR has_schema_privilege('hon_runtime','hon','CREATE') THEN RAISE EXCEPTION 'Restricted CRM close runtime required'; END IF;
  FOR f IN SELECT * FROM (VALUES
- ('hon.guard_crm_lead_close_history()','2a83879e999f9d1858ec5f1438e9763a',false,false),
+ ('hon.guard_crm_lead_close_history()','9dc370500569e26bb324295de1f1f56c',false,false),
  ('hon.crm_lead_close_has_permission(uuid,uuid,uuid,text)','37e23a9753e678215568e7d41062a708',false,true),
  ('hon.resolve_crm_lead_close_scope(text,uuid)','7380ca81c43880a7b520796512a9efea',true,true),
  ('hon.require_crm_lead_close_actor(text)','68b00d4367ac0168df9ef6c40bd784e6',false,true),
@@ -2370,7 +2370,7 @@ DO $$ DECLARE f record; p record; runtime_oid oid := (SELECT oid FROM pg_roles W
     OR EXISTS(SELECT 1 FROM pg_auth_members WHERE member=runtime_oid)
     OR has_schema_privilege('hon_runtime','hon','CREATE') THEN RAISE EXCEPTION 'Restricted CRM registration runtime required'; END IF;
   FOR f IN SELECT * FROM (VALUES
-    ('hon.guard_crm_lead_registration_history()','8673d8b711519a75d2d727276ebdd5a7',false,false,'trigger',false),
+    ('hon.guard_crm_lead_registration_history()','afb2656d2609526318726cbe66bb3cbc',false,false,'trigger',false),
     ('hon.crm_lead_registration_has_permission(uuid,uuid,uuid,text)','e3b71364e299c4be376b83b3e4daa41a',false,true,'boolean',false),
     ('hon.resolve_crm_lead_registration_scope(text,uuid)','97012048ddae1177aadeba233454afcf',true,true,'record',true),
     ('hon.require_crm_lead_registration_actor(text,text)','b1473f5d95b499f8c1d9c10907b34e08',false,true,'uuid',false),
@@ -2434,7 +2434,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
     AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
   INTO safe FROM pg_class c WHERE c.oid='hon.crm_adult_membership_draft_sources'::regclass;
   IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Adult CRM membership source must be private'; END IF;
-  FOR f IN SELECT * FROM (VALUES ('hon.guard_crm_adult_membership_draft_source()',false,false,'a525769ae5e582d7958994cb52b7b522929c43663ace7290e9ce9654d5e2c64d'),
+  FOR f IN SELECT * FROM (VALUES ('hon.guard_crm_adult_membership_draft_source()',false,false,'e8edb6f5791e6d5a82bf03bd2b224f194a0ed7cd1618d9509a3c1fcae9adbff2'),
 ('hon.require_crm_adult_membership_actor(text)',true,false,'f5d9345e3a9fb7abf4c2686d8566cd4f21f60afdc8bd089164dcf9dabd6e30b0'),
 ('hon.crm_adult_membership_relation(uuid)',true,false,'71d39ddcd35a15c7baf094045aaf1979c5d61516dab7818d3cee0bb009c81457'),
 ('hon.read_crm_adult_membership_preparation(text,uuid)',true,true,'909adac7587840fbcd7e464e7b2b2c6b920d44b2d6264822fbcbffe1cc43243f'),
@@ -2501,8 +2501,8 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   END LOOP;
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_membership_plan()',false,false,'6b25106590748dffc6e8c3250cf6ca7e5f14eae80d2506d7c8d7201da432a3c3'),
-('hon.guard_membership_plan_version()',false,false,'2977003ee266b7d2967f4f5155ffa646c1b6925a9aec55f554eb80e706062c98'),
-('hon.guard_membership_plan_selection()',false,false,'31cc7aaabb6ec7e731a343f261d55dcb540877e3a6ee6553fe4b97c68d7343e4'),
+('hon.guard_membership_plan_version()',false,false,'297c1cda018141306fcecd11891044988e27fd45364778fe1aa96c69e97ad8ca'),
+('hon.guard_membership_plan_selection()',false,false,'0efb8c89e0df42dad32692bc6f76d1bd66bc6f9e5cd19179f33d1d536f925150'),
 ('hon.require_membership_plan_manager(text)',true,false,'55b5a9821f0a106e18d89b443ec3b7d4e480e968c6918f2c9738227d2c5ff63c'),
 ('hon.membership_plan_validated_terms(jsonb)',true,false,'b108ba63c4c2da714d076a085895bfb2cadbb0b97b7db06d74901693472d3874'),
 ('hon.membership_plan_version_summary(uuid,integer)',true,false,'a0af232d46adc9230ea2c5df1db23c9e9ca4029edfaaa1507b1aba20e24eb92c'),
@@ -2541,7 +2541,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
     IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'CRM guardian/child enrollment table must be private with FORCE RLS: %',t; END IF;
   END LOOP;
   FOR f IN SELECT * FROM (VALUES
-('hon.guard_crm_guardian_child_enrollment_history()',false,false,'4d5bb4bfc08f5167e20e5b458766502bbe6039d00e610aefbaa8ea77f0085d71'),
+('hon.guard_crm_guardian_child_enrollment_history()',false,false,'57c5b198311e2783a8b3b10e92934d5bd1e0055532d4d9304ab98a5c0f695a53'),
 ('hon.capture_crm_guardian_child_registration_child()',true,false,'98c12236c3ea0f866e39aab5707affd1a4ff44b885c2828abf6b797bb742f9aa'),
 ('hon.require_crm_guardian_child_enrollment_actor(text)',true,false,'1ce782ebcd4e6b15183acaa39434c7a7ef5342e875d694dd01dded3d2f2a63e2'),
 ('hon.crm_guardian_child_family_relation(uuid)',true,false,'c28275b6efad28d071aca09a170eb15dd942d586ca22146a856e836419c44232'),
@@ -2593,7 +2593,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; cols text[]; BEGI
     IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Membership activation evidence table must be private with FORCE RLS: %',t; END IF;
   END LOOP;
   FOR f IN SELECT * FROM (VALUES
-('hon.guard_membership_activation_evidence()',false,false,'search_path=pg_catalog, hon','c60a35d8df72884601abcd51d9f032a18f10f626662601d9d609e6aab56b06af'),
+('hon.guard_membership_activation_evidence()',false,false,'search_path=pg_catalog, hon','04b65c98f96202e9d55115a01b4ac98b2dda459558f61ea6e8e77a7ec2a1769d'),
 ('hon.guard_membership_state_transition()',false,false,'search_path=pg_catalog, hon','1e860ef88864ffe8e61ebe064cba7cf4458df30ef6189cef96e859239dbbd28e'),
 ('hon.membership_local_date(timestamptz,text)',false,false,'search_path=pg_catalog','60fb21bff4757c407e3acddc061c304629f0f035145d633924461e75090ad465'),
 ('hon.membership_local_day_start(date,text)',false,false,'search_path=pg_catalog, hon','7d311eb5b3ec550b13b360c747cc628fc8d13369e2984c01a12cbd2c3794e4ec'),
@@ -2881,7 +2881,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   END LOOP;
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_school_membership_pause_policy_insert()',false,false,'search_path=pg_catalog, hon','6884542f50ced5ca9f6c210d41ee558ad2523f4117524a39c10b4ae98f52f90a'),
-('hon.guard_membership_pause()',false,false,'search_path=pg_catalog, hon','a7f0a4bba001e88edcafcd45c4d9bddb8c819f1fdb129c6051838e1feb4d5b83'),
+('hon.guard_membership_pause()',false,false,'search_path=pg_catalog, hon','faea90fad2861bd9fc5034612bb93c6ff2b162e6e990434075eefea7c0d13679'),
 ('hon.membership_pause_text_ok(jsonb,boolean)',false,false,'search_path=pg_catalog','cec6ad5989b89bd1334049aad74188cef12547a18b024ce0b90345be6a73d491'),
 ('hon.membership_pause_date(jsonb)',false,false,'search_path=pg_catalog','10de318f76aee1cedb89411a3d35a68168c0f4d197558d35d8a26425ff1b8545'),
 ('hon.membership_school_today()',true,false,'search_path=pg_catalog, hon','66d5930b96db5a24a31d7129eaf855890200ca58b8d4ab037ef5f7e628f57d00'),
@@ -2932,7 +2932,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
     IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Student import table must be private with FORCE RLS: %',t; END IF;
   END LOOP;
   FOR f IN SELECT * FROM (VALUES
-('hon.guard_student_import()',true,false,'search_path=pg_catalog, hon','45ba00a2951101e7c0510a8ff136da84e498aa1a9437524d37fd775f5ccb92df'),
+('hon.guard_student_import()',true,false,'search_path=pg_catalog, hon','c2837f6fb12f66735f6d7224f0b992eb1dc1c7476541c7e7cd7f141f9ad5f0f8'),
 ('hon.require_student_import_actor(text)',true,false,'search_path=pg_catalog, hon','0d7763a58e4e5edcf15f4fd90fedac036afd941a2ef7ffc939fc7f28202259c6'),
 ('hon.student_import_fields()',false,false,'search_path=pg_catalog','d5df936dbc745cb27a1d2c8f84a4412e05f562220314f42ff04ee6f24c6e217f'),
 ('hon.student_import_check_row(jsonb,jsonb,jsonb,date)',false,false,'search_path=pg_catalog','33d7ae2571e2606ee89f6d31b18d23541c63b292a304d2cab1b7e8a339525f72'),
@@ -2997,7 +2997,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
     IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Class series table must be private with FORCE RLS: %',t; END IF;
   END LOOP;
   FOR f IN SELECT * FROM (VALUES
-('hon.guard_class_series()',true,false,'search_path=pg_catalog, hon','25279023919d330ac968de1abea2faed15b8d1241c3fe6bc8ca0497f37f1d9e2'),
+('hon.guard_class_series()',true,false,'search_path=pg_catalog, hon','6575ffd2184a7b051d4266547ca26c8f7164c848c657dc3a8504dbd9f5a3253f'),
 ('hon.require_class_series_actor(text)',true,false,'search_path=pg_catalog, hon','a91ef014ce4bb04d732d405ba53b5a0ec1be10267fe2efac6b5f504cdafec2bf'),
 ('hon.class_series_json(hon.class_series)',true,false,'search_path=pg_catalog, hon','ac63ec1bc183d40534a4623df595d4bb46b110f717861b58f08a281b372c82a8'),
 ('hon.class_series_pattern(jsonb,boolean)',false,false,'search_path=pg_catalog, hon','30abf7a726b2fb7c8c970b56b50a25be4239743474107f8954977279d0193bf5'),
@@ -3039,7 +3039,7 @@ DO $$ DECLARE f record; safe boolean; expected record; BEGIN
   INTO safe FROM pg_class c WHERE c.oid='hon.invoice_payment_records'::regclass;
   IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Tuition payment record table must be private with FORCE RLS'; END IF;
   FOR f IN SELECT * FROM (VALUES
-('hon.guard_invoice_payment_record()',true,false,'search_path=pg_catalog, hon','5173648ce92ee38701768bcbeeb74a113d0c46be552697bc43eeac3df2c0ed13'),
+('hon.guard_invoice_payment_record()',true,false,'search_path=pg_catalog, hon','178e678d18f03cf59d4ca52f731d591e3403a948943c9d33fd5b9bc5b56cca1a'),
 ('hon.guard_invoice_payment_status()',true,false,'search_path=pg_catalog, hon','d42c2d8a463004dfb1a7f118dc9c2e1b8fd081179147c7b62cde75a9142a3a43'),
 ('hon.require_tuition_actor(text,text)',true,false,'search_path=pg_catalog, hon','250ed5e3b2245dc5f734465c3b8143b12cb527e2952196d1c953ecdc243b60e1'),
 ('hon.require_tuition_reader(text)',true,false,'search_path=pg_catalog, hon','f903656f91eaabca6673190572ce52ff3da42a87f2b818398bc00ad10e1164b5'),
@@ -3162,8 +3162,8 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
     IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'School payer method table must be private with FORCE RLS: %',t; END IF;
   END LOOP;
   FOR f IN SELECT * FROM (VALUES
-('hon.guard_school_pay_method_setup()',true,false,'search_path=pg_catalog, hon','3686860cca51431cf496ca0d380e7929e8f0889de90e3d652cdcb0057ad217d7'),
-('hon.guard_school_pay_method()',true,false,'search_path=pg_catalog, hon','44113d11d49579a75ff732703e70cd77a15cefef529be14df215bfd950292205'),
+('hon.guard_school_pay_method_setup()',true,false,'search_path=pg_catalog, hon','8a88316512f9516c940a181065490b1a9b8594dcac9410a20313a93010583ef4'),
+('hon.guard_school_pay_method()',true,false,'search_path=pg_catalog, hon','ce47b8396105d240a50774cb219eecdfa5e9b6bf5a9c2732148a7989291fe8f3'),
 ('hon.require_school_pay_method_actor(text,text)',true,false,'search_path=pg_catalog, hon','eeb4a2063bc8d950b37d7b0b479de440b6dc23ae7db83d8b9b3bb22a5b05d528'),
 ('hon.require_school_pay_method_reader(text)',true,false,'search_path=pg_catalog, hon','3abcb1e7071708a57c470da27b0193dd1a05fce7ceb067b2a106320c0d881920'),
 ('hon.school_pay_instant(timestamp with time zone)',false,false,'search_path=pg_catalog','e4a86c6f3c7e0d57791518a05be7b1552ebb4b274f34c42dc0e8b86bf6a93d46'),
@@ -3217,7 +3217,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
     IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'School autopay table must be private with FORCE RLS: %',t; END IF;
   END LOOP;
   FOR f IN SELECT * FROM (VALUES
-('hon.guard_school_pay_autopay_plan()',true,false,'search_path=pg_catalog, hon','01a7860464ede9da8fc29d77b8590d8a2614dea1ca2f33b34a9bdbb3bfd56641'),
+('hon.guard_school_pay_autopay_plan()',true,false,'search_path=pg_catalog, hon','4cd8db8d16d21b9f3c323aa63801ba14d4628cc25a272e9c12fc63d3a1d803e1'),
 ('hon.require_school_pay_autopay_actor(text,text)',true,false,'search_path=pg_catalog, hon','6bf7454c1f8a7c9a8b04276f8ad30d6a39ffbc0252ec47f8e401b57e802c097c'),
 ('hon.require_school_pay_autopay_reader(text,text[])',true,false,'search_path=pg_catalog, hon','2054e0deae2fedecd49fa52a61b73ee4238dd3bc34f86f750b4e57bba366976b'),
 ('hon.school_pay_school_zone()',true,false,'search_path=pg_catalog, hon','6237e35872aaf3b336a3ceae9d6d361cc3d8a351bc4b587d410305e0278779ef'),
@@ -3280,7 +3280,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
     IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'School autopay charge table must be private with FORCE RLS: %',t; END IF;
   END LOOP;
   FOR f IN SELECT * FROM (VALUES
-('hon.guard_school_pay_charge_attempt()',true,false,'search_path=pg_catalog, hon','b39973b7357e39d0e0ed08bb459c8677d4dff795ac30bca2c64e0b0b9fb42e3a'),
+('hon.guard_school_pay_charge_attempt()',true,false,'search_path=pg_catalog, hon','0514638577543be36e87c70964ba339ad7375cdc42778782a8bcdb08d4de6d0a'),
 ('hon.school_pay_invoice_charge_open(uuid)',true,false,'search_path=pg_catalog, hon','3a9692741e5149599d60f4c55faa420296ce6b4cb462d3803ea39f4cab461012'),
 ('hon.guard_school_pay_charge_payment_record()',true,false,'search_path=pg_catalog, hon','ca717afb2623fa3f05d78a1ccda763edf8083460036fe7125def6473ad6d3d1f'),
 ('hon.guard_school_pay_charge_invoice()',true,false,'search_path=pg_catalog, hon','662e92f463cfba1a4b30fc96fddcfc3e7e4bb87a41724b7407f618457a514f04'),
@@ -3753,7 +3753,7 @@ END $$;
 DO $$ DECLARE f record; safe boolean; t text; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.family_message_body_ok(text)',false,false,'search_path=pg_catalog','911c8020274ce0bad19829ea68cafc456c16dd76f61ef1fbe827e68611e0b146'),
-('hon.guard_family_message_thread()',false,false,'search_path=pg_catalog, hon','f1492f25d9552a3a0c22e7094d719ac3775435655527c010d465a665961f9cbf'),
+('hon.guard_family_message_thread()',false,false,'search_path=pg_catalog, hon','6eeb0cb6be4147da0d7e605a37f8a5e6a7f11f67b4d5cd61e30f13a7b1eb3eb9'),
 ('hon.family_message_parent_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','934532bf7f7ae9807bbc7692110f31a3aa0f3359250a578897d95f308e6c6c35'),
 ('hon.require_family_messages_actor(text)',true,false,'search_path=pg_catalog, hon','29ee5eb47779b29faf23ddd1598712047d1bc04d905ab7e8bc1b30eae56f686b'),
 ('hon.family_message_time(timestamp with time zone)',false,false,'search_path=pg_catalog','e4a86c6f3c7e0d57791518a05be7b1552ebb4b274f34c42dc0e8b86bf6a93d46'),
@@ -3795,7 +3795,7 @@ DO $$ DECLARE f record; safe boolean; t text; worker_oid oid:=(SELECT oid FROM p
   FOR f IN SELECT * FROM (VALUES
 ('hon.conversation_body_ok(text)',false,false,false,'search_path=pg_catalog','53dfa913f9ff8f68060d53a6b2b66a2c0831568e388ca92e60742f22b590162e'),
 ('hon.conversation_tags_ok(text[])',false,false,false,'search_path=pg_catalog','dec73cf1312918d4c380e47fd3ee49e210bf95163c664d1d739e5b35d14071c7'),
-('hon.guard_school_conversation()',false,false,false,'search_path=pg_catalog, hon','ac36a3a2ccb1d1975a38a7465c21619c9ecc177054b07e8f72f300d8f036055b'),
+('hon.guard_school_conversation()',false,false,false,'search_path=pg_catalog, hon','0b802ee0518fd202371f9d0d5ebc6c3bac65580df167552b76ddc224c31906da'),
 ('hon.conversation_staff_has(uuid,uuid,uuid,text)',true,false,false,'search_path=pg_catalog, hon','7abb6d93e5f4376fc97e013c7a30952353784fb4eac1ea308874063b7d076054'),
 ('hon.require_conversation_actor(text,boolean)',true,false,false,'search_path=pg_catalog, hon','edae19e955bee3b56686346f1da36671937638e54b9d5e26ba6475cebbe829d9'),
 ('hon.conversation_time(timestamp with time zone)',false,false,false,'search_path=pg_catalog','e4a86c6f3c7e0d57791518a05be7b1552ebb4b274f34c42dc0e8b86bf6a93d46'),
@@ -4135,7 +4135,7 @@ END $$;
 -- touch, twelve runtime entry points, and private helpers, guards, the actor check and the engine-only contact_tag_apply.
 DO $$ DECLARE f record; safe boolean; t text; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.guard_automation_workflow_history()',true,false,'search_path=pg_catalog, hon','286927d43da2244d7c976f4e14e3989a3506ca528fa4906b1b7e847e0305cf43'),
+('hon.guard_automation_workflow_history()',true,false,'search_path=pg_catalog, hon','9f42b9631e2e79f6cf0e9e3897543184e59496f6196a24c5ab2c619639ba5fb1'),
 ('hon.guard_automation_workflow()',true,false,'search_path=pg_catalog, hon','81fe707261e528747c73e0b957d93cfcc57d69d1fd86309e3d8160420c7bef98'),
 ('hon.require_automation_workflow_actor(text,text)',true,false,'search_path=pg_catalog, hon','258b1d6b6f0d2abd06636489969a351f27d3ae0a909a9ec06561acc4a3ae47bf'),
 ('hon.automation_invalid(text)',false,false,'search_path=pg_catalog, hon','0f5d594cb0b1a5cd740550aa23bfbab0a61bf822f6bf380b824135a1a6acf5ef'),
@@ -4279,7 +4279,7 @@ END $$;
 -- private helpers, forward-only guards, the AUTOMATION principal and the message origin columns.
 DO $$ DECLARE f record; safe boolean; t text; worker oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_automation_worker'); BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.guard_automation_run()',true,false,false,'search_path=pg_catalog, hon','a6bd54cdb04bfbe34a3a7ec951404996b4e889343e3eccf8c180b15ada293b5f'),
+('hon.guard_automation_run()',true,false,false,'search_path=pg_catalog, hon','df2bd3ecd609a83df0680ae740df80f3b2ddfac970eee7295297cec3a1240f58'),
 ('hon.automation_unavailable(jsonb)',false,false,false,'search_path=pg_catalog, hon','84aeceae6da7a4aa63f8bd43167713dd1d61beefe566c68baad79e08236dfad9'),
 ('hon.automation_references_ok(uuid,uuid,uuid,jsonb)',false,false,false,'search_path=pg_catalog, hon','af5fd466e05f55bd1afad7b4515edcc9606e71a86cb59dc4150e1d744b8976eb'),
 ('hon.automation_activator_ok(uuid,uuid,uuid)',false,false,false,'search_path=pg_catalog, hon','95ecbf01f8b3da3dcee453618794ffb01359d92f0c9e144f576591434ece9b39'),
@@ -4373,3 +4373,56 @@ DO $$ DECLARE f record; safe boolean; worker_oid oid:=(SELECT oid FROM pg_roles 
   END IF;
 END $$;
 -- End contact message history exact verification.
+-- School demo data exact verification (0439): two private forced-RLS tables, three staff runtime entry points (read, load,
+-- remove), the removal check that the 42 patched append-only guards call (runtime and the three workers may run it), the
+-- refusal triggers that keep demo people from messages and school-pay, and every other helper migration-owner only.
+DO $$ DECLARE f record; safe boolean; t text; workers oid[]:=ARRAY(SELECT oid FROM pg_roles WHERE rolname IN ('hon_outbox_worker','hon_communication_worker','hon_automation_worker')); BEGIN
+  IF (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname LIKE '%demo_data%')<>16 THEN
+    RAISE EXCEPTION 'Unexpected school demo data functions'; END IF;
+  FOR f IN SELECT * FROM (VALUES
+('hon.demo_data_is_demo(text,uuid)',true,false,false,'search_path=pg_catalog, hon','dd6c028771e5d9f92da9c48b29ed981b73e2082da851620fd3362446de7f53a7'),
+('hon.demo_data_person_tables()',false,false,false,'search_path=pg_catalog','ca3cb64f5bb8a39455fc7d5b2e74896f3f0eee832a46879999806dcf4556f363'),
+('hon.demo_data_register(uuid,uuid,uuid,text,uuid)',true,false,false,'search_path=pg_catalog, hon','944c373b87df474d74621c6eb4dbb20838a15abfcdb947f226256d7d8de6755a'),
+('hon.demo_data_removal_allows(text,jsonb)',true,true,true,'search_path=pg_catalog, hon','e867cfe0b31b33b49c28af8f78d6e733d7cfc85a894919969c3f08cff52ac709'),
+('hon.guard_school_demo_data()',false,false,false,'search_path=pg_catalog, hon','e18628d1e587a8afce523fb5630f4e1dba4fec1b5a5a6b5f83d85fc6f0ba1194'),
+('hon.load_school_demo_data(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','2d4fc5841387bedd1ed6c96ef702f51044d2e3ccb0c9bf1884682ace68a79ef0'),
+('hon.read_school_demo_data(text)',true,true,false,'search_path=pg_catalog, hon','c43c760f75b02e81ba06d83006ef560623002a81b1f6b6c5d73e398f7971ac27'),
+('hon.refuse_demo_data_target()',true,false,false,'search_path=pg_catalog, hon','3376565780adf45268abff3a6d8fe667ecdcb74e3ebc374d766008f22d24ea1a'),
+('hon.remove_school_demo_data(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','ee275b954e2482f5ed925c2d15bc32ad7d27b72310f8854781449618f18187b9'),
+('hon.require_demo_data_actor(text)',true,false,false,'search_path=pg_catalog, hon','a49eab0e1f81dbb1185e8dcfd39733ef3603732380460fd5ee61f8eccaa9aede'),
+('hon.school_demo_data_begin(text,text,jsonb,text,uuid,uuid)',true,false,false,'search_path=pg_catalog, hon','d73fab306eafd34c8ad6340e1c6d3e833b185041a534848e23e1f18af6614574'),
+('hon.school_demo_data_collect(uuid,uuid,uuid)',true,false,false,'search_path=pg_catalog, hon','265767a5f2608aa825871c8519171eea989c4a16edcda923deaec298e47a82fe'),
+('hon.school_demo_data_delete(uuid)',true,false,false,'search_path=pg_catalog, hon','fe51977f55482eaa96325f0a8e898c1a5bb2dacee62c00c90b959e8bc885752c'),
+('hon.school_demo_data_finish(text,uuid,text,jsonb)',true,false,false,'search_path=pg_catalog, hon','2db6dba17630bfcd60c5da56566743fce553eef9b9d95a7b0db7d594013fb9bf'),
+('hon.school_demo_data_view(uuid,uuid)',true,false,false,'search_path=pg_catalog, hon','de29ae37237d85ab520b884e443fdfeee5c2a1628807faca2f7f39b8d5b48021'),
+('hon.school_demo_data_write(uuid,uuid,uuid,uuid,uuid,uuid)',true,false,false,'search_path=pg_catalog, hon','837783bed7d15033b4238befba0d092129362976db72db736b84b3e221ff25c3')) e(signature,definer,runtime_allowed,worker_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.is_grantable OR a.privilege_type<>'EXECUTE'
+          OR NOT ((a.grantee=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') AND f.runtime_allowed)
+            OR (a.grantee=ANY(workers) AND f.worker_allowed))))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school demo data function: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['school_demo_data_sets','school_demo_data_rows'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe school demo data table: %',t;
+    END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon'
+      AND p.prosrc LIKE E'%\n  IF TG_OP=''DELETE'' AND hon.demo_data_removal_allows(TG_TABLE_NAME,to_jsonb(OLD)) THEN RETURN OLD; END IF; -- 0439 demo data removal\n%')<>42
+    OR EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.prosrc LIKE '%demo_data_removal_allows%'
+      AND p.proname<>'demo_data_removal_allows' AND array_length(string_to_array(p.prosrc,'demo_data_removal_allows'),1)<>2) THEN
+    RAISE EXCEPTION 'Unexpected demo data removal check in append-only guards'; END IF;
+  IF (SELECT count(*) FROM pg_trigger g WHERE g.tgname='demo_data_refuse' AND g.tgenabled='O' AND g.tgfoid='hon.refuse_demo_data_target()'::regprocedure
+      AND g.tgrelid IN ('hon.communication_messages'::regclass,'hon.school_family_access_invitations'::regclass,'hon.school_pay_customers'::regclass,
+        'hon.school_pay_method_setups'::regclass,'hon.school_pay_autopay_plans'::regclass,'hon.school_pay_charge_attempts'::regclass))<>6 THEN
+    RAISE EXCEPTION 'Demo data refusal triggers missing'; END IF;
+END $$;
+-- End school demo data exact verification.

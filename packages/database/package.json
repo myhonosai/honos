@@ -172,6 +172,7 @@
     "db:test-walk-in-kiosk": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-walk-in-kiosk-integrity.mjs",
     "db:test-paper-import": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-paper-import-integrity.mjs",
     "db:test-school-location": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-location-integrity.mjs",
+    "db:test-school-demo-data": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-demo-data-integrity.mjs",
     "db:test-lead-pipeline-board": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-lead-pipeline-board-integrity.mjs",
     "db:test-shopify": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-shopify-commerce-integrity.mjs",
     "db:test-class-series": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-series-integrity.mjs",
