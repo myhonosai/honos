@@ -1,12 +1,15 @@
 // Builds the static HON OS marketing site: copies src/ to dist/ and fills in the build-time values.
 //   HON_WEBSITE_APP_URL   origin of the HON OS app (default http://localhost:3000)
 //   HON_WEBSITE_INDEXABLE set to 1 only when the site is approved to go live; otherwise pages are noindex.
+//   HON_WEBSITE_LEGAL_FINAL set to 1 only once the privacy policy and terms are reviewed and every [[blank]] is filled;
+//                         otherwise /privacy/ and /terms/ show a "draft, not yet in effect" banner.
 import { cpSync, readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { localize, markLanguage } from './i18n.mjs';
 import { loadPosts, blogPages } from './blog.mjs';
+import { legalPages } from './legal.mjs';
 
 export const LANGUAGES = ['ko', 'es'];
 
@@ -54,6 +57,7 @@ export function buildSite({ outDir = join(root, 'dist'), env = process.env } = {
   cpSync(join(root, 'src'), out, { recursive: true });
   rmSync(join(out, 'i18n'), { recursive: true, force: true });
   rmSync(join(out, 'blog'), { recursive: true, force: true });
+  rmSync(join(out, 'legal'), { recursive: true, force: true });
   versionCss(out);
   const fill = (html, name) => {
     const done = versionPage(html.replaceAll('{{APP_URL}}', app).replaceAll('{{ROBOTS}}', robots), out);
@@ -72,6 +76,10 @@ export function buildSite({ outDir = join(root, 'dist'), env = process.env } = {
   }
   const posts = loadPosts(join(root, 'src', 'blog', 'posts'));
   for (const { file, html } of blogPages({ posts, homes, app })) {
+    mkdirSync(dirname(join(out, file)), { recursive: true });
+    writeFileSync(join(out, file), html);
+  }
+  for (const { file, html } of legalPages({ dir: join(root, 'src', 'legal'), home: homes.en, final: env.HON_WEBSITE_LEGAL_FINAL === '1' })) {
     mkdirSync(dirname(join(out, file)), { recursive: true });
     writeFileSync(join(out, file), html);
   }
