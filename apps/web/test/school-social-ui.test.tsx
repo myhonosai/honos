@@ -118,3 +118,18 @@ it('has every phrase in Korean and Spanish and is listed under Communication', (
   expect(marketing?.routes.some(r => r.href === '/staff/marketing/social')).toBe(true);
   expect(schoolShellActiveRoute('/staff/marketing/social/return')?.href).toBe('/staff/marketing/social');
 });
+
+it('a Google Ads account (0453) shows only its ads switch, never publishing or inbox; the contract refuses one with those on', async () => {
+  const google = account({ accountId: id(42), platform: 'GOOGLE_ADS', displayName: 'Synthetic Dojo Google Ads', adsEnabled: true });
+  const html = renderToStaticMarkup(<SocialView {...props({ list: { state: 'READY', list: list({ accounts: [account(), google] }) } })} />);
+  const card = html.slice(html.indexOf(`data-account="${id(42)}"`));
+  expect(card).toContain('data-platform="GOOGLE_ADS"');
+  expect(card).toContain('Google Ads');
+  const own = card.slice(0, card.indexOf('</li>'));
+  expect(own).toContain(socialText('en', 'sw_ads'));
+  expect(own).not.toContain(socialText('en', 'sw_publish'));
+  expect(own).not.toContain(socialText('en', 'sw_inbox'));
+  for (const language of Object.keys(SOCIAL_LANGUAGES)) expect(socialText(language, 'p_GOOGLE_ADS')).toBe('Google Ads');
+  stub(json({ data: list({ accounts: [{ ...google, publishEnabled: true }] }), meta }));
+  await expect(socialApi.list(scope, signal(), () => true)).rejects.toBeInstanceOf(SocialError);
+});

@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "8d7832f9a62d7cc96e57fa2bf1593554d4cf56cff52e19f74e945ac45a8a36cb",
+  "chainSha256": "5e7273d249c683d46110cd0ad1caa006e37af6da816b72f5d90d7528c7c96142",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -601,6 +601,10 @@
     {
       "file": "0451_hon_team_chat_answers.sql",
       "sha256": "8a639924e09baffd6e8252fb1a2fa0c428aaeff09ac7dc22bd8ce9555a5fe98e"
+    },
+    {
+      "file": "0453_school_google_ads.sql",
+      "sha256": "fde9c8a9f893c7b0ad13b29f0942fea66291a0316915a9659211b449d0f68363"
     },
     {
       "file": "0457_parent_school_bookings.sql",
