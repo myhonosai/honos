@@ -158,7 +158,7 @@ export function HonTeamChat({ school, mode, language, artStyle, api = HON_CONVER
   const sendRef = useRef<(text: string, spoken: boolean) => boolean>(() => false);
   const voice = useHonVoice(lang, (text) => sendRef.current(text, true));
   const { shutdown: voiceShutdown, replyParts } = voice;
-  // 0452: each teammate speaks in the voice this person chose (their usual voice until the choices load).
+  // 0460: each teammate speaks in the voice this person chose (their usual voice until the choices load).
   const voices = useAgentVoices(school, voiceApi);
   const chosen = useRef(voices.choices); chosen.current = voices.choices;
 

@@ -142,7 +142,7 @@ export interface RecognitionAdapter { start(options: RecognitionOptions, handler
  */
 export type HonVoiceProfile = Readonly<{ pitch: number; rate: number; voiceIndex: number }>;
 /**
- * 0452 (owner ask "choose voice for all AI agents, give few choices each"): three free browser voices per teammate.
+ * 0460 (owner ask "choose voice for all AI agents, give few choices each"): three free browser voices per teammate.
  * Choice 1 is the voice each teammate already had; 2 and 3 change pitch, pace and which of the device's own voices is
  * used. The person's choice is saved to their account; the device decides which voices it actually has.
  */

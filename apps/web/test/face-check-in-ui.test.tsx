@@ -249,3 +249,17 @@ it('the menu links the scan screen under Attendance and the settings under Setti
   expect(hrefs).toContain('/staff/attendance/face'); expect(hrefs).toContain('/staff/settings/face-check-in');
   for (const page of ['staff/attendance/face', 'staff/settings/face-check-in', 'parent/face-check-in']) expect(existsSync(new URL(`../src/app/${page}/page.tsx`, import.meta.url))).toBe(true);
 });
+
+it('hiding the tab, leaving the page, ending the session or changing school stops the camera and clears the suggestion', async () => {
+  const { onFaceScanPrivacy } = await import('../src/components/face-check-in/scan');
+  const { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } = await import('../src/components/session-invalidation');
+  const doc = Object.assign(new EventTarget(), { hidden: false });
+  const drop = vi.fn();
+  const off = onFaceScanPrivacy(drop, doc as unknown as Document);
+  doc.dispatchEvent(new Event('visibilitychange')); expect(drop).toHaveBeenCalledTimes(0);
+  doc.hidden = true; doc.dispatchEvent(new Event('visibilitychange')); expect(drop).toHaveBeenCalledTimes(1);
+  for (const name of ['pagehide', HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]) window.dispatchEvent(new Event(name));
+  expect(drop).toHaveBeenCalledTimes(4);
+  off();
+  doc.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(new Event('pagehide')); expect(drop).toHaveBeenCalledTimes(4);
+});

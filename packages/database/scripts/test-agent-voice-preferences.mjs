@@ -1,7 +1,7 @@
 import pg from 'pg';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-// Agent voice choices (0452) against a disposable database through the real API service: each person's own choice
+// Agent voice choices (0460) against a disposable database through the real API service: each person's own choice
 // (1-3) per AI teammate in one school; scope from the verified identity with the personal interface-preference
 // permissions; forced RLS per school; closed values; idempotent replay, key reuse refused; audited; runtime can
 // SELECT/INSERT/UPDATE only (no DELETE). Presentation only: no provider, no AI call.
@@ -92,7 +92,7 @@ try{
  // ---------- closed values ----------
  for(const[agent,choice]of [['bob',1],['hon',0],['hon',4]])
   await sqlCode(admin.query("INSERT INTO hon.principal_agent_voice_preferences(organization_id,school_id,principal_id,agent_key,voice_choice) VALUES($1,$2,$3,$4,$5)",[org.A,school.A1,humans.staffA.id,agent,choice]),'23514');
- console.log('PASS agent voice preferences (0452): defaults, save, exact replay, key reuse refused, audit, per-person/school/organization isolation, forced RLS, runtime SELECT/INSERT/UPDATE only, closed values');
+ console.log('PASS agent voice preferences (0460): defaults, save, exact replay, key reuse refused, audit, per-person/school/organization isolation, forced RLS, runtime SELECT/INSERT/UPDATE only, closed values');
 }finally{
  await admin.query('ROLLBACK').catch(()=>{});
  await admin.query('DELETE FROM hon.principal_agent_voice_preferences WHERE organization_id=ANY($1::uuid[])',[Object.values(org)]).catch(()=>{});

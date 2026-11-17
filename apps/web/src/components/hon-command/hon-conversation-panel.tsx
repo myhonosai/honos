@@ -390,7 +390,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   const voiceAllowed = useRef(false);
   const voice = useHonVoice(lang, (text) => voiceAllowed.current && !concealed.current && sendTextRef.current(text, true));
   const { shutdown: voiceShutdown, replyParts } = voice;
-  // 0452: HON answers aloud in the voice this person chose for HON (the usual voice until the choices load).
+  // 0460: HON answers aloud in the voice this person chose for HON (the usual voice until the choices load).
   const { choices: voiceChoices } = useAgentVoices(school, voiceApi);
   const honVoiceChoice = useRef(voiceChoices.hon); honVoiceChoice.current = voiceChoices.hon;
   const voiceReply = useCallback((text: string) => { replyParts([{ text, profile: honAgentVoice('hon', honVoiceChoice.current) }]); }, [replyParts]);

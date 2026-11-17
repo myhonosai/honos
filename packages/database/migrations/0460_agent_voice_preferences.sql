@@ -1,6 +1,6 @@
 BEGIN;
 
--- 0452 (allocated by the coordinator 2026-11-17; was 0432, 0438, then 0450): owner ask "choose voice for all AI agents, give few choices each".
+-- 0460 (allocated 2026-11-17; was 0432, 0438, 0450, then 0452): owner ask "choose voice for all AI agents, give few choices each".
 -- Each person picks one of three free browser voices for each AI teammate, saved to their own account in this school
 -- (not only in the browser). Presentation only: the value is a choice number (1-3) that the web app maps to a browser
 -- speech profile (pitch, rate, which of the device's own voices). No provider, no paid voice, no AI call, no spend.

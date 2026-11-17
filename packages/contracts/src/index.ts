@@ -43,7 +43,7 @@ export type HonTier = (typeof HON_TIERS)[number];
 
 export const HON_INTERFACE_THEME_IDS = ['big-button', 'modern', 'classic'] as const;
 export type HonInterfaceTheme = (typeof HON_INTERFACE_THEME_IDS)[number];
-/** 0452: each person picks one of three free browser voices per AI teammate (presentation only; 1 = the original voice). */
+/** 0460: each person picks one of three free browser voices per AI teammate (presentation only; 1 = the original voice). */
 export const HON_VOICE_AGENT_KEYS = ['hon', 'claire', 'alex', 'jordan', 'lena', 'marcus', 'chad', 'maya', 'kai'] as const;
 export type HonVoiceAgentKey = (typeof HON_VOICE_AGENT_KEYS)[number];
 export const HON_AGENT_VOICE_CHOICES = [1, 2, 3] as const;

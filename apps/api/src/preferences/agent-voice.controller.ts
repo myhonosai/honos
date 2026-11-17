@@ -7,7 +7,7 @@ import { RuntimeDatabaseService } from '../foundation/runtime-database.service.j
 import { UpdateAgentVoiceDto } from './agent-voice.dto.js';
 import { AgentVoiceService } from './agent-voice.service.js';
 
-/** 0452: the signed-in person's own voice choice per AI teammate. Reuses the personal interface-preference permissions. */
+/** 0460: the signed-in person's own voice choice per AI teammate. Reuses the personal interface-preference permissions. */
 @Controller('organizations/:organizationId/schools/:schoolId/agent-voices')
 @UseGuards(HonIdentityGuard)
 export class AgentVoiceController {

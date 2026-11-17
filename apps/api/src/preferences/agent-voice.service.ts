@@ -17,7 +17,7 @@ export function agentVoiceChoices(rows: readonly Row[]): HonAgentVoiceChoices {
 const SELECT = `SELECT agent_key, voice_choice FROM hon.principal_agent_voice_preferences
   WHERE organization_id = $1 AND school_id = $2 AND principal_id = $3`;
 
-/** 0452: a person's own voice choice per AI teammate in this school (same scope rules as the interface theme). */
+/** 0460: a person's own voice choice per AI teammate in this school (same scope rules as the interface theme). */
 @Injectable()
 export class AgentVoiceService {
   constructor(private readonly database: RuntimeDatabaseService) {}

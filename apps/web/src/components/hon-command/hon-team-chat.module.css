@@ -71,7 +71,7 @@
   .you, .agent { max-width: 100%; }
 }
 
-/* 0452 voice picker: three voices per teammate with a small "hear it" button each. */
+/* 0460 voice picker: three voices per teammate with a small "hear it" button each. */
 .voicePicker summary { cursor: pointer; font-weight: 700; min-height: 32px; }
 .voiceList { display: grid; gap: 10px; margin: 10px 0 0; padding: 0; list-style: none; }
 .voiceList li { display: grid; gap: 6px; padding: 10px; border-radius: 12px; background: var(--hon-surface-2, #13263a); }

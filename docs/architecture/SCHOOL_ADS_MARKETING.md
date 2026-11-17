@@ -51,7 +51,7 @@ turns it on. Results come back into the page.
 | A2 | Land S4 Meta boost backend (social thread, PR #450) | 0445 | merge slot from coordinator |
 | A3 (this PR, stacked on #450) | Ads page on S4: monthly cap, boost a published post (draft, approve, turn on, pause, resolve UNKNOWN), daily spend/clicks | none | no |
 | A4 | Marcus ad plan: a person asks Marcus for an ad; Marcus returns a structured draft (post to boost, budget inside the cap, dates, text, audience note) through the governed AI path; a person applies it to an S4 draft. Agents still never call ad commands | new number (ask coordinator) | real AI provider stays off |
-| A5 | Google Ads through Zernio: connect a Google Ads customer account (GOOGLE_ADS platform on the school Zernio profile), simple Search/Performance Max campaign drafts, same cap, PAUSED, human turn-on, insights | new number(s) | **Zernio Ads add-on is paid; real connection and spend need David** |
+| A5 | Google Ads through Zernio (section 8): connect a Google Ads customer account (GOOGLE_ADS platform on the school Zernio profile), Search ad drafts, same cap, PAUSED, human turn-on | 0453 | **Zernio Ads add-on is paid; real connection and spend need David** |
 | A6 | HQ uses the same Zernio ads path for HON's own Google/Meta accounts (HQ Marketing M3) | later | David |
 
 ## 5. A1 design (frontend only)
@@ -102,3 +102,77 @@ of `GET …/marketing/social/posts` (only Facebook targets HON PUBLISHED can be 
 - One write at a time, each with its own idempotency key. Only an unknown outcome keeps the request for Try again,
   which resends the identical body and key, so the server replays it rather than acting twice.
 - Wording: the review P3 from #435 is applied ("HON never holds the ad money"; no unapproved claim about markups).
+
+## 8. A5 design: Google Ads through Zernio (migration 0453)
+
+Goal: on Marketing > Ads a school connects its own Google Ads account through the same Zernio profile it uses for
+Facebook, drafts a simple Google **Search** ad (headlines, descriptions, landing page, keywords) inside the **same**
+monthly ad limit, approves it (created PAUSED at Google), turns it on (the only spending step), pauses it, and settles
+any unknown outcome. Built and proved on the fake Zernio only.
+
+### 8.1 Backend (0453, one PR)
+
+Extends 0347 and 0445 instead of adding a parallel ad system, so the cap, the lease, UNKNOWN handling and the human
+command rules are the reviewed ones.
+
+- **Connection**: `GOOGLE_ADS` joins the account and connect-intent platforms. The connect start accepts it; Zernio's
+  consent page lets the school pick its Google Ads customer account, and the existing claim/record path binds it (one
+  school per customer id, ever). A Google Ads account can never publish posts or read an inbox: a table check keeps its
+  publish and inbox switches off, and the post field check refuses it as a post target. Only its **ads** switch matters.
+- **Ads table**: `school_social_ads` gains `channel` (`META_BOOST` for every existing row, or `GOOGLE_SEARCH`) and
+  `google_content` (the school's own ad text). A Meta boost keeps its post target; a Google ad has no post target and
+  must have content. Both stay immutable after the draft (guard updated).
+- **Draft**: new `create_school_google_ad {accountId, budgetCents, startsOn, endsOn, headlines[3..15] (each 1 to 30
+  characters), descriptions[2..4] (1 to 90), finalUrl (https), keywords[1..20] (1 to 80)}`. Account must be this
+  school's CONNECTED `GOOGLE_ADS` account with ads on. Same date rules (1 to 31 days, from today up to 90 days ahead),
+  same cap checks; the total budget must allow at least 1.00 a day.
+- **Approve / turn on / pause / cancel / resolve**: the existing 0445 commands, unchanged for people. The start step
+  hands the API the channel and, for Google, the content and a **daily budget = total ÷ days (rounded down)**. Google
+  may spend up to twice the daily budget on a single day and settles against its monthly charging limit (daily budget
+  × days in the month), so over a short campaign the spend can run somewhat above total ÷ days on some days; HON's
+  daily figure keeps the *expected* spend at or under the total counted against the cap, but it is not a hard stop.
+  Before real use, either Zernio sets a Google campaign total budget, or the cap counts the ad at its worst case (see
+  8.2 item 6).
+- **Cap**: one limit per school for Meta and Google together; every ad that may still spend counts its whole budget in
+  every month its dates touch (0445 rule, now across both channels).
+- **API**: `POST …/marketing/social/ads/google` (command `marketing.social.ads.google.create`), everything else on the
+  existing ads routes. The ads read is unchanged apart from each ad's channel and content (one ads switch for both).
+- **Adapter**: `createGoogleSearchAd` (one call, created PAUSED, HON ad id as idempotency key) and the existing
+  `setAdActive` for turn on / pause. The fake gives deterministic ids and lets tests force refused, lost and late
+  answers.
+
+### 8.2 Provider assumptions to confirm before any real use
+
+Zernio's docs are not reachable from the build environment, so the adapter is written to these assumptions, listed
+here and in the adapter, and must be checked against Zernio before `HON_ZERNIO_ADS_APPROVED` is set:
+
+1. Connecting platform name `googleads`; the connected account id is the Google Ads customer id.
+2. Creating a Search campaign + ad group + responsive search ad + keywords in one call (`POST /ads/create` with
+   `platform: googleads`), returning one ad id that the status call accepts.
+3. The campaign can be created **paused** and stays paused until HON's turn-on call (if Google refuses ads inside a
+   paused campaign, the adapter must create the campaign paused with the ad enabled instead; still no spend).
+4. Daily budget, start and end dates and currency in the account's own currency are accepted as sent.
+5. **Location targeting** (decided by David 2026-11-17): every ad, Google and Meta, reaches people within **5 miles of
+   the school's street address** (`hon.school_locations`, 0392). Approving an ad is refused with `SOCIAL_AD_NO_ADDRESS`
+   until the school has saved a street address. The adapter sends `targeting.locations[{ type: radius, radius: 5,
+   unit: MILES, address }]` on create; that shape (and whether Zernio geocodes the address or needs coordinates) is
+   assumed and must be confirmed.
+6. **Budget units and overspend**: HON sends amounts in cents (same for the Meta boost); Zernio may expect currency
+   units or Google micros, which must be confirmed in a sandbox. Google's daily overdelivery (up to 2x on a day) means a
+   campaign total budget, if Zernio exposes one, is the safer setting.
+
+Items 1 to 6 (from the independent review of #459, P3) gate turning `HON_ZERNIO_ADS_APPROVED` on for Google.
+
+### 8.3 Frontend (one PR after the backend)
+
+The Google Ads card on Marketing > Ads replaces "not available yet" with: connect button (when connecting is on),
+connected account(s) with their ads switch, and once an account has ads on, a Search ad form (headlines, descriptions,
+landing page, keywords, total budget, dates) plus the same ad list actions as Meta (approve paused, confirm turn on,
+pause, settle unknowns). Browser proof on synthetic fixtures; en/ko/es.
+
+### 8.4 Owner stops
+
+- The Zernio Ads add-on is paid: David decided (2026-11-17) to buy the paid plan himself. Connecting a real Google Ads
+  account, setting the keys and any real spend still need David.
+- Location targeting: decided 2026-11-17, 5 miles around the school's street address (8.2 item 5).
+- Whether Google uses the same `HON_ZERNIO_ADS_APPROVED` switch as Meta (built: same switch).

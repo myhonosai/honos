@@ -1,7 +1,7 @@
 import { HON_AGENT_VOICE_CHOICES, HON_VOICE_AGENT_KEYS, type HonAgentVoiceChoice, type HonAgentVoiceChoices, type HonVoiceAgentKey } from '@hon/contracts';
 
 /**
- * 0452: the signed-in person's own voice choice (1-3) for each AI teammate in this school. Presentation only: the
+ * 0460: the signed-in person's own voice choice (1-3) for each AI teammate in this school. Presentation only: the
  * server stores a number, the browser maps it to one of its own free voices. Scope must come from the verified
  * school, never from form input.
  */
