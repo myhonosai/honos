@@ -1,4 +1,8 @@
 import { verifyParentJourneyView, type ParentJourneyView } from '@hon/contracts/parent-journey-view';
+import {
+  verifyParentClassBookingChoices, verifyParentClassBookingReceipt,
+  type BookParentClassSessionInput, type ParentClassBookingChoices, type ParentClassBookingReceipt,
+} from '@hon/contracts/parent-class-booking';
 
 /**
  * What a screen shows when a read does not return verified data. Every protected read maps to one of these;
@@ -6,6 +10,14 @@ import { verifyParentJourneyView, type ParentJourneyView } from '@hon/contracts/
  */
 export type ParentFailureState = 'signed-out' | 'access-denied' | 'choose-family' | 'unavailable' | 'offline';
 export type ParentRead<T> = { ok: true; data: T } | { ok: false; state: ParentFailureState };
+
+/**
+ * A command's outcome. `unknown` means the request may or may not have reached HON (network failure, timeout,
+ * unreadable answer): the caller must re-read before offering a retry, and a retry reuses the same Idempotency-Key.
+ * `refused` is a definite no from HON (full, already booked, changed, ...) with HON's code.
+ */
+export type ParentWrite<T> = { ok: true; data: T; replayed: boolean }
+  | { ok: false; state: ParentFailureState | 'unknown' | 'refused'; code?: string };
 
 export interface ParentApiOptions {
   baseUrl: string;
@@ -66,6 +78,40 @@ export function createParentApi(options: ParentApiOptions) {
     try { return { ok: true, data: verify(body) }; } catch { return { ok: false, state: 'unavailable' }; }
   }
 
+  async function post<T>(path: string, command: string, idempotencyKey: string, payload: unknown, verify: (body: unknown) => T): Promise<ParentWrite<T>> {
+    if (!/^[A-Za-z0-9-]{16,200}$/.test(idempotencyKey)) throw new Error('A command needs a fresh Idempotency-Key.');
+    const token = await options.getToken();
+    if (!token) return { ok: false, state: 'signed-out' };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let response: Response;
+    try {
+      // Native request: no Origin and no cookie. The server's native rule admits exactly this shape.
+      response = await fetchImpl(`${baseUrl}${path}`, {
+        method: 'POST', credentials: 'omit', signal: controller.signal, body: JSON.stringify(payload),
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${token}`,
+          'x-hon-human-command': command, 'Idempotency-Key': idempotencyKey },
+      });
+    } catch {
+      return { ok: false, state: 'unknown' };
+    } finally {
+      clearTimeout(timer);
+    }
+    let body: unknown = null;
+    try { body = await response.json(); } catch { /* handled below */ }
+    if (!response.ok) {
+      const code = (body as { code?: unknown } | null)?.code;
+      if (response.status >= 500 || code === 'IDEMPOTENCY_IN_PROGRESS') return { ok: false, state: 'unknown' };
+      const state = classifyFailure(response.status, code);
+      if (state !== 'unavailable') return { ok: false, state };
+      return { ok: false, state: 'refused', ...(typeof code === 'string' ? { code } : {}) };
+    }
+    try {
+      const envelope = body as { data?: unknown; meta?: { replayed?: unknown } } | null;
+      return { ok: true, data: verify(envelope?.data), replayed: envelope?.meta?.replayed === true };
+    } catch { return { ok: false, state: 'unknown' }; }
+  }
+
   return {
     journey: (): Promise<ParentRead<ParentJourneyView>> => get('/v1/parent/journey', verifyParentJourneyView),
     /** The school's IANA time zone from the class booking read; null when that read is not available. */
@@ -77,6 +123,14 @@ export function createParentApi(options: ParentApiOptions) {
       });
       return read.ok ? read.data : null;
     },
+    classBookings: (): Promise<ParentRead<ParentClassBookingChoices>> =>
+      get('/v1/parent/class-bookings', body => verifyParentClassBookingChoices((body as { data?: unknown } | null)?.data)),
+    bookClass: (input: BookParentClassSessionInput, idempotencyKey: string): Promise<ParentWrite<ParentClassBookingReceipt>> =>
+      post('/v1/parent/class-bookings', 'parent.class_booking.book', idempotencyKey,
+        { studentProfileId: input.studentProfileId, sessionId: input.sessionId }, data => verifyParentClassBookingReceipt(data, input)),
+    cancelBooking: (bookingId: string, expectedVersion: number, idempotencyKey: string): Promise<ParentWrite<ParentClassBookingReceipt>> =>
+      post(`/v1/parent/class-bookings/${encodeURIComponent(bookingId)}/cancel`, 'parent.class_booking.cancel', idempotencyKey,
+        { expectedVersion }, data => verifyParentClassBookingReceipt(data, { bookingId })),
   };
 }
 export type ParentApi = ReturnType<typeof createParentApi>;

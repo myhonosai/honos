@@ -46,7 +46,7 @@ export default function App() {
   return (
     <>
       <StatusBar style="auto" />
-      <ParentApp api={api} session={session} version={appConfig.expo.version} onSignIn={onSignIn} />
+      <ParentApp api={api} session={session} version={appConfig.expo.version} onSignIn={onSignIn} newKey={() => Crypto.randomUUID()} />
     </>
   );
 }

@@ -37,3 +37,22 @@ export function journeyBody(overrides: Record<string, unknown> = {}) {
 export function jsonResponse(status: number, body: unknown): Response {
   return { ok: status >= 200 && status < 300, status, json: async () => body } as unknown as Response;
 }
+
+export const CHILD_A = '11111111-1111-4111-8111-111111111111';
+export const SESSION_1 = '22222222-2222-4222-8222-222222222222';
+export const SESSION_2 = '33333333-3333-4333-8333-333333333333';
+export const BOOKING_1 = '44444444-4444-4444-8444-444444444444';
+export function booking(overrides: Record<string, unknown> = {}) {
+  return { bookingId: BOOKING_1, sessionId: SESSION_2, studentProfileId: CHILD_A, status: 'BOOKED', source: 'PARENT_APP', version: 1, canCancel: true, ...overrides };
+}
+export function choicesBody(overrides: { canBook?: boolean; s1?: Record<string, unknown>; s2?: Record<string, unknown> } = {}) {
+  return {
+    data: {
+      canBook: overrides.canBook ?? true, timezone: 'America/Los_Angeles', horizonDays: 14,
+      children: [{ studentProfileId: CHILD_A, displayName: 'Test Child A', sessions: [
+        { sessionId: SESSION_1, name: 'Little Dragons', programName: 'Kids Program', roomName: 'Main floor', startsAt: '2026-11-18T01:00:00.000Z', endsAt: '2026-11-18T02:00:00.000Z', spotsLeft: 3, booking: null, ...overrides.s1 },
+        { sessionId: SESSION_2, name: 'Juniors', programName: 'Kids Program', roomName: null, startsAt: '2026-11-19T01:00:00.000Z', endsAt: '2026-11-19T02:00:00.000Z', spotsLeft: 5, booking: booking(), ...overrides.s2 },
+      ] }],
+    },
+  };
+}

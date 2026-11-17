@@ -22,9 +22,11 @@ export interface ParentAppProps {
   version?: string;
   /** Native sign-in (M2). Omitted in builds where sign-in is not configured. */
   onSignIn?: () => Promise<'signed-in' | 'cancelled' | 'failed'>;
+  /** Random Idempotency-Key source (expo-crypto randomUUID in the app). */
+  newKey?: () => string;
 }
 
-export function ParentApp({ api, session, now = () => new Date(), version = '0.1.0', onSignIn }: ParentAppProps) {
+export function ParentApp({ api, session, now = () => new Date(), version = '0.1.0', onSignIn, newKey = missingKeySource }: ParentAppProps) {
   const [token, setToken] = useState<string | null | undefined>(undefined);
   useEffect(() => {
     let live = true;
@@ -40,7 +42,7 @@ export function ParentApp({ api, session, now = () => new Date(), version = '0.1
         : token === null ? <SignInScreen onSignIn={onSignIn} />
         : (
           // Keyed by session so nothing from a previous sign-in survives into the next one.
-          <FamilyProvider key={token} api={api} onSignedOut={signOut} now={now}>
+          <FamilyProvider key={token} api={api} onSignedOut={signOut} now={now} newKey={newKey}>
             <NavigationContainer>
               <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={props => <TabBar {...props} />}>
                 <Tab.Screen name="Home" children={() => <HomeFromTab />} />
@@ -55,6 +57,8 @@ export function ParentApp({ api, session, now = () => new Date(), version = '0.1
     </SafeAreaProvider>
   );
 }
+
+function missingKeySource(): string { throw new Error('No Idempotency-Key source configured.'); }
 
 function HomeFromTab() {
   const navigation = useNavigation<{ navigate: (tab: keyof Tabs) => void }>();
