@@ -229,7 +229,7 @@ export class ZernioHttpSocialAdapter implements ZernioSocialAdapter {
     let body: Record<string, unknown>;
     if (input.platform === 'GOOGLE_BUSINESS') {
       // 0455 assumed shape (spec §9, to confirm): a standard Google Business Profile update; the link is its "Learn more" button.
-      if (input.text.length > GOOGLE_BUSINESS_POST_MAX_LENGTH) throw new SocialProviderError('REJECTED');
+      if ([...input.text].length > GOOGLE_BUSINESS_POST_MAX_LENGTH) throw new SocialProviderError('REJECTED');
       body = { content: input.text, publishNow: true, platforms: [{ platform: 'googlebusiness', accountId: input.providerAccountId,
         ...(input.linkUrl ? { platformSpecificData: { callToAction: { type: 'LEARN_MORE', url: input.linkUrl } } } : {}) }] };
     } else {
@@ -425,7 +425,7 @@ export class FakeZernioSocialAdapter implements ZernioSocialAdapter {
   async publishPost(input: PublishPostInput): Promise<{ providerPostId: string }> {
     this.check('publishPost');
     if ((input.platform !== 'FACEBOOK' && input.platform !== 'GOOGLE_BUSINESS')
-      || (input.platform === 'GOOGLE_BUSINESS' && input.text.length > GOOGLE_BUSINESS_POST_MAX_LENGTH)) throw new SocialProviderError('REJECTED');
+      || (input.platform === 'GOOGLE_BUSINESS' && [...input.text].length > GOOGLE_BUSINESS_POST_MAX_LENGTH)) throw new SocialProviderError('REJECTED');
     // Same key, same post: a fake retry never makes a second post (HON itself never retries).
     const prior = this.published.find(p => p.idempotencyKey === input.idempotencyKey);
     if (prior) return { providerPostId: prior.providerPostId };

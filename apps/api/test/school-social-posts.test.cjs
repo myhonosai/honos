@@ -212,7 +212,11 @@ test('HTTP adapter publish (0455): a Google Business Profile update with the lin
   routes.push(reply(201, { post: { _id: 'zpost_g2' } }));
   await adapter.publishPost({ ...input, linkUrl: null });
   assert.deepEqual(JSON.parse(calls.at(-1).init.body).platforms, [{ platform: 'googlebusiness', accountId: 'gbp1' }]);
+  // The limit counts characters as the database does (code points), so 1,500 emoji pass and 1,501 do not.
+  routes.push(reply(201, { post: { _id: 'zpost_g3' } }));
+  assert.deepEqual(await adapter.publishPost({ ...input, text: '🥋'.repeat(1500) }), { providerPostId: 'zpost_g3' });
   const before = calls.length;
+  await assert.rejects(adapter.publishPost({ ...input, text: '🥋'.repeat(1501) }), e => e instanceof SocialProviderError && e.failure === 'REJECTED');
   await assert.rejects(adapter.publishPost({ ...input, text: 'x'.repeat(1501) }), e => e instanceof SocialProviderError && e.failure === 'REJECTED');
   await assert.rejects(adapter.publishPost({ ...input, platform: 'GOOGLE_ADS' }), e => e.failure === 'REJECTED');
   assert.equal(calls.length, before);
@@ -221,6 +225,7 @@ test('HTTP adapter publish (0455): a Google Business Profile update with the lin
   const first = await fake.publishPost(input);
   assert.deepEqual(await fake.publishPost(input), first);
   await assert.rejects(fake.publishPost({ ...input, idempotencyKey: 'other', text: 'x'.repeat(1501) }), e => e.failure === 'REJECTED');
+  await fake.publishPost({ ...input, idempotencyKey: 'emoji', text: '🥋'.repeat(1500) });
   // Connecting: Zernio's googlebusiness accounts are listed as GOOGLE_BUSINESS, and the Google sign-in host is allowed.
   routes.push(reply(200, { accounts: [{ _id: 'gbp1', platform: 'googlebusiness', profileId: 'prof_1', name: 'Synthetic Dojo' }] }));
   const lister = new ZernioHttpSocialAdapter(() => ({ ZERNIO_API_KEY: KEY, HON_ZERNIO_CONNECT_APPROVED: 'true' }), send);
