@@ -18,7 +18,7 @@ export class SocialProviderError extends Error {
 export interface ProviderSocialAccount { providerAccountId: string; platform: SocialPlatform; displayName: string }
 
 /**
- * The only Zernio operations S1, S2 and S3 use. Callers pass HON's own values; nothing a browser sent reaches these methods.
+ * The only Zernio operations S1 to S4 use. Callers pass HON's own values; nothing a browser sent reaches these methods.
  * Every method throws SocialProviderError, never a raw provider body, header or key.
  */
 export interface ZernioSocialAdapter {
@@ -48,6 +48,18 @@ export interface ZernioSocialAdapter {
   sendReply(input: SendReplyInput): Promise<{ providerMessageId: string }>;
   /** S3: hide or unhide one comment on the school's own post. */
   setCommentHidden(input: { providerAccountId: string; providerCommentId: string; hidden: boolean; idempotencyKey: string }): Promise<void>;
+  /** S4: READY only when ads are approved (or the fake runs outside production). */
+  adsReady(): boolean;
+  /**
+   * S4: create one boost of a published post, PAUSED, with a lifetime budget and dates. `idempotencyKey` is HON's ad
+   * id. Resolves with the provider ad id; a lost or unclear answer throws UNKNOWN (never resent). Spends nothing.
+   */
+  createBoost(input: CreateBoostInput): Promise<{ providerAdId: string }>;
+  /** S4: turn one ad on (spends the school's money) or pause it. */
+  setAdActive(input: { providerAdId: string; active: boolean; idempotencyKey: string }): Promise<void>;
+}
+export interface CreateBoostInput {
+  providerAccountId: string; providerPostId: string; budgetCents: number; currency: string; startsOn: string; endsOn: string; timezone: string; idempotencyKey: string;
 }
 export interface SendReplyInput {
   providerAccountId: string; platform: SocialPlatform; kind: 'DM' | 'COMMENT'; providerConversationId: string; text: string; idempotencyKey: string;
@@ -63,6 +75,10 @@ export function zernioPublishApproved(env: Env): boolean {
 }
 export function zernioInboxApproved(env: Env): boolean {
   return KEY.test(env.ZERNIO_API_KEY ?? '') && env.HON_ZERNIO_INBOX_APPROVED === 'true';
+}
+/** S4: creating ads (always PAUSED) and turning them on. Turning on spends the school's own money at Meta. */
+export function zernioAdsApproved(env: Env): boolean {
+  return KEY.test(env.ZERNIO_API_KEY ?? '') && env.HON_ZERNIO_ADS_APPROVED === 'true';
 }
 /** The deterministic fake runs only with HON_ZERNIO_FAKE_PROVIDER=1 outside production and staging. */
 export function zernioFakeEnabled(env: Env): boolean {
@@ -105,6 +121,31 @@ export class ZernioHttpSocialAdapter implements ZernioSocialAdapter {
   ready(): boolean { return zernioConnectApproved(this.environment()); }
   publishReady(): boolean { return zernioPublishApproved(this.environment()); }
   inboxReady(): boolean { return zernioInboxApproved(this.environment()); }
+  adsReady(): boolean { return zernioAdsApproved(this.environment()); }
+
+  /** Assumed shape (spec §5, to confirm): POST /ads/boost; answer { ad: { id|_id } }. Created PAUSED. */
+  async createBoost(input: CreateBoostInput): Promise<{ providerAdId: string }> {
+    if (!this.adsReady()) throw new SocialProviderError('NOT_ENABLED');
+    if (!ID.test(input.providerAccountId) || !POST_ID.test(input.providerPostId) || !Number.isSafeInteger(input.budgetCents) || input.budgetCents < 100
+      || !/^[A-Z]{3}$/.test(input.currency) || !/^\d{4}-\d{2}-\d{2}$/.test(input.startsOn) || !/^\d{4}-\d{2}-\d{2}$/.test(input.endsOn)
+      || !/^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+){0,2}$/.test(input.timezone)) throw new SocialProviderError('REJECTED');
+    const answer = await this.call('POST', '/ads/boost', {
+      accountId: input.providerAccountId, postId: input.providerPostId, status: 'PAUSED',
+      budget: { type: 'lifetime', amount: input.budgetCents, currency: input.currency },
+      schedule: { startDate: input.startsOn, endDate: input.endsOn, timezone: input.timezone },
+    }, 'ads', input.idempotencyKey);
+    const ad = ((answer as { ad?: unknown })?.ad ?? answer) as Record<string, unknown> | null;
+    const id = ad && typeof ad === 'object' ? (ad.id ?? ad._id) : undefined;
+    if (typeof id !== 'string' || !POST_ID.test(id)) throw new SocialProviderError('UNKNOWN');
+    return { providerAdId: id };
+  }
+
+  /** Assumed shape (spec §5, to confirm): POST /ads/{id}/status { status: ACTIVE | PAUSED }. */
+  async setAdActive(input: { providerAdId: string; active: boolean; idempotencyKey: string }): Promise<void> {
+    if (!this.adsReady()) throw new SocialProviderError('NOT_ENABLED');
+    if (!POST_ID.test(input.providerAdId)) throw new SocialProviderError('REJECTED');
+    await this.call('POST', `/ads/${encodeURIComponent(input.providerAdId)}/status`, { status: input.active ? 'ACTIVE' : 'PAUSED' }, 'ads', input.idempotencyKey);
+  }
 
   async sendReply(input: SendReplyInput): Promise<{ providerMessageId: string }> {
     if (!this.inboxReady()) throw new SocialProviderError('NOT_ENABLED');
@@ -191,9 +232,9 @@ export class ZernioHttpSocialAdapter implements ZernioSocialAdapter {
     await this.call('DELETE', `/accounts/${providerAccountId}`);
   }
 
-  private async call(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown, purpose: 'connect' | 'publish' | 'inbox' = 'connect', idempotencyKey?: string): Promise<unknown> {
+  private async call(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown, purpose: 'connect' | 'publish' | 'inbox' | 'ads' = 'connect', idempotencyKey?: string): Promise<unknown> {
     const env = this.environment(), key = env.ZERNIO_API_KEY;
-    if (!(purpose === 'publish' ? this.publishReady() : purpose === 'inbox' ? this.inboxReady() : this.ready()) || !key) throw new SocialProviderError('NOT_ENABLED');
+    if (!(purpose === 'publish' ? this.publishReady() : purpose === 'inbox' ? this.inboxReady() : purpose === 'ads' ? this.adsReady() : this.ready()) || !key) throw new SocialProviderError('NOT_ENABLED');
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), 8000);
     try {
@@ -241,10 +282,13 @@ export class FakeZernioSocialAdapter implements ZernioSocialAdapter {
   readonly connected = new Map<string, ProviderSocialAccount[]>();
   readonly removed: string[] = [];
   /** Test hooks: make the next call of a method fail. */
-  failNext: Partial<Record<'findOrCreateProfile' | 'connectUrl' | 'listAccounts' | 'removeAccount' | 'publishPost' | 'sendReply' | 'setCommentHidden', SocialProviderFailure>> = {};
+  failNext: Partial<Record<'findOrCreateProfile' | 'connectUrl' | 'listAccounts' | 'removeAccount' | 'publishPost' | 'sendReply' | 'setCommentHidden' | 'createBoost' | 'setAdActive', SocialProviderFailure>> = {};
   /** Every reply and comment action the fake accepted, in order. */
   readonly replies: (SendReplyInput & { providerMessageId: string })[] = [];
   readonly commentActions: { providerCommentId: string; hidden: boolean; idempotencyKey: string }[] = [];
+  /** Every boost the fake created (always paused) and every turn-on or pause it carried out. */
+  readonly boosts: (CreateBoostInput & { providerAdId: string })[] = [];
+  readonly adStatusChanges: { providerAdId: string; active: boolean; idempotencyKey: string }[] = [];
   /** Every publish the fake accepted, in order (HON's target id -> the fake post id). */
   readonly published: { idempotencyKey: string; providerAccountId: string; text: string; linkUrl: string | null; providerPostId: string }[] = [];
   /** Extra accounts a test wants a profile to report (for example an account another school holds). */
@@ -279,6 +323,19 @@ export class FakeZernioSocialAdapter implements ZernioSocialAdapter {
   }
   publishReady(): boolean { return this.ready(); }
   inboxReady(): boolean { return this.ready(); }
+  adsReady(): boolean { return this.ready(); }
+  async createBoost(input: CreateBoostInput): Promise<{ providerAdId: string }> {
+    this.check('createBoost');
+    const prior = this.boosts.find(b => b.idempotencyKey === input.idempotencyKey);
+    if (prior) return { providerAdId: prior.providerAdId };
+    const providerAdId = 'fakead_' + createHash('sha256').update(input.idempotencyKey).digest('hex').slice(0, 24);
+    this.boosts.push({ ...input, providerAdId });
+    return { providerAdId };
+  }
+  async setAdActive(input: { providerAdId: string; active: boolean; idempotencyKey: string }): Promise<void> {
+    this.check('setAdActive');
+    this.adStatusChanges.push({ ...input });
+  }
   async sendReply(input: SendReplyInput): Promise<{ providerMessageId: string }> {
     this.check('sendReply');
     const prior = this.replies.find(r => r.idempotencyKey === input.idempotencyKey);
@@ -310,9 +367,11 @@ export class FakeZernioSocialAdapter implements ZernioSocialAdapter {
 
 /** Chooses the real adapter when connecting or publishing is approved, else the fake when allowed, else none (never ready). */
 export function zernioSocialAdapterFactory(env: Env = process.env): ZernioSocialAdapter {
-  if (zernioConnectApproved(env) || zernioPublishApproved(env) || zernioInboxApproved(env)) return new ZernioHttpSocialAdapter();
+  if (zernioConnectApproved(env) || zernioPublishApproved(env) || zernioInboxApproved(env) || zernioAdsApproved(env)) return new ZernioHttpSocialAdapter();
   if (zernioFakeEnabled(env)) return new FakeZernioSocialAdapter();
-  return { kind: 'NONE', ready: () => false, publishReady: () => false, inboxReady: () => false,
+  return { kind: 'NONE', ready: () => false, publishReady: () => false, inboxReady: () => false, adsReady: () => false,
+    createBoost: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),
+    setAdActive: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),
     sendReply: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),
     setCommentHidden: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),
     publishPost: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),

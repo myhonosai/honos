@@ -318,6 +318,7 @@
     "0420_conversation_ai_training.sql": "6b2108d753b262700a83f90ecdd425969decea84d77b3f1c6ff0d4628775dbf7",
     "0423_automation_engine.sql": "18fbac749087e7991fa73f98999d46f1a70c65ce805d7e8e0ceba1afc835d9bd",
     "0424_contact_message_history.sql": "dfae0a22b7b64cc79dd396ada7fc6a3f1b763bb84a13ec4632e29375f01d5a39",
-    "0435_school_social_inbox.sql": "c7c3e3c8304de287e2c5899b1f1fa888e132f32b5a16548974b8fe7b05ef6271"
+    "0435_school_social_inbox.sql": "c7c3e3c8304de287e2c5899b1f1fa888e132f32b5a16548974b8fe7b05ef6271",
+    "0437_school_social_ads.sql": "226e198ade6332d1efa35b97b877088e4581a298b1a934ffd60466702c27cf83"
   }
 }

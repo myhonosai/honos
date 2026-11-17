@@ -237,6 +237,8 @@ const expectedRlsTables = [
   'school_social_messages',
   'school_social_comment_actions',
   'school_social_inbox_receipts',
+  'school_social_ad_budgets',
+  'school_social_ads',
   'class_series',
   'class_series_occurrences',
   'invoice_payment_records',

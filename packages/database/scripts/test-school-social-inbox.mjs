@@ -94,10 +94,12 @@ try{
  }
  const inboxRuntime=['read_school_social_inbox','read_school_social_conversation','change_school_social_conversation','start_school_social_reply','record_school_social_reply_result','resolve_school_social_message','start_school_social_comment_action','record_school_social_comment_action_result'];
  const earlierRuntime=['read_school_social_accounts','start_school_social_connect','record_school_social_profile','claim_school_social_connect','record_school_social_accounts','change_school_social_account',
-  'read_school_social_posts','create_school_social_post','edit_school_social_post','approve_school_social_post','cancel_school_social_post','resolve_school_social_post_target'];
+  'read_school_social_posts','create_school_social_post','edit_school_social_post','approve_school_social_post','cancel_school_social_post','resolve_school_social_post_target',
+  // 0437 ads (proven in test-school-social-ads.mjs).
+  'read_school_social_ads','set_school_social_ad_budget','create_school_social_ad','cancel_school_social_ad','start_school_social_ad_operation','record_school_social_ad_result','resolve_school_social_ad'];
  const workerEntry=['claim_school_social_post_targets','record_school_social_post_result','record_school_social_post_event','record_school_social_inbox_event'];
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname LIKE '%school_social%'");
- assert.equal(fns.length,12+16+14,fns.map(f=>f.proname).join());
+ assert.equal(fns.length,12+16+14+12,fns.map(f=>f.proname).join());
  for(const f of fns){
   assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,[...earlierRuntime,...inboxRuntime].includes(f.proname),'runtime '+f.proname);
   assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[workerUrl.username,f.oid]))[0].ok,workerEntry.includes(f.proname),'worker '+f.proname);
