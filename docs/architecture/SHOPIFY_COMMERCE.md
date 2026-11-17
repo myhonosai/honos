@@ -1,6 +1,6 @@
-# HON Shopify Connected (migrations 0405 SH1, 0442 SH1b)
+# HON Shopify Connected (migrations 0405 SH1, 0449 SH1b)
 
-Status: SH1 merged (0405); SH1b built (0442), 2026-11-16. Owner vision: David's Oct 13–18 2026 Shopify recap (shared 2026-11-16), the master
+Status: SH1 merged (0405); SH1b built (0449), 2026-11-16. Owner vision: David's Oct 13–18 2026 Shopify recap (shared 2026-11-16), the master
 directive (ECOMMERCE: "Shopify may remain the source of truth for those commerce records"; "Shopify integration should
 be first-class where enabled"; "Shopify outage: commerce sync degraded") and the menu decision "Finance: checkout pages,
 POS, Shopify, invoices".
@@ -22,7 +22,7 @@ store is the test store.
 | Piece | What | Needs David |
 |---|---|---|
 | **SH1 (0405, merged)** | Connect one store per school via the HON app (OAuth, expiring offline token sealed by the API), Sync now (products, variants, SKU, price, stock, unit cost; last 60 days of orders), Finance › Shopify page with catalog, margins and sales summary, disconnect. Fake Shopify only. | No |
-| **SH1b (0442, this)** | Signed webhooks: products, inventory levels, orders, `app/uninstalled`, and the three mandatory privacy topics; scheduled background sync that also keeps the refresh token alive. | No |
+| **SH1b (0449, this)** | Signed webhooks: products, inventory levels, orders, `app/uninstalled`, and the three mandatory privacy topics; scheduled background sync that also keeps the refresh token alive. | No |
 | SH2 | POS sells Shopify variants when connected (database reprices from the mirror) and each sale is pushed to Shopify (order + inventory) through a queued job. Coordinated with the POS thread (0403). | No |
 | SH3 | Parent App and HON website buy through Shopify Checkout (Storefront cart → Shopify-hosted checkout); orders link back to the HON contact. | No |
 | SH4 | Commerce Workspace writes: create/edit products and prices, artwork upload, mockups, publish; AI descriptions/pricing/promotions by plan (fake AI until approved). | Paid AI |
@@ -111,7 +111,7 @@ links orders to HON contacts.
   stores (over 2,000 products or 1,000 orders in 60 days) finish as FAILED with the reason shown, never as partial success.
 - No product search yet on the page.
 
-## SH1b behavior (0442)
+## SH1b behavior (0449)
 
 ### Webhooks (`POST /v1/commerce/webhooks/shopify`)
 
@@ -204,7 +204,7 @@ links orders to HON contacts.
 
 ## SH1b plan (done)
 
-1. Migration 0442 + DB proof `test-shopify-background-integrity.mjs` (signed HTTP deliveries, worker functions over
+1. Migration 0449 + DB proof `test-shopify-background-integrity.mjs` (signed HTTP deliveries, worker functions over
    the owner connection exactly as `ShopifyWorkerDatabase` maps them).
 2. API: `shopify-webhook.ts` (transport, verifier), `shopify-webhook.controller.ts`, `shopify-sync-engine.ts` (the one
    sync used by both paths), `shopify-worker.ts` (worker store, background sync, scheduler); unit tests in

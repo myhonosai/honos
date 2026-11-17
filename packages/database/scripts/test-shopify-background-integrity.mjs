@@ -1,4 +1,4 @@
-/** 0442 Shopify background sync and webhooks (SH1b). Signed deliveries over real HTTP -> Nest webhook controller -> the 0442 worker functions; background sync through the real worker code; human commands through signed HON sessions -> fixed runtime SQL. Marked disposable PostgreSQL (Champions Club fixture). The Shopify side is the in-memory fake; nothing leaves the machine. The fixture has no worker login, so the five worker functions run over the owner connection, mapped exactly like ShopifyWorkerDatabase. */
+/** 0449 Shopify background sync and webhooks (SH1b). Signed deliveries over real HTTP -> Nest webhook controller -> the 0449 worker functions; background sync through the real worker code; human commands through signed HON sessions -> fixed runtime SQL. Marked disposable PostgreSQL (Champions Club fixture). The Shopify side is the in-memory fake; nothing leaves the machine. The fixture has no worker login, so the five worker functions run over the owner connection, mapped exactly like ShopifyWorkerDatabase. */
 import assert from 'node:assert/strict';
 import {randomUUID as K,randomBytes} from 'node:crypto';
 import {createRequire} from 'node:module';
