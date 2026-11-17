@@ -5,6 +5,7 @@ import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { ClassSessionsReadAccessError, loadCurrentSchoolClassSessions } from '../class-sessions-read-http';
+import { useClassByTime } from '../attendance-check-in/class-by-time';
 import { initialsOf } from '../people/photo';
 import { photoApi, type PhotoApi } from '../people/photo-http';
 import { openFallbackDetector, type FrameDetector } from './camera-decoder';
@@ -26,6 +27,7 @@ export function todaysSessions(sessions: readonly CurrentSchoolClassSession[], n
 export type ScanViewProps = Readonly<{
   language: string; sessions: SessionsState; sessionId: string; status: AttendanceCheckInStatus; code: string; result: ScanResult;
   locked: boolean; canRetry: boolean; camera: 'OFF' | 'ON' | 'UNSUPPORTED' | 'FAILED';
+  /** The class follows the school's schedule by the time of day. */ autoClass?: boolean | undefined; onAutoClass?: ((on: boolean) => void) | undefined;
   inputRef?: React.Ref<HTMLInputElement> | undefined; videoRef?: React.Ref<HTMLVideoElement> | undefined;
   onSession?: ((id: string) => void) | undefined; onStatus?: ((s: AttendanceCheckInStatus) => void) | undefined; onCode?: ((v: string) => void) | undefined;
   onSubmit?: (() => void) | undefined; onCamera?: (() => void) | undefined; onTryAgain?: (() => void) | undefined; onStop?: (() => void) | undefined;
@@ -70,7 +72,8 @@ export function ScanView(p: ScanViewProps): React.ReactElement {
           {sessions.length ? <select id={`${base}-session`} value={p.sessionId} onChange={e => p.onSession?.(e.currentTarget.value)} data-testid="scan-session">
             <option value="">{t('chooseSession')}</option>
             {sessions.map(s => <option key={s.sessionId} value={s.sessionId}>{`${new Date(s.startsAt).toLocaleTimeString(p.language, { hour: 'numeric', minute: '2-digit' })} ${s.name}`}</option>)}
-          </select> : <p className={styles.meta}>{t('noSessions')}</p>}</div>
+          </select> : <p className={styles.meta}>{t('noSessions')}</p>}
+          {sessions.length ? <label className={styles.choice}><input type="checkbox" checked={p.autoClass ?? false} onChange={e => p.onAutoClass?.(e.currentTarget.checked)} data-testid="scan-auto-class"/>{t('autoClass')}</label> : null}</div>
         <fieldset><legend>{t('statusLabel')}</legend>
           {(['PRESENT', 'LATE'] as const).map(s => <label key={s} className={styles.choice}>
             <input type="radio" name={`${base}-status`} value={s} checked={p.status === s} onChange={() => p.onStatus?.(s)}/>{t(s)}</label>)}
@@ -124,6 +127,7 @@ export function AttendanceScan({ api = cardsApi, photos = photoApi, loadSessions
   const [result, setResult] = useState<ScanResult>(null);
   const [lock, setLock] = useState<'NONE' | 'SENDING' | 'KEPT'>('NONE');
   const [camera, setCamera] = useState<'OFF' | 'ON' | 'UNSUPPORTED' | 'FAILED'>('OFF');
+  const [autoClass, setAutoClass] = useClassByTime(sessions.state === 'READY' ? sessions.sessions : null, setSessionId, lock !== 'NONE');
   const mounted = useRef(false), pending = useRef<Pending | null>(null), sending = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null), videoRef = useRef<HTMLVideoElement>(null), stream = useRef<MediaStream | null>(null);
   useEffect(() => { mounted.current = true; if (!canUseCamera()) setCamera('UNSUPPORTED'); return () => { mounted.current = false; pending.current = null; stream.current?.getTracks().forEach(t => t.stop()); }; }, []);
@@ -205,7 +209,8 @@ export function AttendanceScan({ api = cardsApi, photos = photoApi, loadSessions
 
   return <ScanView language={preferences.language} sessions={sessions} sessionId={sessionId} status={status} code={code} result={result}
     locked={lock !== 'NONE'} canRetry={lock === 'KEPT'} camera={camera} inputRef={inputRef} videoRef={videoRef}
-    onSession={id => { setSessionId(id); setResult(null); }} onStatus={setStatus} onCode={setCode} onSubmit={() => submit(code)}
+    autoClass={autoClass} onAutoClass={setAutoClass}
+    onSession={id => { setAutoClass(false); setSessionId(id); setResult(null); }} onStatus={setStatus} onCode={setCode} onSubmit={() => submit(code)}
     onCamera={() => { if (camera === 'ON') stopCamera(); else setCamera('ON'); }}
     onTryAgain={() => { void send(); }} onStop={() => { if (lock !== 'KEPT' || sending.current) return; pending.current = null; setLock('NONE'); setResult(null); inputRef.current?.focus(); }}/>;
 }
