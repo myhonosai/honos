@@ -6,6 +6,7 @@ import { bookingLabel, formatClassTime } from '../home/model';
 import { Body, Button, Card, Pill, Section, Title } from '../ui/parts';
 import { space, type, useColors } from '../ui/theme';
 import { FamilyGate } from './FamilyStates';
+import { BookClasses } from '../schedule/BookClasses';
 
 function Page({ title, eyebrow, children }: { title: string; eyebrow: string; children: React.ReactNode }) {
   const c = useColors();
@@ -19,7 +20,7 @@ function Page({ title, eyebrow, children }: { title: string; eyebrow: string; ch
   );
 }
 
-/** Read-only schedule from the verified journey (next four weeks). Booking from the app is milestone M3. */
+/** Schedule from the verified journey (next four weeks), then booking and cancelling from the class booking read. */
 export function ScheduleScreen() {
   const { state, selection, now } = useFamily();
   const c = useColors();
@@ -45,7 +46,8 @@ export function ScheduleScreen() {
           </Card>
         ))}
       </View>
-      <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.md }}>Booking, cancelling and reporting an absence from the app are coming in the next update. You can do them on the HON parent website today.</Text>
+      <BookClasses />
+      <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.md }}>Reporting an absence from the app is coming in the next update. You can do it on the HON parent website today.</Text>
     </Page>
   );
 }

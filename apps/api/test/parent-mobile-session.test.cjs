@@ -94,3 +94,18 @@ test('hand-off exchange returns a mobile session only for the verifier holder', 
   assert.equal(status(() => controller.exchange({ code, verifier }, { headers: { ...json, origin: 'https://evil.example' } })), 403);
   assert.equal(status(() => controller.exchange({ code, verifier }, { headers: { 'content-type': 'text/plain' } })), 403);
 });
+
+// M3: the real parent class booking guards extend MembershipActivationHumanUiGuard, which adds its own browser rules
+// before the base. A native POST must pass them unchanged, and every browser-shaped variant stays refused.
+test('parent class booking guards admit the native app and keep the extra browser refusals', () => {
+  const { ParentClassBookingBookGuard, ParentClassBookingCancelGuard } = require('../dist/families/parent-class-booking.controller.js');
+  const book = new ParentClassBookingBookGuard();
+  const cancel = new ParentClassBookingCancelGuard();
+  const native = (command, extra = {}) => ({ method: 'POST', honChannel: 'MOBILE', headers: { 'content-type': 'application/json', 'x-hon-human-command': command, authorization: 'Bearer x', ...extra } });
+  assert.equal(book.canActivate(ctx(native('parent.class_booking.book'))), true);
+  assert.equal(cancel.canActivate(ctx(native('parent.class_booking.cancel'))), true);
+  assert.equal(status(() => book.canActivate(ctx(native('parent.class_booking.cancel')))), 403);
+  for (const extra of [{ origin: 'https://hon.example' }, { 'sec-fetch-site': 'cross-site' }, { 'sec-fetch-site': 'same-origin' }, { 'x-hon-source': 'agent' }, { 'x-hon-action-request-id': 'a' }, { 'x-hon-delegated-by-principal-id': 'p' }]) {
+    assert.equal(status(() => book.canActivate(ctx(native('parent.class_booking.book', extra)))), 403, JSON.stringify(extra));
+  }
+});
