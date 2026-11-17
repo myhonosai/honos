@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "0ea265b9a8d78fe628580db322b7fa70e60dd35cf0b83c6403db12c6dca5afb0",
+  "chainSha256": "9ca27bda11f0f05e0b5e7d7e633cf39fcde31b1c227fe3a52cb4a1b8ae2b1ddf",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -609,6 +609,10 @@
     {
       "file": "0455_school_google_business_profile.sql",
       "sha256": "ee8c0fb3049755948af71fdf689b4eb70e0925b1f1d8ce20557814fee29a394a"
+    },
+    {
+      "file": "0459_school_demo_data.sql",
+      "sha256": "6708c6114653c3363c1bed171cce360ab591875cc8e1ae3edb9c572c096e1bee"
     }
   ]
 }
