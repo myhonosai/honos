@@ -71,7 +71,7 @@ try{
  assert.deepEqual((await q("SELECT relrowsecurity r,relforcerowsecurity f,(SELECT count(*) FROM pg_policy WHERE polrelid=c.oid)::int n FROM pg_class c WHERE oid='hon.membership_agreement_links'::regclass"))[0],{r:true,f:true,n:0});
  const entries=['read_membership_agreement_send','send_membership_agreement_link','read_membership_agreement_link','sign_membership_agreement_link'];
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace AND (p.proname LIKE 'membership\\_agreement\\_link%' OR p.proname='guard_membership_agreement_link' OR p.proname=ANY($1))",[entries]);
- assert.equal(fns.length,entries.length+4);
+ assert.equal(fns.length,entries.length+5);
  for(const f of fns){assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entries.includes(f.proname),f.proname);
   assert.equal((await q("SELECT has_function_privilege('public',$1,'EXECUTE') ok",[f.oid]))[0].ok,false,f.proname);}
  await assert.rejects(()=>restricted.query('SELECT * FROM hon.membership_agreement_links'),e=>e.code==='42501');
@@ -242,7 +242,35 @@ try{
   [A.organizationId,A.schoolId,hana,managerPrincipal]),e=>e.code==='23514');
  pass('links only close once (no reopen, token change, delete or truncate); a link signature needs its link and the link principal and a portal signature cannot name a link; an agreement message must name its link');
 
- // 8. Authority is decided live: a revoked grant reads and sends nothing.
+ // 8. A link works only while it still could have been sent: the recipient is still a GUARDIAN of the family and the
+ // organization, school, family and entitlement are live, at read, at sign and again after the last sign write.
+ const t5=token();await q("UPDATE hon.membership_agreement_links SET state='REPLACED',closed_at=clock_timestamp() WHERE token_hash=$1",[sha(t4)]);
+ await q("INSERT INTO hon.membership_agreement_links(organization_id,school_id,family_id,recipient_person_id,student_profile_ids,token_hash,created_by_principal_id,created_at,expires_at) SELECT $1,$2,$3,$4,$5,$6,$7,t,t+interval '14 days' FROM (SELECT clock_timestamp() t) x",
+  [A.organizationId,A.schoolId,lee,leeMom,[ana.studentProfileId],sha(t5),managerPrincipal]);
+ const signAna={...base,signerName:'Min Lee',versionId:v2.versionId,digest:v2.digest,studentProfileIds:[ana.studentProfileId]};
+ const goneNow=async label=>{const r=await pub(t5,{method:'GET'});assert.equal(r.status,404,label);assert.deepEqual(r.body,{result:'GONE'},label);
+  await denied(()=>pub(t5+'/sign',{body:signAna}),410,'GONE');};
+ assert.equal((await pub(t5,{method:'GET'})).body.data.state,'OPEN');
+ const lapses=[
+  ["UPDATE hon.family_members SET member_role='OTHER' WHERE family_id=$1 AND person_id=$2",[lee,leeMom],"UPDATE hon.family_members SET member_role='GUARDIAN' WHERE family_id=$1 AND person_id=$2"],
+  ["UPDATE hon.families SET status='SUSPENDED' WHERE id=$1",[lee],"UPDATE hon.families SET status='ACTIVE' WHERE id=$1"],
+  ["UPDATE hon.schools SET status='SUSPENDED' WHERE id=$1",[A.schoolId],"UPDATE hon.schools SET status='ACTIVE' WHERE id=$1"],
+  ["UPDATE hon.organizations SET status='SUSPENDED' WHERE id=$1",[A.organizationId],"UPDATE hon.organizations SET status='ACTIVE' WHERE id=$1"],
+  ["UPDATE hon.organization_entitlements SET effective_until=clock_timestamp() WHERE organization_id=$1",[A.organizationId],"UPDATE hon.organization_entitlements SET effective_until=NULL WHERE organization_id=$1"]];
+ for(const [stop,args,restore] of lapses){await q(stop,args);await goneNow(stop);await q(restore,args);assert.equal((await pub(t5,{method:'GET'})).body.data.state,'OPEN',restore);}
+ // A guardian removed while the signing waits (simulated in the same transaction, after the signature row): nothing commits.
+ await q(`CREATE FUNCTION hon.fixture_remove_link_guardian() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN
+   UPDATE hon.family_members SET member_role='OTHER' WHERE family_id=NEW.family_id AND person_id='${leeMom}'; RETURN NEW; END $f$`);
+ await q('CREATE TRIGGER fixture_remove_link_guardian AFTER INSERT ON hon.membership_agreement_signatures FOR EACH ROW WHEN (NEW.link_id IS NOT NULL) EXECUTE FUNCTION hon.fixture_remove_link_guardian()');
+ try{await denied(()=>pub(t5+'/sign',{body:signAna}),410,'GONE');}
+ finally{await q('DROP TRIGGER fixture_remove_link_guardian ON hon.membership_agreement_signatures');await q('DROP FUNCTION hon.fixture_remove_link_guardian()');}
+ assert.equal((await q("SELECT member_role FROM hon.family_members WHERE family_id=$1 AND person_id=$2",[lee,leeMom]))[0].member_role,'GUARDIAN');
+ assert.equal((await q('SELECT count(*)::int n FROM hon.membership_agreement_signatures WHERE student_profile_id=$1',[ana.studentProfileId]))[0].n,0);
+ assert.equal((await q('SELECT state FROM hon.membership_agreement_links WHERE token_hash=$1',[sha(t5)]))[0].state,'OPEN');
+ assert.equal((await pub(t5+'/sign',{body:signAna})).status,201);
+ pass('a link shows and signs nothing once its guardian is no longer a GUARDIAN of the family or the family, school, organization or entitlement is not live, and works again when restored; a guardian removed after the signature write commits nothing');
+
+ // 9. Authority is decided live: a revoked grant reads and sends nothing.
  await q("UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=principal_id WHERE id=$1",[managerGrant]);
  await denied(()=>readSend(manager,mina.personId),403,'MEMBERSHIP_AGREEMENT_FORBIDDEN');
  await denied(()=>sendLink(manager,{personId:mina.personId,recipientPersonId:hana,channels:['EMAIL'],token:token()}),403,'MEMBERSHIP_AGREEMENT_FORBIDDEN');

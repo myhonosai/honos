@@ -4282,7 +4282,8 @@ DO $$ DECLARE r text; f text;
   entry text[]:=ARRAY['hon.read_membership_agreement_send(text,jsonb)','hon.send_membership_agreement_link(text,jsonb,text,text,uuid,uuid)',
     'hon.read_membership_agreement_link(text)','hon.sign_membership_agreement_link(text,jsonb,uuid)'];
   fns text[]:=ARRAY['hon.guard_membership_agreement_link()','hon.membership_agreement_link_actor(text)',
-    'hon.membership_agreement_link_children(uuid,uuid,uuid,uuid)','hon.membership_agreement_link_json(hon.membership_agreement_links)'];
+    'hon.membership_agreement_link_children(uuid,uuid,uuid,uuid)','hon.membership_agreement_link_json(hon.membership_agreement_links)',
+    'hon.membership_agreement_link_live(hon.membership_agreement_links)'];
 BEGIN
   IF to_regclass('hon.membership_agreement_links') IS NULL THEN RAISE EXCEPTION 'Apply migration 0499 first'; END IF;
   REVOKE ALL ON TABLE hon.membership_agreement_links FROM PUBLIC;

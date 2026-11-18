@@ -191,7 +191,10 @@ export class MembershipAgreementService {
     try {
       const result = await this.database.signMembershipAgreementLink(token, input, randomUUID());
       return (MEMBERSHIP_AGREEMENT_LINK_SIGN_RESULTS as readonly string[]).includes(result) ? result as MembershipAgreementLinkSignResult : 'UNAVAILABLE';
-    } catch { return 'UNAVAILABLE'; }
+    } catch (error) {
+      // 0499: the guardian was removed or the school stopped while the signing waited; nothing was committed.
+      return (error as { code?: unknown; message?: unknown })?.code === 'P0002' && (error as { message?: unknown }).message === 'MEMBERSHIP_AGREEMENT_LINK_GONE' ? 'GONE' : 'UNAVAILABLE';
+    }
   }
 
   // ---------- parent portal ----------

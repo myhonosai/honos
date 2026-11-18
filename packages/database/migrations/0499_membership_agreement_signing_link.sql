@@ -136,6 +136,21 @@ LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
     'createdAt',hon.saas_ts(l.created_at),'expiresAt',hon.saas_ts(l.expires_at),'closedAt',hon.saas_ts(l.closed_at)) END
 $$;
 
+-- A link works only while it still could have been sent: the organization, school and family are ACTIVE, the
+-- organization has a live ESSENTIAL/CORE/COMPLETE entitlement (the 0463 paid-access rule), and the recipient is still a
+-- GUARDIAN member of the link's family. Decided at every public read and sign, and again after the last sign write.
+CREATE FUNCTION hon.membership_agreement_link_live(l hon.membership_agreement_links) RETURNS boolean
+LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
+  SELECT l.id IS NOT NULL
+    AND EXISTS(SELECT 1 FROM hon.organizations WHERE id=l.organization_id AND status='ACTIVE')
+    AND EXISTS(SELECT 1 FROM hon.schools WHERE id=l.school_id AND organization_id=l.organization_id AND status='ACTIVE')
+    AND EXISTS(SELECT 1 FROM hon.families WHERE id=l.family_id AND organization_id=l.organization_id AND school_id=l.school_id AND status='ACTIVE')
+    AND EXISTS(SELECT 1 FROM hon.organization_entitlements WHERE organization_id=l.organization_id AND status='ACTIVE' AND tier IN ('ESSENTIAL','CORE','COMPLETE')
+      AND effective_from<=clock_timestamp() AND (effective_until IS NULL OR effective_until>clock_timestamp()))
+    AND EXISTS(SELECT 1 FROM hon.family_members m WHERE m.family_id=l.family_id AND m.person_id=l.recipient_person_id
+      AND m.organization_id=l.organization_id AND m.school_id=l.school_id AND m.member_role='GUARDIAN')
+$$;
+
 -- ---------- staff entry points ----------
 -- Read for one student: the current version, the family's guardians (whether each has an address and an OPTED_IN consent
 -- per channel), the children a link would cover now, and the family's latest link. Input: {personId} (the student's person).
@@ -251,7 +266,7 @@ DECLARE l hon.membership_agreement_links; sname text; cur uuid; kids uuid[];
 BEGIN
   IF p_token IS NULL OR p_token !~ '^[A-Za-z0-9_-]{43}$' THEN RETURN NULL; END IF;
   SELECT * INTO l FROM hon.membership_agreement_links x WHERE x.token_hash=encode(sha256(convert_to(p_token,'UTF8')),'hex');
-  IF NOT FOUND THEN RETURN NULL; END IF;
+  IF NOT FOUND OR NOT hon.membership_agreement_link_live(l) THEN RETURN NULL; END IF;
   SELECT s.name INTO sname FROM hon.schools s WHERE s.id=l.school_id AND s.organization_id=l.organization_id;
   IF l.state<>'OPEN' OR l.expires_at<=clock_timestamp() THEN
     RETURN jsonb_build_object('state',hon.membership_agreement_link_json(l)->>'state','schoolName',sname); END IF;
@@ -276,7 +291,7 @@ DECLARE l hon.membership_agreement_links; svc constant uuid:='00000000-0000-4000
 BEGIN
   IF p_token IS NULL OR p_token !~ '^[A-Za-z0-9_-]{43}$' OR p_request IS NULL THEN RETURN 'GONE'; END IF;
   SELECT * INTO l FROM hon.membership_agreement_links x WHERE x.token_hash=encode(sha256(convert_to(p_token,'UTF8')),'hex') FOR UPDATE;
-  IF NOT FOUND OR l.state='REPLACED' OR (l.state='OPEN' AND l.expires_at<=instant) THEN RETURN 'GONE'; END IF;
+  IF NOT FOUND OR l.state='REPLACED' OR (l.state='OPEN' AND l.expires_at<=instant) OR NOT hon.membership_agreement_link_live(l) THEN RETURN 'GONE'; END IF;
   IF l.state='SIGNED' THEN RETURN 'ALREADY_SIGNED'; END IF;
   IF NOT hon.face_checkin_keys_ok(p_input,ARRAY['digest','eSignConsent','language','signerName','studentProfileIds','versionId'])
     OR NOT hon.face_checkin_uuid_ok(p_input,'versionId') OR NOT hon.membership_agreement_name_ok(p_input) OR p_input->'eSignConsent' IS DISTINCT FROM 'true'::jsonb
@@ -314,6 +329,8 @@ BEGIN
   INSERT INTO hon.outbox_events(organization_id,school_id,event_type,schema_version,aggregate_type,aggregate_id,aggregate_version,correlation_id,causation_id,payload)
     VALUES(l.organization_id,l.school_id,'membership_agreement.link_sign',1,'MEMBERSHIP_AGREEMENT_SIGNING',signing,1,p_request,p_request,
       jsonb_build_object('signingId',signing,'linkId',l.id,'versionId',cur,'number',v.number,'studentProfileIds',p_input->'studentProfileIds','internalOnly',true));
+  -- Decided again after the last write: a guardian removed or a school stopped while this waited commits nothing.
+  IF NOT hon.membership_agreement_link_live(l) THEN RAISE EXCEPTION 'MEMBERSHIP_AGREEMENT_LINK_GONE' USING ERRCODE='P0002'; END IF;
   RETURN 'SIGNED';
 END $$;
 
@@ -323,7 +340,7 @@ DO $$ DECLARE r text; f text;
     'hon.read_membership_agreement_link(text)','hon.sign_membership_agreement_link(text,jsonb,uuid)'];
   fns text[]:=ARRAY['hon.guard_membership_agreement_link()','hon.membership_agreement_link_actor(text)',
     'hon.membership_agreement_link_children(uuid,uuid,uuid,uuid)',
-    'hon.membership_agreement_link_json(hon.membership_agreement_links)']||entry; BEGIN
+    'hon.membership_agreement_link_json(hon.membership_agreement_links)','hon.membership_agreement_link_live(hon.membership_agreement_links)']||entry; BEGIN
   REVOKE ALL ON TABLE hon.membership_agreement_links FROM PUBLIC;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
     EXECUTE format('REVOKE ALL ON TABLE hon.membership_agreement_links FROM %I',r); END LOOP;
