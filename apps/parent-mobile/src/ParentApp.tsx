@@ -83,8 +83,8 @@ function SampleBanner({ onExit }: { onExit: () => void }) {
   const c = useColors();
   const insets = useSafeAreaInsets();
   return (
-    <View accessibilityRole="alert" style={{ backgroundColor: c.warning, paddingTop: insets.top + space.xs, paddingBottom: space.xs, paddingHorizontal: space.lg, flexDirection: 'row', alignItems: 'center' }}>
-      <Text style={{ flex: 1, color: '#FFFFFF', fontWeight: '800', fontSize: type.caption }}>SAMPLE FAMILY · made-up data, not a real school</Text>
+    <View accessibilityRole="alert" accessibilityLabel="Sample family. Made-up data, not a real school." style={{ backgroundColor: c.warning, paddingTop: insets.top + space.xs, paddingBottom: space.xs, paddingHorizontal: space.lg, flexDirection: 'row', alignItems: 'center' }}>
+      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ flex: 1, color: '#FFFFFF', fontWeight: '800', fontSize: type.caption }}>SAMPLE FAMILY · made-up data</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Exit sample" onPress={onExit} style={{ minHeight: 32, justifyContent: 'center', paddingHorizontal: space.sm }}>
         <Text style={{ color: '#FFFFFF', fontWeight: '800', textDecorationLine: 'underline' }}>Exit</Text>
       </Pressable>

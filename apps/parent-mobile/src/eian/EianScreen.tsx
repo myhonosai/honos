@@ -10,10 +10,10 @@ import { EIAN_STYLES, eianImage, STYLE_LABEL, type EianMood, type EianStyle } fr
 
 type Turn = { id: number; question: string; reply: EianAnswer };
 const TILES: { icon: string; label: string; question: string }[] = [
-  { icon: '▦', label: 'Class Schedule', question: "What's on this week?" },
+  { icon: '▦', label: 'Schedule', question: "What's on this week?" },
   { icon: '★', label: 'Belt Testing', question: 'When is the next belt test?' },
   { icon: '▭', label: 'Invoices', question: 'Do we have any open invoices?' },
-  { icon: '✉', label: 'School Messages', question: 'What did the school say?' },
+  { icon: '✉', label: 'Messages', question: 'What did the school say?' },
 ];
 
 function greeting(now: Date, timeZone: string | null): string {
@@ -73,12 +73,14 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi' }: { onNavigate:
         <Text style={{ color: c.muted, fontSize: type.caption }}>Your Family Assistant</Text>
       </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: space.lg, gap: space.md }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: space.lg }}>
         <View accessible accessibilityLabel={`Eian, ${busy ? (mood === 'working' ? 'checking your records' : 'thinking') : 'ready'}`}
           style={{ width: 104, height: 104, borderRadius: 52, overflow: 'hidden', borderWidth: 3, borderColor: c.accentSoft, backgroundColor: c.surfaceAlt }}>
-          <Image source={eianImage(style, busy ? mood : latest ? 'speaking' : 'ready')} style={{ width: 104, height: 154 }} resizeMode="cover" />
+          <Image source={eianImage(style, busy ? mood : latest ? 'speaking' : 'ready')} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
         </View>
-        <View accessibilityLiveRegion="polite" style={{ flex: 1, backgroundColor: c.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: c.border, padding: space.md }}>
+        {/* Speech-bubble tail pointing at Eian, so the bubble reads as Eian talking. */}
+        <View style={{ width: 0, height: 0, marginLeft: space.sm, borderTopWidth: 9, borderBottomWidth: 9, borderRightWidth: 11, borderTopColor: 'transparent', borderBottomColor: 'transparent', borderRightColor: c.border }} />
+        <View accessibilityLiveRegion="polite" style={{ flex: 1, minHeight: 104, justifyContent: 'center', backgroundColor: c.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: c.border, padding: space.md }}>
           {busy ? <Text style={{ color: c.muted, fontSize: type.body }}>{mood === 'working' ? 'Checking your school records…' : 'Thinking…'}</Text> : (
             <View accessible accessibilityLabel={`Eian says: ${speech.lines.join(' ')}`}>
               {speech.lines.map((line, i) => <Text key={i} style={{ color: c.text, fontSize: type.body, lineHeight: 22, fontWeight: i === 0 && !latest ? '700' : '400', marginTop: i ? space.xs : 0 }}>{line}</Text>)}
@@ -92,10 +94,12 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi' }: { onNavigate:
       <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.lg }}>
         {TILES.map(t => (
           <Pressable key={t.label} accessibilityRole="button" accessibilityLabel={t.label} onPress={() => void ask(t.question)}
-            style={({ pressed }) => ({ flex: 1, minHeight: 84, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface,
-              alignItems: 'center', justifyContent: 'center', padding: space.xs, opacity: pressed ? 0.8 : 1 })}>
-            <Text style={{ color: c.accent, fontSize: 24 }}>{t.icon}</Text>
-            <Text maxFontSizeMultiplier={1.2} style={{ color: c.text, fontSize: type.caption - 1, fontWeight: '600', textAlign: 'center', marginTop: space.xs }}>{t.label}</Text>
+            style={({ pressed }) => ({ flex: 1, minWidth: 0, height: 80, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface,
+              alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2, opacity: pressed ? 0.8 : 1 })}>
+            {/* Fixed icon and label slots keep every tile's icon and text on the same lines. */}
+            <View style={{ height: 30, justifyContent: 'center' }}><Text style={{ color: c.accent, fontSize: 24, lineHeight: 30 }}>{t.icon}</Text></View>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.2}
+              style={{ color: c.text, fontSize: type.caption - 1, lineHeight: 18, fontWeight: '600', textAlign: 'center', marginTop: space.xs }}>{t.label}</Text>
           </Pressable>
         ))}
       </View>
@@ -103,7 +107,7 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi' }: { onNavigate:
       <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.lg, alignItems: 'center' }}>
         <TextInput accessibilityLabel="Ask Eian" value={draft} onChangeText={setDraft} maxLength={300} placeholder="Ask a question" placeholderTextColor={c.subtle}
           onSubmitEditing={() => void ask(draft)} returnKeyType="send" editable={!busy}
-          style={{ flex: 1, minHeight: TOUCH, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, color: c.text, paddingHorizontal: space.lg, fontSize: type.body }} />
+          style={{ flex: 1, minWidth: 0, minHeight: TOUCH, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, color: c.text, paddingHorizontal: space.lg, fontSize: type.body }} />
         <Button label="Ask" accessibilityLabel="Send question to Eian" onPress={() => void ask(draft)} />
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.md }}>
