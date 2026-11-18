@@ -3747,13 +3747,13 @@ DO $$ DECLARE r text; f text;
   END IF;
 END $$;
 
--- M-B 0398 new membership and renew from the contact card: two runtime entry points (start options read, start); the actor,
+-- M-B 0531 new membership and renew from the contact card: two runtime entry points (start options read, start); the actor,
 -- facts, program group, overlap trigger and item helpers are private; the card-start table has no runtime privilege.
 DO $$ DECLARE r text; f text;
   entry text[]:=ARRAY['hon.read_person_membership_start(text,jsonb)','hon.start_person_membership(text,jsonb,text,uuid,uuid)'];
   fns text[]:=ARRAY['hon.guard_person_membership_start()','hon.membership_program_group(uuid)','hon.guard_person_membership_overlap()',
     'hon.require_person_membership_actor(text)','hon.person_membership_start_facts(uuid,date)','hon.person_membership_start_item(hon.memberships,text)']||entry; BEGIN
-  IF to_regprocedure('hon.start_person_membership(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0398 first'; END IF;
+  IF to_regprocedure('hon.start_person_membership(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0531 first'; END IF;
   FOREACH f IN ARRAY fns LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP

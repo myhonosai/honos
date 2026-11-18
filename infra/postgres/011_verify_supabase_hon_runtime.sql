@@ -2625,10 +2625,10 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; cols text[]; BEGI
     IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
       RAISE EXCEPTION 'Missing membership activation guard: %',expected.name; END IF;
   END LOOP;
-  -- 0398 adds exactly one more: the one-per-program overlap check (AFTER UPDATE, verified in the 0398 section).
+  -- 0531 adds exactly one more: the one-per-program overlap check (AFTER UPDATE, verified in the 0531 section).
   IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.memberships'::regclass AND NOT tgisinternal)<>2
     OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.memberships'::regclass AND NOT tgisinternal AND tgname NOT IN ('membership_state_transition_guard','memberships_one_per_program'))<>0 THEN
-    RAISE EXCEPTION 'hon.memberships must carry exactly the 0177 transition guard (body replaced by 0178) and the 0398 one-per-program check'; END IF;
+    RAISE EXCEPTION 'hon.memberships must carry exactly the 0177 transition guard (body replaced by 0178) and the 0531 one-per-program check'; END IF;
   -- D41 option C: SELECT; no table INSERT, no UPDATE at any level, no DELETE/TRUNCATE; INSERT on exactly the seven DRAFT columns.
   SELECT array_agg(attname::text ORDER BY attname) INTO cols FROM pg_attribute
     WHERE attrelid='hon.memberships'::regclass AND attnum>0 AND NOT attisdropped AND has_column_privilege('hon_runtime',attrelid,attnum,'INSERT');
@@ -3836,7 +3836,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 END $$;
 -- End school contact merge and archive exact verification.
 
--- New membership and renew from the contact card exact verification (M-B 0398): two runtime entry points, private helpers, a private table.
+-- New membership and renew from the contact card exact verification (M-B 0531): two runtime entry points, private helpers, a private table.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_person_membership_start()',false,false,'search_path=pg_catalog, hon','v','778a1f0da886a102416515b7fddaf20f1fbd4442450a7bd598cfbc393f1d0a14'),

@@ -12,7 +12,7 @@ import {
 import { NewMembershipError, prepareNewMembership, readNewMembershipOptions, sendNewMembership } from '../src/components/people/new-membership-http';
 import { id } from './account-status-fixtures';
 
-// New membership and Renew on the contact card (slice B, 0398).
+// New membership and Renew on the contact card (slice B, 0531).
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 

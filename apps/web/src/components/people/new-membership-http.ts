@@ -5,7 +5,7 @@ import {
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
-/** New membership and Renew on the contact card (0398). The server decides every rule; this only sends what staff chose. */
+/** New membership and Renew on the contact card (0531). The server decides every rule; this only sends what staff chose. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type PersonScope = Readonly<{ organizationId: string; schoolId: string; personId: string }>;
 /** The exact request, kept so an unknown outcome can be retried as the same request (it never makes two). */

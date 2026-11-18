@@ -1,5 +1,5 @@
 /**
- * New membership and Renew on the contact card (M-B, 0398) over signed HTTP (HON session cookie -> HonIdentityGuard + human
+ * New membership and Renew on the contact card (M-B, 0531) over signed HTTP (HON session cookie -> HonIdentityGuard + human
  * UI guards + HonExceptionFilter -> controller -> protected definer functions on the restricted runtime role with forced RLS),
  * on the guarded disposable CRM-close fixture only. Started memberships go through the real two-step 0177 activation service.
  * Synthetic names only; no money moves.
@@ -454,7 +454,7 @@ try {
 
   // 14. No money moved.
   ok(JSON.stringify(await money()) === JSON.stringify(moneyBefore), 'no invoice, payment attempt or schedule was created');
-  console.log(`PASS: person membership start (0398), ${checks} checks.`);
+  console.log(`PASS: person membership start (0531), ${checks} checks.`);
 } finally {
   await app?.close();
   await cleanup().catch((error) => console.error('cleanup failed', error.message));

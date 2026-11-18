@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { PersonMembershipStartController } = require('../dist/billing/person-membership-start.controller.js');
 const { PersonMembershipStartService } = require('../dist/billing/person-membership-start.service.js');
 
-// M-B (0398): the card membership start controller's closed requests and permission, and the service's input checks,
+// M-B (0531): the card membership start controller's closed requests and permission, and the service's input checks,
 // verified receipts and error mapping (blockers are passed through as known codes only), without a database.
 const ORG = '11111111-1111-4111-8111-111111111111';
 const SCHOOL = '22222222-2222-4222-8222-222222222222';

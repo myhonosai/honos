@@ -80,7 +80,7 @@ try {
   }
   // The transition trigger reads no session, transaction or custom setting: nothing a caller sets authorizes a transition.
   assert.doesNotMatch(bodyOf('guard_membership_state_transition'), /current_setting|set_config|session_user|current_user|pg_has_role/i);
-  // 0398 adds one AFTER UPDATE check that only refuses (one membership per program); it authorizes nothing.
+  // 0531 adds one AFTER UPDATE check that only refuses (one membership per program); it authorizes nothing.
   assert.deepEqual((await admin.query(`SELECT tgname,tgenabled,pg_get_triggerdef(oid) def FROM pg_trigger WHERE tgrelid='hon.memberships'::regclass AND NOT tgisinternal ORDER BY tgname`)).rows,
     [{ tgname: 'membership_state_transition_guard', tgenabled: 'O', def: 'CREATE TRIGGER membership_state_transition_guard BEFORE INSERT OR UPDATE ON hon.memberships FOR EACH ROW EXECUTE FUNCTION hon.guard_membership_state_transition()' },
       { tgname: 'memberships_one_per_program', tgenabled: 'O', def: 'CREATE TRIGGER memberships_one_per_program AFTER INSERT OR UPDATE OF state, term_started_at, term_ends_at ON hon.memberships FOR EACH ROW EXECUTE FUNCTION hon.guard_person_membership_overlap()' }]);

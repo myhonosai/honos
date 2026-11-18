@@ -38,7 +38,7 @@ function translate(error: unknown): never {
 }
 
 /**
- * M-B (0398): what the card needs to start a membership, and the start itself. Each call re-proves the direct human subject
+ * M-B (0531): what the card needs to start a membership, and the start itself. Each call re-proves the direct human subject
  * and live billing.membership.create in the database; the start repeats the exact plan version the staff member saw.
  */
 @Injectable()

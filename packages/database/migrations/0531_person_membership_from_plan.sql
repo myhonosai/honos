@@ -1,6 +1,6 @@
 BEGIN;
 
--- M-B (0398, allocated by the coordinator 2026-11-16): start a new membership, or renew one, from the contact card.
+-- M-B (0531, allocated by the coordinator 2026-11-18; first drafted as 0398): start a new membership, or renew one, from the contact card.
 -- Owner (David), 2026-11-16 05:45Z: "Membership is tied to student ... we make new/renew/upgrade membership under each
 -- student or member card". Owner decision 05:50Z: one membership per program. A student may hold memberships in different
 -- programs, never two overlapping in the same program; plans without a program share one group.
@@ -64,7 +64,7 @@ $$;
 
 -- One per program: a card-started membership that is current never overlaps another current membership of the same student in
 -- the same program group, and no current membership is moved onto a card-started one. Only rows that involve a card start are
--- checked, so memberships made before 0398 keep their existing behavior.
+-- checked, so memberships made before 0531 keep their existing behavior.
 CREATE FUNCTION hon.guard_person_membership_overlap() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,hon AS $$
 DECLARE grp uuid; card boolean;

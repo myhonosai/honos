@@ -13,7 +13,7 @@ import styles from './people.module.css';
 export { NEW_COPY } from './new-membership-copy';
 
 /**
- * New membership and Renew on the contact card (0398). Staff pick a plan for sale, a first day and who pays; the server makes one
+ * New membership and Renew on the contact card (0531). Staff pick a plan for sale, a first day and who pays; the server makes one
  * membership that has not started, bound to that exact plan version, and the card goes straight on to the usual start review
  * (0177). One membership per program at a time: the server refuses overlaps. Nothing here charges, schedules or sends anything.
  */

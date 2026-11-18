@@ -1,5 +1,5 @@
 /**
- * M-B (0398): start a new membership, or renew one, from a student's contact card. The server makes one DRAFT bound to the
+ * M-B (0531): start a new membership, or renew one, from a student's contact card. The server makes one DRAFT bound to the
  * exact current plan version the staff member picked, with the start date they chose and the plan's term; staff then start
  * it with the unchanged 0177 preview and confirm. One membership per program: never two overlapping in the same program, and
  * plans without a program share one group. Nothing is charged, scheduled or sent.
