@@ -1145,3 +1145,4 @@ export * from './membership-agreement.js';
 export * from './school-social-ads.js';
 export * from './staff-shifts.js';
 export * from './eian.js';
+export * from './kai-journal.js';

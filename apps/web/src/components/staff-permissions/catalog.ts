@@ -117,6 +117,7 @@ export const PERMISSION_LABELS: Readonly<Record<string, string>> = {
   'action.approve': 'Approve AI team actions',
   'ai.team.configure': 'Set up the AI team',
   'ai.usage.read': 'See AI usage',
+  'teaching.journal.use': 'Keep their own Kai teaching journal',
 };
 export const labelOf = (p: AssignablePermission): string => PERMISSION_LABELS[p.code] ?? p.description;
 

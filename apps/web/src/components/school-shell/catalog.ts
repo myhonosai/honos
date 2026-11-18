@@ -40,7 +40,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   // Each specialist's workspace opens from that specialist's card on the AI Team page.
   { key: 'aiTeam', titleKey: 'navAiTeam', section: 'ai', routes: [r('/staff/ai-team', 'routeAiTeam'), r('/staff/action-center/approvals', 'routeApprovals'), r('/staff/ai-work', 'routeAiWork'),
     r('/staff/voice', 'routeVoice'), h('/staff/leads/assistant', 'routeLeadAssistant'), h('/staff/marketing/assistant', 'routeMarketingAssistant'),
-    h('/staff/teaching-assistant', 'routeKai'), h('/staff/retention/at-risk', 'routeMayaAtRisk'),
+    h('/staff/teaching-assistant', 'routeKai'), h('/staff/teaching-assistant/journal', 'routeKaiJournal'), h('/staff/retention/at-risk', 'routeMayaAtRisk'),
     h('/staff/ai-team/alex', 'routeAlex'), h('/staff/ai-team/jordan', 'routeJordan'), h('/staff/ai-team/claire', 'routeClaire'), h('/staff/ai-team/lena', 'routeLena')] },
   // Conversation AI answers the school's texts in this inbox (0364); staff take over any thread.
   { key: 'conversationAi', titleKey: 'navConversationAi', section: 'ai', routes: [r('/staff/conversations', 'routeConversations'), r('/staff/conversations/train-ai', 'routeTrainAi')] },

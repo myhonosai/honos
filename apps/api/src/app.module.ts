@@ -209,6 +209,9 @@ import { SchoolLocationService } from './school-location/school-location.service
 import { SchoolLocationReadHumanUiGuard, SchoolLocationSaveHumanUiGuard } from './school-location/school-location-human-ui.guard.js';
 import { SchoolDemoDataController } from './school-demo-data/school-demo-data.controller.js';
 import { StaffShiftController } from './staff-shifts/staff-shifts.controller.js';
+import { KaiJournalController } from './kai-journal/kai-journal.controller.js';
+import { KaiJournalService } from './kai-journal/kai-journal.service.js';
+import { KaiJournalReadHumanUiGuard, KaiJournalSaveHumanUiGuard } from './kai-journal/kai-journal-human-ui.guard.js';
 import { StaffShiftService } from './staff-shifts/staff-shifts.service.js';
 import { StaffShiftReadHumanUiGuard, StaffShiftSaveHumanUiGuard } from './staff-shifts/staff-shifts-human-ui.guard.js';
 import { SchoolDemoDataService } from './school-demo-data/school-demo-data.service.js';
@@ -602,6 +605,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolLocationController,
     SchoolDemoDataController,
     StaffShiftController,
+    KaiJournalController,
     CrmPipelineBoardController,
     SchoolMembershipListController,
     CrmSchoolClockController,
@@ -871,6 +875,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolLocationService, SchoolLocationReadHumanUiGuard, SchoolLocationSaveHumanUiGuard,
     SchoolDemoDataService, SchoolDemoDataReadHumanUiGuard, SchoolDemoDataLoadHumanUiGuard, SchoolDemoDataRemoveHumanUiGuard,
     StaffShiftService, StaffShiftReadHumanUiGuard, StaffShiftSaveHumanUiGuard,
+    KaiJournalService, KaiJournalReadHumanUiGuard, KaiJournalSaveHumanUiGuard,
     CrmPipelineBoardService, CrmPipelineBoardReadHumanUiGuard, CrmLeadStageMoveHumanUiGuard, CrmPipelineStagesSaveHumanUiGuard,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,

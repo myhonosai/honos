@@ -4224,3 +4224,22 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.record_eian_turn_result(text,uuid,jsonb) TO hon_runtime;
   END IF;
 END $$;
+-- 0476 Kai teaching journal: one private table reached only through two runtime entry points (read, save).
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_kai_journal(text,date,date)','hon.save_kai_journal_entry(text,jsonb,text,uuid,uuid)'];
+  helpers text[]:=ARRAY['hon.kai_journal_text_ok(text,integer,boolean)','hon.kai_journal_topics_ok(text[])','hon.guard_kai_journal_entry()',
+    'hon.require_kai_journal_actor(text)','hon.kai_journal_json(hon.kai_journal_entries)'];
+BEGIN
+  IF to_regprocedure('hon.save_kai_journal_entry(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0476 first'; END IF;
+  EXECUTE 'REVOKE ALL ON TABLE hon.kai_journal_entries FROM PUBLIC';
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.kai_journal_entries FROM %I',r); END LOOP;
+  FOREACH f IN ARRAY helpers||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;

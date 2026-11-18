@@ -194,6 +194,7 @@ const expectedRlsTables = [
   'school_demo_data_sets',
   'school_demo_data_rows',
   'staff_shifts',
+  'kai_journal_entries',
   'biometric_jurisdiction_profiles',
   'biometric_jurisdiction_rules',
   'attendance_card_settings',
