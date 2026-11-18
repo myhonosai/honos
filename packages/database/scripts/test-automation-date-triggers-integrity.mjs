@@ -100,7 +100,7 @@ try{
  const c=(await q("SELECT relrowsecurity rls,relforcerowsecurity forced FROM pg_class WHERE oid='hon.automation_schedule_scans'::regclass"))[0];assert(c.rls&&c.forced);
  assert.equal((await q("SELECT count(*) n FROM pg_policies WHERE schemaname='hon' AND tablename='automation_schedule_scans'"))[0].n,'0');
  for(const p of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'])assert.equal((await q("SELECT has_table_privilege($1,'hon.automation_schedule_scans',$2) ok",[runtime.username,p]))[0].ok,false,p);
- for(const f of ['hon.scan_automation_schedules(integer)','hon.automation_next_birthday(date,date)','hon.automation_date_candidates(hon.automation_workflows,jsonb,date,text)','hon.automation_unavailable(jsonb)'])
+ for(const f of ['hon.scan_automation_schedules(integer)','hon.automation_next_birthday(date,date)','hon.automation_date_subject_open(uuid,uuid,text)','hon.automation_date_candidates(hon.automation_workflows,jsonb,date,text)','hon.automation_unavailable(jsonb)'])
   assert.equal((await q("SELECT has_function_privilege($1,$2::regprocedure,'EXECUTE') ok",[runtime.username,f]))[0].ok,false,f);
  const sc=(await q("SELECT prosecdef d,proconfig c FROM pg_proc WHERE oid='hon.scan_automation_schedules(integer)'::regprocedure"))[0];assert.equal(sc.d,true);assert.deepEqual(sc.c,['search_path=pg_catalog, hon']);
  await assert.rejects(restricted.query('SELECT hon.scan_automation_schedules(10)'),/permission denied/);
@@ -142,6 +142,8 @@ try{
  const back=await attend(a,gone,16);
  assert.deepEqual((await candidates(mia.workflowId,a.today,a.zone)).find(x=>x.person_id===gone.person).trigger_key,'abs:'+back);
  assert.equal((await candidates(mia.workflowId,a.today,a.zone)).some(x=>x.person_id===here.person||x.person_id===lapsed.person),false);
+ // A subject that already started is dropped before the 1000 cap, so a long backlog is reached day by day.
+ assert.equal((await candidates(mia.workflowId,a.today,a.zone)).some(x=>x.person_id===never.person),false);
  pass('MIA: active students absent 14+ days (or never since their term began) start one run per absence episode, not someone who came 2 days ago or has no active membership; one scan per workflow and school day; the SMS is queued as AUTOMATION with the first name');
 
  // 4. Birthdays: a student whose birthday is 3 days away starts one run keyed to that birthday year; 10 days away does not;
@@ -164,6 +166,9 @@ try{
  d=await scan();runs=await runsOf(mend.workflowId);
  assert.deepEqual(runs.map(r=>r.person_id),[ending.person]);
  const before=runs[0].trigger_key;assert.match(before,/^mend:[0-9a-f-]{36}$/);
+ // While that run is open the contact is not a candidate; once it ends a changed term end is.
+ assert.equal((await candidates(mend.workflowId,a.today,a.zone)).some(x=>x.person_id===ending.person),false);
+ await runDue();assert.equal((await runsOf(mend.workflowId))[0].status,'COMPLETED');
  await membershipFixtureQuery(admin,"UPDATE hon.memberships SET term_ends_at=term_ends_at+interval '1 day',version=version+1 WHERE id=$1",[ending.membership]);
  const after=(await candidates(mend.workflowId,a.today,a.zone)).find(x=>x.person_id===ending.person).trigger_key;
  assert.notEqual(after,before);

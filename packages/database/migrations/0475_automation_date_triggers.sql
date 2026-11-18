@@ -86,6 +86,14 @@ BEGIN
   RETURN NULL;
 END $$;
 
+-- True while a subject can still start a run: the workflow has no run for this key and no open run for this contact.
+-- Subjects already handled are dropped before the 1000 cap, so a long backlog is worked through day by day.
+CREATE FUNCTION hon.automation_date_subject_open(p_workflow uuid,p_person uuid,p_key text) RETURNS boolean
+LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
+  SELECT NOT EXISTS(SELECT 1 FROM hon.automation_runs r WHERE r.workflow_id=p_workflow AND r.person_id=p_person
+    AND (r.trigger_key=p_key OR r.status='RUNNING'))
+$$;
+
 -- The contacts one date-triggered workflow qualifies today, with the key that keeps one run per subject. At most 1000.
 CREATE FUNCTION hon.automation_date_candidates(w hon.automation_workflows,d jsonb,p_today date,p_zone text)
 RETURNS TABLE(person_id uuid,trigger_key text)
@@ -96,7 +104,7 @@ BEGIN
     WHEN 'ABSENT_DAYS' THEN
       n:=(d->'trigger'->'config'->>'days')::integer;
       RETURN QUERY
-      SELECT m.participant_person_id,'abs:'||coalesce(la.id,m.id)::text FROM (
+      SELECT x.p,x.k FROM (SELECT m.participant_person_id p,'abs:'||coalesce(la.id,m.id)::text k FROM (
           SELECT DISTINCT ON (x.participant_person_id) x.* FROM hon.memberships x
           WHERE x.organization_id=w.organization_id AND x.school_id=w.school_id AND x.state='ACTIVE'
           ORDER BY x.participant_person_id,x.term_started_at NULLS LAST,x.id) m
@@ -104,24 +112,25 @@ BEGIN
           AND sp.status='ACTIVE'
         LEFT JOIN LATERAL (SELECT a.id,a.recorded_at FROM hon.attendance_records a WHERE a.organization_id=sp.organization_id AND a.school_id=sp.school_id
           AND a.student_profile_id=sp.id AND a.status IN ('PRESENT','LATE','MAKEUP') ORDER BY a.recorded_at DESC,a.id DESC LIMIT 1) la ON true
-      WHERE coalesce(la.recorded_at,m.term_started_at,m.created_at)<=clock_timestamp()-make_interval(days=>n)
-      ORDER BY m.participant_person_id LIMIT 1000;
+      WHERE coalesce(la.recorded_at,m.term_started_at,m.created_at)<=clock_timestamp()-make_interval(days=>n)) x
+      WHERE hon.automation_date_subject_open(w.id,x.p,x.k) ORDER BY x.p LIMIT 1000;
     WHEN 'BIRTHDAY' THEN
       n:=(d->'trigger'->'config'->>'daysBefore')::integer;
       RETURN QUERY
-      SELECT sp.person_id,'bday:'||md5(sp.person_id::text||':'||extract(year FROM b.next_on)::integer::text)::uuid::text
+      SELECT x.p,x.k FROM (SELECT sp.person_id p,'bday:'||md5(sp.person_id::text||':'||extract(year FROM b.next_on)::integer::text)::uuid::text k
       FROM hon.student_profiles sp CROSS JOIN LATERAL (SELECT hon.automation_next_birthday(sp.birth_date,p_today) next_on) b
       WHERE sp.organization_id=w.organization_id AND sp.school_id=w.school_id AND sp.status='ACTIVE' AND sp.birth_date IS NOT NULL
-        AND b.next_on<=p_today+n
-      ORDER BY sp.person_id LIMIT 1000;
+        AND b.next_on<=p_today+n) x
+      WHERE hon.automation_date_subject_open(w.id,x.p,x.k) ORDER BY x.p LIMIT 1000;
     WHEN 'MEMBERSHIP_ENDS_IN_DAYS' THEN
       n:=(d->'trigger'->'config'->>'days')::integer;
       RETURN QUERY
-      SELECT m.participant_person_id,'mend:'||md5(m.id::text||':'||extract(epoch FROM m.term_ends_at)::text)::uuid::text
+      SELECT x.p,x.k FROM (SELECT m.participant_person_id p,'mend:'||md5(m.id::text||':'||extract(epoch FROM m.term_ends_at)::text)::uuid::text k,
+          m.term_ends_at e,m.id i
       FROM hon.memberships m
       WHERE m.organization_id=w.organization_id AND m.school_id=w.school_id AND m.state='ACTIVE'
-        AND m.term_ends_at>clock_timestamp() AND (m.term_ends_at AT TIME ZONE p_zone)::date<=p_today+n
-      ORDER BY m.participant_person_id,m.term_ends_at,m.id LIMIT 1000;
+        AND m.term_ends_at>clock_timestamp() AND (m.term_ends_at AT TIME ZONE p_zone)::date<=p_today+n) x
+      WHERE hon.automation_date_subject_open(w.id,x.p,x.k) ORDER BY x.p,x.e,x.i LIMIT 1000;
     ELSE RAISE EXCEPTION 'AUTOMATION_TRIGGER_UNAVAILABLE' USING ERRCODE='22023';
   END CASE;
 END $$;
@@ -178,7 +187,7 @@ DO $$ DECLARE f regprocedure; r record; BEGIN
     EXECUTE format('REVOKE ALL ON TABLE hon.automation_schedule_scans FROM %I',r.rolname);
   END LOOP;
   FOR f IN SELECT p.oid::regprocedure FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname IN (
-    'automation_unavailable','automation_next_birthday','automation_date_candidates','scan_automation_schedules') LOOP
+    'automation_unavailable','automation_next_birthday','automation_date_subject_open','automation_date_candidates','scan_automation_schedules') LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_automation_worker','hon_communication_worker') LOOP
       EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r.rolname);

@@ -335,6 +335,6 @@
     "0473_parent_school_reads_follow_family_choice.sql": "008973eedb67260a41b8598b9c0b37e7dc1013d49d51a967fbaaee8b40541125",
     "0474_eian_family_ai.sql": "fb0cd95a3a90bdf52fbccfff0a1f025baecec71047a6361f31fc44619c24498f",
     "0478_staff_time_clock.sql": "287658b3c361652b1e24de7682381ba0e295371513e06e2a12547f3b9f0323ea",
-    "0475_automation_date_triggers.sql": "6a98c3e8fbb1462b7d65133828edaa913c6568aa0c7b2f87ae7d22f077cddfc3"
+    "0475_automation_date_triggers.sql": "60c4287d8bd336ae2e64e1a16f4c694ae75ca16e65afc208f1b7dd8d4824fbe5"
   }
 }

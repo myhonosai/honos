@@ -4742,7 +4742,8 @@ END $$;
 DO $$ DECLARE f record; safe boolean; worker oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_automation_worker'); BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.automation_next_birthday(date,date)',false,false,false,'search_path=pg_catalog, hon','450419c70e89811c753abf222900b14d8c61c67dc1b09d76207d35f8c1440935'),
-('hon.automation_date_candidates(hon.automation_workflows,jsonb,date,text)',false,false,false,'search_path=pg_catalog, hon','c1f0c5eca0a245c9f6ed49166f773a9355821250aa1b1414082d66175739a254'),
+('hon.automation_date_subject_open(uuid,uuid,text)',false,false,false,'search_path=pg_catalog, hon','05f33adb132e3dace679fc0b201d1a299022a7a0ed84eb620e181f5926d372b3'),
+('hon.automation_date_candidates(hon.automation_workflows,jsonb,date,text)',false,false,false,'search_path=pg_catalog, hon','556603ea44a0f76545615877370cd5353043043766e2741bf747e039e622b3d6'),
 ('hon.scan_automation_schedules(integer)',true,false,true,'search_path=pg_catalog, hon','cd26c195ee65ab4454751a225fde6072a62521e8816166d762a57b76bffe4173')) e(signature,definer,runtime_allowed,worker_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed

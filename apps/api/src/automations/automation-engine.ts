@@ -56,8 +56,11 @@ export class AutomationWorkerDatabase implements OnModuleDestroy {
       return v;
     };
     const events = await this.call('consume_automation_events', limit);
-    const scans = await this.call('scan_automation_schedules', limit);
+    // A failing date scan never holds back due steps: steps still run, then the scan failure is reported.
+    let scans: Record<string, unknown> | undefined; let scanError: unknown;
+    try { scans = await this.call('scan_automation_schedules', limit); } catch (error) { scanError = error; }
     const steps = await this.call('run_due_automation_steps', limit);
+    if (scanError !== undefined || !scans) throw scanError ?? new Error('AUTOMATION_ENGINE_UNVERIFIED');
     return { consumed: count(events, 'consumed'), runsStarted: count(events, 'runsStarted'), eventsFailed: count(events, 'failed'),
       scanned: count(scans, 'scanned'), scheduledRunsStarted: count(scans, 'runsStarted'), scansFailed: count(scans, 'failed'), ran: count(steps, 'ran'),
       failed: count(steps, 'failed'), exited: count(steps, 'exited'), paused: count(scans, 'paused') + count(steps, 'paused') };

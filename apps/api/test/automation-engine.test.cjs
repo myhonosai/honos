@@ -122,6 +122,12 @@ test('the engine worker refuses another login, an unsafe role and unverified cou
       { ...good, scan_automation_schedules: { scanned: 1, runsStarted: -2, failed: 0, paused: 0 } }, { ...good, scan_automation_schedules: undefined }]) {
       const x = new AutomationWorkerDatabase(); x.pool = fakePool(safeRole, bad); await assert.rejects(x.runOnce(), /AUTOMATION_ENGINE_UNVERIFIED/);
     }
+    // A date scan that throws never holds back due steps: steps still run, then the failure is reported.
+    const y = new AutomationWorkerDatabase(), throwing = fakePool(safeRole, good); y.pool = throwing;
+    const real = throwing.query.bind(throwing);
+    throwing.query = async (sql, args) => { if (sql.includes('scan_automation_schedules')) { throwing.calls.push({ sql, args }); throw new Error('scan down'); } return real(sql, args); };
+    await assert.rejects(y.runOnce(10), /scan down/);
+    assert.ok(throwing.calls.some(c => c.sql.includes('run_due_automation_steps')));
   });
 });
 
