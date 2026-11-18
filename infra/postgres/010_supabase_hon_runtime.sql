@@ -4275,3 +4275,11 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+-- 0501 staff timesheets: no self-approval except the school's system OWNER. One more private helper; the week decision stays the only entry point.
+DO $$ DECLARE r text; f text:='hon.staff_time_actor_is_owner(uuid,uuid,uuid)';
+BEGIN
+  IF to_regprocedure(f) IS NULL THEN RAISE EXCEPTION 'Apply migration 0501 first'; END IF;
+  EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+END $$;

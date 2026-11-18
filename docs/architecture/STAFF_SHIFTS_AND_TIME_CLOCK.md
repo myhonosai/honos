@@ -11,6 +11,7 @@ Two migrations, two PRs:
 |---|---|---|
 | SH shift schedule | 0467 | Owners/managers put staff on shifts in a week view; staff see their own shifts. |
 | TC time clock | 0478 | Staff clock in/out from their own signed-in phone or computer; hours only; owners review, correct, approve and export timesheets. |
+| TC follow-up | 0501 | No self-approval: a timesheet manager cannot approve their own week; the school's system OWNER is exempt. |
 
 Out of scope: payroll providers, pay rates and pay calculation, paid services, texting/emailing staff about shifts,
 a shared front-desk PIN tablet, GPS/location checks. Nothing here sends a message, charges, or calls AI.
@@ -39,7 +40,7 @@ a shared front-desk PIN tablet, GPS/location checks. Nothing here sends a messag
   over 16 h (usually a missed clock-out). No breaks, no overtime rules, no pay maths.
 - **Fix an entry** (managers): add a missed entry or change an entry's in/out time, with a required reason.
   Every change is kept as an append-only revision (who, when, before, after, why).
-- **Approve week** per person locks that person's entries for that week; **Reopen** unlocks it (both audited).
+- **Approve week** per person locks that person's entries for that week; **Reopen** unlocks it (both audited). Nobody approves their own week unless they hold the school's system OWNER role (0501, `TIMESHEET_SELF_APPROVAL`); reopening and fixing one's own entries are unchanged.
 - **Export CSV** of the shown week (one line per entry plus a total line per person), built in the browser from the
   same verified read. Columns: Staff, Date, Clock in, Clock out, Worked hours, Scheduled hours, Notes. Cells that start with `= + - @` are prefixed so spreadsheets never run them.
 
@@ -100,7 +101,7 @@ overtime flags, no pay calculation).
   reason}, ...)`: school-local `YYYY-MM-DDTHH:MM`, ends by now, at most 24 hours, no overlap with the person's other
   entries at the school, neither the old nor the new week approved. A fix may close a forgotten open entry.
 - `hon.set_staff_timesheet_week(subject, {staffPrincipalId, weekStart, action APPROVE|REOPEN, expectedVersion}, ...)`;
-  APPROVE is refused while the person has an open entry that week (`TIMESHEET_HAS_OPEN_ENTRY`).
+  APPROVE is refused while the person has an open entry that week (`TIMESHEET_HAS_OPEN_ENTRY`). APPROVE of one's own week (target = actor) is refused with `TIMESHEET_SELF_APPROVAL` (42501) unless the actor holds a live system OWNER grant at that school (0501, decided after the per-person lock).
 - Errors: `VALIDATION_FAILED`, `STAFF_TIME_FORBIDDEN`, `STAFF_MEMBER_UNAVAILABLE`, `TIME_ENTRY_NOT_FOUND`,
   `TIME_CLOCK_STATE_CHANGED`, `TIME_ENTRY_TOO_LONG`, `TIMESHEET_APPROVED`, `TIMESHEET_HAS_OPEN_ENTRY`, `TIME_ENTRY_OVERLAP`,
   `VERSION_CONFLICT`, `IDEMPOTENCY_KEY_REUSED`, `IDEMPOTENCY_IN_PROGRESS`.

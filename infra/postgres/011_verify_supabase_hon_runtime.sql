@@ -4775,3 +4775,14 @@ BEGIN
     RAISE EXCEPTION 'Shopify product change guards missing'; END IF;
 END $$;
 -- End Shopify product changes exact verification.
+-- Staff timesheet no-self-approval exact verification (0501)
+DO $$ DECLARE f text:='hon.staff_time_actor_is_owner(uuid,uuid,uuid)';
+BEGIN
+  IF to_regprocedure(f) IS NULL OR EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+    RAISE EXCEPTION 'Unsafe staff time helper: %',f; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.set_staff_timesheet_week(text,jsonb,text,uuid,uuid)'::regprocedure
+      AND position('TIMESHEET_SELF_APPROVAL' IN p.prosrc)>0 AND position('staff_time_actor_is_owner' IN p.prosrc)>0) THEN
+    RAISE EXCEPTION 'Staff timesheet self-approval block missing'; END IF;
+END $$;
+-- End staff timesheet no-self-approval exact verification.
