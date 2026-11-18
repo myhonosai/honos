@@ -21,8 +21,10 @@ Marketing > Blasts (`/staff/marketing/blasts`):
    scheduled or completed trial), `FORMER_STUDENTS` (a past membership, none active) and `ALL_CONTACTS`, optionally narrowed
    to people carrying any of up to 10 contact tags.
 3. **See the count before sending.** The database resolves the audience the way it will send:
-   - A matched person without an address for the channel (for example, a child) is replaced by the guardians in their
-     families who have one.
+   - A child (a STUDENT or DEPENDENT family member with a guardian, unless a student birth date shows 18 or over) is reached
+     only through the guardians in their families who have an address, never at their own address, even if opted in. This is
+     the default until David decides otherwise. Anyone else without an address is replaced by their guardians if they have any.
+   - Archived or merged contacts (an open `school_contact_archives` row, 0483) never get a blast, as recipient or guardian.
    - The list is deduplicated by address (one message per phone number or email, so one per household).
    - People without OPTED_IN consent for the channel are skipped (NO_CONSENT). People with no address and no guardian address are skipped (NO_ADDRESS).
      Duplicates are skipped (DUPLICATE_ADDRESS). Demo-data people are never included.

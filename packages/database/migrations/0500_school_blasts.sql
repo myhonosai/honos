@@ -28,11 +28,11 @@ DO $$ BEGIN
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'Trusted migration owner required'; END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='hon_runtime' AND (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolinherit OR rolreplication)) THEN
     RAISE EXCEPTION 'School blasts require a restricted runtime'; END IF;
-  IF to_regclass('hon.contact_tags') IS NULL OR to_regclass('hon.communication_deliveries') IS NULL
+  IF to_regclass('hon.contact_tags') IS NULL OR to_regclass('hon.communication_deliveries') IS NULL OR to_regclass('hon.school_contact_archives') IS NULL
     OR to_regprocedure('hon.demo_data_is_demo(text,uuid)') IS NULL OR to_regprocedure('hon.staff_shift_display_name(uuid)') IS NULL
     OR to_regprocedure('hon.membership_command_args_ok(text,text,uuid,uuid)') IS NULL
     OR NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='communication_messages_origin_shape') THEN
-    RAISE EXCEPTION '0500 requires 0416, 0423, 0243, 0459, 0467 and 0224'; END IF;
+    RAISE EXCEPTION '0500 requires 0416, 0423, 0243, 0459, 0467, 0224 and 0483'; END IF;
 END $$;
 
 INSERT INTO hon.permissions(code,description,is_sensitive,is_staff_assignable) VALUES
@@ -207,6 +207,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
   matched AS (
     SELECT p.* FROM hon.people p, g, t
     WHERE p.organization_id=org AND p.school_id=school AND NOT hon.demo_data_is_demo('people',p.id)
+      AND NOT EXISTS(SELECT 1 FROM hon.school_contact_archives ar WHERE ar.person_id=p.id AND ar.organization_id=org AND ar.school_id=school AND ar.restored_at IS NULL)
       AND ('ALL_CONTACTS'=ANY(g.groups)
         OR ('ACTIVE_STUDENTS'=ANY(g.groups) AND EXISTS(SELECT 1 FROM hon.memberships m WHERE m.organization_id=org AND m.school_id=school
           AND m.participant_person_id=p.id AND m.state='ACTIVE'))
@@ -223,14 +224,28 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
       AND (cardinality(t.tags)=0 OR EXISTS(SELECT 1 FROM hon.contact_tags ct WHERE ct.organization_id=org AND ct.school_id=school
         AND ct.person_id=p.id AND ct.tag_key=ANY(t.tags)))
   ),
+  -- A child (a STUDENT or DEPENDENT family member with a guardian, unless a birth date shows 18 or over) is reached only
+  -- through guardians, never at their own address. Anyone else without an address is reached through guardians if any.
+  kids AS (
+    SELECT m.id,
+      EXISTS(SELECT 1 FROM hon.family_members s JOIN hon.family_members gm ON gm.family_id=s.family_id AND gm.organization_id=org AND gm.school_id=school
+          AND gm.member_role='GUARDIAN' AND gm.person_id<>m.id
+        WHERE s.person_id=m.id AND s.organization_id=org AND s.school_id=school AND s.member_role IN ('STUDENT','DEPENDENT'))
+      AND NOT EXISTS(SELECT 1 FROM hon.student_profiles sp WHERE sp.person_id=m.id AND sp.organization_id=org AND sp.school_id=school
+        AND sp.birth_date IS NOT NULL AND sp.birth_date<=current_date-interval '18 years') AS minor
+    FROM matched m
+  ),
   reach AS (
-    SELECT m.id AS matched_id,m.id AS person_id FROM matched m WHERE hon.school_blast_address(m.phone_e164,m.email::text,chan) IS NOT NULL
+    SELECT m.id AS matched_id,m.id AS person_id FROM matched m JOIN kids k ON k.id=m.id
+    WHERE NOT k.minor AND hon.school_blast_address(m.phone_e164,m.email::text,chan) IS NOT NULL
     UNION
-    SELECT m.id,gp.id FROM matched m
+    SELECT m.id,gp.id FROM matched m JOIN kids k ON k.id=m.id
       JOIN hon.family_members s ON s.person_id=m.id AND s.organization_id=org AND s.school_id=school AND s.member_role IN ('STUDENT','DEPENDENT')
       JOIN hon.family_members gm ON gm.family_id=s.family_id AND gm.organization_id=org AND gm.school_id=school AND gm.member_role='GUARDIAN' AND gm.person_id<>m.id
       JOIN hon.people gp ON gp.id=gm.person_id AND gp.organization_id=org AND gp.school_id=school
-    WHERE hon.school_blast_address(m.phone_e164,m.email::text,chan) IS NULL AND hon.school_blast_address(gp.phone_e164,gp.email::text,chan) IS NOT NULL AND NOT hon.demo_data_is_demo('people',gp.id)
+    WHERE (k.minor OR hon.school_blast_address(m.phone_e164,m.email::text,chan) IS NULL)
+      AND hon.school_blast_address(gp.phone_e164,gp.email::text,chan) IS NOT NULL AND NOT hon.demo_data_is_demo('people',gp.id)
+      AND NOT EXISTS(SELECT 1 FROM hon.school_contact_archives ar WHERE ar.person_id=gp.id AND ar.organization_id=org AND ar.school_id=school AND ar.restored_at IS NULL)
   ),
   recipients AS (
     SELECT DISTINCT r.person_id,hon.school_blast_address(p.phone_e164,p.email::text,chan) AS address,
