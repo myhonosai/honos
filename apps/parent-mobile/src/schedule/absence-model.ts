@@ -62,6 +62,6 @@ export const ABSENCE_REFUSALS: Record<string, string> = {
   PARENT_ABSENCE_GUARDIAN_REQUIRED: 'Only a parent or guardian on the account can report an absence.',
   PARENT_ABSENCE_SCOPE_DENIED: 'Your family access does not allow reporting absences.',
   PARENT_ABSENCE_SCOPE_CHANGED: 'Your family access changed. Please try again.',
-  PARENT_ABSENCE_SCOPE_AMBIGUOUS: 'Your account is linked to more than one family. Please use the HON parent website for now.',
+  PARENT_ABSENCE_SCOPE_AMBIGUOUS: 'Your account is linked to more than one family. Choose your family on the HON parent website, then try again.',
   IDEMPOTENCY_KEY_REUSED: 'This request could not be matched to the earlier one. Please start again.',
 };

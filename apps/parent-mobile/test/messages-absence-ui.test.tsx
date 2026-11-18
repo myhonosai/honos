@@ -80,6 +80,26 @@ describe('Report an absence', () => {
     expect(api.reportAbsence).toHaveBeenCalledWith({ studentProfileId: CHILD_A, startsAt: '2026-11-18T08:00:00.000Z', endsAt: '2026-11-19T08:00:00.000Z' }, '00000000-0000-4000-8000-000000000001');
   });
 
+  it('an unknown outcome retries the exact same request and key, even after the clock moves', async () => {
+    let clock = Date.parse(NOW);
+    const reportAbsence = jest.fn().mockResolvedValueOnce({ ok: false, state: 'unknown' })
+      .mockResolvedValueOnce({ ok: true, replayed: true, data: { status: 'SUBMITTED', submittedAt: NOW } });
+    const api = fakeApi({ reportAbsence });
+    await render(<ParentApp api={api} session={session} now={() => new Date(clock)} newKey={newKey} />);
+    await screen.findByRole('button', { name: 'Open Test Child A journey' });
+    await fireEvent.press(screen.getByRole('tab', { name: 'Schedule' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Report an absence' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Test Child A' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Today' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Send absence to school' }));
+    expect(await screen.findByText(/could not confirm this with your school/)).toBeTruthy();
+    clock += 2 * 60_000;
+    await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('Sent to your school')).toBeTruthy();
+    expect(reportAbsence.mock.calls[1]).toEqual(reportAbsence.mock.calls[0]);
+    expect(reportAbsence.mock.calls[0][0].startsAt).toBe('2026-11-17T15:01:00.000Z');
+  });
+
   it('a refusal explains why', async () => {
     const api = fakeApi({ reportAbsence: jest.fn(async () => ({ ok: false, state: 'refused', code: 'PARENT_ABSENCE_GUARDIAN_REQUIRED' })) });
     await openTab(api, 'Schedule');

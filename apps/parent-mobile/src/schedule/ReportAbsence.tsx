@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import type { ParentPlannedAbsenceRequestContext } from '@hon/contracts/parent-planned-absence-request';
-import type { ParentRead } from '../api/client';
+import type { ParentRead, PlannedAbsenceInput } from '../api/client';
 import { useFamily } from '../family/family-data';
 import { Body, Button, Card, Loading, Pill, Section } from '../ui/parts';
 import { radius, space, TOUCH, type, useColors } from '../ui/theme';
@@ -26,6 +26,8 @@ export function ReportAbsence() {
   const [reason, setReason] = useState('');
   const [status, setStatus] = useState<Status>({ phase: 'idle' });
   const generation = useRef(0);
+  /** The exact request behind an unanswered key: a retry resends these same bytes, never a recomputed window. */
+  const pending = useRef<{ action: string; input: PlannedAbsenceInput } | null>(null);
   const timeZone = state.status === 'ready' ? state.timeZone : null;
 
   const load = useCallback(async () => {
@@ -39,24 +41,31 @@ export function ReportAbsence() {
   if (state.status !== 'ready') return null;
   const days = upcomingDays(timeZone, now());
   const today = days[0]!;
-  const reset = () => { setOpen(false); setChild(null); setDay(null); setReason(''); setStatus({ phase: 'idle' }); };
+  const reset = () => { if (pending.current) settle(pending.current.action); setOpen(false); setChild(null); setDay(null); setReason(''); setStatus({ phase: 'idle' }); };
 
+  const settle = (action: string) => { keys.settle(action); pending.current = null; };
   const send = async () => {
     if (!child || !day) return;
-    const window = absenceWindow(timeZone, day, now());
-    if (!window) { setStatus({ phase: 'refused', message: 'That day is already over. Pick another day.' }); return; }
-    const trimmed = reason.trim();
+    const trimmed = reason.trim().slice(0, 1000);
     const action = `absence:${child}:${day}:${trimmed}`;
+    if (pending.current?.action !== action) {
+      // A new intended request: fix its window now. An unknown outcome keeps this exact input with its key.
+      const window = absenceWindow(timeZone, day, now());
+      if (!window) { setStatus({ phase: 'refused', message: 'That day is already over. Pick another day.' }); return; }
+      if (pending.current) keys.settle(pending.current.action);
+      pending.current = { action, input: { studentProfileId: child, ...window, ...(trimmed ? { reason: trimmed } : {}) } };
+    }
+    const input = pending.current.input;
     const key = keys.keyFor(action);
     setStatus({ phase: 'sending' });
-    const result = await api.reportAbsence({ studentProfileId: child, ...window, ...(trimmed ? { reason: trimmed.slice(0, 1000) } : {}) }, key);
+    const result = await api.reportAbsence(input, key);
     if (result.ok) {
-      keys.settle(action);
+      settle(action);
       setStatus({ phase: 'done', message: 'Sent to your school. They will review it. This does not change bookings or attendance by itself.' });
       return;
     }
     if (result.state === 'unknown' || result.state === 'offline' || result.state === 'unavailable') { setStatus({ phase: 'unknown' }); return; }
-    keys.settle(action);
+    settle(action);
     setStatus({ phase: 'refused', message: (result.code && ABSENCE_REFUSALS[result.code]) ?? 'HON could not record this. Nothing was sent to your school.' });
   };
 

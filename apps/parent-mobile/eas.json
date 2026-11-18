@@ -28,7 +28,8 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_HON_API_URL": "https://app.myhonos.com/api",
-        "EXPO_PUBLIC_HON_WEB_URL": "https://app.myhonos.com"
+        "EXPO_PUBLIC_HON_WEB_URL": "https://app.myhonos.com",
+        "EXPO_PUBLIC_HON_SAMPLE_MODE": "0"
       }
     }
   },
