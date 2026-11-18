@@ -1,9 +1,11 @@
-import React, { useId } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import type { PersonRecord, SchoolContactCard, SchoolContactOptions } from '@hon/contracts';
 import { accountValue } from '../account-status/copy';
 import { peopleText, type PeopleKey } from './copy';
 import { ContactsList } from './contacts-list';
-import { ContactCard as ContactCardTabs, type CardState, type CardTab, type MembershipSlot, type MembershipToolsSlot } from './contact-card';
+import { ContactCard as ContactCardTabs, type CardSlots, type CardState, type CardTab, type MembershipSlot, type MembershipToolsSlot } from './contact-card';
+import type { CardMode } from './card-panel';
+import { panelText, type PanelKey } from './panel-copy';
 import type { ContactFilters } from './contacts-http';
 import { localToday, type CommandKind, type ListState, type RecordState, type SaveOutcome } from './model';
 import styles from './people.module.css';
@@ -22,6 +24,11 @@ export type PeopleViewProps = Readonly<{
   card?: CardState | undefined;
   /** The tab the card opens on (a People link can ask for one), and the actions under each membership. */
   cardTab?: CardTab | undefined; membershipSlot?: MembershipSlot | undefined; membershipTools?: MembershipToolsSlot | undefined;
+  /** Owner (2026-11-16): the open card slides out beside the list (SIDE) or over it (FULL); Close (or Escape) puts it away. */
+  cardMode?: CardMode | undefined; onCardMode?: ((mode: CardMode) => void) | undefined; onClose?: (() => void) | undefined;
+  onCardTab?: ((tab: CardTab) => void) | undefined;
+  /** Each family's app access and this person's messages, placed inside the card. */
+  familySlot?: CardSlots['familySlot']; messagesSlot?: CardSlots['messagesSlot'];
   /** C3 (0523): delete, restore and merge for the open contact (its own reads and commands), and what the last one did. */
   actionsSlot?: ((card: SchoolContactCard) => React.ReactNode) | undefined; actionNotice?: string | null | undefined;
   onFilters?: ((filters: ContactFilters) => void) | undefined; onMore?: (() => void) | undefined; onOpen?: ((personId: string) => void) | undefined; onReload?: (() => void) | undefined;
@@ -62,22 +69,52 @@ export function PeopleView(props: PeopleViewProps): React.ReactElement {
   return <section className={styles.people} aria-labelledby="people-title" data-hon-native="">
     <header className={styles.head}>
       <div><h1 id="people-title">{t('title')}</h1><p className={styles.intro}>{t('intro')}</p></div>
+      {/* The shared inboxes stay for working through unanswered messages across every contact. */}
+      <nav className={styles.inboxes} aria-label={panelText(language, 'inboxes')}>
+        <a className={styles.secondary} href="/staff/conversations">{panelText(language, 'textsInbox')}</a>
+        <a className={styles.secondary} href="/staff/family-messages">{panelText(language, 'familyInbox')}</a>
+      </nav>
     </header>
     {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
-    {visible ? <div className={styles.layout}>
-      <article className={styles.card} aria-labelledby="people-list-title">
+    {visible ? <div className={styles.layout} data-card-mode={selectedId ? props.cardMode ?? 'SIDE' : 'CLOSED'}>
+      <article className={styles.card} aria-labelledby="people-list-title" data-testid="people-list" hidden={Boolean(selectedId) && props.cardMode === 'FULL'}>
         <h2 id="people-list-title">{t('listTitle')}</h2>
         <ContactsList language={language} list={list} filters={props.filters} options={props.options} selectedId={selectedId} pt={t}
           onOpen={onOpen} onFilters={props.onFilters} onMore={props.onMore}/>
       </article>
-      <div className={styles.detail}>
-        {props.actionNotice ? <p className={styles.notice} role="status" data-testid="contact-action-done">{props.actionNotice}</p> : null}
-        {props.card && selectedId ? <ContactCardTabs key={selectedId} language={language} card={props.card} initialTab={props.cardTab ?? 'overview'} membershipSlot={props.membershipSlot} membershipTools={props.membershipTools}/> : null}
-        {props.card?.state === 'READY' && props.actionsSlot ? props.actionsSlot(props.card.card) : null}
-        <RecordPanel {...props} t={t} onReload={onReload}/>
-      </div>
+      {selectedId ? <ContactPanel key={selectedId} {...props} t={t}/> : null}
     </div> : null}
   </section>;
+}
+
+const EDITING = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
+/** The slide-out card: mode and close buttons, the last delete/merge notice, then the card with Details inside it. */
+function ContactPanel(props: PeopleViewProps & { t: T }): React.ReactElement {
+  const { language, t, onReload } = props;
+  const p = (key: PanelKey) => panelText(language, key);
+  const mode = props.cardMode ?? 'SIDE';
+  const panel = useRef<HTMLElement | null>(null);
+  // Opening a card moves focus into it, so keyboard and screen-reader users land on the person they chose.
+  useEffect(() => { panel.current?.focus({ preventScroll: true }); }, []);
+  const card = props.card ?? { state: 'NONE' as const };
+  const details = <div className={styles.detail} data-testid="person-details">
+    {card.state === 'READY' && props.actionsSlot ? props.actionsSlot(card.card) : null}
+    <RecordPanel {...props} t={t} onReload={onReload}/>
+  </div>;
+  return <aside ref={panel} className={styles.panel} data-testid="contact-panel" aria-label={p('panelLabel')} tabIndex={-1}
+    onKeyDown={event => { if (event.key === 'Escape' && props.onClose && !EDITING.has((event.target as HTMLElement).tagName)) { event.stopPropagation(); props.onClose(); } }}>
+    <div className={styles.panelBar}>
+      <button type="button" className={`${styles.secondary} ${styles.modeToggle}`} data-testid="card-mode" aria-pressed={mode === 'FULL'}
+        onClick={() => props.onCardMode?.(mode === 'SIDE' ? 'FULL' : 'SIDE')}>{p(mode === 'SIDE' ? 'fullScreen' : 'keepSide')}</button>
+      <button type="button" className={styles.secondary} data-testid="card-close" onClick={() => props.onClose?.()}>{p('close')}</button>
+    </div>
+    {props.actionNotice ? <p className={styles.notice} role="status" data-testid="contact-action-done">{props.actionNotice}</p> : null}
+    {card.state === 'READY'
+      ? <ContactCardTabs language={language} card={card} initialTab={props.cardTab ?? 'overview'} tab={props.onCardTab ? props.cardTab : undefined} onTab={props.onCardTab}
+          membershipSlot={props.membershipSlot} membershipTools={props.membershipTools} detailsSlot={() => details} familySlot={props.familySlot} messagesSlot={props.messagesSlot}/>
+      // The card could not be read (or is still reading): the person's own record can still be seen and corrected.
+      : <><ContactCardTabs language={language} card={card}/><div data-testid="contact-tab-details">{details}</div></>}
+  </aside>;
 }
 
 function RecordPanel(props: PeopleViewProps & { t: T }) {

@@ -3,12 +3,13 @@ import type { SchoolContactCard } from '@hon/contracts';
 import { cardText, codeLabel, type CardKey } from './contact-card-copy';
 import { contactsText } from './contacts-copy';
 import { endBadge } from './contacts-list';
+import { panelText } from './panel-copy';
 import styles from './people.module.css';
 
 /** The contact card (C2, 0522) as read for the open person. */
 export type CardState =
   | Readonly<{ state: 'NONE' }> | Readonly<{ state: 'LOADING' }> | Readonly<{ state: 'UNAVAILABLE' }> | Readonly<{ state: 'READY'; card: SchoolContactCard }>;
-export const CARD_TABS = ['overview', 'family', 'appointments', 'tasks', 'membership', 'billing', 'messages', 'timeline'] as const;
+export const CARD_TABS = ['overview', 'details', 'family', 'appointments', 'tasks', 'membership', 'billing', 'messages', 'timeline'] as const;
 export type CardTab = typeof CARD_TABS[number];
 type T = (key: CardKey, vars?: Readonly<Record<string, string | number>>) => string;
 
@@ -28,15 +29,26 @@ export type MembershipItem = SchoolContactCard['membership'] extends infer M ? M
 export type MembershipSlot = (item: MembershipItem) => React.ReactNode;
 /** The People page puts New membership and Renew here, at the top of the membership tab (shown even before the first membership). */
 export type MembershipToolsSlot = (items: readonly MembershipItem[]) => React.ReactNode;
-export function ContactCard({ language, card, initialTab = 'overview', membershipSlot, membershipTools }: { language: string; card: CardState; initialTab?: CardTab;
-  membershipSlot?: MembershipSlot | undefined; membershipTools?: MembershipToolsSlot | undefined }): React.ReactElement | null {
-  const [tab, setTab] = useState<CardTab>(initialTab);
+export type FamilyItem = SchoolContactCard['family'] extends infer F ? F extends { families: readonly (infer I)[] } ? I : never : never;
+/**
+ * Slots the People page fills (owner, 2026-11-16: one Contacts page): Details holds the editable record, consents and
+ * delete/merge; each family gets its app access; Messages gets this person's texts and family messages. Each slot does
+ * its own reads, which the server authorizes; the card only places them.
+ */
+export type CardSlots = Readonly<{ membershipSlot?: MembershipSlot | undefined; membershipTools?: MembershipToolsSlot | undefined; detailsSlot?: (() => React.ReactNode) | undefined;
+  familySlot?: ((family: FamilyItem) => React.ReactNode) | undefined; messagesSlot?: ((card: SchoolContactCard) => React.ReactNode) | undefined }>;
+export function ContactCard({ language, card, initialTab = 'overview', tab: shownTab, onTab, ...slots }: { language: string; card: CardState; initialTab?: CardTab;
+  /** When given, the page owns the tab (it is kept in the address); otherwise the card keeps it. */
+  tab?: CardTab | undefined; onTab?: ((tab: CardTab) => void) | undefined } & CardSlots): React.ReactElement | null {
+  const [ownTab, setOwnTab] = useState<CardTab>(initialTab);
+  const tab = shownTab ?? ownTab;
+  const setTab = (next: CardTab) => { setOwnTab(next); onTab?.(next); };
   const t: T = (key, vars) => cardText(language, key, vars);
   if (card.state === 'NONE') return null;
   if (card.state === 'LOADING') return <p className={styles.notice} role="status">{t('loading')}</p>;
   if (card.state === 'UNAVAILABLE') return <p className={styles.notice} role="status">{t('unavailable')}</p>;
   const c = card.card;
-  const allowed = (k: CardTab) => k === 'overview' || k === 'timeline' || (c[k] as { allowed: boolean }).allowed;
+  const allowed = (k: CardTab) => k === 'overview' || k === 'details' || k === 'timeline' || (c[k] as { allowed: boolean }).allowed;
   return <article className={styles.card} aria-label={`${c.person.givenName} ${c.person.familyName}`} data-testid="contact-card">
     <header className={styles.personHead}>
       <h2>{c.person.givenName} {c.person.familyName}</h2>
@@ -44,14 +56,14 @@ export function ContactCard({ language, card, initialTab = 'overview', membershi
     </header>
     <div className={styles.tabs} role="group" aria-label={t('tabsLabel')}>
       {CARD_TABS.map(k => <button key={k} type="button" className={styles.tab} aria-pressed={tab === k} data-tab={k} data-allowed={allowed(k) ? 'true' : 'false'}
-        onClick={() => setTab(k)}>{t(k)}{k === 'messages' && c.messages.allowed ? <span className={styles.count}>{c.messages.direct + (c.messages.family ?? 0)}</span> : null}</button>)}
+        onClick={() => setTab(k)}>{k === 'details' ? panelText(language, 'details') : t(k)}{k === 'messages' && c.messages.allowed ? <span className={styles.count}>{c.messages.direct + (c.messages.family ?? 0)}</span> : null}</button>)}
     </div>
-    <div className={styles.tabBody} data-testid={`contact-tab-${tab}`}><Body language={language} c={c} tab={tab} t={t} slot={membershipSlot} tools={membershipTools}/></div>
+    <div className={styles.tabBody} data-testid={`contact-tab-${tab}`}><Body language={language} c={c} tab={tab} t={t} slots={slots}/></div>
   </article>;
 }
 
-function Body({ language, c, tab, t, slot, tools }: { language: string; c: SchoolContactCard; tab: CardTab; t: T; slot?: MembershipSlot | undefined;
-  tools?: MembershipToolsSlot | undefined }): React.ReactElement {
+function Body({ language, c, tab, t, slots }: { language: string; c: SchoolContactCard; tab: CardTab; t: T; slots: CardSlots }): React.ReactElement {
+  const slot = slots.membershipSlot, tools = slots.membershipTools;
   const denied = <p className={styles.meta} role="note">{t('notAllowed')}</p>;
   const none = <p className={styles.meta}>{t('none')}</p>;
   switch (tab) {
@@ -65,12 +77,15 @@ function Body({ language, c, tab, t, slot, tools }: { language: string; c: Schoo
         <div><dt>{t('added')}</dt><dd>{t('addedOn', { date: day(language, c.person.createdAt) })}{o.openLead ? ` · ${t('openLead')}` : ''}</dd></div>
       </dl>;
     }
+    case 'details':
+      return <>{slots.detailsSlot?.() ?? null}</>;
     case 'family':
       if (!c.family.allowed) return denied;
       if (!c.family.families.length) return none;
       return <>{c.family.families.map(f => <section key={f.familyId} className={styles.subsection}><h3>{f.name}</h3>
         <ul className={styles.plain}>{f.members.map(m => <li key={m.personId}>
-          <strong>{m.givenName} {m.familyName}</strong> · {t(`role_${m.role}` as CardKey)}{m.billingContact ? ` · ${t('billingContact')}` : ''}</li>)}</ul></section>)}</>;
+          <strong>{m.givenName} {m.familyName}</strong> · {t(`role_${m.role}` as CardKey)}{m.billingContact ? ` · ${t('billingContact')}` : ''}</li>)}</ul>
+        {slots.familySlot?.(f) ?? null}</section>)}</>;
     case 'appointments':
       if (!c.appointments.allowed) return denied;
       if (!c.appointments.items.length) return none;
@@ -95,8 +110,11 @@ function Body({ language, c, tab, t, slot, tools }: { language: string; c: Schoo
           {i.dueAt && i.status === 'ISSUED' ? ` · ${t('due', { date: day(language, i.dueAt) })}` : ''}</li>)}</ul> : none}
       </>;
     case 'messages':
-      if (!c.messages.allowed) return denied;
-      return <ul className={styles.plain}><li>{t('directMessages', { n: c.messages.direct })}</li>{c.messages.family === null ? null : <li>{t('familyMessages', { n: c.messages.family })}</li>}</ul>;
+      // Each message section checks its own permission on the server, so the slot shows even when the counts are not allowed.
+      return <>
+        {c.messages.allowed ? <ul className={styles.plain}><li>{t('directMessages', { n: c.messages.direct })}</li>{c.messages.family === null ? null : <li>{t('familyMessages', { n: c.messages.family })}</li>}</ul> : denied}
+        {slots.messagesSlot?.(c) ?? null}
+      </>;
     case 'timeline':
       return <>
         <p className={styles.meta}>{t('timelineNote')}</p>

@@ -5,4 +5,5 @@ import { requireVerifiedWebSession } from '../../../server/require-web-session';
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'HON | People', referrer: 'no-referrer', robots: { index: false, follow: false } };
 
-export default async function PeoplePage() { await requireVerifiedWebSession(); return <People />; }
+/** The verified subject lets the card's family access section re-check that the same account is still signed in. */
+export default async function PeoplePage() { const identity = await requireVerifiedWebSession(); return <People sessionSubject={identity.externalSubject}/>; }
