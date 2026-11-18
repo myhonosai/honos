@@ -167,22 +167,91 @@
   .header nav ul { justify-content: flex-start; gap: 4px 16px; }
 }
 
-/* Template personalities. */
+/* Blocks shaped after proven school sites. */
+.heroWithForm { align-items: center; }
+@container (min-width: 900px) { .heroWithForm { grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr); } }
+.heroForm { position: relative; min-width: 0; padding: clamp(18px, 3cqi, 30px); border-radius: var(--site-radius); background: var(--site-bg); color: var(--site-text); box-shadow: 0 30px 60px -24px rgb(0 0 0 / 60%); }
+.heroForm h2 { margin: 0 0 8px; font-size: clamp(1.4rem, 2.4cqi, 1.8rem); }
+.heroForm p { color: inherit; opacity: 0.85; font-size: 1rem; margin: 0 0 12px; }
+.heroForm .form fieldset { padding: 0; box-shadow: none; max-width: none; }
+.offerBand {
+  display: grid; gap: 22px; align-items: center; padding: clamp(36px, 5cqi, 64px) clamp(18px, 6cqi, 80px);
+  background: var(--site-primary); color: var(--site-on-primary);
+}
+@container (min-width: 900px) { .offerBand { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); } }
+.offerBand h2 { margin: 0 0 10px; font-size: clamp(1.6rem, 3.2cqi, 2.4rem); font-weight: 900; }
+.offerBand p { margin: 0; opacity: 0.92; }
+.offerBand .form fieldset { max-width: none; color: var(--site-text); }
+.offerText { min-width: 0; }
+.programCard { padding: 0 0 20px; overflow: hidden; }
+.programCard > :not(.cardMedia) { margin-left: 20px; margin-right: 20px; }
+.cardMedia { position: relative; }
+.programCard .cardImage, .programCard .cardArt { border-radius: 0; aspect-ratio: 4 / 3; }
+.ages { position: absolute; left: 14px; bottom: 14px; padding: 5px 12px; border-radius: 999px; background: var(--site-accent); color: var(--site-text); font-weight: 800; font-size: 0.85rem; box-shadow: 0 6px 16px -6px rgb(0 0 0 / 50%); }
+.author { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; font-weight: 700; }
+.avatar { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--site-primary); color: var(--site-on-primary); font-weight: 900; }
+.findUs { display: grid; gap: 22px; align-items: start; }
+@container (min-width: 820px) { .findUs { grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); } }
+.findActions { display: grid; gap: 12px; padding: 22px; border-radius: var(--site-radius); background: var(--site-primary); color: var(--site-on-primary); box-shadow: var(--site-shadow); }
+.findActions .buttonGhost { color: var(--site-on-primary) !important; border-color: color-mix(in srgb, var(--site-on-primary) 60%, transparent); }
+.site > .banner { position: relative; z-index: 6; padding: 8px 16px; font-size: 0.95rem; }
+
+/* Looks: each template is its own art direction, not a recolour.
+   MODERN_CLEAN: calm and editorial. Thin lines, no heavy shadows, generous space, a soft grid behind the hero. */
+.site[data-template="MODERN_CLEAN"] { --site-radius: 14px; --site-shadow: none; }
+.site[data-template="MODERN_CLEAN"] .card, .site[data-template="MODERN_CLEAN"] .faq, .site[data-template="MODERN_CLEAN"] .contact, .site[data-template="MODERN_CLEAN"] .table { border: 1px solid color-mix(in srgb, var(--site-text) 14%, transparent); }
+.site[data-template="MODERN_CLEAN"] .heroArt::before {
+  background-image: linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px); background-size: 56px 56px; opacity: 0.12;
+  mask-image: radial-gradient(circle at 70% 40%, #000 0, transparent 70%);
+}
+.site[data-template="MODERN_CLEAN"] .heroArt::after { border-width: 1px; opacity: 0.5; width: 38%; }
+.site[data-template="MODERN_CLEAN"] .block h2::after { width: 28px; height: 3px; }
+.site[data-template="MODERN_CLEAN"] .button { box-shadow: none; }
+
+/* FAMILY_FRIENDLY: playful and illustrated. Round shapes, confetti, a wavy hero edge, colourful card tops. */
 .site[data-template="FAMILY_FRIENDLY"] { --site-radius: 26px; }
-.site[data-template="FAMILY_FRIENDLY"] .hero { border-radius: 0 0 48px 48px; }
+.site[data-template="FAMILY_FRIENDLY"] .hero { padding-bottom: clamp(88px, 12cqi, 150px); }
+.site[data-template="FAMILY_FRIENDLY"] .hero::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; z-index: 0; height: clamp(36px, 6cqi, 70px); width: auto; aspect-ratio: auto; border: 0; border-radius: 0; opacity: 1; transform: none;
+  background: var(--site-bg);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 70' preserveAspectRatio='none'%3E%3Cpath d='M0 40 C 200 0 400 80 600 40 S 1000 0 1200 40 V70 H0Z'/%3E%3C/svg%3E") no-repeat center / 100% 100%;
+}
 .site[data-template="FAMILY_FRIENDLY"] .heroArt::before {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='white'%3E%3Ccircle cx='10' cy='10' r='4'/%3E%3Ccircle cx='50' cy='30' r='6'/%3E%3Ccircle cx='25' cy='60' r='3'/%3E%3Ccircle cx='70' cy='70' r='4'/%3E%3C/g%3E%3C/svg%3E");
-  background-size: 160px 160px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='white'%3E%3Ccircle cx='14' cy='16' r='6'/%3E%3Cpath d='M70 20l6 12 13 2-9 9 2 13-12-6-12 6 2-13-9-9 13-2z'/%3E%3Ccircle cx='30' cy='86' r='4'/%3E%3Crect x='86' y='80' width='14' height='14' rx='4' transform='rotate(20 93 87)'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 180px 180px; opacity: 0.2; mask-image: none;
 }
+.site[data-template="FAMILY_FRIENDLY"] .hero h1 { font-weight: 900; letter-spacing: -0.01em; }
+.site[data-template="FAMILY_FRIENDLY"] .block h2::after { width: 70px; height: 10px; background: radial-gradient(circle, var(--site-accent) 4px, transparent 5px) 0 0 / 14px 10px repeat-x; border-radius: 0; }
+.site[data-template="FAMILY_FRIENDLY"] .cards > li:nth-child(3n+1) { border-top: 8px solid var(--site-primary); }
+.site[data-template="FAMILY_FRIENDLY"] .cards > li:nth-child(3n+2) { border-top: 8px solid var(--site-accent); }
+.site[data-template="FAMILY_FRIENDLY"] .cards > li:nth-child(3n) { border-top: 8px solid color-mix(in srgb, var(--site-primary) 50%, var(--site-accent)); }
+.site[data-template="FAMILY_FRIENDLY"] .card:nth-child(odd) { transform: rotate(-0.6deg); }
+.site[data-template="FAMILY_FRIENDLY"] .card:nth-child(even) { transform: rotate(0.6deg); }
+.site[data-template="FAMILY_FRIENDLY"] .offerBand { border-radius: 36px; margin: 0 clamp(10px, 3cqi, 40px); }
+.site[data-template="FAMILY_FRIENDLY"] .cta { border-radius: 40px; margin: 24px clamp(10px, 3cqi, 40px); }
+
+/* BOLD_POWERFUL: cinematic and dark. Black bands, uppercase type, sharp corners, a slashed accent. */
 .site[data-template="BOLD_POWERFUL"] { --site-radius: 4px; --site-deep: #000; }
-.site[data-template="BOLD_POWERFUL"] h1, .site[data-template="BOLD_POWERFUL"] h2, .site[data-template="BOLD_POWERFUL"] .button { text-transform: uppercase; letter-spacing: 0.01em; }
+.site[data-template="BOLD_POWERFUL"] h1, .site[data-template="BOLD_POWERFUL"] h2, .site[data-template="BOLD_POWERFUL"] h3, .site[data-template="BOLD_POWERFUL"] .button, .site[data-template="BOLD_POWERFUL"] .buttonGhost { text-transform: uppercase; letter-spacing: 0.01em; }
+.site[data-template="BOLD_POWERFUL"] .header { background: rgb(8 8 8 / 92%); border-bottom-color: rgb(255 255 255 / 8%); }
+.site[data-template="BOLD_POWERFUL"] .header nav a, .site[data-template="BOLD_POWERFUL"] .brand { color: #fff !important; }
 .site[data-template="BOLD_POWERFUL"] .heroArt { background: linear-gradient(120deg, #000 0%, var(--site-primary) 55%, color-mix(in srgb, var(--site-accent) 70%, #000) 140%); }
-.site[data-template="BOLD_POWERFUL"] .heroArt::before {
-  background-image: repeating-linear-gradient(-45deg, white 0 2px, transparent 2px 22px); background-size: auto; opacity: 0.08;
-}
+.site[data-template="BOLD_POWERFUL"] .heroArt::before { background-image: repeating-linear-gradient(-45deg, white 0 2px, transparent 2px 22px); background-size: auto; opacity: 0.08; }
 .site[data-template="BOLD_POWERFUL"] .heroArt::after { border-radius: 0; transform: skewX(-18deg); right: -12%; bottom: 0; width: 34%; aspect-ratio: auto; height: 100%; border: 0; background: var(--site-accent); opacity: 0.85; }
+.site[data-template="BOLD_POWERFUL"] .hero h1 { font-size: clamp(2.6rem, 7cqi, 5.2rem); line-height: 0.98; }
 .site[data-template="BOLD_POWERFUL"] .button, .site[data-template="BOLD_POWERFUL"] .buttonGhost { border-radius: 4px; }
 .site[data-template="BOLD_POWERFUL"] .block h2::after { width: 80px; height: 6px; border-radius: 0; }
+.site[data-template="BOLD_POWERFUL"] .main > section:nth-of-type(even).block { background: #0d0d0d; color: #f4f4f4; }
+.site[data-template="BOLD_POWERFUL"] .main > section:nth-of-type(even).block .card,
+.site[data-template="BOLD_POWERFUL"] .main > section:nth-of-type(even).block .faq,
+.site[data-template="BOLD_POWERFUL"] .main > section:nth-of-type(even).block .contact { background: #181818; color: #f4f4f4; border-color: rgb(255 255 255 / 10%); }
+.site[data-template="BOLD_POWERFUL"] .main > section:nth-of-type(even).block a:not(.button) { color: #fff; }
+.site[data-template="BOLD_POWERFUL"] .offerBand { background: linear-gradient(110deg, var(--site-primary), color-mix(in srgb, var(--site-primary) 70%, #000)); }
+.site[data-template="BOLD_POWERFUL"] .cta { background: #000; }
+.site[data-template="BOLD_POWERFUL"] .cta::before { border-radius: 0; transform: skewX(-18deg); background: var(--site-primary); filter: none; opacity: 0.6; }
+.site[data-template="BOLD_POWERFUL"] .ages { border-radius: 2px; text-transform: uppercase; }
+
+/* TRADITIONAL: dojo heritage. Serif type, centred layout, thin double rules, a seal mark under headings. */
 .site[data-template="TRADITIONAL"] { --site-radius: 6px; }
 .site[data-template="TRADITIONAL"] .hero { text-align: center; justify-items: center; }
 .site[data-template="TRADITIONAL"] .hero p { margin-left: auto; margin-right: auto; }
@@ -193,10 +262,24 @@
   background-size: 192px 112px; mask-image: none;
 }
 .site[data-template="TRADITIONAL"] .heroArt::after { left: 50%; right: auto; bottom: auto; top: 50%; width: min(70cqi, 620px); transform: translate(-50%, -50%); border-width: 2px; opacity: 0.4; }
+.site[data-template="TRADITIONAL"] .block { text-align: center; }
+.site[data-template="TRADITIONAL"] .block > p { margin-left: auto; margin-right: auto; }
 .site[data-template="TRADITIONAL"] .block h2 { font-weight: 700; }
-.site[data-template="TRADITIONAL"] .block h2::after { height: 2px; width: 90px; }
+.site[data-template="TRADITIONAL"] .block h2::after { width: 120px; height: 7px; margin: 16px auto 0; border-radius: 0; background: transparent; border-top: 1px solid var(--site-accent); border-bottom: 1px solid var(--site-accent); }
+.site[data-template="TRADITIONAL"] .card, .site[data-template="TRADITIONAL"] .table, .site[data-template="TRADITIONAL"] .contact, .site[data-template="TRADITIONAL"] .faq { text-align: left; box-shadow: none; border: 1px solid color-mix(in srgb, var(--site-text) 18%, transparent); outline: 1px solid color-mix(in srgb, var(--site-text) 10%, transparent); outline-offset: 4px; }
+.site[data-template="TRADITIONAL"] .form fieldset, .site[data-template="TRADITIONAL"] .findUs { margin-left: auto; margin-right: auto; text-align: left; }
+.site[data-template="TRADITIONAL"] .button, .site[data-template="TRADITIONAL"] .buttonGhost { border-radius: 4px; letter-spacing: 0.06em; }
+.site[data-template="TRADITIONAL"] .monogram, .site[data-template="TRADITIONAL"] .avatar { border-radius: 50%; }
+
+/* HIGH_CONVERSION: built to get the trial booked. Form beside the hero, offer bands, big buttons, checkmarks. */
+.site[data-template="HIGH_CONVERSION"] { --site-radius: 12px; }
 .site[data-template="HIGH_CONVERSION"] .heroArt::after { display: none; }
 .site[data-template="HIGH_CONVERSION"] .hero h1 { font-size: clamp(2.2rem, 5.6cqi, 4rem); }
+.site[data-template="HIGH_CONVERSION"] .button { min-height: 54px; padding: 14px 30px; font-size: 1.05rem; }
+.site[data-template="HIGH_CONVERSION"] .cta p::before { content: "✓ "; font-weight: 900; color: var(--site-primary); }
+.site[data-template="HIGH_CONVERSION"] .cta { background: var(--site-accent); color: var(--site-text); }
+.site[data-template="HIGH_CONVERSION"] .cta .button { background: var(--site-primary); border-color: var(--site-primary); color: var(--site-on-primary) !important; }
+.site[data-template="HIGH_CONVERSION"] .cta::before { display: none; }
 
 /* In the owner's preview the site sits in a small frame: no tall hero, and the header stays in the flow. */
 .site[data-mode="preview"] { min-height: 0; }

@@ -65,12 +65,15 @@ export function buildWebsiteFromTemplate(template: WebsiteTemplate, facts: Websi
     section('TEXT', 'story', { heading: `About ${name}`.slice(0, 120), body: 'Tell visitors who you are, how long you have taught, and what makes your school special.' }),
     section('INSTRUCTORS', 'team', { heading: 'Our instructors', items: [] })]);
   const schedule = page('schedule', 'CUSTOM', 'Schedule', [section('SCHEDULE', 'times', { heading: 'Class schedule', note: 'Add your weekly classes here.', items: [] })]);
+  // Conversion looks put the enquiry form right under the hero (an offer band, or beside the hero text in HIGH_CONVERSION).
+  const offer = section('LEAD_FORM', 'enquire', { heading: 'Claim your free first class', body: 'Tell us where to reach you and we will help you pick the right class.' });
   const home: WebsiteSection[] = template === 'HIGH_CONVERSION'
-    ? [section('PROMO_BANNER', 'promo', { text: 'Free trial class for new students', ctaLabel: 'Book now', ctaHref: '#trial' }), hero, trial, form, booking, programs,
-      section('TESTIMONIALS', 'reviews', { heading: 'What families say', items: [] }), faq, contact]
-    : template === 'TRADITIONAL' ? [hero, section('TEXT', 'values', { heading: 'Our values', body: 'Courtesy. Integrity. Perseverance. Self-control.' }), programs, trial, form, contact]
-      : template === 'FAMILY_FRIENDLY' ? [hero, programs, section('TESTIMONIALS', 'reviews', { heading: 'What families say', items: [] }), trial, faq, form, contact]
-        : [hero, programs, trial, faq, form, contact];
+    ? [section('PROMO_BANNER', 'promo', { text: 'Free trial class for new students', ctaLabel: 'Book now', ctaHref: '#trial' }), hero, offer, programs,
+      section('TESTIMONIALS', 'reviews', { heading: 'What families say', items: [] }), trial, booking, faq, contact]
+    : template === 'BOLD_POWERFUL' ? [hero, offer, programs, trial, faq, contact]
+      : template === 'TRADITIONAL' ? [hero, section('TEXT', 'values', { heading: 'Our values', body: 'Courtesy. Integrity. Perseverance. Self-control.' }), programs, trial, form, contact]
+        : template === 'FAMILY_FRIENDLY' ? [hero, programs, section('TESTIMONIALS', 'reviews', { heading: 'What families say', items: [] }), trial, faq, form, contact]
+          : [hero, programs, trial, faq, form, contact];
   const doc: WebsiteDocument = { schemaVersion: 1, theme: { template, logoUrl: '', ...clone(THEMES[template]) }, pages: [
     { ...page('home', 'HOME', 'Home', home), seo: { title: clip(name, 70), description: clip(copy.sub.replace('\n', ' '), 160) } }, about, schedule] };
   return validateWebsiteDocument(doc);

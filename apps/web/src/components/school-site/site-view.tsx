@@ -50,8 +50,14 @@ function CardArt({ index, label }: { index: number; label: string }) {
   return <div className={styles.cardArt} data-art={index % 4} aria-hidden="true"><span>{label.trim().charAt(0).toUpperCase()}</span></div>;
 }
 type Ctx = Readonly<{ schoolName: string; programsId: string | null; programsLabel: string }>;
+/** Where a section sits: right after the hero (offer band), or a form the hero shows beside its text (HIGH_CONVERSION). */
+type Place = Readonly<{ afterHero: boolean; heroForm: WebsiteSection | null; inHero: boolean }>;
+const NO_PLACE: Place = { afterHero: false, heroForm: null, inHero: false };
+const initial = (v: unknown) => str(v).trim().charAt(0).toUpperCase();
+const telHref = (v: unknown) => `tel:${str(v).replace(/[^0-9+]/g, '')}`;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function Section({ section, base, mode, pageSlug, ctx }: { section: WebsiteSection; base: string; mode: SiteMode; pageSlug: string; ctx: Ctx }): ReactNode {
+function Section({ section, base, mode, pageSlug, ctx, place = NO_PLACE }: { section: WebsiteSection; base: string; mode: SiteMode; pageSlug: string; ctx: Ctx; place?: Place }): ReactNode {
   const p = section.props;
   // Visitors never see an empty block: a list section with no items (and no text), or contact details with none filled in.
   if (mode === 'public') {
@@ -63,8 +69,9 @@ function Section({ section, base, mode, pageSlug, ctx }: { section: WebsiteSecti
   }
   switch (section.type) {
     case 'HERO': {
-      const image = siteImage(p.imageUrl), split = p.layout === 'SPLIT' && !!image;
-      return <section id={section.id} data-section="HERO" className={`${styles.hero} ${split ? styles.heroSplit : image ? styles.heroPhoto : styles.heroArt}`}>
+      const image = siteImage(p.imageUrl), form = place.heroForm, split = p.layout === 'SPLIT' && !!image && !form;
+      const kind = form ? (image ? styles.heroPhoto : styles.heroArt) : split ? styles.heroSplit : image ? styles.heroPhoto : styles.heroArt;
+      return <section id={section.id} data-section="HERO" className={`${styles.hero} ${kind}${form ? ` ${styles.heroWithForm}` : ''}`}>
         {image && !split && <><Img src={image} alt="" className={styles.heroBackdrop} /><span className={styles.heroShade} aria-hidden="true" /></>}
         <div className={styles.heroText}>
           {ctx.schoolName && <p className={styles.eyebrow}>{ctx.schoolName}</p>}
@@ -73,13 +80,16 @@ function Section({ section, base, mode, pageSlug, ctx }: { section: WebsiteSecti
             {ctx.programsId && <a className={styles.buttonGhost} href={`#${ctx.programsId}`}>{ctx.programsLabel}</a>}</div>
         </div>
         {split && <Img src={image} alt="" className={styles.heroImage} />}
+        {form && <div id={form.id} data-section="LEAD_FORM" className={styles.heroForm}><Heading text={form.props.heading} /><Paras text={form.props.body} />
+          <SiteLeadForm publicFormId={str(form.props.publicFormId)} pageSlug={pageSlug} preview={mode === 'preview'} /></div>}
       </section>;
     }
     case 'PROGRAMS':
       return <section id={section.id} data-section="PROGRAMS" className={styles.block}><Heading text={p.heading} /><Paras text={p.intro} />
-        <ul className={styles.cards}>{items(p.items).map((it, i) => <li key={i} className={styles.card}>
-          {siteImage(it.imageUrl) ? <Img src={it.imageUrl} alt="" className={styles.cardImage} /> : <CardArt index={i} label={str(it.name)} />}
-          <h3>{str(it.name)}</h3>{str(it.ages) && <p className={styles.meta}>{str(it.ages)}</p>}<Paras text={it.description} /></li>)}</ul></section>;
+        <ul className={styles.cards}>{items(p.items).map((it, i) => <li key={i} className={`${styles.card} ${styles.programCard}`}>
+          <div className={styles.cardMedia}>{siteImage(it.imageUrl) ? <Img src={it.imageUrl} alt="" className={styles.cardImage} /> : <CardArt index={i} label={str(it.name)} />}
+            {str(it.ages) && <span className={styles.ages}>{str(it.ages)}</span>}</div>
+          <h3>{str(it.name)}</h3><Paras text={it.description} /></li>)}</ul></section>;
     case 'SCHEDULE':
       return <section id={section.id} data-section="SCHEDULE" className={styles.block}><Heading text={p.heading} />
         {items(p.items).length > 0 && <table className={styles.table}><thead><tr><th scope="col">Day</th><th scope="col">Time</th><th scope="col">Class</th></tr></thead>
@@ -88,8 +98,9 @@ function Section({ section, base, mode, pageSlug, ctx }: { section: WebsiteSecti
     case 'TRIAL_CTA':
       return <section id={section.id} data-section="TRIAL_CTA" className={styles.cta}><Heading text={p.heading} /><Paras text={p.body} /><Action link={siteHref(p.ctaHref, base)} label={str(p.ctaLabel)} /></section>;
     case 'LEAD_FORM':
+      if (place.inHero) return null;
       if (!str(p.publicFormId)) return mode === 'preview' ? <section id={section.id} data-section="LEAD_FORM" className={styles.block}><Heading text={p.heading} /><p className={styles.note}>Choose a published form to show it here.</p></section> : null;
-      return <section id={section.id} data-section="LEAD_FORM" className={styles.block}><Heading text={p.heading} /><Paras text={p.body} />
+      return <section id={section.id} data-section="LEAD_FORM" className={place.afterHero ? styles.offerBand : styles.block}><div className={styles.offerText}><Heading text={p.heading} /><Paras text={p.body} /></div>
         <SiteLeadForm publicFormId={str(p.publicFormId)} pageSlug={pageSlug} preview={mode === 'preview'} /></section>;
     case 'BOOKING':
       if (!str(p.bookingPublicId)) return mode === 'preview' ? <section id={section.id} data-section="BOOKING" className={styles.block}><Heading text={p.heading} /><p className={styles.note}>Choose an active booking page to show it here.</p></section> : null;
@@ -100,7 +111,8 @@ function Section({ section, base, mode, pageSlug, ctx }: { section: WebsiteSecti
         {items(p.items).map((it, i) => <details key={i} className={styles.faq}><summary>{str(it.question)}</summary><Paras text={it.answer} /></details>)}</section>;
     case 'TESTIMONIALS':
       return <section id={section.id} data-section="TESTIMONIALS" className={styles.block}><Heading text={p.heading} />
-        <ul className={styles.cards}>{items(p.items).map((it, i) => <li key={i} className={`${styles.card} ${styles.quote}`}><blockquote><Paras text={it.quote} /></blockquote>{str(it.author) && <p className={styles.meta}>{str(it.author)}</p>}</li>)}</ul></section>;
+        <ul className={styles.cards}>{items(p.items).map((it, i) => <li key={i} className={`${styles.card} ${styles.quote}`}><blockquote><Paras text={it.quote} /></blockquote>
+          {str(it.author) && <p className={styles.author}><span className={styles.avatar} aria-hidden="true">{initial(it.author)}</span>{str(it.author)}</p>}</li>)}</ul></section>;
     case 'INSTRUCTORS':
       return <section id={section.id} data-section="INSTRUCTORS" className={styles.block}><Heading text={p.heading} />
         <ul className={styles.cards}>{items(p.items).map((it, i) => <li key={i} className={styles.card}><Img src={it.imageUrl} alt={str(it.name)} className={styles.cardImage} />
@@ -119,14 +131,25 @@ function Section({ section, base, mode, pageSlug, ctx }: { section: WebsiteSecti
         <div className={styles.video}><iframe src={url} title={str(p.title) || 'Video'} loading="lazy" referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-presentation"
           allow="encrypted-media; picture-in-picture; fullscreen" /></div></section>;
     }
-    case 'CONTACT':
+    case 'CONTACT': {
+      // A find-us block: the details on one side, big Call / Directions / Email buttons on the other.
+      const address = str(p.address).trim(), phone = str(p.phone).trim(), email = EMAIL.test(str(p.email)) ? str(p.email) : '';
+      const directions = address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address.replace(/\s+/g, ' '))}` : '';
       return <section id={section.id} data-section="CONTACT" className={styles.block}><Heading text={p.heading} />
-        <dl className={styles.contact}>
-          {str(p.address) && <><dt>Address</dt><dd><Paras text={p.address} /></dd></>}
-          {str(p.phone) && <><dt>Phone</dt><dd><a href={`tel:${str(p.phone).replace(/[^0-9+]/g, '')}`}>{str(p.phone)}</a></dd></>}
-          {/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str(p.email)) && <><dt>Email</dt><dd><a href={`mailto:${str(p.email)}`}>{str(p.email)}</a></dd></>}
-          {str(p.hours) && <><dt>Hours</dt><dd><Paras text={p.hours} /></dd></>}
-        </dl></section>;
+        <div className={styles.findUs}>
+          <dl className={styles.contact}>
+            {address && <><dt>Address</dt><dd><Paras text={p.address} /></dd></>}
+            {phone && <><dt>Phone</dt><dd><a href={telHref(phone)}>{phone}</a></dd></>}
+            {email && <><dt>Email</dt><dd><a href={`mailto:${email}`}>{email}</a></dd></>}
+            {str(p.hours) && <><dt>Hours</dt><dd><Paras text={p.hours} /></dd></>}
+          </dl>
+          {(phone || directions || email) && <div className={styles.findActions}>
+            {phone && <a className={styles.button} href={telHref(phone)}>Call {phone}</a>}
+            {directions && <a className={styles.buttonGhost} href={directions} rel="noopener noreferrer" target="_blank">Get directions</a>}
+            {email && <a className={styles.buttonGhost} href={`mailto:${email}`}>Email us</a>}
+          </div>}
+        </div></section>;
+    }
     case 'PROMO_BANNER':
       return str(p.text) ? <aside id={section.id} data-section="PROMO_BANNER" className={styles.banner}><span>{str(p.text)}</span><Action link={siteHref(p.ctaHref, base)} label={str(p.ctaLabel)} primary={false} /></aside> : null;
     case 'CHAT':
@@ -154,17 +177,30 @@ export function SiteView({ schoolName, document, pageSlug, base, mode }: SiteVie
   };
   const main = actionOf(page.sections) ?? actionOf(findSitePage(document, 'home')?.sections ?? []);
   const contact = document.pages.flatMap(p => p.sections).find(x => x.type === 'CONTACT');
+  // Promo banners at the very top of a page become an announcement bar above the header.
+  const sections = page.sections;
+  let lead = 0;
+  while (lead < sections.length && sections[lead]!.type === 'PROMO_BANNER') lead += 1;
+  const placeOf = (i: number): Place => {
+    const s = sections[i]!, prev = sections[i - 1], next = sections[i + 1];
+    const formReady = (x: WebsiteSection | undefined) => x?.type === 'LEAD_FORM' && !!str(x.props.publicFormId);
+    const heroForm = document.theme.template === 'HIGH_CONVERSION' && s.type === 'HERO' && formReady(next) ? next! : null;
+    const inHero = document.theme.template === 'HIGH_CONVERSION' && prev?.type === 'HERO' && formReady(s);
+    return { afterHero: prev?.type === 'HERO', heroForm, inHero };
+  };
+  const render = (i: number) => <Section key={sections[i]!.id} section={sections[i]!} base={base} mode={mode} pageSlug={page.slug} ctx={ctx} place={placeOf(i)} />;
   return <div className={styles.site} style={theme} data-template={document.theme.template} data-mode={mode}>
+    {sections.slice(0, lead).map((_, i) => render(i))}
     <header className={styles.header}>
-      <a className={styles.brand} href={base}>{logo ? <img src={logo} alt="" referrerPolicy="no-referrer" /> : <span className={styles.monogram} aria-hidden="true">{schoolName.trim().charAt(0).toUpperCase()}</span>}<span>{schoolName}</span></a>
+      <a className={styles.brand} href={base}>{logo ? <img src={logo} alt="" referrerPolicy="no-referrer" /> : <span className={styles.monogram} aria-hidden="true">{initial(schoolName)}</span>}<span>{schoolName}</span></a>
       {nav.length > 1 && <nav aria-label="Site"><ul>{nav.map(p => <li key={p.slug}>
         <a href={p.slug === 'home' ? base : `${base}/${p.slug}`} aria-current={p.slug === page.slug ? 'page' : undefined}>{p.title}</a></li>)}</ul></nav>}
       {main && <span className={styles.headerAction}><Action link={main.link} label={main.label} /></span>}
     </header>
-    <main className={styles.main}>{page.sections.map(s => <Section key={s.id} section={s} base={base} mode={mode} pageSlug={page.slug} ctx={ctx} />)}</main>
+    <main className={styles.main}>{sections.map((_, i) => i < lead ? null : render(i))}</main>
     <footer className={styles.footer}>
       <div><p className={styles.footerName}>{schoolName}</p>
-        {contact && str(contact.props.phone) && <p><a href={`tel:${str(contact.props.phone).replace(/[^0-9+]/g, '')}`}>{str(contact.props.phone)}</a></p>}
+        {contact && str(contact.props.phone) && <p><a href={telHref(contact.props.phone)}>{str(contact.props.phone)}</a></p>}
         {contact && str(contact.props.address) && <Paras text={contact.props.address} />}</div>
       {nav.length > 1 && <ul className={styles.footerNav}>{nav.map(p => <li key={p.slug}><a href={p.slug === 'home' ? base : `${base}/${p.slug}`}>{p.title}</a></li>)}</ul>}
       <p className={styles.meta}>© {schoolName}</p>
