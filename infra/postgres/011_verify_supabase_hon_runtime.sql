@@ -4836,7 +4836,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.prepare_shopify_merch_ideas(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','260b38d97bf4ba28c21c1736073f56d1a2bcd93e0d8e0990efb49aff6f0df220'),
 ('hon.read_shopify_merch_ideas(text,uuid)',true,true,'search_path=pg_catalog, hon','ed965695d7dee5a5061d615ef6a1f58d3ad24cd0b87b1ab0f749d9fbbd74bbfc'),
 ('hon.record_shopify_merch_ideas(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','f9b7cff52e04cde057d9c45d227a655179d198c834da8c36b24c56ec2974aee8'),
-('hon.shopify_merch_ideas_planning_reference(text,uuid)',true,true,'search_path=pg_catalog, hon','8ed1020ee0bd464b9121ed83f66559d063de11802030df7dcf0f15dd47b1fbef'),
+('hon.plan_shopify_merch_ideas(text,uuid)',true,true,'search_path=pg_catalog, hon','8ed1020ee0bd464b9121ed83f66559d063de11802030df7dcf0f15dd47b1fbef'),
 ('hon.shopify_merch_ai_actor(text)',true,false,'search_path=pg_catalog, hon','6b4bfc609c2515784d441e8e10e13ca68e8529c48ae9b889ab95a4845a84b582'),
 ('hon.shopify_merch_ai_facts(jsonb,uuid)',true,false,'search_path=pg_catalog, hon','27619b0084c24ed5871006eef2c379cdad247191ea69f584ad1825ae968441ff'),
 ('hon.shopify_merch_ai_reader(text)',true,false,'search_path=pg_catalog, hon','936c85ab00504181ff469620a89f6ae367ef135dc3c082d1231e754cc8937243'),

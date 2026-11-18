@@ -97,7 +97,7 @@ try {
   assert.equal((await row('SELECT current_database() d')).d, database);
 
   // 1. Custody: the MERCH_IDEAS kind is fixed; the runtime executes exactly the seven entry points; nothing to PUBLIC.
-  const entry = ['begin_shopify_merch_ideas', 'shopify_merch_ideas_planning_reference', 'prepare_shopify_merch_ideas', 'fail_shopify_merch_ideas', 'record_shopify_merch_ideas', 'read_shopify_merch_ideas', 'close_shopify_merch_ideas'];
+  const entry = ['begin_shopify_merch_ideas', 'plan_shopify_merch_ideas', 'prepare_shopify_merch_ideas', 'fail_shopify_merch_ideas', 'record_shopify_merch_ideas', 'read_shopify_merch_ideas', 'close_shopify_merch_ideas'];
   const fns = await rows("SELECT p.oid, p.proname, p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname LIKE '%shopify_merch%'");
   assert.equal(fns.length, 16, fns.map((f) => f.proname).join(','));
   for (const f of fns) {
@@ -220,7 +220,7 @@ try {
   const tenant = (o, work) => db.withTenantTransaction(ctx(o), async (c) => { await c.query("SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_external_subject',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)", [o.subject]); return work(c); });
   const begun = await tenant(b, async (c) => (await c.query('SELECT hon.begin_shopify_merch_ideas($1,$2::jsonb,$3::uuid) d', [b.subject, JSON.stringify(brief), K()])).rows[0].d);
   await storeConnected(b, false);
-  const ref = await tenant(b, async (c) => (await c.query('SELECT hon.shopify_merch_ideas_planning_reference($1,$2::uuid) d', [b.subject, begun.id])).rows[0].d);
+  const ref = await tenant(b, async (c) => (await c.query('SELECT hon.plan_shopify_merch_ideas($1,$2::uuid) d', [b.subject, begun.id])).rows[0].d);
   const planned = await plans.plan({ ...ctx(b), idempotencyKey: begun.id }, ref.workItemId, { expectedVersion: ref.workVersion, expectedState: 'READY', agentKey: 'marcus', modality: 'TEXT', taskClass: 'DRAFT_MARKETING', inputBudget: 6000, outputBudget: 3000, maxProviderCostMicrounits: 80000 });
   assert.equal(await tenant(b, async (c) => (await c.query('SELECT hon.prepare_shopify_merch_ideas($1,$2::uuid,$3::uuid,true) d', [b.subject, begun.id, planned.plan.id])).rows[0].d), null);
   const gated = await proposalRow(begun.id);
@@ -239,8 +239,10 @@ try {
   { const verify = await (await import('node:fs/promises')).readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
     const section = verify.split('-- Shopify merch AI ideas exact verification (0510)')[1]?.split('-- End Shopify merch AI ideas exact verification.')[0];
     assert.ok(section, '0510 verify section present');
-    await admin.query(section.slice(section.indexOf('\nDO $$')).replaceAll('hon_runtime', runtimeRole)); }
-  pass('011: the 0510 exact verification (bodies, definer, ACLs, kind row) passes');
+    await admin.query(section.slice(section.indexOf('\nDO $$')).replaceAll('hon_runtime', runtimeRole));
+    // The whole canonical verification too: earlier sections (for example 0405's "no shopify_* helper is runtime") still hold.
+    await admin.query(verify.replaceAll('hon_runtime', runtimeRole)); }
+  pass('011: the 0510 exact verification (bodies, definer, ACLs, kind row) and the whole canonical 011 pass');
   console.log(`CS-M2 merch AI ideas: ${groups} groups passed, ${fake.calls} fake provider calls, 0 network calls`);
 } finally {
   await admin.end().catch(() => {});

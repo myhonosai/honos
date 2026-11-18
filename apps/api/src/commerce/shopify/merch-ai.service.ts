@@ -75,7 +75,7 @@ export class MerchAiService {
   private async generate(context: MerchAiContext, begun: MerchAiView): Promise<MerchAiView> {
     const id = begun.id;
     const ref = await this.tx(context, true, async c => (await c.query<{ data: { planId: string | null; workItemId: string; workVersion: number } | null }>(
-      'SELECT hon.shopify_merch_ideas_planning_reference($1,$2::uuid) data', [context.externalSubject, id])).rows[0]!.data);
+      'SELECT hon.plan_shopify_merch_ideas($1,$2::uuid) data', [context.externalSubject, id])).rows[0]!.data);
     if (!ref) return this.view(context, id, true);
     let planId = ref.planId;
     if (!planId) {

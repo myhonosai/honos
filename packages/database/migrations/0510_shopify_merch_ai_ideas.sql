@@ -138,7 +138,7 @@ BEGIN
   RETURN hon.shopify_merch_ai_view(pid,actor);
 END $$;
 
-CREATE FUNCTION hon.shopify_merch_ideas_planning_reference(p_subject text, p_id uuid) RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+CREATE FUNCTION hon.plan_shopify_merch_ideas(p_subject text, p_id uuid) RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 BEGIN
   RETURN hon.ai_text_planning_reference(p_id, hon.shopify_merch_ai_actor(p_subject));
 END $$;
@@ -209,7 +209,7 @@ END $$;
 DO $$ DECLARE r text; f regprocedure; BEGIN
   FOREACH f IN ARRAY ARRAY['hon.shopify_merch_kinds()','hon.shopify_merch_styles()','hon.shopify_merch_keys_are(jsonb,text[])','hon.shopify_merch_brief_ok(jsonb)',
     'hon.shopify_merch_ideas_ok(jsonb)','hon.shopify_merch_ai_actor(text)','hon.shopify_merch_ai_reader(text)','hon.shopify_merch_ai_facts(jsonb,uuid)',
-    'hon.shopify_merch_ai_view(uuid,uuid)','hon.begin_shopify_merch_ideas(text,jsonb,uuid)','hon.shopify_merch_ideas_planning_reference(text,uuid)',
+    'hon.shopify_merch_ai_view(uuid,uuid)','hon.begin_shopify_merch_ideas(text,jsonb,uuid)','hon.plan_shopify_merch_ideas(text,uuid)',
     'hon.prepare_shopify_merch_ideas(text,uuid,uuid,boolean)','hon.fail_shopify_merch_ideas(text,uuid,text,text)','hon.record_shopify_merch_ideas(text,uuid,jsonb)',
     'hon.read_shopify_merch_ideas(text,uuid)','hon.close_shopify_merch_ideas(text,uuid,text)']::regprocedure[] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
@@ -218,7 +218,7 @@ DO $$ DECLARE r text; f regprocedure; BEGIN
     END LOOP;
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
-    GRANT EXECUTE ON FUNCTION hon.begin_shopify_merch_ideas(text,jsonb,uuid), hon.shopify_merch_ideas_planning_reference(text,uuid),
+    GRANT EXECUTE ON FUNCTION hon.begin_shopify_merch_ideas(text,jsonb,uuid), hon.plan_shopify_merch_ideas(text,uuid),
       hon.prepare_shopify_merch_ideas(text,uuid,uuid,boolean), hon.fail_shopify_merch_ideas(text,uuid,text,text),
       hon.record_shopify_merch_ideas(text,uuid,jsonb), hon.read_shopify_merch_ideas(text,uuid), hon.close_shopify_merch_ideas(text,uuid,text) TO hon_runtime;
   END IF;
