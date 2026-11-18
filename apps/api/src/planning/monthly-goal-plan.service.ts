@@ -19,7 +19,7 @@ function translate(error: unknown): never {
 }
 
 /**
- * G1 (0491): the monthly goal plan. One protected definer function re-proves the direct human and the live school-scoped
+ * G1 (0503): the monthly goal plan. One protected definer function re-proves the direct human and the live school-scoped
  * reporting.view permission (the 0331 rule) before and after the read, and returns counts and money totals only.
  * Nothing is written, sent, charged or scheduled, and no AI is called.
  */

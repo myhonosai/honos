@@ -4,7 +4,7 @@ const { MonthlyGoalPlanController } = require('../dist/planning/monthly-goal-pla
 const { MonthlyGoalPlanService } = require('../dist/planning/monthly-goal-plan.service.js');
 const { validateMonthlyGoalPlanQuery, verifyMonthlyGoalPlan } = require('@hon/contracts');
 
-// G1 (0491): the controller's closed query, the contract's validation and verification, and the service's error mapping.
+// G1 (0503): the controller's closed query, the contract's validation and verification, and the service's error mapping.
 const ORG = '11111111-1111-4111-8111-111111111111';
 const SCHOOL = '22222222-2222-4222-8222-222222222222';
 const request = { honIdentity: { externalSubject: 'staff-subject' } };

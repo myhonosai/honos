@@ -4,9 +4,10 @@ import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
-import { ShopifyError, shopifyApi, type ShopifyApi } from './http';
-import type { ShopifyCatalog, ShopifyOrders } from '@hon/contracts';
-import { SHOPIFY_SECTIONS, ShopifyReturnView, ShopifyView, type ListState, type OverviewState, type ReturnState, type ShopifyOutcome, type ShopifySection } from './view';
+import { ShopifyError, shopifyApi, type Owned, type ShopifyApi } from './http';
+import type { ShopifyCatalog, ShopifyChangeResult, ShopifyOrders, ShopifyProductChange, ShopifyProductChanges } from '@hon/contracts';
+import type { ProposeRequest } from './editor';
+import { SHOPIFY_SECTIONS, ShopifyReturnView, ShopifyView, type ListState, type OverviewState, type ReturnState, type ShopifyAction, type ShopifyOutcome, type ShopifySection } from './view';
 
 const kindOf = (error: unknown) => error instanceof ShopifyError && error.kind !== 'SESSION' ? error.kind : 'UNKNOWN';
 
@@ -23,6 +24,8 @@ export function SchoolShopify({ api = shopifyApi, navigate = (url: string) => wi
   const [section, setSection] = useState<ShopifySection>('overview');
   const [catalog, setCatalog] = useState<ListState<ShopifyCatalog>>({ state: 'LOADING' });
   const [orders, setOrders] = useState<ListState<ShopifyOrders>>({ state: 'LOADING' });
+  const [changes, setChanges] = useState<ListState<ShopifyProductChanges>>({ state: 'LOADING' });
+  const [changesTick, setChangesTick] = useState(0);
   const [shop, setShop] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [outcome, setOutcome] = useState<ShopifyOutcome>(null);
@@ -42,7 +45,7 @@ export function SchoolShopify({ api = shopifyApi, navigate = (url: string) => wi
 
   useEffect(() => onShellPrivacyEvent(() => {
     concealShellPrivateNow(); gen.current++; privacy.current++;
-    setOutcome(null); setConfirming(false); setOverview({ state: 'LOADING' }); setCatalog({ state: 'LOADING' }); setOrders({ state: 'LOADING' });
+    setOutcome(null); setConfirming(false); setOverview({ state: 'LOADING' }); setCatalog({ state: 'LOADING' }); setOrders({ state: 'LOADING' }); setChanges({ state: 'LOADING' });
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), []);
 
   useEffect(() => {
@@ -69,6 +72,38 @@ export function SchoolShopify({ api = shopifyApi, navigate = (url: string) => wi
     api.orders(schoolId, signal, owned).then((value) => { if (owned()) setOrders({ state: 'READY', value }); }, () => { if (owned()) setOrders({ state: 'UNAVAILABLE' }); });
     return () => { abort.abort(); };
   }, [api, schoolId, hasConnection, refresh]);
+  // SH4a: the edits waiting for approval and whether the store lets HON send them. Re-read after each edit command.
+  useEffect(() => {
+    if (!schoolId || !hasConnection) return;
+    const shown = privacy.current;
+    setChanges((c) => c.state === 'READY' ? c : { state: 'LOADING' });
+    const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(20000)]);
+    const owned = () => mounted.current && shown === privacy.current && !abort.signal.aborted;
+    api.changes(schoolId, signal, owned).then((value) => { if (owned()) setChanges({ state: 'READY', value }); }, () => { if (owned()) setChanges({ state: 'UNAVAILABLE' }); });
+    return () => { abort.abort(); };
+  }, [api, schoolId, hasConnection, refresh, changesTick]);
+
+  /**
+   * One edit command at a time, never replayed. An approval re-reads everything (Shopify and the mirror changed);
+   * a new edit or a cancel re-reads only the change list. A lost approval answer shows as "not sure" with Check again.
+   */
+  const change = useCallback(async (action: Extract<ShopifyAction, 'propose' | 'approve' | 'cancelChange'>, send: (owned: Owned) => Promise<ShopifyChangeResult>, target?: string) => {
+    if (sending.current || !schoolId) return;
+    sending.current = true; const shown = privacy.current;
+    setLocked(true); setOutcome({ kind: 'SENDING', action, ...(target ? { target } : {}) });
+    let next: ShopifyOutcome;
+    try { const r = await send(() => mounted.current && shown === privacy.current); next = { kind: 'DONE', action, change: r.change, ...(target ? { target } : {}) }; }
+    catch (error) { next = { kind: kindOf(error), action, ...(target ? { target } : {}) }; }
+    finally { sending.current = false; }
+    setLocked(false);
+    if (shown !== privacy.current || !mounted.current) return;
+    setOutcome(next);
+    if (action === 'approve') setRefresh((n) => n + 1); else setChangesTick((n) => n + 1);
+    if (action === 'propose' && next?.kind === 'DONE') go('changes');
+  }, [schoolId, go]);
+  const onPropose = (r: ProposeRequest) => { if (schoolId) void change('propose', (owned) => api.propose(schoolId, r, AbortSignal.timeout(30000), owned)); };
+  const onApprove = (c: ShopifyProductChange) => { if (schoolId) void change('approve', (owned) => api.approveChange(schoolId, c.changeId, c.version, AbortSignal.timeout(150000), owned), c.changeId); };
+  const onCancelChange = (c: ShopifyProductChange) => { if (schoolId) void change('cancelChange', (owned) => api.cancelChange(schoolId, c.changeId, c.version, AbortSignal.timeout(30000), owned), c.changeId); };
 
   const run = useCallback(async (action: 'sync' | 'disconnect') => {
     if (sending.current || !schoolId || overview.state !== 'READY' || !overview.read.connection) return;
@@ -88,20 +123,23 @@ export function SchoolShopify({ api = shopifyApi, navigate = (url: string) => wi
     setOutcome(next); setConfirming(false); setRefresh((n) => n + 1);
   }, [api, schoolId, overview]);
 
-  const onConnect = useCallback(async () => {
+  const onConnect = useCallback(async (allowEditing = false) => {
     if (sending.current || !schoolId) return;
+    const action = allowEditing ? 'allowEditing' : 'connect';
+    // Allow editing reconnects the same store, asking Shopify for the edit permissions as well.
+    const domain = allowEditing ? (overview.state === 'READY' ? overview.read.connection?.shopDomain ?? '' : '') : shop.trim();
     sending.current = true; const shown = privacy.current;
-    setLocked(true); setOutcome({ kind: 'SENDING', action: 'connect' });
+    setLocked(true); setOutcome({ kind: 'SENDING', action });
     try {
       // A new attempt each time: a lost answer only leaves an unused approval that expires in 10 minutes.
-      const r = await api.connect(schoolId, shop.trim(), AbortSignal.timeout(30000), () => mounted.current && shown === privacy.current);
+      const r = await api.connect(schoolId, domain, AbortSignal.timeout(30000), () => mounted.current && shown === privacy.current, allowEditing);
       sending.current = false;
       if (shown === privacy.current && mounted.current) navigate(r.authorizeUrl);
     } catch (error) {
       sending.current = false; setLocked(false);
-      if (shown === privacy.current && mounted.current) setOutcome({ kind: kindOf(error), action: 'connect' });
+      if (shown === privacy.current && mounted.current) setOutcome({ kind: kindOf(error), action });
     }
-  }, [api, navigate, schoolId, shop]);
+  }, [api, navigate, schoolId, shop, overview]);
 
   return <div key={shell.phase} data-shell-private="">
     <ShopifyView language={locale.preferences.language} locale={locale.formattingLocale} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'}
@@ -109,7 +147,8 @@ export function SchoolShopify({ api = shopifyApi, navigate = (url: string) => wi
       outcome={outcome} locked={locked}
       onRefresh={() => { setOutcome(null); setRefresh((n) => n + 1); }} onShop={(v) => { if (!locked) { setShop(v); setOutcome(null); } }}
       onConnect={() => { void onConnect(); }} onSync={() => { void run('sync'); }} onConfirm={(open) => { if (!locked) { setConfirming(open); setOutcome(null); } }}
-      onDisconnect={() => { void run('disconnect'); }} onSection={go} />
+      onDisconnect={() => { void run('disconnect'); }} onSection={go}
+      changes={changes} onPropose={onPropose} onApprove={onApprove} onCancelChange={onCancelChange} onAllowEditing={() => { void onConnect(true); }} />
   </div>;
 }
 

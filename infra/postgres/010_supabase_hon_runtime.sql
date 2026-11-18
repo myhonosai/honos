@@ -4250,10 +4250,36 @@ BEGIN
   END IF;
 END $$;
 
--- G1 0491 monthly goal plan: one read-only runtime entry point; the shared renewals-due helper and the rate and pace
+-- 0496 Shopify product changes with owner approval (SH4a): one more private table reached only through six runtime entry
+-- points (read, propose, cancel, approve, rotate under a change lease, record a result); the guard and helpers are
+-- migration-owner only. Comes after the 0449 block, which closes every Shopify function outside the 0405 entry points.
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_shopify_product_changes(text,uuid)','hon.propose_shopify_product_change(text,jsonb)',
+    'hon.cancel_shopify_product_change(text,jsonb)','hon.approve_shopify_product_change(text,jsonb)',
+    'hon.rotate_shopify_change_credential(text,jsonb)','hon.record_shopify_product_change_result(text,jsonb)'];
+  helpers text[]:=ARRAY['hon.guard_shopify_product_change()','hon.shopify_edit_text_ok(jsonb,integer,boolean,boolean)','hon.shopify_has_scope(text,text)',
+    'hon.shopify_change_touches_cost(text,jsonb)','hon.shopify_product_item_ok(jsonb)','hon.shopify_mirror_product(uuid,jsonb,uuid)',
+    'hon.shopify_change_base(uuid,bigint,jsonb)','hon.shopify_same_money(jsonb,jsonb)','hon.shopify_change_matches(hon.shopify_product_changes,jsonb)',
+    'hon.shopify_change_json(hon.shopify_product_changes)','hon.shopify_locked_change(uuid,jsonb)','hon.shopify_leased_change(uuid,uuid,jsonb,boolean)'];
+BEGIN
+  IF to_regclass('hon.shopify_product_changes') IS NULL THEN RAISE EXCEPTION 'Apply migration 0496 first'; END IF;
+  REVOKE ALL ON TABLE hon.shopify_product_changes FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.shopify_product_changes FROM %I',r); END LOOP;
+  FOREACH f IN ARRAY helpers||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
+-- G1 0503 monthly goal plan: one read-only runtime entry point; the shared renewals-due helper and the rate and pace
 -- builders are private. The runtime gains no table privilege.
 DO $$ DECLARE r text; f text; BEGIN
-  IF to_regprocedure('hon.read_monthly_goal_plan(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0491 first'; END IF;
+  IF to_regprocedure('hon.read_monthly_goal_plan(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0503 first'; END IF;
   FOREACH f IN ARRAY ARRAY['hon.school_renewals_due(uuid,uuid,timestamptz,timestamptz,timestamptz)','hon.monthly_goal_rate(bigint,bigint,integer,numeric)',
     'hon.monthly_goal_pace(numeric,numeric,numeric,integer)','hon.read_monthly_goal_plan(text,jsonb)'] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
