@@ -6,6 +6,7 @@ import { verifyParentBillingView } from '@hon/contracts/parent-billing-view';
 import { verifyParentClassPassView } from '@hon/contracts/parent-classpass-view';
 import { verifyParentTestingStatusView } from '@hon/contracts/parent-testing-status';
 import { verifyParentCurriculumLibrary } from '@hon/contracts/curriculum-resource-library';
+import { verifyParentInvoicePayments } from '@hon/contracts/parent-invoice-pay';
 import type { ParentApi } from '../api/client';
 import { localDate, localMidnight } from '../schedule/absence-model';
 
@@ -161,5 +162,10 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
     eianStatus: () => ok({ mode: 'GUIDED' as const, reason: 'NOT_INCLUDED' as const }),
     askEian: async () => ({ ok: false as const, state: 'refused' as const, code: 'EIAN_AI_UNAVAILABLE' }),
     eianTurn: async () => ({ ok: false as const, state: 'unavailable' as const }),
+    // The sample family never pays: no school processor is reachable, so nothing is payable and a press is refused.
+    invoicePayments: () => ok(verifyParentInvoicePayments({ canPay: false, testMode: true, invoices: [] })),
+    startInvoicePayment: async () => ({ ok: false as const, state: 'refused' as const, code: 'PARENT_INVOICE_PAY_NOT_CONFIGURED' }),
+    confirmInvoicePayment: async () => ({ ok: false as const, state: 'refused' as const, code: 'PARENT_INVOICE_PAY_NOT_CONFIGURED' }),
+    cancelInvoicePayment: async () => ({ ok: false as const, state: 'refused' as const, code: 'PARENT_INVOICE_PAY_NOT_CONFIGURED' }),
   } as ParentApi;
 }
