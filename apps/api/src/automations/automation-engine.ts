@@ -3,11 +3,14 @@ import { Pool } from 'pg';
 import { runtimePoolOptions } from '../foundation/runtime-pool-options.js';
 import { emitTelemetry } from '../observability/telemetry.js';
 
-export interface AutomationEngineCounts { consumed: number; runsStarted: number; eventsFailed: number; ran: number; failed: number; exited: number; paused: number }
+export interface AutomationEngineCounts {
+  consumed: number; runsStarted: number; eventsFailed: number; scanned: number; scheduledRunsStarted: number; scansFailed: number;
+  ran: number; failed: number; exited: number; paused: number;
+}
 
 /**
  * Connects as hon_automation_worker (HON_AUTOMATION_WORKER_DATABASE_URL), never as the runtime, migration or communication
- * worker login. The role can only execute the two 0423 engine functions; it is refused if it is a superuser, bypasses RLS,
+ * worker login. The role can only execute the 0423 engine functions and the 0475 date scan; it is refused if it is a superuser, bypasses RLS,
  * inherits roles or reuses another login's URL. Every action happens inside those database functions.
  */
 @Injectable()
@@ -33,7 +36,7 @@ export class AutomationWorkerDatabase implements OnModuleDestroy {
     return this.pool;
   }
 
-  private async call(fn: 'consume_automation_events' | 'run_due_automation_steps', limit: number): Promise<Record<string, unknown>> {
+  private async call(fn: 'consume_automation_events' | 'scan_automation_schedules' | 'run_due_automation_steps', limit: number): Promise<Record<string, unknown>> {
     const pool = this.getPool();
     this.posture ??= (async () => {
       const role = (await pool.query<{ rolsuper: boolean; rolbypassrls: boolean; rolinherit: boolean }>(
@@ -53,9 +56,11 @@ export class AutomationWorkerDatabase implements OnModuleDestroy {
       return v;
     };
     const events = await this.call('consume_automation_events', limit);
+    const scans = await this.call('scan_automation_schedules', limit);
     const steps = await this.call('run_due_automation_steps', limit);
-    return { consumed: count(events, 'consumed'), runsStarted: count(events, 'runsStarted'), eventsFailed: count(events, 'failed'), ran: count(steps, 'ran'),
-      failed: count(steps, 'failed'), exited: count(steps, 'exited'), paused: count(steps, 'paused') };
+    return { consumed: count(events, 'consumed'), runsStarted: count(events, 'runsStarted'), eventsFailed: count(events, 'failed'),
+      scanned: count(scans, 'scanned'), scheduledRunsStarted: count(scans, 'runsStarted'), scansFailed: count(scans, 'failed'), ran: count(steps, 'ran'),
+      failed: count(steps, 'failed'), exited: count(steps, 'exited'), paused: count(scans, 'paused') + count(steps, 'paused') };
   }
 }
 
@@ -88,7 +93,7 @@ export class AutomationEngineScheduler implements OnModuleInit, OnModuleDestroy 
     this.running = true;
     try {
       const counts = await this.worker.runOnce();
-      if (counts.consumed || counts.eventsFailed || counts.ran || counts.failed || counts.exited || counts.paused) {
+      if (counts.consumed || counts.eventsFailed || counts.scanned || counts.scansFailed || counts.ran || counts.failed || counts.exited || counts.paused) {
         emitTelemetry('info', 'automation.engine_completed', { component: 'automation-engine', message: JSON.stringify(counts) });
       }
       return counts;

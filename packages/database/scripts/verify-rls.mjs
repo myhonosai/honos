@@ -152,6 +152,7 @@ const expectedRlsTables = [
   'automation_event_receipts',
   'automation_runs',
   'automation_run_steps',
+  'automation_schedule_scans',
   'zernio_lead_forms',
   'zernio_lead_receipts',
   'crm_activities',
