@@ -1,6 +1,6 @@
 BEGIN;
 
--- 0527 (allocated by the coordinator 2026-11-18 above the 0519 release ceiling; first drafted as 0380, then 0489 and 0507): one shared AI text caller, plus its first kind, WEBSITE_EDIT (WB5).
+-- 0534 (allocated 2026-11-18 above the 0529 main ceiling; first drafted as 0380, then 0489, 0507 and 0527): one shared AI text caller, plus its first kind, WEBSITE_EDIT (WB5).
 -- Design: /mnt/project-files/ai-text-proposals/AI_TEXT_PROPOSALS_DESIGN.md (repo copy docs/architecture/AI_TEXT_PROPOSALS.md).
 --
 -- Until now every AI text caller (Marcus, Claire/Kai teaching, Chad, the HON reply) brought its own spend table, and each
@@ -26,7 +26,7 @@ DO $$ BEGIN
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'Trusted migration owner required'; END IF;
   IF to_regclass('hon.school_websites') IS NULL OR to_regclass('hon.ai_school_cost_limits') IS NULL OR to_regclass('hon.ai_unknown_resolutions') IS NULL
     OR to_regprocedure('hon.ai_exception_allowance_micros(uuid,uuid)') IS NULL OR to_regclass('hon.ai_route_unavailable_attempts') IS NULL OR to_regclass('hon.eian_turns') IS NULL THEN
-    RAISE EXCEPTION '0527 requires 0196, 0288, 0336, 0353, 0361 and 0474';
+    RAISE EXCEPTION '0534 requires 0196, 0288, 0336, 0353, 0361 and 0474';
   END IF;
 END $$;
 
@@ -570,7 +570,7 @@ BEGIN
              THEN (SELECT hon.ai_usage_reply_agent(i.specialist) FROM hon.hon_reply_invocations i WHERE i.id = u.source_invocation_id)
            -- 0474: parent Eian turns count under their own agent.
            WHEN EXISTS (SELECT 1 FROM hon.eian_turns i WHERE i.id = u.source_invocation_id) THEN 'EIAN'
-           -- 0527: each shared text proposal counts under its kind's own usage label.
+           -- 0534: each shared text proposal counts under its kind's own usage label.
            WHEN EXISTS (SELECT 1 FROM hon.ai_text_proposals i WHERE i.id = u.source_invocation_id)
              THEN (SELECT k.usage_agent FROM hon.ai_text_proposals i JOIN hon.ai_text_kinds k ON k.kind = i.kind WHERE i.id = u.source_invocation_id)
            ELSE 'UNATTRIBUTED' END AS agent,

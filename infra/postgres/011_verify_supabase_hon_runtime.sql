@@ -4790,7 +4790,7 @@ END $$;
 
 -- Eian family AI exact verification (0474): the private turn table and its four S4 triggers, the pure route helper and the
 -- re-pinned planner that calls it, private Eian helpers and seven runtime entry points. The S4 shared functions that gained
--- EIAN were redefined again by 0527 (adding TEXT_PROPOSAL) and are pinned in the 0527 section below.
+-- EIAN were redefined again by 0534 (adding TEXT_PROPOSAL) and are pinned in the 0534 section below.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.ai_select_text_route(uuid,uuid,uuid,text,text,integer,bigint)',true,false,'search_path=pg_catalog, hon','223c2ace3f9235f3997c960f4e223e0a237145ad71246e2a88e97e9f502bbde1'),
@@ -4934,7 +4934,7 @@ BEGIN
     RAISE EXCEPTION 'Membership agreement link principal missing'; END IF;
 END $$;
 -- End membership agreement signing link exact verification.
--- Shared AI text proposals exact verification (0527): the kind table and the proposal table with its guards and four S4
+-- Shared AI text proposals exact verification (0534): the kind table and the proposal table with its guards and four S4
 -- triggers, the private ai_text core, the WEBSITE_EDIT entry points (seven runtime) and the eight S4 shared functions,
 -- now counting both EIAN (0474) and TEXT_PROPOSAL holds, UNKNOWN rows, resolutions, late expenses and HQ usage.
 DO $$ DECLARE f record; safe boolean; BEGIN
@@ -4956,7 +4956,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.fail_school_website_ai_edit(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','cec489c91805c02f0a460bc9f8401c295fc0efdf66637a86ac3f000703352688'),
 ('hon.guard_ai_text_proposals()',false,false,'search_path=pg_catalog, hon','431a2ad9c9a47028538a537910d2b2b40bef20e091af7b4e650963202671be75'),
 ('hon.prepare_school_website_ai_edit(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','8b78db60ef391b85adc83b5bcbfcfe2eae5c8097fde15fc7d96888adf8cba659'),
-('hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)',true,true,'search_path=pg_catalog, hon','bcd52e08d27a59e91029c794288951c6df887fbadf588291487f3889926a70b1'),
+('hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)',true,true,'search_path=pg_catalog, hon','86e4f1d40a024aacbf1440d37a5d76322049596ef757332d783c2b95fecc8fc7'),
 ('hon.read_ai_unknown_invocations_from_hq(text)',true,true,'search_path=pg_catalog, hon','b3045dc689e5d7f54d4854dfe43d7d4eb331869acc347454cf174eb1cf58c9af'),
 ('hon.read_school_website_ai_edits(text,uuid)',true,true,'search_path=pg_catalog, hon','5bca23fda531a8d5ab1f1bbbed5d08b873ef8da848dea32ba893e4cbc335d99f'),
 ('hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','18a2f6af1ef95d5e91e890d7e70894ac589e4508fb774c70c61d28a5083d97a3'),

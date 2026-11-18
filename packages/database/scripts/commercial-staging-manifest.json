@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "c68f011fe9cdda5d2d32669e4456ac293feeb397d0ff1a1c8e0edef57a195fc1",
+  "chainSha256": "24753287dd19c45caed599ff2c7f5f32890f5ade7ab5bddbad285cba3554f445",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -679,12 +679,12 @@
       "sha256": "39228fc3d1af999e4bff29da71460a5a6c82ec0ccd7d9bb3339c62ba2ea8868c"
     },
     {
-      "file": "0527_ai_text_proposals.sql",
-      "sha256": "38bf94d39ff71d6eb1a652ae3b3b432813055a9ab26d54641c9bb360f960c54c"
-    },
-    {
       "file": "0529_school_pay_once.sql",
       "sha256": "476c62434beaeb0be7f781878ee817e5b0e0641f22f94ed400457bf90da9ea4a"
+    },
+    {
+      "file": "0534_ai_text_proposals.sql",
+      "sha256": "e8ceaae30e97148d72f5369c529c5de883a716e3b55aceefca54bfa4f9b64430"
     }
   ]
 }
