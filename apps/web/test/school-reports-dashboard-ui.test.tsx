@@ -83,7 +83,7 @@ it('draws the income chart in one currency with a table view, and belts, stages 
 it('links only to pages in the school menu, never to one that is missing', () => {
   const links = dashboardLinks(null);
   expect(links.renewals).toBe('/staff/billing/renewals');
-  expect(links.leads).toBe('/staff/crm/leads');
+  expect(links.leads).toBe('/staff/crm');
   const page = html({}, 'en', links);
   expect(page).toContain('href="/staff/billing/renewals"');
   if (!links.goal) expect(page).not.toContain('Monthly goal');
