@@ -84,10 +84,6 @@ function translateLifecycleError(error: unknown, forbidden: string): never {
   const known = LIFECYCLE_ERRORS[message];
   if (known && ['22023', '42501', 'P0002', '40001', '23505'].includes(sqlState)) throw known(message);
   if (sqlState === '42501') throw new ForbiddenException({ code: forbidden });
-  // 0410: the school requires a signed membership agreement before a membership starts.
-  if (sqlState === '55000' && message === 'MEMBERSHIP_AGREEMENT_REQUIRED') throw new ConflictException({ code: 'MEMBERSHIP_AGREEMENT_REQUIRED', detail: 'The membership agreement must be signed before this membership starts.' });
-  // 0398: one membership per program; these dates would overlap another current membership in the same program.
-  if (sqlState === '23P01' && message === 'MEMBERSHIP_PROGRAM_OVERLAP') throw new ConflictException({ code: 'MEMBERSHIP_PROGRAM_OVERLAP', detail: 'These dates overlap another current membership in the same program.' });
   if (['40001', '40P01', '55P03', '23505'].includes(sqlState)) throw new ConflictException({ code: 'MEMBERSHIP_LIFECYCLE_CONFLICT' });
   if (['22023', '22P02', '22003', '22007', '22008'].includes(sqlState)) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
   throw new ServiceUnavailableException({ code: 'MEMBERSHIP_LIFECYCLE_UNAVAILABLE' });

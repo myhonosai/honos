@@ -50,7 +50,7 @@ export function ParentSchoolMessages(): React.ReactElement {
     <h2 id="school-messages-title">Messages with {view?.schoolName ?? 'your school'}</h2>
     <p className={s.subtle}>Write to the school here. Staff reply inside HON; nothing is sent by text or email.</p>
     <div aria-live="polite">{busy && !view && <p role="status">Loading your messages…</p>}
-      {error && <div className={s.error} role="alert"><p>{error}</p>{lost && <a href="/auth/login">Sign in again</a>}</div>}
+      {error && <div className={s.error} role="alert"><p>{error}</p>{lost && <a href="/auth/login?for=parent">Sign in again</a>}</div>}
       {notice && <p className={s.notice} role="status">{notice}</p>}</div>
     {view && <>
       {view.messages.length === 0 ? <p className={s.empty}>No messages yet.</p> : <ol className={s.list} aria-label="Conversation">

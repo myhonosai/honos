@@ -28,13 +28,13 @@ export const PEOPLE_QUERY_MAX = 160;
 const RESPONSE_MAX_BYTES = 131072;
 const JSON_TYPE = /^application\/json(?:\s*;|$)/i;
 
-type Sent = Readonly<{ path: string; body: string; key: string; owned: () => boolean; command?: string }>;
+type Sent = Readonly<{ path: string; body: string; key: string; owned: () => boolean }>;
 /** A bounded, same-origin, no-redirect JSON exchange. Returns the status and the parsed body (null when not JSON). */
-export async function exchange(path: string, signal: AbortSignal, command?: Sent): Promise<{ status: number; value: unknown }> {
+async function exchange(path: string, signal: AbortSignal, command?: Sent): Promise<{ status: number; value: unknown }> {
   signal.throwIfAborted();
   const r = await fetch(path, { method: command ? 'POST' : 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
     referrerPolicy: 'no-referrer', signal,
-    headers: { Accept: 'application/json', ...(command ? { 'Content-Type': 'application/json', 'X-HON-Human-Command': command.command ?? PERSON_RECORD_HUMAN_COMMAND, 'Idempotency-Key': command.key } : {}) },
+    headers: { Accept: 'application/json', ...(command ? { 'Content-Type': 'application/json', 'X-HON-Human-Command': PERSON_RECORD_HUMAN_COMMAND, 'Idempotency-Key': command.key } : {}) },
     ...(command ? { body: command.body } : {}) });
   // A retired read or command must not invalidate the newer session that replaced it. A command has no abort signal of its
   // own (cancelling it would not prove it was not saved), so its caller says whether it is still the one being shown.
@@ -60,7 +60,7 @@ const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
  * address is unchanged apart from case. A clear (null) matches only null.
  */
 export const sameEmail = (a: string | null, b: string | null) => a === null || b === null ? a === b : same(a, b);
-export const codeOf = (value: unknown): string | null =>
+const codeOf = (value: unknown): string | null =>
   value && typeof value === 'object' && !Array.isArray(value) && typeof (value as { code?: unknown }).code === 'string' ? (value as { code: string }).code : null;
 
 /** What a refused read or command means. Only these exact answers are definitive; anything else is UNKNOWN. */

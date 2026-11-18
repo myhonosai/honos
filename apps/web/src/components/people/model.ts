@@ -1,12 +1,9 @@
-import type { PersonRecord, SchoolContactList, SchoolContactRow } from '@hon/contracts';
-import type { ContactFilters } from './contacts-http';
-import { PersonRecordError, type PersonErrorKind } from './http';
+import type { PersonRecord } from '@hon/contracts';
+import { PersonRecordError, type PersonErrorKind, type PersonSummary } from './http';
 
-/** The contacts list (C1, 0373): the pages read so far for these filters, and whether the next page is being read. */
 export type ListState =
   | Readonly<{ state: 'LOADING' }> | Readonly<{ state: 'DENIED' }> | Readonly<{ state: 'UNAVAILABLE' }>
-  | Readonly<{ state: 'READY'; filters: ContactFilters; counts: SchoolContactList['counts']; rows: readonly SchoolContactRow[]; nextCursor: string | null;
-      more: 'IDLE' | 'LOADING' | 'FAILED' }>;
+  | Readonly<{ state: 'READY'; query: string; items: readonly PersonSummary[] }>;
 export type RecordState =
   | Readonly<{ state: 'NONE' }> | Readonly<{ state: 'LOADING' }> | Readonly<{ state: 'DENIED' }> | Readonly<{ state: 'MISSING' }>
   | Readonly<{ state: 'UNAVAILABLE' }> | Readonly<{ state: 'READY'; record: PersonRecord }>;

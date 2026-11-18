@@ -1,7 +1,9 @@
 'use client';
 import React, { useEffect, useId, useState } from 'react';
 import styles from './pickers.module.css';
-import { PickerError, pickerApi, type CandidatePurpose, type EnrollmentPurpose, type PickerCandidate, type PickerEnrollment, type PickerRank, type PickerScope, type PickerStudent, type PickerTestingEvent, type RankPurpose, type StudentPurpose } from './http';
+import type { LeadListItem } from '@hon/contracts';
+import { CrmLeadAccessError, loadCrmLeads } from '../crm-leads-http';
+import { PickerError, pickerApi, type CandidatePurpose, type EnrollmentPurpose, type PickerCandidate, type PickerEnrollment, type PickerRank, type PickerScope, type PickerStaff, type PickerStudent, type PickerTestingEvent, type RankPurpose, type StaffPurpose, type StudentPurpose } from './http';
 
 /**
  * Pick-from-list controls for curriculum, testing and promotion screens. Choosing a row only fills the screen's own
@@ -12,6 +14,7 @@ type Copy = Readonly<{ label: string; choose: string; loading: string; empty: st
 
 const name = (r: { givenName: string; familyName: string }) => `${r.givenName} ${r.familyName}`;
 export const studentLabel = (r: PickerStudent): string => name(r);
+export const staffLabel = (r: PickerStaff): string => r.displayName;
 export const rankLabel = (r: PickerRank): string => `${r.curriculumName} · ${r.rankName}`;
 export function enrollmentLabel(r: PickerEnrollment, showNext: boolean): string {
   const rank = r.currentRankName ?? 'No rank yet';
@@ -93,6 +96,8 @@ export function CandidatePicker({ scope, purpose, value, disabled, onPick }: {
 
 const STUDENT_COPY: Record<StudentPurpose, Copy> = {
   teaching: { label: 'Student', choose: 'Choose a student (optional)', search: 'Find a student', loading: 'Reading students…', empty: 'No students match.', denied: 'Your access does not include student notes at this school.', unavailable: 'Students could not be loaded. Reload the page to try again.' },
+  achievements: { label: 'Student', choose: 'Choose a student (optional)', search: 'Find a student', loading: 'Reading students…', empty: 'No students match.', denied: 'Your access does not include student achievements at this school.', unavailable: 'Students could not be loaded. Reload the page to try again.' },
+  attendance: { label: 'Student', choose: 'Choose a student', search: 'Find a student', loading: 'Reading students…', empty: 'No students match.', denied: 'Your access does not include checking students in at this school.', unavailable: 'Students could not be loaded. Reload the page to try again.' },
 };
 export function StudentPicker({ scope, purpose, value, disabled, onPick }: { scope: PickerScope; purpose: StudentPurpose; value: string; disabled: boolean; onPick: (item: PickerStudent | null) => void }): React.ReactElement {
   const [search, setSearch] = useState('');
@@ -110,7 +115,52 @@ export function RankPicker({ scope, purpose, value, disabled, onPick, onItems }:
   return <PickListView copy={RANK_COPY[purpose]} list={list} keyOf={(i) => i.rankId} describe={rankLabel} value={value} disabled={disabled} onPick={onPick} />;
 }
 
+const STAFF_DENIED: Record<StaffPurpose, string> = {
+  followups: 'Only managers can assign follow-ups to someone else.', work: 'Only managers can assign work to someone else.',
+  qualifications: 'Your role does not include managing instructor qualifications.', roles: 'Your role does not include giving staff roles.',
+  availability: 'Only managers can open another person’s availability.',
+};
+/** People with a role at this school, by name (0404). The list is only for screens whose own command manages a teammate. */
+export function StaffPicker({ scope, purpose, label = 'Staff member', value, disabled, onPick, onState, onItems }: { scope: PickerScope; purpose: StaffPurpose; label?: string; value: string; disabled: boolean;
+  onPick: (item: PickerStaff | null) => void; onState?: (state: ListState<PickerStaff>['state']) => void; onItems?: (items: readonly PickerStaff[]) => void }): React.ReactElement {
+  const [search, setSearch] = useState('');
+  const list = useList((signal) => pickerApi.staff(scope, purpose, signal), [scope.organizationId, scope.schoolId, purpose], 0);
+  useEffect(() => { onState?.(list.state); if (list.state === 'READY') onItems?.(list.items); }, [list]); // eslint-disable-line react-hooks/exhaustive-deps
+  const copy: Copy = { label, choose: 'Choose a person', search: 'Find a person', loading: 'Reading staff…', empty: 'No one matches.', denied: STAFF_DENIED[purpose], unavailable: 'Staff could not be loaded. Reload the page to try again.' };
+  const shown: ListState<PickerStaff> = list.state === 'READY' ? { state: 'READY', items: list.items.filter((r) => r.displayName.toLowerCase().includes(search.trim().toLowerCase())) } : list;
+  return <PickListView copy={copy} list={shown} keyOf={(i) => i.principalId} describe={staffLabel} value={value} search={search} disabled={disabled} onSearch={setSearch} onPick={onPick} />;
+}
+
+type LeadRow = Pick<LeadListItem, 'id' | 'givenName' | 'familyName'>;
+export const leadLabel = (lead: LeadRow): string => name(lead);
+/** The lead list has no server search, so the newest open leads are filtered by name on the page. */
+export function filterLeads<T extends LeadRow>(leads: readonly T[], find: string): T[] {
+  const needle = find.trim().toLowerCase();
+  return needle ? leads.filter((lead) => leadLabel(lead).toLowerCase().includes(needle)) : [...leads];
+}
+const LEAD_COPY: Copy = { label: 'Lead', choose: 'Choose a lead', search: 'Find a lead', loading: 'Reading leads…', empty: 'No open leads match.', denied: 'Your role does not include reading leads at this school.', unavailable: 'Leads could not be loaded. Reload the page to try again.' };
+/** The school's newest open leads (the CRM lead list, crm.lead.read), picked by name. */
+export function LeadPicker({ scope, value, disabled, onPick, onState, onItems }: { scope: PickerScope; value: string; disabled: boolean; onPick: (lead: LeadListItem | null) => void; onState?: (state: ListState<LeadListItem>['state']) => void; onItems?: (items: readonly LeadListItem[]) => void }): React.ReactElement {
+  const [search, setSearch] = useState('');
+  const [list, setList] = useState<ListState<LeadListItem>>({ state: 'LOADING' });
+  useEffect(() => {
+    let current = true; const abort = new AbortController();
+    loadCrmLeads(scope.organizationId, scope.schoolId, 'OPEN', abort.signal).then(
+      (items) => { if (current) setList({ state: 'READY', items }); },
+      (error) => { if (current && !abort.signal.aborted) setList({ state: error instanceof CrmLeadAccessError ? 'DENIED' : 'UNAVAILABLE' }); });
+    return () => { current = false; abort.abort(); };
+  }, [scope.organizationId, scope.schoolId]);
+  useEffect(() => { onState?.(list.state); if (list.state === 'READY') onItems?.(list.items); }, [list]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shown: ListState<LeadListItem> = list.state === 'READY' ? { state: 'READY', items: filterLeads(list.items, search) } : list;
+  return <PickListView copy={LEAD_COPY} list={shown} keyOf={(i) => i.id} describe={leadLabel} value={value} search={search} disabled={disabled} onSearch={setSearch} onPick={onPick} />;
+}
+
 /** Record-ID inputs: shown directly when no school is selected, otherwise tucked under a fallback disclosure. */
 export function IdFields({ manual, children }: { manual: boolean; children: React.ReactNode }): React.ReactElement {
   return manual ? <>{children}</> : <details data-id-fields="fallback" className={styles.idFields}><summary>Enter record IDs instead</summary>{children}</details>;
+}
+
+/** A staff member in words for signed-in staff: "You", their listed name, or a neutral fallback; never a record ID. */
+export function personLabel(id: string | null, me: string, staff: ReadonlyMap<string, string>, none = 'Unassigned'): string {
+  return id === null ? none : id === me ? 'You' : staff.get(id) ?? 'A teammate';
 }

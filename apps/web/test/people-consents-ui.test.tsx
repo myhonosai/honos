@@ -118,7 +118,7 @@ it('says what an answer means, and offers Try again and Stop only for a kept req
 it('puts the consent card on the person page in place of the summary list', () => {
   const record = { schoolId: school, personId: person, givenName: 'Sam', familyName: 'Lee', email: 'sam@example.com', phoneE164: null, version: 1, updatedAt: '2026-11-01T10:00:00.000Z',
     student: null, consents: { EMAIL: 'OPTED_IN', SMS: 'NOT_RECORDED' }, canEdit: true } as never;
-  const props = { language: 'en', waiting: false, concealed: false, hasSchool: true, list: { state: 'READY', filters: { segment: 'ALL', query: '', rankId: '', programId: '', planId: '', endsWithinDays: '' }, counts: { ALL: 0, STUDENT: 0, TRIAL: 0, PROSPECT: 0, INACTIVE: 0, ARCHIVED: 0 }, rows: [], nextCursor: null, more: 'IDLE' }, filters: { segment: 'ALL', query: '', rankId: '', programId: '', planId: '', endsWithinDays: '' }, options: null, record: { state: 'READY', record },
+  const props = { language: 'en', waiting: false, concealed: false, hasSchool: true, list: { state: 'READY', query: '', items: [] }, record: { state: 'READY', record },
     selectedId: person, outcome: null, locked: false, canRetry: false } as unknown as React.ComponentProps<typeof PeopleView>;
   const withSlot = renderToStaticMarkup(<PeopleView {...props} consentSlot={() => <p data-testid="slot">consent card</p>}/>);
   expect(withSlot).toContain('data-testid="slot"'); expect(withSlot).not.toMatch(/<dl[^>]*aria-label="Contact consent"/);

@@ -49,11 +49,7 @@ export function changeBody(action: ChangeAction, fields: ChangeFields, version: 
  * again only after the shell re-verifies the school. Every command answer is followed by fresh reads: the server, not this
  * tab, says what changed. Nothing here charges, refunds or moves money.
  */
-export function MembershipChanges({ api = membershipChangesApi, listApi = membershipListApi, fixed = null, onChanged }: { api?: MembershipChangesApi; listApi?: MembershipListApi;
-  /** On a contact card: this one membership only; the school-wide list is not read. */
-  fixed?: Readonly<{ membershipId: string; label: string }> | null;
-  /** Told after a command the server accepted, so the card reads itself again. */
-  onChanged?: (() => void) | undefined }): React.ReactElement {
+export function MembershipChanges({ api = membershipChangesApi, listApi = membershipListApi }: { api?: MembershipChangesApi; listApi?: MembershipListApi }): React.ReactElement {
   const { preferences } = useLocale();
   const shell = useSchoolShell();
   const selection = shell.phase === 'READY' ? shell.selection : null;
@@ -62,15 +58,13 @@ export function MembershipChanges({ api = membershipChangesApi, listApi = member
   const [list, setList] = useState<ChangeListState>({ state: 'LOADING' });
   const [history, setHistory] = useState<HistoryState>({ state: 'IDLE' });
   const [filter, setFilter] = useState<ChangeFilter>('ACTIVE');
-  const isFixed = fixed !== null;
-  const [selected, setSelected] = useState<{ id: string; label: string } | null>(fixed ? { id: fixed.membershipId, label: fixed.label } : null);
+  const [selected, setSelected] = useState<{ id: string; label: string } | null>(null);
   const [form, setForm] = useState<ChangeAction | null>(null);
   const [outcome, setOutcome] = useState<ChangeOutcome>(null);
   const [lock, setLock] = useState<Lock>('NONE');
   const [refresh, setRefresh] = useState(0);
   const gen = useRef({ policy: 0, list: 0, history: 0 }), privacy = useRef(0), mounted = useRef(false), lastSchool = useRef<string | null>(null);
   const pending = useRef<Pending | null>(null), sending = useRef(false), moreAbort = useRef<AbortController | null>(null);
-  const onChangedRef = useRef(onChanged); onChangedRef.current = onChanged;
   const retire = () => { gen.current.policy++; gen.current.list++; gen.current.history++; moreAbort.current?.abort(); moreAbort.current = null; };
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; privacy.current++; retire(); pending.current = null; }; }, []);
 
@@ -83,7 +77,7 @@ export function MembershipChanges({ api = membershipChangesApi, listApi = member
   // Another school starts clean: nothing chosen at one school carries over to the next.
   const school = schoolId ? schoolId.toLowerCase() : null;
   useEffect(() => {
-    if (school !== null && lastSchool.current !== null && school !== lastSchool.current) { setFilter('ACTIVE'); if (!isFixed) setSelected(null); setForm(null); setOutcome(null); }
+    if (school !== null && lastSchool.current !== null && school !== lastSchool.current) { setFilter('ACTIVE'); setSelected(null); setForm(null); setOutcome(null); }
     if (school !== null) lastSchool.current = school;
   }, [school]);
 
@@ -103,7 +97,7 @@ export function MembershipChanges({ api = membershipChangesApi, listApi = member
     moreAbort.current?.abort(); moreAbort.current = null;
     const current = ++gen.current.list, shown = privacy.current;
     setList({ state: 'LOADING' });
-    if (!orgId || !schoolId || isFixed) return;
+    if (!orgId || !schoolId) return;
     const owned = () => mounted.current && current === gen.current.list && shown === privacy.current;
     const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
     listApi.page({ organizationId: orgId, schoolId }, filter, null, signal, owned).then(
@@ -114,7 +108,7 @@ export function MembershipChanges({ api = membershipChangesApi, listApi = member
         setList({ state: kind === 'DENIED' ? 'DENIED' : kind === 'TIMEZONE' ? 'TIMEZONE' : 'UNAVAILABLE' });
       });
     return () => { abort.abort(); };
-  }, [listApi, orgId, schoolId, filter, refresh, isFixed]);
+  }, [listApi, orgId, schoolId, filter, refresh]);
 
   const selectedId = selected?.id ?? null;
   useEffect(() => {
@@ -181,7 +175,7 @@ export function MembershipChanges({ api = membershipChangesApi, listApi = member
     setLock(pending.current ? 'KEPT' : 'NONE');
     if (shown !== privacy.current || !mounted.current) return;
     setOutcome(next);
-    if (next.kind === 'DONE') { setForm(null); const f = NEXT_FILTER[request.action]; if (f) setFilter(f); onChangedRef.current?.(); }
+    if (next.kind === 'DONE') { setForm(null); const f = NEXT_FILTER[request.action]; if (f) setFilter(f); }
     else if (!FIXABLE.includes(next.kind as ChangeErrorKind)) setForm(null);
     setRefresh((n) => n + 1);
   }, [api]);
@@ -200,9 +194,9 @@ export function MembershipChanges({ api = membershipChangesApi, listApi = member
 
   const onFilter = useCallback((next: ChangeFilter) => { if (lock === 'NONE') { setFilter(next); setForm(null); } }, [lock]);
   const onSelect = useCallback((id: string | null, label: string | null) => {
-    if (lock !== 'NONE' || isFixed) return;
+    if (lock !== 'NONE') return;
     setSelected(id && label ? { id, label } : null); setForm(null); setOutcome(null);
-  }, [lock, isFixed]);
+  }, [lock]);
   const onOpen = useCallback((next: ChangeAction) => { if (lock === 'NONE') { setForm(next); setOutcome(null); } }, [lock]);
   const onClose = useCallback(() => { if (lock === 'NONE') setForm(null); }, [lock]);
   const onRefresh = useCallback(() => setRefresh((n) => n + 1), []);
@@ -211,7 +205,7 @@ export function MembershipChanges({ api = membershipChangesApi, listApi = member
   // Keyed by the shell phase: a concealed node is replaced, never un-hidden in place.
   return <div key={shell.phase} data-shell-private="">
     <MembershipChangesView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
-      embedded={isFixed} hasSchool={!!schoolId} policy={policy} list={list} filter={filter} selected={selectedId} selectedLabel={selected?.label ?? null} history={history}
+      hasSchool={!!schoolId} policy={policy} list={list} filter={filter} selected={selectedId} selectedLabel={selected?.label ?? null} history={history}
       form={form} outcome={outcome} locked={lock !== 'NONE'} canRetry={lock === 'KEPT'}
       onRefresh={onRefresh} onFilter={onFilter} onSelect={onSelect} onMore={onMore} onOpen={onOpen} onClose={onClose} onSubmit={onSubmit} onTryAgain={onTryAgain}/>
   </div>;

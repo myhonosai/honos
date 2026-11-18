@@ -3,7 +3,6 @@ import { SCHOOL_MEMBERSHIP_LIST_STATES, type SchoolMembershipListItem } from '@h
 import { membershipListText, type MembershipListKey } from './copy';
 import { membershipCounts, type MembershipListFilter, type MembershipListScope } from './http';
 import styles from './membership-list.module.css';
-import { cardLink } from '../people/card-link';
 
 type T = (key: MembershipListKey, vars?: Record<string, string>) => string;
 export const MEMBERSHIP_FILTERS: readonly MembershipListFilter[] = [null, ...SCHOOL_MEMBERSHIP_LIST_STATES];
@@ -26,13 +25,6 @@ function Dates({ m, language, timeZone, t }: { m: SchoolMembershipListItem; lang
   }
   const started = m.legacyStoredTerm?.termStartedAt ?? null;
   return <>{t('notConfirmed')}{started ? <small>{t('storedHint', { date: instantDay(language, timeZone, started) })}</small> : null}</>;
-}
-
-/** A row opens the person's contact card, where every membership action lives. */
-function PersonLink({ person, t }: { person: { personId: string; givenName: string; familyName: string }; t: T }) {
-  const name = `${person.givenName} ${person.familyName}`.trim();
-  if (!name) return <>{t('notVisible')}</>;
-  return <a href={cardLink(person.personId)} aria-label={t('openCard', { name })}>{name}</a>;
 }
 
 /** Pure view. Every row comes from the school's membership read; nothing shows before the shell verifies the school. */
@@ -72,7 +64,7 @@ export function MembershipListView(props: MembershipListViewProps): React.ReactE
             <table className={styles.table} data-testid="membership-table">
               <thead><tr><th scope="col">{t('member')}</th><th scope="col">{t('plan')}</th><th scope="col">{t('status')}</th><th scope="col">{t('dates')}</th><th scope="col">{t('created')}</th></tr></thead>
               <tbody>{ready.items.map((m) => <tr key={m.membershipId}>
-                <th scope="row">{m.participant ? <PersonLink person={m.participant} t={t}/> : t('notVisible')}</th>
+                <th scope="row">{m.participant ? `${m.participant.givenName} ${m.participant.familyName}`.trim() || t('notVisible') : t('notVisible')}</th>
                 <td data-label={t('plan')}>{m.planCode}</td>
                 <td data-label={t('status')}><span className={styles.chip} data-status={m.effectiveStatus}>{t(m.effectiveStatus)}</span></td>
                 <td data-label={t('dates')}><Dates m={m} language={language} timeZone={ready.schoolTimezone} t={t}/></td>
@@ -82,6 +74,14 @@ export function MembershipListView(props: MembershipListViewProps): React.ReactE
           {ready.nextCursor ? <button type="button" className={styles.secondary} onClick={onMore} disabled={ready.more === 'LOADING'}>{ready.more === 'LOADING' ? t('moreLoading') : t('more')}</button> : null}
           {ready.more === 'FAILED' ? <p className={styles.meta} role="status">{t('unavailable')}</p> : null}
         </> : null}
+      </article>
+      <article className={styles.card} aria-labelledby="membership-next-title">
+        <h2 id="membership-next-title">{t('nextSteps')}</h2>
+        <ul className={styles.actions}>
+          <li><a className={styles.primary} href="/staff/billing/memberships">{t('activate')}</a></li>
+          <li><a className={styles.secondary} href="/staff/billing/membership-dates">{t('confirmDates')}</a></li>
+          <li><a className={styles.secondary} href="/staff/billing/membership-changes">{t('changes')}</a></li>
+        </ul>
       </article>
       <p className={styles.meta}>{t('readOnly')}</p>
     </> : null}

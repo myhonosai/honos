@@ -191,8 +191,7 @@ it('has every wording in English, Korean and Spanish, and a staff billing route'
   expect(Object.keys(CHANGE_LANGUAGES.ko).sort()).toEqual(keys); expect(Object.keys(CHANGE_LANGUAGES.es).sort()).toEqual(keys);
   expect(changeText('ko', 'title')).toBe('일시정지·취소·환불');
   const billing = SCHOOL_SHELL_NAV.find(g => g.key === 'billing');
-  // Reachable by old links, but no longer in the tabs or the menu: pause and cancel live on the contact card.
-  expect(billing?.routes.find(r => r.href === '/staff/billing/membership-changes')?.hidden).toBe(true);
+  expect(billing?.routes.map(r => r.href)).toContain('/staff/billing/membership-changes');
   expect(schoolShellActiveRoute('/staff/billing/membership-changes')?.href).toBe('/staff/billing/membership-changes');
   const page = readFileSync('src/app/staff/billing/membership-changes/page.tsx', 'utf8');
   expect(page).toContain('await requireVerifiedWebSession()');
