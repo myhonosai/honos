@@ -227,8 +227,8 @@ async function seed() {
   await sql("INSERT INTO hon.school_demo_data_sets(id,organization_id,school_id,status,counts,loaded_by_principal_id) VALUES($1,$2,$3,'LOADED','{}',$4)", [set, ids.organization, ids.schoolA, OWN.principal]);
   await sql("INSERT INTO hon.school_demo_data_rows(table_name,row_id,set_id,organization_id,school_id,origin) VALUES('people',$1,$2,$3,$4,'LOADED')", [P.demo, set, ids.organization, ids.schoolA]);
   await tag(P.adult, 'Adults', OWN); await tag(P.prospect, 'adults', OWN).catch(() => tag(P.prospect, 'Adults', OWN));
-  // Minors are reached only through guardians (owner default until David decides): a teen with their own opted-in email gets
-  // nothing at it; a student whose birth date shows 18 or over is reached directly. Archived or merged contacts never get blasts.
+  // Minors are always reached through guardians and also at their own opted-in address (owner decision 2026-11-18); a student
+  // whose birth date shows 18 or over is reached directly only. Archived or merged contacts never get blasts.
   P.teen = await person('Tia', 'Park', { email: 'tia@example.test', consent: ['EMAIL'] });
   P.grown = await person('Gus', 'Park', { email: 'gus@example.test', consent: ['EMAIL'] });
   for (const pid of [P.teen, P.grown]) await sql("INSERT INTO hon.family_members(organization_id,school_id,family_id,person_id,member_role) VALUES($1,$2,$3,$4,'STUDENT')", [ids.organization, ids.schoolA, family, pid]);
@@ -317,10 +317,10 @@ try {
   ok(a3.outcomes.QUEUED === 2 && a3.matched === 2, `tags narrow the audience case-insensitively ${JSON.stringify(a3)}`);
   const teens = (await success(() => save(SENDER, draft({ name: 'Teens', audience: { groups: ['ALL_CONTACTS'], tags: ['Teens'] } })), 'teens draft')).data;
   const a4 = (await success(() => audience(READER, teens.blastId), 'audience teens')).data;
-  // Teen -> mom QUEUED, dad DUPLICATE (never Tia's own email); Gus (19) QUEUED at his own; Arlo archived: not counted at all.
-  ok(JSON.stringify(a4.outcomes) === JSON.stringify({ QUEUED: 2, NO_CONSENT: 0, NO_ADDRESS: 0, DUPLICATE_ADDRESS: 1 }) && a4.matched === 3, `minors via guardians, archived excluded ${JSON.stringify(a4)}`);
+  // Teen -> Tia QUEUED at her own opted-in email AND mom QUEUED, dad DUPLICATE; Gus (19) QUEUED at his own; Arlo archived: not counted.
+  ok(JSON.stringify(a4.outcomes) === JSON.stringify({ QUEUED: 3, NO_CONSENT: 0, NO_ADDRESS: 0, DUPLICATE_ADDRESS: 1 }) && a4.matched === 3, `minors via guardians and own address, archived excluded ${JSON.stringify(a4)}`);
   const teenRows = (await sql('SELECT person_id::text p FROM hon.school_blast_resolve($1,$2,$3,$4::jsonb)', [ids.organization, ids.schoolA, 'EMAIL', JSON.stringify({ groups: ['ALL_CONTACTS'], tags: ['Teens'] })])).rows.map((r) => r.p);
-  ok(!teenRows.includes(P.teen) && !teenRows.includes(P.archived) && teenRows.includes(P.grown) && teenRows.includes(P.mom), 'a minor is never reached at their own address; an archived contact never at all');
+  ok(teenRows.includes(P.teen) && teenRows.includes(P.mom) && !teenRows.includes(P.archived) && teenRows.includes(P.grown), 'a minor is reached at their own opted-in address and through guardians; an archived contact never at all');
 
   // 4. Send now: one QUEUED 0243 message per reachable recipient with merge tags filled; final after that.
   for (const actor of [READER, NONE, PARENTISH]) await refused(() => send(actor, { blastId: b1.blastId, expectedVersion: 2, sendAt: null }), 403, undefined, `send refused for ${actor.label}`);

@@ -224,8 +224,9 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
       AND (cardinality(t.tags)=0 OR EXISTS(SELECT 1 FROM hon.contact_tags ct WHERE ct.organization_id=org AND ct.school_id=school
         AND ct.person_id=p.id AND ct.tag_key=ANY(t.tags)))
   ),
-  -- A child (a STUDENT or DEPENDENT family member with a guardian, unless a birth date shows 18 or over) is reached only
-  -- through guardians, never at their own address. Anyone else without an address is reached through guardians if any.
+  -- A child (a STUDENT or DEPENDENT family member with a guardian, unless a birth date shows 18 or over) is always reached
+  -- through guardians, and also at their own address when they have one (consent is still checked per person; owner
+  -- decision 2026-11-18). Anyone else without an address is reached through guardians if any.
   kids AS (
     SELECT m.id,
       EXISTS(SELECT 1 FROM hon.family_members s JOIN hon.family_members gm ON gm.family_id=s.family_id AND gm.organization_id=org AND gm.school_id=school
@@ -237,7 +238,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
   ),
   reach AS (
     SELECT m.id AS matched_id,m.id AS person_id FROM matched m JOIN kids k ON k.id=m.id
-    WHERE NOT k.minor AND hon.school_blast_address(m.phone_e164,m.email::text,chan) IS NOT NULL
+    WHERE hon.school_blast_address(m.phone_e164,m.email::text,chan) IS NOT NULL
     UNION
     SELECT m.id,gp.id FROM matched m JOIN kids k ON k.id=m.id
       JOIN hon.family_members s ON s.person_id=m.id AND s.organization_id=org AND s.school_id=school AND s.member_role IN ('STUDENT','DEPENDENT')
