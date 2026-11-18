@@ -1,6 +1,6 @@
 /**
- * CS-M2 (0510): Merch Studio AI ideas. The owner gives a brief (one product kind, one to three looks, optional colors and
- * notes); Marcus answers with up to three product ideas on the shared AI text proposals (0507). An idea is text only: using
+ * CS-M2 (0528): Merch Studio AI ideas. The owner gives a brief (one product kind, one to three looks, optional colors and
+ * notes); Marcus answers with up to three product ideas on the shared AI text proposals (0527). An idea is text only: using
  * one opens the SH4a draft form, and Shopify is changed only by an approved SH4a change.
  */
 export const MERCH_AI_KINDS = ['TSHIRT', 'HOODIE', 'RASHGUARD', 'HAT', 'BAG', 'BOTTLE', 'STICKER', 'PATCH'] as const;
@@ -37,7 +37,7 @@ export function merchSafeText(v: unknown, max: number): v is string {
 const bytes = (v: unknown) => { const s = JSON.stringify(v); let n = 0; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); n += c < 0x80 ? 1 : c < 0x800 ? 2 : c >= 0xd800 && c <= 0xdbff ? (i++, 4) : 3; } return n; };
 const fail = (what: string): never => { throw new Error(`Invalid merch ideas ${what}.`); };
 
-/** The brief, exactly as the database takes it (0510 hon.shopify_merch_brief_ok). Colors are trimmed and de-duplicated by the client. */
+/** The brief, exactly as the database takes it (0528 hon.shopify_merch_brief_ok). Colors are trimmed and de-duplicated by the client. */
 export function validateMerchAiBrief(value: unknown): MerchAiBrief {
   if (!isObject(value) || !exactKeys(value, ['kind', 'styles', 'colors', 'notes'])) return fail('brief');
   const { kind, styles, colors, notes } = value;
@@ -57,7 +57,7 @@ function idea(v: unknown): MerchAiIdea {
     || !merchSafeText(productType, 60) || !merchSafeText(printNotes, 300) || !(price === null || (typeof price === 'string' && MERCH_AI_PRICE.test(price)))) return fail('answer');
   return { style: style as MerchAiStyle, title, description, productType, price: price as string | null, printNotes };
 }
-/** The closed shape the database stores (0510 hon.shopify_merch_ideas_ok). */
+/** The closed shape the database stores (0528 hon.shopify_merch_ideas_ok). */
 export function validateMerchAiProposal(value: unknown): MerchAiProposal {
   if (!isObject(value) || !exactKeys(value, ['summary', 'ideas']) || !merchSafeText(value.summary, 300)) return fail('answer');
   if (!Array.isArray(value.ideas) || value.ideas.length < 1 || value.ideas.length > MERCH_AI_LIMITS.maxIdeas) return fail('answer');

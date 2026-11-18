@@ -1,16 +1,16 @@
-# Shared AI text proposals (0507) and website AI edits (WB5)
+# Shared AI text proposals (0527) and website AI edits (WB5)
 
 ## Why one table
 Several features need "an AI writes a bounded text answer that a person reviews". Each used to need its own caller table,
 and each new caller table had to be wired into every S4 spend function (org and school committed credits, open holds,
-the HQ UNKNOWN queue and resolution, late provider expenses, HQ per-school usage). 0507 adds one shared caller table,
+the HQ UNKNOWN queue and resolution, late provider expenses, HQ per-school usage). 0527 adds one shared caller table,
 `hon.ai_text_proposals`, wired into S4 once. A new kind adds a row in `hon.ai_text_kinds`, its own entry points, a facts
 reader and a validator. It does not touch S4 again.
 
 ## Kinds
 | kind | agent / task class | budgets (in/out tokens, max cost) | caller | usage agent |
 |---|---|---|---|---|
-| WEBSITE_EDIT (0507) | marcus / DRAFT_MARKETING (live MARCUS_MARKETING route) | 16,000 / 4,000, 150,000 micro-USD | HUMAN_UI | WEBSITE_EDIT |
+| WEBSITE_EDIT (0527) | marcus / DRAFT_MARKETING (live MARCUS_MARKETING route) | 16,000 / 4,000, 150,000 micro-USD | HUMAN_UI | WEBSITE_EDIT |
 | Customizer CM-3 (0382), Conversation AI CA2b (0383), goal planner | later migrations | | | |
 
 Kind rows are immutable. The plan must match the kind's agent, task class and budgets.

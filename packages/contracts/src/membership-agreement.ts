@@ -257,3 +257,120 @@ export function validateFamilyPersonPhotoResult(v: unknown): FamilyPersonPhotoRe
   return Object.freeze({ studentProfileId: id(r.studentProfileId, true), photo: photo(r.photo), replaced: bool(r.replaced, true), templatesDeleted: int(r.templatesDeleted, 0, true, 1),
     replayed: bool(o.replayed, true) });
 }
+
+// ---------- 0499 signing link by email and text ----------
+/** The command header for staff sending a signing link. */
+export const MEMBERSHIP_AGREEMENT_LINK_COMMAND = 'membership-agreement-link' as const;
+export const MEMBERSHIP_AGREEMENT_LINK_CONFIRMATION = 'I_CONFIRM_SEND_MEMBERSHIP_AGREEMENT_LINK' as const;
+/** The random part of a signing link: 32 bytes as base64url, made in the staff member's browser. Only its SHA-256 is stored. */
+export const MEMBERSHIP_AGREEMENT_LINK_TOKEN = /^[A-Za-z0-9_-]{43}$/;
+export const MEMBERSHIP_AGREEMENT_LINK_CHANNELS = ['EMAIL', 'SMS'] as const;
+export type MembershipAgreementLinkChannel = typeof MEMBERSHIP_AGREEMENT_LINK_CHANNELS[number];
+export const MEMBERSHIP_AGREEMENT_LINK_STATES = ['OPEN', 'SIGNED', 'REPLACED', 'EXPIRED'] as const;
+export type MembershipAgreementLinkState = typeof MEMBERSHIP_AGREEMENT_LINK_STATES[number];
+export const MEMBERSHIP_AGREEMENT_LINK_OUTCOMES = ['QUEUED', 'NO_CONSENT', 'NO_ADDRESS'] as const;
+export type MembershipAgreementLinkOutcome = typeof MEMBERSHIP_AGREEMENT_LINK_OUTCOMES[number];
+export const MEMBERSHIP_AGREEMENT_LINK_SIGN_RESULTS = ['SIGNED', 'ALREADY_SIGNED', 'CHANGED', 'INVALID', 'GONE'] as const;
+export type MembershipAgreementLinkSignResult = typeof MEMBERSHIP_AGREEMENT_LINK_SIGN_RESULTS[number];
+
+const name = (v: unknown, response: boolean) => text(v, 200, response);
+export interface MembershipAgreementLinkSummary {
+  linkId: string; state: MembershipAgreementLinkState; recipientPersonId: string; studentProfileIds: readonly string[];
+  createdAt: string; expiresAt: string; closedAt: string | null;
+}
+function linkSummary(v: unknown): MembershipAgreementLinkSummary {
+  const o = closed(v, ['linkId', 'state', 'recipientPersonId', 'studentProfileIds', 'createdAt', 'expiresAt', 'closedAt'], true);
+  const state = oneOf(o.state, MEMBERSHIP_AGREEMENT_LINK_STATES, true), closedAt = time(o.closedAt, true, true);
+  if ((closedAt === null) !== (state === 'OPEN' || state === 'EXPIRED')) fail(true);
+  return Object.freeze({ linkId: id(o.linkId, true), state, recipientPersonId: id(o.recipientPersonId, true),
+    studentProfileIds: list(o.studentProfileIds, MEMBERSHIP_AGREEMENT_MAX_CHILDREN, x => id(x, true), true, 1),
+    createdAt: time(o.createdAt, true) as string, expiresAt: time(o.expiresAt, true) as string, closedAt });
+}
+export interface MembershipAgreementLinkGuardian {
+  personId: string; givenName: string; familyName: string;
+  email: { address: boolean; consent: boolean }; text: { address: boolean; consent: boolean };
+}
+export interface MembershipAgreementSendRead {
+  current: { versionId: string; number: number } | null; familyId: string | null;
+  guardians: readonly MembershipAgreementLinkGuardian[]; children: readonly { studentProfileId: string; givenName: string; familyName: string }[];
+  latestLink: MembershipAgreementLinkSummary | null;
+}
+function reach(v: unknown) { const o = closed(v, ['address', 'consent'], true); return Object.freeze({ address: bool(o.address, true), consent: bool(o.consent, true) }); }
+export function validateMembershipAgreementSendRead(v: unknown): MembershipAgreementSendRead {
+  const o = closed(v, ['current', 'familyId', 'guardians', 'children', 'latestLink'], true);
+  let current = null;
+  if (o.current !== null) { const c = closed(o.current, ['versionId', 'number'], true); current = Object.freeze({ versionId: id(c.versionId, true), number: int(c.number, 1, true, 999_999) }); }
+  const familyId = o.familyId === null ? null : id(o.familyId, true);
+  const guardians = list(o.guardians, 50, g => {
+    const x = closed(g, ['personId', 'givenName', 'familyName', 'email', 'text'], true);
+    return Object.freeze({ personId: id(x.personId, true), givenName: name(x.givenName, true), familyName: name(x.familyName, true), email: reach(x.email), text: reach(x.text) });
+  }, true);
+  const children = list(o.children, MEMBERSHIP_AGREEMENT_MAX_CHILDREN, c => {
+    const x = closed(c, ['studentProfileId', 'givenName', 'familyName'], true);
+    return Object.freeze({ studentProfileId: id(x.studentProfileId, true), givenName: name(x.givenName, true), familyName: name(x.familyName, true) });
+  }, true);
+  const latestLink = o.latestLink === null ? null : linkSummary(o.latestLink);
+  if (familyId === null && (guardians.length || children.length || latestLink)) fail(true);
+  if (current === null && children.length) fail(true);
+  return Object.freeze({ current, familyId, guardians, children, latestLink });
+}
+export interface MembershipAgreementLinkSendInput {
+  schoolId: string; personId: string; recipientPersonId: string; channels: readonly MembershipAgreementLinkChannel[]; token: string;
+  confirmation: typeof MEMBERSHIP_AGREEMENT_LINK_CONFIRMATION;
+}
+export function validateMembershipAgreementLinkSendInput(v: unknown): MembershipAgreementLinkSendInput {
+  const o = closed(v, ['schoolId', 'personId', 'recipientPersonId', 'channels', 'token', 'confirmation'], false);
+  if (o.confirmation !== MEMBERSHIP_AGREEMENT_LINK_CONFIRMATION || typeof o.token !== 'string' || !MEMBERSHIP_AGREEMENT_LINK_TOKEN.test(o.token)) fail(false);
+  const channels = list(o.channels, 2, x => oneOf(x, MEMBERSHIP_AGREEMENT_LINK_CHANNELS, false), false);
+  if (new Set(channels).size !== channels.length) fail(false);
+  return Object.freeze({ schoolId: id(o.schoolId, false), personId: id(o.personId, false), recipientPersonId: id(o.recipientPersonId, false),
+    channels, token: o.token, confirmation: MEMBERSHIP_AGREEMENT_LINK_CONFIRMATION });
+}
+export interface MembershipAgreementLinkDelivery { channel: MembershipAgreementLinkChannel; outcome: MembershipAgreementLinkOutcome; messageId: string | null }
+export interface MembershipAgreementLinkSendResult { link: MembershipAgreementLinkSummary; deliveries: readonly MembershipAgreementLinkDelivery[]; replayed: boolean }
+export function validateMembershipAgreementLinkSendResult(v: unknown): MembershipAgreementLinkSendResult {
+  const o = closed(v, ['record', 'replayed'], true);
+  if (typeof o.record !== 'object' || o.record === null || Array.isArray(o.record)) fail(true);
+  const { deliveries: raw, ...rest } = o.record as Record<string, unknown>;
+  const deliveries = list(raw, 2, d => {
+    const x = closed(d, ['channel', 'outcome', 'messageId'], true);
+    const outcome = oneOf(x.outcome, MEMBERSHIP_AGREEMENT_LINK_OUTCOMES, true), messageId = x.messageId === null ? null : id(x.messageId, true);
+    if ((outcome === 'QUEUED') !== (messageId !== null)) fail(true);
+    return Object.freeze({ channel: oneOf(x.channel, MEMBERSHIP_AGREEMENT_LINK_CHANNELS, true), outcome, messageId });
+  }, true);
+  const link = linkSummary(rest);
+  // The receipt records the link as it was made.
+  if (link.state !== 'OPEN') fail(true);
+  return Object.freeze({ link, deliveries, replayed: bool(o.replayed, true) });
+}
+
+/** What a public signing link shows. A link that is not open shows only its state and the school name. */
+export type MembershipAgreementLinkView =
+  | Readonly<{ state: 'SIGNED' | 'REPLACED' | 'EXPIRED'; schoolName: string }>
+  | Readonly<{ state: 'OPEN'; schoolName: string; recipientGivenName: string; expiresAt: string; agreement: MembershipAgreementVersion | null;
+      children: readonly { studentProfileId: string; givenName: string }[] }>;
+export function validateMembershipAgreementLinkView(v: unknown): MembershipAgreementLinkView {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) fail(true);
+  if ((v as { state?: unknown }).state !== 'OPEN') {
+    const o = closed(v, ['state', 'schoolName'], true);
+    return Object.freeze({ state: oneOf(o.state, ['SIGNED', 'REPLACED', 'EXPIRED'] as const, true), schoolName: text(o.schoolName, 300, true) });
+  }
+  const o = closed(v, ['state', 'schoolName', 'recipientGivenName', 'expiresAt', 'agreement', 'children'], true);
+  const children = list(o.children, MEMBERSHIP_AGREEMENT_MAX_CHILDREN, c => {
+    const x = closed(c, ['studentProfileId', 'givenName'], true);
+    return Object.freeze({ studentProfileId: id(x.studentProfileId, true), givenName: name(x.givenName, true) });
+  }, true);
+  return Object.freeze({ state: 'OPEN', schoolName: text(o.schoolName, 300, true), recipientGivenName: name(o.recipientGivenName, true),
+    expiresAt: time(o.expiresAt, true) as string, agreement: version(o.agreement), children });
+}
+export interface MembershipAgreementLinkSignInput {
+  versionId: string; language: MembershipAgreementLanguage; digest: string; signerName: string; eSignConsent: true; studentProfileIds: readonly string[];
+}
+export function validateMembershipAgreementLinkSignInput(v: unknown): MembershipAgreementLinkSignInput {
+  const o = closed(v, ['versionId', 'language', 'digest', 'signerName', 'eSignConsent', 'studentProfileIds'], false);
+  if (o.eSignConsent !== true || !faceCheckInSignerNameOk(o.signerName)) fail(false);
+  const studentProfileIds = list(o.studentProfileIds, MEMBERSHIP_AGREEMENT_MAX_CHILDREN, x => id(x, false), false, 1);
+  if (new Set(studentProfileIds).size !== studentProfileIds.length) fail(false);
+  return Object.freeze({ versionId: id(o.versionId, false), language: language(o.language, false), digest: digest(o.digest, false), signerName: o.signerName,
+    eSignConsent: true, studentProfileIds });
+}
