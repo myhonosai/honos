@@ -8,6 +8,6 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'HON OS | Family invitation', referrer: 'no-referrer', robots: { index: false, follow: false } };
 export default async function Page(): Promise<React.ReactElement> {
   const token = (await cookies()).get(HON_SESSION_COOKIE)?.value ?? ''; let subject: string;
-  try { subject = verifySession(token, sessionConfig()).externalSubject; } catch { redirect('/auth/login'); }
+  try { subject = verifySession(token, sessionConfig()).externalSubject; } catch { redirect('/auth/login?for=family-invitation'); }
   return <FamilyAccessWorkspace key={createHash('sha256').update(token).digest('hex')} sessionSubject={subject} acceptance />;
 }

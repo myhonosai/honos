@@ -37,6 +37,7 @@ function args(f,k,target=k){
 }
 // Reviewed: open to a suspended school on purpose. B6A keeps billing recovery and settings available.
 const OPEN_BY_DESIGN={
+ 'hon.read_parent_family_choices(text)':'account identity (0471 family picker): a signed-in parent lists only the families their own live grants link them to, with the school name, so they can choose or switch; read only, grants nothing, and every portal read still enforces its own school entitlement',
  'hon.read_hon_os_registration(text)':'account identity (B-ID-5 0241): the signed-in owner sees the sign-up program, current terms and their own REGISTERED school before any access exists; read only, grants nothing',
  'hon.read_hon_os_trial(text)':'account identity (D11-B 0246): the registered owner sees the trial program, the public trial they may start and their own trial before any access exists; read only, grants nothing',
  'hon.read_school_ownership(text,uuid)':'account identity (B-ID-4 0223): a school owner sees co-owners, the primary owner and ownership notices, read only, even while the school is suspended or not yet paid',
@@ -55,12 +56,15 @@ const OPEN_BY_DESIGN={
  'hon.cancel_public_school_event_booking(text,jsonb)':'family cancels their own event booking (0261); must keep working for a suspended school',
  'hon.book_public_school_booking_type(text,jsonb,text)':'public booking-type link (0286): answers INVALID for a suspended school or lapsed entitlement and never books; returns no booking data',
  'hon.cancel_public_school_booking_type_booking(text,jsonb)':'family cancel by code (0286): answers INVALID for a suspended school or lapsed entitlement and changes nothing; returns no booking data',
+ 'hon.sign_membership_agreement_link(text,jsonb,uuid)':'public agreement signing link (0499): the token is the only key; answers GONE (signs nothing, returns no data) for an unknown token, a suspended organization, school or family, a lapsed entitlement or a recipient no longer a guardian',
+ 'hon.submit_walkin_visit(text,jsonb,text)':'walk-in tablet (0414): answers CLOSED for a suspended school, lapsed entitlement or unknown device and writes nothing; returns no people data',
  'hon.chad_follow_up_draft_is_current(uuid,jsonb)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.crm_lead_target_is_current(uuid,uuid)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.marketing_action_is_current(uuid,jsonb)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.teaching_action_is_current(uuid,jsonb)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.principal_has_school_permission(uuid,uuid,uuid,text)':'boolean permission predicate; grants nothing by itself',
  'hon.human_action_reviewer()':'returns the fixed reviewer identity; no school data',
+ 'hon.demo_data_removal_allows(text,jsonb)':'0459 boolean guard predicate: true only for a registered demo row in a set the calling transaction is removing; returns no data and grants nothing',
 };
 // Reviewed gaps: none open. The six staff scope resolvers recorded here before (achievements, staff reporting,
 // follow-ups, human work queue, teaching studio, testing registration review) are gated in 0172 and are now in

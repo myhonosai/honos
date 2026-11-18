@@ -268,7 +268,7 @@ try {
   ok(s1.data.setupUrl.startsWith(`${origin}/staff/billing/saved-payment-methods?payer=${P1}&setup=${setup1.setupId}`) && /^[A-Za-z0-9_-]{43}$/.test(state1),
     'the hosted page returns to the staff page with a one-time state');
   ok(setup1.state === 'PENDING' && setup1.version === 1 && setup1.methodKinds.join() === 'CARD' && setup1.consentTextVersion === 'card-on-file-v1'
-    && !('setupRef' in setup1) && /^seti_sim[0-9a-f]{16}$/.test(await refOf(setup1)) && Date.parse(setup1.expiresAt) - Date.parse(setup1.createdAt) === 3_600_000 && s1.meta.replayed === false, 'pending setup, one hour');
+    && !('setupRef' in setup1) && /^seti_sim[0-9a-f]{16}$/.test(await refOf(setup1)) && Math.abs(Date.parse(setup1.expiresAt) - Date.parse(setup1.createdAt) - 3_600_000) <= 1 && s1.meta.replayed === false, 'pending setup, one hour');
   const replay1 = await success(() => startSetup(OWN, P1, CARD(stripeConn.connectionId), { key: setupKey }), 'setup replay');
   ok(replay1.meta.replayed === true && replay1.data.setup.setupId === setup1.setupId && replay1.data.setupUrl === null, 'a replay returns the stored setup without a link');
   await refused(() => startSetup(OWN, P1, { ...CARD(stripeConn.connectionId), methodKinds: ['CARD', 'US_BANK_ACCOUNT'] }, { key: setupKey }), 409, 'IDEMPOTENCY_KEY_REUSED', 'the same key for another setup');

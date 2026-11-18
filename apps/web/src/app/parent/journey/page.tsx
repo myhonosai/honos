@@ -12,6 +12,6 @@ export default async function ParentJourneyPage() {
     const token = cookieValue((await headers()).get('cookie'), HON_SESSION_COOKIE);
     if (token) { verifySession(token, sessionConfig()); authenticated = true; }
   } catch { /* fail closed, including duplicate/malformed/expired cookies */ }
-  if (!authenticated) redirect('/auth/login');
+  if (!authenticated) redirect('/auth/login?for=parent');
   return <ParentJourney />;
 }

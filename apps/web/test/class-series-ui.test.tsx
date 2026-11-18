@@ -162,12 +162,12 @@ it('shows each outcome plainly and offers Try again only for a kept request', ()
   expect(far).toContain('up to 12 weeks ahead'); expect(far).not.toContain('Try again');
 });
 
-it('is a protected dynamic noindex page in the classes menu and the route manifest', () => {
+it('the old timetable address redirects to the Calendar page timetable tab, which is in the classes menu', () => {
   const page = readFileSync('src/app/staff/schedule/timetable/page.tsx', 'utf8');
-  expect(page).toContain("export const dynamic = 'force-dynamic'"); expect(page).toContain('requireVerifiedWebSession'); expect(page).toContain('index: false');
-  expect(page).not.toMatch(/searchParams|organizationId|schoolId|fetch\(/);
-  expect(schoolShellActiveRoute('/staff/schedule/timetable')?.href).toBe('/staff/schedule/timetable');
-  expect(SCHOOL_SHELL_NAV.find((n) => n.key === 'classes')?.routes.some((r) => r.href === '/staff/schedule/timetable')).toBe(true);
+  expect(page).toContain("redirect('/staff/schedule?tab=timetable')"); expect(page).not.toMatch(/organizationId|schoolId|fetch\(/);
+  expect(readFileSync('src/components/school-calendar/schedule-page.tsx', 'utf8')).toContain("<ClassSeriesPage/>");
+  expect(schoolShellActiveRoute('/staff/schedule/timetable')?.href).toBe('/staff/schedule');
+  expect(SCHOOL_SHELL_NAV.find((n) => n.key === 'classes')?.routes.some((r) => r.href === '/staff/schedule')).toBe(true);
   const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
   expect(manifest.routes.filter((r: { path: string }) => r.path === '/staff/schedule/timetable')).toEqual([{ path: '/staff/schedule/timetable', title: 'HON | Weekly timetable' }]);
 });

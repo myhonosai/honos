@@ -1,9 +1,6 @@
-import type { Metadata } from 'next';
-import { SchoolEventsPage } from '../../../../components/school-events/school-events';
-import { requireVerifiedWebSession } from '../../../../server/require-web-session';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'HON | Sale days & events', referrer: 'no-referrer', robots: { index: false, follow: false } };
 
-/** The school event API decides every permission for the verified school; this page only asks. */
-export default async function SchoolEventsRoute() { await requireVerifiedWebSession(); return <SchoolEventsPage />; }
+/** This page is now part of Classes > Calendar (2026-11-16); old links and bookmarks land on the matching place there. */
+export default function MovedToCalendar(): never { redirect('/staff/schedule?tab=events'); }

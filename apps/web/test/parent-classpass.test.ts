@@ -34,6 +34,6 @@ describe('parent ClassPass safe projection and UI',()=>{
  it('renders a read-only parent surface and clears old content on refresh, blur and access loss',()=>{
   const html=renderToStaticMarkup(React.createElement(ParentClassPass));expect(html).toContain('Payment/provider outcome unavailable.');expect(html).toContain('Read-only operational allowances');expect(html).not.toMatch(/<form|<button[^>]*>[^<]*(?:purchase|admit|issue|reverse)/i);
   const source=readFileSync(new URL('../src/components/parent-classpass.tsx',import.meta.url),'utf8');expect(source).toContain('setView(null); setError');expect(source).toContain("window.addEventListener('blur', hide)");expect(source).toContain('generation.current === token');expect(source).not.toMatch(/localStorage|sessionStorage|commandClassPass|studentProfileId|organizationId|schoolId/);
-  const page=readFileSync(new URL('../src/app/parent/classpass/page.tsx',import.meta.url),'utf8');expect(page).toContain("redirect('/auth/login')");expect(page).toContain('verifySession');
+  const page=readFileSync(new URL('../src/app/parent/classpass/page.tsx',import.meta.url),'utf8');expect(page).toContain("redirect('/auth/login?for=parent')");expect(page).toContain('verifySession');
  });
 });

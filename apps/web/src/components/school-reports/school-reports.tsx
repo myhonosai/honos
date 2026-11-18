@@ -10,7 +10,7 @@ import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from 
 import { ReportsError, schoolReportsApi, type SchoolReportsApi } from './http';
 import { SchoolReportsView, type LocationsReadState, type ReportsReadState, type ReportsScopeChoice, type ReportsViewChoice } from './view';
 
-const LINK_PATHS = { memberships: '/staff/memberships', trials: '/staff/crm/trials', leads: '/staff/crm/leads', receivables: '/staff/billing/receivables',
+const LINK_PATHS = { memberships: '/staff/memberships', trials: '/staff/crm/trials', leads: '/staff/crm', receivables: '/staff/billing/receivables',
   progress: '/staff/curriculum/progress', renewals: '/staff/billing/renewals', goal: '/staff/planning/goal', revenue: '/staff/planning/revenue' } as const;
 /** Links only to pages the school menu has (the monthly goal planner shows up once its page is in the menu). */
 export function dashboardLinks(selection: Parameters<typeof schoolShellHref>[1]): SchoolDashboardViewProps['links'] {

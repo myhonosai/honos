@@ -1,5 +1,5 @@
 /**
- * School contact card proof (C2, 0374) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guard + global
+ * School contact card proof (C2, 0522) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guard + global
  * ValidationPipe + HonExceptionFilter -> SchoolContactsController -> one protected definer function on the restricted runtime
  * role with forced RLS), on the guarded disposable CRM-close fixture only. Synthetic names only; nothing is sent or charged.
  */
@@ -332,12 +332,12 @@ try {
   ok(fns.filter((f) => f.runtime).map((f) => f.sig).join() === 'hon.read_school_contact_card(text,jsonb)', 'the runtime may run only the card read');
   await assert.rejects(runtime.query('SELECT hon.school_contact_card_can($1,$2,$3,$4)', [OWN.principal, ids.organization, ids.schoolA, 'family.read']), /permission denied/); checks += 1;
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const startMark = '-- School contact card exact verification (C2 0374)', endMark = '-- End school contact card exact verification.';
+    const startMark = '-- School contact card exact verification (C2 0522)', endMark = '-- End school contact card exact verification.';
     const section = verify.split(startMark)[1]?.split(endMark)[0];
     ok(section, startMark);
     await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
-  console.log(`PASS: school contact card (0374): ${checks} checks.`);
+  console.log(`PASS: school contact card (0522): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

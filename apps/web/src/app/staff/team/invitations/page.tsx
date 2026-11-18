@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { HON_SESSION_COOKIE, sessionConfig, verifySession } from '@hon/auth';
 import { StaffInvitations } from '../../../../components/staff-invitations/workbench';
+import { StaffDirectory } from '../../../../components/staff-directory/staff-directory';
 import { parseOperationalSchoolSelectors } from '../../../../components/operational-navigation';
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'HON OS | Staff invitations', referrer: 'no-referrer', robots: { index: false, follow: false } };
@@ -12,5 +13,6 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Re
   try { subject = verifySession(token, sessionConfig()).externalSubject; } catch { redirect('/auth/login'); }
   // Query values only seed editable selectors. Identity and school authority are
   // rechecked by the workbench after a deliberate human verification.
-  return <StaffInvitations key={createHash('sha256').update(token).digest('hex')} sessionSubject={subject} {...parseOperationalSchoolSelectors(await searchParams)}/>;
+  // Staff (L5) opens on the people with a role here, by name; the directory reads only after the shell verified the school.
+  return <><StaffDirectory /><StaffInvitations key={createHash('sha256').update(token).digest('hex')} sessionSubject={subject} {...parseOperationalSchoolSelectors(await searchParams)}/></>;
 }

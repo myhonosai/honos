@@ -89,6 +89,10 @@
       "title": "HON | Book a class"
     },
     {
+      "path": "/parent/bookings",
+      "title": "HON | Events & bookings"
+    },
+    {
       "path": "/parent/messages",
       "title": "HON | School message history"
     },
@@ -157,6 +161,10 @@
       "title": "HON | Lead Sources & Intake Monitor"
     },
     {
+      "path": "/staff/marketing/ads",
+      "title": "HON | Ads"
+    },
+    {
       "path": "/staff/marketing/social",
       "title": "HON | Social accounts"
     },
@@ -190,7 +198,7 @@
     },
     {
       "path": "/staff/schedule",
-      "title": "HON | Class rosters"
+      "title": "HON | Calendar"
     },
     {
       "path": "/staff/marketing",
@@ -207,6 +215,18 @@
     {
       "path": "/book/t/:publicId",
       "title": "Book a time"
+    },
+    {
+      "path": "/agreement/:token",
+      "title": "Membership agreement"
+    },
+    {
+      "path": "/staff/team/shifts",
+      "title": "HON | Shifts"
+    },
+    {
+      "path": "/staff/team/hours",
+      "title": "HON | Hours"
     },
     {
       "path": "/staff/team/availability",
@@ -239,6 +259,18 @@
     {
       "path": "/staff/attendance/planned-absences",
       "title": "HON | Human Planned Absence Review"
+    },
+    {
+      "path": "/staff/attendance/cards",
+      "title": "HON | Attendance cards"
+    },
+    {
+      "path": "/staff/attendance/scan",
+      "title": "HON | Scan check-in"
+    },
+    {
+      "path": "/staff/attendance/face",
+      "title": "HON | Face check-in"
     },
     {
       "path": "/staff/instructor-qualifications",
@@ -305,8 +337,32 @@
       "title": "HON | Saved payment methods"
     },
     {
+      "path": "/staff/billing/shopify",
+      "title": "HON | Shopify"
+    },
+    {
+      "path": "/staff/billing/shopify/return",
+      "title": "HON | Finishing Shopify connection"
+    },
+    {
       "path": "/staff/ai-team",
       "title": "HON | AI team"
+    },
+    {
+      "path": "/staff/ai-team/alex",
+      "title": "HON | Alex workspace"
+    },
+    {
+      "path": "/staff/ai-team/jordan",
+      "title": "HON | Jordan workspace"
+    },
+    {
+      "path": "/staff/ai-team/claire",
+      "title": "HON | Claire workspace"
+    },
+    {
+      "path": "/staff/ai-team/lena",
+      "title": "HON | Lena workspace"
     },
     {
       "path": "/staff/retention/at-risk",
@@ -321,6 +377,10 @@
       "title": "HON | Conversations"
     },
     {
+      "path": "/staff/conversations/train-ai",
+      "title": "HON | Train AI"
+    },
+    {
       "path": "/staff/settings/branding",
       "title": "HON | School branding"
     },
@@ -329,12 +389,20 @@
       "title": "HON | School location"
     },
     {
+      "path": "/staff/settings/face-check-in",
+      "title": "HON | Face check-in"
+    },
+    {
       "path": "/staff/settings/booking-types",
       "title": "HON | Booking types"
     },
     {
       "path": "/staff/settings/texting-number",
       "title": "HON | Texting number"
+    },
+    {
+      "path": "/staff/settings/demo-data",
+      "title": "HON | Demo data"
     },
     {
       "path": "/staff/champions-club",
@@ -465,6 +533,10 @@
       "title": "HON | Family ClassPass Observations"
     },
     {
+      "path": "/parent/face-check-in",
+      "title": "HON | Face check-in consent"
+    },
+    {
       "path": "/kiosk",
       "title": "HON | Staff Assistance Kiosk"
     },
@@ -491,6 +563,10 @@
     {
       "path": "/hq/ai-costs",
       "title": "HON HQ | Ai Costs"
+    },
+    {
+      "path": "/hq/conversation-ai",
+      "title": "HON HQ | Conversation AI"
     },
     {
       "path": "/hq/ai-safety",
@@ -626,7 +702,7 @@
     },
     {
       "path": "/hq/pricing-offers",
-      "title": "HON HQ | Pricing & Offers · Design review"
+      "title": "HON HQ | Pricing & Offers \u00b7 Design review"
     },
     {
       "path": "/reference/classic-dashboard",
@@ -683,6 +759,26 @@
     {
       "path": "/staff/settings",
       "title": "HON | Settings"
+    },
+    {
+      "path": "/staff/tools",
+      "title": "HON | Custom tools"
+    },
+    {
+      "path": "/staff/tools/:toolKey",
+      "title": "HON | Custom tool"
+    },
+    {
+      "path": "/staff/tool-maker",
+      "title": "HON | Tool Maker"
+    },
+    {
+      "path": "/staff/walk-in",
+      "title": "HON | Walk-in kiosk"
+    },
+    {
+      "path": "/kiosk/walk-in",
+      "title": "HON | Walk-in"
     }
   ]
 }
