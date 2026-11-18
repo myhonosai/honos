@@ -1,0 +1,85 @@
+/* The living HON orb (HON_ORB_PRESENCE.md). Only transform and opacity animate; --orb-level (0..1) is set by script
+   while listening or speaking. State changes switch play-state, never durations, so nothing jumps. */
+.orb {
+  --orb-level: 0;
+  position: relative; display: inline-block; flex: none; width: 168px; height: 168px; isolation: isolate;
+  pointer-events: none; user-select: none; contain: layout style;
+}
+.orb > * { position: absolute; }
+
+.auraLevel { inset: -16%; transform: scale(calc(1 + var(--orb-level) * 0.28)); }
+.aura {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(circle, rgba(70, 170, 255, 0.55) 0%, rgba(40, 120, 255, 0.22) 38%, rgba(30, 90, 255, 0) 68%);
+  animation: orbBreathe 6s ease-in-out infinite;
+}
+
+.body { inset: 6%; animation: orbFloat 6s ease-in-out infinite; }
+/* The art is a sphere (about two-thirds of the picture) on a dark square: a soft round mask keeps only the sphere,
+   so the orb sits on any background. */
+.core { position: absolute; inset: 0; transform: scale(calc(1 + var(--orb-level) * 0.09)); }
+/* The inner sphere turns slowly on its own; a second, paused spin adds speed while HON listens, thinks or speaks. */
+.swirl, .swirlBoost { position: absolute; inset: 0; }
+.swirl { animation: orbSpin 30s linear infinite; }
+.swirlBoost { animation: orbSpin 12s linear infinite paused; }
+.core img { display: block; width: 100%; height: 100%; object-fit: cover;
+  -webkit-mask-image: radial-gradient(circle closest-side, #000 63%, transparent 73%);
+  mask-image: radial-gradient(circle closest-side, #000 63%, transparent 73%); }
+.shimmer {
+  position: absolute; inset: 18%; border-radius: 50%; mix-blend-mode: screen; opacity: 0.55;
+  background: conic-gradient(from 0deg, transparent 0 62%, rgba(170, 235, 255, 0.55) 70%, transparent 78% 100%);
+  animation: orbSpin 9s linear infinite;
+}
+
+.ripple { inset: 22%; border-radius: 50%; border: 2px solid rgba(130, 215, 255, 0.75); opacity: 0;
+  animation: orbRipple 1.5s ease-out infinite paused; }
+.rippleLate { animation-delay: -0.75s; }
+
+.rings { inset: 0; width: 100%; height: 100%; overflow: visible; }
+.rings g { transform-box: view-box; transform-origin: center; }
+.dial { animation: orbSpin 90s linear infinite; opacity: 0.55; }
+.dialRing { fill: none; stroke: rgba(120, 190, 255, 0.35); stroke-width: 0.8; }
+.tick { stroke: rgba(120, 200, 255, 0.9); stroke-width: 1.6; stroke-linecap: round; }
+
+.orbit { fill: none; stroke: rgba(95, 195, 255, 0.6); stroke-width: 1.1; }
+.spark { fill: none; stroke: #e6fbff; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 5 95;
+  animation: orbTravel 5s linear infinite; }
+.sparkB { animation-duration: 7s; animation-direction: reverse; }
+.spin { animation: orbSpin 26s linear infinite; }
+.spinB { animation-duration: 38s; animation-direction: reverse; }
+.boost { animation: orbSpin 3.2s linear infinite paused; }
+.boostB { animation-direction: reverse; animation-duration: 4.4s; }
+
+.scan { opacity: 0; transition: opacity 300ms ease; animation: orbSpin 1.4s linear infinite paused; }
+.scanArc { fill: none; stroke: rgba(200, 245, 255, 0.95); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 16 84; }
+
+/* standby: hands-free waiting for "Hey HON" */
+.orb[data-orb-state='standby'] .aura { animation-duration: 3s; }
+.orb[data-orb-state='standby'] .dial { opacity: 0.85; }
+
+/* listening */
+.orb[data-orb-state='listening'] .boost, .orb[data-orb-state='listening'] .swirlBoost { animation-play-state: running; }
+.orb[data-orb-state='listening'] .orbit { stroke: rgba(170, 240, 255, 0.8); }
+.orb[data-orb-state='listening'] .dial { opacity: 1; }
+
+/* thinking */
+.orb[data-orb-state='thinking'] .boost, .orb[data-orb-state='thinking'] .swirlBoost { animation-play-state: running; }
+.orb[data-orb-state='thinking'] .scan { opacity: 1; animation-play-state: running; }
+.orb[data-orb-state='thinking'] .shimmer { opacity: 0.85; }
+.orb[data-orb-state='thinking'] .aura { animation-duration: 1.6s; }
+
+/* speaking */
+.orb[data-orb-state='speaking'] .boost, .orb[data-orb-state='speaking'] .swirlBoost { animation-play-state: running; }
+.orb[data-orb-state='speaking'] .ripple { animation-play-state: running; }
+.orb[data-orb-state='speaking'] .orbit { stroke: rgba(170, 240, 255, 0.8); }
+
+@keyframes orbBreathe { 0%, 100% { opacity: 0.7; transform: scale(0.94); } 50% { opacity: 1; transform: scale(1.05); } }
+@keyframes orbFloat { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-2%) scale(1.025); } }
+@keyframes orbSpin { to { transform: rotate(360deg); } }
+@keyframes orbTravel { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+@keyframes orbRipple { 0% { opacity: 0.8; transform: scale(1); } 100% { opacity: 0; transform: scale(1.55); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .orb *, .orb { animation: none !important; transition: none !important; }
+  .ripple, .scan { opacity: 0 !important; }
+}

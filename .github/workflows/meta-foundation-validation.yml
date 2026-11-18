@@ -48,7 +48,7 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     # Full canonical suite includes the exhaustive lock-order audit plus B1.
-    timeout-minutes: 35
+    timeout-minutes: 50
     env:
       NEXT_TELEMETRY_DISABLED: '1'
       CI: 'true'

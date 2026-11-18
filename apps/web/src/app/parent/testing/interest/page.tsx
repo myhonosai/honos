@@ -18,6 +18,6 @@ export default async function ParentTestingInterestPage() {
   } catch {
     /* Fail closed. */
   }
-  if (!authenticated) redirect('/auth/login');
+  if (!authenticated) redirect('/auth/login?for=parent');
   return <ParentTestingRegistration />;
 }

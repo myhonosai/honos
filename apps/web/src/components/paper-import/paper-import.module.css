@@ -1,0 +1,13 @@
+/* Paper import (0388): the photo beside the table it was read into. Shares the student import card styles. */
+.split { display: grid; grid-template-columns: minmax(240px, 2fr) minmax(0, 3fr); gap: 14px; align-items: start; min-width: 0; }
+.photos, .tablePane { display: grid; gap: 10px; min-width: 0; }
+.photos h3, .tablePane h3 { margin: 0; font-size: 15px; }
+.viewer { margin: 0; padding: 8px; border: 1px solid #1c3349; border-radius: 12px; background: #0d1d2e; }
+.image { display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain; border-radius: 8px; }
+.cell { box-sizing: border-box; width: 100%; min-width: 120px; min-height: 40px; padding: 6px 8px; border: 1px solid var(--hon-line, #24405a); border-radius: 8px; background: #0d1d2e; color: #eaf4fb; font: inherit; }
+.cell:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 1px; }
+.unsure { background: #2a2210; }
+.unsure .cell { border-color: #c9a24a; }
+.unsureTag { display: inline-block; margin-top: 4px; padding: 1px 7px; border-radius: 999px; background: #3a2f12; color: #ffe29a; font-size: 12px; font-weight: 800; }
+.hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 900px) { .split { grid-template-columns: minmax(0, 1fr); } }

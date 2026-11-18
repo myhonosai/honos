@@ -1,5 +1,6 @@
 /** HON OS public sign-up (B-ID-5, 0241): a verified OIDC identity creates its own school, REGISTERED with no access. */
 import { accountClosed, accountUuid } from './school-owner-invitations.js';
+import { validateSchoolLocationInput, verifySchoolLocationView, type SchoolLocationInput, type SchoolLocationView } from './school-location.js';
 
 export const SIGNUP_CONFIRMATION = 'CREATE_HON_OS_SCHOOL_ACCOUNT' as const;
 export const SIGNUP_HUMAN_COMMAND = 'hon-os-sign-up' as const;
@@ -14,12 +15,15 @@ function timezone(v: unknown): string {
   return v;
 }
 
-export interface SignupInput { ownerName: string; schoolName: string; legalName: string; timezone: string; termsVersionId: string; confirmation: typeof SIGNUP_CONFIRMATION }
+/** 0392: the school address is part of sign-up; it decides the local rules HON tells the owner about (face check-in). */
+export interface SignupInput { ownerName: string; schoolName: string; legalName: string; timezone: string; location: SchoolLocationInput; termsVersionId: string; confirmation: typeof SIGNUP_CONFIRMATION }
 export function validateSignupInput(v: unknown): SignupInput {
-  const o = accountClosed(v, ['ownerName', 'schoolName', 'legalName', 'timezone', 'termsVersionId', 'confirmation']);
+  const o = accountClosed(v, ['ownerName', 'schoolName', 'legalName', 'timezone', 'location', 'termsVersionId', 'confirmation']);
   if (o.confirmation !== SIGNUP_CONFIRMATION) throw new Error('ACCOUNT_INPUT_INVALID');
+  let location: SchoolLocationInput;
+  try { location = validateSchoolLocationInput(o.location); } catch { throw new Error('ACCOUNT_INPUT_INVALID'); }
   return Object.freeze({ ownerName: signupName(o.ownerName), schoolName: signupName(o.schoolName), legalName: signupName(o.legalName),
-    timezone: timezone(o.timezone), termsVersionId: accountUuid(o.termsVersionId), confirmation: SIGNUP_CONFIRMATION });
+    timezone: timezone(o.timezone), location, termsVersionId: accountUuid(o.termsVersionId), confirmation: SIGNUP_CONFIRMATION });
 }
 
 export interface SignupRegistration {
@@ -34,6 +38,17 @@ export function validateSignupRegistration(v: unknown): SignupRegistration {
   try { schoolName = signupName(o.schoolName); tz = timezone(o.timezone); } catch { throw new Error('ACCOUNT_RESPONSE_INVALID'); }
   return Object.freeze({ registrationId: accountUuid(o.registrationId), organizationId: accountUuid(o.organizationId), schoolId: accountUuid(o.schoolId),
     schoolName, timezone: tz, registeredAt: o.registeredAt, lifecycle: 'REGISTERED', accessGranted: false, billingActivated: false, aiCreditsGranted: false });
+}
+
+/** 0392: the sign-up answer is the registration plus the recorded address and the face check-in notice for it. */
+export interface SignupResult extends SchoolLocationView { registration: SignupRegistration }
+export function validateSignupResult(v: unknown): SignupResult {
+  const o = accountClosed(v, ['registration', 'location', 'faceCheckInNotice']);
+  const registration = validateSignupRegistration(o.registration);
+  let view: SchoolLocationView;
+  try { view = verifySchoolLocationView({ location: o.location, faceCheckInNotice: o.faceCheckInNotice }); } catch { throw new Error('ACCOUNT_RESPONSE_INVALID'); }
+  if (view.location === null) throw new Error('ACCOUNT_RESPONSE_INVALID');
+  return Object.freeze({ registration, ...view });
 }
 
 export type SignupEligibility = 'ELIGIBLE' | 'ALREADY_REGISTERED' | 'HAS_OTHER_ACCESS' | 'VERIFIED_SIGN_IN_REQUIRED';
