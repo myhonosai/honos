@@ -34,7 +34,7 @@ const FAILURES = new Set(['CATALOG_TOO_LARGE', 'ORDERS_TOO_MANY', 'TOKEN_REJECTE
 /** What an approval, a cancel or a new edit ended as, from the server's verified change. */
 export function changeMessage(t: T, action: ShopifyAction, c: ShopifyProductChange): string {
   if (action === 'propose') return t('done_propose');
-  if (action === 'cancelChange') return t('done_cancel');
+  if (action === 'cancelChange') return t(c.status === 'FAILED' ? 'done_closed' : 'done_cancel');
   if (c.status === 'APPLIED') return t('done_applied');
   if (c.status === 'UNKNOWN') return t('done_unknown');
   return changeFailure(t, c) ?? t('fc_other');

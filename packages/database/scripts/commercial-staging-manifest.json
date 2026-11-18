@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "fa2f2b4448c4b57ffc34ad8d0f87f9d9758543440239e0bac1efc44eeab0364e",
+  "chainSha256": "7ad1db3a2774629138e9a3ae1642295d2bb02c958ea4dc4b7c3ace1ff12879aa",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -652,7 +652,7 @@
     },
     {
       "file": "0496_shopify_product_changes.sql",
-      "sha256": "658361bc90d14dee7495c2a1d2e51bd4493a532204c247851a0ee357fed57638"
+      "sha256": "8419cff247f47336a963385cfd5ab81d44cd01ff608900fb53fb49a451327d11"
     }
   ]
 }

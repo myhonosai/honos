@@ -124,6 +124,7 @@ try{
  assert.equal((await q("SELECT count(*)::int n FROM hon.shopify_product_changes WHERE school_id=$1",[B.schoolId]))[0].n,0);
  pass('only commerce.shopify.manage at the school proposes; no-op, unknown, other-product, UNLISTED and control-character changes are refused; one open change per product; the base keeps the mirror values; nothing reaches Shopify');
 
+ let direct;
  // 3. Approving needs the store to have allowed editing; Allow editing asks Shopify for the edit scopes.
  const cmdOf=c=>({schoolId:A.schoolId,changeId:c.changeId,expectedVersion:c.version});
  await denied(()=>approve(reader,cmdOf(proposed)),403,'SHOPIFY_FORBIDDEN');
@@ -177,18 +178,17 @@ try{
  shopify.fake.writeFault='LOSE_ANSWER';
  const unknown=ok(await approve(manager,cmdOf(lost))).change;
  assert.deepEqual([unknown.status,unknown.failureCode],['UNKNOWN','SHOPIFY_UNAVAILABLE']);
- await denied(()=>cancel(manager,cmdOf(unknown)),409,'SHOPIFY_CHANGE_NOT_PENDING');
  await denied(()=>propose(manager,{schoolId:A.schoolId,kind:'UPDATE',productId:GEAR,changes:{vendor:'X'}}),409,'SHOPIFY_CHANGE_OPEN');
  const w0=writes();
  const checked=ok(await approve(second,cmdOf(unknown))).change;
  assert.deepEqual([checked.status,checked.attempts],['APPLIED',2]);
  assert.equal(writes(),w0,'checking reads Shopify and writes nothing');
  assert.equal((await mirrorProduct(GEAR)).product_type,null);
- pass('a write whose answer was lost is UNKNOWN (not cancellable, still blocks new edits); approving it again checks Shopify without writing and records APPLIED');
+ pass('a write whose answer was lost is UNKNOWN (still blocks new edits); approving it again checks Shopify without writing and records APPLIED');
 
  // 7. Leases: a result needs the exact lease of the person who approved; a lease that runs out reads UNKNOWN and is checked.
  const leased=ok(await propose(manager,{schoolId:A.schoolId,kind:'UPDATE',productId:GEAR,changes:{title:'Sparring set'}})).change;
- const direct=async(fn,who,input)=>restricted.query(`SELECT hon.${fn}($1,$2::jsonb) d`,[who.externalSubject,JSON.stringify(input)]);
+ direct=async(fn,who,input)=>restricted.query(`SELECT hon.${fn}($1,$2::jsonb) d`,[who.externalSubject,JSON.stringify(input)]);
  const lease=(await direct('approve_shopify_product_change',manager,cmdOf(leased))).rows[0].d;
  assert.equal(lease.mode,'APPLY');assert.match(lease.credential.sealed,/^v1\./);
  const result={schoolId:A.schoolId,changeId:leased.changeId,leaseToken:lease.leaseToken,outcome:'UNKNOWN',failureCode:'X',product:null};
@@ -243,6 +243,26 @@ try{
  await denied(()=>propose(manager,{schoolId:A.schoolId,kind:'UPDATE',productId:UNIFORM,changes:{vendor:'Late'}}),403,'SHOPIFY_FORBIDDEN');
  assert.equal(ok(await cancel(second,cmdOf(late))).change.status,'CANCELLED','another manager can still cancel it');
  pass('a revoked grant stops proposing and approving at once; another manager can still cancel');
+ // 11. An UNKNOWN change that reached five attempts can be closed as unresolved, freeing the product for a new edit.
+ const stuck=ok(await propose(second,{schoolId:A.schoolId,kind:'UPDATE',productId:HOODIE,changes:{vendor:'Stuck'}})).change;
+ const current=async()=>ok(await changesRead(second,A.schoolId)).changes.find(c=>c.changeId===stuck.changeId);
+ for(let i=0;i<5;i++){
+  await direct('approve_shopify_product_change',second,cmdOf(await current()));
+  await q('ALTER TABLE hon.shopify_product_changes DISABLE TRIGGER shopify_product_changes_guard');
+  await q("UPDATE hon.shopify_product_changes SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=$1",[stuck.changeId]);
+  await q('ALTER TABLE hon.shopify_product_changes ENABLE TRIGGER shopify_product_changes_guard');
+ }
+ const five=await current();
+ assert.deepEqual([five.status,five.failureCode,five.attempts],['UNKNOWN','LEASE_EXPIRED',5]);
+ await denied(()=>approve(second,cmdOf(five)),409,'SHOPIFY_CHANGE_ATTEMPTS');
+ await denied(()=>propose(second,{schoolId:A.schoolId,kind:'UPDATE',productId:HOODIE,changes:{vendor:'Next'}}),409,'SHOPIFY_CHANGE_OPEN');
+ await denied(()=>cancel(reader,cmdOf(five)),403,'SHOPIFY_FORBIDDEN');
+ const closed=ok(await cancel(second,cmdOf(five))).change;
+ assert.deepEqual([closed.status,closed.failureCode,closed.attempts,closed.version>five.version,!!closed.finishedAt],['FAILED','CLOSED_UNRESOLVED',5,true,true]);
+ assert.equal((await q("SELECT count(*)::int n FROM hon.audit_events WHERE entity_id=$1 AND action_code='commerce.shopify.product_change.closed_unresolved'",[stuck.changeId]))[0].n,1);
+ await denied(()=>cancel(second,cmdOf(closed)),409,'SHOPIFY_CHANGE_NOT_PENDING');
+ assert.equal(ok(await propose(second,{schoolId:A.schoolId,kind:'UPDATE',productId:HOODIE,changes:{vendor:'Next'}})).change.status,'PENDING');
+ pass('an UNKNOWN change at five attempts cannot be approved again; a manager closes it as FAILED CLOSED_UNRESOLVED (with evidence) and a new edit of the product is accepted');
  // 11. The deploy check for 0496 in infra 011 passes against this database (with the fixture's runtime role).
  {const verify=await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql',import.meta.url),'utf8');
   const section=verify.split('-- Shopify product changes exact verification (0496, SH4a)')[1]?.split('-- End Shopify product changes exact verification.')[0];

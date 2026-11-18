@@ -257,7 +257,7 @@ it('changes: each edit shows now and after, its status, the right action, and pl
   const html = renderToStaticMarkup(<ShopifyView {...props({ section: 'changes', changes: { state: 'READY', value: list } })} />);
   expect(html).toContain('Waiting for approval'); expect(html).toContain('Approve and send to Shopify'); expect(html).toContain('Cancel this edit');
   expect(html).toContain('Size 2 · Price'); expect(html).toContain('$65.00'); expect(html).toContain('$69.50'); expect(html).toContain('Student uniform (white)');
-  expect(html).toContain('Not sure it was saved'); expect(html).toContain('Check Shopify again'); expect(html).toContain('did not arrive in time');
+  expect(html).toContain('Not sure it was saved'); expect(html).toContain('Check Shopify again'); expect(html).toContain('Close as unresolved'); expect(html).toContain('did not arrive in time');
   expect(html).toContain('HON did not overwrite it'); expect(html).toContain('Rash guard'); expect(html).toContain('$39.99');
   expect(html).not.toContain('data-shopify-allow-editing');
   const off = renderToStaticMarkup(<ShopifyView {...props({ section: 'changes', changes: { state: 'READY', value: changeList({ editProducts: false, editCosts: false }) } })} />);
@@ -276,5 +276,6 @@ it('approval outcomes: saved, not saved, not sure (also when the answer was lost
   expect(view({ kind: 'UNKNOWN', action: 'approve' })).toContain('could not confirm whether Shopify saved');
   expect(view({ kind: 'DONE', action: 'propose', change: chg() })).toContain('Saved for approval.');
   expect(view({ kind: 'EDIT_OFF', action: 'approve' })).toContain('Press Allow editing');
+  expect(view({ kind: 'DONE', action: 'cancelChange', change: chg({ status: 'FAILED', failureCode: 'CLOSED_UNRESOLVED', version: 4 }) })).toContain('Edit closed.');
   expect(orderToFulfill({ ...orders().orders[0]!, financialStatus: 'REFUNDED' })).toBe(false);
 });

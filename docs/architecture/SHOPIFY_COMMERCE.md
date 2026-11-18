@@ -256,8 +256,11 @@ never overwrites a change made there.
    nothing. Approving an `UNKNOWN` change again only reads Shopify (CHECK mode) and records APPLIED or
    `FAILED NOT_APPLIED`. A lease that runs out reads as UNKNOWN (`LEASE_EXPIRED`); a late result after that is refused.
 5. A second write refused after the first was saved is `FAILED PARTLY_APPLIED` with the product.
+6. A manager can close an `UNKNOWN` change (never while a lease is live) after checking Shopify themselves: it becomes
+   `FAILED CLOSED_UNRESOLVED` with evidence, freeing the product (and the draft cap) for a new edit. This is the way out
+   after 5 attempts.
 
-Statuses: PENDING → APPLYING | CANCELLED; APPLYING → APPLIED | FAILED | UNKNOWN; UNKNOWN → APPLYING | APPLIED | FAILED.
+Statuses: PENDING → APPLYING | CANCELLED; APPLYING → APPLIED | FAILED | UNKNOWN; UNKNOWN → APPLYING | APPLIED | FAILED (incl. closed unresolved).
 The table's guard keeps identity, kind, handle, changes, base, source and proposer fixed, bumps the version on every
 update and refuses delete and truncate. Audit and outbox evidence name the fields, never the values.
 

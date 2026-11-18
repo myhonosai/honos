@@ -140,7 +140,7 @@ export function DraftEditor({ ctx, locked, onPropose, onClose }: { ctx: EditCtx;
 
 // ---- The Changes section: what each edit would change, and its approval. ----
 
-const FAILED_KEYS = new Set(['CHANGED_IN_SHOPIFY', 'PRODUCT_NOT_FOUND', 'SHOPIFY_REJECTED', 'PARTLY_APPLIED', 'NOT_APPLIED', 'HANDLE_TAKEN', 'TOKEN_REJECTED', 'SHOPIFY_RATE_LIMITED']);
+const FAILED_KEYS = new Set(['CHANGED_IN_SHOPIFY', 'PRODUCT_NOT_FOUND', 'SHOPIFY_REJECTED', 'PARTLY_APPLIED', 'NOT_APPLIED', 'HANDLE_TAKEN', 'TOKEN_REJECTED', 'SHOPIFY_RATE_LIMITED', 'CLOSED_UNRESOLVED']);
 /** Why a change ended where it did, in plain words. Unknown codes never read as a success. */
 export function changeFailure(t: T, c: ShopifyProductChange): string | null {
   if (!c.failureCode) return null;
@@ -226,7 +226,8 @@ export function Changes(p: ChangesProps): React.ReactElement {
             <div className={styles.row}>
               {act && c.status === 'PENDING' && <><button type="button" className={styles.primary} disabled={p.locked} onClick={() => p.onApprove?.(c)}>{sending ? t('approving') : t('approve')}</button>
                 <button type="button" className={styles.secondary} disabled={p.locked} onClick={() => p.onCancel?.(c)}>{t('cancelChange')}</button></>}
-              {act && c.status === 'UNKNOWN' && <button type="button" className={styles.primary} disabled={p.locked} onClick={() => p.onApprove?.(c)}>{sending ? t('approving') : t('checkAgain')}</button>}
+              {act && c.status === 'UNKNOWN' && <><button type="button" className={styles.primary} disabled={p.locked} onClick={() => p.onApprove?.(c)}>{sending ? t('approving') : t('checkAgain')}</button>
+                <button type="button" className={styles.secondary} disabled={p.locked} onClick={() => p.onCancel?.(c)} data-close-unresolved>{t('closeUnresolved')}</button></>}
               {c.productId && (c.status === 'APPLIED' || c.status === 'FAILED' || c.status === 'UNKNOWN') &&
                 <a className={styles.secondary} href={shopifyAdminUrl(p.ctx.domain, 'products', c.productId)} target="_blank" rel="noopener noreferrer">{t('openShopify')}</a>}
             </div>

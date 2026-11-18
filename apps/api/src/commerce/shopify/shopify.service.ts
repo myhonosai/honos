@@ -36,7 +36,7 @@ const DETAIL: Record<string, string> = {
   SHOPIFY_CHANGE_OPEN: 'This product already has an edit waiting. Approve or cancel that one first.',
   SHOPIFY_CHANGE_NOT_PENDING: 'This edit is no longer waiting for approval. Reload to see where it stands.',
   SHOPIFY_CHANGE_NOT_LEASED: 'This edit is no longer being sent. Reload to see where it stands.',
-  SHOPIFY_CHANGE_ATTEMPTS: 'HON has tried this edit five times. Check the product in Shopify, then cancel it and prepare it again.',
+  SHOPIFY_CHANGE_ATTEMPTS: 'HON has tried this edit five times. Check the product in Shopify, close the edit as unresolved, then prepare it again if needed.',
   SHOPIFY_TOO_MANY_DRAFTS: 'There are already 20 new products waiting. Approve or cancel some first.',
 };
 const STATUS: Record<string, number> = {

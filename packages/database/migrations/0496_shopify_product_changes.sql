@@ -338,7 +338,7 @@ BEGIN
   RETURN jsonb_build_object('change',hon.shopify_change_json(x)||jsonb_build_object('proposedByMe',true));
 END $$;
 
--- CANCEL {schoolId, changeId, expectedVersion}: a PENDING change is dropped. Nothing reaches Shopify.
+-- CANCEL {schoolId, changeId, expectedVersion}: a PENDING change is dropped; an UNKNOWN one is closed unresolved. Nothing reaches Shopify.
 CREATE FUNCTION hon.cancel_shopify_product_change(p_subject text,p_input jsonb) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE b record; x hon.shopify_product_changes%ROWTYPE;
@@ -346,12 +346,24 @@ BEGIN
   SELECT * INTO b FROM hon.shopify_begin(p_subject,p_input,ARRAY['changeId','expectedVersion']);
   IF NOT hon.shopify_int_ok(p_input->'expectedVersion',1,1000000000,false) THEN RAISE EXCEPTION 'SHOPIFY_INVALID' USING ERRCODE='22023'; END IF;
   x:=hon.shopify_locked_change(b.school,p_input->'changeId');
-  IF x.version<>(p_input->>'expectedVersion')::integer THEN RAISE EXCEPTION 'SHOPIFY_VERSION_CONFLICT' USING ERRCODE='40001'; END IF;
-  IF x.status<>'PENDING' THEN RAISE EXCEPTION 'SHOPIFY_CHANGE_NOT_PENDING' USING ERRCODE='55000'; END IF;
-  UPDATE hon.shopify_product_changes SET status='CANCELLED',cancelled_by_principal_id=b.actor,finished_at=clock_timestamp(),version=version+1
-    WHERE id=x.id RETURNING * INTO x;
-  PERFORM hon.shopify_evidence(b.org,b.school,b.actor,'commerce.shopify.product_change.cancelled','SHOPIFY_PRODUCT_CHANGE',x.id,x.version,
-    jsonb_build_object('kind',x.kind,'productId',x.product_shopify_id::text));
+  -- As in approve: a change that just settled as UNKNOWN moved one version on; the person saw it as UNKNOWN already.
+  IF x.version<>(p_input->>'expectedVersion')::integer AND NOT (x.status='UNKNOWN' AND x.failure_code='LEASE_EXPIRED'
+      AND x.version=(p_input->>'expectedVersion')::integer+1) THEN
+    RAISE EXCEPTION 'SHOPIFY_VERSION_CONFLICT' USING ERRCODE='40001'; END IF;
+  -- A PENDING change is cancelled. An UNKNOWN one (never while a lease is live: that is APPLYING) is closed as
+  -- FAILED CLOSED_UNRESOLVED after the person checked Shopify themselves, so it no longer blocks new edits or the draft cap.
+  IF x.status='PENDING' THEN
+    UPDATE hon.shopify_product_changes SET status='CANCELLED',cancelled_by_principal_id=b.actor,finished_at=clock_timestamp(),version=version+1
+      WHERE id=x.id RETURNING * INTO x;
+    PERFORM hon.shopify_evidence(b.org,b.school,b.actor,'commerce.shopify.product_change.cancelled','SHOPIFY_PRODUCT_CHANGE',x.id,x.version,
+      jsonb_build_object('kind',x.kind,'productId',x.product_shopify_id::text));
+  ELSIF x.status='UNKNOWN' THEN
+    UPDATE hon.shopify_product_changes SET status='FAILED',failure_code='CLOSED_UNRESOLVED',finished_at=clock_timestamp(),version=version+1
+      WHERE id=x.id RETURNING * INTO x;
+    PERFORM hon.shopify_evidence(b.org,b.school,b.actor,'commerce.shopify.product_change.closed_unresolved','SHOPIFY_PRODUCT_CHANGE',x.id,x.version,
+      jsonb_build_object('kind',x.kind,'productId',x.product_shopify_id::text,'attempt',x.attempts));
+  ELSE RAISE EXCEPTION 'SHOPIFY_CHANGE_NOT_PENDING' USING ERRCODE='55000';
+  END IF;
   PERFORM hon.shopify_recheck(p_subject,b.school,b.actor);
   RETURN jsonb_build_object('change',hon.shopify_change_json(x));
 END $$;
