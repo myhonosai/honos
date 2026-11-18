@@ -211,6 +211,9 @@ import { SchoolDemoDataController } from './school-demo-data/school-demo-data.co
 import { StaffShiftController } from './staff-shifts/staff-shifts.controller.js';
 import { StaffShiftService } from './staff-shifts/staff-shifts.service.js';
 import { StaffShiftReadHumanUiGuard, StaffShiftSaveHumanUiGuard } from './staff-shifts/staff-shifts-human-ui.guard.js';
+import { StaffTimeController } from './staff-time/staff-time.controller.js';
+import { StaffTimeService } from './staff-time/staff-time.service.js';
+import { StaffTimeEntrySaveHumanUiGuard, StaffTimePunchHumanUiGuard, StaffTimeReadHumanUiGuard, StaffTimesheetDecideHumanUiGuard } from './staff-time/staff-time-human-ui.guard.js';
 import { SchoolDemoDataService } from './school-demo-data/school-demo-data.service.js';
 import { SchoolDemoDataLoadHumanUiGuard, SchoolDemoDataReadHumanUiGuard, SchoolDemoDataRemoveHumanUiGuard } from './school-demo-data/school-demo-data-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
@@ -604,6 +607,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolLocationController,
     SchoolDemoDataController,
     StaffShiftController,
+    StaffTimeController,
     CrmPipelineBoardController,
     SchoolMembershipListController,
     CrmSchoolClockController,
@@ -873,6 +877,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolLocationService, SchoolLocationReadHumanUiGuard, SchoolLocationSaveHumanUiGuard,
     SchoolDemoDataService, SchoolDemoDataReadHumanUiGuard, SchoolDemoDataLoadHumanUiGuard, SchoolDemoDataRemoveHumanUiGuard,
     StaffShiftService, StaffShiftReadHumanUiGuard, StaffShiftSaveHumanUiGuard,
+    StaffTimeService, StaffTimeReadHumanUiGuard, StaffTimePunchHumanUiGuard, StaffTimeEntrySaveHumanUiGuard, StaffTimesheetDecideHumanUiGuard,
     CrmPipelineBoardService, CrmPipelineBoardReadHumanUiGuard, CrmLeadStageMoveHumanUiGuard, CrmPipelineStagesSaveHumanUiGuard,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,

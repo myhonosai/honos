@@ -29,7 +29,7 @@ const en = {
   routeVoice: 'Voice', routeDocuments: 'Documents',
   routeHon: 'HON workspace', routeAiWork: 'AI drafts', routeKai: 'Kai: teaching drafts', routeMayaAtRisk: 'Maya: students at risk', routeAlex: 'Alex: whole-school priorities', routeJordan: 'Jordan: schedule and attendance', routeClaire: 'Claire: your numbers', routeLena: 'Lena: plans and creative', routeTeachingStudio: 'Teaching studio', routeCurriculumLibrary: 'Curriculum library',
   routeApprovals: 'Action Center', routeWork: 'Work', routeAutomation: 'Automation rules', routeCustomTools: 'Custom tools', routeToolMaker: 'Tool Maker',
-  routeTeam: 'Team & invitations', routeRoles: 'Roles & permissions', routeShifts: 'Shifts', routeAvailability: 'Availability', routeQualifications: 'Instructor qualifications', routeAccount: 'Account & usage', routeOwners: 'School owners', routeSubscription: 'HON subscription', routeLaunch: 'School launch', routeFounderSetup: 'Founder Setup guide', routeWelcome: 'Welcome and setup', routeHelp: 'Ask HON for help',
+  routeTeam: 'Team & invitations', routeRoles: 'Roles & permissions', routeShifts: 'Shifts', routeHours: 'Hours', routeAvailability: 'Availability', routeQualifications: 'Instructor qualifications', routeAccount: 'Account & usage', routeOwners: 'School owners', routeSubscription: 'HON subscription', routeLaunch: 'School launch', routeFounderSetup: 'Founder Setup guide', routeWelcome: 'Welcome and setup', routeHelp: 'Ask HON for help',
 } as const;
 export type ShellKey = keyof typeof en;
 const ko: Record<ShellKey, string> = {
@@ -62,7 +62,7 @@ const ko: Record<ShellKey, string> = {
   routeVoice: '음성', routeDocuments: '문서',
   routeHon: 'HON 업무 공간', routeAiWork: 'AI 초안', routeKai: 'Kai: 수업 초안', routeMayaAtRisk: 'Maya: 이탈 위험 학생', routeAlex: 'Alex: 도장 전체 우선순위', routeJordan: 'Jordan: 일정과 출석', routeClaire: 'Claire: 도장 숫자', routeLena: 'Lena: 플랜과 크리에이티브', routeTeachingStudio: '교육 스튜디오', routeCurriculumLibrary: '커리큘럼 라이브러리',
   routeApprovals: '액션 센터', routeWork: '업무 목록', routeAutomation: '자동화 규칙', routeCustomTools: '맞춤 도구', routeToolMaker: '도구 만들기',
-  routeTeam: '팀 및 초대', routeRoles: '역할 및 권한', routeShifts: '근무 일정', routeAvailability: '근무 가능 시간', routeQualifications: '사범 자격', routeAccount: '계정 및 사용량', routeOwners: '도장 소유자', routeSubscription: 'HON 구독', routeLaunch: '도장 개설', routeFounderSetup: '창업 설정 가이드', routeWelcome: '환영 및 설정', routeHelp: 'HON에 도움 요청',
+  routeTeam: '팀 및 초대', routeRoles: '역할 및 권한', routeShifts: '근무 일정', routeHours: '근무 시간', routeAvailability: '근무 가능 시간', routeQualifications: '사범 자격', routeAccount: '계정 및 사용량', routeOwners: '도장 소유자', routeSubscription: 'HON 구독', routeLaunch: '도장 개설', routeFounderSetup: '창업 설정 가이드', routeWelcome: '환영 및 설정', routeHelp: 'HON에 도움 요청',
 };
 const es: Record<ShellKey, string> = {
   routeSettingsSummary: 'Resumen',
@@ -94,7 +94,7 @@ const es: Record<ShellKey, string> = {
   routeVoice: 'Voz', routeDocuments: 'Documentos',
   routeHon: 'Espacio HON', routeAiWork: 'Borradores de IA', routeKai: 'Kai: borradores de clases', routeMayaAtRisk: 'Maya: alumnos en riesgo', routeAlex: 'Alex: prioridades de la escuela', routeJordan: 'Jordan: horario y asistencia', routeClaire: 'Claire: tus cifras', routeLena: 'Lena: planes y creatividad', routeTeachingStudio: 'Estudio de enseñanza', routeCurriculumLibrary: 'Biblioteca del plan de estudios',
   routeApprovals: 'Centro de acciones', routeWork: 'Trabajo', routeAutomation: 'Reglas de automatización', routeCustomTools: 'Herramientas propias', routeToolMaker: 'Creador de herramientas',
-  routeTeam: 'Equipo e invitaciones', routeRoles: 'Roles y permisos', routeShifts: 'Turnos', routeAvailability: 'Disponibilidad', routeQualifications: 'Certificaciones de instructores', routeAccount: 'Cuenta y uso', routeOwners: 'Propietarios de la escuela', routeSubscription: 'Suscripción HON', routeLaunch: 'Apertura de la escuela', routeFounderSetup: 'Guía de configuración inicial', routeWelcome: 'Bienvenida y configuración', routeHelp: 'Pedir ayuda a HON',
+  routeTeam: 'Equipo e invitaciones', routeRoles: 'Roles y permisos', routeShifts: 'Turnos', routeHours: 'Horas', routeAvailability: 'Disponibilidad', routeQualifications: 'Certificaciones de instructores', routeAccount: 'Cuenta y uso', routeOwners: 'Propietarios de la escuela', routeSubscription: 'Suscripción HON', routeLaunch: 'Apertura de la escuela', routeFounderSetup: 'Guía de configuración inicial', routeWelcome: 'Bienvenida y configuración', routeHelp: 'Pedir ayuda a HON',
 };
 export const SHELL_LANGUAGES = ['en', 'ko', 'es'] as const;
 export type ShellLanguage = (typeof SHELL_LANGUAGES)[number];
