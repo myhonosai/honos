@@ -77,7 +77,7 @@ export function MessagesScreen() {
                 borderRadius: radius.md, padding: space.md }}>
               <Text style={{ color: m.from === 'FAMILY' ? c.accentText : c.text, fontSize: type.body, lineHeight: 22 }}>{m.body}</Text>
               <Text style={{ color: m.from === 'FAMILY' ? c.accentText : c.subtle, opacity: 0.8, fontSize: type.caption, marginTop: space.xs }}>
-                {m.from === 'SCHOOL' ? 'School · ' : m.mine ? '' : 'Family · '}{formatSent(m.sentAt, now())}
+                {m.from === 'SCHOOL' ? 'School · ' : m.mine ? '' : 'Family · '}{formatSent(m.sentAt, now(), state.status === 'ready' ? state.timeZone : null)}
               </Text>
             </View>
           ))}
@@ -119,8 +119,10 @@ export function MessagesScreen() {
   );
 }
 
-function formatSent(iso: string, now: Date): string {
+/** Sent time in the school's time zone (the phone's when unknown), with the date unless it is today there. */
+function formatSent(iso: string, now: Date, timeZone: string | null): string {
+  const zone = timeZone ? { timeZone } : {};
+  const day = (d: Date) => new Intl.DateTimeFormat('en-US', { ...zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
   const date = new Date(iso);
-  const sameDay = date.toDateString() === now.toDateString();
-  return new Intl.DateTimeFormat('en-US', sameDay ? { hour: 'numeric', minute: '2-digit' } : { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date);
+  return new Intl.DateTimeFormat('en-US', day(date) === day(now) ? { ...zone, hour: 'numeric', minute: '2-digit' } : { ...zone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date);
 }
