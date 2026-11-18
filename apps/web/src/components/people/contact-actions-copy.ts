@@ -1,4 +1,4 @@
-/** Delete (archive), restore and merge wording (C3, 0387), en / ko / es. Labels only; nothing here is authority. */
+/** Delete (archive), restore and merge wording (C3, 0523), en / ko / es. Labels only; nothing here is authority. */
 const en = {
   actionsLabel: 'Contact actions', delete: 'Delete contact', restore: 'Restore contact', merge: 'Merge with a duplicate', cancel: 'Cancel', close: 'Close',
   checking: 'Checking…', sending: 'Saving…', tryAgain: 'Check again',

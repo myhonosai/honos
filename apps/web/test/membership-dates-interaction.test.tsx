@@ -12,6 +12,7 @@ vi.mock('react', async importOriginal => {
   return { ...actual, ...hooks, default: { ...actual, ...hooks } };
 });
 vi.mock('../src/components/crm-enrollment-privacy', () => ({ verifyEnrollmentSession: harness.session }));
+vi.mock('../src/components/school-shell/page-school', () => ({ useShellSchool: () => null }));
 vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ preferences: { language: 'en', region: 'auto', timeZone: 'UTC', currencyDisplay: 'symbol' }, date: (s: string) => s, number: (n: number) => String(n) }) }));
 import { MembershipDatesWorkbench } from '../src/components/membership-dates-workbench';
 import { scope, id, history, preview, receipt, period, report, envelope, rejected } from './membership-dates-fixtures';

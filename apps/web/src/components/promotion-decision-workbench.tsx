@@ -7,6 +7,7 @@ import { PromotionDecisionAccessError, PromotionDecisionUncertainError, prepareP
 import styles from './attendance-workbench.module.css';
 import { useShellSchoolInto } from './school-shell/page-school';
 import { CandidatePicker, IdFields } from './school-pickers/pickers';
+import { MassPromotion } from './mass-promotion';
 
 const EMPTY_IDS: PromotionDecisionIds = { organizationId: '', schoolId: '', candidateId: '' };
 const LABELS: Record<keyof PromotionDecisionIds, string> = { organizationId: 'Organization UUID', schoolId: 'School UUID', candidateId: 'Testing candidate UUID' };
@@ -82,14 +83,11 @@ export function PromotionDecisionWorkbench(): React.ReactElement {
 
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">Staff dashboard</a></nav>
-    <header><p>Curriculum &amp; testing</p><h1>Promotion decision</h1>
-      <p>Choose a student whose test has a result, then record your final decision with a reason.</p>
+    <header><p>Ranks</p><h1>{shellSchool ? 'Mass rank promotion' : 'Promotion decision'}</h1>
+      <p>{shellSchool ? 'Pick the students who tested and record one decision for the group, or decide one student at a time below.' : 'Choose a student whose test has a result, then record your final decision with a reason.'}</p>
     </header>
-    <aside data-plain-note=""><strong>Only an instructor decides a promotion. HON and the AI team never promote a student.</strong><details><summary>What this page never does</summary><p><strong>PROMOTED is a final human instructor decision, never an AI or scorecard action.</strong></p>
-      <p>This page submits only the existing canonical promotion-decision command. The API independently validates the terminal candidate, current enrollment, target rank and promotion prerequisites. Only after that server validation may its existing canonical <code>PROMOTED</code> decision perform the canonical rank change. Entered IDs and version are untrusted selectors, not authority or verified current facts.</p>
-      <p>No external certificate, parent notice, attendance record, billing/payment change, message, provider, AI, Action Engine, automation or effect consumer is created, activated or invoked. No certificate issuance, parent/family access, notification or downstream command occurs here.</p>
-    </details></aside>
-    <section aria-labelledby="promotion-decision-command"><h2 id="promotion-decision-command">Record one final known-ID promotion decision</h2>
+    {shellSchool ? <MassPromotion scope={shellSchool} /> : <aside data-plain-note=""><strong>Only an instructor decides a promotion. HON and the AI team never promote a student.</strong></aside>}
+    <section aria-labelledby="promotion-decision-command"><h2 id="promotion-decision-command">{shellSchool ? 'One student at a time' : 'Record one final known-ID promotion decision'}</h2>
       <form autoComplete="off" onSubmit={submit}><fieldset disabled={busy}>
         {shellSchool && <CandidatePicker scope={shellSchool} purpose="decision" value={ids.candidateId} disabled={busy}
           onPick={picked => edit(() => { setIds(current => ({ ...current, candidateId: picked?.candidateId ?? '' })); setVersion(picked ? String(picked.version) : ''); })} />}

@@ -1,4 +1,4 @@
-/** C2 (0374): one contact's card. Each section is either denied for this viewer or carries its rows; nothing else is shown. */
+/** C2 (0522): one contact's card. Each section is either denied for this viewer or carries its rows; nothing else is shown. */
 import type { SchoolContactRowSegment } from './school-contacts.js';
 
 export type Denied = Readonly<{ allowed: false }>;

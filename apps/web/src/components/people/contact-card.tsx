@@ -6,7 +6,7 @@ import { endBadge } from './contacts-list';
 import { panelText } from './panel-copy';
 import styles from './people.module.css';
 
-/** The contact card (C2, 0374) as read for the open person. */
+/** The contact card (C2, 0522) as read for the open person. */
 export type CardState =
   | Readonly<{ state: 'NONE' }> | Readonly<{ state: 'LOADING' }> | Readonly<{ state: 'UNAVAILABLE' }> | Readonly<{ state: 'READY'; card: SchoolContactCard }>;
 export const CARD_TABS = ['overview', 'details', 'family', 'appointments', 'tasks', 'membership', 'billing', 'messages', 'timeline'] as const;
@@ -27,13 +27,15 @@ const when = (language: string, at: string) => new Intl.DateTimeFormat(language,
 export type MembershipItem = SchoolContactCard['membership'] extends infer M ? M extends { items: readonly (infer I)[] } ? I : never : never;
 /** The People page puts each membership's actions here (pause, cancel, start, …); the card itself only shows what the server read. */
 export type MembershipSlot = (item: MembershipItem) => React.ReactNode;
+/** The People page puts New membership and Renew here, at the top of the membership tab (shown even before the first membership). */
+export type MembershipToolsSlot = (items: readonly MembershipItem[]) => React.ReactNode;
 export type FamilyItem = SchoolContactCard['family'] extends infer F ? F extends { families: readonly (infer I)[] } ? I : never : never;
 /**
  * Slots the People page fills (owner, 2026-11-16: one Contacts page): Details holds the editable record, consents and
  * delete/merge; each family gets its app access; Messages gets this person's texts and family messages. Each slot does
  * its own reads, which the server authorizes; the card only places them.
  */
-export type CardSlots = Readonly<{ membershipSlot?: MembershipSlot | undefined; detailsSlot?: (() => React.ReactNode) | undefined;
+export type CardSlots = Readonly<{ membershipSlot?: MembershipSlot | undefined; membershipTools?: MembershipToolsSlot | undefined; detailsSlot?: (() => React.ReactNode) | undefined;
   familySlot?: ((family: FamilyItem) => React.ReactNode) | undefined; messagesSlot?: ((card: SchoolContactCard) => React.ReactNode) | undefined }>;
 export function ContactCard({ language, card, initialTab = 'overview', tab: shownTab, onTab, ...slots }: { language: string; card: CardState; initialTab?: CardTab;
   /** When given, the page owns the tab (it is kept in the address); otherwise the card keeps it. */
@@ -61,7 +63,7 @@ export function ContactCard({ language, card, initialTab = 'overview', tab: show
 }
 
 function Body({ language, c, tab, t, slots }: { language: string; c: SchoolContactCard; tab: CardTab; t: T; slots: CardSlots }): React.ReactElement {
-  const slot = slots.membershipSlot;
+  const slot = slots.membershipSlot, tools = slots.membershipTools;
   const denied = <p className={styles.meta} role="note">{t('notAllowed')}</p>;
   const none = <p className={styles.meta}>{t('none')}</p>;
   switch (tab) {
@@ -96,10 +98,9 @@ function Body({ language, c, tab, t, slots }: { language: string; c: SchoolConta
         <strong>{a.title}</strong> · {t(`priority_${a.priority}` as CardKey)}{a.dueAt ? ` · ${t('due', { date: day(language, a.dueAt) })}` : ''}</li>)}</ul>;
     case 'membership':
       if (!c.membership.allowed) return denied;
-      if (!c.membership.items.length) return none;
-      return <ul className={styles.plain}>{c.membership.items.map(m => <li key={m.membershipId} data-testid="card-membership">
+      return <>{tools ? tools(c.membership.items) : null}{c.membership.items.length ? <ul className={styles.plain}>{c.membership.items.map(m => <li key={m.membershipId} data-testid="card-membership">
         <strong>{m.planName ?? m.planCode}</strong> · {codeLabel(language, m.state)}
-        {m.startedAt ? ` · ${day(language, m.startedAt)}` : ''}{m.endsAt ? ` – ${day(language, m.endsAt)}` : ''}{slot ? slot(m) : null}</li>)}</ul>;
+        {m.startedAt ? ` · ${day(language, m.startedAt)}` : ''}{m.endsAt ? ` – ${day(language, m.endsAt)}` : ''}{slot ? slot(m) : null}</li>)}</ul> : none}</>;
     case 'billing':
       if (!c.billing.allowed) return denied;
       return <>

@@ -2,6 +2,8 @@ import React from 'react';
 import {beforeEach,afterEach,describe,it,expect,vi} from 'vitest';
 import {readFileSync} from 'node:fs';
 const hooks=vi.hoisted(()=>({cells:[] as unknown[],cursor:0,mounted:false,events:{} as Record<string,()=>void>}));
+const shell=vi.hoisted(()=>({value:null as null|{organizationId:string;schoolId:string}}));
+vi.mock('../src/components/school-shell/page-school',()=>({useShellSchool:()=>shell.value}));
 vi.mock('react',async()=>{
  const actual=await vi.importActual<typeof import('react')>('react');
  return {...actual,useState:(initial:unknown)=>{const index=hooks.cursor++;if(index>=hooks.cells.length)hooks.cells[index]=initial;return [hooks.cells[index],(value:unknown)=>{hooks.cells[index]=typeof value==='function'?(value as (v:unknown)=>unknown)(hooks.cells[index]):value;}];},useRef:(initial:unknown)=>{const index=hooks.cursor++;if(index>=hooks.cells.length)hooks.cells[index]={current:initial};return hooks.cells[index];},useEffect:(effect:()=>unknown)=>{if(!hooks.mounted){hooks.mounted=true;effect();}}};
