@@ -1,7 +1,8 @@
 import { ShopifyProviderError, type MirrorOrder, type MirrorProduct, type ShopifyApp, type ShopifyFailure } from './shopify-adapter.js';
 
-const FAILURE_CODE: Record<ShopifyFailure, string> = {
+export const FAILURE_CODE: Record<ShopifyFailure, string> = {
   AUTH: 'TOKEN_REJECTED', RATE_LIMITED: 'SHOPIFY_RATE_LIMITED', UNAVAILABLE: 'SHOPIFY_UNAVAILABLE', INVALID_RESPONSE: 'SHOPIFY_INVALID_RESPONSE',
+  REJECTED: 'SHOPIFY_REJECTED',
 };
 /** Orders HON mirrors per sync (the summary covers 30 days; 60 keeps late edits). */
 export const SHOPIFY_ORDER_DAYS = 60;

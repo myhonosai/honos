@@ -1,8 +1,8 @@
 import {
   SHOPIFY_HUMAN_COMMAND, accountClosed, accountUuid, validateShopifyCompleteInput, validateShopifyConnectInput, validateShopifyDisconnectInput,
   verifyShopifyCatalog, verifyShopifyConnectResult, verifyShopifyConnectStart, verifyShopifyDisconnectResult, verifyShopifyOrders, verifyShopifyOverview,
-  verifyShopifySyncResult,
-  type ShopifyCatalog, type ShopifyConnectResult, type ShopifyConnectStart, type ShopifyDisconnectResult, type ShopifyOrders, type ShopifyOverview,
+  verifyShopifySyncResult, validateShopifyProposeInput, validateShopifyChangeCommandInput, verifyShopifyProductChanges, verifyShopifyChangeResult,
+  type ShopifyCatalog, type ShopifyProductChanges, type ShopifyChangeResult, type ShopifyDraftChanges, type ShopifyUpdateChanges, type ShopifyConnectResult, type ShopifyConnectStart, type ShopifyDisconnectResult, type ShopifyOrders, type ShopifyOverview,
   type ShopifySyncResult,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
@@ -12,7 +12,8 @@ import { reportConfirmedSessionInvalidation } from '../session-invalidation';
  * The server decides the permission, the school and every outcome; the browser never sees a Shopify token.
  */
 export type ShopifyErrorKind =
-  'SESSION' | 'DENIED' | 'NOT_ENABLED' | 'STATE' | 'TAKEN' | 'OTHER_STORE' | 'STALE' | 'BUSY' | 'NOT_CONNECTED' | 'LIMIT' | 'REJECTED' | 'SCOPES' | 'INVALID' | 'UNKNOWN';
+  'SESSION' | 'DENIED' | 'NOT_ENABLED' | 'STATE' | 'TAKEN' | 'OTHER_STORE' | 'STALE' | 'BUSY' | 'NOT_CONNECTED' | 'LIMIT' | 'REJECTED' | 'SCOPES' | 'INVALID' | 'UNKNOWN'
+  | 'EDIT_OFF' | 'CHANGE_STALE' | 'CHANGE_OPEN' | 'CHANGE_DONE' | 'ATTEMPTS' | 'TOO_MANY';
 export class ShopifyError extends Error { constructor(readonly kind: ShopifyErrorKind, readonly code: string | null = null) { super(kind); } }
 export type Owned = () => boolean;
 
@@ -31,6 +32,12 @@ export function shopifyErrorFor(status: number, code: string | null): ShopifyErr
   if (status === 409 && code === 'SHOPIFY_OTHER_STORE_CONNECTED') return new ShopifyError('OTHER_STORE', code);
   if (status === 409 && code === 'SHOPIFY_SYNC_RUNNING') return new ShopifyError('BUSY', code);
   if (status === 409 && code === 'SHOPIFY_VERSION_CONFLICT') return new ShopifyError('STALE', code);
+  if (status === 409 && code === 'SHOPIFY_EDIT_NOT_ALLOWED') return new ShopifyError('EDIT_OFF', code);
+  if (status === 409 && code === 'SHOPIFY_CHANGE_STALE') return new ShopifyError('CHANGE_STALE', code);
+  if (status === 409 && code === 'SHOPIFY_CHANGE_OPEN') return new ShopifyError('CHANGE_OPEN', code);
+  if (status === 409 && (code === 'SHOPIFY_CHANGE_NOT_PENDING' || code === 'SHOPIFY_CHANGE_NOT_LEASED')) return new ShopifyError('CHANGE_DONE', code);
+  if (status === 409 && code === 'SHOPIFY_CHANGE_ATTEMPTS') return new ShopifyError('ATTEMPTS', code);
+  if (status === 409 && code === 'SHOPIFY_TOO_MANY_DRAFTS') return new ShopifyError('TOO_MANY', code);
   if ((status === 409 && code === 'SHOPIFY_NOT_CONNECTED') || (status === 404 && code === 'SHOPIFY_NOT_FOUND')) return new ShopifyError('NOT_CONNECTED', code);
   if (status === 429) return new ShopifyError('LIMIT', code);
   if (status === 503 && code === 'SHOPIFY_CONNECT_OFF') return new ShopifyError('NOT_ENABLED', code);
@@ -80,8 +87,8 @@ export const shopifyApi = {
     return out;
   },
   /** Starts a connection. The answer is Shopify's approval page (or, in development, HON's own return page). */
-  async connect(schoolId: string, shopDomain: string, signal: AbortSignal, owned: Owned): Promise<ShopifyConnectStart> {
-    const body = input(validateShopifyConnectInput, { schoolId: school(schoolId), shopDomain });
+  async connect(schoolId: string, shopDomain: string, signal: AbortSignal, owned: Owned, allowEditing = false): Promise<ShopifyConnectStart> {
+    const body = input(validateShopifyConnectInput, { schoolId: school(schoolId), shopDomain, allowEditing });
     const out = await answer('/api/v1/school/shopify/connect', signal, owned, verifyShopifyConnectStart, JSON.stringify(body));
     if (out.shopDomain !== body.shopDomain) throw new ShopifyError('UNKNOWN');
     const url = new URL(out.authorizeUrl);
@@ -103,5 +110,33 @@ export const shopifyApi = {
     if (out.connection.connectionId.toLowerCase() !== body.connectionId.toLowerCase()) throw new ShopifyError('UNKNOWN');
     return out;
   },
+  /** SH4a: whether the store lets HON edit, and the latest product changes (open ones first). */
+  async changes(schoolId: string, signal: AbortSignal, owned: Owned): Promise<ShopifyProductChanges> {
+    const id = school(schoolId);
+    const out = await answer(`/api/v1/school/schools/${id}/shopify/changes`, signal, owned, verifyShopifyProductChanges);
+    if (out.schoolId.toLowerCase() !== id) throw new ShopifyError('UNKNOWN');
+    return out;
+  },
+  /** Saves a change for approval. Nothing reaches Shopify until someone approves it. */
+  async propose(schoolId: string, change: { kind: 'CREATE_DRAFT'; changes: ShopifyDraftChanges } | { kind: 'UPDATE'; productId: string; changes: ShopifyUpdateChanges },
+    signal: AbortSignal, owned: Owned): Promise<ShopifyChangeResult> {
+    const body = input(validateShopifyProposeInput, { schoolId: school(schoolId), kind: change.kind, productId: change.kind === 'UPDATE' ? change.productId : null, changes: change.changes });
+    const out = await answer('/api/v1/school/shopify/changes', signal, owned, verifyShopifyChangeResult, JSON.stringify(body));
+    if (out.change.kind !== body.kind || out.change.status !== 'PENDING') throw new ShopifyError('UNKNOWN');
+    return out;
+  },
+  async cancelChange(schoolId: string, changeId: string, expectedVersion: number, signal: AbortSignal, owned: Owned): Promise<ShopifyChangeResult> {
+    return command('/api/v1/school/shopify/changes/cancel', schoolId, changeId, expectedVersion, signal, owned);
+  },
+  /** Approves this exact version: HON checks the product in Shopify, writes it, reads it back and answers with the result. */
+  async approveChange(schoolId: string, changeId: string, expectedVersion: number, signal: AbortSignal, owned: Owned): Promise<ShopifyChangeResult> {
+    return command('/api/v1/school/shopify/changes/approve', schoolId, changeId, expectedVersion, signal, owned);
+  },
 };
+async function command(path: string, schoolId: string, changeId: string, expectedVersion: number, signal: AbortSignal, owned: Owned): Promise<ShopifyChangeResult> {
+  const body = input(validateShopifyChangeCommandInput, { schoolId: school(schoolId), changeId, expectedVersion });
+  const out = await answer(path, signal, owned, verifyShopifyChangeResult, JSON.stringify(body));
+  if (out.change.changeId.toLowerCase() !== body.changeId.toLowerCase()) throw new ShopifyError('UNKNOWN');
+  return out;
+}
 export type ShopifyApi = typeof shopifyApi;
