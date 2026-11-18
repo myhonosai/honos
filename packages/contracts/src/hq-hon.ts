@@ -95,7 +95,8 @@ function budget(value: unknown): HqHonBudget {
   if (b.creditCap === null) {
     if (b.version !== null || b.setBy !== null || b.setAt !== null || b.availableCredits !== 0) drift();
   } else {
-    if (!isInt(b.creditCap, 0, HQ_HON_LIMITS.maxCap) || !isInt(b.version, 1, 999_999_999) || !isTimestamp(b.setAt)) drift();
+    // 0519: version is null while the month carries over the latest earlier month's cap (no row of its own yet).
+    if (!isInt(b.creditCap, 0, HQ_HON_LIMITS.maxCap) || !(b.version === null || isInt(b.version, 1, 999_999_999)) || !isTimestamp(b.setAt)) drift();
     person(b.setBy);
     if ((b.availableCredits as number) !== Math.max((b.creditCap as number) - (b.usedCredits as number) - (b.heldCredits as number), 0)) drift();
   }
