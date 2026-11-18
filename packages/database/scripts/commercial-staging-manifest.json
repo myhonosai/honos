@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "6ab66bd1ff618ba5eee109fb43fdfc84fa61e5628c24338feb4642e926a3734b",
+  "chainSha256": "8f6eea5288eb3be138795271f0e6cd2740e76c3c56c56beb36bcc50b39dd5af7",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -655,8 +655,16 @@
       "sha256": "8419cff247f47336a963385cfd5ab81d44cd01ff608900fb53fb49a451327d11"
     },
     {
-      "file": "0507_ai_text_proposals.sql",
-      "sha256": "fadf8a12448a8a6e66e98ddfe835c8ddd0b67eb84492889da89c8f862df861e8"
+      "file": "0499_membership_agreement_signing_link.sql",
+      "sha256": "5fbd399f57b9cd71a761f94dee19401f46f75c2c68567f2670e3872ac7a8cc30"
+    },
+    {
+      "file": "0519_hq_hon_ongoing_budget.sql",
+      "sha256": "7203674b5377e3fe58c9dcd7229ec175f03ab716293bde333ca20ad4dad606ce"
+    },
+    {
+      "file": "0527_ai_text_proposals.sql",
+      "sha256": "38bf94d39ff71d6eb1a652ae3b3b432813055a9ab26d54641c9bb360f960c54c"
     }
   ]
 }

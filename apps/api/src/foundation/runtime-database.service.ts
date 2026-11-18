@@ -618,6 +618,24 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     await this.assertRuntimePosture();
     return (await this.getPool().query<{ data: unknown }>('SELECT hon.read_published_school_website($1) data', [slug])).rows[0]!.data;
   }
+  /** 0499: what one membership agreement signing link shows, or null. One fixed call, no tenant settings. */
+  async readMembershipAgreementLink(token: string): Promise<unknown> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<{ data: unknown }>('SELECT hon.read_membership_agreement_link($1) data', [token])).rows[0]!.data;
+  }
+  /** 0499: sign through one link (SIGNED, ALREADY_SIGNED, CHANGED, INVALID or GONE). One short transaction, no tenant settings. */
+  async signMembershipAgreementLink(token: string, input: object, requestId: string): Promise<string> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ result: string }>('SELECT hon.sign_membership_agreement_link($1,$2::jsonb,$3::uuid) result', [token, JSON.stringify(input), requestId]);
+      await client.query('COMMIT');
+      return result.rows[0]!.result;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
   async submitPublishedLeadForm(publicId: string, input: object, key: string): Promise<string> {
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
