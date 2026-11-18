@@ -1145,4 +1145,5 @@ export * from './membership-agreement.js';
 export * from './school-social-ads.js';
 export * from './staff-shifts.js';
 export * from './staff-time-clock.js';
+export * from './school-blasts.js';
 export * from './eian.js';

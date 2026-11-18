@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "0606cb1452ee9d0d30ecded8975e7ee1a44ae3bde80b1e6e44cebe1eb2b590d1",
+  "chainSha256": "e23cbac863541d6dd2a07309d749454408584527d8ed41cb564d44ea433692dc",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -649,6 +649,10 @@
     {
       "file": "0478_staff_time_clock.sql",
       "sha256": "287658b3c361652b1e24de7682381ba0e295371513e06e2a12547f3b9f0323ea"
+    },
+    {
+      "file": "0500_school_blasts.sql",
+      "sha256": "6f0f097cd518dfc41e14622237020a4f900ee0b7db01abf1d58fa8bb7ae3259c"
     }
   ]
 }
