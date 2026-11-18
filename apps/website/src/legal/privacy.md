@@ -3,7 +3,7 @@ title: Privacy Policy
 description: What information HON OS collects for martial arts schools, staff, students and families, why we use it, who we share it with, and the choices you have.
 updated: 2026-11-17
 ---
-This Privacy Policy explains how [[Legal entity name, for example HON OS Labs LLC]] ("HON", "we", "us") handles personal information in HON OS, the HON Family parent app, HON HQ, the HON Shopify app and this website (together, the "Services").
+This Privacy Policy explains how HON OS Labs LLC ("HON", "we", "us") handles personal information in HON OS, the HON Family parent app, HON HQ, the HON Shopify app and this website (together, the "Services").
 
 HON OS is software that martial arts schools use to run their business. Most of the personal information in HON OS is about a school's own students, families, staff and leads, and the school decides what to collect and how to use it. For that information the school is in charge and HON works on the school's behalf, under the data processing terms in our [Terms of Service](/terms/#data-processing-terms-for-schools). If you are a student, parent or lead of a school, please also read that school's own privacy notice, and contact the school first with questions about your information.
 
@@ -153,6 +153,6 @@ We may update this policy. We will change the "Last updated" date, and if a chan
 
 Questions or requests about privacy: [[privacy contact email]]
 
-[[Legal entity name]]
+HON OS Labs LLC
 
 [[Mailing address]]
