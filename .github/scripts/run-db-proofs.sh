@@ -74,6 +74,9 @@ proof ai-spend-baseline test-ai-spend-authority-baseline.mjs "AI-0 spend-authori
 # WB5 (0489) website AI edits on a fresh copy of the same disposable AI fixture (fake provider only).
 setup ai-spend-baseline HON_AI_SPEND_BASELINE_VALIDATION_TARGET hon_ai_spend_baseline_validation HON_AI_SPEND_BASELINE_ENV_FILE
 proof ai-spend-baseline test-website-ai-edits.mjs "Website AI edits (WB5, 0489) on the shared AI text proposal table: real API services and runtime role, one plan and one counted fake call per request, one usage row, apply as one draft save, stale/rejected/unknown/refused outcomes, HQ queue and usage attribution, Complete/Marcus/pause gates, exact-school isolation, requester-only moves, seven runtime entry points"
+# CS-M2 (0502) Shopify merch AI ideas on a fresh copy of the same disposable AI fixture (fake provider only).
+setup ai-spend-baseline HON_AI_SPEND_BASELINE_VALIDATION_TARGET hon_ai_spend_baseline_validation HON_AI_SPEND_BASELINE_ENV_FILE
+proof ai-spend-baseline test-shopify-merch-ai-ideas.mjs "Shopify merch AI ideas (CS-M2, 0502) on the shared AI text proposal table: real API services and runtime role, one plan and one counted fake call per request, one usage row, brief and store facts only, no Shopify change, rejected/unknown/refused outcomes, HQ queue and usage attribution, Complete/Marcus/store/pause gates, exact-school isolation, requester-only moves, seven runtime entry points"
 
 # Public lead forms use the uniquely marked marketing fixture. Keep its descriptor
 # separate from every other proof and invoke the package's existing db:test-public-forms
