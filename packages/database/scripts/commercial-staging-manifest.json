@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "f2d1c41abe6ef127f8dc353060d8a9b9f0cb9b202ab1647094f8095516dd4c57",
+  "chainSha256": "d5d902d8ee3f0fd206bfccc26b78aaf4e1114c7394df85293256503334177987",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -649,6 +649,10 @@
     {
       "file": "0475_automation_date_triggers.sql",
       "sha256": "6a98c3e8fbb1462b7d65133828edaa913c6568aa0c7b2f87ae7d22f077cddfc3"
+    },
+    {
+      "file": "0478_staff_time_clock.sql",
+      "sha256": "287658b3c361652b1e24de7682381ba0e295371513e06e2a12547f3b9f0323ea"
     }
   ]
 }
