@@ -8,7 +8,11 @@ import {
   validateMembershipAgreementPublishResult, validateMembershipAgreementRead,
   type AttendanceCommandContext, type FamilyMembershipAgreementRead, type FamilyMembershipAgreementSignResult, type FamilyPersonPhotoResult,
   type MembershipAgreementDraftResult, type MembershipAgreementPublishResult, type MembershipAgreementRead,
+  MEMBERSHIP_AGREEMENT_LINK_SIGN_RESULTS, MEMBERSHIP_AGREEMENT_LINK_TOKEN, validateMembershipAgreementLinkSendInput, validateMembershipAgreementLinkSendResult,
+  validateMembershipAgreementLinkSignInput, validateMembershipAgreementLinkView, validateMembershipAgreementSendRead,
+  type MembershipAgreementLinkSendResult, type MembershipAgreementLinkSignResult, type MembershipAgreementLinkView, type MembershipAgreementSendRead,
 } from '@hon/contracts';
+import { configuredPublicOrigin } from '@hon/auth';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService, type ResolvedParentFamilyScope } from '../foundation/runtime-database.service.js';
 import { ImageRefused, stripImageMetadata } from '../paper-import/image-metadata.js';
@@ -37,6 +41,10 @@ const ERRORS: Record<string, (code: string) => HttpException> = {
   VERSION_CONFLICT: () => conflict('MEMBERSHIP_AGREEMENT_VERSION_CONFLICT', 'This changed. Reload and try again.'),
   IDEMPOTENCY_KEY_REUSED: () => conflict('MEMBERSHIP_AGREEMENT_KEY_REUSED'),
   MEMBERSHIP_AGREEMENT_BUSY: () => busy(),
+  // 0499 signing link.
+  MEMBERSHIP_AGREEMENT_NOT_PUBLISHED: code => bad(code, 'Publish the membership agreement before sending it.'),
+  MEMBERSHIP_AGREEMENT_RECIPIENT_NOT_ALLOWED: code => bad(code, 'Send the agreement to a guardian of this student\'s family.'),
+  MEMBERSHIP_AGREEMENT_NOTHING_TO_SIGN: code => bad(code, 'Every child in this family has already signed the current agreement, or none needs it.'),
   // The face check-in box (0443): the agreement is not signed either when one of these refuses.
   FACE_CHECKIN_CLOSED: code => new ForbiddenException({ code, detail: 'Face check-in is not open yet.' }),
   FACE_CHECKIN_OFF: code => new ForbiddenException({ code, detail: 'Face check-in is off at this school.' }),
@@ -135,6 +143,55 @@ export class MembershipAgreementService {
     const asked = [...input.drafts.map(d => d.language)].sort().join(), got = [...out.texts.map(t => t.language)].sort().join();
     if (asked !== got || out.number !== input.expectedNumber + 1) throw unavailable();
     return out;
+  }
+
+  // ---------- 0499 signing link (staff) ----------
+  /** Who can receive a link for this student's family (the student named by their person id), and the family's latest link. */
+  async sendRead(req: HonRequest, schoolId: unknown, personId: unknown): Promise<MembershipAgreementSendRead> {
+    let student: string; try { student = accountUuid(personId).toLowerCase(); } catch { throw invalid(); }
+    const c = await this.staff(req, schoolId, '');
+    const raw = await this.staffCall(c, 'SELECT hon.read_membership_agreement_send($1,$2::jsonb) data', [c.externalSubject, JSON.stringify({ personId: student })], true);
+    try { return validateMembershipAgreementSendRead(raw); } catch { throw unavailable(); }
+  }
+
+  /**
+   * Make a new one-time link and queue it by email and/or text. The link's origin is this server's configured web origin, never
+   * the browser's; the database queues only channels the guardian opted in to and has an address for. Nothing here delivers:
+   * the existing communication workers and their gates do.
+   */
+  async sendLink(req: HonRequest, body: unknown, k: unknown): Promise<MembershipAgreementLinkSendResult> {
+    const ik = key(k);
+    let input; try { input = validateMembershipAgreementLinkSendInput(body); } catch { throw invalid(); }
+    let origin: string | undefined;
+    try { origin = configuredPublicOrigin(process.env); } catch { origin = undefined; }
+    if (!origin) throw new ServiceUnavailableException({ code: 'MEMBERSHIP_AGREEMENT_LINK_ORIGIN_NOT_CONFIGURED', outcome: 'NOT_SUBMITTED' });
+    const c = await this.staff(req, input.schoolId, ik);
+    const { schoolId: _s, ...rest } = input;
+    const raw = await this.staffCall(c, 'SELECT hon.send_membership_agreement_link($1,$2::jsonb,$3,$4,$5::uuid,$6::uuid) data',
+      [c.externalSubject, JSON.stringify(rest), new URL(origin).origin, c.idempotencyKey, c.requestId, c.correlationId]);
+    let out; try { out = validateMembershipAgreementLinkSendResult(raw); } catch { throw unavailable(); }
+    const asked = [...input.channels].sort().join(), got = out.deliveries.map(d => d.channel).sort().join();
+    if (asked !== got || out.link.recipientPersonId !== input.recipientPersonId) throw unavailable();
+    return out;
+  }
+
+  // ---------- 0499 signing link (public: the token is the only key) ----------
+  /** Null for an unknown or malformed token. Never propagates database text. */
+  async linkRead(token: unknown): Promise<MembershipAgreementLinkView | null> {
+    if (typeof token !== 'string' || !MEMBERSHIP_AGREEMENT_LINK_TOKEN.test(token)) return null;
+    let data: unknown;
+    try { data = await this.database.readMembershipAgreementLink(token); } catch { throw new ServiceUnavailableException({ result: 'UNAVAILABLE' }); }
+    if (data === null) return null;
+    try { return validateMembershipAgreementLinkView(data); } catch { throw new ServiceUnavailableException({ result: 'UNAVAILABLE' }); }
+  }
+
+  async linkSign(token: unknown, body: unknown): Promise<MembershipAgreementLinkSignResult | 'UNAVAILABLE'> {
+    if (typeof token !== 'string' || !MEMBERSHIP_AGREEMENT_LINK_TOKEN.test(token)) return 'GONE';
+    let input; try { input = validateMembershipAgreementLinkSignInput(body); } catch { return 'INVALID'; }
+    try {
+      const result = await this.database.signMembershipAgreementLink(token, input, randomUUID());
+      return (MEMBERSHIP_AGREEMENT_LINK_SIGN_RESULTS as readonly string[]).includes(result) ? result as MembershipAgreementLinkSignResult : 'UNAVAILABLE';
+    } catch { return 'UNAVAILABLE'; }
   }
 
   // ---------- parent portal ----------

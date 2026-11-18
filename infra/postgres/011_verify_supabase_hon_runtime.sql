@@ -4736,3 +4736,31 @@ BEGIN
     RAISE EXCEPTION 'Staff time permissions missing'; END IF;
 END $$;
 -- End staff time clock exact verification.
+-- Membership agreement signing link exact verification (0499)
+DO $$ DECLARE f text;
+  entry text[]:=ARRAY['hon.read_membership_agreement_send(text,jsonb)','hon.send_membership_agreement_link(text,jsonb,text,text,uuid,uuid)',
+    'hon.read_membership_agreement_link(text)','hon.sign_membership_agreement_link(text,jsonb,uuid)'];
+  fns text[]:=ARRAY['hon.guard_membership_agreement_link()','hon.membership_agreement_link_actor(text)',
+    'hon.membership_agreement_link_children(uuid,uuid,uuid,uuid)','hon.membership_agreement_link_json(hon.membership_agreement_links)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe membership agreement link entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY fns LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND a.grantee<>p.proowner) THEN
+      RAISE EXCEPTION 'Unsafe membership agreement link helper: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.membership_agreement_links'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.membership_agreement_links'::regclass)
+    OR has_table_privilege('hon_runtime','hon.membership_agreement_links','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.membership_agreement_links','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe membership agreement link table'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM hon.principals WHERE id='00000000-0000-4000-8000-000000000499' AND principal_type='SYSTEM_SERVICE' AND user_id IS NULL AND is_active) THEN
+    RAISE EXCEPTION 'Membership agreement link principal missing'; END IF;
+END $$;
+-- End membership agreement signing link exact verification.
