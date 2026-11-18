@@ -4312,8 +4312,8 @@ END $$;
 -- End conversation AI training exact verification.
 -- Automation engine exact verification (AU-2 0423): three private forced-RLS engine tables nobody but the owner touches, four runtime
 -- entry points (turn on, pause, run history), two definer engine functions only the hon_automation_worker login (014) may call,
--- private helpers, forward-only guards, the AUTOMATION principal and the message origin columns. 0475 replaced the body of
--- hon.automation_unavailable (the three date triggers now run); its hash below is the 0475 body.
+-- private helpers, forward-only guards, the AUTOMATION principal and the message origin columns. 0498 replaced the body of
+-- hon.automation_unavailable (the three date triggers now run); its hash below is the 0498 body.
 DO $$ DECLARE f record; safe boolean; t text; worker oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_automation_worker'); BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_automation_run()',true,false,false,'search_path=pg_catalog, hon','65683e06da1ed396b09ab9ac1a460ae718c0b4cfa31c6f1d97c90b8f627d0abb'),
@@ -4737,7 +4737,7 @@ BEGIN
     RAISE EXCEPTION 'Staff time permissions missing'; END IF;
 END $$;
 -- End staff time clock exact verification.
--- Automation date triggers exact verification (AU-3 0475): one private forced-RLS scan receipt table nobody but the owner touches
+-- Automation date triggers exact verification (AU-3 0498): one private forced-RLS scan receipt table nobody but the owner touches
 -- (forward-only guards), private candidate and birthday helpers, and one definer scan only the hon_automation_worker login (014) may call.
 DO $$ DECLARE f record; safe boolean; worker oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_automation_worker'); BEGIN
   FOR f IN SELECT * FROM (VALUES
