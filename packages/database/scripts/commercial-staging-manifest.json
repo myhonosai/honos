@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "352ebe2bb425b3c234a4bbf1037fdadc761a6ec7afa72c032d0c53927481844b",
+  "chainSha256": "e3dba5d9f51dfff45fb767908f935adddbbbbc46a4d2b54c3fa141582d45bc76",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -645,6 +645,10 @@
     {
       "file": "0474_eian_family_ai.sql",
       "sha256": "fb0cd95a3a90bdf52fbccfff0a1f025baecec71047a6361f31fc44619c24498f"
+    },
+    {
+      "file": "0478_staff_time_clock.sql",
+      "sha256": "287658b3c361652b1e24de7682381ba0e295371513e06e2a12547f3b9f0323ea"
     },
     {
       "file": "0480_school_reports_dashboard.sql",
