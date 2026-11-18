@@ -22,10 +22,13 @@ const stub = (response: Response) => { const f = vi.fn(async () => response); vi
 const signal = () => new AbortController().signal;
 const fails = async (p: Promise<unknown>) => { try { await p; } catch (e) { return e as JournalError; } throw new Error('expected a failure'); };
 const entry = (over: Record<string, unknown> = {}) => ({ entryId, taughtOn: '2026-11-17', className: 'Kids 6-8', notes: 'Roundhouse kick drills.\nPartner blocking.',
-  topics: ['Roundhouse kick', 'Blocking'], source: 'SPOKEN', status: 'ACTIVE', version: 1, createdAt: '2026-11-17T20:00:00.000Z', updatedAt: '2026-11-17T20:00:00.000Z', ...over });
+  topics: ['Roundhouse kick', 'Blocking'], source: 'SPOKEN', status: 'ACTIVE', shared: false, version: 1, createdAt: '2026-11-17T20:00:00.000Z', updatedAt: '2026-11-17T20:00:00.000Z', ...over });
 const journal = (over: Record<string, unknown> = {}) => ({ timezone: 'America/Los_Angeles', today: '2026-11-18', from: '2026-08-20', to: '2026-11-19', entries: [entry()], ...over });
 const input = (over: Record<string, unknown> = {}) => ({ entryId: null, expectedVersion: 0, taughtOn: '2026-11-17', className: 'Kids 6-8', notes: 'Roundhouse kick drills.',
-  topics: ['Roundhouse kick'], source: 'TYPED', status: 'ACTIVE', ...over }) as never;
+  topics: ['Roundhouse kick'], source: 'TYPED', status: 'ACTIVE', shared: false, ...over }) as never;
+const teamEntry = (over: Record<string, unknown> = {}) => ({ entryId: id(30), authorName: 'Coach Lee', taughtOn: '2026-11-16', className: null, notes: 'Sparring footwork.',
+  topics: ['Footwork'], updatedAt: '2026-11-16T20:00:00.000Z', ...over });
+const teamRead = (over: Record<string, unknown> = {}) => ({ today: '2026-11-18', from: '2026-10-19', to: '2026-11-19', entries: [teamEntry()], ...over });
 
 it('reads a range as a plain same-origin GET with no key and no x-hon header, and refuses drift', async () => {
   const f = stub(json({ data: journal(), meta }));
@@ -63,6 +66,34 @@ it('a save sends its own command and key and must answer the next version of the
   expect(silent).not.toHaveBeenCalled();
 });
 
+it('the team journal is a plain GET of shared entries with display names only, and refuses drift', async () => {
+  const f = stub(json({ data: teamRead(), meta }));
+  expect((await journalApi.readTeam(scope, '2026-10-19', '2026-11-19', signal(), () => true)).entries[0]).toMatchObject({ authorName: 'Coach Lee' });
+  const [path, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+  expect(path).toBe(`/api/v1/organizations/${org}/schools/${school}/staff/kai/journal/team/2026-10-19/2026-11-19`);
+  expect(init).toMatchObject({ method: 'GET' });
+  expect(Object.keys(init.headers as object).some(k => /^x-hon|idempotency/i.test(k))).toBe(false);
+  for (const bad of [teamRead({ entries: [teamEntry({ authorPrincipalId: id(9) })] }), teamRead({ entries: [teamEntry({ taughtOn: '2026-10-01' })] }),
+    teamRead({ entries: [teamEntry(), teamEntry()] }), teamRead({ entries: [teamEntry({ authorName: 'a\nb' })] }), teamRead({ entries: [teamEntry({ version: 1 })] })]) {
+    stub(json({ data: bad, meta }));
+    expect((await fails(journalApi.readTeam(scope, '2026-10-19', '2026-11-19', signal(), () => true))).kind).toBe('UNKNOWN');
+  }
+  stub(json({ code: 'KAI_JOURNAL_FORBIDDEN' }, 403));
+  expect((await fails(journalApi.readTeam(scope, '2026-10-19', '2026-11-19', signal(), () => true))).kind).toBe('DENIED');
+});
+
+it('sharing is off by default, kept by edits, sent with the save and dropped on remove', async () => {
+  expect(newDraft('2026-11-18').shared).toBe(false);
+  expect(saveInput({ ...newDraft('2026-11-18'), notes: 'x' }).shared).toBe(false);
+  expect(saveInput({ ...draftOf(entry({ shared: true }) as never) }).shared).toBe(true);
+  expect(saveInput(draftOf(entry({ shared: true }) as never), true)).toMatchObject({ status: 'REMOVED', shared: false });
+  stub(json({ data: entry({ source: 'TYPED', shared: false }), meta: { ...meta, replayed: false } }));
+  expect((await fails(journalApi.save(scope, input({ shared: true }), key, signal(), () => true))).kind).toBe('UNKNOWN');
+  const f = stub(json({ data: entry({ source: 'TYPED', shared: true }), meta: { ...meta, replayed: false } }));
+  expect((await journalApi.save(scope, input({ shared: true }), key, signal(), () => true)).shared).toBe(true);
+  expect(JSON.parse(String((f.mock.calls[0] as unknown as [string, RequestInit])[1].body)).shared).toBe(true);
+});
+
 it('maps only exact refusals; busy keeps the same-key retry', () => {
   expect(journalErrorFor(403, 'KAI_JOURNAL_FORBIDDEN').kind).toBe('DENIED');
   expect(journalErrorFor(409, 'VERSION_CONFLICT').kind).toBe('CHANGED');
@@ -89,7 +120,7 @@ it('the form checks date, class, notes and topics before sending; remove sends t
 
 const props = (over: Partial<KaiJournalViewProps> = {}): KaiJournalViewProps => ({ language: 'en', waiting: false, concealed: false, hasSchool: true, today: '2026-11-18',
   read: { state: 'READY', read: journal() as never }, draft: newDraft('2026-11-18'), problems: [], hints: [], speech: { supported: true, listening: false, failed: false },
-  confirmingRemove: false, outcome: null, locked: false, canRetry: false, question: '', recall: null, suggestions: [], ...over });
+  confirmingRemove: false, outcome: null, locked: false, canRetry: false, question: '', recall: null, suggestions: [], team: { state: 'READY', entries: [teamEntry()] as never }, ...over });
 
 it('the page: log form with voice, ask box, pattern notes and recent entries', () => {
   const page = renderToStaticMarkup(<KaiJournalView {...props({ hints: ['Forms'], suggestions: [{ kind: 'FOCUS', topic: 'Roundhouse kick', count: 5, total: 7 }, { kind: 'LOG', lastDate: '2026-11-05' }] })} />);
@@ -104,6 +135,12 @@ it('the page: log form with voice, ask box, pattern notes and recent entries', (
   expect(renderToStaticMarkup(<KaiJournalView {...props({ draft: draftOf(entry() as never), confirmingRemove: true })} />)).toContain('Its notes are erased');
   expect(renderToStaticMarkup(<KaiJournalView {...props({ problems: ['notes'] })} />)).toContain('Write what you taught');
   expect(renderToStaticMarkup(<KaiJournalView {...props({ suggestions: [] })} />)).toContain('Log a few classes with topics');
+  expect(page).toContain('Share this entry with my school’s teaching team'); expect(page).not.toMatch(/type="checkbox" checked/);
+  expect(page).toContain('Team journal'); expect(page).toContain('Coach Lee'); expect(page).toContain('Sparring footwork.');
+  expect(renderToStaticMarkup(<KaiJournalView {...props({ draft: draftOf(entry({ shared: true }) as never) })} />)).toMatch(/type="checkbox" checked/);
+  expect(renderToStaticMarkup(<KaiJournalView {...props({ read: { state: 'READY', read: journal({ entries: [entry({ shared: true })] }) as never } })} />)).toContain('data-tag="shared"');
+  expect(renderToStaticMarkup(<KaiJournalView {...props({ team: { state: 'READY', entries: [] } })} />)).toContain('Nobody has shared an entry');
+  expect(renderToStaticMarkup(<KaiJournalView {...props({ team: { state: 'DENIED' } })} />)).toContain('not available to you');
 });
 
 it('recall shows the range Kai understood, the topic tally and the entries', () => {

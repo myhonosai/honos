@@ -1,15 +1,17 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),{randomUUID}=require('node:crypto');
 const {KaiJournalService}=require('../dist/kai-journal/kai-journal.service.js');
-const {KaiJournalReadHumanUiGuard,KaiJournalSaveHumanUiGuard}=require('../dist/kai-journal/kai-journal-human-ui.guard.js');
+const {KaiJournalReadHumanUiGuard,KaiJournalSaveHumanUiGuard,KaiTeamJournalReadHumanUiGuard}=require('../dist/kai-journal/kai-journal-human-ui.guard.js');
 const c=require('@hon/contracts');
 // 0476: the Kai teaching journal (KJ1, no AI).
 const entryId=randomUUID();
 const entry=(over={})=>({entryId,taughtOn:'2026-11-17',className:'Kids 6-8',notes:'Roundhouse kick drills.\nPartner blocking.',topics:['Roundhouse kick','Blocking'],
- source:'SPOKEN',status:'ACTIVE',version:1,createdAt:'2026-11-17T20:00:00.000Z',updatedAt:'2026-11-17T20:00:00.000Z',...over});
+ source:'SPOKEN',status:'ACTIVE',shared:false,version:1,createdAt:'2026-11-17T20:00:00.000Z',updatedAt:'2026-11-17T20:00:00.000Z',...over});
 const read=(over={})=>({timezone:'America/Los_Angeles',today:'2026-11-17',from:'2026-11-10',to:'2026-11-17',entries:[entry()],...over});
-const input=(over={})=>({entryId:null,expectedVersion:0,taughtOn:'2026-11-17',className:'Kids 6-8',notes:'Roundhouse kick drills.',topics:['Roundhouse kick'],source:'TYPED',status:'ACTIVE',...over});
+const input=(over={})=>({entryId:null,expectedVersion:0,taughtOn:'2026-11-17',className:'Kids 6-8',notes:'Roundhouse kick drills.',topics:['Roundhouse kick'],source:'TYPED',status:'ACTIVE',shared:false,...over});
+const team=(over={})=>({today:'2026-11-17',from:'2026-11-10',to:'2026-11-17',entries:[{entryId:randomUUID(),authorName:'Coach Lee',taughtOn:'2026-11-16',className:null,
+ notes:'Footwork.',topics:['Footwork'],updatedAt:'2026-11-16T20:00:00.000Z'}],...over});
 const ctx=(over={})=>({organizationId:randomUUID(),schoolId:randomUUID(),principalId:randomUUID(),principalType:'HUMAN_USER',source:'HUMAN_UI',requestId:randomUUID(),correlationId:randomUUID(),externalSubject:'oidc:coach',idempotencyKey:'',...over});
-function db(rows,calls=[]){const q=async(sql,args)=>{calls.push([sql,args]);return /hon\.(read_kai_journal|save_kai_journal_entry)/.test(sql)?{rows}:{rows:[]};};
+function db(rows,calls=[]){const q=async(sql,args)=>{calls.push([sql,args]);return /hon\.(read_kai_journal|read_kai_team_journal|save_kai_journal_entry)/.test(sql)?{rows}:{rows:[]};};
  return {withTenantReadOnlyTransaction:async(_c,f)=>f({query:q}),withTenantTransaction:async(_c,f)=>f({query:q})};}
 
 test('read and save call only the 0476 functions with the session subject and verify the answer',async()=>{
@@ -27,6 +29,25 @@ test('read and save call only the 0476 functions with the session subject and ve
  for(const bad of [{entry:entry({version:3}),replayed:false},{entry:entry({entryId:randomUUID(),version:2}),replayed:false},{entry:entry({version:2}),replayed:false},
   {entry:{...removed,notes:'kept'},replayed:false}])
   await assert.rejects(new KaiJournalService(db([{data:bad}])).save(ctx({idempotencyKey:'k1'}),input({entryId,expectedVersion:1,status:'REMOVED'})),e=>e.status===503,JSON.stringify(bad));
+});
+
+test('the team read calls only read_kai_team_journal, shows display names only and refuses drift; sharing must round-trip',async()=>{
+ const calls=[];const t=await new KaiJournalService(db([{data:team()}],calls)).readTeam(ctx(),'2026-11-10','2026-11-17');
+ assert.equal(t.entries[0].authorName,'Coach Lee');
+ assert(calls.some(([sql,args])=>sql.includes('hon.read_kai_team_journal($1,$2::date,$3::date)')&&args[0]==='oidc:coach'));
+ assert(!calls.some(([sql])=>/save_kai_journal_entry/.test(sql)),'no write path');
+ const one=team().entries[0];
+ for(const bad of [team({entries:[{...one,authorPrincipalId:randomUUID()}]}),team({entries:[{...one,version:1}]}),team({entries:[{...one,authorName:''}]}),
+  team({entries:[{...one,taughtOn:'2026-11-09'}]}),team({entries:[one,one]}),team({from:'2026-11-11'}),team({entries:[{...one,notes:null}]})])
+  await assert.rejects(new KaiJournalService(db([{data:bad}])).readTeam(ctx(),'2026-11-10','2026-11-17'),e=>e.status===503,JSON.stringify(bad));
+ await assert.rejects(new KaiJournalService(db([])).readTeam(ctx({idempotencyKey:'x'}),'2026-11-10','2026-11-17'),e=>e.status===409);
+ await assert.rejects(new KaiJournalService(db([])).readTeam(ctx({source:'ACTION_ENGINE'}),'2026-11-10','2026-11-17'),e=>e.status===403);
+ const sharedCalls=[];
+ assert.equal((await new KaiJournalService(db([{data:{entry:entry({source:'TYPED',shared:true}),replayed:false}}],sharedCalls)).save(ctx({idempotencyKey:'k3'}),input({shared:true}))).entry.shared,true);
+ assert.equal(JSON.parse(sharedCalls.find(([sql])=>/save_kai_journal_entry/.test(sql))[1][1]).shared,true);
+ await assert.rejects(new KaiJournalService(db([{data:{entry:entry({source:'TYPED',shared:false}),replayed:false}}])).save(ctx({idempotencyKey:'k4'}),input({shared:true})),e=>e.status===503);
+ for(const bad of [input({shared:'yes'}),(({shared,...r})=>r)(input())])
+  await assert.rejects(new KaiJournalService(db([])).save(ctx({idempotencyKey:'k'}),bad),e=>e.status===400,JSON.stringify(bad));
 });
 
 test('only direct human commands; bad input never reaches the database; refusals map to closed codes',async()=>{
@@ -54,6 +75,7 @@ test('only direct human commands; bad input never reaches the database; refusals
 test('the guards use their own command names',()=>{
  assert.equal(new KaiJournalReadHumanUiGuard().command,'kai_journal.read');
  assert.equal(new KaiJournalSaveHumanUiGuard().command,'kai_journal.save');
+ assert.equal(new KaiTeamJournalReadHumanUiGuard().command,'kai_journal.team_read');
 });
 
 test('recall turns questions into school-local ranges (en, ko, es); weeks run Monday to Sunday',()=>{

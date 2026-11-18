@@ -1,6 +1,6 @@
 import {
-  isKaiJournalRange, validateSaveKaiJournalEntryInput, verifyKaiJournalRead, verifyKaiJournalReceipt,
-  type KaiJournalEntry, type KaiJournalRead, type SaveKaiJournalEntryInput,
+  isKaiJournalRange, validateSaveKaiJournalEntryInput, verifyKaiJournalRead, verifyKaiJournalReceipt, verifyKaiTeamJournalRead,
+  type KaiJournalEntry, type KaiJournalRead, type KaiTeamJournalRead, type SaveKaiJournalEntryInput,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
@@ -32,7 +32,7 @@ function envelope(value: unknown): { data: unknown; meta: Record<string, unknown
   return { data: (value as { data: unknown }).data, meta: meta as Record<string, unknown> };
 }
 function id(value: string): string { if (!UUID.test(value)) throw new JournalError('INVALID'); return value.toLowerCase(); }
-function base(scope: JournalScope): string { return `/api/v1/organizations/${id(scope.organizationId)}/schools/${id(scope.schoolId)}/staff/kai/journal/entries`; }
+function base(scope: JournalScope, part: 'entries' | 'team' = 'entries'): string { return `/api/v1/organizations/${id(scope.organizationId)}/schools/${id(scope.schoolId)}/staff/kai/journal/${part}`; }
 
 async function exchange(url: string, signal: AbortSignal, owned: Owned, command?: Readonly<{ body: string; key: string }>): Promise<{ status: number; value: unknown }> {
   const r = await fetch(url, { method: command ? 'POST' : 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
@@ -69,6 +69,15 @@ export const journalApi = {
     catch (error) { if (error instanceof JournalError || signal.aborted) throw error; throw new JournalError('UNKNOWN'); }
     if (answer.status !== 200) throw journalErrorFor(answer.status, codeOf(answer.value));
     try { return verifyKaiJournalRead(envelope(answer.value).data, { from, to }); } catch { throw new JournalError('UNKNOWN'); }
+  },
+  /** Entries other instructors at this school shared with the teaching team (read-only, display names only). */
+  async readTeam(scope: JournalScope, from: string, to: string, signal: AbortSignal, owned: Owned): Promise<KaiTeamJournalRead> {
+    if (!isKaiJournalRange(from, to)) throw new JournalError('INVALID');
+    let answer: { status: number; value: unknown };
+    try { answer = await exchange(`${base(scope, 'team')}/${from}/${to}`, signal, owned); }
+    catch (error) { if (error instanceof JournalError || signal.aborted) throw error; throw new JournalError('UNKNOWN'); }
+    if (answer.status !== 200) throw journalErrorFor(answer.status, codeOf(answer.value));
+    try { return verifyKaiTeamJournalRead(envelope(answer.value).data, { from, to }); } catch { throw new JournalError('UNKNOWN'); }
   },
   /** Add, change or remove one entry. The receipt must be the next version of the same entry. */
   async save(scope: JournalScope, input: SaveKaiJournalEntryInput, key: string, signal: AbortSignal, owned: Owned): Promise<KaiJournalEntry> {

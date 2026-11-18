@@ -3,12 +3,12 @@ import { KAI_JOURNAL_LIMITS, isKaiJournalDate, kaiAddDays, kaiTopicKey, validate
 /** The journal form, in memory only. A school change or session end drops it. */
 export interface JournalDraft {
   entryId: string | null; expectedVersion: number; taughtOn: string; className: string; notes: string; topics: string[];
-  source: KaiJournalSource; topicInput: string;
+  source: KaiJournalSource; shared: boolean; topicInput: string;
 }
 export type JournalProblem = 'date' | 'className' | 'notes' | 'topics';
-export const newDraft = (today: string): JournalDraft => ({ entryId: null, expectedVersion: 0, taughtOn: today, className: '', notes: '', topics: [], source: 'TYPED', topicInput: '' });
+export const newDraft = (today: string): JournalDraft => ({ entryId: null, expectedVersion: 0, taughtOn: today, className: '', notes: '', topics: [], source: 'TYPED', shared: false, topicInput: '' });
 export const draftOf = (entry: KaiJournalEntry): JournalDraft => ({ entryId: entry.entryId, expectedVersion: entry.version, taughtOn: entry.taughtOn,
-  className: entry.className ?? '', notes: entry.notes ?? '', topics: [...entry.topics], source: entry.source, topicInput: '' });
+  className: entry.className ?? '', notes: entry.notes ?? '', topics: [...entry.topics], source: entry.source, shared: entry.shared, topicInput: '' });
 
 const cleanNotes = (notes: string) => notes.replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').trim();
 const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim();
@@ -25,7 +25,7 @@ export function addTopic(draft: JournalDraft, topic?: string): JournalDraft {
 export function saveInput(draft: JournalDraft, remove = false): SaveKaiJournalEntryInput {
   const className = oneLine(draft.className);
   return { entryId: draft.entryId, expectedVersion: draft.expectedVersion, taughtOn: draft.taughtOn, className: className || null,
-    notes: cleanNotes(draft.notes), topics: draft.topics, source: draft.source, status: remove ? 'REMOVED' : 'ACTIVE' };
+    notes: cleanNotes(draft.notes), topics: draft.topics, source: draft.source, status: remove ? 'REMOVED' : 'ACTIVE', shared: remove ? false : draft.shared };
 }
 
 /** What stops this draft from saving, checked with the same contract the API uses. */

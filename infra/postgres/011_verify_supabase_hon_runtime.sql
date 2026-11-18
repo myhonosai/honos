@@ -4705,9 +4705,9 @@ END $$;
 -- End Eian family AI exact verification.
 -- Kai teaching journal exact verification (0476)
 DO $$ DECLARE f text;
-  entry text[]:=ARRAY['hon.read_kai_journal(text,date,date)','hon.save_kai_journal_entry(text,jsonb,text,uuid,uuid)'];
+  entry text[]:=ARRAY['hon.read_kai_journal(text,date,date)','hon.read_kai_team_journal(text,date,date)','hon.save_kai_journal_entry(text,jsonb,text,uuid,uuid)'];
   helpers text[]:=ARRAY['hon.kai_journal_text_ok(text,integer,boolean)','hon.kai_journal_topics_ok(text[])','hon.guard_kai_journal_entry()',
-    'hon.require_kai_journal_actor(text)','hon.kai_journal_json(hon.kai_journal_entries)'];
+    'hon.require_kai_journal_actor(text)','hon.kai_journal_json(hon.kai_journal_entries)','hon.kai_journal_display_name(uuid)'];
 BEGIN
   FOREACH f IN ARRAY entry LOOP
     IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)

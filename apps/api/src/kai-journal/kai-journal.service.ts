@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { isKaiJournalRange, validateSaveKaiJournalEntryInput, verifyKaiJournalRead, verifyKaiJournalReceipt, type KaiJournalRead, type KaiJournalReceipt } from '@hon/contracts';
+import { isKaiJournalRange, validateSaveKaiJournalEntryInput, verifyKaiJournalRead, verifyKaiJournalReceipt, verifyKaiTeamJournalRead, type KaiJournalRead, type KaiJournalReceipt, type KaiTeamJournalRead } from '@hon/contracts';
 import type { PoolClient } from 'pg';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import type { MembershipLifecycleContext } from '../billing/membership.service.js';
@@ -32,7 +32,8 @@ function translate(error: unknown): never {
 
 /**
  * 0476: the Kai teaching journal (KJ1). Each read and save is one protected definer call that re-proves the direct human
- * subject, teaching.journal.use and Complete access. An instructor reads and changes only their own entries. No AI runs here.
+ * subject, teaching.journal.use and Complete access. An instructor reads and changes only their own entries, and reads, never
+ * changes, the entries other instructors at the same school chose to share. No AI runs here.
  */
 @Injectable()
 export class KaiJournalService {
@@ -48,6 +49,21 @@ export class KaiJournalService {
         const result = await client.query<{ data: unknown }>('SELECT hon.read_kai_journal($1,$2::date,$3::date) AS data', [context.externalSubject, from, to]);
         if (result.rows.length !== 1) throw new Error('Unverified Kai journal read.');
         return verifyKaiJournalRead(result.rows[0]!.data, { from, to });
+      });
+    } catch (error) { return translate(error); }
+  }
+
+  /** Entries other instructors at this school shared with the teaching team (read-only, display names only). */
+  async readTeam(context: MembershipLifecycleContext, from: string, to: string): Promise<KaiTeamJournalRead> {
+    this.assertHumanContext(context, false);
+    if (!isKaiJournalRange(from, to)) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
+    try {
+      return await this.database.withTenantReadOnlyTransaction(context, async (client: PoolClient) => {
+        await client.query(READ_LIMITS);
+        await client.query(HUMAN_SETTINGS, [context.externalSubject]);
+        const result = await client.query<{ data: unknown }>('SELECT hon.read_kai_team_journal($1,$2::date,$3::date) AS data', [context.externalSubject, from, to]);
+        if (result.rows.length !== 1) throw new Error('Unverified Kai team journal read.');
+        return verifyKaiTeamJournalRead(result.rows[0]!.data, { from, to });
       });
     } catch (error) { return translate(error); }
   }

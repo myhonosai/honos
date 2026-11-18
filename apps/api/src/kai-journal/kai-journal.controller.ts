@@ -6,7 +6,7 @@ import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import type { MembershipLifecycleContext } from '../billing/membership.service.js';
 import { SaveKaiJournalEntryDto } from './kai-journal.dto.js';
-import { KaiJournalReadHumanUiGuard, KaiJournalSaveHumanUiGuard } from './kai-journal-human-ui.guard.js';
+import { KaiJournalReadHumanUiGuard, KaiJournalSaveHumanUiGuard, KaiTeamJournalReadHumanUiGuard } from './kai-journal-human-ui.guard.js';
 import { KaiJournalService } from './kai-journal.service.js';
 
 const USE = 'teaching.journal.use';
@@ -18,7 +18,8 @@ function definedFields(input: object): Record<string, unknown> {
 /**
  * 0476: the Kai teaching journal. Route identifiers are never authority: the boundary resolves the route scope from the
  * verified session for teaching.journal.use, and each protected database function proves the direct human subject, the
- * permission and Complete access again. An instructor only ever reaches their own entries.
+ * permission and Complete access again. An instructor only ever changes their own entries; the team read shows, read-only,
+ * the entries other instructors at the same school chose to share.
  */
 @Controller('organizations/:organizationId/schools/:schoolId/staff/kai/journal')
 @UseGuards(HonIdentityGuard)
@@ -42,6 +43,26 @@ export class KaiJournalController {
     if (!isKaiJournalRange(from, to)) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
     const context = await this.context(request, organizationId, schoolId, '');
     const data = await this.journal.read(context, from, to);
+    return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
+  }
+
+  @Get('team/:from/:to')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  @UseGuards(KaiTeamJournalReadHumanUiGuard)
+  async readTeam(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('from') from: string,
+    @Param('to') to: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Req() request: HonRequest,
+  ) {
+    if (idempotencyKey !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
+    this.noQuery(request);
+    if (!isKaiJournalRange(from, to)) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
+    const context = await this.context(request, organizationId, schoolId, '');
+    const data = await this.journal.readTeam(context, from, to);
     return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
   }
 

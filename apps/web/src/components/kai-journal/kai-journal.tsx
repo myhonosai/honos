@@ -8,7 +8,7 @@ import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from 
 import { browserRecognition, detectHonVoiceSupport, honVoiceLang, type RecognitionAdapter, type RecognitionSession } from '../hon-command/hon-voice';
 import { JournalError, journalApi, keepForRetry, type JournalApi, type JournalScope } from './http';
 import { addTopic, draftOf, draftProblems, newDraft, saveInput, type JournalDraft } from './draft';
-import { KaiJournalView, type DraftField, type JournalOutcome, type JournalReadState, type JournalRecallState } from './view';
+import { KaiJournalView, type DraftField, type JournalOutcome, type JournalReadState, type JournalRecallState, type JournalTeamState } from './view';
 
 type Pending = Readonly<{ key: string; scope: JournalScope; input: SaveKaiJournalEntryInput }>;
 type Lock = 'NONE' | 'SENDING' | 'KEPT';
@@ -29,6 +29,7 @@ export function KaiJournal({ api = journalApi, recognition, initialToday }: { ap
   const orgId = selection?.organizationId ?? null, schoolId = selection?.schoolId ?? null;
   const [today, setToday] = useState(() => initialToday ?? browserToday());
   const [read, setRead] = useState<JournalReadState>({ state: 'LOADING' });
+  const [team, setTeam] = useState<JournalTeamState>({ state: 'LOADING' });
   const [draft, setDraft] = useState<JournalDraft>(() => newDraft(initialToday ?? browserToday()));
   const [confirming, setConfirming] = useState(false);
   const [outcome, setOutcome] = useState<JournalOutcome>(null);
@@ -51,7 +52,7 @@ export function KaiJournal({ api = journalApi, recognition, initialToday }: { ap
   const forget = useCallback(() => { stopSpeech(); setDraft(newDraft(today)); setConfirming(false); setOutcome(null); setRecall(null); setQuestion(''); }, [stopSpeech, today]);
   useEffect(() => onShellPrivacyEvent((event) => {
     concealShellPrivateNow(); gen.current++; privacy.current++; recallGen.current++; pending.current = null; stopSpeech();
-    setLock(sending.current ? 'SENDING' : 'NONE'); setOutcome(null); setRead({ state: 'LOADING' }); setRecall(null);
+    setLock(sending.current ? 'SENDING' : 'NONE'); setOutcome(null); setRead({ state: 'LOADING' }); setTeam({ state: 'LOADING' }); setRecall(null);
     if (event.type === HON_SESSION_INVALIDATED_EVENT || event.type === HON_SCHOOL_CONTEXT_CHANGED_EVENT) forget();
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), [forget, stopSpeech]);
 
@@ -78,6 +79,21 @@ export function KaiJournal({ api = journalApi, recognition, initialToday }: { ap
       (error) => { if (owned() && !abort.signal.aborted) setRead({ state: error instanceof JournalError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
     return () => { abort.abort(); };
   }, [api, orgId, schoolId, refresh, initialToday]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // What other instructors at this school shared in the last 30 days (read-only). Refreshed with the page's own read.
+  useEffect(() => {
+    const shown = privacy.current;
+    setTeam({ state: 'LOADING' });
+    if (!orgId || !schoolId) return;
+    let live = true;
+    const owned = () => live && mounted.current && shown === privacy.current;
+    const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
+    const anchor = browserToday();
+    api.readTeam({ organizationId: orgId, schoolId }, kaiAddDays(anchor, -30), kaiAddDays(anchor, 1), signal, owned).then(
+      (shared) => { if (owned()) setTeam({ state: 'READY', entries: shared.entries }); },
+      (error) => { if (owned() && !abort.signal.aborted) setTeam({ state: error instanceof JournalError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
+    return () => { live = false; abort.abort(); };
+  }, [api, orgId, schoolId, refresh]);
 
   const send = useCallback(async () => {
     const request = pending.current;
@@ -116,6 +132,7 @@ export function KaiJournal({ api = journalApi, recognition, initialToday }: { ap
   }, [draft.entryId, queue, read]);
   const onEdit = useCallback((field: DraftField, value: string) => { if (lock === 'NONE') setDraft((d) => ({ ...d, [field]: value })); }, [lock]);
   const onAddTopic = useCallback((topic?: string) => { if (lock === 'NONE') setDraft((d) => addTopic(d, topic)); }, [lock]);
+  const onShare = useCallback((shared: boolean) => { if (lock === 'NONE') setDraft((d) => ({ ...d, shared })); }, [lock]);
   const onRemoveTopic = useCallback((topic: string) => { if (lock === 'NONE') setDraft((d) => ({ ...d, topics: d.topics.filter((t) => t !== topic) })); }, [lock]);
 
   const onSpeak = useCallback(() => {
@@ -155,7 +172,7 @@ export function KaiJournal({ api = journalApi, recognition, initialToday }: { ap
     <KaiJournalView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       hasSchool={!!schoolId} today={today} read={read} draft={draft} problems={problems} hints={hints}
       speech={{ supported: !!adapter, listening, failed: speechFailed }} confirmingRemove={confirming} outcome={outcome}
-      locked={lock !== 'NONE'} canRetry={lock === 'KEPT'} question={question} recall={recall} suggestions={suggestions}
+      locked={lock !== 'NONE'} canRetry={lock === 'KEPT'} question={question} recall={recall} suggestions={suggestions} team={team} onShare={onShare}
       onEdit={onEdit} onAddTopic={onAddTopic} onRemoveTopic={onRemoveTopic} onSpeak={onSpeak} onSave={onSave}
       onCancelEdit={() => { if (lock === 'NONE') { stopSpeech(); setDraft(newDraft(today)); setConfirming(false); } }}
       onAskRemove={() => setConfirming(true)} onConfirmRemove={onConfirmRemove} onKeep={() => setConfirming(false)}

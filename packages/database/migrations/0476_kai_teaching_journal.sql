@@ -8,13 +8,15 @@ BEGIN;
 --       school. Live COMPLETE access only (Kai is part of the Complete AI team). Direct human only (HUMAN_USER, HUMAN_UI, no
 --       action request or delegation); family, student, HQ and platform roles are refused; the actor is proved again after
 --       the locks and at the end.
---   J2  An instructor reads and changes only their own entries. Another person's entry is "not found".
+--   J2  An instructor changes only their own entries; another person's entry is "not found". Entries are private by default.
+--       Owner decision (David, 2026-11-18): each instructor may share an entry read-only with the school's teaching team
+--       (everyone holding teaching.journal.use at the same school), shown by display name only.
 --   J3  An entry is a school-local date (400 days back to today at the school), an optional class name (1-80), notes (1-2,000,
 --       line breaks allowed), 0-10 topics (1-40 each, unique ignoring case) and TYPED or SPOKEN.
 --   J4  Every change is the next version. A removed entry is final and its notes, class and topics are erased in the same
 --       update. Entries are never deleted. Saves are idempotent; the replay record keeps only ids, version and status, never
 --       journal text. The audit keeps no free text. Each save adds an inert outbox event.
---   J5  Nothing here runs AI, sends a message or charges anyone. The runtime gains no table privilege, only EXECUTE on two
+--   J5  Nothing here runs AI, sends a message or charges anyone. The runtime gains no table privilege, only EXECUTE on three
 --       entry points.
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
@@ -27,7 +29,7 @@ DO $$ BEGIN
 END $$;
 
 INSERT INTO hon.permissions(code,description,is_sensitive,is_staff_assignable) VALUES
-  ('teaching.journal.use','Keep their own Kai teaching journal: log what they taught, recall it and see pattern notes',false,true)
+  ('teaching.journal.use','Keep their own Kai teaching journal: log what they taught, recall it, see pattern notes and read entries colleagues share',false,true)
 ON CONFLICT (code) DO NOTHING;
 DO $$ BEGIN
   IF (SELECT count(*) FROM hon.permissions WHERE code='teaching.journal.use' AND NOT is_sensitive AND is_staff_assignable)<>1 THEN
@@ -63,6 +65,7 @@ CREATE TABLE hon.kai_journal_entries (
   topics text[] NOT NULL DEFAULT '{}',
   entry_source text NOT NULL CHECK (entry_source IN ('TYPED','SPOKEN')),
   status text NOT NULL CHECK (status IN ('ACTIVE','REMOVED')),
+  shared boolean NOT NULL DEFAULT false,
   version integer NOT NULL DEFAULT 1 CHECK (version BETWEEN 1 AND 999999999),
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
@@ -71,9 +74,10 @@ CREATE TABLE hon.kai_journal_entries (
   CHECK (taught_on BETWEEN date '2000-01-01' AND date '2099-12-31'),
   CHECK (hon.kai_journal_topics_ok(topics)),
   CHECK ((status='ACTIVE' AND hon.kai_journal_text_ok(notes,2000,true) AND (class_name IS NULL OR hon.kai_journal_text_ok(class_name,80,false)))
-      OR (status='REMOVED' AND notes IS NULL AND class_name IS NULL AND cardinality(topics)=0))
+      OR (status='REMOVED' AND notes IS NULL AND class_name IS NULL AND cardinality(topics)=0 AND NOT shared))
 );
 CREATE INDEX kai_journal_entries_author_day ON hon.kai_journal_entries(organization_id,school_id,author_principal_id,taught_on DESC) WHERE status='ACTIVE';
+CREATE INDEX kai_journal_entries_shared_day ON hon.kai_journal_entries(organization_id,school_id,taught_on DESC) WHERE status='ACTIVE' AND shared;
 ALTER TABLE hon.kai_journal_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hon.kai_journal_entries FORCE ROW LEVEL SECURITY;
 -- No policies: reachable only through the fixed definer functions below.
@@ -138,7 +142,7 @@ END $$;
 CREATE FUNCTION hon.kai_journal_json(e hon.kai_journal_entries) RETURNS jsonb
 LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
   SELECT jsonb_build_object('entryId',e.id,'taughtOn',to_char(e.taught_on,'YYYY-MM-DD'),'className',e.class_name,'notes',e.notes,
-    'topics',to_jsonb(e.topics),'source',e.entry_source,'status',e.status,'version',e.version,
+    'topics',to_jsonb(e.topics),'source',e.entry_source,'status',e.status,'shared',e.shared,'version',e.version,
     'createdAt',hon.saas_ts(e.created_at),'updatedAt',hon.saas_ts(e.updated_at))
 $$;
 
@@ -161,8 +165,36 @@ BEGIN
   RETURN result;
 END $$;
 
+-- The display name staff pickers use (as 0467): never email, subject, roles or grants; unsafe characters dropped.
+CREATE FUNCTION hon.kai_journal_display_name(p_principal uuid) RETURNS text
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+  SELECT coalesce(nullif(btrim(left(regexp_replace(coalesce(nullif(btrim(p.display_name),''),nullif(btrim(u.display_name),''),''),
+      '[\x01-\x1f\x7f-\x9f<>\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]','','g'),120)),''),'Staff member')
+    FROM hon.principals p LEFT JOIN hon.users u ON u.id=p.user_id WHERE p.id=p_principal
+$$;
+
+-- Entries other instructors at this school shared with the teaching team, between two school-local dates (at most 120 days),
+-- newest first, at most 300. Only what was taught, by display name; never the author's id, source, versions or one's own entries.
+CREATE FUNCTION hon.read_kai_team_journal(subject text,from_day date,to_day date) RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); actor uuid; result jsonb;
+BEGIN
+  IF from_day IS NULL OR to_day IS NULL OR to_day<from_day OR to_day-from_day>119
+    OR from_day<date '2000-01-01' OR to_day>date '2099-12-31' THEN RAISE EXCEPTION 'VALIDATION_FAILED' USING ERRCODE='22023'; END IF;
+  actor:=hon.require_kai_journal_actor(subject);
+  SELECT jsonb_build_object('today',to_char(hon.membership_school_today(),'YYYY-MM-DD'),'from',to_char(from_day,'YYYY-MM-DD'),'to',to_char(to_day,'YYYY-MM-DD'),
+      'entries',coalesce((SELECT jsonb_agg(jsonb_build_object('entryId',e.id,'authorName',hon.kai_journal_display_name(e.author_principal_id),
+          'taughtOn',to_char(e.taught_on,'YYYY-MM-DD'),'className',e.class_name,'notes',e.notes,'topics',to_jsonb(e.topics),'updatedAt',hon.saas_ts(e.updated_at))
+        ORDER BY e.taught_on DESC,e.created_at DESC,e.id) FROM (
+        SELECT * FROM hon.kai_journal_entries x WHERE x.organization_id=org AND x.school_id=school AND x.author_principal_id<>actor
+          AND x.status='ACTIVE' AND x.shared AND x.taught_on BETWEEN from_day AND to_day ORDER BY x.taught_on DESC,x.created_at DESC,x.id LIMIT 300) e),'[]'::jsonb))
+    INTO result;
+  IF hon.require_kai_journal_actor(subject) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'KAI_JOURNAL_FORBIDDEN' USING ERRCODE='42501'; END IF;
+  RETURN result;
+END $$;
+
 -- Add, change or remove one of one's own entries. Input:
---   {entryId|null, expectedVersion, taughtOn, className|null, notes, topics, source, status}
+--   {entryId|null, expectedVersion, taughtOn, className|null, notes, topics, source, status, shared}
 -- A new entry has entryId null, expectedVersion 0 and status ACTIVE. Removing sends status REMOVED; the other fields must
 -- still be well formed and are not kept.
 CREATE FUNCTION hon.save_kai_journal_entry(subject text,p jsonb,key text,request uuid,correlation uuid) RETURNS jsonb
@@ -173,7 +205,8 @@ DECLARE org uuid:=hon.current_organization_id(); school uuid:=hon.current_school
 BEGIN
   IF jsonb_typeof(p) IS DISTINCT FROM 'object' OR NOT hon.membership_command_args_ok(subject,key,request,correlation)
     OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p) k)
-       IS DISTINCT FROM ARRAY['className','entryId','expectedVersion','notes','source','status','taughtOn','topics']
+       IS DISTINCT FROM ARRAY['className','entryId','expectedVersion','notes','shared','source','status','taughtOn','topics']
+    OR jsonb_typeof(p->'shared') IS DISTINCT FROM 'boolean'
     OR jsonb_typeof(p->'expectedVersion') IS DISTINCT FROM 'number' OR (p->'expectedVersion')::text !~ '^(0|[1-9][0-9]{0,8})$'
     OR NOT (jsonb_typeof(p->'entryId')='null' OR (jsonb_typeof(p->'entryId')='string' AND p->>'entryId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'))
     OR jsonb_typeof(p->'taughtOn') IS DISTINCT FROM 'string' OR p->>'taughtOn' !~ '^20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
@@ -220,24 +253,24 @@ BEGIN
     IF e.version<>expected THEN RAISE EXCEPTION 'VERSION_CONFLICT' USING ERRCODE='40001'; END IF;
   END IF;
   IF e.id IS NULL THEN
-    INSERT INTO hon.kai_journal_entries(organization_id,school_id,author_principal_id,taught_on,class_name,notes,topics,entry_source,status)
-      VALUES(org,school,actor,d,p->>'className',p->>'notes',t,p->>'source','ACTIVE') RETURNING * INTO e;
+    INSERT INTO hon.kai_journal_entries(organization_id,school_id,author_principal_id,taught_on,class_name,notes,topics,entry_source,status,shared)
+      VALUES(org,school,actor,d,p->>'className',p->>'notes',t,p->>'source','ACTIVE',(p->>'shared')::boolean) RETURNING * INTO e;
     action:='kai_journal.create';
   ELSE
-    before:=jsonb_build_object('entryId',e.id,'taughtOn',to_char(e.taught_on,'YYYY-MM-DD'),'status',e.status,'version',e.version,'source',e.entry_source,'topicCount',cardinality(e.topics));
+    before:=jsonb_build_object('entryId',e.id,'taughtOn',to_char(e.taught_on,'YYYY-MM-DD'),'status',e.status,'version',e.version,'source',e.entry_source,'shared',e.shared,'topicCount',cardinality(e.topics));
     IF p->>'status'='REMOVED' THEN
-      UPDATE hon.kai_journal_entries SET status='REMOVED',notes=NULL,class_name=NULL,topics='{}',version=e.version+1,updated_at=clock_timestamp()
+      UPDATE hon.kai_journal_entries SET status='REMOVED',notes=NULL,class_name=NULL,topics='{}',shared=false,version=e.version+1,updated_at=clock_timestamp()
         WHERE id=e.id RETURNING * INTO e;
       action:='kai_journal.remove';
     ELSE
-      UPDATE hon.kai_journal_entries SET taught_on=d,class_name=p->>'className',notes=p->>'notes',topics=t,entry_source=p->>'source',
+      UPDATE hon.kai_journal_entries SET taught_on=d,class_name=p->>'className',notes=p->>'notes',topics=t,entry_source=p->>'source',shared=(p->>'shared')::boolean,
           version=e.version+1,updated_at=clock_timestamp()
         WHERE id=e.id RETURNING * INTO e;
       action:='kai_journal.update';
     END IF;
   END IF;
   result:=hon.kai_journal_json(e);
-  summary:=jsonb_build_object('entryId',e.id,'taughtOn',to_char(e.taught_on,'YYYY-MM-DD'),'status',e.status,'version',e.version,'source',e.entry_source,'topicCount',cardinality(e.topics));
+  summary:=jsonb_build_object('entryId',e.id,'taughtOn',to_char(e.taught_on,'YYYY-MM-DD'),'status',e.status,'version',e.version,'source',e.entry_source,'shared',e.shared,'topicCount',cardinality(e.topics));
   -- The audit keeps dates, status, version and counts; notes, class and topics stay only on the entry.
   INSERT INTO hon.audit_events(organization_id,school_id,actor_principal_id,source,action_code,entity_type,entity_id,prior_state,next_state,result,request_id,correlation_id)
     VALUES(org,school,actor,'HUMAN_UI',action,'KAI_JOURNAL_ENTRY',e.id,before,summary,'SUCCEEDED',request,correlation);
@@ -251,9 +284,9 @@ BEGIN
 END $$;
 
 DO $$ DECLARE r text; f text;
-  entry text[]:=ARRAY['hon.read_kai_journal(text,date,date)','hon.save_kai_journal_entry(text,jsonb,text,uuid,uuid)'];
+  entry text[]:=ARRAY['hon.read_kai_journal(text,date,date)','hon.read_kai_team_journal(text,date,date)','hon.save_kai_journal_entry(text,jsonb,text,uuid,uuid)'];
   helpers text[]:=ARRAY['hon.kai_journal_text_ok(text,integer,boolean)','hon.kai_journal_topics_ok(text[])','hon.guard_kai_journal_entry()',
-    'hon.require_kai_journal_actor(text)','hon.kai_journal_json(hon.kai_journal_entries)'];
+    'hon.require_kai_journal_actor(text)','hon.kai_journal_json(hon.kai_journal_entries)','hon.kai_journal_display_name(uuid)'];
 BEGIN
   EXECUTE 'REVOKE ALL ON TABLE hon.kai_journal_entries FROM PUBLIC';
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP

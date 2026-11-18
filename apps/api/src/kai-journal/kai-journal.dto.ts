@@ -10,4 +10,5 @@ export class SaveKaiJournalEntryDto {
   @Allow() topics?: unknown;
   @Allow() source?: unknown;
   @Allow() status?: unknown;
+  @Allow() shared?: unknown;
 }

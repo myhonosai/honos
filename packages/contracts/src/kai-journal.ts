@@ -19,12 +19,14 @@ export type KaiJournalStatus = typeof KAI_JOURNAL_STATUSES[number];
 export interface KaiJournalEntry {
   entryId: string; taughtOn: string; className: string | null;
   /** Null only on a REMOVED receipt: removing erases the text. */ notes: string | null;
-  topics: string[]; source: KaiJournalSource; status: KaiJournalStatus; version: number; createdAt: string; updatedAt: string;
+  topics: string[]; source: KaiJournalSource; status: KaiJournalStatus;
+  /** Shared read-only with the school's teaching team (owner decision 2026-11-18: private by default, each instructor may share). */ shared: boolean;
+  version: number; createdAt: string; updatedAt: string;
 }
 export interface KaiJournalRead { timezone: string; today: string; from: string; to: string; entries: KaiJournalEntry[] }
 export interface SaveKaiJournalEntryInput {
   entryId: string | null; expectedVersion: number; taughtOn: string; className: string | null; notes: string;
-  topics: string[]; source: KaiJournalSource; status: KaiJournalStatus;
+  topics: string[]; source: KaiJournalSource; status: KaiJournalStatus; shared: boolean;
 }
 export interface KaiJournalReceipt { entry: KaiJournalEntry; replayed: boolean }
 
@@ -95,27 +97,29 @@ export function isKaiJournalRange(from: unknown, to: unknown): boolean {
 
 /** Closed check of a save before it is sent. Throws on anything else. */
 export function validateSaveKaiJournalEntryInput(value: unknown): SaveKaiJournalEntryInput {
-  const row = record(value, ['entryId', 'expectedVersion', 'taughtOn', 'className', 'notes', 'topics', 'source', 'status']);
+  const row = record(value, ['entryId', 'expectedVersion', 'taughtOn', 'className', 'notes', 'topics', 'source', 'status', 'shared']);
   const entryId = row.entryId === null ? null : uuid(row.entryId);
   const expectedVersion = version(row.expectedVersion, 0);
   const status = oneOf(row.status, KAI_JOURNAL_STATUSES);
   if (entryId === null ? expectedVersion !== 0 || status !== 'ACTIVE' : expectedVersion < 1) invalid();
+  if (typeof row.shared !== 'boolean') invalid();
   return {
     entryId, expectedVersion, taughtOn: date(row.taughtOn), className: row.className === null ? null : line(row.className, KAI_JOURNAL_LIMITS.classNameMax),
-    notes: notesText(row.notes), topics: topicList(row.topics), source: oneOf(row.source, KAI_JOURNAL_SOURCES), status,
+    notes: notesText(row.notes), topics: topicList(row.topics), source: oneOf(row.source, KAI_JOURNAL_SOURCES), status, shared: row.shared,
   };
 }
 
 function entryOf(value: unknown): KaiJournalEntry {
-  const row = record(value, ['entryId', 'taughtOn', 'className', 'notes', 'topics', 'source', 'status', 'version', 'createdAt', 'updatedAt']);
+  const row = record(value, ['entryId', 'taughtOn', 'className', 'notes', 'topics', 'source', 'status', 'shared', 'version', 'createdAt', 'updatedAt']);
   const status = oneOf(row.status, KAI_JOURNAL_STATUSES);
   const removed = status === 'REMOVED';
+  if (typeof row.shared !== 'boolean' || (removed && row.shared)) invalid();
   if (removed && (row.notes !== null || row.className !== null || !Array.isArray(row.topics) || row.topics.length)) invalid();
   if (typeof row.createdAt !== 'string' || !INSTANT.test(row.createdAt) || typeof row.updatedAt !== 'string' || !INSTANT.test(row.updatedAt)) invalid();
   return {
     entryId: uuid(row.entryId), taughtOn: date(row.taughtOn),
     className: row.className === null ? null : line(row.className, KAI_JOURNAL_LIMITS.classNameMax),
-    notes: removed ? null : notesText(row.notes), topics: topicList(row.topics), source: oneOf(row.source, KAI_JOURNAL_SOURCES), status,
+    notes: removed ? null : notesText(row.notes), topics: topicList(row.topics), source: oneOf(row.source, KAI_JOURNAL_SOURCES), status, shared: row.shared,
     version: version(row.version, 1), createdAt: row.createdAt, updatedAt: row.updatedAt,
   };
 }
@@ -143,8 +147,28 @@ export function verifyKaiJournalReceipt(value: unknown, input: SaveKaiJournalEnt
   const row = record(value, ['entry', 'replayed']);
   if (typeof row.replayed !== 'boolean') invalid();
   const entry = entryOf(row.entry);
-  if (entry.version !== input.expectedVersion + 1 || entry.status !== input.status || (input.entryId !== null && entry.entryId !== input.entryId)) invalid();
+  if (entry.version !== input.expectedVersion + 1 || entry.status !== input.status || (input.status === 'ACTIVE' && entry.shared !== input.shared) || (input.entryId !== null && entry.entryId !== input.entryId)) invalid();
   return { entry, replayed: row.replayed };
+}
+
+/** One entry another instructor shared with the school's teaching team: what they taught, by display name only. */
+export interface KaiTeamJournalEntry { entryId: string; authorName: string; taughtOn: string; className: string | null; notes: string; topics: string[]; updatedAt: string }
+export interface KaiTeamJournalRead { today: string; from: string; to: string; entries: KaiTeamJournalEntry[] }
+/** The team read for exactly the requested range: inside the range, newest first, unique, no author ids. */
+export function verifyKaiTeamJournalRead(value: unknown, expected: { from: string; to: string }): KaiTeamJournalRead {
+  const row = record(value, ['today', 'from', 'to', 'entries']);
+  if (row.from !== expected.from || row.to !== expected.to || !Array.isArray(row.entries) || row.entries.length > KAI_JOURNAL_LIMITS.readLimit) invalid();
+  const today = date(row.today); const seen = new Set<string>(); let previous: string | null = null;
+  const entries = row.entries.map((item): KaiTeamJournalEntry => {
+    const e = record(item, ['entryId', 'authorName', 'taughtOn', 'className', 'notes', 'topics', 'updatedAt']);
+    const entry = { entryId: uuid(e.entryId), authorName: line(e.authorName, 120), taughtOn: date(e.taughtOn),
+      className: e.className === null ? null : line(e.className, KAI_JOURNAL_LIMITS.classNameMax), notes: notesText(e.notes), topics: topicList(e.topics),
+      updatedAt: typeof e.updatedAt === 'string' && INSTANT.test(e.updatedAt) ? e.updatedAt : invalid() };
+    if (seen.has(entry.entryId) || entry.taughtOn < expected.from || entry.taughtOn > expected.to || (previous !== null && entry.taughtOn > previous)) invalid();
+    previous = entry.taughtOn; seen.add(entry.entryId);
+    return entry;
+  });
+  return { today, from: expected.from, to: expected.to, entries };
 }
 
 /* ------------------------------ recall ------------------------------ */

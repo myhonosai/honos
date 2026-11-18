@@ -1,5 +1,5 @@
 import React from 'react';
-import type { KaiJournalEntry, KaiJournalPeriod, KaiJournalRead, KaiJournalSuggestion } from '@hon/contracts';
+import type { KaiJournalEntry, KaiJournalPeriod, KaiJournalRead, KaiJournalSuggestion, KaiTeamJournalEntry } from '@hon/contracts';
 import { journalCopy, journalDate, type JournalOutcomeKind } from './copy';
 import type { JournalDraft, JournalProblem } from './draft';
 import page from '../membership-changes/membership-changes.module.css';
@@ -8,6 +8,7 @@ import styles from './kai-journal.module.css';
 export type JournalReadState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; read: KaiJournalRead };
 export type JournalRecallState = null | { state: 'LOADING'; period: KaiJournalPeriod } | { state: 'UNAVAILABLE'; period: KaiJournalPeriod }
   | { state: 'READY'; period: KaiJournalPeriod; entries: KaiJournalEntry[]; topics: { topic: string; count: number }[] };
+export type JournalTeamState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; entries: readonly KaiTeamJournalEntry[] };
 export type JournalOutcome = null | Readonly<{ kind: JournalOutcomeKind }>;
 export type JournalSpeech = Readonly<{ supported: boolean; listening: boolean; failed: boolean }>;
 export type DraftField = 'taughtOn' | 'className' | 'notes' | 'topicInput';
@@ -15,7 +16,8 @@ export type KaiJournalViewProps = Readonly<{
   language: string; waiting: boolean; concealed: boolean; hasSchool: boolean; today: string;
   read: JournalReadState; draft: JournalDraft; problems: readonly JournalProblem[]; hints: readonly string[];
   speech: JournalSpeech; confirmingRemove: boolean; outcome: JournalOutcome; locked: boolean; canRetry: boolean;
-  question: string; recall: JournalRecallState; suggestions: readonly KaiJournalSuggestion[];
+  question: string; recall: JournalRecallState; suggestions: readonly KaiJournalSuggestion[]; team: JournalTeamState;
+  onShare?: ((shared: boolean) => void) | undefined;
   onEdit?: ((field: DraftField, value: string) => void) | undefined; onAddTopic?: ((topic?: string) => void) | undefined; onRemoveTopic?: ((topic: string) => void) | undefined;
   onSpeak?: (() => void) | undefined; onSave?: (() => void) | undefined; onCancelEdit?: (() => void) | undefined;
   onAskRemove?: (() => void) | undefined; onConfirmRemove?: (() => void) | undefined; onKeep?: (() => void) | undefined;
@@ -29,7 +31,7 @@ function EntryList({ entries, language, onOpen, locked }: { entries: readonly Ka
   const c = journalCopy(language);
   return <ul className={styles.entries}>{entries.map((e) => <li key={e.entryId} className={styles.entry} data-entry={e.entryId}>
     <div className={styles.entryHead}><strong>{journalDate(e.taughtOn, language)}{e.className ? ` · ${e.className}` : ''}</strong>
-      <span>{e.source === 'SPOKEN' && <span className={styles.tag}>{c.spokenTag} </span>}
+      <span>{e.source === 'SPOKEN' && <span className={styles.tag}>{c.spokenTag} </span>}{e.shared && <span className={styles.tag} data-tag="shared">{c.sharedTag} </span>}
         {onOpen && <button type="button" className={page.secondary} disabled={locked} onClick={() => onOpen(e)}>{c.edit}</button>}</span></div>
     <p className={styles.notes}>{e.notes}</p>
     {e.topics.length > 0 && <div className={styles.chips}>{e.topics.map((t) => <span key={t} className={styles.chip}>{t}</span>)}</div>}
@@ -83,6 +85,8 @@ export function KaiJournalView(p: KaiJournalViewProps): React.ReactElement {
           {p.hints.length > 0 && <div className={styles.chips}><span className={page.meta}>{c.usedBefore}</span>{p.hints.map((t) => <button key={t} type="button" data-kind="hint" className={styles.chip}
             disabled={p.locked} onClick={() => p.onAddTopic?.(t)}>+ {t}</button>)}</div>}
         </div>
+        <label className={styles.share}><input type="checkbox" checked={d.shared} disabled={p.locked} onChange={(e) => p.onShare?.(e.target.checked)} /> {c.shareLabel}</label>
+        <p className={page.meta}>{c.shareNote}</p>
         {p.problems.length > 0 && <ul className={styles.problems}>{p.problems.map((k) => <li key={k}>{c.problems[k]}</li>)}</ul>}
         <div className={page.row}>
           <button type="submit" className={page.primary} disabled={p.locked || p.problems.length > 0}>{c.save}</button>
@@ -125,6 +129,20 @@ export function KaiJournalView(p: KaiJournalViewProps): React.ReactElement {
       <div className={page.cardHead}><h2 id="kai-journal-recent">{c.recentTitle}</h2>
         <button type="button" className={page.secondary} disabled={p.locked} onClick={p.onRefresh}>{c.refresh}</button></div>
       {recent.length === 0 ? <p>{c.recentEmpty}</p> : <EntryList entries={recent} language={p.language} locked={p.locked} onOpen={p.onOpen} />}
+    </section>
+
+    <section className={page.card} aria-labelledby="kai-journal-team" data-team={p.team.state}>
+      <h2 id="kai-journal-team">{c.teamTitle}</h2>
+      <p className={page.meta}>{c.teamNote}</p>
+      {p.team.state === 'LOADING' && <p role="status">{c.reading}</p>}
+      {p.team.state === 'DENIED' && <p>{c.teamDenied}</p>}
+      {p.team.state === 'UNAVAILABLE' && <p role="alert">{c.teamUnavailable}</p>}
+      {p.team.state === 'READY' && (p.team.entries.length === 0 ? <p>{c.teamEmpty}</p>
+        : <ul className={styles.entries}>{p.team.entries.map((e) => <li key={e.entryId} className={styles.entry} data-team-entry={e.entryId}>
+          <div className={styles.entryHead}><strong>{date(e.taughtOn)}{e.className ? ` · ${e.className}` : ''}</strong><span>{e.authorName}</span></div>
+          <p className={styles.notes}>{e.notes}</p>
+          {e.topics.length > 0 && <div className={styles.chips}>{e.topics.map((t) => <span key={t} className={styles.chip}>{t}</span>)}</div>}
+        </li>)}</ul>)}
     </section>
   </main>;
 }

@@ -15,12 +15,14 @@ export interface JournalCopy {
   recallHeading: (from: string, to: string) => string; recallCount: (n: number) => string; recallNone: string; recallGuess: string; recallTopics: string;
   patternsTitle: string; patternsNote: string; patternsNone: string; suggestion: (s: KaiJournalSuggestion, date: (d: string) => string) => string;
   recentTitle: string; recentEmpty: string; edit: string; spokenTag: string;
+  shareLabel: string; shareNote: string; sharedTag: string;
+  teamTitle: string; teamNote: string; teamEmpty: string; teamUnavailable: string; teamDenied: string;
   outcomes: Record<JournalOutcomeKind, string>;
 }
 
 const en: JournalCopy = {
   pageTitle: 'Teaching journal',
-  intro: 'Tell Kai what you taught, by voice or by typing. Ask Kai what you worked on, and see a few notes from the patterns in your journal. Your journal is yours: other staff, including owners, don’t see it.',
+  intro: 'Tell Kai what you taught, by voice or by typing. Ask Kai what you worked on, and see a few notes from the patterns in your journal. Your journal is private: other staff, including owners, see only the entries you choose to share.',
   privacy: 'Write about skills and drills. Avoid student names and personal details.',
   checking: 'Checking your school…', hidden: 'Hidden while you were away.', chooseSchool: 'Choose a school first.', reading: 'Reading your journal…',
   denied: 'You can’t keep a teaching journal at this school. It needs HON Complete, and the owner can give your role “Keep their own Kai teaching journal” in Roles & permissions.',
@@ -46,6 +48,9 @@ const en: JournalCopy = {
     }
   },
   recentTitle: 'Your recent entries', recentEmpty: 'No entries yet. Tell Kai about your first class above.', edit: 'Edit', spokenTag: 'spoken',
+  shareLabel: 'Share this entry with my school’s teaching team', shareNote: 'Shared entries are read-only for staff who keep a journal at this school. They see your name, not your email.', sharedTag: 'shared',
+  teamTitle: 'Team journal', teamNote: 'Entries other instructors at this school shared in the last 30 days. Read-only.', teamEmpty: 'Nobody has shared an entry in the last 30 days.',
+  teamUnavailable: 'The team journal could not be read right now.', teamDenied: 'The team journal is not available to you at this school.',
   outcomes: {
     SAVING: 'Saving…', SAVED: 'Saved to your journal.', REMOVED: 'Entry removed.', SESSION: 'Your session ended. Sign in again.',
     DENIED: 'You can’t change this journal. Nothing was saved.', CHANGED: 'This entry changed somewhere else. Nothing was saved. Open it again.',
@@ -56,7 +61,7 @@ const en: JournalCopy = {
 
 const ko: JournalCopy = {
   pageTitle: '수업 일지',
-  intro: '오늘 가르친 내용을 Kai에게 말하거나 입력하세요. 무엇을 했는지 Kai에게 물어보고, 일지의 패턴에서 나온 몇 가지 메모를 확인하세요. 일지는 본인만 볼 수 있으며 소유자를 포함한 다른 직원은 볼 수 없습니다.',
+  intro: '오늘 가르친 내용을 Kai에게 말하거나 입력하세요. 무엇을 했는지 Kai에게 물어보고, 일지의 패턴에서 나온 몇 가지 메모를 확인하세요. 일지는 비공개이며, 소유자를 포함한 다른 직원은 내가 공유한 기록만 볼 수 있습니다.',
   privacy: '기술과 훈련 위주로 적어 주세요. 학생 이름과 개인 정보는 피해 주세요.',
   checking: '도장을 확인하는 중…', hidden: '자리를 비운 동안 숨겼습니다.', chooseSchool: '먼저 도장을 선택하세요.', reading: '일지를 읽는 중…',
   denied: '이 도장에서는 수업 일지를 쓸 수 없습니다. HON Complete가 필요하며, 소유자가 역할 및 권한에서 “본인 Kai 수업 일지 작성” 권한을 줄 수 있습니다.',
@@ -82,6 +87,9 @@ const ko: JournalCopy = {
     }
   },
   recentTitle: '최근 기록', recentEmpty: '아직 기록이 없습니다. 위에서 첫 수업을 알려 주세요.', edit: '수정', spokenTag: '음성',
+  shareLabel: '이 기록을 우리 도장 지도팀과 공유', shareNote: '공유한 기록은 이 도장에서 일지를 쓰는 직원이 읽기만 할 수 있습니다. 이메일이 아닌 이름이 표시됩니다.', sharedTag: '공유됨',
+  teamTitle: '팀 일지', teamNote: '최근 30일 동안 이 도장의 다른 사범이 공유한 기록입니다. 읽기 전용입니다.', teamEmpty: '최근 30일 동안 공유된 기록이 없습니다.',
+  teamUnavailable: '지금은 팀 일지를 읽을 수 없습니다.', teamDenied: '이 도장에서는 팀 일지를 볼 수 없습니다.',
   outcomes: {
     SAVING: '저장하는 중…', SAVED: '일지에 저장했습니다.', REMOVED: '기록을 삭제했습니다.', SESSION: '세션이 끝났습니다. 다시 로그인하세요.',
     DENIED: '이 일지를 바꿀 수 없습니다. 저장되지 않았습니다.', CHANGED: '다른 곳에서 이 기록이 바뀌었습니다. 저장되지 않았습니다. 다시 여세요.',
@@ -92,7 +100,7 @@ const ko: JournalCopy = {
 
 const es: JournalCopy = {
   pageTitle: 'Diario de clases',
-  intro: 'Cuéntale a Kai lo que enseñaste, hablando o escribiendo. Pregúntale a Kai en qué trabajaste y mira algunas notas de los patrones de tu diario. Tu diario es tuyo: el resto del personal, incluidos los propietarios, no lo ve.',
+  intro: 'Cuéntale a Kai lo que enseñaste, hablando o escribiendo. Pregúntale a Kai en qué trabajaste y mira algunas notas de los patrones de tu diario. Tu diario es privado: el resto del personal, incluidos los propietarios, solo ve las entradas que decidas compartir.',
   privacy: 'Escribe sobre técnicas y ejercicios. Evita nombres de alumnos y datos personales.',
   checking: 'Comprobando tu escuela…', hidden: 'Oculto mientras no estabas.', chooseSchool: 'Primero elige una escuela.', reading: 'Leyendo tu diario…',
   denied: 'No puedes llevar un diario de clases en esta escuela. Necesita HON Complete, y el propietario puede dar a tu rol “Llevar su propio diario de clases de Kai” en Roles y permisos.',
@@ -118,6 +126,9 @@ const es: JournalCopy = {
     }
   },
   recentTitle: 'Tus entradas recientes', recentEmpty: 'Aún no hay entradas. Cuéntale a Kai tu primera clase arriba.', edit: 'Editar', spokenTag: 'por voz',
+  shareLabel: 'Compartir esta entrada con el equipo de instructores de mi escuela', shareNote: 'Las entradas compartidas son de solo lectura para el personal que lleva un diario en esta escuela. Ven tu nombre, no tu correo.', sharedTag: 'compartida',
+  teamTitle: 'Diario del equipo', teamNote: 'Entradas que otros instructores de esta escuela compartieron en los últimos 30 días. Solo lectura.', teamEmpty: 'Nadie ha compartido una entrada en los últimos 30 días.',
+  teamUnavailable: 'No se pudo leer el diario del equipo ahora.', teamDenied: 'El diario del equipo no está disponible para ti en esta escuela.',
   outcomes: {
     SAVING: 'Guardando…', SAVED: 'Guardado en tu diario.', REMOVED: 'Entrada quitada.', SESSION: 'Tu sesión terminó. Vuelve a iniciar sesión.',
     DENIED: 'No puedes cambiar este diario. No se guardó nada.', CHANGED: 'Esta entrada cambió en otro lugar. No se guardó nada. Ábrela de nuevo.',

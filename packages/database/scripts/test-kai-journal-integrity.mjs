@@ -89,6 +89,7 @@ function call(actor, method, { body, key = randomUUID(), command = SAVE, headers
 }
 const read = (actor, from, to, options = {}) => call(actor, 'GET', { path: `/entries/${from}/${to}`, ...options });
 const save = (actor, body, options = {}) => call(actor, 'POST', { path: '/entries', body, ...options });
+const team = (actor, from, to, options = {}) => call(actor, 'GET', { path: `/team/${from}/${to}`, ...options });
 async function success(run, label) {
   const { status, body, headers } = await run();
   assert.equal(status, 200, `${label}: expected 200, got ${status} ${JSON.stringify(body).slice(0, 400)}`);
@@ -164,7 +165,7 @@ async function staff(label, roles, { org = ids.organization, school = ids.school
 const today = (await sql(`SELECT to_char((clock_timestamp() AT TIME ZONE '${LA}')::date,'YYYY-MM-DD') d`)).rows[0].d;
 const day = (offset) => { const d = new Date(`${today}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + offset); return d.toISOString().slice(0, 10); };
 const entry = (patch = {}) => ({ entryId: null, expectedVersion: 0, taughtOn: day(-1), className: 'Kids 6-8',
-  notes: 'Roundhouse kick drills on pads.\nPartner blocking, then a short forms review.', topics: ['Roundhouse kick', 'Blocking'], source: 'SPOKEN', status: 'ACTIVE', ...patch });
+  notes: 'Roundhouse kick drills on pads.\nPartner blocking, then a short forms review.', topics: ['Roundhouse kick', 'Blocking'], source: 'SPOKEN', status: 'ACTIVE', shared: false, ...patch });
 const count = async (where = '') => (await sql(`SELECT count(*)::int n FROM hon.kai_journal_entries WHERE organization_id=$1 ${where}`, [ids.organization])).rows[0].n;
 
 let OWN, COACH, COACH2, NONE, PARENTISH, COACH_B, OTHER_ORG, LOSER;
@@ -220,7 +221,7 @@ try {
     ['long notes', { notes: 'x'.repeat(2001) }], ['class with a line break', { className: 'a\nb' }], ['long class', { className: 'x'.repeat(81) }],
     ['duplicate topics', { topics: ['Blocking', 'blocking'] }], ['eleven topics', { topics: Array.from({ length: 11 }, (_, i) => `t${i}`) }],
     ['long topic', { topics: ['x'.repeat(41)] }], ['double space topic', { topics: ['a  b'] }], ['number topic', { topics: [1] }],
-    ['AI source', { source: 'AI' }], ['new entry removed', { status: 'REMOVED' }], ['new entry at version 1', { expectedVersion: 1 }], ['bad id', { entryId: 'x', expectedVersion: 1 }]]) {
+    ['AI source', { source: 'AI' }], ['shared not a boolean', { shared: 'yes' }], ['shared missing', { shared: undefined }], ['new entry removed', { status: 'REMOVED' }], ['new entry at version 1', { expectedVersion: 1 }], ['bad id', { entryId: 'x', expectedVersion: 1 }]]) {
     await refused(() => save(COACH, entry(value)), 400, undefined, label);
   }
   await refused(() => save(COACH, { ...entry(), extra: 1 }), 400, undefined, 'an extra field (the global pipe refuses it)');
@@ -231,7 +232,7 @@ try {
     set_config('app.hon_principal_type','HUMAN_USER',true),set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_external_subject',$4,true)`,
     [COACH.principal, ids.organization, ids.schoolA, COACH.subject]);
   for (const [label, value] of [['db tab', { notes: 'a\tb' }], ['db dup topics', { topics: ['A', 'a'] }], ['db zero width', { notes: 'a​b' }], ['db tomorrow', { taughtOn: day(1) }],
-    ['db bidi topic', { topics: ['a‮b'] }]]) {
+    ['db bidi topic', { topics: ['a‮b'] }], ['db shared string', { shared: 'true' }], ['db shared missing', { shared: undefined }]]) {
     await rejectsSql(() => sql('SELECT hon.save_kai_journal_entry($1,$2::jsonb,$3,$4::uuid,$5::uuid)', [COACH.subject, JSON.stringify(entry(value)), randomUUID(), randomUUID(), randomUUID()]), /VALIDATION_FAILED/, label);
   }
   await sql('ROLLBACK');
@@ -277,6 +278,53 @@ try {
   ok((await success(() => save(COACH, { ...edit, expectedVersion: 2, status: 'REMOVED' }, { key: removeKey }), 'remove replay')).meta.replayed === true, 'remove replays');
   await refused(() => save(COACH, { ...edit, expectedVersion: 3 }), 409, 'KAI_JOURNAL_ENTRY_REMOVED', 'a removed entry is final');
 
+  // 6b. Sharing (owner decision O1): private by default, shared per entry by its author, read-only for the school's teaching team.
+  ok(first.shared === false && older.shared === false && otherCoach.shared === false, 'entries are private by default');
+  for (const actor of [COACH, COACH2, OWN]) ok((await success(() => team(actor, WEEK_FROM, today), 'team read')).data.entries.length === 0, 'nothing shared yet');
+  const shareKey = randomUUID();
+  const sharedNew = await success(() => save(COACH, entry({ notes: 'Sparring footwork ladder.', topics: ['Footwork'], shared: true }), { key: shareKey }), 'create shared');
+  ok(sharedNew.data.shared === true && sharedNew.data.version === 1, 'the author shares an entry');
+  ok((await success(() => save(COACH, entry({ notes: 'Sparring footwork ladder.', topics: ['Footwork'], shared: true }), { key: shareKey }), 'shared replay')).meta.replayed === true, 'a shared save replays');
+  await refused(() => save(COACH, entry({ notes: 'Sparring footwork ladder.', topics: ['Footwork'], shared: false }), { key: shareKey }), 409, 'IDEMPOTENCY_KEY_REUSED', 'the share choice is part of the command');
+  const seen = (await success(() => team(COACH2, WEEK_FROM, today), 'coach2 team read')).data;
+  ok(seen.today === today && seen.from === WEEK_FROM && seen.to === today && Object.keys(seen).sort().join() === 'entries,from,to,today', `team read shape ${JSON.stringify(Object.keys(seen))}`);
+  ok(seen.entries.length === 1 && seen.entries[0].entryId === sharedNew.data.entryId && seen.entries[0].authorName === 'Staff coach'
+    && seen.entries[0].notes === 'Sparring footwork ladder.' && Object.keys(seen.entries[0]).sort().join() === 'authorName,className,entryId,notes,taughtOn,topics,updatedAt',
+    `a colleague sees only what was taught, by display name ${JSON.stringify(seen.entries)}`);
+  ok(!JSON.stringify(seen).includes(COACH.principal) && !JSON.stringify(seen).includes(COACH.subject) && !JSON.stringify(seen).includes('@example.test'), 'no author id, subject or email');
+  ok((await success(() => team(OWN, WEEK_FROM, today), 'owner team read')).data.entries.length === 1, 'the owner sees shared entries too');
+  ok((await success(() => team(COACH, WEEK_FROM, today), 'author team read')).data.entries.length === 0, 'the author\'s own entries are not in their team view');
+  ok(!(await success(() => team(COACH, WEEK_FROM, today), 'coach team read')).data.entries.some((e) => e.entryId === otherCoach.entryId), 'unshared entries stay private');
+  ok((await success(() => team(COACH_B, WEEK_FROM, today), 'school-B team read')).data.entries.length === 0, 'another school of the same organization sees nothing');
+  for (const actor of [NONE, PARENTISH]) await refused(() => team(actor, WEEK_FROM, today), 403, 'KAI_JOURNAL_FORBIDDEN', `team read refused for ${actor.subject.split('-').pop()}`);
+  await refused(() => team(COACH_B, WEEK_FROM, today, { school: ids.schoolA }), 403, undefined, 'school-B coach at the school-A team route');
+  await refused(() => team(OTHER_ORG, WEEK_FROM, today, { school: ids.schoolA, organization: ids.organization }), 403, undefined, 'other-organization owner at the school-A team route');
+  await refused(() => team(COACH2, day(-120), today), 400, 'VALIDATION_FAILED', 'team 121 days');
+  await refused(() => team(COACH2, WEEK_FROM, today, { query: '?author=x' }), 400, 'VALIDATION_FAILED', 'team read with a query');
+  await refused(() => team(COACH2, WEEK_FROM, today, { headers: { 'Idempotency-Key': 'x' } }), 409, 'IDEMPOTENCY_KEY_NOT_ACCEPTED', 'team read with a key');
+  await refused(() => team(COACH2, WEEK_FROM, today, { headers: { 'Sec-Fetch-Site': 'cross-site' } }), 403, 'HUMAN_UI_REQUIRED', 'cross-site team read');
+  { const { status } = await call(COACH2, 'POST', { path: `/team/${WEEK_FROM}/${today}`, body: {} }); ok(status === 404, `the team journal has no write path (${status})`); }
+  await refused(() => save(COACH2, entry({ entryId: sharedNew.data.entryId, expectedVersion: 1, notes: 'Taken over.', shared: true })), 404, 'KAI_JOURNAL_ENTRY_NOT_FOUND', 'a colleague cannot edit a shared entry');
+  // A display name never carries markup or invisible characters; an empty one falls back.
+  await sql("UPDATE hon.principals SET display_name=$2 WHERE id=$1", [COACH.principal, 'Coach <i>\u200bLee']);
+  ok((await success(() => team(COACH2, WEEK_FROM, today), 'sanitized name')).data.entries[0].authorName === 'Coach iLee', 'unsafe characters are dropped from the name');
+  await sql("UPDATE hon.principals SET display_name='Staff coach' WHERE id=$1", [COACH.principal]);
+  // Unsharing is the next version and disappears at once; removing a shared entry unshares and erases it.
+  const unshared = (await success(() => save(COACH, entry({ entryId: sharedNew.data.entryId, expectedVersion: 1, notes: 'Sparring footwork ladder.', topics: ['Footwork'] })), 'unshare')).data;
+  ok(unshared.shared === false && unshared.version === 2, 'unsharing is the next version');
+  ok((await success(() => team(COACH2, WEEK_FROM, today), 'after unshare')).data.entries.length === 0, 'an unshared entry leaves the team view at once');
+  const reshared = (await success(() => save(COACH, entry({ entryId: sharedNew.data.entryId, expectedVersion: 2, notes: 'Sparring footwork ladder.', topics: ['Footwork'], shared: true })), 'reshare')).data;
+  ok(reshared.shared === true && reshared.version === 3 && (await success(() => team(COACH2, WEEK_FROM, today), 'after reshare')).data.entries.length === 1, 'sharing again shows it again');
+  const gone = (await success(() => save(COACH, entry({ entryId: sharedNew.data.entryId, expectedVersion: 3, status: 'REMOVED', shared: true })), 'remove shared')).data;
+  ok(gone.status === 'REMOVED' && gone.shared === false && gone.notes === null, 'removing a shared entry unshares and erases it');
+  ok((await success(() => team(COACH2, WEEK_FROM, today), 'after remove')).data.entries.length === 0, 'a removed entry leaves the team view at once');
+  ok((await sql('SELECT shared FROM hon.kai_journal_entries WHERE id=$1', [sharedNew.data.entryId])).rows[0].shared === false, 'the stored removed entry is not shared');
+  { const stored = (await sql('SELECT response_body FROM hon.idempotency_records WHERE organization_id=$1 AND principal_id=$2 AND idempotency_key=$3', [ids.organization, COACH.principal, shareKey])).rows[0].response_body;
+    ok(Object.keys(stored).sort().join() === 'entryId,status,version', 'the shared save replay record holds no journal text'); }
+  // Sharing works both ways between colleagues.
+  const sharedByCoach2 = (await success(() => save(COACH2, entry({ taughtOn: day(-2), notes: 'Kata review.', topics: [], shared: true })), 'coach2 shares')).data;
+  ok((await success(() => team(COACH, WEEK_FROM, today), 'coach sees coach2')).data.entries.map((e) => e.entryId).join() === sharedByCoach2.entryId, 'each colleague sees the other\'s shared entry');
+
   // 7. Losing access refuses reads and saves; restoring it allows them again.
   await success(() => save(LOSER, entry()), 'loser create');
   for (const [label, take, restore] of [
@@ -288,6 +336,7 @@ try {
       "UPDATE hon.organization_entitlements SET tier='COMPLETE' WHERE organization_id=(SELECT organization_id FROM hon.principal_role_grants WHERE id=$1)"]]) {
     await sql(take, [LOSER.grants[0]]);
     await refused(() => read(LOSER, WEEK_FROM, today), 403, undefined, `${label}: read`);
+    await refused(() => team(LOSER, WEEK_FROM, today), 403, undefined, `${label}: team read`);
     await refused(() => save(LOSER, entry({ taughtOn: day(-2) })), 403, undefined, `${label}: save`);
     await sql(restore, [LOSER.grants[0]]);
   }
@@ -310,15 +359,16 @@ try {
   await rejectsSql(() => sql("UPDATE hon.kai_journal_entries SET notes=' x', version=version+1 WHERE id=$1", [older.entryId]), /check constraint/, 'invalid text stored directly');
   await rejectsSql(() => sql("UPDATE hon.kai_journal_entries SET status='REMOVED', version=version+1 WHERE id=$1", [older.entryId]), /check constraint/, 'removed but not erased');
   await rejectsSql(() => sql("UPDATE hon.kai_journal_entries SET topics=ARRAY['A','a'], version=version+1 WHERE id=$1", [older.entryId]), /check constraint/, 'duplicate topics stored directly');
+  await rejectsSql(() => sql("UPDATE hon.kai_journal_entries SET status='REMOVED', notes=NULL, class_name=NULL, topics='{}', shared=true, version=version+1 WHERE id=$1", [older.entryId]), /check constraint|IMMUTABLE/, 'removed but still shared');
   await sql('ROLLBACK');
 
-  // 10. Runtime ACL: two definer entry points only; helpers and the table private.
-  for (const fn of ['read_kai_journal(text,date,date)', 'save_kai_journal_entry(text,jsonb,text,uuid,uuid)']) {
+  // 10. Runtime ACL: three definer entry points only; helpers and the table private.
+  for (const fn of ['read_kai_journal(text,date,date)', 'read_kai_team_journal(text,date,date)', 'save_kai_journal_entry(text,jsonb,text,uuid,uuid)']) {
     const r = (await sql(`SELECT has_function_privilege($1,$2,'EXECUTE') runtime, p.prosecdef, EXISTS(SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee=0) public
       FROM pg_proc p WHERE p.oid=$2::regprocedure`, [CRM_CLOSE_RUNTIME_ROLE, `hon.${fn}`])).rows[0];
     ok(r.runtime && r.prosecdef && !r.public, `runtime may execute definer ${fn}; PUBLIC may not`);
   }
-  for (const fn of ['kai_journal_text_ok(text,integer,boolean)', 'kai_journal_topics_ok(text[])', 'guard_kai_journal_entry()', 'require_kai_journal_actor(text)', 'kai_journal_json(hon.kai_journal_entries)']) {
+  for (const fn of ['kai_journal_text_ok(text,integer,boolean)', 'kai_journal_topics_ok(text[])', 'guard_kai_journal_entry()', 'require_kai_journal_actor(text)', 'kai_journal_json(hon.kai_journal_entries)', 'kai_journal_display_name(uuid)']) {
     const r = (await sql(`SELECT has_function_privilege($1,$2,'EXECUTE') runtime, EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0) public
       FROM pg_proc p WHERE p.oid=$2::regprocedure`, [CRM_CLOSE_RUNTIME_ROLE, `hon.${fn}`])).rows[0];
     ok(!r.runtime && !r.public, `helper ${fn} is private`);
@@ -329,6 +379,7 @@ try {
     ok(t.forced && !t.runtime, 'kai_journal_entries: forced RLS, no runtime privilege');
     await assert.rejects(runtime.query('SELECT * FROM hon.kai_journal_entries LIMIT 1'), /permission denied/); checks += 1; }
   await assert.rejects(runtime.query("SELECT hon.read_kai_journal('x','2026-11-01','2026-11-02')"), /KAI_JOURNAL_FORBIDDEN/); checks += 1;
+  await assert.rejects(runtime.query("SELECT hon.read_kai_team_journal('x','2026-11-01','2026-11-02')"), /KAI_JOURNAL_FORBIDDEN/); checks += 1;
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
     const begin = '-- Kai teaching journal exact verification (0476)', end = '-- End Kai teaching journal exact verification.';
     const section = verify.split(begin)[1]?.split(end)[0];

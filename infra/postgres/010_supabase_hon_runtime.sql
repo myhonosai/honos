@@ -4224,11 +4224,11 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.record_eian_turn_result(text,uuid,jsonb) TO hon_runtime;
   END IF;
 END $$;
--- 0476 Kai teaching journal: one private table reached only through two runtime entry points (read, save).
+-- 0476 Kai teaching journal: one private table reached only through three runtime entry points (own read, team read, save).
 DO $$ DECLARE r text; f text;
-  entry text[]:=ARRAY['hon.read_kai_journal(text,date,date)','hon.save_kai_journal_entry(text,jsonb,text,uuid,uuid)'];
+  entry text[]:=ARRAY['hon.read_kai_journal(text,date,date)','hon.read_kai_team_journal(text,date,date)','hon.save_kai_journal_entry(text,jsonb,text,uuid,uuid)'];
   helpers text[]:=ARRAY['hon.kai_journal_text_ok(text,integer,boolean)','hon.kai_journal_topics_ok(text[])','hon.guard_kai_journal_entry()',
-    'hon.require_kai_journal_actor(text)','hon.kai_journal_json(hon.kai_journal_entries)'];
+    'hon.require_kai_journal_actor(text)','hon.kai_journal_json(hon.kai_journal_entries)','hon.kai_journal_display_name(uuid)'];
 BEGIN
   IF to_regprocedure('hon.save_kai_journal_entry(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0476 first'; END IF;
   EXECUTE 'REVOKE ALL ON TABLE hon.kai_journal_entries FROM PUBLIC';
