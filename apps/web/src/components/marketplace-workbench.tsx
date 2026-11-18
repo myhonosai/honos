@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import React, { useRef, useState } from 'react';
-import { MARKETPLACE_HELP, MARKETPLACE_CATEGORIES, MARKETPLACE_MODULES, MARKETPLACE_REQUIRED_PERMISSIONS, type MarketplaceAccess, type MarketplaceAsset, type MarketplaceInput, type MarketplaceSelection, type MarketplaceHistory } from '@hon/contracts';
+import { MARKETPLACE_CATEGORIES, MARKETPLACE_MODULES, MARKETPLACE_REQUIRED_PERMISSIONS, type MarketplaceAccess, type MarketplaceAsset, type MarketplaceInput, type MarketplaceSelection, type MarketplaceHistory } from '@hon/contracts';
 import { loadMarketplaceAccess, loadMarketplace, loadMarketplaceSelections, loadMarketplaceHistory, saveMarketplace, marketplaceFingerprint, type MarketplaceMutation } from './marketplace-http';
 import s from './community-workbench.module.css';
 import { ManualSchoolFields, useShellSchoolInto } from './school-shell/page-school';
@@ -58,8 +58,8 @@ export function MarketplaceWorkbench() {
   function describe(a: MarketplaceAsset) { return <><h3>{a.title}</h3><p>{a.assetKind} · {a.category} · Version {a.version} · {a.status}</p><p>Target module: {a.targetModule}</p><p>Required permissions for any separately reviewed future use: {a.requiredPermissions.join(', ')}. These grant no authority.</p><p className={s.body}>{a.previewText}</p><p>Release notes: {a.releaseNotes}</p></>; }
   return <main className={s.page}>
     <nav><Link href="/community">Community membership and opt-in</Link><Link href="/staff/dashboard">School workspace</Link></nav>
-    <header><p>HON / VERIFIED HUMAN MARKETPLACE</p><h1>Blueprints, not installations</h1><p>Browse and save for review only. No purchase, installation or automation.</p></header>
-    <aside>{MARKETPLACE_HELP}</aside>
+    <header><p>Community</p><h1>Marketplace</h1><p>Browse ready-made setups and save the ones you want to review.</p></header>
+    <aside data-plain-note=""><strong>Saving is for review only. Nothing is bought, installed or switched on.</strong></aside>
     <section><h2>Current school access</h2><ManualSchoolFields current={school}><label>School UUID<input value={school} onChange={e => { ++generation.current; setSchool(e.target.value); clear(); setPending(null); setBusy(false); setError(''); setNotice(''); }}/></label></ManualSchoolFields><button disabled={busy} onClick={() => void load()}>Load current access</button><p>A school selector is not authority. Community membership and organization/profile opt-in must already be enabled.</p></section>
     {error && <p role="alert" className={s.error}>{error}</p>}{notice && <p role="status" className={s.notice}>{notice}</p>}
     {pending && <section><h2>Uncertain request</h2><p>Keep the original key. Reload current access for the same school, then retry the exact unchanged request. Nothing is automatically retried.</p><button disabled={busy || scope !== pending.scope || !access} onClick={() => void mutate(pending.m, true)}>Retry unchanged request</button><button disabled={busy} onClick={() => setPending(null)}>Discard retained retry</button></section>}

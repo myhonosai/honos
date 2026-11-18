@@ -4,6 +4,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { flexibleBillingAccountsFixture, requireFlexibleBillingAccountsLocalUrls } from './flexible-billing-accounts-local-guard.mjs';
 import { ACTIVATION_CONFIRMATION, ADULT_ATTESTATION, OVERRIDE_CONFIRMATION, confirmationFor, membershipFixtureQuery } from './membership-activation-test-support.mjs';
+import { bodyAfterDemoData } from './demo-data-guard-line.mjs';
 
 // Disposable-localhost proof for the 0177 membership activation gate (E1a). Every command runs through the real
 // MembershipService against the restricted runtime role; the owner connection only builds fixtures and observes.
@@ -72,7 +73,7 @@ try {
     assert.ok(body, `0177 or its 0178 replacement defines ${name}`);
     const row = (await admin.query(`SELECT p.prosrc=$2 exact,p.prosecdef definer,has_function_privilege($1,p.oid,'EXECUTE') runtime_execute,
       has_function_privilege('public',p.oid,'EXECUTE') public_execute,(SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)::int overloads,
-      p.proconfig config FROM pg_proc p WHERE p.oid=$3::regprocedure`, [runtimeUrl.username, body, `hon.${signature}`])).rows[0];
+      p.proconfig config FROM pg_proc p WHERE p.oid=$3::regprocedure`, [runtimeUrl.username, bodyAfterDemoData(name, body), `hon.${signature}`])).rows[0];
     assert.deepEqual({ ...row, config: undefined }, { exact: true, definer: !plain.includes(signature), runtime_execute: entry.includes(signature), public_execute: false, overloads: 1, config: undefined }, signature);
     assert.ok(row.config?.every((setting) => /^search_path=pg_catalog(, hon)?$/.test(setting)) && row.config.length === 1, `${signature} fixed search path`);
     assertions += 2;
@@ -665,19 +666,24 @@ try {
   // Every function that reads hon.memberships is a reviewed path. None is a booking, attendance, ClassPass, kiosk or
   // check-in path, so a SCHEDULED (future-dated) ACTIVE membership grants no benefit today. A new reader fails here
   // until it is reviewed for effective dates (E1b). The 0334 import writer and its open-membership check grant no benefit.
+  // The 0423 automation engine readers (event contact, enrolled exit rule, entry/IF conditions) only decide whether a
+  // workflow run starts, branches or exits; they grant no booking, attendance or check-in benefit.
+  // The 0463 membership_agreement_covered reader only decides which children a family's agreement covers; it grants no benefit.
+  // The 0474 eian_facts_ok matches only because 'memberships' is a key of the Eian facts shape it validates; it reads no table.
   const readers = (await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' ORDER BY proname")).map((r) => r.proname);
-  assert.deepEqual(readers, ['acknowledge_retention_review_evidence', 'activate_school_membership', 'apply_billing_import_row', 'begin_hon_turn', 'billing_import_has_membership', 'cancel_school_membership', 'crm_adult_membership_draft_is_current',
-    'crm_guardian_child_membership_draft_current', 'draft_crm_adult_membership', 'draft_crm_adult_membership_from_plan', 'draft_crm_guardian_child_membership_from_plan',
-    'draft_owner_launch_membership', 'evaluate_membership_activation', 'evaluate_membership_date_revision', 'guard_membership_date_revision_insert',
-    'guard_membership_pause', 'pause_school_membership', 'prepare_school_pay_autopay_cycle', 'read_crm_adult_membership_draft_confirmation', 'read_crm_adult_membership_preparation',
-    'read_crm_guardian_child_enrollment', 'read_crm_lead_memberships', 'read_crm_lead_registration_recovery', 'read_maya_at_risk_students', 'read_membership_date_confirmation_queue', 'read_membership_date_history', 'read_membership_pauses_and_refunds',
-    'read_monthly_goal_plan', 'read_owner_launch_membership_draft', 'read_parent_billing_view', 'read_parent_testing_status',
+  assert.deepEqual(readers, ['acknowledge_retention_review_evidence', 'activate_school_membership', 'apply_billing_import_row', 'automation_condition_holds', 'automation_enrolled', 'automation_event_subject', 'begin_hon_turn', 'billing_import_has_membership', 'cancel_school_membership', 'crm_adult_membership_draft_is_current',
+    'crm_guardian_child_membership_draft_current', 'demo_data_person_tables', 'draft_crm_adult_membership', 'draft_crm_adult_membership_from_plan', 'draft_crm_guardian_child_membership_from_plan',
+    'draft_owner_launch_membership', 'eian_facts_ok', 'evaluate_membership_activation', 'evaluate_membership_date_revision', 'guard_membership_date_revision_insert',
+    'guard_membership_pause', 'list_retention_review_members', 'membership_agreement_covered', 'pause_school_membership', 'prepare_school_pay_autopay_cycle', 'read_crm_adult_membership_draft_confirmation', 'read_crm_adult_membership_preparation',
+    'read_crm_guardian_child_enrollment', 'read_crm_lead_memberships', 'read_crm_lead_registration_recovery', 'read_maya_at_risk_students', 'read_membership_date_confirmation_queue', 'read_membership_date_history', 'read_membership_pauses_and_refunds', 'read_monthly_goal_plan',
+    'read_owner_launch_membership_draft', 'read_parent_billing_view', 'read_parent_testing_status',
     'read_retention_review_signals', 'read_school_command_center', 'read_school_health_score', 'read_school_membership_list', 'read_school_membership_status_summary', 'read_school_reports', 'read_school_reports_locations', 'read_specialist_school_facts', 'record_membership_refund', 'record_retention_attention_alert',
-    'renewal_membership_facts', 'resolve_retention_attention_alert', 'resume_school_membership', 'revenue_plan_snapshot', 'revise_membership_dates', 'save_school_onboarding', 'school_pay_autopay_due', 'school_renewals_due', 'school_report_periods']);
+    'renewal_membership_facts', 'resolve_retention_attention_alert', 'resume_school_membership', 'revenue_plan_snapshot', 'revise_membership_dates', 'save_school_onboarding', 'school_demo_data_write', 'school_pay_autopay_due', 'school_renewals_due', 'school_report_periods']);
   // 0370 (G1) read_monthly_goal_plan and school_renewals_due are read-only goal and renewal counts: they read term dates,
   // plan selections and payment schedules, and book, check in and grant nothing.
   // 0323 save_school_onboarding names the closed import-wish code 'MEMBERSHIPS' only; it never reads hon.memberships.
   // 0220 (U6) read_school_membership_list is a read-only school list: no booking, check-in or benefit path.
+  // 0407 list_retention_review_members is a read-only name list for the retention review picker: no booking, check-in or benefit path.
   // 0224 pause, resume, refund-record and pause-history paths and the pause guard: FROZEN is not ACTIVE, so a pause
   // removes benefits rather than granting one; none books, checks in or grants a benefit.
   // 0178 (E1b-1) readers are date-management paths only: revision evaluation, its insert guard, history, the legacy
@@ -693,8 +699,14 @@ try {
   // 0259 (Maya M1) read_maya_at_risk_students is a read-only retention signal: it books, checks in and grants nothing,
   // and reads only ACTIVE, FROZEN and CANCELLATION_PENDING memberships (no DRAFT); a SCHEDULED (future-dated) ACTIVE
   // membership can at most appear as a staff-only list row, which grants no benefit.
+  // 0459 school demo data: demo_data_person_tables only names the tables (memberships among them) whose demo rows removal
+  // follows; school_demo_data_write inserts the demo school's own DRAFT memberships and activates them with 0177 evidence.
+  // Neither books, checks in or grants a benefit; demo attendance is written by school_demo_data_attendance, which never
+  // reads memberships.
+  // 0423 automation_event_subject and automation_condition_holds only read a class booking event's own booking row (to
+  // find its contact) and membership state (for entry/IF conditions); they book, check in and grant nothing.
   assert.deepEqual((await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' AND prosrc ~* '(class_bookings|attendance_records|class_pass|kiosk|check_in)' ORDER BY 1")).map((r) => r.proname),
-    ['acknowledge_retention_review_evidence', 'begin_hon_turn', 'read_maya_at_risk_students', 'read_retention_review_signals', 'read_school_health_score', 'record_retention_attention_alert',
+    ['acknowledge_retention_review_evidence', 'automation_condition_holds', 'automation_event_subject', 'begin_hon_turn', 'read_maya_at_risk_students', 'read_retention_review_signals', 'read_school_health_score', 'record_retention_attention_alert',
       'school_report_periods']);
   assert.equal((await sql("SELECT count(*)::int n FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' AND prosrc ~* '(INSERT\\s+INTO|UPDATE)\\s+(hon\\.)?(class_bookings|attendance_records|class_pass\\w*|kiosk\\w*|check_in\\w*)'"))[0].n, 0);
   assert.equal((await sql("SELECT count(*)::int n FROM pg_views WHERE definition ~* '\\mmemberships\\M'"))[0].n, 0);

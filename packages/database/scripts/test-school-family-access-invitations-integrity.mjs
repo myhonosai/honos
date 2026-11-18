@@ -169,7 +169,9 @@ try{
  // An already-linked parent can be linked to a second family of the same organization, never twice to the same family.
  const inputSecond=invite(A.schoolId,famA2,parentA.email);const invSecond=receipt(await send('school/family-access-invitations',{identity:manager,body:inputSecond}));
  receipt(await send('account/family-access-invitations/accept',{identity:parentA,body:accept(invSecond,inputSecond.token)}));
- assert.deepEqual(await scope(parentA,A),[{f:famA,a:'SECONDARY_GUARDIAN'},{f:famA2,a:'SECONDARY_GUARDIAN'}].sort((x,y)=>x.f<y.f?-1:1));
+ assert.deepEqual((await q("SELECT g.family_id::text f,g.access_level::text a FROM hon.family_access_grants g JOIN hon.principals p ON p.id=g.principal_id JOIN hon.users u ON u.id=p.user_id WHERE u.external_subject=$1 AND g.school_id=$2 ORDER BY 1",[parentA.externalSubject,A.schoolId])),[{f:famA,a:'SECONDARY_GUARDIAN'},{f:famA2,a:'SECONDARY_GUARDIAN'}].sort((x,y)=>x.f<y.f?-1:1));
+ // 0473: with two live families and no choice yet, the per-school parent scope resolves nothing until the parent picks one (0471).
+ assert.deepEqual(await scope(parentA,A),[]);
  const inputTwice=invite(A.schoolId,famA,parentA.email,{accessLevel:'PRIMARY_GUARDIAN'});const invTwice=receipt(await send('school/family-access-invitations',{identity:manager,body:inputTwice}));
  await denied(()=>send('account/family-access-invitations/accept',{identity:parentA,body:accept(invTwice,inputTwice.token)}),409);
  for(const [identity,label]of [[desk,'staff'],[manager,'self']]){

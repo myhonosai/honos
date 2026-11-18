@@ -19,3 +19,16 @@ it('inert school prefills never mount a bound reader, known-reference form or co
  const html=renderToStaticMarkup(<FamilyAccessWorkspace sessionSubject="synthetic-owner" initialOrganizationId={organizationId} initialSchoolId={schoolId}/>);
  expect(html).toContain(`value="${organizationId}"`);expect(html).toContain(`value="${schoolId}"`);expect(html).toContain(familyText('en','knownVerify'));expect(html).not.toContain('data-testid="family-access-private"');expect(f).not.toHaveBeenCalled();
 });
+it('inside the school shell shows no school box or school IDs; the signed-in school is used',async()=>{
+ const { SchoolShellProvider, NO_SCHOOL_SHELL } = await import('../src/components/school-shell/context');
+ state.language='en';const organizationId='00000000-0000-4000-8000-000000000001',schoolId='00000000-0000-4000-8000-000000000002';
+ const html=renderToStaticMarkup(<SchoolShellProvider value={{...NO_SCHOOL_SHELL,phase:'READY',selection:{organizationId,schoolId},schoolName:'Sunrise'}}><FamilyAccessWorkspace sessionSubject="synthetic-owner"/></SchoolShellProvider>);
+ for(const key of ['scope','org','knownVerify','verifiedScope']as const)expect(html).not.toContain(familyText('en',key));
+ expect(html).not.toContain(organizationId);expect(html).not.toContain(schoolId);expect(html).not.toContain('<input');
+ expect(html).toContain('data-testid="family-access-private"');expect(html).toContain(familyText('en','read'));
+});
+it('inside the school shell an unusable school shows a reload message instead of a blank page',async()=>{
+ const { SchoolShellProvider, NO_SCHOOL_SHELL } = await import('../src/components/school-shell/context');
+ const html=renderToStaticMarkup(<SchoolShellProvider value={{...NO_SCHOOL_SHELL,phase:'READY',selection:{organizationId:'not-a-uuid',schoolId:'also-not'},schoolName:'Sunrise'}}><FamilyAccessWorkspace sessionSubject="synthetic-owner"/></SchoolShellProvider>);
+ expect(html).toContain('Family access could not open for your school.');expect(html).toContain('Reload page');expect(html).not.toContain('not-a-uuid');
+});

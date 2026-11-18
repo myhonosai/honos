@@ -263,7 +263,7 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;backdrop-filt
 footer{padding-block:28px 48px;border-top:1px solid var(--line);background:rgba(10,11,10,.55)}
 .statusrow{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px 24px;padding-bottom:28px;border-bottom:1px solid var(--line)}
 .statusrow span{display:flex;align-items:center;gap:8px}
-.foot{display:grid;grid-template-columns:1.4fr repeat(3,1fr);gap:28px;padding-block:32px}
+.foot{display:grid;grid-template-columns:1.4fr repeat(4,1fr);gap:28px;padding-block:32px}
 .foot h4{margin:0 0 12px;font-family:var(--mono);font-weight:400;font-size:12px;color:var(--dim)}
 .foot a{display:block;font-size:14px;color:var(--muted);padding:3px 0}
 .foot a:hover{color:var(--fg)}
@@ -323,3 +323,17 @@ html[lang="ko"] p,html[lang="ko"] li{word-break:keep-all}
 .post-end h2{font-size:24px;margin:0 0 8px}
 .post-end p{color:var(--muted);margin:0 0 18px}
 @media (max-width:620px){.prose{font-size:17px}.prose blockquote{font-size:21px}.blog-head{padding-top:48px}.post{padding-top:36px}}
+
+/* legal pages */
+.legal-doc .prose{font-size:17px}
+.legal-doc .prose h2{font-size:23px;scroll-margin-top:90px}
+.legal-doc .prose h3{font-size:18px}
+.legal-doc h1{margin-top:28px}
+.legal-draft{margin:0 0 8px;padding:14px 18px;border:1px solid color-mix(in srgb,var(--accent) 55%,transparent);border-radius:12px;background:color-mix(in srgb,var(--accent) 10%,transparent);font-size:15px;color:var(--fg)}
+.legal-toc{margin:0 0 40px;padding:18px 22px;border:1px solid var(--line,#2a2c28);border-radius:12px}
+.legal-toc ol{margin:0;padding-left:1.3em;columns:2;column-gap:28px;font-size:15px}
+.legal-toc li{margin:0;padding:3px 0;break-inside:avoid}
+.legal-toc a{color:var(--muted)}
+.legal-toc a:hover{color:var(--fg)}
+mark.placeholder{background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--fg);padding:0 4px;border-radius:4px}
+@media (max-width:620px){.legal-toc ol{columns:1}}

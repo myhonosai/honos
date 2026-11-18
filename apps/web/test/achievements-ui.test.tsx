@@ -26,7 +26,8 @@ describe('human student achievements UI', () => {
       const staff = renderToStaticMarkup(<AchievementsWorkbench/>);
       const parent = renderToStaticMarkup(<ParentAchievements/>);
       expect(fetchSpy).not.toHaveBeenCalled();
-      for (const text of ['Recognize effort. Keep judgment human.', 'Known school and student', 'No child social feed, AI, actions, providers, communications or payments.', 'These selectors are not authorization']) expect(staff).toContain(text);
+      for (const text of ['Create your school’s achievements and award them to students.', 'School UUID', 'Student record ID']) expect(staff).toContain(text);
+      for (const text of ['Known school', 'selectors are not authorization', 'human principal', 'UUID (optional']) expect(staff).not.toContain(text);
       for (const text of ['Your child’s human-recorded achievements', 'No social feed or sibling records.', 'Private staff reasons and revision history are never shared here.', 'Current authorized child']) expect(parent).toContain(text);
       expect(staff).not.toContain('Careful practice');
       expect(parent).not.toContain('Private staff observation');
@@ -87,13 +88,15 @@ describe('human student achievements UI', () => {
 
   it('clears scope on failures, keeps retries manual, presents original/revision attribution only to staff, and protects non-indexable routes', () => {
     const workbench = readFileSync('src/components/achievements-workbench.tsx', 'utf8');
-    for (const text of ['setAccess(null)', 'setDefinitions([])', 'setAwards([])', 'setHistory(null)', 'setPending(null)', 'generation.current !== token', 'Retry unchanged request', 'Nothing is automatically retried', 'Originally awarded by human principal', 'This revision was recorded by human principal', 'Private staff reason']) expect(workbench).toContain(text);
+    for (const text of ['setAccess(null)', 'setDefinitions([])', 'setAwards([])', 'setHistory(null)', 'setPending(null)', 'generation.current !== token', 'Try again', 'Staff note', 'purpose="achievements"']) expect(workbench).toContain(text);
+    // Owner 2026-11-16: names, not record IDs; awarder IDs are not shown.
+    expect(workbench).not.toMatch(/\{v\.(awardedByPrincipalId|recordedByPrincipalId)\}|Definition ID:|Student: \{scope\.student\}/);
     expect(workbench).not.toMatch(/localStorage|sessionStorage|setInterval|setTimeout|invokeLLM|executeAction|dangerouslySetInnerHTML|fetch\(['"]https?:\/\//);
     const parent = readFileSync('src/components/parent-achievements.tsx', 'utf8');
     expect(parent).not.toMatch(/\.reason|reason\s*:|recordedByPrincipalId|awardedByPrincipalId|items\.map\([^)]*version/);
     const staffRoute = readFileSync('src/app/staff/students/achievements/page.tsx', 'utf8');
     const parentRoute = readFileSync('src/app/parent/achievements/page.tsx', 'utf8');
-    for (const route of [staffRoute, parentRoute]) for (const text of ['verifySession', "redirect('/auth/login')", 'index: false', 'force-dynamic']) expect(route).toContain(text);
+    for (const route of [staffRoute, parentRoute]) for (const text of ['verifySession', "redirect('/auth/login", 'index: false', 'force-dynamic']) expect(route).toContain(text);
     const http = readFileSync('src/components/achievements-http.ts', 'utf8');
     expect(http).toContain("credentials: 'same-origin'");
     expect(http).not.toMatch(/https:\/\/|provider|invokeLLM|executeAction|sendMessage|payment/i);

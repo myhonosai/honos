@@ -11,6 +11,6 @@ import styles from './locale.module.css';
 export function LocaleUtility({inShell=false}:{inShell?:boolean}={}):React.ReactElement|null {
  const {scope,preferences,chooseLanguage,blocked,syncStatus,t}=useLocale();
  const path=usePathname()??'';
- if(!scope||(!inShell&&isSchoolShellPath(path)))return null;
+ if(!scope||(!inShell&&isSchoolShellPath(path))||path.startsWith('/sites/'))return null; // school websites are the school's own pages
  return <nav data-locale-utility className={styles.utility} aria-label={t('Settings navigation')}><a href="/settings/language-region">{t('Language & Region')}</a><label><span className={styles.sr}>{t('Display language')}</span><select aria-label={t('Display language')} value={preferences.language} disabled={blocked} onChange={e=>{if(isLanguage(e.target.value))chooseLanguage(e.target.value);}}>{LANGUAGES.map(l=><option key={l.code} value={l.code} lang={l.code}>{l.name}</option>)}</select></label><span>{t(syncStatus==='saved'||syncStatus==='ready'?'Language synchronized':'Language sync pending')}</span></nav>;
 }

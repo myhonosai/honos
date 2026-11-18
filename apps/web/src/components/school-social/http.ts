@@ -1,7 +1,7 @@
 import {
   SOCIAL_ACCOUNT_CHANGE_COMMAND, SOCIAL_CONNECT_COMMAND, SOCIAL_CONNECT_COMPLETE_COMMAND, validateSocialAccountChangeInput, validateSocialConnectCompleteInput,
   validateSocialConnectInput, verifySocialAccountChange, verifySocialAccountList, verifySocialConnectResult, verifySocialConnectStart,
-  type SocialAccountChange, type SocialAccountChangeInput, type SocialAccountList, type SocialConnectResult, type SocialConnectStart, type SocialPlatform,
+  type SocialAccountChange, type SocialAccountChangeInput, type SocialAccountList, type SocialConnectResult, type SocialConnectStart, type SocialAccountPlatform,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
@@ -83,7 +83,7 @@ export const socialApi = {
     try { return verifySocialAccountList(data(answer.value)); } catch { throw new SocialError('UNKNOWN'); }
   },
   /** Starts a connection and returns the consent page to open. The state stays only in that link. */
-  async connect(scope: SocialScope, platform: SocialPlatform, key: string, signal: AbortSignal, owned: Owned): Promise<SocialConnectStart> {
+  async connect(scope: SocialScope, platform: SocialAccountPlatform, key: string, signal: AbortSignal, owned: Owned): Promise<SocialConnectStart> {
     return command(`${base(scope)}/connect`, SOCIAL_CONNECT_COMMAND, checked(() => validateSocialConnectInput({ platform })), key, verifySocialConnectStart, signal, owned);
   },
   async complete(scope: SocialScope, state: string, key: string, signal: AbortSignal, owned: Owned): Promise<SocialConnectResult> {

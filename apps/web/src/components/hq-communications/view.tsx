@@ -145,7 +145,8 @@ function MessageFacts({ t, m, formattingLocale }: { t: T; m: HqMessage; formatti
 
 function Head({ t, title, back, concealed, busy, onRefresh }: { t: T; title: string; back: boolean; concealed: boolean; busy: boolean; onRefresh: () => void }): React.ReactElement {
   return <header className={styles.head}>
-    <div>{back && <p className={styles.meta}><a href="/hq/communications">{t('back')}</a></p>}<h1>{title}</h1><p className={styles.intro}>{t('intro')}</p></div>
+    <div>{back && <p className={styles.meta}><a href="/hq/communications">{t('back')}</a></p>}<h1>{title}</h1><p className={styles.intro}>{t('intro')}</p>
+      {!back && <p className={styles.meta}><a href="/hq/communications/numbers" data-hq-school-numbers-link="">{t('schoolNumbers')}</a></p>}</div>
     {!concealed && <button type="button" className={styles.secondary} disabled={busy} onClick={onRefresh}>{t('refresh')}</button>}
   </header>;
 }

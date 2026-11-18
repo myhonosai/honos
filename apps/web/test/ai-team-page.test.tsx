@@ -20,10 +20,12 @@ describe('AI team page', () => {
     expect(html).toContain(aiTeamText('en', 'maya'));
   });
 
-  it('opens a workspace for Chad, Marcus, Kai and Maya, and Ask HON with the specialist picked for the rest', () => {
+  it('opens a workspace for every specialist, so every card works the same way', () => {
     const html = view({ state: 'READY', value: allReady() });
-    for (const href of ['/staff/leads/assistant', '/staff/marketing/assistant', '/staff/teaching-assistant', '/staff/retention/at-risk']) expect(html).toContain(`href="${href}">Open workspace</a>`);
-    for (const id of ['alex', 'jordan', 'claire', 'lena']) expect(html).toMatch(new RegExp(`href="/staff/hon\\?ask=${id}">Ask [A-Z][a-z]+</a>`));
+    for (const href of ['/staff/leads/assistant', '/staff/marketing/assistant', '/staff/teaching-assistant', '/staff/retention/at-risk',
+      '/staff/ai-team/alex', '/staff/ai-team/jordan', '/staff/ai-team/claire', '/staff/ai-team/lena']) expect(html).toContain(`href="${href}">Open workspace</a>`);
+    expect(html.match(/>Open workspace<\/a>/g)).toHaveLength(8);
+    expect(html).not.toContain('?ask=');
   });
 
   it('offers no action for anyone readiness does not clear, and says why in plain words', () => {
@@ -45,7 +47,7 @@ describe('AI team page', () => {
 
   it('speaks Korean and Spanish', () => {
     expect(view({ state: 'READY', value: allReady() }, 'ko')).toContain(aiTeamText('ko', 'title'));
-    expect(view({ state: 'READY', value: allReady() }, 'es')).toContain('Preguntar a Alex');
+    expect(view({ state: 'READY', value: allReady() }, 'es')).toContain('Abrir espacio de trabajo');
   });
 
   it('contains no developer jargon', () => {

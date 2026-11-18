@@ -13,6 +13,6 @@ export const metadata = { title: 'HON | School message history', description: 'V
 export default async function ParentMessageHistoryPage() {
   let authenticated = false;
   try { const token = cookieValue((await headers()).get('cookie'), HON_SESSION_COOKIE); if (token) { verifySession(token, sessionConfig()); authenticated = true; } } catch { /* fail closed */ }
-  if (!authenticated) redirect('/auth/login');
+  if (!authenticated) redirect('/auth/login?for=parent');
   return <><ParentSchoolMessages /><ParentMessageHistory /></>;
 }

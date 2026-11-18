@@ -2,6 +2,7 @@
 import '@hon/design-system/src/tokens.css';
 import './shell-global.css';
 import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import { usePathname } from 'next/navigation';
 import { DEFAULT_HON_INTERFACE_THEME, type HonInterfaceTheme } from '@hon/design-system';
 import { useLocale } from '../localization/provider';
@@ -14,9 +15,12 @@ import { SchoolEntryController, type EntrySnapshot } from '../school-entry/contr
 import { schoolEntryApi } from '../school-entry/http';
 import { SCHOOL_SHELL_NAV, schoolShellHref } from './catalog';
 import { concealShellPrivateNow, onShellPrivacyEvent } from './privacy';
+import { HON_SCREENSAVER_SHOWN_EVENT, ScreensaverController } from './screensaver';
 import { SchoolShellFrame, type ShellViewState } from './frame';
+import { SCHOOL_TOUR_OPEN_EVENT, markSchoolTourSeen } from './tour';
 import { SchoolShellProvider, type SchoolShellState } from './context';
 import { defaultArtStyle, isHonArtStyle, type HonArtStyle } from '../hon-command/roster';
+import { HON_DEMO_DATA_CHANGED_EVENT, demoDataApi } from '../school-demo-data/http';
 
 /** Per-viewer convenience only (never authority, never shared): the chosen AI team art style. */
 export const HON_ART_STYLE_STORAGE_KEY = 'hon.ai-team.art-style';
@@ -64,9 +68,10 @@ export function shellNeedsLegacyCanvas(main: Element | null): boolean {
 
 /**
  * School app shell. Holds a navigation selector in mounted memory only; every page
- * and API keeps authorizing the exact school itself. Session invalidation, a school
- * context change, blur, a hidden tab or page hide conceal the school and drop the prefill;
- * only an explicit re-verification of the current identity and exact school restores it.
+ * and API keeps authorizing the exact school itself. Session invalidation and a school
+ * context change conceal the school and drop the prefill. Blur, a hidden tab, page hide
+ * or 5 idle minutes only show the screensaver (owner request 2026-11-16): the school and
+ * page stay, and lifting it runs a quiet identity + exact-school re-check.
  */
 export { SCHOOL_SHELL_BARE_ROUTES } from './paths';
 
@@ -87,6 +92,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   const [mode, setMode] = useState<HonInterfaceTheme>(DEFAULT_HON_INTERFACE_THEME);
   const [viewState, setViewState] = useState<ShellViewState>('LOCAL');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [tourStep, setTourStep] = useState<number | null>(null);
   const [artChoice, setArtChoice] = useState<HonArtStyle | null>(null);
   useEffect(() => { setArtChoice(readStoredArtStyle()); }, []);
   const chooseArtStyle = useCallback((style: HonArtStyle) => { setArtChoice(style); storeArtStyle(style); }, []);
@@ -99,7 +105,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
       concealShellPrivateNow();
       setSchoolName(null); entry.conceal(event.type === HON_SESSION_INVALIDATED_EVENT ? 'SESSION' : 'CONCEALED');
     };
-    const stop = onShellPrivacyEvent(conceal, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]);
+    const stop = onShellPrivacyEvent(conceal);
     const preferred = shellPreferredSchool(window.location.search);
     void (preferred ? entry.loadPreferred(preferred) : entry.load());
     return () => { unsubscribe(); entry.dispose(); stop(); };
@@ -127,11 +133,69 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
     return () => abort.abort();
   }, [selection?.organizationId, selection?.schoolId, schoolName]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { setMenuOpen(false); }, [path]);
-  // Where am I: a long tab row scrolls so the current page and group are in view (no page scroll).
+  // Screensaver: rendered synchronously on hide so the app switcher and onlookers see it, not records.
+  // 0459: a banner while this school has demo data loaded. Read for the verified school only; any refusal (a staff member
+  // without the demo data permission included) shows no banner. A load or remove on the Settings page reads it again.
+  const [demoLoaded, setDemoLoaded] = useState(false);
+  const [demoCheck, setDemoCheck] = useState(0);
+  useEffect(() => { const again = () => setDemoCheck(n => n + 1); window.addEventListener(HON_DEMO_DATA_CHANGED_EVENT, again); return () => window.removeEventListener(HON_DEMO_DATA_CHANGED_EVENT, again); }, []);
   useEffect(() => {
-    for (const selector of ['[data-shell-groups] [aria-current]', '[data-shell-tabs] [aria-current]']) {
-      const link = document.querySelector<HTMLElement>(selector), row = link?.parentElement;
+    setDemoLoaded(false);
+    if (!selection) return;
+    const abort = new AbortController();
+    const owned = () => !abort.signal.aborted;
+    demoDataApi.read({ organizationId: selection.organizationId, schoolId: selection.schoolId }, AbortSignal.any([abort.signal, AbortSignal.timeout(8000)]), owned)
+      .then(view => { if (owned()) setDemoLoaded(view.status === 'LOADED'); }, () => {});
+    return () => abort.abort();
+  }, [selection?.organizationId, selection?.schoolId, demoCheck]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [asleep, setAsleep] = useState(false);
+  const saver = useRef<ScreensaverController | null>(null);
+  useEffect(() => {
+    const controller = new ScreensaverController(show => { if (!show) { setAsleep(false); return; } flushSync(() => setAsleep(true)); window.dispatchEvent(new Event(HON_SCREENSAVER_SHOWN_EVENT)); }, () => void entry.recheck());
+    saver.current = controller;
+    const visibility = () => { if (document.visibilityState === 'hidden') controller.hidden(); else controller.visible(); };
+    const hide = () => controller.hidden();
+    const show = (event: PageTransitionEvent) => { if (event.persisted) controller.visible({ restored: true }); };
+    const activity = () => controller.activity();
+    const activityEvents = ['pointerdown', 'keydown', 'wheel', 'touchstart', 'scroll'] as const;
+    document.addEventListener('visibilitychange', visibility);
+    window.addEventListener('pagehide', hide); window.addEventListener('pageshow', show);
+    for (const name of activityEvents) window.addEventListener(name, activity, { passive: true, capture: true });
+    controller.start();
+    return () => {
+      controller.stop(); saver.current = null;
+      document.removeEventListener('visibilitychange', visibility);
+      window.removeEventListener('pagehide', hide); window.removeEventListener('pageshow', show);
+      for (const name of activityEvents) window.removeEventListener(name, activity, { capture: true });
+    };
+  }, [entry]);
+  const wake = useCallback(() => saver.current?.dismiss(), []);
+
+  useEffect(() => { setMenuOpen(false); }, [path]);
+  // Guided tour: opened from Home's invitation, the Menu or Settings (event), or a `?tour=1` link. Seen is per device only.
+  const tourOpener = useRef<HTMLElement | null>(null);
+  const tourNow = useRef<number | null>(null);
+  const tour = useCallback((step: number | null) => {
+    if (tourNow.current === null && step !== null) tourOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (tourNow.current !== null && step === null) markSchoolTourSeen();
+    tourNow.current = step; setTourStep(step);
+  }, []);
+  useEffect(() => {
+    const open = () => tour(0);
+    window.addEventListener(SCHOOL_TOUR_OPEN_EVENT, open);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tour') === '1') {
+      params.delete('tour');
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`);
+      open();
+    }
+    return () => window.removeEventListener(SCHOOL_TOUR_OPEN_EVENT, open);
+  }, [tour]);
+  // Where am I: a long tab row scrolls so the current page is in view (no page scroll).
+  useEffect(() => {
+    for (const selector of ['[data-shell-tabs] [aria-current]', '[data-shell-steps] [aria-current]']) {
+      const link = document.querySelector<HTMLElement>(selector), row = link?.closest<HTMLElement>('[data-shell-tabs], [data-shell-steps]');
       if (link && row) row.scrollLeft = Math.max(0, link.offsetLeft - (row.clientWidth - link.offsetWidth) / 2);
     }
   }, [path]);
@@ -155,11 +219,12 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
     observer.observe(main, { childList: true, subtree: true });
     return () => { observer.disconnect(); if (frame) cancelAnimationFrame(frame); };
   }, [path]);
+  const dialogOpen = menuOpen || tourStep !== null;
   useEffect(() => {
-    if (!menuOpen) return;
-    const opener = menuOpener.current;
+    if (!dialogOpen) return;
+    const opener = tourStep !== null ? tourOpener.current : menuOpener.current;
     const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { setMenuOpen(false); return; }
+      if (event.key === 'Escape') { setMenuOpen(false); tour(null); return; }
       if (event.key !== 'Tab') return;
       // Keyboard focus wraps inside the modal Menu panel (the page behind it is inert).
       const dialog = document.querySelector<HTMLElement>('[data-hon-ui="school"] [role="dialog"][aria-modal="true"]');
@@ -173,7 +238,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
     };
     window.addEventListener('keydown', escape);
     return () => { window.removeEventListener('keydown', escape); if (opener?.isConnected) opener.focus(); };
-  }, [menuOpen]);
+  }, [dialogOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveMode = useCallback((next: HonInterfaceTheme, via: 'ONBOARDING' | 'SETTINGS'): Promise<boolean> => {
     setMode(next);
@@ -207,7 +272,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
 
   return <SchoolShellFrame path={path} language={preferences.language} phase={snapshot.phase} selection={snapshot.selection} schoolName={schoolName}
     choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility inShell />}
-    onMode={chooseMode} onMenu={openMenu} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
+    tourStep={tourStep} onTour={tour} asleep={asleep} onWake={wake} demoLoaded={demoLoaded} onMode={chooseMode} onMenu={openMenu} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
     <SchoolShellProvider value={shared}>{children}</SchoolShellProvider>
   </SchoolShellFrame>;
 }

@@ -11,6 +11,9 @@ import { attemptOutcome, type ListState, type RecordState, type SaveOutcome } fr
 import { PeopleView, type BirthDraft, type ContactDraft } from './view';
 import { PersonConsents } from './consents';
 import { consentApi, type ConsentApi } from './consent-http';
+import { PersonPhoto } from './photo';
+import { ContactMessageHistory } from '../contact-history/contact-history';
+import { photoApi, type PhotoApi } from './photo-http';
 
 /**
  * A save whose outcome is not known yet: the exact request and key, in memory only, so "Try again" replays it.
@@ -49,7 +52,7 @@ export function birthDateInput(schoolId: string, record: PersonRecord, draft: Bi
  * a child's birth date. Blur, a hidden tab, page hide, a school change or a session end hide the page at once, retire
  * every read and drop any kept save; reads start again only after the shell re-verifies the school.
  */
-export function People({ api = peopleApi, consents = consentApi }: { api?: PeopleApi; consents?: ConsentApi }): React.ReactElement {
+export function People({ api = peopleApi, consents = consentApi, photos = photoApi }: { api?: PeopleApi; consents?: ConsentApi; photos?: PhotoApi }): React.ReactElement {
   const { preferences } = useLocale();
   const shell = useSchoolShell();
   const selection = shell.phase === 'READY' ? shell.selection : null;
@@ -173,9 +176,15 @@ export function People({ api = peopleApi, consents = consentApi }: { api?: Peopl
   const onConsentRecorded = useCallback((channel: 'EMAIL' | 'SMS', status: 'OPTED_IN' | 'OPTED_OUT') => {
     setRecord(prior => prior.state === 'READY' ? { state: 'READY', record: { ...prior.record, consents: { ...prior.record.consents, [channel]: status } } } : prior);
   }, []);
-  const consentSlot = useCallback((r: PersonRecord) => selection ? <PersonConsents key={`${lower(selection.schoolId)}:${r.personId}`} language={preferences.language}
-    scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} record={r} canEdit={r.canEdit} onRecorded={onConsentRecorded} api={consents}/> : null,
-  [selection?.organizationId, selection?.schoolId, preferences.language, onConsentRecorded, consents]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The contact photo (0390) and contact consent each have their own reads and commands, mounted per person.
+  const consentSlot = useCallback((r: PersonRecord) => selection ? <>
+    <PersonPhoto key={`photo:${lower(selection.schoolId)}:${r.personId}`} language={preferences.language} schoolId={selection.schoolId} record={r} canEdit={r.canEdit} api={photos}/>
+    <PersonConsents key={`${lower(selection.schoolId)}:${r.personId}`} language={preferences.language}
+      scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} record={r} canEdit={r.canEdit} onRecorded={onConsentRecorded} api={consents}/>
+    {/* 0424: this person's texts, emails and messages (opened on request; needs the conversations permission). */}
+    <ContactMessageHistory key={`history:${lower(selection.schoolId)}:${r.personId}`} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} personId={r.personId}/>
+  </> : null,
+  [selection?.organizationId, selection?.schoolId, preferences.language, onConsentRecorded, consents, photos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyed by the shell phase: a concealed node is replaced, never un-hidden in place.
   return <div key={shell.phase} data-shell-private="">
