@@ -421,11 +421,12 @@ BEGIN
     IF hon.require_school_contact_admin(p_subject,'people.merge') IS DISTINCT FROM actor THEN RAISE EXCEPTION 'SCHOOL_CONTACT_ADMIN_FORBIDDEN' USING ERRCODE='42501'; END IF;
     RETURN jsonb_build_object('receipt',prior,'replayed',true);
   END IF;
+  -- Consent rows of both people are locked first, so an opt-out written mid-merge cannot slip past CONSENT_CONFLICT, and a STOP that
+  -- holds one person's consent row and then adds the other's (KEY SHARE on people) finishes before the people locks below instead of deadlocking.
+  PERFORM 1 FROM hon.communication_consents c WHERE c.organization_id=org AND c.school_id=school AND c.person_id IN (keep,mrg) ORDER BY c.id FOR UPDATE;
   -- Both people locked in id order, then a per-school lock so two merges never interleave their moves.
   PERFORM 1 FROM hon.people x WHERE x.id IN (keep,mrg) AND x.organization_id=org AND x.school_id=school ORDER BY x.id FOR UPDATE;
   PERFORM pg_advisory_xact_lock(hashtextextended('hon.school_contact_merge:'||school::text,0));
-  -- Consent rows of both people are locked before the plan is computed, so an opt-out written mid-merge cannot slip past CONSENT_CONFLICT.
-  PERFORM 1 FROM hon.communication_consents c WHERE c.organization_id=org AND c.school_id=school AND c.person_id IN (keep,mrg) ORDER BY c.id FOR UPDATE;
   SELECT * INTO k FROM hon.people x WHERE x.id=keep AND x.organization_id=org AND x.school_id=school;
   SELECT * INTO m FROM hon.people x WHERE x.id=mrg AND x.organization_id=org AND x.school_id=school;
   IF k.id IS NULL OR m.id IS NULL THEN RAISE EXCEPTION 'SCHOOL_CONTACT_NOT_FOUND' USING ERRCODE='P0002'; END IF;

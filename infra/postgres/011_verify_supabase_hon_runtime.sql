@@ -3818,7 +3818,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.archive_school_contact(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','v','c723295a67b8cfa6741d94efeb228b3158990f15b6fa84c167cf2e5496f4f13b'),
 ('hon.restore_school_contact(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','v','8cfaeaf075de3d326f3d96bce295d7f0dc4ef61b30a922df631d194e1d464d96'),
 ('hon.read_school_contact_merge(text,jsonb)',true,true,'search_path=pg_catalog, hon','v','37f31569cf3f1b6656e0c8cb55645549b8b4f410bcfd23412099f1cafbb363ad'),
-('hon.merge_school_contacts(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','v','f86f6fc4717f98b3752788b52b20d71a90bb462c0bee53f39ebb7e485128d48d')) e(signature,definer,runtime_allowed,config,volatility,body_hash) LOOP
+('hon.merge_school_contacts(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','v','7639e2fa71a7b496c14b83959c221d31f0fb2cae5cbefbafc0f5b531c21909fb')) e(signature,definer,runtime_allowed,config,volatility,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config] AND p.provolatile=f.volatility
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
