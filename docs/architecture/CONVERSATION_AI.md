@@ -281,7 +281,7 @@ Each fact carries its source id, so a reply can show what it used. Nothing outsi
   - inbox AI state: takeover and hand-back, needs staff, the needs-attention count.
 
   No AI is called.
-- **CA2b** (0421) adds the CONVERSATION_REPLY kind to the shared AI text caller (0380 `hon.ai_text_proposals`, Website Builder;
+- **CA2b** (0421) adds the CONVERSATION_REPLY kind to the shared AI text caller (0489 `hon.ai_text_proposals`, Website Builder;
   docs/architecture/AI_TEXT_PROPOSALS.md), which owns the one S4 wiring. CA2b adds its own worker-only planning path, the HIGH
   CONVERSATION_REPLY task profile, its gate (the 0420 program switch and school settings, run before core prepare), the system turn planner and recorder, the worker,
   ASSIST drafts, TEST_MODE automatic replies, and the test bench.

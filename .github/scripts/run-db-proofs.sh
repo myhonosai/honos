@@ -71,6 +71,9 @@ proof() { # fixture, script, description
 # pinned OPEN in ai-spend-entrypoints.json and must be replaced by S4 (or the approved AI-D3 slice).
 setup ai-spend-baseline HON_AI_SPEND_BASELINE_VALIDATION_TARGET hon_ai_spend_baseline_validation HON_AI_SPEND_BASELINE_ENV_FILE
 proof ai-spend-baseline test-ai-spend-authority-baseline.mjs "AI-0 spend-authority baseline: strict inventory of AI spend paths, grants and ceilings; closed credit/trial/access/payment programs; entitlement gates for all three agents; 5 known failures (open, replaced by S4 or a later approved slice)"
+# WB5 (0489) website AI edits on a fresh copy of the same disposable AI fixture (fake provider only).
+setup ai-spend-baseline HON_AI_SPEND_BASELINE_VALIDATION_TARGET hon_ai_spend_baseline_validation HON_AI_SPEND_BASELINE_ENV_FILE
+proof ai-spend-baseline test-website-ai-edits.mjs "Website AI edits (WB5, 0489) on the shared AI text proposal table: real API services and runtime role, one plan and one counted fake call per request, one usage row, apply as one draft save, stale/rejected/unknown/refused outcomes, HQ queue and usage attribution, Complete/Marcus/pause gates, exact-school isolation, requester-only moves, seven runtime entry points"
 
 # Public lead forms use the uniquely marked marketing fixture. Keep its descriptor
 # separate from every other proof and invoke the package's existing db:test-public-forms
