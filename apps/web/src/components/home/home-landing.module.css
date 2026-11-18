@@ -7,3 +7,7 @@
 .actions a:focus-visible { outline: 3px solid #8fb4ff; outline-offset: 3px; }
 .actions .primary { background: #2f6bff; border-color: #2f6bff; color: #fff; }
 .help { margin: 0; color: #a9b6d6; font-size: 0.95rem; }
+.legal { display: flex; flex-wrap: wrap; gap: 4px 20px; font-size: 0.9rem; }
+.legal a { color: #a9b6d6; text-decoration: underline; text-underline-offset: 3px; padding: 6px 0; }
+.legal a:hover { color: #e8eefc; }
+.legal a:focus-visible { outline: 3px solid #8fb4ff; outline-offset: 3px; }

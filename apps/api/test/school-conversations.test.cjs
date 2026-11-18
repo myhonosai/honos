@@ -88,7 +88,7 @@ test('0364 conversation inputs are closed', () => {
   assert.throws(() => contracts.validateUpdateConversationInput({ conversationId: A, expectedVersion: 1, tags: ['Trial', 'trial'] }));
   assert.throws(() => contracts.validateMarkConversationReadInput({ conversationId: A }));
   assert.throws(() => contracts.validateLinkConversationInput({ conversationId: A, expectedVersion: 1, personId: 'nope' }));
-  // 0401: the contact card asks for one person's conversations; the id must be an exact lowercase uuid.
+  // 0532: the contact card asks for one person's conversations; the id must be an exact lowercase uuid.
   assert.deepEqual(contracts.validateConversationListQuery({ personId: A, status: 'ALL' }), { personId: A, status: 'ALL' });
   for (const personId of ['nope', 'ABCDEF11-1111-4111-8111-111111111111', 7, null]) assert.throws(() => contracts.validateConversationListQuery({ personId }), undefined, String(personId));
 });

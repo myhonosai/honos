@@ -108,13 +108,49 @@ it('a lost connect answer says to start again, not Try again', () => {
   expect(html).toContain('Start again from Social accounts');
 });
 
-it('has every phrase in Korean and Spanish and is listed under Marketing', () => {
+it('has every phrase in Korean and Spanish and is listed under Communication', () => {
   for (const language of ['ko', 'es'] as const) for (const k of Object.keys(SOCIAL_LANGUAGES.en)) {
     const v = SOCIAL_LANGUAGES[language][k as keyof typeof SOCIAL_LANGUAGES.en];
     if (SOCIAL_LANGUAGES.en[k as keyof typeof SOCIAL_LANGUAGES.en] !== '') expect(v, `${language}:${k}`).not.toBe('');
   }
   expect(socialText('ko', 'returnDone', { count: '2' })).toContain('2');
-  const marketing = SCHOOL_SHELL_NAV.find(g => g.key === 'crm');
+  const marketing = SCHOOL_SHELL_NAV.find(g => g.key === 'social');
   expect(marketing?.routes.some(r => r.href === '/staff/marketing/social')).toBe(true);
   expect(schoolShellActiveRoute('/staff/marketing/social/return')?.href).toBe('/staff/marketing/social');
+});
+
+it('a Google Ads account (0453) shows only its ads switch, never publishing or inbox; the contract refuses one with those on', async () => {
+  const google = account({ accountId: id(42), platform: 'GOOGLE_ADS', displayName: 'Synthetic Dojo Google Ads', adsEnabled: true });
+  const html = renderToStaticMarkup(<SocialView {...props({ list: { state: 'READY', list: list({ accounts: [account(), google] }) } })} />);
+  const card = html.slice(html.indexOf(`data-account="${id(42)}"`));
+  expect(card).toContain('data-platform="GOOGLE_ADS"');
+  expect(card).toContain('Google Ads');
+  const own = card.slice(0, card.indexOf('</li>'));
+  expect(own).toContain(socialText('en', 'sw_ads'));
+  expect(own).not.toContain(socialText('en', 'sw_publish'));
+  expect(own).not.toContain(socialText('en', 'sw_inbox'));
+  for (const language of Object.keys(SOCIAL_LANGUAGES)) expect(socialText(language, 'p_GOOGLE_ADS')).toBe('Google Ads');
+  stub(json({ data: list({ accounts: [{ ...google, publishEnabled: true }] }), meta }));
+  await expect(socialApi.list(scope, signal(), () => true)).rejects.toBeInstanceOf(SocialError);
+});
+
+it('a Google Business Profile (0455) shows only its posting switch, can be connected here in every language, and the contract refuses one with inbox or ads on', async () => {
+  const gbp = account({ accountId: id(43), platform: 'GOOGLE_BUSINESS', displayName: 'Synthetic Dojo (Google)', publishEnabled: true });
+  const html = renderToStaticMarkup(<SocialView {...props({ list: { state: 'READY', list: list({ accounts: [account(), gbp] }) } })} />);
+  const own = html.slice(html.indexOf(`data-account="${id(43)}"`)).split('</li>')[0];
+  expect(html).toContain(socialText('en', 'connect_GOOGLE_BUSINESS'));
+  expect(html).not.toContain('connect_GOOGLE_ADS');
+  expect(own).toContain('data-platform="GOOGLE_BUSINESS"');
+  expect(own).toContain(socialText('en', 'p_GOOGLE_BUSINESS'));
+  expect(own).toContain(socialText('en', 'sw_publish'));
+  expect(own).not.toContain(socialText('en', 'sw_inbox'));
+  expect(own).not.toContain(socialText('en', 'sw_ads'));
+  for (const language of Object.keys(SOCIAL_LANGUAGES)) {
+    expect(socialText(language, 'connect_GOOGLE_BUSINESS')).toMatch(/Google/);
+    expect(socialText(language, 'p_GOOGLE_BUSINESS')).toMatch(/Google/);
+  }
+  stub(json({ data: list({ accounts: [{ ...gbp, inboxEnabled: true }] }), meta }));
+  await expect(socialApi.list(scope, signal(), () => true)).rejects.toBeInstanceOf(SocialError);
+  stub(json({ data: list({ accounts: [{ ...gbp, adsEnabled: true }] }), meta }));
+  await expect(socialApi.list(scope, signal(), () => true)).rejects.toBeInstanceOf(SocialError);
 });

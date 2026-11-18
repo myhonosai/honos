@@ -44,3 +44,27 @@ export async function acknowledgeRetentionReviewEvidence(schoolId: string, membe
   const response = await fetch(path, { method: 'POST', credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'no-referrer', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-HON-Human-Command': 'retention-review-acknowledgement' }, body: JSON.stringify(input) });
   return verifyRetentionReviewAcknowledgement(await acknowledgementEnvelope(response, 'retentionReviewAcknowledgement'), membershipId, input);
 }
+
+export type RetentionMember = Readonly<{ membershipId: string; displayName: string; state: string; termEndsAt: string | null }>;
+const MEMBER_STATES = ['ACTIVE', 'FROZEN', 'CANCELLATION_PENDING', 'EXPIRED'];
+/** 0407 member list for the signed-in school: names to choose from. The server checks retention.review.read on every read. */
+export async function loadRetentionMembers(schoolId: string): Promise<readonly RetentionMember[]> {
+  id(schoolId);
+  const response = await fetch(`${base}/memberships?schoolId=${encodeURIComponent(schoolId)}`, { method: 'GET', credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'no-referrer', headers: { Accept: 'application/json' } });
+  if (!response.ok) throw new RetentionReviewUiError(response.status === 401 ? 'Please sign in again.' : response.status === 403 ? 'Your role does not include retention reviews at this school.' : 'The member list could not be loaded.', response.status);
+  const bad = (): never => { throw new Error('The member list could not be verified.'); };
+  let envelope: unknown; try { envelope = await response.json(); } catch { bad(); }
+  const data = (envelope as { data?: { items?: unknown } } | null)?.data;
+  if (!data || typeof data !== 'object' || Object.keys(data).join() !== 'items' || !Array.isArray(data.items) || data.items.length > 200) bad();
+  const rows = (data!.items as unknown[]).map((row) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row) || Object.keys(row).sort().join() !== 'displayName,membershipId,state,termEndsAt') bad();
+    const x = row as Record<string, unknown>;
+    try { communityUuid(x.membershipId); } catch { bad(); }
+    if (typeof x.displayName !== 'string' || !x.displayName || x.displayName.length > 120 || typeof x.state !== 'string' || !MEMBER_STATES.includes(x.state) || !(x.termEndsAt === null || typeof x.termEndsAt === 'string')) bad();
+    return Object.freeze({ membershipId: (x.membershipId as string).toLowerCase(), displayName: x.displayName as string, state: x.state as string, termEndsAt: x.termEndsAt as string | null });
+  });
+  if (new Set(rows.map((x) => x.membershipId)).size !== rows.length) bad();
+  return Object.freeze(rows);
+}
+/** "Ann Able · Frozen" — the state only when it is not plain active. */
+export const memberLabel = (m: RetentionMember): string => m.state === 'ACTIVE' ? m.displayName : `${m.displayName} · ${m.state.replaceAll('_', ' ').toLowerCase()}`;

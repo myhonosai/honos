@@ -8,6 +8,7 @@ import {
   type FamilyMessagesScope,
 } from './http';
 import s from '../testing-registration.module.css';
+import { ComposeMessage } from './compose';
 
 function when(value: string) { return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)); }
 function failure(error: unknown) { return error instanceof Error ? error.message : 'Family messages are unavailable right now.'; }
@@ -66,8 +67,11 @@ export function StaffFamilyInbox(): React.ReactElement {
 
   if (!scope) return <p role="status">Choose a school to see family messages.</p>;
   return <main className={s.page}><div className={s.shell}>
-    <header className={s.header}><h1>Family messages</h1>
-      <p>Messages families send from the HON parent app. Replies stay inside HON and show to the family as from the school. Nothing is texted or emailed.</p></header>
+    <header className={s.header}><h1>Texts &amp; email</h1>
+      <p>Send a text or email to one contact, and answer the messages families send from the HON parent app.</p></header>
+    <ComposeMessage scope={scope} />
+    <h2>Family messages</h2>
+    <p className={s.subtle}>Replies here stay inside HON and show to the family as from the school. They are not texted or emailed.</p>
     {hidden && !inbox && <p className={s.actions}><button type="button" onClick={show}>Show family messages</button></p>}
     <div aria-live="polite">{busy && !inbox && <p role="status">Loading family messages…</p>}
       {error && <div className={s.error} role="alert"><strong>{denied ? 'Not available for your role' : 'Family messages'}</strong><p>{denied ? 'You need the family messages permission at this school.' : error}</p></div>}

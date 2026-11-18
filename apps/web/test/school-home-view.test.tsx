@@ -10,7 +10,9 @@ import { SchoolHome, panelFromError } from '../src/components/home/home';
 import { CommandCenterAccessError } from '../src/components/command-center-http';
 import { CrmLeadAccessError } from '../src/components/crm-leads-http';
 import { AiTeamReadinessAccessError } from '../src/components/ai-team-readiness-http';
-import { NOW, ORG, SCHOOL, ready, readiness, readinessAgent, sessions } from './school-home-fixtures';
+import { HonConversationError } from '../src/components/hon-command/hon-conversation-http';
+import { honLine } from '../src/components/home/model';
+import { NOW, ORG, SCHOOL, honReadiness, ready, readiness, readinessAgent, sessions } from './school-home-fixtures';
 
 const esc = (value: string) => value.replaceAll('&', '&amp;').replaceAll('’', '’');
 const base: SchoolHomeViewProps = { language: 'en', mode: 'modern', schoolName: 'Sunrise Taekwondo', selection: { organizationId: ORG, schoolId: SCHOOL }, sources: ready(), now: NOW };
@@ -19,6 +21,7 @@ const render = (props: Partial<SchoolHomeViewProps> = {}) => renderToStaticMarku
 describe('school home view', () => {
   it('renders the reference layout from verified reads: greeting, HON, AI team, KPIs, lists', () => {
     const html = render();
+    expect(html).toContain('data-orb-state="idle"'); // the living HON orb on the HON card
     expect(html).toContain('Good morning, <span>Sunrise Taekwondo</span>');
     for (const text of ['Ask HON', 'Your AI team', 'Kai', 'Chad', 'Marcus', 'Claire', 'Lena', '286', '412', '1,257', 'Little Tigers', 'Adult Sparring', 'Jordan Example', 'Call back trial family'])
       expect(html).toContain(text);
@@ -32,7 +35,8 @@ describe('school home view', () => {
     const html = render();
     expect(html).toMatch(/data-kpi="revenue"[^>]*data-state="NOT_CONNECTED"/);
     expect(html).toMatch(/data-kpi="attendanceRate"[^>]*data-state="NOT_CONNECTED"/);
-    expect(html).toContain(homeText('en', 'honStatus'));
+    expect(html).toContain(esc(homeText('en', 'honOff')));
+    expect(html).not.toContain('not connected yet');
     // The fixture's readiness lists only Marcus, Kai and Chad: nobody else is claimed as available.
     for (const id of ['alex', 'maya', 'jordan', 'claire', 'lena']) expect(html).toMatch(new RegExp(`data-agent="${id}" data-status="UNKNOWN"`));
     expect(html).toMatch(/data-agent="kai" data-status="PROVIDER_OFF"/);
@@ -111,6 +115,19 @@ describe('school home view', () => {
     expect(html).toContain(mode === 'classic' ? '/ai/kai-illustrated.webp' : mode === 'big-button' ? '/ai/kai-chibi.webp' : '/ai/kai.webp');
   });
 
+  it('in Big Button, groups the page cards under the owner\'s menu headings, never one long list', () => {
+    const html = render({ mode: 'big-button' });
+    const groups = [...html.matchAll(/data-area-section="([a-z]+)"/g)].map(m => m[1]);
+    expect(groups).toEqual(['dashboard', 'ai', 'calendar', 'contacts', 'leads', 'communication', 'finance', 'marketing', 'ranks', 'business', 'community']);
+    const ranks = html.match(/data-area-section="ranks"[^>]*>(.*?)<\/section>/s)?.[1] ?? '';
+    expect(ranks).toContain('>Ranks</h3>');
+    for (const key of ['ranks', 'testing', 'promotions']) expect(ranks).toContain(`data-area="${key}"`);
+    // The Dashboard card is the page you are on; hidden routes never show as a card's subtitle.
+    expect(html).not.toContain('data-area="home"');
+    expect(html).not.toContain('Chad: lead follow-ups');
+    expect(render({ mode: 'modern' })).not.toContain('data-area-section');
+  });
+
   it('first container render performs no read and shows no school content', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
     const html = renderToStaticMarkup(<SchoolHome />);
@@ -122,7 +139,25 @@ describe('school home view', () => {
     expect(panelFromError(new CommandCenterAccessError('x', 403))).toEqual({ state: 'DENIED' });
     expect(panelFromError(new CrmLeadAccessError('x'))).toEqual({ state: 'DENIED' });
     expect(panelFromError(new AiTeamReadinessAccessError(403))).toEqual({ state: 'DENIED' });
+    expect(panelFromError(new HonConversationError('FORBIDDEN'))).toEqual({ state: 'DENIED' });
+    expect(panelFromError(new HonConversationError('SESSION'))).toEqual({ state: 'DENIED' });
+    expect(panelFromError(new HonConversationError('UNAVAILABLE'))).toEqual({ state: 'UNAVAILABLE' });
     expect(panelFromError(new Error('boom'))).toEqual({ state: 'UNAVAILABLE' });
+  });
+
+  it('takes the HON line from the Ask HON readiness read, never from fixed text', () => {
+    const line = (hon: Parameters<typeof honLine>[0]) => render({ sources: { ...ready(), hon } });
+    const on = line({ state: 'READY', value: honReadiness({ honReply: true }) });
+    expect(on).toMatch(/data-status="ready"/);
+    expect(on).toContain(esc(homeText('en', 'honReady')));
+    expect(on).not.toContain(esc(homeText('en', 'honOff')));
+    expect(line({ state: 'READY', value: honReadiness({ providerRoute: false }) })).toContain(esc(homeText('en', 'honNotOn')));
+    expect(line({ state: 'LOADING' })).toMatch(/data-status="checking"/);
+    expect(line({ state: 'UNAVAILABLE' })).toContain(esc(homeText('en', 'honUnknown')));
+    expect(line({ state: 'DENIED' })).not.toMatch(/data-status="(checking|ready|off|unknown)"/);
+    expect(honLine({ state: 'DENIED' })).toBeNull();
+    for (const language of ['en', 'ko', 'es'] as const) for (const key of ['honChecking', 'honReady', 'honOff', 'honNotOn', 'honUnknown'] as const)
+      expect(homeText(language, key).length).toBeGreaterThan(10);
   });
 
   it('uses existing protected GET reads only: no mutation, AI invocation or provider client', () => {

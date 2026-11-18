@@ -51,6 +51,14 @@ export function validateDeploymentConfiguration(env: DatabaseEnvironment = proce
     }
   }
 
+  // 0423 automation engine login (infra 014): its own role, never the runtime, migration or communication worker login.
+  const automationUrl = env.HON_AUTOMATION_WORKER_DATABASE_URL;
+  if (automationUrl) {
+    try { verifiedDatabaseConnection(automationUrl, env); } catch { failures.push('AUTOMATION_WORKER_DATABASE_TLS_INVALID'); }
+    const automationUser = databaseUser(automationUrl);
+    if ([runtimeUrl, env.DATABASE_URL, workerUrl].some(url => url && databaseUser(url) === automationUser)) failures.push('AUTOMATION_WORKER_ROLE_REUSED');
+  }
+
   const strict = deployment === 'production' || deployment === 'staging' || (declared === undefined && env.NODE_ENV === 'production');
   if (strict) {
     if (!runtimeUrl) failures.push('RUNTIME_DATABASE_URL_REQUIRED');

@@ -9,7 +9,7 @@ import { dashboardLinks } from '../src/components/school-reports/school-reports'
 import { SchoolReportsView } from '../src/components/school-reports/view';
 import { id } from './account-status-fixtures';
 
-// R3 (0371): the reports dashboard, read with one same-origin GET and drawn from counts and totals only.
+// R3 (0520): the reports dashboard, read with one same-origin GET and drawn from counts and totals only.
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -83,7 +83,7 @@ it('draws the income chart in one currency with a table view, and belts, stages 
 it('links only to pages in the school menu, never to one that is missing', () => {
   const links = dashboardLinks(null);
   expect(links.renewals).toBe('/staff/billing/renewals');
-  expect(links.leads).toBe('/staff/crm/leads');
+  expect(links.leads).toBe('/staff/crm');
   const page = html({}, 'en', links);
   expect(page).toContain('href="/staff/billing/renewals"');
   if (!links.goal) expect(page).not.toContain('Monthly goal');

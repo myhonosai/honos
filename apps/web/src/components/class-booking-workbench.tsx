@@ -106,10 +106,7 @@ export function ClassBookingWorkbench({ initialPrefill, shellScope = null }: { i
     <header><p>Schedule</p><h1>Book a student into a class</h1>
       <p>Choose the class and the student to book.</p>
     </header>
-    <aside data-plain-note=""><strong>The class’s capacity and waitlist decide the result. Booking does not take payment or record attendance.</strong><details><summary>What this page never does</summary><p><strong>Current school authority stays server-owned.</strong></p>
-      <p>The four IDs are untrusted selectors. The existing server authorization, tenant RLS and current <code>schedule.booking.manage</code> gates remain authoritative. Capacity and waitlist decisions are made only by the canonical booking service.</p>
-      <p>This workbench does not infer identity, enrollment, eligibility or availability; manage sessions; grant ClassPass; or create attendance, progression, testing, membership, payment, messages, provider, AI, Action Engine or automation effects. Canonical booking audit/outbox evidence is unchanged.</p>
-    </details></aside>
+    <aside data-plain-note=""><strong>The class’s capacity and waitlist decide the result. Booking does not take payment or record attendance.</strong></aside>
     <section aria-labelledby="booking-command"><h2 id="booking-command">Exact-known-ID booking command</h2>
       <p>Use already-known organization, current school, class session and student profile UUIDs. A closed handoff may prefill only exact organization, school and class-session UUID selectors; student profile remains blank, booking kind remains unselected, and confirmation remains required. No other query selector is accepted. A booking kind is intent only, not an eligibility or makeup approval decision.</p>
       <form onSubmit={submit}><fieldset disabled={busy}>

@@ -15,6 +15,7 @@ import { NO_CONTACT_FILTERS, contactAdminApi, contactsApi, type ContactAdminApi,
 import { ContactActions, type ContactChange } from './contact-actions';
 import type { CardState, CardTab, FamilyItem, MembershipItem } from './contact-card';
 import { MembershipPanel } from './membership-panel';
+import { NewMembershipTools } from './new-membership';
 import { initialCardTarget } from './card-link';
 import { cardUrl, readCardMode, writeCardMode, type CardMode } from './card-panel';
 import { CardFamilyAccess } from './card-family-access';
@@ -30,6 +31,10 @@ function showCardInAddress(target: { personId: string; tab: CardTab } | null): v
     if (next !== `${location.pathname}${location.search}`) history.replaceState(history.state, '', next);
   } catch { /* the address is a convenience; the page works without it */ }
 }
+import { PersonPhoto } from './photo';
+import { AgreementLinkPanel } from '../agreement-link/send-panel';
+import { ContactMessageHistory } from '../contact-history/contact-history';
+import { photoApi, type PhotoApi } from './photo-http';
 
 /**
  * A save whose outcome is not known yet: the exact request and key, in memory only, so "Try again" replays it.
@@ -68,8 +73,8 @@ export function birthDateInput(schoolId: string, record: PersonRecord, draft: Bi
  * a child's birth date. Blur, a hidden tab, page hide, a school change or a session end hide the page at once, retire
  * every read and drop any kept save; reads start again only after the shell re-verifies the school.
  */
-export function People({ api = peopleApi, consents = consentApi, contacts = contactsApi, admin = contactAdminApi, sessionSubject = null }: { api?: PeopleApi; consents?: ConsentApi; contacts?: ContactsApi;
-  admin?: ContactAdminApi;
+export function People({ api = peopleApi, consents = consentApi, contacts = contactsApi, admin = contactAdminApi, photos = photoApi, sessionSubject = null }: { api?: PeopleApi; consents?: ConsentApi;
+  contacts?: ContactsApi; admin?: ContactAdminApi; photos?: PhotoApi;
   /** The verified signed-in subject, for the family access checks inside the card (they re-check identity before each step). */
   sessionSubject?: string | null }): React.ReactElement {
   const { preferences } = useLocale();
@@ -280,6 +285,11 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
     {c.family.allowed && c.family.families.length ? <CardFamilyMessages key={`${lower(selection.schoolId)}:${c.person.personId}`} language={preferences.language}
       scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} familyIds={c.family.families.map(f => f.familyId)}/> : null}
   </> : null, [selection?.organizationId, selection?.schoolId, preferences.language]); // eslint-disable-line react-hooks/exhaustive-deps
+  // New membership and Renew (0531) at the top of the membership tab; the server decides who can have which plan.
+  const membershipTools = useCallback((items: readonly MembershipItem[]) => selection && selectedId ? <NewMembershipTools key={`${lower(selection.schoolId)}:${selectedId}`}
+    language={preferences.language} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId, personId: selectedId }} items={items}
+    onChanged={onMembershipChanged}/> : null,
+  [selection?.organizationId, selection?.schoolId, selectedId, preferences.language, onMembershipChanged]); // eslint-disable-line react-hooks/exhaustive-deps
   const onDiscard = useCallback(() => { setOutcome(null); drop(); setRecordRefresh(value => value + 1); }, [drop]);
   const onTryAgain = useCallback(() => { void send(); }, [send]);
   const onFilters = useCallback((next: ContactFilters) => { setFilters({ ...next, query: next.query.trim() }); setListRefresh(n => n + 1); }, []);
@@ -288,15 +298,23 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   const onConsentRecorded = useCallback((channel: 'EMAIL' | 'SMS', status: 'OPTED_IN' | 'OPTED_OUT') => {
     setRecord(prior => prior.state === 'READY' ? { state: 'READY', record: { ...prior.record, consents: { ...prior.record.consents, [channel]: status } } } : prior);
   }, []);
-  const consentSlot = useCallback((r: PersonRecord) => selection ? <PersonConsents key={`${lower(selection.schoolId)}:${r.personId}`} language={preferences.language}
-    scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} record={r} canEdit={r.canEdit} onRecorded={onConsentRecorded} api={consents}/> : null,
-  [selection?.organizationId, selection?.schoolId, preferences.language, onConsentRecorded, consents]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The contact photo (0390) and contact consent each have their own reads and commands, mounted per person.
+  const consentSlot = useCallback((r: PersonRecord) => selection ? <>
+    <PersonPhoto key={`photo:${lower(selection.schoolId)}:${r.personId}`} language={preferences.language} schoolId={selection.schoolId} record={r} canEdit={r.canEdit} api={photos}/>
+    <PersonConsents key={`${lower(selection.schoolId)}:${r.personId}`} language={preferences.language}
+      scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} record={r} canEdit={r.canEdit} onRecorded={onConsentRecorded} api={consents}/>
+    {/* 0424: this person's texts, emails and messages (opened on request; needs the conversations permission). */}
+    <ContactMessageHistory key={`history:${lower(selection.schoolId)}:${r.personId}`} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} personId={r.personId}/>
+    {/* 0499: send the family a link to sign the membership agreement (students only; its own read decides access). */}
+    {r.student ? <AgreementLinkPanel key={`agreement:${lower(selection.schoolId)}:${r.personId}`} language={preferences.language} schoolId={selection.schoolId} personId={r.personId}/> : null}
+  </> : null,
+  [selection?.organizationId, selection?.schoolId, preferences.language, onConsentRecorded, consents, photos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyed by the shell phase: a concealed node is replaced, never un-hidden in place.
   return <div key={shell.phase} data-shell-private="">
     <PeopleView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       hasSchool={selection !== null} list={list} record={record} selectedId={selectedId} outcome={outcome} locked={lock !== 'NONE'} canRetry={lock === 'KEPT'}
-      filters={filters} options={options} card={card} cardTab={cardTab} membershipSlot={membershipSlot}
+      filters={filters} options={options} card={card} cardTab={cardTab} membershipSlot={membershipSlot} membershipTools={membershipTools}
       cardMode={cardMode} onCardMode={onCardMode} onClose={onClose} onCardTab={onCardTab} familySlot={familySlot} messagesSlot={messagesSlot} actionsSlot={actionsSlot} actionNotice={actionNotice} onFilters={onFilters} onMore={onMore} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot}/>
   </div>;
 }

@@ -1,0 +1,70 @@
+/** School Calendar wording (en / ko / es). Labels only; nothing here is authority or an outcome. */
+const en = {
+  title: 'Calendar', intro: 'Classes, sale days and events in one place. Open a class to see its roster, mark attendance or book a student.',
+  tabCalendar: 'Calendar', tabTimetable: 'Weekly timetable', tabEvents: 'Sale days & events', tabsLabel: 'Schedule sections',
+  day: 'Day', week: 'Week', month: 'Month', viewLabel: 'Calendar view', previous: 'Previous', next: 'Next', today: 'Today', refresh: 'Refresh',
+  addClass: 'Add a class', allClasses: 'All classes', filterLabel: 'Show classes', eventsRow: 'Events', details: 'Details', addEvent: 'Add a sale day or event',
+  loading: 'Reading the calendar…', waiting: 'Checking your school…', noSchool: 'Choose a school to see its calendar.',
+  concealed: 'The calendar is hidden. Come back to this tab to check your school again.',
+  classesDenied: 'Your access at this school does not include the class schedule, so classes are not shown.',
+  classesTimezone: 'This school\'s time zone is not set correctly, so classes cannot be shown.',
+  classesUnavailable: 'Classes could not be loaded. Nothing is shown.',
+  eventsDenied: 'Sale days and events are shown only to staff who manage the schedule.',
+  eventsUnavailable: 'Sale days and events could not be loaded.',
+  truncated: 'This view has more classes than can be shown at once. Switch to Week or Day to see them all.',
+  zone: 'Times are school time ({zone}).', nothing: 'Nothing scheduled.', more: '+{n} more', moreLabel: 'Show all {n} items on {day}',
+  eventTag: 'Event', cancelled: 'Cancelled',
+  pick: 'Choose a class or an event on the calendar to see its details.', close: 'Close',
+  whenLabel: 'When', eventWhen: '{day}, {from} to {to}', eventStatus: 'Status', eventSpots: 'Booked spots', eventPlace: 'Place', noPlace: 'No place given',
+  spots: '{booked} of {total}', manageEvent: 'Manage on Sale days & events',
+  DRAFT: 'Draft', PUBLISHED: 'Open for booking', CLOSED: 'Closed', CANCELLED: 'Cancelled',
+  bookTitle: 'Book a student on {name}', bookClose: 'Back to the roster',
+};
+export type CalendarKey = keyof typeof en;
+const ko: Record<CalendarKey, string> = {
+  title: '캘린더', intro: '수업, 세일 데이, 행사를 한곳에서 봅니다. 수업을 열어 명단 확인, 출석 기록, 학생 예약을 하세요.',
+  tabCalendar: '캘린더', tabTimetable: '주간 시간표', tabEvents: '세일 데이 및 행사', tabsLabel: '일정 메뉴',
+  day: '일', week: '주', month: '월', viewLabel: '캘린더 보기', previous: '이전', next: '다음', today: '오늘', refresh: '새로 고침',
+  addClass: '수업 추가', allClasses: '모든 수업', filterLabel: '표시할 수업', eventsRow: '행사', details: '자세히', addEvent: '세일 데이 또는 행사 추가',
+  loading: '캘린더를 읽는 중…', waiting: '학교를 확인하는 중…', noSchool: '캘린더를 볼 학교를 선택하세요.',
+  concealed: '캘린더가 숨겨졌습니다. 이 탭으로 돌아오면 학교를 다시 확인합니다.',
+  classesDenied: '이 학교에서의 권한에 수업 일정이 포함되어 있지 않아 수업을 표시하지 않습니다.',
+  classesTimezone: '학교 시간대가 올바르게 설정되지 않아 수업을 표시할 수 없습니다.',
+  classesUnavailable: '수업을 불러오지 못했습니다. 아무것도 표시하지 않습니다.',
+  eventsDenied: '세일 데이와 행사는 일정을 관리하는 직원에게만 표시됩니다.',
+  eventsUnavailable: '세일 데이와 행사를 불러오지 못했습니다.',
+  truncated: '이 보기에는 한 번에 표시할 수 있는 것보다 많은 수업이 있습니다. 주 또는 일 보기로 바꾸면 모두 볼 수 있습니다.',
+  zone: '시간은 학교 기준({zone})입니다.', nothing: '예정된 일정이 없습니다.', more: '+{n}개 더', moreLabel: '{day}의 {n}개 항목 모두 보기',
+  eventTag: '행사', cancelled: '취소됨',
+  pick: '캘린더에서 수업이나 행사를 선택하면 자세한 내용을 볼 수 있습니다.', close: '닫기',
+  whenLabel: '일시', eventWhen: '{day}, {from}–{to}', eventStatus: '상태', eventSpots: '예약된 자리', eventPlace: '장소', noPlace: '장소 없음',
+  spots: '{total}개 중 {booked}개', manageEvent: '세일 데이 및 행사에서 관리',
+  DRAFT: '초안', PUBLISHED: '예약 받는 중', CLOSED: '마감', CANCELLED: '취소됨',
+  bookTitle: '{name}에 학생 예약', bookClose: '명단으로 돌아가기',
+};
+const es: Record<CalendarKey, string> = {
+  title: 'Calendario', intro: 'Clases, días de venta y eventos en un solo lugar. Abre una clase para ver su lista, marcar asistencia o reservar un alumno.',
+  tabCalendar: 'Calendario', tabTimetable: 'Horario semanal', tabEvents: 'Días de venta y eventos', tabsLabel: 'Secciones del horario',
+  day: 'Día', week: 'Semana', month: 'Mes', viewLabel: 'Vista del calendario', previous: 'Anterior', next: 'Siguiente', today: 'Hoy', refresh: 'Actualizar',
+  addClass: 'Añadir una clase', allClasses: 'Todas las clases', filterLabel: 'Mostrar clases', eventsRow: 'Eventos', details: 'Detalles', addEvent: 'Añadir un día de venta o evento',
+  loading: 'Leyendo el calendario…', waiting: 'Comprobando su escuela…', noSchool: 'Elija una escuela para ver su calendario.',
+  concealed: 'El calendario está oculto. Vuelva a esta pestaña para comprobar su escuela de nuevo.',
+  classesDenied: 'Su acceso en esta escuela no incluye el horario de clases, así que no se muestran clases.',
+  classesTimezone: 'La zona horaria de esta escuela no está bien configurada, así que no se pueden mostrar clases.',
+  classesUnavailable: 'No se pudieron cargar las clases. No se muestra nada.',
+  eventsDenied: 'Los días de venta y eventos solo se muestran al personal que gestiona el horario.',
+  eventsUnavailable: 'No se pudieron cargar los días de venta y eventos.',
+  truncated: 'Esta vista tiene más clases de las que se pueden mostrar a la vez. Cambie a Semana o Día para verlas todas.',
+  zone: 'Las horas son de la escuela ({zone}).', nothing: 'Nada programado.', more: '+{n} más', moreLabel: 'Ver los {n} elementos del {day}',
+  eventTag: 'Evento', cancelled: 'Cancelada',
+  pick: 'Elija una clase o un evento del calendario para ver sus detalles.', close: 'Cerrar',
+  whenLabel: 'Cuándo', eventWhen: '{day}, de {from} a {to}', eventStatus: 'Estado', eventSpots: 'Plazas reservadas', eventPlace: 'Lugar', noPlace: 'Sin lugar',
+  spots: '{booked} de {total}', manageEvent: 'Gestionar en Días de venta y eventos',
+  DRAFT: 'Borrador', PUBLISHED: 'Abierto a reservas', CLOSED: 'Cerrado', CANCELLED: 'Cancelado',
+  bookTitle: 'Reservar un alumno en {name}', bookClose: 'Volver a la lista',
+};
+export const CALENDAR_LANGUAGES = { en, ko, es } as const;
+export function calendarText(language: string, key: CalendarKey, vars: Record<string, string> = {}): string {
+  const text = (language === 'ko' ? ko : language === 'es' ? es : en)[key];
+  return text.replace(/\{(\w+)\}/g, (_, name: string) => vars[name] ?? '');
+}

@@ -3,7 +3,7 @@ import type { PersonRecord, SchoolContactCard, SchoolContactOptions } from '@hon
 import { accountValue } from '../account-status/copy';
 import { peopleText, type PeopleKey } from './copy';
 import { ContactsList } from './contacts-list';
-import { ContactCard as ContactCardTabs, type CardSlots, type CardState, type CardTab, type MembershipSlot } from './contact-card';
+import { ContactCard as ContactCardTabs, type CardSlots, type CardState, type CardTab, type MembershipSlot, type MembershipToolsSlot } from './contact-card';
 import type { CardMode } from './card-panel';
 import { panelText, type PanelKey } from './panel-copy';
 import type { ContactFilters } from './contacts-http';
@@ -18,18 +18,18 @@ export type PeopleViewProps = Readonly<{
   list: ListState; record: RecordState; selectedId: string | null; outcome: SaveOutcome;
   /** True while a save from this tab is sending, or kept for "Try again": both forms stay locked. */
   locked: boolean; canRetry: boolean;
-  /** The contacts list filters (C1, 0373) and the rank, program and plan choices read with the first page. */
+  /** The contacts list filters (C1, 0521) and the rank, program and plan choices read with the first page. */
   filters: ContactFilters; options: SchoolContactOptions | null;
-  /** The open person's contact card (C2, 0374), read beside the editable record. */
+  /** The open person's contact card (C2, 0522), read beside the editable record. */
   card?: CardState | undefined;
   /** The tab the card opens on (a People link can ask for one), and the actions under each membership. */
-  cardTab?: CardTab | undefined; membershipSlot?: MembershipSlot | undefined;
+  cardTab?: CardTab | undefined; membershipSlot?: MembershipSlot | undefined; membershipTools?: MembershipToolsSlot | undefined;
   /** Owner (2026-11-16): the open card slides out beside the list (SIDE) or over it (FULL); Close (or Escape) puts it away. */
   cardMode?: CardMode | undefined; onCardMode?: ((mode: CardMode) => void) | undefined; onClose?: (() => void) | undefined;
   onCardTab?: ((tab: CardTab) => void) | undefined;
   /** Each family's app access and this person's messages, placed inside the card. */
   familySlot?: CardSlots['familySlot']; messagesSlot?: CardSlots['messagesSlot'];
-  /** C3 (0387): delete, restore and merge for the open contact (its own reads and commands), and what the last one did. */
+  /** C3 (0523): delete, restore and merge for the open contact (its own reads and commands), and what the last one did. */
   actionsSlot?: ((card: SchoolContactCard) => React.ReactNode) | undefined; actionNotice?: string | null | undefined;
   onFilters?: ((filters: ContactFilters) => void) | undefined; onMore?: (() => void) | undefined; onOpen?: ((personId: string) => void) | undefined; onReload?: (() => void) | undefined;
   onSaveContact?: ((draft: ContactDraft) => void) | undefined; onSaveBirth?: ((draft: BirthDraft) => void) | undefined;
@@ -111,7 +111,7 @@ function ContactPanel(props: PeopleViewProps & { t: T }): React.ReactElement {
     {props.actionNotice ? <p className={styles.notice} role="status" data-testid="contact-action-done">{props.actionNotice}</p> : null}
     {card.state === 'READY'
       ? <ContactCardTabs language={language} card={card} initialTab={props.cardTab ?? 'overview'} tab={props.onCardTab ? props.cardTab : undefined} onTab={props.onCardTab}
-          membershipSlot={props.membershipSlot} detailsSlot={() => details} familySlot={props.familySlot} messagesSlot={props.messagesSlot}/>
+          membershipSlot={props.membershipSlot} membershipTools={props.membershipTools} detailsSlot={() => details} familySlot={props.familySlot} messagesSlot={props.messagesSlot}/>
       // The card could not be read (or is still reading): the person's own record can still be seen and corrected.
       : <><ContactCardTabs language={language} card={card}/><div data-testid="contact-tab-details">{details}</div></>}
   </aside>;

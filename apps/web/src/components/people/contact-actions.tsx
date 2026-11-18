@@ -26,7 +26,7 @@ type Mode =
   | Readonly<{ kind: 'MERGE'; phase: 'LOADING' | 'READY' | 'SENDING'; keep: string; merge: string; preview?: SchoolContactMergePreview; failure?: Failure }>;
 
 /**
- * Delete (archive), restore and merge for the open contact (C3, 0387). Every step reads first and shows what would happen and
+ * Delete (archive), restore and merge for the open contact (C3, 0523). Every step reads first and shows what would happen and
  * what blocks it, in words; the command repeats the exact versions (and the merge plan hash) that read showed. The server
  * decides who may do this: a role without people.archive or people.merge sees "Your role doesn't include this."
  */

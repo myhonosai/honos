@@ -71,7 +71,7 @@ try{
    assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[role,'hon.'+t,p]))[0].ok,false,role+':'+t+':'+p);
  }
  const runtimeEntry=['read_school_conversations','read_school_conversation','reply_school_conversation','update_school_conversation','mark_school_conversation_read','link_school_conversation','create_school_conversation_lead'];
- const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE '%conversation%' AND p.proname NOT LIKE '%hon_conversation%' AND p.proname NOT LIKE 'hq_%' AND p.proname NOT LIKE '%social%') AND p.oid>=(SELECT oid FROM pg_proc WHERE proname='conversation_body_ok')");
+ const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE '%conversation%' AND p.proname NOT LIKE '%hon_conversation%' AND p.proname NOT LIKE 'hq_%' AND p.proname NOT LIKE '%social%' AND p.proname NOT LIKE '%conversation_ai%') AND p.oid>=(SELECT oid FROM pg_proc WHERE proname='conversation_body_ok')");
  assert.equal(fns.length,22,fns.map(f=>f.proname).join());
  for(const f of fns){
   assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,runtimeEntry.includes(f.proname),'runtime '+f.proname);
@@ -149,7 +149,7 @@ try{
  assert.deepEqual((await list(a,{search:'ada'})).conversations.map(x=>x.conversationId),[convAda]);
  assert.deepEqual((await list(a,{search:'7777'})).conversations.map(x=>x.conversationId),[convNew]);
  assert.equal((await list(a,{status:'CLOSED'})).conversations.length,0);
- // 0401: one person's conversations for the contact card (any status); a person with none, or of another school, gets nothing.
+ // 0532: one person's conversations for the contact card (any status); a person with none, or of another school, gets nothing.
  assert.deepEqual((await list(a,{personId:ada,status:'ALL'})).conversations.map(x=>x.conversationId),[convAda]);
  assert.deepEqual((await list(a,{personId:twinA,status:'ALL'})).conversations,[]);
  assert.deepEqual((await list(b,{personId:ada,status:'ALL'})).conversations,[]);
@@ -171,7 +171,7 @@ try{
  const p2=await list(a,{beforeAt:p1.nextCursor.at,beforeId:p1.nextCursor.id});assert.equal(p2.conversations.length,8);assert.equal(p2.nextCursor,null);
  assert.equal(new Set([...p1.conversations,...p2.conversations].map(x=>x.conversationId)).size,58);
  // All 58 within one millisecond (sub-millisecond writes): stored to whole milliseconds, and the pages still split exactly by id.
- await q("UPDATE hon.school_conversations x SET last_message_at=(date_trunc('second',clock_timestamp())+interval '1 hour')+(r.n*interval '7 microseconds'),version=x.version+1 FROM (SELECT id,row_number() OVER (ORDER BY id) n FROM hon.school_conversations WHERE school_id=$1) r WHERE r.id=x.id",[a.school]);
+ await q("UPDATE hon.school_conversations x SET last_message_at=(date_trunc('second',statement_timestamp())+interval '1 hour')+(r.n*interval '7 microseconds'),version=x.version+1 FROM (SELECT id,row_number() OVER (ORDER BY id) n FROM hon.school_conversations WHERE school_id=$1) r WHERE r.id=x.id",[a.school]);
  assert.equal((await q("SELECT count(DISTINCT last_message_at) n, bool_and(last_message_at=date_trunc('milliseconds',last_message_at)) ms FROM hon.school_conversations WHERE school_id=$1",[a.school]))[0].n,'1');
  const s1=await list(a);assert.equal(s1.conversations.length,50);
  const s2=await list(a,{beforeAt:s1.nextCursor.at,beforeId:s1.nextCursor.id});assert.equal(s2.conversations.length,8,'no conversation in the anchor millisecond is skipped');

@@ -1,5 +1,5 @@
 /**
- * C3 (0387): merge and delete (archive) on the contact card. Delete archives: the contact leaves the contacts list (segment
+ * C3 (0523): merge and delete (archive) on the contact card. Delete archives: the contact leaves the contacts list (segment
  * ARCHIVED), keeps every record and can be restored. Merge keeps one person, moves the other's leads, family links, billing
  * accounts, consents (channels the kept person has none for) and conversations onto them, then archives the other as merged.
  * Both are two-step: a read shows what would happen and what blocks it; the command repeats the exact versions (and, for a

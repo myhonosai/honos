@@ -14,9 +14,21 @@ import { RuntimeDatabaseService } from '../foundation/runtime-database.service.j
  * every command these screens send still re-checks the record, school and permission itself.
  */
 export const PICKER_LIMIT = 50;
+/** A school's belt list across all its curricula is longer than one page of students, so ranks get a larger cap. */
+export const RANK_LIMIT = 200;
 export const ENROLLMENT_PURPOSES = { progress: 'curriculum.progress.record', readiness: 'testing.promotion.readiness.read', testing: 'testing.manage' } as const;
 export const CANDIDATE_PURPOSES = { grade: 'testing.manage', decision: 'testing.promotion.decide' } as const;
+/** attendance: front-desk check-in by name, for any active student (a booking is never required to attend). */
+export const STUDENT_PURPOSES = { teaching: 'teaching.studio.read', achievements: 'achievement.award.read', attendance: 'attendance.record' } as const;
+export const RANK_PURPOSES = { teaching: 'teaching.studio.read' } as const;
+/** Screens that assign or manage a teammate, each with the permission that screen's own command needs (0404 allow-list). */
+export const STAFF_PURPOSES = { followups: 'crm.follow_up.manage', work: 'work_item.manage', qualifications: 'staff.instructor_qualification.manage',
+  roles: 'iam.staff_role.grant', availability: 'staff.availability.manage' } as const;
+export const STAFF_LIMIT = 200;
+export type StaffPurpose = keyof typeof STAFF_PURPOSES;
 export type EnrollmentPurpose = keyof typeof ENROLLMENT_PURPOSES;
+export type StudentPurpose = keyof typeof STUDENT_PURPOSES;
+export type RankPurpose = keyof typeof RANK_PURPOSES;
 export type CandidatePurpose = keyof typeof CANDIDATE_PURPOSES;
 type Scope = { organizationId: string; schoolId: string; principalId: string };
 
@@ -26,6 +38,10 @@ export interface PickerTestingEvent extends QueryResultRow { testingEventId: str
 export interface PickerCandidate extends QueryResultRow { candidateId: string; version: number; result: string; testingEventId: string; testingEventName: string; startsAt: string;
   studentProfileId: string; givenName: string; familyName: string; curriculumName: string; targetRankId: string; targetRankName: string }
 
+export interface PickerStudent extends QueryResultRow { studentProfileId: string; givenName: string; familyName: string }
+export interface PickerRank extends QueryResultRow { curriculumId: string; curriculumName: string; rankId: string; rankName: string; progressionOrder: number }
+
+export type PickerStaff = { principalId: string; displayName: string };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function needle(search: unknown): string | null {
   if (search === undefined) return null;
@@ -78,6 +94,46 @@ export class SchoolPickersService {
           AND ($3::text IS NULL OR (p.given_name || ' ' || p.family_name) ILIKE ${LIKE})
         ORDER BY p.family_name, p.given_name, c.name, e.id
         LIMIT ${PICKER_LIMIT}`, [context.organizationId, context.schoolId, search, curriculumId]));
+  }
+
+  /** Active students at this school, by name (for screens that note something about one student). */
+  async students(context: CommandContext, subject: string, purpose: StudentPurpose, search: string | null): Promise<PickerStudent[]> {
+    return this.read<PickerStudent>(context, subject, STUDENT_PURPOSES[purpose], (query) => query(
+      `SELECT s.id AS "studentProfileId", p.given_name AS "givenName", p.family_name AS "familyName"
+         FROM hon.student_profiles AS s
+         JOIN hon.people AS p ON p.id = s.person_id AND p.organization_id = s.organization_id AND p.school_id = s.school_id
+        WHERE s.organization_id = $1 AND s.school_id = $2 AND s.status = 'ACTIVE'
+          AND ($3::text IS NULL OR (p.given_name || ' ' || p.family_name) ILIKE ${LIKE})
+        ORDER BY p.family_name, p.given_name, s.id
+        LIMIT ${PICKER_LIMIT}`, [context.organizationId, context.schoolId, search]));
+  }
+
+  /** Ranks of this school's draft and published curricula, by curriculum then belt order. */
+  async ranks(context: CommandContext, subject: string, purpose: RankPurpose): Promise<PickerRank[]> {
+    return this.read<PickerRank>(context, subject, RANK_PURPOSES[purpose], (query) => query(
+      `SELECT c.id AS "curriculumId", c.name AS "curriculumName", r.id AS "rankId", r.name AS "rankName", r.progression_order AS "progressionOrder"
+         FROM hon.curricula AS c
+         JOIN hon.curriculum_ranks AS r ON r.curriculum_id = c.id AND r.organization_id = c.organization_id AND r.school_id = c.school_id
+        WHERE c.organization_id = $1 AND c.school_id = $2 AND c.lifecycle <> 'ARCHIVED'
+        ORDER BY c.name, r.progression_order, r.id
+        LIMIT ${RANK_LIMIT}`, [context.organizationId, context.schoolId]));
+  }
+
+  /** People with an active role at this school, by display name only, through the closed 0404 boundary. */
+  async staff(context: CommandContext, subject: string, purpose: StaffPurpose): Promise<PickerStaff[]> {
+    const rows = await this.read<{ data: unknown }>(context, subject, STAFF_PURPOSES[purpose], async (query) => {
+      // The 0404 boundary serves signed-in people only; it refuses any other source.
+      await query("SELECT set_config('app.hon_source', 'HUMAN_UI', true)", []);
+      return query('SELECT hon.list_school_staff_for_picker($1, $2) AS data', [subject, STAFF_PURPOSES[purpose]]);
+    });
+    const data = rows[0]?.data as { items?: unknown } | null | undefined;
+    if (!data || typeof data !== 'object' || Object.keys(data).join() !== 'items' || !Array.isArray(data.items) || data.items.length > STAFF_LIMIT) throw new Error('Invalid staff list.');
+    return data.items.map((item) => {
+      const r = item as Record<string, unknown>;
+      if (!r || typeof r !== 'object' || Object.keys(r).sort().join() !== 'displayName,principalId' || typeof r.principalId !== 'string' || !UUID.test(r.principalId)
+        || typeof r.displayName !== 'string' || !r.displayName.trim() || r.displayName.length > 120) throw new Error('Invalid staff list.');
+      return { principalId: r.principalId, displayName: r.displayName };
+    });
   }
 
   /** Testing events that are not finished or cancelled, soonest first. */
@@ -163,5 +219,33 @@ export class SchoolPickersController {
     const text = needle(search);
     const { context, subject } = await this.scope(request, organizationId, schoolId, CANDIDATE_PURPOSES[purpose as CandidatePurpose]);
     return { data: await this.pickers.candidates(context, subject, purpose as CandidatePurpose, text), meta: { requestId: context.requestId, correlationId: context.correlationId, limit: PICKER_LIMIT } };
+  }
+
+  @Get('students')
+  async students(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Query('for') purpose: unknown, @Query('search') search: unknown, @Req() request: HonRequest, @Res({ passthrough: true }) response: Response) {
+    response.setHeader('Cache-Control', 'private, no-store');
+    if (typeof purpose !== 'string' || !Object.hasOwn(STUDENT_PURPOSES, purpose)) throw new BadRequestException({ code: 'PURPOSE_INVALID', detail: 'Say which screen this list is for.' });
+    const text = needle(search);
+    const { context, subject } = await this.scope(request, organizationId, schoolId, STUDENT_PURPOSES[purpose as StudentPurpose]);
+    return { data: await this.pickers.students(context, subject, purpose as StudentPurpose, text), meta: { requestId: context.requestId, correlationId: context.correlationId, limit: PICKER_LIMIT } };
+  }
+
+  @Get('ranks')
+  async ranks(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Query('for') purpose: unknown, @Req() request: HonRequest, @Res({ passthrough: true }) response: Response) {
+    response.setHeader('Cache-Control', 'private, no-store');
+    if (typeof purpose !== 'string' || !Object.hasOwn(RANK_PURPOSES, purpose)) throw new BadRequestException({ code: 'PURPOSE_INVALID', detail: 'Say which screen this list is for.' });
+    const { context, subject } = await this.scope(request, organizationId, schoolId, RANK_PURPOSES[purpose as RankPurpose]);
+    return { data: await this.pickers.ranks(context, subject, purpose as RankPurpose), meta: { requestId: context.requestId, correlationId: context.correlationId, limit: RANK_LIMIT } };
+  }
+
+  @Get('staff')
+  async staff(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Query('for') purpose: unknown, @Req() request: HonRequest, @Res({ passthrough: true }) response: Response) {
+    response.setHeader('Cache-Control', 'private, no-store');
+    if (typeof purpose !== 'string' || !Object.hasOwn(STAFF_PURPOSES, purpose)) throw new BadRequestException({ code: 'PURPOSE_INVALID', detail: 'Say which screen this list is for.' });
+    const { context, subject } = await this.scope(request, organizationId, schoolId, STAFF_PURPOSES[purpose as StaffPurpose]);
+    return { data: await this.pickers.staff(context, subject, purpose as StaffPurpose), meta: { requestId: context.requestId, correlationId: context.correlationId, limit: STAFF_LIMIT } };
   }
 }

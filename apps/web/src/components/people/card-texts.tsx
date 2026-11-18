@@ -11,7 +11,7 @@ import { conversationsCopy, type ConversationsCopy } from '../conversations/copy
 import { panelText } from './panel-copy';
 import styles from './people.module.css';
 
-/** The server already narrows the list to the person (0401); this drops anything else that would ever come back. */
+/** The server already narrows the list to the person (0532); this drops anything else that would ever come back. */
 export function personConversations(rows: readonly ConversationRow[], personId: string): ConversationRow[] {
   const id = personId.toLowerCase();
   return rows.filter(r => r.personId?.toLowerCase() === id);
@@ -86,7 +86,7 @@ function problemText(problem: unknown, copy: ConversationsCopy): string {
 }
 
 /**
- * This person's texts (0364 + 0401) inside the contact card. The list asks the server for this person's conversations
+ * This person's texts (0364 + 0532) inside the contact card. The list asks the server for this person's conversations
  * of any status; the server checks conversation.read on every read and conversation.manage on mark read and reply, and the
  * 0243 worker re-checks consent, quiet hours and the sender before anything is sent. A reply whose outcome is unknown keeps
  * its key, so sending the same text again repeats the same command once.

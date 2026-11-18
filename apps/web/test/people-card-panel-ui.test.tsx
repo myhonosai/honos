@@ -134,17 +134,18 @@ it('words every panel label in all three languages', () => {
   for (const lang of ['en', 'ko', 'es'] as const) for (const text of Object.values(PANEL_COPY[lang])) expect(text.trim()).not.toBe('');
 });
 
-it('takes Search, Family access, Conversations and Family messages out of the Contacts tabs but keeps their pages', () => {
+it('keeps People as the Contacts home with search hidden, and the inboxes outside Contacts (menu owned by the school layout)', () => {
   const contacts = SCHOOL_SHELL_NAV.find(item => item.key === 'students')!;
-  for (const href of ['/staff/search', '/staff/family-access', '/staff/conversations', '/staff/family-messages']) {
-    const route = contacts.routes.find(r => r.href === href);
-    expect(route, href).toBeDefined();
-    expect(route!.hidden, href).toBe(true);
+  expect(contacts.routes[0]!.href).toBe('/staff/people');
+  expect(contacts.routes[0]!.hidden).toBeFalsy();
+  expect(contacts.routes.find(r => r.href === '/staff/search')!.hidden).toBe(true);
+  for (const href of ['/staff/conversations', '/staff/family-messages']) {
+    expect(contacts.routes.some(r => r.href === href), href).toBe(false);
+    expect(SCHOOL_SHELL_NAV.some(item => item.routes.some(r => r.href === href)), href).toBe(true);
   }
-  expect(contacts.routes.find(r => r.href === '/staff/people')!.hidden).toBeFalsy();
 });
 
-// Slice B: this person's texts inline in the card (0401 personId filter).
+// Slice B: this person's texts inline in the card (0532 personId filter).
 const conv = (conversationId: string, personId: string | null) => ({ conversationId, channel: 'SMS' as const, contactAddress: '+15555550100', contactName: 'Ana Rivera',
   personId, leadId: null, leadStatus: null, leadStage: null, status: 'OPEN' as const, unread: 2, tags: [], assignedTo: null,
   lastMessage: { direction: 'INBOUND' as const, preview: 'See you Monday', mediaCount: 0, at: '2026-11-15T10:00:00.000Z' },

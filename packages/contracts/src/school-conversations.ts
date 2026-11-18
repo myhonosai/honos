@@ -42,7 +42,7 @@ export interface ConversationContact {
 export interface ConversationDetail { conversation: ConversationRow; contact: ConversationContact; messages: ConversationMessage[]; hasOlder: boolean; canManage: boolean }
 export interface ConversationListQuery {
   status?: 'OPEN' | 'CLOSED' | 'ALL'; assigned?: 'ANY' | 'ME' | 'NONE'; unreadOnly?: boolean; tag?: string; search?: string; before?: { at: string; id: string };
-  /** 0401: only this person's conversations (the contact card's Texts). */
+  /** 0532: only this person's conversations (the contact card's Texts). */
   personId?: string;
 }
 export interface ReplyConversationInput { conversationId: string; expectedVersion: number; body: string }

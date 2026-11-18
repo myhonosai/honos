@@ -227,6 +227,9 @@ const SAAS_BILLING_CALLS = {
   commandAiSchoolCostLimit: { sql: 'SELECT hon.command_ai_school_cost_limit($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readAiExceptionAllowances: { sql: 'SELECT hon.read_ai_exception_school_allowances_from_hq($1) AS data', arity: 1, readOnly: true },
   commandAiExceptionAllowance: { sql: 'SELECT hon.command_ai_exception_school_allowance($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  // CA2a (0420): the Conversation AI program switch (HQ readers read; a human HQ owner changes it).
+  readConversationAiProgram: { sql: 'SELECT hon.read_conversation_ai_program_from_hq($1) AS data', arity: 1, readOnly: true },
+  commandConversationAiProgram: { sql: 'SELECT hon.command_conversation_ai_program($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readAccessExceptions: { sql: 'SELECT hon.read_saas_access_exceptions_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   grantAccessException: { sql: 'SELECT hon.grant_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   revokeAccessException: { sql: 'SELECT hon.revoke_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
@@ -333,6 +336,9 @@ const LANGUAGE_CALLS = {
 export type LanguageOperation = keyof typeof LANGUAGE_CALLS;
 
 export type SchoolOwnershipOperation = 'hqRead'|'setPrimary'|'ownerRead';
+
+export type ShopifyOperation = 'read'|'catalog'|'orders'|'start'|'claim'|'record'|'beginSync'|'rotate'|'page'|'finishSync'|'disconnect'
+  |'changes'|'propose'|'cancelChange'|'approveChange'|'rotateChange'|'recordChange';
 
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
@@ -612,6 +618,24 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     await this.assertRuntimePosture();
     return (await this.getPool().query<{ data: unknown }>('SELECT hon.read_published_school_website($1) data', [slug])).rows[0]!.data;
   }
+  /** 0499: what one membership agreement signing link shows, or null. One fixed call, no tenant settings. */
+  async readMembershipAgreementLink(token: string): Promise<unknown> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<{ data: unknown }>('SELECT hon.read_membership_agreement_link($1) data', [token])).rows[0]!.data;
+  }
+  /** 0499: sign through one link (SIGNED, ALREADY_SIGNED, CHANGED, INVALID or GONE). One short transaction, no tenant settings. */
+  async signMembershipAgreementLink(token: string, input: object, requestId: string): Promise<string> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ result: string }>('SELECT hon.sign_membership_agreement_link($1,$2::jsonb,$3::uuid) result', [token, JSON.stringify(input), requestId]);
+      await client.query('COMMIT');
+      return result.rows[0]!.result;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
   async submitPublishedLeadForm(publicId: string, input: object, key: string): Promise<string> {
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
@@ -625,7 +649,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     finally { client.release(); }
   }
 
-  /** B-SCH-3 (0261): the three fixed public event calls, one short transaction each, no tenant settings. */
+  /** B-SCH-3 (0261), 0286 and the 0414 walk-in kiosk tablet: the fixed public calls, one short transaction each, no tenant settings. */
   async runPublicEventCall(statement: string, values: unknown[]): Promise<unknown> {
     if (![
       'SELECT hon.read_public_school_event($1) AS data',
@@ -634,6 +658,8 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT hon.read_public_school_booking_type($1) AS data',
       'SELECT hon.book_public_school_booking_type($1,$2::jsonb,$3) AS data',
       'SELECT hon.cancel_public_school_booking_type_booking($1,$2::jsonb) AS data',
+      'SELECT hon.read_walkin_kiosk_terminal($1) AS data',
+      'SELECT hon.submit_walkin_visit($1,$2::jsonb,$3) AS data',
     ].includes(statement)) throw new Error('Unknown public event call.');
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
@@ -835,6 +861,10 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       ? this.withTenantReadOnlyTransaction(context, scopedWork)
       : this.withTenantTransaction(context, scopedWork);
   }
+  /** 0407: current-school memberships by participant name for the retention page's member list. */
+  async listRetentionReviewMemberships(context: RetentionReviewSignalsContext): Promise<unknown> {
+    return this.retentionAttentionTransaction(context, true, async client => (await client.query("SELECT hon.list_retention_review_members($1) AS data", [context.externalSubject])).rows[0]?.data);
+  }
   async readRetentionAttentionAlerts(context: RetentionReviewSignalsContext, membershipId: string): Promise<unknown> {
     return this.retentionAttentionTransaction(context, true, async client => (await client.query('SELECT hon.read_retention_attention_alerts($1,$2::uuid) AS data', [context.externalSubject, membershipId])).rows[0]?.data);
   }
@@ -1032,6 +1062,37 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       if (!result.rows[0]) throw new Error('HON parent absence context unavailable.');
       await client.query('COMMIT');
       return result.rows[0].data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
+  /** 0471: the families this parent is linked to now. Subject only; no tenant setting, read-only. */
+  async readParentFamilyChoices(externalSubject: string): Promise<unknown> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>('SELECT hon.read_parent_family_choices($1) AS data', [externalSubject]);
+      if (result.rows.length !== 1) throw new Error('HON parent family choices unavailable.');
+      await client.query('COMMIT');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
+  /** 0471: choose one of the parent's live families. The database re-proves the choice after its lock and write. */
+  async selectParentFamily(externalSubject: string, input: { schoolId: string; familyId: string }, requestId: string): Promise<unknown> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0");
+      await client.query("SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_external_subject',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)", [externalSubject]);
+      const result = await client.query<{ data: unknown }>('SELECT hon.select_parent_family($1,$2::jsonb,$3::uuid) AS data', [externalSubject, JSON.stringify(input), requestId]);
+      if (result.rows.length !== 1) throw new Error('HON parent family choice unavailable.');
+      await client.query('COMMIT');
+      return result.rows[0]!.data;
     } catch (error) { await client.query('ROLLBACK'); throw error; }
     finally { client.release(); }
   }
@@ -1372,7 +1433,8 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
 
   async callHonOsSignup(operation: 'register'|'read', params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
-      register: {sql: 'SELECT hon.register_hon_os_school($1,$2,$3::jsonb,$4::uuid) data',arity:4,readOnly:false},
+      // 0392: sign-up records the school address in the same transaction (wraps the unchanged 0241 function).
+      register: {sql: 'SELECT hon.register_hon_os_school_with_location($1,$2,$3::jsonb,$4::uuid) data',arity:4,readOnly:false},
       read: {sql: 'SELECT hon.read_hon_os_registration($1) data',arity:1,readOnly:true},
     } as const;
     const call=calls[operation];
@@ -1425,6 +1487,45 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('PERSON_UNAVAILABLE');
     return this.callFixedSubjectFunction(call,params,'PERSON_UNAVAILABLE');
+  }
+
+  /** 0390 contact photos: three fixed definer functions; the subject comes only from the signed HON session. */
+  async callSchoolPersonPhoto(operation: 'read'|'set'|'remove', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      read: {sql: 'SELECT hon.read_person_photo($1,$2::uuid,$3::uuid) data',arity:3,readOnly:true},
+      set: {sql: 'SELECT hon.set_person_photo($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      remove: {sql: 'SELECT hon.remove_person_photo($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('PERSON_PHOTO_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call,params,'PERSON_PHOTO_UNAVAILABLE');
+  }
+
+  /** 0405 Shopify: eleven fixed definer functions, and six more for 0496 product changes; the subject comes only from the signed HON session. */
+  async callShopify(operation: ShopifyOperation, params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      read: {sql: 'SELECT hon.read_shopify($1,$2::uuid) data',arity:2,readOnly:true},
+      catalog: {sql: 'SELECT hon.read_shopify_catalog($1,$2::uuid) data',arity:2,readOnly:true},
+      orders: {sql: 'SELECT hon.read_shopify_orders($1,$2::uuid) data',arity:2,readOnly:true},
+      start: {sql: 'SELECT hon.start_shopify_connect($1,$2::jsonb,$3) data',arity:3,readOnly:false},
+      claim: {sql: 'SELECT hon.claim_shopify_connect($1,$2::jsonb) data',arity:2,readOnly:false},
+      record: {sql: 'SELECT hon.record_shopify_connection($1,$2::jsonb) data',arity:2,readOnly:false},
+      beginSync: {sql: 'SELECT hon.begin_shopify_sync($1,$2::jsonb) data',arity:2,readOnly:false},
+      rotate: {sql: 'SELECT hon.rotate_shopify_credential($1,$2::jsonb) data',arity:2,readOnly:false},
+      page: {sql: 'SELECT hon.record_shopify_sync_page($1,$2::jsonb) data',arity:2,readOnly:false},
+      finishSync: {sql: 'SELECT hon.finish_shopify_sync($1,$2::jsonb) data',arity:2,readOnly:false},
+      disconnect: {sql: 'SELECT hon.disconnect_shopify($1,$2::jsonb) data',arity:2,readOnly:false},
+      // 0496 product changes with owner approval (SH4a).
+      changes: {sql: 'SELECT hon.read_shopify_product_changes($1,$2::uuid) data',arity:2,readOnly:true},
+      propose: {sql: 'SELECT hon.propose_shopify_product_change($1,$2::jsonb) data',arity:2,readOnly:false},
+      cancelChange: {sql: 'SELECT hon.cancel_shopify_product_change($1,$2::jsonb) data',arity:2,readOnly:false},
+      approveChange: {sql: 'SELECT hon.approve_shopify_product_change($1,$2::jsonb) data',arity:2,readOnly:false},
+      rotateChange: {sql: 'SELECT hon.rotate_shopify_change_credential($1,$2::jsonb) data',arity:2,readOnly:false},
+      recordChange: {sql: 'SELECT hon.record_shopify_product_change_result($1,$2::jsonb) data',arity:2,readOnly:false},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('SHOPIFY_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call,params,'SHOPIFY_UNAVAILABLE');
   }
 
   private async callFixedSubjectFunction(call: { sql: string; readOnly: boolean }, params: readonly (string | null)[], unavailable: string): Promise<unknown> {
