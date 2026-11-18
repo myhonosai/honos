@@ -84,6 +84,7 @@ function store(over = {}) {
     async page(input) { calls.push(['page', input]); return {}; },
     async finish(input) { calls.push(['finish', input]); return over.finish ? over.finish(input)
       : { syncId: input.syncId, source: 'SCHEDULED', outcome: input.outcome, failureCode: input.failureCode, connectionStatus: input.outcome === 'NEEDS_RECONNECT' ? 'NEEDS_RECONNECT' : 'CONNECTED' }; },
+    async purgeExpiredOrders() { calls.push(['purge']); return over.purge ? over.purge() : { orders: 0, lines: 0, more: false }; },
   };
 }
 const fakeApp = () => { const app = adapter.shopifyAppFromEnvironment({ HON_SHOPIFY_FAKE: '1' }); return app; };
@@ -123,19 +124,19 @@ test('0449 background sync: claims due stores, writes every page under the lease
   let claims = [first];
   const s = store({ claim: () => claims.shift() ?? null });
   const sync = new worker.ShopifyBackgroundSync(s, app, () => now);
-  assert.deepEqual(await sync.runOnce(), { claimed: 1, succeeded: 1, failed: 0, needsReconnect: 0, errors: 0 });
-  assert.deepEqual(s.calls.map(c => c[0]), ['claim', 'rotate', 'page', 'page', 'finish', 'claim']);
-  for (const [op, input] of s.calls.slice(1, 5)) { assert.equal(input.syncId, 'y1', op); assert.equal(input.leaseToken, 'l1', op); assert.equal('schoolId' in input, false, op); }
-  assert.equal(s.calls[1][1].expectedVersion, 1);
+  assert.deepEqual(await sync.runOnce(), { claimed: 1, succeeded: 1, failed: 0, needsReconnect: 0, errors: 0, purgedOrders: 0 });
+  assert.deepEqual(s.calls.map(c => c[0]), ['purge', 'claim', 'rotate', 'page', 'page', 'finish', 'claim']);
+  for (const [op, input] of s.calls.slice(2, 6)) { assert.equal(input.syncId, 'y1', op); assert.equal(input.leaseToken, 'l1', op); assert.equal('schoolId' in input, false, op); }
+  assert.equal(s.calls[2][1].expectedVersion, 1);
   assert.equal(/fake_(at|rt)_/.test(JSON.stringify(s.calls)), false, 'no token value ever reaches the database in clear');
-  assert.deepEqual(s.calls[4][1], { syncId: 'y1', leaseToken: 'l1', outcome: 'SUCCEEDED', failureCode: null });
+  assert.deepEqual(s.calls[5][1], { syncId: 'y1', leaseToken: 'l1', outcome: 'SUCCEEDED', failureCode: null });
 
   // Shopify refusing the token ends as Needs reconnect; a broken answer counts as an error and never throws.
   app.fake.rejectTokens(SHOP);
   claims = [await claimFor(app, now)];
-  assert.deepEqual(await sync.runOnce(), { claimed: 1, succeeded: 0, failed: 0, needsReconnect: 1, errors: 0 });
+  assert.deepEqual(await sync.runOnce(), { claimed: 1, succeeded: 0, failed: 0, needsReconnect: 1, errors: 0, purgedOrders: 0 });
   claims = [{ syncId: 'y2' }];
-  assert.deepEqual(await sync.runOnce(), { claimed: 1, succeeded: 0, failed: 0, needsReconnect: 0, errors: 1 });
+  assert.deepEqual(await sync.runOnce(), { claimed: 1, succeeded: 0, failed: 0, needsReconnect: 0, errors: 1, purgedOrders: 0 });
   app.fake.rejectTokens(SHOP, false);
   const lying = new worker.ShopifyBackgroundSync(store({ claim: (() => { let n = 0; return () => (n++ ? null : first); })(), finish: () => ({ syncId: 'other', outcome: 'SUCCEEDED' }) }), app, () => now);
   assert.equal((await lying.runOnce()).errors, 1);
@@ -147,6 +148,25 @@ test('0449 background sync: claims due stores, writes every page under the lease
   assert.equal((await new worker.ShopifyBackgroundSync(off, null).runOnce()).claimed, 0);
   off.configured = false;
   assert.equal((await new worker.ShopifyBackgroundSync(off, app).runOnce()).claimed, 0);
+});
+
+test('0470 background run deletes expired orders first, in at most five batches, and a failure never stops the syncs', async () => {
+  const app = fakeApp();
+  let left = 3;
+  const s = store({ purge: () => { left -= 1; return { orders: 2000, lines: 4000, more: left > 0 }; } });
+  assert.deepEqual(await new worker.ShopifyBackgroundSync(s, app).runOnce(), { claimed: 0, succeeded: 0, failed: 0, needsReconnect: 0, errors: 0, purgedOrders: 6000 });
+  assert.deepEqual(s.calls.map(c => c[0]), ['purge', 'purge', 'purge', 'claim']);
+  const endless = store({ purge: () => ({ orders: 2000, lines: 0, more: true }) });
+  assert.equal((await new worker.ShopifyBackgroundSync(endless, app).runOnce()).purgedOrders, 10000);
+  assert.equal(endless.calls.filter(c => c[0] === 'purge').length, 5);
+  const broken = store({ purge: () => { throw new Error('down'); }, claim: (() => { let n = 0; return () => (n++ ? null : { syncId: 'y9' }); })() });
+  const r = await new worker.ShopifyBackgroundSync(broken, app).runOnce();
+  assert.deepEqual([r.errors, r.claimed], [2, 1], 'the purge error and the bad claim are both counted; the claim still ran');
+  // The SQL store refuses a malformed answer.
+  const sql = new worker.ShopifyWorkerSql(async () => [{ data: { orders: '1', lines: 0, more: false } }]);
+  await assert.rejects(sql.purgeExpiredOrders(), /SHOPIFY_WORKER_ANSWER_INVALID/);
+  assert.deepEqual(await new worker.ShopifyWorkerSql(async (q) => { assert.equal(q, 'SELECT hon.purge_expired_shopify_orders() AS data'); return [{ data: { orders: 1, lines: 2, more: false } }]; }).purgeExpiredOrders(),
+    { orders: 1, lines: 2, more: false });
 });
 
 test('0449 background sync is on only with the worker login and a valid poll interval; the page says so', async () => {
