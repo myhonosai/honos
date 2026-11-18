@@ -677,8 +677,8 @@ try {
     'guard_membership_pause', 'list_retention_review_members', 'membership_agreement_covered', 'pause_school_membership', 'prepare_school_pay_autopay_cycle', 'read_crm_adult_membership_draft_confirmation', 'read_crm_adult_membership_preparation',
     'read_crm_guardian_child_enrollment', 'read_crm_lead_memberships', 'read_crm_lead_registration_recovery', 'read_maya_at_risk_students', 'read_membership_date_confirmation_queue', 'read_membership_date_history', 'read_membership_pauses_and_refunds',
     'read_owner_launch_membership_draft', 'read_parent_billing_view', 'read_parent_testing_status',
-    'read_retention_review_signals', 'read_school_command_center', 'read_school_health_score', 'read_school_membership_list', 'read_school_membership_status_summary', 'read_school_reports', 'read_school_reports_locations', 'read_specialist_school_facts', 'record_membership_refund', 'record_retention_attention_alert',
-    'renewal_membership_facts', 'resolve_retention_attention_alert', 'resume_school_membership', 'revenue_plan_snapshot', 'revise_membership_dates', 'save_school_onboarding', 'school_demo_data_write', 'school_pay_autopay_due', 'school_report_periods']);
+    'read_retention_review_signals', 'read_school_command_center', 'read_school_contact_card', 'read_school_health_score', 'read_school_membership_list', 'read_school_membership_status_summary', 'read_school_reports', 'read_school_reports_locations', 'read_specialist_school_facts', 'record_membership_refund', 'record_retention_attention_alert', 'renewal_membership_facts',
+    'resolve_retention_attention_alert', 'resume_school_membership', 'revenue_plan_snapshot', 'revise_membership_dates', 'save_school_onboarding', 'school_contact_archive_plan', 'school_contact_facts', 'school_contact_merge_plan', 'school_dashboard_kpis', 'school_dashboard_members', 'school_demo_data_write', 'school_pay_autopay_due', 'school_report_periods']);
   // 0323 save_school_onboarding names the closed import-wish code 'MEMBERSHIPS' only; it never reads hon.memberships.
   // 0220 (U6) read_school_membership_list is a read-only school list: no booking, check-in or benefit path.
   // 0407 list_retention_review_members is a read-only name list for the retention review picker: no booking, check-in or benefit path.
@@ -694,6 +694,14 @@ try {
   // drafts) by term dates and recorded cancellations and count attendance marks; they book, check in and grant nothing.
   // 0332 (R2) read_school_reports_locations counts each listed location's cancelled memberships without a recorded
   // cancellation time (the same 0331 rule) and otherwise reuses school_report_periods; it books, checks in and grants nothing.
+  // 0520 (R3) school_dashboard_members and school_dashboard_kpis are read-only dashboard counts: members by term dates and
+  // recorded cancellations (the 0331 rule) and first membership starts; they book, check in and grant nothing.
+  // 0522 (C2) read_school_contact_card lists one person's memberships, invoices and attendance marks for staff to read; it books,
+  // checks in, records attendance and grants nothing.
+  // 0521 (C1) school_contact_facts is the read-only contacts list: it sorts people into student / trial / prospect / inactive
+  // by the same 0331 membership rule and reads the current membership's plan and end date; it books, checks in and grants nothing.
+  // 0523 (C3) school_contact_archive_plan and school_contact_merge_plan only test whether a person holds memberships (a
+  // current one blocks archive; any one blocks being merged away); they never move, change or grant a membership.
   // 0259 (Maya M1) read_maya_at_risk_students is a read-only retention signal: it books, checks in and grants nothing,
   // and reads only ACTIVE, FROZEN and CANCELLATION_PENDING memberships (no DRAFT); a SCHEDULED (future-dated) ACTIVE
   // membership can at most appear as a staff-only list row, which grants no benefit.
@@ -704,7 +712,7 @@ try {
   // 0423 automation_event_subject and automation_condition_holds only read a class booking event's own booking row (to
   // find its contact) and membership state (for entry/IF conditions); they book, check in and grant nothing.
   assert.deepEqual((await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' AND prosrc ~* '(class_bookings|attendance_records|class_pass|kiosk|check_in)' ORDER BY 1")).map((r) => r.proname),
-    ['acknowledge_retention_review_evidence', 'automation_condition_holds', 'automation_event_subject', 'begin_hon_turn', 'read_maya_at_risk_students', 'read_retention_review_signals', 'read_school_health_score', 'record_retention_attention_alert',
+    ['acknowledge_retention_review_evidence', 'automation_condition_holds', 'automation_event_subject', 'begin_hon_turn', 'read_maya_at_risk_students', 'read_retention_review_signals', 'read_school_contact_card', 'read_school_health_score', 'record_retention_attention_alert',
       'school_report_periods']);
   assert.equal((await sql("SELECT count(*)::int n FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' AND prosrc ~* '(INSERT\\s+INTO|UPDATE)\\s+(hon\\.)?(class_bookings|attendance_records|class_pass\\w*|kiosk\\w*|check_in\\w*)'"))[0].n, 0);
   assert.equal((await sql("SELECT count(*)::int n FROM pg_views WHERE definition ~* '\\mmemberships\\M'"))[0].n, 0);
