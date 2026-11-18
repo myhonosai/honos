@@ -23,7 +23,7 @@ export type ShopifyViewProps = Readonly<{
   language: string; locale: string; waiting: boolean; concealed: boolean; hasSchool: boolean;
   overview: OverviewState; section: ShopifySection; catalog: ListState<ShopifyCatalog>; orders: ListState<ShopifyOrders>; shop: string; confirming: boolean; outcome: ShopifyOutcome; locked: boolean;
   changes?: ListState<ShopifyProductChanges> | undefined;
-  onPropose?: ((change: ProposeRequest) => void) | undefined; onApprove?: ((change: ShopifyProductChange) => void) | undefined;
+  onPropose?: ((change: ProposeRequest) => void | Promise<boolean>) | undefined; onApprove?: ((change: ShopifyProductChange) => void) | undefined;
   onCancelChange?: ((change: ShopifyProductChange) => void) | undefined; onAllowEditing?: (() => void) | undefined;
   onRefresh?: (() => void) | undefined; onShop?: ((value: string) => void) | undefined; onConnect?: (() => void) | undefined;
   onSync?: (() => void) | undefined; onConfirm?: ((open: boolean) => void) | undefined; onDisconnect?: (() => void) | undefined;
@@ -161,7 +161,7 @@ export function matchesProduct(p: ShopifyProduct, query: string): boolean {
   return [p.title, p.productType, p.vendor, ...p.variants.flatMap(v => [v.title, v.sku])].some(x => typeof x === 'string' && x.toLowerCase().includes(q));
 }
 
-type Editing = Readonly<{ canEdit: boolean; open: ReadonlySet<string>; locked: boolean; onPropose: (r: ProposeRequest) => void; go: (s: ShopifySection) => void }>;
+type Editing = Readonly<{ canEdit: boolean; open: ReadonlySet<string>; locked: boolean; onPropose: (r: ProposeRequest) => void | Promise<boolean>; go: (s: ShopifySection) => void }>;
 function Products({ ctx, catalog, edit }: { ctx: Ctx; catalog: ListState<ShopifyCatalog>; edit: Editing }): React.ReactElement {
   const { t, locale } = ctx;
   const [query, setQuery] = useState(''), [status, setStatus] = useState<ProductFilter>('all'), [type, setType] = useState('');

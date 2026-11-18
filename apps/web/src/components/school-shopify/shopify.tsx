@@ -105,8 +105,8 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
    * One edit command at a time, never replayed. An approval re-reads everything (Shopify and the mirror changed);
    * a new edit or a cancel re-reads only the change list. A lost approval answer shows as "not sure" with Check again.
    */
-  const change = useCallback(async (action: Extract<ShopifyAction, 'propose' | 'approve' | 'cancelChange'>, send: (owned: Owned) => Promise<ShopifyChangeResult>, target?: string) => {
-    if (sending.current || !schoolId) return;
+  const change = useCallback(async (action: Extract<ShopifyAction, 'propose' | 'approve' | 'cancelChange'>, send: (owned: Owned) => Promise<ShopifyChangeResult>, target?: string): Promise<boolean> => {
+    if (sending.current || !schoolId) return false;
     sending.current = true; const shown = privacy.current;
     setLocked(true); setOutcome({ kind: 'SENDING', action, ...(target ? { target } : {}) });
     let next: ShopifyOutcome;
@@ -114,12 +114,14 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
     catch (error) { next = { kind: kindOf(error), action, ...(target ? { target } : {}) }; }
     finally { sending.current = false; }
     setLocked(false);
-    if (shown !== privacy.current || !mounted.current) return;
+    if (shown !== privacy.current || !mounted.current) return false;
     setOutcome(next);
     if (action === 'approve') setRefresh((n) => n + 1); else setChangesTick((n) => n + 1);
     if (action === 'propose' && next?.kind === 'DONE') go('changes');
+    return next?.kind === 'DONE';
   }, [schoolId, go]);
-  const onPropose = (r: ProposeRequest) => { if (schoolId) void change('propose', (owned) => api.propose(schoolId, r, AbortSignal.timeout(30000), owned)); };
+  /** Resolves true only when the server confirmed the proposal (PENDING). */
+  const onPropose = (r: ProposeRequest): Promise<boolean> => schoolId ? change('propose', (owned) => api.propose(schoolId, r, AbortSignal.timeout(30000), owned)) : Promise.resolve(false);
   const onApprove = (c: ShopifyProductChange) => { if (schoolId) void change('approve', (owned) => api.approveChange(schoolId, c.changeId, c.version, AbortSignal.timeout(150000), owned), c.changeId); };
   const onCancelChange = (c: ShopifyProductChange) => { if (schoolId) void change('cancelChange', (owned) => api.cancelChange(schoolId, c.changeId, c.version, AbortSignal.timeout(30000), owned), c.changeId); };
 

@@ -92,7 +92,8 @@ type AiNotice = null | { kind: MerchAiErrorKind | 'FAILED' | 'BLOCKED' | 'CONFIG
 
 export type StudioProps = Readonly<{
   ctx: EditCtx; language: string; school: string | null; brand: BrandState; canEdit: boolean; locked: boolean;
-  onPropose: (r: ProposeRequest) => void; creativeHref: string;
+  /** Resolves true only when the server confirmed the proposal; a plain void means the result is unknown. */
+  onPropose: (r: ProposeRequest) => void | Promise<boolean>; creativeHref: string;
   /** CS-M2: asking Marcus. Missing, refused or switched off, the studio writes starter ideas from templates instead. */
   merchAi?: Readonly<{ api: MerchAiApi; scope: MerchAiScope }> | undefined;
 }>;
@@ -158,7 +159,12 @@ export function MerchStudio(p: StudioProps): React.ReactElement {
       (error) => { if (live.current && error instanceof MerchAiError && error.kind !== 'GONE') setAiNotice({ kind: error.kind }); });
   };
   // Using one of Marcus's ideas is an ordinary SH4a proposal; the ideas are then marked used. Templates need no mark.
-  const propose = (r: ProposeRequest) => { p.onPropose(r); if (view && view.status === 'RESULT_RECORDED' && editing?.startsWith('marcus:')) close('APPLIED'); };
+  // Marked used only after the server confirmed the SH4a proposal: a refused or unknown save leaves the ideas open. The
+  // page moves to Changes on success, so the mark is sent even after this view has gone.
+  const propose = (r: ProposeRequest) => {
+    const marcusIdea = !!view && view.status === 'RESULT_RECORDED' && !!editing?.startsWith('marcus:');
+    void Promise.resolve(p.onPropose(r)).then(ok => { if (ok === true && marcusIdea) close('APPLIED'); }, () => {});
+  };
   const toggle = (style: MerchStyle) => {
     const on = brief.styles.includes(style);
     if (!on && brief.styles.length >= MAX_LOOKS) return;
