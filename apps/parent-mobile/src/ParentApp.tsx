@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { NavigationContainer, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ParentApi } from './api/client';
@@ -96,7 +96,9 @@ function missingKeySource(): string { throw new Error('No Idempotency-Key source
 
 function EianFromTab() {
   const navigation = useNavigation<{ navigate: (tab: keyof Tabs) => void }>();
-  return <EianScreen onNavigate={tab => navigation.navigate(tab)} />;
+  const [focusTick, setFocusTick] = useState(0);
+  useFocusEffect(useCallback(() => { setFocusTick(n => n + 1); }, []));
+  return <EianScreen onNavigate={tab => navigation.navigate(tab)} focusTick={focusTick} />;
 }
 
 function HomeFromTab() {

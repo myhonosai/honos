@@ -51,6 +51,9 @@ import { ChadFollowUpAssistantService } from './chad-follow-up-assistant/chad-fo
 import { CHAD_PROVIDER_RUNTIME, OpenRouterChadRuntime } from './ai/chad-provider-runtime.js';
 import { HON_REPLY_PROVIDER_RUNTIME, OpenRouterHonReplyRuntime } from './ai/hon-reply-provider-runtime.js';
 import { HonReplyService } from './hon-conversation/hon-reply.service.js';
+import { EianController, EianAskGuard, EianReadGuard } from './eian/eian.controller.js';
+import { EianService } from './eian/eian.service.js';
+import { EIAN_PROVIDER_RUNTIME, OpenRouterEianRuntime } from './eian/eian-provider-runtime.js';
 import { CREATIVE_PROVIDER_RUNTIME } from './creative-studio/creative-provider-runtime.js';
 import { createCreativeProviderRuntime } from './creative-studio/providers/creative-provider-router.js';
 import { CreativeStudioService } from './creative-studio/creative-studio.service.js';
@@ -507,6 +510,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentFamilyPickerController,
     ParentSchoolBookingController,
     ParentFamilyMessagesController,
+    EianController,
     FamilyMessagesInboxController,
     SchoolConversationsController,
     ContactMessagesController,
@@ -648,6 +652,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ChadFollowUpAssistantHumanUiGuard,
     { provide: CHAD_PROVIDER_RUNTIME, useFactory: () => new OpenRouterChadRuntime() },
     { provide: HON_REPLY_PROVIDER_RUNTIME, useFactory: () => new OpenRouterHonReplyRuntime() },
+    // E-AI1: Eian family AI. The same OpenRouter rules: off until the key and the paid-call approval flag are both set.
+    { provide: EIAN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterEianRuntime() }, EianService, EianAskGuard, EianReadGuard,
     // CS1: no creative provider is connected; the synthetic runtime is test-only and never selected here.
     // C2: real adapters exist, but stay off until results can be copied into HON storage (C3).
     { provide: CREATIVE_PROVIDER_RUNTIME, useFactory: () => createCreativeProviderRuntime({ mediaStorageReady: false }) },

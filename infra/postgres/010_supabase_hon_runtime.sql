@@ -4196,3 +4196,24 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.select_parent_family(text,jsonb,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0472 Eian family AI: one private table, the pure route-selection helper and private Eian helpers, and seven runtime entry
+-- points (status, read a turn, begin, plan, prepare, fail, record). plan_ai_invocation and the S4 shared functions keep their grants.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.record_eian_turn_result(text,uuid,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0472 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.ai_select_text_route(uuid,uuid,uuid,text,text,integer,bigint)','hon.eian_turn_limits()','hon.eian_share_percent()',
+      'hon.eian_burst_limit()','hon.eian_scope(text)','hon.eian_access(text)','hon.eian_committed_credits(uuid,timestamptz)',
+      'hon.eian_unavailable_reason(uuid,uuid,boolean)','hon.eian_facts_ok(jsonb)','hon.eian_turn_view(hon.eian_turns,boolean)',
+      'hon.read_eian_status(text,boolean)','hon.read_eian_turn(text,uuid)','hon.begin_eian_turn(text,text,text)','hon.plan_eian_turn(text,uuid,uuid,uuid)',
+      'hon.prepare_eian_turn(text,uuid,uuid,boolean,jsonb,jsonb)','hon.fail_eian_turn(text,uuid,text,text)','hon.record_eian_turn_result(text,uuid,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.eian_turns FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.eian_turns FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_eian_status(text,boolean), hon.read_eian_turn(text,uuid), hon.begin_eian_turn(text,text,text),
+      hon.plan_eian_turn(text,uuid,uuid,uuid), hon.prepare_eian_turn(text,uuid,uuid,boolean,jsonb,jsonb), hon.fail_eian_turn(text,uuid,text,text),
+      hon.record_eian_turn_result(text,uuid,jsonb) TO hon_runtime;
+  END IF;
+END $$;

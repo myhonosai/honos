@@ -4633,3 +4633,57 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END IF;
 END $$;
 -- End parent family picker exact verification.
+
+-- Eian family AI exact verification (0472): the private turn table and its four S4 triggers, the pure route helper and the
+-- re-pinned planner that calls it, private Eian helpers, seven runtime entry points, and the S4 shared functions that gained EIAN.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.ai_select_text_route(uuid,uuid,uuid,text,text,integer,bigint)',true,false,'search_path=pg_catalog, hon','223c2ace3f9235f3997c960f4e223e0a237145ad71246e2a88e97e9f502bbde1'),
+('hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','17675880148308085f1317d6a88561cdf86dd47d3fa9036d8100b4ceee155635'),
+('hon.eian_turn_limits()',false,false,'search_path=pg_catalog','0f454af366b8676c78035cce4722573484eef6ffa7b90921a10258a490827994'),
+('hon.eian_share_percent()',false,false,'search_path=pg_catalog','f1fa1dbcf005dd15d5387ba63ae99407dff620b40ff10200aeb960240271e31f'),
+('hon.eian_burst_limit()',false,false,'search_path=pg_catalog','5e6a329b1c71b45fb5674458e87b8f8fd18c5b9916f026435f4b1cba7cae4610'),
+('hon.eian_scope(text)',true,false,'search_path=pg_catalog, hon','afe37bc2bc76e9af1e30100277a1a865b3218ec4d9b33b791a208f11c0df93a7'),
+('hon.eian_access(text)',true,false,'search_path=pg_catalog, hon','f4e619e296dea7098b40d8200e17dd578e183fcdaff84ad57f7d0df883242cc3'),
+('hon.eian_committed_credits(uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','71742922fd00247c964ef648d540d5bffa339da838b3c0ce7dbf5d56d384b574'),
+('hon.eian_unavailable_reason(uuid,uuid,boolean)',true,false,'search_path=pg_catalog, hon','63210a50284e8a0190b94c06905916f488be30320ecac0afaa893b44eda7dae0'),
+('hon.eian_facts_ok(jsonb)',false,false,'search_path=pg_catalog','5dee68d2e78fcca110a427464ea23a1819918d01778134c64a432bfc03ecbd35'),
+('hon.eian_turn_view(hon.eian_turns,boolean)',true,false,'search_path=pg_catalog, hon','2e62bdbd0117818742599180c0799fa5c510793cf46ca8165665c91889c05356'),
+('hon.read_eian_status(text,boolean)',true,true,'search_path=pg_catalog, hon','76cc90d9104dde327d92a9d704879857898565b0e483bf8d8845defc578919ff'),
+('hon.read_eian_turn(text,uuid)',true,true,'search_path=pg_catalog, hon','9fe9e6019b0e845ef2aa66d617c6065b8b4782b413dd3d592da40987dab7c33a'),
+('hon.begin_eian_turn(text,text,text)',true,true,'search_path=pg_catalog, hon','7d4c6bf36042dce0efdd868209b2a1b1ab93c3a4d2eb3fe31eb6ed4b5f0c9c86'),
+('hon.plan_eian_turn(text,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','120f7c05c0d76dce3a989499c7d96d5f127a64754e1665aafe126d81a23aac5e'),
+('hon.prepare_eian_turn(text,uuid,uuid,boolean,jsonb,jsonb)',true,true,'search_path=pg_catalog, hon','213d4d2e9d474e7259200cc091d7de43740968b052c1c26558e305f69b26a163'),
+('hon.fail_eian_turn(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','ea5e453a389f95b954cdc69631c2889bd0024f4de1e5bb9b2ce051c5e80d4da3'),
+('hon.record_eian_turn_result(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','299c891b3c5e91df5ab0d576a1d817642db8d6210aebf349a8ab04d29b5d4d9f'),
+('hon.ai_org_committed_credits(uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','eeac44fbf9e908b646c03b6d964ea49b8f626a7c6a8bd5bae448518112cdaab2'),
+('hon.ai_org_open_agent_holds(uuid)',false,false,'search_path=pg_catalog, hon','d294a4699657b4ad6d453c76eb75523606aa707a55e6971bfb5c89488ea8f7dd'),
+('hon.ai_school_committed_cost_micros(uuid,uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','6b1c505f44ee9c838a8fdf620205c65023ff5135b4f8e6950a5486c80b8bcc98'),
+('hon.ai_unknown_validate(text,jsonb)',false,false,'search_path=pg_catalog, hon','aa860812b7f98f2e3f5e4d4f12431377da2ec5ce6a615b74ef00c80a077d1584'),
+('hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','73d1194c2c076483e217358570b9d4b2f582c85a1b8780110ab143d29cb1d2d3'),
+('hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','c946c8b901d92f3d482fcc157e129fef14877600462ede1ace53ee01b33e83b8'),
+('hon.read_ai_unknown_invocations_from_hq(text)',true,true,'search_path=pg_catalog, hon','9632c34ef8dbe2fd916fd4cb3e531ae40249e3cde338732df4a9ba4ff1689e4d'),
+('hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)',true,true,'search_path=pg_catalog, hon','476132992d1da534e0fb41b95ee87a54a1948d7e541b55eb883c19304eba483d'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Eian family AI function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.eian_turns'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.eian_turns'::regclass)
+    OR has_table_privilege('hon_runtime','hon.eian_turns','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.eian_turns','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe Eian turn table';
+  END IF;
+  IF (SELECT count(*) FROM pg_trigger t WHERE t.tgrelid='hon.eian_turns'::regclass AND t.tgenabled='O' AND (t.tgname, t.tgfoid) IN (
+      ('ai_spend_start_guard','hon.ai_spend_start_guard()'::regprocedure), ('ai_spend_reserve_guard','hon.ai_spend_reserve_guard()'::regprocedure),
+      ('ai_spend_reserve_guard_insert','hon.ai_spend_reserve_guard()'::regprocedure), ('zz_ai_hold_origin','hon.ai_stamp_hold_origin()'::regprocedure))) <> 4 THEN
+    RAISE EXCEPTION 'Eian turn S4 triggers missing';
+  END IF;
+END $$;
+-- End Eian family AI exact verification.

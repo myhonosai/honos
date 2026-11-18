@@ -12,6 +12,7 @@ import { verifyParentBillingView, type ParentBillingView } from '@hon/contracts/
 import { verifyParentClassPassView, type ParentClassPassView } from '@hon/contracts/parent-classpass-view';
 import { verifyParentTestingStatusView, type ParentTestingStatusView } from '@hon/contracts/parent-testing-status';
 import { verifyParentCurriculumLibrary, type ParentCurriculumLibrary } from '@hon/contracts/curriculum-resource-library';
+import { verifyEianStatus, verifyEianTurn, type EianStatus, type EianTurn } from '@hon/contracts/eian';
 
 /**
  * What a screen shows when a read does not return verified data. Every protected read maps to one of these;
@@ -94,7 +95,9 @@ export function createParentApi(options: ParentApiOptions) {
     try { return { ok: true, data: verify(body) }; } catch { return { ok: false, state: 'unavailable' }; }
   }
 
-  async function post<T>(path: string, command: string, idempotencyKey: string, payload: unknown, verify: (body: unknown) => T): Promise<ParentWrite<T>> {
+  /** `definite` lists 5xx codes that are a definite no (nothing was asked), not an unknown outcome. */
+  async function post<T>(path: string, command: string, idempotencyKey: string, payload: unknown, verify: (body: unknown) => T,
+    definite: readonly string[] = []): Promise<ParentWrite<T>> {
     if (!/^[A-Za-z0-9-]{16,200}$/.test(idempotencyKey)) throw new Error('A command needs a fresh Idempotency-Key.');
     const token = await options.getToken();
     if (!token) return { ok: false, state: 'signed-out' };
@@ -117,6 +120,7 @@ export function createParentApi(options: ParentApiOptions) {
     try { body = await response.json(); } catch { /* handled below */ }
     if (!response.ok) {
       const code = (body as { code?: unknown } | null)?.code;
+      if (typeof code === 'string' && definite.includes(code)) return { ok: false, state: 'refused', code };
       if (response.status >= 500 || code === 'IDEMPOTENCY_IN_PROGRESS') return { ok: false, state: 'unknown' };
       const state = classifyFailure(response.status, code);
       if (state !== 'unavailable') return { ok: false, state };
@@ -165,6 +169,26 @@ export function createParentApi(options: ParentApiOptions) {
     classPass: (): Promise<ParentRead<ParentClassPassView>> => get('/v1/parent/classpass', dataOf(verifyParentClassPassView)),
     testingStatus: (): Promise<ParentRead<ParentTestingStatusView>> => get('/v1/parent/testing/status', dataOf(verifyParentTestingStatusView)),
     curriculumLibrary: (): Promise<ParentRead<ParentCurriculumLibrary>> => get('/v1/parent/curriculum-library', dataOf(verifyParentCurriculumLibrary)),
+    /** Whether Eian answers with the school's AI right now (AI) or only with guided answers (GUIDED), with a closed reason. */
+    eianStatus: (): Promise<ParentRead<EianStatus>> => get('/v1/parent/eian/status', dataOf(verifyEianStatus)),
+    /**
+     * One question to Eian AI. One key per question: after an unknown outcome the caller re-asks with the SAME key and the
+     * exact same question, and HON replays that turn instead of asking again. The answer is text only; nothing it says runs.
+     */
+    askEian: (question: string, idempotencyKey: string): Promise<ParentWrite<EianTurn>> => {
+      const asked = question.trim();
+      return post('/v1/parent/eian/turns', 'parent.eian.ask', idempotencyKey, { question: asked }, data => {
+        const turn = verifyEianTurn(data);
+        if (turn.question !== asked) throw new Error('Eian answered a different question.');
+        return turn;
+      }, ['EIAN_AI_UNAVAILABLE']);
+    },
+    eianTurn: (turnId: string): Promise<ParentRead<EianTurn>> =>
+      get(`/v1/parent/eian/turns/${encodeURIComponent(turnId)}`, body => {
+        const turn = verifyEianTurn((body as { data?: unknown } | null)?.data);
+        if (turn.id !== turnId) throw new Error('Eian returned a different turn.');
+        return turn;
+      }),
   };
 }
 export type ParentApi = ReturnType<typeof createParentApi>;
