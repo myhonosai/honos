@@ -7,8 +7,8 @@ BEGIN;
 --   E1  Scope: hon.parent_class_booking_scope (0329/0471), so Eian follows the parent's family choice like every parent path.
 --       The client sends no family, school or organization selector.
 --   E2  Gate: HON's own hon_reply_complete_live (Complete at the live clock), the 4-argument S4 spend decision (HQ pause,
---       exception allowance, school cost ceiling), the organization ceiling, and a share of that ceiling for parents
---       (hon.eian_share_percent, owner decision D3 pending, 25 until answered).
+--       exception allowance, school cost ceiling), and the organization ceiling. No separate parent share or
+--       cap (David, D3, 2026-11-18 03:30Z: "no limit or cap"): parents share the school's whole AI budget.
 --   E3  Burst guard: 20 new turns per guardian per rolling 10 minutes, counted under a per-guardian lock. Replays never count.
 --   E4  Planning: plan_ai_invocation's route selection moves, byte for byte, into the pure, ungranted
 --       hon.ai_select_text_route. plan_ai_invocation keeps every check it had and calls it; plan_eian_turn checks the parent
@@ -225,9 +225,6 @@ END $function$;
 CREATE FUNCTION hon.eian_turn_limits() RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
   SELECT jsonb_build_object('taskClass','SUMMARIZE','inputBudget',9000,'outputBudget',700,'maxProviderCostMicrounits',20000)
 $$;
--- D3 (owner decision pending): the share of the organization's AI ceiling that parent Eian turns may commit in one
--- spend window. 25 keeps the school's own AI team working whatever parents ask; 100 shares the whole budget.
-CREATE FUNCTION hon.eian_share_percent() RETURNS integer LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$ SELECT 25 $$;
 -- Burst guard (D2): at most this many new turns per guardian in a rolling ten minutes. Replays never count.
 CREATE FUNCTION hon.eian_burst_limit() RETURNS integer LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$ SELECT 20 $$;
 
@@ -296,16 +293,6 @@ BEGIN
 EXCEPTION WHEN insufficient_privilege THEN RETURN false;
 END $$;
 
--- Credits parent Eian turns commit in the organization's current window: their ledger rows plus their counting holds.
-CREATE FUNCTION hon.eian_committed_credits(p_org uuid, p_at timestamptz) RETURNS bigint
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-  WITH w AS (SELECT hon.ai_spend_window(p_org, p_at) AS r)
-  SELECT (SELECT coalesce(sum(u.customer_credits),0) FROM hon.ai_usage_ledger u, w
-           WHERE u.organization_id=p_org AND u.spend_class='AGENT_INFERENCE' AND u.occurred_at>=lower(w.r) AND u.occurred_at<upper(w.r)
-             AND EXISTS (SELECT 1 FROM hon.eian_turns e WHERE e.id = u.source_invocation_id))
-       + (SELECT coalesce(sum(i.reserved_credits),0) FROM hon.eian_turns i, w WHERE i.organization_id=p_org AND i.reserved_credits>0 AND hon.ai_hold_counts(i.status,i.held_at,w.r,p_at));
-$$;
-
 -- Why a new turn could not be answered by AI now, or NULL. Closed reasons only; never a ceiling, spend or route name.
 CREATE FUNCTION hon.eian_unavailable_reason(p_org uuid, p_school uuid, p_ready boolean) RETURNS text
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
@@ -317,8 +304,7 @@ BEGIN
   IF NOT coalesce(p_ready, false) OR hon.ai_team_route(p_org, p_school, (lim->>'inputBudget')::bigint + (lim->>'outputBudget')::bigint,
       (lim->>'maxProviderCostMicrounits')::bigint) IS NOT NULL THEN RETURN 'NOT_CONFIGURED'; END IF;
   ceiling := hon.ai_org_ceiling(p_org, at);
-  IF hon.ai_org_committed_credits(p_org, at) + est > ceiling
-     OR (hon.eian_committed_credits(p_org, at) + est) * 100 > ceiling * hon.eian_share_percent() THEN RETURN 'BUDGET_REACHED'; END IF;
+  IF hon.ai_org_committed_credits(p_org, at) + est > ceiling THEN RETURN 'BUDGET_REACHED'; END IF;
   RETURN NULL;
 END $$;
 
@@ -385,7 +371,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
     'reply', CASE WHEN t.status = 'COMPLETED' AND p_visible THEN t.reply_text END,
     'screen', CASE WHEN t.status = 'COMPLETED' AND p_visible THEN t.suggested_screen END,
     'reason', CASE WHEN t.status IN ('BLOCKED','CONFIGURATION_REQUIRED','FAILED','UNKNOWN') THEN
-      CASE WHEN t.reason IN ('CUSTOMER_BUDGET_EXCEEDED','EIAN_SHARE_REACHED','AI_ORG_BUDGET_EXCEEDED') THEN 'BUDGET_REACHED'
+      CASE WHEN t.reason IN ('CUSTOMER_BUDGET_EXCEEDED','AI_ORG_BUDGET_EXCEEDED') THEN 'BUDGET_REACHED'
            WHEN t.reason IN ('AI_ACCESS_REFUSED') THEN 'NOT_INCLUDED'
            WHEN t.status = 'CONFIGURATION_REQUIRED' OR t.reason IN ('NO_ELIGIBLE_ROUTE','UNSUPPORTED_PROVIDER','CONFIGURATION_REQUIRED') THEN 'NOT_CONFIGURED'
            WHEN t.status = 'UNKNOWN' THEN 'OUTCOME_UNKNOWN'
@@ -516,7 +502,7 @@ END $$;
 -- input. The organization budget lock is taken first, as in every S4 prepare. p_scope names the scope the API built
 -- p_facts under; it must be this turn's family and the parent's live scope after every lock (review condition A1).
 -- Order of refusals: scope, access, S4 spend decision (HQ pause, exception, school decision), plan, provider
--- readiness, organization ceiling, Eian share. A refusal reserves nothing and never calls a provider.
+-- readiness, organization ceiling. A refusal reserves nothing and never calls a provider.
 CREATE FUNCTION hon.prepare_eian_turn(p_subject text, p_turn uuid, p_plan uuid, p_ready boolean, p_scope jsonb, p_facts jsonb) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE budget_locked boolean := hon.ai_budget_lock(hon.current_organization_id());
@@ -560,8 +546,6 @@ BEGIN
     ceiling := hon.ai_org_ceiling(t.organization_id, clock_timestamp());
     IF hon.ai_org_committed_credits(t.organization_id, clock_timestamp()) + p.customer_credit_estimate > ceiling THEN
       why := 'CUSTOMER_BUDGET_EXCEEDED';
-    ELSIF (hon.eian_committed_credits(t.organization_id, clock_timestamp()) + p.customer_credit_estimate) * 100 > ceiling * hon.eian_share_percent() THEN
-      why := 'EIAN_SHARE_REACHED';
     END IF;
   END IF;
   UPDATE hon.eian_turns SET plan_id = p.id,
@@ -1010,8 +994,8 @@ BEGIN
 END $$;
 
 DO $$ DECLARE r text; f text; BEGIN
-  FOREACH f IN ARRAY ARRAY['hon.ai_select_text_route(uuid,uuid,uuid,text,text,integer,bigint)','hon.eian_turn_limits()','hon.eian_share_percent()',
-      'hon.eian_burst_limit()','hon.eian_scope(text)','hon.eian_access(text)','hon.eian_committed_credits(uuid,timestamptz)',
+  FOREACH f IN ARRAY ARRAY['hon.ai_select_text_route(uuid,uuid,uuid,text,text,integer,bigint)','hon.eian_turn_limits()',
+      'hon.eian_burst_limit()','hon.eian_scope(text)','hon.eian_access(text)',
       'hon.eian_unavailable_reason(uuid,uuid,boolean)','hon.eian_facts_ok(jsonb)','hon.eian_turn_view(hon.eian_turns,boolean)',
       'hon.read_eian_status(text,boolean)','hon.read_eian_turn(text,uuid)','hon.begin_eian_turn(text,text,text)','hon.plan_eian_turn(text,uuid,uuid,uuid)',
       'hon.prepare_eian_turn(text,uuid,uuid,boolean,jsonb,jsonb)','hon.fail_eian_turn(text,uuid,text,text)','hon.record_eian_turn_result(text,uuid,jsonb)'] LOOP

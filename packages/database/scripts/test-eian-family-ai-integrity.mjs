@@ -286,7 +286,7 @@ try {
   const unknown = (await expect(ask(PARENT, 'Is there class on Friday?'), 201, 'unknown')).data;
   const unknownRow = await turnRow(unknown.id);
   ok(unknown.status === 'UNKNOWN' && unknown.reason === 'OUTCOME_UNKNOWN' && unknown.reply === null && unknownRow.reserved_credits > 0 && unknownRow.held_at, 'UNKNOWN keeps its hold');
-  ok(Number((await one('SELECT hon.eian_committed_credits($1,clock_timestamp()) c', [ids.organization])).c) >= unknownRow.reserved_credits, 'the hold counts against the parents\' share');
+  ok(Number((await one('SELECT hon.ai_org_committed_credits($1,clock_timestamp()) c', [ids.organization])).c) >= unknownRow.reserved_credits, 'the hold counts against the school budget');
   fake.next.push(() => ({ reply: 'Too long', inputTokens: 900, outputTokens: 701, providerCostMicrounits: 10 }));
   const over = (await expect(ask(PARENT, 'Tell me everything.'), 201, 'over budget')).data;
   const overRow = await turnRow(over.id);
@@ -351,23 +351,23 @@ try {
     has_function_privilege(current_user,'hon.eian_scope(text)','EXECUTE') s, has_function_privilege(current_user,'hon.begin_eian_turn(text,text,text)','EXECUTE') b`)).rows[0];
   ok(!acl.t && !acl.r && !acl.s && acl.b, 'runtime: no table access, no helper access, entry points only');
 
-  // 10. Budget: the organization ceiling, then the parents' share of it (D3), refuse before any call.
+  // 10. Budget: parents share the school's whole AI budget (D3, no separate cap); the organization ceiling refuses before any call.
   const ceiling = Number((await one('SELECT hon.ai_org_ceiling($1,clock_timestamp()) c', [ids.organization])).c);
   const calls = fake.calls.length;
   ok((await expect(status(PARENT), 200, 'status under the ceiling')).data.mode === 'AI', 'AI before the budget checks');
   const ledgerRow = (credits, source) => sql("INSERT INTO hon.ai_usage_ledger(organization_id,school_id,initiator_principal_id,provider_code,model_code,modality,input_units,output_units,provider_cost_microunits,customer_credits,spend_class,source_invocation_id,correlation_id) VALUES($1,$2,$3,'OPENROUTER','approved/eian-local','TEXT',1,1,0,$4,'AGENT_INFERENCE',$5,gen_random_uuid())",
     [ids.organization, ids.school, PARENT.principal, credits, source]);
-  // Parent turns' own recorded usage at a quarter of the ceiling: the parents' share is used up, staff AI is untouched.
-  await ledgerRow(Math.ceil(ceiling * 0.25), down.id);
-  assert.deepEqual((await expect(status(PARENT), 200, 'share reached status')).data, { mode: 'GUIDED', reason: 'BUDGET_REACHED' });
-  const blocked = (await expect(ask(PARENT, 'Share reached?'), 201, 'share reached ask')).data;
-  ok(blocked.status === 'BLOCKED' && blocked.reason === 'BUDGET_REACHED' && fake.calls.length === calls, 'share reached: blocked, no call');
-  ok((await turnRow(blocked.id)).reason === 'EIAN_SHARE_REACHED' && (await turnRow(blocked.id)).reserved_credits === 0, 'share refusal recorded, nothing reserved');
+  // Parent turns' own recorded usage at 90% of the ceiling: no parent share or cap, so Eian still answers with AI.
+  await ledgerRow(Math.floor(ceiling * 0.9), down.id);
+  ok((await expect(status(PARENT), 200, 'no parent cap status')).data.mode === 'AI', 'no separate parent cap: AI at 90% of the budget');
+  fake.next.push(() => ({ reply: 'Still here.', inputTokens: 10, outputTokens: 5, providerCostMicrounits: 1 }));
+  const uncapped = (await expect(ask(PARENT, 'Still answering?'), 201, 'no parent cap ask')).data;
+  ok(uncapped.status === 'COMPLETED' && fake.calls.length === calls + 1, 'no separate parent cap: answered with one call');
   await sql('DELETE FROM hon.ai_usage_ledger WHERE organization_id=$1 AND input_units=1 AND output_units=1', [ids.organization]);
   // The organization ceiling itself (staff use up everything).
   await ledgerRow(ceiling, null);
   const full = (await expect(ask(PARENT, 'Ceiling reached?'), 201, 'ceiling reached ask')).data;
-  ok(full.status === 'BLOCKED' && full.reason === 'BUDGET_REACHED' && (await turnRow(full.id)).reason === 'CUSTOMER_BUDGET_EXCEEDED' && fake.calls.length === calls, 'ceiling reached: blocked, no call');
+  ok(full.status === 'BLOCKED' && full.reason === 'BUDGET_REACHED' && (await turnRow(full.id)).reason === 'CUSTOMER_BUDGET_EXCEEDED' && fake.calls.length === calls + 1, 'ceiling reached: blocked, no call');
 
   // 11. Burst guard: 20 new questions per guardian per 10 minutes, counted under a lock; replays never count.
   await sql('DELETE FROM hon.ai_usage_ledger WHERE organization_id=$1 AND input_units=1 AND output_units=1', [ids.organization]);

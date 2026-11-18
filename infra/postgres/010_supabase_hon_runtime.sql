@@ -4208,8 +4208,8 @@ END $$;
 -- points (status, read a turn, begin, plan, prepare, fail, record). plan_ai_invocation and the S4 shared functions keep their grants.
 DO $$ DECLARE r text; f text; BEGIN
   IF to_regprocedure('hon.record_eian_turn_result(text,uuid,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0474 first'; END IF;
-  FOREACH f IN ARRAY ARRAY['hon.ai_select_text_route(uuid,uuid,uuid,text,text,integer,bigint)','hon.eian_turn_limits()','hon.eian_share_percent()',
-      'hon.eian_burst_limit()','hon.eian_scope(text)','hon.eian_access(text)','hon.eian_committed_credits(uuid,timestamptz)',
+  FOREACH f IN ARRAY ARRAY['hon.ai_select_text_route(uuid,uuid,uuid,text,text,integer,bigint)','hon.eian_turn_limits()',
+      'hon.eian_burst_limit()','hon.eian_scope(text)','hon.eian_access(text)',
       'hon.eian_unavailable_reason(uuid,uuid,boolean)','hon.eian_facts_ok(jsonb)','hon.eian_turn_view(hon.eian_turns,boolean)',
       'hon.read_eian_status(text,boolean)','hon.read_eian_turn(text,uuid)','hon.begin_eian_turn(text,text,text)','hon.plan_eian_turn(text,uuid,uuid,uuid)',
       'hon.prepare_eian_turn(text,uuid,uuid,boolean,jsonb,jsonb)','hon.fail_eian_turn(text,uuid,text,text)','hon.record_eian_turn_result(text,uuid,jsonb)'] LOOP

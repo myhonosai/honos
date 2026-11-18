@@ -38,9 +38,8 @@ Guided mode stays. The app still answers the questions the on-device engine reco
 - **Gate (D1, decided):** HON's own `hon_reply_complete_live` (Complete at the live clock), plus:
   - the 4-argument `ai_spend_allowed` (HQ pause, exception allowance, school cost ceiling)
   - the organization ceiling
-  - a parent share of that ceiling
   A school without the gate gets guided mode.
-- **Parent share (D3, pending):** `hon.eian_share_percent()` is 25. Parents together may commit at most 25% of the organization's monthly AI ceiling. The alternative is sharing the whole budget.
+- **No parent cap (D3, decided):** David said "no limit or cap" (2026-11-18 03:30Z). Parents share the school's whole AI budget; the organization ceiling and the S4 controls still apply.
 - **No per-family cap** (David, 2026-11-17). The school's budget and the S4 controls still apply.
 - **Burst guard:** 20 new questions per guardian per rolling 10 minutes, counted under a per-guardian lock, then `EIAN_BUSY`. Replays never count.
 
@@ -116,7 +115,7 @@ The provider runtime is `OpenRouterEianRuntime`. It uses the same rules as the H
   - the HQ queue, usage and resolve
   - a lapse that is held, then released
   - direct SQL refusals and ACLs
-  - the share and the ceiling
+  - no separate parent cap, then the organization ceiling
   - a parallel burst
   - the 011 section
   - the largest facts the API builds for a crowded family are accepted, and the API and database measure the same jsonb text
@@ -131,4 +130,4 @@ The provider runtime is `OpenRouterEianRuntime`. It uses the same rules as the H
 
 ## Owner decisions
 
-- **D3 (pending):** cap parents at 25% of the school's AI budget (recommended), or let Eian share the whole budget.
+- **D3 (decided 2026-11-18):** no parent share or cap; Eian uses the school's whole AI budget.
