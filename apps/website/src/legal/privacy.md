@@ -1,7 +1,7 @@
 ---
 title: Privacy Policy
 description: What information HON OS collects for martial arts schools, staff, students and families, why we use it, who we share it with, and the choices you have.
-updated: 2026-11-17
+updated: 2026-11-18
 ---
 This Privacy Policy explains how HON OS Labs LLC ("HON", "we", "us") handles personal information in HON OS, the HON Family parent app, HON HQ, the HON Shopify app and this website (together, the "Services").
 
@@ -72,7 +72,7 @@ We use the information a school puts into HON OS only to provide the Services to
 
 ## AI features
 
-HON OS includes AI assistants that help a school draft messages, summarize records, suggest follow-ups, create marketing images and videos, and similar tasks. When a school uses these features, the information needed for the task is sent to the AI service provider that performs it. HON chooses AI providers whose business terms do not allow them to use the information HON sends to train their models. **HON does not use a school's student, family or staff information to train AI models.** Actions that send messages, spend money or change important records go through approval rules the school controls, and staff should review AI output before relying on it.
+HON OS includes AI assistants that help a school draft messages, summarize records, suggest follow-ups, create marketing images and videos, and similar tasks. When a school uses these features, the information needed for the task is sent to the AI service provider that performs it. Those providers process it under their own terms. **HON does not use a school's student, family or staff information to train AI models.** Actions that send messages, spend money or change important records go through approval rules the school controls, and staff should review AI output before relying on it.
 
 ## The HON Shopify app
 
@@ -108,7 +108,7 @@ We use the following kinds of providers. Each only receives the information it n
 - **Payments**: Stripe (HON OS subscriptions, and tuition for schools that use Stripe) and Square (tuition for schools that use Square).
 - **Texting and calls**: Twilio (text messages and missed-call text-back).
 - **Email**: Twilio SendGrid (service and school emails).
-- **AI**: AI model providers such as Anthropic and OpenAI, and media generation providers for marketing images, video and voice, used only for AI features.
+- **AI**: OpenRouter (which routes AI requests to model providers such as Anthropic and OpenAI), HeyGen (AI video and avatars) and Higgsfield (AI images and video), used only for AI features.
 - **Marketing connections**: Meta, Google and Zernio, used only when a school connects them.
 - **Commerce**: Shopify, used only when a merchant connects a store.
 

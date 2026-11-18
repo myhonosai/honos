@@ -16,7 +16,8 @@ const read = (file) => readFileSync(join(out, file), 'utf8');
 const visible = (html) => html.replace(/<(script|style)[\s\S]*?<\/\1>/g, ' ').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/\s+/g, ' ');
 
 const BANNED = [/\$149\b/, /\bEssential\b/, /lifetime/i, /free months?/i, /available now/i, /\$15\b/, /payment processor of our own|hon pay\b/i,
-  /HIPAA[- ]compliant|SOC ?2 (certified|compliant)|ISO ?27001 certified|PCI[- ]DSS certified/i, /we (never|do not) (ever )?(get|have) (breached|hacked)/i];
+  /HIPAA[- ]compliant|SOC ?2 (certified|compliant)|ISO ?27001 certified|PCI[- ]DSS certified/i, /we (never|do not) (ever )?(get|have) (breached|hacked)/i,
+  /do not allow them to (use|train)|providers (may not|must not|cannot) (use|train)/i];
 
 test('builds /privacy/ and /terms/ as English pages with the site header and footer', () => {
   for (const slug of LEGAL_PAGES) {
@@ -125,6 +126,7 @@ test('privacy policy covers what the app stores ask about', () => {
     ['retention', /retention|how long we keep/i],
     ['security / encryption', /encrypt/i],
     ['subprocessors', /service providers|subprocessors/i],
+    ['AI providers the code calls', /OpenRouter[\s\S]*HeyGen[\s\S]*Higgsfield/],
     ['rights / requests', /access, correct|delete/i],
     ['California', /California/],
     ['contact', /contact us/i],

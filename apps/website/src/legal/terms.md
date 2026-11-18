@@ -1,7 +1,7 @@
 ---
 title: Terms of Service
 description: The agreement between HON and the martial arts schools that use HON OS, including fees, acceptable use, AI features, texting rules and how HON processes school data.
-updated: 2026-11-17
+updated: 2026-11-18
 ---
 These Terms of Service ("Terms") are an agreement between HON OS Labs LLC ("HON", "we", "us") and the school or business that signs up for HON OS ("School", "you"). The person who accepts these Terms for a School confirms they are authorized to bind it. If you use the HON Family app as a parent, guardian or student, the section "For HON Family app users" applies to you.
 
