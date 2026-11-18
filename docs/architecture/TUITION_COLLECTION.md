@@ -544,7 +544,7 @@ promo codes are CP3 and CP4). Nothing here takes a payment, and HON adds no fee.
   carry-over in a rolled-back transaction; `apps/api/test/school-checkout.test.cjs` (3 tests);
   `apps/web/test/school-checkout-ui.test.tsx` (11 tests); 011 exact verification passes.
 
-## 22. Shared one-time payment as built (0462): one whole payment for checkout, the kiosk and the point of sale
+## 22. Shared one-time payment as built (0529): one whole payment for checkout, the kiosk and the point of sale
 
 Status: source only, not deployed. TEST/SANDBOX mode only (the connection table already refuses LIVE). HON adds no fee.
 No route of its own: the family checkout page (CP3), the walk-in kiosk tablet (WK3) and the point of sale each call it
@@ -596,7 +596,7 @@ from their own database function and their own route, which decide who may pay a
 - **Data (private, forced RLS, no runtime table privilege):** `school_pay_once` (one row per payment; scope, caller
   record, amount, label, payer email and expiry never change; start facts and each provider reference are written once),
   `school_pay_once_events` (append-only), an audit row per change by the code-owned principal
-  `00000000-0000-4000-8000-000000000462`, and an inert outbox event `school_pay_once.settled` when a payment settles.
+  `00000000-0000-4000-8000-000000000529`, and an inert outbox event `school_pay_once.settled` when a payment settles.
   Results and history carry no provider reference and no payer email.
 - **Rule for every caller route (review P3):** the four API entry points are scoped by the payment id alone, and the read
   returns the school's account reference and the payer email to the API. A caller route (CP3, WK3, POS) must therefore
@@ -612,4 +612,4 @@ from their own database function and their own route, which decide who may pay a
   the desk, cancel after paying, internal cancel, lost and refused session answers, PROCESSING then FAILED, expiry and the
   sweep, Square hosted only, an unconfigured processor, caller lock, record misuse, guards, ACL, 011);
   `apps/api/test/school-payments-sandbox.test.cjs` (Stripe Checkout fields, key, account header, outcomes, UNKNOWN
-  cases, expiry; Square not offered; simulators); 010/011; staging pin 0462.
+  cases, expiry; Square not offered; simulators); 010/011; staging pin 0529.

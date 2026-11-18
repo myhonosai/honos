@@ -1,5 +1,5 @@
 import {
-  SOCIAL_AD_CANCEL_COMMAND, SOCIAL_AD_CREATE_COMMAND, SOCIAL_AD_OPERATION_COMMAND, SOCIAL_AD_RESOLVE_COMMAND, SOCIAL_ADS_BUDGET_COMMAND,
+  SOCIAL_AD_CANCEL_COMMAND, SOCIAL_AD_CREATE_COMMAND, SOCIAL_GOOGLE_AD_CREATE_COMMAND, validateSocialGoogleAdDraftInput, type SocialGoogleAdDraftInput, SOCIAL_AD_OPERATION_COMMAND, SOCIAL_AD_RESOLVE_COMMAND, SOCIAL_ADS_BUDGET_COMMAND,
   validateSocialAdBudgetInput, validateSocialAdCancelInput, validateSocialAdDraftInput, validateSocialAdOperationInput, validateSocialAdResolveInput,
   verifySocialAd, verifySocialAdsView, verifySocialPostList,
   type SocialAd, type SocialAdBudgetInput, type SocialAdDraftInput, type SocialAdOperationInput, type SocialAdResolveInput, type SocialAdsView, type SocialPostList,
@@ -18,7 +18,7 @@ export type AdsErrorKind =
   /** No monthly limit set yet. */ | 'NO_BUDGET'
   /** Would go over the monthly limit. */ | 'OVER_CAP'
   /** The school has no saved street address; ads reach 5 miles around it (0453). */ | 'NO_ADDRESS'
-  /** Ads are off for that Facebook Page. */ | 'ADS_OFF'
+  /** Ads are off for that Facebook Page or Google Ads account. */ | 'ADS_OFF'
   /** The post is not published on Facebook by HON. */ | 'NOT_PUBLISHED'
   /** The ad moved on or its dates passed. */ | 'STATE'
   /** Currency cannot change once ads exist. */ | 'CURRENCY_FIXED'
@@ -57,7 +57,7 @@ async function exchange(path: string, signal: AbortSignal, owned: Owned, command
 }
 const CONFLICTS: Readonly<Record<string, AdsErrorKind>> = {
   SOCIAL_AD_NO_BUDGET: 'NO_BUDGET', SOCIAL_AD_NO_ADDRESS: 'NO_ADDRESS', SOCIAL_AD_OVER_CAP: 'OVER_CAP', SOCIAL_ADS_OFF: 'ADS_OFF', SOCIAL_AD_POST_NOT_PUBLISHED: 'NOT_PUBLISHED',
-  SOCIAL_AD_STATE: 'STATE', SOCIAL_AD_CURRENCY_FIXED: 'CURRENCY_FIXED', SOCIAL_VERSION_CONFLICT: 'STALE',
+  SOCIAL_AD_STATE: 'STATE', SOCIAL_ACCOUNT_DISCONNECTED: 'ADS_OFF', SOCIAL_AD_CURRENCY_FIXED: 'CURRENCY_FIXED', SOCIAL_VERSION_CONFLICT: 'STALE',
   IDEMPOTENCY_KEY_REUSED: 'INVALID', IDEMPOTENCY_KEY_REQUIRED: 'INVALID',
 };
 /** Only these exact answers are definitive; anything else (busy, 5xx, drift) is UNKNOWN. */
@@ -107,6 +107,13 @@ export const adsApi = {
   async draft(scope: AdsScope, input: SocialAdDraftInput, key: string, signal: AbortSignal, owned: Owned): Promise<SocialAd> {
     const body = checked(() => validateSocialAdDraftInput(input));
     return command(`${base(scope)}/ads`, SOCIAL_AD_CREATE_COMMAND, body, key, (v) => { const ad = verifySocialAd(v); if (ad.targetId !== body.targetId) throw new Error('ad'); return ad; }, signal, owned);
+  },
+  /** 0453: a Google Search ad draft on this school's connected Google Ads account. Nothing is sent to Google. */
+  async googleDraft(scope: AdsScope, input: SocialGoogleAdDraftInput, key: string, signal: AbortSignal, owned: Owned): Promise<SocialAd> {
+    const body = checked(() => validateSocialGoogleAdDraftInput(input));
+    return command(`${base(scope)}/ads/google`, SOCIAL_GOOGLE_AD_CREATE_COMMAND, body, key, (v) => {
+      const ad = verifySocialAd(v); if (ad.channel !== 'GOOGLE_SEARCH' || ad.accountId !== body.accountId.toLowerCase()) throw new Error('ad'); return ad;
+    }, signal, owned);
   },
   async operation(scope: AdsScope, id: string, input: SocialAdOperationInput, key: string, signal: AbortSignal, owned: Owned): Promise<SocialAd> {
     return command(`${base(scope)}/ads/${adId(id)}/operation`, SOCIAL_AD_OPERATION_COMMAND, checked(() => validateSocialAdOperationInput(input)), key, sameAd(id), signal, owned);

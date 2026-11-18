@@ -6,6 +6,7 @@ import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT } from 
 import { FamilyAccessController } from './controller';
 import { familyScope, type FamilyScope } from './http';
 import { familyText } from './copy';
+import { ParentPortalLink } from './parent-portal-link';
 import styles from './workbench.module.css';
 import { useShellSchool } from '../school-shell/page-school';
 
@@ -46,6 +47,7 @@ export function FamilyAccessWorkspace({ sessionSubject, acceptance = false, init
   return <main className={`${styles.page} ${styles[mode]}`} data-testid="family-access" data-interface-theme={mode}>
     <h1>{t(acceptance ? 'acceptTitle' : 'title')}</h1><p>{t('intro')}</p>
     <div className={styles.modes} role="group" aria-label={t('mode')}>{(['modern', 'classic', 'big'] as const).map(value => <button type="button" key={value} aria-pressed={mode === value} onClick={() => setMode(value)}>{t(value)}</button>)}</div>
+    {!acceptance && <ParentPortalLink />}
     {!acceptance && !shellSchool && <fieldset ref={scopeFields} disabled={isLocked}><legend>{t('scope')}</legend><label>{t('org')}<input autoComplete="off" value={org} onChange={e => change(setOrg, e.target.value)} /></label><label>{t('school')}<input autoComplete="off" value={school} onChange={e => change(setSchool, e.target.value)} /></label><button type="button" onClick={() => bind()}>{t('read')}</button><button type="button" onClick={() => bind(true)}>{t('knownVerify')}</button>{problem && <p role="alert">{t('ACCOUNT_INPUT_INVALID')}</p>}</fieldset>}
     {!acceptance && shellSchool && !shellScope && <p role="status">{t('shellUnavailable')} <button type="button" onClick={() => window.location.reload()}>{t('reloadPage')}</button></p>}
     {(acceptance || bound) && <BoundFamilyAccess key={`${sessionSubject}:${scopeKey}:${bound?.organizationId ?? ''}:${bound?.schoolId ?? ''}`} sessionSubject={sessionSubject} scope={acceptance ? null : bound} autoLoad={!acceptance} known={shellScope ? false : known} inShell={Boolean(shellSchool)} binding={binding} onLock={(value, terminal) => { setIsLocked(binding.current?.controller.snapshot().active === true || terminal && !binding.current?.controller.snapshot().retained); }} />}

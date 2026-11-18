@@ -68,3 +68,17 @@ describe('parent API client', () => {
     expect(() => createParentApi({ baseUrl: 'https://REPLACE-WITH-PRODUCTION-API', getToken: async () => 't', fetchImpl: jest.fn() })).toThrow();
   });
 });
+
+describe('build profiles', () => {
+  const eas = require('../eas.json') as { build: Record<string, { env: Record<string, string> }> };
+  it.each(['preview', 'production'])('%s points at the live HON site over https and is accepted by the client', profile => {
+    const env = eas.build[profile]!.env;
+    expect(env.EXPO_PUBLIC_HON_WEB_URL).toBe('https://app.myhonos.com');
+    expect(env.EXPO_PUBLIC_HON_API_URL).toBe('https://app.myhonos.com/api');
+    expect(() => createParentApi({ baseUrl: env.EXPO_PUBLIC_HON_API_URL!, getToken: async () => null, fetchImpl: jest.fn() })).not.toThrow();
+  });
+  it('uses the decided app id and name', () => {
+    const app = require('../app.json') as { expo: { name: string; ios: { bundleIdentifier: string }; android: { package: string } } };
+    expect([app.expo.name, app.expo.ios.bundleIdentifier, app.expo.android.package]).toEqual(['HON Family', 'com.myhonos.family', 'com.myhonos.family']);
+  });
+});

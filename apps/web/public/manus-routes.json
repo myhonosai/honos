@@ -89,6 +89,10 @@
       "title": "HON | Book a class"
     },
     {
+      "path": "/parent/bookings",
+      "title": "HON | Events & bookings"
+    },
+    {
       "path": "/parent/messages",
       "title": "HON | School message history"
     },
@@ -211,6 +215,18 @@
     {
       "path": "/book/t/:publicId",
       "title": "Book a time"
+    },
+    {
+      "path": "/agreement/:token",
+      "title": "Membership agreement"
+    },
+    {
+      "path": "/staff/team/shifts",
+      "title": "HON | Shifts"
+    },
+    {
+      "path": "/staff/team/hours",
+      "title": "HON | Hours"
     },
     {
       "path": "/staff/team/availability",

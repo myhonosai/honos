@@ -1,4 +1,4 @@
-# HON Shopify Connected (migrations 0405 SH1, 0449 SH1b)
+# HON Shopify Connected (migrations 0405 SH1, 0449 SH1b, 0470 SH1c, 0496 SH4a)
 
 Status: SH1 merged (0405); SH1b built (0449), 2026-11-16. Owner vision: David's Oct 13–18 2026 Shopify recap (shared 2026-11-16), the master
 directive (ECOMMERCE: "Shopify may remain the source of truth for those commerce records"; "Shopify integration should
@@ -22,7 +22,9 @@ store is the test store.
 | Piece | What | Needs David |
 |---|---|---|
 | **SH1 (0405, merged)** | Connect one store per school via the HON app (OAuth, expiring offline token sealed by the API), Sync now (products, variants, SKU, price, stock, unit cost; last 60 days of orders), Finance › Shopify page with catalog, margins and sales summary, disconnect. Fake Shopify only. | No |
-| **SH1b (0449, this)** | Signed webhooks: products, inventory levels, orders, `app/uninstalled`, and the three mandatory privacy topics; scheduled background sync that also keeps the refresh token alive. | No |
+| **SH1b (0449, merged)** | Signed webhooks: products, inventory levels, orders, `app/uninstalled`, and the three mandatory privacy topics; scheduled background sync that also keeps the refresh token alive. | No |
+| **SH1c (0470, merged)** | Order retention: a mirrored order and its lines are deleted 60 days after the order was placed, on every successful sync and by the background worker for every store (connected or not). | No |
+| **WS1 (this, no migration)** | Commerce Workspace layout over the read-only mirror: Overview (30-day sales, needs attention, recent orders), Products (search, status/type filters, variants, margins), Orders (filters, lines, totals), Inventory (low stock, units, stock value at cost), Store settings (connection, what HON can do). Each record links to the same record in Shopify admin. | No |
 | SH2 | POS sells Shopify variants when connected (database reprices from the mirror) and each sale is pushed to Shopify (order + inventory) through a queued job. Coordinated with the POS thread (0403). | No |
 | SH3 | Parent App and HON website buy through Shopify Checkout (Storefront cart → Shopify-hosted checkout); orders link back to the HON contact. | No |
 | SH4 | Commerce Workspace writes: create/edit products and prices, artwork upload, mockups, publish; AI descriptions/pricing/promotions by plan (fake AI until approved). | Paid AI |
@@ -187,6 +189,117 @@ links orders to HON contacts.
   `hon_communication_worker` login (013) was checked by hand on the communication fixture; a fixture that runs the
   proof as that login is a follow-up.
 - The `shopify.app.toml` and the Partner app itself are created only with David's approval, together with the real keys.
+
+## SH1c behavior (0470): order retention
+
+HON reads only the last 60 days of a store's orders, so it keeps a mirrored order only that long. This is the answer
+behind "Yes" on Shopify's data-retention question for the protected-customer-data review.
+
+- Every successful sync (a person's Sync now or a background run) deletes that store's orders placed more than 60 days
+  ago, and their lines, in the same transaction that records the sync as SUCCEEDED (trigger
+  `shopify_syncs_order_retention`). A failed or abandoned run deletes nothing.
+- The background worker calls `hon.purge_expired_shopify_orders()` before claiming any store: up to 2,000 expired
+  orders per call across all stores, including stores that are disconnected or waiting to reconnect and so never sync,
+  at most five calls per run. It never waits for a lock; an order a running sync holds is left for the next call.
+- Order rows hold no customer details (0405). Products and variants stay while the store is connected and are erased
+  by `shop/redact` after it leaves (SH1b).
+- The purge is executable only by `hon_communication_worker` (013); the trigger function by nobody. 010 revokes both,
+  011 pins both bodies and the trigger.
+
+## WS1: Commerce Workspace (owner vision 2026-11-18, `/mnt/project-files/shopify/COMMERCE_VISION_2026-11-18.md`)
+
+David's Commerce vision replaces the single Shopify page with a Commerce Workspace. WS1 is its frame, built only on the
+existing read endpoints (overview, catalog, orders); no migration and no new permission.
+
+- Sections: Overview, Products, Orders, Inventory, Store settings. The open section is kept in the address (`#products`)
+  and only known names are accepted. Later sections (Collections, Fulfillment, Theme Builder, Creative Studio,
+  Promotions, Automations, Analytics) are added when they work, never as empty screens.
+- Overview: the 30-day summary, a "Needs attention" list counted from the mirror (orders to fulfill = not cancelled and
+  not FULFILLED/RESTOCKED; low stock; variants without a cost; draft products) and the five most recent orders. A list
+  that is loading or failed says so; nothing is shown as zero.
+- Products and orders are read together once a store is linked. Search and filters run in the browser over the verified
+  answer. Shopify status words are translated when known and shown as plain words otherwise.
+- "Open in Shopify" links are built only from the verified myshopify name and numeric ids
+  (`https://admin.shopify.com/store/<name>/products/<id>`), open in a new tab with `noopener noreferrer`.
+- Product images load lazily from Shopify's CDN (the verified URL pattern) with no referrer.
+- Order of later pieces (owner-approved 2026-11-18): product editing with owner approval; Creative Studio product drafts
+  (paid image provider needs approval); Theme Builder on a safe copy of an existing theme (needs Shopify's theme-file
+  exemption, request drafted at `/mnt/project-files/shopify/THEME_EDIT_EXEMPTION_REQUEST_DRAFT.md`); Parent App shop and
+  website link; POS and print-on-demand; Commerce Agent and automations.
+
+## SH4a: product editing with approval (0496)
+
+Every product edit made in HON is saved first and sent to Shopify only when a person with `commerce.shopify.manage` at
+the school approves it. Shopify stays the source of truth: HON checks the product in Shopify right before writing, so it
+never overwrites a change made there.
+
+### Who and what
+- Propose, cancel, approve: `commerce.shopify.manage` at the school (re-checked after the last write). Read the list:
+  `commerce.shopify.read`. A revoked grant stops proposing and approving at once.
+- An **edit** (`UPDATE`) may change title, type, vendor, status (ACTIVE, DRAFT, ARCHIVED; never UNLISTED) and, per
+  variant, price, compare-at price and cost per item. Only the fields that changed are sent. One open edit per product.
+- A **new product** (`CREATE_DRAFT`) has a title, optional description, type, vendor, SKU, a price and optional
+  compare-at price and cost. It is always created in Shopify as a DRAFT under a handle HON chooses
+  (`<slug>-<10 hex of the change id>`), so a repeat finds the earlier product instead of creating a second one.
+  At most 20 new products wait at once; at most 200 proposals per school per day.
+- Every proposal stores a **base**: the mirror's values for the touched fields when it was made.
+
+### Approval (`POST /v1/school/shopify/changes/approve`)
+1. The database leases the change for 3 minutes to the approver (`APPLYING`), with a fresh lease token, and hands the
+   API the sealed credential. It refuses when the store has not granted `write_products` (or `write_inventory` for a
+   cost), when the mirror no longer matches the base (`SHOPIFY_CHANGE_STALE`), or after 5 attempts.
+2. The API reads the product live from Shopify. If it differs from the base the change is `FAILED`
+   (`CHANGED_IN_SHOPIFY`) without writing, and the mirror is refreshed from what Shopify said.
+3. It writes (`productUpdate`, `productVariantsBulkUpdate`, or `productCreate` as DRAFT), reads the product back and
+   records `APPLIED` only when the product shows every proposed value. The mirror row is updated in the same step.
+4. Any write answer that is lost, or an access error on a write, is `UNKNOWN`: it is never assumed to have saved
+   nothing. Approving an `UNKNOWN` change again only reads Shopify (CHECK mode) and records APPLIED or
+   `FAILED NOT_APPLIED`. A lease that runs out reads as UNKNOWN (`LEASE_EXPIRED`); a late result after that is refused.
+5. A second write refused after the first was saved is `FAILED PARTLY_APPLIED` with the product.
+6. A manager can close an `UNKNOWN` change (never while a lease is live) after checking Shopify themselves: it becomes
+   `FAILED CLOSED_UNRESOLVED` with evidence, freeing the product (and the draft cap) for a new edit. This is the way out
+   after 5 attempts.
+
+Statuses: PENDING → APPLYING | CANCELLED; APPLYING → APPLIED | FAILED | UNKNOWN; UNKNOWN → APPLYING | APPLIED | FAILED (incl. closed unresolved).
+The table's guard keeps identity, kind, handle, changes, base, source and proposer fixed, bumps the version on every
+update and refuses delete and truncate. Audit and outbox evidence name the fields, never the values.
+
+### Allow editing
+Plain connect still asks only for read scopes. **Allow editing** reconnects the same store asking Shopify for
+`write_products` and `write_inventory` as well. The Shopify app version must list those scopes first (one-time step in
+the Dev Dashboard, owner action).
+
+### Screens
+- Products: managers get **Edit** on each product and **New product**; a product with an open edit points to Changes.
+- Changes: each edit shows Now and After approval, its status (Waiting for approval, Sending to Shopify, Saved in
+  Shopify, Not saved, Not sure it was saved, Cancelled), plain reasons, and Approve / Cancel / Check Shopify again.
+  When the store has not allowed editing, an Allow editing banner is shown. Overview counts edits waiting.
+- Store settings lists the editing permissions the store granted.
+
+### Known limits in SH4a
+- No inventory quantity changes, images, collections, variants added or removed, or publishing a draft (each a later
+  piece). AI-proposed edits (Commerce Agent) are a later piece and will use the same approval path.
+- The orders list still shows at most the 200 newest kept orders, without a "more" marker.
+
+## CS-M1: Merch Studio, starter ideas to Shopify drafts (step 3, part 1; no migration)
+
+Commerce step 3 ("Creative Studio product drafts", vision section 7) in three parts:
+
+1. **CS-M1 (this piece, frontend only).** A Merch Studio section in the Commerce Workspace. The person picks a product
+   (8 kinds) and up to three looks (5 styles), optionally types colors, and HON writes one starter idea per look from
+   templates in en/ko/es: title, description, product type, vendor (the school name), SKU stem and, in a USD store only,
+   a suggested price (no conversion in other currencies: the price stays empty and must be typed). Ideas are always
+   labelled as templates, never as AI. "Use this idea" opens the SH4a draft form prefilled; saving goes through the
+   unchanged SH4a propose path, so nothing reaches Shopify until a manager approves it, and the product is created as a
+   DRAFT. The school's saved logo and brand color (0285 branding read, refused or missing = not shown) are displayed.
+   Each idea carries a print checklist (artwork attached, transparent PNG, 300 DPI, print area, provider colors,
+   variants in Shopify), every item shown as "Not checked": HON never labels a design ready to print until the print
+   provider (step 6) checks it. Sizes and colors are listed but the draft has one price; the person adds variants in
+   Shopify for now (SH4a creates single-variant drafts).
+2. **CS-M2.** AI-written ideas through HON's governed text path (S4 spend decision, school cost ceiling, plan, ledger,
+   human approval), with these templates as the fallback when AI is off or over budget.
+3. **CS-M3.** Artwork and mockups from Creative Studio image generations attached as product media, once creative media
+   storage (C3, PR #365) is merged; until then no generated image can become Shopify media.
 
 ## Plan (TDD)
 

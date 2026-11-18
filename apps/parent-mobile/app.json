@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "HON Parent",
-    "slug": "hon-parent",
+    "name": "HON Family",
+    "slug": "hon-family",
     "scheme": "honparent",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -14,13 +14,13 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.myhonos.parent",
+      "bundleIdentifier": "com.myhonos.family",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "com.myhonos.parent",
+      "package": "com.myhonos.family",
       "adaptiveIcon": {
         "backgroundColor": "#050A18",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -33,6 +33,11 @@
     "plugins": [
       "expo-secure-store",
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f9df2343-aea1-45d3-b455-ae9577566cac"
+      }
+    }
   }
 }

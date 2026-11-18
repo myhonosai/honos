@@ -8,6 +8,9 @@ import { loadParentJourney, ParentJourneyAccessError } from './parent-journey-ht
 import { loadParentTestingStatus, ParentTestingStatusAccessError } from './parent-testing-status-http';
 import { loadParentPlannedAbsenceHistory, ParentPlannedAbsenceHistoryAccessError } from './parent-planned-absence-history-http';
 import { loadParentLibrary, LibraryUiError } from './curriculum-library-http';
+import type { ParentFamilyChoices, SelectParentFamilyInput } from '@hon/contracts';
+import { chooseParentFamily, loadParentFamilyChoices, ParentFamilyPickerAccessError } from './parent-family-picker-http';
+import { ParentFamilyPicker } from './parent-family-picker';
 import s from './parent-home.module.css';
 
 export type ParentHomeReadState =
@@ -17,6 +20,9 @@ export type ParentHomeReadState =
   | { kind: 'access-lost'; message: string };
 
 const loading: ParentHomeReadState = { kind: 'loading' };
+/** 0471: the families this parent is linked to. Hidden until verified; hidden again whenever content is concealed. */
+type FamilyState = { kind: 'hidden' } | ({ kind: 'ready' } & ParentFamilyChoices);
+const CHOOSE_FIRST: ParentHomeReadState = { kind: 'unavailable', message: 'Choose a school and family above to open this.' };
 
 function UnavailableCard({ title, children }: { title: string; children: React.ReactNode }) {
   return <section className={`${s.card} ${s.unavailable}`} aria-labelledby={`${title.toLowerCase().replaceAll(' ', '-')}-heading`}>
@@ -47,6 +53,7 @@ export function ParentHomeCards({ journey, testing, billing, plannedAbsences, cu
     {journey.kind === 'ready' && <>
       <HomeCard title="Schedule" eyebrow="AUTHORIZED BOOKINGS" description="View the current family schedule in Student Journey." href="/parent/journey#schedule" note="The Journey read chooses the authorized family and its bounded window. No booking, cancellation, check-in, or attendance action starts here." />
       <HomeCard title="Book a class" eyebrow="OPEN CLASSES" description="Book your child into open classes for the next two weeks, or cancel a booking you made." href="/parent/classes" note="Only classes your child is enrolled in that take bookings are shown. Guardians can book; viewers can look." />
+      <HomeCard title="Events & bookings" eyebrow="SCHOOL EVENTS" description="Book a time at a school event or a family booking such as a belt test, or cancel one you made." href="/parent/bookings" note="Bookings use your family name and sign-in email. Guardians can book; viewers can look." />
       <HomeCard title="Student Journey" eyebrow="CURRENT PROGRESS" description="Review current curriculum, shared recognition, and authorized bookings." href="/parent/journey" note="Only current family-safe observations are shown there. Progress, readiness, promotion, and testing outcomes are never inferred." />
       <HomeCard title="Face check-in consent" eyebrow="OPTIONAL" description="Read your school's face check-in consent form, sign it for your child, or withdraw." href="/parent/face-check-in" note="Nothing happens unless you sign. Your child can always check in with a card or by name instead." />
       <HomeCard title="Documents" eyebrow="CURRENT PUBLICATIONS" description="Open the existing family document review and acknowledgement desk." href="/parent/documents" note="Document access is checked again by its own family-safe route. This Home never assumes an acknowledgement or creates one." />
@@ -66,6 +73,9 @@ export function ParentHome(): React.ReactElement {
   const [billing, setBilling] = useState<ParentHomeReadState>(loading);
   const [plannedAbsences, setPlannedAbsences] = useState<ParentHomeReadState>(loading);
   const [curriculumLibrary, setCurriculumLibrary] = useState<ParentHomeReadState>(loading);
+  const [family, setFamily] = useState<FamilyState>({ kind: 'hidden' });
+  const [choosing, setChoosing] = useState(false);
+  const [chooseError, setChooseError] = useState<string | null>(null);
   const generation = useRef(0);
   const pending = useRef<AbortController | null>(null);
 
@@ -78,6 +88,7 @@ export function ParentHome(): React.ReactElement {
     setBilling({ kind: 'access-lost', message });
     setPlannedAbsences({ kind: 'access-lost', message });
     setCurriculumLibrary({ kind: 'access-lost', message });
+    setFamily({ kind: 'hidden' });
   }, []);
 
   const hide = useCallback(() => {
@@ -90,6 +101,20 @@ export function ParentHome(): React.ReactElement {
     const controller = new AbortController();
     pending.current = controller;
     setJourney(loading); setTesting(loading); setBilling(loading); setPlannedAbsences(loading); setCurriculumLibrary(loading);
+
+    // 0471: list the parent's families first. With several and none chosen, nothing else opens until the parent chooses.
+    let families: ParentFamilyChoices | null = null;
+    try { families = await loadParentFamilyChoices(controller.signal); } catch (error) {
+      if (generation.current !== token || error instanceof DOMException && error.name === 'AbortError') return;
+      if (error instanceof ParentFamilyPickerAccessError && error.status === 401) { conceal(error.message); return; }
+      // Otherwise carry on without the list: every area below still checks its own family scope.
+    }
+    if (generation.current !== token) return;
+    setFamily(families ? { kind: 'ready', ...families } : { kind: 'hidden' });
+    if (families?.needsChoice) {
+      setJourney(CHOOSE_FIRST); setTesting(CHOOSE_FIRST); setBilling(CHOOSE_FIRST); setPlannedAbsences(CHOOSE_FIRST); setCurriculumLibrary(CHOOSE_FIRST);
+      return;
+    }
 
     void loadParentJourney(controller.signal).then(() => {
       if (generation.current === token) setJourney({ kind: 'ready' });
@@ -140,6 +165,14 @@ export function ParentHome(): React.ReactElement {
     });
   }, [conceal]);
 
+  const choose = useCallback(async (input: SelectParentFamilyInput) => {
+    setChoosing(true); setChooseError(null);
+    try { await chooseParentFamily(input); await verify(); } catch (error) {
+      if (error instanceof ParentFamilyPickerAccessError && error.status === 401) conceal(error.message);
+      else setChooseError(error instanceof Error ? error.message : 'The family could not be changed. Refresh and try again.');
+    } finally { setChoosing(false); }
+  }, [conceal, verify]);
+
   useEffect(() => {
     void verify();
     const visibility = () => { if (document.visibilityState === 'hidden') hide(); else void verify(); };
@@ -160,16 +193,18 @@ export function ParentHome(): React.ReactElement {
 
   const checking = [journey, testing, billing, plannedAbsences, curriculumLibrary].some(state => state.kind === 'loading');
   const familyAccessLost = journey.kind === 'access-lost';
+  const mustChoose = family.kind === 'ready' && family.needsChoice;
 
   return <main className={`theme-${theme} ${s.page}`}><div className={s.shell}>
-    <nav className={s.nav} aria-label="Parent Home navigation"><Link href="/parent" aria-current="page" className={s.wordmark}>HON <span>Parent Home</span></Link><Link href="/auth/login" prefetch={false}>Sign in</Link></nav>
+    <nav className={s.nav} aria-label="Parent Home navigation"><Link href="/parent" aria-current="page" className={s.wordmark}>HON <span>Parent Home</span></Link><Link href="/auth/login?for=parent" prefetch={false}>Sign in</Link></nav>
     <header className={s.header}><p className={s.eyebrow}>YOUR FAMILY · VERIFIED READS ONLY</p><h1>One clear place to start.</h1><p>Open the family information that is currently available to you. This Home has no AI, messages, payments, booking controls, or actions.</p></header>
     <section className={s.controls} aria-label="Presentation and access"><div className={s.themes}><span>Presentation</span>{HON_INTERFACE_THEMES.map(item => <button key={item.id} type="button" aria-pressed={theme === item.id} onClick={() => setTheme(item.id)}>{item.label}</button>)}</div><button type="button" disabled={checking} onClick={() => void verify()}>{checking ? 'Checking verified access…' : 'Refresh verified access'}</button></section>
+    {family.kind === 'ready' && <ParentFamilyPicker choices={family.choices} needsChoice={family.needsChoice} busy={choosing} error={chooseError} onChoose={input => void choose(input)} />}
     <div aria-live="polite" aria-atomic="true">
       {checking && <p className={s.state} role="status">Loading Parent Home. Each available area is being checked through its existing family-safe read route; no previous family content is retained.</p>}
-      {familyAccessLost && <section className={s.error} role="alert"><strong>Family access unavailable</strong><p>{journey.message}</p><Link href="/auth/login" prefetch={false}>Sign in again</Link></section>}
+      {familyAccessLost && <section className={s.error} role="alert"><strong>Family access unavailable</strong><p>{journey.message}</p><Link href="/auth/login?for=parent" prefetch={false}>Sign in again</Link></section>}
     </div>
-    {!familyAccessLost && <ParentHomeCards journey={journey} testing={testing} billing={billing} plannedAbsences={plannedAbsences} curriculumLibrary={curriculumLibrary} />}
+    {!familyAccessLost && !mustChoose && <ParentHomeCards journey={journey} testing={testing} billing={billing} plannedAbsences={plannedAbsences} curriculumLibrary={curriculumLibrary} />}
     <footer className={s.footer}>Messages are intentionally not linked from Home until independently provable receipt evidence exists; queue intent is never presented as received content. Every destination independently verifies its own family scope. Presentation choices are visual only and do not change access, data, or actions.</footer>
   </div></main>;
 }

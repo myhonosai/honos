@@ -44,6 +44,6 @@ describe('metadata curriculum library',()=>{
   expect(parent).not.toMatch(/<input|familyId|schoolId|studentId/);expect(parent).toContain('generation.current');expect(parent).toContain('setView(null)');
   expect(client).not.toMatch(/fetch\(.*\.url|https:\/\/|preview|embed/);
   const routes=JSON.parse(readFileSync('public/manus-routes.json','utf8')).routes;
-  for(const path of ['/staff/curriculum/library','/parent/curriculum-library']){expect(routes.filter((r:{path:string})=>r.path===path)).toHaveLength(1);const page=readFileSync(`src/app${path}/page.tsx`,'utf8');for(const token of ['verifySession',"redirect('/auth/login')",'force-dynamic','index:false','follow:false'])expect(page).toContain(token);}
+  for(const path of ['/staff/curriculum/library','/parent/curriculum-library']){expect(routes.filter((r:{path:string})=>r.path===path)).toHaveLength(1);const page=readFileSync(`src/app${path}/page.tsx`,'utf8');for(const token of ['verifySession',"redirect('/auth/login",'force-dynamic','index:false','follow:false'])expect(page).toContain(token);}
  });
 });

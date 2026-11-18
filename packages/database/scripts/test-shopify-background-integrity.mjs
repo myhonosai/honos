@@ -76,7 +76,10 @@ try{
  }
  const workerFns=['record_shopify_webhook','claim_shopify_background_sync','rotate_shopify_background_credential','record_shopify_background_page','finish_shopify_background_sync'];
  const runtimeEntry=['read_shopify','read_shopify_catalog','read_shopify_orders','start_shopify_connect','claim_shopify_connect','record_shopify_connection',
-  'begin_shopify_sync','rotate_shopify_credential','record_shopify_sync_page','finish_shopify_sync','disconnect_shopify'];
+  'begin_shopify_sync','rotate_shopify_credential','record_shopify_sync_page','finish_shopify_sync','disconnect_shopify',
+  // 0496 product changes (SH4a).
+  'read_shopify_product_changes','propose_shopify_product_change','cancel_shopify_product_change','approve_shopify_product_change',
+  'rotate_shopify_change_credential','record_shopify_product_change_result'];
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname LIKE '%shopify%'");
  for(const f of workerFns)assert(fns.some(x=>x.proname===f),f);
  for(const f of fns){
@@ -150,7 +153,7 @@ try{
  assert.equal(await store.claim(),null,'never more than one sync per store every two minutes');
  await age(CA,3);
  before=await counts();
- assert.deepEqual(await worker.runOnce(),{claimed:1,succeeded:1,failed:0,needsReconnect:0,errors:0});
+ assert.deepEqual(await worker.runOnce(),{claimed:1,succeeded:1,failed:0,needsReconnect:0,errors:0,purgedOrders:0});
  const bg=await one("SELECT * FROM hon.shopify_syncs WHERE connection_id=$1 ORDER BY started_at DESC LIMIT 1",[CA]);
  assert.deepEqual([bg.source,bg.started_by_principal_id,bg.outcome,bg.products_seen,bg.orders_seen],['WEBHOOK',SYSTEM,'SUCCEEDED',3,3]);
  assert.match(bg.lease_token,/^[0-9a-f-]{36}$/);
@@ -262,11 +265,42 @@ try{
  // 6. Shopify refusing the token in a background run: Needs reconnect, sealed pair destroyed.
  shopify.fake.rejectTokens(SHOP);
  await lastSyncAgo(CA,7);await age(CA,3);await lastSyncAgo(CB,1);
- assert.deepEqual(await worker.runOnce(),{claimed:1,succeeded:0,failed:0,needsReconnect:1,errors:0});
+ assert.deepEqual(await worker.runOnce(),{claimed:1,succeeded:0,failed:0,needsReconnect:1,errors:0,purgedOrders:0});
  assert.deepEqual(await one('SELECT c.status,k.sealed FROM hon.shopify_connections c JOIN hon.shopify_credentials k ON k.connection_id=c.id WHERE c.id=$1',[CA]),{status:'NEEDS_RECONNECT',sealed:null});
  assert.equal((await deliver('products/update',SHOP)).body.outcome,'IGNORED','a store waiting to reconnect is not marked for sync');
  assert.equal(await store.claim(),null);
  pass('a background run Shopify refuses moves the store to Needs reconnect and destroys the sealed pair; such a store is neither marked nor claimed');
+ // 7. Retention (0470): a mirrored order placed more than 60 days ago is deleted with its lines.
+ const oldOrder=async(c,o,id,days)=>{
+  const last=(await one('SELECT id FROM hon.shopify_syncs WHERE connection_id=$1 ORDER BY started_at DESC LIMIT 1',[c])).id;
+  await q("INSERT INTO hon.shopify_orders(connection_id,shopify_id,organization_id,school_id,name,placed_at,currency,subtotal,discounts,tax,total,last_sync_id) VALUES($1,$2::bigint,$3,$4,'#R'||$2::text,clock_timestamp()-make_interval(days=>$5),'USD',10,0,0,10,$6)",[c,id,o.organizationId,o.schoolId,days,last]);
+  await q("INSERT INTO hon.shopify_order_lines(connection_id,order_shopify_id,line_no,title,quantity,unit_price) VALUES($1,$2,1,'Old line',1,10)",[c,id]);
+ };
+ const has=async(c,id)=>(await one('SELECT count(*)::int n FROM hon.shopify_orders WHERE connection_id=$1 AND shopify_id=$2',[c,id])).n;
+ // A successful sync (here a person's Sync now on store B) deletes that store's expired orders and keeps recent ones.
+ await oldOrder(CB,B,9000000001,61);await oldOrder(CB,B,9000000002,59);
+ const keepB=(await mirror(CB)).orders;
+ await age(CB,3);
+ assert.equal(ok(await sync(managerB,{schoolId:B.schoolId})).outcome,'SUCCEEDED');
+ assert.deepEqual([await has(CB,9000000001),await has(CB,9000000002),(await mirror(CB)).orders],[0,1,keepB-1]);
+ assert.equal((await one('SELECT count(*)::int n FROM hon.shopify_order_lines WHERE connection_id=$1 AND order_shopify_id=9000000001',[CB])).n,0);
+ // A failed run deletes nothing.
+ await oldOrder(CB,B,9000000003,90);await age(CB,3);await lastSyncAgo(CB,7);
+ const run=await store.claim();assert.equal(run.connectionId,CB);
+ await store.finish({syncId:run.syncId,leaseToken:run.leaseToken,outcome:'FAILED',failureCode:'SHOPIFY_UNAVAILABLE'});
+ assert.equal(await has(CB,9000000003),1,'a failed run keeps everything');
+ // The worker sweep reaches stores that no longer sync (A waits to reconnect) and runs before any claim.
+ await oldOrder(CA,A,9000000004,70);await lastSyncAgo(CB,1);await age(CB,3);
+ const swept=await worker.runOnce();
+ assert.deepEqual([swept.claimed,swept.purgedOrders>=2],[0,true]);
+ assert.deepEqual([await has(CA,9000000004),await has(CB,9000000003),await has(CB,9000000002)],[0,0,1]);
+ assert.deepEqual(await store.purgeExpiredOrders(),{orders:0,lines:0,more:false});
+ assert.equal((await one("SELECT count(*)::int n FROM hon.shopify_orders WHERE placed_at<clock_timestamp()-interval '60 days'")).n,0);
+ for(const f of ['hon.purge_expired_shopify_orders()','hon.shopify_purge_expired_orders_on_success()']){
+  assert.equal((await one("SELECT has_function_privilege($1,$2::regprocedure,'EXECUTE') ok",[runtime.username,f])).ok,false,f);
+  assert.equal((await one("SELECT has_function_privilege('public',$1::regprocedure,'EXECUTE') ok",[f])).ok,false,f);
+ }
+ pass('retention: a successful sync deletes that store\'s orders placed more than 60 days ago and their lines, keeps recent ones, and a failed run deletes nothing; the worker sweep also clears stores that no longer sync; the runtime cannot call either');
  console.log('PASS SHOPIFY-BG all '+groups+' groups');
 }finally{
  await app?.close();await Promise.allSettled([admin.end(),workerConn.end(),database.onModuleDestroy()]);

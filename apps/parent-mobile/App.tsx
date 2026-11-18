@@ -9,10 +9,13 @@ import { createSessionStore } from './src/session/session-store';
 import { base64url, pkceChallenge } from './src/session/pkce';
 import { signIn } from './src/session/sign-in';
 import { ParentApp } from './src/ParentApp';
+import { createSampleApi } from './src/sample/sample-api';
 
 const session = createSessionStore();
 const API = process.env.EXPO_PUBLIC_HON_API_URL ?? '';
 const WEB = process.env.EXPO_PUBLIC_HON_WEB_URL ?? '';
+// Test builds only (eas.json preview/development). Store builds never offer the made-up sample family.
+const SAMPLE = process.env.EXPO_PUBLIC_HON_SAMPLE_MODE === '1';
 
 function webOrigin(raw: string): string | null {
   try {
@@ -31,7 +34,7 @@ export default function App() {
   const web = webOrigin(WEB);
   if (!api) {
     // A build without a valid https API address must not start at all rather than talk to the wrong server.
-    return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}><Text>This build of HON Parent is not configured. Please update the app.</Text></View>;
+    return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}><Text>This build of HON Family is not configured. Please update the app.</Text></View>;
   }
   const onSignIn = web ? () => signIn({
     webOrigin: web,
@@ -46,7 +49,7 @@ export default function App() {
   return (
     <>
       <StatusBar style="auto" />
-      <ParentApp api={api} session={session} version={appConfig.expo.version} onSignIn={onSignIn} newKey={() => Crypto.randomUUID()} />
+      <ParentApp api={api} session={session} version={appConfig.expo.version} onSignIn={onSignIn} sampleApi={SAMPLE ? () => createSampleApi() : undefined} newKey={() => Crypto.randomUUID()} />
     </>
   );
 }

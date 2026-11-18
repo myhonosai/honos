@@ -337,7 +337,8 @@ export type LanguageOperation = keyof typeof LANGUAGE_CALLS;
 
 export type SchoolOwnershipOperation = 'hqRead'|'setPrimary'|'ownerRead';
 
-export type ShopifyOperation = 'read'|'catalog'|'orders'|'start'|'claim'|'record'|'beginSync'|'rotate'|'page'|'finishSync'|'disconnect';
+export type ShopifyOperation = 'read'|'catalog'|'orders'|'start'|'claim'|'record'|'beginSync'|'rotate'|'page'|'finishSync'|'disconnect'
+  |'changes'|'propose'|'cancelChange'|'approveChange'|'rotateChange'|'recordChange';
 
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
@@ -617,6 +618,24 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     await this.assertRuntimePosture();
     return (await this.getPool().query<{ data: unknown }>('SELECT hon.read_published_school_website($1) data', [slug])).rows[0]!.data;
   }
+  /** 0499: what one membership agreement signing link shows, or null. One fixed call, no tenant settings. */
+  async readMembershipAgreementLink(token: string): Promise<unknown> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<{ data: unknown }>('SELECT hon.read_membership_agreement_link($1) data', [token])).rows[0]!.data;
+  }
+  /** 0499: sign through one link (SIGNED, ALREADY_SIGNED, CHANGED, INVALID or GONE). One short transaction, no tenant settings. */
+  async signMembershipAgreementLink(token: string, input: object, requestId: string): Promise<string> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ result: string }>('SELECT hon.sign_membership_agreement_link($1,$2::jsonb,$3::uuid) result', [token, JSON.stringify(input), requestId]);
+      await client.query('COMMIT');
+      return result.rows[0]!.result;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
   async submitPublishedLeadForm(publicId: string, input: object, key: string): Promise<string> {
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
@@ -656,7 +675,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
   }
 
   /**
-   * B-TUI-2 0462 shared one-time payment: the API's four fixed calls (read, start, record, list due), one short
+   * B-TUI-2 0529 shared one-time payment: the API's four fixed calls (read, start, record, list due), one short
    * transaction each, no tenant settings. The payment id is the only scope; opening a payment is never a runtime call.
    */
   async runSchoolPayOnceCall(statement: string, values: unknown[]): Promise<unknown> {
@@ -1071,6 +1090,37 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     finally { client.release(); }
   }
 
+  /** 0471: the families this parent is linked to now. Subject only; no tenant setting, read-only. */
+  async readParentFamilyChoices(externalSubject: string): Promise<unknown> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>('SELECT hon.read_parent_family_choices($1) AS data', [externalSubject]);
+      if (result.rows.length !== 1) throw new Error('HON parent family choices unavailable.');
+      await client.query('COMMIT');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
+  /** 0471: choose one of the parent's live families. The database re-proves the choice after its lock and write. */
+  async selectParentFamily(externalSubject: string, input: { schoolId: string; familyId: string }, requestId: string): Promise<unknown> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0");
+      await client.query("SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_external_subject',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)", [externalSubject]);
+      const result = await client.query<{ data: unknown }>('SELECT hon.select_parent_family($1,$2::jsonb,$3::uuid) AS data', [externalSubject, JSON.stringify(input), requestId]);
+      if (result.rows.length !== 1) throw new Error('HON parent family choice unavailable.');
+      await client.query('COMMIT');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
   async resolveParentJourneyScopes(externalSubject: string): Promise<ResolvedParentFamilyScope[]> {
     await this.assertRuntimePosture();
     const result = await this.getPool().query<ResolvedParentFamilyScope>(
@@ -1475,7 +1525,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return this.callFixedSubjectFunction(call,params,'PERSON_PHOTO_UNAVAILABLE');
   }
 
-  /** 0405 Shopify: eleven fixed definer functions; the subject comes only from the signed HON session. */
+  /** 0405 Shopify: eleven fixed definer functions, and six more for 0496 product changes; the subject comes only from the signed HON session. */
   async callShopify(operation: ShopifyOperation, params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
       read: {sql: 'SELECT hon.read_shopify($1,$2::uuid) data',arity:2,readOnly:true},
@@ -1489,6 +1539,13 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       page: {sql: 'SELECT hon.record_shopify_sync_page($1,$2::jsonb) data',arity:2,readOnly:false},
       finishSync: {sql: 'SELECT hon.finish_shopify_sync($1,$2::jsonb) data',arity:2,readOnly:false},
       disconnect: {sql: 'SELECT hon.disconnect_shopify($1,$2::jsonb) data',arity:2,readOnly:false},
+      // 0496 product changes with owner approval (SH4a).
+      changes: {sql: 'SELECT hon.read_shopify_product_changes($1,$2::uuid) data',arity:2,readOnly:true},
+      propose: {sql: 'SELECT hon.propose_shopify_product_change($1,$2::jsonb) data',arity:2,readOnly:false},
+      cancelChange: {sql: 'SELECT hon.cancel_shopify_product_change($1,$2::jsonb) data',arity:2,readOnly:false},
+      approveChange: {sql: 'SELECT hon.approve_shopify_product_change($1,$2::jsonb) data',arity:2,readOnly:false},
+      rotateChange: {sql: 'SELECT hon.rotate_shopify_change_credential($1,$2::jsonb) data',arity:2,readOnly:false},
+      recordChange: {sql: 'SELECT hon.record_shopify_product_change_result($1,$2::jsonb) data',arity:2,readOnly:false},
     } as const;
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('SHOPIFY_UNAVAILABLE');
