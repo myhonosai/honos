@@ -157,5 +157,9 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
       { title: 'Form 1 walkthrough', description: 'Practice the first form at home, step by step.', kind: 'VIDEO', url: 'https://www.myhonos.com/', curriculumName: 'Kids Program', rankName: 'Yellow Belt', childDisplayName: 'Mia Sample' },
       { title: 'Sparring safety basics', description: 'What to bring and how to stay safe.', kind: 'LINK', url: 'https://www.myhonos.com/', curriculumName: 'Junior Program', rankName: null, childDisplayName: 'Leo Sample' },
     ] })),
+    // The sample family never reaches HON's AI: Eian stays in guided mode and a question is refused locally.
+    eianStatus: () => ok({ mode: 'GUIDED' as const, reason: 'NOT_INCLUDED' as const }),
+    askEian: async () => ({ ok: false as const, state: 'refused' as const, code: 'EIAN_AI_UNAVAILABLE' }),
+    eianTurn: async () => ({ ok: false as const, state: 'unavailable' as const }),
   } as ParentApi;
 }

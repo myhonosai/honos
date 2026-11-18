@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFamily } from '../family/family-data';
@@ -6,6 +6,7 @@ import { FamilyGate } from '../screens/FamilyStates';
 import { Button } from '../ui/parts';
 import { radius, space, TOUCH, type, useColors } from '../ui/theme';
 import { answer, classify, NEEDS, SUGGESTIONS, type EianAnswer, type EianFacts, type EianTab } from './eian-engine';
+import { askEianAi } from './eian-ai';
 import { EIAN_STYLES, eianImage, STYLE_LABEL, type EianMood, type EianStyle } from './avatar';
 
 type Turn = { id: number; question: string; reply: EianAnswer };
@@ -22,12 +23,14 @@ function greeting(now: Date, timeZone: string | null): string {
 }
 
 /**
- * Eian (guided mode), laid out like the owner's reference: Eian's portrait and speech bubble, four quick tiles, then
+ * Eian, laid out like the owner's reference: Eian's portrait and speech bubble, four quick tiles, then
  * "ask a question". Every answer is built from records the parent's own session reads at that moment; Eian never
- * books, sends or pays, and offers the normal screen instead, where the parent confirms.
+ * books, sends or pays, and offers the normal screen instead, where the parent confirms. When HON says AI is on for this school, a question
+ * the guided engine does not recognize goes to Eian AI (answered from the family's own records on the server); guided
+ * answers stay on the device. `focusTick` changes each time the tab gains focus, so the AI status is read again.
  */
-export function EianScreen({ onNavigate, initialStyle = 'chibi' }: { onNavigate: (tab: EianTab) => void; initialStyle?: EianStyle }) {
-  const { api, now, state } = useFamily();
+export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0 }: { onNavigate: (tab: EianTab) => void; initialStyle?: EianStyle; focusTick?: number }) {
+  const { api, now, state, newKey } = useFamily();
   const c = useColors();
   const insets = useSafeAreaInsets();
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -36,6 +39,17 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi' }: { onNavigate:
   const [busy, setBusy] = useState(false);
   const [style, setStyle] = useState<EianStyle>(initialStyle);
   const counter = useRef(0);
+  const [ai, setAi] = useState(false);
+  /** The key of a question whose outcome is not known yet: the same question re-asks with it, never a fresh key. */
+  const pending = useRef<{ question: string; key: string } | null>(null);
+  const ready = state.status === 'ready';
+
+  useEffect(() => {
+    if (!ready) { setAi(false); return; }
+    let live = true;
+    void api.eianStatus().then(r => { if (live) setAi(r.ok && r.data.mode === 'AI'); });
+    return () => { live = false; };
+  }, [api, ready, focusTick]);
 
   const opener = useMemo(() => {
     if (state.status !== 'ready') return null;
@@ -48,7 +62,21 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi' }: { onNavigate:
     if (!q || busy || state.status !== 'ready') return;
     setDraft('');
     setBusy(true);
-    const needs = NEEDS[classify(q)];
+    const intent = classify(q);
+    if (intent === 'help' && ai) {
+      setMood('thinking');
+      const key = pending.current?.question === q ? pending.current.key : newKey();
+      const outcome = await askEianAi(api, q, key);
+      pending.current = outcome.kind === 'answer' && outcome.reuseKey ? { question: q, key } : null;
+      if (outcome.kind === 'answer') {
+        setTurns(t => [...t.slice(-9), { id: ++counter.current, question: q, reply: outcome.answer }]);
+        setMood('speaking');
+        setBusy(false);
+        return;
+      }
+      if (outcome.aiOff) setAi(false);
+    }
+    const needs = NEEDS[intent];
     setMood(needs.length ? 'working' : 'thinking');
     const facts: EianFacts = { journey: state.view, timeZone: state.timeZone, now: now() };
     if (needs.includes('billing')) { const r = await api.billing(); facts.billing = r.ok ? r.data : null; }
@@ -81,7 +109,7 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi' }: { onNavigate:
         {/* Speech-bubble tail pointing at Eian, so the bubble reads as Eian talking. */}
         <View style={{ width: 0, height: 0, marginLeft: space.sm, borderTopWidth: 9, borderBottomWidth: 9, borderRightWidth: 11, borderTopColor: 'transparent', borderBottomColor: 'transparent', borderRightColor: c.border }} />
         <View accessibilityLiveRegion="polite" style={{ flex: 1, minHeight: 104, justifyContent: 'center', backgroundColor: c.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: c.border, padding: space.md }}>
-          {busy ? <Text style={{ color: c.muted, fontSize: type.body }}>{mood === 'working' ? 'Checking your school records…' : 'Thinking…'}</Text> : (
+          {busy ? <Text style={{ color: c.muted, fontSize: type.body }}>{mood === 'working' ? 'Checking your school records…' : ai ? 'Thinking… this can take a few seconds.' : 'Thinking…'}</Text> : (
             <View accessible accessibilityLabel={`Eian says: ${speech.lines.join(' ')}`}>
               {speech.lines.map((line, i) => <Text key={i} style={{ color: c.text, fontSize: type.body, lineHeight: 22, fontWeight: i === 0 && !latest ? '700' : '400', marginTop: i ? space.xs : 0 }}>{line}</Text>)}
               {speech.source ? <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.sm }}>From: {speech.source}</Text> : null}
@@ -141,7 +169,9 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi' }: { onNavigate:
           </Pressable>
         ))}
       </View>
-      <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.lg }}>Eian understands common family questions and answers only from your school's records. It does not use an outside AI service and never pays, books or sends anything by itself.</Text>
+      <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.lg }}>{ai
+        ? "Eian answers common family questions on your phone. Other questions are answered by AI from your school's records, and those answers are marked AI. Eian never pays, books or sends anything by itself."
+        : "Eian understands common family questions and answers only from your school's records. It never pays, books or sends anything by itself."}</Text>
     </ScrollView>
   );
 }

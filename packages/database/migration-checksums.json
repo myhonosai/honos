@@ -332,6 +332,7 @@
     "0467_staff_shift_schedule.sql": "21b4813e18092224182c3064d15e6fdd0506f9f4165b6e988091ebb60b9841fb",
     "0470_shopify_order_retention.sql": "3dfa0e7769ba525afa7ba62007ff569554824edde0eaf282563498e2381e9319",
     "0471_parent_family_picker.sql": "27cc328b099da7a596fd17c2f90f5ff7fc20dabdaf11d14f23a3b5896b207caa",
-    "0473_parent_school_reads_follow_family_choice.sql": "008973eedb67260a41b8598b9c0b37e7dc1013d49d51a967fbaaee8b40541125"
+    "0473_parent_school_reads_follow_family_choice.sql": "008973eedb67260a41b8598b9c0b37e7dc1013d49d51a967fbaaee8b40541125",
+    "0474_eian_family_ai.sql": "fb0cd95a3a90bdf52fbccfff0a1f025baecec71047a6361f31fc44619c24498f"
   }
 }
