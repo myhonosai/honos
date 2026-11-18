@@ -217,6 +217,10 @@
       "title": "Book a time"
     },
     {
+      "path": "/agreement/:token",
+      "title": "Membership agreement"
+    },
+    {
       "path": "/staff/team/shifts",
       "title": "HON | Shifts"
     },
