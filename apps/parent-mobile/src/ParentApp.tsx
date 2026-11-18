@@ -7,7 +7,10 @@ import type { ParentApi } from './api/client';
 import type { SessionStore } from './session/session-store';
 import { FamilyProvider } from './family/family-data';
 import { HomeScreen } from './screens/HomeScreen';
-import { EianScreen, MessagesScreen, MoreScreen, ScheduleScreen, SignInScreen } from './screens/OtherTabs';
+import { ScheduleScreen, SignInScreen } from './screens/OtherTabs';
+import { EianScreen } from './eian/EianScreen';
+import { MoreScreen } from './more/MoreScreen';
+import { MessagesScreen } from './messages/MessagesScreen';
 import { Loading } from './ui/parts';
 import { radius, space, type, useColors } from './ui/theme';
 
@@ -24,9 +27,12 @@ export interface ParentAppProps {
   onSignIn?: () => Promise<'signed-in' | 'cancelled' | 'failed'>;
   /** Random Idempotency-Key source (expo-crypto randomUUID in the app). */
   newKey?: () => string;
+  /** Test builds only: a made-up offline family to tap through before signing in. Never offered in store builds. */
+  sampleApi?: () => ParentApi;
 }
 
-export function ParentApp({ api, session, now = () => new Date(), version = '0.1.0', onSignIn, newKey = missingKeySource }: ParentAppProps) {
+export function ParentApp({ api, session, now = () => new Date(), version = '0.1.0', onSignIn, newKey = missingKeySource, sampleApi }: ParentAppProps) {
+  const [sample, setSample] = useState<ParentApi | null>(null);
   const [token, setToken] = useState<string | null | undefined>(undefined);
   useEffect(() => {
     let live = true;
@@ -39,26 +45,59 @@ export function ParentApp({ api, session, now = () => new Date(), version = '0.1
   return (
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
       {token === undefined ? <Loading label="Starting HON" />
-        : token === null ? <SignInScreen onSignIn={onSignIn} />
+        : sample ? (
+          <View style={{ flex: 1 }}>
+            <SampleBanner onExit={() => setSample(null)} />
+            <FamilyProvider key="sample" api={sample} onSignedOut={() => setSample(null)} now={now} newKey={newKey}>
+              <Tabs onSignOut={() => setSample(null)} version={version} />
+            </FamilyProvider>
+          </View>
+        )
+        : token === null ? <SignInScreen onSignIn={onSignIn} onTrySample={sampleApi ? () => setSample(sampleApi()) : undefined} />
         : (
           // Keyed by session so nothing from a previous sign-in survives into the next one.
           <FamilyProvider key={token} api={api} onSignedOut={signOut} now={now} newKey={newKey}>
-            <NavigationContainer>
-              <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={props => <TabBar {...props} />}>
-                <Tab.Screen name="Home" children={() => <HomeFromTab />} />
-                <Tab.Screen name="Schedule" component={ScheduleScreen} />
-                <Tab.Screen name="Eian" component={EianScreen} />
-                <Tab.Screen name="Messages" component={MessagesScreen} />
-                <Tab.Screen name="More" children={() => <MoreScreen onSignOut={signOut} version={version} />} />
-              </Tab.Navigator>
-            </NavigationContainer>
+            <Tabs onSignOut={signOut} version={version} />
           </FamilyProvider>
         )}
     </SafeAreaProvider>
   );
 }
 
+function Tabs({ onSignOut, version }: { onSignOut: () => void; version: string }) {
+  return (
+    <NavigationContainer>
+      <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={props => <TabBar {...props} />}>
+        <Tab.Screen name="Home" children={() => <HomeFromTab />} />
+        <Tab.Screen name="Schedule" component={ScheduleScreen} />
+        <Tab.Screen name="Eian" children={() => <EianFromTab />} />
+        <Tab.Screen name="Messages" component={MessagesScreen} />
+        <Tab.Screen name="More" children={() => <MoreScreen onSignOut={onSignOut} version={version} />} />
+      </Tab.Navigator>
+    </NavigationContainer>
+  );
+}
+
+/** Always visible while the made-up family is shown, so a sample is never mistaken for a real school's records. */
+function SampleBanner({ onExit }: { onExit: () => void }) {
+  const c = useColors();
+  const insets = useSafeAreaInsets();
+  return (
+    <View accessibilityRole="alert" accessibilityLabel="Sample family. Made-up data, not a real school." style={{ backgroundColor: c.warning, paddingTop: insets.top + space.xs, paddingBottom: space.xs, paddingHorizontal: space.lg, flexDirection: 'row', alignItems: 'center' }}>
+      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ flex: 1, color: '#FFFFFF', fontWeight: '800', fontSize: type.caption }}>SAMPLE FAMILY · made-up data</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Exit sample" onPress={onExit} style={{ minHeight: 32, justifyContent: 'center', paddingHorizontal: space.sm }}>
+        <Text style={{ color: '#FFFFFF', fontWeight: '800', textDecorationLine: 'underline' }}>Exit</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function missingKeySource(): string { throw new Error('No Idempotency-Key source configured.'); }
+
+function EianFromTab() {
+  const navigation = useNavigation<{ navigate: (tab: keyof Tabs) => void }>();
+  return <EianScreen onNavigate={tab => navigation.navigate(tab)} />;
+}
 
 function HomeFromTab() {
   const navigation = useNavigation<{ navigate: (tab: keyof Tabs) => void }>();

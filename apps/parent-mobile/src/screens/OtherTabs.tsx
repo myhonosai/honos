@@ -7,6 +7,7 @@ import { Body, Button, Card, Pill, Section, Title } from '../ui/parts';
 import { space, type, useColors } from '../ui/theme';
 import { FamilyGate } from './FamilyStates';
 import { BookClasses } from '../schedule/BookClasses';
+import { ReportAbsence } from '../schedule/ReportAbsence';
 
 function Page({ title, eyebrow, children }: { title: string; eyebrow: string; children: React.ReactNode }) {
   const c = useColors();
@@ -47,49 +48,12 @@ export function ScheduleScreen() {
         ))}
       </View>
       <BookClasses />
-      <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.md }}>Reporting an absence from the app is coming in the next update. You can do it on the HON parent website today.</Text>
+      <ReportAbsence />
     </Page>
   );
 }
 
-export function EianScreen() {
-  const c = useColors();
-  return (
-    <Page eyebrow="YOUR FAMILY ASSISTANT" title="Eian">
-      <Card style={{ marginTop: space.lg, backgroundColor: c.accentSoft, borderColor: c.accentSoft }}>
-        <Text style={{ color: c.text, fontSize: type.title, fontWeight: '800' }}>Eian is not connected yet.</Text>
-        <Body muted>When Eian arrives, it will answer from your family's real school records and always ask you before booking, cancelling or sending anything. Everything Eian does will also be possible with normal buttons.</Body>
-      </Card>
-      <Section>Things you'll be able to ask</Section>
-      {["What's my son's next class?", 'What does she need for her next belt?', 'When is the next belt test?', 'Do we have any unpaid invoices?'].map(q => (
-        <Card key={q}><Body>“{q}”</Body></Card>
-      ))}
-    </Page>
-  );
-}
-
-export function MessagesScreen() {
-  return (
-    <Page eyebrow="MESSAGES" title="Your school">
-      <Card style={{ marginTop: space.lg }}><Body muted>Messages with your school are not connected in this version of the app yet. You can message the school from the HON parent website today.</Body></Card>
-    </Page>
-  );
-}
-
-export function MoreScreen({ onSignOut, version }: { onSignOut: () => void; version: string }) {
-  const c = useColors();
-  return (
-    <Page eyebrow="MORE" title="Account">
-      <Section>Coming next</Section>
-      <Card><Body muted>Membership and billing, belt testing, documents, curriculum, events and settings will appear here as each one is connected.</Body></Card>
-      <Section>Security</Section>
-      <Button kind="quiet" label="Sign out" onPress={onSignOut} />
-      <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.xl, textAlign: 'center' }}>HON Family {version}</Text>
-    </Page>
-  );
-}
-
-export function SignInScreen({ onSignIn }: { onSignIn?: () => Promise<'signed-in' | 'cancelled' | 'failed'> }) {
+export function SignInScreen({ onSignIn, onTrySample }: { onSignIn?: () => Promise<'signed-in' | 'cancelled' | 'failed'>; onTrySample?: () => void }) {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = React.useState(false);
@@ -113,6 +77,12 @@ export function SignInScreen({ onSignIn }: { onSignIn?: () => Promise<'signed-in
           {failed ? <Card style={{ marginTop: space.lg }}><Body muted>We couldn't finish signing in. Please try again. If it keeps happening, contact your school.</Body></Card> : null}
         </View>
       ) : <Card style={{ marginTop: space.xl }}><Body muted>Signing in from the app is being connected. Until then, please use the HON parent website your school shared.</Body></Card>}
+      {onTrySample ? (
+        <View style={{ marginTop: space.xl }}>
+          <Button kind="quiet" label="Try with a sample family" onPress={onTrySample} />
+          <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.sm, textAlign: 'center' }}>Test builds only. Made-up data that never leaves this phone.</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
