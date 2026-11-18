@@ -1,5 +1,5 @@
 /**
- * WB5 (0527): AI website edits on the shared AI text proposal table, through the real API services, the restricted runtime
+ * WB5 (0534): AI website edits on the shared AI text proposal table, through the real API services, the restricted runtime
  * role and the S4 spend controls on a fresh disposable AI-0 fixture. The provider is a counted in-process fake: nothing
  * leaves the machine, and fetch is refused. Synthetic names only.
  */
@@ -226,11 +226,11 @@ try {
   assert.equal((await proposalRow(v1.id))?.status, 'APPLIED');
   pass('guard: identity and request columns are fixed and a closed suggestion cannot reopen');
   { const verify = await (await import('node:fs/promises')).readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
-    const section = verify.split('-- Shared AI text proposals exact verification (0527)')[1]?.split('-- End shared AI text proposals exact verification.')[0];
-    assert.ok(section, '0527 verify section present');
+    const section = verify.split('-- Shared AI text proposals exact verification (0534)')[1]?.split('-- End shared AI text proposals exact verification.')[0];
+    assert.ok(section, '0534 verify section present');
     const body = section.slice(section.indexOf('\n'));
     await admin.query(body.replaceAll('hon_runtime', runtimeRole)); }
-  pass('011: the 0527 exact verification (bodies, ACLs, tables, triggers) passes, including the eight S4 shared functions that count EIAN and TEXT_PROPOSAL');
+  pass('011: the 0534 exact verification (bodies, ACLs, tables, triggers) passes, including the eight S4 shared functions that count EIAN and TEXT_PROPOSAL');
   console.log(`WB5 website AI edits: ${groups} groups passed, ${fake.calls} fake provider calls, 0 network calls`);
 } finally {
   await admin.end().catch(() => {});

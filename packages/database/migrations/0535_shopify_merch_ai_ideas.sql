@@ -1,9 +1,9 @@
 BEGIN;
 
--- Merch Studio AI ideas, CS-M2 (0528). Commerce step 3 (owner vision 2026-11-18, section 7): Marcus writes up to three merch
+-- Merch Studio AI ideas, CS-M2 (0535). Commerce step 3 (owner vision 2026-11-18, section 7): Marcus writes up to three merch
 -- product ideas (title, description, product type, suggested price, print notes) from the owner's brief. It is the second
--- kind on the shared AI text proposals of 0527 (docs/architecture/AI_TEXT_PROPOSALS.md): one kinds row and its own entry
--- points. The 0527 core and every S4 function are unchanged. Spec: docs/architecture/SHOPIFY_COMMERCE.md (CS-M2).
+-- kind on the shared AI text proposals of 0534 (docs/architecture/AI_TEXT_PROPOSALS.md): one kinds row and its own entry
+-- points. The 0534 core and every S4 function are unchanged. Spec: docs/architecture/SHOPIFY_COMMERCE.md (CS-M2).
 --   M1 Who: a direct human with commerce.shopify.manage at the session school (0405 rules), marketing.assistant.use and
 --      ai.invocation.plan there, and an active Complete entitlement. Only the requester prepares, records or closes; anyone
 --      who may read the store reads.
@@ -27,7 +27,7 @@ DO $$ BEGIN
     OR to_regprocedure('hon.shopify_actor(text,uuid,boolean)') IS NULL OR to_regprocedure('hon.shopify_current(uuid)') IS NULL
     OR to_regclass('hon.shopify_product_changes') IS NULL OR to_regclass('hon.school_page_branding') IS NULL
     OR to_regprocedure('hon.marketing_safe_text(text,integer)') IS NULL OR to_regprocedure('hon.begin_shopify_merch_ideas(text,jsonb,uuid)') IS NOT NULL THEN
-    RAISE EXCEPTION 'Merch AI ideas require migrations through 0496 and 0527 and must apply once';
+    RAISE EXCEPTION 'Merch AI ideas require migrations through 0496 and 0534 and must apply once';
   END IF;
 END $$;
 

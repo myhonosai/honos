@@ -6,7 +6,7 @@ import type { HonRequest } from '../../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../../foundation/runtime-database.service.js';
 import { MerchAiService, type MerchAiContext } from './merch-ai.service.js';
 
-/** CS-M2 (0528): reading, asking, using and dismissing are each their own same-origin browser command. */
+/** CS-M2 (0535): reading, asking, using and dismissing are each their own same-origin browser command. */
 @Injectable() export class MerchAiReadHumanUiGuard extends MembershipActivationHumanUiGuard { protected override readonly command: string = 'shopify.merch.ai.read'; }
 @Injectable() export class MerchAiRequestHumanUiGuard extends MembershipActivationHumanUiGuard { protected override readonly command: string = 'shopify.merch.ai.request'; }
 @Injectable() export class MerchAiCloseHumanUiGuard extends MembershipActivationHumanUiGuard { protected override readonly command: string = 'shopify.merch.ai.close'; }

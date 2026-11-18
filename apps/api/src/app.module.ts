@@ -171,7 +171,11 @@ import { SchoolMembershipListService } from './billing/school-membership-list.se
 import { CrmSchoolClockController, CrmSchoolClockHumanUiGuard, CrmSessionSchoolClockController } from './crm/crm-school-clock.controller.js';
 import { CrmSchoolClockService } from './crm/crm-school-clock.service.js';
 import { MembershipStatusReportController } from './reports/membership-status-report.controller.js';
-import { SchoolReportsController } from './reports/school-reports.controller.js';
+import { SchoolReportsController, SchoolReportsDashboardController } from './reports/school-reports.controller.js';
+import { SchoolContactsController } from './people/school-contacts.controller.js';
+import { SchoolContactsService } from './people/school-contacts.service.js';
+import { SchoolContactAdminController } from './people/school-contact-admin.controller.js';
+import { SchoolContactAdminService } from './people/school-contact-admin.service.js';
 import { SchoolReportsService } from './reports/school-reports.service.js';
 import { MembershipActivationHumanUiGuard, TuitionPaymentRecordHumanUiGuard, TuitionPaymentVoidHumanUiGuard, TuitionReadHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { TuitionPaymentController } from './billing/tuition-payment.controller.js';
@@ -194,6 +198,7 @@ import { SchoolPayAutopayController } from './school-payments/school-pay-autopay
 import { SchoolPayAutopayService } from './school-payments/school-pay-autopay.service.js';
 import { SchoolPayChargeController } from './school-payments/school-pay-charge.controller.js';
 import { SchoolPayChargeService } from './school-payments/school-pay-charge.service.js';
+import { SchoolPayOnceService } from './school-payments/school-pay-once.service.js';
 import { SchoolCheckoutController } from './school-checkout/school-checkout.controller.js';
 import { SchoolCheckoutService } from './school-checkout/school-checkout.service.js';
 import { ShopifyController, ShopifyHumanGuard } from './commerce/shopify/shopify.controller.js';
@@ -620,6 +625,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     CrmSessionSchoolClockController,
     MembershipStatusReportController,
     SchoolReportsController,
+    SchoolReportsDashboardController,
+    SchoolContactsController,
+    SchoolContactAdminController,
     CrmAdultMembershipDraftController,
     CrmAdultMembershipDraftFromPlanController,
     MembershipPlanController,
@@ -842,6 +850,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SocialPostDispatcher,
     ClassSeriesService,
     SchoolReportsService,
+    SchoolContactsService,
+    SchoolContactAdminService,
     SchoolEventService,
     SchoolEventReadHumanUiGuard,
     SchoolEventSaveHumanUiGuard,
@@ -870,6 +880,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPayMethodService,
     SchoolPayAutopayService,
     SchoolPayChargeService,
+    SchoolPayOnceService,
     { provide: SCHOOL_PAYMENT_ADAPTERS, useFactory: () => schoolPaymentAdaptersFromEnvironment() },
     { provide: SCHOOL_PAYMENT_VAULT, useFactory: () => schoolPaymentVaultForProcess() },
     SchoolPayReadHumanUiGuard, SchoolPayStartHumanUiGuard, SchoolPayOnboardingLinkHumanUiGuard, SchoolPayFinishHumanUiGuard,

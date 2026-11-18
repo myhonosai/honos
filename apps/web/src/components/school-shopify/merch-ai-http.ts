@@ -2,7 +2,7 @@ import { validateMerchAiBrief, verifyMerchAiList, verifyMerchAiView, type MerchA
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * CS-M2 (0528): merch ideas from Marcus. The list is a plain same-origin GET; asking, using and dismissing each send their
+ * CS-M2 (0535): merch ideas from Marcus. The list is a plain same-origin GET; asking, using and dismissing each send their
  * own X-HON-Human-Command and an Idempotency-Key. The server decides every permission, the plan and the AI spend.
  */
 export type MerchAiErrorKind =

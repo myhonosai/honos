@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "6cd728b4ffc49c74b60b19c5a6c21dea3b77e84269ed7c6e1d0c3d7faf81212c",
+  "chainSha256": "716e27755470f2a5e2844a78d874314c05f1e3e88f859ebb2b5fddfac3d942fc",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -663,12 +663,32 @@
       "sha256": "7203674b5377e3fe58c9dcd7229ec175f03ab716293bde333ca20ad4dad606ce"
     },
     {
-      "file": "0527_ai_text_proposals.sql",
-      "sha256": "38bf94d39ff71d6eb1a652ae3b3b432813055a9ab26d54641c9bb360f960c54c"
+      "file": "0520_school_reports_dashboard.sql",
+      "sha256": "768911f840237cc845136c189b167fe41eb0c0f56a48c30398c4b8f825f25048"
     },
     {
-      "file": "0528_shopify_merch_ai_ideas.sql",
-      "sha256": "ee75f04740408adafab7055c5515e74c373cae19003c72ac4cd148e34a89a7a3"
+      "file": "0521_school_contact_list.sql",
+      "sha256": "15710fdfee6ad20c80784be688b58c699773742fdfe4be7f9690befd640ad46e"
+    },
+    {
+      "file": "0522_school_contact_card.sql",
+      "sha256": "dc1a744a90a927fb3303e25d79fce87d106ff5b92caefc5db69595b9e1f56516"
+    },
+    {
+      "file": "0523_school_contact_merge_archive.sql",
+      "sha256": "39228fc3d1af999e4bff29da71460a5a6c82ec0ccd7d9bb3339c62ba2ea8868c"
+    },
+    {
+      "file": "0529_school_pay_once.sql",
+      "sha256": "476c62434beaeb0be7f781878ee817e5b0e0641f22f94ed400457bf90da9ea4a"
+    },
+    {
+      "file": "0534_ai_text_proposals.sql",
+      "sha256": "e8ceaae30e97148d72f5369c529c5de883a716e3b55aceefca54bfa4f9b64430"
+    },
+    {
+      "file": "0535_shopify_merch_ai_ideas.sql",
+      "sha256": "0be42012228d86b6ae2ddadc2c81a555c3a023abb00fd95b974a2b4aa2448c69"
     }
   ]
 }
