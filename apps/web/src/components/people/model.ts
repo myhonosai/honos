@@ -2,7 +2,7 @@ import type { PersonRecord, SchoolContactList, SchoolContactRow } from '@hon/con
 import type { ContactFilters } from './contacts-http';
 import { PersonRecordError, type PersonErrorKind } from './http';
 
-/** The contacts list (C1, 0513): the pages read so far for these filters, and whether the next page is being read. */
+/** The contacts list (C1, 0521): the pages read so far for these filters, and whether the next page is being read. */
 export type ListState =
   | Readonly<{ state: 'LOADING' }> | Readonly<{ state: 'DENIED' }> | Readonly<{ state: 'UNAVAILABLE' }>
   | Readonly<{ state: 'READY'; filters: ContactFilters; counts: SchoolContactList['counts']; rows: readonly SchoolContactRow[]; nextCursor: string | null;

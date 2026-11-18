@@ -1196,7 +1196,7 @@ const pplRead = (r) => ({ ...r, student: r.student && { ...r.student }, consents
 async function peopleApiRoute(route, path, method, url) {
   const consent = path.match(new RegExp(`^/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/people/([0-9a-f-]{36})/communication-consents(?:/([A-Z]+))?$`));
   if (consent) return consentApiRoute(route, method, url, consent[1], consent[2] ?? null);
-  // C1 (0513): the People page lists contacts with segment counts; the synthetic people are students or other contacts.
+  // C1 (0521): the People page lists contacts with segment counts; the synthetic people are students or other contacts.
   if (path === `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/contacts` && method === 'GET') {
     const q = (url.searchParams.get('query') ?? '').toLowerCase(), segment = url.searchParams.get('segment') ?? 'ALL';
     const all = [...ppl.records.values()].filter((r) => !q || [r.givenName, r.familyName, r.email, r.phoneE164].join(' ').toLowerCase().includes(q))

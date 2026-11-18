@@ -1,5 +1,5 @@
 /**
- * School reports dashboard proof (R3, 0512) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guard + global
+ * School reports dashboard proof (R3, 0520) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guard + global
  * ValidationPipe + HonExceptionFilter -> SchoolReportsDashboardController -> one protected definer function on the restricted runtime
  * role with forced RLS), on the guarded disposable CRM-close fixture only. Synthetic names only; nothing is sent or charged.
  */
@@ -362,12 +362,12 @@ try {
   await assert.rejects(runtime.query('SELECT * FROM hon.school_dashboard_members($1,$2)', [ids.organization, ids.schoolA]), /permission denied/); checks += 1;
   await assert.rejects(runtime.query('SELECT hon.read_school_reports_dashboard($1,$2::jsonb)', [OWN.subject, '{}']), /SCHOOL_REPORTS_FORBIDDEN|tenant|permission/i); checks += 1;
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const startMark = '-- School reports dashboard exact verification (R3 0512)', endMark = '-- End school reports dashboard exact verification.';
+    const startMark = '-- School reports dashboard exact verification (R3 0520)', endMark = '-- End school reports dashboard exact verification.';
     const section = verify.split(startMark)[1]?.split(endMark)[0];
     ok(section, startMark);
     await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
-  console.log(`PASS: school reports dashboard (0512): ${checks} checks.`);
+  console.log(`PASS: school reports dashboard (0520): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

@@ -6,7 +6,7 @@ import { ContactsList, activeFilterCount, endBadge, type ContactsListProps } fro
 import { CONTACTS_COPY } from '../src/components/people/contacts-copy';
 import { id, scope } from './account-status-fixtures';
 
-// C1 (0513): the contacts list on the People page.
+// C1 (0521): the contacts list on the People page.
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -83,7 +83,7 @@ it('has the same wording keys in every language', () => {
   expect(Object.keys(CONTACTS_COPY.ko).sort()).toEqual(keys); expect(Object.keys(CONTACTS_COPY.es).sort()).toEqual(keys);
 });
 
-// C2 (0514): the contact card.
+// C2 (0522): the contact card.
 import { ContactCard, formatMinor, type CardTab } from '../src/components/people/contact-card';
 import { CARD_COPY } from '../src/components/people/contact-card-copy';
 const person = id(410);

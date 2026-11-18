@@ -219,6 +219,7 @@ const expectedRlsTables = [
   'membership_agreement_texts',
   'membership_agreement_signatures',
   'membership_agreement_requests',
+  'membership_agreement_links',
   'shopify_connections',
   'shopify_credentials',
   'shopify_connect_intents',

@@ -281,6 +281,26 @@ the Dev Dashboard, owner action).
   piece). AI-proposed edits (Commerce Agent) are a later piece and will use the same approval path.
 - The orders list still shows at most the 200 newest kept orders, without a "more" marker.
 
+## CS-M1: Merch Studio, starter ideas to Shopify drafts (step 3, part 1; no migration)
+
+Commerce step 3 ("Creative Studio product drafts", vision section 7) in three parts:
+
+1. **CS-M1 (this piece, frontend only).** A Merch Studio section in the Commerce Workspace. The person picks a product
+   (8 kinds) and up to three looks (5 styles), optionally types colors, and HON writes one starter idea per look from
+   templates in en/ko/es: title, description, product type, vendor (the school name), SKU stem and, in a USD store only,
+   a suggested price (no conversion in other currencies: the price stays empty and must be typed). Ideas are always
+   labelled as templates, never as AI. "Use this idea" opens the SH4a draft form prefilled; saving goes through the
+   unchanged SH4a propose path, so nothing reaches Shopify until a manager approves it, and the product is created as a
+   DRAFT. The school's saved logo and brand color (0285 branding read, refused or missing = not shown) are displayed.
+   Each idea carries a print checklist (artwork attached, transparent PNG, 300 DPI, print area, provider colors,
+   variants in Shopify), every item shown as "Not checked": HON never labels a design ready to print until the print
+   provider (step 6) checks it. Sizes and colors are listed but the draft has one price; the person adds variants in
+   Shopify for now (SH4a creates single-variant drafts).
+2. **CS-M2.** AI-written ideas through HON's governed text path (S4 spend decision, school cost ceiling, plan, ledger,
+   human approval), with these templates as the fallback when AI is off or over budget.
+3. **CS-M3.** Artwork and mockups from Creative Studio image generations attached as product media, once creative media
+   storage (C3, PR #365) is merged; until then no generated image can become Shopify media.
+
 ## Plan (TDD)
 
 1. Migration 0405 + DB proof `test-shopify-commerce-integrity.mjs` over signed HTTP with the fake adapter: ACL/RLS,

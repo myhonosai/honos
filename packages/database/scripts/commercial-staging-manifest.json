@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "aacb7140b6533e5646230d561272c0e888b33fd0b3c5b3d632902d17139ed714",
+  "chainSha256": "face19e18b8cbc67d6755ce4d4de21038e12205bf2ab781df29a6878fa0b8a51",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -655,20 +655,28 @@
       "sha256": "8419cff247f47336a963385cfd5ab81d44cd01ff608900fb53fb49a451327d11"
     },
     {
-      "file": "0512_school_reports_dashboard.sql",
-      "sha256": "06e1dbb877172819b51e6540f33528914243569a17d8335c34f0211545da3c41"
+      "file": "0499_membership_agreement_signing_link.sql",
+      "sha256": "5fbd399f57b9cd71a761f94dee19401f46f75c2c68567f2670e3872ac7a8cc30"
     },
     {
-      "file": "0513_school_contact_list.sql",
-      "sha256": "aa0153e58f6a48647d9f51d056334b6bcecd16360ec955a4fb59de4fbe790e45"
+      "file": "0519_hq_hon_ongoing_budget.sql",
+      "sha256": "7203674b5377e3fe58c9dcd7229ec175f03ab716293bde333ca20ad4dad606ce"
     },
     {
-      "file": "0514_school_contact_card.sql",
-      "sha256": "470f8f7c7ffaa90b42982f68d6f43a90501c922de1e40824a5395907393b872e"
+      "file": "0520_school_reports_dashboard.sql",
+      "sha256": "768911f840237cc845136c189b167fe41eb0c0f56a48c30398c4b8f825f25048"
     },
     {
-      "file": "0515_school_contact_merge_archive.sql",
-      "sha256": "02452c832a810f477ff467d1de192ac182541c0c408363a792faec92965d9e42"
+      "file": "0521_school_contact_list.sql",
+      "sha256": "15710fdfee6ad20c80784be688b58c699773742fdfe4be7f9690befd640ad46e"
+    },
+    {
+      "file": "0522_school_contact_card.sql",
+      "sha256": "dc1a744a90a927fb3303e25d79fce87d106ff5b92caefc5db69595b9e1f56516"
+    },
+    {
+      "file": "0523_school_contact_merge_archive.sql",
+      "sha256": "39228fc3d1af999e4bff29da71460a5a6c82ec0ccd7d9bb3339c62ba2ea8868c"
     }
   ]
 }

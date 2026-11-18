@@ -21,7 +21,7 @@ function translate(error: unknown): never {
 }
 
 /**
- * C1 (0513): the contacts list for the session school. One protected definer function re-proves the direct human subject
+ * C1 (0521): the contacts list for the session school. One protected definer function re-proves the direct human subject
  * and live people.read and returns one page in name order with segment counts. The cursor is signed and bound to the school
  * and every filter. Nothing is written, sent or charged.
  */
@@ -54,7 +54,7 @@ export class SchoolContactsService {
     } catch (error) { return translate(error); }
   }
 
-  /** C2 (0514): one contact's card for the session school. Sections the viewer may not read come back as { allowed: false }. */
+  /** C2 (0522): one contact's card for the session school. Sections the viewer may not read come back as { allowed: false }. */
   async card(context: MembershipLifecycleContext, personId: unknown): Promise<SchoolContactCard> {
     const subject = this.subject(context);
     let input: { personId: string };

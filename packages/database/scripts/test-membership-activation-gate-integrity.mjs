@@ -694,13 +694,13 @@ try {
   // drafts) by term dates and recorded cancellations and count attendance marks; they book, check in and grant nothing.
   // 0332 (R2) read_school_reports_locations counts each listed location's cancelled memberships without a recorded
   // cancellation time (the same 0331 rule) and otherwise reuses school_report_periods; it books, checks in and grants nothing.
-  // 0512 (R3) school_dashboard_members and school_dashboard_kpis are read-only dashboard counts: members by term dates and
+  // 0520 (R3) school_dashboard_members and school_dashboard_kpis are read-only dashboard counts: members by term dates and
   // recorded cancellations (the 0331 rule) and first membership starts; they book, check in and grant nothing.
-  // 0514 (C2) read_school_contact_card lists one person's memberships, invoices and attendance marks for staff to read; it books,
+  // 0522 (C2) read_school_contact_card lists one person's memberships, invoices and attendance marks for staff to read; it books,
   // checks in, records attendance and grants nothing.
-  // 0513 (C1) school_contact_facts is the read-only contacts list: it sorts people into student / trial / prospect / inactive
+  // 0521 (C1) school_contact_facts is the read-only contacts list: it sorts people into student / trial / prospect / inactive
   // by the same 0331 membership rule and reads the current membership's plan and end date; it books, checks in and grants nothing.
-  // 0515 (C3) school_contact_archive_plan and school_contact_merge_plan only test whether a person holds memberships (a
+  // 0523 (C3) school_contact_archive_plan and school_contact_merge_plan only test whether a person holds memberships (a
   // current one blocks archive; any one blocks being merged away); they never move, change or grant a membership.
   // 0259 (Maya M1) read_maya_at_risk_students is a read-only retention signal: it books, checks in and grants nothing,
   // and reads only ACTIVE, FROZEN and CANCELLATION_PENDING memberships (no DRAFT); a SCHEDULED (future-dated) ACTIVE

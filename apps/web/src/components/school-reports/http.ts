@@ -51,7 +51,7 @@ async function fetchVerified<T>(path: string, signal: AbortSignal, owned: () => 
 }
 
 export const schoolReportsApi = {
-  /** R3 (0512): the dashboard for one range in school time (reporting.view here). */
+  /** R3 (0520): the dashboard for one range in school time (reporting.view here). */
   async dashboard(scope: ReportsScope, range: SchoolDashboardRange, signal: AbortSignal, owned: () => boolean): Promise<SchoolDashboard> {
     let query: { range?: SchoolDashboardRange };
     try { query = validateSchoolDashboardQuery({ range }); } catch { throw new ReportsError('UNAVAILABLE'); }

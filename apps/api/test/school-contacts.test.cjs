@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { SchoolContactsController } = require('../dist/people/school-contacts.controller.js');
 const { SchoolContactsService } = require('../dist/people/school-contacts.service.js');
 
-// C1 (0513): the controller's closed query, the service's cursor binding and error mapping, without a database.
+// C1 (0521): the controller's closed query, the service's cursor binding and error mapping, without a database.
 const ORG = '11111111-1111-4111-8111-111111111111';
 const SCHOOL = '22222222-2222-4222-8222-222222222222';
 const PERSON = '55555555-5555-4555-8555-555555555555';
@@ -83,7 +83,7 @@ const card = () => ({ generatedAt: '2026-11-15T10:00:00.000Z',
   family: { allowed: false }, appointments: { allowed: true, items: [] }, tasks: { allowed: false }, membership: { allowed: false },
   billing: { allowed: true, open: [{ currency: 'USD', dueMinor: 7900 }], invoices: [] }, messages: { allowed: false }, timeline: [{ kind: 'PERSON_ADDED', at: '2026-08-01T10:00:00.000Z', detail: null }] });
 
-test('school contact card (0514): the person id comes from the path, no query is accepted, and the answer is verified', async () => {
+test('school contact card (0522): the person id comes from the path, no query is accepted, and the answer is verified', async () => {
   const db = scopeDatabase(), contacts = { calls: [], async card(ctx, personId) { this.calls.push([ctx, personId]); return { ok: true }; } };
   const controller = new SchoolContactsController(db, contacts);
   await controller.card(ORG, SCHOOL, PERSON, undefined, {}, request);

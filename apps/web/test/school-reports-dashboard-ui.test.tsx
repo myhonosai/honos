@@ -9,7 +9,7 @@ import { dashboardLinks } from '../src/components/school-reports/school-reports'
 import { SchoolReportsView } from '../src/components/school-reports/view';
 import { id } from './account-status-fixtures';
 
-// R3 (0512): the reports dashboard, read with one same-origin GET and drawn from counts and totals only.
+// R3 (0520): the reports dashboard, read with one same-origin GET and drawn from counts and totals only.
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 

@@ -1,4 +1,4 @@
-/** Reports dashboard wording (R3, 0512), en / ko / es. Labels only; nothing here is authority or an outcome. */
+/** Reports dashboard wording (R3, 0520), en / ko / es. Labels only; nothing here is authority or an outcome. */
 const en = {
   viewOverview: 'Overview', viewMonthly: 'Month by month', viewLabel: 'Report',
   rangeLabel: 'Range', THIS_MONTH: 'This month', LAST_MONTH: 'Last month', D30: '30 days', D90: '90 days', M12: '12 months', ALL: 'All time',

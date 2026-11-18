@@ -16,11 +16,11 @@ export type PeopleViewProps = Readonly<{
   list: ListState; record: RecordState; selectedId: string | null; outcome: SaveOutcome;
   /** True while a save from this tab is sending, or kept for "Try again": both forms stay locked. */
   locked: boolean; canRetry: boolean;
-  /** The contacts list filters (C1, 0513) and the rank, program and plan choices read with the first page. */
+  /** The contacts list filters (C1, 0521) and the rank, program and plan choices read with the first page. */
   filters: ContactFilters; options: SchoolContactOptions | null;
-  /** The open person's contact card (C2, 0514), read beside the editable record. */
+  /** The open person's contact card (C2, 0522), read beside the editable record. */
   card?: CardState | undefined;
-  /** C3 (0515): delete, restore and merge for the open contact (its own reads and commands), and what the last one did. */
+  /** C3 (0523): delete, restore and merge for the open contact (its own reads and commands), and what the last one did. */
   actionsSlot?: ((card: SchoolContactCard) => React.ReactNode) | undefined; actionNotice?: string | null | undefined;
   onFilters?: ((filters: ContactFilters) => void) | undefined; onMore?: (() => void) | undefined; onOpen?: ((personId: string) => void) | undefined; onReload?: (() => void) | undefined;
   onSaveContact?: ((draft: ContactDraft) => void) | undefined; onSaveBirth?: ((draft: BirthDraft) => void) | undefined;

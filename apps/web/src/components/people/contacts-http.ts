@@ -6,7 +6,7 @@ import { accountUuid, validateSchoolContactArchiveInput, validateSchoolContactMe
 import { PersonRecordError, codeOf, exchange, personErrorFor, type PeopleScope } from './http';
 
 /**
- * C1 (0513): the contacts list for the school the shell verified. One same-origin GET with no key and no command header;
+ * C1 (0521): the contacts list for the school the shell verified. One same-origin GET with no key and no command header;
  * the server re-proves people.read and signs the page cursor to this school and these filters.
  */
 export type ContactFilters = Readonly<{ segment: SchoolContactSegment; query: string; rankId: string; programId: string; planId: string; endsWithinDays: '' | '7' | '30' | '60' | '90' }>;
@@ -46,7 +46,7 @@ export const contactsApi = {
       return { ...list, nextCursor: next };
     } catch { throw new PersonRecordError('UNKNOWN'); }
   },
-  /** C2 (0514): one contact's card; sections the viewer's role does not include come back as not allowed. */
+  /** C2 (0522): one contact's card; sections the viewer's role does not include come back as not allowed. */
   async card(scope: PeopleScope, personId: string, signal: AbortSignal): Promise<SchoolContactCard> {
     const path = `/api/v1/organizations/${accountUuid(scope.organizationId)}/schools/${accountUuid(scope.schoolId)}/contacts/${accountUuid(personId)}`;
     const { status, value } = await exchange(path, signal);
@@ -60,7 +60,7 @@ export const contactsApi = {
 export type ContactsApi = typeof contactsApi;
 
 /**
- * C3 (0515): delete (archive), restore and merge. The reads are same-origin GETs; each command is a POST with its own
+ * C3 (0523): delete (archive), restore and merge. The reads are same-origin GETs; each command is a POST with its own
  * human-command header and a fresh idempotency key, repeating the exact versions (and the plan hash) the read showed.
  */
 export type ContactAdminFailure = Readonly<{ kind: 'DENIED' | 'MISSING' | 'BLOCKED' | 'STALE' | 'SESSION' | 'UNKNOWN'; blockers: readonly string[] }>;

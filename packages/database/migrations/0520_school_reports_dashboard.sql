@@ -1,6 +1,6 @@
 BEGIN;
 
--- R3 (0512, allocated by the coordinator, renumbered 2026-11-18 above release 0496): the school reports dashboard. Owner (David), 2026-11-15 08:23Z, on
+-- R3 (0520, allocated by the coordinator, renumbered 2026-11-18 above main 0519): the school reports dashboard. Owner (David), 2026-11-15 08:23Z, on
 -- the Manus CRM ideas: "Apply all." Idea #6: range chips, KPI cards with a trend, an income chart, belt mix, open leads by
 -- stage and won vs lost. One read-only entry point, hon.read_school_reports_dashboard(subject, input), for the session
 -- school only, with the same authority as 0331 (hon.require_school_reports_actor: a direct human at the session school with
