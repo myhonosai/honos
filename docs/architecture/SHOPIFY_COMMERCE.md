@@ -301,6 +301,34 @@ Commerce step 3 ("Creative Studio product drafts", vision section 7) in three pa
 3. **CS-M3.** Artwork and mockups from Creative Studio image generations attached as product media, once creative media
    storage (C3, PR #365) is merged; until then no generated image can become Shopify media.
 
+## CS-M2: Marcus merch ideas (step 3, part 2; migration 0502)
+
+Marcus writes up to three merch ideas from the owner's brief, on the shared AI text proposals (0489, kind `MERCH_IDEAS`).
+An idea is text only: using one opens the CS-M1 draft form, and Shopify changes only through an approved SH4a change.
+
+- **Kind row.** `MERCH_IDEAS`: agent `marcus`, task `DRAFT_MARKETING`, 6,000 input and 3,000 output tokens, at most
+  80,000 micro-USD per call, at most 12,288 result bytes, caller `HUMAN_UI`, subject `SHOPIFY_STORE` (the connection id).
+- **Who may ask.** Shopify management at the session school, `marketing.assistant.use`, `ai.invocation.plan` and an
+  active Complete plan, re-proved in the database on every step. A Shopify reader can read the list only.
+- **What Marcus sees.** The closed brief (one product kind, one to three looks, up to ten colors, up to 500 characters of
+  notes), the school name, the store currency, the saved brand color and up to 30 existing product titles. No customer,
+  order, family or student data.
+- **Flow.** begin (store must be CONNECTED) -> planning reference -> plan (marcus, DRAFT_MARKETING) -> prepare (budget lock
+  first; blocks `GATE_CLOSED` if the store disconnected since the start) -> one provider call -> fail, or record usage and
+  the validated answer in its own transaction. The S4 spend decision, HQ pause, per-school ceiling and UNKNOWN queue are
+  the shared 0489 ones; S4 itself is unchanged.
+- **Answer checks.** `hon.shopify_merch_ideas_ok` and `validateMerchAiProposal` take only `{summary, ideas[1..3]}`, each
+  idea `{style, title, description, productType, price, printNotes}`. `merchAiProblems` rejects a look that was not asked
+  for, a repeated look, a count that does not match the looks, and any price in a store that is not in US dollars (HON
+  never converts). A rejected answer keeps its usage and shows its problems, and can only be dismissed.
+- **Closing.** The requester marks ideas used (`APPLIED`) after sending one for approval, or dismisses them.
+- **Screen.** Merch Studio shows "Ask Marcus for ideas" only when the server has the paid text route configured and the
+  person can manage the store. Any refusal, failure, rejected answer or switched-off route falls back to the CS-M1
+  template ideas, labelled as templates. A lost answer keeps its key, so only the identical brief is sent again.
+- **Evidence.** `packages/database/scripts/test-shopify-merch-ai-ideas.mjs` (8 groups, fake provider, 0 network calls),
+  `apps/api/test/merch-ai.test.cjs`, `apps/web/test/school-shopify-merch-ai.test.tsx`, and the 011 section
+  "Shopify merch AI ideas exact verification (0502)".
+
 ## Plan (TDD)
 
 1. Migration 0405 + DB proof `test-shopify-commerce-integrity.mjs` over signed HTTP with the fake adapter: ACL/RLS,

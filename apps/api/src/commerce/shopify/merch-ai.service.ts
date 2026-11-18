@@ -55,8 +55,8 @@ export class MerchAiService {
   list(context: MerchAiContext): Promise<MerchAiView[]> {
     return this.tx(context, false, async c => verifyMerchAiList((await c.query<{ data: unknown }>('SELECT hon.read_shopify_merch_ideas($1,NULL) data', [context.externalSubject])).rows[0]?.data));
   }
-  read(context: MerchAiContext, id: string): Promise<MerchAiView> { return this.view(context, id, false); }
-  private view(context: MerchAiContext, id: string, command: boolean): Promise<MerchAiView> {
+  async read(context: MerchAiContext, id: string): Promise<MerchAiView> { return this.view(context, id, false); }
+  private async view(context: MerchAiContext, id: string, command: boolean): Promise<MerchAiView> {
     this.uuid(id);
     return this.tx(context, command, async c => verifyMerchAiView((await c.query<{ data: unknown }>('SELECT hon.read_shopify_merch_ideas($1,$2::uuid) data', [context.externalSubject, id])).rows[0]?.data));
   }
@@ -120,8 +120,9 @@ export class MerchAiService {
   }
 
   /** USED (APPLIED) after the requester saved one of the ideas for approval, or DISMISSED. The requester only. */
-  close(context: MerchAiContext, id: string, status: 'APPLIED' | 'DISMISSED'): Promise<MerchAiView> {
+  async close(context: MerchAiContext, id: string, status: 'APPLIED' | 'DISMISSED'): Promise<MerchAiView> {
     this.uuid(id);
+    if (status !== 'APPLIED' && status !== 'DISMISSED') throw new BadRequestException({ code: 'SHOPIFY_MERCH_AI_INVALID', detail: 'Ideas can only be marked used or dismissed.' });
     return this.tx(context, true, async c => verifyMerchAiView((await c.query<{ data: unknown }>('SELECT hon.close_shopify_merch_ideas($1,$2::uuid,$3) data', [context.externalSubject, id, status])).rows[0]?.data));
   }
 
