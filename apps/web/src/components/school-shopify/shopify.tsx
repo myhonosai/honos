@@ -5,7 +5,8 @@ import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { ShopifyError, shopifyApi, type ShopifyApi } from './http';
-import { ShopifyReturnView, ShopifyView, type OverviewState, type ReturnState, type ShopifyOutcome, type ShopifyTab, type TabState } from './view';
+import type { ShopifyCatalog, ShopifyOrders } from '@hon/contracts';
+import { SHOPIFY_SECTIONS, ShopifyReturnView, ShopifyView, type ListState, type OverviewState, type ReturnState, type ShopifyOutcome, type ShopifySection } from './view';
 
 const kindOf = (error: unknown) => error instanceof ShopifyError && error.kind !== 'SESSION' ? error.kind : 'UNKNOWN';
 
@@ -19,8 +20,9 @@ export function SchoolShopify({ api = shopifyApi, navigate = (url: string) => wi
   const shell = useSchoolShell();
   const schoolId = shell.phase === 'READY' ? shell.selection?.schoolId ?? null : null;
   const [overview, setOverview] = useState<OverviewState>({ state: 'LOADING' });
-  const [tab, setTab] = useState<ShopifyTab>('catalog');
-  const [list, setList] = useState<TabState>({ state: 'LOADING' });
+  const [section, setSection] = useState<ShopifySection>('overview');
+  const [catalog, setCatalog] = useState<ListState<ShopifyCatalog>>({ state: 'LOADING' });
+  const [orders, setOrders] = useState<ListState<ShopifyOrders>>({ state: 'LOADING' });
   const [shop, setShop] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [outcome, setOutcome] = useState<ShopifyOutcome>(null);
@@ -28,10 +30,19 @@ export function SchoolShopify({ api = shopifyApi, navigate = (url: string) => wi
   const [refresh, setRefresh] = useState(0);
   const gen = useRef(0), privacy = useRef(0), mounted = useRef(false), sending = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; privacy.current++; gen.current++; }; }, []);
+  // The open section lives in the address (#products …) so a refresh or a shared link opens the same place. Only known names.
+  useEffect(() => {
+    const read = () => { const h = window.location.hash.replace(/^#/, ''); setSection((SHOPIFY_SECTIONS as readonly string[]).includes(h) ? h as ShopifySection : 'overview'); };
+    read(); window.addEventListener('hashchange', read); return () => window.removeEventListener('hashchange', read);
+  }, []);
+  const go = useCallback((next: ShopifySection) => {
+    setSection(next);
+    try { window.history.replaceState(null, '', next === 'overview' ? window.location.pathname : `#${next}`); } catch { /* the section still changes */ }
+  }, []);
 
   useEffect(() => onShellPrivacyEvent(() => {
     concealShellPrivateNow(); gen.current++; privacy.current++;
-    setOutcome(null); setConfirming(false); setOverview({ state: 'LOADING' }); setList({ state: 'LOADING' });
+    setOutcome(null); setConfirming(false); setOverview({ state: 'LOADING' }); setCatalog({ state: 'LOADING' }); setOrders({ state: 'LOADING' });
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), []);
 
   useEffect(() => {
@@ -47,18 +58,17 @@ export function SchoolShopify({ api = shopifyApi, navigate = (url: string) => wi
   }, [api, schoolId, refresh]);
 
   const hasConnection = overview.state === 'READY' && overview.read.connection !== null;
+  // Products and orders are read together once a store is linked: the Overview needs both, and each section then opens at once.
   useEffect(() => {
     if (!schoolId || !hasConnection) return;
     const shown = privacy.current;
-    setList({ state: 'LOADING' });
+    setCatalog({ state: 'LOADING' }); setOrders({ state: 'LOADING' });
     const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(20000)]);
     const owned = () => mounted.current && shown === privacy.current && !abort.signal.aborted;
-    const read: Promise<TabState> = tab === 'catalog'
-      ? api.catalog(schoolId, signal, owned).then((catalog) => ({ state: 'CATALOG', catalog }))
-      : api.orders(schoolId, signal, owned).then((orders) => ({ state: 'ORDERS', orders }));
-    read.then((next) => { if (owned()) setList(next); }, () => { if (owned()) setList({ state: 'UNAVAILABLE' }); });
+    api.catalog(schoolId, signal, owned).then((value) => { if (owned()) setCatalog({ state: 'READY', value }); }, () => { if (owned()) setCatalog({ state: 'UNAVAILABLE' }); });
+    api.orders(schoolId, signal, owned).then((value) => { if (owned()) setOrders({ state: 'READY', value }); }, () => { if (owned()) setOrders({ state: 'UNAVAILABLE' }); });
     return () => { abort.abort(); };
-  }, [api, schoolId, hasConnection, tab, refresh]);
+  }, [api, schoolId, hasConnection, refresh]);
 
   const run = useCallback(async (action: 'sync' | 'disconnect') => {
     if (sending.current || !schoolId || overview.state !== 'READY' || !overview.read.connection) return;
@@ -95,11 +105,11 @@ export function SchoolShopify({ api = shopifyApi, navigate = (url: string) => wi
 
   return <div key={shell.phase} data-shell-private="">
     <ShopifyView language={locale.preferences.language} locale={locale.formattingLocale} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'}
-      concealed={shell.phase === 'CONCEALED'} hasSchool={!!schoolId} overview={overview} tab={tab} list={list} shop={shop} confirming={confirming}
+      concealed={shell.phase === 'CONCEALED'} hasSchool={!!schoolId} overview={overview} section={section} catalog={catalog} orders={orders} shop={shop} confirming={confirming}
       outcome={outcome} locked={locked}
       onRefresh={() => { setOutcome(null); setRefresh((n) => n + 1); }} onShop={(v) => { if (!locked) { setShop(v); setOutcome(null); } }}
       onConnect={() => { void onConnect(); }} onSync={() => { void run('sync'); }} onConfirm={(open) => { if (!locked) { setConfirming(open); setOutcome(null); } }}
-      onDisconnect={() => { void run('disconnect'); }} onTab={(next) => setTab(next)} />
+      onDisconnect={() => { void run('disconnect'); }} onSection={go} />
   </div>;
 }
 

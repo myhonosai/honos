@@ -1,22 +1,24 @@
-import React from 'react';
-import type { ShopifyCatalog, ShopifyConnectResult, ShopifyOrders, ShopifyOverview, ShopifySyncResult } from '@hon/contracts';
+import React, { useState } from 'react';
+import type { ShopifyCatalog, ShopifyConnectResult, ShopifyConnection, ShopifyOrder, ShopifyOrders, ShopifyOverview, ShopifyProduct, ShopifySyncResult } from '@hon/contracts';
 import { shopifyText, type ShopifyKey } from './copy';
 import type { ShopifyErrorKind } from './http';
 import styles from './shopify.module.css';
 
 type T = (key: ShopifyKey, vars?: Record<string, string>) => string;
 export type OverviewState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; read: ShopifyOverview };
-export type ShopifyTab = 'catalog' | 'orders';
-export type TabState = { state: 'LOADING' | 'UNAVAILABLE' } | { state: 'CATALOG'; catalog: ShopifyCatalog } | { state: 'ORDERS'; orders: ShopifyOrders };
+/** The Commerce Workspace sections built today. Later sections (Collections, Fulfillment, Theme Builder, …) are added when they work. */
+export const SHOPIFY_SECTIONS = ['overview', 'products', 'orders', 'inventory', 'settings'] as const;
+export type ShopifySection = typeof SHOPIFY_SECTIONS[number];
+export type ListState<T> = { state: 'LOADING' | 'UNAVAILABLE' } | { state: 'READY'; value: T };
 export type ShopifyAction = 'connect' | 'sync' | 'disconnect';
 export type ShopifyOutcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | ShopifyErrorKind; action: ShopifyAction; sync?: ShopifySyncResult }>;
 
 export type ShopifyViewProps = Readonly<{
   language: string; locale: string; waiting: boolean; concealed: boolean; hasSchool: boolean;
-  overview: OverviewState; tab: ShopifyTab; list: TabState; shop: string; confirming: boolean; outcome: ShopifyOutcome; locked: boolean;
+  overview: OverviewState; section: ShopifySection; catalog: ListState<ShopifyCatalog>; orders: ListState<ShopifyOrders>; shop: string; confirming: boolean; outcome: ShopifyOutcome; locked: boolean;
   onRefresh?: (() => void) | undefined; onShop?: ((value: string) => void) | undefined; onConnect?: (() => void) | undefined;
   onSync?: (() => void) | undefined; onConfirm?: ((open: boolean) => void) | undefined; onDisconnect?: (() => void) | undefined;
-  onTab?: ((tab: ShopifyTab) => void) | undefined;
+  onSection?: ((section: ShopifySection) => void) | undefined;
 }>;
 
 const when = (locale: string, iso: string) => { try { return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso)); } catch { return iso; } };
@@ -61,34 +63,291 @@ function Summary({ read, t, locale }: { read: ShopifyOverview; t: T; locale: str
   </div>;
 }
 
-function CatalogTable({ catalog, t, locale }: { catalog: ShopifyCatalog; t: T; locale: string }): React.ReactElement {
-  if (catalog.products.length === 0) return <p className={styles.meta}>{t('catalogEmpty')}</p>;
-  const m = (n: number | null) => n === null ? t('noCost') : money(locale, catalog.currency, n);
-  return <div className={styles.tableWrap}><table className={styles.table} data-shopify-catalog>
-    <thead><tr><th>{t('col_product')}</th><th>{t('col_variant')}</th><th>{t('col_sku')}</th><th>{t('col_price')}</th><th>{t('col_cost')}</th><th>{t('col_margin')}</th><th>{t('col_stock')}</th></tr></thead>
-    <tbody>{catalog.products.flatMap((p) => p.variants.map((v, i) => <tr key={v.variantId} data-variant={v.variantId} data-low={v.lowStock ? 'true' : 'false'}>
-      <td>{i === 0 ? <><strong>{p.title}</strong>{p.status !== 'ACTIVE' && <span className={styles.chip}>{t(`status_${p.status}`)}</span>}</> : ''}</td>
-      <td>{v.title}</td><td>{v.sku ?? ''}</td><td>{m(v.price)}</td><td>{m(v.unitCost)}</td>
-      <td>{v.margin === null ? t('noCost') : `${m(v.margin)}${v.marginPercent === null ? '' : ` (${v.marginPercent}%)`}`}</td>
-      <td>{!v.tracked ? <span className={styles.meta}>{t('notTracked')}</span> : <>{v.inventoryQuantity ?? 0}{v.lowStock && <span className={styles.chip} data-state="LOW">{t('low')}</span>}</>}</td>
-    </tr>))}</tbody>
-  </table></div>;
+// ---- Commerce Workspace (WS1): sections over the verified read-only mirror. Nothing here writes to Shopify. ----
+
+const handleOf = (domain: string) => domain.replace(/\.myshopify\.com$/, '');
+/** Shopify admin links: built only from the verified myshopify name and numeric ids. */
+export function shopifyAdminUrl(domain: string, kind: 'home' | 'products' | 'orders', id?: string): string {
+  const base = `https://admin.shopify.com/store/${encodeURIComponent(handleOf(domain))}`;
+  return kind === 'home' ? base : `${base}/${kind}${id ? `/${encodeURIComponent(id)}` : ''}`;
+}
+const FIN_KEYS = new Set<string>(['PAID', 'PENDING', 'REFUNDED', 'PARTIALLY_REFUNDED', 'AUTHORIZED', 'VOIDED', 'PARTIALLY_PAID', 'EXPIRED']);
+const FUL_KEYS = new Set<string>(['FULFILLED', 'UNFULFILLED', 'PARTIALLY_FULFILLED', 'IN_PROGRESS', 'ON_HOLD', 'SCHEDULED', 'RESTOCKED', 'PENDING_FULFILLMENT', 'OPEN']);
+/** A Shopify status word in plain language; an unknown word is shown as words, never as an outcome HON invented. */
+function statusLabel(t: T, prefix: 'fin' | 'ful', value: string | null): string | null {
+  if (!value) return null;
+  if ((prefix === 'fin' ? FIN_KEYS : FUL_KEYS).has(value)) return t(`${prefix}_${value}` as ShopifyKey);
+  const words = value.toLowerCase().replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+const FULFILLED = new Set(['FULFILLED', 'RESTOCKED']);
+export const orderToFulfill = (o: ShopifyOrder) => !o.cancelledAt && !(o.fulfillmentStatus && FULFILLED.has(o.fulfillmentStatus));
+
+type Ctx = Readonly<{ t: T; locale: string; domain: string; currency: string | null }>;
+const pending = (t: T, state: ListState<unknown>) => state.state === 'LOADING'
+  ? <p className={styles.meta} role="status">{t('loadingList')}</p> : <p className={styles.notice} role="alert">{t('listUnavailable')}</p>;
+
+function Filters<K extends string>({ label, value, options, onChange }: { label: string; value: K; options: readonly (readonly [K, string])[]; onChange: (k: K) => void }): React.ReactElement {
+  return <div className={styles.tabs} role="group" aria-label={label}>
+    {options.map(([k, text]) => <button key={k} type="button" className={styles.tab} aria-pressed={value === k} onClick={() => onChange(k)}>{text}</button>)}
+  </div>;
 }
 
-function OrdersTable({ orders, t, locale }: { orders: ShopifyOrders; t: T; locale: string }): React.ReactElement {
-  if (orders.orders.length === 0) return <p className={styles.meta}>{t('ordersEmpty')}</p>;
-  return <div className={styles.tableWrap}><table className={styles.table} data-shopify-orders>
-    <thead><tr><th>{t('col_order')}</th><th>{t('col_date')}</th><th>{t('col_items')}</th><th>{t('col_total')}</th><th>{t('col_status')}</th></tr></thead>
-    <tbody>{orders.orders.map((o) => <tr key={o.orderId} data-order={o.orderId}>
-      <td><strong>{o.name}</strong></td><td>{day(locale, o.placedAt)}</td>
-      <td>{o.lines.map((l) => `${l.quantity} × ${l.title}`).join(', ')}</td>
-      <td>{money(locale, o.currency, o.total)}</td>
-      <td>{o.cancelledAt ? <span className={styles.chip} data-state="CANCELLED">{t('cancelled')}</span> : [o.financialStatus, o.fulfillmentStatus].filter(Boolean).join(' · ')}</td>
-    </tr>)}</tbody>
-  </table></div>;
+function Attention({ ctx, read, catalog, orders, go }: { ctx: Ctx; read: ShopifyOverview; catalog: ListState<ShopifyCatalog>; orders: ListState<ShopifyOrders>; go: (s: ShopifySection) => void }): React.ReactElement {
+  const { t } = ctx;
+  const items: { key: string; label: string; n: number; to: ShopifySection }[] = [];
+  if (orders.state === 'READY') items.push({ key: 'toFulfill', label: t('att_toFulfill'), n: orders.value.orders.filter(orderToFulfill).length, to: 'orders' });
+  if (read.counts) items.push({ key: 'lowStock', label: t('att_lowStock'), n: read.counts.lowStock, to: 'inventory' });
+  if (catalog.state === 'READY') {
+    const products = catalog.value.products;
+    items.push({ key: 'noCost', label: t('att_noCost'), n: products.reduce((a, p) => a + p.variants.filter(v => v.unitCost === null).length, 0), to: 'products' });
+    items.push({ key: 'drafts', label: t('att_drafts'), n: products.filter(p => p.status === 'DRAFT').length, to: 'products' });
+  }
+  const open = items.filter(i => i.n > 0);
+  const reconnect = read.connection?.status === 'NEEDS_RECONNECT';
+  return <div className={styles.card} data-shopify-attention>
+    <h2>{t('attentionTitle')}</h2>
+    {reconnect && <p className={styles.warnText}>{t('att_reconnect')}</p>}
+    {(orders.state === 'LOADING' || catalog.state === 'LOADING') && <p className={styles.meta} role="status">{t('loadingList')}</p>}
+    {(orders.state === 'UNAVAILABLE' || catalog.state === 'UNAVAILABLE') && <p className={styles.notice} role="alert">{t('listUnavailable')}</p>}
+    {open.length === 0 && !reconnect && orders.state === 'READY' && catalog.state === 'READY' ? <p className={styles.meta}>{t('att_none')}</p>
+      : <ul className={styles.list}>{open.map(i => <li key={i.key} data-attention={i.key}>
+        <button type="button" className={styles.linkButton} onClick={() => go(i.to)}>{i.label}</button><strong>{i.n}</strong></li>)}</ul>}
+  </div>;
 }
 
-/** Pure view of the server's verified answers. */
+function RecentOrders({ ctx, orders, go }: { ctx: Ctx; orders: ListState<ShopifyOrders>; go: (s: ShopifySection) => void }): React.ReactElement {
+  const { t, locale } = ctx;
+  return <div className={styles.card} data-shopify-recent>
+    <div className={styles.cardHead}><h2>{t('recentTitle')}</h2><button type="button" className={styles.linkButton} onClick={() => go('orders')}>{t('viewAll')}</button></div>
+    {orders.state !== 'READY' ? pending(t, orders) : orders.value.orders.length === 0 ? <p className={styles.meta}>{t('ordersEmpty')}</p>
+      : <ul className={styles.list}>{orders.value.orders.slice(0, 5).map(o => <li key={o.orderId}>
+        <span><strong>{o.name}</strong> <span className={styles.meta}>{day(locale, o.placedAt)}</span></span>
+        <span>{money(locale, o.currency, o.total)}</span></li>)}</ul>}
+  </div>;
+}
+
+function Overview({ ctx, read, catalog, orders, go }: { ctx: Ctx; read: ShopifyOverview; catalog: ListState<ShopifyCatalog>; orders: ListState<ShopifyOrders>; go: (s: ShopifySection) => void }): React.ReactElement {
+  return <div className={styles.section} data-section="overview">
+    <Summary read={read} t={ctx.t} locale={ctx.locale} />
+    <div className={styles.cards}>
+      <Attention ctx={ctx} read={read} catalog={catalog} orders={orders} go={go} />
+      <RecentOrders ctx={ctx} orders={orders} go={go} />
+    </div>
+  </div>;
+}
+
+type ProductFilter = 'all' | 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
+const range = (ctx: Ctx, values: number[]) => {
+  if (values.length === 0) return ctx.t('noCost');
+  const lo = Math.min(...values), hi = Math.max(...values), m = (n: number) => money(ctx.locale, ctx.currency, n);
+  return lo === hi ? m(lo) : `${m(lo)} – ${m(hi)}`;
+};
+export function matchesProduct(p: ShopifyProduct, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return [p.title, p.productType, p.vendor, ...p.variants.flatMap(v => [v.title, v.sku])].some(x => typeof x === 'string' && x.toLowerCase().includes(q));
+}
+
+function Products({ ctx, catalog }: { ctx: Ctx; catalog: ListState<ShopifyCatalog> }): React.ReactElement {
+  const { t, locale } = ctx;
+  const [query, setQuery] = useState(''), [status, setStatus] = useState<ProductFilter>('all'), [type, setType] = useState('');
+  if (catalog.state !== 'READY') return <div className={styles.card} data-section="products">{pending(t, catalog)}</div>;
+  const all = catalog.value.products;
+  const types = [...new Set(all.map(p => p.productType).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b, locale));
+  const shown = all.filter(p => (status === 'all' || p.status === status) && (!type || p.productType === type) && matchesProduct(p, query));
+  const m = (n: number | null) => n === null ? t('noCost') : money(locale, ctx.currency, n);
+  return <div className={styles.section} data-section="products">
+    <div className={styles.card}>
+      <div className={styles.toolbar}>
+        <label className={styles.field}>{t('search')}<input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder={t('searchProducts')} maxLength={100} /></label>
+        {types.length > 0 && <label className={styles.field}>{t('type')}<select value={type} onChange={e => setType(e.target.value)}>
+          <option value="">{t('allTypes')}</option>{types.map(x => <option key={x} value={x}>{x}</option>)}</select></label>}
+      </div>
+      <Filters label={t('nav_products')} value={status} onChange={setStatus}
+        options={[['all', t('f_all')], ['ACTIVE', t('status_ACTIVE')], ['DRAFT', t('status_DRAFT')], ['ARCHIVED', t('status_ARCHIVED')]]} />
+      <p className={styles.meta} role="status">{t('shownOf', { shown: String(shown.length), total: String(all.length) })}</p>
+    </div>
+    {all.length === 0 ? <p className={styles.meta}>{t('catalogEmpty')}</p> : shown.length === 0 ? <p className={styles.meta}>{t('noMatch')}</p>
+      : <ul className={styles.items} data-shopify-catalog>{shown.map(p => {
+        const tracked = p.variants.filter(v => v.tracked), stock = tracked.reduce((a, v) => a + (v.inventoryQuantity ?? 0), 0);
+        const margins = p.variants.map(v => v.marginPercent).filter((x): x is number => x !== null);
+        const low = p.variants.some(v => v.lowStock);
+        return <li key={p.productId} className={styles.item} data-product={p.productId}>
+          <details>
+            <summary className={styles.itemHead}>
+              {p.imageUrl ? <img className={styles.thumb} src={p.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span className={styles.thumb} aria-hidden="true" />}
+              <span className={styles.itemMain}><strong>{p.title}</strong>
+                <span className={styles.meta}>{[p.productType, t('variantsCount', { n: String(p.variants.length) })].filter(Boolean).join(' · ')}</span></span>
+              <span className={styles.itemFacts}>
+                <span>{range(ctx, p.variants.map(v => v.price))}</span>
+                <span className={styles.meta}>{tracked.length === 0 ? t('notTracked') : t('stockTotal', { n: String(stock) })}</span>
+                {margins.length > 0 && <span className={styles.meta}>{t('marginShort', { n: `${Math.min(...margins)}%${Math.min(...margins) === Math.max(...margins) ? '' : `–${Math.max(...margins)}%`}` })}</span>}
+              </span>
+              <span className={styles.chips}>{p.status !== 'ACTIVE' && <span className={styles.chip} data-state={p.status}>{t(`status_${p.status}`)}</span>}
+                {low && <span className={styles.chip} data-state="LOW">{t('low')}</span>}</span>
+            </summary>
+            <div className={styles.itemBody}>
+              <div className={styles.tableWrap}><table className={styles.table}>
+                <thead><tr><th>{t('col_variant')}</th><th>{t('col_sku')}</th><th>{t('col_price')}</th><th>{t('col_cost')}</th><th>{t('col_margin')}</th><th>{t('col_stock')}</th></tr></thead>
+                <tbody>{p.variants.map(v => <tr key={v.variantId} data-variant={v.variantId} data-low={v.lowStock ? 'true' : 'false'}>
+                  <td>{v.title}</td><td>{v.sku ?? ''}</td><td>{m(v.price)}</td><td>{m(v.unitCost)}</td>
+                  <td>{v.margin === null ? t('noCost') : `${m(v.margin)}${v.marginPercent === null ? '' : ` (${v.marginPercent}%)`}`}</td>
+                  <td>{!v.tracked ? <span className={styles.meta}>{t('notTracked')}</span> : <>{v.inventoryQuantity ?? 0}{v.lowStock && <span className={styles.chip} data-state="LOW">{t('low')}</span>}</>}</td>
+                </tr>)}</tbody>
+              </table></div>
+              <a className={styles.secondary} href={shopifyAdminUrl(ctx.domain, 'products', p.productId)} target="_blank" rel="noopener noreferrer">{t('openShopify')}</a>
+            </div>
+          </details>
+        </li>;
+      })}</ul>}
+  </div>;
+}
+
+type OrderFilter = 'all' | 'toFulfill' | 'paid' | 'refunded' | 'cancelled';
+const REFUNDED = new Set(['REFUNDED', 'PARTIALLY_REFUNDED']);
+export function orderMatches(o: ShopifyOrder, filter: OrderFilter, query: string): boolean {
+  const ok = filter === 'all' ? true : filter === 'toFulfill' ? orderToFulfill(o) : filter === 'cancelled' ? !!o.cancelledAt
+    : filter === 'paid' ? !o.cancelledAt && o.financialStatus === 'PAID' : !!o.financialStatus && REFUNDED.has(o.financialStatus);
+  const q = query.trim().toLowerCase();
+  return ok && (!q || o.name.toLowerCase().includes(q) || o.lines.some(l => l.title.toLowerCase().includes(q) || (l.sku ?? '').toLowerCase().includes(q)));
+}
+
+function Orders({ ctx, orders }: { ctx: Ctx; orders: ListState<ShopifyOrders> }): React.ReactElement {
+  const { t, locale } = ctx;
+  const [filter, setFilter] = useState<OrderFilter>('all'), [query, setQuery] = useState('');
+  if (orders.state !== 'READY') return <div className={styles.card} data-section="orders">{pending(t, orders)}</div>;
+  const all = orders.value.orders, shown = all.filter(o => orderMatches(o, filter, query));
+  return <div className={styles.section} data-section="orders">
+    <div className={styles.card}>
+      <div className={styles.toolbar}><label className={styles.field}>{t('search')}<input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder={t('searchOrders')} maxLength={100} /></label></div>
+      <Filters label={t('nav_orders')} value={filter} onChange={setFilter}
+        options={[['all', t('f_all')], ['toFulfill', t('of_toFulfill')], ['paid', t('of_paid')], ['refunded', t('of_refunded')], ['cancelled', t('of_cancelled')]]} />
+      <p className={styles.meta} role="status">{t('shownOf', { shown: String(shown.length), total: String(all.length) })} · {t('ordersNote')}</p>
+    </div>
+    {all.length === 0 ? <p className={styles.meta}>{t('ordersEmpty')}</p> : shown.length === 0 ? <p className={styles.meta}>{t('noMatch')}</p>
+      : <ul className={styles.items} data-shopify-orders>{shown.map(o => {
+        const m = (n: number) => money(locale, o.currency, n);
+        const fin = statusLabel(t, 'fin', o.financialStatus), ful = statusLabel(t, 'ful', o.fulfillmentStatus);
+        return <li key={o.orderId} className={styles.item} data-order={o.orderId}>
+          <details>
+            <summary className={styles.itemHead}>
+              <span className={styles.itemMain}><strong>{o.name}</strong><span className={styles.meta}>{when(locale, o.placedAt)}{o.sourceName ? ` · ${o.sourceName}` : ''}</span></span>
+              <span className={styles.itemFacts}><span>{m(o.total)}</span><span className={styles.meta}>{t('itemsCount', { n: String(o.lines.reduce((a, l) => a + l.quantity, 0)) })}</span></span>
+              <span className={styles.chips}>
+                {o.cancelledAt ? <span className={styles.chip} data-state="CANCELLED">{t('cancelled')}</span> : <>
+                  {fin && <span className={styles.chip} data-state={o.financialStatus ?? ''}>{fin}</span>}
+                  {ful && <span className={styles.chip} data-state={orderToFulfill(o) ? 'TO_FULFILL' : o.fulfillmentStatus ?? ''}>{ful}</span>}</>}
+              </span>
+            </summary>
+            <div className={styles.itemBody}>
+              <div className={styles.tableWrap}><table className={styles.table}>
+                <thead><tr><th>{t('col_items')}</th><th>{t('col_sku')}</th><th>{t('col_qty')}</th><th>{t('col_price')}</th><th>{t('col_lineTotal')}</th></tr></thead>
+                <tbody>{o.lines.map((l, i) => <tr key={i}><td>{l.title}</td><td>{l.sku ?? ''}</td><td>{l.quantity}</td><td>{m(l.unitPrice)}</td><td>{m(l.unitPrice * l.quantity)}</td></tr>)}</tbody>
+              </table></div>
+              <dl className={styles.summary}>
+                <dt>{t('subtotal')}</dt><dd>{m(o.subtotal)}</dd>
+                {o.discounts > 0 && <><dt>{t('discounts')}</dt><dd>−{m(o.discounts)}</dd></>}
+                <dt>{t('tax')}</dt><dd>{m(o.tax)}</dd>
+                <dt>{t('total')}</dt><dd><strong>{m(o.total)}</strong></dd>
+              </dl>
+              <a className={styles.secondary} href={shopifyAdminUrl(ctx.domain, 'orders', o.orderId)} target="_blank" rel="noopener noreferrer">{t('openShopify')}</a>
+            </div>
+          </details>
+        </li>;
+      })}</ul>}
+  </div>;
+}
+
+type InventoryFilter = 'low' | 'tracked' | 'untracked';
+function Inventory({ ctx, catalog }: { ctx: Ctx; catalog: ListState<ShopifyCatalog> }): React.ReactElement {
+  const { t, locale } = ctx;
+  const [filter, setFilter] = useState<InventoryFilter>('low');
+  if (catalog.state !== 'READY') return <div className={styles.card} data-section="inventory">{pending(t, catalog)}</div>;
+  const rows = catalog.value.products.flatMap(p => p.variants.map(v => ({ p, v })));
+  const tracked = rows.filter(r => r.v.tracked);
+  const units = tracked.reduce((a, r) => a + Math.max(0, r.v.inventoryQuantity ?? 0), 0);
+  const costed = tracked.filter(r => r.v.unitCost !== null);
+  const value = costed.reduce((a, r) => a + Math.max(0, r.v.inventoryQuantity ?? 0) * (r.v.unitCost ?? 0), 0);
+  const costedUnits = costed.reduce((a, r) => a + Math.max(0, r.v.inventoryQuantity ?? 0), 0);
+  const shown = (filter === 'low' ? tracked.filter(r => r.v.lowStock) : filter === 'tracked' ? tracked : rows.filter(r => !r.v.tracked))
+    .slice().sort((a, b) => (a.v.inventoryQuantity ?? 0) - (b.v.inventoryQuantity ?? 0) || a.p.title.localeCompare(b.p.title, locale));
+  return <div className={styles.section} data-section="inventory">
+    <div className={styles.card}>
+      <dl className={styles.stats}>
+        <div><dt>{t('unitsInStock')}</dt><dd>{units}</dd></div>
+        <div><dt>{t('lowStock')}</dt><dd data-low={tracked.some(r => r.v.lowStock) ? 'true' : 'false'}>{tracked.filter(r => r.v.lowStock).length}</dd></div>
+        <div><dt>{t('stockValue')}</dt><dd data-shopify-stock-value>{costedUnits > 0 ? money(locale, ctx.currency, value) : t('noCost')}</dd></div>
+      </dl>
+      <p className={styles.meta}>{costedUnits > 0 ? t('stockValueNote', { units: String(costedUnits), total: String(units) }) : t('profitNone')}</p>
+      <Filters label={t('nav_inventory')} value={filter} onChange={setFilter}
+        options={[['low', t('if_low')], ['tracked', t('if_tracked')], ['untracked', t('if_untracked')]]} />
+    </div>
+    {shown.length === 0 ? <p className={styles.meta}>{filter === 'low' ? t('noLow') : t('noMatch')}</p>
+      : <div className={styles.card}><div className={styles.tableWrap}><table className={styles.table} data-shopify-inventory>
+        <thead><tr><th>{t('col_product')}</th><th>{t('col_variant')}</th><th>{t('col_sku')}</th><th>{t('col_stock')}</th></tr></thead>
+        <tbody>{shown.map(({ p, v }) => <tr key={v.variantId} data-variant={v.variantId} data-low={v.lowStock ? 'true' : 'false'}>
+          <td>{p.title}</td><td>{v.title}</td><td>{v.sku ?? ''}</td>
+          <td>{!v.tracked ? <span className={styles.meta}>{t('notTracked')}</span> : <>{v.inventoryQuantity ?? 0}{v.lowStock && <span className={styles.chip} data-state="LOW">{t('low')}</span>}</>}</td>
+        </tr>)}</tbody>
+      </table></div>{filter === 'untracked' && <p className={styles.meta}>{t('untrackedNote')}</p>}</div>}
+  </div>;
+}
+
+function Connection({ p, t, read, c }: { p: ShopifyViewProps; t: T; read: ShopifyOverview; c: ShopifyConnection }): React.ReactElement {
+  const o = p.outcome;
+  return <div className={styles.card} data-shopify-connection data-status={c.status}>
+    <div className={styles.cardHead}>
+      <div><h2>{c.shopName ?? c.shopDomain}</h2><p className={styles.meta}>{c.shopDomain}</p></div>
+      <span className={styles.chip} data-state={c.status}>{t(`st_${c.status}`)}</span>
+    </div>
+    <p className={styles.meta}>{t('since', { time: when(p.locale, c.connectedAt) })} · {c.syncRunning ? t('syncing')
+      : c.lastSyncAt ? `${t('lastSync', { time: when(p.locale, c.lastSyncAt) })} (${t(`out_${c.lastSyncOutcome ?? 'SUCCEEDED'}`)})` : t('neverSynced')}</p>
+    {c.status === 'CONNECTED' && read.autoSync && <p className={styles.meta} data-shopify-auto-sync>{t('autoSync')}</p>}
+    {c.status === 'CONNECTED' && !read.autoSync && read.canManage && <p className={styles.meta}>{t('manualSync')}</p>}
+    {c.status === 'NEEDS_RECONNECT' && <p className={styles.warnText}>{t('needsReconnect')}</p>}
+    {c.status === 'DISCONNECTED' && <p className={styles.meta}>{t('disconnectedNote')}</p>}
+    {read.canManage && c.status === 'CONNECTED' && <div className={styles.row}>
+      {p.confirming
+        ? <><p className={styles.warnText}>{t('confirmDisconnect')}</p>
+          <button type="button" className={styles.primary} disabled={p.locked} onClick={p.onDisconnect}>{t('yesDisconnect')}</button>
+          <button type="button" className={styles.secondary} disabled={p.locked} onClick={() => p.onConfirm?.(false)}>{t('cancel')}</button></>
+        : <><button type="button" className={styles.primary} disabled={p.locked || c.syncRunning} onClick={p.onSync}>{p.locked && o?.action === 'sync' ? t('syncBusy') : t('sync')}</button>
+          <a className={styles.secondary} href={shopifyAdminUrl(c.shopDomain, 'home')} target="_blank" rel="noopener noreferrer">{t('openAdmin')}</a>
+          <button type="button" className={styles.secondary} disabled={p.locked} onClick={() => p.onConfirm?.(true)}>{t('disconnect')}</button></>}
+    </div>}
+  </div>;
+}
+
+function Settings({ p, t, read, c }: { p: ShopifyViewProps; t: T; read: ShopifyOverview; c: ShopifyConnection }): React.ReactElement {
+  return <div className={styles.section} data-section="settings">
+    <Connection p={p} t={t} read={read} c={c} />
+    <div className={styles.card} data-shopify-permissions>
+      <h2>{t('perm_title')}</h2>
+      <ul className={styles.plainList}><li>{t('perm_read')}</li><li>{t('perm_orders')}</li></ul>
+      <p className={styles.meta}>{t('perm_noWrite')}</p>
+    </div>
+  </div>;
+}
+
+function ConnectCard({ p, t, read, c }: { p: ShopifyViewProps; t: T; read: ShopifyOverview; c: ShopifyConnection | null }): React.ReactElement {
+  const o = p.outcome;
+  return <div className={styles.card} data-shopify-connect>
+    <h2>{c ? t('reconnect') : t('connectTitle')}</h2>
+    {!read.canManage ? <p className={styles.meta}>{t('managerOnly')}</p>
+      : !read.connectEnabled ? <p className={styles.notice} data-shopify-not-enabled>{t('notEnabled')}</p>
+      : <form className={styles.form} onSubmit={(e) => { e.preventDefault(); p.onConnect?.(); }}>
+        <p className={styles.meta}>{t('connectHelp')}</p>
+        <label className={styles.field}>{t('shopLabel')}
+          <input value={p.shop} onChange={(e) => p.onShop?.(e.target.value)} disabled={p.locked} autoComplete="off" spellCheck={false}
+            inputMode="url" maxLength={200} aria-describedby="shopify-shop-hint" /></label>
+        <span id="shopify-shop-hint" className={styles.meta}>{t('shopHint')}</span>
+        <div className={styles.row}><button type="submit" className={styles.primary} disabled={p.locked}>{p.locked && o?.action === 'connect' ? t('connecting') : c ? t('reconnect') : t('connect')}</button></div>
+      </form>}
+  </div>;
+}
+
+/** Pure view of the server's verified answers: the Commerce Workspace once a store is linked, the connect card before. */
 export function ShopifyView(p: ShopifyViewProps): React.ReactElement {
   const t: T = (key, vars) => shopifyText(p.language, key, vars);
   const head = <div className={styles.head}><div><h1>{t('title')}</h1><p className={styles.intro}>{t('intro')}</p></div>
@@ -107,51 +366,30 @@ export function ShopifyView(p: ShopifyViewProps): React.ReactElement {
   if (o && o.kind === 'DONE') message = o.action === 'disconnect' ? t('done_disconnect') : o.sync ? syncMessage(t, o.sync) : '';
   else if (o && o.kind !== 'SENDING') message = t(`e_${o.kind}` as ShopifyKey);
   const good = o?.kind === 'DONE' && (o.action === 'disconnect' || o.sync?.outcome === 'SUCCEEDED');
-  return <section className={styles.page}>
+  const notice = message && <div className={`${styles.notice} ${good ? '' : styles.warn}`} role={good ? 'status' : 'alert'} data-shopify-outcome={o?.kind}><p>{message}</p></div>;
+  if (!c) return <section className={styles.page}>{head}{notice}<ConnectCard p={p} t={t} read={read} c={null} /></section>;
+  const ctx: Ctx = { t, locale: p.locale, domain: c.shopDomain, currency: c.currency };
+  const go = (s: ShopifySection) => p.onSection?.(s);
+  const section = p.section;
+  return <section className={styles.page} data-shopify-workspace>
     {head}
-    {message && <div className={`${styles.notice} ${good ? '' : styles.warn}`} role={good ? 'status' : 'alert'} data-shopify-outcome={o?.kind}><p>{message}</p></div>}
-    {c && <div className={styles.card} data-shopify-connection data-status={c.status}>
-      <div className={styles.cardHead}>
-        <div><h2>{c.shopName ?? c.shopDomain}</h2><p className={styles.meta}>{c.shopDomain}</p></div>
-        <span className={styles.chip} data-state={c.status}>{t(`st_${c.status}`)}</span>
-      </div>
-      <p className={styles.meta}>{t('since', { time: when(p.locale, c.connectedAt) })} · {c.syncRunning ? t('syncing')
-        : c.lastSyncAt ? `${t('lastSync', { time: when(p.locale, c.lastSyncAt) })} (${t(`out_${c.lastSyncOutcome ?? 'SUCCEEDED'}`)})` : t('neverSynced')}</p>
-      {c.status === 'CONNECTED' && read.autoSync && <p className={styles.meta} data-shopify-auto-sync>{t('autoSync')}</p>}
-      {c.status === 'NEEDS_RECONNECT' && <p className={styles.warnText}>{t('needsReconnect')}</p>}
-      {c.status === 'DISCONNECTED' && <p className={styles.meta}>{t('disconnectedNote')}</p>}
-      {read.canManage && c.status === 'CONNECTED' && <div className={styles.row}>
-        {p.confirming
-          ? <><p className={styles.warnText}>{t('confirmDisconnect')}</p>
-            <button type="button" className={styles.primary} disabled={p.locked} onClick={p.onDisconnect}>{t('yesDisconnect')}</button>
-            <button type="button" className={styles.secondary} disabled={p.locked} onClick={() => p.onConfirm?.(false)}>{t('cancel')}</button></>
-          : <><button type="button" className={styles.primary} disabled={p.locked || c.syncRunning} onClick={p.onSync}>{p.locked && o?.action === 'sync' ? t('syncBusy') : t('sync')}</button>
-            <button type="button" className={styles.secondary} disabled={p.locked} onClick={() => p.onConfirm?.(true)}>{t('disconnect')}</button></>}
-      </div>}
-    </div>}
-    {connectable && <div className={styles.card} data-shopify-connect>
-      <h2>{c ? t('reconnect') : t('connectTitle')}</h2>
-      {!read.canManage ? <p className={styles.meta}>{t('managerOnly')}</p>
-        : !read.connectEnabled ? <p className={styles.notice} data-shopify-not-enabled>{t('notEnabled')}</p>
-        : <form className={styles.form} onSubmit={(e) => { e.preventDefault(); p.onConnect?.(); }}>
-          <p className={styles.meta}>{t('connectHelp')}</p>
-          <label className={styles.field}>{t('shopLabel')}
-            <input value={p.shop} onChange={(e) => p.onShop?.(e.target.value)} disabled={p.locked} autoComplete="off" spellCheck={false}
-              inputMode="url" maxLength={200} aria-describedby="shopify-shop-hint" /></label>
-          <span id="shopify-shop-hint" className={styles.meta}>{t('shopHint')}</span>
-          <div className={styles.row}><button type="submit" className={styles.primary} disabled={p.locked}>{p.locked && o?.action === 'connect' ? t('connecting') : c ? t('reconnect') : t('connect')}</button></div>
-        </form>}
-    </div>}
-    <Summary read={read} t={t} locale={p.locale} />
-    {c && <div className={styles.card}>
-      <div className={styles.tabs} role="group">
-        {(['catalog', 'orders'] as const).map((tab) => <button key={tab} type="button" className={styles.tab} aria-pressed={p.tab === tab} onClick={() => p.onTab?.(tab)}>{t(`tab_${tab}`)}</button>)}
-      </div>
-      {p.list.state === 'LOADING' ? <p className={styles.meta} role="status">{t('loadingList')}</p>
-        : p.list.state === 'UNAVAILABLE' ? <p className={styles.notice} role="alert">{t('listUnavailable')}</p>
-        : p.list.state === 'CATALOG' ? <CatalogTable catalog={p.list.catalog} t={t} locale={p.locale} />
-        : p.list.state === 'ORDERS' ? <OrdersTable orders={p.list.orders} t={t} locale={p.locale} /> : null}
-    </div>}
+    <div className={styles.storeBar}>
+      <span><strong>{c.shopName ?? c.shopDomain}</strong> <span className={styles.meta}>{c.shopDomain}</span></span>
+      <span className={styles.chip} data-state={c.status}>{t(`st_${c.status}`)}</span>
+      {read.canManage && c.status === 'CONNECTED' && section !== 'settings' &&
+        <button type="button" className={styles.secondary} disabled={p.locked || c.syncRunning} onClick={p.onSync}>{p.locked && o?.action === 'sync' ? t('syncBusy') : t('sync')}</button>}
+    </div>
+    <nav className={styles.sections} aria-label={t('navLabel')}>
+      {SHOPIFY_SECTIONS.map(s => <button key={s} type="button" className={styles.sectionTab} aria-current={section === s ? 'page' : undefined}
+        onClick={() => go(s)} data-nav={s}>{t(`nav_${s}`)}</button>)}
+    </nav>
+    {notice}
+    {connectable && section !== 'settings' && c.status === 'NEEDS_RECONNECT' && <p className={`${styles.notice} ${styles.warn}`}>{t('needsReconnect')}</p>}
+    {section === 'overview' ? <Overview ctx={ctx} read={read} catalog={p.catalog} orders={p.orders} go={go} />
+      : section === 'products' ? <Products ctx={ctx} catalog={p.catalog} />
+      : section === 'orders' ? <Orders ctx={ctx} orders={p.orders} />
+      : section === 'inventory' ? <Inventory ctx={ctx} catalog={p.catalog} />
+      : <><Settings p={p} t={t} read={read} c={c} />{connectable && <ConnectCard p={p} t={t} read={read} c={c} />}</>}
   </section>;
 }
 
