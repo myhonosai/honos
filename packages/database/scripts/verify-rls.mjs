@@ -320,6 +320,7 @@ const expectedRlsTables = [
   'parent_school_bookings',
   'school_conversations',
   'school_conversation_messages',
+  'school_contact_archives',
   'conversation_ai_program',
   'conversation_ai_program_changes',
   'school_conversation_ai_settings',
