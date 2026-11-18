@@ -115,3 +115,12 @@
 .chip[data-state="CH_UNKNOWN"] { background: #3a2f12; color: #ffe29a; box-shadow: inset 0 0 0 1px #7a6328; }
 .chip[data-state="CH_FAILED"] { background: #3a1616; color: #ffc4c4; box-shadow: inset 0 0 0 1px #7a3030; }
 .chip[data-state="CH_CANCELLED"] { background: #2a2232; color: #d9c8e8; box-shadow: inset 0 0 0 1px #5a4a6a; }
+/* Merch Studio */
+.swatch { display: inline-block; width: 18px; height: 18px; border-radius: 4px; border: 1px solid #35506d; margin-right: 6px; vertical-align: middle; }
+.checks { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
+.checks li { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.chip[data-state="NOT_CHECKED"] { background: #3a2f12; color: #ffe29a; box-shadow: inset 0 0 0 1px #7a6328; }
+.chip[data-state="ON"] { background: #10392f; color: #8ff0c9; box-shadow: inset 0 0 0 1px #2b7a63; }
+.chip[data-state="OFF"] { cursor: pointer; }
+.chip input { margin: 0 4px 0 0; }
+fieldset.field { border: 0; padding: 0; margin: 0; min-width: 0; }
