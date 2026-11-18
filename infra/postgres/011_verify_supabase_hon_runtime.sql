@@ -4736,7 +4736,46 @@ BEGIN
     RAISE EXCEPTION 'Staff time permissions missing'; END IF;
 END $$;
 -- End staff time clock exact verification.
--- Staff timesheet no-self-approval exact verification (0495)
+
+-- Shopify product changes exact verification (0496, SH4a): six runtime entry points (definer, owner-safe, runtime only,
+-- exact bodies); the change table is forced-RLS with no policy and no runtime privilege; every new helper stays closed.
+DO $$ DECLARE f text; t text;
+  entry text[]:=ARRAY['hon.read_shopify_product_changes(text,uuid)','hon.propose_shopify_product_change(text,jsonb)','hon.cancel_shopify_product_change(text,jsonb)',
+    'hon.approve_shopify_product_change(text,jsonb)','hon.rotate_shopify_change_credential(text,jsonb)','hon.record_shopify_product_change_result(text,jsonb)'];
+BEGIN
+  FOR f,t IN SELECT * FROM (VALUES ('hon.read_shopify_product_changes(text,uuid)','c9ffb984aff89d62f550dd97cc83402c'),
+      ('hon.propose_shopify_product_change(text,jsonb)','1f0db6cc91143a9b9f523c142253209f'),('hon.cancel_shopify_product_change(text,jsonb)','669f1ce90c8d974e522e68255b514a52'),
+      ('hon.approve_shopify_product_change(text,jsonb)','1b46ea3b1d44f613fe3fe27b7e795795'),('hon.rotate_shopify_change_credential(text,jsonb)','43ecb7034d74235ae67c530b61143dc2'),
+      ('hon.record_shopify_product_change_result(text,jsonb)','8b8c5c7310f9d03fe30049e8f33832f1'),('hon.guard_shopify_product_change()','1b6ee6dfb8d817c9b2163d6a4c6f9f94'),
+      ('hon.shopify_locked_change(uuid,jsonb)','515c47ff8148c870ac6b23491497e2bc'),('hon.shopify_leased_change(uuid,uuid,jsonb,boolean)','bed71c1e6af57533ef99ecf1e0e73949'),
+      ('hon.shopify_change_matches(hon.shopify_product_changes,jsonb)','b8f15aa40311b3b02816b944f4cb0f74'),('hon.shopify_mirror_product(uuid,jsonb,uuid)','f36d0ce08c05f41ab6d39e59946f1281')) v LOOP
+    IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM t THEN RAISE EXCEPTION 'Shopify product change function body drift: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe Shopify product change entry point: %',f; END IF;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='hon' AND (p.proname LIKE 'shopify\_%' OR p.proname IN ('guard_shopify','guard_shopify_product_change')) LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe Shopify product change helper: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.shopify_product_changes'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.shopify_product_changes'::regclass)
+    OR has_table_privilege('hon_runtime','hon.shopify_product_changes','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.shopify_product_changes','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe Shopify product change table'; END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.shopify_product_changes'::regclass AND tgenabled='O' AND (
+      (tgname='shopify_product_changes_guard' AND tgfoid='hon.guard_shopify_product_change()'::regprocedure)
+      OR (tgname='shopify_product_changes_no_truncate' AND tgfoid='hon.guard_shopify()'::regprocedure))) <> 2 THEN
+    RAISE EXCEPTION 'Shopify product change guards missing'; END IF;
+END $$;
+-- End Shopify product changes exact verification.
+-- Staff timesheet no-self-approval exact verification (0501)
 DO $$ DECLARE f text:='hon.staff_time_actor_is_owner(uuid,uuid,uuid)';
 BEGIN
   IF to_regprocedure(f) IS NULL OR EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')

@@ -1,6 +1,6 @@
 BEGIN;
 
--- Staff timesheets: no self-approval (0495, ledger 2026-11-18). Follow-up to the 0478 time clock review (P3): a holder
+-- Staff timesheets: no self-approval (0501, ledger 2026-11-18). Follow-up to the 0478 time clock review (P3): a holder
 -- of staff.timesheet.manage could approve their own week. Coordinator request 2026-11-18 for the owner (David): block
 -- approving one's own week, with the school's OWNER role exempt (an owner may have nobody above them).
 --   S1  APPROVE where the target is the actor is refused with TIMESHEET_SELF_APPROVAL (42501) unless the actor holds a
@@ -8,7 +8,7 @@ BEGIN;
 --       or fixing one's own entries, are unchanged.
 --   S2  Only hon.set_staff_timesheet_week changes (same signature, same ACL); one new private helper.
 DO $$ BEGIN
-  IF to_regprocedure('hon.set_staff_timesheet_week(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION '0495 requires 0478'; END IF;
+  IF to_regprocedure('hon.set_staff_timesheet_week(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION '0501 requires 0478'; END IF;
 END $$;
 
 -- Live system OWNER role grant for this principal at this exact school.
@@ -41,7 +41,7 @@ BEGIN
     OR NOT (hon.staff_member_eligible(target,org,school) OR EXISTS(SELECT 1 FROM hon.staff_time_entries e WHERE e.organization_id=org AND e.school_id=school
       AND e.principal_id=target AND e.local_date>=week AND e.local_date<week+7)) THEN
     RAISE EXCEPTION 'STAFF_MEMBER_UNAVAILABLE' USING ERRCODE='42501'; END IF;
-  -- 0495: nobody approves their own week unless they hold the school's OWNER role (decided after the per-person lock).
+  -- 0501: nobody approves their own week unless they hold the school's OWNER role (decided after the per-person lock).
   IF act='APPROVE' AND target=actor AND NOT hon.staff_time_actor_is_owner(actor,org,school) THEN
     RAISE EXCEPTION 'TIMESHEET_SELF_APPROVAL' USING ERRCODE='42501'; END IF;
   SELECT * INTO w FROM hon.staff_timesheet_weeks x WHERE x.organization_id=org AND x.school_id=school AND x.principal_id=target AND x.week_start=week FOR UPDATE;
