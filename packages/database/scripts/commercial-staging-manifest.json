@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "4011c079e8958a065fcb2372665c3d56f2957459b99fe83b5abedc1f2fd7ab02",
+  "chainSha256": "3d65b2fbeaeced5bfe66f3098da93badefb64673fbfecf2ec1898febc3068c35",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -645,6 +645,10 @@
     {
       "file": "0474_eian_family_ai.sql",
       "sha256": "fb0cd95a3a90bdf52fbccfff0a1f025baecec71047a6361f31fc44619c24498f"
+    },
+    {
+      "file": "0478_staff_time_clock.sql",
+      "sha256": "287658b3c361652b1e24de7682381ba0e295371513e06e2a12547f3b9f0323ea"
     },
     {
       "file": "0491_monthly_goal_plan.sql",

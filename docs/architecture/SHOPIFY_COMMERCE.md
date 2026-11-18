@@ -23,7 +23,8 @@ store is the test store.
 |---|---|---|
 | **SH1 (0405, merged)** | Connect one store per school via the HON app (OAuth, expiring offline token sealed by the API), Sync now (products, variants, SKU, price, stock, unit cost; last 60 days of orders), Finance › Shopify page with catalog, margins and sales summary, disconnect. Fake Shopify only. | No |
 | **SH1b (0449, merged)** | Signed webhooks: products, inventory levels, orders, `app/uninstalled`, and the three mandatory privacy topics; scheduled background sync that also keeps the refresh token alive. | No |
-| **SH1c (0470, this)** | Order retention: a mirrored order and its lines are deleted 60 days after the order was placed, on every successful sync and by the background worker for every store (connected or not). | No |
+| **SH1c (0470, merged)** | Order retention: a mirrored order and its lines are deleted 60 days after the order was placed, on every successful sync and by the background worker for every store (connected or not). | No |
+| **WS1 (this, no migration)** | Commerce Workspace layout over the read-only mirror: Overview (30-day sales, needs attention, recent orders), Products (search, status/type filters, variants, margins), Orders (filters, lines, totals), Inventory (low stock, units, stock value at cost), Store settings (connection, what HON can do). Each record links to the same record in Shopify admin. | No |
 | SH2 | POS sells Shopify variants when connected (database reprices from the mirror) and each sale is pushed to Shopify (order + inventory) through a queued job. Coordinated with the POS thread (0403). | No |
 | SH3 | Parent App and HON website buy through Shopify Checkout (Storefront cart → Shopify-hosted checkout); orders link back to the HON contact. | No |
 | SH4 | Commerce Workspace writes: create/edit products and prices, artwork upload, mockups, publish; AI descriptions/pricing/promotions by plan (fake AI until approved). | Paid AI |
@@ -204,6 +205,27 @@ behind "Yes" on Shopify's data-retention question for the protected-customer-dat
   by `shop/redact` after it leaves (SH1b).
 - The purge is executable only by `hon_communication_worker` (013); the trigger function by nobody. 010 revokes both,
   011 pins both bodies and the trigger.
+
+## WS1: Commerce Workspace (owner vision 2026-11-18, `/mnt/project-files/shopify/COMMERCE_VISION_2026-11-18.md`)
+
+David's Commerce vision replaces the single Shopify page with a Commerce Workspace. WS1 is its frame, built only on the
+existing read endpoints (overview, catalog, orders); no migration and no new permission.
+
+- Sections: Overview, Products, Orders, Inventory, Store settings. The open section is kept in the address (`#products`)
+  and only known names are accepted. Later sections (Collections, Fulfillment, Theme Builder, Creative Studio,
+  Promotions, Automations, Analytics) are added when they work, never as empty screens.
+- Overview: the 30-day summary, a "Needs attention" list counted from the mirror (orders to fulfill = not cancelled and
+  not FULFILLED/RESTOCKED; low stock; variants without a cost; draft products) and the five most recent orders. A list
+  that is loading or failed says so; nothing is shown as zero.
+- Products and orders are read together once a store is linked. Search and filters run in the browser over the verified
+  answer. Shopify status words are translated when known and shown as plain words otherwise.
+- "Open in Shopify" links are built only from the verified myshopify name and numeric ids
+  (`https://admin.shopify.com/store/<name>/products/<id>`), open in a new tab with `noopener noreferrer`.
+- Product images load lazily from Shopify's CDN (the verified URL pattern) with no referrer.
+- Order of later pieces (owner-approved 2026-11-18): product editing with owner approval; Creative Studio product drafts
+  (paid image provider needs approval); Theme Builder on a safe copy of an existing theme (needs Shopify's theme-file
+  exemption, request drafted at `/mnt/project-files/shopify/THEME_EDIT_EXEMPTION_REQUEST_DRAFT.md`); Parent App shop and
+  website link; POS and print-on-demand; Commerce Agent and automations.
 
 ## Plan (TDD)
 

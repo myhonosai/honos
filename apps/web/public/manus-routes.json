@@ -221,6 +221,10 @@
       "title": "HON | Shifts"
     },
     {
+      "path": "/staff/team/hours",
+      "title": "HON | Hours"
+    },
+    {
       "path": "/staff/team/availability",
       "title": "Human Staff Availability and Qualifications"
     },
