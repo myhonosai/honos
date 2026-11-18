@@ -1,4 +1,4 @@
-/* Reports dashboard (R3, 0480): KPI cards, one income chart, belt and pipeline bars. Thin marks, recessive axes, no page scroll on a phone. */
+/* Reports dashboard (R3, 0512): KPI cards, one income chart, belt and pipeline bars. Thin marks, recessive axes, no page scroll on a phone. */
 .dashboard { display: grid; gap: var(--hon-space-4, 16px); min-width: 0; }
 .kpis { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--hon-space-3, 12px); }
 .kpi { display: grid; gap: 4px; align-content: start; padding: var(--hon-space-4, 16px); border-radius: var(--hon-radius-md, 12px); background: var(--hon-surface, #0f2033); border: 1px solid var(--hon-border, #1c3349); min-width: 0; }

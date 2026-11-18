@@ -88,7 +88,7 @@ test('school reports service: months outside 3..12 and unknown keys are refused 
 });
 
 const { SchoolReportsDashboardController } = require('../dist/reports/school-reports.controller.js');
-test('school reports dashboard controller (0480): only ?range passes, as a string; reporting.view is resolved from the session', async () => {
+test('school reports dashboard controller (0512): only ?range passes, as a string; reporting.view is resolved from the session', async () => {
   const database = scopeDatabase();
   const reports = { inputs: [], async readDashboard(context, input) { this.inputs.push([context, input]); return { ok: true }; } };
   const controller = new SchoolReportsDashboardController(database, reports);
@@ -105,7 +105,7 @@ test('school reports dashboard controller (0480): only ?range passes, as a strin
   assert.equal(await code(other.read(ORG, SCHOOL, undefined, {}, request)), 'SCHOOL_REPORTS_FORBIDDEN');
 });
 
-test('school reports dashboard service (0480): ranges are closed before the database; errors map like the monthly reports', async () => {
+test('school reports dashboard service (0512): ranges are closed before the database; errors map like the monthly reports', async () => {
   let touched = false;
   const service = new SchoolReportsService({ async withTenantReadOnlyTransaction() { touched = true; } });
   for (const value of [{ range: 'last_month' }, { range: 'D7' }, { range: '' }, { months: '3' }]) {

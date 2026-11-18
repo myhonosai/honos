@@ -9,7 +9,7 @@ import { MembershipActivationHumanUiGuard } from '../billing/membership-activati
 import type { MembershipLifecycleContext } from '../billing/membership.service.js';
 import { SchoolContactAdminService } from './school-contact-admin.service.js';
 
-/** C3 (0483): every merge / archive call is its own browser command, so none replays as another. */
+/** C3 (0515): every merge / archive call is its own browser command, so none replays as another. */
 @Injectable()
 export class SchoolContactArchiveReadGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'people.contact.archive.read';
@@ -39,7 +39,7 @@ function idempotencyKey(key: string | undefined): string {
 }
 
 /**
- * C3 (0483): delete (archive), restore and merge on the contact card. Route identifiers are never authority: the scope is
+ * C3 (0515): delete (archive), restore and merge on the contact card. Route identifiers are never authority: the scope is
  * resolved from the verified session for the permission the call needs, and the database re-proves it live.
  */
 @Controller('organizations/:organizationId/schools/:schoolId/contacts/:personId')

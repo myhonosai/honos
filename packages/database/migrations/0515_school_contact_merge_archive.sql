@@ -1,6 +1,6 @@
 BEGIN;
 
--- C3 (0483, allocated by the coordinator 2026-11-15): merge and delete on the contact card. Owner (David), 2026-11-15
+-- C3 (0515, allocated by the coordinator, renumbered 2026-11-18 above release 0496): merge and delete on the contact card. Owner (David), 2026-11-15
 -- 18:04Z: "Merge and delete is needed." Read as (stated in the thread): Delete archives the contact (kept, restorable,
 -- history intact; never erased), Merge keeps one person and moves the other's live links onto them, then archives the
 -- other as merged. Nothing is sent or charged.
@@ -198,7 +198,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 $$;
 
 -- The contacts list and the card: an archived or merged person is segment ARCHIVED (it wins over every other segment).
--- Unchanged from 0481 otherwise.
+-- Unchanged from 0513 otherwise.
 CREATE OR REPLACE FUNCTION hon.school_contact_facts(org uuid, school uuid, as_of timestamptz)
 RETURNS TABLE(person_id uuid, segment text, membership_id uuid, plan_id uuid, plan_name text, program_id uuid, program_name text, plan_code text, ends_at timestamptz)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
@@ -239,7 +239,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 $$;
 
 -- The contacts list: segment ARCHIVED can be chosen and has its own count; ALL leaves archived contacts out. Unchanged from
--- 0481 otherwise.
+-- 0513 otherwise.
 CREATE OR REPLACE FUNCTION hon.read_school_contact_list(p_subject text, p_input jsonb) RETURNS jsonb
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); as_of timestamptz:=statement_timestamp();

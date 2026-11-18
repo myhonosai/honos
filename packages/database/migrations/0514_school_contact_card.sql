@@ -1,10 +1,10 @@
 BEGIN;
 
--- C2 (0482, allocated by the coordinator 2026-11-15): the contact card. Owner (David), 2026-11-15 08:23Z, on the Manus CRM
+-- C2 (0514, allocated by the coordinator, renumbered 2026-11-18 above release 0496): the contact card. Owner (David), 2026-11-15 08:23Z, on the Manus CRM
 -- ideas: "Apply all." Idea #1: one card per contact with an overview and tabs for family, appointments, tasks, membership,
 -- billing, messages and a timeline. Each tab shows only what the viewer's role may read; otherwise it says so.
 -- One read-only entry point, hon.read_school_contact_card(subject, {personId}), for the session school only. Authority: the
--- 0481 contacts actor (a direct human at the session school with live people.read, active school, organization and HON
+-- 0513 contacts actor (a direct human at the session school with live people.read, active school, organization and HON
 -- entitlement; HQ, family, delegated and automated callers refused). Each section then re-checks its own live permission:
 --   family        family.read
 --   appointments  crm.lead.read

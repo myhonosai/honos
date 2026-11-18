@@ -3749,7 +3749,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 END $$;
 -- End school reports locations exact verification.
 
--- School reports dashboard exact verification (R3 0480): one runtime read and three private helpers.
+-- School reports dashboard exact verification (R3 0512): one runtime read and three private helpers.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.school_dashboard_members(uuid,uuid)',true,false,'search_path=pg_catalog, hon','128ad76ba2cc03f7f668ea88048f1196838ff26d96ff61e88ffb036c28839977'),
@@ -3768,7 +3768,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 END $$;
 -- End school reports dashboard exact verification.
 
--- School contacts list exact verification (C1 0481): one runtime read and two private helpers.
+-- School contacts list exact verification (C1 0513): one runtime read and two private helpers.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.require_school_contacts_actor(text)',true,false,'search_path=pg_catalog, hon','d428974c62fe5e652b4470356505c174fd3b6431a3f07dd753ef47f79b1107a4'),
@@ -3786,7 +3786,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 END $$;
 -- End school contacts list exact verification.
 
--- School contact card exact verification (C2 0482): one runtime read and two private helpers.
+-- School contact card exact verification (C2 0514): one runtime read and two private helpers.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.school_contact_card_can(uuid,uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','51833fe5d339195ff9309001d6a460bd2070d6fcebe8a1d8bc6f5c26c6aba616'),
@@ -3804,7 +3804,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 END $$;
 -- End school contact card exact verification.
 
--- School contact merge and archive exact verification (C3 0483): five runtime entry points, private helpers, a private table.
+-- School contact merge and archive exact verification (C3 0515): five runtime entry points, private helpers, a private table.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_school_contact_archive()',false,false,'search_path=pg_catalog, hon','v','d34a1772d3f162a2f59a512845bb16e4342714ca299f24641eef51bad73535e8'),
@@ -4821,3 +4821,42 @@ BEGIN
     RAISE EXCEPTION 'Staff time permissions missing'; END IF;
 END $$;
 -- End staff time clock exact verification.
+
+-- Shopify product changes exact verification (0496, SH4a): six runtime entry points (definer, owner-safe, runtime only,
+-- exact bodies); the change table is forced-RLS with no policy and no runtime privilege; every new helper stays closed.
+DO $$ DECLARE f text; t text;
+  entry text[]:=ARRAY['hon.read_shopify_product_changes(text,uuid)','hon.propose_shopify_product_change(text,jsonb)','hon.cancel_shopify_product_change(text,jsonb)',
+    'hon.approve_shopify_product_change(text,jsonb)','hon.rotate_shopify_change_credential(text,jsonb)','hon.record_shopify_product_change_result(text,jsonb)'];
+BEGIN
+  FOR f,t IN SELECT * FROM (VALUES ('hon.read_shopify_product_changes(text,uuid)','c9ffb984aff89d62f550dd97cc83402c'),
+      ('hon.propose_shopify_product_change(text,jsonb)','1f0db6cc91143a9b9f523c142253209f'),('hon.cancel_shopify_product_change(text,jsonb)','669f1ce90c8d974e522e68255b514a52'),
+      ('hon.approve_shopify_product_change(text,jsonb)','1b46ea3b1d44f613fe3fe27b7e795795'),('hon.rotate_shopify_change_credential(text,jsonb)','43ecb7034d74235ae67c530b61143dc2'),
+      ('hon.record_shopify_product_change_result(text,jsonb)','8b8c5c7310f9d03fe30049e8f33832f1'),('hon.guard_shopify_product_change()','1b6ee6dfb8d817c9b2163d6a4c6f9f94'),
+      ('hon.shopify_locked_change(uuid,jsonb)','515c47ff8148c870ac6b23491497e2bc'),('hon.shopify_leased_change(uuid,uuid,jsonb,boolean)','bed71c1e6af57533ef99ecf1e0e73949'),
+      ('hon.shopify_change_matches(hon.shopify_product_changes,jsonb)','b8f15aa40311b3b02816b944f4cb0f74'),('hon.shopify_mirror_product(uuid,jsonb,uuid)','f36d0ce08c05f41ab6d39e59946f1281')) v LOOP
+    IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM t THEN RAISE EXCEPTION 'Shopify product change function body drift: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe Shopify product change entry point: %',f; END IF;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='hon' AND (p.proname LIKE 'shopify\_%' OR p.proname IN ('guard_shopify','guard_shopify_product_change')) LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe Shopify product change helper: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.shopify_product_changes'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.shopify_product_changes'::regclass)
+    OR has_table_privilege('hon_runtime','hon.shopify_product_changes','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.shopify_product_changes','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe Shopify product change table'; END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.shopify_product_changes'::regclass AND tgenabled='O' AND (
+      (tgname='shopify_product_changes_guard' AND tgfoid='hon.guard_shopify_product_change()'::regprocedure)
+      OR (tgname='shopify_product_changes_no_truncate' AND tgfoid='hon.guard_shopify()'::regprocedure))) <> 2 THEN
+    RAISE EXCEPTION 'Shopify product change guards missing'; END IF;
+END $$;
+-- End Shopify product changes exact verification.

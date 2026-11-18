@@ -40,7 +40,7 @@ function translate(error: unknown): never {
 }
 
 /**
- * C3 (0483): archive (delete), restore and merge for the session school. Each call re-proves the direct human subject and
+ * C3 (0515): archive (delete), restore and merge for the session school. Each call re-proves the direct human subject and
  * live people.archive or people.merge in the database; the commands repeat the exact versions shown by the read.
  */
 @Injectable()

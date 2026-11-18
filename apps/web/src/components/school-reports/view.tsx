@@ -18,7 +18,7 @@ export type SchoolReportsViewProps = Readonly<{
   scope?: ReportsScopeChoice | undefined; locations?: LocationsReadState | undefined; locationMonth?: string | null | undefined;
   onMonths?: ((months: number) => void) | undefined; onRefresh?: (() => void) | undefined;
   onScope?: ((scope: ReportsScopeChoice) => void) | undefined; onLocationMonth?: ((month: string) => void) | undefined;
-  /** R3 (0480): the overview dashboard or the month by month tables (the default when not given). */
+  /** R3 (0512): the overview dashboard or the month by month tables (the default when not given). */
   view?: ReportsViewChoice | undefined; onView?: ((view: ReportsViewChoice) => void) | undefined;
   range?: SchoolDashboardRange | undefined; dashboard?: DashboardReadState | undefined; onRange?: ((range: SchoolDashboardRange) => void) | undefined;
   links?: SchoolDashboardViewProps['links'] | undefined;

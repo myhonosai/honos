@@ -335,9 +335,10 @@
     "0473_parent_school_reads_follow_family_choice.sql": "008973eedb67260a41b8598b9c0b37e7dc1013d49d51a967fbaaee8b40541125",
     "0474_eian_family_ai.sql": "fb0cd95a3a90bdf52fbccfff0a1f025baecec71047a6361f31fc44619c24498f",
     "0478_staff_time_clock.sql": "287658b3c361652b1e24de7682381ba0e295371513e06e2a12547f3b9f0323ea",
-    "0480_school_reports_dashboard.sql": "ad0313e1bd4db2ffe138ed900583a707248e75f0a32f579deb30a5fa57c16cec",
-    "0481_school_contact_list.sql": "170236d63cbeb670cb4b8a80052dfc82901442f4d6af3e6b63e8e892643cd739",
-    "0482_school_contact_card.sql": "432f11ceadf779071bcca9deed78232270f521d549e955412f2bb2f7ca2a6747",
-    "0483_school_contact_merge_archive.sql": "ddd4b8a793c2d993a59aae0420faf50e068e197bfe959fbe569af008ba9ac6d9"
+    "0496_shopify_product_changes.sql": "8419cff247f47336a963385cfd5ab81d44cd01ff608900fb53fb49a451327d11",
+    "0512_school_reports_dashboard.sql": "06e1dbb877172819b51e6540f33528914243569a17d8335c34f0211545da3c41",
+    "0513_school_contact_list.sql": "aa0153e58f6a48647d9f51d056334b6bcecd16360ec955a4fb59de4fbe790e45",
+    "0514_school_contact_card.sql": "470f8f7c7ffaa90b42982f68d6f43a90501c922de1e40824a5395907393b872e",
+    "0515_school_contact_merge_archive.sql": "02452c832a810f477ff467d1de192ac182541c0c408363a792faec92965d9e42"
   }
 }

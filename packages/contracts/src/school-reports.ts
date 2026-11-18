@@ -167,7 +167,7 @@ export function sumSchoolReportLocations(locations: readonly SchoolReportLocatio
 }
 
 /**
- * R3 (0480): the reports dashboard for one school. A range in school time, KPI counts with the previous equal range,
+ * R3 (0512): the reports dashboard for one school. A range in school time, KPI counts with the previous equal range,
  * income per day / week / month, belts and open leads by stage now. Counts and money totals only; no people.
  */
 export const SCHOOL_DASHBOARD_RANGES = ['THIS_MONTH', 'LAST_MONTH', 'D30', 'D90', 'M12', 'ALL'] as const;

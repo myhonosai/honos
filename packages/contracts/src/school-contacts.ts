@@ -1,7 +1,7 @@
 /**
- * C1 (0481): the contacts list with segments and filters for one school. Names, email and phone as in the people
+ * C1 (0513): the contacts list with segments and filters for one school. Names, email and phone as in the people
  * directory (people.read), plus segment, ranks, current plan and when it ends. Staff live on the Team page.
- * C3 (0483): archived and merged contacts are segment ARCHIVED, counted on their own and left out of ALL.
+ * C3 (0515): archived and merged contacts are segment ARCHIVED, counted on their own and left out of ALL.
  */
 export const SCHOOL_CONTACT_SEGMENTS = ['ALL', 'STUDENT', 'TRIAL', 'PROSPECT', 'INACTIVE', 'ARCHIVED'] as const;
 export type SchoolContactSegment = typeof SCHOOL_CONTACT_SEGMENTS[number];

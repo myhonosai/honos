@@ -8,7 +8,7 @@ import base from '../membership-changes/membership-changes.module.css';
 import styles from './dashboard.module.css';
 
 /**
- * Reports dashboard (R3, 0480): range chips, KPI cards against the previous equal range, income over time, belt mix,
+ * Reports dashboard (R3, 0512): range chips, KPI cards against the previous equal range, income over time, belt mix,
  * open leads by stage and won vs lost. Counts and totals only, read from the server on every range change.
  */
 export type DashboardReadState = { state: 'LOADING' | 'DENIED' | 'TIMEZONE' | 'UNAVAILABLE' } | { state: 'READY'; read: SchoolDashboard };

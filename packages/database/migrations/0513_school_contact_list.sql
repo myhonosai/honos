@@ -1,6 +1,6 @@
 BEGIN;
 
--- C1 (0481, allocated by the coordinator 2026-11-15): the contacts list with segments and filters. Owner (David),
+-- C1 (0513, allocated by the coordinator, renumbered 2026-11-18 above release 0496): the contacts list with segments and filters. Owner (David),
 -- 2026-11-15 08:23Z, on the Manus CRM ideas: "Apply all." Idea #13: segment chips with counts, filters for belt, program,
 -- membership plan and membership end date, and an end-date badge on each row.
 -- One read-only entry point, hon.read_school_contact_list(subject, input), for the session school only. Authority: a direct
