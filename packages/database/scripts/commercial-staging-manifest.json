@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "0606cb1452ee9d0d30ecded8975e7ee1a44ae3bde80b1e6e44cebe1eb2b590d1",
+  "chainSha256": "fa2f2b4448c4b57ffc34ad8d0f87f9d9758543440239e0bac1efc44eeab0364e",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -649,6 +649,10 @@
     {
       "file": "0478_staff_time_clock.sql",
       "sha256": "287658b3c361652b1e24de7682381ba0e295371513e06e2a12547f3b9f0323ea"
+    },
+    {
+      "file": "0496_shopify_product_changes.sql",
+      "sha256": "658361bc90d14dee7495c2a1d2e51bd4493a532204c247851a0ee357fed57638"
     }
   ]
 }

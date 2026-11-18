@@ -4,7 +4,8 @@ import {
 } from '@nestjs/common';
 import { configuredPublicOrigin } from '@hon/auth';
 import {
-  SHOPIFY_RETURN_PATH, validateShopifyCompleteInput, validateShopifyConnectInput, validateShopifyDisconnectInput, validateShopifySyncInput,
+  SHOPIFY_EDIT_SCOPES, SHOPIFY_RETURN_PATH, validateShopifyChangeCommandInput, validateShopifyProposeInput, verifyShopifyChangeResult,
+  verifyShopifyProductChange, verifyShopifyProductChanges, type ShopifyChangeResult, type ShopifyProductChanges, validateShopifyCompleteInput, validateShopifyConnectInput, validateShopifyDisconnectInput, validateShopifySyncInput,
   verifyShopifyCatalog, verifyShopifyConnectResult, verifyShopifyConnectStart, verifyShopifyDisconnectResult, verifyShopifyOrders, verifyShopifyOverview,
   verifyShopifySyncResult,
   type ShopifyCatalog, type ShopifyConnectResult, type ShopifyConnectStart, type ShopifyDisconnectResult, type ShopifyOrders, type ShopifyOverview,
@@ -14,6 +15,7 @@ import type { HonRequest } from '../../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService, type ShopifyOperation } from '../../foundation/runtime-database.service.js';
 import { SHOPIFY_APP, ShopifyProviderError, type ShopifyApp } from './shopify-adapter.js';
 import { begunSync, runShopifySync } from './shopify-sync-engine.js';
+import { leasedChange, runShopifyChange } from './shopify-change-engine.js';
 import { shopifyBackgroundEnabled } from './shopify-worker.js';
 import { scopesGranted, shopifyAuthorizeUrl, verifyShopifyCallback } from './shopify-oauth.js';
 
@@ -29,14 +31,23 @@ const DETAIL: Record<string, string> = {
   SHOPIFY_CONNECT_OFF: 'Connecting Shopify is not turned on for HON yet.',
   SHOPIFY_CONNECT_REJECTED: 'Shopify did not accept this approval. Start again from the Shopify page.',
   SHOPIFY_SCOPES_MISSING: 'Shopify did not grant everything HON needs. Start again and approve every requested permission.',
+  SHOPIFY_EDIT_NOT_ALLOWED: 'Your Shopify store has not allowed HON to edit products yet. Press Allow editing and approve it in Shopify.',
+  SHOPIFY_CHANGE_STALE: 'This product changed since the edit was prepared. Cancel it and prepare it again.',
+  SHOPIFY_CHANGE_OPEN: 'This product already has an edit waiting. Approve or cancel that one first.',
+  SHOPIFY_CHANGE_NOT_PENDING: 'This edit is no longer waiting for approval. Reload to see where it stands.',
+  SHOPIFY_CHANGE_NOT_LEASED: 'This edit is no longer being sent. Reload to see where it stands.',
+  SHOPIFY_CHANGE_ATTEMPTS: 'HON has tried this edit five times. Check the product in Shopify, then cancel it and prepare it again.',
+  SHOPIFY_TOO_MANY_DRAFTS: 'There are already 20 new products waiting. Approve or cancel some first.',
 };
 const STATUS: Record<string, number> = {
   SHOPIFY_INVALID: 400, SHOPIFY_CONNECT_STATE_INVALID: 400, SHOPIFY_CONNECT_STATE_EXPIRED: 400,
   SHOPIFY_FORBIDDEN: 403, SHOPIFY_NOT_FOUND: 404,
   SHOPIFY_SHOP_TAKEN: 409, SHOPIFY_OTHER_STORE_CONNECTED: 409, SHOPIFY_SYNC_RUNNING: 409, SHOPIFY_VERSION_CONFLICT: 409, SHOPIFY_NOT_CONNECTED: 409,
   SHOPIFY_SYNC_NOT_RUNNING: 409, SHOPIFY_RATE_LIMITED: 429,
+  SHOPIFY_EDIT_NOT_ALLOWED: 409, SHOPIFY_CHANGE_STALE: 409, SHOPIFY_CHANGE_OPEN: 409, SHOPIFY_CHANGE_NOT_PENDING: 409, SHOPIFY_CHANGE_NOT_LEASED: 409,
+  SHOPIFY_CHANGE_ATTEMPTS: 409, SHOPIFY_TOO_MANY_DRAFTS: 409,
 };
-const STATES = ['22023', '42501', 'P0002', '40001', '23505', '55P03', '54000'];
+const STATES = ['22023', '42501', 'P0002', '40001', '23505', '55P03', '54000', '55000'];
 
 function refuse(code: string, status: number): never {
   const body: Record<string, string> = { code };
@@ -127,9 +138,11 @@ export class ShopifyService {
     const r = raw as { shopDomain?: unknown; expiresAt?: unknown } | null;
     if (!r || r.shopDomain !== input.shopDomain) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
     const redirectUri = origin + SHOPIFY_RETURN_PATH;
+    // Allow editing (SH4a) asks for the edit scopes too; connecting alone stays read-only.
+    const scopes = input.allowEditing ? [...app.scopes, ...SHOPIFY_EDIT_SCOPES] : app.scopes;
     const authorizeUrl = app.fake
-      ? `${redirectUri}?${app.fake.approve(input.shopDomain, state)}`
-      : shopifyAuthorizeUrl({ shop: input.shopDomain, clientId: app.clientId, scopes: app.scopes, redirectUri, state });
+      ? `${redirectUri}?${app.fake.approve(input.shopDomain, state, undefined, scopes)}`
+      : shopifyAuthorizeUrl({ shop: input.shopDomain, clientId: app.clientId, scopes, redirectUri, state });
     return this.checked(verifyShopifyConnectStart, { authorizeUrl, shopDomain: input.shopDomain, expiresAt: r.expiresAt });
   }
 
@@ -177,6 +190,43 @@ export class ShopifyService {
   async disconnect(req: HonRequest, body: unknown): Promise<ShopifyDisconnectResult> {
     const input = this.input(validateShopifyDisconnectInput, body);
     return this.checked(verifyShopifyDisconnectResult, await this.call('disconnect', [this.subject(req), JSON.stringify(input)]));
+  }
+
+  /** SH4a: the store's editing permissions and its latest product changes. */
+  async changes(req: HonRequest, schoolId: unknown): Promise<ShopifyProductChanges> {
+    const school = this.school(schoolId);
+    const out = this.checked(verifyShopifyProductChanges, await this.call('changes', [this.subject(req), school]));
+    if (out.schoolId !== school) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
+    return out;
+  }
+
+  /** Saves a proposed product change for review. Nothing reaches Shopify. */
+  async propose(req: HonRequest, body: unknown): Promise<ShopifyChangeResult> {
+    const input = this.input(validateShopifyProposeInput, body);
+    return this.checked(verifyShopifyChangeResult, await this.call('propose', [this.subject(req), JSON.stringify(input)]));
+  }
+
+  async cancelChange(req: HonRequest, body: unknown): Promise<ShopifyChangeResult> {
+    const input = this.input(validateShopifyChangeCommandInput, body);
+    return this.checked(verifyShopifyChangeResult, await this.call('cancelChange', [this.subject(req), JSON.stringify(input)]));
+  }
+
+  /**
+   * The person approves this exact change: the database leases it to them, then HON checks the product in Shopify,
+   * writes it, reads it back and records the result under that lease. An UNKNOWN change approved again is only checked.
+   */
+  async approveChange(req: HonRequest, body: unknown): Promise<ShopifyChangeResult> {
+    const input = this.input(validateShopifyChangeCommandInput, body), subject = this.subject(req), app = this.requireApp();
+    const raw = await this.call('approveChange', [subject, JSON.stringify(input)]) as { change?: unknown } | null;
+    const change = this.checked(verifyShopifyProductChange, raw?.change);
+    const lease = leasedChange(raw, change);
+    if (!lease || change.changeId !== input.changeId) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
+    const bound = { schoolId: input.schoolId, changeId: change.changeId, leaseToken: lease.leaseToken };
+    return runShopifyChange(app, this.now, lease, {
+      rotate: b => this.call('rotateChange', [subject, JSON.stringify({ ...bound, ...b })]),
+      record: async (outcome, failureCode, product) => this.checked(verifyShopifyChangeResult,
+        await this.call('recordChange', [subject, JSON.stringify({ ...bound, outcome, failureCode, product })])),
+    });
   }
 
   /** A person's sync (Sync now, and the first sync after connecting), bound to their session at this school. */

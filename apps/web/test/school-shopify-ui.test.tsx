@@ -1,7 +1,8 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { ShopifyCatalog, ShopifyConnection, ShopifyOrders, ShopifyOverview, ShopifySyncResult } from '@hon/contracts';
+import type { ShopifyCatalog, ShopifyConnection, ShopifyOrders, ShopifyOverview, ShopifyProductChange, ShopifyProductChanges, ShopifySyncResult } from '@hon/contracts';
+import { buildDraft, buildUpdate, editFieldsOf, EMPTY_DRAFT } from '../src/components/school-shopify/editor';
 import { SHOPIFY_LANGUAGES, shopifyText } from '../src/components/school-shopify/copy';
 import { ShopifyError, shopifyApi, shopifyErrorFor } from '../src/components/school-shopify/http';
 import { ShopifyReturnView, ShopifyView, matchesProduct, orderMatches, orderToFulfill, shopifyAdminUrl, type ShopifyViewProps } from '../src/components/school-shopify/view';
@@ -50,7 +51,7 @@ it('reads with plain same-origin GETs and sends each command with the Shopify co
   const [cpath, cinit] = g.mock.calls[0] as unknown as [string, RequestInit];
   expect(cpath).toBe('/api/v1/school/shopify/connect');
   expect(cinit.headers).toMatchObject({ 'X-HON-Human-Command': 'school-shopify' });
-  expect(JSON.parse(cinit.body as string)).toEqual({ schoolId: school, shopDomain: SHOP });
+  expect(JSON.parse(cinit.body as string)).toEqual({ schoolId: school, shopDomain: SHOP, allowEditing: false });
   // Only Shopify's own approval page for that shop, or HON's own return page.
   stub(json({ data: { authorizeUrl: `https://other.myshopify.com/admin/oauth/authorize?x=1`, shopDomain: SHOP, expiresAt: at } }));
   expect((await fails(shopifyApi.connect(school, SHOP, signal(), () => true))).kind).toBe('UNKNOWN');
@@ -122,9 +123,9 @@ it('connect form only for managers and only when connecting is turned on; reconn
   expect(renderToStaticMarkup(<ShopifyView {...props({ concealed: true })} />)).not.toContain('Synthetic Dojo Store');
 });
 
-it('Commerce Workspace: five sections, needs-attention counts from real data, and honest loading', () => {
+it('Commerce Workspace: six sections, needs-attention counts from real data, and honest loading', () => {
   const html = renderToStaticMarkup(<ShopifyView {...props({ section: 'overview' })} />);
-  for (const s of ['overview', 'products', 'orders', 'inventory', 'settings']) expect(html).toContain(`data-nav="${s}"`);
+  for (const s of ['overview', 'products', 'changes', 'orders', 'inventory', 'settings']) expect(html).toContain(`data-nav="${s}"`);
   expect(html).toContain('aria-current="page"'); expect(html).toContain('Needs attention');
   // one order to fulfill (#1001; #1002 fulfilled, #1003 cancelled), two low/costless counts from the catalog
   expect(html).toMatch(/data-attention="toFulfill">.*?<strong>1<\/strong>/); expect(html).toMatch(/data-attention="noCost">.*?<strong>1<\/strong>/);
@@ -144,7 +145,7 @@ it('products, orders and inventory sections read the mirror and link to the same
   const inv = renderToStaticMarkup(<ShopifyView {...props({ section: 'inventory' })} />);
   expect(inv).toContain('Units in stock'); expect(inv).toContain('$56.00'); expect(inv).toContain('Counts 2 of 2 units'); expect(inv).toContain('UNI-2');
   const settings = renderToStaticMarkup(<ShopifyView {...props({ section: 'settings' })} />);
-  expect(settings).toContain('cannot change anything in your store yet'); expect(settings).toContain('https://admin.shopify.com/store/ima-test');
+  expect(settings).toContain('HON can only read your store'); expect(settings).toContain('https://admin.shopify.com/store/ima-test');
   expect(shopifyAdminUrl('a-b.myshopify.com', 'orders', '12')).toBe('https://admin.shopify.com/store/a-b/orders/12');
 });
 
@@ -179,4 +180,101 @@ it('has every phrase in Korean and Spanish and is its own Finance page with its 
   expect(shopify?.routes.map(r => r.href)).toEqual(['/staff/billing/shopify']);
   expect(SCHOOL_SHELL_UNLISTED_ROUTES).toContain('/staff/billing/shopify/return');
   expect(schoolShellActiveRoute('/staff/billing/shopify/return')?.href).toBe('/staff/billing/shopify');
+});
+
+// ---- SH4a product editing ----
+const chg = (over: Partial<ShopifyProductChange> = {}): ShopifyProductChange => ({ changeId: id(50), kind: 'UPDATE', productId: '9100000001', handle: null, status: 'PENDING', version: 1,
+  changes: { title: 'Student uniform (white)', variants: [{ variantId: '9200000012', price: '69.5' }] },
+  base: { title: 'Student uniform', variants: [{ variantId: '9200000012', price: '65.0000' }] }, attempts: 0, failureCode: null, proposedAt: at, approvedAt: null, finishedAt: null,
+  proposedByMe: true, ...over });
+const changeList = (over: Partial<ShopifyProductChanges> = {}): ShopifyProductChanges => ({ schoolId: school, canManage: true, editProducts: true, editCosts: true, changes: [chg()], ...over });
+const draft = { title: 'Rash guard', description: null, productType: null, vendor: null, price: '39.99', compareAtPrice: null, unitCost: null, sku: null };
+
+it('edit commands: same-origin, the Shopify command header, exact version, and closed refusals', async () => {
+  const f = stub(json({ data: changeList() }));
+  expect((await shopifyApi.changes(school, signal(), () => true)).changes).toHaveLength(1);
+  expect((f.mock.calls[0] as unknown as [string])[0]).toBe(`/api/v1/school/schools/${school}/shopify/changes`);
+  const g = stub(json({ data: { change: chg() } }));
+  await shopifyApi.propose(school, { kind: 'UPDATE', productId: '9100000001', changes: { title: 'Student uniform (white)' } }, signal(), () => true);
+  const [ppath, pinit] = g.mock.calls[0] as unknown as [string, RequestInit];
+  expect(ppath).toBe('/api/v1/school/shopify/changes'); expect(pinit.headers).toMatchObject({ 'X-HON-Human-Command': 'school-shopify' });
+  expect(JSON.parse(pinit.body as string)).toEqual({ schoolId: school, kind: 'UPDATE', productId: '9100000001', changes: { title: 'Student uniform (white)' } });
+  const h = stub(json({ data: { change: chg({ status: 'APPLIED', version: 3 }) } }));
+  expect((await shopifyApi.approveChange(school, id(50), 1, signal(), () => true)).change.status).toBe('APPLIED');
+  expect((h.mock.calls[0] as unknown as [string, RequestInit])[0]).toBe('/api/v1/school/shopify/changes/approve');
+  expect(JSON.parse((h.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)).toEqual({ schoolId: school, changeId: id(50), expectedVersion: 1 });
+  stub(json({ data: { change: chg({ changeId: id(51) }) } }));
+  expect((await fails(shopifyApi.cancelChange(school, id(50), 1, signal(), () => true))).kind).toBe('UNKNOWN');
+  stub(json({ data: { change: chg({ status: 'APPLIED' }) } }));
+  expect((await fails(shopifyApi.propose(school, { kind: 'CREATE_DRAFT', changes: draft }, signal(), () => true))).kind).toBe('UNKNOWN');
+  const none = stub(json({}));
+  expect((await fails(shopifyApi.propose(school, { kind: 'UPDATE', productId: '9100000001', changes: {} }, signal(), () => true))).kind).toBe('INVALID');
+  expect((await fails(shopifyApi.approveChange(school, id(50), 0, signal(), () => true))).kind).toBe('INVALID');
+  expect(none).not.toHaveBeenCalled();
+  const e = stub(json({ data: { authorizeUrl: `https://${SHOP}/admin/oauth/authorize?x=1`, shopDomain: SHOP, expiresAt: at } }));
+  await shopifyApi.connect(school, SHOP, signal(), () => true, true);
+  expect(JSON.parse((e.mock.calls[0] as unknown as [string, RequestInit])[1].body as string).allowEditing).toBe(true);
+  expect(shopifyErrorFor(409, 'SHOPIFY_EDIT_NOT_ALLOWED').kind).toBe('EDIT_OFF');
+  expect(shopifyErrorFor(409, 'SHOPIFY_CHANGE_STALE').kind).toBe('CHANGE_STALE');
+  expect(shopifyErrorFor(409, 'SHOPIFY_CHANGE_OPEN').kind).toBe('CHANGE_OPEN');
+  expect(shopifyErrorFor(409, 'SHOPIFY_CHANGE_NOT_LEASED').kind).toBe('CHANGE_DONE');
+  expect(shopifyErrorFor(409, 'SHOPIFY_CHANGE_ATTEMPTS').kind).toBe('ATTEMPTS');
+  expect(shopifyErrorFor(409, 'SHOPIFY_TOO_MANY_DRAFTS').kind).toBe('TOO_MANY');
+});
+
+it('an edit sends only what changed, checked the way the server checks it', () => {
+  const p = catalog().products[0]!, f = editFieldsOf(p);
+  expect(buildUpdate(p, f)).toBe('NOTHING');
+  expect(buildUpdate(p, { ...f, variants: { ...f.variants, '9200000012': { price: '65.00', compareAtPrice: '', unitCost: '28' } } })).toBe('NOTHING');
+  expect(buildUpdate(p, { ...f, title: ' Student uniform (white) ', vendor: 'HON', status: 'DRAFT',
+    variants: { ...f.variants, '9200000013': { price: '72.5', compareAtPrice: '80', unitCost: '30' } } }))
+    .toEqual({ title: 'Student uniform (white)', vendor: 'HON', status: 'DRAFT', variants: [{ variantId: '9200000013', price: '72.5', compareAtPrice: '80', unitCost: '30' }] });
+  expect(buildUpdate(p, { ...f, productType: '' })).toEqual({ productType: null });
+  expect(buildUpdate(p, { ...f, variants: { ...f.variants, '9200000012': { price: '', compareAtPrice: '', unitCost: '28' } } })).toBe('INVALID');
+  expect(buildUpdate(p, { ...f, variants: { ...f.variants, '9200000012': { price: '-1', compareAtPrice: '', unitCost: '28' } } })).toBe('INVALID');
+  expect(buildUpdate(p, { ...f, title: '' })).toBe('INVALID');
+  expect(buildDraft({ ...EMPTY_DRAFT, title: 'Rash guard', price: '39.99', description: 'Line one\r\nLine two\n' }))
+    .toEqual({ ...draft, description: 'Line one\nLine two' });
+  expect(buildDraft({ ...EMPTY_DRAFT, title: 'Rash guard' })).toBe('INVALID');
+  expect(buildDraft({ ...EMPTY_DRAFT, title: 'Rash guard', price: '1,5' })).toBe('INVALID');
+});
+
+it('products: managers get Edit and New product; an open edit points to Changes; readers get neither', () => {
+  const noop = () => undefined;
+  const html = renderToStaticMarkup(<ShopifyView {...props({ changes: { state: 'READY', value: changeList({ changes: [] }) }, onPropose: noop })} />);
+  expect(html).toContain('data-edit="9100000001"'); expect(html).toContain('New product');
+  const open = renderToStaticMarkup(<ShopifyView {...props({ changes: { state: 'READY', value: changeList() }, onPropose: noop })} />);
+  expect(open).toContain('An edit is waiting for approval'); expect(open).not.toContain('data-edit="9100000001"');
+  const reader = renderToStaticMarkup(<ShopifyView {...props({ overview: { state: 'READY', read: overview({ canManage: false }) }, onPropose: noop })} />);
+  expect(reader).not.toContain('data-edit='); expect(reader).not.toContain('New product');
+});
+
+it('changes: each edit shows now and after, its status, the right action, and plain failure reasons', () => {
+  const list = changeList({ changes: [chg(),
+    chg({ changeId: id(52), status: 'UNKNOWN', failureCode: 'LEASE_EXPIRED', attempts: 1, version: 3 }),
+    chg({ changeId: id(53), status: 'FAILED', failureCode: 'CHANGED_IN_SHOPIFY', attempts: 1, version: 3, finishedAt: at }),
+    chg({ changeId: id(54), kind: 'CREATE_DRAFT', productId: null, handle: 'rash-guard-0000000054', changes: draft, base: {} })] });
+  const html = renderToStaticMarkup(<ShopifyView {...props({ section: 'changes', changes: { state: 'READY', value: list } })} />);
+  expect(html).toContain('Waiting for approval'); expect(html).toContain('Approve and send to Shopify'); expect(html).toContain('Cancel this edit');
+  expect(html).toContain('Size 2 · Price'); expect(html).toContain('$65.00'); expect(html).toContain('$69.50'); expect(html).toContain('Student uniform (white)');
+  expect(html).toContain('Not sure it was saved'); expect(html).toContain('Check Shopify again'); expect(html).toContain('did not arrive in time');
+  expect(html).toContain('HON did not overwrite it'); expect(html).toContain('Rash guard'); expect(html).toContain('$39.99');
+  expect(html).not.toContain('data-shopify-allow-editing');
+  const off = renderToStaticMarkup(<ShopifyView {...props({ section: 'changes', changes: { state: 'READY', value: changeList({ editProducts: false, editCosts: false }) } })} />);
+  expect(off).toContain('data-shopify-allow-editing'); expect(off).toContain('Allow editing in Shopify');
+  const reader = renderToStaticMarkup(<ShopifyView {...props({ section: 'changes', overview: { state: 'READY', read: overview({ canManage: false }) }, changes: { state: 'READY', value: list } })} />);
+  expect(reader).not.toContain('Approve and send'); expect(reader).not.toContain('data-shopify-allow-editing');
+  expect(renderToStaticMarkup(<ShopifyView {...props({ section: 'changes' })} />)).toContain('Reading…');
+  const attention = renderToStaticMarkup(<ShopifyView {...props({ section: 'overview', changes: { state: 'READY', value: list } })} />);
+  expect(attention).toMatch(/data-attention="changes">.*?<strong>2<\/strong>/);
+});
+
+it('approval outcomes: saved, not saved, not sure (also when the answer was lost)', () => {
+  const view = (outcome: ShopifyViewProps['outcome']) => renderToStaticMarkup(<ShopifyView {...props({ section: 'changes', outcome, changes: { state: 'READY', value: changeList() } })} />);
+  expect(view({ kind: 'DONE', action: 'approve', change: chg({ status: 'APPLIED', version: 3 }) })).toContain('Saved in Shopify and checked.');
+  expect(view({ kind: 'DONE', action: 'approve', change: chg({ status: 'FAILED', failureCode: 'SHOPIFY_REJECTED', version: 3 }) })).toContain('Shopify did not accept this edit');
+  expect(view({ kind: 'UNKNOWN', action: 'approve' })).toContain('could not confirm whether Shopify saved');
+  expect(view({ kind: 'DONE', action: 'propose', change: chg() })).toContain('Saved for approval.');
+  expect(view({ kind: 'EDIT_OFF', action: 'approve' })).toContain('Press Allow editing');
+  expect(orderToFulfill({ ...orders().orders[0]!, financialStatus: 'REFUNDED' })).toBe(false);
 });
