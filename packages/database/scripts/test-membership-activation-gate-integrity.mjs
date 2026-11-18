@@ -679,7 +679,7 @@ try {
     'read_owner_launch_membership_draft', 'read_parent_billing_view', 'read_parent_testing_status',
     'read_retention_review_signals', 'read_school_command_center', 'read_school_health_score', 'read_school_membership_list', 'read_school_membership_status_summary', 'read_school_reports', 'read_school_reports_locations', 'read_specialist_school_facts', 'record_membership_refund', 'record_retention_attention_alert',
     'renewal_membership_facts', 'resolve_retention_attention_alert', 'resume_school_membership', 'revenue_plan_snapshot', 'revise_membership_dates', 'save_school_onboarding', 'school_demo_data_write', 'school_pay_autopay_due', 'school_renewals_due', 'school_report_periods']);
-  // 0370 (G1) read_monthly_goal_plan and school_renewals_due are read-only goal and renewal counts: they read term dates,
+  // 0491 (G1) read_monthly_goal_plan and school_renewals_due are read-only goal and renewal counts: they read term dates,
   // plan selections and payment schedules, and book, check in and grant nothing.
   // 0323 save_school_onboarding names the closed import-wish code 'MEMBERSHIPS' only; it never reads hon.memberships.
   // 0220 (U6) read_school_membership_list is a read-only school list: no booking, check-in or benefit path.

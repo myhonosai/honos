@@ -4704,7 +4704,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 END $$;
 -- End Eian family AI exact verification.
 
--- Monthly goal plan exact verification (G1 0370): one runtime read; the renewals-due helper and the rate and pace builders are private.
+-- Monthly goal plan exact verification (G1 0491): one runtime read; the renewals-due helper and the rate and pace builders are private.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.monthly_goal_pace(numeric,numeric,numeric,integer)',false,false,'search_path=pg_catalog, hon','52e59707b1b0588614110a0e5d22907560c831e397973aad8fd0920cf05430c5'),

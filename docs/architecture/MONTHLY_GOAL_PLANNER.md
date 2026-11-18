@@ -1,4 +1,4 @@
-# Monthly goal planner (brief #16; migrations 0370, 0375, 0376)
+# Monthly goal planner (brief #16; migrations 0491 (was 0370), 0492, 0493)
 
 Owner (David, 2026-11-15): "Monthly goal need to be more detailed with ai help. So it breaks down in not just monetary but
 how many appointment, lead, renewal, upgrade needed and give analysis of current student body to renew or upgrade
@@ -12,12 +12,12 @@ plans and never sends a message. AI wording uses the fake provider until David a
 
 | Slice | Migration | What |
 |---|---|---|
-| G1 | 0370 | Shared private renewals-due helper `hon.school_renewals_due` (also used by the reports renewals forecast, 0372) and the read-only goal plan `hon.read_monthly_goal_plan`: sources, rates with record counts, activity counts needed, pace. Goal passed in the request. API, contracts, DB proof. |
+| G1 | 0491 | Shared private renewals-due helper `hon.school_renewals_due` (also used by the reports renewals forecast, 0372) and the read-only goal plan `hon.read_monthly_goal_plan`: sources, rates with record counts, activity counts needed, pace. Goal passed in the request. API, contracts, DB proof. |
 | G2 | none | Staff page `/staff/planning/goal` (Reports menu): goal form, plan, pace, "this week", plain-language explanation from the fake provider. |
-| G3 | 0375 | Saved monthly goals per school and optional program (versioned, audited, idempotent), program director slice. |
-| G4 | 0376 | Student body analysis: renewal likelihood and upgrade candidates, totals by program for reporting readers and a named list with reasons for staff allowed to see those students. |
+| G3 | 0493 | Saved monthly goals per school and optional program (versioned, audited, idempotent), program director slice. |
+| G4 | 0492 | Student body analysis: renewal likelihood and upgrade candidates, totals by program for reporting readers and a named list with reasons for staff allowed to see those students. |
 
-## Shared renewals-due helper (0370)
+## Shared renewals-due helper (0491)
 
 `hon.school_renewals_due(org uuid, school uuid, from timestamptz, to timestamptz, as_of timestamptz)` returns one row per
 membership whose term end falls in `[from, to)`. Private: no runtime grant; callers prove authority first.
@@ -34,7 +34,7 @@ membership whose term end falls in `[from, to)`. Private: no runtime grant; call
 - Plan facts from the 0175 plan selection: plan id, version, code, program, currency, price, billing frequency, term
   months (null when the membership has no catalog selection).
 
-## Goal plan read (0370)
+## Goal plan read (0491)
 
 `GET /v1/organizations/:org/schools/:school/planning/monthly-goal` with optional query `month` (YYYY-MM, 11 months back to
 2 ahead, default the current school month), `goalMinor` + `currency`, `historyMonths` (3-12, default 6) and owner

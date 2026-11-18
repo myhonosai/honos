@@ -4225,10 +4225,10 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 
--- G1 0370 monthly goal plan: one read-only runtime entry point; the shared renewals-due helper and the rate and pace
+-- G1 0491 monthly goal plan: one read-only runtime entry point; the shared renewals-due helper and the rate and pace
 -- builders are private. The runtime gains no table privilege.
 DO $$ DECLARE r text; f text; BEGIN
-  IF to_regprocedure('hon.read_monthly_goal_plan(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0370 first'; END IF;
+  IF to_regprocedure('hon.read_monthly_goal_plan(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0491 first'; END IF;
   FOREACH f IN ARRAY ARRAY['hon.school_renewals_due(uuid,uuid,timestamptz,timestamptz,timestamptz)','hon.monthly_goal_rate(bigint,bigint,integer,numeric)',
     'hon.monthly_goal_pace(numeric,numeric,numeric,integer)','hon.read_monthly_goal_plan(text,jsonb)'] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);

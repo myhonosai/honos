@@ -334,6 +334,6 @@
     "0471_parent_family_picker.sql": "27cc328b099da7a596fd17c2f90f5ff7fc20dabdaf11d14f23a3b5896b207caa",
     "0473_parent_school_reads_follow_family_choice.sql": "008973eedb67260a41b8598b9c0b37e7dc1013d49d51a967fbaaee8b40541125",
     "0474_eian_family_ai.sql": "fb0cd95a3a90bdf52fbccfff0a1f025baecec71047a6361f31fc44619c24498f",
-    "0370_monthly_goal_plan.sql": "b62f493d5d7586888f86d29c48f0f3782360fe0e564c5eb4fa0185dee63df9c7"
+    "0491_monthly_goal_plan.sql": "99f5a4a82197ff69db97d43ed0db7b3eeaeffbccc139f59bae80df3dfecc6637"
   }
 }

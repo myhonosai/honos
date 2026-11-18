@@ -9,14 +9,14 @@ import { MonthlyGoalPlanService } from './monthly-goal-plan.service.js';
 const QUERY_KEYS = new Set(['month', 'goalMinor', 'currency', 'historyMonths', 'bookRate', 'showRate', 'closeRate', 'renewalRate',
   'avgNewMinor', 'plannedUpgrades', 'upgradeValueMinor']);
 
-/** G1 (0370): the monthly goal plan read is its own same-origin browser read. */
+/** G1 (0491): the monthly goal plan read is its own same-origin browser read. */
 @Injectable()
 export class MonthlyGoalPlanHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'planning.monthly-goal';
 }
 
 /**
- * G1 (0370): a monthly goal broken down into renewals, upgrades, new enrollments, shows, appointments and leads from the
+ * G1 (0491): a monthly goal broken down into renewals, upgrades, new enrollments, shows, appointments and leads from the
  * school's records, with pace. Route identifiers are never authority: the scope comes from the verified session and the
  * database function re-proves reporting.view.
  */
