@@ -4775,3 +4775,22 @@ BEGIN
     RAISE EXCEPTION 'Shopify product change guards missing'; END IF;
 END $$;
 -- End Shopify product changes exact verification.
+
+-- Monthly goal plan exact verification (G1 0503): one runtime read; the renewals-due helper and the rate and pace builders are private.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.monthly_goal_pace(numeric,numeric,numeric,integer)',false,false,'search_path=pg_catalog, hon','52e59707b1b0588614110a0e5d22907560c831e397973aad8fd0920cf05430c5'),
+('hon.monthly_goal_rate(bigint,bigint,integer,numeric)',false,false,'search_path=pg_catalog, hon','e001224945722db79f76d8dda1692cef5351ffe98f129a71e4002252905a00b9'),
+('hon.school_renewals_due(uuid,uuid,timestamptz,timestamptz,timestamptz)',true,false,'search_path=pg_catalog, hon','b9a001e01a07bd2859bfe5096d005980f136641692b23693f8221ecfa2dfdc98'),
+('hon.read_monthly_goal_plan(text,jsonb)',true,true,'search_path=pg_catalog, hon','5cce372659029086067d4686d3b3d4ce883f7f61281a367b9dade388d69bbf23')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe monthly goal plan function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End monthly goal plan exact verification.
