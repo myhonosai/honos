@@ -1,4 +1,4 @@
-/** Contacts list wording (C1, 0373), en / ko / es. Labels only; nothing here is authority. */
+/** Contacts list wording (C1, 0481), en / ko / es. Labels only; nothing here is authority. */
 const en = {
   segmentsLabel: 'Show', ALL: 'All', STUDENT: 'Students', TRIAL: 'Trial', PROSPECT: 'Prospects', INACTIVE: 'Inactive', ARCHIVED: 'Archived', OTHER: 'Other contact',
   rowSTUDENT: 'Student', rowTRIAL: 'Trial booked', rowPROSPECT: 'Prospect', rowINACTIVE: 'Inactive', rowOTHER: 'Contact', rowARCHIVED: 'Archived',

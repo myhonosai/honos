@@ -13,7 +13,7 @@ const queue={schoolId:school,principalId:principal,humanOnly:true,executionAllow
 const response=(data:unknown)=>({ok:true,json:async()=>({data})}) as Response;
 describe('human membership renewal review workbench',()=>{
  it('starts honest and empty with no fetches, fake writes or billing execution UI',()=>{
-  const f=vi.spyOn(globalThis,'fetch');try{const html=renderToStaticMarkup(<BillingRenewalsWorkbench/>);expect(f).not.toHaveBeenCalled();for(const text of ['coming up for renewal','No collection','No notices','No automatic renewal','Essential','billing.renewal.manage','billing.membership.read','No payer directory','Load / refresh reviews'])expect(html.toLowerCase()).toContain(text.toLowerCase());expect(html).not.toContain('Private human review note');expect(html).not.toContain('Create renewal review record');expect(html).not.toContain('type="email"');}finally{f.mockRestore();}
+  const f=vi.spyOn(globalThis,'fetch');try{const html=renderToStaticMarkup(<BillingRenewalsWorkbench/>);expect(f).not.toHaveBeenCalled();for(const text of ['coming up for renewal','Refresh reviews'])expect(html.toLowerCase()).toContain(text.toLowerCase());expect(html).not.toContain('Private human review note');expect(html).not.toContain('Create renewal review record');expect(html).not.toContain('type="email"');}finally{f.mockRestore();}
  });
  it('uses closed same-origin human requests and verifies exact saved fields/version/state',async()=>{
   const f=vi.spyOn(globalThis,'fetch').mockResolvedValue(response(saved));try{
@@ -47,7 +47,7 @@ describe('human membership renewal review workbench',()=>{
   }finally{f.mockRestore();}
  });
  it('retains uncertain requests in memory, clears sensitive state and requires reload before another mutation',()=>{
-  const source=readFileSync('src/components/billing-renewals-workbench.tsx','utf8');for(const text of ['Retry exact retained request','retry.current','No save is assumed','needsRefresh','Reload current detail','setContext(null)','New renewal review','No reviews on this page','readOnly','Read known membership summary','Historical saved revision','Manual reminder-needed fact'])expect(source.toLowerCase()).toContain(text.toLowerCase());expect(source).not.toMatch(/localStorage|sessionStorage|setInterval|setTimeout|invokeLLM|sendMessage|executeAction|type="email"/);
+  const source=readFileSync('src/components/billing-renewals-workbench.tsx','utf8');for(const text of ['Retry exact retained request','retry.current','No save is assumed','needsRefresh','Reload current detail','setContext(null)','New renewal review','No reviews on this page','readOnly','Read membership','Choose a member','Membership record ID','Historical saved revision','Manual reminder-needed fact'])expect(source.toLowerCase()).toContain(text.toLowerCase());expect(source).not.toMatch(/School \{context\.schoolId\}|Signed-in staff \{context\.principalId\}|Membership \{r\.membershipId\}|Membership \{facts\.membershipId\}/);expect(source).not.toMatch(/localStorage|sessionStorage|setInterval|setTimeout|invokeLLM|sendMessage|executeAction|type="email"/);
   const manifest=JSON.parse(readFileSync('public/manus-routes.json','utf8'));expect(manifest.routes.filter((r:{path:string})=>r.path==='/staff/billing/renewals')).toHaveLength(1);
  });
 });

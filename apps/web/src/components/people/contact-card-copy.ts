@@ -1,4 +1,4 @@
-/** Contact card wording (C2, 0374), en / ko / es. Labels only; nothing here is authority. */
+/** Contact card wording (C2, 0482), en / ko / es. Labels only; nothing here is authority. */
 const en = {
   tabsLabel: 'Contact sections', overview: 'Overview', family: 'Family', appointments: 'Appointments', tasks: 'Follow-ups', membership: 'Membership',
   billing: 'Billing', messages: 'Messages', timeline: 'Timeline', loading: 'Reading this contact…', unavailable: 'This contact’s card could not be loaded.',

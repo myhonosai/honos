@@ -43,7 +43,7 @@ describe('family-safe planned-absence history', () => {
 
   it('protects/no-indexes the dynamic route and keeps human submission separate from read-only redacted history', () => {
     const route = readFileSync('src/app/parent/planned-absences/page.tsx', 'utf8'); const component = readFileSync('src/components/parent-planned-absence-history.tsx', 'utf8'); const http = readFileSync('src/components/parent-planned-absence-history-http.ts', 'utf8');
-    for (const token of ['cookieValue', 'verifySession', "redirect('/auth/login')", 'force-dynamic', 'index: false', 'follow: false']) expect(route).toContain(token);
+    for (const token of ['cookieValue', 'verifySession', "redirect('/auth/login?for=parent')", 'force-dynamic', 'index: false', 'follow: false']) expect(route).toContain(token);
     expect(route).not.toMatch(/searchParams|familyId|studentProfileId|requestId/);
     for (const token of ['No planned-absence request for a current child', 'Guardian family access unavailable', 'No verified absence history shown', 'setView(null)', 'pending.current?.abort()', "'visibilitychange'"]) expect(component).toContain(token);
     expect(component).not.toMatch(/useSearchParams|localStorage|sessionStorage|schoolId|familyId|invokeLLM|executeAction|sendMessage|reviewNote/i);

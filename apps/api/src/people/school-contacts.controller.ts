@@ -6,7 +6,7 @@ import { RuntimeDatabaseService } from '../foundation/runtime-database.service.j
 import { MembershipActivationHumanUiGuard } from '../billing/membership-activation-human-ui.guard.js';
 import { SchoolContactsService } from './school-contacts.service.js';
 
-/** C1 (0373): the contacts list is its own same-origin browser read. */
+/** C1 (0481): the contacts list is its own same-origin browser read. */
 @Injectable()
 export class SchoolContactsHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'people.school-contacts';
@@ -15,7 +15,7 @@ export class SchoolContactsHumanUiGuard extends MembershipActivationHumanUiGuard
 const KEYS = new Set(['segment', 'query', 'rankId', 'programId', 'planId', 'endsWithinDays', 'options', 'cursor']);
 
 /**
- * C1 (0373): contacts with segment counts and filters. Route identifiers are never authority: the scope is resolved from
+ * C1 (0481): contacts with segment counts and filters. Route identifiers are never authority: the scope is resolved from
  * the verified session and the database function re-proves people.read.
  */
 @Controller('organizations/:organizationId/schools/:schoolId/contacts')
@@ -45,7 +45,7 @@ export class SchoolContactsController {
     return { data: await this.contacts.list(context, filters, cursor), meta: { requestId, correlationId: requestId } };
   }
 
-  /** C2 (0374): one contact's card; each section is re-checked against its own live permission in the database. */
+  /** C2 (0482): one contact's card; each section is re-checked against its own live permission in the database. */
   @Get(':personId')
   @Header('Cache-Control', 'private, no-store')
   @Header('Referrer-Policy', 'no-referrer')

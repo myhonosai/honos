@@ -44,7 +44,7 @@ export class SchoolReportsService {
       (data, query) => verifySchoolReportLocations(data, context.organizationId, context.schoolId, query), validateSchoolReportsQuery);
   }
 
-  /** R3 (0371): the dashboard for one range in school time. */
+  /** R3 (0480): the dashboard for one range in school time. */
   async readDashboard(context: MembershipLifecycleContext, value: unknown): Promise<SchoolDashboard> {
     return this.run(context, value, 'SELECT hon.read_school_reports_dashboard($1,$2::jsonb) AS data',
       (data, query) => verifySchoolDashboard(data, context.schoolId, query), validateSchoolDashboardQuery);

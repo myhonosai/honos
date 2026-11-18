@@ -8,7 +8,7 @@ import { ACTION_COPY } from '../src/components/people/contact-actions-copy';
 import { CONTACTS_COPY } from '../src/components/people/contacts-copy';
 import { id, scope } from './account-status-fixtures';
 
-// C3 (0387): delete (archive), restore and merge on the contact card.
+// C3 (0483): delete (archive), restore and merge on the contact card.
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 

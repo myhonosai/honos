@@ -1,5 +1,5 @@
 /**
- * School contacts list proof (C1, 0373) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guard + global
+ * School contacts list proof (C1, 0481) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guard + global
  * ValidationPipe + HonExceptionFilter -> SchoolContactsController -> one protected definer function on the restricted runtime
  * role with forced RLS), on the guarded disposable CRM-close fixture only. Synthetic names only; nothing is sent or charged.
  */
@@ -288,7 +288,7 @@ try {
   }
 
   // 2. All contacts: counts per segment, name order, 50 per page, options for the filters.
-  // 0387 adds the ARCHIVED count (archived and merged contacts, left out of ALL); the merge proof covers it.
+  // 0483 adds the ARCHIVED count (archived and merged contacts, left out of ALL); the merge proof covers it.
   const F = first.data;
   ok(json(F.counts) === json({ ALL: 62, STUDENT: 2, TRIAL: 1, PROSPECT: 2, INACTIVE: 1, ARCHIVED: 0 }), `counts ${json(F.counts)}`);
   ok(F.segment === 'ALL' && F.rows.length === 50 && F.hasMore === true && typeof F.nextCursor === 'string', 'first page of 50 with a cursor');
@@ -349,12 +349,12 @@ try {
   await assert.rejects(runtime.query('SELECT hon.require_school_contacts_actor($1)', [OWN.subject]), /permission denied/); checks += 1;
   await assert.rejects(runtime.query('SELECT hon.read_school_contact_list($1,$2::jsonb)', [OWN.subject, '{}']), /SCHOOL_CONTACTS_FORBIDDEN|tenant|permission/i); checks += 1;
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const startMark = '-- School contacts list exact verification (C1 0373)', endMark = '-- End school contacts list exact verification.';
+    const startMark = '-- School contacts list exact verification (C1 0481)', endMark = '-- End school contacts list exact verification.';
     const section = verify.split(startMark)[1]?.split(endMark)[0];
     ok(section, startMark);
     await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
-  console.log(`PASS: school contacts list (0373): ${checks} checks.`);
+  console.log(`PASS: school contacts list (0481): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

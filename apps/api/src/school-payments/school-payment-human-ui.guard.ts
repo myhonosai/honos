@@ -90,3 +90,12 @@ export class SchoolPayAutopayCancelHumanUiGuard extends MembershipActivationHuma
 export class SchoolPayAutopayCycleHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'school_pay.autopay.cycle';
 }
+/** B-TUI-2 (0337): charging a prepared autopay cycle and reconciling an open charge, one browser command per call. */
+@Injectable()
+export class SchoolPayAutopayChargeHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'school_pay.autopay.charge';
+}
+@Injectable()
+export class SchoolPayAutopayReconcileHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'school_pay.autopay.reconcile';
+}

@@ -9,6 +9,6 @@ export const metadata = { title: 'HON | Family testing status', description: 'Ve
 export default async function ParentTestingPage() {
   let authenticated = false;
   try { const token = cookieValue((await headers()).get('cookie'), HON_SESSION_COOKIE); if (token) { verifySession(token, sessionConfig()); authenticated = true; } } catch { /* fail closed */ }
-  if (!authenticated) redirect('/auth/login');
+  if (!authenticated) redirect('/auth/login?for=parent');
   return <ParentTestingStatus/>;
 }

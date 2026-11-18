@@ -5,7 +5,7 @@ import { contactsText } from './contacts-copy';
 import { endBadge } from './contacts-list';
 import styles from './people.module.css';
 
-/** The contact card (C2, 0374) as read for the open person. */
+/** The contact card (C2, 0482) as read for the open person. */
 export type CardState =
   | Readonly<{ state: 'NONE' }> | Readonly<{ state: 'LOADING' }> | Readonly<{ state: 'UNAVAILABLE' }> | Readonly<{ state: 'READY'; card: SchoolContactCard }>;
 export const CARD_TABS = ['overview', 'family', 'appointments', 'tasks', 'membership', 'billing', 'messages', 'timeline'] as const;

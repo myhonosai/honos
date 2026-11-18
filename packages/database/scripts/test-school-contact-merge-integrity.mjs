@@ -1,5 +1,5 @@
 /**
- * School contact merge and archive proof (C3, 0387) over signed HTTP (HON session cookie -> HonIdentityGuard + per-command
+ * School contact merge and archive proof (C3, 0483) over signed HTTP (HON session cookie -> HonIdentityGuard + per-command
  * human UI guard + global ValidationPipe + HonExceptionFilter -> SchoolContactAdminController / SchoolContactsController ->
  * protected definer functions on the restricted runtime role with forced RLS), on the guarded disposable CRM-close fixture
  * only. Synthetic names only; nothing is sent or charged.
@@ -361,12 +361,12 @@ try {
   await assert.rejects(sql('DELETE FROM hon.school_contact_archives WHERE person_id=$1', [A.dup]), /never deleted/); checks += 1;
   ok((await one("SELECT count(*)::int n FROM hon.role_permissions rp JOIN hon.roles r ON r.id=rp.role_id WHERE r.is_system_role AND r.code<>'OWNER' AND rp.permission_code IN ('people.merge','people.archive')", [])).n === 0, 'only system owner roles get the new permissions');
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const startMark = '-- School contact merge and archive exact verification (C3 0387)', endMark = '-- End school contact merge and archive exact verification.';
+    const startMark = '-- School contact merge and archive exact verification (C3 0483)', endMark = '-- End school contact merge and archive exact verification.';
     const section = verify.split(startMark)[1]?.split(endMark)[0];
     ok(section, startMark);
     await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
-  console.log(`PASS: school contact merge and archive (0387): ${checks} checks.`);
+  console.log(`PASS: school contact merge and archive (0483): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));
