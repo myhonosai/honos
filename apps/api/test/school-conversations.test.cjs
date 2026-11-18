@@ -88,6 +88,9 @@ test('0364 conversation inputs are closed', () => {
   assert.throws(() => contracts.validateUpdateConversationInput({ conversationId: A, expectedVersion: 1, tags: ['Trial', 'trial'] }));
   assert.throws(() => contracts.validateMarkConversationReadInput({ conversationId: A }));
   assert.throws(() => contracts.validateLinkConversationInput({ conversationId: A, expectedVersion: 1, personId: 'nope' }));
+  // 0532: the contact card asks for one person's conversations; the id must be an exact lowercase uuid.
+  assert.deepEqual(contracts.validateConversationListQuery({ personId: A, status: 'ALL' }), { personId: A, status: 'ALL' });
+  for (const personId of ['nope', 'ABCDEF11-1111-4111-8111-111111111111', 7, null]) assert.throws(() => contracts.validateConversationListQuery({ personId }), undefined, String(personId));
 });
 
 test('0364 service and controller refuse before any database call', async () => {
@@ -131,6 +134,8 @@ test('0364 service and controller refuse before any database call', async () => 
   await assert.rejects(() => proved.list(A, B, { beforeAt: '2026-11-01T00:00:00.000Z' }, undefined, req), (e) => e.response.code === 'VALIDATION_FAILED');
   await assert.rejects(() => proved.list(A, B, { status: ['OPEN', 'CLOSED'] }, undefined, req), (e) => e.response.code === 'VALIDATION_FAILED');
   await assert.rejects(() => proved.list(A, B, { unreadOnly: 'yes' }, undefined, req), (e) => e.response.code === 'VALIDATION_FAILED');
+  await assert.rejects(() => proved.list(A, B, { personId: 'nope' }, undefined, req), (e) => e.response.code === 'VALIDATION_FAILED');
+  await assert.rejects(() => proved.list(A, B, { personId: [A, B] }, undefined, req), (e) => e.response.code === 'VALIDATION_FAILED');
   assert.equal(calls, 0);
   // A scope resolved for another school or organization is refused.
   const scoped = new SchoolConversationsController({ resolveAuthorizedScope: async () => ({ organizationId: A, schoolId: C, principalId: C }) }, service);

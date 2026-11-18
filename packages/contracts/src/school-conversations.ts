@@ -42,6 +42,8 @@ export interface ConversationContact {
 export interface ConversationDetail { conversation: ConversationRow; contact: ConversationContact; messages: ConversationMessage[]; hasOlder: boolean; canManage: boolean }
 export interface ConversationListQuery {
   status?: 'OPEN' | 'CLOSED' | 'ALL'; assigned?: 'ANY' | 'ME' | 'NONE'; unreadOnly?: boolean; tag?: string; search?: string; before?: { at: string; id: string };
+  /** 0532: only this person's conversations (the contact card's Texts). */
+  personId?: string;
 }
 export interface ReplyConversationInput { conversationId: string; expectedVersion: number; body: string }
 export interface UpdateConversationInput { conversationId: string; expectedVersion: number; status?: ConversationStatus; assignedPrincipalId?: string | null; tags?: string[] }
@@ -99,7 +101,7 @@ function nameOk(value: unknown, min: number): value is string {
 }
 
 export function validateConversationListQuery(value: unknown): ConversationListQuery {
-  const row = record(value, [], ['status', 'assigned', 'unreadOnly', 'tag', 'search', 'before']);
+  const row = record(value, [], ['status', 'assigned', 'unreadOnly', 'tag', 'search', 'before', 'personId']);
   const out: ConversationListQuery = {};
   if ('status' in row) out.status = oneOf(row.status, ['OPEN', 'CLOSED', 'ALL'] as const);
   if ('assigned' in row) out.assigned = oneOf(row.assigned, ['ANY', 'ME', 'NONE'] as const);
@@ -110,6 +112,7 @@ export function validateConversationListQuery(value: unknown): ConversationListQ
     if (typeof s !== 'string' || s.length < 1 || s.length > CONVERSATION_LIMITS.searchMax || s.trim() !== s || /[\u0000-\u001f\u007f]/.test(s)) invalid();
     out.search = s;
   }
+  if ('personId' in row) out.personId = uuid(row.personId);
   if ('before' in row) { const b = record(row.before, ['at', 'id']); out.before = { at: instant(b.at), id: uuid(b.id) }; }
   return out;
 }

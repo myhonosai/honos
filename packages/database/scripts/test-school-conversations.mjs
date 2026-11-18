@@ -149,6 +149,12 @@ try{
  assert.deepEqual((await list(a,{search:'ada'})).conversations.map(x=>x.conversationId),[convAda]);
  assert.deepEqual((await list(a,{search:'7777'})).conversations.map(x=>x.conversationId),[convNew]);
  assert.equal((await list(a,{status:'CLOSED'})).conversations.length,0);
+ // 0532: one person's conversations for the contact card (any status); a person with none, or of another school, gets nothing.
+ assert.deepEqual((await list(a,{personId:ada,status:'ALL'})).conversations.map(x=>x.conversationId),[convAda]);
+ assert.deepEqual((await list(a,{personId:twinA,status:'ALL'})).conversations,[]);
+ assert.deepEqual((await list(b,{personId:ada,status:'ALL'})).conversations,[]);
+ assert.deepEqual((await list(a,{personId:ada,search:'zzz'})).conversations,[],'ANDed with the other filters');
+ r=await send(base(a)+'?personId=nope',{identity:a});assert.equal(r.status,400);
  assert.equal((await list(b)).conversations.length,1);
  let D=await detail(a,convAda);
  assert.deepEqual(D.messages.map(m=>m.body),['Hi, my 5 year old wants karate. How much?\nThanks','Second text']);
