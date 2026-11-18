@@ -1141,6 +1141,7 @@ export * from './school-contacts.js';
 export * from './school-contact-card.js';
 export * from './school-contact-admin.js';
 export * from './school-pay-charges.js';
+export * from './school-pay-once.js';
 export * from './shopify.js';
 export * from './walk-in-kiosk.js';
 export * from './face-checkin.js';

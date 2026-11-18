@@ -4328,6 +4328,57 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
     RAISE EXCEPTION 'Unsafe automation workflow table posture: guard triggers'; END IF;
 END $$;
 -- End automation workflows and contact tags exact verification.
+-- School one-time payment exact verification (B-TUI-2 0529): two private forced-RLS tables, the payment guard, internal
+-- opener/state/cancel helpers that the runtime can never call, four API entry points and one live payment per caller record.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['hon.school_pay_once','hon.school_pay_once_events'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=t::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'School one-time payment table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_school_pay_once()',true,false,'search_path=pg_catalog, hon','146eda805148cf8b04b17a50e115ad8d443ee60dc7ae377dbc1be092194a9406'),
+('hon.school_pay_once_json(hon.school_pay_once)',true,false,'search_path=pg_catalog, hon','dada49e4219c0766b8b7b7f3c8e3f7583d9c87989011ec5bd3c8ec75e0b9f1fd'),
+('hon.school_pay_once_record(hon.school_pay_once,text,jsonb)',true,false,'search_path=pg_catalog, hon','ed1e9f9cdcd60e74a9c18fc5489017ab3c18c37f6b0b12979d3b8fd63842f2ef'),
+('hon.school_pay_once_connection(uuid,uuid)',true,false,'search_path=pg_catalog, hon','79a382f793dde948ed35350c6680c7a82008eddd8d6466d903d9e5bdbde38a05'),
+('hon.school_pay_once_provider(uuid,uuid)',true,false,'search_path=pg_catalog, hon','5181fd08f01fdf39baad56c02e5be4fa589b5a439128d438f94ad36ffa6bf2ad'),
+('hon.school_pay_once_open(uuid,uuid,text,uuid,bigint,text,jsonb,jsonb,timestamp with time zone)',true,false,'search_path=pg_catalog, hon','567bf757d993dcfc4813039949d11d4e97cc855aac152307151c90575d36176b'),
+('hon.school_pay_once_state(uuid)',true,false,'search_path=pg_catalog, hon','92232df24fcb7b1c3d16dfc0f024243ffb53a01f6bc63fe3dbc0067fc276feb7'),
+('hon.school_pay_once_cancel(uuid)',true,false,'search_path=pg_catalog, hon','fda71731d5c24ee71075c41c2d6c2aa251dcabc1355ff151d35425e75197fc88'),
+('hon.read_school_pay_once(uuid)',true,true,'search_path=pg_catalog, hon','784ba9ab62974f5a50f5a98885f01bedb39708784480c6f364dab0fd7bc486fb'),
+('hon.start_school_pay_once(uuid,jsonb)',true,true,'search_path=pg_catalog, hon','fd59d925b7197a20b738355be9b88e38409c4489ac825f347697d0d3b710df8d'),
+('hon.record_school_pay_once(uuid,jsonb)',true,true,'search_path=pg_catalog, hon','50d1e14183cf9ce4da3c4e0cbb8c10c3f3e9f0fa8f3bfdbe143b2ae89b4464ab'),
+('hon.list_due_school_pay_once(integer)',true,true,'search_path=pg_catalog, hon','fb793d67c1691ca4c973e8cf09c43f22937d70e55bc2ad5d655931352dc590b2')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school one-time payment function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('school_pay_once','school_pay_once_guard','hon.guard_school_pay_once()'),
+    ('school_pay_once','school_pay_once_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('school_pay_once_events','school_pay_once_events_immutable','hon.guard_membership_activation_evidence()'),
+    ('school_pay_once_events','school_pay_once_events_no_truncate','hon.guard_membership_activation_evidence()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing school one-time payment guard: %',expected.name; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid IN ('hon.school_pay_once'::regclass,'hon.school_pay_once_events'::regclass) AND NOT tgisinternal)<>4 THEN
+    RAISE EXCEPTION 'School one-time payment tables must have exactly their four guards'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname='hon' AND indexname='school_pay_once_one_live_idx'
+      AND indexdef LIKE '%UNIQUE%(organization_id, school_id, source, source_id)%') THEN
+    RAISE EXCEPTION 'A caller record must have at most one live one-time payment'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM hon.principals WHERE id='00000000-0000-4000-8000-000000000529' AND principal_type='SYSTEM_SERVICE' AND user_id IS NULL)
+    OR EXISTS(SELECT 1 FROM hon.principal_role_grants WHERE principal_id='00000000-0000-4000-8000-000000000529')
+    OR EXISTS(SELECT 1 FROM hon.hq_operator_grants WHERE principal_id='00000000-0000-4000-8000-000000000529')
+    OR EXISTS(SELECT 1 FROM hon.family_access_grants WHERE principal_id='00000000-0000-4000-8000-000000000529') THEN
+    RAISE EXCEPTION 'The one-time payment recorder must be a code-owned service with no authority'; END IF;
+END $$;
+-- End school one-time payment exact verification.
 -- Lead pipeline board exact verification (0417)
 DO $$ DECLARE f text;
   entry text[]:=ARRAY['hon.read_crm_pipeline_board(text,uuid,text)','hon.move_crm_lead_stage(text,uuid,jsonb,text,uuid,uuid)',
