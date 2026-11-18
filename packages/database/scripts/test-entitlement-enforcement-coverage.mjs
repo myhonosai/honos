@@ -58,6 +58,8 @@ const OPEN_BY_DESIGN={
  'hon.cancel_public_school_booking_type_booking(text,jsonb)':'family cancel by code (0286): answers INVALID for a suspended school or lapsed entitlement and changes nothing; returns no booking data',
  'hon.sign_membership_agreement_link(text,jsonb,uuid)':'public agreement signing link (0499): the token is the only key; answers GONE (signs nothing, returns no data) for an unknown token, a suspended organization, school or family, a lapsed entitlement or a recipient no longer a guardian',
  'hon.submit_walkin_visit(text,jsonb,text)':'walk-in tablet (0414): answers CLOSED for a suspended school, lapsed entitlement or unknown device and writes nothing; returns no people data',
+ 'hon.open_walkin_card_payment(text,text)':'walk-in tablet card payment (0533): answers CLOSED for a suspended school, lapsed entitlement or unknown device (the 0414 tablet hold) and opens nothing; returns no people data',
+ 'hon.settle_walkin_card_payment(text,text)':'walk-in tablet card payment state (0533): answers CLOSED for a suspended school, lapsed entitlement or unknown device and changes nothing; returns no people data',
  'hon.chad_follow_up_draft_is_current(uuid,jsonb)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.crm_lead_target_is_current(uuid,uuid)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.marketing_action_is_current(uuid,jsonb)':'boolean predicate over ids; returns no data and grants nothing',

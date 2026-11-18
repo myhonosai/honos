@@ -4393,3 +4393,21 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+
+-- 0533 walk-in kiosk card payment (WK3): four runtime entry points (three tablet, one staff read); the visit/payment
+-- helpers are migration-owner only. Tables keep the 0414 and 0529 rules (no runtime table privilege).
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_walkin_card_provider(text)','hon.open_walkin_card_payment(text,text)','hon.settle_walkin_card_payment(text,text)',
+    'hon.read_walkin_visit_card_payment(text,uuid)'];
+  fns text[]:=ARRAY['hon.walkin_card_payment_of(hon.walkin_visits)','hon.walkin_card_paid(hon.walkin_visits,jsonb,uuid,text,uuid)',
+    'hon.walkin_tablet_hold(text)','hon.walkin_tablet_visit(hon.walkin_kiosk_devices,text)'];
+BEGIN
+  IF to_regprocedure('hon.open_walkin_card_payment(text,text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0533 first'; END IF;
+  FOREACH f IN ARRAY fns||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
