@@ -29,8 +29,9 @@ DO $$ BEGIN
     OR to_regclass('hon.school_pay_once') IS NULL
     OR to_regprocedure('hon.school_pay_once_open(uuid,uuid,text,uuid,bigint,text,jsonb,jsonb,timestamptz)') IS NULL
     OR to_regprocedure('hon.school_pay_once_state(uuid)') IS NULL OR to_regprocedure('hon.school_pay_once_cancel(uuid)') IS NULL
-    OR to_regprocedure('hon.school_pay_once_provider(uuid,uuid)') IS NULL THEN
-    RAISE EXCEPTION 'Walk-in kiosk card payment requires 0414 and 0529';
+    OR to_regprocedure('hon.school_pay_once_provider(uuid,uuid)') IS NULL
+    OR position('hon.demo_data_removal_allows(TG_TABLE_NAME,to_jsonb(OLD))' IN (SELECT prosrc FROM pg_proc WHERE oid='hon.guard_walkin_kiosk()'::regprocedure))=0 THEN
+    RAISE EXCEPTION 'Walk-in kiosk card payment requires 0414, 0459 and 0529';
   END IF;
   IF (SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c WHERE c.conrelid='hon.walkin_visits'::regclass AND c.conname='walkin_visits_payment_state_check')
     IS DISTINCT FROM 'CHECK ((payment_state = ANY (ARRAY[''FREE''::text, ''PAY_AT_DESK''::text, ''PAID_AT_DESK''::text])))' THEN
@@ -46,10 +47,13 @@ ALTER TABLE hon.walkin_visits
   ADD CONSTRAINT walkin_visits_payment_state_check CHECK (payment_state IN ('FREE','PAY_AT_DESK','PAID_AT_DESK','PAID_CARD')),
   ADD CONSTRAINT walkin_visits_card_paid_check CHECK ((payment_state='PAID_CARD')=(card_payment_id IS NOT NULL) AND (card_payment_id IS NULL)=(card_paid_at IS NULL));
 
--- Settings-free guards (0414), with K1: visits move only PAY_AT_DESK -> PAID_AT_DESK or PAY_AT_DESK -> PAID_CARD, once.
+-- Settings-free guards (0414, with the 0459 demo data removal line kept as is), with K1: visits move only
+-- PAY_AT_DESK -> PAID_AT_DESK or PAY_AT_DESK -> PAID_CARD, once.
 CREATE OR REPLACE FUNCTION hon.guard_walkin_kiosk() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 BEGIN
+  IF TG_OP='DELETE' AND hon.demo_data_removal_allows(TG_TABLE_NAME,to_jsonb(OLD)) THEN RETURN OLD; END IF; -- 0459 demo data removal
+
   IF TG_OP='DELETE' THEN RAISE EXCEPTION 'WALKIN_KIOSK_IMMUTABLE' USING ERRCODE='55000'; END IF;
   IF TG_TABLE_NAME='walkin_kiosk_settings' THEN
     IF TG_OP='INSERT' THEN

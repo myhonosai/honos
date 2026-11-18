@@ -343,6 +343,6 @@
     "0522_school_contact_card.sql": "dc1a744a90a927fb3303e25d79fce87d106ff5b92caefc5db69595b9e1f56516",
     "0523_school_contact_merge_archive.sql": "39228fc3d1af999e4bff29da71460a5a6c82ec0ccd7d9bb3339c62ba2ea8868c",
     "0529_school_pay_once.sql": "476c62434beaeb0be7f781878ee817e5b0e0641f22f94ed400457bf90da9ea4a",
-    "0533_walk_in_kiosk_card_payment.sql": "ebc947de0d49d59284edb463539b64595c7791f76d91138686d762ae9d849379"
+    "0533_walk_in_kiosk_card_payment.sql": "bbdffff9b9eee29f5ff9f8452a4ff5694c758b2abc234967b8bb2ebda8af35ac"
   }
 }
