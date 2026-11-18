@@ -2,9 +2,12 @@
 // deterministic fill of school facts HON already holds (name, contact details); it is not AI. The same edit operations
 // are what the owner's editor applies today and what AI edit proposals (WB5) will be limited to.
 import {
-  WEBSITE_MAX_PAGES, WEBSITE_MAX_SECTIONS, WEBSITE_SECTION_SPECS, WEBSITE_SECTION_ID, WEBSITE_PAGE_SLUG, validateWebsiteDocument,
-  type WebsiteDocument, type WebsitePage, type WebsitePageKind, type WebsiteSection, type WebsiteSectionType, type WebsiteTemplate, type WebsiteTheme,
+  WEBSITE_MAX_PAGES, WEBSITE_MAX_SECTIONS, WEBSITE_SECTION_SPECS, WEBSITE_SECTION_ID, WEBSITE_PAGE_SLUG, validateWebsiteDocument, websiteStarterArtUrl,
+  type WebsiteDocument, type WebsitePage, type WebsitePageKind, type WebsiteSection, type WebsiteSectionType, type WebsiteTemplate, type WebsiteTheme, type WebsiteStarterArt,
 } from './school-website.js';
+
+/** 0560: each template starts with its own starter hero and the shared program art (see WEBSITE_STARTER_ART). */
+const HERO_ART = { MODERN_CLEAN: 'hero-modern', FAMILY_FRIENDLY: 'hero-family', BOLD_POWERFUL: 'hero-bold', TRADITIONAL: 'hero-traditional', HIGH_CONVERSION: 'hero-conversion' } as const satisfies Record<WebsiteTemplate, WebsiteStarterArt>;
 
 export interface WebsiteSchoolFacts { schoolName: string; phone?: string; email?: string; address?: string }
 
@@ -50,11 +53,11 @@ export function buildWebsiteFromTemplate(template: WebsiteTemplate, facts: Websi
   const email = clean(facts.email, 254);
   const contact = section('CONTACT', 'contact', { heading: 'Visit us', address: clean(facts.address, 300), phone: clean(facts.phone, 40),
     email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '', hours: '' });
-  const hero = section('HERO', 'hero', { heading: fill(copy.hero, 120), subheading: copy.sub, ctaLabel: copy.cta, ctaHref: '#trial' });
+  const hero = section('HERO', 'hero', { heading: fill(copy.hero, 120), subheading: copy.sub, ctaLabel: copy.cta, ctaHref: '#trial', imageUrl: websiteStarterArtUrl(HERO_ART[template]) });
   const programs = section('PROGRAMS', 'programs', { heading: 'Programs', intro: '', items: [
-    { name: 'Little Ninjas', ages: 'Ages 4-6', description: 'Listening, balance and confidence through play.', imageUrl: '' },
-    { name: 'Kids', ages: 'Ages 7-12', description: 'Focus, respect and real technique, one belt at a time.', imageUrl: '' },
-    { name: 'Teens and adults', ages: 'Ages 13+', description: 'Fitness, self-defense and skill for every level.', imageUrl: '' }] });
+    { name: 'Little Ninjas', ages: 'Ages 4-6', description: 'Listening, balance and confidence through play.', imageUrl: websiteStarterArtUrl('program-little') },
+    { name: 'Kids', ages: 'Ages 7-12', description: 'Focus, respect and real technique, one belt at a time.', imageUrl: websiteStarterArtUrl('program-kids') },
+    { name: 'Teens and adults', ages: 'Ages 13+', description: 'Fitness, self-defense and skill for every level.', imageUrl: websiteStarterArtUrl('program-adults') }] });
   const trial = section('TRIAL_CTA', 'trial', { heading: copy.trial, body: copy.trialBody, ctaLabel: 'Ask about a class', ctaHref: '#enquire' });
   const form = section('LEAD_FORM', 'enquire', { heading: 'Ask us anything', body: 'Leave your details and we will get back to you.' });
   const booking = section('BOOKING', 'book', { heading: 'Book a time', body: '', ctaLabel: 'See open times' });

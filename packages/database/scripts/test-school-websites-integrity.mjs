@@ -20,7 +20,7 @@ const {SchoolWebsiteController,PublishedSchoolWebsiteController}=require('./dist
 const {SchoolWebsiteService}=require('./dist/website/school-website.service.js');
 const guards=require('./dist/website/school-website-human-ui.guard.js');
 const {publicSiteTransport}=require('./dist/website/public-site-transport.js');
-const {SIGNUP_CONFIRMATION,verifySchoolWebsite,verifyPublishedSchoolWebsite,validateWebsiteDocument,WEBSITE_MAX_DOCUMENT_BYTES}=require('@hon/contracts');
+const {SIGNUP_CONFIRMATION,verifySchoolWebsite,verifyPublishedSchoolWebsite,validateWebsiteDocument,WEBSITE_MAX_DOCUMENT_BYTES,WEBSITE_STARTER_ART,websiteStarterArtUrl}=require('@hon/contracts');
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false});
 const database=new RuntimeDatabaseService();let app,groups=0,origin;
 const session={mode:'OIDC',audience:'school-website-disposable',secret:createHash('sha256').update(K()).digest('hex')};
@@ -102,6 +102,14 @@ try{
  ];
  for(const [i,change]of bad.entries()){const d=structuredClone(good);change(d);assert.equal((await q('SELECT hon.school_website_document_ok($1::jsonb) ok',[d]))[0].ok,false,'bad document '+i);
   assert.throws(()=>validateWebsiteDocument(d),/Invalid website/,'shared validator, bad document '+i);}
+ // 0560 starter art: exactly the eight shipped /site-art/ paths are images, in every image field, on both sides; any other
+ // same-origin path, a query, a different extension or a path that only contains a starter name is refused.
+ for(const name of WEBSITE_STARTER_ART){const d=structuredClone(good);const url=websiteStarterArtUrl(name);d.pages[0].sections[0].props.imageUrl=url;d.theme.logoUrl=url;
+  assert.equal((await q('SELECT hon.school_website_document_ok($1::jsonb) ok',[d]))[0].ok,true,'starter art '+name);assert.doesNotThrow(()=>validateWebsiteDocument(d));}
+ assert.equal(WEBSITE_STARTER_ART.length,8);
+ for(const url of ['/site-art/other.webp','/site-art/hero-bold.png','/site-art/hero-bold.webp?x=1','/site-art/../hero-bold.webp','/x/site-art/hero-bold.webp','site-art/hero-bold.webp','/site-art/hero-bold.webp/','//site-art/hero-bold.webp']){
+  const d=structuredClone(good);d.pages[0].sections[0].props.imageUrl=url;
+  assert.equal((await q('SELECT hon.school_website_document_ok($1::jsonb) ok',[d]))[0].ok,false,'not starter art '+url);assert.throws(()=>validateWebsiteDocument(d),/Invalid website/,url);}
  // Only link fields are links: text that starts with '/' is just text, for the database and the shared validator alike.
  const slashText=structuredClone(good);slashText.pages[0].sections.push({id:'about',type:'TEXT',props:{heading:'/about us',body:'/ Classes start at 4 PM.'}});
  assert.equal((await q('SELECT hon.school_website_document_ok($1::jsonb) ok',[slashText]))[0].ok,true);assert.doesNotThrow(()=>validateWebsiteDocument(slashText));
@@ -115,7 +123,7 @@ try{
  for(const [n,expected]of [[room,true],[room+1,false]]){const d=sized(n);
   assert.equal((await q('SELECT hon.school_website_document_ok($1::jsonb) ok',[d]))[0].ok,expected,'database size '+n);
   if(expected)assert.doesNotThrow(()=>validateWebsiteDocument(d));else assert.throws(()=>validateWebsiteDocument(d),/document size/);}
- pass('database and shared rules refuse script links, data/http images, unknown fields and types, bidi/newline/line-separator characters, bad colours, page and link rules, limits; agree on text starting with / and on the exact size boundary');
+ pass('database and shared rules refuse script links, data/http images, unknown fields and types, bidi/newline/line-separator characters, bad colours, page and link rules, limits; accept exactly the eight 0560 starter-art paths; agree on text starting with / and on the exact size boundary');
 
  const module=await Test.createTestingModule({controllers:[SchoolWebsiteController,PublishedSchoolWebsiteController],providers:[SchoolWebsiteService,...Object.values(guards),HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
  app=module.createNestApplication({logger:false});app.use(publicSiteTransport());app.setGlobalPrefix('v1');await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;

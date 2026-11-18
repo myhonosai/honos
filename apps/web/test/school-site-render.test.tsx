@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, expect, it, vi } from 'vitest';
-import { validateWebsiteDocument, type WebsiteDocument } from '@hon/contracts';
+import { buildWebsiteFromTemplate, validateWebsiteDocument, WEBSITE_STARTER_ART, WEBSITE_TEMPLATES, websiteStarterArtUrl, type WebsiteDocument } from '@hon/contracts';
 vi.mock('server-only', () => ({}));
 import { SiteView } from '../src/components/school-site/site-view';
 import { siteHref, siteSourceNote, siteVideoUrl, siteParagraphs } from '../src/components/school-site/site-links';
@@ -135,4 +135,22 @@ it('the public read verifies the published copy and separates missing from unava
   expect((await readPublicSite('../etc', never as unknown as typeof fetch)).kind).toBe('missing');
   expect((await readPublicSite('admin', never as unknown as typeof fetch)).kind).toBe('missing');
   expect(never).not.toHaveBeenCalled();
+});
+
+it('every template starts with shipped starter art that the site renders and the app actually serves', () => {
+  const fs = require('node:fs') as typeof import('node:fs'); const path = require('node:path') as typeof import('node:path');
+  for (const name of WEBSITE_STARTER_ART) expect(fs.existsSync(path.join(__dirname, '..', 'public', 'site-art', `${name}.webp`))).toBe(true);
+  for (const template of WEBSITE_TEMPLATES) {
+    const d = buildWebsiteFromTemplate(template, { schoolName: 'Tiger Dojo' });
+    const home = d.pages[0]!; const hero = home.sections.find(s => s.type === 'HERO')!; const programs = home.sections.find(s => s.type === 'PROGRAMS')!;
+    expect(String(hero.props.imageUrl)).toMatch(/^\/site-art\/hero-[a-z]+\.webp$/);
+    expect((programs.props.items as { imageUrl: string }[]).map(i => i.imageUrl)).toEqual(['program-little', 'program-kids', 'program-adults'].map(n => websiteStarterArtUrl(n as never)));
+    const html = render('public', 'home', d);
+    expect(html).toContain(`src="${String(hero.props.imageUrl)}"`);
+    expect(html).toContain(`src="${websiteStarterArtUrl('program-kids')}"`);
+  }
+  const heroes = WEBSITE_TEMPLATES.map(t => buildWebsiteFromTemplate(t, { schoolName: 'x' }).pages[0]!.sections.find(s => s.type === 'HERO')!.props.imageUrl);
+  expect(new Set(heroes).size).toBe(WEBSITE_TEMPLATES.length);
+  const other = doc(); (other.pages[0]!.sections[0]!.props as Record<string, unknown>).imageUrl = '/site-art/other.webp';
+  expect(() => validateWebsiteDocument(other)).toThrow(/Invalid website/);
 });
