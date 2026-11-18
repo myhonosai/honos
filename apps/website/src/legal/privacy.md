@@ -24,7 +24,7 @@ Depending on the features the school uses, this can include:
 - **Training records**: programs, memberships, class bookings, attendance and check-ins, belt ranks and testing results, achievements, notes staff write, and signed waivers and agreements.
 - **Photos**: profile photos and pictures a school chooses to upload.
 - **Messages**: texts, emails and in-app messages between the school and its students, families and leads, with delivery records and opt-out (STOP) and help (HELP) requests.
-- **Billing records**: plans, invoices, tuition amounts, payment status and the last digits and brand of a saved card. Card numbers are entered directly with the payment provider and never stored by HON.
+- **Billing records**: plans, invoices, tuition amounts, payment status and, for a family's saved payment method, its brand and last digits. Card numbers are entered directly with the payment provider and never stored by HON.
 - **Leads and marketing**: enquiries from website forms, missed calls, and Facebook and Instagram lead forms, with how each lead found the school.
 - **Staff records**: staff accounts, roles and permissions, shifts and the actions staff take in HON OS.
 
@@ -34,13 +34,13 @@ When you create or use a HON OS account we collect your name, email address, pho
 
 ### Information about HON OS subscriptions
 
-When a school subscribes to HON OS, our payment provider (Stripe) collects the payment card and billing details. We receive the subscription status, plan, invoices, amounts and the last digits and brand of the card, never the full card number.
+When a school subscribes to HON OS, our payment provider (Stripe) collects the payment card and billing details. We receive the subscription status, plan, invoices and amounts. HON never receives or stores the card number.
 
 ### Information from connected services
 
 When a school chooses to connect another service, HON receives only what that connection needs:
 
-- **Meta (Facebook and Instagram), Google and Zernio**: the school's page or account names and identifiers, leads submitted through the school's lead forms, and the reporting and posting details the school's marketing features use. Access tokens are stored encrypted.
+- **Meta (Facebook and Instagram), Google and Zernio**: the school's page or account names and identifiers, leads submitted through the school's lead forms, and the reporting and posting details the school's marketing features use. HON does not hold the school's Meta or Google access tokens; Zernio, our connection provider, keeps them.
 - **Square and Stripe for tuition**: when a school takes tuition payments through its own Square or Stripe account, we receive the payment and payout records needed to show them in HON OS.
 - **Shopify**: see "The HON Shopify app" below.
 
@@ -72,14 +72,14 @@ We use the information a school puts into HON OS only to provide the Services to
 
 ## AI features
 
-HON OS includes AI assistants that help a school draft messages, summarize records, suggest follow-ups, create marketing images and videos, and similar tasks. When a school uses these features, the information needed for the task is sent to the AI service provider that performs it. HON requires those providers not to use school information to train their models. **HON does not use a school's student, family or staff information to train AI models.** Actions that send messages, spend money or change important records go through approval rules the school controls, and staff should review AI output before relying on it.
+HON OS includes AI assistants that help a school draft messages, summarize records, suggest follow-ups, create marketing images and videos, and similar tasks. When a school uses these features, the information needed for the task is sent to the AI service provider that performs it. [[Confirm with each AI provider's terms that it does not train on information HON sends.]] **HON does not use a school's student, family or staff information to train AI models.** Actions that send messages, spend money or change important records go through approval rules the school controls, and staff should review AI output before relying on it.
 
 ## The HON Shopify app
 
 When a merchant connects a Shopify store to HON OS, HON asks Shopify for read-only access to products, inventory and orders. HON copies:
 
 - products and variants (title, status, SKU, barcode, price, unit cost and stock);
-- orders from the last 60 days and new orders after that: order number, dates, status, sales channel, currency, subtotal, discounts, tax and total; and
+- orders placed in the last 60 days: order number, dates, status, sales channel, currency, subtotal, discounts, tax and total; and
 - order line items: product title, SKU, quantity and unit price.
 
 **HON stores no Shopify customer names, emails, phone numbers or addresses.** We use this information only to show the merchant their catalog, stock, sales and estimated margins inside HON OS. HON never writes to the store. Access tokens are encrypted, and the database never sees them in readable form.
@@ -88,7 +88,7 @@ When a merchant uninstalls the HON app or disconnects the store, HON destroys it
 
 ## Children's privacy
 
-HON OS is used by schools that teach children, so a school may keep information about students under 13. That information is provided by the school or by a parent or guardian, not collected directly from children by HON. Schools agree in our Terms to obtain any parental consent the law requires, including under the Children's Online Privacy Protection Act (COPPA), before adding a child's information or turning on features such as face check-in. Children do not get their own HON OS or HON Family accounts; the HON Family app is for parents, guardians and adult students. A parent or guardian can ask the school, or us, to review or delete their child's information and to stop further collection; we will work with the school to do that. If we learn that we have collected a child's information directly without the required consent, we will delete it.
+HON OS is used by schools that teach children, so a school may keep information about students under 13. That information is provided by the school or by a parent or guardian, not collected directly from children by HON. Schools agree in our Terms to obtain any parental consent the law requires, including under the Children's Online Privacy Protection Act (COPPA), before adding a child's information or turning on features such as face check-in. The HON Family app is meant for parents, guardians and adult students, and schools agree not to invite children to their own accounts. A parent or guardian can ask the school, or us, to review or delete their child's information and to stop further collection; we will work with the school to do that. If we learn that we have collected a child's information directly without the required consent, we will delete it.
 
 ## How we share information
 

@@ -16,7 +16,7 @@ HON OS is software for running and growing a martial arts school: leads and cont
 - You must give accurate information and keep it up to date.
 - Each staff member uses their own sign-in. You are responsible for who you invite, the roles you give them and what they do in your account.
 - Keep sign-in details secure and tell us at once if you think your account has been misused.
-- You must be at least 18 to create a School account.
+- You must be at least 18 to create a School account, and you will not invite children under 13 to their own HON OS or HON Family account; parents and guardians use the HON Family app for their children.
 
 ## Your responsibilities for student and family information
 
