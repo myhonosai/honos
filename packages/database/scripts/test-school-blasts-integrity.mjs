@@ -318,7 +318,7 @@ try {
   const teens = (await success(() => save(SENDER, draft({ name: 'Teens', audience: { groups: ['ALL_CONTACTS'], tags: ['Teens'] } })), 'teens draft')).data;
   const a4 = (await success(() => audience(READER, teens.blastId), 'audience teens')).data;
   // Teen -> Tia QUEUED at her own opted-in email AND mom QUEUED, dad DUPLICATE; Gus (19) QUEUED at his own; Arlo archived: not counted.
-  ok(JSON.stringify(a4.outcomes) === JSON.stringify({ QUEUED: 3, NO_CONSENT: 0, NO_ADDRESS: 0, DUPLICATE_ADDRESS: 1 }) && a4.matched === 3, `minors via guardians and own address, archived excluded ${JSON.stringify(a4)}`);
+  ok(JSON.stringify(a4.outcomes) === JSON.stringify({ QUEUED: 3, NO_CONSENT: 0, NO_ADDRESS: 0, DUPLICATE_ADDRESS: 1 }) && a4.matched === 4, `minors via guardians and own address, archived excluded ${JSON.stringify(a4)}`);
   const teenRows = (await sql('SELECT person_id::text p FROM hon.school_blast_resolve($1,$2,$3,$4::jsonb)', [ids.organization, ids.schoolA, 'EMAIL', JSON.stringify({ groups: ['ALL_CONTACTS'], tags: ['Teens'] })])).rows.map((r) => r.p);
   ok(teenRows.includes(P.teen) && teenRows.includes(P.mom) && !teenRows.includes(P.archived) && teenRows.includes(P.grown), 'a minor is reached at their own opted-in address and through guardians; an archived contact never at all');
 
