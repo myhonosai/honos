@@ -106,9 +106,11 @@ export function ProductEditor({ ctx, product, locked, onPropose, onClose }: { ct
   </form>;
 }
 
-export function DraftEditor({ ctx, locked, onPropose, onClose }: { ctx: EditCtx; locked: boolean; onPropose: (r: ProposeRequest) => void; onClose: () => void }): React.ReactElement {
+/** `initial` prefills the form (a Merch Studio idea); `heading` replaces the New product title. */
+export function DraftEditor({ ctx, locked, onPropose, onClose, initial = EMPTY_DRAFT, heading }: { ctx: EditCtx; locked: boolean; onPropose: (r: ProposeRequest) => void; onClose: () => void;
+  initial?: DraftFields; heading?: string }): React.ReactElement {
   const { t } = ctx;
-  const [f, setF] = useState<DraftFields>(EMPTY_DRAFT);
+  const [f, setF] = useState<DraftFields>(initial);
   const [problem, setProblem] = useState(false);
   const set = (k: keyof DraftFields) => (v: string) => { setF(x => ({ ...x, [k]: v })); setProblem(false); };
   return <form className={styles.form} data-shopify-draft onSubmit={e => {
@@ -117,7 +119,7 @@ export function DraftEditor({ ctx, locked, onPropose, onClose }: { ctx: EditCtx;
     if (changes === 'INVALID') { setProblem(true); return; }
     onPropose({ kind: 'CREATE_DRAFT', changes });
   }}>
-    <h3>{t('draftTitle')}</h3>
+    <h3>{heading ?? t('draftTitle')}</h3>
     <p className={styles.meta}>{t('draftHelp')}</p>
     <div className={styles.grid2}>
       <Field label={t('f_title')} value={f.title} onChange={set('title')} disabled={locked} />
