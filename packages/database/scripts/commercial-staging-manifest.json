@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "48c5f2b0b8be9fd4343d2bbb21949cbd25c2bff4aa388278268de9cea05cc9ad",
+  "chainSha256": "face19e18b8cbc67d6755ce4d4de21038e12205bf2ab781df29a6878fa0b8a51",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -661,6 +661,22 @@
     {
       "file": "0519_hq_hon_ongoing_budget.sql",
       "sha256": "7203674b5377e3fe58c9dcd7229ec175f03ab716293bde333ca20ad4dad606ce"
+    },
+    {
+      "file": "0520_school_reports_dashboard.sql",
+      "sha256": "768911f840237cc845136c189b167fe41eb0c0f56a48c30398c4b8f825f25048"
+    },
+    {
+      "file": "0521_school_contact_list.sql",
+      "sha256": "15710fdfee6ad20c80784be688b58c699773742fdfe4be7f9690befd640ad46e"
+    },
+    {
+      "file": "0522_school_contact_card.sql",
+      "sha256": "dc1a744a90a927fb3303e25d79fce87d106ff5b92caefc5db69595b9e1f56516"
+    },
+    {
+      "file": "0523_school_contact_merge_archive.sql",
+      "sha256": "39228fc3d1af999e4bff29da71460a5a6c82ec0ccd7d9bb3339c62ba2ea8868c"
     }
   ]
 }
