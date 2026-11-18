@@ -73,7 +73,7 @@ export function SchoolMembershipCatalog(): React.ReactElement {
   }
   const selectedName = scope ? choices.find(c => c.schoolId === scope.schoolId)?.schoolName : null;
   return <main className={styles.page}>
-    <nav aria-label="Membership navigation"><a href="/staff/crm/leads">CRM leads and enrollment</a><a href="/staff/launch">School setup</a><a href="/staff/command-center">School Command Center</a></nav>
+    <nav aria-label="Membership navigation"><a href="/staff/crm/leads">CRM leads and enrollment</a><a href="/staff/launch">School setup</a><a href="/staff/command-center">School Command Center</a><a href="/staff/billing/membership-changes">Pause and cancel rules</a></nav>
     <header><p className={styles.kicker}>SCHOOL MEMBERSHIPS</p><h1>Membership plans</h1><p>Publish clear enrollment choices for your students and families.</p></header>
     <aside className={styles.intro}><strong>Your school’s published terms</strong><p>Plan changes create a new version. Existing members keep the version they enrolled with. Publishing a plan does not create an agreement, payment schedule or charge.</p></aside>
     <section className={styles.panel} aria-labelledby="catalog-school"><h2 id="catalog-school">{scope ? selectedName ?? 'Current authorized school' : 'Choose your school'}</h2>

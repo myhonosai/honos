@@ -3,7 +3,7 @@ import type { PersonRecord, SchoolContactCard, SchoolContactOptions } from '@hon
 import { accountValue } from '../account-status/copy';
 import { peopleText, type PeopleKey } from './copy';
 import { ContactsList } from './contacts-list';
-import { ContactCard as ContactCardTabs, type CardState } from './contact-card';
+import { ContactCard as ContactCardTabs, type CardState, type CardTab, type MembershipSlot, type MembershipToolsSlot } from './contact-card';
 import type { ContactFilters } from './contacts-http';
 import { localToday, type CommandKind, type ListState, type RecordState, type SaveOutcome } from './model';
 import styles from './people.module.css';
@@ -20,6 +20,8 @@ export type PeopleViewProps = Readonly<{
   filters: ContactFilters; options: SchoolContactOptions | null;
   /** The open person's contact card (C2, 0522), read beside the editable record. */
   card?: CardState | undefined;
+  /** The tab the card opens on (a People link can ask for one), and the actions under each membership. */
+  cardTab?: CardTab | undefined; membershipSlot?: MembershipSlot | undefined; membershipTools?: MembershipToolsSlot | undefined;
   /** C3 (0523): delete, restore and merge for the open contact (its own reads and commands), and what the last one did. */
   actionsSlot?: ((card: SchoolContactCard) => React.ReactNode) | undefined; actionNotice?: string | null | undefined;
   onFilters?: ((filters: ContactFilters) => void) | undefined; onMore?: (() => void) | undefined; onOpen?: ((personId: string) => void) | undefined; onReload?: (() => void) | undefined;
@@ -70,7 +72,7 @@ export function PeopleView(props: PeopleViewProps): React.ReactElement {
       </article>
       <div className={styles.detail}>
         {props.actionNotice ? <p className={styles.notice} role="status" data-testid="contact-action-done">{props.actionNotice}</p> : null}
-        {props.card && selectedId ? <ContactCardTabs key={selectedId} language={language} card={props.card}/> : null}
+        {props.card && selectedId ? <ContactCardTabs key={selectedId} language={language} card={props.card} initialTab={props.cardTab ?? 'overview'} membershipSlot={props.membershipSlot} membershipTools={props.membershipTools}/> : null}
         {props.card?.state === 'READY' && props.actionsSlot ? props.actionsSlot(props.card.card) : null}
         <RecordPanel {...props} t={t} onReload={onReload}/>
       </div>
