@@ -243,6 +243,7 @@ const expectedRlsTables = [
   'walkin_kiosk_rates',
   'shopify_sync_requests',
   'shopify_webhook_receipts',
+  'shopify_product_changes',
   'school_websites',
   'school_website_versions',
   'school_website_requests',

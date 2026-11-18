@@ -1,6 +1,6 @@
 import { computePosTotals, type PosCategory, type PosDiscount, type PosItem, type PosMethod, type PosSaleInput, type PosTotals } from '@hon/contracts';
 
-/** Register cart and money helpers (0488). Pure: the screen and its tests share them. */
+/** Register cart and money helpers (0506). Pure: the screen and its tests share them. */
 export type CartLine =
   | Readonly<{ kind: 'ITEM'; itemId: string; name: string; unitPriceMinor: number; taxable: boolean; quantity: number }>
   | Readonly<{ kind: 'QUICK'; id: string; name: string; unitPriceMinor: number; taxable: false; quantity: number }>;

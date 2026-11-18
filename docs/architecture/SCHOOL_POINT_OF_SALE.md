@@ -1,4 +1,4 @@
-# School front-desk Point of Sale (migration 0488)
+# School front-desk Point of Sale (migration 0506)
 
 Status: spec + plan, 2026-11-16. Owner ask (David, 2026-11-16): "I didn't see POS. Make all simple, keep the
 organization style of my current CRM." Reference: David's Manus CRM, Finance > Point of Sale (read-only look, no
@@ -19,7 +19,7 @@ One page, three tabs:
 Payment methods seen there: Cash, Check, External Terminal (card swiped on the school's own machine), Credit Card
 online.
 
-## HON v1 (this PR, 0488)
+## HON v1 (this PR, 0506)
 
 Same three tabs, same words where they are clear. Everything money-related is decided by the database, never the
 browser.
@@ -70,7 +70,7 @@ and amounts only (`pos.sale.recorded`, `pos.sale.refunded`, `pos.item.saved`, `p
 
 ## Plan
 
-1. Migration 0488 + DB proof script (`test-pos-integrity.mjs`): permissions, cross-school refusal, totals and tax
+1. Migration 0506 + DB proof script (`test-pos-integrity.mjs`): permissions, cross-school refusal, totals and tax
    math, total-changed refusal, out-of-stock refusal, stock moves, refund limits and restock, idempotent replay and key
    reuse, report sums, authority loss.
 2. Contracts (`packages/contracts/src/pos.ts`) with validators + API service/controller (`apps/api/src/pos/`),

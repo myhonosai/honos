@@ -337,7 +337,8 @@ export type LanguageOperation = keyof typeof LANGUAGE_CALLS;
 
 export type SchoolOwnershipOperation = 'hqRead'|'setPrimary'|'ownerRead';
 
-export type ShopifyOperation = 'read'|'catalog'|'orders'|'start'|'claim'|'record'|'beginSync'|'rotate'|'page'|'finishSync'|'disconnect';
+export type ShopifyOperation = 'read'|'catalog'|'orders'|'start'|'claim'|'record'|'beginSync'|'rotate'|'page'|'finishSync'|'disconnect'
+  |'changes'|'propose'|'cancelChange'|'approveChange'|'rotateChange'|'recordChange';
 
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
@@ -1470,7 +1471,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return this.callFixedSubjectFunction(call,params,'PERSON_UNAVAILABLE');
   }
 
-  /** 0488 Point of Sale: fixed definer functions; the subject comes only from the signed HON session. */
+  /** 0506 Point of Sale: fixed definer functions; the subject comes only from the signed HON session. */
   async callSchoolPos(operation: 'read'|'sales'|'sale'|'settings'|'item'|'stock'|'record'|'refund', params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
       read: {sql: 'SELECT hon.read_pos($1,$2::uuid) data',arity:2,readOnly:true},
@@ -1499,7 +1500,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return this.callFixedSubjectFunction(call,params,'PERSON_PHOTO_UNAVAILABLE');
   }
 
-  /** 0405 Shopify: eleven fixed definer functions; the subject comes only from the signed HON session. */
+  /** 0405 Shopify: eleven fixed definer functions, and six more for 0496 product changes; the subject comes only from the signed HON session. */
   async callShopify(operation: ShopifyOperation, params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
       read: {sql: 'SELECT hon.read_shopify($1,$2::uuid) data',arity:2,readOnly:true},
@@ -1513,6 +1514,13 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       page: {sql: 'SELECT hon.record_shopify_sync_page($1,$2::jsonb) data',arity:2,readOnly:false},
       finishSync: {sql: 'SELECT hon.finish_shopify_sync($1,$2::jsonb) data',arity:2,readOnly:false},
       disconnect: {sql: 'SELECT hon.disconnect_shopify($1,$2::jsonb) data',arity:2,readOnly:false},
+      // 0496 product changes with owner approval (SH4a).
+      changes: {sql: 'SELECT hon.read_shopify_product_changes($1,$2::uuid) data',arity:2,readOnly:true},
+      propose: {sql: 'SELECT hon.propose_shopify_product_change($1,$2::jsonb) data',arity:2,readOnly:false},
+      cancelChange: {sql: 'SELECT hon.cancel_shopify_product_change($1,$2::jsonb) data',arity:2,readOnly:false},
+      approveChange: {sql: 'SELECT hon.approve_shopify_product_change($1,$2::jsonb) data',arity:2,readOnly:false},
+      rotateChange: {sql: 'SELECT hon.rotate_shopify_change_credential($1,$2::jsonb) data',arity:2,readOnly:false},
+      recordChange: {sql: 'SELECT hon.record_shopify_product_change_result($1,$2::jsonb) data',arity:2,readOnly:false},
     } as const;
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('SHOPIFY_UNAVAILABLE');

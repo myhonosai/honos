@@ -1,4 +1,4 @@
-# HON Shopify Connected (migrations 0405 SH1, 0449 SH1b)
+# HON Shopify Connected (migrations 0405 SH1, 0449 SH1b, 0470 SH1c, 0496 SH4a)
 
 Status: SH1 merged (0405); SH1b built (0449), 2026-11-16. Owner vision: David's Oct 13–18 2026 Shopify recap (shared 2026-11-16), the master
 directive (ECOMMERCE: "Shopify may remain the source of truth for those commerce records"; "Shopify integration should
@@ -226,6 +226,60 @@ existing read endpoints (overview, catalog, orders); no migration and no new per
   (paid image provider needs approval); Theme Builder on a safe copy of an existing theme (needs Shopify's theme-file
   exemption, request drafted at `/mnt/project-files/shopify/THEME_EDIT_EXEMPTION_REQUEST_DRAFT.md`); Parent App shop and
   website link; POS and print-on-demand; Commerce Agent and automations.
+
+## SH4a: product editing with approval (0496)
+
+Every product edit made in HON is saved first and sent to Shopify only when a person with `commerce.shopify.manage` at
+the school approves it. Shopify stays the source of truth: HON checks the product in Shopify right before writing, so it
+never overwrites a change made there.
+
+### Who and what
+- Propose, cancel, approve: `commerce.shopify.manage` at the school (re-checked after the last write). Read the list:
+  `commerce.shopify.read`. A revoked grant stops proposing and approving at once.
+- An **edit** (`UPDATE`) may change title, type, vendor, status (ACTIVE, DRAFT, ARCHIVED; never UNLISTED) and, per
+  variant, price, compare-at price and cost per item. Only the fields that changed are sent. One open edit per product.
+- A **new product** (`CREATE_DRAFT`) has a title, optional description, type, vendor, SKU, a price and optional
+  compare-at price and cost. It is always created in Shopify as a DRAFT under a handle HON chooses
+  (`<slug>-<10 hex of the change id>`), so a repeat finds the earlier product instead of creating a second one.
+  At most 20 new products wait at once; at most 200 proposals per school per day.
+- Every proposal stores a **base**: the mirror's values for the touched fields when it was made.
+
+### Approval (`POST /v1/school/shopify/changes/approve`)
+1. The database leases the change for 3 minutes to the approver (`APPLYING`), with a fresh lease token, and hands the
+   API the sealed credential. It refuses when the store has not granted `write_products` (or `write_inventory` for a
+   cost), when the mirror no longer matches the base (`SHOPIFY_CHANGE_STALE`), or after 5 attempts.
+2. The API reads the product live from Shopify. If it differs from the base the change is `FAILED`
+   (`CHANGED_IN_SHOPIFY`) without writing, and the mirror is refreshed from what Shopify said.
+3. It writes (`productUpdate`, `productVariantsBulkUpdate`, or `productCreate` as DRAFT), reads the product back and
+   records `APPLIED` only when the product shows every proposed value. The mirror row is updated in the same step.
+4. Any write answer that is lost, or an access error on a write, is `UNKNOWN`: it is never assumed to have saved
+   nothing. Approving an `UNKNOWN` change again only reads Shopify (CHECK mode) and records APPLIED or
+   `FAILED NOT_APPLIED`. A lease that runs out reads as UNKNOWN (`LEASE_EXPIRED`); a late result after that is refused.
+5. A second write refused after the first was saved is `FAILED PARTLY_APPLIED` with the product.
+6. A manager can close an `UNKNOWN` change (never while a lease is live) after checking Shopify themselves: it becomes
+   `FAILED CLOSED_UNRESOLVED` with evidence, freeing the product (and the draft cap) for a new edit. This is the way out
+   after 5 attempts.
+
+Statuses: PENDING → APPLYING | CANCELLED; APPLYING → APPLIED | FAILED | UNKNOWN; UNKNOWN → APPLYING | APPLIED | FAILED (incl. closed unresolved).
+The table's guard keeps identity, kind, handle, changes, base, source and proposer fixed, bumps the version on every
+update and refuses delete and truncate. Audit and outbox evidence name the fields, never the values.
+
+### Allow editing
+Plain connect still asks only for read scopes. **Allow editing** reconnects the same store asking Shopify for
+`write_products` and `write_inventory` as well. The Shopify app version must list those scopes first (one-time step in
+the Dev Dashboard, owner action).
+
+### Screens
+- Products: managers get **Edit** on each product and **New product**; a product with an open edit points to Changes.
+- Changes: each edit shows Now and After approval, its status (Waiting for approval, Sending to Shopify, Saved in
+  Shopify, Not saved, Not sure it was saved, Cancelled), plain reasons, and Approve / Cancel / Check Shopify again.
+  When the store has not allowed editing, an Allow editing banner is shown. Overview counts edits waiting.
+- Store settings lists the editing permissions the store granted.
+
+### Known limits in SH4a
+- No inventory quantity changes, images, collections, variants added or removed, or publishing a draft (each a later
+  piece). AI-proposed edits (Commerce Agent) are a later piece and will use the same approval path.
+- The orders list still shows at most the 200 newest kept orders, without a "more" marker.
 
 ## Plan (TDD)
 

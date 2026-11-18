@@ -4,7 +4,7 @@ const { randomUUID } = require('node:crypto');
 const { SchoolPosService } = require('../dist/pos/school-pos.service.js');
 const { computePosTotals, validatePosSaleInput } = require('@hon/contracts');
 
-// Mocked boundary tests for the 0488 Point of Sale API. Authority, school scope, pricing, stock and refunds are proven
+// Mocked boundary tests for the 0506 Point of Sale API. Authority, school scope, pricing, stock and refunds are proven
 // against PostgreSQL by test-pos-integrity.mjs.
 const status = (value, code) => (error) => { assert.equal(error.getStatus(), value); if (code) assert.equal(error.getResponse().code, code); return true; };
 const req = { honIdentity: { externalSubject: 'subject-1' } };

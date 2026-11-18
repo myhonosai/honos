@@ -1,21 +1,28 @@
 import React, { useState } from 'react';
-import type { ShopifyCatalog, ShopifyConnectResult, ShopifyConnection, ShopifyOrder, ShopifyOrders, ShopifyOverview, ShopifyProduct, ShopifySyncResult } from '@hon/contracts';
+import type { ShopifyCatalog, ShopifyConnectResult, ShopifyConnection, ShopifyOrder, ShopifyOrders, ShopifyOverview, ShopifyProduct, ShopifyProductChange, ShopifyProductChanges, ShopifySyncResult } from '@hon/contracts';
 import { shopifyText, type ShopifyKey } from './copy';
 import type { ShopifyErrorKind } from './http';
 import styles from './shopify.module.css';
+import { money, shopifyAdminUrl } from './format';
+export { money, shopifyAdminUrl };
+import { Changes, DraftEditor, ProductEditor, changeFailure, changeOpen, type ProposeRequest } from './editor';
 
 type T = (key: ShopifyKey, vars?: Record<string, string>) => string;
 export type OverviewState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; read: ShopifyOverview };
 /** The Commerce Workspace sections built today. Later sections (Collections, Fulfillment, Theme Builder, …) are added when they work. */
-export const SHOPIFY_SECTIONS = ['overview', 'products', 'orders', 'inventory', 'settings'] as const;
+export const SHOPIFY_SECTIONS = ['overview', 'products', 'changes', 'orders', 'inventory', 'settings'] as const;
 export type ShopifySection = typeof SHOPIFY_SECTIONS[number];
 export type ListState<T> = { state: 'LOADING' | 'UNAVAILABLE' } | { state: 'READY'; value: T };
-export type ShopifyAction = 'connect' | 'sync' | 'disconnect';
-export type ShopifyOutcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | ShopifyErrorKind; action: ShopifyAction; sync?: ShopifySyncResult }>;
+export type ShopifyAction = 'connect' | 'sync' | 'disconnect' | 'allowEditing' | 'propose' | 'approve' | 'cancelChange';
+/** `target` is the change a command was about; `change` is the server's verified answer for it. */
+export type ShopifyOutcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | ShopifyErrorKind; action: ShopifyAction; sync?: ShopifySyncResult; change?: ShopifyProductChange; target?: string }>;
 
 export type ShopifyViewProps = Readonly<{
   language: string; locale: string; waiting: boolean; concealed: boolean; hasSchool: boolean;
   overview: OverviewState; section: ShopifySection; catalog: ListState<ShopifyCatalog>; orders: ListState<ShopifyOrders>; shop: string; confirming: boolean; outcome: ShopifyOutcome; locked: boolean;
+  changes?: ListState<ShopifyProductChanges> | undefined;
+  onPropose?: ((change: ProposeRequest) => void) | undefined; onApprove?: ((change: ShopifyProductChange) => void) | undefined;
+  onCancelChange?: ((change: ShopifyProductChange) => void) | undefined; onAllowEditing?: (() => void) | undefined;
   onRefresh?: (() => void) | undefined; onShop?: ((value: string) => void) | undefined; onConnect?: (() => void) | undefined;
   onSync?: (() => void) | undefined; onConfirm?: ((open: boolean) => void) | undefined; onDisconnect?: (() => void) | undefined;
   onSection?: ((section: ShopifySection) => void) | undefined;
@@ -23,11 +30,15 @@ export type ShopifyViewProps = Readonly<{
 
 const when = (locale: string, iso: string) => { try { return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso)); } catch { return iso; } };
 const day = (locale: string, iso: string) => { try { return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(iso)); } catch { return iso; } };
-export function money(locale: string, currency: string | null, amount: number): string {
-  try { return new Intl.NumberFormat(locale, currency ? { style: 'currency', currency } : { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount); }
-  catch { return amount.toFixed(2); }
-}
 const FAILURES = new Set(['CATALOG_TOO_LARGE', 'ORDERS_TOO_MANY', 'TOKEN_REJECTED', 'REFRESH_EXPIRED', 'CREDENTIAL_UNREADABLE']);
+/** What an approval, a cancel or a new edit ended as, from the server's verified change. */
+export function changeMessage(t: T, action: ShopifyAction, c: ShopifyProductChange): string {
+  if (action === 'propose') return t('done_propose');
+  if (action === 'cancelChange') return t(c.status === 'FAILED' ? 'done_closed' : 'done_cancel');
+  if (c.status === 'APPLIED') return t('done_applied');
+  if (c.status === 'UNKNOWN') return t('done_unknown');
+  return changeFailure(t, c) ?? t('fc_other');
+}
 export function syncMessage(t: T, s: ShopifySyncResult): string {
   if (s.outcome === 'SUCCEEDED') return t('done_sync', { products: String(s.productsSeen), orders: String(s.ordersSeen) });
   return t(s.failureCode && FAILURES.has(s.failureCode) ? `fail_${s.failureCode}` as ShopifyKey : 'fail_other');
@@ -65,12 +76,6 @@ function Summary({ read, t, locale }: { read: ShopifyOverview; t: T; locale: str
 
 // ---- Commerce Workspace (WS1): sections over the verified read-only mirror. Nothing here writes to Shopify. ----
 
-const handleOf = (domain: string) => domain.replace(/\.myshopify\.com$/, '');
-/** Shopify admin links: built only from the verified myshopify name and numeric ids. */
-export function shopifyAdminUrl(domain: string, kind: 'home' | 'products' | 'orders', id?: string): string {
-  const base = `https://admin.shopify.com/store/${encodeURIComponent(handleOf(domain))}`;
-  return kind === 'home' ? base : `${base}/${kind}${id ? `/${encodeURIComponent(id)}` : ''}`;
-}
 const FIN_KEYS = new Set<string>(['PAID', 'PENDING', 'REFUNDED', 'PARTIALLY_REFUNDED', 'AUTHORIZED', 'VOIDED', 'PARTIALLY_PAID', 'EXPIRED']);
 const FUL_KEYS = new Set<string>(['FULFILLED', 'UNFULFILLED', 'PARTIALLY_FULFILLED', 'IN_PROGRESS', 'ON_HOLD', 'SCHEDULED', 'RESTOCKED', 'PENDING_FULFILLMENT', 'OPEN']);
 /** A Shopify status word in plain language; an unknown word is shown as words, never as an outcome HON invented. */
@@ -81,7 +86,7 @@ function statusLabel(t: T, prefix: 'fin' | 'ful', value: string | null): string 
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 const FULFILLED = new Set(['FULFILLED', 'RESTOCKED']);
-export const orderToFulfill = (o: ShopifyOrder) => !o.cancelledAt && !(o.fulfillmentStatus && FULFILLED.has(o.fulfillmentStatus));
+export const orderToFulfill = (o: ShopifyOrder) => !o.cancelledAt && o.financialStatus !== 'REFUNDED' && !(o.fulfillmentStatus && FULFILLED.has(o.fulfillmentStatus));
 
 type Ctx = Readonly<{ t: T; locale: string; domain: string; currency: string | null }>;
 const pending = (t: T, state: ListState<unknown>) => state.state === 'LOADING'
@@ -93,9 +98,10 @@ function Filters<K extends string>({ label, value, options, onChange }: { label:
   </div>;
 }
 
-function Attention({ ctx, read, catalog, orders, go }: { ctx: Ctx; read: ShopifyOverview; catalog: ListState<ShopifyCatalog>; orders: ListState<ShopifyOrders>; go: (s: ShopifySection) => void }): React.ReactElement {
+function Attention({ ctx, read, catalog, orders, changes, go }: { ctx: Ctx; read: ShopifyOverview; catalog: ListState<ShopifyCatalog>; orders: ListState<ShopifyOrders>; changes: ListState<ShopifyProductChanges>; go: (s: ShopifySection) => void }): React.ReactElement {
   const { t } = ctx;
   const items: { key: string; label: string; n: number; to: ShopifySection }[] = [];
+  if (changes.state === 'READY') items.push({ key: 'changes', label: t('att_changes'), n: changes.value.changes.filter(c => c.status === 'PENDING' || c.status === 'UNKNOWN').length, to: 'changes' });
   if (orders.state === 'READY') items.push({ key: 'toFulfill', label: t('att_toFulfill'), n: orders.value.orders.filter(orderToFulfill).length, to: 'orders' });
   if (read.counts) items.push({ key: 'lowStock', label: t('att_lowStock'), n: read.counts.lowStock, to: 'inventory' });
   if (catalog.state === 'READY') {
@@ -127,17 +133,17 @@ function RecentOrders({ ctx, orders, go }: { ctx: Ctx; orders: ListState<Shopify
   </div>;
 }
 
-function Overview({ ctx, read, catalog, orders, go }: { ctx: Ctx; read: ShopifyOverview; catalog: ListState<ShopifyCatalog>; orders: ListState<ShopifyOrders>; go: (s: ShopifySection) => void }): React.ReactElement {
+function Overview({ ctx, read, catalog, orders, changes, go }: { ctx: Ctx; read: ShopifyOverview; catalog: ListState<ShopifyCatalog>; orders: ListState<ShopifyOrders>; changes: ListState<ShopifyProductChanges>; go: (s: ShopifySection) => void }): React.ReactElement {
   return <div className={styles.section} data-section="overview">
     <Summary read={read} t={ctx.t} locale={ctx.locale} />
     <div className={styles.cards}>
-      <Attention ctx={ctx} read={read} catalog={catalog} orders={orders} go={go} />
+      <Attention ctx={ctx} read={read} catalog={catalog} orders={orders} changes={changes} go={go} />
       <RecentOrders ctx={ctx} orders={orders} go={go} />
     </div>
   </div>;
 }
 
-type ProductFilter = 'all' | 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
+type ProductFilter = 'all' | 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | 'UNLISTED';
 const range = (ctx: Ctx, values: number[]) => {
   if (values.length === 0) return ctx.t('noCost');
   const lo = Math.min(...values), hi = Math.max(...values), m = (n: number) => money(ctx.locale, ctx.currency, n);
@@ -149,10 +155,13 @@ export function matchesProduct(p: ShopifyProduct, query: string): boolean {
   return [p.title, p.productType, p.vendor, ...p.variants.flatMap(v => [v.title, v.sku])].some(x => typeof x === 'string' && x.toLowerCase().includes(q));
 }
 
-function Products({ ctx, catalog }: { ctx: Ctx; catalog: ListState<ShopifyCatalog> }): React.ReactElement {
+type Editing = Readonly<{ canEdit: boolean; open: ReadonlySet<string>; locked: boolean; onPropose: (r: ProposeRequest) => void; go: (s: ShopifySection) => void }>;
+function Products({ ctx, catalog, edit }: { ctx: Ctx; catalog: ListState<ShopifyCatalog>; edit: Editing }): React.ReactElement {
   const { t, locale } = ctx;
   const [query, setQuery] = useState(''), [status, setStatus] = useState<ProductFilter>('all'), [type, setType] = useState('');
+  const [editing, setEditing] = useState<string | null>(null);
   if (catalog.state !== 'READY') return <div className={styles.card} data-section="products">{pending(t, catalog)}</div>;
+  const hasUnlisted = catalog.value.products.some(p => p.status === 'UNLISTED');
   const all = catalog.value.products;
   const types = [...new Set(all.map(p => p.productType).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b, locale));
   const shown = all.filter(p => (status === 'all' || p.status === status) && (!type || p.productType === type) && matchesProduct(p, query));
@@ -165,16 +174,19 @@ function Products({ ctx, catalog }: { ctx: Ctx; catalog: ListState<ShopifyCatalo
           <option value="">{t('allTypes')}</option>{types.map(x => <option key={x} value={x}>{x}</option>)}</select></label>}
       </div>
       <Filters label={t('nav_products')} value={status} onChange={setStatus}
-        options={[['all', t('f_all')], ['ACTIVE', t('status_ACTIVE')], ['DRAFT', t('status_DRAFT')], ['ARCHIVED', t('status_ARCHIVED')]]} />
-      <p className={styles.meta} role="status">{t('shownOf', { shown: String(shown.length), total: String(all.length) })}</p>
+        options={[['all', t('f_all')], ['ACTIVE', t('status_ACTIVE')], ['DRAFT', t('status_DRAFT')], ['ARCHIVED', t('status_ARCHIVED')],
+          ...(hasUnlisted ? [['UNLISTED', t('status_UNLISTED')] as const] : [])]} />
+      <div className={styles.cardHead}><p className={styles.meta} role="status">{t('shownOf', { shown: String(shown.length), total: String(all.length) })}</p>
+        {edit.canEdit && editing !== 'new' && <button type="button" className={styles.secondary} disabled={edit.locked} onClick={() => setEditing('new')} data-shopify-new>{t('newProduct')}</button>}</div>
     </div>
+    {edit.canEdit && editing === 'new' && <div className={styles.card}><DraftEditor ctx={ctx} locked={edit.locked} onPropose={edit.onPropose} onClose={() => setEditing(null)} /></div>}
     {all.length === 0 ? <p className={styles.meta}>{t('catalogEmpty')}</p> : shown.length === 0 ? <p className={styles.meta}>{t('noMatch')}</p>
       : <ul className={styles.items} data-shopify-catalog>{shown.map(p => {
         const tracked = p.variants.filter(v => v.tracked), stock = tracked.reduce((a, v) => a + (v.inventoryQuantity ?? 0), 0);
         const margins = p.variants.map(v => v.marginPercent).filter((x): x is number => x !== null);
         const low = p.variants.some(v => v.lowStock);
         return <li key={p.productId} className={styles.item} data-product={p.productId}>
-          <details>
+          <details open={editing === p.productId || undefined}>
             <summary className={styles.itemHead}>
               {p.imageUrl ? <img className={styles.thumb} src={p.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span className={styles.thumb} aria-hidden="true" />}
               <span className={styles.itemMain}><strong>{p.title}</strong>
@@ -196,7 +208,14 @@ function Products({ ctx, catalog }: { ctx: Ctx; catalog: ListState<ShopifyCatalo
                   <td>{!v.tracked ? <span className={styles.meta}>{t('notTracked')}</span> : <>{v.inventoryQuantity ?? 0}{v.lowStock && <span className={styles.chip} data-state="LOW">{t('low')}</span>}</>}</td>
                 </tr>)}</tbody>
               </table></div>
-              <a className={styles.secondary} href={shopifyAdminUrl(ctx.domain, 'products', p.productId)} target="_blank" rel="noopener noreferrer">{t('openShopify')}</a>
+              {edit.canEdit && editing === p.productId
+                ? <ProductEditor ctx={ctx} product={p} locked={edit.locked} onPropose={edit.onPropose} onClose={() => setEditing(null)} />
+                : <div className={styles.row}>
+                  {edit.canEdit && (edit.open.has(p.productId)
+                    ? <button type="button" className={styles.secondary} onClick={() => edit.go('changes')} data-edit-waiting>{t('editWaiting')}</button>
+                    : <button type="button" className={styles.primary} disabled={edit.locked} onClick={() => setEditing(p.productId)} data-edit={p.productId}>{t('edit')}</button>)}
+                  <a className={styles.secondary} href={shopifyAdminUrl(ctx.domain, 'products', p.productId)} target="_blank" rel="noopener noreferrer">{t('openShopify')}</a>
+                </div>}
             </div>
           </details>
         </li>;
@@ -320,12 +339,16 @@ function Connection({ p, t, read, c }: { p: ShopifyViewProps; t: T; read: Shopif
 }
 
 function Settings({ p, t, read, c }: { p: ShopifyViewProps; t: T; read: ShopifyOverview; c: ShopifyConnection }): React.ReactElement {
+  const edit = p.changes?.state === 'READY' ? p.changes.value : null;
   return <div className={styles.section} data-section="settings">
     <Connection p={p} t={t} read={read} c={c} />
     <div className={styles.card} data-shopify-permissions>
       <h2>{t('perm_title')}</h2>
-      <ul className={styles.plainList}><li>{t('perm_read')}</li><li>{t('perm_orders')}</li></ul>
-      <p className={styles.meta}>{t('perm_noWrite')}</p>
+      <ul className={styles.plainList}><li>{t('perm_read')}</li><li>{t('perm_orders')}</li>
+        {edit?.editProducts && <li data-perm="products">{t('perm_editProducts')}</li>}{edit?.editCosts && <li data-perm="costs">{t('perm_editCosts')}</li>}</ul>
+      <p className={styles.meta}>{t(edit?.editProducts ? 'perm_approval' : 'perm_noWrite')}</p>
+      {edit && !(edit.editProducts && edit.editCosts) && read.canManage && c.status === 'CONNECTED' &&
+        <div className={styles.row}><button type="button" className={styles.secondary} disabled={p.locked} onClick={p.onAllowEditing}>{p.locked && p.outcome?.action === 'allowEditing' ? t('connecting') : t('allowEditing')}</button></div>}
     </div>
   </div>;
 }
@@ -363,14 +386,17 @@ export function ShopifyView(p: ShopifyViewProps): React.ReactElement {
   const read = p.overview.read, c = read.connection, o = p.outcome;
   const connectable = !c || c.status !== 'CONNECTED';
   let message = '';
-  if (o && o.kind === 'DONE') message = o.action === 'disconnect' ? t('done_disconnect') : o.sync ? syncMessage(t, o.sync) : '';
-  else if (o && o.kind !== 'SENDING') message = t(`e_${o.kind}` as ShopifyKey);
-  const good = o?.kind === 'DONE' && (o.action === 'disconnect' || o.sync?.outcome === 'SUCCEEDED');
+  if (o && o.kind === 'DONE') message = o.action === 'disconnect' ? t('done_disconnect') : o.sync ? syncMessage(t, o.sync) : o.change ? changeMessage(t, o.action, o.change) : '';
+  else if (o && o.kind !== 'SENDING') message = t(o.action === 'approve' && o.kind === 'UNKNOWN' ? 'done_unknown' : `e_${o.kind}` as ShopifyKey);
+  const good = o?.kind === 'DONE' && (o.action === 'disconnect' || o.sync?.outcome === 'SUCCEEDED' || o.action === 'propose' || o.action === 'cancelChange' || o.change?.status === 'APPLIED');
   const notice = message && <div className={`${styles.notice} ${good ? '' : styles.warn}`} role={good ? 'status' : 'alert'} data-shopify-outcome={o?.kind}><p>{message}</p></div>;
   if (!c) return <section className={styles.page}>{head}{notice}<ConnectCard p={p} t={t} read={read} c={null} /></section>;
   const ctx: Ctx = { t, locale: p.locale, domain: c.shopDomain, currency: c.currency };
   const go = (s: ShopifySection) => p.onSection?.(s);
   const section = p.section;
+  const changes: ListState<ShopifyProductChanges> = p.changes ?? { state: 'LOADING' };
+  const editing: Editing = { canEdit: read.canManage && c.status === 'CONNECTED' && !!p.onPropose, locked: p.locked, go, onPropose: (r) => p.onPropose?.(r),
+    open: new Set(changes.state === 'READY' ? changes.value.changes.filter(x => x.kind === 'UPDATE' && changeOpen(x) && x.productId).map(x => x.productId!) : []) };
   return <section className={styles.page} data-shopify-workspace>
     {head}
     <div className={styles.storeBar}>
@@ -385,8 +411,11 @@ export function ShopifyView(p: ShopifyViewProps): React.ReactElement {
     </nav>
     {notice}
     {connectable && section !== 'settings' && c.status === 'NEEDS_RECONNECT' && <p className={`${styles.notice} ${styles.warn}`}>{t('needsReconnect')}</p>}
-    {section === 'overview' ? <Overview ctx={ctx} read={read} catalog={p.catalog} orders={p.orders} go={go} />
-      : section === 'products' ? <Products ctx={ctx} catalog={p.catalog} />
+    {section === 'overview' ? <Overview ctx={ctx} read={read} catalog={p.catalog} orders={p.orders} changes={changes} go={go} />
+      : section === 'products' ? <Products ctx={ctx} catalog={p.catalog} edit={editing} />
+      : section === 'changes' ? <Changes ctx={ctx} changes={changes} catalog={p.catalog.state === 'READY' ? p.catalog.value : null} canManage={read.canManage}
+        connected={c.status === 'CONNECTED'} locked={p.locked} busy={p.locked && o?.action === 'approve' ? o.target ?? null : null} pending={pending}
+        when={(iso) => when(p.locale, iso)} onApprove={p.onApprove} onCancel={p.onCancelChange} onAllowEditing={p.onAllowEditing} />
       : section === 'orders' ? <Orders ctx={ctx} orders={p.orders} />
       : section === 'inventory' ? <Inventory ctx={ctx} catalog={p.catalog} />
       : <><Settings p={p} t={t} read={read} c={c} />{connectable && <ConnectCard p={p} t={t} read={read} c={c} />}</>}

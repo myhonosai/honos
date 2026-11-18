@@ -1,6 +1,6 @@
 BEGIN;
 
--- Front-desk Point of Sale (0488; allocated as 0403 on 2026-11-16, renumbered above the main ceiling on 2026-11-18). Spec: docs/architecture/SCHOOL_POINT_OF_SALE.md.
+-- Front-desk Point of Sale (0506; allocated as 0403 on 2026-11-16, renumbered above the main ceiling on 2026-11-18). Spec: docs/architecture/SCHOOL_POINT_OF_SALE.md.
 -- Staff ring up school products (testing fees, uniforms, gear, apparel, events) for a contact or a walk-in and record
 -- how the school was paid: cash, check, a card on the school's own terminal, or other. HON moves no money: a sale and a
 -- refund are evidence records, like 0240 tuition payment records. Refunds are manual with a reason (owner policy
@@ -18,7 +18,7 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'Trusted migration owner required'; END IF;
   IF to_regprocedure('hon.saas_ts(timestamptz)') IS NULL OR to_regclass('hon.people') IS NULL OR to_regclass('hon.role_permissions') IS NULL THEN
-    RAISE EXCEPTION '0488 requires the people, IAM and saas timestamp foundations'; END IF;
+    RAISE EXCEPTION '0506 requires the people, IAM and saas timestamp foundations'; END IF;
 END $$;
 
 INSERT INTO hon.permissions(code,description,is_sensitive,is_staff_assignable) VALUES

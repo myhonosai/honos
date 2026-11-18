@@ -26,6 +26,14 @@ export class ShopifyController {
   complete(@Req() r: HonRequest, @Body() b: unknown) { return this.shopify.complete(r, b).then(data => ({ data })); }
   @Post('school/shopify/sync') @HttpCode(200)
   sync(@Req() r: HonRequest, @Body() b: unknown) { return this.shopify.sync(r, b).then(data => ({ data })); }
+  @Get('school/schools/:schoolId/shopify/changes')
+  changes(@Req() r: HonRequest, @Param('schoolId') s: string) { return this.shopify.changes(r, s).then(data => ({ data })); }
+  @Post('school/shopify/changes') @HttpCode(200)
+  propose(@Req() r: HonRequest, @Body() b: unknown) { return this.shopify.propose(r, b).then(data => ({ data })); }
+  @Post('school/shopify/changes/cancel') @HttpCode(200)
+  cancelChange(@Req() r: HonRequest, @Body() b: unknown) { return this.shopify.cancelChange(r, b).then(data => ({ data })); }
+  @Post('school/shopify/changes/approve') @HttpCode(200)
+  approveChange(@Req() r: HonRequest, @Body() b: unknown) { return this.shopify.approveChange(r, b).then(data => ({ data })); }
   @Post('school/shopify/disconnect') @HttpCode(200)
   disconnect(@Req() r: HonRequest, @Body() b: unknown) { return this.shopify.disconnect(r, b).then(data => ({ data })); }
 }
