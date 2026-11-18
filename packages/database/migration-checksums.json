@@ -336,6 +336,7 @@
     "0474_eian_family_ai.sql": "fb0cd95a3a90bdf52fbccfff0a1f025baecec71047a6361f31fc44619c24498f",
     "0478_staff_time_clock.sql": "287658b3c361652b1e24de7682381ba0e295371513e06e2a12547f3b9f0323ea",
     "0496_shopify_product_changes.sql": "8419cff247f47336a963385cfd5ab81d44cd01ff608900fb53fb49a451327d11",
-    "0499_membership_agreement_signing_link.sql": "5fbd399f57b9cd71a761f94dee19401f46f75c2c68567f2670e3872ac7a8cc30"
+    "0499_membership_agreement_signing_link.sql": "5fbd399f57b9cd71a761f94dee19401f46f75c2c68567f2670e3872ac7a8cc30",
+    "0519_hq_hon_ongoing_budget.sql": "7203674b5377e3fe58c9dcd7229ec175f03ab716293bde333ca20ad4dad606ce"
   }
 }
