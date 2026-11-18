@@ -76,7 +76,10 @@ try{
  }
  const workerFns=['record_shopify_webhook','claim_shopify_background_sync','rotate_shopify_background_credential','record_shopify_background_page','finish_shopify_background_sync'];
  const runtimeEntry=['read_shopify','read_shopify_catalog','read_shopify_orders','start_shopify_connect','claim_shopify_connect','record_shopify_connection',
-  'begin_shopify_sync','rotate_shopify_credential','record_shopify_sync_page','finish_shopify_sync','disconnect_shopify'];
+  'begin_shopify_sync','rotate_shopify_credential','record_shopify_sync_page','finish_shopify_sync','disconnect_shopify',
+  // 0496 product changes (SH4a).
+  'read_shopify_product_changes','propose_shopify_product_change','cancel_shopify_product_change','approve_shopify_product_change',
+  'rotate_shopify_change_credential','record_shopify_product_change_result'];
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname LIKE '%shopify%'");
  for(const f of workerFns)assert(fns.some(x=>x.proname===f),f);
  for(const f of fns){

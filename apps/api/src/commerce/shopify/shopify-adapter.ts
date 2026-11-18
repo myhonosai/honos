@@ -14,7 +14,8 @@ export const SHOPIFY_MAX_VARIANTS = 20000;
 export const SHOPIFY_MAX_ORDERS = 1000;
 export const SHOPIFY_ORDER_LINES = 25;
 
-export type ShopifyFailure = 'AUTH' | 'RATE_LIMITED' | 'UNAVAILABLE' | 'INVALID_RESPONSE';
+/** REJECTED (SH4a): Shopify answered a write with user errors, so nothing in that write was saved. */
+export type ShopifyFailure = 'AUTH' | 'RATE_LIMITED' | 'UNAVAILABLE' | 'INVALID_RESPONSE' | 'REJECTED';
 /** The only error the adapter throws: never a Shopify body, header or token. */
 export class ShopifyProviderError extends Error { constructor(readonly failure: ShopifyFailure) { super(failure); } }
 
@@ -29,6 +30,13 @@ export interface MirrorProduct {
   id: string; title: string; status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | 'UNLISTED'; vendor: string | null; productType: string | null; handle: string | null;
   imageUrl: string | null; variants: MirrorVariant[];
 }
+/** SH4a: a new product, always created as DRAFT under the handle HON chose. */
+export interface ShopifyDraftInput {
+  title: string; descriptionHtml: string | null; productType: string | null; vendor: string | null; handle: string;
+  price: string; compareAtPrice: string | null; unitCost: string | null; sku: string | null;
+}
+export interface ShopifyProductFields { title?: string; productType?: string | null; vendor?: string | null; status?: 'ACTIVE' | 'DRAFT' | 'ARCHIVED' }
+export interface ShopifyVariantFields { variantId: string; price?: string; compareAtPrice?: string | null; unitCost?: string | null }
 export interface MirrorOrderLine { title: string; sku: string | null; variantId: string | null; quantity: number; unitPrice: string }
 export interface MirrorOrder {
   id: string; name: string; placedAt: string; cancelledAt: string | null; financialStatus: string | null; fulfillmentStatus: string | null;
@@ -43,6 +51,13 @@ export interface ShopifyAdapter {
   shopInfo(shop: string, accessToken: string): Promise<ShopifyShopInfo>;
   catalog(shop: string, accessToken: string): Promise<{ products: MirrorProduct[]; complete: boolean }>;
   orders(shop: string, accessToken: string, sinceIso: string): Promise<{ orders: MirrorOrder[]; complete: boolean }>;
+  // SH4a writes, each called only after a person approved that exact change.
+  product(shop: string, accessToken: string, productId: string): Promise<MirrorProduct | null>;
+  productByHandle(shop: string, accessToken: string, handle: string): Promise<MirrorProduct | null>;
+  /** Creates the DRAFT product and returns its id (its one variant is priced by updateVariants). */
+  createDraft(shop: string, accessToken: string, input: ShopifyDraftInput): Promise<{ productId: string; variantId: string }>;
+  updateProduct(shop: string, accessToken: string, productId: string, fields: ShopifyProductFields): Promise<void>;
+  updateVariants(shop: string, accessToken: string, productId: string, variants: readonly ShopifyVariantFields[], sku?: string | null): Promise<void>;
 }
 
 /** The one HON Shopify app, as configured on this server. */
@@ -208,6 +223,44 @@ const ORDERS_QUERY = `query HonOrders($after: String, $q: String) {
   }
 }`;
 const SHOP_QUERY = 'query HonShop { shop { name currencyCode } }';
+const PRODUCT_FIELDS = `id title status vendor productType handle featuredMedia { preview { image { url } } }
+    variants(first: 100) { nodes { id title sku barcode price compareAtPrice inventoryQuantity position inventoryItem { tracked unitCost { amount } } } }`;
+const PRODUCT_QUERY = `query HonProduct($id: ID!) { product(id: $id) { ${PRODUCT_FIELDS} } }`;
+const PRODUCT_BY_HANDLE_QUERY = `query HonProductByHandle($handle: String!) { productByIdentifier(identifier: { handle: $handle }) { ${PRODUCT_FIELDS} } }`;
+const CREATE_DRAFT = `mutation HonCreateDraft($product: ProductCreateInput!) {
+  productCreate(product: $product) { product { id variants(first: 1) { nodes { id } } } userErrors { field message } }
+}`;
+const UPDATE_PRODUCT = `mutation HonUpdateProduct($product: ProductUpdateInput!) {
+  productUpdate(product: $product) { product { id } userErrors { field message } }
+}`;
+const UPDATE_VARIANTS = `mutation HonUpdateVariants($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+  productVariantsBulkUpdate(productId: $productId, variants: $variants) { product { id } userErrors { field message } }
+}`;
+
+/** One product node (with its variants connection) as a mirror record, or null when Shopify has none. */
+export function productFromNode(n: unknown): MirrorProduct | null {
+  if (n === null || n === undefined) return null;
+  const p = obj(n), { variants, ...rest } = p;
+  const nodes = list(obj(variants).nodes).map(v => ({ ...obj(v), product: rest }));
+  if (nodes.length === 0) bad();
+  return productsFromVariantNodes(nodes)[0] ?? bad();
+}
+/** A payload's userErrors: any at all means Shopify saved nothing in that write. */
+function noUserErrors(payload: unknown): Record<string, unknown> {
+  const p = obj(payload);
+  if (list(p.userErrors).length > 0) throw new ShopifyProviderError('REJECTED');
+  return p;
+}
+const blankable = (v: string | null | undefined) => (v === undefined ? undefined : v ?? '');
+export function variantInputs(variants: readonly ShopifyVariantFields[], sku?: string | null): Record<string, unknown>[] {
+  return variants.map((v, i) => {
+    const item: Record<string, unknown> = {};
+    if (v.unitCost !== undefined) item.cost = v.unitCost;
+    if (i === 0 && sku) item.sku = sku;
+    return { id: `gid://shopify/ProductVariant/${v.variantId}`, ...(v.price !== undefined ? { price: v.price } : {}),
+      ...(v.compareAtPrice !== undefined ? { compareAtPrice: v.compareAtPrice } : {}), ...(Object.keys(item).length ? { inventoryItem: item } : {}) };
+  });
+}
 
 /** The Shopify Admin API through the HON app. Only called with a verified shop and a token HON holds. */
 export class GraphqlShopifyAdapter implements ShopifyAdapter {
@@ -293,6 +346,30 @@ export class GraphqlShopifyAdapter implements ShopifyAdapter {
       after = typeof info.endCursor === 'string' && info.endCursor.length <= 1024 ? info.endCursor : bad();
     }
   }
+
+  async product(shop: string, accessToken: string, productId: string): Promise<MirrorProduct | null> {
+    return productFromNode((await this.graphql(shop, accessToken, PRODUCT_QUERY, { id: `gid://shopify/Product/${productId}` })).product);
+  }
+  async productByHandle(shop: string, accessToken: string, handle: string): Promise<MirrorProduct | null> {
+    return productFromNode((await this.graphql(shop, accessToken, PRODUCT_BY_HANDLE_QUERY, { handle })).productByIdentifier);
+  }
+  async createDraft(shop: string, accessToken: string, input: ShopifyDraftInput): Promise<{ productId: string; variantId: string }> {
+    const product = { title: input.title, handle: input.handle, status: 'DRAFT', ...(input.descriptionHtml ? { descriptionHtml: input.descriptionHtml } : {}),
+      ...(input.productType ? { productType: input.productType } : {}), ...(input.vendor ? { vendor: input.vendor } : {}) };
+    const p = noUserErrors((await this.graphql(shop, accessToken, CREATE_DRAFT, { product })).productCreate);
+    const created = obj(p.product), first = list(obj(created.variants).nodes)[0];
+    return { productId: gidNumber(created.id, 'Product'), variantId: gidNumber(obj(first).id, 'ProductVariant') };
+  }
+  async updateProduct(shop: string, accessToken: string, productId: string, fields: ShopifyProductFields): Promise<void> {
+    const product = { id: `gid://shopify/Product/${productId}`, ...(fields.title !== undefined ? { title: fields.title } : {}),
+      ...(fields.status !== undefined ? { status: fields.status } : {}), ...(fields.productType !== undefined ? { productType: blankable(fields.productType) } : {}),
+      ...(fields.vendor !== undefined ? { vendor: blankable(fields.vendor) } : {}) };
+    noUserErrors((await this.graphql(shop, accessToken, UPDATE_PRODUCT, { product })).productUpdate);
+  }
+  async updateVariants(shop: string, accessToken: string, productId: string, variants: readonly ShopifyVariantFields[], sku?: string | null): Promise<void> {
+    noUserErrors((await this.graphql(shop, accessToken, UPDATE_VARIANTS, { productId: `gid://shopify/Product/${productId}`, variants: variantInputs(variants, sku) }))
+      .productVariantsBulkUpdate);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -303,8 +380,16 @@ export class GraphqlShopifyAdapter implements ShopifyAdapter {
  */
 export class FakeShopify implements ShopifyAdapter {
   readonly kind = 'FAKE' as const;
-  private readonly codes = new Map<string, string>();
-  private readonly tokens = new Map<string, { shop: string; kind: 'access' | 'refresh'; expiresAt: number }>();
+  private readonly codes = new Map<string, { shop: string; scope: string }>();
+  private readonly tokens = new Map<string, { shop: string; kind: 'access' | 'refresh'; expiresAt: number; scope: string }>();
+  private nextId = 9_500_000_000;
+  /**
+   * Test hook for the next write: 'REJECT' answers with user errors (nothing saved); 'LOSE_ANSWER' saves the write and
+   * then fails as a dropped connection would (HON cannot tell it was saved).
+   */
+  writeFault: 'REJECT' | 'LOSE_ANSWER' | null = null;
+  /** Test hook: what the store owner approves (the fake grants exactly this). */
+  grantScopes: string | null = null;
   private readonly stores = new Map<string, { products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string; rejected: boolean }>();
   /** Calls the API made, for tests (no token values). */
   readonly calls: string[] = [];
@@ -324,9 +409,9 @@ export class FakeShopify implements ShopifyAdapter {
   rejectTokens(shop: string, rejected = true): void { this.store(shop).rejected = rejected; }
 
   /** What Shopify's redirect would carry after the owner approves: a signed query for HON's return page. */
-  approve(shop: string, state: string, at: number = this.now()): string {
+  approve(shop: string, state: string, at: number = this.now(), scopes: readonly string[] = SHOPIFY_SCOPES): string {
     const code = randomBytes(16).toString('hex');
-    this.codes.set(code, shop);
+    this.codes.set(code, { shop, scope: this.grantScopes ?? scopes.join(',') });
     const params = { code, host: Buffer.from(`admin.shopify.com/store/${shop.split('.')[0]}`).toString('base64url'), shop, state, timestamp: String(Math.floor(at / 1000)) };
     return new URLSearchParams({ ...params, hmac: signShopifyQuery(params, this.secret) }).toString();
   }
@@ -338,29 +423,42 @@ export class FakeShopify implements ShopifyAdapter {
       'x-shopify-triggered-at': new Date(at).toISOString(), 'x-shopify-api-version': SHOPIFY_API_VERSION, 'x-shopify-hmac-sha256': signShopifyWebhook(body, this.secret) } };
   }
 
-  private issue(shop: string): ShopifyTokens {
+  private issue(shop: string, scope: string): ShopifyTokens {
     const now = this.now(), access = 'fake_at_' + randomBytes(16).toString('hex'), refresh = 'fake_rt_' + randomBytes(16).toString('hex');
-    this.tokens.set(access, { shop, kind: 'access', expiresAt: now + 3600_000 });
-    this.tokens.set(refresh, { shop, kind: 'refresh', expiresAt: now + 90 * 86400_000 });
-    return { accessToken: access, refreshToken: refresh, scope: SHOPIFY_SCOPES.join(','), accessExpiresAt: new Date(now + 3600_000).toISOString(),
+    this.tokens.set(access, { shop, kind: 'access', expiresAt: now + 3600_000, scope });
+    this.tokens.set(refresh, { shop, kind: 'refresh', expiresAt: now + 90 * 86400_000, scope });
+    return { accessToken: access, refreshToken: refresh, scope, accessExpiresAt: new Date(now + 3600_000).toISOString(),
       refreshExpiresAt: new Date(now + 90 * 86400_000).toISOString() };
   }
-  private check(shop: string, token: string, kind: 'access' | 'refresh'): void {
+  private check(shop: string, token: string, kind: 'access' | 'refresh', scope?: string): string {
     const t = this.tokens.get(token);
     if (!t || t.shop !== shop || t.kind !== kind || t.expiresAt <= this.now() || this.store(shop).rejected) throw new ShopifyProviderError('AUTH');
+    // Shopify refuses a write the store never granted (a top-level ACCESS_DENIED error).
+    if (scope && !t.scope.split(',').includes(scope)) throw new ShopifyProviderError('INVALID_RESPONSE');
+    return t.scope;
+  }
+  /** Applies a write unless a fault is set; LOSE_ANSWER applies it and then fails. */
+  private write<T>(apply: () => T): T {
+    const fault = this.writeFault;
+    this.writeFault = null;
+    if (fault === 'REJECT') throw new ShopifyProviderError('REJECTED');
+    const out = apply();
+    if (fault === 'LOSE_ANSWER') throw new ShopifyProviderError('UNAVAILABLE');
+    return out;
   }
 
   async exchangeCode(shop: string, code: string): Promise<ShopifyTokens> {
     this.calls.push('exchangeCode:' + shop);
-    if (this.codes.get(code) !== shop) throw new ShopifyProviderError('AUTH');
+    const approved = this.codes.get(code);
+    if (approved?.shop !== shop) throw new ShopifyProviderError('AUTH');
     this.codes.delete(code);
-    return this.issue(shop);
+    return this.issue(shop, approved.scope);
   }
   async refresh(shop: string, refreshToken: string): Promise<ShopifyTokens> {
     this.calls.push('refresh:' + shop);
-    this.check(shop, refreshToken, 'refresh');
+    const scope = this.check(shop, refreshToken, 'refresh');
     this.tokens.delete(refreshToken);
-    return this.issue(shop);
+    return this.issue(shop, scope);
   }
   async shopInfo(shop: string, accessToken: string): Promise<ShopifyShopInfo> {
     this.calls.push('shopInfo:' + shop); this.check(shop, accessToken, 'access');
@@ -373,6 +471,52 @@ export class FakeShopify implements ShopifyAdapter {
   async orders(shop: string, accessToken: string, sinceIso: string) {
     this.calls.push('orders:' + shop); this.check(shop, accessToken, 'access');
     return { orders: structuredClone(this.store(shop).orders.filter(o => o.placedAt >= sinceIso)), complete: true };
+  }
+  async product(shop: string, accessToken: string, productId: string) {
+    this.calls.push('product:' + shop); this.check(shop, accessToken, 'access');
+    const p = this.store(shop).products.find(x => x.id === productId);
+    return p ? structuredClone(p) : null;
+  }
+  async productByHandle(shop: string, accessToken: string, handle: string) {
+    this.calls.push('productByHandle:' + shop); this.check(shop, accessToken, 'access');
+    const p = this.store(shop).products.find(x => x.handle === handle);
+    return p ? structuredClone(p) : null;
+  }
+  async createDraft(shop: string, accessToken: string, input: ShopifyDraftInput) {
+    this.calls.push('createDraft:' + shop); this.check(shop, accessToken, 'access', 'write_products');
+    return this.write(() => {
+      const productId = String(this.nextId++), variantId = String(this.nextId++);
+      this.store(shop).products.push({ id: productId, title: input.title, status: 'DRAFT', vendor: input.vendor, productType: input.productType, handle: input.handle,
+        imageUrl: null, variants: [{ id: variantId, title: 'Default Title', sku: null, barcode: null, price: '0', compareAtPrice: null, unitCost: null, tracked: false, inventoryQuantity: 0 }] });
+      return { productId, variantId };
+    });
+  }
+  async updateProduct(shop: string, accessToken: string, productId: string, fields: ShopifyProductFields) {
+    this.calls.push('updateProduct:' + shop); this.check(shop, accessToken, 'access', 'write_products');
+    const p = this.store(shop).products.find(x => x.id === productId);
+    if (!p) { this.writeFault = null; throw new ShopifyProviderError('REJECTED'); }
+    this.write(() => {
+      if (fields.title !== undefined) p.title = fields.title;
+      if (fields.status !== undefined) p.status = fields.status;
+      if (fields.productType !== undefined) p.productType = fields.productType;
+      if (fields.vendor !== undefined) p.vendor = fields.vendor;
+    });
+  }
+  async updateVariants(shop: string, accessToken: string, productId: string, variants: readonly ShopifyVariantFields[], sku?: string | null) {
+    this.calls.push('updateVariants:' + shop);
+    this.check(shop, accessToken, 'access', 'write_products');
+    if (variants.some(v => v.unitCost !== undefined)) this.check(shop, accessToken, 'access', 'write_inventory');
+    const p = this.store(shop).products.find(x => x.id === productId);
+    if (!p || variants.some(v => !p.variants.some(x => x.id === v.variantId))) { this.writeFault = null; throw new ShopifyProviderError('REJECTED'); }
+    this.write(() => {
+      variants.forEach((v, i) => {
+        const x = p.variants.find(y => y.id === v.variantId)!;
+        if (v.price !== undefined) x.price = v.price;
+        if (v.compareAtPrice !== undefined) x.compareAtPrice = v.compareAtPrice;
+        if (v.unitCost !== undefined) x.unitCost = v.unitCost;
+        if (i === 0 && sku) x.sku = sku;
+      });
+    });
   }
 }
 
