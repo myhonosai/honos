@@ -337,6 +337,6 @@
     "0478_staff_time_clock.sql": "287658b3c361652b1e24de7682381ba0e295371513e06e2a12547f3b9f0323ea",
     "0489_ai_text_proposals.sql": "c8d1a536df877c52b5bd5858bd5a5cb550313d1365a0b1a65d7188482bf95091",
     "0496_shopify_product_changes.sql": "8419cff247f47336a963385cfd5ab81d44cd01ff608900fb53fb49a451327d11",
-    "0502_shopify_merch_ai_ideas.sql": "00aa4441dee75c0b076687705a731aad7fa70c00f32af942cfb44ac65cf4130d"
+    "0510_shopify_merch_ai_ideas.sql": "3176518d8d82a45687d983c430478e79a92464a9bd3009858069772cce55bec5"
   }
 }

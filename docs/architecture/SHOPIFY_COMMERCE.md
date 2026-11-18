@@ -301,7 +301,7 @@ Commerce step 3 ("Creative Studio product drafts", vision section 7) in three pa
 3. **CS-M3.** Artwork and mockups from Creative Studio image generations attached as product media, once creative media
    storage (C3, PR #365) is merged; until then no generated image can become Shopify media.
 
-## CS-M2: Marcus merch ideas (step 3, part 2; migration 0502)
+## CS-M2: Marcus merch ideas (step 3, part 2; migration 0510)
 
 Marcus writes up to three merch ideas from the owner's brief, on the shared AI text proposals (0489, kind `MERCH_IDEAS`).
 An idea is text only: using one opens the CS-M1 draft form, and Shopify changes only through an approved SH4a change.
@@ -327,7 +327,7 @@ An idea is text only: using one opens the CS-M1 draft form, and Shopify changes 
   template ideas, labelled as templates. A lost answer keeps its key, so only the identical brief is sent again.
 - **Evidence.** `packages/database/scripts/test-shopify-merch-ai-ideas.mjs` (8 groups, fake provider, 0 network calls),
   `apps/api/test/merch-ai.test.cjs`, `apps/web/test/school-shopify-merch-ai.test.tsx`, and the 011 section
-  "Shopify merch AI ideas exact verification (0502)".
+  "Shopify merch AI ideas exact verification (0510)".
 
 ## Plan (TDD)
 

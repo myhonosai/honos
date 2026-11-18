@@ -4826,7 +4826,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END IF;
 END $$;
 -- End shared AI text proposals exact verification.
--- Shopify merch AI ideas exact verification (0502): the MERCH_IDEAS kind row on the shared AI text proposals (0489), the
+-- Shopify merch AI ideas exact verification (0510): the MERCH_IDEAS kind row on the shared AI text proposals (0489), the
 -- closed brief and answer shapes, the private authority, facts and view helpers, and the seven runtime entry points.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES

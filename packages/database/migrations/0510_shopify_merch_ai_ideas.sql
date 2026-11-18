@@ -1,6 +1,6 @@
 BEGIN;
 
--- Merch Studio AI ideas, CS-M2 (0502). Commerce step 3 (owner vision 2026-11-18, section 7): Marcus writes up to three merch
+-- Merch Studio AI ideas, CS-M2 (0510). Commerce step 3 (owner vision 2026-11-18, section 7): Marcus writes up to three merch
 -- product ideas (title, description, product type, suggested price, print notes) from the owner's brief. It is the second
 -- kind on the shared AI text proposals of 0489 (docs/architecture/AI_TEXT_PROPOSALS.md): one kinds row and its own entry
 -- points. The 0489 core and every S4 function are unchanged. Spec: docs/architecture/SHOPIFY_COMMERCE.md (CS-M2).
