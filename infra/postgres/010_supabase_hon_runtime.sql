@@ -4196,3 +4196,10 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.select_parent_family(text,jsonb,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0473 parent reads that name a school follow the family picker: one private helper (the 0071 body under a private name).
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.parent_family_scope_any(text,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0473 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.parent_family_scope_any(text,uuid) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION hon.parent_family_scope_any(text,uuid) FROM %I',r); END LOOP;
+END $$;
