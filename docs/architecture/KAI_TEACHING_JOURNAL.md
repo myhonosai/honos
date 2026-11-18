@@ -1,4 +1,4 @@
-# Kai teaching journal (KJ1, migration 0476)
+# Kai teaching journal (KJ1, migration 0497)
 
 **Status:** built, not deployed (2026-11-18). **Owner request (David, 2026-11-18 05:02Z):** "kai should also be teaching journal.
 instructor can speak to it regarding what they taught that day. and kai can recall it when instructor ask what did we work on
@@ -12,7 +12,7 @@ table, function, route or screen.
 
 | Piece | What | AI | Migration |
 |---|---|---|---|
-| **KJ1 (this PR)** | Journal entries by voice or text, recall by period ("what did we work on last week?"), pattern suggestions computed by fixed rules | none, free, works today | 0476 |
+| **KJ1 (this PR)** | Journal entries by voice or text, recall by period ("what did we work on last week?"), pattern suggestions computed by fixed rules | none, free, works today | 0497 |
 | KJ2 (next) | Kai answers free-text journal questions and writes richer suggestions through the governed AI runtime (S4 plan, budget lock, spend decision, usage before answer, UNKNOWN), like Eian (0474) | governed, behind the OpenRouter key, the paid-call flag and David's approval | to be allocated |
 
 KJ1 stands on its own: an instructor can keep the journal, recall any period and see suggestions with no provider at all.
@@ -105,7 +105,7 @@ database proves it again.
 ## Plan (TDD order)
 
 1. Contracts `kai-journal.ts`: validators, period parser, suggestions. Tests in `apps/api/test/kai-journal.test.cjs` first.
-2. Migration 0476 and `test-kai-journal-integrity.mjs` (signed HTTP proof): permission, tier, own-only, validation, versioning,
+2. Migration 0497 and `test-kai-journal-integrity.mjs` (signed HTTP proof): permission, tier, own-only, validation, versioning,
    removal erasure, idempotency, ACLs. Wire 010/011, verify-rls, staging manifest, checksums, run-db-proofs, package script.
 3. API controller, service, guards, DTO and unit tests.
 4. Web http client, page, copy, route manifest, menu and Kai link, vitest UI tests.

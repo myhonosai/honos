@@ -4224,13 +4224,38 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.record_eian_turn_result(text,uuid,jsonb) TO hon_runtime;
   END IF;
 END $$;
--- 0476 Kai teaching journal: one private table reached only through three runtime entry points (own read, team read, save).
+-- 0478 staff time clock: three private tables reached only through five runtime entry points (punch, my clock, week read, entry fix, week decision).
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.staff_time_clock_punch(text,jsonb,text,uuid,uuid)','hon.read_my_time_clock(text)','hon.read_staff_timesheet_week(text,date)',
+    'hon.save_staff_time_entry(text,jsonb,text,uuid,uuid)','hon.set_staff_timesheet_week(text,jsonb,text,uuid,uuid)'];
+  helpers text[]:=ARRAY['hon.staff_time_local_ok(jsonb)','hon.guard_staff_time()','hon.require_staff_time_actor(text,text)',
+    'hon.staff_time_entry_json(hon.staff_time_entries)','hon.staff_timesheet_week_json(uuid,uuid,uuid,date)',
+    'hon.staff_time_week_of(date)','hon.staff_time_week_approved(uuid,uuid,uuid,date)','hon.staff_time_begin(text,text,text,jsonb,text,uuid)',
+    'hon.staff_time_finish(text,text,text,uuid,jsonb)','hon.staff_time_record(text,uuid,jsonb,jsonb,integer,uuid,uuid,uuid,jsonb)'];
+  tables text[]:=ARRAY['hon.staff_time_entries','hon.staff_time_entry_revisions','hon.staff_timesheet_weeks'];
+BEGIN
+  IF to_regprocedure('hon.set_staff_timesheet_week(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0478 first'; END IF;
+  FOREACH t IN ARRAY tables LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY helpers||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+-- 0497 Kai teaching journal: one private table reached only through three runtime entry points (own read, team read, save).
 DO $$ DECLARE r text; f text;
   entry text[]:=ARRAY['hon.read_kai_journal(text,date,date)','hon.read_kai_team_journal(text,date,date)','hon.save_kai_journal_entry(text,jsonb,text,uuid,uuid)'];
   helpers text[]:=ARRAY['hon.kai_journal_text_ok(text,integer,boolean)','hon.kai_journal_topics_ok(text[])','hon.guard_kai_journal_entry()',
     'hon.require_kai_journal_actor(text)','hon.kai_journal_json(hon.kai_journal_entries)','hon.kai_journal_display_name(uuid)'];
 BEGIN
-  IF to_regprocedure('hon.save_kai_journal_entry(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0476 first'; END IF;
+  IF to_regprocedure('hon.save_kai_journal_entry(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0497 first'; END IF;
   EXECUTE 'REVOKE ALL ON TABLE hon.kai_journal_entries FROM PUBLIC';
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
     EXECUTE format('REVOKE ALL ON TABLE hon.kai_journal_entries FROM %I',r); END LOOP;

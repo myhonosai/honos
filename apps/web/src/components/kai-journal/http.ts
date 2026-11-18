@@ -5,7 +5,7 @@ import {
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * Kai teaching journal (0476). A read sends no Idempotency-Key; a save sends its own X-HON-Human-Command and an
+ * Kai teaching journal (0497). A read sends no Idempotency-Key; a save sends its own X-HON-Human-Command and an
  * Idempotency-Key. The server decides the permission, the author, the dates and the version again.
  */
 export type JournalErrorKind =

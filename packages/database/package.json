@@ -175,6 +175,7 @@
     "db:test-paper-import": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-paper-import-integrity.mjs",
     "db:test-school-location": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-location-integrity.mjs",
     "db:test-staff-shifts": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-staff-shifts-integrity.mjs",
+    "db:test-staff-time-clock": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-staff-time-clock-integrity.mjs",
     "db:test-kai-journal": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-kai-journal-integrity.mjs",
     "db:test-school-demo-data": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-demo-data-integrity.mjs",
     "db:test-lead-pipeline-board": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-lead-pipeline-board-integrity.mjs",

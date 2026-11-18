@@ -1,5 +1,5 @@
 /**
- * Kai teaching journal proof (0476) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global
+ * Kai teaching journal proof (0497) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global
  * ValidationPipe + HonExceptionFilter -> KaiJournalController -> protected definer functions on the restricted runtime role
  * with forced RLS), on the guarded disposable CRM-close fixture only. Synthetic staff and synthetic journal text only;
  * nothing messages anyone, pays anyone or calls a provider.
@@ -381,7 +381,7 @@ try {
   await assert.rejects(runtime.query("SELECT hon.read_kai_journal('x','2026-11-01','2026-11-02')"), /KAI_JOURNAL_FORBIDDEN/); checks += 1;
   await assert.rejects(runtime.query("SELECT hon.read_kai_team_journal('x','2026-11-01','2026-11-02')"), /KAI_JOURNAL_FORBIDDEN/); checks += 1;
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const begin = '-- Kai teaching journal exact verification (0476)', end = '-- End Kai teaching journal exact verification.';
+    const begin = '-- Kai teaching journal exact verification (0497)', end = '-- End Kai teaching journal exact verification.';
     const section = verify.split(begin)[1]?.split(end)[0];
     ok(section, begin);
     await sql(section.replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
@@ -391,7 +391,7 @@ try {
     + (SELECT count(*) FROM hon.communication_messages WHERE organization_id=ANY($1::uuid[])) + (SELECT count(*) FROM hon.ai_invocation_plans WHERE organization_id=ANY($1::uuid[])) n`,
     [[ids.organization, ids.otherOrganization]])).rows[0].n === '0', 'no message, payment attempt, invoice or AI plan was created');
 
-  console.log(`PASS: Kai teaching journal (0476): ${checks} checks.`);
+  console.log(`PASS: Kai teaching journal (0497): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));
