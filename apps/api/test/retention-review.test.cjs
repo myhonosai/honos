@@ -67,3 +67,22 @@ test('Retention Review retains the read-only projection and has no downstream in
   assert.doesNotMatch(source, /@Patch\(|@Delete\(|executeAction|invokeLLM|sendMessage|providerClient|paymentClient|refund|cancelMembership|forecast|predict/i);
   assert.match(source, /readRetentionReviewSignals/);
 });
+
+test('0407 member list: closed bounded rows only, exact query, scope resolved before the read', async () => {
+  const { parseRetentionMembers } = require('../dist/retention-review/retention-review.service.js');
+  const row = { membershipId: 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA', displayName: 'Ann Able', state: 'ACTIVE', termEndsAt: '2027-01-31T00:00:00.000Z' };
+  assert.deepEqual(parseRetentionMembers({ items: [row] }), [{ ...row, membershipId: row.membershipId.toLowerCase() }]);
+  for (const bad of [null, [], { items: [row], extra: 1 }, { items: [{ ...row, email: 'x@example.invalid' }] }, { items: [{ ...row, state: 'DRAFT' }] }, { items: [row, row] },
+    { items: [{ ...row, displayName: '' }] }, { items: [{ ...row, termEndsAt: 'soon' }] }, { items: Array.from({ length: 201 }, () => row) }]) assert.throws(() => parseRetentionMembers(bad));
+  const calls = [];
+  const database = { resolveRetentionReviewScope: async (subject, school) => { calls.push(['scope', subject, school]); return { principalId: '11111111-1111-4111-8111-111111111111', organizationId: '22222222-2222-4222-8222-222222222222', schoolId: school }; },
+    listRetentionReviewMemberships: async (context) => { calls.push(['list', context.externalSubject, context.schoolId, context.source]); return { items: [row] }; } };
+  const controller = new RetentionReviewController(database, new RetentionReviewService(database));
+  const school = '33333333-3333-4333-8333-333333333333', request = { honIdentity: { externalSubject: 'oidc:staff' } };
+  const body = await controller.memberships({ schoolId: school }, request);
+  assert.equal(body.data.items.length, 1); assert.deepEqual(calls, [['scope', 'oidc:staff', school], ['list', 'oidc:staff', school, 'HUMAN_UI']]);
+  for (const query of [{}, { schoolId: school, membershipId: school }, { schoolId: 'nope' }]) await assert.rejects(controller.memberships(query, request), (e) => e.getStatus() === 400);
+  await assert.rejects(controller.memberships({ schoolId: school }, {}), (e) => e.getStatus() === 403);
+  const denied = new RetentionReviewController({ ...database, resolveRetentionReviewScope: async () => undefined }, new RetentionReviewService(database));
+  await assert.rejects(denied.memberships({ schoolId: school }, request), (e) => e.getStatus() === 403);
+});

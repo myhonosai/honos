@@ -7,9 +7,11 @@ import { SCHOOL_SHELL_EVERYDAY, SCHOOL_SHELL_MOBILE, SCHOOL_SHELL_NAV, SCHOOL_SH
   schoolShellListed, schoolShellSectionItems, type SchoolShellItem } from './catalog';
 import { shellText, type ShellKey } from './copy';
 import { ShellIcon } from './icons';
+import { HonOrb } from '../hon-command/hon-orb';
 import { SCHOOL_TOUR_STEPS, SchoolTourDialog } from './tour';
 import { tourCopy } from './tour-copy';
 import { SignOutButton } from '../auth/sign-out-button';
+import { demoCopy } from '../school-demo-data/copy';
 import styles from './shell.module.css';
 
 export type ShellViewState = 'LOCAL' | 'SAVING' | 'SAVED' | 'ERROR';
@@ -22,6 +24,8 @@ export type SchoolShellFrameProps = {
   tourStep?: number | null; onTour?: (step: number | null) => void;
   /** Screensaver over the whole app (away or idle). The page behind it stays mounted and inert. */
   asleep?: boolean; onWake?: () => void;
+  /** 0459: this school has demo data loaded (read for the verified school only). Presentation only. */
+  demoLoaded?: boolean;
 };
 const MODES: readonly HonInterfaceTheme[] = ['big-button', 'modern', 'classic'];
 const VIEW_STATE: Record<ShellViewState, ShellKey> = { LOCAL: 'viewLocal', SAVING: 'viewSaving', SAVED: 'viewSaved', ERROR: 'viewError' };
@@ -132,9 +136,14 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
         <a className={styles.iconButton} href="/staff/search" aria-label={t('search')} title={t('search')}><ShellIcon name="search" /></a>
       </header>
       {!sidebar && <div className={styles.schoolStrip}>{school}</div>}
-      {active && tabRoutes.length > 1 && <nav className={styles.tabs} aria-label={t('sectionNav')} data-shell-tabs="">
+      {active?.steps && <nav className={styles.steps} aria-label={t('stepsNav')} data-shell-steps=""><ol>
+        {tabRoutes.map((route, index) => <li key={route.href}><a href={schoolShellHref(route, verified)} aria-current={activeRoute?.href === route.href ? 'step' : undefined}><span data-step-number="">{index + 1}</span>{t(route.titleKey)}</a></li>)}
+      </ol></nav>}
+      {active && !active.steps && tabRoutes.length > 1 && <nav className={styles.tabs} aria-label={t('sectionNav')} data-wrap={active.key === 'settings' ? 'true' : undefined} data-shell-tabs="">
         {tabRoutes.map(route => <a key={route.href} href={schoolShellHref(route, verified)} aria-current={activeRoute?.href === route.href ? 'page' : undefined}>{t(route.titleKey)}</a>)}
       </nav>}
+      {verified && props.demoLoaded ? <p className={styles.demoBanner} role="status" data-demo-banner="">
+        <span>{demoCopy(language).banner}</span>{path === '/staff/settings/demo-data' ? null : <a href="/staff/settings/demo-data">{demoCopy(language).bannerLink}</a>}</p> : null}
       <div id="hon-main" tabIndex={-1} className={styles.main}>{children}</div>
     </div>
     {!honHere && <a inert={modal} className={styles.honLauncher} href="/staff/hon" aria-label={t('askHon')} title={t('honLauncher')}>
@@ -173,7 +182,7 @@ export function SchoolScreensaver({ language, schoolName, onWake }: { language: 
   return <div className={styles.screensaver} role="dialog" aria-modal="true" aria-label={t('screensaverLabel')} data-screensaver=""
     onClick={onWake} onKeyDown={onWake}>
     <span className={styles.screensaverGlow} aria-hidden="true" />
-    <img className={styles.screensaverMark} src="/ai/hon-core.webp" alt="" width={132} height={132} />
+    <HonOrb className={styles.screensaverMark} />
     <ScreensaverClock language={language} />
     <p className={styles.screensaverSchool}>{schoolName}</p>
     <button type="button" className={styles.screensaverTap} autoFocus onClick={onWake}>{t('screensaverTap')}</button>

@@ -59,7 +59,7 @@ export function ParentClassBooking(): React.ReactElement {
     <header className={s.header}><p>YOUR FAMILY</p><h1>Book a class</h1><p>Classes your child is enrolled in that take bookings, for the next two weeks. Times are in the school’s time zone.</p></header>
     <p className={s.actions}><button type="button" disabled={busy || !!acting} onClick={() => void load()}>{busy ? 'Loading…' : 'Refresh'}</button></p>
     <div aria-live="polite" aria-atomic="true">
-      {error && <div className={s.error} role="alert"><strong>{lost ? 'Not available on this account' : 'That did not go through'}</strong><p>{error}</p>{lost && <Link href="/auth/login" prefetch={false}>Sign in again</Link>}</div>}
+      {error && <div className={s.error} role="alert"><strong>{lost ? 'Not available on this account' : 'That did not go through'}</strong><p>{error}</p>{lost && <Link href="/auth/login?for=parent" prefetch={false}>Sign in again</Link>}</div>}
       {notice && <p className={s.notice} role="status">{notice}</p>}
     </div>
     {!busy && view && (view.children.length === 0 ? <section className={s.card}><p className={s.empty}>No active child is on your family account at this school.</p></section> : <>

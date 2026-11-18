@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   HON_VOICE_LIMITS, HonVoiceController, honVoiceLang, isStopPhrase, meaningfulQuestion, parseWake, speakableText, detectHonVoiceSupport, onDeviceSpeech,
+  HON_AGENT_VOICES, honAgentVoice, type HonVoiceProfile,
   type RecognitionAdapter, type RecognitionHandlers, type RecognitionOptions, type SpeechAdapter, type VoiceTimer,
 } from '../src/components/hon-command/hon-voice';
 
@@ -93,6 +94,7 @@ type Session = { options: RecognitionOptions; handlers: RecognitionHandlers; sto
 function fakes() {
   const sessions: Session[] = [];
   const spoken: string[] = [];
+  const profiles: (HonVoiceProfile | undefined)[] = [];
   let speakDone: (() => void) | null = null;
   let cancelled = 0;
   const timers = new Map<number, () => void>(); let nextTimer = 1;
@@ -103,7 +105,7 @@ function fakes() {
     },
   };
   const speech: SpeechAdapter = {
-    speak(text, _lang, onDone) { spoken.push(text); speakDone = onDone; },
+    speak(text, _lang, onDone, profile) { spoken.push(text); profiles.push(profile); speakDone = onDone; },
     cancel() { cancelled++; speakDone = null; },
   };
   const timer: VoiceTimer = { set(fn) { const id = nextTimer++; timers.set(id, fn); return id; }, clear(id) { timers.delete(id as number); } };
@@ -111,7 +113,7 @@ function fakes() {
   let accept = true;
   const controller = new HonVoiceController({ recognition, speech, timer, lang: 'en-US', ask: (text) => { if (!accept) return false; asked.push(text); return true; } });
   return {
-    controller, sessions, spoken, asked, timers,
+    controller, sessions, spoken, profiles, asked, timers,
     last: () => sessions[sessions.length - 1]!,
     finishSpeaking: () => { const done = speakDone; speakDone = null; done?.(); },
     fireTimers: () => { const all = [...timers.values()]; timers.clear(); for (const fn of all) fn(); },
@@ -361,5 +363,44 @@ describe('review fixes', () => {
     expect(pieces.every((p) => p.length <= 200)).toBe(true);
     expect(pieces.join('')).toBe(run);
     expect(splitLong('x'.repeat(450)).map((p) => p.length)).toEqual([200, 200, 50]);
+  });
+});
+
+describe('HonVoiceController: team chat voices', () => {
+  it('reads each teammate in turn, in their own voice, then listens for a follow-up', () => {
+    const f = fakes();
+    f.controller.talk(); f.last().handlers.onFinal('What should we do this week');
+    f.controller.replyParts([{ text: 'HON says: focus on trials.', profile: honAgentVoice('hon') }, { text: 'Jordan says: two classes have no instructor.', profile: honAgentVoice('jordan') }]);
+    expect(f.controller.snapshot().state).toBe('SPEAKING');
+    expect(f.spoken).toEqual(['HON says: focus on trials.']);
+    f.finishSpeaking();
+    expect(f.spoken).toEqual(['HON says: focus on trials.', 'Jordan says: two classes have no instructor.']);
+    expect(f.profiles).toEqual([HON_AGENT_VOICES.hon, HON_AGENT_VOICES.jordan]);
+    f.finishSpeaking();
+    expect(f.controller.snapshot().state).toBe('FOLLOW_UP');
+  });
+  it('shares the spoken length between the parts and keeps the rest on screen', () => {
+    const f = fakes();
+    f.controller.talk(); f.last().handlers.onFinal('Team, what now');
+    const long = 'This is one long sentence about the school. '.repeat(30);
+    f.controller.replyParts(['hon', 'claire', 'alex', 'jordan', 'lena'].map((k) => ({ text: long, profile: honAgentVoice(k) })));
+    for (let i = 0; i < 5; i++) f.finishSpeaking();
+    expect(f.spoken).toHaveLength(5);
+    expect(f.spoken.every((s) => s.length <= 160 + 40 && s.endsWith('The rest is on screen.'))).toBe(true);
+    expect(f.spoken.join(' ').length).toBeLessThan(HON_VOICE_LIMITS.spokenCharacters * 2);
+  });
+  it('stops every part at once', () => {
+    const f = fakes();
+    f.controller.talk(); f.last().handlers.onFinal('Team, what now');
+    f.controller.replyParts([{ text: 'One.' }, { text: 'Two.' }]);
+    f.controller.stopSpeaking();
+    f.finishSpeaking();
+    expect(f.spoken).toEqual(['One.']);
+    expect(f.controller.snapshot().state).toBe('IDLE');
+  });
+  it('gives every teammate a voice and falls back to HON for anyone else', () => {
+    for (const k of ['hon', 'claire', 'alex', 'jordan', 'lena', 'marcus', 'chad', 'maya', 'kai']) expect(HON_AGENT_VOICES[k]).toBeDefined();
+    expect(new Set(Object.values(HON_AGENT_VOICES).map((v) => `${v.pitch}/${v.rate}`)).size).toBe(9);
+    expect(honAgentVoice('nobody')).toBe(HON_AGENT_VOICES.hon);
   });
 });

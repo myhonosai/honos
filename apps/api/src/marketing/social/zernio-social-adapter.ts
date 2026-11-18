@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { SocialPlatform } from '@hon/contracts';
+import { GOOGLE_BUSINESS_POST_MAX_LENGTH, SOCIAL_AD_RADIUS_MILES, type GoogleAdContent, type SocialAccountPlatform, type SocialAdLocation, type SocialPlatform, type SocialPostPlatform } from '@hon/contracts';
 
 type Env = Record<string, string | undefined>;
 export const ZERNIO_SOCIAL_ADAPTER = Symbol('ZERNIO_SOCIAL_ADAPTER');
@@ -8,17 +8,17 @@ const KEY = /^(?:sk_|zrk_)[a-fA-F0-9]{64}$/;
 const ID = /^[0-9A-Za-z_-]{1,64}$/;
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f]/g;
-/** Hosts a connect URL may point at: Zernio's own consent pages and Meta's login pages. */
-const CONNECT_HOSTS = [/^(?:[a-z0-9-]+\.)*zernio\.com$/, /^(?:www\.|m\.|web\.)?facebook\.com$/, /^(?:www\.)?instagram\.com$/];
+/** Hosts a connect URL may point at: Zernio's own consent pages, Meta's login pages and (0453) Google's sign-in page. */
+const CONNECT_HOSTS = [/^(?:[a-z0-9-]+\.)*zernio\.com$/, /^(?:www\.|m\.|web\.)?facebook\.com$/, /^(?:www\.)?instagram\.com$/, /^accounts\.google\.com$/];
 
 export type SocialProviderFailure = 'NOT_ENABLED' | 'REJECTED' | 'RATE_LIMITED' | 'UNAVAILABLE' | 'UNKNOWN';
 export class SocialProviderError extends Error {
   constructor(readonly failure: SocialProviderFailure) { super(failure); }
 }
-export interface ProviderSocialAccount { providerAccountId: string; platform: SocialPlatform; displayName: string }
+export interface ProviderSocialAccount { providerAccountId: string; platform: SocialAccountPlatform; displayName: string }
 
 /**
- * The only Zernio operations S1 and S2 use. Callers pass HON's own values; nothing a browser sent reaches these methods.
+ * The only Zernio operations S1 to S4 use. Callers pass HON's own values; nothing a browser sent reaches these methods.
  * Every method throws SocialProviderError, never a raw provider body, header or key.
  */
 export interface ZernioSocialAdapter {
@@ -28,7 +28,7 @@ export interface ZernioSocialAdapter {
   /** The profile named `name`, created only if none exists, so a retry after an unknown answer makes no second one. */
   findOrCreateProfile(name: string): Promise<string>;
   /** The consent URL for one platform on one profile. Checked: https on an allowed host. */
-  connectUrl(input: { profileId: string; platform: SocialPlatform; redirectUrl: string; state: string }): Promise<string>;
+  connectUrl(input: { profileId: string; platform: SocialAccountPlatform; redirectUrl: string; state: string }): Promise<string>;
   /** Accounts connected on one profile. Provider order and extra fields are dropped. */
   listAccounts(profileId: string): Promise<ProviderSocialAccount[]>;
   removeAccount(providerAccountId: string): Promise<void>;
@@ -39,8 +39,55 @@ export interface ZernioSocialAdapter {
    * provider post id; a lost or unclear answer throws UNKNOWN (the caller never sends it again).
    */
   publishPost(input: PublishPostInput): Promise<{ providerPostId: string }>;
+  /** S3: READY only when the inbox is approved (or the fake runs outside production). */
+  inboxReady(): boolean;
+  /**
+   * S3: send one reply once. A DM reply goes into the conversation; a comment reply answers that comment. `idempotencyKey`
+   * is HON's message id. A lost or unclear answer throws UNKNOWN (never resent).
+   */
+  sendReply(input: SendReplyInput): Promise<{ providerMessageId: string }>;
+  /** S3: hide or unhide one comment on the school's own post. */
+  setCommentHidden(input: { providerAccountId: string; providerCommentId: string; hidden: boolean; idempotencyKey: string }): Promise<void>;
+  /** S4: READY only when ads are approved (or the fake runs outside production). */
+  adsReady(): boolean;
+  /** Pausing only lowers spend, so it needs a well-formed key but never the ads approval (spec §6). */
+  adsPauseReady(): boolean;
+  /**
+   * S4: create one boost of a published post, PAUSED, with a lifetime budget and dates. `idempotencyKey` is HON's ad
+   * id. Resolves with the provider ad id; a lost or unclear answer throws UNKNOWN (never resent). Spends nothing.
+   */
+  createBoost(input: CreateBoostInput): Promise<{ providerAdId: string }>;
+  /**
+   * 0453: create one Google Search campaign + ad group + responsive search ad + keywords, PAUSED, with a daily budget
+   * and dates. `idempotencyKey` is HON's ad id. Resolves with the provider ad id; a lost or unclear answer throws
+   * UNKNOWN (never resent). Spends nothing.
+   */
+  createGoogleSearchAd(input: CreateGoogleSearchAdInput): Promise<{ providerAdId: string }>;
+  /** S4: turn one ad on (spends the school's money) or pause it. */
+  setAdActive(input: { providerAdId: string; active: boolean; idempotencyKey: string }): Promise<void>;
 }
-export interface PublishPostInput { profileId: string | null; providerAccountId: string; platform: SocialPlatform; text: string; linkUrl: string | null; idempotencyKey: string }
+export interface CreateBoostInput {
+  providerAccountId: string; providerPostId: string; budgetCents: number; currency: string; startsOn: string; endsOn: string; timezone: string;
+  location: SocialAdLocation; idempotencyKey: string;
+}
+export interface CreateGoogleSearchAdInput extends GoogleAdContent {
+  providerAccountId: string; dailyBudgetCents: number; currency: string; startsOn: string; endsOn: string; timezone: string;
+  location: SocialAdLocation; idempotencyKey: string;
+}
+/**
+ * Owner decision 2026-11-17: a radius around the school's street address. Assumed Zernio shape (spec 8.2 item 5, to
+ * confirm before real use): targeting.locations[{ type: radius, address, radius, unit: MILES }].
+ */
+function radiusTargeting(l: SocialAdLocation): Record<string, unknown> {
+  if (l.radiusMiles !== SOCIAL_AD_RADIUS_MILES || typeof l.addressLine1 !== 'string' || !l.addressLine1.trim() || typeof l.city !== 'string' || !l.city.trim()
+    || !/^[A-Z]{2}$/.test(l.country)) throw new SocialProviderError('REJECTED');
+  return { locations: [{ type: 'radius', radius: l.radiusMiles, unit: 'MILES',
+    address: { line1: l.addressLine1, line2: l.addressLine2, city: l.city, region: l.region, postalCode: l.postalCode, country: l.country } }] };
+}
+export interface SendReplyInput {
+  providerAccountId: string; platform: SocialPlatform; kind: 'DM' | 'COMMENT'; providerConversationId: string; text: string; idempotencyKey: string;
+}
+export interface PublishPostInput { profileId: string | null; providerAccountId: string; platform: SocialPostPlatform; text: string; linkUrl: string | null; idempotencyKey: string }
 const POST_ID = /^[0-9A-Za-z_:.-]{1,128}$/;
 
 export function zernioConnectApproved(env: Env): boolean {
@@ -48,6 +95,17 @@ export function zernioConnectApproved(env: Env): boolean {
 }
 export function zernioPublishApproved(env: Env): boolean {
   return KEY.test(env.ZERNIO_API_KEY ?? '') && env.HON_ZERNIO_PUBLISH_APPROVED === 'true';
+}
+export function zernioInboxApproved(env: Env): boolean {
+  return KEY.test(env.ZERNIO_API_KEY ?? '') && env.HON_ZERNIO_INBOX_APPROVED === 'true';
+}
+/** S4: creating ads (always PAUSED) and turning them on. Turning on spends the school's own money at Meta. */
+export function zernioAdsApproved(env: Env): boolean {
+  return KEY.test(env.ZERNIO_API_KEY ?? '') && env.HON_ZERNIO_ADS_APPROVED === 'true';
+}
+/** S4: pausing an ad HON already created. It only lowers spend, so a well-formed key is enough, even with every switch off. */
+export function zernioAdsPauseReady(env: Env): boolean {
+  return KEY.test(env.ZERNIO_API_KEY ?? '');
 }
 /** The deterministic fake runs only with HON_ZERNIO_FAKE_PROVIDER=1 outside production and staging. */
 export function zernioFakeEnabled(env: Env): boolean {
@@ -74,9 +132,14 @@ function displayName(value: unknown): string | null {
   const clean = value.replace(CONTROL, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
   return clean.length ? clean : null;
 }
-function platformOf(value: unknown): SocialPlatform | null {
-  return value === 'facebook' ? 'FACEBOOK' : value === 'instagram' ? 'INSTAGRAM' : null;
+function platformOf(value: unknown): SocialAccountPlatform | null {
+  return value === 'facebook' ? 'FACEBOOK' : value === 'instagram' ? 'INSTAGRAM' : value === 'googleads' ? 'GOOGLE_ADS'
+    : value === 'googlebusiness' ? 'GOOGLE_BUSINESS' : null;
 }
+/** Zernio's platform names (assumptions to confirm: Google Ads is `googleads` (0453), Google Business Profile `googlebusiness` (0455)). */
+const ZERNIO_PLATFORM: Record<SocialAccountPlatform, string> = { FACEBOOK: 'facebook', INSTAGRAM: 'instagram', GOOGLE_ADS: 'googleads', GOOGLE_BUSINESS: 'googlebusiness' };
+const TZ = /^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+){0,2}$/;
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Zernio over HTTPS. The endpoint paths and field names are the build-time assumptions listed in
@@ -89,14 +152,91 @@ export class ZernioHttpSocialAdapter implements ZernioSocialAdapter {
 
   ready(): boolean { return zernioConnectApproved(this.environment()); }
   publishReady(): boolean { return zernioPublishApproved(this.environment()); }
+  inboxReady(): boolean { return zernioInboxApproved(this.environment()); }
+  adsReady(): boolean { return zernioAdsApproved(this.environment()); }
+  adsPauseReady(): boolean { return zernioAdsPauseReady(this.environment()); }
+
+  /** Assumed shape (spec §5, to confirm): POST /ads/boost; answer { ad: { id|_id } }. Created PAUSED. */
+  async createBoost(input: CreateBoostInput): Promise<{ providerAdId: string }> {
+    if (!this.adsReady()) throw new SocialProviderError('NOT_ENABLED');
+    if (!ID.test(input.providerAccountId) || !POST_ID.test(input.providerPostId) || !Number.isSafeInteger(input.budgetCents) || input.budgetCents < 100
+      || !/^[A-Z]{3}$/.test(input.currency) || !/^\d{4}-\d{2}-\d{2}$/.test(input.startsOn) || !/^\d{4}-\d{2}-\d{2}$/.test(input.endsOn)
+      || !/^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+){0,2}$/.test(input.timezone)) throw new SocialProviderError('REJECTED');
+    const answer = await this.call('POST', '/ads/boost', {
+      accountId: input.providerAccountId, postId: input.providerPostId, status: 'PAUSED',
+      budget: { type: 'lifetime', amount: input.budgetCents, currency: input.currency },
+      schedule: { startDate: input.startsOn, endDate: input.endsOn, timezone: input.timezone },
+      targeting: radiusTargeting(input.location),
+    }, 'ads', input.idempotencyKey);
+    const ad = ((answer as { ad?: unknown })?.ad ?? answer) as Record<string, unknown> | null;
+    const id = ad && typeof ad === 'object' ? (ad.id ?? ad._id) : undefined;
+    if (typeof id !== 'string' || !POST_ID.test(id)) throw new SocialProviderError('UNKNOWN');
+    return { providerAdId: id };
+  }
+
+  /**
+   * Assumed shape (SCHOOL_ADS_MARKETING.md §8.2, to confirm): POST /ads/create with platform googleads creates a Search
+   * campaign, ad group, responsive search ad and keywords in one call; answer { ad: { id|_id } }. Created PAUSED, shown
+   * within 5 miles of the school's street address.
+   */
+  async createGoogleSearchAd(input: CreateGoogleSearchAdInput): Promise<{ providerAdId: string }> {
+    if (!this.adsReady()) throw new SocialProviderError('NOT_ENABLED');
+    if (!ID.test(input.providerAccountId) || !Number.isSafeInteger(input.dailyBudgetCents) || input.dailyBudgetCents < 100
+      || !/^[A-Z]{3}$/.test(input.currency) || !DAY.test(input.startsOn) || !DAY.test(input.endsOn) || !TZ.test(input.timezone)) throw new SocialProviderError('REJECTED');
+    const answer = await this.call('POST', '/ads/create', {
+      platform: 'googleads', accountId: input.providerAccountId, campaignType: 'SEARCH', status: 'PAUSED',
+      budget: { type: 'daily', amount: input.dailyBudgetCents, currency: input.currency },
+      schedule: { startDate: input.startsOn, endDate: input.endsOn, timezone: input.timezone },
+      ad: { headlines: input.headlines, descriptions: input.descriptions, finalUrl: input.finalUrl }, keywords: input.keywords,
+      targeting: radiusTargeting(input.location),
+    }, 'ads', input.idempotencyKey);
+    const ad = ((answer as { ad?: unknown })?.ad ?? answer) as Record<string, unknown> | null;
+    const id = ad && typeof ad === 'object' ? (ad.id ?? ad._id) : undefined;
+    if (typeof id !== 'string' || !POST_ID.test(id)) throw new SocialProviderError('UNKNOWN');
+    return { providerAdId: id };
+  }
+
+  /** Assumed shape (spec §5, to confirm): POST /ads/{id}/status { status: ACTIVE | PAUSED }. */
+  async setAdActive(input: { providerAdId: string; active: boolean; idempotencyKey: string }): Promise<void> {
+    if (!(input.active ? this.adsReady() : this.adsPauseReady())) throw new SocialProviderError('NOT_ENABLED');
+    if (!POST_ID.test(input.providerAdId)) throw new SocialProviderError('REJECTED');
+    await this.call('POST', `/ads/${encodeURIComponent(input.providerAdId)}/status`, { status: input.active ? 'ACTIVE' : 'PAUSED' }, input.active ? 'ads' : 'ads-pause', input.idempotencyKey);
+  }
+
+  async sendReply(input: SendReplyInput): Promise<{ providerMessageId: string }> {
+    if (!this.inboxReady()) throw new SocialProviderError('NOT_ENABLED');
+    if (!ID.test(input.providerAccountId) || !POST_ID.test(input.providerConversationId)) throw new SocialProviderError('REJECTED');
+    const path = input.kind === 'DM'
+      ? `/inbox/conversations/${encodeURIComponent(input.providerConversationId)}/messages`
+      : `/inbox/comments/${encodeURIComponent(input.providerConversationId)}/reply`;
+    const answer = await this.call('POST', path, { accountId: input.providerAccountId, message: input.text }, 'inbox', input.idempotencyKey);
+    const message = ((answer as { message?: unknown; comment?: unknown })?.message ?? (answer as { comment?: unknown })?.comment ?? answer) as Record<string, unknown> | null;
+    const id = message && typeof message === 'object' ? (message.id ?? message._id ?? message.messageId) : undefined;
+    if (typeof id !== 'string' || !POST_ID.test(id)) throw new SocialProviderError('UNKNOWN');
+    return { providerMessageId: id };
+  }
+
+  async setCommentHidden(input: { providerAccountId: string; providerCommentId: string; hidden: boolean; idempotencyKey: string }): Promise<void> {
+    if (!this.inboxReady()) throw new SocialProviderError('NOT_ENABLED');
+    if (!ID.test(input.providerAccountId) || !POST_ID.test(input.providerCommentId)) throw new SocialProviderError('REJECTED');
+    await this.call('POST', `/inbox/comments/${encodeURIComponent(input.providerCommentId)}/${input.hidden ? 'hide' : 'unhide'}`,
+      { accountId: input.providerAccountId }, 'inbox', input.idempotencyKey);
+  }
 
   async publishPost(input: PublishPostInput): Promise<{ providerPostId: string }> {
     if (!this.publishReady()) throw new SocialProviderError('NOT_ENABLED');
-    if (!ID.test(input.providerAccountId) || input.platform !== 'FACEBOOK') throw new SocialProviderError('REJECTED');
-    const content = input.linkUrl ? `${input.text}\n\n${input.linkUrl}` : input.text;
-    const answer = await this.call('POST', '/posts', {
-      content, publishNow: true, platforms: [{ platform: 'facebook', accountId: input.providerAccountId }],
-    }, 'publish', input.idempotencyKey);
+    if (!ID.test(input.providerAccountId) || (input.platform !== 'FACEBOOK' && input.platform !== 'GOOGLE_BUSINESS')) throw new SocialProviderError('REJECTED');
+    let body: Record<string, unknown>;
+    if (input.platform === 'GOOGLE_BUSINESS') {
+      // 0455 assumed shape (spec §9, to confirm): a standard Google Business Profile update; the link is its "Learn more" button.
+      if ([...input.text].length > GOOGLE_BUSINESS_POST_MAX_LENGTH) throw new SocialProviderError('REJECTED');
+      body = { content: input.text, publishNow: true, platforms: [{ platform: 'googlebusiness', accountId: input.providerAccountId,
+        ...(input.linkUrl ? { platformSpecificData: { callToAction: { type: 'LEARN_MORE', url: input.linkUrl } } } : {}) }] };
+    } else {
+      body = { content: input.linkUrl ? `${input.text}\n\n${input.linkUrl}` : input.text, publishNow: true,
+        platforms: [{ platform: 'facebook', accountId: input.providerAccountId }] };
+    }
+    const answer = await this.call('POST', '/posts', body, 'publish', input.idempotencyKey);
     const post = ((answer as { post?: unknown })?.post ?? answer) as Record<string, unknown> | null;
     const id = post && typeof post === 'object' ? (post._id ?? post.id) : undefined;
     if (typeof id !== 'string' || !POST_ID.test(id)) throw new SocialProviderError('UNKNOWN');
@@ -120,9 +260,9 @@ export class ZernioHttpSocialAdapter implements ZernioSocialAdapter {
     return id((created as { profile?: unknown })?.profile ?? created);
   }
 
-  async connectUrl(input: { profileId: string; platform: SocialPlatform; redirectUrl: string; state: string }): Promise<string> {
+  async connectUrl(input: { profileId: string; platform: SocialAccountPlatform; redirectUrl: string; state: string }): Promise<string> {
     const query = new URLSearchParams({ profileId: input.profileId, redirect_url: input.redirectUrl, state: input.state });
-    const answer = await this.call('GET', `/connect/${input.platform === 'FACEBOOK' ? 'facebook' : 'instagram'}?${query}`);
+    const answer = await this.call('GET', `/connect/${ZERNIO_PLATFORM[input.platform]}?${query}`);
     const url = (answer as { authUrl?: unknown })?.authUrl;
     if (typeof url !== 'string' || !allowedConnectUrl(url)) throw new SocialProviderError('UNKNOWN');
     return url;
@@ -155,9 +295,9 @@ export class ZernioHttpSocialAdapter implements ZernioSocialAdapter {
     await this.call('DELETE', `/accounts/${providerAccountId}`);
   }
 
-  private async call(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown, purpose: 'connect' | 'publish' = 'connect', idempotencyKey?: string): Promise<unknown> {
+  private async call(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown, purpose: 'connect' | 'publish' | 'inbox' | 'ads' | 'ads-pause' = 'connect', idempotencyKey?: string): Promise<unknown> {
     const env = this.environment(), key = env.ZERNIO_API_KEY;
-    if (!(purpose === 'publish' ? this.publishReady() : this.ready()) || !key) throw new SocialProviderError('NOT_ENABLED');
+    if (!(purpose === 'publish' ? this.publishReady() : purpose === 'inbox' ? this.inboxReady() : purpose === 'ads' ? this.adsReady() : purpose === 'ads-pause' ? this.adsPauseReady() : this.ready()) || !key) throw new SocialProviderError('NOT_ENABLED');
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), 8000);
     try {
@@ -169,7 +309,7 @@ export class ZernioHttpSocialAdapter implements ZernioSocialAdapter {
         await response.body?.cancel();
         if (response.status === 401 || response.status === 403) throw new SocialProviderError('REJECTED');
         if (response.status === 429) throw new SocialProviderError('RATE_LIMITED');
-        if (purpose === 'publish' && response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 409) throw new SocialProviderError('REJECTED');
+        if (purpose !== 'connect' && response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 409) throw new SocialProviderError('REJECTED');
         // A 5xx on a write may still have happened: the caller treats it as unknown, never as "nothing happened".
         throw new SocialProviderError(method === 'GET' ? 'UNAVAILABLE' : 'UNKNOWN');
       }
@@ -205,7 +345,15 @@ export class FakeZernioSocialAdapter implements ZernioSocialAdapter {
   readonly connected = new Map<string, ProviderSocialAccount[]>();
   readonly removed: string[] = [];
   /** Test hooks: make the next call of a method fail. */
-  failNext: Partial<Record<'findOrCreateProfile' | 'connectUrl' | 'listAccounts' | 'removeAccount' | 'publishPost', SocialProviderFailure>> = {};
+  failNext: Partial<Record<'findOrCreateProfile' | 'connectUrl' | 'listAccounts' | 'removeAccount' | 'publishPost' | 'sendReply' | 'setCommentHidden' | 'createBoost' | 'createGoogleSearchAd' | 'setAdActive', SocialProviderFailure>> = {};
+  /** Every reply and comment action the fake accepted, in order. */
+  readonly replies: (SendReplyInput & { providerMessageId: string })[] = [];
+  readonly commentActions: { providerCommentId: string; hidden: boolean; idempotencyKey: string }[] = [];
+  /** Every boost the fake created (always paused) and every turn-on or pause it carried out. */
+  readonly boosts: (CreateBoostInput & { providerAdId: string })[] = [];
+  readonly adStatusChanges: { providerAdId: string; active: boolean; idempotencyKey: string }[] = [];
+  /** Every Google Search ad the fake created (always paused). */
+  readonly googleAds: (CreateGoogleSearchAdInput & { providerAdId: string })[] = [];
   /** Every publish the fake accepted, in order (HON's target id -> the fake post id). */
   readonly published: { idempotencyKey: string; providerAccountId: string; text: string; linkUrl: string | null; providerPostId: string }[] = [];
   /** Extra accounts a test wants a profile to report (for example an account another school holds). */
@@ -225,11 +373,11 @@ export class FakeZernioSocialAdapter implements ZernioSocialAdapter {
     if (!id) { id = 'fakeprofile_' + createHash('sha256').update(name).digest('hex').slice(0, 24); this.profiles.set(name, id); }
     return id;
   }
-  async connectUrl(input: { profileId: string; platform: SocialPlatform; redirectUrl: string; state: string }): Promise<string> {
+  async connectUrl(input: { profileId: string; platform: SocialAccountPlatform; redirectUrl: string; state: string }): Promise<string> {
     this.check('connectUrl');
     const suffix = createHash('sha256').update(input.profileId + ':' + input.platform).digest('hex').slice(0, 20);
-    const account: ProviderSocialAccount = { providerAccountId: (input.platform === 'FACEBOOK' ? 'fbpage_' : 'igbiz_') + suffix, platform: input.platform,
-      displayName: input.platform === 'FACEBOOK' ? 'Synthetic Dojo Page' : 'synthetic.dojo' };
+    const account: ProviderSocialAccount = { providerAccountId: ({ FACEBOOK: 'fbpage_', INSTAGRAM: 'igbiz_', GOOGLE_ADS: 'gads_', GOOGLE_BUSINESS: 'gbp_' })[input.platform] + suffix, platform: input.platform,
+      displayName: ({ FACEBOOK: 'Synthetic Dojo Page', INSTAGRAM: 'synthetic.dojo', GOOGLE_ADS: 'Synthetic Dojo Google Ads', GOOGLE_BUSINESS: 'Synthetic Dojo (Google)' })[input.platform] };
     const list = (this.connected.get(input.profileId) ?? []).filter(a => a.providerAccountId !== account.providerAccountId);
     this.connected.set(input.profileId, [...list, account]);
     return `${input.redirectUrl}?${new URLSearchParams({ state: input.state, connected: input.platform.toLowerCase() })}`;
@@ -239,9 +387,45 @@ export class FakeZernioSocialAdapter implements ZernioSocialAdapter {
     return [...(this.connected.get(profileId) ?? []), ...(this.extra.get(profileId) ?? [])];
   }
   publishReady(): boolean { return this.ready(); }
+  inboxReady(): boolean { return this.ready(); }
+  adsReady(): boolean { return this.ready(); }
+  adsPauseReady(): boolean { return this.ready(); }
+  async createBoost(input: CreateBoostInput): Promise<{ providerAdId: string }> {
+    this.check('createBoost');
+    const prior = this.boosts.find(b => b.idempotencyKey === input.idempotencyKey);
+    if (prior) return { providerAdId: prior.providerAdId };
+    const providerAdId = 'fakead_' + createHash('sha256').update(input.idempotencyKey).digest('hex').slice(0, 24);
+    this.boosts.push({ ...input, providerAdId });
+    return { providerAdId };
+  }
+  async createGoogleSearchAd(input: CreateGoogleSearchAdInput): Promise<{ providerAdId: string }> {
+    this.check('createGoogleSearchAd');
+    const prior = this.googleAds.find(g => g.idempotencyKey === input.idempotencyKey);
+    if (prior) return { providerAdId: prior.providerAdId };
+    const providerAdId = 'fakegad_' + createHash('sha256').update(input.idempotencyKey).digest('hex').slice(0, 24);
+    this.googleAds.push({ ...input, providerAdId });
+    return { providerAdId };
+  }
+  async setAdActive(input: { providerAdId: string; active: boolean; idempotencyKey: string }): Promise<void> {
+    this.check('setAdActive');
+    this.adStatusChanges.push({ ...input });
+  }
+  async sendReply(input: SendReplyInput): Promise<{ providerMessageId: string }> {
+    this.check('sendReply');
+    const prior = this.replies.find(r => r.idempotencyKey === input.idempotencyKey);
+    if (prior) return { providerMessageId: prior.providerMessageId };
+    const providerMessageId = 'fakemsg_' + createHash('sha256').update(input.idempotencyKey).digest('hex').slice(0, 24);
+    this.replies.push({ ...input, providerMessageId });
+    return { providerMessageId };
+  }
+  async setCommentHidden(input: { providerAccountId: string; providerCommentId: string; hidden: boolean; idempotencyKey: string }): Promise<void> {
+    this.check('setCommentHidden');
+    this.commentActions.push({ providerCommentId: input.providerCommentId, hidden: input.hidden, idempotencyKey: input.idempotencyKey });
+  }
   async publishPost(input: PublishPostInput): Promise<{ providerPostId: string }> {
     this.check('publishPost');
-    if (input.platform !== 'FACEBOOK') throw new SocialProviderError('REJECTED');
+    if ((input.platform !== 'FACEBOOK' && input.platform !== 'GOOGLE_BUSINESS')
+      || (input.platform === 'GOOGLE_BUSINESS' && [...input.text].length > GOOGLE_BUSINESS_POST_MAX_LENGTH)) throw new SocialProviderError('REJECTED');
     // Same key, same post: a fake retry never makes a second post (HON itself never retries).
     const prior = this.published.find(p => p.idempotencyKey === input.idempotencyKey);
     if (prior) return { providerPostId: prior.providerPostId };
@@ -256,11 +440,18 @@ export class FakeZernioSocialAdapter implements ZernioSocialAdapter {
   }
 }
 
-/** Chooses the real adapter when connecting or publishing is approved, else the fake when allowed, else none (never ready). */
+/** Chooses the real adapter when any piece is approved, else the fake when allowed, else the real adapter for pausing only when a key is set, else none. */
 export function zernioSocialAdapterFactory(env: Env = process.env): ZernioSocialAdapter {
-  if (zernioConnectApproved(env) || zernioPublishApproved(env)) return new ZernioHttpSocialAdapter();
+  if (zernioConnectApproved(env) || zernioPublishApproved(env) || zernioInboxApproved(env) || zernioAdsApproved(env)) return new ZernioHttpSocialAdapter();
   if (zernioFakeEnabled(env)) return new FakeZernioSocialAdapter();
-  return { kind: 'NONE', ready: () => false, publishReady: () => false,
+  // A key with every switch off still lets a person pause an ad already running at Meta; nothing else is ready.
+  if (zernioAdsPauseReady(env)) return new ZernioHttpSocialAdapter(() => env);
+  return { kind: 'NONE', ready: () => false, publishReady: () => false, inboxReady: () => false, adsReady: () => false, adsPauseReady: () => false,
+    createBoost: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),
+    createGoogleSearchAd: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),
+    setAdActive: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),
+    sendReply: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),
+    setCommentHidden: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),
     publishPost: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),
     findOrCreateProfile: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),
     connectUrl: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),

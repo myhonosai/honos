@@ -1,4 +1,4 @@
-/** 0403 front-desk Point of Sale. Sales and refunds are records of money the school took or paid back itself; HON moves no money. */
+/** 0488 front-desk Point of Sale. Sales and refunds are records of money the school took or paid back itself; HON moves no money. */
 import { accountClosed, accountUuid } from './school-owner-invitations.js';
 
 export const POS_HUMAN_COMMAND = 'school-pos' as const;

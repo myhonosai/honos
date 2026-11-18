@@ -1,4 +1,4 @@
-# Attendance cards and scan check-in (0390, 0391)
+# Attendance cards and scan check-in (0390, 0394)
 
 Status: spec + plan, owner request 2026-11-16 ("make attendance cards; barcode or QR, school owner chooses; card has the
 school logo and the student's picture from the contact card; the scanner picks up which one automatically").
@@ -7,11 +7,13 @@ Face matching is a separate thread ("Add face check-in with parent consent") tha
 ## Goals
 
 1. **Student photo on the contact card (0390).** Staff take or upload one photo per person on the People contact card.
-2. **Card maker (0391).** The school owner chooses BARCODE (Code 128) or QR for the school. Staff with card permission
+2. **Card maker (0394).** The school owner chooses BARCODE (Code 128) or QR for the school. Staff with card permission
    print one card or a sheet of cards: school logo (existing 0285 branding `logoUrl`), student photo (0390), name,
    school name, the code. Printing a card issues a new code; the student's previous card stops working.
-3. **Scan check-in (0391).** A signed-in staff "front desk" screen: pick today's class, scan. A USB/Bluetooth scanner
-   (keyboard input) or the device camera (browser `BarcodeDetector`, QR + Code 128) is read without choosing the type:
+3. **Scan check-in (0394).** A signed-in staff "front desk" screen: pick today's class, scan. A USB/Bluetooth scanner
+   (keyboard input) or the device camera is read without choosing the type (browser `BarcodeDetector` where it reads
+   both QR and Code 128; otherwise, as on Safari and iPad, the open-source ZXing decoder `@zxing/library` 0.21.3 (npm lists MIT; it ships the upstream ZXing Apache-2.0 LICENSE),
+   loaded only then and run on the device with no network calls):
    both symbologies carry the same digits. Staff see the student's photo and name, and attendance is written by the
    existing `hon.record_attendance` (0115). No parallel attendance model.
 
@@ -55,7 +57,7 @@ Functions: `read_person_photo(subject, school, person)`, `set_person_photo(subje
 `remove_person_photo(subject, input, key)`. The People record read gains `photo: {version, checksum} | null` through a
 separate photo summary read (`read_person_photo_summary`), so 0217 is not replaced.
 
-## Data (0391)
+## Data (0394)
 
 - `hon.attendance_card_settings(school PK, code_type BARCODE|QR, show_photo, show_logo, design CLASSIC|BOLD|MINIMAL, version)`.
 - `hon.attendance_cards(id, school, student_profile_id, code_digest bytea UNIQUE, code_last4, status ACTIVE|REPLACED|REVOKED, issued/ended by/at)`.
@@ -63,27 +65,55 @@ separate photo summary read (`read_person_photo_summary`), so 0217 is not replac
   with named constraint `attendance_check_ins_method_check CHECK (method IN ('CARD'))` (the face thread widens it).
 - Internal `hon.attendance_check_in_student(subject, session, student, method, method_ref, status, key, request, correlation)`:
   if the student already has a record for the session it returns `ALREADY_RECORDED` with the current status and changes
-  nothing; otherwise it calls `hon.record_attendance` (PRESENT or LATE) and logs the check-in. Not granted to the app.
-- Entry points: `read_attendance_card_settings`, `configure_attendance_card_settings`, `issue_attendance_cards` (1..40
-  students, digests from the API), `revoke_attendance_card`, `read_attendance_cards` (students' card status, no codes),
+  nothing, except an absence (EXCUSED_ABSENCE or UNEXCUSED_ABSENCE): an arrival corrects that record to PRESENT or LATE
+  through `hon.record_attendance` at its saved version, keeping category and note; otherwise it calls `hon.record_attendance` (PRESENT or LATE) and logs the check-in. Not granted to the app.
+- Entry points as built: `read_attendance_cards` (look + students' card status, no codes), `configure_attendance_cards`,
+  `issue_attendance_cards` (1..40 students, digests from the API), `revoke_attendance_card`,
   `check_in_with_attendance_card(subject, session, input{codeDigest,status}, key, request, correlation)`.
+- A print's receipt fingerprint covers the student list only (the API draws new random codes on each attempt), so a
+  retry of an unknown outcome replays the saved print without codes; the screen then asks for new cards.
+- Scan authority is held, not re-checked: `hon.lock_attendance_actor` locks the staff grant for the transaction, so a
+  revocation waits for an in-flight scan and the next scan is refused (proved in group 8).
 
 ## Screens
 
 - People contact card: Photo panel (take/upload, replace, remove) in en/ko/es.
 - `/staff/attendance/cards`: owner settings (barcode/QR, show photo/logo, design), student list with card status, select
-  and "Print cards" (issue then print sheet, CR80 85.6 × 54 mm, 10 per A4/Letter), cancel card.
+  and "Print cards" (issue then print sheet, CR80 85.6 × 54 mm, two across), cancel card. Cards print only in the saved
+  look: printing is off while the look has unsaved changes.
 - `/staff/attendance/scan`: pick a class session of today, Present/Late toggle, scanner input always focused, optional
   camera; result card shows photo, name and RECORDED / ALREADY (status) / NOT RECOGNISED.
-- Barcode (Code 128 set C) and QR (byte/numeric, ECC M) are drawn by small in-repo SVG encoders; no new dependency.
+- Barcode (Code 128 set C) and QR (version 1-M, numeric) are drawn by small in-repo SVG encoders; no new dependency.
 
 ## Plan
 
 1. 0390 photos: contracts, migration, API (strip + call), web Photo panel, DB proof, API + UI tests. PR 1.
-2. 0391 cards + scan: contracts (code + checksum helpers shared), migration, API, encoders with tests, card maker and
+2. 0394 cards + scan: contracts (code + checksum helpers shared), migration, API, encoders with tests, card maker and
    scan screens, DB proof, tests. PR 2 (stacked on PR 1).
 3. Later, no migration: Creative Studio image as card background (Higgsfield off; fakes in tests).
 
 ## Open owner questions (not blocking)
 
-- iPad/Safari camera scanning needs a JS decoder library (Safari has no `BarcodeDetector`); USB scanners work everywhere.
+- Owner decision 2026-11-16: add a free decoder for iPad/Safari (done, see above).
+- Superseded 2026-11-16 21:44Z by the U.S.-only photo policy below. 0394 had built place-based consent
+  (`hon.student_photo_consent_rules`, EU_GDPR/UK_GDPR/KR_PIPA/NOT_REVIEWED from the 0392 location); that table stays
+  as immutable history and is no longer read by cards.
+- Staff on the scan screen also need `schedule.session.read` to list today's classes (existing read).
+- New organizations: like 0364, the migration adds `attendance.cards.manage` to existing OWNER system roles; whether
+  system roles created later receive it depends on the role template (owner check before launch).
+
+## U.S.-only card photo policy (0413, owner David 2026-11-16 21:44Z)
+
+HON OS serves U.S. martial arts schools first. For internal attendance cards:
+
+| Owner requirement | How it is met |
+| --- | --- |
+| 1. Staff upload photos; cards print them by default | 0390 photo on the contact card (staff with people.update only); `showPhoto` defaults on and no consent step is needed (0413). |
+| 2. No separate parental consent step just to print a card | `hon.attendance_photo_consent_rule` now reads only the school's own setting; place rules are no longer applied. |
+| 3. Optional parental photo-approval policy | `attendance_card_settings.photo_approval_required` (default off), part of the saved card look (`photoApprovalRequired`). While on, staff record approval per student (`set_student_photo_consent`, unchanged) and a card without it prints initials. Turning it off keeps the recorded history. |
+| 4. Initials when no photo or use is restricted | The server decides `printPhoto` per card: look shows photos, a photo is on file, and approval is recorded when the school asks for it. |
+| 5. School isolation, authenticated photo access | Forced RLS, no client table privilege, fixed definer entry points; photos are read only by signed-in staff with people.read at that school (0390). |
+| 6. Marketing/public use kept separate | Card photos are internal only; nothing in 0390/0394/0413 authorizes marketing or public use. Any marketing photo authorization must be its own record. |
+| 7. No direct photo upload by children under 13 | There is no family or student upload path: only signed-in staff can set a photo. A future family upload must add a COPPA-compliant flow first. |
+| 8. Privacy notices, retention, deletion, access | Deletion: remove is a hard delete of the bytes (0390), audit/outbox carry ids only. Access: as row 5. **Gaps:** no in-app privacy notice text for card photos yet, and no automatic retention rule (for example, deleting a photo some time after a student leaves). Both need owner policy. |
+| 9. Not legally approved | Compliance assessment stays pending U.S. legal review. |

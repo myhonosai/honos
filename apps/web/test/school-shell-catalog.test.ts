@@ -22,8 +22,8 @@ describe('school shell navigation catalog', () => {
     const menu = Object.fromEntries(SCHOOL_SHELL_SECTIONS.map(section => [section.key, schoolShellSectionItems(section.key).map(item => shellText('en', item.titleKey))]));
     expect(menu).toEqual({
       dashboard: ['Dashboard', 'Ask HON'], ai: ['AI Team', 'Conversation AI'], calendar: ['Calendar', 'Attendance'], contacts: ['Contact list', 'Staff'],
-      leads: ['Lead pipeline', 'Automations'], communication: ['Texts & email', 'Facebook & Instagram'], finance: ['Checkout Pages', 'Point of Sale', 'Invoices'],
-      marketing: ['Website', 'Marketing', 'Creative Studio'], ranks: ['Rank setup', 'Tests', 'Mass rank promotion'], business: ['Membership', 'Reports'], community: ['Community'],
+      leads: ['Lead pipeline', 'Automations'], communication: ['Texts & email', 'Facebook & Instagram'], finance: ['Checkout Pages', 'Point of Sale', 'Shopify', 'Invoices'],
+      marketing: ['Website', 'Marketing', 'Ads', 'Creative Studio'], ranks: ['Rank setup', 'Tests', 'Mass rank promotion'], business: ['Membership', 'Reports'], community: ['Community'],
     });
     expect(SCHOOL_SHELL_NAV.filter(item => !item.section).map(item => item.key)).toEqual(['settings']);
     expect(SCHOOL_SHELL_NAV.at(-1)?.key).toBe('settings');
@@ -73,7 +73,7 @@ describe('school shell navigation catalog', () => {
   it('puts every former page where the owner\'s menu says', () => {
     const where: Record<string, string> = {
       '/staff/team/invitations': 'staff', '/staff/roles': 'staff', '/staff/conversations': 'conversationAi', '/staff/family-messages': 'messages',
-      '/staff/marketing/social': 'social', '/staff/marketing/campaigns': 'marketing', '/staff/champions-club': 'marketing', '/staff/creative-studio': 'creative',
+      '/staff/marketing/social': 'social', '/staff/marketing/campaigns': 'marketing', '/staff/champions-club': 'marketing', '/staff/creative-studio': 'creative', '/staff/marketing/ads': 'ads',
       '/staff/automation/rules': 'automation', '/staff/operations': 'analytics', '/staff/retention/review': 'analytics', '/community/marketplace': 'community',
       '/staff/testing/promotion-decisions': 'promotions', '/staff/billing/payment-processors': 'settings', '/staff/attendance/planned-absences': 'attendance',
     };
@@ -91,6 +91,17 @@ describe('school shell navigation catalog', () => {
       expect(item.routes[0]!.hidden, item.key).toBeFalsy();
       for (const route of item.routes.filter(candidate => candidate.hidden)) expect(text.includes(`'${route.href}'`) || text.includes(`"${route.href}"`), route.href).toBe(true);
     }
+  });
+
+  it('makes Tests one page of six ordered steps that opens at "Who is ready" (L3)', () => {
+    const testing = SCHOOL_SHELL_NAV.find(item => item.key === 'testing')!;
+    expect(testing.steps).toBe(true);
+    expect(schoolShellListed(testing).map(route => route.href)).toEqual(['/staff/testing/readiness', '/staff/testing/registrations',
+      '/staff/testing/candidates/register', '/staff/testing/candidates/grade', '/staff/testing/scorecards', '/staff/testing/certificates']);
+    expect(SCHOOL_SHELL_UNLISTED_ROUTES).not.toContain('/staff/testing/candidates/register');
+    expect(SCHOOL_SHELL_UNLISTED_ROUTES).not.toContain('/staff/testing/candidates/grade');
+    expect(schoolShellActiveItem('/staff/testing/candidates/grade')?.key).toBe('testing');
+    expect(SCHOOL_SHELL_NAV.filter(item => item.steps).map(item => item.key)).toEqual(['testing']);
   });
 
   it('resolves the active primary item from the path, including sub-routes and dynamic detail pages', () => {

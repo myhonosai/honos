@@ -21,9 +21,19 @@ power and a staff role never acts as a parent. Every write has exact-request ide
   never exceeded and the same child is never booked twice. The booking is `REGULAR`, `source = PARENT_APP`.
 - **A3 Cancel.** The guardian may cancel a `PARENT_APP` booking of their own child until the session starts. A staff-made
   booking is cancelled only by staff.
-- **A4 Event slots and families-only booking types (later PR, needs its own number).** The guardian can book a 0261 event slot or a 0286
+- **A4 Event slots and families-only booking types (0466).** The guardian can book a 0261 event slot or a 0286
   `FAMILIES_ONLY` booking type with the family's details filled in from the account, with the same capacity and
   one-booking rules as the public path. (This is booking types part 3's family path.)
+  - The details are the family's display name and the signed-in parent's sign-in email; nothing about the family is
+    taken from the request. Without a usable email the page is view only and a booking is refused.
+  - The rows go into the 0261 and 0286 booking tables, so staff see them like any other booking. A private insert-only
+    table `parent_school_bookings` records which family made each one from the account.
+  - On top of the public rules (live event or type, offered time, a free spot, one live booking per email), a family has
+    at most one live booking per event and one future booking per type. The family row is locked after the organization
+    and school, so two guardians of one family cannot both get through.
+  - The guardian cancels only bookings the family made from the account, before they start. Link and staff bookings are
+    not touched. VIEWER grants read only.
+  - Parent page: `/parent/bookings` (Events & bookings), linked from the family home.
 
 ## PR B: messages between a family and the school, inside HON (0330)
 
