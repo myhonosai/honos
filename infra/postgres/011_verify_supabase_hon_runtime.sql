@@ -3749,6 +3749,91 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 END $$;
 -- End school reports locations exact verification.
 
+-- School reports dashboard exact verification (R3 0520): one runtime read and three private helpers.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.school_dashboard_members(uuid,uuid)',true,false,'search_path=pg_catalog, hon','128ad76ba2cc03f7f668ea88048f1196838ff26d96ff61e88ffb036c28839977'),
+('hon.school_dashboard_income(uuid,uuid,text,timestamp with time zone,timestamp with time zone)',true,false,'search_path=pg_catalog, hon','97e9aaf00e48d6ee39041ac4a4e02cf82a5b9b60bcb6fdd9340164a5b3dd7fc0'),
+('hon.school_dashboard_kpis(uuid,uuid,text,timestamp with time zone,timestamp with time zone)',true,false,'search_path=pg_catalog, hon','3f83288d46756613d7bf35ac981780ab360e384592261dc944c2cb7e3e0ede73'),
+('hon.read_school_reports_dashboard(text,jsonb)',true,true,'search_path=pg_catalog, hon','3176cb4114cd70d547242cba063d2dbd140d45cf716dfae2b735dc4d06a3d503')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config] AND p.provolatile='s'
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school reports dashboard function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End school reports dashboard exact verification.
+
+-- School contacts list exact verification (C1 0521): one runtime read and two private helpers.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.require_school_contacts_actor(text)',true,false,'search_path=pg_catalog, hon','d428974c62fe5e652b4470356505c174fd3b6431a3f07dd753ef47f79b1107a4'),
+('hon.school_contact_facts(uuid,uuid,timestamp with time zone)',true,false,'search_path=pg_catalog, hon','f481befbcea6c9e50078c3e0cddd8d26561814a339a7a8617152c109f0cd48dd'),
+('hon.read_school_contact_list(text,jsonb)',true,true,'search_path=pg_catalog, hon','063bee418609311e9b6c1d8a1120aac203f881724bfbaa760c4fbc57c08f58f3')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config] AND p.provolatile='s'
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school contacts list function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End school contacts list exact verification.
+
+-- School contact card exact verification (C2 0522): one runtime read and two private helpers.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.school_contact_card_can(uuid,uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','51833fe5d339195ff9309001d6a460bd2070d6fcebe8a1d8bc6f5c26c6aba616'),
+('hon.school_contact_card_time(timestamp with time zone)',true,false,'search_path=pg_catalog, hon','e4a86c6f3c7e0d57791518a05be7b1552ebb4b274f34c42dc0e8b86bf6a93d46'),
+('hon.read_school_contact_card(text,jsonb)',true,true,'search_path=pg_catalog, hon','66be110863b1387e2892614f418047c50413d1939554495ec92dc117f56439a3')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config] AND p.provolatile='s'
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school contact card function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End school contact card exact verification.
+
+-- School contact merge and archive exact verification (C3 0523): five runtime entry points, private helpers, a private table.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_school_contact_archive()',false,false,'search_path=pg_catalog, hon','v','d34a1772d3f162a2f59a512845bb16e4342714ca299f24641eef51bad73535e8'),
+('hon.require_school_contact_admin(text,text)',true,false,'search_path=pg_catalog, hon','v','d8408f3c3eb366cb55c011b5979aeafdfe2d3f88dfdb5ae08ebf68907027ef48'),
+('hon.school_contact_admin_begin(uuid,text,text)',true,false,'search_path=pg_catalog, hon','v','ab1a5d9b6f613a0882b3d242846da5cbaa3f5c5487410b76e0969d02494762d6'),
+('hon.school_contact_archive_plan(uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','s','be7c9a3e0cf0b99511fe49612d6e2a6423ab7af175db26c2cd327fd88e57b27d'),
+('hon.school_contact_merge_plan(uuid,uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','s','138d72cc623f45f64ae4f2471507cb2e2e6f502b2e95aaf2155fed3f7b899844'),
+('hon.school_contact_admin_person(uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','s','ddf78a33ee8f8d7771b6c60fbaef4535d3f296f28a93dec6aef684c44e6f2cbe'),
+('hon.read_school_contact_archive(text,jsonb)',true,true,'search_path=pg_catalog, hon','v','e76ccda135666363f12bfd010bdcb61c13b7652f5a9c1980b649526bdbecd0af'),
+('hon.school_contact_archive_command(text,jsonb,text,uuid,uuid,boolean)',true,false,'search_path=pg_catalog, hon','v','43eb4068f3d0813ea045f60b38fe642ffbc3925c2dad921204dad94fdfd7c542'),
+('hon.archive_school_contact(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','v','c723295a67b8cfa6741d94efeb228b3158990f15b6fa84c167cf2e5496f4f13b'),
+('hon.restore_school_contact(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','v','8cfaeaf075de3d326f3d96bce295d7f0dc4ef61b30a922df631d194e1d464d96'),
+('hon.read_school_contact_merge(text,jsonb)',true,true,'search_path=pg_catalog, hon','v','37f31569cf3f1b6656e0c8cb55645549b8b4f410bcfd23412099f1cafbb363ad'),
+('hon.merge_school_contacts(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','v','7639e2fa71a7b496c14b83959c221d31f0fb2cae5cbefbafc0f5b531c21909fb')) e(signature,definer,runtime_allowed,config,volatility,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config] AND p.provolatile=f.volatility
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school contact merge/archive function: %',f.signature; END IF;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') AND (has_table_privilege('hon_runtime','hon.school_contact_archives','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+    OR NOT (SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid='hon.school_contact_archives'::regclass)) THEN
+    RAISE EXCEPTION 'hon.school_contact_archives must stay private with forced RLS'; END IF;
+END $$;
+-- End school contact merge and archive exact verification.
+
 -- Family messages exact verification (0330): private helpers, private forced-RLS tables and six runtime entry points.
 DO $$ DECLARE f record; safe boolean; t text; BEGIN
   FOR f IN SELECT * FROM (VALUES
@@ -4775,7 +4860,37 @@ BEGIN
     RAISE EXCEPTION 'Shopify product change guards missing'; END IF;
 END $$;
 -- End Shopify product changes exact verification.
--- School blasts exact verification (0500)
+
+-- Membership agreement signing link exact verification (0499)
+DO $$ DECLARE f text;
+  entry text[]:=ARRAY['hon.read_membership_agreement_send(text,jsonb)','hon.send_membership_agreement_link(text,jsonb,text,text,uuid,uuid)',
+    'hon.read_membership_agreement_link(text)','hon.sign_membership_agreement_link(text,jsonb,uuid)'];
+  fns text[]:=ARRAY['hon.guard_membership_agreement_link()','hon.membership_agreement_link_actor(text)',
+    'hon.membership_agreement_link_children(uuid,uuid,uuid,uuid)','hon.membership_agreement_link_json(hon.membership_agreement_links)',
+    'hon.membership_agreement_link_live(hon.membership_agreement_links)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe membership agreement link entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY fns LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND a.grantee<>p.proowner) THEN
+      RAISE EXCEPTION 'Unsafe membership agreement link helper: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.membership_agreement_links'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.membership_agreement_links'::regclass)
+    OR has_table_privilege('hon_runtime','hon.membership_agreement_links','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.membership_agreement_links','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe membership agreement link table'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM hon.principals WHERE id='00000000-0000-4000-8000-000000000499' AND principal_type='SYSTEM_SERVICE' AND user_id IS NULL AND is_active) THEN
+    RAISE EXCEPTION 'Membership agreement link principal missing'; END IF;
+END $$;
+-- End membership agreement signing link exact verification.
+-- School blasts exact verification (0524)
 DO $$ DECLARE f text; t text;
   entry text[]:=ARRAY['hon.save_school_blast(text,jsonb,text,uuid,uuid)','hon.send_school_blast(text,jsonb,text,uuid,uuid)',
     'hon.cancel_school_blast(text,jsonb,text,uuid,uuid)','hon.read_school_blasts(text)','hon.read_school_blast(text,uuid)','hon.read_school_blast_audience(text,uuid)'];

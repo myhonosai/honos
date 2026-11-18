@@ -11,7 +11,7 @@ import { blastDraftOf, blastInput, blastProblems, insertMergeTag, newBlastDraft,
 import { SchoolBlastsView, type SchoolBlastsViewProps } from '../src/components/school-blasts/view';
 import { id } from './account-status-fixtures';
 
-// 0500: Marketing > Blasts. Staff write one email or text, check its audience and send it now or schedule it.
+// 0524: Marketing > Blasts. Staff write one email or text, check its audience and send it now or schedule it.
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 

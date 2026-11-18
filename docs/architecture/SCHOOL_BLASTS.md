@@ -1,4 +1,4 @@
-# School email and text blasts (BL1, migration 0500)
+# School email and text blasts (BL1, migration 0524)
 
 Owner request (David, 2026-11-18): staff send an email or text blast with a checkout page link, merge tags and pictures or
 video. Audit and the full three-piece plan: `/mnt/project-files/blasts/BLAST_COMPOSER_AUDIT_AND_SPEC.md` (project files).
@@ -24,7 +24,7 @@ Marketing > Blasts (`/staff/marketing/blasts`):
    - A child (a STUDENT or DEPENDENT family member with a guardian, unless a student birth date shows 18 or over) is always
      reached through the guardians in their families who have an address, and also at their own address when they have one
      and are opted in (David's decision, 2026-11-18). Anyone else without an address is replaced by their guardians if they have any.
-   - Archived or merged contacts (an open `school_contact_archives` row, 0483) never get a blast, as recipient or guardian.
+   - Archived or merged contacts (an open `school_contact_archives` row, 0523) never get a blast, as recipient or guardian.
    - The list is deduplicated by address (one message per phone number or email, so one per household).
    - People without OPTED_IN consent for the channel are skipped (NO_CONSENT). People with no address and no guardian address are skipped (NO_ADDRESS).
      Duplicates are skipped (DUPLICATE_ADDRESS). Demo-data people are never included.

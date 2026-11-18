@@ -18,7 +18,7 @@ const readState = (error: unknown) => error instanceof BlastError && error.kind 
 const same = (a: BlastDraft | null, b: BlastDraft | null) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
- * Marketing > Blasts (0500). Staff with marketing.blast.read see the school's blasts; with marketing.blast.send they write a
+ * Marketing > Blasts (0524). Staff with marketing.blast.read see the school's blasts; with marketing.blast.send they write a
  * draft, check its audience and send it now or schedule it. The draft stays in memory until saved; a school change or
  * session end drops it. Every command answer is followed by a fresh list read.
  */

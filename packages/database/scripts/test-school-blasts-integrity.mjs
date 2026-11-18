@@ -1,5 +1,5 @@
 /**
- * School email and text blasts proof (BL1, 0500) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards
+ * School email and text blasts proof (BL1, 0524) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards
  * + global ValidationPipe + HonExceptionFilter -> SchoolBlastController -> protected definer functions on the restricted
  * runtime role with forced RLS), on the guarded disposable CRM-close fixture only. Synthetic contacts only. Messages are
  * only QUEUED for the 0243 worker; no provider is called and nothing is paid.
@@ -436,7 +436,7 @@ try {
   }
   await assert.rejects(runtime.query("SELECT hon.read_school_blasts('x')"), /SCHOOL_BLAST_FORBIDDEN/); checks += 1;
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const begin = '-- School blasts exact verification (0500)', end = '-- End school blasts exact verification.';
+    const begin = '-- School blasts exact verification (0524)', end = '-- End school blasts exact verification.';
     const section = verify.split(begin)[1]?.split(end)[0];
     ok(section, begin);
     await sql(section.replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
@@ -446,7 +446,7 @@ try {
     [[ids.organization, ids.otherOrganization]])).rows[0].n === '0', 'no payment attempt or invoice');
   ok((await sql('SELECT count(*)::int n FROM hon.communication_messages WHERE organization_id=$1', [ids.otherOrganization])).rows[0].n === 0, 'the other organization received nothing');
 
-  console.log(`PASS: school blasts (0500): ${checks} checks.`);
+  console.log(`PASS: school blasts (0524): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

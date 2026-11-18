@@ -1,6 +1,6 @@
 BEGIN;
 
--- School email and text blasts BL1 (0500, allocated by the coordinator 2026-11-18). Owner request (David, 2026-11-18):
+-- School email and text blasts BL1 (0524, allocated by the coordinator 2026-11-18). Owner request (David, 2026-11-18):
 -- blasts with merge tags, a checkout link and pictures or video; this is piece 1 (compose, audience, merge tags, send).
 -- Spec: docs/architecture/SCHOOL_BLASTS.md. Contract: @hon/contracts school-blasts.ts (validateSaveSchoolBlast mirrors
 -- the checks here).
@@ -32,7 +32,7 @@ DO $$ BEGIN
     OR to_regprocedure('hon.demo_data_is_demo(text,uuid)') IS NULL OR to_regprocedure('hon.staff_shift_display_name(uuid)') IS NULL
     OR to_regprocedure('hon.membership_command_args_ok(text,text,uuid,uuid)') IS NULL
     OR NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='communication_messages_origin_shape') THEN
-    RAISE EXCEPTION '0500 requires 0416, 0423, 0243, 0459, 0467, 0224 and 0483'; END IF;
+    RAISE EXCEPTION '0524 requires 0416, 0423, 0243, 0459, 0467, 0224 and 0523'; END IF;
 END $$;
 
 INSERT INTO hon.permissions(code,description,is_sensitive,is_staff_assignable) VALUES

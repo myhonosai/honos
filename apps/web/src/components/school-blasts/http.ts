@@ -6,7 +6,7 @@ import {
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * Marketing > Blasts (0500). Reads are plain same-origin GETs with no key; each command sends its own X-HON-Human-Command
+ * Marketing > Blasts (0524). Reads are plain same-origin GETs with no key; each command sends its own X-HON-Human-Command
  * name and an Idempotency-Key. The server decides the permission, the audience, the merge tags and the version again.
  */
 export type BlastErrorKind =

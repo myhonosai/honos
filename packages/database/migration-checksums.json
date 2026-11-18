@@ -336,6 +336,12 @@
     "0474_eian_family_ai.sql": "fb0cd95a3a90bdf52fbccfff0a1f025baecec71047a6361f31fc44619c24498f",
     "0478_staff_time_clock.sql": "287658b3c361652b1e24de7682381ba0e295371513e06e2a12547f3b9f0323ea",
     "0496_shopify_product_changes.sql": "8419cff247f47336a963385cfd5ab81d44cd01ff608900fb53fb49a451327d11",
-    "0500_school_blasts.sql": "a46035a52441b7d52c0b780b9287cf05421aa31c557904814d5fa8c2bc010c83"
+    "0499_membership_agreement_signing_link.sql": "5fbd399f57b9cd71a761f94dee19401f46f75c2c68567f2670e3872ac7a8cc30",
+    "0519_hq_hon_ongoing_budget.sql": "7203674b5377e3fe58c9dcd7229ec175f03ab716293bde333ca20ad4dad606ce",
+    "0520_school_reports_dashboard.sql": "768911f840237cc845136c189b167fe41eb0c0f56a48c30398c4b8f825f25048",
+    "0521_school_contact_list.sql": "15710fdfee6ad20c80784be688b58c699773742fdfe4be7f9690befd640ad46e",
+    "0522_school_contact_card.sql": "dc1a744a90a927fb3303e25d79fce87d106ff5b92caefc5db69595b9e1f56516",
+    "0523_school_contact_merge_archive.sql": "39228fc3d1af999e4bff29da71460a5a6c82ec0ccd7d9bb3339c62ba2ea8868c",
+    "0524_school_blasts.sql": "05a7b6fb9e035fe3f530c30c15253fd59e76c876deff99214e84f57514674cbf"
   }
 }
