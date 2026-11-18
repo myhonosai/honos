@@ -1,6 +1,6 @@
 BEGIN;
 
--- Eian family AI, E-AI1 (0472). A parent asks Eian a free-text question in the HON Family app and HON answers from that
+-- Eian family AI, E-AI1 (0474). A parent asks Eian a free-text question in the HON Family app and HON answers from that
 -- family's own records through the same governed AI runtime as Ask HON (0210/0336). Spec: docs/architecture/EIAN_FAMILY_AI.md.
 -- Owner: David chose "Build it now" (2026-11-18 01:34Z) and "Eian is as HON. Included in program" (01:39Z). That builds the
 -- path; a paid call still needs the provider key, the paid-call approval flag, a HEALTHY HQ route and a deploy.
@@ -33,8 +33,9 @@ DO $$ BEGIN
   END IF;
   IF to_regprocedure('hon.parent_class_booking_scope(text,boolean)') IS NULL OR to_regprocedure('hon.hon_reply_complete_live(uuid)') IS NULL
     OR to_regprocedure('hon.ai_spend_allowed(uuid,uuid,timestamptz,text)') IS NULL OR to_regprocedure('hon.ai_select_text_route(uuid,uuid,uuid,text,text,integer,bigint)') IS NOT NULL
-    OR to_regprocedure('hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)') IS NULL OR to_regclass('hon.eian_turns') IS NOT NULL THEN
-    RAISE EXCEPTION 'Eian family AI requires migrations through 0471 and must apply once';
+    OR to_regprocedure('hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)') IS NULL OR to_regprocedure('hon.parent_family_scope_any(text,uuid)') IS NULL
+    OR to_regclass('hon.eian_turns') IS NOT NULL THEN
+    RAISE EXCEPTION 'Eian family AI requires migrations through 0473 and must apply once';
   END IF;
 END $$;
 
@@ -909,7 +910,7 @@ BEGIN
            -- 0267 and this migration: every analysis specialist shares HON's reply table; each counts under its own agent.
            WHEN EXISTS (SELECT 1 FROM hon.hon_reply_invocations i WHERE i.id = u.source_invocation_id)
              THEN (SELECT hon.ai_usage_reply_agent(i.specialist) FROM hon.hon_reply_invocations i WHERE i.id = u.source_invocation_id)
-           -- 0472: parent Eian turns count under their own agent.
+           -- 0474: parent Eian turns count under their own agent.
            WHEN EXISTS (SELECT 1 FROM hon.eian_turns i WHERE i.id = u.source_invocation_id) THEN 'EIAN'
            ELSE 'UNATTRIBUTED' END AS agent,
       EXISTS (SELECT 1 FROM hon.ai_unknown_resolutions r WHERE r.ledger_entry_id = u.id AND r.decision = 'WRITE_OFF') AS write_off,

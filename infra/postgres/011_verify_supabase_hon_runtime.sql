@@ -4609,7 +4609,7 @@ END $$;
 -- Parent family picker exact verification (0471): the private selection table, the private helper, the redefined family scopes and two runtime entry points.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.parent_live_family_scopes(text)',true,false,'search_path=pg_catalog, hon','fe4e64801e394c4b75e7e2d9951f02314d949717810d52d386d72602f6b0ee9f'),
+('hon.parent_live_family_scopes(text)',true,false,'search_path=pg_catalog, hon','b5ec04292b7c0b8a22ad81bdccf7b4d72e661b58bbe27c5ee5f129c46e3b3524'),
 ('hon.parent_class_booking_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','cb18dc6356494af40a5b1af73147d4dd8d1bbafefab492439f51180e63fcac15'),
 ('hon.face_checkin_family_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','e4d3454467f9f1c1290ab6a6b84a627dd2e3ba8a865ef1072ea710351fdfb652'),
 ('hon.school_family_acceptor_conflict(text,text,hon.school_family_access_invitations)',false,false,'search_path=pg_catalog, hon','06a988bb21c29c801f959aee91de9bb179fcb6d353e7f30351163fb3061bacfd'),
@@ -4634,7 +4634,25 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 END $$;
 -- End parent family picker exact verification.
 
--- Eian family AI exact verification (0472): the private turn table and its four S4 triggers, the pure route helper and the
+-- Parent school reads follow the family choice exact verification (0473): the private helper, the picker's choice list and the per-school parent resolver.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.parent_family_scope_any(text,uuid)',true,false,'search_path=pg_catalog, hon','20be8b6aa5add0ad188c486aa3331133477b8962405503ca439ee4cf67b920c9'),
+('hon.parent_live_family_scopes(text)',true,false,'search_path=pg_catalog, hon','b5ec04292b7c0b8a22ad81bdccf7b4d72e661b58bbe27c5ee5f129c46e3b3524'),
+('hon.resolve_parent_family_scope(text,uuid)',true,true,'search_path=pg_catalog, hon','e76a7689c3a06550acf0ea8a7de33d107aae0bae1ec1d454497d4beba808bb23')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe parent school scope function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End parent school reads follow the family choice exact verification.
+
+-- Eian family AI exact verification (0474): the private turn table and its four S4 triggers, the pure route helper and the
 -- re-pinned planner that calls it, private Eian helpers, seven runtime entry points, and the S4 shared functions that gained EIAN.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
@@ -4663,7 +4681,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','73d1194c2c076483e217358570b9d4b2f582c85a1b8780110ab143d29cb1d2d3'),
 ('hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','c946c8b901d92f3d482fcc157e129fef14877600462ede1ace53ee01b33e83b8'),
 ('hon.read_ai_unknown_invocations_from_hq(text)',true,true,'search_path=pg_catalog, hon','9632c34ef8dbe2fd916fd4cb3e531ae40249e3cde338732df4a9ba4ff1689e4d'),
-('hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)',true,true,'search_path=pg_catalog, hon','476132992d1da534e0fb41b95ee87a54a1948d7e541b55eb883c19304eba483d'))
+('hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)',true,true,'search_path=pg_catalog, hon','dd5311e022c776bfd926e0d270c8d6ebb04de716bdc444ba3f5b2fe9908bf2f7'))
  e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed

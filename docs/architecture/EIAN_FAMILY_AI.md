@@ -1,4 +1,4 @@
-# Eian family AI (E-AI1, migration 0472)
+# Eian family AI (E-AI1, migration 0474)
 
 **Status:** built, not deployed. **Owner approval:** David chose "Build it now" on 2026-11-18 01:34Z ("Start building the real AI connection for Eian now?") and said "Eian is as HON. Included in program" at 01:39Z. That covers building the path. It does **not** cover a paid call. A real call still needs all of these owner steps:
 - `OPENROUTER_API_KEY` and `OPENROUTER_PAID_CALL_APPROVED=true` on hon-api
@@ -109,7 +109,7 @@ The provider runtime is `OpenRouterEianRuntime`. It uses the same rules as the H
 
 ## Evidence
 
-- `packages/database/scripts/test-eian-family-ai-integrity.mjs` runs over signed HTTP against a fake provider and passes 93 checks. It covers:
+- `packages/database/scripts/test-eian-family-ai-integrity.mjs` runs over signed HTTP against a fake provider and passes 97 checks. It covers:
   - scope and gate
   - the happy path and replay
   - every outcome
@@ -119,9 +119,15 @@ The provider runtime is `OpenRouterEianRuntime`. It uses the same rules as the H
   - the share and the ceiling
   - a parallel burst
   - the 011 section
+  - the largest facts the API builds for a crowded family are accepted, and the API and database measure the same jsonb text
 - The AI-0 spend inventory is updated; the check passes with 54 invariants.
 - API unit tests: `apps/api/test/eian-family-ai.test.cjs`.
 - App tests: `apps/parent-mobile/test/eian-ai.test.tsx`.
+
+## Known follow-ups (from review, not blocking)
+
+- `ai_route_task_category` has no Eian entry, so Eian follows the HQ policy order only and HQ cannot set privacy controls for it yet. Add a category, or confirm the policy order and provider privacy, before go-live.
+- A turn that prepare refuses (for example, facts the database rejects) stays PENDING. A resend with the same key carries it again; nothing is called or charged.
 
 ## Owner decisions
 

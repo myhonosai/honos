@@ -1,6 +1,6 @@
 /**
- * Eian family AI proof (E-AI1, 0472) over signed HTTP (HON session cookie -> HonIdentityGuard + Eian guards -> EianController
- * -> EianService -> the existing guarded parent reads and the 0472 definer functions on the restricted runtime role with
+ * Eian family AI proof (E-AI1, 0474) over signed HTTP (HON session cookie -> HonIdentityGuard + Eian guards -> EianController
+ * -> EianService -> the existing guarded parent reads and the 0474 definer functions on the restricted runtime role with
  * forced RLS), on the guarded disposable CRM-close fixture only. The provider is an in-process fake; no network call is
  * made and nothing is sent. Synthetic names only.
  */
@@ -380,13 +380,27 @@ try {
 
   // 12. The canonical 011 section (exact definer flags, search paths, body hashes, ACLs, forced RLS, the four S4 triggers).
   const canonical = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-  const block = canonical.split('-- Eian family AI exact verification (0472)')[1]?.split('-- End Eian family AI exact verification.')[0];
+  const block = canonical.split('-- Eian family AI exact verification (0474)')[1]?.split('-- End Eian family AI exact verification.')[0];
   ok(Boolean(block), '011 section present');
   await sql(block.slice(block.indexOf('\n') + 1).replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE));
   ok(true, '011 section passes on the fixture');
 
+  // 13. Review P2: a crowded family's facts (many small items) are trimmed by the API to the size the database measures
+  // (jsonb text), so eian_facts_ok accepts the largest facts the API can build, and both sides agree on the byte count.
+  {
+    const { buildEianFacts, jsonbTextBytes } = await load('eian/eian-facts.js');
+    const { crowdedSources } = apiRequire('./test/eian-facts-fixtures.cjs');
+    const crowded = buildEianFacts(crowdedSources());
+    const measured = await one('SELECT hon.eian_facts_ok($1::jsonb) ok, octet_length($1::jsonb::text) n', [JSON.stringify(crowded)]);
+    ok(measured.n === jsonbTextBytes(crowded), `API and database measure the same jsonb text (${measured.n} bytes)`);
+    ok(measured.n > Buffer.byteLength(JSON.stringify(crowded)), 'jsonb text is longer than the compact JSON sent');
+    ok(measured.ok === true && crowded.classes?.length > 0, 'the largest facts the API builds are accepted');
+    const untrimmed = { ...crowded, knowledge: Array.from({ length: 5 }, (_, i) => ({ title: `T${i}`, text: 'x'.repeat(400) })) };
+    ok((await one('SELECT hon.eian_facts_ok($1::jsonb) ok', [JSON.stringify(untrimmed)])).ok === false, 'facts over the cap are still refused');
+  }
+
   console.log(JSON.stringify({ proof: 'eian-family-ai', checks, providerCalls: fake.calls.length, networkCalls: 0 }));
-  console.log(`PASS Eian family AI (0472): ${checks} checks.`);
+  console.log(`PASS Eian family AI (0474): ${checks} checks.`);
 } finally {
   await app?.close();
   await cleanup().catch(() => null);

@@ -3,7 +3,7 @@ import { openRouterRefusal } from '../ai/hon-reply-provider-runtime.js';
 
 export const EIAN_PROVIDER_RUNTIME = Symbol('EIAN_PROVIDER_RUNTIME');
 
-/** Exactly what prepare_eian_turn (0472) returns: the plan's route and fixed budgets, the question and the server-checked facts. */
+/** Exactly what prepare_eian_turn (0474) returns: the plan's route and fixed budgets, the question and the server-checked facts. */
 export interface EianInvocation {
   providerId: string; modelId: string; providerRequestId: string; question: string; facts: string;
   inputBudget: number; outputBudget: number; maxCostMicrounits: number;

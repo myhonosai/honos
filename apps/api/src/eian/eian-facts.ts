@@ -4,7 +4,7 @@ import { EIAN_LIMITS, type FamilyMessage, type ParentBillingView, type ParentCla
 /**
  * E-AI1 facts (design review 2026-11-18, item 2 and condition A). Each source is the verified output of an existing
  * guarded parent read, called with the signed-in subject under one resolved family scope. Nothing is forwarded whole:
- * every section is projected through an explicit allow-list into a closed shape that hon.eian_facts_ok (0472) checks
+ * every section is projected through an explicit allow-list into a closed shape that hon.eian_facts_ok (0474) checks
  * again. Children appear by display name only. Ids, contact emails, waivers, booking questions, payment attempts and
  * provider outcomes, payer linkage, certificates and registration interests never leave this file. Any email address
  * or uuid inside free text (a message body, an article) is masked, because the database refuses facts that contain one.
@@ -36,11 +36,27 @@ const TRIM_ORDER: readonly Section[] = ['knowledge', 'messages', 'classes', 'boo
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 const UUID_TEXT = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g;
 const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
+/** A lone surrogate cannot be stored as jsonb text, so it becomes the replacement character. */
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+/**
+ * The facts exactly as PostgreSQL prints them as jsonb text (`p::text`), which is what hon.eian_facts_ok measures and
+ * what the prompt carries: ", " between items and ": " after each key. Key order differs in jsonb, the length does not.
+ * Strings and numbers print as JSON.stringify prints them (the facts hold no lone surrogate and no control character).
+ */
+export function jsonbText(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(jsonbText).join(', ')}]`;
+  if (value !== null && typeof value === 'object') {
+    return `{${Object.entries(value).filter(([, v]) => v !== undefined).map(([k, v]) => `${JSON.stringify(k)}: ${jsonbText(v)}`).join(', ')}}`;
+  }
+  return JSON.stringify(value);
+}
+export const jsonbTextBytes = (value: unknown): number => Buffer.byteLength(jsonbText(value), 'utf8');
 
 /** Plain, bounded, masked text; null when nothing is left. */
 export function eianText(value: unknown, max = 120): string | null {
   if (typeof value !== 'string') return null;
-  let text = value.replace(CONTROL, ' ').replace(EMAIL, '[email hidden]').replace(UUID_TEXT, '[id hidden]').replace(/\s+/g, ' ').trim();
+  let text = value.replace(CONTROL, ' ').replace(LONE_SURROGATE, '\uFFFD').replace(EMAIL, '[email hidden]').replace(UUID_TEXT, '[id hidden]').replace(/\s+/g, ' ').trim();
   if ([...text].length > max) text = [...text].slice(0, max - 1).join('').trimEnd() + '…';
   return text.length ? text : null;
 }
@@ -139,8 +155,9 @@ export function buildEianFacts(s: EianFactSources): EianFacts {
 
   if (unavailable.length) facts.unavailable = unavailable;
   for (const key of Object.keys(facts) as (keyof EianFacts)[]) if (Array.isArray(facts[key]) && (facts[key] as unknown[]).length === 0 && key !== 'unavailable') delete facts[key];
-  // Over the byte cap: drop the last item of the first non-empty section in trim order until it fits.
-  while (Buffer.byteLength(JSON.stringify(facts), 'utf8') > EIAN_LIMITS.factsBytes - 200) {
+  // Over the byte cap, measured as the database measures it (jsonb text): drop the last item of the first non-empty
+  // section in trim order until it fits, with a margin.
+  while (jsonbTextBytes(facts) > EIAN_LIMITS.factsBytes - 200) {
     const section = TRIM_ORDER.find((k) => (facts[k]?.length ?? 0) > 0);
     if (!section) break;
     facts[section]!.pop();

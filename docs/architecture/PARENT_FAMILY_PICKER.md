@@ -27,7 +27,7 @@ Children within one family were already switchable inside Student Journey, and t
 
   Each command still checks the scope again after its locks and writes. If a switch happens in another tab mid-command, that command refuses and rolls back.
 
-  Not covered yet: the older reads that take `?schoolId=` (schedule, journey, planned absences, documents, achievements, knowledge) call 0071 `resolve_parent_family_scope` directly, so they do not follow the choice. They are still limited to the parent's own live grants. Moving them onto the resolver is a follow-up.
+  Reads that name a school (0473): documents, achievements, curriculum progress, testing interest and the API's per-school parent scope call `hon.resolve_parent_family_scope(subject, school)`. Since 0473 it keeps its signature and answers exactly as 0071 did when the parent has at most one live family. With several, it returns only the chosen live family, and nothing at any school until the parent chooses. The picker lists its choices from `hon.parent_family_scope_any`, which keeps the 0071 body under a private name.
 - **F4 Invitations.** A parent may hold families at more than one organization. These are still refused:
   - the same family twice;
   - staff and HQ accounts;

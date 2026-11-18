@@ -1,5 +1,5 @@
 /**
- * Eian family AI (E-AI1, 0472). A parent asks Eian a free-text question in the HON Family app and HON answers from that
+ * Eian family AI (E-AI1, 0474). A parent asks Eian a free-text question in the HON Family app and HON answers from that
  * family's own records through the governed AI runtime. Eian answers in text only and may suggest one screen from a
  * closed list; the app opens that screen and the parent acts through its normal guarded command. Nothing Eian says runs.
  */

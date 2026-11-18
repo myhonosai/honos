@@ -4197,10 +4197,17 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 
--- 0472 Eian family AI: one private table, the pure route-selection helper and private Eian helpers, and seven runtime entry
+-- 0473 parent reads that name a school follow the family picker: one private helper (the 0071 body under a private name).
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.parent_family_scope_any(text,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0473 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.parent_family_scope_any(text,uuid) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION hon.parent_family_scope_any(text,uuid) FROM %I',r); END LOOP;
+END $$;
+
+-- 0474 Eian family AI: one private table, the pure route-selection helper and private Eian helpers, and seven runtime entry
 -- points (status, read a turn, begin, plan, prepare, fail, record). plan_ai_invocation and the S4 shared functions keep their grants.
 DO $$ DECLARE r text; f text; BEGIN
-  IF to_regprocedure('hon.record_eian_turn_result(text,uuid,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0472 first'; END IF;
+  IF to_regprocedure('hon.record_eian_turn_result(text,uuid,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0474 first'; END IF;
   FOREACH f IN ARRAY ARRAY['hon.ai_select_text_route(uuid,uuid,uuid,text,text,integer,bigint)','hon.eian_turn_limits()','hon.eian_share_percent()',
       'hon.eian_burst_limit()','hon.eian_scope(text)','hon.eian_access(text)','hon.eian_committed_credits(uuid,timestamptz)',
       'hon.eian_unavailable_reason(uuid,uuid,boolean)','hon.eian_facts_ok(jsonb)','hon.eian_turn_view(hon.eian_turns,boolean)',
