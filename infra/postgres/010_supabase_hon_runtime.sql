@@ -4275,9 +4275,9 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
--- 0489 shared AI text proposals: two private tables; the runtime reaches the WEBSITE_EDIT kind through seven entry points.
+-- 0507 shared AI text proposals: two private tables; the runtime reaches the WEBSITE_EDIT kind through seven entry points.
 DO $$ DECLARE r text; t text; BEGIN
-  IF to_regclass('hon.ai_text_proposals') IS NULL THEN RAISE EXCEPTION 'Apply migration 0489 first'; END IF;
+  IF to_regclass('hon.ai_text_proposals') IS NULL THEN RAISE EXCEPTION 'Apply migration 0507 first'; END IF;
   FOREACH t IN ARRAY ARRAY['ai_text_kinds','ai_text_proposals'] LOOP
     EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;

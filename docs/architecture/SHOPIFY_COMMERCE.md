@@ -303,7 +303,7 @@ Commerce step 3 ("Creative Studio product drafts", vision section 7) in three pa
 
 ## CS-M2: Marcus merch ideas (step 3, part 2; migration 0510)
 
-Marcus writes up to three merch ideas from the owner's brief, on the shared AI text proposals (0489, kind `MERCH_IDEAS`).
+Marcus writes up to three merch ideas from the owner's brief, on the shared AI text proposals (0507, kind `MERCH_IDEAS`).
 An idea is text only: using one opens the CS-M1 draft form, and Shopify changes only through an approved SH4a change.
 
 - **Kind row.** `MERCH_IDEAS`: agent `marcus`, task `DRAFT_MARKETING`, 6,000 input and 3,000 output tokens, at most
@@ -316,7 +316,7 @@ An idea is text only: using one opens the CS-M1 draft form, and Shopify changes 
 - **Flow.** begin (store must be CONNECTED) -> planning reference -> plan (marcus, DRAFT_MARKETING) -> prepare (budget lock
   first; blocks `GATE_CLOSED` if the store disconnected since the start) -> one provider call -> fail, or record usage and
   the validated answer in its own transaction. The S4 spend decision, HQ pause, per-school ceiling and UNKNOWN queue are
-  the shared 0489 ones; S4 itself is unchanged.
+  the shared 0507 ones; S4 itself is unchanged.
 - **Answer checks.** `hon.shopify_merch_ideas_ok` and `validateMerchAiProposal` take only `{summary, ideas[1..3]}`, each
   idea `{style, title, description, productType, price, printNotes}`. `merchAiProblems` rejects a look that was not asked
   for, a repeated look, a count that does not match the looks, and any price in a store that is not in US dollars (HON

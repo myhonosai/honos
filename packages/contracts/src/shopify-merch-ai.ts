@@ -1,6 +1,6 @@
 /**
  * CS-M2 (0510): Merch Studio AI ideas. The owner gives a brief (one product kind, one to three looks, optional colors and
- * notes); Marcus answers with up to three product ideas on the shared AI text proposals (0489). An idea is text only: using
+ * notes); Marcus answers with up to three product ideas on the shared AI text proposals (0507). An idea is text only: using
  * one opens the SH4a draft form, and Shopify is changed only by an approved SH4a change.
  */
 export const MERCH_AI_KINDS = ['TSHIRT', 'HOODIE', 'RASHGUARD', 'HAT', 'BAG', 'BOTTLE', 'STICKER', 'PATCH'] as const;
