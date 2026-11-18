@@ -12,11 +12,12 @@ const READ_LIMITS = "SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3
 const WRITE_LIMITS = "SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0";
 
 const stale = 'Your time clock changed. Reload and try again.';
-// Exact 0478 error codes; every unknown database failure is unavailable, never success.
+// Exact 0478 + 0495 error codes; every unknown database failure is unavailable, never success.
 const ERRORS: Record<string, { states: string[]; make: (code: string) => HttpException }> = {
   VALIDATION_FAILED: { states: ['22023'], make: code => new BadRequestException({ code }) },
   STAFF_TIME_FORBIDDEN: { states: ['42501'], make: code => new ForbiddenException({ code }) },
   STAFF_MEMBER_UNAVAILABLE: { states: ['42501'], make: code => new ForbiddenException({ code, detail: 'This person is not current staff at this school.' }) },
+  TIMESHEET_SELF_APPROVAL: { states: ['42501'], make: code => new ForbiddenException({ code, detail: 'You cannot approve your own week. Ask the owner or another manager.' }) },
   TIME_ENTRY_NOT_FOUND: { states: ['P0002'], make: code => new NotFoundException({ code }) },
   TIME_CLOCK_STATE_CHANGED: { states: ['55000'], make: code => new ConflictException({ code, detail: stale }) },
   TIME_ENTRY_TOO_LONG: { states: ['55000'], make: code => new ConflictException({ code, detail: 'This entry is over 24 hours. Ask a manager to fix it.' }) },

@@ -334,6 +334,7 @@
     "0471_parent_family_picker.sql": "27cc328b099da7a596fd17c2f90f5ff7fc20dabdaf11d14f23a3b5896b207caa",
     "0473_parent_school_reads_follow_family_choice.sql": "008973eedb67260a41b8598b9c0b37e7dc1013d49d51a967fbaaee8b40541125",
     "0474_eian_family_ai.sql": "fb0cd95a3a90bdf52fbccfff0a1f025baecec71047a6361f31fc44619c24498f",
-    "0478_staff_time_clock.sql": "287658b3c361652b1e24de7682381ba0e295371513e06e2a12547f3b9f0323ea"
+    "0478_staff_time_clock.sql": "287658b3c361652b1e24de7682381ba0e295371513e06e2a12547f3b9f0323ea",
+    "0495_staff_timesheet_no_self_approval.sql": "4f9ded2430018c3c22a725f315c91abcc8bbd731191124f94b9dfc35d8bed315"
   }
 }
