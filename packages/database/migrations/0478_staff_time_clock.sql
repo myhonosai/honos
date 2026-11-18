@@ -1,6 +1,6 @@
 BEGIN;
 
--- Staff time clock TC (0468, allocated 2026-11-17 as 0465 and renumbered above main ceiling 0466 per the ledger rule). Owner request (David, 2026-11-17): "staff doesn't have
+-- Staff time clock TC (0478, allocated 2026-11-17 as 0465, renumbered to 0468 and then 0478 above main ceiling 0474 per the ledger rule). Owner request (David, 2026-11-17): "staff doesn't have
 -- scheduler for shifts and hour tracking". Builds on the shift schedule (0467). Spec: docs/architecture/STAFF_SHIFTS_AND_TIME_CLOCK.md.
 -- Rules:
 --   T1  staff.time.clock (OWNER by default, staff-assignable): clock oneself in and out at this school,
@@ -24,7 +24,7 @@ DO $$ BEGIN
     RAISE EXCEPTION 'Staff time clock requires a restricted runtime'; END IF;
   IF to_regclass('hon.staff_shifts') IS NULL OR to_regprocedure('hon.staff_shift_display_name(uuid)') IS NULL
     OR to_regprocedure('hon.staff_shift_text_ok(jsonb,integer)') IS NULL THEN
-    RAISE EXCEPTION '0468 requires 0467'; END IF;
+    RAISE EXCEPTION '0478 requires 0467'; END IF;
 END $$;
 
 INSERT INTO hon.permissions(code,description,is_sensitive,is_staff_assignable) VALUES

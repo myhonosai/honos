@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),{randomUU
 const {StaffTimeService}=require('../dist/staff-time/staff-time.service.js');
 const g=require('../dist/staff-time/staff-time-human-ui.guard.js');
 const c=require('@hon/contracts');
-// 0468: the staff time clock and timesheets.
+// 0478: the staff time clock and timesheets.
 const person=randomUUID(),entryId=randomUUID();
 const entry=(over={})=>({entryId,staffPrincipalId:person,localDate:'2026-11-18',clockInAt:'2026-11-18T17:00:00.000Z',clockOutAt:null,origin:'CLOCK',
  version:1,workedMinutes:null,updatedAt:'2026-11-18T17:00:00.000Z',...over});
@@ -16,7 +16,7 @@ function db(rows,calls=[]){const q=async(sql,args)=>{calls.push([sql,args]);retu
  return {withTenantReadOnlyTransaction:async(_c,f)=>f({query:q}),withTenantTransaction:async(_c,f)=>f({query:q})};}
 const k=ctx({idempotencyKey:'k1'});
 
-test('reads and commands call only the 0468 functions with the session subject and verify the answer',async()=>{
+test('reads and commands call only the 0478 functions with the session subject and verify the answer',async()=>{
  const calls=[];
  assert.equal((await new StaffTimeService(db([{data:clock()}],calls)).myClock(ctx())).open.entryId,entryId);
  assert(calls.some(([sql,args])=>sql.includes('hon.read_my_time_clock($1)')&&args[0]==='oidc:owner'));

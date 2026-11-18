@@ -10,7 +10,7 @@ import { entryDraftOf, entryInput, entryProblems, localDateTime, newEntryDraft, 
 import { StaffHoursView, type StaffHoursViewProps } from '../src/components/staff-hours/view';
 import { id } from './account-status-fixtures';
 
-// 0468: Staff > Hours. Staff clock in and out at the server's clock; managers review, fix, approve and export.
+// 0478: Staff > Hours. Staff clock in and out at the server's clock; managers review, fix, approve and export.
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 

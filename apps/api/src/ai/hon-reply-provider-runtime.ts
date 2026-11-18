@@ -246,7 +246,7 @@ const endpoint = 'https://openrouter.ai/api/v1/chat/completions';
  * 0336: true only for OpenRouter's own JSON error body with the same code, e.g. {"error":{"code":503,"message":"..."}}. Any
  * other 503 (a proxy page, an empty or malformed body, a different code) is not proof that nothing was generated.
  */
-async function openRouterRefusal(response: Response, code: number): Promise<boolean> {
+export async function openRouterRefusal(response: Response, code: number): Promise<boolean> {
   try {
     const text = await response.text();
     if (text.length > 4096) return false;

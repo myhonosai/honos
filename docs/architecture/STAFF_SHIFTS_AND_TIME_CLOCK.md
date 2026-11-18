@@ -10,7 +10,7 @@ Two migrations, two PRs:
 | Piece | Migration | What |
 |---|---|---|
 | SH shift schedule | 0467 | Owners/managers put staff on shifts in a week view; staff see their own shifts. |
-| TC time clock | 0468 | Staff clock in/out from their own signed-in phone or computer; hours only; owners review, correct, approve and export timesheets. |
+| TC time clock | 0478 | Staff clock in/out from their own signed-in phone or computer; hours only; owners review, correct, approve and export timesheets. |
 
 Out of scope: payroll providers, pay rates and pay calculation, paid services, texting/emailing staff about shifts,
 a shared front-desk PIN tablet, GPS/location checks. Nothing here sends a message, charges, or calls AI.
@@ -75,7 +75,7 @@ to instructor/front-desk roles with the existing Roles & permissions checklist (
   Errors: `VALIDATION_FAILED`, `STAFF_SHIFT_FORBIDDEN`, `STAFF_MEMBER_UNAVAILABLE`, `SHIFT_OVERLAP`, `VERSION_CONFLICT`,
   `IDEMPOTENCY_KEY_REUSED`, `IDEMPOTENCY_IN_PROGRESS`, `TIER_ENTITLEMENT_REQUIRED`.
 
-## 4. TC (0468) data and functions (as built)
+## 4. TC (0478) data and functions (as built)
 
 Owner decisions (David, 2026-11-17): staff clock in and out from their **own signed-in phone or computer** (no shared
 kiosk); timesheets are **hours only** (clock in and out; total hours per entry, per day and per week; no breaks, no
@@ -124,4 +124,4 @@ overtime flags, no pay calculation).
 1. SH: contracts (`staff-shifts.ts`) + tests → 0467 + DB proof → API controller/service/guards + tests → web page
    (`staff-shifts/`) + route + catalog labels + tests → docs/plumbing (checksums, staging manifest, 010/011, verify-rls,
    proof runner) → PR, independent review.
-2. TC: same order for 0468 on top of SH (stacked branch), then PR, independent review.
+2. TC: same order for 0478 on top of SH (stacked branch), then PR, independent review.

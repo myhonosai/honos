@@ -112,7 +112,7 @@ function Sheet({ p, c, week }: { p: StaffHoursViewProps; c: HoursCopy; week: Tim
   </section>;
 }
 
-/** Staff > Hours (0468): pure, every state comes from props. The time clock for oneself, timesheets for managers. */
+/** Staff > Hours (0478): pure, every state comes from props. The time clock for oneself, timesheets for managers. */
 export function StaffHoursView(p: StaffHoursViewProps): React.ReactElement {
   const c = hoursCopy(p.language);
   const loading = p.clock.state === 'LOADING' || p.sheet.state === 'LOADING';

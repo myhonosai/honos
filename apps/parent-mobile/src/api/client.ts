@@ -3,6 +3,16 @@ import {
   verifyParentClassBookingChoices, verifyParentClassBookingReceipt,
   type BookParentClassSessionInput, type ParentClassBookingChoices, type ParentClassBookingReceipt,
 } from '@hon/contracts/parent-class-booking';
+import { verifyFamilyMessageReceipt, verifyParentFamilyMessages, type FamilyMessageReceipt, type ParentFamilyMessages } from '@hon/contracts/family-messages';
+import {
+  verifyParentPlannedAbsenceRequestContext, verifyParentPlannedAbsenceSubmittedReceipt,
+  type ParentPlannedAbsenceRequestContext, type ParentPlannedAbsenceSubmittedReceipt,
+} from '@hon/contracts/parent-planned-absence-request';
+import { verifyParentBillingView, type ParentBillingView } from '@hon/contracts/parent-billing-view';
+import { verifyParentClassPassView, type ParentClassPassView } from '@hon/contracts/parent-classpass-view';
+import { verifyParentTestingStatusView, type ParentTestingStatusView } from '@hon/contracts/parent-testing-status';
+import { verifyParentCurriculumLibrary, type ParentCurriculumLibrary } from '@hon/contracts/curriculum-resource-library';
+import { verifyEianStatus, verifyEianTurn, type EianStatus, type EianTurn } from '@hon/contracts/eian';
 
 /**
  * What a screen shows when a read does not return verified data. Every protected read maps to one of these;
@@ -18,6 +28,8 @@ export type ParentRead<T> = { ok: true; data: T } | { ok: false; state: ParentFa
  */
 export type ParentWrite<T> = { ok: true; data: T; replayed: boolean }
   | { ok: false; state: ParentFailureState | 'unknown' | 'refused'; code?: string };
+
+export interface PlannedAbsenceInput { studentProfileId: string; startsAt: string; endsAt: string; reason?: string }
 
 export interface ParentApiOptions {
   baseUrl: string;
@@ -51,6 +63,11 @@ function validTimeZone(value: unknown): string | null {
   try { new Intl.DateTimeFormat('en-US', { timeZone: value }); return value; } catch { return null; }
 }
 
+/** Unwraps HON's `{ data, meta }` envelope before the shared contract verifier runs. */
+function dataOf<T>(verify: (data: unknown) => T): (body: unknown) => T {
+  return body => verify((body as { data?: unknown } | null)?.data);
+}
+
 export function createParentApi(options: ParentApiOptions) {
   const baseUrl = checkedBaseUrl(options.baseUrl);
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -78,7 +95,9 @@ export function createParentApi(options: ParentApiOptions) {
     try { return { ok: true, data: verify(body) }; } catch { return { ok: false, state: 'unavailable' }; }
   }
 
-  async function post<T>(path: string, command: string, idempotencyKey: string, payload: unknown, verify: (body: unknown) => T): Promise<ParentWrite<T>> {
+  /** `definite` lists 5xx codes that are a definite no (nothing was asked), not an unknown outcome. */
+  async function post<T>(path: string, command: string, idempotencyKey: string, payload: unknown, verify: (body: unknown) => T,
+    definite: readonly string[] = []): Promise<ParentWrite<T>> {
     if (!/^[A-Za-z0-9-]{16,200}$/.test(idempotencyKey)) throw new Error('A command needs a fresh Idempotency-Key.');
     const token = await options.getToken();
     if (!token) return { ok: false, state: 'signed-out' };
@@ -101,6 +120,7 @@ export function createParentApi(options: ParentApiOptions) {
     try { body = await response.json(); } catch { /* handled below */ }
     if (!response.ok) {
       const code = (body as { code?: unknown } | null)?.code;
+      if (typeof code === 'string' && definite.includes(code)) return { ok: false, state: 'refused', code };
       if (response.status >= 500 || code === 'IDEMPOTENCY_IN_PROGRESS') return { ok: false, state: 'unknown' };
       const state = classifyFailure(response.status, code);
       if (state !== 'unavailable') return { ok: false, state };
@@ -131,6 +151,44 @@ export function createParentApi(options: ParentApiOptions) {
     cancelBooking: (bookingId: string, expectedVersion: number, idempotencyKey: string): Promise<ParentWrite<ParentClassBookingReceipt>> =>
       post(`/v1/parent/class-bookings/${encodeURIComponent(bookingId)}/cancel`, 'parent.class_booking.cancel', idempotencyKey,
         { expectedVersion }, data => verifyParentClassBookingReceipt(data, { bookingId })),
+    /** The family's one conversation with its school (0330). No family, school or thread id is ever sent. */
+    schoolMessages: (): Promise<ParentRead<ParentFamilyMessages>> =>
+      get('/v1/parent/messages/school', body => verifyParentFamilyMessages((body as { data?: unknown } | null)?.data)),
+    sendSchoolMessage: (body: string, idempotencyKey: string): Promise<ParentWrite<FamilyMessageReceipt>> =>
+      post('/v1/parent/messages/school', 'parent.family_messages.send', idempotencyKey, { body },
+        data => verifyFamilyMessageReceipt(data, { from: 'FAMILY', body })),
+    /** Children this parent may report a planned absence for; the server re-checks the child on submit. */
+    absenceContext: (): Promise<ParentRead<ParentPlannedAbsenceRequestContext>> =>
+      get('/v1/parent/planned-absences/context', body => verifyParentPlannedAbsenceRequestContext((body as { data?: unknown } | null)?.data)),
+    reportAbsence: (input: PlannedAbsenceInput, idempotencyKey: string): Promise<ParentWrite<ParentPlannedAbsenceSubmittedReceipt>> =>
+      post('/v1/parent/planned-absences', 'parent-planned-absence', idempotencyKey,
+        { studentProfileId: input.studentProfileId, startsAt: input.startsAt, endsAt: input.endsAt, ...(input.reason ? { reason: input.reason } : {}) },
+        verifyParentPlannedAbsenceSubmittedReceipt),
+    /** Read-only, redacted family billing: memberships and invoices. The app never pays, refunds or changes billing. */
+    billing: (): Promise<ParentRead<ParentBillingView>> => get('/v1/parent/billing', dataOf(verifyParentBillingView)),
+    classPass: (): Promise<ParentRead<ParentClassPassView>> => get('/v1/parent/classpass', dataOf(verifyParentClassPassView)),
+    testingStatus: (): Promise<ParentRead<ParentTestingStatusView>> => get('/v1/parent/testing/status', dataOf(verifyParentTestingStatusView)),
+    curriculumLibrary: (): Promise<ParentRead<ParentCurriculumLibrary>> => get('/v1/parent/curriculum-library', dataOf(verifyParentCurriculumLibrary)),
+    /** Whether Eian answers with the school's AI right now (AI) or only with guided answers (GUIDED), with a closed reason. */
+    eianStatus: (): Promise<ParentRead<EianStatus>> => get('/v1/parent/eian/status', dataOf(verifyEianStatus)),
+    /**
+     * One question to Eian AI. One key per question: after an unknown outcome the caller re-asks with the SAME key and the
+     * exact same question, and HON replays that turn instead of asking again. The answer is text only; nothing it says runs.
+     */
+    askEian: (question: string, idempotencyKey: string): Promise<ParentWrite<EianTurn>> => {
+      const asked = question.trim();
+      return post('/v1/parent/eian/turns', 'parent.eian.ask', idempotencyKey, { question: asked }, data => {
+        const turn = verifyEianTurn(data);
+        if (turn.question !== asked) throw new Error('Eian answered a different question.');
+        return turn;
+      }, ['EIAN_AI_UNAVAILABLE']);
+    },
+    eianTurn: (turnId: string): Promise<ParentRead<EianTurn>> =>
+      get(`/v1/parent/eian/turns/${encodeURIComponent(turnId)}`, body => {
+        const turn = verifyEianTurn((body as { data?: unknown } | null)?.data);
+        if (turn.id !== turnId) throw new Error('Eian returned a different turn.');
+        return turn;
+      }),
   };
 }
 export type ParentApi = ReturnType<typeof createParentApi>;

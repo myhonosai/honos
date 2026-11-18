@@ -17,7 +17,7 @@ function definedFields(input: object): Record<string, unknown> {
 }
 
 /**
- * 0468: the staff time clock and timesheets. Route identifiers are never authority: the boundary resolves the route scope
+ * 0478: the staff time clock and timesheets. Route identifiers are never authority: the boundary resolves the route scope
  * from the verified session, and each protected database function re-proves the direct human subject and the live
  * permission (staff.time.clock for one's own clock, staff.timesheet.manage for everyone's week). Punches use the database
  * clock. Nothing here messages staff, pays anyone or calculates pay.

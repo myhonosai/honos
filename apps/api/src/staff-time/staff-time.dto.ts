@@ -1,6 +1,6 @@
 import { Allow } from 'class-validator';
 
-/** 0468 bodies. Every field is closed-validated by the shared contract validators in the service. */
+/** 0478 bodies. Every field is closed-validated by the shared contract validators in the service. */
 export class TimeClockPunchDto {
   @Allow() action?: unknown;
   @Allow() expectedVersion?: unknown;

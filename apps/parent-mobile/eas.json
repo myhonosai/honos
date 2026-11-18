@@ -9,14 +9,16 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_HON_API_URL": "http://10.0.2.2:4000",
-        "EXPO_PUBLIC_HON_WEB_URL": "http://10.0.2.2:3000"
+        "EXPO_PUBLIC_HON_WEB_URL": "http://10.0.2.2:3000",
+        "EXPO_PUBLIC_HON_SAMPLE_MODE": "1"
       }
     },
     "preview": {
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_HON_API_URL": "https://app.myhonos.com/api",
-        "EXPO_PUBLIC_HON_WEB_URL": "https://app.myhonos.com"
+        "EXPO_PUBLIC_HON_WEB_URL": "https://app.myhonos.com",
+        "EXPO_PUBLIC_HON_SAMPLE_MODE": "1"
       },
       "android": {
         "buildType": "apk"
@@ -26,7 +28,8 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_HON_API_URL": "https://app.myhonos.com/api",
-        "EXPO_PUBLIC_HON_WEB_URL": "https://app.myhonos.com"
+        "EXPO_PUBLIC_HON_WEB_URL": "https://app.myhonos.com",
+        "EXPO_PUBLIC_HON_SAMPLE_MODE": "0"
       }
     }
   },

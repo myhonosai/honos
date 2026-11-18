@@ -87,13 +87,6 @@ describe('Parent app shell', () => {
     expect(await screen.findByText(/can't reach HON/)).toBeTruthy();
   });
 
-  it('eian tab is honest that the assistant is not connected yet', async () => {
-    await render(<ParentApp api={fakeApi(ok)} session={fakeSession('t')} now={now} />);
-    await screen.findByRole('button', { name: 'Open Test Child A journey' });
-    await fireEvent.press(screen.getByRole('tab', { name: 'Eian' }));
-    expect(await screen.findByText(/not connected yet/)).toBeTruthy();
-  });
-
   it('sign out removes the session', async () => {
     const session = fakeSession('t');
     await render(<ParentApp api={fakeApi(ok)} session={session} now={now} />);

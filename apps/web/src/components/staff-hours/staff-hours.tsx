@@ -27,7 +27,7 @@ function download(name: string, text: string): void {
 }
 
 /**
- * Staff > Hours (0468). Anyone with staff.time.clock clocks in and out here at the server's clock; managers with
+ * Staff > Hours (0478). Anyone with staff.time.clock clocks in and out here at the server's clock; managers with
  * staff.timesheet.manage see everyone's week, fix entries with a reason, approve or reopen, and export CSV. The form stays
  * in memory only; a school change or session end drops it. Every command answer is followed by a fresh read.
  */

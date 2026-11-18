@@ -12,7 +12,7 @@ const READ_LIMITS = "SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3
 const WRITE_LIMITS = "SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0";
 
 const stale = 'Your time clock changed. Reload and try again.';
-// Exact 0468 error codes; every unknown database failure is unavailable, never success.
+// Exact 0478 error codes; every unknown database failure is unavailable, never success.
 const ERRORS: Record<string, { states: string[]; make: (code: string) => HttpException }> = {
   VALIDATION_FAILED: { states: ['22023'], make: code => new BadRequestException({ code }) },
   STAFF_TIME_FORBIDDEN: { states: ['42501'], make: code => new ForbiddenException({ code }) },
@@ -41,7 +41,7 @@ function translate(error: unknown): never {
 function unverified(): never { throw new Error('Unverified staff time answer.'); }
 
 /**
- * 0468: the staff time clock and timesheets. Each read and command is one protected definer call that re-proves the direct
+ * 0478: the staff time clock and timesheets. Each read and command is one protected definer call that re-proves the direct
  * human subject and the live permission. Punch times come from the database clock; the device clock is never sent.
  */
 @Injectable()

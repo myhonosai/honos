@@ -1,5 +1,5 @@
 /**
- * Staff time clock proof (0468) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global
+ * Staff time clock proof (0478) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global
  * ValidationPipe + HonExceptionFilter -> StaffTimeController -> protected definer functions on the restricted runtime role
  * with forced RLS), on the guarded disposable CRM-close fixture only. Synthetic staff only; nothing messages anyone, pays
  * anyone or calls a provider.
@@ -372,7 +372,7 @@ try {
   }
   await assert.rejects(runtime.query("SELECT hon.read_my_time_clock('x')"), /STAFF_TIME_FORBIDDEN/); checks += 1;
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const begin = '-- Staff time clock exact verification (0468)', end = '-- End staff time clock exact verification.';
+    const begin = '-- Staff time clock exact verification (0478)', end = '-- End staff time clock exact verification.';
     const section = verify.split(begin)[1]?.split(end)[0];
     ok(section, begin);
     await sql(section.replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
@@ -381,7 +381,7 @@ try {
   ok((await sql("SELECT (SELECT count(*) FROM hon.payment_attempts WHERE organization_id=ANY($1::uuid[])) + (SELECT count(*) FROM hon.invoices WHERE organization_id=ANY($1::uuid[])) + (SELECT count(*) FROM hon.communication_messages WHERE organization_id=ANY($1::uuid[])) n",
     [[ids.organization, ids.otherOrganization]])).rows[0].n === '0', 'no message, payment attempt or invoice was created');
 
-  console.log(`PASS: staff time clock (0468): ${checks} checks.`);
+  console.log(`PASS: staff time clock (0478): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

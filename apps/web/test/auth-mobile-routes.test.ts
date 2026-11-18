@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('server-only', () => ({}));
 import { NextRequest } from 'next/server';
 import { HON_SESSION_COOKIE, MOBILE_START_COOKIE, exchangeMobileHandoff, issueMobileSession, issueMobileStart, issueSession, pkceChallenge, sessionConfig, verifyMobileSession, verifyMobileStart } from '@hon/auth';
 import { GET as start } from '../src/app/auth/mobile/start/route';
@@ -92,5 +93,18 @@ describe('/auth/mobile/finish', () => {
   it('ignores any return address in the request', async () => {
     const response = await finishPost(post(both(), undefined, '/auth/mobile/finish?redirect=https://evil.example&code=x'));
     expect(response.headers.get('location')).toMatch(/^honparent:\/\/auth\?code=/);
+  });
+});
+
+describe('app sign-in end to end (web side)', () => {
+  it('start -> login stores the mobile intent -> continue lands on the confirmation page, never the app', async () => {
+    const { GET: login } = await import('../src/app/auth/login/route');
+    const { GET: continueRoute } = await import('../src/app/auth/continue/route');
+    const started = await start(req(`/auth/mobile/start?challenge=${challenge}`));
+    expect(new URL(started.headers.get('location')!).pathname + new URL(started.headers.get('location')!).search).toBe('/auth/login?for=mobile');
+    const loggedIn = await login(req('/auth/login?for=mobile'));
+    expect(loggedIn.cookies.get('hon_post_login')?.value).toBe('mobile');
+    const continued = await continueRoute(req('/auth/continue', `${HON_SESSION_COOKIE}=${issueSession(identity, sessionConfig())}; hon_post_login=mobile`));
+    expect(continued.headers.get('location')).toBe('/auth/mobile/finish');
   });
 });

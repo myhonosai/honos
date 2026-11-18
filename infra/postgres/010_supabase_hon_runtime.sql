@@ -4170,7 +4170,61 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
--- 0468 staff time clock: three private tables reached only through five runtime entry points (punch, my clock, week read, entry fix, week decision).
+-- 0470 Shopify order retention (SH1c): the trigger function and the worker purge are never granted to the runtime; the
+-- purge belongs to hon_communication_worker (013).
+DO $$ DECLARE r text; f text;
+BEGIN
+  IF to_regprocedure('hon.purge_expired_shopify_orders()') IS NULL THEN RAISE EXCEPTION 'Apply migration 0470 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.shopify_purge_expired_orders_on_success()','hon.purge_expired_shopify_orders()'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+END $$;
+
+-- 0471 parent family picker: one private table, a private helper and two runtime entry points (list families, choose one).
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.select_parent_family(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0471 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.parent_live_family_scopes(text)','hon.read_parent_family_choices(text)','hon.select_parent_family(text,jsonb,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.parent_family_selections FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.parent_family_selections FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_parent_family_choices(text) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.select_parent_family(text,jsonb,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0473 parent reads that name a school follow the family picker: one private helper (the 0071 body under a private name).
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.parent_family_scope_any(text,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0473 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.parent_family_scope_any(text,uuid) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION hon.parent_family_scope_any(text,uuid) FROM %I',r); END LOOP;
+END $$;
+
+-- 0474 Eian family AI: one private table, the pure route-selection helper and private Eian helpers, and seven runtime entry
+-- points (status, read a turn, begin, plan, prepare, fail, record). plan_ai_invocation and the S4 shared functions keep their grants.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.record_eian_turn_result(text,uuid,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0474 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.ai_select_text_route(uuid,uuid,uuid,text,text,integer,bigint)','hon.eian_turn_limits()',
+      'hon.eian_burst_limit()','hon.eian_scope(text)','hon.eian_access(text)',
+      'hon.eian_unavailable_reason(uuid,uuid,boolean)','hon.eian_facts_ok(jsonb)','hon.eian_turn_view(hon.eian_turns,boolean)',
+      'hon.read_eian_status(text,boolean)','hon.read_eian_turn(text,uuid)','hon.begin_eian_turn(text,text,text)','hon.plan_eian_turn(text,uuid,uuid,uuid)',
+      'hon.prepare_eian_turn(text,uuid,uuid,boolean,jsonb,jsonb)','hon.fail_eian_turn(text,uuid,text,text)','hon.record_eian_turn_result(text,uuid,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.eian_turns FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.eian_turns FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_eian_status(text,boolean), hon.read_eian_turn(text,uuid), hon.begin_eian_turn(text,text,text),
+      hon.plan_eian_turn(text,uuid,uuid,uuid), hon.prepare_eian_turn(text,uuid,uuid,boolean,jsonb,jsonb), hon.fail_eian_turn(text,uuid,text,text),
+      hon.record_eian_turn_result(text,uuid,jsonb) TO hon_runtime;
+  END IF;
+END $$;
+-- 0478 staff time clock: three private tables reached only through five runtime entry points (punch, my clock, week read, entry fix, week decision).
 DO $$ DECLARE r text; f text; t text;
   entry text[]:=ARRAY['hon.staff_time_clock_punch(text,jsonb,text,uuid,uuid)','hon.read_my_time_clock(text)','hon.read_staff_timesheet_week(text,date)',
     'hon.save_staff_time_entry(text,jsonb,text,uuid,uuid)','hon.set_staff_timesheet_week(text,jsonb,text,uuid,uuid)'];
@@ -4180,7 +4234,7 @@ DO $$ DECLARE r text; f text; t text;
     'hon.staff_time_finish(text,text,text,uuid,jsonb)','hon.staff_time_record(text,uuid,jsonb,jsonb,integer,uuid,uuid,uuid,jsonb)'];
   tables text[]:=ARRAY['hon.staff_time_entries','hon.staff_time_entry_revisions','hon.staff_timesheet_weeks'];
 BEGIN
-  IF to_regprocedure('hon.set_staff_timesheet_week(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0468 first'; END IF;
+  IF to_regprocedure('hon.set_staff_timesheet_week(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0478 first'; END IF;
   FOREACH t IN ARRAY tables LOOP
     EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP

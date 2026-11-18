@@ -6,7 +6,7 @@ import {
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * Staff > Hours (0468). Reads send no Idempotency-Key; each command sends its own X-HON-Human-Command and an
+ * Staff > Hours (0478). Reads send no Idempotency-Key; each command sends its own X-HON-Human-Command and an
  * Idempotency-Key. A punch never carries a time: the server's clock is the only clock. The server decides the
  * permission, the person, the times and the version again.
  */
