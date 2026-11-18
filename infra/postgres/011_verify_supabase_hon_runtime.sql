@@ -3066,8 +3066,9 @@ DO $$ DECLARE f record; safe boolean; expected record; BEGIN
     IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
       RAISE EXCEPTION 'Missing tuition payment guard: %',expected.name; END IF;
   END LOOP;
-  -- 0337 adds one more invoice guard (an open autopay charge holds its invoices), verified in its own section.
-  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.invoices'::regclass AND NOT tgisinternal AND tgname<>'school_pay_charge_invoice_guard')<>1 THEN
+  -- 0337 adds one more invoice guard (an open autopay charge holds its invoices), and 0530 one more (an open family
+  -- payment holds its invoice); each is verified in its own section.
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.invoices'::regclass AND NOT tgisinternal AND tgname NOT IN ('school_pay_charge_invoice_guard','parent_invoice_pay_invoice_guard'))<>1 THEN
     RAISE EXCEPTION 'hon.invoices must carry exactly the tuition payment status guard'; END IF;
   IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='billing.invoice.payment.record' AND is_sensitive AND is_staff_assignable) THEN
     RAISE EXCEPTION 'billing.invoice.payment.record must exist as a sensitive staff-assignable permission'; END IF;
