@@ -3,6 +3,15 @@ import {
   verifyParentClassBookingChoices, verifyParentClassBookingReceipt,
   type BookParentClassSessionInput, type ParentClassBookingChoices, type ParentClassBookingReceipt,
 } from '@hon/contracts/parent-class-booking';
+import { verifyFamilyMessageReceipt, verifyParentFamilyMessages, type FamilyMessageReceipt, type ParentFamilyMessages } from '@hon/contracts/family-messages';
+import {
+  verifyParentPlannedAbsenceRequestContext, verifyParentPlannedAbsenceSubmittedReceipt,
+  type ParentPlannedAbsenceRequestContext, type ParentPlannedAbsenceSubmittedReceipt,
+} from '@hon/contracts/parent-planned-absence-request';
+import { verifyParentBillingView, type ParentBillingView } from '@hon/contracts/parent-billing-view';
+import { verifyParentClassPassView, type ParentClassPassView } from '@hon/contracts/parent-classpass-view';
+import { verifyParentTestingStatusView, type ParentTestingStatusView } from '@hon/contracts/parent-testing-status';
+import { verifyParentCurriculumLibrary, type ParentCurriculumLibrary } from '@hon/contracts/curriculum-resource-library';
 
 /**
  * What a screen shows when a read does not return verified data. Every protected read maps to one of these;
@@ -18,6 +27,8 @@ export type ParentRead<T> = { ok: true; data: T } | { ok: false; state: ParentFa
  */
 export type ParentWrite<T> = { ok: true; data: T; replayed: boolean }
   | { ok: false; state: ParentFailureState | 'unknown' | 'refused'; code?: string };
+
+export interface PlannedAbsenceInput { studentProfileId: string; startsAt: string; endsAt: string; reason?: string }
 
 export interface ParentApiOptions {
   baseUrl: string;
@@ -49,6 +60,11 @@ function checkedBaseUrl(raw: string): string {
 function validTimeZone(value: unknown): string | null {
   if (typeof value !== 'string' || !value || value.length > 64) return null;
   try { new Intl.DateTimeFormat('en-US', { timeZone: value }); return value; } catch { return null; }
+}
+
+/** Unwraps HON's `{ data, meta }` envelope before the shared contract verifier runs. */
+function dataOf<T>(verify: (data: unknown) => T): (body: unknown) => T {
+  return body => verify((body as { data?: unknown } | null)?.data);
 }
 
 export function createParentApi(options: ParentApiOptions) {
@@ -131,6 +147,24 @@ export function createParentApi(options: ParentApiOptions) {
     cancelBooking: (bookingId: string, expectedVersion: number, idempotencyKey: string): Promise<ParentWrite<ParentClassBookingReceipt>> =>
       post(`/v1/parent/class-bookings/${encodeURIComponent(bookingId)}/cancel`, 'parent.class_booking.cancel', idempotencyKey,
         { expectedVersion }, data => verifyParentClassBookingReceipt(data, { bookingId })),
+    /** The family's one conversation with its school (0330). No family, school or thread id is ever sent. */
+    schoolMessages: (): Promise<ParentRead<ParentFamilyMessages>> =>
+      get('/v1/parent/messages/school', body => verifyParentFamilyMessages((body as { data?: unknown } | null)?.data)),
+    sendSchoolMessage: (body: string, idempotencyKey: string): Promise<ParentWrite<FamilyMessageReceipt>> =>
+      post('/v1/parent/messages/school', 'parent.family_messages.send', idempotencyKey, { body },
+        data => verifyFamilyMessageReceipt(data, { from: 'FAMILY', body })),
+    /** Children this parent may report a planned absence for; the server re-checks the child on submit. */
+    absenceContext: (): Promise<ParentRead<ParentPlannedAbsenceRequestContext>> =>
+      get('/v1/parent/planned-absences/context', body => verifyParentPlannedAbsenceRequestContext((body as { data?: unknown } | null)?.data)),
+    reportAbsence: (input: PlannedAbsenceInput, idempotencyKey: string): Promise<ParentWrite<ParentPlannedAbsenceSubmittedReceipt>> =>
+      post('/v1/parent/planned-absences', 'parent-planned-absence', idempotencyKey,
+        { studentProfileId: input.studentProfileId, startsAt: input.startsAt, endsAt: input.endsAt, ...(input.reason ? { reason: input.reason } : {}) },
+        verifyParentPlannedAbsenceSubmittedReceipt),
+    /** Read-only, redacted family billing: memberships and invoices. The app never pays, refunds or changes billing. */
+    billing: (): Promise<ParentRead<ParentBillingView>> => get('/v1/parent/billing', dataOf(verifyParentBillingView)),
+    classPass: (): Promise<ParentRead<ParentClassPassView>> => get('/v1/parent/classpass', dataOf(verifyParentClassPassView)),
+    testingStatus: (): Promise<ParentRead<ParentTestingStatusView>> => get('/v1/parent/testing/status', dataOf(verifyParentTestingStatusView)),
+    curriculumLibrary: (): Promise<ParentRead<ParentCurriculumLibrary>> => get('/v1/parent/curriculum-library', dataOf(verifyParentCurriculumLibrary)),
   };
 }
 export type ParentApi = ReturnType<typeof createParentApi>;
