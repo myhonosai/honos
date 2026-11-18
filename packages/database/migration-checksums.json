@@ -330,6 +330,7 @@
     "0463_membership_agreement.sql": "966b67ddb1ebec3a7884b2a824f2af070430e513e66af5683a01f19522484edf",
     "0466_parent_school_bookings.sql": "e51fcf1be375d96fbc954bc6533d0f11ad86069972684b51f04cde38fe5a85de",
     "0467_staff_shift_schedule.sql": "21b4813e18092224182c3064d15e6fdd0506f9f4165b6e988091ebb60b9841fb",
-    "0470_shopify_order_retention.sql": "3dfa0e7769ba525afa7ba62007ff569554824edde0eaf282563498e2381e9319"
+    "0470_shopify_order_retention.sql": "3dfa0e7769ba525afa7ba62007ff569554824edde0eaf282563498e2381e9319",
+    "0471_parent_family_picker.sql": "27cc328b099da7a596fd17c2f90f5ff7fc20dabdaf11d14f23a3b5896b207caa"
   }
 }
