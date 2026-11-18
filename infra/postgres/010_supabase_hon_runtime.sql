@@ -4170,10 +4170,21 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+-- 0470 Shopify order retention (SH1c): the trigger function and the worker purge are never granted to the runtime; the
+-- purge belongs to hon_communication_worker (013).
+DO $$ DECLARE r text; f text;
+BEGIN
+  IF to_regprocedure('hon.purge_expired_shopify_orders()') IS NULL THEN RAISE EXCEPTION 'Apply migration 0470 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.shopify_purge_expired_orders_on_success()','hon.purge_expired_shopify_orders()'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+END $$;
 
--- 0469 parent family picker: one private table, a private helper and two runtime entry points (list families, choose one).
+-- 0471 parent family picker: one private table, a private helper and two runtime entry points (list families, choose one).
 DO $$ DECLARE r text; f text; BEGIN
-  IF to_regprocedure('hon.select_parent_family(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0469 first'; END IF;
+  IF to_regprocedure('hon.select_parent_family(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0471 first'; END IF;
   FOREACH f IN ARRAY ARRAY['hon.parent_live_family_scopes(text)','hon.read_parent_family_choices(text)','hon.select_parent_family(text,jsonb,uuid)'] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;

@@ -20,7 +20,7 @@ export type ParentHomeReadState =
   | { kind: 'access-lost'; message: string };
 
 const loading: ParentHomeReadState = { kind: 'loading' };
-/** 0469: the families this parent is linked to. Hidden until verified; hidden again whenever content is concealed. */
+/** 0471: the families this parent is linked to. Hidden until verified; hidden again whenever content is concealed. */
 type FamilyState = { kind: 'hidden' } | ({ kind: 'ready' } & ParentFamilyChoices);
 const CHOOSE_FIRST: ParentHomeReadState = { kind: 'unavailable', message: 'Choose a school and family above to open this.' };
 
@@ -102,7 +102,7 @@ export function ParentHome(): React.ReactElement {
     pending.current = controller;
     setJourney(loading); setTesting(loading); setBilling(loading); setPlannedAbsences(loading); setCurriculumLibrary(loading);
 
-    // 0469: list the parent's families first. With several and none chosen, nothing else opens until the parent chooses.
+    // 0471: list the parent's families first. With several and none chosen, nothing else opens until the parent chooses.
     let families: ParentFamilyChoices | null = null;
     try { families = await loadParentFamilyChoices(controller.signal); } catch (error) {
       if (generation.current !== token || error instanceof DOMException && error.name === 'AbortError') return;

@@ -4,7 +4,7 @@ import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { MembershipActivationHumanUiGuard } from '../billing/membership-activation-human-ui.guard.js';
 import { ParentFamilyPickerService } from './parent-family-picker.service.js';
 
-/** 0469: the list is a GET; choosing is its own same-origin browser command. */
+/** 0471: the list is a GET; choosing is its own same-origin browser command. */
 @Injectable()
 export class ParentFamilyPickerReadGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'parent.family.read';

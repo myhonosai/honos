@@ -6,7 +6,7 @@ import type { ParentFamilyChoice } from '@hon/contracts';
 import { ParentFamilyPicker } from '../src/components/parent-family-picker';
 import { chooseParentFamily, loadParentFamilyChoices, ParentFamilyPickerAccessError } from '../src/components/parent-family-picker-http';
 
-// 0469 parent school and family picker web: the list comes from the server, the choice names one listed family, and the
+// 0471 parent school and family picker web: the list comes from the server, the choice names one listed family, and the
 // home page opens nothing else until a parent with several families has chosen.
 const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222', C = '33333333-3333-4333-8333-333333333333', D = '44444444-4444-4444-8444-444444444444';
 const kim: ParentFamilyChoice = { schoolId: A, schoolName: 'Alpha Dojo', familyId: B, familyName: 'Kim Family', accessLevel: 'PRIMARY_GUARDIAN', current: false };

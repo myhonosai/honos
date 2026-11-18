@@ -22,7 +22,8 @@ store is the test store.
 | Piece | What | Needs David |
 |---|---|---|
 | **SH1 (0405, merged)** | Connect one store per school via the HON app (OAuth, expiring offline token sealed by the API), Sync now (products, variants, SKU, price, stock, unit cost; last 60 days of orders), Finance › Shopify page with catalog, margins and sales summary, disconnect. Fake Shopify only. | No |
-| **SH1b (0449, this)** | Signed webhooks: products, inventory levels, orders, `app/uninstalled`, and the three mandatory privacy topics; scheduled background sync that also keeps the refresh token alive. | No |
+| **SH1b (0449, merged)** | Signed webhooks: products, inventory levels, orders, `app/uninstalled`, and the three mandatory privacy topics; scheduled background sync that also keeps the refresh token alive. | No |
+| **SH1c (0470, this)** | Order retention: a mirrored order and its lines are deleted 60 days after the order was placed, on every successful sync and by the background worker for every store (connected or not). | No |
 | SH2 | POS sells Shopify variants when connected (database reprices from the mirror) and each sale is pushed to Shopify (order + inventory) through a queued job. Coordinated with the POS thread (0403). | No |
 | SH3 | Parent App and HON website buy through Shopify Checkout (Storefront cart → Shopify-hosted checkout); orders link back to the HON contact. | No |
 | SH4 | Commerce Workspace writes: create/edit products and prices, artwork upload, mockups, publish; AI descriptions/pricing/promotions by plan (fake AI until approved). | Paid AI |
@@ -187,6 +188,22 @@ links orders to HON contacts.
   `hon_communication_worker` login (013) was checked by hand on the communication fixture; a fixture that runs the
   proof as that login is a follow-up.
 - The `shopify.app.toml` and the Partner app itself are created only with David's approval, together with the real keys.
+
+## SH1c behavior (0470): order retention
+
+HON reads only the last 60 days of a store's orders, so it keeps a mirrored order only that long. This is the answer
+behind "Yes" on Shopify's data-retention question for the protected-customer-data review.
+
+- Every successful sync (a person's Sync now or a background run) deletes that store's orders placed more than 60 days
+  ago, and their lines, in the same transaction that records the sync as SUCCEEDED (trigger
+  `shopify_syncs_order_retention`). A failed or abandoned run deletes nothing.
+- The background worker calls `hon.purge_expired_shopify_orders()` before claiming any store: up to 2,000 expired
+  orders per call across all stores, including stores that are disconnected or waiting to reconnect and so never sync,
+  at most five calls per run. It never waits for a lock; an order a running sync holds is left for the next call.
+- Order rows hold no customer details (0405). Products and variants stay while the store is connected and are erased
+  by `shop/redact` after it leaves (SH1b).
+- The purge is executable only by `hon_communication_worker` (013); the trigger function by nobody. 010 revokes both,
+  011 pins both bodies and the trigger.
 
 ## Plan (TDD)
 

@@ -4583,8 +4583,30 @@ BEGIN
     RAISE EXCEPTION 'Staff shift permissions missing'; END IF;
 END $$;
 -- End staff shift exact verification.
+-- Shopify order retention exact verification (0470): the purge is executable by hon_communication_worker only (when that
+-- login exists); the trigger function by nobody; both bodies exact; the retention trigger is in place.
+DO $$ DECLARE f text; t text; w oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_communication_worker');
+BEGIN
+  FOR f,t IN SELECT * FROM (VALUES ('hon.purge_expired_shopify_orders()','8b4804b74e9a6f8abe20b59aa1f29eee'),
+      ('hon.shopify_purge_expired_orders_on_success()','0d390e29b082f0fe9a1b199191b8faa2')) v LOOP
+    IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM t THEN RAISE EXCEPTION 'Shopify retention function body drift: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid='hon.purge_expired_shopify_orders()'::regprocedure
+      AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND NOT has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+        AND (a.is_grantable OR a.grantee IS DISTINCT FROM w))) THEN
+    RAISE EXCEPTION 'Unsafe Shopify retention function'; END IF;
+  IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.shopify_purge_expired_orders_on_success()'::regprocedure
+      AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+    RAISE EXCEPTION 'Unsafe Shopify retention trigger function'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.shopify_syncs'::regclass AND tgname='shopify_syncs_order_retention' AND tgenabled='O'
+      AND tgfoid='hon.shopify_purge_expired_orders_on_success()'::regprocedure) THEN
+    RAISE EXCEPTION 'Shopify order retention trigger missing'; END IF;
+END $$;
+-- End Shopify order retention exact verification.
 
--- Parent family picker exact verification (0469): the private selection table, the private helper, the redefined family scopes and two runtime entry points.
+-- Parent family picker exact verification (0471): the private selection table, the private helper, the redefined family scopes and two runtime entry points.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.parent_live_family_scopes(text)',true,false,'search_path=pg_catalog, hon','fe4e64801e394c4b75e7e2d9951f02314d949717810d52d386d72602f6b0ee9f'),

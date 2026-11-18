@@ -14,7 +14,7 @@ Legend: **Verified** = a parent-scoped endpoint + contract verifier + proofs on 
 | Native app | Absent | No React Native/Expo code anywhere. `apps/web/src/app/complete-mobile` is a web page, not native. |
 | Mobile sign-in | **Absent (first blocker)** | API authenticates only the `hon_session` cookie (`apps/api/src/foundation/hon-identity.service.ts`). POST "human UI" guards require `Origin == PUBLIC_ORIGIN` + `x-hon-human-command` (`apps/api/src/curriculum/curriculum-human-ui.guard.ts`). A native app has neither. Needs M2 (below). |
 | Family scope | Verified (single family) | `resolve_parent_journey_scopes`; every parent read refuses with `PARENT_SCOPE_DENIED` 403 / `PARENT_SCOPE_AMBIGUOUS` 409 / `PARENT_SCOPE_CHANGED`. |
-| School/family picker | Partial (in flight) | Web portal thread: `GET /v1/parent/families`, `POST /v1/parent/families/current` (0469), `packages/contracts/src/parent-family-picker.ts`. Choice stored per user, shared by web and app. |
+| School/family picker | Partial (in flight) | Web portal thread: `GET /v1/parent/families`, `POST /v1/parent/families/current` (0471), `packages/contracts/src/parent-family-picker.ts`. Choice stored per user, shared by web and app. |
 | School identity/branding for parents | Partial | `schoolName` arrives with the picker. Logo/colors are staff-only (`school-branding.controller.ts`). Gap: parent-scoped branding read. |
 | Home aggregate | Verified | `GET /v1/parent/journey` → `verifyParentJourneyView` (children, programs, rank, requirements, 31-day schedule, achievements, documents). Display-only: no ids. |
 | Schedule read | Verified | Journey schedule + `GET /v1/parent/class-bookings` (14-day choices, school timezone, spots left). |

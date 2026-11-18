@@ -1047,7 +1047,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     finally { client.release(); }
   }
 
-  /** 0469: the families this parent is linked to now. Subject only; no tenant setting, read-only. */
+  /** 0471: the families this parent is linked to now. Subject only; no tenant setting, read-only. */
   async readParentFamilyChoices(externalSubject: string): Promise<unknown> {
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
@@ -1062,7 +1062,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     finally { client.release(); }
   }
 
-  /** 0469: choose one of the parent's live families. The database re-proves the choice after its lock and write. */
+  /** 0471: choose one of the parent's live families. The database re-proves the choice after its lock and write. */
   async selectParentFamily(externalSubject: string, input: { schoolId: string; familyId: string }, requestId: string): Promise<unknown> {
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();

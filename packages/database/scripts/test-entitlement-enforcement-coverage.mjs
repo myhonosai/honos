@@ -37,7 +37,7 @@ function args(f,k,target=k){
 }
 // Reviewed: open to a suspended school on purpose. B6A keeps billing recovery and settings available.
 const OPEN_BY_DESIGN={
- 'hon.read_parent_family_choices(text)':'account identity (0469 family picker): a signed-in parent lists only the families their own live grants link them to, with the school name, so they can choose or switch; read only, grants nothing, and every portal read still enforces its own school entitlement',
+ 'hon.read_parent_family_choices(text)':'account identity (0471 family picker): a signed-in parent lists only the families their own live grants link them to, with the school name, so they can choose or switch; read only, grants nothing, and every portal read still enforces its own school entitlement',
  'hon.read_hon_os_registration(text)':'account identity (B-ID-5 0241): the signed-in owner sees the sign-up program, current terms and their own REGISTERED school before any access exists; read only, grants nothing',
  'hon.read_hon_os_trial(text)':'account identity (D11-B 0246): the registered owner sees the trial program, the public trial they may start and their own trial before any access exists; read only, grants nothing',
  'hon.read_school_ownership(text,uuid)':'account identity (B-ID-4 0223): a school owner sees co-owners, the primary owner and ownership notices, read only, even while the school is suspended or not yet paid',

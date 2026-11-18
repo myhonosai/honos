@@ -142,6 +142,15 @@ BEGIN
 END;
 $$;
 
+-- 0470 Shopify: delete mirrored orders older than 60 days, in bounded batches (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.purge_expired_shopify_orders()') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.purge_expired_shopify_orders() TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 -- 0364 school conversations: record an inbound non-keyword text into the school's conversation inbox (when applied).
 DO $$
 BEGIN

@@ -1,5 +1,5 @@
 /**
- * Parent school and family picker proof (0469) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards ->
+ * Parent school and family picker proof (0471) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards ->
  * ParentFamilyPickerController and ParentClassBookingController -> protected definer functions on the restricted runtime role
  * with forced RLS), on the guarded disposable CRM-close fixture only. Synthetic names only; nothing is sent.
  */
@@ -312,12 +312,12 @@ try {
   await assert.rejects(runtime.query("SELECT hon.select_parent_family($1,$2::jsonb,gen_random_uuid())", [MULTI.subject, JSON.stringify({ schoolId: ids.school, familyId: ids.family })]),
     (error) => error.message === 'PARENT_FAMILY_FORBIDDEN'); checks += 1;
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const startMark = '-- Parent family picker exact verification (0469)', endMark = '-- End parent family picker exact verification.';
+    const startMark = '-- Parent family picker exact verification (0471)', endMark = '-- End parent family picker exact verification.';
     const section = verify.split(startMark)[1]?.split(endMark)[0];
     ok(section, startMark);
     await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
-  console.log(`PASS: parent family picker (0469): ${checks} checks.`);
+  console.log(`PASS: parent family picker (0471): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch(() => {});
