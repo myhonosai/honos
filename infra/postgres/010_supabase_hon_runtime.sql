@@ -4393,7 +4393,7 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
--- 0524 school blasts: two private tables reached only through six runtime entry points (save, send, cancel, list, read, audience preview).
+-- 0536 school blasts: two private tables reached only through six runtime entry points (save, send, cancel, list, read, audience preview).
 DO $$ DECLARE r text; f text; t text;
   entry text[]:=ARRAY['hon.save_school_blast(text,jsonb,text,uuid,uuid)','hon.send_school_blast(text,jsonb,text,uuid,uuid)',
     'hon.cancel_school_blast(text,jsonb,text,uuid,uuid)','hon.read_school_blasts(text)','hon.read_school_blast(text,uuid)','hon.read_school_blast_audience(text,uuid)'];
@@ -4404,7 +4404,7 @@ DO $$ DECLARE r text; f text; t text;
     'hon.school_blast_finish(text,text,uuid,text,hon.school_blasts,jsonb,uuid,uuid)'];
   tables text[]:=ARRAY['hon.school_blasts','hon.school_blast_recipients'];
 BEGIN
-  IF to_regprocedure('hon.read_school_blast_audience(text,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0524 first'; END IF;
+  IF to_regprocedure('hon.read_school_blast_audience(text,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0536 first'; END IF;
   FOREACH t IN ARRAY tables LOOP
     EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP

@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),{randomUU
 const {SchoolBlastService}=require('../dist/school-blasts/school-blast.service.js');
 const g=require('../dist/school-blasts/school-blast-human-ui.guard.js');
 const c=require('@hon/contracts');
-// 0524: school email and text blasts.
+// 0536: school email and text blasts.
 const blastId=randomUUID();
 const zero=keys=>Object.fromEntries(keys.map(k=>[k,0]));
 const blast=(over={})=>({blastId,name:'Open house',channel:'EMAIL',subject:'Hi {{first_name}}',body:'Hello {{first_name}}',audience:{groups:['ACTIVE_STUDENTS'],tags:[]},
@@ -18,7 +18,7 @@ function db(rows,calls=[]){const q=async(sql,args)=>{calls.push([sql,args]);retu
 const k=ctx({idempotencyKey:'k1'});
 const later=()=>new Date(Date.now()+3_600_000).toISOString();
 
-test('reads and commands call only the 0524 functions with the session subject and verify the answer',async()=>{
+test('reads and commands call only the 0536 functions with the session subject and verify the answer',async()=>{
  const calls=[];
  assert.equal((await new SchoolBlastService(db([{data:[{blastId,name:'Open house',channel:'EMAIL',status:'DRAFT',version:1,sendAt:null,queuedAt:null,recipientCount:null,updatedAt:'2026-11-18T08:00:00.000Z'}]}],calls)).list(ctx()))[0].blastId,blastId);
  assert(calls.some(([sql,args])=>sql.includes('hon.read_school_blasts($1)')&&args[0]==='oidc:owner'));

@@ -4941,7 +4941,7 @@ BEGIN
     RAISE EXCEPTION 'Membership agreement link principal missing'; END IF;
 END $$;
 -- End membership agreement signing link exact verification.
--- School blasts exact verification (0524)
+-- School blasts exact verification (0536)
 DO $$ DECLARE f text; t text;
   entry text[]:=ARRAY['hon.save_school_blast(text,jsonb,text,uuid,uuid)','hon.send_school_blast(text,jsonb,text,uuid,uuid)',
     'hon.cancel_school_blast(text,jsonb,text,uuid,uuid)','hon.read_school_blasts(text)','hon.read_school_blast(text,uuid)','hon.read_school_blast_audience(text,uuid)'];

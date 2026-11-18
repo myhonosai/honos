@@ -669,7 +669,7 @@ try {
   // The 0423 automation engine readers (event contact, enrolled exit rule, entry/IF conditions) only decide whether a
   // workflow run starts, branches or exits; they grant no booking, attendance or check-in benefit.
   // The 0463 membership_agreement_covered reader only decides which children a family's agreement covers; it grants no benefit.
-  // The 0524 school_blast_resolve reader only decides who an audience group (active or former students) reaches with a
+  // The 0536 school_blast_resolve reader only decides who an audience group (active or former students) reaches with a
   // queued marketing message; it grants no booking, attendance or check-in benefit.
   // The 0474 eian_facts_ok matches only because 'memberships' is a key of the Eian facts shape it validates; it reads no table.
   const readers = (await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' ORDER BY proname")).map((r) => r.proname);

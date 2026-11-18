@@ -1,4 +1,4 @@
-# School email and text blasts (BL1, migration 0524)
+# School email and text blasts (BL1, migration 0536)
 
 Owner request (David, 2026-11-18): staff send an email or text blast with a checkout page link, merge tags and pictures or
 video. Audit and the full three-piece plan: `/mnt/project-files/blasts/BLAST_COMPOSER_AUDIT_AND_SPEC.md` (project files).
