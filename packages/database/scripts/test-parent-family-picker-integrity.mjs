@@ -180,6 +180,8 @@ async function seed() {
   kidB = await child('Ji-ho', ids.otherFamily, ids.otherSchool, ids.otherOrganization);
 }
 const resolved = async (actor) => (await runtime.query('SELECT school_id::text, family_id::text FROM hon.resolve_parent_journey_scopes($1) ORDER BY 1,2', [actor.subject])).rows;
+// 0473: the per-school resolver that documents, achievements, curriculum progress and testing interest use.
+const atSchool = async (actor, school) => (await runtime.query('SELECT family_id::text FROM hon.resolve_parent_family_scope($1,$2::uuid) ORDER BY 1', [actor.subject, school])).rows.map((r) => r.family_id).join();
 const children = (view) => view.children.map((c) => c.studentProfileId).sort().join();
 async function faceScope(actor, org, school) {
   await sql('BEGIN');
@@ -212,6 +214,8 @@ try {
   ok((await resolved(MULTI)).length === 2, 'the resolver stays ambiguous until the parent chooses');
   await refused(() => bookings(MULTI), 403, 'PARENT_CLASS_BOOKING_FORBIDDEN', 'class booking refuses before a choice');
   ok(String(await faceScope(MULTI, ids.organization, ids.school)).includes('FACE_CHECKIN_FORBIDDEN'), 'face check-in refuses before a choice');
+  ok(await atSchool(MULTI, ids.school) === '' && await atSchool(MULTI, ids.otherSchool) === '', '0473: reads that name a school refuse before a choice');
+  ok(await atSchool(SINGLE, ids.school) === ids.family && await atSchool(SINGLE, ids.otherSchool) === '', '0473: a one-family parent resolves at its school exactly as before');
 
   // 3. The choose command: closed body, its own command header, same origin, no selectors in the URL.
   for (const [label, body] of [['missing family', { schoolId: ids.school }], ['extra key', { schoolId: ids.school, familyId: ids.family, principalId: MULTI.principal }],
@@ -236,6 +240,7 @@ try {
   ok(readA.timezone === LA && children(readA) === kidA && readA.canBook === true, 'class booking shows only the chosen family\'s child at its school');
   ok(await faceScope(MULTI, ids.organization, ids.school) === ids.family, 'face check-in follows the choice');
   ok(String(await faceScope(MULTI, ids.otherOrganization, ids.otherSchool)).includes('FACE_CHECKIN_FORBIDDEN'), 'face check-in refuses another tenant than the choice');
+  ok(await atSchool(MULTI, ids.school) === ids.family && await atSchool(MULTI, ids.otherSchool) === '', '0473: reads that name a school give only the chosen family, not the other household or school');
   let row = (await sql('SELECT organization_id::text o, school_id::text s, family_id::text f, version FROM hon.parent_family_selections WHERE user_id=$1', [MULTI.user])).rows[0];
   ok(row.o === ids.organization && row.s === ids.school && row.f === ids.family && row.version === 1, 'one selection row, version 1');
   let audits = (await sql("SELECT organization_id::text o, school_id::text s, entity_id::text e, actor_principal_id::text a, prior_state, next_state FROM hon.audit_events WHERE action_code='PARENT_FAMILY_SELECTED' AND actor_principal_id=$1 ORDER BY occurred_at", [MULTI.principal])).rows;
@@ -252,6 +257,7 @@ try {
   const readB = await success(() => bookings(MULTI), 'class booking read after switching');
   ok(readB.timezone === NY && children(readB) === kidB && !JSON.stringify(readB).includes(kidA), 'class booking now shows only the other family at the other school');
   ok(await faceScope(MULTI, ids.otherOrganization, ids.otherSchool) === ids.otherFamily, 'face check-in follows the switch');
+  ok(await atSchool(MULTI, ids.otherSchool) === ids.otherFamily && await atSchool(MULTI, ids.school) === '', '0473: reads that name a school follow the switch');
   row = (await sql('SELECT organization_id::text o, version FROM hon.parent_family_selections WHERE user_id=$1', [MULTI.user])).rows[0];
   ok(row.o === ids.otherOrganization && row.version === 2, 'the same row, version 2');
   audits = (await sql("SELECT organization_id::text o, prior_state, next_state::text n FROM hon.audit_events WHERE action_code='PARENT_FAMILY_SELECTED' AND actor_principal_id=$1 ORDER BY occurred_at", [MULTI.principal])).rows;
@@ -273,10 +279,12 @@ try {
   ok(afterEnd.needsChoice === true && afterEnd.choices.length === 2 && !afterEnd.choices.some((c) => c.familyId === ids.otherFamily), 'an ended grant is no longer a choice and a choice is needed again');
   await refused(() => bookings(MULTI), 403, 'PARENT_CLASS_BOOKING_FORBIDDEN', 'parent reads refuse again until the parent chooses');
   await refused(() => choose(MULTI, { schoolId: ids.otherSchool, familyId: ids.otherFamily }), 404, 'PARENT_FAMILY_NOT_AVAILABLE', 'an ended grant cannot be chosen');
+  ok(await atSchool(MULTI, ids.school) === '' && await atSchool(MULTI, ids.otherSchool) === '', '0473: a choice of an ended grant counts for nothing at any school');
   await sql("UPDATE hon.families SET status='SUSPENDED' WHERE id=$1", [ids.household]);
   const onlyOne = await success(() => list(MULTI), 'list with one live family left');
   ok(onlyOne.needsChoice === false && onlyOne.choices.length === 1 && onlyOne.choices[0].familyId === ids.family && onlyOne.choices[0].current === true, 'the one live family is current with no choice needed');
   ok(children(await success(() => bookings(MULTI), 'class booking with one live family')) === kidA, 'class booking works for the one live family');
+  ok(await atSchool(MULTI, ids.school) === ids.family, '0473: with one live family left, reads that name a school resolve it again');
   await sql("UPDATE hon.families SET status='ACTIVE' WHERE id=$1", [ids.household]);
 
   // 7. Family invitations (0205): another organization is no longer a conflict; the same family, staff and HQ still are.
@@ -297,7 +305,7 @@ try {
       FROM pg_proc p WHERE p.oid=$2::regprocedure`, [CRM_CLOSE_RUNTIME_ROLE, `hon.${fn}`])).rows[0];
     ok(r.runtime && r.prosecdef && !r.public, `runtime may execute definer ${fn}; PUBLIC may not`);
   }
-  for (const fn of ['parent_live_family_scopes(text)', 'parent_class_booking_scope(text,boolean)', 'face_checkin_family_scope(text,boolean)']) {
+  for (const fn of ['parent_live_family_scopes(text)', 'parent_class_booking_scope(text,boolean)', 'face_checkin_family_scope(text,boolean)', 'parent_family_scope_any(text,uuid)']) {
     const r = (await sql(`SELECT has_function_privilege($1,$2,'EXECUTE') runtime, EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0) public
       FROM pg_proc p WHERE p.oid=$2::regprocedure`, [CRM_CLOSE_RUNTIME_ROLE, `hon.${fn}`])).rows[0];
     ok(!r.runtime && !r.public, `helper ${fn} is private`);
@@ -316,8 +324,13 @@ try {
     const section = verify.split(startMark)[1]?.split(endMark)[0];
     ok(section, startMark);
     await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
+  { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
+    const startMark = '-- Parent school reads follow the family choice exact verification (0473)', endMark = '-- End parent school reads follow the family choice exact verification.';
+    const section = verify.split(startMark)[1]?.split(endMark)[0];
+    ok(section, startMark);
+    await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
-  console.log(`PASS: parent family picker (0471): ${checks} checks.`);
+  console.log(`PASS: parent family picker (0471, 0473): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch(() => {});
