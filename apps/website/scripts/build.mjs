@@ -7,6 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { localize, markLanguage } from './i18n.mjs';
 import { loadPosts, blogPages } from './blog.mjs';
+import { legalPages } from './legal.mjs';
 
 export const LANGUAGES = ['ko', 'es'];
 
@@ -54,6 +55,7 @@ export function buildSite({ outDir = join(root, 'dist'), env = process.env } = {
   cpSync(join(root, 'src'), out, { recursive: true });
   rmSync(join(out, 'i18n'), { recursive: true, force: true });
   rmSync(join(out, 'blog'), { recursive: true, force: true });
+  rmSync(join(out, 'legal'), { recursive: true, force: true });
   versionCss(out);
   const fill = (html, name) => {
     const done = versionPage(html.replaceAll('{{APP_URL}}', app).replaceAll('{{ROBOTS}}', robots), out);
@@ -72,6 +74,10 @@ export function buildSite({ outDir = join(root, 'dist'), env = process.env } = {
   }
   const posts = loadPosts(join(root, 'src', 'blog', 'posts'));
   for (const { file, html } of blogPages({ posts, homes, app })) {
+    mkdirSync(dirname(join(out, file)), { recursive: true });
+    writeFileSync(join(out, file), html);
+  }
+  for (const { file, html } of legalPages({ dir: join(root, 'src', 'legal'), home: homes.en })) {
     mkdirSync(dirname(join(out, file)), { recursive: true });
     writeFileSync(join(out, file), html);
   }
