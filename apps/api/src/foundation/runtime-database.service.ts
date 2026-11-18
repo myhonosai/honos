@@ -674,6 +674,30 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     finally { client.release(); }
   }
 
+  /**
+   * B-TUI-2 0529 shared one-time payment: the API's four fixed calls (read, start, record, list due), one short
+   * transaction each, no tenant settings. The payment id is the only scope; opening a payment is never a runtime call.
+   */
+  async runSchoolPayOnceCall(statement: string, values: unknown[]): Promise<unknown> {
+    if (![
+      'SELECT hon.read_school_pay_once($1::uuid) AS data',
+      'SELECT hon.start_school_pay_once($1::uuid,$2::jsonb) AS data',
+      'SELECT hon.record_school_pay_once($1::uuid,$2::jsonb) AS data',
+      'SELECT hon.list_due_school_pay_once($1::integer) AS data',
+    ].includes(statement)) throw new Error('Unknown school one-time payment call.');
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>(statement, values);
+      await client.query('COMMIT');
+      if (result.rows.length !== 1) throw new Error('Unverified school one-time payment call.');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
+    finally { client.release(); }
+  }
+
   async resolveHumanWorkScope(externalSubject: string): Promise<ResolvedPrincipalScope | undefined> {
     await this.assertRuntimePosture();
     return (await this.getPool().query<ResolvedPrincipalScope>(

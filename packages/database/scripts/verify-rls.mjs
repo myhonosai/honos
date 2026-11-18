@@ -282,6 +282,8 @@ const expectedRlsTables = [
   'school_pay_autopay_events',
   'school_pay_charge_attempts',
   'school_pay_charge_events',
+  'school_pay_once',
+  'school_pay_once_events',
   'school_checkout_pages',
   'school_checkout_page_versions',
   'school_checkouts',
