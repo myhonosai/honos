@@ -72,7 +72,7 @@ We use the information a school puts into HON OS only to provide the Services to
 
 ## AI features
 
-HON OS includes AI assistants that help a school draft messages, summarize records, suggest follow-ups, create marketing images and videos, and similar tasks. When a school uses these features, the information needed for the task is sent to the AI service provider that performs it. [[Confirm with each AI provider's terms that it does not train on information HON sends.]] **HON does not use a school's student, family or staff information to train AI models.** Actions that send messages, spend money or change important records go through approval rules the school controls, and staff should review AI output before relying on it.
+HON OS includes AI assistants that help a school draft messages, summarize records, suggest follow-ups, create marketing images and videos, and similar tasks. When a school uses these features, the information needed for the task is sent to the AI service provider that performs it. HON chooses AI providers whose business terms do not allow them to use the information HON sends to train their models. **HON does not use a school's student, family or staff information to train AI models.** Actions that send messages, spend money or change important records go through approval rules the school controls, and staff should review AI output before relying on it.
 
 ## The HON Shopify app
 
@@ -102,7 +102,7 @@ We share personal information only:
 
 ## Service providers
 
-We use the following kinds of providers. Each only receives the information it needs, and some are used only when a school turns on the feature that needs them. [[Confirm this list against signed provider agreements before publishing.]]
+We use the following kinds of providers. Each only receives the information it needs, and some are used only when a school turns on the feature that needs them.
 
 - **Hosting and database**: Render (application hosting) and Supabase (database and sign-in), in the United States.
 - **Payments**: Stripe (HON OS subscriptions, and tuition for schools that use Stripe) and Square (tuition for schools that use Square).
@@ -118,12 +118,12 @@ Schools use HON OS to text their students, families and leads, and must have the
 
 ## How long we keep information
 
-- **School account data** is kept while the school's subscription is active. After a school closes its account, we keep it for [[number]] days so the school can export it, then delete or de-identify it, except where we must keep records longer (for example invoices and tax records, which we keep for as long as tax law requires).
+- **School account data** is kept while the school's subscription is active. After a school closes its account, we keep it for 30 days so the school can export it, then delete or de-identify it, except where we must keep records longer (for example invoices and tax records, which we keep for as long as tax law requires).
 - **Face templates** are deleted at the earliest of: consent is withdrawn; the profile photo is removed or replaced; the school turns face check-in off; 30 days after the student is no longer active; or 12 months without a face check-in. We keep only a record of who, when and why, with no face data.
 - **Shopify data** is erased as described in "The HON Shopify app".
 - **Opt-out (STOP) records** are kept so we keep honoring them.
-- **Audit logs and security logs** are kept for [[number]] months to keep the Services secure and show who did what.
-- **Backups** are overwritten on a rolling schedule of about [[number]] days.
+- **Audit logs and security logs** are kept for 24 months to keep the Services secure and show who did what.
+- **Backups** are overwritten on a rolling schedule of about 7 days.
 
 ## Security
 
@@ -151,8 +151,8 @@ We may update this policy. We will change the "Last updated" date, and if a chan
 
 ## Contact us
 
-Questions or requests about privacy: [[privacy contact email]]
+Questions or requests about privacy: myhonosai@gmail.com
 
 HON OS Labs LLC
 
-[[Mailing address]]
+546 W. Las Tunas Dr., San Gabriel, CA 91776

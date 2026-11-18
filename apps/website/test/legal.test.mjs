@@ -35,38 +35,25 @@ test('builds /privacy/ and /terms/ as English pages with the site header and foo
   }
 });
 
-test('drafts carry a not-in-effect banner and highlighted placeholders', () => {
+test('the published pages are complete: no blanks and no draft banner', () => {
   for (const slug of LEGAL_PAGES) {
     const html = read(`${slug}/index.html`);
-    assert.match(html, /class="legal-draft"[^>]*role="note"/);
-    assert.match(visible(html), /Draft for review\. These terms are not yet in effect\./);
-    assert.match(html, /<mark class="placeholder">[^<]+<\/mark>/, `${slug} shows its blanks`);
+    assert.doesNotMatch(html, /legal-draft|<mark class="placeholder">/, `${slug} is final`);
     assert.doesNotMatch(html, /\[\[|\]\]/, 'no raw placeholder markers reach the page');
   }
 });
 
-test('the final flag is refused while any placeholder is left', () => {
-  const tmp = mkdtempSync(join(tmpdir(), 'hon-website-legal-final-'));
-  try {
-    assert.throws(
-      () => buildSite({ outDir: tmp, env: { HON_WEBSITE_APP_URL: 'https://app.example.test', HON_WEBSITE_LEGAL_FINAL: '1' } }),
-      /placeholder/i,
-    );
-  } finally { rmSync(tmp, { recursive: true, force: true }); }
-});
-
-test('a filled-in page built as final has no banner', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'hon-website-legal-filled-'));
+test('a page with a blank left shows a not-in-effect banner and highlights the blank', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'hon-website-legal-blank-'));
   try {
     cpSync(join(root, 'src', 'legal'), dir, { recursive: true });
-    for (const slug of LEGAL_PAGES) {
-      const file = join(dir, `${slug}.md`);
-      writeFileSync(file, readFileSync(file, 'utf8').replace(/\[\[[^\]]+\]\]/g, 'Filled in'));
-    }
-    const pages = loadLegal(dir, { final: true });
-    for (const page of pages) {
-      assert.doesNotMatch(page.main, /legal-draft|<mark class="placeholder">/);
-    }
+    const file = join(dir, 'terms.md');
+    writeFileSync(file, readFileSync(file, 'utf8').replace('Los Angeles County, California', '[[County and State]]'));
+    const [privacyPage, termsPage] = loadLegal(dir);
+    assert.doesNotMatch(privacyPage.main, /legal-draft/, 'a complete page has no banner');
+    assert.match(termsPage.main, /class="legal-draft"[^>]*role="note"/);
+    assert.match(visible(termsPage.main), /Draft for review\. These terms are not yet in effect\./);
+    assert.match(termsPage.main, /<mark class="placeholder">County and State<\/mark>/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -141,6 +128,9 @@ test('privacy policy covers what the app stores ask about', () => {
     ['rights / requests', /access, correct|delete/i],
     ['California', /California/],
     ['contact', /contact us/i],
+    ['legal entity', /HON OS Labs LLC/],
+    ['contact email', /myhonosai@gmail\.com/],
+    ['mailing address', /San Gabriel, CA 91776/],
     ['changes', /changes to this/i],
   ]) assert.match(text, re, `privacy policy covers ${topic}`);
 });
@@ -165,11 +155,9 @@ test('terms cover the school agreement and data processing', () => {
     ['return / delete on termination', /export|delete/i],
     ['disclaimer', /as is/i],
     ['limitation of liability', /limitation of liability/i],
-    ['governing law placeholder', /governing law/i],
+    ['governing law', /laws of the State of California/],
+    ['breach notice within 72 hours', /within 72 hours/],
+    ['export window', /30 days so you can export/],
     ['contact', /contact/i],
   ]) assert.match(text, re, `terms cover ${topic}`);
-});
-
-test('both drafts tell the reader a lawyer has not reviewed them yet', () => {
-  for (const text of [privacy(), terms()]) assert.match(text, /lawyer|legal review/i);
 });

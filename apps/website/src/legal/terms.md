@@ -88,9 +88,9 @@ This section explains how HON processes personal information in School Data on y
 3. **Security.** HON keeps reasonable administrative, technical and physical safeguards, including encryption in transit and at rest, separation between schools enforced in the database, role-based access and audit logs.
 4. **Subprocessors.** You allow HON to use the subprocessors listed in our Privacy Policy. HON makes each one protect School Data at least as well as these terms require, and will update that list before adding a new one, so you can object.
 5. **Requests from people.** If a student, parent or other person asks HON to access, correct or delete their information in your School Data, HON will refer them to you, and will help you respond through the Services.
-6. **Security incidents.** If HON confirms a security incident that affects School Data (a breach), HON will notify you without undue delay, and within [[number]] hours of confirming it, with the information you need to meet your own obligations.
+6. **Security incidents.** If HON confirms a security incident that affects School Data (a breach), HON will notify you without undue delay, and within 72 hours of confirming it, with the information you need to meet your own obligations.
 7. **Children's information.** HON uses children's information in School Data only to provide the Services to you, and relies on you to obtain any required parental consent. HON will help you review or delete a child's information when a parent asks.
-8. **Return and deletion.** You can export School Data while your account is active. After your account closes, HON keeps School Data for [[number]] days so you can export it, then deletes or de-identifies it, except copies HON must keep by law and backups that are overwritten on their normal schedule.
+8. **Return and deletion.** You can export School Data while your account is active. After your account closes, HON keeps School Data for 30 days so you can export it, then deletes or de-identifies it, except copies HON must keep by law and backups that are overwritten on their normal schedule.
 9. **Information about compliance.** HON will answer reasonable written questions about how it protects School Data, once a year or after a security incident.
 
 ## For HON Family app users
@@ -115,7 +115,7 @@ You will defend and hold HON harmless from third-party claims arising from Schoo
 
 ## Governing law and disputes
 
-These Terms are governed by the laws of [[State]], without regard to its conflict-of-law rules. Disputes will be resolved in the state or federal courts in [[County and State]], and both parties agree to their jurisdiction. [[Lawyer to decide whether to use arbitration and a class action waiver.]]
+These Terms are governed by the laws of the State of California, without regard to its conflict-of-law rules. Disputes will be resolved in the state or federal courts in Los Angeles County, California, and both parties agree to their jurisdiction.
 
 ## Changes to these Terms
 
@@ -127,8 +127,8 @@ These Terms, the Privacy Policy and any order you place are the whole agreement 
 
 ## Contact
 
-Questions about these Terms: [[legal contact email]]
+Questions about these Terms: myhonosai@gmail.com
 
 HON OS Labs LLC
 
-[[Mailing address]]
+546 W. Las Tunas Dr., San Gabriel, CA 91776

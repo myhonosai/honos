@@ -1,8 +1,6 @@
 // Builds the static HON OS marketing site: copies src/ to dist/ and fills in the build-time values.
 //   HON_WEBSITE_APP_URL   origin of the HON OS app (default http://localhost:3000)
 //   HON_WEBSITE_INDEXABLE set to 1 only when the site is approved to go live; otherwise pages are noindex.
-//   HON_WEBSITE_LEGAL_FINAL set to 1 only once the privacy policy and terms are reviewed and every [[blank]] is filled;
-//                         otherwise /privacy/ and /terms/ show a "draft, not yet in effect" banner.
 import { cpSync, readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
@@ -79,7 +77,7 @@ export function buildSite({ outDir = join(root, 'dist'), env = process.env } = {
     mkdirSync(dirname(join(out, file)), { recursive: true });
     writeFileSync(join(out, file), html);
   }
-  for (const { file, html } of legalPages({ dir: join(root, 'src', 'legal'), home: homes.en, final: env.HON_WEBSITE_LEGAL_FINAL === '1' })) {
+  for (const { file, html } of legalPages({ dir: join(root, 'src', 'legal'), home: homes.en })) {
     mkdirSync(dirname(join(out, file)), { recursive: true });
     writeFileSync(join(out, file), html);
   }
