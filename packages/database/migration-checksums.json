@@ -342,6 +342,7 @@
     "0521_school_contact_list.sql": "15710fdfee6ad20c80784be688b58c699773742fdfe4be7f9690befd640ad46e",
     "0522_school_contact_card.sql": "dc1a744a90a927fb3303e25d79fce87d106ff5b92caefc5db69595b9e1f56516",
     "0523_school_contact_merge_archive.sql": "39228fc3d1af999e4bff29da71460a5a6c82ec0ccd7d9bb3339c62ba2ea8868c",
+    "0529_school_pay_once.sql": "476c62434beaeb0be7f781878ee817e5b0e0641f22f94ed400457bf90da9ea4a",
     "0527_ai_text_proposals.sql": "38bf94d39ff71d6eb1a652ae3b3b432813055a9ab26d54641c9bb360f960c54c"
   }
 }
