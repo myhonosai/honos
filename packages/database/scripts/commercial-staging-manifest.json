@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "8c3bf9cea2b427002ed4e1b6ca9e2d7f202e8e9098913162e15d2f5046add29d",
+  "chainSha256": "eb2a2b1cf1907219e35cdd8cab4380e66334fa2f010921f08dbc4740c006e765",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -699,8 +699,12 @@
       "sha256": "9e3e4bd1693a9edf87577d30f46d03769880f74c63835a14b015010ba04e292e"
     },
     {
-      "file": "0544_shopify_finance.sql",
-      "sha256": "dc3b3c29de08244a9b9c81773541c692783cfffa9e1f1aa3d0f1e2e7c0d1b582"
+      "file": "0550_ai_text_proposals.sql",
+      "sha256": "166369680863c3e7d300d3ce5db6a48cbe863b0e5761cbabf18cb8bec57857b1"
+    },
+    {
+      "file": "0557_shopify_finance.sql",
+      "sha256": "f4cea55cd68296fc3ebde28f394f8b1753eccf63328444a845883409185d6559"
     }
   ]
 }

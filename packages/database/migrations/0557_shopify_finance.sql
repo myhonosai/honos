@@ -1,6 +1,6 @@
 BEGIN;
 
--- HON Shopify finance view, piece SH-F1 (0544, coordinator-allocated 2026-11-19). Spec: docs/architecture/SHOPIFY_COMMERCE.md.
+-- HON Shopify finance view, piece SH-F1 (0557, coordinator-allocated 2026-11-19). Spec: docs/architecture/SHOPIFY_COMMERCE.md.
 -- Builds on 0405 (SH1), 0449 (SH1b) and 0496 (SH4a).
 -- Owner vision (David, 2026-11-19): the Commerce page shows the store's money side next to the catalog and orders: the
 -- Shopify Payments balance, the latest payouts and recent balance transactions. Shopify stays the source of truth; HON
@@ -16,7 +16,7 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'Trusted migration owner required'; END IF;
   IF to_regprocedure('hon.shopify_leased_sync(jsonb,text[],boolean)') IS NULL OR to_regprocedure('hon.shopify_has_scope(text,text)') IS NULL THEN
-    RAISE EXCEPTION '0544 requires 0449 and 0496 (Shopify background sync and product changes)'; END IF;
+    RAISE EXCEPTION '0557 requires 0449 and 0496 (Shopify background sync and product changes)'; END IF;
 END $$;
 
 CREATE TABLE hon.shopify_finance (
@@ -35,7 +35,7 @@ ALTER TABLE hon.shopify_finance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hon.shopify_finance FORCE ROW LEVEL SECURITY;
 CREATE TRIGGER shopify_finance_no_truncate BEFORE TRUNCATE ON hon.shopify_finance FOR EACH STATEMENT EXECUTE FUNCTION hon.guard_shopify();
 COMMENT ON TABLE hon.shopify_finance IS
-'0544 the latest Shopify Payments snapshot (balance, payouts, balance transactions) of a CONNECTED store. Read-only copy; private.';
+'0557 the latest Shopify Payments snapshot (balance, payouts, balance transactions) of a CONNECTED store. Read-only copy; private.';
 
 -- A store that stops being CONNECTED loses its snapshot.
 CREATE FUNCTION hon.shopify_finance_on_end() RETURNS trigger

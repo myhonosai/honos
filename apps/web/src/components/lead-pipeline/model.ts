@@ -146,3 +146,8 @@ export function draftInput(draft: Draft, expectedVersion: number): SaveCrmPipeli
     moves: stagesNeedingMove(draft).map((s) => ({ fromStageId: s.id!, toStageId: draft.moves[s.id!]! })),
   };
 }
+
+/** After stages are set up from the board, the editor opens only once the board shows the pipeline that setup made. */
+export function starterEditReady(board: { pipeline: { id: string } | null }, pendingPipelineId: string | null): boolean {
+  return pendingPipelineId !== null && board.pipeline !== null && board.pipeline.id.toLowerCase() === pendingPipelineId.toLowerCase();
+}

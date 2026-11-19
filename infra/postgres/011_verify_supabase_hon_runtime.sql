@@ -4791,7 +4791,8 @@ END $$;
 -- End parent school reads follow the family choice exact verification.
 
 -- Eian family AI exact verification (0474): the private turn table and its four S4 triggers, the pure route helper and the
--- re-pinned planner that calls it, private Eian helpers, seven runtime entry points, and the S4 shared functions that gained EIAN.
+-- re-pinned planner that calls it, private Eian helpers and seven runtime entry points. The S4 shared functions that gained
+-- EIAN were redefined again by 0507 (adding TEXT_PROPOSAL) and are pinned in the 0507 section below.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.ai_select_text_route(uuid,uuid,uuid,text,text,integer,bigint)',true,false,'search_path=pg_catalog, hon','223c2ace3f9235f3997c960f4e223e0a237145ad71246e2a88e97e9f502bbde1'),
@@ -4809,15 +4810,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.plan_eian_turn(text,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','120f7c05c0d76dce3a989499c7d96d5f127a64754e1665aafe126d81a23aac5e'),
 ('hon.prepare_eian_turn(text,uuid,uuid,boolean,jsonb,jsonb)',true,true,'search_path=pg_catalog, hon','b7b937e0437a96873e0247a2d43c768ee4f78ff556fff6f0ca2b418ee9202ebd'),
 ('hon.fail_eian_turn(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','ea5e453a389f95b954cdc69631c2889bd0024f4de1e5bb9b2ce051c5e80d4da3'),
-('hon.record_eian_turn_result(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','299c891b3c5e91df5ab0d576a1d817642db8d6210aebf349a8ab04d29b5d4d9f'),
-('hon.ai_org_committed_credits(uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','eeac44fbf9e908b646c03b6d964ea49b8f626a7c6a8bd5bae448518112cdaab2'),
-('hon.ai_org_open_agent_holds(uuid)',false,false,'search_path=pg_catalog, hon','d294a4699657b4ad6d453c76eb75523606aa707a55e6971bfb5c89488ea8f7dd'),
-('hon.ai_school_committed_cost_micros(uuid,uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','6b1c505f44ee9c838a8fdf620205c65023ff5135b4f8e6950a5486c80b8bcc98'),
-('hon.ai_unknown_validate(text,jsonb)',false,false,'search_path=pg_catalog, hon','aa860812b7f98f2e3f5e4d4f12431377da2ec5ce6a615b74ef00c80a077d1584'),
-('hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','73d1194c2c076483e217358570b9d4b2f582c85a1b8780110ab143d29cb1d2d3'),
-('hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','c946c8b901d92f3d482fcc157e129fef14877600462ede1ace53ee01b33e83b8'),
-('hon.read_ai_unknown_invocations_from_hq(text)',true,true,'search_path=pg_catalog, hon','9632c34ef8dbe2fd916fd4cb3e531ae40249e3cde338732df4a9ba4ff1689e4d'),
-('hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)',true,true,'search_path=pg_catalog, hon','dd5311e022c776bfd926e0d270c8d6ebb04de716bdc444ba3f5b2fe9908bf2f7'))
+('hon.record_eian_turn_result(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','299c891b3c5e91df5ab0d576a1d817642db8d6210aebf349a8ab04d29b5d4d9f'))
  e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
@@ -5052,7 +5045,65 @@ BEGIN
     RAISE EXCEPTION 'Unsafe demo data rows grant'; END IF;
 END $$;
 -- End walk-in kiosk trial seats exact verification.
--- Shopify finance exact verification (0544, SH-F1): two runtime entry points and one worker function (definer,
+-- Shared AI text proposals exact verification (0550): the kind table and the proposal table with its guards and four S4
+-- triggers, the private ai_text core, the WEBSITE_EDIT entry points (seven runtime) and the eight S4 shared functions,
+-- now counting both EIAN (0474) and TEXT_PROPOSAL holds, UNKNOWN rows, resolutions, late expenses and HQ usage.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.ai_org_committed_credits(uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','995b43d44309baa6b5c8cd0f7921070e3d720cbb36745bc21cd9d69b40a407d8'),
+('hon.ai_org_open_agent_holds(uuid)',false,false,'search_path=pg_catalog, hon','1eb41ff4957316b94c0f0ba09c869e68e1c213edd1026dc99061232af426880b'),
+('hon.ai_school_committed_cost_micros(uuid,uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','fe4b28b423fe81657a169efbda61a7229a40ffe3387ded4db5835bdf87e916a2'),
+('hon.ai_text_begin(text,uuid,text,uuid,integer,jsonb)',true,false,'search_path=pg_catalog, hon','6f82977de496d1ed4a4dc92344338141ac0a7e6a1b438aedcd3d8289883036aa'),
+('hon.ai_text_close(uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','c7eb4e44d4c7e0b43356156e95e0575a3abefc205611d98e4606c81505e29010'),
+('hon.ai_text_event(uuid,text)',true,false,'search_path=pg_catalog, hon','f959f57392aaa107fd79d0b094854aae0f61cac002bc96f71308fc8b503685a0'),
+('hon.ai_text_fail(uuid,uuid,text,text)',true,false,'search_path=pg_catalog, hon','29d2f210d4f0a5a9806c37010e04371fca0ef00a52d91bf6a3724be965ed49ef'),
+('hon.ai_text_planning_reference(uuid,uuid)',true,false,'search_path=pg_catalog, hon','07b5666966d6ab065efe82da92fa2f2b6c39fa367660a0101eb5fcd798aba0bd'),
+('hon.ai_text_prepare(uuid,uuid,uuid,boolean,text)',true,false,'search_path=pg_catalog, hon','8637c7fd7f7cf540513b939f44eceb5f6bf459e920159947e7984f53f7bcdde7'),
+('hon.ai_text_record(uuid,uuid,jsonb,jsonb,jsonb)',true,false,'search_path=pg_catalog, hon','1fa1f6af3987b11c06f6877ce9ddc836de24ac9e63a989618dca4d864ef0abd8'),
+('hon.ai_text_row(uuid,uuid)',true,false,'search_path=pg_catalog, hon','c872bdf33d4691655dfebf209863dfd96c2a51dbb64c897802fc25952c60d01d'),
+('hon.ai_unknown_validate(text,jsonb)',false,false,'search_path=pg_catalog, hon','2216fdb4756b4a1b5b179b5788445c8d4cacf1f747cb27ee3016b24eb84533e3'),
+('hon.begin_school_website_ai_edit(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','942cb067060413f3309465c5cd4c6f8d326b8c73a41d695a00dcd452f3465f69'),
+('hon.close_school_website_ai_edit(text,uuid,text)',true,true,'search_path=pg_catalog, hon','cf273be12c4a99889369dad1feb7ecff0ae6d73edaecde2c82274d6054432298'),
+('hon.fail_school_website_ai_edit(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','cec489c91805c02f0a460bc9f8401c295fc0efdf66637a86ac3f000703352688'),
+('hon.guard_ai_text_proposals()',false,false,'search_path=pg_catalog, hon','431a2ad9c9a47028538a537910d2b2b40bef20e091af7b4e650963202671be75'),
+('hon.prepare_school_website_ai_edit(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','8b78db60ef391b85adc83b5bcbfcfe2eae5c8097fde15fc7d96888adf8cba659'),
+('hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)',true,true,'search_path=pg_catalog, hon','191edd80f8aa928f852627e7e174726053f555815b300b20fb755c55574c185d'),
+('hon.read_ai_unknown_invocations_from_hq(text)',true,true,'search_path=pg_catalog, hon','b3045dc689e5d7f54d4854dfe43d7d4eb331869acc347454cf174eb1cf58c9af'),
+('hon.read_school_website_ai_edits(text,uuid)',true,true,'search_path=pg_catalog, hon','5bca23fda531a8d5ab1f1bbbed5d08b873ef8da848dea32ba893e4cbc335d99f'),
+('hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','18a2f6af1ef95d5e91e890d7e70894ac589e4508fb774c70c61d28a5083d97a3'),
+('hon.record_school_website_ai_edit(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','94284d3805916895a286633e8a81d58d4f7f56c0835e41217b68be4e9588f2f4'),
+('hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','4a97483f35d15de587ca3dce3fd24d309d2794c8aa93747bc4379e1d29edf52c'),
+('hon.school_website_ai_actor(text)',true,false,'search_path=pg_catalog, hon','768224c8665725fe986a89512fbac5a3a69e54e6b6627fbb033d13b5ceb2e1c5'),
+('hon.school_website_ai_edit_planning_reference(text,uuid)',true,true,'search_path=pg_catalog, hon','a649cd44c33edc3d00f17a46830ce3f632ff814b5274e760688186d49b7baa6d'),
+('hon.school_website_ai_facts(jsonb,text)',false,false,'search_path=pg_catalog, hon','c6a2bfb758bca374c226adeb598d7e297fed6715b68e4a10788bebb71a078a14'),
+('hon.school_website_ai_proposal_ok(jsonb)',false,false,'search_path=pg_catalog, hon','852faa84decc92ee7b5d4d10dacc3ff32034b2279fedc20854b5f4dc2cf47368'),
+('hon.school_website_ai_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','830d4f263809921c30c16b46d34c06a1cf0c138f4ad85d6b9c0ba07cfe3f66cf'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe shared AI text function: %',f.signature; END IF;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM unnest(ARRAY['hon.ai_text_kinds','hon.ai_text_proposals']::regclass[]) t(r) WHERE NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t.r AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=t.r)
+      OR has_table_privilege('hon_runtime',t.r,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime',t.r,'SELECT,INSERT,UPDATE,REFERENCES')) THEN
+    RAISE EXCEPTION 'Unsafe shared AI text table';
+  END IF;
+  IF (SELECT count(*) FROM pg_trigger t WHERE t.tgrelid='hon.ai_text_proposals'::regclass AND t.tgenabled='O' AND (t.tgname, t.tgfoid) IN (
+      ('ai_spend_start_guard','hon.ai_spend_start_guard()'::regprocedure), ('ai_spend_reserve_guard','hon.ai_spend_reserve_guard()'::regprocedure),
+      ('ai_spend_reserve_guard_insert','hon.ai_spend_reserve_guard()'::regprocedure), ('zz_ai_hold_origin','hon.ai_stamp_hold_origin()'::regprocedure),
+      ('ai_text_proposals_guard','hon.guard_ai_text_proposals()'::regprocedure), ('ai_text_proposals_no_truncate','hon.guard_ai_text_proposals()'::regprocedure))) <> 6 THEN
+    RAISE EXCEPTION 'Shared AI text proposal triggers missing';
+  END IF;
+END $$;
+-- End shared AI text proposals exact verification.
+
+-- Shopify finance exact verification (0557, SH-F1): two runtime entry points and one worker function (definer,
 -- owner-safe, exact bodies); the snapshot table is forced-RLS with no policy and no runtime privilege; every new helper
 -- and the end-of-connection trigger stay closed.
 DO $$ DECLARE f text; t text; w oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_communication_worker');

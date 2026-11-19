@@ -4456,7 +4456,22 @@ BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_class_session_seats_taken(uuid) TO hon_runtime; END IF;
 END $$;
 
--- 0544 Shopify finance (SH-F1): one more private table reached only through two runtime entry points (read the latest
+-- 0550 shared AI text proposals: two private tables; the runtime reaches the WEBSITE_EDIT kind through seven entry points.
+DO $$ DECLARE r text; t text; BEGIN
+  IF to_regclass('hon.ai_text_proposals') IS NULL THEN RAISE EXCEPTION 'Apply migration 0550 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['ai_text_kinds','ai_text_proposals'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_school_website_ai_edit(text,jsonb,uuid), hon.school_website_ai_edit_planning_reference(text,uuid),
+      hon.prepare_school_website_ai_edit(text,uuid,uuid,boolean), hon.fail_school_website_ai_edit(text,uuid,text,text),
+      hon.record_school_website_ai_edit(text,uuid,jsonb), hon.read_school_website_ai_edits(text,uuid), hon.close_school_website_ai_edit(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+
+
+-- 0557 Shopify finance (SH-F1): one more private table reached only through two runtime entry points (read the latest
 -- Shopify Payments snapshot, record it during a person's sync); the trigger and helpers are migration-owner only and the
 -- background write is the communication worker's (013).
 DO $$ DECLARE r text; f text;
@@ -4464,7 +4479,7 @@ DO $$ DECLARE r text; f text;
   helpers text[]:=ARRAY['hon.shopify_finance_on_end()','hon.shopify_signed_money_ok(jsonb)','hon.shopify_currency_ok(jsonb)',
     'hon.shopify_finance_ok(jsonb)','hon.shopify_apply_finance(hon.shopify_syncs,jsonb)','hon.record_shopify_background_finance(jsonb)'];
 BEGIN
-  IF to_regclass('hon.shopify_finance') IS NULL THEN RAISE EXCEPTION 'Apply migration 0544 first'; END IF;
+  IF to_regclass('hon.shopify_finance') IS NULL THEN RAISE EXCEPTION 'Apply migration 0557 first'; END IF;
   REVOKE ALL ON TABLE hon.shopify_finance FROM PUBLIC;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
     EXECUTE format('REVOKE ALL ON TABLE hon.shopify_finance FROM %I',r); END LOOP;

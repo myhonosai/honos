@@ -169,7 +169,7 @@ BEGIN
 END;
 $$;
 
--- 0544 Shopify finance: record the Shopify Payments snapshot a background sync read under its lease (when applied).
+-- 0557 Shopify finance: record the Shopify Payments snapshot a background sync read under its lease (when applied).
 DO $$
 BEGIN
   IF to_regprocedure('hon.record_shopify_background_finance(jsonb)') IS NOT NULL THEN

@@ -20,7 +20,7 @@ export interface ShopifyWorkerStore {
   claim(): Promise<unknown>;
   rotate(input: object): Promise<unknown>;
   page(input: object): Promise<unknown>;
-  /** SH-F1 (0544): the Shopify Payments snapshot a leased run read. */
+  /** SH-F1 (0557): the Shopify Payments snapshot a leased run read. */
   finance(input: object): Promise<unknown>;
   finish(input: object): Promise<unknown>;
   /** 0470: deletes up to 2,000 mirrored orders placed more than 60 days ago (any store) and their lines. */

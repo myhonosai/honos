@@ -1569,7 +1569,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       approveChange: {sql: 'SELECT hon.approve_shopify_product_change($1,$2::jsonb) data',arity:2,readOnly:false},
       rotateChange: {sql: 'SELECT hon.rotate_shopify_change_credential($1,$2::jsonb) data',arity:2,readOnly:false},
       recordChange: {sql: 'SELECT hon.record_shopify_product_change_result($1,$2::jsonb) data',arity:2,readOnly:false},
-      // 0544 SH-F1 Shopify Payments snapshot.
+      // 0557 SH-F1 Shopify Payments snapshot.
       finance: {sql: 'SELECT hon.read_shopify_finance($1,$2::uuid) data',arity:2,readOnly:true},
       recordFinance: {sql: 'SELECT hon.record_shopify_finance($1,$2::jsonb) data',arity:2,readOnly:false},
     } as const;
