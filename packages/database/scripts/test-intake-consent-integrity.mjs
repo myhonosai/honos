@@ -203,7 +203,7 @@ try {
   });
   let added = await staffAdd(MANAGER, ['EMAIL', 'SMS'], { phone: '+15555550110' });
   rows = await consents(added.p);
-  ok(added.r.people === 1 && added.r.recorded === 2 && rows.every((r) => r.status === 'OPTED_IN' && r.source === 'STAFF' && r.captures[0].method === 'STAFF_ADD' && r.captures[0].actor === MANAGER.principal), 'staff add: both agreed by default, source STAFF, the staff member as actor');
+  ok(added.r.people === 1 && added.r.recorded === 2 && rows.every((r) => r.status === 'OPTED_IN' && r.source === 'STAFF' && r.captures[0].method === 'STAFF_ADD' && r.captures[0].actor === MANAGER.principal && !('wording' in (r.captures[0].evidence ?? {}))), 'staff add: both agreed by default, source STAFF, the staff member as actor');
   added = await staffAdd(PEOPLE_ONLY, ['EMAIL'], { phone: '+15555550111' });
   ok((await consents(added.p)).map((r) => r.channel).join() === 'EMAIL', 'staff unticked text: only email recorded (people.create is enough)');
   added = await staffAdd(MANAGER, [], { phone: '+15555550112' });

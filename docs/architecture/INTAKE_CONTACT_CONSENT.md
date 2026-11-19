@@ -38,9 +38,10 @@ overwrites an existing opt-out, including one recorded on another record with th
 6. **Audit and outbox.** `communication.consent.intake_recorded` audit event and the existing
    `communication.consent.recorded` outbox event (same payload shape as 0243), so downstream readers see one kind.
 7. **Nothing sends.** Recording consent starts no message, automation or welcome.
-8. **Staff paths are opt-in by the API.** Automatic staff/import capture happens only when the API marks the
-   transaction (`app.hon_intake_consent`) for an active human staff principal of that school; anything else that
-   inserts people (demo data, registration, merges) records nothing.
+8. **Staff paths are opt-in by the API.** Staff/import capture happens only when the API calls
+   `hon.record_staff_intake_consent` for a direct human staff command with the right permission, and only for
+   people created in that transaction; anything else that inserts people (demo data, registration, merges) records
+   nothing.
 
 ## Mechanism (no rewrite of existing intake functions)
 
@@ -50,9 +51,11 @@ overwrites an existing opt-out, including one recorded on another record with th
 - Deferred constraint trigger on `hon.crm_leads` INSERT (fires at commit, after the path's own writes such as the
   kiosk tick): maps `PUBLIC_API`, `ZERNIO_META`, `WALK_IN_KIOSK`, `CONVERSATION_SMS` to methods and evidence from the
   lead's attribution.
-- Deferred constraint trigger on `hon.people` INSERT: staff/import capture when the transaction carries
-  `app.hon_intake_consent = '<METHOD>:<CHANNELS>'` (methods `STAFF_ADD`, `LEAD_IMPORT`, `STUDENT_IMPORT`; channels
-  `EMAIL`, `SMS`, both or `NONE`).
+- Runtime entry point `hon.record_staff_intake_consent(subject, {method, channels, personId | batchId})` for staff
+  add and imports (methods `STAFF_ADD`, `LEAD_IMPORT`, `STUDENT_IMPORT`; channels any of `EMAIL`, `SMS`, or none).
+  It re-checks the signed-in subject, the permission for the method, and touches only people created in this
+  transaction.
+- The wording version is kept as evidence only where HON showed the wording (website form, kiosk).
 - `hon.read_published_form` adds `schoolName` so the form can show the wording.
 
 ## Wording (shown next to submit)

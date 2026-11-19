@@ -64,7 +64,9 @@ CREATE POLICY communication_consent_captures_tenant_isolation ON hon.communicati
 CREATE FUNCTION hon.record_intake_consent(p_person uuid, p_channel text, p_method text, p_evidence jsonb, p_actor uuid, p_adopt boolean DEFAULT false)
 RETURNS text LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE pe hon.people; cur hon.communication_consents; prior hon.communication_consents; nxt hon.communication_consents;
-  v_status text:='OPTED_IN'; v_method text:=p_method; v_source text; v_evidence jsonb:=coalesce(p_evidence,'{}'::jsonb)||jsonb_build_object('wording','IC1-2026-11-19');
+  v_status text:='OPTED_IN'; v_method text:=p_method; v_source text; v_evidence jsonb:=coalesce(p_evidence,'{}'::jsonb)
+    -- The wording version only where HON showed the wording to the person (website form, kiosk).
+    ||CASE WHEN p_method IN ('LEAD_FORM','WALK_IN_KIOSK') THEN jsonb_build_object('wording','IC1-2026-11-19') ELSE '{}'::jsonb END;
   v_req uuid:=gen_random_uuid();
 BEGIN
   IF p_channel NOT IN ('EMAIL','SMS') OR p_method NOT IN ('LEAD_FORM','WALK_IN_KIOSK','FACEBOOK_LEAD_FORM','INBOUND_TEXT','STAFF_ADD','LEAD_IMPORT','STUDENT_IMPORT') THEN
@@ -90,7 +92,8 @@ BEGIN
   ORDER BY k.updated_at DESC, k.id LIMIT 1;
   IF prior.id IS NOT NULL THEN
     v_status:='OPTED_OUT'; v_method:='PRIOR_OPT_OUT'; v_source:='RECIPIENT';
-    v_evidence:=jsonb_build_object('priorConsentId',prior.id,'intakeMethod',p_method,'wording','IC1-2026-11-19');
+    v_evidence:=jsonb_build_object('priorConsentId',prior.id,'intakeMethod',p_method)
+      ||CASE WHEN p_method IN ('LEAD_FORM','WALK_IN_KIOSK') THEN jsonb_build_object('wording','IC1-2026-11-19') ELSE '{}'::jsonb END;
   ELSE
     v_source:=CASE WHEN p_method IN ('LEAD_FORM','WALK_IN_KIOSK','FACEBOOK_LEAD_FORM','INBOUND_TEXT') THEN 'RECIPIENT'
       WHEN p_method IN ('LEAD_IMPORT','STUDENT_IMPORT') THEN 'IMPORT' ELSE 'STAFF' END;
@@ -151,6 +154,9 @@ BEGIN
       AND x.organization_id=l.organization_id AND x.school_id=l.school_id;
     IF c.id IS NOT NULL AND EXISTS(SELECT 1 FROM hon.school_conversation_messages m WHERE m.conversation_id=c.id AND m.direction='INBOUND')
        AND EXISTS(SELECT 1 FROM hon.people p WHERE p.id=l.primary_person_id AND p.phone_e164=c.contact_address) THEN
+      -- The consent comes from the person's own inbound text. The actor is attribution only, never authority: it is
+      -- the staff member whose create-lead command (0364, actor checked by require_conversation_actor in that same
+      -- transaction) set app.hon_principal_id. It is recorded as evidence of who created the lead and nothing else.
       PERFORM hon.record_intake_consent(l.primary_person_id,'SMS','INBOUND_TEXT',jsonb_build_object('leadId',l.id,'conversationId',c.id),
         nullif(current_setting('app.hon_principal_id',true),'')::uuid);
     END IF;
