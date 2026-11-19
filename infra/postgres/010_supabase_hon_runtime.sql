@@ -4583,3 +4583,25 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+
+-- 0567 calendar cards: three runtime entry points (create, move/resize, card read). The new columns, the roster detachment
+-- table and every helper stay migration-owner only; the runtime keeps no UPDATE on class sessions.
+DO $$ DECLARE r text; f text; col text; BEGIN
+  IF to_regprocedure('hon.read_school_calendar_cards(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0567 first'; END IF;
+  REVOKE ALL ON hon.class_session_roster_detachments FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE format('REVOKE ALL ON hon.class_session_roster_detachments FROM %I',r);
+    FOREACH col IN ARRAY ARRAY['session_kind','lead_instructor_principal_id'] LOOP EXECUTE format('REVOKE ALL (%I) ON hon.class_series FROM %I',col,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.calendar_instructor_ok(uuid,uuid,uuid)','hon.class_series_occurrence_inherit()',
+    'hon.calendar_card_command_finish(text,text,uuid,jsonb,text,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)',
+    'hon.create_calendar_card(text,jsonb,text,uuid,uuid)','hon.move_calendar_card(text,uuid,jsonb,text,uuid,uuid)','hon.read_school_calendar_cards(text,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.create_calendar_card(text,jsonb,text,uuid,uuid),hon.move_calendar_card(text,uuid,jsonb,text,uuid,uuid),
+      hon.read_school_calendar_cards(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;

@@ -352,6 +352,7 @@
     "0556_school_calls.sql": "aa8a430ed111153ae4613811fd7184a2e1b5ba27ed6f3bbbd719828226b6c536",
     "0558_simple_invoices.sql": "3b42347f51e202714398f01d0bf457723bcafc545a5edd9ec4fbeee6b7d02a82",
     "0561_school_voice_apps.sql": "a8ec7c5b68fd71653b3ed4630500a82b33dcf2c9fb858de17861bd8ec209acef",
-    "0562_hq_calls.sql": "22a38a75e724d363371a71b406d6f54dd1257ce13e37e3cef274908c2ff5a410"
+    "0562_hq_calls.sql": "22a38a75e724d363371a71b406d6f54dd1257ce13e37e3cef274908c2ff5a410",
+    "0567_calendar_cards.sql": "812ae679a0a8671aca29a4692db0f7751ad78bcb3169eec0b3bcdc3ac301de76"
   }
 }
