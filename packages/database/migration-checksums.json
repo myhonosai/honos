@@ -349,6 +349,7 @@
     "0538_walk_in_kiosk_trial_seats_and_demo.sql": "9e3e4bd1693a9edf87577d30f46d03769880f74c63835a14b015010ba04e292e",
     "0553_school_a2p_registrations.sql": "fd25dc1f0f73734228a886d6b0e47dd8d804aa0083b8947ad931041a7e5bc691",
     "0550_ai_text_proposals.sql": "166369680863c3e7d300d3ce5db6a48cbe863b0e5761cbabf18cb8bec57857b1",
-    "0556_school_calls.sql": "aa8a430ed111153ae4613811fd7184a2e1b5ba27ed6f3bbbd719828226b6c536"
+    "0556_school_calls.sql": "aa8a430ed111153ae4613811fd7184a2e1b5ba27ed6f3bbbd719828226b6c536",
+    "0558_simple_invoices.sql": "3b42347f51e202714398f01d0bf457723bcafc545a5edd9ec4fbeee6b7d02a82"
   }
 }

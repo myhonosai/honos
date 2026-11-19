@@ -4516,3 +4516,26 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+
+-- 0558 simple invoices (SI1): two runtime entry points (create, detail read); items and details tables stay private and
+-- every helper stays migration-owner only.
+DO $$ DECLARE f text; r text;
+BEGIN
+  IF to_regprocedure('hon.create_simple_invoice(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0558 first'; END IF;
+  REVOKE ALL ON hon.invoice_line_items, hon.invoice_details FROM PUBLIC;
+  FOREACH f IN ARRAY ARRAY['hon.create_simple_invoice(text,jsonb,text,uuid,uuid)','hon.read_school_invoice_detail(text,uuid)',
+      'hon.simple_invoice_detail_json(hon.invoices,boolean)','hon.simple_invoice_can_issue(text)','hon.simple_invoice_text_ok(jsonb,integer,boolean)',
+      'hon.guard_invoice_simple_rows()'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE format('REVOKE ALL ON hon.invoice_line_items, hon.invoice_details FROM %I',r);
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.create_simple_invoice(text,jsonb,text,uuid,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.read_school_invoice_detail(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
