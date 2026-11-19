@@ -137,7 +137,9 @@ try {
   }, 'a school-scoped session never reaches HQ calling');
   o = await overview('hqOwner');
   assert.equal(o.canManage, true);
-  assert.deepEqual(o.staff.map((s) => s.principalId).sort(), [P('billingOp'), P('hqOwner'), P('supportOp')].sort(), 'staff list: HQ people with a purpose only');
+  // The shared fixture may hold HQ grants from earlier proofs; judge only this proof's people.
+  const mine = new Set(Object.keys(humans).map(P));
+  assert.deepEqual(o.staff.map((s) => s.principalId).filter((id) => mine.has(id)).sort(), [P('billingOp'), P('hqOwner'), P('supportOp')].sort(), 'staff list: HQ people with a purpose only');
   pass('HQ owner, support and billing operators use HQ calling; no-purpose HQ grants, school owners and school sessions are refused; only the HQ owner manages');
 
   // ---------- 3. starting calls ----------
