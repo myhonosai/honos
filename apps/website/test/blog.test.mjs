@@ -42,7 +42,7 @@ test('each blog page is marked with its language, alternates and current languag
     for (const path of ['blog/', ...posts.map((s) => `blog/${s}/`)]) {
       const html = read(`${pre(lang)}${path}index.html`);
       assert.match(html, new RegExp(`<html lang="${lang}">`));
-      for (const l of BLOG_LANGS) assert.ok(html.includes(`hreflang="${l}" href="${l === 'en' ? '' : `/${l}`}/${path}"`), `${lang} ${path} alternate ${l}`);
+      for (const l of BLOG_LANGS) assert.ok(html.includes(`hreflang="${l}" href="https://myhonos.com${l === 'en' ? '' : `/${l}`}/${path}"`), `${lang} ${path} alternate ${l}`);
       assert.match(html, new RegExp(`href="${lang === 'en' ? '' : `/${lang}`}/${path}"[^>]*data-lang="${lang}" aria-current="page"`), 'switcher stays on this page');
       assert.equal((html.match(/aria-current="page"/g) ?? []).length, 2, 'header and footer mark one language each');
       assert.match(html, /<meta name="robots" content="noindex, nofollow">/);
@@ -89,7 +89,7 @@ test('blog pages load no animation script and nothing from other hosts', () => {
   for (const file of blogPages()) {
     const html = read(file);
     assert.doesNotMatch(html, /<script\b/, `${file} has no scripts`);
-    assert.doesNotMatch(html, /(href|src)="(https?:)?\/\/(?!app\.example\.test)/, `${file} stays on this host`);
+    assert.doesNotMatch(html, /(href|src)="(https?:)?\/\/(?!app\.example\.test|myhonos\.com\/)/, `${file} stays on this host`);
     assert.match(html, /href="\/styles\.css\?v=[0-9a-f]{10}"/, `${file} loads versioned CSS`);
   }
 });
