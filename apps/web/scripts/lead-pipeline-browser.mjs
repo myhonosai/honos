@@ -300,6 +300,40 @@ await check('no leads yet: the empty-board Set up button works the same and a de
   await second.ctx.close();
 });
 
+await check('edit pipeline: drag a stage by its handle to a new place, then save', async () => {
+  reset(); report.commands = [];
+  const { ctx, page } = await open({ width: 1440, height: 960 });
+  await page.getByRole('button', { name: 'Edit pipeline' }).click();
+  const dialog = page.getByTestId('edit-dialog');
+  await dialog.getByTitle('Drag Trial done to reorder').dragTo(dialog.getByTestId('stage-row').nth(0));
+  assert.deepEqual(await dialog.getByLabel('Stage name', { exact: true }).evaluateAll((els) => els.map((e) => e.value)), ['Trial done', 'New lead', 'Contacted', 'Trial booked']);
+  await shot(page, 'pipeline-edit-drag-modern-en');
+  await dialog.getByRole('button', { name: 'Save pipeline' }).click();
+  await page.getByText('Pipeline saved.').waitFor();
+  assert.deepEqual(state.stages.map((s) => s.name), ['Trial done', 'New lead', 'Contacted', 'Trial booked', 'Enrolled', 'Not now']);
+  await ctx.close();
+});
+
+await check('quick actions: Call, Text and Book trial on a card; Email too in the panel; nothing is sent', async () => {
+  reset(); report.commands = [];
+  const { ctx, page } = await open({ width: 1440, height: 960 });
+  const card = column(page, 'New lead').getByTestId('lead-card').filter({ hasText: 'Mina Park' });
+  const mina = state.leads.find((l) => l.givenName === 'Mina');
+  assert.equal(await card.getByRole('link', { name: 'Call Mina Park' }).getAttribute('href'), `tel:${mina.phoneE164}`);
+  assert.equal(await card.getByRole('link', { name: 'Text Mina Park' }).getAttribute('href'), `sms:${mina.phoneE164}`);
+  const trial = new URL(await card.getByRole('link', { name: 'Book a trial for Mina Park' }).getAttribute('href'), origin);
+  assert.equal(trial.pathname, '/staff/crm/journey');
+  assert.deepEqual(Object.fromEntries(trial.searchParams), { ...school, leadId: mina.id, step: 'trial' });
+  await shot(page, 'pipeline-quick-actions-card-modern-en');
+  await card.getByRole('button', { name: /Mina Park/ }).click();
+  const panel = page.getByTestId('lead-panel');
+  assert.equal(await panel.getByTestId('panel-email').getAttribute('href'), `mailto:${mina.email}`);
+  await panel.getByText('HON does not send or record those messages.', { exact: false }).waitFor();
+  await shot(page, 'pipeline-quick-actions-panel-modern-en');
+  assert.deepEqual(report.commands, [], 'quick actions send no command');
+  await ctx.close();
+});
+
 await check('new pipeline from a school template: pick Adult program, the editor opens on it, rename and save; picking it again opens it', async () => {
   reset(); report.commands = [];
   const { ctx, page } = await open({ width: 1440, height: 960 });

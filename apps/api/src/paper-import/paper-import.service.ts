@@ -93,7 +93,7 @@ function translate(error: unknown): never {
 /**
  * Paper import (0388). Every call runs protected definer functions that re-prove the direct human subject and the live
  * students.import permission at the session school. Pages are checked and stripped of metadata here and checked again by
- * the database. Reading (0559) uses HON on the AI team's text route (S4 spend controls, the HQ pause, the school's AI limit)
+ * the database. Reading (0594) uses HON on the AI team's text route (S4 spend controls, the HQ pause, the school's AI limit)
  * for real photos, and the stand-in reader for the built-in sample pages; staff can always type the rows instead. Sending
  * stages the saved table through the existing import in the database, where every row is still decided by staff.
  */
@@ -176,7 +176,7 @@ export class PaperImportService {
   }
 
   /**
-   * HON's reading on the AI route (0559). Order: the set's proposal, its plan (only a DOCUMENT_READING profile on an image
+   * HON's reading on the AI route (0594). Order: the set's proposal, its plan (only a DOCUMENT_READING profile on an image
    * model can plan it), the page bytes checked against the fixed checksums, the final claim (budget lock, S4 decision,
    * hold), the provider call, then the usage evidence in its own transaction. Every refusal before the claim leaves the
    * set open with nothing spent; the screen offers typing the rows instead.

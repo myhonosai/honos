@@ -83,7 +83,7 @@ function api(route) {
   }
   if (parts[1] === 'reading') {
     if (aiBlocked) return json(route, 403, { code: 'PAPER_IMPORT_AI_BLOCKED', reason: 'AI_SPEND_PAUSED' });
-    // 0559: with no photo-reading route the reading is refused before anything is sent; the set stays open.
+    // 0594: with no photo-reading route the reading is refused before anything is sent; the set stays open.
     if (notSetUp && s.status === 'OPEN') { s.aiReading = { status: 'BLOCKED', reason: 'NO_ELIGIBLE_ROUTE' }; s.version++; return ok(route, detail(s)); }
     if (s.status === 'OPEN') { s.status = 'READ'; s.reader = 'SYNTHETIC'; s.outcome = 'SAMPLE_READ'; s.readAt = now(); s.version++; s.rows = [READ_ROW]; s.unsure = [READ_ROW.map((_, i) => i === 8)]; }
     return ok(route, detail(s));

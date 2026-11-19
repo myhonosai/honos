@@ -2,13 +2,13 @@ import React, { useId } from 'react';
 import { CRM_PIPELINE_TEMPLATES, CRM_STAGE_COLORS, CRM_STAGE_NAME_MAX, type CrmPipelineTemplateCode, type CrmBoardLead, type CrmBoardStage, type CrmBoardStatus, type CrmPipelineBoard, type CrmStageColor } from '@hon/contracts';
 import type { CrmAppointmentSummary } from '@hon/contracts';
 import { crmFollowUpHref } from '../crm-follow-up-handoff';
-import { leadMembershipHref, leadWorkflowHref } from '../crm-lead-memberships-http';
+import { leadMembershipHref, leadTrialHref, leadWorkflowHref } from '../crm-lead-memberships-http';
 import type { TrialRecovery } from '../crm-journey/trial-recovery-http';
 import { pipelineText, type PipelineKey } from './copy';
 import type { BoardScope } from './http';
 import {
-  BOARD_SORTS, PROGRAM_NONE, applyFilters, boardColumns, boardStats, cardLine, codeLabel, draftErrors, fullName, initials, moveChoices,
-  moveDraftStage, moveTargets, programsOf, rateText, stagesNeedingMove, type BoardSort, type BoardView, type Draft, type DraftError, type Filters,
+  BOARD_SORTS, PROGRAM_NONE, applyFilters, callHref, emailHref, textHref, boardColumns, boardStats, cardLine, codeLabel, draftErrors, fullName, initials, moveChoices,
+  moveDraftStage, moveDraftStageTo, moveTargets, programsOf, rateText, stagesNeedingMove, type BoardSort, type BoardView, type Draft, type DraftError, type Filters,
 } from './model';
 import styles from './pipeline.module.css';
 
@@ -21,6 +21,7 @@ export type SetupState = { state: 'IDLE' | 'WORKING' | 'DENIED' | 'FAILED' | 'UN
 export type TemplateState = null | { phase: 'PICK' | 'WORKING' | 'DENIED' | 'FAILED' | 'UNKNOWN' | 'LIMIT'; code: CrmPipelineTemplateCode | null };
 export type EditState = null | { draft: Draft; newName: string; phase: 'EDIT' | 'SAVING' | 'UNCERTAIN'; error: string | null };
 export const LEAD_DRAG_TYPE = 'application/x-hon-lead';
+export const STAGE_DRAG_TYPE = 'application/x-hon-stage';
 
 export type PipelineViewProps = Readonly<{
   language: string; waiting: boolean; concealed: boolean; scope: BoardScope | null;
@@ -204,7 +205,7 @@ function Board(props: Inner & { shown: CrmBoardLead[] }) {
   </>;
 }
 
-function Card({ board, lead, language, selectedId, movingId, onOpen, onMove, onAskClose, t }: Inner & { lead: CrmBoardLead }) {
+function Card({ board, lead, scope, language, selectedId, movingId, onOpen, onMove, onAskClose, t }: Inner & { lead: CrmBoardLead }) {
   const name = fullName(lead);
   const line = cardLine(lead);
   const targets = moveTargets(board.stages, lead);
@@ -229,7 +230,21 @@ function Card({ board, lead, language, selectedId, movingId, onOpen, onMove, onA
         <li><button type="button" data-tone="lost" onClick={() => onAskClose?.(lead.id, 'LOST')}>{t('markLost')}</button></li>
       </ul>
     </details> : null}
+    {lead.status === 'OPEN' ? <QuickActions lead={lead} scope={scope} name={name} t={t} where="card"/> : null}
   </article>;
+}
+
+/** One-tap Call, Text and Book trial (Email too in the panel). Call, Text and Email open the staff member's own app; HON sends nothing. */
+function QuickActions({ lead, scope, name, where, t }: { lead: CrmBoardLead; scope: BoardScope; name: string; where: 'card' | 'panel'; t: T }) {
+  const call = callHref(lead.phoneE164), text = textHref(lead.phoneE164), email = where === 'panel' ? emailHref(lead.email) : null;
+  const trial = leadTrialHref({ organizationId: scope.organizationId, schoolId: scope.schoolId, leadId: lead.id });
+  const id = where === 'card' ? 'quick' : 'panel';
+  return <div className={styles.quick} data-where={where}>
+    {call ? <a className={styles.quickLink} href={call} draggable={false} data-testid={`${id}-call`} aria-label={t('quickCallLabel', { name })}>{t('quickCall')}</a> : null}
+    {text ? <a className={styles.quickLink} href={text} draggable={false} data-testid={`${id}-text`} aria-label={t('quickTextLabel', { name })}>{t('quickText')}</a> : null}
+    {email ? <a className={styles.quickLink} href={email} draggable={false} data-testid={`${id}-email`}>{t('quickEmail')}</a> : null}
+    <a className={styles.quickLink} data-tone="trial" href={trial} draggable={false} data-testid={`${id}-trial`} aria-label={t('quickTrialLabel', { name })}>{t('quickTrial')}</a>
+  </div>;
 }
 
 function List({ board, shown, language, selectedId, onOpen, t }: Inner & { shown: CrmBoardLead[] }) {
@@ -274,6 +289,8 @@ function Panel({ board, lead, scope, language, trials, movingId, onOpen, onMove,
         <div><dt>{t('source')}</dt><dd>{lead.sourceCode ? codeLabel(lead.sourceCode) : t('notRecorded')}</dd></div>
         <div><dt>{t('added')}</dt><dd>{when(language, lead.createdAt, false)}</dd></div>
       </dl>
+      {lead.status === 'OPEN' ? <><QuickActions lead={lead} scope={scope} name={fullName(lead)} t={t} where="panel"/>
+        {callHref(lead.phoneE164) || emailHref(lead.email) ? <p className={styles.meta}>{t('quickTextHelp')}</p> : null}</> : null}
     </section>
     <section className={styles.field}>
       <label htmlFor={stageId}>{t('stage')}</label>
@@ -376,14 +393,23 @@ function EditDialog({ board, edit, onDraft, onSave, onEdit, t }: Inner & { edit:
   const set = (next: Partial<NonNullable<EditState>>) => onDraft?.({ ...edit, ...next, error: null });
   const setStage = (index: number, patch: Partial<Draft['stages'][number]>) => set({ draft: { ...draft, stages: draft.stages.map((s, i) => i === index ? { ...s, ...patch } : s) } });
   const swap = (index: number, delta: -1 | 1) => set({ draft: moveDraftStage(draft, index, delta) });
+  const dropOn = (event: React.DragEvent, to: number) => {
+    const raw = event.dataTransfer.getData(STAGE_DRAG_TYPE);
+    if (busy || !/^\d{1,2}$/.test(raw)) return;
+    event.preventDefault();
+    set({ draft: moveDraftStageTo(draft, Number(raw), to) });
+  };
   const newName = edit.newName.trim();
   const canAdd = newName.length > 0 && newName.length <= CRM_STAGE_NAME_MAX && draft.stages.length < 20;
   return <div className={styles.overlay}>
     <div className={styles.dialog} data-wide="" role="dialog" aria-modal="true" aria-labelledby="pipeline-edit-title" data-testid="edit-dialog">
       <h2 id="pipeline-edit-title">{t('editTitle')}</h2>
-      <p className={styles.meta}>{t('editHelp')}</p>
+      <p className={styles.meta}>{t('editHelp')} {t('dragHelp')}</p>
       <ol className={styles.stageList}>
-        {draft.stages.map((stage, index) => <li key={stage.key} className={styles.stageRow} data-hidden={stage.hidden ? '' : undefined}>
+        {draft.stages.map((stage, index) => <li key={stage.key} className={styles.stageRow} data-hidden={stage.hidden ? '' : undefined} data-testid="stage-row"
+          onDragOver={(e) => { if (!busy && e.dataTransfer.types.includes(STAGE_DRAG_TYPE)) e.preventDefault(); }} onDrop={(e) => dropOn(e, index)}>
+          <span className={styles.handle} draggable={busy ? undefined : true} title={t('dragStage', { name: stage.name })} aria-hidden="true"
+            onDragStart={(e) => { e.dataTransfer.setData(STAGE_DRAG_TYPE, String(index)); e.dataTransfer.effectAllowed = 'move'; }}>⋮⋮</span>
           <span className={styles.dot} data-color={stage.color} aria-hidden="true"/>
           <input aria-label={t('stageName')} value={stage.name} maxLength={CRM_STAGE_NAME_MAX} disabled={busy} onChange={(e) => setStage(index, { name: e.target.value })}/>
           <select aria-label={t('stageColor')} value={stage.color} disabled={busy} onChange={(e) => setStage(index, { color: e.target.value as CrmStageColor })}>
@@ -396,7 +422,7 @@ function EditDialog({ board, edit, onDraft, onSave, onEdit, t }: Inner & { edit:
           {stage.hidden ? <span className={styles.badge}>{t('hiddenBadge')}</span> : null}
         </li>)}
         {terminal.map((stage) => <li key={stage.id} className={styles.stageRow} data-fixed="">
-          <span className={styles.dot} data-color={stage.color} aria-hidden="true"/><span>{stage.name}</span>
+          <span aria-hidden="true"/><span className={styles.dot} data-color={stage.color} aria-hidden="true"/><span>{stage.name}</span>
           <span className={styles.badge}>{t(stage.terminalStatus === 'WON' ? 'terminalWON' : 'terminalLOST')}</span>
         </li>)}
       </ol>

@@ -1,5 +1,5 @@
--- HON / Supabase automation engine role (0423, docs/architecture/AUTOMATION_WORKFLOWS.md)
--- Run after HON migrations through 0423 have completed. Replace the placeholder with a freshly generated
+-- HON / Supabase automation engine role (0423, 0574, docs/architecture/AUTOMATION_WORKFLOWS.md)
+-- Run after HON migrations through 0574 have completed. Replace the placeholder with a freshly generated
 -- base64url password; do not save it in Git. Store the Session Pooler URI only as
 -- HON_AUTOMATION_WORKER_DATABASE_URL (never DATABASE_URL, HON_RUNTIME_DATABASE_URL or the communication worker URL).
 ROLLBACK;
@@ -10,8 +10,8 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_automation_worker') THEN
     RAISE EXCEPTION 'Role hon_automation_worker already exists. Inspect and rotate it deliberately rather than overwriting it.';
   END IF;
-  IF to_regprocedure('hon.run_due_automation_steps(integer)') IS NULL THEN
-    RAISE EXCEPTION 'Apply automation engine migration 0423 first.';
+  IF to_regprocedure('hon.run_due_automation_steps(integer)') IS NULL OR to_regprocedure('hon.scan_automation_schedules(integer)') IS NULL THEN
+    RAISE EXCEPTION 'Apply automation engine migrations 0423 and 0574 first.';
   END IF;
 END;
 $$;
@@ -33,12 +33,13 @@ REVOKE ALL PRIVILEGES ON SCHEMA public FROM hon_automation_worker;
 GRANT USAGE ON SCHEMA hon TO hon_automation_worker;
 ALTER ROLE hon_automation_worker SET search_path = hon, pg_catalog;
 
--- No direct HON table, sequence or function access. The engine starts runs from qualifying outbox events and runs
--- due steps only through these two fixed functions; every message it creates is delivered by the 0243 worker.
+-- No direct HON table, sequence or function access. The engine starts runs from qualifying outbox events and from the
+-- daily date scan, and runs due steps, only through these three fixed functions; every message it creates is delivered by the 0243 worker.
 REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA hon FROM hon_automation_worker;
 REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA hon FROM hon_automation_worker;
 REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA hon FROM hon_automation_worker;
 GRANT EXECUTE ON FUNCTION hon.consume_automation_events(integer) TO hon_automation_worker;
 GRANT EXECUTE ON FUNCTION hon.run_due_automation_steps(integer) TO hon_automation_worker;
+GRANT EXECUTE ON FUNCTION hon.scan_automation_schedules(integer) TO hon_automation_worker;
 
 COMMIT;

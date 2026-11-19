@@ -1,7 +1,7 @@
 // Paper import (0388): photos or scans of student cards, contracts or attendance sheets. HON reads the pages into a
 // table with the columns of an existing import; staff check the table beside the photo, then send it to the existing
 // staged import (0226 students and guardians, 0333 attendance history), where every row is decided before anything is
-// saved. Readers: AI_ROUTE (0559, HON on the AI team's provider, under the S4 spend controls), NONE (staff typed the rows,
+// saved. Readers: AI_ROUTE (0594, HON on the AI team's provider, under the S4 spend controls), NONE (staff typed the rows,
 // no AI) and the stand-in SYNTHETIC, which reads only the built-in sample pages and never sends a page anywhere.
 import { STUDENT_IMPORT_FIELDS } from './student-imports.js';
 import { HISTORY_IMPORT_FIELDS } from './history-imports.js';
@@ -25,14 +25,14 @@ export type PaperImportReader = 'SYNTHETIC' | 'AI_ROUTE' | 'NONE';
 const READER_OUTCOMES: Readonly<Record<PaperImportReader, readonly PaperImportReadOutcome[]>> = {
   SYNTHETIC: ['SAMPLE_READ', 'NOT_READABLE'], AI_ROUTE: ['AI_READ', 'NOT_READABLE'], NONE: ['TYPED'],
 };
-/** HON's reading of a set on the AI route (0559): the shared text proposal's status and reason, never its content. */
+/** HON's reading of a set on the AI route (0594): the shared text proposal's status and reason, never its content. */
 export const PAPER_READING_STATUSES = ['PENDING', 'CONFIGURATION_REQUIRED', 'BLOCKED', 'SENDING', 'UNKNOWN', 'FAILED', 'RESULT_RECORDED', 'RESULT_REJECTED', 'APPLIED', 'DISMISSED'] as const;
 export type PaperReadingStatus = typeof PAPER_READING_STATUSES[number];
 export const PAPER_READING_REASONS = ['CONFIGURATION_REQUIRED', 'NO_ELIGIBLE_ROUTE', 'CUSTOMER_BUDGET_EXCEEDED', 'AI_SPEND_STOPPED', 'UNSUPPORTED_PROVIDER',
   'INVALID_REQUEST', 'PROVIDER_REJECTED', 'PROVIDER_UNKNOWN', 'ROUTE_STALE', 'RESULT_BUDGET_EXCEEDED', 'RESULT_INVALID', 'SUBJECT_STALE', 'GATE_CLOSED'] as const;
 export type PaperReadingReason = typeof PAPER_READING_REASONS[number];
 export interface PaperReadingState { status: PaperReadingStatus; reason: PaperReadingReason | null }
-/** The PAPER_READING kind row (0559): plan budgets and the most one reading may cost (micro-USD). */
+/** The PAPER_READING kind row (0594): plan budgets and the most one reading may cost (micro-USD). */
 export const PAPER_READING_AI_LIMITS = { inputTokens: 40000, outputTokens: 16000, maxProviderCostMicrounits: 250000 } as const;
 export interface PaperImportSummary {
   id: string; kind: PaperImportKind; target: PaperImportTarget; version: number; status: PaperImportStatus; pageCount: number;
@@ -155,7 +155,7 @@ export function verifyPaperImportPage(value: unknown): PaperImportPage {
 }
 
 /**
- * The model's answer to a reading (0559), as the API keeps it: exactly {rows, unsure}, one array of cells per row in the
+ * The model's answer to a reading (0594), as the API keeps it: exactly {rows, unsure}, one array of cells per row in the
  * column order of the kind, and a matching matrix of booleans. Each cell is trimmed and inner whitespace is joined to one
  * space; a cell that is still not plain text of up to 200 characters is left blank and marked unsure (never shortened or
  * guessed). Returns null when the answer is not that table at all, so the reading is recorded as not readable.

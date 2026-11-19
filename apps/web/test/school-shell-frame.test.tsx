@@ -87,6 +87,21 @@ describe('school shell frame', () => {
     expect(html).not.toContain('>CRM &amp; Sales<');
   });
 
+  it('opens HON from the corner as a pop-up over the page instead of leaving it (owner 2026-11-19)', () => {
+    const html = render({ path: '/staff/crm/leads' });
+    const corner = html.match(/<button[^>]*data-hon-corner=""[^>]*>/)?.[0] ?? '';
+    expect(corner).toContain('aria-haspopup="dialog"');
+    expect(corner).toContain('aria-expanded="false"');
+    expect(corner).toContain(`aria-label="${shellText('en', 'askHon')}"`);
+    // No link away from the page: the full workspace is offered inside the pop-up instead.
+    expect(html).not.toMatch(/<a[^>]*honLauncher/);
+    expect(html).not.toContain('role="dialog"');
+    expect(html).toContain('data-testid="page"');
+    // Where HON is already the page, there is no corner button; behind a modal it is inert.
+    for (const path of ['/staff/dashboard', '/staff/hon']) expect(render({ path })).not.toContain('data-hon-corner');
+    expect(render({ path: '/staff/crm/leads', menuOpen: true }).match(/<button[^>]*data-hon-corner=""[^>]*>/)?.[0]).toContain('inert');
+  });
+
   it('performs no network read while rendering', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
     render(); expect(fetcher).not.toHaveBeenCalled(); fetcher.mockRestore();
@@ -130,7 +145,7 @@ describe('school shell frame', () => {
 
   it('marks only the everyday pages for the Modern top bar; the rest stay in the Menu', () => {
     const html = render({ mode: 'modern' });
-    for (const key of ['home', 'classes', 'attendance', 'students', 'crm', 'conversationAi']) expect(html).toMatch(new RegExp(`data-nav="${key}" data-everyday="true"`));
+    for (const key of ['home', 'classes', 'attendance', 'students', 'crm', 'messages']) expect(html).toMatch(new RegExp(`data-nav="${key}" data-everyday="true"`));
     expect(html).toMatch(/data-nav="billing" data-everyday="false"/);
   });
 
@@ -162,7 +177,7 @@ describe('school shell frame', () => {
     expect(render({ phase: 'CONCEALED', schoolName: null })).not.toContain('data-shell-private');
   });
   it('keeps HON in the corner on other pages, but not on the dashboard or in HON itself', () => {
-    const launcher = /class="[^"]*honLauncher[^"]*" href="\/staff\/hon"/;
+    const launcher = /<button[^>]*class="[^"]*honLauncher[^"]*"[^>]*aria-haspopup="dialog"/;
     expect(render({ path: '/staff/crm/leads' })).toMatch(launcher);
     expect(render({ path: '/staff/work', phase: 'SESSION', selection: null })).toMatch(launcher);
     expect(render({ path: '/staff/dashboard' })).not.toMatch(launcher);

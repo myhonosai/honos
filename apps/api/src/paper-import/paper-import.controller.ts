@@ -94,7 +94,7 @@ export class PaperImportController {
     return { data: await this.imports.readPages(context, setId, input), meta: this.meta(context) };
   }
 
-  /** "Type the rows myself" (0559): no AI, nothing spent. Keyless like the reading: a repeat returns the set unchanged. */
+  /** "Type the rows myself" (0594): no AI, nothing spent. Keyless like the reading: a repeat returns the set unchanged. */
   @Post(':setId/typed')
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'private, no-store')

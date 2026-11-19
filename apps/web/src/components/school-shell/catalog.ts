@@ -6,7 +6,7 @@ import type { ShellKey } from './copy';
  * authority. `scoped` routes accept the existing `organizationId` + `schoolId`
  * prefill, which the destination re-verifies server-side.
  */
-export type SchoolShellIcon = 'home' | 'hon' | 'aiTeam' | 'conversationAi' | 'classes' | 'attendance' | 'students' | 'staff' | 'crm' | 'automation' | 'messages'
+export type SchoolShellIcon = 'home' | 'hon' | 'aiTeam' | 'conversationAi' | 'classes' | 'attendance' | 'students' | 'staff' | 'crm' | 'automation' | 'messages' | 'parentApp'
   | 'social' | 'checkout' | 'shopify' | 'invoices' | 'website' | 'marketing' | 'ads' | 'creative' | 'ranks' | 'testing' | 'promotions' | 'billing' | 'analytics' | 'community' | 'settings';
 /** Owner menu (David, 2026-11-16 07:52Z): eleven headings, each with its few pages under it. */
 export type SchoolShellSection = 'dashboard' | 'ai' | 'calendar' | 'contacts' | 'leads' | 'communication' | 'finance' | 'marketing' | 'ranks' | 'business' | 'community';
@@ -42,8 +42,8 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/voice', 'routeVoice'), h('/staff/leads/assistant', 'routeLeadAssistant'), h('/staff/marketing/assistant', 'routeMarketingAssistant'),
     h('/staff/teaching-assistant', 'routeKai'), h('/staff/retention/at-risk', 'routeMayaAtRisk'),
     h('/staff/ai-team/alex', 'routeAlex'), h('/staff/ai-team/jordan', 'routeJordan'), h('/staff/ai-team/claire', 'routeClaire'), h('/staff/ai-team/lena', 'routeLena')] },
-  // Conversation AI answers the school's texts in this inbox (0364); staff take over any thread.
-  { key: 'conversationAi', titleKey: 'navConversationAi', section: 'ai', routes: [r('/staff/conversations', 'routeConversations'), r('/staff/conversations/train-ai', 'routeTrainAi')] },
+  // Conversation AI answers the school's texts in Texts > Conversations (0364); its training and settings stay here.
+  { key: 'conversationAi', titleKey: 'navConversationAi', section: 'ai', routes: [r('/staff/conversations/train-ai', 'routeTrainAi')] },
   // Owner ask (2026-11-16): rosters, class schedule, weekly timetable, sale days and events and class booking are one
   // Calendar page; /staff/schedule owns every /staff/schedule/* path, so the old pages and workflow pages still mark Classes.
   { key: 'classes', titleKey: 'navClasses', section: 'calendar', routes: [r('/staff/schedule', 'routeCalendar')] },
@@ -56,8 +56,11 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/instructor-qualifications', 'routeQualifications'), r('/staff/documents', 'routeDocuments')] },
   { key: 'crm', titleKey: 'navCrm', section: 'leads', routes: [r('/staff/crm', 'routeLeadsHome'), h('/staff/crm/leads', 'routeLeads'), h('/staff/crm/journey', 'routeJourney'),
     r('/staff/crm/follow-ups', 'routeFollowUps'), r('/staff/crm/trials', 'routeTrials', true), r('/staff/crm/lead-memberships', 'routeLeadMemberships'), r('/staff/migration/leads', 'routeLeadImport')] },
-  { key: 'automation', titleKey: 'navAutomation', section: 'leads', routes: [r('/staff/automation/rules', 'routeAutomation')] },
-  { key: 'messages', titleKey: 'navMessages', section: 'communication', routes: [r('/staff/family-messages', 'routeFamilyMessages')] },
+  { key: 'automation', titleKey: 'navAutomation', section: 'leads', routes: [r('/staff/automations', 'routeAutomation'), h('/staff/automation/rules', 'routeAutomationRules')] },
+  // Owner ask (2026-11-19, docs/architecture/SCHOOL_TEXTS_AND_EMAIL_PAGES.md): texts and email are separate pages with their own
+  // tabs, modeled on the owner's current CRM; the parent app chat is its own page laid out like the texts inbox.
+  { key: 'messages', titleKey: 'navMessages', section: 'communication', routes: [r('/staff/texts', 'routeConversations'), r('/staff/texts/send', 'routeTextsSend')] },
+  { key: 'parentApp', titleKey: 'navParentApp', section: 'communication', routes: [r('/staff/family-messages', 'routeFamilyMessages'), r('/staff/family-messages/announcements', 'routeAnnouncements')] },
   { key: 'social', titleKey: 'navSocial', section: 'communication', routes: [r('/staff/marketing/social', 'routeSocial')] },
   { key: 'checkout', titleKey: 'navCheckout', section: 'finance', routes: [r('/staff/billing/checkout-pages', 'routeCheckoutPages')] },
   // Shopify (0405): the school's own store, read-only mirror plus connect, sync and disconnect.
@@ -97,6 +100,8 @@ export const SCHOOL_SHELL_UNLISTED_ROUTES: readonly string[] = [
   '/staff/schedule/sessions',
   '/staff/schedule/timetable',
   '/staff/schedule/events',
+  // The old SMS inbox address (0364) redirects to Texts > Conversations (2026-11-19) for old links and bookmarks.
+  '/staff/conversations',
   '/staff/search/[organizationId]/[schoolId]/[kind]/[entityId]',
   // One custom tool's own section (0415); reached from Custom tools, never from the static menu.
   '/staff/tools/[toolKey]',
@@ -109,7 +114,7 @@ export const SCHOOL_SHELL_UNLISTED_ROUTES: readonly string[] = [
 /** Mobile bottom bar: four primary destinations plus "More". */
 export const SCHOOL_SHELL_MOBILE: readonly SchoolShellIcon[] = ['home', 'students', 'crm', 'classes'];
 /** Modern top bar: the everyday pages; every other page is one click away in the Menu (owner layout, 2026-11-16). */
-export const SCHOOL_SHELL_EVERYDAY: readonly SchoolShellIcon[] = ['home', 'classes', 'attendance', 'students', 'crm', 'conversationAi'];
+export const SCHOOL_SHELL_EVERYDAY: readonly SchoolShellIcon[] = ['home', 'classes', 'attendance', 'students', 'crm', 'messages'];
 
 /** The menu pages under one heading, in catalog order. */
 export const schoolShellSectionItems = (section: SchoolShellSection): SchoolShellItem[] => SCHOOL_SHELL_NAV.filter(item => item.section === section);

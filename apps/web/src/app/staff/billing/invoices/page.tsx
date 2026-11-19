@@ -1,9 +1,9 @@
 import React from 'react';
-import { InvoiceWorkbenchEntry } from '../../../../components/invoice-workbench-entry';
-// The shared /staff layout verifies the signed session. Each canonical command
-// independently authorizes the current exact school and invoice permission.
+import { SimpleInvoicesEntry } from '../../../../components/simple-invoice/simple-invoices-entry';
+// The shared /staff layout verifies the signed session. Each command independently authorizes the current school and
+// invoice permission on the server (SI1, 0558).
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'HON | Human Invoice Workbench', robots: { index: false, follow: false } };
+export const metadata = { title: 'HON | Invoices', robots: { index: false, follow: false } };
 export default function StaffInvoicesPage() {
-  return <InvoiceWorkbenchEntry />;
+  return <SimpleInvoicesEntry />;
 }

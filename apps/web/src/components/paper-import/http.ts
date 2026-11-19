@@ -6,7 +6,7 @@ import {
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * Paper import (0388, 0559): photos or scans read into a table that staff check, then sent to the existing staged import. Reads
+ * Paper import (0388, 0594): photos or scans read into a table that staff check, then sent to the existing staged import. Reads
  * send no Idempotency-Key; each command sends its own X-HON-Human-Command and (except the one reading per set and typing
  * the rows) an Idempotency-Key. The server strips image metadata, decides the AI spend, checks every cell and the permission.
  */
@@ -132,7 +132,7 @@ export const paperImportApi = {
     const body = checked(() => validatePaperImportVersionInput({ expectedVersion }));
     return command(`${setPath(scope, setId)}/reading`, 'students.paper_import.reading', body, null, sameDetail(setId), signal, owned);
   },
-  /** "Type the rows myself" (0559): no AI, nothing spent, no key; a repeat returns the set as it stands. */
+  /** "Type the rows myself" (0594): no AI, nothing spent, no key; a repeat returns the set as it stands. */
   async typeRows(scope: PaperScope, setId: string, expectedVersion: number, signal: AbortSignal, owned: Owned): Promise<PaperImportDetail> {
     const body = checked(() => validatePaperImportVersionInput({ expectedVersion }));
     return command(`${setPath(scope, setId)}/typed`, 'students.paper_import.typed', body, null, sameDetail(setId), signal, owned);

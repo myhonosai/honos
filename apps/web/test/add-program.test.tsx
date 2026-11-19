@@ -73,7 +73,7 @@ it('shows the button, the form, results and a kept retry in plain words (en/ko/e
   const form = renderToStaticMarkup(<AddProgramView language="en" open status={{ kind: 'IDLE' }} locked={false} canRetry={false}/>);
   expect(form).toContain('Program name'); expect(form).toContain('maxLength="140"');
   expect(renderToStaticMarkup(<AddProgramView language="en" open={false} status={{ kind: 'DONE', name: 'Kids' }} locked={false} canRetry={false}/>))
-    .toContain('&quot;Kids&quot; was added. You can now create a class series for it.');
+    .toContain('&quot;Kids&quot; was added. You can now create a roster for it.');
   const unknown = renderToStaticMarkup(<AddProgramView language="en" open status={{ kind: 'UNKNOWN' }} locked={false} canRetry/>);
   expect(unknown).toContain('Try again'); expect(unknown).toContain('never add the program twice');
   expect(programText('ko', 'open')).toBe('프로그램 추가');
