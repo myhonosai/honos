@@ -23,8 +23,8 @@ export type CalendarViewProps = Readonly<{
   onView?: ((view: CalendarView) => void) | undefined; onShift?: ((step: 1 | -1) => void) | undefined; onToday?: (() => void) | undefined;
   onSelect?: ((selection: CalendarSelection) => void) | undefined; onDay?: ((date: string) => void) | undefined;
   onRefresh?: (() => void) | undefined; onManageEvent?: (() => void) | undefined;
-  /** Class-name filter chips (null = all classes), like the program chips of the scheduler the school uses today. */
-  classFilter?: string | null | undefined; onClassFilter?: ((name: string | null) => void) | undefined;
+  /** The chosen class names (empty = all classes). A compact Filter menu replaces the old wall of chips. */
+  classFilter?: readonly string[] | undefined; onClassFilter?: ((names: readonly string[]) => void) | undefined;
 }>;
 
 const day = (language: string, date: string, options: Intl.DateTimeFormatOptions) => new Date(`${date}T00:00:00Z`).toLocaleDateString(language, { ...options, timeZone: 'UTC' });
@@ -59,7 +59,7 @@ export function CalendarViewPane(p: CalendarViewProps): React.ReactElement {
         </div>
       </div>
       <Notices {...p} t={t}/>
-      {!loading ? <Chips {...p} t={t}/> : null}
+      {!loading ? <Filter {...p} t={t}/> : null}
       <div className={styles.board}>{loading ? <p className={styles.meta} role="status">{t('loading')}</p> : p.anchor !== null ? <Board {...p} anchor={p.anchor} t={t}/> : null}</div>
       {p.selected ? <aside className={styles.drawer} aria-labelledby="calendar-drawer-title" data-testid="calendar-drawer">
         <div className={styles.drawerHead}><h2 id="calendar-drawer-title" className={styles.hidden}>{t('details')}</h2>
@@ -81,19 +81,40 @@ function Notices({ classes, events, t }: CalendarViewProps & { t: T }): React.Re
   </>;
 }
 
-/** The classes shown: all, or only those with the chosen name. */
-export function visibleClasses(classes: ClassesState, filter: string | null | undefined): readonly CurrentSchoolClassSession[] {
+/** The classes shown: all, or only those whose name is chosen. */
+export function visibleClasses(classes: ClassesState, filter: readonly string[] | undefined): readonly CurrentSchoolClassSession[] {
   if (classes.state !== 'READY') return [];
-  return filter ? classes.items.filter((s) => s.name === filter) : classes.items;
+  // Only names loaded in this range count, as in the Filter menu: a choice that matches nothing here shows every class,
+  // so the board never goes empty behind a menu that says "All classes".
+  const loaded = new Set(classes.items.map((s) => s.name)), chosen = new Set((filter ?? []).filter((n) => loaded.has(n)));
+  return chosen.size === 0 ? classes.items : classes.items.filter((s) => chosen.has(s.name));
 }
 
-function Chips({ classes, classFilter, onClassFilter, t }: CalendarViewProps & { t: T }): React.ReactElement | null {
+/** A compact Filter menu: one button that says what is shown, and a short checklist of class names under it. */
+function Filter({ classes, classFilter = [], onClassFilter, t }: CalendarViewProps & { t: T }): React.ReactElement | null {
   if (classes.state !== 'READY') return null;
   const names = [...new Set(classes.items.map((s) => s.name))].sort((a, b) => a.localeCompare(b));
   if (names.length < 2) return null;
-  return <div className={styles.chips} role="group" aria-label={t('filterLabel')}>
-    <button type="button" className={styles.chip} aria-pressed={!classFilter} onClick={() => onClassFilter?.(null)}>{t('allClasses')}</button>
-    {names.map((name) => <button key={name} type="button" className={styles.chip} aria-pressed={classFilter === name} onClick={() => onClassFilter?.(name)}>{name}</button>)}
+  const chosen = new Set(classFilter.filter((n) => names.includes(n)));
+  const summary = chosen.size === 0 ? t('allClasses') : chosen.size === 1 ? [...chosen][0]! : t('classesChosen', { n: String(chosen.size) });
+  const toggle = (name: string) => onClassFilter?.(chosen.has(name) ? [...chosen].filter((n) => n !== name) : [...chosen, name]);
+  return <div className={styles.filterBar}>
+    <details className={styles.filter} data-testid="calendar-filter">
+      <summary className={styles.filterButton} aria-label={`${t('filterLabel')}: ${summary}`}>
+        <span aria-hidden="true" className={styles.filterIcon}>⏷</span> {t('filterTitle')}
+        <span className={styles.filterValue}>{summary}</span>
+        {chosen.size ? <span className={styles.filterCount} aria-hidden="true">{chosen.size}</span> : null}
+      </summary>
+      <div className={styles.filterMenu}>
+        <fieldset className={styles.filterGroup}>
+          <legend>{t('filterClasses')}</legend>
+          <ul>{names.map((name) => <li key={name}><label className={styles.filterOption}>
+            <input type="checkbox" checked={chosen.has(name)} onChange={() => toggle(name)}/> <span>{name}</span></label></li>)}</ul>
+        </fieldset>
+        <button type="button" className={styles.secondary} onClick={() => onClassFilter?.([])} disabled={chosen.size === 0}>{t('filterClear')}</button>
+      </div>
+    </details>
+    {chosen.size ? <button type="button" className={styles.clearLink} onClick={() => onClassFilter?.([])}>{t('filterClear')}</button> : null}
   </div>;
 }
 
