@@ -4393,10 +4393,72 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+-- 0530 parent invoice payment (test mode only): three runtime entry points (list, latest payment, open); the scope,
+-- balance, hold and settle helpers are migration-owner only. No new table.
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_parent_invoice_payments(text)','hon.read_parent_invoice_payment(text,uuid)','hon.open_parent_invoice_payment(text,uuid)'];
+BEGIN
+  IF to_regprocedure('hon.open_parent_invoice_payment(text,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0530 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.parent_invoice_pay_open(uuid)','hon.guard_parent_invoice_pay_record()','hon.guard_parent_invoice_pay_invoice()',
+    'hon.guard_parent_invoice_pay_charge()','hon.parent_invoice_pay_scope(text)','hon.parent_invoice_pay_invoices(uuid,uuid,uuid)',
+    'hon.parent_invoice_pay_balance(uuid)','hon.parent_invoice_pay_latest(uuid)','hon.settle_parent_invoice_payment()']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
 
--- 0534 shared AI text proposals: two private tables; the runtime reaches the WEBSITE_EDIT kind through seven entry points.
+-- 0533 walk-in kiosk card payment (WK3): four runtime entry points (three tablet, one staff read); the visit/payment
+-- helpers are migration-owner only. Tables keep the 0414 and 0529 rules (no runtime table privilege).
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_walkin_card_provider(text)','hon.open_walkin_card_payment(text,text)','hon.settle_walkin_card_payment(text,text)',
+    'hon.read_walkin_visit_card_payment(text,uuid)'];
+  fns text[]:=ARRAY['hon.walkin_card_payment_of(hon.walkin_visits)','hon.walkin_card_paid(hon.walkin_visits,jsonb,uuid,text,uuid)',
+    'hon.walkin_tablet_hold(text)','hon.walkin_tablet_visit(hon.walkin_kiosk_devices,text)'];
+BEGIN
+  IF to_regprocedure('hon.open_walkin_card_payment(text,text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0533 first'; END IF;
+  FOREACH f IN ARRAY fns||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
+-- 0537 walk-in kiosk trial class (WK4): no new runtime entry point; the class, seat and trial helpers (and the six-argument
+-- card-paid step) are migration-owner only. Tables keep the 0414, 0032 and 0043 rules.
+DO $$ DECLARE r text; f text;
+  fns text[]:=ARRAY['hon.walkin_session_taken(uuid)','hon.walkin_trial_session_open(hon.class_sessions,jsonb,integer)',
+    'hon.walkin_trial_classes(uuid,uuid,jsonb)','hon.walkin_trial_class_json(hon.walkin_visits)',
+    'hon.walkin_card_paid(hon.walkin_visits,jsonb,uuid,text,uuid,uuid)'];
+BEGIN
+  IF to_regprocedure('hon.walkin_trial_classes(uuid,uuid,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0537 first'; END IF;
+  FOREACH f IN ARRAY fns LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+END $$;
+
+-- 0538 walk-in kiosk trial seats and demo programs (WK5): one new scoped runtime read, the class seat count the staff
+-- booking API uses so kiosk trial seats count everywhere. Every helper stays migration-owner only.
+DO $$ DECLARE r text;
+BEGIN
+  IF to_regprocedure('hon.read_class_session_seats_taken(uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0538 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.read_class_session_seats_taken(uuid) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION hon.read_class_session_seats_taken(uuid) FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_class_session_seats_taken(uuid) TO hon_runtime; END IF;
+END $$;
+
+-- 0550 shared AI text proposals: two private tables; the runtime reaches the WEBSITE_EDIT kind through seven entry points.
 DO $$ DECLARE r text; t text; BEGIN
-  IF to_regclass('hon.ai_text_proposals') IS NULL THEN RAISE EXCEPTION 'Apply migration 0534 first'; END IF;
+  IF to_regclass('hon.ai_text_proposals') IS NULL THEN RAISE EXCEPTION 'Apply migration 0550 first'; END IF;
   FOREACH t IN ARRAY ARRAY['ai_text_kinds','ai_text_proposals'] LOOP
     EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
@@ -4407,9 +4469,9 @@ DO $$ DECLARE r text; t text; BEGIN
       hon.record_school_website_ai_edit(text,uuid,jsonb), hon.read_school_website_ai_edits(text,uuid), hon.close_school_website_ai_edit(text,uuid,text) TO hon_runtime;
   END IF;
 END $$;
--- 0535 Merch Studio AI ideas: the MERCH_IDEAS kind on the shared AI text proposals; seven runtime entry points, every helper closed.
+-- 0566 Merch Studio AI ideas: the MERCH_IDEAS kind on the shared AI text proposals; seven runtime entry points, every helper closed.
 DO $$ DECLARE r text; f regprocedure; BEGIN
-  IF to_regprocedure('hon.begin_shopify_merch_ideas(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0535 first'; END IF;
+  IF to_regprocedure('hon.begin_shopify_merch_ideas(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0566 first'; END IF;
   FOREACH f IN ARRAY ARRAY['hon.shopify_merch_kinds()','hon.shopify_merch_styles()','hon.shopify_merch_keys_are(jsonb,text[])','hon.shopify_merch_brief_ok(jsonb)',
     'hon.shopify_merch_ideas_ok(jsonb)','hon.shopify_merch_ai_actor(text)','hon.shopify_merch_ai_reader(text)','hon.shopify_merch_ai_facts(jsonb,uuid)',
     'hon.shopify_merch_ai_view(uuid,uuid)']::regprocedure[] LOOP

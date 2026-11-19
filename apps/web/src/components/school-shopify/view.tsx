@@ -3,7 +3,7 @@ import type { ShopifyCatalog, ShopifyConnectResult, ShopifyConnection, ShopifyOr
 import { shopifyText, type ShopifyKey } from './copy';
 import type { ShopifyErrorKind } from './http';
 import styles from './shopify.module.css';
-import { money, shopifyAdminUrl } from './format';
+import { SHOPIFY_ADMIN_PAGES, money, shopifyAdminUrl, type ShopifyAdminPage } from './format';
 export { money, shopifyAdminUrl };
 import { Changes, DraftEditor, ProductEditor, changeFailure, changeOpen, type ProposeRequest } from './editor';
 import { MerchStudio, type BrandState } from './studio';
@@ -12,7 +12,7 @@ import type { MerchAiApi, MerchAiScope } from './merch-ai-http';
 type T = (key: ShopifyKey, vars?: Record<string, string>) => string;
 export type OverviewState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; read: ShopifyOverview };
 /** The Commerce Workspace sections built today. Later sections (Collections, Fulfillment, Theme Builder, …) are added when they work. */
-export const SHOPIFY_SECTIONS = ['overview', 'products', 'studio', 'changes', 'orders', 'inventory', 'settings'] as const;
+export const SHOPIFY_SECTIONS = ['overview', 'products', 'studio', 'changes', 'orders', 'inventory', 'admin', 'settings'] as const;
 export type ShopifySection = typeof SHOPIFY_SECTIONS[number];
 export type ListState<T> = { state: 'LOADING' | 'UNAVAILABLE' } | { state: 'READY'; value: T };
 export type ShopifyAction = 'connect' | 'sync' | 'disconnect' | 'allowEditing' | 'propose' | 'approve' | 'cancelChange';
@@ -285,6 +285,20 @@ function Orders({ ctx, orders }: { ctx: Ctx; orders: ListState<ShopifyOrders> })
 }
 
 type InventoryFilter = 'low' | 'tracked' | 'untracked';
+/** Shopify forbids showing its admin inside another site, so each page opens in a new tab on this store. */
+export function AdminLinks({ ctx }: { ctx: Ctx }): React.ReactElement {
+  const { t } = ctx;
+  return <div className={styles.card} data-section="admin">
+    <h2>{t('adm_title')}</h2>
+    <p className={styles.meta}>{t('adm_help')}</p>
+    <ul className={styles.adminLinks}>
+      {(Object.keys(SHOPIFY_ADMIN_PAGES) as ShopifyAdminPage[]).map(k => <li key={k}>
+        <a href={shopifyAdminUrl(ctx.domain, k)} target="_blank" rel="noopener noreferrer" data-admin-link={k}>
+          <strong>{t(`adm_${k}`)}</strong><span className={styles.meta}>{t(`adm_${k}D`)}</span></a></li>)}
+    </ul>
+  </div>;
+}
+
 function Inventory({ ctx, catalog }: { ctx: Ctx; catalog: ListState<ShopifyCatalog> }): React.ReactElement {
   const { t, locale } = ctx;
   const [filter, setFilter] = useState<InventoryFilter>('low');
@@ -426,6 +440,7 @@ export function ShopifyView(p: ShopifyViewProps): React.ReactElement {
         when={(iso) => when(p.locale, iso)} onApprove={p.onApprove} onCancel={p.onCancelChange} onAllowEditing={p.onAllowEditing} />
       : section === 'orders' ? <Orders ctx={ctx} orders={p.orders} />
       : section === 'inventory' ? <Inventory ctx={ctx} catalog={p.catalog} />
+      : section === 'admin' ? <AdminLinks ctx={ctx} />
       : <><Settings p={p} t={t} read={read} c={c} />{connectable && <ConnectCard p={p} t={t} read={read} c={c} />}</>}
   </section>;
 }

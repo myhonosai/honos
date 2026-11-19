@@ -6,7 +6,7 @@ import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 import { websiteBase, type Owned, type WebsiteScope } from './http';
 
 /**
- * WB5 (0534): suggestions from Marcus for the website draft. The list is a plain same-origin GET; asking, applying and
+ * WB5 (0550): suggestions from Marcus for the website draft. The list is a plain same-origin GET; asking, applying and
  * dismissing each send their own X-HON-Human-Command and an Idempotency-Key. The server decides every permission.
  */
 export type WebsiteAiErrorKind =

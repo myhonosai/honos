@@ -13,6 +13,10 @@ import { verifyParentClassPassView, type ParentClassPassView } from '@hon/contra
 import { verifyParentTestingStatusView, type ParentTestingStatusView } from '@hon/contracts/parent-testing-status';
 import { verifyParentCurriculumLibrary, type ParentCurriculumLibrary } from '@hon/contracts/curriculum-resource-library';
 import { verifyEianStatus, verifyEianTurn, type EianStatus, type EianTurn } from '@hon/contracts/eian';
+import {
+  verifyParentInvoicePayResult, verifyParentInvoicePayStart, verifyParentInvoicePayments,
+  type ParentInvoicePayResult, type ParentInvoicePayStart, type ParentInvoicePayments,
+} from '@hon/contracts/parent-invoice-pay';
 
 /**
  * What a screen shows when a read does not return verified data. Every protected read maps to one of these;
@@ -164,8 +168,20 @@ export function createParentApi(options: ParentApiOptions) {
       post('/v1/parent/planned-absences', 'parent-planned-absence', idempotencyKey,
         { studentProfileId: input.studentProfileId, startsAt: input.startsAt, endsAt: input.endsAt, ...(input.reason ? { reason: input.reason } : {}) },
         verifyParentPlannedAbsenceSubmittedReceipt),
-    /** Read-only, redacted family billing: memberships and invoices. The app never pays, refunds or changes billing. */
+    /** Read-only, redacted family billing: memberships and invoices. Paying an invoice is the separate path below. */
     billing: (): Promise<ParentRead<ParentBillingView>> => get('/v1/parent/billing', dataOf(verifyParentBillingView)),
+    /** 0530: the family's open invoices the parent may pay on the school's own processor page (test mode only). */
+    invoicePayments: (): Promise<ParentRead<ParentInvoicePayments>> => get('/v1/parent/invoice-payments', dataOf(verifyParentInvoicePayments)),
+    /** Opens (or gets back) the processor page for one invoice. The server decides the amount; the app sends nothing else. */
+    startInvoicePayment: (invoiceId: string, idempotencyKey: string): Promise<ParentWrite<ParentInvoicePayStart>> =>
+      post(`/v1/parent/invoice-payments/${encodeURIComponent(invoiceId)}/start`, 'parent.invoice.pay.start', idempotencyKey, {}, verifyParentInvoicePayStart,
+        // The return page is checked before anything is opened, so this 503 is a definite no.
+        ['PARENT_INVOICE_PAY_NOT_CONFIGURED']),
+    /** The processor's own answer for the invoice's payment, as HON recorded it. */
+    confirmInvoicePayment: (invoiceId: string, idempotencyKey: string): Promise<ParentWrite<ParentInvoicePayResult>> =>
+      post(`/v1/parent/invoice-payments/${encodeURIComponent(invoiceId)}/confirm`, 'parent.invoice.pay.confirm', idempotencyKey, {}, verifyParentInvoicePayResult),
+    cancelInvoicePayment: (invoiceId: string, idempotencyKey: string): Promise<ParentWrite<ParentInvoicePayResult>> =>
+      post(`/v1/parent/invoice-payments/${encodeURIComponent(invoiceId)}/cancel`, 'parent.invoice.pay.cancel', idempotencyKey, {}, verifyParentInvoicePayResult),
     classPass: (): Promise<ParentRead<ParentClassPassView>> => get('/v1/parent/classpass', dataOf(verifyParentClassPassView)),
     testingStatus: (): Promise<ParentRead<ParentTestingStatusView>> => get('/v1/parent/testing/status', dataOf(verifyParentTestingStatusView)),
     curriculumLibrary: (): Promise<ParentRead<ParentCurriculumLibrary>> => get('/v1/parent/curriculum-library', dataOf(verifyParentCurriculumLibrary)),
