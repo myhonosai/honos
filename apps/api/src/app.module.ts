@@ -103,7 +103,7 @@ import { ReadinessController } from './health/readiness.controller.js';
 import { LeadController } from './crm/lead.controller.js';
 import { LeadService } from './crm/lead.service.js';
 import { LeadCreateHumanUiGuard } from './crm/lead-create-human-ui.guard.js';
-import { StarterPipelineHumanUiGuard } from './crm/starter-pipeline-human-ui.guard.js';
+import { StarterPipelineHumanUiGuard, TemplatePipelineHumanUiGuard } from './crm/starter-pipeline-human-ui.guard.js';
 import { LeadCloseController } from './crm/lead-close.controller.js';
 import { LeadCloseService } from './crm/lead-close.service.js';
 import { LeadCloseHumanUiGuard } from './crm/lead-close.dto.js';
@@ -739,6 +739,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     LeadService,
     LeadCreateHumanUiGuard,
     StarterPipelineHumanUiGuard,
+    TemplatePipelineHumanUiGuard,
     LeadCloseService,
     LeadCloseHumanUiGuard,
     LeadRegistrationService,
