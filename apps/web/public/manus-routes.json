@@ -281,6 +281,10 @@
       "title": "HON | Human instructor qualification evidence"
     },
     {
+      "path": "/staff/automations",
+      "title": "HON | Automations"
+    },
+    {
       "path": "/staff/automation/rules",
       "title": "HON Staff | Automation Configuration Only"
     },
