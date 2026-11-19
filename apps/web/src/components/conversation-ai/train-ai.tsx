@@ -11,10 +11,12 @@ import { onShellPrivacyEvent } from '../school-shell/privacy';
 import { useLocale } from '../localization/provider';
 import { trainAiCopy, type TrainAiCopy } from './copy';
 import {
-  TrainAiAccessError, TrainAiRefusal, commandAttempt, loadKnowledge, loadTrainAi, loadTrainingFile, mediaTypeFor, saveSettings, saveTrainingItem,
+  TrainAiAccessError, TrainAiRefusal, commandAttempt, loadKnowledge, loadTestChat, loadTrainAi, loadTrainingFile, mediaTypeFor, saveSettings, saveTrainingItem,
   setTrainingItemStatus, toBase64, uploadTrainingFile, type TrainAiScope,
 } from './http';
 import { setupCopy } from './setup-copy';
+import { TryIt } from './try-it';
+import { tryItCopy } from './try-it-copy';
 import { enabledFromModes, modeSummary, modesAll, quickStartLeft, setupChecklist, type QuickStartKey } from './setup-model';
 import { Checklist, HandoffChips, LengthPresets, ModeChoice, StatusCard, type StepKey } from './setup-parts';
 import s from './setup.module.css';
@@ -59,8 +61,8 @@ export function itemInput(draft: ItemDraft): ConversationAiItemInput | null {
   return out;
 }
 
-type Tab = 'how' | 'knows' | 'handoff';
-const TABS: readonly Tab[] = ['how', 'knows', 'handoff'];
+type Tab = 'how' | 'knows' | 'handoff' | 'tryIt';
+const TABS: readonly Tab[] = ['how', 'knows', 'handoff', 'tryIt'];
 
 /**
  * CE1 Conversation AI easy setup over the 0420 Train AI API (docs/architecture/CONVERSATION_AI_EASY_SETUP.md). Every call carries the shell's school scope, which the server re-checks (conversation.read to look,
@@ -69,7 +71,7 @@ const TABS: readonly Tab[] = ['how', 'knows', 'handoff'];
 export function TrainAi(): React.ReactElement {
   const shell = useSchoolShell();
   const { preferences, date } = useLocale();
-  const copy = trainAiCopy(preferences.language), easy = setupCopy(preferences.language);
+  const copy = trainAiCopy(preferences.language), easy = setupCopy(preferences.language), tryCopy = tryItCopy(preferences.language);
   const selection = shell.phase === 'READY' ? shell.selection : null;
   const scopeKey = selection ? `${selection.organizationId}/${selection.schoolId}` : '';
   const [overview, setOverview] = useState<ConversationAiOverview | null>(null), [knowledge, setKnowledge] = useState<ConversationAiKnowledge | null>(null);
@@ -78,6 +80,7 @@ export function TrainAi(): React.ReactElement {
   const [busy, setBusy] = useState(false), [acting, setActing] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [denied, setDenied] = useState(false), [hidden, setHidden] = useState(false);
   const [tab, setTab] = useState<Tab>('how'), [perChannel, setPerChannel] = useState(false), [editing, setEditing] = useState(false), [showAll, setShowAll] = useState(false);
+  const [tested, setTested] = useState(false);
   const [quick, setQuick] = useState<QuickStartKey | null>(null), [quickAnswer, setQuickAnswer] = useState(''), [rule, setRule] = useState('');
   const generation = useRef(0), fileInput = useRef<HTMLInputElement>(null);
   // One retry key per command kind: an unconfirmed change keeps its key until the same change is sent again or something else is chosen.
@@ -88,7 +91,7 @@ export function TrainAi(): React.ReactElement {
     return organizationId && schoolId ? { organizationId, schoolId } : null;
   }, [scopeKey]);
   const clear = useCallback(() => {
-    ++generation.current; setOverview(null); setKnowledge(null); setSettings(null); setItem(EMPTY_ITEM); setUpload(null); setConfirming(null);
+    ++generation.current; setOverview(null); setKnowledge(null); setTested(false); setSettings(null); setItem(EMPTY_ITEM); setUpload(null); setConfirming(null);
     attempts.current = { settings: null, item: null, status: null, upload: null };
   }, []);
   const refresh = useCallback(async () => {
@@ -101,6 +104,8 @@ export function TrainAi(): React.ReactElement {
       if (generation.current !== token) return;
       setOverview(next); setSettings(settingsDraft(next)); setKnowledge(null); setError(''); setHidden(false);
       if (modeSummary(next.settings.modes) === 'MIXED') setPerChannel(true);
+      // The checklist's last step: has this staff member seen an answer yet? A failure here only leaves it unticked.
+      if (next.canConfigure) void loadTestChat(scope).then(state => { if (generation.current === token) setTested(state.tests.some(t => t.status === 'ANSWERED')); }, () => {});
     } catch (problem) {
       if (generation.current !== token) return;
       setOverview(null); setError(message(problem, copy)); setDenied(problem instanceof TrainAiAccessError);
@@ -205,8 +210,16 @@ export function TrainAi(): React.ReactElement {
     if (!input) { setError(copy.itemInvalid); return; }
     if (await run('item', `item:${JSON.stringify(input)}`, (scope, key) => saveTrainingItem(scope, input, key), copy.saved)) { setRule(''); await refresh(); }
   }
+  /** "Use a better answer": a coaching card (the question and the answer it should give), saved like any other item. */
+  async function coach(question: string, answer: string): Promise<boolean> {
+    const input = itemInput({ ...EMPTY_ITEM, kind: 'COACHING', title: question.slice(0, CONVERSATION_AI_LIMITS.title).trim(), question, body: answer });
+    if (!input) { setError(copy.itemInvalid); return false; }
+    const ok = await run('item', `item:${JSON.stringify(input)}`, (scope, key) => saveTrainingItem(scope, input, key), copy.saved);
+    if (ok) await refresh();
+    return ok;
+  }
   function go(step: StepKey) {
-    const next: Tab = step === 'answers' ? 'knows' : step === 'handoff' ? 'handoff' : 'how';
+    const next: Tab = step === 'answers' ? 'knows' : step === 'handoff' ? 'handoff' : step === 'tryIt' ? 'tryIt' : 'how';
     setTab(next);
     if (next === 'knows' && !knowledge) void showKnowledge();
   }
@@ -262,6 +275,8 @@ export function TrainAi(): React.ReactElement {
         <input id="ca-question" value={item.question} maxLength={CONVERSATION_AI_LIMITS.question} disabled={acting} placeholder={copy.questionHint} onChange={e => setItem({ ...item, question: e.target.value })} /></div>}
       <div className={s.field}><label htmlFor="ca-body">{asks ? copy.answer : copy.body}</label>
         <textarea id="ca-body" rows={5} value={item.body} maxLength={CONVERSATION_AI_LIMITS.body} disabled={acting} onChange={e => setItem({ ...item, body: e.target.value })} /></div>
+      <div className={s.field}><label htmlFor="ca-summary">{copy.summary}</label>
+        <input id="ca-summary" value={item.summary} maxLength={CONVERSATION_AI_LIMITS.summary} disabled={acting} onChange={e => setItem({ ...item, summary: e.target.value })} /></div>
       {item.kind === 'COACHING' && <div className={s.field}><label htmlFor="ca-note">{copy.staffNote}</label>
         <input id="ca-note" value={item.staffNote} maxLength={CONVERSATION_AI_LIMITS.staffNote} disabled={acting} placeholder={copy.staffNoteHint} onChange={e => setItem({ ...item, staffNote: e.target.value })} /></div>}
       <div className={s.actions}><button type="submit" className={s.primary} disabled={acting || !itemInput(item)}>{copy.save}</button>
@@ -278,7 +293,7 @@ export function TrainAi(): React.ReactElement {
       {notice && <p className={s.flash} data-tone="OK" role="status">{notice}</p>}</div>
     {overview && settings && <>
       <StatusCard copy={easy} program={overview.program} summary={modeSummary(overview.settings.modes)} />
-      <Checklist copy={easy} state={setupChecklist(overview)} onGo={go} />
+      <Checklist copy={easy} state={setupChecklist(overview, tested)} onGo={go} />
       {!canConfigure && <p className={s.meta}>{easy.readOnly}</p>}
 
       <div className={s.tabs} role="tablist" aria-label={easy.tabsLabel}>
@@ -359,6 +374,11 @@ export function TrainAi(): React.ReactElement {
         <section className={s.card} aria-labelledby="ca-length"><h2 id="ca-length">{easy.lengthTitle}</h2><p className={s.meta}>{easy.lengthIntro}</p>
           <LengthPresets copy={easy} label={easy.lengthTexts} value={settings.smsMaxChars} disabled={locked} onChange={smsMaxChars => setSettings({ ...settings, smsMaxChars })} />
           <LengthPresets copy={easy} label={easy.lengthChat} value={settings.chatMaxChars} disabled={locked} onChange={chatMaxChars => setSettings({ ...settings, chatMaxChars })} /></section>
+      </div>}
+
+      {tab === 'tryIt' && <div role="tabpanel" id="ca-panel-tryIt" aria-labelledby="ca-tab-tryIt" className={s.page}>
+        <TryIt scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} copy={tryCopy} canConfigure={canConfigure}
+          samples={Object.values(easy.quickStart)} onAnswered={answered => { if (answered) setTested(true); }} onCoach={coach} />
       </div>}
 
       {canConfigure && dirty && <form className={s.saveBar} onSubmit={e => void saveAllSettings(e)}><p>{easy.unsaved}</p>
