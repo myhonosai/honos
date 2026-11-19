@@ -11,6 +11,7 @@ import {
 } from '../src/components/conversations/http';
 import { NO_SCHOOL_SHELL, SchoolShellProvider } from '../src/components/school-shell/context';
 import { SCHOOL_SHELL_NAV } from '../src/components/school-shell/catalog';
+import { movedQuery } from '../src/components/texts/moved-query';
 
 // 0364 Conversations screen: fixed same-origin calls with the shell scope, verified answers, definite refusals vs unknown outcomes.
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -111,7 +112,9 @@ describe('school conversations screen', () => {
     const texts = SCHOOL_SHELL_NAV.find(item => item.key === 'messages')!;
     expect(texts.section).toBe('communication');
     expect(texts.routes.map(r => r.href)).toEqual(['/staff/texts', '/staff/texts/send']);
-    expect(readFileSync(resolve('src/app/staff/conversations/page.tsx'), 'utf8')).toContain("redirect('/staff/texts')");
+    expect(readFileSync(resolve('src/app/staff/conversations/page.tsx'), 'utf8')).toContain('redirect(`/staff/texts${movedQuery(await searchParams)}`)');
+    expect(movedQuery({})).toBe('');
+    expect(movedQuery({ conversation: 'abc', tag: ['a', 'b'], gone: undefined })).toBe('?conversation=abc&tag=a&tag=b');
     expect(readFileSync(resolve('src/app/staff/texts/page.tsx'), 'utf8')).toContain('<StaffConversations />');
   });
   it('searches as you type and filters with chips, with no Apply button', () => {

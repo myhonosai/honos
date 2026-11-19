@@ -34,7 +34,8 @@ type Element = ReactElement<Record<string, any>>;
 function elements(node: unknown): Element[] { if (Array.isArray(node)) return node.flatMap(elements); if (!React.isValidElement(node)) return []; const e = node as Element; return [e, ...elements(e.props.children)]; }
 function text(node: unknown): string { if (Array.isArray(node)) return node.map(text).join(' '); if (React.isValidElement(node)) return text((node as Element).props.children); return typeof node === 'string' || typeof node === 'number' ? String(node) : ''; }
 let channel: 'SMS' | 'EMAIL' = 'SMS';
-function render(): Element { hooks.cursor = 0; const tree = ComposeMessage({ scope, channel, schoolName: 'Sunrise Dojo' }) as Element; hooks.effects.splice(0).forEach(run => run()); return tree; }
+let school: string | null = 'Sunrise Dojo';
+function render(): Element { hooks.cursor = 0; const tree = ComposeMessage({ scope, channel, schoolName: school }) as Element; hooks.effects.splice(0).forEach(run => run()); return tree; }
 function unmount(): void { for (const cell of hooks.cells) if (cell && typeof cell === 'object' && 'cleanup' in cell) (cell as { cleanup?: () => void }).cleanup?.(); }
 const all = () => elements(render());
 const field = (name: string, value?: string) => all().find(e => e.props.name === name && (value === undefined || e.props.value === value));
@@ -51,7 +52,7 @@ function confirm(): void { field('confirmCompose')!.props.onChange({ target: { c
 function send(): void { forms().find(f => String(f.props['aria-label']).startsWith('Message to'))!.props.onSubmit({ preventDefault() {} }); }
 const calls = (fetcher: { mock: { calls: unknown[][] } }) => fetcher.mock.calls.map(c => ({ path: c[0], key: ((c[1] as RequestInit).headers as Record<string, string>)['Idempotency-Key'], body: JSON.parse(String((c[1] as RequestInit).body)) }));
 
-beforeEach(() => { hooks.cells = []; hooks.cursor = 0; hooks.effects = []; people.search.mockReset(); channel = 'SMS'; });
+beforeEach(() => { hooks.cells = []; hooks.cursor = 0; hooks.effects = []; people.search.mockReset(); channel = 'SMS'; school = 'Sunrise Dojo'; });
 afterEach(() => { unmount(); vi.restoreAllMocks(); });
 
 describe('New text or email: http (L4)', () => {
@@ -119,6 +120,41 @@ describe('Texts > Send: composer (TE3a)', () => {
     await findAndPick(ana); write('Hi {{program}}'); confirm(); send(); await settle();
     expect(fetcher).not.toHaveBeenCalled();
     expect(text(render())).toContain('Not a merge tag: {{program}}');
+  });
+
+  it('refuses tags it cannot fill here instead of sending them empty (#500 review P3)', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch');
+    await findAndPick(ana); write('From {{staff_name}}'); confirm(); send(); await settle();
+    expect(text(render())).toContain("This tag can't be filled in here: {{staff_name}}");
+    school = null; write('See you at {{school_name}}'); confirm(); send(); await settle();
+    expect(text(render())).toContain("This tag can't be filled in here: {{school_name}}");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('a retry sends the exact text of the first try under the same key (#500 review P3)', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('network'))
+      .mockResolvedValueOnce(ok(msg({ content: 'Hi Ana' }))).mockResolvedValueOnce(ok(msg({ lifecycle: 'QUEUED', version: 2 }), 200));
+    await findAndPick(ana); write('Hi {{first_name}}'); confirm(); send(); await settle();
+    expect(text(render())).toContain('Not sure it went through.');
+    school = 'Renamed Dojo';
+    all().find(e => e.type === 'button' && text(e) === 'Retry the same message')!.props.onClick(); await settle();
+    const sent = calls(fetcher);
+    expect(sent[1]!.key).toBe(sent[0]!.key);
+    expect(sent[1]!.body).toEqual(sent[0]!.body);
+  });
+
+  it('picking a contact stops a type-ahead search still waiting (#500 review P3)', async () => {
+    people.search.mockResolvedValue([ana, ben]);
+    render(); field('composeQuery')!.props.onChange({ target: { value: 'Rivera' } });
+    forms()[0]!.props.onSubmit({ preventDefault() {} }); await settle();
+    vi.useFakeTimers();
+    try {
+      field('composeQuery')!.props.onChange({ target: { value: 'Riveras' } });
+      all().find(e => e.props['data-person'] === ana.personId)!.props.onClick();
+      vi.advanceTimersByTime(1000);
+      expect(people.search).toHaveBeenCalledTimes(1);
+      expect(text(render())).toMatch(/To:\s+Ana Rivera/);
+    } finally { vi.useRealTimers(); }
   });
 
   it('searches as you type once typing pauses, not on every key', async () => {

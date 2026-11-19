@@ -65,7 +65,9 @@ export function StaffConversations(): React.ReactElement {
     const [organizationId, schoolId] = scopeKey.split('/');
     return organizationId && schoolId ? { organizationId, schoolId } : null;
   }, [scopeKey]);
-  const clear = useCallback(() => { ++generation.current; setList(null); setOpen(null); setText(''); setTagText(''); attempt.current = null; updateAttempt.current = null; }, []);
+  const searchTimerStop = () => { if (searchTimer.current) { clearTimeout(searchTimer.current); searchTimer.current = null; } };
+  // A pending search must never land after a privacy hide or a school change: clearing stops it.
+  const clear = useCallback(() => { searchTimerStop(); ++generation.current; setList(null); setOpen(null); setText(''); setTagText(''); attempt.current = null; updateAttempt.current = null; }, []);
   const refresh = useCallback(async (conversationId?: string, nextFilters?: Filters) => {
     const scope = scopeOf();
     if (!scope) return;
@@ -139,14 +141,19 @@ export function StaffConversations(): React.ReactElement {
   /** Filters apply at once; typing in search waits a moment so each keystroke is not a request. */
   function filter(next: Filters, wait = 0) {
     setDraft(next);
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    const run = () => { setFilters(next); void refresh(open?.conversation.conversationId, next); };
+    searchTimerStop();
+    const run = () => { searchTimer.current = null; setFilters(next); void refresh(open?.conversation.conversationId, next); };
     if (wait) searchTimer.current = setTimeout(run, wait); else run();
   }
-  useEffect(() => () => { if (searchTimer.current) clearTimeout(searchTimer.current); }, []);
+  useEffect(() => searchTimerStop, []);
   function pick(conversationId: string | null) {
+    // A search still waiting to run is applied now, with the thread just picked.
+    const pending = searchTimer.current !== null;
+    searchTimerStop();
+    if (pending) setFilters(draft);
+    const next = pending ? draft : undefined;
     setText(''); attempt.current = null;
-    if (conversationId) void refresh(conversationId); else { ++generation.current; setOpen(null); void refresh(); }
+    if (conversationId) void refresh(conversationId, next); else { ++generation.current; setOpen(null); void refresh(undefined, next); }
   }
 
   if (!selection) return <p role="status">{copy.chooseSchool}</p>;

@@ -31,3 +31,7 @@ export function insertAt(text: string, cursor: number, tag: string): { text: str
   const at = Math.max(0, Math.min(cursor, text.length));
   return { text: text.slice(0, at) + tag + text.slice(at), cursor: at + tag.length };
 }
+/** The written tags among the given keys, as written (for refusing tags a screen cannot fill). */
+export function mergeTagsIn(text: string, keys: readonly MergeTagKey[]): string[] {
+  return [...text.matchAll(ANY_TAG)].filter(match => (keys as readonly string[]).includes(match[1]!)).map(match => match[0]);
+}

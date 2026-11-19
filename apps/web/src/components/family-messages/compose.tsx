@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState, type FormEvent } from 'react';
 import { PersonRecordError, peopleApi, type PersonSummary } from '../people/http';
 import { COMPOSE_MAX, ComposeRefusal, composeOk, createDraft, queueDraft, type ComposeChannel, type ComposeDraft, type ComposeScope } from './compose-http';
 import s from '../comms-kit/comms.module.css';
-import { MERGE_TAGS, fillMergeTags, insertAt, unknownMergeTags } from '../comms-kit/merge-tags';
+import { MERGE_TAGS, fillMergeTags, insertAt, mergeTagsIn, unknownMergeTags } from '../comms-kit/merge-tags';
 import { smsSegments } from '../comms-kit/sms-segments';
 import { initials } from '../comms-kit/initials';
 
@@ -35,6 +35,8 @@ export function ComposeMessage({ scope, channel, schoolName }: { scope: ComposeS
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [sentTo, setSentTo] = useState('');
   const retained = useRef<Step | null>(null);
+  // The exact text the retained step sends: a retry never re-fills merge tags, so the same key always carries the same text.
+  const retainedText = useRef('');
   const active = useRef(false);
   const mounted = useRef(true);
   const lookup = useRef<AbortController | null>(null);
@@ -42,9 +44,11 @@ export function ComposeMessage({ scope, channel, schoolName }: { scope: ComposeS
   const box = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; lookup.current?.abort(); if (searchTimer.current) clearTimeout(searchTimer.current); }; }, []);
 
+  // One-to-one sends fill tags in the browser: a tag we cannot fill here (staff name, or the school name before it loads) is refused, never sent empty.
   const unknownTags = unknownMergeTags(content);
+  const unfillable = mergeTagsIn(content, schoolName?.trim() ? ['staff_name'] : ['staff_name', 'school_name']);
   const filled = person ? fillMergeTags(content, { first_name: person.givenName, last_name: person.familyName, school_name: schoolName ?? '', staff_name: '' }) : content;
-  const ready = Boolean(person && addressOf(person, channel) && unknownTags.length === 0 && composeOk(person.personId, channel, filled));
+  const ready = Boolean(person && addressOf(person, channel) && unknownTags.length === 0 && unfillable.length === 0 && composeOk(person.personId, channel, filled));
   function edit(change: () => void): void {
     if (active.current) return;
     // While a send is uncertain the first message may already be queued: nothing changes until Retry or an explicit Discard.
@@ -67,7 +71,12 @@ export function ComposeMessage({ scope, channel, schoolName }: { scope: ComposeS
     if (searchTimer.current) clearTimeout(searchTimer.current);
     if (value.trim().length >= 2) searchTimer.current = setTimeout(() => find(undefined, value), SEARCH_WAIT_MS);
   }
-  function pick(next: PersonSummary): void { edit(() => { setPerson(next); setSearch({ state: 'IDLE' }); }); }
+  function pick(next: PersonSummary): void {
+    edit(() => {
+      if (searchTimer.current) { clearTimeout(searchTimer.current); searchTimer.current = null; }
+      lookup.current?.abort(); setPerson(next); setSearch({ state: 'IDLE' });
+    });
+  }
   function insertTag(tag: string): void {
     if (!tag) return;
     edit(() => { const at = box.current?.selectionStart ?? content.length; setContent(insertAt(content, at, tag).text); });
@@ -76,7 +85,7 @@ export function ComposeMessage({ scope, channel, schoolName }: { scope: ComposeS
     active.current = true; setBusy(true); setOutcome(null);
     let step: Step = start;
     try {
-      retained.current = step;
+      retained.current = step; retainedText.current = text;
       if (step.kind === 'create') {
         const draft = await createDraft(scope, to.personId, via, text, step.key);
         step = { kind: 'queue', draft, key: crypto.randomUUID() }; retained.current = step;
@@ -103,7 +112,7 @@ export function ComposeMessage({ scope, channel, schoolName }: { scope: ComposeS
   function retry(): void {
     const step = retained.current;
     if (active.current || !step || outcome !== 'UNCERTAIN' || !person) return;
-    void run(step, person, channel, filled);
+    void run(step, person, channel, retainedText.current);
   }
 
   const who = person ? nameOf(person) : '';
@@ -140,6 +149,7 @@ export function ComposeMessage({ scope, channel, schoolName }: { scope: ComposeS
             <span>{filled.length} / {COMPOSE_MAX}{parts > 1 ? ` · ${parts} texts` : ''}</span></span>
         </div>
         {unknownTags.length > 0 && <p className={s.flash} data-tone="bad" role="alert">{`Not a merge tag: ${unknownTags.join(', ')}. Use Insert to add one.`}</p>}
+        {unfillable.length > 0 && <p className={s.flash} data-tone="bad" role="alert">{`This tag can't be filled in here: ${unfillable.join(', ')}. Remove it or type the words.`}</p>}
         <label className={s.check}><input type="checkbox" name="confirmCompose" checked={confirmed} disabled={!ready} onChange={event => { if (!active.current && ready) setConfirmed(event.target.checked); }} />
           {` Send this to ${who} by ${CHANNEL[channel].toLowerCase()}`}</label>
         <p className={s.actions}><button type="submit" className={s.primary} disabled={!ready || !confirmed || busy}>{busy ? 'Sending…' : 'Send'}</button></p>

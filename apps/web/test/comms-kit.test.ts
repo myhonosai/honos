@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MERGE_TAGS, fillMergeTags, unknownMergeTags, insertAt } from '../src/components/comms-kit/merge-tags';
+import { MERGE_TAGS, fillMergeTags, unknownMergeTags, insertAt, mergeTagsIn } from '../src/components/comms-kit/merge-tags';
 import { smsSegments } from '../src/components/comms-kit/sms-segments';
 
 // Texts and Email pages (TE3a): merge tags are the BL1 closed list, filled in the browser from the chosen contact for one-to-one sends.
@@ -67,5 +67,12 @@ describe('shortWhen', () => {
     const { shortWhen } = await import('../src/components/comms-kit/short-when');
     // 03:00 UTC on Nov 19 is still Nov 18 in Los Angeles.
     expect(shortWhen('2026-11-19T03:00:00Z', { locale: 'en-US', timeZone: 'America/Los_Angeles', now })).toBe('Nov 18');
+  });
+});
+
+describe('mergeTagsIn', () => {
+  it('finds the written tags among the given keys, as written', () => {
+    expect(mergeTagsIn('Hi {{first_name}} from {{ staff_name }} and {{staff_name}}', ['staff_name'])).toEqual(['{{ staff_name }}', '{{staff_name}}']);
+    expect(mergeTagsIn('Hi {{first_name}}', ['staff_name', 'school_name'])).toEqual([]);
   });
 });
