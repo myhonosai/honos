@@ -1,4 +1,4 @@
-/** 0506 front-desk Point of Sale. Real signed HON sessions -> Nest/guard -> fixed runtime SQL -> marked disposable PostgreSQL (Champions Club fixture). */
+/** 0539 front-desk Point of Sale. Real signed HON sessions -> Nest/guard -> fixed runtime SQL -> marked disposable PostgreSQL (Champions Club fixture). */
 import assert from 'node:assert/strict';
 import {randomUUID as K,randomBytes} from 'node:crypto';
 import {createRequire} from 'node:module';
@@ -229,7 +229,7 @@ try{
    const after=await counts();assert.equal(after.pos_sales,c.pos_sales);assert.equal(after.audit_events,c.audit_events);}
   finally{await blocker.end();}}
  pass('a grant revoked while the sale waited commits nothing');
- console.log('Point of Sale proof (0506): '+groups+' groups passed');
+ console.log('Point of Sale proof (0539): '+groups+' groups passed');
 }finally{
  await app?.close();
  await Promise.allSettled([admin.end(),restricted.end()]);

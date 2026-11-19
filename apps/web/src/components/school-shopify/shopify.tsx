@@ -5,6 +5,8 @@ import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { ShopifyError, shopifyApi, type Owned, type ShopifyApi } from './http';
+import { brandingApi, type BrandingApi } from '../school-branding/http';
+import type { BrandState } from './studio';
 import type { ShopifyCatalog, ShopifyChangeResult, ShopifyOrders, ShopifyProductChange, ShopifyProductChanges } from '@hon/contracts';
 import type { ProposeRequest } from './editor';
 import { SHOPIFY_SECTIONS, ShopifyReturnView, ShopifyView, type ListState, type OverviewState, type ReturnState, type ShopifyAction, type ShopifyOutcome, type ShopifySection } from './view';
@@ -16,10 +18,12 @@ const kindOf = (error: unknown) => error instanceof ShopifyError && error.kind !
  * orders. Blur, a hidden tab, a school change or a session end hide the page at once and retire every read. Commands are
  * never replayed automatically: a sync or disconnect whose answer was lost is checked again with a fresh read.
  */
-export function SchoolShopify({ api = shopifyApi, navigate = (url: string) => window.location.assign(url) }: { api?: ShopifyApi; navigate?: (url: string) => void }): React.ReactElement {
+export function SchoolShopify({ api = shopifyApi, branding = brandingApi, navigate = (url: string) => window.location.assign(url) }: { api?: ShopifyApi; branding?: BrandingApi; navigate?: (url: string) => void }): React.ReactElement {
   const locale = useLocale();
   const shell = useSchoolShell();
   const schoolId = shell.phase === 'READY' ? shell.selection?.schoolId ?? null : null;
+  const organizationId = shell.phase === 'READY' ? shell.selection?.organizationId ?? null : null;
+  const [brand, setBrand] = useState<BrandState>({ state: 'LOADING' });
   const [overview, setOverview] = useState<OverviewState>({ state: 'LOADING' });
   const [section, setSection] = useState<ShopifySection>('overview');
   const [catalog, setCatalog] = useState<ListState<ShopifyCatalog>>({ state: 'LOADING' });
@@ -45,7 +49,7 @@ export function SchoolShopify({ api = shopifyApi, navigate = (url: string) => wi
 
   useEffect(() => onShellPrivacyEvent(() => {
     concealShellPrivateNow(); gen.current++; privacy.current++;
-    setOutcome(null); setConfirming(false); setOverview({ state: 'LOADING' }); setCatalog({ state: 'LOADING' }); setOrders({ state: 'LOADING' }); setChanges({ state: 'LOADING' });
+    setOutcome(null); setConfirming(false); setOverview({ state: 'LOADING' }); setCatalog({ state: 'LOADING' }); setOrders({ state: 'LOADING' }); setChanges({ state: 'LOADING' }); setBrand({ state: 'LOADING' });
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), []);
 
   useEffect(() => {
@@ -61,6 +65,18 @@ export function SchoolShopify({ api = shopifyApi, navigate = (url: string) => wi
   }, [api, schoolId, refresh]);
 
   const hasConnection = overview.state === 'READY' && overview.read.connection !== null;
+  // Merch Studio shows the school's saved logo and brand color when this person may read them. A refusal shows nothing.
+  useEffect(() => {
+    if (!schoolId || !organizationId || !hasConnection) return;
+    const shown = privacy.current;
+    setBrand({ state: 'LOADING' });
+    const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
+    const owned = () => mounted.current && shown === privacy.current && !abort.signal.aborted;
+    branding.read({ organizationId, schoolId }, signal, owned).then(
+      (b) => { if (owned()) setBrand({ state: 'READY', logoUrl: b.logoUrl, accentColor: b.accentColor }); },
+      () => { if (owned()) setBrand({ state: 'NONE' }); });
+    return () => { abort.abort(); };
+  }, [branding, schoolId, organizationId, hasConnection]);
   // Products and orders are read together once a store is linked: the Overview needs both, and each section then opens at once.
   useEffect(() => {
     if (!schoolId || !hasConnection) return;
@@ -148,7 +164,8 @@ export function SchoolShopify({ api = shopifyApi, navigate = (url: string) => wi
       onRefresh={() => { setOutcome(null); setRefresh((n) => n + 1); }} onShop={(v) => { if (!locked) { setShop(v); setOutcome(null); } }}
       onConnect={() => { void onConnect(); }} onSync={() => { void run('sync'); }} onConfirm={(open) => { if (!locked) { setConfirming(open); setOutcome(null); } }}
       onDisconnect={() => { void run('disconnect'); }} onSection={go}
-      changes={changes} onPropose={onPropose} onApprove={onApprove} onCancelChange={onCancelChange} onAllowEditing={() => { void onConnect(true); }} />
+      changes={changes} onPropose={onPropose} onApprove={onApprove} onCancelChange={onCancelChange} onAllowEditing={() => { void onConnect(true); }}
+      schoolName={shell.schoolName} brand={brand} />
   </div>;
 }
 

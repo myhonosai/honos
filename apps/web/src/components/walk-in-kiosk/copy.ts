@@ -11,7 +11,7 @@ const en = {
   label: 'Tablet name', hours: 'Run for', hoursN: '{n} hours', start: 'Start kiosk', starting: 'Starting…',
   tabletsTitle: 'Tablets', noTablets: 'No tablets in the last day.', live: 'Running until {at}', ended: 'Ended', endTablet: 'End', startedBy: 'Started by {name}',
   visitsTitle: 'Walk-ins (last 14 days)', noVisits: 'No walk-ins yet.', refresh: 'Refresh',
-  pFREE: 'Free', pPAY_AT_DESK: 'Pay at desk', pPAID_AT_DESK: 'Paid at desk', kDAY_PASS: 'Day pass', kTRIAL: 'Trial',
+  pFREE: 'Free', pPAY_AT_DESK: 'Pay at desk', pPAID_AT_DESK: 'Paid at desk', pPAID_CARD: 'Paid by card', kDAY_PASS: 'Day pass', kTRIAL: 'Trial',
   waiverSigned: 'Waiver signed {at}', openLead: 'Open lead', viewWaiver: 'View waiver', closeWaiver: 'Close', print: 'Print',
   markPaid: 'Mark paid at desk', mCASH: 'Cash', mCARD_OUTSIDE_HON: 'Card (outside HON)', mOTHER: 'Other',
   signedBy: 'Signed by {name} ({relationship})', rSELF: 'self', rPARENT: 'parent', rLEGAL_GUARDIAN: 'legal guardian',
@@ -53,6 +53,19 @@ const en = {
   vSTALE: 'The school just updated the kiosk. Please start again.', vINVALID: 'Something in the form was not accepted. Please check it and try again.',
   vRATE_LIMITED: 'This tablet is busy. Please see the front desk.', vUNAVAILABLE: 'It did not go through yet. Try again sends the same check-in, so it can never count twice.',
   vRetry: 'Try again', vStartOver: 'Start over',
+  vPayTitle: 'How would you like to pay {price}?', vPayHere: 'Pay here with a card', vPayPhone: 'Pay on my phone', vPayDesk: 'Pay at the front desk',
+  vPayTest: 'Test mode: no real card is charged.', vPayStarting: 'Getting the payment ready…', vPayScan: 'Scan this code with your phone camera to pay. This screen updates by itself when you are done.',
+  vPayChecking: 'Checking your payment…', vPayProcessing: 'Your payment is being confirmed. This can take a moment.', vPayOther: 'Choose another way',
+  vPayFAILED: 'The payment did not go through. You can try again or pay at the front desk.', vPayEXPIRED: 'The payment timed out. You can start again or pay at the front desk.',
+  vPayUNAVAILABLE: 'Card payment is not working right now. You can try again or pay at the front desk.', vPayFORM: 'The card form could not load. Please choose another way to pay.',
+  vDonePaid: 'Paid {price}. You are all set!', vPaidTitle: 'Thank you', vPaidBody: 'You can go back to the tablet now. It shows whether your payment went through.',
+  oCARD_PENDING: 'A card payment for this walk-in is still open or being confirmed on the tablet. Wait a minute and try again. Nothing changed.',
+  paidByCard: 'This visitor already paid by card on the tablet, so nothing was recorded at the desk. Give back any money taken at the desk.',
+  // 0537 trial classes
+  vClassTitle: 'Pick your trial class', vClassSpots: 'Spots open', vClassFull: 'Full', vNoClasses: 'No open trial classes in the next two weeks. Please ask at the front desk.',
+  vCLASS_FULL: 'That class just filled up. Please pick another one.', vDoneClass: 'Your trial class: {name}, {when}.',
+  sTrialPrograms: 'Classes visitors can book for this trial', sTrialProgramsHelp: 'Pick programs and the tablet lists their classes for the next two weeks. Leave all unticked for a trial without a booked class.',
+  trialClass: 'Trial class: {name}, {at}', aSCHEDULED: 'Booked', aCANCELLED: 'Trial cancelled', aCOMPLETED: 'Trial done', aNO_SHOW: 'Did not come',
 };
 export type WalkInKey = keyof typeof en;
 const ko: Record<WalkInKey, string> = {
@@ -66,7 +79,7 @@ const ko: Record<WalkInKey, string> = {
   label: '태블릿 이름', hours: '실행 시간', hoursN: '{n}시간', start: '키오스크 시작', starting: '시작하는 중…',
   tabletsTitle: '태블릿', noTablets: '최근 하루 동안 태블릿이 없습니다.', live: '{at}까지 실행 중', ended: '종료됨', endTablet: '종료', startedBy: '{name} 님이 시작',
   visitsTitle: '워크인 (최근 14일)', noVisits: '아직 워크인이 없습니다.', refresh: '새로고침',
-  pFREE: '무료', pPAY_AT_DESK: '데스크에서 결제', pPAID_AT_DESK: '데스크에서 결제됨', kDAY_PASS: '일일 이용권', kTRIAL: '체험',
+  pFREE: '무료', pPAY_AT_DESK: '데스크에서 결제', pPAID_AT_DESK: '데스크에서 결제됨', pPAID_CARD: '카드로 결제됨', kDAY_PASS: '일일 이용권', kTRIAL: '체험',
   waiverSigned: '동의서 서명 {at}', openLead: '리드 열기', viewWaiver: '동의서 보기', closeWaiver: '닫기', print: '인쇄',
   markPaid: '데스크 결제로 표시', mCASH: '현금', mCARD_OUTSIDE_HON: '카드 (HON 외부)', mOTHER: '기타',
   signedBy: '{name} 서명 ({relationship})', rSELF: '본인', rPARENT: '부모', rLEGAL_GUARDIAN: '법정 보호자',
@@ -107,6 +120,19 @@ const ko: Record<WalkInKey, string> = {
   vSTALE: '학교에서 방금 키오스크를 업데이트했습니다. 처음부터 다시 시작해 주세요.', vINVALID: '양식에서 받아들여지지 않은 항목이 있습니다. 확인 후 다시 시도해 주세요.',
   vRATE_LIMITED: '이 태블릿이 바쁩니다. 프런트 데스크로 와 주세요.', vUNAVAILABLE: '아직 처리되지 않았습니다. 다시 시도하면 같은 체크인을 보내므로 두 번 처리되지 않습니다.',
   vRetry: '다시 시도', vStartOver: '처음부터',
+  vPayTitle: '{price}를 어떻게 결제하시겠어요?', vPayHere: '여기서 카드로 결제', vPayPhone: '내 휴대폰으로 결제', vPayDesk: '프런트 데스크에서 결제',
+  vPayTest: '테스트 모드: 실제 카드는 청구되지 않습니다.', vPayStarting: '결제를 준비하는 중…', vPayScan: '휴대폰 카메라로 이 코드를 스캔해 결제하세요. 결제가 끝나면 이 화면이 저절로 바뀝니다.',
+  vPayChecking: '결제를 확인하는 중…', vPayProcessing: '결제를 확인하고 있습니다. 잠시 걸릴 수 있어요.', vPayOther: '다른 방법 선택',
+  vPayFAILED: '결제가 완료되지 않았습니다. 다시 시도하거나 프런트 데스크에서 결제하세요.', vPayEXPIRED: '결제 시간이 지났습니다. 다시 시작하거나 프런트 데스크에서 결제하세요.',
+  vPayUNAVAILABLE: '지금은 카드 결제를 할 수 없습니다. 다시 시도하거나 프런트 데스크에서 결제하세요.', vPayFORM: '카드 양식을 불러오지 못했습니다. 다른 결제 방법을 선택해 주세요.',
+  vDonePaid: '{price} 결제가 완료되었습니다. 준비가 끝났어요!', vPaidTitle: '감사합니다', vPaidBody: '이제 태블릿으로 돌아가셔도 됩니다. 결제가 완료되었는지 태블릿에 표시됩니다.',
+  oCARD_PENDING: '이 워크인의 카드 결제가 태블릿에서 아직 열려 있거나 확인 중입니다. 잠시 후 다시 시도하세요. 변경된 것은 없습니다.',
+  paidByCard: '이 방문자는 이미 태블릿에서 카드로 결제했으므로 데스크 결제는 기록되지 않았습니다. 데스크에서 받은 돈이 있다면 돌려주세요.',
+  // 0537 trial classes
+  vClassTitle: '체험 수업을 고르세요', vClassSpots: '자리 있음', vClassFull: '마감', vNoClasses: '앞으로 2주 안에 자리가 있는 체험 수업이 없습니다. 프런트 데스크에 문의해 주세요.',
+  vCLASS_FULL: '방금 그 수업이 마감되었습니다. 다른 수업을 골라 주세요.', vDoneClass: '체험 수업: {name}, {when}.',
+  sTrialPrograms: '이 체험으로 예약할 수 있는 수업', sTrialProgramsHelp: '프로그램을 고르면 태블릿에 앞으로 2주간의 수업이 표시됩니다. 수업 예약 없는 체험은 모두 비워 두세요.',
+  trialClass: '체험 수업: {name}, {at}', aSCHEDULED: '예약됨', aCANCELLED: '체험 취소됨', aCOMPLETED: '체험 완료', aNO_SHOW: '오지 않음',
 };
 const es: Record<WalkInKey, string> = {
   pageTitle: 'Quiosco de visitas',
@@ -119,7 +145,7 @@ const es: Record<WalkInKey, string> = {
   label: 'Nombre de la tableta', hours: 'Funciona por', hoursN: '{n} horas', start: 'Iniciar quiosco', starting: 'Iniciando…',
   tabletsTitle: 'Tabletas', noTablets: 'Ninguna tableta en el último día.', live: 'Funciona hasta {at}', ended: 'Terminada', endTablet: 'Terminar', startedBy: 'Iniciada por {name}',
   visitsTitle: 'Visitas (últimos 14 días)', noVisits: 'Aún no hay visitas.', refresh: 'Actualizar',
-  pFREE: 'Gratis', pPAY_AT_DESK: 'Pagar en recepción', pPAID_AT_DESK: 'Pagado en recepción', kDAY_PASS: 'Pase de día', kTRIAL: 'Prueba',
+  pFREE: 'Gratis', pPAY_AT_DESK: 'Pagar en recepción', pPAID_AT_DESK: 'Pagado en recepción', pPAID_CARD: 'Pagado con tarjeta', kDAY_PASS: 'Pase de día', kTRIAL: 'Prueba',
   waiverSigned: 'Exención firmada {at}', openLead: 'Abrir prospecto', viewWaiver: 'Ver exención', closeWaiver: 'Cerrar', print: 'Imprimir',
   markPaid: 'Marcar pagado en recepción', mCASH: 'Efectivo', mCARD_OUTSIDE_HON: 'Tarjeta (fuera de HON)', mOTHER: 'Otro',
   signedBy: 'Firmado por {name} ({relationship})', rSELF: 'por sí mismo', rPARENT: 'padre o madre', rLEGAL_GUARDIAN: 'tutor legal',
@@ -160,6 +186,19 @@ const es: Record<WalkInKey, string> = {
   vSTALE: 'La escuela acaba de actualizar el quiosco. Empiece de nuevo.', vINVALID: 'Algo del formulario no se aceptó. Revíselo e inténtelo de nuevo.',
   vRATE_LIMITED: 'Esta tableta está ocupada. Pase por la recepción.', vUNAVAILABLE: 'Aún no se envió. Intentar de nuevo manda el mismo registro, así que nunca cuenta dos veces.',
   vRetry: 'Intentar de nuevo', vStartOver: 'Empezar de nuevo',
+  vPayTitle: '¿Cómo quiere pagar {price}?', vPayHere: 'Pagar aquí con tarjeta', vPayPhone: 'Pagar en mi teléfono', vPayDesk: 'Pagar en la recepción',
+  vPayTest: 'Modo de prueba: no se cobra ninguna tarjeta real.', vPayStarting: 'Preparando el pago…', vPayScan: 'Escanee este código con la cámara de su teléfono para pagar. Esta pantalla se actualiza sola cuando termine.',
+  vPayChecking: 'Comprobando su pago…', vPayProcessing: 'Estamos confirmando su pago. Puede tardar un momento.', vPayOther: 'Elegir otra forma',
+  vPayFAILED: 'El pago no se completó. Puede intentarlo de nuevo o pagar en la recepción.', vPayEXPIRED: 'Se acabó el tiempo del pago. Puede empezar de nuevo o pagar en la recepción.',
+  vPayUNAVAILABLE: 'El pago con tarjeta no funciona ahora. Puede intentarlo de nuevo o pagar en la recepción.', vPayFORM: 'No se pudo cargar el formulario de tarjeta. Elija otra forma de pago.',
+  vDonePaid: 'Pagó {price}. ¡Todo listo!', vPaidTitle: 'Gracias', vPaidBody: 'Ya puede volver a la tableta. Allí verá si su pago se completó.',
+  oCARD_PENDING: 'Un pago con tarjeta de esta visita sigue abierto o en confirmación en la tableta. Espere un minuto e inténtelo de nuevo. No cambió nada.',
+  paidByCard: 'Este visitante ya pagó con tarjeta en la tableta, así que no se registró nada en la recepción. Devuelva el dinero cobrado en la recepción.',
+  // 0537 trial classes
+  vClassTitle: 'Elija su clase de prueba', vClassSpots: 'Hay lugares', vClassFull: 'Llena', vNoClasses: 'No hay clases de prueba con lugar en las próximas dos semanas. Pregunte en la recepción.',
+  vCLASS_FULL: 'Esa clase se acaba de llenar. Elija otra, por favor.', vDoneClass: 'Su clase de prueba: {name}, {when}.',
+  sTrialPrograms: 'Clases que se pueden reservar con esta prueba', sTrialProgramsHelp: 'Elija programas y la tableta mostrará sus clases de las próximas dos semanas. Déjelos sin marcar para una prueba sin clase reservada.',
+  trialClass: 'Clase de prueba: {name}, {at}', aSCHEDULED: 'Reservada', aCANCELLED: 'Prueba cancelada', aCOMPLETED: 'Prueba hecha', aNO_SHOW: 'No vino',
 };
 export const WALK_IN_COPY = { en, ko, es } as const;
 export type WalkInCopyLanguage = keyof typeof WALK_IN_COPY;

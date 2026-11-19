@@ -1,8 +1,10 @@
 import React, { useId } from 'react';
-import type { PersonRecord } from '@hon/contracts';
+import type { PersonRecord, SchoolContactCard, SchoolContactOptions } from '@hon/contracts';
 import { accountValue } from '../account-status/copy';
 import { peopleText, type PeopleKey } from './copy';
-import { PEOPLE_LIST_LIMIT, PEOPLE_QUERY_MAX } from './http';
+import { ContactsList } from './contacts-list';
+import { ContactCard as ContactCardTabs, type CardState } from './contact-card';
+import type { ContactFilters } from './contacts-http';
 import { localToday, type CommandKind, type ListState, type RecordState, type SaveOutcome } from './model';
 import styles from './people.module.css';
 
@@ -14,7 +16,13 @@ export type PeopleViewProps = Readonly<{
   list: ListState; record: RecordState; selectedId: string | null; outcome: SaveOutcome;
   /** True while a save from this tab is sending, or kept for "Try again": both forms stay locked. */
   locked: boolean; canRetry: boolean;
-  onSearch?: ((query: string) => void) | undefined; onOpen?: ((personId: string) => void) | undefined; onReload?: (() => void) | undefined;
+  /** The contacts list filters (C1, 0521) and the rank, program and plan choices read with the first page. */
+  filters: ContactFilters; options: SchoolContactOptions | null;
+  /** The open person's contact card (C2, 0522), read beside the editable record. */
+  card?: CardState | undefined;
+  /** C3 (0523): delete, restore and merge for the open contact (its own reads and commands), and what the last one did. */
+  actionsSlot?: ((card: SchoolContactCard) => React.ReactNode) | undefined; actionNotice?: string | null | undefined;
+  onFilters?: ((filters: ContactFilters) => void) | undefined; onMore?: (() => void) | undefined; onOpen?: ((personId: string) => void) | undefined; onReload?: (() => void) | undefined;
   onSaveContact?: ((draft: ContactDraft) => void) | undefined; onSaveBirth?: ((draft: BirthDraft) => void) | undefined;
   onTryAgain?: (() => void) | undefined; onDiscard?: (() => void) | undefined;
   /** The contact consent card for the open person (its own reads and commands); without it the saved summary is shown. */
@@ -45,9 +53,8 @@ export function outcomeText(language: string, outcome: SaveOutcome): Readonly<{ 
 
 /** Pure view. Every name, address and date comes from the school's people reads; nothing is shown before the shell verifies the school. */
 export function PeopleView(props: PeopleViewProps): React.ReactElement {
-  const { language, waiting, concealed, hasSchool, list, record, selectedId, onSearch, onOpen, onReload } = props;
+  const { language, waiting, concealed, hasSchool, list, selectedId, onOpen, onReload } = props;
   const t: T = (key, vars) => peopleText(language, key, vars);
-  const searchId = useId();
   const notice = waiting ? t('waiting') : concealed ? t('concealed') : !hasSchool ? t('noSchool') : null;
   const visible = notice === null;
   return <section className={styles.people} aria-labelledby="people-title" data-hon-native="">
@@ -58,36 +65,17 @@ export function PeopleView(props: PeopleViewProps): React.ReactElement {
     {visible ? <div className={styles.layout}>
       <article className={styles.card} aria-labelledby="people-list-title">
         <h2 id="people-list-title">{t('listTitle')}</h2>
-        <form className={styles.search} role="search" onSubmit={e => { e.preventDefault(); onSearch?.(String(new FormData(e.currentTarget).get('query') ?? '')); }}>
-          <label htmlFor={searchId}>{t('searchLabel')}</label>
-          <div className={styles.searchRow}>
-            <input id={searchId} name="query" type="search" maxLength={PEOPLE_QUERY_MAX} autoComplete="off" defaultValue={list.state === 'READY' ? list.query : ''}/>
-            <button type="submit" className={styles.secondary} disabled={list.state === 'LOADING'}>{t('searchButton')}</button>
-          </div>
-        </form>
-        <PeopleList list={list} selectedId={selectedId} onOpen={onOpen} t={t}/>
+        <ContactsList language={language} list={list} filters={props.filters} options={props.options} selectedId={selectedId} pt={t}
+          onOpen={onOpen} onFilters={props.onFilters} onMore={props.onMore}/>
       </article>
       <div className={styles.detail}>
+        {props.actionNotice ? <p className={styles.notice} role="status" data-testid="contact-action-done">{props.actionNotice}</p> : null}
+        {props.card && selectedId ? <ContactCardTabs key={selectedId} language={language} card={props.card}/> : null}
+        {props.card?.state === 'READY' && props.actionsSlot ? props.actionsSlot(props.card.card) : null}
         <RecordPanel {...props} t={t} onReload={onReload}/>
       </div>
     </div> : null}
   </section>;
-}
-
-function PeopleList({ list, selectedId, onOpen, t }: { list: ListState; selectedId: string | null; onOpen?: ((id: string) => void) | undefined; t: T }) {
-  if (list.state === 'LOADING') return <p className={styles.meta} role="status">{t('listLoading')}</p>;
-  if (list.state === 'DENIED') return <p className={styles.meta} role="status">{t('listDenied')}</p>;
-  if (list.state === 'UNAVAILABLE') return <p className={styles.meta} role="status">{t('listUnavailable')}</p>;
-  if (!list.items.length) return <p className={styles.meta}>{t('listNone')}</p>;
-  return <>
-    <ul className={styles.list} data-testid="people-list">{list.items.map(p => <li key={p.personId}>
-      <button type="button" className={styles.person} aria-current={p.personId === selectedId ? 'true' : undefined} onClick={() => onOpen?.(p.personId)}>
-        <strong>{p.givenName} {p.familyName}</strong>
-        <small>{p.email ?? t('noEmail')} · {p.phoneE164 ?? t('noPhone')}</small>
-      </button>
-    </li>)}</ul>
-    {list.items.length >= PEOPLE_LIST_LIMIT ? <p className={styles.meta}>{t('listCapped', { n: String(PEOPLE_LIST_LIMIT) })}</p> : null}
-  </>;
 }
 
 function RecordPanel(props: PeopleViewProps & { t: T }) {

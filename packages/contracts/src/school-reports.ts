@@ -165,3 +165,123 @@ export function sumSchoolReportLocations(locations: readonly SchoolReportLocatio
   for (const t of byMonth.values()) t.revenue.sort((a, b) => a.currency.localeCompare(b.currency));
   return [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
 }
+
+/**
+ * R3 (0520): the reports dashboard for one school. A range in school time, KPI counts with the previous equal range,
+ * income per day / week / month, belts and open leads by stage now. Counts and money totals only; no people.
+ */
+export const SCHOOL_DASHBOARD_RANGES = ['THIS_MONTH', 'LAST_MONTH', 'D30', 'D90', 'M12', 'ALL'] as const;
+export type SchoolDashboardRange = typeof SCHOOL_DASHBOARD_RANGES[number];
+export const SCHOOL_DASHBOARD_RANGE_DEFAULT: SchoolDashboardRange = 'THIS_MONTH';
+export interface SchoolDashboardQuery { range?: SchoolDashboardRange }
+export interface SchoolDashboardIncome { currency: string; paymentsMinor: number; refundsMinor: number }
+export interface SchoolDashboardKpis {
+  activeStudents: number; newStudents: number; appointments: number; leadsWon: number; leadsLost: number; income: SchoolDashboardIncome[];
+}
+export type SchoolDashboardBucket = 'DAY' | 'WEEK' | 'MONTH';
+export interface SchoolDashboardPoint { start: string; income: SchoolDashboardIncome[] }
+export interface SchoolDashboardRank { curriculumId: string; curriculum: string; rankId: string; rank: string; color: string | null; order: number; students: number }
+export interface SchoolDashboardStage { pipelineId: string; pipeline: string; stageId: string; stage: string; position: number; leads: number }
+export interface SchoolDashboard {
+  schoolId: string; schoolName: string; timezone: string; range: SchoolDashboardRange; generatedAt: string;
+  /** null for ALL (every record up to now). */
+  from: string | null; to: string;
+  previous: { from: string; to: string; kpis: SchoolDashboardKpis } | null;
+  kpis: SchoolDashboardKpis;
+  series: { bucket: SchoolDashboardBucket; truncated: boolean; points: SchoolDashboardPoint[] };
+  belts: { students: number; unranked: number; truncated: boolean; ranks: SchoolDashboardRank[] };
+  pipeline: { open: number; stages: SchoolDashboardStage[] };
+}
+
+const DAY = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+const COLOR = /^#[0-9a-f]{3,8}$/i;
+
+/** Query string to input: only ?range=<one of SCHOOL_DASHBOARD_RANGES> is accepted. */
+export function validateSchoolDashboardQuery(value: unknown): SchoolDashboardQuery {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('VALIDATION_FAILED');
+  const source = value as Record<string, unknown>;
+  if (Object.keys(source).some(key => key !== 'range')) throw new Error('VALIDATION_FAILED');
+  if (source.range === undefined) return {};
+  if (typeof source.range !== 'string' || !(SCHOOL_DASHBOARD_RANGES as readonly string[]).includes(source.range)) throw new Error('VALIDATION_FAILED');
+  return { range: source.range as SchoolDashboardRange };
+}
+
+function income(value: unknown): SchoolDashboardIncome[] {
+  if (!Array.isArray(value) || value.length > 10) fail();
+  const seen = new Set<string>();
+  return value.map(line => {
+    const v = exact(line, ['currency', 'paymentsMinor', 'refundsMinor']);
+    const currency = text(v.currency, 3);
+    if (!CURRENCY.test(currency) || seen.has(currency)) fail();
+    seen.add(currency);
+    return { currency, paymentsMinor: count(v.paymentsMinor), refundsMinor: count(v.refundsMinor) };
+  });
+}
+function kpis(value: unknown): SchoolDashboardKpis {
+  const k = exact(value, ['activeStudents', 'newStudents', 'appointments', 'leadsWon', 'leadsLost', 'income']);
+  return { activeStudents: count(k.activeStudents), newStudents: count(k.newStudents), appointments: count(k.appointments),
+    leadsWon: count(k.leadsWon), leadsLost: count(k.leadsLost), income: income(k.income) };
+}
+function uuid(value: unknown): string {
+  const id = text(value, 36).toLowerCase();
+  if (!UUID.test(id)) fail();
+  return id;
+}
+
+export function verifySchoolDashboard(value: unknown, expectedSchoolId: string, query: SchoolDashboardQuery): SchoolDashboard {
+  const source = exact(value, ['schoolId', 'schoolName', 'timezone', 'range', 'generatedAt', 'from', 'to', 'previous', 'kpis', 'series', 'belts', 'pipeline']);
+  const schoolId = uuid(source.schoolId);
+  if (schoolId !== expectedSchoolId.toLowerCase()) fail();
+  const range = source.range;
+  if (range !== (query.range ?? SCHOOL_DASHBOARD_RANGE_DEFAULT)) fail();
+  const to = instant(source.to), from = source.from === null ? null : instant(source.from);
+  if ((from === null) !== (range === 'ALL') || (from !== null && Date.parse(from) >= Date.parse(to))) fail();
+  let previous: SchoolDashboard['previous'] = null;
+  if (source.previous !== null) {
+    const p = exact(source.previous, ['from', 'to', 'kpis']);
+    previous = { from: instant(p.from), to: instant(p.to), kpis: kpis(p.kpis) };
+    if (from === null || Date.parse(previous.from) >= Date.parse(previous.to) || Date.parse(previous.to) > Date.parse(from)) fail();
+  } else if (range !== 'ALL') fail();
+  const s = exact(source.series, ['bucket', 'truncated', 'points']);
+  const bucket = s.bucket;
+  const expectedBucket = range === 'D90' ? 'WEEK' : range === 'M12' || range === 'ALL' ? 'MONTH' : 'DAY';
+  if (bucket !== expectedBucket || typeof s.truncated !== 'boolean' || (s.truncated && range !== 'ALL') || !Array.isArray(s.points) || s.points.length < 1 || s.points.length > 36) fail();
+  let last = '';
+  const points = s.points.map(item => {
+    const pt = exact(item, ['start', 'income']);
+    const start = text(pt.start, 10);
+    if (!DAY.test(start) || start <= last || (bucket === 'MONTH' && !start.endsWith('-01'))) fail();
+    last = start;
+    return { start, income: income(pt.income) };
+  });
+  const b = exact(source.belts, ['students', 'unranked', 'truncated', 'ranks']);
+  if (typeof b.truncated !== 'boolean' || !Array.isArray(b.ranks) || b.ranks.length > 100) fail();
+  const students = count(b.students), unranked = count(b.unranked);
+  if (unranked > students) fail();
+  const ranks = b.ranks.map(item => {
+    const r = exact(item, ['curriculumId', 'curriculum', 'rankId', 'rank', 'color', 'order', 'students']);
+    const color = r.color === null ? null : text(r.color, 9);
+    if (color !== null && !COLOR.test(color)) fail();
+    const n = count(r.students);
+    if (n < 1 || n > students) fail();
+    return { curriculumId: uuid(r.curriculumId), curriculum: text(r.curriculum, 200), rankId: uuid(r.rankId), rank: text(r.rank, 200), color, order: count(r.order), students: n };
+  });
+  const pl = exact(source.pipeline, ['open', 'stages']);
+  if (!Array.isArray(pl.stages) || pl.stages.length > 50) fail();
+  const open = count(pl.open);
+  const stages = pl.stages.map(item => {
+    const x = exact(item, ['pipelineId', 'pipeline', 'stageId', 'stage', 'position', 'leads']);
+    const leads = count(x.leads);
+    if (leads < 1 || leads > open) fail();
+    return { pipelineId: uuid(x.pipelineId), pipeline: text(x.pipeline, 200), stageId: uuid(x.stageId), stage: text(x.stage, 200), position: count(x.position), leads };
+  });
+  return { schoolId, schoolName: text(source.schoolName, 200), timezone: text(source.timezone, 64), range: range as SchoolDashboardRange,
+    generatedAt: instant(source.generatedAt), from, to, previous, kpis: kpis(source.kpis),
+    series: { bucket: bucket as SchoolDashboardBucket, truncated: s.truncated, points }, belts: { students, unranked, truncated: b.truncated, ranks }, pipeline: { open, stages } };
+}
+
+/** Won ÷ (won + lost) as a whole percent; null when no lead was closed. */
+export function schoolDashboardWinRate(k: Pick<SchoolDashboardKpis, 'leadsWon' | 'leadsLost'>): number | null {
+  const closed = k.leadsWon + k.leadsLost;
+  return closed === 0 ? null : Math.round((100 * k.leadsWon) / closed);
+}

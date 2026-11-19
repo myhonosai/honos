@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
-import type { ParentRead } from '../api/client';
+import type { ParentRead, ParentWrite } from '../api/client';
+import type { ParentInvoicePayOutcome, ParentPayableInvoice } from '@hon/contracts/parent-invoice-pay';
 import { useFamily } from '../family/family-data';
 import { Body, Button, Card, Loading, Pill, Section, StateMessage, Title } from '../ui/parts';
 import { radius, space, TOUCH, type, useColors } from '../ui/theme';
@@ -74,11 +75,17 @@ function BillingArea() {
   const c = useColors();
   const { read, reload } = useRead(api.billing);
   const zone = state.status === 'ready' ? state.timeZone : null;
+  const [payRound, setPayRound] = useState(0);
+  const [payNote, setPayNote] = useState<string | null>(null);
+  // A payment that changed the invoice re-reads billing and the pay list; the processor's answer stays on screen.
+  const paid = useCallback((message: string) => { setPayNote(message); setPayRound(n => n + 1); reload(); }, [reload]);
   if (!read) return <Loading label="Loading billing" />;
   if (!read.ok) return <Unavailable what="Billing" reload={reload} />;
   const { memberships, invoices } = read.data;
   return (
     <View>
+      {payNote ? <Card style={{ marginTop: space.md }}><Text accessibilityLiveRegion="polite" style={{ color: c.text }}>{payNote}</Text></Card> : null}
+      <PayInvoices key={payRound} zone={zone} onChanged={paid} />
       <Section>Memberships</Section>
       {memberships.status !== 'AVAILABLE' ? <Card><Body muted>{memberships.reason === 'PAYER_LINK_UNVERIFIED' ? 'Your school has not confirmed you as the billing contact, so memberships are not shown here.' : 'Memberships are not available right now.'}</Body></Card>
         : memberships.items.length === 0 ? <Card><Body muted>No memberships on your account.</Body></Card>
@@ -102,7 +109,88 @@ function BillingArea() {
             <Text style={{ color: c.muted, marginTop: space.xs }}>{inv.participant.displayName}{inv.dueAt ? ` · Due ${formatDay(inv.dueAt, zone)}` : ''}</Text>
           </Card>
         ))}
-      <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.md }}>Paying and changing a membership happen with your school. The app shows your school's records only.</Text>
+      <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.md }}>Changing a membership happens with your school. The app shows your school's records only.</Text>
+    </View>
+  );
+}
+
+const PAY_RESULT: Record<ParentInvoicePayOutcome, string> = {
+  SUCCEEDED: 'Paid. Thank you! Your school has the payment.',
+  PROCESSING: 'Your payment is still processing. Check back soon.',
+  OPEN: 'Not paid yet. You can open the payment page again.',
+  NONE: 'Not paid yet.',
+  FAILED: 'The payment did not go through. Nothing was charged.',
+  EXPIRED: 'The payment page timed out. Nothing was charged.',
+  CANCELED: 'The payment was canceled. Nothing was charged.',
+};
+const PAY_REFUSED: Record<string, string> = {
+  PARENT_INVOICE_PAY_NOT_PAYABLE: 'This invoice can no longer be paid here. Check with your school.',
+  PARENT_INVOICE_PAY_IN_PROGRESS: 'A payment for this invoice is already in progress.',
+  PARENT_INVOICE_PAY_AUTOPAY_IN_PROGRESS: 'Your school is already collecting this invoice.',
+  PARENT_INVOICE_PAY_NOT_CONFIGURED: 'Your school does not take payments in the app yet.',
+};
+
+/**
+ * Pay an open invoice on the school's own processor page (TEST mode). The app names only an invoice it read from
+ * the pay list; HON opens the payment, the page belongs to the school's processor, and the answer after the page
+ * closes is HON's record of the processor's answer. Nothing here claims "paid" from the page closing alone.
+ */
+function PayInvoices({ zone, onChanged }: { zone: string | null; onChanged: (message: string) => void }) {
+  const { api, newKey } = useFamily();
+  const c = useColors();
+  const { read } = useRead(api.invoicePayments);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  // A start whose answer was lost is retried with the same Idempotency-Key, so a second press never opens a second payment.
+  const startKeys = useRef(new Map<string, string>());
+  if (!read) return null;
+  if (!read.ok) return <Text style={{ color: c.muted, marginTop: space.md }}>Paying in the app is unavailable right now.</Text>;
+  const { canPay, testMode } = read.data;
+  const shown = read.data.invoices.filter(i => i.payable || i.payState === 'PROCESSING');
+  if (!canPay || !shown.length) return null;
+  const note = (id: string, text: string) => setNotes(n => ({ ...n, [id]: text }));
+  const finish = (id: string, outcome: ParentWrite<{ state: ParentInvoicePayOutcome }>) => {
+    if (outcome.ok && (outcome.data.state === 'SUCCEEDED' || outcome.data.state === 'PROCESSING')) onChanged(PAY_RESULT[outcome.data.state]);
+    else if (outcome.ok) note(id, PAY_RESULT[outcome.data.state]);
+    else note(id, "We couldn't check the payment yet. Open billing again in a moment to see it.");
+  };
+  const pay = async (inv: ParentPayableInvoice) => {
+    const id = inv.invoiceId;
+    setBusy(id);
+    try {
+      let key = startKeys.current.get(id);
+      if (!key) { key = newKey(); startKeys.current.set(id, key); }
+      const started = await api.startInvoicePayment(id, key);
+      if (!started.ok) {
+        if (started.state !== 'unknown') startKeys.current.delete(id);
+        note(id, started.state === 'unknown' ? "We couldn't reach your school. Try again; you won't be charged twice."
+          : (started.code && PAY_REFUSED[started.code]) || 'Paying is unavailable right now.');
+        return;
+      }
+      startKeys.current.delete(id);
+      if (started.data.state !== 'OPEN') { onChanged(PAY_RESULT[started.data.state]); return; }
+      await WebBrowser.openBrowserAsync(started.data.url);
+      finish(id, await api.confirmInvoicePayment(id, newKey()));
+    } finally { setBusy(null); }
+  };
+  return (
+    <View>
+      <Section>Pay an invoice</Section>
+      {testMode ? <Pill tone="warn" text="Test mode: no real money moves" /> : null}
+      {shown.map(inv => (
+        <Card key={inv.invoiceId}>
+          <Text style={{ color: c.text, fontSize: type.title, fontWeight: '700' }}>{formatMoney(inv.balanceMinor, inv.currency)} due</Text>
+          <Text style={{ color: c.muted, marginTop: space.xs }}>{inv.childName}{inv.dueAt ? ` · Due ${formatDay(inv.dueAt, zone)}` : ''}</Text>
+          {inv.payState === 'PROCESSING' && !notes[inv.invoiceId] ? <Text style={{ color: c.muted, marginTop: space.sm }}>{PAY_RESULT.PROCESSING}</Text> : null}
+          {notes[inv.invoiceId] ? <Text accessibilityLiveRegion="polite" style={{ color: c.text, marginTop: space.sm }}>{notes[inv.invoiceId]}</Text> : null}
+          {inv.payable ? <View style={{ marginTop: space.md }}>
+            {busy === inv.invoiceId ? <Loading label="Opening your school's payment page" />
+              : <Button label={`Pay ${formatMoney(inv.balanceMinor, inv.currency)}`} accessibilityLabel={`Pay ${formatMoney(inv.balanceMinor, inv.currency)} for ${inv.childName}`}
+                  onPress={() => { if (!busy) void pay(inv); }} />}
+          </View> : null}
+        </Card>
+      ))}
+      <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.sm }}>You pay on your school's own card page. HON never sees or keeps your card.</Text>
     </View>
   );
 }

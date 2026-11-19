@@ -21,9 +21,9 @@ afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 const terminal: WalkInTerminal = {
   schoolName: 'Synthetic Dojo', branding: { logoUrl: null, accentColor: null }, endsAt: '2099-01-01T00:00:00.000Z', settingsVersion: 3,
   waiver: { en: 'I accept the risks of training.', ko: '훈련 위험을 이해합니다.' }, emergencyRequired: false,
-  offers: [{ key: 'free-trial', kind: 'TRIAL', name: { en: 'Free trial class' }, description: { en: '' }, priceMinor: 0, currency: 'USD' },
-    { key: 'day-pass', kind: 'DAY_PASS', name: { en: 'Day pass', es: 'Pase de día' }, description: { en: 'One day' }, priceMinor: 2500, currency: 'USD' }],
-  thankYou: { en: 'See you on the mat.' },
+  offers: [{ key: 'free-trial', kind: 'TRIAL', name: { en: 'Free trial class' }, description: { en: '' }, priceMinor: 0, currency: 'USD', classes: null },
+    { key: 'day-pass', kind: 'DAY_PASS', name: { en: 'Day pass', es: 'Pase de día' }, description: { en: 'One day' }, priceMinor: 2500, currency: 'USD', classes: null }],
+  thankYou: { en: 'See you on the mat.' }, cardSurfaces: [],
 };
 const today = '2026-11-16';
 const filled = (patch: Partial<VisitDraft> = {}): VisitDraft => ({
@@ -180,7 +180,7 @@ describe('walk-in http', () => {
   });
 });
 
-const settingsRead: WalkInSettingsRead = { settings: null, pipelines: [{ pipelineId: pipe, name: 'Walk-ins', stages: [{ stageId: stage, name: 'New' }] }] };
+const settingsRead: WalkInSettingsRead = { settings: null, pipelines: [{ pipelineId: pipe, name: 'Walk-ins', stages: [{ stageId: stage, name: 'New' }] }], programs: [] };
 const overview: WalkInOverview = {
   canManage: true, configured: true, enabled: true,
   devices: [{ deviceId: device, label: 'Front desk', startedAt: '2026-11-16T08:00:00.000Z', endsAt: '2026-11-16T16:00:00.000Z', endedAt: null, live: true, version: 1, startedBy: 'Owner' }],

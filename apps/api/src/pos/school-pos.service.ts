@@ -56,7 +56,7 @@ const INPUT: Record<Command, (v: unknown) => { schoolId: string }> = {
 };
 
 /**
- * 0506 front-desk Point of Sale. The subject comes only from the signed HON session; the database decides school,
+ * 0539 front-desk Point of Sale. The subject comes only from the signed HON session; the database decides school,
  * organization, principal and permission (pos.sell / pos.manage) and computes every amount.
  */
 @Injectable()
