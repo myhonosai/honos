@@ -4456,11 +4456,12 @@ BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_class_session_seats_taken(uuid) TO hon_runtime; END IF;
 END $$;
 
--- 0545 intake contact consent (IC1): one runtime entry point for staff adds and imports, and a read of the capture
+<<<<<<< HEAD
+-- 0555 intake contact consent (IC1): one runtime entry point for staff adds and imports, and a read of the capture
 -- evidence (forced RLS, tenant-scoped). The writer and the deferred lead trigger stay migration-owner only.
 DO $$ DECLARE r text; f text;
 BEGIN
-  IF to_regprocedure('hon.record_staff_intake_consent(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0545 first'; END IF;
+  IF to_regprocedure('hon.record_staff_intake_consent(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0555 first'; END IF;
   FOREACH f IN ARRAY ARRAY['hon.record_intake_consent(uuid,text,text,jsonb,uuid,boolean)','hon.intake_consent_after_lead()','hon.record_staff_intake_consent(text,jsonb)'] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
@@ -4472,5 +4473,18 @@ BEGIN
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.record_staff_intake_consent(text,jsonb) TO hon_runtime;
     GRANT SELECT ON TABLE hon.communication_consent_captures TO hon_runtime;
+=======
+-- 0550 shared AI text proposals: two private tables; the runtime reaches the WEBSITE_EDIT kind through seven entry points.
+DO $$ DECLARE r text; t text; BEGIN
+  IF to_regclass('hon.ai_text_proposals') IS NULL THEN RAISE EXCEPTION 'Apply migration 0550 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['ai_text_kinds','ai_text_proposals'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_school_website_ai_edit(text,jsonb,uuid), hon.school_website_ai_edit_planning_reference(text,uuid),
+      hon.prepare_school_website_ai_edit(text,uuid,uuid,boolean), hon.fail_school_website_ai_edit(text,uuid,text,text),
+      hon.record_school_website_ai_edit(text,uuid,jsonb), hon.read_school_website_ai_edits(text,uuid), hon.close_school_website_ai_edit(text,uuid,text) TO hon_runtime;
+>>>>>>> origin/main
   END IF;
 END $$;

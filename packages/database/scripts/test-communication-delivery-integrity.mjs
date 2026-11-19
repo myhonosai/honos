@@ -587,7 +587,7 @@ try {
   check(leadRow.given_name === 'Ada' && leadRow.family_name === 'King Lovelace' && leadRow.email === 'ada@example.test' && leadRow.phone_e164 === '+15555550111', 'name, email and phone are normalized from the mapped keys');
   check(leadRow.attribution.zernio.formId === '777' && leadRow.attribution.zernio.adCampaignId === '77' && !JSON.stringify(leadRow.attribution).includes('ignored'), 'attribution carries form and ad ids, never unmapped answers');
   check((await admin.query('SELECT count(*)::int AS n FROM hon.crm_lead_attributions WHERE lead_id = $1', [zCreated.lead_id])).rows[0].n === 1, 'the immutable lead attribution is captured');
-  // IC1 (0545): a Meta lead gets email consent automatically; never text consent (HON cannot show the wording on Meta's form).
+  // IC1 (0555): a Meta lead gets email consent automatically; never text consent (HON cannot show the wording on Meta's form).
   // ada@example.test unsubscribed earlier in this school, so the address-level opt-out wins (PRIOR_OPT_OUT, never OPTED_IN).
   const adConsents = (await admin.query("SELECT c.channel::text, c.status::text, c.source::text, k.method FROM hon.communication_consents c JOIN hon.communication_consent_captures k ON k.consent_id = c.id WHERE c.person_id = $1", [leadRow.primary_person_id])).rows;
   check(JSON.stringify(adConsents) === JSON.stringify([{ channel: 'EMAIL', status: 'OPTED_OUT', source: 'RECIPIENT', method: 'PRIOR_OPT_OUT' }]), `an ad lead records email only, and the earlier unsubscribe of the same address wins: ${JSON.stringify(adConsents)}`);

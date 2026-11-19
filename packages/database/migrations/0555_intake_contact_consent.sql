@@ -1,6 +1,6 @@
 BEGIN;
 
--- Automatic contact consent at lead intake (IC1, 0545, assigned by the coordinator 2026-11-19).
+-- Automatic contact consent at lead intake (IC1, 0555, assigned by the coordinator 2026-11-19).
 -- Owner decision 2026-11-19 05:12Z "Email automatic, texts one tick": a contact that reaches a school through lead
 -- intake gets email consent recorded when the record is created; text consent only when the lead ticks the unticked
 -- "Text me" box (website form, walk-in kiosk) or has texted the school (conversation lead). Staff adds and CSV imports

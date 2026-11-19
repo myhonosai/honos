@@ -13,7 +13,7 @@ export interface PublicFormConfigInput {
   pipelineId: string; pipelineStageId: string; campaignId: string | null;
 }
 export interface LeadFormBase { publicId: string; title: string; description: string; optionalFields: PublicFormOptionalField[] }
-/** IC1 (0545): the public read also names the school, for the consent wording next to submit. */
+/** IC1 (0555): the public read also names the school, for the consent wording next to submit. */
 export interface PublishedLeadForm extends LeadFormBase { schoolName: string }
 export interface StaffLeadForm extends LeadFormBase {
   id: string; version: number; status: 'DRAFT' | 'PUBLISHED' | 'DISABLED';
@@ -52,7 +52,7 @@ export function validatePublicFormSubmission(input: unknown, fields: readonly Pu
   const p = input as Record<string, unknown>;
   const caps = { name: 120, email: 254, mobile: 16, interest: 80, source: 80, website: 0, ageBand: 30, experience: 30, preferredTime: 30 };
   if (Object.keys(p).some(k => k !== 'acknowledged' && k !== 'textOptIn' && !Object.hasOwn(caps, k)) || typeof p.acknowledged !== 'boolean' || p.website !== '') throw new Error('FORM_INVALID');
-  // IC1 (0545): the lead's own optional "Text me" tick.
+  // IC1 (0555): the lead's own optional "Text me" tick.
   if (Object.hasOwn(p, 'textOptIn') && typeof p.textOptIn !== 'boolean') throw new Error('FORM_INVALID');
   for (const [key, value] of Object.entries(p)) {
     if (key === 'acknowledged' || key === 'textOptIn') continue;

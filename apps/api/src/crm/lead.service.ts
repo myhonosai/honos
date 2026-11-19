@@ -246,7 +246,7 @@ export class LeadService {
         ],
       );
 
-      // IC1 (0545): a lead staff add by hand records the consent channels they left ticked (both by default).
+      // IC1 (0555): a lead staff add by hand records the consent channels they left ticked (both by default).
       await recordStaffIntakeConsent(client, context, { method: 'STAFF_ADD', personId: primaryPerson.id }, input.consentChannels);
 
       await client.query(
