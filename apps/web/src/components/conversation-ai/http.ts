@@ -1,5 +1,7 @@
 import {
-  CONVERSATION_AI_ITEM_SAVE_COMMAND, CONVERSATION_AI_ITEM_STATUS_COMMAND, CONVERSATION_AI_SETTINGS_COMMAND, CONVERSATION_AI_UPLOAD_COMMAND, SAAS_COMMANDS,
+  CONVERSATION_AI_ITEM_SAVE_COMMAND, CONVERSATION_AI_ITEM_STATUS_COMMAND, CONVERSATION_AI_SETTINGS_COMMAND, CONVERSATION_AI_TEST_ASK_COMMAND,
+  CONVERSATION_AI_UPLOAD_COMMAND, SAAS_COMMANDS, validateConversationAiTestAsk, verifyConversationAiTestState, verifyConversationAiTestView,
+  type ConversationAiTestState, type ConversationAiTestView,
   validateConversationAiItemInput, validateConversationAiItemStatusInput, validateConversationAiProgram, validateConversationAiProgramInput,
   validateConversationAiProgramReceipt, validateConversationAiSettingsInput, validateConversationAiUploadInput,
   verifyConversationAiFileContent, verifyConversationAiItemReceipt, verifyConversationAiKnowledge, verifyConversationAiOverview,
@@ -15,7 +17,7 @@ import {
  * (conversation.read to look, conversation.ai.configure to change); nothing here decides permission, and no AI is called.
  * Reads are plain GETs with no command marker or Idempotency-Key; every change sends its own X-HON-Human-Command and one.
  */
-export class TrainAiAccessError extends Error { constructor(readonly reason: 'SESSION' | 'FORBIDDEN', readonly status: number) { super(reason); } }
+export class TrainAiAccessError extends Error { constructor(readonly reason: 'SESSION' | 'FORBIDDEN', readonly status: number, readonly code = '') { super(reason); } }
 /** A definite refusal (nothing stored). A retry is a new command. */
 export class TrainAiRefusal extends Error { constructor(readonly code: string) { super(code); } }
 /** The answer could not be checked or the outcome is unknown: the change may or may not have been saved. */
@@ -29,6 +31,7 @@ export const TRAIN_AI_REFUSALS = [
   'VALIDATION_FAILED', 'CONVERSATION_VERSION_CONFLICT', 'IDEMPOTENCY_KEY_REUSED', 'CONVERSATION_AI_ITEM_NOT_FOUND',
   'CONVERSATION_AI_FILE_TYPE_MISMATCH', 'CONVERSATION_AI_LIBRARY_FULL', 'CONVERSATION_AI_SELECTORS_NOT_ACCEPTED',
   'INVALID_SAAS_INPUT', 'SAAS_VERSION_CONFLICT', 'CONVERSATION_AI_PROGRAM_UNCHANGED',
+  'CONVERSATION_AI_TEST_INVALID', 'CONVERSATION_AI_TEST_BUSY',
 ] as const;
 const REFUSAL = new Set<string>(TRAIN_AI_REFUSALS);
 function invalid(): never { throw new TrainAiUnknown('unverified'); }
@@ -44,7 +47,12 @@ async function call(url: string, method: 'GET' | 'POST', command?: string, body?
       ...(method === 'POST' ? { body: JSON.stringify(body) } : {}) });
   } catch { throw new TrainAiUnknown('network'); }
   if (response.status === 401) throw new TrainAiAccessError('SESSION', 401);
-  if (response.status === 403) throw new TrainAiAccessError('FORBIDDEN', 403);
+  if (response.status === 403) {
+    // The refusal code says why (for the test chat: not included, or AI spend stopped); it never grants anything.
+    const body: unknown = JSON_TYPE.test(response.headers.get('content-type') ?? '') ? await response.json().catch(() => null) : null;
+    const code = body && typeof body === 'object' && typeof (body as { code?: unknown }).code === 'string' ? (body as { code: string }).code : '';
+    throw new TrainAiAccessError('FORBIDDEN', 403, /^[A-Z][A-Z_]{1,63}$/.test(code) ? code : '');
+  }
   if (!JSON_TYPE.test(response.headers.get('content-type') ?? '')) invalid();
   const value: unknown = await response.json().catch(() => invalid());
   if (!value || typeof value !== 'object' || Array.isArray(value)) invalid();
@@ -107,6 +115,21 @@ export async function setTrainingItemStatus(scope: TrainAiScope, input: Conversa
   const body = validateConversationAiItemStatusInput(input);
   const out = await call(`${base(scope)}/items/status`, 'POST', CONVERSATION_AI_ITEM_STATUS_COMMAND, body, key);
   return { receipt: checked(() => verifyConversationAiItemReceipt(out.data, { itemId: body.itemId, status: body.status })), replayed: replayed(out.meta) };
+}
+
+/** CE2 (0563): whether the AI can answer a test now, and the signed-in staff member's own last 10 tests. */
+export async function loadTestChat(scope: TrainAiScope): Promise<ConversationAiTestState> {
+  const { data } = await call(`${base(scope)}/test`, 'GET');
+  return checked(() => verifyConversationAiTestState(data));
+}
+/** One test question. The answer is shown only to the asker and never sent; the same key never makes a second AI call. */
+export async function askTestQuestion(scope: TrainAiScope, question: string, key: string): Promise<ConversationAiTestView> {
+  const body = validateConversationAiTestAsk({ question });
+  if (!UUID.test(key)) invalid();
+  const { data } = await call(`${base(scope)}/test`, 'POST', CONVERSATION_AI_TEST_ASK_COMMAND, body, key);
+  const view = checked(() => verifyConversationAiTestView(data));
+  if (view.question !== body.question) invalid();
+  return view;
 }
 
 /** HQ program switch. The database decides who may read (HQ readers) and who may change it (a human HQ owner). */

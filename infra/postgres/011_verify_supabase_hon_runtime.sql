@@ -5159,3 +5159,35 @@ BEGIN
   END LOOP;
 END $$;
 -- End simple invoices exact verification.
+-- Conversation AI test chat exact verification (0563): the CONVERSATION_TEST kind row (fixed budgets) and its twelve functions,
+-- six of them runtime entry points. The shared AI text core and S4 functions are pinned in the 0550 section above, unchanged.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.begin_conversation_ai_test(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','270dd60e82325d4876fe52031ddaf2876ecac607ccd53fd8a73f3b9a2775bf02'),
+('hon.conversation_ai_test_actor(text)',true,false,'search_path=pg_catalog, hon','ca2f6549c8e40ea3788f9d340fa6bd2794570a35d35b2aeafd47ae0d3e32f063'),
+('hon.conversation_ai_test_allowed(uuid)',true,false,'search_path=pg_catalog, hon','29df31059946fd9ef66aa1a1c2841e453c2c83550b8223cde99b93aba8826b53'),
+('hon.conversation_ai_test_answer_ok(jsonb)',false,false,'search_path=pg_catalog, hon','72b2c592d9447d2bc764b019c8d159074e319be4af2468dee286dfdb34042150'),
+('hon.conversation_ai_test_facts(uuid,uuid)',true,false,'search_path=pg_catalog, hon','d6ecb68135efb6773b42a549cbbfe5f5c7d5f3ec0333f107227a25f8974a7a15'),
+('hon.conversation_ai_test_planning_reference(text,uuid)',true,true,'search_path=pg_catalog, hon','6517dcf07a9eb60ed80135b1a0ab43fbcc141da031dcc28ed5ea7259a4b6f15b'),
+('hon.conversation_ai_test_unavailable_reason(uuid,boolean)',true,false,'search_path=pg_catalog, hon','c207903058dcad4de5a1ba9a008f9809cdfb05afe332c4524464db0f53fadd06'),
+('hon.conversation_ai_test_view(uuid)',true,false,'search_path=pg_catalog, hon','c818398e5cb74ad9dfa3fb57efd1007370b5f03c11cc9c50bd6b8902af73e633'),
+('hon.fail_conversation_ai_test(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','3717ca791019a6f20a0b71f950b139ba585401b51c24a942ec0d6a1b0b1e4e49'),
+('hon.prepare_conversation_ai_test(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','fc60c70090fc4b49060e948ddcc969b2e2fd9b784fa23705cbf15a97e8235cc5'),
+('hon.read_conversation_ai_test(text,boolean)',true,true,'search_path=pg_catalog, hon','04c2b5b87ed46709d8f7e09e833f8c0d3117af6657f917af2bae5e9dc807039f'),
+('hon.record_conversation_ai_test(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','496f88281ae26f369b758a931ba2af024c4c89bf4ab967f41e7e979342edc798'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Conversation AI test function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds WHERE kind='CONVERSATION_TEST' AND agent_key='chad' AND task_class='DRAFT_FOLLOW_UP' AND input_budget=12000
+      AND output_budget=600 AND max_cost_microunits=20000 AND max_result_bytes=4096 AND caller='HUMAN_UI' AND subject_type='CONVERSATION_AI_TEST' AND usage_agent='CONVERSATION_TEST') THEN
+    RAISE EXCEPTION 'Conversation AI test kind missing or changed';
+  END IF;
+END $$;
+-- End Conversation AI test chat exact verification.

@@ -145,6 +145,8 @@ import { SchoolWebsiteService } from './website/school-website.service.js';
 import { SchoolWebsiteAiController } from './website/website-ai.controller.js';
 import { WebsiteAiService } from './website/website-ai.service.js';
 import { WEBSITE_PROVIDER_RUNTIME, OpenRouterWebsiteRuntime } from './ai/website-provider-runtime.js';
+import { CONVERSATION_TEST_PROVIDER_RUNTIME, OpenRouterConversationTestRuntime } from './ai/conversation-test-provider-runtime.js';
+import { ConversationAiTestService } from './conversations/conversation-ai-test.service.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
 import { SchoolSupportController } from './support/school-support.controller.js';
@@ -853,6 +855,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolWebsiteService,
     WebsiteAiService,
     { provide: WEBSITE_PROVIDER_RUNTIME, useFactory: () => new OpenRouterWebsiteRuntime() },
+    ConversationAiTestService,
+    { provide: CONVERSATION_TEST_PROVIDER_RUNTIME, useFactory: () => new OpenRouterConversationTestRuntime() },
     SchoolOnboardingService,
     SchoolSupportService,
     CustomToolService,

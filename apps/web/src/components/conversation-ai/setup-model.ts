@@ -20,9 +20,10 @@ export function enabledFromModes(modes: Modes): boolean { return CONVERSATION_AI
 
 export const ANSWER_GOAL = 5;
 export type SetupChecklist = { how: boolean; answers: boolean; answerCount: number; handoff: boolean; tryIt: boolean };
-export function setupChecklist(overview: ConversationAiOverview): SetupChecklist {
+/** tested: the signed-in staff member has at least one answered test (CE2). */
+export function setupChecklist(overview: ConversationAiOverview, tested = false): SetupChecklist {
   const answerCount = overview.items.filter(i => i.status === 'ACTIVE').length;
-  return { how: enabledFromModes(overview.settings.modes), answers: answerCount >= ANSWER_GOAL, answerCount, handoff: overview.settings.handoffWords.length > 0, tryIt: false };
+  return { how: enabledFromModes(overview.settings.modes), answers: answerCount >= ANSWER_GOAL, answerCount, handoff: overview.settings.handoffWords.length > 0, tryIt: tested };
 }
 
 /** Common questions families ask a martial arts school; the owner only types the answer. */
