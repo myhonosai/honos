@@ -70,7 +70,7 @@ export interface CommunicationWorkerStore {
   recordSocialPostEvent?(event: ZernioSocialEventRecord): Promise<{ outcome: 'APPLIED' | 'IGNORED' | 'UNMATCHED' | 'REPLAYED' }>;
   /** 0435 school inbox: record one signed inbound DM or comment. */
   recordSocialInboxEvent?(event: ZernioInboxEventRecord): Promise<{ outcome: SocialInboxEventOutcome }>;
-  /** 0547/0548 calling on the school number (CL3b): the signed Twilio voice webhooks and the browser phone key. */
+  /** 0556/0561 calling on the school number (CL3b): the signed Twilio voice webhooks and the browser phone key. */
   connectSchoolClientCall?(callId: string, identity: string, accountSid: string | null, callSid: string): Promise<SchoolClientCallDecision>;
   routeSchoolIncomingCall?(to: string, from: string | null, callSid: string): Promise<SchoolIncomingCallRoute>;
   recordSchoolCallStatus?(accountSid: string | null, callSid: string, status: SchoolCallProviderStatus, answeredIdentity: string | null,
@@ -78,7 +78,17 @@ export interface CommunicationWorkerStore {
   recordSchoolCallRecording?(accountSid: string | null, callSid: string, recordingSid: string, seconds: number, voicemail: boolean):
     Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'REFUSED' | 'UNKNOWN_CALL'; callId: string | null }>;
   readSchoolVoiceApp?(schoolId: string): Promise<SchoolVoiceAppKey | null>;
+  /** 0561 V1 (CL3c): the voice app worker claims a school, records its TwiML App, then its sealed API key. */
+  readSchoolsNeedingVoiceApp?(limit: number): Promise<string[]>;
+  beginSchoolVoiceApp?(schoolId: string, leaseSeconds: number): Promise<SchoolVoiceAppClaim>;
+  recordSchoolVoiceAppTwiml?(schoolId: string, claimToken: string, twimlAppSid: string): Promise<boolean>;
+  completeSchoolVoiceApp?(schoolId: string, claimToken: string, apiKeySid: string, sealedApiSecret: string, vaultKeyId: string): Promise<boolean>;
+  /** 0556 K3 (CL3c): recordings past 90 days, deleted at Twilio first, then marked deleted by exact SID. */
+  readSchoolCallRecordingsDue?(limit: number): Promise<SchoolCallRecordingDue[]>;
+  markSchoolCallRecordingDeleted?(callId: string, recordingSid: string): Promise<boolean>;
 }
+export interface SchoolVoiceAppClaim { state: 'CLAIMED' | 'ACTIVE' | 'BUSY' | 'INELIGIBLE'; accountSid: string | null; twimlAppSid: string | null; claimToken: string | null }
+export interface SchoolCallRecordingDue { callId: string; recordingSid: string; accountSid: string | null }
 export type SchoolCallProviderStatus = 'RINGING' | 'IN_PROGRESS' | 'COMPLETED' | 'NO_ANSWER' | 'BUSY' | 'FAILED' | 'CANCELED' | 'MISSED';
 export interface SchoolClientCallDecision {
   outcome: 'CONNECT' | 'REPLAYED' | 'REFUSED'; toE164: string | null; callerIdE164: string | null; recorded: boolean; language: string | null; schoolName: string | null;
@@ -253,6 +263,38 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
     const row = (await this.query<{ account_sid: string; twiml_app_sid: string; api_key_sid: string; sealed_api_secret: string; vault_key_id: string }>(
       'SELECT * FROM hon.read_school_voice_app($1::uuid)', [schoolId]))[0];
     return row ? { accountSid: row.account_sid, twimlAppSid: row.twiml_app_sid, apiKeySid: row.api_key_sid, sealedApiSecret: row.sealed_api_secret, vaultKeyId: row.vault_key_id } : null;
+  }
+
+  async readSchoolsNeedingVoiceApp(limit: number): Promise<string[]> {
+    return (await this.query<{ school_id: string }>('SELECT * FROM hon.read_schools_needing_voice_app($1::integer)', [limit])).map(row => row.school_id);
+  }
+
+  async beginSchoolVoiceApp(schoolId: string, leaseSeconds: number): Promise<SchoolVoiceAppClaim> {
+    const row = (await this.query<{ state: SchoolVoiceAppClaim['state']; account_sid: string | null; twiml_app_sid: string | null; claim_token: string | null }>(
+      'SELECT * FROM hon.begin_school_voice_app($1::uuid, $2::integer)', [schoolId, leaseSeconds]))[0];
+    if (!row) throw new Error('COMMUNICATION_VOICE_APP_NOT_CLAIMED');
+    return { state: row.state, accountSid: row.account_sid, twimlAppSid: row.twiml_app_sid, claimToken: row.claim_token };
+  }
+
+  async recordSchoolVoiceAppTwiml(schoolId: string, claimToken: string, twimlAppSid: string): Promise<boolean> {
+    const row = (await this.query<{ recorded: boolean }>('SELECT hon.record_school_voice_app_twiml($1::uuid, $2::uuid, $3) AS recorded', [schoolId, claimToken, twimlAppSid]))[0];
+    return row?.recorded === true;
+  }
+
+  async completeSchoolVoiceApp(schoolId: string, claimToken: string, apiKeySid: string, sealedApiSecret: string, vaultKeyId: string): Promise<boolean> {
+    const row = (await this.query<{ completed: boolean }>('SELECT hon.complete_school_voice_app($1::uuid, $2::uuid, $3, $4, $5) AS completed',
+      [schoolId, claimToken, apiKeySid, sealedApiSecret, vaultKeyId]))[0];
+    return row?.completed === true;
+  }
+
+  async readSchoolCallRecordingsDue(limit: number): Promise<SchoolCallRecordingDue[]> {
+    return (await this.query<{ call_id: string; recording_sid: string; account_sid: string | null }>('SELECT * FROM hon.read_school_call_recordings_due($1::integer)', [limit]))
+      .map(row => ({ callId: row.call_id, recordingSid: row.recording_sid, accountSid: row.account_sid }));
+  }
+
+  async markSchoolCallRecordingDeleted(callId: string, recordingSid: string): Promise<boolean> {
+    const row = (await this.query<{ deleted: boolean }>('SELECT hon.mark_school_call_recording_deleted($1::uuid, $2) AS deleted', [callId, recordingSid]))[0];
+    return row?.deleted === true;
   }
 
   async readMissedCallRoute(to: string) {

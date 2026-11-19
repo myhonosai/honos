@@ -7,7 +7,7 @@ import { StaffCalls, greetingValue } from '../src/components/calls/staff-calls';
 import { callsCopy } from '../src/components/calls/copy';
 import {
   CALL_REFUSALS, CallsAccessError, CallsRefusal, CallsUnknown, callAttempt, formatCallDuration, formatCallNumber, loadCalling, loadCalls, loadPhoneToken,
-  saveCallingSettings, setDoNotCall, setRingMe, startCall, updateCall,
+  recordingUrl, saveCallingSettings, setDoNotCall, setRingMe, startCall, updateCall,
 } from '../src/components/calls/http';
 import { NO_SCHOOL_SHELL, SchoolShellProvider } from '../src/components/school-shell/context';
 import { SCHOOL_SHELL_NAV } from '../src/components/school-shell/catalog';
@@ -120,6 +120,7 @@ describe('school calls http', () => {
     expect(callAttempt('+15125550101', first, key)).toBe(first);
     expect(callAttempt('+15125550102', first, key).key).toBe('k2');
     expect(formatCallNumber('+15125550101')).toBe('(512) 555-0101'); expect(formatCallNumber('+442071234567')).toBe('+442071234567');
+    expect(recordingUrl(scope, C.toUpperCase())).toBe(`${BASE}/${C}/recording`); expect(() => recordingUrl(scope, '../x')).toThrow();
     expect(formatCallDuration(65)).toBe('1:05'); expect(formatCallDuration(3725)).toBe('1:02:05'); expect(formatCallDuration(null)).toBe('');
   });
 });

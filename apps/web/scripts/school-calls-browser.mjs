@@ -111,6 +111,12 @@ await check('calls page desktop: log, after-call card, settings', async () => {
   assert.equal(await page.getByRole('button', { name: 'Trial booked' }).getAttribute('aria-pressed'), 'true');
   await page.getByRole('region', { name: 'Call with Jordan Kim' }).scrollIntoViewIfNeeded();
   await shot(page, 'calls-after-call-card-desktop');
+  await page.getByRole('button', { name: 'Maria Lopez' }).click();
+  assert.equal(await page.locator('[data-call-recording]').getAttribute('src'), `${prefix}/calls/${calls[0].callId}/recording`);
+  assert.equal(await page.locator('[data-call-recording]').getAttribute('preload'), 'none', 'nothing is fetched until play');
+  assert(!report.apiRequests.some(r => r.includes('/recording')), 'the recording is not fetched before the person presses play');
+  await page.getByRole('region', { name: 'Call with Maria Lopez' }).scrollIntoViewIfNeeded();
+  await shot(page, 'calls-voicemail-card-desktop');
   await page.getByRole('button', { name: 'Voicemail', exact: true }).click();
   await page.waitForFunction(() => document.querySelectorAll('[aria-label="Call log"] li').length === 1);
   assert(report.apiRequests.some(r => r.endsWith('/calls?filter=VOICEMAIL')));

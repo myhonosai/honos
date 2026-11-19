@@ -11,7 +11,7 @@ export type CallsCopy = {
   incoming: string; outgoing: string; unknownCaller: string; by: (name: string) => string; status: Record<SchoolCallStatus, string>;
   voicemailNew: string; voicemailHeard: string; recorded: string; doNotCallBadge: string; open: string;
   card: (name: string) => string; outcome: string; outcomes: Record<SchoolCallOutcome, string>; clearOutcome: string; note: string; noteHint: string; save: string; saved: string;
-  markHeard: string; markedHeard: string; recordingLater: string;
+  markHeard: string; markedHeard: string; listen: (seconds: string) => string; recordingKept: string;
   doNotCall: string; doNotCallHint: string; addDoNotCall: string; removeDoNotCall: string; doNotCallAdded: string; doNotCallRemoved: string;
   settings: string; settingsHint: string; turnOn: string; greeting: string; greetingHint: string; recording: string; recordingHint: string;
   consentLabel: string; consentAccepted: (when: string) => string; saveSettings: string; settingsSaved: string; ownerOnly: string;
@@ -44,7 +44,7 @@ const en: CallsCopy = {
   card: name => `Call with ${name}`, outcome: 'What happened?',
   outcomes: { TRIAL_BOOKED: 'Trial booked', CALL_BACK: 'Call back', INTERESTED: 'Interested', NOT_INTERESTED: 'Not interested', LEFT_VOICEMAIL: 'Left voicemail', WRONG_NUMBER: 'Wrong number', OTHER: 'Other' },
   clearOutcome: 'Clear', note: 'Note', noteHint: 'Up to 1,000 characters. Saved on this call and seen in the contact’s history.', save: 'Save', saved: 'Saved.',
-  markHeard: 'Mark voicemail heard', markedHeard: 'Voicemail marked heard.', recordingLater: 'Playback of recordings and voicemail arrives with the browser phone.',
+  markHeard: 'Mark voicemail heard', markedHeard: 'Voicemail marked heard.', listen: seconds => (seconds ? `Listen (${seconds})` : 'Listen'), recordingKept: 'Recordings and voicemail are kept 90 days. Each listen is logged.',
   doNotCall: 'Do not call', doNotCallHint: 'HON will not place calls to this number from this school.',
   addDoNotCall: 'Add to do-not-call', removeDoNotCall: 'Remove from do-not-call', doNotCallAdded: 'Added to the do-not-call list.', doNotCallRemoved: 'Removed from the do-not-call list.',
   settings: 'Calling settings', settingsHint: 'Only the school owner can change these.', turnOn: 'Turn calling on for this school',
@@ -61,7 +61,7 @@ const en: CallsCopy = {
     CALL_PERSON_PHONE_MISMATCH: 'That number is not this contact’s phone number.',
     RECORDING_CONSENT_REQUIRED: 'Accept the recording statement before turning recording on.',
     CALL_RATE_LIMITED: 'You have placed a lot of calls this hour. Try again later.',
-    CALL_PERSON_NOT_FOUND: 'That contact is not available at this school.', CALL_NOT_FOUND: 'That call is not available.',
+    CALL_PERSON_NOT_FOUND: 'That contact is not available at this school.', CALL_NOT_FOUND: 'That call is not available.', CALL_RECORDING_NOT_FOUND: 'That recording is not available. Recordings are kept 90 days.',
     CALLING_VERSION_CONFLICT: 'Calling settings changed. They have been reloaded; try again.', CALL_VERSION_CONFLICT: 'This call changed. It has been reloaded; try again.',
     IDEMPOTENCY_KEY_REUSED: 'This could not be matched to the earlier attempt. Refresh and try again.', CALL_CONFLICT: 'Something changed at the same time. Refresh and try again.',
   },
@@ -90,7 +90,7 @@ const ko: CallsCopy = {
   card: name => `${name}와(과)의 통화`, outcome: '통화 결과는?',
   outcomes: { TRIAL_BOOKED: '체험 예약', CALL_BACK: '다시 전화', INTERESTED: '관심 있음', NOT_INTERESTED: '관심 없음', LEFT_VOICEMAIL: '음성 메일 남김', WRONG_NUMBER: '잘못된 번호', OTHER: '기타' },
   clearOutcome: '지우기', note: '메모', noteHint: '최대 1,000자. 이 통화에 저장되고 연락처 기록에서 볼 수 있습니다.', save: '저장', saved: '저장했습니다.',
-  markHeard: '음성 메일 들음으로 표시', markedHeard: '음성 메일을 들음으로 표시했습니다.', recordingLater: '녹음과 음성 메일 재생은 브라우저 전화와 함께 제공됩니다.',
+  markHeard: '음성 메일 들음으로 표시', markedHeard: '음성 메일을 들음으로 표시했습니다.', listen: seconds => (seconds ? `듣기 (${seconds})` : '듣기'), recordingKept: '녹음과 음성 메일은 90일간 보관됩니다. 들을 때마다 기록됩니다.',
   doNotCall: '전화 금지', doNotCallHint: '이 학교에서는 이 번호로 전화를 걸지 않습니다.',
   addDoNotCall: '전화 금지에 추가', removeDoNotCall: '전화 금지에서 제거', doNotCallAdded: '전화 금지 목록에 추가했습니다.', doNotCallRemoved: '전화 금지 목록에서 제거했습니다.',
   settings: '전화 설정', settingsHint: '학교 원장만 변경할 수 있습니다.', turnOn: '이 학교의 전화 켜기',
@@ -107,7 +107,7 @@ const ko: CallsCopy = {
     CALL_PERSON_PHONE_MISMATCH: '이 번호는 해당 연락처의 전화번호가 아닙니다.',
     RECORDING_CONSENT_REQUIRED: '녹음을 켜기 전에 녹음 안내에 동의하세요.',
     CALL_RATE_LIMITED: '이번 시간에 전화를 많이 걸었습니다. 나중에 다시 시도하세요.',
-    CALL_PERSON_NOT_FOUND: '이 학교에서 해당 연락처를 사용할 수 없습니다.', CALL_NOT_FOUND: '해당 통화를 사용할 수 없습니다.',
+    CALL_PERSON_NOT_FOUND: '이 학교에서 해당 연락처를 사용할 수 없습니다.', CALL_NOT_FOUND: '해당 통화를 사용할 수 없습니다.', CALL_RECORDING_NOT_FOUND: '해당 녹음을 사용할 수 없습니다. 녹음은 90일간 보관됩니다.',
     CALLING_VERSION_CONFLICT: '전화 설정이 바뀌었습니다. 다시 불러왔으니 다시 시도하세요.', CALL_VERSION_CONFLICT: '이 통화가 바뀌었습니다. 다시 불러왔으니 다시 시도하세요.',
     IDEMPOTENCY_KEY_REUSED: '이전 시도와 맞출 수 없습니다. 새로 고침 후 다시 시도하세요.', CALL_CONFLICT: '동시에 다른 변경이 있었습니다. 새로 고침 후 다시 시도하세요.',
   },
@@ -136,7 +136,7 @@ const es: CallsCopy = {
   card: name => `Llamada con ${name}`, outcome: '¿Qué pasó?',
   outcomes: { TRIAL_BOOKED: 'Clase de prueba reservada', CALL_BACK: 'Volver a llamar', INTERESTED: 'Interesado', NOT_INTERESTED: 'No interesado', LEFT_VOICEMAIL: 'Dejé mensaje', WRONG_NUMBER: 'Número equivocado', OTHER: 'Otro' },
   clearOutcome: 'Borrar', note: 'Nota', noteHint: 'Hasta 1.000 caracteres. Se guarda en esta llamada y se ve en el historial del contacto.', save: 'Guardar', saved: 'Guardado.',
-  markHeard: 'Marcar mensaje de voz como escuchado', markedHeard: 'Mensaje de voz marcado como escuchado.', recordingLater: 'La reproducción de grabaciones y mensajes de voz llega con el teléfono del navegador.',
+  markHeard: 'Marcar mensaje de voz como escuchado', markedHeard: 'Mensaje de voz marcado como escuchado.', listen: seconds => (seconds ? `Escuchar (${seconds})` : 'Escuchar'), recordingKept: 'Las grabaciones y los mensajes de voz se guardan 90 días. Cada vez que se escuchan queda registrado.',
   doNotCall: 'No llamar', doNotCallHint: 'HON no hará llamadas a este número desde esta escuela.',
   addDoNotCall: 'Agregar a no llamar', removeDoNotCall: 'Quitar de no llamar', doNotCallAdded: 'Agregado a la lista de no llamar.', doNotCallRemoved: 'Quitado de la lista de no llamar.',
   settings: 'Configuración de llamadas', settingsHint: 'Solo el dueño de la escuela puede cambiarla.', turnOn: 'Activar las llamadas para esta escuela',
@@ -153,7 +153,7 @@ const es: CallsCopy = {
     CALL_PERSON_PHONE_MISMATCH: 'Ese número no es el teléfono de este contacto.',
     RECORDING_CONSENT_REQUIRED: 'Acepta la declaración de grabación antes de activar la grabación.',
     CALL_RATE_LIMITED: 'Hiciste muchas llamadas en esta hora. Inténtalo más tarde.',
-    CALL_PERSON_NOT_FOUND: 'Ese contacto no está disponible en esta escuela.', CALL_NOT_FOUND: 'Esa llamada no está disponible.',
+    CALL_PERSON_NOT_FOUND: 'Ese contacto no está disponible en esta escuela.', CALL_NOT_FOUND: 'Esa llamada no está disponible.', CALL_RECORDING_NOT_FOUND: 'Esa grabación no está disponible. Las grabaciones se guardan 90 días.',
     CALLING_VERSION_CONFLICT: 'La configuración de llamadas cambió. Se volvió a cargar; inténtalo de nuevo.', CALL_VERSION_CONFLICT: 'Esta llamada cambió. Se volvió a cargar; inténtalo de nuevo.',
     IDEMPOTENCY_KEY_REUSED: 'No se pudo relacionar con el intento anterior. Actualiza e inténtalo de nuevo.', CALL_CONFLICT: 'Algo cambió al mismo tiempo. Actualiza e inténtalo de nuevo.',
   },

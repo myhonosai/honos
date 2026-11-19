@@ -133,6 +133,17 @@ token endpoint answers `CALLING_NOT_AVAILABLE`, the Calls page shows "Calling is
 working screen), incoming calls keep 0249 behaviour. The fake Twilio voice client and fake browser phone work only in
 test/local environments (same production refusal as the 0243 fake provider).
 
+Workers and deploy notes (CL3c): two in-process loops run only when `HON_COMMUNICATION_WORKER_DATABASE_URL` and their
+interval (60-86400 seconds) are set. `HON_SCHOOL_VOICE_APP_INTERVAL_SECONDS` runs voice setup (find-or-create the TwiML
+App `hon-voice-<schoolId>` on the school's ACTIVE subaccount, create an API key, seal its secret; claim 300 s, a lost
+answer leaves the claim to expire and the next run makes a fresh key). It needs `HON_VOICE_CALLS_APPROVED=true`,
+`HON_PUBLIC_API_ORIGIN`, the parent Twilio credentials and the voice key vault. `HON_SCHOOL_CALL_RETENTION_INTERVAL_SECONDS`
+deletes recordings and voicemail after 90 days: Twilio first, then the exact SID is marked deleted (already gone at
+Twilio counts as deleted; any failure is retried next run). Playback is `GET .../calls/{callId}/recording`: the database
+authorizes and audits every play (`open_school_call_recording`), audio is streamed with `no-store`, nothing is cached
+on HON, and the player loads nothing until play is pressed. If a Content-Security-Policy is added to the web app later,
+the browser phone needs Twilio's Voice SDK hosts (`*.twilio.com` media/signalling over wss) allowed.
+
 ## 8. Pieces (small PRs, tests first)
 
 | PR | Contents | Migration |

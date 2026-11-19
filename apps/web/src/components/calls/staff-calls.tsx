@@ -9,7 +9,7 @@ import { onShellPrivacyEvent } from '../school-shell/privacy';
 import { useLocale } from '../localization/provider';
 import { callsCopy, type CallsCopy } from './copy';
 import {
-  CallsAccessError, CallsRefusal, formatCallDuration, formatCallNumber, loadCalling, loadCalls, saveCallingSettings, setDoNotCall, setRingMe, updateCall,
+  CallsAccessError, CallsRefusal, formatCallDuration, formatCallNumber, loadCalling, loadCalls, recordingUrl, saveCallingSettings, setDoNotCall, setRingMe, updateCall,
   type CallsScope,
 } from './http';
 import { CallButton } from './call-button';
@@ -179,7 +179,11 @@ export function StaffCalls(): React.ReactElement {
       </form>
       {open.voicemail && !open.heard && <p className={s.actions}><button type="button" disabled={acting}
         onClick={() => void command(scope => updateCall(scope, { callId: open.callId, expectedVersion: open.version, heard: true }), copy.markedHeard)}>{copy.markHeard}</button></p>}
-      {(open.voicemail || open.recordingAvailable) && <p className={s.subtle}>{copy.recordingLater}</p>}
+      {open.recordingAvailable && scopeOf() && <div>
+        <p><strong>{copy.listen(open.recordingSeconds === null ? '' : formatCallDuration(open.recordingSeconds))}</strong></p>
+        <audio key={open.callId} controls preload="none" src={recordingUrl(scopeOf()!, open.callId)} style={{ width: '100%', maxWidth: 480 }}
+          aria-label={copy.listen('')} data-call-recording="" />
+        <p className={s.subtle}>{copy.recordingKept}</p></div>}
       <p className={s.actions}><button type="button" disabled={acting}
         onClick={() => void command(scope => setDoNotCall(scope, { phoneE164: open.remoteE164, doNotCall: !open.doNotCall }), open.doNotCall ? copy.doNotCallRemoved : copy.doNotCallAdded)}>
         {open.doNotCall ? copy.removeDoNotCall : copy.addDoNotCall}</button> <span className={s.subtle}>{copy.doNotCallHint}</span></p>

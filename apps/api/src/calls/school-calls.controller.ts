@@ -92,6 +92,19 @@ export class SchoolCallsController {
     return { data: await this.calls.list(context, filters), meta: { requestId: context.requestId } };
   }
 
+  /** A recording or voicemail, streamed for this staff member only (audited); never cached. */
+  @Get(':callId/recording')
+  @UseGuards(SchoolCallReadGuard)
+  async recording(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('callId', new ParseUUIDPipe()) callId: string, @Query() query: Record<string, unknown>, @Headers('idempotency-key') key: string | undefined,
+    @Req() request: HonRequest, @Res() response: Response) {
+    noQuery(request, query); noKey(key);
+    const context = await this.context(request, organizationId, schoolId, 'communication.call.use', '');
+    const audio = await this.calls.recording(context, callId.toLowerCase());
+    response.status(200).set({ 'Content-Type': audio.contentType, 'Content-Length': String(audio.audio.length), 'Cache-Control': 'private, no-store',
+      'Content-Disposition': 'inline', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' }).end(audio.audio);
+  }
+
   @Post('settings')
   @HttpCode(200)
   @UseGuards(SchoolCallSettingsGuard)

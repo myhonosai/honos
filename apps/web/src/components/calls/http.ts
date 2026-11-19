@@ -27,7 +27,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Codes the calling API returns for a definite refusal. Anything else is treated as unknown. */
 export const CALL_REFUSALS = [
   'VALIDATION_FAILED', 'CALLING_OFF', 'CALL_NUMBER_NOT_READY', 'CALL_NUMBER_NOT_ALLOWED', 'CALL_DO_NOT_CALL', 'CALL_PERSON_PHONE_MISMATCH',
-  'RECORDING_CONSENT_REQUIRED', 'CALL_RATE_LIMITED', 'CALL_PERSON_NOT_FOUND', 'CALL_NOT_FOUND', 'CALLING_VERSION_CONFLICT', 'CALL_VERSION_CONFLICT',
+  'RECORDING_CONSENT_REQUIRED', 'CALL_RATE_LIMITED', 'CALL_PERSON_NOT_FOUND', 'CALL_NOT_FOUND', 'CALL_RECORDING_NOT_FOUND', 'CALLING_VERSION_CONFLICT', 'CALL_VERSION_CONFLICT',
   'IDEMPOTENCY_KEY_REUSED', 'CALL_CONFLICT',
 ] as const;
 const REFUSAL = new Set<string>(CALL_REFUSALS);
@@ -119,6 +119,11 @@ export async function loadPhoneToken(scope: CallsScope): Promise<SchoolPhoneToke
   return checked(() => verifySchoolPhoneToken(out.data));
 }
 
+/** The recording or voicemail stream for one call: a same-origin GET the server authorizes and audits on every play. */
+export function recordingUrl(scope: CallsScope, callId: string): string {
+  if (!UUID.test(callId)) invalid();
+  return `${base(scope)}/${callId.toLowerCase()}/recording`;
+}
 /** Keep the idempotency key only while the same call is retried; any change starts a new call. */
 export function callAttempt(fingerprint: string, previous: { fingerprint: string; key: string } | null, newKey: () => string): { fingerprint: string; key: string } {
   return previous && previous.fingerprint === fingerprint ? previous : { fingerprint, key: newKey() };

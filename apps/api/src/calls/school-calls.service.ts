@@ -15,6 +15,7 @@ import type { MembershipLifecycleContext } from '../billing/membership.service.j
 import { COMMUNICATION_WORKER_STORE, type CommunicationWorkerStore } from '../communication/delivery/communication-worker-database.js';
 import { mintPhoneToken, voiceCallsApproved, type TwilioVoiceKeyVault } from './twilio-voice.js';
 import { SCHOOL_CALL_CLOCK, SCHOOL_CALL_ENVIRONMENT } from './school-call-webhooks.controller.js';
+import { SCHOOL_VOICE_TWILIO_CLIENT, TwilioVoiceError, type SchoolVoiceTwilioClient } from './twilio-voice-rest.js';
 
 export const TWILIO_VOICE_KEY_VAULT = Symbol('TWILIO_VOICE_KEY_VAULT');
 const tokenLog = new Logger('SchoolPhoneToken');
@@ -35,6 +36,7 @@ const DETAIL: Record<string, [string, (body: object) => HttpException]> = {
   CALL_RATE_LIMITED: ['54000', body => new HttpException(body, 429)],
   CALL_PERSON_NOT_FOUND: ['P0002', body => new NotFoundException(body)],
   CALL_NOT_FOUND: ['P0002', body => new NotFoundException(body)],
+  CALL_RECORDING_NOT_FOUND: ['P0002', body => new NotFoundException(body)],
   CALLING_VERSION_CONFLICT: ['40001', body => new ConflictException(body)],
   CALL_VERSION_CONFLICT: ['40001', body => new ConflictException(body)],
   IDEMPOTENCY_KEY_REUSED: ['23505', body => new ConflictException(body)],
@@ -49,6 +51,7 @@ const WORDS: Record<string, string> = {
   CALL_RATE_LIMITED: 'You have started 60 calls in the last hour. Try again a little later.',
   CALL_PERSON_NOT_FOUND: 'That contact is not available.',
   CALL_NOT_FOUND: 'That call is not available.',
+  CALL_RECORDING_NOT_FOUND: 'That recording is not available. Recordings are kept 90 days.',
   CALLING_VERSION_CONFLICT: 'Someone else changed the calling settings. Reload and try again.',
   CALL_VERSION_CONFLICT: 'The call changed. Reload it and try again.',
   IDEMPOTENCY_KEY_REUSED: 'The idempotency key was already used for a different call.',
@@ -88,6 +91,7 @@ export class SchoolCallsService {
     @Optional() @Inject(TWILIO_VOICE_KEY_VAULT) private readonly vault?: TwilioVoiceKeyVault | null,
     @Optional() @Inject(SCHOOL_CALL_ENVIRONMENT) private readonly environment: () => NodeJS.ProcessEnv = () => process.env,
     @Optional() @Inject(SCHOOL_CALL_CLOCK) private readonly now: () => number = Date.now,
+    @Optional() @Inject(SCHOOL_VOICE_TWILIO_CLIENT) private readonly twilio?: SchoolVoiceTwilioClient,
   ) {}
 
   /**
@@ -121,6 +125,28 @@ export class SchoolCallsService {
     const minted = mintPhoneToken({ accountSid: key.accountSid, apiKeySid: key.apiKeySid, apiKeySecret: secret, twimlAppSid: key.twimlAppSid,
       identity: decision.identity, incoming: decision.incoming, nowSeconds: Math.floor(this.now() / 1000) });
     return verifySchoolPhoneToken({ ready: true, reason: 'READY', identity: decision.identity, token: minted.token, expiresAt: minted.expiresAt, incoming: decision.incoming });
+  }
+
+  /**
+   * K2: play a recording or voicemail. The database proves call.use at the session school, that this call's recording is
+   * still available, and audits the open; only then is the audio fetched from the school's own Twilio account and
+   * streamed back. Nothing is cached or stored by HON.
+   */
+  async recording(context: MembershipLifecycleContext, callId: string): Promise<{ audio: Buffer; contentType: 'audio/mpeg' }> {
+    this.assertStaff(context, false);
+    const opened = await this.write(context, 'SELECT hon.open_school_call_recording($1,$2::uuid) AS data', [context.externalSubject, callId], data => {
+      const row = data as Record<string, unknown> | null;
+      if (!row || typeof row !== 'object' || Object.keys(row).sort().join(',') !== 'accountSid,recordingSid,seconds'
+        || typeof row.recordingSid !== 'string' || !/^RE[0-9a-f]{32}$/.test(row.recordingSid)
+        || (row.accountSid !== null && (typeof row.accountSid !== 'string' || !/^AC[0-9a-f]{32}$/.test(row.accountSid)))) throw new Error('Unverified recording.');
+      return row as { recordingSid: string; accountSid: string | null; seconds: number | null };
+    });
+    if (!voiceCallsApproved(this.environment()) || !this.twilio || this.twilio.readiness() !== 'READY') throw new ServiceUnavailableException({ code: 'CALLING_UNAVAILABLE' });
+    try { return await this.twilio.fetchRecording(opened.accountSid, opened.recordingSid); }
+    catch (error) {
+      if (error instanceof TwilioVoiceError && error.outcome === 'GONE') throw new NotFoundException({ code: 'CALL_RECORDING_NOT_FOUND', detail: WORDS.CALL_RECORDING_NOT_FOUND });
+      throw new ServiceUnavailableException({ code: 'CALLING_UNAVAILABLE' });
+    }
   }
 
   async overview(context: MembershipLifecycleContext): Promise<SchoolCallingOverview> {

@@ -280,6 +280,8 @@ import { ConversationCreateLeadGuard, ConversationLinkGuard, ConversationMarkRea
 import { SchoolConversationsService } from './conversations/school-conversations.service.js';
 import { SchoolCallDoNotCallGuard, SchoolCallReadGuard, SchoolCallRingGuard, SchoolCallSettingsGuard, SchoolCallStartGuard, SchoolCallTokenGuard, SchoolCallUpdateGuard, SchoolCallsController } from './calls/school-calls.controller.js';
 import { SchoolCallsService, TWILIO_VOICE_KEY_VAULT } from './calls/school-calls.service.js';
+import { SchoolCallRecordingRetentionWorker, SchoolVoiceAppWorker, SchoolVoiceScheduler } from './calls/school-voice-workers.js';
+import { SCHOOL_VOICE_TWILIO_CLIENT, TwilioRestVoiceClient } from './calls/twilio-voice-rest.js';
 import { SchoolCallWebhooksController } from './calls/school-call-webhooks.controller.js';
 import { twilioVoiceKeyVaultFromEnvironment } from './calls/twilio-voice.js';
 import { ContactEmailResendGuard, ContactHistoryReadGuard, ContactMessagesController } from './conversations/contact-messages.controller.js';
@@ -740,6 +742,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ConversationReadGuard,
     SchoolCallReadGuard, SchoolCallSettingsGuard, SchoolCallRingGuard, SchoolCallStartGuard, SchoolCallUpdateGuard, SchoolCallDoNotCallGuard, SchoolCallTokenGuard,
     { provide: TWILIO_VOICE_KEY_VAULT, useFactory: () => twilioVoiceKeyVaultFromEnvironment() },
+    { provide: SCHOOL_VOICE_TWILIO_CLIENT, useFactory: () => new TwilioRestVoiceClient() },
+    SchoolVoiceAppWorker, SchoolCallRecordingRetentionWorker, SchoolVoiceScheduler,
     ConversationReplyGuard,
     ConversationUpdateGuard,
     ConversationMarkReadGuard,
