@@ -13,6 +13,8 @@ export type ListState = { state: 'LOADING' } | { state: 'READY'; list: Automatio
 export type EditorState = null | {
   workflowId: string | null; revision: number | null; status: AutomationWorkflowStatus | null; name: string;
   draft: SimpleAutomation | null; showProblems: boolean; busy: boolean;
+  /** A save whose outcome is unknown: editing pauses so pressing the same button again reuses its key and cannot save twice. */
+  locked?: boolean;
 };
 export type ActivityState = null | { workflowId: string; state: 'LOADING' } | { workflowId: string; state: 'ERROR' } | { workflowId: string; state: 'READY'; runs: AutomationRunList };
 export type Notice = null | { tone: 'OK' | 'ERROR'; text: string };
@@ -198,7 +200,7 @@ function Builder(props: AutomationsViewProps & { editor: NonNullable<EditorState
   const found = problems(a), shown = editor.showProblems ? found : [];
   const has = (p: Problem) => shown.includes(p);
   const flagged = new Set(shown.map(problemNode));
-  const set = (patch: Partial<SimpleAutomation>) => onDraft({ ...a, ...patch });
+  const set = (patch: Partial<SimpleAutomation>) => { if (!editor.locked) onDraft({ ...a, ...patch }); };
   const setSend = (i: number, patch: Partial<Send>) => set({ sends: a.sends.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
   const insert = (at: number, c: Channel) => {
     const next = [...a.sends]; next.splice(at, 0, { ...blankSend(c), delayUnit: at === 0 ? 'NOW' : 'DAYS' });
@@ -220,13 +222,14 @@ function Builder(props: AutomationsViewProps & { editor: NonNullable<EditorState
       <button type="button" className={styles.ghost} onClick={onCancel}>← {t('back')}</button>
       <label htmlFor="automation-name" className={styles.srOnly}>{t('nameLabel')}</label>
       <input id="automation-name" className={styles.topName} value={a.name} maxLength={100} placeholder={t('namePlaceholder')} aria-invalid={has('name') || undefined}
-        disabled={editor.busy} onChange={e => set({ name: e.target.value })}/>
+        disabled={editor.busy || editor.locked} onChange={e => set({ name: e.target.value })}/>
       {statusChip}
       <div className={styles.topActions}>
         {!active && <button type="button" className={styles.secondary} disabled={editor.busy} onClick={() => onSave(false)}>{editor.busy ? t('saving') : t('saveDraft')}</button>}
         <button type="button" className={styles.primary} disabled={editor.busy} onClick={() => onSave(true)}>{editor.busy ? t('saving') : active ? t('saveKeepOn') : t('saveOn')}</button>
       </div>
     </div>
+    {editor.locked && <p className={styles.notice} role="status" data-locked="true">{t('lockedUncertain')}</p>}
     {shown.length > 0 && <div className={styles.problems} role="alert"><strong>{t('fixFirst', { n: String(shown.length) })}</strong>
       <ul>{shown.map(p => <li key={p}><button type="button" className={styles.linkish} onClick={() => { const k = problemNode(p); if (k) setNode(k); }}>{problemText(t, p)}</button></li>)}</ul></div>}
     <div className={styles.canvas}>

@@ -1,6 +1,6 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { AutomationWorkflowDetail } from '@hon/contracts';
+import type { AutomationWorkflowDetail, AutomationWorkflowStatus } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
@@ -24,6 +24,20 @@ export function commandErrorKey(error: unknown): AutomationsKey {
   if (error.code === 'AUTOMATION_STALE') return 'errStale';
   if (error.code && /NOT_AVAILABLE_YET|_UNAVAILABLE$/.test(error.code)) return 'errNotYet';
   return 'errInvalid';
+}
+
+/** A save whose outcome is unknown pauses editing until the same press finishes it or a reload shows what happened. */
+export function locksEditor(error: unknown): boolean {
+  return error instanceof AutomationCommandError && error.kind === 'UNCERTAIN';
+}
+
+/**
+ * The words when a save went through but turning on did not. The editor has closed by then, so the reason never says "press the
+ * same button"; and an automation that was already on keeps running its earlier version, which the message says.
+ */
+export function turnOnFailure(status: AutomationWorkflowStatus | null, error: unknown): { message: 'savedNotOn' | 'savedNotLive'; why: AutomationsKey } {
+  const key = commandErrorKey(error);
+  return { message: status === 'ACTIVE' ? 'savedNotLive' : 'savedNotOn', why: key === 'errUncertain' ? 'errUncertainOn' : key };
 }
 
 /** The editor for a saved automation: the simple form when its definition fits, else a read-only summary. */
@@ -113,7 +127,8 @@ export function Automations({ api = automationsApi }: { api?: AutomationsApi }):
       saved = await api.submit(request);
     } catch (error) {
       if (!owned()) return;
-      setEditor((now) => (now ? { ...now, busy: false } : now));
+      // An unknown outcome keeps the form exactly as sent, so the next press reuses the retained key instead of creating a second one.
+      setEditor((now) => (now ? { ...now, busy: false, locked: locksEditor(error) || now.locked === true } : now));
       setNotice({ tone: 'ERROR', text: t(commandErrorKey(error)) });
       if (error instanceof AutomationCommandError && error.kind === 'CONFLICT') reload();
       return;
@@ -129,7 +144,8 @@ export function Automations({ api = automationsApi }: { api?: AutomationsApi }):
       } catch (error) {
         if (!owned()) return;
         retained.current = null;
-        setNotice({ tone: 'ERROR', text: t('savedNotOn', { name, why: t(commandErrorKey(error)) }) });
+        const failed = turnOnFailure(editor.status, error);
+        setNotice({ tone: 'ERROR', text: t(failed.message, { name, why: t(failed.why) }) });
       }
     } else setNotice({ tone: 'OK', text: t('savedDraft', { name }) });
     setEditor(null); reload();
@@ -173,7 +189,7 @@ export function Automations({ api = automationsApi }: { api?: AutomationsApi }):
     <AutomationsView language={language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'} scope={scope}
       list={list} editor={editor} picking={picking} activity={activity} notice={notice} busyId={busyId}
       onNew={() => { setNotice(null); setPicking(true); }} onTemplate={onTemplate} onEdit={onEdit}
-      onDraft={(draft) => setEditor((now) => (now ? { ...now, draft } : now))} onSave={(on) => { void onSave(on); }} onCancel={onCancel}
+      onDraft={(draft) => setEditor((now) => (now && !now.locked ? { ...now, draft } : now))} onSave={(on) => { void onSave(on); }} onCancel={onCancel}
       onToggle={(id) => { void onToggle(id); }} onActivity={onActivity} onRefresh={() => { setNotice(null); reload(); }}/>
   </div>;
 }
