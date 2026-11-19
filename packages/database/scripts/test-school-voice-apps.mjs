@@ -1,4 +1,4 @@
-/** School voice apps (0579, CL2, docs/architecture/SCHOOL_CALLING.md §4) on the marked disposable communication delivery
+/** School voice apps (0590, CL2, docs/architecture/SCHOOL_CALLING.md §4) on the marked disposable communication delivery
  *  database: the worker claims and records each school's TwiML App and sealed API key on its own subaccount; staff get a
  *  phone-token decision from the runtime; the key is readable only by the worker. Nothing is created at Twilio. */
 import assert from 'node:assert/strict';
@@ -130,7 +130,7 @@ try {
 
   // 6. 011.
   const verify = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
-  const section = verify.split('-- School voice apps exact verification (0579)')[1]?.split('-- End school voice apps exact verification.')[0];
+  const section = verify.split('-- School voice apps exact verification (0590)')[1]?.split('-- End school voice apps exact verification.')[0];
   assert(section);
   const body = section.replace(/^[^\n]*\n[^\n]*\n/, '').replaceAll('hon_communication_worker', workerUrl.username).replaceAll('hon_runtime', runtime.username);
   await q(body);

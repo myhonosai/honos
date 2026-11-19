@@ -82,7 +82,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
 
   const rail = <>
     <a className={styles.brand} href={schoolShellHref(SCHOOL_SHELL_NAV[0]!.routes[0]!, verified)}>
-      <span className={styles.brandMark} aria-hidden="true" /><span><strong>{t('brand')}</strong><small>{t('brandTagline')}</small></span>
+      <img className={styles.brandMark} src="/brand/hon-os-mark-dark.svg" alt="" width={36} height={36} /><span><strong>{t('brand')}</strong><small>{t('brandTagline')}</small></span>
     </a>
     {sidebar && school}
     <nav className={styles.nav} aria-label={t('primaryNav')}>

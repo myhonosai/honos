@@ -24,7 +24,7 @@ function parse<T>(fn: () => T): T {
 function unavailable(): never { throw new ServiceUnavailableException({ code: 'CALLING_UNAVAILABLE' }); }
 
 /**
- * CL5 (0580) HQ calling on the HQ texting number. Every read and command re-proves the HQ person (any HQ messaging purpose;
+ * CL5 (0591) HQ calling on the HQ texting number. Every read and command re-proves the HQ person (any HQ messaging purpose;
  * settings: HQ owner) inside one fixed definer function; nothing here decides permission. Starting a call only records it:
  * the browser phone connects it through the signed HQ webhook, which dials the stored number. HQ calls are not recorded.
  */

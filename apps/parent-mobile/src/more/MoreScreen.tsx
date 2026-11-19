@@ -7,13 +7,17 @@ import type { ParentInvoicePayOutcome, ParentPayableInvoice } from '@hon/contrac
 import { useFamily } from '../family/family-data';
 import { Body, Button, Card, Loading, Pill, Section, StateMessage, Title } from '../ui/parts';
 import { radius, space, TOUCH, type, useColors } from '../ui/theme';
+import { EventsArea } from './EventsArea';
+import { ProShopArea } from './ProShopArea';
 import { CANDIDATE_LABEL, formatDay, formatMoney, INTEREST_LABEL, INVOICE_LABEL, MEMBERSHIP_LABEL, PASS_LABEL } from './more-model';
 
-type Area = 'billing' | 'passes' | 'testing' | 'library';
+type Area = 'events' | 'billing' | 'passes' | 'testing' | 'shop' | 'library';
 const AREAS: { key: Area; title: string; blurb: string }[] = [
+  { key: 'events', title: 'Events & bookings', blurb: 'School events and family bookings' },
   { key: 'billing', title: 'Membership & billing', blurb: 'Memberships and invoices' },
   { key: 'passes', title: 'Class passes', blurb: 'Passes and uses left' },
   { key: 'testing', title: 'Belt testing', blurb: 'Upcoming tests and results' },
+  { key: 'shop', title: 'Pro shop', blurb: 'Gear and uniforms from your school' },
   { key: 'library', title: 'Learning library', blurb: 'Videos and links from your school' },
 ];
 
@@ -46,7 +50,7 @@ export function MoreScreen({ onSignOut, version }: { onSignOut: () => void; vers
       {current ? (
         <View>
           <View style={{ marginTop: space.md, alignSelf: 'flex-start' }}><Button kind="quiet" label="‹ Back" accessibilityLabel="Back to More" onPress={() => setArea(null)} /></View>
-          {area === 'billing' ? <BillingArea /> : area === 'passes' ? <PassesArea /> : area === 'testing' ? <TestingArea /> : <LibraryArea />}
+          {area === 'events' ? <EventsArea /> : area === 'billing' ? <BillingArea /> : area === 'passes' ? <PassesArea /> : area === 'testing' ? <TestingArea /> : area === 'shop' ? <ProShopArea /> : <LibraryArea />}
         </View>
       ) : (
         <View style={{ marginTop: space.lg }}>

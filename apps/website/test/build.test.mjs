@@ -19,7 +19,7 @@ test('puts the app address into every app link and leaves no placeholder', () =>
     assert.ok(html.includes('href="https://app.example.test/account/start"'));
     assert.ok(html.includes('href="https://app.example.test/auth/login"'));
     assert.doesNotMatch(html, /\{\{[A-Z_]+\}\}/);
-    for (const f of ['styles.css', 'site.js', 'flow.js', 'favicon.svg', 'assets/front-desk-1168.webp']) {
+    for (const f of ['styles.css', 'story.css', 'boot.js', 'loader.js', 'story.js', 'site.js', 'favicon.svg', 'assets/story-class-1344.webp', 'assets/story-door-1280.mp4']) {
       assert.ok(existsSync(join(out, f)), `${f} copied`);
     }
   } finally { rmSync(out, { recursive: true, force: true }); }
@@ -60,7 +60,7 @@ test('versions CSS, scripts and fonts by content so browsers can cache them for 
     }
     for (const page of ['index.html', 'ko/index.html', 'es/index.html']) {
       const html = readFileSync(join(out, page), 'utf8');
-      for (const f of ['styles.css', 'site.js', 'flow.js']) {
+      for (const f of ['styles.css', 'story.css', 'boot.js', 'loader.js', 'story.js', 'site.js']) {
         assert.ok(html.includes(`"/${f}?v=${short(f)}"`), `${page} loads versioned ${f}`);
       }
       for (const [, href] of html.matchAll(/<link rel="preload" href="([^"]+)" as="font"/g)) {

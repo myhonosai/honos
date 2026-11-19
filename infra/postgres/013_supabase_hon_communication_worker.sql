@@ -191,7 +191,7 @@ BEGIN
 END;
 $$;
 
--- 0579 school voice apps: find schools that need one, claim, record the TwiML App and sealed key, read the key to sign
+-- 0590 school voice apps: find schools that need one, claim, record the TwiML App and sealed key, read the key to sign
 -- a phone token (when applied).
 DO $$
 BEGIN
@@ -203,7 +203,7 @@ BEGIN
 END;
 $$;
 
--- 0580 HQ calls: the HQ voice app, connect an HQ browser call, route a call to the HQ number, record progress and
+-- 0591 HQ calls: the HQ voice app, connect an HQ browser call, route a call to the HQ number, record progress and
 -- voicemail, delete voicemail after 90 days (when applied).
 DO $$
 BEGIN

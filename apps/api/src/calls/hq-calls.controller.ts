@@ -29,7 +29,7 @@ export function hqCallListQuery(query: Record<string, unknown>): Record<string, 
 }
 
 /**
- * CL5 (0580) HQ calling on the HQ number: direct human HQ people only. Reads are GET with no body; each command is its own
+ * CL5 (0591) HQ calling on the HQ number: direct human HQ people only. Reads are GET with no body; each command is its own
  * same-origin human command. The database decides who may call (any HQ messaging purpose) and who manages (HQ owner).
  */
 @Controller('hq/calls')

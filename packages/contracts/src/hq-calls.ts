@@ -1,5 +1,5 @@
 /**
- * HQ calling on the HQ texting number (0580 CL5; docs/architecture/SCHOOL_CALLING.md §10). HQ people with an HQ messaging
+ * HQ calling on the HQ texting number (0591 CL5; docs/architecture/SCHOOL_CALLING.md §10). HQ people with an HQ messaging
  * purpose make and take browser calls on the HQ number, see the HQ call log and voicemail and set their own Ring me; only
  * the HQ owner switches HQ calling on and sets the greeting. HQ calls are not recorded; only voicemail is kept (90 days).
  * Nothing here reaches Twilio: the API proves every call through the database behind the voice switch.

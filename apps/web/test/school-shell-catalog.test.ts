@@ -74,7 +74,7 @@ describe('school shell navigation catalog', () => {
     const where: Record<string, string> = {
       '/staff/team/invitations': 'staff', '/staff/roles': 'staff', '/staff/texts': 'messages', '/staff/texts/send': 'messages', '/staff/conversations/train-ai': 'conversationAi', '/staff/family-messages': 'parentApp', '/staff/calls': 'calls',
       '/staff/marketing/social': 'social', '/staff/marketing/campaigns': 'marketing', '/staff/champions-club': 'marketing', '/staff/creative-studio': 'creative', '/staff/marketing/ads': 'ads',
-      '/staff/automation/rules': 'automation', '/staff/operations': 'analytics', '/staff/retention/review': 'analytics', '/community/marketplace': 'community',
+      '/staff/automations': 'automation', '/staff/automation/rules': 'automation', '/staff/operations': 'analytics', '/staff/retention/review': 'analytics', '/community/marketplace': 'community',
       '/staff/testing/promotion-decisions': 'promotions', '/staff/billing/payment-processors': 'settings', '/staff/attendance/planned-absences': 'attendance',
     };
     for (const [href, key] of Object.entries(where)) expect(schoolShellActiveItem(href)?.key, href).toBe(key);

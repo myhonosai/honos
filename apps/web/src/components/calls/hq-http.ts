@@ -8,7 +8,7 @@ import {
 import { callsRequest, checked, invalid } from './http';
 
 /**
- * HQ calling on the HQ texting number (0580). Same-origin HQ commands only; the server re-proves the HQ person on every
+ * HQ calling on the HQ texting number (0591). Same-origin HQ commands only; the server re-proves the HQ person on every
  * read and command (settings: HQ owner). Starting a call only records it; only the separately approved voice switch lets
  * a call leave HON. Errors are the same CallsAccessError / CallsRefusal / CallsUnknown as school calling.
  */

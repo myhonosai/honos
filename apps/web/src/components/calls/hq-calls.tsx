@@ -25,7 +25,7 @@ type SettingsDraft = { callingOn: boolean; greeting: string };
 const draftOf = (o: HqCallingOverview): SettingsDraft => ({ callingOn: o.callingOn, greeting: o.voicemailGreeting ?? '' });
 
 /**
- * CL5 (0580) HQ Calls page: the HQ number's call log, the after-call card, Ring me and the HQ owner's settings. The server
+ * CL5 (0591) HQ Calls page: the HQ number's call log, the after-call card, Ring me and the HQ owner's settings. The server
  * re-proves the HQ person on every read and command (settings: HQ owner). Nothing here dials; the HQ top-bar phone does.
  * Leaving the tab hides everything; coming back reads again.
  */

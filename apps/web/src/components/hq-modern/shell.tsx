@@ -94,7 +94,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
     });
   };
   const nav = <>
-    <Link href="/hq" className={styles.brand}><strong>{t("HON HQ")}</strong><span>{t("Company control plane")}</span></Link>
+    <Link href="/hq" className={styles.brand}><img className={styles.brandMark} src="/brand/hon-os-mark-dark.svg" alt="" width={38} height={38}/><div><strong>{t("HON HQ")}</strong><span>{t("Company control plane")}</span></div></Link>
     <nav className={styles.navigation} aria-label={t("HQ navigation")}>
       {HQ_NAV.map((item) => {
         const group = HQ_NAV_GROUPS[item.path];

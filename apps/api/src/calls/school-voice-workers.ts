@@ -8,7 +8,7 @@ import { SCHOOL_CALL_ENVIRONMENT } from './school-call-webhooks.controller.js';
 import { TWILIO_VOICE_KEY_VAULT } from './school-calls.service.js';
 
 /**
- * CL3c (0556 K3, 0579 V1; docs/architecture/SCHOOL_CALLING.md §4): the Twilio Voice pieces HON creates and removes on a
+ * CL3c (0556 K3, 0590 V1; docs/architecture/SCHOOL_CALLING.md §4): the Twilio Voice pieces HON creates and removes on a
  * school's own subaccount. Every Twilio request is authenticated as HON's parent account and is made only when the owner's
  * voice switch HON_VOICE_CALLS_APPROVED is exactly 'true'; otherwise nothing leaves HON. The workers are off unless their
  * interval is set. Recording audio is fetched only to stream it to a staff member the database just authorized.
@@ -52,7 +52,7 @@ export class SchoolVoiceAppWorker {
   }
 
   /**
-   * CL5 (0580): the HQ number's voice app lives on HON's parent account (the HQ number is not on a school subaccount). Same
+   * CL5 (0591): the HQ number's voice app lives on HON's parent account (the HQ number is not on a school subaccount). Same
    * claim, find-or-create and seal steps; the sealed key is bound to the fixed HQ binding id and the parent account.
    */
   private async provisionHq(voiceUrl: string): Promise<VoiceAppOutcome | null> {
@@ -122,7 +122,7 @@ export class SchoolCallRecordingRetentionWorker {
         if (await store.markSchoolCallRecordingDeleted(due.callId, due.recordingSid)) deleted += 1;
       } catch { failed += 1; }
     }
-    // CL5 (0580): HQ voicemail, on HON's parent account (accountSid null), same 90 days and the same delete-first rule.
+    // CL5 (0591): HQ voicemail, on HON's parent account (accountSid null), same 90 days and the same delete-first rule.
     if (s.readHqCallRecordingsDue && s.markHqCallRecordingDeleted) {
       for (const due of await s.readHqCallRecordingsDue(limit)) {
         try {
