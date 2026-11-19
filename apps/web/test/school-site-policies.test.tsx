@@ -52,7 +52,7 @@ it('writes terms with a texting program section that never makes consent a condi
   expect(text).toContain('not a condition of any purchase');
   expect(text).toMatch(/Reply STOP/);
   expect(text).toContain('Carriers are not liable for delayed or undelivered messages');
-  expect(text).toContain('/privacy');
+  expect(text).toContain('privacy policy, linked at the bottom of every page');
 });
 
 it('falls back to the website contact form wording when the site has no contact details', () => {

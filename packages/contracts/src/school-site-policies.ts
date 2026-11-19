@@ -65,7 +65,7 @@ export function buildSchoolSitePolicy(kind: SchoolSitePolicyKind, facts: { schoo
       { heading: 'Children', paragraphs: [
         'Parents and guardians give us information about students who are children. We do not knowingly collect personal information directly from children under 13 through this website.'] },
       { heading: 'Your choices', paragraphs: [
-        'You can unsubscribe from emails with the link in each email, and stop texts by replying STOP.',
+        'You can stop marketing emails with the unsubscribe link in them or by asking us, and stop texts by replying STOP.',
         'You can ask us to see, correct or delete the information we hold about you.'] },
       { heading: 'Contact us', paragraphs: [contact] },
     ],
@@ -82,7 +82,7 @@ export function buildSchoolSitePolicy(kind: SchoolSitePolicyKind, facts: { schoo
         ...TEXTING_CORE(name),
         'Agreeing to receive text messages is optional and is not a condition of any purchase.',
         'Carriers are not liable for delayed or undelivered messages.',
-        'Our privacy policy at /privacy on this website explains how we handle your mobile number.'] },
+        'Our privacy policy, linked at the bottom of every page of this website, explains how we handle your mobile number.'] },
       { heading: 'Contact us', paragraphs: [contact] },
     ],
   };
