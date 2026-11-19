@@ -36,9 +36,10 @@ shown in template previews, one consistent component kit, phone layout, and ever
 
 ### Menu (Communication heading)
 
-`Texts` · `Email` · `Social` (unchanged). Conversation AI under the AI heading keeps **Train AI** and its settings; its
+`Texts` · `Email` · `Parent app` · `Social` (unchanged). Parent app is its own page (David, 2026-11-19 05:08Z:
+"own page like sms conversation page"): the 0330 family-messages chat in the same two-pane layout as Texts > Conversations. Conversation AI under the AI heading keeps **Train AI** and its settings; its
 inbox moves to Texts > Conversations. Old routes redirect: `/staff/conversations` -> `/staff/texts`,
-`/staff/family-messages` -> `/staff/texts/app`. Call log and FB/IG Messenger are not part of this series (Social keeps
+Parent app keeps its route `/staff/family-messages`. Call log and FB/IG Messenger are not part of this series (Social keeps
 FB/IG; a call log page can follow once calls are recorded).
 
 ### Texts page (`/staff/texts`), tabs
@@ -61,7 +62,6 @@ FB/IG; a call log page can follow once calls are recorded).
    merge tag picker and a live preview.
 5. **Scheduled.** Group sends waiting for their time, with Cancel (BL1 cancel).
 6. **Opted out.** Contacts who replied STOP or whose texting consent is OPTED_OUT, with date, source and Open contact.
-7. **Parent app.** The family-messages chat (0330) in the same two-pane layout; replies stay inside HON.
 
 ### Email page (`/staff/email`), tabs
 
@@ -99,8 +99,8 @@ preview is exactly what is stored and sent; the server stores plain text as toda
 
 1. **TE1** backend: history read + staff email subject (migration A).
 2. **TE2** backend: templates (migration B).
-3. **TE3** frontend: comms kit + Texts page (Conversations over 0364, Send one person, History, Templates, Opted out,
-   Parent app), menu change and redirects.
+3. **TE3** frontend: comms kit + Texts page (Conversations over 0364, Send one person, History, Templates, Opted out),
+   Parent app page, menu change and redirects.
 4. **TE4** frontend: Email page.
 5. **TE5** group sends: mount the BL1 composer, group history cards and Scheduled tab after #489 merges (coordinate
    with the blasts thread; Marketing > Blasts then links here).
@@ -113,7 +113,7 @@ sender checks. No deploy.
 
 ## 5. Open questions for David
 
-- Parent-app chat as a tab on Texts (proposed) or its own page.
+- Decided 2026-11-19 05:08Z: parent-app chat is its own page.
 
 ## 6. Plan (2026-11-19)
 
@@ -123,7 +123,7 @@ GO + green CI.
 
 | PR | Contents | Depends on | Tests |
 | --- | --- | --- | --- |
-| TE3a (frontend, no migration) | `components/comms-kit/*` on `--hon-*` tokens; `/staff/texts` page shell with pill tabs; **Conversations** tab (0364 http reused, two-pane list/thread, live search, chips, contact slide-in); **Send** tab, one person (type-ahead over people search, consent shown, merge tags filled from the contact, preview bubble, 0047 create+queue reused from `compose-http.ts`, Recent sends from the 0047 list); **Parent app** tab (0330 http reused); catalog: Communication = Texts, Email (placeholder until TE4), Social; Conversation AI keeps Train AI; redirects from `/staff/conversations` and `/staff/family-messages`. | none | unit: merge-tag fill, segment counter, tab routing, catalog; component tests per tab with mocked http incl. uncertain-send retry lock; browser check of the shell menu |
+| TE3a (frontend, no migration) | `components/comms-kit/*` on `--hon-*` tokens; `/staff/texts` page shell with pill tabs; **Conversations** tab (0364 http reused, two-pane list/thread, live search, chips, contact slide-in); **Send** tab, one person (type-ahead over people search, consent shown, merge tags filled from the contact, preview bubble, 0047 create+queue reused from `compose-http.ts`, Recent sends from the 0047 list); **Parent app** page `/staff/family-messages` (0330 http reused); catalog: Communication = Texts, Email (placeholder until TE4), Social; Conversation AI keeps Train AI; redirects from `/staff/conversations` and `/staff/family-messages`. | none | unit: merge-tag fill, segment counter, tab routing, catalog; component tests per tab with mocked http incl. uncertain-send retry lock; browser check of the shell menu |
 | TE1 (0542) | `hon.read_school_message_history`, `hon.read_school_opted_out_contacts`, staff email subject on create; API `GET .../communications/history`, `GET .../communications/opted-out`, `emailSubject` on `POST .../communications/messages`; contracts verifiers; 010/011 grants; manifest, checksums, staging ceiling. | none | DB proof (tenant isolation, filters, paging, search escaping, demo exclusion, permission), API unit tests |
 | TE2 (0543) | `hon.school_message_templates` + create/update/archive/restore/list, permissions `communication.template.read/manage`; API + contracts. | none | DB proof (RLS, version conflicts, idempotency, name uniqueness, merge-tag closed list, caps), API tests |
 | TE3b | Texts **History** (one-to-one table + drawer), **Templates** (cards + editor, Use in Send), **Opted out**. | TE1, TE2 | component tests |

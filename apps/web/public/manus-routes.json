@@ -373,8 +373,16 @@
       "title": "HON | Students at risk"
     },
     {
+      "path": "/staff/texts",
+      "title": "HON | Texts"
+    },
+    {
+      "path": "/staff/texts/send",
+      "title": "HON | Send a text"
+    },
+    {
       "path": "/staff/family-messages",
-      "title": "HON | Family messages"
+      "title": "HON | Parent app"
     },
     {
       "path": "/staff/conversations",
@@ -706,7 +714,7 @@
     },
     {
       "path": "/hq/pricing-offers",
-      "title": "HON HQ | Pricing & Offers \u00b7 Design review"
+      "title": "HON HQ | Pricing & Offers · Design review"
     },
     {
       "path": "/reference/classic-dashboard",

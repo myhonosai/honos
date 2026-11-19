@@ -83,6 +83,17 @@ const leads = () => [['Avery', 'Sample', 1], ['Rowan', 'Example', 2], ['Kim', 'P
 const work = (scope) => ({ schoolId: scope.schoolId, principalId: id(500), canManage: true, canCreate: true, humanOnly: true, executionAllowed: false, queue: 'mine', status: 'ACTIVE',
   items: [{ title: 'Call back trial family', workItemId: id(601), version: 1, status: 'READY', priority: 'HIGH', dueAt: at(day), assigneeId: id(500) },
     { title: 'Order new belts for testing', workItemId: id(602), version: 1, status: 'WAITING', priority: 'NORMAL', dueAt: null, assigneeId: id(500) }], nextAfter: null });
+const textRows = () => [
+  { conversationId: id(901), channel: 'SMS', contactAddress: '+15555550101', contactName: 'Avery Sample', personId: id(850), leadId: id(201), leadStatus: 'OPEN', leadStage: 'Trial booked', status: 'OPEN', unread: 1,
+    tags: ['trial'], assignedTo: null, lastMessage: { direction: 'INBOUND', preview: 'Can we move the trial to Thursday?', mediaCount: 0, at: at(-1800_000) }, lastMessageAt: at(-1800_000), lastInboundAt: at(-1800_000), version: 3 },
+  { conversationId: id(902), channel: 'SMS', contactAddress: '+15555550199', contactName: null, personId: null, leadId: null, leadStatus: null, leadStage: null, status: 'OPEN', unread: 0,
+    tags: [], assignedTo: null, lastMessage: { direction: 'OUTBOUND', preview: 'Thanks for reaching out!', mediaCount: 0, at: at(-day) }, lastMessageAt: at(-day), lastInboundAt: at(-day - 60_000), version: 2 },
+];
+const textThread = () => [
+  { messageId: id(911), direction: 'INBOUND', author: 'CONTACT', staffName: null, body: 'Hi, is the kids class open on Tuesday?', mediaCount: 0, at: at(-day), delivery: null },
+  { messageId: id(912), direction: 'OUTBOUND', author: 'STAFF', staffName: 'Synthetic Owner', body: 'Yes! 4:30 PM. Want me to book a free trial?', mediaCount: 0, at: at(-day + 600_000), delivery: 'DELIVERED' },
+  { messageId: id(913), direction: 'INBOUND', author: 'CONTACT', staffName: null, body: 'Can we move the trial to Thursday?', mediaCount: 0, at: at(-1800_000), delivery: null },
+];
 const json = (route, status, body) => route.fulfill({ status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }, body: JSON.stringify(body) });
 function api(route) {
   const url = new URL(route.request().url()), path = url.pathname, method = route.request().method();
@@ -100,6 +111,15 @@ function api(route) {
     if (path === `${prefix}/ai/team/capabilities`) return readinessDenied ? json(route, 403, { code: 'AI_TEAM_READINESS_FORBIDDEN' }) : json(route, 200, { data: readiness(scope), meta: { requestId: 'r', correlationId: 'r' } });
     if (path === `${prefix}/crm/leads`) return leadsGate ? leadsGate.then(() => json(route, 200, { data: leads(), meta: {} })) : json(route, 200, { data: leads(), meta: {} });
     if (path === `${prefix}/schedule/sessions`) return json(route, 200, { data: sessions(), meta: { requestId: id(700), correlationId: id(700) } });
+    // Texts > Conversations (0364) and Parent app (0330): synthetic inboxes for the TE3a layout checks.
+    if (path === `${prefix}/conversations`) return json(route, 200, { data: { conversations: textRows(), nextCursor: null, unreadConversations: 1, canManage: true }, meta: {} });
+    if (path === `${prefix}/conversations/${id(901)}`) return json(route, 200, { data: { conversation: textRows()[0], contact: { person: { personId: id(850), givenName: 'Avery', familyName: 'Sample',
+      phone: '+15555550101', email: 'avery@example.test', smsConsent: 'OPTED_IN' }, lead: { leadId: id(201), status: 'OPEN', pipeline: 'Kids', stage: 'Trial booked', source: 'Website', createdAt: at(-2 * day) },
+      nextAppointment: null, peopleWithNumber: 1, schoolCanText: true }, messages: textThread(), hasOlder: false, canManage: true }, meta: {} });
+    if (path === `${prefix}/family-messages`) return json(route, 200, { data: { threads: [{ threadId: id(951), familyId: id(961), familyName: 'Sample family', lastMessageAt: at(-3600_000), lastFrom: 'FAMILY',
+      messageCount: 2, unreadCount: 1, version: 2 }, { threadId: id(952), familyId: id(962), familyName: 'Example family', lastMessageAt: at(-2 * day), lastFrom: 'SCHOOL', messageCount: 3, unreadCount: 0, version: 3 }], unreadThreads: 1 }, meta: {} });
+    if (path === `${prefix}/family-messages/${id(951)}`) return json(route, 200, { data: { threadId: id(951), familyId: id(961), familyName: 'Sample family', version: 2, unreadCount: 1,
+      messages: [{ messageId: id(971), from: 'SCHOOL', mine: true, body: 'Welcome to the parent app!', sentAt: at(-day) }, { messageId: id(972), from: 'FAMILY', mine: false, body: 'Thanks! Is there class on Friday?', sentAt: at(-3600_000) }] }, meta: {} });
     if (path === `${prefix}/people`) return json(route, 200, { data: [['Avery', 'Sample', '+15555550101', 'avery@example.test'], ['Rowan', 'Example', null, 'rowan@example.test']]
       .map(([givenName, familyName, phoneE164, email], i) => ({ id: id(850 + i), givenName, familyName, email, phoneE164, version: 1, createdAt: iso() })), meta: { requestId: id(860), correlationId: id(860) } });
     if (path === `${prefix}/staff-roles/lists`) return json(route, 200, { data: { roles: [{ id: id(880), code: 'CUSTOM_FRONT_DESK', name: 'Front desk', version: 1, permissionCodes: ['school.view', 'crm.lead.read'] }], grants: [] }, meta: {} });
@@ -220,7 +240,7 @@ await check('modern top bar shows the everyday pages and More', async () => {
   theme = 'modern'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/crm/follow-ups');
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
   const visible = await page.locator('nav[aria-label="School navigation"] a[data-nav]').evaluateAll((links) => links.filter((a) => a.offsetParent !== null).map((a) => a.dataset.nav));
-  assert.deepEqual(visible, ['home', 'conversationAi', 'classes', 'attendance', 'students', 'crm']);
+  assert.deepEqual(visible, ['home', 'classes', 'attendance', 'students', 'crm', 'messages']);
   await noOverflow(page); await shot(page, 'l1-topbar-modern-desktop'); await ctx.close();
 });
 for (const mode of ['modern', 'big-button']) await check(`${mode} menu panel lists every area`, async () => {
@@ -228,9 +248,9 @@ for (const mode of ['modern', 'big-button']) await check(`${mode} menu panel lis
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
   await page.getByRole('button', { name: 'Open navigation' }).click();
   const panel = page.getByRole('dialog', { name: 'Menu' }); await panel.waitFor();
-  // Owner menu (2026-11-16): eleven headings plus Settings; one card per page (25 pages, Shopify added under Finance).
+  // Owner menu (2026-11-16): eleven headings plus Settings; one card per page (27 pages: Shopify and Ads added, then Parent app split from Texts on 2026-11-19).
   assert.equal(await panel.locator('[data-menu-section]').count(), 12);
-  assert.equal(await panel.locator('[data-menu]').count(), 25);
+  assert.equal(await panel.locator('[data-menu]').count(), 27);
   await page.waitForTimeout(250); await axeScan(page, `menu-${mode}`); await shot(page, `u2-menu-${mode}-desktop`);
   await page.keyboard.press('Escape'); await panel.waitFor({ state: 'detached' }); await ctx.close();
 });
@@ -372,19 +392,37 @@ await check('Mass rank promotion opens on the graded students with one decision 
   assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('promotion-decision')), false);
   await shot(page, 'l3-mass-promotion-desktop'); await ctx.close();
 });
-await check('Texts & email opens with the composer: find a contact, Text or Email, nothing sent before Send', async () => {
+for (const mode of ['modern', 'big-button']) for (const size of ['desktop', 'phone']) await check(`Texts > Conversations: list, open a thread, contact details (${mode} ${size})`, async () => {
+  theme = mode; const { ctx, page } = await open(viewports[size], '/staff/texts');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('button', { name: /Avery Sample/ }).first().click();
+  await page.getByText('Can we move the trial to Thursday?').last().waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Apply' }).count(), 0, 'no Apply button');
+  assert.equal(await page.locator('[data-texts-conversations]').evaluate(el => /[0-9a-f]{8}-[0-9a-f]{4}/i.test(el.textContent ?? '')), false, 'no IDs shown');
+  assert.equal(report.apiRequests.some(r => r.startsWith('POST')), false);
+  await shot(page, `te3a-texts-conversations-${mode}-${size}`); await ctx.close();
+});
+await check('Parent app is its own page laid out like the texts inbox (TE3a)', async () => {
   theme = 'modern'; const { ctx, page } = await open(viewports.desktop, '/staff/family-messages');
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
-  await page.getByRole('heading', { name: 'New text or email' }).waitFor();
+  await page.getByRole('heading', { name: 'Parent app', exact: true }).first().waitFor();
+  await page.getByRole('button', { name: /Sample family/ }).click();
+  await page.getByText('Thanks! Is there class on Friday?').waitFor();
+  assert.equal(await page.locator('[data-compose]').count(), 0, 'no composer on the parent app page');
+  await shot(page, 'te3a-parent-app-desktop'); await ctx.close();
+});
+await check('Texts > Send: type a name, pick the contact, nothing sent before Send (TE3a)', async () => {
+  theme = 'modern'; const { ctx, page } = await open(viewports.desktop, '/staff/texts/send');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Send a text', exact: true }).first().waitFor();
   await page.locator('input[name="composeQuery"]').fill('Sample');
-  await page.getByRole('button', { name: 'Find' }).click();
-  await page.getByRole('button', { name: 'Rowan Example' }).click();
-  assert.equal(await page.locator('input[name="composeChannel"][value="SMS"]').isDisabled(), true, 'no mobile number, no text');
-  assert.equal(await page.locator('input[name="composeChannel"][value="EMAIL"]').isChecked(), true);
-  await page.locator('textarea[name="composeContent"]').fill('Synthetic message');
-  assert.equal(await page.getByRole('button', { name: 'Send', exact: true }).isDisabled(), true, 'needs the confirm');
+  await page.getByRole('button', { name: /Rowan Example/ }).click();
+  await page.getByText('No mobile number: this contact cannot get texts').waitFor();
+  await page.locator('textarea[name="composeContent"]').fill('Hi {{first_name}}');
+  await page.getByText('Hi Rowan', { exact: false }).first().waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Send', exact: true }).isDisabled(), true, 'no mobile number, no text');
   assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('communications/messages')), false);
-  await shot(page, 'l4-texts-email-desktop'); await ctx.close();
+  await shot(page, 'te3a-texts-send-desktop'); await ctx.close();
 });
 for (const mode of ['modern', 'classic', 'big-button']) for (const size of ['desktop', 'phone']) await check(`Staff opens on names; a name opens its card (${mode} ${size})`, async () => {
   theme = mode; const { ctx, page } = await open(viewports[size], '/staff/team/invitations');

@@ -107,9 +107,17 @@ describe('school conversations screen', () => {
     expect(parseTags('')).toEqual([]);
     expect(parseTags('a, A')).toBeNull(); expect(parseTags('<b>')).toBeNull();
   });
-  it('is reachable from the Contacts area next to family messages', () => {
-    const routes = SCHOOL_SHELL_NAV.flatMap(item => item.routes.map(r => r.href));
-    expect(routes).toContain('/staff/conversations');
+  it('is the first tab of Texts under Communication, and the old address redirects there', () => {
+    const texts = SCHOOL_SHELL_NAV.find(item => item.key === 'messages')!;
+    expect(texts.section).toBe('communication');
+    expect(texts.routes.map(r => r.href)).toEqual(['/staff/texts', '/staff/texts/send']);
+    expect(readFileSync(resolve('src/app/staff/conversations/page.tsx'), 'utf8')).toContain("redirect('/staff/texts')");
+    expect(readFileSync(resolve('src/app/staff/texts/page.tsx'), 'utf8')).toContain('<StaffConversations />');
+  });
+  it('searches as you type and filters with chips, with no Apply button', () => {
+    const source = readFileSync(resolve('src/components/conversations/staff-conversations.tsx'), 'utf8');
+    expect(source).toContain('filter({ ...draft, search: e.target.value }, 350)');
+    expect(source).not.toContain('copy.apply');
   });
   it('keeps a separate retry key per command kind, so an update cannot replace an unconfirmed reply key', () => {
     const source = readFileSync(resolve('src/components/conversations/staff-conversations.tsx'), 'utf8');

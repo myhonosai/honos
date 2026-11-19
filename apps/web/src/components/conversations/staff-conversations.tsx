@@ -13,7 +13,10 @@ import {
   ConversationsAccessError, ConversationsRefusal, commandAttempt, loadConversation, loadConversations, markConversationRead, replyConversation,
   updateConversation, type ConversationsScope,
 } from './http';
-import s from '../testing-registration.module.css';
+import s from '../comms-kit/comms.module.css';
+import { initials } from '../comms-kit/initials';
+import { smsSegments } from '../comms-kit/sms-segments';
+import { shortWhen } from '../comms-kit/short-when';
 
 type Filters = { status: 'OPEN' | 'CLOSED' | 'ALL'; unreadOnly: boolean; search: string };
 const START: Filters = { status: 'OPEN', unreadOnly: false, search: '' };
@@ -44,7 +47,7 @@ export function parseTags(text: string): string[] | null {
  */
 export function StaffConversations(): React.ReactElement {
   const shell = useSchoolShell();
-  const { preferences, date } = useLocale();
+  const { preferences, date, formattingLocale } = useLocale();
   const copy = conversationsCopy(preferences.language);
   const selection = shell.phase === 'READY' ? shell.selection : null;
   const scopeKey = selection ? `${selection.organizationId}/${selection.schoolId}` : '';
@@ -52,7 +55,8 @@ export function StaffConversations(): React.ReactElement {
   const [filters, setFilters] = useState<Filters>(START), [draft, setDraft] = useState<Filters>(START);
   const [text, setText] = useState(''), [tagText, setTagText] = useState('');
   const [busy, setBusy] = useState(false), [acting, setActing] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
-  const [denied, setDenied] = useState(false), [hidden, setHidden] = useState(false);
+  const [denied, setDenied] = useState(false), [hidden, setHidden] = useState(false), [side, setSide] = useState(true);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const generation = useRef(0);
   // One retry key per command kind, so an update never replaces the key an unconfirmed reply must retry with.
   const attempt = useRef<{ fingerprint: string; key: string } | null>(null), updateAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
@@ -132,83 +136,114 @@ export function StaffConversations(): React.ReactElement {
     if (result === true || result instanceof ConversationsRefusal) updateAttempt.current = null;
     else if (!(result instanceof ConversationsAccessError)) setError(copy.unknownUpdate);
   }
-  function applyFilters(event: React.FormEvent) { event.preventDefault(); setFilters(draft); void refresh(open?.conversation.conversationId, draft); }
+  /** Filters apply at once; typing in search waits a moment so each keystroke is not a request. */
+  function filter(next: Filters, wait = 0) {
+    setDraft(next);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    const run = () => { setFilters(next); void refresh(open?.conversation.conversationId, next); };
+    if (wait) searchTimer.current = setTimeout(run, wait); else run();
+  }
+  useEffect(() => () => { if (searchTimer.current) clearTimeout(searchTimer.current); }, []);
+  function pick(conversationId: string | null) {
+    setText(''); attempt.current = null;
+    if (conversationId) void refresh(conversationId); else { ++generation.current; setOpen(null); void refresh(); }
+  }
 
   if (!selection) return <p role="status">{copy.chooseSchool}</p>;
   const canManage = Boolean(open?.canManage);
   const consent = open?.contact.person?.smsConsent;
   const canReply = Boolean(open && canManage && open.conversation.channel === 'SMS' && open.contact.person && consent === 'OPTED_IN' && open.contact.schoolCanText);
   const tags = parseTags(tagText);
-  return <main className={s.page}><div className={s.shell}>
-    <header className={s.header}><h1>{copy.title}</h1><p>{copy.intro}</p></header>
-    {hidden && !list && <p className={s.actions}><span className={s.subtle}>{copy.hidden}</span> <button type="button" onClick={() => void refresh()}>{copy.show}</button></p>}
-    <div aria-live="polite">{busy && !list && <p role="status">{copy.loading}</p>}
-      {error && <div className={s.error} role="alert"><strong>{denied ? copy.deniedTitle : copy.title}</strong><p>{error}</p></div>}
-      {notice && <p className={s.notice} role="status">{notice}</p>}</div>
-    {list && <section className={s.card} aria-label={copy.inbox}>
-      <h2>{copy.inbox}{list.unreadConversations ? ` · ${copy.unread(list.unreadConversations)}` : ''}</h2>
-      <form onSubmit={applyFilters} className={s.actions} aria-label={copy.filterStatus}>
-        <label>{copy.filterStatus} <select value={draft.status} onChange={e => setDraft({ ...draft, status: e.target.value as Filters['status'] })}>
-          <option value="OPEN">{copy.statusOpen}</option><option value="CLOSED">{copy.statusClosed}</option><option value="ALL">{copy.statusAll}</option></select></label>
-        <label><input type="checkbox" checked={draft.unreadOnly} onChange={e => setDraft({ ...draft, unreadOnly: e.target.checked })} /> {copy.unreadOnly}</label>
-        <label>{copy.search} <input type="search" value={draft.search} maxLength={CONVERSATION_LIMITS.searchMax} placeholder={copy.searchHint}
-          onChange={e => setDraft({ ...draft, search: e.target.value })} /></label>
-        <button type="submit" disabled={busy}>{copy.apply}</button>
-        <button type="button" disabled={busy} onClick={() => void refresh(open?.conversation.conversationId)}>{copy.refresh}</button>
-      </form>
-      {list.conversations.length === 0 ? <p className={s.empty}>{filters === START ? copy.empty : copy.emptyFiltered}</p> : <ul className={s.list}>
-        {list.conversations.map(c => <li key={c.conversationId}>
-          <button type="button" aria-current={open?.conversation.conversationId === c.conversationId ? 'true' : undefined}
-            onClick={() => { setText(''); attempt.current = null; void refresh(c.conversationId); }}>
-            {name(c, copy)}{c.unread ? <span className={s.badge}> {copy.newBadge(c.unread)}</span> : null}{c.status === 'CLOSED' ? <span className={s.subtle}> · {copy.closedBadge}</span> : null}
-          </button>{' '}
-          <span className={s.subtle}>{c.lastMessage ? `${c.lastMessage.direction === 'INBOUND' ? copy.theyWrote : copy.youReplied}: ${c.lastMessage.preview}${c.lastMessage.mediaCount ? ` (${copy.media(c.lastMessage.mediaCount)})` : ''} · ` : ''}{date(c.lastMessageAt)}</span>
-          {c.tags.length > 0 && <span className={s.subtle}> · {c.tags.join(', ')}</span>}
-        </li>)}
-      </ul>}
-      {list.nextCursor && <p className={s.actions}><button type="button" disabled={busy} onClick={() => void more()}>{copy.more}</button></p>}
-    </section>}
-    {open && <section className={s.card} aria-label={copy.thread(name(open.conversation, copy))}>
-      <h2>{name(open.conversation, copy)}</h2>
-      <aside aria-label={copy.contact}>
-        <h3>{copy.contact}</h3>
-        <p><strong>{copy.person}:</strong> {open.contact.person ? `${open.contact.person.givenName} ${open.contact.person.familyName}` : open.contact.peopleWithNumber > 1 ? copy.twoPeople(open.contact.peopleWithNumber) : copy.noPerson}</p>
-        {open.contact.person && <p><strong>{copy.consent}:</strong> {consent === 'OPTED_IN' ? copy.consentIn : consent === 'OPTED_OUT' ? copy.consentOut : copy.consentNone}</p>}
-        <p><strong>{copy.lead}:</strong> {open.contact.lead ? `${open.contact.lead.pipeline} · ${open.contact.lead.stage}` : copy.noLead}</p>
-        <p><strong>{copy.appointment}:</strong> {open.contact.nextAppointment ? `${open.contact.nextAppointment.type} · ${date(open.contact.nextAppointment.startsAt)}` : copy.noAppointment}</p>
-        {!open.contact.schoolCanText && <p className={s.subtle}>{copy.noSender}</p>}
-        <p className={s.actions}><a href="/staff/crm/leads">{copy.openLeads}</a> <a href="/staff/people">{copy.openPeople}</a></p>
-        {open.contact.person && selection && <ContactMessageHistory key={`${scopeKey}/${open.contact.person.personId}`}
-          scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} personId={open.contact.person.personId}/>}
-      </aside>
-      {open.hasOlder && <p className={s.actions}><button type="button" onClick={() => void older()}>{copy.older}</button></p>}
-      <ol className={s.list}>{open.messages.map(m => <li key={m.messageId}>
-        <p><strong>{m.author === 'CONTACT' ? name(open.conversation, copy) : m.staffName ?? copy.staff}</strong> · <span className={s.subtle}>{date(m.at)}{m.delivery ? ` · ${copy.delivery[m.delivery]}` : ''}</span></p>
-        {m.body && <p style={{ whiteSpace: 'pre-wrap' }}>{m.body}</p>}
-        {m.mediaCount > 0 && <p className={s.subtle}>{copy.media(m.mediaCount)}</p>}
-      </li>)}</ol>
-      {open.conversation.unread > 0 && open.messages.length > 0 && <p className={s.actions}><button type="button" disabled={acting}
-        onClick={() => void command(scope => markConversationRead(scope, open.conversation.conversationId, open.messages.at(-1)!.messageId), copy.markedRead, open.conversation.conversationId)}>
-        {copy.markRead(open.conversation.unread)}</button></p>}
-      {!canManage && <p className={s.subtle}>{copy.readOnly}</p>}
-      {canManage && <>
-        <p className={s.actions}>{open.conversation.status === 'OPEN'
-          ? <button type="button" disabled={acting} onClick={() => void change(open.conversation, { status: 'CLOSED' }, copy.closed)}>{copy.close}</button>
-          : <button type="button" disabled={acting} onClick={() => void change(open.conversation, { status: 'OPEN' }, copy.reopened)}>{copy.reopen}</button>}</p>
-        <form onSubmit={e => { e.preventDefault(); if (tags) void change(open.conversation, { tags }, copy.tagsSaved); }}>
-          <label htmlFor="conversation-tags">{copy.tags}</label>
-          <input id="conversation-tags" value={tagText} onChange={e => setTagText(e.target.value)} disabled={acting} aria-describedby="conversation-tags-hint" />
-          <p id="conversation-tags-hint" className={s.subtle}>{copy.tagsHint}</p>
-          <p className={s.actions}><button type="submit" disabled={acting || !tags}>{copy.saveTags}</button></p>
-        </form>
-        {canReply ? <form onSubmit={sendReply}>
-          <label htmlFor="conversation-reply">{copy.reply(name(open.conversation, copy))}</label>
-          <textarea id="conversation-reply" rows={4} value={text} maxLength={CONVERSATION_LIMITS.bodyMax + 1} onChange={e => setText(e.target.value)} disabled={acting}
+  const parts = smsSegments(text).segments;
+  const statusChip = (value: Filters['status'], label: string) =>
+    <li key={value}><button type="button" className={s.chip} aria-pressed={draft.status === value} onClick={() => filter({ ...draft, status: value })}>{label}</button></li>;
+  return <main className={s.page} data-texts-conversations="">
+    <header className={s.head}><div><h1>{copy.title}</h1><p>{copy.intro}</p></div>
+      <button type="button" className={s.ghost} disabled={busy} onClick={() => void refresh(open?.conversation.conversationId)}>{copy.refresh}</button></header>
+    {hidden && !list && <p className={s.actions}><span className={s.muted}>{copy.hidden}</span> <button type="button" className={s.button} onClick={() => void refresh()}>{copy.show}</button></p>}
+    <div aria-live="polite">{busy && !list && <p className={s.muted} role="status">{copy.loading}</p>}
+      {error && <div className={s.flash} data-tone="bad" role="alert"><strong>{denied ? copy.deniedTitle : copy.title}</strong><p>{error}</p></div>}
+      {notice && <p className={s.flash} data-tone="ok" role="status">{notice}</p>}</div>
+    {list && <div className={s.split} data-open={open ? 'true' : undefined} data-side={open && side ? 'open' : undefined}>
+      <section className={s.listPane} aria-label={copy.inbox}>
+        <div className={s.listTools}>
+          <input className={s.field} type="search" aria-label={copy.search} value={draft.search} maxLength={CONVERSATION_LIMITS.searchMax} placeholder={copy.searchHint}
+            onChange={e => filter({ ...draft, search: e.target.value }, 350)} />
+          <ul className={s.chips} aria-label={copy.filterStatus}>
+            {statusChip('OPEN', copy.statusOpen)}{statusChip('CLOSED', copy.statusClosed)}{statusChip('ALL', copy.statusAll)}
+            <li><button type="button" className={s.chip} aria-pressed={draft.unreadOnly} onClick={() => filter({ ...draft, unreadOnly: !draft.unreadOnly })}>
+              {copy.unreadOnly}{list.unreadConversations ? ` (${list.unreadConversations})` : ''}</button></li>
+          </ul>
+        </div>
+        {list.conversations.length === 0 ? <p className={s.empty}>{JSON.stringify(filters) === JSON.stringify(START) ? copy.empty : copy.emptyFiltered}</p> : <ul className={s.rows}>
+          {list.conversations.map(c => <li key={c.conversationId}>
+            <button type="button" className={s.row} aria-current={open?.conversation.conversationId === c.conversationId ? 'true' : undefined} onClick={() => pick(c.conversationId)}>
+              <span className={s.avatar} aria-hidden="true">{initials(c.contactName ?? '#')}</span>
+              <span className={s.rowMain}><span className={s.rowName}>{name(c, copy)}</span>
+                {c.contactName && <span className={s.rowSub}>{c.contactAddress}</span>}
+                {c.lastMessage && <span className={s.rowPreview}>{c.lastMessage.direction === 'INBOUND' ? '' : `${copy.you}: `}{c.lastMessage.preview}{c.lastMessage.mediaCount ? ` (${copy.media(c.lastMessage.mediaCount)})` : ''}</span>}
+                {(c.status === 'CLOSED' || c.tags.length > 0) && <span className={s.rowSub}>{[c.status === 'CLOSED' ? copy.closedBadge : '', ...c.tags].filter(Boolean).join(' · ')}</span>}</span>
+              <span className={s.rowSide}><time dateTime={c.lastMessageAt} title={date(c.lastMessageAt)}>{shortWhen(c.lastMessageAt, { locale: formattingLocale, timeZone: preferences.timeZone })}</time>{c.unread ? <span className={s.badge} data-tone="accent">{copy.newBadge(c.unread)}</span> : null}</span>
+            </button>
+          </li>)}
+        </ul>}
+        {list.nextCursor && <p className={s.more}><button type="button" className={s.ghost} disabled={busy} onClick={() => void more()}>{copy.more}</button></p>}
+      </section>
+      {open ? <section className={s.thread} aria-label={copy.thread(name(open.conversation, copy))}>
+        <header className={s.threadHead}>
+          <div className={s.actions}><button type="button" className={`${s.ghost} ${s.back}`} onClick={() => pick(null)}>{copy.back}</button>
+            <div><h2>{name(open.conversation, copy)}</h2><p>{open.conversation.contactAddress}</p></div></div>
+          <div className={s.actions}>
+            {open.conversation.unread > 0 && open.messages.length > 0 && <button type="button" className={s.button} disabled={acting}
+              onClick={() => void command(scope => markConversationRead(scope, open.conversation.conversationId, open.messages.at(-1)!.messageId), copy.markedRead, open.conversation.conversationId)}>
+              {copy.markRead(open.conversation.unread)}</button>}
+            {canManage && (open.conversation.status === 'OPEN'
+              ? <button type="button" className={s.button} disabled={acting} onClick={() => void change(open.conversation, { status: 'CLOSED' }, copy.closed)}>{copy.close}</button>
+              : <button type="button" className={s.button} disabled={acting} onClick={() => void change(open.conversation, { status: 'OPEN' }, copy.reopened)}>{copy.reopen}</button>)}
+            <button type="button" className={s.ghost} aria-expanded={side} onClick={() => setSide(!side)}>{side ? copy.hideContact : copy.showContact}</button>
+          </div>
+        </header>
+        <ol className={s.messages}>
+          {open.hasOlder && <li className={s.actions}><button type="button" className={s.ghost} onClick={() => void older()}>{copy.older}</button></li>}
+          {open.messages.length === 0 && <li className={s.empty}>{copy.noMessages}</li>}
+          {open.messages.map(m => <li key={m.messageId} className={s.bubble} data-from={m.author === 'CONTACT' ? 'in' : 'out'}>
+            {m.body && <p>{m.body}</p>}
+            {m.mediaCount > 0 && <p className={s.muted}>{copy.media(m.mediaCount)}</p>}
+            <span className={s.bubbleMeta}><span>{m.author === 'CONTACT' ? name(open.conversation, copy) : m.staffName ?? copy.staff}</span><span>{date(m.at)}</span>
+              {m.delivery && <span>{copy.delivery[m.delivery]}</span>}</span>
+          </li>)}
+        </ol>
+        {!canManage ? <p className={`${s.composer} ${s.muted}`}>{copy.readOnly}</p> : canReply ? <form className={s.composer} onSubmit={sendReply}>
+          <label htmlFor="conversation-reply" className={s.label}>{copy.reply(name(open.conversation, copy))}</label>
+          <textarea id="conversation-reply" className={s.field} rows={3} value={text} maxLength={CONVERSATION_LIMITS.bodyMax + 1} onChange={e => setText(e.target.value)} disabled={acting}
             aria-describedby="conversation-reply-hint" />
-          <p id="conversation-reply-hint" className={s.subtle}>{copy.replyHint} {copy.counter(text.length, CONVERSATION_LIMITS.bodyMax)}</p>
-          <p className={s.actions}><button type="submit" disabled={acting || !conversationBodyOk(text)}>{acting ? copy.sending : copy.send}</button></p>
-        </form> : <p className={s.subtle}>{copy.cannotReply}</p>}
-      </>}
-    </section>}
-  </div></main>;
+          <div className={s.composerBar}>
+            <span id="conversation-reply-hint" className={s.composerTools}>{copy.counter(text.length, CONVERSATION_LIMITS.bodyMax)}{parts > 1 ? ` · ${copy.segments(parts)}` : ''}</span>
+            <button type="submit" className={s.primary} disabled={acting || !conversationBodyOk(text)}>{acting ? copy.sending : copy.send}</button>
+          </div>
+        </form> : <p className={`${s.composer} ${s.muted}`}>{copy.cannotReply}</p>}
+      </section> : <section className={s.thread}><p className={s.empty}>{copy.pickConversation}</p></section>}
+      {open && side && <aside className={s.side} aria-label={copy.contact}>
+        <h3>{copy.contact}</h3>
+        <dl className={s.facts}>
+          <div><dt>{copy.person}</dt><dd>{open.contact.person ? `${open.contact.person.givenName} ${open.contact.person.familyName}` : open.contact.peopleWithNumber > 1 ? copy.twoPeople(open.contact.peopleWithNumber) : copy.noPerson}</dd></div>
+          {open.contact.person && <div><dt>{copy.consent}</dt><dd><span className={s.badge} data-tone={consent === 'OPTED_IN' ? 'ok' : consent === 'OPTED_OUT' ? 'bad' : 'warn'}>
+            {consent === 'OPTED_IN' ? copy.consentIn : consent === 'OPTED_OUT' ? copy.consentOut : copy.consentNone}</span></dd></div>}
+          <div><dt>{copy.lead}</dt><dd>{open.contact.lead ? `${open.contact.lead.pipeline} · ${open.contact.lead.stage}` : copy.noLead}</dd></div>
+          <div><dt>{copy.appointment}</dt><dd>{open.contact.nextAppointment ? `${open.contact.nextAppointment.type} · ${date(open.contact.nextAppointment.startsAt)}` : copy.noAppointment}</dd></div>
+        </dl>
+        {!open.contact.schoolCanText && <p className={s.muted}>{copy.noSender}</p>}
+        <p className={s.actions}><a className={s.button} href="/staff/people">{copy.openPeople}</a> <a className={s.ghost} href="/staff/crm">{copy.openLeads}</a></p>
+        {canManage && <form className={s.stack} onSubmit={e => { e.preventDefault(); if (tags) void change(open.conversation, { tags }, copy.tagsSaved); }}>
+          <label htmlFor="conversation-tags" className={s.label}>{copy.tags}
+            <input id="conversation-tags" className={s.field} value={tagText} onChange={e => setTagText(e.target.value)} disabled={acting} aria-describedby="conversation-tags-hint" /></label>
+          <p id="conversation-tags-hint" className={s.muted}>{copy.tagsHint}</p>
+          <p className={s.actions}><button type="submit" className={s.button} disabled={acting || !tags}>{copy.saveTags}</button></p>
+        </form>}
+        {open.contact.person && selection && <details><summary>{copy.history}</summary>
+          <ContactMessageHistory key={`${scopeKey}/${open.contact.person.personId}`} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} personId={open.contact.person.personId}/>
+        </details>}
+      </aside>}
+    </div>}
+  </main>;
 }
