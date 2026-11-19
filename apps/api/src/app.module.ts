@@ -53,6 +53,8 @@ import { HON_REPLY_PROVIDER_RUNTIME, OpenRouterHonReplyRuntime } from './ai/hon-
 import { HonReplyService } from './hon-conversation/hon-reply.service.js';
 import { EianController, EianAskGuard, EianReadGuard } from './eian/eian.controller.js';
 import { EianService } from './eian/eian.service.js';
+import { ParentInvoicePayCancelGuard, ParentInvoicePayConfirmGuard, ParentInvoicePayController, ParentInvoicePayStartGuard } from './parent-pay/parent-invoice-pay.controller.js';
+import { ParentInvoicePayService } from './parent-pay/parent-invoice-pay.service.js';
 import { EIAN_PROVIDER_RUNTIME, OpenRouterEianRuntime } from './eian/eian-provider-runtime.js';
 import { CREATIVE_PROVIDER_RUNTIME } from './creative-studio/creative-provider-runtime.js';
 import { createCreativeProviderRuntime } from './creative-studio/providers/creative-provider-router.js';
@@ -522,6 +524,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentSchoolBookingController,
     ParentFamilyMessagesController,
     EianController,
+    ParentInvoicePayController,
     FamilyMessagesInboxController,
     SchoolConversationsController,
     ContactMessagesController,
@@ -670,6 +673,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     { provide: HON_REPLY_PROVIDER_RUNTIME, useFactory: () => new OpenRouterHonReplyRuntime() },
     // E-AI1: Eian family AI. The same OpenRouter rules: off until the key and the paid-call approval flag are both set.
     { provide: EIAN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterEianRuntime() }, EianService, EianAskGuard, EianReadGuard,
+    ParentInvoicePayService, ParentInvoicePayStartGuard, ParentInvoicePayConfirmGuard, ParentInvoicePayCancelGuard,
     // CS1: no creative provider is connected; the synthetic runtime is test-only and never selected here.
     // C2: real adapters exist, but stay off until results can be copied into HON storage (C3).
     { provide: CREATIVE_PROVIDER_RUNTIME, useFactory: () => createCreativeProviderRuntime({ mediaStorageReady: false }) },

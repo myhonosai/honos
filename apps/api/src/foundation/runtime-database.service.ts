@@ -698,6 +698,26 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     finally { client.release(); }
   }
 
+  /** 0530: the parent invoice payment entry points, a fixed allow-list (the subject comes only from the verified session). */
+  async runParentInvoicePayCall(statement: string, values: unknown[]): Promise<unknown> {
+    if (![
+      'SELECT hon.read_parent_invoice_payments($1::text) AS data',
+      'SELECT hon.read_parent_invoice_payment($1::text,$2::uuid) AS data',
+      'SELECT hon.open_parent_invoice_payment($1::text,$2::uuid) AS data',
+    ].includes(statement)) throw new Error('Unknown parent invoice payment call.');
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>(statement, values);
+      await client.query('COMMIT');
+      if (result.rows.length !== 1) throw new Error('Unverified parent invoice payment call.');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
+    finally { client.release(); }
+  }
+
   async resolveHumanWorkScope(externalSubject: string): Promise<ResolvedPrincipalScope | undefined> {
     await this.assertRuntimePosture();
     return (await this.getPool().query<ResolvedPrincipalScope>(

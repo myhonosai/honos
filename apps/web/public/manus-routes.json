@@ -97,6 +97,10 @@
       "title": "HON | School message history"
     },
     {
+      "path": "/parent/payment-return",
+      "title": "HON | Payment finished"
+    },
+    {
       "path": "/complete-mobile",
       "title": "HON Complete Mobile"
     },

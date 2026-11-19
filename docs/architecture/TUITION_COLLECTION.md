@@ -613,3 +613,53 @@ from their own database function and their own route, which decide who may pay a
   sweep, Square hosted only, an unconfigured processor, caller lock, record misuse, guards, ACL, 011);
   `apps/api/test/school-payments-sandbox.test.cjs` (Stripe Checkout fields, key, account header, outcomes, UNKNOWN
   cases, expiry; Square not offered; simulators); 010/011; staging pin 0529.
+
+## 23. Parent invoice payment as built (0530): a guardian pays an open invoice in the HON Family app
+
+Status: source only, not deployed. TEST/SANDBOX mode only; live money needs a separate owner decision. HON adds no fee.
+No saved card and no autopay from the app. Owner decision 2026-11-18: parents pay an open invoice through the school's own
+Stripe (or, later, Square) hosted page, using the shared one-time payment (section 22) with the new source `FAMILY_INVOICE`.
+
+- **Who may pay:** the signed-in guardian on the 0102 parent path (exactly one resolved family scope, a PRIMARY or
+  SECONDARY guardian grant), for an invoice of a STUDENT participant on that family's membership whose payer is the
+  family's GUARDIAN billing contact. Only `ISSUED` invoices with a balance of at least 1 minor unit are payable; the amount
+  is always the whole open balance, computed in the database. Nothing about payment, school, family, amount or provider
+  comes from the app: it names an invoice id it read from the pay list, and nothing else.
+- **Database (0530):** `read_parent_invoice_payments(subject)` (the family's invoices with balance, due date, the latest
+  family payment's state NONE/OPEN/PROCESSING/SUCCEEDED, whether an autopay charge is in progress, and the school's
+  provider code for the API only); `read_parent_invoice_payment(subject, invoice)` → the latest payment id and state for
+  that invoice, only after the same scope check; `open_parent_invoice_payment(subject, invoice)` locks the live payment,
+  then the invoice (the order 0529 uses), re-checks scope and payability, refuses while an autopay charge is open
+  (`PARENT_INVOICE_PAY_AUTOPAY_IN_PROGRESS`), and opens a 30-minute payment labelled "Tuition invoice due YYYY-MM-DD".
+  Refusals: `PARENT_INVOICE_PAY_FORBIDDEN` (42501), `PARENT_INVOICE_PAY_NOT_FOUND` (P0002, also a foreign or unknown
+  invoice), `PARENT_INVOICE_PAY_NOT_PAYABLE` (40001). `school_pay_once_open` and its source check gain `FAMILY_INVOICE`
+  and are otherwise unchanged.
+- **Holds while a family payment may still be paid** (PROCESSING, or OPEN before the later of its own and the provider
+  session's expiry): no non-PROVIDER payment record can be added to the invoice, the invoice can only move to PAID, and
+  no autopay charge attempt can start. A stale OPEN payment past its expiry holds nothing.
+- **Settlement:** an AFTER UPDATE trigger on `school_pay_once` (`parent_invoice_pay_settle`) runs on SUCCEEDED for a
+  FAMILY_INVOICE payment: when the invoice is still ISSUED in the same currency and the paid amount still equals its open
+  balance, it writes one PROVIDER `invoice_payment_records` row and sets the invoice PAID; otherwise (the invoice changed
+  meanwhile) it records a `parent_invoice_pay.review_needed` audit and outbox event for staff instead of guessing. Because it is a trigger, any path that records the processor's answer (the parent's
+  confirm, the next start, or a later `reconcileDue`) pays the invoice exactly once.
+- **API (`apps/api/src/parent-pay/`):** `GET /v1/parent/invoice-payments` → `{canPay, testMode: true, invoices:
+  [{invoiceId, childName, currency, totalMinor, balanceMinor, dueAt, payState, payable}]}` (no payment id, provider or
+  account). `POST /v1/parent/invoice-payments/:invoiceId/start|confirm|cancel`, human commands
+  `parent.invoice.pay.start|confirm|cancel` with an Idempotency-Key, empty body, no query. `start` refuses first when the
+  return page is not configured (`HON_PUBLIC_ORIGIN` must be https, or http on localhost; `503
+  PARENT_INVOICE_PAY_NOT_CONFIGURED`, nothing read or opened); a latest OPEN/PROCESSING payment is confirmed at the
+  processor first, so a payment already made is never doubled; otherwise it opens and starts a HOSTED page returning to
+  `${HON_PUBLIC_ORIGIN}/parent/payment-return` (a static web page that records nothing). `confirm` and `cancel` act only
+  on the latest payment id from the scoped read. Unknown errors are `503 PARENT_INVOICE_PAY_UNAVAILABLE`, never success.
+- **App (`apps/parent-mobile`, More → Membership & billing):** a "Pay an invoice" section with a test-mode note, a
+  "Pay $X" button per payable invoice, the processor page in the system browser, then HON's recorded answer (Paid, Still
+  processing, Not paid yet, Failed/Expired/Canceled with "Nothing was charged"). Nothing is claimed from the page closing
+  alone. A start whose answer was lost is retried with the same Idempotency-Key. The sample family offers no payment.
+- **Not done yet:** Square is not offered (no real Square hosted adapter); `reconcileDue` is not scheduled; the autopay
+  hold guards are implemented but not yet covered by the proof.
+- **Evidence:** `packages/database/scripts/test-parent-invoice-payment-integrity.mjs` (80 checks through the service with
+  the simulators: list scope, a foreign or unknown invoice refused with nothing opened, DRAFT not payable, start for
+  exactly the balance and the same page on a second press, holds, paid once on SUCCEEDED, cancel and cancel after paying,
+  expiry and a new page, PROCESSING, the review flag, an unconfigured adapter, SQL refusals, ACL, 011);
+  `apps/api/test/parent-invoice-pay.test.cjs`; `apps/parent-mobile/test/invoice-pay-ui.test.tsx` and
+  `api-client.test.ts`; 010/011; staging pin 0530.
