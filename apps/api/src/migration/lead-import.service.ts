@@ -1,6 +1,8 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import type { LeadImportBatch, LeadImportContext, LeadImportOptions, LeadImportPreview, LeadImportResult, LeadImportReview, LeadImportUpload } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
+import { recordStaffIntakeConsent } from '../communication/intake-consent.js';
+import { isIntakeConsentChannels, type IntakeConsentChannel } from '@hon/contracts';
 import { closed, invalid, parseLeadCsv } from './lead-import-csv.js';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function uuid(v: unknown): asserts v is string { if (typeof v !== 'string' || !UUID.test(v)) invalid(); }
@@ -35,10 +37,14 @@ export class LeadImportService {
     for (const d of input.decisions) { closed(d,['index','choice']); if (!Number.isInteger(d.index) || (d.index as number)<1 || (d.index as number)>1000 || !['IMPORT','SKIP'].includes(d.choice as string)) invalid(); }
     return this.mutate(c,'decide',id,input);
   }
-  finalize(c: LeadImportContext,id: string,input: {expectedVersion: number;reviewToken: string;selectedIndices: number[]}): Promise<LeadImportResult> {
-    human(c); uuid(id); closed(input,['expectedVersion','reviewToken','selectedIndices']); version(input); uuid(input.reviewToken);
+  /** IC1 (0545): consentChannels (optional, both by default) records consent for the leads this finalize creates. */
+  finalize(c: LeadImportContext,id: string,value: {expectedVersion: number;reviewToken: string;selectedIndices: number[];consentChannels?: IntakeConsentChannel[]}): Promise<LeadImportResult> {
+    human(c); uuid(id); closed(value,['expectedVersion','reviewToken','selectedIndices','consentChannels']);
+    const { consentChannels, ...input } = value;
+    if (consentChannels !== undefined && !isIntakeConsentChannels(consentChannels)) invalid();
+    version(input); uuid(input.reviewToken);
     if (!Array.isArray(input.selectedIndices) || input.selectedIndices.length>1000 || new Set(input.selectedIndices).size!==input.selectedIndices.length || input.selectedIndices.some(x=>!Number.isInteger(x)||x<1||x>1000)) invalid();
-    return this.mutate(c,'finalize',id,input);
+    return this.mutate(c,'finalize',id,input,client=>recordStaffIntakeConsent(client,c,{method:'LEAD_IMPORT',batchId:id},consentChannels));
   }
   async read(c: LeadImportContext,kind: 'LIST'|'BATCH'|'OPTIONS'|'REVIEW_ROWS',id: string|null=null,token: string|null=null): Promise<LeadImportBatch|LeadImportBatch[]|LeadImportOptions|LeadImportPreview> {
     human(c); if (!['LIST','BATCH','OPTIONS','REVIEW_ROWS'].includes(kind) || (['LIST','OPTIONS'].includes(kind) !== (id===null))) invalid();
@@ -52,11 +58,13 @@ export class LeadImportService {
     await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)",[c.source]);
     await client.query("SET LOCAL statement_timeout = '30s'; SET LOCAL lock_timeout = '5s'");
   }
-  private async mutate<T=LeadImportBatch>(c: LeadImportContext,operation: string,id: string|null,input: object): Promise<LeadImportResult<T>> {
+  private async mutate<T=LeadImportBatch>(c: LeadImportContext,operation: string,id: string|null,input: object,after?: (client: import('pg').PoolClient)=>Promise<unknown>): Promise<LeadImportResult<T>> {
     if (!c.idempotencyKey || c.idempotencyKey.length>200 || c.idempotencyKey.trim()!==c.idempotencyKey || /[\u0000-\u001f\u007f]/.test(c.idempotencyKey)) throw new ConflictException({code:'IDEMPOTENCY_KEY_REQUIRED'});
     try { return await this.database.withTenantTransaction(c,async client=>{
       await this.source(client,c);
-      return (await client.query('SELECT hon.mutate_lead_import($1,$2,$3::uuid,$4::jsonb,$5,$6::uuid,$7::uuid) data',[c.externalSubject,operation,id,JSON.stringify(input),c.idempotencyKey,c.requestId,c.correlationId])).rows[0]!.data;
+      const data = (await client.query('SELECT hon.mutate_lead_import($1,$2,$3::uuid,$4::jsonb,$5,$6::uuid,$7::uuid) data',[c.externalSubject,operation,id,JSON.stringify(input),c.idempotencyKey,c.requestId,c.correlationId])).rows[0]!.data;
+      if (after) await after(client);
+      return data;
     }); } catch(e) { return dbError(e); }
   }
 }

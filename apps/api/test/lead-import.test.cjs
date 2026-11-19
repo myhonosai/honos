@@ -47,3 +47,17 @@ test('trusted origin guard fails closed and permits only conventional human JSON
 test('Essential migration registry cannot be proposed/executed by Action Engine at any tier',()=>{
  for(const cmd of LEAD_IMPORT_COMMAND_REGISTRY){assert.equal(cmd.minimumTier,'ESSENTIAL');assert.equal(cmd.execution,'HUMAN_ONLY');assert.equal(cmd.requiredPermission,cmd.code);assert.equal(ACTION_CATALOG.some(a=>a.code===cmd.code),false);for(const tier of ['ESSENTIAL','CORE','COMPLETE'])assert.throws(()=>authorizeAction({actionCode:cmd.code,tier,grantedPermissions:new Set([cmd.code]),authoritySources:{platform:'AUTO'}}),/ACTION_NOT_REGISTERED/);}
 });
+test('IC1: finalize records intake consent for the batch (both by default, staff can untick); consentChannels never reaches the import command',async()=>{
+ const run=async(extra)=>{const calls=[];const svc=new LeadImportService({withTenantTransaction:async(_c,work)=>work({query:async(sql,args)=>{calls.push({sql,args});
+  if(sql.includes('mutate_lead_import'))return{rows:[{data:{record:{id:'b'},replayed:false}}]};
+  if(sql.includes('record_staff_intake_consent'))return{rows:[{result:{people:1,recorded:1}}]};return{rows:[]};}})});
+  const id=randomUUID(),ctx=c();await svc.finalize(ctx,id,{expectedVersion:1,reviewToken:randomUUID(),selectedIndices:[1],...extra});return{calls,id,ctx};};
+ let r=await run({});
+ const mutate=r.calls.find(x=>x.sql.includes('mutate_lead_import'));assert.equal(Object.hasOwn(JSON.parse(mutate.args[3]),'consentChannels'),false);
+ const rec=r.calls.filter(x=>x.sql.includes('record_staff_intake_consent'));assert.deepEqual(rec.map(x=>[x.args[0],JSON.parse(x.args[1])]),[['verified',{method:'LEAD_IMPORT',batchId:r.id,channels:['EMAIL','SMS']}]]);
+ assert(r.calls.indexOf(rec[0])>r.calls.indexOf(mutate),'after the import, same transaction');
+ r=await run({consentChannels:['EMAIL']});assert.deepEqual(JSON.parse(r.calls.find(x=>x.sql.includes('record_staff_intake_consent')).args[1]).channels,['EMAIL']);
+ r=await run({consentChannels:[]});assert.equal(r.calls.filter(x=>x.sql.includes('record_staff_intake_consent')).length,0);
+ const svc=new LeadImportService({withTenantTransaction:async()=>assert.fail('must not query')});
+ for(const consentChannels of [['PUSH'],['SMS','SMS'],'SMS',null])assert.throws(()=>svc.finalize(c(),randomUUID(),{expectedVersion:1,reviewToken:randomUUID(),selectedIndices:[1],consentChannels}),status(400));
+});

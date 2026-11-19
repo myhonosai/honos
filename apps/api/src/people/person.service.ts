@@ -3,12 +3,14 @@ import { createHash, randomUUID } from 'node:crypto';
 import { tierIncludesFeature } from '@hon/config';
 import type { CommandContext, CreatePersonInput, HonTier, PersonSummary } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
+import { intakeConsentChannels, recordStaffIntakeConsent } from '../communication/intake-consent.js';
 import { decodeListCursor, encodeListCursor, staleListCursor } from '../foundation/list-cursor.js';
 
 function fingerprint(input: CreatePersonInput): string {
   return createHash('sha256').update(JSON.stringify({
     givenName: input.givenName.trim(), familyName: input.familyName.trim(),
     email: input.email?.trim().toLowerCase() ?? null, phoneE164: input.phoneE164 ?? null,
+    consentChannels: intakeConsentChannels(input.consentChannels),
   })).digest('hex');
 }
 
@@ -59,7 +61,7 @@ export class PersonService {
     });
   }
 
-  async create(context: CommandContext, input: CreatePersonInput): Promise<{ person: PersonSummary; replayed: boolean }> {
+  async create(context: CommandContext & { externalSubject?: string }, input: CreatePersonInput): Promise<{ person: PersonSummary; replayed: boolean }> {
     const requestFingerprint = fingerprint(input);
     return this.database.withTenantTransaction(context, async (client) => {
       const entitlement = await client.query<{ tier: HonTier }>(
@@ -106,6 +108,8 @@ export class PersonService {
          VALUES ($1::uuid,$2,$3,'people.person.created',1,'PERSON',$4::uuid,$5,$6::uuid,$7::uuid,$8::jsonb)`,
         [randomUUID(), context.organizationId, context.schoolId, person.id, person.version, context.correlationId, context.requestId, JSON.stringify(payload)],
       );
+      // IC1 (0545): a person staff add by hand records the consent channels they left ticked (both by default).
+      await recordStaffIntakeConsent(client, context, { method: 'STAFF_ADD', personId: person.id }, input.consentChannels);
       await client.query(
         `UPDATE hon.idempotency_records SET status='COMPLETED',response_status=201,response_body=$5::jsonb
          WHERE organization_id=$1 AND school_id=$2 AND principal_id=$3 AND idempotency_key=$4`,
