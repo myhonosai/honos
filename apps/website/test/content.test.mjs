@@ -185,7 +185,8 @@ test('photos are small WebP files with phone-sized copies', () => {
     assert.ok(entries.some(([, w]) => parseInt(w, 10) <= 800), `${srcAttr} has a phone-sized copy`);
     assert.match(img, /\ssizes="[^"]+"/, `${srcAttr} tells the browser its display size`);
   }
-  const jpgs = readdirSync(join(src, 'assets')).filter((f) => /\.jpe?g$/i.test(f));
+  // The link-preview card is a JPEG on purpose (every share preview reads it); no photo is.
+  const jpgs = readdirSync(join(src, 'assets')).filter((f) => /\.jpe?g$/i.test(f) && f !== 'og-hon-os-1200.jpg');
   assert.deepEqual(jpgs, [], 'no full-size JPEGs left in the site');
 });
 
