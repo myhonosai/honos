@@ -17,7 +17,7 @@ import { strokePath } from './signature-pad';
 import styles from './walk-in-kiosk.module.css';
 
 export type Read<T> = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; read: T };
-export type Outcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | 'SIGN_OUT_FAILED' | 'START_REPLAYED' | WalkInErrorKind }>;
+export type Outcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | 'SIGN_OUT_FAILED' | 'START_REPLAYED' | 'PAID_BY_CARD' | WalkInErrorKind }>;
 type T = (key: WalkInKey, vars?: Readonly<Record<string, string | number>>) => string;
 
 export type OfferDraft = Readonly<{ key: string; kind: WalkInOfferKind; name: WalkInText; description: WalkInText; price: string }>;
@@ -93,7 +93,7 @@ export function WalkInStaffView(p: WalkInStaffViewProps): React.ReactElement {
   }
   const o = p.overview.read;
   const outcome = p.outcome && p.outcome.kind !== 'SENDING' ? <p className={styles.notice} role={p.outcome.kind === 'DONE' ? 'status' : 'alert'} data-testid="walkin-outcome">
-    {p.outcome.kind === 'DONE' ? t('saved') : p.outcome.kind === 'SIGN_OUT_FAILED' ? t('signOutFailed') : p.outcome.kind === 'START_REPLAYED' ? t('startReplayed') : t(`o${p.outcome.kind}` as WalkInKey)}</p> : null;
+    {p.outcome.kind === 'DONE' ? t('saved') : p.outcome.kind === 'PAID_BY_CARD' ? t('paidByCard') : p.outcome.kind === 'SIGN_OUT_FAILED' ? t('signOutFailed') : p.outcome.kind === 'START_REPLAYED' ? t('startReplayed') : t(`o${p.outcome.kind}` as WalkInKey)}</p> : null;
   const ready = o.configured && o.enabled;
   const start = <section className={styles.card} aria-labelledby="walkin-start"><h2 id="walkin-start">{t('startTitle')}</h2>
     {!o.configured ? <p className={styles.meta}>{t('notSetUp')} {t(o.canManage ? 'notSetUpOwner' : 'notSetUpStaff')}</p> : !o.enabled ? <p className={styles.meta}>{t('isOff')}</p> : null}
@@ -248,7 +248,11 @@ export function WalkInKioskPage({ api = walkInApi, signOut = signOutThisBrowser 
     draft={draft} detail={detail} outcome={outcome} busy={outcome?.kind === 'SENDING'} label={label} hours={hours} scope={scope}
     onLabel={setLabel} onHours={setHours} onStart={() => { void onStart(); }} onRefresh={reload} onDraft={setDraft}
     onEnd={(deviceId, version) => { if (scope) void run(`end:${deviceId}:${version}`, (k, s, o) => api.end(scope, deviceId, version, k, s, o)).then(r => { if (r) reload(); }); }}
-    onPaid={(visitId, version, method) => { if (scope) void run(`paid:${visitId}:${version}:${method}`, (k, s, o) => api.deskPaid(scope, visitId, { expectedVersion: version, method }, k, s, o)).then(r => { if (r) reload(); }); }}
+    onPaid={(visitId, version, method) => { if (scope) void run(`paid:${visitId}:${version}:${method}`, (k, s, o) => api.deskPaid(scope, visitId, { expectedVersion: version, method }, k, s, o)).then(r => {
+      // 0533: the visitor had already paid by card on the tablet. Nothing was recorded at the desk, so staff must hand back any money.
+      if (r?.visit.paymentState === 'PAID_CARD' && mounted.current) setOutcome({ kind: 'PAID_BY_CARD' });
+      if (r) reload();
+    }); }}
     onOpen={visitId => {
       if (!visitId || !scope) { setDetail(null); return; }
       setDetail({ state: 'LOADING' });

@@ -783,6 +783,10 @@
     {
       "path": "/kiosk/walk-in",
       "title": "HON | Walk-in"
+    },
+    {
+      "path": "/kiosk/walk-in/paid",
+      "title": "HON | Walk-in"
     }
   ]
 }

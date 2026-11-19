@@ -300,7 +300,9 @@ export class StripeConnectTestAdapter implements SchoolPaymentAdapter {
       'line_items[0][quantity]': '1', 'line_items[0][price_data][currency]': currency.toLowerCase(), 'line_items[0][price_data][unit_amount]': String(amountMinor),
       'line_items[0][price_data][product_data][name]': label, client_reference_id: paymentId, 'metadata[hon_pay_once_id]': paymentId,
       'payment_intent_data[metadata][hon_pay_once_id]': paymentId, expires_at: String(expires),
-      ...(surface === 'EMBEDDED' ? { return_url: back } : { success_url: back, cancel_url: back }),
+      // EMBEDDED stays on the page for a card payment (if_required), so a kiosk tablet keeps its in-memory state; return_url is
+      // only for a payment method that must redirect.
+      ...(surface === 'EMBEDDED' ? { return_url: back, redirect_on_completion: 'if_required' } : { success_url: back, cancel_url: back }),
       ...(payerEmail ? { customer_email: payerEmail } : {}),
     };
     const response = await this.call('POST', '/v1/checkout/sessions', form, schoolPayOnceKey(paymentId), account);

@@ -53,6 +53,14 @@ const en = {
   vSTALE: 'The school just updated the kiosk. Please start again.', vINVALID: 'Something in the form was not accepted. Please check it and try again.',
   vRATE_LIMITED: 'This tablet is busy. Please see the front desk.', vUNAVAILABLE: 'It did not go through yet. Try again sends the same check-in, so it can never count twice.',
   vRetry: 'Try again', vStartOver: 'Start over',
+  vPayTitle: 'How would you like to pay {price}?', vPayHere: 'Pay here with a card', vPayPhone: 'Pay on my phone', vPayDesk: 'Pay at the front desk',
+  vPayTest: 'Test mode: no real card is charged.', vPayStarting: 'Getting the payment ready…', vPayScan: 'Scan this code with your phone camera to pay. This screen updates by itself when you are done.',
+  vPayChecking: 'Checking your payment…', vPayProcessing: 'Your payment is being confirmed. This can take a moment.', vPayOther: 'Choose another way',
+  vPayFAILED: 'The payment did not go through. You can try again or pay at the front desk.', vPayEXPIRED: 'The payment timed out. You can start again or pay at the front desk.',
+  vPayUNAVAILABLE: 'Card payment is not working right now. You can try again or pay at the front desk.', vPayFORM: 'The card form could not load. Please choose another way to pay.',
+  vDonePaid: 'Paid {price}. You are all set!', vPaidTitle: 'Thank you', vPaidBody: 'You can go back to the tablet now. It shows whether your payment went through.',
+  oCARD_PENDING: 'A card payment for this walk-in is still open or being confirmed on the tablet. Wait a minute and try again. Nothing changed.',
+  paidByCard: 'This visitor already paid by card on the tablet, so nothing was recorded at the desk. Give back any money taken at the desk.',
 };
 export type WalkInKey = keyof typeof en;
 const ko: Record<WalkInKey, string> = {
@@ -107,6 +115,14 @@ const ko: Record<WalkInKey, string> = {
   vSTALE: '학교에서 방금 키오스크를 업데이트했습니다. 처음부터 다시 시작해 주세요.', vINVALID: '양식에서 받아들여지지 않은 항목이 있습니다. 확인 후 다시 시도해 주세요.',
   vRATE_LIMITED: '이 태블릿이 바쁩니다. 프런트 데스크로 와 주세요.', vUNAVAILABLE: '아직 처리되지 않았습니다. 다시 시도하면 같은 체크인을 보내므로 두 번 처리되지 않습니다.',
   vRetry: '다시 시도', vStartOver: '처음부터',
+  vPayTitle: '{price}를 어떻게 결제하시겠어요?', vPayHere: '여기서 카드로 결제', vPayPhone: '내 휴대폰으로 결제', vPayDesk: '프런트 데스크에서 결제',
+  vPayTest: '테스트 모드: 실제 카드는 청구되지 않습니다.', vPayStarting: '결제를 준비하는 중…', vPayScan: '휴대폰 카메라로 이 코드를 스캔해 결제하세요. 결제가 끝나면 이 화면이 저절로 바뀝니다.',
+  vPayChecking: '결제를 확인하는 중…', vPayProcessing: '결제를 확인하고 있습니다. 잠시 걸릴 수 있어요.', vPayOther: '다른 방법 선택',
+  vPayFAILED: '결제가 완료되지 않았습니다. 다시 시도하거나 프런트 데스크에서 결제하세요.', vPayEXPIRED: '결제 시간이 지났습니다. 다시 시작하거나 프런트 데스크에서 결제하세요.',
+  vPayUNAVAILABLE: '지금은 카드 결제를 할 수 없습니다. 다시 시도하거나 프런트 데스크에서 결제하세요.', vPayFORM: '카드 양식을 불러오지 못했습니다. 다른 결제 방법을 선택해 주세요.',
+  vDonePaid: '{price} 결제가 완료되었습니다. 준비가 끝났어요!', vPaidTitle: '감사합니다', vPaidBody: '이제 태블릿으로 돌아가셔도 됩니다. 결제가 완료되었는지 태블릿에 표시됩니다.',
+  oCARD_PENDING: '이 워크인의 카드 결제가 태블릿에서 아직 열려 있거나 확인 중입니다. 잠시 후 다시 시도하세요. 변경된 것은 없습니다.',
+  paidByCard: '이 방문자는 이미 태블릿에서 카드로 결제했으므로 데스크 결제는 기록되지 않았습니다. 데스크에서 받은 돈이 있다면 돌려주세요.',
 };
 const es: Record<WalkInKey, string> = {
   pageTitle: 'Quiosco de visitas',
@@ -160,6 +176,14 @@ const es: Record<WalkInKey, string> = {
   vSTALE: 'La escuela acaba de actualizar el quiosco. Empiece de nuevo.', vINVALID: 'Algo del formulario no se aceptó. Revíselo e inténtelo de nuevo.',
   vRATE_LIMITED: 'Esta tableta está ocupada. Pase por la recepción.', vUNAVAILABLE: 'Aún no se envió. Intentar de nuevo manda el mismo registro, así que nunca cuenta dos veces.',
   vRetry: 'Intentar de nuevo', vStartOver: 'Empezar de nuevo',
+  vPayTitle: '¿Cómo quiere pagar {price}?', vPayHere: 'Pagar aquí con tarjeta', vPayPhone: 'Pagar en mi teléfono', vPayDesk: 'Pagar en la recepción',
+  vPayTest: 'Modo de prueba: no se cobra ninguna tarjeta real.', vPayStarting: 'Preparando el pago…', vPayScan: 'Escanee este código con la cámara de su teléfono para pagar. Esta pantalla se actualiza sola cuando termine.',
+  vPayChecking: 'Comprobando su pago…', vPayProcessing: 'Estamos confirmando su pago. Puede tardar un momento.', vPayOther: 'Elegir otra forma',
+  vPayFAILED: 'El pago no se completó. Puede intentarlo de nuevo o pagar en la recepción.', vPayEXPIRED: 'Se acabó el tiempo del pago. Puede empezar de nuevo o pagar en la recepción.',
+  vPayUNAVAILABLE: 'El pago con tarjeta no funciona ahora. Puede intentarlo de nuevo o pagar en la recepción.', vPayFORM: 'No se pudo cargar el formulario de tarjeta. Elija otra forma de pago.',
+  vDonePaid: 'Pagó {price}. ¡Todo listo!', vPaidTitle: 'Gracias', vPaidBody: 'Ya puede volver a la tableta. Allí verá si su pago se completó.',
+  oCARD_PENDING: 'Un pago con tarjeta de esta visita sigue abierto o en confirmación en la tableta. Espere un minuto e inténtelo de nuevo. No cambió nada.',
+  paidByCard: 'Este visitante ya pagó con tarjeta en la tableta, así que no se registró nada en la recepción. Devuelva el dinero cobrado en la recepción.',
 };
 export const WALK_IN_COPY = { en, ko, es } as const;
 export type WalkInCopyLanguage = keyof typeof WALK_IN_COPY;
