@@ -332,6 +332,12 @@ try {
     const r = await publicRead(id);
     ok(r.status === 404 && r.body.result === 'INVALID', `public read 404 for an ${label} id`);
   }
+  // A cancelled program's calendar (and its group card) is hidden like a disabled one (review P3).
+  await sql("UPDATE hon.programs SET status='CANCELLED' WHERE id=$1", [programs.a]);
+  ok((await publicRead(kids.publicId)).status === 404, 'a cancelled program\'s calendar answers 404');
+  ok((await publicRead(group.publicId)).body.data.calendars.length === 0, 'the group drops a cancelled program\'s card');
+  await sql("UPDATE hon.programs SET status='SCHEDULED' WHERE id=$1", [programs.a]);
+  ok((await publicRead(kids.publicId)).status === 200, 'the calendar answers again when the program runs again');
   const lapsedProgramCal = randomUUID();
   await sql(`INSERT INTO hon.share_calendars(id,organization_id,school_id,kind,name,program_id,created_by_principal_id,updated_by_principal_id)
     VALUES($1,$2,$3,'PROGRAM','Lapsed',$4,$5,$5)`, [lapsedProgramCal, ids.lapsedOrganization, ids.lapsedSchool, programs.l, MANAGER.principal]);

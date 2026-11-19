@@ -395,7 +395,8 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
   SELECT c.* FROM hon.share_calendars c JOIN hon.organizations o ON o.id=c.organization_id
     JOIN hon.schools s ON s.id=c.school_id AND s.organization_id=c.organization_id
   WHERE pid ~ '^[a-f0-9]{48}$' AND c.public_id=pid AND c.status='ACTIVE' AND c.enabled AND o.status='ACTIVE' AND s.status='ACTIVE'
-    AND (c.kind='GROUP' OR NOT hon.demo_data_is_demo('programs',c.program_id))
+    AND (c.kind='GROUP' OR (NOT hon.demo_data_is_demo('programs',c.program_id)
+      AND EXISTS(SELECT 1 FROM hon.programs g WHERE g.id=c.program_id AND g.status<>'CANCELLED')))
     AND EXISTS(SELECT 1 FROM hon.organization_entitlements x WHERE x.organization_id=c.organization_id AND x.tier IN ('ESSENTIAL','CORE','COMPLETE')
       AND x.status='ACTIVE' AND x.effective_from<=clock_timestamp() AND (x.effective_until IS NULL OR x.effective_until>clock_timestamp()))
 $$;
@@ -420,7 +421,8 @@ BEGIN
         'upcomingCount',(SELECT count(*) FROM hon.share_calendar_times(y.organization_id,y.school_id,y.program_id,tz,200) t)::integer) ORDER BY m.ordinality)
       FROM jsonb_array_elements_text(c.member_ids) WITH ORDINALITY m JOIN hon.share_calendars y ON y.id=m.value::uuid
       WHERE y.organization_id=c.organization_id AND y.school_id=c.school_id AND y.status='ACTIVE' AND y.enabled AND y.kind='PROGRAM'
-        AND NOT hon.demo_data_is_demo('programs',y.program_id)),'[]'::jsonb) ELSE '[]'::jsonb END,
+        AND NOT hon.demo_data_is_demo('programs',y.program_id)
+        AND EXISTS(SELECT 1 FROM hon.programs g WHERE g.id=y.program_id AND g.status<>'CANCELLED')),'[]'::jsonb) ELSE '[]'::jsonb END,
     'times',CASE WHEN c.kind='PROGRAM' THEN coalesce((SELECT jsonb_agg(jsonb_build_object('name',t.name,
         'startsAt',to_char(t.starts_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
         'endsAt',to_char(t.ends_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
