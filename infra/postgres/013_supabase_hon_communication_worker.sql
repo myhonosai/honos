@@ -111,6 +111,16 @@ BEGIN
 END;
 $$;
 
+-- 0553 school A2P registrations: claim approved submissions and record each step (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.claim_school_a2p_registrations(integer,integer)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.claim_school_a2p_registrations(integer, integer),
+      hon.record_school_a2p_progress(uuid, uuid, text, jsonb, text, integer) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 -- 0435 school social inbox: signed inbound Zernio messages and comments, when 0435 is applied.
 DO $$
 BEGIN
