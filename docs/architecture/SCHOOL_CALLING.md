@@ -167,3 +167,26 @@ independent review, squash on GO + green CI (standing approval). No deploy.
 - No secrets, numbers or names in logs; call SIDs only.
 - Calling stops (new calls refused, tokens not issued) when the school is suspended, the entitlement lapses, the sender
   is disabled or calling is off; calls in progress end naturally.
+
+## 10. HQ calling (CL5, 0562)
+
+HON HQ calls and takes calls on the **HQ texting number** (the ACTIVE `hq_communication_senders` SMS row's reply number),
+which lives on HON's **parent** Twilio account, not a school subaccount.
+
+- **Who:** any HQ person holding an HQ messaging purpose may call, answer, see the HQ call log and set their own Ring me.
+  Only the HQ owner switches HQ calling on and sets the voicemail greeting. Every read and command is one fixed definer
+  function that re-proves the HQ actor (`require_hq_communication_actor`); the API never decides.
+- **Not recorded.** HQ calls are never recorded. Only voicemail is kept, for 90 days, then deleted at Twilio first and
+  marked deleted (same retention worker). Each voicemail listen is audited in `hq_call_events` (HQ evidence has no school).
+- **Contacts:** a number links to a person only through a CONFIRMED `hq_contact_phones` row; the log shows which schools
+  that person owns. A withheld caller is stored with no number.
+- **Browser phone:** identity `h` + principal hex. The voice app worker creates the TwiML App `hon-voice-hq` and an API key
+  on the parent account; the key is sealed to the fixed HQ binding id, so a school key never opens as HQ and back.
+- **Webhooks:** `/v1/communications/webhooks/twilio/hq/*`, signed by the parent account only (a subaccount signature is
+  refused). The number dialled always comes from the stored HQ call row.
+- **API:** `/v1/hq/calls` (overview, log, settings, ring-me, start with a uuid Idempotency-Key, after-call card,
+  do-not-call, voicemail playback, phone token). **Web:** HQ › Calls (`/hq/communications/calls`) and the HQ top-bar phone.
+
+**Before anyone can use it (owner steps, not done):** set the HQ number's Voice URL in Twilio to
+`<public API origin>/v1/communications/webhooks/twilio/hq/voice`; set `HON_VOICE_CALLS_APPROVED=true` (paid calling);
+check Twilio Voice geographic permissions (US/Canada only); the HQ owner turns HQ calling on.

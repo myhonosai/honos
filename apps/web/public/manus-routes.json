@@ -593,6 +593,10 @@
       "title": "HON HQ | HQ message"
     },
     {
+      "path": "/hq/communications/calls",
+      "title": "HON HQ | Calls"
+    },
+    {
       "path": "/hq/communications/numbers",
       "title": "HON HQ | School texting numbers"
     },

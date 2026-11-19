@@ -31,10 +31,11 @@ export const CALL_REFUSALS = [
   'IDEMPOTENCY_KEY_REUSED', 'CALL_CONFLICT',
 ] as const;
 const REFUSAL = new Set<string>(CALL_REFUSALS);
-function invalid(): never { throw new CallsUnknown('unverified'); }
-function checked<T>(run: () => T): T { try { return run(); } catch { return invalid(); } }
+export function invalid(): never { throw new CallsUnknown('unverified'); }
+export function checked<T>(run: () => T): T { try { return run(); } catch { return invalid(); } }
 
-async function call(url: string, method: 'GET' | 'POST', command?: string, body?: unknown, key?: string): Promise<{ data: unknown; meta?: unknown }> {
+/** One same-origin calling request (school or HQ): JSON only, no redirects, no cache; refusals by known code only. */
+export async function callsRequest(url: string, method: 'GET' | 'POST', command?: string, body?: unknown, key?: string): Promise<{ data: unknown; meta?: unknown }> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (method === 'POST') { headers['Content-Type'] = 'application/json'; headers['X-HON-Human-Command'] = command!; if (key) headers['Idempotency-Key'] = key; }
   let response: Response;
@@ -61,7 +62,7 @@ function base(scope: CallsScope): string {
 }
 
 export async function loadCalling(scope: CallsScope): Promise<SchoolCallingOverview> {
-  const out = await call(`${base(scope)}/overview`, 'GET');
+  const out = await callsRequest(`${base(scope)}/overview`, 'GET');
   return checked(() => verifySchoolCallingOverview(out.data));
 }
 /** Filters go out as plain query strings; the keyset cursor is the previous page's nextCursor, unchanged. */
@@ -72,7 +73,7 @@ export async function loadCalls(scope: CallsScope, filters: SchoolCallListQuery 
   if (query.personId) params.set('personId', query.personId.toLowerCase());
   if (query.before) { params.set('beforeAt', query.before.at); params.set('beforeId', query.before.id); }
   const text = params.toString();
-  const out = await call(base(scope) + (text ? `?${text}` : ''), 'GET');
+  const out = await callsRequest(base(scope) + (text ? `?${text}` : ''), 'GET');
   const list = checked(() => verifySchoolCallList(out.data));
   // The page shows only what was asked for; a list that does not match the filter is not shown at all.
   if (query.personId && list.calls.some(c => c.personId !== query.personId!.toLowerCase())) invalid();
@@ -82,14 +83,14 @@ export async function loadCalls(scope: CallsScope, filters: SchoolCallListQuery 
 }
 export async function saveCallingSettings(scope: CallsScope, input: SetSchoolCallingSettingsInput): Promise<SchoolCallingSettings> {
   const body = validateSetSchoolCallingSettingsInput(input);
-  const out = await call(`${base(scope)}/settings`, 'POST', SCHOOL_CALL_SETTINGS_COMMAND, body);
+  const out = await callsRequest(`${base(scope)}/settings`, 'POST', SCHOOL_CALL_SETTINGS_COMMAND, body);
   const saved = checked(() => verifySchoolCallingSettings(out.data));
   if (saved.callingOn !== body.callingOn || saved.recordingOn !== body.recordingOn || saved.voicemailGreeting !== body.voicemailGreeting) invalid();
   return saved;
 }
 export async function setRingMe(scope: CallsScope, ringMe: boolean): Promise<SchoolCallRinging> {
   const body = validateSchoolCallRingingInput({ ringMe });
-  const out = await call(`${base(scope)}/ring-me`, 'POST', SCHOOL_CALL_RING_COMMAND, body);
+  const out = await callsRequest(`${base(scope)}/ring-me`, 'POST', SCHOOL_CALL_RING_COMMAND, body);
   const saved = checked(() => verifySchoolCallRinging(out.data));
   if (saved.ringMe !== ringMe) invalid();
   return saved;
@@ -97,25 +98,25 @@ export async function setRingMe(scope: CallsScope, ringMe: boolean): Promise<Sch
 /** Records an outgoing call; the same key replays the same call. The browser phone must connect it before connectBy. */
 export async function startCall(scope: CallsScope, input: StartSchoolCallInput, key: string): Promise<StartedSchoolCall> {
   const body = validateStartSchoolCallInput(input);
-  const out = await call(base(scope), 'POST', SCHOOL_CALL_START_COMMAND, body, key);
+  const out = await callsRequest(base(scope), 'POST', SCHOOL_CALL_START_COMMAND, body, key);
   return checked(() => verifyStartedSchoolCall(out.data, body));
 }
 /** The after-call card: outcome chip, note, or a voicemail marked heard. Version-checked; nothing else changes. */
 export async function updateCall(scope: CallsScope, input: UpdateSchoolCallInput): Promise<SchoolCall> {
   const { callId, ...body } = validateUpdateSchoolCallInput(input);
-  const out = await call(`${base(scope)}/${callId.toLowerCase()}`, 'POST', SCHOOL_CALL_UPDATE_COMMAND, body);
+  const out = await callsRequest(`${base(scope)}/${callId.toLowerCase()}`, 'POST', SCHOOL_CALL_UPDATE_COMMAND, body);
   const saved = checked(() => verifySchoolCall(out.data));
   if (saved.callId !== callId.toLowerCase() || saved.version !== body.expectedVersion + 1) invalid();
   return saved;
 }
 export async function setDoNotCall(scope: CallsScope, input: SchoolDoNotCallInput): Promise<SchoolDoNotCallInput> {
   const body = validateSchoolDoNotCallInput(input);
-  const out = await call(`${base(scope)}/do-not-call`, 'POST', SCHOOL_CALL_DO_NOT_CALL_COMMAND, body);
+  const out = await callsRequest(`${base(scope)}/do-not-call`, 'POST', SCHOOL_CALL_DO_NOT_CALL_COMMAND, body);
   return checked(() => verifySchoolDoNotCall(out.data, body));
 }
 /** A one-hour browser phone token, or the reason there is none. Never stored: kept only in memory by the phone. */
 export async function loadPhoneToken(scope: CallsScope): Promise<SchoolPhoneToken> {
-  const out = await call(`${base(scope)}/phone-token`, 'POST', SCHOOL_CALL_TOKEN_COMMAND, {});
+  const out = await callsRequest(`${base(scope)}/phone-token`, 'POST', SCHOOL_CALL_TOKEN_COMMAND, {});
   return checked(() => verifySchoolPhoneToken(out.data));
 }
 

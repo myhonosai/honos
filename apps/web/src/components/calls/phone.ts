@@ -1,5 +1,23 @@
 import { normalizeSchoolCallNumber, schoolCallNumberOk, type SchoolPhoneToken } from '@hon/contracts';
 import { CallsAccessError, CallsRefusal, callAttempt, loadPhoneToken, startCall, type CallsScope } from './http';
+import { loadHqPhoneToken, startHqCall } from './hq-http';
+
+/** Where the phone gets its token and records a call: a school (0556) or HON HQ (0562). Same token shape for both. */
+export interface PhoneBackend {
+  loadToken(): Promise<SchoolPhoneToken>;
+  /** Records the call and returns its id; contactId is the school person or the HQ contact the call is for. */
+  startCall(toE164: string, contactId: string | undefined, key: string): Promise<{ callId: string }>;
+}
+export function schoolPhoneBackend(scope: CallsScope): PhoneBackend {
+  return {
+    loadToken: () => loadPhoneToken(scope),
+    startCall: async (toE164, personId, key) => (await startCall(scope, { toE164, ...(personId ? { personId } : {}) }, key)).call,
+  };
+}
+export const HQ_PHONE_BACKEND: PhoneBackend = {
+  loadToken: () => loadHqPhoneToken(),
+  startCall: async (toE164, contactUserId, key) => (await startHqCall({ toE164, ...(contactUserId ? { contactUserId } : {}) }, key)).call,
+};
 
 /**
  * The browser phone (0556/0561, docs/architecture/SCHOOL_CALLING.md §4). It holds a one-hour Twilio Voice token in memory
@@ -53,8 +71,11 @@ export class PhoneController {
   private generation = 0;
   private cancelled = false;
 
-  constructor(private readonly scope: CallsScope, private readonly createDevice: VoiceDeviceFactory = twilioVoiceDevice,
-    private readonly clock: () => number = () => Date.now(), private readonly newKey: () => string = () => crypto.randomUUID()) {}
+  private readonly backend: PhoneBackend;
+  constructor(target: CallsScope | PhoneBackend, private readonly createDevice: VoiceDeviceFactory = twilioVoiceDevice,
+    private readonly clock: () => number = () => Date.now(), private readonly newKey: () => string = () => crypto.randomUUID()) {
+    this.backend = 'loadToken' in target ? target : schoolPhoneBackend(target);
+  }
 
   snapshot(): PhoneState { return this.state; }
   subscribe(listener: (state: PhoneState) => void): () => void { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
@@ -66,7 +87,7 @@ export class PhoneController {
     const generation = ++this.generation;
     this.set({ kind: 'LOADING' });
     let token: SchoolPhoneToken;
-    try { token = await loadPhoneToken(this.scope); } catch (problem) {
+    try { token = await this.backend.loadToken(); } catch (problem) {
       if (!this.live(generation)) return;
       this.set(problem instanceof CallsAccessError ? { kind: 'HIDDEN' } : { kind: 'UNAVAILABLE', reason: 'ERROR' });
       return;
@@ -92,7 +113,7 @@ export class PhoneController {
   }
   private async refreshToken(generation: number): Promise<void> {
     try {
-      const token = await loadPhoneToken(this.scope);
+      const token = await this.backend.loadToken();
       if (!this.live(generation)) return;
       if (!token.ready) { this.stop(); this.set({ kind: 'UNAVAILABLE', reason: token.reason as Exclude<PhoneUnavailable, 'READY'> }); return; }
       this.token = token; this.device?.updateToken(token.token!);
@@ -126,8 +147,7 @@ export class PhoneController {
     this.set({ kind: 'DIALING', remote: to, callId: null });
     let callId: string;
     try {
-      const started = await startCall(this.scope, { toE164: to, ...(personId ? { personId } : {}) }, this.attempt.key);
-      callId = started.call.callId;
+      callId = (await this.backend.startCall(to, personId, this.attempt.key)).callId;
     } catch (problem) {
       if (!this.live(generation)) return;
       if (problem instanceof CallsRefusal) { this.attempt = null; this.problem({ kind: 'REFUSED', code: problem.code }); }

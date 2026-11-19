@@ -4,8 +4,8 @@ import type { OperationalSchoolScope } from '../operational-navigation';
 import { onShellPrivacyEvent } from '../school-shell/privacy';
 import { ShellIcon } from '../school-shell/icons';
 import { formatCallDuration, formatCallNumber } from './http';
-import { PHONE_REQUEST_EVENT, PhoneController, type PhoneProblem, type PhoneRequest, type PhoneState, type VoiceDeviceFactory } from './phone';
-import { phoneCopy, type PhoneCopy } from './phone-copy';
+import { HQ_PHONE_BACKEND, PHONE_REQUEST_EVENT, PhoneController, type PhoneBackend, type PhoneProblem, type PhoneRequest, type PhoneState, type VoiceDeviceFactory } from './phone';
+import { hqPhoneCopy, phoneCopy, type PhoneCopy } from './phone-copy';
 import styles from './phone-panel.module.css';
 
 const HIDDEN: PhoneState = { kind: 'HIDDEN' };
@@ -23,8 +23,17 @@ const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'] as con
  * without calling permission never sees it. The incoming-call banner shows over any page. Presentation of the controller only.
  */
 export function SchoolPhone({ scope, language, createDevice }: { scope: OperationalSchoolScope; language: string; createDevice?: VoiceDeviceFactory }): React.ReactElement | null {
-  const copy = phoneCopy(language);
-  const [controller] = useState(() => new PhoneController({ organizationId: scope.organizationId, schoolId: scope.schoolId }, createDevice));
+  return <BrowserPhone target={{ organizationId: scope.organizationId, schoolId: scope.schoolId }} callsHref="/staff/calls" language={language} createDevice={createDevice} />;
+}
+/** The HQ top-bar phone on the HQ texting number (0562). Hidden for anyone the HQ calling API refuses. */
+export function HqPhone({ language, createDevice, backend = HQ_PHONE_BACKEND }: { language: string; createDevice?: VoiceDeviceFactory; backend?: PhoneBackend }): React.ReactElement | null {
+  return <BrowserPhone target={backend} callsHref="/hq/communications/calls" language={language} createDevice={createDevice} hq />;
+}
+
+function BrowserPhone({ target, callsHref, language, createDevice, hq = false }: { target: { organizationId: string; schoolId: string } | PhoneBackend; callsHref: string;
+  language: string; createDevice?: VoiceDeviceFactory | undefined; hq?: boolean }): React.ReactElement | null {
+  const copy = hq ? hqPhoneCopy(language) : phoneCopy(language);
+  const [controller] = useState(() => new PhoneController(target, createDevice));
   const state = useSyncExternalStore(listener => controller.subscribe(listener), () => controller.snapshot(), () => HIDDEN);
   const [open, setOpen] = useState(false), [number, setNumber] = useState(''), [person, setPerson] = useState<PhoneRequest | null>(null);
   const [keypad, setKeypad] = useState(false), [now, setNow] = useState(() => Date.now());
@@ -70,7 +79,7 @@ export function SchoolPhone({ scope, language, createDevice }: { scope: Operatio
       <header><strong>{copy.title}</strong><button type="button" aria-label={copy.close} onClick={() => setOpen(false)}>×</button></header>
       <div aria-live="polite">
         {state.kind === 'LOADING' && <p role="status">{copy.loading}</p>}
-        {state.kind === 'UNAVAILABLE' && <p role="status">{copy.unavailable[state.reason]} <a href="/staff/calls">{copy.callsPage}</a></p>}
+        {state.kind === 'UNAVAILABLE' && <p role="status">{copy.unavailable[state.reason]} <a href={callsHref}>{copy.callsPage}</a></p>}
         {state.kind === 'READY' && state.problem && <p role="alert" className={styles.problem}>{problemText(state.problem, copy)}</p>}
         {state.kind === 'DIALING' && <p role="status">{copy.calling(who(state.remote))}</p>}
         {state.kind === 'ACTIVE' && <p role="status">{copy.onCall(who(state.remote))} · {formatCallDuration(Math.max(0, Math.floor((now - state.since) / 1000)))}</p>}
@@ -84,7 +93,7 @@ export function SchoolPhone({ scope, language, createDevice }: { scope: Operatio
         <div className={styles.keys} role="group" aria-label={copy.keypad}>
           {KEYS.map(key => <button key={key} type="button" onClick={() => setNumber(value => (value + key).slice(0, 40))}>{key}</button>)}</div>
         <p className={styles.actions}><button type="submit" className={styles.answer} disabled={!number.trim()}>{copy.call}</button>
-          {state.kind === 'ENDED' && <a href="/staff/calls">{copy.addNotes}</a>}</p>
+          {state.kind === 'ENDED' && <a href={callsHref}>{copy.addNotes}</a>}</p>
         {state.kind === 'READY' && <p className={styles.hint}>{state.incoming ? copy.ringMeOn : copy.ringMeOff}</p>}
       </form>}
       {busyCall && <div className={styles.actions}>

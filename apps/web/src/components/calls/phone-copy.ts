@@ -81,3 +81,20 @@ const es: PhoneCopy = {
   },
 };
 export function phoneCopy(language: Language | string): PhoneCopy { return language === 'ko' ? ko : language === 'es' ? es : en; }
+
+/** The HQ phone (0562) calls from the HQ number; only the wording about which number and who switches it on differs. */
+const HQ: Record<'en' | 'ko' | 'es', Pick<PhoneCopy, 'title' | 'ringMeOn' | 'ringMeOff'> & { unavailable: Pick<PhoneCopy['unavailable'], 'CALLING_OFF' | 'NUMBER_NOT_READY' | 'PHONE_NOT_SET_UP' | 'VOICE_NOT_APPROVED'> }> = {
+  en: { title: 'Call from the HQ number', ringMeOn: 'Calls to the HQ number ring here.', ringMeOff: 'Turn on Ring me on the HQ Calls page to answer calls here.',
+    unavailable: { CALLING_OFF: 'HQ calling is off. The HQ owner can turn it on on the HQ Calls page.', NUMBER_NOT_READY: 'The HQ number is not active yet.',
+      PHONE_NOT_SET_UP: 'The browser phone is not set up for HQ yet.', VOICE_NOT_APPROVED: 'HQ calling is built but switched off until HON approves voice calls.' } },
+  ko: { title: 'HQ 번호로 전화', ringMeOn: 'HQ 번호로 오는 전화가 여기서 울립니다.', ringMeOff: '여기서 전화를 받으려면 HQ 전화 페이지에서 "나에게 울리기"를 켜세요.',
+    unavailable: { CALLING_OFF: 'HQ 전화가 꺼져 있습니다. HQ 소유자가 HQ 전화 페이지에서 켤 수 있습니다.', NUMBER_NOT_READY: 'HQ 번호가 아직 활성화되지 않았습니다.',
+      PHONE_NOT_SET_UP: 'HQ용 브라우저 전화가 아직 설정되지 않았습니다.', VOICE_NOT_APPROVED: 'HQ 전화는 준비되었지만 HON이 음성 통화를 승인할 때까지 꺼져 있습니다.' } },
+  es: { title: 'Llamar desde el número de HQ', ringMeOn: 'Las llamadas al número de HQ suenan aquí.', ringMeOff: 'Activa Llamarme en la página de Llamadas de HQ para contestar aquí.',
+    unavailable: { CALLING_OFF: 'Las llamadas de HQ están desactivadas. El dueño de HQ puede activarlas en la página de Llamadas de HQ.', NUMBER_NOT_READY: 'El número de HQ todavía no está activo.',
+      PHONE_NOT_SET_UP: 'El teléfono del navegador todavía no está configurado para HQ.', VOICE_NOT_APPROVED: 'Las llamadas de HQ están listas pero desactivadas hasta que HON apruebe las llamadas de voz.' } },
+};
+export function hqPhoneCopy(language: string): PhoneCopy {
+  const base = phoneCopy(language), hq = HQ[language === 'ko' || language === 'es' ? language : 'en'];
+  return { ...base, ...hq, unavailable: { ...base.unavailable, ...hq.unavailable } };
+}

@@ -7,3 +7,5 @@
 .form blockquote { margin: 0; padding: 12px 14px; border-left: 3px solid var(--gold, #b7791f); background: var(--surface); border-radius: 0 10px 10px 0; line-height: 1.55; }
 .outcomes { border: 0; padding: 0; margin: 12px 0 0; }
 .outcomes legend { font-weight: 700; padding: 0; }
+.hq p, .hq label, .hq li { color: #1e293b; }
+.hq [class*='subtle'] { color: #475569; }
