@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
 import type { CurrentSchoolClassSession } from '@hon/contracts';
 import { CALENDAR_LANGUAGES, calendarText } from '../src/components/school-calendar/copy';
-import { CalendarViewPane, MONTH_CELL_ITEMS, rangeLabel, type CalendarViewProps } from '../src/components/school-calendar/view';
+import { CalendarViewPane, MONTH_CELL_ITEMS, rangeLabel, visibleClasses, type CalendarViewProps } from '../src/components/school-calendar/view';
 import { SchoolSchedulePage, scheduleTabHref } from '../src/components/school-calendar/schedule-page';
 import { RosterSessionDetail } from '../src/components/class-roster/view';
 import { SCHOOL_SHELL_NAV, schoolShellActiveRoute } from '../src/components/school-shell/catalog';
@@ -90,13 +90,27 @@ it('puts week classes on an hour grid at their school time, as tall as they are 
   expect(html).toContain('>Events</div>');
 });
 
-it('filters the calendar by class name with chips', () => {
+it('filters the calendar by class name with one compact Filter menu, several names at once', () => {
   const all = render();
-  expect(all).toMatch(/aria-pressed="true"[^>]*>All classes</); expect(all).toContain('>Little tigers</button>');
-  const only = render({ classFilter: 'Little tigers' });
-  expect(only).toContain('Little tigers');
+  expect(all).toContain('data-testid="calendar-filter"'); expect(all).toContain('aria-label="Show classes: All classes"');
+  expect(all).toMatch(/<input type="checkbox"\/> <span>Little tigers<\/span>/); expect(all).not.toContain('aria-pressed="true">All classes');
+  const only = render({ classFilter: ['Little tigers'] });
+  expect(only).toContain('aria-label="Show classes: Little tigers"'); expect(only).toContain('>Show all</button>');
   expect(only.match(/<span class="[^"]*name[^"]*">Class 2<\/span>/)).toBeNull();
   expect(only).toContain('Sale day 1');
+  // A name that is no longer on the calendar does not count as chosen.
+  expect(render({ classFilter: ['Gone class'] })).toContain('aria-label="Show classes: All classes"');
+});
+
+it('shows only the chosen class names', () => {
+  const items = [s(1, '2026-11-16T17:00:00.000Z'), s(2, '2026-11-16T18:00:00.000Z', { name: 'Little tigers' })];
+  const ready = { state: 'READY', range: week, items, truncated: false, timezone: 'UTC', localToday: '2026-11-16' } as const;
+  expect(visibleClasses(ready, [])).toHaveLength(2);
+  expect(visibleClasses(ready, ['Little tigers']).map((c) => c.name)).toEqual(['Little tigers']);
+  expect(visibleClasses({ state: 'LOADING' }, ['Little tigers'])).toEqual([]);
+  // A chosen name with no class in this range (e.g. after moving to another week) shows every class, as the menu says.
+  expect(visibleClasses(ready, ['Karate'])).toHaveLength(2);
+  expect(visibleClasses(ready, ['Karate', 'Little tigers']).map((c) => c.name)).toEqual(['Little tigers']);
 });
 
 it('offers booking in place from the roster panel when the calendar asks, and never for a cancelled class', () => {
@@ -113,7 +127,7 @@ it('is one page with Calendar, Weekly timetable and Sale days & events tabs', ()
   expect(html).toContain('<h1 id="schedule-title">Calendar</h1>');
   expect(order(html, '>Calendar</button>', '>Weekly timetable</button>', '>Sale days &amp; events</button>')).toBe(true);
   expect(html).toMatch(/aria-selected="true"[^>]*>Calendar</);
-  expect(html).toContain('href="/staff/schedule/sessions/create"');
+  expect(html).toContain('data-testid="calendar-add-class"');
   expect(scheduleTabHref('events')).toBe('/staff/schedule?tab=events'); expect(scheduleTabHref('calendar')).toBe('/staff/schedule');
 });
 

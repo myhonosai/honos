@@ -7,13 +7,15 @@ import {
   FamilyMessagesAccessError, FamilyMessagesRefusal, loadFamilyMessageInbox, loadFamilyMessageThread, markFamilyMessageThreadRead, replyFamilyMessage, sendAttempt,
   type FamilyMessagesScope,
 } from './http';
-import s from '../testing-registration.module.css';
-import { ComposeMessage } from './compose';
+import s from '../comms-kit/comms.module.css';
+import { initials } from '../comms-kit/initials';
+import { shortWhen } from '../comms-kit/short-when';
 
 function when(value: string) { return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)); }
 function failure(error: unknown) { return error instanceof Error ? error.message : 'Family messages are unavailable right now.'; }
 
 /**
+ * Parent app page (David 2026-11-19: "own page like sms conversation page"), laid out like Texts > Conversations.
  * 0330 staff inbox: every family conversation of the verified school, newest first, with unread counts. Opening a thread
  * does not mark it read; "Mark read" and a reply do, up to the newest message on screen, so a later family message stays unread. The server checks family_messages.manage on every call. Nothing is
  * texted or emailed; families see the reply as from the school.
@@ -65,41 +67,45 @@ export function StaffFamilyInbox(): React.ReactElement {
     else if (result instanceof FamilyMessagesRefusal) attempt.current = null;
   }
 
-  if (!scope) return <p role="status">Choose a school to see family messages.</p>;
-  return <main className={s.page}><div className={s.shell}>
-    <header className={s.header}><h1>Texts &amp; email</h1>
-      <p>Send a text or email to one contact, and answer the messages families send from the HON parent app.</p></header>
-    <ComposeMessage scope={scope} />
-    <h2>Family messages</h2>
-    <p className={s.subtle}>Replies here stay inside HON and show to the family as from the school. They are not texted or emailed.</p>
-    {hidden && !inbox && <p className={s.actions}><button type="button" onClick={show}>Show family messages</button></p>}
-    <div aria-live="polite">{busy && !inbox && <p role="status">Loading family messages…</p>}
-      {error && <div className={s.error} role="alert"><strong>{denied ? 'Not available for your role' : 'Family messages'}</strong><p>{denied ? 'You need the family messages permission at this school.' : error}</p></div>}
-      {notice && <p className={s.notice} role="status">{notice}</p>}</div>
-    {inbox && <section className={s.card} aria-label="Inbox">
-      <h2>Conversations{inbox.unreadThreads ? ` · ${inbox.unreadThreads} unread` : ''}</h2>
-      {inbox.threads.length === 0 ? <p className={s.empty}>No family has written yet.</p> : <ul className={s.list}>
-        {inbox.threads.map(t => <li key={t.threadId}>
-          <button type="button" aria-current={open?.threadId === t.threadId ? 'true' : undefined} onClick={() => { setText(''); attempt.current = null; void refresh(t.threadId); }}>
-            {t.familyName}{t.unreadCount ? <span className={s.badge}> {t.unreadCount} new</span> : null}
-          </button> <span className={s.subtle}>{t.lastFrom === 'FAMILY' ? 'Family wrote' : 'School replied'} · {when(t.lastMessageAt)}</span>
-        </li>)}
-      </ul>}
-      <p className={s.actions}><button type="button" disabled={busy} onClick={() => void refresh(open?.threadId)}>Refresh</button></p>
-    </section>}
-    {open && <section className={s.card} aria-label={`Conversation with ${open.familyName}`}>
-      <h2>{open.familyName}</h2>
-      <ol className={s.list}>{open.messages.map(m => <li key={m.messageId}>
-        <p><strong>{m.from === 'FAMILY' ? open.familyName : m.mine ? 'You' : 'School staff'}</strong> · <span className={s.subtle}>{when(m.sentAt)}</span></p>
-        <p style={{ whiteSpace: 'pre-wrap' }}>{m.body}</p></li>)}</ol>
-      {open.unreadCount > 0 && open.messages.length > 0 && <p className={s.actions}><button type="button" disabled={acting}
-        onClick={() => void command(() => markFamilyMessageThreadRead(scope, open.threadId, open.messages.at(-1)!.messageId), 'Marked read.', open.threadId)}>Mark read ({open.unreadCount} new)</button></p>}
-      <form onSubmit={sendReply}>
-        <label htmlFor="family-reply">Reply to {open.familyName}</label>
-        <textarea id="family-reply" rows={4} value={text} maxLength={FAMILY_MESSAGE_LIMITS.bodyMax + 1} onChange={e => setText(e.target.value)} disabled={acting} />
-        <p className={s.subtle}>{text.length} / {FAMILY_MESSAGE_LIMITS.bodyMax}</p>
-        <p className={s.actions}><button type="submit" disabled={acting || !familyMessageBodyOk(text)}>{acting ? 'Sending…' : 'Send reply'}</button></p>
-      </form>
-    </section>}
-  </div></main>;
+  if (!scope) return <p role="status">Choose a school to see parent app messages.</p>;
+  const pick = (threadId: string | null) => { setText(''); attempt.current = null; if (threadId) void refresh(threadId); else { setOpen(null); void refresh(); } };
+  return <main className={s.page} data-parent-app="">
+    <header className={s.head}><div><h1>Parent app</h1>
+      <p>Messages families send from the HON parent app. Your replies stay inside the app and show as from the school; they are not texted or emailed.</p></div>
+      {inbox && <button type="button" className={s.ghost} disabled={busy} onClick={() => void refresh(open?.threadId)}>Refresh</button>}</header>
+    {hidden && !inbox && <p className={s.actions}><button type="button" className={s.button} onClick={show}>Show parent app messages</button></p>}
+    <div aria-live="polite">{busy && !inbox && <p className={s.muted} role="status">Loading parent app messages…</p>}
+      {error && <div className={s.flash} data-tone="bad" role="alert"><strong>{denied ? 'Not available for your role' : 'Parent app'}</strong><p>{denied ? 'You need the family messages permission at this school.' : error}</p></div>}
+      {notice && <p className={s.flash} data-tone="ok" role="status">{notice}</p>}</div>
+    {inbox && <div className={s.split} data-open={open ? 'true' : undefined}>
+      <section className={s.listPane} aria-label="Inbox">
+        <div className={s.listTools}><p className={s.muted}>{inbox.unreadThreads ? `${inbox.unreadThreads} unread` : 'All read'}</p></div>
+        {inbox.threads.length === 0 ? <p className={s.empty}>No family has written yet.</p> : <ul className={s.rows}>
+          {inbox.threads.map(t => <li key={t.threadId}>
+            <button type="button" className={s.row} aria-current={open?.threadId === t.threadId ? 'true' : undefined} onClick={() => pick(t.threadId)}>
+              <span className={s.avatar} aria-hidden="true">{initials(t.familyName)}</span>
+              <span className={s.rowMain}><span className={s.rowName}>{t.familyName}</span><span className={s.rowPreview}>{t.lastFrom === 'FAMILY' ? 'Family wrote' : 'School replied'}</span></span>
+              <span className={s.rowSide}><time dateTime={t.lastMessageAt} title={when(t.lastMessageAt)}>{shortWhen(t.lastMessageAt, {})}</time>{t.unreadCount ? <span className={s.badge} data-tone="accent">{t.unreadCount} new</span> : null}</span>
+            </button>
+          </li>)}
+        </ul>}
+      </section>
+      {open ? <section className={s.thread} aria-label={`Conversation with ${open.familyName}`}>
+        <header className={s.threadHead}>
+          <div className={s.actions}><button type="button" className={`${s.ghost} ${s.back}`} onClick={() => pick(null)}>Back</button><h2>{open.familyName}</h2></div>
+          {open.unreadCount > 0 && open.messages.length > 0 && <button type="button" className={s.button} disabled={acting}
+            onClick={() => void command(() => markFamilyMessageThreadRead(scope, open.threadId, open.messages.at(-1)!.messageId), 'Marked read.', open.threadId)}>Mark read ({open.unreadCount} new)</button>}
+        </header>
+        <ol className={s.messages}>{open.messages.map(m => <li key={m.messageId} className={s.bubble} data-from={m.from === 'FAMILY' ? 'in' : 'out'}>
+          <p>{m.body}</p>
+          <span className={s.bubbleMeta}><span>{m.from === 'FAMILY' ? open.familyName : m.mine ? 'You' : 'School staff'}</span><span>{when(m.sentAt)}</span></span></li>)}</ol>
+        <form className={s.composer} onSubmit={sendReply}>
+          <label htmlFor="family-reply" className={s.label}>Reply to {open.familyName}</label>
+          <textarea id="family-reply" className={s.field} rows={3} value={text} maxLength={FAMILY_MESSAGE_LIMITS.bodyMax + 1} onChange={e => setText(e.target.value)} disabled={acting} />
+          <div className={s.composerBar}><span className={s.composerTools}>{text.length} / {FAMILY_MESSAGE_LIMITS.bodyMax}</span>
+            <button type="submit" className={s.primary} disabled={acting || !familyMessageBodyOk(text)}>{acting ? 'Sending…' : 'Send reply'}</button></div>
+        </form>
+      </section> : <section className={s.thread}><p className={s.empty}>Pick a family on the left.</p></section>}
+    </div>}
+  </main>;
 }

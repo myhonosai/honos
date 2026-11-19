@@ -59,6 +59,42 @@ const roster = students.slice(0, 3).map((s, n) => ({ ...s, personId: id(3100 + n
   booking: { id: id(3200 + n), kind: n === 2 ? 'TRIAL' : 'REGULAR', status: 'BOOKED', source: 'STAFF', bookedAt: '2026-11-10T00:00:00.000Z', cancelledAt: null, version: 1 },
   attendance: n === 0 ? { id: id(3300), status: 'PRESENT', category: 'REGULAR_PARTICIPANT', recordedAt: '2026-11-16T00:40:00.000Z', version: 1 } : null }));
 
+// 0567 card details: programs, instructors (synthetic names), kinds and booked counts, and the commands the page sends.
+const programs = { kids: { programId: id(4001), name: 'Kids Karate' }, adults: { programId: id(4002), name: 'Adult Kickboxing' } };
+const instructors = [{ principalId: id(4101), displayName: 'Coach Sample' }, { principalId: id(4102), displayName: 'Coach Example' }];
+const cardOf = new Map(sessions.map((x) => [x.sessionId, { version: 1, kind: x.name === 'Private lesson' ? 'PRIVATE_LESSON' : 'CLASS',
+  program: x.name === 'Adult Kickboxing' ? programs.adults : programs.kids, instructor: x.name === 'Little Tigers' ? instructors[0] : x.name === 'Adult Kickboxing' ? instructors[1] : null,
+  booked: x.name === 'Adult Kickboxing' ? 2 : 0, seriesId: x.name === 'Private lesson' ? null : id(4200) }]));
+const commands = []; let refuseNextMove = null;
+const pacific = (date, minutes) => new Date(Date.parse(`${date}T00:00:00Z`) + (minutes + 8 * 60) * 60_000).toISOString();
+function calendarCommand(route, path, body) {
+  commands.push({ path: path.slice(prefix.length), body, command: route.request().headers()['x-hon-human-command'], key: route.request().headers()['idempotency-key'] });
+  if (path === `${prefix}/schedule/calendar/cards`) {
+    const [hh, mm] = body.localStartTime.split(':').map(Number), dates = [];
+    if (body.repeatWeekdays) { for (let d = body.localDate, n = 0; n < 84; n++, d = new Date(Date.parse(`${d}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)) {
+      const iso = new Date(`${d}T00:00:00Z`).getUTCDay() || 7; if (body.repeatWeekdays.includes(iso) && (!body.repeatUntil || d <= body.repeatUntil)) dates.push(d); } }
+    else dates.push(body.localDate);
+    const seriesId = body.repeatWeekdays ? id(4300 + commands.length) : null, made = [];
+    for (const d of dates) {
+      const startsAt = pacific(d, hh * 60 + mm), sessionId = id(5000 + sessions.length);
+      sessions.push({ sessionId, name: body.name, startsAt, endsAt: new Date(Date.parse(startsAt) + body.durationMinutes * 60_000).toISOString(), roomName: body.roomName ?? null,
+        capacity: body.capacity, bookingPolicy: body.bookingPolicy, status: 'SCHEDULED', createdAt: '2026-11-16T00:00:00.000Z' });
+      cardOf.set(sessionId, { version: 1, kind: body.kind, program: Object.values(programs).find((g) => g.programId === body.programId), seriesId,
+        instructor: instructors.find((i) => i.principalId === body.instructorPrincipalId) ?? null, booked: 0 });
+      made.push(sessionId);
+    }
+    sessions.sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+    return json(route, 200, { data: { repeats: !!body.repeatWeekdays, sessionKind: body.kind, sessionId: made[0], seriesId, created: made.length, skippedDates: [] }, meta: meta({ replayed: false }) });
+  }
+  const sessionId = path.split('/').at(-2), x = sessions.find((y) => y.sessionId === sessionId), c = cardOf.get(sessionId);
+  if (refuseNextMove) { const code = refuseNextMove; refuseNextMove = null; return json(route, 409, { code }); }
+  if (!x || !c) return json(route, 404, { code: 'CALENDAR_CARD_NOT_FOUND' });
+  if (body.expectedVersion !== c.version) return json(route, 409, { code: 'VERSION_CONFLICT' });
+  x.startsAt = body.startsAt; x.endsAt = body.endsAt; c.version += 1;
+  sessions.sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+  return json(route, 200, { data: { sessionId, version: c.version, startsAt: body.startsAt, endsAt: body.endsAt, detachedFromRoster: c.seriesId !== null }, meta: meta({ replayed: false }) });
+}
+
 const json = (route, status, body) => route.fulfill({ status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }, body: JSON.stringify(body) });
 const meta = (extra = {}) => ({ requestId: id(9000), correlationId: id(9000), ...extra });
 function api(route) {
@@ -81,6 +117,34 @@ function api(route) {
   if (path === `${prefix}/schedule/sessions`) return json(route, 200, { data: sessions.filter((s) => s.status === 'SCHEDULED').slice(0, 40), meta: meta() });
   if (path === `${prefix}/schedule/bookable-students`) return json(route, 200, { data: students, meta: meta() });
   if (path === `${prefix}/schedule/events`) return eventsDenied ? json(route, 403, { code: 'FORBIDDEN' }) : json(route, 200, { data: { localToday: TODAY, timezone: ZONE, events }, meta: meta() });
+  if (path === `${prefix}/schedule/calendar/cards` && method === 'GET') {
+    const from = url.searchParams.get('from'), to = url.searchParams.get('to');
+    const cards = sessions.filter((x) => localDate(x.startsAt) >= from && localDate(x.startsAt) <= to).map((x) => { const c = cardOf.get(x.sessionId);
+      return { sessionId: x.sessionId, version: c.version, kind: c.kind, programId: c.program.programId, programName: c.program.name, seriesId: c.seriesId, instructor: c.instructor,
+        booked: c.booked, attended: x.status === 'COMPLETED' }; });
+    return json(route, 200, { data: { timezone: ZONE, localToday: TODAY, from, to, truncated: false, canManage: true, cards, programs: Object.values(programs), instructors }, meta: meta() });
+  }
+  if (path.startsWith(`${prefix}/schedule/calendar/cards`) && method === 'POST') return calendarCommand(route, path, JSON.parse(route.request().postData() ?? '{}'));
+  if (path === `${prefix}/schedule/class-series`) {
+    const roster = (n, name, weekdays, localStartTime, durationMinutes, futureSessions) => ({ seriesId: id(4000 + n), programId: id(4100 + n), name, roomName: 'Main mat', capacity: 20,
+      bookingPolicy: 'OPTIONAL_BOOKING', weekdays, localStartTime, durationMinutes, startsOn: '2026-11-02', endsOn: null, generatedThrough: '2027-01-24', status: 'ACTIVE', endReason: null,
+      version: 2, ongoing: n === 1, futureSessions, createdAt: '2026-11-01T08:00:00.000Z' });
+    return json(route, 200, { data: { localToday: TODAY, timezone: ZONE, fillLimit: '2027-02-08', topUpDue: false,
+      series: [roster(1, 'Little Tigers', [1, 2, 3, 4, 5], '16:30', 45, 50), roster(2, 'Junior Black Belt Club', [2, 4], '17:15', 60, 20)],
+      programs: [{ programId: id(4101), name: 'Little Tigers' }, { programId: id(4102), name: 'Junior Black Belt Club' }] }, meta: meta() });
+  }
+  if (path === `${prefix}/schedule/timetable`) {
+    const of = Date.parse(`${url.searchParams.get('weekOf') ?? TODAY}T00:00:00Z`), start = of - ((new Date(of).getUTCDay() + 6) % 7) * 86_400_000;
+    const weekStart = new Date(start).toISOString().slice(0, 10);
+    const weekEnd = new Date(start + 6 * 86_400_000).toISOString().slice(0, 10);
+    const inWeek = sessions.filter((x) => localDate(x.startsAt) >= weekStart && localDate(x.startsAt) <= weekEnd).map((x) => {
+      const local = new Date(Date.parse(x.startsAt) - 8 * 3_600_000).toISOString(), end = new Date(Date.parse(x.endsAt) - 8 * 3_600_000).toISOString();
+      return { sessionId: x.sessionId, seriesId: x.name === 'Little Tigers' ? id(4001) : x.name === 'Junior Black Belt Club' ? id(4002) : null, name: x.name, roomName: x.roomName,
+        startsAt: x.startsAt, endsAt: x.endsAt, localDate: local.slice(0, 10), localStart: local.slice(11, 16), localEnd: end.slice(11, 16), capacity: x.capacity,
+        bookingPolicy: x.bookingPolicy, status: x.status, booked: 3 };
+    });
+    return json(route, 200, { data: { timezone: ZONE, localToday: TODAY, weekStart, weekEnd, truncated: false, sessions: inWeek }, meta: meta() });
+  }
   return json(route, 403, { code: 'FORBIDDEN' });
 }
 
@@ -114,7 +178,7 @@ async function shot(page, name, fullPage = false) { await page.screenshot({ path
 const noOverflow = async (page) => assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1), false, 'page scrolls horizontally');
 const calendar = (page) => page.getByTestId('school-calendar');
 
-await check('week view shows classes and sale days; a class opens its roster and books in place', async () => {
+await check('week view shows classes and sale days; a class opens its students and books in place', async () => {
   const { ctx, page } = await open(viewports.desktop, '/staff/schedule');
   await calendar(page).getByTestId('calendar-week').waitFor();
   assert.match(await page.getByTestId('calendar-range').innerText(), /Nov 16.*22, 2026/);
@@ -128,9 +192,32 @@ await check('week view shows classes and sale days; a class opens its roster and
   await page.getByRole('button', { name: 'Book a student on this class' }).click();
   await page.getByTestId('calendar-booking').waitFor();
   await shot(page, 'calendar-class-booking-desktop-1440');
-  await page.getByRole('button', { name: 'Back to the roster' }).click();
+  await page.getByRole('button', { name: 'Back to the students' }).click();
   await page.getByTestId('roster-table').waitFor();
   await noOverflow(page); await ctx.close();
+});
+await check('one compact Filter menu narrows the calendar to the chosen classes', async () => {
+  const { ctx, page } = await open(viewports.desktop, '/staff/schedule');
+  await calendar(page).getByTestId('calendar-week').waitFor();
+  const filter = calendar(page).getByTestId('calendar-filter');
+  await filter.locator('summary').click();
+  await shot(page, 'calendar-filter-open-desktop-1440');
+  await filter.getByLabel('Little Tigers').check();
+  await filter.getByLabel('Junior Black Belt Club').check();
+  await page.keyboard.press('Escape'); await filter.locator('summary').click();
+  assert.equal(await calendar(page).getByRole('button', { name: /Adult Kickboxing/ }).count(), 0);
+  assert.ok(await calendar(page).getByRole('button', { name: /Little Tigers/ }).count() >= 5);
+  assert.match(await filter.locator('summary').getAttribute('aria-label'), /Show classes: 2 classes/);
+  await shot(page, 'calendar-filter-applied-desktop-1440');
+  await calendar(page).getByRole('button', { name: 'Show all' }).last().click();
+  assert.ok(await calendar(page).getByRole('button', { name: /Adult Kickboxing/ }).count() >= 5);
+  await ctx.close();
+});
+await check('Weekly timetable tab calls repeating classes Rosters', async () => {
+  const { ctx, page } = await open(viewports.desktop, '/staff/schedule?tab=timetable');
+  await page.getByRole('heading', { name: 'Rosters' }).waitFor();
+  await shot(page, 'timetable-rosters-desktop-1440', true);
+  await ctx.close();
 });
 await check('month view, "+N more" day links, an event panel and the events tab', async () => {
   const { ctx, page } = await open(viewports.desktop, '/staff/schedule?view=month');
@@ -172,6 +259,133 @@ await check('classes still show when sale days are hidden for the role', async (
   await page.getByText('Sale days and events are shown only to staff who manage the schedule.').waitFor();
   assert.ok(await calendar(page).getByRole('button', { name: /Little Tigers/ }).count() >= 5);
   eventsDenied = false; await ctx.close();
+});
+const cardButton = (page, name, dayLabel) => calendar(page).locator(`section[aria-label="${dayLabel}"]`).getByRole('button', { name: new RegExp(name) }).first();
+await check('click an empty time to add a trial class with a program and instructor', async () => {
+  const { ctx, page } = await open(viewports.desktop, '/staff/schedule');
+  await calendar(page).getByTestId('calendar-week').waitFor();
+  await calendar(page).getByRole('button', { name: 'Add a class on Nov 20, 2026 at 1:00 PM' }).click({ position: { x: 40, y: 34 } });
+  const form = page.getByTestId('calendar-create-form'); await form.waitFor();
+  assert.equal(await form.getByLabel('Start time').inputValue(), '13:30');
+  assert.equal(await form.getByLabel('Date').inputValue(), '2026-11-20');
+  await form.getByText('Trial class', { exact: true }).click();
+  await form.getByLabel('Title').fill('Free trial class');
+  await form.getByLabel('Program').selectOption({ label: 'Kids Karate' });
+  await form.getByLabel('Instructor').selectOption({ label: 'Coach Sample' });
+  await shot(page, 'calendar-create-form-desktop-1440');
+  await form.getByRole('button', { name: 'Add to calendar' }).click();
+  await page.getByTestId('calendar-message').getByText('Added Free trial class.').waitFor();
+  const sent = commands.at(-1);
+  assert.equal(sent.command, 'schedule.calendar.create'); assert.match(sent.key, /^[0-9a-f-]{36}$/);
+  assert.deepEqual(sent.body, { kind: 'TRIAL', programId: id(4001), name: 'Free trial class', capacity: 10, bookingPolicy: 'OPTIONAL_BOOKING', localDate: '2026-11-20', localStartTime: '13:30',
+    durationMinutes: 60, instructorPrincipalId: id(4101), roomName: null });
+  const added = cardButton(page, 'Free trial class', 'Friday, November 20, 2026'); await added.waitFor();
+  assert.equal(await added.getAttribute('data-card-kind'), 'TRIAL');
+  await shot(page, 'calendar-created-trial-desktop-1440');
+  await ctx.close();
+});
+await check('Add a class makes a weekly roster from the calendar', async () => {
+  const { ctx, page } = await open(viewports.desktop, '/staff/schedule');
+  await calendar(page).getByTestId('calendar-week').waitFor();
+  await page.getByTestId('calendar-add-class').click();
+  const form = page.getByTestId('calendar-create-form'); await form.waitFor();
+  await form.getByLabel('Title').fill('Teen Sparring');
+  await form.getByLabel('Program').selectOption({ label: 'Adult Kickboxing' });
+  await form.getByLabel('Date').fill('2026-11-21'); await form.getByLabel('Start time').fill('11:00');
+  await form.getByLabel('Repeats every week').check();
+  await form.locator('label', { hasText: /^Wed$/ }).click();
+  await shot(page, 'calendar-create-roster-desktop-1440');
+  await form.getByRole('button', { name: 'Add to calendar' }).click();
+  await page.getByTestId('calendar-message').getByText(/Roster Teen Sparring created with \d+ classes\./).waitFor();
+  assert.deepEqual(commands.at(-1).body.repeatWeekdays, [3, 6]);
+  await cardButton(page, 'Teen Sparring', 'Saturday, November 21, 2026').waitFor();
+  await ctx.close();
+});
+await check('drag a class to another day and time, drag its bottom edge, and use the keyboard', async () => {
+  const { ctx, page } = await open(viewports.desktop, '/staff/schedule');
+  await calendar(page).getByTestId('calendar-week').waitFor();
+  const card = cardButton(page, 'Little Tigers', 'Thursday, November 19, 2026');
+  assert.equal(await card.getAttribute('data-draggable'), 'true');
+  await card.scrollIntoViewIfNeeded();
+  const box = await card.boundingBox(), friday = await calendar(page).locator('section[aria-label="Friday, November 20, 2026"]').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + 10); await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 40, box.y + 30, { steps: 4 });
+  await page.mouse.move(friday.x + friday.width / 2, box.y + 10 + 64, { steps: 6 });
+  await calendar(page).getByTestId('calendar-ghost').waitFor();
+  assert.match(await calendar(page).getByTestId('calendar-ghost').innerText(), /5:30\s*PM\s*–\s*6:15\s*PM/);
+  await shot(page, 'calendar-drag-ghost-desktop-1440');
+  await page.mouse.up();
+  await page.getByTestId('calendar-message').getByText(/Moved Little Tigers to Fri, Nov 20, 5:30\s*PM\. It no longer follows its roster\./).waitFor();
+  let sent = commands.at(-1);
+  assert.equal(sent.command, 'schedule.calendar.move');
+  assert.deepEqual(sent.body, { expectedVersion: 1, startsAt: '2026-11-21T01:30:00.000Z', endsAt: '2026-11-21T02:15:00.000Z' });
+  await shot(page, 'calendar-dropped-desktop-1440');
+  // Resize: drag the bottom edge of Friday's 6 PM Adult... (booked) is covered below; resize the Junior Black Belt Club on Thursday.
+  const jbbc = calendar(page).locator('section[aria-label="Thursday, November 19, 2026"] li', { hasText: 'Junior Black Belt Club' });
+  const handle = jbbc.getByTestId('calendar-resize');
+  await handle.scrollIntoViewIfNeeded();
+  const hb = await handle.boundingBox();
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2); await page.mouse.down();
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + 36, { steps: 5 });
+  await calendar(page).getByTestId('calendar-ghost').waitFor();
+  await page.mouse.up();
+  await page.getByTestId('calendar-message').getByText(/Moved Junior Black Belt Club/).waitFor();
+  sent = commands.at(-1);
+  assert.equal((Date.parse(sent.body.endsAt) - Date.parse(sent.body.startsAt)) / 60_000, 90);
+  // Keyboard: Alt+Arrow Down moves the focused class 15 minutes later.
+  const sat = cardButton(page, 'Family Class', 'Saturday, November 21, 2026');
+  await sat.focus(); await page.keyboard.press('Alt+ArrowDown');
+  await page.getByTestId('calendar-message').getByText(/Moved Family Class to Sat, Nov 21, 10:15\s*AM/).waitFor();
+  // Escape cancels a drag: nothing is sent.
+  const before = commands.length, mon = cardButton(page, 'Little Tigers', 'Friday, November 20, 2026');
+  await mon.scrollIntoViewIfNeeded();
+  const mb = await mon.boundingBox();
+  await page.mouse.move(mb.x + 10, mb.y + 10); await page.mouse.down(); await page.mouse.move(mb.x + 10, mb.y + 80, { steps: 5 });
+  await page.keyboard.press('Escape'); await page.mouse.up();
+  assert.equal(commands.length, before);
+  assert.equal(await page.getByTestId('calendar-drawer').count(), 0, 'a cancelled drag does not open the panel');
+  await noOverflow(page); await ctx.close();
+});
+await check('a booked class asks first; a stale or locked move is refused and the card stays', async () => {
+  const { ctx, page } = await open(viewports.desktop, '/staff/schedule');
+  await calendar(page).getByTestId('calendar-week').waitFor();
+  const booked = cardButton(page, 'Adult Kickboxing', 'Friday, November 20, 2026');
+  assert.match(await booked.innerText(), /2 booked/);
+  const before = commands.length;
+  await booked.focus(); await page.keyboard.press('Alt+ArrowRight');
+  const bar = page.getByTestId('calendar-message'); await bar.getByText('2 students are booked on Adult Kickboxing. They are not told about the new time.').waitFor();
+  assert.equal(commands.length, before, 'nothing is sent before the answer');
+  await shot(page, 'calendar-move-booked-confirm-desktop-1440');
+  await bar.getByRole('button', { name: 'Keep the old time' }).click();
+  assert.equal(commands.length, before);
+  refuseNextMove = 'CALENDAR_CARD_LOCKED';
+  await booked.focus(); await page.keyboard.press('Alt+ArrowDown');
+  await bar.getByRole('button', { name: 'Move it' }).click();
+  await bar.getByText('This class has started, ended, been cancelled or has attendance, so it cannot be moved.').waitFor();
+  await shot(page, 'calendar-move-refused-desktop-1440');
+  assert.equal(await calendar(page).getByTestId('calendar-ghost').count(), 0);
+  await ctx.close();
+});
+await check('Program and Instructor filters combine', async () => {
+  const { ctx, page } = await open(viewports.desktop, '/staff/schedule');
+  await calendar(page).getByTestId('calendar-week').waitFor();
+  const filter = calendar(page).getByTestId('calendar-filter');
+  await filter.locator('summary').click();
+  await filter.getByRole('group', { name: 'Programs' }).getByLabel('Kids Karate').check();
+  await filter.getByRole('group', { name: 'Instructors' }).getByLabel('No instructor').check();
+  await shot(page, 'calendar-filter-program-instructor-desktop-1440');
+  await page.keyboard.press('Escape');
+  assert.equal(await calendar(page).getByRole('button', { name: /Little Tigers|Adult Kickboxing/ }).count(), 0);
+  assert.ok(await calendar(page).getByRole('button', { name: /Junior Black Belt Club/ }).count() >= 1);
+  await ctx.close();
+});
+await check('phone: the create form fits the screen', async () => {
+  const { ctx, page } = await open(viewports.phone, '/staff/schedule');
+  await calendar(page).getByTestId('calendar-week').waitFor();
+  await page.getByTestId('calendar-add-class').click();
+  await page.getByTestId('calendar-create-form').waitFor();
+  await noOverflow(page); await shot(page, 'calendar-create-form-phone-390');
+  await ctx.close();
 });
 await check('phone: week and month fit the screen', async () => {
   const { ctx, page } = await open(viewports.phone, '/staff/schedule');

@@ -1,8 +1,9 @@
-import React from 'react';
-import type { CurrentSchoolClassSession } from '@hon/contracts';
+import React, { useEffect, useRef, useState } from 'react';
+import type { CalendarCard, CalendarCardPerson, CurrentSchoolClassSession } from '@hon/contracts';
 import { calendarText, type CalendarKey } from './copy';
 import { groupByDay, type CalendarEvent, type CalendarItem } from './http';
 import { CALENDAR_VIEWS, calendarRange, daysOf, hourBounds, layoutLanes, localMinutesOf, monthGrid, type CalendarView, type DateRange, type Span } from './range';
+import { dragTarget, keyboardStep, MAX_LENGTH, SNAP_MINUTES, type DragOrigin, type DragSpot } from './drag';
 import styles from './school-calendar.module.css';
 
 type T = (key: CalendarKey, vars?: Record<string, string>) => string;
@@ -10,6 +11,13 @@ export type ClassesState = { state: 'LOADING' | 'DENIED' | 'TIMEZONE' | 'UNAVAIL
   | { state: 'READY'; range: DateRange; items: readonly CurrentSchoolClassSession[]; truncated: boolean; timezone: string; localToday: string };
 export type EventsState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; events: readonly CalendarEvent[]; timezone: string; localToday: string };
 export type CalendarSelection = Readonly<{ kind: 'class' | 'event'; id: string }> | null;
+/** Card details (0567): kind, program, roster, lead instructor and booked count per class, plus what a manager may pick. */
+export type CardsState = { state: 'LOADING' | 'UNAVAILABLE' }
+  | { state: 'READY'; byId: ReadonlyMap<string, CalendarCard>; canManage: boolean; programs: readonly { programId: string; name: string }[]; instructors: readonly CalendarCardPerson[] };
+/** A move waiting for the booked-students question or for the server. */
+export type PendingMove = Readonly<{ sessionId: string; date: string; start: number; end: number; saving: boolean }>;
+/** "No instructor" in the Instructor filter. */
+export const NO_INSTRUCTOR = 'none';
 /** Items a month cell lists before "+N more". */
 export const MONTH_CELL_ITEMS = 3;
 /** Pixels per hour on the week and day grid. */
@@ -23,8 +31,21 @@ export type CalendarViewProps = Readonly<{
   onView?: ((view: CalendarView) => void) | undefined; onShift?: ((step: 1 | -1) => void) | undefined; onToday?: (() => void) | undefined;
   onSelect?: ((selection: CalendarSelection) => void) | undefined; onDay?: ((date: string) => void) | undefined;
   onRefresh?: (() => void) | undefined; onManageEvent?: (() => void) | undefined;
-  /** Class-name filter chips (null = all classes), like the program chips of the scheduler the school uses today. */
-  classFilter?: string | null | undefined; onClassFilter?: ((name: string | null) => void) | undefined;
+  /** The chosen class names (empty = all classes). A compact Filter menu replaces the old wall of chips. */
+  classFilter?: readonly string[] | undefined; onClassFilter?: ((names: readonly string[]) => void) | undefined;
+  /** 0567: card details, and the Program and Instructor filter groups (program ids; principal ids or NO_INSTRUCTOR). */
+  cards?: CardsState | undefined;
+  programFilter?: readonly string[] | undefined; onProgramFilter?: ((ids: readonly string[]) => void) | undefined;
+  instructorFilter?: readonly string[] | undefined; onInstructorFilter?: ((ids: readonly string[]) => void) | undefined;
+  /** Week and Day: an empty time was clicked (school date, minutes after school midnight). */
+  onCreateAt?: ((date: string, minutes: number) => void) | undefined;
+  /** A card was dropped, resized or moved by keyboard to a new school date and minutes. */
+  onDrop?: ((sessionId: string, date: string, start: number, end: number) => void) | undefined;
+  pending?: PendingMove | null | undefined;
+  /** The create form, shown in the side panel. */
+  createPanel?: React.ReactNode;
+  /** A short result or refusal line above the board. */
+  message?: React.ReactNode;
 }>;
 
 const day = (language: string, date: string, options: Intl.DateTimeFormatOptions) => new Date(`${date}T00:00:00Z`).toLocaleDateString(language, { ...options, timeZone: 'UTC' });
@@ -59,9 +80,13 @@ export function CalendarViewPane(p: CalendarViewProps): React.ReactElement {
         </div>
       </div>
       <Notices {...p} t={t}/>
-      {!loading ? <Chips {...p} t={t}/> : null}
+      {!loading ? <Filter {...p} t={t}/> : null}
       <div className={styles.board}>{loading ? <p className={styles.meta} role="status">{t('loading')}</p> : p.anchor !== null ? <Board {...p} anchor={p.anchor} t={t}/> : null}</div>
-      {p.selected ? <aside className={styles.drawer} aria-labelledby="calendar-drawer-title" data-testid="calendar-drawer">
+      {p.message ? <div className={styles.messageBar}>{p.message}</div> : null}
+      {p.createPanel ? <aside className={styles.drawer} aria-label={t('createTitle')} data-testid="calendar-create-drawer">
+        <div className={styles.drawerHead}><button type="button" className={styles.secondary} onClick={() => p.onSelect?.(null)}>{t('close')}</button></div>
+        {p.createPanel}
+      </aside> : p.selected ? <aside className={styles.drawer} aria-labelledby="calendar-drawer-title" data-testid="calendar-drawer">
         <div className={styles.drawerHead}><h2 id="calendar-drawer-title" className={styles.hidden}>{t('details')}</h2>
           <button type="button" className={styles.secondary} onClick={() => p.onSelect?.(null)}>{t('close')}</button></div>
         <Detail {...p} t={t}/>
@@ -81,19 +106,87 @@ function Notices({ classes, events, t }: CalendarViewProps & { t: T }): React.Re
   </>;
 }
 
-/** The classes shown: all, or only those with the chosen name. */
-export function visibleClasses(classes: ClassesState, filter: string | null | undefined): readonly CurrentSchoolClassSession[] {
+/** The classes shown: all, or only those whose name is chosen. */
+export function visibleClasses(classes: ClassesState, filter: readonly string[] | undefined): readonly CurrentSchoolClassSession[] {
   if (classes.state !== 'READY') return [];
-  return filter ? classes.items.filter((s) => s.name === filter) : classes.items;
+  // Only names loaded in this range count, as in the Filter menu: a choice that matches nothing here shows every class,
+  // so the board never goes empty behind a menu that says "All classes".
+  const loaded = new Set(classes.items.map((s) => s.name)), chosen = new Set((filter ?? []).filter((n) => loaded.has(n)));
+  return chosen.size === 0 ? classes.items : classes.items.filter((s) => chosen.has(s.name));
 }
 
-function Chips({ classes, classFilter, onClassFilter, t }: CalendarViewProps & { t: T }): React.ReactElement | null {
-  if (classes.state !== 'READY') return null;
+export type FilterOptions = Readonly<{ names: string[]; programs: { id: string; name: string }[]; instructors: { id: string; name: string }[] }>;
+/** The choices each filter group offers for the classes loaded in this range. */
+export function filterOptions(classes: ClassesState, cards: CardsState | undefined): FilterOptions {
+  if (classes.state !== 'READY') return { names: [], programs: [], instructors: [] };
   const names = [...new Set(classes.items.map((s) => s.name))].sort((a, b) => a.localeCompare(b));
-  if (names.length < 2) return null;
-  return <div className={styles.chips} role="group" aria-label={t('filterLabel')}>
-    <button type="button" className={styles.chip} aria-pressed={!classFilter} onClick={() => onClassFilter?.(null)}>{t('allClasses')}</button>
-    {names.map((name) => <button key={name} type="button" className={styles.chip} aria-pressed={classFilter === name} onClick={() => onClassFilter?.(name)}>{name}</button>)}
+  const programs = new Map<string, string>(), instructors = new Map<string, string>();
+  if (cards?.state === 'READY') for (const s of classes.items) {
+    const card = cards.byId.get(s.sessionId);
+    if (!card) continue;
+    programs.set(card.programId, card.programName);
+    instructors.set(card.instructor?.principalId ?? NO_INSTRUCTOR, card.instructor?.displayName ?? '');
+  }
+  const sorted = (m: Map<string, string>) => [...m].map(([id, name]) => ({ id, name })).sort((a, b) => (a.id === NO_INSTRUCTOR ? 1 : 0) - (b.id === NO_INSTRUCTOR ? 1 : 0) || a.name.localeCompare(b.name));
+  return { names, programs: sorted(programs), instructors: sorted(instructors) };
+}
+const chosenOf = (filter: readonly string[] | undefined, offered: readonly string[]) => new Set((filter ?? []).filter((x) => offered.includes(x)));
+
+/**
+ * Every filter at once: choices in different groups combine with AND, several in one group with OR. A choice that matches
+ * nothing loaded here is ignored, so the board never goes empty behind a menu that shows nothing chosen.
+ */
+export function filteredClasses(classes: ClassesState, cards: CardsState | undefined,
+  f: Readonly<{ names?: readonly string[] | undefined; programs?: readonly string[] | undefined; instructors?: readonly string[] | undefined }>): readonly CurrentSchoolClassSession[] {
+  const byName = visibleClasses(classes, f.names);
+  if (cards?.state !== 'READY') return byName;
+  const o = filterOptions(classes, cards);
+  const programs = chosenOf(f.programs, o.programs.map((x) => x.id)), instructors = chosenOf(f.instructors, o.instructors.map((x) => x.id));
+  if (!programs.size && !instructors.size) return byName;
+  return byName.filter((s) => {
+    const card = cards.byId.get(s.sessionId);
+    if (!card) return false;
+    return (!programs.size || programs.has(card.programId)) && (!instructors.size || instructors.has(card.instructor?.principalId ?? NO_INSTRUCTOR));
+  });
+}
+
+function FilterGroup({ legend, options, chosen, onChange }: { legend: string; options: readonly { id: string; name: string }[]; chosen: Set<string>;
+  onChange?: ((ids: readonly string[]) => void) | undefined }): React.ReactElement {
+  const toggle = (id: string) => onChange?.(chosen.has(id) ? [...chosen].filter((n) => n !== id) : [...chosen, id]);
+  return <fieldset className={styles.filterGroup}>
+    <legend>{legend}</legend>
+    <ul>{options.map((o) => <li key={o.id}><label className={styles.filterOption}>
+      <input type="checkbox" checked={chosen.has(o.id)} onChange={() => toggle(o.id)}/> <span>{o.name}</span></label></li>)}</ul>
+  </fieldset>;
+}
+
+/** A compact Filter menu: one button that says what is shown, and short checklists (classes, programs, instructors) under it. */
+function Filter({ classes, cards, classFilter = [], onClassFilter, programFilter, onProgramFilter, instructorFilter, onInstructorFilter, t }: CalendarViewProps & { t: T }): React.ReactElement | null {
+  if (classes.state !== 'READY') return null;
+  const o = filterOptions(classes, cards);
+  const instructorOptions = o.instructors.map((x) => x.id === NO_INSTRUCTOR ? { ...x, name: t('noInstructor') } : x);
+  const showNames = o.names.length >= 2, showPrograms = o.programs.length >= 2, showInstructors = instructorOptions.length >= 2;
+  if (!showNames && !showPrograms && !showInstructors) return null;
+  const names = chosenOf(classFilter, o.names), programs = chosenOf(programFilter, o.programs.map((x) => x.id)), instructors = chosenOf(instructorFilter, instructorOptions.map((x) => x.id));
+  const count = names.size + programs.size + instructors.size;
+  const only = count === 1 ? [...names][0] ?? o.programs.find((x) => programs.has(x.id))?.name ?? instructorOptions.find((x) => instructors.has(x.id))?.name : undefined;
+  const summary = count === 0 ? t('allClasses') : only !== undefined ? only : names.size === count ? t('classesChosen', { n: String(count) }) : t('filtersChosen', { n: String(count) });
+  const clear = () => { onClassFilter?.([]); onProgramFilter?.([]); onInstructorFilter?.([]); };
+  return <div className={styles.filterBar}>
+    <details className={styles.filter} data-testid="calendar-filter">
+      <summary className={styles.filterButton} aria-label={`${t('filterLabel')}: ${summary}`}>
+        <span aria-hidden="true" className={styles.filterIcon}>⏷</span> {t('filterTitle')}
+        <span className={styles.filterValue}>{summary}</span>
+        {count ? <span className={styles.filterCount} aria-hidden="true">{count}</span> : null}
+      </summary>
+      <div className={styles.filterMenu}>
+        {showNames ? <FilterGroup legend={t('filterClasses')} options={o.names.map((n) => ({ id: n, name: n }))} chosen={names} onChange={onClassFilter}/> : null}
+        {showPrograms ? <FilterGroup legend={t('filterPrograms')} options={o.programs} chosen={programs} onChange={onProgramFilter}/> : null}
+        {showInstructors ? <FilterGroup legend={t('filterInstructors')} options={instructorOptions} chosen={instructors} onChange={onInstructorFilter}/> : null}
+        <button type="button" className={styles.secondary} onClick={clear} disabled={count === 0}>{t('filterClear')}</button>
+      </div>
+    </details>
+    {count ? <button type="button" className={styles.clearLink} onClick={clear}>{t('filterClear')}</button> : null}
   </div>;
 }
 
@@ -103,7 +196,7 @@ const todayOf = (classes: ClassesState, events: EventsState) => classes.state ==
 function Board(p: CalendarViewProps & { anchor: string; t: T }): React.ReactElement {
   const { view, anchor, classes, events, language, t } = p;
   const range = calendarRange(view, anchor), zone = zoneOf(classes, events), today = todayOf(classes, events);
-  const days = groupByDay(visibleClasses(classes, p.classFilter), events.state === 'READY' ? events.events : [], zone, range);
+  const days = groupByDay(filteredClasses(classes, p.cards, { names: p.classFilter, programs: p.programFilter, instructors: p.instructorFilter }), events.state === 'READY' ? events.events : [], zone, range);
   const weekdays = daysOf(calendarRange('week', anchor)).map((d) => day(language, d, { weekday: 'short' }));
   const footer = <p className={styles.meta}>{t('zone', { zone })}</p>;
   if (view === 'month') return <>
@@ -123,7 +216,8 @@ function Board(p: CalendarViewProps & { anchor: string; t: T }): React.ReactElem
       })}</div>)}
     </div>{footer}</>;
   // Week and day: an hour grid. Each class sits at its school-time start, as tall as it is long; classes that overlap share
-  // the column side by side. Sale days and events sit in a row above the hours.
+  // the column side by side. Sale days and events sit in a row above the hours. A manager can click an empty time to add a
+  // class, drag a class to move it and drag its bottom edge to change its length (0567).
   const entries = [...days.entries()];
   const spans = new Map<string, Span>();
   for (const [, items] of entries) for (const item of items) if (item.kind === 'class') {
@@ -134,6 +228,7 @@ function Board(p: CalendarViewProps & { anchor: string; t: T }): React.ReactElem
   const hours = Array.from({ length: last - first }, (_, i) => first + i);
   const height = hours.length * HOUR_HEIGHT;
   const hasEvents = entries.some(([, items]) => items.some((i) => i.kind === 'event'));
+  const manage = p.cards?.state === 'READY' && p.cards.canManage;
   return <>
     <div className={styles.gridScroll}>
       <div className={styles.timeGrid} data-view={view} data-testid={`calendar-${view}`} style={{ ['--days' as string]: String(entries.length) }}>
@@ -148,23 +243,123 @@ function Board(p: CalendarViewProps & { anchor: string; t: T }): React.ReactElem
           {entries.map(([date, items]) => <ul key={date} className={styles.eventRow}>{items.filter((i) => i.kind === 'event').map((item) => <li key={keyOf(item)}><Item {...p} item={item} zone={zone}/></li>)}</ul>)}
         </> : null}
         <div className={styles.hours} style={{ height }} aria-hidden="true">{hours.map((h) => <span key={h} style={{ top: (h - first) * HOUR_HEIGHT }}>{clock(language, `${String(h).padStart(2, '0')}:00`)}</span>)}</div>
-        {entries.map(([date, items]) => {
-          const classes = items.filter((i): i is Extract<CalendarItem, { kind: 'class' }> => i.kind === 'class');
-          const lanes = layoutLanes(classes.map((c) => spans.get(c.session.sessionId)!));
-          return <section key={date} className={styles.dayColumn} style={{ height }} data-today={date === today ? 'true' : undefined} aria-label={day(language, date, { dateStyle: 'full' })}>
-            {classes.length === 0 ? <p className={styles.hidden}>{t('nothing')}</p> : null}
-            <ul className={styles.blocks}>{classes.map((c, i) => { const span = spans.get(c.session.sessionId)!, lane = lanes[i]!;
-              return <li key={keyOf(c)} className={styles.block} style={{ top: (span.start - first * 60) * HOUR_HEIGHT / 60, height: Math.max(28, (span.end - span.start) * HOUR_HEIGHT / 60 - 3),
-                left: `calc(${(lane.lane * 100) / lane.lanes}% + 2px)`, width: `calc(${100 / lane.lanes}% - 4px)` }}><Item {...p} item={c} zone={zone}/></li>; })}</ul>
-          </section>;
-        })}
+        <DayColumns {...p} entries={entries} spans={spans} first={first} hours={hours} height={height} zone={zone} today={today} manage={manage}/>
       </div>
-    </div>{footer}</>;
+    </div>
+    {manage ? <p className={styles.meta}>{t('dragHint')}</p> : p.cards?.state === 'READY' ? <p className={styles.meta}>{t('cannotManage')}</p> : null}
+    {footer}</>;
+}
+
+type ClassItem = Extract<CalendarItem, { kind: 'class' }>;
+type Drag = { sessionId: string; origin: DragOrigin; x0: number; y0: number; width: number; spot: DragSpot; moved: boolean };
+const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+
+/** Whether this class can be dragged: a manager, a scheduled class not yet started, with no attendance. */
+export function canDrag(session: CurrentSchoolClassSession, card: CalendarCard | undefined, manage: boolean, now = Date.now()): boolean {
+  return manage && !!card && session.status === 'SCHEDULED' && Date.parse(session.startsAt) > now && !card.attended;
+}
+
+function DayColumns(p: CalendarViewProps & { anchor: string; t: T; entries: [string, CalendarItem[]][]; spans: Map<string, Span>; first: number; hours: number[];
+  height: number; zone: string; today: string; manage: boolean }): React.ReactElement {
+  const { entries, spans, first, hours, height, language, t } = p;
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const dragRef = useRef<Drag | null>(null), suppressClick = useRef(false);
+  const update = (next: Drag | null) => { dragRef.current = next; setDrag(next); };
+  useEffect(() => {
+    if (!drag) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.stopPropagation(); suppressClick.current = dragRef.current?.moved ?? false; update(null); } };
+    window.addEventListener('keydown', onKey, true); return () => window.removeEventListener('keydown', onKey, true);
+  }, [drag !== null]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cards = p.cards?.state === 'READY' ? p.cards.byId : null;
+  const start = (event: React.PointerEvent<HTMLElement>, c: ClassItem, dayIndex: number, mode: DragOrigin['mode']) => {
+    if (event.button !== 0 || !p.onDrop) return;
+    const column = event.currentTarget.closest('section'), span = spans.get(c.session.sessionId)!;
+    const origin: DragOrigin = { mode, dayIndex, start: span.start, end: span.end, days: entries.length };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    if (mode === 'resize') event.stopPropagation();
+    update({ sessionId: c.session.sessionId, origin, x0: event.clientX, y0: event.clientY, width: column?.getBoundingClientRect().width || 1, spot: origin, moved: false });
+  };
+  const move = (event: React.PointerEvent<HTMLElement>) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = event.clientX - d.x0, dy = event.clientY - d.y0;
+    const moved = d.moved || Math.hypot(dx, dy) > 4;
+    update({ ...d, moved, spot: moved ? dragTarget(d.origin, dx / d.width, dy, HOUR_HEIGHT) : d.spot });
+  };
+  const end = (event: React.PointerEvent<HTMLElement>) => {
+    const d = dragRef.current;
+    if (!d) return;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    update(null);
+    if (!d.moved) return;
+    suppressClick.current = true;
+    const { spot, origin } = d;
+    if (spot.dayIndex !== origin.dayIndex || spot.start !== origin.start || spot.end !== origin.end) p.onDrop?.(d.sessionId, entries[spot.dayIndex]![0], spot.start, spot.end);
+  };
+  const keys = (event: React.KeyboardEvent<HTMLElement>, c: ClassItem, dayIndex: number) => {
+    const step = keyboardStep(event.key, event.altKey, event.shiftKey), span = spans.get(c.session.sessionId);
+    if (!step || !span || !p.onDrop) return;
+    event.preventDefault();
+    const length = span.end - span.start;
+    if (step.resize) {
+      const finish = Math.min(Math.min(24 * 60, span.start + MAX_LENGTH), Math.max(span.start + SNAP_MINUTES, span.end + step.minutes));
+      if (finish !== span.end) p.onDrop(c.session.sessionId, entries[dayIndex]![0], span.start, finish);
+      return;
+    }
+    const target = Math.min(entries.length - 1, Math.max(0, dayIndex + step.days)), begin = Math.min(24 * 60 - length, Math.max(0, span.start + step.minutes));
+    if (target !== dayIndex || begin !== span.start) p.onDrop(c.session.sessionId, entries[target]![0], begin, begin + length);
+  };
+  const ghostAt = (dayIndex: number, date: string) => {
+    const g = drag?.moved && drag.spot.dayIndex === dayIndex ? { ...drag.spot, saving: false, sessionId: drag.sessionId }
+      : p.pending && p.pending.date === date ? { ...p.pending } : null;
+    if (!g) return null;
+    const name = (cards && cards.get(g.sessionId)?.programName) ?? '';
+    return <div className={styles.ghost} data-testid="calendar-ghost" data-saving={g.saving ? 'true' : undefined} aria-hidden="true"
+      style={{ top: (g.start - first * 60) * HOUR_HEIGHT / 60, height: Math.max(20, (g.end - g.start) * HOUR_HEIGHT / 60 - 3) }}>
+      <strong>{clock(language, hhmm(g.start))} – {clock(language, hhmm(g.end))}</strong>{g.saving ? <small>{t('moving')}</small> : name ? <small>{name}</small> : null}
+    </div>;
+  };
+  return <>{entries.map(([date, items], dayIndex) => {
+    const classes = items.filter((i): i is ClassItem => i.kind === 'class');
+    const lanes = layoutLanes(classes.map((c) => spans.get(c.session.sessionId)!));
+    return <section key={date} className={styles.dayColumn} style={{ height }} data-today={date === p.today ? 'true' : undefined} aria-label={day(language, date, { dateStyle: 'full' })}>
+      {classes.length === 0 ? <p className={styles.hidden}>{t('nothing')}</p> : null}
+      {p.manage && p.onCreateAt ? <div className={styles.slots}>{hours.map((h) => <button key={h} type="button" className={styles.slot} data-testid="calendar-slot"
+        style={{ top: (h - first) * HOUR_HEIGHT, height: HOUR_HEIGHT }} aria-label={t('slotLabel', { day: day(language, date, { dateStyle: 'medium' }), time: clock(language, hhmm(h * 60)) })}
+        onClick={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          const quarter = event.detail === 0 ? 0 : Math.min(3, Math.max(0, Math.floor((event.clientY - rect.top) / (HOUR_HEIGHT / 4))));
+          p.onCreateAt?.(date, h * 60 + quarter * SNAP_MINUTES);
+        }}/>)}</div> : null}
+      <ul className={styles.blocks}>{classes.map((c, i) => {
+        const span = spans.get(c.session.sessionId)!, lane = lanes[i]!, card = cards?.get(c.session.sessionId);
+        const draggable = canDrag(c.session, card, p.manage) && !!p.onDrop;
+        const dragging = drag?.moved && drag.sessionId === c.session.sessionId || p.pending?.sessionId === c.session.sessionId;
+        return <li key={keyOf(c)} className={styles.block} data-dragging={dragging ? 'true' : undefined} style={{ top: (span.start - first * 60) * HOUR_HEIGHT / 60,
+          height: Math.max(28, (span.end - span.start) * HOUR_HEIGHT / 60 - 3), left: `calc(${(lane.lane * 100) / lane.lanes}% + 2px)`, width: `calc(${100 / lane.lanes}% - 4px)` }}>
+          <Item {...p} item={c} zone={p.zone} draggable={draggable} suppressClick={suppressClick}
+            onPointerDown={draggable ? (event) => start(event, c, dayIndex, 'move') : undefined} onPointerMove={draggable ? move : undefined}
+            onPointerUp={draggable ? end : undefined} onPointerCancel={draggable ? () => update(null) : undefined}
+            onKeyDown={draggable ? (event) => keys(event, c, dayIndex) : undefined}/>
+          {draggable ? <span className={styles.resize} role="presentation" title={t('resizeLabel', { name: c.session.name })} data-testid="calendar-resize"
+            onPointerDown={(event) => start(event, c, dayIndex, 'resize')} onPointerMove={move} onPointerUp={end} onPointerCancel={() => update(null)}/> : null}
+        </li>;
+      })}</ul>
+      {ghostAt(dayIndex, date)}
+    </section>;
+  })}</>;
 }
 
 const keyOf = (item: CalendarItem) => item.kind === 'class' ? `c:${item.session.sessionId}` : `e:${item.event.eventId}`;
 
-function Item({ item, zone, compact = false, selected, onSelect, language, t }: CalendarViewProps & { item: CalendarItem; zone: string; compact?: boolean; t: T }): React.ReactElement {
+type ItemHandlers = {
+  draggable?: boolean; suppressClick?: React.MutableRefObject<boolean>;
+  onPointerDown?: ((event: React.PointerEvent<HTMLButtonElement>) => void) | undefined; onPointerMove?: ((event: React.PointerEvent<HTMLButtonElement>) => void) | undefined;
+  onPointerUp?: ((event: React.PointerEvent<HTMLButtonElement>) => void) | undefined; onPointerCancel?: (() => void) | undefined;
+  onKeyDown?: ((event: React.KeyboardEvent<HTMLButtonElement>) => void) | undefined;
+};
+function Item({ item, zone, compact = false, selected, onSelect, language, t, cards, draggable, suppressClick, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onKeyDown }:
+  CalendarViewProps & ItemHandlers & { item: CalendarItem; zone: string; compact?: boolean; t: T }): React.ReactElement {
   if (item.kind === 'event') {
     const e = item.event, current = selected?.kind === 'event' && selected.id === e.eventId;
     return <button type="button" className={styles.item} data-kind="event" data-status={e.status} aria-current={current ? 'true' : undefined} onClick={() => onSelect?.({ kind: 'event', id: e.eventId })}>
@@ -173,10 +368,17 @@ function Item({ item, zone, compact = false, selected, onSelect, language, t }: 
     </button>;
   }
   const s = item.session, current = selected?.kind === 'class' && selected.id === s.sessionId;
-  return <button type="button" className={styles.item} data-kind="class" data-status={s.status} aria-current={current ? 'true' : undefined} onClick={() => onSelect?.({ kind: 'class', id: s.sessionId })}>
+  const card = cards?.state === 'READY' ? cards.byId.get(s.sessionId) : undefined;
+  return <button type="button" className={styles.item} data-kind="class" data-card-kind={card?.kind ?? 'CLASS'} data-status={s.status} data-draggable={draggable ? 'true' : undefined}
+    aria-current={current ? 'true' : undefined} aria-keyshortcuts={draggable ? 'Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight Alt+Shift+ArrowUp Alt+Shift+ArrowDown' : undefined}
+    onClick={() => { if (suppressClick?.current) { suppressClick.current = false; return; } onSelect?.({ kind: 'class', id: s.sessionId }); }}
+    onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerCancel} onKeyDown={onKeyDown}>
     <span className={styles.time}>{time(language, zone, s.startsAt)}</span> <span className={styles.name}>{s.name}</span>
+    {card && card.kind !== 'CLASS' ? <span className={styles.kindTag}>{t(`kind${card.kind}` as CalendarKey)}</span> : null}
     {s.status === 'CANCELLED' ? <small> · {t('cancelled')}</small> : null}
+    {!compact && card?.instructor ? <small className={styles.room}>{card.instructor.displayName}</small> : null}
     {!compact && s.roomName ? <small className={styles.room}>{s.roomName}</small> : null}
+    {!compact && card && card.booked > 0 ? <small className={styles.room}>{t('booked', { n: String(card.booked) })}</small> : null}
   </button>;
 }
 
