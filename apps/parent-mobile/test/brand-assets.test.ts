@@ -1,5 +1,8 @@
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+// This app's tsconfig carries no Node types; Jest runs the test in Node, so declare the two modules used.
+declare const require: (id: string) => any;
+declare const __dirname: string;
+const { readFileSync, existsSync } = require('fs') as { readFileSync: (p: string) => { subarray: (a: number, b: number) => { toString: (e: string) => string }; readUInt32BE: (o: number) => number; [i: number]: number }; existsSync: (p: string) => boolean };
+const { join } = require('path') as { join: (...p: string[]) => string };
 import appConfig from '../app.json';
 
 // HON Family uses the owner-approved HON OS "spirit orbit" logo (2026-11-19) instead of the Expo placeholder.
