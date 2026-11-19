@@ -124,6 +124,19 @@ test('secrets and account-specific values never have a literal value in Git', ()
   }
 });
 
+test('the only Stripe value is the web test publishable key, and it is never live', () => {
+  const key = 'NEXT_PUBLIC_HON_TUITION_STRIPE_TEST_PUBLISHABLE_KEY';
+  const entry = envVars(web).find((candidate) => candidate.key === key);
+  assert.match(entry?.value ?? '', /^pk_test_[A-Za-z0-9]{10,250}$/, 'test publishable key only');
+  for (const svc of [api, web]) {
+    for (const candidate of envVars(svc)) {
+      if (candidate.key === key && svc === web) continue;
+      assert.doesNotMatch(candidate.key, /STRIPE|PUBLISHABLE/, `${svc.name} must not declare ${candidate.key}`);
+      assert.doesNotMatch(String(candidate.value ?? ''), /\b(pk|sk|rk)_(live|test)_|whsec_/, `${svc.name} ${candidate.key} holds no Stripe value`);
+    }
+  }
+});
+
 test('the deployment label is fixed to staging in Git, with OIDC sign-in, on both services', () => {
   for (const svc of [api, web]) {
     const env = resolvedEnv(svc);
