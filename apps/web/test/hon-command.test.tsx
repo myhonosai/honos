@@ -9,7 +9,7 @@ import { CommandCenterAccessError } from '../src/components/command-center-http'
 import { ActionReviewAccessError } from '../src/components/action-approvals-http';
 import { HonCommandController, initialHonCommandSnapshot, type HonCommandApi, type HonCommandSnapshot } from '../src/components/hon-command/hon-command-data';
 import { HON_CONVERSATION_BOUNDARY, HON_TURN_STATUSES, honComposerEnabled, honTurnStatusPresentation } from '../src/components/hon-command/hon-conversation';
-import { HonLauncher, HonTeamBand, honExpandHref } from '../src/components/hon-command/hon-command';
+import { HonLauncher, HonPanel, HonTeamBand, honExpandHref } from '../src/components/hon-command/hon-command';
 import { HonWorkspaceView, type HonTab } from '../src/components/hon-command/hon-workspace-view';
 import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, HON_TEACHING_AI, HON_TEACHING_AI_PORTRAITS, approvalSourceLabel, safeHonReturnPath, teachingAiPortrait } from '../src/components/hon-command/roster';
 
@@ -347,6 +347,26 @@ describe('HON integration boundaries', () => {
     for (const outside of ['/', '/complete-mobile', '/reference/classic-dashboard', '/parent', '/hq', '/auth/login', '/staffing']) expect(renderToStaticMarkup(<HonLauncher pathname={outside} />)).toBe('');
     expect(readFileSync('src/app/layout.tsx', 'utf8')).toContain('<HonLauncherSlot/>');
     expect(readFileSync('src/app/staff/layout.tsx', 'utf8')).toContain('requireVerifiedWebSession');
+  });
+
+  it('opens the corner pop-up as a dialog over the page, with a link that expands to the same HON workspace', () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch');
+    try {
+      const html = renderToStaticMarkup(<HonPanel open placement="corner" onClose={() => {}} returnPath="/staff/crm/leads" />);
+      expect(html).toMatch(/role="dialog"[^>]*aria-modal="true"/);
+      expect(html).toContain('data-placement="corner"');
+      expect(html).toContain(`href="${honExpandHref('/staff/crm/leads', null).replaceAll('&', '&amp;')}"`);
+      expect(html).toContain('>Full workspace<');
+      expect(html).toContain('aria-label="Close HON"');
+      expect(renderToStaticMarkup(<HonPanel open onClose={() => {}} returnPath="/staff/crm/leads" />)).toContain('data-placement="side"');
+      expect(fetcher).not.toHaveBeenCalled();
+    } finally { fetcher.mockRestore(); }
+  });
+
+  it('names the way back after expanding from another page', () => {
+    const view = (returnHref: string) => renderToStaticMarkup(<HonWorkspaceView snapshot={initialHonCommandSnapshot()} variant="modern" presentation="full" tab="team" headingId="h" selectedAgentId={null} returnHref={returnHref} />);
+    expect(view('/staff/dashboard')).toContain('>Back to dashboard<');
+    expect(view('/staff/work')).toContain('href="/staff/work">Back to your page<');
   });
 
   it('renders the dashboard band per mode without fetching before it is opened', () => {

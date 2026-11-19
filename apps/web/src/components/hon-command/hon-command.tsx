@@ -42,6 +42,8 @@ interface HonPanelProps {
   initialAgentId?: string | null;
   returnPath: string;
   api?: HonCommandApi | undefined;
+  /** `corner`: a floating pop-up above the corner HON button, the page staying visible behind it. */
+  placement?: 'side' | 'corner';
 }
 
 /** The live Ask HON conversation, only for a server-verified school; a school change remounts it. */
@@ -55,7 +57,7 @@ function verifiedConversation(scope: HonCommandSnapshot['scope'], presentation: 
 }
 
 /** Expandable HON panel: a modal side sheet that keeps the page underneath intact. */
-export function HonPanel({ open, onClose, scope = null, variant = null, initialAgentId = null, returnPath, api }: HonPanelProps): React.ReactElement | null {
+export function HonPanel({ open, onClose, scope = null, variant = null, initialAgentId = null, returnPath, api, placement = 'side' }: HonPanelProps): React.ReactElement | null {
   const { controller, snapshot } = useHonController(api);
   const [tab, setTab] = useState<HonTab>('team');
   const [agentId, setAgentId] = useState<string | null>(initialAgentId);
@@ -95,9 +97,9 @@ export function HonPanel({ open, onClose, scope = null, variant = null, initialA
 
   if (!open) return null;
   const resolvedVariant = variant ?? snapshot.theme ?? DEFAULT_HON_INTERFACE_THEME;
-  return <div className={styles.overlay} data-variant={resolvedVariant}>
+  return <div className={styles.overlay} data-variant={resolvedVariant} data-placement={placement}>
     <button type="button" className={styles.scrim} aria-label="Close HON" tabIndex={-1} onClick={onClose} />
-    <div ref={dialog} className={styles.panel} role="dialog" aria-modal="true" aria-labelledby={headingId} data-variant={resolvedVariant}>
+    <div ref={dialog} className={styles.panel} role="dialog" aria-modal="true" aria-labelledby={headingId} data-variant={resolvedVariant} data-placement={placement}>
       <HonWorkspaceView
         snapshot={snapshot}
         variant={resolvedVariant}
