@@ -4443,3 +4443,15 @@ BEGIN
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
   END LOOP;
 END $$;
+
+-- 0538 walk-in kiosk trial seats and demo programs (WK5): one new scoped runtime read, the class seat count the staff
+-- booking API uses so kiosk trial seats count everywhere. Every helper stays migration-owner only.
+DO $$ DECLARE r text;
+BEGIN
+  IF to_regprocedure('hon.read_class_session_seats_taken(uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0538 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.read_class_session_seats_taken(uuid) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION hon.read_class_session_seats_taken(uuid) FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_class_session_seats_taken(uuid) TO hon_runtime; END IF;
+END $$;
