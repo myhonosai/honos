@@ -917,7 +917,11 @@ export interface CreateCommunicationMessageInput {
   channel: CommunicationMessageChannel;
   content: string;
   scheduledAt?: string | undefined;
+  /** EMAIL only (TE1): the subject the email is sent with; without it the adapter uses the school's standard subject. */
+  emailSubject?: string | undefined;
 }
+/** The longest staff email subject (0423 column check). */
+export const COMMUNICATION_EMAIL_SUBJECT_MAX = 150;
 
 /** Queueing is a separate human confirmation against the current consent record. */
 export interface QueueCommunicationMessageInput {
@@ -934,6 +938,7 @@ export interface CommunicationMessageSummary {
   scheduledAt?: string | undefined;
   createdByPrincipalId: string;
   queuedByPrincipalId?: string | undefined;
+  emailSubject?: string | undefined;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -1124,6 +1129,7 @@ export * from './family-messages.js';
 export * from './school-conversations.js';
 export * from './conversation-ai.js';
 export * from './contact-message-history.js';
+export * from './school-message-history.js';
 export * from './school-pay-autopay.js';
 export * from './hq-school-health.js';
 export * from './school-reports.js';
