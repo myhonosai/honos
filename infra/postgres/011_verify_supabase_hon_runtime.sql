@@ -5261,6 +5261,41 @@ DO $$ DECLARE f record; safe boolean; worker oid:=(SELECT oid FROM pg_roles WHER
     RAISE EXCEPTION 'Unsafe automation date trigger table posture: guard triggers'; END IF;
 END $$;
 -- End automation date triggers exact verification.
+-- School announcements exact verification (0576): private title, scope and JSON helpers, the write guard, four runtime entry points and a
+-- private forced-RLS table the runtime can never touch directly.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.school_announcement_title_ok(text)',false,false,'search_path=pg_catalog','5a743ed6ddbeb67d486c9678bea6fb7a4682da55484c6f719803e0c7cf1e199b'),
+('hon.guard_school_announcement()',false,false,'search_path=pg_catalog, hon','7f36851762b4848dda76943c0eca128c057db88801998cf0437a508ac6c13aee'),
+('hon.school_announcement_parent_scope(text)',true,false,'search_path=pg_catalog, hon','782964087089c4feca334f5940294930b1c1586cffe228e75206416eab75480c'),
+('hon.require_school_announcements_actor(text)',true,false,'search_path=pg_catalog, hon','c496bd74ed650a880b3735e82279c9934819b9df34332c09c4cee1e3f0bb467c'),
+('hon.school_announcement_family_json(hon.school_announcements)',true,false,'search_path=pg_catalog, hon','060b18bd1000ba92fc30ac843a3a3078c21674b8963e508deca6375a30ab61c8'),
+('hon.school_announcement_staff_json(hon.school_announcements)',true,false,'search_path=pg_catalog, hon','e91a1110e8229f3cb6243554a745b9657e3a8c3d23a792aefed005405a945695'),
+('hon.read_parent_school_announcements(text)',true,true,'search_path=pg_catalog, hon','b42286f83b937b65ff94ac33149c3ab4dd2799338939d70d37db7fb597c63da6'),
+('hon.read_school_announcements(text)',true,true,'search_path=pg_catalog, hon','8e974dde8c79198e935240ed0f9270fb3fb99eee7c8cc17a60db1b75de64d696'),
+('hon.publish_school_announcement(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','71af2f8ebb7fd6af9bab5d61e7f6f94796b6034e2225d056de1b96eaa1661496'),
+('hon.withdraw_school_announcement(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','a0a798a755e39c3fba2c2f20a1fd4b1812e22cd917111ffd36f8e902b4d721d8')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school announcement function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.school_announcements'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.school_announcements'::regclass)
+    OR has_table_privilege('hon_runtime','hon.school_announcements','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.school_announcements','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe school announcements table'; END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.school_announcements'::regclass AND NOT tgisinternal AND tgenabled='O'
+      AND ((tgname='school_announcements_guard' AND tgfoid='hon.guard_school_announcement()'::regprocedure)
+        OR (tgname='school_announcements_no_truncate' AND tgfoid='hon.guard_membership_activation_evidence()'::regprocedure)))<>2
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.school_announcements'::regclass AND NOT tgisinternal)<>2 THEN
+    RAISE EXCEPTION 'hon.school_announcements must carry exactly its two guards'; END IF;
+END $$;
+-- End school announcements exact verification.
 -- Calendar settings exact verification (0583): three private forced-RLS tables with guard and no-truncate triggers, private
 -- helpers and eight runtime entry points.
 DO $$ DECLARE f record; safe boolean; t text; BEGIN
