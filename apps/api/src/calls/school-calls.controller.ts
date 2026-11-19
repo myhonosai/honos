@@ -6,7 +6,7 @@ import type { Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import {
   SCHOOL_CALL_DO_NOT_CALL_COMMAND, SCHOOL_CALL_READ_COMMAND, SCHOOL_CALL_RING_COMMAND, SCHOOL_CALL_SETTINGS_COMMAND, SCHOOL_CALL_START_COMMAND,
-  SCHOOL_CALL_UPDATE_COMMAND,
+  SCHOOL_CALL_TOKEN_COMMAND, SCHOOL_CALL_UPDATE_COMMAND,
 } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
@@ -39,6 +39,11 @@ export class SchoolCallUpdateGuard extends MembershipActivationHumanUiGuard {
 @Injectable()
 export class SchoolCallDoNotCallGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = SCHOOL_CALL_DO_NOT_CALL_COMMAND;
+}
+
+@Injectable()
+export class SchoolCallTokenGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = SCHOOL_CALL_TOKEN_COMMAND;
 }
 
 const LIST_KEYS = new Set(['filter', 'personId', 'beforeAt', 'beforeId']);
@@ -107,6 +112,22 @@ export class SchoolCallsController {
     noQuery(request, query); noKey(key);
     const context = await this.context(request, organizationId, schoolId, 'communication.call.use', '');
     return { data: await this.calls.setRinging(context, body), meta: { requestId: context.requestId } };
+  }
+
+  /** The browser phone's one-hour Twilio Voice token (never cached, never logged). */
+  @Post('phone-token')
+  @HttpCode(200)
+  @UseGuards(SchoolCallTokenGuard)
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  async phoneToken(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Query() query: Record<string, unknown>, @Headers('idempotency-key') key: string | undefined, @Body() body: unknown, @Req() request: HonRequest) {
+    noQuery(request, query); noKey(key);
+    if (body !== undefined && (typeof body !== 'object' || body === null || Array.isArray(body) || Object.keys(body).length)) {
+      throw new BadRequestException({ code: 'VALIDATION_FAILED' });
+    }
+    const context = await this.context(request, organizationId, schoolId, 'communication.call.use', '');
+    return { data: await this.calls.phoneToken(context), meta: { requestId: context.requestId } };
   }
 
   @Post('do-not-call')

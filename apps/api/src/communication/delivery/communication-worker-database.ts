@@ -70,7 +70,24 @@ export interface CommunicationWorkerStore {
   recordSocialPostEvent?(event: ZernioSocialEventRecord): Promise<{ outcome: 'APPLIED' | 'IGNORED' | 'UNMATCHED' | 'REPLAYED' }>;
   /** 0435 school inbox: record one signed inbound DM or comment. */
   recordSocialInboxEvent?(event: ZernioInboxEventRecord): Promise<{ outcome: SocialInboxEventOutcome }>;
+  /** 0547/0548 calling on the school number (CL3b): the signed Twilio voice webhooks and the browser phone key. */
+  connectSchoolClientCall?(callId: string, identity: string, accountSid: string | null, callSid: string): Promise<SchoolClientCallDecision>;
+  routeSchoolIncomingCall?(to: string, from: string | null, callSid: string): Promise<SchoolIncomingCallRoute>;
+  recordSchoolCallStatus?(accountSid: string | null, callSid: string, status: SchoolCallProviderStatus, answeredIdentity: string | null,
+    durationSeconds: number | null, occurredAt: string): Promise<{ outcome: 'RECORDED' | 'IGNORED' | 'UNKNOWN_CALL'; status: string | null }>;
+  recordSchoolCallRecording?(accountSid: string | null, callSid: string, recordingSid: string, seconds: number, voicemail: boolean):
+    Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'REFUSED' | 'UNKNOWN_CALL'; callId: string | null }>;
+  readSchoolVoiceApp?(schoolId: string): Promise<SchoolVoiceAppKey | null>;
 }
+export type SchoolCallProviderStatus = 'RINGING' | 'IN_PROGRESS' | 'COMPLETED' | 'NO_ANSWER' | 'BUSY' | 'FAILED' | 'CANCELED' | 'MISSED';
+export interface SchoolClientCallDecision {
+  outcome: 'CONNECT' | 'REPLAYED' | 'REFUSED'; toE164: string | null; callerIdE164: string | null; recorded: boolean; language: string | null; schoolName: string | null;
+}
+export interface SchoolIncomingCallRoute {
+  outcome: 'RING' | 'REPLAYED' | 'OFF' | 'UNROUTED'; callId: string | null; identities: string[]; forwardPhoneE164: string | null; recorded: boolean;
+  voicemailGreeting: string | null; language: string | null; schoolName: string | null;
+}
+export interface SchoolVoiceAppKey { accountSid: string; twimlAppSid: string; apiKeySid: string; sealedApiSecret: string; vaultKeyId: string }
 export type SocialInboxEventOutcome = 'APPLIED' | 'IGNORED' | 'UNMATCHED' | 'DUPLICATE' | 'REPLAYED';
 export interface ZernioInboxEventRecord {
   eventId: string; eventType: 'message.received' | 'comment.received'; platform: 'FACEBOOK' | 'INSTAGRAM'; providerAccountId: string;
@@ -199,6 +216,43 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
       [text.to, text.from, text.body, text.mediaCount, text.providerMessageId, text.receivedAt]))[0];
     if (!row) throw new Error('COMMUNICATION_INBOUND_CONVERSATION_NOT_RECORDED');
     return { outcome: row.outcome, conversationId: row.conversation_id };
+  }
+
+  async connectSchoolClientCall(callId: string, identity: string, accountSid: string | null, callSid: string): Promise<SchoolClientCallDecision> {
+    const row = (await this.query<{ outcome: SchoolClientCallDecision['outcome']; to_e164: string | null; caller_id_e164: string | null; recorded: boolean | null;
+      language: string | null; school_name: string | null }>('SELECT * FROM hon.connect_school_client_call($1::uuid, $2, $3, $4)', [callId, identity, accountSid, callSid]))[0];
+    if (!row) throw new Error('SCHOOL_CALL_NOT_DECIDED');
+    return { outcome: row.outcome, toE164: row.to_e164, callerIdE164: row.caller_id_e164, recorded: row.recorded === true, language: row.language, schoolName: row.school_name };
+  }
+
+  async routeSchoolIncomingCall(to: string, from: string | null, callSid: string): Promise<SchoolIncomingCallRoute> {
+    const row = (await this.query<{ outcome: SchoolIncomingCallRoute['outcome']; call_id: string | null; identities: string[] | null; forward_phone_e164: string | null;
+      recorded: boolean | null; voicemail_greeting: string | null; language: string | null; school_name: string | null }>(
+      'SELECT * FROM hon.route_school_incoming_call($1, $2, $3)', [to, from, callSid]))[0];
+    if (!row) throw new Error('SCHOOL_CALL_NOT_ROUTED');
+    return { outcome: row.outcome, callId: row.call_id, identities: row.identities ?? [], forwardPhoneE164: row.forward_phone_e164, recorded: row.recorded === true,
+      voicemailGreeting: row.voicemail_greeting, language: row.language, schoolName: row.school_name };
+  }
+
+  async recordSchoolCallStatus(accountSid: string | null, callSid: string, status: SchoolCallProviderStatus, answeredIdentity: string | null,
+    durationSeconds: number | null, occurredAt: string) {
+    const row = (await this.query<{ outcome: 'RECORDED' | 'IGNORED' | 'UNKNOWN_CALL'; status: string | null }>(
+      'SELECT * FROM hon.record_school_call_status($1, $2, $3, $4, $5, $6::timestamptz)', [accountSid, callSid, status, answeredIdentity, durationSeconds, occurredAt]))[0];
+    if (!row) throw new Error('SCHOOL_CALL_STATUS_NOT_RECORDED');
+    return { outcome: row.outcome, status: row.status };
+  }
+
+  async recordSchoolCallRecording(accountSid: string | null, callSid: string, recordingSid: string, seconds: number, voicemail: boolean) {
+    const row = (await this.query<{ outcome: 'RECORDED' | 'REPLAYED' | 'REFUSED' | 'UNKNOWN_CALL'; call_id: string | null }>(
+      'SELECT * FROM hon.record_school_call_recording($1, $2, $3, $4, $5)', [accountSid, callSid, recordingSid, seconds, voicemail]))[0];
+    if (!row) throw new Error('SCHOOL_CALL_RECORDING_NOT_RECORDED');
+    return { outcome: row.outcome, callId: row.call_id };
+  }
+
+  async readSchoolVoiceApp(schoolId: string): Promise<SchoolVoiceAppKey | null> {
+    const row = (await this.query<{ account_sid: string; twiml_app_sid: string; api_key_sid: string; sealed_api_secret: string; vault_key_id: string }>(
+      'SELECT * FROM hon.read_school_voice_app($1::uuid)', [schoolId]))[0];
+    return row ? { accountSid: row.account_sid, twimlAppSid: row.twiml_app_sid, apiKeySid: row.api_key_sid, sealedApiSecret: row.sealed_api_secret, vaultKeyId: row.vault_key_id } : null;
   }
 
   async readMissedCallRoute(to: string) {

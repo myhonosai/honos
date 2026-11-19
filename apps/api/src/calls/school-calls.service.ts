@@ -1,6 +1,6 @@
 import {
-  BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException, ServiceUnavailableException,
-  UnprocessableEntityException,
+  BadRequestException, ConflictException, ForbiddenException, HttpException, Inject, Injectable, Logger, NotFoundException, Optional,
+  ServiceUnavailableException, UnprocessableEntityException,
 } from '@nestjs/common';
 import type { PoolClient } from 'pg';
 import {
@@ -8,10 +8,17 @@ import {
   validateStartSchoolCallInput, validateUpdateSchoolCallInput, verifySchoolCall, verifySchoolCallingOverview, verifySchoolCallingSettings,
   verifySchoolCallList, verifySchoolCallRinging, verifySchoolDoNotCall, verifyStartedSchoolCall,
   type SchoolCall, type SchoolCallingOverview, type SchoolCallingSettings, type SchoolCallList, type SchoolCallRinging, type SchoolDoNotCallInput,
-  type StartedSchoolCall,
+  type StartedSchoolCall, type SchoolPhoneToken, verifySchoolPhoneToken,
 } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import type { MembershipLifecycleContext } from '../billing/membership.service.js';
+import { COMMUNICATION_WORKER_STORE, type CommunicationWorkerStore } from '../communication/delivery/communication-worker-database.js';
+import { mintPhoneToken, voiceCallsApproved, type TwilioVoiceKeyVault } from './twilio-voice.js';
+import { SCHOOL_CALL_CLOCK, SCHOOL_CALL_ENVIRONMENT } from './school-call-webhooks.controller.js';
+
+export const TWILIO_VOICE_KEY_VAULT = Symbol('TWILIO_VOICE_KEY_VAULT');
+const tokenLog = new Logger('SchoolPhoneToken');
+const IDENTITY = /^u[0-9a-f]{32}$/;
 
 const HUMAN_SETTINGS = "SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_external_subject',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)";
 const READ_LIMITS = "SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0";
@@ -75,7 +82,46 @@ function parse<T>(fn: () => T): T {
  */
 @Injectable()
 export class SchoolCallsService {
-  constructor(private readonly database: RuntimeDatabaseService) {}
+  constructor(
+    private readonly database: RuntimeDatabaseService,
+    @Optional() @Inject(COMMUNICATION_WORKER_STORE) private readonly worker?: Pick<CommunicationWorkerStore, 'isConfigured' | 'readSchoolVoiceApp'>,
+    @Optional() @Inject(TWILIO_VOICE_KEY_VAULT) private readonly vault?: TwilioVoiceKeyVault | null,
+    @Optional() @Inject(SCHOOL_CALL_ENVIRONMENT) private readonly environment: () => NodeJS.ProcessEnv = () => process.env,
+    @Optional() @Inject(SCHOOL_CALL_CLOCK) private readonly now: () => number = Date.now,
+  ) {}
+
+  /**
+   * The browser phone's token. The runtime proves call.use at the session school and says whether the school's voice
+   * app is ready and whether this staff member rings (audited either way). Only then, and only with paid calling
+   * approved, the worker reads the school's sealed API key and the API signs a one-hour token for this identity.
+   */
+  async phoneToken(context: MembershipLifecycleContext): Promise<SchoolPhoneToken> {
+    this.assertStaff(context, false);
+    const decision = await this.write(context, 'SELECT hon.authorize_school_phone_token($1) AS data', [context.externalSubject], data => {
+      const row = data as Record<string, unknown> | null;
+      if (!row || typeof row !== 'object' || Object.keys(row).sort().join(',') !== 'callingOn,identity,incoming,ready,schoolId'
+        || row.schoolId !== context.schoolId || typeof row.identity !== 'string' || !IDENTITY.test(row.identity)
+        || typeof row.ready !== 'boolean' || typeof row.callingOn !== 'boolean' || typeof row.incoming !== 'boolean' || (row.incoming && !row.ready)) {
+        throw new Error('Unverified phone token decision.');
+      }
+      return row as { schoolId: string; identity: string; ready: boolean; callingOn: boolean; incoming: boolean };
+    });
+    const none = (reason: SchoolPhoneToken['reason']) => verifySchoolPhoneToken({ ready: false, reason, identity: null, token: null, expiresAt: null, incoming: false });
+    if (!decision.callingOn) return none('CALLING_OFF');
+    if (!decision.ready) return none('PHONE_NOT_SET_UP');
+    if (!voiceCallsApproved(this.environment())) return none('VOICE_NOT_APPROVED');
+    if (!this.worker?.isConfigured() || !this.worker.readSchoolVoiceApp || !this.vault) throw new ServiceUnavailableException({ code: 'CALLING_UNAVAILABLE' });
+    let key;
+    try { key = await this.worker.readSchoolVoiceApp(context.schoolId); }
+    catch { throw new ServiceUnavailableException({ code: 'CALLING_UNAVAILABLE' }); }
+    if (!key) return none('PHONE_NOT_SET_UP');
+    let secret: string;
+    try { secret = this.vault.open({ schoolId: context.schoolId, accountSid: key.accountSid, apiKeySid: key.apiKeySid }, key.vaultKeyId, key.sealedApiSecret); }
+    catch { tokenLog.error('A school voice key did not open.'); throw new ServiceUnavailableException({ code: 'CALLING_UNAVAILABLE' }); }
+    const minted = mintPhoneToken({ accountSid: key.accountSid, apiKeySid: key.apiKeySid, apiKeySecret: secret, twimlAppSid: key.twimlAppSid,
+      identity: decision.identity, incoming: decision.incoming, nowSeconds: Math.floor(this.now() / 1000) });
+    return verifySchoolPhoneToken({ ready: true, reason: 'READY', identity: decision.identity, token: minted.token, expiresAt: minted.expiresAt, incoming: decision.incoming });
+  }
 
   async overview(context: MembershipLifecycleContext): Promise<SchoolCallingOverview> {
     this.assertStaff(context, false);
