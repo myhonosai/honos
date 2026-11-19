@@ -1,4 +1,4 @@
-/** Automation date triggers (AU-3, 0541): real signed HON sessions -> Nest/guard -> fixed runtime SQL turn date-triggered workflows on;
+/** Automation date triggers (AU-3, 0565): real signed HON sessions -> Nest/guard -> fixed runtime SQL turn date-triggered workflows on;
  *  the date scan and step runner are driven from this proof's owner connection exactly as the dedicated worker login calls them.
  *  Students, memberships and attendance are SYNTHETIC rows in SYNTHETIC schools made through the 0241 runtime entry point. Messages
  *  are only QUEUED; no provider, payment or AI is called. School time zones are set so one school is past 09:00 and one is not. */
@@ -232,11 +232,11 @@ try{
  await assert.rejects(q('TRUNCATE hon.automation_schedule_scans'),/AUTOMATION_HISTORY_IMMUTABLE/);
  pass('scan receipts cannot be edited, deleted or truncated');
 
- // 12. The canonical 011 exact verification for 0423 (with the 0541 body) and 0541 passes on this database and refuses drift.
+ // 12. The canonical 011 exact verification for 0423 (with the 0565 body) and 0565 passes on this database and refuses drift.
  const verify=await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql',import.meta.url),'utf8');
  const section=(begin,end)=>{const x=verify.split(begin)[1]?.split(end)[0];assert(x,begin);return x.replace(/^[^\n]*\n/,'').replaceAll('hon_runtime',runtime.username);};
  const s423=section('-- Automation engine exact verification (AU-2 0423)','-- End automation engine exact verification.');
- const s475=section('-- Automation date triggers exact verification (AU-3 0541)','-- End automation date triggers exact verification.');
+ const s475=section('-- Automation date triggers exact verification (AU-3 0565)','-- End automation date triggers exact verification.');
  await admin.query(s423);await admin.query(s475);
  for(const [drift,pattern] of [
   [`GRANT EXECUTE ON FUNCTION hon.scan_automation_schedules(integer) TO ${runtime.username}`,/Unsafe automation date trigger function/],
@@ -247,8 +247,8 @@ try{
   await admin.query('BEGIN');try{await admin.query(drift);await assert.rejects(admin.query(s475),pattern);}finally{await admin.query('ROLLBACK');}
   await admin.query(s475);
  }
- pass('the canonical 011 exact verification for 0423 and 0541 passes here and refuses a runtime grant, a disabled guard, unforced RLS and a table grant');
- console.log('PASS: automation date triggers (0541), '+groups+' groups');
+ pass('the canonical 011 exact verification for 0423 and 0565 passes here and refuses a runtime grant, a disabled guard, unforced RLS and a table grant');
+ console.log('PASS: automation date triggers (0565), '+groups+' groups');
 }finally{
  // Leave nothing running for other proofs that share this fixture.
  for(const id of mine)await q("SELECT hon.automation_engine_pause($1,'FIXTURE_DONE')",[id]).catch(()=>{});

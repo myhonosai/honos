@@ -1,6 +1,6 @@
 BEGIN;
 
--- AU-3 (0541; allocated as 0475 then 0541 on 2026-11-18, renumbered each time main's ceiling passed it, last with 0538): date-based automation triggers. Design: docs/superpowers/specs/2026-11-15-automation-builder-design.md (5.3).
+-- AU-3 (0565; allocated as 0475, then 0498, then 0541, renumbered each time main's ceiling passed it, last with 0550): date-based automation triggers. Design: docs/superpowers/specs/2026-11-15-automation-builder-design.md (5.3).
 -- - Three triggers become runnable: ABSENT_DAYS (an active student has not attended for N days), BIRTHDAY (a student's
 --   birthday is N days away or today) and MEMBERSHIP_ENDS_IN_DAYS (an active membership's term ends within N days).
 -- - The engine role (hon_automation_worker, infra/postgres/014) gains one fixed function, scan_automation_schedules. It looks
@@ -21,7 +21,7 @@ DO $$ BEGIN
   IF to_regprocedure('hon.run_due_automation_steps(integer)') IS NULL
     OR to_regprocedure('hon.automation_start_run(hon.automation_workflows,uuid,text,uuid,uuid,integer,timestamp with time zone)') IS NULL
     OR to_regclass('hon.attendance_records') IS NULL OR to_regclass('hon.memberships') IS NULL THEN
-    RAISE EXCEPTION '0541 requires 0423, 0177 and 0032'; END IF;
+    RAISE EXCEPTION '0565 requires 0423, 0177 and 0032'; END IF;
 END $$;
 
 -- One receipt per workflow and school-local date it was scanned on.

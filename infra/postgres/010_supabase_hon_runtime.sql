@@ -4455,10 +4455,24 @@ BEGIN
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.read_class_session_seats_taken(uuid) TO hon_runtime; END IF;
 END $$;
--- 0541 automation date triggers: one private scan receipt table and private helpers; the date scan belongs to
+
+-- 0550 shared AI text proposals: two private tables; the runtime reaches the WEBSITE_EDIT kind through seven entry points.
+DO $$ DECLARE r text; t text; BEGIN
+  IF to_regclass('hon.ai_text_proposals') IS NULL THEN RAISE EXCEPTION 'Apply migration 0550 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['ai_text_kinds','ai_text_proposals'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_school_website_ai_edit(text,jsonb,uuid), hon.school_website_ai_edit_planning_reference(text,uuid),
+      hon.prepare_school_website_ai_edit(text,uuid,uuid,boolean), hon.fail_school_website_ai_edit(text,uuid,text,text),
+      hon.record_school_website_ai_edit(text,uuid,jsonb), hon.read_school_website_ai_edits(text,uuid), hon.close_school_website_ai_edit(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+-- 0565 automation date triggers: one private scan receipt table and private helpers; the date scan belongs to
 -- hon_automation_worker (014) and is never granted to the runtime.
 DO $$ DECLARE r text; f text; BEGIN
-  IF to_regprocedure('hon.scan_automation_schedules(integer)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0541 first'; END IF;
+  IF to_regprocedure('hon.scan_automation_schedules(integer)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0565 first'; END IF;
   REVOKE ALL ON TABLE hon.automation_schedule_scans FROM PUBLIC;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.automation_schedule_scans FROM %I',r); END LOOP;
   FOREACH f IN ARRAY ARRAY['hon.scan_automation_schedules(integer)','hon.automation_date_candidates(hon.automation_workflows,jsonb,date,text)','hon.automation_next_birthday(date,date)','hon.automation_date_subject_open(uuid,uuid,text)'] LOOP

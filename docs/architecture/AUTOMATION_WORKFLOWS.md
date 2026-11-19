@@ -72,7 +72,7 @@ Audit and outbox payloads carry ids, versions and trigger kinds only, never mess
 
 **What runs today.** Turning on refuses, by name (`422 AUTOMATION_NOT_AVAILABLE_YET` with `part`), anything this engine
 does not run yet: triggers other than lead created, form lead, Meta lead, trial booked/cancelled/attended/no-show, class
-booking, membership activated/cancelled, testing registration, tag added and (since 0541) absent N days, birthday and
+booking, membership activated/cancelled, testing registration, tag added and (since 0565) absent N days, birthday and
 membership ends in N days (so SCHEDULE and CUSTOM_TOOL_RECORD are still refused); the REPLIED exit, wait and condition;
 IN_PROGRAM and CUSTOM_FIELD_EQUALS conditions; ASSIGN_LEAD and REQUEST_APPROVAL steps; LEAD_ASSIGNEE as a staff target;
 and the `program_name`, `trial_time`, `booking_link` and `staff_name` merge fields. Stage, form and START_WORKFLOW ids
@@ -115,7 +115,7 @@ steps (at least 10) failed the workflow pauses `FAILURE_RATE`.
 Runs and steps only move forward (`hon.guard_automation_run`); receipts never change. History reads return the contact's
 first name only and step outcomes, branches, message and task ids and delivery status, never message text.
 
-**Date triggers (0541).** `hon.scan_automation_schedules(limit)` looks at each ACTIVE workflow whose active version has an
+**Date triggers (0565).** `hon.scan_automation_schedules(limit)` looks at each ACTIVE workflow whose active version has an
 ABSENT_DAYS, BIRTHDAY or MEMBERSHIP_ENDS_IN_DAYS trigger once per school-local day, at or after 09:00 school time
 (schools with an unknown time zone are skipped). Under the workflow's row lock (`SKIP LOCKED`, so a workflow a staff
 command holds waits for the next scan) it re-proves the activator (otherwise the workflow pauses `AUTHORITY_LOST` and
@@ -147,6 +147,6 @@ configuration) and a role that is a superuser, bypasses RLS or inherits. Nothing
 - `packages/database/scripts/test-automation-engine-integrity.mjs` (champions-club fixture, 15 groups, incl. the 011
   exact verification for 0416 and 0423 and drift refusals).
 - `packages/database/scripts/test-automation-date-triggers-integrity.mjs` (champions-club fixture, 11 groups, incl. the 011
-  exact verification for 0423 and 0541 and drift refusals).
+  exact verification for 0423 and 0565 and drift refusals).
 - `apps/api/test/automation-workflows.test.cjs`, `apps/api/test/automation-engine.test.cjs` (mocked boundary, worker,
   scheduler and deployment configuration).
