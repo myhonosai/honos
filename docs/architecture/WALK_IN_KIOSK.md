@@ -112,8 +112,10 @@ TEST-mode processor connection, no HON fee, no card data at HON. Stripe only tod
   redirect; agreed with the tuition thread), so the form's `onComplete` calls the status route in place (WK3b).
 - Environment: the Stripe TEST secret key the tuition adapter already uses (`HON_TUITION_STRIPE_TEST_SECRET_KEY`), plus a
   Stripe test publishable key for Stripe.js on the tablet, `NEXT_PUBLIC_HON_TUITION_STRIPE_TEST_PUBLISHABLE_KEY` at web
-  build time (the owner sets it, never in chat). Only `pk_test_` is accepted; without it the tablet offers only the phone
-  QR and the desk.
+  build time. A publishable key is public by design; David provided the test one on 2026-11-19 and it is fixed in
+  `render.yaml` for hon-web (the Blueprint test allows only `pk_test_` there and no other Stripe value on either
+  service). Only `pk_test_` is accepted; without it the tablet offers only the phone QR and the desk. The form also needs
+  the API's `HON_TUITION_STRIPE_TEST_SECRET_KEY` from the **same** Stripe test account (set in the dashboard, never in Git).
 - **Tablet screens (WK3b):** after a `PAY_AT_DESK` visit is recorded, the tablet asks "How would you like to pay?" with
   "Pay here with a card" (only with a test publishable key), "Pay on my phone" and "Pay at the front desk", and says it is
   test mode. The form is Stripe's embedded Checkout loaded from `js.stripe.com/basil` (the server's API version) with the
