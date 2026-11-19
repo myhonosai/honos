@@ -191,4 +191,16 @@ BEGIN
 END;
 $$;
 
+-- 0561 school voice apps: find schools that need one, claim, record the TwiML App and sealed key, read the key to sign
+-- a phone token (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.begin_school_voice_app(uuid,integer)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.read_schools_needing_voice_app(integer), hon.begin_school_voice_app(uuid, integer),
+      hon.record_school_voice_app_twiml(uuid, uuid, text), hon.complete_school_voice_app(uuid, uuid, text, text, text),
+      hon.read_school_voice_app(uuid) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 COMMIT;

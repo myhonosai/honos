@@ -5156,3 +5156,26 @@ BEGIN
   END LOOP;
 END $$;
 -- End school calls exact verification.
+-- School voice apps exact verification (0561): one private forced-RLS table, one staff runtime entry point, worker-only
+-- claim/record/key functions and an owner-only guard, all SECURITY DEFINER with the fixed search path.
+DO $$ DECLARE f text;
+  entry text[]:=ARRAY['hon.authorize_school_phone_token(text)'];
+  worker text[]:=ARRAY['hon.read_schools_needing_voice_app(integer)','hon.begin_school_voice_app(uuid,integer)','hon.record_school_voice_app_twiml(uuid,uuid,text)',
+    'hon.complete_school_voice_app(uuid,uuid,text,text,text)','hon.read_school_voice_app(uuid)'];
+  closed text[]:=ARRAY['hon.guard_school_voice_app()'];
+BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.school_voice_apps'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR has_table_privilege('hon_runtime','hon.school_voice_apps','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR (EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_communication_worker')
+      AND has_table_privilege('hon_communication_worker','hon.school_voice_apps','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')) THEN
+    RAISE EXCEPTION 'Unsafe school voice apps table'; END IF;
+  FOREACH f IN ARRAY entry||worker||closed LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND p.prosecdef AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon'])
+      OR has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') IS DISTINCT FROM (f=ANY(entry))
+      OR (EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_communication_worker')
+        AND has_function_privilege('hon_communication_worker',f::regprocedure,'EXECUTE') IS DISTINCT FROM (f=ANY(worker)))
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND a.grantee=0) THEN
+      RAISE EXCEPTION 'Unsafe school voice apps function: %',f; END IF;
+  END LOOP;
+END $$;
+-- End school voice apps exact verification.
