@@ -83,6 +83,21 @@ const leads = () => [['Avery', 'Sample', 1], ['Rowan', 'Example', 2], ['Kim', 'P
 const work = (scope) => ({ schoolId: scope.schoolId, principalId: id(500), canManage: true, canCreate: true, humanOnly: true, executionAllowed: false, queue: 'mine', status: 'ACTIVE',
   items: [{ title: 'Call back trial family', workItemId: id(601), version: 1, status: 'READY', priority: 'HIGH', dueAt: at(day), assigneeId: id(500) },
     { title: 'Order new belts for testing', workItemId: id(602), version: 1, status: 'WAITING', priority: 'NORMAL', dueAt: null, assigneeId: id(500) }], nextAfter: null });
+// Corner HON pop-up (2026-11-19): two synthetic HON conversations, read-only.
+const honDetail = { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [] };
+const honConversations = [[901, 'Plan this week', 'What should I focus on this week?', 'Follow up the 5 new leads first, then confirm the 2 trials tomorrow.'],
+  [902, 'Belt testing', 'When is the next belt test?', 'One testing event is scheduled in the next 30 days.']].map(([n, title, question, answer]) => ({
+  id: id(n), title, createdAt: iso(), updatedAt: iso(), turnCount: 1, status: 'COMPLETED', turns: [
+    { turnId: id(n + 50), role: 'HUMAN', text: question, createdAt: iso(), status: 'COMPLETED', reason: null, references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null },
+    { turnId: id(n + 50), role: 'hon', text: answer, createdAt: iso(), status: 'COMPLETED', reason: null, references: { workItemId: id(n + 60), actionRequestId: null, invocationId: id(n + 70) }, replyDetail: honDetail }] }));
+function honApi(route, path, base) {
+  if (path === `${base}/readiness`) return json(route, 200, { data: { contract: true, providerRoute: true, entitlement: true, authorization: true, availableAgentKeys: [], honReply: true, businessPerformance: false, availableAnalystKeys: [], asOf: iso() }, meta: { requestId: 'r', correlationId: 'r' } });
+  if (path === `${base}/conversations`) return json(route, 200, { data: { items: honConversations.map(({ turns, ...rest }) => rest), nextCursor: null } });
+  const thread = honConversations.find((c) => path === `${base}/conversations/${c.id}`);
+  if (thread) return json(route, 200, { data: thread });
+  if (honConversations.some((c) => path === `${base}/conversations/${c.id}/orchestrations`)) return json(route, 200, { data: { items: [] } });
+  return json(route, 403, { code: 'FORBIDDEN' });
+}
 const json = (route, status, body) => route.fulfill({ status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }, body: JSON.stringify(body) });
 function api(route) {
   const url = new URL(route.request().url()), path = url.pathname, method = route.request().method();
@@ -96,6 +111,7 @@ function api(route) {
   if (path === '/api/v1/staff/work') return json(route, 200, { data: work(multi ? schoolB : schoolA) });
   for (const scope of [schoolA, schoolB]) {
     const prefix = `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}`;
+    if (path.startsWith(`${prefix}/hon/`)) return honApi(route, path, `${prefix}/hon`);
     if (path === `${prefix}/command-center`) return json(route, 200, { data: { commandCenter: commandCenter(scope) }, meta: {} });
     if (path === `${prefix}/ai/team/capabilities`) return readinessDenied ? json(route, 403, { code: 'AI_TEAM_READINESS_FORBIDDEN' }) : json(route, 200, { data: readiness(scope), meta: { requestId: 'r', correlationId: 'r' } });
     if (path === `${prefix}/crm/leads`) return leadsGate ? leadsGate.then(() => json(route, 200, { data: leads(), meta: {} })) : json(route, 200, { data: leads(), meta: {} });
@@ -136,6 +152,9 @@ async function open(viewport, path, { language, clock } = {}) {
     if (url.pathname.startsWith('/api/')) return api(route);
     return route.continue();
   });
+  // Voice is not part of this proof. Some headless Chromium builds terminate the page when the
+  // on-device speech recognition service is probed, so speech recognition is left out here.
+  await ctx.addInitScript(() => { for (const name of ['SpeechRecognition', 'webkitSpeechRecognition']) { try { Object.defineProperty(window, name, { value: undefined, configurable: true }); } catch { /* keep */ } } });
   const page = await ctx.newPage();
   if (clock) await page.clock.install();
   page.on('pageerror', (error) => report.pageErrors.push(String(error)));
@@ -143,7 +162,9 @@ async function open(viewport, path, { language, clock } = {}) {
   if (language) await page.evaluate((l) => { document.documentElement.lang = l; }, language);
   return { ctx, page };
 }
-async function check(name, work) { try { await work(); report.checks.push(name); } catch (error) { report.failures.push(`${name}: ${error instanceof Error ? error.message : String(error)}`); } }
+// Optional HON_SHELL_BROWSER_ONLY=<text>: run only the checks whose name contains it.
+const only = process.env.HON_SHELL_BROWSER_ONLY ?? null;
+async function check(name, work) { if (only && !name.includes(only)) return; try { await work(); report.checks.push(name); } catch (error) { report.failures.push(`${name}: ${error instanceof Error ? error.message : String(error)}`); } }
 async function shot(page, name) { await page.screenshot({ path: join(results, `${name}.png`) }); report.screenshots.push(`${name}.png`); }
 async function noOverflow(page) {
   const offenders = await page.evaluate(() => [...document.querySelectorAll('[data-hon-ui] *')]
@@ -190,7 +211,7 @@ await check('art style chip redraws the team without changing availability, and 
     await page.waitForTimeout(300); await shot(page, `u2-home-art-${style}-desktop`);
   }
   await page.reload(); await page.waitForSelector('[data-art="chibi"]');
-  assert.equal(await page.locator('a[href="/staff/hon"][class*="honLauncher"]').count(), 0, 'no corner HON on the dashboard');
+  assert.equal(await page.locator('[data-hon-corner]').count(), 0, 'no corner HON on the dashboard');
   // The HON workspace follows the same chosen style and shows the HON core orb.
   await page.goto(origin + '/staff/hon');
   await page.waitForSelector('img[src="/ai/chad-chibi.webp"]');
@@ -202,9 +223,52 @@ await check('art style chip redraws the team without changing availability, and 
 await check('HON waits in the corner on other pages', async () => {
   theme = 'classic'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/work');
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
-  assert.equal(await page.locator('a[href="/staff/hon"][class*="honLauncher"]').isVisible(), true);
+  assert.equal(await page.locator('button[data-hon-corner][aria-haspopup="dialog"]').isVisible(), true);
   await page.waitForTimeout(500); await shot(page, 'u2-hon-corner-classic-desktop'); await ctx.close();
 });
+for (const [mode, size] of [['modern', 'desktop'], ['classic', 'desktop'], ['big-button', 'desktop'], ['modern', 'phone']]) {
+  await check(`corner HON opens a pop-up over the page and expands to the same conversation (${mode} ${size})`, async () => {
+    theme = mode; multi = false; const { ctx, page } = await open(viewports[size], '/staff/work');
+    await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+    await page.getByText('Call back trial family').waitFor();
+    // Something the person was in the middle of on this page: scrolled and typed, never saved.
+    const field = page.locator('#hon-main input:not([type=hidden]):not([type=checkbox]):not([type=radio]), #hon-main textarea').locator('visible=true').first();
+    const typed = (await field.count()) ? 'Half-written note' : null;
+    if (typed) await field.fill(typed);
+    await page.evaluate(() => window.scrollTo(0, 200)); const scrolled = await page.evaluate(() => window.scrollY);
+    const corner = page.locator('button[data-hon-corner]');
+    await corner.click();
+    const dialog = page.getByRole('dialog', { name: 'HON' });
+    await dialog.waitFor();
+    assert.equal(new URL(page.url()).pathname, '/staff/work', 'opening HON never leaves the page');
+    assert.equal(await dialog.getAttribute('data-placement'), 'corner');
+    assert.equal(await corner.getAttribute('aria-expanded'), 'true');
+    await dialog.getByRole('button', { name: /Plan this week/ }).click();
+    await dialog.getByText('Follow up the 5 new leads first').waitFor();
+    await page.waitForTimeout(300); await shot(page, `p1-hon-popup-${mode}-${size}`);
+    // Close: the page is exactly as it was.
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'detached' });
+    assert.equal(new URL(page.url()).pathname, '/staff/work');
+    if (typed) assert.equal(await field.inputValue(), typed, 'unsaved typing on the page is kept');
+    assert.equal(await page.evaluate(() => window.scrollY), scrolled, 'scroll position is kept');
+    assert.equal(await page.evaluate(() => document.activeElement?.hasAttribute('data-hon-corner')), true, 'focus returns to the corner button');
+    // Reopen: the same conversation is still open.
+    await corner.click(); await dialog.waitFor();
+    await dialog.getByText('Follow up the 5 new leads first').waitFor();
+    // Expand: the full workspace opens the same conversation, with a way back to this page.
+    const expand = dialog.getByRole('link', { name: 'Full workspace' });
+    assert.equal(await expand.getAttribute('href'), '/staff/hon?return=%2Fstaff%2Fwork');
+    if (size === 'desktop') {
+      await expand.click(); await page.waitForURL('**/staff/hon?return=%2Fstaff%2Fwork');
+      await page.getByText('Follow up the 5 new leads first').waitFor();
+      assert.equal(await page.locator('[aria-current="true"]', { hasText: 'Plan this week' }).count() > 0, true, 'same conversation selected');
+      assert.equal(await page.getByRole('link', { name: 'Back to your page' }).getAttribute('href'), '/staff/work');
+      await page.waitForTimeout(300); await shot(page, `p1-hon-expanded-${mode}-${size}`);
+    }
+    await ctx.close();
+  });
+}
 await check('classic sidebar shows the owner menu headings with their pages, and the current page', async () => {
   theme = 'classic'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/billing/invoices');
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');

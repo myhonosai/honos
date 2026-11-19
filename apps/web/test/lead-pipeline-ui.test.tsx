@@ -8,7 +8,7 @@ import { StarterRefusedError, addLeadApi } from '../src/components/leads/add-lea
 import { LeadsError } from '../src/components/leads/http';
 import {
   PROGRAM_NONE, applyFilters, applyMove, boardColumns, boardStats, cardLine, codeLabel, draftErrors, draftFrom, draftInput, initials, matchesSearch,
-  moveDraftStage, moveTargets, programsOf, rateText, sortLeads, stagesNeedingMove, starterEditReady,
+  moveDraftStage, moveDraftStageTo, moveTargets, programsOf, rateText, sortLeads, stagesNeedingMove, starterEditReady,
 } from '../src/components/lead-pipeline/model';
 import { PipelineView, type PipelineViewProps } from '../src/components/lead-pipeline/view';
 import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
@@ -318,4 +318,27 @@ describe('new pipeline from a school template', () => {
     expect(render({ board: { state: 'READY', board: EMPTY_BOARD }, setup: { state: 'DENIED' } })).toMatch(/<button[^>]*disabled=""[^>]*>Edit pipeline<\/button>/);
   });
   it('uses the board api for templates', () => { expect(boardApi.submitTemplate).toBe(submitTemplate); });
+});
+
+describe('drag to reorder stages', () => {
+  it('moves a stage to any position and ignores out-of-range or no-op drops', () => {
+    const draft = draftFrom(STAGES); // New lead, Trial booked, Old
+    const names = (d: typeof draft) => d.stages.map((s) => s.name);
+    expect(names(moveDraftStageTo(draft, 0, 2))).toEqual(['Trial booked', 'Old', 'New lead']);
+    expect(names(moveDraftStageTo(draft, 2, 0))).toEqual(['Old', 'New lead', 'Trial booked']);
+    expect(moveDraftStageTo(draft, 1, 1)).toBe(draft);
+    expect(moveDraftStageTo(draft, -1, 0)).toBe(draft);
+    expect(moveDraftStageTo(draft, 0, 3)).toBe(draft);
+  });
+  it('gives each editable stage a drag handle and keeps the arrow buttons for keyboards', () => {
+    const html = render({ edit: { draft: draftFrom(STAGES), newName: '', phase: 'EDIT', error: null } });
+    expect(html.match(/draggable="true" title="Drag/g)?.length).toBe(3);
+    expect(html).toContain('Drag New lead to reorder');
+    expect(html).toContain('Move New lead up');
+    expect(html).toContain('Drag a stage by its handle, or use the arrows.');
+  });
+  it('does not offer dragging while saving', () => {
+    const html = render({ edit: { draft: draftFrom(STAGES), newName: '', phase: 'SAVING', error: null } });
+    expect(html).not.toMatch(/draggable="true" title="Drag/);
+  });
 });
