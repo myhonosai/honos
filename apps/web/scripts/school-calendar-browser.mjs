@@ -59,7 +59,7 @@ const roster = students.slice(0, 3).map((s, n) => ({ ...s, personId: id(3100 + n
   booking: { id: id(3200 + n), kind: n === 2 ? 'TRIAL' : 'REGULAR', status: 'BOOKED', source: 'STAFF', bookedAt: '2026-11-10T00:00:00.000Z', cancelledAt: null, version: 1 },
   attendance: n === 0 ? { id: id(3300), status: 'PRESENT', category: 'REGULAR_PARTICIPANT', recordedAt: '2026-11-16T00:40:00.000Z', version: 1 } : null }));
 
-// 0551 card details: programs, instructors (synthetic names), kinds and booked counts, and the commands the page sends.
+// 0567 card details: programs, instructors (synthetic names), kinds and booked counts, and the commands the page sends.
 const programs = { kids: { programId: id(4001), name: 'Kids Karate' }, adults: { programId: id(4002), name: 'Adult Kickboxing' } };
 const instructors = [{ principalId: id(4101), displayName: 'Coach Sample' }, { principalId: id(4102), displayName: 'Coach Example' }];
 const cardOf = new Map(sessions.map((x) => [x.sessionId, { version: 1, kind: x.name === 'Private lesson' ? 'PRIVATE_LESSON' : 'CLASS',

@@ -11,7 +11,7 @@ export type ClassesState = { state: 'LOADING' | 'DENIED' | 'TIMEZONE' | 'UNAVAIL
   | { state: 'READY'; range: DateRange; items: readonly CurrentSchoolClassSession[]; truncated: boolean; timezone: string; localToday: string };
 export type EventsState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; events: readonly CalendarEvent[]; timezone: string; localToday: string };
 export type CalendarSelection = Readonly<{ kind: 'class' | 'event'; id: string }> | null;
-/** Card details (0551): kind, program, roster, lead instructor and booked count per class, plus what a manager may pick. */
+/** Card details (0567): kind, program, roster, lead instructor and booked count per class, plus what a manager may pick. */
 export type CardsState = { state: 'LOADING' | 'UNAVAILABLE' }
   | { state: 'READY'; byId: ReadonlyMap<string, CalendarCard>; canManage: boolean; programs: readonly { programId: string; name: string }[]; instructors: readonly CalendarCardPerson[] };
 /** A move waiting for the booked-students question or for the server. */
@@ -33,7 +33,7 @@ export type CalendarViewProps = Readonly<{
   onRefresh?: (() => void) | undefined; onManageEvent?: (() => void) | undefined;
   /** The chosen class names (empty = all classes). A compact Filter menu replaces the old wall of chips. */
   classFilter?: readonly string[] | undefined; onClassFilter?: ((names: readonly string[]) => void) | undefined;
-  /** 0551: card details, and the Program and Instructor filter groups (program ids; principal ids or NO_INSTRUCTOR). */
+  /** 0567: card details, and the Program and Instructor filter groups (program ids; principal ids or NO_INSTRUCTOR). */
   cards?: CardsState | undefined;
   programFilter?: readonly string[] | undefined; onProgramFilter?: ((ids: readonly string[]) => void) | undefined;
   instructorFilter?: readonly string[] | undefined; onInstructorFilter?: ((ids: readonly string[]) => void) | undefined;
@@ -217,7 +217,7 @@ function Board(p: CalendarViewProps & { anchor: string; t: T }): React.ReactElem
     </div>{footer}</>;
   // Week and day: an hour grid. Each class sits at its school-time start, as tall as it is long; classes that overlap share
   // the column side by side. Sale days and events sit in a row above the hours. A manager can click an empty time to add a
-  // class, drag a class to move it and drag its bottom edge to change its length (0551).
+  // class, drag a class to move it and drag its bottom edge to change its length (0567).
   const entries = [...days.entries()];
   const spans = new Map<string, Span>();
   for (const [, items] of entries) for (const item of items) if (item.kind === 'class') {

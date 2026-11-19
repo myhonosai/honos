@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "0c7931b9b01cd953ed8c5d64d90fa39b28835dbb9c4479a1a7ad0ee8e71cb7fb",
+  "chainSha256": "9fe45cf35e3fcc1b0591911f9b172772d53ccc5ff8203297265b691b539536a3",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -699,8 +699,16 @@
       "sha256": "9e3e4bd1693a9edf87577d30f46d03769880f74c63835a14b015010ba04e292e"
     },
     {
-      "file": "0551_calendar_cards.sql",
-      "sha256": "d0bb3188db37af551b6969887ab4994b939f001ac04689fad28f6b710fd00356"
+      "file": "0550_ai_text_proposals.sql",
+      "sha256": "166369680863c3e7d300d3ce5db6a48cbe863b0e5761cbabf18cb8bec57857b1"
+    },
+    {
+      "file": "0553_school_a2p_registrations.sql",
+      "sha256": "fd25dc1f0f73734228a886d6b0e47dd8d804aa0083b8947ad931041a7e5bc691"
+    },
+    {
+      "file": "0567_calendar_cards.sql",
+      "sha256": "812ae679a0a8671aca29a4692db0f7751ad78bcb3169eec0b3bcdc3ac301de76"
     }
   ]
 }

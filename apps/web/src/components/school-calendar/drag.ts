@@ -1,5 +1,5 @@
 /**
- * Calendar card drag, resize and keyboard maths (0551). Pure: every value is school-local minutes after midnight on a
+ * Calendar card drag, resize and keyboard maths (0567). Pure: every value is school-local minutes after midnight on a
  * visible day, and an instant is made only from a school date, minutes and the school zone the server reports.
  */
 export const SNAP_MINUTES = 15;

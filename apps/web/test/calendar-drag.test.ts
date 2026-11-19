@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dragTarget, keyboardStep, slotAt, snap, zonedInstant, MAX_LENGTH, SNAP_MINUTES } from '../src/components/school-calendar/drag';
 
-describe('calendar drag maths (0551)', () => {
+describe('calendar drag maths (0567)', () => {
   it('snaps to 15 minutes', () => {
     expect(SNAP_MINUTES).toBe(15);
     expect([0, 7, 8, 22, 23, -7, -8].map((m) => snap(m))).toEqual([0, 0, 15, 15, 30, -0, -15]);

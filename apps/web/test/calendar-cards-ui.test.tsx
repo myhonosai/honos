@@ -27,7 +27,7 @@ const props = (over: Partial<CalendarViewProps> = {}): CalendarViewProps => ({ l
   onCreateAt: () => undefined, onDrop: () => undefined, ...over });
 const render = (over: Partial<CalendarViewProps> = {}) => renderToStaticMarkup(<CalendarViewPane {...props(over)}/>);
 
-describe('calendar cards on the board (0551)', () => {
+describe('calendar cards on the board (0567)', () => {
   it('lets a manager click empty times and drag future, unattended classes only', () => {
     const html = render();
     expect((html.match(/data-testid="calendar-slot"/g) ?? []).length).toBe(7 * 14);

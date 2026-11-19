@@ -3611,6 +3611,26 @@ DO $$ DECLARE r text; BEGIN
   END LOOP;
   GRANT EXECUTE ON FUNCTION hon.settle_school_number_order_from_hq(text,uuid,text,text,integer) TO hon_runtime;
 END $$;
+-- 0553 school A2P registrations: five runtime entry points (owner request/cancel/read, HQ decide/read), no table
+-- privilege; claim/record are worker-only (013); the owner check, JSON and business helpers and the guard are private.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regclass('hon.school_a2p_registrations') IS NULL THEN RAISE EXCEPTION 'Apply migration 0553 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_a2p_registrations FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_a2p_registrations FROM '||quote_ident(r);
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.require_school_a2p_owner(text)','hon.school_a2p_registration_json(hon.school_a2p_registrations)',
+    'hon.school_a2p_business(jsonb)','hon.guard_school_a2p_registration()',
+    'hon.claim_school_a2p_registrations(integer,integer)','hon.record_school_a2p_progress(uuid,uuid,text,jsonb,text,integer)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.request_school_a2p_registration(text,jsonb,text), hon.cancel_school_a2p_registration(text,uuid,integer),
+    hon.read_school_a2p_registrations(text), hon.decide_school_a2p_registration_from_hq(text,uuid,text,text,integer),
+    hon.read_hq_school_a2p_registrations(text,text) TO hon_runtime;
+END $$;
 -- 0353 AI on HQ access-exception schools under an HQ-owner monthly limit: only the HQ command and read reach the
 -- runtime; the two tables and the decision helpers are internal.
 DO $$ DECLARE r text; f text; BEGIN
@@ -4456,10 +4476,24 @@ BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_class_session_seats_taken(uuid) TO hon_runtime; END IF;
 END $$;
 
--- 0551 calendar cards: three runtime entry points (create, move/resize, card read). The new columns, the roster detachment
+-- 0550 shared AI text proposals: two private tables; the runtime reaches the WEBSITE_EDIT kind through seven entry points.
+DO $$ DECLARE r text; t text; BEGIN
+  IF to_regclass('hon.ai_text_proposals') IS NULL THEN RAISE EXCEPTION 'Apply migration 0550 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['ai_text_kinds','ai_text_proposals'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_school_website_ai_edit(text,jsonb,uuid), hon.school_website_ai_edit_planning_reference(text,uuid),
+      hon.prepare_school_website_ai_edit(text,uuid,uuid,boolean), hon.fail_school_website_ai_edit(text,uuid,text,text),
+      hon.record_school_website_ai_edit(text,uuid,jsonb), hon.read_school_website_ai_edits(text,uuid), hon.close_school_website_ai_edit(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0567 calendar cards: three runtime entry points (create, move/resize, card read). The new columns, the roster detachment
 -- table and every helper stay migration-owner only; the runtime keeps no UPDATE on class sessions.
 DO $$ DECLARE r text; f text; col text; BEGIN
-  IF to_regprocedure('hon.read_school_calendar_cards(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0551 first'; END IF;
+  IF to_regprocedure('hon.read_school_calendar_cards(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0567 first'; END IF;
   REVOKE ALL ON hon.class_session_roster_detachments FROM PUBLIC;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
     EXECUTE format('REVOKE ALL ON hon.class_session_roster_detachments FROM %I',r);

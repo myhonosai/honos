@@ -115,7 +115,7 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
     return () => abort.abort();
   }, [school, anchor, view, refresh, api]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Card details (0551) for the same visible days: kind, program, roster, lead instructor, booked count, and what a manager may pick.
+  // Card details (0567) for the same visible days: kind, program, roster, lead instructor, booked count, and what a manager may pick.
   useEffect(() => {
     if (!scope || anchor === null) return;
     const shown = privacy.current, abort = new AbortController(), range = calendarRange(view, anchor);

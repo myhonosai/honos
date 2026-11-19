@@ -106,7 +106,7 @@
 .drawer table td, .drawer table th { padding: 2px 0; border: 0; }
 .drawer table td[data-label]::before { content: attr(data-label) ': '; color: var(--hon-muted, #9fb4c8); font-size: 12px; font-weight: 700; }
 
-/* 0551 calendar cards: click an empty time to add, drag to move, drag the bottom edge to resize. Colours follow the card kind. */
+/* 0567 calendar cards: click an empty time to add, drag to move, drag the bottom edge to resize. Colours follow the card kind. */
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .messageBar { position: sticky; top: 8px; z-index: 35; }
 .message { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border: 1px solid var(--hon-accent, #8de3d8);

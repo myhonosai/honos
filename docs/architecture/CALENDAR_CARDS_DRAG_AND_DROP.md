@@ -1,6 +1,6 @@
-# Calendar cards: click to create, drag to move, resize (0551)
+# Calendar cards: click to create, drag to move, resize (0567)
 
-Owner ask (David, 2026-11-19): "i need this calendar to be clickable and let me make schedule or class cards that can be drag and dropped", plus "also need filters". The reference is the ease of a modern scheduling calendar (GoHighLevel, Google Calendar), adapted rather than copied. The coordinator allocated migration **0551**.
+Owner ask (David, 2026-11-19): "i need this calendar to be clickable and let me make schedule or class cards that can be drag and dropped", plus "also need filters". The reference is the ease of a modern scheduling calendar (GoHighLevel, Google Calendar), adapted rather than copied. The coordinator allocated migration **0567**.
 
 ## Spec
 
@@ -39,7 +39,7 @@ Owner ask (David, 2026-11-19): "i need this calendar to be clickable and let me 
 
 ## Plan
 
-1. Migration 0551: columns (`class_sessions.session_kind`, `class_series.session_kind`, `class_series.lead_instructor_principal_id`), private `class_session_roster_detachments`, the occurrence trigger that copies kind and instructor, `class_series_apply_future` skipping detached classes, `create_calendar_card`, `move_calendar_card`, `read_school_calendar_cards`; 010/011 sections; checksums and staging pins.
+1. Migration 0567: columns (`class_sessions.session_kind`, `class_series.session_kind`, `class_series.lead_instructor_principal_id`), private `class_session_roster_detachments`, the occurrence trigger that copies kind and instructor, `class_series_apply_future` skipping detached classes, `create_calendar_card`, `move_calendar_card`, `read_school_calendar_cards`; 010/011 sections; checksums and staging pins.
 2. Contracts: input validators and receipt/read verifiers.
 3. API: controller routes under `schedule/calendar`, human UI guards, service with exact error mapping.
 4. DB proof script and run-db-proofs entry.
