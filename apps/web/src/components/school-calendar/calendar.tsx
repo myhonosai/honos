@@ -41,7 +41,7 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
   const [events, setEvents] = useState<EventsState>({ state: 'LOADING' });
   const [selected, setSelected] = useState<CalendarSelection>(null);
   const [booking, setBooking] = useState(false);
-  const [classFilter, setClassFilter] = useState<string | null>(null);
+  const [classFilter, setClassFilter] = useState<readonly string[]>([]);
   const [refresh, setRefresh] = useState(0);
   const privacy = useRef(0), mounted = useRef(false), generation = useRef(0), lastSchool = useRef<string | null>(null);
   const selectedClass = selected?.kind === 'class' ? selected.id : null;
@@ -55,7 +55,7 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (school !== null && lastSchool.current !== null && school !== lastSchool.current) { setAnchor(null); setSelected(null); setBooking(false); setClassFilter(null); }
+    if (school !== null && lastSchool.current !== null && school !== lastSchool.current) { setAnchor(null); setSelected(null); setBooking(false); setClassFilter([]); }
     if (school !== null) lastSchool.current = school;
   }, [school]);
 

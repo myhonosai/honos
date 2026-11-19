@@ -81,6 +81,26 @@ function api(route) {
   if (path === `${prefix}/schedule/sessions`) return json(route, 200, { data: sessions.filter((s) => s.status === 'SCHEDULED').slice(0, 40), meta: meta() });
   if (path === `${prefix}/schedule/bookable-students`) return json(route, 200, { data: students, meta: meta() });
   if (path === `${prefix}/schedule/events`) return eventsDenied ? json(route, 403, { code: 'FORBIDDEN' }) : json(route, 200, { data: { localToday: TODAY, timezone: ZONE, events }, meta: meta() });
+  if (path === `${prefix}/schedule/class-series`) {
+    const roster = (n, name, weekdays, localStartTime, durationMinutes, futureSessions) => ({ seriesId: id(4000 + n), programId: id(4100 + n), name, roomName: 'Main mat', capacity: 20,
+      bookingPolicy: 'OPTIONAL_BOOKING', weekdays, localStartTime, durationMinutes, startsOn: '2026-11-02', endsOn: null, generatedThrough: '2027-01-24', status: 'ACTIVE', endReason: null,
+      version: 2, ongoing: n === 1, futureSessions, createdAt: '2026-11-01T08:00:00.000Z' });
+    return json(route, 200, { data: { localToday: TODAY, timezone: ZONE, fillLimit: '2027-02-08', topUpDue: false,
+      series: [roster(1, 'Little Tigers', [1, 2, 3, 4, 5], '16:30', 45, 50), roster(2, 'Junior Black Belt Club', [2, 4], '17:15', 60, 20)],
+      programs: [{ programId: id(4101), name: 'Little Tigers' }, { programId: id(4102), name: 'Junior Black Belt Club' }] }, meta: meta() });
+  }
+  if (path === `${prefix}/schedule/timetable`) {
+    const of = Date.parse(`${url.searchParams.get('weekOf') ?? TODAY}T00:00:00Z`), start = of - ((new Date(of).getUTCDay() + 6) % 7) * 86_400_000;
+    const weekStart = new Date(start).toISOString().slice(0, 10);
+    const weekEnd = new Date(start + 6 * 86_400_000).toISOString().slice(0, 10);
+    const inWeek = sessions.filter((x) => localDate(x.startsAt) >= weekStart && localDate(x.startsAt) <= weekEnd).map((x) => {
+      const local = new Date(Date.parse(x.startsAt) - 8 * 3_600_000).toISOString(), end = new Date(Date.parse(x.endsAt) - 8 * 3_600_000).toISOString();
+      return { sessionId: x.sessionId, seriesId: x.name === 'Little Tigers' ? id(4001) : x.name === 'Junior Black Belt Club' ? id(4002) : null, name: x.name, roomName: x.roomName,
+        startsAt: x.startsAt, endsAt: x.endsAt, localDate: local.slice(0, 10), localStart: local.slice(11, 16), localEnd: end.slice(11, 16), capacity: x.capacity,
+        bookingPolicy: x.bookingPolicy, status: x.status, booked: 3 };
+    });
+    return json(route, 200, { data: { timezone: ZONE, localToday: TODAY, weekStart, weekEnd, truncated: false, sessions: inWeek }, meta: meta() });
+  }
   return json(route, 403, { code: 'FORBIDDEN' });
 }
 
@@ -114,7 +134,7 @@ async function shot(page, name, fullPage = false) { await page.screenshot({ path
 const noOverflow = async (page) => assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1), false, 'page scrolls horizontally');
 const calendar = (page) => page.getByTestId('school-calendar');
 
-await check('week view shows classes and sale days; a class opens its roster and books in place', async () => {
+await check('week view shows classes and sale days; a class opens its students and books in place', async () => {
   const { ctx, page } = await open(viewports.desktop, '/staff/schedule');
   await calendar(page).getByTestId('calendar-week').waitFor();
   assert.match(await page.getByTestId('calendar-range').innerText(), /Nov 16.*22, 2026/);
@@ -128,9 +148,32 @@ await check('week view shows classes and sale days; a class opens its roster and
   await page.getByRole('button', { name: 'Book a student on this class' }).click();
   await page.getByTestId('calendar-booking').waitFor();
   await shot(page, 'calendar-class-booking-desktop-1440');
-  await page.getByRole('button', { name: 'Back to the roster' }).click();
+  await page.getByRole('button', { name: 'Back to the students' }).click();
   await page.getByTestId('roster-table').waitFor();
   await noOverflow(page); await ctx.close();
+});
+await check('one compact Filter menu narrows the calendar to the chosen classes', async () => {
+  const { ctx, page } = await open(viewports.desktop, '/staff/schedule');
+  await calendar(page).getByTestId('calendar-week').waitFor();
+  const filter = calendar(page).getByTestId('calendar-filter');
+  await filter.locator('summary').click();
+  await shot(page, 'calendar-filter-open-desktop-1440');
+  await filter.getByLabel('Little Tigers').check();
+  await filter.getByLabel('Junior Black Belt Club').check();
+  await page.keyboard.press('Escape'); await filter.locator('summary').click();
+  assert.equal(await calendar(page).getByRole('button', { name: /Adult Kickboxing/ }).count(), 0);
+  assert.ok(await calendar(page).getByRole('button', { name: /Little Tigers/ }).count() >= 5);
+  assert.match(await filter.locator('summary').getAttribute('aria-label'), /Show classes: 2 classes/);
+  await shot(page, 'calendar-filter-applied-desktop-1440');
+  await calendar(page).getByRole('button', { name: 'Show all' }).last().click();
+  assert.ok(await calendar(page).getByRole('button', { name: /Adult Kickboxing/ }).count() >= 5);
+  await ctx.close();
+});
+await check('Weekly timetable tab calls repeating classes Rosters', async () => {
+  const { ctx, page } = await open(viewports.desktop, '/staff/schedule?tab=timetable');
+  await page.getByRole('heading', { name: 'Rosters' }).waitFor();
+  await shot(page, 'timetable-rosters-desktop-1440', true);
+  await ctx.close();
 });
 await check('month view, "+N more" day links, an event panel and the events tab', async () => {
   const { ctx, page } = await open(viewports.desktop, '/staff/schedule?view=month');
