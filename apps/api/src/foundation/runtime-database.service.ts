@@ -618,6 +618,24 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     await this.assertRuntimePosture();
     return (await this.getPool().query<{ data: unknown }>('SELECT hon.read_published_school_website($1) data', [slug])).rows[0]!.data;
   }
+  /** 0499: what one membership agreement signing link shows, or null. One fixed call, no tenant settings. */
+  async readMembershipAgreementLink(token: string): Promise<unknown> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<{ data: unknown }>('SELECT hon.read_membership_agreement_link($1) data', [token])).rows[0]!.data;
+  }
+  /** 0499: sign through one link (SIGNED, ALREADY_SIGNED, CHANGED, INVALID or GONE). One short transaction, no tenant settings. */
+  async signMembershipAgreementLink(token: string, input: object, requestId: string): Promise<string> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ result: string }>('SELECT hon.sign_membership_agreement_link($1,$2::jsonb,$3::uuid) result', [token, JSON.stringify(input), requestId]);
+      await client.query('COMMIT');
+      return result.rows[0]!.result;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
   async submitPublishedLeadForm(publicId: string, input: object, key: string): Promise<string> {
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
@@ -642,6 +660,9 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT hon.cancel_public_school_booking_type_booking($1,$2::jsonb) AS data',
       'SELECT hon.read_walkin_kiosk_terminal($1) AS data',
       'SELECT hon.submit_walkin_visit($1,$2::jsonb,$3) AS data',
+      'SELECT hon.read_walkin_card_provider($1) AS data',
+      'SELECT hon.open_walkin_card_payment($1,$2) AS data',
+      'SELECT hon.settle_walkin_card_payment($1,$2) AS data',
     ].includes(statement)) throw new Error('Unknown public event call.');
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
@@ -651,6 +672,50 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       const result = await client.query<{ data: unknown }>(statement, values);
       await client.query('COMMIT');
       if (result.rows.length !== 1) throw new Error('Unverified public event call.');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
+    finally { client.release(); }
+  }
+
+  /**
+   * B-TUI-2 0529 shared one-time payment: the API's four fixed calls (read, start, record, list due), one short
+   * transaction each, no tenant settings. The payment id is the only scope; opening a payment is never a runtime call.
+   */
+  async runSchoolPayOnceCall(statement: string, values: unknown[]): Promise<unknown> {
+    if (![
+      'SELECT hon.read_school_pay_once($1::uuid) AS data',
+      'SELECT hon.start_school_pay_once($1::uuid,$2::jsonb) AS data',
+      'SELECT hon.record_school_pay_once($1::uuid,$2::jsonb) AS data',
+      'SELECT hon.list_due_school_pay_once($1::integer) AS data',
+    ].includes(statement)) throw new Error('Unknown school one-time payment call.');
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>(statement, values);
+      await client.query('COMMIT');
+      if (result.rows.length !== 1) throw new Error('Unverified school one-time payment call.');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
+    finally { client.release(); }
+  }
+
+  /** 0530: the parent invoice payment entry points, a fixed allow-list (the subject comes only from the verified session). */
+  async runParentInvoicePayCall(statement: string, values: unknown[]): Promise<unknown> {
+    if (![
+      'SELECT hon.read_parent_invoice_payments($1::text) AS data',
+      'SELECT hon.read_parent_invoice_payment($1::text,$2::uuid) AS data',
+      'SELECT hon.open_parent_invoice_payment($1::text,$2::uuid) AS data',
+    ].includes(statement)) throw new Error('Unknown parent invoice payment call.');
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>(statement, values);
+      await client.query('COMMIT');
+      if (result.rows.length !== 1) throw new Error('Unverified parent invoice payment call.');
       return result.rows[0]!.data;
     } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
     finally { client.release(); }

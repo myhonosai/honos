@@ -97,6 +97,10 @@
       "title": "HON | School message history"
     },
     {
+      "path": "/parent/payment-return",
+      "title": "HON | Payment finished"
+    },
+    {
       "path": "/complete-mobile",
       "title": "HON Complete Mobile"
     },
@@ -215,6 +219,10 @@
     {
       "path": "/book/t/:publicId",
       "title": "Book a time"
+    },
+    {
+      "path": "/agreement/:token",
+      "title": "Membership agreement"
     },
     {
       "path": "/staff/team/shifts",
@@ -774,6 +782,10 @@
     },
     {
       "path": "/kiosk/walk-in",
+      "title": "HON | Walk-in"
+    },
+    {
+      "path": "/kiosk/walk-in/paid",
       "title": "HON | Walk-in"
     }
   ]

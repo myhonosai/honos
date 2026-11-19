@@ -86,3 +86,34 @@ test('school reports service: months outside 3..12 and unknown keys are refused 
   await assert.rejects(service.read(nonHuman, {}), (error) => error.getStatus() === 403);
   assert.equal(touched, false);
 });
+
+const { SchoolReportsDashboardController } = require('../dist/reports/school-reports.controller.js');
+test('school reports dashboard controller (0520): only ?range passes, as a string; reporting.view is resolved from the session', async () => {
+  const database = scopeDatabase();
+  const reports = { inputs: [], async readDashboard(context, input) { this.inputs.push([context, input]); return { ok: true }; } };
+  const controller = new SchoolReportsDashboardController(database, reports);
+  await controller.read(ORG, SCHOOL, undefined, {}, request);
+  await controller.read(ORG, SCHOOL, undefined, { range: 'M12' }, request);
+  assert.deepEqual(reports.inputs.map((entry) => entry[1]), [{}, { range: 'M12' }]);
+  assert.deepEqual(database.calls[0], ['staff-subject', SCHOOL, 'reporting.view']);
+  assert.equal(reports.inputs[0][0].source, 'HUMAN_UI');
+  for (const query of [{ range: 'ALL', months: '3' }, { months: '3' }, { range: ['ALL', 'M12'] }]) {
+    assert.equal(await code(controller.read(ORG, SCHOOL, undefined, query, request)), 'VALIDATION_FAILED', JSON.stringify(query));
+  }
+  assert.equal(await code(controller.read(ORG, SCHOOL, 'key-1', {}, request)), 'IDEMPOTENCY_KEY_NOT_ACCEPTED');
+  const other = new SchoolReportsDashboardController(scopeDatabase({ organizationId: '44444444-4444-4444-8444-444444444444', schoolId: SCHOOL, principalId: 'p' }), reports);
+  assert.equal(await code(other.read(ORG, SCHOOL, undefined, {}, request)), 'SCHOOL_REPORTS_FORBIDDEN');
+});
+
+test('school reports dashboard service (0520): ranges are closed before the database; errors map like the monthly reports', async () => {
+  let touched = false;
+  const service = new SchoolReportsService({ async withTenantReadOnlyTransaction() { touched = true; } });
+  for (const value of [{ range: 'last_month' }, { range: 'D7' }, { range: '' }, { months: '3' }]) {
+    await assert.rejects(service.readDashboard(context, value), (error) => error.getStatus() === 400, JSON.stringify(value));
+  }
+  await assert.rejects(service.readDashboard({ ...context, source: 'AI_AGENT' }, {}), (error) => error.getStatus() === 403);
+  assert.equal(touched, false);
+  for (const [error, expectedStatus] of [[pgError('42501', 'SCHOOL_REPORTS_FORBIDDEN'), 403], [pgError('22023', 'SCHOOL_TIMEZONE_INVALID'), 409], [new Error('lost'), 503]]) {
+    await assert.rejects(new SchoolReportsService(failingDatabase(error)).readDashboard(context, { range: 'ALL' }), (refusal) => refusal.getStatus() === expectedStatus);
+  }
+});

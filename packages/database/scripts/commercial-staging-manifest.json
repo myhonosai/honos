@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "b1af83672099db6a17a909449cafca43e859e71038608dee01a29767e33b3b4d",
+  "chainSha256": "708d9ed58f9b9d0913248ecce97ffcc4ae4ba8733824d793bfc4c762327ce957",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -655,8 +655,52 @@
       "sha256": "8419cff247f47336a963385cfd5ab81d44cd01ff608900fb53fb49a451327d11"
     },
     {
-      "file": "0498_automation_date_triggers.sql",
-      "sha256": "12863a05d0327474624c2661d2c8aa1c1324831e7a8f12d5ef9cd0676a938594"
+      "file": "0499_membership_agreement_signing_link.sql",
+      "sha256": "5fbd399f57b9cd71a761f94dee19401f46f75c2c68567f2670e3872ac7a8cc30"
+    },
+    {
+      "file": "0519_hq_hon_ongoing_budget.sql",
+      "sha256": "7203674b5377e3fe58c9dcd7229ec175f03ab716293bde333ca20ad4dad606ce"
+    },
+    {
+      "file": "0520_school_reports_dashboard.sql",
+      "sha256": "768911f840237cc845136c189b167fe41eb0c0f56a48c30398c4b8f825f25048"
+    },
+    {
+      "file": "0521_school_contact_list.sql",
+      "sha256": "15710fdfee6ad20c80784be688b58c699773742fdfe4be7f9690befd640ad46e"
+    },
+    {
+      "file": "0522_school_contact_card.sql",
+      "sha256": "dc1a744a90a927fb3303e25d79fce87d106ff5b92caefc5db69595b9e1f56516"
+    },
+    {
+      "file": "0523_school_contact_merge_archive.sql",
+      "sha256": "39228fc3d1af999e4bff29da71460a5a6c82ec0ccd7d9bb3339c62ba2ea8868c"
+    },
+    {
+      "file": "0529_school_pay_once.sql",
+      "sha256": "476c62434beaeb0be7f781878ee817e5b0e0641f22f94ed400457bf90da9ea4a"
+    },
+    {
+      "file": "0530_parent_invoice_payment.sql",
+      "sha256": "df276ef58db20b72c15d11911704c8bd3b6773b85102c19aa78e88ef5638ce43"
+    },
+    {
+      "file": "0533_walk_in_kiosk_card_payment.sql",
+      "sha256": "bbdffff9b9eee29f5ff9f8452a4ff5694c758b2abc234967b8bb2ebda8af35ac"
+    },
+    {
+      "file": "0537_walk_in_kiosk_trial_class.sql",
+      "sha256": "24b725cddd83d80ab9597b5531e2178eb355aae5911c6267d13e2dc999fe057f"
+    },
+    {
+      "file": "0538_walk_in_kiosk_trial_seats_and_demo.sql",
+      "sha256": "9e3e4bd1693a9edf87577d30f46d03769880f74c63835a14b015010ba04e292e"
+    },
+    {
+      "file": "0541_automation_date_triggers.sql",
+      "sha256": "2fa954a5acbd4b937f176fb9a8ad22adf5af4eadd8f222c8c35090c378ecd655"
     }
   ]
 }

@@ -10,7 +10,7 @@ export interface AutomationEngineCounts {
 
 /**
  * Connects as hon_automation_worker (HON_AUTOMATION_WORKER_DATABASE_URL), never as the runtime, migration or communication
- * worker login. The role can only execute the 0423 engine functions and the 0498 date scan; it is refused if it is a superuser, bypasses RLS,
+ * worker login. The role can only execute the 0423 engine functions and the 0541 date scan; it is refused if it is a superuser, bypasses RLS,
  * inherits roles or reuses another login's URL. Every action happens inside those database functions.
  */
 @Injectable()
