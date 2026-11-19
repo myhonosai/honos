@@ -354,6 +354,7 @@
     "0567_calendar_cards.sql": "812ae679a0a8671aca29a4692db0f7751ad78bcb3169eec0b3bcdc3ac301de76",
     "0574_automation_date_triggers.sql": "fb2795778f536ea83c5a6c81191b9baaed41575c22b4c0e5a06a0e163e012be9",
     "0576_school_announcements.sql": "7d57e1debc975c6058aeea95428cb8cdfc7979beb467282bf2cde0ab49af4ffa",
-    "0581_parent_pro_shop.sql": "2d3752083574a64ffb76936058118b7ed1b398ef79b7e78dd790c35506381aa6"
+    "0581_parent_pro_shop.sql": "2d3752083574a64ffb76936058118b7ed1b398ef79b7e78dd790c35506381aa6",
+    "0592_crm_board_text_opt_out.sql": "5849d768a0eafd42be85d94c637ff97ffb975d2a54523a61d15367a73ab54580"
   }
 }

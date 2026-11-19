@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "cf086fcf3ddc1e5c22176f72a9a8b66756e8f239a0386a853fba74fe8828d9dc",
+  "chainSha256": "99c1bdb8cf4fe3f7cc3026effdec102a26bb19637d2706a0ab44ee8503c71bdc",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -729,6 +729,10 @@
     {
       "file": "0581_parent_pro_shop.sql",
       "sha256": "2d3752083574a64ffb76936058118b7ed1b398ef79b7e78dd790c35506381aa6"
+    },
+    {
+      "file": "0592_crm_board_text_opt_out.sql",
+      "sha256": "5849d768a0eafd42be85d94c637ff97ffb975d2a54523a61d15367a73ab54580"
     }
   ]
 }
