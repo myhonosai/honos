@@ -16,7 +16,8 @@ function fakeSession(token: string | null) {
   };
 }
 function fakeApi(journey: ParentRead<ReturnType<typeof verifyParentJourneyView>>, zone: string | null = 'America/Los_Angeles'): ParentApi {
-  return { journey: jest.fn(async () => journey), schoolTimeZone: jest.fn(async () => zone), classBookings: jest.fn(async () => ({ ok: false, state: 'unavailable' })) } as unknown as ParentApi;
+  return { journey: jest.fn(async () => journey), schoolTimeZone: jest.fn(async () => zone), classBookings: jest.fn(async () => ({ ok: false, state: 'unavailable' })),
+    announcements: jest.fn(async () => ({ ok: false, state: 'unavailable' })) } as unknown as ParentApi;
 }
 const ok = { ok: true as const, data: verifyParentJourneyView(journeyBody()) };
 const now = () => new Date(NOW);

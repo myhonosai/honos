@@ -56,11 +56,11 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/instructor-qualifications', 'routeQualifications'), r('/staff/documents', 'routeDocuments')] },
   { key: 'crm', titleKey: 'navCrm', section: 'leads', routes: [r('/staff/crm', 'routeLeadsHome'), h('/staff/crm/leads', 'routeLeads'), h('/staff/crm/journey', 'routeJourney'),
     r('/staff/crm/follow-ups', 'routeFollowUps'), r('/staff/crm/trials', 'routeTrials', true), r('/staff/crm/lead-memberships', 'routeLeadMemberships'), r('/staff/migration/leads', 'routeLeadImport')] },
-  { key: 'automation', titleKey: 'navAutomation', section: 'leads', routes: [r('/staff/automation/rules', 'routeAutomation')] },
+  { key: 'automation', titleKey: 'navAutomation', section: 'leads', routes: [r('/staff/automations', 'routeAutomation'), h('/staff/automation/rules', 'routeAutomationRules')] },
   // Owner ask (2026-11-19, docs/architecture/SCHOOL_TEXTS_AND_EMAIL_PAGES.md): texts and email are separate pages with their own
   // tabs, modeled on the owner's current CRM; the parent app chat is its own page laid out like the texts inbox.
   { key: 'messages', titleKey: 'navMessages', section: 'communication', routes: [r('/staff/texts', 'routeConversations'), r('/staff/texts/send', 'routeTextsSend')] },
-  { key: 'parentApp', titleKey: 'navParentApp', section: 'communication', routes: [r('/staff/family-messages', 'routeFamilyMessages')] },
+  { key: 'parentApp', titleKey: 'navParentApp', section: 'communication', routes: [r('/staff/family-messages', 'routeFamilyMessages'), r('/staff/family-messages/announcements', 'routeAnnouncements')] },
   { key: 'social', titleKey: 'navSocial', section: 'communication', routes: [r('/staff/marketing/social', 'routeSocial')] },
   { key: 'checkout', titleKey: 'navCheckout', section: 'finance', routes: [r('/staff/billing/checkout-pages', 'routeCheckoutPages')] },
   // Shopify (0405): the school's own store, read-only mirror plus connect, sync and disconnect.

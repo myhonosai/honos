@@ -1161,3 +1161,4 @@ export * from './staff-shifts.js';
 export * from './staff-time-clock.js';
 export * from './eian.js';
 export * from './parent-invoice-pay.js';
+export * from './school-announcements.js';

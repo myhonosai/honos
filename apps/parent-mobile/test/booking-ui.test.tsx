@@ -13,7 +13,7 @@ function fakeApi(overrides: Partial<Record<keyof ParentApi, jest.Mock>>) {
     journey: jest.fn(async () => ({ ok: true, data: verifyParentJourneyView(journeyBody()) })),
     schoolTimeZone: jest.fn(async () => 'America/Los_Angeles'),
     classBookings: jest.fn(async () => choices()),
-    bookClass: jest.fn(), cancelBooking: jest.fn(),
+    bookClass: jest.fn(), cancelBooking: jest.fn(), announcements: jest.fn(async () => ({ ok: false, state: 'unavailable' })),
     ...overrides,
   } as unknown as ParentApi & Record<string, jest.Mock>;
 }
