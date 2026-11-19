@@ -278,6 +278,10 @@ import { ParentSchoolBookingBookGuard, ParentSchoolBookingCancelGuard, ParentSch
 import { ParentSchoolBookingService } from './families/parent-school-bookings.service.js';
 import { FamilyMessagesInboxController, FamilyMessagesInboxReadGuard, FamilyMessagesMarkReadGuard, FamilyMessagesReplyGuard, ParentFamilyMessagesController, ParentFamilyMessagesReadGuard, ParentFamilyMessagesSendGuard } from './families/family-messages.controller.js';
 import { FamilyMessagesService } from './families/family-messages.service.js';
+import { ParentSchoolAnnouncementsController, ParentSchoolAnnouncementsReadGuard, SchoolAnnouncementsController, SchoolAnnouncementsPublishGuard, SchoolAnnouncementsReadGuard, SchoolAnnouncementsWithdrawGuard } from './announcements/school-announcements.controller.js';
+import { SchoolAnnouncementsService } from './announcements/school-announcements.service.js';
+import { ParentProShopController, ParentProShopReadGuard } from './pro-shop/parent-pro-shop.controller.js';
+import { ParentProShopService } from './pro-shop/parent-pro-shop.service.js';
 import { ConversationCreateLeadGuard, ConversationLinkGuard, ConversationMarkReadGuard, ConversationReadGuard, ConversationReplyGuard, ConversationUpdateGuard, SchoolConversationsController } from './conversations/school-conversations.controller.js';
 import { SchoolConversationsService } from './conversations/school-conversations.service.js';
 import { ContactEmailResendGuard, ContactHistoryReadGuard, ContactMessagesController } from './conversations/contact-messages.controller.js';
@@ -318,6 +322,9 @@ import { ClassSessionsReadHumanUiGuard } from './schedule/class-sessions-read-hu
 import { ClassSessionsReadService } from './schedule/class-sessions-read.service.js';
 import { ClassSessionPagesController, ClassSessionPagesHumanUiGuard } from './schedule/class-session-pages.controller.js';
 import { ClassSeriesController } from './schedule/class-series.controller.js';
+import { CalendarCardsController } from './schedule/calendar-cards.controller.js';
+import { CalendarCardsService } from './schedule/calendar-cards.service.js';
+import { CalendarCardCreateHumanUiGuard, CalendarCardMoveHumanUiGuard, CalendarCardsReadHumanUiGuard } from './schedule/calendar-cards-human-ui.guard.js';
 import { ClassSeriesService } from './schedule/class-series.service.js';
 import { PublicSchoolEventController, SchoolEventController } from './schedule/school-event.controller.js';
 import { SchoolEventService } from './schedule/school-event.service.js';
@@ -531,6 +538,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     EianController,
     ParentInvoicePayController,
     FamilyMessagesInboxController,
+    ParentSchoolAnnouncementsController,
+    SchoolAnnouncementsController,
+    ParentProShopController,
     SchoolConversationsController,
     ContactMessagesController,
     ConversationAiController,
@@ -550,6 +560,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSessionsReadController,
     ClassSessionPagesController,
     ClassSeriesController,
+    CalendarCardsController,
     SchoolEventController,
     PublicSchoolEventController,
     BookingTypeController,
@@ -726,6 +737,13 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     FamilyMessagesInboxReadGuard,
     FamilyMessagesMarkReadGuard,
     FamilyMessagesReplyGuard,
+    SchoolAnnouncementsService,
+    ParentSchoolAnnouncementsReadGuard,
+    SchoolAnnouncementsReadGuard,
+    SchoolAnnouncementsPublishGuard,
+    SchoolAnnouncementsWithdrawGuard,
+    ParentProShopService,
+    ParentProShopReadGuard,
     SchoolConversationsService,
     ContactMessagesService,
     ContactHistoryReadGuard,
@@ -865,6 +883,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolSocialAdsService,
     SocialPostDispatcher,
     ClassSeriesService,
+    CalendarCardsService,
     SchoolReportsService,
     SchoolContactsService,
     SchoolContactAdminService,
@@ -885,6 +904,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     BookingTypeStatusHumanUiGuard,
     BookingTypeBookingStatusHumanUiGuard,
     ClassSeriesCreateHumanUiGuard,
+    CalendarCardsReadHumanUiGuard,
+    CalendarCardCreateHumanUiGuard,
+    CalendarCardMoveHumanUiGuard,
     ClassSeriesReviseHumanUiGuard,
     ClassSeriesOngoingHumanUiGuard,
     ClassSeriesTopUpHumanUiGuard,

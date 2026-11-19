@@ -5,7 +5,7 @@ const adapter = require('../dist/commerce/shopify/shopify-adapter.js');
 const { runShopifySync } = require('../dist/commerce/shopify/shopify-sync-engine.js');
 const { ShopifyWorkerSql } = require('../dist/commerce/shopify/shopify-worker.js');
 
-// SH-F1 (0569) Shopify finance: everything here is local (the fake store, parsed sample answers). Nothing calls Shopify.
+// SH-F1 (0597) Shopify finance: everything here is local (the fake store, parsed sample answers). Nothing calls Shopify.
 const SHOP = 'ima-finance.myshopify.com';
 const CONN = '22222222-2222-4222-8222-222222222222';
 const SECRET = 's'.repeat(40);

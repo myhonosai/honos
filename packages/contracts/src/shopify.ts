@@ -366,7 +366,7 @@ export function verifyShopifyChangeResult(v: unknown): ShopifyChangeResult {
   return Object.freeze({ change: verifyShopifyProductChange(o.change) });
 }
 
-// ---- SH-F1 (0569): Shopify Payments balance, payouts and balance transactions (read-only) ----
+// ---- SH-F1 (0597): Shopify Payments balance, payouts and balance transactions (read-only) ----
 
 export const SHOPIFY_PAYOUT_STATUSES = ['SCHEDULED', 'IN_TRANSIT', 'PAID', 'FAILED', 'CANCELED'] as const;
 export type ShopifyPayoutStatus = typeof SHOPIFY_PAYOUT_STATUSES[number];
