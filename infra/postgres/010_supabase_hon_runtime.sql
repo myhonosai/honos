@@ -4561,3 +4561,26 @@ DO $$ DECLARE r text; f text; col text; BEGIN
       hon.read_school_calendar_cards(text,jsonb) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0577 parent app curriculum (cycles, app settings, staff commands): two runtime entry points. The four new tables, the new
+-- curriculum_resources.cycle_id column and every helper stay migration-owner only.
+DO $$ DECLARE r text; f text; t text; BEGIN
+  IF to_regprocedure('hon.mutate_parent_app_curriculum(text,text,uuid,uuid,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0577 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['curriculum_cycles','curriculum_app_settings','curriculum_app_events','curriculum_app_requests'] LOOP
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE format('REVOKE ALL (cycle_id) ON hon.curriculum_resources FROM %I',r); END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.curriculum_app_name_ok(text,integer)','hon.guard_curriculum_cycle()','hon.guard_curriculum_app_settings()',
+    'hon.curriculum_app_cycle_state(uuid,uuid,uuid)','hon.curriculum_app_projection(uuid,uuid,uuid)','hon.read_staff_parent_app_curriculum(text)',
+    'hon.mutate_parent_app_curriculum(text,text,uuid,uuid,jsonb,text,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_staff_parent_app_curriculum(text),hon.mutate_parent_app_curriculum(text,text,uuid,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;

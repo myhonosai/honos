@@ -5,7 +5,7 @@ or cycle based. If rank based, as rank changes, I need app to know and change wh
 know which cycle and cycle material is set either video or documents. And it would cycle through or pick by staff.
 This means HON OS needs a section for app control."
 
-Status: SPEC. Nothing here is built yet. Migrations (coordinator, 2026-11-19): 0577 cycles + settings, 0578 parent read v2.
+Status: PCA-1 (0577) built on branch claude/project-thread-05np7o; PCA-2..4 not built yet. Migrations (coordinator, 2026-11-19): 0577 cycles + settings, 0578 parent read v2.
 
 ## 1. What already exists on main (cd2c33d)
 
@@ -48,7 +48,7 @@ material, changing how promotions set ranks.
 | Field | Values | Default |
 | --- | --- | --- |
 | `display_mode` | `RANK`, `CYCLE` | `CYCLE` when `model_code='ROTATIONAL'`, else `RANK` |
-| `show_in_app` | boolean | `false` (staff turn it on; nothing new appears to parents until then) |
+| `show_in_app` | boolean | `true` (staff can hide a curriculum from the app) |
 | `rank_show_earlier` | boolean | `false` |
 | `rank_show_next` | boolean | `false` |
 | `cycle_rotation` | `AUTO`, `STAFF_PICK` | `STAFF_PICK` |
@@ -58,8 +58,8 @@ material, changing how promotions set ranks.
 | `cycle_show_next` | boolean | `true` |
 | `version` | optimistic lock | 1 |
 
-A curriculum with no settings row behaves as today (`RANK`, shown) so existing parents see no change. A row is created
-on first save. (`show_in_app` default false applies to the row; a missing row keeps the 0132 behavior.)
+A curriculum with no settings row behaves as today (shown; rank material) so existing parents see no change. The staff
+read shows the defaults with `saved: false, version: 0`; the first save creates the row (expected version 0).
 
 **Cycle** (new table `hon.curriculum_cycles`): `id`, curriculum, `name` (1..80), `position` (1..), `status`
 (`ACTIVE`/`ARCHIVED`), `version`. Positions are unique among active cycles and are reordered by one command.
@@ -177,3 +177,21 @@ Contracts in `packages/contracts/src/parent-app-curriculum.ts` with strict verif
 - Isolation: other school, other family, staff-only, archived, hidden curriculum, family picker choice.
 - Commands: idempotent replay, key reuse conflict, version conflict, cross-curriculum cycle/rank refused, revoked
   permission after lock.
+
+## 12. PCA-1 as built (0577)
+
+- Tables `hon.curriculum_cycles`, `hon.curriculum_app_settings`, `hon.curriculum_app_events` (immutable history),
+  `hon.curriculum_app_requests` (scoped receipts); forced RLS, no policies, no runtime grants.
+- `hon.curriculum_resources` gains `cycle_id` (FK to an active-or-archived cycle of the same curriculum, at most one of
+  rank/cycle) and the `DOCUMENT` kind. The 0132 parent read now leaves cycle material and documents to the 0578 read.
+- Entry points (runtime EXECUTE only): `hon.read_staff_parent_app_curriculum(text)` and
+  `hon.mutate_parent_app_curriculum(subject, op, curriculum, target, input, key, request, correlation)` with ops
+  `SAVE_SETTINGS`, `CYCLE_CREATE`, `CYCLE_RENAME`, `CYCLE_ARCHIVE`, `CYCLE_ORDER`, `SWITCH_CYCLE`.
+- Routes under `/v1/staff/schools/:schoolId/parent-app/curriculum` (human command `parent-app-curriculum`):
+  `GET`, `POST :curriculumId/settings`, `POST :curriculumId/cycles`, `POST :curriculumId/cycles/:cycleId/versions`,
+  `POST .../archive`, `POST .../switch`, `POST :curriculumId/cycle-order`. Materials keep the library routes, which now
+  accept `kind: DOCUMENT` and an optional `cycleId`.
+- Rules decided while building: the staff-picked current cycle cannot be archived (`CYCLE_IS_CURRENT`); switching
+  needs saved settings (`SETTINGS_REQUIRED`); leaving AUTO keeps the cycle families see today; a first STAFF_PICK save
+  or the first cycle added under STAFF_PICK becomes current; reorder takes the exact list of active cycles.
+- Proof: `packages/database/scripts/test-parent-app-curriculum-integrity.mjs` (126 checks over signed HTTP).
