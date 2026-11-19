@@ -220,7 +220,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
   WHERE p_phone IS NOT NULL AND p.organization_id=p_org AND p.school_id=p_school AND p.phone_e164=p_phone
 $$;
 
--- Ended outgoing calls that never connected become EXPIRED (called before reads and starts).
+-- Outgoing calls that never connected become EXPIRED (on the next start; reads show them EXPIRED already).
 CREATE FUNCTION hon.expire_school_calls(p_school uuid) RETURNS void
 LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
   UPDATE hon.school_calls SET status='EXPIRED', version=version+1, updated_at=clock_timestamp()
@@ -229,7 +229,8 @@ $$;
 
 CREATE FUNCTION hon.school_call_json(c hon.school_calls) RETURNS jsonb
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-  SELECT jsonb_build_object('callId',c.id,'direction',c.direction,'status',c.status,'remoteE164',c.remote_e164,'personId',c.person_id,
+  SELECT jsonb_build_object('callId',c.id,'direction',c.direction,
+    'status',CASE WHEN c.status='INITIATED' AND c.connect_by<=clock_timestamp() THEN 'EXPIRED' ELSE c.status END,'remoteE164',c.remote_e164,'personId',c.person_id,
     'contactName',(SELECT nullif(btrim(coalesce(p.given_name,'')||' '||coalesce(p.family_name,'')),'') FROM hon.people p WHERE p.id=c.person_id),
     'staffName',(SELECT p.display_name FROM hon.principals p WHERE p.id=c.staff_principal_id),
     'startedAt',hon.conversation_time(c.created_at),'answeredAt',hon.conversation_time(c.answered_at),'endedAt',hon.conversation_time(c.ended_at),
@@ -262,7 +263,6 @@ DECLARE actor uuid; org uuid:=hon.current_organization_id(); school uuid:=hon.cu
   manage boolean; sender hon.school_text_senders; result jsonb;
 BEGIN
   actor:=hon.require_school_call_actor(subject,false);
-  PERFORM hon.expire_school_calls(school);
   manage:=hon.conversation_staff_has(actor,org,school,'communication.call.manage');
   SELECT * INTO s FROM hon.school_calling_settings x WHERE x.school_id=school;
   SELECT * INTO sender FROM hon.school_text_senders x WHERE x.school_id=school;
@@ -388,7 +388,7 @@ BEGIN
   RETURN hon.school_call_json(c)||jsonb_build_object('connectBy',hon.conversation_time(c.connect_by),'replayed',false);
 END $$;
 
--- K1 call log. p: optional filter ALL|MISSED|VOICEMAIL|OUTGOING (default ALL), personId, before {at, id}. 50 rows, newest first.
+-- K1 call log (read only). p: optional filter ALL|MISSED|VOICEMAIL|OUTGOING (default ALL), personId, before {at, id}. 50 rows, newest first.
 CREATE FUNCTION hon.read_school_calls(subject text, p jsonb) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid; org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); v_filter text; v_person uuid; v_at timestamptz; v_id uuid;
@@ -403,7 +403,6 @@ BEGIN
     RAISE EXCEPTION 'VALIDATION_FAILED' USING ERRCODE='22023';
   END IF;
   actor:=hon.require_school_call_actor(subject,false);
-  PERFORM hon.expire_school_calls(school);
   v_filter:=coalesce(p->>'filter','ALL'); v_person:=(p->>'personId')::uuid; v_at:=(p->'before'->>'at')::timestamptz; v_id:=(p->'before'->>'id')::uuid;
   SELECT coalesce(jsonb_agg(hon.school_call_json(x) ORDER BY x.created_at DESC, x.id DESC),'[]'), count(*) INTO rows, n FROM (
     SELECT c.* FROM hon.school_calls c WHERE c.organization_id=org AND c.school_id=school

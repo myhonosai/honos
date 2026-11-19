@@ -23,8 +23,9 @@ const callSid = () => 'CA' + hex(), recSid = () => 'RE' + hex(), msid = () => 'M
 const ident = (principal) => 'u' + principal.replaceAll('-', '');
 const human = (label) => ({ externalSubject: 'oidc:calls:' + label + ':' + K(), email: label + '-' + K() + '@example.invalid' });
 
-async function as(x, sql, args = []) {
-  await restricted.query('BEGIN');
+async function as(x, sql, args = [], readOnly = false) {
+  // Reads run READ ONLY, as the API runs them.
+  await restricted.query(readOnly ? 'BEGIN READ ONLY' : 'BEGIN');
   try {
     for (const [k, v] of [['app.hon_external_subject', x.externalSubject], ['app.hon_principal_type', 'HUMAN_USER'], ['app.hon_source', 'HUMAN_UI'],
       ['app.hon_principal_id', x.principal], ['app.hon_organization_id', x.org], ['app.hon_school_id', x.school]]) {
@@ -39,11 +40,11 @@ async function rejects(code, work, label) {
   try { await work(); } catch (error) { assert.equal(error.code, code, label + ': ' + error.message); return error; }
   assert.fail(label + ': no error');
 }
-const calling = (x) => as(x, 'SELECT hon.read_school_calling($1) data', [x.externalSubject]);
+const calling = (x) => as(x, 'SELECT hon.read_school_calling($1) data', [x.externalSubject], true);
 const settings = (x, p) => as(x, 'SELECT hon.set_school_calling_settings($1,$2::jsonb,$3,$4) data', [x.externalSubject, JSON.stringify(p), K(), K()]);
 const ringMe = (x, on) => as(x, 'SELECT hon.set_my_school_call_ringing($1,$2::jsonb) data', [x.externalSubject, JSON.stringify({ ringMe: on })]);
 const start = (x, p, key = 'key-' + K()) => as(x, 'SELECT hon.start_school_call($1,$2::jsonb,$3,$4,$5) data', [x.externalSubject, JSON.stringify(p), key, K(), K()]);
-const log = (x, p = {}) => as(x, 'SELECT hon.read_school_calls($1,$2::jsonb) data', [x.externalSubject, JSON.stringify(p)]);
+const log = (x, p = {}) => as(x, 'SELECT hon.read_school_calls($1,$2::jsonb) data', [x.externalSubject, JSON.stringify(p)], true);
 const update = (x, p) => as(x, 'SELECT hon.update_school_call($1,$2::jsonb,$3,$4) data', [x.externalSubject, JSON.stringify(p), K(), K()]);
 const dnc = (x, phone, on) => as(x, 'SELECT hon.set_school_do_not_call($1,$2::jsonb) data', [x.externalSubject, JSON.stringify({ phoneE164: phone, doNotCall: on })]);
 const openRec = (x, id) => as(x, 'SELECT hon.open_school_call_recording($1,$2) data', [x.externalSubject, id]);
@@ -172,7 +173,9 @@ try {
   await q("UPDATE hon.school_calls SET connect_by=clock_timestamp()-interval '1 second' WHERE id=$1", [stale.callId]);
   await q("ALTER TABLE hon.school_calls ENABLE TRIGGER guarded");
   assert.equal((await connect(stale.callId, ident(coach.principal), null, callSid())).outcome, 'REFUSED', 'expired');
-  await log(coach); assert.equal((await row(stale.callId)).status, 'EXPIRED');
+  assert.equal((await log(coach)).calls.find((x) => x.callId === stale.callId).status, 'EXPIRED', 'shown EXPIRED at once');
+  await start(coach, { toE164: '+15125551005' });
+  assert.equal((await row(stale.callId)).status, 'EXPIRED', 'stored EXPIRED on the next start');
   const lost = await start(coach, { toE164: '+15125551004' });
   await q("DELETE FROM hon.role_permissions WHERE permission_code='communication.call.use' AND role_id=(SELECT role_id FROM hon.principal_role_grants WHERE id=$1)", [coach.grant]);
   assert.equal((await connect(lost.callId, ident(coach.principal), null, callSid())).outcome, 'REFUSED', 'starter lost permission');

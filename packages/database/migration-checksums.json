@@ -347,6 +347,6 @@
     "0533_walk_in_kiosk_card_payment.sql": "bbdffff9b9eee29f5ff9f8452a4ff5694c758b2abc234967b8bb2ebda8af35ac",
     "0537_walk_in_kiosk_trial_class.sql": "24b725cddd83d80ab9597b5531e2178eb355aae5911c6267d13e2dc999fe057f",
     "0538_walk_in_kiosk_trial_seats_and_demo.sql": "9e3e4bd1693a9edf87577d30f46d03769880f74c63835a14b015010ba04e292e",
-    "0547_school_calls.sql": "962f5906f471f90195d21c9ac2329fde41177cd543c8e0adda03a18e67d2bd74"
+    "0547_school_calls.sql": "20f33d4eee577d52937afb3df2896cdab3bd2b19ce1040556ecc1be5f336fbdb"
   }
 }
