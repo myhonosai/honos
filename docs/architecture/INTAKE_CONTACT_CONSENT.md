@@ -67,9 +67,13 @@ Korean and Spanish translations ship with it. Version `IC1-2026-11-19` is stored
 
 ## UI
 
-- Contact card: the consent line shows the method, e.g. "Agreed · from website form · Nov 19, 2026". Record
+- Contact card: the consent line names how it was captured, e.g. "Recorded Nov 19 from the website form". Record
   agreement stays for contacts with nothing recorded (older records, staff who unticked).
-- Add lead / add person dialogs and both import reviews: "Record email and text consent" box, ticked by default.
+- Website form: the email wording above submit and the unticked "Text me" box (sent as `textOptIn: true` only when
+  ticked). Kiosk: the existing tick is relabelled to the texting wording and the email wording sits under it.
+- Add lead dialog and both import finalize steps: "Record email and text consent" box, ticked by default; unticked
+  sends `consentChannels: []`. There is no add-person dialog in the web app today; the API accepts `consentChannels`.
+- Follow-up: privacy and terms links next to the Text me box once schools have those pages (A2P thread, PR #501).
 
 ## Known effect
 
