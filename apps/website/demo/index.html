@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HON OS Website Demos</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+:root{--bg:#f5f2ea;--fg:#141a17;--muted:#5f6a64;--card:#fff;--line:#ddd6c6}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1210;--fg:#eef2ee;--muted:#9aa69f;--card:#18201c;--line:#2a332e}}
+:root[data-theme="dark"]{--bg:#0e1210;--fg:#eef2ee;--muted:#9aa69f;--card:#18201c;--line:#2a332e}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:960px;margin:0 auto;padding:56px 16px}
+h1{font-size:clamp(30px,5vw,46px);letter-spacing:-.03em;margin:0 0 8px}
+p{color:var(--muted);margin:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;margin-top:32px}
+a.card{display:block;text-decoration:none;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;transition:transform .2s}
+a.card:hover{transform:translateY(-3px)}
+.sw{height:150px;display:flex;align-items:flex-end;padding:18px;font-size:30px;letter-spacing:-.04em}
+.a .sw{background:#2563eb;color:#fff;font-weight:500}
+.b .sw{background:#0a1913;color:#f3cf7a;font-family:Georgia,serif}
+.body{padding:16px 18px 20px}
+.body b{display:block;font-size:18px;margin-bottom:4px}
+</style>
+</head>
+<body>
+<main>
+  <h1>HON OS website: two design previews</h1>
+  <p>Both use the same HON content and the new pricing section (PR #510). Neither is the live site; nothing has been deployed.</p>
+  <div class="grid">
+    <a class="card a" href="jeton/index.html"><div class="sw">One app for your whole school</div><div class="body"><b>Demo A: bold and bright</b><p>Inspired by Jeton. Full-screen HON blue sections, very large headlines, a floating pill menu, product screens in browser frames and photos that move as you scroll.</p></div></a>
+    <a class="card b" href="editorial/index.html"><div class="sw">Run the school. Grow the school.</div><div class="body"><b>Demo B: editorial report</b><p>Inspired by the Creative Intelligence Report 2026. Night-green sky with gold stars, serif headlines, a news ticker, cream pages with charts and the illustrated AI team.</p></div></a>
+  </div>
+</main>
+</body>
+</html>
