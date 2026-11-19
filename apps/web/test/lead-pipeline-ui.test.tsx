@@ -8,10 +8,11 @@ import { StarterRefusedError, addLeadApi } from '../src/components/leads/add-lea
 import { LeadsError } from '../src/components/leads/http';
 import {
   PROGRAM_NONE, applyFilters, applyMove, boardColumns, boardStats, cardLine, codeLabel, draftErrors, draftFrom, draftInput, initials, matchesSearch,
-  moveDraftStage, moveDraftStageTo, moveTargets, programsOf, rateText, sortLeads, stagesNeedingMove, starterEditReady,
+  callHref, emailHref, moveDraftStage, moveDraftStageTo, moveTargets, programsOf, rateText, sortLeads, stagesNeedingMove, starterEditReady, textHref,
 } from '../src/components/lead-pipeline/model';
 import { PipelineView, type PipelineViewProps } from '../src/components/lead-pipeline/view';
 import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
+import { leadTrialHref } from '../src/components/crm-lead-memberships-http';
 import { id, scope } from './account-status-fixtures';
 
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
@@ -340,5 +341,79 @@ describe('drag to reorder stages', () => {
   it('does not offer dragging while saving', () => {
     const html = render({ edit: { draft: draftFrom(STAGES), newName: '', phase: 'SAVING', error: null } });
     expect(html).not.toMatch(/draggable="true" title="Drag/);
+  });
+});
+
+describe('quick actions on lead cards', () => {
+  it('builds call and text links only from a strict E.164 number', () => {
+    expect(callHref('+15555550100')).toBe('tel:+15555550100');
+    expect(textHref('+15555550100')).toBe('sms:+15555550100');
+    for (const bad of [null, '', '5555550100', '+0555', '+1555 555 0100', '+15555550100?body=x', '+1234567890123456', 'javascript:alert(1)']) {
+      expect(callHref(bad)).toBeNull();
+      expect(textHref(bad)).toBeNull();
+    }
+  });
+
+  it('builds an email link only from a plain address with no extra mail headers', () => {
+    expect(emailHref('riley@example.invalid')).toBe('mailto:riley@example.invalid');
+    for (const bad of [null, '', 'riley', 'riley@', 'a@b', 'a b@example.invalid', 'a@example.invalid?cc=x@y.z', 'a@example.invalid&bcc=x', 'a%0A@example.invalid', '<a@example.invalid>']) {
+      expect(emailHref(bad)).toBeNull();
+    }
+  });
+
+  it('links Book trial straight to the trial step of the lead journey', () => {
+    const href = leadTrialHref({ organizationId: id(1), schoolId: id(2), leadId: id(41) });
+    expect(href.startsWith('/staff/crm/journey?')).toBe(true);
+    const params = new URLSearchParams(href.split('?')[1]);
+    expect(Object.fromEntries(params)).toEqual({ organizationId: id(1), schoolId: id(2), leadId: id(41), step: 'trial' });
+  });
+
+  it('shows Call, Text and Book trial on each open lead card', () => {
+    const html = render();
+    expect(html.match(/data-testid="quick-call"/g)).toHaveLength(3);
+    expect(html.match(/data-testid="quick-text"/g)).toHaveLength(3);
+    expect(html.match(/data-testid="quick-trial"/g)).toHaveLength(3);
+    expect(html).toContain('href="tel:+15555550100"');
+    expect(html).toContain('href="sms:+15555550199"');
+    expect(html).toContain('step=trial');
+    expect(html).toContain('aria-label="Call Riley1 Park"');
+  });
+
+  it('leaves out Call and Text when a lead has no usable phone number', () => {
+    const board = { ...BOARD, leads: [lead(1, { phoneE164: null })] };
+    const html = render({ board: { state: 'READY', board } });
+    expect(html).not.toContain('data-testid="quick-call"');
+    expect(html).not.toContain('data-testid="quick-text"');
+    expect(html).toContain('data-testid="quick-trial"');
+  });
+
+  it('gives the open lead panel Call, Text, Email and Book trial, and says Text uses the phone', () => {
+    const html = render({ selectedId: id(41) });
+    const panel = html.slice(html.indexOf('data-testid="lead-panel"'));
+    expect(panel).toContain('href="tel:+15555550100"');
+    expect(panel).toContain('href="sms:+15555550100"');
+    expect(panel).toContain('href="mailto:riley1@example.invalid"');
+    expect(panel).toContain('data-testid="panel-trial"');
+    expect(panel).toContain(pipelineText('en', 'quickTextHelp'));
+  });
+
+  it('offers no quick actions for a closed lead', () => {
+    const board = { ...BOARD, status: 'WON' as const, leads: [lead(1, { status: 'WON' })] };
+    const html = render({ board: { state: 'READY', board }, status: 'WON', view: 'LIST', selectedId: id(41) });
+    expect(html).not.toContain('data-testid="quick-');
+    expect(html).not.toContain('data-testid="panel-trial"');
+  });
+
+  it('has quick action words in every language', () => {
+    for (const language of Object.keys(PIPELINE_LANGUAGES)) {
+      for (const key of ['quickCall', 'quickText', 'quickEmail', 'quickTrial', 'quickCallLabel', 'quickTextLabel', 'quickTrialLabel', 'quickTextHelp'] as const) {
+        expect(pipelineText(language, key).length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('marks the stage drag handle as decoration, since the arrows are the accessible way', () => {
+    const html = render({ edit: { draft: draftFrom(STAGES), newName: '', phase: 'EDIT', error: null } });
+    expect(html).toMatch(/aria-hidden="true"[^>]*draggable="true"|draggable="true"[^>]*aria-hidden="true"/);
   });
 });
