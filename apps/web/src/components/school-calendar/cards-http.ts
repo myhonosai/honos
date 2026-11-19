@@ -19,6 +19,7 @@ export type CardErrorKind =
   /** The new time is not in the future. Nothing changed. */ | 'PAST'
   /** The request was not accepted as sent. Nothing changed. */ | 'INVALID'
   /** Too many requests. Nothing changed. */ | 'RATE'
+  /** The school already has the most block-outs or shared calendars allowed. Nothing changed. */ | 'LIMIT'
   /** Busy, or the outcome is not known. Only the identical request (same key) may be sent again. */ | 'UNKNOWN';
 export class CardError extends Error { constructor(readonly kind: CardErrorKind, readonly code: string | null = null) { super(kind); } }
 export type Owned = () => boolean;
@@ -47,11 +48,13 @@ export function cardErrorFor(status: number, code: string | null): CardError {
     if (code === 'VERSION_CONFLICT') return new CardError('CHANGED', code);
     if (code === 'CALENDAR_CARD_LOCKED') return new CardError('LOCKED', code);
     if (code === 'IDEMPOTENCY_KEY_REUSED') return new CardError('INVALID', code);
+    if (code === 'CALENDAR_SETTINGS_LIMIT') return new CardError('LIMIT', code);
   }
   return new CardError('UNKNOWN', code);
 }
 
-async function exchange<T>(path: string, verify: (v: unknown) => T, signal: AbortSignal, owned: Owned, command?: Readonly<{ name: string; body: unknown; key: string }>): Promise<T> {
+/** One same-origin JSON exchange: a GET read, or a POST command with its own X-HON-Human-Command and Idempotency-Key. */
+export async function exchange<T>(path: string, verify: (v: unknown) => T, signal: AbortSignal, owned: Owned, command?: Readonly<{ name: string; body: unknown; key: string }>): Promise<T> {
   if (command && !UUID.test(command.key)) throw new CardError('INVALID');
   let r: Response;
   try {

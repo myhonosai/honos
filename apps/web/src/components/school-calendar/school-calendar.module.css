@@ -152,3 +152,35 @@
 .weekdayOption:has(input:disabled) { opacity: .85; cursor: default; }
 .repeat { display: grid; gap: 10px; }
 @media (max-width: 480px) { .fields { grid-template-columns: minmax(0, 1fr); } }
+
+/* 0552 calendar settings: Programs, Block-out dates, Share links and QR codes, as cards in the app's look. */
+.settings { display: grid; gap: 14px; min-width: 0; }
+.settings .head h2 { margin: 0 0 4px; font-size: 20px; }
+.settingsPanel { display: grid; gap: 14px; min-width: 0; padding: 16px; border: 1px solid var(--hon-line, #24405a); border-radius: var(--hon-radius, 16px); background: linear-gradient(160deg, #10263b, #0b1828); }
+.settingsSection { display: grid; gap: 12px; min-width: 0; }
+.settingsSection h2 { margin: 0; font-size: 19px; }
+.settingsSub { margin: 0; font-size: 15px; }
+.settingsList { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.settingsRow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--hon-line, #24405a); border-radius: 12px; background: #0d1d2e; }
+.settingsForm { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; gap: 10px; padding: 12px; border: 1px solid #2b4a66; border-radius: 12px; background: #0d1d2e; }
+.settingsForm > h3, .settingsForm > p { grid-column: 1 / -1; }
+.settingsForm textarea { min-height: 72px; box-sizing: border-box; width: 100%; padding: 6px 10px; border: 1px solid var(--hon-line, #24405a); border-radius: 10px; background: #0b1828; color: #eef6fc; font: inherit; font-size: 15px; font-weight: 400; }
+.shareGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.shareGrid > li { display: grid; align-content: start; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--hon-line, #24405a); border-radius: 14px; background: #0d1d2e; }
+.shareGrid > li[data-enabled="false"] { opacity: .75; }
+.shareLink { display: block; padding: 8px 10px; border-radius: 8px; background: #071019; color: #a9d8ff; font-size: 12px; overflow-wrap: anywhere; }
+.switch { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; color: #cfe0f2; font-size: 13px; font-weight: 800; cursor: pointer; }
+.switch input { appearance: none; position: relative; width: 44px; height: 24px; margin: 0; border-radius: 999px; background: #35506d; cursor: pointer; transition: background .15s; }
+.switch input::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #eef6fc; transition: transform .15s; }
+.switch input:checked { background: var(--hon-accent, #5fb8f0); }
+.switch input:checked::after { transform: translateX(20px); }
+.switch input:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
+.switch input:disabled { opacity: .6; cursor: wait; }
+.qr { width: 168px; height: 168px; padding: 10px; border-radius: 10px; background: #fff; }
+@media (max-width: 480px) { .shareGrid { grid-template-columns: minmax(0, 1fr); } }
+/* 0552 closed days (block-out dates): striped and labelled; the classes still show, a block-out never cancels them. */
+.cell[data-closed="true"] { background-color: #1a1420; background-image: repeating-linear-gradient(135deg, rgba(240, 183, 95, .08) 0, rgba(240, 183, 95, .08) 8px, transparent 8px, transparent 16px); }
+.dayColumn[data-closed="true"] { background-color: #1a1420; background-image: repeating-linear-gradient(to bottom, #172c42 0, #172c42 1px, transparent 1px, transparent 64px),
+  repeating-linear-gradient(135deg, rgba(240, 183, 95, .08) 0, rgba(240, 183, 95, .08) 8px, transparent 8px, transparent 16px); }
+.dayHead[data-closed="true"] { background: #2a1f14; }
+.closed { justify-self: start; padding: 1px 7px; border-radius: 999px; background: #4a3a17; color: #ffe2a8; font-size: 11px; font-weight: 800; overflow-wrap: anywhere; }

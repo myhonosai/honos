@@ -95,6 +95,82 @@ function calendarCommand(route, path, body) {
   return json(route, 200, { data: { sessionId, version: c.version, startsAt: body.startsAt, endsAt: body.endsAt, detachedFromRoster: c.seriesId !== null }, meta: meta({ replayed: false }) });
 }
 
+// 0552 calendar settings: contact details, block-out dates and share calendars, plus the public read the shared page makes.
+const contact = { address: '100 Sample Avenue, Example City', phone: '(555) 010-0199', version: 1 };
+const blockOuts = [{ blockOutId: id(6001), label: 'Thanksgiving break', firstDate: '2026-11-26', lastDate: '2026-11-27', version: 1, active: true }];
+const share = (n, kind, name, program, extra = {}) => ({ shareCalendarId: id(6100 + n), publicId: (0xc0de00 + n).toString(16).padStart(48, 'a'), kind, name, description: '',
+  programId: program?.programId ?? null, programName: program?.name ?? null, memberIds: [], ageMin: null, ageMax: null, enabled: true, version: 1, deleted: false, ...extra });
+const shares = [share(1, 'PROGRAM', 'Kids Karate', programs.kids, { ageMin: 4, ageMax: 12, description: 'After-school karate for kids.' }),
+  share(2, 'PROGRAM', 'Adult Kickboxing', programs.adults, { ageMin: 16, description: 'Evening kickboxing for teens and adults.' })];
+shares.push(share(3, 'GROUP', 'All classes', null, { memberIds: [shares[0].shareCalendarId, shares[1].shareCalendarId], description: 'Pick the calendar that fits your family.' }));
+const settingsCommands = [];
+const blockedOn = (date) => blockOuts.some((b) => b.active && b.firstDate <= date && b.lastDate >= date);
+const dayAfter = (date, n) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+function publicTimes(c) {
+  const until = dayAfter(TODAY, 28);
+  return sessions.filter((x) => x.status === 'SCHEDULED' && localDate(x.startsAt) >= TODAY && localDate(x.startsAt) < until && !blockedOn(localDate(x.startsAt))
+    && cardOf.get(x.sessionId)?.kind !== 'PRIVATE_LESSON' && cardOf.get(x.sessionId)?.program?.programId === c.programId).slice(0, 200).map((x) => {
+    const local = new Date(Date.parse(x.startsAt) - 8 * 3_600_000).toISOString(), end = new Date(Date.parse(x.endsAt) - 8 * 3_600_000).toISOString();
+    return { name: x.name, startsAt: x.startsAt, endsAt: x.endsAt, localDate: local.slice(0, 10), localStart: local.slice(11, 16), localEnd: end.slice(11, 16), room: x.roomName ?? '',
+      spotsLeft: Math.max(0, x.capacity - (cardOf.get(x.sessionId)?.booked ?? 0) - (x.name === 'Little Tigers' && localDate(x.startsAt) === '2026-11-17' ? 20 : 0)) };
+  });
+}
+const shareRow = ({ deleted: _d, ...c }) => c;
+const shareView = (c) => ({ ...shareRow(c), upcomingCount: c.kind === 'PROGRAM' ? publicTimes(c).length : null });
+function settingsApi(route, url, path, method) {
+  const body = method === 'POST' ? JSON.parse(route.request().postData() ?? '{}') : null;
+  if (method === 'POST') settingsCommands.push({ path: path.slice(prefix.length), body, command: route.request().headers()['x-hon-human-command'], key: route.request().headers()['idempotency-key'] });
+  const live = () => shares.filter((c) => !c.deleted);
+  if (path === `${prefix}/schedule/calendar/settings` && method === 'GET') return json(route, 200, { data: { timezone: ZONE, localToday: TODAY, schoolName: 'Sample Martial Arts',
+    settings: contact, programs: Object.values(programs), blockOuts: blockOuts.filter((b) => b.active).map(({ active: _a, ...b }) => b), shareCalendars: live().map(shareView) }, meta: meta() });
+  if (path === `${prefix}/schedule/calendar/block-outs` && method === 'GET') {
+    const from = url.searchParams.get('from'), to = url.searchParams.get('to');
+    return json(route, 200, { data: { blockOuts: blockOuts.filter((b) => b.active && b.firstDate <= to && b.lastDate >= from).map(({ active: _a, ...b }) => b) }, meta: meta() });
+  }
+  if (path === `${prefix}/schedule/calendar/settings/profile` && method === 'POST') {
+    Object.assign(contact, { address: body.address, phone: body.phone, version: contact.version + 1 });
+    return json(route, 200, { data: contact, meta: meta({ replayed: false }) });
+  }
+  if (path === `${prefix}/schedule/calendar/settings/block-outs` && method === 'POST') {
+    const b = { blockOutId: id(6010 + blockOuts.length), label: body.label, firstDate: body.firstDate, lastDate: body.lastDate, version: 1, active: true };
+    blockOuts.push(b); const { active: _a, ...out } = b;
+    return json(route, 200, { data: out, meta: meta({ replayed: false }) });
+  }
+  const remove = path.match(/\/settings\/block-outs\/([0-9a-f-]{36})\/remove$/);
+  if (remove && method === 'POST') {
+    const b = blockOuts.find((x) => x.blockOutId === remove[1] && x.active);
+    if (!b) return json(route, 404, { code: 'CALENDAR_SETTINGS_NOT_FOUND' });
+    b.active = false; b.version += 1; const { active: _a, ...out } = b;
+    return json(route, 200, { data: { ...out, status: 'REMOVED' }, meta: meta({ replayed: false }) });
+  }
+  const edit = path.match(/\/settings\/share-calendars(?:\/([0-9a-f-]{36})\/(edit|delete))?$/);
+  if (edit && method === 'POST') {
+    if (edit[2] === 'delete') {
+      const c = live().find((x) => x.shareCalendarId === edit[1]); if (!c) return json(route, 404, { code: 'CALENDAR_SETTINGS_NOT_FOUND' });
+      c.deleted = true; c.version += 1; for (const g of shares) g.memberIds = g.memberIds.filter((m) => m !== c.shareCalendarId);
+      return json(route, 200, { data: { shareCalendarId: c.shareCalendarId, status: 'DELETED', version: c.version }, meta: meta({ replayed: false }) });
+    }
+    const program = Object.values(programs).find((g) => g.programId === body.programId) ?? null;
+    let c = edit[1] ? live().find((x) => x.shareCalendarId === edit[1]) : null;
+    if (edit[1] && !c) return json(route, 404, { code: 'CALENDAR_SETTINGS_NOT_FOUND' });
+    if (!c) { c = share(shares.length + 1, body.kind, body.name, program, { version: 0 }); shares.push(c); }
+    Object.assign(c, { name: body.name, description: body.description, programId: body.programId, programName: program?.name ?? null, memberIds: body.memberIds,
+      ageMin: body.ageMin, ageMax: body.ageMax, enabled: body.enabled, version: c.version + 1 });
+    return json(route, 200, { data: shareRow(c), meta: meta({ replayed: false }) });
+  }
+  const pub = path.match(/^\/api\/v1\/public\/calendars\/([0-9a-f]{48})$/);
+  if (pub && method === 'GET') {
+    const c = live().find((x) => x.publicId === pub[1] && x.enabled);
+    if (!c) return json(route, 404, { code: 'NOT_FOUND' });
+    const cards = c.kind === 'GROUP' ? c.memberIds.map((m) => live().find((x) => x.shareCalendarId === m && x.enabled)).filter(Boolean)
+      .map((m) => ({ publicId: m.publicId, name: m.name, description: m.description, ageMin: m.ageMin, ageMax: m.ageMax, upcomingCount: publicTimes(m).length })) : [];
+    return json(route, 200, { data: { publicId: c.publicId, kind: c.kind, name: c.name, description: c.description, timezone: ZONE,
+      school: { name: 'Sample Martial Arts', address: contact.address, phone: contact.phone, logoUrl: null, accentColor: '#b91c1c', contactLine: null },
+      ageMin: c.ageMin, ageMax: c.ageMax, calendars: cards, times: c.kind === 'PROGRAM' ? publicTimes(c) : [] }, meta: {} });
+  }
+  return null;
+}
+
 const json = (route, status, body) => route.fulfill({ status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }, body: JSON.stringify(body) });
 const meta = (extra = {}) => ({ requestId: id(9000), correlationId: id(9000), ...extra });
 function api(route) {
@@ -145,7 +221,7 @@ function api(route) {
     });
     return json(route, 200, { data: { timezone: ZONE, localToday: TODAY, weekStart, weekEnd, truncated: false, sessions: inWeek }, meta: meta() });
   }
-  return json(route, 403, { code: 'FORBIDDEN' });
+  return settingsApi(route, url, path, method) ?? json(route, 403, { code: 'FORBIDDEN' });
 }
 
 const probe = createServer(); await new Promise((done) => probe.listen(0, '127.0.0.1', done)); const port = probe.address().port; await new Promise((done) => probe.close(done));
@@ -394,6 +470,144 @@ await check('phone: week and month fit the screen', async () => {
   await page.getByRole('button', { name: 'Month', exact: true }).click();
   await calendar(page).getByTestId('calendar-month').waitFor();
   await noOverflow(page); await shot(page, 'calendar-month-phone-390');
+  await ctx.close();
+});
+
+// 0552 calendar settings, closed days and the shared public calendar.
+const settingsTab = async (page, section) => { await page.getByTestId('calendar-settings').waitFor(); await page.getByRole('tab', { name: section }).click(); };
+await check('Settings tab: share links with on/off, link, embed code, edit and delete', async () => {
+  const { ctx, page } = await open(viewports.desktop, '/staff/schedule?tab=settings');
+  await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
+  await settingsTab(page, 'Share links');
+  const cards = page.getByTestId('share-calendar'); await cards.first().waitFor();
+  assert.equal(await cards.count(), 3);
+  assert.match(await cards.first().getByTestId('share-link').innerText(), new RegExp(`/calendars/${shares[0].publicId}$`));
+  await shot(page, 'settings-share-links-desktop-1440', true);
+  await cards.first().getByRole('button', { name: 'Copy embed code' }).click();
+  await cards.first().getByRole('button', { name: 'Copied' }).waitFor();
+  assert.match(await page.evaluate(() => navigator.clipboard.readText()), new RegExp(`^<iframe src="${origin}/calendars/${shares[0].publicId}"`));
+  // Turn Adult Kickboxing off, then on again.
+  const adults = cards.filter({ hasText: 'Adult Kickboxing' }).first();
+  await adults.getByRole('switch').click();
+  await adults.getByText('Off', { exact: true }).waitFor();
+  assert.deepEqual([settingsCommands.at(-1).command, settingsCommands.at(-1).body.enabled, settingsCommands.at(-1).body.expectedVersion], ['schedule.calendar.share.save', false, 1]);
+  assert.match(settingsCommands.at(-1).key, /^[0-9a-f-]{36}$/);
+  await adults.getByRole('switch').click(); await adults.getByText('On', { exact: true }).waitFor();
+  // New program calendar.
+  await page.getByTestId('share-new').click();
+  const form = page.getByTestId('share-form'); await form.waitFor();
+  await form.locator('select').selectOption({ label: 'Kids Karate' });
+  await form.getByLabel('Name').fill('Little Tigers (ages 4-6)');
+  await form.getByLabel('Youngest age').fill('4'); await form.getByLabel('Oldest age').fill('6');
+  await shot(page, 'settings-share-new-form-desktop-1440');
+  await form.getByRole('button', { name: 'Save' }).click();
+  await cards.filter({ hasText: 'Little Tigers (ages 4-6)' }).waitFor();
+  assert.deepEqual(settingsCommands.at(-1).body, { expectedVersion: null, kind: 'PROGRAM', name: 'Little Tigers (ages 4-6)', description: '', programId: programs.kids.programId,
+    memberIds: [], ageMin: 4, ageMax: 6, enabled: true });
+  // Delete it: asks first, then the link stops working.
+  const made = cards.filter({ hasText: 'Little Tigers (ages 4-6)' });
+  await made.getByRole('button', { name: 'Delete' }).click();
+  await page.getByTestId('share-delete-confirm').waitFor();
+  await shot(page, 'settings-share-delete-confirm-desktop-1440');
+  await page.getByTestId('share-delete-confirm').getByRole('button').first().click();
+  await page.getByTestId('share-delete-confirm').waitFor({ state: 'detached' });
+  await made.waitFor({ state: 'detached' });
+  assert.equal(settingsCommands.at(-1).command, 'schedule.calendar.share.delete');
+  await noOverflow(page); await ctx.close();
+});
+await check('Settings tab: a group calendar, contact details, programs and QR codes', async () => {
+  const { ctx, page } = await open(viewports.desktop, '/staff/schedule?tab=settings');
+  await settingsTab(page, 'Share links');
+  const group = page.getByTestId('share-calendar').filter({ hasText: 'All classes' });
+  await group.getByRole('button', { name: 'Edit' }).click();
+  const form = page.getByTestId('share-form'); await form.waitFor();
+  assert.equal(await form.getByLabel('Kids Karate').isChecked(), true);
+  await shot(page, 'settings-share-group-edit-desktop-1440');
+  await form.getByRole('button', { name: 'Cancel' }).click();
+  const contactForm = page.getByTestId('contact-form');
+  await contactForm.getByLabel('Phone').fill('(555) 010-0100');
+  await contactForm.getByRole('button', { name: 'Save contact details' }).click();
+  await page.getByTestId('settings-message').waitFor();
+  assert.deepEqual(settingsCommands.at(-1).body, { address: contact.address, phone: '(555) 010-0100', expectedVersion: 1 });
+  await settingsTab(page, 'Programs');
+  await page.getByTestId('settings-programs').getByText('Adult Kickboxing').first().waitFor();
+  await shot(page, 'settings-programs-desktop-1440');
+  await settingsTab(page, 'QR codes');
+  assert.equal(await page.getByTestId('share-qr').count(), 3);
+  const href = await page.getByTestId('share-qr').first().getByRole('link').getAttribute('href');
+  assert.match(decodeURIComponent(href), /^data:image\/svg\+xml;charset=utf-8,<svg xmlns="http:\/\/www.w3.org\/2000\/svg"/);
+  await shot(page, 'settings-qr-desktop-1440', true);
+  await settingsTab(page, 'Programs');
+  await page.getByRole('button', { name: 'Manage programs' }).click();
+  await page.waitForFunction(() => location.search === '?tab=timetable');
+  await ctx.close();
+});
+await check('Block-out dates: add and remove; the calendar marks closed days and asks before adding on one', async () => {
+  const { ctx, page } = await open(viewports.desktop, '/staff/schedule?tab=settings');
+  await settingsTab(page, 'Block-out dates');
+  const section = page.getByTestId('settings-block-outs');
+  await section.getByTestId('block-out').first().waitFor();
+  await section.getByLabel('Reason').fill('Winter break'); await section.getByLabel('First day').fill('2026-12-24'); await section.getByLabel('Last day').fill('2027-01-01');
+  await section.getByRole('button', { name: 'Add block-out' }).click();
+  await section.getByTestId('block-out').filter({ hasText: 'Winter break' }).waitFor();
+  assert.deepEqual(settingsCommands.at(-1).body, { label: 'Winter break', firstDate: '2026-12-24', lastDate: '2027-01-01' });
+  await shot(page, 'settings-block-outs-desktop-1440');
+  await section.getByRole('button', { name: 'Remove: Winter break' }).click();
+  await section.getByTestId('block-out').filter({ hasText: 'Winter break' }).waitFor({ state: 'detached' });
+  assert.equal(settingsCommands.at(-1).command, 'schedule.calendar.block_out.remove');
+  await page.getByRole('tab', { name: 'Calendar', exact: true }).click();
+  await calendar(page).getByTestId('calendar-week').waitFor();
+  await page.getByRole('button', { name: 'Next' }).click();
+  await calendar(page).getByTestId('calendar-closed').first().waitFor();
+  assert.equal(await calendar(page).getByTestId('calendar-closed').count(), 2);
+  assert.equal(await calendar(page).locator('section[aria-label="Thursday, November 26, 2026"]').getAttribute('data-closed'), 'true');
+  await shot(page, 'calendar-closed-days-week-desktop-1440');
+  const before = commands.length;
+  await calendar(page).getByRole('button', { name: 'Add a class on Nov 27, 2026 at 11:00 AM' }).click({ position: { x: 40, y: 4 } });
+  const bar = page.getByTestId('calendar-message');
+  await bar.getByText(/Friday, November 27 is blocked out \(Thanksgiving break\)/).waitFor();
+  assert.equal(await page.getByTestId('calendar-create-form').count(), 0);
+  await shot(page, 'calendar-closed-day-ask-desktop-1440');
+  await bar.getByTestId('calendar-blocked-continue').click();
+  await page.getByTestId('calendar-create-form').waitFor();
+  assert.equal(commands.length, before, 'nothing is sent by asking');
+  await page.keyboard.press('Escape'); await page.getByTestId('calendar-create-form').waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: 'Month', exact: true }).click();
+  await calendar(page).getByTestId('calendar-month').waitFor();
+  await shot(page, 'calendar-closed-days-month-desktop-1440');
+  await ctx.close();
+});
+await check('public shared calendar: school details, choose a calendar, class times, embed and phone', async () => {
+  const group = shares[2];
+  let { ctx, page } = await open(viewports.desktop, `/calendars/${group.publicId}`);
+  await page.getByTestId('public-calendar').waitFor();
+  assert.ok(await page.getByText('100 Sample Avenue, Example City').isVisible());
+  assert.equal(await page.getByTestId('public-calendar-card').count(), 2);
+  assert.match(await page.getByTestId('public-calendar-card').first().innerText(), /Ages 4 to 12[\s\S]*\d+ upcoming class times/);
+  await shot(page, 'public-calendar-choose-desktop-1440');
+  await page.getByTestId('public-calendar-card').first().click();
+  await page.getByTestId('public-calendar-time').first().waitFor();
+  assert.equal(await page.getByTestId('public-calendar-day').filter({ hasText: 'Thursday, November 26' }).count(), 0, 'closed days are hidden');
+  assert.ok(await page.getByText('Full').first().isVisible());
+  assert.match(await page.getByTestId('public-calendar-book').innerText(), /To book, call \(555\) 010-0100\./);
+  await shot(page, 'public-calendar-times-desktop-1440');
+  await page.getByTestId('public-calendar-back').click();
+  await page.getByTestId('public-calendar-card').first().waitFor();
+  const publicCalls = report.apiRequests.filter((r) => r.includes('/public/calendars/'));
+  assert.ok(publicCalls.every((r) => /^GET \/api\/v1\/public\/calendars\/[0-9a-f]{48}$/.test(r)));
+  await page.goto(`${origin}/calendars/${'f'.repeat(48)}`);
+  await page.getByText('This calendar is not available.').waitFor();
+  await ctx.close();
+  ({ ctx, page } = await open(viewports.phone, `/calendars/${shares[0].publicId}`));
+  await page.getByTestId('public-calendar-time').first().waitFor();
+  await noOverflow(page); await shot(page, 'public-calendar-times-phone-390');
+  await ctx.close();
+  // Embedded: the copied iframe code on a stand-in school web page (same origin here; the page sets no frame restriction).
+  ({ ctx, page } = await open(viewports.desktop, '/auth/login'));
+  const embed = `<iframe src="${origin}/calendars/${group.publicId}" title="Class calendar" width="100%" height="720" style="border:0" loading="lazy"></iframe>`;
+  await page.setContent(`<!doctype html><body style="margin:0;font-family:system-ui;background:#f8fafc"><header style="padding:24px 40px;background:#111827;color:#fff;font-size:22px;font-weight:700">Sample Martial Arts website</header><div style="max-width:900px;margin:24px auto">${embed}</div></body>`);
+  await page.frameLocator('iframe').getByTestId('public-calendar-card').first().waitFor();
+  await shot(page, 'public-calendar-embedded-desktop-1440');
   await ctx.close();
 });
 
