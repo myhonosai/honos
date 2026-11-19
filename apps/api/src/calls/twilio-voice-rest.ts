@@ -162,4 +162,3 @@ export class FakeSchoolVoiceTwilioClient implements SchoolVoiceTwilioClient {
     return 'DELETED' as const;
   }
 }
-
