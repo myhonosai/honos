@@ -149,3 +149,94 @@ test('0414 tablet transport: two POST paths, no session, same origin, JSON only'
     if (previous === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = previous;
   }
 });
+
+// 0533 card payment on the tablet: the payment id stays in the API, a surface switch closes the earlier session first, a
+// paid one is never paid twice, and any unverified answer is UNAVAILABLE.
+const { ConflictException, ServiceUnavailableException } = require('@nestjs/common');
+const PAY = '22222222-2222-4222-8222-222222222222';
+const KEY = 'k'.repeat(24);
+function cardHarness(script) {
+  const calls = [];
+  const database = { runPublicEventCall: async (statement, values) => { calls.push([statement.match(/hon\.(\w+)/)[1], ...values]); return script.db(statement, calls); } };
+  const payOnce = {
+    supports: (provider, surface) => provider === 'STRIPE_CONNECT' && (script.surfaces ?? ['EMBEDDED', 'HOSTED']).includes(surface),
+    start: async (id, input) => { calls.push(['start', id, input.surface, input.returnUrl]); return script.start(id, input, calls); },
+    confirm: async (id) => { calls.push(['confirm', id]); return script.confirm?.(id) ?? { state: 'OPEN' }; },
+    cancel: async (id) => { calls.push(['cancel', id]); return script.cancel?.(id) ?? { state: 'CANCELED' }; },
+  };
+  return { service: new WalkInKioskService(database, payOnce), calls };
+}
+test('0533 card calls refuse a bad shape before any database or processor call', async () => {
+  const { service, calls } = cardHarness({ db: () => assert.fail('no database call') });
+  for (const body of [null, {}, { device: TOKEN }, { device: TOKEN, visit: 'short', surface: 'HOSTED' }, { device: TOKEN, visit: KEY, surface: 'SMS' },
+    { device: TOKEN, visit: KEY, surface: 'HOSTED', paymentId: PAY }, { device: 'x', visit: KEY, surface: 'HOSTED' }]) {
+    assert.deepEqual(await service.cardStart(body), { result: 'INVALID' }, JSON.stringify(body));
+  }
+  assert.deepEqual(await service.cardStatus({ device: TOKEN, visit: KEY, surface: 'HOSTED' }), { result: 'INVALID' }, 'no surface on status');
+  assert.deepEqual(await service.cardCancel({ device: TOKEN, visit: KEY, paymentId: PAY }), { result: 'INVALID' }, 'never a payment id');
+  assert.equal(calls.length, 0);
+});
+test('0533 card start: digest only, payment id never returned, surface switch cancels first, paid stays paid', async () => {
+  const previous = process.env.HON_PUBLIC_ORIGIN;
+  process.env.HON_PUBLIC_ORIGIN = 'https://app.example.test';
+  try {
+    let opened = 0;
+    const ok = cardHarness({
+      db: (statement) => (/open_walkin/.test(statement) ? { result: 'OPEN', paymentId: opened++ ? PAY.replace(/2/g, '3') : PAY, providerCode: 'STRIPE_CONNECT' } : { result: 'NONE' }),
+      start: (id, input) => {
+        if (id === PAY && input.surface === 'EMBEDDED') throw new ConflictException({ code: 'SCHOOL_PAY_ONCE_START_MISMATCH' });
+        return { paymentId: id, clientSecret: input.surface === 'EMBEDDED' ? 'cs_test_secret' : null, url: null, accountRef: 'acct_1', expiresAt: '2026-11-18T23:30:00.000Z' };
+      },
+    });
+    const out = await ok.service.cardStart({ device: TOKEN, visit: KEY, surface: 'EMBEDDED' });
+    assert.deepEqual(out, { result: 'READY', surface: 'EMBEDDED', clientSecret: 'cs_test_secret', url: null, accountRef: 'acct_1', expiresAt: '2026-11-18T23:30:00.000Z' });
+    assert.ok(!JSON.stringify(out).includes(PAY.slice(0, 8)) && !JSON.stringify(out).includes('33333333'), 'no payment id to the tablet');
+    assert.deepEqual(ok.calls.map(c => c[0]), ['open_walkin_card_payment', 'start', 'cancel', 'open_walkin_card_payment', 'start']);
+    assert.equal(ok.calls[0][1], walkInTokenDigest(TOKEN), 'only the digest');
+    assert.equal(ok.calls[1][3], 'https://app.example.test/kiosk/walk-in', 'the tablet return address');
+    const paid = cardHarness({
+      db: (statement, calls) => (/open_walkin/.test(statement) ? { result: 'OPEN', paymentId: PAY, providerCode: 'STRIPE_CONNECT' } : { result: 'PAID' }),
+      start: () => { throw new ConflictException({ code: 'SCHOOL_PAY_ONCE_START_MISMATCH' }); },
+      cancel: () => ({ state: 'SUCCEEDED' }),
+    });
+    assert.deepEqual(await paid.service.cardStart({ device: TOKEN, visit: KEY, surface: 'HOSTED' }), { result: 'PAID' }, 'cancel found it paid: no new payment');
+    assert.deepEqual(paid.calls.map(c => c[0]), ['open_walkin_card_payment', 'start', 'cancel', 'settle_walkin_card_payment']);
+    const none = cardHarness({ surfaces: ['HOSTED'], db: () => ({ result: 'OPEN', paymentId: PAY, providerCode: 'STRIPE_CONNECT' }), start: () => assert.fail('not started') });
+    assert.deepEqual(await none.service.cardStart({ device: TOKEN, visit: KEY, surface: 'EMBEDDED' }), { result: 'NOT_AVAILABLE' });
+    for (const answer of [{ result: 'OPEN', paymentId: PAY }, { result: 'OPEN', paymentId: 'x', providerCode: 'STRIPE_CONNECT' }, { result: 'PAID', paymentId: PAY }, { result: 'WHAT' }, null]) {
+      const bad = cardHarness({ db: () => answer, start: () => assert.fail('not started') });
+      assert.deepEqual(await bad.service.cardStart({ device: TOKEN, visit: KEY, surface: 'HOSTED' }), { result: 'UNAVAILABLE' }, JSON.stringify(answer));
+    }
+  } finally {
+    if (previous === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = previous;
+  }
+});
+test('0533 card status and cancel ask the processor only while it is payable; failures say UNAVAILABLE', async () => {
+  let n = 0;
+  const status = cardHarness({ db: () => (n++ === 0 ? { result: 'OPEN', paymentId: PAY } : { result: 'PAID' }), start: () => assert.fail() });
+  assert.deepEqual(await status.service.cardStatus({ device: TOKEN, visit: KEY }), { result: 'PAID' });
+  assert.deepEqual(status.calls.map(c => c[0]), ['settle_walkin_card_payment', 'confirm', 'settle_walkin_card_payment']);
+  const settled = cardHarness({ db: () => ({ result: 'CANCELED' }), start: () => assert.fail() });
+  assert.deepEqual(await settled.service.cardCancel({ device: TOKEN, visit: KEY }), { result: 'CANCELED' });
+  assert.deepEqual(settled.calls.map(c => c[0]), ['settle_walkin_card_payment'], 'nothing sent for an ended payment');
+  const clearing = cardHarness({ db: () => ({ result: 'PROCESSING', paymentId: PAY }), start: () => assert.fail() });
+  assert.deepEqual(await clearing.service.cardCancel({ device: TOKEN, visit: KEY }), { result: 'PROCESSING' }, 'never cancelled while clearing');
+  const down = cardHarness({ db: () => ({ result: 'OPEN', paymentId: PAY }), start: () => assert.fail(),
+    confirm: () => { throw new ServiceUnavailableException({ code: 'SCHOOL_PAY_PROVIDER_UNKNOWN', detail: 'acct_1 kim@example.test' }); } });
+  assert.deepEqual(await down.service.cardStatus({ device: TOKEN, visit: KEY }), { result: 'UNAVAILABLE' });
+  const closed = cardHarness({ db: () => { throw Object.assign(new Error('WALKIN_KIOSK_CLOSED'), { code: '42501' }); }, start: () => assert.fail() });
+  assert.deepEqual(await closed.service.cardStatus({ device: TOKEN, visit: KEY }), { result: 'CLOSED' });
+});
+test('0533 tablet transport refuses any other card path', async () => {
+  const previous = process.env.HON_PUBLIC_ORIGIN;
+  process.env.HON_PUBLIC_ORIGIN = 'https://app.example.test';
+  try {
+    const mw = walkInKioskTransport();
+    const json = { 'content-type': 'application/json' };
+    for (const path of ['/v1/walk-in-kiosk/card-payment/refund', '/v1/walk-in-kiosk/card-payment', '/v1/walk-in-kiosk/card-payment/start/x']) {
+      assert.equal((await run(mw, { method: 'POST', path, headers: json, body: { device: TOKEN, visit: KEY } })).status, 400, path);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = previous;
+  }
+});

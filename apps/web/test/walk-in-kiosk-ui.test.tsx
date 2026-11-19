@@ -23,7 +23,7 @@ const terminal: WalkInTerminal = {
   waiver: { en: 'I accept the risks of training.', ko: '훈련 위험을 이해합니다.' }, emergencyRequired: false,
   offers: [{ key: 'free-trial', kind: 'TRIAL', name: { en: 'Free trial class' }, description: { en: '' }, priceMinor: 0, currency: 'USD' },
     { key: 'day-pass', kind: 'DAY_PASS', name: { en: 'Day pass', es: 'Pase de día' }, description: { en: 'One day' }, priceMinor: 2500, currency: 'USD' }],
-  thankYou: { en: 'See you on the mat.' },
+  thankYou: { en: 'See you on the mat.' }, cardSurfaces: [],
 };
 const today = '2026-11-16';
 const filled = (patch: Partial<VisitDraft> = {}): VisitDraft => ({

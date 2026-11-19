@@ -80,22 +80,38 @@ code-owned SYSTEM_SERVICE principal (the 0075/0286 shape) and, in one transactio
 The response holds only the visit id, the first participant's first name for the thank-you line, the payment state, and
 (for tablet payment) the data the card form needs. A retry with the same key and body returns the same answer.
 
-### 3.3 Paying on the tablet (sandbox only)
+### 3.3 Paying on the tablet or by phone QR (sandbox only; built in WK3, 0533)
 
-Uses the school's default processor connection from tuition collection (0258/0320), TEST mode only (the database
-already refuses LIVE). No platform fee. HON never sees card numbers.
+The kiosk is a caller of the shared one-time payment (0529, `TUITION_COLLECTION.md` section 22): the school's default
+TEST-mode processor connection, no HON fee, no card data at HON. Stripe only today (Square: `supports()` is false, so only
+"Pay at the front desk" is offered for a Square school).
 
-- **Stripe Connect:** a Checkout Session `mode=payment`, `ui_mode=embedded`, on the school's connected account, one line
-  item with the frozen offer price, idempotency key from the visit. The tablet shows Stripe's embedded form in the page,
-  so kiosk mode is never left.
-- **Square:** the Web Payments SDK card form (sandbox) tokenizes the card; the API calls `POST /v2/payments` on the
-  school's seller account with the visit's idempotency key. Uses only the scopes already granted (`PAYMENTS_WRITE`).
-- **Result:** the API confirms with the provider (Stripe session retrieve / Square payment response) before the visit
-  becomes `PAID_ON_TABLET`; a lost answer becomes `PAYMENT_UNKNOWN` and is reconciled, never assumed. A refused card
-  lets the visitor try again or choose "Pay at the front desk".
-- No school processor connected, or the provider not configured: only "Pay at the front desk" is offered.
-- New environment names (owner sets them; never in chat): `HON_TUITION_STRIPE_TEST_PUBLISHABLE_KEY` (`pk_test_` only).
-  Square uses the existing sandbox app id plus the school's location from the connection status.
+- **Two ways, one payment per visit at a time:** `EMBEDDED` (Stripe's embedded Checkout form inside the tablet page,
+  so kiosk mode is never left) and `HOSTED` (Stripe's own page, shown on the tablet as a QR code for the visitor's phone;
+  the phone comes back to a plain `/kiosk/walk-in/paid` page). The terminal read says which ways the school can take now
+  (`cardSurfaces`, empty means desk only).
+- **Tablet calls** (strict transport, body `{device, visit, surface?}` where `visit` is the key the visit was submitted
+  with, never an id): `POST /v1/walk-in-kiosk/card-payment/start` opens (or gets back) the payment at the frozen offer
+  price with the offer name and no payer detail, 20 minutes to expiry, and returns the client secret and the school
+  account (EMBEDDED) or the page link (HOSTED); `.../status` asks the processor while the payment is payable or clearing
+  and settles it into the visit; `.../cancel` is "pay at the front desk instead". Results: `READY`, `PAID`, `OPEN`,
+  `PROCESSING`, `FAILED`, `EXPIRED`, `CANCELED`, `NONE`, `NOT_DUE`, `NOT_AVAILABLE`, `NOT_FOUND`, `INVALID`, `CLOSED`,
+  `RATE_LIMITED`, `UNAVAILABLE`.
+- **Caller rule (0529 P3):** the payment id never reaches a browser. Each tablet call finds the payment from the visit
+  that this live tablet recorded with that key in the last 2 hours (`open_walkin_card_payment`,
+  `settle_walkin_card_payment`), and staff reach it only from a visit of their own school
+  (`read_walkin_visit_card_payment`, `walkin_kiosk.run`). The proof shows another tablet, school or organization, an
+  unknown key, a payment id field and a foreign staff route are all refused with nothing changed.
+- **Paid:** a visit becomes `PAID_CARD` (with its payment) only from the processor's recorded `SUCCEEDED`, with one
+  audit row and one internal `walkin_kiosk.visit_card_paid` event. A refused card (`FAILED`), an expired or cancelled
+  one lets the visitor try again or pay at the desk. A processor that does not answer changes nothing (`UNAVAILABLE`).
+- **Never twice:** switching between the form and the QR, choosing the desk on the tablet, or staff marking it paid
+  at the desk first closes the earlier session at the processor; if the visitor had already paid, the visit becomes
+  `PAID_CARD` instead (the desk receipt shows it). Desk paid is refused while a card payment is still clearing.
+- **Return without leaving the page:** EMBEDDED uses `redirect_on_completion=if_required` (card only never needs a
+  redirect; agreed with the tuition thread), so the form's `onComplete` calls the status route in place (WK3b).
+- Environment: the Stripe TEST secret key the tuition adapter already uses, plus a `pk_test_` publishable key for
+  Stripe.js on the tablet (WK3b; the owner sets it, never in chat).
 
 ### 3.4 Trial class pick
 
@@ -120,7 +136,8 @@ transaction; a full class shows as unavailable.
 | --- | --- | --- | --- |
 | WK1 | Kiosk settings, tablet sessions, intake + waiver + visit | 0414 | Tables, permissions, settings/offer/waiver versions, start/end tablet, public visit submit (FREE / PAY_AT_DESK), today's walk-ins, mark paid at desk, signed waiver read, DB proof, API, contracts. |
 | WK2 | Kiosk screens | — | Visitor flow (3 themes, EN/KO/ES, signature pad), staff kiosk page + settings, Classes tab change (old screens to Settings > Advanced). Browser screenshots at phone/tablet/desktop. |
-| WK3 | Pay on the tablet (sandbox) | 0397 | Stripe embedded Checkout + Square card form, confirm/reconcile, PAID_ON_TABLET / PAYMENT_UNKNOWN, simulators for tests. |
+| WK3a | Card payment backend (sandbox) | 0533 | PAID_CARD, tablet start/status/cancel by visit key on the 0529 payment, desk paid ends any card payment first, DB proof with simulators, API, contracts. |
+| WK3b | Card form and phone QR screens | — | Stripe embedded form on the tablet, QR for the phone, waiting and result screens (3 themes, EN/KO/ES), `/kiosk/walk-in/paid`, embedded `redirect_on_completion=if_required`. |
 | WK4 | Trial class pick | maybe | Trial-eligible sessions read + CRM trial scheduling inside the visit. |
 
 ## 6. Open owner items

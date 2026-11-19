@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "4e6cebf309b023fe6b3629e6e15fbe1ab97797b8b9f50617c35f965c4d67e182",
+  "chainSha256": "6402fc6b701296d78e209b3140fce12c7a0d4dfe6f8dd2902d342f188cefd5a7",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -685,6 +685,10 @@
     {
       "file": "0530_parent_invoice_payment.sql",
       "sha256": "df276ef58db20b72c15d11911704c8bd3b6773b85102c19aa78e88ef5638ce43"
+    },
+    {
+      "file": "0533_walk_in_kiosk_card_payment.sql",
+      "sha256": "bbdffff9b9eee29f5ff9f8452a4ff5694c758b2abc234967b8bb2ebda8af35ac"
     }
   ]
 }

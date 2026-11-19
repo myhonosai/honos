@@ -4985,3 +4985,31 @@ DO $$ DECLARE f record; safe boolean; expected record; BEGIN
     RAISE EXCEPTION 'The parent invoice payment recorder must be a code-owned service with no authority'; END IF;
 END $$;
 -- End parent invoice payment exact verification.
+-- Walk-in kiosk card payment exact verification (0533): four runtime entry points, owner-only helpers, PAID_CARD columns.
+DO $$ DECLARE f text;
+  entry text[]:=ARRAY['hon.read_walkin_card_provider(text)','hon.open_walkin_card_payment(text,text)','hon.settle_walkin_card_payment(text,text)',
+    'hon.read_walkin_visit_card_payment(text,uuid)'];
+  helpers text[]:=ARRAY['hon.walkin_card_payment_of(hon.walkin_visits)','hon.walkin_card_paid(hon.walkin_visits,jsonb,uuid,text,uuid)',
+    'hon.walkin_tablet_hold(text)','hon.walkin_tablet_visit(hon.walkin_kiosk_devices,text)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND (SELECT proconfig FROM pg_proc WHERE oid=f::regprocedure) IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe walk-in card payment entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY helpers LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND p.prosecdef)
+      OR EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe walk-in card payment helper: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.walkin_visits'::regclass AND conname='walkin_visits_card_paid_check')
+    OR (SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c WHERE c.conrelid='hon.walkin_visits'::regclass AND c.conname='walkin_visits_payment_state_check')
+      IS DISTINCT FROM 'CHECK ((payment_state = ANY (ARRAY[''FREE''::text, ''PAY_AT_DESK''::text, ''PAID_AT_DESK''::text, ''PAID_CARD''::text])))'
+    OR has_any_column_privilege('hon_runtime','hon.walkin_visits','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe walk-in card payment columns'; END IF;
+END $$;
+-- End walk-in kiosk card payment exact verification.

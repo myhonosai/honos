@@ -64,7 +64,7 @@ export function nextOfferKey(offers: readonly OfferDraft[]): string {
 export const leadHref = (scope: WalkInScope | null, leadId: string) =>
   scope ? `/staff/crm/journey?${new URLSearchParams({ organizationId: scope.organizationId, schoolId: scope.schoolId, leadId })}` : '/staff/crm/journey';
 const when = (language: string, iso: string) => new Date(iso).toLocaleString(language, { dateStyle: 'medium', timeStyle: 'short' });
-const tagFor = (v: WalkInVisit) => v.paymentState === 'PAY_AT_DESK' ? `${styles.tag} ${styles.tagDue}` : v.paymentState === 'PAID_AT_DESK' ? `${styles.tag} ${styles.tagPaid}` : styles.tag;
+const tagFor = (v: WalkInVisit) => v.paymentState === 'PAY_AT_DESK' ? `${styles.tag} ${styles.tagDue}` : v.paymentState === 'PAID_AT_DESK' || v.paymentState === 'PAID_CARD' ? `${styles.tag} ${styles.tagPaid}` : styles.tag;
 
 function TextFields({ t, label, value, onChange, multiline, max }: { t: T; label: string; value: WalkInText; onChange: (v: WalkInText) => void; multiline?: boolean; max: number }): React.ReactElement {
   const Field = multiline ? 'textarea' : 'input';

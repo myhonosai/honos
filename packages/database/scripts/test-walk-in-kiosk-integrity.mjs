@@ -33,6 +33,7 @@ const { HonExceptionFilter } = await load('observability/http-telemetry.js');
 const { WalkInKioskController, PublicWalkInKioskController } = await load('walk-in-kiosk/walk-in-kiosk.controller.js');
 const { WalkInKioskService } = await load('walk-in-kiosk/walk-in-kiosk.service.js');
 const { walkInKioskTransport } = await load('walk-in-kiosk/walk-in-kiosk-transport.js');
+const { SchoolPayOnceService } = await load('school-payments/school-pay-once.service.js');
 
 const admin = new pg.Client(targets.owner);
 await admin.connect();
@@ -55,7 +56,9 @@ const database = new RuntimeDatabaseService();
 async function startApp() {
   const module = await Test.createTestingModule({
     controllers: [WalkInKioskController, PublicWalkInKioskController],
-    providers: [HonIdentityGuard, HonIdentityService, WalkInKioskService, { provide: RuntimeDatabaseService, useValue: database }],
+    providers: [HonIdentityGuard, HonIdentityService, WalkInKioskService, { provide: RuntimeDatabaseService, useValue: database },
+      // No processor here (0533 card payment has its own proof): the tablet offers the desk only.
+      { provide: SchoolPayOnceService, useValue: new SchoolPayOnceService(database, new Map()) }],
   }).compile();
   app = module.createNestApplication({ logger: false, bodyParser: false });
   app.use(walkInKioskTransport());
