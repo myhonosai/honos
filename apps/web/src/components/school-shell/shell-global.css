@@ -53,7 +53,7 @@ body:has([data-hon-ui='school']) [data-hon-launcher] { display: none; }
 [data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-fill='danger'] { background: var(--hon-danger-soft) !important; }
 [data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-fill='success'] { background: var(--hon-success-soft) !important; }
 [data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-fill='warning'] { background: var(--hon-warning-soft) !important; }
-[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-fill='accent'] { background: var(--hon-accent) !important; border-color: var(--hon-accent) !important; }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-fill='accent'] { background: var(--hon-accent-strong) !important; border-color: var(--hon-accent-strong) !important; color: var(--hon-accent-contrast) !important; }
 [data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-line='line'] { border-color: var(--hon-border) !important; }
 
 /* Fields: one dark control. Secondary buttons (written white): a quiet outline. */

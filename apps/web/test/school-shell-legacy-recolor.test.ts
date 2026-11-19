@@ -179,3 +179,9 @@ describe('pages that paint their own light page are recoloured too', () => {
     expect(child.attrs.get('data-hon-fill')).toBe('page');
   });
 });
+
+it('keeps white button text readable on the accent fill (axe colour contrast, #509 browser CI)', () => {
+  const css = readFileSync('src/components/school-shell/shell-global.css', 'utf8');
+  // --hon-accent (#2f7bff) gives 3.9:1 with white; --hon-accent-strong (#1d63f0) gives 5.1:1.
+  expect(css).toMatch(/\[data-hon-fill='accent'\] \{ background: var\(--hon-accent-strong\)/);
+});
