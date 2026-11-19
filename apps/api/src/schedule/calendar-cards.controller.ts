@@ -16,7 +16,7 @@ function definedFields(input: object): Record<string, unknown> {
 }
 
 /**
- * 0551 calendar cards: create a class or a roster from the calendar, move or resize one class, and read each class's card
+ * 0567 calendar cards: create a class or a roster from the calendar, move or resize one class, and read each class's card
  * details. Route identifiers are never authority: the guarded boundary resolves the route scope from the verified session,
  * and each protected database function re-proves the direct human subject and the live school-scoped permission. Nothing
  * here contacts families, charges, or runs on a timer.

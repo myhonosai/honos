@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { MembershipActivationHumanUiGuard } from '../billing/membership-activation-human-ui.guard.js';
 
-/** 0552 calendar settings: every write is its own same-origin browser command; the reads are GET only. */
+/** 0568 calendar settings: every write is its own same-origin browser command; the reads are GET only. */
 @Injectable()
 export class CalendarSettingsReadHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'schedule.calendar.settings.read';

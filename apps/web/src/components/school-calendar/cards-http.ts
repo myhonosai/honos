@@ -6,7 +6,7 @@ import {
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * Calendar cards (0551): the card details read, create from the calendar, and move or resize one class. Reads send no
+ * Calendar cards (0567): the card details read, create from the calendar, and move or resize one class. Reads send no
  * Idempotency-Key; each command sends its own X-HON-Human-Command and an Idempotency-Key. The server decides every
  * permission, version and time again. Nothing here contacts families.
  */

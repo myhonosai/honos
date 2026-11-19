@@ -1,5 +1,5 @@
 /**
- * Calendar cards proof (0551) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global ValidationPipe
+ * Calendar cards proof (0567) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global ValidationPipe
  * + HonExceptionFilter -> CalendarCardsController / ClassSeriesController -> protected definer functions on the restricted runtime
  * role with forced RLS), on the guarded disposable CRM-close fixture only. Synthetic names only; nothing contacts anyone.
  */
@@ -367,14 +367,14 @@ try {
   await assert.rejects(runtime.query('SELECT * FROM hon.class_session_roster_detachments LIMIT 1'), /permission denied/); checks += 1;
   await assert.rejects(runtime.query("SELECT hon.calendar_instructor_ok($1,$2,$3)", [COACH.principal, ids.organization, ids.schoolA]), /permission denied/); checks += 1;
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    for (const [startMark, endMark] of [['-- Calendar cards exact verification (0551)', '-- End calendar cards exact verification.'],
+    for (const [startMark, endMark] of [['-- Calendar cards exact verification (0567)', '-- End calendar cards exact verification.'],
       ['-- Recurring class series exact verification (B-SCH-1 0239)', '-- End recurring class series exact verification.']]) {
       const section = verify.split(startMark)[1]?.split(endMark)[0];
       ok(section, startMark);
       await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1;
     } }
 
-  console.log(`PASS: calendar cards (0551): ${checks} checks.`);
+  console.log(`PASS: calendar cards (0567): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

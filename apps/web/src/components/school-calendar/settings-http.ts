@@ -8,7 +8,7 @@ import {
 import { CardError, exchange, type CardScope, type Owned } from './cards-http';
 
 /**
- * Calendar settings (0552): the Settings tab read and its commands, the closed days for the calendar view, and the public
+ * Calendar settings (0568): the Settings tab read and its commands, the closed days for the calendar view, and the public
  * shared calendar read. Every command sends its own X-HON-Human-Command and Idempotency-Key; the server decides everything again.
  */
 export const SETTINGS_COMMANDS = {

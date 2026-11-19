@@ -20,7 +20,7 @@ const dayLabel = (language: string, date: string) => new Date(`${date}T00:00:00Z
 const clock = (language: string, hhmm: string) => new Date(`2000-01-01T${hhmm}:00Z`).toLocaleTimeString(language, { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' });
 
 /**
- * The public shared calendar (0552): the school's name, address and phone, then either "Choose a calendar" cards (a group)
+ * The public shared calendar (0568): the school's name, address and phone, then either "Choose a calendar" cards (a group)
  * or the class times of the next four weeks with open spots (a program). It never writes anything; booking is by phone
  * until online booking from a shared calendar is decided. The page holds no session and sends no credentials.
  */

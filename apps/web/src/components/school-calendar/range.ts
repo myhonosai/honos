@@ -101,7 +101,7 @@ export function hourBounds(spans: readonly Span[]): { first: number; last: numbe
 export function parseCalendarTab(value: unknown): CalendarTab { return typeof value === 'string' && (CALENDAR_TABS as readonly string[]).includes(value) ? value as CalendarTab : 'calendar'; }
 export function parseCalendarView(value: unknown): CalendarView { return typeof value === 'string' && (CALENDAR_VIEWS as readonly string[]).includes(value) ? value as CalendarView : 'week'; }
 
-/** 0552: the school dates from `from` to `to` (inclusive) that a block-out covers, each with the first covering block-out's label. */
+/** 0568: the school dates from `from` to `to` (inclusive) that a block-out covers, each with the first covering block-out's label. */
 export function closedDays(blockOuts: readonly Readonly<{ firstDate: string; lastDate: string; label: string }>[], from: string, to: string): Map<string, string> {
   const closed = new Map<string, string>();
   for (const b of blockOuts) {

@@ -1,6 +1,6 @@
-# Calendar cards: click to create, drag to move, resize (0551)
+# Calendar cards: click to create, drag to move, resize (0567)
 
-Owner ask (David, 2026-11-19): "i need this calendar to be clickable and let me make schedule or class cards that can be drag and dropped", plus "also need filters". The reference is the ease of a modern scheduling calendar (GoHighLevel, Google Calendar), adapted rather than copied. The coordinator allocated migration **0551**.
+Owner ask (David, 2026-11-19): "i need this calendar to be clickable and let me make schedule or class cards that can be drag and dropped", plus "also need filters". The reference is the ease of a modern scheduling calendar (GoHighLevel, Google Calendar), adapted rather than copied. The coordinator allocated migration **0567**.
 
 ## Spec
 
@@ -31,7 +31,7 @@ Owner ask (David, 2026-11-19): "i need this calendar to be clickable and let me 
 
 **Reads.** One new read, `hon.read_school_calendar_cards(subject, {from, to})`, for school-local dates at most 42 days apart: for each class starting in the range (at most 1000) its version, kind, program id and name, roster id, lead instructor (id and display name only) and booked count; plus `canManage`, and when the caller can manage, the school's programs and the staff who can be picked as instructor (id and display name only, the 0404/0467 name rule). No email, contact or role is returned.
 
-**Out of scope.** Editing a card's title/program/instructor after creation (use the Roster page for repeating classes), copy/paste, multi-select drag, month-view drag, notifying families, calendar settings, block-out dates and shareable calendars (0552).
+**Out of scope.** Editing a card's title/program/instructor after creation (use the Roster page for repeating classes), copy/paste, multi-select drag, month-view drag, notifying families, calendar settings, block-out dates and shareable calendars (0568).
 
 **Security.** Direct human commands only (HUMAN_UI, no delegation or action request), exact current school and organization from the tenant transaction, live entitlement, forced RLS, definer functions with an EXECUTE-only runtime ACL, idempotency key with exact replay and key-reuse refusal, row lock and version check, audit and outbox with identifiers only, authority checked again after the last write. The runtime keeps no UPDATE on class sessions.
 
@@ -39,7 +39,7 @@ Owner ask (David, 2026-11-19): "i need this calendar to be clickable and let me 
 
 ## Plan
 
-1. Migration 0551: columns (`class_sessions.session_kind`, `class_series.session_kind`, `class_series.lead_instructor_principal_id`), private `class_session_roster_detachments`, the occurrence trigger that copies kind and instructor, `class_series_apply_future` skipping detached classes, `create_calendar_card`, `move_calendar_card`, `read_school_calendar_cards`; 010/011 sections; checksums and staging pins.
+1. Migration 0567: columns (`class_sessions.session_kind`, `class_series.session_kind`, `class_series.lead_instructor_principal_id`), private `class_session_roster_detachments`, the occurrence trigger that copies kind and instructor, `class_series_apply_future` skipping detached classes, `create_calendar_card`, `move_calendar_card`, `read_school_calendar_cards`; 010/011 sections; checksums and staging pins.
 2. Contracts: input validators and receipt/read verifiers.
 3. API: controller routes under `schedule/calendar`, human UI guards, service with exact error mapping.
 4. DB proof script and run-db-proofs entry.

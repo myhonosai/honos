@@ -34,7 +34,7 @@ const signalFor = (abort: AbortController) => AbortSignal.any([abort.signal, Abo
  */
 type Pending = PendingMove & Readonly<{ startsAt: string; endsAt: string; version: number; name: string; booked: number; done?: boolean }>;
 type Creating = Readonly<{ date: string; minutes: number; key: string; busy: boolean; error: string | null; serial: number }>;
-/** `confirm` asks about moving a booked class; `ask` asks before adding or moving onto a closed day (0552). */
+/** `confirm` asks about moving a booked class; `ask` asks before adding or moving onto a closed day (0568). */
 type Message = Readonly<{ text: string; confirm?: boolean; ask?: () => void }>;
 const newKey = () => crypto.randomUUID();
 /** The next whole hour in school time, today; after 11 PM, 9 AM tomorrow. */
@@ -118,7 +118,7 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
     return () => abort.abort();
   }, [school, anchor, view, refresh, api]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Card details (0551) for the same visible days: kind, program, roster, lead instructor, booked count, and what a manager may pick.
+  // Card details (0567) for the same visible days: kind, program, roster, lead instructor, booked count, and what a manager may pick.
   useEffect(() => {
     if (!scope || anchor === null) return;
     const shown = privacy.current, abort = new AbortController(), range = calendarRange(view, anchor);
@@ -129,7 +129,7 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
     return () => abort.abort();
   }, [school, anchor, view, refresh, cardsApi]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Block-out dates (0552) for the same visible days. A school whose block-outs cannot be read shows no closed days.
+  // Block-out dates (0568) for the same visible days. A school whose block-outs cannot be read shows no closed days.
   useEffect(() => {
     if (!scope || anchor === null) return;
     const shown = privacy.current, abort = new AbortController(), range = calendarRange(view, anchor), last = addDays(range.end, -1);

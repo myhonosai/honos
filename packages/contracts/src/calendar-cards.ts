@@ -1,5 +1,5 @@
 /**
- * 0551 calendar cards: create a class or a roster from the calendar, move or resize one class, and read each class's card kind,
+ * 0567 calendar cards: create a class or a roster from the calendar, move or resize one class, and read each class's card kind,
  * program, roster, lead instructor and booked count. Spec: docs/architecture/CALENDAR_CARDS_DRAG_AND_DROP.md.
  */
 import { CLASS_SERIES_BOOKING_POLICIES, classSeriesDate, type ClassSeriesBookingPolicy } from './class-series.js';

@@ -39,7 +39,7 @@ export function shareInput(d: ShareDraft): ShareCalendarInput | null {
 const errorText = (t: T, error: unknown) => t(`err${error instanceof CardError ? error.kind : 'UNKNOWN'}` as SettingsKey);
 const signalFor = (abort: AbortController) => AbortSignal.any([abort.signal, AbortSignal.timeout(20000)]);
 
-/** Calendar settings tab (0552). Every read and write goes through the protected API; the page decides nothing on its own. */
+/** Calendar settings tab (0568). Every read and write goes through the protected API; the page decides nothing on its own. */
 export function CalendarSettingsPage({ api = calendarSettingsApi, onManagePrograms, origin }: {
   api?: CalendarSettingsApi; onManagePrograms?: () => void; origin?: string;
 }): React.ReactElement {

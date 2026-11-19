@@ -13,7 +13,7 @@ const HUMAN_SETTINGS = "SELECT set_config('app.hon_source','HUMAN_UI',true),set_
 const READ_LIMITS = "SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0";
 const WRITE_LIMITS = "SET LOCAL statement_timeout='15s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0";
 
-// Exact 0551 error codes; every unknown database failure is unavailable, never success.
+// Exact 0567 error codes; every unknown database failure is unavailable, never success.
 const CARD_ERRORS: Record<string, (code: string) => HttpException> = {
   VALIDATION_FAILED: code => new BadRequestException({ code }),
   CLASS_SERIES_FORBIDDEN: code => new ForbiddenException({ code }),
@@ -41,7 +41,7 @@ function translate(error: unknown, forbidden: string): never {
 }
 
 /**
- * 0551 calendar cards. Each call runs one protected definer function that re-proves the direct human subject and the live
+ * 0567 calendar cards. Each call runs one protected definer function that re-proves the direct human subject and the live
  * school-scoped permission; the runtime has no privilege on the tables and no UPDATE on class sessions. Moving a class never
  * contacts the families booked into it.
  */

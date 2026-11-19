@@ -17,13 +17,14 @@ export type BoardState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { sta
 export type TrialState = { state: 'NONE' | 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; leadId: string; recovery: TrialRecovery };
 export type Notice = { tone: 'OK' | 'ERROR'; text: string } | null;
 export type CloseState = null | { leadId: string; status: 'WON' | 'LOST'; note: string; phase: 'ASK' | 'SAVING' | 'UNCERTAIN' | 'FAILED' };
+export type SetupState = { state: 'IDLE' | 'WORKING' | 'DENIED' | 'FAILED' | 'UNKNOWN' };
 export type EditState = null | { draft: Draft; newName: string; phase: 'EDIT' | 'SAVING' | 'UNCERTAIN'; error: string | null };
 export const LEAD_DRAG_TYPE = 'application/x-hon-lead';
 
 export type PipelineViewProps = Readonly<{
   language: string; waiting: boolean; concealed: boolean; scope: BoardScope | null;
   board: BoardState; status: CrmBoardStatus; filters: Filters; view: BoardView; selectedId: string | null; trials: TrialState;
-  notice: Notice; movingId: string | null; close: CloseState; edit: EditState; adding: boolean; addLead?: React.ReactNode;
+  notice: Notice; movingId: string | null; close: CloseState; edit: EditState; adding: boolean; addLead?: React.ReactNode; setup?: SetupState;
   onStatus?: (status: CrmBoardStatus) => void; onFilters?: (filters: Filters) => void; onView?: (view: BoardView) => void;
   onPipeline?: (pipelineId: string) => void; onOpen?: (leadId: string | null) => void; onMove?: (leadId: string, stageId: string) => void;
   onAskClose?: (leadId: string, status: 'WON' | 'LOST') => void; onCloseNote?: (note: string) => void; onConfirmClose?: () => void; onCancelClose?: () => void;
@@ -135,7 +136,7 @@ function Toolbar(props: PipelineViewProps & { t: T }) {
       <button type="button" aria-pressed={view === 'LIST'} disabled={off} onClick={() => onView?.('LIST')}>{t('viewList')}</button>
     </div>
     <div className={styles.actions}>
-      <button type="button" className={styles.secondary} disabled={!ready?.pipeline} onClick={() => onEdit?.(true)}>{t('editPipeline')}</button>
+      <button type="button" className={styles.secondary} disabled={!ready || props.setup?.state === 'WORKING'} onClick={() => onEdit?.(true)}>{t('editPipeline')}</button>
       <button type="button" className={styles.primary} aria-expanded={adding} onClick={() => onAdd?.(!adding)}>{adding ? t('closeAdd') : t('addLead')}</button>
     </div>
   </div>;
@@ -143,7 +144,7 @@ function Toolbar(props: PipelineViewProps & { t: T }) {
 
 function Ready(props: Inner) {
   const { board, filters, view, status, language, t } = props;
-  if (!board.pipeline) return <p className={styles.notice}>{t('noPipeline')}</p>;
+  if (!board.pipeline) return <SetUpStages {...props}/>;
   const shown = applyFilters(board.leads, filters, language);
   const selected = props.selectedId ? board.leads.find((l) => l.id === props.selectedId) ?? null : null;
   return <div className={styles.workspace} data-panel={selected ? 'open' : undefined}>
@@ -153,6 +154,18 @@ function Ready(props: Inner) {
       {board.truncated ? <p className={styles.meta}>{t('truncated', { n: String(board.limit) })}</p> : null}
     </div>
     {selected ? <Panel {...props} lead={selected}/> : null}
+  </div>;
+}
+
+/** No stages yet: set them up now (the existing starter command), then the editor opens. No lead is needed first. */
+function SetUpStages({ setup, onEdit, t }: Inner) {
+  const state = setup?.state ?? 'IDLE';
+  const message: PipelineKey | null = state === 'DENIED' ? 'setUpDenied' : state === 'FAILED' ? 'setUpFailed' : state === 'UNKNOWN' ? 'setUpUnknown' : null;
+  return <div className={`${styles.notice} ${styles.setup}`} data-testid="pipeline-setup">
+    <p>{t('noPipeline')}</p>
+    {message ? <p className={styles.error} role="alert">{t(message)}</p> : null}
+    {state === 'DENIED' ? null : <button type="button" className={styles.primary} disabled={state === 'WORKING'} onClick={() => onEdit?.(true)}>
+      {state === 'WORKING' ? t('setUpWorking') : state === 'UNKNOWN' ? t('retry') : t('setUp')}</button>}
   </div>;
 }
 

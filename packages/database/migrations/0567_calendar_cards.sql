@@ -1,6 +1,6 @@
 BEGIN;
 
--- 0551 calendar cards (owner David 2026-11-19, number assigned by the coordinator): "i need this calendar to be clickable and
+-- 0567 calendar cards (owner David 2026-11-19, number assigned by the coordinator): "i need this calendar to be clickable and
 -- let me make schedule or class cards that can be drag and dropped". Spec: docs/architecture/CALENDAR_CARDS_DRAG_AND_DROP.md.
 --   K1  Every class session and roster (0239 class series) has a card kind: CLASS (default, every existing row), PRIVATE_LESSON,
 --       TRIAL or EVENT. It is a label only; booking, attendance and capacity rules do not change.
@@ -295,16 +295,16 @@ BEGIN
   RETURN result;
 END $$;
 
-COMMENT ON COLUMN hon.class_sessions.session_kind IS '0551 card kind label (CLASS, PRIVATE_LESSON, TRIAL, EVENT). No booking, attendance or capacity effect.';
-COMMENT ON COLUMN hon.class_series.session_kind IS '0551 card kind every session of this roster takes.';
-COMMENT ON COLUMN hon.class_series.lead_instructor_principal_id IS '0551 lead instructor every session of this roster takes while still eligible staff.';
-COMMENT ON TABLE hon.class_session_roster_detachments IS '0551 roster classes moved on their own; a later roster change never moves them back. Immutable. Private.';
+COMMENT ON COLUMN hon.class_sessions.session_kind IS '0567 card kind label (CLASS, PRIVATE_LESSON, TRIAL, EVENT). No booking, attendance or capacity effect.';
+COMMENT ON COLUMN hon.class_series.session_kind IS '0567 card kind every session of this roster takes.';
+COMMENT ON COLUMN hon.class_series.lead_instructor_principal_id IS '0567 lead instructor every session of this roster takes while still eligible staff.';
+COMMENT ON TABLE hon.class_session_roster_detachments IS '0567 roster classes moved on their own; a later roster change never moves them back. Immutable. Private.';
 COMMENT ON FUNCTION hon.create_calendar_card(text,jsonb,text,uuid,uuid) IS
-'Direct HUMAN_UI calendar create (0551 C1): one class, or a roster and its classes through 84 days ahead, with a kind and an optional lead instructor. No automation, AI, communication or payment effect.';
+'Direct HUMAN_UI calendar create (0567 C1): one class, or a roster and its classes through 84 days ahead, with a kind and an optional lead instructor. No automation, AI, communication or payment effect.';
 COMMENT ON FUNCTION hon.move_calendar_card(text,uuid,jsonb,text,uuid,uuid) IS
-'Direct HUMAN_UI move or resize of one scheduled, unstarted, unattended class (0551 M1); a roster class is detached from the pattern. Families are not contacted.';
+'Direct HUMAN_UI move or resize of one scheduled, unstarted, unattended class (0567 M1); a roster class is detached from the pattern. Families are not contacted.';
 COMMENT ON FUNCTION hon.read_school_calendar_cards(text,jsonb) IS
-'Direct HUMAN_UI read of card kind, program, roster, lead instructor and booked count for up to 42 school-local days (0551 R1); managers also get programs and instructors (id and name). No DML.';
+'Direct HUMAN_UI read of card kind, program, roster, lead instructor and booked count for up to 42 school-local days (0567 R1); managers also get programs and instructors (id and name). No DML.';
 
 DO $$ DECLARE r text; col text; f text; fns text[]:=ARRAY['hon.calendar_instructor_ok(uuid,uuid,uuid)','hon.class_series_occurrence_inherit()',
     'hon.class_series_apply_future(hon.class_series,text)',

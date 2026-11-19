@@ -1,5 +1,5 @@
 /**
- * Calendar settings proof (0552) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global ValidationPipe
+ * Calendar settings proof (0568) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global ValidationPipe
  * + HonExceptionFilter -> CalendarSettingsController / PublicShareCalendarController -> protected definer functions on the
  * restricted runtime role with forced RLS), on the guarded disposable CRM-close fixture only. Synthetic names only.
  */
@@ -371,7 +371,7 @@ try {
     ok(!(await sql('SELECT has_function_privilege($1,$2,\'EXECUTE\') p', [CRM_CLOSE_RUNTIME_ROLE, fn])).rows[0].p, `runtime cannot run ${fn}`);
   }
   await rejectsSql(async () => { await runtime.query('SELECT * FROM hon.share_calendars'); }, /permission denied/, 'the runtime cannot read share calendars directly');
-  console.log(`PASS: calendar settings (0552): ${checks} checks.`);
+  console.log(`PASS: calendar settings (0568): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

@@ -1,4 +1,4 @@
-/** Calendar settings and public shared calendar copy (0552). Every language has every key. */
+/** Calendar settings and public shared calendar copy (0568). Every language has every key. */
 const en = {
   settingsTitle: 'Calendar settings', settingsIntro: 'Closed days, links families can open or embed on your website, and QR codes.',
   sectionsLabel: 'Settings sections', secPrograms: 'Programs', secBlockOuts: 'Block-out dates', secShare: 'Share links', secQr: 'QR codes',

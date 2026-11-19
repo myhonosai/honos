@@ -347,7 +347,9 @@
     "0533_walk_in_kiosk_card_payment.sql": "bbdffff9b9eee29f5ff9f8452a4ff5694c758b2abc234967b8bb2ebda8af35ac",
     "0537_walk_in_kiosk_trial_class.sql": "24b725cddd83d80ab9597b5531e2178eb355aae5911c6267d13e2dc999fe057f",
     "0538_walk_in_kiosk_trial_seats_and_demo.sql": "9e3e4bd1693a9edf87577d30f46d03769880f74c63835a14b015010ba04e292e",
-    "0551_calendar_cards.sql": "d0bb3188db37af551b6969887ab4994b939f001ac04689fad28f6b710fd00356",
-    "0552_calendar_settings.sql": "edffa765726b6ecda2acd0ef00b07e5a34929d5f8393e5028b92f8ae1e7e91e0"
+    "0553_school_a2p_registrations.sql": "fd25dc1f0f73734228a886d6b0e47dd8d804aa0083b8947ad931041a7e5bc691",
+    "0550_ai_text_proposals.sql": "166369680863c3e7d300d3ce5db6a48cbe863b0e5761cbabf18cb8bec57857b1",
+    "0567_calendar_cards.sql": "812ae679a0a8671aca29a4692db0f7751ad78bcb3169eec0b3bcdc3ac301de76",
+    "0568_calendar_settings.sql": "42db5aa1b05a92dc875e841ce6033c931625efd45d1795cb114c74c83bd92e38"
   }
 }

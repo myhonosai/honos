@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { sharedPublicClientLimit, type PublicClientLimit } from './public-client-limit.js';
 
 /**
- * 0552 shared calendars: strict transport for /v1/public/calendars. GET of one canonical path only, no query string and no body,
+ * 0568 shared calendars: strict transport for /v1/public/calendars. GET of one canonical path only, no query string and no body,
  * behind the per-client read limit shared with the other public links. Nothing here writes.
  */
 export function publicShareCalendarTransport(clients: PublicClientLimit = sharedPublicClientLimit()) {
