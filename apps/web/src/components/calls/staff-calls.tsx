@@ -14,6 +14,7 @@ import {
 } from './http';
 import { CallButton } from './call-button';
 import s from '../testing-registration.module.css';
+import c from './calls.module.css';
 
 function who(call: SchoolCall, copy: CallsCopy): string { return call.contactName ?? `${copy.unknownCaller} ${formatCallNumber(call.remoteE164)}`; }
 function message(problem: unknown, copy: CallsCopy): string {
@@ -136,13 +137,13 @@ export function StaffCalls(): React.ReactElement {
         <label><input type="checkbox" checked={overview.ringMe} disabled={acting || !overview.callingOn}
           onChange={e => { const on = e.target.checked; void command(scope => setRingMe(scope, on), on ? copy.ringMeOn : copy.ringMeOff); }} /> {copy.ringMe}</label>
         <span className={s.subtle}>{copy.ringMeHint}</span></p>
-      {overview.callingOn && <p className={s.subtle}>{overview.staff ? (ringers.length ? copy.ringing(ringers.join(', ')) : copy.nobodyRings) + ' ' : ''}
+      {overview.callingOn && <p className={s.subtle}>{overview.staff ? (ringers.length ? copy.ringing(ringers.join(', ')) + '.' : copy.nobodyRings) + ' ' : ''}
         {copy.forwardingNote}{overview.missedCallTextBack ? ` ${copy.textBackNote}` : ''}</p>}
     </section>}
 
     {list && <section className={s.card} aria-label={copy.log}>
       <h2>{copy.log}</h2>
-      <p className={s.actions} role="group" aria-label={copy.log}>
+      <p className={`${s.actions} ${c.pressed}`} role="group" aria-label={copy.log}>
         {SCHOOL_CALL_FILTERS.map(f => <button key={f} type="button" aria-pressed={filter === f} disabled={busy} onClick={() => choose(f)}>{copy.filters[f]}</button>)}
         <button type="button" disabled={busy} onClick={() => void refresh()}>{copy.refresh}</button>
       </p>
@@ -166,11 +167,11 @@ export function StaffCalls(): React.ReactElement {
       <p className={s.subtle}>{formatCallNumber(open.remoteE164)} · {copy.status[open.status]} · {date(open.startedAt)}</p>
       {!open.doNotCall && <p className={s.actions}><CallButton phoneE164={open.remoteE164} personId={open.personId ?? undefined} name={open.contactName ?? undefined}
         language={preferences.language} /></p>}
-      <fieldset><legend>{copy.outcome}</legend><p className={s.actions}>
+      <fieldset className={c.outcomes}><legend>{copy.outcome}</legend><p className={`${s.actions} ${c.pressed}`}>
         {SCHOOL_CALL_OUTCOMES.map(o => <button key={o} type="button" aria-pressed={open.outcome === o} disabled={acting} onClick={() => saveOutcome(open, o)}>{copy.outcomes[o]}</button>)}
         {open.outcome && <button type="button" disabled={acting} onClick={() => saveOutcome(open, null)}>{copy.clearOutcome}</button>}
       </p></fieldset>
-      <form onSubmit={e => saveNote(e, open)}>
+      <form className={c.form} onSubmit={e => saveNote(e, open)}>
         <label htmlFor="call-note">{copy.note}</label>
         <textarea id="call-note" rows={3} value={note} maxLength={SCHOOL_CALL_LIMITS.noteMax + 1} onChange={e => setNote(e.target.value)} disabled={acting} aria-describedby="call-note-hint" />
         <p id="call-note-hint" className={s.subtle}>{copy.noteHint}</p>
@@ -186,7 +187,7 @@ export function StaffCalls(): React.ReactElement {
 
     {overview && settings && <section className={s.card} aria-label={copy.settings}>
       <h2>{copy.settings}</h2>
-      {!overview.canManage ? <p className={s.subtle}>{copy.ownerOnly}</p> : <form onSubmit={saveSettings}>
+      {!overview.canManage ? <p className={s.subtle}>{copy.ownerOnly}</p> : <form className={c.form} onSubmit={saveSettings}>
         <p className={s.subtle}>{copy.settingsHint}</p>
         <p><label><input type="checkbox" checked={settings.callingOn} disabled={acting} onChange={e => setSettings({ ...settings, callingOn: e.target.checked })} /> {copy.turnOn}</label></p>
         <label htmlFor="call-greeting">{copy.greeting}</label>
