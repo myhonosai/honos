@@ -4,7 +4,7 @@ import { PUBLIC_FORM_CHOICES, type PublishedLeadForm } from '@hon/contracts';
 import { loadPublicLeadForm, sendPublicLeadForm } from './public-form-client';
 import styles from './campaign-workbench.module.css';
 export { sendPublicLeadForm } from './public-form-client';
-/** IC1 (0555) consent wording, version IC1-2026-11-19 (spec docs/architecture/INTAKE_CONTACT_CONSENT.md). */
+/** IC1 (0570) consent wording, version IC1-2026-11-19 (spec docs/architecture/INTAKE_CONTACT_CONSENT.md). */
 export const emailConsentWording = (school: string) => `By submitting, you agree that ${school} may email you about your enquiry and classes. You can unsubscribe at any time.`;
 export const textConsentWording = (school: string) => `Text me about my enquiry and classes from ${school}. Message and data rates may apply. Message frequency varies. Reply STOP to opt out, HELP for help. Consent is not a condition of purchase. (Optional)`;
 export function PublishedLeadFormView({ publicId }: { publicId: string }) {
@@ -25,7 +25,7 @@ export function PublishedLeadFormView({ publicId }: { publicId: string }) {
   },[publicId]);
   async function submit(event: FormEvent) {
     event.preventDefault(); if (gate.current || !form || form.publicId !== publicId) return;
-    // IC1 (0555): the "Text me" tick is the lead's own choice; it is sent only when ticked.
+    // IC1 (0570): the "Text me" tick is the lead's own choice; it is sent only when ticked.
     const input = { ...values, acknowledged, ...(textOptIn ? { textOptIn: true } : {}) }, fingerprint = JSON.stringify(input);
     if (retry.current?.fingerprint !== fingerprint) retry.current = { fingerprint, key:crypto.randomUUID() };
     gate.current = true; setBusy(true); const result = await sendPublicLeadForm(publicId,input,retry.current.key); gate.current = false; setBusy(false);

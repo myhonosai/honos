@@ -303,7 +303,7 @@ try {
   const signature = (await sql('SELECT * FROM hon.walkin_waiver_signatures WHERE visit_id=$1', [visit.id])).rows[0];
   ok(signature.signer_relationship === 'PARENT' && signature.language === 'en' && signature.waiver_version === 1 && signature.signer_person_id === visit.contact_person_id
     && signature.text_hash === createHash('sha256').update(WAIVER.en, 'utf8').digest('hex') && JSON.stringify(signature.strokes) === JSON.stringify(SIGNATURE), 'signed waiver with the exact text hash and strokes');
-  // IC1 (0555): email consent is recorded automatically at intake; texts only with the box ticked.
+  // IC1 (0570): email consent is recorded automatically at intake; texts only with the box ticked.
   const untickedConsents = (await sql("SELECT c.channel, c.status, c.source, k.method FROM hon.communication_consents c JOIN hon.communication_consent_captures k ON k.consent_id=c.id WHERE c.person_id=$1 ORDER BY 1", [visit.contact_person_id])).rows;
   ok(JSON.stringify(untickedConsents) === JSON.stringify([{ channel: 'EMAIL', status: 'OPTED_IN', source: 'RECIPIENT', method: 'WALK_IN_KIOSK' }]), `email automatic, no text opt-in without the box ticked: ${JSON.stringify(untickedConsents)}`);
   const again = await success(() => submit(TOKEN, visitInput(), { key: visitKey }), 'visit retry', 201);

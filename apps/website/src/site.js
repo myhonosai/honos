@@ -1,14 +1,30 @@
 (function(){
+  // offer banner start
+  // A promo or referral discount for the banner, e.g. {by:"A partner school",pct:20}.
+  // Keep null: no billing path applies promo or referral discounts yet (Champions Club records referrals only),
+  // so showing one would promise a discount checkout does not give. Turning it on needs David's decision.
+  var OFFER=null;
+  var OFFER_TEXT={
+    en:"{by} has applied a {pct}% discount on your first year of HON OS.",
+    ko:"{by}님이 HON OS 첫해 {pct}% 할인을 적용했습니다.",
+    es:"{by} aplicó un descuento del {pct}% en tu primer año de HON OS."
+  };
+  function offerText(o,lang){
+    if(!o||typeof o.by!=="string"||!o.by||!(o.pct>0&&o.pct<100))return null;
+    return (OFFER_TEXT[lang]||OFFER_TEXT.en).replace("{pct}",String(o.pct)).replace("{by}",function(){return o.by});
+  }
+  // offer banner end
+
   // Strings drawn by this script, per page language (the page's own text is translated at build time).
   var L={
     en:{days:["mon","tue","wed","thu","fri","sat"],full:"% full",noClass:"no class",belt:" belt",
-      belts:["white","yellow","orange","green","blue","purple","brown","black"],month:" /month",year:" /year",review:"review",read:"read",
+      belts:["white","yellow","orange","green","blue","purple","brown","black"],review:"review",read:"read",
       feed:[["chad / sales","Drafted a check-in for a family whose trial ends Friday","review"],["claire / performance","Summed up attendance by program for this month","read"],["marcus / marketing","Drafted a referral post for your Champions Club code","review"],["hon","Summarized what the team drafted today in three lines","read"],["kai / teaching","Suggested drills for students testing for green belt","review"]]},
     ko:{days:["월","화","수","목","금","토"],full:"% 참석",noClass:"수업 없음",belt:"",
-      belts:["흰 띠","노란 띠","주황 띠","초록 띠","파란 띠","보라 띠","갈색 띠","검은 띠"],month:" /월",year:" /년",review:"검토",read:"읽음",
+      belts:["흰 띠","노란 띠","주황 띠","초록 띠","파란 띠","보라 띠","갈색 띠","검은 띠"],review:"검토",read:"읽음",
       feed:[["chad / 영업","체험이 금요일에 끝나는 가족에게 보낼 안부 메시지 초안","review"],["claire / 성과","이번 달 프로그램별 출석 요약","read"],["marcus / 마케팅","Champions Club 추천 코드 홍보 게시물 초안","review"],["hon","오늘 팀이 작성한 초안을 세 줄로 요약","read"],["kai / 지도","초록 띠 심사를 앞둔 수련생을 위한 훈련 제안","review"]]},
     es:{days:["lun","mar","mié","jue","vie","sáb"],full:"% lleno",noClass:"sin clase",belt:"",
-      belts:["cinturón blanco","cinturón amarillo","cinturón naranja","cinturón verde","cinturón azul","cinturón morado","cinturón marrón","cinturón negro"],month:" /mes",year:" /año",review:"revisar",read:"leído",
+      belts:["cinturón blanco","cinturón amarillo","cinturón naranja","cinturón verde","cinturón azul","cinturón morado","cinturón marrón","cinturón negro"],review:"revisar",read:"leído",
       feed:[["chad / ventas","Redactó un mensaje para una familia cuya prueba termina el viernes","review"],["claire / rendimiento","Resumió la asistencia por programa de este mes","read"],["marcus / marketing","Redactó una publicación de referidos con tu código de Champions Club","review"],["hon","Resumió en tres líneas lo que el equipo redactó hoy","read"],["kai / enseñanza","Sugirió ejercicios para alumnos que se examinan de cinturón verde","review"]]}
   };
   var t=L[document.documentElement.lang]||L.en;
@@ -35,9 +51,13 @@
     row.innerHTML='<span><span class="who">'+f[0]+"</span>"+f[1]+'</span><span class="v'+(f[2]=="read"?" ok":"")+'">'+t[f[2]]+"</span>";
     log.insertBefore(row,log.firstChild);if(log.children.length>4)log.removeChild(log.lastChild)},4200);
 
-  // pricing toggle
-  var pb=document.querySelectorAll(".toggle button");
-  pb.forEach(function(b){b.addEventListener("click",function(){var p=b.dataset.p;
-    pb.forEach(function(o){o.setAttribute("aria-pressed",o===b?"true":"false")});
-    document.querySelectorAll(".price").forEach(function(el){el.querySelector(".amt").textContent=el.dataset[p];el.querySelector(".per").textContent=p=="m"?t.month:t.year})})});
+  // billing period switch: shows the yearly or monthly prices already on the page
+  var sw=document.querySelectorAll(".seg button[data-period]"),plans=document.querySelector(".plans[data-period]");
+  sw.forEach(function(b){b.addEventListener("click",function(){
+    sw.forEach(function(o){o.setAttribute("aria-pressed",o===b?"true":"false")});
+    if(plans)plans.setAttribute("data-period",b.getAttribute("data-period"))})});
+
+  // promo or referral discount: replaces the founder line in the banner when switched on
+  var shown=offerText(OFFER,document.documentElement.lang),slot=document.querySelector("[data-offer]");
+  if(shown&&slot)slot.textContent=shown;
 })();

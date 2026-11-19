@@ -1,9 +1,9 @@
 /** School Calendar wording (en / ko / es). Labels only; nothing here is authority or an outcome. */
 const en = {
-  title: 'Calendar', intro: 'Classes, sale days and events in one place. Open a class to see its roster, mark attendance or book a student.',
+  title: 'Calendar', intro: 'Classes, sale days and events in one place. Open a class to see its students, mark attendance or book a student.',
   tabCalendar: 'Calendar', tabTimetable: 'Weekly timetable', tabEvents: 'Sale days & events', tabsLabel: 'Schedule sections',
   day: 'Day', week: 'Week', month: 'Month', viewLabel: 'Calendar view', previous: 'Previous', next: 'Next', today: 'Today', refresh: 'Refresh',
-  addClass: 'Add a class', allClasses: 'All classes', filterLabel: 'Show classes', eventsRow: 'Events', details: 'Details', addEvent: 'Add a sale day or event',
+  addClass: 'Add a class', allClasses: 'All classes', filterLabel: 'Show classes', filterTitle: 'Filter', filterClasses: 'Classes', filterClear: 'Show all', classesChosen: '{n} classes', eventsRow: 'Events', details: 'Details', addEvent: 'Add a sale day or event',
   loading: 'Reading the calendar…', waiting: 'Checking your school…', noSchool: 'Choose a school to see its calendar.',
   concealed: 'The calendar is hidden. Come back to this tab to check your school again.',
   classesDenied: 'Your access at this school does not include the class schedule, so classes are not shown.',
@@ -18,14 +18,14 @@ const en = {
   whenLabel: 'When', eventWhen: '{day}, {from} to {to}', eventStatus: 'Status', eventSpots: 'Booked spots', eventPlace: 'Place', noPlace: 'No place given',
   spots: '{booked} of {total}', manageEvent: 'Manage on Sale days & events',
   DRAFT: 'Draft', PUBLISHED: 'Open for booking', CLOSED: 'Closed', CANCELLED: 'Cancelled',
-  bookTitle: 'Book a student on {name}', bookClose: 'Back to the roster',
+  bookTitle: 'Book a student on {name}', bookClose: 'Back to the students',
 };
 export type CalendarKey = keyof typeof en;
 const ko: Record<CalendarKey, string> = {
-  title: '캘린더', intro: '수업, 세일 데이, 행사를 한곳에서 봅니다. 수업을 열어 명단 확인, 출석 기록, 학생 예약을 하세요.',
+  title: '캘린더', intro: '수업, 세일 데이, 행사를 한곳에서 봅니다. 수업을 열어 학생 확인, 출석 기록, 학생 예약을 하세요.',
   tabCalendar: '캘린더', tabTimetable: '주간 시간표', tabEvents: '세일 데이 및 행사', tabsLabel: '일정 메뉴',
   day: '일', week: '주', month: '월', viewLabel: '캘린더 보기', previous: '이전', next: '다음', today: '오늘', refresh: '새로 고침',
-  addClass: '수업 추가', allClasses: '모든 수업', filterLabel: '표시할 수업', eventsRow: '행사', details: '자세히', addEvent: '세일 데이 또는 행사 추가',
+  addClass: '수업 추가', allClasses: '모든 수업', filterLabel: '표시할 수업', filterTitle: '필터', filterClasses: '수업', filterClear: '모두 보기', classesChosen: '수업 {n}개', eventsRow: '행사', details: '자세히', addEvent: '세일 데이 또는 행사 추가',
   loading: '캘린더를 읽는 중…', waiting: '학교를 확인하는 중…', noSchool: '캘린더를 볼 학교를 선택하세요.',
   concealed: '캘린더가 숨겨졌습니다. 이 탭으로 돌아오면 학교를 다시 확인합니다.',
   classesDenied: '이 학교에서의 권한에 수업 일정이 포함되어 있지 않아 수업을 표시하지 않습니다.',
@@ -40,13 +40,13 @@ const ko: Record<CalendarKey, string> = {
   whenLabel: '일시', eventWhen: '{day}, {from}–{to}', eventStatus: '상태', eventSpots: '예약된 자리', eventPlace: '장소', noPlace: '장소 없음',
   spots: '{total}개 중 {booked}개', manageEvent: '세일 데이 및 행사에서 관리',
   DRAFT: '초안', PUBLISHED: '예약 받는 중', CLOSED: '마감', CANCELLED: '취소됨',
-  bookTitle: '{name}에 학생 예약', bookClose: '명단으로 돌아가기',
+  bookTitle: '{name}에 학생 예약', bookClose: '학생 목록으로 돌아가기',
 };
 const es: Record<CalendarKey, string> = {
-  title: 'Calendario', intro: 'Clases, días de venta y eventos en un solo lugar. Abre una clase para ver su lista, marcar asistencia o reservar un alumno.',
+  title: 'Calendario', intro: 'Clases, días de venta y eventos en un solo lugar. Abre una clase para ver sus alumnos, marcar asistencia o reservar un alumno.',
   tabCalendar: 'Calendario', tabTimetable: 'Horario semanal', tabEvents: 'Días de venta y eventos', tabsLabel: 'Secciones del horario',
   day: 'Día', week: 'Semana', month: 'Mes', viewLabel: 'Vista del calendario', previous: 'Anterior', next: 'Siguiente', today: 'Hoy', refresh: 'Actualizar',
-  addClass: 'Añadir una clase', allClasses: 'Todas las clases', filterLabel: 'Mostrar clases', eventsRow: 'Eventos', details: 'Detalles', addEvent: 'Añadir un día de venta o evento',
+  addClass: 'Añadir una clase', allClasses: 'Todas las clases', filterLabel: 'Mostrar clases', filterTitle: 'Filtro', filterClasses: 'Clases', filterClear: 'Mostrar todo', classesChosen: '{n} clases', eventsRow: 'Eventos', details: 'Detalles', addEvent: 'Añadir un día de venta o evento',
   loading: 'Leyendo el calendario…', waiting: 'Comprobando su escuela…', noSchool: 'Elija una escuela para ver su calendario.',
   concealed: 'El calendario está oculto. Vuelva a esta pestaña para comprobar su escuela de nuevo.',
   classesDenied: 'Su acceso en esta escuela no incluye el horario de clases, así que no se muestran clases.',
@@ -61,7 +61,7 @@ const es: Record<CalendarKey, string> = {
   whenLabel: 'Cuándo', eventWhen: '{day}, de {from} a {to}', eventStatus: 'Estado', eventSpots: 'Plazas reservadas', eventPlace: 'Lugar', noPlace: 'Sin lugar',
   spots: '{booked} de {total}', manageEvent: 'Gestionar en Días de venta y eventos',
   DRAFT: 'Borrador', PUBLISHED: 'Abierto a reservas', CLOSED: 'Cerrado', CANCELLED: 'Cancelado',
-  bookTitle: 'Reservar un alumno en {name}', bookClose: 'Volver a la lista',
+  bookTitle: 'Reservar un alumno en {name}', bookClose: 'Volver a los alumnos',
 };
 export const CALENDAR_LANGUAGES = { en, ko, es } as const;
 export function calendarText(language: string, key: CalendarKey, vars: Record<string, string> = {}): string {

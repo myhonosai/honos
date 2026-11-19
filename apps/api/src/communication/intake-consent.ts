@@ -2,7 +2,7 @@ import type { PoolClient } from 'pg';
 import { INTAKE_CONSENT_CHANNELS, isIntakeConsentChannels, type CommandContext, type IntakeConsentChannel } from '@hon/contracts';
 
 /**
- * IC1 (0555) automatic intake consent for staff adds and imports. Called inside the same transaction that created
+ * IC1 (0570) automatic intake consent for staff adds and imports. Called inside the same transaction that created
  * the people; hon.record_staff_intake_consent re-checks the signed-in staff member and touches only people created in
  * this transaction. Staff may untick a channel; omitted means both (owner default 2026-11-19).
  * Only a direct human UI command records anything: AI, automation, delegated or action-engine commands never do.

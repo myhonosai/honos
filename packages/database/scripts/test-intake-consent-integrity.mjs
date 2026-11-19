@@ -1,5 +1,5 @@
 /**
- * Automatic contact consent at lead intake (IC1, 0555) on the guarded disposable CRM-close fixture only.
+ * Automatic contact consent at lead intake (IC1, 0570) on the guarded disposable CRM-close fixture only.
  * Owner decision 2026-11-19 "Email automatic, texts one tick":
  *   - a website form records email consent; text consent only with the lead's own textOptIn tick and a mobile;
  *   - a Zernio (Facebook/Instagram) lead records email consent only;
@@ -260,7 +260,7 @@ try {
   ok(visible === 1, 'school B staff see only school B evidence');
   ok((await sql("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid='hon.crm_leads'::regclass AND tgname='crm_leads_intake_consent' AND tgdeferrable AND tginitdeferred")).rows[0].n === 1, 'the lead trigger is deferred to commit');
 
-  console.log(`PASS: intake contact consent (0555): ${checks} checks.`);
+  console.log(`PASS: intake contact consent (0570): ${checks} checks.`);
 } finally {
   try { await cleanup(); } finally { await admin.end(); await runtime.end(); }
 }

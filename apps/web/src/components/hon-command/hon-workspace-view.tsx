@@ -342,7 +342,8 @@ export function HonWorkspaceView(props: HonWorkspaceViewProps): React.ReactEleme
       <div className={styles.headerActions}>
         {verified ? <button type="button" onClick={props.onRefresh}>Refresh</button> : null}
         {props.expandHref ? <a href={props.expandHref}>Full workspace</a> : null}
-        {props.returnHref ? <a href={props.returnHref}>Back to dashboard</a> : null}
+        {/* Expanded from the corner pop-up on another page: the way back names that it returns there. */}
+        {props.returnHref ? <a href={props.returnHref}>{props.returnHref === '/staff/dashboard' ? 'Back to dashboard' : 'Back to your page'}</a> : null}
         {props.onClose ? <button type="button" onClick={props.onClose} aria-label="Close HON">Close</button> : null}
       </div>
     </header>

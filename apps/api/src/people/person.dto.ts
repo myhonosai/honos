@@ -21,7 +21,7 @@ export class CreatePersonDto {
   @Matches(/^\+[1-9]\d{1,14}$/)
   phoneE164?: string;
 
-  /** IC1 (0555): consent channels staff left ticked; omitted means both. */
+  /** IC1 (0570): consent channels staff left ticked; omitted means both. */
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(2)
