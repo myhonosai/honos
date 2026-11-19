@@ -169,7 +169,7 @@ BEGIN
 END;
 $$;
 
--- 0547 school calls: connect a browser call, route an incoming call, record call progress, voicemails and recordings,
+-- 0556 school calls: connect a browser call, route an incoming call, record call progress, voicemails and recordings,
 -- and delete recordings after 90 days (when applied).
 DO $$
 BEGIN

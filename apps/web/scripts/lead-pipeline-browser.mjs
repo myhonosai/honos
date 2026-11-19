@@ -53,7 +53,10 @@ function reset() {
 }
 const openCount = (s) => state.leads.filter((l) => l.stageId === s.id && l.status === 'OPEN').length;
 const stagesJson = () => state.stages.map((s) => ({ ...s, openCount: openCount(s) }));
+/** A school with no lead stages and no leads yet (the starter command has not run). */
+function resetEmpty() { state = { version: 0, seen: new Map(), stages: [], leads: [], empty: true }; }
 function board(status) {
+  if (state.empty) return { pipelines: [], pipeline: null, stages: [], totals: { open: 0, won: 0, lost: 0 }, status, leads: [], truncated: false, limit: 500 };
   const allowed = status === 'CLOSED' ? ['WON', 'LOST'] : [status];
   const leads = state.leads.filter((l) => allowed.includes(l.status)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const count = (st) => state.leads.filter((l) => l.status === st).length;
@@ -95,8 +98,19 @@ function api(route) {
   }
   if (method !== 'POST') return json(route, 404, { code: 'NOT_FOUND' });
   report.commands.push({ path: rest.join('/').replace(/[0-9a-f-]{36}/g, ':id'), command: headers['x-hon-human-command'], key: key !== null, origin: headers.origin ?? null });
+  if (state.denyStarter && rest[1] === 'starter') return json(route, 403, { code: 'FORBIDDEN' });
   if (key && state.seen.has(key)) return ok(route, state.seen.get(key), true);
   const answer = (data) => { if (key) state.seen.set(key, data); return ok(route, data, false); };
+  if (rest[0] === 'pipelines' && rest[1] === 'starter') {
+    // The server-defined starter funnel; replays on the same key, never a second pipeline.
+    if (state.empty) {
+      state.empty = false; state.version = 1;
+      state.stages = [['New lead', 'BLUE', null], ['Trial booked', 'AMBER', null], ['Enrolled', 'GREEN', 'WON'], ['Not now', 'RED', 'LOST']]
+        .map(([name, color, terminalStatus], i) => ({ id: id(31 + i), name, position: i + 1, color, hidden: false, terminalStatus }));
+    }
+    return answer({ id: id(20), name: 'New students', version: state.version, createdAt: day(1),
+      stages: state.stages.map((s) => ({ id: s.id, name: s.name, position: s.position, ...(s.terminalStatus ? { terminalStatus: s.terminalStatus } : {}) })) });
+  }
   if (rest[0] === 'leads' && rest[2] === 'stage') {
     const lead = state.leads.find((l) => l.id === rest[1]), target = state.stages.find((s) => s.id === body.stageId);
     if (!lead || lead.status !== 'OPEN') return json(route, 404, { code: 'CRM_LEAD_UNAVAILABLE' });
@@ -135,7 +149,7 @@ for (let i = 0; i < 240; i += 1) { try { const r = await fetch(`${origin}/auth/l
 const browser = await chromium.launch();
 const TITLES = { en: 'Leads', ko: '문의', es: 'Prospectos' };
 let current = null;
-async function open(viewport, { language = 'en', mode = 'modern' } = {}) {
+async function open(viewport, { language = 'en', mode = 'modern', ready = 'pipeline-board' } = {}) {
   theme = mode;
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1, reducedMotion: 'reduce' });
   await ctx.addCookies([{ name: HON_SESSION_COOKIE, value: issueSession({ externalSubject: 'pipeline-synthetic-staff' }, session), url: origin, httpOnly: true, sameSite: 'Lax' }]);
@@ -152,7 +166,7 @@ async function open(viewport, { language = 'en', mode = 'modern' } = {}) {
   await page.goto(`${origin}/staff/crm`);
   current = page;
   await page.getByRole('heading', { name: TITLES[language], level: 1 }).waitFor();
-  await page.getByTestId('pipeline-board').waitFor();
+  await page.getByTestId(ready).waitFor();
   return { ctx, page };
 }
 async function check(name, work) { try { await work(); report.checks.push(name); } catch (error) { if (current) await current.screenshot({ path: join(results, `failure-${report.failures.length}.png`), fullPage: true }).catch(() => {}); report.failures.push(`${name}: ${error?.stack ?? error}`); } }
@@ -216,6 +230,46 @@ await check('edit pipeline: rename, add, reorder, hide a stage with leads only a
   assert.deepEqual([...new Set(report.commands.map((c) => c.command))], ['crm.pipeline.stages.save']);
   await shot(page, 'pipeline-board-after-edit-modern-en', true);
   await ctx.close();
+});
+
+await check('no leads yet: Edit pipeline sets up the starter stages, opens the editor, and the edited stages save before any lead', async () => {
+  resetEmpty(); report.commands = [];
+  const { ctx, page } = await open({ width: 1440, height: 960 }, { ready: 'pipeline-setup' });
+  assert.equal(await page.getByRole('button', { name: 'Edit pipeline' }).isDisabled(), false, 'Edit pipeline works with no leads');
+  await page.getByText('Set them up now, before your first lead').waitFor();
+  await shot(page, 'pipeline-no-stages-modern-en');
+  await page.getByRole('button', { name: 'Edit pipeline' }).click();
+  const dialog = page.getByTestId('edit-dialog');
+  await dialog.waitFor();
+  assert.deepEqual(await dialog.getByLabel('Stage name', { exact: true }).evaluateAll((els) => els.map((e) => e.value)), ['New lead', 'Trial booked']);
+  await dialog.getByLabel('Stage name').nth(0).fill('New inquiry');
+  await dialog.getByLabel('New stage name').fill('Contacted');
+  await dialog.getByRole('button', { name: 'Add stage' }).click();
+  await dialog.getByRole('button', { name: 'Move Contacted up' }).click();
+  await shot(page, 'pipeline-no-stages-editor-modern-en');
+  await dialog.getByRole('button', { name: 'Save pipeline' }).click();
+  await page.getByText('Pipeline saved.').waitFor();
+  assert.deepEqual(state.stages.map((s) => s.name), ['New inquiry', 'Contacted', 'Trial booked', 'Enrolled', 'Not now']);
+  assert.equal(state.leads.length, 0, 'no lead was needed');
+  await page.getByRole('heading', { name: 'Contacted', level: 2, exact: true }).waitFor();
+  assert.deepEqual(report.commands.map((c) => `${c.command}:${c.key}:${c.origin === origin}`), ['crm-pipeline-starter:true:true', 'crm.pipeline.stages.save:true:true']);
+  await shot(page, 'pipeline-no-stages-after-save-modern-en', true);
+  await ctx.close();
+});
+
+await check('no leads yet: the empty-board Set up button works the same and a denial is explained', async () => {
+  resetEmpty(); report.commands = [];
+  const { ctx, page } = await open({ width: 390, height: 844 }, { ready: 'pipeline-setup', mode: 'big-button', language: 'ko' });
+  await shot(page, 'pipeline-no-stages-big-button-ko-phone');
+  await page.getByTestId('pipeline-setup').getByRole('button', { name: '문의 단계 설정' }).click();
+  await page.getByTestId('edit-dialog').waitFor();
+  await ctx.close();
+  resetEmpty(); state.denyStarter = true;
+  const second = await open({ width: 1440, height: 960 }, { ready: 'pipeline-setup' });
+  await second.page.getByRole('button', { name: 'Set up lead stages' }).click();
+  await second.page.getByText('Only people who can manage the pipeline can set up stages.').waitFor();
+  assert.equal(state.empty, true);
+  await second.ctx.close();
 });
 
 for (const [mode, language] of [['classic', 'ko'], ['big-button', 'es'], ['modern', 'ko'], ['classic', 'en']]) {

@@ -10,9 +10,9 @@ import { AddLead } from '../leads/add-lead';
 import type { AddLeadApi } from '../leads/add-lead-http';
 import { LeadsError, leadsApi, type LeadsApi } from '../leads/http';
 import { pipelineText, type PipelineKey } from './copy';
-import { BoardCommandError, BoardError, boardApi, prepareMove, prepareSave, type BoardApi, type PreparedCommand } from './http';
-import { applyMove, draftFrom, draftInput, fullName, type BoardView, type Filters } from './model';
-import { PipelineView, type BoardState, type CloseState, type EditState, type Notice, type TrialState } from './view';
+import { BoardCommandError, BoardError, boardApi, prepareMove, prepareSave, starterOutcome, type BoardApi, type PreparedCommand } from './http';
+import { applyMove, draftFrom, draftInput, fullName, starterEditReady, type BoardView, type Filters } from './model';
+import { PipelineView, type BoardState, type CloseState, type EditState, type Notice, type SetupState, type TrialState } from './view';
 
 const SAVE_REASON: Record<string, PipelineKey> = {
   CRM_STAGE_NAME_TAKEN: 'errName', CRM_STAGE_VISIBLE_REQUIRED: 'errVisible', CRM_STAGE_MOVE_REQUIRED: 'errMove', VALIDATION_FAILED: 'errName',
@@ -53,12 +53,17 @@ export function LeadPipeline({ api = boardApi, leads = leadsApi, addLeadApi, clo
   const [close, setClose] = useState<CloseState>(null);
   const [edit, setEdit] = useState<EditState>(null);
   const [adding, setAdding] = useState(false);
+  const [setup, setSetup] = useState<SetupState>({ state: 'IDLE' });
+  // The pipeline the starter command made from this board, waiting for the board read that shows it; and a remount counter for the add-lead form.
+  const [pendingEdit, setPendingEdit] = useState<string | null>(null);
+  const [setupRuns, setSetupRuns] = useState(0);
   const generation = useRef(0), trialGeneration = useRef(0), privacy = useRef(0), mounted = useRef(false), lastSchool = useRef<string | null>(null);
-  const retainedClose = useRef<PreparedCrmLeadClose | null>(null), retainedSave = useRef<PreparedCommand | null>(null);
+  const retainedClose = useRef<PreparedCrmLeadClose | null>(null), retainedSave = useRef<PreparedCommand | null>(null), setupKey = useRef<string | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; privacy.current++; generation.current++; trialGeneration.current++; }; }, []);
 
   const reset = useCallback(() => {
-    retainedClose.current = null; retainedSave.current = null;
+    retainedClose.current = null; retainedSave.current = null; setupKey.current = null;
+    setSetup({ state: 'IDLE' }); setPendingEdit(null);
     setClose(null); setEdit(null); setNotice(null); setMovingId(null); setFilters(FILTERS);
   }, []);
   useEffect(() => onShellPrivacyEvent(() => {
@@ -149,11 +154,33 @@ export function LeadPipeline({ api = boardApi, leads = leadsApi, addLeadApi, clo
     if (was && was.phase !== 'ASK') reload();
   }, [close, reload]);
 
+  // Stages set up from the board: open the editor once the board read shows that pipeline.
+  useEffect(() => {
+    if (!ready || !pendingEdit || !starterEditReady(ready, pendingEdit)) return;
+    setPendingEdit(null); retainedSave.current = null;
+    setEdit({ draft: draftFrom(ready.stages), newName: '', phase: 'EDIT', error: null });
+  }, [ready, pendingEdit]);
+
+  const onSetUp = useCallback(() => {
+    if (!scope || setup.state === 'WORKING') return;
+    const key = setupKey.current ??= crypto.randomUUID();
+    const shown = privacy.current;
+    setSetup({ state: 'WORKING' }); setNotice(null);
+    api.setUpStarter(scope, key).then(
+      (pipeline) => { if (!mounted.current || shown !== privacy.current) return; setupKey.current = null; setSetup({ state: 'IDLE' });
+        setPendingEdit(pipeline.id.toLowerCase()); setPipelineId(pipeline.id.toLowerCase()); setStatus('OPEN'); setView('BOARD'); setSetupRuns((n) => n + 1); reload(); },
+      (error) => { if (!mounted.current || shown !== privacy.current) return;
+        const outcome = starterOutcome(error);
+        if (outcome.key === 'clear') setupKey.current = null;
+        setSetup({ state: outcome.show ?? 'IDLE' }); });
+  }, [scope?.organizationId, scope?.schoolId, setup.state, api, reload]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const onEdit = useCallback((open: boolean) => {
+    if (open && ready && !ready.pipeline) { onSetUp(); return; }
     retainedSave.current = null;
     if (!open || !ready?.pipeline) { const wasUncertain = edit?.phase === 'UNCERTAIN'; setEdit(null); if (wasUncertain) reload(); return; }
     setEdit({ draft: draftFrom(ready.stages), newName: '', phase: 'EDIT', error: null });
-  }, [ready, edit, reload]);
+  }, [ready, edit, reload, onSetUp]);
   const onDraft = useCallback((next: EditState) => {
     // Changing the draft after an unknown outcome starts a new command; the old one is no longer retried.
     if (next && edit?.phase === 'UNCERTAIN' && next.draft !== edit.draft) { retainedSave.current = null; setEdit({ ...next, phase: 'EDIT' }); return; }
@@ -190,8 +217,8 @@ export function LeadPipeline({ api = boardApi, leads = leadsApi, addLeadApi, clo
   return <div key={shell.phase} data-shell-private="">
     <PipelineView language={language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'} scope={scope}
       board={board} status={status} filters={filters} view={status === 'OPEN' ? view : 'LIST'} selectedId={selectedId} trials={trials}
-      notice={notice} movingId={movingId} close={close} edit={edit} adding={adding}
-      addLead={scope ? <AddLead key={scope.schoolId.toLowerCase()} scope={scope} language={language} onAdded={onAdded} {...(addLeadApi ? { api: addLeadApi } : {})}/> : null}
+      notice={notice} movingId={movingId} close={close} edit={edit} adding={adding} setup={setup}
+      addLead={scope ? <AddLead key={`${scope.schoolId.toLowerCase()}:${setupRuns}`} scope={scope} language={language} onAdded={onAdded} {...(addLeadApi ? { api: addLeadApi } : {})}/> : null}
       onStatus={onStatus} onFilters={setFilters} onView={setView} onPipeline={onPipeline} onOpen={onOpen} onMove={onMove}
       onAskClose={onAskClose} onCloseNote={(note) => setClose((now) => now ? { ...now, note } : now)} onConfirmClose={onConfirmClose} onCancelClose={onCancelClose}
       onEdit={onEdit} onDraft={onDraft} onSave={onSave} onAdd={setAdding} onRefresh={onRefresh} onReloadTrials={() => setTrialsRefresh((n) => n + 1)}/>

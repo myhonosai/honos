@@ -4,8 +4,8 @@ Status: spec 2026-11-19. Owner ask (David, 2026-11-19 05:15Z): "I want HON OS an
 same number as the text number." Clarification 05:16Z: understand GoHighLevel's phone features, but do not copy it;
 make HON's version easier to use and focused on martial arts schools.
 
-Migrations (coordinator): **CL1 = 0547** (call log, voicemail, calling settings), **CL2 = 0548** (per-school voice
-credentials), **CL3 = 0549** (HQ calling). Nothing here buys anything, places a real call or turns on a provider:
+Migrations (coordinator): **CL1 = 0556** (call log, voicemail, calling settings), **CL2 = 0560** (per-school voice
+credentials), **CL5 = 0561** (HQ calling). Nothing here buys anything, places a real call or turns on a provider:
 every real Twilio voice action is behind `HON_VOICE_CALLS_APPROVED=true` (unset everywhere) and David's OK. All
 tests run against a fake Twilio voice client and a fake browser phone.
 
@@ -58,7 +58,7 @@ school's ACTIVE sender.
 
 ## 4. How a call works (Twilio Voice, browser)
 
-- **Credentials (CL2, 0548)**: per school subaccount, HON creates an API key (`SK…`, secret sealed with the 0351 vault,
+- **Credentials (CL2, 0560)**: per school subaccount, HON creates an API key (`SK…`, secret sealed with the 0351 vault,
   own label) and a TwiML App (`AP…`) whose Voice URL is HON's fixed `/v1/communications/webhooks/twilio/client-voice`.
   Created by a worker only with `HON_VOICE_CALLS_APPROVED=true` and an ACTIVE subaccount. HQ uses the parent account's
   key and app from environment settings.
@@ -89,7 +89,7 @@ school's ACTIVE sender.
 - **Playback**: voicemails and recordings are played through HON (`GET .../calls/:id/recording`), which fetches the
   media from Twilio with the parent credentials and streams it; Twilio URLs are never sent to the browser.
 
-## 5. Records (CL1, 0547)
+## 5. Records (CL1, 0556)
 
 - `hon.school_calling_settings` (one per school): calling_on, voicemail_greeting (<= 300 chars, plain text),
   recording_on, recording_ack_by/at (who accepted the consent statement), version.
@@ -137,11 +137,11 @@ test/local environments (same production refusal as the 0243 fake provider).
 
 | PR | Contents | Migration |
 | --- | --- | --- |
-| CL1 | Records + definer functions (§5): settings, ring-me, start outgoing, record incoming/status/voicemail, call log + voicemail reads, outcome/note, do-not-call, heard; permissions; DB proof | 0547 |
-| CL2 | Voice credentials: sealed API key + TwiML App per subaccount, worker (switch-gated), token minting; fake Twilio voice client | 0548 |
+| CL1 | Records + definer functions (§5): settings, ring-me, start outgoing, record incoming/status/voicemail, call log + voicemail reads, outcome/note, do-not-call, heard; permissions; DB proof | 0556 |
+| CL2 | Voice credentials: sealed API key + TwiML App per subaccount, worker (switch-gated), token minting; fake Twilio voice client | 0560 |
 | CL3a | API: phone token, start call, log/voicemail/settings endpoints, webhooks (client-voice, call-status, dial-result, recording-status), 0249 voice webhook routing to browsers + voicemail, recording playback proxy | none |
 | CL4 | Web: top-bar Call button + dialer panel, incoming banner, after-call card, Calls page (log / voicemail / settings), contact Call button, `CallButton` for Texts; fake phone for tests and screenshots | none |
-| CL5 | HQ calling on the HQ number (parent account), HQ Calls page | 0549 |
+| CL5 | HQ calling on the HQ number (parent account), HQ Calls page | 0561 |
 | Later | Transcription, voicemail drop, IVR, round robin, transfers, cost lines (with T4) | — |
 
 Each PR: unit tests + DB proof (tenant isolation, permission, idempotency, status ordering, toll-fraud checks), web

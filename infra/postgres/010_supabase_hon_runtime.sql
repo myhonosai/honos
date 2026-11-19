@@ -4456,7 +4456,21 @@ BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_class_session_seats_taken(uuid) TO hon_runtime; END IF;
 END $$;
 
--- 0547 school calls (CL1): four private forced-RLS tables; eight staff runtime entry points; provider entry points belong to
+-- 0550 shared AI text proposals: two private tables; the runtime reaches the WEBSITE_EDIT kind through seven entry points.
+DO $$ DECLARE r text; t text; BEGIN
+  IF to_regclass('hon.ai_text_proposals') IS NULL THEN RAISE EXCEPTION 'Apply migration 0550 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['ai_text_kinds','ai_text_proposals'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_school_website_ai_edit(text,jsonb,uuid), hon.school_website_ai_edit_planning_reference(text,uuid),
+      hon.prepare_school_website_ai_edit(text,uuid,uuid,boolean), hon.fail_school_website_ai_edit(text,uuid,text,text),
+      hon.record_school_website_ai_edit(text,uuid,jsonb), hon.read_school_website_ai_edits(text,uuid), hon.close_school_website_ai_edit(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0556 school calls (CL1): four private forced-RLS tables; eight staff runtime entry points; provider entry points belong to
 -- the communication worker (013); guards and helpers are migration-owner only.
 DO $$ DECLARE r text; f text; t text;
   entry text[]:=ARRAY['hon.read_school_calling(text)','hon.set_school_calling_settings(text,jsonb,uuid,uuid)','hon.set_my_school_call_ringing(text,jsonb)',
@@ -4469,7 +4483,7 @@ DO $$ DECLARE r text; f text; t text;
     'hon.school_call_identity(uuid)','hon.school_call_number_ok(text)','hon.school_call_person(uuid,uuid,text)','hon.school_call_account_ok(uuid,text)','hon.expire_school_calls(uuid)',
     'hon.school_call_json(hon.school_calls)','hon.school_call_audit(hon.school_calls,uuid,text,text,jsonb,text,uuid,uuid)'];
 BEGIN
-  IF to_regprocedure('hon.start_school_call(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0547 first'; END IF;
+  IF to_regprocedure('hon.start_school_call(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0556 first'; END IF;
   FOREACH f IN ARRAY entry||closed LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;

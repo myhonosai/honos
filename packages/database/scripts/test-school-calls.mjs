@@ -1,4 +1,4 @@
-/** School calls (0547, CL1, docs/architecture/SCHOOL_CALLING.md §5) on the marked disposable communication delivery database.
+/** School calls (0556, CL1, docs/architecture/SCHOOL_CALLING.md §5) on the marked disposable communication delivery database.
  *  Staff entry points run as the restricted runtime login inside HON staff session settings; provider entry points run as the
  *  0243 communication worker login. Schools are SYNTHETIC sign-ups made through the 0241 runtime entry point. Nothing is called. */
 import assert from 'node:assert/strict';
@@ -293,7 +293,7 @@ try {
   // 11. The canonical 011 section passes with the fixture's roles and catches an extra runtime or worker grant.
   {
     const verify = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
-    const section = verify.split('-- School calls exact verification (0547)')[1]?.split('-- End school calls exact verification.')[0];
+    const section = verify.split('-- School calls exact verification (0556)')[1]?.split('-- End school calls exact verification.')[0];
     assert(section, '011 section');
     const body = section.replace(/^[^\n]*\n[^\n]*\n/, '').replaceAll('hon_communication_worker', workerUrl.username).replaceAll('hon_runtime', runtime.username);
     await q(body);
@@ -305,7 +305,7 @@ try {
     await q(`REVOKE EXECUTE ON FUNCTION hon.start_school_call(text,jsonb,text,uuid,uuid) FROM ${workerUrl.username}`);
     await q(body);
   }
-  pass('the canonical 011 verification of the 0547 tables and functions passes and refuses an extra runtime or worker grant');
+  pass('the canonical 011 verification of the 0556 tables and functions passes and refuses an extra runtime or worker grant');
   console.log('PASS school calls proof: ' + groups + ' groups');
 } finally {
   await Promise.allSettled([admin.end(), restricted.end(), worker.end()]);

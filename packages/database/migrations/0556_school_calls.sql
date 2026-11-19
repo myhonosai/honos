@@ -1,5 +1,5 @@
 BEGIN;
--- 0547 school calling, piece CL1 (allocated by the coordinator 2026-11-19; docs/architecture/SCHOOL_CALLING.md §5).
+-- 0556 school calling, piece CL1 (allocated by the coordinator 2026-11-19; docs/architecture/SCHOOL_CALLING.md §5).
 -- Calls on the school's own texting number (0248): the call log, voicemail, the school's calling settings, who rings for
 -- incoming calls and the school's do-not-call list. This migration places no call and talks to no provider: the API
 -- reaches Twilio only behind HON_VOICE_CALLS_APPROVED, and call minutes are included like texting (owner card 05:19Z).
