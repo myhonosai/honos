@@ -3639,7 +3639,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.parent_class_booking_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','cb18dc6356494af40a5b1af73147d4dd8d1bbafefab492439f51180e63fcac15'),
 ('hon.parent_class_booking_child_ok(uuid,uuid)',true,false,'search_path=pg_catalog, hon','237a329c4db7c485ffa5521d1a4028ed443de87e157873ac4e2b17fdc11110d7'),
 ('hon.parent_class_booking_session_ok(uuid,hon.class_sessions)',true,false,'search_path=pg_catalog, hon','34c305ae6857963bed97c48089b88563e20dfd2091d60888830d6cfedb7cc183'),
-('hon.parent_class_booking_seats(uuid)',true,false,'search_path=pg_catalog, hon','d05efcb128c7e55cfef7d12d6db9d25bd8c314bc20305ad2cc38055123f4f3eb'),
+('hon.parent_class_booking_seats(uuid)',true,false,'search_path=pg_catalog, hon','61bfcc57c3e31a23b3a689150ead7d7d43c724db47483cbac8a3f74dcf2e3002'),
 ('hon.parent_class_booking_json(hon.class_bookings,hon.class_sessions)',true,false,'search_path=pg_catalog, hon','d753781cf05db78ddc2525f62e8ecf36aaa4b0a63432578c7155bed238c1ff37'),
 ('hon.parent_class_booking_begin(text,text,text)',true,false,'search_path=pg_catalog, hon','d66182b548222ae12d0d1cc3e027279005c55389277c37718c2476595384215a'),
 ('hon.parent_class_booking_finish(text,text,uuid,jsonb,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)',true,false,'search_path=pg_catalog, hon','a9ddf831453529fd97154ae53e60eb65f1e023218b332008491e172d3a97e5e0'),
@@ -5033,6 +5033,25 @@ BEGIN
     RAISE EXCEPTION 'Unsafe walk-in trial class columns'; END IF;
 END $$;
 -- End walk-in kiosk trial class exact verification.
+-- Walk-in kiosk trial seats exact verification (0538): one scoped runtime seat read, owner-only seat helper.
+DO $$ DECLARE f text;
+BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid='hon.read_class_session_seats_taken(uuid)'::regprocedure
+      AND p.prosecdef AND p.provolatile='s' AND (o.rolsuper OR o.rolbypassrls)
+      AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+    RAISE EXCEPTION 'Unsafe class session seat read'; END IF;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname='read_class_session_seats_taken')<>1 THEN
+    RAISE EXCEPTION 'Unexpected class session seat read overload'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.walkin_session_taken(uuid)','hon.parent_class_booking_seats(uuid)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') THEN RAISE EXCEPTION 'Unsafe class seat helper: %',f; END IF;
+  END LOOP;
+  IF has_table_privilege('hon_runtime','hon.school_demo_data_rows','SELECT,INSERT,UPDATE,DELETE') THEN
+    RAISE EXCEPTION 'Unsafe demo data rows grant'; END IF;
+END $$;
+-- End walk-in kiosk trial seats exact verification.
 
 -- Point of Sale exact verification (0539)
 DO $$ DECLARE f text; t text; c text;
