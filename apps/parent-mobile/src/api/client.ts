@@ -23,6 +23,7 @@ import {
   type ParentInvoicePayResult, type ParentInvoicePayStart, type ParentInvoicePayments,
 } from '@hon/contracts/parent-invoice-pay';
 import { verifyParentSchoolAnnouncements, type ParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
+import { verifyParentProShop, type ParentProShop } from '@hon/contracts/parent-pro-shop';
 
 /**
  * What a screen shows when a read does not return verified data. Every protected read maps to one of these;
@@ -143,6 +144,8 @@ export function createParentApi(options: ParentApiOptions) {
   }
 
   return {
+    /** True only for the made-up sample family: screens never open real outside pages for it. */
+    sampleMode: false as boolean,
     journey: (): Promise<ParentRead<ParentJourneyView>> => get('/v1/parent/journey', verifyParentJourneyView),
     /** The school's IANA time zone from the class booking read; null when that read is not available. */
     async schoolTimeZone(): Promise<string | null> {
@@ -179,6 +182,8 @@ export function createParentApi(options: ParentApiOptions) {
     /** 0530: the family's open invoices the parent may pay on the school's own processor page (test mode only). */
     /** The school's live announcements (0576) for the one family this sign-in belongs to. No school or family id is sent. */
     announcements: (): Promise<ParentRead<ParentSchoolAnnouncements>> => get('/v1/parent/announcements', dataOf(verifyParentSchoolAnnouncements)),
+    /** The school's own Shopify products (0581); buying opens the school's store page. No school or family id is sent. */
+    proShop: (): Promise<ParentRead<ParentProShop>> => get('/v1/parent/pro-shop', dataOf(verifyParentProShop)),
     invoicePayments: (): Promise<ParentRead<ParentInvoicePayments>> => get('/v1/parent/invoice-payments', dataOf(verifyParentInvoicePayments)),
     /** Opens (or gets back) the processor page for one invoice. The server decides the amount; the app sends nothing else. */
     startInvoicePayment: (invoiceId: string, idempotencyKey: string): Promise<ParentWrite<ParentInvoicePayStart>> =>

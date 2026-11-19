@@ -280,6 +280,8 @@ import { FamilyMessagesInboxController, FamilyMessagesInboxReadGuard, FamilyMess
 import { FamilyMessagesService } from './families/family-messages.service.js';
 import { ParentSchoolAnnouncementsController, ParentSchoolAnnouncementsReadGuard, SchoolAnnouncementsController, SchoolAnnouncementsPublishGuard, SchoolAnnouncementsReadGuard, SchoolAnnouncementsWithdrawGuard } from './announcements/school-announcements.controller.js';
 import { SchoolAnnouncementsService } from './announcements/school-announcements.service.js';
+import { ParentProShopController, ParentProShopReadGuard } from './pro-shop/parent-pro-shop.controller.js';
+import { ParentProShopService } from './pro-shop/parent-pro-shop.service.js';
 import { ConversationCreateLeadGuard, ConversationLinkGuard, ConversationMarkReadGuard, ConversationReadGuard, ConversationReplyGuard, ConversationUpdateGuard, SchoolConversationsController } from './conversations/school-conversations.controller.js';
 import { SchoolConversationsService } from './conversations/school-conversations.service.js';
 import { ContactEmailResendGuard, ContactHistoryReadGuard, ContactMessagesController } from './conversations/contact-messages.controller.js';
@@ -538,6 +540,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     FamilyMessagesInboxController,
     ParentSchoolAnnouncementsController,
     SchoolAnnouncementsController,
+    ParentProShopController,
     SchoolConversationsController,
     ContactMessagesController,
     ConversationAiController,
@@ -739,6 +742,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolAnnouncementsReadGuard,
     SchoolAnnouncementsPublishGuard,
     SchoolAnnouncementsWithdrawGuard,
+    ParentProShopService,
+    ParentProShopReadGuard,
     SchoolConversationsService,
     ContactMessagesService,
     ContactHistoryReadGuard,
