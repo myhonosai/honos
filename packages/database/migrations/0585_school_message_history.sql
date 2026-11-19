@@ -1,6 +1,6 @@
 BEGIN;
 
--- 0572 Texts and Email pages piece TE1 (0542 renumbered to 0572 by the ledger rule 2026-11-19; docs/architecture/SCHOOL_TEXTS_AND_EMAIL_PAGES.md §4).
+-- 0585 Texts and Email pages piece TE1 (0542, then 0572, renumbered to 0585 by the ledger rule 2026-11-19 after #483 landed 0574; docs/architecture/SCHOOL_TEXTS_AND_EMAIL_PAGES.md §4).
 -- The school-wide History tab of the Texts and Email pages, and their Opted out tab. Read only.
 --   T1  Staff with communication.message.read see every non-draft 0047 message of the session school, newest first: who it
 --       went to (name and the address on file now), channel, the email subject sent (0424), a 160-character preview, the

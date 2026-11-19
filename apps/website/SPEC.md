@@ -46,7 +46,7 @@ Source of truth for every claim: `/mnt/project-files/website/HON_OS_WEBSITE_SUMM
 ## Plan
 
 1. Tests first (`apps/website/test/*.test.mjs`, Node's built-in test runner): content rules above, every `#anchor` resolves, every image exists and has alt text, every link to the app goes to an allowed path through the build placeholder, the build substitutes the app address and the `noindex` guard.
-2. Source: `src/index.html`, `src/styles.css`, `src/site.js`, `src/flow.js` (background animation, honours reduced motion), `src/assets/*.webp` (each photo at full size and 800px wide), `src/favicon.svg`.
+2. Source: `src/index.html`, `src/styles.css`, `src/story.css`, `src/boot.js`, `src/loader.js`, `src/story.js` (scroll story and loading screen, honour reduced motion), `src/site.js`, `src/assets/*.webp` (each picture at full size and a phone size) and `src/assets/story-door-*.mp4` (door film), `src/favicon.svg`.
 3. Build: `scripts/build.mjs` copies `src` to `dist`, replaces `{{APP_URL}}` and `{{ROBOTS}}`, and refuses a non-http(s) app address.
 4. Wire `build` and `test` scripts so the root `pnpm build` / `pnpm test` include the site.
 5. Verify in a real browser at desktop and phone widths, then review and open the PR.

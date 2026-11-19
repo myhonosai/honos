@@ -1,5 +1,5 @@
 /**
- * School message history and opted-out list (0572, Texts and Email pages piece TE1; docs/architecture/SCHOOL_TEXTS_AND_EMAIL_PAGES.md §4).
+ * School message history and opted-out list (0585, Texts and Email pages piece TE1; docs/architecture/SCHOOL_TEXTS_AND_EMAIL_PAGES.md §4).
  * The History tab of the Texts and Email pages lists every sent (non-draft) text or email of the school, newest first, with who it went
  * to, the delivery state and where it came from (communication.message.read). The Opted out tab lists the people whose consent for a
  * channel is OPTED_OUT (communication.consent.read). Both are read only; one message's full email and resend stay on the 0424 reads.

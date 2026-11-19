@@ -8,7 +8,7 @@ import type { MembershipLifecycleContext } from '../billing/membership.service.j
 import { MembershipActivationHumanUiGuard } from '../billing/membership-activation-human-ui.guard.js';
 import { SchoolMessagesService } from './school-messages.service.js';
 
-/** 0572: each list read is its own same-origin browser command; GET only. */
+/** 0585: each list read is its own same-origin browser command; GET only. */
 @Injectable()
 export class SchoolMessageHistoryReadGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = SCHOOL_MESSAGE_HISTORY_READ_COMMAND;

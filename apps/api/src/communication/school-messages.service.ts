@@ -18,7 +18,7 @@ function translate(error: unknown): never {
 }
 
 /**
- * 0572 (TE1) the school's History and Opted out lists for the Texts and Email pages. The guarded route scope plus the live
+ * 0585 (TE1) the school's History and Opted out lists for the Texts and Email pages. The guarded route scope plus the live
  * communication.message.read (history) or communication.consent.read (opted out) permission, re-proved by the database.
  * Read only: nothing here sends, queues or changes consent.
  */

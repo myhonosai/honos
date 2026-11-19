@@ -1,4 +1,4 @@
-/** School message history and opted-out list (0572, Texts and Email pages TE1): real signed HON sessions -> Nest/guards -> the two
+/** School message history and opted-out list (0585, Texts and Email pages TE1): real signed HON sessions -> Nest/guards -> the two
  *  read-only runtime entry points, on the marked disposable communication delivery database. Schools are SYNTHETIC sign-ups made
  *  through the 0241 runtime entry point; people use example.invalid addresses. Nothing is sent, queued or changed by the reads. */
 import assert from 'node:assert/strict';

@@ -4561,12 +4561,23 @@ DO $$ DECLARE r text; f text; col text; BEGIN
       hon.read_school_calendar_cards(text,jsonb) TO hon_runtime;
   END IF;
 END $$;
+-- 0574 automation date triggers: one private scan receipt table and private helpers; the date scan belongs to
+-- hon_automation_worker (014) and is never granted to the runtime.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.scan_automation_schedules(integer)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0574 first'; END IF;
+  REVOKE ALL ON TABLE hon.automation_schedule_scans FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.automation_schedule_scans FROM %I',r); END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.scan_automation_schedules(integer)','hon.automation_date_candidates(hon.automation_workflows,jsonb,date,text)','hon.automation_next_birthday(date,date)','hon.automation_date_subject_open(uuid,uuid,text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+END $$;
 
--- 0572 school message history and opted-out list (Texts and Email pages TE1): two read-only staff entry points. Every
+-- 0585 school message history and opted-out list (Texts and Email pages TE1): two read-only staff entry points. Every
 -- helper stays migration-owner only; no table privilege is granted.
 DO $$ DECLARE r text; f text;
 BEGIN
-  IF to_regprocedure('hon.read_school_message_history(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0572 first'; END IF;
+  IF to_regprocedure('hon.read_school_message_history(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0585 first'; END IF;
   FOREACH f IN ARRAY ARRAY['hon.require_school_messages_actor(text,text)','hon.school_messages_args_ok(jsonb,text[])','hon.school_message_outcome(text)',
       'hon.read_school_message_history(text,jsonb)','hon.read_school_opted_out_contacts(text,jsonb)'] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
