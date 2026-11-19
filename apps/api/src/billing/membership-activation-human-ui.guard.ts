@@ -92,3 +92,8 @@ export class TuitionPaymentVoidHumanUiGuard extends MembershipActivationHumanUiG
 export class TuitionReadHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'billing.tuition.read';
 }
+/** SI1 (0558): the simple invoice create (and optional issue) is its own same-origin browser command. */
+@Injectable()
+export class SimpleInvoiceCreateHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'billing.invoice.simple.create';
+}
