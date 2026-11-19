@@ -3,10 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CrmBoardLead, CrmBoardStage, CrmPipelineBoard } from '@hon/contracts';
 import { PIPELINE_LANGUAGES, pipelineText } from '../src/components/lead-pipeline/copy';
-import { BoardCommandError, BoardError, boardPath, prepareMove, prepareSave, readBoard, submitMove, submitSave } from '../src/components/lead-pipeline/http';
+import { BoardCommandError, BoardError, boardApi, boardPath, prepareMove, prepareSave, prepareTemplate, readBoard, starterOutcome, submitMove, submitSave, submitTemplate, templateOutcome } from '../src/components/lead-pipeline/http';
+import { StarterRefusedError, addLeadApi } from '../src/components/leads/add-lead-http';
+import { LeadsError } from '../src/components/leads/http';
 import {
   PROGRAM_NONE, applyFilters, applyMove, boardColumns, boardStats, cardLine, codeLabel, draftErrors, draftFrom, draftInput, initials, matchesSearch,
-  moveDraftStage, moveTargets, programsOf, rateText, sortLeads, stagesNeedingMove,
+  moveDraftStage, moveTargets, programsOf, rateText, sortLeads, stagesNeedingMove, starterEditReady,
 } from '../src/components/lead-pipeline/model';
 import { PipelineView, type PipelineViewProps } from '../src/components/lead-pipeline/view';
 import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
@@ -205,7 +207,7 @@ describe('view', () => {
     expect(render({ scope: null })).toContain('Choose a school');
     expect(render({ board: { state: 'DENIED' } })).toContain('does not include leads');
     expect(render({ board: { state: 'UNAVAILABLE' } })).toContain('could not be loaded');
-    expect(render({ board: { state: 'READY', board: { ...BOARD, pipeline: null, pipelines: [], stages: [], leads: [] } } })).toContain('no lead stages yet');
+    expect(render({ board: { state: 'READY', board: { ...BOARD, pipeline: null, pipelines: [], stages: [], leads: [] } } })).toContain('No lead stages yet');
   });
   it('renders in Korean and Spanish with every key translated', () => {
     const keys = Object.keys(PIPELINE_LANGUAGES.en).sort();
@@ -216,4 +218,104 @@ describe('view', () => {
     expect(render({ language: 'es' })).toContain('Prospectos');
     expect(render({ language: 'es', edit: { draft: draftFrom(STAGES), newName: '', phase: 'EDIT', error: null } })).toContain('Editar etapas del embudo');
   });
+});
+
+const EMPTY_BOARD: CrmPipelineBoard = { ...BOARD, pipeline: null, pipelines: [], stages: [], leads: [], totals: { open: 0, won: 0, lost: 0 } };
+describe('stages before the first lead', () => {
+  it('keeps Edit pipeline usable with no stages and offers to set them up on the empty board', () => {
+    const html = render({ board: { state: 'READY', board: EMPTY_BOARD } });
+    expect(html).toMatch(/<button[^>]*>Edit pipeline<\/button>/);
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Edit pipeline<\/button>/);
+    expect(html).toContain('Set up lead stages');
+    expect(html).toContain('New lead, Trial booked, Enrolled and Not now');
+    expect(html).not.toContain('Add your first lead and HON sets up');
+  });
+  it('still disables Edit pipeline while the board is loading or unavailable', () => {
+    expect(render({ board: { state: 'LOADING' } })).toMatch(/<button[^>]*disabled=""[^>]*>Edit pipeline<\/button>/);
+    expect(render({ board: { state: 'UNAVAILABLE' } })).toMatch(/<button[^>]*disabled=""[^>]*>Edit pipeline<\/button>/);
+  });
+  it('shows the setup states: working, denied, refused and unknown', () => {
+    const empty = { board: { state: 'READY' as const, board: EMPTY_BOARD } };
+    const working = render({ ...empty, setup: { state: 'WORKING' } });
+    expect(working).toContain('Setting up stages…');
+    expect(working).toMatch(/<button[^>]*disabled=""[^>]*>Edit pipeline<\/button>/);
+    expect(render({ ...empty, setup: { state: 'DENIED' } })).toContain('Only people who can manage the pipeline can set up stages.');
+    expect(render({ ...empty, setup: { state: 'FAILED' } })).toContain('The stages could not be set up.');
+    const unknown = render({ ...empty, setup: { state: 'UNKNOWN' } });
+    expect(unknown).toContain('We could not confirm the setup.');
+    expect(unknown).toContain('Retry');
+  });
+  it('keeps the starter key only for an unknown outcome and drops it on any definite answer', () => {
+    expect(starterOutcome(new LeadsError('UNAVAILABLE'))).toEqual({ key: 'keep', show: 'UNKNOWN' });
+    expect(starterOutcome(new Error('network'))).toEqual({ key: 'keep', show: 'UNKNOWN' });
+    expect(starterOutcome(new StarterRefusedError())).toEqual({ key: 'clear', show: 'FAILED' });
+    expect(starterOutcome(new LeadsError('DENIED'))).toEqual({ key: 'clear', show: 'DENIED' });
+    expect(starterOutcome(new LeadsError('SESSION'))).toEqual({ key: 'clear', show: null });
+  });
+  it('opens the editor only once the board shows the pipeline that setup made', () => {
+    expect(starterEditReady(EMPTY_BOARD, id(20))).toBe(false);
+    expect(starterEditReady(BOARD, id(20))).toBe(true);
+    expect(starterEditReady(BOARD, id(21))).toBe(false);
+    expect(starterEditReady(BOARD, null)).toBe(false);
+  });
+  it('sets up stages through the existing starter command', () => {
+    expect(boardApi.setUpStarter).toBe(addLeadApi.setUpStarter);
+  });
+  it('translates the setup wording', () => {
+    for (const language of ['ko', 'es']) {
+      const html = render({ language, board: { state: 'READY', board: EMPTY_BOARD } });
+      expect(html).toContain(pipelineText(language, 'setUp'));
+      expect(pipelineText(language, 'setUp')).not.toBe(pipelineText('en', 'setUp'));
+    }
+  });
+});
+
+describe('new pipeline from a school template', () => {
+  it('posts only the template code as its own human command and accepts 201 or 200', async () => {
+    const request = prepareTemplate(scope, 'KIDS_PROGRAM', id(90));
+    expect(request.path).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/crm/pipelines/templates`);
+    expect(JSON.parse(request.body)).toEqual({ template: 'KIDS_PROGRAM' });
+    const f = stub(json({ data: { id: id(21).toUpperCase(), name: 'Kids program', version: 1, createdAt: at(1), stages: [] }, meta: {} }, 201));
+    await expect(submitTemplate(request)).resolves.toEqual({ id: id(21), name: 'Kids program' });
+    const [, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.headers).toMatchObject({ 'X-HON-Human-Command': 'crm-pipeline-template', 'Idempotency-Key': id(90) });
+    stub(json({ data: { id: id(21), name: 'Kids program' }, meta: {} }, 200));
+    await expect(submitTemplate(request)).resolves.toEqual({ id: id(21), name: 'Kids program' });
+    stub(json({ data: { id: 'nope', name: 'x' }, meta: {} }, 201));
+    await expect(submitTemplate(request)).rejects.toMatchObject({ kind: 'UNCERTAIN' });
+    expect(() => prepareTemplate(scope, 'NOPE' as never, id(90))).toThrow();
+    expect(() => prepareTemplate(scope, 'EVENTS', 'not-a-key')).toThrow();
+  });
+  it('keeps the key only for an unknown outcome and explains a refusal, denial or the school limit', () => {
+    expect(templateOutcome(new BoardCommandError('UNCERTAIN'))).toEqual({ key: 'keep', show: 'UNKNOWN' });
+    expect(templateOutcome(new Error('x'))).toEqual({ key: 'keep', show: 'UNKNOWN' });
+    expect(templateOutcome(new BoardCommandError('CONFLICT', 'CRM_PIPELINE_LIMIT'))).toEqual({ key: 'clear', show: 'LIMIT' });
+    expect(templateOutcome(new BoardCommandError('CONFLICT', 'IDEMPOTENCY_KEY_REUSED'))).toEqual({ key: 'clear', show: 'FAILED' });
+    expect(templateOutcome(new BoardCommandError('DENIED'))).toEqual({ key: 'clear', show: 'DENIED' });
+    expect(templateOutcome(new BoardCommandError('SESSION'))).toEqual({ key: 'clear', show: null });
+  });
+  it('shows New pipeline only when a pipeline exists, and lists the three school templates with their stages', () => {
+    expect(render()).toMatch(/<button[^>]*>New pipeline<\/button>/);
+    expect(render({ board: { state: 'READY', board: EMPTY_BOARD } })).not.toContain('New pipeline');
+    const html = render({ templates: { phase: 'PICK', code: null } });
+    for (const text of ['Add a pipeline', 'Kids program', 'Adult program', 'Birthday parties and events', 'Intro class booked', 'Deposit pending']) expect(html).toContain(text);
+    expect(html.match(/Add this pipeline/g)?.length).toBe(3);
+  });
+  it('offers to open a template the school already added instead of adding it twice', () => {
+    const board = { ...BOARD, pipelines: [...BOARD.pipelines, { id: id(22), name: 'Adult program', version: 1 }] };
+    const html = render({ board: { state: 'READY', board }, templates: { phase: 'PICK', code: null } });
+    expect(html).toContain('Already added: open it');
+    expect(html.match(/Add this pipeline/g)?.length).toBe(2);
+  });
+  it('shows working, retry, limit and denial states', () => {
+    expect(render({ templates: { phase: 'WORKING', code: 'EVENTS' } })).toContain('Adding…');
+    const unknown = render({ templates: { phase: 'UNKNOWN', code: 'EVENTS' } });
+    expect(unknown).toContain('We could not confirm the new pipeline.'); expect(unknown).toContain('Retry');
+    expect(render({ templates: { phase: 'LIMIT', code: 'EVENTS' } })).toContain('already has 10 pipelines');
+    expect(render({ templates: { phase: 'DENIED', code: 'EVENTS' } })).toContain('Only people who can manage the pipeline can add one.');
+  });
+  it('disables Edit pipeline after a denied setup with no stages', () => {
+    expect(render({ board: { state: 'READY', board: EMPTY_BOARD }, setup: { state: 'DENIED' } })).toMatch(/<button[^>]*disabled=""[^>]*>Edit pipeline<\/button>/);
+  });
+  it('uses the board api for templates', () => { expect(boardApi.submitTemplate).toBe(submitTemplate); });
 });
