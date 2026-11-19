@@ -50,9 +50,9 @@ const dnc = (x, phone, on) => as(x, 'SELECT hon.set_school_do_not_call($1,$2::js
 const openRec = (x, id) => as(x, 'SELECT hon.open_school_call_recording($1,$2) data', [x.externalSubject, id]);
 const connect = async (id, identity, account, sid) => (await worker.query('SELECT * FROM hon.connect_school_client_call($1,$2,$3,$4)', [id, identity, account, sid])).rows[0];
 const route = async (to, from, sid) => (await worker.query('SELECT * FROM hon.route_school_incoming_call($1,$2,$3)', [to, from, sid])).rows[0];
-const status = async (sid, s, identity = null, duration = null, at = new Date()) =>
-  (await worker.query('SELECT * FROM hon.record_school_call_status($1,$2,$3,$4,$5)', [sid, s, identity, duration, at])).rows[0];
-const recording = async (sid, rec, seconds, voicemail) => (await worker.query('SELECT * FROM hon.record_school_call_recording($1,$2,$3,$4)', [sid, rec, seconds, voicemail])).rows[0];
+const status = async (sid, s, identity = null, duration = null, at = new Date(), account = null) =>
+  (await worker.query('SELECT * FROM hon.record_school_call_status($1,$2,$3,$4,$5,$6)', [account, sid, s, identity, duration, at])).rows[0];
+const recording = async (sid, rec, seconds, voicemail, account = null) => (await worker.query('SELECT * FROM hon.record_school_call_recording($1,$2,$3,$4,$5)', [account, sid, rec, seconds, voicemail])).rows[0];
 const row = async (id) => (await q('SELECT * FROM hon.school_calls WHERE id=$1', [id]))[0];
 
 let terms;
@@ -91,7 +91,7 @@ try {
   const workerEntry = ['connect_school_client_call', 'route_school_incoming_call', 'record_school_call_status', 'record_school_call_recording', 'read_school_call_recordings_due', 'mark_school_call_recording_deleted'];
   const fns = await q("SELECT p.oid,p.proname,p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.oid>=(SELECT oid FROM pg_proc WHERE proname='school_call_rank')");
   const ours = fns.filter((f) => /call|calling/.test(f.proname));
-  assert.equal(ours.length, 25, ours.map((f) => f.proname).join());
+  assert.equal(ours.length, 26, ours.map((f) => f.proname).join());
   for (const f of ours) {
     assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok", [runtime.username, f.oid]))[0].ok, staffEntry.includes(f.proname), 'runtime ' + f.proname);
     assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok", [workerUrl.username, f.oid]))[0].ok, workerEntry.includes(f.proname), 'worker ' + f.proname);
@@ -189,6 +189,8 @@ try {
   assert.equal((await status(sidOut, 'FAILED')).outcome, 'IGNORED');
   let r = await row(out.callId); assert.equal(r.duration_seconds, 95); assert(r.answered_at && r.ended_at);
   assert.equal((await status(callSid(), 'COMPLETED')).outcome, 'UNKNOWN_CALL');
+  assert.equal((await status(sidOut, 'COMPLETED', null, 95, new Date(), 'AC' + hex())).outcome, 'UNKNOWN_CALL', 'another account cannot touch this call');
+  assert.equal((await recording(sidOut, recSid(), 5, false, 'AC' + hex())).outcome, 'UNKNOWN_CALL', 'nor record on it');
   assert.equal((await q("SELECT count(*) n FROM hon.outbox_events WHERE aggregate_id=$1 AND event_type='communication.call.completed'", [out.callId]))[0].n, '1');
   await rejects('42501', () => q('UPDATE hon.school_calls SET remote_e164=$1, version=version+1 WHERE id=$2', ['+15125550000', out.callId]), 'numbers immutable');
   await rejects('42501', () => q("UPDATE hon.school_calls SET status='RINGING', version=version+1 WHERE id=$1", [out.callId]), 'status never moves back');

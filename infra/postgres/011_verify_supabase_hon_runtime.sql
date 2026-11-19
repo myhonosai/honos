@@ -5059,9 +5059,9 @@ DO $$ DECLARE f text; t text;
     'hon.start_school_call(text,jsonb,text,uuid,uuid)','hon.read_school_calls(text,jsonb)','hon.update_school_call(text,jsonb,uuid,uuid)',
     'hon.set_school_do_not_call(text,jsonb)','hon.open_school_call_recording(text,uuid)'];
   worker text[]:=ARRAY['hon.connect_school_client_call(uuid,text,text,text)','hon.route_school_incoming_call(text,text,text)',
-    'hon.record_school_call_status(text,text,text,integer,timestamptz)','hon.record_school_call_recording(text,text,integer,boolean)',
+    'hon.record_school_call_status(text,text,text,text,integer,timestamptz)','hon.record_school_call_recording(text,text,text,integer,boolean)',
     'hon.read_school_call_recordings_due(integer)','hon.mark_school_call_recording_deleted(uuid,text)'];
-  closed text[]:=ARRAY['hon.require_school_call_actor(text,boolean)','hon.school_call_person(uuid,uuid,text)','hon.expire_school_calls(uuid)',
+  closed text[]:=ARRAY['hon.require_school_call_actor(text,boolean)','hon.school_call_person(uuid,uuid,text)','hon.school_call_account_ok(uuid,text)','hon.expire_school_calls(uuid)',
     'hon.school_call_json(hon.school_calls)','hon.school_call_audit(hon.school_calls,uuid,text,text,jsonb,text,uuid,uuid)',
     'hon.guard_school_call()','hon.guard_school_calling_settings()','hon.guard_school_call_staff()'];
 BEGIN

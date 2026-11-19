@@ -220,6 +220,14 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
   WHERE p_phone IS NOT NULL AND p.organization_id=p_org AND p.school_id=p_school AND p.phone_e164=p_phone
 $$;
 
+-- A verified provider event for a call of this school came from that school's own Twilio account: its ACTIVE or SUSPENDED
+-- subaccount, or (p_account_sid NULL) HON's parent account only when the school's sender is on the parent account.
+CREATE FUNCTION hon.school_call_account_ok(p_school uuid, p_account_sid text) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+  SELECT CASE WHEN p_account_sid IS NULL THEN EXISTS(SELECT 1 FROM hon.school_text_senders s WHERE s.school_id=p_school AND s.twilio_account_sid IS NULL)
+    ELSE EXISTS(SELECT 1 FROM hon.school_twilio_accounts a WHERE a.school_id=p_school AND a.account_sid=p_account_sid AND a.status IN ('ACTIVE','SUSPENDED')) END
+$$;
+
 -- Outgoing calls that never connected become EXPIRED (on the next start; reads show them EXPIRED already).
 CREATE FUNCTION hon.expire_school_calls(p_school uuid) RETURNS void
 LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
@@ -572,13 +580,13 @@ END $$;
 -- K3 worker: call progress for the call (parent call SID). p_status one of RINGING, IN_PROGRESS, COMPLETED, NO_ANSWER, BUSY,
 -- FAILED, CANCELED, MISSED. p_answered_identity names the staff browser that answered an incoming call (it must be a staff
 -- member of that school who may take calls). Older statuses are ignored, never written over a newer one.
-CREATE FUNCTION hon.record_school_call_status(p_call_sid text, p_status text, p_answered_identity text, p_duration_seconds integer, p_occurred_at timestamptz)
+CREATE FUNCTION hon.record_school_call_status(p_account_sid text, p_call_sid text, p_status text, p_answered_identity text, p_duration_seconds integer, p_occurred_at timestamptz)
 RETURNS TABLE (outcome text, status text)
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 #variable_conflict use_column
 DECLARE c hon.school_calls; v_staff uuid; v_event text;
 BEGIN
-  IF p_call_sid IS NULL OR p_call_sid !~ '^CA[0-9a-f]{32}$'
+  IF p_call_sid IS NULL OR p_call_sid !~ '^CA[0-9a-f]{32}$' OR (p_account_sid IS NOT NULL AND p_account_sid !~ '^AC[0-9a-f]{32}$')
     OR p_status IS NULL OR p_status NOT IN ('RINGING','IN_PROGRESS','COMPLETED','NO_ANSWER','BUSY','FAILED','CANCELED','MISSED')
     OR (p_answered_identity IS NOT NULL AND p_answered_identity !~ '^u[0-9a-f]{32}$')
     OR (p_duration_seconds IS NOT NULL AND p_duration_seconds NOT BETWEEN 0 AND 86400)
@@ -586,7 +594,7 @@ BEGIN
     RAISE EXCEPTION 'HON call status is invalid.' USING ERRCODE='22023';
   END IF;
   SELECT * INTO c FROM hon.school_calls x WHERE x.provider_call_sid=p_call_sid FOR UPDATE;
-  IF NOT FOUND THEN outcome:='UNKNOWN_CALL'; RETURN NEXT; RETURN; END IF;
+  IF NOT FOUND OR NOT hon.school_call_account_ok(c.school_id,p_account_sid) THEN outcome:='UNKNOWN_CALL'; RETURN NEXT; RETURN; END IF;
   IF p_answered_identity IS NOT NULL AND c.direction='IN' AND c.staff_principal_id IS NULL THEN
     SELECT k.principal_id INTO v_staff FROM hon.school_call_staff k WHERE k.school_id=c.school_id AND hon.school_call_identity(k.principal_id)=p_answered_identity
       AND hon.conversation_staff_has(k.principal_id,c.organization_id,c.school_id,'communication.call.use');
@@ -608,18 +616,19 @@ END $$;
 
 -- K3 worker: a finished recording for the call. A voicemail turns a missed incoming call into VOICEMAIL; otherwise it is the
 -- call's own recording, only when the call was set to be recorded.
-CREATE FUNCTION hon.record_school_call_recording(p_call_sid text, p_recording_sid text, p_seconds integer, p_voicemail boolean)
+CREATE FUNCTION hon.record_school_call_recording(p_account_sid text, p_call_sid text, p_recording_sid text, p_seconds integer, p_voicemail boolean)
 RETURNS TABLE (outcome text, call_id uuid)
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 #variable_conflict use_column
 DECLARE c hon.school_calls;
 BEGIN
   IF p_call_sid IS NULL OR p_call_sid !~ '^CA[0-9a-f]{32}$' OR p_recording_sid IS NULL OR p_recording_sid !~ '^RE[0-9a-f]{32}$'
-    OR p_seconds IS NULL OR p_seconds NOT BETWEEN 0 AND 86400 OR p_voicemail IS NULL THEN
+    OR p_seconds IS NULL OR p_seconds NOT BETWEEN 0 AND 86400 OR p_voicemail IS NULL
+    OR (p_account_sid IS NOT NULL AND p_account_sid !~ '^AC[0-9a-f]{32}$') THEN
     RAISE EXCEPTION 'HON call recording is invalid.' USING ERRCODE='22023';
   END IF;
   SELECT * INTO c FROM hon.school_calls x WHERE x.provider_call_sid=p_call_sid FOR UPDATE;
-  IF NOT FOUND THEN outcome:='UNKNOWN_CALL'; RETURN NEXT; RETURN; END IF;
+  IF NOT FOUND OR NOT hon.school_call_account_ok(c.school_id,p_account_sid) THEN outcome:='UNKNOWN_CALL'; RETURN NEXT; RETURN; END IF;
   call_id:=c.id;
   IF c.recording_sid=p_recording_sid THEN outcome:='REPLAYED'; RETURN NEXT; RETURN; END IF;
   IF c.recording_sid IS NOT NULL OR (p_voicemail AND (c.direction<>'IN' OR c.status NOT IN ('RINGING','MISSED')))
@@ -673,10 +682,10 @@ DO $$ DECLARE r text; f text; t text;
     'hon.start_school_call(text,jsonb,text,uuid,uuid)','hon.read_school_calls(text,jsonb)','hon.update_school_call(text,jsonb,uuid,uuid)',
     'hon.set_school_do_not_call(text,jsonb)','hon.open_school_call_recording(text,uuid)'];
   worker text[]:=ARRAY['hon.connect_school_client_call(uuid,text,text,text)','hon.route_school_incoming_call(text,text,text)',
-    'hon.record_school_call_status(text,text,text,integer,timestamptz)','hon.record_school_call_recording(text,text,integer,boolean)',
+    'hon.record_school_call_status(text,text,text,text,integer,timestamptz)','hon.record_school_call_recording(text,text,text,integer,boolean)',
     'hon.read_school_call_recordings_due(integer)','hon.mark_school_call_recording_deleted(uuid,text)'];
   private text[]:=ARRAY['hon.school_call_rank(text)','hon.guard_school_call()','hon.guard_school_calling_settings()','hon.guard_school_call_staff()','hon.require_school_call_actor(text,boolean)',
-    'hon.school_call_identity(uuid)','hon.school_call_number_ok(text)','hon.school_call_person(uuid,uuid,text)','hon.expire_school_calls(uuid)',
+    'hon.school_call_identity(uuid)','hon.school_call_number_ok(text)','hon.school_call_person(uuid,uuid,text)','hon.school_call_account_ok(uuid,text)','hon.expire_school_calls(uuid)',
     'hon.school_call_json(hon.school_calls)','hon.school_call_audit(hon.school_calls,uuid,text,text,jsonb,text,uuid,uuid)'];
 BEGIN
   FOREACH f IN ARRAY staff||worker||private LOOP
