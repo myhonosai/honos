@@ -4455,3 +4455,30 @@ BEGIN
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.read_class_session_seats_taken(uuid) TO hon_runtime; END IF;
 END $$;
+
+-- 0547 school calls (CL1): four private forced-RLS tables; eight staff runtime entry points; provider entry points belong to
+-- the communication worker (013); guards and helpers are migration-owner only.
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.read_school_calling(text)','hon.set_school_calling_settings(text,jsonb,uuid,uuid)','hon.set_my_school_call_ringing(text,jsonb)',
+    'hon.start_school_call(text,jsonb,text,uuid,uuid)','hon.read_school_calls(text,jsonb)','hon.update_school_call(text,jsonb,uuid,uuid)',
+    'hon.set_school_do_not_call(text,jsonb)','hon.open_school_call_recording(text,uuid)'];
+  closed text[]:=ARRAY['hon.connect_school_client_call(uuid,text,text,text)','hon.route_school_incoming_call(text,text,text)',
+    'hon.record_school_call_status(text,text,text,integer,timestamptz)','hon.record_school_call_recording(text,text,integer,boolean)',
+    'hon.read_school_call_recordings_due(integer)','hon.mark_school_call_recording_deleted(uuid,text)',
+    'hon.school_call_rank(text)','hon.guard_school_call()','hon.guard_school_calling_settings()','hon.guard_school_call_staff()','hon.require_school_call_actor(text,boolean)',
+    'hon.school_call_identity(uuid)','hon.school_call_number_ok(text)','hon.school_call_person(uuid,uuid,text)','hon.expire_school_calls(uuid)',
+    'hon.school_call_json(hon.school_calls)','hon.school_call_audit(hon.school_calls,uuid,text,text,jsonb,text,uuid,uuid)'];
+BEGIN
+  IF to_regprocedure('hon.start_school_call(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0547 first'; END IF;
+  FOREACH f IN ARRAY entry||closed LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['school_calling_settings','school_call_staff','school_calls','school_do_not_call'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
