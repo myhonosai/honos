@@ -325,6 +325,7 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
       [result.registrationId, result.leaseToken, result.outcome, JSON.stringify(result.sids), result.failureCode ?? null, result.waitSeconds ?? null]))[0];
     if (!row?.data) throw new Error('A2P_PROGRESS_NOT_RECORDED');
     return row.data;
+  }
 
   async recordSocialInboxEvent(event: ZernioInboxEventRecord) {
     const row = (await this.query<{ outcome: SocialInboxEventOutcome }>('SELECT * FROM hon.record_school_social_inbox_event($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
