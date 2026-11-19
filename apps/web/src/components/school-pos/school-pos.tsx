@@ -17,7 +17,7 @@ type Tab = 'REGISTER' | 'HISTORY' | 'INVENTORY';
 type Pending = Readonly<{ key: string; command: PosCommand }>;
 
 /**
- * Front-desk Point of Sale (0539), organized like the owner's current CRM: Register, History and Inventory on one page.
+ * Front-desk Point of Sale (0564), organized like the owner's current CRM: Register, History and Inventory on one page.
  * The database prices every sale; the register shows the same arithmetic and sends the total it showed, so staff never
  * take an amount they did not see. Card on the school's own terminal, cash, check and other are recorded only: HON moves
  * no money. Blur, a hidden tab, a school change or a session end hides the page; the last two also drop the cart.

@@ -4456,14 +4456,28 @@ BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_class_session_seats_taken(uuid) TO hon_runtime; END IF;
 END $$;
 
--- 0539 Point of Sale: seven private tables reached only through eight runtime entry points; the guard and helpers are
+-- 0550 shared AI text proposals: two private tables; the runtime reaches the WEBSITE_EDIT kind through seven entry points.
+DO $$ DECLARE r text; t text; BEGIN
+  IF to_regclass('hon.ai_text_proposals') IS NULL THEN RAISE EXCEPTION 'Apply migration 0550 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['ai_text_kinds','ai_text_proposals'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_school_website_ai_edit(text,jsonb,uuid), hon.school_website_ai_edit_planning_reference(text,uuid),
+      hon.prepare_school_website_ai_edit(text,uuid,uuid,boolean), hon.fail_school_website_ai_edit(text,uuid,text,text),
+      hon.record_school_website_ai_edit(text,uuid,jsonb), hon.read_school_website_ai_edits(text,uuid), hon.close_school_website_ai_edit(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0564 Point of Sale: seven private tables reached only through eight runtime entry points; the guard and helpers are
 -- migration-owner only.
 DO $$ DECLARE r text; t text; f text;
   entry text[]:=ARRAY['hon.read_pos(text,uuid)','hon.read_pos_sales(text,uuid,date,date)','hon.read_pos_sale(text,uuid,uuid)',
     'hon.save_pos_settings(text,jsonb,uuid)','hon.save_pos_item(text,jsonb,uuid)','hon.adjust_pos_stock(text,jsonb,uuid)',
     'hon.record_pos_sale(text,jsonb,uuid)','hon.refund_pos_sale(text,jsonb,uuid)'];
 BEGIN
-  IF to_regclass('hon.pos_sales') IS NULL THEN RAISE EXCEPTION 'Apply migration 0539 first'; END IF;
+  IF to_regclass('hon.pos_sales') IS NULL THEN RAISE EXCEPTION 'Apply migration 0564 first'; END IF;
   FOREACH t IN ARRAY ARRAY['pos_settings','pos_items','pos_sales','pos_sale_lines','pos_refunds','pos_stock_moves','pos_requests'] LOOP
     EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;

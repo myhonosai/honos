@@ -7,7 +7,7 @@ import {
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * Front-desk Point of Sale (0539). The server decides authority from the verified session and prices every sale; the
+ * Front-desk Point of Sale (0564). The server decides authority from the verified session and prices every sale; the
  * browser names the school and sends one closed body per command with the POS human-command marker and an idempotency key.
  */
 export type PosErrorKind =

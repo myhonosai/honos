@@ -1536,7 +1536,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return this.callFixedSubjectFunction(call,params,'PERSON_UNAVAILABLE');
   }
 
-  /** 0539 Point of Sale: fixed definer functions; the subject comes only from the signed HON session. */
+  /** 0564 Point of Sale: fixed definer functions; the subject comes only from the signed HON session. */
   async callSchoolPos(operation: 'read'|'sales'|'sale'|'settings'|'item'|'stock'|'record'|'refund', params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
       read: {sql: 'SELECT hon.read_pos($1,$2::uuid) data',arity:2,readOnly:true},
