@@ -14,13 +14,14 @@ export type ConversationsCopy = {
   tags: string; tagsHint: string; saveTags: string; tagsSaved: string;
   reply: (name: string) => string; replyHint: string; send: string; sending: string; queued: string; cannotReply: string; readOnly: string;
   counter: (n: number, max: number) => string;
+  back: string; showContact: string; hideContact: string; segments: (n: number) => string; insertTag: string; history: string; noMessages: string; pickConversation: string;
   delivery: Record<ConversationDeliveryState, string>;
   refusal: Record<string, string>;
 };
 
 const en: ConversationsCopy = {
   title: 'Conversations', chooseSchool: 'Choose a school to see its conversations.',
-  intro: 'Texts people send to your school number. Replies go out from the school number through HON’s delivery queue, which checks texting consent, quiet hours and the number again before sending.',
+  intro: 'Texts people send to your school number. Your replies go out from the school number.',
   loading: 'Loading conversations…', hidden: 'Conversations are hidden.', show: 'Show conversations', refresh: 'Refresh',
   deniedTitle: 'Not available for your role', denied: 'You need the conversations permission at this school.', sessionEnded: 'Your session has ended. Sign in again.',
   unavailable: 'Conversations are unavailable right now. Try again in a moment.',
@@ -55,11 +56,12 @@ const en: ConversationsCopy = {
     CONVERSATION_ALREADY_LINKED: 'This conversation is already linked to a person.',
     CONVERSATION_PIPELINE_INVALID: 'Choose an open stage of one of this school’s pipelines.',
   },
+  back: 'Back', showContact: 'Contact details', hideContact: 'Hide details', segments: n => (n === 1 ? '1 text' : `${n} texts`), insertTag: 'Insert', history: 'All messages with this person', noMessages: 'No messages yet.', pickConversation: 'Pick a conversation on the left.',
 };
 
 const ko: ConversationsCopy = {
   title: '대화', chooseSchool: '대화를 보려면 학교를 선택하세요.',
-  intro: '학교 번호로 받은 문자입니다. 답장은 HON 발송 대기열을 거쳐 학교 번호로 나가며, 보내기 전에 문자 수신 동의, 조용한 시간, 번호를 다시 확인합니다.',
+  intro: '학교 번호로 받은 문자입니다. 답장은 학교 번호로 보내집니다.',
   loading: '대화를 불러오는 중…', hidden: '대화가 숨겨져 있습니다.', show: '대화 보기', refresh: '새로고침',
   deniedTitle: '현재 역할로는 사용할 수 없습니다', denied: '이 학교의 대화 권한이 필요합니다.', sessionEnded: '세션이 끝났습니다. 다시 로그인하세요.',
   unavailable: '지금은 대화를 불러올 수 없습니다. 잠시 후 다시 시도하세요.',
@@ -94,11 +96,12 @@ const ko: ConversationsCopy = {
     CONVERSATION_ALREADY_LINKED: '이 대화는 이미 사람과 연결되어 있습니다.',
     CONVERSATION_PIPELINE_INVALID: '이 학교 파이프라인의 진행 중인 단계를 고르세요.',
   },
+  back: '뒤로', showContact: '연락처 정보', hideContact: '정보 숨기기', segments: n => `문자 ${n}건`, insertTag: '삽입', history: '이 사람과 주고받은 모든 메시지', noMessages: '아직 메시지가 없습니다.', pickConversation: '왼쪽에서 대화를 고르세요.',
 };
 
 const es: ConversationsCopy = {
   title: 'Conversaciones', chooseSchool: 'Elige una escuela para ver sus conversaciones.',
-  intro: 'Mensajes de texto que la gente envía al número de tu escuela. Las respuestas salen desde el número de la escuela por la cola de envío de HON, que vuelve a revisar el consentimiento, el horario de silencio y el número antes de enviar.',
+  intro: 'Mensajes de texto que la gente envía al número de la escuela. Tus respuestas salen desde el número de la escuela.',
   loading: 'Cargando conversaciones…', hidden: 'Las conversaciones están ocultas.', show: 'Mostrar conversaciones', refresh: 'Actualizar',
   deniedTitle: 'No disponible para tu función', denied: 'Necesitas el permiso de conversaciones en esta escuela.', sessionEnded: 'Tu sesión terminó. Inicia sesión otra vez.',
   unavailable: 'Las conversaciones no están disponibles ahora. Inténtalo de nuevo en un momento.',
@@ -133,6 +136,7 @@ const es: ConversationsCopy = {
     CONVERSATION_ALREADY_LINKED: 'Esta conversación ya está vinculada a una persona.',
     CONVERSATION_PIPELINE_INVALID: 'Elige una etapa abierta de uno de los embudos de esta escuela.',
   },
+  back: 'Atrás', showContact: 'Datos del contacto', hideContact: 'Ocultar datos', segments: n => (n === 1 ? '1 mensaje' : `${n} mensajes`), insertTag: 'Insertar', history: 'Todos los mensajes con esta persona', noMessages: 'Todavía no hay mensajes.', pickConversation: 'Elige una conversación a la izquierda.',
 };
 
 const copy: Record<Language, ConversationsCopy> = { en, ko, es };

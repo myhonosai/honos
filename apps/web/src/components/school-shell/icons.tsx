@@ -12,6 +12,7 @@ const paths = {
   checkout: <><path d="M3 4h2.5l2 11h11l2-8H6.5" /><circle cx="9" cy="19.5" r="1.5" /><circle cx="17" cy="19.5" r="1.5" /></>,
   calls: <><path d="M5 3.5h3.5l1.5 4.5-2.2 1.4a11 11 0 0 0 6.8 6.8l1.4-2.2 4.5 1.5V19a2 2 0 0 1-2 2A16 16 0 0 1 3 5.5a2 2 0 0 1 2-2Z" /></>,
   messages: <><path d="M4 5h16v11H9l-5 4Z" /><path d="M8 9.5h8M8 12.5h5" /></>,
+  parentApp: <><rect x="7" y="3" width="10" height="18" rx="2" /><path d="M10 7h4M10 17h4" /></>,
   website: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.8 3.5 5.8 3.5 9s-1 6.2-3.5 9c-2.5-2.8-3.5-5.8-3.5-9S9.5 5.8 12 3Z" /></>,
   conversationAi: <><path d="M4 5h16v11H9l-5 4Z" /><path d="m12 7.5 1 2 2 1-2 1-1 2-1-2-2-1 2-1Z" /></>,
   social: <><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="0.8" /></>,

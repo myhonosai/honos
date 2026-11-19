@@ -90,6 +90,15 @@ export function cardLine(lead: CrmBoardLead): CardLine {
   return { kind: 'NONE' };
 }
 
+const E164 = /^\+[1-9]\d{6,14}$/;
+const PLAIN_EMAIL = /^[A-Za-z0-9._+-]{1,64}@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,63}$/;
+/** A tel: link for a strict E.164 number only, so nothing else can ride along in the link. */
+export function callHref(phone: string | null): string | null { return phone && E164.test(phone) ? `tel:${phone}` : null; }
+/** An sms: link that opens the staff member's own texting app. HON sends nothing. */
+export function textHref(phone: string | null): string | null { return phone && E164.test(phone) ? `sms:${phone}` : null; }
+/** A mailto: link for a plain address only: no cc, bcc, subject or body can be added through it. */
+export function emailHref(email: string | null): string | null { return email && email.length <= 254 && PLAIN_EMAIL.test(email) ? `mailto:${email}` : null; }
+
 /** A code such as WEBSITE_FORM or kids_karate shown as words. */
 export function codeLabel(code: string): string {
   const words = code.replace(/[_-]+/g, ' ').trim().toLowerCase();
