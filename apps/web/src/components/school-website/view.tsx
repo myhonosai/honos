@@ -22,6 +22,8 @@ export type WebsiteViewProps = Readonly<{
   read: ReadState; draft: WebsiteDocument | null; name: string; dirty: boolean; start: StartForm; choices: WebsiteChoices;
   tab: 'edit' | 'history'; device: Device; pageSlug: string; sectionId: string | null; confirming: null | 'unpublish' | number; note: string;
   outcome: Outcome; locked: boolean; canRetry: boolean; origin: string;
+  /** WB5: the Ask Marcus panel, shown above the editor in the Edit tab. */
+  aiPanel?: React.ReactNode;
   on: Readonly<{
     refresh(): void; start(next: StartForm): void; create(): void; tab(next: 'edit' | 'history'): void; device(next: Device): void;
     page(slug: string): void; section(id: string | null): void; edit(edit: WebsiteEdit): void; name(next: string): void; note(next: string): void;
@@ -201,6 +203,6 @@ export function WebsiteView(p: WebsiteViewProps): React.ReactElement {
   return shell(<>
     {status}
     <div className={styles.tabs}>{(['edit', 'history'] as const).map(x => <button key={x} type="button" className={styles.tab} aria-pressed={p.tab === x} onClick={() => p.on.tab(x)}>{t(x === 'edit' ? 'tabEdit' : 'tabHistory')}</button>)}</div>
-    {p.tab === 'history' ? history : <div className={styles.workspace}><div className={styles.side}><fieldset className={styles.plain} disabled={p.locked}><PageEditor doc={p.draft} p={p} t={t} /></fieldset>{bar}<SitePolicyNote language={p.language} document={p.draft} slug={site.publicSlug} published={site.status === 'PUBLISHED'} /></div>{preview}</div>}
+    {p.tab === 'history' ? history : <div className={styles.workspace}><div className={styles.side}>{p.aiPanel}<fieldset className={styles.plain} disabled={p.locked}><PageEditor doc={p.draft} p={p} t={t} /></fieldset>{bar}<SitePolicyNote language={p.language} document={p.draft} slug={site.publicSlug} published={site.status === 'PUBLISHED'} /></div>{preview}</div>}
   </>);
 }

@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "194a70cc30f5cdb01e25c87bbe93d7e4293f5bb5ce1498b25b05faff2eedc534",
+  "chainSha256": "8ad399c89e054d8be59add432aad0c4bdf2815aec7c107d98abd7626d11a98db",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -697,6 +697,10 @@
     {
       "file": "0538_walk_in_kiosk_trial_seats_and_demo.sql",
       "sha256": "9e3e4bd1693a9edf87577d30f46d03769880f74c63835a14b015010ba04e292e"
+    },
+    {
+      "file": "0550_ai_text_proposals.sql",
+      "sha256": "166369680863c3e7d300d3ce5db6a48cbe863b0e5761cbabf18cb8bec57857b1"
     }
   ]
 }
