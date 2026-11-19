@@ -4,6 +4,7 @@ import {
   type SchoolWebsite, type WebsiteDocument, type WebsiteEdit, type WebsitePage, type WebsiteSectionType, type WebsiteTemplate,
 } from '@hon/contracts';
 import { SiteView } from '../school-site/site-view';
+import { SitePolicyNote } from './site-policy-note';
 import { fieldName, sectionName, websiteText, type WebsiteKey } from './copy';
 import type { WebsiteChoices, WebsiteCommand, WebsiteErrorKind } from './http';
 import styles from './website.module.css';
@@ -200,6 +201,6 @@ export function WebsiteView(p: WebsiteViewProps): React.ReactElement {
   return shell(<>
     {status}
     <div className={styles.tabs}>{(['edit', 'history'] as const).map(x => <button key={x} type="button" className={styles.tab} aria-pressed={p.tab === x} onClick={() => p.on.tab(x)}>{t(x === 'edit' ? 'tabEdit' : 'tabHistory')}</button>)}</div>
-    {p.tab === 'history' ? history : <div className={styles.workspace}><div className={styles.side}><fieldset className={styles.plain} disabled={p.locked}><PageEditor doc={p.draft} p={p} t={t} /></fieldset>{bar}</div>{preview}</div>}
+    {p.tab === 'history' ? history : <div className={styles.workspace}><div className={styles.side}><fieldset className={styles.plain} disabled={p.locked}><PageEditor doc={p.draft} p={p} t={t} /></fieldset>{bar}<SitePolicyNote language={p.language} document={p.draft} slug={site.publicSlug} published={site.status === 'PUBLISHED'} /></div>{preview}</div>}
   </>);
 }
