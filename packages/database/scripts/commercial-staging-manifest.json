@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "c007deb1ea82e79fbbe5157bc70324995bbb22fbf175324ae6e7d60af780bc05",
+  "chainSha256": "2192a73a4f12b8caa6173562d483b64b015674adb35911f855082d089e1b3df3",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -713,6 +713,10 @@
     {
       "file": "0558_simple_invoices.sql",
       "sha256": "3b42347f51e202714398f01d0bf457723bcafc545a5edd9ec4fbeee6b7d02a82"
+    },
+    {
+      "file": "0571_crm_board_text_opt_out.sql",
+      "sha256": "14c6e92e5b8d3a95f55bea1e40608411b2693b3bbee55347c07a51c8e8f4e704"
     }
   ]
 }
