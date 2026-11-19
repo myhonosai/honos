@@ -669,6 +669,8 @@ try {
   // The 0423 automation engine readers (event contact, enrolled exit rule, entry/IF conditions) only decide whether a
   // workflow run starts, branches or exits; they grant no booking, attendance or check-in benefit.
   // The 0463 membership_agreement_covered reader only decides which children a family's agreement covers; it grants no benefit.
+  // The 0536 school_blast_resolve reader only decides who an audience group (active or former students) reaches with a
+  // queued marketing message; it grants no booking, attendance or check-in benefit.
   // The 0474 eian_facts_ok matches only because 'memberships' is a key of the Eian facts shape it validates; it reads no table.
   // The 0530 parent_invoice_pay_invoices reader only joins an invoice to its membership to prove the family billing path
   // (as 0102); it lets a guardian pay an invoice and grants no booking, check-in or benefit.
@@ -680,7 +682,7 @@ try {
     'read_crm_guardian_child_enrollment', 'read_crm_lead_memberships', 'read_crm_lead_registration_recovery', 'read_maya_at_risk_students', 'read_membership_date_confirmation_queue', 'read_membership_date_history', 'read_membership_pauses_and_refunds',
     'read_owner_launch_membership_draft', 'read_parent_billing_view', 'read_parent_testing_status',
     'read_retention_review_signals', 'read_school_command_center', 'read_school_contact_card', 'read_school_health_score', 'read_school_membership_list', 'read_school_membership_status_summary', 'read_school_reports', 'read_school_reports_locations', 'read_specialist_school_facts', 'record_membership_refund', 'record_retention_attention_alert', 'renewal_membership_facts',
-    'resolve_retention_attention_alert', 'resume_school_membership', 'revenue_plan_snapshot', 'revise_membership_dates', 'save_school_onboarding', 'school_contact_archive_plan', 'school_contact_facts', 'school_contact_merge_plan', 'school_dashboard_kpis', 'school_dashboard_members', 'school_demo_data_write', 'school_pay_autopay_due', 'school_report_periods']);
+    'resolve_retention_attention_alert', 'resume_school_membership', 'revenue_plan_snapshot', 'revise_membership_dates', 'save_school_onboarding', 'school_blast_resolve', 'school_contact_archive_plan', 'school_contact_facts', 'school_contact_merge_plan', 'school_dashboard_kpis', 'school_dashboard_members', 'school_demo_data_write', 'school_pay_autopay_due', 'school_report_periods']);
   // 0323 save_school_onboarding names the closed import-wish code 'MEMBERSHIPS' only; it never reads hon.memberships.
   // 0220 (U6) read_school_membership_list is a read-only school list: no booking, check-in or benefit path.
   // 0407 list_retention_review_members is a read-only name list for the retention review picker: no booking, check-in or benefit path.

@@ -5013,3 +5013,38 @@ BEGIN
     RAISE EXCEPTION 'Unsafe walk-in card payment columns'; END IF;
 END $$;
 -- End walk-in kiosk card payment exact verification.
+-- School blasts exact verification (0536)
+DO $$ DECLARE f text; t text;
+  entry text[]:=ARRAY['hon.save_school_blast(text,jsonb,text,uuid,uuid)','hon.send_school_blast(text,jsonb,text,uuid,uuid)',
+    'hon.cancel_school_blast(text,jsonb,text,uuid,uuid)','hon.read_school_blasts(text)','hon.read_school_blast(text,uuid)','hon.read_school_blast_audience(text,uuid)'];
+  helpers text[]:=ARRAY['hon.school_blast_text_ok(jsonb,integer,integer)','hon.school_blast_line_ok(jsonb,integer)','hon.school_blast_audience_ok(jsonb)',
+    'hon.guard_school_blast()','hon.require_school_blast_actor(text,text)','hon.school_blast_address(text,text,text)',
+    'hon.school_blast_resolve(uuid,uuid,text,jsonb)','hon.school_blast_render(text,text,text,text,text)','hon.school_blast_json(hon.school_blasts)',
+    'hon.school_blast_summary_json(hon.school_blasts)','hon.school_blast_begin(text,text,jsonb,text,uuid)',
+    'hon.school_blast_finish(text,text,uuid,text,hon.school_blasts,jsonb,uuid,uuid)'];
+  tables text[]:=ARRAY['hon.school_blasts','hon.school_blast_recipients'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe school blast entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY helpers LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe school blast helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY tables LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=t::regclass)
+      OR has_table_privilege('hon_runtime',t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime',t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe school blast table: %',t; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM hon.permissions WHERE (code='marketing.blast.read' AND NOT is_sensitive AND is_staff_assignable)
+      OR (code='marketing.blast.send' AND is_sensitive AND is_staff_assignable))<>2 THEN
+    RAISE EXCEPTION 'School blast permissions missing'; END IF;
+END $$;
+-- End school blasts exact verification.

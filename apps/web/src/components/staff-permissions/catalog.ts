@@ -73,6 +73,8 @@ export const PERMISSION_LABELS: Readonly<Record<string, string>> = {
   'staff.shift.view_own': 'See their own shifts',
   'staff.time.clock': 'Clock in and out',
   'staff.timesheet.manage': 'Review and approve timesheets',
+  'marketing.blast.read': 'See blasts',
+  'marketing.blast.send': 'Send blasts',
   'staff.availability.self_manage': 'Set their own availability',
   'staff.instructor_qualification.read': 'See instructor qualifications',
   'staff.instructor_qualification.manage': 'Record instructor qualifications',

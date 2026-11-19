@@ -195,6 +195,8 @@ const expectedRlsTables = [
   'school_demo_data_rows',
   'staff_shifts',
   'staff_time_entries',
+  'school_blasts',
+  'school_blast_recipients',
   'staff_time_entry_revisions',
   'staff_timesheet_weeks',
   'biometric_jurisdiction_profiles',
