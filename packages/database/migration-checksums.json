@@ -343,6 +343,10 @@
     "0522_school_contact_card.sql": "dc1a744a90a927fb3303e25d79fce87d106ff5b92caefc5db69595b9e1f56516",
     "0523_school_contact_merge_archive.sql": "39228fc3d1af999e4bff29da71460a5a6c82ec0ccd7d9bb3339c62ba2ea8868c",
     "0529_school_pay_once.sql": "476c62434beaeb0be7f781878ee817e5b0e0641f22f94ed400457bf90da9ea4a",
-    "0534_ai_text_proposals.sql": "e8ceaae30e97148d72f5369c529c5de883a716e3b55aceefca54bfa4f9b64430"
+    "0530_parent_invoice_payment.sql": "df276ef58db20b72c15d11911704c8bd3b6773b85102c19aa78e88ef5638ce43",
+    "0533_walk_in_kiosk_card_payment.sql": "bbdffff9b9eee29f5ff9f8452a4ff5694c758b2abc234967b8bb2ebda8af35ac",
+    "0537_walk_in_kiosk_trial_class.sql": "24b725cddd83d80ab9597b5531e2178eb355aae5911c6267d13e2dc999fe057f",
+    "0538_walk_in_kiosk_trial_seats_and_demo.sql": "9e3e4bd1693a9edf87577d30f46d03769880f74c63835a14b015010ba04e292e",
+    "0550_ai_text_proposals.sql": "166369680863c3e7d300d3ce5db6a48cbe863b0e5761cbabf18cb8bec57857b1"
   }
 }

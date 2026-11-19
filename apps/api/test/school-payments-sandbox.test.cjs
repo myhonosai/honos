@@ -423,13 +423,13 @@ test('0529 Stripe one-time payment: Checkout Session on the school account, fixe
     mode: 'payment', ui_mode: 'embedded', 'payment_method_types[0]': 'card', 'line_items[0][quantity]': '1', 'line_items[0][price_data][currency]': 'usd',
     'line_items[0][price_data][unit_amount]': '2500', 'line_items[0][price_data][product_data][name]': 'Trial class', client_reference_id: PAYMENT,
     'metadata[hon_pay_once_id]': PAYMENT, 'payment_intent_data[metadata][hon_pay_once_id]': PAYMENT, expires_at: String(Date.parse(request.providerExpiresAt) / 1000),
-    return_url: 'https://app.example.test/kiosk/done', customer_email: 'pay.er@example.test',
-  }, 'exactly these fields: no fee, no transfer, no on_behalf_of');
+    return_url: 'https://app.example.test/kiosk/done', redirect_on_completion: 'if_required', customer_email: 'pay.er@example.test',
+  }, 'exactly these fields: no fee, no transfer, no on_behalf_of; a card payment stays on the page (the kiosk keeps its in-memory token)');
   reply = { status: 200, body: session({ client_secret: null, url: 'https://checkout.stripe.com/c/pay/cs_test_a1B2c3' }) };
   assert.deepEqual(await stripe.beginOneTimePayment({ ...request, surface: 'HOSTED', payerEmail: null }), { sessionRef: SESSION, clientSecret: null, url: 'https://checkout.stripe.com/c/pay/cs_test_a1B2c3' });
   const hosted = form(t.calls.at(-1).body);
   assert.equal(hosted.ui_mode, 'hosted'); assert.equal(hosted.success_url, request.returnUrl); assert.equal(hosted.cancel_url, request.returnUrl);
-  assert.ok(!('customer_email' in hosted) && !('return_url' in hosted));
+  assert.ok(!('customer_email' in hosted) && !('return_url' in hosted) && !('redirect_on_completion' in hosted));
   for (const [bad, label, surface = 'EMBEDDED'] of [[session({ amount_total: 2499 }), 'another amount'], [session({ currency: 'eur' }), 'another currency'],
     [session({ metadata: { hon_pay_once_id: 'x' } }), 'another payment'], [session({ client_reference_id: null }), 'no client reference'], [session({ status: 'complete' }), 'not open'],
     [session({ id: 'pi_123' }), 'not a session'], [session({ client_secret: null }), 'no client secret'],

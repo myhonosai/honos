@@ -2,13 +2,14 @@
  * Walk-in kiosk (0414, docs/architecture/WALK_IN_KIOSK.md). A school tablet where a visitor fills a short form, signs the
  * school's waiver and picks a day pass or a trial. Staff with walkin_kiosk.run start tablets and see walk-ins; the owner
  * (walkin_kiosk.manage) sets the waiver, offers and prices. The tablet can only create a new walk-in; it never reads people.
- * Paying on the tablet or by QR comes in 0397; here a paid offer is "pay at the front desk".
+ * A paid offer is "pay at the front desk"; 0533 adds paying it by card on the tablet or by a QR code on the visitor's own
+ * phone (the 0529 one-time payment, TEST mode only).
  */
 export const WALKIN_LANGUAGES = ['en', 'ko', 'es'] as const;
 export type WalkInLanguage = (typeof WALKIN_LANGUAGES)[number];
 export const WALKIN_OFFER_KINDS = ['DAY_PASS', 'TRIAL'] as const;
 export type WalkInOfferKind = (typeof WALKIN_OFFER_KINDS)[number];
-export const WALKIN_PAYMENT_STATES = ['FREE', 'PAY_AT_DESK', 'PAID_AT_DESK'] as const;
+export const WALKIN_PAYMENT_STATES = ['FREE', 'PAY_AT_DESK', 'PAID_AT_DESK', 'PAID_CARD'] as const;
 export type WalkInPaymentState = (typeof WALKIN_PAYMENT_STATES)[number];
 export const WALKIN_DESK_METHODS = ['CASH', 'CARD_OUTSIDE_HON', 'OTHER'] as const;
 export type WalkInDeskMethod = (typeof WALKIN_DESK_METHODS)[number];
@@ -18,32 +19,53 @@ export const WALKIN_RELATIONSHIPS = ['PARENT', 'LEGAL_GUARDIAN'] as const;
 export type WalkInRelationship = (typeof WALKIN_RELATIONSHIPS)[number];
 export const WALKIN_SIGNER_RELATIONSHIPS = ['SELF', 'PARENT', 'LEGAL_GUARDIAN', 'SELF_AND_PARENT', 'SELF_AND_LEGAL_GUARDIAN'] as const;
 export type WalkInSignerRelationship = (typeof WALKIN_SIGNER_RELATIONSHIPS)[number];
-export const WALKIN_VISIT_RESULTS = ['RECORDED', 'INVALID', 'STALE', 'CLOSED', 'RATE_LIMITED', 'UNAVAILABLE'] as const;
+/** 0537: CLASS_FULL: the picked trial class is full, started or gone; the tablet reloads the classes. */
+export const WALKIN_VISIT_RESULTS = ['RECORDED', 'INVALID', 'STALE', 'CLOSED', 'RATE_LIMITED', 'CLASS_FULL', 'UNAVAILABLE'] as const;
 export type WalkInVisitResult = (typeof WALKIN_VISIT_RESULTS)[number];
+/** 0533: the two ways a card payment can be shown on the tablet: the processor's form in the page, or its page by QR code. */
+export const WALKIN_CARD_SURFACES = ['EMBEDDED', 'HOSTED'] as const;
+export type WalkInCardSurface = (typeof WALKIN_CARD_SURFACES)[number];
+/**
+ * 0533 tablet card answers. READY: shown (client secret for EMBEDDED, url for HOSTED). PAID: the visit is paid by card.
+ * OPEN: still payable, not paid yet. PROCESSING: paid on the form, still clearing. FAILED, EXPIRED, CANCELED: ended unpaid,
+ * a new one can be started. NONE: none started. NOT_DUE: nothing to pay (free, or paid at the desk). NOT_AVAILABLE: the
+ * school cannot take a card here. NOT_FOUND: no visit of this tablet with that key in the last 2 hours.
+ */
+export const WALKIN_CARD_RESULTS = ['READY', 'PAID', 'OPEN', 'PROCESSING', 'FAILED', 'EXPIRED', 'CANCELED', 'NONE', 'NOT_DUE', 'NOT_AVAILABLE', 'NOT_FOUND',
+  'INVALID', 'CLOSED', 'RATE_LIMITED', 'UNAVAILABLE'] as const;
+export type WalkInCardResult = (typeof WALKIN_CARD_RESULTS)[number];
 export const WALKIN_LIMITS = {
   waiver: 8000, thankYou: 300, offerName: 60, offerDescription: 200, offers: 6, maxPriceMinor: 1_000_000, name: 60, signerName: 120,
-  emergencyName: 120, label: 40, maxHours: 12, children: 3, strokes: 40, points: 2000, strokeBytes: 16384, maxDevices: 10,
+  emergencyName: 120, label: 40, maxHours: 12, children: 3, strokes: 40, points: 2000, strokeBytes: 16384, maxDevices: 10, trialPrograms: 10, trialClasses: 20,
 } as const;
 
 /** English required, Korean and Spanish optional. */
 export interface WalkInText { en: string; ko?: string; es?: string }
-export interface WalkInOffer { key: string; kind: WalkInOfferKind; name: WalkInText; description: WalkInText; priceMinor: number }
+/** 0537: a TRIAL offer may name 1-10 of the school's programs; the visitor then picks one of their next classes. */
+export interface WalkInOffer { key: string; kind: WalkInOfferKind; name: WalkInText; description: WalkInText; priceMinor: number; programIds?: string[] }
+/** 0537: one class the tablet offers for a trial (scheduled, not started, within 14 days). */
+export interface WalkInTrialClass { sessionId: string; name: string; startsAt: string; endsAt: string; spotsOpen: number }
+/** 0537: the class a visit booked, with its CRM trial status. */
+export interface WalkInBookedClass { sessionId: string; name: string; startsAt: string; endsAt: string; status: 'SCHEDULED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW' }
+export interface WalkInProgramChoice { programId: string; name: string }
 export interface WalkInSettingsInput {
   expectedVersion: number; enabled: boolean; waiver: WalkInText; emergencyRequired: boolean; pipelineId: string; pipelineStageId: string;
   offers: WalkInOffer[]; thankYou: WalkInText;
 }
 export interface WalkInSettings extends Omit<WalkInSettingsInput, 'expectedVersion'> { waiverVersion: number; version: number; updatedAt: string }
 export interface WalkInPipelineChoice { pipelineId: string; name: string; stages: { stageId: string; name: string }[] }
-export interface WalkInSettingsRead { settings: WalkInSettings | null; pipelines: WalkInPipelineChoice[] }
+export interface WalkInSettingsRead { settings: WalkInSettings | null; pipelines: WalkInPipelineChoice[]; programs: WalkInProgramChoice[] }
 export interface WalkInDevice { deviceId: string; label: string; startedAt: string; endsAt: string; endedAt: string | null; live: boolean; version: number; startedBy: string | null }
 export interface WalkInParticipant { givenName: string; familyName: string; birthDate: string; isContact: boolean; isMinor: boolean }
 export interface WalkInVisit {
   visitId: string; leadId: string; createdAt: string; localDate: string; language: WalkInLanguage;
   offer: { key: string; kind: WalkInOfferKind; name: string; priceMinor: number; currency: 'USD' };
-  paymentState: WalkInPaymentState; deskMethod: WalkInDeskMethod | null; deskPaidAt: string | null;
+  paymentState: WalkInPaymentState; deskMethod: WalkInDeskMethod | null; deskPaidAt: string | null; cardPaidAt: string | null;
   contact: { givenName: string; familyName: string; email: string | null; mobile: string | null };
   participants: WalkInParticipant[]; emergencyName: string; emergencyPhone: string; heardFrom: WalkInHeardFrom; marketingOptIn: boolean;
   waiverSignedAt: string | null; version: number;
+  /** 0537: the trial class this visit booked, or null. */
+  trialClass: WalkInBookedClass | null;
 }
 export interface WalkInOverview { canManage: boolean; configured: boolean; enabled: boolean; devices: WalkInDevice[]; visits: WalkInVisit[] }
 export type WalkInStroke = [number, number][];
@@ -61,7 +83,9 @@ export interface StartedWalkInDevice { device: WalkInDevice; token: string | nul
 /** What the tablet reads. */
 export interface WalkInTerminal {
   schoolName: string; branding: { logoUrl: string | null; accentColor: string | null }; endsAt: string; settingsVersion: number;
-  waiver: WalkInText; emergencyRequired: boolean; offers: (WalkInOffer & { currency: 'USD' })[]; thankYou: WalkInText;
+  waiver: WalkInText; emergencyRequired: boolean; offers: (Omit<WalkInOffer, 'programIds'> & { currency: 'USD'; classes: WalkInTrialClass[] | null })[]; thankYou: WalkInText;
+  /** 0533: the ways this school can take a card here now (empty: pay at the desk only). Added by the API. */
+  cardSurfaces: WalkInCardSurface[];
 }
 export interface WalkInVisitInput {
   settingsVersion: number; language: WalkInLanguage;
@@ -69,9 +93,16 @@ export interface WalkInVisitInput {
   children: { givenName: string; familyName: string; birthDate: string }[];
   relationship: WalkInRelationship | null; emergency: { name: string; phone: string }; heardFrom: WalkInHeardFrom; marketingOptIn: boolean;
   offerKey: string; waiver: { accepted: true; signerName: string; strokes: WalkInStroke[] }; website: '';
+  /** 0537: the picked class, for an offer whose `classes` is not null. */
+  trialSessionId?: string | null;
+}
+/** 0533: the tablet's card payment calls name the visit by the key it was submitted with; never by a payment id. */
+export interface WalkInCardStartInput { visit: string; surface: WalkInCardSurface }
+export interface WalkInCardOutcome {
+  result: WalkInCardResult; surface?: WalkInCardSurface; clientSecret?: string | null; url?: string | null; accountRef?: string | null; expiresAt?: string;
 }
 export interface WalkInVisitOutcome {
-  result: WalkInVisitResult; firstName?: string; paymentState?: WalkInPaymentState; priceMinor?: number; thankYou?: string | null;
+  result: WalkInVisitResult; firstName?: string; paymentState?: WalkInPaymentState; priceMinor?: number; thankYou?: string | null; trialClass?: WalkInBookedClass | null;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -112,11 +143,19 @@ export function validateWalkInSettingsInput(value: unknown): WalkInSettingsInput
   if (offers.length < 1 || offers.length > WALKIN_LIMITS.offers) fail();
   const keys = new Set<string>();
   const normalized = offers.map(entry => {
-    const o = object(entry, ['key', 'kind', 'name', 'description', 'priceMinor']);
+    const o = object(entry, ['key', 'kind', 'name', 'description', 'priceMinor'], ['programIds']);
     if (typeof o.key !== 'string' || !OFFER_KEY.test(o.key) || keys.has(o.key)) fail();
     keys.add(o.key);
-    return { key: o.key, kind: oneOf(o.kind, WALKIN_OFFER_KINDS), name: text(o.name, 1, WALKIN_LIMITS.offerName, false),
+    const offer: WalkInOffer = { key: o.key, kind: oneOf(o.kind, WALKIN_OFFER_KINDS), name: text(o.name, 1, WALKIN_LIMITS.offerName, false),
       description: text(o.description, 0, WALKIN_LIMITS.offerDescription, false), priceMinor: integer(o.priceMinor, 0, WALKIN_LIMITS.maxPriceMinor) };
+    if ('programIds' in o) {
+      // 0537: only a trial names programs: 1-10 distinct ids (the database checks they are this school's).
+      if (offer.kind !== 'TRIAL' || !Array.isArray(o.programIds) || o.programIds.length < 1 || o.programIds.length > WALKIN_LIMITS.trialPrograms) fail();
+      const ids = (o.programIds as unknown[]).map(uuid);
+      if (new Set(ids).size !== ids.length) fail();
+      offer.programIds = ids;
+    }
+    return offer;
   });
   return { expectedVersion: integer(p.expectedVersion, 0, 999_999_999), enabled: p.enabled, waiver: text(p.waiver, 1, WALKIN_LIMITS.waiver, true),
     emergencyRequired: p.emergencyRequired, pipelineId: uuid(p.pipelineId), pipelineStageId: uuid(p.pipelineStageId), offers: normalized,
@@ -149,7 +188,7 @@ function birthDate(value: unknown, today: string): string {
 }
 /** The tablet's own check before sending (the database checks it all again against the live settings). */
 export function validateWalkInVisitInput(value: unknown, today: string): WalkInVisitInput {
-  const p = object(value, ['settingsVersion', 'language', 'contact', 'children', 'relationship', 'emergency', 'heardFrom', 'marketingOptIn', 'offerKey', 'waiver', 'website']);
+  const p = object(value, ['settingsVersion', 'language', 'contact', 'children', 'relationship', 'emergency', 'heardFrom', 'marketingOptIn', 'offerKey', 'waiver', 'website'], ['trialSessionId']);
   const c = object(p.contact, ['givenName', 'familyName', 'email', 'mobile', 'birthDate', 'isParticipant', 'adultConfirmed']);
   if (!isWalkInText(c.givenName, 1, WALKIN_LIMITS.name) || !isWalkInText(c.familyName, 1, WALKIN_LIMITS.name) || typeof c.email !== 'string'
     || typeof c.mobile !== 'string' || typeof c.isParticipant !== 'boolean' || c.adultConfirmed !== true) fail();
@@ -174,11 +213,13 @@ export function validateWalkInVisitInput(value: unknown, today: string): WalkInV
   const w = object(p.waiver, ['accepted', 'signerName', 'strokes']);
   if (w.accepted !== true || !isWalkInText(w.signerName, 1, WALKIN_LIMITS.signerName)) fail();
   const strokes = validateWalkInStrokes(w.strokes);
+  const trialSessionId = p.trialSessionId === undefined || p.trialSessionId === null ? p.trialSessionId as null | undefined : uuid(p.trialSessionId);
   return {
     settingsVersion: integer(p.settingsVersion, 1, 999_999_999), language: oneOf(p.language, WALKIN_LANGUAGES),
     contact: { givenName: c.givenName as string, familyName: c.familyName as string, email, mobile, birthDate: contactBirth, isParticipant: c.isParticipant, adultConfirmed: true },
     children, relationship, emergency: { name: e.name as string, phone: e.phone }, heardFrom: oneOf(p.heardFrom, WALKIN_HEARD_FROM),
     marketingOptIn: p.marketingOptIn, offerKey: p.offerKey, waiver: { accepted: true, signerName: w.signerName as string, strokes }, website: '',
+    ...(trialSessionId === undefined ? {} : { trialSessionId }),
   };
 }
 /** 1-40 strokes, 2-2000 points in all, integer coordinates 0-1000, at most 16 KiB as JSON. */
@@ -206,8 +247,8 @@ function device(value: unknown): WalkInDevice {
     version: integer(d.version, 1, 999_999_999), startedBy: d.startedBy as string | null };
 }
 function visit(value: unknown): WalkInVisit {
-  const v = object(value, ['visitId', 'leadId', 'createdAt', 'localDate', 'language', 'offer', 'paymentState', 'deskMethod', 'deskPaidAt', 'contact', 'participants',
-    'emergencyName', 'emergencyPhone', 'heardFrom', 'marketingOptIn', 'waiverSignedAt', 'version']);
+  const v = object(value, ['visitId', 'leadId', 'createdAt', 'localDate', 'language', 'offer', 'paymentState', 'deskMethod', 'deskPaidAt', 'cardPaidAt', 'contact', 'participants',
+    'emergencyName', 'emergencyPhone', 'heardFrom', 'marketingOptIn', 'waiverSignedAt', 'trialClass', 'version']);
   const offer = object(v.offer, ['key', 'kind', 'name', 'priceMinor', 'currency']);
   const contact = object(v.contact, ['givenName', 'familyName', 'email', 'mobile']);
   if (!Array.isArray(v.participants) || !v.participants.length || typeof v.localDate !== 'string' || typeof v.marketingOptIn !== 'boolean'
@@ -217,6 +258,7 @@ function visit(value: unknown): WalkInVisit {
     visitId: uuid(v.visitId), leadId: uuid(v.leadId), createdAt: iso(v.createdAt), localDate: v.localDate, language: oneOf(v.language, WALKIN_LANGUAGES),
     offer: { key: String(offer.key), kind: oneOf(offer.kind, WALKIN_OFFER_KINDS), name: offer.name, priceMinor: integer(offer.priceMinor, 0, WALKIN_LIMITS.maxPriceMinor), currency: 'USD' },
     paymentState: oneOf(v.paymentState, WALKIN_PAYMENT_STATES), deskMethod: v.deskMethod === null ? null : oneOf(v.deskMethod, WALKIN_DESK_METHODS), deskPaidAt: isoOrNull(v.deskPaidAt),
+    cardPaidAt: isoOrNull(v.cardPaidAt),
     contact: { givenName: contact.givenName, familyName: contact.familyName, email: (contact.email as string | null) ?? null, mobile: (contact.mobile as string | null) ?? null },
     participants: (v.participants as unknown[]).map(entry => {
       const x = object(entry, ['givenName', 'familyName', 'birthDate', 'isContact', 'isMinor']);
@@ -224,8 +266,20 @@ function visit(value: unknown): WalkInVisit {
       return x as unknown as WalkInParticipant;
     }),
     emergencyName: v.emergencyName, emergencyPhone: v.emergencyPhone, heardFrom: oneOf(v.heardFrom, WALKIN_HEARD_FROM), marketingOptIn: v.marketingOptIn,
-    waiverSignedAt: isoOrNull(v.waiverSignedAt), version: integer(v.version, 1, 999_999_999),
+    waiverSignedAt: isoOrNull(v.waiverSignedAt), version: integer(v.version, 1, 999_999_999), trialClass: bookedClass(v.trialClass),
   };
+}
+const APPOINTMENT_STATES = ['SCHEDULED', 'CANCELLED', 'COMPLETED', 'NO_SHOW'] as const;
+function bookedClass(value: unknown): WalkInBookedClass | null {
+  if (value === null) return null;
+  const c = object(value, ['sessionId', 'name', 'startsAt', 'endsAt', 'status']);
+  if (typeof c.name !== 'string') fail();
+  return { sessionId: uuid(c.sessionId), name: c.name, startsAt: iso(c.startsAt), endsAt: iso(c.endsAt), status: oneOf(c.status, APPOINTMENT_STATES) };
+}
+function trialClass(value: unknown): WalkInTrialClass {
+  const c = object(value, ['sessionId', 'name', 'startsAt', 'endsAt', 'spotsOpen']);
+  if (typeof c.name !== 'string') fail();
+  return { sessionId: uuid(c.sessionId), name: c.name, startsAt: iso(c.startsAt), endsAt: iso(c.endsAt), spotsOpen: integer(c.spotsOpen, 0, 100_000) };
 }
 function settings(value: unknown): WalkInSettings {
   const s = object(value, ['enabled', 'waiver', 'waiverVersion', 'emergencyRequired', 'pipelineId', 'pipelineStageId', 'offers', 'thankYou', 'version', 'updatedAt']);
@@ -240,8 +294,13 @@ export function verifyWalkInOverview(value: unknown): WalkInOverview {
   return { canManage: o.canManage, configured: o.configured, enabled: o.enabled, devices: o.devices.map(device), visits: o.visits.map(visit) };
 }
 export function verifyWalkInSettingsRead(value: unknown): WalkInSettingsRead {
-  const o = object(value, ['settings', 'pipelines']);
-  if (!Array.isArray(o.pipelines)) fail();
+  const o = object(value, ['settings', 'pipelines', 'programs']);
+  if (!Array.isArray(o.pipelines) || !Array.isArray(o.programs)) fail();
+  const programs = o.programs.map(entry => {
+    const g = object(entry, ['programId', 'name']);
+    if (typeof g.name !== 'string') fail();
+    return { programId: uuid(g.programId), name: g.name };
+  });
   return { settings: o.settings === null ? null : settings(o.settings), pipelines: o.pipelines.map(entry => {
     const p = object(entry, ['pipelineId', 'name', 'stages']);
     if (typeof p.name !== 'string' || !Array.isArray(p.stages)) fail();
@@ -250,7 +309,7 @@ export function verifyWalkInSettingsRead(value: unknown): WalkInSettingsRead {
       if (typeof s.name !== 'string') fail();
       return { stageId: uuid(s.stageId), name: s.name };
     }) };
-  }) };
+  }), programs };
 }
 export function verifyWalkInSettingsReceipt(value: unknown): { settings: WalkInSettings } { return { settings: settings(object(value, ['settings']).settings) }; }
 export function verifyWalkInDeviceReceipt(value: unknown, expected: { deviceId?: string } = {}): { device: WalkInDevice } {
@@ -273,24 +332,51 @@ export function verifyWalkInVisitDetail(value: unknown, visitId: string): WalkIn
     signerName: w.signerName, relationship: oneOf(w.relationship, WALKIN_SIGNER_RELATIONSHIPS), strokes: validateWalkInStrokes(w.strokes), signedAt: iso(w.signedAt) } };
 }
 export function verifyWalkInTerminal(value: unknown): WalkInTerminal {
-  const t = object(value, ['schoolName', 'branding', 'endsAt', 'settingsVersion', 'waiver', 'emergencyRequired', 'offers', 'thankYou']);
+  const t = object(value, ['schoolName', 'branding', 'endsAt', 'settingsVersion', 'waiver', 'emergencyRequired', 'offers', 'thankYou'], ['cardSurfaces']);
+  const cardSurfaces = t.cardSurfaces === undefined ? [] : Array.isArray(t.cardSurfaces) && t.cardSurfaces.length <= 2
+    ? [...new Set((t.cardSurfaces as unknown[]).map(entry => oneOf(entry, WALKIN_CARD_SURFACES)))] : fail();
+  if (cardSurfaces.length !== (t.cardSurfaces as unknown[] | undefined ?? []).length) fail();
   const b = object(t.branding, ['logoUrl', 'accentColor']);
   if (typeof t.schoolName !== 'string' || typeof t.emergencyRequired !== 'boolean' || !Array.isArray(t.offers)) fail();
   const offers = validateWalkInSettingsInput({ expectedVersion: 0, enabled: true, waiver: t.waiver, emergencyRequired: t.emergencyRequired,
     pipelineId: '00000000-0000-4000-8000-000000000000', pipelineStageId: '00000000-0000-4000-8000-000000000000',
-    offers: (t.offers as unknown[]).map(entry => { const { currency, ...rest } = object(entry, ['key', 'kind', 'name', 'description', 'priceMinor', 'currency']); if (currency !== 'USD') fail(); return rest; }),
+    offers: (t.offers as unknown[]).map(entry => {
+      const { currency, classes: _classes, ...rest } = object(entry, ['key', 'kind', 'name', 'description', 'priceMinor', 'currency', 'classes']);
+      if (currency !== 'USD') fail(); return rest; }),
     thankYou: t.thankYou });
+  // 0537: classes only on a trial, at most 20, each once.
+  const classes = (t.offers as Record<string, unknown>[]).map(entry => {
+    if (entry.classes === null) return null;
+    if (entry.kind !== 'TRIAL' || !Array.isArray(entry.classes) || entry.classes.length > WALKIN_LIMITS.trialClasses) fail();
+    const list = (entry.classes as unknown[]).map(trialClass);
+    if (new Set(list.map(c => c.sessionId)).size !== list.length) fail();
+    return list;
+  });
   return { schoolName: t.schoolName, branding: { logoUrl: typeof b.logoUrl === 'string' ? b.logoUrl : null, accentColor: typeof b.accentColor === 'string' ? b.accentColor : null },
     endsAt: iso(t.endsAt), settingsVersion: integer(t.settingsVersion, 1, 999_999_999), waiver: offers.waiver, emergencyRequired: t.emergencyRequired,
-    offers: offers.offers.map(o => ({ ...o, currency: 'USD' as const })), thankYou: offers.thankYou };
+    offers: offers.offers.map((o, index) => ({ ...o, currency: 'USD' as const, classes: classes[index] ?? null })), thankYou: offers.thankYou, cardSurfaces };
 }
 export function verifyWalkInVisitOutcome(value: unknown): WalkInVisitOutcome {
-  const o = object(value, ['result'], ['firstName', 'paymentState', 'priceMinor', 'thankYou']);
+  const o = object(value, ['result'], ['firstName', 'paymentState', 'priceMinor', 'thankYou', 'trialClass']);
   const result = oneOf(o.result, WALKIN_VISIT_RESULTS);
   if (result !== 'RECORDED') { if (Object.keys(o).length !== 1) fail(); return { result }; }
   if (typeof o.firstName !== 'string' || (o.thankYou !== null && typeof o.thankYou !== 'string')) fail();
   return { result, firstName: o.firstName, paymentState: oneOf(o.paymentState, WALKIN_PAYMENT_STATES), priceMinor: integer(o.priceMinor, 0, WALKIN_LIMITS.maxPriceMinor),
-    thankYou: (o.thankYou as string | null) ?? null };
+    thankYou: (o.thankYou as string | null) ?? null, trialClass: o.trialClass === undefined ? null : bookedClass(o.trialClass) };
+}
+/** 0533: a tablet card answer; READY must carry exactly what its surface needs. */
+export function verifyWalkInCardOutcome(value: unknown): WalkInCardOutcome {
+  const o = object(value, ['result'], ['surface', 'clientSecret', 'url', 'accountRef', 'expiresAt']);
+  const result = oneOf(o.result, WALKIN_CARD_RESULTS);
+  if (result !== 'READY') { if (Object.keys(o).length !== 1) fail(); return { result }; }
+  const r = object(value, ['result', 'surface', 'clientSecret', 'url', 'accountRef', 'expiresAt']);
+  const surface = oneOf(r.surface, WALKIN_CARD_SURFACES);
+  const text = (entry: unknown, pattern: RegExp): string | null => (entry === null ? null : typeof entry === 'string' && pattern.test(entry) ? entry : fail());
+  const clientSecret = text(r.clientSecret, /^[A-Za-z0-9_-]{8,300}$/);
+  const url = text(r.url, /^https:\/\/[^\s<>"']{8,2000}$/);
+  const accountRef = text(r.accountRef, /^[A-Za-z0-9_-]{3,100}$/);
+  if ((surface === 'EMBEDDED') !== (clientSecret !== null) || (surface === 'HOSTED') !== (url !== null) || (surface === 'HOSTED' && accountRef !== null)) fail();
+  return { result, surface, clientSecret, url, accountRef, expiresAt: iso(r.expiresAt) };
 }
 /** A text in the chosen language, falling back to English (and saying so through `fallback`). */
 export function walkInText(value: WalkInText, language: WalkInLanguage): { text: string; fallback: boolean } {

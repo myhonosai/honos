@@ -10,7 +10,7 @@ export const SCHOOL_PAY_ONCE_STATES = ['OPEN', 'PROCESSING', 'SUCCEEDED', 'FAILE
 export type SchoolPayOnceState = (typeof SCHOOL_PAY_ONCE_STATES)[number];
 /** States that are final: the payment never changes again. */
 export const SCHOOL_PAY_ONCE_SETTLED_STATES: readonly SchoolPayOnceState[] = ['SUCCEEDED', 'FAILED', 'EXPIRED', 'CANCELED'];
-export const SCHOOL_PAY_ONCE_SOURCES = ['CHECKOUT_PAGE', 'WALKIN_VISIT', 'POS_SALE'] as const;
+export const SCHOOL_PAY_ONCE_SOURCES = ['CHECKOUT_PAGE', 'WALKIN_VISIT', 'POS_SALE', 'FAMILY_INVOICE'] as const;
 export type SchoolPayOnceSource = (typeof SCHOOL_PAY_ONCE_SOURCES)[number];
 /** EMBEDDED: the processor's form inside a HON page (Stripe embedded Checkout). HOSTED: the processor's own page (a QR or link). */
 export const SCHOOL_PAY_ONCE_SURFACES = ['EMBEDDED', 'HOSTED'] as const;
