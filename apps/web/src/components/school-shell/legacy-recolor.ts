@@ -63,6 +63,7 @@ const measured = new WeakMap<Element, string>();
 export function shellRecolorLegacy(main: Element, limit = 6000, seen: WeakMap<Element, string> = measured): void {
   const elements = main.querySelectorAll('*');
   const count = Math.min(elements.length, limit);
+  if (elements.length > limit && process.env.NODE_ENV !== 'production') console.warn(`HON shell: ${elements.length - limit} elements past the recolour limit keep their light colours.`);
   for (let i = 0; i < count; i += 1) {
     const element = elements[i]!;
     if (element.closest('svg')) continue;
@@ -76,4 +77,13 @@ export function shellRecolorLegacy(main: Element, limit = 6000, seen: WeakMap<El
     TAGS.forEach((name, index) => { const value = values[index]; if (value) element.setAttribute(name, value); });
     seen.set(element, signature);
   }
+}
+
+/**
+ * Forgets the measurements of an element whose class or inline style changed, and of everything under it (a parent's
+ * class can change its children's colours), so the next pass measures them again from their own colours.
+ */
+export function shellForgetLegacy(element: Element, seen: WeakMap<Element, string> = measured): void {
+  seen.delete(element);
+  element.querySelectorAll('*').forEach(child => seen.delete(child));
 }

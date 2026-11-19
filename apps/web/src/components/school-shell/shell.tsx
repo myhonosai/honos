@@ -17,7 +17,7 @@ import { SCHOOL_SHELL_NAV, schoolShellHref } from './catalog';
 import { concealShellPrivateNow, onShellPrivacyEvent } from './privacy';
 import { HON_SCREENSAVER_SHOWN_EVENT, ScreensaverController } from './screensaver';
 import { SchoolShellFrame, type ShellViewState } from './frame';
-import { shellRecolorLegacy } from './legacy-recolor';
+import { shellForgetLegacy, shellRecolorLegacy } from './legacy-recolor';
 import { SCHOOL_TOUR_OPEN_EVENT, markSchoolTourSeen } from './tour';
 import { SchoolShellProvider, type SchoolShellState } from './context';
 import { defaultArtStyle, isHonArtStyle, type HonArtStyle } from '../hon-command/roster';
@@ -232,8 +232,13 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
     classify();
     // Pages render their heading after their own reads; re-check (once per frame) as the page fills in.
     let frame = 0;
-    const observer = new MutationObserver(() => { if (!frame) frame = requestAnimationFrame(() => { frame = 0; classify(); }); });
-    observer.observe(main, { childList: true, subtree: true });
+    // A class or style toggle on an existing element (a selected chip, an error row) re-measures it and everything
+    // under it (#509 review P2). The recolouring writes only data-hon-* and data-canvas, so this cannot loop.
+    const observer = new MutationObserver(records => {
+      for (const record of records) if (record.type === 'attributes' && record.target instanceof Element) shellForgetLegacy(record.target);
+      if (!frame) frame = requestAnimationFrame(() => { frame = 0; classify(); });
+    });
+    observer.observe(main, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
     return () => { observer.disconnect(); if (frame) cancelAnimationFrame(frame); };
   }, [path]);
   const dialogOpen = menuOpen || tourStep !== null;

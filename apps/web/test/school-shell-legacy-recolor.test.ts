@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { legacyFillTag, legacyInkTag, legacyLineTag, shellRecolorLegacy } from '../src/components/school-shell/legacy-recolor';
+import { legacyFillTag, legacyInkTag, legacyLineTag, shellForgetLegacy, shellRecolorLegacy } from '../src/components/school-shell/legacy-recolor';
 
 // Consistent look C1 (owner 2026-11-19, "lot that is miss match in aesthetics"): older pages written for a light body
 // are recoloured onto the dark tokens instead of sitting on a light card inside the dark shell.
@@ -120,6 +120,34 @@ describe('the light card is gone', () => {
     expect(effect).toMatch(/const legacy = decided \?\? shellNeedsLegacyCanvas\(main\)/);
     expect(effect).toMatch(/if \(main\.querySelector\('h1, h2'\)\) decided = legacy/);
     expect(effect).toContain('shellRecolorLegacy(main)');
+  });
+});
+
+describe('class and style toggles (#509 review P2)', () => {
+  it('re-measures an element and its children after a toggle on the element or an ancestor', () => {
+    const parent = el('div', { color: 'rgb(23, 34, 56)', backgroundColor: 'rgba(0, 0, 0, 0)', borderTopColor: 'rgb(0, 0, 0)', borderTopWidth: '0px' });
+    const chip = el('button', { color: 'rgb(23, 34, 56)', backgroundColor: 'rgb(255, 255, 255)', borderTopColor: 'rgb(0, 0, 0)', borderTopWidth: '0px' });
+    const chipEl = asElement(chip);
+    const parentEl = Object.assign(asElement(parent), { querySelectorAll: () => [chipEl] });
+    const main = { querySelectorAll: () => [parentEl, chipEl] } as unknown as Element, seen = new WeakMap<Element, string>();
+    vi.stubGlobal('getComputedStyle', (e: { _f: Fake }) => e._f.style);
+    shellRecolorLegacy(main, 6000, seen);
+    expect(chip.attrs.get('data-hon-fill')).toBe('panel');
+    // The parent's class selects the chip: the chip's own class did not change, its colour did.
+    chip.style.backgroundColor = 'rgb(36, 90, 196)'; chip.style.color = 'rgb(255, 255, 255)';
+    shellRecolorLegacy(main, 6000, seen);
+    expect(chip.attrs.get('data-hon-fill')).toBe('panel');
+    shellForgetLegacy(parentEl as unknown as Element, seen);
+    shellRecolorLegacy(main, 6000, seen);
+    vi.unstubAllGlobals();
+    expect(chip.attrs.get('data-hon-fill')).toBe('accent');
+    expect(chip.attrs.has('data-hon-ink')).toBe(false);
+  });
+
+  it('watches class and style changes, not only added or removed elements', () => {
+    const shellTsx = readFileSync('src/components/school-shell/shell.tsx', 'utf8');
+    expect(shellTsx).toContain("observer.observe(main, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] })");
+    expect(shellTsx).toMatch(/record\.type === 'attributes'[^\n]*shellForgetLegacy\(record\.target\)/);
   });
 });
 
