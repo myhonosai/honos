@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateAutomationDefinition, type AutomationDefinition, type AutomationWorkflowDetail, type AutomationWorkflowList, type AutomationWorkflowSummary } from '@hon/contracts';
 import { AUTOMATIONS_LANGUAGES, automationsText } from '../src/components/automations/copy';
-import { commandErrorKey, editorFor } from '../src/components/automations/automations';
+import { commandErrorKey, editorFor, locksEditor, turnOnFailure } from '../src/components/automations/automations';
 import {
   AutomationCommandError, AutomationReadError, automationsPath, listAutomations, prepareActivate, prepareCreate, preparePause, prepareSave, submitAutomationCommand,
 } from '../src/components/automations/http';
@@ -72,6 +72,19 @@ describe('model', () => {
     expect(fromDefinition('x', validateAutomationDefinition(ai))).toBeNull();
     expect(fromDefinition('x', { ...base, entry: { ...base.entry, reentry: 'ONCE_PER_PERIOD', reentryDays: 30 } })).toBeNull();
     expect(fromDefinition('x', { ...base, trigger: { kind: 'SCHEDULE', config: {} } })).toBeNull();
+  });
+  it('a task opens in the simple form only when it is the task the form writes, so saving never changes its due time or assignee', () => {
+    const lead = toDefinition(fromTemplate('NO_SHOW')), task = lead.steps.findIndex(x => x.type === 'CREATE_TASK');
+    expect(lead.steps[task]).toMatchObject({ dueInHours: 24, assignTo: 'LEAD_ASSIGNEE' });
+    const withTask = (over: Record<string, unknown>): AutomationDefinition => ({ ...lead, steps: lead.steps.map((x, i) => (i === task ? { ...x, ...over } as typeof x : x)) });
+    expect(fromDefinition('x', withTask({}))).not.toBeNull();
+    expect(fromDefinition('x', withTask({ dueInHours: 48 }))).toBeNull();
+    expect(fromDefinition('x', withTask({ assignTo: 'SCHOOL_OWNERS' }))).toBeNull();
+    const students: SimpleAutomation = { ...fromTemplate('MIA'), sends: [{ channel: 'TASK', delayUnit: 'NOW', delayAmount: 1, subject: '', text: 'Call {{first_name}}', videoUrl: '' }] };
+    const d = toDefinition(students);
+    expect(d.steps[0]).toMatchObject({ type: 'CREATE_TASK', dueInHours: 24, assignTo: 'SCHOOL_OWNERS' });
+    expect(fromDefinition(students.name, d)).toEqual(students);
+    expect(fromDefinition('x', { ...d, steps: [{ ...d.steps[0]!, assignTo: 'LEAD_ASSIGNEE' } as typeof d.steps[0]] })).toBeNull();
   });
 });
 
@@ -165,6 +178,30 @@ describe('view', () => {
     expect(render({ waiting: true })).toContain('Checking your school');
     expect(render({ concealed: true })).not.toContain('Automation 1');
     expect(render({ list: { state: 'DENIED' } })).toContain('You do not have access');
+  });
+});
+
+describe('unknown outcomes', () => {
+  it('only an unconfirmed save pauses editing, and a paused editor shows why and keeps the name locked', () => {
+    expect(locksEditor(new AutomationCommandError('UNCERTAIN'))).toBe(true);
+    for (const kind of ['DENIED', 'SESSION', 'CONFLICT', 'REJECTED'] as const) expect(locksEditor(new AutomationCommandError(kind))).toBe(false);
+    expect(locksEditor(new Error('x'))).toBe(false);
+    const html = render({ editor: editor(fromTemplate('NO_SHOW'), { locked: true }) });
+    expect(html).toContain(automationsText('en', 'lockedUncertain'));
+    expect(html).toMatch(/id="automation-name"[^>]*disabled=""/);
+    expect(render({ editor: editor(fromTemplate('NO_SHOW')) })).not.toContain(automationsText('en', 'lockedUncertain'));
+  });
+  it('when turning on fails after a save, an automation that was on says its earlier version still runs, and never says press the same button', () => {
+    const unsure = new AutomationCommandError('UNCERTAIN');
+    expect(turnOnFailure('ACTIVE', unsure)).toEqual({ message: 'savedNotLive', why: 'errUncertainOn' });
+    expect(turnOnFailure('DRAFT', unsure)).toEqual({ message: 'savedNotOn', why: 'errUncertainOn' });
+    expect(turnOnFailure(null, new AutomationCommandError('DENIED'))).toEqual({ message: 'savedNotOn', why: 'errDenied' });
+    expect(turnOnFailure('PAUSED', new AutomationCommandError('REJECTED', 'AUTOMATION_TRIGGER_UNAVAILABLE'))).toEqual({ message: 'savedNotOn', why: 'errNotYet' });
+    for (const language of ['en', 'ko', 'es'] as const) {
+      expect(automationsText(language, 'errUncertainOn')).not.toBe(automationsText(language, 'errUncertain'));
+      expect(automationsText(language, 'savedNotLive', { name: 'N', why: 'W' })).toContain('N');
+    }
+    expect(automationsText('en', 'errUncertainOn')).not.toMatch(/same button/i);
   });
 });
 
