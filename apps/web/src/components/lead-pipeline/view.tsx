@@ -1,5 +1,5 @@
 import React, { useId } from 'react';
-import { CRM_STAGE_COLORS, CRM_STAGE_NAME_MAX, type CrmBoardLead, type CrmBoardStage, type CrmBoardStatus, type CrmPipelineBoard, type CrmStageColor } from '@hon/contracts';
+import { CRM_PIPELINE_TEMPLATES, CRM_STAGE_COLORS, CRM_STAGE_NAME_MAX, type CrmPipelineTemplateCode, type CrmBoardLead, type CrmBoardStage, type CrmBoardStatus, type CrmPipelineBoard, type CrmStageColor } from '@hon/contracts';
 import type { CrmAppointmentSummary } from '@hon/contracts';
 import { crmFollowUpHref } from '../crm-follow-up-handoff';
 import { leadMembershipHref, leadWorkflowHref } from '../crm-lead-memberships-http';
@@ -18,16 +18,18 @@ export type TrialState = { state: 'NONE' | 'LOADING' | 'DENIED' | 'UNAVAILABLE' 
 export type Notice = { tone: 'OK' | 'ERROR'; text: string } | null;
 export type CloseState = null | { leadId: string; status: 'WON' | 'LOST'; note: string; phase: 'ASK' | 'SAVING' | 'UNCERTAIN' | 'FAILED' };
 export type SetupState = { state: 'IDLE' | 'WORKING' | 'DENIED' | 'FAILED' | 'UNKNOWN' };
+export type TemplateState = null | { phase: 'PICK' | 'WORKING' | 'DENIED' | 'FAILED' | 'UNKNOWN' | 'LIMIT'; code: CrmPipelineTemplateCode | null };
 export type EditState = null | { draft: Draft; newName: string; phase: 'EDIT' | 'SAVING' | 'UNCERTAIN'; error: string | null };
 export const LEAD_DRAG_TYPE = 'application/x-hon-lead';
 
 export type PipelineViewProps = Readonly<{
   language: string; waiting: boolean; concealed: boolean; scope: BoardScope | null;
   board: BoardState; status: CrmBoardStatus; filters: Filters; view: BoardView; selectedId: string | null; trials: TrialState;
-  notice: Notice; movingId: string | null; close: CloseState; edit: EditState; adding: boolean; addLead?: React.ReactNode; setup?: SetupState;
+  notice: Notice; movingId: string | null; close: CloseState; edit: EditState; adding: boolean; addLead?: React.ReactNode; setup?: SetupState; templates?: TemplateState;
   onStatus?: (status: CrmBoardStatus) => void; onFilters?: (filters: Filters) => void; onView?: (view: BoardView) => void;
   onPipeline?: (pipelineId: string) => void; onOpen?: (leadId: string | null) => void; onMove?: (leadId: string, stageId: string) => void;
   onAskClose?: (leadId: string, status: 'WON' | 'LOST') => void; onCloseNote?: (note: string) => void; onConfirmClose?: () => void; onCancelClose?: () => void;
+  onTemplates?: (open: boolean) => void; onTemplate?: (code: CrmPipelineTemplateCode) => void;
   onEdit?: (open: boolean) => void; onDraft?: (edit: EditState) => void; onSave?: () => void;
   onAdd?: (open: boolean) => void; onRefresh?: () => void; onReloadTrials?: () => void;
 }>;
@@ -73,6 +75,7 @@ function Body(props: PipelineViewProps & { scope: BoardScope; t: T }): React.Rea
       <button type="button" className={styles.secondary} onClick={onRefresh}>{t('reload')}</button></div> : null}
     {board.state === 'READY' ? <Ready {...props} board={board.board}/> : null}
     {board.state === 'READY' && props.close ? <CloseDialog {...props} board={board.board} close={props.close}/> : null}
+    {board.state === 'READY' && props.templates ? <TemplateDialog {...props} board={board.board} templates={props.templates}/> : null}
     {board.state === 'READY' && props.edit ? <EditDialog {...props} board={board.board} edit={props.edit}/> : null}
   </>;
 }
@@ -136,7 +139,8 @@ function Toolbar(props: PipelineViewProps & { t: T }) {
       <button type="button" aria-pressed={view === 'LIST'} disabled={off} onClick={() => onView?.('LIST')}>{t('viewList')}</button>
     </div>
     <div className={styles.actions}>
-      <button type="button" className={styles.secondary} disabled={!ready || props.setup?.state === 'WORKING'} onClick={() => onEdit?.(true)}>{t('editPipeline')}</button>
+      {ready?.pipeline ? <button type="button" className={styles.secondary} onClick={() => props.onTemplates?.(true)}>{t('newPipeline')}</button> : null}
+      <button type="button" className={styles.secondary} disabled={!ready || props.setup?.state === 'WORKING' || (!ready.pipeline && props.setup?.state === 'DENIED')} onClick={() => onEdit?.(true)}>{t('editPipeline')}</button>
       <button type="button" className={styles.primary} aria-expanded={adding} onClick={() => onAdd?.(!adding)}>{adding ? t('closeAdd') : t('addLead')}</button>
     </div>
   </div>;
@@ -326,6 +330,36 @@ function CloseDialog({ board, close, onCloseNote, onConfirmClose, onCancelClose,
           {busy ? t('closing') : close.phase === 'UNCERTAIN' ? t('retry') : t('closeConfirm', { choice })}</button>
         <button type="button" className={styles.secondary} disabled={busy} onClick={onCancelClose}>{t('cancel')}</button>
       </div>
+    </div>
+  </div>;
+}
+
+const TEMPLATE_MESSAGE: Partial<Record<NonNullable<TemplateState>['phase'], PipelineKey>> = {
+  DENIED: 'templateDenied', FAILED: 'templateFailed', UNKNOWN: 'templateUnknown', LIMIT: 'templateLimit',
+};
+/** Ready-made school funnels: one press adds the pipeline (server-defined stages), then the stage editor opens to adjust it. */
+function TemplateDialog({ board, templates, onTemplates, onTemplate, onPipeline, t }: Inner & { templates: NonNullable<TemplateState> }) {
+  const busy = templates.phase === 'WORKING';
+  const message = TEMPLATE_MESSAGE[templates.phase];
+  return <div className={styles.overlay}>
+    <div className={styles.dialog} data-wide="" role="dialog" aria-modal="true" aria-labelledby="pipeline-templates-title" data-testid="template-dialog">
+      <h2 id="pipeline-templates-title">{t('templatesTitle')}</h2>
+      <p className={styles.meta}>{t('templatesHelp')}</p>
+      <ul className={styles.templates}>{CRM_PIPELINE_TEMPLATES.map((template) => {
+        const have = board.pipelines.find((p) => p.name === template.name);
+        const retry = templates.phase === 'UNKNOWN' && templates.code === template.code;
+        return <li key={template.code} className={styles.template} data-testid={`template-${template.code}`}>
+          <h3>{t(`template${template.code}` as PipelineKey)}</h3>
+          <ol className={styles.templateStages}>{template.stages.map((stage) => <li key={stage.name} data-color={stage.color} data-terminal={stage.terminalStatus ?? undefined}>
+            <span className={styles.dot} data-color={stage.color} aria-hidden="true"/>{stage.name}</li>)}</ol>
+          {have && !retry
+            ? <button type="button" className={styles.secondary} disabled={busy} onClick={() => { onPipeline?.(have.id); onTemplates?.(false); }}>{t('templateOpen')}</button>
+            : <button type="button" className={styles.primary} disabled={busy || (templates.phase === 'UNKNOWN' && !retry)} onClick={() => onTemplate?.(template.code)}>
+              {busy && templates.code === template.code ? t('templateWorking') : retry ? t('retry') : t('templateUse')}</button>}
+        </li>;
+      })}</ul>
+      {message ? <p className={styles.error} role="alert">{t(message)}</p> : null}
+      <div className={styles.inline}><button type="button" className={styles.secondary} disabled={busy} onClick={() => onTemplates?.(false)}>{t('cancel')}</button></div>
     </div>
   </div>;
 }

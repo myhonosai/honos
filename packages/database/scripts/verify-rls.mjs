@@ -141,6 +141,7 @@ const expectedRlsTables = [
   'missed_calls',
   'school_twilio_accounts',
   'school_number_orders',
+  'school_a2p_registrations',
   'creative_provider_daily_limits',
   'creative_school_daily_caps',
   'creative_limit_commands',
