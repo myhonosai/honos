@@ -8,6 +8,7 @@ import { SCHOOL_SHELL_EVERYDAY, SCHOOL_SHELL_MOBILE, SCHOOL_SHELL_NAV, SCHOOL_SH
 import { shellText, type ShellKey } from './copy';
 import { ShellIcon } from './icons';
 import { HonOrb } from '../hon-command/hon-orb';
+import { ShellHonCorner } from './hon-corner';
 import { SCHOOL_TOUR_STEPS, SchoolTourDialog } from './tour';
 import { tourCopy } from './tour-copy';
 import { SignOutButton } from '../auth/sign-out-button';
@@ -48,7 +49,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
   // Owner direction 2026-11-06: Classic keeps the left sidebar, Modern a top navigation bar with a
   // Menu panel, Big Button large cards. Presentation only; every link is the same closed catalog.
   const sidebar = mode === 'classic';
-  // HON waits in the corner on every page except where it is already the main content.
+  // HON waits in the corner on every page except where it is already the main content; it opens as a pop-up over the page.
   const honHere = path === '/staff/dashboard' || path === '/staff/hon' || path.startsWith('/staff/hon/');
 
   // The Menu panel is modal: everything behind it is inert, so keyboard focus stays inside it.
@@ -149,8 +150,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
         <span>{demoCopy(language).banner}</span>{path === '/staff/settings/demo-data' ? null : <a href="/staff/settings/demo-data">{demoCopy(language).bannerLink}</a>}</p> : null}
       <div id="hon-main" tabIndex={-1} className={styles.main}>{children}</div>
     </div>
-    {!honHere && <a inert={modal} className={styles.honLauncher} href="/staff/hon" aria-label={t('askHon')} title={t('honLauncher')}>
-      <img src="/ai/hon-core.webp" alt="" width={44} height={44} /><span>{t('askHon')}</span></a>}
+    {!honHere && <ShellHonCorner inert={modal} asleep={asleep} path={path} label={t('askHon')} title={t('honLauncher')} />}
     <nav className={styles.mobileNav} aria-label={t('mobileNav')} inert={modal}>
       {SCHOOL_SHELL_MOBILE.map(key => { const item = SCHOOL_SHELL_NAV.find(candidate => candidate.key === key)!;
         return <a key={key} href={schoolShellHref(item.routes[0]!, verified)} aria-current={active?.key === key ? 'page' : undefined}><ShellIcon name={key} /><span>{t(item.titleKey)}</span></a>; })}

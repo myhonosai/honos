@@ -5156,6 +5156,38 @@ BEGIN
   END LOOP;
 END $$;
 -- End school calls exact verification.
+
+-- Simple invoices exact verification (SI1 0558)
+DO $$ DECLARE f text; t text; safe boolean;
+BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.create_simple_invoice(text,jsonb,text,uuid,uuid)','hon.read_school_invoice_detail(text,uuid)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure
+        AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe simple invoice entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.simple_invoice_detail_json(hon.invoices,boolean)','hon.simple_invoice_can_issue(text)',
+      'hon.simple_invoice_text_ok(jsonb,integer,boolean)','hon.guard_invoice_simple_rows()'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND a.grantee=0) THEN
+      RAISE EXCEPTION 'Unsafe simple invoice helper: %',f; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname IN ('create_simple_invoice','read_school_invoice_detail'))<>2 THEN
+    RAISE EXCEPTION 'Unexpected simple invoice overload'; END IF;
+  FOREACH t IN ARRAY ARRAY['invoice_line_items','invoice_details'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe simple invoice table: %',t; END IF;
+    IF (SELECT count(*) FROM pg_trigger g WHERE g.tgrelid=('hon.'||t)::regclass AND NOT g.tgisinternal AND g.tgenabled='O'
+        AND g.tgfoid='hon.guard_invoice_simple_rows()'::regprocedure)<>2 THEN
+      RAISE EXCEPTION 'Simple invoice guards missing on %',t; END IF;
+  END LOOP;
+END $$;
+-- End simple invoices exact verification.
 -- School voice apps exact verification (0561): one private forced-RLS table, one staff runtime entry point, worker-only
 -- claim/record/key functions and an owner-only guard, all SECURITY DEFINER with the fixed search path.
 DO $$ DECLARE f text;

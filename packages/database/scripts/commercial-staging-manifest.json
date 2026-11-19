@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "37f62ed71b1cb3dc4bbb7f7a55d70ad8358163675b09fd554193e12877d80398",
+  "chainSha256": "533fd6e1f81276396cc11548380e1a62a9adc0ab979dd4ebd8e461078c0f7e48",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -709,6 +709,10 @@
     {
       "file": "0556_school_calls.sql",
       "sha256": "aa8a430ed111153ae4613811fd7184a2e1b5ba27ed6f3bbbd719828226b6c536"
+    },
+    {
+      "file": "0558_simple_invoices.sql",
+      "sha256": "3b42347f51e202714398f01d0bf457723bcafc545a5edd9ec4fbeee6b7d02a82"
     },
     {
       "file": "0561_school_voice_apps.sql",
