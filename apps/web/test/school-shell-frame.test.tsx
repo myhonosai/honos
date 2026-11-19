@@ -145,7 +145,7 @@ describe('school shell frame', () => {
 
   it('marks only the everyday pages for the Modern top bar; the rest stay in the Menu', () => {
     const html = render({ mode: 'modern' });
-    for (const key of ['home', 'classes', 'attendance', 'students', 'crm', 'conversationAi']) expect(html).toMatch(new RegExp(`data-nav="${key}" data-everyday="true"`));
+    for (const key of ['home', 'classes', 'attendance', 'students', 'crm', 'messages']) expect(html).toMatch(new RegExp(`data-nav="${key}" data-everyday="true"`));
     expect(html).toMatch(/data-nav="billing" data-everyday="false"/);
   });
 
