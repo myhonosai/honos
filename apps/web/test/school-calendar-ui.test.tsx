@@ -108,6 +108,9 @@ it('shows only the chosen class names', () => {
   expect(visibleClasses(ready, [])).toHaveLength(2);
   expect(visibleClasses(ready, ['Little tigers']).map((c) => c.name)).toEqual(['Little tigers']);
   expect(visibleClasses({ state: 'LOADING' }, ['Little tigers'])).toEqual([]);
+  // A chosen name with no class in this range (e.g. after moving to another week) shows every class, as the menu says.
+  expect(visibleClasses(ready, ['Karate'])).toHaveLength(2);
+  expect(visibleClasses(ready, ['Karate', 'Little tigers']).map((c) => c.name)).toEqual(['Little tigers']);
 });
 
 it('offers booking in place from the roster panel when the calendar asks, and never for a cancelled class', () => {

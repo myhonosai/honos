@@ -84,9 +84,10 @@ function Notices({ classes, events, t }: CalendarViewProps & { t: T }): React.Re
 /** The classes shown: all, or only those whose name is chosen. */
 export function visibleClasses(classes: ClassesState, filter: readonly string[] | undefined): readonly CurrentSchoolClassSession[] {
   if (classes.state !== 'READY') return [];
-  if (!filter?.length) return classes.items;
-  const chosen = new Set(filter);
-  return classes.items.filter((s) => chosen.has(s.name));
+  // Only names loaded in this range count, as in the Filter menu: a choice that matches nothing here shows every class,
+  // so the board never goes empty behind a menu that says "All classes".
+  const loaded = new Set(classes.items.map((s) => s.name)), chosen = new Set((filter ?? []).filter((n) => loaded.has(n)));
+  return chosen.size === 0 ? classes.items : classes.items.filter((s) => chosen.has(s.name));
 }
 
 /** A compact Filter menu: one button that says what is shown, and a short checklist of class names under it. */
