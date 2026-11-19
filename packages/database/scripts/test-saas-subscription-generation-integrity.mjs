@@ -83,7 +83,7 @@ try{
  // Snapshot all pre-existing business tables; excludes only explicit synthetic offer/evidence/IAM rows.
  const excluded=[...tables,'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops','saas_requests','saas_audit','saas_outbox','users','principals','hq_operator_grants','principal_role_grants'];
  const domainTables=(await admin.query("SELECT tablename FROM pg_tables WHERE schemaname='hon' AND NOT(tablename=ANY($1::text[])) ORDER BY tablename",[excluded])).rows.map(r=>r.tablename);
- async function snapshot(){const result={};for(const t of domainTables){assert(/^[a-z_]+$/.test(t));result[t]=createHash('sha256').update(JSON.stringify((await admin.query('SELECT to_jsonb(t)::text data FROM hon.'+t+' t ORDER BY 1')).rows)).digest('hex');}return result;}
+ async function snapshot(){const result={};for(const t of domainTables){assert(/^[a-z][a-z0-9_]*$/.test(t));result[t]=createHash('sha256').update(JSON.stringify((await admin.query('SELECT to_jsonb(t)::text data FROM hon.'+t+' t ORDER BY 1')).rows)).digest('hex');}return result;}
  const before=await snapshot();
  async function publish(offers=pricingOffers()){
   const d=await billing.createOfferSetDraft(H('hq'),{basedOnSetId:null,termsReference:'SYNTHETIC_A2_TERMS_V1',founderTotalLimit:50,offers},K());
