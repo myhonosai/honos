@@ -10,7 +10,14 @@ import { HQ_ART, HQ_NAV, HQ_NAV_GROUPS, HQ_VIEWS, hqGroupContains, hqPageLabel, 
 import { HqIcon } from './icon';
 import { SignOutButton } from '../auth/sign-out-button';
 import { HonAssistant } from './assistant';
+import { HqPhone } from '../calls/phone-panel';
 import styles from './hq-modern.module.css';
+
+/** A top-level entry is current on its own page and below it, unless a more specific top-level entry owns that page. */
+export function hqNavCurrent(itemPath: string, path: string): boolean {
+  if (itemPath === '/hq' || path === itemPath) return path === itemPath;
+  return path.startsWith(`${itemPath}/`) && !HQ_NAV.some((other) => other.path.length > itemPath.length && (path === other.path || path.startsWith(`${other.path}/`)));
+}
 
 type AccessState = { kind: 'loading' | 'unauthorized' | 'forbidden' | 'unavailable' } | { kind: 'ready'; overview: HqPlatformOverview };
 type HqContextValue = { overview: HqPlatformOverview; view: HqView; art: HqArt; draft: string; setDraft: (value: string) => void; openAssistant: () => void };
@@ -29,7 +36,7 @@ export function HonCore({ small = false }: { small?: boolean }): React.ReactElem
 }
 
 export function HqModernShell({ children }: { children: ReactNode }): React.ReactElement {
-  const { t,text,number,money,date,formattingLocale } = useLocale();
+  const { t,text,number,money,date,formattingLocale,preferences } = useLocale();
   const path = usePathname();
   useEffect(()=>{document.title=(path==='/hq'?t('Overview'):text(hqPageLabel(path)))+' | HON HQ';},[path,t,text]);
   const [access, setAccess] = useState<AccessState>({ kind: 'loading' });
@@ -91,7 +98,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
     <nav className={styles.navigation} aria-label={t("HQ navigation")}>
       {HQ_NAV.map((item) => {
         const group = HQ_NAV_GROUPS[item.path];
-        if (!group) return <Link key={item.path} href={item.path} onClick={() => setMenu(false)} aria-current={(item.path === '/hq' ? path === item.path : path === item.path || path.startsWith(`${item.path}/`)) ? 'page' : undefined}><HqIcon name={item.icon}/>{text(item.title)}</Link>;
+        if (!group) return <Link key={item.path} href={item.path} onClick={() => setMenu(false)} aria-current={hqNavCurrent(item.path, path) ? 'page' : undefined}><HqIcon name={item.icon}/>{text(item.title)}</Link>;
         const links = [...(group.overview ? [group.overview] : []), ...group.children];
         return <details className={styles.growthNav} key={`${group.key}:${hqGroupContains(group, path)}`} open={hqGroupContains(group, path)} data-hq-nav-group={group.key}>
           <summary><HqIcon name={group.icon}/><span>{text(group.title)}</span></summary>
@@ -112,6 +119,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
       <header className={styles.topbar}>
         <button ref={menuButton} type="button" className={styles.menuButton} aria-label={t("Open HQ navigation")} aria-expanded={menu} onClick={() => setMenu(true)}><HqIcon name="menu"/></button>
         <div><p className={styles.eyebrow}>HON HQ / {path === '/hq' ? t("Company command center") : text(hqPageLabel(path))}</p><h1>{path === '/hq' ? t("Your company. In command.") : text(hqPageLabel(path))}</h1><p className={styles.subtitle}>{path === '/hq' ? t("One workspace for HON and your executive team.") : t("Your company. One governed workspace.")}</p></div>
+        {access.kind === 'ready' && <HqPhone language={preferences.language}/>}
         <span className={styles.ownerAvatar} title={t("Company control plane")} aria-label={t("HQ workspace")}>{t("HQ")}</span>
       </header>
       <section className={styles.appearance} data-hq-appearance aria-label={t("HQ appearance")}>

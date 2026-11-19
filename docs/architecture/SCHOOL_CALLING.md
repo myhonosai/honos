@@ -4,8 +4,8 @@ Status: spec 2026-11-19. Owner ask (David, 2026-11-19 05:15Z): "I want HON OS an
 same number as the text number." Clarification 05:16Z: understand GoHighLevel's phone features, but do not copy it;
 make HON's version easier to use and focused on martial arts schools.
 
-Migrations (coordinator): **CL1 = 0556** (call log, voicemail, calling settings), **CL2 = 0560** (per-school voice
-credentials), **CL5 = 0561** (HQ calling). Nothing here buys anything, places a real call or turns on a provider:
+Migrations (coordinator): **CL1 = 0556** (call log, voicemail, calling settings), **CL2 = 0561** (per-school voice
+credentials), **CL5 = 0562** (HQ calling). Nothing here buys anything, places a real call or turns on a provider:
 every real Twilio voice action is behind `HON_VOICE_CALLS_APPROVED=true` (unset everywhere) and David's OK. All
 tests run against a fake Twilio voice client and a fake browser phone.
 
@@ -58,7 +58,7 @@ school's ACTIVE sender.
 
 ## 4. How a call works (Twilio Voice, browser)
 
-- **Credentials (CL2, 0560)**: per school subaccount, HON creates an API key (`SK…`, secret sealed with the 0351 vault,
+- **Credentials (CL2, 0561)**: per school subaccount, HON creates an API key (`SK…`, secret sealed with the 0351 vault,
   own label) and a TwiML App (`AP…`) whose Voice URL is HON's fixed `/v1/communications/webhooks/twilio/client-voice`.
   Created by a worker only with `HON_VOICE_CALLS_APPROVED=true` and an ACTIVE subaccount. HQ uses the parent account's
   key and app from environment settings.
@@ -133,15 +133,26 @@ token endpoint answers `CALLING_NOT_AVAILABLE`, the Calls page shows "Calling is
 working screen), incoming calls keep 0249 behaviour. The fake Twilio voice client and fake browser phone work only in
 test/local environments (same production refusal as the 0243 fake provider).
 
+Workers and deploy notes (CL3c): two in-process loops run only when `HON_COMMUNICATION_WORKER_DATABASE_URL` and their
+interval (60-86400 seconds) are set. `HON_SCHOOL_VOICE_APP_INTERVAL_SECONDS` runs voice setup (find-or-create the TwiML
+App `hon-voice-<schoolId>` on the school's ACTIVE subaccount, create an API key, seal its secret; claim 300 s, a lost
+answer leaves the claim to expire and the next run makes a fresh key). It needs `HON_VOICE_CALLS_APPROVED=true`,
+`HON_PUBLIC_API_ORIGIN`, the parent Twilio credentials and the voice key vault. `HON_SCHOOL_CALL_RETENTION_INTERVAL_SECONDS`
+deletes recordings and voicemail after 90 days: Twilio first, then the exact SID is marked deleted (already gone at
+Twilio counts as deleted; any failure is retried next run). Playback is `GET .../calls/{callId}/recording`: the database
+authorizes and audits every play (`open_school_call_recording`), audio is streamed with `no-store`, nothing is cached
+on HON, and the player loads nothing until play is pressed. If a Content-Security-Policy is added to the web app later,
+the browser phone needs Twilio's Voice SDK hosts (`*.twilio.com` media/signalling over wss) allowed.
+
 ## 8. Pieces (small PRs, tests first)
 
 | PR | Contents | Migration |
 | --- | --- | --- |
 | CL1 | Records + definer functions (§5): settings, ring-me, start outgoing, record incoming/status/voicemail, call log + voicemail reads, outcome/note, do-not-call, heard; permissions; DB proof | 0556 |
-| CL2 | Voice credentials: sealed API key + TwiML App per subaccount, worker (switch-gated), token minting; fake Twilio voice client | 0560 |
+| CL2 | Voice credentials: sealed API key + TwiML App per subaccount, worker (switch-gated), token minting; fake Twilio voice client | 0561 |
 | CL3a | API: phone token, start call, log/voicemail/settings endpoints, webhooks (client-voice, call-status, dial-result, recording-status), 0249 voice webhook routing to browsers + voicemail, recording playback proxy | none |
 | CL4 | Web: top-bar Call button + dialer panel, incoming banner, after-call card, Calls page (log / voicemail / settings), contact Call button, `CallButton` for Texts; fake phone for tests and screenshots | none |
-| CL5 | HQ calling on the HQ number (parent account), HQ Calls page | 0561 |
+| CL5 | HQ calling on the HQ number (parent account), HQ Calls page | 0562 |
 | Later | Transcription, voicemail drop, IVR, round robin, transfers, cost lines (with T4) | — |
 
 Each PR: unit tests + DB proof (tenant isolation, permission, idempotency, status ordering, toll-fraud checks), web
@@ -156,3 +167,26 @@ independent review, squash on GO + green CI (standing approval). No deploy.
 - No secrets, numbers or names in logs; call SIDs only.
 - Calling stops (new calls refused, tokens not issued) when the school is suspended, the entitlement lapses, the sender
   is disabled or calling is off; calls in progress end naturally.
+
+## 10. HQ calling (CL5, 0562)
+
+HON HQ calls and takes calls on the **HQ texting number** (the ACTIVE `hq_communication_senders` SMS row's reply number),
+which lives on HON's **parent** Twilio account, not a school subaccount.
+
+- **Who:** any HQ person holding an HQ messaging purpose may call, answer, see the HQ call log and set their own Ring me.
+  Only the HQ owner switches HQ calling on and sets the voicemail greeting. Every read and command is one fixed definer
+  function that re-proves the HQ actor (`require_hq_communication_actor`); the API never decides.
+- **Not recorded.** HQ calls are never recorded. Only voicemail is kept, for 90 days, then deleted at Twilio first and
+  marked deleted (same retention worker). Each voicemail listen is audited in `hq_call_events` (HQ evidence has no school).
+- **Contacts:** a number links to a person only through a CONFIRMED `hq_contact_phones` row; the log shows which schools
+  that person owns. A withheld caller is stored with no number.
+- **Browser phone:** identity `h` + principal hex. The voice app worker creates the TwiML App `hon-voice-hq` and an API key
+  on the parent account; the key is sealed to the fixed HQ binding id, so a school key never opens as HQ and back.
+- **Webhooks:** `/v1/communications/webhooks/twilio/hq/*`, signed by the parent account only (a subaccount signature is
+  refused). The number dialled always comes from the stored HQ call row.
+- **API:** `/v1/hq/calls` (overview, log, settings, ring-me, start with a uuid Idempotency-Key, after-call card,
+  do-not-call, voicemail playback, phone token). **Web:** HQ › Calls (`/hq/communications/calls`) and the HQ top-bar phone.
+
+**Before anyone can use it (owner steps, not done):** set the HQ number's Voice URL in Twilio to
+`<public API origin>/v1/communications/webhooks/twilio/hq/voice`; set `HON_VOICE_CALLS_APPROVED=true` (paid calling);
+check Twilio Voice geographic permissions (US/Canada only); the HQ owner turns HQ calling on.

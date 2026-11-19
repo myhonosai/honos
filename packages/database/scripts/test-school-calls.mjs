@@ -90,7 +90,7 @@ try {
   const staffEntry = ['read_school_calling', 'set_school_calling_settings', 'set_my_school_call_ringing', 'start_school_call', 'read_school_calls', 'update_school_call', 'set_school_do_not_call', 'open_school_call_recording'];
   const workerEntry = ['connect_school_client_call', 'route_school_incoming_call', 'record_school_call_status', 'record_school_call_recording', 'read_school_call_recordings_due', 'mark_school_call_recording_deleted'];
   const fns = await q("SELECT p.oid,p.proname,p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.oid>=(SELECT oid FROM pg_proc WHERE proname='school_call_rank')");
-  const ours = fns.filter((f) => /call|calling/.test(f.proname));
+  const ours = fns.filter((f) => /call|calling/.test(f.proname) && !/(^|_)hq_/.test(f.proname));
   assert.equal(ours.length, 27, ours.map((f) => f.proname).join());
   for (const f of ours) {
     assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok", [runtime.username, f.oid]))[0].ok, staffEntry.includes(f.proname), 'runtime ' + f.proname);
