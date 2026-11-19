@@ -132,6 +132,7 @@ const expectedRlsTables = [
   'class_sessions',
   'class_templates',
   'communication_consents',
+  'communication_consent_captures',
   'communication_messages',
   'communication_deliveries',
   'communication_delivery_events',
