@@ -20,6 +20,8 @@ export interface ShopifyWorkerStore {
   claim(): Promise<unknown>;
   rotate(input: object): Promise<unknown>;
   page(input: object): Promise<unknown>;
+  /** SH-F1 (0544): the Shopify Payments snapshot a leased run read. */
+  finance(input: object): Promise<unknown>;
   finish(input: object): Promise<unknown>;
   /** 0470: deletes up to 2,000 mirrored orders placed more than 60 days ago (any store) and their lines. */
   purgeExpiredOrders(): Promise<{ orders: number; lines: number; more: boolean }>;
@@ -30,6 +32,7 @@ const SQL = {
   claim: 'SELECT hon.claim_shopify_background_sync() AS data',
   rotate: 'SELECT hon.rotate_shopify_background_credential($1::jsonb) AS data',
   page: 'SELECT hon.record_shopify_background_page($1::jsonb) AS data',
+  finance: 'SELECT hon.record_shopify_background_finance($1::jsonb) AS data',
   finish: 'SELECT hon.finish_shopify_background_sync($1::jsonb) AS data',
   purge: 'SELECT hon.purge_expired_shopify_orders() AS data',
 } as const;
@@ -48,6 +51,7 @@ export class ShopifyWorkerSql implements ShopifyWorkerStore {
   claim() { return this.one(SQL.claim, []); }
   rotate(input: object) { return this.one(SQL.rotate, [JSON.stringify(input)]); }
   page(input: object) { return this.one(SQL.page, [JSON.stringify(input)]); }
+  finance(input: object) { return this.one(SQL.finance, [JSON.stringify(input)]); }
   finish(input: object) { return this.one(SQL.finish, [JSON.stringify(input)]); }
   async purgeExpiredOrders() {
     const r = await this.one(SQL.purge, []) as { orders?: unknown; lines?: unknown; more?: unknown } | null;
@@ -131,6 +135,7 @@ export class ShopifyBackgroundSync {
         const done = await runShopifySync(app, this.now, b, {
           rotate: body => this.store.rotate({ ...lease, ...body }),
           page: body => this.store.page({ ...lease, ...body }),
+          finance: body => this.store.finance({ ...lease, ...body }),
           finish: async (outcome, failureCode) => {
             const r = await this.store.finish({ ...lease, outcome, failureCode }) as ShopifyFinished | null;
             if (!r || r.syncId !== b.syncId || r.outcome !== outcome) throw new Error('SHOPIFY_WORKER_ANSWER_INVALID');

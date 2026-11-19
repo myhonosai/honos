@@ -4,7 +4,7 @@ import {
 } from '@nestjs/common';
 import { configuredPublicOrigin } from '@hon/auth';
 import {
-  SHOPIFY_EDIT_SCOPES, SHOPIFY_RETURN_PATH, validateShopifyChangeCommandInput, validateShopifyProposeInput, verifyShopifyChangeResult,
+  SHOPIFY_EDIT_SCOPES, SHOPIFY_FINANCE_SCOPES, SHOPIFY_RETURN_PATH, verifyShopifyFinanceSnapshot, verifyShopifyFinanceView, type ShopifyFinanceView, validateShopifyChangeCommandInput, validateShopifyProposeInput, verifyShopifyChangeResult,
   verifyShopifyProductChange, verifyShopifyProductChanges, type ShopifyChangeResult, type ShopifyProductChanges, validateShopifyCompleteInput, validateShopifyConnectInput, validateShopifyDisconnectInput, validateShopifySyncInput,
   verifyShopifyCatalog, verifyShopifyConnectResult, verifyShopifyConnectStart, verifyShopifyDisconnectResult, verifyShopifyOrders, verifyShopifyOverview,
   verifyShopifySyncResult,
@@ -115,6 +115,14 @@ export class ShopifyService {
     return out;
   }
 
+  /** SH-F1 (commerce.shopify.manage): the latest Shopify Payments snapshot and whether the store allowed finance. */
+  async finance(req: HonRequest, schoolId: unknown): Promise<ShopifyFinanceView> {
+    const school = this.school(schoolId);
+    const out = this.checked(verifyShopifyFinanceView, await this.call('finance', [this.subject(req), school]));
+    if (out.schoolId !== school) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
+    return out;
+  }
+
   async catalog(req: HonRequest, schoolId: unknown): Promise<ShopifyCatalog> {
     const school = this.school(schoolId);
     const out = this.checked(verifyShopifyCatalog, await this.call('catalog', [this.subject(req), school]));
@@ -138,8 +146,8 @@ export class ShopifyService {
     const r = raw as { shopDomain?: unknown; expiresAt?: unknown } | null;
     if (!r || r.shopDomain !== input.shopDomain) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
     const redirectUri = origin + SHOPIFY_RETURN_PATH;
-    // Allow editing (SH4a) asks for the edit scopes too; connecting alone stays read-only.
-    const scopes = input.allowEditing ? [...app.scopes, ...SHOPIFY_EDIT_SCOPES] : app.scopes;
+    // Allow editing (SH4a) and Allow finance (SH-F1) ask for their scopes too; connecting alone stays read-only.
+    const scopes = [...app.scopes, ...(input.allowEditing ? SHOPIFY_EDIT_SCOPES : []), ...(input.allowFinance ? SHOPIFY_FINANCE_SCOPES : [])];
     const authorizeUrl = app.fake
       ? `${redirectUri}?${app.fake.approve(input.shopDomain, state, undefined, scopes)}`
       : shopifyAuthorizeUrl({ shop: input.shopDomain, clientId: app.clientId, scopes, redirectUri, state });
@@ -237,6 +245,7 @@ export class ShopifyService {
     return runShopifySync(app, this.now, b, {
       rotate: body => this.call('rotate', [subject, JSON.stringify({ schoolId, syncId: b.syncId, ...body })]),
       page: body => this.call('page', [subject, JSON.stringify({ schoolId, syncId: b.syncId, ...body })]),
+      finance: body => this.call('recordFinance', [subject, JSON.stringify({ schoolId, syncId: b.syncId, finance: verifyShopifyFinanceSnapshot(body.finance) })]),
       finish: async (outcome, failureCode) => {
         const raw = await this.call('finishSync', [subject, JSON.stringify({ schoolId, syncId: b.syncId, outcome, failureCode })]);
         const { syncId, ...rest } = (raw ?? {}) as Record<string, unknown>;

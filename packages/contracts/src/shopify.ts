@@ -11,6 +11,8 @@ export const SHOPIFY_RETURN_PATH = '/staff/billing/shopify/return' as const;
 export const SHOPIFY_SCOPES = ['read_products', 'read_inventory', 'read_orders'] as const;
 /** SH4a: asked for only when the owner presses Allow editing. write_products edits products; write_inventory edits unit costs. */
 export const SHOPIFY_EDIT_SCOPES = ['write_products', 'write_inventory'] as const;
+/** SH-F1: asked for only when the owner presses Allow finance. Reads the Shopify Payments balance, payouts and balance transactions. */
+export const SHOPIFY_FINANCE_SCOPES = ['read_shopify_payments_accounts'] as const;
 export const SHOPIFY_LOW_STOCK_AT = 3;
 export const SHOPIFY_CONNECTION_STATUSES = ['CONNECTED', 'NEEDS_RECONNECT', 'DISCONNECTED'] as const;
 export type ShopifyConnectionStatus = typeof SHOPIFY_CONNECTION_STATUSES[number];
@@ -68,14 +70,16 @@ function shop(v: unknown, response = true): string { if (typeof v !== 'string' |
 
 // ---- Inputs from the browser (closed; the API and the database check again) ----
 
-/** allowEditing (SH4a): also ask Shopify for the edit scopes. Absent means false. */
-export interface ShopifyConnectInput { schoolId: string; shopDomain: string; allowEditing: boolean }
+/** allowEditing (SH4a): also ask Shopify for the edit scopes. allowFinance (SH-F1): also ask for the finance scope. Absent means false. */
+export interface ShopifyConnectInput { schoolId: string; shopDomain: string; allowEditing: boolean; allowFinance: boolean }
 export function validateShopifyConnectInput(v: unknown): ShopifyConnectInput {
-  const editing = !!v && typeof v === 'object' && !Array.isArray(v) && Object.hasOwn(v, 'allowEditing');
-  const o = closed(v, editing ? ['schoolId', 'shopDomain', 'allowEditing'] : ['schoolId', 'shopDomain'], false);
+  const has = (k: string) => !!v && typeof v === 'object' && !Array.isArray(v) && Object.hasOwn(v, k);
+  const editing = has('allowEditing'), finance = has('allowFinance');
+  const o = closed(v, ['schoolId', 'shopDomain', ...(editing ? ['allowEditing'] : []), ...(finance ? ['allowFinance'] : [])], false);
   const domain = normalizeShopDomain(o.shopDomain);
-  if (!domain || (editing && typeof o.allowEditing !== 'boolean')) fail(false);
-  return Object.freeze({ schoolId: id(o.schoolId, false), shopDomain: domain, allowEditing: editing && o.allowEditing === true });
+  if (!domain || (editing && typeof o.allowEditing !== 'boolean') || (finance && typeof o.allowFinance !== 'boolean')) fail(false);
+  return Object.freeze({ schoolId: id(o.schoolId, false), shopDomain: domain, allowEditing: editing && o.allowEditing === true,
+    allowFinance: finance && o.allowFinance === true });
 }
 /** The raw query string Shopify put on the return URL, without the leading `?`. */
 export interface ShopifyCompleteInput { schoolId: string; query: string }
@@ -360,4 +364,59 @@ export interface ShopifyChangeResult { change: ShopifyProductChange }
 export function verifyShopifyChangeResult(v: unknown): ShopifyChangeResult {
   const o = closed(v, ['change'], true);
   return Object.freeze({ change: verifyShopifyProductChange(o.change) });
+}
+
+// ---- SH-F1 (0544): Shopify Payments balance, payouts and balance transactions (read-only) ----
+
+export const SHOPIFY_PAYOUT_STATUSES = ['SCHEDULED', 'IN_TRANSIT', 'PAID', 'FAILED', 'CANCELED'] as const;
+export type ShopifyPayoutStatus = typeof SHOPIFY_PAYOUT_STATUSES[number];
+export const SHOPIFY_PAYOUT_DIRECTIONS = ['DEPOSIT', 'WITHDRAWAL'] as const;
+export type ShopifyPayoutDirection = typeof SHOPIFY_PAYOUT_DIRECTIONS[number];
+/** Money as Shopify Payments sends it: a decimal string with at most 4 decimals below one billion, which may be negative. */
+export const SHOPIFY_SIGNED_MONEY_TEXT = /^-?(0|[1-9][0-9]{0,8})(\.[0-9]{1,4})?$/;
+function signedMoneyText(v: unknown): string { if (typeof v !== 'string' || !SHOPIFY_SIGNED_MONEY_TEXT.test(v)) fail(true); return v; }
+function unique<T>(list: readonly T[], key: (t: T) => string): readonly T[] { if (new Set(list.map(key)).size !== list.length) fail(true); return Object.freeze(list); }
+
+export interface ShopifyBalance { currency: string; amount: string }
+export interface ShopifyPayout { id: string; status: ShopifyPayoutStatus; direction: ShopifyPayoutDirection; issuedAt: string; currency: string; net: string }
+export interface ShopifyBalanceTransaction {
+  id: string; type: string; at: string; currency: string; amount: string; fee: string; net: string; test: boolean; payoutId: string | null;
+}
+/** One read of Shopify Payments, as the API sends it to the database and the database answers it back. */
+export interface ShopifyFinanceSnapshot {
+  paymentsActive: boolean; balances: readonly ShopifyBalance[]; payouts: readonly ShopifyPayout[]; transactions: readonly ShopifyBalanceTransaction[];
+}
+export function verifyShopifyFinanceSnapshot(v: unknown): ShopifyFinanceSnapshot {
+  const o = closed(v, ['paymentsActive', 'balances', 'payouts', 'transactions'], true);
+  const paymentsActive = bool(o.paymentsActive);
+  const balances = unique(arr(o.balances, 10).map(b => { const x = closed(b, ['currency', 'amount'], true);
+    return Object.freeze({ currency: currency(x.currency), amount: signedMoneyText(x.amount) }); }), b => b.currency);
+  const payouts = unique(arr(o.payouts, 20).map(p => { const x = closed(p, ['id', 'status', 'direction', 'issuedAt', 'currency', 'net'], true);
+    return Object.freeze({ id: shopifyId(x.id), status: oneOf(x.status, SHOPIFY_PAYOUT_STATUSES), direction: oneOf(x.direction, SHOPIFY_PAYOUT_DIRECTIONS),
+      issuedAt: iso(x.issuedAt), currency: currency(x.currency), net: signedMoneyText(x.net) }); }), p => p.id);
+  const transactions = unique(arr(o.transactions, 50).map(t => { const x = closed(t, ['id', 'type', 'at', 'currency', 'amount', 'fee', 'net', 'test', 'payoutId'], true);
+    const type = word(x.type); if (type === null) fail(true);
+    return Object.freeze({ id: shopifyId(x.id), type, at: iso(x.at), currency: currency(x.currency), amount: signedMoneyText(x.amount),
+      fee: signedMoneyText(x.fee), net: signedMoneyText(x.net), test: bool(x.test), payoutId: maybeShopifyId(x.payoutId) }); }), t => t.id);
+  if (!paymentsActive && (balances.length || payouts.length || transactions.length)) fail(true);
+  return Object.freeze({ paymentsActive, balances, payouts, transactions });
+}
+
+/** READ (commerce.shopify.manage). financeAllowed: the store granted the finance scope. finance: the latest snapshot, or null before the first read. */
+export interface ShopifyFinanceView {
+  schoolId: string; connected: boolean; financeAllowed: boolean; currency: string | null;
+  finance: (ShopifyFinanceSnapshot & { readAt: string }) | null;
+}
+export function verifyShopifyFinanceView(v: unknown): ShopifyFinanceView {
+  const o = closed(v, ['schoolId', 'connected', 'financeAllowed', 'currency', 'finance'], true);
+  const connected = bool(o.connected), financeAllowed = bool(o.financeAllowed);
+  if (financeAllowed && !connected) fail(true);
+  let finance: ShopifyFinanceView['finance'] = null;
+  if (o.finance !== null) {
+    if (!connected) fail(true);
+    const f = closed(o.finance, ['paymentsActive', 'balances', 'payouts', 'transactions', 'readAt'], true);
+    const { readAt, ...rest } = f;
+    finance = Object.freeze({ ...verifyShopifyFinanceSnapshot(rest), readAt: iso(readAt) });
+  }
+  return Object.freeze({ schoolId: id(o.schoolId, true), connected, financeAllowed, currency: maybeCurrency(o.currency), finance });
 }

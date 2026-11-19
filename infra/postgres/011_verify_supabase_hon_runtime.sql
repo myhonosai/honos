@@ -5052,3 +5052,43 @@ BEGIN
     RAISE EXCEPTION 'Unsafe demo data rows grant'; END IF;
 END $$;
 -- End walk-in kiosk trial seats exact verification.
+-- Shopify finance exact verification (0544, SH-F1): two runtime entry points and one worker function (definer,
+-- owner-safe, exact bodies); the snapshot table is forced-RLS with no policy and no runtime privilege; every new helper
+-- and the end-of-connection trigger stay closed.
+DO $$ DECLARE f text; t text; w oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_communication_worker');
+  entry text[]:=ARRAY['hon.read_shopify_finance(text,uuid)','hon.record_shopify_finance(text,jsonb)'];
+BEGIN
+  FOR f,t IN SELECT * FROM (VALUES ('hon.read_shopify_finance(text,uuid)','3b71e5deb62e9a4de6689e496d9ab071'),('hon.record_shopify_finance(text,jsonb)','ec69aca61bc28659aedcc3f6df3c32f1'),
+      ('hon.record_shopify_background_finance(jsonb)','cc5d78c2e1ba8c5fbd7b4f805e24af67'),('hon.shopify_apply_finance(hon.shopify_syncs,jsonb)','1bafe76ede8da2415192eb1fdc1b1fd0'),
+      ('hon.shopify_finance_ok(jsonb)','49145981c791aeb25cdd0f4da3c07422'),('hon.shopify_finance_on_end()','aa8d7f4bfa62d3bad802ea885f672aec')) v LOOP
+    IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM t THEN RAISE EXCEPTION 'Shopify finance function body drift: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe Shopify finance entry point: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid='hon.record_shopify_background_finance(jsonb)'::regprocedure
+      AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND NOT has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+        AND (a.is_grantable OR a.grantee IS DISTINCT FROM w))) THEN
+    RAISE EXCEPTION 'Unsafe Shopify finance worker function'; END IF;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='hon' AND p.proname IN ('shopify_finance_on_end','shopify_signed_money_ok','shopify_currency_ok','shopify_finance_ok','shopify_apply_finance') LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe Shopify finance helper: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.shopify_finance'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.shopify_finance'::regclass)
+    OR has_table_privilege('hon_runtime','hon.shopify_finance','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.shopify_finance','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe Shopify finance table'; END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgenabled='O' AND (
+      (tgrelid='hon.shopify_finance'::regclass AND tgname='shopify_finance_no_truncate' AND tgfoid='hon.guard_shopify()'::regprocedure)
+      OR (tgrelid='hon.shopify_connections'::regclass AND tgname='shopify_connection_finance_end' AND tgfoid='hon.shopify_finance_on_end()'::regprocedure))) <> 2 THEN
+    RAISE EXCEPTION 'Shopify finance triggers missing'; END IF;
+END $$;
+-- End Shopify finance exact verification.

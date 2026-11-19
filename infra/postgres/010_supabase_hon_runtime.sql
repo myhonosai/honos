@@ -4455,3 +4455,25 @@ BEGIN
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.read_class_session_seats_taken(uuid) TO hon_runtime; END IF;
 END $$;
+
+-- 0544 Shopify finance (SH-F1): one more private table reached only through two runtime entry points (read the latest
+-- Shopify Payments snapshot, record it during a person's sync); the trigger and helpers are migration-owner only and the
+-- background write is the communication worker's (013).
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_shopify_finance(text,uuid)','hon.record_shopify_finance(text,jsonb)'];
+  helpers text[]:=ARRAY['hon.shopify_finance_on_end()','hon.shopify_signed_money_ok(jsonb)','hon.shopify_currency_ok(jsonb)',
+    'hon.shopify_finance_ok(jsonb)','hon.shopify_apply_finance(hon.shopify_syncs,jsonb)','hon.record_shopify_background_finance(jsonb)'];
+BEGIN
+  IF to_regclass('hon.shopify_finance') IS NULL THEN RAISE EXCEPTION 'Apply migration 0544 first'; END IF;
+  REVOKE ALL ON TABLE hon.shopify_finance FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.shopify_finance FROM %I',r); END LOOP;
+  FOREACH f IN ARRAY helpers||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;

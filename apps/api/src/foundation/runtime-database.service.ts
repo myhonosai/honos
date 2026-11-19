@@ -338,7 +338,7 @@ export type LanguageOperation = keyof typeof LANGUAGE_CALLS;
 export type SchoolOwnershipOperation = 'hqRead'|'setPrimary'|'ownerRead';
 
 export type ShopifyOperation = 'read'|'catalog'|'orders'|'start'|'claim'|'record'|'beginSync'|'rotate'|'page'|'finishSync'|'disconnect'
-  |'changes'|'propose'|'cancelChange'|'approveChange'|'rotateChange'|'recordChange';
+  |'changes'|'propose'|'cancelChange'|'approveChange'|'rotateChange'|'recordChange'|'finance'|'recordFinance';
 
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
@@ -1569,6 +1569,9 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       approveChange: {sql: 'SELECT hon.approve_shopify_product_change($1,$2::jsonb) data',arity:2,readOnly:false},
       rotateChange: {sql: 'SELECT hon.rotate_shopify_change_credential($1,$2::jsonb) data',arity:2,readOnly:false},
       recordChange: {sql: 'SELECT hon.record_shopify_product_change_result($1,$2::jsonb) data',arity:2,readOnly:false},
+      // 0544 SH-F1 Shopify Payments snapshot.
+      finance: {sql: 'SELECT hon.read_shopify_finance($1,$2::uuid) data',arity:2,readOnly:true},
+      recordFinance: {sql: 'SELECT hon.record_shopify_finance($1,$2::jsonb) data',arity:2,readOnly:false},
     } as const;
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('SHOPIFY_UNAVAILABLE');

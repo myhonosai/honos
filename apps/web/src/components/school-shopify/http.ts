@@ -3,7 +3,7 @@ import {
   verifyShopifyCatalog, verifyShopifyConnectResult, verifyShopifyConnectStart, verifyShopifyDisconnectResult, verifyShopifyOrders, verifyShopifyOverview,
   verifyShopifySyncResult, validateShopifyProposeInput, validateShopifyChangeCommandInput, verifyShopifyProductChanges, verifyShopifyChangeResult,
   type ShopifyCatalog, type ShopifyProductChanges, type ShopifyChangeResult, type ShopifyDraftChanges, type ShopifyUpdateChanges, type ShopifyConnectResult, type ShopifyConnectStart, type ShopifyDisconnectResult, type ShopifyOrders, type ShopifyOverview,
-  type ShopifySyncResult,
+  type ShopifySyncResult, type ShopifyFinanceView, verifyShopifyFinanceView,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
@@ -87,8 +87,8 @@ export const shopifyApi = {
     return out;
   },
   /** Starts a connection. The answer is Shopify's approval page (or, in development, HON's own return page). */
-  async connect(schoolId: string, shopDomain: string, signal: AbortSignal, owned: Owned, allowEditing = false): Promise<ShopifyConnectStart> {
-    const body = input(validateShopifyConnectInput, { schoolId: school(schoolId), shopDomain, allowEditing });
+  async connect(schoolId: string, shopDomain: string, signal: AbortSignal, owned: Owned, allowEditing = false, allowFinance = false): Promise<ShopifyConnectStart> {
+    const body = input(validateShopifyConnectInput, { schoolId: school(schoolId), shopDomain, allowEditing, allowFinance });
     const out = await answer('/api/v1/school/shopify/connect', signal, owned, verifyShopifyConnectStart, JSON.stringify(body));
     if (out.shopDomain !== body.shopDomain) throw new ShopifyError('UNKNOWN');
     const url = new URL(out.authorizeUrl);
@@ -108,6 +108,13 @@ export const shopifyApi = {
     const body = input(validateShopifyDisconnectInput, { schoolId: school(schoolId), connectionId, expectedVersion });
     const out = await answer('/api/v1/school/shopify/disconnect', signal, owned, verifyShopifyDisconnectResult, JSON.stringify(body));
     if (out.connection.connectionId.toLowerCase() !== body.connectionId.toLowerCase()) throw new ShopifyError('UNKNOWN');
+    return out;
+  },
+  /** SH-F1 (commerce.shopify.manage): the Shopify Payments balance, payouts and recent balance transactions HON last read. */
+  async finance(schoolId: string, signal: AbortSignal, owned: Owned): Promise<ShopifyFinanceView> {
+    const id = school(schoolId);
+    const out = await answer(`/api/v1/school/schools/${id}/shopify/finance`, signal, owned, verifyShopifyFinanceView);
+    if (out.schoolId.toLowerCase() !== id) throw new ShopifyError('UNKNOWN');
     return out;
   },
   /** SH4a: whether the store lets HON edit, and the latest product changes (open ones first). */

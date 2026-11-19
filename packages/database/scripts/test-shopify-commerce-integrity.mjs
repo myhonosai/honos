@@ -66,7 +66,7 @@ try{
   'begin_shopify_sync','rotate_shopify_credential','record_shopify_sync_page','finish_shopify_sync','disconnect_shopify',
   // 0496 product changes (SH4a).
   'read_shopify_product_changes','propose_shopify_product_change','cancel_shopify_product_change','approve_shopify_product_change',
-  'rotate_shopify_change_credential','record_shopify_product_change_result'];
+  'rotate_shopify_change_credential','record_shopify_product_change_result','read_shopify_finance','record_shopify_finance'];
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE '%shopify%')");
  for(const e of entries)assert(fns.some(f=>f.proname===e),e);
  for(const f of fns){assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entries.includes(f.proname),f.proname);
