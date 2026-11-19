@@ -130,6 +130,14 @@
 @media (prefers-reduced-motion: no-preference) { .panel { animation: hon-slide .2s ease-out; } }
 @keyframes hon-slide { from { transform: translateX(24px); opacity: .6; } to { transform: none; opacity: 1; } }
 .panel .team { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Corner pop-up (owner 2026-11-19): opened from the corner HON button, floating above it so the page stays in view. */
+.overlay[data-placement="corner"] { align-items: flex-end; padding: 0 20px 20px; box-sizing: border-box; }
+.overlay[data-placement="corner"] .scrim { background: rgba(2, 8, 18, .32); backdrop-filter: none; }
+.panel[data-placement="corner"], .panel[data-placement="corner"][data-variant] { width: min(480px, 100%); height: auto; max-height: min(780px, calc(100vh - 40px)); padding: 16px; border: 1px solid #2c4862; border-radius: 20px; box-shadow: 0 24px 60px rgba(0, 0, 0, .55), 0 0 0 4px rgba(47, 123, 255, .10); transform-origin: bottom right; }
+.panel[data-placement="corner"][data-variant="big-button"] { width: min(560px, 100%); }
+.panel[data-placement="corner"] .team { grid-template-columns: 1fr; }
+@media (prefers-reduced-motion: no-preference) { .panel[data-placement="corner"] { animation: hon-pop .18s ease-out; } }
+@keyframes hon-pop { from { transform: translateY(12px) scale(.97); opacity: .4; } to { transform: none; opacity: 1; } }
 
 /* Persistent launcher */
 .launcher { position: fixed; right: 20px; bottom: 20px; z-index: 900; display: inline-flex; align-items: center; gap: 9px; min-height: 52px; padding: 8px 18px 8px 9px; border: 1px solid #3a7f8a; border-radius: 999px; background: linear-gradient(135deg, #0f3346, #0a1d30); color: #e9fbfa; font: inherit; font-weight: 800; box-shadow: 0 10px 30px rgba(0, 0, 0, .45), 0 0 0 4px rgba(134, 216, 208, .08); cursor: pointer; }
@@ -211,6 +219,8 @@
   .band[data-variant] .bandTeam { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .band[data-variant="classic"] .bandTeam { grid-template-columns: minmax(0, 1fr); }
   .panel { width: 100vw; padding: 16px; border-left: 0; }
+  .overlay[data-placement="corner"] { padding: 0; }
+  .panel[data-placement="corner"], .panel[data-placement="corner"][data-variant] { width: 100vw; height: 100%; max-height: none; border: 0; border-radius: 0; }
   .panel .team { grid-template-columns: 1fr; }
   .workspace .tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .launcher { right: 12px; bottom: 12px; }

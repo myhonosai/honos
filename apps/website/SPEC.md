@@ -46,7 +46,7 @@ Source of truth for every claim: `/mnt/project-files/website/HON_OS_WEBSITE_SUMM
 ## Plan
 
 1. Tests first (`apps/website/test/*.test.mjs`, Node's built-in test runner): content rules above, every `#anchor` resolves, every image exists and has alt text, every link to the app goes to an allowed path through the build placeholder, the build substitutes the app address and the `noindex` guard.
-2. Source: `src/index.html`, `src/styles.css`, `src/site.js`, `src/flow.js` (background animation, honours reduced motion), `src/assets/*.webp` (each photo at full size and 800px wide), `src/favicon.svg`.
+2. Source: `src/index.html`, `src/styles.css`, `src/story.css`, `src/boot.js`, `src/loader.js`, `src/story.js` (scroll story and loading screen, honour reduced motion), `src/site.js`, `src/assets/*.webp` (each picture at full size and a phone size) and `src/assets/story-door-*.mp4` (door film), `src/favicon.svg`.
 3. Build: `scripts/build.mjs` copies `src` to `dist`, replaces `{{APP_URL}}` and `{{ROBOTS}}`, and refuses a non-http(s) app address.
 4. Wire `build` and `test` scripts so the root `pnpm build` / `pnpm test` include the site.
 5. Verify in a real browser at desktop and phone widths, then review and open the PR.
@@ -72,3 +72,24 @@ Owner request (David, 2026-11-17): "we need privacy policy and terms on website"
 - Facts in the text come from the code and architecture docs on `main` (Shopify mirror without customer contact details and `shop/redact` erase; face check-in consent, no stored camera pictures and the template retention rules; Stripe/Square payments; texting STOP/HELP; Meta/Google/Zernio connections; AI features), described as what HON does when the feature is turned on. Nothing claims a certification HON does not have.
 - Tests: the legal pages build with no blanks or banner, a page with a blank shows the banner, link only to built pages, pass the same banned-claims rules, and cover each required topic (Shopify, minors and parental consent, face check-in, AI, payments, texting STOP/HELP, retention, security, subprocessors, school data processing, contact). The app tests check the landing links and the redirect, including a refused bad origin.
 - Out of scope: a click-to-accept step at sign-up (needs David's decision on wording and the final text), translated legal pages, a cookie banner (the site sets no cookies and loads nothing from other hosts), and redeploying the website (David's OK).
+
+## Pricing section redesign (2026-11-19)
+
+Owner request (David, 2026-11-19): rework the pricing section using the patterns in three Mobbin screenshots (a Yearly/Quarterly switch with a "Save 33% on a yearly subscription" line, plan cards with a discount badge and a "Popular" badge, the original price struck through above the discounted price with "per month, billed yearly", a big rounded button, a checklist of features, and a "X has applied a 20% discount on your first year" banner). Use the patterns, not Mobbin's look: keep the site's dark style, Geist type and blue accent.
+
+Prices are the owner-approved ones already on the page. Nothing new is invented; the per-month figures for yearly billing are the yearly price divided by 12.
+
+| Plan | Monthly | Yearly | Yearly, per month |
+| --- | --- | --- | --- |
+| Founder 50 | $199.20 | $1,494 | $124.50 |
+| HON OS | $249 | $2,097 | $174.75 |
+
+- **Switch:** "Yearly" and "Monthly" (HON has no quarterly price). Yearly is selected first, as in the pattern. Under it: "Save up to 37% on a yearly subscription" (Founder 50 yearly vs monthly is 37.5%, HON OS 29.8%; figures are rounded down, never up). Without JavaScript the yearly prices show and nothing breaks.
+- **Struck-through price:** always the standard monthly price, $249, labelled for screen readers as the standard monthly price. The discount badge is the saving against it, rounded down: Founder 50 yearly -50%, monthly -20%; HON OS yearly -29%; HON OS monthly has no strike and no badge.
+- **Badges:** the discount badge, and "Best value" on Founder 50 instead of "Popular". HON has no customers yet, so "Popular" would be a claim we can't back.
+- **Price line:** big per-month price with "per month / billed yearly" (or "billed monthly"), then the yearly total in mono.
+- **Button:** big rounded "Start a new school" to the app's `/account/start` (unchanged link).
+- **Checklist:** the same eight items on both cards, from what the section already says (platform, AI team with no per-message charges, 12,000 studio credits, no HON fee on tuition, 14-day trial with no automatic charge, 30-day money-back guarantee). Top-ups ($30, $60, $120) move to a line under the cards.
+- **Discount banner:** shows the discount that really applies today, Founder 50: 20% off the standard price for the first 50 schools while they stay subscribed. A promo or referral variant ("{name} has applied a {n}% discount on your first year of HON OS") is built into `site.js` but switched off (`OFFER = null`), because no billing path applies promo or referral discounts yet (Champions Club records referrals only). A test keeps it off. Turning it on needs David's decision and a billing path.
+- **Languages:** every new phrase is in the Korean and Spanish dictionaries; the banner variant has its own Korean and Spanish strings in `site.js`.
+- **Out of scope:** live billing, founder billing (B2), checkout, the app's old `/pricing` page, redeploying the site.

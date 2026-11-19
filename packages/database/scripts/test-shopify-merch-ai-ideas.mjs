@@ -1,5 +1,5 @@
 /**
- * CS-M2 (0566): Merch Studio AI ideas on the shared AI text proposal table, through the real API service, the restricted
+ * CS-M2 (0596): Merch Studio AI ideas on the shared AI text proposal table, through the real API service, the restricted
  * runtime role and the S4 spend controls on a fresh disposable AI-0 fixture. The provider is a counted in-process fake:
  * nothing leaves the machine, and fetch is refused. Synthetic names only.
  */
@@ -237,12 +237,12 @@ try {
   pass('gates: Core plan, a store reader, or a manager without Marcus is refused before any row; bad briefs are refused; a disconnected store refuses the start and blocks GATE_CLOSED at the final claim; an HQ pause refuses with no call; schools are isolated');
 
   { const verify = await (await import('node:fs/promises')).readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
-    const section = verify.split('-- Shopify merch AI ideas exact verification (0566)')[1]?.split('-- End Shopify merch AI ideas exact verification.')[0];
-    assert.ok(section, '0566 verify section present');
+    const section = verify.split('-- Shopify merch AI ideas exact verification (0596)')[1]?.split('-- End Shopify merch AI ideas exact verification.')[0];
+    assert.ok(section, '0596 verify section present');
     await admin.query(section.slice(section.indexOf('\nDO $$')).replaceAll('hon_runtime', runtimeRole));
     // The whole canonical verification too: earlier sections (for example 0405's "no shopify_* helper is runtime") still hold.
     await admin.query(verify.replaceAll('hon_runtime', runtimeRole)); }
-  pass('011: the 0566 exact verification (bodies, definer, ACLs, kind row) and the whole canonical 011 pass');
+  pass('011: the 0596 exact verification (bodies, definer, ACLs, kind row) and the whole canonical 011 pass');
   console.log(`CS-M2 merch AI ideas: ${groups} groups passed, ${fake.calls} fake provider calls, 0 network calls`);
 } finally {
   await admin.end().catch(() => {});

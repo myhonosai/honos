@@ -3611,6 +3611,26 @@ DO $$ DECLARE r text; BEGIN
   END LOOP;
   GRANT EXECUTE ON FUNCTION hon.settle_school_number_order_from_hq(text,uuid,text,text,integer) TO hon_runtime;
 END $$;
+-- 0553 school A2P registrations: five runtime entry points (owner request/cancel/read, HQ decide/read), no table
+-- privilege; claim/record are worker-only (013); the owner check, JSON and business helpers and the guard are private.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regclass('hon.school_a2p_registrations') IS NULL THEN RAISE EXCEPTION 'Apply migration 0553 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_a2p_registrations FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_a2p_registrations FROM '||quote_ident(r);
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.require_school_a2p_owner(text)','hon.school_a2p_registration_json(hon.school_a2p_registrations)',
+    'hon.school_a2p_business(jsonb)','hon.guard_school_a2p_registration()',
+    'hon.claim_school_a2p_registrations(integer,integer)','hon.record_school_a2p_progress(uuid,uuid,text,jsonb,text,integer)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.request_school_a2p_registration(text,jsonb,text), hon.cancel_school_a2p_registration(text,uuid,integer),
+    hon.read_school_a2p_registrations(text), hon.decide_school_a2p_registration_from_hq(text,uuid,text,text,integer),
+    hon.read_hq_school_a2p_registrations(text,text) TO hon_runtime;
+END $$;
 -- 0353 AI on HQ access-exception schools under an HQ-owner monthly limit: only the HQ command and read reach the
 -- runtime; the two tables and the decision helpers are internal.
 DO $$ DECLARE r text; f text; BEGIN
@@ -4469,9 +4489,121 @@ DO $$ DECLARE r text; t text; BEGIN
       hon.record_school_website_ai_edit(text,uuid,jsonb), hon.read_school_website_ai_edits(text,uuid), hon.close_school_website_ai_edit(text,uuid,text) TO hon_runtime;
   END IF;
 END $$;
--- 0566 Merch Studio AI ideas: the MERCH_IDEAS kind on the shared AI text proposals; seven runtime entry points, every helper closed.
+
+-- 0556 school calls (CL1): four private forced-RLS tables; eight staff runtime entry points; provider entry points belong to
+-- the communication worker (013); guards and helpers are migration-owner only.
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.read_school_calling(text)','hon.set_school_calling_settings(text,jsonb,uuid,uuid)','hon.set_my_school_call_ringing(text,jsonb)',
+    'hon.start_school_call(text,jsonb,text,uuid,uuid)','hon.read_school_calls(text,jsonb)','hon.update_school_call(text,jsonb,uuid,uuid)',
+    'hon.set_school_do_not_call(text,jsonb)','hon.open_school_call_recording(text,uuid)'];
+  closed text[]:=ARRAY['hon.connect_school_client_call(uuid,text,text,text)','hon.route_school_incoming_call(text,text,text)',
+    'hon.record_school_call_status(text,text,text,text,integer,timestamptz)','hon.record_school_call_recording(text,text,text,integer,boolean)',
+    'hon.read_school_call_recordings_due(integer)','hon.mark_school_call_recording_deleted(uuid,text)',
+    'hon.school_call_rank(text)','hon.guard_school_call()','hon.guard_school_calling_settings()','hon.guard_school_call_staff()','hon.guard_school_do_not_call()','hon.require_school_call_actor(text,boolean)',
+    'hon.school_call_identity(uuid)','hon.school_call_number_ok(text)','hon.school_call_person(uuid,uuid,text)','hon.school_call_account_ok(uuid,text)','hon.expire_school_calls(uuid)',
+    'hon.school_call_json(hon.school_calls)','hon.school_call_audit(hon.school_calls,uuid,text,text,jsonb,text,uuid,uuid)'];
+BEGIN
+  IF to_regprocedure('hon.start_school_call(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0556 first'; END IF;
+  FOREACH f IN ARRAY entry||closed LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['school_calling_settings','school_call_staff','school_calls','school_do_not_call'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
+-- 0558 simple invoices (SI1): two runtime entry points (create, detail read); items and details tables stay private and
+-- every helper stays migration-owner only.
+DO $$ DECLARE f text; r text;
+BEGIN
+  IF to_regprocedure('hon.create_simple_invoice(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0558 first'; END IF;
+  REVOKE ALL ON hon.invoice_line_items, hon.invoice_details FROM PUBLIC;
+  FOREACH f IN ARRAY ARRAY['hon.create_simple_invoice(text,jsonb,text,uuid,uuid)','hon.read_school_invoice_detail(text,uuid)',
+      'hon.simple_invoice_detail_json(hon.invoices,boolean)','hon.simple_invoice_can_issue(text)','hon.simple_invoice_text_ok(jsonb,integer,boolean)',
+      'hon.guard_invoice_simple_rows()'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE format('REVOKE ALL ON hon.invoice_line_items, hon.invoice_details FROM %I',r);
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.create_simple_invoice(text,jsonb,text,uuid,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.read_school_invoice_detail(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0567 calendar cards: three runtime entry points (create, move/resize, card read). The new columns, the roster detachment
+-- table and every helper stay migration-owner only; the runtime keeps no UPDATE on class sessions.
+DO $$ DECLARE r text; f text; col text; BEGIN
+  IF to_regprocedure('hon.read_school_calendar_cards(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0567 first'; END IF;
+  REVOKE ALL ON hon.class_session_roster_detachments FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE format('REVOKE ALL ON hon.class_session_roster_detachments FROM %I',r);
+    FOREACH col IN ARRAY ARRAY['session_kind','lead_instructor_principal_id'] LOOP EXECUTE format('REVOKE ALL (%I) ON hon.class_series FROM %I',col,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.calendar_instructor_ok(uuid,uuid,uuid)','hon.class_series_occurrence_inherit()',
+    'hon.calendar_card_command_finish(text,text,uuid,jsonb,text,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)',
+    'hon.create_calendar_card(text,jsonb,text,uuid,uuid)','hon.move_calendar_card(text,uuid,jsonb,text,uuid,uuid)','hon.read_school_calendar_cards(text,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.create_calendar_card(text,jsonb,text,uuid,uuid),hon.move_calendar_card(text,uuid,jsonb,text,uuid,uuid),
+      hon.read_school_calendar_cards(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;
+-- 0574 automation date triggers: one private scan receipt table and private helpers; the date scan belongs to
+-- hon_automation_worker (014) and is never granted to the runtime.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.scan_automation_schedules(integer)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0574 first'; END IF;
+  REVOKE ALL ON TABLE hon.automation_schedule_scans FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.automation_schedule_scans FROM %I',r); END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.scan_automation_schedules(integer)','hon.automation_date_candidates(hon.automation_workflows,jsonb,date,text)','hon.automation_next_birthday(date,date)','hon.automation_date_subject_open(uuid,uuid,text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+END $$;
+-- 0576 school announcements: private helpers and one private table, four runtime entry points (parent read; staff list, post, take down).
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.withdraw_school_announcement(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0576 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.school_announcement_title_ok(text)','hon.guard_school_announcement()','hon.school_announcement_parent_scope(text)',
+    'hon.require_school_announcements_actor(text)','hon.school_announcement_family_json(hon.school_announcements)','hon.school_announcement_staff_json(hon.school_announcements)',
+    'hon.read_parent_school_announcements(text)','hon.read_school_announcements(text)','hon.publish_school_announcement(text,jsonb,text,uuid,uuid)',
+    'hon.withdraw_school_announcement(text,jsonb,text,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.school_announcements FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.school_announcements FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_parent_school_announcements(text),hon.read_school_announcements(text),
+      hon.publish_school_announcement(text,jsonb,text,uuid,uuid),hon.withdraw_school_announcement(text,jsonb,text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- 0581 parent pro shop: one private scope helper and one runtime entry point (parent read of the school's mirrored Shopify products).
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.read_parent_pro_shop(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0581 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.parent_pro_shop_scope(text)','hon.read_parent_pro_shop(text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_parent_pro_shop(text) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0596 Merch Studio AI ideas: the MERCH_IDEAS kind on the shared AI text proposals; seven runtime entry points, every helper closed.
 DO $$ DECLARE r text; f regprocedure; BEGIN
-  IF to_regprocedure('hon.begin_shopify_merch_ideas(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0566 first'; END IF;
+  IF to_regprocedure('hon.begin_shopify_merch_ideas(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0596 first'; END IF;
   FOREACH f IN ARRAY ARRAY['hon.shopify_merch_kinds()','hon.shopify_merch_styles()','hon.shopify_merch_keys_are(jsonb,text[])','hon.shopify_merch_brief_ok(jsonb)',
     'hon.shopify_merch_ideas_ok(jsonb)','hon.shopify_merch_ai_actor(text)','hon.shopify_merch_ai_reader(text)','hon.shopify_merch_ai_facts(jsonb,uuid)',
     'hon.shopify_merch_ai_view(uuid,uuid)']::regprocedure[] LOOP

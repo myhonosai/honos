@@ -28,7 +28,7 @@ const context=(patch={})=>{const requestId=randomUUID();return{organizationId:id
 const other=context({organizationId:ids.otherOrg,schoolId:ids.otherSchool,principalId:ids.otherPrincipal,externalSubject:otherSubject});
 const check=()=>groups++,status=n=>e=>e?.getStatus?.()===n;
 let tables;
-async function snapshot(excluded=[]){const result={};for(const table of tables){if(excluded.includes(table))continue;assert(/^[a-z_]+$/.test(table));result[table]=(await owner.query(`SELECT md5(coalesce(string_agg(to_jsonb(t)::text,E'\n' ORDER BY to_jsonb(t)::text),'')) hash FROM hon.${table} t`)).rows[0].hash;}return result;}
+async function snapshot(excluded=[]){const result={};for(const table of tables){if(excluded.includes(table))continue;assert(/^[a-z][a-z0-9_]*$/.test(table));result[table]=(await owner.query(`SELECT md5(coalesce(string_agg(to_jsonb(t)::text,E'\n' ORDER BY to_jsonb(t)::text),'')) hash FROM hon.${table} t`)).rows[0].hash;}return result;}
 async function checked(work,allowed=[]){const before=await snapshot();try{const result=await work();operations++;const after=await snapshot();for(const table of tables)if(!allowed.includes(table))assert.equal(after[table],before[table],'Unexpected platform write: '+table);return result;}catch(error){assert.deepEqual(await snapshot(),before,'Denied/failed command wrote platform data');throw error;}}
 const evidence=(c=context(),membership=ids.membership)=>checked(()=>service.acknowledgementEvidence(c,membership));
 const input=e=>({evidenceVersion:e.evidenceVersion,evidenceFingerprint:e.evidenceFingerprint,observedAt:e.signals.observedAt,idempotencyKey:randomUUID()});

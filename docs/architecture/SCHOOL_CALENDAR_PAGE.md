@@ -43,3 +43,12 @@ Owner ask (David, 2026-11-16): "Class roster, schedule, weekly time table, sale 
 4. `school-calendar/view.tsx` and `calendar.tsx`: a pure view plus the state container. `copy.ts` in en/ko/es.
 5. `SchoolSchedulePage` with tabs; route `/staff/schedule`; redirects; catalog and copy; `manus-routes.json`.
 6. Full web test, type check and build, then independent review.
+
+## Update 2026-11-19: Roster wording and a compact Filter menu (owner, David)
+
+Owner ask (2026-11-19): "also need filters and setting for calendar. name change class series to roster".
+
+- **Rename.** Everywhere the school sees it, a repeating weekly class ("class series") is now a **Roster** (ko 로스터, es lista de clase). Code names, API paths, permissions and database objects keep `series`; only wording changes.
+- **No clash.** The list of booked students inside a class's side panel was also called "Roster". It is now **Students** (ko 학생, es alumnos), so "Roster" means one thing.
+- **Filter.** The row of class-name chips becomes one **Filter** button that says what is shown ("All classes", one name, or "N classes") with a count badge. It opens a short checklist of the class names in the loaded range; several can be chosen at once. "Show all" clears it, beside the button and inside the menu. A chosen name that is no longer loaded counts as not chosen. Frontend only; nothing new is read.
+- **Next (separate PRs).** Program and Instructor filters, click-to-create, drag to move and resize (migration 0567); calendar Settings with block-out dates and shareable calendars (0552).

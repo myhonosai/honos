@@ -40,7 +40,7 @@ const currencyOf = (request: string): string | null => {
 };
 
 /**
- * CS-M2 (0566): Marcus writes merch ideas on the live text route (S4 spend controls, per-school ceiling) through the shared
+ * CS-M2 (0596): Marcus writes merch ideas on the live text route (S4 spend controls, per-school ceiling) through the shared
  * AI text proposals (0550). Ideas change nothing: the owner uses one through the SH4a draft form and its approval. Usage
  * evidence is recorded in its own transaction.
  */
