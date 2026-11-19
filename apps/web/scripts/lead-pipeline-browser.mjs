@@ -300,6 +300,20 @@ await check('no leads yet: the empty-board Set up button works the same and a de
   await second.ctx.close();
 });
 
+await check('edit pipeline: drag a stage by its handle to a new place, then save', async () => {
+  reset(); report.commands = [];
+  const { ctx, page } = await open({ width: 1440, height: 960 });
+  await page.getByRole('button', { name: 'Edit pipeline' }).click();
+  const dialog = page.getByTestId('edit-dialog');
+  await dialog.getByLabel('Drag Trial done to reorder').dragTo(dialog.getByTestId('stage-row').nth(0));
+  assert.deepEqual(await dialog.getByLabel('Stage name', { exact: true }).evaluateAll((els) => els.map((e) => e.value)), ['Trial done', 'New lead', 'Contacted', 'Trial booked']);
+  await shot(page, 'pipeline-edit-drag-modern-en');
+  await dialog.getByRole('button', { name: 'Save pipeline' }).click();
+  await page.getByText('Pipeline saved.').waitFor();
+  assert.deepEqual(state.stages.map((s) => s.name), ['Trial done', 'New lead', 'Contacted', 'Trial booked', 'Enrolled', 'Not now']);
+  await ctx.close();
+});
+
 await check('new pipeline from a school template: pick Adult program, the editor opens on it, rename and save; picking it again opens it', async () => {
   reset(); report.commands = [];
   const { ctx, page } = await open({ width: 1440, height: 960 });
