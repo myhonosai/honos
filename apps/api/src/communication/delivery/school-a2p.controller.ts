@@ -15,7 +15,7 @@ import type { SchoolNumberContext } from './school-number.service.js';
 const PERMISSION = 'communication.sender.manage';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/** 0379: the registration list is a same-origin GET; submitting and withdrawing are each their own browser command. */
+/** 0553: the registration list is a same-origin GET; submitting and withdrawing are each their own browser command. */
 @Injectable()
 export class SchoolA2pReadHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'communication.a2p.read';
@@ -29,7 +29,7 @@ export class SchoolA2pCancelHumanUiGuard extends MembershipActivationHumanUiGuar
   protected override readonly command: string = SCHOOL_A2P_CANCEL_COMMAND;
 }
 
-/** T3a (0379): the school owner's A2P registration. Route ids are never authority; the database re-proves the owner. */
+/** T3a (0553): the school owner's A2P registration. Route ids are never authority; the database re-proves the owner. */
 @Controller('organizations/:organizationId/schools/:schoolId/communications/a2p-registrations')
 @UseGuards(HonIdentityGuard)
 export class SchoolA2pController {
@@ -87,7 +87,7 @@ function key(idempotencyKey: string | undefined): string {
   return idempotencyKey;
 }
 
-/** T3a (0379): HQ sees every school's A2P registrations; a human HQ owner approves or rejects each submission. */
+/** T3a (0553): HQ sees every school's A2P registrations; a human HQ owner approves or rejects each submission. */
 @Controller('hq/saas/school-a2p-registrations')
 @UseGuards(HonIdentityGuard)
 export class SchoolA2pHqController {

@@ -1,4 +1,4 @@
-// School A2P 10DLC registrations (0379, docs/architecture/SCHOOL_OWN_SENDERS.md §4.3 step 6-7, §5). A school OWNER
+// School A2P 10DLC registrations (0553, docs/architecture/SCHOOL_OWN_SENDERS.md §4.3 step 6-7, §5). A school OWNER
 // submits the A2P draft they confirmed in the 0190 assistant plus the business facts Twilio registers; a human HON HQ
 // owner approves each submission; the communication worker registers the brand and campaign on the school's own
 // subaccount only behind HON_TWILIO_A2P_SUBMIT_APPROVED. Only an approved campaign switches the school's number on.

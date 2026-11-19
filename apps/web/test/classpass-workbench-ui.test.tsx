@@ -28,9 +28,18 @@ describe('ClassPass verified-scope handoff', () => {
     expect(workbench).toContain('initialScope');
     expect(workbench).not.toMatch(/useEffect|fetch\(|localStorage|sessionStorage|invokeLLM|executeAction/);
     expect(route).toContain("dynamic = 'force-dynamic'");
-    expect(route).toContain('initialScope');
+    expect(route).toContain('ClassPassWorkbenchEntry');
+    expect(route).not.toContain('searchParams');
     expect(route).not.toContain('verifySession');
-    expect(dashboard).toContain('classPassScopeHref');
-    expect(commandCenter).toContain('classPassScopeHref');
+    expect(dashboard).toContain("return '/staff/classpass';");
+    expect(commandCenter).toContain("return '/staff/classpass';");
+  });
+
+  it('opens on the signed-in school with no school ID fields', () => {
+    const html = renderToStaticMarkup(<ClassPassWorkbench shellScope={{ organizationId, schoolId }} />);
+    expect(html).toContain('This uses the school you are signed in to.');
+    expect(html).not.toContain(organizationId); expect(html).not.toContain(schoolId);
+    expect(html).not.toContain('>organizationId<'); expect(html).not.toContain('>schoolId<');
+    expect(renderToStaticMarkup(<ClassPassWorkbench shellScope={null} />)).toContain('Choose your school at the top of the page first.');
   });
 });

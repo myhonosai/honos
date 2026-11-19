@@ -1,4 +1,4 @@
-// 0379 school A2P registrations (docs/architecture/SCHOOL_OWN_SENDERS.md §4.3 step 6-7, T3a): only a live OWNER with
+// 0553 school A2P registrations (docs/architecture/SCHOOL_OWN_SENDERS.md §4.3 step 6-7, T3a): only a live OWNER with
 // communication.sender.manage at an entitled school submits the confirmed draft and business facts; a human HQ owner
 // approves; the worker claims, leases and records each step; an APPROVED campaign on the school's own service switches
 // its sender ACTIVE, and the HQ setter can no longer switch a HON-bought sender on without it; no runtime table access.
@@ -272,7 +272,7 @@ try {
   await expectError('42501', () => admin.query('DELETE FROM hon.school_a2p_registrations WHERE id = $1', [b1.registrationId]), 'a registration is never deleted');
   await expectError('42501', () => admin.query('TRUNCATE hon.school_a2p_registrations'), 'registrations are never truncated');
 
-  // 9. The deployment verifier's 0379 section (infra/postgres/011) passes here with this database's roles.
+  // 9. The deployment verifier's 0553 section (infra/postgres/011) passes here with this database's roles.
   {
     const verify = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
     const start = verify.indexOf('-- School A2P registrations exact verification');

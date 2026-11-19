@@ -111,12 +111,21 @@ BEGIN
 END;
 $$;
 
--- 0379 school A2P registrations: claim approved submissions and record each step (when applied).
+-- 0553 school A2P registrations: claim approved submissions and record each step (when applied).
 DO $$
 BEGIN
   IF to_regprocedure('hon.claim_school_a2p_registrations(integer,integer)') IS NOT NULL THEN
     GRANT EXECUTE ON FUNCTION hon.claim_school_a2p_registrations(integer, integer),
       hon.record_school_a2p_progress(uuid, uuid, text, jsonb, text, integer) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
+-- 0435 school social inbox: signed inbound Zernio messages and comments, when 0435 is applied.
+DO $$
+BEGIN
+  IF to_regprocedure('hon.record_school_social_inbox_event(text,text,text,text,text,text,text,text,text,timestamptz)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.record_school_social_inbox_event(text, text, text, text, text, text, text, text, text, timestamptz) TO hon_communication_worker;
   END IF;
 END;
 $$;
@@ -127,6 +136,45 @@ BEGIN
   IF to_regprocedure('hon.claim_creative_provider_jobs(integer,integer)') IS NOT NULL THEN
     GRANT EXECUTE ON FUNCTION hon.claim_creative_provider_jobs(integer, integer), hon.record_creative_provider_job_poll(uuid, uuid),
       hon.record_creative_provider_job_result(uuid, uuid, jsonb) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
+-- 0449 Shopify: record verified webhook deliveries, and claim, rotate, write and finish background syncs under a lease
+-- (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.claim_shopify_background_sync()') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.record_shopify_webhook(jsonb), hon.claim_shopify_background_sync(),
+      hon.rotate_shopify_background_credential(jsonb), hon.record_shopify_background_page(jsonb),
+      hon.finish_shopify_background_sync(jsonb) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
+-- 0470 Shopify: delete mirrored orders older than 60 days, in bounded batches (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.purge_expired_shopify_orders()') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.purge_expired_shopify_orders() TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
+-- 0364 school conversations: record an inbound non-keyword text into the school's conversation inbox (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.record_inbound_conversation_text(text,text,text,integer,text,timestamptz)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.record_inbound_conversation_text(text, text, text, integer, text, timestamptz) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
+-- 0424 contact message history: the author's subject of the email a lease is sending (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.communication_email_subject(uuid,uuid)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.communication_email_subject(uuid, uuid) TO hon_communication_worker;
   END IF;
 END;
 $$;

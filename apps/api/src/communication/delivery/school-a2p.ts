@@ -5,7 +5,7 @@ import { emitTelemetry } from '../../observability/telemetry.js';
 import { TwilioProvisioningError, type TwilioSubaccountCredential, type TwilioSubaccountStore, type TwilioSubaccountVault } from './twilio-subaccounts.js';
 
 /**
- * T3a (0379, docs/architecture/SCHOOL_OWN_SENDERS.md §4.3 step 6-7, §5): registers a school's A2P 10DLC brand and
+ * T3a (0553, docs/architecture/SCHOOL_OWN_SENDERS.md §4.3 step 6-7, §5): registers a school's A2P 10DLC brand and
  * campaign on the school's own Twilio subaccount. Each step finds the school's existing object before it creates one,
  * so a lost response is found by the next attempt and never doubled (a brand and its vetting are billed per create).
  * Twilio reviews every step; the worker records PENDING and checks again later. Only an approved campaign on the

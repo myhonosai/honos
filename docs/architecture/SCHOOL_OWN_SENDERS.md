@@ -230,7 +230,7 @@ records a per-school count of accepted emails for HQ visibility only; a school's
   (`PROVISIONED_SENDER_LOCKED`) but can still switch it ACTIVE. HQ must not do that before the school's A2P campaign is
   approved; T3 adds the A2P check to that switch.
 
-## 8c. T3a as built (0379)
+## 8c. T3a as built (0553)
 
 - `hon.school_a2p_registrations`: REQUESTED (school OWNER: communication.sender.manage plus a live OWNER role) ->
   SUBMIT_APPROVED or REJECTED (human HQ owner; a rejection needs a reason) -> SUBMITTING (worker lease) -> BRAND_PENDING ->

@@ -48,9 +48,9 @@ describe('bounded Parent Home composition', () => {
     const documents = readFileSync('src/app/parent/documents/page.tsx', 'utf8');
     for (const token of ['loadParentJourney', 'loadParentTestingStatus', 'loadParentBilling', 'loadParentPlannedAbsenceHistory', 'loadParentLibrary', 'HON_INTERFACE_THEMES', 'setJourney({ kind: \'access-lost\'', 'pending.current?.abort()', 'visibilitychange']) expect(component).toContain(token);
     expect(component).not.toMatch(/fetch\(|method:\s*'POST'|Idempotency-Key|X-HON-Human-Command|submitParentTestingInterest|sendMessage|invokeLLM|executeAction|payment provider/i);
-    for (const text of ['cookieValue', 'verifySession', "redirect('/auth/login')", 'force-dynamic', 'index: false', 'follow: false', 'ParentHome']) expect(route).toContain(text);
+    for (const text of ['cookieValue', 'verifySession', "redirect('/auth/login?for=parent')", 'force-dynamic', 'index: false', 'follow: false', 'ParentHome']) expect(route).toContain(text);
     expect(route).not.toContain("redirect('/parent/journey')");
-    for (const text of ['cookieValue', 'verifySession', "redirect('/auth/login')", 'force-dynamic', 'index: false', 'follow: false']) expect(documents).toContain(text);
+    for (const text of ['cookieValue', 'verifySession', "redirect('/auth/login?for=parent')", 'force-dynamic', 'index: false', 'follow: false']) expect(documents).toContain(text);
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
     expect(manifest.routes.filter((item: { path: string }) => item.path === '/parent')).toEqual([{ path: '/parent', title: 'HON | Parent Home' }]);
   });

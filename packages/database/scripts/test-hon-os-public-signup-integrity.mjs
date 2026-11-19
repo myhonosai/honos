@@ -37,7 +37,8 @@ const counts=async()=>Object.fromEntries(await Promise.all(tables.map(async t=>[
 async function denied(work,status,code){const before=await counts();const r=await work();assert.equal(r.status,status,JSON.stringify(r.body));if(code)assert.equal(r.body.code,code,JSON.stringify(r.body));assert.deepEqual(await counts(),before);assert.equal(r.headers['cache-control'],'private, no-store');assert(!JSON.stringify(r.body).match(/external_subject|SQLSTATE|SELECT |hon\./));return r;}
 const setProgram=status=>q("UPDATE hon.hon_os_signup_program SET status=$1,recorded_at=clock_timestamp() WHERE program_id=1",[status]);
 let terms;
-const form=(extra={})=>({ownerName:'Synthetic Owner',schoolName:'Synthetic Dragon Martial Arts',legalName:'Synthetic Dragon LLC',timezone:'America/Los_Angeles',termsVersionId:terms,confirmation:SIGNUP_CONFIRMATION,...extra});
+const form=(extra={})=>({ownerName:'Synthetic Owner',schoolName:'Synthetic Dragon Martial Arts',legalName:'Synthetic Dragon LLC',timezone:'America/Los_Angeles',
+ location:{country:'US',region:'IL',city:'Chicago',postalCode:'60601',addressLine1:null,addressLine2:null},termsVersionId:terms,confirmation:SIGNUP_CONFIRMATION,...extra});
 
 try{
  await Promise.all([admin.connect(),restricted.connect(),blocker.connect()]);
@@ -61,7 +62,7 @@ try{
 
  const module=await Test.createTestingModule({controllers:[HonOsSignupController,HonOsAdmissionHqController],providers:[HonOsSignupService,HonOsSignupHumanGuard,HonOsAdmissionService,HonOsAdmissionHumanGuard,HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
  app=module.createNestApplication({logger:false});app.setGlobalPrefix('v1');await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;
- const excluded=new Set([...tables,'hon_os_signup_program','hq_operator_grants','families','family_access_grants','hon_os_admission_limit_versions','hon_os_admission_refusals']);
+ const excluded=new Set([...tables,'hon_os_signup_program','hq_operator_grants','families','family_access_grants','hon_os_admission_limit_versions','hon_os_admission_refusals','school_locations','school_location_versions']);
  const others=(await q("SELECT tablename FROM pg_tables WHERE schemaname='hon' ORDER BY tablename")).map(r=>r.tablename).filter(t=>!excluded.has(t));
  const snapshot=async()=>{const out={};for(const t of others){assert.match(t,/^[a-z_0-9]+$/);out[t]=hash(JSON.stringify(await q('SELECT to_jsonb(t)::text r FROM hon.'+t+' t ORDER BY 1')));}return out;};const baseline=await snapshot();
 
@@ -77,7 +78,7 @@ try{
  await denied(()=>send('account/sign-up',{identity:person('unverified',false),body:form()}),403,'VERIFIED_EMAIL_REQUIRED');
  await denied(()=>send('account/sign-up',{body:form()}),401);
  for(const patch of [{email:'evil@example.invalid'},{subject:'oidc:other'},{organizationId:K()},{role:'OWNER'},{plan:'COMPLETE'}])await denied(()=>send('account/sign-up',{identity:dana,body:form(patch)}),400);
- for(const patch of [{confirmation:'YES'},{timezone:'Mars/Olympus'},{timezone:'posix/UTC'},{ownerName:''},{schoolName:'x'.repeat(121)},{legalName:'a\tb'}])await denied(()=>send('account/sign-up',{identity:dana,body:form(patch)}),400);
+ for(const patch of [{confirmation:'YES'},{timezone:'Mars/Olympus'},{timezone:'posix/UTC'},{ownerName:''},{schoolName:'x'.repeat(121)},{legalName:'a\tb'},{location:undefined},{location:null},{location:{country:'US',region:null,city:'Chicago',postalCode:null,addressLine1:null,addressLine2:null}}])await denied(()=>send('account/sign-up',{identity:dana,body:form(patch)}),400);
  await denied(()=>send('account/sign-up',{identity:dana,body:form(),headers:{'x-hon-human-command':'school-staff-account'}}),403);
  await denied(()=>send('account/sign-up',{identity:dana,body:form(),headers:{origin:'https://evil.invalid'}}),403);
  await assert.rejects(()=>restricted.query('SELECT hon.register_hon_os_school($1,$2,$3::jsonb,$4)',['manus:'+K(),'x@example.invalid',form(),K()]),e=>e.code==='22023');
@@ -87,7 +88,11 @@ try{
 
  // 4. Happy path: exactly one organization, school, OWNER role and grant; entitlement SUSPENDED; no access, billing or AI.
  const key=K(),before=await counts();
- const reg=ok(await send('account/sign-up',{identity:dana,body:form(),key}));
+ const signed=ok(await send('account/sign-up',{identity:dana,body:form(),key})),reg=signed.registration;
+ // 0392: the address is recorded with the account, and the answer carries the Illinois face check-in notice (information only).
+ assert.deepEqual(Object.keys(signed).sort(),['faceCheckInNotice','location','registration']);
+ assert.equal(signed.location.city,'Chicago');assert.equal(signed.location.version,1);assert.equal(signed.faceCheckInNotice.profile,'US_IL_BIPA');
+ assert.equal(signed.faceCheckInNotice.status,'AVAILABLE_WITH_CONSENT');assert.equal(signed.faceCheckInNotice.reviewStatus,'TEST_ONLY_DRAFT');
  assert.equal(reg.lifecycle,'REGISTERED');assert.equal(reg.schoolName,'Synthetic Dragon Martial Arts');assert.equal(reg.timezone,'America/Los_Angeles');
  assert.equal(reg.accessGranted,false);assert.equal(reg.billingActivated,false);assert.equal(reg.aiCreditsGranted,false);
  const after=await counts();
@@ -107,7 +112,8 @@ try{
  pass('sign-up creates one organization, school (slug from the name), full OWNER role and grant, SUSPENDED entitlement and an immutable registration; the owner holds no capability; no access state, subscription, checkout, allowance or exception');
 
  // 5. Replay, key reuse, second registration.
- assert.deepEqual(ok(await send('account/sign-up',{identity:dana,body:form(),key})),reg);
+ assert.deepEqual(ok(await send('account/sign-up',{identity:dana,body:form(),key})),signed);
+ await denied(()=>send('account/sign-up',{identity:dana,body:form({location:{country:'US',region:'TX',city:'Austin',postalCode:null,addressLine1:null,addressLine2:null}}),key}),409,'SIGNUP_KEY_REUSED');
  await denied(()=>send('account/sign-up',{identity:dana,body:form({schoolName:'Changed'}),key}),409,'SIGNUP_KEY_REUSED');
  await denied(()=>send('account/sign-up',{identity:dana,body:form({schoolName:'Second School'})}),409,'SIGNUP_ALREADY_REGISTERED');
  const mine=ok(await send('account/sign-up',{identity:dana,method:'GET'}));
@@ -150,7 +156,7 @@ try{
  await denied(()=>send('account/sign-up',{identity:mismatch,body:form()}),409,'SIGNUP_REVIEW_REQUIRED');
  // A clean pre-existing identity (signed in before, never granted anything) may register.
  const clean=person('clean');await human(clean,'Synthetic clean');
- const cleanReg=ok(await send('account/sign-up',{identity:clean,body:form({schoolName:'Clean Dojo'})}));assert.equal(cleanReg.lifecycle,'REGISTERED');
+ const cleanReg=ok(await send('account/sign-up',{identity:clean,body:form({schoolName:'Clean Dojo'})})).registration;assert.equal(cleanReg.lifecycle,'REGISTERED');
  assert.equal((await q("SELECT count(*) n FROM hon.principals p JOIN hon.users u ON u.id=p.user_id WHERE u.external_subject=$1",[clean.externalSubject]))[0].n,'1');
  pass('an email already held by another identity goes to review (never merged); HQ, staff and family identities and an email mismatch are refused; a clean existing identity registers without a second principal');
 

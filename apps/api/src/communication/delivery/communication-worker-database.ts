@@ -17,6 +17,8 @@ export interface ClaimedCommunicationDelivery {
   content: string;
   schoolName: string;
   attempt: number;
+  /** 0424: the email subject the author wrote (absent: the adapter's standard subject). */
+  subject?: string | undefined;
   senderAddress?: string | undefined;
   senderServiceId?: string | undefined;
 }
@@ -51,6 +53,9 @@ export interface CommunicationWorkerStore {
   recordReceipt(receipt: VerifiedProviderReceipt): Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNMATCHED'; deliveryStatus: string | null }>;
   recordInboundKeyword?(keyword: { to: string; from: string; keyword: 'STOP' | 'START' | 'HELP'; providerMessageId: string; receivedAt: string }):
     Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNROUTED'; schoolName: string | null; consentsChanged: number }>;
+  /** 0364: a non-keyword text to a school number becomes a message in that school's conversations inbox. */
+  recordInboundConversationText?(text: { to: string; from: string; body: string; mediaCount: number; providerMessageId: string; receivedAt: string }):
+    Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNROUTED' | 'RATE_LIMITED' | 'KEYWORD' | 'EMPTY'; conversationId: string | null }>;
   readMissedCallRoute?(to: string): Promise<{ routed: boolean; forwardPhoneE164: string | null }>;
   recordMissedCall?(call: { to: string; from: string; callSid: string; dialStatus: string; receivedAt: string }):
     Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNROUTED'; textBackStatus: string | null }>;
@@ -63,14 +68,21 @@ export interface CommunicationWorkerStore {
   recordSocialPostResult?(targetId: string, leaseToken: string, outcome: 'PUBLISHED' | 'FAILED' | 'UNKNOWN', providerPostId: string | null):
     Promise<{ status: string; accepted: boolean }>;
   recordSocialPostEvent?(event: ZernioSocialEventRecord): Promise<{ outcome: 'APPLIED' | 'IGNORED' | 'UNMATCHED' | 'REPLAYED' }>;
+  /** 0435 school inbox: record one signed inbound DM or comment. */
+  recordSocialInboxEvent?(event: ZernioInboxEventRecord): Promise<{ outcome: SocialInboxEventOutcome }>;
+}
+export type SocialInboxEventOutcome = 'APPLIED' | 'IGNORED' | 'UNMATCHED' | 'DUPLICATE' | 'REPLAYED';
+export interface ZernioInboxEventRecord {
+  eventId: string; eventType: 'message.received' | 'comment.received'; platform: 'FACEBOOK' | 'INSTAGRAM'; providerAccountId: string;
+  providerConversationId: string; providerMessageId: string; providerPostId: string | null; participantName: string; text: string; occurredAt: string;
 }
 
 export interface ClaimedSocialPostTarget {
-  targetId: string; leaseToken: string; organizationId: string; schoolId: string; platform: 'FACEBOOK' | 'INSTAGRAM';
+  targetId: string; leaseToken: string; organizationId: string; schoolId: string; platform: 'FACEBOOK' | 'INSTAGRAM' | 'GOOGLE_BUSINESS';
   providerAccountId: string; providerProfileId: string | null; text: string; linkUrl: string | null;
 }
 export interface ZernioSocialEventRecord {
-  eventId: string; eventType: 'post.published' | 'post.failed' | 'account.disconnected'; platform: 'FACEBOOK' | 'INSTAGRAM';
+  eventId: string; eventType: 'post.published' | 'post.failed' | 'account.disconnected'; platform: 'FACEBOOK' | 'INSTAGRAM' | 'GOOGLE_BUSINESS';
   providerAccountId: string; providerPostId: string | null;
 }
 
@@ -140,12 +152,14 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
     const rows = await this.query<{
       delivery_id: string; lease_token: string; organization_id: string; school_id: string; message_id: string; channel: DeliverableChannel;
       recipient_address: string; content: string; school_name: string; attempt: number;
-      sender_address: string | null; sender_service_id: string | null;
-    }>('SELECT * FROM hon.claim_communication_deliveries($1::text[], $2, $3)', [channels, limit, leaseSeconds]);
+      sender_address: string | null; sender_service_id: string | null; email_subject: string | null;
+    }>(`SELECT c.*, CASE WHEN c.channel = 'EMAIL' THEN hon.communication_email_subject(c.delivery_id, c.lease_token) END AS email_subject
+      FROM hon.claim_communication_deliveries($1::text[], $2, $3) c`, [channels, limit, leaseSeconds]);
     return rows.map((row) => ({
       deliveryId: row.delivery_id, leaseToken: row.lease_token, organizationId: row.organization_id, schoolId: row.school_id,
       messageId: row.message_id, channel: row.channel, recipientAddress: row.recipient_address, content: row.content,
       schoolName: row.school_name, attempt: row.attempt,
+      ...(row.channel === 'EMAIL' && row.email_subject ? { subject: row.email_subject } : {}),
       ...(row.sender_address ? { senderAddress: row.sender_address } : {}),
       ...(row.sender_service_id ? { senderServiceId: row.sender_service_id } : {}),
     }));
@@ -179,6 +193,14 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
   }
 
   /** 0249: where to forward a call to a school number. */
+  async recordInboundConversationText(text: { to: string; from: string; body: string; mediaCount: number; providerMessageId: string; receivedAt: string }) {
+    const row = (await this.query<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNROUTED' | 'RATE_LIMITED' | 'KEYWORD' | 'EMPTY'; conversation_id: string | null }>(
+      'SELECT * FROM hon.record_inbound_conversation_text($1, $2, $3, $4, $5, $6)',
+      [text.to, text.from, text.body, text.mediaCount, text.providerMessageId, text.receivedAt]))[0];
+    if (!row) throw new Error('COMMUNICATION_INBOUND_CONVERSATION_NOT_RECORDED');
+    return { outcome: row.outcome, conversationId: row.conversation_id };
+  }
+
   async readMissedCallRoute(to: string) {
     const row = (await this.query<{ routed: boolean; forward_phone_e164: string | null }>('SELECT * FROM hon.read_missed_call_route($1)', [to]))[0];
     return { routed: Boolean(row?.routed), forwardPhoneE164: row?.forward_phone_e164 ?? null };
@@ -217,7 +239,7 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
   }
 
   async claimSocialPostTargets(limit: number, leaseSeconds: number): Promise<ClaimedSocialPostTarget[]> {
-    const rows = await this.query<{ target_id: string; lease_token: string; organization_id: string; school_id: string; platform: 'FACEBOOK' | 'INSTAGRAM';
+    const rows = await this.query<{ target_id: string; lease_token: string; organization_id: string; school_id: string; platform: 'FACEBOOK' | 'INSTAGRAM' | 'GOOGLE_BUSINESS';
       provider_account_id: string; provider_profile_id: string | null; body: string; link_url: string | null }>(
       'SELECT * FROM hon.claim_school_social_post_targets($1, $2)', [limit, leaseSeconds]);
     return rows.map((row) => ({ targetId: row.target_id, leaseToken: row.lease_token, organizationId: row.organization_id, schoolId: row.school_id,
@@ -287,7 +309,7 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
     if (!row?.data) throw new Error('NUMBER_PURCHASE_NOT_RECORDED');
     return row.data;
   }
-  /** T3a (0379): approved A2P registrations to submit or check, each under a fresh lease, with the frozen facts. */
+  /** T3a (0553): approved A2P registrations to submit or check, each under a fresh lease, with the frozen facts. */
   async claimSchoolA2pRegistrations(limit: number, leaseSeconds: number): Promise<SchoolA2pClaim[]> {
     const rows = await this.query<{ registration_id: string; lease_token: string; school_id: string; organization_id: string; stage: string; attempt: number;
       outcome_unknown: boolean; account_sid: string; brand_type: SchoolA2pClaim['brandType']; use_case: SchoolA2pClaim['useCase']; draft: SchoolA2pClaim['draft'];
@@ -303,5 +325,12 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
       [result.registrationId, result.leaseToken, result.outcome, JSON.stringify(result.sids), result.failureCode ?? null, result.waitSeconds ?? null]))[0];
     if (!row?.data) throw new Error('A2P_PROGRESS_NOT_RECORDED');
     return row.data;
+
+  async recordSocialInboxEvent(event: ZernioInboxEventRecord) {
+    const row = (await this.query<{ outcome: SocialInboxEventOutcome }>('SELECT * FROM hon.record_school_social_inbox_event($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
+      [event.eventId, event.eventType, event.platform, event.providerAccountId, event.providerConversationId, event.providerMessageId,
+        event.providerPostId, event.participantName, event.text, event.occurredAt]))[0];
+    if (!row) throw new Error('COMMUNICATION_SOCIAL_INBOX_EVENT_NOT_RECORDED');
+    return { outcome: row.outcome };
   }
 }

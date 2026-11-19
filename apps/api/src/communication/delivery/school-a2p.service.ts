@@ -40,7 +40,7 @@ function frozenDraft(draft: { engineVersion: string; answers: unknown; sampleMes
 }
 
 /**
- * T3a (0379): the school owner submits the A2P draft they confirmed, with the business facts for the brand. The API
+ * T3a (0553): the school owner submits the A2P draft they confirmed, with the business facts for the brand. The API
  * regenerates the draft with the 0190 engine from the exact input, refuses it if the digest the owner saw no longer
  * matches or the draft is incomplete, and the database re-proves a live OWNER with communication.sender.manage and an
  * active plan. Submitting sends nothing to Twilio: a human HQ owner approves first, and the worker needs its switch.

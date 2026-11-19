@@ -98,7 +98,7 @@ try{
  for(const[sig,allowed]of [['set_hq_hon_budget(text,jsonb,uuid)',true],['ask_hq_hon(text,jsonb,uuid)',true],['record_hq_hon_result(text,uuid,jsonb)',true],
   ['resolve_hq_hon_turn(text,uuid,jsonb,uuid)',true],['read_hq_hon_conversation(text)',true],['read_hq_hon_agent_performance(text,text)',true],['require_hq_hon_actor(text,boolean)',false],
   ['hq_hon_permission_held(uuid,text)',false],['hq_hon_owner_eligible(uuid)',false],['hq_hon_agent_facts(text,text)',false],['hq_hon_claim(uuid,uuid,text,text)',false],
-  ['hq_hon_lock_period(date)',false],['hq_hon_budget_json(date)',false],['hq_hon_turn_json(hon.hq_hon_turns,uuid)',false],['hq_hon_agent_permission(text)',false],['hq_hon_counts(text[],text[])',false]])
+  ['hq_hon_lock_period(date)',false],['hq_hon_budget_json(date)',false],['hq_hon_turn_json(hon.hq_hon_turns,uuid)',false],['hq_hon_agent_permission(text)',false],['hq_hon_counts(text[],text[])',false],['hq_hon_effective_period(date)',false],['hq_hon_carry_forward(date)',false]])
   assert.equal((await restricted.query("SELECT has_function_privilege(current_user,$1,'EXECUTE') a",['hon.'+sig])).rows[0].a,allowed,sig);
  for(const t of tables)for(const priv of ['SELECT','INSERT','UPDATE','DELETE'])
   assert.equal((await restricted.query('SELECT has_table_privilege(current_user,$1,$2) a',['hon.'+t,priv])).rows[0].a,false,`${t} ${priv}`);
@@ -170,6 +170,17 @@ try{
  await hon.setBudget(H('owner'),budgetIn({periodStart:NEXT,creditCap:500,reason:'Next month plan'}),K());
  assert.deepEqual((await hon.conversation(H('owner'))).budgetHistory.map(h=>[h.periodStart,h.version,h.creditCap,h.previousCap]),[[NEXT,1,500,null],[NOW,2,60,100],[NOW,1,100,null]]);
  assert.deepEqual((await hon.conversation(H('viewer'))).budgetHistory,[],'cap history is the HQ owner\'s');
+ // 0519 ongoing budget: a month with no row of its own shows the latest earlier cap (version null); the first question
+ // of that month records it as a carried-over row and change (here driven directly for a month two ahead).
+ const LATER=month(new Date(),2);
+ const carried=(await admin.query('SELECT hon.hq_hon_budget_json($1::date) b',[LATER])).rows[0].b;
+ assert.deepEqual([carried.periodStart,carried.creditCap,carried.version,carried.availableCredits,carried.setBy.principalId],[LATER,500,null,500,P('owner')],'carried cap shown');
+ assert.equal((await admin.query('SELECT hon.hq_hon_budget_json($1::date) b',['2000-01-01'])).rows[0].b.creditCap,null,'no earlier month = no cap');
+ await admin.query('BEGIN'); await admin.query('SELECT hon.hq_hon_carry_forward($1::date)',[LATER]); await admin.query('SELECT hon.hq_hon_carry_forward($1::date)',[LATER]); await admin.query('COMMIT');
+ assert.deepEqual((await admin.query('SELECT credit_cap c,version v,set_by s FROM hon.hq_hon_budget_periods WHERE period_start=$1',[LATER])).rows,[{c:500,v:1,s:P('owner')}],'one carried row');
+ assert.deepEqual((await admin.query('SELECT version v,credit_cap c,previous_cap p,reason r FROM hon.hq_hon_budget_changes WHERE period_start=$1',[LATER])).rows,
+  [{v:1,c:500,p:null,r:'Carried over from '+NEXT.slice(0,7)}],'carried change recorded once');
+ assert.equal((await admin.query('SELECT hon.hq_hon_budget_json($1::date) b',[LATER])).rows[0].b.version,1,'carried month now has its own version');
 
  // ---------- 3. ask ----------
  for(const bad of [ask({question:''}),ask({question:' padded'}),ask({question:'x'.repeat(2001)}),ask({question:'bell\u0007'}),ask({agentKey:'claire'}),
@@ -185,7 +196,7 @@ try{
  }
  const creativePause=(await row("INSERT INTO hon.ai_spend_pauses(organization_id,spend_class,reason,pause_key,pause_fingerprint,paused_by_principal_id) VALUES(NULL,'CREATIVE_MEDIA','Fixture creative-only pause',$1,'f',$2) RETURNING id",[K(),P('owner')])).id;
  assert.equal(provider.calls.length,0,'no refusal reached the provider');
- assert.deepEqual(await counts(),{...start,b:2,h:3,r:3},'only the budget writes so far');
+ assert.deepEqual(await counts(),{...start,b:3,h:4,r:3},'only the budget writes so far (plus the 0519 carried month)');
 
  // The happy path: the viewer asks; one provider call with the HQ overview as facts.
  const k1=K(),a1=await hon.ask(H('viewer'),ask(),k1);
