@@ -176,8 +176,10 @@ import { SchoolContactsService } from './people/school-contacts.service.js';
 import { SchoolContactAdminController } from './people/school-contact-admin.controller.js';
 import { SchoolContactAdminService } from './people/school-contact-admin.service.js';
 import { SchoolReportsService } from './reports/school-reports.service.js';
-import { MembershipActivationHumanUiGuard, TuitionPaymentRecordHumanUiGuard, TuitionPaymentVoidHumanUiGuard, TuitionReadHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
+import { MembershipActivationHumanUiGuard, SimpleInvoiceCreateHumanUiGuard, TuitionPaymentRecordHumanUiGuard, TuitionPaymentVoidHumanUiGuard, TuitionReadHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { TuitionPaymentController } from './billing/tuition-payment.controller.js';
+import { SimpleInvoiceController } from './billing/simple-invoice.controller.js';
+import { SimpleInvoiceService } from './billing/simple-invoice.service.js';
 import { TuitionPaymentService } from './billing/tuition-payment.service.js';
 import { SchoolPaymentController } from './school-payments/school-payment.controller.js';
 import { SchoolPaymentService } from './school-payments/school-payment.service.js';
@@ -612,6 +614,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolSocialInboxController,
     SchoolSocialAdsController,
     TuitionPaymentController,
+    SimpleInvoiceController,
     SchoolPaymentController,
     SchoolPayMethodController,
     SchoolPayAutopayController,
@@ -897,6 +900,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSeriesFillHumanUiGuard,
     ClassSeriesReadHumanUiGuard,
     TuitionPaymentService,
+    SimpleInvoiceService,
     SchoolPaymentService,
     SchoolPayMethodService,
     SchoolPayAutopayService,
@@ -930,6 +934,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     GuardianChildEnrollmentService, CrmGuardianChildEnrollmentReadHumanUiGuard, CrmGuardianChildPayerDesignationHumanUiGuard, CrmGuardianChildAdditionHumanUiGuard, CrmGuardianChildMembershipDraftFromPlanHumanUiGuard,
     MembershipActivationHumanUiGuard,
     TuitionPaymentRecordHumanUiGuard,
+    SimpleInvoiceCreateHumanUiGuard,
     TuitionPaymentVoidHumanUiGuard,
     TuitionReadHumanUiGuard,
     BillingAccountService,

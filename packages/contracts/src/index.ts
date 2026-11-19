@@ -1106,6 +1106,7 @@ export * from './class-series.js';
 export * from './calendar-cards.js';
 export * from './school-events.js';
 export * from './tuition-payments.js';
+export * from './simple-invoices.js';
 export * from './school-payments.js';
 export * from './school-checkout.js';
 export * from './school-pay-methods.js';
