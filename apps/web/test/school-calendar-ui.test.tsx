@@ -127,7 +127,7 @@ it('is one page with Calendar, Weekly timetable and Sale days & events tabs', ()
   expect(html).toContain('<h1 id="schedule-title">Calendar</h1>');
   expect(order(html, '>Calendar</button>', '>Weekly timetable</button>', '>Sale days &amp; events</button>')).toBe(true);
   expect(html).toMatch(/aria-selected="true"[^>]*>Calendar</);
-  expect(html).toContain('href="/staff/schedule/sessions/create"');
+  expect(html).toContain('data-testid="calendar-add-class"');
   expect(scheduleTabHref('events')).toBe('/staff/schedule?tab=events'); expect(scheduleTabHref('calendar')).toBe('/staff/schedule');
 });
 

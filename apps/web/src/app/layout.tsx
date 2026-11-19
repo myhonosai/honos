@@ -9,7 +9,11 @@ export const metadata: Metadata = {
   title: 'HON | School Operations',
   description: 'The operating system for martial arts schools.',
   icons: {
-    icon: '/manus-storage/async-images/V2i1yOxmOLQ5wsG9Ltutn8/image-1.webp',
+    icon: [
+      { url: '/brand/favicon.svg', type: 'image/svg+xml' },
+      { url: '/brand/favicon.ico', sizes: '16x16 32x32 48x48' },
+    ],
+    apple: '/brand/apple-touch-icon.png',
   },
 };
 

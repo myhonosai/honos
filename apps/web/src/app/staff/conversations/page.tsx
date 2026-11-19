@@ -1,9 +1,7 @@
-import type { Metadata } from 'next';
-import { StaffConversations } from '../../../components/conversations/staff-conversations';
-import { requireVerifiedWebSession } from '../../../server/require-web-session';
+import { redirect } from 'next/navigation';
+import { movedQuery, type SearchParams } from '../../../components/texts/moved-query';
 
-export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'HON | Conversations', referrer: 'no-referrer', robots: { index: false, follow: false } };
-
-/** The conversations API decides every permission for the verified school; this page only asks. */
-export default async function ConversationsPage() { await requireVerifiedWebSession(); return <StaffConversations />; }
+/** The SMS inbox moved to Texts > Conversations (docs/architecture/SCHOOL_TEXTS_AND_EMAIL_PAGES.md); old links land there with their query. */
+export default async function ConversationsMoved({ searchParams }: { searchParams: Promise<SearchParams> }): Promise<never> {
+  redirect(`/staff/texts${movedQuery(await searchParams)}`);
+}
