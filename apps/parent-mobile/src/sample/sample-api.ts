@@ -10,6 +10,7 @@ import { verifyParentSchoolBookingReceipt, verifyParentSchoolBookings, type Pare
 import { verifyParentInvoicePayments } from '@hon/contracts/parent-invoice-pay';
 import { verifyParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
 import { verifyParentProShop } from '@hon/contracts/parent-pro-shop';
+import { verifyParentCheckoutPages } from '@hon/contracts/family-checkout';
 import type { ParentApi } from '../api/client';
 import { localDate, localMidnight } from '../schedule/absence-model';
 
@@ -223,6 +224,18 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
       { productId: '9001', title: 'Sample sparring gloves', imageUrl: null, fromPrice: '39.00', url: 'https://sample-dojo.myshopify.com/products/sample-sparring-gloves' },
       { productId: '9002', title: 'Sample uniform', imageUrl: null, fromPrice: '65.00', url: 'https://sample-dojo.myshopify.com/products/sample-uniform' },
     ] })),
+    // The sample family can fill in a sample page but never orders: the app hides the order button and a press would be refused.
+    checkoutPages: () => ok(verifyParentCheckoutPages({ schoolName: SAMPLE_SCHOOL, canBuy: true, canPay: true, testMode: true, pages: [
+      { checkoutId: id(950), version: 1, group: 'events', title: 'Sample summer camp', description: 'A week of games, forms and sparring.', currency: 'USD', maxParticipants: 2,
+        blocks: [], options: [{ key: 'week', label: 'Full week', description: null, priceMinor: 19900, additionalParticipantMinor: 14900, mostPopular: true, placesLeft: 8 }],
+        addOns: [{ key: 'shirt', label: 'Camp shirt', amountMinor: 1500, required: false }],
+        questions: [{ key: 'size', label: 'Shirt size', kind: 'CHOICE', required: true, options: ['Youth S', 'Youth M', 'Youth L'] }],
+        waiver: 'I agree to the camp safety rules.', thankYou: null },
+    ], children: [{ studentProfileId: id(951), displayName: 'Sample child' }], orders: [] })),
+    orderCheckout: async () => ({ ok: false as const, state: 'refused' as const, code: 'FAMILY_CHECKOUT_NOT_CONFIGURED' }),
+    startCheckoutOrder: async () => ({ ok: false as const, state: 'refused' as const, code: 'FAMILY_CHECKOUT_NOT_CONFIGURED' }),
+    confirmCheckoutOrder: async () => ({ ok: false as const, state: 'refused' as const, code: 'FAMILY_CHECKOUT_NOT_CONFIGURED' }),
+    cancelCheckoutOrder: async () => ({ ok: false as const, state: 'refused' as const, code: 'FAMILY_CHECKOUT_NOT_CONFIGURED' }),
     invoicePayments: () => ok(verifyParentInvoicePayments({ canPay: false, testMode: true, invoices: [] })),
     startInvoicePayment: async () => ({ ok: false as const, state: 'refused' as const, code: 'PARENT_INVOICE_PAY_NOT_CONFIGURED' }),
     confirmInvoicePayment: async () => ({ ok: false as const, state: 'refused' as const, code: 'PARENT_INVOICE_PAY_NOT_CONFIGURED' }),

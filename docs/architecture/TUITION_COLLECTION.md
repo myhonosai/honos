@@ -663,3 +663,28 @@ Stripe (or, later, Square) hosted page, using the shared one-time payment (secti
   expiry and a new page, PROCESSING, the review flag, an unconfigured adapter, SQL refusals, ACL, 011);
   `apps/api/test/parent-invoice-pay.test.cjs`; `apps/parent-mobile/test/invoice-pay-ui.test.tsx` and
   `api-client.test.ts`; 010/011; staging pin 0530.
+
+## 24. Family checkout orders as built (0582, CP3 first slice): a guardian buys from a checkout page in the HON Family app
+
+Owner ask (2026-11-19): "event/checkout pages" in the HON Family app. TEST mode only, through the shared one-time payment
+(§22). HON adds no fee. Not in this slice: MONTHLY options, options tied to a catalog plan (`createsMembership`), promo
+codes (CP4) and public links for people without an account.
+
+| Topic | Rule |
+| --- | --- |
+| Who | The signed-in person's one live family (the 0530 parent scope). Anyone with a grant sees the pages; only a PRIMARY or SECONDARY guardian buys, confirms or cancels. |
+| What is sold | PUBLISHED pages of that school with at least one ONE_TIME option that has no plan, does not create a membership and is still available on the school's today. Only those options are shown. |
+| For whom | 1 to the page's `maxPerOrder` distinct ACTIVE children whose primary family is this family. |
+| Checked by the database | The page and version the parent saw (`FAMILY_CHECKOUT_CHANGED`), the option, every answer against the page's questions (required, choice values, yes/no, text up to 500), known add-ons with every required one, the waiver when the page has one, and places left. |
+| Price | The option price for the first child, plus the extra-child fee (or the full price when the page has none) for each other child, plus each chosen add-on once per order. The app never sends an amount. |
+| Places | PAID orders and OPEN orders whose payment may still be paid count against capacity (0 is no limit), under the page row lock. A canceled or expired order frees its places. |
+| Payment | A free order is PAID at once with no payment. Otherwise the order opens a 0529 `CHECKOUT_PAGE` payment for exactly that amount, valid 30 minutes, on the school's default test-mode connection, shown as the processor's hosted page. The payment id never leaves the API and is read only from the family's own order (0529 caller rule). |
+| Settling | An AFTER UPDATE trigger on `school_pay_once` settles the order in the same transaction, whoever recorded the processor's answer (the parent's confirm or the 0529 sweep). SUCCEEDED for the same amount makes the order PAID; FAILED, EXPIRED or CANCELED makes it CANCELED. A success for an order that is no longer OPEN keeps the success on the payment and is flagged for staff review (`family_checkout.review_needed`). A CHECKOUT_PAGE payment with no order is left alone. Nothing is refunded here. |
+| Replay | Exact request idempotency per guardian and key. Another request under the same key is `IDEMPOTENCY_KEY_REUSED`. |
+| Limits | At most 20 orders per family per rolling day (`FAMILY_CHECKOUT_RATE_LIMITED`, 429). |
+| Staff | Billing > Checkout orders (`school_checkout.manage`): the school's latest 200 orders with family, children, answers, add-ons, waiver, amount and state. Read only. |
+| Storage | `hon.family_checkout_orders`: forced RLS, no runtime table privilege, never deleted or truncated; an order moves once from OPEN to PAID, CANCELED or REVIEW. The waiver is kept as the SHA-256 of the page's waiver text. Recorder principal `00000000-0000-4000-8000-000000000582` (code-owned, no authority). |
+
+API: `GET /v1/parent/checkout-pages`, `POST /v1/parent/checkout-pages/orders` (Idempotency-Key required),
+`POST .../orders/:orderId/start`, `.../confirm` and `.../cancel`; staff `GET /v1/organizations/:org/schools/:school/payments/checkout-pages/orders`.
+App: More > Sign up & pay. Proof: `test-family-checkout-integrity.mjs`.

@@ -341,6 +341,10 @@
       "title": "HON | Checkout pages"
     },
     {
+      "path": "/staff/billing/checkout-orders",
+      "title": "HON | Checkout orders"
+    },
+    {
       "path": "/staff/billing/saved-payment-methods",
       "title": "HON | Saved payment methods"
     },
