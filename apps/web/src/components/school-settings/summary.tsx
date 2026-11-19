@@ -85,7 +85,7 @@ export function SettingsSummaryView({ language, preferences, sources }: { langua
         lines={[{ text: languageName }, { text: `${t('timeZone')}: ${preferences.timeZone}` }, ...(preferences.region === 'auto' ? [{ text: t('regionAuto') }] : [{ text: preferences.region }])]} t={t} />
       <Card id="texts" title={t('texts')} href="/settings/texts-from-hon" panel={sources.texts} lines={textLines} t={t} />
       <Card id="usage" title={t('usage')} href="/staff/account-status" lines={[{ text: t('usageLine') }]} t={t} action="open" />
-      <Card id="automation" title={t('automation')} href="/staff/automation/rules" lines={[{ text: t('automationLine') }]} t={t} action="open" />
+      <Card id="automation" title={t('automation')} href="/staff/automations" lines={[{ text: t('automationLine') }]} t={t} action="open" />
       <Card id="help" title={t('help')} href="/staff/help" lines={[{ text: t('helpLine') }]} t={t} action="open" />
       <Card id="demo-data" title={demoCopy(language).summaryTitle} href="/staff/settings/demo-data" lines={[{ text: demoCopy(language).summaryLine }]} t={t} action="open" />
       <Card id="tour" title={t('tour')} href="/staff/settings?tour=1" lines={[{ text: t('tourLine') }]} t={t} action="start" />
