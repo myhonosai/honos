@@ -1,6 +1,6 @@
 BEGIN;
 
--- Lead board text opt-out (0571, assigned by the coordinator 2026-11-19). Leads board quick actions (PR #517) offer a
+-- Lead board text opt-out (0592, was 0571; renumbered after main reached ceiling 0581; ledger 2026-11-19). Leads board quick actions (PR #517) offer a
 -- Text link that opens the staff member's own phone. A lead whose person has opted out of texts (an SMS consent row
 -- OPTED_OUT: STOP to a school number, 0248, or a staff-recorded opt-out, 0046) must not be offered Text. This replaces
 -- hon.read_crm_pipeline_board (0417, unchanged since) with one added card field, textOptedOut, read from

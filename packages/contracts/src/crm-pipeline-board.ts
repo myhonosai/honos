@@ -19,7 +19,7 @@ export interface CrmBoardLead {
   givenName: string; familyName: string; email: string | null; phoneE164: string | null;
   programInterestCode: string | null; sourceCode: string | null;
   createdAt: string; closedAt: string | null; nextTrialAt: string | null; lastTrialAt: string | null;
-  /** The person has opted out of texts (0571): the board must not offer Text. */
+  /** The person has opted out of texts (0592): the board must not offer Text. */
   textOptedOut: boolean;
 }
 export interface CrmPipelineRef { id: string; name: string; version: number }
