@@ -1121,6 +1121,7 @@ export * from './parent-family-picker.js';
 export * from './parent-school-bookings.js';
 export * from './family-messages.js';
 export * from './school-conversations.js';
+export * from './school-calls.js';
 export * from './conversation-ai.js';
 export * from './contact-message-history.js';
 export * from './school-pay-autopay.js';

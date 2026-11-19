@@ -278,6 +278,8 @@ import { FamilyMessagesInboxController, FamilyMessagesInboxReadGuard, FamilyMess
 import { FamilyMessagesService } from './families/family-messages.service.js';
 import { ConversationCreateLeadGuard, ConversationLinkGuard, ConversationMarkReadGuard, ConversationReadGuard, ConversationReplyGuard, ConversationUpdateGuard, SchoolConversationsController } from './conversations/school-conversations.controller.js';
 import { SchoolConversationsService } from './conversations/school-conversations.service.js';
+import { SchoolCallDoNotCallGuard, SchoolCallReadGuard, SchoolCallRingGuard, SchoolCallSettingsGuard, SchoolCallStartGuard, SchoolCallUpdateGuard, SchoolCallsController } from './calls/school-calls.controller.js';
+import { SchoolCallsService } from './calls/school-calls.service.js';
 import { ContactEmailResendGuard, ContactHistoryReadGuard, ContactMessagesController } from './conversations/contact-messages.controller.js';
 import { ContactMessagesService } from './conversations/contact-messages.service.js';
 import { ConversationAiController, ConversationAiFileGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard, ConversationAiKnowledgeGuard, ConversationAiProgramHqController, ConversationAiReadGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard } from './conversations/conversation-ai.controller.js';
@@ -530,6 +532,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentInvoicePayController,
     FamilyMessagesInboxController,
     SchoolConversationsController,
+    SchoolCallsController,
     ContactMessagesController,
     ConversationAiController,
     ConversationAiProgramHqController,
@@ -724,6 +727,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     FamilyMessagesMarkReadGuard,
     FamilyMessagesReplyGuard,
     SchoolConversationsService,
+    SchoolCallsService,
     ContactMessagesService,
     ContactHistoryReadGuard,
     ContactEmailResendGuard,
@@ -731,6 +735,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ConversationAiProgramService,
     ConversationAiReadGuard, ConversationAiKnowledgeGuard, ConversationAiFileGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard,
     ConversationReadGuard,
+    SchoolCallReadGuard, SchoolCallSettingsGuard, SchoolCallRingGuard, SchoolCallStartGuard, SchoolCallUpdateGuard, SchoolCallDoNotCallGuard,
     ConversationReplyGuard,
     ConversationUpdateGuard,
     ConversationMarkReadGuard,
