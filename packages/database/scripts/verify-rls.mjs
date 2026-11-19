@@ -382,6 +382,8 @@ const expectedRlsTables = [
   'hq_operator_grants',
   'idempotency_records',
   'invoices',
+  'invoice_line_items',
+  'invoice_details',
   'knowledge_articles',
   'lead_import_batches',
   'lead_import_rows',
