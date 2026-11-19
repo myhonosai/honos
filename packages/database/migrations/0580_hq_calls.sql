@@ -1,5 +1,5 @@
 BEGIN;
--- 0562 HQ calling, piece CL5 (allocated by the coordinator 2026-11-19; docs/architecture/SCHOOL_CALLING.md §10).
+-- 0580 HQ calling, piece CL5 (allocated by the coordinator 2026-11-19; docs/architecture/SCHOOL_CALLING.md §10).
 -- HON HQ calls and takes calls on the HQ texting number (the ACTIVE 0281 SMS sender's reply number, on HON's parent
 -- Twilio account): the HQ call log, voicemail, HQ calling settings, which HQ people ring for incoming calls, the HQ
 -- do-not-call list and the HQ browser phone's voice app. This migration places no call and talks to no provider: the API
@@ -24,7 +24,7 @@ DO $$ BEGIN
   IF to_regclass('hon.hq_communication_senders') IS NULL OR to_regclass('hon.hq_contact_phones') IS NULL
     OR to_regprocedure('hon.require_hq_communication_actor(text,text)') IS NULL OR to_regprocedure('hon.school_call_number_ok(text)') IS NULL
     OR to_regclass('hon.school_voice_apps') IS NULL THEN
-    RAISE EXCEPTION 'HQ calls require 0281, 0282, 0556 and 0561';
+    RAISE EXCEPTION 'HQ calls require 0281, 0282, 0556 and 0579';
   END IF;
 END $$;
 
@@ -97,7 +97,7 @@ CREATE TABLE hon.hq_do_not_call (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
--- The HQ browser phone's TwiML App and API key on HON's parent account (same shape and sealing as 0561).
+-- The HQ browser phone's TwiML App and API key on HON's parent account (same shape and sealing as 0579).
 CREATE TABLE hon.hq_voice_app (
   singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
   status text NOT NULL CHECK (status IN ('PENDING','ACTIVE','CLOSED')),

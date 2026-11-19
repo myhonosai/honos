@@ -2,7 +2,7 @@ import { normalizeSchoolCallNumber, schoolCallNumberOk, type SchoolPhoneToken } 
 import { CallsAccessError, CallsRefusal, callAttempt, loadPhoneToken, startCall, type CallsScope } from './http';
 import { loadHqPhoneToken, startHqCall } from './hq-http';
 
-/** Where the phone gets its token and records a call: a school (0556) or HON HQ (0562). Same token shape for both. */
+/** Where the phone gets its token and records a call: a school (0556) or HON HQ (0580). Same token shape for both. */
 export interface PhoneBackend {
   loadToken(): Promise<SchoolPhoneToken>;
   /** Records the call and returns its id; contactId is the school person or the HQ contact the call is for. */
@@ -20,7 +20,7 @@ export const HQ_PHONE_BACKEND: PhoneBackend = {
 };
 
 /**
- * The browser phone (0556/0561, docs/architecture/SCHOOL_CALLING.md §4). It holds a one-hour Twilio Voice token in memory
+ * The browser phone (0556/0579, docs/architecture/SCHOOL_CALLING.md §4). It holds a one-hour Twilio Voice token in memory
  * only, registers for incoming calls only when the server says Ring me is on, and places a call only after the API has
  * recorded it: the device sends just the recorded call id (HonCallId), and the server dials the number stored on that row.
  * The Twilio SDK sits behind VoiceDevice so the controller is tested with a fake and the SDK loads only when needed.

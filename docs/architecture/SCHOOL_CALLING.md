@@ -4,8 +4,8 @@ Status: spec 2026-11-19. Owner ask (David, 2026-11-19 05:15Z): "I want HON OS an
 same number as the text number." Clarification 05:16Z: understand GoHighLevel's phone features, but do not copy it;
 make HON's version easier to use and focused on martial arts schools.
 
-Migrations (coordinator): **CL1 = 0556** (call log, voicemail, calling settings), **CL2 = 0561** (per-school voice
-credentials), **CL5 = 0562** (HQ calling). Nothing here buys anything, places a real call or turns on a provider:
+Migrations (coordinator): **CL1 = 0556** (call log, voicemail, calling settings), **CL2 = 0579** (per-school voice
+credentials), **CL5 = 0580** (HQ calling). Nothing here buys anything, places a real call or turns on a provider:
 every real Twilio voice action is behind `HON_VOICE_CALLS_APPROVED=true` (unset everywhere) and David's OK. All
 tests run against a fake Twilio voice client and a fake browser phone.
 
@@ -58,7 +58,7 @@ school's ACTIVE sender.
 
 ## 4. How a call works (Twilio Voice, browser)
 
-- **Credentials (CL2, 0561)**: per school subaccount, HON creates an API key (`SK…`, secret sealed with the 0351 vault,
+- **Credentials (CL2, 0579)**: per school subaccount, HON creates an API key (`SK…`, secret sealed with the 0351 vault,
   own label) and a TwiML App (`AP…`) whose Voice URL is HON's fixed `/v1/communications/webhooks/twilio/client-voice`.
   Created by a worker only with `HON_VOICE_CALLS_APPROVED=true` and an ACTIVE subaccount. HQ uses the parent account's
   key and app from environment settings.
@@ -149,10 +149,10 @@ the browser phone needs Twilio's Voice SDK hosts (`*.twilio.com` media/signallin
 | PR | Contents | Migration |
 | --- | --- | --- |
 | CL1 | Records + definer functions (§5): settings, ring-me, start outgoing, record incoming/status/voicemail, call log + voicemail reads, outcome/note, do-not-call, heard; permissions; DB proof | 0556 |
-| CL2 | Voice credentials: sealed API key + TwiML App per subaccount, worker (switch-gated), token minting; fake Twilio voice client | 0561 |
+| CL2 | Voice credentials: sealed API key + TwiML App per subaccount, worker (switch-gated), token minting; fake Twilio voice client | 0579 |
 | CL3a | API: phone token, start call, log/voicemail/settings endpoints, webhooks (client-voice, call-status, dial-result, recording-status), 0249 voice webhook routing to browsers + voicemail, recording playback proxy | none |
 | CL4 | Web: top-bar Call button + dialer panel, incoming banner, after-call card, Calls page (log / voicemail / settings), contact Call button, `CallButton` for Texts; fake phone for tests and screenshots | none |
-| CL5 | HQ calling on the HQ number (parent account), HQ Calls page | 0562 |
+| CL5 | HQ calling on the HQ number (parent account), HQ Calls page | 0580 |
 | Later | Transcription, voicemail drop, IVR, round robin, transfers, cost lines (with T4) | — |
 
 Each PR: unit tests + DB proof (tenant isolation, permission, idempotency, status ordering, toll-fraud checks), web
@@ -168,7 +168,7 @@ independent review, squash on GO + green CI (standing approval). No deploy.
 - Calling stops (new calls refused, tokens not issued) when the school is suspended, the entitlement lapses, the sender
   is disabled or calling is off; calls in progress end naturally.
 
-## 10. HQ calling (CL5, 0562)
+## 10. HQ calling (CL5, 0580)
 
 HON HQ calls and takes calls on the **HQ texting number** (the ACTIVE `hq_communication_senders` SMS row's reply number),
 which lives on HON's **parent** Twilio account, not a school subaccount.

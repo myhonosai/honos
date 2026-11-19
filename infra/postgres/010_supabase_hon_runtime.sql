@@ -4540,13 +4540,13 @@ BEGIN
   END IF;
 END $$;
 
--- 0561 school voice apps (CL2): one private forced-RLS table; one staff runtime entry point (phone token authorization);
+-- 0579 school voice apps (CL2): one private forced-RLS table; one staff runtime entry point (phone token authorization);
 -- claim, record and key reads belong to the communication worker (013); the guard is migration-owner only.
 DO $$ DECLARE r text; f text;
   closed text[]:=ARRAY['hon.read_schools_needing_voice_app(integer)','hon.begin_school_voice_app(uuid,integer)','hon.record_school_voice_app_twiml(uuid,uuid,text)',
     'hon.complete_school_voice_app(uuid,uuid,text,text,text)','hon.read_school_voice_app(uuid)','hon.guard_school_voice_app()'];
 BEGIN
-  IF to_regprocedure('hon.authorize_school_phone_token(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0561 first'; END IF;
+  IF to_regprocedure('hon.authorize_school_phone_token(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0579 first'; END IF;
   FOREACH f IN ARRAY closed||ARRAY['hon.authorize_school_phone_token(text)'] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
@@ -4556,7 +4556,7 @@ BEGIN
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN GRANT EXECUTE ON FUNCTION hon.authorize_school_phone_token(text) TO hon_runtime; END IF;
 END $$;
 
--- 0562 HQ calls (CL5): six private forced-RLS tables with no policy; nine HQ runtime entry points; provider entry points
+-- 0580 HQ calls (CL5): six private forced-RLS tables with no policy; nine HQ runtime entry points; provider entry points
 -- belong to the communication worker (013); guards and helpers are migration-owner only.
 DO $$ DECLARE r text; f text; t text;
   entry text[]:=ARRAY['hon.read_hq_calling(text)','hon.set_hq_calling_settings(text,jsonb)','hon.set_my_hq_call_ringing(text,jsonb)',
@@ -4570,7 +4570,7 @@ DO $$ DECLARE r text; f text; t text;
     'hon.hq_call_staff_ok(uuid)','hon.hq_call_number()','hon.hq_call_contact(text)','hon.expire_hq_calls()','hon.hq_call_json(hon.hq_calls)',
     'hon.hq_call_evidence(uuid,uuid,text,text,jsonb)','hon.hq_call_state(hon.hq_calls)'];
 BEGIN
-  IF to_regprocedure('hon.start_hq_call(text,jsonb,text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0562 first'; END IF;
+  IF to_regprocedure('hon.start_hq_call(text,jsonb,text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0580 first'; END IF;
   FOREACH f IN ARRAY entry||closed LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;

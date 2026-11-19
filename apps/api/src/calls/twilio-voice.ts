@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:crypto';
 
 /**
- * CL3b (0556/0561, docs/architecture/SCHOOL_CALLING.md §4): browser calling through Twilio Voice on the school's own
+ * CL3b (0556/0579, docs/architecture/SCHOOL_CALLING.md §4): browser calling through Twilio Voice on the school's own
  * subaccount. This module holds the pure pieces: the fixed webhook paths, the sealed voice API key, the browser phone
  * token, and the TwiML HON answers with. Nothing here talks to Twilio; the voice switch HON_VOICE_CALLS_APPROVED (owner
  * approval, unset by default) decides whether any call may leave HON at all.
@@ -22,7 +22,7 @@ export const TWILIO_RECORDING_NOTICE_PATHS: Readonly<Record<CallLanguage, string
 export const SCHOOL_CALL_WEBHOOK_PATHS: readonly string[] = [TWILIO_CLIENT_VOICE_PATH, TWILIO_CLIENT_DIAL_RESULT_PATH, TWILIO_INCOMING_DIAL_RESULT_PATH,
   TWILIO_CALL_ANSWERED_PATH, TWILIO_RECORDING_STATUS_PATH, TWILIO_VOICEMAIL_STATUS_PATH, TWILIO_VOICEMAIL_DONE_PATH, ...Object.values(TWILIO_RECORDING_NOTICE_PATHS)];
 /**
- * CL5 (0562): HQ calling on the HQ number, on HON's parent account only. `voice` is the HQ number's Voice URL; the HQ
+ * CL5 (0580): HQ calling on the HQ number, on HON's parent account only. `voice` is the HQ number's Voice URL; the HQ
  * TwiML App's Voice URL is `clientVoice`. HQ calls are never recorded, so there is no recording or notice path.
  */
 export const HQ_CALL_PATHS = {

@@ -5189,7 +5189,7 @@ BEGIN
   END LOOP;
 END $$;
 -- End simple invoices exact verification.
--- School voice apps exact verification (0561): one private forced-RLS table, one staff runtime entry point, worker-only
+-- School voice apps exact verification (0579): one private forced-RLS table, one staff runtime entry point, worker-only
 -- claim/record/key functions and an owner-only guard, all SECURITY DEFINER with the fixed search path.
 DO $$ DECLARE f text;
   entry text[]:=ARRAY['hon.authorize_school_phone_token(text)'];
@@ -5212,7 +5212,7 @@ BEGIN
   END LOOP;
 END $$;
 -- End school voice apps exact verification.
--- HQ calls exact verification (0562): six private forced-RLS tables, nine HQ runtime entry points, worker-only provider
+-- HQ calls exact verification (0580): six private forced-RLS tables, nine HQ runtime entry points, worker-only provider
 -- functions and owner-only definer helpers, all SECURITY DEFINER with the fixed search path.
 DO $$ DECLARE f text; t text;
   entry text[]:=ARRAY['hon.read_hq_calling(text)','hon.set_hq_calling_settings(text,jsonb)','hon.set_my_hq_call_ringing(text,jsonb)',

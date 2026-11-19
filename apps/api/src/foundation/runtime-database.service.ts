@@ -343,7 +343,7 @@ export type SchoolOwnershipOperation = 'hqRead'|'setPrimary'|'ownerRead';
 export type ShopifyOperation = 'read'|'catalog'|'orders'|'start'|'claim'|'record'|'beginSync'|'rotate'|'page'|'finishSync'|'disconnect'
   |'changes'|'propose'|'cancelChange'|'approveChange'|'rotateChange'|'recordChange';
 
-/** CL5 (0562): the only HQ calling SQL the API may run. */
+/** CL5 (0580): the only HQ calling SQL the API may run. */
 const HQ_CALLS_CALLS = {
   overview: { sql: 'SELECT hon.read_hq_calling($1) AS data', arity: 1, readOnly: true },
   list: { sql: 'SELECT hon.read_hq_calls($1,$2::jsonb) AS data', arity: 2, readOnly: true },
@@ -1593,7 +1593,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
   }
 
   /**
-   * CL5 (0562) HQ calling: one fixed, subject-only SECURITY DEFINER call per operation, no tenant settings (the HQ actor
+   * CL5 (0580) HQ calling: one fixed, subject-only SECURITY DEFINER call per operation, no tenant settings (the HQ actor
    * check refuses any). Reads that write nothing run READ ONLY; opening a voicemail and the phone token are audited.
    */
   async callHqCalls(operation: HqCallsOperation, params: readonly (string | null)[]): Promise<unknown> {

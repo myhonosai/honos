@@ -82,7 +82,7 @@ const es: PhoneCopy = {
 };
 export function phoneCopy(language: Language | string): PhoneCopy { return language === 'ko' ? ko : language === 'es' ? es : en; }
 
-/** The HQ phone (0562) calls from the HQ number; only the wording about which number and who switches it on differs. */
+/** The HQ phone (0580) calls from the HQ number; only the wording about which number and who switches it on differs. */
 const HQ: Record<'en' | 'ko' | 'es', Pick<PhoneCopy, 'title' | 'ringMeOn' | 'ringMeOff'> & { unavailable: Pick<PhoneCopy['unavailable'], 'CALLING_OFF' | 'NUMBER_NOT_READY' | 'PHONE_NOT_SET_UP' | 'VOICE_NOT_APPROVED'> }> = {
   en: { title: 'Call from the HQ number', ringMeOn: 'Calls to the HQ number ring here.', ringMeOff: 'Turn on Ring me on the HQ Calls page to answer calls here.',
     unavailable: { CALLING_OFF: 'HQ calling is off. The HQ owner can turn it on on the HQ Calls page.', NUMBER_NOT_READY: 'The HQ number is not active yet.',

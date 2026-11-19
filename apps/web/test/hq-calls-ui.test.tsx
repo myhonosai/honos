@@ -15,7 +15,7 @@ import { HQ_NAV, hqPageLabel } from '../src/components/hq-modern/catalog';
 import { hqNavCurrent } from '../src/components/hq-modern/shell';
 import { hqPhoneCopy, phoneCopy } from '../src/components/calls/phone-copy';
 
-// CL5 (0562) HQ calling: same-origin HQ commands, verified answers, and the HQ top-bar phone records before it connects.
+// CL5 (0580) HQ calling: same-origin HQ commands, verified answers, and the HQ top-bar phone records before it connects.
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const A = '11111111-1111-4111-8111-111111111111', C = '33333333-3333-4333-8333-333333333333', K = '55555555-5555-4555-8555-555555555555';
 const T = '2026-11-20T17:00:00.000Z';

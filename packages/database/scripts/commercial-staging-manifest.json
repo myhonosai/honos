@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "2903c86ab7282145afb7bdc2798e88e9c0a39c42f328fb16d53ed0cc339a29d2",
+  "chainSha256": "13da5dece61235c5f952ae357de628065e81184e2ede8b397f15ec31c76b42a4",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -715,16 +715,16 @@
       "sha256": "3b42347f51e202714398f01d0bf457723bcafc545a5edd9ec4fbeee6b7d02a82"
     },
     {
-      "file": "0561_school_voice_apps.sql",
-      "sha256": "a8ec7c5b68fd71653b3ed4630500a82b33dcf2c9fb858de17861bd8ec209acef"
-    },
-    {
-      "file": "0562_hq_calls.sql",
-      "sha256": "22a38a75e724d363371a71b406d6f54dd1257ce13e37e3cef274908c2ff5a410"
-    },
-    {
       "file": "0567_calendar_cards.sql",
       "sha256": "812ae679a0a8671aca29a4692db0f7751ad78bcb3169eec0b3bcdc3ac301de76"
+    },
+    {
+      "file": "0579_school_voice_apps.sql",
+      "sha256": "e6464716f376e1e01838daa843d7c0204d3c9b7a5ae389c176e120c5dc83e24d"
+    },
+    {
+      "file": "0580_hq_calls.sql",
+      "sha256": "60ef91adeb58f68ab06a91c84971f9992b04cd1b646ba5655a3b81dbea83659f"
     }
   ]
 }
