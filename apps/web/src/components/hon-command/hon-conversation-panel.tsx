@@ -13,6 +13,7 @@ import {
   type HonSchool, type Owned, type PreparedHonCommand,
 } from './hon-conversation-http';
 import { honTurnStatusPresentation } from './hon-conversation';
+import { forgetHonConversations, rememberConversation, rememberedConversation } from './hon-conversation-memory';
 import {
   ORCHESTRATION_PRESENTATION, PURPOSE_LABEL, SUGGESTION_AGENT, SUGGESTION_PURPOSES, orchestrationsBySource, suggestionDelegation, textLimit,
   type HonDelegateTarget,
@@ -379,7 +380,11 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   const [groupPhase, setGroupPhase] = useState<GroupPhase>('NONE');
   const [confirm, setConfirm] = useState<SuggestionConfirm | null>(null);
   const generation = useRef(0), reads = useRef<AbortController | null>(null), concealed = useRef(false), ended = useRef(false), mounted = useRef(true);
+  // The corner pop-up and the full workspace reopen the same conversation (kept only if the server still lists it).
   const openId = useRef<string | null>(null);
+  const restored = useRef(false);
+  if (!restored.current) { restored.current = true; openId.current = rememberedConversation(school); }
+  const keepOpen = (conversationId: string | null) => { openId.current = conversationId; rememberConversation(school, conversationId); };
   // Ownership for 401s: the privacy epoch advances on conceal and unmount; the pending key names the one command in flight;
   // the confirm sequence names the one open target list. A retired request never ends this session.
   const privacy = useRef(0), pendingKey = useRef<string | null>(null), confirmSeq = useRef(0), targetRead = useRef<AbortController | null>(null);
@@ -420,7 +425,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
         if (current !== generation.current || concealed.current || ended.current) return;
         setReadiness(nextReadiness); setConversations(page.items); setPhase('READY');
         const keep = openId.current && page.items.some((item) => item.id === openId.current) ? openId.current : null;
-        openId.current = keep; if (keep) readThread(keep, current, abort.signal);
+        keepOpen(keep); if (keep) readThread(keep, current, abort.signal);
       },
       (error) => { if (current !== generation.current || abort.signal.aborted) return; const kind = error instanceof HonConversationError ? error.kind : 'UNAVAILABLE';
         if (kind === 'SESSION') ended.current = true; setReadiness(null); setPhase(kind); });
@@ -432,7 +437,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
       concealed.current = true; generation.current++; privacy.current++; reads.current?.abort(); closeConfirm(); voiceAnswer.current = null; voiceShutdown();
       for (const node of document.querySelectorAll<HTMLElement>('[data-hon-private]')) { node.hidden = true; node.inert = true; }
       setConversations([]); setThread(null); setThreadPhase('NONE'); setGroups(new Map()); setGroupPhase('NONE');
-      if (event.type === HON_SESSION_INVALIDATED_EVENT) { ended.current = true; setPhase('SESSION'); } else setPhase((now) => now === 'SESSION' ? now : 'CONCEALED');
+      if (event.type === HON_SESSION_INVALIDATED_EVENT) { ended.current = true; forgetHonConversations(); setPhase('SESSION'); } else setPhase((now) => now === 'SESSION' ? now : 'CONCEALED');
     };
     // Away (blur, hidden tab, page hide) only shows the school screensaver; the session end still clears everything.
     const windowEvents = [HON_SESSION_INVALIDATED_EVENT];
@@ -477,7 +482,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
       if (!mounted.current) return;
       if (next.kind === 'create') {
         // The conversation exists; send the waiting first message as its own frozen turn.
-        const created = result as HonConversationSummary; openId.current = created.id;
+        const created = result as HonConversationSummary; keepOpen(created.id);
         const first = next.first;
         if (first) {
           try { run({ prepared: prepareTurn(school, created.id, composerTurnRequest(first.text, first.ask, first.replyMode)), kind: 'turn', label: `Your message to ${askName(first.ask)}`, state: 'SENDING', conversationId: created.id, text: first.text, ...(next.voice ? { voice: true } : {}) }); return; }
@@ -510,7 +515,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
     try { prepared = prepareTurn(school, thread.id, { text, delegation: suggestionDelegation(current.agent, target, current.purpose), fromSuggestionTurnId: current.sourceTurnId }); }
     catch { return; }
     closeConfirm();
-    openId.current = thread.id;
+    keepOpen(thread.id);
     run({ prepared, kind: 'turn', label: `Your request to ${SUGGESTION_AGENT[current.agent].name}`, state: 'SENDING', conversationId: thread.id, confirm: choice });
   };
 
@@ -525,7 +530,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
     const who: HonComposerAsk = ask !== 'hon' && offeredAnalysts(readiness).includes(ask) ? ask : 'hon';
     try {
       if (thread) {
-        openId.current = thread.id;
+        keepOpen(thread.id);
         run({ prepared: prepareTurn(school, thread.id, composerTurnRequest(text, who, mode)), kind: 'turn', label: `Your message to ${askName(who)}`, state: 'SENDING', conversationId: thread.id, text, ...voiceFlag });
       } else {
         const title = text.length > 60 ? `${text.slice(0, 57).trimEnd()}…` : text;
@@ -550,8 +555,8 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
     }}
     onConfirmChange={(patch) => setConfirm((now) => now ? { ...now, ...patch } : now)}
     onConfirmSend={sendConfirm} onConfirmCancel={closeConfirm}
-    onOpen={(conversationId) => { if (concealed.current) return; closeConfirm(); openId.current = conversationId; const abort = new AbortController(); reads.current?.abort(); reads.current = abort; readThread(conversationId, generation.current, abort.signal); }}
-    onNew={() => { closeConfirm(); openId.current = null; setThread(null); setThreadPhase('NONE'); setGroups(new Map()); setGroupPhase('NONE'); }}
+    onOpen={(conversationId) => { if (concealed.current) return; closeConfirm(); keepOpen(conversationId); const abort = new AbortController(); reads.current?.abort(); reads.current = abort; readThread(conversationId, generation.current, abort.signal); }}
+    onNew={() => { closeConfirm(); keepOpen(null); setThread(null); setThreadPhase('NONE'); setGroups(new Map()); setGroupPhase('NONE'); }}
     onContinue={(turn) => {
       if (!thread || concealed.current || !turn.replyDetail?.canContinue) return;
       try { run({ prepared: prepareTurn(school, thread.id, { text: 'Please continue.', delegation: null, continueTurnId: turn.turnId }), kind: 'turn', label: 'Continue HON’s answer', state: 'SENDING', conversationId: thread.id }); }
@@ -561,7 +566,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
       if (!thread || concealed.current || groupPhase !== 'READY' || (pending && (pending.state === 'SENDING' || pending.state === 'UNKNOWN'))) return;
       const group = groups.get(sourceTurnId.toLowerCase());
       if (!group || !SUMMARIZABLE_GROUP.has(group.status)) return;
-      closeConfirm(); openId.current = thread.id;
+      closeConfirm(); keepOpen(thread.id);
       try { run({ prepared: prepareTurn(school, thread.id, { text: SUMMARY_QUESTION, delegation: null, summarizeTurnId: group.sourceTurnId }), kind: 'turn', label: 'Summarize with HON', state: 'SENDING', conversationId: thread.id }); }
       catch { /* an invalid summary request is never sent */ }
     }}

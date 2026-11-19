@@ -5128,6 +5128,67 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END IF;
 END $$;
 -- End shared AI text proposals exact verification.
+-- School calls exact verification (0556): four private forced-RLS tables, eight staff runtime entry points, worker-only
+-- provider functions and owner-only helpers, all SECURITY DEFINER with the fixed search path.
+DO $$ DECLARE f text; t text;
+  entry text[]:=ARRAY['hon.read_school_calling(text)','hon.set_school_calling_settings(text,jsonb,uuid,uuid)','hon.set_my_school_call_ringing(text,jsonb)',
+    'hon.start_school_call(text,jsonb,text,uuid,uuid)','hon.read_school_calls(text,jsonb)','hon.update_school_call(text,jsonb,uuid,uuid)',
+    'hon.set_school_do_not_call(text,jsonb)','hon.open_school_call_recording(text,uuid)'];
+  worker text[]:=ARRAY['hon.connect_school_client_call(uuid,text,text,text)','hon.route_school_incoming_call(text,text,text)',
+    'hon.record_school_call_status(text,text,text,text,integer,timestamptz)','hon.record_school_call_recording(text,text,text,integer,boolean)',
+    'hon.read_school_call_recordings_due(integer)','hon.mark_school_call_recording_deleted(uuid,text)'];
+  closed text[]:=ARRAY['hon.require_school_call_actor(text,boolean)','hon.school_call_person(uuid,uuid,text)','hon.school_call_account_ok(uuid,text)','hon.expire_school_calls(uuid)',
+    'hon.school_call_json(hon.school_calls)','hon.school_call_audit(hon.school_calls,uuid,text,text,jsonb,text,uuid,uuid)',
+    'hon.guard_school_call()','hon.guard_school_calling_settings()','hon.guard_school_call_staff()','hon.guard_school_do_not_call()'];
+BEGIN
+  FOREACH t IN ARRAY ARRAY['school_calling_settings','school_call_staff','school_calls','school_do_not_call'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+      RAISE EXCEPTION 'Unsafe school calls table: %',t; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY entry||worker||closed LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND p.prosecdef AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon'])
+      OR has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') IS DISTINCT FROM (f=ANY(entry))
+      OR (EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_communication_worker')
+        AND has_function_privilege('hon_communication_worker',f::regprocedure,'EXECUTE') IS DISTINCT FROM (f=ANY(worker)))
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure
+        AND a.grantee=0) THEN
+      RAISE EXCEPTION 'Unsafe school calls function: %',f; END IF;
+  END LOOP;
+END $$;
+-- End school calls exact verification.
+
+-- Simple invoices exact verification (SI1 0558)
+DO $$ DECLARE f text; t text; safe boolean;
+BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.create_simple_invoice(text,jsonb,text,uuid,uuid)','hon.read_school_invoice_detail(text,uuid)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure
+        AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe simple invoice entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.simple_invoice_detail_json(hon.invoices,boolean)','hon.simple_invoice_can_issue(text)',
+      'hon.simple_invoice_text_ok(jsonb,integer,boolean)','hon.guard_invoice_simple_rows()'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND a.grantee=0) THEN
+      RAISE EXCEPTION 'Unsafe simple invoice helper: %',f; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname IN ('create_simple_invoice','read_school_invoice_detail'))<>2 THEN
+    RAISE EXCEPTION 'Unexpected simple invoice overload'; END IF;
+  FOREACH t IN ARRAY ARRAY['invoice_line_items','invoice_details'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe simple invoice table: %',t; END IF;
+    IF (SELECT count(*) FROM pg_trigger g WHERE g.tgrelid=('hon.'||t)::regclass AND NOT g.tgisinternal AND g.tgenabled='O'
+        AND g.tgfoid='hon.guard_invoice_simple_rows()'::regprocedure)<>2 THEN
+      RAISE EXCEPTION 'Simple invoice guards missing on %',t; END IF;
+  END LOOP;
+END $$;
+-- End simple invoices exact verification.
 -- Calendar cards exact verification (0567): the card kind and roster instructor columns, the private forced-RLS roster
 -- detachment table, private helpers, the occurrence trigger and three runtime entry points; still no runtime UPDATE on class sessions.
 DO $$ DECLARE f record; safe boolean; BEGIN

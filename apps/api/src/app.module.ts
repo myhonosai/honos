@@ -103,7 +103,7 @@ import { ReadinessController } from './health/readiness.controller.js';
 import { LeadController } from './crm/lead.controller.js';
 import { LeadService } from './crm/lead.service.js';
 import { LeadCreateHumanUiGuard } from './crm/lead-create-human-ui.guard.js';
-import { StarterPipelineHumanUiGuard } from './crm/starter-pipeline-human-ui.guard.js';
+import { StarterPipelineHumanUiGuard, TemplatePipelineHumanUiGuard } from './crm/starter-pipeline-human-ui.guard.js';
 import { LeadCloseController } from './crm/lead-close.controller.js';
 import { LeadCloseService } from './crm/lead-close.service.js';
 import { LeadCloseHumanUiGuard } from './crm/lead-close.dto.js';
@@ -176,8 +176,10 @@ import { SchoolContactsService } from './people/school-contacts.service.js';
 import { SchoolContactAdminController } from './people/school-contact-admin.controller.js';
 import { SchoolContactAdminService } from './people/school-contact-admin.service.js';
 import { SchoolReportsService } from './reports/school-reports.service.js';
-import { MembershipActivationHumanUiGuard, TuitionPaymentRecordHumanUiGuard, TuitionPaymentVoidHumanUiGuard, TuitionReadHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
+import { MembershipActivationHumanUiGuard, SimpleInvoiceCreateHumanUiGuard, TuitionPaymentRecordHumanUiGuard, TuitionPaymentVoidHumanUiGuard, TuitionReadHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { TuitionPaymentController } from './billing/tuition-payment.controller.js';
+import { SimpleInvoiceController } from './billing/simple-invoice.controller.js';
+import { SimpleInvoiceService } from './billing/simple-invoice.service.js';
 import { TuitionPaymentService } from './billing/tuition-payment.service.js';
 import { SchoolPaymentController } from './school-payments/school-payment.controller.js';
 import { SchoolPaymentService } from './school-payments/school-payment.service.js';
@@ -620,6 +622,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolSocialInboxController,
     SchoolSocialAdsController,
     TuitionPaymentController,
+    SimpleInvoiceController,
     SchoolPaymentController,
     SchoolPayMethodController,
     SchoolPayAutopayController,
@@ -754,6 +757,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     LeadService,
     LeadCreateHumanUiGuard,
     StarterPipelineHumanUiGuard,
+    TemplatePipelineHumanUiGuard,
     LeadCloseService,
     LeadCloseHumanUiGuard,
     LeadRegistrationService,
@@ -912,6 +916,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSeriesFillHumanUiGuard,
     ClassSeriesReadHumanUiGuard,
     TuitionPaymentService,
+    SimpleInvoiceService,
     SchoolPaymentService,
     SchoolPayMethodService,
     SchoolPayAutopayService,
@@ -945,6 +950,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     GuardianChildEnrollmentService, CrmGuardianChildEnrollmentReadHumanUiGuard, CrmGuardianChildPayerDesignationHumanUiGuard, CrmGuardianChildAdditionHumanUiGuard, CrmGuardianChildMembershipDraftFromPlanHumanUiGuard,
     MembershipActivationHumanUiGuard,
     TuitionPaymentRecordHumanUiGuard,
+    SimpleInvoiceCreateHumanUiGuard,
     TuitionPaymentVoidHumanUiGuard,
     TuitionReadHumanUiGuard,
     BillingAccountService,
