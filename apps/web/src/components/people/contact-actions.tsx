@@ -5,6 +5,7 @@ import { contactsText } from './contacts-copy';
 import { ContactAdminError, NO_CONTACT_FILTERS, contactAdminApi, contactsApi, type ContactAdminApi, type ContactAdminFailure, type ContactsApi } from './contacts-http';
 import type { PeopleScope } from './http';
 import styles from './people.module.css';
+import { CallButton } from '../calls/call-button';
 
 /** What changed, so the page can read the list and the card again (and open the kept person after a merge). */
 export type ContactChange = Readonly<{ kind: 'ARCHIVED' | 'RESTORED' }> | Readonly<{ kind: 'MERGED'; keepPersonId: string }>;
@@ -154,6 +155,7 @@ export function ContactActions({ language, scope, card, onChanged, api = contact
       {archived
         ? <button type="button" className={styles.secondary} data-testid="contact-restore" onClick={() => openArchive(true)}>{t('restore')}</button>
         : <>
+          <CallButton phoneE164={me.phoneE164} personId={me.personId} name={myName} language={language} className={styles.secondary} />
           <button type="button" className={styles.secondary} data-testid="contact-merge" onClick={() => { begin(); setMode({ kind: 'FIND', phase: 'IDLE', query: '', rows: [] }); }}>{t('merge')}</button>
           <button type="button" className={styles.danger} data-testid="contact-delete" onClick={() => openArchive(false)}>{t('delete')}</button>
         </>}

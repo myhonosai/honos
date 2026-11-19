@@ -12,6 +12,7 @@ import {
   CallsAccessError, CallsRefusal, formatCallDuration, formatCallNumber, loadCalling, loadCalls, saveCallingSettings, setDoNotCall, setRingMe, updateCall,
   type CallsScope,
 } from './http';
+import { CallButton } from './call-button';
 import s from '../testing-registration.module.css';
 
 function who(call: SchoolCall, copy: CallsCopy): string { return call.contactName ?? `${copy.unknownCaller} ${formatCallNumber(call.remoteE164)}`; }
@@ -163,6 +164,8 @@ export function StaffCalls(): React.ReactElement {
     {open && <section className={s.card} aria-label={copy.card(who(open, copy))}>
       <h2>{copy.card(who(open, copy))}</h2>
       <p className={s.subtle}>{formatCallNumber(open.remoteE164)} · {copy.status[open.status]} · {date(open.startedAt)}</p>
+      {!open.doNotCall && <p className={s.actions}><CallButton phoneE164={open.remoteE164} personId={open.personId ?? undefined} name={open.contactName ?? undefined}
+        language={preferences.language} /></p>}
       <fieldset><legend>{copy.outcome}</legend><p className={s.actions}>
         {SCHOOL_CALL_OUTCOMES.map(o => <button key={o} type="button" aria-pressed={open.outcome === o} disabled={acting} onClick={() => saveOutcome(open, o)}>{copy.outcomes[o]}</button>)}
         {open.outcome && <button type="button" disabled={acting} onClick={() => saveOutcome(open, null)}>{copy.clearOutcome}</button>}
