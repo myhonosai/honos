@@ -32,3 +32,9 @@ it('does not reset private memory solely for equivalent normalized UUID selector
  const next=await Page({searchParams:Promise.resolve({...selectors,organizationId:selectors.organizationId.toUpperCase()})});
  expect(next.key).toBe(first.key);
 });
+it('opens at the trial step only for step=trial, the Leads board Book trial link',async()=>{
+ state.token=issueSession({externalSubject:'synthetic'},config);
+ const selectors={organizationId:id(1),schoolId:id(2),leadId:id(3)};
+ expect((await Page({searchParams:Promise.resolve({...selectors,step:'trial'})})).props.initialStep).toBe('trial');
+ for(const step of [undefined,'close','TRIAL','trial ']) expect('initialStep' in (await Page({searchParams:Promise.resolve({...selectors,...(step===undefined?{}:{step})})})).props).toBe(false);
+});

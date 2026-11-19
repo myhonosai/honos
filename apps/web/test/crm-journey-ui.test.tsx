@@ -312,3 +312,9 @@ it('inside the school shell opens on the signed-in school with no school box, ID
  f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope([row])).mockResolvedValueOnce(identity());click('load');await settle();expect(f).toHaveBeenCalledTimes(6);
 });
 it('outside the shell still offers the school box as the only way in',()=>{const page=text(render());expect(page).toContain(journeyCatalog.en.school);expect(el('current-school')).toBeDefined();expect(el('organization')).toBeDefined();});
+it('starts at the trial step when opened from Book trial, and at the lead step otherwise',()=>{
+ const current=(initialStep?:'trial')=>{h.values=[];h.cursor=0;const tree=CrmJourney({sessionSubject:'staff:synthetic',initialScope:scope,initialLeadId:row.id,...(initialStep?{initialStep}:{}),clockReader:(s,signal)=>clock.reader(s,signal)});h.effects.splice(0);
+  return nodes(tree).find(e=>e.props['aria-current']==='step')!.props['data-testid'];};
+ expect(current('trial')).toBe('step-trial');
+ expect(current()).toBe('step-lead');
+});
