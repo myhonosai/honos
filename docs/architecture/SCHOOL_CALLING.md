@@ -71,8 +71,12 @@ school's ACTIVE sender.
   connects with only `{ HonCallId }`. The signed client-voice webhook re-reads the call row: same school subaccount,
   caller identity = the staff member who started it, `INITIATED`, under 2 minutes old, used once; it returns
   `<Dial callerId="school number" answerOnBridge="true" action=dial-result>` to the number **stored on the row** (the
-  browser can never choose the number at the provider). Checks at start: +1 only, not 900/976/premium, not the school's
-  own number, not a number marked "Do not call" for that school, at most 60 outgoing calls per staff per hour.
+  browser can never choose the number at the provider). Checks at start: +1 US states and Canada only (the NANP
+  Caribbean and territory codes such as 876, 809/829/849, 268, 473, 787/939 are refused as international or high-cost),
+  not 900/976/premium, personal (5XX), carrier, government or reserved (N9X) codes, not the school's own number, a
+  linked contact's phone must be the number dialled, not a number marked "Do not call" for that school, at most 60 outgoing calls per staff per hour.
+  Deploy: Twilio Voice geographic permissions on each school subaccount set to United States and Canada only, as a
+  second layer behind this check.
 - **Incoming**: the existing 0249 voice webhook, when calling is on: records a `RINGING` incoming call, then
   `<Dial timeout=20 answerOnBridge=true action=voice-result>` with one `<Client>` per staff member who has "Ring me" on
   (max 10), plus the forwarding phone when set. First to answer wins (Twilio cancels the other legs). No answer,

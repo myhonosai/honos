@@ -91,7 +91,7 @@ try {
   const workerEntry = ['connect_school_client_call', 'route_school_incoming_call', 'record_school_call_status', 'record_school_call_recording', 'read_school_call_recordings_due', 'mark_school_call_recording_deleted'];
   const fns = await q("SELECT p.oid,p.proname,p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.oid>=(SELECT oid FROM pg_proc WHERE proname='school_call_rank')");
   const ours = fns.filter((f) => /call|calling/.test(f.proname));
-  assert.equal(ours.length, 26, ours.map((f) => f.proname).join());
+  assert.equal(ours.length, 27, ours.map((f) => f.proname).join());
   for (const f of ours) {
     assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok", [runtime.username, f.oid]))[0].ok, staffEntry.includes(f.proname), 'runtime ' + f.proname);
     assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok", [workerUrl.username, f.oid]))[0].ok, workerEntry.includes(f.proname), 'worker ' + f.proname);
@@ -139,14 +139,19 @@ try {
   pass('calling starts off; greeting is plain text; recording needs the consent statement, who and when are kept; versioned and audited');
 
   // 4. Outgoing start: number rules, do-not-call, idempotency, person matching.
-  for (const bad of ['+442071234567', '+19005551234', '+15129765555', '+14115551234', '+15124111234', numA]) {
+  for (const bad of ['+442071234567', '+19005551234', '+15129765555', '+14115551234', '+15124111234', numA,
+    '+18765551234', '+18095551234', '+18295551234', '+12685551234', '+14735551234', '+16495551234', '+17875551234', '+19395551234',
+    '+15005551234', '+15215551234', '+12925551234', '+17105551234']) {
     await rejects('22023', () => start(coach, { toE164: bad }), 'refused number ' + bad);
   }
   await q('UPDATE hon.school_text_senders SET forward_phone_e164=$1 WHERE school_id=$2', [fwdA, a.school]);
   await rejects('22023', () => start(coach, { toE164: fwdA }), 'own forwarding phone refused');
   await dnc(coach, '+15125551009', true);
   await rejects('22023', () => start(coach, { toE164: '+15125551009' }), 'do-not-call refused');
+  await rejects('42501', () => q("UPDATE hon.school_do_not_call SET phone_e164='+15125551008' WHERE phone_e164='+15125551009'"), 'do-not-call row immutable');
+  await rejects('42501', () => q('TRUNCATE hon.school_do_not_call'), 'do-not-call never truncated');
   await dnc(coach, '+15125551009', false);
+  assert.equal((await start(coach, { toE164: '+18005551234' })).status, 'INITIATED', 'US toll-free allowed');
   const key = 'key-' + K();
   const out = await start(coach, { toE164: '+15125551001' }, key);
   assert.equal(out.status, 'INITIATED'); assert.equal(out.personId, ada); assert.equal(out.contactName, 'Ada Parent'); assert.equal(out.replayed, false);
@@ -154,9 +159,10 @@ try {
   assert.equal(again.callId, out.callId); assert.equal(again.replayed, true);
   await rejects('23505', () => start(coach, { toE164: '+15125551002' }, key), 'key reused for another number');
   await rejects('P0002', () => start(coach, { toE164: '+15125551002', personId: K() }), 'unknown person');
+  await rejects('22023', () => start(coach, { toE164: '+15125551002', personId: ada }), 'person whose phone is another number');
   const otherPerson = (await q('SELECT id FROM hon.people WHERE school_id=$1', [b.school]))[0].id;
   await rejects('P0002', () => start(coach, { toE164: '+15125551002', personId: otherPerson }), 'other school person');
-  pass('+1 only, no 900/976/N11, not the school number or its forwarding phone, do-not-call honoured; exact replay by key, reuse refused; person matched in this school only');
+  pass('+1 US/Canada only: no Caribbean or territory codes, no 900/976/N11/personal/reserved codes, not the school number or its forwarding phone, do-not-call honoured; exact replay by key, reuse refused; person matched in this school only');
 
   // 5. Connecting the browser call.
   const sidOut = callSid();
@@ -167,6 +173,8 @@ try {
   c = await connect(out.callId, ident(coach.principal), null, sidOut);
   assert.equal(c.outcome, 'CONNECT'); assert.equal(c.to_e164, '+15125551001'); assert.equal(c.caller_id_e164, numA); assert.equal(c.recorded, true);
   assert.equal((await connect(out.callId, ident(coach.principal), null, sidOut)).outcome, 'REPLAYED');
+  assert.equal((await connect(out.callId, ident(coach2.principal), null, sidOut)).outcome, 'REFUSED', 'replay by another identity');
+  assert.equal((await connect(out.callId, ident(coach.principal), 'AC' + hex(), sidOut)).outcome, 'REFUSED', 'replay on another account');
   assert.equal((await connect(out.callId, ident(coach.principal), null, callSid())).outcome, 'REFUSED', 'used once');
   const stale = await start(coach, { toE164: '+15125551003' });
   await q("ALTER TABLE hon.school_calls DISABLE TRIGGER guarded");

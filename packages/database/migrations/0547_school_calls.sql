@@ -172,6 +172,15 @@ BEGIN
 END $$;
 CREATE TRIGGER guarded BEFORE UPDATE OR DELETE ON hon.school_call_staff FOR EACH ROW EXECUTE FUNCTION hon.guard_school_call_staff();
 CREATE TRIGGER no_truncate BEFORE TRUNCATE ON hon.school_call_staff FOR EACH STATEMENT EXECUTE FUNCTION hon.guard_school_call_staff();
+-- Do-not-call rows are added and removed one at a time by set_school_do_not_call; never changed in place or truncated.
+CREATE FUNCTION hon.guard_school_do_not_call() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+BEGIN
+  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+  RAISE EXCEPTION 'SCHOOL_DO_NOT_CALL_IMMUTABLE' USING ERRCODE='42501';
+END $$;
+CREATE TRIGGER guarded BEFORE UPDATE OR DELETE ON hon.school_do_not_call FOR EACH ROW EXECUTE FUNCTION hon.guard_school_do_not_call();
+CREATE TRIGGER no_truncate BEFORE TRUNCATE ON hon.school_do_not_call FOR EACH STATEMENT EXECUTE FUNCTION hon.guard_school_do_not_call();
 
 DO $$ DECLARE t text; BEGIN
   FOREACH t IN ARRAY ARRAY['school_calling_settings','school_call_staff','school_calls','school_do_not_call'] LOOP
@@ -209,8 +218,15 @@ LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$ SELECT 'u'||replace(p_pr
 -- A dialable number: North American (+1, area code and exchange 2-9), not 900 numbers or 976 exchanges, not N11.
 CREATE FUNCTION hon.school_call_number_ok(p text) RETURNS boolean
 LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
-  SELECT p IS NOT NULL AND p ~ '^\+1[2-9][0-9]{2}[2-9][0-9]{6}$' AND substr(p,3,3)<>'900' AND substr(p,6,3)<>'976'
-    AND substr(p,4,2)<>'11' AND substr(p,7,2)<>'11'
+  SELECT p IS NOT NULL AND p ~ '^\+1[2-9][0-9]{2}[2-9][0-9]{6}$' AND substr(p,6,3)<>'976'
+    AND substr(p,4,2)<>'11' AND substr(p,7,2)<>'11' AND substr(p,4,1)<>'9'
+    AND substr(p,3,3)<>ALL(ARRAY[
+      -- premium, personal, carrier and government NANP codes
+      '900','456','500','521','522','523','524','525','526','527','528','529','530','531','532','533','544','566','577','588',
+      '600','622','700','710',
+      -- NANP countries and territories outside the US states and Canada, billed as international or high-cost destinations
+      '242','246','264','268','284','340','345','441','473','649','658','664','670','671','684','721','758','767','784',
+      '787','809','829','849','868','869','876','939'])
 $$;
 
 -- The one person of the school with this phone, or NULL when none or several.
@@ -360,7 +376,7 @@ END $$;
 CREATE FUNCTION hon.start_school_call(subject text, p jsonb, key text, request uuid, correlation uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid; org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); c hon.school_calls; sender hon.school_text_senders;
-  v_to text; v_person uuid;
+  v_to text; v_person uuid; v_person_phone text;
 BEGIN
   IF jsonb_typeof(p)<>'object' OR NOT p ? 'toE164' OR EXISTS(SELECT 1 FROM jsonb_object_keys(p) k WHERE k NOT IN ('toE164','personId'))
     OR jsonb_typeof(p->'toE164')<>'string' OR (p ? 'personId' AND NOT hon.conversation_uuid_ok(p->'personId'))
@@ -386,8 +402,10 @@ BEGIN
   IF (SELECT count(*) FROM hon.school_calls x WHERE x.school_id=school AND x.staff_principal_id=actor AND x.direction='OUT'
       AND x.created_at>clock_timestamp()-interval '1 hour')>=60 THEN RAISE EXCEPTION 'CALL_RATE_LIMITED' USING ERRCODE='54000'; END IF;
   IF p ? 'personId' THEN
-    SELECT pe.id INTO v_person FROM hon.people pe WHERE pe.id=(p->>'personId')::uuid AND pe.organization_id=org AND pe.school_id=school;
+    SELECT pe.id, pe.phone_e164 INTO v_person, v_person_phone FROM hon.people pe
+      WHERE pe.id=(p->>'personId')::uuid AND pe.organization_id=org AND pe.school_id=school;
     IF v_person IS NULL THEN RAISE EXCEPTION 'CALL_PERSON_NOT_FOUND' USING ERRCODE='P0002'; END IF;
+    IF v_person_phone IS DISTINCT FROM v_to THEN RAISE EXCEPTION 'CALL_PERSON_PHONE_MISMATCH' USING ERRCODE='22023'; END IF;
   ELSE v_person:=hon.school_call_person(org,school,v_to); END IF;
   INSERT INTO hon.school_calls(organization_id,school_id,direction,status,school_number_e164,remote_e164,person_id,staff_principal_id,idempotency_key,connect_by)
     VALUES(org,school,'OUT','INITIATED',sender.phone_e164,v_to,v_person,actor,key,clock_timestamp()+interval '2 minutes') RETURNING * INTO c;
@@ -513,7 +531,10 @@ BEGIN
   END IF;
   SELECT * INTO c FROM hon.school_calls x WHERE x.id=p_call FOR UPDATE;
   IF NOT FOUND OR c.direction<>'OUT' THEN outcome:='REFUSED'; RETURN NEXT; RETURN; END IF;
-  IF c.provider_call_sid=p_call_sid THEN outcome:='REPLAYED'; to_e164:=c.remote_e164; caller_id_e164:=c.school_number_e164; recorded:=c.recorded;
+  IF c.provider_call_sid=p_call_sid THEN
+    IF p_identity<>hon.school_call_identity(c.staff_principal_id) OR NOT hon.school_call_account_ok(c.school_id,p_account_sid) THEN
+      outcome:='REFUSED'; RETURN NEXT; RETURN; END IF;
+    outcome:='REPLAYED'; to_e164:=c.remote_e164; caller_id_e164:=c.school_number_e164; recorded:=c.recorded;
     SELECT coalesce(l.language,'en'), sc.name INTO language, school_name FROM hon.schools sc LEFT JOIN hon.school_language_defaults l ON l.school_id=sc.id WHERE sc.id=c.school_id;
     RETURN NEXT; RETURN; END IF;
   SELECT * INTO sender FROM hon.school_text_senders x WHERE x.school_id=c.school_id AND x.status='ACTIVE' AND x.phone_e164=c.school_number_e164;
@@ -684,7 +705,7 @@ DO $$ DECLARE r text; f text; t text;
   worker text[]:=ARRAY['hon.connect_school_client_call(uuid,text,text,text)','hon.route_school_incoming_call(text,text,text)',
     'hon.record_school_call_status(text,text,text,text,integer,timestamptz)','hon.record_school_call_recording(text,text,text,integer,boolean)',
     'hon.read_school_call_recordings_due(integer)','hon.mark_school_call_recording_deleted(uuid,text)'];
-  private text[]:=ARRAY['hon.school_call_rank(text)','hon.guard_school_call()','hon.guard_school_calling_settings()','hon.guard_school_call_staff()','hon.require_school_call_actor(text,boolean)',
+  private text[]:=ARRAY['hon.school_call_rank(text)','hon.guard_school_call()','hon.guard_school_calling_settings()','hon.guard_school_call_staff()','hon.guard_school_do_not_call()','hon.require_school_call_actor(text,boolean)',
     'hon.school_call_identity(uuid)','hon.school_call_number_ok(text)','hon.school_call_person(uuid,uuid,text)','hon.school_call_account_ok(uuid,text)','hon.expire_school_calls(uuid)',
     'hon.school_call_json(hon.school_calls)','hon.school_call_audit(hon.school_calls,uuid,text,text,jsonb,text,uuid,uuid)'];
 BEGIN
