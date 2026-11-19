@@ -8,6 +8,7 @@ import { verifyParentTestingStatusView } from '@hon/contracts/parent-testing-sta
 import { verifyParentCurriculumLibrary } from '@hon/contracts/curriculum-resource-library';
 import { verifyParentSchoolBookingReceipt, verifyParentSchoolBookings, type ParentSchoolBooking } from '@hon/contracts/parent-school-bookings';
 import { verifyParentInvoicePayments } from '@hon/contracts/parent-invoice-pay';
+import { verifyParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
 import type { ParentApi } from '../api/client';
 import { localDate, localMidnight } from '../schedule/absence-model';
 
@@ -212,6 +213,10 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
       return wrote(verifyParentSchoolBookingReceipt({ booking: { ...b, status: 'CANCELLED', canCancel: false, version: b.version + 1 }, spotsLeft: back?.spotsLeft ?? 0 }, { bookingId }));
     },
     // The sample family never pays: no school processor is reachable, so nothing is payable and a press is refused.
+    announcements: () => ok(verifyParentSchoolAnnouncements({ schoolName: SAMPLE_SCHOOL, announcements: [
+      { announcementId: id(900), title: 'Belt testing next Saturday', body: 'Testing starts at 10am. Please arrive 15 minutes early in a clean uniform.', publishedAt: ms(plus(start.toISOString(), -90)) },
+      { announcementId: id(901), title: 'Closed Monday for the holiday', body: 'There are no classes on Monday. See you Tuesday!', publishedAt: ms(plus(start.toISOString(), -3 * 24 * 60)) },
+    ] })),
     invoicePayments: () => ok(verifyParentInvoicePayments({ canPay: false, testMode: true, invoices: [] })),
     startInvoicePayment: async () => ({ ok: false as const, state: 'refused' as const, code: 'PARENT_INVOICE_PAY_NOT_CONFIGURED' }),
     confirmInvoicePayment: async () => ({ ok: false as const, state: 'refused' as const, code: 'PARENT_INVOICE_PAY_NOT_CONFIGURED' }),

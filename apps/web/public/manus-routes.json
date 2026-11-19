@@ -389,6 +389,10 @@
       "title": "HON | Parent app"
     },
     {
+      "path": "/staff/family-messages/announcements",
+      "title": "HON | Announcements"
+    },
+    {
       "path": "/staff/conversations",
       "title": "HON | Conversations"
     },
