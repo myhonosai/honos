@@ -4393,3 +4393,21 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+-- 0530 parent invoice payment (test mode only): three runtime entry points (list, latest payment, open); the scope,
+-- balance, hold and settle helpers are migration-owner only. No new table.
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_parent_invoice_payments(text)','hon.read_parent_invoice_payment(text,uuid)','hon.open_parent_invoice_payment(text,uuid)'];
+BEGIN
+  IF to_regprocedure('hon.open_parent_invoice_payment(text,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0530 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.parent_invoice_pay_open(uuid)','hon.guard_parent_invoice_pay_record()','hon.guard_parent_invoice_pay_invoice()',
+    'hon.guard_parent_invoice_pay_charge()','hon.parent_invoice_pay_scope(text)','hon.parent_invoice_pay_invoices(uuid,uuid,uuid)',
+    'hon.parent_invoice_pay_balance(uuid)','hon.parent_invoice_pay_latest(uuid)','hon.settle_parent_invoice_payment()']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
