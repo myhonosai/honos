@@ -79,3 +79,10 @@
 .cardForm { width: 100%; min-height: 420px; }
 .qr { width: min(280px, 70vw); height: auto; background: #fff; padding: 8px; border-radius: 8px; border: 1px solid var(--walkin-line); }
 .qrBox { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+/* 0537 trial classes: the staff program picker spans the offer card; the tablet lists classes under the trial. */
+.programs { grid-column: 1 / -1; border: 1px dashed var(--hon-border, #cbd5e1); border-radius: 8px; padding: 8px 10px; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.programs legend { font-weight: 600; font-size: 0.95rem; }
+.programs .meta { flex-basis: 100%; }
+.classes { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.classes button { text-align: left; }
+.classes button:disabled { opacity: 0.55; }
