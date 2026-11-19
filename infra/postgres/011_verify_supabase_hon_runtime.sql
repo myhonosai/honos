@@ -3639,7 +3639,8 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.parent_class_booking_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','cb18dc6356494af40a5b1af73147d4dd8d1bbafefab492439f51180e63fcac15'),
 ('hon.parent_class_booking_child_ok(uuid,uuid)',true,false,'search_path=pg_catalog, hon','237a329c4db7c485ffa5521d1a4028ed443de87e157873ac4e2b17fdc11110d7'),
-('hon.parent_class_booking_session_ok(uuid,hon.class_sessions)',true,false,'search_path=pg_catalog, hon','34c305ae6857963bed97c48089b88563e20dfd2091d60888830d6cfedb7cc183'),
+-- 0575 replaced the body of hon.parent_class_booking_session_ok (classes on a closed day are not offered); its hash below is the 0575 body.
+('hon.parent_class_booking_session_ok(uuid,hon.class_sessions)',true,false,'search_path=pg_catalog, hon','5e10f242e88a5bd527e19cfe7027388305257a36ee371ceca551832833cb948a'),
 ('hon.parent_class_booking_seats(uuid)',true,false,'search_path=pg_catalog, hon','61bfcc57c3e31a23b3a689150ead7d7d43c724db47483cbac8a3f74dcf2e3002'),
 ('hon.parent_class_booking_json(hon.class_bookings,hon.class_sessions)',true,false,'search_path=pg_catalog, hon','d753781cf05db78ddc2525f62e8ecf36aaa4b0a63432578c7155bed238c1ff37'),
 ('hon.parent_class_booking_begin(text,text,text)',true,false,'search_path=pg_catalog, hon','d66182b548222ae12d0d1cc3e027279005c55389277c37718c2476595384215a'),
@@ -5267,3 +5268,21 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
   END LOOP;
 END $$;
 -- End calendar settings exact verification.
+
+-- Closed days for families exact verification (0575): the private closed-day helper and the two kiosk trial helpers it now
+-- filters (the parent booking helper is pinned in the 0329 section above); none is open to the runtime or PUBLIC.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.class_session_on_closed_day(hon.class_sessions)',true,'search_path=pg_catalog, hon','2000f8bf34d83a4d37fa6f60fcb8d2b134664f1936135bd758442edb7635ab26'),
+('hon.walkin_trial_session_open(hon.class_sessions,jsonb,integer)',true,'search_path=pg_catalog, hon','5b8c0373220440eef3385662f7c53eaf73797567db95a42b124ce7148f637041'),
+('hon.walkin_trial_classes(uuid,uuid,jsonb)',true,'search_path=pg_catalog, hon','1fca00badb3cdf18f727f7da46efccd8e3b1022d2c97ce9c954c72602bd40181')) e(signature,definer,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND NOT has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner)
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe closed-day function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End closed days for families exact verification.

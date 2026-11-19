@@ -278,6 +278,29 @@ try {
   const again = await success(() => book(GUARDIAN, { studentProfileId: kid, sessionId: S.open }), 'book again after cancelling', 201);
   ok(again.data.booking.bookingId === B.bookingId && again.data.booking.version === 3 && again.data.booking.status === 'BOOKED', 'booking again reuses the same row');
 
+  // 4b. Closed days (0575): a class on a school-local date inside an ACTIVE block-out of this school is neither offered to
+  //     families nor bookable from the app; another school's block-out, a neighbouring day and a removed block-out change nothing.
+  const holiday = await classSession('Kids Karate Holiday', { inHours: 120 });
+  const holidayDay = (await sql('SELECT (starts_at AT TIME ZONE $2)::date::text d FROM hon.class_sessions WHERE id=$1', [holiday, LA])).rows[0].d;
+  const blockOut = async (school, first, last = first) => { const id = randomUUID();
+    await sql("INSERT INTO hon.calendar_block_outs(id,organization_id,school_id,label,first_day,last_day,created_by_principal_id,updated_by_principal_id) VALUES($1,$2,$3,'Holiday break',$4::date,$5::date,$6,$6)",
+      [id, ids.organization, school, first, last, GUARDIAN.principal]); return id; };
+  const offeredNow = async (label) => (await success(() => choices(GUARDIAN), label)).data.children.find((c) => c.studentProfileId === kid).sessions.map((s) => s.sessionId);
+  ok((await offeredNow('choices before any block-out')).includes(holiday), 'the holiday class is offered while the school is open');
+  const elsewhere = await blockOut(ids.otherSchool, holidayDay);
+  const nextDay = await blockOut(ids.school, (await sql("SELECT ($1::date+1)::text d", [holidayDay])).rows[0].d);
+  ok((await offeredNow('choices with unrelated block-outs')).includes(holiday), 'another school closing that day, or this school closing the next day, hides nothing');
+  const closed = await blockOut(ids.school, (await sql("SELECT ($1::date-2)::text d", [holidayDay])).rows[0].d, holidayDay);
+  const hidden = await offeredNow('choices on a closed day');
+  ok(!hidden.includes(holiday) && hidden.includes(S.optional), 'a class on a closed day is not offered; other classes still are');
+  const closedBefore = (await sql("SELECT count(*)::int n FROM hon.class_bookings WHERE class_session_id=$1", [holiday])).rows[0].n;
+  await refused(() => book(GUARDIAN, { studentProfileId: kid, sessionId: holiday }), 409, 'PARENT_CLASS_BOOKING_NOT_OFFERED', 'a class on a closed day cannot be booked from the app');
+  ok((await sql("SELECT count(*)::int n FROM hon.class_bookings WHERE class_session_id=$1", [holiday])).rows[0].n === closedBefore, 'a refused closed-day booking writes nothing');
+  await sql("UPDATE hon.calendar_block_outs SET status='REMOVED',version=version+1 WHERE id=$1", [closed]);
+  ok((await offeredNow('choices after the block-out is removed')).includes(holiday), 'removing the block-out offers the class again');
+  ok((await success(() => book(GUARDIAN, { studentProfileId: kid, sessionId: holiday }), 'book once the school reopens that day', 201)).data.booking.status === 'BOOKED', 'and it can be booked again');
+  void elsewhere; void nextDay;
+
   // 5. Live authority: grant end, suspended school and lapsed entitlement are refused.
   await sql("UPDATE hon.families SET status='SUSPENDED' WHERE id=$1", [ids.family]);
   await refused(() => book(GUARDIAN, { studentProfileId: kid, sessionId: S.optional }), 403, 'PARENT_CLASS_BOOKING_FORBIDDEN', 'an inactive family');
