@@ -42,7 +42,7 @@ function versionCss(out) {
 }
 
 function versionPage(html, out) {
-  return html.replace(/(href|src)="\/((?:fonts\/[^"?]+\.woff2)|styles\.css|site\.js|flow\.js)"/g,
+  return html.replace(/(href|src)="\/((?:fonts\/[^"?]+\.woff2)|styles\.css|story\.css|boot\.js|loader\.js|story\.js|site\.js)"/g,
     (_, attr, file) => `${attr}="/${file}?v=${contentVersion(join(out, file))}"`);
 }
 
