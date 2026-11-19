@@ -318,6 +318,9 @@ import { ClassSessionsReadHumanUiGuard } from './schedule/class-sessions-read-hu
 import { ClassSessionsReadService } from './schedule/class-sessions-read.service.js';
 import { ClassSessionPagesController, ClassSessionPagesHumanUiGuard } from './schedule/class-session-pages.controller.js';
 import { ClassSeriesController } from './schedule/class-series.controller.js';
+import { CalendarCardsController } from './schedule/calendar-cards.controller.js';
+import { CalendarCardsService } from './schedule/calendar-cards.service.js';
+import { CalendarCardCreateHumanUiGuard, CalendarCardMoveHumanUiGuard, CalendarCardsReadHumanUiGuard } from './schedule/calendar-cards-human-ui.guard.js';
 import { ClassSeriesService } from './schedule/class-series.service.js';
 import { PublicSchoolEventController, SchoolEventController } from './schedule/school-event.controller.js';
 import { SchoolEventService } from './schedule/school-event.service.js';
@@ -550,6 +553,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSessionsReadController,
     ClassSessionPagesController,
     ClassSeriesController,
+    CalendarCardsController,
     SchoolEventController,
     PublicSchoolEventController,
     BookingTypeController,
@@ -865,6 +869,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolSocialAdsService,
     SocialPostDispatcher,
     ClassSeriesService,
+    CalendarCardsService,
     SchoolReportsService,
     SchoolContactsService,
     SchoolContactAdminService,
@@ -885,6 +890,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     BookingTypeStatusHumanUiGuard,
     BookingTypeBookingStatusHumanUiGuard,
     ClassSeriesCreateHumanUiGuard,
+    CalendarCardsReadHumanUiGuard,
+    CalendarCardCreateHumanUiGuard,
+    CalendarCardMoveHumanUiGuard,
     ClassSeriesReviseHumanUiGuard,
     ClassSeriesOngoingHumanUiGuard,
     ClassSeriesTopUpHumanUiGuard,

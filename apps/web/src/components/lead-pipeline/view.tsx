@@ -2,12 +2,12 @@ import React, { useId } from 'react';
 import { CRM_PIPELINE_TEMPLATES, CRM_STAGE_COLORS, CRM_STAGE_NAME_MAX, type CrmPipelineTemplateCode, type CrmBoardLead, type CrmBoardStage, type CrmBoardStatus, type CrmPipelineBoard, type CrmStageColor } from '@hon/contracts';
 import type { CrmAppointmentSummary } from '@hon/contracts';
 import { crmFollowUpHref } from '../crm-follow-up-handoff';
-import { leadMembershipHref, leadWorkflowHref } from '../crm-lead-memberships-http';
+import { leadMembershipHref, leadTrialHref, leadWorkflowHref } from '../crm-lead-memberships-http';
 import type { TrialRecovery } from '../crm-journey/trial-recovery-http';
 import { pipelineText, type PipelineKey } from './copy';
 import type { BoardScope } from './http';
 import {
-  BOARD_SORTS, PROGRAM_NONE, applyFilters, boardColumns, boardStats, cardLine, codeLabel, draftErrors, fullName, initials, moveChoices,
+  BOARD_SORTS, PROGRAM_NONE, applyFilters, callHref, emailHref, textHref, boardColumns, boardStats, cardLine, codeLabel, draftErrors, fullName, initials, moveChoices,
   moveDraftStage, moveDraftStageTo, moveTargets, programsOf, rateText, stagesNeedingMove, type BoardSort, type BoardView, type Draft, type DraftError, type Filters,
 } from './model';
 import styles from './pipeline.module.css';
@@ -205,7 +205,7 @@ function Board(props: Inner & { shown: CrmBoardLead[] }) {
   </>;
 }
 
-function Card({ board, lead, language, selectedId, movingId, onOpen, onMove, onAskClose, t }: Inner & { lead: CrmBoardLead }) {
+function Card({ board, lead, scope, language, selectedId, movingId, onOpen, onMove, onAskClose, t }: Inner & { lead: CrmBoardLead }) {
   const name = fullName(lead);
   const line = cardLine(lead);
   const targets = moveTargets(board.stages, lead);
@@ -230,7 +230,21 @@ function Card({ board, lead, language, selectedId, movingId, onOpen, onMove, onA
         <li><button type="button" data-tone="lost" onClick={() => onAskClose?.(lead.id, 'LOST')}>{t('markLost')}</button></li>
       </ul>
     </details> : null}
+    {lead.status === 'OPEN' ? <QuickActions lead={lead} scope={scope} name={name} t={t} where="card"/> : null}
   </article>;
+}
+
+/** One-tap Call, Text and Book trial (Email too in the panel). Call, Text and Email open the staff member's own app; HON sends nothing. */
+function QuickActions({ lead, scope, name, where, t }: { lead: CrmBoardLead; scope: BoardScope; name: string; where: 'card' | 'panel'; t: T }) {
+  const call = callHref(lead.phoneE164), text = textHref(lead.phoneE164), email = where === 'panel' ? emailHref(lead.email) : null;
+  const trial = leadTrialHref({ organizationId: scope.organizationId, schoolId: scope.schoolId, leadId: lead.id });
+  const id = where === 'card' ? 'quick' : 'panel';
+  return <div className={styles.quick} data-where={where}>
+    {call ? <a className={styles.quickLink} href={call} draggable={false} data-testid={`${id}-call`} aria-label={t('quickCallLabel', { name })}>{t('quickCall')}</a> : null}
+    {text ? <a className={styles.quickLink} href={text} draggable={false} data-testid={`${id}-text`} aria-label={t('quickTextLabel', { name })}>{t('quickText')}</a> : null}
+    {email ? <a className={styles.quickLink} href={email} draggable={false} data-testid={`${id}-email`}>{t('quickEmail')}</a> : null}
+    <a className={styles.quickLink} data-tone="trial" href={trial} draggable={false} data-testid={`${id}-trial`} aria-label={t('quickTrialLabel', { name })}>{t('quickTrial')}</a>
+  </div>;
 }
 
 function List({ board, shown, language, selectedId, onOpen, t }: Inner & { shown: CrmBoardLead[] }) {
@@ -275,6 +289,8 @@ function Panel({ board, lead, scope, language, trials, movingId, onOpen, onMove,
         <div><dt>{t('source')}</dt><dd>{lead.sourceCode ? codeLabel(lead.sourceCode) : t('notRecorded')}</dd></div>
         <div><dt>{t('added')}</dt><dd>{when(language, lead.createdAt, false)}</dd></div>
       </dl>
+      {lead.status === 'OPEN' ? <><QuickActions lead={lead} scope={scope} name={fullName(lead)} t={t} where="panel"/>
+        {callHref(lead.phoneE164) || emailHref(lead.email) ? <p className={styles.meta}>{t('quickTextHelp')}</p> : null}</> : null}
     </section>
     <section className={styles.field}>
       <label htmlFor={stageId}>{t('stage')}</label>
@@ -392,7 +408,7 @@ function EditDialog({ board, edit, onDraft, onSave, onEdit, t }: Inner & { edit:
       <ol className={styles.stageList}>
         {draft.stages.map((stage, index) => <li key={stage.key} className={styles.stageRow} data-hidden={stage.hidden ? '' : undefined} data-testid="stage-row"
           onDragOver={(e) => { if (!busy && e.dataTransfer.types.includes(STAGE_DRAG_TYPE)) e.preventDefault(); }} onDrop={(e) => dropOn(e, index)}>
-          <span className={styles.handle} draggable={busy ? undefined : true} title={t('dragStage', { name: stage.name })} aria-label={t('dragStage', { name: stage.name })}
+          <span className={styles.handle} draggable={busy ? undefined : true} title={t('dragStage', { name: stage.name })} aria-hidden="true"
             onDragStart={(e) => { e.dataTransfer.setData(STAGE_DRAG_TYPE, String(index)); e.dataTransfer.effectAllowed = 'move'; }}>⋮⋮</span>
           <span className={styles.dot} data-color={stage.color} aria-hidden="true"/>
           <input aria-label={t('stageName')} value={stage.name} maxLength={CRM_STAGE_NAME_MAX} disabled={busy} onChange={(e) => setStage(index, { name: e.target.value })}/>

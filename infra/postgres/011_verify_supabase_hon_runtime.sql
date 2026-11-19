@@ -2986,6 +2986,7 @@ END $$;
 -- End CRM school clock exact verification.
 
 -- 0251 replaced the bodies of hon.class_series_json, hon.read_school_class_series and hon.revise_class_series (ongoing switch, topUpDue, new weekdays of ongoing series filled); their hashes below are the 0251 bodies.
+-- 0567 replaced the body of hon.class_series_apply_future (classes moved off their roster from the calendar are skipped); its hash below is the 0567 body.
 -- Recurring class series exact verification (B-SCH-1 0239): private forced-RLS series and occurrence tables, the series guard,
 -- private helpers, six runtime entry points; the runtime still has no UPDATE on hon.class_sessions.
 DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
@@ -3003,7 +3004,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 ('hon.class_series_pattern(jsonb,boolean)',false,false,'search_path=pg_catalog, hon','30abf7a726b2fb7c8c970b56b50a25be4239743474107f8954977279d0193bf5'),
 ('hon.class_series_command_begin(text,text,text)',true,false,'search_path=pg_catalog, hon','7119e94378413589f6e0fc87777f10405147e5556cd4b047b0d38ce6e0b45944'),
 ('hon.class_series_command_finish(text,text,uuid,jsonb,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)',true,false,'search_path=pg_catalog, hon','3fba076d7585bdac91002f2dc9ecf156debb50a5680d5899571361a1e99f902d'),
-('hon.class_series_apply_future(hon.class_series,text)',true,false,'search_path=pg_catalog, hon','f5b76af7d5a086421461f3419d828fc1c2554221a32e613c1162bd771459f62f'),
+('hon.class_series_apply_future(hon.class_series,text)',true,false,'search_path=pg_catalog, hon','01b183c1fb680a81b50957262d0c1b5d13448a7a0b9f1b4f1725c25c93a7ed0c'),
 ('hon.create_class_series(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','789071319d0903f962db946b683d9ee520d88739a0cc3e4f1742f0d0c44ddeab'),
 ('hon.revise_class_series(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','59d84e1b8134dc6d6d2d637f64128640f91cb56d6c0f5013fcbb324366cf20d4'),
 ('hon.end_class_series(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','874b8ab2922b59f0bca68e24a7dd87bb1955d023c790f1a8ec6ae5e4f9d6422c'),
@@ -4475,8 +4476,8 @@ END $$;
 -- End conversation AI training exact verification.
 -- Automation engine exact verification (AU-2 0423): three private forced-RLS engine tables nobody but the owner touches, four runtime
 -- entry points (turn on, pause, run history), two definer engine functions only the hon_automation_worker login (014) may call,
--- private helpers, forward-only guards, the AUTOMATION principal and the message origin columns. 0565 replaced the body of
--- hon.automation_unavailable (the three date triggers now run); its hash below is the 0565 body.
+-- private helpers, forward-only guards, the AUTOMATION principal and the message origin columns. 0574 replaced the body of
+-- hon.automation_unavailable (the three date triggers now run); its hash below is the 0574 body.
 DO $$ DECLARE f record; safe boolean; t text; worker oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_automation_worker'); BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_automation_run()',true,false,false,'search_path=pg_catalog, hon','65683e06da1ed396b09ab9ac1a460ae718c0b4cfa31c6f1d97c90b8f627d0abb'),
@@ -5128,6 +5129,35 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END IF;
 END $$;
 -- End shared AI text proposals exact verification.
+-- School calls exact verification (0556): four private forced-RLS tables, eight staff runtime entry points, worker-only
+-- provider functions and owner-only helpers, all SECURITY DEFINER with the fixed search path.
+DO $$ DECLARE f text; t text;
+  entry text[]:=ARRAY['hon.read_school_calling(text)','hon.set_school_calling_settings(text,jsonb,uuid,uuid)','hon.set_my_school_call_ringing(text,jsonb)',
+    'hon.start_school_call(text,jsonb,text,uuid,uuid)','hon.read_school_calls(text,jsonb)','hon.update_school_call(text,jsonb,uuid,uuid)',
+    'hon.set_school_do_not_call(text,jsonb)','hon.open_school_call_recording(text,uuid)'];
+  worker text[]:=ARRAY['hon.connect_school_client_call(uuid,text,text,text)','hon.route_school_incoming_call(text,text,text)',
+    'hon.record_school_call_status(text,text,text,text,integer,timestamptz)','hon.record_school_call_recording(text,text,text,integer,boolean)',
+    'hon.read_school_call_recordings_due(integer)','hon.mark_school_call_recording_deleted(uuid,text)'];
+  closed text[]:=ARRAY['hon.require_school_call_actor(text,boolean)','hon.school_call_person(uuid,uuid,text)','hon.school_call_account_ok(uuid,text)','hon.expire_school_calls(uuid)',
+    'hon.school_call_json(hon.school_calls)','hon.school_call_audit(hon.school_calls,uuid,text,text,jsonb,text,uuid,uuid)',
+    'hon.guard_school_call()','hon.guard_school_calling_settings()','hon.guard_school_call_staff()','hon.guard_school_do_not_call()'];
+BEGIN
+  FOREACH t IN ARRAY ARRAY['school_calling_settings','school_call_staff','school_calls','school_do_not_call'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+      RAISE EXCEPTION 'Unsafe school calls table: %',t; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY entry||worker||closed LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND p.prosecdef AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon'])
+      OR has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') IS DISTINCT FROM (f=ANY(entry))
+      OR (EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_communication_worker')
+        AND has_function_privilege('hon_communication_worker',f::regprocedure,'EXECUTE') IS DISTINCT FROM (f=ANY(worker)))
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure
+        AND a.grantee=0) THEN
+      RAISE EXCEPTION 'Unsafe school calls function: %',f; END IF;
+  END LOOP;
+END $$;
+-- End school calls exact verification.
 
 -- Simple invoices exact verification (SI1 0558)
 DO $$ DECLARE f text; t text; safe boolean;
@@ -5160,7 +5190,45 @@ BEGIN
   END LOOP;
 END $$;
 -- End simple invoices exact verification.
--- Automation date triggers exact verification (AU-3 0565): one private forced-RLS scan receipt table nobody but the owner touches
+-- Calendar cards exact verification (0567): the card kind and roster instructor columns, the private forced-RLS roster
+-- detachment table, private helpers, the occurrence trigger and three runtime entry points; still no runtime UPDATE on class sessions.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+    AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+    AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=c.oid AND tgname='class_session_roster_detachments_immutable' AND NOT tgisinternal)
+    AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=c.oid AND tgname='class_session_roster_detachments_no_truncate' AND NOT tgisinternal)
+  INTO safe FROM pg_class c WHERE c.oid='hon.class_session_roster_detachments'::regclass;
+  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Roster detachments must be private, immutable and FORCE RLS'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='hon.class_sessions'::regclass AND attname='session_kind' AND atttypid='text'::regtype AND attnotnull)
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.class_sessions'::regclass AND conname='class_sessions_session_kind_check')
+    OR NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='hon.class_series'::regclass AND attname='session_kind' AND atttypid='text'::regtype AND attnotnull)
+    OR NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='hon.class_series'::regclass AND attname='lead_instructor_principal_id' AND atttypid='uuid'::regtype)
+    OR EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a JOIN pg_class c ON c.oid=x.attrelid
+      WHERE x.attrelid='hon.class_series'::regclass AND x.attname IN ('session_kind','lead_instructor_principal_id') AND a.grantee<>c.relowner)
+    OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.class_series_occurrences'::regclass AND tgname='class_series_occurrence_inherit' AND NOT tgisinternal
+      AND tgfoid='hon.class_series_occurrence_inherit()'::regprocedure) THEN
+    RAISE EXCEPTION 'Unsafe calendar card columns or occurrence trigger'; END IF;
+  FOR f IN SELECT * FROM (VALUES
+('hon.calendar_instructor_ok(uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','10f1ede2fa35f1fb1a34d196555e061b8a9221b09e48663477318dbd060bd33f'),
+('hon.class_series_occurrence_inherit()',true,false,'search_path=pg_catalog, hon','769018b72f49972a10e9fe1a6c1416b045c5f622641e8196329bb3eb44c5f99f'),
+('hon.calendar_card_command_finish(text,text,uuid,jsonb,text,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)',true,false,'search_path=pg_catalog, hon','afe49b9fbbd604a62f4c994f9aa6d67cdf57f9c70e9a6684aaf0f4e9c6db41e7'),
+('hon.create_calendar_card(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','813f6ae96dca73dd9a8e82da08b2582f4bf458c9d94d0c7d1c4ee4e183b9fd71'),
+('hon.move_calendar_card(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','9486c99871157f5e84f9611d70b141bbacdf91be2dbdb6176db5704094aa6eea'),
+('hon.read_school_calendar_cards(text,jsonb)',true,true,'search_path=pg_catalog, hon','8b60a8a66eb9214df14669446158c6ac36f78a922e807fda2d3efb6f676b8da8')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe calendar card function: %',f.signature; END IF;
+  END LOOP;
+  IF has_any_column_privilege('hon_runtime','hon.class_sessions','UPDATE') THEN RAISE EXCEPTION 'Runtime must not update class sessions'; END IF;
+END $$;
+-- End calendar cards exact verification.
+-- Automation date triggers exact verification (AU-3 0574): one private forced-RLS scan receipt table nobody but the owner touches
 -- (forward-only guards), private candidate and birthday helpers, and one definer scan only the hon_automation_worker login (014) may call.
 DO $$ DECLARE f record; safe boolean; worker oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_automation_worker'); BEGIN
   FOR f IN SELECT * FROM (VALUES

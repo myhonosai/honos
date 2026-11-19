@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "b9d53737c41059a2ad8dfab6fe8e75d64b5cd797dcfdcc4f54eccd74394dd79f",
+  "chainSha256": "c4e90eed55b871974bf119baecc0c48c4f1ec8331381b777838ffe4e6c394a21",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -707,12 +707,20 @@
       "sha256": "fd25dc1f0f73734228a886d6b0e47dd8d804aa0083b8947ad931041a7e5bc691"
     },
     {
+      "file": "0556_school_calls.sql",
+      "sha256": "aa8a430ed111153ae4613811fd7184a2e1b5ba27ed6f3bbbd719828226b6c536"
+    },
+    {
       "file": "0558_simple_invoices.sql",
       "sha256": "3b42347f51e202714398f01d0bf457723bcafc545a5edd9ec4fbeee6b7d02a82"
     },
     {
-      "file": "0565_automation_date_triggers.sql",
-      "sha256": "a99297a2fc4fbec454e418b6a60ee2bdbf446c044720ac6f74712976dab887f6"
+      "file": "0567_calendar_cards.sql",
+      "sha256": "812ae679a0a8671aca29a4692db0f7751ad78bcb3169eec0b3bcdc3ac301de76"
+    },
+    {
+      "file": "0574_automation_date_triggers.sql",
+      "sha256": "fb2795778f536ea83c5a6c81191b9baaed41575c22b4c0e5a06a0e163e012be9"
     }
   ]
 }

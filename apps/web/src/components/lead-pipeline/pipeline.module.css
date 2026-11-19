@@ -85,6 +85,15 @@
 .cardText { display: grid; gap: 1px; min-width: 0; }
 .cardText strong { font-size: var(--hon-text-sm, 13px); overflow-wrap: anywhere; }
 .cardText small { color: var(--hon-text-subtle, #7486aa); font-size: var(--hon-text-xs, 12px); }
+.quick { display: flex; flex-wrap: wrap; gap: 4px; }
+.quick[data-where='card'] { grid-column: 1 / -1; padding-left: 40px; }
+.quick[data-where='panel'] { margin-top: var(--hon-space-2, 8px); }
+.quickLink { display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border: 1px solid var(--hon-border, #24405a); border-radius: 999px;
+  color: var(--hon-text-muted, #a9b8d6); font-size: var(--hon-text-xs, 12px); font-weight: 600; text-decoration: none; cursor: pointer; }
+.quickLink:hover, .quickLink:focus-visible { border-color: var(--hon-accent, #2f7bff); color: var(--hon-text, #eef3ff); }
+.quickLink[data-tone='trial'] { border-color: color-mix(in srgb, var(--hon-accent, #2f7bff) 55%, transparent); color: var(--hon-text, #eef3ff); }
+.quick[data-where='panel'] .quickLink { min-height: 32px; padding: 0 14px; font-size: var(--hon-text-sm, 13px); }
+[data-hon-mode='big-button'] .quickLink { min-height: 40px; padding: 0 14px; font-size: var(--hon-text-sm); }
 .program { color: var(--hon-text-muted, #a9b8d6); font-size: var(--hon-text-xs, 12px); }
 .avatar { display: inline-grid; flex: none; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: color-mix(in srgb, var(--hon-accent, #2f7bff) 30%, var(--hon-surface-solid, #0d1a38));
   color: var(--hon-text, #eef3ff); font-size: var(--hon-text-xs, 12px); font-weight: 800; }
