@@ -20,7 +20,7 @@ Owner ask (2026-11-19): "on main screen we would have announcement that we can p
 | Entry points | `read_parent_school_announcements(text)`, `read_school_announcements(text)`, `publish_school_announcement(text,jsonb,text,uuid,uuid)`, `withdraw_school_announcement(text,jsonb,text,uuid,uuid)`; runtime EXECUTE only. |
 | Parent scope | 0329 `parent_class_booking_scope(subject,false)`: exactly one live family grant, live school and entitlement. No selector is accepted. |
 | Staff scope | 0330 `require_family_messages_actor`, re-checked after every lock and write. The route ids are never authority. |
-| Limits | 20 posts per school per rolling day, under a per-school advisory lock (`SCHOOL_ANNOUNCEMENTS_RATE_LIMITED`, 429). |
+| Limits | 20 posts per school per rolling day, under a per-school advisory lock (`SCHOOL_ANNOUNCEMENTS_RATE_LIMITED`, 429). Posts taken down still count, on purpose, so posting and taking down cannot be repeated without limit. |
 | Idempotency | Publish and withdraw need an `Idempotency-Key`; an exact repeat replays, a different command under the same key is `IDEMPOTENCY_KEY_REUSED`. |
 | Audit / outbox | `school_announcement.publish` / `.withdraw` audit rows and inert `school_announcement.published` / `.withdrawn` outbox events carry ids, status and version only, never the text. |
 | API | `GET /v1/parent/announcements` (`parent.announcements.read`); `GET|POST /v1/organizations/:org/schools/:school/announcements` (`school_announcements.read`, `school_announcements.publish`); `POST .../:id/withdraw` (`school_announcements.withdraw`). |
