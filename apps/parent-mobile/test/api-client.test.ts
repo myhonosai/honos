@@ -6,6 +6,21 @@ function api(fetchImpl: jest.Mock, token: string | null = 'tok') {
 }
 
 describe('parent API client', () => {
+  it('starts an invoice payment naming only the invoice, as a human command with an idempotency key', async () => {
+    const inv = '66666666-6666-4666-8666-666666666666';
+    const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(200, { data: { state: 'OPEN', url: 'https://checkout.stripe.test/pay/cs_1', expiresAt: '2026-11-17T15:30:00.000Z', amountMinor: 14900, currency: 'USD' } }));
+    const result = await api(fetchImpl).startInvoicePayment(inv, 'key-0000000000000001');
+    expect(result.ok && result.data.state).toBe('OPEN');
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(url).toBe(`https://api.example.test/v1/parent/invoice-payments/${inv}/start`);
+    expect(init.method).toBe('POST');
+    expect(init.headers['x-hon-human-command']).toBe('parent.invoice.pay.start');
+    expect(init.headers['Idempotency-Key']).toBe('key-0000000000000001');
+    expect(JSON.parse(init.body)).toEqual({});
+    const bad = jest.fn().mockResolvedValue(jsonResponse(200, { data: { state: 'OPEN', url: 'http://evil.test', expiresAt: '2026-11-17T15:30:00.000Z', amountMinor: 1, currency: 'USD' } }));
+    expect((await api(bad).startInvoicePayment(inv, 'key-0000000000000002')).ok).toBe(false);
+  });
+
   it('reads the journey with a bearer session, no cookies and no selectors', async () => {
     const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(200, journeyBody()));
     const result = await api(fetchImpl).journey();

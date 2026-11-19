@@ -3066,8 +3066,9 @@ DO $$ DECLARE f record; safe boolean; expected record; BEGIN
     IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
       RAISE EXCEPTION 'Missing tuition payment guard: %',expected.name; END IF;
   END LOOP;
-  -- 0337 adds one more invoice guard (an open autopay charge holds its invoices), verified in its own section.
-  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.invoices'::regclass AND NOT tgisinternal AND tgname<>'school_pay_charge_invoice_guard')<>1 THEN
+  -- 0337 adds one more invoice guard (an open autopay charge holds its invoices), and 0530 one more (an open family
+  -- payment holds its invoice); each is verified in its own section.
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.invoices'::regclass AND NOT tgisinternal AND tgname NOT IN ('school_pay_charge_invoice_guard','parent_invoice_pay_invoice_guard'))<>1 THEN
     RAISE EXCEPTION 'hon.invoices must carry exactly the tuition payment status guard'; END IF;
   IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='billing.invoice.payment.record' AND is_sensitive AND is_staff_assignable) THEN
     RAISE EXCEPTION 'billing.invoice.payment.record must exist as a sensitive staff-assignable permission'; END IF;
@@ -4344,7 +4345,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 ('hon.school_pay_once_record(hon.school_pay_once,text,jsonb)',true,false,'search_path=pg_catalog, hon','ed1e9f9cdcd60e74a9c18fc5489017ab3c18c37f6b0b12979d3b8fd63842f2ef'),
 ('hon.school_pay_once_connection(uuid,uuid)',true,false,'search_path=pg_catalog, hon','79a382f793dde948ed35350c6680c7a82008eddd8d6466d903d9e5bdbde38a05'),
 ('hon.school_pay_once_provider(uuid,uuid)',true,false,'search_path=pg_catalog, hon','5181fd08f01fdf39baad56c02e5be4fa589b5a439128d438f94ad36ffa6bf2ad'),
-('hon.school_pay_once_open(uuid,uuid,text,uuid,bigint,text,jsonb,jsonb,timestamp with time zone)',true,false,'search_path=pg_catalog, hon','567bf757d993dcfc4813039949d11d4e97cc855aac152307151c90575d36176b'),
+('hon.school_pay_once_open(uuid,uuid,text,uuid,bigint,text,jsonb,jsonb,timestamp with time zone)',true,false,'search_path=pg_catalog, hon','22f2cc0d4c25f26af3a2d0f75f5f6b674cb8dbf4ad81f95609a8537f8f3ca9ac'),
 ('hon.school_pay_once_state(uuid)',true,false,'search_path=pg_catalog, hon','92232df24fcb7b1c3d16dfc0f024243ffb53a01f6bc63fe3dbc0067fc276feb7'),
 ('hon.school_pay_once_cancel(uuid)',true,false,'search_path=pg_catalog, hon','fda71731d5c24ee71075c41c2d6c2aa251dcabc1355ff151d35425e75197fc88'),
 ('hon.read_school_pay_once(uuid)',true,true,'search_path=pg_catalog, hon','784ba9ab62974f5a50f5a98885f01bedb39708784480c6f364dab0fd7bc486fb'),
@@ -4367,7 +4368,8 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
     IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
       RAISE EXCEPTION 'Missing school one-time payment guard: %',expected.name; END IF;
   END LOOP;
-  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid IN ('hon.school_pay_once'::regclass,'hon.school_pay_once_events'::regclass) AND NOT tgisinternal)<>4 THEN
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid IN ('hon.school_pay_once'::regclass,'hon.school_pay_once_events'::regclass) AND NOT tgisinternal
+      AND tgname<>'parent_invoice_pay_settle')<>4 THEN
     RAISE EXCEPTION 'School one-time payment tables must have exactly their four guards'; END IF;
   IF NOT EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname='hon' AND indexname='school_pay_once_one_live_idx'
       AND indexdef LIKE '%UNIQUE%(organization_id, school_id, source, source_id)%') THEN
@@ -4941,6 +4943,48 @@ BEGIN
     RAISE EXCEPTION 'Membership agreement link principal missing'; END IF;
 END $$;
 -- End membership agreement signing link exact verification.
+-- Parent invoice payment exact verification (0530): internal scope, balance and hold helpers and the settle trigger that the runtime can never
+-- call, three API entry points, the FAMILY_INVOICE source and the holds on invoices, payment records and charge attempts.
+DO $$ DECLARE f record; safe boolean; expected record; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.parent_invoice_pay_open(uuid)',true,false,'search_path=pg_catalog, hon','ba74921d7cd710c413da1f9f0c8fdb0a540ac030d052379e019791e1e8a6b4d4'),
+('hon.guard_parent_invoice_pay_record()',true,false,'search_path=pg_catalog, hon','f7bc1870338e8ad66447e70036d1b48a248f10ed0c51b51134b6ee0dfc82c3d4'),
+('hon.guard_parent_invoice_pay_invoice()',true,false,'search_path=pg_catalog, hon','644f147f6141ae47b9dc4c02ec1272cfd53ab45ea9d3dfb99b385377fd77272f'),
+('hon.guard_parent_invoice_pay_charge()',true,false,'search_path=pg_catalog, hon','092e827e9cdd20ffe9e684b8b1c77d3d78d79c26f4d2a5020e985909b4c2662f'),
+('hon.parent_invoice_pay_scope(text)',true,false,'search_path=pg_catalog, hon','7c8b204c73f882751064534c3ecd9b79ea9945e9104f6c55d3432677dd76fdb1'),
+('hon.parent_invoice_pay_invoices(uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','73f77c2fdb5c60e190cb4b40e018842afb800430441857367aafe074e706491f'),
+('hon.parent_invoice_pay_balance(uuid)',true,false,'search_path=pg_catalog, hon','176ec1527f930cf6dea56d3b2d55183964ae87438d47ec12bfd687c08ad26891'),
+('hon.parent_invoice_pay_latest(uuid)',true,false,'search_path=pg_catalog, hon','858ab153664a30381ca762a08d0204c51f6e016645c45374485e6cc94dada6fe'),
+('hon.settle_parent_invoice_payment()',true,false,'search_path=pg_catalog, hon','0a1c1a2bb05d617bf2f5f358d2480741a4512e6a34d93cd2cb9585eedc354c2b'),
+('hon.read_parent_invoice_payments(text)',true,true,'search_path=pg_catalog, hon','2d0e8c9164b6993cb32e23bad7542822b0bd43ee84dffc26831e4da238a2588a'),
+('hon.read_parent_invoice_payment(text,uuid)',true,true,'search_path=pg_catalog, hon','9ee6e696bcc53f9927d2b673c83b63146734de72e9cb2376c1040afd72e0b4d6'),
+('hon.open_parent_invoice_payment(text,uuid)',true,true,'search_path=pg_catalog, hon','a5d6d390449d934abb29fd07ac7a27c6a9e99880cfbedd0135c43e2f8981d497')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe parent invoice payment function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('school_pay_once','parent_invoice_pay_settle','hon.settle_parent_invoice_payment()'),
+    ('invoice_payment_records','parent_invoice_pay_record_guard','hon.guard_parent_invoice_pay_record()'),
+    ('invoices','parent_invoice_pay_invoice_guard','hon.guard_parent_invoice_pay_invoice()'),
+    ('school_pay_charge_attempts','parent_invoice_pay_charge_guard','hon.guard_parent_invoice_pay_charge()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing parent invoice payment trigger: %',expected.name; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.school_pay_once'::regclass AND conname='school_pay_once_source_check'
+      AND pg_get_constraintdef(oid) LIKE '%FAMILY_INVOICE%') THEN
+    RAISE EXCEPTION 'The one-time payment source must include FAMILY_INVOICE'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM hon.principals WHERE id='00000000-0000-4000-8000-000000000530' AND principal_type='SYSTEM_SERVICE' AND user_id IS NULL)
+    OR EXISTS(SELECT 1 FROM hon.principal_role_grants WHERE principal_id='00000000-0000-4000-8000-000000000530')
+    OR EXISTS(SELECT 1 FROM hon.hq_operator_grants WHERE principal_id='00000000-0000-4000-8000-000000000530')
+    OR EXISTS(SELECT 1 FROM hon.family_access_grants WHERE principal_id='00000000-0000-4000-8000-000000000530') THEN
+    RAISE EXCEPTION 'The parent invoice payment recorder must be a code-owned service with no authority'; END IF;
+END $$;
+-- End parent invoice payment exact verification.
 -- Walk-in kiosk card payment exact verification (0533): four runtime entry points, owner-only helpers, PAID_CARD columns.
 DO $$ DECLARE f text;
   entry text[]:=ARRAY['hon.read_walkin_card_provider(text)','hon.open_walkin_card_payment(text,text)','hon.settle_walkin_card_payment(text,text)',
