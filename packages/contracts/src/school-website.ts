@@ -3,9 +3,10 @@
 // a site: forms and booking buttons point at the school's own published lead forms (0075) and booking types (0286).
 // The same rules are checked again by hon.school_website_document_ok in the database.
 
-export const WEBSITE_TEMPLATES = ['MODERN_CLEAN', 'FAMILY_FRIENDLY', 'BOLD_POWERFUL', 'TRADITIONAL', 'HIGH_CONVERSION'] as const;
+/** The first five follow proven martial arts school sites; NEON_GRID, EDITORIAL and BENTO (0560) show off a modern product look. */
+export const WEBSITE_TEMPLATES = ['MODERN_CLEAN', 'FAMILY_FRIENDLY', 'BOLD_POWERFUL', 'TRADITIONAL', 'HIGH_CONVERSION', 'NEON_GRID', 'EDITORIAL', 'BENTO'] as const;
 export type WebsiteTemplate = typeof WEBSITE_TEMPLATES[number];
-export const WEBSITE_FONTS = ['MODERN', 'FRIENDLY', 'BOLD', 'CLASSIC'] as const;
+export const WEBSITE_FONTS = ['MODERN', 'FRIENDLY', 'BOLD', 'CLASSIC', 'TECH', 'EDITORIAL'] as const;
 export type WebsiteFont = typeof WEBSITE_FONTS[number];
 export const WEBSITE_PAGE_KINDS = ['HOME', 'PROGRAM', 'LANDING', 'PROMOTION', 'CUSTOM'] as const;
 export type WebsitePageKind = typeof WEBSITE_PAGE_KINDS[number];
@@ -115,7 +116,7 @@ export function websiteHrefOk(value: unknown): boolean {
  * it so a new site never looks empty. Children appear only in illustrations, never in photographs. The list is closed and
  * mirrored by the database validator; a school's own images stay https.
  */
-export const WEBSITE_STARTER_ART = ['hero-bold', 'hero-family', 'hero-traditional', 'hero-modern', 'hero-conversion', 'program-little', 'program-kids', 'program-adults'] as const;
+export const WEBSITE_STARTER_ART = ['hero-bold', 'hero-family', 'hero-traditional', 'hero-modern', 'hero-conversion', 'program-little', 'program-kids', 'program-adults', 'hero-neon', 'hero-editorial', 'hero-bento'] as const;
 export type WebsiteStarterArt = (typeof WEBSITE_STARTER_ART)[number];
 export function websiteStarterArtUrl(name: WebsiteStarterArt): string { return `/site-art/${name}.webp`; }
 const STARTER_ART_URLS: readonly string[] = WEBSITE_STARTER_ART.map(websiteStarterArtUrl);

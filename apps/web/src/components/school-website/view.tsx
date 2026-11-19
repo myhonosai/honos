@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  WEBSITE_FONTS, WEBSITE_PALETTE_KEYS, WEBSITE_SECTION_SPECS, WEBSITE_SECTION_TYPES, WEBSITE_TEMPLATES,
+  WEBSITE_DEMO_SCHOOL, WEBSITE_FONTS, WEBSITE_PALETTE_KEYS, WEBSITE_SECTION_SPECS, WEBSITE_SECTION_TYPES, WEBSITE_TEMPLATES, WEBSITE_TEMPLATE_FOCUS, buildWebsiteTemplateDemo,
   type SchoolWebsite, type WebsiteDocument, type WebsiteEdit, type WebsitePage, type WebsiteSectionType, type WebsiteTemplate,
 } from '@hon/contracts';
 import { SiteView } from '../school-site/site-view';
@@ -125,6 +125,36 @@ function PageEditor({ doc, p, t }: { doc: WebsiteDocument; p: WebsiteViewProps; 
   </div>;
 }
 
+const SCHOOL_LOOKS: readonly WebsiteTemplate[] = ['HIGH_CONVERSION', 'FAMILY_FRIENDLY', 'MODERN_CLEAN', 'BOLD_POWERFUL', 'TRADITIONAL'];
+const MODERN_LOOKS: readonly WebsiteTemplate[] = WEBSITE_TEMPLATES.filter(x => !SCHOOL_LOOKS.includes(x));
+/**
+ * Template picker: every template is a complete demo site for a sample school, with what it is built to do. Picking one
+ * shows its full demo (every page, computer or phone width). Nothing is loaded or sent from the demo.
+ */
+function TemplatePicker({ p, t }: { p: WebsiteViewProps; t: T }) {
+  const [demoPage, setDemoPage] = React.useState('home');
+  const demo = React.useMemo(() => buildWebsiteTemplateDemo(p.start.template), [p.start.template]);
+  const slug = demo.pages.some(x => x.slug === demoPage) ? demoPage : 'home';
+  const card = (x: WebsiteTemplate) => <label key={x} className={styles.templateCard} data-template={x}>
+    <input type="radio" name="template" value={x} checked={p.start.template === x} onChange={() => { p.on.start({ ...p.start, template: x }); setDemoPage('home'); }} />
+    <span className={styles.swatch} data-template={x} aria-hidden="true" />
+    <span className={styles.templateText}><strong>{t(`t_${x}`)}</strong><span className={styles.focus} data-focus={WEBSITE_TEMPLATE_FOCUS[x]}>{t(`fo_${WEBSITE_TEMPLATE_FOCUS[x]}`)}</span>
+      <span className={styles.meta}>{t(`td_${x}`)}</span></span></label>;
+  return <>
+    <fieldset className={styles.templates} disabled={p.locked}><legend>{t('startLook')}</legend>
+      <p className={styles.groupLabel}>{t('g_SCHOOL')}</p><div className={styles.templateGrid}>{SCHOOL_LOOKS.map(card)}</div>
+      <p className={styles.groupLabel}>{t('g_MODERN')}</p><div className={styles.templateGrid}>{MODERN_LOOKS.map(card)}</div>
+    </fieldset>
+    <section className={styles.demo} aria-labelledby="template-demo" data-demo-template={p.start.template}>
+      <div className={styles.cardHead}><h3 id="template-demo">{t('demoTitle', { name: t(`t_${p.start.template}`) })}</h3>
+        <div className={styles.tabs} role="group">{(['desktop', 'mobile'] as const).map(d => <button key={d} type="button" className={styles.tab} aria-pressed={p.device === d} onClick={() => p.on.device(d)}>{t(d)}</button>)}</div></div>
+      <p className={styles.meta}>{t('demoNote')}</p>
+      <div className={styles.tabs} role="group" aria-label={t('demoPage')}>{demo.pages.map(x => <button key={x.slug} type="button" className={styles.tab} aria-pressed={slug === x.slug} onClick={() => setDemoPage(x.slug)}>{x.title}</button>)}</div>
+      <div className={`${styles.frame} ${styles.demoFrame}`} data-device={p.device}><SiteView schoolName={WEBSITE_DEMO_SCHOOL} document={demo} pageSlug={slug} base="#demo" mode="demo" onNavigate={setDemoPage} /></div>
+    </section>
+  </>;
+}
+
 function Message({ p, t }: { p: WebsiteViewProps; t: T }) {
   const o = p.outcome;
   if (!o) return null;
@@ -152,11 +182,7 @@ export function WebsiteView(p: WebsiteViewProps): React.ReactElement {
     <label className={`${styles.field} ${styles.describe}`}>{t('describe')}
       <textarea rows={4} maxLength={1000} value={p.start.describe} disabled={p.locked} placeholder={t('describePlaceholder')} data-website-describe=""
         onChange={e => p.on.start({ ...p.start, describe: e.target.value })} /></label>
-    <fieldset className={styles.templates} disabled={p.locked}><legend>{t('startLook')}</legend>
-      {WEBSITE_TEMPLATES.map(x => <label key={x} className={styles.templateCard} data-template={x}>
-        <input type="radio" name="template" value={x} checked={p.start.template === x} onChange={() => p.on.start({ ...p.start, template: x })} />
-        <span className={styles.swatch} data-template={x} aria-hidden="true" /><strong>{t(`t_${x}`)}</strong><span className={styles.meta}>{t(`td_${x}`)}</span></label>)}
-    </fieldset>
+    <TemplatePicker p={p} t={t} />
     <div className={styles.grid}>
       <label className={styles.field}>{t('siteName')}<input required maxLength={120} value={p.start.name} disabled={p.locked} onChange={e => p.on.start({ ...p.start, name: e.target.value })} /></label>
       <label className={styles.field}>{t('address')}<input required maxLength={48} pattern="[a-z0-9][a-z0-9\-]{1,46}[a-z0-9]" value={p.start.slug} disabled={p.locked}

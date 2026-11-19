@@ -9,14 +9,18 @@ import styles from './school-site.module.css';
  * Every value comes from a validated document and is rendered as escaped text; links, images and video players go
  * through site-links. No HTML, style or script from a document is ever rendered.
  */
-export type SiteMode = 'public' | 'preview';
-export interface SiteViewProps { schoolName: string; document: WebsiteDocument; pageSlug: string; base: string; mode: SiteMode }
+/** public: the live site. preview: the owner's draft, with notes and nothing loaded. demo: a template demo for a sample
+ * school, with an inert sample form and booking button and no owner notes; page links switch pages in place. */
+export type SiteMode = 'public' | 'preview' | 'demo';
+export interface SiteViewProps { schoolName: string; document: WebsiteDocument; pageSlug: string; base: string; mode: SiteMode; onNavigate?: (slug: string) => void }
 
 const FONTS: Record<WebsiteDocument['theme']['font'], string> = {
   MODERN: 'var(--site-font-modern)',
   FRIENDLY: 'var(--site-font-friendly)',
   BOLD: 'var(--site-font-bold)',
   CLASSIC: 'var(--site-font-classic)',
+  TECH: 'var(--site-font-tech)',
+  EDITORIAL: 'var(--site-font-editorial)',
 };
 
 /** White or near-black text, whichever reads better on a palette colour (#rrggbb, validated upstream). */
@@ -54,6 +58,12 @@ type Ctx = Readonly<{ schoolName: string; programsId: string | null; programsLab
 type Place = Readonly<{ afterHero: boolean; heroForm: WebsiteSection | null; inHero: boolean }>;
 const NO_PLACE: Place = { afterHero: false, heroForm: null, inHero: false };
 const initial = (v: unknown) => str(v).trim().charAt(0).toUpperCase();
+/** The demo's stand-in for a school's enquiry form: shows the fields a visitor fills in, sends nothing. */
+function DemoForm() {
+  return <form className={styles.form} data-demo-form="true" onSubmit={e => e.preventDefault()} aria-label="Sample enquiry form">
+    <fieldset>{['Name', 'Phone', 'Email'].map(f => <label key={f}>{f}<input type="text" readOnly value="" placeholder={f} /></label>)}
+      <button type="button" className={styles.button}>Request my free class</button></fieldset></form>;
+}
 const telHref = (v: unknown) => `tel:${str(v).replace(/[^0-9+]/g, '')}`;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -81,7 +91,7 @@ function Section({ section, base, mode, pageSlug, ctx, place = NO_PLACE }: { sec
         </div>
         {split && <Img src={image} alt="" className={styles.heroImage} />}
         {form && <div id={form.id} data-section="LEAD_FORM" className={styles.heroForm}><Heading text={form.props.heading} /><Paras text={form.props.body} />
-          <SiteLeadForm publicFormId={str(form.props.publicFormId)} pageSlug={pageSlug} preview={mode === 'preview'} /></div>}
+          {mode === 'demo' && !str(form.props.publicFormId) ? <DemoForm /> : <SiteLeadForm publicFormId={str(form.props.publicFormId)} pageSlug={pageSlug} preview={mode !== 'public'} />}</div>}
       </section>;
     }
     case 'PROGRAMS':
@@ -99,10 +109,14 @@ function Section({ section, base, mode, pageSlug, ctx, place = NO_PLACE }: { sec
       return <section id={section.id} data-section="TRIAL_CTA" className={styles.cta}><Heading text={p.heading} /><Paras text={p.body} /><Action link={siteHref(p.ctaHref, base)} label={str(p.ctaLabel)} /></section>;
     case 'LEAD_FORM':
       if (place.inHero) return null;
+      if (!str(p.publicFormId) && mode === 'demo') return <section id={section.id} data-section="LEAD_FORM" className={place.afterHero ? styles.offerBand : styles.block}>
+        <div className={styles.offerText}><Heading text={p.heading} /><Paras text={p.body} /></div><DemoForm /></section>;
       if (!str(p.publicFormId)) return mode === 'preview' ? <section id={section.id} data-section="LEAD_FORM" className={styles.block}><Heading text={p.heading} /><p className={styles.note}>Choose a published form to show it here.</p></section> : null;
       return <section id={section.id} data-section="LEAD_FORM" className={place.afterHero ? styles.offerBand : styles.block}><div className={styles.offerText}><Heading text={p.heading} /><Paras text={p.body} /></div>
-        <SiteLeadForm publicFormId={str(p.publicFormId)} pageSlug={pageSlug} preview={mode === 'preview'} /></section>;
+        <SiteLeadForm publicFormId={str(p.publicFormId)} pageSlug={pageSlug} preview={mode !== 'public'} /></section>;
     case 'BOOKING':
+      if (!str(p.bookingPublicId) && mode === 'demo') return <section id={section.id} data-section="BOOKING" className={styles.cta}><Heading text={p.heading} /><Paras text={p.body} />
+        <Action link={{ href: '#book', external: false }} label={str(p.ctaLabel) || 'Book a time'} /></section>;
       if (!str(p.bookingPublicId)) return mode === 'preview' ? <section id={section.id} data-section="BOOKING" className={styles.block}><Heading text={p.heading} /><p className={styles.note}>Choose an active booking page to show it here.</p></section> : null;
       return <section id={section.id} data-section="BOOKING" className={styles.cta}><Heading text={p.heading} /><Paras text={p.body} />
         <Action link={{ href: `/book/${str(p.bookingPublicId)}`, external: false }} label={str(p.ctaLabel) || 'Book a time'} /></section>;
@@ -159,7 +173,7 @@ function Section({ section, base, mode, pageSlug, ctx, place = NO_PLACE }: { sec
   return null;
 }
 
-export function SiteView({ schoolName, document, pageSlug, base, mode }: SiteViewProps) {
+export function SiteView({ schoolName, document, pageSlug, base, mode, onNavigate }: SiteViewProps) {
   const page = findSitePage(document, pageSlug);
   if (!page) return null;
   const { palette, font } = document.theme;
@@ -167,7 +181,7 @@ export function SiteView({ schoolName, document, pageSlug, base, mode }: SiteVie
     '--site-surface': palette.surface, '--site-text': palette.text, '--site-font': FONTS[font], '--site-on-primary': readableOn(palette.primary) } as CSSProperties;
   const nav = document.pages.filter(p => p.inNav);
   const logo = siteImage(document.theme.logoUrl);
-  const programs = page.sections.find(x => x.type === 'PROGRAMS' && (items(x.props.items).length > 0 || mode === 'preview'));
+  const programs = page.sections.find(x => x.type === 'PROGRAMS' && (items(x.props.items).length > 0 || mode !== 'public'));
   const ctx: Ctx = { schoolName, programsId: programs?.id ?? null, programsLabel: str(programs?.props.heading).trim() || 'Programs' };
   // The site's main action (the first hero or trial button on this page, else on the home page) sits in the header and,
   // on phones, in a bar that stays at the bottom of the screen.
@@ -183,18 +197,20 @@ export function SiteView({ schoolName, document, pageSlug, base, mode }: SiteVie
   while (lead < sections.length && sections[lead]!.type === 'PROMO_BANNER') lead += 1;
   const placeOf = (i: number): Place => {
     const s = sections[i]!, prev = sections[i - 1], next = sections[i + 1];
-    const formReady = (x: WebsiteSection | undefined) => x?.type === 'LEAD_FORM' && !!str(x.props.publicFormId);
+    const formReady = (x: WebsiteSection | undefined) => x?.type === 'LEAD_FORM' && (!!str(x.props.publicFormId) || mode === 'demo');
     const heroForm = document.theme.template === 'HIGH_CONVERSION' && s.type === 'HERO' && formReady(next) ? next! : null;
     const inHero = document.theme.template === 'HIGH_CONVERSION' && prev?.type === 'HERO' && formReady(s);
     return { afterHero: prev?.type === 'HERO', heroForm, inHero };
   };
+  // In a demo, page links switch the shown page in place instead of leaving the picker.
+  const go = (slug: string) => (onNavigate ? { onClick: (e: React.MouseEvent) => { e.preventDefault(); onNavigate(slug); } } : {});
   const render = (i: number) => <Section key={sections[i]!.id} section={sections[i]!} base={base} mode={mode} pageSlug={page.slug} ctx={ctx} place={placeOf(i)} />;
   return <div className={styles.site} style={theme} data-template={document.theme.template} data-mode={mode}>
     {sections.slice(0, lead).map((_, i) => render(i))}
     <header className={styles.header}>
       <a className={styles.brand} href={base}>{logo ? <img src={logo} alt="" referrerPolicy="no-referrer" /> : <span className={styles.monogram} aria-hidden="true">{initial(schoolName)}</span>}<span>{schoolName}</span></a>
       {nav.length > 1 && <nav aria-label="Site"><ul>{nav.map(p => <li key={p.slug}>
-        <a href={p.slug === 'home' ? base : `${base}/${p.slug}`} aria-current={p.slug === page.slug ? 'page' : undefined}>{p.title}</a></li>)}</ul></nav>}
+        <a href={p.slug === 'home' ? base : `${base}/${p.slug}`} aria-current={p.slug === page.slug ? 'page' : undefined} {...go(p.slug)}>{p.title}</a></li>)}</ul></nav>}
       {main && <span className={styles.headerAction}><Action link={main.link} label={main.label} /></span>}
     </header>
     <main className={styles.main}>{sections.map((_, i) => i < lead ? null : render(i))}</main>
@@ -202,7 +218,7 @@ export function SiteView({ schoolName, document, pageSlug, base, mode }: SiteVie
       <div><p className={styles.footerName}>{schoolName}</p>
         {contact && str(contact.props.phone) && <p><a href={telHref(contact.props.phone)}>{str(contact.props.phone)}</a></p>}
         {contact && str(contact.props.address) && <Paras text={contact.props.address} />}</div>
-      {nav.length > 1 && <ul className={styles.footerNav}>{nav.map(p => <li key={p.slug}><a href={p.slug === 'home' ? base : `${base}/${p.slug}`}>{p.title}</a></li>)}</ul>}
+      {nav.length > 1 && <ul className={styles.footerNav}>{nav.map(p => <li key={p.slug}><a href={p.slug === 'home' ? base : `${base}/${p.slug}`} {...go(p.slug)}>{p.title}</a></li>)}</ul>}
       <p className={styles.meta}>© {schoolName}</p>
     </footer>
     {main && <div className={styles.stickyAction}><Action link={main.link} label={main.label} /></div>}
