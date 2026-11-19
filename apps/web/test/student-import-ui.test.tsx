@@ -128,6 +128,8 @@ it('reviews rows: problems in words, rows with problems can only be skipped, and
   expect(ready).not.toContain('Some decisions are not saved yet.');
   expect(ready).toMatch(/<button type="button"[^>]*>Import 1 students<\/button>/);
   expect(ready).not.toMatch(/disabled=""[^>]*>Import 1 students/);
+  expect(ready).toContain('Record email and text consent for the people imported'); expect(ready).toMatch(/name="record-consent"[^>]*checked=""|checked=""[^>]*name="record-consent"/);
+  expect(html({ selected: batchId, detail: { state: 'READY', detail: saved as never }, consent: false })).not.toMatch(/name="record-consent"[^>]*checked=""|checked=""[^>]*name="record-consent"/);
   const done = detailRaw({ batch: batch({ version: 3, status: 'FINALIZED', importCount: 1, skipCount: 1, undecidedCount: 0, importedCount: 1, finalizedAt: '2026-11-09T03:00:00.000Z' }),
     rows: [row(1, { choice: 'IMPORT', created: { familyId: id(60), guardianPersonId: id(61), studentPersonId: id(62), studentProfileId: id(63) } }), row(2, { choice: 'SKIP', errors: ['x:UNKNOWN_CODE'] })] });
   const final = html({ selected: batchId, detail: { state: 'READY', detail: done as never } });
