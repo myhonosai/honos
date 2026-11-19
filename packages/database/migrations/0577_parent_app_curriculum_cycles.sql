@@ -387,6 +387,10 @@ BEGIN
   IF cy.version<>expected THEN RAISE EXCEPTION 'VERSION_CONFLICT' USING ERRCODE='40001'; END IF;
   IF had AND s.cycle_rotation='STAFF_PICK' AND s.cycle_current_id=cy.id THEN RAISE EXCEPTION 'CYCLE_IS_CURRENT' USING ERRCODE='55000'; END IF;
   UPDATE hon.curriculum_cycles SET status='ARCHIVED',version=version+1 WHERE id=cy.id;
+  -- Keep active positions 1..n (review P3): creates take n+1 and the order shift below stays inside the CHECK.
+  UPDATE hon.curriculum_cycles SET position=position+1000 WHERE curriculum_id=p_curriculum AND status='ACTIVE';
+  UPDATE hon.curriculum_cycles c SET position=x.o FROM (SELECT id,row_number() OVER (ORDER BY position,id) o FROM hon.curriculum_cycles
+   WHERE curriculum_id=p_curriculum AND status='ACTIVE') x WHERE c.id=x.id;
  ELSIF p_operation='CYCLE_ORDER' THEN
   IF (SELECT array_agg(g ORDER BY g) FROM unnest(given) g) IS DISTINCT FROM (SELECT array_agg(i ORDER BY i) FROM unnest(ids) i) THEN RAISE EXCEPTION 'VERSION_CONFLICT' USING ERRCODE='40001'; END IF;
   UPDATE hon.curriculum_cycles SET position=position+1000 WHERE curriculum_id=p_curriculum AND status='ACTIVE';

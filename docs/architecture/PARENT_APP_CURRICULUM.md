@@ -193,5 +193,5 @@ Contracts in `packages/contracts/src/parent-app-curriculum.ts` with strict verif
   accept `kind: DOCUMENT` and an optional `cycleId`.
 - Rules decided while building: the staff-picked current cycle cannot be archived (`CYCLE_IS_CURRENT`); switching
   needs saved settings (`SETTINGS_REQUIRED`); leaving AUTO keeps the cycle families see today; a first STAFF_PICK save
-  or the first cycle added under STAFF_PICK becomes current; reorder takes the exact list of active cycles.
-- Proof: `packages/database/scripts/test-parent-app-curriculum-integrity.mjs` (126 checks over signed HTTP).
+  or the first cycle added under STAFF_PICK becomes current; reorder takes the exact list of active cycles; active positions stay 1..n (archive renumbers, review P3).
+- Proof: `packages/database/scripts/test-parent-app-curriculum-integrity.mjs` (142 checks over signed HTTP).

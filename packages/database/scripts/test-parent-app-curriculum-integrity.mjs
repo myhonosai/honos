@@ -297,6 +297,16 @@ try {
   ok(state.cycleState.current.id === cycles[1].id && state.cycleState.current.startsOn === today && state.cycleState.current.endsOn === addDays(today, 13) && state.cycleState.next.id === cycles[0].id, 'picked cycle starts today and the rotation continues');
   state = (await success(() => post(MANAGER, `/${cur.adult}/cycles/${cycles[2].id}/archive`, { expectedVersion: 1 }), 'archive a cycle while automatic')).data;
   ok(state.cycles.length === 2 && state.cycleState.current !== null, 'automatic rotation continues over the remaining cycles');
+  ok(state.cycles.map((x) => x.position).join() === '1,2', 'archive renumbers the remaining cycles 1..n');
+  { let churn = state; // Many creates and archives keep positions small, so a reorder still fits the 1..2000 CHECK (review P3).
+    for (let n = 0; n < 6; n += 1) {
+      churn = (await success(() => post(MANAGER, `/${cur.adult}/cycles`, { name: `Churn ${n}` }), `churn create ${n}`)).data;
+      const made = churn.cycles.at(-1);
+      churn = (await success(() => post(MANAGER, `/${cur.adult}/cycles/${made.id}/archive`, { expectedVersion: 1 }), `churn archive ${n}`)).data;
+    }
+    ok(Math.max(...churn.cycles.map((x) => x.position)) === 2, 'positions never grow past the active count');
+    churn = (await success(() => post(MANAGER, `/${cur.adult}/cycle-order`, { cycleIds: churn.cycles.map((x) => x.id).reverse() }), 'reorder after churn')).data;
+    state = (await success(() => post(MANAGER, `/${cur.adult}/cycle-order`, { cycleIds: churn.cycles.map((x) => x.id).reverse() }), 'restore order')).data; }
   state = (await success(() => post(MANAGER, `/${cur.adult}/settings`, settings({ expectedVersion: 8, cycleAnchorDate: state.settings.cycleAnchorDate, cycleLengthWeeks: 2 })), 'back to staff pick')).data;
   const keptId = state.cycleState.current.id;
   ok(state.settings.cycleRotation === 'STAFF_PICK' && state.cycleState.current.startsOn === today && state.cycles.some((c) => c.id === keptId), 'leaving automatic keeps the cycle families see today');
@@ -326,7 +336,7 @@ try {
   await sql('UPDATE hon.principal_role_grants SET effective_until=clock_timestamp() WHERE id=$1', [LIB_ONLY.grants[0]]);
   await refused(() => post(LIB_ONLY, `/${cur.adult}/cycles`, { name: 'Late' }), 403, undefined, 'revoked grant');
   const events = (await sql('SELECT operation, count(*)::int n FROM hon.curriculum_app_events WHERE organization_id=$1 GROUP BY 1 ORDER BY 1', [ids.organization])).rows;
-  ok(events.find((e) => e.operation === 'CYCLE_CREATE').n === 5 && events.find((e) => e.operation === 'SWITCH_CYCLE').n === 2 && events.find((e) => e.operation === 'CYCLE_ORDER').n === 1, 'one history row per command, none for refusals or replays');
+  ok(events.find((e) => e.operation === 'CYCLE_CREATE').n === 11 && events.find((e) => e.operation === 'SWITCH_CYCLE').n === 2 && events.find((e) => e.operation === 'CYCLE_ORDER').n === 3, 'one history row per command, none for refusals or replays');
   ok((await sql("SELECT count(*)::int n FROM hon.audit_events WHERE organization_id=$1 AND action_code LIKE 'curriculum.parent_app.%' AND source='HUMAN_UI' AND entity_type='CURRICULUM'", [ids.organization])).rows[0].n
     === (await sql('SELECT count(*)::int n FROM hon.curriculum_app_events WHERE organization_id=$1', [ids.organization])).rows[0].n, 'one audit row per command');
   await assert.rejects(sql('UPDATE hon.curriculum_app_events SET operation=operation WHERE organization_id=$1', [ids.organization]), /immutable|IMMUTABLE|42501/i); checks += 1;
