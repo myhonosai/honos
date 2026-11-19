@@ -1,5 +1,5 @@
 BEGIN;
--- Parent app curriculum, piece 1 (0577, coordinator-allocated 2026-11-19; spec docs/architecture/PARENT_APP_CURRICULUM.md).
+-- Parent app curriculum, piece 1 (0587, coordinator-allocated 2026-11-19; spec docs/architecture/PARENT_APP_CURRICULUM.md).
 -- Each curriculum is shown in the parent app as RANK-based (material follows the child's current rank) or CYCLE-based
 -- (ordered cycles; the current cycle rotates on a schedule or is picked by staff). Material stays in 0132
 -- hon.curriculum_resources, which gains a DOCUMENT kind and an optional cycle (at most one of rank or cycle).

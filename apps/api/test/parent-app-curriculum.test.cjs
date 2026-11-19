@@ -100,6 +100,6 @@ test('source boundary: dedicated functions only, no network, AI, outbox or provi
   const service = readFileSync('src/curriculum/parent-app-curriculum.service.ts', 'utf8');
   assert.match(service, /hon\.read_staff_parent_app_curriculum/); assert.match(service, /hon\.mutate_parent_app_curriculum/);
   assert.doesNotMatch(service, /fetch\(|https?\.request|dns\.|invokeLLM|sendMessage|executeAction|FROM hon\./);
-  const sql = readFileSync('../../packages/database/migrations/0577_parent_app_curriculum_cycles.sql', 'utf8');
+  const sql = readFileSync('../../packages/database/migrations/0587_parent_app_curriculum_cycles.sql', 'utf8');
   assert.doesNotMatch(sql, /INSERT INTO hon\.(outbox_events|action_requests|work_items|communication_messages|ai_invocation_plans)/);
 });

@@ -5,7 +5,7 @@ or cycle based. If rank based, as rank changes, I need app to know and change wh
 know which cycle and cycle material is set either video or documents. And it would cycle through or pick by staff.
 This means HON OS needs a section for app control."
 
-Status: PCA-1 (0577) built on branch claude/project-thread-05np7o; PCA-2..4 not built yet. Migrations (coordinator, 2026-11-19): 0577 cycles + settings, 0578 parent read v2.
+Status: PCA-1 (0587) built on branch claude/project-thread-05np7o; PCA-2..4 not built yet. Migrations (coordinator, 2026-11-19): 0587 cycles + settings, 0578 parent read v2.
 
 ## 1. What already exists on main (cd2c33d)
 
@@ -163,7 +163,7 @@ Contracts in `packages/contracts/src/parent-app-curriculum.ts` with strict verif
 
 ## 10. Build plan (small PRs)
 
-1. **PCA-1 database + staff API** (migration 0577): settings table, cycles table, resource `cycle_id` + `DOCUMENT`, staff
+1. **PCA-1 database + staff API** (migration 0587): settings table, cycles table, resource `cycle_id` + `DOCUMENT`, staff
    read and commands, current-cycle function, DB proofs.
 2. **PCA-2 parent read** (migration 0578): `read_parent_curriculum_app`, staff preview, parent route, contracts, proofs.
 3. **PCA-3 staff page** `/staff/parent-app/curriculum` (web), browser screenshots at 1440 and 390.
@@ -178,7 +178,7 @@ Contracts in `packages/contracts/src/parent-app-curriculum.ts` with strict verif
 - Commands: idempotent replay, key reuse conflict, version conflict, cross-curriculum cycle/rank refused, revoked
   permission after lock.
 
-## 12. PCA-1 as built (0577)
+## 12. PCA-1 as built (0587)
 
 - Tables `hon.curriculum_cycles`, `hon.curriculum_app_settings`, `hon.curriculum_app_events` (immutable history),
   `hon.curriculum_app_requests` (scoped receipts); forced RLS, no policies, no runtime grants.

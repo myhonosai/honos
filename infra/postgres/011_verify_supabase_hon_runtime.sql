@@ -2057,8 +2057,8 @@ END $$;
 -- End retention factual attention exact verification.
 
 -- Curriculum library exact verification:
--- 0577 replaced the bodies of hon.guard_curriculum_resource, hon.curriculum_resource_projection, hon.mutate_curriculum_resource and
--- hon.read_parent_curriculum_library (cycle column, DOCUMENT kind); their hashes below are the 0577 bodies.
+-- 0587 replaced the bodies of hon.guard_curriculum_resource, hon.curriculum_resource_projection, hon.mutate_curriculum_resource and
+-- hon.read_parent_curriculum_library (cycle column, DOCUMENT kind); their hashes below are the 0587 bodies.
 DO $$ DECLARE t text; c record; signature text; f record; expected_hash text; executable boolean; runtime_oid oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'); BEGIN
  IF runtime_oid IS NULL THEN RAISE EXCEPTION 'Library restricted runtime missing'; END IF;
  IF EXISTS(SELECT 1 FROM pg_roles WHERE oid=runtime_oid AND (NOT rolcanlogin OR rolsuper OR rolbypassrls OR rolinherit OR rolcreatedb OR rolcreaterole OR rolreplication)) OR EXISTS(SELECT 1 FROM pg_auth_members WHERE member=runtime_oid) OR has_schema_privilege('hon_runtime','hon','CREATE') THEN RAISE EXCEPTION 'Library unsafe runtime role'; END IF;
@@ -5229,7 +5229,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   IF has_any_column_privilege('hon_runtime','hon.class_sessions','UPDATE') THEN RAISE EXCEPTION 'Runtime must not update class sessions'; END IF;
 END $$;
 -- End calendar cards exact verification.
--- Parent app curriculum exact verification (0577): four private forced-RLS tables with their guards, the cycle column and constraints
+-- Parent app curriculum exact verification (0587): four private forced-RLS tables with their guards, the cycle column and constraints
 -- on curriculum_resources, private helpers and two runtime entry points.
 DO $$ DECLARE f record; safe boolean; t text; BEGIN
   FOREACH t IN ARRAY ARRAY['curriculum_cycles','curriculum_app_settings','curriculum_app_events','curriculum_app_requests'] LOOP

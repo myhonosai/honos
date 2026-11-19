@@ -4562,10 +4562,10 @@ DO $$ DECLARE r text; f text; col text; BEGIN
   END IF;
 END $$;
 
--- 0577 parent app curriculum (cycles, app settings, staff commands): two runtime entry points. The four new tables, the new
+-- 0587 parent app curriculum (cycles, app settings, staff commands): two runtime entry points. The four new tables, the new
 -- curriculum_resources.cycle_id column and every helper stay migration-owner only.
 DO $$ DECLARE r text; f text; t text; BEGIN
-  IF to_regprocedure('hon.mutate_parent_app_curriculum(text,text,uuid,uuid,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0577 first'; END IF;
+  IF to_regprocedure('hon.mutate_parent_app_curriculum(text,text,uuid,uuid,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0587 first'; END IF;
   FOREACH t IN ARRAY ARRAY['curriculum_cycles','curriculum_app_settings','curriculum_app_events','curriculum_app_requests'] LOOP
     EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
