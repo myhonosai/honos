@@ -5091,3 +5091,43 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   IF has_any_column_privilege('hon_runtime','hon.class_sessions','UPDATE') THEN RAISE EXCEPTION 'Runtime must not update class sessions'; END IF;
 END $$;
 -- End calendar cards exact verification.
+-- Calendar settings exact verification (0552): three private forced-RLS tables with guard and no-truncate triggers, private
+-- helpers and eight runtime entry points.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOREACH t IN ARRAY ARRAY['calendar_share_settings','calendar_block_outs','share_calendars'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+      AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=c.oid AND tgname=t||'_guard' AND NOT tgisinternal AND tgfoid='hon.guard_calendar_settings()'::regprocedure)
+      AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=c.oid AND tgname=t||'_no_truncate' AND NOT tgisinternal)
+    INTO safe FROM pg_class c WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Calendar settings table must be private, guarded and FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_calendar_settings()',false,false,'search_path=pg_catalog, hon','82b4992e390578bb166c15a123002960e09c9e779052e6dfe38cbb5d50250418'),
+('hon.calendar_day_blocked(uuid,uuid,date)',true,false,'search_path=pg_catalog, hon','74289b956cd480a78038895f666a24f28309a812aefe1dd9bd26e7810b159f8d'),
+('hon.share_calendar_times(uuid,uuid,uuid,text,integer)',true,false,'search_path=pg_catalog, hon','d02eeebcfaf1dc3ffd2602ac6903b487c9bfa0af3584872d52abb618b067bd81'),
+('hon.share_calendar_json(hon.share_calendars)',true,false,'search_path=pg_catalog, hon','8f359f6dde3e4dbb072f8d5a777820dc846f954800088740118bfcc8ec99c2c4'),
+('hon.calendar_block_out_json(hon.calendar_block_outs)',false,false,'search_path=pg_catalog, hon','8da71fff985809ffe2c4a7d82a139cd18accb0d019f6acc7130f9019f097694a'),
+('hon.calendar_settings_fp(text,uuid,jsonb)',false,false,'search_path=pg_catalog','bbfb92ae8192f72c6c66ce5616cf6fe90bd70c7293636500839826b5ee3f0372'),
+('hon.calendar_expected_version(jsonb)',false,false,'search_path=pg_catalog','9b383f9759d096a24b434537d779fc1bd20c039683b69f0fcad75d67069ffac8'),
+('hon.public_share_calendar(text)',true,false,'search_path=pg_catalog, hon','074cfb18e08b9c2478ce4595fe5834e9eebe06ea546a78bd743e7dc277eb58de'),
+('hon.save_calendar_share_settings(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','3d7a55cdbec5be04e60d6cad37a2a7d69681318f4eb31a9ba840c334a08768f6'),
+('hon.save_calendar_block_out(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','ef3d93521a701abd42cbb04dcb0cc3b43d940dfbba58eede6fb8fe8952140897'),
+('hon.remove_calendar_block_out(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','335460d212eae52ec95289c49f290b51a2ce5c8122f4277462c945213ce9d997'),
+('hon.save_share_calendar(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','d656cf26febb4ed559fe076c3332aab4dbdb1ea2f511470e6ef19c92717542e2'),
+('hon.delete_share_calendar(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','01d82a6257c31df540c6e6c6d93008ff3fef25bcfe83ba16afbef829a78e41e4'),
+('hon.read_calendar_settings(text)',true,true,'search_path=pg_catalog, hon','3465be4b189ba9b5ee283e22d7f6b469b74ef215aff7e3740b5b0907199f9d1c'),
+('hon.read_school_calendar_block_outs(text,jsonb)',true,true,'search_path=pg_catalog, hon','02bdb87849deda7c91271d9b1dc3452263315915700845c59e40af747d929d8a'),
+('hon.read_public_share_calendar(text)',true,true,'search_path=pg_catalog, hon','0e341579074cece93580f41125336ae2cf8268a834b112733e4743ca4cb996c2')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe calendar settings function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End calendar settings exact verification.

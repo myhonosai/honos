@@ -663,6 +663,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT hon.read_walkin_card_provider($1) AS data',
       'SELECT hon.open_walkin_card_payment($1,$2) AS data',
       'SELECT hon.settle_walkin_card_payment($1,$2) AS data',
+      'SELECT hon.read_public_share_calendar($1) AS data',
     ].includes(statement)) throw new Error('Unknown public event call.');
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
