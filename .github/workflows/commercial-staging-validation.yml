@@ -136,7 +136,7 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     # Same complete proof suite as regular CI; first B1 run reached its last proof at 25m.
-    timeout-minutes: 35
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:

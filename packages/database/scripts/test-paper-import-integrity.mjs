@@ -55,7 +55,7 @@ const database = new RuntimeDatabaseService();
 let readerCalls = 0;
 const reader = new SyntheticPaperReader();
 const countingReader = { read: (input) => { readerCalls += 1; return reader.read(input); } };
-// 0389: the AI reader is a fake that is never ready here; the 0389 proof covers it (test-paper-import-ai-reader.mjs).
+// 0559: the AI reader is a fake that is never ready here; the 0559 proof covers it (test-paper-import-ai-reader.mjs).
 let visionCalls = 0;
 const idleVision = { readiness: () => 'CONFIGURATION_REQUIRED', read: async () => { visionCalls += 1; throw new Error('not in this proof'); } };
 
@@ -305,7 +305,7 @@ try {
   await sql('UPDATE hon.paper_import_sets SET reading_id=gen_random_uuid(), reading_started_at=clock_timestamp() WHERE id=$1', [cards.id]);
   await sql('ALTER TABLE hon.paper_import_sets ENABLE TRIGGER USER');
   await refused(() => addPage(IMPORTER, cards.id, pageBody(CONTRACT, 'image/png', v)), 409, 'PAPER_IMPORT_ALREADY_READ', 'no page once a reading has begun');
-  // 0389: a set with a real photo is read by HON on the AI route, which needs the AI team (Complete) and AI permission.
+  // 0559: a set with a real photo is read by HON on the AI route, which needs the AI team (Complete) and AI permission.
   // This CORE school has neither: nothing is read, planned or sent, and staff type the rows instead.
   await refused(() => readSet(IMPORTER, cards.id, { expectedVersion: v }), 403, 'PAPER_IMPORT_AI_FORBIDDEN', 'a real photo needs the AI team');
   ok(readerCalls === 0 && visionCalls === 0 && (await sql("SELECT count(*)::int n FROM hon.ai_text_proposals WHERE organization_id=$1", [ids.organization])).rows[0].n === 0, 'no reading, no proposal, no provider call');

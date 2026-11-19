@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { OpenRouterPaperVisionRuntime, PaperVisionRuntimeError, PAPER_READING_SYSTEM_PROMPT } = require('../dist/ai/paper-vision-runtime.js');
 const { parsePaperReadingAnswer, paperImportColumns, verifyPaperImportDetail, PAPER_READING_AI_LIMITS } = require('@hon/contracts');
 
-// 0389: the OpenRouter reader for paper import photos, against a fake transport only. The database flow (plan, claim,
+// 0559: the OpenRouter reader for paper import photos, against a fake transport only. The database flow (plan, claim,
 // usage, one reading per set) is proven by packages/database/scripts/test-paper-import-ai-reader.mjs.
 const id = '11111111-1111-4111-8111-111111111111';
 const env = () => ({ OPENROUTER_API_KEY: 'unit-only-not-a-secret', OPENROUTER_PAID_CALL_APPROVED: 'true' });

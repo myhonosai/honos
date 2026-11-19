@@ -4,10 +4,16 @@ import {
   SCHOOL_PAY_PROVIDER_CODES,
   verifySchoolPayMethodObservation,
   verifySchoolPayObservation,
+  verifySchoolPayChargeObservation,
+  verifySchoolPayOnceObservation,
   type SchoolPayCapabilities,
+  type SchoolPayChargeFailureClass,
+  type SchoolPayChargeObservation,
   type SchoolPayMethodKind,
   type SchoolPayMethodObservation,
   type SchoolPayObservation,
+  type SchoolPayOnceObservation,
+  type SchoolPayOnceSurface,
   type SchoolPayProviderCode,
 } from '@hon/contracts';
 import type { SchoolPayCredential } from './school-payment-vault.js';
@@ -49,7 +55,42 @@ export interface SchoolPaymentAdapter {
   retrieveMethodSetup(input: { accountRef: string; customerRef: string; setupRef: string }): Promise<SchoolPayMethodObservation>;
   /** 0321: detach a removed method from the payer's customer at the provider. */
   detachMethod(input: { accountRef: string; methodRef: string }): Promise<void>;
+  /**
+   * 0337: one off-session charge of a saved method on the school's account (a direct charge; no application fee), with the
+   * provider idempotency key hon-school-pay-charge-<attemptId>, so a resend never charges twice while the provider keeps
+   * the key. A decline is a FAILED observation; anything ambiguous throws UNKNOWN.
+   */
+  chargeOffSession(input: SchoolPayChargeRequest): Promise<SchoolPayChargeObservation>;
+  /** 0337: the provider's own record of the charge made for one attempt, or null when the provider has none. */
+  findCharge(input: SchoolPayChargeLookup): Promise<SchoolPayChargeObservation | null>;
+  /** 0529: the surfaces this adapter can show a one-time payment on in this environment (none: not offered). */
+  oneTimeSurfaces(): readonly SchoolPayOnceSurface[];
+  /**
+   * 0529: create (or, with the same idempotency key hon-school-pay-once-<paymentId> and the same parameters, get back) the
+   * provider session of one one-time payment on the school's account: a direct charge, no application fee.
+   */
+  beginOneTimePayment(input: SchoolPayOnceRequest): Promise<SchoolPayOnceSession>;
+  /** 0529: authenticated retrieval of one session; never derived from a browser return. */
+  findOneTimePayment(input: SchoolPayOnceLookup): Promise<SchoolPayOnceObservation>;
+  /** 0529: close an open session so it can no longer be paid. A session that is already closed is not an error. */
+  expireOneTimePayment(input: SchoolPayOnceLookup): Promise<void>;
 }
+
+export interface SchoolPayOnceRequest {
+  accountRef: string; paymentId: string; amountMinor: number; currency: string; label: string; payerEmail: string | null;
+  surface: SchoolPayOnceSurface; returnUrl: string; providerExpiresAt: string;
+}
+export interface SchoolPayOnceSession { sessionRef: string; clientSecret: string | null; url: string | null }
+export interface SchoolPayOnceLookup { accountRef: string; paymentId: string; sessionRef: string; amountMinor: number; currency: string }
+/** The provider idempotency key of one one-time payment. */
+export const schoolPayOnceKey = (paymentId: string): string => `hon-school-pay-once-${paymentId}`;
+
+export interface SchoolPayChargeRequest {
+  accountRef: string; customerRef: string; methodRef: string; methodKind: SchoolPayMethodKind; attemptId: string; amountMinor: number; currency: string;
+}
+export interface SchoolPayChargeLookup { accountRef: string; customerRef: string; attemptId: string; amountMinor: number; currency: string; createdAt: string }
+/** The provider idempotency key of one charge attempt. */
+export const schoolPayChargeKey = (attemptId: string): string => `hon-school-pay-charge-${attemptId}`;
 
 /** PRE_SEND: nothing reached the provider. FAILED: the provider refused. UNKNOWN: it may have acted. */
 export class SchoolPaymentProviderError extends Error {
@@ -75,12 +116,23 @@ export class UnconfiguredSchoolPaymentAdapter implements SchoolPaymentAdapter {
   async beginMethodSetup(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
   async retrieveMethodSetup(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
   async detachMethod(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
+  async chargeOffSession(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
+  async findCharge(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
+  oneTimeSurfaces(): readonly SchoolPayOnceSurface[] { return []; }
+  async beginOneTimePayment(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
+  async findOneTimePayment(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
+  async expireOneTimePayment(): Promise<never> { throw new SchoolPaymentProviderError('PRE_SEND', 'NOT_CONFIGURED'); }
 }
 
 const ALL: SchoolPayCapabilities = Object.freeze({ bankDebit: true, offSessionRecurring: true, oneTimeCard: true, refunds: true, storedCard: true });
 
 export interface SimulatedAccountStatus { chargesEnabled: boolean; payoutsEnabled: boolean; requirementsDue: boolean; reauthorizationRequired: boolean }
 /** What the simulated payer entered on the hosted setup page; `incomplete` means the payer left without saving. */
+/**
+ * What the simulated processor does with one attempt's charge. `lostAnswer`: it charged but the answer never arrived
+ * (UNKNOWN). `neverArrived`: the request never reached it (UNKNOWN, and nothing charged).
+ */
+export interface SimulatedChargeOutcome { outcome: 'SUCCEEDED' | 'PROCESSING' | 'FAILED'; failureClass: SchoolPayChargeFailureClass; lostAnswer: boolean; neverArrived: boolean }
 export interface SimulatedSetupOutcome { kind: SchoolPayMethodKind; brand: SchoolPayMethodObservation['brand']; last4: string; expMonth: number | null; expYear: number | null; incomplete: boolean; customerRef: string }
 
 /**
@@ -119,7 +171,7 @@ abstract class SimulatedSchoolPaymentAdapter implements SchoolPaymentAdapter {
   }
   async disconnect({ accountRef }: { accountRef: string }): Promise<void> { this.revoked.add(accountRef); }
 
-  protected abstract readonly refs: { customer: string; setup: string; method: string };
+  protected abstract readonly refs: { customer: string; setup: string; method: string; charge: string };
   /** Per setup reference: what the payer "entered". The default is a test Visa ending 4242 (or a bank account ending 6789). */
   readonly setupOutcomes = new Map<string, Partial<SimulatedSetupOutcome>>();
   readonly setups = new Map<string, { accountRef: string; customerRef: string; methodKinds: readonly SchoolPayMethodKind[] }>();
@@ -151,13 +203,112 @@ abstract class SimulatedSchoolPaymentAdapter implements SchoolPaymentAdapter {
     });
   }
   async detachMethod({ methodRef }: { accountRef: string; methodRef: string }): Promise<void> { this.detached.add(methodRef); }
+
+  /** Per attempt: what the processor does. The default is an immediate success. */
+  readonly chargeOutcomes = new Map<string, Partial<SimulatedChargeOutcome>>();
+  /** Charges the simulated processor holds, by provider idempotency key (a resend returns the first answer). */
+  readonly charges = new Map<string, SchoolPayChargeObservation & { accountRef: string; customerRef: string; methodRef: string }>();
+  chargeCalls = 0;
+  async chargeOffSession({ accountRef, customerRef, methodRef, methodKind, attemptId, amountMinor, currency }: SchoolPayChargeRequest): Promise<SchoolPayChargeObservation> {
+    if (this.revoked.has(accountRef)) throw new SchoolPaymentProviderError('FAILED', 'PROVIDER_REJECTED');
+    if (methodKind === 'US_BANK_ACCOUNT' && !this.manifest.bankDebit) throw new SchoolPaymentProviderError('PRE_SEND', 'INVALID_REQUEST');
+    this.chargeCalls += 1;
+    const key = schoolPayChargeKey(attemptId);
+    const plan = this.chargeOutcomes.get(attemptId) ?? {};
+    if (plan.neverArrived) { this.chargeOutcomes.set(attemptId, { ...plan, neverArrived: false }); throw new SchoolPaymentProviderError('UNKNOWN', 'PROVIDER_UNKNOWN'); }
+    let held = this.charges.get(key);
+    if (!held) {
+      const outcome = plan.outcome ?? (methodKind === 'US_BANK_ACCOUNT' ? 'PROCESSING' : 'SUCCEEDED');
+      held = verifySchoolPayChargeObservation({ outcome, chargeRef: `${this.refs.charge}${this.hash(key)}`, failureClass: outcome === 'FAILED' ? plan.failureClass ?? 'DECLINED' : null,
+        amountMinor, currency }) as SchoolPayChargeObservation & { accountRef: string; customerRef: string; methodRef: string };
+      held = { ...held, accountRef, customerRef, methodRef };
+      this.charges.set(key, held);
+    }
+    if (plan.lostAnswer) { this.chargeOutcomes.set(attemptId, { ...plan, lostAnswer: false }); throw new SchoolPaymentProviderError('UNKNOWN', 'PROVIDER_UNKNOWN'); }
+    return { outcome: held.outcome, chargeRef: held.chargeRef, failureClass: held.failureClass, amountMinor: held.amountMinor, currency: held.currency };
+  }
+  async findCharge({ accountRef, customerRef, attemptId }: SchoolPayChargeLookup): Promise<SchoolPayChargeObservation | null> {
+    const held = this.charges.get(schoolPayChargeKey(attemptId));
+    if (!held || held.accountRef !== accountRef || held.customerRef !== customerRef) return null;
+    return { outcome: held.outcome, chargeRef: held.chargeRef, failureClass: held.failureClass, amountMinor: held.amountMinor, currency: held.currency };
+  }
+  /**
+   * 0529: one-time payment sessions the simulated processor holds, by provider idempotency key (a resend returns the
+   * first session). Test hooks below pay, fail or expire a session as the payer or the processor would.
+   */
+  readonly onceSessions = new Map<string, { accountRef: string; paymentId: string; sessionRef: string; amountMinor: number; currency: string; surface: SchoolPayOnceSurface;
+    providerExpiresAt: string; outcome: SchoolPayOnceObservation['outcome']; paymentRef: string | null; failureClass: SchoolPayOnceObservation['failureClass'] }>();
+  /** Per payment: the next begin/find/expire call never arrives or its answer is lost (UNKNOWN); `refuseBegin`: a 4xx. */
+  readonly onceFaults = new Map<string, { beginLost?: boolean; beginNeverArrived?: boolean; refuseBegin?: boolean; findLost?: boolean; expireLost?: boolean }>();
+  onceBeginCalls = 0;
+  oneTimeSurfaces(): readonly SchoolPayOnceSurface[] { return this.onceSurfaces; }
+  protected abstract readonly onceSurfaces: readonly SchoolPayOnceSurface[];
+  async beginOneTimePayment({ accountRef, paymentId, amountMinor, currency, label, surface, returnUrl, providerExpiresAt }: SchoolPayOnceRequest): Promise<SchoolPayOnceSession> {
+    if (!this.onceSurfaces.includes(surface) || !Number.isInteger(amountMinor) || amountMinor < 1 || !/^[A-Z]{3}$/.test(currency) || !label) {
+      throw new SchoolPaymentProviderError('PRE_SEND', 'INVALID_REQUEST');
+    }
+    this.returnTo(returnUrl, 'x');
+    if (this.revoked.has(accountRef)) throw new SchoolPaymentProviderError('FAILED', 'PROVIDER_REJECTED');
+    this.onceBeginCalls += 1;
+    const key = schoolPayOnceKey(paymentId), fault = this.onceFaults.get(paymentId) ?? {};
+    if (fault.beginNeverArrived) { this.onceFaults.set(paymentId, { ...fault, beginNeverArrived: false }); throw new SchoolPaymentProviderError('UNKNOWN', 'PROVIDER_UNKNOWN'); }
+    if (fault.refuseBegin) throw new SchoolPaymentProviderError('FAILED', 'PROVIDER_REJECTED');
+    let held = this.onceSessions.get(key);
+    if (held && (held.accountRef !== accountRef || held.amountMinor !== amountMinor || held.currency !== currency || held.surface !== surface || held.providerExpiresAt !== providerExpiresAt)) {
+      throw new SchoolPaymentProviderError('FAILED', 'PROVIDER_REJECTED'); // a reused key with other parameters
+    }
+    if (!held) {
+      held = { accountRef, paymentId, sessionRef: `${this.onceRefs.session}${this.hash(key)}`, amountMinor, currency, surface, providerExpiresAt,
+        outcome: 'OPEN', paymentRef: null, failureClass: null };
+      this.onceSessions.set(key, held);
+    }
+    if (fault.beginLost) { this.onceFaults.set(paymentId, { ...fault, beginLost: false }); throw new SchoolPaymentProviderError('UNKNOWN', 'PROVIDER_UNKNOWN'); }
+    return { sessionRef: held.sessionRef, clientSecret: surface === 'EMBEDDED' ? `${held.sessionRef}_secret_sim` : null,
+      url: surface === 'HOSTED' ? `https://checkout.simulated.invalid/pay/${held.sessionRef}` : null };
+  }
+  private onceHeld({ accountRef, paymentId, sessionRef }: SchoolPayOnceLookup) {
+    const held = this.onceSessions.get(schoolPayOnceKey(paymentId));
+    if (!held || held.accountRef !== accountRef || held.sessionRef !== sessionRef) throw new SchoolPaymentProviderError('FAILED', 'PROVIDER_REJECTED');
+    return held;
+  }
+  async findOneTimePayment(input: SchoolPayOnceLookup): Promise<SchoolPayOnceObservation> {
+    const fault = this.onceFaults.get(input.paymentId) ?? {};
+    if (fault.findLost) { this.onceFaults.set(input.paymentId, { ...fault, findLost: false }); throw new SchoolPaymentProviderError('UNKNOWN', 'PROVIDER_UNKNOWN'); }
+    const held = this.onceHeld(input);
+    return verifySchoolPayOnceObservation({ outcome: held.outcome, sessionRef: held.sessionRef, paymentRef: held.paymentRef, failureClass: held.failureClass,
+      amountMinor: held.amountMinor, currency: held.currency }, { amountMinor: input.amountMinor, currency: input.currency });
+  }
+  async expireOneTimePayment(input: SchoolPayOnceLookup): Promise<void> {
+    const fault = this.onceFaults.get(input.paymentId) ?? {};
+    if (fault.expireLost) { this.onceFaults.set(input.paymentId, { ...fault, expireLost: false }); throw new SchoolPaymentProviderError('UNKNOWN', 'PROVIDER_UNKNOWN'); }
+    const held = this.onceHeld(input);
+    if (held.outcome === 'OPEN') held.outcome = 'EXPIRED';
+  }
+  /** Test hook: the payer pays (or a card is refused, or payment is still clearing) on the processor's form. */
+  settleOnce(paymentId: string, outcome: 'SUCCEEDED' | 'PROCESSING' | 'FAILED' | 'EXPIRED'): void {
+    const held = this.onceSessions.get(schoolPayOnceKey(paymentId));
+    if (!held) throw new Error('No simulated session for this payment.');
+    held.outcome = outcome;
+    held.paymentRef = outcome === 'SUCCEEDED' ? `${this.refs.charge}${this.hash(`once:${paymentId}`)}` : null;
+    held.failureClass = outcome === 'FAILED' ? 'DECLINED' : null;
+  }
+  protected abstract readonly onceRefs: { session: string };
+
+  /** Test hook: the processor settles a held charge (a bank debit clearing or bouncing). */
+  settleCharge(attemptId: string, outcome: 'SUCCEEDED' | 'FAILED', failureClass: SchoolPayChargeFailureClass = 'INSUFFICIENT_FUNDS'): void {
+    const key = schoolPayChargeKey(attemptId), held = this.charges.get(key);
+    if (!held) throw new Error('No simulated charge for this attempt.');
+    this.charges.set(key, { ...held, outcome, failureClass: outcome === 'FAILED' ? failureClass : null });
+  }
 }
 
 /** Stripe Connect (test mode): the connected account exists before onboarding, like Accounts + Account Links. */
 export class SimulatedStripeConnectAdapter extends SimulatedSchoolPaymentAdapter {
   readonly providerCode = 'STRIPE_CONNECT' as const;
   readonly manifest = ALL;
-  protected readonly refs = { customer: 'cus_sim', setup: 'seti_sim', method: 'pm_sim' };
+  protected readonly refs = { customer: 'cus_sim', setup: 'seti_sim', method: 'pm_sim', charge: 'pi_sim' };
+  protected readonly onceRefs = { session: 'cs_sim' };
+  protected readonly onceSurfaces: readonly SchoolPayOnceSurface[] = Object.freeze(['EMBEDDED', 'HOSTED'] as const);
   readonly credentialKind = 'NONE' as const;
   async beginOnboarding({ connectionId, accountRef, state, returnUrl }: { connectionId: string; accountRef: string | null; state: string; returnUrl: string }) {
     const account = accountRef ?? this.ref('acct_sim', connectionId);
@@ -176,7 +327,10 @@ export class SimulatedStripeConnectAdapter extends SimulatedSchoolPaymentAdapter
 export class SimulatedSquareAdapter extends SimulatedSchoolPaymentAdapter {
   readonly providerCode = 'SQUARE' as const;
   readonly manifest: SchoolPayCapabilities = Object.freeze({ ...ALL, bankDebit: false });
-  protected readonly refs = { customer: 'SQCUSTSIM', setup: 'sqsetup_sim', method: 'ccof:sim' };
+  protected readonly refs = { customer: 'SQCUSTSIM', setup: 'sqsetup_sim', method: 'ccof:sim', charge: 'sqpay_sim' };
+  /** A Square payment link is the processor's own page: hosted only. */
+  protected readonly onceRefs = { session: 'sqlink_sim' };
+  protected readonly onceSurfaces: readonly SchoolPayOnceSurface[] = Object.freeze(['HOSTED'] as const);
   readonly credentialKind = 'OAUTH_TOKENS' as const;
   /** Access tokens seen by status calls and renewals (the proof checks the vault round trip with them). */
   readonly seenTokens: string[] = [];

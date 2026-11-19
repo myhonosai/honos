@@ -218,9 +218,12 @@ try {
     assert.equal(await submit(f,body(),key),'invalid'); assert.equal(await forms.published(f.publicId),null);
     await admin.query(`UPDATE hon.${table} SET status='ACTIVE' WHERE id=$1`,[target]);
   }
+  // 0417 guards stage rows; this fixture-only flip of a stage to terminal bypasses it for the admin connection only.
+  await admin.query('ALTER TABLE hon.crm_pipeline_stages DISABLE TRIGGER crm_pipeline_stage_update_guard');
   await admin.query("UPDATE hon.crm_pipeline_stages SET terminal_status='WON' WHERE id=$1",[id.stage]);
   assert.equal(await submit(f,body(),key),'invalid'); assert.equal(await forms.published(f.publicId),null);
   await admin.query('UPDATE hon.crm_pipeline_stages SET terminal_status=NULL WHERE id=$1',[id.stage]);
+  await admin.query('ALTER TABLE hon.crm_pipeline_stages ENABLE TRIGGER crm_pipeline_stage_update_guard');
   // Exact permission revocation denies fresh commands and unchanged staff replay.
   await admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='marketing.form.publish'",[id.role]); await deny(()=>forms.mutate(publishCtx,'publish',draft.id,{expectedVersion:1}));
   await admin.query("INSERT INTO hon.role_permissions VALUES($1,$2,'marketing.form.publish')",[id.role,id.org]);

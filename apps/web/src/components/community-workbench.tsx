@@ -1,6 +1,6 @@
 'use client';
 import React, { useRef, useState, type FormEvent } from 'react';
-import { COMMUNITY_HELP, type CommunityKind, type CommunityInput, type CommunityRecord, type CommunityPage, type CommunityProfile, type CommunityHistory } from '@hon/contracts';
+import { type CommunityKind, type CommunityInput, type CommunityRecord, type CommunityPage, type CommunityProfile, type CommunityHistory } from '@hon/contracts';
 import { CommunityAccessError, communityFingerprint, loadCommunityProfile, loadCommunity, readCommunity, loadCommunityHistory, saveCommunity, type CommunityMutation } from './community-http';
 import styles from './community-workbench.module.css';
 import { ManualSchoolFields, useShellSchoolInto } from './school-shell/page-school';
@@ -43,7 +43,7 @@ export function CommunityWorkbench(): React.ReactElement {
   return <main className={styles.page}>
     <nav><a href="/community/marketplace">Descriptive marketplace · review only</a><a href="/staff/dashboard">School dashboard</a><a href="/auth/login">Sign in</a></nav>
     <header><p>Community</p><h1>Owner community</h1><p>Talk shop with other school owners. Share general practice, never student records.</p></header>
-    <aside data-plain-note=""><strong>Posts are visible to members only, never public.</strong><details><summary>What this page never does</summary><p><strong>Member-only published discussions. Never public.</strong></p><p>{COMMUNITY_HELP}</p><p>Organization consent and your display-name profile are separate opt-ins. Opting out hides your contributions from members; saved private history is retained. Revocation hides your content and denies access. No personal contact directory or arbitrary HQ reader.</p></details></aside>
+    <aside data-plain-note=""><strong>Posts are visible to members only, never public.</strong></aside>
     <section><h2>Current verified membership</h2><form onSubmit={access}><ManualSchoolFields current={school}><label>Already-known school ID<input required disabled={busy} value={school} onChange={e => { setSchool(e.target.value); clearAll(); }} placeholder="School UUID · no school directory"/></label></ManualSchoolFields><button disabled={busy}>Check / refresh current access</button></form><p>A school ID selects existing authority; it never grants access. Manual owner/operator verification must be completed by a trusted administrator.</p></section>
     {busy && <p role="status">Checking the current human membership boundary…</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}{notice && <p role="status" className={styles.notice}>{notice}</p>}

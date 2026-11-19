@@ -7,6 +7,7 @@ import {
   HON_REPLY_SOURCE_LABELS,
 } from '@hon/contracts';
 import { HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
+import { onAppPutAway } from '../school-shell/screensaver';
 import {
   HON_CONVERSATION_API, HonConversationError, prepareConversation, prepareTurn, type HonConversationApi, type HonConversationFailure,
   type HonSchool, type Owned, type PreparedHonCommand,
@@ -19,7 +20,9 @@ import {
 import styles from './hon-conversation.module.css';
 import { useLocale } from '../localization/provider';
 import { HonVoiceControls, useHonVoice } from './hon-voice-controls';
-import { honVoiceLang, honVoiceLine, honVoiceReplyText } from './hon-voice';
+import { honAgentVoice, honVoiceLang, honVoiceLine, honVoiceReplyText } from './hon-voice';
+import { useAgentVoices } from './hon-voice-picker';
+import { AGENT_VOICE_API, type AgentVoiceApi } from './agent-voice-preference';
 
 // A 'claire' turn is Claire, Business Performance (K2); legacy claire teaching turns are already presented as 'kai' by the server.
 const AGENT_NAME: Record<string, string> = { hon: 'HON', marcus: 'Marcus', claire: 'Claire', kai: 'Kai', chad: 'Chad', alex: 'Alex', jordan: 'Jordan', lena: 'Lena', maya: 'Maya', HUMAN: 'You' };
@@ -359,10 +362,10 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
 
 /**
  * Container. Every read is for exactly the verified school passed in; a school change remounts it (keyed by the parent).
- * Private conversation content is concealed synchronously on blur, a hidden tab, page hide or session end, and shown again
+ * Private conversation content is concealed synchronously on session end (away only shows the school screensaver), and shown again
  * only after an explicit Refresh. A sent message is never cancelled: its outcome and exact retry are kept.
  */
-export function HonConversation({ school, presentation, api = HON_CONVERSATION_API, initialAsk = 'hon' }: { school: HonSchool; presentation: 'panel' | 'full'; api?: HonConversationApi; initialAsk?: HonComposerAsk }): React.ReactElement {
+export function HonConversation({ school, presentation, api = HON_CONVERSATION_API, initialAsk = 'hon', voiceApi = AGENT_VOICE_API }: { school: HonSchool; presentation: 'panel' | 'full'; api?: HonConversationApi; initialAsk?: HonComposerAsk; voiceApi?: AgentVoiceApi }): React.ReactElement {
   const [phase, setPhase] = useState<ConversationPhase>('LOADING');
   const [readiness, setReadiness] = useState<HonConversationReadiness | null>(null);
   const [conversations, setConversations] = useState<HonConversationSummary[]>([]);
@@ -386,7 +389,11 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   const sendTextRef = useRef<(text: string, voice: boolean) => boolean>(() => false);
   const voiceAllowed = useRef(false);
   const voice = useHonVoice(lang, (text) => voiceAllowed.current && !concealed.current && sendTextRef.current(text, true));
-  const { shutdown: voiceShutdown, reply: voiceReply } = voice;
+  const { shutdown: voiceShutdown, replyParts } = voice;
+  // 0460: HON answers aloud in the voice this person chose for HON (the usual voice until the choices load).
+  const { choices: voiceChoices } = useAgentVoices(school, voiceApi);
+  const honVoiceChoice = useRef(voiceChoices.hon); honVoiceChoice.current = voiceChoices.hon;
+  const voiceReply = useCallback((text: string) => { replyParts([{ text, profile: honAgentVoice('hon', honVoiceChoice.current) }]); }, [replyParts]);
   /** A spoken answer waits until the reload after it settles, so a follow-up lands in the same, freshly read conversation. */
   const voiceAnswer = useRef<string | null>(null);
 
@@ -422,17 +429,19 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   useEffect(() => {
     mounted.current = true; load();
     const conceal = (event: Event) => {
-      if (event.type === 'visibilitychange' && document.visibilityState === 'visible') return;
       concealed.current = true; generation.current++; privacy.current++; reads.current?.abort(); closeConfirm(); voiceAnswer.current = null; voiceShutdown();
       for (const node of document.querySelectorAll<HTMLElement>('[data-hon-private]')) { node.hidden = true; node.inert = true; }
       setConversations([]); setThread(null); setThreadPhase('NONE'); setGroups(new Map()); setGroupPhase('NONE');
       if (event.type === HON_SESSION_INVALIDATED_EVENT) { ended.current = true; setPhase('SESSION'); } else setPhase((now) => now === 'SESSION' ? now : 'CONCEALED');
     };
-    const windowEvents = ['blur', 'pagehide', HON_SESSION_INVALIDATED_EVENT];
+    // Away (blur, hidden tab, page hide) only shows the school screensaver; the session end still clears everything.
+    const windowEvents = [HON_SESSION_INVALIDATED_EVENT];
     for (const name of windowEvents) window.addEventListener(name, conceal);
-    document.addEventListener('visibilitychange', conceal);
-    return () => { mounted.current = false; generation.current++; privacy.current++; pendingKey.current = null; confirmSeq.current++; targetRead.current?.abort(); reads.current?.abort(); for (const name of windowEvents) window.removeEventListener(name, conceal); document.removeEventListener('visibilitychange', conceal); };
+    return () => { mounted.current = false; generation.current++; privacy.current++; pendingKey.current = null; confirmSeq.current++; targetRead.current?.abort(); reads.current?.abort(); for (const name of windowEvents) window.removeEventListener(name, conceal); };
   }, [load, closeConfirm, voiceShutdown]);
+  // Hands-free voice never keeps listening or speaking behind the screensaver: putting the app away
+  // (hidden, page hide, screensaver incl. idle) turns it off; a person turns it on again. Content stays.
+  useEffect(() => onAppPutAway(voiceShutdown), [voiceShutdown]);
 
   useEffect(() => {
     const text = voiceAnswer.current;

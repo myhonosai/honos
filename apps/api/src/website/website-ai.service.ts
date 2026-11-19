@@ -45,7 +45,7 @@ const validUsage = (r: WebsiteTextResult) => [r.inputTokens, r.outputTokens].eve
   && Number.isSafeInteger(r.providerCostMicrounits) && r.providerCostMicrounits >= 0 && r.providerCostMicrounits <= 1_000_000_000;
 
 /**
- * WB5 (0380): Marcus suggests website edits on the live text route (S4 spend controls, per-school ceiling). A suggestion
+ * WB5 (0550): Marcus suggests website edits on the live text route (S4 spend controls, per-school ceiling). A suggestion
  * changes nothing until the owner applies it; applying is the 0361 draft save and the APPLIED close in one transaction.
  * Usage evidence is recorded in its own transaction, never with the draft change.
  */

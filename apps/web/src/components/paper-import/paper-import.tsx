@@ -25,7 +25,7 @@ function draftOf(detail: PaperImportDetail): PaperDraft {
 }
 
 /**
- * Import from photos (0388, 0389). Staff photograph student cards, contracts or attendance sheets; HON reads the set once into
+ * Import from photos (0388, 0559). Staff photograph student cards, contracts or attendance sheets; HON reads the set once into
  * a table on the AI team's route (or staff type the rows themselves, with no AI); staff check every cell beside the photo, save, and send the table to the
  * existing import review, where nothing is added until each row is decided. Blur, a hidden tab, page hide, a school change
  * or a session end hide the page at once, retire every read, and drop the photos, the table and any kept command held in memory.

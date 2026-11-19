@@ -51,7 +51,8 @@ describe('Retention Review Signals UI', () => {
     try {
       const html = renderToStaticMarkup(<RetentionReviewSignalsWorkbench />);
       expect(fetchSpy).not.toHaveBeenCalled();
-      for (const text of ['Known-ID review only', 'Load Retention Review Signals', 'no score, prediction', 'No verified school and membership are selected']) expect(html).toContain(text);
+      for (const text of ['Choose a member to see their recorded facts.', 'Membership record ID', 'no score, prediction', 'No member chosen yet.']) expect(html).toContain(text);
+      for (const text of ['Known-ID review only', 'Known membership UUID', 'not a student, family, membership']) expect(html).not.toContain(text);
     } finally { fetchSpy.mockRestore(); }
     const route = readFileSync('src/app/staff/retention/review/page.tsx', 'utf8');
     const component = readFileSync('src/components/retention-review-signals.tsx', 'utf8');
@@ -60,5 +61,19 @@ describe('Retention Review Signals UI', () => {
     expect(`${component}\n${http}`).not.toMatch(/invokeLLM|executeAction|sendMessage|providerClient|paymentClient|refundMembership/i);
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
     expect(manifest.routes.filter((item: { path: string }) => item.path === '/staff/retention/review')).toHaveLength(1);
+  });
+  it('reads the signed-in school\'s member list by name and fails closed on anything else', async () => {
+    const { loadRetentionMembers, memberLabel } = await import('../src/components/retention-review-signals-http');
+    const school = '11111111-1111-4111-8111-111111111111', member = { membershipId: '22222222-2222-4222-8222-222222222222', displayName: 'Ann Able', state: 'FROZEN', termEndsAt: null };
+    const reply = (data: unknown, status = 200) => ({ ok: status === 200, status, json: async () => ({ data, meta: {} }) }) as Response;
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(reply({ items: [member] }));
+    try {
+      await expect(loadRetentionMembers(school)).resolves.toEqual([member]);
+      expect(fetchSpy).toHaveBeenLastCalledWith(`/api/v1/staff/retention/review/memberships?schoolId=${school}`, expect.objectContaining({ method: 'GET', credentials: 'same-origin', cache: 'no-store' }));
+      expect(memberLabel(member)).toBe('Ann Able · frozen'); expect(memberLabel({ ...member, state: 'ACTIVE' })).toBe('Ann Able');
+      for (const bad of [{ items: [{ ...member, email: 'x' }] }, { items: [{ ...member, state: 'DRAFT' }] }, { items: [member, member] }, { items: [], extra: 1 }]) { fetchSpy.mockResolvedValueOnce(reply(bad)); await expect(loadRetentionMembers(school)).rejects.toThrow(); }
+      fetchSpy.mockResolvedValueOnce(reply(null, 403)); await expect(loadRetentionMembers(school)).rejects.toThrow('Your role does not include retention reviews');
+      await expect(loadRetentionMembers('not-a-school')).rejects.toThrow();
+    } finally { fetchSpy.mockRestore(); }
   });
 });

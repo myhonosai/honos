@@ -21,7 +21,7 @@ describe('human work-item workbench', () => {
   try {
    const html = renderToStaticMarkup(<WorkItemsWorkbench />);
    expect(fetchSpy).not.toHaveBeenCalled();
-   for (const text of ['Human work, not an AI execution queue.', 'Authorized school queue', 'Load / refresh queue', 'Due dates are UTC planning metadata only.', 'No AI, Action Engine, payments, marketing or communication execution.']) expect(html).toContain(text);
+   for (const text of ['Show', 'Refresh', 'Due dates are in UTC and are for planning only.']) expect(html).toContain(text);
    expect(html).not.toContain('Inspect mats');
    expect(html).not.toContain('provider connected');
    expect(html).not.toMatch(/type="(?:email|file)"/);

@@ -8,7 +8,7 @@ import type { SchoolWebsiteContext } from './school-website.service.js';
 import { WebsiteAiService } from './website-ai.service.js';
 
 /**
- * WB5 (0380): website suggestions from Marcus. Route identifiers are never authority: the scope comes from the verified
+ * WB5 (0550): website suggestions from Marcus. Route identifiers are never authority: the scope comes from the verified
  * session, and the database re-proves website editing, the Marcus capability and the Complete plan for each request.
  */
 @Controller('organizations/:organizationId/schools/:schoolId/website/ai-edits')

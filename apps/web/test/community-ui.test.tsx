@@ -12,7 +12,7 @@ const page={items:[record],nextAfter:null,humanOnly:true,executionAllowed:false}
 const response=(data:unknown)=>({ok:true,json:async()=>({data})}) as Response;
 describe('closed human owner community',()=>{
  it('starts empty without calls, member content, contacts, external publishing or action UI',()=>{
-  const f=vi.spyOn(globalThis,'fetch');try{const html=renderToStaticMarkup(<CommunityWorkbench/>);expect(f).not.toHaveBeenCalled();for(const text of ['Owner community','Member-only published discussions','Never public','Already-known school ID','manual','No personal contact directory','moderation','payments','operator'])expect(html.toLowerCase()).toContain(text.toLowerCase());expect(html).not.toContain('Owner alias');expect(html).not.toContain('Save private draft');expect(html).not.toMatch(/type="(?:email|file)"/);}finally{f.mockRestore();}
+  const f=vi.spyOn(globalThis,'fetch');try{const html=renderToStaticMarkup(<CommunityWorkbench/>);expect(f).not.toHaveBeenCalled();for(const text of ['Owner community','Already-known school ID'])expect(html.toLowerCase()).toContain(text.toLowerCase());expect(html).not.toContain('Owner alias');expect(html).not.toContain('Save private draft');expect(html).not.toMatch(/type="(?:email|file)"/);}finally{f.mockRestore();}
  });
  it('uses only the authenticated same-origin human staff boundary and exact version fields',async()=>{
   const f=vi.spyOn(globalThis,'fetch').mockResolvedValue(response(record));try{

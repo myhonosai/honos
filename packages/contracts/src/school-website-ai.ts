@@ -5,7 +5,7 @@ import {
 import { applyWebsiteEdit, type WebsiteEdit } from './school-website-templates.js';
 
 /**
- * WB5 (0380): AI website edits. The owner asks in words; Marcus answers with a summary and a closed list of edits.
+ * WB5 (0550): AI website edits. The owner asks in words; Marcus answers with a summary and a closed list of edits.
  * A proposal changes nothing until the owner applies it, which is an ordinary draft save (0361) that re-validates the
  * whole document. These rules keep the AI to text and layout: it can never choose an image, a form or booking page, or a
  * link that leaves the site, because it could invent one. The owner sets those in the editor.
@@ -58,7 +58,7 @@ export function validateWebsiteAiApplyInput(value: unknown): WebsiteAiApplyInput
   return { expectedRevision: value.expectedRevision as number };
 }
 
-/** The closed shape the database stores (0380 hon.school_website_ai_proposal_ok). Field values are checked when applied. */
+/** The closed shape the database stores (0550 hon.school_website_ai_proposal_ok). Field values are checked when applied. */
 export function validateWebsiteAiProposal(value: unknown): WebsiteAiProposal {
   if (!isObject(value) || Object.keys(value).sort().join(',') !== 'edits,summary') throw new Error('Invalid website proposal.');
   const { summary, edits } = value;

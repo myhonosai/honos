@@ -307,14 +307,17 @@ export class ClassBookingService {
   }
 
   private async activeSeatCount(client: PoolClient, sessionId: string): Promise<number> {
-    const count = await client.query<{ count: string }>(
-      `SELECT count(*)::text AS count
-       FROM hon.class_bookings
-       WHERE class_session_id = $1::uuid
-         AND status IN ('BOOKED'::hon.class_booking_status, 'CHECKED_IN'::hon.class_booking_status)`,
+    // 0538: bookings plus kiosk trial visitors, read after the session lock in the
+    // same transaction. Null means the session is not in the current school.
+    const count = await client.query<{ count: number | null }>(
+      'SELECT hon.read_class_session_seats_taken($1::uuid) AS count',
       [sessionId],
     );
-    return Number(count.rows[0]?.count ?? '0');
+    const seats = count.rows[0]?.count;
+    if (typeof seats !== 'number' || !Number.isInteger(seats) || seats < 0) {
+      throw new NotFoundException('Class session was not found in this school.');
+    }
+    return seats;
   }
 
   private async completeIdempotencyRecord(

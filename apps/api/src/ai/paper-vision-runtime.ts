@@ -25,7 +25,7 @@ const KIND_WORDS: Readonly<Record<PaperImportKind, string>> = {
   ATTENDANCE_SHEETS: 'attendance sheets (one line per student per class date)',
 };
 /**
- * 0389: HON reads photos or scans of a school's paper records into the columns of an existing import. The images are
+ * 0559: HON reads photos or scans of a school's paper records into the columns of an existing import. The images are
  * untrusted content. The answer is checked cell by cell by the contracts parser and again by the database.
  */
 export const PAPER_READING_SYSTEM_PROMPT = [
