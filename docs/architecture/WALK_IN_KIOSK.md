@@ -110,8 +110,19 @@ TEST-mode processor connection, no HON fee, no card data at HON. Stripe only tod
   `PAID_CARD` instead (the desk receipt shows it). Desk paid is refused while a card payment is still clearing.
 - **Return without leaving the page:** EMBEDDED uses `redirect_on_completion=if_required` (card only never needs a
   redirect; agreed with the tuition thread), so the form's `onComplete` calls the status route in place (WK3b).
-- Environment: the Stripe TEST secret key the tuition adapter already uses, plus a `pk_test_` publishable key for
-  Stripe.js on the tablet (WK3b; the owner sets it, never in chat).
+- Environment: the Stripe TEST secret key the tuition adapter already uses (`HON_TUITION_STRIPE_TEST_SECRET_KEY`), plus a
+  Stripe test publishable key for Stripe.js on the tablet, `NEXT_PUBLIC_HON_TUITION_STRIPE_TEST_PUBLISHABLE_KEY` at web
+  build time (the owner sets it, never in chat). Only `pk_test_` is accepted; without it the tablet offers only the phone
+  QR and the desk.
+- **Tablet screens (WK3b):** after a `PAY_AT_DESK` visit is recorded, the tablet asks "How would you like to pay?" with
+  "Pay here with a card" (only with a test publishable key), "Pay on my phone" and "Pay at the front desk", and says it is
+  test mode. The form is Stripe's embedded Checkout loaded from `js.stripe.com/basil` (the server's API version) with the
+  school account; card details stay in Stripe's frame. The QR is drawn on the tablet (the existing `@zxing/library`
+  encoder, no new dependency) and the tablet asks the status route every 4 seconds. Only the server's `PAID` shows
+  "Paid"; a failed, expired or cancelled payment returns to the choices; "Pay at the front desk" cancels it. Paying
+  clears itself after 10 minutes untouched (typing happens inside Stripe's frame) and ends any open payment.
+- **Staff:** a desk payment refused because a card payment is open or clearing says so (`CARD_PENDING`); a desk
+  payment that finds the visitor already paid by card shows "already paid by card ... give back any money taken".
 
 ### 3.4 Trial class pick
 
@@ -137,7 +148,7 @@ transaction; a full class shows as unavailable.
 | WK1 | Kiosk settings, tablet sessions, intake + waiver + visit | 0414 | Tables, permissions, settings/offer/waiver versions, start/end tablet, public visit submit (FREE / PAY_AT_DESK), today's walk-ins, mark paid at desk, signed waiver read, DB proof, API, contracts. |
 | WK2 | Kiosk screens | — | Visitor flow (3 themes, EN/KO/ES, signature pad), staff kiosk page + settings, Classes tab change (old screens to Settings > Advanced). Browser screenshots at phone/tablet/desktop. |
 | WK3a | Card payment backend (sandbox) | 0533 | PAID_CARD, tablet start/status/cancel by visit key on the 0529 payment, desk paid ends any card payment first, DB proof with simulators, API, contracts. |
-| WK3b | Card form and phone QR screens | — | Stripe embedded form on the tablet, QR for the phone, waiting and result screens (3 themes, EN/KO/ES), `/kiosk/walk-in/paid`, embedded `redirect_on_completion=if_required`. |
+| WK3b | Card form and phone QR screens (built) | — | Stripe embedded form on the tablet, QR for the phone, waiting and result screens (3 themes, EN/KO/ES), `/kiosk/walk-in/paid`, embedded `redirect_on_completion=if_required`. |
 | WK4 | Trial class pick | maybe | Trial-eligible sessions read + CRM trial scheduling inside the visit. |
 
 ## 6. Open owner items

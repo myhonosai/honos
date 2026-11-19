@@ -75,3 +75,7 @@
 .signed { white-space: pre-line; border: 1px solid var(--hon-border, #e2e8f0); border-radius: 8px; padding: 12px; max-height: 320px; overflow-y: auto; }
 .signature { width: 100%; max-width: 420px; aspect-ratio: 3 / 1; border: 1px solid var(--hon-border, #e2e8f0); border-radius: 8px; background: #fff; color: #0f172a; }
 @media print { .noPrint { display: none !important; } }
+/* 0533 card payment on the tablet: the processor's form fills the card; the QR stays black on white in every theme. */
+.cardForm { width: 100%; min-height: 420px; }
+.qr { width: min(280px, 70vw); height: auto; background: #fff; padding: 8px; border-radius: 8px; border: 1px solid var(--walkin-line); }
+.qrBox { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
