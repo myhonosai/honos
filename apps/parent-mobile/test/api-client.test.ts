@@ -21,6 +21,18 @@ describe('parent API client', () => {
     expect((await api(bad).startInvoicePayment(inv, 'key-0000000000000002')).ok).toBe(false);
   });
 
+  it('reads school announcements with no selector and verifies them', async () => {
+    const item = { announcementId: '77777777-7777-4777-8777-000000000001', title: 'Closed Monday', body: 'No classes.', publishedAt: '2026-11-17T15:30:00.000Z' };
+    const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(200, { data: { schoolName: 'Dojo', announcements: [item] } }));
+    const result = await api(fetchImpl).announcements();
+    expect(result.ok && result.data.announcements[0]!.title).toBe('Closed Monday');
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(url).toBe('https://api.example.test/v1/parent/announcements');
+    expect(init.method).toBe('GET');
+    const leaky = jest.fn().mockResolvedValue(jsonResponse(200, { data: { schoolName: 'Dojo', announcements: [{ ...item, author: 'Coach' }] } }));
+    expect(await api(leaky).announcements()).toEqual({ ok: false, state: 'unavailable' });
+  });
+
   it('reads the journey with a bearer session, no cookies and no selectors', async () => {
     const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(200, journeyBody()));
     const result = await api(fetchImpl).journey();
