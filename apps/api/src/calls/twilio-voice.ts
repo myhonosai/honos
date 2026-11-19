@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:crypto';
 
 /**
- * CL3b (0547/0548, docs/architecture/SCHOOL_CALLING.md §4): browser calling through Twilio Voice on the school's own
+ * CL3b (0556/0561, docs/architecture/SCHOOL_CALLING.md §4): browser calling through Twilio Voice on the school's own
  * subaccount. This module holds the pure pieces: the fixed webhook paths, the sealed voice API key, the browser phone
  * token, and the TwiML HON answers with. Nothing here talks to Twilio; the voice switch HON_VOICE_CALLS_APPROVED (owner
  * approval, unset by default) decides whether any call may leave HON at all.

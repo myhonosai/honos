@@ -15,7 +15,7 @@ import type { MembershipLifecycleContext } from '../billing/membership.service.j
 import { MembershipActivationHumanUiGuard } from '../billing/membership-activation-human-ui.guard.js';
 import { SchoolCallsService } from './school-calls.service.js';
 
-/** 0547: each calling call is its own same-origin browser command; reads are GET only. */
+/** 0556: each calling call is its own same-origin browser command; reads are GET only. */
 @Injectable()
 export class SchoolCallReadGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = SCHOOL_CALL_READ_COMMAND;
@@ -62,7 +62,7 @@ export function schoolCallListQuery(query: Record<string, unknown>): Record<stri
 }
 
 /**
- * Staff calling on the school number (0547). Route identifiers are never authority: the guarded boundary resolves the
+ * Staff calling on the school number (0556). Route identifiers are never authority: the guarded boundary resolves the
  * scope from the verified session with communication.call.use (settings: communication.call.manage), and every
  * database call re-proves it.
  */

@@ -381,6 +381,10 @@
       "title": "HON | Conversations"
     },
     {
+      "path": "/staff/calls",
+      "title": "HON | Calls"
+    },
+    {
       "path": "/staff/conversations/train-ai",
       "title": "HON | Train AI"
     },
