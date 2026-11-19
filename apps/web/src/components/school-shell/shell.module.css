@@ -225,9 +225,9 @@
   background: var(--hon-surface); color: var(--hon-text); font: inherit; font-size: var(--hon-text-sm);
 }
 
-/* Transitional canvas for pages designed for the old light body (removed per area as pages migrate). */
+/* Transitional: pages designed for the old light body, recoloured onto the tokens in shell-global.css (C1). */
 .main[data-canvas='legacy-light'] {
-  color: #172238; background: #f5f7fb; border-radius: var(--hon-radius-lg); box-shadow: var(--hon-shadow-1); color-scheme: light;
+  color: var(--hon-text); color-scheme: dark;
   width: auto; margin: var(--hon-space-4) max(var(--hon-space-6), calc((100% - var(--hon-content-max)) / 2)) var(--hon-space-6);
 }
 @media (max-width: 1099px) { .main[data-canvas='legacy-light'] { margin: var(--hon-space-3); } }
