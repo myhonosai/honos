@@ -272,13 +272,41 @@ footer .base{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
   .close .stage::after{background:linear-gradient(0deg,rgba(18,24,21,.96) 30%,rgba(18,24,21,.5) 70%,rgba(18,24,21,.2))}
   .close .stage{align-items:flex-end;padding-bottom:70px}
 }
+/* Loading screen: covers the page until the story is ready, then lifts like a curtain. */
+#loader{position:fixed;inset:0;z-index:100;background:radial-gradient(120% 80% at 50% 110%,#16352a 0%,var(--night) 58%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;color:#eef2ee;transition:transform 1.1s cubic-bezier(.7,0,.2,1),opacity 1.1s ease}
+#loader.gone{transform:translateY(-100%);opacity:.6;pointer-events:none}
+html.loading body{overflow:hidden}
+.hero-copy>*,.hint{transition:opacity 1s ease,transform 1s cubic-bezier(.2,.7,.2,1)}
+.hero-copy>*:nth-child(2){transition-delay:.12s}.hero-copy>*:nth-child(3){transition-delay:.24s}.hero-copy>*:nth-child(4){transition-delay:.36s}
+html.loading .hero-copy>*{opacity:0;transform:translateY(24px)}
+.ld-mark{position:relative;width:96px;height:96px;display:grid;place-items:center}
+.ld-mark .ribbon{position:relative;width:52px;height:74px;padding-top:18px}
+.ld-mark .ribbon svg{width:26px;height:26px}
+.ld-star{position:absolute;width:22px;height:22px;right:-6px;top:-4px;background:var(--gold);clip-path:polygon(50% 0,58% 42%,100% 50%,58% 58%,50% 100%,42% 58%,0 50%,42% 42%);filter:drop-shadow(0 0 8px rgba(243,207,122,.9));animation:ldspin 2.4s ease-in-out infinite}
+.ld-star.b{width:12px;height:12px;left:-14px;right:auto;top:auto;bottom:6px;animation-delay:-1.2s}
+@keyframes ldspin{0%{transform:rotate(0) scale(.7);opacity:.6}50%{transform:rotate(90deg) scale(1.1);opacity:1}100%{transform:rotate(180deg) scale(.7);opacity:.6}}
+.ld-name{font-family:var(--serif);font-size:clamp(34px,5vw,52px);letter-spacing:-.01em;line-height:1}
+.ld-sub{font-family:var(--serif);font-style:italic;color:var(--sage-2);font-size:18px;margin-top:-10px}
+.ld-bar{width:min(280px,70vw);height:1px;background:rgba(255,255,255,.14);overflow:hidden}
+.ld-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--sage),var(--gold));transform-origin:0 50%;transform:scaleX(0)}
+.ld-meta{display:flex;justify-content:space-between;width:min(280px,70vw);margin-top:-12px;color:var(--sage-2)}
+.ld-pct{color:var(--gold)}
+@media (prefers-reduced-motion:reduce){#loader{transition:opacity .3s}#loader.gone{transform:none;opacity:0}.ld-star{animation:none}}
 </style>
 <script>
   // Decide before first paint whether scenes animate, so there is no flash of the finished state.
-  document.documentElement.classList.add(matchMedia('(prefers-reduced-motion: reduce)').matches ? 'still' : 'story');
+  document.documentElement.classList.add(matchMedia('(prefers-reduced-motion: reduce)').matches ? 'still' : 'story', 'loading');
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 </script>
 </head>
 <body>
+<div id="loader" role="status" aria-live="polite">
+  <div class="ld-mark" aria-hidden="true"><span class="ribbon"><svg viewBox="0 0 32 32"><path d="M5 13.2h22v4.4H5z" fill="#fff"/><rect x="12.6" y="10.6" width="6.8" height="9.6" rx="1.6" fill="#fff" stroke="#7f9f93" stroke-width="1.4"/><path d="M14 20.2l-3.2 6.2M18 20.2l3.2 6.2" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></span><i class="ld-star"></i><i class="ld-star b"></i></div>
+  <div class="ld-name">HON OS</div>
+  <div class="ld-sub">A story in seven chapters</div>
+  <div class="ld-bar" aria-hidden="true"><i></i></div>
+  <div class="ld-meta label"><span class="ld-line">Lighting the lanterns</span><span class="ld-pct">0%</span></div>
+</div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="mark" viewBox="0 0 32 32">
     <path d="M5 13.2h22v4.4H5z" fill="#ffffff"/>
@@ -345,7 +373,7 @@ footer .base{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
     <div class="room"><img src="../shared/assets/story-class.webp" width="1344" height="752" alt="A painting of an instructor kneeling to correct a child's stance while the class watches"></div>
     <div class="leaf l" aria-hidden="true"></div>
     <div class="leaf r" aria-hidden="true"></div>
-    <video class="film" muted playsinline preload="auto" aria-hidden="true"><source src="../shared/assets/story-door.mp4" type="video/mp4"><source src="../shared/assets/story-door.webm" type="video/webm"></video>
+    <video class="film" muted playsinline preload="auto" aria-hidden="true" data-src="../shared/assets/story-door.mp4" data-src-phone="../shared/assets/story-door-phone.mp4"></video>
     <div class="intro" aria-hidden="true"><span class="label">Chapter one</span><h2>Step inside your school.</h2></div>
     <div class="cap"><div class="wrap">
       <span class="label">Chapter one · Your school</span>
@@ -492,6 +520,7 @@ footer .base{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
     <div class="base"><span>© 2026 HON OS</span><span>Design preview B, scroll story (inspired by the Creative Intelligence Report layout). Not the live site. Photos are placeholders.</span></div>
   </div>
 </footer>
+<script src="loader.js"></script>
 <script src="../shared/demo.js"></script>
 <script src="story.js"></script>
 </body>
