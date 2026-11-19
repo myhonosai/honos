@@ -3,10 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CrmBoardLead, CrmBoardStage, CrmPipelineBoard } from '@hon/contracts';
 import { PIPELINE_LANGUAGES, pipelineText } from '../src/components/lead-pipeline/copy';
-import { BoardCommandError, BoardError, boardPath, prepareMove, prepareSave, readBoard, submitMove, submitSave } from '../src/components/lead-pipeline/http';
+import { BoardCommandError, BoardError, boardApi, boardPath, prepareMove, prepareSave, readBoard, starterOutcome, submitMove, submitSave } from '../src/components/lead-pipeline/http';
+import { StarterRefusedError, addLeadApi } from '../src/components/leads/add-lead-http';
+import { LeadsError } from '../src/components/leads/http';
 import {
   PROGRAM_NONE, applyFilters, applyMove, boardColumns, boardStats, cardLine, codeLabel, draftErrors, draftFrom, draftInput, initials, matchesSearch,
-  moveDraftStage, moveTargets, programsOf, rateText, sortLeads, stagesNeedingMove,
+  moveDraftStage, moveTargets, programsOf, rateText, sortLeads, stagesNeedingMove, starterEditReady,
 } from '../src/components/lead-pipeline/model';
 import { PipelineView, type PipelineViewProps } from '../src/components/lead-pipeline/view';
 import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
@@ -205,7 +207,7 @@ describe('view', () => {
     expect(render({ scope: null })).toContain('Choose a school');
     expect(render({ board: { state: 'DENIED' } })).toContain('does not include leads');
     expect(render({ board: { state: 'UNAVAILABLE' } })).toContain('could not be loaded');
-    expect(render({ board: { state: 'READY', board: { ...BOARD, pipeline: null, pipelines: [], stages: [], leads: [] } } })).toContain('no lead stages yet');
+    expect(render({ board: { state: 'READY', board: { ...BOARD, pipeline: null, pipelines: [], stages: [], leads: [] } } })).toContain('No lead stages yet');
   });
   it('renders in Korean and Spanish with every key translated', () => {
     const keys = Object.keys(PIPELINE_LANGUAGES.en).sort();
@@ -215,5 +217,55 @@ describe('view', () => {
     expect(render({ language: 'ko' })).toContain('등록률');
     expect(render({ language: 'es' })).toContain('Prospectos');
     expect(render({ language: 'es', edit: { draft: draftFrom(STAGES), newName: '', phase: 'EDIT', error: null } })).toContain('Editar etapas del embudo');
+  });
+});
+
+const EMPTY_BOARD: CrmPipelineBoard = { ...BOARD, pipeline: null, pipelines: [], stages: [], leads: [], totals: { open: 0, won: 0, lost: 0 } };
+describe('stages before the first lead', () => {
+  it('keeps Edit pipeline usable with no stages and offers to set them up on the empty board', () => {
+    const html = render({ board: { state: 'READY', board: EMPTY_BOARD } });
+    expect(html).toMatch(/<button[^>]*>Edit pipeline<\/button>/);
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Edit pipeline<\/button>/);
+    expect(html).toContain('Set up lead stages');
+    expect(html).toContain('New lead, Trial booked, Enrolled and Not now');
+    expect(html).not.toContain('Add your first lead and HON sets up');
+  });
+  it('still disables Edit pipeline while the board is loading or unavailable', () => {
+    expect(render({ board: { state: 'LOADING' } })).toMatch(/<button[^>]*disabled=""[^>]*>Edit pipeline<\/button>/);
+    expect(render({ board: { state: 'UNAVAILABLE' } })).toMatch(/<button[^>]*disabled=""[^>]*>Edit pipeline<\/button>/);
+  });
+  it('shows the setup states: working, denied, refused and unknown', () => {
+    const empty = { board: { state: 'READY' as const, board: EMPTY_BOARD } };
+    const working = render({ ...empty, setup: { state: 'WORKING' } });
+    expect(working).toContain('Setting up stages…');
+    expect(working).toMatch(/<button[^>]*disabled=""[^>]*>Edit pipeline<\/button>/);
+    expect(render({ ...empty, setup: { state: 'DENIED' } })).toContain('Only people who can manage the pipeline can set up stages.');
+    expect(render({ ...empty, setup: { state: 'FAILED' } })).toContain('The stages could not be set up.');
+    const unknown = render({ ...empty, setup: { state: 'UNKNOWN' } });
+    expect(unknown).toContain('We could not confirm the setup.');
+    expect(unknown).toContain('Retry');
+  });
+  it('keeps the starter key only for an unknown outcome and drops it on any definite answer', () => {
+    expect(starterOutcome(new LeadsError('UNAVAILABLE'))).toEqual({ key: 'keep', show: 'UNKNOWN' });
+    expect(starterOutcome(new Error('network'))).toEqual({ key: 'keep', show: 'UNKNOWN' });
+    expect(starterOutcome(new StarterRefusedError())).toEqual({ key: 'clear', show: 'FAILED' });
+    expect(starterOutcome(new LeadsError('DENIED'))).toEqual({ key: 'clear', show: 'DENIED' });
+    expect(starterOutcome(new LeadsError('SESSION'))).toEqual({ key: 'clear', show: null });
+  });
+  it('opens the editor only once the board shows the pipeline that setup made', () => {
+    expect(starterEditReady(EMPTY_BOARD, id(20))).toBe(false);
+    expect(starterEditReady(BOARD, id(20))).toBe(true);
+    expect(starterEditReady(BOARD, id(21))).toBe(false);
+    expect(starterEditReady(BOARD, null)).toBe(false);
+  });
+  it('sets up stages through the existing starter command', () => {
+    expect(boardApi.setUpStarter).toBe(addLeadApi.setUpStarter);
+  });
+  it('translates the setup wording', () => {
+    for (const language of ['ko', 'es']) {
+      const html = render({ language, board: { state: 'READY', board: EMPTY_BOARD } });
+      expect(html).toContain(pipelineText(language, 'setUp'));
+      expect(pipelineText(language, 'setUp')).not.toBe(pipelineText('en', 'setUp'));
+    }
   });
 });

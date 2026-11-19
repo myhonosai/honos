@@ -4,6 +4,8 @@ import {
   type SaveCrmPipelineStagesInput,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
+import { StarterRefusedError, addLeadApi } from '../leads/add-lead-http';
+import { LeadsError } from '../leads/http';
 
 /**
  * 0417 lead pipeline board calls. The school is the one the shell verified; ids are selectors only and the API re-derives
@@ -101,7 +103,21 @@ export async function submitSave(request: PreparedCommand): Promise<CrmPipelineS
   catch { throw new BoardCommandError('UNCERTAIN'); }
 }
 
+/**
+ * What a starter-stages answer means for the board: only an unknown outcome keeps the press's key for the same retry;
+ * a refusal, denial or ended session drops it. A session end shows nothing here because the shell takes over.
+ */
+export type StarterShow = 'DENIED' | 'FAILED' | 'UNKNOWN';
+export function starterOutcome(error: unknown): { key: 'keep' | 'clear'; show: StarterShow | null } {
+  if (error instanceof StarterRefusedError) return { key: 'clear', show: 'FAILED' };
+  if (error instanceof LeadsError && error.kind === 'DENIED') return { key: 'clear', show: 'DENIED' };
+  if (error instanceof LeadsError && error.kind === 'SESSION') return { key: 'clear', show: null };
+  return { key: 'keep', show: 'UNKNOWN' };
+}
+
 export interface BoardApi {
   read: typeof readBoard; submitMove: typeof submitMove; submitSave: typeof submitSave;
+  /** The existing server-defined starter-stages command (crm.pipeline.manage), so stages can be set up before any lead. */
+  setUpStarter: typeof addLeadApi.setUpStarter;
 }
-export const boardApi: BoardApi = { read: readBoard, submitMove, submitSave };
+export const boardApi: BoardApi = { read: readBoard, submitMove, submitSave, setUpStarter: addLeadApi.setUpStarter };
