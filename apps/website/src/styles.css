@@ -46,14 +46,14 @@ a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var
 .skip{position:absolute;left:12px;top:-60px;z-index:120;background:var(--accent-fill);color:var(--on-accent);padding:8px 14px;border-radius:999px;font-weight:500}
 .skip:focus{top:12px}
 
-/* Header: a ribbon bookmark with the HON knot, language and the two app links, floating over every page */
+/* Header: the HON OS spirit-orbit logo, language and the two app links, floating over every page */
 header{position:fixed;inset:0 0 auto;z-index:60;pointer-events:none}
 header .nav{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;max-width:none;padding-left:28px;padding-right:28px}
 header a,header nav{pointer-events:auto}
-.brand{display:flex;align-items:flex-start;gap:14px}
-.ribbon{width:44px;height:62px;background:var(--sage);clip-path:polygon(0 0,100% 0,100% 100%,50% 82%,0 100%);display:grid;place-items:start center;padding-top:14px}
-.ribbon svg{width:22px;height:22px}
-.brand-name{padding-top:17px;font-family:var(--serif);font-size:24px;color:#fff;mix-blend-mode:difference}
+.brand{display:flex;align-items:center;gap:12px;padding-top:12px}
+.logo-mark{display:block;width:42px;height:42px;flex:none}
+.logo-mark svg{display:block;width:100%;height:100%}
+.brand-name{display:block;width:112px;height:auto;aspect-ratio:4272/700;mix-blend-mode:difference}
 .nav-right{display:flex;align-items:center;gap:10px;padding-top:14px}
 .lang{display:flex;gap:2px;padding:3px;border-radius:999px;background:rgba(6,13,31,.6);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);font-family:var(--mono);font-size:12px}
 .lang a{padding:6px 9px;border-radius:999px;color:var(--muted)}
