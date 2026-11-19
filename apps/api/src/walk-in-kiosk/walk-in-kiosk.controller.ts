@@ -146,7 +146,7 @@ export class PublicWalkInKioskController {
   async submit(@Body() input: unknown, @Headers('idempotency-key') key: string, @Res() res: Response) {
     const outcome = await this.kiosk.submit(input, key);
     if (outcome.result === 'RATE_LIMITED') res.setHeader('Retry-After', '3600');
-    const status = { RECORDED: 201, INVALID: 400, STALE: 409, CLOSED: 404, RATE_LIMITED: 429, UNAVAILABLE: 503 }[outcome.result];
+    const status = { RECORDED: 201, INVALID: 400, STALE: 409, CLASS_FULL: 409, CLOSED: 404, RATE_LIMITED: 429, UNAVAILABLE: 503 }[outcome.result];
     return res.status(status).json(outcome);
   }
 

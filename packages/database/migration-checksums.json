@@ -344,6 +344,7 @@
     "0523_school_contact_merge_archive.sql": "39228fc3d1af999e4bff29da71460a5a6c82ec0ccd7d9bb3339c62ba2ea8868c",
     "0529_school_pay_once.sql": "476c62434beaeb0be7f781878ee817e5b0e0641f22f94ed400457bf90da9ea4a",
     "0530_parent_invoice_payment.sql": "df276ef58db20b72c15d11911704c8bd3b6773b85102c19aa78e88ef5638ce43",
-    "0533_walk_in_kiosk_card_payment.sql": "bbdffff9b9eee29f5ff9f8452a4ff5694c758b2abc234967b8bb2ebda8af35ac"
+    "0533_walk_in_kiosk_card_payment.sql": "bbdffff9b9eee29f5ff9f8452a4ff5694c758b2abc234967b8bb2ebda8af35ac",
+    "0537_walk_in_kiosk_trial_class.sql": "24b725cddd83d80ab9597b5531e2178eb355aae5911c6267d13e2dc999fe057f"
   }
 }

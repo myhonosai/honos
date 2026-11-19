@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   schoolBrandingColorOk, schoolBrandingImageUrlOk, validateWalkInVisitInput, walkInText, WALKIN_HEARD_FROM, WALKIN_LANGUAGES,
-  type WalkInCardOutcome, type WalkInCardSurface, type WalkInHeardFrom, type WalkInLanguage, type WalkInRelationship, type WalkInStroke, type WalkInTerminal,
+  type WalkInCardOutcome, type WalkInCardSurface, type WalkInHeardFrom, type WalkInLanguage, type WalkInRelationship, type WalkInStroke, type WalkInTerminal, type WalkInTrialClass,
   type WalkInVisitInput, type WalkInVisitOutcome,
 } from '@hon/contracts';
 import type { HonInterfaceTheme } from '@hon/design-system';
@@ -60,11 +60,13 @@ export type VisitDraft = Readonly<{
   who: Who; contact: Person & Readonly<{ email: string; mobile: string }>; children: readonly Person[]; relationship: WalkInRelationship;
   emergencyName: string; emergencyPhone: string; heardFrom: WalkInHeardFrom; marketingOptIn: boolean; offerKey: string;
   signerName: string; strokes: readonly WalkInStroke[]; agreed: boolean;
+  /** 0537: the class picked for a trial offer that lists classes ('' until one is picked). */
+  trialSessionId: string;
 }>;
 const emptyPerson: Person = { givenName: '', familyName: '', birthDate: '' };
 export const emptyDraft = (): VisitDraft => ({
   who: 'ME', contact: { ...emptyPerson, email: '', mobile: '' }, children: [], relationship: 'PARENT', emergencyName: '', emergencyPhone: '',
-  heardFrom: '', marketingOptIn: false, offerKey: '', signerName: '', strokes: [], agreed: false,
+  heardFrom: '', marketingOptIn: false, offerKey: '', signerName: '', strokes: [], agreed: false, trialSessionId: '',
 });
 export const RESET_SECONDS = 20;
 export const IDLE_MS = 120_000;
@@ -85,10 +87,26 @@ export function localToday(now = new Date()): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
-/** The request body for the whole form. Throws when anything is not acceptable; the server checks it all again. */
-export function visitBody(d: VisitDraft, terminal: WalkInTerminal, language: WalkInLanguage, today: string): WalkInVisitInput {
+/** 0537: how many people on this visit need a seat in a trial class. */
+export const visitSeats = (d: VisitDraft): number => (d.who !== 'KIDS' ? 1 : 0) + (d.who !== 'ME' ? d.children.length : 0);
+/** 0537: a trial class the visitor can pick (enough open spots for everyone on the visit). */
+export const classOpen = (c: WalkInTrialClass, d: VisitDraft): boolean => c.spotsOpen >= visitSeats(d);
+/** 0537: an offer can be chosen unless it lists classes and none of them has room. */
+export const offerOpen = (o: WalkInTerminal['offers'][number], d: VisitDraft): boolean => o.classes === null || o.classes.some(c => classOpen(c, d));
+/** A class time as the tablet shows it (the tablet sits at the school, so its own clock zone is the school's). */
+export const classWhen = (language: WalkInLanguage, iso: string): string =>
+  new Date(iso).toLocaleString(language, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+/**
+ * The request body for the whole form. Throws when anything is not acceptable; the server checks it all again.
+ * `standIn` (the details check) skips the offer and class, which are picked later.
+ */
+export function visitBody(d: VisitDraft, terminal: WalkInTerminal, language: WalkInLanguage, today: string, standIn = false): WalkInVisitInput {
   const adultTrains = d.who !== 'KIDS', kids = d.who !== 'ME';
-  if (!terminal.offers.some(o => o.key === d.offerKey)) throw new Error('Choose one of this school’s offers.');
+  const offer = standIn ? terminal.offers[0] : terminal.offers.find(o => o.key === d.offerKey);
+  if (!offer) throw new Error('Choose one of this school’s offers.');
+  const picked = !standIn && offer.classes !== null ? offer.classes.find(c => c.sessionId === d.trialSessionId) : undefined;
+  if (!standIn && offer.classes !== null && (!picked || !classOpen(picked, d))) throw new Error('Choose one of the trial classes.');
   const trim = (p: Person) => ({ givenName: p.givenName.trim(), familyName: p.familyName.trim(), birthDate: p.birthDate });
   return validateWalkInVisitInput({
     settingsVersion: terminal.settingsVersion, language,
@@ -96,13 +114,14 @@ export function visitBody(d: VisitDraft, terminal: WalkInTerminal, language: Wal
       birthDate: adultTrains ? d.contact.birthDate : null, isParticipant: adultTrains, adultConfirmed: true },
     children: kids ? d.children.map(trim) : [], relationship: kids ? d.relationship : null,
     emergency: { name: d.emergencyName.trim(), phone: normalizeMobile(d.emergencyPhone) }, heardFrom: d.heardFrom, marketingOptIn: d.marketingOptIn,
-    offerKey: d.offerKey, waiver: { accepted: d.agreed, signerName: d.signerName.trim(), strokes: signedStrokes(d.strokes) }, website: '',
+    offerKey: offer.key, waiver: { accepted: d.agreed, signerName: d.signerName.trim(), strokes: signedStrokes(d.strokes) }, website: '',
+    ...(picked ? { trialSessionId: picked.sessionId } : {}),
   }, today);
 }
 /** Whether the details step is complete: the whole form with a stand-in waiver and offer must pass. */
 export function detailsOk(d: VisitDraft, terminal: WalkInTerminal, language: WalkInLanguage, today: string): boolean {
   try {
-    visitBody({ ...d, agreed: true, signerName: 'Signer', strokes: [[[1, 1], [2, 2]]], offerKey: terminal.offers[0]?.key ?? '' }, terminal, language, today);
+    visitBody({ ...d, agreed: true, signerName: 'Signer', strokes: [[[1, 1], [2, 2]]] }, terminal, language, today, true);
     return true;
   } catch { return false; }
 }
@@ -211,16 +230,27 @@ export function WalkInVisitorView(p: VisitorViewProps): React.ReactElement {
 
   if (p.step === 'OFFER') {
     const failed = p.outcome && p.outcome.result !== 'RECORDED' ? p.outcome.result : null;
+    const chosen = r.offers.find(o => o.key === d.offerKey);
+    const ready = !!chosen && offerOpen(chosen, d) && (chosen.classes === null || chosen.classes.some(c => c.sessionId === d.trialSessionId && classOpen(c, d)));
     return shell(<>{head}<section className={styles.step}><h1>{t('vOfferTitle')}</h1>
       <div className={styles.offers} role="radiogroup" aria-label={t('vOfferTitle')}>{r.offers.map(o => {
-        const name = walkInText(o.name, p.language).text, about = walkInText(o.description, p.language).text;
-        return <button type="button" role="radio" key={o.key} aria-checked={d.offerKey === o.key} className={styles.offer} disabled={p.sending} onClick={() => set({ offerKey: o.key })}>
-          <strong>{name}</strong><span className={styles.price}>{o.priceMinor ? walkInPrice(p.language, o.priceMinor) : t('vFree')}</span>{about ? <small>{about}</small> : null}</button>;
+        const name = walkInText(o.name, p.language).text, about = walkInText(o.description, p.language).text, open = offerOpen(o, d);
+        return <button type="button" role="radio" key={o.key} aria-checked={d.offerKey === o.key} className={styles.offer} disabled={p.sending || !open}
+          onClick={() => set({ offerKey: o.key, trialSessionId: o.key === d.offerKey ? d.trialSessionId : '' })}>
+          <strong>{name}</strong><span className={styles.price}>{o.priceMinor ? walkInPrice(p.language, o.priceMinor) : t('vFree')}</span>{about ? <small>{about}</small> : null}
+          {open ? null : <small>{t('vNoClasses')}</small>}</button>;
       })}</div>
+      {chosen?.classes ? <section aria-labelledby="walkin-classes"><h2 id="walkin-classes">{t('vClassTitle')}</h2>
+        <div className={styles.classes} role="radiogroup" aria-labelledby="walkin-classes" data-testid="walkin-classes">{chosen.classes.map(c => {
+          const open = classOpen(c, d);
+          return <button type="button" role="radio" key={c.sessionId} className={styles.offer} aria-checked={d.trialSessionId === c.sessionId} disabled={p.sending || !open}
+            onClick={() => set({ trialSessionId: c.sessionId })}><strong>{c.name}</strong><span>{classWhen(p.language, c.startsAt)}</span>
+            <small>{open ? t('vClassSpots') : t('vClassFull')}</small></button>;
+        })}</div></section> : null}
       {failed ? <p role="alert" className={styles.alert}>{t(`v${failed}` as WalkInKey)}</p> : null}
       {failed === 'STALE' || failed === 'CLOSED' || failed === 'RATE_LIMITED' ? <div className={styles.nav}><span/>
         <button type="button" className={styles.primary} onClick={() => p.onReset?.()}>{t('vStartOver')}</button></div>
-        : nav(p.sending ? null : 'WAIVER', <button type="button" className={styles.primary} disabled={!d.offerKey || p.sending} onClick={() => p.onSend?.()}>
+        : nav(p.sending ? null : 'WAIVER', <button type="button" className={styles.primary} disabled={!ready || p.sending} onClick={() => p.onSend?.()}>
           {p.sending ? t('vSending') : failed ? t('vRetry') : t('vSend')}</button>)}</section></>, accent);
   }
 
@@ -252,6 +282,7 @@ export function WalkInVisitorView(p: VisitorViewProps): React.ReactElement {
   return shell(<section className={styles.center} role="status" data-testid="walkin-done">
     <h1>{t('vDone', { name: o ? doneName(o, d) : '' })}</h1>
     <p className={styles.lead}>{p.paid === 'CARD' ? t('vDonePaid', { price }) : desk ? t('vDoneDesk', { price }) : t('vDoneFree')}</p>
+    {o?.trialClass ? <p className={styles.lead} data-testid="walkin-done-class">{t('vDoneClass', { name: o.trialClass.name, when: classWhen(p.language, o.trialClass.startsAt) })}</p> : null}
     {o?.thankYou ? <p className={styles.thanks}>{o.thankYou}</p> : null}
     <button type="button" className={styles.primary} onClick={() => p.onReset?.()}>{t('vFinish')}</button>
     <p className={styles.hint}>{t('vResetting', { n: p.countdown })}</p></section>, accent);
@@ -362,14 +393,18 @@ export function WalkInVisitorPage({ api = walkInTabletApi, now = () => new Date(
       setCountdown(RESET_SECONDS); setStep('DONE'); return;
     }
     if (answer.result === 'CLOSED') setRead('CLOSED');
+    // 0537: the class filled up (or started) meanwhile: fresh classes, pick again.
+    if (answer.result === 'CLASS_FULL') { setDraft(x => ({ ...x, trialSessionId: '' })); void load(); }
     if (answer.result !== 'UNAVAILABLE') key.current = null; // Only an unknown outcome is retried with the same key.
-  }, [api, draft, language, now, read, sending, testKey, token]);
+  }, [api, draft, language, load, now, read, sending, testKey, token]);
 
   return <WalkInVisitorView read={read} mode={handoff?.mode ?? 'big-button'} language={language} step={step} draft={draft} today={localToday(now())} tried={tried}
     sending={sending} outcome={outcome} countdown={countdown} pay={pay} paid={paid} testKey={testKey}
     onPay={surface => { if (pay) void ask('start', pay, surface); }} onDesk={() => { if (pay) void ask('cancel', pay); }}
-    onOther={() => { if (pay) setPay(choosePay(pay.surfaces)); }} onFormDone={() => { if (pay) setPay({ ...pay, view: 'CHECKING' }); }}
-    onFormError={() => { if (pay) setPay(choosePay(pay.surfaces.filter(x => x !== 'EMBEDDED'), 'FORM')); }}
+    // #494 P3: each of these makes an earlier card answer stale, so an in-flight status answer can never bring the old view back.
+    onOther={() => { if (pay) { generation.current += 1; setPay(choosePay(pay.surfaces)); } }}
+    onFormDone={() => { if (pay) { generation.current += 1; setPay({ ...pay, view: 'CHECKING' }); } }}
+    onFormError={() => { if (pay) { generation.current += 1; setPay(choosePay(pay.surfaces.filter(x => x !== 'EMBEDDED'), 'FORM')); } }}
     onLanguage={l => { key.current = null; setLanguage(l); }} onStep={s => { setTried(false); if (s !== 'OFFER') setOutcome(null); setStep(s); }} onDraft={d => { key.current = null; setDraft(d); }} onTried={() => setTried(true)}
     onSend={() => { void send(); }} onReset={reset}/>;
 }

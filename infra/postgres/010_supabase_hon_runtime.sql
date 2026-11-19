@@ -4429,3 +4429,17 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+
+-- 0537 walk-in kiosk trial class (WK4): no new runtime entry point; the class, seat and trial helpers (and the six-argument
+-- card-paid step) are migration-owner only. Tables keep the 0414, 0032 and 0043 rules.
+DO $$ DECLARE r text; f text;
+  fns text[]:=ARRAY['hon.walkin_session_taken(uuid)','hon.walkin_trial_session_open(hon.class_sessions,jsonb,integer)',
+    'hon.walkin_trial_classes(uuid,uuid,jsonb)','hon.walkin_trial_class_json(hon.walkin_visits)',
+    'hon.walkin_card_paid(hon.walkin_visits,jsonb,uuid,text,uuid,uuid)'];
+BEGIN
+  IF to_regprocedure('hon.walkin_trial_classes(uuid,uuid,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0537 first'; END IF;
+  FOREACH f IN ARRAY fns LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+END $$;

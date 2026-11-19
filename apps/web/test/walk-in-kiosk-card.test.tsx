@@ -20,7 +20,7 @@ const signal = () => new AbortController().signal;
 const terminal: WalkInTerminal = {
   schoolName: 'Synthetic Dojo', branding: { logoUrl: null, accentColor: null }, endsAt: '2099-01-01T00:00:00.000Z', settingsVersion: 3,
   waiver: { en: 'I accept the risks of training.' }, emergencyRequired: false,
-  offers: [{ key: 'day-pass', kind: 'DAY_PASS', name: { en: 'Day pass' }, description: { en: '' }, priceMinor: 2500, currency: 'USD' }],
+  offers: [{ key: 'day-pass', kind: 'DAY_PASS', name: { en: 'Day pass' }, description: { en: '' }, priceMinor: 2500, currency: 'USD', classes: null }],
   thankYou: { en: 'See you on the mat.' }, cardSurfaces: ['EMBEDDED', 'HOSTED'],
 };
 const recorded = { result: 'RECORDED' as const, firstName: 'Sam', paymentState: 'PAY_AT_DESK' as const, priceMinor: 2500, thankYou: null };

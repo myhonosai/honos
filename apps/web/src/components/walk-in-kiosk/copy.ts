@@ -61,6 +61,11 @@ const en = {
   vDonePaid: 'Paid {price}. You are all set!', vPaidTitle: 'Thank you', vPaidBody: 'You can go back to the tablet now. It shows whether your payment went through.',
   oCARD_PENDING: 'A card payment for this walk-in is still open or being confirmed on the tablet. Wait a minute and try again. Nothing changed.',
   paidByCard: 'This visitor already paid by card on the tablet, so nothing was recorded at the desk. Give back any money taken at the desk.',
+  // 0537 trial classes
+  vClassTitle: 'Pick your trial class', vClassSpots: 'Spots open', vClassFull: 'Full', vNoClasses: 'No open trial classes in the next two weeks. Please ask at the front desk.',
+  vCLASS_FULL: 'That class just filled up. Please pick another one.', vDoneClass: 'Your trial class: {name}, {when}.',
+  sTrialPrograms: 'Classes visitors can book for this trial', sTrialProgramsHelp: 'Pick programs and the tablet lists their classes for the next two weeks. Leave all unticked for a trial without a booked class.',
+  trialClass: 'Trial class: {name}, {at}', aSCHEDULED: 'Booked', aCANCELLED: 'Trial cancelled', aCOMPLETED: 'Trial done', aNO_SHOW: 'Did not come',
 };
 export type WalkInKey = keyof typeof en;
 const ko: Record<WalkInKey, string> = {
@@ -123,6 +128,11 @@ const ko: Record<WalkInKey, string> = {
   vDonePaid: '{price} 결제가 완료되었습니다. 준비가 끝났어요!', vPaidTitle: '감사합니다', vPaidBody: '이제 태블릿으로 돌아가셔도 됩니다. 결제가 완료되었는지 태블릿에 표시됩니다.',
   oCARD_PENDING: '이 워크인의 카드 결제가 태블릿에서 아직 열려 있거나 확인 중입니다. 잠시 후 다시 시도하세요. 변경된 것은 없습니다.',
   paidByCard: '이 방문자는 이미 태블릿에서 카드로 결제했으므로 데스크 결제는 기록되지 않았습니다. 데스크에서 받은 돈이 있다면 돌려주세요.',
+  // 0537 trial classes
+  vClassTitle: '체험 수업을 고르세요', vClassSpots: '자리 있음', vClassFull: '마감', vNoClasses: '앞으로 2주 안에 자리가 있는 체험 수업이 없습니다. 프런트 데스크에 문의해 주세요.',
+  vCLASS_FULL: '방금 그 수업이 마감되었습니다. 다른 수업을 골라 주세요.', vDoneClass: '체험 수업: {name}, {when}.',
+  sTrialPrograms: '이 체험으로 예약할 수 있는 수업', sTrialProgramsHelp: '프로그램을 고르면 태블릿에 앞으로 2주간의 수업이 표시됩니다. 수업 예약 없는 체험은 모두 비워 두세요.',
+  trialClass: '체험 수업: {name}, {at}', aSCHEDULED: '예약됨', aCANCELLED: '체험 취소됨', aCOMPLETED: '체험 완료', aNO_SHOW: '오지 않음',
 };
 const es: Record<WalkInKey, string> = {
   pageTitle: 'Quiosco de visitas',
@@ -184,6 +194,11 @@ const es: Record<WalkInKey, string> = {
   vDonePaid: 'Pagó {price}. ¡Todo listo!', vPaidTitle: 'Gracias', vPaidBody: 'Ya puede volver a la tableta. Allí verá si su pago se completó.',
   oCARD_PENDING: 'Un pago con tarjeta de esta visita sigue abierto o en confirmación en la tableta. Espere un minuto e inténtelo de nuevo. No cambió nada.',
   paidByCard: 'Este visitante ya pagó con tarjeta en la tableta, así que no se registró nada en la recepción. Devuelva el dinero cobrado en la recepción.',
+  // 0537 trial classes
+  vClassTitle: 'Elija su clase de prueba', vClassSpots: 'Hay lugares', vClassFull: 'Llena', vNoClasses: 'No hay clases de prueba con lugar en las próximas dos semanas. Pregunte en la recepción.',
+  vCLASS_FULL: 'Esa clase se acaba de llenar. Elija otra, por favor.', vDoneClass: 'Su clase de prueba: {name}, {when}.',
+  sTrialPrograms: 'Clases que se pueden reservar con esta prueba', sTrialProgramsHelp: 'Elija programas y la tableta mostrará sus clases de las próximas dos semanas. Déjelos sin marcar para una prueba sin clase reservada.',
+  trialClass: 'Clase de prueba: {name}, {at}', aSCHEDULED: 'Reservada', aCANCELLED: 'Prueba cancelada', aCOMPLETED: 'Prueba hecha', aNO_SHOW: 'No vino',
 };
 export const WALK_IN_COPY = { en, ko, es } as const;
 export type WalkInCopyLanguage = keyof typeof WALK_IN_COPY;

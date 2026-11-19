@@ -5013,3 +5013,23 @@ BEGIN
     RAISE EXCEPTION 'Unsafe walk-in card payment columns'; END IF;
 END $$;
 -- End walk-in kiosk card payment exact verification.
+-- Walk-in kiosk trial class exact verification (0537): owner-only class, seat and trial helpers, trial columns.
+DO $$ DECLARE f text;
+  helpers text[]:=ARRAY['hon.walkin_session_taken(uuid)','hon.walkin_trial_session_open(hon.class_sessions,jsonb,integer)',
+    'hon.walkin_trial_classes(uuid,uuid,jsonb)','hon.walkin_trial_class_json(hon.walkin_visits)',
+    'hon.walkin_card_paid(hon.walkin_visits,jsonb,uuid,text,uuid,uuid)','hon.walkin_card_paid(hon.walkin_visits,jsonb,uuid,text,uuid)'];
+BEGIN
+  FOREACH f IN ARRAY helpers LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND p.prosecdef
+        AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon'])
+      OR EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe walk-in trial class helper: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.walkin_visits'::regclass AND conname='walkin_visits_trial_check')
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.walkin_visits'::regclass AND conname='walkin_visits_trial_session_fk')
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.walkin_visits'::regclass AND conname='walkin_visits_trial_appointment_fk')
+    OR has_any_column_privilege('hon_runtime','hon.walkin_visits','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe walk-in trial class columns'; END IF;
+END $$;
+-- End walk-in kiosk trial class exact verification.

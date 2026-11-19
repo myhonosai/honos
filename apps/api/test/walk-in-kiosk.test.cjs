@@ -240,3 +240,33 @@ test('0533 tablet transport refuses any other card path', async () => {
     if (previous === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = previous;
   }
 });
+
+test('0537 trial classes: programs only on a trial, a picked class on the visit, classes on the tablet, CLASS_FULL refusal', () => {
+  const P = '22222222-2222-4222-8222-222222222222', S = '33333333-3333-4333-8333-333333333333';
+  const trial = { ...settings.offers[0], programIds: [ID, P] };
+  assert.deepEqual(contracts.validateWalkInSettingsInput({ ...settings, offers: [trial] }).offers[0].programIds, [ID, P]);
+  assert.equal(contracts.validateWalkInSettingsInput(settings).offers[0].programIds, undefined, 'no programs stays absent');
+  for (const offer of [{ ...settings.offers[1], programIds: [ID] }, { ...trial, programIds: [] }, { ...trial, programIds: [ID, ID] }, { ...trial, programIds: ['x'] },
+    { ...trial, programIds: Array.from({ length: 11 }, (_, i) => `${String(i).padStart(8, '0')}-1111-4111-8111-111111111111`) }, { ...trial, programIds: ID }]) {
+    assert.throws(() => contracts.validateWalkInSettingsInput({ ...settings, offers: [offer] }), undefined, JSON.stringify(offer.programIds));
+  }
+  assert.equal(contracts.validateWalkInVisitInput(visit({ trialSessionId: S }), TODAY).trialSessionId, S);
+  assert.equal(contracts.validateWalkInVisitInput(visit({ trialSessionId: null }), TODAY).trialSessionId, null);
+  assert.equal('trialSessionId' in contracts.validateWalkInVisitInput(visit(), TODAY), false);
+  assert.throws(() => contracts.validateWalkInVisitInput(visit({ trialSessionId: 'x' }), TODAY));
+  const cls = { sessionId: S, name: 'Kids class', startsAt: '2026-11-20T23:00:00.000Z', endsAt: '2026-11-21T00:00:00.000Z', spotsOpen: 3 };
+  const terminal = (classes, kind = 'TRIAL') => ({ schoolName: 'Dojo', branding: { logoUrl: null, accentColor: null }, endsAt: '2026-11-20T23:00:00.000Z', settingsVersion: 1,
+    waiver: settings.waiver, emergencyRequired: false, thankYou: settings.thankYou,
+    offers: [{ key: 'trial', kind, name: { en: 'Trial' }, description: { en: '' }, priceMinor: 0, currency: 'USD', classes }] });
+  assert.deepEqual(contracts.verifyWalkInTerminal(terminal([cls])).offers[0].classes, [cls]);
+  assert.equal(contracts.verifyWalkInTerminal(terminal(null)).offers[0].classes, null);
+  for (const bad of [terminal([cls], 'DAY_PASS'), terminal([cls, cls]), terminal([{ ...cls, spotsOpen: -1 }]), terminal([{ ...cls, programId: P }]), terminal(Array(21).fill(cls))]) {
+    assert.throws(() => contracts.verifyWalkInTerminal(bad));
+  }
+  const missing = terminal(null); delete missing.offers[0].classes;
+  assert.throws(() => contracts.verifyWalkInTerminal(missing), undefined, 'classes is always stated');
+  assert.deepEqual(contracts.verifyWalkInVisitOutcome({ result: 'CLASS_FULL' }), { result: 'CLASS_FULL' });
+  const booked = { sessionId: S, name: 'Kids class', startsAt: cls.startsAt, endsAt: cls.endsAt, status: 'SCHEDULED' };
+  assert.deepEqual(contracts.verifyWalkInVisitOutcome({ result: 'RECORDED', firstName: 'Sam', paymentState: 'FREE', priceMinor: 0, thankYou: null, trialClass: booked }).trialClass, booked);
+  assert.throws(() => contracts.verifyWalkInVisitOutcome({ result: 'RECORDED', firstName: 'Sam', paymentState: 'FREE', priceMinor: 0, thankYou: null, trialClass: { ...booked, status: 'MAYBE' } }));
+});
