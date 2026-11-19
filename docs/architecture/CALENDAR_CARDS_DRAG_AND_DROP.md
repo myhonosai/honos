@@ -22,7 +22,7 @@ Owner ask (David, 2026-11-19): "i need this calendar to be clickable and let me 
 - A stale version is refused (someone else changed it); the page reads again.
 
 **Calendar interactions.**
-- Week and Day: click (or Enter on) an empty 15-minute slot to open the create form at that time, 60 minutes long. "Add a class" opens it at the next whole hour today.
+- Week and Day: click an empty hour to open the create form at the clicked quarter hour, 60 minutes long (Enter or Space on an empty hour opens it at the start of that hour). The "Add a class" button opens it at the next whole hour today.
 - Drag a card by its body to another time or day (15-minute steps); drag its bottom edge to resize. While dragging, a ghost shows the new time. On drop the change is sent; the card shows the new time when the server confirms, and goes back with a short message if it is refused. Escape cancels a drag. A click without movement opens the side panel as before.
 - Keyboard: a focused card moves with Alt+Arrow Up/Down (15 minutes) and Alt+Arrow Left/Right (a day), and resizes with Alt+Shift+Arrow Up/Down.
 - Cancelled, completed, started, attended or unmanageable cards cannot be dragged.
