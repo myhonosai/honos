@@ -16,7 +16,9 @@ import { CallButton } from './call-button';
 import s from '../testing-registration.module.css';
 import c from './calls.module.css';
 
-function who(call: SchoolCall, copy: CallsCopy): string { return call.contactName ?? `${copy.unknownCaller} ${formatCallNumber(call.remoteE164)}`; }
+function who(call: SchoolCall, copy: CallsCopy): string {
+  return call.contactName ?? (call.remoteE164 ? `${copy.unknownCaller} ${formatCallNumber(call.remoteE164)}` : copy.unknownCaller);
+}
 function message(problem: unknown, copy: CallsCopy): string {
   if (problem instanceof CallsAccessError) return problem.reason === 'SESSION' ? copy.sessionEnded : copy.denied;
   if (problem instanceof CallsRefusal) return copy.refusal[problem.code] ?? copy.unavailable;
@@ -164,8 +166,8 @@ export function StaffCalls(): React.ReactElement {
 
     {open && <section className={s.card} aria-label={copy.card(who(open, copy))}>
       <h2>{copy.card(who(open, copy))}</h2>
-      <p className={s.subtle}>{formatCallNumber(open.remoteE164)} · {copy.status[open.status]} · {date(open.startedAt)}</p>
-      {!open.doNotCall && <p className={s.actions}><CallButton phoneE164={open.remoteE164} personId={open.personId ?? undefined} name={open.contactName ?? undefined}
+      <p className={s.subtle}>{open.remoteE164 ? formatCallNumber(open.remoteE164) : copy.unknownCaller} · {copy.status[open.status]} · {date(open.startedAt)}</p>
+      {!open.doNotCall && open.remoteE164 && <p className={s.actions}><CallButton phoneE164={open.remoteE164} personId={open.personId ?? undefined} name={open.contactName ?? undefined}
         language={preferences.language} /></p>}
       <fieldset className={c.outcomes}><legend>{copy.outcome}</legend><p className={`${s.actions} ${c.pressed}`}>
         {SCHOOL_CALL_OUTCOMES.map(o => <button key={o} type="button" aria-pressed={open.outcome === o} disabled={acting} onClick={() => saveOutcome(open, o)}>{copy.outcomes[o]}</button>)}
@@ -184,9 +186,9 @@ export function StaffCalls(): React.ReactElement {
         <audio key={open.callId} controls preload="none" src={recordingUrl(scopeOf()!, open.callId)} style={{ width: '100%', maxWidth: 480 }}
           aria-label={copy.listen('')} data-call-recording="" />
         <p className={s.subtle}>{copy.recordingKept}</p></div>}
-      <p className={s.actions}><button type="button" disabled={acting}
-        onClick={() => void command(scope => setDoNotCall(scope, { phoneE164: open.remoteE164, doNotCall: !open.doNotCall }), open.doNotCall ? copy.doNotCallRemoved : copy.doNotCallAdded)}>
-        {open.doNotCall ? copy.removeDoNotCall : copy.addDoNotCall}</button> <span className={s.subtle}>{copy.doNotCallHint}</span></p>
+      {open.remoteE164 && <p className={s.actions}><button type="button" disabled={acting}
+        onClick={() => void command(scope => setDoNotCall(scope, { phoneE164: open.remoteE164!, doNotCall: !open.doNotCall }), open.doNotCall ? copy.doNotCallRemoved : copy.doNotCallAdded)}>
+        {open.doNotCall ? copy.removeDoNotCall : copy.addDoNotCall}</button> <span className={s.subtle}>{copy.doNotCallHint}</span></p>}
     </section>}
 
     {overview && settings && <section className={s.card} aria-label={copy.settings}>

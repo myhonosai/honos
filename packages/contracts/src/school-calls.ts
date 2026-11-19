@@ -33,7 +33,7 @@ export const SCHOOL_CALL_DO_NOT_CALL_COMMAND = 'communication.call.do_not_call';
 export const SCHOOL_CALL_TOKEN_COMMAND = 'communication.call.token';
 
 export interface SchoolCall {
-  callId: string; direction: SchoolCallDirection; status: SchoolCallStatus; remoteE164: string; personId: string | null; contactName: string | null;
+  callId: string; direction: SchoolCallDirection; status: SchoolCallStatus; /** null: the caller withheld their number (incoming only). */ remoteE164: string | null; personId: string | null; contactName: string | null;
   staffName: string | null; startedAt: string; answeredAt: string | null; endedAt: string | null; durationSeconds: number | null;
   recorded: boolean; voicemail: boolean; recordingAvailable: boolean; recordingSeconds: number | null; heard: boolean;
   outcome: SchoolCallOutcome | null; note: string | null; doNotCall: boolean; version: number;
@@ -173,14 +173,14 @@ export function verifySchoolCall(value: unknown): SchoolCall {
   const row = record(value, CALL_KEYS);
   const call: SchoolCall = {
     callId: uuid(row.callId), direction: oneOf(row.direction, SCHOOL_CALL_DIRECTIONS), status: oneOf(row.status, SCHOOL_CALL_STATUSES),
-    remoteE164: e164(row.remoteE164), personId: nullableUuid(row.personId), contactName: nullableText(row.contactName, 202),
+    remoteE164: row.remoteE164 === null ? null : e164(row.remoteE164), personId: nullableUuid(row.personId), contactName: nullableText(row.contactName, 202),
     staffName: nullableText(row.staffName, 200), startedAt: instant(row.startedAt), answeredAt: nullableInstant(row.answeredAt),
     endedAt: nullableInstant(row.endedAt), durationSeconds: nullableCount(row.durationSeconds), recorded: bool(row.recorded),
     voicemail: bool(row.voicemail), recordingAvailable: bool(row.recordingAvailable), recordingSeconds: nullableCount(row.recordingSeconds),
     heard: bool(row.heard), outcome: row.outcome === null ? null : oneOf(row.outcome, SCHOOL_CALL_OUTCOMES),
     note: row.note === null ? null : (schoolCallNoteOk(row.note) ? row.note : invalid()), doNotCall: bool(row.doNotCall), version: count(row.version, 1),
   };
-  if (call.direction === 'OUT' && call.voicemail) invalid();
+  if (call.direction === 'OUT' && (call.voicemail || call.remoteE164 === null)) invalid();
   if (!call.recordingAvailable && call.recordingSeconds !== null) invalid();
   if (call.heard && !call.voicemail) invalid();
   return call;

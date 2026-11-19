@@ -21,6 +21,18 @@ export const TWILIO_RECORDING_NOTICE_PATHS: Readonly<Record<CallLanguage, string
 };
 export const SCHOOL_CALL_WEBHOOK_PATHS: readonly string[] = [TWILIO_CLIENT_VOICE_PATH, TWILIO_CLIENT_DIAL_RESULT_PATH, TWILIO_INCOMING_DIAL_RESULT_PATH,
   TWILIO_CALL_ANSWERED_PATH, TWILIO_RECORDING_STATUS_PATH, TWILIO_VOICEMAIL_STATUS_PATH, TWILIO_VOICEMAIL_DONE_PATH, ...Object.values(TWILIO_RECORDING_NOTICE_PATHS)];
+/**
+ * CL5 (0562): HQ calling on the HQ number, on HON's parent account only. `voice` is the HQ number's Voice URL; the HQ
+ * TwiML App's Voice URL is `clientVoice`. HQ calls are never recorded, so there is no recording or notice path.
+ */
+export const HQ_CALL_PATHS = {
+  clientVoice: `${WEBHOOKS}/hq/client-voice`, clientDialResult: `${WEBHOOKS}/hq/client-dial-result`, callAnswered: `${WEBHOOKS}/hq/call-answered`,
+  voice: `${WEBHOOKS}/hq/voice`, incomingDialResult: `${WEBHOOKS}/hq/incoming-dial-result`, voicemailStatus: `${WEBHOOKS}/hq/voicemail-status`,
+  voicemailDone: `${WEBHOOKS}/hq/voicemail-done`,
+} as const;
+export const HQ_CALL_WEBHOOK_PATHS: readonly string[] = Object.values(HQ_CALL_PATHS);
+/** The sealed HQ voice key's binding id (the HQ calling integration principal; never a school id). */
+export const HQ_VOICE_BINDING_ID = '00000000-0000-4000-8000-00000000c562';
 
 export const PHONE_TOKEN_SECONDS = 3600;
 export const INCOMING_RING_SECONDS = 20;
@@ -32,7 +44,8 @@ const ACCOUNT_SID = /^AC[0-9a-f]{32}$/;
 const APP_SID = /^AP[0-9a-f]{32}$/;
 const KEY_SID = /^SK[0-9a-f]{32}$/;
 const SECRET = /^[A-Za-z0-9]{16,128}$/;
-const IDENTITY = /^u[0-9a-f]{32}$/;
+/** A school staff ('u') or HQ ('h') browser phone identity. */
+const IDENTITY = /^[uh][0-9a-f]{32}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const E164 = /^\+[1-9][0-9]{7,14}$/;
 const KEY_ID = /^[a-z0-9-]{1,40}$/;
@@ -160,7 +173,8 @@ export function recordingNoticeTwiml(lang: CallLanguage): string {
   return `${XML_HEAD}<Response>${say(NOTICE[lang], lang)}</Response>`;
 }
 
-export interface OutgoingDial { toE164: string; callerIdE164: string; recorded: boolean; language: string | null; publicBase: string }
+export interface CallLegPaths { dialResult: string; answered: string }
+export interface OutgoingDial { toE164: string; callerIdE164: string; recorded: boolean; language: string | null; publicBase: string; paths?: CallLegPaths }
 /**
  * The browser's outgoing call: dial the number stored on the call row from the school's own number. The result and
  * the answer time come back to HON's fixed signed paths; a recorded call tells the callee first.
@@ -173,15 +187,16 @@ export function outgoingDialTwiml(dial: OutgoingDial): string {
     : '';
   const notice = dial.recorded ? ` url="${url(base, TWILIO_RECORDING_NOTICE_PATHS[lang])}" method="POST"` : '';
   return `${XML_HEAD}<Response><Dial callerId="${dial.callerIdE164}" answerOnBridge="true" timeLimit="${CALL_TIME_LIMIT_SECONDS}" `
-    + `action="${url(base, TWILIO_CLIENT_DIAL_RESULT_PATH)}" method="POST"${record}>`
-    + `<Number statusCallbackEvent="answered" statusCallback="${url(base, TWILIO_CALL_ANSWERED_PATH)}" statusCallbackMethod="POST"${notice}>${dial.toE164}</Number>`
+    + `action="${url(base, dial.paths?.dialResult ?? TWILIO_CLIENT_DIAL_RESULT_PATH)}" method="POST"${record}>`
+    + `<Number statusCallbackEvent="answered" statusCallback="${url(base, dial.paths?.answered ?? TWILIO_CALL_ANSWERED_PATH)}" statusCallbackMethod="POST"${notice}>${dial.toE164}</Number>`
     + '</Dial></Response>';
 }
 
 export interface IncomingRing {
   identities: readonly string[]; forwardPhoneE164: string | null; recorded: boolean; voicemailGreeting: string | null; language: string | null;
-  schoolName: string | null; publicBase: string;
+  schoolName: string | null; publicBase: string; paths?: CallLegPaths; voicemailPaths?: VoicemailPaths;
 }
+export interface VoicemailPaths { done: string; status: string }
 /**
  * An incoming call with calling on: ring every Ring me browser (at most 10) and the school's forwarding phone at once;
  * the first to answer takes it. With nobody to ring, go straight to voicemail. A recorded call says so first.
@@ -193,24 +208,25 @@ export function incomingRingTwiml(ring: IncomingRing): string {
     throw new Error('HON incoming ring is invalid.');
   }
   const notice = ring.recorded ? say(NOTICE[lang], lang) : '';
-  if (!identities.length && !ring.forwardPhoneE164) return voicemailTwiml({ ...ring, noticeSaid: ring.recorded });
+  if (!identities.length && !ring.forwardPhoneE164) return voicemailTwiml({ voicemailGreeting: ring.voicemailGreeting, language: ring.language, schoolName: ring.schoolName, publicBase: base,
+    noticeSaid: ring.recorded, ...(ring.voicemailPaths ? { paths: ring.voicemailPaths } : {}) });
   const record = ring.recorded
     ? ` record="record-from-answer-dual" recordingStatusCallback="${url(base, TWILIO_RECORDING_STATUS_PATH)}" recordingStatusCallbackMethod="POST" recordingStatusCallbackEvent="completed"`
     : '';
-  const answered = `statusCallbackEvent="answered" statusCallback="${url(base, TWILIO_CALL_ANSWERED_PATH)}" statusCallbackMethod="POST"`;
+  const answered = `statusCallbackEvent="answered" statusCallback="${url(base, ring.paths?.answered ?? TWILIO_CALL_ANSWERED_PATH)}" statusCallbackMethod="POST"`;
   const clients = identities.map(identity => `<Client ${answered}><Identity>${identity}</Identity></Client>`).join('');
   const forward = ring.forwardPhoneE164 ? `<Number ${answered}>${ring.forwardPhoneE164}</Number>` : '';
   return `${XML_HEAD}<Response>${notice}<Dial timeout="${INCOMING_RING_SECONDS}" answerOnBridge="true" timeLimit="${CALL_TIME_LIMIT_SECONDS}" `
-    + `action="${url(base, TWILIO_INCOMING_DIAL_RESULT_PATH)}" method="POST"${record}>${clients}${forward}</Dial></Response>`;
+    + `action="${url(base, ring.paths?.dialResult ?? TWILIO_INCOMING_DIAL_RESULT_PATH)}" method="POST"${record}>${clients}${forward}</Dial></Response>`;
 }
 
 /** Nobody answered: the school's greeting (or a plain default), then record a voicemail of up to two minutes. */
-export function voicemailTwiml(vm: { voicemailGreeting: string | null; language: string | null; schoolName: string | null; publicBase: string; noticeSaid?: boolean }): string {
+export function voicemailTwiml(vm: { voicemailGreeting: string | null; language: string | null; schoolName: string | null; publicBase: string; noticeSaid?: boolean; paths?: VoicemailPaths }): string {
   const lang = language(vm.language);
   const greeting = vm.voicemailGreeting && !/[<>\u0000-\u001f\u007f]/.test(vm.voicemailGreeting) ? vm.voicemailGreeting : DEFAULT_GREETING[lang](schoolLabel(vm.schoolName));
   const notice = vm.noticeSaid ? say(NOTICE[lang], lang) : '';
   return `${XML_HEAD}<Response>${notice}${say(greeting, lang)}<Record maxLength="${VOICEMAIL_MAX_SECONDS}" timeout="5" playBeep="true" trim="trim-silence" `
-    + `action="${url(vm.publicBase, TWILIO_VOICEMAIL_DONE_PATH)}" method="POST" recordingStatusCallback="${url(vm.publicBase, TWILIO_VOICEMAIL_STATUS_PATH)}" `
+    + `action="${url(vm.publicBase, vm.paths?.done ?? TWILIO_VOICEMAIL_DONE_PATH)}" method="POST" recordingStatusCallback="${url(vm.publicBase, vm.paths?.status ?? TWILIO_VOICEMAIL_STATUS_PATH)}" `
     + 'recordingStatusCallbackMethod="POST" recordingStatusCallbackEvent="completed"/></Response>';
 }
 

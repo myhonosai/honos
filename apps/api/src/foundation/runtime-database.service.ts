@@ -343,6 +343,20 @@ export type SchoolOwnershipOperation = 'hqRead'|'setPrimary'|'ownerRead';
 export type ShopifyOperation = 'read'|'catalog'|'orders'|'start'|'claim'|'record'|'beginSync'|'rotate'|'page'|'finishSync'|'disconnect'
   |'changes'|'propose'|'cancelChange'|'approveChange'|'rotateChange'|'recordChange';
 
+/** CL5 (0562): the only HQ calling SQL the API may run. */
+const HQ_CALLS_CALLS = {
+  overview: { sql: 'SELECT hon.read_hq_calling($1) AS data', arity: 1, readOnly: true },
+  list: { sql: 'SELECT hon.read_hq_calls($1,$2::jsonb) AS data', arity: 2, readOnly: true },
+  settings: { sql: 'SELECT hon.set_hq_calling_settings($1,$2::jsonb) AS data', arity: 2, readOnly: false },
+  ringing: { sql: 'SELECT hon.set_my_hq_call_ringing($1,$2::jsonb) AS data', arity: 2, readOnly: false },
+  start: { sql: 'SELECT hon.start_hq_call($1,$2::jsonb,$3) AS data', arity: 3, readOnly: false },
+  update: { sql: 'SELECT hon.update_hq_call($1,$2::jsonb) AS data', arity: 2, readOnly: false },
+  doNotCall: { sql: 'SELECT hon.set_hq_do_not_call($1,$2::jsonb) AS data', arity: 2, readOnly: false },
+  recording: { sql: 'SELECT hon.open_hq_call_recording($1,$2::uuid) AS data', arity: 2, readOnly: false },
+  phoneToken: { sql: 'SELECT hon.authorize_hq_phone_token($1) AS data', arity: 1, readOnly: false },
+} as const;
+export type HqCallsOperation = keyof typeof HQ_CALLS_CALLS;
+
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
   private pool: Pool | undefined;
@@ -1576,6 +1590,16 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('SHOPIFY_UNAVAILABLE');
     return this.callFixedSubjectFunction(call,params,'SHOPIFY_UNAVAILABLE');
+  }
+
+  /**
+   * CL5 (0562) HQ calling: one fixed, subject-only SECURITY DEFINER call per operation, no tenant settings (the HQ actor
+   * check refuses any). Reads that write nothing run READ ONLY; opening a voicemail and the phone token are audited.
+   */
+  async callHqCalls(operation: HqCallsOperation, params: readonly (string | null)[]): Promise<unknown> {
+    const call = HQ_CALLS_CALLS[operation];
+    if (!call || params.length !== call.arity) throw new Error('CALLING_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call, params, 'CALLING_UNAVAILABLE');
   }
 
   private async callFixedSubjectFunction(call: { sql: string; readOnly: boolean }, params: readonly (string | null)[], unavailable: string): Promise<unknown> {

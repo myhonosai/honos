@@ -86,7 +86,23 @@ export interface CommunicationWorkerStore {
   /** 0556 K3 (CL3c): recordings past 90 days, deleted at Twilio first, then marked deleted by exact SID. */
   readSchoolCallRecordingsDue?(limit: number): Promise<SchoolCallRecordingDue[]>;
   markSchoolCallRecordingDeleted?(callId: string, recordingSid: string): Promise<boolean>;
+  /** 0562 HQ calling on the HQ number (CL5): parent-account webhooks, the HQ voice app and voicemail retention. */
+  connectHqClientCall?(callId: string, identity: string, callSid: string): Promise<HqClientCallDecision>;
+  routeHqIncomingCall?(to: string, from: string | null, callSid: string): Promise<HqIncomingCallRoute>;
+  recordHqCallStatus?(callSid: string, status: SchoolCallProviderStatus, answeredIdentity: string | null, durationSeconds: number | null, occurredAt: string):
+    Promise<{ outcome: 'RECORDED' | 'IGNORED' | 'UNKNOWN_CALL'; status: string | null }>;
+  recordHqCallVoicemail?(callSid: string, recordingSid: string, seconds: number): Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'REFUSED' | 'UNKNOWN_CALL'; callId: string | null }>;
+  readHqVoiceApp?(): Promise<HqVoiceAppKey | null>;
+  hqNeedsVoiceApp?(): Promise<boolean>;
+  beginHqVoiceApp?(leaseSeconds: number): Promise<SchoolVoiceAppClaim>;
+  recordHqVoiceAppTwiml?(claimToken: string, twimlAppSid: string): Promise<boolean>;
+  completeHqVoiceApp?(claimToken: string, apiKeySid: string, sealedApiSecret: string, vaultKeyId: string): Promise<boolean>;
+  readHqCallRecordingsDue?(limit: number): Promise<{ callId: string; recordingSid: string }[]>;
+  markHqCallRecordingDeleted?(callId: string, recordingSid: string): Promise<boolean>;
 }
+export interface HqClientCallDecision { outcome: 'CONNECT' | 'REPLAYED' | 'REFUSED'; toE164: string | null; callerIdE164: string | null }
+export interface HqIncomingCallRoute { outcome: 'RING' | 'REPLAYED' | 'OFF' | 'UNROUTED'; callId: string | null; identities: string[]; voicemailGreeting: string | null }
+export interface HqVoiceAppKey { twimlAppSid: string; apiKeySid: string; sealedApiSecret: string; vaultKeyId: string }
 export interface SchoolVoiceAppClaim { state: 'CLAIMED' | 'ACTIVE' | 'BUSY' | 'INELIGIBLE'; accountSid: string | null; twimlAppSid: string | null; claimToken: string | null }
 export interface SchoolCallRecordingDue { callId: string; recordingSid: string; accountSid: string | null }
 export type SchoolCallProviderStatus = 'RINGING' | 'IN_PROGRESS' | 'COMPLETED' | 'NO_ANSWER' | 'BUSY' | 'FAILED' | 'CANCELED' | 'MISSED';
@@ -295,6 +311,68 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
   async markSchoolCallRecordingDeleted(callId: string, recordingSid: string): Promise<boolean> {
     const row = (await this.query<{ deleted: boolean }>('SELECT hon.mark_school_call_recording_deleted($1::uuid, $2) AS deleted', [callId, recordingSid]))[0];
     return row?.deleted === true;
+  }
+
+  async connectHqClientCall(callId: string, identity: string, callSid: string): Promise<HqClientCallDecision> {
+    const row = (await this.query<{ outcome: HqClientCallDecision['outcome']; to_e164: string | null; caller_id_e164: string | null }>(
+      'SELECT * FROM hon.connect_hq_client_call($1::uuid, $2, $3)', [callId, identity, callSid]))[0];
+    if (!row) throw new Error('HQ_CALL_NOT_DECIDED');
+    return { outcome: row.outcome, toE164: row.to_e164, callerIdE164: row.caller_id_e164 };
+  }
+
+  async routeHqIncomingCall(to: string, from: string | null, callSid: string): Promise<HqIncomingCallRoute> {
+    const row = (await this.query<{ outcome: HqIncomingCallRoute['outcome']; call_id: string | null; identities: string[] | null; voicemail_greeting: string | null }>(
+      'SELECT * FROM hon.route_hq_incoming_call($1, $2, $3)', [to, from, callSid]))[0];
+    if (!row) throw new Error('HQ_CALL_NOT_ROUTED');
+    return { outcome: row.outcome, callId: row.call_id, identities: row.identities ?? [], voicemailGreeting: row.voicemail_greeting };
+  }
+
+  async recordHqCallStatus(callSid: string, status: SchoolCallProviderStatus, answeredIdentity: string | null, durationSeconds: number | null, occurredAt: string) {
+    const row = (await this.query<{ outcome: 'RECORDED' | 'IGNORED' | 'UNKNOWN_CALL'; status: string | null }>(
+      'SELECT * FROM hon.record_hq_call_status($1, $2, $3, $4, $5::timestamptz)', [callSid, status, answeredIdentity, durationSeconds, occurredAt]))[0];
+    if (!row) throw new Error('HQ_CALL_STATUS_NOT_RECORDED');
+    return { outcome: row.outcome, status: row.status };
+  }
+
+  async recordHqCallVoicemail(callSid: string, recordingSid: string, seconds: number) {
+    const row = (await this.query<{ outcome: 'RECORDED' | 'REPLAYED' | 'REFUSED' | 'UNKNOWN_CALL'; call_id: string | null }>(
+      'SELECT * FROM hon.record_hq_call_voicemail($1, $2, $3)', [callSid, recordingSid, seconds]))[0];
+    if (!row) throw new Error('HQ_CALL_VOICEMAIL_NOT_RECORDED');
+    return { outcome: row.outcome, callId: row.call_id };
+  }
+
+  async readHqVoiceApp(): Promise<HqVoiceAppKey | null> {
+    const row = (await this.query<{ twiml_app_sid: string; api_key_sid: string; sealed_api_secret: string; vault_key_id: string }>('SELECT * FROM hon.read_hq_voice_app()', []))[0];
+    return row ? { twimlAppSid: row.twiml_app_sid, apiKeySid: row.api_key_sid, sealedApiSecret: row.sealed_api_secret, vaultKeyId: row.vault_key_id } : null;
+  }
+
+  async hqNeedsVoiceApp(): Promise<boolean> {
+    return (await this.query<{ needed: boolean }>('SELECT hon.hq_needs_voice_app() AS needed', []))[0]?.needed === true;
+  }
+
+  async beginHqVoiceApp(leaseSeconds: number): Promise<SchoolVoiceAppClaim> {
+    const row = (await this.query<{ state: SchoolVoiceAppClaim['state']; twiml_app_sid: string | null; claim_token: string | null }>(
+      'SELECT * FROM hon.begin_hq_voice_app($1::integer)', [leaseSeconds]))[0];
+    if (!row) throw new Error('COMMUNICATION_VOICE_APP_NOT_CLAIMED');
+    return { state: row.state, accountSid: null, twimlAppSid: row.twiml_app_sid, claimToken: row.claim_token };
+  }
+
+  async recordHqVoiceAppTwiml(claimToken: string, twimlAppSid: string): Promise<boolean> {
+    return (await this.query<{ recorded: boolean }>('SELECT hon.record_hq_voice_app_twiml($1::uuid, $2) AS recorded', [claimToken, twimlAppSid]))[0]?.recorded === true;
+  }
+
+  async completeHqVoiceApp(claimToken: string, apiKeySid: string, sealedApiSecret: string, vaultKeyId: string): Promise<boolean> {
+    return (await this.query<{ completed: boolean }>('SELECT hon.complete_hq_voice_app($1::uuid, $2, $3, $4) AS completed',
+      [claimToken, apiKeySid, sealedApiSecret, vaultKeyId]))[0]?.completed === true;
+  }
+
+  async readHqCallRecordingsDue(limit: number): Promise<{ callId: string; recordingSid: string }[]> {
+    return (await this.query<{ call_id: string; recording_sid: string }>('SELECT * FROM hon.read_hq_call_recordings_due($1::integer)', [limit]))
+      .map(row => ({ callId: row.call_id, recordingSid: row.recording_sid }));
+  }
+
+  async markHqCallRecordingDeleted(callId: string, recordingSid: string): Promise<boolean> {
+    return (await this.query<{ deleted: boolean }>('SELECT hon.mark_hq_call_recording_deleted($1::uuid, $2) AS deleted', [callId, recordingSid]))[0]?.deleted === true;
   }
 
   async readMissedCallRoute(to: string) {

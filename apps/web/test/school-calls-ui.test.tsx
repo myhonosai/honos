@@ -50,6 +50,12 @@ describe('school calls http', () => {
     await expect(loadCalls(scope, { personId: D })).rejects.toBeInstanceOf(CallsUnknown);
     await expect(loadCalls(scope, { filter: 'OUTGOING' })).rejects.toBeInstanceOf(CallsUnknown);
   });
+  it('lists a withheld incoming caller, but never an outgoing call with no number', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json(200, { data: { calls: [call({ remoteE164: null, personId: null, contactName: null })], nextCursor: null }, meta: {} }))
+      .mockResolvedValueOnce(json(200, { data: { calls: [call({ direction: 'OUT', status: 'COMPLETED', voicemail: false, recordingAvailable: false, recordingSeconds: null, remoteE164: null })], nextCursor: null }, meta: {} }));
+    expect((await loadCalls(scope)).calls[0]!.remoteE164).toBeNull();
+    await expect(loadCalls(scope)).rejects.toBeInstanceOf(CallsUnknown);
+  });
   it('sends each change as its own human command, version-checked, with no idempotency key', async () => {
     const fetcher = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(json(200, { data: call({ outcome: 'CALL_BACK', version: 3 }), meta: {} }))

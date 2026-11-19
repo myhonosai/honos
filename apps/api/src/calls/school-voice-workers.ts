@@ -2,7 +2,7 @@ import { Inject, Injectable, Optional, type OnModuleDestroy, type OnModuleInit }
 import { emitTelemetry } from '../observability/telemetry.js';
 import { COMMUNICATION_WORKER_STORE, type CommunicationWorkerStore } from '../communication/delivery/communication-worker-database.js';
 import { twilioPublicOrigin } from '../communication/delivery/twilio-text-provider.js';
-import { TWILIO_CLIENT_VOICE_PATH, voiceCallsApproved, type TwilioVoiceKeyVault } from './twilio-voice.js';
+import { HQ_CALL_PATHS, HQ_VOICE_BINDING_ID, TWILIO_CLIENT_VOICE_PATH, voiceCallsApproved, type TwilioVoiceKeyVault } from './twilio-voice.js';
 import { SCHOOL_VOICE_TWILIO_CLIENT, TwilioVoiceError, voiceAppFriendlyName, type SchoolVoiceTwilioClient } from './twilio-voice-rest.js';
 import { SCHOOL_CALL_ENVIRONMENT } from './school-call-webhooks.controller.js';
 import { TWILIO_VOICE_KEY_VAULT } from './school-calls.service.js';
@@ -16,6 +16,7 @@ import { TWILIO_VOICE_KEY_VAULT } from './school-calls.service.js';
 const ACCOUNT_SID = /^AC[0-9a-f]{32}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 export const VOICE_APP_CLAIM_SECONDS = 300;
+export const HQ_VOICE_APP_NAME = 'hon-voice-hq';
 
 type VoiceAppStore = Required<Pick<CommunicationWorkerStore, 'readSchoolsNeedingVoiceApp' | 'beginSchoolVoiceApp' | 'recordSchoolVoiceAppTwiml' | 'completeSchoolVoiceApp'>>;
 export type VoiceAppOutcome = 'ACTIVE' | 'CREATED' | 'BUSY' | 'INELIGIBLE' | 'RETRY' | 'FAILED' | 'UNKNOWN';
@@ -45,7 +46,36 @@ export class SchoolVoiceAppWorker {
     if (!store || !base) return { skipped: true, outcomes: {} };
     const outcomes: Record<string, VoiceAppOutcome> = {};
     for (const schoolId of await store.readSchoolsNeedingVoiceApp(limit)) outcomes[schoolId] = await this.provision(store, schoolId, `${base}${TWILIO_CLIENT_VOICE_PATH}`);
+    const hq = await this.provisionHq(`${base}${HQ_CALL_PATHS.clientVoice}`);
+    if (hq) outcomes.hq = hq;
     return { skipped: false, outcomes };
+  }
+
+  /**
+   * CL5 (0562): the HQ number's voice app lives on HON's parent account (the HQ number is not on a school subaccount). Same
+   * claim, find-or-create and seal steps; the sealed key is bound to the fixed HQ binding id and the parent account.
+   */
+  private async provisionHq(voiceUrl: string): Promise<VoiceAppOutcome | null> {
+    const s = this.store, parent = this.environment().TWILIO_ACCOUNT_SID ?? '';
+    if (!s.hqNeedsVoiceApp || !s.beginHqVoiceApp || !s.recordHqVoiceAppTwiml || !s.completeHqVoiceApp || !ACCOUNT_SID.test(parent)) return null;
+    if (!await s.hqNeedsVoiceApp()) return null;
+    const claim = await s.beginHqVoiceApp(VOICE_APP_CLAIM_SECONDS);
+    if (claim.state !== 'CLAIMED') return claim.state;
+    const claimToken = claim.claimToken!;
+    if (!UUID.test(claimToken)) return 'FAILED';
+    try {
+      let appSid = claim.twimlAppSid;
+      if (!appSid) {
+        appSid = await this.twilio.findTwimlApp(parent, HQ_VOICE_APP_NAME) ?? await this.twilio.createTwimlApp(parent, HQ_VOICE_APP_NAME, voiceUrl);
+        if (!await s.recordHqVoiceAppTwiml(claimToken, appSid)) return 'FAILED';
+      }
+      const key = await this.twilio.createApiKey(parent, HQ_VOICE_APP_NAME);
+      const sealed = this.vault!.seal({ schoolId: HQ_VOICE_BINDING_ID, accountSid: parent, apiKeySid: key.sid }, key.secret);
+      return await s.completeHqVoiceApp(claimToken, key.sid, sealed, this.vault!.keyId) ? 'CREATED' : 'FAILED';
+    } catch (error) {
+      if (error instanceof TwilioVoiceError) return error.outcome === 'RETRYABLE' ? 'RETRY' : error.outcome === 'FAILED' ? 'FAILED' : 'UNKNOWN';
+      return 'UNKNOWN';
+    }
   }
 
   private async provision(store: VoiceAppStore, schoolId: string, voiceUrl: string): Promise<VoiceAppOutcome> {
@@ -91,6 +121,15 @@ export class SchoolCallRecordingRetentionWorker {
         await this.twilio.deleteRecording(due.accountSid, due.recordingSid);
         if (await store.markSchoolCallRecordingDeleted(due.callId, due.recordingSid)) deleted += 1;
       } catch { failed += 1; }
+    }
+    // CL5 (0562): HQ voicemail, on HON's parent account (accountSid null), same 90 days and the same delete-first rule.
+    if (s.readHqCallRecordingsDue && s.markHqCallRecordingDeleted) {
+      for (const due of await s.readHqCallRecordingsDue(limit)) {
+        try {
+          await this.twilio.deleteRecording(null, due.recordingSid);
+          if (await s.markHqCallRecordingDeleted(due.callId, due.recordingSid)) deleted += 1;
+        } catch { failed += 1; }
+      }
     }
     return { skipped: false, deleted, failed };
   }

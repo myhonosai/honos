@@ -13,13 +13,13 @@ import { HQ_MESSAGE_WORKER_STORE, type HqMessageWorkerStore } from '../../hq-com
 import { EMPTY_VOICE_TWIML, REJECT_VOICE_TWIML, voiceForwardTwiml } from './missed-call-text-back.js';
 import { TWILIO_SUBACCOUNT_DIRECTORY, type TwilioSubaccountCredential, type TwilioSubaccountDirectory } from './twilio-subaccounts.js';
 
-import { SCHOOL_CALL_WEBHOOK_PATHS, REJECT_CALL_TWIML, incomingRingTwiml, voiceCallsApproved } from '../../calls/twilio-voice.js';
+import { HQ_CALL_WEBHOOK_PATHS, SCHOOL_CALL_WEBHOOK_PATHS, REJECT_CALL_TWIML, incomingRingTwiml, voiceCallsApproved } from '../../calls/twilio-voice.js';
 
 const inboundLog = new Logger('CommunicationInboundText');
 
 export const COMMUNICATION_WEBHOOK_PREFIX = /^\/v1\/communications\/webhooks(?:\/|$)/i;
 const JSON_PATHS = new Set(['/v1/communications/webhooks/sendgrid', ZERNIO_LEAD_PATH]);
-const FORM_PATHS = new Set([TWILIO_STATUS_PATH, TWILIO_HQ_STATUS_PATH, TWILIO_INBOUND_PATH, TWILIO_VOICE_PATH, TWILIO_VOICE_RESULT_PATH, ...SCHOOL_CALL_WEBHOOK_PATHS]);
+const FORM_PATHS = new Set([TWILIO_STATUS_PATH, TWILIO_HQ_STATUS_PATH, TWILIO_INBOUND_PATH, TWILIO_VOICE_PATH, TWILIO_VOICE_RESULT_PATH, ...SCHOOL_CALL_WEBHOOK_PATHS, ...HQ_CALL_WEBHOOK_PATHS]);
 export const COMMUNICATION_WEBHOOK_PATHS = new Set([...JSON_PATHS, ...FORM_PATHS]);
 export const SENDGRID_EVENT_VERIFIER = Symbol('SENDGRID_EVENT_VERIFIER');
 export const TWILIO_WEBHOOK_VERIFIER = Symbol('TWILIO_WEBHOOK_VERIFIER');
