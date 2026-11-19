@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "2192a73a4f12b8caa6173562d483b64b015674adb35911f855082d089e1b3df3",
+  "chainSha256": "e695f59f852cbdd966301635881151f888d68a2fda413333e33493d8aa494f39",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -715,8 +715,24 @@
       "sha256": "3b42347f51e202714398f01d0bf457723bcafc545a5edd9ec4fbeee6b7d02a82"
     },
     {
+      "file": "0567_calendar_cards.sql",
+      "sha256": "812ae679a0a8671aca29a4692db0f7751ad78bcb3169eec0b3bcdc3ac301de76"
+    },
+    {
       "file": "0571_crm_board_text_opt_out.sql",
       "sha256": "14c6e92e5b8d3a95f55bea1e40608411b2693b3bbee55347c07a51c8e8f4e704"
+    },
+    {
+      "file": "0574_automation_date_triggers.sql",
+      "sha256": "fb2795778f536ea83c5a6c81191b9baaed41575c22b4c0e5a06a0e163e012be9"
+    },
+    {
+      "file": "0576_school_announcements.sql",
+      "sha256": "7d57e1debc975c6058aeea95428cb8cdfc7979beb467282bf2cde0ab49af4ffa"
+    },
+    {
+      "file": "0581_parent_pro_shop.sql",
+      "sha256": "2d3752083574a64ffb76936058118b7ed1b398ef79b7e78dd790c35506381aa6"
     }
   ]
 }

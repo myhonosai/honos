@@ -22,6 +22,7 @@ export function SchoolSchedulePage({ initialTab = 'calendar', initialView = 'wee
   const { preferences } = useLocale();
   const t = (key: CalendarKey) => calendarText(preferences.language, key);
   const [tab, setTab] = useState<CalendarTab>(initialTab);
+  const [addSignal, setAddSignal] = useState(0);
   const choose = useCallback((next: CalendarTab) => {
     setTab(next);
     // Keeps the tab in the address so a refresh or a shared link opens it; history may be unavailable, which is harmless.
@@ -31,7 +32,7 @@ export function SchoolSchedulePage({ initialTab = 'calendar', initialView = 'wee
     <header className={styles.head}>
       <div><h1 id="schedule-title">{t('title')}</h1><p className={styles.intro}>{t('intro')}</p></div>
       <div className={styles.headActions}>
-        <a className={styles.secondary} href="/staff/schedule/sessions/create">{t('addClass')}</a>
+        <button type="button" className={styles.primary} onClick={() => { choose('calendar'); setAddSignal((n) => n + 1); }} data-testid="calendar-add-class">{t('addClass')}</button>
         <button type="button" className={styles.secondary} onClick={() => choose('events')}>{t('addEvent')}</button>
       </div>
     </header>
@@ -40,7 +41,7 @@ export function SchoolSchedulePage({ initialTab = 'calendar', initialView = 'wee
         className={styles.tab} onClick={() => choose(key)}>{t(TAB_LABEL[key])}</button>)}
     </div>
     <div className={styles.panel} id="schedule-panel" role="tabpanel" aria-labelledby={`schedule-tab-${tab}`}>
-      {tab === 'calendar' ? <main aria-labelledby="schedule-title"><SchoolCalendar initialView={initialView} onManageEvent={() => choose('events')}/></main> : tab === 'timetable' ? <ClassSeriesPage/> : <SchoolEventsPage/>}
+      {tab === 'calendar' ? <main aria-labelledby="schedule-title"><SchoolCalendar initialView={initialView} onManageEvent={() => choose('events')} addSignal={addSignal}/></main> : tab === 'timetable' ? <ClassSeriesPage/> : <SchoolEventsPage/>}
     </div>
   </div>;
 }

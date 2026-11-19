@@ -4539,3 +4539,64 @@ BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_school_invoice_detail(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0567 calendar cards: three runtime entry points (create, move/resize, card read). The new columns, the roster detachment
+-- table and every helper stay migration-owner only; the runtime keeps no UPDATE on class sessions.
+DO $$ DECLARE r text; f text; col text; BEGIN
+  IF to_regprocedure('hon.read_school_calendar_cards(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0567 first'; END IF;
+  REVOKE ALL ON hon.class_session_roster_detachments FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE format('REVOKE ALL ON hon.class_session_roster_detachments FROM %I',r);
+    FOREACH col IN ARRAY ARRAY['session_kind','lead_instructor_principal_id'] LOOP EXECUTE format('REVOKE ALL (%I) ON hon.class_series FROM %I',col,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.calendar_instructor_ok(uuid,uuid,uuid)','hon.class_series_occurrence_inherit()',
+    'hon.calendar_card_command_finish(text,text,uuid,jsonb,text,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)',
+    'hon.create_calendar_card(text,jsonb,text,uuid,uuid)','hon.move_calendar_card(text,uuid,jsonb,text,uuid,uuid)','hon.read_school_calendar_cards(text,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.create_calendar_card(text,jsonb,text,uuid,uuid),hon.move_calendar_card(text,uuid,jsonb,text,uuid,uuid),
+      hon.read_school_calendar_cards(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;
+-- 0574 automation date triggers: one private scan receipt table and private helpers; the date scan belongs to
+-- hon_automation_worker (014) and is never granted to the runtime.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.scan_automation_schedules(integer)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0574 first'; END IF;
+  REVOKE ALL ON TABLE hon.automation_schedule_scans FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.automation_schedule_scans FROM %I',r); END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.scan_automation_schedules(integer)','hon.automation_date_candidates(hon.automation_workflows,jsonb,date,text)','hon.automation_next_birthday(date,date)','hon.automation_date_subject_open(uuid,uuid,text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+END $$;
+-- 0576 school announcements: private helpers and one private table, four runtime entry points (parent read; staff list, post, take down).
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.withdraw_school_announcement(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0576 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.school_announcement_title_ok(text)','hon.guard_school_announcement()','hon.school_announcement_parent_scope(text)',
+    'hon.require_school_announcements_actor(text)','hon.school_announcement_family_json(hon.school_announcements)','hon.school_announcement_staff_json(hon.school_announcements)',
+    'hon.read_parent_school_announcements(text)','hon.read_school_announcements(text)','hon.publish_school_announcement(text,jsonb,text,uuid,uuid)',
+    'hon.withdraw_school_announcement(text,jsonb,text,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.school_announcements FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.school_announcements FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_parent_school_announcements(text),hon.read_school_announcements(text),
+      hon.publish_school_announcement(text,jsonb,text,uuid,uuid),hon.withdraw_school_announcement(text,jsonb,text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- 0581 parent pro shop: one private scope helper and one runtime entry point (parent read of the school's mirrored Shopify products).
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.read_parent_pro_shop(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0581 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.parent_pro_shop_scope(text)','hon.read_parent_pro_shop(text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_parent_pro_shop(text) TO hon_runtime;
+  END IF;
+END $$;
