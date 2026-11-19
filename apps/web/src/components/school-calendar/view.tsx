@@ -46,7 +46,7 @@ export type CalendarViewProps = Readonly<{
   createPanel?: React.ReactNode;
   /** A short result or refusal line above the board. */
   message?: React.ReactNode;
-  /** 0568 block-out dates in view: school date -> label. Closed days are shaded and labelled; classes still show. */
+  /** 0583 block-out dates in view: school date -> label. Closed days are shaded and labelled; classes still show. */
   closed?: ReadonlyMap<string, string> | undefined;
 }>;
 

@@ -1,4 +1,4 @@
-/* Public shared calendar (0568). A light page that reads well on its own and inside a school website's iframe. */
+/* Public shared calendar (0583). A light page that reads well on its own and inside a school website's iframe. */
 .page { --accent: #1d4ed8; display: grid; gap: 18px; max-width: 760px; margin: 0 auto; padding: 20px 16px 32px; color: #0f172a; background: #ffffff; font-family: inherit; }
 .hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .school { display: flex; align-items: center; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid #e2e8f0; }

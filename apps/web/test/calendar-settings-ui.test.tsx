@@ -26,7 +26,7 @@ const view = (over: Partial<CalendarSettingsViewProps> = {}) => renderToStaticMa
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
-describe('calendar settings tab (0568)', () => {
+describe('calendar settings tab (0583)', () => {
   it('is the fourth tab of Classes > Calendar, with Programs, Block-out dates, Share links and QR codes', () => {
     expect(CALENDAR_TABS).toEqual(['calendar', 'timetable', 'events', 'settings']);
     expect(SETTINGS_SECTIONS).toEqual(['programs', 'blockOuts', 'share', 'qr']);
@@ -75,7 +75,7 @@ describe('calendar settings tab (0568)', () => {
   });
 });
 
-describe('calendar settings HTTP (0568)', () => {
+describe('calendar settings HTTP (0583)', () => {
   it('reads block-outs for a checked range and refuses a range over 42 days before sending', async () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify({ data: { blockOuts: [] }, meta: {} }), { status: 200, headers: { 'content-type': 'application/json' } }));
     vi.stubGlobal('fetch', fetch);
@@ -94,7 +94,7 @@ describe('calendar settings HTTP (0568)', () => {
   });
 });
 
-describe('closed days on the calendar (0568)', () => {
+describe('closed days on the calendar (0583)', () => {
   it('maps block-outs onto the visible dates only', () => {
     const map = closedDays([{ firstDate: '2027-02-27', lastDate: '2027-03-02', label: 'Winter' }, { firstDate: '2027-03-02', lastDate: '2027-03-02', label: 'Other' }], '2027-03-01', '2027-03-07');
     expect([...map]).toEqual([['2027-03-01', 'Winter'], ['2027-03-02', 'Winter']]);
@@ -114,7 +114,7 @@ describe('closed days on the calendar (0568)', () => {
   });
 });
 
-describe('public shared calendar page (0568)', () => {
+describe('public shared calendar page (0583)', () => {
   const school = { name: 'Sample Dojo', address: '1 Sample Street', phone: '555-0100', logoUrl: null, accentColor: '#b91c1c', contactLine: null };
   const group: PublicShareCalendar = { publicId: pid('3'), kind: 'GROUP', name: 'All classes', description: 'Pick a class', timezone: 'America/Los_Angeles', school,
     ageMin: null, ageMax: null, times: [], calendars: [{ publicId: pid('1'), name: 'Kids', description: '', ageMin: 5, ageMax: 12, upcomingCount: 8 },

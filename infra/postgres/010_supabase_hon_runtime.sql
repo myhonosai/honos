@@ -4572,10 +4572,10 @@ DO $$ DECLARE r text; f text; BEGIN
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
   END LOOP;
 END $$;
--- 0568 calendar settings: eight runtime entry points (settings read and save, block-out add, remove and read, share
+-- 0583 calendar settings: eight runtime entry points (settings read and save, block-out add, remove and read, share
 -- calendar save and delete, public share calendar read). The three tables and every helper stay migration-owner only.
 DO $$ DECLARE r text; f text; t text; col text; BEGIN
-  IF to_regprocedure('hon.read_public_share_calendar(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0568 first'; END IF;
+  IF to_regprocedure('hon.read_public_share_calendar(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0583 first'; END IF;
   FOREACH t IN ARRAY ARRAY['calendar_share_settings','calendar_block_outs','share_calendars'] LOOP
     EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
@@ -4615,4 +4615,4 @@ DO $$ DECLARE r text; f text; t text; col text; BEGIN
       hon.read_public_share_calendar(text) TO hon_runtime;
   END IF;
 END $$;
--- End 0568 calendar settings grants.
+-- End 0583 calendar settings grants.

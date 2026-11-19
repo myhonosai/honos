@@ -5261,7 +5261,7 @@ DO $$ DECLARE f record; safe boolean; worker oid:=(SELECT oid FROM pg_roles WHER
     RAISE EXCEPTION 'Unsafe automation date trigger table posture: guard triggers'; END IF;
 END $$;
 -- End automation date triggers exact verification.
--- Calendar settings exact verification (0568): three private forced-RLS tables with guard and no-truncate triggers, private
+-- Calendar settings exact verification (0583): three private forced-RLS tables with guard and no-truncate triggers, private
 -- helpers and eight runtime entry points.
 DO $$ DECLARE f record; safe boolean; t text; BEGIN
   FOREACH t IN ARRAY ARRAY['calendar_share_settings','calendar_block_outs','share_calendars'] LOOP

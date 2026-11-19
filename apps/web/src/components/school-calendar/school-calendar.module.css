@@ -153,7 +153,7 @@
 .repeat { display: grid; gap: 10px; }
 @media (max-width: 480px) { .fields { grid-template-columns: minmax(0, 1fr); } }
 
-/* 0568 calendar settings: Programs, Block-out dates, Share links and QR codes, as cards in the app's look. */
+/* 0583 calendar settings: Programs, Block-out dates, Share links and QR codes, as cards in the app's look. */
 .settings { display: grid; gap: 14px; min-width: 0; }
 .settings .head h2 { margin: 0 0 4px; font-size: 20px; }
 .settingsPanel { display: grid; gap: 14px; min-width: 0; padding: 16px; border: 1px solid var(--hon-line, #24405a); border-radius: var(--hon-radius, 16px); background: linear-gradient(160deg, #10263b, #0b1828); }
@@ -178,7 +178,7 @@
 .switch input:disabled { opacity: .6; cursor: wait; }
 .qr { width: 168px; height: 168px; padding: 10px; border-radius: 10px; background: #fff; }
 @media (max-width: 480px) { .shareGrid { grid-template-columns: minmax(0, 1fr); } }
-/* 0568 closed days (block-out dates): striped and labelled; the classes still show, a block-out never cancels them. */
+/* 0583 closed days (block-out dates): striped and labelled; the classes still show, a block-out never cancels them. */
 .cell[data-closed="true"] { background-color: #1a1420; background-image: repeating-linear-gradient(135deg, rgba(240, 183, 95, .08) 0, rgba(240, 183, 95, .08) 8px, transparent 8px, transparent 16px); }
 .dayColumn[data-closed="true"] { background-color: #1a1420; background-image: repeating-linear-gradient(to bottom, #172c42 0, #172c42 1px, transparent 1px, transparent 64px),
   repeating-linear-gradient(135deg, rgba(240, 183, 95, .08) 0, rgba(240, 183, 95, .08) 8px, transparent 8px, transparent 16px); }

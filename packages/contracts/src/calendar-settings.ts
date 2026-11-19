@@ -1,5 +1,5 @@
 /**
- * 0568 calendar settings: the school's public address and phone, block-out dates, and share calendars (one program, or a group
+ * 0583 calendar settings: the school's public address and phone, block-out dates, and share calendars (one program, or a group
  * of program calendars) with a public read. Spec: docs/architecture/CALENDAR_SETTINGS_AND_SHARE_LINKS.md.
  */
 import { classSeriesDate } from './class-series.js';
