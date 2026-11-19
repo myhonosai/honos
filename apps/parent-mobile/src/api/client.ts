@@ -12,6 +12,11 @@ import { verifyParentBillingView, type ParentBillingView } from '@hon/contracts/
 import { verifyParentClassPassView, type ParentClassPassView } from '@hon/contracts/parent-classpass-view';
 import { verifyParentTestingStatusView, type ParentTestingStatusView } from '@hon/contracts/parent-testing-status';
 import { verifyParentCurriculumLibrary, type ParentCurriculumLibrary } from '@hon/contracts/curriculum-resource-library';
+import {
+  validateBookParentSchoolBookingTypeInput, validateBookParentSchoolEventSlotInput, validateCancelParentSchoolBookingInput,
+  verifyParentSchoolBookingReceipt, verifyParentSchoolBookings,
+  type BookParentSchoolBookingTypeInput, type ParentSchoolBookingReceipt, type ParentSchoolBookings,
+} from '@hon/contracts/parent-school-bookings';
 import { verifyEianStatus, verifyEianTurn, type EianStatus, type EianTurn } from '@hon/contracts/eian';
 import {
   verifyParentInvoicePayResult, verifyParentInvoicePayStart, verifyParentInvoicePayments,
@@ -182,6 +187,19 @@ export function createParentApi(options: ParentApiOptions) {
       post(`/v1/parent/invoice-payments/${encodeURIComponent(invoiceId)}/confirm`, 'parent.invoice.pay.confirm', idempotencyKey, {}, verifyParentInvoicePayResult),
     cancelInvoicePayment: (invoiceId: string, idempotencyKey: string): Promise<ParentWrite<ParentInvoicePayResult>> =>
       post(`/v1/parent/invoice-payments/${encodeURIComponent(invoiceId)}/cancel`, 'parent.invoice.pay.cancel', idempotencyKey, {}, verifyParentInvoicePayResult),
+    /** 0466: school events with open times and families-only booking types; the family's own bookings made here. */
+    schoolBookings: (): Promise<ParentRead<ParentSchoolBookings>> => get('/v1/parent/school-bookings', dataOf(verifyParentSchoolBookings)),
+    bookSchoolEventSlot: (slotId: string, idempotencyKey: string): Promise<ParentWrite<ParentSchoolBookingReceipt>> =>
+      post('/v1/parent/school-bookings/event-slots', 'parent.school_booking.book', idempotencyKey, validateBookParentSchoolEventSlotInput({ slotId }),
+        data => verifyParentSchoolBookingReceipt(data, { kind: 'EVENT' })),
+    bookSchoolBookingType: (input: BookParentSchoolBookingTypeInput, idempotencyKey: string): Promise<ParentWrite<ParentSchoolBookingReceipt>> =>
+      post('/v1/parent/school-bookings/booking-types', 'parent.school_booking.book', idempotencyKey, validateBookParentSchoolBookingTypeInput(input),
+        data => verifyParentSchoolBookingReceipt(data, { kind: 'BOOKING_TYPE' })),
+    cancelSchoolBooking: (bookingId: string, expectedVersion: number, idempotencyKey: string): Promise<ParentWrite<ParentSchoolBookingReceipt>> => {
+      const input = validateCancelParentSchoolBookingInput({ bookingId, expectedVersion });
+      return post(`/v1/parent/school-bookings/${encodeURIComponent(input.bookingId)}/cancel`, 'parent.school_booking.cancel', idempotencyKey,
+        { expectedVersion: input.expectedVersion }, data => verifyParentSchoolBookingReceipt(data, { bookingId: input.bookingId }));
+    },
     classPass: (): Promise<ParentRead<ParentClassPassView>> => get('/v1/parent/classpass', dataOf(verifyParentClassPassView)),
     testingStatus: (): Promise<ParentRead<ParentTestingStatusView>> => get('/v1/parent/testing/status', dataOf(verifyParentTestingStatusView)),
     curriculumLibrary: (): Promise<ParentRead<ParentCurriculumLibrary>> => get('/v1/parent/curriculum-library', dataOf(verifyParentCurriculumLibrary)),
