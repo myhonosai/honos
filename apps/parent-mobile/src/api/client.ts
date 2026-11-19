@@ -22,6 +22,7 @@ import {
   verifyParentInvoicePayResult, verifyParentInvoicePayStart, verifyParentInvoicePayments,
   type ParentInvoicePayResult, type ParentInvoicePayStart, type ParentInvoicePayments,
 } from '@hon/contracts/parent-invoice-pay';
+import { verifyParentSchoolAnnouncements, type ParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
 
 /**
  * What a screen shows when a read does not return verified data. Every protected read maps to one of these;
@@ -176,6 +177,8 @@ export function createParentApi(options: ParentApiOptions) {
     /** Read-only, redacted family billing: memberships and invoices. Paying an invoice is the separate path below. */
     billing: (): Promise<ParentRead<ParentBillingView>> => get('/v1/parent/billing', dataOf(verifyParentBillingView)),
     /** 0530: the family's open invoices the parent may pay on the school's own processor page (test mode only). */
+    /** The school's live announcements (0576) for the one family this sign-in belongs to. No school or family id is sent. */
+    announcements: (): Promise<ParentRead<ParentSchoolAnnouncements>> => get('/v1/parent/announcements', dataOf(verifyParentSchoolAnnouncements)),
     invoicePayments: (): Promise<ParentRead<ParentInvoicePayments>> => get('/v1/parent/invoice-payments', dataOf(verifyParentInvoicePayments)),
     /** Opens (or gets back) the processor page for one invoice. The server decides the amount; the app sends nothing else. */
     startInvoicePayment: (invoiceId: string, idempotencyKey: string): Promise<ParentWrite<ParentInvoicePayStart>> =>

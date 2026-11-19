@@ -3,6 +3,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'r
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ParentJourneyView } from '@hon/contracts/parent-journey-view';
 import { useFamily } from '../family/family-data';
+import { SchoolAnnouncements, useAnnouncements } from '../home/Announcements';
 import { bookingLabel, childSummaries, formatClassTime, nextClass, requirementCounts } from '../home/model';
 import { Body, Button, Card, Pill, Section, Title } from '../ui/parts';
 import { radius, space, TOUCH, type, useColors } from '../ui/theme';
@@ -14,7 +15,8 @@ const ACCESS_LABEL: Record<ParentJourneyView['accessLevel'], string> = {
 };
 
 export function HomeScreen({ onNavigate }: { onNavigate: (tab: 'Schedule' | 'Eian' | 'Messages') => void }) {
-  const { state, selection, select, refresh, now } = useFamily();
+  const { state, selection, select, refresh, now, api } = useFamily();
+  const announcements = useAnnouncements(api, state.status === 'ready' ? state.view : null);
   const [openChild, setOpenChild] = useState<number | null>(null);
   const insets = useSafeAreaInsets();
   const c = useColors();
@@ -53,6 +55,8 @@ export function HomeScreen({ onNavigate }: { onNavigate: (tab: 'Schedule' | 'Eia
             {children.map(ch => <Chip key={ch.key} label={ch.name} active={selection === ch.index} onPress={() => select(ch.index)} a11y={`Show ${ch.name}`} />)}
           </ScrollView>
         ) : null}
+
+        <SchoolAnnouncements read={announcements} timeZone={timeZone} />
 
         <Section>Next class</Section>
         {next && when ? (
