@@ -311,7 +311,7 @@
 /* HON waits in the corner on every page except the dashboard and HON's own workspace. */
 .honLauncher {
   position: fixed; right: 20px; bottom: 20px; z-index: 22; display: inline-flex; align-items: center; gap: 8px;
-  padding: 4px 16px 4px 4px; border-radius: 999px; color: #fff; font-weight: 700; text-decoration: none;
+  padding: 4px 16px 4px 4px; border-radius: 999px; color: #fff; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer;
   background: linear-gradient(90deg, rgba(14, 40, 102, 0.96), rgba(10, 26, 66, 0.96)); border: 1px solid rgba(110, 170, 255, 0.55);
   box-shadow: 0 0 0 4px rgba(47, 123, 255, 0.12), 0 10px 30px rgba(20, 80, 220, 0.45);
 }

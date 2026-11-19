@@ -181,7 +181,7 @@ try{
  await assert.rejects(()=>store.rotate({syncId:claimed.syncId,leaseToken:claimed.leaseToken,expectedVersion:claimed.credential.version+5,credential:{keyId:'fake-ephemeral',sealed:claimed.credential.sealed,
   accessExpiresAt:new Date(Date.now()+3600_000).toISOString(),refreshExpiresAt:new Date(Date.now()+86400_000).toISOString()}}),e=>e.message==='SHOPIFY_VERSION_CONFLICT');
  assert.deepEqual(await store.page({syncId:claimed.syncId,leaseToken:claimed.leaseToken,kind:'ORDERS',orders:[]}),{syncId:claimed.syncId,productsSeen:0,variantsSeen:0,ordersSeen:0});
- // SH-F1 (0557): the worker records finance only under its lease, and only for a store that granted the finance scope.
+ // SH-F1 (0569): the worker records finance only under its lease, and only for a store that granted the finance scope.
  const snap={paymentsActive:false,balances:[],payouts:[],transactions:[]};
  await assert.rejects(()=>store.finance({syncId:claimed.syncId,leaseToken:K(),finance:snap}),e=>e.message==='SHOPIFY_SYNC_NOT_RUNNING');
  await assert.rejects(()=>store.finance({syncId:claimed.syncId,leaseToken:claimed.leaseToken,finance:{...snap,extra:1}}),e=>e.message==='SHOPIFY_INVALID');

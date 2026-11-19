@@ -290,35 +290,73 @@
         <h2 class="h2" data-t>One plan. <em class="s">Everything</em> in it.</h2>
       </div>
       <div>
-        <p class="lede" style="margin-bottom:18px">Try the full AI team and Creative Studio free for 14 days. No automatic charge when the trial ends.</p>
-        <div class="toggle" role="group" aria-label="Billing period">
-          <button type="button" data-p="m" aria-pressed="true">Monthly</button>
-          <button type="button" data-p="y" aria-pressed="false">Yearly</button>
-        </div>
+        <p class="lede">Try the full AI team and Creative Studio free for 14 days. No automatic charge when the trial ends.</p>
       </div>
     </div>
-    <div class="plans">
-      <article class="card plan hot">
-        <h3>Founder 50 <span class="tag"><span class="dot"></span>first 50 schools</span></h3>
-        <div class="price" data-m="$199.20" data-y="$1,494"><span class="amt">$199.20</span><small class="per"> /month</small></div>
-        <p class="mono">or $1,494 a year, about 37% less than paying monthly</p>
-        <p style="color:var(--muted)">Your founder price stays for as long as your school stays subscribed. If you cancel, you come back at the standard price.</p>
-        <a class="btn primary" href="{{APP_URL}}/account/start">Start a new school</a>
+    <div class="billing">
+      <div class="seg" role="group" aria-label="Billing period">
+        <button type="button" data-period="y" aria-pressed="true">Yearly</button>
+        <button type="button" data-period="m" aria-pressed="false">Monthly</button>
+      </div>
+      <p class="save" data-t><b>Save up to 37%</b> on a yearly subscription</p>
+    </div>
+    <div class="offer" role="note">
+      <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l2.3 1.7 2.8-.2 1 2.6 2.4 1.5-.6 2.8 1 2.6-2 2 .1 2.9-2.7.7-1.6 2.3-2.7-.9L12 21.5l-2.3-1.7-2.7.9-1.6-2.3-2.7-.7.1-2.9-2-2 1-2.6-.6-2.8 2.4-1.5 1-2.6 2.8.2z"/><path d="M9 15l6-6"/><circle cx="9.3" cy="9.3" r=".9" fill="currentColor"/><circle cx="14.7" cy="14.7" r=".9" fill="currentColor"/></svg>
+      <p data-offer data-t><b>Founder 50 pricing:</b> the first 50 schools get 20% off HON OS for as long as they stay subscribed. If you cancel, you come back at the standard price.</p>
+    </div>
+    <div class="plans" data-period="y">
+      <article class="card plan hot" data-plan="founder">
+        <div class="plan-head"><h3>Founder 50</h3><span class="pill" data-show="y">-50%</span><span class="pill" data-show="m">-20%</span><span class="pill best">Best value</span></div>
+        <p class="for">For the first 50 schools, kept while you stay subscribed</p>
+        <div class="price" data-show="y">
+          <s class="was"><span class="sr">Standard monthly price</span> $249</s>
+          <div class="now"><span class="amt">$124.50</span><span class="per"><span>per month</span> <span>billed yearly</span></span></div>
+          <p class="mono">$1,494 billed once a year</p>
+        </div><!-- /price -->
+        <div class="price" data-show="m">
+          <s class="was"><span class="sr">Standard monthly price</span> $249</s>
+          <div class="now"><span class="amt">$199.20</span><span class="per"><span>per month</span> <span>billed monthly</span></span></div>
+          <p class="mono">or $1,494 a year, about 37% less than paying monthly</p>
+        </div><!-- /price -->
+        <a class="btn cta primary" href="{{APP_URL}}/account/start">Start a new school</a>
+        <ul class="checks">
+          <li>Leads, memberships and classes</li>
+          <li>Belt testing and attendance</li>
+          <li>Payments and marketing tools</li>
+          <li>HON and the AI team, with no per-message charges</li>
+          <li>12,000 Creative Studio credits every month</li>
+          <li>No HON fee on tuition</li>
+          <li>14-day free trial, no automatic charge</li>
+          <li>30-day money-back guarantee</li>
+        </ul>
       </article>
-      <article class="card plan">
-        <h3>HON OS</h3>
-        <div class="price" data-m="$249" data-y="$2,097"><span class="amt">$249</span><small class="per"> /month</small></div>
-        <p class="mono">or $2,097 a year, about 30% less than paying monthly</p>
-        <p style="color:var(--muted)">The standard price once the 50 founder spots are taken.</p>
-        <a class="btn" href="{{APP_URL}}/account/start">Start a new school</a>
+      <article class="card plan" data-plan="standard">
+        <div class="plan-head"><h3>HON OS</h3><span class="pill" data-show="y">-29%</span></div>
+        <p class="for">The standard price once the 50 founder spots are taken.</p>
+        <div class="price" data-show="y">
+          <s class="was"><span class="sr">Standard monthly price</span> $249</s>
+          <div class="now"><span class="amt">$174.75</span><span class="per"><span>per month</span> <span>billed yearly</span></span></div>
+          <p class="mono">$2,097 billed once a year</p>
+        </div><!-- /price -->
+        <div class="price" data-show="m">
+          <span class="was none" aria-hidden="true"></span>
+          <div class="now"><span class="amt">$249</span><span class="per"><span>per month</span> <span>billed monthly</span></span></div>
+          <p class="mono">or $2,097 a year, about 30% less than paying monthly</p>
+        </div><!-- /price -->
+        <a class="btn cta" href="{{APP_URL}}/account/start">Start a new school</a>
+        <ul class="checks">
+          <li>Leads, memberships and classes</li>
+          <li>Belt testing and attendance</li>
+          <li>Payments and marketing tools</li>
+          <li>HON and the AI team, with no per-message charges</li>
+          <li>12,000 Creative Studio credits every month</li>
+          <li>No HON fee on tuition</li>
+          <li>14-day free trial, no automatic charge</li>
+          <li>30-day money-back guarantee</li>
+        </ul>
       </article>
     </div>
-    <div class="card included">
-      <div><b>The full platform</b>Leads, memberships, classes, belt testing, payments and marketing.</div>
-      <div><b>The AI team</b>HON and the specialists, with no per-message charges.</div>
-      <div><b>12,000 studio credits</b>Every month, with top-ups at $30, $60 or $120.</div>
-      <div><b>No fee on tuition</b>Connect your own Stripe or Square account. HON takes nothing.</div>
-    </div>
+    <p class="topups mono">Need more studio credits? Top-ups are $30, $60 or $120.</p>
     <div class="card guarantee"><b>30-day money-back guarantee</b><p>If HON OS isn't right for you, ask within 30 days of your first payment, monthly or yearly, and we'll refund that payment in full. Your access ends when the refund is made, and a founder spot isn't returned.</p></div>
   </div>
 </section>

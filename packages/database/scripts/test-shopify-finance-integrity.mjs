@@ -1,4 +1,4 @@
-/** 0557 Shopify finance (SH-F1): Shopify Payments balance, payouts and balance transactions, read-only. Real signed HON sessions -> Nest/guard -> fixed runtime SQL -> marked disposable PostgreSQL (Champions Club fixture). The Shopify side is the in-memory fake; nothing leaves the machine. */
+/** 0569 Shopify finance (SH-F1): Shopify Payments balance, payouts and balance transactions, read-only. Real signed HON sessions -> Nest/guard -> fixed runtime SQL -> marked disposable PostgreSQL (Champions Club fixture). The Shopify side is the in-memory fake; nothing leaves the machine. */
 import assert from 'node:assert/strict';
 import {randomUUID as K,randomBytes} from 'node:crypto';
 import {createRequire} from 'node:module';
@@ -167,11 +167,11 @@ try{
  await denied(()=>financeRead(manager,A.schoolId),403,'SHOPIFY_FORBIDDEN');
  pass('a store that stops being CONNECTED loses its snapshot; the table is never truncated or read by the runtime; a revoked grant reads nothing');
 
- // 7. The deploy check for 0557 in infra 011 passes against this database (with the fixture's runtime role).
+ // 7. The deploy check for 0569 in infra 011 passes against this database (with the fixture's runtime role).
  {const verify=await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql',import.meta.url),'utf8');
-  const section=verify.split('-- Shopify finance exact verification (0557, SH-F1)')[1]?.split('-- End Shopify finance exact verification.')[0];
-  assert(section,'0557 verify section');await q(section.slice(section.indexOf('\nDO $$')).replaceAll('hon_runtime','hon_champions_runtime'));}
- pass('the infra verification for 0557 (exact bodies, closed helpers, forced RLS, triggers) passes');
+  const section=verify.split('-- Shopify finance exact verification (0569, SH-F1)')[1]?.split('-- End Shopify finance exact verification.')[0];
+  assert(section,'0569 verify section');await q(section.slice(section.indexOf('\nDO $$')).replaceAll('hon_runtime','hon_champions_runtime'));}
+ pass('the infra verification for 0569 (exact bodies, closed helpers, forced RLS, triggers) passes');
  console.log('PASS SHOPIFY FINANCE all '+groups+' groups');
 }finally{
  await app?.close();await Promise.allSettled([admin.end(),restricted.end(),database.onModuleDestroy()]);

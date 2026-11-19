@@ -8,7 +8,7 @@ import { pipelineText, type PipelineKey } from './copy';
 import type { BoardScope } from './http';
 import {
   BOARD_SORTS, PROGRAM_NONE, applyFilters, boardColumns, boardStats, cardLine, codeLabel, draftErrors, fullName, initials, moveChoices,
-  moveDraftStage, moveTargets, programsOf, rateText, stagesNeedingMove, type BoardSort, type BoardView, type Draft, type DraftError, type Filters,
+  moveDraftStage, moveDraftStageTo, moveTargets, programsOf, rateText, stagesNeedingMove, type BoardSort, type BoardView, type Draft, type DraftError, type Filters,
 } from './model';
 import styles from './pipeline.module.css';
 
@@ -21,6 +21,7 @@ export type SetupState = { state: 'IDLE' | 'WORKING' | 'DENIED' | 'FAILED' | 'UN
 export type TemplateState = null | { phase: 'PICK' | 'WORKING' | 'DENIED' | 'FAILED' | 'UNKNOWN' | 'LIMIT'; code: CrmPipelineTemplateCode | null };
 export type EditState = null | { draft: Draft; newName: string; phase: 'EDIT' | 'SAVING' | 'UNCERTAIN'; error: string | null };
 export const LEAD_DRAG_TYPE = 'application/x-hon-lead';
+export const STAGE_DRAG_TYPE = 'application/x-hon-stage';
 
 export type PipelineViewProps = Readonly<{
   language: string; waiting: boolean; concealed: boolean; scope: BoardScope | null;
@@ -376,14 +377,23 @@ function EditDialog({ board, edit, onDraft, onSave, onEdit, t }: Inner & { edit:
   const set = (next: Partial<NonNullable<EditState>>) => onDraft?.({ ...edit, ...next, error: null });
   const setStage = (index: number, patch: Partial<Draft['stages'][number]>) => set({ draft: { ...draft, stages: draft.stages.map((s, i) => i === index ? { ...s, ...patch } : s) } });
   const swap = (index: number, delta: -1 | 1) => set({ draft: moveDraftStage(draft, index, delta) });
+  const dropOn = (event: React.DragEvent, to: number) => {
+    const raw = event.dataTransfer.getData(STAGE_DRAG_TYPE);
+    if (busy || !/^\d{1,2}$/.test(raw)) return;
+    event.preventDefault();
+    set({ draft: moveDraftStageTo(draft, Number(raw), to) });
+  };
   const newName = edit.newName.trim();
   const canAdd = newName.length > 0 && newName.length <= CRM_STAGE_NAME_MAX && draft.stages.length < 20;
   return <div className={styles.overlay}>
     <div className={styles.dialog} data-wide="" role="dialog" aria-modal="true" aria-labelledby="pipeline-edit-title" data-testid="edit-dialog">
       <h2 id="pipeline-edit-title">{t('editTitle')}</h2>
-      <p className={styles.meta}>{t('editHelp')}</p>
+      <p className={styles.meta}>{t('editHelp')} {t('dragHelp')}</p>
       <ol className={styles.stageList}>
-        {draft.stages.map((stage, index) => <li key={stage.key} className={styles.stageRow} data-hidden={stage.hidden ? '' : undefined}>
+        {draft.stages.map((stage, index) => <li key={stage.key} className={styles.stageRow} data-hidden={stage.hidden ? '' : undefined} data-testid="stage-row"
+          onDragOver={(e) => { if (!busy && e.dataTransfer.types.includes(STAGE_DRAG_TYPE)) e.preventDefault(); }} onDrop={(e) => dropOn(e, index)}>
+          <span className={styles.handle} draggable={busy ? undefined : true} title={t('dragStage', { name: stage.name })} aria-label={t('dragStage', { name: stage.name })}
+            onDragStart={(e) => { e.dataTransfer.setData(STAGE_DRAG_TYPE, String(index)); e.dataTransfer.effectAllowed = 'move'; }}>⋮⋮</span>
           <span className={styles.dot} data-color={stage.color} aria-hidden="true"/>
           <input aria-label={t('stageName')} value={stage.name} maxLength={CRM_STAGE_NAME_MAX} disabled={busy} onChange={(e) => setStage(index, { name: e.target.value })}/>
           <select aria-label={t('stageColor')} value={stage.color} disabled={busy} onChange={(e) => setStage(index, { color: e.target.value as CrmStageColor })}>
@@ -396,7 +406,7 @@ function EditDialog({ board, edit, onDraft, onSave, onEdit, t }: Inner & { edit:
           {stage.hidden ? <span className={styles.badge}>{t('hiddenBadge')}</span> : null}
         </li>)}
         {terminal.map((stage) => <li key={stage.id} className={styles.stageRow} data-fixed="">
-          <span className={styles.dot} data-color={stage.color} aria-hidden="true"/><span>{stage.name}</span>
+          <span aria-hidden="true"/><span className={styles.dot} data-color={stage.color} aria-hidden="true"/><span>{stage.name}</span>
           <span className={styles.badge}>{t(stage.terminalStatus === 'WON' ? 'terminalWON' : 'terminalLOST')}</span>
         </li>)}
       </ol>

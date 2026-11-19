@@ -124,6 +124,13 @@ export function moveDraftStage(draft: Draft, index: number, delta: -1 | 1): Draf
   const stages = [...draft.stages]; const [item] = stages.splice(index, 1); stages.splice(to, 0, item!);
   return { ...draft, stages };
 }
+/** Drag and drop in the stage editor: take the stage at `from` and put it at `to`. */
+export function moveDraftStageTo(draft: Draft, from: number, to: number): Draft {
+  const n = draft.stages.length;
+  if (from === to || from < 0 || to < 0 || from >= n || to >= n) return draft;
+  const stages = [...draft.stages]; const [item] = stages.splice(from, 1); stages.splice(to, 0, item!);
+  return { ...draft, stages };
+}
 /** Stages that will hide while still holding open leads: each needs a visible existing stage to receive them. */
 export function stagesNeedingMove(draft: Draft): DraftStage[] { return draft.stages.filter((s) => s.id !== null && s.hidden && s.openCount > 0); }
 export function moveChoices(draft: Draft): DraftStage[] { return draft.stages.filter((s) => s.id !== null && !s.hidden); }

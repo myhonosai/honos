@@ -7,7 +7,7 @@ import { ShopifyError, shopifyApi } from '../src/components/school-shopify/http'
 import { ShopifyView, type ShopifyViewProps } from '../src/components/school-shopify/view';
 import { id } from './account-status-fixtures';
 
-// SH-F1 (0557): the Finance section shows what Shopify Payments holds, its payouts and recent transactions; read-only.
+// SH-F1 (0569): the Finance section shows what Shopify Payments holds, its payouts and recent transactions; read-only.
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('location', { origin: 'https://app.hon.test' }); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
