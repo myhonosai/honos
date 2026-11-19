@@ -13,7 +13,7 @@ import type { MembershipLifecycleContext } from './membership.service.js';
 const READ = ['billing.invoice.payment.record', 'billing.invoice.issue', 'billing.invoice.create'] as const;
 
 /**
- * SI1 (0540): the simple invoice form and the printable invoice. Route identifiers are never authority: the guarded
+ * SI1 (0558): the simple invoice form and the printable invoice. Route identifiers are never authority: the guarded
  * boundary resolves the route scope from the verified session, and each protected database function re-proves the
  * direct human subject and the live school permission. Nothing here charges, sends or contacts a provider.
  */

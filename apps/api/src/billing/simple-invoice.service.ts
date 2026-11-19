@@ -22,7 +22,7 @@ const HUMAN_SETTINGS = "SELECT set_config('app.hon_source','HUMAN_UI',true),set_
 const READ_LIMITS = "SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0";
 const WRITE_LIMITS = "SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0";
 
-// Exact 0540 (and shared 0240) refusals; every unknown database failure is unavailable, never success.
+// Exact 0558 (and shared 0240) refusals; every unknown database failure is unavailable, never success.
 const KNOWN: Record<string, (code: string) => HttpException> = {
   VALIDATION_FAILED: code => new BadRequestException({ code }),
   TUITION_RECEIVABLES_FORBIDDEN: code => new ForbiddenException({ code }),
@@ -45,7 +45,7 @@ export function translateSimpleInvoiceError(error: unknown): never {
 }
 
 /**
- * SI1 (0540): the simple staff invoice. Each call runs one protected definer function that re-proves the direct human
+ * SI1 (0558): the simple staff invoice. Each call runs one protected definer function that re-proves the direct human
  * subject and the live school permission (billing.invoice.create, plus .issue to issue at once; the 0280 readers for the
  * detail). The runtime has no privilege on the item or detail tables. Nothing here charges, sends or contacts a provider.
  */

@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { SimpleInvoiceService, translateSimpleInvoiceError } = require('../dist/billing/simple-invoice.service.js');
 
-// SI1 (0540): the service runs one protected definer function per call, checks the answer strictly and maps refusals.
+// SI1 (0558): the service runs one protected definer function per call, checks the answer strictly and maps refusals.
 const ORG = '11111111-1111-4111-8111-111111111111', SCHOOL = '22222222-2222-4222-8222-222222222222';
 const INV = '33333333-3333-4333-8333-333333333333', ACCOUNT = '44444444-4444-4444-8444-444444444444', PERSON = '55555555-5555-4555-8555-555555555555';
 const input = { billingAccountId: ACCOUNT, dueDate: '2026-12-03', issue: true, items: [{ description: 'Monthly tuition', quantity: 1, unitAmountMinor: 12900 }, { description: 'Belt test fee', quantity: 2, unitAmountMinor: 500 }] };

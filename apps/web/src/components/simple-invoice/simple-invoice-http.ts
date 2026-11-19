@@ -1,5 +1,5 @@
 /**
- * SI1 (0540) browser calls for the simple staff invoice. Same-origin only; the server decides the school, the
+ * SI1 (0558) browser calls for the simple staff invoice. Same-origin only; the server decides the school, the
  * permission and the payer's account. Nothing here charges or sends: create saves (and, when asked, issues) one invoice.
  */
 import {

@@ -1,6 +1,6 @@
 BEGIN;
 
--- Simple invoices (SI1, 0540, assigned by the coordinator 2026-11-19). Spec: docs/architecture/SIMPLE_INVOICES.md.
+-- Simple invoices (SI1, 0558, assigned by the coordinator 2026-11-19). Spec: docs/architecture/SIMPLE_INVOICES.md.
 -- Owner feedback: the staff invoice form should be payer, pay-to, items with prices, a total, the way to pay, and print,
 -- email or text. This adds:
 --   * hon.invoice_line_items and hon.invoice_details: the items and the pay-to / how-to-pay / note text of an invoice,
@@ -257,9 +257,9 @@ BEGIN
 END $$;
 
 COMMENT ON FUNCTION hon.create_simple_invoice(text,jsonb,text,uuid,uuid) IS
-'Direct HUMAN_UI simple invoice (SI1 0540): DRAFT invoice with items (total = their sum), optionally issued. No money moves.';
+'Direct HUMAN_UI simple invoice (SI1 0558): DRAFT invoice with items (total = their sum), optionally issued. No money moves.';
 COMMENT ON FUNCTION hon.read_school_invoice_detail(text,uuid) IS
-'Direct HUMAN_UI read of one current-school invoice for the printable view (SI1 0540). No DML.';
+'Direct HUMAN_UI read of one current-school invoice for the printable view (SI1 0558). No DML.';
 
 DO $$ DECLARE f text; r text; BEGIN
   FOREACH f IN ARRAY ARRAY['hon.create_simple_invoice(text,jsonb,text,uuid,uuid)','hon.read_school_invoice_detail(text,uuid)',

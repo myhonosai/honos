@@ -1,5 +1,5 @@
 /**
- * SI1 (0540): the simple staff invoice. Staff pick who pays, list items with prices, and the total is their sum. The
+ * SI1 (0558): the simple staff invoice. Staff pick who pays, list items with prices, and the total is their sum. The
  * invoice shows who it is from, how to pay, and can be printed, emailed or texted (through the existing message
  * commands). Creating an invoice moves no money.
  */
@@ -21,7 +21,7 @@ export interface InvoiceDetail {
   /** A short reference people can read out: the first eight characters of the invoice id, upper case. */
   number: string;
   localToday: string; timezone: string; canIssue: boolean;
-  /** Empty for invoices made before 0540 (one amount, no items). */
+  /** Empty for invoices made before 0558 (one amount, no items). */
   items: InvoiceDetailItem[];
   note: string | null;
   billTo: { personId: string | null; name: string | null; email: string | null; phone: string | null };

@@ -10,7 +10,7 @@ import { InvoiceBuilderView, InvoiceDetailView, InvoicesListView, sendFailureTex
 import { ComposeRefusal, ComposeUncertain } from '../src/components/family-messages/compose-http';
 import { id } from './account-status-fixtures';
 
-// SI1 (0540): the simple staff invoice: form math, the calls it makes, and what staff see.
+// SI1 (0558): the simple staff invoice: form math, the calls it makes, and what staff see.
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 

@@ -1,4 +1,4 @@
-# Simple invoices (SI1, migration 0540)
+# Simple invoices (SI1, migration 0558)
 
 Owner feedback (David, 2026-11-19): the Billing > Invoices screen is too technical ("server-owned", a DRAFT
 confirmation checkbox, membership-only). He wants a simple invoice form: payer info, pay-to info, items with prices,
@@ -40,7 +40,7 @@ Older invoices (no items) show one line "Invoice amount" with their total.
 
 ## Backend
 
-### Migration 0540
+### Migration 0558
 
 - `hon.invoice_line_items` (id, org, school, invoice_id, position 1-30, description 1-200, quantity 1-1000,
   unit_amount_minor 0-100,000,000, amount_minor = quantity x unit). Forced RLS, no runtime table privilege.
@@ -90,7 +90,7 @@ linking a membership from the simple form (the existing membership invoices keep
 ## Plan
 
 1. Contracts (types, validator, verifiers) with tests.
-2. Migration 0540 + DB proof + 010/011 + pins.
+2. Migration 0558 + DB proof + 010/011 + pins.
 3. API service/controller + tests.
 4. Web: new page (list, form, view, print, email/text) + tests + screenshots.
 5. Self-review, PR, independent review, merge on GO + green CI.

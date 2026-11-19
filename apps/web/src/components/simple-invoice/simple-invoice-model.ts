@@ -1,5 +1,5 @@
 /**
- * SI1 (0540) form math and message text for the simple staff invoice (docs/architecture/SIMPLE_INVOICES.md). Pure: no
+ * SI1 (0558) form math and message text for the simple staff invoice (docs/architecture/SIMPLE_INVOICES.md). Pure: no
  * requests. The server computes and stores the same total again; this only shows it while staff type.
  */
 import { SIMPLE_INVOICE_MAX_ITEMS, simpleInvoiceTotal, validateCreateSimpleInvoiceInput, type CreateSimpleInvoiceInput, type InvoiceDetail } from '@hon/contracts';
@@ -113,7 +113,7 @@ export function addDays(date: string, days: number): string {
 }
 
 export type InvoiceLine = Readonly<{ description: string; quantity: number; unitAmountMinor: number; amountMinor: number }>;
-/** The lines to show: the saved items, or one "Invoice amount" line for an invoice made before 0540. */
+/** The lines to show: the saved items, or one "Invoice amount" line for an invoice made before 0558. */
 export function invoiceLines(detail: InvoiceDetail): readonly InvoiceLine[] {
   if (detail.items.length > 0) return detail.items;
   return [{ description: 'Invoice amount', quantity: 1, unitAmountMinor: detail.invoice.totalMinor, amountMinor: detail.invoice.totalMinor }];

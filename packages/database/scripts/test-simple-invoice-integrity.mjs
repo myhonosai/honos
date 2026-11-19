@@ -1,5 +1,5 @@
 /**
- * Simple invoices proof (SI1, 0540) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global
+ * Simple invoices proof (SI1, 0558) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global
  * ValidationPipe + HonExceptionFilter -> SimpleInvoiceController -> protected definer functions on the restricted runtime
  * role with forced RLS), on the guarded disposable CRM-close fixture only. Synthetic names and amounts only; HON moves no
  * money, sends nothing and no provider is reachable.
@@ -329,12 +329,12 @@ try {
     await assert.rejects(runtime.query(`SELECT * FROM hon.${t} LIMIT 1`), /permission denied/); checks += 1;
   }
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const start = '-- Simple invoices exact verification (SI1 0540)', end = '-- End simple invoices exact verification.';
+    const start = '-- Simple invoices exact verification (SI1 0558)', end = '-- End simple invoices exact verification.';
     const section = verify.split(start)[1]?.split(end)[0];
     ok(section, start);
     await sql(section.replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
-  console.log(`PASS: simple invoices (0540): ${checks} checks.`);
+  console.log(`PASS: simple invoices (0558): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

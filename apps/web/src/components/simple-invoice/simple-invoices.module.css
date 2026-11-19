@@ -1,4 +1,4 @@
-/* SI1 (0540) staff invoices. HON design tokens for the page; the invoice itself is a light "paper" so it prints cleanly. */
+/* SI1 (0558) staff invoices. HON design tokens for the page; the invoice itself is a light "paper" so it prints cleanly. */
 .page { display: grid; gap: var(--hon-space-4, 16px); min-width: 0; max-width: 1240px; color: var(--hon-text, #eef3ff); font-size: var(--hon-text-md, 15px); }
 .head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--hon-space-3, 12px); }
 .head h1 { margin: 0; font-family: var(--hon-font-display, inherit); font-size: var(--hon-text-2xl, 30px); line-height: 1.15; }

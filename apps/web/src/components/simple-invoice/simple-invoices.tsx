@@ -14,7 +14,7 @@ import { SimpleInvoiceError, simpleInvoiceApi, type PayerChoice, type SimpleInvo
 import styles from './simple-invoices.module.css';
 
 /**
- * SI1 (0540) staff invoices, laid out like a familiar invoicing tool: a list, a builder with a live preview, and a clean
+ * SI1 (0558) staff invoices, laid out like a familiar invoicing tool: a list, a builder with a live preview, and a clean
  * invoice with Print, Email and Text. Creating an invoice moves no money. Email and text go through the existing
  * message commands, so the server checks the permission and the payer's consent, and HON's delivery worker sends only
  * where delivery is switched on.

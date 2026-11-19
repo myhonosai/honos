@@ -142,6 +142,9 @@ import { HistoryImportController } from './migration/history-import.controller.j
 import { HistoryImportService } from './migration/history-import.service.js';
 import { PublishedSchoolWebsiteController, SchoolWebsiteController } from './website/school-website.controller.js';
 import { SchoolWebsiteService } from './website/school-website.service.js';
+import { SchoolWebsiteAiController } from './website/website-ai.controller.js';
+import { WebsiteAiService } from './website/website-ai.service.js';
+import { WEBSITE_PROVIDER_RUNTIME, OpenRouterWebsiteRuntime } from './ai/website-provider-runtime.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
 import { SchoolSupportController } from './support/school-support.controller.js';
@@ -592,6 +595,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     BillingImportController,
     HistoryImportController,
     SchoolWebsiteController,
+    SchoolWebsiteAiController,
     PublishedSchoolWebsiteController,
     SchoolOnboardingController,
     SchoolSupportController,
@@ -832,6 +836,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     BillingImportService,
     HistoryImportService,
     SchoolWebsiteService,
+    WebsiteAiService,
+    { provide: WEBSITE_PROVIDER_RUNTIME, useFactory: () => new OpenRouterWebsiteRuntime() },
     SchoolOnboardingService,
     SchoolSupportService,
     CustomToolService,
