@@ -3708,6 +3708,31 @@ DO $$ BEGIN
     RAISE EXCEPTION 'Unsafe school number order settle posture'; END IF;
 END $$;
 -- End school number order settle exact verification.
+-- School A2P registrations exact verification (T3a 0553): private forced-RLS table with its guard triggers, five runtime
+-- entry points, worker-only claim/record, a private owner check, and the 0248 HQ setter still a runtime definer.
+DO $$ DECLARE f record; BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.school_a2p_registrations'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR has_table_privilege('hon_runtime','hon.school_a2p_registrations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR (SELECT count(*) FROM pg_trigger t WHERE NOT t.tgisinternal AND t.tgenabled='O' AND t.tgname IN ('guarded','no_truncate')
+      AND t.tgrelid='hon.school_a2p_registrations'::regclass) <> 2
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='school_a2p_registrations_approved' AND conrelid='hon.school_a2p_registrations'::regclass) THEN
+    RAISE EXCEPTION 'Unsafe school A2P registration table posture'; END IF;
+  FOR f IN SELECT * FROM (VALUES
+    ('hon.request_school_a2p_registration(text,jsonb,text)',true),('hon.cancel_school_a2p_registration(text,uuid,integer)',true),
+    ('hon.read_school_a2p_registrations(text)',true),('hon.decide_school_a2p_registration_from_hq(text,uuid,text,text,integer)',true),
+    ('hon.read_hq_school_a2p_registrations(text,text)',true),('hon.set_school_text_sender_from_hq(text,uuid,text,text,text,boolean,integer)',true),
+    ('hon.require_school_a2p_owner(text)',false),('hon.claim_school_a2p_registrations(integer,integer)',false),
+    ('hon.record_school_a2p_progress(uuid,uuid,text,jsonb,text,integer)',false),('hon.guard_school_a2p_registration()',false)) e(signature,runtime_allowed) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure AND p.prosecdef
+        AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND (owner.rolsuper OR owner.rolbypassrls))
+      OR has_function_privilege('hon_runtime',f.signature::regprocedure,'EXECUTE') IS DISTINCT FROM f.runtime_allowed THEN
+      RAISE EXCEPTION 'Unsafe school A2P registration function: %',f.signature; END IF;
+  END LOOP;
+  IF has_function_privilege('hon_runtime','hon.school_a2p_business(jsonb)','EXECUTE')
+    OR has_function_privilege('hon_runtime','hon.school_a2p_registration_json(hon.school_a2p_registrations)','EXECUTE') THEN
+    RAISE EXCEPTION 'School A2P registration helper runnable by runtime'; END IF;
+END $$;
+-- End school A2P registrations exact verification.
 -- Creative provider jobs exact verification (C1 0354): four private forced-RLS tables the runtime cannot touch, five
 -- runtime entry points (plus the 0216 record wrapper above), worker functions and private helpers not runnable by it.
 DO $$ DECLARE t text; f text; BEGIN
