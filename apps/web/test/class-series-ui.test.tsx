@@ -145,7 +145,7 @@ it('shows the school week day by day, the series with their actions, and each fo
   const ended = renderToStaticMarkup(<ClassSeriesView {...props({ series: { state: 'READY', read: listRaw({ series: [series({ status: 'ENDED', endsOn: '2026-11-20', endReason: 'Term ends' })] }) as never } })}/>);
   expect(ended).toContain('ended (Term ends)'); expect(ended).not.toContain('>End<');
   const reader = renderToStaticMarkup(<ClassSeriesView {...props({ series: { state: 'DENIED' } })}/>);
-  expect(reader).toContain('18:00–19:00'); expect(reader).toContain('needs the class schedule manage permission'); expect(reader).not.toContain('New class series');
+  expect(reader).toContain('18:00–19:00'); expect(reader).toContain('needs the class schedule manage permission'); expect(reader).not.toContain('New roster');
 });
 
 it('shows each outcome plainly and offers Try again only for a kept request', () => {
@@ -220,13 +220,13 @@ it('ongoing series (0251): the switch and the top-up are their own commands, and
 
   const off = renderToStaticMarkup(<ClassSeriesView {...props()}/>);
   expect(off).toContain('Make ongoing');
-  expect(off).toContain('An ongoing series fills itself');
+  expect(off).toContain('An ongoing roster fills itself');
   expect(off).not.toContain('Adult Karate</strong> · ongoing');
   const on = renderToStaticMarkup(<ClassSeriesView {...props({ series: { state: 'READY', read: listRaw({ series: [series({ ongoing: true })] }) as never } })}/>);
   expect(on).toContain('Adult Karate</strong> · ongoing');
   expect(on).toContain('Stop ongoing');
   const form = renderToStaticMarkup(<ClassSeriesView {...props({ form: { kind: 'ongoing', seriesId } })}/>);
-  expect(form).toContain('Make the series ongoing: Adult Karate');
+  expect(form).toContain('Make the roster ongoing: Adult Karate');
   expect(form).toContain('up to 12 weeks ahead now');
   expect(form).toContain('Nothing contacts families or charges anyone');
   const stop = renderToStaticMarkup(<ClassSeriesView {...props({ form: { kind: 'ongoing', seriesId }, series: { state: 'READY', read: listRaw({ series: [series({ ongoing: true })] }) as never } })}/>);

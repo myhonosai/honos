@@ -28,7 +28,7 @@ const digest=s=>createHash('sha256').update(s).digest();
 const check=()=>groups++;
 const code=n=>e=>e?.getStatus?.()===n;
 let tables;
-async function snapshot(){const r={};for(const t of tables){assert(/^[a-z_]+$/.test(t));r[t]=(await owner.query(`SELECT md5(coalesce(string_agg(to_jsonb(t)::text,E'\n' ORDER BY to_jsonb(t)::text),'')) hash FROM hon.${t} t`)).rows[0].hash;}return r;}
+async function snapshot(){const r={};for(const t of tables){assert(/^[a-z][a-z0-9_]*$/.test(t));r[t]=(await owner.query(`SELECT md5(coalesce(string_agg(to_jsonb(t)::text,E'\n' ORDER BY to_jsonb(t)::text),'')) hash FROM hon.${t} t`)).rows[0].hash;}return r;}
 async function checked(work,allowed=[]){const before=await snapshot();try{const r=await work();operations++;const after=await snapshot();for(const t of tables)if(!allowed.includes(t))assert.equal(after[t],before[t],'Unexpected platform write: '+t);return r;}catch(e){assert.deepEqual(await snapshot(),before,'Denied request wrote data');throw e;}}
 const terminal=async(c=context(),id=randomUUID(),token=secret())=>{const input={terminalSessionId:randomUUID(),terminalSession:token};const r=await checked(()=>service.activate(c,id,input),['kiosk_terminals','kiosk_terminal_sessions']);return{...r,token};};
 const provision=async(c=context(),student=ids.student,session=ids.session,id=randomUUID(),token=secret())=>{const r=await checked(()=>service.provision(c,id,{studentProfileId:student,classSessionId:session,claim:token}),['kiosk_claims']);return{...r,token};};

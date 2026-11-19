@@ -103,7 +103,7 @@ import { ReadinessController } from './health/readiness.controller.js';
 import { LeadController } from './crm/lead.controller.js';
 import { LeadService } from './crm/lead.service.js';
 import { LeadCreateHumanUiGuard } from './crm/lead-create-human-ui.guard.js';
-import { StarterPipelineHumanUiGuard } from './crm/starter-pipeline-human-ui.guard.js';
+import { StarterPipelineHumanUiGuard, TemplatePipelineHumanUiGuard } from './crm/starter-pipeline-human-ui.guard.js';
 import { LeadCloseController } from './crm/lead-close.controller.js';
 import { LeadCloseService } from './crm/lead-close.service.js';
 import { LeadCloseHumanUiGuard } from './crm/lead-close.dto.js';
@@ -142,6 +142,9 @@ import { HistoryImportController } from './migration/history-import.controller.j
 import { HistoryImportService } from './migration/history-import.service.js';
 import { PublishedSchoolWebsiteController, SchoolWebsiteController } from './website/school-website.controller.js';
 import { SchoolWebsiteService } from './website/school-website.service.js';
+import { SchoolWebsiteAiController } from './website/website-ai.controller.js';
+import { WebsiteAiService } from './website/website-ai.service.js';
+import { WEBSITE_PROVIDER_RUNTIME, OpenRouterWebsiteRuntime } from './ai/website-provider-runtime.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
 import { SchoolSupportController } from './support/school-support.controller.js';
@@ -173,8 +176,10 @@ import { SchoolContactsService } from './people/school-contacts.service.js';
 import { SchoolContactAdminController } from './people/school-contact-admin.controller.js';
 import { SchoolContactAdminService } from './people/school-contact-admin.service.js';
 import { SchoolReportsService } from './reports/school-reports.service.js';
-import { MembershipActivationHumanUiGuard, TuitionPaymentRecordHumanUiGuard, TuitionPaymentVoidHumanUiGuard, TuitionReadHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
+import { MembershipActivationHumanUiGuard, SimpleInvoiceCreateHumanUiGuard, TuitionPaymentRecordHumanUiGuard, TuitionPaymentVoidHumanUiGuard, TuitionReadHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { TuitionPaymentController } from './billing/tuition-payment.controller.js';
+import { SimpleInvoiceController } from './billing/simple-invoice.controller.js';
+import { SimpleInvoiceService } from './billing/simple-invoice.service.js';
 import { TuitionPaymentService } from './billing/tuition-payment.service.js';
 import { SchoolPaymentController } from './school-payments/school-payment.controller.js';
 import { SchoolPaymentService } from './school-payments/school-payment.service.js';
@@ -383,6 +388,9 @@ import { SchoolNumberController, SchoolNumberOrderHqController } from './communi
 import { SchoolNumberCancelHumanUiGuard, SchoolNumberOrderHumanUiGuard, SchoolNumberReadHumanUiGuard } from './communication/delivery/school-number.guard.js';
 import { SchoolNumberService } from './communication/delivery/school-number.service.js';
 import { SCHOOL_NUMBER_PURCHASE_SETUP, SCHOOL_NUMBER_PURCHASE_STORE, SchoolNumberPurchaseScheduler, SchoolNumberPurchaseWorker } from './communication/delivery/school-number-purchase.js';
+import { SCHOOL_A2P_SETUP, SCHOOL_A2P_STORE, SchoolA2pScheduler, SchoolA2pWorker, TWILIO_A2P_CLIENT, UnavailableTwilioA2pClient } from './communication/delivery/school-a2p.js';
+import { SchoolA2pCancelHumanUiGuard, SchoolA2pController, SchoolA2pHqController, SchoolA2pReadHumanUiGuard, SchoolA2pRequestHumanUiGuard } from './communication/delivery/school-a2p.controller.js';
+import { SchoolA2pService } from './communication/delivery/school-a2p.service.js';
 import { TWILIO_NUMBER_CLIENT, TwilioRestNumberClient } from './communication/delivery/twilio-numbers.js';
 import { HqAiProviderController } from './hq/hq-ai-provider.controller.js';
 import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
@@ -590,6 +598,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     BillingImportController,
     HistoryImportController,
     SchoolWebsiteController,
+    SchoolWebsiteAiController,
     PublishedSchoolWebsiteController,
     SchoolOnboardingController,
     SchoolSupportController,
@@ -601,6 +610,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolSocialInboxController,
     SchoolSocialAdsController,
     TuitionPaymentController,
+    SimpleInvoiceController,
     SchoolPaymentController,
     SchoolPayMethodController,
     SchoolPayAutopayController,
@@ -637,7 +647,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     A2pPreparationController,
     HqEntitlementController,
     ChampionsSchoolController, ChampionsHqController,
-    SaasSubscriptionGenerationHqController, HqHonController, SaasSubscriptionGenerationSchoolController, SaasScheduleBindingHqController, SaasScheduleBindingSchoolController, SaasPaidReviewHqController, SaasFounderPoolHqController, SaasFounderAvailabilitySchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, CreativeStudioAvatarsController, CreativeStudioAvatarVideosController, CreativeLimitsHqController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, CommunicationWebhookController, SchoolTextSenderHqController, SchoolNumberController, SchoolNumberOrderHqController, SchoolMissedCallHqController, SchoolMissedCallsController, ZernioLeadFormHqController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqBusinessNumbersController, HqSupportController, HqMarketingController, HqPlanPromotionsController, SchoolPlanPromotionsController, HqCreativeController, AiSpendPauseHqController, AiSchoolCostLimitHqController, AiExceptionAllowanceHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController, HqCommunicationsController, HqContactController, HqProspectsController,
+    SaasSubscriptionGenerationHqController, HqHonController, SaasSubscriptionGenerationSchoolController, SaasScheduleBindingHqController, SaasScheduleBindingSchoolController, SaasPaidReviewHqController, SaasFounderPoolHqController, SaasFounderAvailabilitySchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, CreativeStudioAvatarsController, CreativeStudioAvatarVideosController, CreativeLimitsHqController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, CommunicationWebhookController, SchoolTextSenderHqController, SchoolNumberController, SchoolNumberOrderHqController, SchoolA2pController, SchoolA2pHqController, SchoolMissedCallHqController, SchoolMissedCallsController, ZernioLeadFormHqController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqBusinessNumbersController, HqSupportController, HqMarketingController, HqPlanPromotionsController, SchoolPlanPromotionsController, HqCreativeController, AiSpendPauseHqController, AiSchoolCostLimitHqController, AiExceptionAllowanceHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController, HqCommunicationsController, HqContactController, HqProspectsController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [BookableStudentsService, SchoolPickersService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard, SchoolPersonPhotoService, SchoolPersonPhotoHumanGuard, AttendanceCardsService, AttendanceCardsHumanGuard, AttendanceScanHumanGuard, FaceCheckInService, FaceCheckInHumanGuard, FaceCheckInScanHumanGuard, FamilyFaceCheckInSignGuard, FamilyFaceCheckInWithdrawGuard, MembershipAgreementService, MembershipAgreementHumanGuard, MembershipAgreementLinkHumanGuard, FamilyMembershipAgreementSignGuard, FamilyPersonPhotoGuard,
@@ -735,6 +745,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     LeadService,
     LeadCreateHumanUiGuard,
     StarterPipelineHumanUiGuard,
+    TemplatePipelineHumanUiGuard,
     LeadCloseService,
     LeadCloseHumanUiGuard,
     LeadRegistrationService,
@@ -796,6 +807,17 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolNumberCancelHumanUiGuard,
     SchoolNumberPurchaseWorker,
     SchoolNumberPurchaseScheduler,
+    // T3a (0553): school A2P registrations. Nothing is submitted without HON_TWILIO_A2P_SUBMIT_APPROVED and a READY A2P
+    // client; this piece wires only the never-ready client, so production cannot submit (the REST client is T3c).
+    { provide: TWILIO_A2P_CLIENT, useFactory: () => new UnavailableTwilioA2pClient() },
+    { provide: SCHOOL_A2P_STORE, useExisting: CommunicationWorkerDatabase },
+    { provide: SCHOOL_A2P_SETUP, useFactory: () => ({ vault: () => twilioSubaccountVaultFromEnvironment() }) },
+    SchoolA2pService,
+    SchoolA2pReadHumanUiGuard,
+    SchoolA2pRequestHumanUiGuard,
+    SchoolA2pCancelHumanUiGuard,
+    SchoolA2pWorker,
+    SchoolA2pScheduler,
     CommunicationDispatcher,
     MissedCallTextBackDispatcher,
     CommunicationDispatchScheduler,
@@ -829,6 +851,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     BillingImportService,
     HistoryImportService,
     SchoolWebsiteService,
+    WebsiteAiService,
+    { provide: WEBSITE_PROVIDER_RUNTIME, useFactory: () => new OpenRouterWebsiteRuntime() },
     SchoolOnboardingService,
     SchoolSupportService,
     CustomToolService,
@@ -868,6 +892,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSeriesFillHumanUiGuard,
     ClassSeriesReadHumanUiGuard,
     TuitionPaymentService,
+    SimpleInvoiceService,
     SchoolPaymentService,
     SchoolPayMethodService,
     SchoolPayAutopayService,
@@ -901,6 +926,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     GuardianChildEnrollmentService, CrmGuardianChildEnrollmentReadHumanUiGuard, CrmGuardianChildPayerDesignationHumanUiGuard, CrmGuardianChildAdditionHumanUiGuard, CrmGuardianChildMembershipDraftFromPlanHumanUiGuard,
     MembershipActivationHumanUiGuard,
     TuitionPaymentRecordHumanUiGuard,
+    SimpleInvoiceCreateHumanUiGuard,
     TuitionPaymentVoidHumanUiGuard,
     TuitionReadHumanUiGuard,
     BillingAccountService,

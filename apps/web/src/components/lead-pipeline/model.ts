@@ -124,6 +124,13 @@ export function moveDraftStage(draft: Draft, index: number, delta: -1 | 1): Draf
   const stages = [...draft.stages]; const [item] = stages.splice(index, 1); stages.splice(to, 0, item!);
   return { ...draft, stages };
 }
+/** Drag and drop in the stage editor: take the stage at `from` and put it at `to`. */
+export function moveDraftStageTo(draft: Draft, from: number, to: number): Draft {
+  const n = draft.stages.length;
+  if (from === to || from < 0 || to < 0 || from >= n || to >= n) return draft;
+  const stages = [...draft.stages]; const [item] = stages.splice(from, 1); stages.splice(to, 0, item!);
+  return { ...draft, stages };
+}
 /** Stages that will hide while still holding open leads: each needs a visible existing stage to receive them. */
 export function stagesNeedingMove(draft: Draft): DraftStage[] { return draft.stages.filter((s) => s.id !== null && s.hidden && s.openCount > 0); }
 export function moveChoices(draft: Draft): DraftStage[] { return draft.stages.filter((s) => s.id !== null && !s.hidden); }
@@ -145,4 +152,9 @@ export function draftInput(draft: Draft, expectedVersion: number): SaveCrmPipeli
     stages: draft.stages.map((s) => ({ id: s.id, name: s.name, color: s.color, hidden: s.hidden })),
     moves: stagesNeedingMove(draft).map((s) => ({ fromStageId: s.id!, toStageId: draft.moves[s.id!]! })),
   };
+}
+
+/** After stages are set up from the board, the editor opens only once the board shows the pipeline that setup made. */
+export function starterEditReady(board: { pipeline: { id: string } | null }, pendingPipelineId: string | null): boolean {
+  return pendingPipelineId !== null && board.pipeline !== null && board.pipeline.id.toLowerCase() === pendingPipelineId.toLowerCase();
 }

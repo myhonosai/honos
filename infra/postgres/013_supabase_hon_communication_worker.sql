@@ -111,6 +111,16 @@ BEGIN
 END;
 $$;
 
+-- 0553 school A2P registrations: claim approved submissions and record each step (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.claim_school_a2p_registrations(integer,integer)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.claim_school_a2p_registrations(integer, integer),
+      hon.record_school_a2p_progress(uuid, uuid, text, jsonb, text, integer) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 -- 0435 school social inbox: signed inbound Zernio messages and comments, when 0435 is applied.
 DO $$
 BEGIN
@@ -165,6 +175,18 @@ DO $$
 BEGIN
   IF to_regprocedure('hon.communication_email_subject(uuid,uuid)') IS NOT NULL THEN
     GRANT EXECUTE ON FUNCTION hon.communication_email_subject(uuid, uuid) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
+-- 0556 school calls: connect a browser call, route an incoming call, record call progress, voicemails and recordings,
+-- and delete recordings after 90 days (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.route_school_incoming_call(text,text,text)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.connect_school_client_call(uuid, text, text, text), hon.route_school_incoming_call(text, text, text),
+      hon.record_school_call_status(text, text, text, text, integer, timestamptz), hon.record_school_call_recording(text, text, text, integer, boolean),
+      hon.read_school_call_recordings_due(integer), hon.mark_school_call_recording_deleted(uuid, text) TO hon_communication_worker;
   END IF;
 END;
 $$;
