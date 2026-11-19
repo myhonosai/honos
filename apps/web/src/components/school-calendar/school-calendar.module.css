@@ -105,3 +105,50 @@
 .drawer table tr { padding: 8px 0; border-bottom: 1px solid var(--hon-line, #24405a); }
 .drawer table td, .drawer table th { padding: 2px 0; border: 0; }
 .drawer table td[data-label]::before { content: attr(data-label) ': '; color: var(--hon-muted, #9fb4c8); font-size: 12px; font-weight: 700; }
+
+/* 0567 calendar cards: click an empty time to add, drag to move, drag the bottom edge to resize. Colours follow the card kind. */
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.messageBar { position: sticky; top: 8px; z-index: 35; }
+.message { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border: 1px solid var(--hon-accent, #8de3d8);
+  border-radius: 12px; background: #0f2a3d; color: #eef6fc; font-size: 14px; box-shadow: 0 10px 24px rgba(0, 0, 0, .35); }
+.messageActions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.slots { position: absolute; inset: 0; z-index: 1; }
+.slot { position: absolute; left: 0; right: 0; display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: copy; }
+.slot:hover { background: rgba(141, 227, 216, .07); }
+.slot:focus-visible { outline: 2px solid var(--hon-accent, #8de3d8); outline-offset: -2px; background: rgba(141, 227, 216, .1); }
+.block { z-index: 2; }
+.block[data-dragging="true"] { opacity: .35; }
+.item[data-draggable="true"] { cursor: grab; touch-action: none; }
+.item[data-draggable="true"]:active { cursor: grabbing; }
+.item[data-card-kind="PRIVATE_LESSON"] { border-left-color: #b48cf2; background: #1e1838; }
+.item[data-card-kind="TRIAL"] { border-left-color: #7fdc8f; background: #12301f; }
+.item[data-card-kind="EVENT"] { border-left-color: #f0b75f; background: #2a2212; }
+.kindTag { padding: 0 6px; border-radius: 999px; background: rgba(255, 255, 255, .12); color: #eef6fc; font-size: 11px; font-weight: 800; }
+.resize { position: absolute; left: 6px; right: 6px; bottom: 0; height: 8px; border-radius: 0 0 8px 8px; cursor: ns-resize; touch-action: none; }
+.resize::after { content: ''; position: absolute; left: 50%; bottom: 2px; width: 24px; height: 3px; margin-left: -12px; border-radius: 3px; background: rgba(238, 246, 252, .45); }
+.ghost { position: absolute; z-index: 3; left: 2px; right: 2px; display: grid; align-content: start; gap: 2px; padding: 4px 7px; border: 2px dashed var(--hon-accent, #8de3d8);
+  border-radius: 8px; background: rgba(141, 227, 216, .16); color: #eef6fc; font-size: 12px; pointer-events: none; }
+.ghost[data-saving="true"] { border-style: solid; }
+.ghost small { color: var(--hon-muted, #9fb4c8); }
+/* The create form in the side panel. */
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.field { display: grid; gap: 4px; min-width: 0; color: var(--hon-muted, #9fb4c8); font-size: 12px; font-weight: 700; }
+.field[data-wide="true"] { grid-column: 1 / -1; }
+.field input, .field select { min-height: var(--hon-target, 44px); box-sizing: border-box; width: 100%; padding: 6px 10px; border: 1px solid var(--hon-line, #24405a); border-radius: 10px;
+  background: #0b1828; color: #eef6fc; font: inherit; font-size: 15px; font-weight: 400; color-scheme: dark; }
+.field input:focus-visible, .field select:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 1px; }
+.kinds, .weekdays { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.kinds legend, .weekdays legend { width: 100%; padding: 0 0 6px; color: var(--hon-muted, #9fb4c8); font-size: 12px; font-weight: 800; }
+.kindOption, .weekdayOption { position: relative; display: inline-flex; align-items: center; min-height: 40px; padding: 0 12px; border: 1px solid var(--hon-line, #24405a); border-left-width: 4px;
+  border-radius: 10px; background: #10263b; color: #eef6fc; font-size: 14px; font-weight: 700; cursor: pointer; }
+.kindOption input, .weekdayOption input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.kindOption:has(input:checked), .weekdayOption:has(input:checked) { border-color: var(--hon-accent, #8de3d8); background: #123047; }
+.kindOption:has(input:focus-visible), .weekdayOption:has(input:focus-visible) { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
+.kindOption[data-card-kind="CLASS"] { border-left-color: #5fb8f0; }
+.kindOption[data-card-kind="PRIVATE_LESSON"] { border-left-color: #b48cf2; }
+.kindOption[data-card-kind="TRIAL"] { border-left-color: #7fdc8f; }
+.kindOption[data-card-kind="EVENT"] { border-left-color: #f0b75f; }
+.weekdayOption { border-left-width: 1px; min-width: 52px; justify-content: center; }
+.weekdayOption:has(input:disabled) { opacity: .85; cursor: default; }
+.repeat { display: grid; gap: 10px; }
+@media (max-width: 480px) { .fields { grid-template-columns: minmax(0, 1fr); } }

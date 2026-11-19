@@ -272,6 +272,7 @@ const expectedRlsTables = [
   'school_social_ads',
   'class_series',
   'class_series_occurrences',
+  'class_session_roster_detachments',
   'invoice_payment_records',
   'school_pay_providers',
   'school_pay_connections',
