@@ -114,3 +114,18 @@ sender checks. No deploy.
 ## 5. Open questions for David
 
 - Parent-app chat as a tab on Texts (proposed) or its own page.
+
+## 6. Plan (2026-11-19)
+
+Migration numbers (coordinator): TE1 = 0542, TE2 = 0543. Every PR: tests first, `git diff --check`, focused tests,
+screenshots (Modern desktop 1440, phone 390, Big Button) in `/mnt/project-files/texts-email/`, independent review, squash on
+GO + green CI.
+
+| PR | Contents | Depends on | Tests |
+| --- | --- | --- | --- |
+| TE3a (frontend, no migration) | `components/comms-kit/*` on `--hon-*` tokens; `/staff/texts` page shell with pill tabs; **Conversations** tab (0364 http reused, two-pane list/thread, live search, chips, contact slide-in); **Send** tab, one person (type-ahead over people search, consent shown, merge tags filled from the contact, preview bubble, 0047 create+queue reused from `compose-http.ts`, Recent sends from the 0047 list); **Parent app** tab (0330 http reused); catalog: Communication = Texts, Email (placeholder until TE4), Social; Conversation AI keeps Train AI; redirects from `/staff/conversations` and `/staff/family-messages`. | none | unit: merge-tag fill, segment counter, tab routing, catalog; component tests per tab with mocked http incl. uncertain-send retry lock; browser check of the shell menu |
+| TE1 (0542) | `hon.read_school_message_history`, `hon.read_school_opted_out_contacts`, staff email subject on create; API `GET .../communications/history`, `GET .../communications/opted-out`, `emailSubject` on `POST .../communications/messages`; contracts verifiers; 010/011 grants; manifest, checksums, staging ceiling. | none | DB proof (tenant isolation, filters, paging, search escaping, demo exclusion, permission), API unit tests |
+| TE2 (0543) | `hon.school_message_templates` + create/update/archive/restore/list, permissions `communication.template.read/manage`; API + contracts. | none | DB proof (RLS, version conflicts, idempotency, name uniqueness, merge-tag closed list, caps), API tests |
+| TE3b | Texts **History** (one-to-one table + drawer), **Templates** (cards + editor, Use in Send), **Opted out**. | TE1, TE2 | component tests |
+| TE4 | `/staff/email`: Send (subject), History, Templates, Opted out (+ record email unsubscribe). | TE1, TE2, TE3a kit | component tests + screenshots |
+| TE5 | Group sends on both pages (BL1 composer, group history cards, Scheduled). | #489 merged | component tests |
