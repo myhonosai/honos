@@ -388,6 +388,9 @@ import { SchoolNumberController, SchoolNumberOrderHqController } from './communi
 import { SchoolNumberCancelHumanUiGuard, SchoolNumberOrderHumanUiGuard, SchoolNumberReadHumanUiGuard } from './communication/delivery/school-number.guard.js';
 import { SchoolNumberService } from './communication/delivery/school-number.service.js';
 import { SCHOOL_NUMBER_PURCHASE_SETUP, SCHOOL_NUMBER_PURCHASE_STORE, SchoolNumberPurchaseScheduler, SchoolNumberPurchaseWorker } from './communication/delivery/school-number-purchase.js';
+import { SCHOOL_A2P_SETUP, SCHOOL_A2P_STORE, SchoolA2pScheduler, SchoolA2pWorker, TWILIO_A2P_CLIENT, UnavailableTwilioA2pClient } from './communication/delivery/school-a2p.js';
+import { SchoolA2pCancelHumanUiGuard, SchoolA2pController, SchoolA2pHqController, SchoolA2pReadHumanUiGuard, SchoolA2pRequestHumanUiGuard } from './communication/delivery/school-a2p.controller.js';
+import { SchoolA2pService } from './communication/delivery/school-a2p.service.js';
 import { TWILIO_NUMBER_CLIENT, TwilioRestNumberClient } from './communication/delivery/twilio-numbers.js';
 import { HqAiProviderController } from './hq/hq-ai-provider.controller.js';
 import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
@@ -644,7 +647,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     A2pPreparationController,
     HqEntitlementController,
     ChampionsSchoolController, ChampionsHqController,
-    SaasSubscriptionGenerationHqController, HqHonController, SaasSubscriptionGenerationSchoolController, SaasScheduleBindingHqController, SaasScheduleBindingSchoolController, SaasPaidReviewHqController, SaasFounderPoolHqController, SaasFounderAvailabilitySchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, CreativeStudioAvatarsController, CreativeStudioAvatarVideosController, CreativeLimitsHqController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, CommunicationWebhookController, SchoolTextSenderHqController, SchoolNumberController, SchoolNumberOrderHqController, SchoolMissedCallHqController, SchoolMissedCallsController, ZernioLeadFormHqController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqBusinessNumbersController, HqSupportController, HqMarketingController, HqPlanPromotionsController, SchoolPlanPromotionsController, HqCreativeController, AiSpendPauseHqController, AiSchoolCostLimitHqController, AiExceptionAllowanceHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController, HqCommunicationsController, HqContactController, HqProspectsController,
+    SaasSubscriptionGenerationHqController, HqHonController, SaasSubscriptionGenerationSchoolController, SaasScheduleBindingHqController, SaasScheduleBindingSchoolController, SaasPaidReviewHqController, SaasFounderPoolHqController, SaasFounderAvailabilitySchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, CreativeStudioAvatarsController, CreativeStudioAvatarVideosController, CreativeLimitsHqController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, CommunicationWebhookController, SchoolTextSenderHqController, SchoolNumberController, SchoolNumberOrderHqController, SchoolA2pController, SchoolA2pHqController, SchoolMissedCallHqController, SchoolMissedCallsController, ZernioLeadFormHqController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqBusinessNumbersController, HqSupportController, HqMarketingController, HqPlanPromotionsController, SchoolPlanPromotionsController, HqCreativeController, AiSpendPauseHqController, AiSchoolCostLimitHqController, AiExceptionAllowanceHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController, HqCommunicationsController, HqContactController, HqProspectsController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [BookableStudentsService, SchoolPickersService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard, SchoolPersonPhotoService, SchoolPersonPhotoHumanGuard, AttendanceCardsService, AttendanceCardsHumanGuard, AttendanceScanHumanGuard, FaceCheckInService, FaceCheckInHumanGuard, FaceCheckInScanHumanGuard, FamilyFaceCheckInSignGuard, FamilyFaceCheckInWithdrawGuard, MembershipAgreementService, MembershipAgreementHumanGuard, MembershipAgreementLinkHumanGuard, FamilyMembershipAgreementSignGuard, FamilyPersonPhotoGuard,
@@ -803,6 +806,17 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolNumberCancelHumanUiGuard,
     SchoolNumberPurchaseWorker,
     SchoolNumberPurchaseScheduler,
+    // T3a (0553): school A2P registrations. Nothing is submitted without HON_TWILIO_A2P_SUBMIT_APPROVED and a READY A2P
+    // client; this piece wires only the never-ready client, so production cannot submit (the REST client is T3c).
+    { provide: TWILIO_A2P_CLIENT, useFactory: () => new UnavailableTwilioA2pClient() },
+    { provide: SCHOOL_A2P_STORE, useExisting: CommunicationWorkerDatabase },
+    { provide: SCHOOL_A2P_SETUP, useFactory: () => ({ vault: () => twilioSubaccountVaultFromEnvironment() }) },
+    SchoolA2pService,
+    SchoolA2pReadHumanUiGuard,
+    SchoolA2pRequestHumanUiGuard,
+    SchoolA2pCancelHumanUiGuard,
+    SchoolA2pWorker,
+    SchoolA2pScheduler,
     CommunicationDispatcher,
     MissedCallTextBackDispatcher,
     CommunicationDispatchScheduler,
