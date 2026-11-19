@@ -19,7 +19,7 @@ function fields(input: object): Record<string, unknown> {
 }
 
 /**
- * 0568 calendar settings: the school's public address and phone, block-out dates and share calendars. Route identifiers are
+ * 0583 calendar settings: the school's public address and phone, block-out dates and share calendars. Route identifiers are
  * never authority: the guarded boundary resolves the route scope from the verified session, and each protected database
  * function re-proves the direct human subject and the live school-scoped permission. Nothing here contacts anyone.
  */
@@ -147,7 +147,7 @@ export class CalendarSettingsController {
   }
 }
 
-/** 0568 shared calendars: the public side. No session, cookie or tenant id is read; the public link id is the only selector. */
+/** 0583 shared calendars: the public side. No session, cookie or tenant id is read; the public link id is the only selector. */
 @Controller('public/calendars')
 export class PublicShareCalendarController {
   constructor(private readonly settings: CalendarSettingsService) {}

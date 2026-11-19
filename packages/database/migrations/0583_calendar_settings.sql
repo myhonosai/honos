@@ -1,6 +1,6 @@
 BEGIN;
 
--- 0568 calendar settings (owner David 2026-11-19, number assigned by the coordinator): Classes > Calendar gets Settings with
+-- 0583 calendar settings (owner David 2026-11-19, number assigned by the coordinator; was 0568, earlier 0552): Classes > Calendar gets Settings with
 -- Block-out Dates, Share Links (public calendars per program or for a group of programs, with link, embed code and QR) and the
 -- school's public address and phone. Spec: docs/architecture/CALENDAR_SETTINGS_AND_SHARE_LINKS.md.
 --   S1  hon.calendar_share_settings: one row per school, address (0-200) and phone (0-40), version +1 per save.
@@ -432,11 +432,11 @@ BEGIN
       FROM hon.share_calendar_times(c.organization_id,c.school_id,c.program_id,tz,200) t),'[]'::jsonb) ELSE '[]'::jsonb END);
 END $$;
 
-COMMENT ON TABLE hon.calendar_share_settings IS '0568 S1 the school''s public address and phone for shared calendars. Private; definer access only.';
-COMMENT ON TABLE hon.calendar_block_outs IS '0568 S2 closed days. Never cancels or refuses a class; hides the days from shared calendars. Private.';
-COMMENT ON TABLE hon.share_calendars IS '0568 S3 public calendars (one program, or a group of program calendars). Private; definer access only.';
+COMMENT ON TABLE hon.calendar_share_settings IS '0583 S1 the school''s public address and phone for shared calendars. Private; definer access only.';
+COMMENT ON TABLE hon.calendar_block_outs IS '0583 S2 closed days. Never cancels or refuses a class; hides the days from shared calendars. Private.';
+COMMENT ON TABLE hon.share_calendars IS '0583 S3 public calendars (one program, or a group of program calendars). Private; definer access only.';
 COMMENT ON FUNCTION hon.read_public_share_calendar(text) IS
-'Public read of one enabled shared calendar (0568 S5): school name, address, phone, branding, group cards or up to 200 class times in 28 days with open spots. No student, family, staff or booking data. No DML.';
+'Public read of one enabled shared calendar (0583 S5): school name, address, phone, branding, group cards or up to 200 class times in 28 days with open spots. No student, family, staff or booking data. No DML.';
 
 DO $$ DECLARE r text; col text; f text; t text;
   tables text[]:=ARRAY['calendar_share_settings','calendar_block_outs','share_calendars'];

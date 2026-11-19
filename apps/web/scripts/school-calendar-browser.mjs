@@ -95,7 +95,7 @@ function calendarCommand(route, path, body) {
   return json(route, 200, { data: { sessionId, version: c.version, startsAt: body.startsAt, endsAt: body.endsAt, detachedFromRoster: c.seriesId !== null }, meta: meta({ replayed: false }) });
 }
 
-// 0568 calendar settings: contact details, block-out dates and share calendars, plus the public read the shared page makes.
+// 0583 calendar settings: contact details, block-out dates and share calendars, plus the public read the shared page makes.
 const contact = { address: '100 Sample Avenue, Example City', phone: '(555) 010-0199', version: 1 };
 const blockOuts = [{ blockOutId: id(6001), label: 'Thanksgiving break', firstDate: '2026-11-26', lastDate: '2026-11-27', version: 1, active: true }];
 const share = (n, kind, name, program, extra = {}) => ({ shareCalendarId: id(6100 + n), publicId: (0xc0de00 + n).toString(16).padStart(48, 'a'), kind, name, description: '',
@@ -473,7 +473,7 @@ await check('phone: week and month fit the screen', async () => {
   await ctx.close();
 });
 
-// 0568 calendar settings, closed days and the shared public calendar.
+// 0583 calendar settings, closed days and the shared public calendar.
 const settingsTab = async (page, section) => { await page.getByTestId('calendar-settings').waitFor(); await page.getByRole('tab', { name: section }).click(); };
 await check('Settings tab: share links with on/off, link, embed code, edit and delete', async () => {
   const { ctx, page } = await open(viewports.desktop, '/staff/schedule?tab=settings');

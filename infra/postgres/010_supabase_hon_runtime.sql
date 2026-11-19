@@ -4561,10 +4561,21 @@ DO $$ DECLARE r text; f text; col text; BEGIN
       hon.read_school_calendar_cards(text,jsonb) TO hon_runtime;
   END IF;
 END $$;
--- 0568 calendar settings: eight runtime entry points (settings read and save, block-out add, remove and read, share
+-- 0574 automation date triggers: one private scan receipt table and private helpers; the date scan belongs to
+-- hon_automation_worker (014) and is never granted to the runtime.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.scan_automation_schedules(integer)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0574 first'; END IF;
+  REVOKE ALL ON TABLE hon.automation_schedule_scans FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.automation_schedule_scans FROM %I',r); END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.scan_automation_schedules(integer)','hon.automation_date_candidates(hon.automation_workflows,jsonb,date,text)','hon.automation_next_birthday(date,date)','hon.automation_date_subject_open(uuid,uuid,text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+END $$;
+-- 0583 calendar settings: eight runtime entry points (settings read and save, block-out add, remove and read, share
 -- calendar save and delete, public share calendar read). The three tables and every helper stay migration-owner only.
 DO $$ DECLARE r text; f text; t text; col text; BEGIN
-  IF to_regprocedure('hon.read_public_share_calendar(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0568 first'; END IF;
+  IF to_regprocedure('hon.read_public_share_calendar(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0583 first'; END IF;
   FOREACH t IN ARRAY ARRAY['calendar_share_settings','calendar_block_outs','share_calendars'] LOOP
     EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
@@ -4604,11 +4615,11 @@ DO $$ DECLARE r text; f text; t text; col text; BEGIN
       hon.read_public_share_calendar(text) TO hon_runtime;
   END IF;
 END $$;
--- End 0568 calendar settings grants.
+-- End 0583 calendar settings grants.
 
--- 0575 closed days for families: one private helper; the three replaced functions keep their 0329/0538 grants (none to runtime).
+-- 0584 closed days for families: one private helper; the three replaced functions keep their 0329/0538 grants (none to runtime).
 DO $$ DECLARE r text; BEGIN
-  IF to_regprocedure('hon.class_session_on_closed_day(hon.class_sessions)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0575 first'; END IF;
+  IF to_regprocedure('hon.class_session_on_closed_day(hon.class_sessions)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0584 first'; END IF;
   REVOKE ALL ON FUNCTION hon.class_session_on_closed_day(hon.class_sessions) FROM PUBLIC;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION hon.class_session_on_closed_day(hon.class_sessions) FROM %I',r); END LOOP;

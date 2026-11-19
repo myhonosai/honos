@@ -3639,7 +3639,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.parent_class_booking_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','cb18dc6356494af40a5b1af73147d4dd8d1bbafefab492439f51180e63fcac15'),
 ('hon.parent_class_booking_child_ok(uuid,uuid)',true,false,'search_path=pg_catalog, hon','237a329c4db7c485ffa5521d1a4028ed443de87e157873ac4e2b17fdc11110d7'),
--- 0575 replaced the body of hon.parent_class_booking_session_ok (classes on a closed day are not offered); its hash below is the 0575 body.
+-- 0584 replaced the body of hon.parent_class_booking_session_ok (classes on a closed day are not offered); its hash below is the 0584 body.
 ('hon.parent_class_booking_session_ok(uuid,hon.class_sessions)',true,false,'search_path=pg_catalog, hon','5e10f242e88a5bd527e19cfe7027388305257a36ee371ceca551832833cb948a'),
 ('hon.parent_class_booking_seats(uuid)',true,false,'search_path=pg_catalog, hon','61bfcc57c3e31a23b3a689150ead7d7d43c724db47483cbac8a3f74dcf2e3002'),
 ('hon.parent_class_booking_json(hon.class_bookings,hon.class_sessions)',true,false,'search_path=pg_catalog, hon','d753781cf05db78ddc2525f62e8ecf36aaa4b0a63432578c7155bed238c1ff37'),
@@ -4477,11 +4477,12 @@ END $$;
 -- End conversation AI training exact verification.
 -- Automation engine exact verification (AU-2 0423): three private forced-RLS engine tables nobody but the owner touches, four runtime
 -- entry points (turn on, pause, run history), two definer engine functions only the hon_automation_worker login (014) may call,
--- private helpers, forward-only guards, the AUTOMATION principal and the message origin columns.
+-- private helpers, forward-only guards, the AUTOMATION principal and the message origin columns. 0574 replaced the body of
+-- hon.automation_unavailable (the three date triggers now run); its hash below is the 0574 body.
 DO $$ DECLARE f record; safe boolean; t text; worker oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_automation_worker'); BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_automation_run()',true,false,false,'search_path=pg_catalog, hon','65683e06da1ed396b09ab9ac1a460ae718c0b4cfa31c6f1d97c90b8f627d0abb'),
-('hon.automation_unavailable(jsonb)',false,false,false,'search_path=pg_catalog, hon','84aeceae6da7a4aa63f8bd43167713dd1d61beefe566c68baad79e08236dfad9'),
+('hon.automation_unavailable(jsonb)',false,false,false,'search_path=pg_catalog, hon','178ad43fc35d2dd11aac3b3b37889c5ef41f213b496868d3692546658d362b3c'),
 ('hon.automation_references_ok(uuid,uuid,uuid,jsonb)',false,false,false,'search_path=pg_catalog, hon','af5fd466e05f55bd1afad7b4515edcc9606e71a86cb59dc4150e1d744b8976eb'),
 ('hon.automation_activator_ok(uuid,uuid,uuid)',false,false,false,'search_path=pg_catalog, hon','95ecbf01f8b3da3dcee453618794ffb01359d92f0c9e144f576591434ece9b39'),
 ('hon.automation_trial_booked(uuid,uuid,uuid,timestamp with time zone)',false,false,false,'search_path=pg_catalog, hon','8c640f7d5e3056dfde834c683dfea98e68c609d89cc6fa13c21a5d4eec9acbb6'),
@@ -5228,7 +5229,40 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   IF has_any_column_privilege('hon_runtime','hon.class_sessions','UPDATE') THEN RAISE EXCEPTION 'Runtime must not update class sessions'; END IF;
 END $$;
 -- End calendar cards exact verification.
--- Calendar settings exact verification (0568): three private forced-RLS tables with guard and no-truncate triggers, private
+-- Automation date triggers exact verification (AU-3 0574): one private forced-RLS scan receipt table nobody but the owner touches
+-- (forward-only guards), private candidate and birthday helpers, and one definer scan only the hon_automation_worker login (014) may call.
+DO $$ DECLARE f record; safe boolean; worker oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_automation_worker'); BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.automation_next_birthday(date,date)',false,false,false,'search_path=pg_catalog, hon','450419c70e89811c753abf222900b14d8c61c67dc1b09d76207d35f8c1440935'),
+('hon.automation_date_subject_open(uuid,uuid,text)',false,false,false,'search_path=pg_catalog, hon','05f33adb132e3dace679fc0b201d1a299022a7a0ed84eb620e181f5926d372b3'),
+('hon.automation_date_candidates(hon.automation_workflows,jsonb,date,text)',false,false,false,'search_path=pg_catalog, hon','556603ea44a0f76545615877370cd5353043043766e2741bf747e039e622b3d6'),
+('hon.scan_automation_schedules(integer)',true,false,true,'search_path=pg_catalog, hon','cd26c195ee65ab4454751a225fde6072a62521e8816166d762a57b76bffe4173')) e(signature,definer,runtime_allowed,worker_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND (worker IS NULL OR has_function_privilege(worker,p.oid,'EXECUTE')=f.worker_allowed)
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.is_grantable OR a.privilege_type<>'EXECUTE'
+          OR NOT ((a.grantee=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') AND f.runtime_allowed) OR (a.grantee=worker AND f.worker_allowed))))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe automation date trigger function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.automation_schedule_scans'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.automation_schedule_scans'::regclass)
+    OR has_table_privilege('hon_runtime','hon.automation_schedule_scans','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.automation_schedule_scans','SELECT,INSERT,UPDATE,REFERENCES')
+    OR (worker IS NOT NULL AND (has_table_privilege(worker,'hon.automation_schedule_scans','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege(worker,'hon.automation_schedule_scans','SELECT,INSERT,UPDATE,REFERENCES'))) THEN
+    RAISE EXCEPTION 'Unsafe automation date trigger table: automation_schedule_scans';
+  END IF;
+  -- Guard triggers: scan receipts never change and are never truncated.
+  IF (SELECT count(*) FROM pg_trigger g WHERE NOT g.tgisinternal AND g.tgenabled='O' AND (g.tgrelid::regclass::text,g.tgname,g.tgfoid::regproc::text) IN (
+      ('hon.automation_schedule_scans','guarded','hon.guard_automation_workflow_history'),('hon.automation_schedule_scans','no_truncate','hon.guard_automation_workflow_history'))) <> 2 THEN
+    RAISE EXCEPTION 'Unsafe automation date trigger table posture: guard triggers'; END IF;
+END $$;
+-- End automation date triggers exact verification.
+-- Calendar settings exact verification (0583): three private forced-RLS tables with guard and no-truncate triggers, private
 -- helpers and eight runtime entry points.
 DO $$ DECLARE f record; safe boolean; t text; BEGIN
   FOREACH t IN ARRAY ARRAY['calendar_share_settings','calendar_block_outs','share_calendars'] LOOP
@@ -5269,7 +5303,7 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
 END $$;
 -- End calendar settings exact verification.
 
--- Closed days for families exact verification (0575): the private closed-day helper and the two kiosk trial helpers it now
+-- Closed days for families exact verification (0584): the private closed-day helper and the two kiosk trial helpers it now
 -- filters (the parent booking helper is pinned in the 0329 section above); none is open to the runtime or PUBLIC.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES

@@ -1,10 +1,10 @@
-# Calendar settings: block-out dates, share links and QR codes (0568)
+# Calendar settings: block-out dates, share links and QR codes (0583)
 
 Owner request (David, 2026-11-19): Classes > Calendar gets a Settings tab like his Manus CRM, with Programs, Block-out Dates,
 Share Links and QR Codes. Share Links are public calendars a school can link to or embed: one per program, or a group of
 several programs under one link. Each has an on/off switch, a copyable link, copyable iframe embed code, edit and delete. The
 public page shows the school's name, address and phone, then "Choose a calendar" cards (age range, number of upcoming class
-times), then that calendar's class times. Migration number 0568 was allocated by the coordinator.
+times), then that calendar's class times. Migration number 0583 was allocated by the coordinator.
 
 Online booking from a shared calendar is a separate owner decision (asked 2026-11-19) and a separate PR. Until it lands, a
 public calendar shows the times and the school's phone number to call; it never writes anything.
@@ -44,7 +44,7 @@ No message, charge, CRM lead, student record, booking or AI. Nothing here deploy
 
 ## Plan
 
-1. Migration 0568: tables `calendar_share_settings`, `calendar_block_outs`, `share_calendars` (forced RLS, no runtime
+1. Migration 0583: tables `calendar_share_settings`, `calendar_block_outs`, `share_calendars` (forced RLS, no runtime
    table privilege, guard triggers for immutable identity and final states), commands `save_calendar_share_settings`,
    `save_calendar_block_out`, `remove_calendar_block_out`, `save_share_calendar`, `set_share_calendar_status`, reads
    `read_calendar_settings`, `read_school_calendar_block_outs`, `read_public_share_calendar`. 010 grants, 011 hashes,
@@ -55,18 +55,18 @@ No message, charge, CRM lead, student record, booking or AI. Nothing here deploy
    edit, delete, on/off), closed days on the calendar, and the public page `/calendars/[publicId]`.
 4. Unit tests, browser proof with screenshots, full test/check/build.
 
-## Closed days for families (0575)
+## Closed days for families (0584)
 
 Owner decision (David, 2026-11-19, decision card "Hide from families only"): a class whose school-local start date is inside
-an ACTIVE block-out of its own school is not offered to families, while staff keep the 0568 warn-and-continue behaviour.
+an ACTIVE block-out of its own school is not offered to families, while staff keep the 0583 warn-and-continue behaviour.
 
 - Parent app (0329 `hon.parent_class_booking_session_ok`): the choices read leaves the class out and booking it is refused with
   `PARENT_CLASS_BOOKING_NOT_OFFERED`, writing nothing. Existing bookings stay, and families can still cancel them.
 - Kiosk trial (0538 `hon.walkin_trial_session_open`, `hon.walkin_trial_classes`): the tablet does not list the class and a submit
   naming it is refused like any unavailable class (`CLASS_FULL`, nothing written).
-- Public shared calendar: already hides block-out days (0568).
+- Public shared calendar: already hides block-out days (0583).
 - Unchanged: staff booking, the staff calendar, ClassPass, owner-launch first class, school events and booking types.
 - Private helper `hon.class_session_on_closed_day(hon.class_sessions)` uses the session's own school and time zone. Signatures
-  are unchanged, so ACLs stay; 011 pins the new bodies (0329 section hash and a 0575 section).
+  are unchanged, so ACLs stay; 011 pins the new bodies (0329 section hash and a 0584 section).
 - Proof: closed-day checks added to `test-parent-class-booking-integrity.mjs` (section 4b) and
-  `test-walk-in-kiosk-trial-seats-integrity.mjs` (section 2b, plus the 0575 011 section).
+  `test-walk-in-kiosk-trial-seats-integrity.mjs` (section 2b, plus the 0584 011 section).

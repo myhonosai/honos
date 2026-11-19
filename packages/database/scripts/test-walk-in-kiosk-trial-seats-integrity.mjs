@@ -318,7 +318,7 @@ try {
   await refused(() => submit(TOKEN, trialVisit(S.demoClass, uniqueContact())), 409, 'CLASS_FULL', 'a demo class');
   ok(JSON.stringify(await counts()) === JSON.stringify(before), 'a demo class writes nothing');
 
-  // 2b. Closed days (0575): a trial class on a school-local date inside an ACTIVE block-out of this school is not listed on the
+  // 2b. Closed days (0584): a trial class on a school-local date inside an ACTIVE block-out of this school is not listed on the
   //     tablet and is refused at submit with nothing written; another school's block-out changes nothing; removing it lists it again.
   await classSession('holiday', 'a', { hoursAhead: 24 * 5, capacity: 5 });
   const holidayDay = (await sql('SELECT (starts_at AT TIME ZONE $2)::date::text d FROM hon.class_sessions WHERE id=$1', [S.holiday, LA])).rows[0].d;
@@ -397,7 +397,7 @@ try {
   for (const [startMark, endMark] of [['-- Walk-in kiosk trial seats exact verification (0538)', '-- End walk-in kiosk trial seats exact verification.'],
     ['-- Walk-in kiosk trial class exact verification (0537)', '-- End walk-in kiosk trial class exact verification.'],
     ['-- Parent class booking exact verification (0329)', '-- End parent class booking exact verification.'],
-    ['-- Closed days for families exact verification (0575)', '-- End closed days for families exact verification.']]) {
+    ['-- Closed days for families exact verification (0584)', '-- End closed days for families exact verification.']]) {
     const section = verify.split(startMark)[1]?.split(endMark)[0];
     ok(section, startMark);
     await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1;
