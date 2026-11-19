@@ -33,6 +33,16 @@ describe('parent API client', () => {
     expect(await api(leaky).announcements()).toEqual({ ok: false, state: 'unavailable' });
   });
 
+  it('reads the pro shop with no selector and refuses a link to another site', async () => {
+    const item = { productId: '11', title: 'Gloves', imageUrl: null, fromPrice: '19.50', url: 'https://dojo.myshopify.com/products/gloves' };
+    const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(200, { data: { schoolName: 'Dojo', available: true, currency: 'USD', products: [item] } }));
+    const result = await api(fetchImpl).proShop();
+    expect(result.ok && result.data.products[0]!.url).toBe(item.url);
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://api.example.test/v1/parent/pro-shop');
+    const evil = jest.fn().mockResolvedValue(jsonResponse(200, { data: { schoolName: 'Dojo', available: true, currency: 'USD', products: [{ ...item, url: 'https://evil.test/products/x' }] } }));
+    expect(await api(evil).proShop()).toEqual({ ok: false, state: 'unavailable' });
+  });
+
   it('reads the journey with a bearer session, no cookies and no selectors', async () => {
     const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(200, journeyBody()));
     const result = await api(fetchImpl).journey();

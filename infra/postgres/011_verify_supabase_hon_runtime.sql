@@ -5296,3 +5296,19 @@ DO $$ DECLARE f record; safe boolean; BEGIN
     RAISE EXCEPTION 'hon.school_announcements must carry exactly its two guards'; END IF;
 END $$;
 -- End school announcements exact verification.
+-- Parent pro shop exact verification (0581): a private scope helper and one runtime read of the mirrored Shopify products.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.parent_pro_shop_scope(text)',true,false,'search_path=pg_catalog, hon','4e21712b1b5c0e86d01c14f91ae3a39fa900e29a6c5abd709ed9024ad212612a'),
+('hon.read_parent_pro_shop(text)',true,true,'search_path=pg_catalog, hon','ccea6dd5c412d4b41958c338e584b92c79fc540661ca92f0b2ef46074e5f4e7f')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe parent pro shop function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End parent pro shop exact verification.
