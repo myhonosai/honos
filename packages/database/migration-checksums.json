@@ -350,6 +350,7 @@
     "0553_school_a2p_registrations.sql": "fd25dc1f0f73734228a886d6b0e47dd8d804aa0083b8947ad931041a7e5bc691",
     "0550_ai_text_proposals.sql": "166369680863c3e7d300d3ce5db6a48cbe863b0e5761cbabf18cb8bec57857b1",
     "0556_school_calls.sql": "aa8a430ed111153ae4613811fd7184a2e1b5ba27ed6f3bbbd719828226b6c536",
-    "0561_school_voice_apps.sql": "a8ec7c5b68fd71653b3ed4630500a82b33dcf2c9fb858de17861bd8ec209acef"
+    "0561_school_voice_apps.sql": "a8ec7c5b68fd71653b3ed4630500a82b33dcf2c9fb858de17861bd8ec209acef",
+    "0562_hq_calls.sql": "22a38a75e724d363371a71b406d6f54dd1257ce13e37e3cef274908c2ff5a410"
   }
 }

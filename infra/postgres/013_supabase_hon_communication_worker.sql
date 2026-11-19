@@ -203,4 +203,18 @@ BEGIN
 END;
 $$;
 
+-- 0562 HQ calls: the HQ voice app, connect an HQ browser call, route a call to the HQ number, record progress and
+-- voicemail, delete voicemail after 90 days (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.route_hq_incoming_call(text,text,text)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.hq_needs_voice_app(), hon.begin_hq_voice_app(integer), hon.record_hq_voice_app_twiml(uuid, text),
+      hon.complete_hq_voice_app(uuid, text, text, text), hon.read_hq_voice_app(), hon.connect_hq_client_call(uuid, text, text),
+      hon.route_hq_incoming_call(text, text, text), hon.record_hq_call_status(text, text, text, integer, timestamptz),
+      hon.record_hq_call_voicemail(text, text, integer), hon.read_hq_call_recordings_due(integer), hon.mark_hq_call_recording_deleted(uuid, text)
+      TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 COMMIT;
