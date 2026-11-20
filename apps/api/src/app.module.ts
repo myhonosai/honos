@@ -290,6 +290,8 @@ import { EXPO_PUSH_TRANSPORT, ExpoPushClient } from './parent-push/expo-push-cli
 import { PARENT_PUSH_WORKER_STORE, ParentPushScheduler, ParentPushWorker, ParentPushWorkerDatabase } from './parent-push/parent-push-worker.js';
 import { ParentProShopController, ParentProShopReadGuard } from './pro-shop/parent-pro-shop.controller.js';
 import { ParentProShopService } from './pro-shop/parent-pro-shop.service.js';
+import { ParentAttendanceStreaksController, ParentAttendanceStreaksReadGuard } from './attendance-streaks/parent-attendance-streaks.controller.js';
+import { ParentAttendanceStreaksService } from './attendance-streaks/parent-attendance-streaks.service.js';
 import { ParentCheckoutCancelGuard, ParentCheckoutConfirmGuard, ParentCheckoutController, ParentCheckoutOrderGuard, ParentCheckoutStartGuard } from './family-checkout/parent-checkout.controller.js';
 import { ParentCheckoutService } from './family-checkout/parent-checkout.service.js';
 import { ConversationCreateLeadGuard, ConversationLinkGuard, ConversationMarkReadGuard, ConversationReadGuard, ConversationReplyGuard, ConversationUpdateGuard, SchoolConversationsController } from './conversations/school-conversations.controller.js';
@@ -562,6 +564,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolAnnouncementsController,
     ParentPushController,
     ParentProShopController,
+    ParentAttendanceStreaksController,
     ParentCheckoutController,
     SchoolConversationsController,
     ContactMessagesController,
@@ -781,6 +784,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentPushScheduler,
     ParentProShopService,
     ParentProShopReadGuard,
+    ParentAttendanceStreaksService,
+    ParentAttendanceStreaksReadGuard,
     ParentCheckoutService, ParentCheckoutOrderGuard, ParentCheckoutStartGuard, ParentCheckoutConfirmGuard, ParentCheckoutCancelGuard,
     SchoolConversationsService,
     ContactMessagesService,

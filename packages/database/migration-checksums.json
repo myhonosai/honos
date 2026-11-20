@@ -363,6 +363,7 @@
     "0597_shopify_finance.sql": "d1495ba5027d402cc3ff21c0ba7d38061505511453323a3108e3a300e04cce94",
     "0598_family_checkout_orders.sql": "a4debf59bcbf49c684c439e1bc427c6800a105b3f72a501a36d3d38fd9c0fb13",
     "0600_shopify_theme_drafts.sql": "1687467219e72d2445ddd299f7b534a30e5854600b824037b5abf1686e80c08f",
-    "0601_parent_announcement_push.sql": "199420cc54a86f7bcc8dc2d80e419053802d9e2acf3951826faa3910dd2cc23b"
+    "0601_parent_announcement_push.sql": "199420cc54a86f7bcc8dc2d80e419053802d9e2acf3951826faa3910dd2cc23b",
+    "0602_parent_attendance_streaks.sql": "af5aa6f5ba2bc9ffd345d92124c09514bef0e30ad125819d2f4f683a113c98eb"
   }
 }

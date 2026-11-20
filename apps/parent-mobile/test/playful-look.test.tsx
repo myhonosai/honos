@@ -64,7 +64,7 @@ describe('Playful look (R1)', () => {
 
   it('small text colours meet WCAG AA 4.5:1 on their backgrounds (light scheme)', () => {
     const l = palette.light;
-    for (const [fg, bg] of [[l.success, l.successSoft], [l.warning, l.warningSoft], [l.danger, l.dangerSoft], [l.glowEdge, l.surface], [l.accentEdge, l.accentSoft], [l.accentEdge, l.surface], [l.muted, l.surface], [l.limeText, l.lime]]) {
+    for (const [fg, bg] of [[l.success, l.successSoft], [l.warning, l.warningSoft], [l.danger, l.dangerSoft], [l.glowEdge, l.surface], [l.accentEdge, l.accentSoft], [l.accentEdge, l.surface], [l.muted, l.surface], [l.limeText, l.lime], [l.muted, l.coralSoft], [l.text, l.coralSoft]]) {
       expect(contrast(fg!, bg!)).toBeGreaterThanOrEqual(4.5);
     }
   });

@@ -23,6 +23,7 @@ import {
   type ParentInvoicePayResult, type ParentInvoicePayStart, type ParentInvoicePayments,
 } from '@hon/contracts/parent-invoice-pay';
 import { verifyParentSchoolAnnouncements, type ParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
+import { verifyParentAttendanceStreaks, type ParentAttendanceStreaks } from '@hon/contracts/parent-attendance-streaks';
 import { verifyParentProShop, type ParentProShop } from '@hon/contracts/parent-pro-shop';
 import {
   validateRegisterParentPushDeviceInput, validateUnregisterParentPushDeviceInput, verifyParentPushDeviceReceipt, verifyParentPushStatus, verifyParentPushUnregisterReceipt,
@@ -190,6 +191,8 @@ export function createParentApi(options: ParentApiOptions) {
     /** 0530: the family's open invoices the parent may pay on the school's own processor page (test mode only). */
     /** The school's live announcements (0576) for the one family this sign-in belongs to. No school or family id is sent. */
     announcements: (): Promise<ParentRead<ParentSchoolAnnouncements>> => get('/v1/parent/announcements', dataOf(verifyParentSchoolAnnouncements)),
+    /** Each child's weekly attendance streak (0602) for the one family this sign-in belongs to: name and number only. */
+    attendanceStreaks: (): Promise<ParentRead<ParentAttendanceStreaks>> => get('/v1/parent/attendance-streaks', dataOf(verifyParentAttendanceStreaks)),
     /** 0601: whether the school's server sends notifications at all (the app asks for permission only then). */
     pushStatus: (): Promise<ParentRead<ParentPushStatus>> => get('/v1/parent/push-devices/status', dataOf(verifyParentPushStatus)),
     /** 0601: this phone's Expo push token for announcement notifications. The server decides the person and school. */
