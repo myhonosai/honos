@@ -4647,6 +4647,23 @@ DO $$ DECLARE r text; f text; t text; col text; BEGIN
 END $$;
 -- End 0583 calendar settings grants.
 
+-- 0585 school message history and opted-out list (Texts and Email pages TE1): two read-only staff entry points. Every
+-- helper stays migration-owner only; no table privilege is granted.
+DO $$ DECLARE r text; f text;
+BEGIN
+  IF to_regprocedure('hon.read_school_message_history(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0585 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.require_school_messages_actor(text,text)','hon.school_messages_args_ok(jsonb,text[])','hon.school_message_outcome(text)',
+      'hon.read_school_message_history(text,jsonb)','hon.read_school_opted_out_contacts(text,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_message_history(text,jsonb) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.read_school_opted_out_contacts(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;
+
 -- 0587 parent app curriculum (cycles, app settings, staff commands): two runtime entry points. The four new tables, the new
 -- curriculum_resources.cycle_id column and every helper stay migration-owner only.
 DO $$ DECLARE r text; f text; t text; BEGIN

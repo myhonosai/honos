@@ -288,6 +288,8 @@ import { ConversationCreateLeadGuard, ConversationLinkGuard, ConversationMarkRea
 import { SchoolConversationsService } from './conversations/school-conversations.service.js';
 import { ContactEmailResendGuard, ContactHistoryReadGuard, ContactMessagesController } from './conversations/contact-messages.controller.js';
 import { ContactMessagesService } from './conversations/contact-messages.service.js';
+import { SchoolMessageHistoryReadGuard, SchoolMessagesController, SchoolOptedOutReadGuard } from './communication/school-messages.controller.js';
+import { SchoolMessagesService } from './communication/school-messages.service.js';
 import { ConversationAiController, ConversationAiFileGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard, ConversationAiKnowledgeGuard, ConversationAiProgramHqController, ConversationAiReadGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard } from './conversations/conversation-ai.controller.js';
 import { ConversationAiProgramService, ConversationAiService } from './conversations/conversation-ai.service.js';
 import { ParentMessageHistoryController, ParentMessageHistoryReadGuard } from './families/parent-message-history.controller.js';
@@ -551,6 +553,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentProShopController,
     SchoolConversationsController,
     ContactMessagesController,
+    SchoolMessagesController,
     ConversationAiController,
     ConversationAiProgramHqController,
     ParentMessageHistoryController,
@@ -758,6 +761,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ContactMessagesService,
     ContactHistoryReadGuard,
     ContactEmailResendGuard,
+    SchoolMessagesService,
+    SchoolMessageHistoryReadGuard,
+    SchoolOptedOutReadGuard,
     ConversationAiService,
     ConversationAiProgramService,
     ConversationAiReadGuard, ConversationAiKnowledgeGuard, ConversationAiFileGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard,
