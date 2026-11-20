@@ -3639,7 +3639,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.parent_class_booking_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','cb18dc6356494af40a5b1af73147d4dd8d1bbafefab492439f51180e63fcac15'),
 ('hon.parent_class_booking_child_ok(uuid,uuid)',true,false,'search_path=pg_catalog, hon','237a329c4db7c485ffa5521d1a4028ed443de87e157873ac4e2b17fdc11110d7'),
--- 0584 replaced the body of hon.parent_class_booking_session_ok (classes on a closed day are not offered); its hash below is the 0584 body.
+-- 0599 replaced the body of hon.parent_class_booking_session_ok (classes on a closed day are not offered); its hash below is the 0599 body.
 ('hon.parent_class_booking_session_ok(uuid,hon.class_sessions)',true,false,'search_path=pg_catalog, hon','5e10f242e88a5bd527e19cfe7027388305257a36ee371ceca551832833cb948a'),
 ('hon.parent_class_booking_seats(uuid)',true,false,'search_path=pg_catalog, hon','61bfcc57c3e31a23b3a689150ead7d7d43c724db47483cbac8a3f74dcf2e3002'),
 ('hon.parent_class_booking_json(hon.class_bookings,hon.class_sessions)',true,false,'search_path=pg_catalog, hon','d753781cf05db78ddc2525f62e8ecf36aaa4b0a63432578c7155bed238c1ff37'),
@@ -5354,7 +5354,7 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
 END $$;
 -- End calendar settings exact verification.
 
--- Closed days for families exact verification (0584): the private closed-day helper and the two kiosk trial helpers it now
+-- Closed days for families exact verification (0599): the private closed-day helper and the two kiosk trial helpers it now
 -- filters (the parent booking helper is pinned in the 0329 section above); none is open to the runtime or PUBLIC.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
