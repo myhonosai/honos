@@ -4832,3 +4832,27 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.save_journey_recommendation(text,jsonb,text,uuid,uuid),hon.set_journey_recommendation_status(text,jsonb,text,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
+-- 0604 family referrals: private helpers and five tables; runtime executes the seven entry points only
+-- (staff read/configure/reward, parent read/link, public read/submit).
+DO $$ DECLARE r text; f text; t text; BEGIN
+  IF to_regprocedure('hon.submit_family_referral(text,jsonb,text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0604 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.guard_family_referral_rows()','hon.require_school_referral_actor(text,text)','hon.school_referral_program_json(uuid,uuid)',
+    'hon.family_referral_display(text,integer)','hon.family_referral_staff_json(hon.family_referrals)','hon.read_school_referrals(text)','hon.family_referral_text(jsonb,integer,boolean,boolean)',
+    'hon.school_referral_begin(uuid,text,text)','hon.configure_school_referral_program(text,jsonb,text,uuid,uuid)',
+    'hon.decide_family_referral_reward(text,uuid,jsonb,text,uuid,uuid)','hon.family_referral_scope(text,boolean)',
+    'hon.family_referral_program_live(uuid,uuid)','hon.read_parent_referrals(text)','hon.issue_parent_referral_link(text)',
+    'hon.family_referral_code_live(text)','hon.read_public_referral(text)','hon.submit_family_referral(text,jsonb,text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['school_referral_programs','school_referral_program_versions','school_referral_requests','family_referral_codes','family_referrals'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_referrals(text),hon.configure_school_referral_program(text,jsonb,text,uuid,uuid),
+      hon.decide_family_referral_reward(text,uuid,jsonb,text,uuid,uuid),hon.read_parent_referrals(text),hon.issue_parent_referral_link(text),
+      hon.read_public_referral(text),hon.submit_family_referral(text,jsonb,text) TO hon_runtime;
+  END IF;
+END $$;
