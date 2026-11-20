@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '../ui/text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import { bookingLabel, childSummaries, formatClassTime, nextClass } from '../hom
 import { beltPath, eianCheer } from '../home/belt-path';
 import { BeltPathView } from '../home/BeltPathView';
 import { giftsFor, RecommendationSheet, useRecommendations, type JourneyGo } from '../home/Recommendations';
+import type { ParentJourneyResponseInput } from '@hon/contracts/journey-recommendations';
 import type { FamilyJourneyRecommendation } from '@hon/contracts/journey-recommendations';
 import { Icon } from '../ui/icons';
 import { Body, Button, Card, Pill, Section, Title } from '../ui/parts';
@@ -22,12 +23,25 @@ const ACCESS_LABEL: Record<ParentJourneyView['accessLevel'], string> = {
 };
 
 export function HomeScreen({ onNavigate, onJourneyGo }: { onNavigate: (tab: 'Schedule' | 'Eian' | 'Messages') => void; onJourneyGo?: (go: JourneyGo) => void }) {
-  const { state, selection, select, refresh, now, api } = useFamily();
+  const { state, selection, select, refresh, now, api, newKey } = useFamily();
   const announcements = useAnnouncements(api, state.status === 'ready' ? state.view : null);
   const streaks = useStreaks(api, state.status === 'ready' ? state.view : null);
   const recommendations = useRecommendations(api, state.status === 'ready' ? state.view : null);
-  const [gift, setGift] = useState<FamilyJourneyRecommendation | null>(null);
+  const [gift, setGift] = useState<{ item: FamilyJourneyRecommendation; child: string } | null>(null);
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  // 0608: one key per answer, reused if the same answer is tried again. Viewers only read, so nothing is recorded for them.
+  const answerKeys = useRef(new Map<string, string>());
+  const guardian = state.status === 'ready' && state.view.accessLevel !== 'VIEWER';
+  const answer = (id: string, input: ParentJourneyResponseInput) => {
+    if (!guardian) return;
+    const slot = `${id}/${input.kind}/${input.kind === 'INTERESTED' ? input.childName.toLowerCase() : ''}`;
+    try {
+      let key = answerKeys.current.get(slot);
+      if (!key) { key = newKey(); answerKeys.current.set(slot, key); }
+      // Best effort: the sheet already did what the family asked; an unknown outcome is retried with the same key next time.
+      void api.respondJourneyRecommendation(id, input, key).catch(() => undefined);
+    } catch { /* no key source: nothing is recorded */ }
+  };
   const [openChild, setOpenChild] = useState<number | null>(null);
   const insets = useSafeAreaInsets();
   const c = useColors();
@@ -50,9 +64,13 @@ export function HomeScreen({ onNavigate, onJourneyGo }: { onNavigate: (tab: 'Sch
       </View>
       <FamilyGate state={state} />
       {state.status === 'ready' ? <Ready view={state.view} timeZone={state.timeZone} /> : null}
-      <RecommendationSheet item={gift} onClose={() => setGift(null)}
-        onNotNow={id => { setHidden(prev => new Set([...prev, id])); setGift(null); }}
-        onGo={go => { setGift(null); if (onJourneyGo) onJourneyGo(go); else if (go.tab === 'Messages') onNavigate('Messages'); }} />
+      <RecommendationSheet item={gift?.item ?? null} childName={gift?.child ?? null} tellsSchool={guardian} onClose={() => setGift(null)}
+        onNotNow={id => { setHidden(prev => new Set([...prev, id])); setGift(null); answer(id, { kind: 'HIDDEN' }); }}
+        onGo={(go, item, who) => {
+          setGift(null);
+          if (who) answer(item.recommendationId, { kind: 'INTERESTED', childName: who.childName, sibling: who.sibling });
+          if (onJourneyGo) onJourneyGo(go); else if (go.tab === 'Messages') onNavigate('Messages');
+        }} />
     </ScrollView>
   );
 
@@ -106,7 +124,7 @@ export function HomeScreen({ onNavigate, onJourneyGo }: { onNavigate: (tab: 'Sch
           return (
             <View key={ch.key} style={{ marginBottom: space.lg }}>
               <BeltPathView childName={ch.name} program={ch.program} rank={ch.rank} path={path} cheer={eianCheer(first, path)} onOpen={() => setOpenChild(ch.index)}
-                gifts={giftsFor(recommendations, ch.name, hidden)} onGift={setGift} />
+                gifts={giftsFor(recommendations, ch.name, hidden)} onGift={item => setGift({ item, child: ch.name })} />
               {ch.latestAchievement ? <View style={{ marginTop: space.sm }}><Pill tone="good" text={`★ ${ch.latestAchievement}`} /></View> : null}
             </View>
           );

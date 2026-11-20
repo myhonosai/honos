@@ -5558,50 +5558,55 @@ BEGIN
 END $$;
 -- End Shopify finance exact verification.
 
--- Shopify theme drafts exact verification (0600, TB1): four runtime entry points (definer, owner-safe, exact bodies);
--- both tables forced-RLS with no policy and no runtime privilege; the guard, the end-of-connection trigger and every
--- helper stay closed. HON writes only to its own UNPUBLISHED copy of the live theme.
+-- Shopify storefront blocks exact verification (0609, TB2): the 0600 theme draft objects are gone; five runtime entry points
+-- (definer, owner-safe, exact bodies); the table forced-RLS with no policy and no runtime privilege; the end-of-connection
+-- trigger and every helper stay closed.
 DO $$ DECLARE f text; t text;
-  entry text[]:=ARRAY['hon.read_shopify_theme_workspace(text,uuid)','hon.begin_shopify_theme_work(text,jsonb)',
-    'hon.rotate_shopify_theme_credential(text,jsonb)','hon.finish_shopify_theme_work(text,jsonb)'];
+  entry text[]:=ARRAY['hon.read_shopify_storefront(text,uuid)','hon.save_shopify_storefront(text,jsonb)',
+    'hon.begin_shopify_storefront_publish(text,jsonb)','hon.rotate_shopify_storefront_credential(text,jsonb)',
+    'hon.finish_shopify_storefront_publish(text,jsonb)'];
 BEGIN
-  FOR f,t IN SELECT * FROM (VALUES ('hon.read_shopify_theme_workspace(text,uuid)','6748c5d7799d195cb990470742d74709'),
-      ('hon.begin_shopify_theme_work(text,jsonb)','e41565ac93075f538760ce804dafa938'),('hon.rotate_shopify_theme_credential(text,jsonb)','bee1cf30f3bc544b01db650d72eaca63'),
-      ('hon.finish_shopify_theme_work(text,jsonb)','2269de63b2256fc3444eaec7e2396b60'),('hon.guard_shopify_theme_edit()','f6153ff9e72de1efc78666eba85be584'),
-      ('hon.shopify_theme_on_end()','075be5c8529a27a352d1ea0141853e76'),('hon.shopify_theme_leased(uuid,uuid,jsonb)','8e34d566dc6346edb62167f6038bda6f'),
-      ('hon.shopify_theme_locked(uuid)','671cc926d1ed2064f8c0204066b2b754'),('hon.shopify_theme_files_ok(jsonb)','c427b24ebca44b3a40b6b004e9b3c992'),
-      ('hon.shopify_theme_recipe_ok(text,jsonb)','4347450901fa4e6fd4d3880e13c8d21e')) v LOOP
-    IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM t THEN RAISE EXCEPTION 'Shopify theme function body drift: %',f; END IF;
+  IF to_regclass('hon.shopify_theme_drafts') IS NOT NULL OR to_regclass('hon.shopify_theme_edits') IS NOT NULL
+    OR EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon'
+      AND (p.proname LIKE '%shopify_theme%' OR p.proname='guard_shopify_theme_edit')) THEN
+    RAISE EXCEPTION 'Retired Shopify theme draft objects still present'; END IF;
+  FOR f,t IN SELECT * FROM (VALUES
+    ('hon.begin_shopify_storefront_publish(text,jsonb)','8210e62b007e22f632e58018df5e6f75'),
+    ('hon.finish_shopify_storefront_publish(text,jsonb)','03b33ede60a7c6c1659bbb6514635164'),
+    ('hon.read_shopify_storefront(text,uuid)','9330abfc892a6b516ff58de71f0cbb3b'),
+    ('hon.rotate_shopify_storefront_credential(text,jsonb)','62c7d37465cec0291df0721eb1ce76e1'),
+    ('hon.save_shopify_storefront(text,jsonb)','9983c73ed6ad1c07f8ad2700fedd9135'),
+    ('hon.shopify_storefront_leased(uuid,uuid,jsonb)','9adc2553349d84f62770148622a97d63'),
+    ('hon.shopify_storefront_locked(uuid)','10a31c56278de690ab7ff5f403c81eea'),
+    ('hon.shopify_storefront_on_end()','c48bd1eec43e4d2768fd5a74df1796eb'),
+    ('hon.shopify_storefront_settings_ok(jsonb)','92c570e3a4c0197eff1b190f6ce48257')
+  ) v LOOP
+    IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM t THEN RAISE EXCEPTION 'Shopify storefront function body drift: %',f; END IF;
   END LOOP;
   FOREACH f IN ARRAY entry LOOP
     IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
         AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
         AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
           AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
-      RAISE EXCEPTION 'Unsafe Shopify theme entry point: %',f; END IF;
+      RAISE EXCEPTION 'Unsafe Shopify storefront entry point: %',f; END IF;
   END LOOP;
   FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-    WHERE n.nspname='hon' AND p.proname IN ('guard_shopify_theme_edit','shopify_theme_on_end','shopify_theme_recipe_ok','shopify_theme_files_ok',
-      'shopify_theme_name_ok','shopify_theme_edit_json','shopify_theme_locked','shopify_theme_leased') LOOP
+    WHERE n.nspname='hon' AND p.proname IN ('shopify_storefront_on_end','shopify_storefront_settings_ok','shopify_storefront_locked','shopify_storefront_leased') LOOP
     IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
         OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
-      RAISE EXCEPTION 'Unsafe Shopify theme helper: %',f; END IF;
+      RAISE EXCEPTION 'Unsafe Shopify storefront helper: %',f; END IF;
   END LOOP;
-  FOREACH t IN ARRAY ARRAY['hon.shopify_theme_drafts','hon.shopify_theme_edits'] LOOP
-    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
-      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=t::regclass)
-      OR has_table_privilege('hon_runtime',t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
-      OR has_any_column_privilege('hon_runtime',t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
-      RAISE EXCEPTION 'Unsafe Shopify theme table: %',t; END IF;
-  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.shopify_storefronts'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.shopify_storefronts'::regclass)
+    OR has_table_privilege('hon_runtime','hon.shopify_storefronts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.shopify_storefronts','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe Shopify storefront table'; END IF;
   IF (SELECT count(*) FROM pg_trigger WHERE tgenabled='O' AND (
-      (tgrelid='hon.shopify_theme_drafts'::regclass AND tgname='shopify_theme_drafts_no_truncate' AND tgfoid='hon.guard_shopify()'::regprocedure)
-      OR (tgrelid='hon.shopify_theme_edits'::regclass AND tgname='shopify_theme_edits_no_truncate' AND tgfoid='hon.guard_shopify()'::regprocedure)
-      OR (tgrelid='hon.shopify_theme_edits'::regclass AND tgname='shopify_theme_edits_guard' AND tgfoid='hon.guard_shopify_theme_edit()'::regprocedure)
-      OR (tgrelid='hon.shopify_connections'::regclass AND tgname='shopify_connection_theme_end' AND tgfoid='hon.shopify_theme_on_end()'::regprocedure))) <> 4 THEN
-    RAISE EXCEPTION 'Shopify theme triggers missing'; END IF;
+      (tgrelid='hon.shopify_storefronts'::regclass AND tgname='shopify_storefronts_no_truncate' AND tgfoid='hon.guard_shopify()'::regprocedure)
+      OR (tgrelid='hon.shopify_connections'::regclass AND tgname='shopify_connection_storefront_end' AND tgfoid='hon.shopify_storefront_on_end()'::regprocedure))) <> 2 THEN
+    RAISE EXCEPTION 'Shopify storefront triggers missing'; END IF;
 END $$;
--- End Shopify theme drafts exact verification.
+-- End Shopify storefront blocks exact verification.
 -- Parent announcement push exact verification (0601): private token check, guards, live-person check and scope, two runtime entry points,
 -- four worker functions only the communication worker may run, and three private forced-RLS tables nobody else can touch.
 DO $$ DECLARE f record; safe boolean; t text; worker oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_communication_worker'); BEGIN
@@ -5683,7 +5688,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.journey_recommendation_reached(hon.journey_recommendations,hon.student_curriculum_enrollments)',true,false,'search_path=pg_catalog, hon','1277bbbd3f46cea65d994f1a7161fecdfeb5b6ff5fa24c2675592a0bb5747e58'),
 ('hon.journey_child_signed_up(hon.journey_recommendations,uuid)',true,false,'search_path=pg_catalog, hon','325bc4ea04d1eb73bfff6610cb63ad1097002ecec7f745cd1f4c5db493b66e13'),
 ('hon.journey_recommendation_staff_json(hon.journey_recommendations)',true,false,'search_path=pg_catalog, hon','8fcdd822892ac24edb871c1ec3d93bdc60fcde003e471795afbd83508e377566'),
-('hon.read_parent_journey_recommendations(text)',true,true,'search_path=pg_catalog, hon','dd913ed82599714afb8959b8289db6d8deaaa3f9623e6c7b31374f18be774ce4'),
+('hon.read_parent_journey_recommendations(text)',true,true,'search_path=pg_catalog, hon','bd19ca704cb6c0e49ea57c5110bdc425c91557b56e8ec23d9a92c041f4cc108a'),
 ('hon.read_journey_recommendations(text)',true,true,'search_path=pg_catalog, hon','6869676977b79340531b0272bc689f96c658c1a3b04c12ebf883992e1527f496'),
 ('hon.save_journey_recommendation(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','13bb3676bfed9b04f738437f3468bdbf4a751bd0686ce5e8ef685599af4660f3'),
 ('hon.set_journey_recommendation_status(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','7f557467fb7287a257d9b3c5a947abff8bc830c85de74830b742100aab5323b1')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
@@ -5804,6 +5809,40 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END LOOP;
 END $$;
 -- End closed days for families exact verification.
+-- Journey recommendation responses exact verification (0608): three private helpers (immutability guard, name rule, receipt),
+-- two runtime entry points, the 0603 family read replaced to leave out hidden recommendations (hash above), and a private
+-- forced-RLS table with exactly its two guards and its two once-only indexes.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_journey_recommendation_response()',false,false,'search_path=pg_catalog','1f25c0e55ae475781467d2d48c98797f31001ec00c000d282e607a5a055c55e0'),
+('hon.journey_child_name_ok(text)',false,false,'search_path=pg_catalog','82c93b3ee7656d0fa5c3ae878a2b431f1c977112cf75dff03dcb038ce3a2c041'),
+('hon.journey_response_json(hon.journey_recommendation_responses,boolean)',false,false,'search_path=pg_catalog','2000bd7a8aa66228adafc90d547feff3a6008547e7ae9b2b382b8ba2af0db30c'),
+('hon.respond_parent_journey_recommendation(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','b49a9c6439ff1f55d66145d161ecb19a576b6893a4b54fa8c701d0402556bc1f'),
+('hon.read_journey_recommendation_interest(text)',true,true,'search_path=pg_catalog, hon','4db00330b9c19c2314878a0cea80df1c6ce8d6f2252897a0d2f4ad967cb8523c')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe journey recommendation response function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.journey_recommendation_responses'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.journey_recommendation_responses'::regclass)
+    OR has_table_privilege('hon_runtime','hon.journey_recommendation_responses','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.journey_recommendation_responses','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe journey recommendation responses table'; END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.journey_recommendation_responses'::regclass AND NOT tgisinternal AND tgenabled='O'
+      AND tgname IN ('journey_recommendation_responses_immutable','journey_recommendation_responses_no_truncate')
+      AND tgfoid='hon.guard_journey_recommendation_response()'::regprocedure)<>2
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.journey_recommendation_responses'::regclass AND NOT tgisinternal)<>2 THEN
+    RAISE EXCEPTION 'hon.journey_recommendation_responses must carry exactly its two guards'; END IF;
+  IF (SELECT count(*) FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE i.indrelid='hon.journey_recommendation_responses'::regclass AND i.indisunique
+      AND i.indisvalid AND i.indpred IS NOT NULL AND c.relname IN ('journey_recommendation_responses_hidden_once','journey_recommendation_responses_interest_once'))<>2 THEN
+    RAISE EXCEPTION 'hon.journey_recommendation_responses must keep its once-only indexes'; END IF;
+END $$;
+-- End journey recommendation responses exact verification.
 -- Parent app curriculum read exact verification (0610): the private child entries helper and two runtime entry points.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES

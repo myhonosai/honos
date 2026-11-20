@@ -16,6 +16,10 @@ export class ParentJourneyRecommendationsReadGuard extends MembershipActivationH
   protected override readonly command: string = 'parent.journey_recommendations.read';
 }
 @Injectable()
+export class ParentJourneyRecommendationsRespondGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'parent.journey_recommendations.respond';
+}
+@Injectable()
 export class JourneyRecommendationsReadGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'journey_recommendations.read';
 }
@@ -47,6 +51,17 @@ export class ParentJourneyRecommendationsController {
     noSelectors(request, query);
     return { data: await this.recommendations.parentRead(request.honIdentity!.externalSubject) };
   }
+
+  /** 0608: "Not now" (HIDDEN) or "See how to join" (INTERESTED) for one recommendation the family sees now. */
+  @Post(':recommendationId/response')
+  @HttpCode(200)
+  @UseGuards(ParentJourneyRecommendationsRespondGuard)
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  async respond(@Param('recommendationId') recommendationId: string, @Query() query: Record<string, unknown>, @Body() body: unknown, @Req() request: HonRequest) {
+    noSelectors(request, query);
+    return { data: await this.recommendations.parentRespond(request.honIdentity!.externalSubject, recommendationId, body) };
+  }
 }
 
 /**
@@ -67,6 +82,18 @@ export class JourneyRecommendationsController {
     if (key !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
     const context = await this.context(request, organizationId, schoolId, '');
     return { data: await this.recommendations.list(context), meta: { requestId: context.requestId } };
+  }
+
+  /** 0608: families who tapped "See how to join", newest first. */
+  @Get('interest')
+  @UseGuards(JourneyRecommendationsReadGuard)
+  @Header('Cache-Control', 'private, no-store')
+  async interest(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Query() query: Record<string, unknown>, @Headers('idempotency-key') key: string | undefined, @Req() request: HonRequest) {
+    noSelectors(request, query);
+    if (key !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
+    const context = await this.context(request, organizationId, schoolId, '');
+    return { data: await this.recommendations.interest(context), meta: { requestId: context.requestId } };
   }
 
   @Post()
