@@ -68,7 +68,7 @@ The share link is `HON_PUBLIC_ORIGIN + "/refer/" + code`, built by the API on ea
 - Automatic rewards (credit to the family's invoices, tuition credit, gift cards). Would need David's commercial decision.
 - Referral contests and leaderboards for families (vision 14.2).
 - Sending messages to the friend. HON sends nothing; the family shares the link themselves.
-- Showing the referrer in the CRM lead card (the staff Referrals page links to each lead).
+- Showing the referrer in the CRM lead card. The staff Referrals page names each friend and their lead status; staff open the lead from Leads.
 
 ## Slices
 

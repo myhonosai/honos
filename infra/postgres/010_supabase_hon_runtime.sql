@@ -4572,6 +4572,7 @@ DO $$ DECLARE r text; f text; BEGIN
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
   END LOOP;
 END $$;
+
 -- 0576 school announcements: private helpers and one private table, four runtime entry points (parent read; staff list, post, take down).
 DO $$ DECLARE r text; f text; BEGIN
   IF to_regprocedure('hon.withdraw_school_announcement(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0576 first'; END IF;
@@ -4589,6 +4590,7 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.publish_school_announcement(text,jsonb,text,uuid,uuid),hon.withdraw_school_announcement(text,jsonb,text,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
+
 -- 0581 parent pro shop: one private scope helper and one runtime entry point (parent read of the school's mirrored Shopify products).
 DO $$ DECLARE r text; f text; BEGIN
   IF to_regprocedure('hon.read_parent_pro_shop(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0581 first'; END IF;
@@ -4684,6 +4686,7 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+
 -- 0594 HON reads paper import photos on the AI team's route: six runtime entry points; the plan guard, the proposal
 -- lookup, the reading actor and the outcome note are migration-owner only.
 DO $$ DECLARE r text; f text;
@@ -4830,6 +4833,7 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.save_journey_recommendation(text,jsonb,text,uuid,uuid),hon.set_journey_recommendation_status(text,jsonb,text,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
+
 -- 0604 family referrals: private helpers and five tables; runtime executes the seven entry points only
 -- (staff read/configure/reward, parent read/link, public read/submit).
 DO $$ DECLARE r text; f text; t text; BEGIN
@@ -4852,5 +4856,28 @@ DO $$ DECLARE r text; f text; t text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_school_referrals(text),hon.configure_school_referral_program(text,jsonb,text,uuid,uuid),
       hon.decide_family_referral_reward(text,uuid,jsonb,text,uuid,uuid),hon.read_parent_referrals(text),hon.issue_parent_referral_link(text),
       hon.read_public_referral(text),hon.submit_family_referral(text,jsonb,text) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0605 parent app curriculum (cycles, app settings, staff commands): two runtime entry points. The four new tables, the new
+-- curriculum_resources.cycle_id column and every helper stay migration-owner only.
+DO $$ DECLARE r text; f text; t text; BEGIN
+  IF to_regprocedure('hon.mutate_parent_app_curriculum(text,text,uuid,uuid,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0605 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['curriculum_cycles','curriculum_app_settings','curriculum_app_events','curriculum_app_requests'] LOOP
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE format('REVOKE ALL (cycle_id) ON hon.curriculum_resources FROM %I',r); END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.curriculum_app_name_ok(text,integer)','hon.guard_curriculum_cycle()','hon.guard_curriculum_app_settings()',
+    'hon.curriculum_app_cycle_state(uuid,uuid,uuid)','hon.curriculum_app_projection(uuid,uuid,uuid)','hon.read_staff_parent_app_curriculum(text)',
+    'hon.mutate_parent_app_curriculum(text,text,uuid,uuid,jsonb,text,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_staff_parent_app_curriculum(text),hon.mutate_parent_app_curriculum(text,text,uuid,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;

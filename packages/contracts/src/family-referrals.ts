@@ -128,7 +128,7 @@ export function verifyParentReferralsRecord(value: unknown): ParentReferralsReco
     const r = record(item, ['referredAt', 'status', 'reward']);
     return { referredAt: instant(r.referredAt), status: oneOf(r.status, FAMILY_REFERRAL_STATUSES), reward: oneOf(r.reward, FAMILY_REFERRAL_REWARDS) };
   });
-  return { schoolName: str(row.schoolName, 200, { required: true }), on: row.on, ...texts, code: row.code as string | null, canShare: row.canShare, counts, referrals };
+  return Object.assign({ schoolName: str(row.schoolName, 200, { required: true }), on: row.on }, texts, { code: row.code as string | null, canShare: row.canShare, counts, referrals });
 }
 
 /** The share link: the HON site origin plus /refer/<code>, nothing else. */
@@ -140,11 +140,12 @@ export function familyReferralShareUrl(origin: string, code: string): string {
 const SHARE_URL = /^(https:\/\/[a-z0-9.-]+(:\d+)?|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)\/refer\/[0-9a-f]{16}$/i;
 export function verifyParentReferrals(value: unknown): ParentReferrals {
   if (!value || typeof value !== 'object' || Array.isArray(value)) invalid();
-  const { shareUrl, ...rest } = value as Record<string, unknown>;
-  const base = verifyParentReferralsRecord({ ...rest, code: null });
+  const rest: Record<string, unknown> = Object.assign({}, value as Record<string, unknown>);
+  const shareUrl = rest.shareUrl; delete rest.shareUrl;
+  const base = verifyParentReferralsRecord(Object.assign(rest, { code: null }));
   if (shareUrl !== null && (typeof shareUrl !== 'string' || !SHARE_URL.test(shareUrl) || !base.canShare)) invalid();
-  const { code: _code, ...shown } = base;
-  return { ...shown, shareUrl: shareUrl as string | null };
+  const shown: Omit<ParentReferralsRecord, 'code'> & { code?: unknown } = Object.assign({}, base); delete shown.code;
+  return Object.assign(shown, { shareUrl: shareUrl as string | null }) as ParentReferrals;
 }
 export function verifyParentReferralLink(value: unknown): ParentReferralLink {
   const row = record(value, ['shareUrl']);
