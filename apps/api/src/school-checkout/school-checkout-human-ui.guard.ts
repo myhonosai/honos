@@ -14,3 +14,7 @@ export class SchoolCheckoutSaveHumanUiGuard extends MembershipActivationHumanUiG
 export class SchoolCheckoutSettingsSaveHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'school_checkout.settings.save';
 }
+@Injectable()
+export class SchoolCheckoutOrdersReadHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'school_checkout.orders.read';
+}

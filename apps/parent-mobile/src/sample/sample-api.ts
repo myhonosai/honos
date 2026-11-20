@@ -9,7 +9,9 @@ import { verifyParentCurriculumLibrary } from '@hon/contracts/curriculum-resourc
 import { verifyParentSchoolBookingReceipt, verifyParentSchoolBookings, type ParentSchoolBooking } from '@hon/contracts/parent-school-bookings';
 import { verifyParentInvoicePayments } from '@hon/contracts/parent-invoice-pay';
 import { verifyParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
+import { verifyParentAttendanceStreaks } from '@hon/contracts/parent-attendance-streaks';
 import { verifyParentProShop } from '@hon/contracts/parent-pro-shop';
+import { verifyParentCheckoutPages } from '@hon/contracts/family-checkout';
 import type { ParentApi } from '../api/client';
 import { localDate, localMidnight } from '../schedule/absence-model';
 
@@ -129,6 +131,10 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
 
   return {
     sampleMode: true,
+    // The made-up family never signs a phone up for notifications.
+    pushStatus: () => ok({ sending: false }),
+    registerPushDevice: () => refused('PARENT_PUSH_FORBIDDEN'),
+    unregisterPushDevice: () => wrote({ unregistered: false }),
     journey: () => ok(verifyParentJourneyView(journeyRaw())),
     schoolTimeZone: () => Promise.resolve(ZONE),
     classBookings: () => ok(verifyParentClassBookingChoices(choicesRaw())),
@@ -219,10 +225,23 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
       { announcementId: id(900), title: 'Belt testing next Saturday', body: 'Testing starts at 10am. Please arrive 15 minutes early in a clean uniform.', publishedAt: ms(plus(start.toISOString(), -90)) },
       { announcementId: id(901), title: 'Closed Monday for the holiday', body: 'There are no classes on Monday. See you Tuesday!', publishedAt: ms(plus(start.toISOString(), -3 * 24 * 60)) },
     ] })),
+    attendanceStreaks: () => ok(verifyParentAttendanceStreaks({ children: [{ name: 'Leo Sample', weeks: 2 }, { name: 'Mia Sample', weeks: 5 }] })),
     proShop: () => ok(verifyParentProShop({ schoolName: SAMPLE_SCHOOL, available: true, currency: 'USD', products: [
       { productId: '9001', title: 'Sample sparring gloves', imageUrl: null, fromPrice: '39.00', url: 'https://sample-dojo.myshopify.com/products/sample-sparring-gloves' },
       { productId: '9002', title: 'Sample uniform', imageUrl: null, fromPrice: '65.00', url: 'https://sample-dojo.myshopify.com/products/sample-uniform' },
     ] })),
+    // The sample family can fill in a sample page but never orders: the app hides the order button and a press would be refused.
+    checkoutPages: () => ok(verifyParentCheckoutPages({ schoolName: SAMPLE_SCHOOL, canBuy: true, canPay: true, testMode: true, pages: [
+      { checkoutId: id(950), version: 1, group: 'events', title: 'Sample summer camp', description: 'A week of games, forms and sparring.', currency: 'USD', maxParticipants: 2,
+        blocks: [], options: [{ key: 'week', label: 'Full week', description: null, priceMinor: 19900, additionalParticipantMinor: 14900, mostPopular: true, placesLeft: 8 }],
+        addOns: [{ key: 'shirt', label: 'Camp shirt', amountMinor: 1500, required: false }],
+        questions: [{ key: 'size', label: 'Shirt size', kind: 'CHOICE', required: true, options: ['Youth S', 'Youth M', 'Youth L'] }],
+        waiver: 'I agree to the camp safety rules.', thankYou: null },
+    ], children: [{ studentProfileId: id(951), displayName: 'Sample child' }], orders: [] })),
+    orderCheckout: async () => ({ ok: false as const, state: 'refused' as const, code: 'FAMILY_CHECKOUT_NOT_CONFIGURED' }),
+    startCheckoutOrder: async () => ({ ok: false as const, state: 'refused' as const, code: 'FAMILY_CHECKOUT_NOT_CONFIGURED' }),
+    confirmCheckoutOrder: async () => ({ ok: false as const, state: 'refused' as const, code: 'FAMILY_CHECKOUT_NOT_CONFIGURED' }),
+    cancelCheckoutOrder: async () => ({ ok: false as const, state: 'refused' as const, code: 'FAMILY_CHECKOUT_NOT_CONFIGURED' }),
     invoicePayments: () => ok(verifyParentInvoicePayments({ canPay: false, testMode: true, invoices: [] })),
     startInvoicePayment: async () => ({ ok: false as const, state: 'refused' as const, code: 'PARENT_INVOICE_PAY_NOT_CONFIGURED' }),
     confirmInvoicePayment: async () => ({ ok: false as const, state: 'refused' as const, code: 'PARENT_INVOICE_PAY_NOT_CONFIGURED' }),
