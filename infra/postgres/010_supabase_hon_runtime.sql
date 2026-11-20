@@ -4758,22 +4758,20 @@ BEGIN
   END IF;
 END $$;
 
--- 0600 Shopify theme drafts (TB1): two private tables reached only through four runtime entry points (read the theme
--- workspace, begin / rotate / finish one piece of theme work under its lease); the guard, the end-of-connection trigger
--- and the helpers are migration-owner only. HON writes only to its own UNPUBLISHED copy of the live theme.
-DO $$ DECLARE r text; f text; t text;
-  entry text[]:=ARRAY['hon.read_shopify_theme_workspace(text,uuid)','hon.begin_shopify_theme_work(text,jsonb)',
-    'hon.rotate_shopify_theme_credential(text,jsonb)','hon.finish_shopify_theme_work(text,jsonb)'];
-  helpers text[]:=ARRAY['hon.guard_shopify_theme_edit()','hon.shopify_theme_on_end()','hon.shopify_theme_recipe_ok(text,jsonb)',
-    'hon.shopify_theme_files_ok(jsonb)','hon.shopify_theme_name_ok(jsonb)','hon.shopify_theme_edit_json(hon.shopify_theme_edits,boolean)',
-    'hon.shopify_theme_locked(uuid)','hon.shopify_theme_leased(uuid,uuid,jsonb)'];
+-- 0609 Shopify storefront blocks (TB2; retires 0600 TB1 theme drafts): one private table reached only through five runtime
+-- entry points (read and save the settings, begin / rotate / finish one publish under its lease); the end-of-connection
+-- trigger and the helpers are migration-owner only. HON writes only its own app-data metafield, never theme files.
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_shopify_storefront(text,uuid)','hon.save_shopify_storefront(text,jsonb)',
+    'hon.begin_shopify_storefront_publish(text,jsonb)','hon.rotate_shopify_storefront_credential(text,jsonb)',
+    'hon.finish_shopify_storefront_publish(text,jsonb)'];
+  helpers text[]:=ARRAY['hon.shopify_storefront_on_end()','hon.shopify_storefront_settings_ok(jsonb)',
+    'hon.shopify_storefront_locked(uuid)','hon.shopify_storefront_leased(uuid,uuid,jsonb)'];
 BEGIN
-  IF to_regclass('hon.shopify_theme_edits') IS NULL THEN RAISE EXCEPTION 'Apply migration 0600 first'; END IF;
-  FOREACH t IN ARRAY ARRAY['hon.shopify_theme_drafts','hon.shopify_theme_edits'] LOOP
-    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
-    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
-      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
-  END LOOP;
+  IF to_regclass('hon.shopify_storefronts') IS NULL THEN RAISE EXCEPTION 'Apply migration 0609 first'; END IF;
+  REVOKE ALL ON TABLE hon.shopify_storefronts FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.shopify_storefronts FROM %I',r); END LOOP;
   FOREACH f IN ARRAY helpers||entry LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
