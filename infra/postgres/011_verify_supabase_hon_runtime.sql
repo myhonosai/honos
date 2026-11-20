@@ -5375,6 +5375,36 @@ BEGIN
     RAISE EXCEPTION 'Unexpected school message history overload'; END IF;
 END $$;
 -- End school message history exact verification.
+-- School message templates exact verification (TE2 0586): three runtime entry points, nine private helpers, a forced-RLS table.
+DO $$ DECLARE f text;
+BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.read_school_message_templates(text,jsonb)','hon.save_school_message_template(text,jsonb,text,uuid,uuid)',
+      'hon.set_school_message_template_status(text,jsonb,text,uuid,uuid)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure
+        AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe school message template entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.school_template_line_ok(text,integer)','hon.school_template_body_ok(text,integer)','hon.school_template_tags_ok(text)',
+      'hon.guard_school_message_template()','hon.require_school_template_actor(text,text)','hon.school_message_template_json(hon.school_message_templates)',
+      'hon.school_template_command_begin(text,text,jsonb,text,uuid,uuid)','hon.school_template_room_check(uuid,uuid,text,text,uuid,boolean)',
+      'hon.school_template_command_finish(uuid,text,hon.school_message_templates,jsonb,text,uuid,uuid,jsonb)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND (a.grantee=0 OR a.grantee<>p.proowner)) THEN
+      RAISE EXCEPTION 'Unsafe school message template helper: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.school_message_templates'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename='school_message_templates')
+    OR EXISTS(SELECT 1 FROM pg_class c, aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid='hon.school_message_templates'::regclass AND a.grantee<>c.relowner) THEN
+    RAISE EXCEPTION 'Unsafe school message template table'; END IF;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname IN ('read_school_message_templates','save_school_message_template',
+      'set_school_message_template_status','school_template_line_ok','school_template_body_ok','school_template_tags_ok','guard_school_message_template',
+      'require_school_template_actor','school_message_template_json','school_template_command_begin','school_template_room_check','school_template_command_finish'))<>12 THEN
+    RAISE EXCEPTION 'Unexpected school message template overload'; END IF;
+END $$;
+-- End school message templates exact verification.
 -- Parent app curriculum exact verification (0587): four private forced-RLS tables with their guards, the cycle column and constraints
 -- on curriculum_resources, private helpers and two runtime entry points.
 DO $$ DECLARE f record; safe boolean; t text; BEGIN
