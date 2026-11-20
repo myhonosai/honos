@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "4188a508c65b656c3d27c8313b3cd82f72e93992c0a819b3da62475e867f7005",
+  "chainSha256": "6a293c0f852e147e8c36c5e08af4e07da87b650d9e37a93451ecb0895d386420",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -741,6 +741,10 @@
     {
       "file": "0586_school_message_templates.sql",
       "sha256": "d85d8ca8d6153a38a0cd0a04b73628f2cbac4cc7094de7678a50db4c24117e9b"
+    },
+    {
+      "file": "0594_paper_import_ai_reader.sql",
+      "sha256": "7a84df3e44906d28635eaf0889a1c133994e0201b805a7bb343a3ba4b2da99a9"
     }
   ]
 }
