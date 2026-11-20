@@ -25,6 +25,7 @@ import {
 import { verifyParentSchoolAnnouncements, type ParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
 import { verifyParentAttendanceStreaks, type ParentAttendanceStreaks } from '@hon/contracts/parent-attendance-streaks';
 import { verifyParentProShop, type ParentProShop } from '@hon/contracts/parent-pro-shop';
+import { verifyParentJourneyRecommendations, type ParentJourneyRecommendations } from '@hon/contracts/journey-recommendations';
 import {
   validateRegisterParentPushDeviceInput, validateUnregisterParentPushDeviceInput, verifyParentPushDeviceReceipt, verifyParentPushStatus, verifyParentPushUnregisterReceipt,
   type ParentPushDeviceReceipt, type ParentPushPlatform, type ParentPushStatus, type ParentPushUnregisterReceipt,
@@ -193,6 +194,8 @@ export function createParentApi(options: ParentApiOptions) {
     announcements: (): Promise<ParentRead<ParentSchoolAnnouncements>> => get('/v1/parent/announcements', dataOf(verifyParentSchoolAnnouncements)),
     /** Each child's weekly attendance streak (0602) for the one family this sign-in belongs to: name and number only. */
     attendanceStreaks: (): Promise<ParentRead<ParentAttendanceStreaks>> => get('/v1/parent/attendance-streaks', dataOf(verifyParentAttendanceStreaks)),
+    /** 0603: what the school recommends for each child at the point they have reached on their journey. Read only. */
+    journeyRecommendations: (): Promise<ParentRead<ParentJourneyRecommendations>> => get('/v1/parent/journey-recommendations', dataOf(verifyParentJourneyRecommendations)),
     /** 0601: whether the school's server sends notifications at all (the app asks for permission only then). */
     pushStatus: (): Promise<ParentRead<ParentPushStatus>> => get('/v1/parent/push-devices/status', dataOf(verifyParentPushStatus)),
     /** 0601: this phone's Expo push token for announcement notifications. The server decides the person and school. */

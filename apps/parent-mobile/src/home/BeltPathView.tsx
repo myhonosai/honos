@@ -4,7 +4,9 @@ import { Text } from '../ui/text';
 import { Icon } from '../ui/icons';
 import { eianImage } from '../eian/avatar';
 import { EDGE, radius, space, type, useColors } from '../ui/theme';
+import type { FamilyJourneyRecommendation } from '@hon/contracts/journey-recommendations';
 import type { BeltPath, PathStep } from './belt-path';
+import { GiftStop } from './Recommendations';
 
 /** Horizontal offsets that make the stops wind left and right like a path. */
 const WIND = [0, -56, -24, 40, 64, 16, -48, -12];
@@ -12,15 +14,18 @@ const NODE = 68;
 
 /**
  * One child's belt path on Home: a banner (program, rank, requirements met), then the stops, then the next belt.
- * The whole card opens the child's journey, exactly as the old Progress card did.
+ * The banner opens the child's journey. Gift stops (0603, what the school recommends at this point) are their own buttons,
+ * placed just before the next belt.
  */
-export function BeltPathView({ childName, program, rank, path, cheer, onOpen }: {
+export function BeltPathView({ childName, program, rank, path, cheer, onOpen, gifts = [], onGift }: {
   childName: string; program: string | null; rank: string | null; path: BeltPath; cheer: string | null; onOpen: () => void;
+  gifts?: FamilyJourneyRecommendation[]; onGift?: (item: FamilyJourneyRecommendation) => void;
 }) {
   const c = useColors();
   const summary = path.available && path.total > 0 ? `${path.met} of ${path.total} requirements met` : null;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`Open ${childName} journey`} accessibilityHint={summary ?? undefined} onPress={onOpen}>
+    <View>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Open ${childName} journey`} accessibilityHint={summary ?? undefined} onPress={onOpen}>
       <View style={[styles.banner, { backgroundColor: c.accent, borderBottomColor: c.accentEdge }]}>
         <View style={{ flex: 1 }}>
           <Text style={{ color: c.accentText, opacity: 0.85, fontSize: type.caption, fontWeight: '800', letterSpacing: 1 }}>{[childName, program].filter(Boolean).join(' · ').toUpperCase()}</Text>
@@ -33,6 +38,7 @@ export function BeltPathView({ childName, program, rank, path, cheer, onOpen }: 
           </View>
         ) : null}
       </View>
+      </Pressable>
 
       {!path.available ? <Text style={[styles.note, { color: c.muted }]}>Requirements aren't available right now.</Text>
         : path.total === 0 ? <Text style={[styles.note, { color: c.muted }]}>The school hasn't listed requirements for this rank.</Text>
@@ -48,11 +54,13 @@ export function BeltPathView({ childName, program, rank, path, cheer, onOpen }: 
             ) : null}
             {path.steps.map((step, i) => <Stop key={`s-${i}`} step={step} offset={WIND[i % WIND.length]!} />)}
             {path.more ? <Text style={[styles.more, { color: c.muted }]}>+{path.more} more in {childName}'s journey</Text> : null}
+            {gifts.map(g => <GiftStop key={g.recommendationId} item={g} onOpen={() => onGift?.(g)} />)}
             <View style={[styles.goal, { backgroundColor: c.sun, borderBottomColor: c.sunEdge }]}><Icon name="belt" size={36} color="#FFFFFF" /></View>
             <Text style={{ color: c.warning, fontWeight: '800', textAlign: 'center', marginTop: space.sm }}>Next belt</Text>
           </View>
         )}
-    </Pressable>
+      {(!path.available || path.total === 0) ? gifts.map(g => <GiftStop key={g.recommendationId} item={g} onOpen={() => onGift?.(g)} />) : null}
+    </View>
   );
 }
 

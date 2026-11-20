@@ -33,6 +33,19 @@ describe('parent API client', () => {
     expect(await api(leaky).announcements()).toEqual({ ok: false, state: 'unavailable' });
   });
 
+  it('reads journey recommendations with no selector and refuses an unexpected field', async () => {
+    const item = { recommendationId: '77777777-7777-4777-8777-000000000002', program: 'Kids', rank: null, triggerKind: 'CLASSES_ATTENDED', threshold: 10,
+      title: 'Sparring gear', message: 'Ready for light sparring.', targetKind: 'PRO_SHOP', checkoutId: null, eventId: null, targetLabel: null };
+    const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(200, { data: { children: [{ name: 'Mia', recommendations: [item] }] } }));
+    const result = await api(fetchImpl).journeyRecommendations();
+    expect(result.ok && result.data.children[0]!.recommendations[0]!.title).toBe('Sparring gear');
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(url).toBe('https://api.example.test/v1/parent/journey-recommendations');
+    expect(init.method).toBe('GET');
+    const leaky = jest.fn().mockResolvedValue(jsonResponse(200, { data: { children: [{ name: 'Mia', recommendations: [{ ...item, studentProfileId: item.recommendationId }] }] } }));
+    expect(await api(leaky).journeyRecommendations()).toEqual({ ok: false, state: 'unavailable' });
+  });
+
   it('reads attendance streaks with no selector and refuses anything beyond a name and a number', async () => {
     const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(200, { data: { children: [{ name: 'Mia', weeks: 3 }] } }));
     const result = await api(fetchImpl).attendanceStreaks();

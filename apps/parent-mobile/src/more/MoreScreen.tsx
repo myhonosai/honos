@@ -14,7 +14,7 @@ import { EventsArea } from './EventsArea';
 import { ProShopArea } from './ProShopArea';
 import { CANDIDATE_LABEL, formatDay, formatMoney, INTEREST_LABEL, INVOICE_LABEL, MEMBERSHIP_LABEL, PASS_LABEL } from './more-model';
 
-type Area = 'events' | 'checkout' | 'billing' | 'passes' | 'testing' | 'shop' | 'library';
+export type Area = 'events' | 'checkout' | 'billing' | 'passes' | 'testing' | 'shop' | 'library';
 const AREAS: { key: Area; title: string; blurb: string; icon: IconName; tone: Tone }[] = [
   { key: 'events', title: 'Events & bookings', blurb: 'School events and family bookings', icon: 'ticket', tone: 'violet' },
   { key: 'checkout', title: 'Sign up & pay', blurb: 'Camps, events and more from your school', icon: 'check', tone: 'lime' },
@@ -47,10 +47,11 @@ function Unavailable({ what, reload }: { what: string; reload: () => void }) {
   return <StateMessage title={`${what} is unavailable`} body="We couldn't load this from your school right now. Nothing old is shown in its place." action={{ label: 'Try again', onPress: reload }} />;
 }
 
-export function MoreScreen({ onSignOut, version }: { onSignOut: () => void; version: string }) {
+export function MoreScreen({ onSignOut, version, openArea = null, openAt = 0 }: { onSignOut: () => void; version: string; openArea?: Area | null; openAt?: number }) {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const [area, setArea] = useState<Area | null>(null);
+  const [area, setArea] = useState<Area | null>(openArea);
+  useEffect(() => { if (openArea) setArea(openArea); }, [openArea, openAt]);
   const current = AREAS.find(a => a.key === area);
   return (
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: space.xxl }}>
