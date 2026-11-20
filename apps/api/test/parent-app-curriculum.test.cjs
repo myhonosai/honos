@@ -104,7 +104,7 @@ test('source boundary: dedicated functions only, no network, AI, outbox or provi
   assert.doesNotMatch(sql, /INSERT INTO hon\.(outbox_events|action_requests|work_items|communication_messages|ai_invocation_plans)/);
 });
 
-test('0606 parent read verifier: whitelist only, one mode, closed sections', () => {
+test('0610 parent read verifier: whitelist only, one mode, closed sections', () => {
   const { verifyParentCurriculumApp } = require('@hon/contracts');
   const item = { title: 'Yellow form', description: '', kind: 'VIDEO', url: 'https://www.youtube.com/watch?v=y' };
   const entry = { curriculumName: 'Kids', mode: 'RANK', rank: { name: 'Yellow', color: '#ffd400' }, cycle: null, next: { name: 'Orange', startsOn: null }, sections: [{ label: 'CURRENT', items: [item] }] };
@@ -119,7 +119,7 @@ test('0606 parent read verifier: whitelist only, one mode, closed sections', () 
     assert.throws(() => verifyParentCurriculumApp({ children: [{ childDisplayName: 'Mia', curricula: [bad] }] }));
 });
 
-test('0606 parent service refuses ambiguous families before reading', async () => {
+test('0610 parent service refuses ambiguous families before reading', async () => {
   let reads = 0;
   const service = new ParentAppCurriculumService({ resolveParentJourneyScopes: async () => [], withTenantTransaction: () => { reads += 1; throw new Error('unexpected'); } });
   await assert.rejects(() => service.parent('synthetic-parent'), (e) => e.getStatus() === 403 && e.getResponse().code === 'FAMILY_SCOPE_UNAVAILABLE');

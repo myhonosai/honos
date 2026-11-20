@@ -1,5 +1,5 @@
 /**
- * Parent app curriculum read proof (0606) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global ValidationPipe
+ * Parent app curriculum read proof (0610) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards + global ValidationPipe
  * + HonExceptionFilter -> ParentCurriculumAppController / ParentCurriculumLibraryController / StaffParentAppCurriculumController -> protected definer functions on the
  * restricted runtime role with forced RLS), on the guarded disposable CRM-close fixture only. Synthetic names only; nothing contacts anyone.
  */
@@ -277,11 +277,11 @@ try {
   for (const fn of ['read_parent_curriculum_app(text,uuid)', 'read_staff_parent_app_curriculum_preview(text,uuid)']) ok((await sql("SELECT has_function_privilege($1,$2,'EXECUTE') e", [CRM_CLOSE_RUNTIME_ROLE, `hon.${fn}`])).rows[0].e, `runtime may execute ${fn}`);
   await assert.rejects(runtime.query('SELECT hon.read_parent_curriculum_app($1,$2)', [GUARDIAN.subject, family]), /FAMILY_FORBIDDEN|42501/); checks += 1;
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const section = verify.split('-- Parent app curriculum read exact verification (0606)')[1]?.split('-- End parent app curriculum read exact verification.')[0];
+    const section = verify.split('-- Parent app curriculum read exact verification (0610)')[1]?.split('-- End parent app curriculum read exact verification.')[0];
     ok(section, '011 section present');
     await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
-  console.log(`PASS: parent app curriculum read (0606): ${checks} checks.`);
+  console.log(`PASS: parent app curriculum read (0610): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

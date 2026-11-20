@@ -100,7 +100,7 @@ export function verifyStaffParentAppCurriculum(v: unknown): StaffParentAppCurric
   }) };
 }
 
-// 0606: what a family sees. Names, dates, kinds, titles, descriptions and URLs only (no ids).
+// 0610: what a family sees. Names, dates, kinds, titles, descriptions and URLs only (no ids).
 export const CURRICULUM_APP_SECTION_LABELS = ['CURRENT', 'REVIEW', 'NEXT', 'ALL'] as const;
 export type CurriculumAppSectionLabel = (typeof CURRICULUM_APP_SECTION_LABELS)[number];
 export interface CurriculumAppItem { title: string; description: string; kind: CurriculumResourceRecord['kind']; url: string }

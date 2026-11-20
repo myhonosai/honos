@@ -1,5 +1,5 @@
 BEGIN;
--- Parent app curriculum, piece 2 (0606, coordinator-allocated 2026-11-20, was 0578; spec docs/architecture/PARENT_APP_CURRICULUM.md s5).
+-- Parent app curriculum, piece 2 (0610, coordinator-allocated 2026-11-20, was 0606, earlier 0588 and 0578; spec docs/architecture/PARENT_APP_CURRICULUM.md s5).
 -- What a family sees in the app: per child and active enrollment in a curriculum shown in the app, the current rank or
 -- the current cycle (0605 hon.curriculum_app_cycle_state, school time zone) and its PARENT material in sections.
 --   R1  hon.curriculum_app_child_entries: private helper for one student (both reads use it, so staff preview = parent view).

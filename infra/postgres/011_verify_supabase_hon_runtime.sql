@@ -5785,7 +5785,7 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
   END LOOP;
 END $$;
 -- End parent app curriculum exact verification.
--- Parent app curriculum read exact verification (0606): the private child entries helper and two runtime entry points.
+-- Parent app curriculum read exact verification (0610): the private child entries helper and two runtime entry points.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.curriculum_app_child_entries(uuid,uuid,uuid)',false,false,'097a96a3484cb9111ef6e952f00969c144ca0c1943eecfc82895d8efe4034995'),

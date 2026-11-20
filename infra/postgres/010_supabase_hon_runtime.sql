@@ -4884,10 +4884,10 @@ DO $$ DECLARE r text; f text; t text; BEGIN
   END IF;
 END $$;
 
--- 0606 parent app curriculum read: the parent read and the staff preview are the only runtime entry points; the child
+-- 0610 parent app curriculum read: the parent read and the staff preview are the only runtime entry points; the child
 -- entries helper stays migration-owner only.
 DO $$ DECLARE r text; f text; BEGIN
-  IF to_regprocedure('hon.read_parent_curriculum_app(text,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0606 first'; END IF;
+  IF to_regprocedure('hon.read_parent_curriculum_app(text,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0610 first'; END IF;
   FOREACH f IN ARRAY ARRAY['hon.curriculum_app_child_entries(uuid,uuid,uuid)','hon.read_parent_curriculum_app(text,uuid)','hon.read_staff_parent_app_curriculum_preview(text,uuid)'] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP

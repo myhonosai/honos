@@ -368,6 +368,6 @@
     "0603_journey_recommendations.sql": "495a7bc113ba416ef5a19ab189ba248f0d06c197dac26a78af956fb4ab520ab6",
     "0604_family_referrals.sql": "f7896771a56abc86e413398b0851a99c4479aa0d0203013c5555aa9aaaeb2f0b",
     "0605_parent_app_curriculum_cycles.sql": "e9577f6b636a77715d9295978cd20ed969be590c8ed92418ab59f130255629f7",
-    "0606_parent_app_curriculum_read.sql": "6177640c5dbf4cb39cc7010a132edf637e9c02eae6f6d91022752a554cdb8fc2"
+    "0610_parent_app_curriculum_read.sql": "2d161c551581b2eae1233e1f9e1ceb4d81b5ce61bf2b79ee7c5e59c05a85ac5d"
   }
 }
