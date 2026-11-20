@@ -5,7 +5,7 @@ export type CurriculumResourceAudience = 'STAFF' | 'PARENT';
 export interface CurriculumResourceContext extends CommandContext { externalSubject: string }
 export interface CurriculumResourceCreateInput {
   expectedVersion: 0; curriculumId: string; rankId: string | null;
-  /** 0587: at most one of rankId / cycleId; an active cycle of the same curriculum. Optional for older clients. */
+  /** 0605: at most one of rankId / cycleId; an active cycle of the same curriculum. Optional for older clients. */
   cycleId?: string | null;
   kind: CurriculumResourceKind; url: string; title: string; description: string; audience: CurriculumResourceAudience;
 }

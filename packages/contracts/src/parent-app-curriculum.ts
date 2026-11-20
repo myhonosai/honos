@@ -1,5 +1,5 @@
 /**
- * Parent app curriculum (0587 staff side). Spec: docs/architecture/PARENT_APP_CURRICULUM.md.
+ * Parent app curriculum (0605 staff side). Spec: docs/architecture/PARENT_APP_CURRICULUM.md.
  * A curriculum is shown in the parent app as RANK-based or CYCLE-based. Strict, closed verifiers only.
  */
 import { closedLibraryObject, isCurriculumLibraryId, libraryText, verifyCurriculumResourceRecord, type CurriculumResourceRecord } from './curriculum-resource-library.js';

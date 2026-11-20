@@ -743,7 +743,7 @@
       "sha256": "d85d8ca8d6153a38a0cd0a04b73628f2cbac4cc7094de7678a50db4c24117e9b"
     },
     {
-      "file": "0587_parent_app_curriculum_cycles.sql",
+      "file": "0605_parent_app_curriculum_cycles.sql",
       "sha256": "56f3ff1dec3442bdd6ace5c98e494c21f7ba9e0d44991e2783dcb2fd921b886b"
     }
   ]
