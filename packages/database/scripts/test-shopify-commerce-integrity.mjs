@@ -67,6 +67,7 @@ try{
   // 0496 product changes (SH4a).
   'read_shopify_product_changes','propose_shopify_product_change','cancel_shopify_product_change','approve_shopify_product_change',
   'rotate_shopify_change_credential','record_shopify_product_change_result','read_shopify_finance','record_shopify_finance',
+  'read_shopify_theme_workspace','begin_shopify_theme_work','rotate_shopify_theme_credential','finish_shopify_theme_work',
   // 0596 Marcus merch ideas (CS-M2).
   'begin_shopify_merch_ideas','plan_shopify_merch_ideas','prepare_shopify_merch_ideas','fail_shopify_merch_ideas','record_shopify_merch_ideas',
   'read_shopify_merch_ideas','close_shopify_merch_ideas'];

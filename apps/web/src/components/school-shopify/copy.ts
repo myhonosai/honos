@@ -205,6 +205,12 @@ const en = {
   perm_editProducts: "Edit products and prices, and create draft products, after approval.",
   perm_editCosts: "Change the cost per item, after approval.",
   nav_finance: "Finance",
+  nav_theme: "Theme",
+  e_THEMES_OFF: "Theme editing is not allowed yet.",
+  e_THEME_BUSY: "HON is already working on the theme.",
+  e_THEME_NOT_UNDOABLE: "This change can no longer be undone.",
+  e_THEME_DONE: "That theme change is no longer being written.",
+  e_THEME_LIMIT: "Too many theme changes today.",
   fin_title: "Shopify Payments",
   fin_managerOnly: "Only someone who can manage Shopify for this school can see payouts and the balance.",
   fin_allowHelp: "See your Shopify Payments balance, payouts and recent transactions here. Press Allow finance and approve it in Shopify. HON only reads them; it never moves money.",
@@ -244,6 +250,7 @@ const en = {
   tx_APPLICATION_FEE_REFUND: "Fee refund",
   tx_other: "Other",
   perm_finance: "Read the Shopify Payments balance, payouts and transactions.",
+  perm_themes: "Read your themes and write to HON's unpublished draft copy (never the live theme).",
   perm_approval: "Every change waits in Changes until someone who manages Shopify approves it.",
 };
 export type ShopifyKey = keyof typeof en;
@@ -453,6 +460,12 @@ const ko: Record<ShopifyKey, string> = {
   perm_editProducts: "승인 후 상품과 가격 편집, 임시 상품 만들기.",
   perm_editCosts: "승인 후 개당 원가 바꾸기.",
   nav_finance: "재무",
+  nav_theme: "테마",
+  e_THEMES_OFF: "아직 테마 편집이 허용되지 않았습니다.",
+  e_THEME_BUSY: "HON이 이미 테마를 작업 중입니다.",
+  e_THEME_NOT_UNDOABLE: "이 변경은 더 이상 되돌릴 수 없습니다.",
+  e_THEME_DONE: "그 테마 변경은 더 이상 쓰이고 있지 않습니다.",
+  e_THEME_LIMIT: "오늘 테마 변경이 너무 많습니다.",
   fin_title: "Shopify Payments",
   fin_managerOnly: "이 도장의 Shopify를 관리할 수 있는 사람만 정산과 잔액을 볼 수 있습니다.",
   fin_allowHelp: "Shopify Payments 잔액, 정산, 최근 거래를 여기서 확인하세요. 재무 허용을 누르고 Shopify에서 승인하세요. HON은 읽기만 하고 돈을 옮기지 않습니다.",
@@ -492,6 +505,7 @@ const ko: Record<ShopifyKey, string> = {
   tx_APPLICATION_FEE_REFUND: "수수료 환불",
   tx_other: "기타",
   perm_finance: "Shopify Payments 잔액, 정산, 거래 읽기.",
+  perm_themes: "테마를 읽고 HON의 미게시 초안 사본에 쓰기 (라이브 테마는 절대 아님).",
   perm_approval: "모든 변경은 Shopify 관리 권한이 있는 사람이 승인할 때까지 변경 사항에서 기다립니다.",
 };
 const es: Record<ShopifyKey, string> = {
@@ -700,6 +714,12 @@ const es: Record<ShopifyKey, string> = {
   perm_editProducts: "Editar productos y precios, y crear productos en borrador, tras la aprobación.",
   perm_editCosts: "Cambiar el costo por artículo, tras la aprobación.",
   nav_finance: "Finanzas",
+  nav_theme: "Tema",
+  e_THEMES_OFF: "Aún no se permite editar el tema.",
+  e_THEME_BUSY: "HON ya está trabajando en el tema.",
+  e_THEME_NOT_UNDOABLE: "Este cambio ya no se puede deshacer.",
+  e_THEME_DONE: "Ese cambio de tema ya no se está escribiendo.",
+  e_THEME_LIMIT: "Demasiados cambios de tema hoy.",
   fin_title: "Shopify Payments",
   fin_managerOnly: "Solo quien puede administrar Shopify en esta escuela puede ver los pagos y el saldo.",
   fin_allowHelp: "Vea aquí su saldo de Shopify Payments, los pagos y las transacciones recientes. Pulse Permitir finanzas y apruébelo en Shopify. HON solo los lee; nunca mueve dinero.",
@@ -739,6 +759,7 @@ const es: Record<ShopifyKey, string> = {
   tx_APPLICATION_FEE_REFUND: "Reembolso de comisión",
   tx_other: "Otro",
   perm_finance: "Leer el saldo, los pagos y las transacciones de Shopify Payments.",
+  perm_themes: "Leer sus temas y escribir en la copia sin publicar de HON (nunca en el tema publicado).",
   perm_approval: "Cada cambio espera en Cambios hasta que alguien que administra Shopify lo apruebe.",
 };
 export const SHOPIFY_LANGUAGES = { en, ko, es } as const;

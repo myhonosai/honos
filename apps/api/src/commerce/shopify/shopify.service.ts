@@ -4,7 +4,8 @@ import {
 } from '@nestjs/common';
 import { configuredPublicOrigin } from '@hon/auth';
 import {
-  SHOPIFY_EDIT_SCOPES, SHOPIFY_FINANCE_SCOPES, SHOPIFY_RETURN_PATH, verifyShopifyFinanceSnapshot, verifyShopifyFinanceView, type ShopifyFinanceView, validateShopifyChangeCommandInput, validateShopifyProposeInput, verifyShopifyChangeResult,
+  SHOPIFY_EDIT_SCOPES, SHOPIFY_FINANCE_SCOPES, SHOPIFY_THEME_SCOPES, validateShopifyThemeCommand, verifyShopifyThemePreview, verifyShopifyThemeWorkspace,
+  type ShopifyThemePreview, type ShopifyThemeWorkResult, type ShopifyThemeWorkspace, verifyShopifyThemeWorkResult, SHOPIFY_RETURN_PATH, verifyShopifyFinanceSnapshot, verifyShopifyFinanceView, type ShopifyFinanceView, validateShopifyChangeCommandInput, validateShopifyProposeInput, verifyShopifyChangeResult,
   verifyShopifyProductChange, verifyShopifyProductChanges, type ShopifyChangeResult, type ShopifyProductChanges, validateShopifyCompleteInput, validateShopifyConnectInput, validateShopifyDisconnectInput, validateShopifySyncInput,
   verifyShopifyCatalog, verifyShopifyConnectResult, verifyShopifyConnectStart, verifyShopifyDisconnectResult, verifyShopifyOrders, verifyShopifyOverview,
   verifyShopifySyncResult,
@@ -16,6 +17,7 @@ import { RuntimeDatabaseService, type ShopifyOperation } from '../../foundation/
 import { SHOPIFY_APP, ShopifyProviderError, type ShopifyApp } from './shopify-adapter.js';
 import { begunSync, runShopifySync } from './shopify-sync-engine.js';
 import { leasedChange, runShopifyChange } from './shopify-change-engine.js';
+import { begunThemeWork, runThemeWork } from './shopify-theme-engine.js';
 import { shopifyBackgroundEnabled } from './shopify-worker.js';
 import { scopesGranted, shopifyAuthorizeUrl, verifyShopifyCallback } from './shopify-oauth.js';
 
@@ -38,6 +40,11 @@ const DETAIL: Record<string, string> = {
   SHOPIFY_CHANGE_NOT_LEASED: 'This edit is no longer being sent. Reload to see where it stands.',
   SHOPIFY_CHANGE_ATTEMPTS: 'HON has tried this edit five times. Check the product in Shopify, close the edit as unresolved, then prepare it again if needed.',
   SHOPIFY_TOO_MANY_DRAFTS: 'There are already 20 new products waiting. Approve or cancel some first.',
+  SHOPIFY_THEMES_NOT_ALLOWED: 'Your Shopify store has not allowed HON to edit themes yet. Press Allow theme editing and approve it in Shopify.',
+  SHOPIFY_THEME_BUSY: 'HON is already working on this store\'s theme. Wait a moment and try again.',
+  SHOPIFY_THEME_NOT_UNDOABLE: 'This change can no longer be undone. Reload to see where it stands.',
+  SHOPIFY_THEME_NOT_LEASED: 'This theme change is no longer being written. Reload to see where it stands.',
+  SHOPIFY_THEME_LIMIT: 'HON has made 50 theme changes for this store today. Try again tomorrow.',
 };
 const STATUS: Record<string, number> = {
   SHOPIFY_INVALID: 400, SHOPIFY_CONNECT_STATE_INVALID: 400, SHOPIFY_CONNECT_STATE_EXPIRED: 400,
@@ -46,8 +53,9 @@ const STATUS: Record<string, number> = {
   SHOPIFY_SYNC_NOT_RUNNING: 409, SHOPIFY_RATE_LIMITED: 429,
   SHOPIFY_EDIT_NOT_ALLOWED: 409, SHOPIFY_CHANGE_STALE: 409, SHOPIFY_CHANGE_OPEN: 409, SHOPIFY_CHANGE_NOT_PENDING: 409, SHOPIFY_CHANGE_NOT_LEASED: 409,
   SHOPIFY_CHANGE_ATTEMPTS: 409, SHOPIFY_TOO_MANY_DRAFTS: 409,
+  SHOPIFY_THEMES_NOT_ALLOWED: 409, SHOPIFY_THEME_BUSY: 409, SHOPIFY_THEME_NOT_UNDOABLE: 409, SHOPIFY_THEME_NOT_LEASED: 409, SHOPIFY_THEME_LIMIT: 429,
 };
-const STATES = ['22023', '42501', 'P0002', '40001', '23505', '55P03', '54000', '55000'];
+const STATES = ['22023', '42501', 'P0002', '40001', '23505', '55P03', '54000', '55000', '55006'];
 
 function refuse(code: string, status: number): never {
   const body: Record<string, string> = { code };
@@ -146,8 +154,9 @@ export class ShopifyService {
     const r = raw as { shopDomain?: unknown; expiresAt?: unknown } | null;
     if (!r || r.shopDomain !== input.shopDomain) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
     const redirectUri = origin + SHOPIFY_RETURN_PATH;
-    // Allow editing (SH4a) and Allow finance (SH-F1) ask for their scopes too; connecting alone stays read-only.
-    const scopes = [...app.scopes, ...(input.allowEditing ? SHOPIFY_EDIT_SCOPES : []), ...(input.allowFinance ? SHOPIFY_FINANCE_SCOPES : [])];
+    // Allow editing (SH4a), Allow finance (SH-F1) and Allow theme editing (TB1) ask for their scopes too; connecting alone stays read-only.
+    const scopes = [...app.scopes, ...(input.allowEditing ? SHOPIFY_EDIT_SCOPES : []), ...(input.allowFinance ? SHOPIFY_FINANCE_SCOPES : []),
+      ...(input.allowThemes ? SHOPIFY_THEME_SCOPES : [])];
     const authorizeUrl = app.fake
       ? `${redirectUri}?${app.fake.approve(input.shopDomain, state, undefined, scopes)}`
       : shopifyAuthorizeUrl({ shop: input.shopDomain, clientId: app.clientId, scopes, redirectUri, state });
@@ -235,6 +244,35 @@ export class ShopifyService {
       record: async (outcome, failureCode, product) => this.checked(verifyShopifyChangeResult,
         await this.call('recordChange', [subject, JSON.stringify({ ...bound, outcome, failureCode, product })])),
     });
+  }
+
+  /** TB1 (commerce.shopify.manage): whether theme editing is allowed, HON's draft copy of the live theme and the latest edits. */
+  async themeWorkspace(req: HonRequest, schoolId: unknown): Promise<ShopifyThemeWorkspace> {
+    const school = this.school(schoolId);
+    const out = this.checked(verifyShopifyThemeWorkspace, await this.call('themes', [this.subject(req), school]));
+    if (out.schoolId !== school) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
+    return out;
+  }
+
+  /**
+   * TB1: preview a ready-made theme change (reads only), write it to HON's UNPUBLISHED copy of the live theme, or undo one
+   * edit. The database leases the store's theme work to this person first; HON never writes to the live theme.
+   */
+  async themeWork(req: HonRequest, body: unknown): Promise<ShopifyThemeWorkResult> {
+    const input = this.input(validateShopifyThemeCommand, body), subject = this.subject(req), app = this.requireApp();
+    const w = begunThemeWork(await this.call('beginTheme', [subject, JSON.stringify(input)]));
+    if (!w || w.purpose !== input.purpose) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
+    const bound = { schoolId: input.schoolId, leaseToken: w.leaseToken };
+    const done = await runThemeWork(app, this.now, w, {
+      rotate: b => this.call('rotateTheme', [subject, JSON.stringify({ ...bound, ...b })]),
+      finish: async (f, preview) => {
+        const raw = await this.call('finishTheme', [subject, JSON.stringify({ ...bound, ...f })]) as { outcome?: unknown } | null;
+        if (raw?.outcome !== f.outcome) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
+        return { outcome: f.outcome, failureCode: f.failureCode,
+          preview: preview ? this.checked(verifyShopifyThemePreview, { schoolId: input.schoolId, recipe: w.recipe.recipe, ...preview }) : null };
+      },
+    });
+    return this.checked(verifyShopifyThemeWorkResult, { ...done, workspace: await this.themeWorkspace(req, input.schoolId) });
   }
 
   /** A person's sync (Sync now, and the first sync after connecting), bound to their session at this school. */
