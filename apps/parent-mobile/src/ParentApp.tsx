@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from './ui/text';
-import { createNavigationContainerRef, NavigationContainer, useFocusEffect, useNavigation } from '@react-navigation/native';
+import { createNavigationContainerRef, NavigationContainer, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { createBottomTabNavigator, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ParentApi } from './api/client';
@@ -11,14 +11,14 @@ import { registerPhone, unregisterPhone, type PhonePush } from './push/push';
 import { HomeScreen } from './screens/HomeScreen';
 import { ScheduleScreen, SignInScreen } from './screens/OtherTabs';
 import { EianScreen } from './eian/EianScreen';
-import { MoreScreen } from './more/MoreScreen';
+import { MoreScreen, type Area as MoreArea } from './more/MoreScreen';
 import { MessagesScreen } from './messages/MessagesScreen';
 import { Loading } from './ui/parts';
 import { Icon, type IconName } from './ui/icons';
 import { eianImage } from './eian/avatar';
 import { radius, space, type, useColors } from './ui/theme';
 
-type Tabs = { Home: undefined; Schedule: undefined; Eian: undefined; Messages: undefined; More: undefined };
+type Tabs = { Home: undefined; Schedule: undefined; Eian: undefined; Messages: undefined; More: { area?: MoreArea; at?: number } | undefined };
 const Tab = createBottomTabNavigator<Tabs>();
 const ICONS: Record<Exclude<keyof Tabs, 'Eian'>, IconName> = { Home: 'home', Schedule: 'schedule', Messages: 'messages', More: 'more' };
 
@@ -96,7 +96,7 @@ function Tabs({ onSignOut, version, opened = 0 }: { onSignOut: () => void; versi
         <Tab.Screen name="Schedule" component={ScheduleScreen} />
         <Tab.Screen name="Eian" children={() => <EianFromTab />} />
         <Tab.Screen name="Messages" component={MessagesScreen} />
-        <Tab.Screen name="More" children={() => <MoreScreen onSignOut={onSignOut} version={version} />} />
+        <Tab.Screen name="More" children={() => <MoreFromTab onSignOut={onSignOut} version={version} />} />
       </Tab.Navigator>
     </NavigationContainer>
   );
@@ -126,8 +126,15 @@ function EianFromTab() {
 }
 
 function HomeFromTab() {
-  const navigation = useNavigation<{ navigate: (tab: keyof Tabs) => void }>();
-  return <HomeScreen onNavigate={tab => navigation.navigate(tab)} />;
+  const navigation = useNavigation<{ navigate: (tab: keyof Tabs, params?: Tabs['More']) => void }>();
+  return <HomeScreen onNavigate={tab => navigation.navigate(tab)}
+    onJourneyGo={go => go.tab === 'More' ? navigation.navigate('More', { area: go.area, at: Date.now() }) : navigation.navigate('Messages')} />;
+}
+
+/** More opens straight into an area when Home's journey sends it there (`at` makes a repeat tap open it again). */
+function MoreFromTab({ onSignOut, version }: { onSignOut: () => void; version: string }) {
+  const route = useRoute<{ key: string; name: 'More'; params: Tabs['More'] }>();
+  return <MoreScreen onSignOut={onSignOut} version={version} openArea={route.params?.area ?? null} openAt={route.params?.at ?? 0} />;
 }
 
 /** Five fixed tabs; Eian's face is the raised center tab. Every tab is a 48pt+ target with a screen-reader role. */

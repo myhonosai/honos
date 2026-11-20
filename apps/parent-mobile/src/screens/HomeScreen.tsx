@@ -9,6 +9,8 @@ import { StreakBar, useStreaks } from '../home/Streaks';
 import { bookingLabel, childSummaries, formatClassTime, nextClass } from '../home/model';
 import { beltPath, eianCheer } from '../home/belt-path';
 import { BeltPathView } from '../home/BeltPathView';
+import { giftsFor, RecommendationSheet, useRecommendations, type JourneyGo } from '../home/Recommendations';
+import type { FamilyJourneyRecommendation } from '@hon/contracts/journey-recommendations';
 import { Icon } from '../ui/icons';
 import { Body, Button, Card, Pill, Section, Title } from '../ui/parts';
 import { EDGE, radius, space, TOUCH, type, useColors } from '../ui/theme';
@@ -19,10 +21,13 @@ const ACCESS_LABEL: Record<ParentJourneyView['accessLevel'], string> = {
   PRIMARY_GUARDIAN: 'Primary guardian', SECONDARY_GUARDIAN: 'Guardian', VIEWER: 'View only',
 };
 
-export function HomeScreen({ onNavigate }: { onNavigate: (tab: 'Schedule' | 'Eian' | 'Messages') => void }) {
+export function HomeScreen({ onNavigate, onJourneyGo }: { onNavigate: (tab: 'Schedule' | 'Eian' | 'Messages') => void; onJourneyGo?: (go: JourneyGo) => void }) {
   const { state, selection, select, refresh, now, api } = useFamily();
   const announcements = useAnnouncements(api, state.status === 'ready' ? state.view : null);
   const streaks = useStreaks(api, state.status === 'ready' ? state.view : null);
+  const recommendations = useRecommendations(api, state.status === 'ready' ? state.view : null);
+  const [gift, setGift] = useState<FamilyJourneyRecommendation | null>(null);
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
   const [openChild, setOpenChild] = useState<number | null>(null);
   const insets = useSafeAreaInsets();
   const c = useColors();
@@ -45,6 +50,9 @@ export function HomeScreen({ onNavigate }: { onNavigate: (tab: 'Schedule' | 'Eia
       </View>
       <FamilyGate state={state} />
       {state.status === 'ready' ? <Ready view={state.view} timeZone={state.timeZone} /> : null}
+      <RecommendationSheet item={gift} onClose={() => setGift(null)}
+        onNotNow={id => { setHidden(prev => new Set([...prev, id])); setGift(null); }}
+        onGo={go => { setGift(null); if (onJourneyGo) onJourneyGo(go); else if (go.tab === 'Messages') onNavigate('Messages'); }} />
     </ScrollView>
   );
 
@@ -97,7 +105,8 @@ export function HomeScreen({ onNavigate }: { onNavigate: (tab: 'Schedule' | 'Eia
           const first = ch.name.split(/\s+/)[0] || ch.name;
           return (
             <View key={ch.key} style={{ marginBottom: space.lg }}>
-              <BeltPathView childName={ch.name} program={ch.program} rank={ch.rank} path={path} cheer={eianCheer(first, path)} onOpen={() => setOpenChild(ch.index)} />
+              <BeltPathView childName={ch.name} program={ch.program} rank={ch.rank} path={path} cheer={eianCheer(first, path)} onOpen={() => setOpenChild(ch.index)}
+                gifts={giftsFor(recommendations, ch.name, hidden)} onGift={setGift} />
               {ch.latestAchievement ? <View style={{ marginTop: space.sm }}><Pill tone="good" text={`★ ${ch.latestAchievement}`} /></View> : null}
             </View>
           );
