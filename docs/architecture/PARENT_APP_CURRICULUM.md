@@ -5,7 +5,7 @@ or cycle based. If rank based, as rank changes, I need app to know and change wh
 know which cycle and cycle material is set either video or documents. And it would cycle through or pick by staff.
 This means HON OS needs a section for app control."
 
-Status: PCA-1 (0605) built on branch claude/project-thread-05np7o; PCA-2..4 not built yet. Migrations (coordinator, 2026-11-19): 0605 cycles + settings, 0578 parent read v2.
+Status: PCA-1 (0605) merged to main (#524); PCA-2 (0606) on branch claude/project-thread-05np7o; PCA-3..4 not merged yet. Migrations (coordinator, 2026-11-19): 0605 cycles + settings, 0606 parent read v2.
 
 ## 1. What already exists on main (cd2c33d)
 
@@ -165,7 +165,7 @@ Contracts in `packages/contracts/src/parent-app-curriculum.ts` with strict verif
 
 1. **PCA-1 database + staff API** (migration 0605): settings table, cycles table, resource `cycle_id` + `DOCUMENT`, staff
    read and commands, current-cycle function, DB proofs.
-2. **PCA-2 parent read** (migration 0578): `read_parent_curriculum_app`, staff preview, parent route, contracts, proofs.
+2. **PCA-2 parent read** (migration 0606): `read_parent_curriculum_app`, staff preview, parent route, contracts, proofs.
 3. **PCA-3 staff page** `/staff/parent-app/curriculum` (web), browser screenshots at 1440 and 390.
 4. **PCA-4 app screen** in `apps/parent-mobile`: Curriculum screen replacing the More list, sample data, tests.
 
@@ -183,7 +183,7 @@ Contracts in `packages/contracts/src/parent-app-curriculum.ts` with strict verif
 - Tables `hon.curriculum_cycles`, `hon.curriculum_app_settings`, `hon.curriculum_app_events` (immutable history),
   `hon.curriculum_app_requests` (scoped receipts); forced RLS, no policies, no runtime grants.
 - `hon.curriculum_resources` gains `cycle_id` (FK to an active-or-archived cycle of the same curriculum, at most one of
-  rank/cycle) and the `DOCUMENT` kind. The 0132 parent read now leaves cycle material and documents to the 0578 read.
+  rank/cycle) and the `DOCUMENT` kind. The 0132 parent read now leaves cycle material and documents to the 0606 read.
 - Entry points (runtime EXECUTE only): `hon.read_staff_parent_app_curriculum(text)` and
   `hon.mutate_parent_app_curriculum(subject, op, curriculum, target, input, key, request, correlation)` with ops
   `SAVE_SETTINGS`, `CYCLE_CREATE`, `CYCLE_RENAME`, `CYCLE_ARCHIVE`, `CYCLE_ORDER`, `SWITCH_CYCLE`.

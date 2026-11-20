@@ -103,3 +103,27 @@ test('source boundary: dedicated functions only, no network, AI, outbox or provi
   const sql = readFileSync('../../packages/database/migrations/0605_parent_app_curriculum_cycles.sql', 'utf8');
   assert.doesNotMatch(sql, /INSERT INTO hon\.(outbox_events|action_requests|work_items|communication_messages|ai_invocation_plans)/);
 });
+
+test('0606 parent read verifier: whitelist only, one mode, closed sections', () => {
+  const { verifyParentCurriculumApp } = require('@hon/contracts');
+  const item = { title: 'Yellow form', description: '', kind: 'VIDEO', url: 'https://www.youtube.com/watch?v=y' };
+  const entry = { curriculumName: 'Kids', mode: 'RANK', rank: { name: 'Yellow', color: '#ffd400' }, cycle: null, next: { name: 'Orange', startsOn: null }, sections: [{ label: 'CURRENT', items: [item] }] };
+  const good = { children: [{ childDisplayName: 'Mia Sample', curricula: [entry] }] };
+  assert.equal(verifyParentCurriculumApp(good).children[0].curricula[0].sections[0].items[0].title, 'Yellow form');
+  const cycleEntry = { ...entry, mode: 'CYCLE', rank: null, cycle: { name: 'Cycle 2', startsOn: '2026-11-19', endsOn: null, rotation: 'STAFF_PICK' } };
+  assert.equal(verifyParentCurriculumApp({ children: [{ childDisplayName: 'Leo', curricula: [cycleEntry] }] }).children[0].curricula[0].cycle.rotation, 'STAFF_PICK');
+  for (const bad of [{ ...entry, id: randomUUID() }, { ...entry, cycle: cycleEntry.cycle }, { ...entry, sections: [{ label: 'LATER', items: [item] }] },
+    { ...entry, sections: [{ label: 'CURRENT', items: [] }] }, { ...entry, sections: [{ label: 'CURRENT', items: [item] }, { label: 'CURRENT', items: [item] }] },
+    { ...entry, sections: [{ label: 'CURRENT', items: [{ ...item, url: 'http://x.com/' }] }] }, { ...entry, sections: [{ label: 'CURRENT', items: [{ ...item, studentId: randomUUID() }] }] },
+    { ...entry, next: { name: 'Orange', startsOn: 'soon' } }])
+    assert.throws(() => verifyParentCurriculumApp({ children: [{ childDisplayName: 'Mia', curricula: [bad] }] }));
+});
+
+test('0606 parent service refuses ambiguous families before reading', async () => {
+  let reads = 0;
+  const service = new ParentAppCurriculumService({ resolveParentJourneyScopes: async () => [], withTenantTransaction: () => { reads += 1; throw new Error('unexpected'); } });
+  await assert.rejects(() => service.parent('synthetic-parent'), (e) => e.getStatus() === 403 && e.getResponse().code === 'FAMILY_SCOPE_UNAVAILABLE');
+  await assert.rejects(() => service.parent(''), (e) => e.getStatus() === 403);
+  await assert.rejects(() => service.preview(c(), 'student'), (e) => e.getStatus() === 400);
+  assert.equal(reads, 0);
+});

@@ -2,7 +2,7 @@
  * Parent app curriculum (0605 staff side). Spec: docs/architecture/PARENT_APP_CURRICULUM.md.
  * A curriculum is shown in the parent app as RANK-based or CYCLE-based. Strict, closed verifiers only.
  */
-import { closedLibraryObject, isCurriculumLibraryId, libraryText, verifyCurriculumResourceRecord, type CurriculumResourceRecord } from './curriculum-resource-library.js';
+import { CURRICULUM_RESOURCE_KINDS, closedLibraryObject, isCurriculumLibraryId, isSafeCurriculumResourceUrl, libraryText, verifyCurriculumResourceRecord, type CurriculumResourceRecord } from './curriculum-resource-library.js';
 
 export const PARENT_APP_CURRICULUM_COMMAND = 'parent-app-curriculum';
 export const CURRICULUM_DISPLAY_MODES = ['RANK', 'CYCLE'] as const;
@@ -98,4 +98,54 @@ export function verifyStaffParentAppCurriculum(v: unknown): StaffParentAppCurric
         return { id: x.id, name: libraryText(x.name, 160), color: x.color as string | null, order: x.order as number };
       }), app, resources: c.resources.map(verifyCurriculumResourceRecord).filter((x) => { if (x.curriculumId !== c.id) bad(); return true; }) };
   }) };
+}
+
+// 0606: what a family sees. Names, dates, kinds, titles, descriptions and URLs only (no ids).
+export const CURRICULUM_APP_SECTION_LABELS = ['CURRENT', 'REVIEW', 'NEXT', 'ALL'] as const;
+export type CurriculumAppSectionLabel = (typeof CURRICULUM_APP_SECTION_LABELS)[number];
+export interface CurriculumAppItem { title: string; description: string; kind: CurriculumResourceRecord['kind']; url: string }
+export interface CurriculumAppEntry {
+  curriculumName: string; mode: CurriculumDisplayMode;
+  rank: { name: string; color: string | null } | null;
+  cycle: { name: string; startsOn: string | null; endsOn: string | null; rotation: CurriculumCycleRotation } | null;
+  next: { name: string; startsOn: string | null } | null;
+  sections: { label: CurriculumAppSectionLabel; items: CurriculumAppItem[] }[];
+}
+export interface CurriculumAppChild { childDisplayName: string; curricula: CurriculumAppEntry[] }
+export interface ParentCurriculumApp { children: CurriculumAppChild[] }
+
+const dateOrNull = (v: unknown) => v === null || isCurriculumAppDate(v);
+export function verifyCurriculumAppChild(v: unknown): CurriculumAppChild {
+  const c = closedLibraryObject(v, ['childDisplayName', 'curricula']);
+  if (!Array.isArray(c.curricula) || c.curricula.length > 20) bad();
+  return { childDisplayName: libraryText(c.childDisplayName, 160), curricula: c.curricula.map((value) => {
+    const e = closedLibraryObject(value, ['curriculumName', 'mode', 'rank', 'cycle', 'next', 'sections']);
+    if (!CURRICULUM_DISPLAY_MODES.includes(e.mode as never) || !Array.isArray(e.sections) || e.sections.length > 4) bad();
+    let rank: CurriculumAppEntry['rank'] = null, cycle: CurriculumAppEntry['cycle'] = null, next: CurriculumAppEntry['next'] = null;
+    if (e.rank !== null) { const r = closedLibraryObject(e.rank, ['name', 'color']); if (r.color !== null && !/^#[0-9A-Fa-f]{6}$/.test(String(r.color))) bad(); rank = { name: libraryText(r.name, 160), color: r.color as string | null }; }
+    if (e.cycle !== null) {
+      const r = closedLibraryObject(e.cycle, ['name', 'startsOn', 'endsOn', 'rotation']);
+      if (!isValidCurriculumCycleName(r.name) || !dateOrNull(r.startsOn) || !dateOrNull(r.endsOn) || !CURRICULUM_CYCLE_ROTATIONS.includes(r.rotation as never)) bad();
+      cycle = { name: r.name, startsOn: r.startsOn as string | null, endsOn: r.endsOn as string | null, rotation: r.rotation as CurriculumCycleRotation };
+    }
+    if (e.next !== null) { const r = closedLibraryObject(e.next, ['name', 'startsOn']); if (!dateOrNull(r.startsOn)) bad(); next = { name: libraryText(r.name, 160), startsOn: r.startsOn as string | null }; }
+    if ((e.mode === 'RANK' && cycle !== null) || (e.mode === 'CYCLE' && rank !== null)) bad();
+    const labels = new Set<string>();
+    const sections = e.sections.map((sv) => {
+      const s = closedLibraryObject(sv, ['label', 'items']);
+      if (!CURRICULUM_APP_SECTION_LABELS.includes(s.label as never) || labels.has(s.label as string) || !Array.isArray(s.items) || !s.items.length || s.items.length > 200) bad();
+      labels.add(s.label as string);
+      return { label: s.label as CurriculumAppSectionLabel, items: s.items.map((iv) => {
+        const i = closedLibraryObject(iv, ['title', 'description', 'kind', 'url']);
+        if (!CURRICULUM_RESOURCE_KINDS.includes(i.kind as never) || !isSafeCurriculumResourceUrl(i.url)) bad();
+        return { title: libraryText(i.title, 160), description: libraryText(i.description, 600, true), kind: i.kind as CurriculumAppItem['kind'], url: i.url };
+      }) };
+    });
+    return { curriculumName: libraryText(e.curriculumName, 160), mode: e.mode as CurriculumDisplayMode, rank, cycle, next, sections };
+  }) };
+}
+export function verifyParentCurriculumApp(v: unknown): ParentCurriculumApp {
+  const r = closedLibraryObject(v, ['children']);
+  if (!Array.isArray(r.children) || r.children.length > 20) bad();
+  return { children: r.children.map(verifyCurriculumAppChild) };
 }

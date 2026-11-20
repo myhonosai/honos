@@ -4883,3 +4883,17 @@ DO $$ DECLARE r text; f text; t text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_staff_parent_app_curriculum(text),hon.mutate_parent_app_curriculum(text,text,uuid,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0606 parent app curriculum read: the parent read and the staff preview are the only runtime entry points; the child
+-- entries helper stays migration-owner only.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.read_parent_curriculum_app(text,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0606 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.curriculum_app_child_entries(uuid,uuid,uuid)','hon.read_parent_curriculum_app(text,uuid)','hon.read_staff_parent_app_curriculum_preview(text,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_parent_curriculum_app(text,uuid),hon.read_staff_parent_app_curriculum_preview(text,uuid) TO hon_runtime;
+  END IF;
+END $$;

@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Header, Headers, HttpCode, Injectable, Param, ParseUUIDPipe, Post, Req, UseGuards, type ExecutionContext } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Header, Headers, HttpCode, Injectable, Param, ParseUUIDPipe, Post, Query, Req, UseGuards, type ExecutionContext } from '@nestjs/common';
 import type { Request } from 'express';
 import { randomUUID } from 'node:crypto';
 import { PARENT_APP_CURRICULUM_COMMAND, type CurriculumResourceContext, type ParentAppCurriculumOperation } from '@hon/contracts';
@@ -6,6 +6,7 @@ import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { CurriculumHumanUiGuard } from './curriculum-human-ui.guard.js';
+import { ParentCurriculumLibraryReadGuard, rejectParentLibraryInputs } from './library.controller.js';
 import { CurriculumAppSettingsDto, CurriculumCycleCreateDto, CurriculumCycleOrderDto, CurriculumCycleRenameDto, CurriculumCycleVersionDto } from './parent-app-curriculum.dto.js';
 import { ParentAppCurriculumService } from './parent-app-curriculum.service.js';
 
@@ -43,6 +44,11 @@ export class StaffParentAppCurriculumController {
   const c = await this.context(request, school);
   return { data: await this.service.read(c), meta: { requestId: c.requestId, correlationId: c.correlationId, replayed: false } };
  }
+ @Get('preview/:studentId') @Header('Cache-Control', 'private, no-store')
+ async preview(@Param('schoolId', new ParseUUIDPipe()) school: string, @Param('studentId', new ParseUUIDPipe()) student: string, @Req() request: HonRequest) {
+  const c = await this.context(request, school);
+  return { data: await this.service.preview(c, student), meta: { requestId: c.requestId, correlationId: c.correlationId, replayed: false } };
+ }
  @Post(':curriculumId/settings') @HttpCode(200) @Header('Cache-Control', 'private, no-store')
  settings(@Param('schoolId', new ParseUUIDPipe()) school: string, @Param('curriculumId', new ParseUUIDPipe()) curriculum: string, @Headers('idempotency-key') key: string | undefined, @Body() body: CurriculumAppSettingsDto, @Req() request: HonRequest) {
   return this.run(request, school, key, 'SAVE_SETTINGS', curriculum, null, body);
@@ -66,5 +72,18 @@ export class StaffParentAppCurriculumController {
  @Post(':curriculumId/cycle-order') @HttpCode(200) @Header('Cache-Control', 'private, no-store')
  orderCycles(@Param('schoolId', new ParseUUIDPipe()) school: string, @Param('curriculumId', new ParseUUIDPipe()) curriculum: string, @Headers('idempotency-key') key: string | undefined, @Body() body: CurriculumCycleOrderDto, @Req() request: HonRequest) {
   return this.run(request, school, key, 'CYCLE_ORDER', curriculum, null, body);
+ }
+}
+
+/** Selector-free, read-only parent route (cookie or mobile bearer): the family comes from the signed-in subject only. */
+@Controller('parent/curriculum-app')
+@UseGuards(HonIdentityGuard, ParentCurriculumLibraryReadGuard)
+export class ParentCurriculumAppController {
+ constructor(private readonly service: ParentAppCurriculumService) {}
+ @Get() @Header('Cache-Control', 'private, no-store') @Header('Referrer-Policy', 'no-referrer') @Header('X-Robots-Tag', 'noindex, nofollow')
+ async read(@Query() query: Record<string, unknown>, @Req() request: HonRequest) {
+  rejectParentLibraryInputs(request, query);
+  if (!request.honIdentity) throw new ForbiddenException({ code: 'IDENTITY_REQUIRED' });
+  return this.service.parent(request.honIdentity.externalSubject);
  }
 }
