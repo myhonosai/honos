@@ -4,7 +4,8 @@ import { Text } from '../ui/text';
 import type { FamilySchoolAnnouncement, ParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
 import type { ParentApi, ParentRead } from '../api/client';
 import { Card, Section } from '../ui/parts';
-import { space, type, useColors } from '../ui/theme';
+import { space, type, useColors, radius } from '../ui/theme';
+import { Icon } from '../ui/icons';
 
 /** How many announcements Home shows before "Show all". */
 export const HOME_ANNOUNCEMENTS = 3;
@@ -57,12 +58,17 @@ function Announcement({ item, timeZone }: { item: FamilySchoolAnnouncement; time
   const date = announcementDate(item.publishedAt, timeZone);
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`Announcement, ${date}: ${item.title}`} accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)}>
-      <Card>
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.sm }}>
-          <Text style={{ flex: 1, color: c.text, fontSize: type.title, fontWeight: '700' }}>{item.title}</Text>
-          <Text style={{ color: c.muted, fontSize: type.caption }}>{date}</Text>
+      <Card style={{ flexDirection: 'row', gap: space.md }}>
+        <View style={{ width: 44, height: 44, borderRadius: radius.md, backgroundColor: c.coralSoft, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="megaphone" size={24} color={c.coral} />
         </View>
-        <Text style={{ color: c.muted, fontSize: type.body, marginTop: space.xs, lineHeight: type.body * 1.4 }} numberOfLines={open ? undefined : 3}>{item.body}</Text>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.sm }}>
+            <Text style={{ flex: 1, color: c.text, fontSize: type.title - 2, fontWeight: '800' }}>{item.title}</Text>
+            <Text style={{ color: c.muted, fontSize: type.caption }}>{date}</Text>
+          </View>
+          <Text style={{ color: c.muted, fontSize: type.body, marginTop: space.xs, lineHeight: type.body * 1.4 }} numberOfLines={open ? undefined : 3}>{item.body}</Text>
+        </View>
       </Card>
     </Pressable>
   );

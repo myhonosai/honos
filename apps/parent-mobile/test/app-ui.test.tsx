@@ -30,6 +30,18 @@ describe('Parent app shell', () => {
     expect(labels).toHaveLength(5);
   });
 
+  it('home: progress is a belt path with the next requirement, from the school\'s records only', async () => {
+    await render(<ParentApp api={fakeApi(ok)} session={fakeSession('t')} now={now} />);
+    await screen.findByRole('button', { name: 'Open Test Child A journey' });
+    expect(screen.getByText('Next: Form 1')).toBeTruthy();
+    expect(screen.getByText('Test has 1 of 3 done. Keep going!')).toBeTruthy();
+    expect(screen.getByLabelText('Front kick: met')).toBeTruthy();
+    expect(screen.getByLabelText('Respect: still to come, optional')).toBeTruthy();
+    expect(screen.getByText('1/3')).toBeTruthy();
+    // A child whose requirements the school did not return says so instead of drawing a path.
+    expect(screen.getByText("Requirements aren't available right now.")).toBeTruthy();
+  });
+
   it('signed out: shows sign-in and never calls a family read', async () => {
     const api = fakeApi(ok);
     await render(<ParentApp api={api} session={fakeSession(null)} now={now} />);

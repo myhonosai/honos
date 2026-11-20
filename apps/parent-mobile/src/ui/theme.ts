@@ -8,10 +8,10 @@ export const palette = {
   light: {
     bg: '#F6F8FD', surface: '#FFFFFF', surfaceAlt: '#EEF2FA', border: '#E2E8F4', edge: '#CDD6E8',
     text: '#0E1A33', muted: '#55627D', subtle: '#7A869F',
-    accent: '#2F7BFF', accentEdge: '#1B5FD6', accentText: '#FFFFFF', accentSoft: '#E4EEFF', glow: '#25C9DE', glowEdge: '#129DB0',
-    success: '#3E8E0B', successSoft: '#EEFAD9', lime: '#8FD61F', limeEdge: '#6CAA0E', limeText: '#16310A',
-    warning: '#B97800', warningSoft: '#FFF4D6', sun: '#FFC23D', sunEdge: '#E09A00',
-    danger: '#D93A50', dangerSoft: '#FDE3E7', coral: '#FF6F55', coralSoft: '#FFE9E3',
+    accent: '#2F7BFF', accentEdge: '#1B5FD6', accentText: '#FFFFFF', accentSoft: '#E4EEFF', glow: '#25C9DE', glowEdge: '#0E7C8C',
+    success: '#2F6E08', successSoft: '#EEFAD9', lime: '#8FD61F', limeEdge: '#6CAA0E', limeText: '#16310A',
+    warning: '#8A5A00', warningSoft: '#FFF4D6', sun: '#FFC23D', sunEdge: '#E09A00',
+    danger: '#B8243A', dangerSoft: '#FDE3E7', coral: '#FF6F55', coralSoft: '#FFE9E3',
     violet: '#8B6CFF', violetEdge: '#6A4CE0', violetSoft: '#EFEAFF', pink: '#E8478D', pinkSoft: '#FFE5F1', cyanSoft: '#DFF8FB',
   },
   dark: {
