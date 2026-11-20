@@ -122,10 +122,10 @@ it('offers booking in place from the roster panel when the calendar asks, and ne
   expect(renderToStaticMarkup(<RosterSessionDetail {...base} session={s(1, '2026-11-16T17:00:00.000Z', { status: 'CANCELLED' })} onBook={() => {}}/>)).not.toContain('Book a student');
 });
 
-it('is one page with Calendar, Weekly timetable and Sale days & events tabs', () => {
+it('is one page with Calendar, Weekly timetable, Sale days & events and Settings tabs', () => {
   const html = renderToStaticMarkup(<SchoolSchedulePage/>);
   expect(html).toContain('<h1 id="schedule-title">Calendar</h1>');
-  expect(order(html, '>Calendar</button>', '>Weekly timetable</button>', '>Sale days &amp; events</button>')).toBe(true);
+  expect(order(html, '>Calendar</button>', '>Weekly timetable</button>', '>Sale days &amp; events</button>', '>Settings</button>')).toBe(true);
   expect(html).toMatch(/aria-selected="true"[^>]*>Calendar</);
   expect(html).toContain('data-testid="calendar-add-class"');
   expect(scheduleTabHref('events')).toBe('/staff/schedule?tab=events'); expect(scheduleTabHref('calendar')).toBe('/staff/schedule');
