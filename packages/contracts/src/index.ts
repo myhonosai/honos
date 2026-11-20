@@ -1168,6 +1168,7 @@ export * from './parent-app-curriculum.js';
 export * from './school-announcements.js';
 export * from './parent-push.js';
 export * from './parent-pro-shop.js';
+export * from './family-referrals.js';
 export * from './family-checkout.js';
 export * from './parent-attendance-streaks.js';
 export * from './journey-recommendations.js';
