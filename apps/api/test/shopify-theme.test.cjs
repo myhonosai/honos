@@ -5,7 +5,7 @@ const adapter = require('../dist/commerce/shopify/shopify-adapter.js');
 const recipes = require('../dist/commerce/shopify/shopify-theme-recipes.js');
 const { begunThemeWork, draftName, runThemeWork } = require('../dist/commerce/shopify/shopify-theme-engine.js');
 
-// TB1 (0595) Theme Builder: everything here runs against the in-memory fake store. Nothing calls Shopify.
+// TB1 (0600) Theme Builder: everything here runs against the in-memory fake store. Nothing calls Shopify.
 const SHOP = 'ima-theme.myshopify.com';
 const CONN = '33333333-3333-4333-8333-333333333333';
 const SCHOOL = '44444444-4444-4444-8444-444444444444';
@@ -121,6 +121,18 @@ test('TB1 a refused write is FAILED, a lost answer is UNKNOWN, and the live them
   const s3 = await store(['read_products', 'read_orders', 'read_themes']);
   assert.equal((await run(s3, begun(s3))).finished[0].f.outcome, 'UNKNOWN');
   assert.equal((await s3.app.adapter.themes(SHOP, s3.token)).length, 1);
+});
+
+test('TB1 a copy whose answer was lost is never followed by a second copy', async () => {
+  const s = await store();
+  s.app.fake.writeFault = 'LOSE_ANSWER';
+  const lost = (await run(s, begun(s))).finished[0].f;
+  assert.deepEqual([lost.outcome, lost.draftTheme], ['UNKNOWN', null]);
+  assert.equal((await s.app.adapter.themes(SHOP, s.token)).filter(t => t.role === 'UNPUBLISHED').length, 1, 'Shopify made the copy');
+  const next = (await run(s, begun(s))).finished[0].f;
+  assert.deepEqual([next.outcome, next.failureCode], ['FAILED', 'DRAFT_COPY_EXISTS']);
+  assert.equal(s.app.fake.calls.filter(c => c.startsWith('themeDuplicate')).length, 1);
+  assert.equal((await s.app.adapter.themes(SHOP, s.token)).filter(t => t.role === 'UNPUBLISHED').length, 1);
 });
 
 test('TB1 begin answers of the wrong shape are refused', async () => {

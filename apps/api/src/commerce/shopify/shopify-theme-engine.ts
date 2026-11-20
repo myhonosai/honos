@@ -81,6 +81,8 @@ export async function runThemeWork<T>(app: ShopifyApp, now: () => number, w: Beg
     if (!live) return await end(failed, 'NO_LIVE_THEME');
     if (!base) base = { id: live.id, name: live.name };
     if (draft && !themes.some(t => t.id === draft!.id && t.role === 'UNPUBLISHED')) return await end(failed, 'DRAFT_THEME_MISSING');
+    // An earlier copy whose answer was lost is not recorded: refuse rather than make a second one.
+    if (!draft && w.purpose === 'APPLY' && themes.some(t => t.role === 'UNPUBLISHED' && t.name === draftName(live!.name))) return await end(failed, 'DRAFT_COPY_EXISTS');
     const target = draft ?? { id: live.id, name: live.name };
     const names = w.purpose === 'UNDO' ? w.restore!.map(f => f.filename) : [...THEME_RECIPE_FILES[w.recipe.recipe]];
     files = await app.adapter.themeFiles(shop, token, target.id, names);

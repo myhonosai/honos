@@ -1,4 +1,4 @@
-/** 0595 Shopify theme drafts (TB1): ready-made theme changes written only to HON's UNPUBLISHED copy of the live theme. Real signed HON sessions -> Nest/guard -> fixed runtime SQL -> marked disposable PostgreSQL (Champions Club fixture). The Shopify side is the in-memory fake; nothing leaves the machine. */
+/** 0600 Shopify theme drafts (TB1): ready-made theme changes written only to HON's UNPUBLISHED copy of the live theme. Real signed HON sessions -> Nest/guard -> fixed runtime SQL -> marked disposable PostgreSQL (Champions Club fixture). The Shopify side is the in-memory fake; nothing leaves the machine. */
 import assert from 'node:assert/strict';
 import {randomUUID as K,randomBytes} from 'node:crypto';
 import {createRequire} from 'node:module';
@@ -215,11 +215,11 @@ try{
  await denied(()=>themeRead(manager,A.schoolId),403,'SHOPIFY_FORBIDDEN');
  pass('a store that stops being CONNECTED loses its draft record and edits; a revoked grant reads nothing');
 
- // 10. The deploy check for 0595 in infra 011 passes against this database (with the fixture's runtime role).
+ // 10. The deploy check for 0600 in infra 011 passes against this database (with the fixture's runtime role).
  {const verify=await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql',import.meta.url),'utf8');
-  const section=verify.split('-- Shopify theme drafts exact verification (0595, TB1)')[1]?.split('-- End Shopify theme drafts exact verification.')[0];
-  assert(section,'0595 verify section');await q(section.slice(section.indexOf('\nDO $$')).replaceAll('hon_runtime','hon_champions_runtime'));}
- pass('the infra verification for 0595 (exact bodies, closed helpers, forced RLS, triggers) passes');
+  const section=verify.split('-- Shopify theme drafts exact verification (0600, TB1)')[1]?.split('-- End Shopify theme drafts exact verification.')[0];
+  assert(section,'0600 verify section');await q(section.slice(section.indexOf('\nDO $$')).replaceAll('hon_runtime','hon_champions_runtime'));}
+ pass('the infra verification for 0600 (exact bodies, closed helpers, forced RLS, triggers) passes');
  console.log('PASS SHOPIFY THEME all '+groups+' groups');
 }finally{
  await app?.close();await Promise.allSettled([admin.end(),restricted.end(),database.onModuleDestroy()]);

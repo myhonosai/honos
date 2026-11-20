@@ -96,7 +96,7 @@ export function ThemeBuilder(p: ThemeViewProps): React.ReactElement {
   if (o?.kind === 'DONE') {
     const r = o.result, code = r.failureCode ?? '';
     const key: ThemeKey | null = r.outcome === 'UNKNOWN' ? 'th_unknown' : r.outcome === 'FAILED'
-      ? (['CHANGED_SINCE', 'DRAFT_THEME_MISSING', 'UNSUPPORTED_THEME', 'FILE_MISSING'].includes(code) ? `th_f_${code}` as ThemeKey : 'th_failed')
+      ? (['CHANGED_SINCE', 'DRAFT_THEME_MISSING', 'DRAFT_COPY_EXISTS', 'UNSUPPORTED_THEME', 'FILE_MISSING'].includes(code) ? `th_f_${code}` as ThemeKey : 'th_failed')
       : o.command.purpose === 'PREVIEW' ? null : `th_done_${o.command.purpose}` as ThemeKey;
     const good = r.outcome === 'APPLIED';
     if (key) message = <div className={`${styles.notice} ${good ? '' : styles.warn}`} role={good ? 'status' : 'alert'} data-theme-outcome={r.outcome}><p>{t(key, { code })}</p></div>;

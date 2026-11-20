@@ -1,6 +1,6 @@
 BEGIN;
 
--- HON Shopify Theme Builder, first slice TB1 (0595, coordinator-allocated 2026-11-19). Spec: docs/architecture/SHOPIFY_COMMERCE.md
+-- HON Shopify Theme Builder, first slice TB1 (0600, coordinator-allocated 2026-11-20; was 0595). Spec: docs/architecture/SHOPIFY_COMMERCE.md
 -- (TB1). Commerce step 4. Builds on 0405 (SH1) and 0496 (SH4a).
 -- * HON prepares a theme change from a ready-made recipe (school colors, size guide, pickup note) and writes it only to an
 --   UNPUBLISHED copy of the store's live theme that HON made ("draft copy"). It never writes to the live (MAIN) theme and never
@@ -18,7 +18,7 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'Trusted migration owner required'; END IF;
   IF to_regprocedure('hon.shopify_has_scope(text,text)') IS NULL OR to_regprocedure('hon.shopify_begin(text,jsonb,text[])') IS NULL THEN
-    RAISE EXCEPTION '0595 requires 0405 and 0496 (Shopify connection and product changes)'; END IF;
+    RAISE EXCEPTION '0600 requires 0405 and 0496 (Shopify connection and product changes)'; END IF;
 END $$;
 
 CREATE TABLE hon.shopify_theme_drafts (

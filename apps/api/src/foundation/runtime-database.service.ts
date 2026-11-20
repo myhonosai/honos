@@ -1576,7 +1576,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       // 0597 SH-F1 Shopify Payments snapshot.
       finance: {sql: 'SELECT hon.read_shopify_finance($1,$2::uuid) data',arity:2,readOnly:true},
       recordFinance: {sql: 'SELECT hon.record_shopify_finance($1,$2::jsonb) data',arity:2,readOnly:false},
-      // 0595 TB1 theme drafts (HON writes only to an UNPUBLISHED copy).
+      // 0600 TB1 theme drafts (HON writes only to an UNPUBLISHED copy).
       themes: {sql: 'SELECT hon.read_shopify_theme_workspace($1,$2::uuid) data',arity:2,readOnly:true},
       beginTheme: {sql: 'SELECT hon.begin_shopify_theme_work($1,$2::jsonb) data',arity:2,readOnly:false},
       rotateTheme: {sql: 'SELECT hon.rotate_shopify_theme_credential($1,$2::jsonb) data',arity:2,readOnly:false},

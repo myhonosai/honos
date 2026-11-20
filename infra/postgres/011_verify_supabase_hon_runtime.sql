@@ -5354,7 +5354,7 @@ BEGIN
 END $$;
 -- End Shopify finance exact verification.
 
--- Shopify theme drafts exact verification (0595, TB1): four runtime entry points (definer, owner-safe, exact bodies);
+-- Shopify theme drafts exact verification (0600, TB1): four runtime entry points (definer, owner-safe, exact bodies);
 -- both tables forced-RLS with no policy and no runtime privilege; the guard, the end-of-connection trigger and every
 -- helper stay closed. HON writes only to its own UNPUBLISHED copy of the live theme.
 DO $$ DECLARE f text; t text;

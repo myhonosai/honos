@@ -4623,7 +4623,7 @@ BEGIN
   END IF;
 END $$;
 
--- 0595 Shopify theme drafts (TB1): two private tables reached only through four runtime entry points (read the theme
+-- 0600 Shopify theme drafts (TB1): two private tables reached only through four runtime entry points (read the theme
 -- workspace, begin / rotate / finish one piece of theme work under its lease); the guard, the end-of-connection trigger
 -- and the helpers are migration-owner only. HON writes only to its own UNPUBLISHED copy of the live theme.
 DO $$ DECLARE r text; f text; t text;
@@ -4633,7 +4633,7 @@ DO $$ DECLARE r text; f text; t text;
     'hon.shopify_theme_files_ok(jsonb)','hon.shopify_theme_name_ok(jsonb)','hon.shopify_theme_edit_json(hon.shopify_theme_edits,boolean)',
     'hon.shopify_theme_locked(uuid)','hon.shopify_theme_leased(uuid,uuid,jsonb)'];
 BEGIN
-  IF to_regclass('hon.shopify_theme_edits') IS NULL THEN RAISE EXCEPTION 'Apply migration 0595 first'; END IF;
+  IF to_regclass('hon.shopify_theme_edits') IS NULL THEN RAISE EXCEPTION 'Apply migration 0600 first'; END IF;
   FOREACH t IN ARRAY ARRAY['hon.shopify_theme_drafts','hon.shopify_theme_edits'] LOOP
     EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP

@@ -606,6 +606,7 @@ export class FakeShopify implements ShopifyAdapter {
     if (!t) throw new ShopifyProviderError('REJECTED');
     const copy: FakeTheme = { id: String(this.nextId++), name: themeName(name), role: 'UNPUBLISHED', files: { ...t.files } };
     s.themes.push(copy);
+    if (this.writeFault === 'LOSE_ANSWER') { this.writeFault = null; throw new ShopifyProviderError('UNAVAILABLE'); }
     return { id: copy.id, name: copy.name, role: copy.role };
   }
   async upsertThemeFiles(shop: string, accessToken: string, themeId: string, files: readonly ShopifyThemeFile[]): Promise<void> {

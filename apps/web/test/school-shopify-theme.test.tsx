@@ -7,7 +7,7 @@ import { lineDiff, themeColor } from '../src/components/school-shopify/theme';
 import { ShopifyView, type ShopifyViewProps } from '../src/components/school-shopify/view';
 import { id } from './account-status-fixtures';
 
-// TB1 (0595): the Theme section previews a ready-made change, writes it only to HON's unpublished copy, and can undo it.
+// TB1 (0600): the Theme section previews a ready-made change, writes it only to HON's unpublished copy, and can undo it.
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('location', { origin: 'https://app.hon.test' }); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
