@@ -5668,6 +5668,44 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END LOOP;
 END $$;
 -- End parent attendance streaks exact verification.
+-- Journey recommendations exact verification (0603): private text, scope, trigger, target and JSON helpers, the write guard,
+-- four runtime entry points and a private forced-RLS table the runtime can never touch directly.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.journey_text_ok(text,integer,boolean)',false,false,'search_path=pg_catalog','487d7c7babea664218269d815a700aac4d150be754140579a07a4c7a75da4105'),
+('hon.guard_journey_recommendation()',false,false,'search_path=pg_catalog, hon','abc6726b50a8de8c1f3e34f78406c1bbc76d3334f2b1d13407e881917a89c749'),
+('hon.require_journey_recommendations_actor(text)',true,false,'search_path=pg_catalog, hon','4caf74d5f2dad4fa50d2e2ed13d64cf4f7fba168761391026d19ce5097f17e1d'),
+('hon.journey_recommendation_parent_scope(text)',true,false,'search_path=pg_catalog, hon','5a50751fab0cc4acd883e5890cdf207d0de9f738ad5a5fb15c07aaad169e6a7b'),
+('hon.journey_checkout_title(uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','72a68723c7f937d41517b5ce3c3887f5235563967faacaeba6ed0de508090b33'),
+('hon.journey_event_title(uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','48de16efc9b7ca01bf9df2055d3e9ab1500f74237a234e24817d4d5f1f1b280f'),
+('hon.journey_recommendation_reached(hon.journey_recommendations,hon.student_curriculum_enrollments)',true,false,'search_path=pg_catalog, hon','1277bbbd3f46cea65d994f1a7161fecdfeb5b6ff5fa24c2675592a0bb5747e58'),
+('hon.journey_child_signed_up(hon.journey_recommendations,uuid)',true,false,'search_path=pg_catalog, hon','325bc4ea04d1eb73bfff6610cb63ad1097002ecec7f745cd1f4c5db493b66e13'),
+('hon.journey_recommendation_staff_json(hon.journey_recommendations)',true,false,'search_path=pg_catalog, hon','8fcdd822892ac24edb871c1ec3d93bdc60fcde003e471795afbd83508e377566'),
+('hon.read_parent_journey_recommendations(text)',true,true,'search_path=pg_catalog, hon','dd913ed82599714afb8959b8289db6d8deaaa3f9623e6c7b31374f18be774ce4'),
+('hon.read_journey_recommendations(text)',true,true,'search_path=pg_catalog, hon','6869676977b79340531b0272bc689f96c658c1a3b04c12ebf883992e1527f496'),
+('hon.save_journey_recommendation(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','13bb3676bfed9b04f738437f3468bdbf4a751bd0686ce5e8ef685599af4660f3'),
+('hon.set_journey_recommendation_status(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','7f557467fb7287a257d9b3c5a947abff8bc830c85de74830b742100aab5323b1')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe journey recommendation function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.journey_recommendations'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.journey_recommendations'::regclass)
+    OR has_table_privilege('hon_runtime','hon.journey_recommendations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.journey_recommendations','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe journey recommendations table'; END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.journey_recommendations'::regclass AND NOT tgisinternal AND tgenabled='O'
+      AND ((tgname='journey_recommendations_guard' AND tgfoid='hon.guard_journey_recommendation()'::regprocedure)
+        OR (tgname='journey_recommendations_no_truncate' AND tgfoid='hon.guard_membership_activation_evidence()'::regprocedure)))<>2
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.journey_recommendations'::regclass AND NOT tgisinternal)<>2 THEN
+    RAISE EXCEPTION 'hon.journey_recommendations must carry exactly its two guards'; END IF;
+END $$;
+-- End journey recommendations exact verification.
 -- Family referrals exact verification (0604): private helpers, seven runtime entry points, five private forced-RLS tables with guards.
 DO $$ DECLARE f record; safe boolean; t text; BEGIN
   FOR f IN SELECT * FROM (VALUES

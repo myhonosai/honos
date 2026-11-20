@@ -4814,6 +4814,24 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_parent_attendance_streaks(text) TO hon_runtime;
   END IF;
 END $$;
+-- 0603 journey recommendations: private helpers and one private table; four runtime entry points (parent read; staff list, save, status).
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.set_journey_recommendation_status(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0603 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.journey_text_ok(text,integer,boolean)','hon.guard_journey_recommendation()','hon.require_journey_recommendations_actor(text)',
+    'hon.journey_recommendation_parent_scope(text)','hon.journey_checkout_title(uuid,uuid,uuid)','hon.journey_event_title(uuid,uuid,uuid)',
+    'hon.journey_recommendation_reached(hon.journey_recommendations,hon.student_curriculum_enrollments)','hon.journey_child_signed_up(hon.journey_recommendations,uuid)',
+    'hon.journey_recommendation_staff_json(hon.journey_recommendations)','hon.read_parent_journey_recommendations(text)','hon.read_journey_recommendations(text)',
+    'hon.save_journey_recommendation(text,jsonb,text,uuid,uuid)','hon.set_journey_recommendation_status(text,jsonb,text,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.journey_recommendations FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.journey_recommendations FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_parent_journey_recommendations(text),hon.read_journey_recommendations(text),
+      hon.save_journey_recommendation(text,jsonb,text,uuid,uuid),hon.set_journey_recommendation_status(text,jsonb,text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
 -- 0604 family referrals: private helpers and five tables; runtime executes the seven entry points only
 -- (staff read/configure/reward, parent read/link, public read/submit).
 DO $$ DECLARE r text; f text; t text; BEGIN

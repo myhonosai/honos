@@ -159,6 +159,7 @@ const expectedRlsTables = [
   'automation_run_steps',
   'automation_schedule_scans',
   'school_announcements',
+  'journey_recommendations',
   'family_checkout_orders',
   'parent_push_devices',
   'parent_push_fanouts',
