@@ -145,6 +145,7 @@ import { SchoolWebsiteService } from './website/school-website.service.js';
 import { SchoolWebsiteAiController } from './website/website-ai.controller.js';
 import { WebsiteAiService } from './website/website-ai.service.js';
 import { WEBSITE_PROVIDER_RUNTIME, OpenRouterWebsiteRuntime } from './ai/website-provider-runtime.js';
+import { PAPER_VISION_RUNTIME, OpenRouterPaperVisionRuntime } from './ai/paper-vision-runtime.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
 import { SchoolSupportController } from './support/school-support.controller.js';
@@ -290,6 +291,8 @@ import { ContactEmailResendGuard, ContactHistoryReadGuard, ContactMessagesContro
 import { ContactMessagesService } from './conversations/contact-messages.service.js';
 import { SchoolMessageHistoryReadGuard, SchoolMessagesController, SchoolOptedOutReadGuard } from './communication/school-messages.controller.js';
 import { SchoolMessagesService } from './communication/school-messages.service.js';
+import { SchoolMessageTemplatesController, SchoolTemplateSaveGuard, SchoolTemplateStatusGuard, SchoolTemplatesReadGuard } from './communication/school-message-templates.controller.js';
+import { SchoolMessageTemplatesService } from './communication/school-message-templates.service.js';
 import { ConversationAiController, ConversationAiFileGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard, ConversationAiKnowledgeGuard, ConversationAiProgramHqController, ConversationAiReadGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard } from './conversations/conversation-ai.controller.js';
 import { ConversationAiProgramService, ConversationAiService } from './conversations/conversation-ai.service.js';
 import { ParentMessageHistoryController, ParentMessageHistoryReadGuard } from './families/parent-message-history.controller.js';
@@ -555,6 +558,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolConversationsController,
     ContactMessagesController,
     SchoolMessagesController,
+    SchoolMessageTemplatesController,
     ConversationAiController,
     ConversationAiProgramHqController,
     ParentMessageHistoryController,
@@ -764,7 +768,11 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ContactHistoryReadGuard,
     ContactEmailResendGuard,
     SchoolMessagesService,
+    SchoolMessageTemplatesService,
     SchoolMessageHistoryReadGuard,
+    SchoolTemplatesReadGuard,
+    SchoolTemplateSaveGuard,
+    SchoolTemplateStatusGuard,
     SchoolOptedOutReadGuard,
     ConversationAiService,
     ConversationAiProgramService,
@@ -882,8 +890,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipPauseService,
     StudentImportService,
     PaperImportService,
-    // 0388: the stand-in reader is the only paper reader; a real vision provider needs owner approval.
+    // 0388: the stand-in reads only the built-in sample pages. 0594: HON reads real photos on the AI team's route; no call is
+    // made until HQ keeps a DOCUMENT_READING profile on an image model and the existing OpenRouter key and approval are set.
     { provide: PAPER_READER_RUNTIME, useFactory: () => new SyntheticPaperReader() },
+    { provide: PAPER_VISION_RUNTIME, useFactory: () => new OpenRouterPaperVisionRuntime() },
     BillingImportService,
     HistoryImportService,
     SchoolWebsiteService,

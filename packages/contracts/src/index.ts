@@ -1132,6 +1132,7 @@ export * from './school-conversations.js';
 export * from './conversation-ai.js';
 export * from './contact-message-history.js';
 export * from './school-message-history.js';
+export * from './school-message-templates.js';
 export * from './school-pay-autopay.js';
 export * from './hq-school-health.js';
 export * from './school-reports.js';
