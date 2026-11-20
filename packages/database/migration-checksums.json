@@ -367,6 +367,7 @@
     "0602_parent_attendance_streaks.sql": "af5aa6f5ba2bc9ffd345d92124c09514bef0e30ad125819d2f4f683a113c98eb",
     "0603_journey_recommendations.sql": "495a7bc113ba416ef5a19ab189ba248f0d06c197dac26a78af956fb4ab520ab6",
     "0604_family_referrals.sql": "f7896771a56abc86e413398b0851a99c4479aa0d0203013c5555aa9aaaeb2f0b",
-    "0605_parent_app_curriculum_cycles.sql": "e9577f6b636a77715d9295978cd20ed969be590c8ed92418ab59f130255629f7"
+    "0605_parent_app_curriculum_cycles.sql": "e9577f6b636a77715d9295978cd20ed969be590c8ed92418ab59f130255629f7",
+    "0607_calendar_closed_days_families.sql": "6446819d8426932c8e8cc63db3f7b81c95173b18797531657a77b2d161183452"
   }
 }

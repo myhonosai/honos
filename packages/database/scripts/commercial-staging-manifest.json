@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "ffdf1206ff00dcb05710b1ee378134e97516999b34d4acfda2902970f1fc3af6",
+  "chainSha256": "a09e8c644333c3090b38e8f024a1fd4f3e82ad0c1746dc8df26c5adaf2c9890c",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -781,6 +781,10 @@
     {
       "file": "0605_parent_app_curriculum_cycles.sql",
       "sha256": "e9577f6b636a77715d9295978cd20ed969be590c8ed92418ab59f130255629f7"
+    },
+    {
+      "file": "0607_calendar_closed_days_families.sql",
+      "sha256": "6446819d8426932c8e8cc63db3f7b81c95173b18797531657a77b2d161183452"
     }
   ]
 }
