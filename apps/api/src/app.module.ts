@@ -37,6 +37,8 @@ import { OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLau
 import { OwnerLaunchController } from './owner-launch/owner-launch.controller.js';
 import { OwnerLaunchService } from './owner-launch/owner-launch.service.js';
 import { CurriculumLibraryService } from './curriculum/library.service.js';
+import { ParentAppCurriculumService } from './curriculum/parent-app-curriculum.service.js';
+import { StaffParentAppCurriculumController, ParentAppCurriculumHumanUiGuard } from './curriculum/parent-app-curriculum.controller.js';
 import { StaffCurriculumLibraryController, ParentCurriculumLibraryController, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard } from './curriculum/library.controller.js';
 import { ParentClassPassViewController, ParentClassPassReadGuard } from './families/parent-classpass-view.controller.js';
 import { ParentClassPassViewService } from './families/parent-classpass-view.service.js';
@@ -294,6 +296,11 @@ import { ParentAttendanceStreaksController, ParentAttendanceStreaksReadGuard } f
 import { ParentAttendanceStreaksService } from './attendance-streaks/parent-attendance-streaks.service.js';
 import { JourneyRecommendationsController, JourneyRecommendationsReadGuard, JourneyRecommendationsSaveGuard, JourneyRecommendationsStatusGuard, ParentJourneyRecommendationsController, ParentJourneyRecommendationsReadGuard } from './journey-recommendations/journey-recommendations.controller.js';
 import { JourneyRecommendationsService } from './journey-recommendations/journey-recommendations.service.js';
+import { ParentReferralLinkGuard, ParentReferralsController, ParentReferralsReadGuard } from './referrals/parent-referrals.controller.js';
+import { ParentReferralsService } from './referrals/parent-referrals.service.js';
+import { PublicReferralController, PublicReferralService } from './referrals/public-referral.controller.js';
+import { SchoolReferralProgramGuard, SchoolReferralRewardGuard, SchoolReferralsController, SchoolReferralsReadGuard } from './referrals/school-referrals.controller.js';
+import { SchoolReferralsService } from './referrals/school-referrals.service.js';
 import { ParentCheckoutCancelGuard, ParentCheckoutConfirmGuard, ParentCheckoutController, ParentCheckoutOrderGuard, ParentCheckoutStartGuard } from './family-checkout/parent-checkout.controller.js';
 import { ParentCheckoutService } from './family-checkout/parent-checkout.service.js';
 import { ConversationCreateLeadGuard, ConversationLinkGuard, ConversationMarkReadGuard, ConversationReadGuard, ConversationReplyGuard, ConversationUpdateGuard, SchoolConversationsController } from './conversations/school-conversations.controller.js';
@@ -516,7 +523,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
   imports: [ClassPassModule, KioskModule],
   controllers: [HonOsSignupController,HonOsTrialController,HonOsAdmissionHqController,SchoolOwnerInvitationController,SchoolOwnershipController,SchoolStaffInvitationController,SchoolFamilyAccessInvitationController,OwnerLaunchController,
     CurrentStaffReportingSchoolController,
-    StaffCurriculumLibraryController, ParentCurriculumLibraryController,
+    StaffCurriculumLibraryController, ParentCurriculumLibraryController, StaffParentAppCurriculumController,
     AchievementsController, ParentAchievementsController,
     TeachingStudioController,
     RetentionReviewController,
@@ -569,6 +576,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentAttendanceStreaksController,
     ParentJourneyRecommendationsController,
     JourneyRecommendationsController,
+    ParentReferralsController, PublicReferralController, SchoolReferralsController,
     ParentCheckoutController,
     SchoolConversationsController,
     ContactMessagesController,
@@ -698,7 +706,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
   providers: [BookableStudentsService, SchoolPickersService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard, SchoolPersonPhotoService, SchoolPersonPhotoHumanGuard, AttendanceCardsService, AttendanceCardsHumanGuard, AttendanceScanHumanGuard, FaceCheckInService, FaceCheckInHumanGuard, FaceCheckInScanHumanGuard, FamilyFaceCheckInSignGuard, FamilyFaceCheckInWithdrawGuard, MembershipAgreementService, MembershipAgreementHumanGuard, MembershipAgreementLinkHumanGuard, FamilyMembershipAgreementSignGuard, FamilyPersonPhotoGuard,
     SaasSubscriptionGenerationService, SaasScheduleBillingService, SaasPaidReviewService, SaasFounderService, SaasPriceAcceptanceService, SaasTrialsService, OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
     CurrentStaffReportingSchoolNoStoreGuard,
-    CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard,
+    CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard, ParentAppCurriculumService, ParentAppCurriculumHumanUiGuard,
     AchievementsService, AchievementHumanUiGuard,
     TeachingStudioService, TeachingStudioHumanUiGuard,
     RetentionReviewService, RetentionReviewHumanUiGuard,
@@ -795,6 +803,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     JourneyRecommendationsReadGuard,
     JourneyRecommendationsSaveGuard,
     JourneyRecommendationsStatusGuard,
+    ParentReferralsService, ParentReferralsReadGuard, ParentReferralLinkGuard, PublicReferralService,
+    SchoolReferralsService, SchoolReferralsReadGuard, SchoolReferralProgramGuard, SchoolReferralRewardGuard,
     ParentCheckoutService, ParentCheckoutOrderGuard, ParentCheckoutStartGuard, ParentCheckoutConfirmGuard, ParentCheckoutCancelGuard,
     SchoolConversationsService,
     ContactMessagesService,

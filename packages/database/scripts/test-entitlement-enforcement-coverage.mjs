@@ -56,6 +56,7 @@ const OPEN_BY_DESIGN={
  'hon.cancel_public_school_event_booking(text,jsonb)':'family cancels their own event booking (0261); must keep working for a suspended school',
  'hon.book_public_school_booking_type(text,jsonb,text)':'public booking-type link (0286): answers INVALID for a suspended school or lapsed entitlement and never books; returns no booking data',
  'hon.cancel_public_school_booking_type_booking(text,jsonb)':'family cancel by code (0286): answers INVALID for a suspended school or lapsed entitlement and changes nothing; returns no booking data',
+ 'hon.submit_family_referral(text,jsonb,text)':'public family referral link (0604): calls the unchanged submit_public_form; answers INVALID (records nothing) unless the program is ON and its form is readable by read_published_form, which needs a live school entitlement',
  'hon.sign_membership_agreement_link(text,jsonb,uuid)':'public agreement signing link (0499): the token is the only key; answers GONE (signs nothing, returns no data) for an unknown token, a suspended organization, school or family, a lapsed entitlement or a recipient no longer a guardian',
  'hon.submit_walkin_visit(text,jsonb,text)':'walk-in tablet (0414): answers CLOSED for a suspended school, lapsed entitlement or unknown device and writes nothing; returns no people data',
  'hon.open_walkin_card_payment(text,text)':'walk-in tablet card payment (0533): answers CLOSED for a suspended school, lapsed entitlement or unknown device (the 0414 tablet hold) and opens nothing; returns no people data',

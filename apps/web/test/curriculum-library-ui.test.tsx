@@ -7,7 +7,7 @@ import {ParentCurriculumLibraryPage} from '../src/components/parent-curriculum-l
 import {loadParentLibrary,loadStaffLibrary,createLibraryReference} from '../src/components/curriculum-library-http';
 const school='22222222-2222-4222-8222-222222222222',id='33333333-3333-4333-8333-333333333333';
 const parentData={resources:[{title:'Basics',description:'Optional approved reference.',kind:'VIDEO',url:'https://www.youtube.com/watch?v=approved',curriculumName:'Main',rankName:'White',childDisplayName:'Child Safe'}]};
-const record={id,curriculumId:id,rankId:null,kind:'VIDEO',url:'https://www.youtube.com/watch?v=approved',title:'Basics',description:'Optional approved reference.',audience:'PARENT',status:'ACTIVE',version:1};
+const record={id,curriculumId:id,rankId:null,cycleId:null,kind:'VIDEO',url:'https://www.youtube.com/watch?v=approved',title:'Basics',description:'Optional approved reference.',audience:'PARENT',status:'ACTIVE',version:1};
 const response=(data:unknown,parent=true)=>({ok:true,headers:new Headers({'content-type':'application/json'}),json:async()=>({data,meta:{requestId:id,correlationId:id,...(parent?{}:{replayed:false})}})} as Response);
 describe('curriculum library inside the school shell',()=>{
  it('shows no school UUID box; the signed-in school is used',async()=>{

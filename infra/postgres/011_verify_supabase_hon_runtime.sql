@@ -2057,6 +2057,8 @@ END $$;
 -- End retention factual attention exact verification.
 
 -- Curriculum library exact verification:
+-- 0605 replaced the bodies of hon.guard_curriculum_resource, hon.curriculum_resource_projection, hon.mutate_curriculum_resource and
+-- hon.read_parent_curriculum_library (cycle column, DOCUMENT kind); their hashes below are the 0605 bodies.
 DO $$ DECLARE t text; c record; signature text; f record; expected_hash text; executable boolean; runtime_oid oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'); BEGIN
  IF runtime_oid IS NULL THEN RAISE EXCEPTION 'Library restricted runtime missing'; END IF;
  IF EXISTS(SELECT 1 FROM pg_roles WHERE oid=runtime_oid AND (NOT rolcanlogin OR rolsuper OR rolbypassrls OR rolinherit OR rolcreatedb OR rolcreaterole OR rolreplication)) OR EXISTS(SELECT 1 FROM pg_auth_members WHERE member=runtime_oid) OR has_schema_privilege('hon_runtime','hon','CREATE') THEN RAISE EXCEPTION 'Library unsafe runtime role'; END IF;
@@ -2075,12 +2077,12 @@ DO $$ DECLARE t text; c record; signature text; f record; expected_hash text; ex
   executable:=signature=ANY(ARRAY['read_staff_curriculum_library(text)','mutate_curriculum_resource(text,text,uuid,jsonb,text,uuid,uuid)','read_parent_curriculum_library(text,uuid)']);
   expected_hash:=CASE f.proname
    WHEN 'valid_curriculum_resource_url' THEN '22469a4242d744d498c09f3460790a93'
-   WHEN 'guard_curriculum_resource' THEN '04c5ee9a43548efd7ae2a03b5f68d0c1'
+   WHEN 'guard_curriculum_resource' THEN '9415c4fbb3dccc8db1ea397fefe0eae9'
    WHEN 'lock_curriculum_resource_actor' THEN '72cca48e824d14f17bbf843211f1f61c'
-   WHEN 'curriculum_resource_projection' THEN 'b4fd2c24a8e0e84138b4e0862b31d15b'
+   WHEN 'curriculum_resource_projection' THEN '4c351e8084546fc3e63351d94e1ebfec'
    WHEN 'read_staff_curriculum_library' THEN 'ff6afaae7d2cd119087fa27433a9ebcd'
-   WHEN 'mutate_curriculum_resource' THEN '00e261bfb2a5c1fabadfd6e020bcb691'
-   WHEN 'read_parent_curriculum_library' THEN '0dcd740136a3ee78f3720fa973ba1b9c'
+   WHEN 'mutate_curriculum_resource' THEN '21887d0bd0f8aff8a9febee355e2cd59'
+   WHEN 'read_parent_curriculum_library' THEN '5afab2b94053609f85f50e72f2575d83'
    END;
   IF f.oid IS NULL OR f.proowner=runtime_oid OR NOT(f.rolsuper OR f.rolbypassrls) OR f.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
    OR f.prosecdef IS DISTINCT FROM (signature=ANY(ARRAY['lock_curriculum_resource_actor(text)','read_staff_curriculum_library(text)','mutate_curriculum_resource(text,text,uuid,jsonb,text,uuid,uuid)','read_parent_curriculum_library(text,uuid)'])) OR f.provolatile IS DISTINCT FROM (CASE WHEN signature=ANY(ARRAY['valid_curriculum_resource_url(text)','curriculum_resource_projection(hon.curriculum_resources)']) THEN 'i'::"char" ELSE 'v'::"char" END)
@@ -5353,7 +5355,6 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
   END LOOP;
 END $$;
 -- End calendar settings exact verification.
-
 -- School message history exact verification (TE1 0585): two runtime read entry points, three private helpers.
 DO $$ DECLARE f text;
 BEGIN
@@ -5707,6 +5708,84 @@ DO $$ DECLARE f record; safe boolean; BEGIN
     RAISE EXCEPTION 'hon.journey_recommendations must carry exactly its two guards'; END IF;
 END $$;
 -- End journey recommendations exact verification.
+-- Family referrals exact verification (0604): private helpers, seven runtime entry points, five private forced-RLS tables with guards.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_family_referral_rows()',false,false,'search_path=pg_catalog, hon','314dbb05287e2da471a2d27f6bbd457e853aa191978eeed30d45f895f8d13129'),
+('hon.require_school_referral_actor(text,text)',true,false,'search_path=pg_catalog, hon','5a743de3954bc5f3bba625c8f21713718b51429b6e24d8ca0124461e555eb98b'),
+('hon.school_referral_program_json(uuid,uuid)',true,false,'search_path=pg_catalog, hon','efe55fdb5e464dbf5fe930dcee5ebf11c7bd0791f77f85fa829561bd5650eb3b'),
+('hon.family_referral_display(text,integer)',false,false,'search_path=pg_catalog','6dc48e9e62534fc012adb7097fdb9d0203a552406f4d5ff55ea192ef568018e5'),
+('hon.family_referral_staff_json(hon.family_referrals)',true,false,'search_path=pg_catalog, hon','688d5c38e68fd953ffda0e816dc111506437bcb56e5fcaa7e3199dd58adfb68f'),
+('hon.read_school_referrals(text)',true,true,'search_path=pg_catalog, hon','76faec5648dd6c39863949e19a979c137ec54b8b4141d276c44b6981d830ab8a'),
+('hon.family_referral_text(jsonb,integer,boolean,boolean)',false,false,'search_path=pg_catalog, hon','e96404e895a33453e004fa0222a57400a567b653c4d1a441835cd6b569713d5e'),
+('hon.school_referral_begin(uuid,text,text)',true,false,'search_path=pg_catalog, hon','bf47a32dbc1b55955eeee2a8578aff425495bf97e0ef1a1fe4cab3d1c652c853'),
+('hon.configure_school_referral_program(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','213b829c0f405dedb5ecc32e5cc59f72bb1b91f21629f77de5e80ef1e51d2b80'),
+('hon.decide_family_referral_reward(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','49bc7662589cfafaa175ababb0200e1bf8474d2f113779a11791158fdd2488ab'),
+('hon.family_referral_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','89e8f2752b69d789e4378e5ab0d280fe23cc64aba42ceade3a1756053b4aca07'),
+('hon.family_referral_program_live(uuid,uuid)',true,false,'search_path=pg_catalog, hon','f2174d290592d96273549fec90962df90dda14698d5b9b0c09d69cb390ec9d64'),
+('hon.read_parent_referrals(text)',true,true,'search_path=pg_catalog, hon','2131c70f19a59060657213e9670e6fc5c78a21e09aad0b5bc1b4ad5b236756ad'),
+('hon.issue_parent_referral_link(text)',true,true,'search_path=pg_catalog, hon','668845de0109ee41aa7a4d71e39402a2b6b7dd6b749f9ff31700bcf61a69b640'),
+('hon.family_referral_code_live(text)',true,false,'search_path=pg_catalog, hon','9e15fe83025265c6b96ac8c23087457383b9c6e8d1b0d979d420bdb7c0646271'),
+('hon.read_public_referral(text)',true,true,'search_path=pg_catalog, hon','a478d2bee0d62fc94dd453a1ecd91bfb663f6101d242a873e65b5e195e5bb4a7'),
+('hon.submit_family_referral(text,jsonb,text)',true,true,'search_path=pg_catalog, hon','98ccec2c2a43d5957172ec3b85dfef62192f4b3199aff3e335226aab93c6c238')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe family referral function: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['school_referral_programs','school_referral_program_versions','school_referral_requests','family_referral_codes','family_referrals'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR has_table_privilege('hon_runtime',('hon.'||t)::regclass,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR (SELECT count(*) FROM pg_trigger g WHERE g.tgrelid=('hon.'||t)::regclass AND NOT g.tgisinternal AND g.tgenabled='O'
+        AND g.tgfoid IN ('hon.guard_family_referral_rows()'::regprocedure,'hon.guard_membership_activation_evidence()'::regprocedure))<>2 THEN
+      RAISE EXCEPTION 'hon.% must be private, forced-RLS and carry exactly its two guards',t; END IF;
+  END LOOP;
+END $$;
+-- End family referrals exact verification.
+-- Parent app curriculum exact verification (0605): four private forced-RLS tables with their guards, the cycle column and constraints
+-- on curriculum_resources, private helpers and two runtime entry points.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOREACH t IN ARRAY ARRAY['curriculum_cycles','curriculum_app_settings','curriculum_app_events','curriculum_app_requests'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+      AND (SELECT count(*) FROM pg_trigger WHERE tgrelid=c.oid AND NOT tgisinternal AND tgenabled='O')=2
+      AND EXISTS(SELECT 1 FROM pg_roles WHERE oid=c.relowner AND (rolsuper OR rolbypassrls))
+    INTO safe FROM pg_class c WHERE c.oid=to_regclass('hon.'||t);
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Parent app curriculum table must be private, guarded and FORCE RLS: %',t; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='hon.curriculum_resources'::regclass AND attname='cycle_id' AND atttypid='uuid'::regtype AND NOT attisdropped)
+    OR EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a JOIN pg_class c ON c.oid=x.attrelid WHERE x.attrelid='hon.curriculum_resources'::regclass AND x.attname='cycle_id' AND a.grantee<>c.relowner)
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.curriculum_resources'::regclass AND conname='curriculum_resources_rank_or_cycle' AND convalidated AND pg_get_constraintdef(oid)='CHECK (((rank_id IS NULL) OR (cycle_id IS NULL)))')
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.curriculum_resources'::regclass AND contype='f' AND convalidated AND confrelid='hon.curriculum_cycles'::regclass
+      AND pg_get_constraintdef(oid)='FOREIGN KEY (cycle_id, curriculum_id, organization_id, school_id) REFERENCES hon.curriculum_cycles(id, curriculum_id, organization_id, school_id)')
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.curriculum_resources'::regclass AND conname='curriculum_resources_kind_check' AND pg_get_constraintdef(oid)='CHECK ((kind = ANY (ARRAY[''VIDEO''::text, ''LINK''::text, ''DOCUMENT''::text])))')
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.curriculum_app_requests'::regclass AND contype='p' AND pg_get_constraintdef(oid)='PRIMARY KEY (organization_id, school_id, principal_id, idempotency_key)')
+    OR NOT EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname='hon' AND indexname='curriculum_cycles_active_position')
+    THEN RAISE EXCEPTION 'Unsafe parent app curriculum columns or constraints'; END IF;
+  FOR f IN SELECT * FROM (VALUES
+('hon.curriculum_app_name_ok(text,integer)',false,false,'a1e8ead3cc2218801959245c1b83b144db237137e4cb3cc8250783eeb03db2fa'),
+('hon.guard_curriculum_cycle()',false,false,'aced90ebf3274d2ac8d6c99c022dfe06b93b093dd0418ccaaa39c0d0bd65b030'),
+('hon.guard_curriculum_app_settings()',false,false,'dae65289a2524e7bc3c5e8f101b63d507b1f49f45ebad968fbc8db457076523d'),
+('hon.curriculum_app_cycle_state(uuid,uuid,uuid)',false,false,'78428b8429dce5f1e483b5c02d72ae329ca93c321e0ba8841126c11915f03222'),
+('hon.curriculum_app_projection(uuid,uuid,uuid)',false,false,'4578665ecabc0a7654500134a316a0392ebf273ae78ff6c3dadd0ef473831ff2'),
+('hon.read_staff_parent_app_curriculum(text)',true,true,'27b9704064f7677dc7b60e3340ab0e8805db230c273d878666207760203aea52'),
+('hon.mutate_parent_app_curriculum(text,text,uuid,uuid,jsonb,text,uuid,uuid)',true,true,'190242a1cedbe2166c2cb4b9786df614aa29de674ffacae496a09307f2935e6a')) e(signature,definer,runtime_allowed,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe parent app curriculum function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End parent app curriculum exact verification.
 
 -- Closed days for families exact verification (0607): the private closed-day helper and the two kiosk trial helpers it now
 -- filters (the parent booking helper is pinned in the 0329 section above); none is open to the runtime or PUBLIC.

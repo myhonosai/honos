@@ -13,6 +13,7 @@ import { verifyParentAttendanceStreaks } from '@hon/contracts/parent-attendance-
 import { verifyParentProShop } from '@hon/contracts/parent-pro-shop';
 import { verifyParentCheckoutPages } from '@hon/contracts/family-checkout';
 import type { ParentApi } from '../api/client';
+import { verifyParentJourneyRecommendations } from '@hon/contracts/journey-recommendations';
 import { localDate, localMidnight } from '../schedule/absence-model';
 
 /**
@@ -226,6 +227,16 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
       { announcementId: id(901), title: 'Closed Monday for the holiday', body: 'There are no classes on Monday. See you Tuesday!', publishedAt: ms(plus(start.toISOString(), -3 * 24 * 60)) },
     ] })),
     attendanceStreaks: () => ok(verifyParentAttendanceStreaks({ children: [{ name: 'Leo Sample', weeks: 2 }, { name: 'Mia Sample', weeks: 5 }] })),
+    journeyRecommendations: () => ok(verifyParentJourneyRecommendations({ children: [
+      { name: 'Leo Sample', recommendations: [
+        { recommendationId: id(960), program: 'Junior Program', rank: 'Orange Belt', triggerKind: 'REQUIREMENTS_MET', threshold: 1, title: 'Try summer camp',
+          message: 'Leo is moving fast! Camp is a fun week of forms and games.', targetKind: 'CHECKOUT', checkoutId: id(950), eventId: null, targetLabel: 'Sample summer camp' },
+      ] },
+      { name: 'Mia Sample', recommendations: [
+        { recommendationId: id(961), program: 'Kids Program', rank: null, triggerKind: 'CLASSES_ATTENDED', threshold: 10, title: 'Time for sparring gear',
+          message: 'After 10 classes, Mia is ready to start light sparring. Gloves and pads are in the pro shop.', targetKind: 'PRO_SHOP', checkoutId: null, eventId: null, targetLabel: null },
+      ] },
+    ] })),
     proShop: () => ok(verifyParentProShop({ schoolName: SAMPLE_SCHOOL, available: true, currency: 'USD', products: [
       { productId: '9001', title: 'Sample sparring gloves', imageUrl: null, fromPrice: '39.00', url: 'https://sample-dojo.myshopify.com/products/sample-sparring-gloves' },
       { productId: '9002', title: 'Sample uniform', imageUrl: null, fromPrice: '65.00', url: 'https://sample-dojo.myshopify.com/products/sample-uniform' },
