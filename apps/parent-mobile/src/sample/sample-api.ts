@@ -11,6 +11,7 @@ import { verifyParentInvoicePayments } from '@hon/contracts/parent-invoice-pay';
 import { verifyParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
 import { verifyParentAttendanceStreaks } from '@hon/contracts/parent-attendance-streaks';
 import { verifyParentProShop } from '@hon/contracts/parent-pro-shop';
+import { verifyParentReferrals } from '@hon/contracts/family-referrals';
 import { verifyParentCheckoutPages } from '@hon/contracts/family-checkout';
 import type { ParentApi } from '../api/client';
 import { verifyParentJourneyRecommendations, verifyParentJourneyResponseReceipt } from '@hon/contracts/journey-recommendations';
@@ -245,6 +246,15 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
       { productId: '9001', title: 'Sample sparring gloves', imageUrl: null, fromPrice: '39.00', url: 'https://sample-dojo.myshopify.com/products/sample-sparring-gloves' },
       { productId: '9002', title: 'Sample uniform', imageUrl: null, fromPrice: '65.00', url: 'https://sample-dojo.myshopify.com/products/sample-uniform' },
     ] })),
+    // The sample family sees a made-up program and history; it never gets a real link to share.
+    referrals: () => ok(verifyParentReferrals({ schoolName: SAMPLE_SCHOOL, on: true, referrerReward: 'One free month of classes', friendOffer: 'Free trial week',
+      rules: "Given after your friend's first paid month.", shareMessage: 'Come train with us!', canShare: true, shareUrl: null,
+      counts: { referred: 3, joined: 1, rewarded: 1 }, referrals: [
+        { referredAt: '2026-11-12T17:00:00Z', status: 'INTERESTED', reward: 'PENDING' },
+        { referredAt: '2026-10-28T17:00:00Z', status: 'JOINED', reward: 'GIVEN' },
+        { referredAt: '2026-10-02T17:00:00Z', status: 'NOT_JOINED', reward: 'NOT_ELIGIBLE' },
+      ] })),
+    referralLink: async () => ({ ok: false as const, state: 'refused' as const, code: 'PARENT_REFERRALS_NOT_CONFIGURED' }),
     // The sample family can fill in a sample page but never orders: the app hides the order button and a press would be refused.
     checkoutPages: () => ok(verifyParentCheckoutPages({ schoolName: SAMPLE_SCHOOL, canBuy: true, canPay: true, testMode: true, pages: [
       { checkoutId: id(950), version: 1, group: 'events', title: 'Sample summer camp', description: 'A week of games, forms and sparring.', currency: 'USD', maxParticipants: 2,

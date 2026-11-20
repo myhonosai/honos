@@ -12,9 +12,10 @@ import { radius, space, TOUCH, type, useColors, EDGE, type Colors } from '../ui/
 import { CheckoutArea } from './CheckoutArea';
 import { EventsArea } from './EventsArea';
 import { ProShopArea } from './ProShopArea';
+import { ReferArea } from './ReferArea';
 import { CANDIDATE_LABEL, formatDay, formatMoney, INTEREST_LABEL, INVOICE_LABEL, MEMBERSHIP_LABEL, PASS_LABEL } from './more-model';
 
-export type Area = 'events' | 'checkout' | 'billing' | 'passes' | 'testing' | 'shop' | 'library';
+export type Area = 'events' | 'checkout' | 'billing' | 'passes' | 'testing' | 'shop' | 'library' | 'refer';
 const AREAS: { key: Area; title: string; blurb: string; icon: IconName; tone: Tone }[] = [
   { key: 'events', title: 'Events & bookings', blurb: 'School events and family bookings', icon: 'ticket', tone: 'violet' },
   { key: 'checkout', title: 'Sign up & pay', blurb: 'Camps, events and more from your school', icon: 'check', tone: 'lime' },
@@ -23,6 +24,7 @@ const AREAS: { key: Area; title: string; blurb: string; icon: IconName; tone: To
   { key: 'testing', title: 'Belt testing', blurb: 'Upcoming tests and results', icon: 'trophy', tone: 'sun' },
   { key: 'shop', title: 'Pro shop', blurb: 'Gear and uniforms from your school', icon: 'bag', tone: 'coral' },
   { key: 'library', title: 'Learning library', blurb: 'Videos and links from your school', icon: 'book', tone: 'pink' },
+  { key: 'refer', title: 'Refer a friend', blurb: 'Share your link and see your rewards', icon: 'gift', tone: 'sun' },
 ];
 type Tone = 'violet' | 'lime' | 'accent' | 'cyan' | 'sun' | 'coral' | 'pink';
 function toneColors(c: Colors, t: Tone): [string, string] {
@@ -60,7 +62,7 @@ export function MoreScreen({ onSignOut, version, openArea = null, openAt = 0 }: 
       <Title>{current ? current.title : 'Account'}</Title>
       {current ? (
         <View>
-          {area === 'events' ? <EventsArea /> : area === 'checkout' ? <CheckoutArea /> : area === 'billing' ? <BillingArea /> : area === 'passes' ? <PassesArea /> : area === 'testing' ? <TestingArea /> : area === 'shop' ? <ProShopArea /> : <LibraryArea />}
+          {area === 'events' ? <EventsArea /> : area === 'checkout' ? <CheckoutArea /> : area === 'billing' ? <BillingArea /> : area === 'passes' ? <PassesArea /> : area === 'testing' ? <TestingArea /> : area === 'shop' ? <ProShopArea /> : area === 'refer' ? <ReferArea /> : <LibraryArea />}
         </View>
       ) : (
         <View style={{ marginTop: space.lg }}>

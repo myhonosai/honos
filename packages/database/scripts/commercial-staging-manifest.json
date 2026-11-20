@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "7c2748dbf0aa4508303303a0ab5d8a9a72cbdd3926e664d3415c33c192498f72",
+  "chainSha256": "66735fc277e2b71ce0cef58b14a62f1b0637a5089a835f8f1c6d128f3e7d1a10",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -777,6 +777,10 @@
     {
       "file": "0604_family_referrals.sql",
       "sha256": "f7896771a56abc86e413398b0851a99c4479aa0d0203013c5555aa9aaaeb2f0b"
+    },
+    {
+      "file": "0605_parent_app_curriculum_cycles.sql",
+      "sha256": "e9577f6b636a77715d9295978cd20ed969be590c8ed92418ab59f130255629f7"
     },
     {
       "file": "0608_journey_recommendation_responses.sql",
