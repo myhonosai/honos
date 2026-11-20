@@ -1,6 +1,7 @@
 import {
-  validateSaveJourneyRecommendationInput, validateSetJourneyRecommendationStatusInput, verifyJourneyRecommendationReceipt, verifyJourneyRecommendations,
-  type JourneyRecommendationReceipt, type JourneyRecommendationStatus, type JourneyRecommendations, type SaveJourneyRecommendationInput,
+  validateSaveJourneyRecommendationInput, validateSetJourneyRecommendationStatusInput, verifyJourneyRecommendationInterest, verifyJourneyRecommendationReceipt,
+  verifyJourneyRecommendations, type JourneyRecommendationInterest, type JourneyRecommendationReceipt, type JourneyRecommendationStatus, type JourneyRecommendations,
+  type SaveJourneyRecommendationInput,
 } from '@hon/contracts';
 
 /**
@@ -46,6 +47,10 @@ function base(scope: JourneyScope): string {
 }
 export async function loadJourneyRecommendations(scope: JourneyScope): Promise<JourneyRecommendations> {
   return verifyJourneyRecommendations((await call(base(scope), 'GET')).data);
+}
+/** 0608: families who tapped the main button on a recommendation in the HON Family app (names and dates only). Read only. */
+export async function loadJourneyRecommendationInterest(scope: JourneyScope): Promise<JourneyRecommendationInterest> {
+  return verifyJourneyRecommendationInterest((await call(`${base(scope)}/interest`, 'GET')).data);
 }
 export async function saveJourneyRecommendation(scope: JourneyScope, draft: SaveJourneyRecommendationInput, key: string): Promise<JourneyRecommendationReceipt> {
   const input = validateSaveJourneyRecommendationInput(draft);

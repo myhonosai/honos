@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "a09e8c644333c3090b38e8f024a1fd4f3e82ad0c1746dc8df26c5adaf2c9890c",
+  "chainSha256": "cbb6150dc6a7dfe10d5a21f63efe665b6239c630cc1c6ec296edfca17ccfcab4",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -785,6 +785,10 @@
     {
       "file": "0607_calendar_closed_days_families.sql",
       "sha256": "6446819d8426932c8e8cc63db3f7b81c95173b18797531657a77b2d161183452"
+    },
+    {
+      "file": "0608_journey_recommendation_responses.sql",
+      "sha256": "5496f49cef59302da88dc267340983e766edd18bf236346dcfe3749820eab41e"
     }
   ]
 }

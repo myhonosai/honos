@@ -5683,7 +5683,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.journey_recommendation_reached(hon.journey_recommendations,hon.student_curriculum_enrollments)',true,false,'search_path=pg_catalog, hon','1277bbbd3f46cea65d994f1a7161fecdfeb5b6ff5fa24c2675592a0bb5747e58'),
 ('hon.journey_child_signed_up(hon.journey_recommendations,uuid)',true,false,'search_path=pg_catalog, hon','325bc4ea04d1eb73bfff6610cb63ad1097002ecec7f745cd1f4c5db493b66e13'),
 ('hon.journey_recommendation_staff_json(hon.journey_recommendations)',true,false,'search_path=pg_catalog, hon','8fcdd822892ac24edb871c1ec3d93bdc60fcde003e471795afbd83508e377566'),
-('hon.read_parent_journey_recommendations(text)',true,true,'search_path=pg_catalog, hon','dd913ed82599714afb8959b8289db6d8deaaa3f9623e6c7b31374f18be774ce4'),
+('hon.read_parent_journey_recommendations(text)',true,true,'search_path=pg_catalog, hon','bd19ca704cb6c0e49ea57c5110bdc425c91557b56e8ec23d9a92c041f4cc108a'),
 ('hon.read_journey_recommendations(text)',true,true,'search_path=pg_catalog, hon','6869676977b79340531b0272bc689f96c658c1a3b04c12ebf883992e1527f496'),
 ('hon.save_journey_recommendation(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','13bb3676bfed9b04f738437f3468bdbf4a751bd0686ce5e8ef685599af4660f3'),
 ('hon.set_journey_recommendation_status(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','7f557467fb7287a257d9b3c5a947abff8bc830c85de74830b742100aab5323b1')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
@@ -5804,3 +5804,37 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END LOOP;
 END $$;
 -- End closed days for families exact verification.
+-- Journey recommendation responses exact verification (0608): three private helpers (immutability guard, name rule, receipt),
+-- two runtime entry points, the 0603 family read replaced to leave out hidden recommendations (hash above), and a private
+-- forced-RLS table with exactly its two guards and its two once-only indexes.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_journey_recommendation_response()',false,false,'search_path=pg_catalog','1f25c0e55ae475781467d2d48c98797f31001ec00c000d282e607a5a055c55e0'),
+('hon.journey_child_name_ok(text)',false,false,'search_path=pg_catalog','82c93b3ee7656d0fa5c3ae878a2b431f1c977112cf75dff03dcb038ce3a2c041'),
+('hon.journey_response_json(hon.journey_recommendation_responses,boolean)',false,false,'search_path=pg_catalog','2000bd7a8aa66228adafc90d547feff3a6008547e7ae9b2b382b8ba2af0db30c'),
+('hon.respond_parent_journey_recommendation(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','b49a9c6439ff1f55d66145d161ecb19a576b6893a4b54fa8c701d0402556bc1f'),
+('hon.read_journey_recommendation_interest(text)',true,true,'search_path=pg_catalog, hon','4db00330b9c19c2314878a0cea80df1c6ce8d6f2252897a0d2f4ad967cb8523c')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe journey recommendation response function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.journey_recommendation_responses'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.journey_recommendation_responses'::regclass)
+    OR has_table_privilege('hon_runtime','hon.journey_recommendation_responses','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.journey_recommendation_responses','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe journey recommendation responses table'; END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.journey_recommendation_responses'::regclass AND NOT tgisinternal AND tgenabled='O'
+      AND tgname IN ('journey_recommendation_responses_immutable','journey_recommendation_responses_no_truncate')
+      AND tgfoid='hon.guard_journey_recommendation_response()'::regprocedure)<>2
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.journey_recommendation_responses'::regclass AND NOT tgisinternal)<>2 THEN
+    RAISE EXCEPTION 'hon.journey_recommendation_responses must carry exactly its two guards'; END IF;
+  IF (SELECT count(*) FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE i.indrelid='hon.journey_recommendation_responses'::regclass AND i.indisunique
+      AND i.indisvalid AND i.indpred IS NOT NULL AND c.relname IN ('journey_recommendation_responses_hidden_once','journey_recommendation_responses_interest_once'))<>2 THEN
+    RAISE EXCEPTION 'hon.journey_recommendation_responses must keep its once-only indexes'; END IF;
+END $$;
+-- End journey recommendation responses exact verification.

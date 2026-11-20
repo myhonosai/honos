@@ -2,11 +2,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   JOURNEY_RECOMMENDATION_LIMITS, isJourneyMessage, isJourneyTitle,
-  type JourneyRecommendation, type JourneyRecommendations, type JourneyTarget, type JourneyTrigger, type SaveJourneyRecommendationInput,
+  type JourneyRecommendation, type JourneyRecommendationInterest, type JourneyRecommendations, type JourneyTarget, type JourneyTrigger, type SaveJourneyRecommendationInput,
 } from '@hon/contracts';
 import { onShellPrivacyEvent } from '../school-shell/privacy';
 import {
-  JourneyRecommendationsAccessError, JourneyRecommendationsRefusal, attemptFor, loadJourneyRecommendations, saveJourneyRecommendation,
+  JourneyRecommendationsAccessError, JourneyRecommendationsRefusal, attemptFor, loadJourneyRecommendationInterest, loadJourneyRecommendations, saveJourneyRecommendation,
   setJourneyRecommendationStatus, type JourneyScope,
 } from './http';
 import s from '../comms-kit/comms.module.css';
@@ -24,6 +24,10 @@ const needsRank = (t: JourneyTrigger) => t !== 'CLASSES_ATTENDED';
 const needsCount = (t: JourneyTrigger) => t === 'REQUIREMENTS_MET' || t === 'CLASSES_ATTENDED';
 const needsTarget = (t: JourneyTarget) => t === 'CHECKOUT' || t === 'EVENT';
 const empty = (): Draft => ({ recommendationId: null, expectedVersion: null, triggerKind: 'RANK_REACHED', rankId: '', threshold: '', title: '', message: '', targetKind: 'CHECKOUT', targetId: '', skipEnrolled: true });
+/** "Mar 3" style day for an interest row, from the recorded instant only. */
+export function interestDay(recordedAt: string): string {
+  return new Date(recordedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
 function failure(error: unknown) { return error instanceof Error ? error.message : 'Recommendations are unavailable right now.'; }
 
 /** Plain words for one recommendation's "when", from the stored rule only. */
@@ -58,22 +62,25 @@ export function draftInput(curriculumId: string, d: Draft): SaveJourneyRecommend
 export function JourneyRecommendationsPanel({ organizationId, schoolId, curriculum }: { organizationId: string; schoolId: string; curriculum: JourneyPanelCurriculum }): React.ReactElement {
   const scopeKey = `${organizationId}/${schoolId}`;
   const [data, setData] = useState<JourneyRecommendations | null>(null), [draft, setDraft] = useState<Draft | null>(null);
+  // 0608 interest is shown only when its own read verified; a failed interest read never hides the recommendations.
+  const [interest, setInterest] = useState<JourneyRecommendationInterest | null>(null);
   const [busy, setBusy] = useState(false), [acting, setActing] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [denied, setDenied] = useState(false), [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const generation = useRef(0), attempt = useRef<{ identity: string; key: string } | null>(null);
 
-  const clear = useCallback(() => { ++generation.current; setData(null); setDraft(null); setConfirmRemove(null); attempt.current = null; }, []);
+  const clear = useCallback(() => { ++generation.current; setData(null); setInterest(null); setDraft(null); setConfirmRemove(null); attempt.current = null; }, []);
   const refresh = useCallback(async () => {
     const [org, school] = scopeKey.split('/');
     const token = ++generation.current;
     setBusy(true); setDenied(false);
     try {
-      const read = await loadJourneyRecommendations({ organizationId: org!, schoolId: school! });
+      const scope = { organizationId: org!, schoolId: school! };
+      const [read, interested] = await Promise.all([loadJourneyRecommendations(scope), loadJourneyRecommendationInterest(scope).catch(() => null)]);
       if (generation.current !== token) return;
-      setData(read); setError('');
+      setData(read); setInterest(interested); setError('');
     } catch (problem) {
       if (generation.current !== token) return;
-      setData(null); setError(failure(problem)); setDenied(problem instanceof JourneyRecommendationsAccessError);
+      setData(null); setInterest(null); setError(failure(problem)); setDenied(problem instanceof JourneyRecommendationsAccessError);
     } finally { if (generation.current === token) setBusy(false); }
   }, [scopeKey]);
   useEffect(() => { clear(); void refresh(); }, [scopeKey, curriculum.id, clear, refresh]);
@@ -157,6 +164,7 @@ export function JourneyRecommendationsPanel({ organizationId, schoolId, curricul
           {!r.targetLive && needsTarget(r.targetKind) && <span className={s.badge} data-tone="bad">Page or event not open, families don't see it</span>}</div>
         <p className={s.muted}>{whenText(r)} · {WHERE[r.targetKind]}{r.targetLabel ? `: ${r.targetLabel}` : ''}</p>
         <p style={{ whiteSpace: 'pre-wrap' }}>{r.message}</p>
+        <Interested rows={interest?.interest.filter(i => i.recommendationId === r.recommendationId) ?? null} />
         <div className={s.actions}>
           <button type="button" className={s.ghost} disabled={acting} onClick={() => edit(r)}>Edit</button>
           <button type="button" className={s.ghost} disabled={acting} onClick={() => void status(r, r.status === 'ON' ? 'OFF' : 'ON')}>{r.status === 'ON' ? 'Turn off' : 'Turn on'}</button>
@@ -169,4 +177,17 @@ export function JourneyRecommendationsPanel({ organizationId, schoolId, curricul
       </li>)}
     </ul>)}
   </section>;
+}
+
+/**
+ * Who a recommendation interested, from the HON Family app (0608): the child's name, or a brother or sister the guardian
+ * named, with the family. Each one is also a lead in the CRM when the school has a pipeline. Nobody was messaged.
+ */
+export function Interested({ rows }: { rows: JourneyRecommendationInterest['interest'] | null }): React.ReactElement | null {
+  if (rows === null) return null;
+  if (rows.length === 0) return <p className={s.muted}>No families have asked about it yet.</p>;
+  return <details><summary>{rows.length} interested</summary>
+    <ul className={s.rows}>{rows.map(i => <li key={`${i.familyId}/${i.childName.toLowerCase()}`}><strong>{i.childName}</strong>
+      {i.sibling ? ' (brother or sister)' : ''} · {i.familyName} <span className={s.muted}>· {interestDay(i.recordedAt)}{i.leadId ? ' · added to CRM leads' : ' · no CRM lead (no pipeline yet)'}</span></li>)}</ul>
+    <p className={s.muted}>The family chose this in the HON Family app. Nothing was sent to them; follow up from CRM leads or Messages.</p></details>;
 }
