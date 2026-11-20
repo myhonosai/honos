@@ -1122,6 +1122,7 @@ export * from './person-photos.js';
 export * from './attendance-cards.js';
 export * from './class-series.js';
 export * from './calendar-cards.js';
+export * from './calendar-settings.js';
 export * from './school-events.js';
 export * from './tuition-payments.js';
 export * from './simple-invoices.js';
