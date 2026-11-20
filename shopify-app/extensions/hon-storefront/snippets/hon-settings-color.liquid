@@ -4,10 +4,11 @@
 {%- endcomment -%}
 {%- liquid
   assign c = value | append: '' | upcase
-  if c.size == 7 and c contains '#'
-    assign rest = c | remove: '#' | remove: '0' | remove: '1' | remove: '2' | remove: '3' | remove: '4' | remove: '5' | remove: '6' | remove: '7' | remove: '8' | remove: '9' | remove: 'A' | remove: 'B' | remove: 'C' | remove: 'D' | remove: 'E' | remove: 'F'
+  if c.size == 7
     assign first = c | slice: 0
-    if rest == '' and first == '#'
+    assign digits = c | slice: 1, 6
+    assign rest = digits | remove: '0' | remove: '1' | remove: '2' | remove: '3' | remove: '4' | remove: '5' | remove: '6' | remove: '7' | remove: '8' | remove: '9' | remove: 'A' | remove: 'B' | remove: 'C' | remove: 'D' | remove: 'E' | remove: 'F'
+    if first == '#' and digits.size == 6 and rest == ''
       echo c
     endif
   endif
