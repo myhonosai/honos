@@ -110,7 +110,7 @@ export function toDefinition(a: SimpleAutomation): AutomationDefinition {
     const id = `send_${i + 1}`, text = messageText(s);
     if (s.channel === 'TEXT') steps.push({ id, type: 'SEND_SMS', content: { mode: 'FIXED', text }, next: next(id) });
     if (s.channel === 'EMAIL') steps.push({ id, type: 'SEND_EMAIL', content: { mode: 'FIXED', subject: s.subject.trim(), text }, next: next(id) });
-    if (s.channel === 'TASK') steps.push({ id, type: 'CREATE_TASK', title: text, details: '', dueInHours: 24, assignTo: a.group === 'ACTIVE_STUDENTS' ? 'SCHOOL_OWNERS' : 'LEAD_ASSIGNEE', next: next(id) });
+    if (s.channel === 'TASK') steps.push({ id, type: 'CREATE_TASK', title: text, details: '', dueInHours: TASK_DUE_HOURS, assignTo: taskAssignee(a.group), next: next(id) });
     if (s.channel === 'NOTIFY') steps.push({ id, type: 'NOTIFY_STAFF', to: 'SCHOOL_OWNERS', text, next: next(id) });
   });
   return validateAutomationDefinition({
@@ -152,7 +152,7 @@ export function fromDefinition(name: string, d: AutomationDefinition): SimpleAut
       if (pending > 0 || typeof at.minutes !== 'number' || at.localTime !== null) return null;
       pending = at.minutes;
     } else {
-      const send = readSend(at, pending);
+      const send = readSend(at, pending, group);
       if (!send) return null;
       sends.push(send); pending = 0;
     }
@@ -164,7 +164,11 @@ export function fromDefinition(name: string, d: AutomationDefinition): SimpleAut
   return { name, when, days, tag, group, onlyTag, stopWhen: STOPS.filter(s => d.exitWhen.includes(s)), repeat: d.entry.reentry === 'EVERY_TIME', sends };
 }
 
-function readSend(step: AutomationWorkflowStep, wait: number): Send | null {
+/** Tasks the simple form writes: due in a day, to the lead's owner for leads and to the school owners for students. */
+const TASK_DUE_HOURS = 24;
+const taskAssignee = (group: Group): 'SCHOOL_OWNERS' | 'LEAD_ASSIGNEE' => (group === 'ACTIVE_STUDENTS' ? 'SCHOOL_OWNERS' : 'LEAD_ASSIGNEE');
+
+function readSend(step: AutomationWorkflowStep, wait: number, group: Group): Send | null {
   const delay: Pick<Send, 'delayUnit' | 'delayAmount'> = wait === 0 ? { delayUnit: 'NOW', delayAmount: 1 }
     : wait % 1440 === 0 ? { delayUnit: 'DAYS', delayAmount: wait / 1440 } : wait % 60 === 0 ? { delayUnit: 'HOURS', delayAmount: wait / 60 } : { delayUnit: 'NOW', delayAmount: -1 };
   if (delay.delayAmount === -1) return null;
@@ -179,7 +183,8 @@ function readSend(step: AutomationWorkflowStep, wait: number): Send | null {
   if (step.type === 'SEND_EMAIL' && obj(content) && content.mode === 'FIXED' && typeof content.text === 'string' && typeof content.subject === 'string') {
     return { channel: 'EMAIL', ...delay, subject: content.subject, ...split(content.text) };
   }
-  if (step.type === 'CREATE_TASK' && typeof step.title === 'string' && step.details === '') return { channel: 'TASK', ...delay, subject: '', text: step.title, videoUrl: '' };
+  // Only a task the form itself would write; any other due time or assignee opens read-only so saving never rewrites it.
+  if (step.type === 'CREATE_TASK' && typeof step.title === 'string' && step.details === '' && step.dueInHours === TASK_DUE_HOURS && step.assignTo === taskAssignee(group)) return { channel: 'TASK', ...delay, subject: '', text: step.title, videoUrl: '' };
   if (step.type === 'NOTIFY_STAFF' && step.to === 'SCHOOL_OWNERS' && typeof step.text === 'string') return { channel: 'NOTIFY', ...delay, subject: '', text: step.text, videoUrl: '' };
   return null;
 }

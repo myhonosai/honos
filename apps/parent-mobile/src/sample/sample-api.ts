@@ -9,6 +9,7 @@ import { verifyParentCurriculumLibrary } from '@hon/contracts/curriculum-resourc
 import { verifyParentSchoolBookingReceipt, verifyParentSchoolBookings, type ParentSchoolBooking } from '@hon/contracts/parent-school-bookings';
 import { verifyParentInvoicePayments } from '@hon/contracts/parent-invoice-pay';
 import { verifyParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
+import { verifyParentProShop } from '@hon/contracts/parent-pro-shop';
 import type { ParentApi } from '../api/client';
 import { localDate, localMidnight } from '../schedule/absence-model';
 
@@ -127,6 +128,7 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
   const refused = (code: string) => Promise.resolve({ ok: false as const, state: 'refused' as const, code });
 
   return {
+    sampleMode: true,
     journey: () => ok(verifyParentJourneyView(journeyRaw())),
     schoolTimeZone: () => Promise.resolve(ZONE),
     classBookings: () => ok(verifyParentClassBookingChoices(choicesRaw())),
@@ -216,6 +218,10 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
     announcements: () => ok(verifyParentSchoolAnnouncements({ schoolName: SAMPLE_SCHOOL, announcements: [
       { announcementId: id(900), title: 'Belt testing next Saturday', body: 'Testing starts at 10am. Please arrive 15 minutes early in a clean uniform.', publishedAt: ms(plus(start.toISOString(), -90)) },
       { announcementId: id(901), title: 'Closed Monday for the holiday', body: 'There are no classes on Monday. See you Tuesday!', publishedAt: ms(plus(start.toISOString(), -3 * 24 * 60)) },
+    ] })),
+    proShop: () => ok(verifyParentProShop({ schoolName: SAMPLE_SCHOOL, available: true, currency: 'USD', products: [
+      { productId: '9001', title: 'Sample sparring gloves', imageUrl: null, fromPrice: '39.00', url: 'https://sample-dojo.myshopify.com/products/sample-sparring-gloves' },
+      { productId: '9002', title: 'Sample uniform', imageUrl: null, fromPrice: '65.00', url: 'https://sample-dojo.myshopify.com/products/sample-uniform' },
     ] })),
     invoicePayments: () => ok(verifyParentInvoicePayments({ canPay: false, testMode: true, invoices: [] })),
     startInvoicePayment: async () => ({ ok: false as const, state: 'refused' as const, code: 'PARENT_INVOICE_PAY_NOT_CONFIGURED' }),
