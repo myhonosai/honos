@@ -356,6 +356,7 @@
     "0576_school_announcements.sql": "7d57e1debc975c6058aeea95428cb8cdfc7979beb467282bf2cde0ab49af4ffa",
     "0581_parent_pro_shop.sql": "2d3752083574a64ffb76936058118b7ed1b398ef79b7e78dd790c35506381aa6",
     "0583_calendar_settings.sql": "5e2984f34a479a4739e984ee2bcc7532d6de49449da07f869e2c5c70b1d40975",
-    "0585_school_message_history.sql": "5c85915c11e07fc66563a8b617f9809f4340ed92fa8a2df141143834ee22036b"
+    "0585_school_message_history.sql": "5c85915c11e07fc66563a8b617f9809f4340ed92fa8a2df141143834ee22036b",
+    "0586_school_message_templates.sql": "d85d8ca8d6153a38a0cd0a04b73628f2cbac4cc7094de7678a50db4c24117e9b"
   }
 }

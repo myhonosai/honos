@@ -4661,3 +4661,26 @@ BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_school_opted_out_contacts(text,jsonb) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0586 school message templates (Texts and Email pages TE2): three staff entry points (read, save, archive/restore). The
+-- table keeps forced RLS with no runtime privilege; every helper stays migration-owner only.
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_school_message_templates(text,jsonb)','hon.save_school_message_template(text,jsonb,text,uuid,uuid)',
+    'hon.set_school_message_template_status(text,jsonb,text,uuid,uuid)'];
+BEGIN
+  IF to_regclass('hon.school_message_templates') IS NULL THEN RAISE EXCEPTION 'Apply migration 0586 first'; END IF;
+  EXECUTE 'REVOKE ALL ON TABLE hon.school_message_templates FROM PUBLIC';
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.school_message_templates FROM %I',r); END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.school_template_line_ok(text,integer)','hon.school_template_body_ok(text,integer)','hon.school_template_tags_ok(text)',
+      'hon.guard_school_message_template()','hon.require_school_template_actor(text,text)','hon.school_message_template_json(hon.school_message_templates)',
+      'hon.school_template_command_begin(text,text,jsonb,text,uuid,uuid)','hon.school_template_room_check(uuid,uuid,text,text,uuid,boolean)',
+      'hon.school_template_command_finish(uuid,text,hon.school_message_templates,jsonb,text,uuid,uuid,jsonb)']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
