@@ -5706,3 +5706,41 @@ DO $$ DECLARE f record; safe boolean; BEGIN
     RAISE EXCEPTION 'hon.journey_recommendations must carry exactly its two guards'; END IF;
 END $$;
 -- End journey recommendations exact verification.
+-- Family referrals exact verification (0604): private helpers, seven runtime entry points, five private forced-RLS tables with guards.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_family_referral_rows()',false,false,'search_path=pg_catalog, hon','314dbb05287e2da471a2d27f6bbd457e853aa191978eeed30d45f895f8d13129'),
+('hon.require_school_referral_actor(text,text)',true,false,'search_path=pg_catalog, hon','5a743de3954bc5f3bba625c8f21713718b51429b6e24d8ca0124461e555eb98b'),
+('hon.school_referral_program_json(uuid,uuid)',true,false,'search_path=pg_catalog, hon','efe55fdb5e464dbf5fe930dcee5ebf11c7bd0791f77f85fa829561bd5650eb3b'),
+('hon.family_referral_display(text,integer)',false,false,'search_path=pg_catalog','6dc48e9e62534fc012adb7097fdb9d0203a552406f4d5ff55ea192ef568018e5'),
+('hon.family_referral_staff_json(hon.family_referrals)',true,false,'search_path=pg_catalog, hon','688d5c38e68fd953ffda0e816dc111506437bcb56e5fcaa7e3199dd58adfb68f'),
+('hon.read_school_referrals(text)',true,true,'search_path=pg_catalog, hon','76faec5648dd6c39863949e19a979c137ec54b8b4141d276c44b6981d830ab8a'),
+('hon.family_referral_text(jsonb,integer,boolean,boolean)',false,false,'search_path=pg_catalog, hon','e96404e895a33453e004fa0222a57400a567b653c4d1a441835cd6b569713d5e'),
+('hon.school_referral_begin(uuid,text,text)',true,false,'search_path=pg_catalog, hon','bf47a32dbc1b55955eeee2a8578aff425495bf97e0ef1a1fe4cab3d1c652c853'),
+('hon.configure_school_referral_program(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','213b829c0f405dedb5ecc32e5cc59f72bb1b91f21629f77de5e80ef1e51d2b80'),
+('hon.decide_family_referral_reward(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','49bc7662589cfafaa175ababb0200e1bf8474d2f113779a11791158fdd2488ab'),
+('hon.family_referral_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','89e8f2752b69d789e4378e5ab0d280fe23cc64aba42ceade3a1756053b4aca07'),
+('hon.family_referral_program_live(uuid,uuid)',true,false,'search_path=pg_catalog, hon','f2174d290592d96273549fec90962df90dda14698d5b9b0c09d69cb390ec9d64'),
+('hon.read_parent_referrals(text)',true,true,'search_path=pg_catalog, hon','2131c70f19a59060657213e9670e6fc5c78a21e09aad0b5bc1b4ad5b236756ad'),
+('hon.issue_parent_referral_link(text)',true,true,'search_path=pg_catalog, hon','668845de0109ee41aa7a4d71e39402a2b6b7dd6b749f9ff31700bcf61a69b640'),
+('hon.family_referral_code_live(text)',true,false,'search_path=pg_catalog, hon','9e15fe83025265c6b96ac8c23087457383b9c6e8d1b0d979d420bdb7c0646271'),
+('hon.read_public_referral(text)',true,true,'search_path=pg_catalog, hon','a478d2bee0d62fc94dd453a1ecd91bfb663f6101d242a873e65b5e195e5bb4a7'),
+('hon.submit_family_referral(text,jsonb,text)',true,true,'search_path=pg_catalog, hon','98ccec2c2a43d5957172ec3b85dfef62192f4b3199aff3e335226aab93c6c238')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe family referral function: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['school_referral_programs','school_referral_program_versions','school_referral_requests','family_referral_codes','family_referrals'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR has_table_privilege('hon_runtime',('hon.'||t)::regclass,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR (SELECT count(*) FROM pg_trigger g WHERE g.tgrelid=('hon.'||t)::regclass AND NOT g.tgisinternal AND g.tgenabled='O'
+        AND g.tgfoid IN ('hon.guard_family_referral_rows()'::regprocedure,'hon.guard_membership_activation_evidence()'::regprocedure))<>2 THEN
+      RAISE EXCEPTION 'hon.% must be private, forced-RLS and carry exactly its two guards',t; END IF;
+  END LOOP;
+END $$;
+-- End family referrals exact verification.
