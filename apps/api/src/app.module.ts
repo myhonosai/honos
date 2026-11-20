@@ -145,6 +145,9 @@ import { SchoolWebsiteService } from './website/school-website.service.js';
 import { SchoolWebsiteAiController } from './website/website-ai.controller.js';
 import { WebsiteAiService } from './website/website-ai.service.js';
 import { WEBSITE_PROVIDER_RUNTIME, OpenRouterWebsiteRuntime } from './ai/website-provider-runtime.js';
+import { MerchAiController } from './commerce/shopify/merch-ai.controller.js';
+import { MerchAiService } from './commerce/shopify/merch-ai.service.js';
+import { MERCH_PROVIDER_RUNTIME, OpenRouterMerchRuntime } from './commerce/shopify/merch-provider-runtime.js';
 import { PAPER_VISION_RUNTIME, OpenRouterPaperVisionRuntime } from './ai/paper-vision-runtime.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
@@ -628,6 +631,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HistoryImportController,
     SchoolWebsiteController,
     SchoolWebsiteAiController,
+    MerchAiController,
     PublishedSchoolWebsiteController,
     SchoolOnboardingController,
     SchoolSupportController,
@@ -899,6 +903,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolWebsiteService,
     WebsiteAiService,
     { provide: WEBSITE_PROVIDER_RUNTIME, useFactory: () => new OpenRouterWebsiteRuntime() },
+    MerchAiService,
+    { provide: MERCH_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime() },
     SchoolOnboardingService,
     SchoolSupportService,
     CustomToolService,

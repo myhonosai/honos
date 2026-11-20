@@ -4719,3 +4719,19 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.read_parent_checkout_order(text,uuid),hon.read_school_checkout_orders(text) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0596 Merch Studio AI ideas: the MERCH_IDEAS kind on the shared AI text proposals; seven runtime entry points, every helper closed.
+DO $$ DECLARE r text; f regprocedure; BEGIN
+  IF to_regprocedure('hon.begin_shopify_merch_ideas(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0596 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.shopify_merch_kinds()','hon.shopify_merch_styles()','hon.shopify_merch_keys_are(jsonb,text[])','hon.shopify_merch_brief_ok(jsonb)',
+    'hon.shopify_merch_ideas_ok(jsonb)','hon.shopify_merch_ai_actor(text)','hon.shopify_merch_ai_reader(text)','hon.shopify_merch_ai_facts(jsonb,uuid)',
+    'hon.shopify_merch_ai_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_shopify_merch_ideas(text,jsonb,uuid), hon.plan_shopify_merch_ideas(text,uuid),
+      hon.prepare_shopify_merch_ideas(text,uuid,uuid,boolean), hon.fail_shopify_merch_ideas(text,uuid,text,text),
+      hon.record_shopify_merch_ideas(text,uuid,jsonb), hon.read_shopify_merch_ideas(text,uuid), hon.close_shopify_merch_ideas(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;

@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "73f140d59cca31fc3c09d57568cfe8ac55dfb91a59284c02b397807cbf13be0c",
+  "chainSha256": "8c89b939e3039c0f229566ec5a3221773821bffe6b060a6c54015b67112d08ed",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -745,6 +745,10 @@
     {
       "file": "0594_paper_import_ai_reader.sql",
       "sha256": "7a84df3e44906d28635eaf0889a1c133994e0201b805a7bb343a3ba4b2da99a9"
+    },
+    {
+      "file": "0596_shopify_merch_ai_ideas.sql",
+      "sha256": "15e91391b40b51c53684df45238cc33038f00084add99849eb0737ba173b3452"
     },
     {
       "file": "0598_family_checkout_orders.sql",
