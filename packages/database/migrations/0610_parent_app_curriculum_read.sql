@@ -6,7 +6,7 @@ BEGIN;
 --   R2  hon.read_parent_curriculum_app: the parent read; the family follows the 0471/0473 family choice through
 --       hon.resolve_parent_journey_scopes; the same lock-then-recheck and entitlement rule as the 0132 parent read.
 --   R3  hon.read_staff_parent_app_curriculum_preview: staff (curriculum.manage) preview of one own-school student.
--- Output is a whitelist: names, dates, kinds, titles, descriptions and URLs. No ids, staff, audit or progress data.
+-- Output is a whitelist: names, dates, kinds, titles, descriptions and URLs; each section holds at most 200 items (contract cap). No ids, staff, audit or progress data.
 -- No table, write path, external I/O or AI.
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)) THEN RAISE EXCEPTION 'Parent app curriculum read requires trusted migration owner'; END IF;
@@ -32,13 +32,13 @@ BEGIN
    IF e.current_rank_id IS NOT NULL THEN
     SELECT jsonb_build_object('name',left(regexp_replace(k.name,'[[:cntrl:]<>]','','g'),160),'color',CASE WHEN k.display_color ~ '^#[0-9A-Fa-f]{6}$' THEN k.display_color ELSE NULL END) INTO rank_obj
      FROM hon.curriculum_ranks k WHERE k.id=e.current_rank_id AND k.curriculum_id=e.curriculum_id;
-    items:=(SELECT coalesce(jsonb_agg(jsonb_build_object('title',r.title,'description',r.description,'kind',r.kind,'url',r.url) ORDER BY r.title,r.id),'[]'::jsonb)
-     FROM hon.curriculum_resources r WHERE r.curriculum_id=e.curriculum_id AND r.organization_id=p_organization AND r.school_id=p_school AND r.status='ACTIVE' AND r.audience='PARENT' AND r.rank_id=e.current_rank_id);
+    items:=(SELECT coalesce(jsonb_agg(q.o ORDER BY q.n),'[]'::jsonb) FROM (SELECT jsonb_build_object('title',r.title,'description',r.description,'kind',r.kind,'url',r.url) o,row_number() OVER (ORDER BY r.title,r.id) n
+     FROM hon.curriculum_resources r WHERE r.curriculum_id=e.curriculum_id AND r.organization_id=p_organization AND r.school_id=p_school AND r.status='ACTIVE' AND r.audience='PARENT' AND r.rank_id=e.current_rank_id ORDER BY r.title,r.id LIMIT 200) q);
     IF jsonb_array_length(items)>0 THEN sections:=sections||jsonb_build_array(jsonb_build_object('label','CURRENT','items',items)); END IF;
     IF has_settings AND s.rank_show_earlier AND cur_order IS NOT NULL THEN
-     items:=(SELECT coalesce(jsonb_agg(jsonb_build_object('title',r.title,'description',r.description,'kind',r.kind,'url',r.url) ORDER BY k.progression_order DESC,r.title,r.id),'[]'::jsonb)
+     items:=(SELECT coalesce(jsonb_agg(q.o ORDER BY q.n),'[]'::jsonb) FROM (SELECT jsonb_build_object('title',r.title,'description',r.description,'kind',r.kind,'url',r.url) o,row_number() OVER (ORDER BY k.progression_order DESC,r.title,r.id) n
       FROM hon.curriculum_resources r JOIN hon.curriculum_ranks k ON k.id=r.rank_id AND k.curriculum_id=r.curriculum_id
-      WHERE r.curriculum_id=e.curriculum_id AND r.organization_id=p_organization AND r.school_id=p_school AND r.status='ACTIVE' AND r.audience='PARENT' AND k.progression_order<cur_order);
+      WHERE r.curriculum_id=e.curriculum_id AND r.organization_id=p_organization AND r.school_id=p_school AND r.status='ACTIVE' AND r.audience='PARENT' AND k.progression_order<cur_order ORDER BY k.progression_order DESC,r.title,r.id LIMIT 200) q);
      IF jsonb_array_length(items)>0 THEN sections:=sections||jsonb_build_array(jsonb_build_object('label','REVIEW','items',items)); END IF;
     END IF;
    END IF;
@@ -47,8 +47,8 @@ BEGIN
      AND (cur_order IS NULL OR k.progression_order>cur_order) ORDER BY k.progression_order,k.id LIMIT 1;
     IF next_rank.id IS NOT NULL THEN
      next_obj:=jsonb_build_object('name',left(regexp_replace(next_rank.name,'[[:cntrl:]<>]','','g'),160),'startsOn',NULL);
-     items:=(SELECT coalesce(jsonb_agg(jsonb_build_object('title',r.title,'description',r.description,'kind',r.kind,'url',r.url) ORDER BY r.title,r.id),'[]'::jsonb)
-      FROM hon.curriculum_resources r WHERE r.curriculum_id=e.curriculum_id AND r.organization_id=p_organization AND r.school_id=p_school AND r.status='ACTIVE' AND r.audience='PARENT' AND r.rank_id=next_rank.id);
+     items:=(SELECT coalesce(jsonb_agg(q.o ORDER BY q.n),'[]'::jsonb) FROM (SELECT jsonb_build_object('title',r.title,'description',r.description,'kind',r.kind,'url',r.url) o,row_number() OVER (ORDER BY r.title,r.id) n
+      FROM hon.curriculum_resources r WHERE r.curriculum_id=e.curriculum_id AND r.organization_id=p_organization AND r.school_id=p_school AND r.status='ACTIVE' AND r.audience='PARENT' AND r.rank_id=next_rank.id ORDER BY r.title,r.id LIMIT 200) q);
      IF jsonb_array_length(items)>0 THEN sections:=sections||jsonb_build_array(jsonb_build_object('label','NEXT','items',items)); END IF;
     END IF;
    END IF;
@@ -57,19 +57,19 @@ BEGIN
    IF jsonb_typeof(state->'current')='object' THEN
     cycle_obj:=jsonb_build_object('name',state#>>'{current,name}','startsOn',state#>'{current,startsOn}','endsOn',state#>'{current,endsOn}',
      'rotation',CASE WHEN has_settings THEN s.cycle_rotation ELSE 'STAFF_PICK' END);
-    items:=(SELECT coalesce(jsonb_agg(jsonb_build_object('title',r.title,'description',r.description,'kind',r.kind,'url',r.url) ORDER BY r.title,r.id),'[]'::jsonb)
-     FROM hon.curriculum_resources r WHERE r.curriculum_id=e.curriculum_id AND r.organization_id=p_organization AND r.school_id=p_school AND r.status='ACTIVE' AND r.audience='PARENT' AND r.cycle_id=(state#>>'{current,id}')::uuid);
+    items:=(SELECT coalesce(jsonb_agg(q.o ORDER BY q.n),'[]'::jsonb) FROM (SELECT jsonb_build_object('title',r.title,'description',r.description,'kind',r.kind,'url',r.url) o,row_number() OVER (ORDER BY r.title,r.id) n
+     FROM hon.curriculum_resources r WHERE r.curriculum_id=e.curriculum_id AND r.organization_id=p_organization AND r.school_id=p_school AND r.status='ACTIVE' AND r.audience='PARENT' AND r.cycle_id=(state#>>'{current,id}')::uuid ORDER BY r.title,r.id LIMIT 200) q);
     IF jsonb_array_length(items)>0 THEN sections:=sections||jsonb_build_array(jsonb_build_object('label','CURRENT','items',items)); END IF;
    END IF;
    IF has_settings AND s.cycle_show_next AND jsonb_typeof(state->'next')='object' AND (state#>>'{next,id}') IS DISTINCT FROM (state#>>'{current,id}') THEN
     next_obj:=jsonb_build_object('name',state#>>'{next,name}','startsOn',state#>'{next,startsOn}');
-    items:=(SELECT coalesce(jsonb_agg(jsonb_build_object('title',r.title,'description',r.description,'kind',r.kind,'url',r.url) ORDER BY r.title,r.id),'[]'::jsonb)
-     FROM hon.curriculum_resources r WHERE r.curriculum_id=e.curriculum_id AND r.organization_id=p_organization AND r.school_id=p_school AND r.status='ACTIVE' AND r.audience='PARENT' AND r.cycle_id=(state#>>'{next,id}')::uuid);
+    items:=(SELECT coalesce(jsonb_agg(q.o ORDER BY q.n),'[]'::jsonb) FROM (SELECT jsonb_build_object('title',r.title,'description',r.description,'kind',r.kind,'url',r.url) o,row_number() OVER (ORDER BY r.title,r.id) n
+     FROM hon.curriculum_resources r WHERE r.curriculum_id=e.curriculum_id AND r.organization_id=p_organization AND r.school_id=p_school AND r.status='ACTIVE' AND r.audience='PARENT' AND r.cycle_id=(state#>>'{next,id}')::uuid ORDER BY r.title,r.id LIMIT 200) q);
     IF jsonb_array_length(items)>0 THEN sections:=sections||jsonb_build_array(jsonb_build_object('label','NEXT','items',items)); END IF;
    END IF;
   END IF;
-  items:=(SELECT coalesce(jsonb_agg(jsonb_build_object('title',r.title,'description',r.description,'kind',r.kind,'url',r.url) ORDER BY r.title,r.id),'[]'::jsonb)
-   FROM hon.curriculum_resources r WHERE r.curriculum_id=e.curriculum_id AND r.organization_id=p_organization AND r.school_id=p_school AND r.status='ACTIVE' AND r.audience='PARENT' AND r.rank_id IS NULL AND r.cycle_id IS NULL);
+  items:=(SELECT coalesce(jsonb_agg(q.o ORDER BY q.n),'[]'::jsonb) FROM (SELECT jsonb_build_object('title',r.title,'description',r.description,'kind',r.kind,'url',r.url) o,row_number() OVER (ORDER BY r.title,r.id) n
+   FROM hon.curriculum_resources r WHERE r.curriculum_id=e.curriculum_id AND r.organization_id=p_organization AND r.school_id=p_school AND r.status='ACTIVE' AND r.audience='PARENT' AND r.rank_id IS NULL AND r.cycle_id IS NULL ORDER BY r.title,r.id LIMIT 200) q);
   IF jsonb_array_length(items)>0 THEN sections:=sections||jsonb_build_array(jsonb_build_object('label','ALL','items',items)); END IF;
   out:=out||jsonb_build_array(jsonb_build_object('curriculumName',left(regexp_replace(e.curriculum_name,'[[:cntrl:]<>]','','g'),160),'mode',mode,
    'rank',rank_obj,'cycle',cycle_obj,'next',next_obj,'sections',sections));
@@ -106,7 +106,7 @@ BEGIN
   JOIN hon.student_profiles student ON student.person_id=member.person_id AND student.primary_family_id=p_family AND student.organization_id=member.organization_id AND student.school_id=member.school_id AND student.status='ACTIVE'
   JOIN hon.people person ON person.id=student.person_id AND person.organization_id=student.organization_id AND person.school_id=student.school_id
   WHERE member.family_id=p_family AND member.member_role='STUDENT' AND member.organization_id=scope.organization_id AND member.school_id=scope.school_id
-  LIMIT 20) x;
+  ORDER BY display_name,student.id LIMIT 20) x;
  RETURN jsonb_build_object('children',children);
 END $$;
 

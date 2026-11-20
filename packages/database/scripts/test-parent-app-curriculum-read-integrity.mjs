@@ -270,6 +270,17 @@ try {
   await refused(() => parentApp(GUARDIAN), 403, undefined, 'no active entitlement');
   await sql("UPDATE hon.organization_entitlements SET effective_until=NULL WHERE organization_id=$1", [ids.organization]);
 
+  // 8b. A long syllabus: every section is capped in SQL at the 200-item contract limit, so the read stays up.
+  await sql(`INSERT INTO hon.curriculum_resources(organization_id,school_id,curriculum_id,rank_id,cycle_id,kind,url,title,description,audience,status)
+    SELECT $1,$2,$3,$4,NULL,'LINK','https://www.myhonos.com/long-'||g,'White drill '||lpad(g::text,3,'0'),'About drill '||g,'PARENT','ACTIVE' FROM generate_series(1,205) g`,
+    [ids.organization, ids.schoolA, k.id, k['White Belt']]);
+  await saveSettings(k.id, { rank_show_earlier: true });
+  const longKids = entryOf((await success(() => parentApp(GUARDIAN), 'more than 200 review items')).data, 'Mia', 'Kids Program');
+  const review = sectionOf(longKids, 'REVIEW').items.map((x) => x.title);
+  ok(review.length === 200 && review[0] === 'Yellow form' && review[1] === 'White drill 001' && !review.includes('White form'), `review capped at 200, newest rank first (${review.length})`);
+  const longPreview = (await success(() => preview(MANAGER, mia), 'staff preview of a long syllabus')).data;
+  ok(JSON.stringify(longPreview) === JSON.stringify(childOf((await success(() => parentApp(GUARDIAN), 'parent long view')).data, 'Mia')), 'long preview still equals the parent view');
+
   // 9. ACLs and the 011 section.
   const helper = (await sql(`SELECT has_function_privilege($1,'hon.curriculum_app_child_entries(uuid,uuid,uuid)','EXECUTE') r,
     EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0) pub FROM pg_proc p WHERE p.oid='hon.curriculum_app_child_entries(uuid,uuid,uuid)'::regprocedure`, [CRM_CLOSE_RUNTIME_ROLE])).rows[0];

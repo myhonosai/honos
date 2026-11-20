@@ -5788,8 +5788,8 @@ END $$;
 -- Parent app curriculum read exact verification (0610): the private child entries helper and two runtime entry points.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.curriculum_app_child_entries(uuid,uuid,uuid)',false,false,'097a96a3484cb9111ef6e952f00969c144ca0c1943eecfc82895d8efe4034995'),
-('hon.read_parent_curriculum_app(text,uuid)',true,true,'b6d9de1343d5261c56bc917c8a9165e9d3a884385c261861497def78747162dc'),
+('hon.curriculum_app_child_entries(uuid,uuid,uuid)',false,false,'450c5b748c2d87cdc3ee28b1277cdd2f656ea328044f95372abde1855c67918f'),
+('hon.read_parent_curriculum_app(text,uuid)',true,true,'6e9cf6695959c60fedd87ef70dcafcbde2ef51a79e005f6d0bb7f5229e295a88'),
 ('hon.read_staff_parent_app_curriculum_preview(text,uuid)',true,true,'5ca6c27d9648f5d72d3d147ef019d1c98ff2f6348c922e8f781a219cde0c1820')) e(signature,definer,runtime_allowed,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
