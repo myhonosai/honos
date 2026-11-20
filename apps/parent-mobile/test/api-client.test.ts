@@ -33,6 +33,17 @@ describe('parent API client', () => {
     expect(await api(leaky).announcements()).toEqual({ ok: false, state: 'unavailable' });
   });
 
+  it('reads attendance streaks with no selector and refuses anything beyond a name and a number', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(200, { data: { children: [{ name: 'Mia', weeks: 3 }] } }));
+    const result = await api(fetchImpl).attendanceStreaks();
+    expect(result.ok && result.data.children[0]!.weeks).toBe(3);
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(url).toBe('https://api.example.test/v1/parent/attendance-streaks');
+    expect(init.method).toBe('GET');
+    const leaky = jest.fn().mockResolvedValue(jsonResponse(200, { data: { children: [{ name: 'Mia', weeks: 3, lastClassAt: '2026-11-17T15:30:00.000Z' }] } }));
+    expect(await api(leaky).attendanceStreaks()).toEqual({ ok: false, state: 'unavailable' });
+  });
+
   it('reads the pro shop with no selector and refuses a link to another site', async () => {
     const item = { productId: '11', title: 'Gloves', imageUrl: null, fromPrice: '19.50', url: 'https://dojo.myshopify.com/products/gloves' };
     const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(200, { data: { schoolName: 'Dojo', available: true, currency: 'USD', products: [item] } }));

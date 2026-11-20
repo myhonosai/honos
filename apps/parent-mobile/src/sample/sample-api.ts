@@ -9,6 +9,7 @@ import { verifyParentCurriculumLibrary } from '@hon/contracts/curriculum-resourc
 import { verifyParentSchoolBookingReceipt, verifyParentSchoolBookings, type ParentSchoolBooking } from '@hon/contracts/parent-school-bookings';
 import { verifyParentInvoicePayments } from '@hon/contracts/parent-invoice-pay';
 import { verifyParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
+import { verifyParentAttendanceStreaks } from '@hon/contracts/parent-attendance-streaks';
 import { verifyParentProShop } from '@hon/contracts/parent-pro-shop';
 import { verifyParentCheckoutPages } from '@hon/contracts/family-checkout';
 import type { ParentApi } from '../api/client';
@@ -224,6 +225,7 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
       { announcementId: id(900), title: 'Belt testing next Saturday', body: 'Testing starts at 10am. Please arrive 15 minutes early in a clean uniform.', publishedAt: ms(plus(start.toISOString(), -90)) },
       { announcementId: id(901), title: 'Closed Monday for the holiday', body: 'There are no classes on Monday. See you Tuesday!', publishedAt: ms(plus(start.toISOString(), -3 * 24 * 60)) },
     ] })),
+    attendanceStreaks: () => ok(verifyParentAttendanceStreaks({ children: [{ name: 'Leo Sample', weeks: 2 }, { name: 'Mia Sample', weeks: 5 }] })),
     proShop: () => ok(verifyParentProShop({ schoolName: SAMPLE_SCHOOL, available: true, currency: 'USD', products: [
       { productId: '9001', title: 'Sample sparring gloves', imageUrl: null, fromPrice: '39.00', url: 'https://sample-dojo.myshopify.com/products/sample-sparring-gloves' },
       { productId: '9002', title: 'Sample uniform', imageUrl: null, fromPrice: '65.00', url: 'https://sample-dojo.myshopify.com/products/sample-uniform' },

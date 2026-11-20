@@ -5651,6 +5651,23 @@ DO $$ DECLARE f record; safe boolean; t text; worker oid:=(SELECT oid FROM pg_ro
     RAISE EXCEPTION 'hon.parent_push_fanouts must carry exactly its two guards'; END IF;
 END $$;
 -- End parent announcement push exact verification.
+-- Parent attendance streaks exact verification (0602): two private helpers and one runtime read of each child's weekly streak.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.parent_attendance_streak_scope(text)',true,false,'search_path=pg_catalog, hon','6413c080d2e14db63dd517c3027500079ee5c073b237b93b9435e091ab875f62'),
+('hon.parent_attendance_streak_weeks(uuid,uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','4c942048bb09e27adfd2a3a1bc366bf7cd7d8655457c5cb88244a355c89d3cde'),
+('hon.read_parent_attendance_streaks(text)',true,true,'search_path=pg_catalog, hon','2fe1c204603de05035fa4d7de6e65a0f823c748b70008bc86e541f5d9f17a03d')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe parent attendance streak function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End parent attendance streaks exact verification.
 -- Family referrals exact verification (0604): private helpers, seven runtime entry points, five private forced-RLS tables with guards.
 DO $$ DECLARE f record; safe boolean; t text; BEGIN
   FOR f IN SELECT * FROM (VALUES

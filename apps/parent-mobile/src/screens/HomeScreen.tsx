@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ParentJourneyView } from '@hon/contracts/parent-journey-view';
 import { useFamily } from '../family/family-data';
 import { SchoolAnnouncements, useAnnouncements } from '../home/Announcements';
+import { StreakBar, useStreaks } from '../home/Streaks';
 import { bookingLabel, childSummaries, formatClassTime, nextClass } from '../home/model';
 import { beltPath, eianCheer } from '../home/belt-path';
 import { BeltPathView } from '../home/BeltPathView';
@@ -21,6 +22,7 @@ const ACCESS_LABEL: Record<ParentJourneyView['accessLevel'], string> = {
 export function HomeScreen({ onNavigate }: { onNavigate: (tab: 'Schedule' | 'Eian' | 'Messages') => void }) {
   const { state, selection, select, refresh, now, api } = useFamily();
   const announcements = useAnnouncements(api, state.status === 'ready' ? state.view : null);
+  const streaks = useStreaks(api, state.status === 'ready' ? state.view : null);
   const [openChild, setOpenChild] = useState<number | null>(null);
   const insets = useSafeAreaInsets();
   const c = useColors();
@@ -53,6 +55,7 @@ export function HomeScreen({ onNavigate }: { onNavigate: (tab: 'Schedule' | 'Eia
     return (
       <View>
         <View style={{ flexDirection: 'row', marginTop: space.sm }}><Pill text={ACCESS_LABEL[view.accessLevel]} /></View>
+        <StreakBar read={streaks} names={selection === 'all' ? null : children.filter(ch => ch.index === selection).map(ch => ch.name)} />
         {children.length > 1 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: space.lg }} contentContainerStyle={{ gap: space.sm }}>
             <Chip label="All children" active={selection === 'all'} onPress={() => select('all')} a11y="Show all children" />

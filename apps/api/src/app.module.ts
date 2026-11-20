@@ -290,6 +290,8 @@ import { EXPO_PUSH_TRANSPORT, ExpoPushClient } from './parent-push/expo-push-cli
 import { PARENT_PUSH_WORKER_STORE, ParentPushScheduler, ParentPushWorker, ParentPushWorkerDatabase } from './parent-push/parent-push-worker.js';
 import { ParentProShopController, ParentProShopReadGuard } from './pro-shop/parent-pro-shop.controller.js';
 import { ParentProShopService } from './pro-shop/parent-pro-shop.service.js';
+import { ParentAttendanceStreaksController, ParentAttendanceStreaksReadGuard } from './attendance-streaks/parent-attendance-streaks.controller.js';
+import { ParentAttendanceStreaksService } from './attendance-streaks/parent-attendance-streaks.service.js';
 import { ParentReferralLinkGuard, ParentReferralsController, ParentReferralsReadGuard } from './referrals/parent-referrals.controller.js';
 import { ParentReferralsService } from './referrals/parent-referrals.service.js';
 import { PublicReferralController, PublicReferralService } from './referrals/public-referral.controller.js';
@@ -567,6 +569,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolAnnouncementsController,
     ParentPushController,
     ParentProShopController,
+    ParentAttendanceStreaksController,
     ParentReferralsController, PublicReferralController, SchoolReferralsController,
     ParentCheckoutController,
     SchoolConversationsController,
@@ -787,6 +790,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentPushScheduler,
     ParentProShopService,
     ParentProShopReadGuard,
+    ParentAttendanceStreaksService,
+    ParentAttendanceStreaksReadGuard,
     ParentReferralsService, ParentReferralsReadGuard, ParentReferralLinkGuard, PublicReferralService,
     SchoolReferralsService, SchoolReferralsReadGuard, SchoolReferralProgramGuard, SchoolReferralRewardGuard,
     ParentCheckoutService, ParentCheckoutOrderGuard, ParentCheckoutStartGuard, ParentCheckoutConfirmGuard, ParentCheckoutCancelGuard,

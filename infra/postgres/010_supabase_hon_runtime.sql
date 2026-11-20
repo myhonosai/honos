@@ -4803,6 +4803,17 @@ DO $$ DECLARE r text; f text; t text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.register_parent_push_device(text,jsonb,text,uuid,uuid),hon.unregister_parent_push_device(text,jsonb,text,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
+-- 0602 parent attendance streaks: two private helpers and one runtime entry point (parent read of each child's weekly streak).
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.read_parent_attendance_streaks(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0602 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.parent_attendance_streak_scope(text)','hon.parent_attendance_streak_weeks(uuid,uuid,uuid,text)','hon.read_parent_attendance_streaks(text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_parent_attendance_streaks(text) TO hon_runtime;
+  END IF;
+END $$;
 -- 0604 family referrals: private helpers and five tables; runtime executes the seven entry points only
 -- (staff read/configure/reward, parent read/link, public read/submit).
 DO $$ DECLARE r text; f text; t text; BEGIN
