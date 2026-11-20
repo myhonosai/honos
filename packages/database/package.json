@@ -125,6 +125,7 @@
     "db:test-parent-testing-status": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-parent-testing-status-integrity.mjs",
     "db:test-parent-planned-absence-history": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-parent-planned-absence-history-integrity.mjs",
     "db:test-parent-message-history": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-parent-message-history-integrity.mjs",
+    "db:test-school-message-history": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-message-history.mjs",
     "db:setup-parent-journey": "node scripts/setup-parent-journey-validation.mjs",
     "db:setup-parent-billing": "node scripts/setup-parent-billing-validation.mjs",
     "db:setup-marketing-assistant": "node scripts/setup-marketing-assistant-validation.mjs",

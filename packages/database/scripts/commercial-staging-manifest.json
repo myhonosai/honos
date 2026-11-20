@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "d1061c1c04740cf414cd004926bdbae291aea2136a654307ff91be52fc622d57",
+  "chainSha256": "3332d7496d0d9cdea34b71ff5acdf730c7df80a3d982d7e3b433899eccb01fb3",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -733,6 +733,10 @@
     {
       "file": "0583_calendar_settings.sql",
       "sha256": "5e2984f34a479a4739e984ee2bcc7532d6de49449da07f869e2c5c70b1d40975"
+    },
+    {
+      "file": "0585_school_message_history.sql",
+      "sha256": "5c85915c11e07fc66563a8b617f9809f4340ed92fa8a2df141143834ee22036b"
     },
     {
       "file": "0598_family_checkout_orders.sql",

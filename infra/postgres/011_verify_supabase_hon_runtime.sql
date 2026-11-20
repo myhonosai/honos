@@ -5352,6 +5352,28 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
   END LOOP;
 END $$;
 -- End calendar settings exact verification.
+
+-- School message history exact verification (TE1 0585): two runtime read entry points, three private helpers.
+DO $$ DECLARE f text;
+BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.read_school_message_history(text,jsonb)','hon.read_school_opted_out_contacts(text,jsonb)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure
+        AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe school message history entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.require_school_messages_actor(text,text)','hon.school_messages_args_ok(jsonb,text[])','hon.school_message_outcome(text)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND (a.grantee=0 OR a.grantee<>p.proowner)) THEN
+      RAISE EXCEPTION 'Unsafe school message history helper: %',f; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname IN ('read_school_message_history','read_school_opted_out_contacts',
+      'require_school_messages_actor','school_messages_args_ok','school_message_outcome'))<>5 THEN
+    RAISE EXCEPTION 'Unexpected school message history overload'; END IF;
+END $$;
+-- End school message history exact verification.
 -- Family checkout orders exact verification (0598): private scope, pricing and JSON helpers, the order guard, the settle trigger, four runtime entry
 -- points, a private forced-RLS table the runtime can never touch directly and a code-owned recorder with no authority.
 DO $$ DECLARE f record; safe boolean; BEGIN

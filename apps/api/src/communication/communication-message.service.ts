@@ -9,6 +9,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import {
   COMMUNICATION_DELIVERY_STATUSES,
+  COMMUNICATION_EMAIL_SUBJECT_MAX,
   COMMUNICATION_MESSAGE_CHANNELS,
   COMMUNICATION_MESSAGE_LIFECYCLES,
   type CommandContext,
@@ -34,6 +35,7 @@ interface CommunicationMessageRow {
   scheduledAt: Date | string | null;
   createdByPrincipalId: string;
   queuedByPrincipalId: string | null;
+  emailSubject: string | null;
   version: number;
   createdAt: Date | string;
   updatedAt: Date | string;
@@ -50,6 +52,7 @@ interface NormalizedCreateInput {
   channel: CommunicationMessageChannel;
   content: string;
   scheduledAt: string | null;
+  emailSubject: string | null;
 }
 
 function validationError(detail: string): BadRequestException {
@@ -94,11 +97,22 @@ function normalizeCreateInput(input: CreateCommunicationMessageInput): Normalize
   if (content.length < 1 || content.length > 4000) {
     throw validationError('content must contain between 1 and 4000 characters.');
   }
+  let emailSubject: string | null = null;
+  if (input.emailSubject !== undefined) {
+    // TE1: a subject only for an email, already trimmed, 1-150 characters, one line (the 0423 column check).
+    const subject = input.emailSubject;
+    if (input.channel !== 'EMAIL' || typeof subject !== 'string' || subject.trim() !== subject || subject.length < 1
+      || subject.length > COMMUNICATION_EMAIL_SUBJECT_MAX || /[\u0000-\u001f\u007f]/.test(subject)) {
+      throw validationError('emailSubject must be 1-150 characters on one line, and only for an email.');
+    }
+    emailSubject = subject;
+  }
   return {
     recipientPersonId: input.recipientPersonId,
     channel: input.channel,
     content,
     scheduledAt: normalizeOptionalInstant(input.scheduledAt),
+    emailSubject,
   };
 }
 
@@ -123,6 +137,7 @@ function toSummary(row: CommunicationMessageRow): CommunicationMessageSummary {
     ...(row.scheduledAt === null ? {} : { scheduledAt: asIso(row.scheduledAt) }),
     createdByPrincipalId: row.createdByPrincipalId,
     ...(row.queuedByPrincipalId === null ? {} : { queuedByPrincipalId: row.queuedByPrincipalId }),
+    ...(row.emailSubject === null ? {} : { emailSubject: row.emailSubject }),
     version: row.version,
     createdAt: asIso(row.createdAt),
     updatedAt: asIso(row.updatedAt),
@@ -138,6 +153,7 @@ const MESSAGE_COLUMNS = `
   scheduled_at AS "scheduledAt",
   created_by_principal_id AS "createdByPrincipalId",
   queued_by_principal_id AS "queuedByPrincipalId",
+  email_subject AS "emailSubject",
   version,
   created_at AS "createdAt",
   updated_at AS "updatedAt"
@@ -159,7 +175,9 @@ export class CommunicationMessageService {
     this.assertHumanUi(context, 'creation');
     const normalized = normalizeCreateInput(input);
     const requestFingerprint = createHash('sha256')
-      .update(JSON.stringify({ command: 'communication.message.create', ...normalized }))
+      // The subject joins the fingerprint only when given, so a create without one keeps its pre-TE1 fingerprint.
+      .update(JSON.stringify({ command: 'communication.message.create', recipientPersonId: normalized.recipientPersonId, channel: normalized.channel,
+        content: normalized.content, scheduledAt: normalized.scheduledAt, ...(normalized.emailSubject === null ? {} : { emailSubject: normalized.emailSubject }) }))
       .digest('hex');
 
     return this.database.withTenantTransaction(context, async (client) => {
@@ -173,8 +191,8 @@ export class CommunicationMessageService {
       const inserted = await client.query<CommunicationMessageRow>(
         `INSERT INTO hon.communication_messages (
            organization_id, school_id, recipient_person_id, channel, content, lifecycle,
-           scheduled_at, created_by_principal_id
-         ) VALUES ($1, $2, $3::uuid, $4::hon.communication_message_channel, $5, 'DRAFT', $6::timestamptz, $7::uuid)
+           scheduled_at, created_by_principal_id, email_subject
+         ) VALUES ($1, $2, $3::uuid, $4::hon.communication_message_channel, $5, 'DRAFT', $6::timestamptz, $7::uuid, $8)
          RETURNING ${MESSAGE_COLUMNS}`,
         [
           context.organizationId,
@@ -184,6 +202,7 @@ export class CommunicationMessageService {
           normalized.content,
           normalized.scheduledAt,
           context.principalId,
+          normalized.emailSubject,
         ],
       );
       const row = inserted.rows[0];
