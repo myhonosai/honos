@@ -4622,3 +4622,29 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+
+-- 0595 Shopify theme drafts (TB1): two private tables reached only through four runtime entry points (read the theme
+-- workspace, begin / rotate / finish one piece of theme work under its lease); the guard, the end-of-connection trigger
+-- and the helpers are migration-owner only. HON writes only to its own UNPUBLISHED copy of the live theme.
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.read_shopify_theme_workspace(text,uuid)','hon.begin_shopify_theme_work(text,jsonb)',
+    'hon.rotate_shopify_theme_credential(text,jsonb)','hon.finish_shopify_theme_work(text,jsonb)'];
+  helpers text[]:=ARRAY['hon.guard_shopify_theme_edit()','hon.shopify_theme_on_end()','hon.shopify_theme_recipe_ok(text,jsonb)',
+    'hon.shopify_theme_files_ok(jsonb)','hon.shopify_theme_name_ok(jsonb)','hon.shopify_theme_edit_json(hon.shopify_theme_edits,boolean)',
+    'hon.shopify_theme_locked(uuid)','hon.shopify_theme_leased(uuid,uuid,jsonb)'];
+BEGIN
+  IF to_regclass('hon.shopify_theme_edits') IS NULL THEN RAISE EXCEPTION 'Apply migration 0595 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.shopify_theme_drafts','hon.shopify_theme_edits'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY helpers||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;

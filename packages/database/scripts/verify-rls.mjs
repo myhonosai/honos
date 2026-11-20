@@ -246,6 +246,8 @@ const expectedRlsTables = [
   'shopify_webhook_receipts',
   'shopify_product_changes',
   'shopify_finance',
+  'shopify_theme_drafts',
+  'shopify_theme_edits',
   'school_websites',
   'school_website_versions',
   'school_website_requests',

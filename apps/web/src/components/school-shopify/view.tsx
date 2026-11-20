@@ -3,6 +3,7 @@ import type { ShopifyCatalog, ShopifyConnectResult, ShopifyConnection, ShopifyFi
 import { shopifyText, type ShopifyKey } from './copy';
 import type { ShopifyErrorKind } from './http';
 import styles from './shopify.module.css';
+import { ThemeBuilder, type ThemeCommand, type ThemeOutcome, type ThemeState } from './theme';
 import { SHOPIFY_ADMIN_PAGES, money, shopifyAdminUrl, type ShopifyAdminPage } from './format';
 export { money, shopifyAdminUrl };
 import { Changes, DraftEditor, ProductEditor, changeFailure, changeOpen, type ProposeRequest } from './editor';
@@ -11,10 +12,10 @@ import { MerchStudio, type BrandState } from './studio';
 type T = (key: ShopifyKey, vars?: Record<string, string>) => string;
 export type OverviewState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; read: ShopifyOverview };
 /** The Commerce Workspace sections built today. Later sections (Collections, Fulfillment, Theme Builder, …) are added when they work. */
-export const SHOPIFY_SECTIONS = ['overview', 'products', 'studio', 'changes', 'orders', 'finance', 'inventory', 'admin', 'settings'] as const;
+export const SHOPIFY_SECTIONS = ['overview', 'products', 'studio', 'changes', 'orders', 'finance', 'theme', 'inventory', 'admin', 'settings'] as const;
 export type ShopifySection = typeof SHOPIFY_SECTIONS[number];
 export type ListState<T> = { state: 'LOADING' | 'UNAVAILABLE' } | { state: 'READY'; value: T };
-export type ShopifyAction = 'connect' | 'sync' | 'disconnect' | 'allowEditing' | 'allowFinance' | 'propose' | 'approve' | 'cancelChange';
+export type ShopifyAction = 'connect' | 'sync' | 'disconnect' | 'allowEditing' | 'allowFinance' | 'allowThemes' | 'propose' | 'approve' | 'cancelChange';
 /** `target` is the change a command was about; `change` is the server's verified answer for it. */
 export type ShopifyOutcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | ShopifyErrorKind; action: ShopifyAction; sync?: ShopifySyncResult; change?: ShopifyProductChange; target?: string }>;
 
@@ -26,6 +27,8 @@ export type ShopifyViewProps = Readonly<{
   onCancelChange?: ((change: ShopifyProductChange) => void) | undefined; onAllowEditing?: (() => void) | undefined;
   /** SH-F1: the Shopify Payments snapshot (managers only) and the switch that asks Shopify for it. */
   finance?: ListState<ShopifyFinanceView> | undefined; onAllowFinance?: (() => void) | undefined;
+  /** TB1: the theme workspace (managers only), the last theme command and the switch that asks Shopify for theme editing. */
+  theme?: ThemeState | undefined; themeOutcome?: ThemeOutcome | undefined; onThemeCommand?: ((c: ThemeCommand) => void) | undefined; onAllowThemes?: (() => void) | undefined;
   onRefresh?: (() => void) | undefined; onShop?: ((value: string) => void) | undefined; onConnect?: (() => void) | undefined;
   onSync?: (() => void) | undefined; onConfirm?: ((open: boolean) => void) | undefined; onDisconnect?: (() => void) | undefined;
   onSection?: ((section: ShopifySection) => void) | undefined;
@@ -431,7 +434,8 @@ function Settings({ p, t, read, c }: { p: ShopifyViewProps; t: T; read: ShopifyO
       <h2>{t('perm_title')}</h2>
       <ul className={styles.plainList}><li>{t('perm_read')}</li><li>{t('perm_orders')}</li>
         {edit?.editProducts && <li data-perm="products">{t('perm_editProducts')}</li>}{edit?.editCosts && <li data-perm="costs">{t('perm_editCosts')}</li>}
-        {p.finance?.state === 'READY' && p.finance.value.financeAllowed && <li data-perm="finance">{t('perm_finance')}</li>}</ul>
+        {p.finance?.state === 'READY' && p.finance.value.financeAllowed && <li data-perm="finance">{t('perm_finance')}</li>}
+        {p.theme?.state === 'READY' && p.theme.value.themesAllowed && <li data-perm="themes">{t('perm_themes')}</li>}</ul>
       <p className={styles.meta}>{t(edit?.editProducts ? 'perm_approval' : 'perm_noWrite')}</p>
       {edit && !(edit.editProducts && edit.editCosts) && read.canManage && c.status === 'CONNECTED' &&
         <div className={styles.row}><button type="button" className={styles.secondary} disabled={p.locked} onClick={p.onAllowEditing}>{p.locked && p.outcome?.action === 'allowEditing' ? t('connecting') : t('allowEditing')}</button></div>}
@@ -507,6 +511,9 @@ export function ShopifyView(p: ShopifyViewProps): React.ReactElement {
       : section === 'orders' ? <Orders ctx={ctx} orders={p.orders} />
       : section === 'finance' ? <Finance ctx={ctx} read={read} c={c} finance={p.finance ?? { state: 'LOADING' }} locked={p.locked}
         busy={p.locked && o?.action === 'allowFinance'} onAllowFinance={p.onAllowFinance} />
+      : section === 'theme' ? <ThemeBuilder language={p.language} locale={p.locale} domain={c.shopDomain} canManage={read.canManage} connected={c.status === 'CONNECTED'}
+        theme={p.theme ?? { state: 'LOADING' }} outcome={p.themeOutcome ?? null} locked={p.locked} allowing={p.locked && o?.action === 'allowThemes'}
+        brandColor={p.brand?.state === 'READY' ? p.brand.accentColor : null} onCommand={(cmd) => p.onThemeCommand?.(cmd)} onAllowThemes={p.onAllowThemes} />
       : section === 'inventory' ? <Inventory ctx={ctx} catalog={p.catalog} />
       : section === 'admin' ? <AdminLinks ctx={ctx} />
       : <><Settings p={p} t={t} read={read} c={c} />{connectable && <ConnectCard p={p} t={t} read={read} c={c} />}</>}

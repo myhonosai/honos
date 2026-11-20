@@ -43,6 +43,14 @@ export interface MirrorOrder {
   sourceName: string | null; currency: string; subtotal: string; discounts: string; tax: string; total: string; lines: MirrorOrderLine[];
 }
 
+/** TB1: a theme as Shopify lists it, and one text file of it. */
+export type ShopifyThemeRole = 'MAIN' | 'UNPUBLISHED' | 'DEVELOPMENT' | 'DEMO' | 'ARCHIVED' | 'LOCKED';
+export interface ShopifyTheme { id: string; name: string; role: ShopifyThemeRole }
+export interface ShopifyThemeFile { filename: string; content: string }
+/** The files HON reads and writes in TB1: JSON settings and templates only (never Liquid, never assets). */
+export const SHOPIFY_THEME_FILE = /^(config\/settings_data\.json|templates\/[a-z0-9_-]{1,40}(\.[a-z0-9_-]{1,40})?\.json)$/;
+export const SHOPIFY_THEME_FILE_MAX = 262_144;
+
 /** The Shopify operations SH1 uses. Callers pass HON's own values (a verified shop, a code from a verified redirect). */
 export interface ShopifyAdapter {
   readonly kind: 'SHOPIFY' | 'FAKE';
@@ -60,6 +68,14 @@ export interface ShopifyAdapter {
   updateVariants(shop: string, accessToken: string, productId: string, variants: readonly ShopifyVariantFields[], sku?: string | null): Promise<void>;
   /** SH-F1 read: the Shopify Payments balance, the latest 20 payouts and the latest 50 balance transactions. Needs read_shopify_payments_accounts. */
   finance(shop: string, accessToken: string): Promise<ShopifyFinanceSnapshot>;
+  // TB1 theme drafts (write_themes, protected scope): HON writes only to an UNPUBLISHED copy it made, never to MAIN.
+  themes(shop: string, accessToken: string): Promise<ShopifyTheme[]>;
+  /** The named files of one theme; a file the theme does not have is left out. */
+  themeFiles(shop: string, accessToken: string, themeId: string, filenames: readonly string[]): Promise<ShopifyThemeFile[]>;
+  /** A copy of the theme with the UNPUBLISHED role. */
+  duplicateTheme(shop: string, accessToken: string, themeId: string, name: string): Promise<ShopifyTheme>;
+  /** Writes the files into an UNPUBLISHED theme; refuses any other role before calling Shopify. */
+  upsertThemeFiles(shop: string, accessToken: string, themeId: string, files: readonly ShopifyThemeFile[]): Promise<void>;
 }
 
 /** The one HON Shopify app, as configured on this server. */
@@ -307,6 +323,38 @@ export function financeFromAccount(v: unknown): ShopifyFinanceSnapshot {
   return { paymentsActive: true, balances, payouts, transactions };
 }
 
+// ---- TB1 themes ----
+const THEMES_QUERY = `query HonThemes { themes(first: 20) { nodes { id name role } } }`;
+const THEME_FILES_QUERY = `query HonThemeFiles($id: ID!, $filenames: [String!]!) {
+  theme(id: $id) { files(filenames: $filenames, first: 10) { nodes { filename body { ... on OnlineStoreThemeFileBodyText { content } } } } } }`;
+const THEME_DUPLICATE = `mutation HonThemeDuplicate($id: ID!, $name: String) {
+  themeDuplicate(id: $id, name: $name) { newTheme { id name role } userErrors { field message } } }`;
+const THEME_FILES_UPSERT = `mutation HonThemeFilesUpsert($themeId: ID!, $files: [OnlineStoreThemeFilesUpsertFileInput!]!) {
+  themeFilesUpsert(themeId: $themeId, files: $files) { upsertedThemeFiles { filename } userErrors { filename message } } }`;
+const THEME_ROLES: readonly ShopifyThemeRole[] = ['MAIN', 'UNPUBLISHED', 'DEVELOPMENT', 'DEMO', 'ARCHIVED', 'LOCKED'];
+export function themeFromNode(n: unknown): ShopifyTheme {
+  const o = obj(n);
+  const role = THEME_ROLES.find(r => r === o.role) ?? bad();
+  return { id: gidNumber(o.id, 'OnlineStoreTheme'), name: cleanText(o.name, 120) ?? bad(), role };
+}
+/** HON's theme name: plain text, at most 50 characters (Shopify's limit). */
+export function themeName(v: string): string { const t = cleanText(v, 50); return t ?? bad(); }
+/** Only the files TB1 is allowed to touch, each at most once, and (when given) text under the size limit. */
+export function themeFileNames(names: readonly string[], files?: readonly ShopifyThemeFile[]): void {
+  if (!names.length || names.length > 5 || new Set(names).size !== names.length || names.some(n => !SHOPIFY_THEME_FILE.test(n))) bad();
+  for (const f of files ?? []) if (typeof f.content !== 'string' || Buffer.byteLength(f.content, 'utf8') > SHOPIFY_THEME_FILE_MAX) bad();
+}
+export function themeFilesFrom(nodes: unknown, asked: readonly string[]): ShopifyThemeFile[] {
+  const out: ShopifyThemeFile[] = [];
+  for (const n of list(nodes)) {
+    const o = obj(n), b = obj(o.body);
+    if (typeof o.filename !== 'string' || !asked.includes(o.filename) || out.some(f => f.filename === o.filename)) bad();
+    if (typeof b.content !== 'string' || Buffer.byteLength(b.content, 'utf8') > SHOPIFY_THEME_FILE_MAX) bad();
+    out.push({ filename: o.filename, content: b.content });
+  }
+  return out;
+}
+
 export class GraphqlShopifyAdapter implements ShopifyAdapter {
   readonly kind = 'SHOPIFY' as const;
   constructor(private readonly clientId: string, private readonly clientSecret: string, private readonly send: typeof fetch,
@@ -363,6 +411,33 @@ export class GraphqlShopifyAdapter implements ShopifyAdapter {
 
   async finance(shop: string, accessToken: string): Promise<ShopifyFinanceSnapshot> {
     return financeFromAccount((await this.graphql(shop, accessToken, FINANCE_QUERY, {})).shopifyPaymentsAccount);
+  }
+
+  async themes(shop: string, accessToken: string): Promise<ShopifyTheme[]> {
+    return list(obj((await this.graphql(shop, accessToken, THEMES_QUERY, {})).themes).nodes).map(themeFromNode);
+  }
+  async themeFiles(shop: string, accessToken: string, themeId: string, filenames: readonly string[]): Promise<ShopifyThemeFile[]> {
+    themeFileNames(filenames);
+    const t = maybeObj((await this.graphql(shop, accessToken, THEME_FILES_QUERY, { id: `gid://shopify/OnlineStoreTheme/${themeId}`, filenames })).theme);
+    if (!t) throw new ShopifyProviderError('REJECTED');
+    return themeFilesFrom(obj(t.files).nodes, filenames);
+  }
+  async duplicateTheme(shop: string, accessToken: string, themeId: string, name: string): Promise<ShopifyTheme> {
+    const r = obj((await this.graphql(shop, accessToken, THEME_DUPLICATE, { id: `gid://shopify/OnlineStoreTheme/${themeId}`, name: themeName(name) })).themeDuplicate);
+    if (list(r.userErrors).length) throw new ShopifyProviderError('REJECTED');
+    const t = themeFromNode(r.newTheme);
+    if (t.role !== 'UNPUBLISHED') bad();
+    return t;
+  }
+  async upsertThemeFiles(shop: string, accessToken: string, themeId: string, files: readonly ShopifyThemeFile[]): Promise<void> {
+    themeFileNames(files.map(f => f.filename), files);
+    const role = (await this.themes(shop, accessToken)).find(t => t.id === themeId)?.role;
+    if (role !== 'UNPUBLISHED') throw new ShopifyProviderError('REJECTED');
+    const r = obj((await this.graphql(shop, accessToken, THEME_FILES_UPSERT, { themeId: `gid://shopify/OnlineStoreTheme/${themeId}`,
+      files: files.map(f => ({ filename: f.filename, body: { type: 'TEXT', value: f.content } })) })).themeFilesUpsert);
+    if (list(r.userErrors).length) throw new ShopifyProviderError('REJECTED');
+    const done = new Set(list(r.upsertedThemeFiles).map(n => obj(n).filename));
+    if (files.some(f => !done.has(f.filename))) bad();
   }
 
   async catalog(shop: string, accessToken: string): Promise<{ products: MirrorProduct[]; complete: boolean }> {
@@ -438,7 +513,7 @@ export class FakeShopify implements ShopifyAdapter {
   writeFault: 'REJECT' | 'LOSE_ANSWER' | null = null;
   /** Test hook: what the store owner approves (the fake grants exactly this). */
   grantScopes: string | null = null;
-  private readonly stores = new Map<string, { products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string; finance: ShopifyFinanceSnapshot; rejected: boolean }>();
+  private readonly stores = new Map<string, { products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string; finance: ShopifyFinanceSnapshot; themes: FakeTheme[]; rejected: boolean }>();
   /** Calls the API made, for tests (no token values). */
   readonly calls: string[] = [];
   /** Test hook: the clock the fake uses. */
@@ -512,6 +587,43 @@ export class FakeShopify implements ShopifyAdapter {
     this.calls.push('shopInfo:' + shop); this.check(shop, accessToken, 'access');
     const s = this.store(shop); return { name: s.name, currency: s.currency };
   }
+  async themes(shop: string, accessToken: string): Promise<ShopifyTheme[]> {
+    await Promise.resolve();
+    this.calls.push('themes:' + shop); this.check(shop, accessToken, 'access', 'read_themes');
+    return this.store(shop).themes.map(({ id, name, role }) => ({ id, name, role }));
+  }
+  async themeFiles(shop: string, accessToken: string, themeId: string, filenames: readonly string[]): Promise<ShopifyThemeFile[]> {
+    await Promise.resolve();
+    this.calls.push('themeFiles:' + shop); this.check(shop, accessToken, 'access', 'read_themes'); themeFileNames(filenames);
+    const t = this.store(shop).themes.find(x => x.id === themeId);
+    if (!t) throw new ShopifyProviderError('REJECTED');
+    return filenames.filter(n => n in t.files).map(n => ({ filename: n, content: t.files[n]! }));
+  }
+  async duplicateTheme(shop: string, accessToken: string, themeId: string, name: string): Promise<ShopifyTheme> {
+    await Promise.resolve();
+    this.calls.push('themeDuplicate:' + shop); this.check(shop, accessToken, 'access', 'write_themes');
+    const s = this.store(shop), t = s.themes.find(x => x.id === themeId);
+    if (!t) throw new ShopifyProviderError('REJECTED');
+    const copy: FakeTheme = { id: String(this.nextId++), name: themeName(name), role: 'UNPUBLISHED', files: { ...t.files } };
+    s.themes.push(copy);
+    return { id: copy.id, name: copy.name, role: copy.role };
+  }
+  async upsertThemeFiles(shop: string, accessToken: string, themeId: string, files: readonly ShopifyThemeFile[]): Promise<void> {
+    await Promise.resolve();
+    this.calls.push('themeFilesUpsert:' + shop); this.check(shop, accessToken, 'access', 'write_themes');
+    themeFileNames(files.map(f => f.filename), files);
+    const t = this.store(shop).themes.find(x => x.id === themeId);
+    if (!t || t.role !== 'UNPUBLISHED') throw new ShopifyProviderError('REJECTED');
+    if (this.writeFault === 'REJECT') { this.writeFault = null; throw new ShopifyProviderError('REJECTED'); }
+    for (const f of files) t.files[f.filename] = f.content;
+    if (this.writeFault === 'LOSE_ANSWER') { this.writeFault = null; throw new ShopifyProviderError('UNAVAILABLE'); }
+  }
+  /** Test hooks: change a theme file as the theme editor would, or publish a theme (the old live theme becomes UNPUBLISHED). */
+  setThemeFile(shop: string, themeId: string, filename: string, content: string): void { const t = this.store(shop).themes.find(x => x.id === themeId); if (t) t.files[filename] = content; }
+  publishTheme(shop: string, themeId: string): void { for (const t of this.store(shop).themes) t.role = t.id === themeId ? 'MAIN' : t.role === 'MAIN' ? 'UNPUBLISHED' : t.role; }
+  /** Test hook: one theme's files as the fake holds them. */
+  themeFile(shop: string, themeId: string, filename: string): string | undefined { return this.store(shop).themes.find(t => t.id === themeId)?.files[filename]; }
+
   async finance(shop: string, accessToken: string): Promise<ShopifyFinanceSnapshot> {
     // Shopify refuses this read when the store never granted the scope (a top-level ACCESS_DENIED error).
     this.calls.push('finance:' + shop); this.check(shop, accessToken, 'access', 'read_shopify_payments_accounts');
@@ -573,7 +685,7 @@ export class FakeShopify implements ShopifyAdapter {
   }
 }
 
-function sampleStore(shop: string, now: number): { products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string; finance: ShopifyFinanceSnapshot } {
+function sampleStore(shop: string, now: number): { products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string; finance: ShopifyFinanceSnapshot; themes: FakeTheme[] } {
   const v = (id: string, title: string, sku: string, price: string, unitCost: string | null, qty: number | null): MirrorVariant =>
     ({ id, title, sku, barcode: null, price, compareAtPrice: null, unitCost, tracked: qty !== null, inventoryQuantity: qty });
   const products: MirrorProduct[] = [
@@ -603,5 +715,24 @@ function sampleStore(shop: string, now: number): { products: MirrorProduct[]; or
       { id: '9450000003', type: 'CHARGE', at: day(2), currency: 'USD', amount: '140.73', fee: '4.38', net: '136.35', test: true, payoutId: '9400000002' },
       { id: '9450000002', type: 'REFUND', at: day(4), currency: 'USD', amount: '-0.31', fee: '0', net: '-0.31', test: true, payoutId: '9400000002' },
       { id: '9450000001', type: 'CHARGE', at: day(5), currency: 'USD', amount: '150.00', fee: '4.65', net: '145.35', test: true, payoutId: null }] };
-  return { products, orders, finance, name: shop.split('.')[0]!.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '), currency: 'USD' };
+  return { products, orders, finance, themes: sampleThemes(), name: shop.split('.')[0]!.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '), currency: 'USD' };
+}
+
+interface FakeTheme extends ShopifyTheme { files: Record<string, string> }
+/** A small Dawn-like live theme: its colour settings, product template and cart template (JSON, as Shopify stores them). */
+function sampleThemes(): FakeTheme[] {
+  // Shopify starts these files with the same generated comment; HON keeps it.
+  const j = (v: unknown) => '/*\n * IMPORTANT: The contents of this file are auto-generated.\n */\n' + JSON.stringify(v, null, 2);
+  const settings = { current: { color_schemes: {
+    'scheme-1': { settings: { background: '#FFFFFF', text: '#121212', button: '#121212', button_label: '#FFFFFF', secondary_button_label: '#121212' } },
+    'scheme-2': { settings: { background: '#F3F3F3', text: '#121212', button: '#121212', button_label: '#F3F3F3', secondary_button_label: '#121212' } } },
+    type_header_font: 'assistant_n4', type_body_font: 'assistant_n4' } };
+  const product = { sections: { main: { type: 'main-product', blocks: { title: { type: 'title', settings: {} }, price: { type: 'price', settings: {} },
+    variant_picker: { type: 'variant_picker', settings: {} }, buy_buttons: { type: 'buy_buttons', settings: {} } },
+    block_order: ['title', 'price', 'variant_picker', 'buy_buttons'], settings: {} } }, order: ['main'] };
+  const cart = { sections: { 'cart-items': { type: 'main-cart-items', settings: {} }, subtotal: { type: 'main-cart-footer', blocks: {
+    subtotal: { type: 'subtotal', settings: {} }, buttons: { type: 'buttons', settings: {} } }, block_order: ['subtotal', 'buttons'], settings: {} } },
+    order: ['cart-items', 'subtotal'] };
+  return [{ id: '140000000001', name: 'Dawn', role: 'MAIN',
+    files: { 'config/settings_data.json': j(settings), 'templates/product.json': j(product), 'templates/cart.json': j(cart) } }];
 }

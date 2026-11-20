@@ -355,6 +355,7 @@
     "0574_automation_date_triggers.sql": "fb2795778f536ea83c5a6c81191b9baaed41575c22b4c0e5a06a0e163e012be9",
     "0576_school_announcements.sql": "7d57e1debc975c6058aeea95428cb8cdfc7979beb467282bf2cde0ab49af4ffa",
     "0581_parent_pro_shop.sql": "2d3752083574a64ffb76936058118b7ed1b398ef79b7e78dd790c35506381aa6",
+    "0595_shopify_theme_drafts.sql": "be8471721abd12124074273583c3f0829ba01b53ab803967fa53f590e3f4d5c8",
     "0597_shopify_finance.sql": "d1495ba5027d402cc3ff21c0ba7d38061505511453323a3108e3a300e04cce94"
   }
 }
