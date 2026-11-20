@@ -178,3 +178,55 @@ export function verifyJourneyRecommendationReceipt(value: unknown, expected: { r
     || (expected.title !== undefined && recommendation.title !== expected.title)) invalid();
   return { recommendation };
 }
+
+// 0608 J1b: a family's answer and the staff interest list. "Not now" hides it for the family. Interest names who it is for:
+// one of the family's own children as the family read shows them, or a brother or sister whose name the guardian types.
+export const JOURNEY_RESPONSE_KINDS = ['HIDDEN', 'INTERESTED'] as const;
+export type JourneyResponseKind = (typeof JOURNEY_RESPONSE_KINDS)[number];
+export const JOURNEY_INTEREST_LIMIT = 500;
+export const JOURNEY_CHILD_NAME_MAX = 200;
+export const JOURNEY_SIBLING_NAME_MAX = 80;
+export type ParentJourneyResponseInput = { kind: 'HIDDEN' } | { kind: 'INTERESTED'; childName: string; sibling: boolean };
+export interface ParentJourneyResponseReceipt { recommendationId: string; kind: JourneyResponseKind; childName: string | null; recordedAt: string; replayed: boolean }
+export interface JourneyRecommendationInterest {
+  interest: { recommendationId: string; familyId: string; familyName: string; childName: string; sibling: boolean; leadId: string | null; recordedAt: string }[];
+}
+/** A typed brother or sister name: 1 to 80 characters on one line with no space at either end. */
+export function isJourneySiblingName(value: unknown): value is string {
+  return typeof value === 'string' && value.length >= 1 && [...value].length <= JOURNEY_SIBLING_NAME_MAX && value.trim() === value && !LINE_CONTROL.test(value);
+}
+export function validateParentJourneyResponseInput(value: unknown): ParentJourneyResponseInput {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) invalid();
+  const kind = oneOf((value as Record<string, unknown>).kind, JOURNEY_RESPONSE_KINDS);
+  if (kind === 'HIDDEN') { record(value, ['kind']); return { kind }; }
+  const row = record(value, ['kind', 'childName', 'sibling']);
+  if (typeof row.sibling !== 'boolean') invalid();
+  const childName = name(row.childName, JOURNEY_CHILD_NAME_MAX);
+  if (row.sibling && !isJourneySiblingName(childName)) invalid();
+  return { kind, childName, sibling: row.sibling };
+}
+export function verifyParentJourneyResponseReceipt(value: unknown, expected: { recommendationId: string } & ParentJourneyResponseInput): ParentJourneyResponseReceipt {
+  const row = record(value, ['recommendationId', 'kind', 'childName', 'recordedAt', 'replayed']);
+  const receipt: ParentJourneyResponseReceipt = { recommendationId: uuid(row.recommendationId), kind: oneOf(row.kind, JOURNEY_RESPONSE_KINDS),
+    childName: row.childName === null ? null : name(row.childName, JOURNEY_CHILD_NAME_MAX),
+    recordedAt: instant(row.recordedAt), replayed: typeof row.replayed === 'boolean' ? row.replayed : invalid() };
+  if (receipt.recommendationId !== expected.recommendationId.toLowerCase() || receipt.kind !== expected.kind) invalid();
+  // A replay may carry the first spelling of the same name; anything else is not this answer.
+  if (expected.kind === 'HIDDEN' ? receipt.childName !== null : receipt.childName?.toLowerCase() !== expected.childName.toLowerCase()) invalid();
+  return receipt;
+}
+export function verifyJourneyRecommendationInterest(value: unknown): JourneyRecommendationInterest {
+  const row = record(value, ['interest']);
+  if (!Array.isArray(row.interest) || row.interest.length > JOURNEY_INTEREST_LIMIT) invalid();
+  const seen = new Set<string>();
+  return { interest: row.interest.map(item => {
+    const i = record(item, ['recommendationId', 'familyId', 'familyName', 'childName', 'sibling', 'leadId', 'recordedAt']);
+    const recommendationId = uuid(i.recommendationId), familyId = uuid(i.familyId), childName = name(i.childName, JOURNEY_CHILD_NAME_MAX);
+    if (typeof i.sibling !== 'boolean') invalid();
+    // One interest per family, recommendation and child name (0608 unique index): a repeat is not a verified list.
+    const key = `${recommendationId}/${familyId}/${childName.toLowerCase()}`;
+    if (seen.has(key)) invalid();
+    seen.add(key);
+    return { recommendationId, familyId, familyName: name(i.familyName), childName, sibling: i.sibling, leadId: i.leadId === null ? null : uuid(i.leadId), recordedAt: instant(i.recordedAt) };
+  }) };
+}

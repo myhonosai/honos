@@ -160,6 +160,7 @@ const expectedRlsTables = [
   'automation_schedule_scans',
   'school_announcements',
   'journey_recommendations',
+  'journey_recommendation_responses',
   'family_checkout_orders',
   'parent_push_devices',
   'parent_push_fanouts',

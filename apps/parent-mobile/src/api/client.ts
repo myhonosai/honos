@@ -25,7 +25,8 @@ import {
 import { verifyParentSchoolAnnouncements, type ParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
 import { verifyParentAttendanceStreaks, type ParentAttendanceStreaks } from '@hon/contracts/parent-attendance-streaks';
 import { verifyParentProShop, type ParentProShop } from '@hon/contracts/parent-pro-shop';
-import { verifyParentJourneyRecommendations, type ParentJourneyRecommendations } from '@hon/contracts/journey-recommendations';
+import { verifyParentJourneyRecommendations, verifyParentJourneyResponseReceipt, type ParentJourneyRecommendations, type ParentJourneyResponseInput,
+  type ParentJourneyResponseReceipt } from '@hon/contracts/journey-recommendations';
 import { verifyParentReferralLink, verifyParentReferrals, type ParentReferralLink, type ParentReferrals } from '@hon/contracts/family-referrals';
 import {
   validateRegisterParentPushDeviceInput, validateUnregisterParentPushDeviceInput, verifyParentPushDeviceReceipt, verifyParentPushStatus, verifyParentPushUnregisterReceipt,
@@ -197,6 +198,13 @@ export function createParentApi(options: ParentApiOptions) {
     attendanceStreaks: (): Promise<ParentRead<ParentAttendanceStreaks>> => get('/v1/parent/attendance-streaks', dataOf(verifyParentAttendanceStreaks)),
     /** 0603: what the school recommends for each child at the point they have reached on their journey. Read only. */
     journeyRecommendations: (): Promise<ParentRead<ParentJourneyRecommendations>> => get('/v1/parent/journey-recommendations', dataOf(verifyParentJourneyRecommendations)),
+    /**
+     * 0608 (guardians): "Not now" (HIDDEN, the family stops seeing it) or interest for a named child or a brother or sister
+     * (INTERESTED: the school sees it and gets a lead to follow up). Nothing is sent, bought or booked.
+     */
+    respondJourneyRecommendation: (recommendationId: string, input: ParentJourneyResponseInput, idempotencyKey: string): Promise<ParentWrite<ParentJourneyResponseReceipt>> =>
+      post(`/v1/parent/journey-recommendations/${encodeURIComponent(recommendationId)}/response`, 'parent.journey_recommendations.respond', idempotencyKey, input,
+        data => verifyParentJourneyResponseReceipt(data, { recommendationId, ...input })),
     /** 0601: whether the school's server sends notifications at all (the app asks for permission only then). */
     pushStatus: (): Promise<ParentRead<ParentPushStatus>> => get('/v1/parent/push-devices/status', dataOf(verifyParentPushStatus)),
     /** 0601: this phone's Expo push token for announcement notifications. The server decides the person and school. */
