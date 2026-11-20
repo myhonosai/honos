@@ -1167,4 +1167,5 @@ export * from './parent-invoice-pay.js';
 export * from './school-announcements.js';
 export * from './parent-push.js';
 export * from './parent-pro-shop.js';
+export * from './family-referrals.js';
 export * from './family-checkout.js';

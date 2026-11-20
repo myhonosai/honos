@@ -4,6 +4,7 @@ import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { json } from 'express';
 import { publicFormTransport } from './marketing/public-form-transport.js';
+import { publicReferralTransport } from './referrals/public-referral-transport.js';
 import { publicSiteTransport } from './website/public-site-transport.js';
 import { publicEventTransport } from './schedule/public-event-transport.js';
 import { publicBookingTypeTransport } from './schedule/public-booking-type-transport.js';
@@ -32,6 +33,7 @@ async function bootstrap(): Promise<void> {
   // JSON escaping may expand 256 KiB CSV; domain validation retains strict caps.
   app.use(kioskTransport());
   app.use(publicFormTransport());
+  app.use(publicReferralTransport());
   app.use(publicSiteTransport());
   app.use(publicEventTransport());
   app.use(publicBookingTypeTransport());

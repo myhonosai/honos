@@ -290,6 +290,11 @@ import { EXPO_PUSH_TRANSPORT, ExpoPushClient } from './parent-push/expo-push-cli
 import { PARENT_PUSH_WORKER_STORE, ParentPushScheduler, ParentPushWorker, ParentPushWorkerDatabase } from './parent-push/parent-push-worker.js';
 import { ParentProShopController, ParentProShopReadGuard } from './pro-shop/parent-pro-shop.controller.js';
 import { ParentProShopService } from './pro-shop/parent-pro-shop.service.js';
+import { ParentReferralLinkGuard, ParentReferralsController, ParentReferralsReadGuard } from './referrals/parent-referrals.controller.js';
+import { ParentReferralsService } from './referrals/parent-referrals.service.js';
+import { PublicReferralController, PublicReferralService } from './referrals/public-referral.controller.js';
+import { SchoolReferralProgramGuard, SchoolReferralRewardGuard, SchoolReferralsController, SchoolReferralsReadGuard } from './referrals/school-referrals.controller.js';
+import { SchoolReferralsService } from './referrals/school-referrals.service.js';
 import { ParentCheckoutCancelGuard, ParentCheckoutConfirmGuard, ParentCheckoutController, ParentCheckoutOrderGuard, ParentCheckoutStartGuard } from './family-checkout/parent-checkout.controller.js';
 import { ParentCheckoutService } from './family-checkout/parent-checkout.service.js';
 import { ConversationCreateLeadGuard, ConversationLinkGuard, ConversationMarkReadGuard, ConversationReadGuard, ConversationReplyGuard, ConversationUpdateGuard, SchoolConversationsController } from './conversations/school-conversations.controller.js';
@@ -562,6 +567,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolAnnouncementsController,
     ParentPushController,
     ParentProShopController,
+    ParentReferralsController, PublicReferralController, SchoolReferralsController,
     ParentCheckoutController,
     SchoolConversationsController,
     ContactMessagesController,
@@ -781,6 +787,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentPushScheduler,
     ParentProShopService,
     ParentProShopReadGuard,
+    ParentReferralsService, ParentReferralsReadGuard, ParentReferralLinkGuard, PublicReferralService,
+    SchoolReferralsService, SchoolReferralsReadGuard, SchoolReferralProgramGuard, SchoolReferralRewardGuard,
     ParentCheckoutService, ParentCheckoutOrderGuard, ParentCheckoutStartGuard, ParentCheckoutConfirmGuard, ParentCheckoutCancelGuard,
     SchoolConversationsService,
     ContactMessagesService,
