@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CheckoutOrdersAccessError, loadCheckoutOrders, money } from '../src/components/checkout-orders/http';
 
-// 0582 checkout orders web client: one fixed same-origin read, verified answer, no command header.
+// 0598 checkout orders web client: one fixed same-origin read, verified answer, no command header.
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222', C = '33333333-3333-4333-8333-333333333333';
 const scope = { organizationId: A, schoolId: B };

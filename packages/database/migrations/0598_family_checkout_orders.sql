@@ -1,6 +1,6 @@
 BEGIN;
 
--- Family checkout orders (0582, CP3 first slice, assigned by the coordinator 2026-11-19; docs/architecture/TUITION_COLLECTION.md
+-- Family checkout orders (0598, CP3 first slice, assigned by the coordinator 2026-11-19; docs/architecture/TUITION_COLLECTION.md
 -- §24). Owner ask (2026-11-19): "event/checkout pages" in the HON Family app. A signed-in guardian buys one ONE_TIME
 -- option of a PUBLISHED checkout page (0402) of their school, for one or more of their own children, through the shared
 -- one-time payment (0529) on the school's own processor page. TEST/SANDBOX mode only (0258 refuses LIVE connections).
@@ -388,13 +388,13 @@ CREATE TRIGGER family_checkout_settle AFTER UPDATE ON hon.school_pay_once
   EXECUTE FUNCTION hon.settle_family_checkout_order();
 
 COMMENT ON FUNCTION hon.read_parent_checkout_pages(text) IS
-'0582 API-only: the school''s published checkout pages with one-time options a family can buy, the family''s children and latest orders. No DML.';
+'0598 API-only: the school''s published checkout pages with one-time options a family can buy, the family''s children and latest orders. No DML.';
 COMMENT ON FUNCTION hon.open_parent_checkout_order(text,jsonb,text) IS
-'0582 API-only: a guardian''s checkout order for their own children, priced by the page, with its one-time payment opened (test mode only).';
+'0598 API-only: a guardian''s checkout order for their own children, priced by the page, with its one-time payment opened (test mode only).';
 COMMENT ON FUNCTION hon.read_parent_checkout_order(text,uuid) IS
-'0582 API-only: an order of the guardian''s family and its latest payment id (for start, confirm and cancel). No DML.';
+'0598 API-only: an order of the guardian''s family and its latest payment id (for start, confirm and cancel). No DML.';
 COMMENT ON FUNCTION hon.read_school_checkout_orders(text) IS
-'0582 staff read (school_checkout.manage): the school''s latest 200 family checkout orders. No DML.';
+'0598 staff read (school_checkout.manage): the school''s latest 200 family checkout orders. No DML.';
 
 DO $$ DECLARE r text; f text;
   entry text[]:=ARRAY['hon.read_parent_checkout_pages(text)','hon.open_parent_checkout_order(text,jsonb,text)','hon.read_parent_checkout_order(text,uuid)',

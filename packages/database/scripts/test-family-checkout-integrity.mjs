@@ -1,5 +1,5 @@
 /**
- * Family checkout orders proof (0582, CP3 first slice): ParentCheckoutService -> the three fixed parent calls on the
+ * Family checkout orders proof (0598, CP3 first slice): ParentCheckoutService -> the three fixed parent calls on the
  * restricted runtime role -> protected definers, SchoolPayOnceService (0529) with the in-process processor simulators,
  * and the staff orders read through SchoolCheckoutService, on the guarded disposable CRM-close fixture only. No network,
  * no credentials, synthetic data, TEST mode only; HON takes no fee and nothing is sent to anyone.
@@ -393,7 +393,7 @@ try {
   await assert.rejects(runtime.query('SELECT * FROM hon.family_checkout_orders LIMIT 1'), /permission denied/); checks += 1;
   await assert.rejects(runtime.query("SELECT hon.open_parent_checkout_order($1,'{}'::jsonb,'k')", [PARENT.subject]), /VALIDATION_FAILED/); checks += 1;
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    for (const [begin, end] of [['-- Family checkout orders exact verification (0582)', '-- End family checkout orders exact verification.'],
+    for (const [begin, end] of [['-- Family checkout orders exact verification (0598)', '-- End family checkout orders exact verification.'],
       ['-- School one-time payment exact verification (B-TUI-2 0529)', '-- End school one-time payment exact verification.']]) {
       const section = verify.split(begin)[1]?.split(end)[0];
       ok(section, begin);
@@ -405,7 +405,7 @@ try {
   ok([...stripe.onceSessions.values()].every((x) => !('applicationFee' in x)), 'no session carries an application fee');
   ok(square.onceBeginCalls === 0, 'Square untouched');
 
-  console.log(`PASS: family checkout orders (0582): ${checks} checks.`);
+  console.log(`PASS: family checkout orders (0598): ${checks} checks.`);
 } finally {
   await cleanup().catch((error) => console.error('cleanup failed', error));
   await runtime.end();

@@ -40,7 +40,7 @@ export class SchoolCheckoutController {
     return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
   }
 
-  /** 0582: family checkout orders of this school, newest first (at most 200). */
+  /** 0598: family checkout orders of this school, newest first (at most 200). */
   @Get('orders')
   @Header('Cache-Control', 'private, no-store')
   @UseGuards(SchoolCheckoutOrdersReadHumanUiGuard)

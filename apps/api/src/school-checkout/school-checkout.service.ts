@@ -61,7 +61,7 @@ export class SchoolCheckoutService {
     } catch (error) { return translate(error); }
   }
 
-  /** 0582: the school's latest 200 family checkout orders (who, what, answers, state). Read only; nothing is sent to anyone. */
+  /** 0598: the school's latest 200 family checkout orders (who, what, answers, state). Read only; nothing is sent to anyone. */
   async orders(context: MembershipLifecycleContext): Promise<SchoolCheckoutOrders> {
     this.assertHumanContext(context, false);
     try {

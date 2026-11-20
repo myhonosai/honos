@@ -1,7 +1,7 @@
 import { verifySchoolCheckoutOrders, type SchoolCheckoutOrders } from '@hon/contracts';
 
 /**
- * Family checkout orders (0582): one same-origin read. The server checks the shell's school scope again with
+ * Family checkout orders (0598): one same-origin read. The server checks the shell's school scope again with
  * school_checkout.manage. Read only: nothing here changes an order, takes a payment or messages anyone.
  */
 export class CheckoutOrdersAccessError extends Error { constructor(message: string, readonly status: number) { super(message); } }

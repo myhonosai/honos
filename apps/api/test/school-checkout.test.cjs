@@ -58,7 +58,7 @@ test('0402 settings input and the read verifier', () => {
   assert.equal(contracts.verifyCheckoutSettingsReceipt({ settings: { ...settings, version: 1 } }, { version: 1 }).settings.groups.length, 8);
 });
 
-test('0402 API: three routes (plus the 0582 orders read) under their own human-UI guards; no fee, no payment, no public route; 0269 entry points unused', () => {
+test('0402 API: three routes (plus the 0598 orders read) under their own human-UI guards; no fee, no payment, no public route; 0269 entry points unused', () => {
   const dir = path.join(__dirname, '../src/school-checkout');
   const controller = fs.readFileSync(path.join(dir, 'school-checkout.controller.ts'), 'utf8');
   assert.match(controller, /@Controller\('organizations\/:organizationId\/schools\/:schoolId\/payments\/checkout-pages'\)/);

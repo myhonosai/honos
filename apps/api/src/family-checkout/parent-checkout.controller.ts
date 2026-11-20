@@ -34,7 +34,7 @@ function noBody(body: unknown): void {
   }
 }
 
-/** 0582: the signed-in family's checkout pages and orders. Family, school and organization come only from the verified session. */
+/** 0598: the signed-in family's checkout pages and orders. Family, school and organization come only from the verified session. */
 @Controller('parent/checkout-pages')
 @UseGuards(HonIdentityGuard)
 export class ParentCheckoutController {

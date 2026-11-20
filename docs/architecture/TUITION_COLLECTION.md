@@ -664,7 +664,7 @@ Stripe (or, later, Square) hosted page, using the shared one-time payment (secti
   `apps/api/test/parent-invoice-pay.test.cjs`; `apps/parent-mobile/test/invoice-pay-ui.test.tsx` and
   `api-client.test.ts`; 010/011; staging pin 0530.
 
-## 24. Family checkout orders as built (0582, CP3 first slice): a guardian buys from a checkout page in the HON Family app
+## 24. Family checkout orders as built (0598, CP3 first slice): a guardian buys from a checkout page in the HON Family app
 
 Owner ask (2026-11-19): "event/checkout pages" in the HON Family app. TEST mode only, through the shared one-time payment
 (§22). HON adds no fee. Not in this slice: MONTHLY options, options tied to a catalog plan (`createsMembership`), promo

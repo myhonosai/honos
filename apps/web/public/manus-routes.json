@@ -221,6 +221,10 @@
       "title": "Book a time"
     },
     {
+      "path": "/calendars/:publicId",
+      "title": "Class calendar"
+    },
+    {
       "path": "/agreement/:token",
       "title": "Membership agreement"
     },

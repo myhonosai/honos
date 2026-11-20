@@ -73,7 +73,7 @@ type Pending = { page: FamilyCheckoutPage; option: FamilyCheckoutOption };
 type Status = { phase: 'form' } | { phase: 'sending' } | { phase: 'unknown' } | { phase: 'result'; tone: 'good' | 'bad' | 'warn'; message: string };
 
 /**
- * Checkout pages (CP3, 0582): a guardian buys a one-time option of the school's checkout pages for their own children
+ * Checkout pages (CP3, 0598): a guardian buys a one-time option of the school's checkout pages for their own children
  * and pays on the school's own processor page (TEST mode). The app sends only the page's own ids and version, children
  * it read here, answers and add-ons; the server decides the price. Closing the payment page is never shown as paid:
  * the answer shown is HON's record of the processor's answer. A lost answer keeps its key, so Try again never orders twice.

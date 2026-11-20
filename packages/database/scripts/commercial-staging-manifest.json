@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "abd3b24fe29ab2bd312afefdb0d011ea486f31861bc7007239f07411e52f6b7e",
+  "chainSha256": "d1061c1c04740cf414cd004926bdbae291aea2136a654307ff91be52fc622d57",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -731,8 +731,12 @@
       "sha256": "2d3752083574a64ffb76936058118b7ed1b398ef79b7e78dd790c35506381aa6"
     },
     {
-      "file": "0582_family_checkout_orders.sql",
-      "sha256": "b237f4fa342ade58f821cda924bb0d43e3b9ac41e506318db4391d6c63cb1df5"
+      "file": "0583_calendar_settings.sql",
+      "sha256": "5e2984f34a479a4739e984ee2bcc7532d6de49449da07f869e2c5c70b1d40975"
+    },
+    {
+      "file": "0598_family_checkout_orders.sql",
+      "sha256": "a4debf59bcbf49c684c439e1bc427c6800a105b3f72a501a36d3d38fd9c0fb13"
     }
   ]
 }

@@ -188,7 +188,7 @@ export function createParentApi(options: ParentApiOptions) {
     announcements: (): Promise<ParentRead<ParentSchoolAnnouncements>> => get('/v1/parent/announcements', dataOf(verifyParentSchoolAnnouncements)),
     /** The school's own Shopify products (0581); buying opens the school's store page. No school or family id is sent. */
     proShop: (): Promise<ParentRead<ParentProShop>> => get('/v1/parent/pro-shop', dataOf(verifyParentProShop)),
-    /** 0582: the school's checkout pages the family can buy from, the family's children and latest orders. No school or family id is sent. */
+    /** 0598: the school's checkout pages the family can buy from, the family's children and latest orders. No school or family id is sent. */
     checkoutPages: (): Promise<ParentRead<ParentCheckoutPages>> => get('/v1/parent/checkout-pages', dataOf(verifyParentCheckoutPages)),
     /** Places an order and opens the processor page when it is not free. The server decides who, what and how much. */
     orderCheckout: (input: OpenParentCheckoutOrderInput, idempotencyKey: string): Promise<ParentWrite<ParentCheckoutOrderStart>> =>

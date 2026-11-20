@@ -26,7 +26,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const PROVIDERS = ['STRIPE_CONNECT', 'SQUARE'] as const;
 const PAY_STATES = ['OPEN', 'PROCESSING', 'SUCCEEDED', 'FAILED', 'EXPIRED', 'CANCELED'] as const;
 
-// Exact 0582/0529 refusals; every other database failure is unavailable, never success.
+// Exact 0598/0529 refusals; every other database failure is unavailable, never success.
 const KNOWN: Record<string, () => HttpException> = {
   FAMILY_CHECKOUT_FORBIDDEN: () => new ForbiddenException({ code: 'FAMILY_CHECKOUT_FORBIDDEN', detail: 'Current guardian family access is required.' }),
   FAMILY_CHECKOUT_NOT_FOUND: () => new NotFoundException({ code: 'FAMILY_CHECKOUT_NOT_FOUND', detail: 'This page or order is not available.' }),
@@ -50,7 +50,7 @@ function translate(error: unknown): never {
 }
 
 /**
- * 0582: a signed-in guardian orders a one-time option of one of the school's published checkout pages for their own
+ * 0598: a signed-in guardian orders a one-time option of one of the school's published checkout pages for their own
  * children and pays on the school's own processor page (HOSTED, the shared one-time payment 0529), TEST mode only.
  * Who, what and how much are decided by the database from the verified session; the app names only a page, its
  * version, an option, children, answers and add-ons it read here. The payment id is taken only from the guardian's own

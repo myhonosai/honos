@@ -327,6 +327,12 @@ import { ClassSeriesController } from './schedule/class-series.controller.js';
 import { CalendarCardsController } from './schedule/calendar-cards.controller.js';
 import { CalendarCardsService } from './schedule/calendar-cards.service.js';
 import { CalendarCardCreateHumanUiGuard, CalendarCardMoveHumanUiGuard, CalendarCardsReadHumanUiGuard } from './schedule/calendar-cards-human-ui.guard.js';
+import { CalendarSettingsController, PublicShareCalendarController } from './schedule/calendar-settings.controller.js';
+import { CalendarSettingsService } from './schedule/calendar-settings.service.js';
+import {
+  CalendarBlockOutAddHumanUiGuard, CalendarBlockOutRemoveHumanUiGuard, CalendarBlockOutsReadHumanUiGuard, CalendarSettingsReadHumanUiGuard,
+  CalendarShareSettingsSaveHumanUiGuard, ShareCalendarDeleteHumanUiGuard, ShareCalendarSaveHumanUiGuard,
+} from './schedule/calendar-settings-human-ui.guard.js';
 import { ClassSeriesService } from './schedule/class-series.service.js';
 import { PublicSchoolEventController, SchoolEventController } from './schedule/school-event.controller.js';
 import { SchoolEventService } from './schedule/school-event.service.js';
@@ -564,6 +570,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSessionPagesController,
     ClassSeriesController,
     CalendarCardsController,
+    CalendarSettingsController,
+    PublicShareCalendarController,
     SchoolEventController,
     PublicSchoolEventController,
     BookingTypeController,
@@ -888,6 +896,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SocialPostDispatcher,
     ClassSeriesService,
     CalendarCardsService,
+    CalendarSettingsService,
     SchoolReportsService,
     SchoolContactsService,
     SchoolContactAdminService,
@@ -911,6 +920,13 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     CalendarCardsReadHumanUiGuard,
     CalendarCardCreateHumanUiGuard,
     CalendarCardMoveHumanUiGuard,
+    CalendarSettingsReadHumanUiGuard,
+    CalendarBlockOutsReadHumanUiGuard,
+    CalendarShareSettingsSaveHumanUiGuard,
+    CalendarBlockOutAddHumanUiGuard,
+    CalendarBlockOutRemoveHumanUiGuard,
+    ShareCalendarSaveHumanUiGuard,
+    ShareCalendarDeleteHumanUiGuard,
     ClassSeriesReviseHumanUiGuard,
     ClassSeriesOngoingHumanUiGuard,
     ClassSeriesTopUpHumanUiGuard,

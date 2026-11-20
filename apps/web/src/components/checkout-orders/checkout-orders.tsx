@@ -10,7 +10,7 @@ function when(value: string) { return new Intl.DateTimeFormat(undefined, { dateS
 function answerText(value: string | boolean) { return value === true ? 'Yes' : value === false ? 'No' : value; }
 
 /**
- * Checkout pages > Orders (CP3, 0582): what families bought from the school's checkout pages in the HON Family app,
+ * Checkout pages > Orders (CP3, 0598): what families bought from the school's checkout pages in the HON Family app,
  * newest first (at most 200), with each child's answers. Test mode only; payments go to the school's own processor.
  */
 export function CheckoutOrders(): React.ReactElement {

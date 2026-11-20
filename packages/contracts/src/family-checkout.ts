@@ -1,5 +1,5 @@
 /**
- * Family checkout orders (0582, CP3 first slice). A signed-in guardian buys one ONE_TIME option of a PUBLISHED checkout
+ * Family checkout orders (0598, CP3 first slice). A signed-in guardian buys one ONE_TIME option of a PUBLISHED checkout
  * page (0402) of their school, for one or more of their own children, on the school's own processor page (the shared
  * one-time payment, 0529). TEST mode only; HON adds no fee. The app names a page, its version, an option, children it
  * read here, answers and add-ons; who, what and how much are decided by the database. The app never names a payment.
