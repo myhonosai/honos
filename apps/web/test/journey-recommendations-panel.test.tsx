@@ -2,9 +2,10 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  JourneyRecommendationsAccessError, JourneyRecommendationsRefusal, attemptFor, loadJourneyRecommendations, saveJourneyRecommendation, setJourneyRecommendationStatus,
+  JourneyRecommendationsAccessError, JourneyRecommendationsRefusal, attemptFor, loadJourneyRecommendationInterest, loadJourneyRecommendations, saveJourneyRecommendation,
+  setJourneyRecommendationStatus,
 } from '../src/components/journey-recommendations/http';
-import { JourneyRecommendationsPanel, draftInput, whenText } from '../src/components/journey-recommendations/journey-recommendations-panel';
+import { Interested, JourneyRecommendationsPanel, draftInput, interestDay, whenText } from '../src/components/journey-recommendations/journey-recommendations-panel';
 
 // 0603 journey recommendations staff panel: fixed same-origin calls, verified answers, and a form that only sends complete rules.
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -94,5 +95,29 @@ describe('journey recommendations panel', () => {
     expect(html).toContain('Recommendations');
     expect(html).toContain('Nothing is texted, emailed or charged.');
     expect(html).not.toContain(B);
+  });
+});
+
+describe('journey recommendation interest (0608)', () => {
+  const F = '77777777-7777-4777-8777-777777777777';
+  const row = { recommendationId: R, familyId: F, familyName: 'Park Family', children: ['Mia Park', 'Leo Park'], recordedAt: '2026-11-20T17:00:00.000Z' };
+  it('reads the interest list under the school scope and refuses contact details', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json(200, { data: { interest: [row] } }))
+      .mockResolvedValueOnce(json(200, { data: { interest: [{ ...row, email: 'x@example.test' }] } }));
+    expect((await loadJourneyRecommendationInterest(scope)).interest[0]!.familyName).toBe('Park Family');
+    expect(fetcher.mock.calls[0]![0]).toBe(`/api/v1/organizations/${A}/schools/${B}/journey-recommendations/interest`);
+    expect(fetcher.mock.calls[0]![1]).toMatchObject({ method: 'GET' });
+    await expect(loadJourneyRecommendationInterest(scope)).rejects.toThrow();
+  });
+  it('lists interested families with children and date, says nobody was messaged, and shows nothing when the read failed', () => {
+    const html = renderToStaticMarkup(<Interested rows={[row]} />);
+    expect(html).toContain('1 family is interested');
+    expect(html).toContain('Park Family');
+    expect(html).toContain('Mia Park, Leo Park');
+    expect(html).toContain(interestDay(row.recordedAt));
+    expect(html).toContain('Nothing was sent to them');
+    expect(renderToStaticMarkup(<Interested rows={[]} />)).toContain('No families have tapped it yet.');
+    expect(renderToStaticMarkup(<Interested rows={null} />)).toBe('');
+    expect(interestDay('2026-11-20T17:00:00.000Z')).toBe('Nov 20, 2026');
   });
 });
