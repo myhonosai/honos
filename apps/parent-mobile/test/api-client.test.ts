@@ -159,6 +159,14 @@ describe('build profiles', () => {
     expect(env.EXPO_PUBLIC_HON_API_URL).toBe('https://app.myhonos.com/api');
     expect(() => createParentApi({ baseUrl: env.EXPO_PUBLIC_HON_API_URL!, getToken: async () => null, fetchImpl: jest.fn() })).not.toThrow();
   });
+  it('ships the Firebase file for the same Android app id, with no private key in it', () => {
+    const app = require('../app.json') as { expo: { android: { package: string; googleServicesFile: string } } };
+    expect(app.expo.android.googleServicesFile).toBe('./google-services.json');
+    const raw = JSON.stringify(require('../google-services.json'));
+    const file = require('../google-services.json') as { client: Array<{ client_info: { android_client_info: { package_name: string } } }> };
+    expect(file.client.map(c => c.client_info.android_client_info.package_name)).toEqual([app.expo.android.package]);
+    expect(raw).not.toMatch(/private_key|client_email|service_account/);
+  });
   it('uses the decided app id and name', () => {
     const app = require('../app.json') as { expo: { name: string; ios: { bundleIdentifier: string }; android: { package: string } } };
     expect([app.expo.name, app.expo.ios.bundleIdentifier, app.expo.android.package]).toEqual(['HON Family', 'com.myhonos.family', 'com.myhonos.family']);
