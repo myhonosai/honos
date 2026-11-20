@@ -159,6 +159,7 @@ const expectedRlsTables = [
   'automation_run_steps',
   'automation_schedule_scans',
   'school_announcements',
+  'family_checkout_orders',
   'school_message_templates',
   'zernio_lead_forms',
   'zernio_lead_receipts',

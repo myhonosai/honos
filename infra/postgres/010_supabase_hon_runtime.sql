@@ -4701,3 +4701,21 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+-- 0598 family checkout orders: private helpers, one private table and one settle trigger; four runtime entry points (parent list/open/read; staff orders list).
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.read_school_checkout_orders(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0598 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.guard_family_checkout_order()','hon.family_checkout_scope(text,boolean)','hon.family_checkout_children(uuid,uuid,uuid)',
+    'hon.family_checkout_today(uuid)','hon.family_checkout_payment_live(uuid)','hon.family_checkout_taken(uuid,text)','hon.family_checkout_en(jsonb)',
+    'hon.family_checkout_option_open(jsonb,date)','hon.family_checkout_page_json(hon.school_checkouts,date)','hon.family_checkout_order_json(hon.family_checkout_orders)',
+    'hon.settle_family_checkout_order()','hon.read_parent_checkout_pages(text)','hon.open_parent_checkout_order(text,jsonb,text)',
+    'hon.read_parent_checkout_order(text,uuid)','hon.read_school_checkout_orders(text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.family_checkout_orders FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.family_checkout_orders FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_parent_checkout_pages(text),hon.open_parent_checkout_order(text,jsonb,text),
+      hon.read_parent_checkout_order(text,uuid),hon.read_school_checkout_orders(text) TO hon_runtime;
+  END IF;
+END $$;

@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
 import {
   validateSaveCheckoutPageInput, validateSaveCheckoutSettingsInput, verifyCheckoutPageReceipt, verifyCheckoutSettingsReceipt, verifySchoolCheckoutPages,
-  type CheckoutPageReceipt, type CheckoutSettingsReceipt, type SchoolCheckoutPages,
+  verifySchoolCheckoutOrders, type CheckoutPageReceipt, type CheckoutSettingsReceipt, type SchoolCheckoutOrders, type SchoolCheckoutPages,
 } from '@hon/contracts';
 import type { PoolClient } from 'pg';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
@@ -57,6 +57,20 @@ export class SchoolCheckoutService {
         const result = await client.query<{ data: unknown }>('SELECT hon.read_school_checkouts($1) AS data', [context.externalSubject]);
         if (result.rows.length !== 1) throw new Error('Unverified checkout pages.');
         return verifySchoolCheckoutPages(result.rows[0]!.data);
+      });
+    } catch (error) { return translate(error); }
+  }
+
+  /** 0598: the school's latest 200 family checkout orders (who, what, answers, state). Read only; nothing is sent to anyone. */
+  async orders(context: MembershipLifecycleContext): Promise<SchoolCheckoutOrders> {
+    this.assertHumanContext(context, false);
+    try {
+      return await this.database.withTenantReadOnlyTransaction(context, async (client: PoolClient) => {
+        await client.query(READ_LIMITS);
+        await client.query(HUMAN_SETTINGS, [context.externalSubject]);
+        const result = await client.query<{ data: unknown }>('SELECT hon.read_school_checkout_orders($1) AS data', [context.externalSubject]);
+        if (result.rows.length !== 1) throw new Error('Unverified checkout orders.');
+        return verifySchoolCheckoutOrders(result.rows[0]!.data);
       });
     } catch (error) { return translate(error); }
   }

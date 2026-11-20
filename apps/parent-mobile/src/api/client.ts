@@ -24,6 +24,10 @@ import {
 } from '@hon/contracts/parent-invoice-pay';
 import { verifyParentSchoolAnnouncements, type ParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
 import { verifyParentProShop, type ParentProShop } from '@hon/contracts/parent-pro-shop';
+import {
+  validateOpenParentCheckoutOrderInput, verifyParentCheckoutOrderResult, verifyParentCheckoutOrderStart, verifyParentCheckoutPages,
+  type OpenParentCheckoutOrderInput, type ParentCheckoutOrderResult, type ParentCheckoutOrderStart, type ParentCheckoutPages,
+} from '@hon/contracts/family-checkout';
 
 /**
  * What a screen shows when a read does not return verified data. Every protected read maps to one of these;
@@ -184,6 +188,21 @@ export function createParentApi(options: ParentApiOptions) {
     announcements: (): Promise<ParentRead<ParentSchoolAnnouncements>> => get('/v1/parent/announcements', dataOf(verifyParentSchoolAnnouncements)),
     /** The school's own Shopify products (0581); buying opens the school's store page. No school or family id is sent. */
     proShop: (): Promise<ParentRead<ParentProShop>> => get('/v1/parent/pro-shop', dataOf(verifyParentProShop)),
+    /** 0598: the school's checkout pages the family can buy from, the family's children and latest orders. No school or family id is sent. */
+    checkoutPages: (): Promise<ParentRead<ParentCheckoutPages>> => get('/v1/parent/checkout-pages', dataOf(verifyParentCheckoutPages)),
+    /** Places an order and opens the processor page when it is not free. The server decides who, what and how much. */
+    orderCheckout: (input: OpenParentCheckoutOrderInput, idempotencyKey: string): Promise<ParentWrite<ParentCheckoutOrderStart>> =>
+      post('/v1/parent/checkout-pages/orders', 'parent.checkout.order', idempotencyKey, validateOpenParentCheckoutOrderInput(input), verifyParentCheckoutOrderStart,
+        // The return page is checked before anything is written, so this 503 is a definite no.
+        ['FAMILY_CHECKOUT_NOT_CONFIGURED']),
+    startCheckoutOrder: (orderId: string, idempotencyKey: string): Promise<ParentWrite<ParentCheckoutOrderStart>> =>
+      post(`/v1/parent/checkout-pages/orders/${encodeURIComponent(orderId)}/start`, 'parent.checkout.pay.start', idempotencyKey, {}, verifyParentCheckoutOrderStart,
+        ['FAMILY_CHECKOUT_NOT_CONFIGURED']),
+    /** The processor's own answer for the order's payment, as HON recorded it. */
+    confirmCheckoutOrder: (orderId: string, idempotencyKey: string): Promise<ParentWrite<ParentCheckoutOrderResult>> =>
+      post(`/v1/parent/checkout-pages/orders/${encodeURIComponent(orderId)}/confirm`, 'parent.checkout.pay.confirm', idempotencyKey, {}, verifyParentCheckoutOrderResult),
+    cancelCheckoutOrder: (orderId: string, idempotencyKey: string): Promise<ParentWrite<ParentCheckoutOrderResult>> =>
+      post(`/v1/parent/checkout-pages/orders/${encodeURIComponent(orderId)}/cancel`, 'parent.checkout.pay.cancel', idempotencyKey, {}, verifyParentCheckoutOrderResult),
     invoicePayments: (): Promise<ParentRead<ParentInvoicePayments>> => get('/v1/parent/invoice-payments', dataOf(verifyParentInvoicePayments)),
     /** Opens (or gets back) the processor page for one invoice. The server decides the amount; the app sends nothing else. */
     startInvoicePayment: (invoiceId: string, idempotencyKey: string): Promise<ParentWrite<ParentInvoicePayStart>> =>
