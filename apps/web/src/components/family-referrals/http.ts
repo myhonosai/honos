@@ -12,7 +12,7 @@ import { reportConfirmedSessionInvalidation } from '../session-invalidation';
  * idempotency key kept for an exact Try again. Public: the code in the page address is the only key; no credentials.
  * Recording a reward moves no money or credit.
  */
-export type ReferralErrorKind = 'SESSION' | 'DENIED' | 'INVALID' | 'VERSION' | 'FORM' | 'NOT_FOUND' | 'UNKNOWN';
+export type ReferralErrorKind = 'SESSION' | 'DENIED' | 'INVALID' | 'VERSION' | 'FORM' | 'NOT_FOUND' | 'PENDING' | 'UNKNOWN';
 export class ReferralError extends Error { constructor(readonly kind: ReferralErrorKind, readonly code: string | null = null) { super(kind); } }
 export type Owned = () => boolean;
 export type Scope = Readonly<{ organizationId: string; schoolId: string }>;
@@ -37,7 +37,7 @@ export function referralErrorFor(status: number, code: string | null): ReferralE
   return new ReferralError('UNKNOWN', code);
 }
 /** Only an unconfirmed outcome keeps the exact change for Try again. */
-export const keepForRetry = (error: unknown) => !(error instanceof ReferralError) || error.kind === 'UNKNOWN';
+export const keepForRetry = (error: unknown) => !(error instanceof ReferralError) || error.kind === 'UNKNOWN' || error.kind === 'PENDING';
 
 async function exchange(path: string, signal: AbortSignal, owned: Owned | null, command?: Readonly<{ body: string; name?: string; key?: string }>): Promise<{ status: number; value: unknown }> {
   let r: Response;

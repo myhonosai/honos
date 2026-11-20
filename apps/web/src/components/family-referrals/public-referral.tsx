@@ -39,7 +39,7 @@ export function PublicReferralView(p: PublicReferralViewProps): React.ReactEleme
       {r.form.optionalFields.map(k => <label key={k}>{OPTIONAL_LABEL[k] ?? k}<select value={v[k] ?? ''} onChange={e => { const next = { ...v }; if (e.target.value) next[k] = e.target.value; else delete next[k]; p.onValues?.(next); }}>
         <option value="">Optional</option>{PUBLIC_FORM_CHOICES[k].map(c => <option key={c} value={c}>{c}</option>)}</select></label>)}
       <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px' }}><label>Website<input tabIndex={-1} autoComplete="off" value={v.website ?? ''} onChange={e => set('website', e.target.value)} /></label></div>
-      <label><input type="checkbox" checked={p.acknowledged} onChange={e => p.onAck?.(e.target.checked)} />I understand the school saves this enquiry. This is not consent to marketing messages.</label>
+      <label><input type="checkbox" required checked={p.acknowledged} onChange={e => p.onAck?.(e.target.checked)} />I understand the school saves this enquiry. This is not consent to marketing messages.</label>
       <button type="submit">{p.busy ? 'Sending…' : 'Send'}</button>
     </fieldset></form>}
   </>);
@@ -48,7 +48,8 @@ export function PublicReferralView(p: PublicReferralViewProps): React.ReactEleme
 export function PublicReferralPage({ code, api = publicReferralApi }: { code: string; api?: PublicReferralApi }): React.ReactElement {
   const [read, setRead] = useState<PublicReferralRead | null>(null), [values, setValues] = useState<Record<string, string>>(EMPTY), [ack, setAck] = useState(false);
   const [busy, setBusy] = useState(false), [status, setStatus] = useState(''), [done, setDone] = useState(false);
-  const retry = useRef<{ fingerprint: string; key: string } | null>(null), gate = useRef(false);
+  const retry = useRef<{ fingerprint: string; key: string } | null>(null), gate = useRef(false), active = useRef(code);
+  active.current = code;
   useEffect(() => {
     const abort = new AbortController();
     setRead(null); setValues(EMPTY); setAck(false); setStatus(''); setDone(false); retry.current = null;
@@ -57,11 +58,15 @@ export function PublicReferralPage({ code, api = publicReferralApi }: { code: st
   }, [code, api]);
   async function submit() {
     if (gate.current || !read || typeof read === 'string') return;
+    if (!ack) { setStatus('Tick the box to say you understand, then send.'); return; }
+    const sent = code;
     const input = { ...values, source: 'Family referral', acknowledged: ack }, fingerprint = JSON.stringify(input);
     if (retry.current?.fingerprint !== fingerprint) retry.current = { fingerprint, key: crypto.randomUUID() };
     gate.current = true; setBusy(true);
     const result = await api.submit(code, input, retry.current.key, new AbortController().signal);
-    gate.current = false; setBusy(false); setStatus(resultText(result));
+    gate.current = false; setBusy(false);
+    if (active.current !== sent) return; // the page moved to another invitation; this answer is not its answer
+    setStatus(resultText(result));
     if (result === 'accepted') { setDone(true); retry.current = null; }
   }
   return <PublicReferralView read={read} values={values} acknowledged={ack} busy={busy} status={status} done={done} onValues={setValues} onAck={setAck} onSubmit={() => void submit()} />;

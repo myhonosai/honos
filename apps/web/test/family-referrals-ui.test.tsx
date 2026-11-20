@@ -91,3 +91,12 @@ it('public page: no credentials, closed answers, same text for every unavailable
   for (const r of ['GONE', 'UNAVAILABLE'] as const) expect(renderToStaticMarkup(<PublicReferralView read={r} values={{}} acknowledged={false} busy={false} status="" done={false} />)).toContain('available right now');
   expect(resultText('accepted')).toMatch(/Thanks/);
 });
+
+it('review fixes: a failed read still offers Refresh; a missing current form stays visible; a pending change blocks another', () => {
+  const empty = renderToStaticMarkup(<SchoolReferralsView data={null} draft={draftOf(null)} busy={false} error="x" notice="" canRetry={false} notes={{}} />);
+  expect(empty).toContain('>Refresh</button>'); expect(empty).not.toContain('Loading referrals');
+  const gone = { ...read, forms: [] };
+  expect(renderToStaticMarkup(<SchoolReferralsView data={gone as never} draft={draftOf(gone as never)} busy={false} error="" notice="" canRetry={false} notes={{}} />)).toContain('no longer available');
+  expect(keepForRetry(new ReferralError('PENDING'))).toBe(true);
+  expect(referralProblem(new ReferralError('PENDING'))).toMatch(/Try again first/);
+});

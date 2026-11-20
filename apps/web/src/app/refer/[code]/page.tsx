@@ -5,5 +5,6 @@ export const metadata: Metadata = { title: 'You are invited', referrer: 'no-refe
 
 export default async function ReferPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
-  return <PublicReferralPage code={/^[0-9a-f]{16}$/.test(code) ? code : 'invalid'} />;
+  const lower = code.toLowerCase(); // a messaging app may change the case of the link
+  return <PublicReferralPage code={/^[0-9a-f]{16}$/.test(lower) ? lower : 'invalid'} />;
 }

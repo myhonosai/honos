@@ -21,6 +21,7 @@ export function referralProblem(error: unknown): string {
   if (kind === 'FORM') return 'Choose a lead form that is live. Publish one on the Lead forms page first.';
   if (kind === 'NOT_FOUND') return 'That referral is no longer here. Refresh the list.';
   if (kind === 'INVALID') return 'Check the fields and try again.';
+  if (kind === 'PENDING') return 'Your last change is not confirmed yet. Press Try again first, or Refresh to drop it.';
   return "We couldn't confirm that. Try again.";
 }
 export const draftOf = (data: SchoolReferrals | null): ProgramDraft => ({ status: data?.program.status ?? 'OFF', formId: data?.program.formId ?? '',
@@ -38,13 +39,14 @@ export function SchoolReferralsView(p: SchoolReferralsViewProps): React.ReactEle
   const submit = (e: FormEvent) => { e.preventDefault(); p.onSave?.(); };
   const published = data?.forms.filter(f => f.status === 'PUBLISHED') ?? [];
   const current = data?.forms.find(f => f.formId === d.formId && f.status !== 'PUBLISHED');
+  const missing = !!d.formId && !data?.forms.some(f => f.formId === d.formId);
   return <main className={styles.page} data-testid="school-referrals">
     <nav><a href="/staff/marketing">Marketing</a><a href="/staff/marketing/forms">Lead forms</a><a href="/staff/crm/leads">Leads</a></nav>
     <header><p>Marketing</p><h1>Family referrals</h1><p>Families share a personal link from the HON Family app. A friend who signs up becomes a lead in your pipeline, marked as referred by that family.</p></header>
     <aside data-plain-note=""><strong>You give the reward your own way.</strong> Marking a reward as given only records it. Nothing is paid, credited or added to an invoice.</aside>
     {p.error && <p role="alert" className={styles.error}>{p.error}</p>}{p.notice && <p role="status">{p.notice}</p>}
     {p.canRetry && <button type="button" disabled={p.busy} onClick={p.onRetry}>Try again</button>}
-    {!data ? <p role="status">{p.error ? '' : 'Loading referrals…'}</p> : <>
+    {!data ? (p.busy ? <p role="status">Loading referrals…</p> : <button type="button" onClick={p.onRefresh}>Refresh</button>) : <>
       <section aria-label="Summary"><h2>So far</h2>
         <ul data-testid="referral-counts">
           <li><strong>{data.counts.referred}</strong> friends referred</li><li><strong>{data.counts.joined}</strong> joined</li>
@@ -58,6 +60,7 @@ export function SchoolReferralsView(p: SchoolReferralsViewProps): React.ReactEle
         <label>Form the friend fills in<select required={d.status === 'ON'} value={d.formId} onChange={e => set({ formId: e.target.value })}>
           <option value="">Choose a live lead form</option>
           {current && <option value={current.formId}>{current.title} (not live)</option>}
+          {missing && <option value={d.formId}>The current form (no longer available)</option>}
           {published.map(f => <option key={f.formId} value={f.formId}>{f.title}</option>)}
         </select></label>
         {published.length === 0 && <p>You have no live lead forms yet. <a href="/staff/marketing/forms">Publish one</a> first.</p>}
@@ -98,7 +101,9 @@ export function SchoolReferralsWorkbench({ api = schoolReferralsApi }: { api?: S
     const mine = ++generation.current, abort = new AbortController();
     const fresh = await api.read(s, abort.signal, () => mine === generation.current);
     if (mine !== generation.current) return;
-    setData(fresh); setDraft(draftOf(fresh)); setNotes({});
+    setData(fresh); setDraft(draftOf(fresh));
+    // Keep notes typed for referrals still waiting for a decision; drop the rest.
+    setNotes(n => Object.fromEntries(Object.entries(n).filter(([id]) => fresh.referrals.some(r => r.referralId === id && r.rewardStatus === 'PENDING'))));
   }, [api]);
   const run = useCallback(async (work: () => Promise<void>) => {
     if (gate.current) return; gate.current = true; setBusy(true); setError('');
@@ -108,7 +113,9 @@ export function SchoolReferralsWorkbench({ api = schoolReferralsApi }: { api?: S
   useEffect(() => { setData(null); if (scope) void run(() => load(scope)); }, [scope?.organizationId, scope?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
   async function send(next: Pending) {
     if (!scope) return;
-    if (pending.current?.fingerprint !== next.fingerprint) pending.current = next;
+    // An unconfirmed change must be settled (Try again) before another one starts, so it is never silently dropped.
+    if (pending.current && pending.current.fingerprint !== next.fingerprint) throw new ReferralError('PENDING');
+    pending.current = pending.current ?? next;
     const p = pending.current, abort = new AbortController(), owned = () => true;
     const replayed = p.kind === 'program' ? (await api.saveProgram(scope, p.save, abort.signal, owned)).replayed : (await api.saveReward(scope, p.save, abort.signal, owned)).replayed;
     pending.current = null; setNotice(replayed ? 'This was already saved.' : 'Saved.');
@@ -135,7 +142,7 @@ export function SchoolReferralsWorkbench({ api = schoolReferralsApi }: { api?: S
     });
   }
   return <SchoolReferralsView data={data} draft={draft} busy={busy || !scope} error={error} notice={notice} canRetry={!!pending.current && !busy} notes={notes}
-    onDraft={setDraft} onSave={save} onRefresh={() => { if (scope) { setNotice(''); void run(() => load(scope)); } }}
+    onDraft={setDraft} onSave={save} onRefresh={() => { if (scope) { pending.current = null; setNotice(''); void run(() => load(scope)); } }}
     onRetry={() => { const p = pending.current; if (p) void run(() => send(p)); }}
     onNote={(id, note) => setNotes(n => ({ ...n, [id]: note }))} onDecide={decide} />;
 }

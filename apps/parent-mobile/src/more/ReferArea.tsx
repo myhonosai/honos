@@ -26,7 +26,7 @@ export function ReferArea() {
   const c = useColors();
   const [read, setRead] = useState<ParentRead<ParentReferrals> | null>(null);
   const [link, setLink] = useState<string | null>(null), [busy, setBusy] = useState(false), [note, setNote] = useState('');
-  const key = useRef<string | null>(null), generation = useRef(0);
+  const key = useRef<string | null>(null), generation = useRef(0), gate = useRef(false);
   const reload = useCallback(() => {
     const mine = ++generation.current;
     setRead(null); setLink(null); setNote('');
@@ -39,22 +39,26 @@ export function ReferArea() {
   const r = read.data;
 
   async function share() {
-    if (busy || !read?.ok) return;
+    if (gate.current || !read?.ok) return;
     if (api.sampleMode) { setNote("This is the sample family, so there's no real link to share. With your school's account, this opens your phone's share options."); return; }
-    setNote(''); setBusy(true);
+    setNote(''); setBusy(true); gate.current = true;
+    try { await shareOnce(); } finally { gate.current = false; setBusy(false); }
+  }
+  async function shareOnce() {
+    if (!read?.ok) return;
     let url = link;
     if (!url) {
       key.current ??= newKey();
       const out = await api.referralLink(key.current);
       if (!out.ok) {
-        setBusy(false);
-        if (out.state !== 'unknown') key.current = null;
-        setNote(out.state === 'unknown' ? "We couldn't confirm your link. Try again." : "Your link isn't available right now. Ask your school.");
+        const retry = out.state === 'unknown' || (out.state === 'refused' && out.code === 'PARENT_REFERRALS_CONFLICT');
+        if (!retry) key.current = null;
+        setNote(retry ? "We couldn't confirm your link. Try again." : out.state === 'signed-out' ? 'Sign in again to share your link.'
+          : out.state === 'offline' ? "You're offline. Try again when you're connected." : "Your link isn't available right now. Ask your school.");
         return;
       }
       key.current = null; url = out.data.shareUrl; setLink(url);
     }
-    setBusy(false);
     try { await Share.share({ message: shareText(r.shareMessage, url) }); } catch { setNote("Your phone couldn't open the share options."); }
   }
 
