@@ -289,6 +289,8 @@ import { ContactEmailResendGuard, ContactHistoryReadGuard, ContactMessagesContro
 import { ContactMessagesService } from './conversations/contact-messages.service.js';
 import { SchoolMessageHistoryReadGuard, SchoolMessagesController, SchoolOptedOutReadGuard } from './communication/school-messages.controller.js';
 import { SchoolMessagesService } from './communication/school-messages.service.js';
+import { SchoolMessageTemplatesController, SchoolTemplateSaveGuard, SchoolTemplateStatusGuard, SchoolTemplatesReadGuard } from './communication/school-message-templates.controller.js';
+import { SchoolMessageTemplatesService } from './communication/school-message-templates.service.js';
 import { ConversationAiController, ConversationAiFileGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard, ConversationAiKnowledgeGuard, ConversationAiProgramHqController, ConversationAiReadGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard } from './conversations/conversation-ai.controller.js';
 import { ConversationAiProgramService, ConversationAiService } from './conversations/conversation-ai.service.js';
 import { ParentMessageHistoryController, ParentMessageHistoryReadGuard } from './families/parent-message-history.controller.js';
@@ -553,6 +555,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolConversationsController,
     ContactMessagesController,
     SchoolMessagesController,
+    SchoolMessageTemplatesController,
     ConversationAiController,
     ConversationAiProgramHqController,
     ParentMessageHistoryController,
@@ -761,7 +764,11 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ContactHistoryReadGuard,
     ContactEmailResendGuard,
     SchoolMessagesService,
+    SchoolMessageTemplatesService,
     SchoolMessageHistoryReadGuard,
+    SchoolTemplatesReadGuard,
+    SchoolTemplateSaveGuard,
+    SchoolTemplateStatusGuard,
     SchoolOptedOutReadGuard,
     ConversationAiService,
     ConversationAiProgramService,
