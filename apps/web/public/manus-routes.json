@@ -389,6 +389,18 @@
       "title": "HON | Send a text"
     },
     {
+      "path": "/staff/texts/history",
+      "title": "HON | Text history"
+    },
+    {
+      "path": "/staff/texts/templates",
+      "title": "HON | Text templates"
+    },
+    {
+      "path": "/staff/texts/opted-out",
+      "title": "HON | Opted out of texts"
+    },
+    {
       "path": "/staff/family-messages",
       "title": "HON | Parent app"
     },

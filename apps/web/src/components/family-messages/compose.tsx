@@ -25,11 +25,11 @@ const SEARCH_WAIT_MS = 300;
  * existing human commands; the server checks permission and consent. An uncertain step keeps only its own key for an exact
  * retry; any edit starts a new message. Nothing is stored in the browser.
  */
-export function ComposeMessage({ scope, channel, schoolName }: { scope: ComposeScope; channel: ComposeChannel; schoolName: string | null }): React.ReactElement {
+export function ComposeMessage({ scope, channel, schoolName, initialContent = '' }: { scope: ComposeScope; channel: ComposeChannel; schoolName: string | null; initialContent?: string }): React.ReactElement {
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState<Search>({ state: 'IDLE' });
   const [person, setPerson] = useState<PersonSummary | null>(null);
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState(initialContent);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
