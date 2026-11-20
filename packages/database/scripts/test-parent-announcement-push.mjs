@@ -58,7 +58,7 @@ const database = new RuntimeDatabaseService();
 async function startApp() {
   const module = await Test.createTestingModule({
     controllers: [P.ParentPushController, M.SchoolAnnouncementsController],
-    providers: [HonIdentityGuard, HonIdentityService, SchoolAnnouncementsService, ParentPushService, P.ParentPushRegisterGuard, P.ParentPushUnregisterGuard,
+    providers: [HonIdentityGuard, HonIdentityService, SchoolAnnouncementsService, ParentPushService, P.ParentPushRegisterGuard, P.ParentPushUnregisterGuard, P.ParentPushStatusGuard,
       M.SchoolAnnouncementsReadGuard, M.SchoolAnnouncementsPublishGuard, M.SchoolAnnouncementsWithdrawGuard, { provide: RuntimeDatabaseService, useValue: database }],
   }).compile();
   app = module.createNestApplication({ logger: false, bodyParser: false });
@@ -206,6 +206,12 @@ try {
   await startApp();
   // Other fixtures' leftovers would be claimed too; the fixture is disposable, so start from an empty queue.
   ok((await sql("SELECT count(*)::int n FROM hon.parent_push_deliveries WHERE status IN ('QUEUED','SENDING')")).rows[0].n === 0, 'empty queue to start');
+
+  // 0. Status: whether the server sends at all (off here); signed in only, no selectors.
+  delete process.env.HON_PARENT_PUSH_APPROVED;
+  ok((await success(() => call(GUARDIAN, 'GET', '/parent/push-devices/status'), 'status')).data.sending === false, 'status: not sending');
+  await refused(() => call(GUARDIAN, 'GET', '/parent/push-devices/status?schoolId=x'), 400, 'PARENT_PUSH_SELECTORS_NOT_ACCEPTED', 'status takes no selector');
+  await refused(() => call(GUARDIAN, 'GET', '/parent/push-devices/status', { headers: { 'X-Hon-Source': 'AI_AGENT' } }), 403, 'HUMAN_UI_REQUIRED', 'status refuses a delegated source');
 
   // 1. Register: closed body, Expo token shape, platform, key, command, one live grant.
   const T1 = tokenOf('guardian-phone');

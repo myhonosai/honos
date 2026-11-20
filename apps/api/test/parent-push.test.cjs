@@ -125,6 +125,28 @@ test('0601 worker: sends, records each outcome, and turns a lost answer into UNK
   assert.equal(lost.errors, 1, 'counted; the lease runs out and the database records UNKNOWN');
 });
 
+test('0601 worker pauses claiming for a minute after Expo says too many', async () => {
+  const s = store([claimRow()]);
+  const worker = new ParentPushWorker(s, { readiness: () => 'READY', send: async () => [{ outcome: 'RETRYABLE', failureCode: 'RATE_LIMITED' }], receipts: async () => new Map() });
+  const first = await worker.runOnce();
+  assert.equal(first.retrying, 1);
+  assert.equal((await worker.runOnce()).claimed, 0);
+  assert.equal(s.claims, 1, 'no claim during the pause');
+  worker.pausedUntil = Date.now() - 1;
+  await worker.runOnce();
+  assert.equal(s.claims, 2, 'claims again after the pause');
+  assert.equal(ParentPushWorker.RATE_LIMIT_PAUSE_MS, 60000);
+});
+
+test('0601 status says only whether sends are approved', () => {
+  const service = new ParentPushService({});
+  withEnv({ HON_PARENT_PUSH_APPROVED: undefined }, () => assert.deepEqual(service.status(), { sending: false }));
+  withEnv({ HON_PARENT_PUSH_APPROVED: 'true' }, () => assert.deepEqual(service.status(), { sending: true }));
+  assert.deepEqual(contracts.verifyParentPushStatus({ sending: true }), { sending: true });
+  assert.throws(() => contracts.verifyParentPushStatus({ sending: 'yes' }));
+  assert.throws(() => contracts.verifyParentPushStatus({ sending: true, schools: 1 }));
+});
+
 test('0601 scheduler starts only with approval, a worker login and a valid interval', () => {
   const cases = [
     [{ HON_PARENT_PUSH_APPROVED: undefined, HON_COMMUNICATION_WORKER_DATABASE_URL: 'postgres://w', HON_PARENT_PUSH_INTERVAL_SECONDS: '30' }, false],

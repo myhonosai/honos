@@ -85,6 +85,9 @@ export interface ParentPushRunSummary { claimed: number; sent: number; failed: n
  */
 @Injectable()
 export class ParentPushWorker {
+  /** After Expo says "too many", nothing is claimed for a minute, so the 3 attempts are spread out. */
+  static readonly RATE_LIMIT_PAUSE_MS = 60_000;
+  private pausedUntil = 0;
   constructor(
     @Inject(PARENT_PUSH_WORKER_STORE) private readonly store: ParentPushWorkerStore,
     @Inject(EXPO_PUSH_TRANSPORT) private readonly expo: ExpoPushTransport,
@@ -92,7 +95,7 @@ export class ParentPushWorker {
 
   async runOnce(limit = EXPO_SEND_BATCH, leaseSeconds = 120): Promise<ParentPushRunSummary> {
     const summary: ParentPushRunSummary = { claimed: 0, sent: 0, failed: 0, unknown: 0, retrying: 0, receipts: 0, delivered: 0, errors: 0 };
-    if (!this.store.isConfigured() || this.expo.readiness() !== 'READY') return summary;
+    if (!this.store.isConfigured() || this.expo.readiness() !== 'READY' || Date.now() < this.pausedUntil) return summary;
     const claimed = await this.store.claim(Math.min(limit, EXPO_SEND_BATCH), leaseSeconds);
     summary.claimed = claimed.length;
     const sendable = claimed.filter(c => UUID.test(c.deliveryId) && UUID.test(c.leaseToken) && UUID.test(c.announcementId) && isParentPushToken(c.expoToken)
@@ -107,6 +110,7 @@ export class ParentPushWorker {
       } catch { outcomes = sendable.map(() => ({ outcome: 'UNKNOWN', failureCode: 'NO_ANSWER' })); }
       if (outcomes.length !== sendable.length) outcomes = sendable.map(() => ({ outcome: 'UNKNOWN', failureCode: 'UNVERIFIED_ANSWER' }));
       for (let i = 0; i < sendable.length; i += 1) await this.record(summary, sendable[i]!, outcomes[i]!);
+      if (outcomes.some(o => o.outcome === 'RETRYABLE')) this.pausedUntil = Date.now() + ParentPushWorker.RATE_LIMIT_PAUSE_MS;
     }
     await this.checkReceipts(summary, leaseSeconds);
     return summary;

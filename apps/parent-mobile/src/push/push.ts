@@ -10,10 +10,17 @@ export interface PhonePush {
   onOpenAnnouncement(listener: () => void): () => void;
 }
 
-export type PushRegistration = 'registered' | 'not-allowed' | 'not-saved';
+export type PushRegistration = 'registered' | 'not-sending' | 'not-allowed' | 'not-saved';
 
-/** Signs this phone up for the signed-in family member. Nothing is registered for the sample family. */
+/**
+ * Signs this phone up for the signed-in family member. Asks for permission only when the school's server actually sends
+ * notifications, so nobody is asked for something that would never arrive. Nothing is registered for the sample family.
+ */
 export async function registerPhone(api: ParentApi, phone: PhonePush, newKey: () => string): Promise<PushRegistration> {
+  try {
+    const status = await api.pushStatus();
+    if (!status.ok || !status.data.sending) return 'not-sending';
+  } catch { return 'not-sending'; }
   let token: string | null;
   try { token = await phone.token(true); } catch { token = null; }
   if (!token) return 'not-allowed';
