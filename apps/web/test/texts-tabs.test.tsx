@@ -229,6 +229,17 @@ describe('Templates tab', () => {
     picker.props.onChange({ target: { value: '' } });
     expect(chosen).toEqual([id('b'), id('a'), null]);
   });
+  it('a locked picker (send in flight or uncertain) cannot change the template (#536 review P2)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(ok({ templates: [template('a'), template('b')] }));
+    const chosen: unknown[] = [];
+    view = () => (TemplatePicker({ scope, channel: 'SMS', chosen: null, disabled: true, onChoose: t => chosen.push(t?.templateId ?? null) }) ?? <i />) as Element;
+    render(); await settle();
+    const picker = named('useTemplate')!;
+    expect(picker.props.disabled).toBe(true);
+    picker.props.onChange({ target: { value: id('a') } });
+    expect(chosen).toEqual([]);
+    expect(readFileSync('src/components/texts/texts-send.tsx', 'utf8')).toMatch(/disabled=\{locked\}[\s\S]*onLockChange=\{lock\}/);
+  });
   it('hides the picker when templates cannot be read', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(problem(403));
     view = () => (TemplatePicker({ scope, channel: 'SMS', chosen: null, onChoose: () => {} }) ?? <i />) as Element;

@@ -25,7 +25,8 @@ const SEARCH_WAIT_MS = 300;
  * existing human commands; the server checks permission and consent. An uncertain step keeps only its own key for an exact
  * retry; any edit starts a new message. Nothing is stored in the browser.
  */
-export function ComposeMessage({ scope, channel, schoolName, initialContent = '' }: { scope: ComposeScope; channel: ComposeChannel; schoolName: string | null; initialContent?: string }): React.ReactElement {
+export function ComposeMessage({ scope, channel, schoolName, initialContent = '', onLockChange }: { scope: ComposeScope; channel: ComposeChannel; schoolName: string | null;
+  initialContent?: string; /** True while a send is in flight or uncertain: the page must not remount this (it would lose the retry key). */ onLockChange?: (locked: boolean) => void }): React.ReactElement {
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState<Search>({ state: 'IDLE' });
   const [person, setPerson] = useState<PersonSummary | null>(null);
@@ -82,7 +83,7 @@ export function ComposeMessage({ scope, channel, schoolName, initialContent = ''
     edit(() => { const at = box.current?.selectionStart ?? content.length; setContent(insertAt(content, at, tag).text); });
   }
   async function run(start: Step, to: PersonSummary, via: ComposeChannel, text: string): Promise<void> {
-    active.current = true; setBusy(true); setOutcome(null);
+    active.current = true; onLockChange?.(true); setBusy(true); setOutcome(null);
     let step: Step = start;
     try {
       retained.current = step; retainedText.current = text;
@@ -98,7 +99,7 @@ export function ComposeMessage({ scope, channel, schoolName, initialContent = ''
       // A refusal is definite (nothing more happened); anything else, including ComposeUncertain, keeps the step for an exact retry.
       if (caught instanceof ComposeRefusal) { retained.current = null; setOutcome(caught.reason); setConfirmed(false); }
       else setOutcome('UNCERTAIN');
-    } finally { active.current = false; if (mounted.current) setBusy(false); }
+    } finally { active.current = false; if (mounted.current) { setBusy(false); onLockChange?.(retained.current !== null); } }
   }
   function send(event: FormEvent): void {
     event.preventDefault();
@@ -107,7 +108,7 @@ export function ComposeMessage({ scope, channel, schoolName, initialContent = ''
   }
   function discard(): void {
     if (active.current || outcome !== 'UNCERTAIN') return;
-    retained.current = null; setOutcome(null); setConfirmed(false); setContent('');
+    retained.current = null; setOutcome(null); setConfirmed(false); setContent(''); onLockChange?.(false);
   }
   function retry(): void {
     const step = retained.current;
