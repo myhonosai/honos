@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '../ui/text';
 import type { ParentClassBookingChoices, ParentClassSessionChoice } from '@hon/contracts/parent-class-booking';
 import type { ParentRead } from '../api/client';
 import { useFamily } from '../family/family-data';
 import { formatClassTime } from '../home/model';
 import { Body, Button, Card, Loading, Pill, Section } from '../ui/parts';
+import { Celebration } from '../ui/Celebration';
 import { space, type, useColors } from '../ui/theme';
 import { bookAction, cancelAction, createCommandKeys, describeOutcome, sessionAction } from './booking-model';
 
@@ -23,6 +25,7 @@ export function BookClasses() {
   const [read, setRead] = useState<ParentRead<ParentClassBookingChoices> | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
+  const [party, setParty] = useState<{ detail: string } | null>(null);
   const generation = useRef(0);
 
   const load = useCallback(async () => {
@@ -33,6 +36,7 @@ export function BookClasses() {
   }, [api]);
   useEffect(() => { void load(); return () => { generation.current++; }; }, [load]);
 
+  const partyDetail = (p: Pending) => `${p.childName} · ${p.session.name}, ${formatClassTime(p.session.startsAt, read?.ok ? read.data.timezone : null).text}`;
   const start = (p: Pending) => { setPending(p); setStatus({ phase: 'confirm' }); };
   const close = () => { setPending(null); setStatus(null); };
 
@@ -52,6 +56,7 @@ export function BookClasses() {
       const landed = p.kind === 'book' ? !!row?.booking : !!row && !row.booking;
       if (landed) {
         keys.settle(action);
+        if (p.kind === 'book' && row!.booking!.status !== 'WAITLISTED') setParty({ detail: partyDetail(p) });
         setStatus({ phase: 'result', tone: 'good', message: p.kind === 'book'
           ? (row!.booking!.status === 'WAITLISTED' ? 'Added to the waitlist. This is not a confirmed spot yet.' : 'Booked.') : 'Booking cancelled.' });
         refresh();
@@ -63,6 +68,7 @@ export function BookClasses() {
     keys.settle(action);
     if (outcome.kind === 'session') { close(); refresh(); return; }
     setStatus({ phase: 'result', tone: outcome.kind === 'done' ? 'good' : 'bad', message: outcome.message });
+    if (outcome.kind === 'done' && outcome.confirmedBooking) setParty({ detail: partyDetail(p) });
     await load();
     if (outcome.kind === 'done') refresh();
   };
@@ -79,6 +85,7 @@ export function BookClasses() {
 
   return (
     <View>
+      <Celebration visible={!!party} title="You're booked!" detail={party?.detail ?? ''} onClose={() => setParty(null)} />
       <Section>Book a class</Section>
       {!choices.canBook ? <Body muted>Your family access lets you see classes but not book them. Ask your school if you need booking access.</Body> : null}
       {pending && status ? (

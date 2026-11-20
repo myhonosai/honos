@@ -11,6 +11,10 @@ export const SHOPIFY_RETURN_PATH = '/staff/billing/shopify/return' as const;
 export const SHOPIFY_SCOPES = ['read_products', 'read_inventory', 'read_orders'] as const;
 /** SH4a: asked for only when the owner presses Allow editing. write_products edits products; write_inventory edits unit costs. */
 export const SHOPIFY_EDIT_SCOPES = ['write_products', 'write_inventory'] as const;
+/** SH-F1: asked for only when the owner presses Allow finance. Reads the Shopify Payments balance, payouts and balance transactions. */
+export const SHOPIFY_FINANCE_SCOPES = ['read_shopify_payments_accounts'] as const;
+/** TB1: asked for only when the owner presses Allow theme editing. write_themes is a Shopify protected scope (exemption). */
+export const SHOPIFY_THEME_SCOPES = ['read_themes', 'write_themes'] as const;
 export const SHOPIFY_LOW_STOCK_AT = 3;
 export const SHOPIFY_CONNECTION_STATUSES = ['CONNECTED', 'NEEDS_RECONNECT', 'DISCONNECTED'] as const;
 export type ShopifyConnectionStatus = typeof SHOPIFY_CONNECTION_STATUSES[number];
@@ -68,14 +72,21 @@ function shop(v: unknown, response = true): string { if (typeof v !== 'string' |
 
 // ---- Inputs from the browser (closed; the API and the database check again) ----
 
-/** allowEditing (SH4a): also ask Shopify for the edit scopes. Absent means false. */
-export interface ShopifyConnectInput { schoolId: string; shopDomain: string; allowEditing: boolean }
+/**
+ * allowEditing (SH4a): also ask Shopify for the edit scopes. allowFinance (SH-F1): also ask for the finance scope.
+ * allowThemes (TB1): also ask for the theme scopes. Absent means false.
+ */
+export interface ShopifyConnectInput { schoolId: string; shopDomain: string; allowEditing: boolean; allowFinance: boolean; allowThemes: boolean }
 export function validateShopifyConnectInput(v: unknown): ShopifyConnectInput {
-  const editing = !!v && typeof v === 'object' && !Array.isArray(v) && Object.hasOwn(v, 'allowEditing');
-  const o = closed(v, editing ? ['schoolId', 'shopDomain', 'allowEditing'] : ['schoolId', 'shopDomain'], false);
+  const has = (k: string) => !!v && typeof v === 'object' && !Array.isArray(v) && Object.hasOwn(v, k);
+  const editing = has('allowEditing'), finance = has('allowFinance'), themes = has('allowThemes');
+  const o = closed(v, ['schoolId', 'shopDomain', ...(editing ? ['allowEditing'] : []), ...(finance ? ['allowFinance'] : []),
+    ...(themes ? ['allowThemes'] : [])], false);
   const domain = normalizeShopDomain(o.shopDomain);
-  if (!domain || (editing && typeof o.allowEditing !== 'boolean')) fail(false);
-  return Object.freeze({ schoolId: id(o.schoolId, false), shopDomain: domain, allowEditing: editing && o.allowEditing === true });
+  if (!domain || (editing && typeof o.allowEditing !== 'boolean') || (finance && typeof o.allowFinance !== 'boolean')
+    || (themes && typeof o.allowThemes !== 'boolean')) fail(false);
+  return Object.freeze({ schoolId: id(o.schoolId, false), shopDomain: domain, allowEditing: editing && o.allowEditing === true,
+    allowFinance: finance && o.allowFinance === true, allowThemes: themes && o.allowThemes === true });
 }
 /** The raw query string Shopify put on the return URL, without the leading `?`. */
 export interface ShopifyCompleteInput { schoolId: string; query: string }
@@ -360,4 +371,161 @@ export interface ShopifyChangeResult { change: ShopifyProductChange }
 export function verifyShopifyChangeResult(v: unknown): ShopifyChangeResult {
   const o = closed(v, ['change'], true);
   return Object.freeze({ change: verifyShopifyProductChange(o.change) });
+}
+
+// ---- SH-F1 (0597): Shopify Payments balance, payouts and balance transactions (read-only) ----
+
+export const SHOPIFY_PAYOUT_STATUSES = ['SCHEDULED', 'IN_TRANSIT', 'PAID', 'FAILED', 'CANCELED'] as const;
+export type ShopifyPayoutStatus = typeof SHOPIFY_PAYOUT_STATUSES[number];
+export const SHOPIFY_PAYOUT_DIRECTIONS = ['DEPOSIT', 'WITHDRAWAL'] as const;
+export type ShopifyPayoutDirection = typeof SHOPIFY_PAYOUT_DIRECTIONS[number];
+/** Money as Shopify Payments sends it: a decimal string with at most 4 decimals below one billion, which may be negative. */
+export const SHOPIFY_SIGNED_MONEY_TEXT = /^-?(0|[1-9][0-9]{0,8})(\.[0-9]{1,4})?$/;
+function signedMoneyText(v: unknown): string { if (typeof v !== 'string' || !SHOPIFY_SIGNED_MONEY_TEXT.test(v)) fail(true); return v; }
+function unique<T>(list: readonly T[], key: (t: T) => string): readonly T[] { if (new Set(list.map(key)).size !== list.length) fail(true); return Object.freeze(list); }
+
+export interface ShopifyBalance { currency: string; amount: string }
+export interface ShopifyPayout { id: string; status: ShopifyPayoutStatus; direction: ShopifyPayoutDirection; issuedAt: string; currency: string; net: string }
+export interface ShopifyBalanceTransaction {
+  id: string; type: string; at: string; currency: string; amount: string; fee: string; net: string; test: boolean; payoutId: string | null;
+}
+/** One read of Shopify Payments, as the API sends it to the database and the database answers it back. */
+export interface ShopifyFinanceSnapshot {
+  paymentsActive: boolean; balances: readonly ShopifyBalance[]; payouts: readonly ShopifyPayout[]; transactions: readonly ShopifyBalanceTransaction[];
+}
+export function verifyShopifyFinanceSnapshot(v: unknown): ShopifyFinanceSnapshot {
+  const o = closed(v, ['paymentsActive', 'balances', 'payouts', 'transactions'], true);
+  const paymentsActive = bool(o.paymentsActive);
+  const balances = unique(arr(o.balances, 10).map(b => { const x = closed(b, ['currency', 'amount'], true);
+    return Object.freeze({ currency: currency(x.currency), amount: signedMoneyText(x.amount) }); }), b => b.currency);
+  const payouts = unique(arr(o.payouts, 20).map(p => { const x = closed(p, ['id', 'status', 'direction', 'issuedAt', 'currency', 'net'], true);
+    return Object.freeze({ id: shopifyId(x.id), status: oneOf(x.status, SHOPIFY_PAYOUT_STATUSES), direction: oneOf(x.direction, SHOPIFY_PAYOUT_DIRECTIONS),
+      issuedAt: iso(x.issuedAt), currency: currency(x.currency), net: signedMoneyText(x.net) }); }), p => p.id);
+  const transactions = unique(arr(o.transactions, 50).map(t => { const x = closed(t, ['id', 'type', 'at', 'currency', 'amount', 'fee', 'net', 'test', 'payoutId'], true);
+    const type = word(x.type); if (type === null) fail(true);
+    return Object.freeze({ id: shopifyId(x.id), type, at: iso(x.at), currency: currency(x.currency), amount: signedMoneyText(x.amount),
+      fee: signedMoneyText(x.fee), net: signedMoneyText(x.net), test: bool(x.test), payoutId: maybeShopifyId(x.payoutId) }); }), t => t.id);
+  if (!paymentsActive && (balances.length || payouts.length || transactions.length)) fail(true);
+  return Object.freeze({ paymentsActive, balances, payouts, transactions });
+}
+
+/** READ (commerce.shopify.manage). financeAllowed: the store granted the finance scope. finance: the latest snapshot, or null before the first read. */
+export interface ShopifyFinanceView {
+  schoolId: string; connected: boolean; financeAllowed: boolean; currency: string | null;
+  finance: (ShopifyFinanceSnapshot & { readAt: string }) | null;
+}
+export function verifyShopifyFinanceView(v: unknown): ShopifyFinanceView {
+  const o = closed(v, ['schoolId', 'connected', 'financeAllowed', 'currency', 'finance'], true);
+  const connected = bool(o.connected), financeAllowed = bool(o.financeAllowed);
+  if (financeAllowed && !connected) fail(true);
+  let finance: ShopifyFinanceView['finance'] = null;
+  if (o.finance !== null) {
+    if (!connected) fail(true);
+    const f = closed(o.finance, ['paymentsActive', 'balances', 'payouts', 'transactions', 'readAt'], true);
+    const { readAt, ...rest } = f;
+    finance = Object.freeze({ ...verifyShopifyFinanceSnapshot(rest), readAt: iso(readAt) });
+  }
+  return Object.freeze({ schoolId: id(o.schoolId, true), connected, financeAllowed, currency: maybeCurrency(o.currency), finance });
+}
+
+// ---- TB1: Theme Builder drafts (write_themes; HON writes only to an UNPUBLISHED copy) ----
+export const SHOPIFY_THEME_RECIPES = ['SCHOOL_COLORS', 'SIZE_GUIDE', 'PICKUP_NOTE'] as const;
+export type ShopifyThemeRecipeName = typeof SHOPIFY_THEME_RECIPES[number];
+export type ShopifyThemeInputs =
+  | { primary: string; secondary: string | null }
+  | { text: string };
+export const SHOPIFY_THEME_EDIT_STATUSES = ['APPLYING', 'APPLIED', 'FAILED', 'UNKNOWN', 'UNDONE'] as const;
+export interface ShopifyThemeRef { id: string; name: string }
+export interface ShopifyThemeEdit {
+  id: string; kind: 'APPLY' | 'UNDO'; recipe: ShopifyThemeRecipeName; inputs: ShopifyThemeInputs; undoOf: string | null;
+  status: typeof SHOPIFY_THEME_EDIT_STATUSES[number]; failureCode: string | null; draftThemeId: string | null;
+  requestedAt: string; finishedAt: string | null; files: string[]; undoable: boolean;
+}
+export interface ShopifyThemeWorkspace {
+  schoolId: string; connected: boolean; themesAllowed: boolean; baseTheme: ShopifyThemeRef | null; draftTheme: ShopifyThemeRef | null;
+  busy: boolean; edits: ShopifyThemeEdit[];
+}
+/** What a person asks for: a recipe with its inputs, either to preview (read only) or to write to the draft copy; or undo one edit. */
+export type ShopifyThemeCommand =
+  | { schoolId: string; purpose: 'PREVIEW' | 'APPLY'; recipe: ShopifyThemeRecipeName; inputs: ShopifyThemeInputs; undoOf: null }
+  | { schoolId: string; purpose: 'UNDO'; recipe: null; inputs: null; undoOf: string };
+export interface ShopifyThemeFileDiff { filename: string; before: string; after: string; changed: boolean }
+export interface ShopifyThemePreview { schoolId: string; recipe: ShopifyThemeRecipeName; target: ShopifyThemeRef; files: ShopifyThemeFileDiff[] }
+
+const HEX_COLOR = /^#[0-9A-F]{6}$/;
+const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
+const THEME_ID = /^[1-9][0-9]{0,17}$/;
+function themeInputs(recipe: unknown, v: unknown): ShopifyThemeInputs {
+  if (recipe === 'SCHOOL_COLORS') {
+    const o = closed(v, ['primary', 'secondary'], false);
+    if (typeof o.primary !== 'string' || !HEX_COLOR.test(o.primary) || (o.secondary !== null && (typeof o.secondary !== 'string' || !HEX_COLOR.test(o.secondary)))) fail(false);
+    return Object.freeze({ primary: o.primary as string, secondary: o.secondary as string | null });
+  }
+  const max = recipe === 'SIZE_GUIDE' ? 2000 : recipe === 'PICKUP_NOTE' ? 500 : fail(false);
+  const o = closed(v, ['text'], false);
+  if (typeof o.text !== 'string' || o.text !== o.text.trim() || o.text.length < 1 || o.text.length > max || CONTROL.test(o.text)) fail(false);
+  return Object.freeze({ text: o.text });
+}
+export function validateShopifyThemeCommand(v: unknown): ShopifyThemeCommand {
+  const o = closed(v, ['schoolId', 'purpose', 'recipe', 'inputs', 'undoOf'], false);
+  const schoolId = id(o.schoolId, false);
+  if (o.purpose === 'UNDO') {
+    if (o.recipe !== null || o.inputs !== null) fail(false);
+    return Object.freeze({ schoolId, purpose: 'UNDO', recipe: null, inputs: null, undoOf: id(o.undoOf, false) });
+  }
+  if ((o.purpose !== 'PREVIEW' && o.purpose !== 'APPLY') || o.undoOf !== null || !SHOPIFY_THEME_RECIPES.includes(o.recipe as ShopifyThemeRecipeName)) fail(false);
+  return Object.freeze({ schoolId, purpose: o.purpose, recipe: o.recipe as ShopifyThemeRecipeName, inputs: themeInputs(o.recipe, o.inputs), undoOf: null });
+}
+function themeRef(v: unknown): ShopifyThemeRef | null {
+  if (v === null) return null;
+  const o = closed(v, ['id', 'name'], true);
+  if (typeof o.id !== 'string' || !THEME_ID.test(o.id) || typeof o.name !== 'string' || o.name.length < 1 || o.name.length > 120) fail(true);
+  return Object.freeze({ id: o.id, name: o.name });
+}
+const ISO_MS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+export function verifyShopifyThemeWorkspace(v: unknown): ShopifyThemeWorkspace {
+  const o = closed(v, ['schoolId', 'connected', 'themesAllowed', 'baseTheme', 'draftTheme', 'busy', 'edits'], true);
+  if (typeof o.connected !== 'boolean' || typeof o.themesAllowed !== 'boolean' || typeof o.busy !== 'boolean' || !Array.isArray(o.edits)
+    || o.edits.length > 20 || (o.themesAllowed && !o.connected)) fail(true);
+  const edits = (o.edits as unknown[]).map(e => {
+    const x = closed(e, ['id', 'kind', 'recipe', 'inputs', 'undoOf', 'status', 'failureCode', 'draftThemeId', 'requestedAt', 'finishedAt', 'files', 'undoable'], true);
+    if ((x.kind !== 'APPLY' && x.kind !== 'UNDO') || !SHOPIFY_THEME_RECIPES.includes(x.recipe as ShopifyThemeRecipeName)
+      || !SHOPIFY_THEME_EDIT_STATUSES.includes(x.status as typeof SHOPIFY_THEME_EDIT_STATUSES[number])
+      || (x.failureCode !== null && (typeof x.failureCode !== 'string' || !/^[A-Z_]{1,40}$/.test(x.failureCode)))
+      || (x.draftThemeId !== null && (typeof x.draftThemeId !== 'string' || !THEME_ID.test(x.draftThemeId)))
+      || typeof x.requestedAt !== 'string' || !ISO_MS.test(x.requestedAt) || (x.finishedAt !== null && (typeof x.finishedAt !== 'string' || !ISO_MS.test(x.finishedAt)))
+      || !Array.isArray(x.files) || x.files.length > 5 || x.files.some(f => typeof f !== 'string') || typeof x.undoable !== 'boolean'
+      || (x.kind === 'UNDO') !== (x.undoOf !== null)) fail(true);
+    let inputs: ShopifyThemeInputs;
+    try { inputs = themeInputs(x.recipe, x.inputs); } catch { return fail(true); }
+    return Object.freeze({ id: id(x.id, true), kind: x.kind, recipe: x.recipe, inputs, undoOf: x.undoOf === null ? null : id(x.undoOf, true),
+      status: x.status, failureCode: x.failureCode, draftThemeId: x.draftThemeId, requestedAt: x.requestedAt, finishedAt: x.finishedAt,
+      files: Object.freeze([...(x.files as string[])]), undoable: x.undoable }) as ShopifyThemeEdit;
+  });
+  return Object.freeze({ schoolId: id(o.schoolId, true), connected: o.connected, themesAllowed: o.themesAllowed, baseTheme: themeRef(o.baseTheme),
+    draftTheme: themeRef(o.draftTheme), busy: o.busy, edits: Object.freeze(edits) as ShopifyThemeEdit[] });
+}
+export function verifyShopifyThemePreview(v: unknown): ShopifyThemePreview {
+  const o = closed(v, ['schoolId', 'recipe', 'target', 'files'], true);
+  if (!SHOPIFY_THEME_RECIPES.includes(o.recipe as ShopifyThemeRecipeName) || !Array.isArray(o.files) || o.files.length < 1 || o.files.length > 5) fail(true);
+  const files = (o.files as unknown[]).map(e => {
+    const f = closed(e, ['filename', 'before', 'after', 'changed'], true);
+    if (typeof f.filename !== 'string' || typeof f.before !== 'string' || typeof f.after !== 'string' || typeof f.changed !== 'boolean'
+      || f.before.length > 262144 || f.after.length > 262144 || f.changed !== (f.before !== f.after)) fail(true);
+    return Object.freeze({ filename: f.filename as string, before: f.before as string, after: f.after as string, changed: f.changed as boolean });
+  });
+  const target = themeRef(o.target);
+  if (!target) fail(true);
+  return Object.freeze({ schoolId: id(o.schoolId, true), recipe: o.recipe as ShopifyThemeRecipeName, target, files: Object.freeze(files) as ShopifyThemeFileDiff[] });
+}
+/** The answer to a theme command: how the work ended, its preview (PREVIEW only) and the workspace read after it. */
+export interface ShopifyThemeWorkResult {
+  outcome: 'DONE' | 'APPLIED' | 'FAILED' | 'UNKNOWN'; failureCode: string | null; preview: ShopifyThemePreview | null; workspace: ShopifyThemeWorkspace;
+}
+export function verifyShopifyThemeWorkResult(v: unknown): ShopifyThemeWorkResult {
+  const o = closed(v, ['outcome', 'failureCode', 'preview', 'workspace'], true);
+  if (!['DONE', 'APPLIED', 'FAILED', 'UNKNOWN'].includes(o.outcome as string) || ((o.outcome === 'DONE' || o.outcome === 'APPLIED') !== (o.failureCode === null))
+    || (o.failureCode !== null && (typeof o.failureCode !== 'string' || !/^[A-Z_]{1,40}$/.test(o.failureCode))) || ((o.preview !== null) && o.outcome !== 'DONE')) fail(true);
+  return Object.freeze({ outcome: o.outcome as ShopifyThemeWorkResult['outcome'], failureCode: o.failureCode as string | null,
+    preview: o.preview === null ? null : verifyShopifyThemePreview(o.preview), workspace: verifyShopifyThemeWorkspace(o.workspace) });
 }

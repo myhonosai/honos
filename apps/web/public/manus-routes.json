@@ -345,6 +345,10 @@
       "title": "HON | Checkout pages"
     },
     {
+      "path": "/staff/billing/checkout-orders",
+      "title": "HON | Checkout orders"
+    },
+    {
       "path": "/staff/billing/saved-payment-methods",
       "title": "HON | Saved payment methods"
     },
@@ -387,6 +391,18 @@
     {
       "path": "/staff/texts/send",
       "title": "HON | Send a text"
+    },
+    {
+      "path": "/staff/texts/history",
+      "title": "HON | Text history"
+    },
+    {
+      "path": "/staff/texts/templates",
+      "title": "HON | Text templates"
+    },
+    {
+      "path": "/staff/texts/opted-out",
+      "title": "HON | Opted out of texts"
     },
     {
       "path": "/staff/family-messages",

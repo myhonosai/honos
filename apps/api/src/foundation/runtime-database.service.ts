@@ -341,7 +341,8 @@ export type LanguageOperation = keyof typeof LANGUAGE_CALLS;
 export type SchoolOwnershipOperation = 'hqRead'|'setPrimary'|'ownerRead';
 
 export type ShopifyOperation = 'read'|'catalog'|'orders'|'start'|'claim'|'record'|'beginSync'|'rotate'|'page'|'finishSync'|'disconnect'
-  |'changes'|'propose'|'cancelChange'|'approveChange'|'rotateChange'|'recordChange';
+  |'changes'|'propose'|'cancelChange'|'approveChange'|'rotateChange'|'recordChange'|'finance'|'recordFinance'
+  |'themes'|'beginTheme'|'rotateTheme'|'finishTheme';
 
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
@@ -720,6 +721,26 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       const result = await client.query<{ data: unknown }>(statement, values);
       await client.query('COMMIT');
       if (result.rows.length !== 1) throw new Error('Unverified parent invoice payment call.');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
+    finally { client.release(); }
+  }
+
+  /** 0598: the four fixed family checkout calls, each in its own short transaction (no tenant settings; the definer re-proves scope). */
+  async runParentCheckoutCall(statement: string, values: unknown[]): Promise<unknown> {
+    if (![
+      'SELECT hon.read_parent_checkout_pages($1::text) AS data',
+      'SELECT hon.open_parent_checkout_order($1::text,$2::jsonb,$3::text) AS data',
+      'SELECT hon.read_parent_checkout_order($1::text,$2::uuid) AS data',
+    ].includes(statement)) throw new Error('Unknown parent checkout call.');
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>(statement, values);
+      await client.query('COMMIT');
+      if (result.rows.length !== 1) throw new Error('Unverified parent checkout call.');
       return result.rows[0]!.data;
     } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
     finally { client.release(); }
@@ -1573,6 +1594,14 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       approveChange: {sql: 'SELECT hon.approve_shopify_product_change($1,$2::jsonb) data',arity:2,readOnly:false},
       rotateChange: {sql: 'SELECT hon.rotate_shopify_change_credential($1,$2::jsonb) data',arity:2,readOnly:false},
       recordChange: {sql: 'SELECT hon.record_shopify_product_change_result($1,$2::jsonb) data',arity:2,readOnly:false},
+      // 0597 SH-F1 Shopify Payments snapshot.
+      finance: {sql: 'SELECT hon.read_shopify_finance($1,$2::uuid) data',arity:2,readOnly:true},
+      recordFinance: {sql: 'SELECT hon.record_shopify_finance($1,$2::jsonb) data',arity:2,readOnly:false},
+      // 0600 TB1 theme drafts (HON writes only to an UNPUBLISHED copy).
+      themes: {sql: 'SELECT hon.read_shopify_theme_workspace($1,$2::uuid) data',arity:2,readOnly:true},
+      beginTheme: {sql: 'SELECT hon.begin_shopify_theme_work($1,$2::jsonb) data',arity:2,readOnly:false},
+      rotateTheme: {sql: 'SELECT hon.rotate_shopify_theme_credential($1,$2::jsonb) data',arity:2,readOnly:false},
+      finishTheme: {sql: 'SELECT hon.finish_shopify_theme_work($1,$2::jsonb) data',arity:2,readOnly:false},
     } as const;
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('SHOPIFY_UNAVAILABLE');

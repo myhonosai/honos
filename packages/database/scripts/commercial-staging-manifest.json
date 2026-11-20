@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "a4fd280c1bb39bdd4ae20b7e660f0efaef7171f34a7440b49057344594fd1e01",
+  "chainSha256": "e8bbc7305bd957ae26a343b003bc619fbf62d2ecf5654b7e3f1365005cc80fb8",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -735,8 +735,44 @@
       "sha256": "5e2984f34a479a4739e984ee2bcc7532d6de49449da07f869e2c5c70b1d40975"
     },
     {
-      "file": "0599_calendar_closed_days_families.sql",
-      "sha256": "82d5cdb4bf22ba27cdb1ab9c7610d89563a13eb3e2e3d87e4775148ab46b8775"
+      "file": "0585_school_message_history.sql",
+      "sha256": "5c85915c11e07fc66563a8b617f9809f4340ed92fa8a2df141143834ee22036b"
+    },
+    {
+      "file": "0586_school_message_templates.sql",
+      "sha256": "d85d8ca8d6153a38a0cd0a04b73628f2cbac4cc7094de7678a50db4c24117e9b"
+    },
+    {
+      "file": "0594_paper_import_ai_reader.sql",
+      "sha256": "7a84df3e44906d28635eaf0889a1c133994e0201b805a7bb343a3ba4b2da99a9"
+    },
+    {
+      "file": "0596_shopify_merch_ai_ideas.sql",
+      "sha256": "15e91391b40b51c53684df45238cc33038f00084add99849eb0737ba173b3452"
+    },
+    {
+      "file": "0597_shopify_finance.sql",
+      "sha256": "d1495ba5027d402cc3ff21c0ba7d38061505511453323a3108e3a300e04cce94"
+    },
+    {
+      "file": "0598_family_checkout_orders.sql",
+      "sha256": "a4debf59bcbf49c684c439e1bc427c6800a105b3f72a501a36d3d38fd9c0fb13"
+    },
+    {
+      "file": "0600_shopify_theme_drafts.sql",
+      "sha256": "1687467219e72d2445ddd299f7b534a30e5854600b824037b5abf1686e80c08f"
+    },
+    {
+      "file": "0601_parent_announcement_push.sql",
+      "sha256": "199420cc54a86f7bcc8dc2d80e419053802d9e2acf3951826faa3910dd2cc23b"
+    },
+    {
+      "file": "0602_parent_attendance_streaks.sql",
+      "sha256": "af5aa6f5ba2bc9ffd345d92124c09514bef0e30ad125819d2f4f683a113c98eb"
+    },
+    {
+      "file": "0603_journey_recommendations.sql",
+      "sha256": "495a7bc113ba416ef5a19ab189ba248f0d06c197dac26a78af956fb4ab520ab6"
     }
   ]
 }

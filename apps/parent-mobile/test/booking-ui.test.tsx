@@ -13,7 +13,7 @@ function fakeApi(overrides: Partial<Record<keyof ParentApi, jest.Mock>>) {
     journey: jest.fn(async () => ({ ok: true, data: verifyParentJourneyView(journeyBody()) })),
     schoolTimeZone: jest.fn(async () => 'America/Los_Angeles'),
     classBookings: jest.fn(async () => choices()),
-    bookClass: jest.fn(), cancelBooking: jest.fn(), announcements: jest.fn(async () => ({ ok: false, state: 'unavailable' })),
+    bookClass: jest.fn(), cancelBooking: jest.fn(), announcements: jest.fn(async () => ({ ok: false, state: 'unavailable' })), attendanceStreaks: jest.fn(async () => ({ ok: false, state: 'unavailable' })),
     ...overrides,
   } as unknown as ParentApi & Record<string, jest.Mock>;
 }
@@ -37,6 +37,11 @@ describe('booking from the Schedule tab', () => {
     expect(await screen.findByText('Booked.')).toBeTruthy();
     expect(api.bookClass).toHaveBeenCalledWith({ studentProfileId: CHILD_A, sessionId: SESSION_1 }, '00000000-0000-4000-8000-000000000001');
     expect(api.classBookings).toHaveBeenCalledTimes(2);
+    // The reward moment repeats what the server confirmed, and Continue closes it.
+    expect(screen.getByText("You're booked!")).toBeTruthy();
+    expect(screen.getByText(/^Test Child A · Little Dragons, /)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Continue' }));
+    expect(screen.queryByText("You're booked!")).toBeNull();
   });
 
   it('a waitlist place is never shown as booked', async () => {
@@ -45,6 +50,7 @@ describe('booking from the Schedule tab', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Confirm booking' }));
     expect(await screen.findByText(/Added to the waitlist/)).toBeTruthy();
     expect(screen.queryByText('Booked.')).toBeNull();
+    expect(screen.queryByText("You're booked!")).toBeNull();
   });
 
   it('unknown result: re-reads, offers a retry, and the retry reuses the same key', async () => {
@@ -69,6 +75,15 @@ describe('booking from the Schedule tab', () => {
     expect(await screen.findByText('Booked.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
     expect(api.bookClass).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("You're booked!")).toBeTruthy();
+  });
+
+  it('unknown result: no reward moment until HON confirms', async () => {
+    const api = fakeApi({ bookClass: jest.fn(async () => ({ ok: false, state: 'unknown' })) });
+    await fireEvent.press(await openSchedule(api));
+    await fireEvent.press(screen.getByRole('button', { name: 'Confirm booking' }));
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeTruthy();
+    expect(screen.queryByText("You're booked!")).toBeNull();
   });
 
   it('a refusal says why and changes nothing on screen', async () => {
@@ -76,6 +91,7 @@ describe('booking from the Schedule tab', () => {
     await fireEvent.press(await openSchedule(api));
     await fireEvent.press(screen.getByRole('button', { name: 'Confirm booking' }));
     expect(await screen.findByText('This class is full.')).toBeTruthy();
+    expect(screen.queryByText("You're booked!")).toBeNull();
   });
 
   it('cancels with the booking version after confirmation', async () => {

@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../ui/text';
 import * as WebBrowser from 'expo-web-browser';
 import type { ParentProShop } from '@hon/contracts/parent-pro-shop';
 import type { ParentRead } from '../api/client';
 import { useFamily } from '../family/family-data';
 import { Body, Card, Loading, StateMessage } from '../ui/parts';
-import { radius, space, type, useColors } from '../ui/theme';
+import { radius, space, type, useColors, EDGE } from '../ui/theme';
+import { Icon } from '../ui/icons';
 
 /** A decimal price string ("19.50") in the store currency; falls back to the plain amount and code. */
 export function shopPrice(amount: string, currency: string): string {
@@ -38,22 +40,19 @@ export function ProShopArea() {
     <View style={{ marginTop: space.lg }}>
       <Body muted>Tap an item to open it in {shop.schoolName}'s shop. You buy it there, not in HON.</Body>
       {sampleNote ? <Card><Body>This is the sample family, so items do not open a real store. With your school's account, the item opens in your school's shop.</Body></Card> : null}
-      <View style={{ marginTop: space.md }}>
-        {shop.products.map(p => {
+      <View style={styles.grid}>
+        {shop.products.map((p, i) => {
           const price = shopPrice(p.fromPrice, shop.currency!);
+          const tint = [c.accentSoft, c.coralSoft, c.warningSoft, c.successSoft, c.violetSoft, c.cyanSoft][i % 6]!;
           return (
-            <Pressable key={p.productId} accessibilityRole="link" accessibilityLabel={`${p.title}, from ${price}. Open in the school's shop`}
+            <Pressable key={p.productId} accessibilityRole="link" accessibilityLabel={`${p.title}, from ${price}. Open in the school's shop`} style={styles.cell}
               onPress={() => { if (api.sampleMode) setSampleNote(true); else void WebBrowser.openBrowserAsync(p.url); }}>
-              <Card>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-                  {p.imageUrl ? <Image source={{ uri: p.imageUrl }} accessibilityIgnoresInvertColors style={{ width: 64, height: 64, borderRadius: radius.md, backgroundColor: c.surface }} />
-                    : <View style={{ width: 64, height: 64, borderRadius: radius.md, backgroundColor: c.accentSoft }} />}
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: c.text, fontSize: type.title, fontWeight: '700' }}>{p.title}</Text>
-                    <Text style={{ color: c.muted, marginTop: space.xs }}>From {price}</Text>
-                  </View>
-                  <Text style={{ color: c.accent, fontWeight: '700' }}>Open ›</Text>
-                </View>
+              <Card style={{ padding: space.sm, marginBottom: 0, flex: 1 }}>
+                {p.imageUrl ? <Image source={{ uri: p.imageUrl }} accessibilityIgnoresInvertColors style={[styles.picture, { backgroundColor: c.surface }]} />
+                  : <View style={[styles.picture, { backgroundColor: tint, alignItems: 'center', justifyContent: 'center' }]}><Icon name="bag" size={44} color={c.subtle} /></View>}
+                <Text numberOfLines={2} style={{ color: c.text, fontSize: type.body, fontWeight: '800', marginTop: space.sm }}>{p.title}</Text>
+                <Text style={{ color: c.muted, marginTop: 2, fontWeight: '700' }}>From {price}</Text>
+                <View style={[styles.open, { backgroundColor: c.accent, borderBottomColor: c.accentEdge }]}><Text style={{ color: c.accentText, fontWeight: '800' }}>Open</Text></View>
               </Card>
             </Pressable>
           );
@@ -62,3 +61,10 @@ export function ProShopArea() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  grid: { marginTop: space.md, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: space.md },
+  cell: { width: '48.5%' },
+  picture: { width: '100%', aspectRatio: 1.2, borderRadius: radius.md },
+  open: { marginTop: space.sm, minHeight: 40, borderRadius: radius.sm, borderBottomWidth: EDGE, alignItems: 'center', justifyContent: 'center' },
+});

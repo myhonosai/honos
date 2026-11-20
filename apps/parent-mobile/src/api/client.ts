@@ -23,7 +23,16 @@ import {
   type ParentInvoicePayResult, type ParentInvoicePayStart, type ParentInvoicePayments,
 } from '@hon/contracts/parent-invoice-pay';
 import { verifyParentSchoolAnnouncements, type ParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
+import { verifyParentAttendanceStreaks, type ParentAttendanceStreaks } from '@hon/contracts/parent-attendance-streaks';
 import { verifyParentProShop, type ParentProShop } from '@hon/contracts/parent-pro-shop';
+import {
+  validateRegisterParentPushDeviceInput, validateUnregisterParentPushDeviceInput, verifyParentPushDeviceReceipt, verifyParentPushStatus, verifyParentPushUnregisterReceipt,
+  type ParentPushDeviceReceipt, type ParentPushPlatform, type ParentPushStatus, type ParentPushUnregisterReceipt,
+} from '@hon/contracts/parent-push';
+import {
+  validateOpenParentCheckoutOrderInput, verifyParentCheckoutOrderResult, verifyParentCheckoutOrderStart, verifyParentCheckoutPages,
+  type OpenParentCheckoutOrderInput, type ParentCheckoutOrderResult, type ParentCheckoutOrderStart, type ParentCheckoutPages,
+} from '@hon/contracts/family-checkout';
 
 /**
  * What a screen shows when a read does not return verified data. Every protected read maps to one of these;
@@ -182,8 +191,35 @@ export function createParentApi(options: ParentApiOptions) {
     /** 0530: the family's open invoices the parent may pay on the school's own processor page (test mode only). */
     /** The school's live announcements (0576) for the one family this sign-in belongs to. No school or family id is sent. */
     announcements: (): Promise<ParentRead<ParentSchoolAnnouncements>> => get('/v1/parent/announcements', dataOf(verifyParentSchoolAnnouncements)),
+    /** Each child's weekly attendance streak (0602) for the one family this sign-in belongs to: name and number only. */
+    attendanceStreaks: (): Promise<ParentRead<ParentAttendanceStreaks>> => get('/v1/parent/attendance-streaks', dataOf(verifyParentAttendanceStreaks)),
+    /** 0601: whether the school's server sends notifications at all (the app asks for permission only then). */
+    pushStatus: (): Promise<ParentRead<ParentPushStatus>> => get('/v1/parent/push-devices/status', dataOf(verifyParentPushStatus)),
+    /** 0601: this phone's Expo push token for announcement notifications. The server decides the person and school. */
+    registerPushDevice: (expoPushToken: string, platform: ParentPushPlatform, idempotencyKey: string): Promise<ParentWrite<ParentPushDeviceReceipt>> =>
+      post('/v1/parent/push-devices', 'parent.push_device.register', idempotencyKey, validateRegisterParentPushDeviceInput({ expoPushToken, platform }),
+        data => verifyParentPushDeviceReceipt(data, platform)),
+    /** 0601: stop notifications to this phone (sign out). */
+    unregisterPushDevice: (expoPushToken: string, idempotencyKey: string): Promise<ParentWrite<ParentPushUnregisterReceipt>> =>
+      post('/v1/parent/push-devices/unregister', 'parent.push_device.unregister', idempotencyKey, validateUnregisterParentPushDeviceInput({ expoPushToken }),
+        verifyParentPushUnregisterReceipt),
     /** The school's own Shopify products (0581); buying opens the school's store page. No school or family id is sent. */
     proShop: (): Promise<ParentRead<ParentProShop>> => get('/v1/parent/pro-shop', dataOf(verifyParentProShop)),
+    /** 0598: the school's checkout pages the family can buy from, the family's children and latest orders. No school or family id is sent. */
+    checkoutPages: (): Promise<ParentRead<ParentCheckoutPages>> => get('/v1/parent/checkout-pages', dataOf(verifyParentCheckoutPages)),
+    /** Places an order and opens the processor page when it is not free. The server decides who, what and how much. */
+    orderCheckout: (input: OpenParentCheckoutOrderInput, idempotencyKey: string): Promise<ParentWrite<ParentCheckoutOrderStart>> =>
+      post('/v1/parent/checkout-pages/orders', 'parent.checkout.order', idempotencyKey, validateOpenParentCheckoutOrderInput(input), verifyParentCheckoutOrderStart,
+        // The return page is checked before anything is written, so this 503 is a definite no.
+        ['FAMILY_CHECKOUT_NOT_CONFIGURED']),
+    startCheckoutOrder: (orderId: string, idempotencyKey: string): Promise<ParentWrite<ParentCheckoutOrderStart>> =>
+      post(`/v1/parent/checkout-pages/orders/${encodeURIComponent(orderId)}/start`, 'parent.checkout.pay.start', idempotencyKey, {}, verifyParentCheckoutOrderStart,
+        ['FAMILY_CHECKOUT_NOT_CONFIGURED']),
+    /** The processor's own answer for the order's payment, as HON recorded it. */
+    confirmCheckoutOrder: (orderId: string, idempotencyKey: string): Promise<ParentWrite<ParentCheckoutOrderResult>> =>
+      post(`/v1/parent/checkout-pages/orders/${encodeURIComponent(orderId)}/confirm`, 'parent.checkout.pay.confirm', idempotencyKey, {}, verifyParentCheckoutOrderResult),
+    cancelCheckoutOrder: (orderId: string, idempotencyKey: string): Promise<ParentWrite<ParentCheckoutOrderResult>> =>
+      post(`/v1/parent/checkout-pages/orders/${encodeURIComponent(orderId)}/cancel`, 'parent.checkout.pay.cancel', idempotencyKey, {}, verifyParentCheckoutOrderResult),
     invoicePayments: (): Promise<ParentRead<ParentInvoicePayments>> => get('/v1/parent/invoice-payments', dataOf(verifyParentInvoicePayments)),
     /** Opens (or gets back) the processor page for one invoice. The server decides the amount; the app sends nothing else. */
     startInvoicePayment: (invoiceId: string, idempotencyKey: string): Promise<ParentWrite<ParentInvoicePayStart>> =>

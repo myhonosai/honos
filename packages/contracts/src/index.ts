@@ -917,7 +917,11 @@ export interface CreateCommunicationMessageInput {
   channel: CommunicationMessageChannel;
   content: string;
   scheduledAt?: string | undefined;
+  /** EMAIL only (TE1): the subject the email is sent with; without it the adapter uses the school's standard subject. */
+  emailSubject?: string | undefined;
 }
+/** The longest staff email subject (0423 column check). */
+export const COMMUNICATION_EMAIL_SUBJECT_MAX = 150;
 
 /** Queueing is a separate human confirmation against the current consent record. */
 export interface QueueCommunicationMessageInput {
@@ -934,6 +938,7 @@ export interface CommunicationMessageSummary {
   scheduledAt?: string | undefined;
   createdByPrincipalId: string;
   queuedByPrincipalId?: string | undefined;
+  emailSubject?: string | undefined;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -1126,6 +1131,8 @@ export * from './family-messages.js';
 export * from './school-conversations.js';
 export * from './conversation-ai.js';
 export * from './contact-message-history.js';
+export * from './school-message-history.js';
+export * from './school-message-templates.js';
 export * from './school-pay-autopay.js';
 export * from './hq-school-health.js';
 export * from './school-reports.js';
@@ -1148,6 +1155,7 @@ export * from './school-contact-admin.js';
 export * from './school-pay-charges.js';
 export * from './school-pay-once.js';
 export * from './shopify.js';
+export * from './shopify-merch-ai.js';
 export * from './walk-in-kiosk.js';
 export * from './face-checkin.js';
 export * from './membership-agreement.js';
@@ -1157,4 +1165,8 @@ export * from './staff-time-clock.js';
 export * from './eian.js';
 export * from './parent-invoice-pay.js';
 export * from './school-announcements.js';
+export * from './parent-push.js';
 export * from './parent-pro-shop.js';
+export * from './family-checkout.js';
+export * from './parent-attendance-streaks.js';
+export * from './journey-recommendations.js';

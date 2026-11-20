@@ -22,7 +22,7 @@
     "android": {
       "package": "com.myhonos.family",
       "adaptiveIcon": {
-        "backgroundColor": "#050A18",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -32,7 +32,13 @@
     },
     "plugins": [
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "color": "#050A18"
+        }
+      ]
     ],
     "extra": {
       "eas": {

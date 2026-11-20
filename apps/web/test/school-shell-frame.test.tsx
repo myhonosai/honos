@@ -195,8 +195,9 @@ describe('school shell frame', () => {
     expect(progress).not.toContain('data-shell-groups');
     expect(tabs(progress)).toEqual(['Curriculum library', 'Curriculum progress', 'Teaching studio', 'Achievements']);
     expect(tabs(render({ path: '/staff/billing/invoices' }))).toEqual(['Invoices', 'Tuition balances']);
+    expect(tabs(render({ path: '/staff/billing/checkout-pages' }))).toEqual(['Checkout pages', 'Checkout orders']);
     // A one-page item shows no tab row at all.
-    expect(render({ path: '/staff/billing/checkout-pages' })).not.toContain('data-shell-tabs');
+    expect(render({ path: '/staff/billing/shopify' })).not.toContain('data-shell-tabs');
   });
 
   it('shows Tests as numbered steps in order, not tabs, with the current step marked (L3)', () => {

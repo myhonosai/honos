@@ -10,12 +10,17 @@ import { base64url, pkceChallenge } from './src/session/pkce';
 import { signIn } from './src/session/sign-in';
 import { ParentApp } from './src/ParentApp';
 import { createSampleApi } from './src/sample/sample-api';
+import { createExpoPhonePush } from './src/push/expo-push';
+import { useFonts, Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold, Nunito_800ExtraBold, Nunito_900Black } from '@expo-google-fonts/nunito';
+import { FontsReadyProvider } from './src/ui/text';
 
 const session = createSessionStore();
 const API = process.env.EXPO_PUBLIC_HON_API_URL ?? '';
 const WEB = process.env.EXPO_PUBLIC_HON_WEB_URL ?? '';
 // Test builds only (eas.json preview/development). Store builds never offer the made-up sample family.
 const SAMPLE = process.env.EXPO_PUBLIC_HON_SAMPLE_MODE === '1';
+// Announcement notifications (0601): the phone registers on sign-in; nothing is sent until the school server is approved to send.
+const PUSH = createExpoPhonePush(appConfig.expo.extra.eas.projectId);
 
 function webOrigin(raw: string): string | null {
   try {
@@ -27,6 +32,8 @@ function webOrigin(raw: string): string | null {
 }
 
 export default function App() {
+  // Nunito ships inside the app (SIL OFL). If it fails to load, the system font is used; the app never waits on the network.
+  const [fontsLoaded, fontError] = useFonts({ Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold, Nunito_800ExtraBold, Nunito_900Black });
   const api = useMemo(() => {
     try { return createParentApi({ baseUrl: API, getToken: () => session.token() }); }
     catch { return null; }
@@ -46,10 +53,11 @@ export default function App() {
     fetchImpl: fetch,
     saveToken: token => session.save(token),
   }) : undefined;
+  if (!fontsLoaded && !fontError) return null;
   return (
-    <>
+    <FontsReadyProvider value={fontsLoaded}>
       <StatusBar style="auto" />
-      <ParentApp api={api} session={session} version={appConfig.expo.version} onSignIn={onSignIn} sampleApi={SAMPLE ? () => createSampleApi() : undefined} newKey={() => Crypto.randomUUID()} />
-    </>
+      <ParentApp api={api} session={session} version={appConfig.expo.version} onSignIn={onSignIn} sampleApi={SAMPLE ? () => createSampleApi() : undefined} newKey={() => Crypto.randomUUID()} push={PUSH} />
+    </FontsReadyProvider>
   );
 }

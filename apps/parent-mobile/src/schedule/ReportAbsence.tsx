@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
+import { Text } from '../ui/text';
 import type { ParentPlannedAbsenceRequestContext } from '@hon/contracts/parent-planned-absence-request';
 import type { ParentRead, PlannedAbsenceInput } from '../api/client';
 import { useFamily } from '../family/family-data';

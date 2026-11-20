@@ -35,7 +35,9 @@ function elements(node: unknown): Element[] { if (Array.isArray(node)) return no
 function text(node: unknown): string { if (Array.isArray(node)) return node.map(text).join(' '); if (React.isValidElement(node)) return text((node as Element).props.children); return typeof node === 'string' || typeof node === 'number' ? String(node) : ''; }
 let channel: 'SMS' | 'EMAIL' = 'SMS';
 let school: string | null = 'Sunrise Dojo';
-function render(): Element { hooks.cursor = 0; const tree = ComposeMessage({ scope, channel, schoolName: school }) as Element; hooks.effects.splice(0).forEach(run => run()); return tree; }
+let locks: boolean[] = [];
+let initial = '';
+function render(): Element { hooks.cursor = 0; const tree = ComposeMessage({ scope, channel, schoolName: school, initialContent: initial, onLockChange: v => locks.push(v) }) as Element; hooks.effects.splice(0).forEach(run => run()); return tree; }
 function unmount(): void { for (const cell of hooks.cells) if (cell && typeof cell === 'object' && 'cleanup' in cell) (cell as { cleanup?: () => void }).cleanup?.(); }
 const all = () => elements(render());
 const field = (name: string, value?: string) => all().find(e => e.props.name === name && (value === undefined || e.props.value === value));
@@ -52,7 +54,7 @@ function confirm(): void { field('confirmCompose')!.props.onChange({ target: { c
 function send(): void { forms().find(f => String(f.props['aria-label']).startsWith('Message to'))!.props.onSubmit({ preventDefault() {} }); }
 const calls = (fetcher: { mock: { calls: unknown[][] } }) => fetcher.mock.calls.map(c => ({ path: c[0], key: ((c[1] as RequestInit).headers as Record<string, string>)['Idempotency-Key'], body: JSON.parse(String((c[1] as RequestInit).body)) }));
 
-beforeEach(() => { hooks.cells = []; hooks.cursor = 0; hooks.effects = []; people.search.mockReset(); channel = 'SMS'; school = 'Sunrise Dojo'; });
+beforeEach(() => { hooks.cells = []; hooks.cursor = 0; hooks.effects = []; people.search.mockReset(); channel = 'SMS'; school = 'Sunrise Dojo'; locks = []; initial = ''; });
 afterEach(() => { unmount(); vi.restoreAllMocks(); });
 
 describe('New text or email: http (L4)', () => {
@@ -141,6 +143,24 @@ describe('Texts > Send: composer (TE3a)', () => {
     const sent = calls(fetcher);
     expect(sent[1]!.key).toBe(sent[0]!.key);
     expect(sent[1]!.body).toEqual(sent[0]!.body);
+  });
+
+  it('tells the page it is locked while a send is uncertain, and unlocked after the retry lands (#536 review P2)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('network'))
+      .mockResolvedValueOnce(ok(msg({ content: 'Hi Ana' }))).mockResolvedValueOnce(ok(msg({ lifecycle: 'QUEUED', version: 2 }), 200));
+    await findAndPick(ana); write('Hi {{first_name}}'); confirm(); send(); await settle();
+    expect(locks).toEqual([true, true]);
+    all().find(e => e.type === 'button' && text(e) === 'Retry the same message')!.props.onClick(); await settle();
+    expect(locks).toEqual([true, true, true, false]);
+  });
+  it('discarding an uncertain send unlocks the page; a template body starts the message', async () => {
+    initial = 'Hi {{first_name}}, class is on.';
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('network'));
+    await findAndPick(ana);
+    expect(field('composeContent')!.props.value).toBe('Hi {{first_name}}, class is on.');
+    confirm(); send(); await settle();
+    all().find(e => e.type === 'button' && String(text(e)).startsWith('Discard'))!.props.onClick();
+    expect(locks).toEqual([true, true, false]);
   });
 
   it('picking a contact stops a type-ahead search still waiting (#500 review P3)', async () => {
