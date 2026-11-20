@@ -64,7 +64,7 @@ export function RecommendationSheet({ item, onGo, onNotNow, onClose }: {
             <View style={styles.head}>
               <Image source={eianImage('chibi', 'speaking')} style={[styles.eian, { borderColor: c.surface }]} accessibilityIgnoresInvertColors />
               <View style={{ flex: 1 }}>
-                <Text style={{ color: c.muted, fontSize: type.caption, fontWeight: '800', letterSpacing: 1 }}>FROM YOUR SCHOOL</Text>
+                <Text style={{ color: c.muted, fontSize: type.caption, fontWeight: '800', letterSpacing: 1 }}>{`FROM YOUR SCHOOL · ${item.program}`.toUpperCase()}</Text>
                 <Text accessibilityRole="header" style={{ color: c.text, fontSize: type.title, fontWeight: '800' }}>{item.title}</Text>
               </View>
             </View>
@@ -73,7 +73,8 @@ export function RecommendationSheet({ item, onGo, onNotNow, onClose }: {
             <View style={{ gap: space.sm, marginTop: space.xl }}>
               {see ? <Button kind="go" label={see.label} onPress={() => onGo(see.go)} /> : null}
               <Button kind={see ? 'quiet' : 'go'} label="Ask the school" onPress={() => onGo({ tab: 'Messages' })} />
-              <Button kind="quiet" label="Not now" onPress={() => onNotNow(item.recommendationId)} />
+              <Button kind="quiet" label="Not now" accessibilityLabel="Not now, hide this for now" onPress={() => onNotNow(item.recommendationId)} />
+              <Button kind="quiet" label="Close" onPress={onClose} />
             </View>
           </View>
         ) : null}
