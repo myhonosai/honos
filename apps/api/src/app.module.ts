@@ -292,6 +292,8 @@ import { ParentProShopController, ParentProShopReadGuard } from './pro-shop/pare
 import { ParentProShopService } from './pro-shop/parent-pro-shop.service.js';
 import { ParentAttendanceStreaksController, ParentAttendanceStreaksReadGuard } from './attendance-streaks/parent-attendance-streaks.controller.js';
 import { ParentAttendanceStreaksService } from './attendance-streaks/parent-attendance-streaks.service.js';
+import { JourneyRecommendationsController, JourneyRecommendationsReadGuard, JourneyRecommendationsSaveGuard, JourneyRecommendationsStatusGuard, ParentJourneyRecommendationsController, ParentJourneyRecommendationsReadGuard } from './journey-recommendations/journey-recommendations.controller.js';
+import { JourneyRecommendationsService } from './journey-recommendations/journey-recommendations.service.js';
 import { ParentCheckoutCancelGuard, ParentCheckoutConfirmGuard, ParentCheckoutController, ParentCheckoutOrderGuard, ParentCheckoutStartGuard } from './family-checkout/parent-checkout.controller.js';
 import { ParentCheckoutService } from './family-checkout/parent-checkout.service.js';
 import { ConversationCreateLeadGuard, ConversationLinkGuard, ConversationMarkReadGuard, ConversationReadGuard, ConversationReplyGuard, ConversationUpdateGuard, SchoolConversationsController } from './conversations/school-conversations.controller.js';
@@ -565,6 +567,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentPushController,
     ParentProShopController,
     ParentAttendanceStreaksController,
+    ParentJourneyRecommendationsController,
+    JourneyRecommendationsController,
     ParentCheckoutController,
     SchoolConversationsController,
     ContactMessagesController,
@@ -786,6 +790,11 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentProShopReadGuard,
     ParentAttendanceStreaksService,
     ParentAttendanceStreaksReadGuard,
+    JourneyRecommendationsService,
+    ParentJourneyRecommendationsReadGuard,
+    JourneyRecommendationsReadGuard,
+    JourneyRecommendationsSaveGuard,
+    JourneyRecommendationsStatusGuard,
     ParentCheckoutService, ParentCheckoutOrderGuard, ParentCheckoutStartGuard, ParentCheckoutConfirmGuard, ParentCheckoutCancelGuard,
     SchoolConversationsService,
     ContactMessagesService,
