@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '../ui/text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,12 +22,25 @@ const ACCESS_LABEL: Record<ParentJourneyView['accessLevel'], string> = {
 };
 
 export function HomeScreen({ onNavigate, onJourneyGo }: { onNavigate: (tab: 'Schedule' | 'Eian' | 'Messages') => void; onJourneyGo?: (go: JourneyGo) => void }) {
-  const { state, selection, select, refresh, now, api } = useFamily();
+  const { state, selection, select, refresh, now, api, newKey } = useFamily();
   const announcements = useAnnouncements(api, state.status === 'ready' ? state.view : null);
   const streaks = useStreaks(api, state.status === 'ready' ? state.view : null);
   const recommendations = useRecommendations(api, state.status === 'ready' ? state.view : null);
   const [gift, setGift] = useState<FamilyJourneyRecommendation | null>(null);
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  // 0608: one key per answer, reused if the same answer is tried again. Viewers only read, so nothing is recorded for them.
+  const answerKeys = useRef(new Map<string, string>());
+  const guardian = state.status === 'ready' && state.view.accessLevel !== 'VIEWER';
+  const answer = (id: string, kind: 'HIDDEN' | 'INTERESTED') => {
+    if (!guardian) return;
+    const slot = `${id}/${kind}`;
+    try {
+      let key = answerKeys.current.get(slot);
+      if (!key) { key = newKey(); answerKeys.current.set(slot, key); }
+      // Best effort: the sheet already did what the family asked; an unknown outcome is retried with the same key next time.
+      void api.respondJourneyRecommendation(id, kind, key).catch(() => undefined);
+    } catch { /* no key source: nothing is recorded */ }
+  };
   const [openChild, setOpenChild] = useState<number | null>(null);
   const insets = useSafeAreaInsets();
   const c = useColors();
@@ -50,9 +63,13 @@ export function HomeScreen({ onNavigate, onJourneyGo }: { onNavigate: (tab: 'Sch
       </View>
       <FamilyGate state={state} />
       {state.status === 'ready' ? <Ready view={state.view} timeZone={state.timeZone} /> : null}
-      <RecommendationSheet item={gift} onClose={() => setGift(null)}
-        onNotNow={id => { setHidden(prev => new Set([...prev, id])); setGift(null); }}
-        onGo={go => { setGift(null); if (onJourneyGo) onJourneyGo(go); else if (go.tab === 'Messages') onNavigate('Messages'); }} />
+      <RecommendationSheet item={gift} tellsSchool={guardian} onClose={() => setGift(null)}
+        onNotNow={id => { setHidden(prev => new Set([...prev, id])); setGift(null); answer(id, 'HIDDEN'); }}
+        onGo={(go, item) => {
+          setGift(null);
+          if (go.tab !== 'Messages') answer(item.recommendationId, 'INTERESTED');
+          if (onJourneyGo) onJourneyGo(go); else if (go.tab === 'Messages') onNavigate('Messages');
+        }} />
     </ScrollView>
   );
 

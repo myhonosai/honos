@@ -54,3 +54,30 @@ test('0603 service refuses before any database call and maps errors to closed co
   assert.deepEqual(code('40001', 'VERSION_CONFLICT'), [409, 'VERSION_CONFLICT']);
   assert.deepEqual(code('08006'), [503, 'JOURNEY_RECOMMENDATIONS_UNAVAILABLE']);
 });
+
+test('0608 family answers and the staff interest list are verified exactly', async () => {
+  assert.deepEqual(contracts.validateParentJourneyResponseInput({ kind: 'HIDDEN' }), { kind: 'HIDDEN' });
+  assert.deepEqual(contracts.validateParentJourneyResponseInput({ kind: 'INTERESTED' }), { kind: 'INTERESTED' });
+  for (const bad of [{}, { kind: 'hidden' }, { kind: 'LIKED' }, { kind: 'HIDDEN', familyId: id(1) }, null, 'HIDDEN'])
+    assert.throws(() => contracts.validateParentJourneyResponseInput(bad), undefined, JSON.stringify(bad));
+  const receipt = { recommendationId: id(9), kind: 'INTERESTED', recordedAt: '2026-11-20T10:00:00.000Z', replayed: false };
+  assert.deepEqual(contracts.verifyParentJourneyResponseReceipt(receipt, { recommendationId: id(9), kind: 'INTERESTED' }), receipt);
+  assert.throws(() => contracts.verifyParentJourneyResponseReceipt(receipt, { recommendationId: id(8), kind: 'INTERESTED' }), undefined, 'another recommendation');
+  assert.throws(() => contracts.verifyParentJourneyResponseReceipt(receipt, { recommendationId: id(9), kind: 'HIDDEN' }), undefined, 'another answer');
+  assert.throws(() => contracts.verifyParentJourneyResponseReceipt({ ...receipt, familyId: id(1) }, { recommendationId: id(9), kind: 'INTERESTED' }), undefined, 'extra key');
+  const row = { recommendationId: id(9), familyId: id(2), familyName: 'Park Family', children: ['Mia Park'], recordedAt: '2026-11-20T10:00:00.000Z' };
+  assert.deepEqual(contracts.verifyJourneyRecommendationInterest({ interest: [row] }), { interest: [row] });
+  for (const [label, bad] of [['email', { interest: [{ ...row, email: 'x@example.test' }] }], ['no children', { interest: [{ ...row, children: undefined }] }],
+    ['duplicate', { interest: [row, row] }], ['bad date', { interest: [{ ...row, recordedAt: 'yesterday' }] }]])
+    assert.throws(() => contracts.verifyJourneyRecommendationInterest(bad), undefined, label);
+
+  let calls = 0;
+  const database = new Proxy({}, { get: () => () => { calls += 1; throw new Error('database must not be reached'); } });
+  const service = new JourneyRecommendationsService(database);
+  await assert.rejects(() => service.parentRespond('', id(9), { kind: 'HIDDEN' }), (e) => e.response.code === 'JOURNEY_RECOMMENDATIONS_FORBIDDEN');
+  await assert.rejects(() => service.parentRespond('parent', 'nope', { kind: 'HIDDEN' }), (e) => e.response.code === 'VALIDATION_FAILED');
+  await assert.rejects(() => service.parentRespond('parent', id(9), { kind: 'SHARE' }), (e) => e.response.code === 'VALIDATION_FAILED');
+  await assert.rejects(() => service.interest({ principalType: 'HUMAN_USER', source: 'AI_AGENT', externalSubject: 'staff', idempotencyKey: '', requestId: id(1), correlationId: id(1) }),
+    (e) => e.response.code === 'HUMAN_COMMAND_REQUIRED');
+  assert.equal(calls, 0);
+});

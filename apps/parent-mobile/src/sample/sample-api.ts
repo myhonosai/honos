@@ -13,7 +13,7 @@ import { verifyParentAttendanceStreaks } from '@hon/contracts/parent-attendance-
 import { verifyParentProShop } from '@hon/contracts/parent-pro-shop';
 import { verifyParentCheckoutPages } from '@hon/contracts/family-checkout';
 import type { ParentApi } from '../api/client';
-import { verifyParentJourneyRecommendations } from '@hon/contracts/journey-recommendations';
+import { verifyParentJourneyRecommendations, verifyParentJourneyResponseReceipt } from '@hon/contracts/journey-recommendations';
 import { localDate, localMidnight } from '../schedule/absence-model';
 
 /**
@@ -237,6 +237,9 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
           message: 'After 10 classes, Mia is ready to start light sparring. Gloves and pads are in the pro shop.', targetKind: 'PRO_SHOP', checkoutId: null, eventId: null, targetLabel: null },
       ] },
     ] })),
+    // The made-up family's answers stay on this phone: nothing reaches a school.
+    respondJourneyRecommendation: (recommendationId, kind, _key) =>
+      wrote(verifyParentJourneyResponseReceipt({ recommendationId, kind, recordedAt: ms(start.toISOString()), replayed: false }, { recommendationId, kind })),
     proShop: () => ok(verifyParentProShop({ schoolName: SAMPLE_SCHOOL, available: true, currency: 'USD', products: [
       { productId: '9001', title: 'Sample sparring gloves', imageUrl: null, fromPrice: '39.00', url: 'https://sample-dojo.myshopify.com/products/sample-sparring-gloves' },
       { productId: '9002', title: 'Sample uniform', imageUrl: null, fromPrice: '65.00', url: 'https://sample-dojo.myshopify.com/products/sample-uniform' },

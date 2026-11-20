@@ -81,4 +81,37 @@ describe('journey gift stops on Home (J3, 0603)', () => {
     await screen.findByRole('button', { name: 'Open Leo Sample journey' });
     expect(screen.queryByRole('button', { name: /From your school/ })).toBeNull();
   });
+
+  it('records the guardian\'s answers (0608): "Not now" hides it for the family, the main button tells the school, asking does not', async () => {
+    const sample = createSampleApi(now);
+    const respond = jest.fn(sample.respondJourneyRecommendation);
+    await openHome({ ...sample, respondJourneyRecommendation: respond });
+    await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Try summer camp' }));
+    expect(screen.getByText('"See how to join" lets your school know you are interested. Nothing is sent, booked or bought.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Ask the school' }));
+    expect(respond).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Home' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Try summer camp' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'See how to join' }));
+    expect(respond).toHaveBeenCalledWith('5a3f0e21-0000-4000-8000-000000000960', 'INTERESTED', expect.any(String));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Back to More' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Home' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Time for sparring gear' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Not now, hide this for now' }));
+    expect(respond).toHaveBeenCalledTimes(2);
+    expect(respond.mock.calls[1]![1]).toBe('HIDDEN');
+    expect(respond.mock.calls[1]![2]).not.toBe(respond.mock.calls[0]![2]);
+  });
+
+  it('records nothing for a view-only member and does not promise the school will see it', async () => {
+    const sample = createSampleApi(now);
+    const respond = jest.fn(sample.respondJourneyRecommendation);
+    const journey = async () => { const r = await sample.journey(); return r.ok ? { ok: true as const, data: { ...r.data, accessLevel: 'VIEWER' as const } } : r; };
+    await openHome({ ...sample, journey, respondJourneyRecommendation: respond });
+    await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Time for sparring gear' }));
+    expect(screen.queryByText(/lets your school know/)).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Not now, hide this for now' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'From your school: Time for sparring gear' })).toBeNull());
+    expect(respond).not.toHaveBeenCalled();
+  });
 });

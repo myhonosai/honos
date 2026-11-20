@@ -292,7 +292,7 @@ import { ParentProShopController, ParentProShopReadGuard } from './pro-shop/pare
 import { ParentProShopService } from './pro-shop/parent-pro-shop.service.js';
 import { ParentAttendanceStreaksController, ParentAttendanceStreaksReadGuard } from './attendance-streaks/parent-attendance-streaks.controller.js';
 import { ParentAttendanceStreaksService } from './attendance-streaks/parent-attendance-streaks.service.js';
-import { JourneyRecommendationsController, JourneyRecommendationsReadGuard, JourneyRecommendationsSaveGuard, JourneyRecommendationsStatusGuard, ParentJourneyRecommendationsController, ParentJourneyRecommendationsReadGuard } from './journey-recommendations/journey-recommendations.controller.js';
+import { JourneyRecommendationsController, JourneyRecommendationsReadGuard, JourneyRecommendationsSaveGuard, JourneyRecommendationsStatusGuard, ParentJourneyRecommendationsController, ParentJourneyRecommendationsReadGuard, ParentJourneyRecommendationsRespondGuard } from './journey-recommendations/journey-recommendations.controller.js';
 import { JourneyRecommendationsService } from './journey-recommendations/journey-recommendations.service.js';
 import { ParentReferralLinkGuard, ParentReferralsController, ParentReferralsReadGuard } from './referrals/parent-referrals.controller.js';
 import { ParentReferralsService } from './referrals/parent-referrals.service.js';
@@ -798,6 +798,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentAttendanceStreaksReadGuard,
     JourneyRecommendationsService,
     ParentJourneyRecommendationsReadGuard,
+    ParentJourneyRecommendationsRespondGuard,
     JourneyRecommendationsReadGuard,
     JourneyRecommendationsSaveGuard,
     JourneyRecommendationsStatusGuard,

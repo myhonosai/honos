@@ -178,3 +178,38 @@ export function verifyJourneyRecommendationReceipt(value: unknown, expected: { r
     || (expected.title !== undefined && recommendation.title !== expected.title)) invalid();
   return { recommendation };
 }
+
+// 0608 J1b: a family's answer ("Not now" hides it for the family; "See how to join" records interest) and the staff interest list.
+export const JOURNEY_RESPONSE_KINDS = ['HIDDEN', 'INTERESTED'] as const;
+export type JourneyResponseKind = (typeof JOURNEY_RESPONSE_KINDS)[number];
+export const JOURNEY_INTEREST_LIMIT = 500;
+export interface ParentJourneyResponseInput { kind: JourneyResponseKind }
+export interface ParentJourneyResponseReceipt { recommendationId: string; kind: JourneyResponseKind; recordedAt: string; replayed: boolean }
+export interface JourneyRecommendationInterest {
+  interest: { recommendationId: string; familyId: string; familyName: string; children: string[]; recordedAt: string }[];
+}
+export function validateParentJourneyResponseInput(value: unknown): ParentJourneyResponseInput {
+  const row = record(value, ['kind']);
+  return { kind: oneOf(row.kind, JOURNEY_RESPONSE_KINDS) };
+}
+export function verifyParentJourneyResponseReceipt(value: unknown, expected: { recommendationId: string; kind: JourneyResponseKind }): ParentJourneyResponseReceipt {
+  const row = record(value, ['recommendationId', 'kind', 'recordedAt', 'replayed']);
+  const receipt: ParentJourneyResponseReceipt = { recommendationId: uuid(row.recommendationId), kind: oneOf(row.kind, JOURNEY_RESPONSE_KINDS),
+    recordedAt: instant(row.recordedAt), replayed: typeof row.replayed === 'boolean' ? row.replayed : invalid() };
+  if (receipt.recommendationId !== expected.recommendationId.toLowerCase() || receipt.kind !== expected.kind) invalid();
+  return receipt;
+}
+export function verifyJourneyRecommendationInterest(value: unknown): JourneyRecommendationInterest {
+  const row = record(value, ['interest']);
+  if (!Array.isArray(row.interest) || row.interest.length > JOURNEY_INTEREST_LIMIT) invalid();
+  const seen = new Set<string>();
+  return { interest: row.interest.map(item => {
+    const i = record(item, ['recommendationId', 'familyId', 'familyName', 'children', 'recordedAt']);
+    if (!Array.isArray(i.children) || i.children.length > JOURNEY_RECOMMENDATION_LIMITS.children) invalid();
+    const recommendationId = uuid(i.recommendationId), familyId = uuid(i.familyId);
+    // One answer per family and recommendation (0608 UNIQUE): a repeat is not a verified list.
+    if (seen.has(`${recommendationId}/${familyId}`)) invalid();
+    seen.add(`${recommendationId}/${familyId}`);
+    return { recommendationId, familyId, familyName: name(i.familyName), children: i.children.map(c => name(c)), recordedAt: instant(i.recordedAt) };
+  }) };
+}

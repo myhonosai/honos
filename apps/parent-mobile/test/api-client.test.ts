@@ -46,6 +46,23 @@ describe('parent API client', () => {
     expect(await api(leaky).journeyRecommendations()).toEqual({ ok: false, state: 'unavailable' });
   });
 
+  it('answers a recommendation naming only it and the answer, and refuses a receipt for something else (0608)', async () => {
+    const rec = '77777777-7777-4777-8777-000000000002';
+    const receipt = { recommendationId: rec, kind: 'HIDDEN', recordedAt: '2026-11-17T15:30:00.000Z', replayed: false };
+    const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(200, { data: receipt }));
+    expect(await api(fetchImpl).respondJourneyRecommendation(rec, 'HIDDEN', 'key-0000000000000003')).toEqual({ ok: true, data: receipt, replayed: false });
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(url).toBe(`https://api.example.test/v1/parent/journey-recommendations/${rec}/response`);
+    expect(init.method).toBe('POST');
+    expect(init.headers['x-hon-human-command']).toBe('parent.journey_recommendations.respond');
+    expect(init.headers['Idempotency-Key']).toBe('key-0000000000000003');
+    expect(JSON.parse(init.body)).toEqual({ kind: 'HIDDEN' });
+    const other = jest.fn().mockResolvedValue(jsonResponse(200, { data: { ...receipt, kind: 'INTERESTED' } }));
+    expect(await api(other).respondJourneyRecommendation(rec, 'HIDDEN', 'key-0000000000000004')).toEqual({ ok: false, state: 'unknown' });
+    const gone = jest.fn().mockResolvedValue(jsonResponse(404, { code: 'JOURNEY_RECOMMENDATIONS_NOT_FOUND' }));
+    expect(await api(gone).respondJourneyRecommendation(rec, 'HIDDEN', 'key-0000000000000005')).toEqual({ ok: false, state: 'refused', code: 'JOURNEY_RECOMMENDATIONS_NOT_FOUND' });
+  });
+
   it('reads attendance streaks with no selector and refuses anything beyond a name and a number', async () => {
     const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(200, { data: { children: [{ name: 'Mia', weeks: 3 }] } }));
     const result = await api(fetchImpl).attendanceStreaks();

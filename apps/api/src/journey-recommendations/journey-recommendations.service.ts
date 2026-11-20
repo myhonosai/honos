@@ -4,6 +4,8 @@ import type { PoolClient } from 'pg';
 import {
   validateSaveJourneyRecommendationInput, validateSetJourneyRecommendationStatusInput, verifyJourneyRecommendationReceipt, verifyJourneyRecommendations,
   verifyParentJourneyRecommendations, type JourneyRecommendationReceipt, type JourneyRecommendations, type ParentJourneyRecommendations,
+  validateParentJourneyResponseInput, verifyParentJourneyResponseReceipt, verifyJourneyRecommendationInterest,
+  type ParentJourneyResponseReceipt, type JourneyRecommendationInterest,
 } from '@hon/contracts';
 import { RuntimeDatabaseService, type ResolvedParentFamilyScope } from '../foundation/runtime-database.service.js';
 import type { MembershipLifecycleContext } from '../billing/membership.service.js';
@@ -62,6 +64,41 @@ export class JourneyRecommendationsService {
         await client.query(READ_LIMITS);
         await client.query(HUMAN_SETTINGS, [subject]);
         return verifyParentJourneyRecommendations(await this.one(client, 'SELECT hon.read_parent_journey_recommendations($1) AS data', [subject]));
+      });
+    } catch (error) { return translateJourneyRecommendationError(error); }
+  }
+
+  /** 0608: a guardian hides a recommendation for the family or records interest. Same answer again is a replay; nothing is sent. */
+  async parentRespond(subject: string, recommendationId: string, value: unknown): Promise<ParentJourneyResponseReceipt> {
+    if (!subjectOk(subject)) throw new ForbiddenException({ code: 'JOURNEY_RECOMMENDATIONS_FORBIDDEN' });
+    let input: { kind: 'HIDDEN' | 'INTERESTED' };
+    try {
+      if (typeof recommendationId !== "string" || !UUID.test(recommendationId)) throw new Error("id");
+      input = validateParentJourneyResponseInput(value);
+    } catch { throw new BadRequestException({ code: 'VALIDATION_FAILED' }); }
+    const id = recommendationId.toLowerCase();
+    try {
+      const scopes: ResolvedParentFamilyScope[] = await this.database.resolveParentJourneyScopes(subject);
+      if (scopes.length !== 1) throw new ForbiddenException({ code: 'JOURNEY_RECOMMENDATIONS_FORBIDDEN' });
+      const scope = scopes[0]!;
+      const context = { organizationId: scope.organizationId, schoolId: scope.schoolId, principalId: scope.principalId, principalType: 'HUMAN_USER', requestId: randomUUID() };
+      return await this.database.withTenantTransaction(context, async client => {
+        await client.query(WRITE_LIMITS);
+        await client.query(HUMAN_SETTINGS, [subject]);
+        return verifyParentJourneyResponseReceipt(await this.one(client, 'SELECT hon.respond_parent_journey_recommendation($1,$2::uuid,$3) AS data', [subject, id, input.kind]),
+          { recommendationId: id, kind: input.kind });
+      });
+    } catch (error) { return translateJourneyRecommendationError(error); }
+  }
+
+  /** 0608 staff read: families interested in the school's recommendations (names and dates only). */
+  async interest(context: MembershipLifecycleContext): Promise<JourneyRecommendationInterest> {
+    this.assertStaff(context, false);
+    try {
+      return await this.database.withTenantReadOnlyTransaction(context, async client => {
+        await client.query(READ_LIMITS);
+        await client.query(HUMAN_SETTINGS, [context.externalSubject]);
+        return verifyJourneyRecommendationInterest(await this.one(client, 'SELECT hon.read_journey_recommendation_interest($1) AS data', [context.externalSubject]));
       });
     } catch (error) { return translateJourneyRecommendationError(error); }
   }

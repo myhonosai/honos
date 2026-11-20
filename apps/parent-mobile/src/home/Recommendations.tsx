@@ -51,8 +51,8 @@ export function GiftStop({ item, onOpen }: { item: FamilyJourneyRecommendation; 
 }
 
 /** The sheet a gift stop opens: the school's own words, then where to go next. */
-export function RecommendationSheet({ item, onGo, onNotNow, onClose }: {
-  item: FamilyJourneyRecommendation | null; onGo: (go: JourneyGo) => void; onNotNow: (id: string) => void; onClose: () => void;
+export function RecommendationSheet({ item, tellsSchool = false, onGo, onNotNow, onClose }: {
+  item: FamilyJourneyRecommendation | null; tellsSchool?: boolean; onGo: (go: JourneyGo, item: FamilyJourneyRecommendation) => void; onNotNow: (id: string) => void; onClose: () => void;
 }) {
   const c = useColors();
   const see = item ? seeAction(item) : null;
@@ -70,9 +70,10 @@ export function RecommendationSheet({ item, onGo, onNotNow, onClose }: {
             </View>
             <Text style={{ color: c.text, fontSize: type.body, marginTop: space.md }}>{item.message}</Text>
             {item.targetLabel ? <Text style={{ color: c.muted, fontSize: type.body, fontWeight: '700', marginTop: space.sm }}>{item.targetLabel}</Text> : null}
+            {see && tellsSchool ? <Text style={{ color: c.muted, fontSize: type.caption, marginTop: space.md }}>{`"${see.label}" lets your school know you are interested. Nothing is sent, booked or bought.`}</Text> : null}
             <View style={{ gap: space.sm, marginTop: space.xl }}>
-              {see ? <Button kind="go" label={see.label} onPress={() => onGo(see.go)} /> : null}
-              <Button kind={see ? 'quiet' : 'go'} label="Ask the school" onPress={() => onGo({ tab: 'Messages' })} />
+              {see ? <Button kind="go" label={see.label} onPress={() => onGo(see.go, item)} /> : null}
+              <Button kind={see ? 'quiet' : 'go'} label="Ask the school" onPress={() => onGo({ tab: 'Messages' }, item)} />
               <Button kind="quiet" label="Not now" accessibilityLabel="Not now, hide this for now" onPress={() => onNotNow(item.recommendationId)} />
               <Button kind="quiet" label="Close" onPress={onClose} />
             </View>

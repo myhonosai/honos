@@ -4856,3 +4856,16 @@ DO $$ DECLARE r text; f text; t text; BEGIN
       hon.read_public_referral(text),hon.submit_family_referral(text,jsonb,text) TO hon_runtime;
   END IF;
 END $$;
+-- 0608 journey recommendation responses: one private guard and one private table; two runtime entry points (parent answer; staff interest read).
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.respond_parent_journey_recommendation(text,uuid,text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0608 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.guard_journey_recommendation_response()','hon.respond_parent_journey_recommendation(text,uuid,text)','hon.read_journey_recommendation_interest(text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.journey_recommendation_responses FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.journey_recommendation_responses FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.respond_parent_journey_recommendation(text,uuid,text),hon.read_journey_recommendation_interest(text) TO hon_runtime;
+  END IF;
+END $$;
