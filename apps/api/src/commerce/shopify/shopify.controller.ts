@@ -18,6 +18,8 @@ export class ShopifyController {
   read(@Req() r: HonRequest, @Param('schoolId') s: string) { return this.shopify.overview(r, s).then(data => ({ data })); }
   @Get('school/schools/:schoolId/shopify/catalog')
   catalog(@Req() r: HonRequest, @Param('schoolId') s: string) { return this.shopify.catalog(r, s).then(data => ({ data })); }
+  @Get('school/schools/:schoolId/shopify/finance')
+  finance(@Req() r: HonRequest, @Param('schoolId') s: string) { return this.shopify.finance(r, s).then(data => ({ data })); }
   @Get('school/schools/:schoolId/shopify/orders')
   orders(@Req() r: HonRequest, @Param('schoolId') s: string) { return this.shopify.orders(r, s).then(data => ({ data })); }
   @Post('school/shopify/connect') @HttpCode(200)

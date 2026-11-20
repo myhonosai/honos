@@ -69,7 +69,7 @@ try{
  const entries=['read_shopify','read_shopify_catalog','read_shopify_orders','start_shopify_connect','claim_shopify_connect','record_shopify_connection',
   'begin_shopify_sync','rotate_shopify_credential','record_shopify_sync_page','finish_shopify_sync','disconnect_shopify',
   'read_shopify_product_changes','propose_shopify_product_change','cancel_shopify_product_change','approve_shopify_product_change',
-  'rotate_shopify_change_credential','record_shopify_product_change_result',
+  'rotate_shopify_change_credential','record_shopify_product_change_result','read_shopify_finance','record_shopify_finance',
   // 0596 Marcus merch ideas (CS-M2).
   'begin_shopify_merch_ideas','plan_shopify_merch_ideas','prepare_shopify_merch_ideas','fail_shopify_merch_ideas','record_shopify_merch_ideas',
   'read_shopify_merch_ideas','close_shopify_merch_ideas'];
@@ -77,7 +77,7 @@ try{
  for(const e of entries)assert(fns.some(f=>f.proname===e),e);
  for(const f of fns){assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entries.includes(f.proname),f.proname);
   assert.equal((await q("SELECT has_function_privilege('public',$1,'EXECUTE') ok",[f.oid]))[0].ok,false,f.proname);}
- pass('product changes are a forced-RLS private table; the runtime executes the 17 Shopify entry points (24 with the 0596 merch ideas) and nothing else; helpers and the guard are closed to it and to PUBLIC');
+ pass('product changes are a forced-RLS private table; the runtime executes the 19 Shopify entry points (26 with the 0596 merch ideas) and nothing else; helpers and the guard are closed to it and to PUBLIC');
 
  // Fixture: two schools with paid access; manager, second manager, reader, other-school manager.
  const hq={subject:'shopify-hq-'+K()};const hqPrincipal=await human({externalSubject:hq.subject,email:K()+'@example.invalid'},'Shopify synthetic HQ');

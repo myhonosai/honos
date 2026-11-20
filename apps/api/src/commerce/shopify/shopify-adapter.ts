@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { SHOPIFY_SCOPES } from '@hon/contracts';
+import { SHOPIFY_SCOPES, type ShopifyFinanceSnapshot } from '@hon/contracts';
 import { SHOP_DOMAIN, signShopifyQuery } from './shopify-oauth.js';
 import { signShopifyWebhook } from './shopify-webhook.js';
 import { ephemeralShopifyVault, shopifyVaultFromEnvironment, type ShopifyVault } from './shopify-vault.js';
@@ -58,6 +58,8 @@ export interface ShopifyAdapter {
   createDraft(shop: string, accessToken: string, input: ShopifyDraftInput): Promise<{ productId: string; variantId: string }>;
   updateProduct(shop: string, accessToken: string, productId: string, fields: ShopifyProductFields): Promise<void>;
   updateVariants(shop: string, accessToken: string, productId: string, variants: readonly ShopifyVariantFields[], sku?: string | null): Promise<void>;
+  /** SH-F1 read: the Shopify Payments balance, the latest 20 payouts and the latest 50 balance transactions. Needs read_shopify_payments_accounts. */
+  finance(shop: string, accessToken: string): Promise<ShopifyFinanceSnapshot>;
 }
 
 /** The one HON Shopify app, as configured on this server. */
@@ -129,6 +131,19 @@ function money(v: unknown): string {
   const out = m[2] ? `${m[1]}.${m[2].slice(0, 4)}` : m[1]!;
   if (!MONEY.test(out)) bad();
   return out;
+}
+/** Shopify Payments money, which may be negative ("-41.9"); at most 4 decimals kept. */
+function signedMoney(v: unknown): string {
+  const t = typeof v === 'string' ? v : typeof v === 'number' && Number.isFinite(v) ? String(v) : null;
+  if (t === null) bad();
+  const m = /^(-?)(0|[1-9][0-9]{0,8})(?:\.([0-9]+))?$/.exec(t);
+  if (!m) bad();
+  return `${m[1]}${m[2]}${m[3] ? '.' + m[3].slice(0, 4) : ''}`;
+}
+function moneyV2(v: unknown): { amount: string; currency: string } {
+  const o = obj(v);
+  if (typeof o.currencyCode !== 'string' || !/^[A-Z]{3}$/.test(o.currencyCode)) bad();
+  return { amount: signedMoney(o.amount), currency: o.currencyCode };
 }
 function maybeMoney(v: unknown): string | null { return v === null || v === undefined ? null : money(v); }
 function instant(v: unknown): string {
@@ -223,6 +238,10 @@ const ORDERS_QUERY = `query HonOrders($after: String, $q: String) {
   }
 }`;
 const SHOP_QUERY = 'query HonShop { shop { name currencyCode } }';
+const FINANCE_QUERY = `query HonFinance { shopifyPaymentsAccount { activated balance { amount currencyCode }
+  payouts(first: 20, reverse: true) { nodes { id status transactionType issuedAt net { amount currencyCode } } }
+  balanceTransactions(first: 50, reverse: true) { nodes { id type test transactionDate amount { amount currencyCode }
+    fee { amount currencyCode } net { amount currencyCode } associatedPayout { id } } } } }`;
 const PRODUCT_FIELDS = `id title status vendor productType handle featuredMedia { preview { image { url } } }
     variants(first: 100) { nodes { id title sku barcode price compareAtPrice inventoryQuantity position inventoryItem { tracked unitCost { amount } } } }`;
 const PRODUCT_QUERY = `query HonProduct($id: ID!) { product(id: $id) { ${PRODUCT_FIELDS} } }`;
@@ -263,6 +282,31 @@ export function variantInputs(variants: readonly ShopifyVariantFields[], sku?: s
 }
 
 /** The Shopify Admin API through the HON app. Only called with a verified shop and a token HON holds. */
+/** shopifyPaymentsAccount as HON keeps it: ids, statuses, instants and amounts only. null or not activated -> payments off. */
+export function financeFromAccount(v: unknown): ShopifyFinanceSnapshot {
+  const a = maybeObj(v);
+  if (!a || a.activated !== true) return { paymentsActive: false, balances: [], payouts: [], transactions: [] };
+  const seen = new Set<string>();
+  const balances = list(a.balance).slice(0, 10).map(moneyV2).filter(b => !seen.has(b.currency) && !!seen.add(b.currency))
+    .map(b => ({ currency: b.currency, amount: b.amount }));
+  const payouts = list(obj(a.payouts).nodes).slice(0, 20).map(n => {
+    const p = obj(n), net = moneyV2(p.net);
+    const status = ['SCHEDULED', 'IN_TRANSIT', 'PAID', 'FAILED', 'CANCELED'].includes(p.status as string) ? p.status as ShopifyFinanceSnapshot['payouts'][number]['status'] : bad();
+    const direction: 'DEPOSIT' | 'WITHDRAWAL' = p.transactionType === 'DEPOSIT' || p.transactionType === 'WITHDRAWAL' ? p.transactionType : bad();
+    return { id: gidNumber(p.id, 'ShopifyPaymentsPayout'), status, direction, issuedAt: instant(p.issuedAt), currency: net.currency, net: net.amount };
+  });
+  const transactions = list(obj(a.balanceTransactions).nodes).slice(0, 50).map(n => {
+    const t = obj(n), amount = moneyV2(t.amount), fee = signedMoney(obj(t.fee).amount), net = signedMoney(obj(t.net).amount);
+    const type = word(t.type); if (type === null) bad();
+    if (typeof t.test !== 'boolean') bad();
+    const payout = maybeObj(t.associatedPayout);
+    return { id: gidNumber(t.id, 'ShopifyPaymentsBalanceTransaction'), type, at: instant(t.transactionDate), currency: amount.currency,
+      amount: amount.amount, fee, net, test: t.test, payoutId: payout && payout.id != null ? gidNumber(payout.id, 'ShopifyPaymentsPayout') : null };
+  });
+  if (new Set(payouts.map(p => p.id)).size !== payouts.length || new Set(transactions.map(t => t.id)).size !== transactions.length) bad();
+  return { paymentsActive: true, balances, payouts, transactions };
+}
+
 export class GraphqlShopifyAdapter implements ShopifyAdapter {
   readonly kind = 'SHOPIFY' as const;
   constructor(private readonly clientId: string, private readonly clientSecret: string, private readonly send: typeof fetch,
@@ -315,6 +359,10 @@ export class GraphqlShopifyAdapter implements ShopifyAdapter {
     const s = obj((await this.graphql(shop, accessToken, SHOP_QUERY, {})).shop);
     const currency = typeof s.currencyCode === 'string' && /^[A-Z]{3}$/.test(s.currencyCode) ? s.currencyCode : bad();
     return { name: cleanText(s.name, 120) ?? shop, currency };
+  }
+
+  async finance(shop: string, accessToken: string): Promise<ShopifyFinanceSnapshot> {
+    return financeFromAccount((await this.graphql(shop, accessToken, FINANCE_QUERY, {})).shopifyPaymentsAccount);
   }
 
   async catalog(shop: string, accessToken: string): Promise<{ products: MirrorProduct[]; complete: boolean }> {
@@ -390,7 +438,7 @@ export class FakeShopify implements ShopifyAdapter {
   writeFault: 'REJECT' | 'LOSE_ANSWER' | null = null;
   /** Test hook: what the store owner approves (the fake grants exactly this). */
   grantScopes: string | null = null;
-  private readonly stores = new Map<string, { products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string; rejected: boolean }>();
+  private readonly stores = new Map<string, { products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string; finance: ShopifyFinanceSnapshot; rejected: boolean }>();
   /** Calls the API made, for tests (no token values). */
   readonly calls: string[] = [];
   /** Test hook: the clock the fake uses. */
@@ -404,7 +452,7 @@ export class FakeShopify implements ShopifyAdapter {
     return s;
   }
   /** Test hook: replace a store's catalog or orders. */
-  setStore(shop: string, change: Partial<{ products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string }>): void { Object.assign(this.store(shop), change); }
+  setStore(shop: string, change: Partial<{ products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string; finance: ShopifyFinanceSnapshot }>): void { Object.assign(this.store(shop), change); }
   /** Test hook: every token of this shop is refused from now on (the owner uninstalled the app). */
   rejectTokens(shop: string, rejected = true): void { this.store(shop).rejected = rejected; }
 
@@ -464,6 +512,11 @@ export class FakeShopify implements ShopifyAdapter {
     this.calls.push('shopInfo:' + shop); this.check(shop, accessToken, 'access');
     const s = this.store(shop); return { name: s.name, currency: s.currency };
   }
+  async finance(shop: string, accessToken: string): Promise<ShopifyFinanceSnapshot> {
+    // Shopify refuses this read when the store never granted the scope (a top-level ACCESS_DENIED error).
+    this.calls.push('finance:' + shop); this.check(shop, accessToken, 'access', 'read_shopify_payments_accounts');
+    return structuredClone(this.store(shop).finance);
+  }
   async catalog(shop: string, accessToken: string) {
     this.calls.push('catalog:' + shop); this.check(shop, accessToken, 'access');
     return { products: structuredClone(this.store(shop).products), complete: true };
@@ -520,7 +573,7 @@ export class FakeShopify implements ShopifyAdapter {
   }
 }
 
-function sampleStore(shop: string, now: number): { products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string } {
+function sampleStore(shop: string, now: number): { products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string; finance: ShopifyFinanceSnapshot } {
   const v = (id: string, title: string, sku: string, price: string, unitCost: string | null, qty: number | null): MirrorVariant =>
     ({ id, title, sku, barcode: null, price, compareAtPrice: null, unitCost, tracked: qty !== null, inventoryQuantity: qty });
   const products: MirrorProduct[] = [
@@ -542,5 +595,13 @@ function sampleStore(shop: string, now: number): { products: MirrorProduct[]; or
     { id: '9300000003', name: '#1003', placedAt: day(40), cancelledAt: null, financialStatus: 'PAID', fulfillmentStatus: 'FULFILLED', sourceName: 'web', currency: 'USD',
       subtotal: '120.00', discounts: '0', tax: '0', total: '120.00', lines: [{ title: 'Sparring gear set', sku: 'SPAR-Y', variantId: '9200000021', quantity: 1, unitPrice: '120.00' }] },
   ];
-  return { products, orders, name: shop.split('.')[0]!.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '), currency: 'USD' };
+  const finance: ShopifyFinanceSnapshot = { paymentsActive: true, balances: [{ currency: 'USD', amount: '245.18' }],
+    payouts: [
+      { id: '9400000002', status: 'SCHEDULED', direction: 'DEPOSIT', issuedAt: day(0), currency: 'USD', net: '136.04' },
+      { id: '9400000001', status: 'PAID', direction: 'DEPOSIT', issuedAt: day(3), currency: 'USD', net: '128.31' }],
+    transactions: [
+      { id: '9450000003', type: 'CHARGE', at: day(2), currency: 'USD', amount: '140.73', fee: '4.38', net: '136.35', test: true, payoutId: '9400000002' },
+      { id: '9450000002', type: 'REFUND', at: day(4), currency: 'USD', amount: '-0.31', fee: '0', net: '-0.31', test: true, payoutId: '9400000002' },
+      { id: '9450000001', type: 'CHARGE', at: day(5), currency: 'USD', amount: '150.00', fee: '4.65', net: '145.35', test: true, payoutId: null }] };
+  return { products, orders, finance, name: shop.split('.')[0]!.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '), currency: 'USD' };
 }
