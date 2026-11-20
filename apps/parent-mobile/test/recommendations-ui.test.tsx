@@ -46,10 +46,32 @@ describe('journey gift stops on Home (J3, 0603)', () => {
     expect(screen.getByText('Sign up & pay')).toBeTruthy();
   });
 
+  it('Close keeps the gift; the sheet names the program', async () => {
+    await openHome(createSampleApi(now));
+    await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Time for sparring gear' }));
+    expect(screen.getByText('FROM YOUR SCHOOL · KIDS PROGRAM')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Close' })).toBeNull());
+    expect(screen.getByRole('button', { name: 'From your school: Time for sparring gear' })).toBeTruthy();
+  });
+
+  it('"See how to join" opens Sign up & pay again after going back to More and Home', async () => {
+    await openHome(createSampleApi(now));
+    for (let i = 0; i < 2; i++) {
+      await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Try summer camp' }));
+      await fireEvent.press(screen.getByRole('button', { name: 'See how to join' }));
+      await fireEvent.press(await screen.findByRole('button', { name: 'Back to More' }));
+      await fireEvent.press(screen.getByRole('tab', { name: 'Home' }));
+    }
+    await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Try summer camp' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'See how to join' }));
+    expect(await screen.findByRole('button', { name: 'Back to More' })).toBeTruthy();
+  });
+
   it('"Not now" hides that gift for this visit and opens nothing', async () => {
     await openHome(createSampleApi(now));
     await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Time for sparring gear' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'Not now' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Not now, hide this for now' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'From your school: Time for sparring gear' })).toBeNull());
     expect(screen.getByRole('button', { name: 'From your school: Try summer camp' })).toBeTruthy();
   });
