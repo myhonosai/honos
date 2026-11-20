@@ -4833,9 +4833,9 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 
--- 0599 closed days for families: one private helper; the three replaced functions keep their 0329/0538 grants (none to runtime).
+-- 0607 closed days for families: one private helper; the three replaced functions keep their 0329/0538 grants (none to runtime).
 DO $$ DECLARE r text; BEGIN
-  IF to_regprocedure('hon.class_session_on_closed_day(hon.class_sessions)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0599 first'; END IF;
+  IF to_regprocedure('hon.class_session_on_closed_day(hon.class_sessions)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0607 first'; END IF;
   REVOKE ALL ON FUNCTION hon.class_session_on_closed_day(hon.class_sessions) FROM PUBLIC;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION hon.class_session_on_closed_day(hon.class_sessions) FROM %I',r); END LOOP;

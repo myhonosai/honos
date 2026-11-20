@@ -55,7 +55,7 @@ No message, charge, CRM lead, student record, booking or AI. Nothing here deploy
    edit, delete, on/off), closed days on the calendar, and the public page `/calendars/[publicId]`.
 4. Unit tests, browser proof with screenshots, full test/check/build.
 
-## Closed days for families (0599)
+## Closed days for families (0607)
 
 Owner decision (David, 2026-11-19, decision card "Hide from families only"): a class whose school-local start date is inside
 an ACTIVE block-out of its own school is not offered to families, while staff keep the 0583 warn-and-continue behaviour.
@@ -67,6 +67,6 @@ an ACTIVE block-out of its own school is not offered to families, while staff ke
 - Public shared calendar: already hides block-out days (0583).
 - Unchanged: staff booking, the staff calendar, ClassPass, owner-launch first class, school events and booking types.
 - Private helper `hon.class_session_on_closed_day(hon.class_sessions)` uses the session's own school and time zone. Signatures
-  are unchanged, so ACLs stay; 011 pins the new bodies (0329 section hash and a 0599 section).
+  are unchanged, so ACLs stay; 011 pins the new bodies (0329 section hash and a 0607 section).
 - Proof: closed-day checks added to `test-parent-class-booking-integrity.mjs` (section 4b) and
-  `test-walk-in-kiosk-trial-seats-integrity.mjs` (section 2b, plus the 0599 011 section).
+  `test-walk-in-kiosk-trial-seats-integrity.mjs` (section 2b, plus the 0607 011 section).

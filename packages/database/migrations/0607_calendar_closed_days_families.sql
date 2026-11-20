@@ -1,7 +1,7 @@
 BEGIN;
 
--- 0599 closed days for families (owner David 2026-11-19 decision "Hide from families only", number assigned by the
--- coordinator; was 0584, earlier 0575): a class whose school-local start date is inside an ACTIVE block-out (0583) of its own school is no longer
+-- 0607 closed days for families (owner David 2026-11-19 decision "Hide from families only", number assigned by the
+-- coordinator; was 0599, earlier 0584 and 0575): a class whose school-local start date is inside an ACTIVE block-out (0583) of its own school is no longer
 -- offered to families. Staff keep the 0583 behaviour: the calendar marks the day closed and asks before adding or moving a
 -- class there, and staff booking, ClassPass, owner-launch and every other staff path are unchanged.
 --   C1  hon.class_session_on_closed_day(hon.class_sessions): private helper; the session's own school and its school time zone.

@@ -278,7 +278,7 @@ try {
   const again = await success(() => book(GUARDIAN, { studentProfileId: kid, sessionId: S.open }), 'book again after cancelling', 201);
   ok(again.data.booking.bookingId === B.bookingId && again.data.booking.version === 3 && again.data.booking.status === 'BOOKED', 'booking again reuses the same row');
 
-  // 4b. Closed days (0599): a class on a school-local date inside an ACTIVE block-out of this school is neither offered to
+  // 4b. Closed days (0607): a class on a school-local date inside an ACTIVE block-out of this school is neither offered to
   //     families nor bookable from the app; another school's block-out, a neighbouring day and a removed block-out change nothing.
   const holiday = await classSession('Kids Karate Holiday', { inHours: 120 });
   const holidayDay = (await sql('SELECT (starts_at AT TIME ZONE $2)::date::text d FROM hon.class_sessions WHERE id=$1', [holiday, LA])).rows[0].d;
