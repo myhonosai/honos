@@ -35,7 +35,7 @@ function fakeApi(): ParentApi {
   const journey: ParentRead<ReturnType<typeof verifyParentJourneyView>> = { ok: true, data: verifyParentJourneyView(journeyBody()) };
   return {
     journey: jest.fn(async () => journey), schoolTimeZone: jest.fn(async () => 'America/Los_Angeles'),
-    classBookings: jest.fn(async () => ({ ok: false, state: 'unavailable' })), announcements: jest.fn(async () => ({ ok: false, state: 'unavailable' })),
+    classBookings: jest.fn(async () => ({ ok: false, state: 'unavailable' })), announcements: jest.fn(async () => ({ ok: false, state: 'unavailable' })), attendanceStreaks: jest.fn(async () => ({ ok: false, state: 'unavailable' })),
     pushStatus: jest.fn(async () => ({ ok: true, data: { sending: true } })),
     registerPushDevice: jest.fn(async () => ({ ok: true, data: DEVICE, replayed: false })),
     unregisterPushDevice: jest.fn(async () => ({ ok: true, data: { unregistered: true }, replayed: false })),
