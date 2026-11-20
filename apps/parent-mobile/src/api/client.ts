@@ -12,11 +12,18 @@ import { verifyParentBillingView, type ParentBillingView } from '@hon/contracts/
 import { verifyParentClassPassView, type ParentClassPassView } from '@hon/contracts/parent-classpass-view';
 import { verifyParentTestingStatusView, type ParentTestingStatusView } from '@hon/contracts/parent-testing-status';
 import { verifyParentCurriculumLibrary, type ParentCurriculumLibrary } from '@hon/contracts/curriculum-resource-library';
+import {
+  validateBookParentSchoolBookingTypeInput, validateBookParentSchoolEventSlotInput, validateCancelParentSchoolBookingInput,
+  verifyParentSchoolBookingReceipt, verifyParentSchoolBookings,
+  type BookParentSchoolBookingTypeInput, type ParentSchoolBookingReceipt, type ParentSchoolBookings,
+} from '@hon/contracts/parent-school-bookings';
 import { verifyEianStatus, verifyEianTurn, type EianStatus, type EianTurn } from '@hon/contracts/eian';
 import {
   verifyParentInvoicePayResult, verifyParentInvoicePayStart, verifyParentInvoicePayments,
   type ParentInvoicePayResult, type ParentInvoicePayStart, type ParentInvoicePayments,
 } from '@hon/contracts/parent-invoice-pay';
+import { verifyParentSchoolAnnouncements, type ParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
+import { verifyParentProShop, type ParentProShop } from '@hon/contracts/parent-pro-shop';
 
 /**
  * What a screen shows when a read does not return verified data. Every protected read maps to one of these;
@@ -137,6 +144,8 @@ export function createParentApi(options: ParentApiOptions) {
   }
 
   return {
+    /** True only for the made-up sample family: screens never open real outside pages for it. */
+    sampleMode: false as boolean,
     journey: (): Promise<ParentRead<ParentJourneyView>> => get('/v1/parent/journey', verifyParentJourneyView),
     /** The school's IANA time zone from the class booking read; null when that read is not available. */
     async schoolTimeZone(): Promise<string | null> {
@@ -171,6 +180,10 @@ export function createParentApi(options: ParentApiOptions) {
     /** Read-only, redacted family billing: memberships and invoices. Paying an invoice is the separate path below. */
     billing: (): Promise<ParentRead<ParentBillingView>> => get('/v1/parent/billing', dataOf(verifyParentBillingView)),
     /** 0530: the family's open invoices the parent may pay on the school's own processor page (test mode only). */
+    /** The school's live announcements (0576) for the one family this sign-in belongs to. No school or family id is sent. */
+    announcements: (): Promise<ParentRead<ParentSchoolAnnouncements>> => get('/v1/parent/announcements', dataOf(verifyParentSchoolAnnouncements)),
+    /** The school's own Shopify products (0581); buying opens the school's store page. No school or family id is sent. */
+    proShop: (): Promise<ParentRead<ParentProShop>> => get('/v1/parent/pro-shop', dataOf(verifyParentProShop)),
     invoicePayments: (): Promise<ParentRead<ParentInvoicePayments>> => get('/v1/parent/invoice-payments', dataOf(verifyParentInvoicePayments)),
     /** Opens (or gets back) the processor page for one invoice. The server decides the amount; the app sends nothing else. */
     startInvoicePayment: (invoiceId: string, idempotencyKey: string): Promise<ParentWrite<ParentInvoicePayStart>> =>
@@ -182,6 +195,19 @@ export function createParentApi(options: ParentApiOptions) {
       post(`/v1/parent/invoice-payments/${encodeURIComponent(invoiceId)}/confirm`, 'parent.invoice.pay.confirm', idempotencyKey, {}, verifyParentInvoicePayResult),
     cancelInvoicePayment: (invoiceId: string, idempotencyKey: string): Promise<ParentWrite<ParentInvoicePayResult>> =>
       post(`/v1/parent/invoice-payments/${encodeURIComponent(invoiceId)}/cancel`, 'parent.invoice.pay.cancel', idempotencyKey, {}, verifyParentInvoicePayResult),
+    /** 0466: school events with open times and families-only booking types; the family's own bookings made here. */
+    schoolBookings: (): Promise<ParentRead<ParentSchoolBookings>> => get('/v1/parent/school-bookings', dataOf(verifyParentSchoolBookings)),
+    bookSchoolEventSlot: (slotId: string, idempotencyKey: string): Promise<ParentWrite<ParentSchoolBookingReceipt>> =>
+      post('/v1/parent/school-bookings/event-slots', 'parent.school_booking.book', idempotencyKey, validateBookParentSchoolEventSlotInput({ slotId }),
+        data => verifyParentSchoolBookingReceipt(data, { kind: 'EVENT' })),
+    bookSchoolBookingType: (input: BookParentSchoolBookingTypeInput, idempotencyKey: string): Promise<ParentWrite<ParentSchoolBookingReceipt>> =>
+      post('/v1/parent/school-bookings/booking-types', 'parent.school_booking.book', idempotencyKey, validateBookParentSchoolBookingTypeInput(input),
+        data => verifyParentSchoolBookingReceipt(data, { kind: 'BOOKING_TYPE' })),
+    cancelSchoolBooking: (bookingId: string, expectedVersion: number, idempotencyKey: string): Promise<ParentWrite<ParentSchoolBookingReceipt>> => {
+      const input = validateCancelParentSchoolBookingInput({ bookingId, expectedVersion });
+      return post(`/v1/parent/school-bookings/${encodeURIComponent(input.bookingId)}/cancel`, 'parent.school_booking.cancel', idempotencyKey,
+        { expectedVersion: input.expectedVersion }, data => verifyParentSchoolBookingReceipt(data, { bookingId: input.bookingId }));
+    },
     classPass: (): Promise<ParentRead<ParentClassPassView>> => get('/v1/parent/classpass', dataOf(verifyParentClassPassView)),
     testingStatus: (): Promise<ParentRead<ParentTestingStatusView>> => get('/v1/parent/testing/status', dataOf(verifyParentTestingStatusView)),
     curriculumLibrary: (): Promise<ParentRead<ParentCurriculumLibrary>> => get('/v1/parent/curriculum-library', dataOf(verifyParentCurriculumLibrary)),

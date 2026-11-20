@@ -285,6 +285,10 @@
       "title": "HON | Human instructor qualification evidence"
     },
     {
+      "path": "/staff/automations",
+      "title": "HON | Automations"
+    },
+    {
       "path": "/staff/automation/rules",
       "title": "HON Staff | Automation Configuration Only"
     },
@@ -387,6 +391,10 @@
     {
       "path": "/staff/family-messages",
       "title": "HON | Parent app"
+    },
+    {
+      "path": "/staff/family-messages/announcements",
+      "title": "HON | Announcements"
     },
     {
       "path": "/staff/conversations",

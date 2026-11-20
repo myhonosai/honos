@@ -27,9 +27,7 @@
 .brand strong { display: block; font-family: var(--hon-font-display); font-size: var(--hon-text-xl); font-weight: 800; letter-spacing: 0.01em; }
 .brand small { display: block; color: var(--hon-text-subtle); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
 .brandMark {
-  width: 34px; height: 34px; flex: none; border-radius: 10px; transform: rotate(45deg) scale(0.82);
-  background: radial-gradient(circle at 35% 30%, #9fe8ff 0, #3a8bff 38%, #1446c8 70%);
-  box-shadow: 0 0 18px rgba(64, 150, 255, 0.65), inset 0 0 0 2px rgba(255, 255, 255, 0.35);
+  width: 36px; height: 36px; flex: none; display: block;
 }
 
 .school {
