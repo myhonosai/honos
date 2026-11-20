@@ -5,8 +5,9 @@ families get a phone notification and it still shows on Home.
 
 ## What happens
 
-1. **Sign-in.** After a family member signs in to the HON Family app, the app asks for notification permission once and
-   registers the phone's Expo push token: `POST /v1/parent/push-devices` with `{ expoPushToken, platform }`. The server
+1. **Sign-in.** After a family member signs in to the HON Family app, the app first asks the server whether it sends
+   notifications at all (`GET /v1/parent/push-devices/status`, `{ sending }`, the same owner switch the sender uses). Only
+   then does it ask for notification permission once and register the phone's Expo push token: `POST /v1/parent/push-devices` with `{ expoPushToken, platform }`. The server
    decides the person and school from the verified session (the 0576/0329 parent scope: exactly one live family grant,
    active principal, organization, school and entitlement). No school, family or child id is sent. Saying no to
    notifications changes nothing else in the app. The made-up sample family never registers.
@@ -24,12 +25,16 @@ families get a phone notification and it still shows on Home.
 
 ## Rules (DB-enforced)
 
-- One live owner per token. The same phone signed in by someone else moves to them (`REPLACED`). At most 10 live
+- One live owner per token. The same phone signed in by someone else moves to them (`REPLACED`). This is deliberate
+  for shared family phones; it also means anyone who knows a token and has their own live family grant can move it to
+  themselves, which only stops the earlier person's notifications on that phone (it reveals nothing and sends nothing).
+  Expo tokens are not shown anywhere in HON. At most 10 live
   phones per person; the least recently seen is let go (`DEVICE_LIMIT`). Expo's `DeviceNotRegistered` lets the phone go.
 - Deliveries move forward only: `QUEUED -> SENDING|SKIPPED`, `SENDING -> SENT|FAILED|UNKNOWN|QUEUED`,
   `SENT -> CHECKING|UNKNOWN`, `CHECKING -> DELIVERED|FAILED|SENT|UNKNOWN`. Nothing is deleted.
 - **Never sent twice.** A send whose answer is lost (timeout, crashed worker, expired lease) is `UNKNOWN` and is never
-  resent. Only Expo's definite refusal (HTTP 429 or `MessageRateExceeded`) is retried, at most 3 attempts.
+  resent. Only Expo's definite refusal (HTTP 429 or `MessageRateExceeded`) is retried, at most 3 attempts; after a
+  refusal the worker claims nothing for 60 seconds, so the attempts are spread out.
 - Receipts are read after 15 minutes (`DELIVERED` = Expo handed it to Apple or Google). No receipt within 24 hours is
   `UNKNOWN`.
 - Tokens never enter audit rows or outbox payloads. The runtime may run only the two parent commands; the worker may run

@@ -12,6 +12,8 @@ export interface RegisterParentPushDeviceInput { expoPushToken: string; platform
 export interface UnregisterParentPushDeviceInput { expoPushToken: string }
 export interface ParentPushDeviceReceipt { device: { deviceId: string; platform: ParentPushPlatform }; replayed: boolean }
 export interface ParentPushUnregisterReceipt { unregistered: boolean }
+/** Whether the school's server sends notifications at all. The app asks for permission only when it does. */
+export interface ParentPushStatus { sending: boolean }
 /** What the notification carries, in data: never a name, a body or a family. */
 export interface ParentPushData { type: 'school_announcement'; announcementId: string }
 
@@ -46,6 +48,11 @@ export function verifyParentPushUnregisterReceipt(value: unknown): ParentPushUnr
   const row = record(value, ['unregistered']);
   if (typeof row.unregistered !== 'boolean') invalid();
   return { unregistered: row.unregistered };
+}
+export function verifyParentPushStatus(value: unknown): ParentPushStatus {
+  const row = record(value, ['sending']);
+  if (typeof row.sending !== 'boolean') invalid();
+  return { sending: row.sending };
 }
 /** The app accepts a notification tap only in this exact shape. */
 export function readParentPushData(value: unknown): ParentPushData | null {

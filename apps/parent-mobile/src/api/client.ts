@@ -25,8 +25,8 @@ import {
 import { verifyParentSchoolAnnouncements, type ParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
 import { verifyParentProShop, type ParentProShop } from '@hon/contracts/parent-pro-shop';
 import {
-  validateRegisterParentPushDeviceInput, validateUnregisterParentPushDeviceInput, verifyParentPushDeviceReceipt, verifyParentPushUnregisterReceipt,
-  type ParentPushDeviceReceipt, type ParentPushPlatform, type ParentPushUnregisterReceipt,
+  validateRegisterParentPushDeviceInput, validateUnregisterParentPushDeviceInput, verifyParentPushDeviceReceipt, verifyParentPushStatus, verifyParentPushUnregisterReceipt,
+  type ParentPushDeviceReceipt, type ParentPushPlatform, type ParentPushStatus, type ParentPushUnregisterReceipt,
 } from '@hon/contracts/parent-push';
 import {
   validateOpenParentCheckoutOrderInput, verifyParentCheckoutOrderResult, verifyParentCheckoutOrderStart, verifyParentCheckoutPages,
@@ -190,6 +190,8 @@ export function createParentApi(options: ParentApiOptions) {
     /** 0530: the family's open invoices the parent may pay on the school's own processor page (test mode only). */
     /** The school's live announcements (0576) for the one family this sign-in belongs to. No school or family id is sent. */
     announcements: (): Promise<ParentRead<ParentSchoolAnnouncements>> => get('/v1/parent/announcements', dataOf(verifyParentSchoolAnnouncements)),
+    /** 0601: whether the school's server sends notifications at all (the app asks for permission only then). */
+    pushStatus: (): Promise<ParentRead<ParentPushStatus>> => get('/v1/parent/push-devices/status', dataOf(verifyParentPushStatus)),
     /** 0601: this phone's Expo push token for announcement notifications. The server decides the person and school. */
     registerPushDevice: (expoPushToken: string, platform: ParentPushPlatform, idempotencyKey: string): Promise<ParentWrite<ParentPushDeviceReceipt>> =>
       post('/v1/parent/push-devices', 'parent.push_device.register', idempotencyKey, validateRegisterParentPushDeviceInput({ expoPushToken, platform }),

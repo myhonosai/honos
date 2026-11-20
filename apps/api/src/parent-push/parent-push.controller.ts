@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Header, Headers, HttpCode, Injectable, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Header, Headers, HttpCode, Injectable, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { MembershipActivationHumanUiGuard } from '../billing/membership-activation-human-ui.guard.js';
@@ -13,6 +13,10 @@ export class ParentPushRegisterGuard extends MembershipActivationHumanUiGuard {
 export class ParentPushUnregisterGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'parent.push_device.unregister';
 }
+@Injectable()
+export class ParentPushStatusGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'parent.push_device.status';
+}
 
 function subjectOf(request: HonRequest, query: Record<string, unknown>): string {
   if (Object.keys(query ?? {}).length || request.originalUrl?.includes('?')) throw new BadRequestException({ code: 'PARENT_PUSH_SELECTORS_NOT_ACCEPTED' });
@@ -25,6 +29,15 @@ function subjectOf(request: HonRequest, query: Record<string, unknown>): string 
 @UseGuards(HonIdentityGuard)
 export class ParentPushController {
   constructor(private readonly push: ParentPushService) {}
+
+  /** Whether this server sends notifications at all, so the app asks for permission only when they would arrive. */
+  @Get('status')
+  @UseGuards(ParentPushStatusGuard)
+  @Header('Cache-Control', 'private, no-store')
+  status(@Query() query: Record<string, unknown>, @Req() request: HonRequest) {
+    subjectOf(request, query);
+    return { data: this.push.status() };
+  }
 
   @Post()
   @HttpCode(200)

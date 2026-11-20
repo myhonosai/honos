@@ -36,6 +36,7 @@ function fakeApi(): ParentApi {
   return {
     journey: jest.fn(async () => journey), schoolTimeZone: jest.fn(async () => 'America/Los_Angeles'),
     classBookings: jest.fn(async () => ({ ok: false, state: 'unavailable' })), announcements: jest.fn(async () => ({ ok: false, state: 'unavailable' })),
+    pushStatus: jest.fn(async () => ({ ok: true, data: { sending: true } })),
     registerPushDevice: jest.fn(async () => ({ ok: true, data: DEVICE, replayed: false })),
     unregisterPushDevice: jest.fn(async () => ({ ok: true, data: { unregistered: true }, replayed: false })),
   } as unknown as ParentApi;
@@ -48,7 +49,7 @@ describe('Announcement notifications', () => {
     const calls: { url: string; init: RequestInit }[] = [];
     const fetchImpl = jest.fn(async (url: string, init: RequestInit) => {
       calls.push({ url, init });
-      const data = url.endsWith('/unregister') ? { unregistered: true } : DEVICE;
+      const data = url.endsWith('/unregister') ? { unregistered: true } : url.endsWith('/status') ? { sending: false } : DEVICE;
       return { ok: true, status: 200, json: async () => ({ data }) } as unknown as Response;
     });
     const api = createParentApi({ baseUrl: 'https://api.example.test', getToken: async () => 'tok', fetchImpl: fetchImpl as unknown as typeof fetch });
@@ -60,6 +61,9 @@ describe('Announcement notifications', () => {
     expect(calls[1]!.url).toBe('https://api.example.test/v1/parent/push-devices/unregister');
     expect(JSON.parse(String(calls[1]!.init.body))).toEqual({ expoPushToken: TOKEN });
     expect(() => api.registerPushDevice('not-a-token', 'ios', KEY)).toThrow();
+    expect(await api.pushStatus()).toEqual({ ok: true, data: { sending: false } });
+    expect(calls[2]!.url).toBe('https://api.example.test/v1/parent/push-devices/status');
+    expect(calls[2]!.init.method).toBe('GET');
   });
 
   it('registers after sign-in, asking permission, and never when signed out', async () => {
@@ -72,6 +76,16 @@ describe('Announcement notifications', () => {
     await screen.findByText(/Sign in to your school/);
     expect(outPhone.token).not.toHaveBeenCalled();
     expect(outApi.registerPushDevice).not.toHaveBeenCalled();
+  });
+
+  it('never asks for permission while the server is not sending', async () => {
+    for (const status of [{ ok: true, data: { sending: false } }, { ok: false, state: 'offline' }]) {
+      const api = { ...fakeApi(), pushStatus: jest.fn(async () => status) } as unknown as ParentApi;
+      const phone = fakePhone();
+      expect(await registerPhone(api, phone, newKey)).toBe('not-sending');
+      expect(phone.token).not.toHaveBeenCalled();
+      expect(api.registerPushDevice).not.toHaveBeenCalled();
+    }
   });
 
   it('does nothing when the person says no to notifications', async () => {

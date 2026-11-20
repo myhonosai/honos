@@ -284,7 +284,7 @@ import { FamilyMessagesInboxController, FamilyMessagesInboxReadGuard, FamilyMess
 import { FamilyMessagesService } from './families/family-messages.service.js';
 import { ParentSchoolAnnouncementsController, ParentSchoolAnnouncementsReadGuard, SchoolAnnouncementsController, SchoolAnnouncementsPublishGuard, SchoolAnnouncementsReadGuard, SchoolAnnouncementsWithdrawGuard } from './announcements/school-announcements.controller.js';
 import { SchoolAnnouncementsService } from './announcements/school-announcements.service.js';
-import { ParentPushController, ParentPushRegisterGuard, ParentPushUnregisterGuard } from './parent-push/parent-push.controller.js';
+import { ParentPushController, ParentPushRegisterGuard, ParentPushStatusGuard, ParentPushUnregisterGuard } from './parent-push/parent-push.controller.js';
 import { ParentPushService } from './parent-push/parent-push.service.js';
 import { EXPO_PUSH_TRANSPORT, ExpoPushClient } from './parent-push/expo-push-client.js';
 import { PARENT_PUSH_WORKER_STORE, ParentPushScheduler, ParentPushWorker, ParentPushWorkerDatabase } from './parent-push/parent-push-worker.js';
@@ -772,6 +772,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentPushService,
     ParentPushRegisterGuard,
     ParentPushUnregisterGuard,
+    ParentPushStatusGuard,
     ExpoPushClient,
     { provide: EXPO_PUSH_TRANSPORT, useExisting: ExpoPushClient },
     ParentPushWorkerDatabase,

@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, HttpExcepti
 import { randomUUID } from 'node:crypto';
 import {
   validateRegisterParentPushDeviceInput, validateUnregisterParentPushDeviceInput, verifyParentPushDeviceReceipt, verifyParentPushUnregisterReceipt,
-  type ParentPushDeviceReceipt, type ParentPushUnregisterReceipt,
+  type ParentPushDeviceReceipt, type ParentPushStatus, type ParentPushUnregisterReceipt,
 } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
@@ -34,6 +34,9 @@ function keyOk(key: unknown): key is string {
 @Injectable()
 export class ParentPushService {
   constructor(private readonly database: RuntimeDatabaseService) {}
+
+  /** The same owner-approval switch the sender uses; nothing about any school or person. */
+  status(): ParentPushStatus { return { sending: process.env.HON_PARENT_PUSH_APPROVED === 'true' }; }
 
   async register(subject: string, value: unknown, key: string): Promise<ParentPushDeviceReceipt> {
     let input;
