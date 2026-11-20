@@ -95,6 +95,8 @@ export const PERMISSION_LABELS: Readonly<Record<string, string>> = {
   'communication.message.queue': 'Send texts and email',
   'communication.consent.read': 'See message consent',
   'communication.consent.manage': 'Record message consent',
+  'communication.template.read': 'See text and email templates',
+  'communication.template.manage': 'Manage text and email templates',
   'billing.account.create': 'Open billing accounts',
   'billing.invoice.create': 'Create invoices',
   'billing.invoice.issue': 'Send invoices',

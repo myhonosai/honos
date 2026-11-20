@@ -30,13 +30,13 @@ const school = { organizationId: id(1), schoolId: id(2) }, prefix = `/api/v1/org
 const report = { syntheticFixturesOnly: true, databaseAccess: false, providerCalls: false, checks: [], failures: [], screenshots: [], pageErrors: [], commands: [] };
 const COLUMNS = ['studentGivenName', 'studentFamilyName', 'birthDate', 'studentEmail', 'studentMobile', 'guardianGivenName', 'guardianFamilyName', 'guardianEmail', 'guardianMobile', 'familyKey'];
 const READ_ROW = ['Mina', 'Park', '2017-03-14', '', '', 'Grace', 'Park', 'grace.park@example.com', '+12135550142', ''];
-let sets = [], aiBlocked = false, seen = new Map();
+let sets = [], aiBlocked = false, notSetUp = false, seen = new Map();
 const now = () => new Date().toISOString();
-const summary = (s) => ({ id: s.id, kind: s.kind, target: 'STUDENTS', version: s.version, status: s.status, pageCount: s.pages.length, reader: s.readAt ? 'SYNTHETIC' : null,
-  readOutcome: s.readAt ? 'SAMPLE_READ' : null, sentBatchId: s.sentAt ? id(900) : null, createdAt: s.createdAt, expiresAt: new Date(Date.parse(s.createdAt) + 30 * 86_400_000).toISOString(),
+const summary = (s) => ({ id: s.id, kind: s.kind, target: 'STUDENTS', version: s.version, status: s.status, pageCount: s.pages.length, reader: s.readAt ? s.reader : null,
+  readOutcome: s.readAt ? s.outcome : null, sentBatchId: s.sentAt ? id(900) : null, createdAt: s.createdAt, expiresAt: new Date(Date.parse(s.createdAt) + 30 * 86_400_000).toISOString(),
   readAt: s.readAt, sentAt: s.sentAt, deletedAt: s.deletedAt, deleteReason: s.deletedAt ? 'STAFF' : null });
 const detail = (s) => ({ set: summary(s), columns: COLUMNS, rows: s.rows, unsure: s.unsure,
-  pages: s.pages.map((p, i) => ({ pageNo: i + 1, mediaType: p.mediaType, bytes: Buffer.from(p.data, 'base64').length, checksum: p.checksum })) });
+  pages: s.pages.map((p, i) => ({ pageNo: i + 1, mediaType: p.mediaType, bytes: Buffer.from(p.data, 'base64').length, checksum: p.checksum })), aiReading: s.aiReading ?? null });
 const snapshot = () => ({
   ...school, generatedAt: '2026-11-06T09:00:00.000Z', from: '2026-10-07T09:00:00.000Z', to: '2026-11-06T09:00:00.000Z',
   studentProfiles: { total: 0 }, leads: { byStatus: { OPEN: 0, WON: 0, LOST: 0, ARCHIVED: 0 } },
@@ -83,7 +83,13 @@ function api(route) {
   }
   if (parts[1] === 'reading') {
     if (aiBlocked) return json(route, 403, { code: 'PAPER_IMPORT_AI_BLOCKED', reason: 'AI_SPEND_PAUSED' });
-    if (s.status === 'OPEN') { s.status = 'READ'; s.readAt = now(); s.version++; s.rows = [READ_ROW]; s.unsure = [READ_ROW.map((_, i) => i === 8)]; }
+    // 0594: with no photo-reading route the reading is refused before anything is sent; the set stays open.
+    if (notSetUp && s.status === 'OPEN') { s.aiReading = { status: 'BLOCKED', reason: 'NO_ELIGIBLE_ROUTE' }; s.version++; return ok(route, detail(s)); }
+    if (s.status === 'OPEN') { s.status = 'READ'; s.reader = 'SYNTHETIC'; s.outcome = 'SAMPLE_READ'; s.readAt = now(); s.version++; s.rows = [READ_ROW]; s.unsure = [READ_ROW.map((_, i) => i === 8)]; }
+    return ok(route, detail(s));
+  }
+  if (parts[1] === 'typed') {
+    if (s.status === 'OPEN') { s.status = 'READ'; s.reader = 'NONE'; s.outcome = 'TYPED'; s.readAt = now(); s.version++; s.rows = []; s.unsure = []; }
     return ok(route, detail(s));
   }
   if (parts[1] === 'table') { s.rows = body.rows; s.unsure = body.unsure; s.version++; return answer(summary(s)); }
@@ -121,10 +127,10 @@ async function check(name, work) { try { await work(); report.checks.push(name);
 async function shot(page, name, fullPage = false) { await page.screenshot({ path: join(results, `${name}.png`), fullPage }); report.screenshots.push(`${name}.png`); }
 
 await check('start a set, add the sample page twice (duplicate refused), read it, fix a cell, save, send', async () => {
-  sets = []; seen = new Map(); aiBlocked = false;
+  sets = []; seen = new Map(); aiBlocked = false; notSetUp = false;
   const { ctx, page } = await open({ width: 1440, height: 900 });
   await page.getByText('What are you photographing?').waitFor();
-  await page.getByText('HON can read only the sample pages for now.').waitFor();
+  await page.getByText('HON reads your own photos when your school has the AI team').waitFor();
   await shot(page, 'paper-import-start-desktop');
   await page.getByTestId('paper-import-create').click();
   await page.getByTestId('paper-import-photos').waitFor();
@@ -169,13 +175,35 @@ await check('an AI pause stops the reading and says nothing was read', async () 
   await page.getByTestId('paper-import-sample').click();
   await page.getByText('1 of 10 photos').waitFor();
   await page.getByRole('button', { name: 'Read with HON', exact: true }).click();
-  await page.getByText('Nothing was read; try again later.').waitFor();
+  await page.getByText('Nothing was read. You can type the rows yourself, or try later.').waitFor();
   assert.equal(sets[0].status, 'OPEN');
   await ctx.close();
 });
 
+await check('with photo reading not set up, HON says so and staff type the rows themselves (no key, no AI)', async () => {
+  sets = []; seen = new Map(); aiBlocked = false; notSetUp = true; report.commands = [];
+  const { ctx, page } = await open({ width: 1440, height: 900 });
+  await page.getByTestId('paper-import-create').click();
+  await page.getByTestId('paper-import-sample').click();
+  await page.getByText('1 of 10 photos').waitFor();
+  await page.getByRole('button', { name: 'Read with HON', exact: true }).click();
+  await page.getByText('Photo reading is not set up for this school yet.').waitFor();
+  assert.equal(sets[0].status, 'OPEN');
+  await shot(page, 'paper-import-not-set-up-desktop');
+  await page.getByRole('button', { name: 'Type the rows myself', exact: true }).click();
+  await page.getByTestId('paper-import-table').waitFor();
+  await page.getByText('Type the rows from the photo into the table.').waitFor();
+  assert.equal(sets[0].outcome, 'TYPED');
+  await page.getByLabel('Student first name 1', { exact: true }).fill('Ava');
+  await page.getByTestId('paper-import-save').click();
+  await page.getByText('Table saved.').waitFor();
+  const typed = report.commands.find((c) => c.path.endsWith('/typed'));
+  assert.deepEqual({ command: typed?.command, key: typed?.key }, { command: 'students.paper_import.typed', key: false });
+  await ctx.close();
+});
+
 await check('delete asks first, then erases the photos and the table; works at phone width without sideways scroll', async () => {
-  sets = []; seen = new Map(); aiBlocked = false;
+  sets = []; seen = new Map(); aiBlocked = false; notSetUp = false;
   const { ctx, page } = await open({ width: 390, height: 844 });
   await page.getByTestId('paper-import-create').click();
   await page.getByTestId('paper-import-sample').click();
