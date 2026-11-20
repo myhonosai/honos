@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsEmail, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsEmail, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class CreatePersonDto {
   @IsString()
@@ -20,6 +20,14 @@ export class CreatePersonDto {
   @IsOptional()
   @Matches(/^\+[1-9]\d{1,14}$/)
   phoneE164?: string;
+
+  /** IC1 (0593): consent channels staff left ticked; omitted means both. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(2)
+  @ArrayUnique()
+  @IsIn(['EMAIL', 'SMS'], { each: true })
+  consentChannels?: ('EMAIL' | 'SMS')[];
 }
 
 export class ListPeopleDto {

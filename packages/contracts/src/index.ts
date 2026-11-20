@@ -139,6 +139,14 @@ export interface DomainEvent<TPayload extends Record<string, unknown> = Record<s
   payload: TPayload;
 }
 
+/** IC1 (0593) automatic intake consent: the channels staff leave ticked on an add or import. */
+export type IntakeConsentChannel = 'EMAIL' | 'SMS';
+export const INTAKE_CONSENT_CHANNELS: readonly IntakeConsentChannel[] = ['EMAIL', 'SMS'];
+/** Exactly a duplicate-free subset of EMAIL and SMS. */
+export function isIntakeConsentChannels(value: unknown): value is IntakeConsentChannel[] {
+  return Array.isArray(value) && value.length <= 2 && value.every((v) => v === 'EMAIL' || v === 'SMS') && new Set(value).size === value.length;
+}
+
 export interface CreateLeadInput {
   pipelineId: string;
   pipelineStageId: string;
@@ -154,6 +162,8 @@ export interface CreateLeadInput {
   campaignId?: string;
   campaignCode?: string;
   attribution?: Record<string, string>;
+  /** IC1 (0593): consent channels staff left ticked when adding the lead; omitted means both (the default). */
+  consentChannels?: IntakeConsentChannel[];
 }
 
 export interface LeadSummary {
@@ -224,6 +234,8 @@ export interface CreatePersonInput {
   familyName: string;
   email?: string | undefined;
   phoneE164?: string | undefined;
+  /** IC1 (0593): consent channels staff left ticked; omitted means both (the default). */
+  consentChannels?: IntakeConsentChannel[] | undefined;
 }
 
 export interface PersonSummary {
@@ -894,6 +906,10 @@ export interface RecordCommunicationConsentInput {
 }
 
 /** Narrow representation: no contact address, tenant metadata, or staff identity. */
+/** IC1 (0593): how an automatically recorded consent was captured. PRIOR_OPT_OUT: an opt-out on another record won. */
+export const INTAKE_CONSENT_METHODS = ['LEAD_FORM', 'WALK_IN_KIOSK', 'FACEBOOK_LEAD_FORM', 'INBOUND_TEXT', 'STAFF_ADD', 'LEAD_IMPORT', 'STUDENT_IMPORT', 'PRIOR_OPT_OUT'] as const;
+export type IntakeConsentMethod = (typeof INTAKE_CONSENT_METHODS)[number];
+
 export interface CommunicationConsentSummary {
   channel: CommunicationConsentChannel;
   status: CommunicationConsentStatus;
@@ -901,6 +917,8 @@ export interface CommunicationConsentSummary {
   capturedAt: string;
   version: number;
   updatedAt: string;
+  /** Set only while the current version is the automatically captured one (a later staff record, STOP or unsubscribe clears it). */
+  captureMethod: IntakeConsentMethod | null;
 }
 
 /** Provider-neutral channels for a consent-gated outbound message queue. */

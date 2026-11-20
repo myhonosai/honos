@@ -12,8 +12,10 @@ export interface PublicFormConfigInput {
   expectedVersion: number; title: string; description: string; optionalFields: PublicFormOptionalField[];
   pipelineId: string; pipelineStageId: string; campaignId: string | null;
 }
-export interface PublishedLeadForm { publicId: string; title: string; description: string; optionalFields: PublicFormOptionalField[] }
-export interface StaffLeadForm extends PublishedLeadForm {
+export interface LeadFormBase { publicId: string; title: string; description: string; optionalFields: PublicFormOptionalField[] }
+/** IC1 (0593): the public read also names the school, for the consent wording next to submit. */
+export interface PublishedLeadForm extends LeadFormBase { schoolName: string }
+export interface StaffLeadForm extends LeadFormBase {
   id: string; version: number; status: 'DRAFT' | 'PUBLISHED' | 'DISABLED';
   pipelineId: string; pipelineStageId: string; campaignId: string | null; acceptedCount: number; updatedAt: string;
 }
@@ -49,9 +51,11 @@ export function validatePublicFormSubmission(input: unknown, fields: readonly Pu
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('FORM_INVALID');
   const p = input as Record<string, unknown>;
   const caps = { name: 120, email: 254, mobile: 16, interest: 80, source: 80, website: 0, ageBand: 30, experience: 30, preferredTime: 30 };
-  if (Object.keys(p).some(k => k !== 'acknowledged' && !Object.hasOwn(caps, k)) || typeof p.acknowledged !== 'boolean' || p.website !== '') throw new Error('FORM_INVALID');
+  if (Object.keys(p).some(k => k !== 'acknowledged' && k !== 'textOptIn' && !Object.hasOwn(caps, k)) || typeof p.acknowledged !== 'boolean' || p.website !== '') throw new Error('FORM_INVALID');
+  // IC1 (0593): the lead's own optional "Text me" tick.
+  if (Object.hasOwn(p, 'textOptIn') && typeof p.textOptIn !== 'boolean') throw new Error('FORM_INVALID');
   for (const [key, value] of Object.entries(p)) {
-    if (key === 'acknowledged') continue;
+    if (key === 'acknowledged' || key === 'textOptIn') continue;
     if (typeof value !== 'string' || value.length > caps[key as keyof typeof caps] || /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/.test(value)) throw new Error('FORM_INVALID');
     const v = value.trim();
     if (key !== 'mobile' && /^[=+@-]/.test(v)) throw new Error('FORM_INVALID');
@@ -62,12 +66,18 @@ export function validatePublicFormSubmission(input: unknown, fields: readonly Pu
   if (typeof p.name !== 'string' || !p.name.trim() || !(typeof p.email === 'string' && p.email.trim()) && !(typeof p.mobile === 'string' && p.mobile.trim())) throw new Error('FORM_INVALID');
 }
 
-export function validatePublishedLeadForm(input: unknown): asserts input is PublishedLeadForm {
+function validateLeadFormBase(input: unknown): asserts input is LeadFormBase {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('FORM_INVALID');
   const p = input as Record<string, unknown>;
   if (Object.keys(p).length !== 4 || Object.keys(p).some(k => !['publicId','title','description','optionalFields'].includes(k)) || typeof p.publicId !== 'string' || !/^[a-f0-9]{48}$/.test(p.publicId)) throw new Error('FORM_INVALID');
   const uuid = '00000000-0000-4000-8000-000000000075';
   validatePublicFormConfig({ expectedVersion: 0, title: p.title, description: p.description, optionalFields: p.optionalFields, pipelineId: uuid, pipelineStageId: uuid, campaignId: null });
+}
+export function validatePublishedLeadForm(input: unknown): asserts input is PublishedLeadForm {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('FORM_INVALID');
+  const { schoolName, ...base } = input as Record<string, unknown>;
+  if (typeof schoolName !== 'string' || !schoolName.trim() || schoolName.length > 200 || /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]/.test(schoolName)) throw new Error('FORM_INVALID');
+  validateLeadFormBase(base);
 }
 
 export function validateStaffLeadForm(input: unknown): asserts input is StaffLeadForm {
@@ -75,7 +85,7 @@ export function validateStaffLeadForm(input: unknown): asserts input is StaffLea
   const p = input as Record<string, unknown>;
   const keys = ['id','publicId','version','status','title','description','optionalFields','pipelineId','pipelineStageId','campaignId','acceptedCount','updatedAt'];
   if (Object.keys(p).length !== keys.length || Object.keys(p).some(k => !keys.includes(k)) || typeof p.id !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(p.id) || !Number.isInteger(p.version) || (p.version as number) < 1 || (p.version as number) > 999999999 || !['DRAFT','PUBLISHED','DISABLED'].includes(p.status as string) || !Number.isSafeInteger(p.acceptedCount) || (p.acceptedCount as number) < 0 || typeof p.updatedAt !== 'string' || p.updatedAt.length > 35 || !Number.isFinite(Date.parse(p.updatedAt))) throw new Error('FORM_INVALID');
-  validatePublishedLeadForm({ publicId: p.publicId, title: p.title, description: p.description, optionalFields: p.optionalFields });
+  validateLeadFormBase({ publicId: p.publicId, title: p.title, description: p.description, optionalFields: p.optionalFields });
   validatePublicFormConfig({ expectedVersion: (p.version as number)-1, title: p.title, description: p.description, optionalFields: p.optionalFields, pipelineId: p.pipelineId, pipelineStageId: p.pipelineStageId, campaignId: p.campaignId });
 }
 

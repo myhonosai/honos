@@ -1,7 +1,8 @@
 // B-CRM-7 (0226): student and guardian CSV import. Staging, row decisions and finalize create people, families,
 // family links and student profiles only: never a membership, plan, schedule, invoice, payment, enrollment, account,
-// invitation, consent or message.
+// invitation or message. IC1 (0593): finalize may record intake consent for the people it creates (staff can untick).
 
+import { isIntakeConsentChannels, type IntakeConsentChannel } from './index.js';
 export const STUDENT_IMPORT_FIELDS = ['studentGivenName', 'studentFamilyName', 'birthDate', 'studentEmail', 'studentMobile',
   'guardianGivenName', 'guardianFamilyName', 'guardianEmail', 'guardianMobile', 'familyKey'] as const;
 export type StudentImportField = typeof STUDENT_IMPORT_FIELDS[number];
@@ -12,7 +13,8 @@ export const STUDENT_IMPORT_MAX_COLUMNS = 24;
 
 export interface StudentImportUpload { csv: string; mapping: Record<string, StudentImportMappingTarget> }
 export interface StudentImportDecisionInput { expectedVersion: number; decisions: { index: number; choice: 'IMPORT' | 'SKIP' }[] }
-export interface StudentImportFinalizeInput { expectedVersion: number; selectedIndices: number[] }
+/** IC1: consentChannels omitted means both channels are recorded for the people this import creates; [] records none. */
+export interface StudentImportFinalizeInput { expectedVersion: number; selectedIndices: number[]; consentChannels?: IntakeConsentChannel[] }
 
 export interface StudentImportBatch {
   id: string; version: number; status: 'STAGED' | 'FINALIZED';
@@ -83,12 +85,14 @@ export function validateStudentImportDecisionInput(value: unknown): StudentImpor
   return { expectedVersion, decisions };
 }
 export function validateStudentImportFinalizeInput(value: unknown): StudentImportFinalizeInput {
-  const input = closedInput(value, ['expectedVersion', 'selectedIndices']);
+  const withConsent = !!value && typeof value === 'object' && Object.hasOwn(value, 'consentChannels');
+  const input = closedInput(value, withConsent ? ['expectedVersion', 'selectedIndices', 'consentChannels'] : ['expectedVersion', 'selectedIndices']);
   const expectedVersion = version(input.expectedVersion);
   if (!Array.isArray(input.selectedIndices) || input.selectedIndices.length > STUDENT_IMPORT_MAX_ROWS) throw new Error('VALIDATION_FAILED');
   const selectedIndices = input.selectedIndices.map(index);
   if (new Set(selectedIndices).size !== selectedIndices.length) throw new Error('VALIDATION_FAILED');
-  return { expectedVersion, selectedIndices };
+  if (withConsent && !isIntakeConsentChannels(input.consentChannels)) throw new Error('VALIDATION_FAILED');
+  return withConsent ? { expectedVersion, selectedIndices, consentChannels: [...input.consentChannels as IntakeConsentChannel[]] } : { expectedVersion, selectedIndices };
 }
 
 export function verifyStudentImportBatch(value: unknown): StudentImportBatch {

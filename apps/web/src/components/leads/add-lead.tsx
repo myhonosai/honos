@@ -31,6 +31,7 @@ export function AddLead({ scope, language, onAdded, api = addLeadApi, submit = s
   const [setup, setSetup] = useState<SetupState>({ state: 'IDLE' });
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<LeadForm>(EMPTY);
+  const [consent, setConsent] = useState(true);
   const [stageId, setStageId] = useState<string | null>(null);
   const [save, setSave] = useState<SaveState>({ state: 'IDLE' });
   const pending = useRef<PreparedCrmLeadCreate | null>(null), setupKey = useRef<string | null>(null), alive = useRef(true);
@@ -58,7 +59,7 @@ export function AddLead({ scope, language, onAdded, api = addLeadApi, submit = s
   const send = useCallback((request: PreparedCrmLeadCreate, name: string) => {
     setSave({ state: 'SAVING' });
     submit(request).then(
-      () => { if (!alive.current) return; pending.current = null; setForm(EMPTY); setSave({ state: 'SAVED', name }); setOpen(false); onAdded?.(); },
+      () => { if (!alive.current) return; pending.current = null; setForm(EMPTY); setConsent(true); setSave({ state: 'SAVED', name }); setOpen(false); onAdded?.(); },
       (error) => { if (!alive.current) return;
         if (error instanceof CrmLeadCreateUncertainError) { setSave({ state: 'UNCERTAIN' }); return; }
         pending.current = null; setSave({ state: error instanceof CrmLeadCreateAccessError ? 'DENIED' : 'REJECTED' }); });
@@ -66,13 +67,13 @@ export function AddLead({ scope, language, onAdded, api = addLeadApi, submit = s
 
   const onSave = useCallback(() => {
     const choice = pipelines.state === 'READY' ? openStageChoices(pipelines.items).find((c) => c.stageId === stageId) ?? null : null;
-    const built = buildLeadInput(form, choice);
+    const built = buildLeadInput(form, choice, consent);
     if (!built.ok) { setSave({ state: 'PROBLEM', problem: built.problem }); return; }
     let request: PreparedCrmLeadCreate;
     try { request = prepareCrmLeadCreate(scope.organizationId, scope.schoolId, built.input, crypto.randomUUID()); } catch { setSave({ state: 'REJECTED' }); return; }
     pending.current = request;
     send(request, `${built.input.primaryContact.givenName} ${built.input.primaryContact.familyName}`);
-  }, [pipelines, stageId, form, scope, send]);
+  }, [pipelines, stageId, form, consent, scope, send]);
 
   const onRetry = useCallback(() => { if (pending.current) send(pending.current, `${form.givenName.trim()} ${form.familyName.trim()}`); }, [send, form]);
   const onDiscard = useCallback(() => { pending.current = null; setForm(EMPTY); setSave({ state: 'IDLE' }); }, []);
@@ -80,5 +81,5 @@ export function AddLead({ scope, language, onAdded, api = addLeadApi, submit = s
   const onOpen = useCallback((next: boolean) => { setOpen(next); if (next) setSave((now) => saveAfterOpen(now, pending.current !== null)); }, []);
 
   return <AddLeadView language={language} pipelines={pipelines} setup={setup} open={open} form={form} stageId={stageId} save={save}
-    onSetUp={onSetUp} onReload={() => setReload((n) => n + 1)} onOpen={onOpen} onField={onField} onStage={setStageId} onSave={onSave} onRetry={onRetry} onDiscard={onDiscard}/>;
+    onSetUp={onSetUp} onReload={() => setReload((n) => n + 1)} onOpen={onOpen} onField={onField} consent={consent} onConsent={setConsent} onStage={setStageId} onSave={onSave} onRetry={onRetry} onDiscard={onDiscard}/>;
 }

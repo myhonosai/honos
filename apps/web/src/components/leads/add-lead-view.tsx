@@ -11,13 +11,14 @@ export type AddLeadViewProps = Readonly<{
   onSetUp?: (() => void) | undefined; onReload?: (() => void) | undefined; onOpen?: ((open: boolean) => void) | undefined;
   onField?: ((field: keyof LeadForm, value: string) => void) | undefined; onStage?: ((stageId: string) => void) | undefined;
   onSave?: (() => void) | undefined; onRetry?: (() => void) | undefined; onDiscard?: (() => void) | undefined;
+  consent?: boolean | undefined; onConsent?: ((consent: boolean) => void) | undefined;
 }>;
 
 /** Pure view. Nothing shows until the school's stages are read; a reader without lead access sees nothing extra. */
 export function AddLeadView(props: AddLeadViewProps): React.ReactElement | null {
   const { language, pipelines, setup, open, form, stageId, save } = props;
   const t = (key: AddLeadKey, vars?: Record<string, string>) => addLeadText(language, key, vars);
-  const ids = { given: useId(), family: useId(), email: useId(), phone: useId(), phoneHelp: useId(), stage: useId() };
+  const ids = { given: useId(), family: useId(), email: useId(), phone: useId(), phoneHelp: useId(), stage: useId(), consentHelp: useId() };
   if (pipelines.state !== 'READY') return pipelines.state !== 'UNAVAILABLE' ? null : <div className={styles.notice} role="status"><p>{t('pipelinesUnavailable')}</p>
     <button type="button" className={styles.secondary} onClick={props.onReload}>{t('reload')}</button></div>;
   const choices = openStageChoices(pipelines.items);
@@ -50,6 +51,9 @@ export function AddLeadView(props: AddLeadViewProps): React.ReactElement | null 
         <select id={ids.stage} value={stageId ?? ''} disabled={locked} onChange={(e) => props.onStage?.(e.target.value)}>
           {choices.map((choice) => <option key={choice.stageId} value={choice.stageId}>{choice.label}</option>)}
         </select></div>
+      <label className={styles.filter}><span><input type="checkbox" name="record-consent" checked={props.consent ?? true} disabled={locked} aria-describedby={ids.consentHelp}
+        onChange={(e) => props.onConsent?.(e.target.checked)}/> {t('consent')}</span></label>
+      <p id={ids.consentHelp} className={styles.meta}>{t('consentHelp')}</p>
       {message ? <p className={styles.notice} role="alert">{message}</p> : null}
       <div className={styles.addActions}>
         {save.state === 'UNCERTAIN' ? <>

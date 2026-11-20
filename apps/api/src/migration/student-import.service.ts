@@ -18,12 +18,15 @@ import {
   verifyStudentImportBatch,
   verifyStudentImportDetail,
   verifyStudentImportList,
+  isIntakeConsentChannels,
+  type IntakeConsentChannel,
   type StudentImportBatch,
   type StudentImportDetail,
   type StudentImportList,
 } from '@hon/contracts';
 import type { PoolClient } from 'pg';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
+import { recordStaffIntakeConsent } from '../communication/intake-consent.js';
 import type { MembershipLifecycleContext } from '../billing/membership.service.js';
 
 export type StudentImportContext = MembershipLifecycleContext;
@@ -117,8 +120,16 @@ export class StudentImportService {
 
   async finalize(context: StudentImportContext, batchId: string, value: unknown): Promise<{ batch: StudentImportBatch; replayed: boolean }> {
     this.assertHuman(context, true); this.assertId(batchId); batchId = batchId.toLowerCase();
-    const input = this.validated(() => validateStudentImportFinalizeInput(value));
-    return this.write(context, 'SELECT hon.finalize_student_import($1,$2::jsonb,$3,$4::uuid,$5::uuid) AS data', { batchId, ...input }, batchId);
+    // IC1 (0593): optional consentChannels (both by default) records consent for the people this finalize creates.
+    const { consentChannels, rest } = this.validated(() => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('VALIDATION_FAILED');
+      const { consentChannels: channels, ...others } = value as Record<string, unknown>;
+      if (channels !== undefined && !isIntakeConsentChannels(channels)) throw new Error('VALIDATION_FAILED');
+      return { consentChannels: channels as IntakeConsentChannel[] | undefined, rest: others };
+    });
+    const input = this.validated(() => validateStudentImportFinalizeInput(rest));
+    return this.write(context, 'SELECT hon.finalize_student_import($1,$2::jsonb,$3,$4::uuid,$5::uuid) AS data', { batchId, ...input }, batchId,
+      client => recordStaffIntakeConsent(client, context, { method: 'STUDENT_IMPORT', batchId }, consentChannels));
   }
 
   private async read<T>(context: StudentImportContext, run: (client: PoolClient) => Promise<T>): Promise<T> {
@@ -131,7 +142,8 @@ export class StudentImportService {
     } catch (error) { return translate(error); }
   }
 
-  private async write(context: StudentImportContext, statement: string, input: object, batchId?: string): Promise<{ batch: StudentImportBatch; replayed: boolean }> {
+  private async write(context: StudentImportContext, statement: string, input: object, batchId?: string,
+    after?: (client: PoolClient) => Promise<unknown>): Promise<{ batch: StudentImportBatch; replayed: boolean }> {
     try {
       return await this.database.withTenantTransaction(context, async client => {
         await client.query(WRITE_LIMITS);
@@ -144,6 +156,7 @@ export class StudentImportService {
         }
         const batch = verifyStudentImportBatch(data.record);
         if (batchId !== undefined && batch.id !== batchId) throw new Error('Unverified student import receipt.');
+        if (after && !data.replayed) await after(client);
         return { batch, replayed: data.replayed };
       });
     } catch (error) { return translate(error); }

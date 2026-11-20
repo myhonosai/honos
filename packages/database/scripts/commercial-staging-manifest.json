@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "6fa2939a952b3bd74919ab03976de8ba504ec994cf3cca0cad453411ed3f2ba2",
+  "chainSha256": "f15f4da2620dba51dc5793af84b0b63f846ba5fb935afa1f2c564228c5805fff",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -733,6 +733,10 @@
     {
       "file": "0583_calendar_settings.sql",
       "sha256": "5e2984f34a479a4739e984ee2bcc7532d6de49449da07f869e2c5c70b1d40975"
+    },
+    {
+      "file": "0593_intake_contact_consent.sql",
+      "sha256": "cbf18d64a83a0d2eb99eb695d274195f5e5d5b5f032ec961529dc199f062a6ec"
     }
   ]
 }
