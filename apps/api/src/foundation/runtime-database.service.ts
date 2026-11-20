@@ -666,6 +666,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT hon.read_walkin_card_provider($1) AS data',
       'SELECT hon.open_walkin_card_payment($1,$2) AS data',
       'SELECT hon.settle_walkin_card_payment($1,$2) AS data',
+      'SELECT hon.read_public_share_calendar($1) AS data',
     ].includes(statement)) throw new Error('Unknown public event call.');
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
@@ -719,6 +720,26 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       const result = await client.query<{ data: unknown }>(statement, values);
       await client.query('COMMIT');
       if (result.rows.length !== 1) throw new Error('Unverified parent invoice payment call.');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
+    finally { client.release(); }
+  }
+
+  /** 0598: the four fixed family checkout calls, each in its own short transaction (no tenant settings; the definer re-proves scope). */
+  async runParentCheckoutCall(statement: string, values: unknown[]): Promise<unknown> {
+    if (![
+      'SELECT hon.read_parent_checkout_pages($1::text) AS data',
+      'SELECT hon.open_parent_checkout_order($1::text,$2::jsonb,$3::text) AS data',
+      'SELECT hon.read_parent_checkout_order($1::text,$2::uuid) AS data',
+    ].includes(statement)) throw new Error('Unknown parent checkout call.');
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>(statement, values);
+      await client.query('COMMIT');
+      if (result.rows.length !== 1) throw new Error('Unverified parent checkout call.');
       return result.rows[0]!.data;
     } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
     finally { client.release(); }

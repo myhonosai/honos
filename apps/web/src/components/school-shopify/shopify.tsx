@@ -1,11 +1,12 @@
 'use client';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { ShopifyError, shopifyApi, type Owned, type ShopifyApi } from './http';
 import { brandingApi, type BrandingApi } from '../school-branding/http';
+import { merchAiApi, type MerchAiApi } from './merch-ai-http';
 import type { BrandState } from './studio';
 import type { ShopifyCatalog, ShopifyChangeResult, ShopifyFinanceView, ShopifyOrders, ShopifyProductChange, ShopifyProductChanges } from '@hon/contracts';
 import type { ProposeRequest } from './editor';
@@ -18,12 +19,13 @@ const kindOf = (error: unknown) => error instanceof ShopifyError && error.kind !
  * orders. Blur, a hidden tab, a school change or a session end hide the page at once and retire every read. Commands are
  * never replayed automatically: a sync or disconnect whose answer was lost is checked again with a fresh read.
  */
-export function SchoolShopify({ api = shopifyApi, branding = brandingApi, navigate = (url: string) => window.location.assign(url) }: { api?: ShopifyApi; branding?: BrandingApi; navigate?: (url: string) => void }): React.ReactElement {
+export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchAi = merchAiApi, navigate = (url: string) => window.location.assign(url) }: { api?: ShopifyApi; branding?: BrandingApi; merchAi?: MerchAiApi; navigate?: (url: string) => void }): React.ReactElement {
   const locale = useLocale();
   const shell = useSchoolShell();
   const schoolId = shell.phase === 'READY' ? shell.selection?.schoolId ?? null : null;
   const organizationId = shell.phase === 'READY' ? shell.selection?.organizationId ?? null : null;
   const [brand, setBrand] = useState<BrandState>({ state: 'LOADING' });
+  const marcus = useMemo(() => schoolId && organizationId ? { api: merchAi, scope: { organizationId, schoolId } } : undefined, [merchAi, organizationId, schoolId]);
   const [overview, setOverview] = useState<OverviewState>({ state: 'LOADING' });
   const [section, setSection] = useState<ShopifySection>('overview');
   const [catalog, setCatalog] = useState<ListState<ShopifyCatalog>>({ state: 'LOADING' });
@@ -116,8 +118,8 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, naviga
    * One edit command at a time, never replayed. An approval re-reads everything (Shopify and the mirror changed);
    * a new edit or a cancel re-reads only the change list. A lost approval answer shows as "not sure" with Check again.
    */
-  const change = useCallback(async (action: Extract<ShopifyAction, 'propose' | 'approve' | 'cancelChange'>, send: (owned: Owned) => Promise<ShopifyChangeResult>, target?: string) => {
-    if (sending.current || !schoolId) return;
+  const change = useCallback(async (action: Extract<ShopifyAction, 'propose' | 'approve' | 'cancelChange'>, send: (owned: Owned) => Promise<ShopifyChangeResult>, target?: string): Promise<boolean> => {
+    if (sending.current || !schoolId) return false;
     sending.current = true; const shown = privacy.current;
     setLocked(true); setOutcome({ kind: 'SENDING', action, ...(target ? { target } : {}) });
     let next: ShopifyOutcome;
@@ -125,12 +127,14 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, naviga
     catch (error) { next = { kind: kindOf(error), action, ...(target ? { target } : {}) }; }
     finally { sending.current = false; }
     setLocked(false);
-    if (shown !== privacy.current || !mounted.current) return;
+    if (shown !== privacy.current || !mounted.current) return false;
     setOutcome(next);
     if (action === 'approve') setRefresh((n) => n + 1); else setChangesTick((n) => n + 1);
     if (action === 'propose' && next?.kind === 'DONE') go('changes');
+    return next?.kind === 'DONE';
   }, [schoolId, go]);
-  const onPropose = (r: ProposeRequest) => { if (schoolId) void change('propose', (owned) => api.propose(schoolId, r, AbortSignal.timeout(30000), owned)); };
+  /** Resolves true only when the server confirmed the proposal (PENDING). */
+  const onPropose = (r: ProposeRequest): Promise<boolean> => schoolId ? change('propose', (owned) => api.propose(schoolId, r, AbortSignal.timeout(30000), owned)) : Promise.resolve(false);
   const onApprove = (c: ShopifyProductChange) => { if (schoolId) void change('approve', (owned) => api.approveChange(schoolId, c.changeId, c.version, AbortSignal.timeout(150000), owned), c.changeId); };
   const onCancelChange = (c: ShopifyProductChange) => { if (schoolId) void change('cancelChange', (owned) => api.cancelChange(schoolId, c.changeId, c.version, AbortSignal.timeout(30000), owned), c.changeId); };
 
@@ -183,7 +187,7 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, naviga
       onDisconnect={() => { void run('disconnect'); }} onSection={go}
       changes={changes} onPropose={onPropose} onApprove={onApprove} onCancelChange={onCancelChange} onAllowEditing={() => { void onConnect('allowEditing'); }}
       finance={finance} onAllowFinance={() => { void onConnect('allowFinance'); }}
-      schoolName={shell.schoolName} brand={brand} />
+      schoolName={shell.schoolName} brand={brand} merchAi={marcus} />
   </div>;
 }
 

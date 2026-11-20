@@ -4395,7 +4395,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
       RAISE EXCEPTION 'Missing school one-time payment guard: %',expected.name; END IF;
   END LOOP;
   IF (SELECT count(*) FROM pg_trigger WHERE tgrelid IN ('hon.school_pay_once'::regclass,'hon.school_pay_once_events'::regclass) AND NOT tgisinternal
-      AND tgname<>'parent_invoice_pay_settle')<>4 THEN
+      AND tgname NOT IN ('parent_invoice_pay_settle','family_checkout_settle'))<>4 THEN
     RAISE EXCEPTION 'School one-time payment tables must have exactly their four guards'; END IF;
   IF NOT EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname='hon' AND indexname='school_pay_once_one_live_idx'
       AND indexdef LIKE '%UNIQUE%(organization_id, school_id, source, source_id)%') THEN
@@ -5312,6 +5312,208 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END LOOP;
 END $$;
 -- End parent pro shop exact verification.
+-- Calendar settings exact verification (0583): three private forced-RLS tables with guard and no-truncate triggers, private
+-- helpers and eight runtime entry points.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOREACH t IN ARRAY ARRAY['calendar_share_settings','calendar_block_outs','share_calendars'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+      AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=c.oid AND tgname=t||'_guard' AND NOT tgisinternal AND tgfoid='hon.guard_calendar_settings()'::regprocedure)
+      AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=c.oid AND tgname=t||'_no_truncate' AND NOT tgisinternal)
+    INTO safe FROM pg_class c WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Calendar settings table must be private, guarded and FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_calendar_settings()',false,false,'search_path=pg_catalog, hon','82b4992e390578bb166c15a123002960e09c9e779052e6dfe38cbb5d50250418'),
+('hon.calendar_day_blocked(uuid,uuid,date)',true,false,'search_path=pg_catalog, hon','74289b956cd480a78038895f666a24f28309a812aefe1dd9bd26e7810b159f8d'),
+('hon.share_calendar_times(uuid,uuid,uuid,text,integer)',true,false,'search_path=pg_catalog, hon','d02eeebcfaf1dc3ffd2602ac6903b487c9bfa0af3584872d52abb618b067bd81'),
+('hon.share_calendar_json(hon.share_calendars)',true,false,'search_path=pg_catalog, hon','8f359f6dde3e4dbb072f8d5a777820dc846f954800088740118bfcc8ec99c2c4'),
+('hon.calendar_block_out_json(hon.calendar_block_outs)',false,false,'search_path=pg_catalog, hon','8da71fff985809ffe2c4a7d82a139cd18accb0d019f6acc7130f9019f097694a'),
+('hon.calendar_settings_fp(text,uuid,jsonb)',false,false,'search_path=pg_catalog','bbfb92ae8192f72c6c66ce5616cf6fe90bd70c7293636500839826b5ee3f0372'),
+('hon.calendar_expected_version(jsonb)',false,false,'search_path=pg_catalog','9b383f9759d096a24b434537d779fc1bd20c039683b69f0fcad75d67069ffac8'),
+('hon.public_share_calendar(text)',true,false,'search_path=pg_catalog, hon','aca7d4ce6e2869aab27e50a7199f09b08d80e53cc1a0ec53646cdb69d3f3e3c8'),
+('hon.save_calendar_share_settings(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','3d7a55cdbec5be04e60d6cad37a2a7d69681318f4eb31a9ba840c334a08768f6'),
+('hon.save_calendar_block_out(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','ef3d93521a701abd42cbb04dcb0cc3b43d940dfbba58eede6fb8fe8952140897'),
+('hon.remove_calendar_block_out(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','335460d212eae52ec95289c49f290b51a2ce5c8122f4277462c945213ce9d997'),
+('hon.save_share_calendar(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','d656cf26febb4ed559fe076c3332aab4dbdb1ea2f511470e6ef19c92717542e2'),
+('hon.delete_share_calendar(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','01d82a6257c31df540c6e6c6d93008ff3fef25bcfe83ba16afbef829a78e41e4'),
+('hon.read_calendar_settings(text)',true,true,'search_path=pg_catalog, hon','3465be4b189ba9b5ee283e22d7f6b469b74ef215aff7e3740b5b0907199f9d1c'),
+('hon.read_school_calendar_block_outs(text,jsonb)',true,true,'search_path=pg_catalog, hon','02bdb87849deda7c91271d9b1dc3452263315915700845c59e40af747d929d8a'),
+('hon.read_public_share_calendar(text)',true,true,'search_path=pg_catalog, hon','0848b8e246deae8c4226860e58958ba586b288d7ea066c345e9258839aee3528')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe calendar settings function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End calendar settings exact verification.
+
+-- School message history exact verification (TE1 0585): two runtime read entry points, three private helpers.
+DO $$ DECLARE f text;
+BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.read_school_message_history(text,jsonb)','hon.read_school_opted_out_contacts(text,jsonb)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure
+        AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe school message history entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.require_school_messages_actor(text,text)','hon.school_messages_args_ok(jsonb,text[])','hon.school_message_outcome(text)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND (a.grantee=0 OR a.grantee<>p.proowner)) THEN
+      RAISE EXCEPTION 'Unsafe school message history helper: %',f; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname IN ('read_school_message_history','read_school_opted_out_contacts',
+      'require_school_messages_actor','school_messages_args_ok','school_message_outcome'))<>5 THEN
+    RAISE EXCEPTION 'Unexpected school message history overload'; END IF;
+END $$;
+-- End school message history exact verification.
+-- School message templates exact verification (TE2 0586): three runtime entry points, nine private helpers, a forced-RLS table.
+DO $$ DECLARE f text;
+BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.read_school_message_templates(text,jsonb)','hon.save_school_message_template(text,jsonb,text,uuid,uuid)',
+      'hon.set_school_message_template_status(text,jsonb,text,uuid,uuid)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure
+        AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe school message template entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.school_template_line_ok(text,integer)','hon.school_template_body_ok(text,integer)','hon.school_template_tags_ok(text)',
+      'hon.guard_school_message_template()','hon.require_school_template_actor(text,text)','hon.school_message_template_json(hon.school_message_templates)',
+      'hon.school_template_command_begin(text,text,jsonb,text,uuid,uuid)','hon.school_template_room_check(uuid,uuid,text,text,uuid,boolean)',
+      'hon.school_template_command_finish(uuid,text,hon.school_message_templates,jsonb,text,uuid,uuid,jsonb)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND (a.grantee=0 OR a.grantee<>p.proowner)) THEN
+      RAISE EXCEPTION 'Unsafe school message template helper: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.school_message_templates'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename='school_message_templates')
+    OR EXISTS(SELECT 1 FROM pg_class c, aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid='hon.school_message_templates'::regclass AND a.grantee<>c.relowner) THEN
+    RAISE EXCEPTION 'Unsafe school message template table'; END IF;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname IN ('read_school_message_templates','save_school_message_template',
+      'set_school_message_template_status','school_template_line_ok','school_template_body_ok','school_template_tags_ok','guard_school_message_template',
+      'require_school_template_actor','school_message_template_json','school_template_command_begin','school_template_room_check','school_template_command_finish'))<>12 THEN
+    RAISE EXCEPTION 'Unexpected school message template overload'; END IF;
+END $$;
+-- End school message templates exact verification.
+-- Paper import AI reader exact verification (0594)
+DO $$ DECLARE f text;
+  entry text[]:=ARRAY['hon.begin_paper_ai_reading(text,uuid,jsonb,uuid,uuid)','hon.paper_ai_reading_planning_reference(text,uuid)',
+    'hon.prepare_paper_ai_reading(text,uuid,uuid,boolean)','hon.fail_paper_ai_reading(text,uuid,text,text)',
+    'hon.record_paper_ai_reading(text,uuid,jsonb,uuid,uuid)','hon.type_paper_import_rows(text,uuid,jsonb,uuid,uuid)'];
+  helpers text[]:=ARRAY['hon.ai_plan_document_reading_guard()','hon.paper_reading_proposal_id(uuid)','hon.paper_import_note(uuid,text,uuid,uuid,uuid)',
+    'hon.paper_reading_ai_actor(text)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe paper import AI reader entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY helpers LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe paper import AI reader helper: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.ai_invocation_plans'::regclass AND tgname='ai_plan_document_reading_guard' AND tgenabled='O') THEN
+    RAISE EXCEPTION 'The READ_DOCUMENT plan guard is missing'; END IF;
+END $$;
+-- End paper import AI reader exact verification.
+-- Family checkout orders exact verification (0598): private scope, pricing and JSON helpers, the order guard, the settle trigger, four runtime entry
+-- points, a private forced-RLS table the runtime can never touch directly and a code-owned recorder with no authority.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_family_checkout_order()',false,false,'search_path=pg_catalog, hon','b94be91e0945babfde4fa50de55de7e3f8936c551819e7aa1e707abaf3116ae6'),
+('hon.family_checkout_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','bd6f2f585a00c022eaf6d377b850e3c31b2ba8cee01f56cac1595afdb8bee65e'),
+('hon.family_checkout_children(uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','0a850378057a26f6d042d93cb628bfac5859ad98c9e46941664207022ff4f024'),
+('hon.family_checkout_today(uuid)',true,false,'search_path=pg_catalog, hon','1bdf40cdc2f388d05b59ed362e36f8c4d2e884a56b8a7160a48e820acec77ff9'),
+('hon.family_checkout_payment_live(uuid)',true,false,'search_path=pg_catalog, hon','40aac4e954dd3fcaef015d5ed376f6a33052b2b44de11bdb48ecb445025467d7'),
+('hon.family_checkout_taken(uuid,text)',true,false,'search_path=pg_catalog, hon','24ba91624eba35992fb547c08b526fb347add7b969aa2e51e6f65f0fd12d07dc'),
+('hon.family_checkout_en(jsonb)',false,false,'search_path=pg_catalog','da5ca1a25665cf3ae73afa608fa02312ae429ba84b6adf1ffa45d1e53c39e14f'),
+('hon.family_checkout_option_open(jsonb,date)',false,false,'search_path=pg_catalog','3b42c14450b2af600556f766fe47a3fe6ecf1a4aadb4de9cc2b0740dd58a1406'),
+('hon.family_checkout_page_json(hon.school_checkouts,date)',true,false,'search_path=pg_catalog, hon','4aca0835d5db9cb6f5257666fd49dbc2bb04b01943b18faabb7ead6a037f99ec'),
+('hon.family_checkout_order_json(hon.family_checkout_orders)',true,false,'search_path=pg_catalog, hon','bec6d97a138180fe466116027da71aa9db52776b23063afa481c178a176ff47a'),
+('hon.read_parent_checkout_pages(text)',true,true,'search_path=pg_catalog, hon','f8aa7fccb2a127efd7df4215e0e0b1078549abb30b2e8e6536ae5411804d9a0b'),
+('hon.open_parent_checkout_order(text,jsonb,text)',true,true,'search_path=pg_catalog, hon','0da0550bb87570fd013335c8a7f3d0b76281189e3ca911ec710ab119572b77cb'),
+('hon.read_parent_checkout_order(text,uuid)',true,true,'search_path=pg_catalog, hon','089e8ae5a6919b83a6b9b82a88b9453c1f207181a408f13ca76c3edf3d4db17f'),
+('hon.read_school_checkout_orders(text)',true,true,'search_path=pg_catalog, hon','edbe690a207b58e5fdfa66efbc513e3f5aea4edcca552c0cd95b4b0e9bbf6a55'),
+('hon.settle_family_checkout_order()',true,false,'search_path=pg_catalog, hon','a4d3737562232b647cafedc9f99b8acb46d3ec54b5ee690639872007b49da56e')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe family checkout function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.family_checkout_orders'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.family_checkout_orders'::regclass)
+    OR has_table_privilege('hon_runtime','hon.family_checkout_orders','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.family_checkout_orders','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe family checkout orders table'; END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.family_checkout_orders'::regclass AND NOT tgisinternal AND tgenabled='O'
+      AND ((tgname='family_checkout_orders_guard' AND tgfoid='hon.guard_family_checkout_order()'::regprocedure)
+        OR (tgname='family_checkout_orders_no_truncate' AND tgfoid='hon.guard_membership_activation_evidence()'::regprocedure)))<>2
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.family_checkout_orders'::regclass AND NOT tgisinternal)<>2 THEN
+    RAISE EXCEPTION 'hon.family_checkout_orders must carry exactly its two guards'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.school_pay_once'::regclass AND tgname='family_checkout_settle'
+      AND tgfoid='hon.settle_family_checkout_order()'::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+    RAISE EXCEPTION 'Missing family checkout settle trigger'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM hon.principals WHERE id='00000000-0000-4000-8000-000000000582' AND principal_type='SYSTEM_SERVICE' AND user_id IS NULL)
+    OR EXISTS(SELECT 1 FROM hon.principal_role_grants WHERE principal_id='00000000-0000-4000-8000-000000000582')
+    OR EXISTS(SELECT 1 FROM hon.hq_operator_grants WHERE principal_id='00000000-0000-4000-8000-000000000582')
+    OR EXISTS(SELECT 1 FROM hon.family_access_grants WHERE principal_id='00000000-0000-4000-8000-000000000582') THEN
+    RAISE EXCEPTION 'The family checkout order recorder must be a code-owned service with no authority'; END IF;
+END $$;
+-- End family checkout orders exact verification.
+
+-- Shopify merch AI ideas exact verification (0596): the MERCH_IDEAS kind row on the shared AI text proposals (0550), the
+-- closed brief and answer shapes, the private authority, facts and view helpers, and the seven runtime entry points.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.begin_shopify_merch_ideas(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','74497d61d966dc3995e267b69b8a55aec23664b1d42d3a83e9557f89a1214257'),
+('hon.close_shopify_merch_ideas(text,uuid,text)',true,true,'search_path=pg_catalog, hon','fad059daacdad94ab0447391ad0e8ec607aa17f984f80d77bd0b6b0db5ab8d73'),
+('hon.fail_shopify_merch_ideas(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','15e79a69ec549f3e59b2492039c0130f0793f190824fddb1263a9c5689e4ad87'),
+('hon.prepare_shopify_merch_ideas(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','260b38d97bf4ba28c21c1736073f56d1a2bcd93e0d8e0990efb49aff6f0df220'),
+('hon.read_shopify_merch_ideas(text,uuid)',true,true,'search_path=pg_catalog, hon','ed965695d7dee5a5061d615ef6a1f58d3ad24cd0b87b1ab0f749d9fbbd74bbfc'),
+('hon.record_shopify_merch_ideas(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','f9b7cff52e04cde057d9c45d227a655179d198c834da8c36b24c56ec2974aee8'),
+('hon.plan_shopify_merch_ideas(text,uuid)',true,true,'search_path=pg_catalog, hon','8ed1020ee0bd464b9121ed83f66559d063de11802030df7dcf0f15dd47b1fbef'),
+('hon.shopify_merch_ai_actor(text)',true,false,'search_path=pg_catalog, hon','6b4bfc609c2515784d441e8e10e13ca68e8529c48ae9b889ab95a4845a84b582'),
+('hon.shopify_merch_ai_facts(jsonb,uuid)',true,false,'search_path=pg_catalog, hon','27619b0084c24ed5871006eef2c379cdad247191ea69f584ad1825ae968441ff'),
+('hon.shopify_merch_ai_reader(text)',true,false,'search_path=pg_catalog, hon','936c85ab00504181ff469620a89f6ae367ef135dc3c082d1231e754cc8937243'),
+('hon.shopify_merch_ai_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','d34e69258f1c91bcd82737b230fe4a5553c9ac1cd4104aa9dba1ae671669449f'),
+('hon.shopify_merch_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','6f052b10309fb4b20549fe23d0f73d645658dd53c6086bfccee73fa0ffbe9647'),
+('hon.shopify_merch_ideas_ok(jsonb)',false,false,'search_path=pg_catalog, hon','5b95d879b9138c63bf7df2f882262b483eab78e77047c98bba0e5d5c7eb27970'),
+('hon.shopify_merch_keys_are(jsonb,text[])',false,false,'search_path=pg_catalog','7556a96f17a68188dd305a64c9279afd187b13bee9774d8bbdfc6d7fd4a64547'),
+('hon.shopify_merch_kinds()',false,false,'search_path=pg_catalog','eddd559534ff456e765791368587c0ade5a8118fee60b3c00525f43c2ea9c184'),
+('hon.shopify_merch_styles()',false,false,'search_path=pg_catalog','912ab927daf35e3d494e2cbf105504c7da9b5fd7fe332b013f111d38318e3e4d'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Shopify merch AI function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='MERCH_IDEAS' AND k.agent_key='marcus' AND k.task_class='DRAFT_MARKETING'
+      AND k.input_budget=6000 AND k.output_budget=3000 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SHOPIFY_STORE' AND k.usage_agent='MERCH_IDEAS') THEN
+    RAISE EXCEPTION 'Shopify merch AI kind row missing or changed';
+  END IF;
+END $$;
+-- End Shopify merch AI ideas exact verification.
 
 -- Shopify finance exact verification (0597, SH-F1): two runtime entry points and one worker function (definer,
 -- owner-safe, exact bodies); the snapshot table is forced-RLS with no policy and no runtime privilege; every new helper

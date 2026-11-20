@@ -4,7 +4,7 @@
  */
 export const CALENDAR_VIEWS = ['day', 'week', 'month'] as const;
 export type CalendarView = (typeof CALENDAR_VIEWS)[number];
-export const CALENDAR_TABS = ['calendar', 'timetable', 'events'] as const;
+export const CALENDAR_TABS = ['calendar', 'timetable', 'events', 'settings'] as const;
 export type CalendarTab = (typeof CALENDAR_TABS)[number];
 export type DateRange = Readonly<{ start: string; end: string }>;
 export type GridDay = Readonly<{ date: string; inMonth: boolean }>;
@@ -100,3 +100,12 @@ export function hourBounds(spans: readonly Span[]): { first: number; last: numbe
 /** URL values are untrusted: only the closed values are kept. */
 export function parseCalendarTab(value: unknown): CalendarTab { return typeof value === 'string' && (CALENDAR_TABS as readonly string[]).includes(value) ? value as CalendarTab : 'calendar'; }
 export function parseCalendarView(value: unknown): CalendarView { return typeof value === 'string' && (CALENDAR_VIEWS as readonly string[]).includes(value) ? value as CalendarView : 'week'; }
+
+/** 0583: the school dates from `from` to `to` (inclusive) that a block-out covers, each with the first covering block-out's label. */
+export function closedDays(blockOuts: readonly Readonly<{ firstDate: string; lastDate: string; label: string }>[], from: string, to: string): Map<string, string> {
+  const closed = new Map<string, string>();
+  for (const b of blockOuts) {
+    for (let date = b.firstDate < from ? from : b.firstDate, end = b.lastDate > to ? to : b.lastDate; date <= end; date = addDays(date, 1)) if (!closed.has(date)) closed.set(date, b.label);
+  }
+  return closed;
+}

@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "5478df079d52777d25c9a839507685398c150ac548e89bb6bdf212d54ba58ec8",
+  "chainSha256": "81b8a0579cc806b4b31b29bb4d827e4f534d91186db2d496e72a4341e05519de",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -731,8 +731,32 @@
       "sha256": "2d3752083574a64ffb76936058118b7ed1b398ef79b7e78dd790c35506381aa6"
     },
     {
+      "file": "0583_calendar_settings.sql",
+      "sha256": "5e2984f34a479a4739e984ee2bcc7532d6de49449da07f869e2c5c70b1d40975"
+    },
+    {
+      "file": "0585_school_message_history.sql",
+      "sha256": "5c85915c11e07fc66563a8b617f9809f4340ed92fa8a2df141143834ee22036b"
+    },
+    {
+      "file": "0586_school_message_templates.sql",
+      "sha256": "d85d8ca8d6153a38a0cd0a04b73628f2cbac4cc7094de7678a50db4c24117e9b"
+    },
+    {
+      "file": "0594_paper_import_ai_reader.sql",
+      "sha256": "7a84df3e44906d28635eaf0889a1c133994e0201b805a7bb343a3ba4b2da99a9"
+    },
+    {
+      "file": "0596_shopify_merch_ai_ideas.sql",
+      "sha256": "15e91391b40b51c53684df45238cc33038f00084add99849eb0737ba173b3452"
+    },
+    {
       "file": "0597_shopify_finance.sql",
       "sha256": "d1495ba5027d402cc3ff21c0ba7d38061505511453323a3108e3a300e04cce94"
+    },
+    {
+      "file": "0598_family_checkout_orders.sql",
+      "sha256": "a4debf59bcbf49c684c439e1bc427c6800a105b3f72a501a36d3d38fd9c0fb13"
     }
   ]
 }
