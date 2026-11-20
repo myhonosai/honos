@@ -51,7 +51,7 @@ it('reads with plain same-origin GETs and sends each command with the Shopify co
   const [cpath, cinit] = g.mock.calls[0] as unknown as [string, RequestInit];
   expect(cpath).toBe('/api/v1/school/shopify/connect');
   expect(cinit.headers).toMatchObject({ 'X-HON-Human-Command': 'school-shopify' });
-  expect(JSON.parse(cinit.body as string)).toEqual({ schoolId: school, shopDomain: SHOP, allowEditing: false });
+  expect(JSON.parse(cinit.body as string)).toEqual({ schoolId: school, shopDomain: SHOP, allowEditing: false, allowFinance: false, allowThemes: false });
   // Only Shopify's own approval page for that shop, or HON's own return page.
   stub(json({ data: { authorizeUrl: `https://other.myshopify.com/admin/oauth/authorize?x=1`, shopDomain: SHOP, expiresAt: at } }));
   expect((await fails(shopifyApi.connect(school, SHOP, signal(), () => true))).kind).toBe('UNKNOWN');

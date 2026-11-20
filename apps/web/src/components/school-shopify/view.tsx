@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import type { ShopifyCatalog, ShopifyConnectResult, ShopifyConnection, ShopifyOrder, ShopifyOrders, ShopifyOverview, ShopifyProduct, ShopifyProductChange, ShopifyProductChanges, ShopifySyncResult } from '@hon/contracts';
+import type { ShopifyCatalog, ShopifyConnectResult, ShopifyConnection, ShopifyFinanceView, ShopifyOrder, ShopifyOrders, ShopifyOverview, ShopifyProduct, ShopifyProductChange, ShopifyProductChanges, ShopifySyncResult } from '@hon/contracts';
 import { shopifyText, type ShopifyKey } from './copy';
 import type { ShopifyErrorKind } from './http';
 import styles from './shopify.module.css';
+import { ThemeBuilder, type ThemeCommand, type ThemeOutcome, type ThemeState } from './theme';
 import { SHOPIFY_ADMIN_PAGES, money, shopifyAdminUrl, type ShopifyAdminPage } from './format';
 export { money, shopifyAdminUrl };
 import { Changes, DraftEditor, ProductEditor, changeFailure, changeOpen, type ProposeRequest } from './editor';
@@ -12,10 +13,10 @@ import type { MerchAiApi, MerchAiScope } from './merch-ai-http';
 type T = (key: ShopifyKey, vars?: Record<string, string>) => string;
 export type OverviewState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; read: ShopifyOverview };
 /** The Commerce Workspace sections built today. Later sections (Collections, Fulfillment, Theme Builder, …) are added when they work. */
-export const SHOPIFY_SECTIONS = ['overview', 'products', 'studio', 'changes', 'orders', 'inventory', 'admin', 'settings'] as const;
+export const SHOPIFY_SECTIONS = ['overview', 'products', 'studio', 'changes', 'orders', 'finance', 'theme', 'inventory', 'admin', 'settings'] as const;
 export type ShopifySection = typeof SHOPIFY_SECTIONS[number];
 export type ListState<T> = { state: 'LOADING' | 'UNAVAILABLE' } | { state: 'READY'; value: T };
-export type ShopifyAction = 'connect' | 'sync' | 'disconnect' | 'allowEditing' | 'propose' | 'approve' | 'cancelChange';
+export type ShopifyAction = 'connect' | 'sync' | 'disconnect' | 'allowEditing' | 'allowFinance' | 'allowThemes' | 'propose' | 'approve' | 'cancelChange';
 /** `target` is the change a command was about; `change` is the server's verified answer for it. */
 export type ShopifyOutcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | ShopifyErrorKind; action: ShopifyAction; sync?: ShopifySyncResult; change?: ShopifyProductChange; target?: string }>;
 
@@ -25,6 +26,10 @@ export type ShopifyViewProps = Readonly<{
   changes?: ListState<ShopifyProductChanges> | undefined;
   onPropose?: ((change: ProposeRequest) => void | Promise<boolean>) | undefined; onApprove?: ((change: ShopifyProductChange) => void) | undefined;
   onCancelChange?: ((change: ShopifyProductChange) => void) | undefined; onAllowEditing?: (() => void) | undefined;
+  /** SH-F1: the Shopify Payments snapshot (managers only) and the switch that asks Shopify for it. */
+  finance?: ListState<ShopifyFinanceView> | undefined; onAllowFinance?: (() => void) | undefined;
+  /** TB1: the theme workspace (managers only), the last theme command and the switch that asks Shopify for theme editing. */
+  theme?: ThemeState | undefined; themeOutcome?: ThemeOutcome | undefined; onThemeCommand?: ((c: ThemeCommand) => void) | undefined; onAllowThemes?: (() => void) | undefined;
   onRefresh?: (() => void) | undefined; onShop?: ((value: string) => void) | undefined; onConnect?: (() => void) | undefined;
   onSync?: (() => void) | undefined; onConfirm?: ((open: boolean) => void) | undefined; onDisconnect?: (() => void) | undefined;
   onSection?: ((section: ShopifySection) => void) | undefined;
@@ -333,6 +338,72 @@ function Inventory({ ctx, catalog }: { ctx: Ctx; catalog: ListState<ShopifyCatal
   </div>;
 }
 
+/** Shopify Payments money arrives as decimal text (which may be negative); shown in its own currency. */
+const cash = (locale: string, currency: string, amount: string) => money(locale, currency, Number(amount));
+const PAYOUT_STATES = new Set(['SCHEDULED', 'IN_TRANSIT', 'PAID', 'FAILED', 'CANCELED']);
+const TXN_TYPES = new Set(['CHARGE', 'REFUND', 'DISPUTE', 'ADJUSTMENT', 'PAYOUT', 'TRANSFER', 'RESERVE', 'APPLICATION_FEE_REFUND']);
+
+/**
+ * SH-F1 Finance: the Shopify Payments balance, the latest payouts and the latest balance transactions as HON last read
+ * them, for managers. Shopify Capital has no API, so it is a link to the Shopify admin, never a number HON makes up.
+ */
+function Finance({ ctx, read, c, finance, locked, busy, onAllowFinance }: { ctx: Ctx; read: ShopifyOverview; c: ShopifyConnection; finance: ListState<ShopifyFinanceView>;
+  locked: boolean; busy: boolean; onAllowFinance?: (() => void) | undefined }): React.ReactElement {
+  const { t, locale } = ctx;
+  const links = <div className={styles.row}>
+    <a className={styles.secondary} href={shopifyAdminUrl(ctx.domain, 'finance')} target="_blank" rel="noopener noreferrer" data-admin-link="finance">{t('fin_openPayouts')}</a>
+    <a className={styles.secondary} href={shopifyAdminUrl(ctx.domain, 'credit')} target="_blank" rel="noopener noreferrer" data-admin-link="credit">{t('fin_openCapital')}</a>
+  </div>;
+  if (!read.canManage) return <div className={styles.card} data-section="finance"><p className={styles.meta}>{t('fin_managerOnly')}</p></div>;
+  if (finance.state !== 'READY') return <div className={styles.card} data-section="finance">{pending(t, finance)}</div>;
+  const f = finance.value;
+  if (!f.financeAllowed) return <div className={styles.section} data-section="finance">
+    <div className={styles.card} data-shopify-finance="not-allowed">
+      <h2>{t('fin_title')}</h2><p className={styles.meta}>{t('fin_allowHelp')}</p>
+      {c.status === 'CONNECTED' && <div className={styles.row}><button type="button" className={styles.primary} disabled={locked} onClick={onAllowFinance}>{busy ? t('connecting') : t('fin_allow')}</button></div>}
+    </div>
+    <div className={styles.card}><h2>{t('fin_capital')}</h2><p className={styles.meta}>{t('fin_capitalNote')}</p>{links}</div>
+  </div>;
+  const snap = f.finance;
+  return <div className={styles.section} data-section="finance">
+    {!snap ? <div className={styles.card} data-shopify-finance="not-read"><h2>{t('fin_title')}</h2><p className={styles.meta}>{t('fin_notRead')}</p></div>
+      : !snap.paymentsActive ? <div className={styles.card} data-shopify-finance="payments-off"><h2>{t('fin_title')}</h2><p className={styles.meta}>{t('fin_paymentsOff')}</p>{links}</div>
+      : <>
+        <div className={styles.card} data-shopify-finance="ready">
+          <div className={styles.cardHead}><h2>{t('fin_balance')}</h2><span className={styles.meta}>{t('fin_readAt', { time: when(locale, snap.readAt) })}</span></div>
+          {snap.balances.length === 0 ? <p className={styles.meta}>{t('fin_noBalance')}</p>
+            : <dl className={styles.stats}>{snap.balances.map(b => <div key={b.currency} data-balance={b.currency}><dt>{b.currency}</dt><dd>{cash(locale, b.currency, b.amount)}</dd></div>)}</dl>}
+          <p className={styles.meta}>{t('fin_balanceNote')}</p>
+        </div>
+        <div className={styles.card}>
+          <h2>{t('fin_payouts')}</h2>
+          {snap.payouts.length === 0 ? <p className={styles.meta}>{t('fin_noPayouts')}</p>
+            : <div className={styles.tableWrap}><table className={styles.table} data-shopify-payouts>
+              <thead><tr><th>{t('col_date')}</th><th>{t('col_status')}</th><th>{t('fin_amount')}</th></tr></thead>
+              <tbody>{snap.payouts.map(o => <tr key={o.id} data-payout={o.id}>
+                <td>{day(locale, o.issuedAt)}</td>
+                <td><span className={styles.chip} data-state={o.status}>{t(PAYOUT_STATES.has(o.status) ? `po_${o.status}` as ShopifyKey : 'po_other')}</span></td>
+                <td>{o.direction === 'WITHDRAWAL' ? '−' : ''}{cash(locale, o.currency, o.net.replace(/^-/, ''))}</td>
+              </tr>)}</tbody>
+            </table></div>}
+        </div>
+        <div className={styles.card}>
+          <h2>{t('fin_transactions')}</h2>
+          {snap.transactions.length === 0 ? <p className={styles.meta}>{t('fin_noTransactions')}</p>
+            : <div className={styles.tableWrap}><table className={styles.table} data-shopify-transactions>
+              <thead><tr><th>{t('col_date')}</th><th>{t('fin_type')}</th><th>{t('fin_amount')}</th><th>{t('fin_fee')}</th><th>{t('fin_net')}</th></tr></thead>
+              <tbody>{snap.transactions.map(x => <tr key={x.id} data-transaction={x.id}>
+                <td>{day(locale, x.at)}</td>
+                <td>{t(TXN_TYPES.has(x.type) ? `tx_${x.type}` as ShopifyKey : 'tx_other')}{x.test && <span className={styles.chip} data-state="TEST">{t('fin_test')}</span>}</td>
+                <td>{cash(locale, x.currency, x.amount)}</td><td>{cash(locale, x.currency, x.fee)}</td><td>{cash(locale, x.currency, x.net)}</td>
+              </tr>)}</tbody>
+            </table></div>}
+        </div>
+      </>}
+    <div className={styles.card}><h2>{t('fin_capital')}</h2><p className={styles.meta}>{t('fin_capitalNote')}</p>{links}</div>
+  </div>;
+}
+
 function Connection({ p, t, read, c }: { p: ShopifyViewProps; t: T; read: ShopifyOverview; c: ShopifyConnection }): React.ReactElement {
   const o = p.outcome;
   return <div className={styles.card} data-shopify-connection data-status={c.status}>
@@ -365,7 +436,9 @@ function Settings({ p, t, read, c }: { p: ShopifyViewProps; t: T; read: ShopifyO
     <div className={styles.card} data-shopify-permissions>
       <h2>{t('perm_title')}</h2>
       <ul className={styles.plainList}><li>{t('perm_read')}</li><li>{t('perm_orders')}</li>
-        {edit?.editProducts && <li data-perm="products">{t('perm_editProducts')}</li>}{edit?.editCosts && <li data-perm="costs">{t('perm_editCosts')}</li>}</ul>
+        {edit?.editProducts && <li data-perm="products">{t('perm_editProducts')}</li>}{edit?.editCosts && <li data-perm="costs">{t('perm_editCosts')}</li>}
+        {p.finance?.state === 'READY' && p.finance.value.financeAllowed && <li data-perm="finance">{t('perm_finance')}</li>}
+        {p.theme?.state === 'READY' && p.theme.value.themesAllowed && <li data-perm="themes">{t('perm_themes')}</li>}</ul>
       <p className={styles.meta}>{t(edit?.editProducts ? 'perm_approval' : 'perm_noWrite')}</p>
       {edit && !(edit.editProducts && edit.editCosts) && read.canManage && c.status === 'CONNECTED' &&
         <div className={styles.row}><button type="button" className={styles.secondary} disabled={p.locked} onClick={p.onAllowEditing}>{p.locked && p.outcome?.action === 'allowEditing' ? t('connecting') : t('allowEditing')}</button></div>}
@@ -439,6 +512,11 @@ export function ShopifyView(p: ShopifyViewProps): React.ReactElement {
         connected={c.status === 'CONNECTED'} locked={p.locked} busy={p.locked && o?.action === 'approve' ? o.target ?? null : null} pending={pending}
         when={(iso) => when(p.locale, iso)} onApprove={p.onApprove} onCancel={p.onCancelChange} onAllowEditing={p.onAllowEditing} />
       : section === 'orders' ? <Orders ctx={ctx} orders={p.orders} />
+      : section === 'finance' ? <Finance ctx={ctx} read={read} c={c} finance={p.finance ?? { state: 'LOADING' }} locked={p.locked}
+        busy={p.locked && o?.action === 'allowFinance'} onAllowFinance={p.onAllowFinance} />
+      : section === 'theme' ? <ThemeBuilder language={p.language} locale={p.locale} domain={c.shopDomain} canManage={read.canManage} connected={c.status === 'CONNECTED'}
+        theme={p.theme ?? { state: 'LOADING' }} outcome={p.themeOutcome ?? null} locked={p.locked} allowing={p.locked && o?.action === 'allowThemes'}
+        brandColor={p.brand?.state === 'READY' ? p.brand.accentColor : null} onCommand={(cmd) => p.onThemeCommand?.(cmd)} onAllowThemes={p.onAllowThemes} />
       : section === 'inventory' ? <Inventory ctx={ctx} catalog={p.catalog} />
       : section === 'admin' ? <AdminLinks ctx={ctx} />
       : <><Settings p={p} t={t} read={read} c={c} />{connectable && <ConnectCard p={p} t={t} read={read} c={c} />}</>}

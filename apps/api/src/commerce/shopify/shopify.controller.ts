@@ -18,6 +18,8 @@ export class ShopifyController {
   read(@Req() r: HonRequest, @Param('schoolId') s: string) { return this.shopify.overview(r, s).then(data => ({ data })); }
   @Get('school/schools/:schoolId/shopify/catalog')
   catalog(@Req() r: HonRequest, @Param('schoolId') s: string) { return this.shopify.catalog(r, s).then(data => ({ data })); }
+  @Get('school/schools/:schoolId/shopify/finance')
+  finance(@Req() r: HonRequest, @Param('schoolId') s: string) { return this.shopify.finance(r, s).then(data => ({ data })); }
   @Get('school/schools/:schoolId/shopify/orders')
   orders(@Req() r: HonRequest, @Param('schoolId') s: string) { return this.shopify.orders(r, s).then(data => ({ data })); }
   @Post('school/shopify/connect') @HttpCode(200)
@@ -34,6 +36,10 @@ export class ShopifyController {
   cancelChange(@Req() r: HonRequest, @Body() b: unknown) { return this.shopify.cancelChange(r, b).then(data => ({ data })); }
   @Post('school/shopify/changes/approve') @HttpCode(200)
   approveChange(@Req() r: HonRequest, @Body() b: unknown) { return this.shopify.approveChange(r, b).then(data => ({ data })); }
+  @Get('school/schools/:schoolId/shopify/theme')
+  theme(@Req() r: HonRequest, @Param('schoolId') s: string) { return this.shopify.themeWorkspace(r, s).then(data => ({ data })); }
+  @Post('school/shopify/theme') @HttpCode(200)
+  themeWork(@Req() r: HonRequest, @Body() b: unknown) { return this.shopify.themeWork(r, b).then(data => ({ data })); }
   @Post('school/shopify/disconnect') @HttpCode(200)
   disconnect(@Req() r: HonRequest, @Body() b: unknown) { return this.shopify.disconnect(r, b).then(data => ({ data })); }
 }

@@ -191,6 +191,15 @@ BEGIN
 END;
 $$;
 
+-- 0597 Shopify finance: record the Shopify Payments snapshot a background sync read under its lease (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.record_shopify_background_finance(jsonb)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.record_shopify_background_finance(jsonb) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 -- 0601 parent announcement push: claim and record sends and Expo receipts (when applied). No table access.
 DO $$
 BEGIN
