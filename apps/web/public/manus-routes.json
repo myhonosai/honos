@@ -401,6 +401,10 @@
       "title": "HON | Conversations"
     },
     {
+      "path": "/staff/calls",
+      "title": "HON | Calls"
+    },
+    {
       "path": "/staff/conversations/train-ai",
       "title": "HON | Train AI"
     },
@@ -607,6 +611,10 @@
     {
       "path": "/hq/communications/:messageId",
       "title": "HON HQ | HQ message"
+    },
+    {
+      "path": "/hq/communications/calls",
+      "title": "HON HQ | Calls"
     },
     {
       "path": "/hq/communications/numbers",

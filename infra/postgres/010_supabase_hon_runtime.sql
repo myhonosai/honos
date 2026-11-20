@@ -4540,6 +4540,50 @@ BEGIN
   END IF;
 END $$;
 
+-- 0590 school voice apps (CL2): one private forced-RLS table; one staff runtime entry point (phone token authorization);
+-- claim, record and key reads belong to the communication worker (013); the guard is migration-owner only.
+DO $$ DECLARE r text; f text;
+  closed text[]:=ARRAY['hon.read_schools_needing_voice_app(integer)','hon.begin_school_voice_app(uuid,integer)','hon.record_school_voice_app_twiml(uuid,uuid,text)',
+    'hon.complete_school_voice_app(uuid,uuid,text,text,text)','hon.read_school_voice_app(uuid)','hon.guard_school_voice_app()'];
+BEGIN
+  IF to_regprocedure('hon.authorize_school_phone_token(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0590 first'; END IF;
+  FOREACH f IN ARRAY closed||ARRAY['hon.authorize_school_phone_token(text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.school_voice_apps FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.school_voice_apps FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN GRANT EXECUTE ON FUNCTION hon.authorize_school_phone_token(text) TO hon_runtime; END IF;
+END $$;
+
+-- 0591 HQ calls (CL5): six private forced-RLS tables with no policy; nine HQ runtime entry points; provider entry points
+-- belong to the communication worker (013); guards and helpers are migration-owner only.
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.read_hq_calling(text)','hon.set_hq_calling_settings(text,jsonb)','hon.set_my_hq_call_ringing(text,jsonb)',
+    'hon.start_hq_call(text,jsonb,text)','hon.read_hq_calls(text,jsonb)','hon.update_hq_call(text,jsonb)','hon.set_hq_do_not_call(text,jsonb)',
+    'hon.open_hq_call_recording(text,uuid)','hon.authorize_hq_phone_token(text)'];
+  closed text[]:=ARRAY['hon.hq_needs_voice_app()','hon.begin_hq_voice_app(integer)','hon.record_hq_voice_app_twiml(uuid,text)',
+    'hon.complete_hq_voice_app(uuid,text,text,text)','hon.read_hq_voice_app()','hon.connect_hq_client_call(uuid,text,text)',
+    'hon.route_hq_incoming_call(text,text,text)','hon.record_hq_call_status(text,text,text,integer,timestamptz)',
+    'hon.record_hq_call_voicemail(text,text,integer)','hon.read_hq_call_recordings_due(integer)','hon.mark_hq_call_recording_deleted(uuid,text)',
+    'hon.guard_hq_call()','hon.guard_hq_calling_row()','hon.guard_hq_voice_app()','hon.guard_hq_call_evidence()','hon.hq_call_identity(uuid)',
+    'hon.hq_call_staff_ok(uuid)','hon.hq_call_number()','hon.hq_call_contact(text)','hon.expire_hq_calls()','hon.hq_call_json(hon.hq_calls)',
+    'hon.hq_call_evidence(uuid,uuid,text,text,jsonb)','hon.hq_call_state(hon.hq_calls)'];
+BEGIN
+  IF to_regprocedure('hon.start_hq_call(text,jsonb,text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0591 first'; END IF;
+  FOREACH f IN ARRAY entry||closed LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hq_calling_settings','hq_call_staff','hq_calls','hq_do_not_call','hq_voice_app','hq_call_events'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
 -- 0567 calendar cards: three runtime entry points (create, move/resize, card read). The new columns, the roster detachment
 -- table and every helper stay migration-owner only; the runtime keeps no UPDATE on class sessions.
 DO $$ DECLARE r text; f text; col text; BEGIN

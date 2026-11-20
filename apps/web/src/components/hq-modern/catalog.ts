@@ -60,6 +60,7 @@ export const HQ_NAV = [
   { path: '/hq/approvals', title: 'Approvals', icon: 'check' },
   { path: '/hq/support', title: 'Support', icon: 'support' },
   { path: '/hq/communications', title: 'Texts & Email', icon: 'support' },
+  { path: '/hq/communications/calls', title: 'Calls', icon: 'support' },
 ] as const;
 type HqNavLink = { readonly path: string; readonly title: string; readonly icon: string };
 export type HqNavGroup = { readonly key: 'schools' | 'revenue' | 'ai' | 'growth'; readonly title: string; readonly icon: string; readonly overview?: HqNavLink; readonly children: readonly HqNavLink[] };

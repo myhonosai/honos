@@ -284,6 +284,15 @@ import { ParentProShopController, ParentProShopReadGuard } from './pro-shop/pare
 import { ParentProShopService } from './pro-shop/parent-pro-shop.service.js';
 import { ConversationCreateLeadGuard, ConversationLinkGuard, ConversationMarkReadGuard, ConversationReadGuard, ConversationReplyGuard, ConversationUpdateGuard, SchoolConversationsController } from './conversations/school-conversations.controller.js';
 import { SchoolConversationsService } from './conversations/school-conversations.service.js';
+import { SchoolCallDoNotCallGuard, SchoolCallReadGuard, SchoolCallRingGuard, SchoolCallSettingsGuard, SchoolCallStartGuard, SchoolCallTokenGuard, SchoolCallUpdateGuard, SchoolCallsController } from './calls/school-calls.controller.js';
+import { SchoolCallsService, TWILIO_VOICE_KEY_VAULT } from './calls/school-calls.service.js';
+import { SchoolCallRecordingRetentionWorker, SchoolVoiceAppWorker, SchoolVoiceScheduler } from './calls/school-voice-workers.js';
+import { SCHOOL_VOICE_TWILIO_CLIENT, TwilioRestVoiceClient } from './calls/twilio-voice-rest.js';
+import { SchoolCallWebhooksController } from './calls/school-call-webhooks.controller.js';
+import { HqCallWebhooksController } from './calls/hq-call-webhooks.controller.js';
+import { HqCallsController } from './calls/hq-calls.controller.js';
+import { HqCallsService } from './calls/hq-calls.service.js';
+import { twilioVoiceKeyVaultFromEnvironment } from './calls/twilio-voice.js';
 import { ContactEmailResendGuard, ContactHistoryReadGuard, ContactMessagesController } from './conversations/contact-messages.controller.js';
 import { ContactMessagesService } from './conversations/contact-messages.service.js';
 import { ConversationAiController, ConversationAiFileGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard, ConversationAiKnowledgeGuard, ConversationAiProgramHqController, ConversationAiReadGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard } from './conversations/conversation-ai.controller.js';
@@ -548,6 +557,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolAnnouncementsController,
     ParentProShopController,
     SchoolConversationsController,
+    SchoolCallsController,
+    SchoolCallWebhooksController,
+    HqCallsController,
+    HqCallWebhooksController,
     ContactMessagesController,
     ConversationAiController,
     ConversationAiProgramHqController,
@@ -753,6 +766,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentProShopService,
     ParentProShopReadGuard,
     SchoolConversationsService,
+    SchoolCallsService,
+    HqCallsService,
     ContactMessagesService,
     ContactHistoryReadGuard,
     ContactEmailResendGuard,
@@ -760,6 +775,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ConversationAiProgramService,
     ConversationAiReadGuard, ConversationAiKnowledgeGuard, ConversationAiFileGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard,
     ConversationReadGuard,
+    SchoolCallReadGuard, SchoolCallSettingsGuard, SchoolCallRingGuard, SchoolCallStartGuard, SchoolCallUpdateGuard, SchoolCallDoNotCallGuard, SchoolCallTokenGuard,
+    { provide: TWILIO_VOICE_KEY_VAULT, useFactory: () => twilioVoiceKeyVaultFromEnvironment() },
+    { provide: SCHOOL_VOICE_TWILIO_CLIENT, useFactory: () => new TwilioRestVoiceClient() },
+    SchoolVoiceAppWorker, SchoolCallRecordingRetentionWorker, SchoolVoiceScheduler,
     ConversationReplyGuard,
     ConversationUpdateGuard,
     ConversationMarkReadGuard,
