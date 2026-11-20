@@ -54,3 +54,19 @@ No message, charge, CRM lead, student record, booking or AI. Nothing here deploy
 3. Web: a Settings tab on Classes > Calendar (Programs link, Block-out Dates, Share Links with link, embed code, QR,
    edit, delete, on/off), closed days on the calendar, and the public page `/calendars/[publicId]`.
 4. Unit tests, browser proof with screenshots, full test/check/build.
+
+## Closed days for families (0607)
+
+Owner decision (David, 2026-11-19, decision card "Hide from families only"): a class whose school-local start date is inside
+an ACTIVE block-out of its own school is not offered to families, while staff keep the 0583 warn-and-continue behaviour.
+
+- Parent app (0329 `hon.parent_class_booking_session_ok`): the choices read leaves the class out and booking it is refused with
+  `PARENT_CLASS_BOOKING_NOT_OFFERED`, writing nothing. Existing bookings stay, and families can still cancel them.
+- Kiosk trial (0538 `hon.walkin_trial_session_open`, `hon.walkin_trial_classes`): the tablet does not list the class and a submit
+  naming it is refused like any unavailable class (`CLASS_FULL`, nothing written).
+- Public shared calendar: already hides block-out days (0583).
+- Unchanged: staff booking, the staff calendar, ClassPass, owner-launch first class, school events and booking types.
+- Private helper `hon.class_session_on_closed_day(hon.class_sessions)` uses the session's own school and time zone. Signatures
+  are unchanged, so ACLs stay; 011 pins the new bodies (0329 section hash and a 0607 section).
+- Proof: closed-day checks added to `test-parent-class-booking-integrity.mjs` (section 4b) and
+  `test-walk-in-kiosk-trial-seats-integrity.mjs` (section 2b, plus the 0607 011 section).

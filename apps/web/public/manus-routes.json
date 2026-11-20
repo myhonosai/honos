@@ -161,6 +161,10 @@
       "title": "Human Public Lead Forms"
     },
     {
+      "path": "/staff/marketing/referrals",
+      "title": "Family Referrals"
+    },
+    {
       "path": "/staff/marketing/intake",
       "title": "HON | Lead Sources & Intake Monitor"
     },
@@ -211,6 +215,10 @@
     {
       "path": "/forms/:publicId",
       "title": "School Enquiry Form"
+    },
+    {
+      "path": "/refer/:code",
+      "title": "Family Referral Invitation"
     },
     {
       "path": "/book/:publicId",

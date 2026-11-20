@@ -26,6 +26,7 @@ import { verifyParentSchoolAnnouncements, type ParentSchoolAnnouncements } from 
 import { verifyParentAttendanceStreaks, type ParentAttendanceStreaks } from '@hon/contracts/parent-attendance-streaks';
 import { verifyParentProShop, type ParentProShop } from '@hon/contracts/parent-pro-shop';
 import { verifyParentJourneyRecommendations, type ParentJourneyRecommendations } from '@hon/contracts/journey-recommendations';
+import { verifyParentReferralLink, verifyParentReferrals, type ParentReferralLink, type ParentReferrals } from '@hon/contracts/family-referrals';
 import {
   validateRegisterParentPushDeviceInput, validateUnregisterParentPushDeviceInput, verifyParentPushDeviceReceipt, verifyParentPushStatus, verifyParentPushUnregisterReceipt,
   type ParentPushDeviceReceipt, type ParentPushPlatform, type ParentPushStatus, type ParentPushUnregisterReceipt,
@@ -208,6 +209,11 @@ export function createParentApi(options: ParentApiOptions) {
         verifyParentPushUnregisterReceipt),
     /** The school's own Shopify products (0581); buying opens the school's store page. No school or family id is sent. */
     proShop: (): Promise<ParentRead<ParentProShop>> => get('/v1/parent/pro-shop', dataOf(verifyParentProShop)),
+    /** 0604: the school's family referral program, the family's counts and referrals (never a friend's name). */
+    referrals: (): Promise<ParentRead<ParentReferrals>> => get('/v1/parent/referrals', dataOf(verifyParentReferrals)),
+    /** 0604: the family's personal link, created once per school; the same link every time. Needs a guardian. */
+    referralLink: (idempotencyKey: string): Promise<ParentWrite<ParentReferralLink>> =>
+      post('/v1/parent/referrals/link', 'parent.referrals.link', idempotencyKey, {}, verifyParentReferralLink, ['PARENT_REFERRALS_NOT_CONFIGURED']),
     /** 0598: the school's checkout pages the family can buy from, the family's children and latest orders. No school or family id is sent. */
     checkoutPages: (): Promise<ParentRead<ParentCheckoutPages>> => get('/v1/parent/checkout-pages', dataOf(verifyParentCheckoutPages)),
     /** Places an order and opens the processor page when it is not free. The server decides who, what and how much. */

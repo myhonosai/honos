@@ -54,8 +54,9 @@ Expo's push service is free and needs no new account (the app already uses EAS p
 
 ## Owner setup before real sends
 
-- **Android:** a free Firebase project with an Android app `com.myhonos.family`; its `google-services.json` added to the
-  app (`android.googleServicesFile`) and its FCM V1 service-account key uploaded to EAS (`eas credentials` -> Android ->
+- **Android:** the free Firebase project `hon-family-7e83d` has the Android app `com.myhonos.family`; its
+  `google-services.json` is in the app (`android.googleServicesFile`; a client config that ships inside every build, not
+  a secret). Still owed: its FCM V1 service-account key, which is a secret, never committed, uploaded by the owner to EAS (`eas credentials` -> Android ->
   production -> Google Service Account -> FCM V1). Then a new Android build. Until then Android cannot get a token and
   simply skips registering.
 - **iOS:** an APNs key from the Apple Developer account, set up through `eas credentials` (on hold with iOS).
