@@ -5476,6 +5476,44 @@ DO $$ DECLARE f record; safe boolean; BEGIN
     RAISE EXCEPTION 'The family checkout order recorder must be a code-owned service with no authority'; END IF;
 END $$;
 -- End family checkout orders exact verification.
+
+-- Shopify merch AI ideas exact verification (0596): the MERCH_IDEAS kind row on the shared AI text proposals (0550), the
+-- closed brief and answer shapes, the private authority, facts and view helpers, and the seven runtime entry points.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.begin_shopify_merch_ideas(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','74497d61d966dc3995e267b69b8a55aec23664b1d42d3a83e9557f89a1214257'),
+('hon.close_shopify_merch_ideas(text,uuid,text)',true,true,'search_path=pg_catalog, hon','fad059daacdad94ab0447391ad0e8ec607aa17f984f80d77bd0b6b0db5ab8d73'),
+('hon.fail_shopify_merch_ideas(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','15e79a69ec549f3e59b2492039c0130f0793f190824fddb1263a9c5689e4ad87'),
+('hon.prepare_shopify_merch_ideas(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','260b38d97bf4ba28c21c1736073f56d1a2bcd93e0d8e0990efb49aff6f0df220'),
+('hon.read_shopify_merch_ideas(text,uuid)',true,true,'search_path=pg_catalog, hon','ed965695d7dee5a5061d615ef6a1f58d3ad24cd0b87b1ab0f749d9fbbd74bbfc'),
+('hon.record_shopify_merch_ideas(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','f9b7cff52e04cde057d9c45d227a655179d198c834da8c36b24c56ec2974aee8'),
+('hon.plan_shopify_merch_ideas(text,uuid)',true,true,'search_path=pg_catalog, hon','8ed1020ee0bd464b9121ed83f66559d063de11802030df7dcf0f15dd47b1fbef'),
+('hon.shopify_merch_ai_actor(text)',true,false,'search_path=pg_catalog, hon','6b4bfc609c2515784d441e8e10e13ca68e8529c48ae9b889ab95a4845a84b582'),
+('hon.shopify_merch_ai_facts(jsonb,uuid)',true,false,'search_path=pg_catalog, hon','27619b0084c24ed5871006eef2c379cdad247191ea69f584ad1825ae968441ff'),
+('hon.shopify_merch_ai_reader(text)',true,false,'search_path=pg_catalog, hon','936c85ab00504181ff469620a89f6ae367ef135dc3c082d1231e754cc8937243'),
+('hon.shopify_merch_ai_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','d34e69258f1c91bcd82737b230fe4a5553c9ac1cd4104aa9dba1ae671669449f'),
+('hon.shopify_merch_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','6f052b10309fb4b20549fe23d0f73d645658dd53c6086bfccee73fa0ffbe9647'),
+('hon.shopify_merch_ideas_ok(jsonb)',false,false,'search_path=pg_catalog, hon','5b95d879b9138c63bf7df2f882262b483eab78e77047c98bba0e5d5c7eb27970'),
+('hon.shopify_merch_keys_are(jsonb,text[])',false,false,'search_path=pg_catalog','7556a96f17a68188dd305a64c9279afd187b13bee9774d8bbdfc6d7fd4a64547'),
+('hon.shopify_merch_kinds()',false,false,'search_path=pg_catalog','eddd559534ff456e765791368587c0ade5a8118fee60b3c00525f43c2ea9c184'),
+('hon.shopify_merch_styles()',false,false,'search_path=pg_catalog','912ab927daf35e3d494e2cbf105504c7da9b5fd7fe332b013f111d38318e3e4d'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Shopify merch AI function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='MERCH_IDEAS' AND k.agent_key='marcus' AND k.task_class='DRAFT_MARKETING'
+      AND k.input_budget=6000 AND k.output_budget=3000 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SHOPIFY_STORE' AND k.usage_agent='MERCH_IDEAS') THEN
+    RAISE EXCEPTION 'Shopify merch AI kind row missing or changed';
+  END IF;
+END $$;
+-- End Shopify merch AI ideas exact verification.
 -- Parent announcement push exact verification (0601): private token check, guards, live-person check and scope, two runtime entry points,
 -- four worker functions only the communication worker may run, and three private forced-RLS tables nobody else can touch.
 DO $$ DECLARE f record; safe boolean; t text; worker oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_communication_worker'); BEGIN
