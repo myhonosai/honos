@@ -4644,3 +4644,47 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_parent_pro_shop(text) TO hon_runtime;
   END IF;
 END $$;
+-- 0583 calendar settings: eight runtime entry points (settings read and save, block-out add, remove and read, share
+-- calendar save and delete, public share calendar read). The three tables and every helper stay migration-owner only.
+DO $$ DECLARE r text; f text; t text; col text; BEGIN
+  IF to_regprocedure('hon.read_public_share_calendar(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0583 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['calendar_share_settings','calendar_block_outs','share_calendars'] LOOP
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r);
+      FOR col IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+        EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',col,t,r); END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_calendar_settings()',
+    'hon.calendar_day_blocked(uuid,uuid,date)',
+    'hon.share_calendar_times(uuid,uuid,uuid,text,integer)',
+    'hon.share_calendar_json(hon.share_calendars)',
+    'hon.calendar_block_out_json(hon.calendar_block_outs)',
+    'hon.calendar_settings_fp(text,uuid,jsonb)',
+    'hon.calendar_expected_version(jsonb)',
+    'hon.public_share_calendar(text)',
+    'hon.save_calendar_share_settings(text,jsonb,text,uuid,uuid)',
+    'hon.save_calendar_block_out(text,jsonb,text,uuid,uuid)',
+    'hon.remove_calendar_block_out(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.save_share_calendar(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.delete_share_calendar(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.read_calendar_settings(text)',
+    'hon.read_school_calendar_block_outs(text,jsonb)',
+    'hon.read_public_share_calendar(text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.save_calendar_share_settings(text,jsonb,text,uuid,uuid),
+      hon.save_calendar_block_out(text,jsonb,text,uuid,uuid),
+      hon.remove_calendar_block_out(text,uuid,jsonb,text,uuid,uuid),
+      hon.save_share_calendar(text,uuid,jsonb,text,uuid,uuid),
+      hon.delete_share_calendar(text,uuid,jsonb,text,uuid,uuid),
+      hon.read_calendar_settings(text),
+      hon.read_school_calendar_block_outs(text,jsonb),
+      hon.read_public_share_calendar(text) TO hon_runtime;
+  END IF;
+END $$;
+-- End 0583 calendar settings grants.
