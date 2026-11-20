@@ -52,6 +52,7 @@ test('0603 service refuses before any database call and maps errors to closed co
   assert.deepEqual(code('P0002', 'JOURNEY_RECOMMENDATIONS_NOT_FOUND'), [404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND']);
   assert.deepEqual(code('53400', 'JOURNEY_RECOMMENDATIONS_LIMIT'), [422, 'JOURNEY_RECOMMENDATIONS_LIMIT']);
   assert.deepEqual(code('40001', 'VERSION_CONFLICT'), [409, 'VERSION_CONFLICT']);
+  assert.deepEqual(code('53400', 'JOURNEY_SIBLING_LIMIT'), [422, 'JOURNEY_SIBLING_LIMIT']);
   assert.deepEqual(code('08006'), [503, 'JOURNEY_RECOMMENDATIONS_UNAVAILABLE']);
 });
 

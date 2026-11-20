@@ -20,6 +20,7 @@ const ERRORS: Record<string, (code: string) => HttpException> = {
   JOURNEY_RECOMMENDATIONS_FORBIDDEN: code => new ForbiddenException({ code }),
   JOURNEY_RECOMMENDATIONS_NOT_FOUND: code => new NotFoundException({ code, detail: 'That program, rank, page, event or recommendation is not available.' }),
   JOURNEY_RECOMMENDATIONS_LIMIT: code => new HttpException({ code, detail: 'A program can have at most 50 recommendations. Remove one first.' }, HttpStatus.UNPROCESSABLE_ENTITY),
+  JOURNEY_SIBLING_LIMIT: code => new HttpException({ code, detail: 'That is the most brothers or sisters a family can add here for now. Ask the school in Messages.' }, HttpStatus.UNPROCESSABLE_ENTITY),
   VERSION_CONFLICT: code => new ConflictException({ code, detail: 'This recommendation changed. Refresh to see the latest.' }),
   IDEMPOTENCY_KEY_REUSED: code => new ConflictException({ code, detail: 'The idempotency key was already used for a different command.' }),
   IDEMPOTENCY_IN_PROGRESS: code => new ConflictException({ code, detail: 'The matching command is being processed.' }),

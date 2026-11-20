@@ -1,10 +1,10 @@
+BEGIN;
 -- 0608 J1b: a family's answer to a journey recommendation (David 2026-11-20, "Both extras"; lead with the child's name 21:05Z).
 -- "Not now" hides one recommendation for the whole family for good. Interest names who it is for: one of the family's own
 -- children the recommendation shows for, or a brother or sister whose name the guardian types. Each new interest opens one CRM
 -- lead named after that child in the school's first pipeline (none when the school has no pipeline), with the usual
 -- crm.lead.create audit and crm.lead.created event. Rows never change or go away. Guardians only (a VIEWER reads but does not
 -- answer). No message, charge or booking is created. The family read (0603) now leaves out what the family hid; same JSON shape.
-BEGIN;
 
 -- A child's name as the family read shows it or as typed: not blank, at most 200 characters, on one line.
 -- A typed brother or sister name is further held to 80 characters with no space at either end (in the command below).
@@ -124,6 +124,12 @@ BEGIN
     -- A brother or sister is someone the family read does not already show by that name.
     IF v_sibling AND EXISTS(SELECT 1 FROM jsonb_array_elements(shown) c WHERE lower(c->>'name')=lower(v_name)) THEN
       RAISE EXCEPTION 'VALIDATION_FAILED' USING ERRCODE='22023'; END IF;
+    -- Typed names are bounded (the family row is locked): at most 3 brothers or sisters per recommendation and 10 per family a day.
+    IF v_sibling AND ((SELECT count(*) FROM hon.journey_recommendation_responses x WHERE x.family_id=sc.family_id AND x.school_id=sc.school_id
+          AND x.kind='INTERESTED' AND x.sibling AND x.recommendation_id=p_recommendation)>=3
+      OR (SELECT count(*) FROM hon.journey_recommendation_responses x WHERE x.family_id=sc.family_id AND x.school_id=sc.school_id
+          AND x.kind='INTERESTED' AND x.sibling AND x.created_at>clock_timestamp()-interval '1 day')>=10) THEN
+      RAISE EXCEPTION 'JOURNEY_SIBLING_LIMIT' USING ERRCODE='53400'; END IF;
     SELECT st.* INTO v_stage FROM hon.crm_pipeline_stages st
       WHERE st.organization_id=sc.organization_id AND st.school_id=sc.school_id AND st.terminal_status IS NULL AND st.hidden_at IS NULL
         AND st.pipeline_id=(SELECT pl.id FROM hon.crm_pipelines pl WHERE pl.organization_id=sc.organization_id AND pl.school_id=sc.school_id ORDER BY pl.created_at, pl.id LIMIT 1)

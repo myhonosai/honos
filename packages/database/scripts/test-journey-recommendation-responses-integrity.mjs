@@ -293,6 +293,18 @@ try {
   await refused(() => interest(COACH, { headers: { 'Idempotency-Key': 'x' } }), 409, 'IDEMPOTENCY_KEY_NOT_ACCEPTED', 'a read takes no key');
   await refused(() => call(COACH, 'GET', `/organizations/${ids.organization}/schools/${ids.otherSchool}/journey-recommendations/interest`), 403, 'JOURNEY_RECOMMENDATIONS_FORBIDDEN', 'another school by URL');
 
+  // 2c. Typed names are bounded: 3 brothers or sisters per recommendation and 10 per family a day; a replay at the limit still passes.
+  for (const n of ['Ann', 'Ben', 'Cy']) await success(() => respond(NEIGHBOUR, A.recommendationId, want(n, true)), `neighbour sibling ${n}`);
+  const beforeLimit = (await leads()).length;
+  await refused(() => respond(NEIGHBOUR, A.recommendationId, want('Dee', true)), 422, 'JOURNEY_SIBLING_LIMIT', 'a fourth brother or sister on one recommendation');
+  ok((await success(() => respond(NEIGHBOUR, A.recommendationId, want('ann', true)), 'sibling replay at the limit')).data.replayed === true, 'a replay at the limit still passes');
+  ok((await success(() => respond(NEIGHBOUR, B.recommendationId, want('Ivy Park')), 'own child at the sibling limit')).data.replayed === false, 'the family own child is not counted');
+  // Seeding only: seven more typed names today on another recommendation bring the family to ten.
+  for (let i = 0; i < 7; i += 1) await sql(`INSERT INTO hon.journey_recommendation_responses(organization_id,school_id,recommendation_id,family_id,kind,child_name,sibling,principal_id)
+    VALUES($1,$2,$3,$4,'INTERESTED',$5,true,$6)`, [ids.organization, ids.school, LATER.recommendationId, ids.otherFamily, `Seed ${i}`, NEIGHBOUR.principal]);
+  await refused(() => respond(NEIGHBOUR, B.recommendationId, want('Eve', true)), 422, 'JOURNEY_SIBLING_LIMIT', 'an eleventh brother or sister in a day');
+  ok((await leads()).length === beforeLimit + 1 && Number((await one("SELECT count(*) n FROM hon.journey_recommendation_responses WHERE family_id=$1 AND sibling", [ids.otherFamily])).n) === 10, 'a refused name records nothing and opens no lead');
+
   // 3. HIDDEN: the family read leaves it out for every member of that family only; answering again is a replay.
   const hid = (await success(() => respond(GUARDIAN, B.recommendationId, HIDE), 'guardian hides B')).data;
   ok(hid.kind === 'HIDDEN' && hid.replayed === false, 'hide receipt');
@@ -303,18 +315,18 @@ try {
   ok((await success(() => respond(GUARDIAN, B.recommendationId, want('Mia Park')), 'interest replay on a hidden one')).data.replayed === true, 'an earlier interest still replays after hiding');
   await refused(() => respond(GUARDIAN, B.recommendationId, want('Kit', true)), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'a hidden recommendation cannot gain new interest');
   ok((await success(() => respond(GUARDIAN, A.recommendationId, HIDE), 'hide A after interest')).data.replayed === false, 'interest and then Not now are two answers');
-  ok((await success(() => interest(COACH), 'interest after hide')).data.interest.length === 5, 'hiding later keeps the interest the school already saw');
+  ok((await success(() => interest(COACH), 'interest after hide')).data.interest.length === 16, 'hiding later keeps the interest the school already saw');
 
   // 4. OFF takes no new answers; REMOVED leaves the staff interest list.
   await success(() => setStatus(COACH, B.recommendationId, { expectedVersion: 1, status: 'OFF' }), 'B OFF');
-  await refused(() => respond(NEIGHBOUR, B.recommendationId, want('Ivy Park')), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'an OFF recommendation takes no answer');
+  await refused(() => respond(NEIGHBOUR, B.recommendationId, want('Zoe', true)), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'an OFF recommendation takes no answer');
   await success(() => setStatus(COACH, A.recommendationId, { expectedVersion: 1, status: 'REMOVED' }), 'remove A');
-  ok((await success(() => interest(COACH), 'interest after remove')).data.interest.length === 1, 'a removed recommendation leaves the interest list');
+  ok((await success(() => interest(COACH), 'interest after remove')).data.interest.length === 9, 'a removed recommendation leaves the interest list');
 
   // 5. Audit with ids only; rows never change.
   const audits = (await sql("SELECT action_code, next_state::text s, actor_principal_id FROM hon.audit_events WHERE entity_type='JOURNEY_RECOMMENDATION' AND school_id=$1 AND action_code LIKE 'journey.recommendation.%' AND action_code IN ('journey.recommendation.hide','journey.recommendation.interest')", [ids.school])).rows;
-  ok(audits.filter((a) => a.action_code === 'journey.recommendation.interest').length === 5 && audits.filter((a) => a.action_code === 'journey.recommendation.hide').length === 2, 'one audit per new answer, none for replays');
-  ok(audits.every((a) => !/Park|Sam|Jo\b|Neighbour|Sparring|Gear/i.test(a.s)), 'audit carries ids only');
+  ok(audits.filter((a) => a.action_code === 'journey.recommendation.interest').length === 9 && audits.filter((a) => a.action_code === 'journey.recommendation.hide').length === 2, 'one audit per new answer, none for replays');
+  ok(audits.every((a) => !/Park|Sam|Jo\b|Ann|Ben|Neighbour|Sparring|Gear/i.test(a.s)), 'audit carries ids only');
   await assert.rejects(sql("UPDATE hon.journey_recommendation_responses SET kind='HIDDEN' WHERE organization_id=$1", [ids.organization]), /JOURNEY_RECOMMENDATION_RESPONSE_IMMUTABLE/); checks += 1;
   await assert.rejects(sql('DELETE FROM hon.journey_recommendation_responses WHERE organization_id=$1', [ids.organization]), /JOURNEY_RECOMMENDATION_RESPONSE_IMMUTABLE/); checks += 1;
   await assert.rejects(sql('TRUNCATE hon.journey_recommendation_responses'), /JOURNEY_RECOMMENDATION_RESPONSE_IMMUTABLE/); checks += 1;

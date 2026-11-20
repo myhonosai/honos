@@ -5793,7 +5793,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.guard_journey_recommendation_response()',false,false,'search_path=pg_catalog','1f25c0e55ae475781467d2d48c98797f31001ec00c000d282e607a5a055c55e0'),
 ('hon.journey_child_name_ok(text)',false,false,'search_path=pg_catalog','82c93b3ee7656d0fa5c3ae878a2b431f1c977112cf75dff03dcb038ce3a2c041'),
 ('hon.journey_response_json(hon.journey_recommendation_responses,boolean)',false,false,'search_path=pg_catalog','2000bd7a8aa66228adafc90d547feff3a6008547e7ae9b2b382b8ba2af0db30c'),
-('hon.respond_parent_journey_recommendation(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','d98002454231f6a8e577e13acba31a0ca9b40a19da70e809875bcac36f1247ba'),
+('hon.respond_parent_journey_recommendation(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','b49a9c6439ff1f55d66145d161ecb19a576b6893a4b54fa8c701d0402556bc1f'),
 ('hon.read_journey_recommendation_interest(text)',true,true,'search_path=pg_catalog, hon','4db00330b9c19c2314878a0cea80df1c6ce8d6f2252897a0d2f4ad967cb8523c')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
