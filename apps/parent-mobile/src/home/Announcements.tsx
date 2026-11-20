@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '../ui/text';
 import type { FamilySchoolAnnouncement, ParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
 import type { ParentApi, ParentRead } from '../api/client';
 import { Card, Section } from '../ui/parts';

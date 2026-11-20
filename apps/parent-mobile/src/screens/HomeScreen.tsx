@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../ui/text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ParentJourneyView } from '@hon/contracts/parent-journey-view';
 import { useFamily } from '../family/family-data';

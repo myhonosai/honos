@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
+import { Text } from '../ui/text';
 import type { BookingTypeAnswer } from '@hon/contracts/school-booking-types';
 import type {
   ParentSchoolBooking, ParentSchoolBookingReceipt, ParentSchoolBookings, ParentSchoolBookingTypeChoice, ParentSchoolEventChoice, ParentSchoolEventSlot,

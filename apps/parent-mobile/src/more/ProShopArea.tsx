@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
+import { Text } from '../ui/text';
 import * as WebBrowser from 'expo-web-browser';
 import type { ParentProShop } from '@hon/contracts/parent-pro-shop';
 import type { ParentRead } from '../api/client';
