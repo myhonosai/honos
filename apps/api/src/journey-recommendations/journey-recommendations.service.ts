@@ -5,7 +5,7 @@ import {
   validateSaveJourneyRecommendationInput, validateSetJourneyRecommendationStatusInput, verifyJourneyRecommendationReceipt, verifyJourneyRecommendations,
   verifyParentJourneyRecommendations, type JourneyRecommendationReceipt, type JourneyRecommendations, type ParentJourneyRecommendations,
   validateParentJourneyResponseInput, verifyParentJourneyResponseReceipt, verifyJourneyRecommendationInterest,
-  type ParentJourneyResponseReceipt, type JourneyRecommendationInterest,
+  type ParentJourneyResponseInput, type ParentJourneyResponseReceipt, type JourneyRecommendationInterest,
 } from '@hon/contracts';
 import { RuntimeDatabaseService, type ResolvedParentFamilyScope } from '../foundation/runtime-database.service.js';
 import type { MembershipLifecycleContext } from '../billing/membership.service.js';
@@ -71,7 +71,7 @@ export class JourneyRecommendationsService {
   /** 0608: a guardian hides a recommendation for the family or records interest. Same answer again is a replay; nothing is sent. */
   async parentRespond(subject: string, recommendationId: string, value: unknown): Promise<ParentJourneyResponseReceipt> {
     if (!subjectOk(subject)) throw new ForbiddenException({ code: 'JOURNEY_RECOMMENDATIONS_FORBIDDEN' });
-    let input: { kind: 'HIDDEN' | 'INTERESTED' };
+    let input: ParentJourneyResponseInput;
     try {
       if (typeof recommendationId !== "string" || !UUID.test(recommendationId)) throw new Error("id");
       input = validateParentJourneyResponseInput(value);
@@ -85,8 +85,8 @@ export class JourneyRecommendationsService {
       return await this.database.withTenantTransaction(context, async client => {
         await client.query(WRITE_LIMITS);
         await client.query(HUMAN_SETTINGS, [subject]);
-        return verifyParentJourneyResponseReceipt(await this.one(client, 'SELECT hon.respond_parent_journey_recommendation($1,$2::uuid,$3) AS data', [subject, id, input.kind]),
-          { recommendationId: id, kind: input.kind });
+        return verifyParentJourneyResponseReceipt(await this.one(client, 'SELECT hon.respond_parent_journey_recommendation($1,$2::uuid,$3::jsonb) AS data', [subject, id, JSON.stringify(input)]),
+          { recommendationId: id, ...input });
       });
     } catch (error) { return translateJourneyRecommendationError(error); }
   }

@@ -5744,13 +5744,16 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
   END LOOP;
 END $$;
 -- End family referrals exact verification.
--- Journey recommendation responses exact verification (0608): the immutability guard, two runtime entry points, the 0603 family
--- read replaced to leave out hidden recommendations (hash above), and a private forced-RLS table with exactly its two guards.
+-- Journey recommendation responses exact verification (0608): three private helpers (immutability guard, name rule, receipt),
+-- two runtime entry points, the 0603 family read replaced to leave out hidden recommendations (hash above), and a private
+-- forced-RLS table with exactly its two guards and its two once-only indexes.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_journey_recommendation_response()',false,false,'search_path=pg_catalog','1f25c0e55ae475781467d2d48c98797f31001ec00c000d282e607a5a055c55e0'),
-('hon.respond_parent_journey_recommendation(text,uuid,text)',true,true,'search_path=pg_catalog, hon','6b5b8ea53b7791076e20c6a0417ae2a099e4d732f8a6691e5d5fdeacc283ac53'),
-('hon.read_journey_recommendation_interest(text)',true,true,'search_path=pg_catalog, hon','d3ce90fe943766cd5f54469532d454777ae1411fb31d997e086a10561588020e')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+('hon.journey_child_name_ok(text)',false,false,'search_path=pg_catalog','82c93b3ee7656d0fa5c3ae878a2b431f1c977112cf75dff03dcb038ce3a2c041'),
+('hon.journey_response_json(hon.journey_recommendation_responses,boolean)',false,false,'search_path=pg_catalog','2000bd7a8aa66228adafc90d547feff3a6008547e7ae9b2b382b8ba2af0db30c'),
+('hon.respond_parent_journey_recommendation(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','d98002454231f6a8e577e13acba31a0ca9b40a19da70e809875bcac36f1247ba'),
+('hon.read_journey_recommendation_interest(text)',true,true,'search_path=pg_catalog, hon','4db00330b9c19c2314878a0cea80df1c6ce8d6f2252897a0d2f4ad967cb8523c')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
@@ -5770,5 +5773,8 @@ DO $$ DECLARE f record; safe boolean; BEGIN
       AND tgfoid='hon.guard_journey_recommendation_response()'::regprocedure)<>2
     OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.journey_recommendation_responses'::regclass AND NOT tgisinternal)<>2 THEN
     RAISE EXCEPTION 'hon.journey_recommendation_responses must carry exactly its two guards'; END IF;
+  IF (SELECT count(*) FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE i.indrelid='hon.journey_recommendation_responses'::regclass AND i.indisunique
+      AND i.indisvalid AND i.indpred IS NOT NULL AND c.relname IN ('journey_recommendation_responses_hidden_once','journey_recommendation_responses_interest_once'))<>2 THEN
+    RAISE EXCEPTION 'hon.journey_recommendation_responses must keep its once-only indexes'; END IF;
 END $$;
 -- End journey recommendation responses exact verification.

@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "35f84f7381211c757d6ee1815c7e8e55e3cfbb3122d45a7aa5ed10fd47efcf2b",
+  "chainSha256": "7c2748dbf0aa4508303303a0ab5d8a9a72cbdd3926e664d3415c33c192498f72",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -780,7 +780,7 @@
     },
     {
       "file": "0608_journey_recommendation_responses.sql",
-      "sha256": "537c4eda26c2e5ba64b989f122d0ee8234bdfb588e8e1f6b808e46af3ffe5168"
+      "sha256": "2c552c7f0d3bc8c79ed56b5d040d0bf21b43f5ac4e1c8c5280ee08c66c690a3b"
     }
   ]
 }

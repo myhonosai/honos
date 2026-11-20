@@ -99,24 +99,28 @@ describe('journey recommendations panel', () => {
 });
 
 describe('journey recommendation interest (0608)', () => {
-  const F = '77777777-7777-4777-8777-777777777777';
-  const row = { recommendationId: R, familyId: F, familyName: 'Park Family', children: ['Mia Park', 'Leo Park'], recordedAt: '2026-11-20T17:00:00.000Z' };
+  const F = '77777777-7777-4777-8777-777777777777', L = '88888888-8888-4888-8888-888888888888';
+  const row = { recommendationId: R, familyId: F, familyName: 'Park Family', childName: 'Mia Park', sibling: false, leadId: L, recordedAt: '2026-11-20T17:00:00.000Z' };
+  const sam = { ...row, childName: 'Sam Park', sibling: true, leadId: null };
   it('reads the interest list under the school scope and refuses contact details', async () => {
-    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json(200, { data: { interest: [row] } }))
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json(200, { data: { interest: [row, sam] } }))
       .mockResolvedValueOnce(json(200, { data: { interest: [{ ...row, email: 'x@example.test' }] } }));
-    expect((await loadJourneyRecommendationInterest(scope)).interest[0]!.familyName).toBe('Park Family');
+    expect((await loadJourneyRecommendationInterest(scope)).interest[1]!.childName).toBe('Sam Park');
     expect(fetcher.mock.calls[0]![0]).toBe(`/api/v1/organizations/${A}/schools/${B}/journey-recommendations/interest`);
     expect(fetcher.mock.calls[0]![1]).toMatchObject({ method: 'GET' });
     await expect(loadJourneyRecommendationInterest(scope)).rejects.toThrow();
   });
-  it('lists interested families with children and date, says nobody was messaged, and shows nothing when the read failed', () => {
-    const html = renderToStaticMarkup(<Interested rows={[row]} />);
-    expect(html).toContain('1 family is interested');
+  it('lists who is interested with the family, sibling and lead, says nobody was messaged, and shows nothing when the read failed', () => {
+    const html = renderToStaticMarkup(<Interested rows={[row, sam]} />);
+    expect(html).toContain('2 interested');
+    expect(html).toContain('<strong>Mia Park</strong>');
+    expect(html).toContain('<strong>Sam Park</strong> (brother or sister)');
     expect(html).toContain('Park Family');
-    expect(html).toContain('Mia Park, Leo Park');
     expect(html).toContain(interestDay(row.recordedAt));
+    expect(html).toContain('added to CRM leads');
+    expect(html).toContain('no CRM lead (no pipeline yet)');
     expect(html).toContain('Nothing was sent to them');
-    expect(renderToStaticMarkup(<Interested rows={[]} />)).toContain('No families have tapped it yet.');
+    expect(renderToStaticMarkup(<Interested rows={[]} />)).toContain('No families have asked about it yet.');
     expect(renderToStaticMarkup(<Interested rows={null} />)).toBe('');
     expect(interestDay('2026-11-20T17:00:00.000Z')).toBe('Nov 20, 2026');
   });

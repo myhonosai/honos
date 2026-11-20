@@ -42,6 +42,7 @@ describe('journey gift stops on Home (J3, 0603)', () => {
     await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Try summer camp' }));
     expect(screen.getByText('Leo is moving fast! Camp is a fun week of forms and games.')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'See how to join' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByRole('button', { name: 'Back to More' })).toBeTruthy();
     expect(screen.getByText('Sign up & pay')).toBeTruthy();
   });
@@ -60,11 +61,13 @@ describe('journey gift stops on Home (J3, 0603)', () => {
     for (let i = 0; i < 2; i++) {
       await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Try summer camp' }));
       await fireEvent.press(screen.getByRole('button', { name: 'See how to join' }));
+      await fireEvent.press(screen.getByRole('button', { name: 'Continue' }));
       await fireEvent.press(await screen.findByRole('button', { name: 'Back to More' }));
       await fireEvent.press(screen.getByRole('tab', { name: 'Home' }));
     }
     await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Try summer camp' }));
     await fireEvent.press(screen.getByRole('button', { name: 'See how to join' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByRole('button', { name: 'Back to More' })).toBeTruthy();
   });
 
@@ -82,34 +85,57 @@ describe('journey gift stops on Home (J3, 0603)', () => {
     expect(screen.queryByRole('button', { name: /From your school/ })).toBeNull();
   });
 
-  it('records the guardian\'s answers (0608): "Not now" hides it for the family, the main button tells the school, asking does not', async () => {
+  it('asks who it is for and records the guardian\'s answer with that child\'s name (0608)', async () => {
     const sample = createSampleApi(now);
     const respond = jest.fn(sample.respondJourneyRecommendation);
     await openHome({ ...sample, respondJourneyRecommendation: respond });
     await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Try summer camp' }));
-    expect(screen.getByText('"See how to join" lets your school know you are interested. Nothing is sent, booked or bought.')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Ask the school' }));
-    expect(respond).not.toHaveBeenCalled();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Home' }));
-    await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Try summer camp' }));
     await fireEvent.press(screen.getByRole('button', { name: 'See how to join' }));
-    expect(respond).toHaveBeenCalledWith('5a3f0e21-0000-4000-8000-000000000960', 'INTERESTED', expect.any(String));
-    await fireEvent.press(await screen.findByRole('button', { name: 'Back to More' }));
-    await fireEvent.press(screen.getByRole('tab', { name: 'Home' }));
-    await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Time for sparring gear' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'Not now, hide this for now' }));
-    expect(respond).toHaveBeenCalledTimes(2);
-    expect(respond.mock.calls[1]![1]).toBe('HIDDEN');
-    expect(respond.mock.calls[1]![2]).not.toBe(respond.mock.calls[0]![2]);
+    expect(screen.getByText('Who is this for?')).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Leo Sample' }).props.accessibilityState.selected).toBe(true);
+    expect(screen.getByText('Your school will see this name so they can follow up. Nothing is sent, booked or bought.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Back' }));
+    expect(respond).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole('button', { name: 'See how to join' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Continue' }));
+    expect(respond).toHaveBeenCalledWith('5a3f0e21-0000-4000-8000-000000000960', { kind: 'INTERESTED', childName: 'Leo Sample', sibling: false }, expect.any(String));
+    expect(await screen.findByRole('button', { name: 'Back to More' })).toBeTruthy();
   });
 
-  it('records nothing for a view-only member and does not promise the school will see it', async () => {
+  it('a brother or sister needs a name before going on, and asking the school records it too', async () => {
+    const sample = createSampleApi(now);
+    const respond = jest.fn(sample.respondJourneyRecommendation);
+    await openHome({ ...sample, respondJourneyRecommendation: respond });
+    await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Try summer camp' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Ask the school' }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'A brother or sister' }));
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull();
+    expect(screen.getByText('Type their name to continue.')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText("Brother or sister's name"), '  Sam   Sample ');
+    await fireEvent.press(screen.getByRole('button', { name: 'Continue' }));
+    expect(respond).toHaveBeenCalledWith('5a3f0e21-0000-4000-8000-000000000960', { kind: 'INTERESTED', childName: 'Sam Sample', sibling: true }, expect.any(String));
+    await waitFor(() => expect(screen.queryByText('Who is this for?')).toBeNull());
+  });
+
+  it('"Not now" is saved for the family with its own key', async () => {
+    const sample = createSampleApi(now);
+    const respond = jest.fn(sample.respondJourneyRecommendation);
+    await openHome({ ...sample, respondJourneyRecommendation: respond });
+    await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Time for sparring gear' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Not now, hide this for now' }));
+    expect(respond).toHaveBeenCalledWith('5a3f0e21-0000-4000-8000-000000000961', { kind: 'HIDDEN' }, expect.any(String));
+  });
+
+  it('records nothing for a view-only member, who goes straight on without being asked', async () => {
     const sample = createSampleApi(now);
     const respond = jest.fn(sample.respondJourneyRecommendation);
     const journey = async () => { const r = await sample.journey(); return r.ok ? { ok: true as const, data: { ...r.data, accessLevel: 'VIEWER' as const } } : r; };
     await openHome({ ...sample, journey, respondJourneyRecommendation: respond });
+    await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Try summer camp' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'See how to join' }));
+    expect(await screen.findByRole('button', { name: 'Back to More' })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Home' }));
     await fireEvent.press(await screen.findByRole('button', { name: 'From your school: Time for sparring gear' }));
-    expect(screen.queryByText(/lets your school know/)).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Not now, hide this for now' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'From your school: Time for sparring gear' })).toBeNull());
     expect(respond).not.toHaveBeenCalled();

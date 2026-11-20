@@ -179,12 +179,15 @@ export function JourneyRecommendationsPanel({ organizationId, schoolId, curricul
   </section>;
 }
 
-/** Families who tapped the main button in the HON Family app for one recommendation. Names and dates only; nobody was messaged. */
+/**
+ * Who a recommendation interested, from the HON Family app (0608): the child's name, or a brother or sister the guardian
+ * named, with the family. Each one is also a lead in the CRM when the school has a pipeline. Nobody was messaged.
+ */
 export function Interested({ rows }: { rows: JourneyRecommendationInterest['interest'] | null }): React.ReactElement | null {
   if (rows === null) return null;
-  if (rows.length === 0) return <p className={s.muted}>No families have tapped it yet.</p>;
-  return <details><summary>{rows.length} {rows.length === 1 ? 'family is' : 'families are'} interested</summary>
-    <ul className={s.rows}>{rows.map(i => <li key={i.familyId}><strong>{i.familyName}</strong>
-      {i.children.length ? ` · ${i.children.join(', ')}` : ''} <span className={s.muted}>· {interestDay(i.recordedAt)}</span></li>)}</ul>
-    <p className={s.muted}>They tapped the button in the HON Family app. Nothing was sent to them; reach out in Messages if you'd like.</p></details>;
+  if (rows.length === 0) return <p className={s.muted}>No families have asked about it yet.</p>;
+  return <details><summary>{rows.length} interested</summary>
+    <ul className={s.rows}>{rows.map(i => <li key={`${i.familyId}/${i.childName.toLowerCase()}`}><strong>{i.childName}</strong>
+      {i.sibling ? ' (brother or sister)' : ''} · {i.familyName} <span className={s.muted}>· {interestDay(i.recordedAt)}{i.leadId ? ' · added to CRM leads' : ' · no CRM lead (no pipeline yet)'}</span></li>)}</ul>
+    <p className={s.muted}>The family chose this in the HON Family app. Nothing was sent to them; follow up from CRM leads or Messages.</p></details>;
 }

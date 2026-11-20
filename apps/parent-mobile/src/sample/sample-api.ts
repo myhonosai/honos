@@ -238,8 +238,9 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
       ] },
     ] })),
     // The made-up family's answers stay on this phone: nothing reaches a school.
-    respondJourneyRecommendation: (recommendationId, kind, _key) =>
-      wrote(verifyParentJourneyResponseReceipt({ recommendationId, kind, recordedAt: ms(start.toISOString()), replayed: false }, { recommendationId, kind })),
+    respondJourneyRecommendation: (recommendationId, input, _key) =>
+      wrote(verifyParentJourneyResponseReceipt({ recommendationId, kind: input.kind, childName: input.kind === 'INTERESTED' ? input.childName : null,
+        recordedAt: ms(start.toISOString()), replayed: false }, { recommendationId, ...input })),
     proShop: () => ok(verifyParentProShop({ schoolName: SAMPLE_SCHOOL, available: true, currency: 'USD', products: [
       { productId: '9001', title: 'Sample sparring gloves', imageUrl: null, fromPrice: '39.00', url: 'https://sample-dojo.myshopify.com/products/sample-sparring-gloves' },
       { productId: '9002', title: 'Sample uniform', imageUrl: null, fromPrice: '65.00', url: 'https://sample-dojo.myshopify.com/products/sample-uniform' },

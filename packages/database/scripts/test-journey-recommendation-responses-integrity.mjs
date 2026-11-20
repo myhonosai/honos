@@ -44,7 +44,7 @@ process.env.HON_AUTH_MODE = session.mode; process.env.HON_SESSION_AUDIENCE = ses
 
 const LA = 'America/Los_Angeles';
 const ids = Object.fromEntries(['organization', 'otherOrganization', 'school', 'otherSchool', 'family', 'otherFamily', 'busyFamily',
-  'karate', 'otherCurriculum', 'white', 'yellow', 'orange', 'otherRank'].map((key) => [key, randomUUID()]));
+  'karate', 'otherCurriculum', 'white', 'yellow', 'orange', 'otherRank', 'pipeline', 'stageHidden', 'stageNew', 'stageWon'].map((key) => [key, randomUUID()]));
 const PREFIX = `jresp-${ids.organization}`;
 const sql = (text, values = []) => admin.query(text, values);
 const one = async (text, values = []) => (await sql(text, values)).rows[0];
@@ -96,7 +96,9 @@ const base = (actor) => `/organizations/${actor.org}/schools/${actor.school}/jou
 const list = (actor, options = {}) => call(actor, 'GET', base(actor), options);
 const save = (actor, body, options = {}) => call(actor, 'POST', base(actor), { body, command: 'journey_recommendations.save', ...options });
 const setStatus = (actor, id, body, options = {}) => call(actor, 'POST', `${base(actor)}/${id}/status`, { body, command: 'journey_recommendations.status', ...options });
-const respond = (actor, id, kind, options = {}) => call(actor, 'POST', `/parent/journey-recommendations/${id}/response`, { body: { kind }, command: 'parent.journey_recommendations.respond', ...options });
+const HIDE = { kind: 'HIDDEN' };
+const want = (childName, sibling = false) => ({ kind: 'INTERESTED', childName, sibling });
+const respond = (actor, id, body, options = {}) => call(actor, 'POST', `/parent/journey-recommendations/${id}/response`, { body, command: 'parent.journey_recommendations.respond', ...options });
 const interest = (actor, options = {}) => call(actor, 'GET', `${base(actor)}/interest`, options);
 
 async function success(read, label, expectedStatus = 200) {
@@ -168,12 +170,14 @@ async function child(given, family, rank, { school = ids.school, curriculum = id
     await sql(`INSERT INTO hon.student_curriculum_enrollments(organization_id,school_id,student_profile_id,curriculum_id,current_rank_id,enrolled_at)
       VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '30 days')`, [ids.organization, school, profile, curriculum, rank]);
   } finally { await sql('ALTER TABLE hon.student_curriculum_enrollments ENABLE TRIGGER USER'); }
+  if (given === 'Mia') miaPerson = personId;
   return profile;
 }
 const rec = (patch = {}) => ({ recommendationId: null, expectedVersion: null, curriculumId: ids.karate, triggerKind: 'RANK_REACHED', rankId: ids.yellow, threshold: null,
   title: 'Join the sparring club', message: 'Sparring club is open to Yellow belts and up.', targetKind: 'ASK_SCHOOL',
   targetCheckoutId: null, targetEventId: null, skipEnrolled: false, ...patch });
 
+let miaPerson;
 let GUARDIAN, SECOND, VIEWER, OUTSIDER, TWO, NEIGHBOUR, OTHER_PARENT, COACH, NOPE, COACH_B;
 async function seed() {
   await sql("INSERT INTO hon.organizations(id,legal_name,display_name) VALUES($1,'Response Org','Response Org'),($2,'Response Other Org','Response Other Org')", [ids.organization, ids.otherOrganization]);
@@ -188,6 +192,11 @@ async function seed() {
     [ids.otherRank, ids.otherCurriculum, 'Yellow Belt', 1, ids.otherSchool]]) {
     await sql('INSERT INTO hon.curriculum_ranks(id,organization_id,school_id,curriculum_id,name,progression_order) VALUES($1,$2,$3,$4,$5,$6)', [id, ids.organization, school, cur, name, order]);
   }
+  // The school's one pipeline: a hidden stage first, then the stage new leads land in, then a terminal one. The other school has none.
+  await sql("INSERT INTO hon.crm_pipelines(id,organization_id,school_id,name) VALUES($1,$2,$3,'Enrollment')", [ids.pipeline, ids.organization, ids.school]);
+  await sql(`INSERT INTO hon.crm_pipeline_stages(id,organization_id,school_id,pipeline_id,name,position,terminal_status,hidden_at) VALUES
+    ($1,$4,$5,$6,'Old',1,NULL,clock_timestamp()),($2,$4,$5,$6,'New',2,NULL,NULL),($3,$4,$5,$6,'Won',3,'WON',NULL)`,
+    [ids.stageHidden, ids.stageNew, ids.stageWon, ids.organization, ids.school, ids.pipeline]);
   GUARDIAN = await person('guardian'); SECOND = await person('second'); VIEWER = await person('viewer'); OUTSIDER = await person('outsider');
   TWO = await person('two'); NEIGHBOUR = await person('neighbour'); OTHER_PARENT = await person('other-parent');
   for (const [actor, family, level, school] of [[GUARDIAN, ids.family, 'PRIMARY_GUARDIAN', ids.school], [SECOND, ids.family, 'SECONDARY_GUARDIAN', ids.school],
@@ -218,63 +227,94 @@ try {
   ok(JSON.stringify(titles(before)) === JSON.stringify({ 'Leo Park': [], 'Mia Park': ['Gear up for Yellow', 'Join the sparring club'] }), 'Mia sees A and B before any answer');
 
   // 1. Input, scope and command checks: nothing is recorded by a refusal.
-  for (const [label, body] of [['no kind', {}], ['bad kind', { kind: 'LIKED' }], ['extra key', { kind: 'HIDDEN', familyId: ids.family }], ['lowercase kind', { kind: 'hidden' }]]) {
+  for (const [label, body] of [['no kind', {}], ['bad kind', { kind: 'LIKED' }], ['extra key', { kind: 'HIDDEN', familyId: ids.family }], ['lowercase kind', { kind: 'hidden' }],
+    ['hide with a name', { kind: 'HIDDEN', childName: 'Mia Park' }], ['interest without a name', { kind: 'INTERESTED', sibling: false }], ['interest without sibling', { kind: 'INTERESTED', childName: 'Mia Park' }],
+    ['blank name', want(' ')], ['name newline', want('Mia\nPark')], ['sibling as text', { kind: 'INTERESTED', childName: 'Sam Park', sibling: 'yes' }],
+    ['sibling name with a space at the end', want('Sam Park ', true)], ['sibling name over 80', want('x'.repeat(81), true)], ['family id', { ...want('Mia Park'), familyId: ids.family }]]) {
     await refused(() => call(GUARDIAN, 'POST', `/parent/journey-recommendations/${A.recommendationId}/response`, { body, command: 'parent.journey_recommendations.respond' }), 400, 'VALIDATION_FAILED', `respond validation: ${label}`);
   }
-  await refused(() => respond(GUARDIAN, 'not-a-uuid', 'HIDDEN'), 400, 'VALIDATION_FAILED', 'respond: bad id');
-  await refused(() => respond(GUARDIAN, A.recommendationId, 'HIDDEN', { command: 'journey_recommendations.save' }), 403, 'HUMAN_UI_REQUIRED', 'respond: wrong command');
-  await refused(() => respond(GUARDIAN, A.recommendationId, 'HIDDEN', { headers: { 'Sec-Fetch-Site': 'cross-site' } }), 403, 'HUMAN_UI_REQUIRED', 'respond: cross-site');
+  await refused(() => respond(GUARDIAN, 'not-a-uuid', HIDE), 400, 'VALIDATION_FAILED', 'respond: bad id');
+  await refused(() => respond(GUARDIAN, A.recommendationId, HIDE, { command: 'journey_recommendations.save' }), 403, 'HUMAN_UI_REQUIRED', 'respond: wrong command');
+  await refused(() => respond(GUARDIAN, A.recommendationId, HIDE, { headers: { 'Sec-Fetch-Site': 'cross-site' } }), 403, 'HUMAN_UI_REQUIRED', 'respond: cross-site');
   await refused(() => call(GUARDIAN, 'POST', `/parent/journey-recommendations/${A.recommendationId}/response?family=${ids.family}`, { body: { kind: 'HIDDEN' }, command: 'parent.journey_recommendations.respond' }), 400, 'JOURNEY_RECOMMENDATIONS_SELECTORS_NOT_ACCEPTED', 'respond: no selector');
-  await refused(() => respond(VIEWER, A.recommendationId, 'HIDDEN'), 403, 'JOURNEY_RECOMMENDATIONS_FORBIDDEN', 'a VIEWER cannot answer for the family');
-  await refused(() => respond(OUTSIDER, A.recommendationId, 'HIDDEN'), 403, 'JOURNEY_RECOMMENDATIONS_FORBIDDEN', 'no family grant');
-  await refused(() => respond(TWO, A.recommendationId, 'HIDDEN'), 403, 'JOURNEY_RECOMMENDATIONS_FORBIDDEN', 'two families are ambiguous');
-  await refused(() => respond(GUARDIAN, LATER.recommendationId, 'INTERESTED'), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'a rank not reached yet');
-  await refused(() => respond(GUARDIAN, OTHER.recommendationId, 'INTERESTED'), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'another school recommendation');
-  await refused(() => respond(GUARDIAN, randomUUID(), 'INTERESTED'), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'an unknown recommendation');
-  await refused(() => respond(OTHER_PARENT, A.recommendationId, 'INTERESTED'), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'a family of another school');
-  ok(Number((await one('SELECT count(*) n FROM hon.journey_recommendation_responses WHERE organization_id=$1', [ids.organization])).n) === 0, 'refusals record nothing');
+  await refused(() => respond(VIEWER, A.recommendationId, HIDE), 403, 'JOURNEY_RECOMMENDATIONS_FORBIDDEN', 'a VIEWER cannot answer for the family');
+  await refused(() => respond(OUTSIDER, A.recommendationId, HIDE), 403, 'JOURNEY_RECOMMENDATIONS_FORBIDDEN', 'no family grant');
+  await refused(() => respond(TWO, A.recommendationId, HIDE), 403, 'JOURNEY_RECOMMENDATIONS_FORBIDDEN', 'two families are ambiguous');
+  await refused(() => respond(GUARDIAN, LATER.recommendationId, want('Mia Park')), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'a rank not reached yet');
+  await refused(() => respond(GUARDIAN, OTHER.recommendationId, want('Mia Park')), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'another school recommendation');
+  await refused(() => respond(GUARDIAN, randomUUID(), want('Mia Park')), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'an unknown recommendation');
+  await refused(() => respond(OTHER_PARENT, A.recommendationId, want('Bo Park')), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'a family of another school');
+  await refused(() => respond(GUARDIAN, A.recommendationId, want('Leo Park')), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'a child the recommendation does not show for');
+  await refused(() => respond(GUARDIAN, A.recommendationId, want('Old Park')), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'an archived child');
+  await refused(() => respond(GUARDIAN, A.recommendationId, want('Ivy Park')), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'another family\'s child');
+  await refused(() => respond(GUARDIAN, A.recommendationId, want('mia park', true)), 400, 'VALIDATION_FAILED', 'a child the family read already shows is not a brother or sister');
+  const leads = async () => (await sql("SELECT l.id, l.primary_person_id, l.pipeline_stage_id, l.source_code, l.status::text status, l.attribution, pe.given_name, pe.family_name, pe.email, pe.phone_e164 FROM hon.crm_leads l JOIN hon.people pe ON pe.id=l.primary_person_id WHERE l.organization_id=$1 ORDER BY l.created_at, l.id", [ids.organization])).rows;
+  ok(Number((await one('SELECT count(*) n FROM hon.journey_recommendation_responses WHERE organization_id=$1', [ids.organization])).n) === 0 && (await leads()).length === 0, 'refusals record nothing and open no lead');
 
-  // 2. INTERESTED: recorded once per family, replay returns the same row, staff see names and dates only.
-  const interested = (await success(() => respond(GUARDIAN, A.recommendationId, 'INTERESTED'), 'guardian interested')).data;
-  ok(interested.recommendationId === A.recommendationId && interested.kind === 'INTERESTED' && interested.replayed === false && /Z$/.test(interested.recordedAt), 'interest receipt');
-  ok(Object.keys(interested).sort().join() === 'kind,recommendationId,recordedAt,replayed', 'receipt has display fields only');
-  const replay = (await success(() => respond(SECOND, A.recommendationId, 'INTERESTED'), 'second guardian interested')).data;
-  ok(replay.replayed === true && replay.recordedAt === interested.recordedAt, 'the other guardian of the same family replays the same row');
+  // 2. INTERESTED for one of the family's children: one row and one CRM lead named after the child; the same answer again is a replay.
+  const interested = (await success(() => respond(GUARDIAN, A.recommendationId, want('Mia Park')), 'guardian interested for Mia')).data;
+  ok(interested.recommendationId === A.recommendationId && interested.kind === 'INTERESTED' && interested.childName === 'Mia Park' && interested.replayed === false && /Z$/.test(interested.recordedAt), 'interest receipt');
+  ok(Object.keys(interested).sort().join() === 'childName,kind,recommendationId,recordedAt,replayed', 'receipt has display fields only');
+  let all = await leads();
+  ok(all.length === 1 && all[0].primary_person_id === miaPerson && all[0].pipeline_stage_id === ids.stageNew && all[0].source_code === 'FAMILY_APP' && all[0].status === 'OPEN', 'one OPEN lead for Mia herself in the first open stage');
+  assert.deepStrictEqual(all[0].attribution, { source: 'FAMILY_APP', journeyRecommendation: { recommendationId: A.recommendationId, familyId: ids.family, sibling: false } }); checks += 1;
+  const replay = (await success(() => respond(SECOND, A.recommendationId, want('mia park')), 'second guardian interested for Mia')).data;
+  ok(replay.replayed === true && replay.recordedAt === interested.recordedAt && replay.childName === 'Mia Park', 'the other guardian replays the same row');
+  ok((await leads()).length === 1, 'a replay opens no second lead');
+  { const twice = await Promise.all([respond(GUARDIAN, B.recommendationId, want('Mia Park')), respond(SECOND, B.recommendationId, want('Mia Park'))]);
+    ok(twice.every((r) => r.status === 200) && twice.filter((r) => r.body.data.replayed).length === 1 && (await leads()).length === 2, 'the same interest sent twice at once is one row and one lead'); }
   ok(JSON.stringify(titles((await success(() => parentRead(GUARDIAN), 'read after interest')).data)) === JSON.stringify(titles(before)), 'interest does not hide the recommendation');
-  await success(() => respond(NEIGHBOUR, A.recommendationId, 'INTERESTED'), 'neighbour interested');
+
+  // 2b. A brother or sister: the typed name becomes a new person with no contact details, and its own lead.
+  const sam = (await success(() => respond(GUARDIAN, A.recommendationId, want('Sam Lee Park', true)), 'guardian interested for a sibling')).data;
+  ok(sam.childName === 'Sam Lee Park' && sam.replayed === false, 'sibling receipt');
+  all = await leads();
+  const samLead = all.find((l) => l.given_name === 'Sam Lee');
+  ok(all.length === 3 && samLead && samLead.family_name === 'Park' && samLead.email === null && samLead.phone_e164 === null && samLead.attribution.journeyRecommendation.sibling === true, 'a new person named as typed, no contact details');
+  ok((await success(() => respond(GUARDIAN, A.recommendationId, want('SAM LEE PARK', true)), 'sibling replay')).data.replayed === true && (await leads()).length === 3, 'the same sibling again is a replay');
+  await success(() => respond(GUARDIAN, A.recommendationId, want('Jo', true)), 'a one-word sibling name');
+  ok((await leads()).some((l) => l.given_name === 'Jo' && l.family_name === ''), 'a one-word name is the given name');
+  await success(() => respond(NEIGHBOUR, A.recommendationId, want('Ivy Park')), 'neighbour interested');
+  ok((await sql("SELECT 1 FROM hon.audit_events WHERE action_code='crm.lead.create' AND entity_type='CRM_LEAD' AND school_id=$1 AND actor_principal_id=ANY($2::uuid[])", [ids.school, [GUARDIAN.principal, SECOND.principal, NEIGHBOUR.principal]])).rowCount === 5
+    && (await sql("SELECT 1 FROM hon.outbox_events WHERE event_type='crm.lead.created' AND school_id=$1", [ids.school])).rowCount === 5, 'each lead has its crm.lead.create audit and crm.lead.created event');
   const list1 = (await success(() => interest(COACH), 'staff interest list')).data.interest;
-  ok(list1.length === 2 && list1.every((i) => i.recommendationId === A.recommendationId), 'two families interested in A');
-  ok(list1[0].familyName === 'Neighbour Family' && JSON.stringify(list1[0].children) === JSON.stringify(['Ivy Park']), 'newest first, with ACTIVE children names');
-  ok(list1[1].familyName === 'Park Family' && JSON.stringify(list1[1].children) === JSON.stringify(['Leo Park', 'Mia Park']), 'inactive children left out');
-  ok(Object.keys(list1[0]).sort().join() === 'children,familyId,familyName,recommendationId,recordedAt', 'staff get names and dates only');
+  const onA = list1.filter((i) => i.recommendationId === A.recommendationId);
+  ok(list1.length === 5 && onA.length === 4, 'every interest, per recommendation');
+  ok(JSON.stringify(onA.map((i) => [i.familyName, i.childName, i.sibling])) === JSON.stringify([['Neighbour Family', 'Ivy Park', false], ['Park Family', 'Jo', true], ['Park Family', 'Sam Lee Park', true], ['Park Family', 'Mia Park', false]]), 'newest first, with the child name and whether it is a sibling');
+  ok(onA[2].leadId === samLead.id && onA.every((i) => i.leadId), 'each row names its CRM lead');
+  ok(Object.keys(list1[0]).sort().join() === 'childName,familyId,familyName,leadId,recommendationId,recordedAt,sibling', 'staff get names, the lead and dates only');
   ok(!JSON.stringify(list1).includes('@example.test') && !JSON.stringify(list1).includes(GUARDIAN.principal), 'no contact details or principal ids');
+  // A school with no pipeline: the interest is kept and no lead is opened.
+  const bo = (await success(() => respond(OTHER_PARENT, OTHER.recommendationId, want('Bo Park')), 'interest at a school with no pipeline')).data;
+  const listB = (await success(() => interest(COACH_B), 'other school interest')).data.interest;
+  ok(bo.replayed === false && listB.length === 1 && listB[0].childName === 'Bo Park' && listB[0].leadId === null, 'no pipeline: interest without a lead, and only that school sees it');
   await refused(() => interest(NOPE), 403, 'JOURNEY_RECOMMENDATIONS_FORBIDDEN', 'staff without curriculum.manage');
   await refused(() => interest(GUARDIAN), 403, 'JOURNEY_RECOMMENDATIONS_FORBIDDEN', 'a parent is not staff');
   await refused(() => interest(COACH, { headers: { 'Idempotency-Key': 'x' } }), 409, 'IDEMPOTENCY_KEY_NOT_ACCEPTED', 'a read takes no key');
   await refused(() => call(COACH, 'GET', `/organizations/${ids.organization}/schools/${ids.otherSchool}/journey-recommendations/interest`), 403, 'JOURNEY_RECOMMENDATIONS_FORBIDDEN', 'another school by URL');
-  ok((await success(() => interest(COACH_B), 'other school interest')).data.interest.length === 0, 'another school sees none of these');
 
   // 3. HIDDEN: the family read leaves it out for every member of that family only; answering again is a replay.
-  const hid = (await success(() => respond(GUARDIAN, B.recommendationId, 'HIDDEN'), 'guardian hides B')).data;
+  const hid = (await success(() => respond(GUARDIAN, B.recommendationId, HIDE), 'guardian hides B')).data;
   ok(hid.kind === 'HIDDEN' && hid.replayed === false, 'hide receipt');
   const after = (await success(() => parentRead(VIEWER), 'viewer read after hide')).data;
   ok(JSON.stringify(titles(after)) === JSON.stringify({ 'Leo Park': [], 'Mia Park': ['Join the sparring club'] }), 'hidden for the whole family, viewer included');
   ok(titles((await success(() => parentRead(NEIGHBOUR), 'neighbour read')).data)['Ivy Park'].includes('Gear up for Yellow'), 'another family still sees B');
-  ok((await success(() => respond(GUARDIAN, B.recommendationId, 'HIDDEN'), 'hide replay')).data.replayed === true, 'hiding again is a replay');
-  await refused(() => respond(GUARDIAN, B.recommendationId, 'INTERESTED'), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'a hidden recommendation cannot gain new interest');
-  ok((await success(() => respond(GUARDIAN, A.recommendationId, 'HIDDEN'), 'hide A after interest')).data.replayed === false, 'interest and then Not now are two answers');
-  ok((await success(() => interest(COACH), 'interest after hide')).data.interest.length === 2, 'hiding later keeps the interest the school already saw');
+  ok((await success(() => respond(GUARDIAN, B.recommendationId, HIDE), 'hide replay')).data.replayed === true, 'hiding again is a replay');
+  ok((await success(() => respond(GUARDIAN, B.recommendationId, want('Mia Park')), 'interest replay on a hidden one')).data.replayed === true, 'an earlier interest still replays after hiding');
+  await refused(() => respond(GUARDIAN, B.recommendationId, want('Kit', true)), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'a hidden recommendation cannot gain new interest');
+  ok((await success(() => respond(GUARDIAN, A.recommendationId, HIDE), 'hide A after interest')).data.replayed === false, 'interest and then Not now are two answers');
+  ok((await success(() => interest(COACH), 'interest after hide')).data.interest.length === 5, 'hiding later keeps the interest the school already saw');
 
   // 4. OFF takes no new answers; REMOVED leaves the staff interest list.
   await success(() => setStatus(COACH, B.recommendationId, { expectedVersion: 1, status: 'OFF' }), 'B OFF');
-  await refused(() => respond(NEIGHBOUR, B.recommendationId, 'INTERESTED'), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'an OFF recommendation takes no answer');
+  await refused(() => respond(NEIGHBOUR, B.recommendationId, want('Ivy Park')), 404, 'JOURNEY_RECOMMENDATIONS_NOT_FOUND', 'an OFF recommendation takes no answer');
   await success(() => setStatus(COACH, A.recommendationId, { expectedVersion: 1, status: 'REMOVED' }), 'remove A');
-  ok((await success(() => interest(COACH), 'interest after remove')).data.interest.length === 0, 'a removed recommendation leaves the interest list');
+  ok((await success(() => interest(COACH), 'interest after remove')).data.interest.length === 1, 'a removed recommendation leaves the interest list');
 
   // 5. Audit with ids only; rows never change.
   const audits = (await sql("SELECT action_code, next_state::text s, actor_principal_id FROM hon.audit_events WHERE entity_type='JOURNEY_RECOMMENDATION' AND school_id=$1 AND action_code LIKE 'journey.recommendation.%' AND action_code IN ('journey.recommendation.hide','journey.recommendation.interest')", [ids.school])).rows;
-  ok(audits.filter((a) => a.action_code === 'journey.recommendation.interest').length === 2 && audits.filter((a) => a.action_code === 'journey.recommendation.hide').length === 2, 'one audit per new answer, none for replays');
-  ok(audits.every((a) => !/Park|Neighbour|Sparring|Gear/i.test(a.s)), 'audit carries ids only');
+  ok(audits.filter((a) => a.action_code === 'journey.recommendation.interest').length === 5 && audits.filter((a) => a.action_code === 'journey.recommendation.hide').length === 2, 'one audit per new answer, none for replays');
+  ok(audits.every((a) => !/Park|Sam|Jo\b|Neighbour|Sparring|Gear/i.test(a.s)), 'audit carries ids only');
   await assert.rejects(sql("UPDATE hon.journey_recommendation_responses SET kind='HIDDEN' WHERE organization_id=$1", [ids.organization]), /JOURNEY_RECOMMENDATION_RESPONSE_IMMUTABLE/); checks += 1;
   await assert.rejects(sql('DELETE FROM hon.journey_recommendation_responses WHERE organization_id=$1', [ids.organization]), /JOURNEY_RECOMMENDATION_RESPONSE_IMMUTABLE/); checks += 1;
   await assert.rejects(sql('TRUNCATE hon.journey_recommendation_responses'), /JOURNEY_RECOMMENDATION_RESPONSE_IMMUTABLE/); checks += 1;
@@ -282,15 +322,17 @@ try {
   // 6. Ended grant: refused.
   await sql("UPDATE hon.family_access_grants SET effective_until=clock_timestamp()+interval '1 second' WHERE principal_id=$1", [SECOND.principal]);
   await new Promise((r) => setTimeout(r, 1200));
-  await refused(() => respond(SECOND, B.recommendationId, 'INTERESTED'), 403, 'JOURNEY_RECOMMENDATIONS_FORBIDDEN', 'an ended family grant');
+  await refused(() => respond(SECOND, B.recommendationId, want('Mia Park')), 403, 'JOURNEY_RECOMMENDATIONS_FORBIDDEN', 'an ended family grant');
 
   // 7. Runtime ACL: two EXECUTE-only entry points, private table and guard, 011 section.
-  for (const fn of ['respond_parent_journey_recommendation(text,uuid,text)', 'read_journey_recommendation_interest(text)', 'read_parent_journey_recommendations(text)']) {
+  for (const fn of ['respond_parent_journey_recommendation(text,uuid,jsonb)', 'read_journey_recommendation_interest(text)', 'read_parent_journey_recommendations(text)']) {
     const r = (await sql(`SELECT has_function_privilege($1,p.oid,'EXECUTE') runtime, p.prosecdef def FROM pg_proc p WHERE p.oid=$2::regprocedure`, [CRM_CLOSE_RUNTIME_ROLE, `hon.${fn}`])).rows[0];
     ok(r.runtime && r.def, `${fn}: runtime EXECUTE, security definer`);
   }
   { const r = (await sql(`SELECT has_function_privilege($1,'hon.guard_journey_recommendation_response()'::regprocedure,'EXECUTE') runtime`, [CRM_CLOSE_RUNTIME_ROLE])).rows[0];
     ok(!r.runtime, 'the immutability guard is private'); }
+  for (const fn of ['journey_child_name_ok(text)', 'journey_response_json(hon.journey_recommendation_responses,boolean)']) {
+    ok(!(await one("SELECT has_function_privilege($1,$2::regprocedure,'EXECUTE') runtime", [CRM_CLOSE_RUNTIME_ROLE, `hon.${fn}`])).runtime, `${fn} is private`); }
   const t = (await sql(`SELECT c.relrowsecurity, c.relforcerowsecurity, has_table_privilege($1,c.oid,'SELECT') sel, has_table_privilege($1,c.oid,'INSERT') ins,
     has_table_privilege($1,c.oid,'UPDATE') upd, has_table_privilege($1,c.oid,'DELETE') del FROM pg_class c WHERE c.oid='hon.journey_recommendation_responses'::regclass`, [CRM_CLOSE_RUNTIME_ROLE])).rows[0];
   ok(t.relrowsecurity && t.relforcerowsecurity && !t.sel && !t.ins && !t.upd && !t.del, 'responses: forced RLS and no runtime table privilege');
