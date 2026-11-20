@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../ui/text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { JourneyChild, JourneyRequirement } from '@hon/contracts/parent-journey-view';
 import { bookingLabel, formatAwardDate, formatClassTime, upcomingFor } from '../home/model';

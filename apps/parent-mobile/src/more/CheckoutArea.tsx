@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
+import { Text } from '../ui/text';
 import * as WebBrowser from 'expo-web-browser';
 import type {
   FamilyCheckoutAnswer, FamilyCheckoutOption, FamilyCheckoutOrder, FamilyCheckoutPage, OpenParentCheckoutOrderInput, ParentCheckoutOrderStart, ParentCheckoutPages,

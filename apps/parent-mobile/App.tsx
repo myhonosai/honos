@@ -11,6 +11,8 @@ import { signIn } from './src/session/sign-in';
 import { ParentApp } from './src/ParentApp';
 import { createSampleApi } from './src/sample/sample-api';
 import { createExpoPhonePush } from './src/push/expo-push';
+import { useFonts, Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold, Nunito_800ExtraBold, Nunito_900Black } from '@expo-google-fonts/nunito';
+import { FontsReadyProvider } from './src/ui/text';
 
 const session = createSessionStore();
 const API = process.env.EXPO_PUBLIC_HON_API_URL ?? '';
@@ -30,6 +32,8 @@ function webOrigin(raw: string): string | null {
 }
 
 export default function App() {
+  // Nunito ships inside the app (SIL OFL). If it fails to load, the system font is used; the app never waits on the network.
+  const [fontsLoaded, fontError] = useFonts({ Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold, Nunito_800ExtraBold, Nunito_900Black });
   const api = useMemo(() => {
     try { return createParentApi({ baseUrl: API, getToken: () => session.token() }); }
     catch { return null; }
@@ -49,10 +53,11 @@ export default function App() {
     fetchImpl: fetch,
     saveToken: token => session.save(token),
   }) : undefined;
+  if (!fontsLoaded && !fontError) return null;
   return (
-    <>
+    <FontsReadyProvider value={fontsLoaded}>
       <StatusBar style="auto" />
       <ParentApp api={api} session={session} version={appConfig.expo.version} onSignIn={onSignIn} sampleApi={SAMPLE ? () => createSampleApi() : undefined} newKey={() => Crypto.randomUUID()} push={PUSH} />
-    </>
+    </FontsReadyProvider>
   );
 }
