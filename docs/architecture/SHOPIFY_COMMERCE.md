@@ -329,6 +329,39 @@ An idea is text only: using one opens the CS-M1 draft form, and Shopify changes 
   `apps/api/test/merch-ai.test.cjs`, `apps/web/test/school-shopify-merch-ai.test.tsx`, and the 011 section
   "Shopify merch AI ideas exact verification (0596)".
 
+## TB2: storefront blocks through a theme app extension (step 4; migration 0609, retires TB1 0600)
+
+TB1 (0600, merged 2026-11-20, never deployed) copied the live theme and wrote ready-made changes to the copy, which needs
+`write_themes`. Shopify declined that scope for HON on 2026-11-20 and pointed to
+[theme app extensions](https://shopify.dev/docs/apps/build/online-store/theme-app-extensions). TB2 replaces TB1 with that
+route; 0609 drops every 0600 table, trigger, helper and entry point (0600 itself is unchanged).
+
+- **The extension.** `shopify-app/extensions/hon-storefront/`: app embed `school-colors` (head; the theme's button and
+  link color variables), app block `size-guide` (product template), app block `pickup-note` (cart) and app embed
+  `pickup-note-banner` (cart, for themes whose cart takes no app blocks). Each reads only the app-data metafield
+  `hon_storefront.settings` (JSON) on HON's app installation, escapes every value and re-checks colors as `#RRGGBB` in
+  Liquid. The extension makes no network requests. Releasing it (`shopify app deploy`) is an owner step in
+  `shopify-app/README.md`.
+- **Who.** Read, save and publish need `commerce.shopify.manage` at the session school, re-proved after each write.
+- **Settings.** `{primaryColor, accentColor|null, sizeGuideTitle|null, sizeGuideText|null, pickupNote|null}`: upper-case
+  `#RRGGBB`, title at most 60 characters (needs text), guide at most 2,000, note at most 500. Saved in
+  `hon.shopify_storefronts` (one row per CONNECTED store, versioned; `expectedVersion` null only for the first save).
+  Saving never reaches Shopify.
+- **Publish** (`POST /v1/school/shopify/storefront/publish {schoolId, settingsVersion}`). The version must be the saved
+  one. The database leases the store's publish for three minutes (one at a time, at most 100 a UTC day) and hands over
+  the settings and the sealed credential. The API sets the metafield with `metafieldsSet` on
+  `currentAppInstallation` (no access scope needed) and finishes under the lease: PUBLISHED (the leased version is live),
+  FAILED (refused, nothing written) or UNKNOWN (answer lost; publishing again settles it because the write is
+  idempotent). A lease that ends without a result reads and settles as UNKNOWN `LEASE_EXPIRED`.
+- **Placing blocks.** The read answers theme editor deep links (client id + block handle) that open the live theme in the
+  editor with the block added or the embed on; the owner previews and presses Save in Shopify, and removes a block there
+  to undo it. HON never reads or writes theme files.
+- **Not in TB2.** Changing the theme's own color settings, blocks in sections that take no app blocks, file diffs.
+  Connecting asks for no theme scope; the TB1 "Allow theme editing" switch is gone.
+- **Evidence.** `packages/database/scripts/test-shopify-storefront-integrity.mjs` (8 groups, fake Shopify, 0 network
+  calls), `apps/api/test/shopify-storefront.test.cjs`, `apps/web/test/school-shopify-storefront.test.tsx`, and the 011
+  section "Shopify storefront blocks exact verification (0609, TB2)".
+
 ## Plan (TDD)
 
 1. Migration 0405 + DB proof `test-shopify-commerce-integrity.mjs` over signed HTTP with the fake adapter: ACL/RLS,

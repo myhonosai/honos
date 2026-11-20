@@ -10,7 +10,7 @@ import { merchAiApi, type MerchAiApi } from './merch-ai-http';
 import type { BrandState } from './studio';
 import type { ShopifyCatalog, ShopifyChangeResult, ShopifyFinanceView, ShopifyOrders, ShopifyProductChange, ShopifyProductChanges } from '@hon/contracts';
 import type { ProposeRequest } from './editor';
-import type { ThemeCommand, ThemeOutcome, ThemeState } from './theme';
+import type { StorefrontCommand, StorefrontOutcome, StorefrontState } from './storefront';
 import { SHOPIFY_SECTIONS, ShopifyReturnView, ShopifyView, type ListState, type OverviewState, type ReturnState, type ShopifyAction, type ShopifyOutcome, type ShopifySection } from './view';
 
 const kindOf = (error: unknown) => error instanceof ShopifyError && error.kind !== 'SESSION' ? error.kind : 'UNKNOWN';
@@ -34,8 +34,8 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
   const [changes, setChanges] = useState<ListState<ShopifyProductChanges>>({ state: 'LOADING' });
   const [changesTick, setChangesTick] = useState(0);
   const [finance, setFinance] = useState<ListState<ShopifyFinanceView>>({ state: 'LOADING' });
-  const [theme, setTheme] = useState<ThemeState>({ state: 'LOADING' });
-  const [themeOutcome, setThemeOutcome] = useState<ThemeOutcome>(null);
+  const [storefront, setStorefront] = useState<StorefrontState>({ state: 'LOADING' });
+  const [storefrontOutcome, setStorefrontOutcome] = useState<StorefrontOutcome>(null);
   const [shop, setShop] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [outcome, setOutcome] = useState<ShopifyOutcome>(null);
@@ -55,7 +55,7 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
 
   useEffect(() => onShellPrivacyEvent(() => {
     concealShellPrivateNow(); gen.current++; privacy.current++;
-    setOutcome(null); setConfirming(false); setOverview({ state: 'LOADING' }); setCatalog({ state: 'LOADING' }); setOrders({ state: 'LOADING' }); setChanges({ state: 'LOADING' }); setFinance({ state: 'LOADING' }); setTheme({ state: 'LOADING' }); setThemeOutcome(null); setBrand({ state: 'LOADING' });
+    setOutcome(null); setConfirming(false); setOverview({ state: 'LOADING' }); setCatalog({ state: 'LOADING' }); setOrders({ state: 'LOADING' }); setChanges({ state: 'LOADING' }); setFinance({ state: 'LOADING' }); setStorefront({ state: 'LOADING' }); setStorefrontOutcome(null); setBrand({ state: 'LOADING' });
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), []);
 
   useEffect(() => {
@@ -117,32 +117,40 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
     return () => { abort.abort(); };
   }, [api, schoolId, hasConnection, canManage, refresh]);
 
-  // TB1: the theme workspace, read only for managers (reconnecting must know whether theme editing is already allowed).
+  // TB2: the storefront settings and theme editor links, read only for managers.
   useEffect(() => {
     if (!schoolId || !hasConnection || !canManage) return;
     const shown = privacy.current;
-    setTheme((f) => f.state === 'READY' ? f : { state: 'LOADING' });
+    setStorefront((f) => f.state === 'READY' ? f : { state: 'LOADING' });
     const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(20000)]);
     const owned = () => mounted.current && shown === privacy.current && !abort.signal.aborted;
-    api.theme(schoolId, signal, owned).then((value) => { if (owned()) setTheme({ state: 'READY', value }); }, () => { if (owned()) setTheme({ state: 'UNAVAILABLE' }); });
+    api.storefront(schoolId, signal, owned).then((value) => { if (owned()) setStorefront({ state: 'READY', value }); }, () => { if (owned()) setStorefront({ state: 'UNAVAILABLE' }); });
     return () => { abort.abort(); };
   }, [api, schoolId, hasConnection, canManage, refresh]);
-  /** One theme command at a time, never replayed. The answer carries the workspace as read after the work. */
-  const onThemeCommand = useCallback(async (command: ThemeCommand) => {
-    if (sending.current || !schoolId) return;
+  /** One storefront command at a time, never replayed. Each answer carries the storefront as read after the command. */
+  const onStorefrontCommand = useCallback(async (command: StorefrontCommand) => {
+    if (sending.current || !schoolId || storefront.state !== 'READY') return;
+    const current = storefront.value;
     sending.current = true; const shown = privacy.current;
-    setLocked(true); setOutcome(null); setThemeOutcome({ kind: 'SENDING', command });
-    let next: ThemeOutcome;
+    setLocked(true); setOutcome(null); setStorefrontOutcome({ kind: 'SENDING', command });
+    let next: StorefrontOutcome, value: typeof current | null = null;
+    const owned = () => mounted.current && shown === privacy.current;
     try {
-      const result = await api.themeWork(schoolId, command, AbortSignal.timeout(150000), () => mounted.current && shown === privacy.current);
-      next = { kind: 'DONE', command, result };
-      if (shown === privacy.current && mounted.current) setTheme({ state: 'READY', value: result.workspace });
+      if (command.kind === 'SAVE') {
+        value = await api.saveStorefront(schoolId, current.settingsVersion, command.settings, AbortSignal.timeout(20000), owned);
+        next = { kind: 'SAVED', command };
+      } else {
+        if (current.settingsVersion === null) throw new Error('unsaved');
+        const result = await api.publishStorefront(schoolId, current.settingsVersion, AbortSignal.timeout(60000), owned);
+        value = result.storefront; next = { kind: 'PUBLISHED', command, result };
+      }
     } catch (error) { next = { kind: 'ERROR', command, error: kindOf(error) }; }
     finally { sending.current = false; }
     setLocked(false);
     if (shown !== privacy.current || !mounted.current) return;
-    setThemeOutcome(next);
-  }, [api, schoolId]);
+    if (value) setStorefront({ state: 'READY', value });
+    setStorefrontOutcome(next);
+  }, [api, schoolId, storefront]);
 
   /**
    * One edit command at a time, never replayed. An approval re-reads everything (Shopify and the mirror changed);
@@ -186,7 +194,7 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
     setOutcome(next); setConfirming(false); setRefresh((n) => n + 1);
   }, [api, schoolId, overview]);
 
-  const onConnect = useCallback(async (action: 'connect' | 'allowEditing' | 'allowFinance' | 'allowThemes' = 'connect') => {
+  const onConnect = useCallback(async (action: 'connect' | 'allowEditing' | 'allowFinance' = 'connect') => {
     if (sending.current || !schoolId) return;
     // Allow editing / Allow finance reconnect the same store, asking Shopify for those permissions as well. Reconnecting
     // the same store keeps what it already allows (Shopify replaces the whole grant on each approval).
@@ -195,19 +203,18 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
     const same = !!current && (action !== 'connect' || shop.trim().toLowerCase().replace(/\.myshopify\.com$/, '') === current.replace(/\.myshopify\.com$/, ''));
     const allowEditing = action === 'allowEditing' || (same && changes.state === 'READY' && changes.value.editProducts);
     const allowFinance = action === 'allowFinance' || (same && finance.state === 'READY' && finance.value.financeAllowed);
-    const allowThemes = action === 'allowThemes' || (same && theme.state === 'READY' && theme.value.themesAllowed);
     sending.current = true; const shown = privacy.current;
     setLocked(true); setOutcome({ kind: 'SENDING', action });
     try {
       // A new attempt each time: a lost answer only leaves an unused approval that expires in 10 minutes.
-      const r = await api.connect(schoolId, domain, AbortSignal.timeout(30000), () => mounted.current && shown === privacy.current, allowEditing, allowFinance, allowThemes);
+      const r = await api.connect(schoolId, domain, AbortSignal.timeout(30000), () => mounted.current && shown === privacy.current, allowEditing, allowFinance);
       sending.current = false;
       if (shown === privacy.current && mounted.current) navigate(r.authorizeUrl);
     } catch (error) {
       sending.current = false; setLocked(false);
       if (shown === privacy.current && mounted.current) setOutcome({ kind: kindOf(error), action });
     }
-  }, [api, navigate, schoolId, shop, overview, changes, finance, theme]);
+  }, [api, navigate, schoolId, shop, overview, changes, finance]);
 
   return <div key={shell.phase} data-shell-private="">
     <ShopifyView language={locale.preferences.language} locale={locale.formattingLocale} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'}
@@ -218,7 +225,7 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
       onDisconnect={() => { void run('disconnect'); }} onSection={go}
       changes={changes} onPropose={onPropose} onApprove={onApprove} onCancelChange={onCancelChange} onAllowEditing={() => { void onConnect('allowEditing'); }}
       finance={finance} onAllowFinance={() => { void onConnect('allowFinance'); }}
-      theme={theme} themeOutcome={themeOutcome} onThemeCommand={(c) => { void onThemeCommand(c); }} onAllowThemes={() => { void onConnect('allowThemes'); }}
+      storefront={storefront} storefrontOutcome={storefrontOutcome} onStorefrontCommand={(c) => { void onStorefrontCommand(c); }}
       schoolName={shell.schoolName} brand={brand} merchAi={marcus} />
   </div>;
 }

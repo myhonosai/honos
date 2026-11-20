@@ -46,7 +46,7 @@ it('reads finance with a plain same-origin GET and asks for it only with Allow f
   expect((await fails(shopifyApi.finance(school, signal(), () => true))).kind).toBe('DENIED');
   const g = stub(json({ data: { authorizeUrl: `https://${SHOP}/admin/oauth/authorize?client_id=x&state=y`, shopDomain: SHOP, expiresAt: at } }));
   await shopifyApi.connect(school, SHOP, signal(), () => true, true, true);
-  expect(JSON.parse((g.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)).toEqual({ schoolId: school, shopDomain: SHOP, allowEditing: true, allowFinance: true, allowThemes: false });
+  expect(JSON.parse((g.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)).toEqual({ schoolId: school, shopDomain: SHOP, allowEditing: true, allowFinance: true });
 });
 
 it('shows the balance, payouts and recent transactions in the store currency, with Shopify admin links for payouts and Capital', () => {

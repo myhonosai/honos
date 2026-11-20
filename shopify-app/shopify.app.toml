@@ -1,0 +1,17 @@
+# HON OS Shopify app configuration for the Shopify CLI (used only to release the theme app extension).
+# client_id is the app's public Client ID from the Partner Dashboard. Run `shopify app config link` once to fill it in;
+# never put the client secret here. The storefront blocks need no theme scope.
+#
+# The scopes below are only the connect-time defaults. HON asks stores for more at run time when an owner presses Allow
+# editing (write_products, write_inventory) or Allow finance (read_shopify_payments_accounts). So include_config_on_deploy
+# MUST stay false: with it on, `shopify app deploy` would push this file's scopes and URLs over the live app's settings.
+client_id = ""
+name = "HON OS"
+application_url = "https://example.invalid"
+embedded = false
+
+[access_scopes]
+scopes = "read_products,read_inventory,read_orders"
+
+[build]
+include_config_on_deploy = false
