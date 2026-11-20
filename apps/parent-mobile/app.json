@@ -32,7 +32,13 @@
     },
     "plugins": [
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "color": "#050A18"
+        }
+      ]
     ],
     "extra": {
       "eas": {

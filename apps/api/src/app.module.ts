@@ -284,6 +284,10 @@ import { FamilyMessagesInboxController, FamilyMessagesInboxReadGuard, FamilyMess
 import { FamilyMessagesService } from './families/family-messages.service.js';
 import { ParentSchoolAnnouncementsController, ParentSchoolAnnouncementsReadGuard, SchoolAnnouncementsController, SchoolAnnouncementsPublishGuard, SchoolAnnouncementsReadGuard, SchoolAnnouncementsWithdrawGuard } from './announcements/school-announcements.controller.js';
 import { SchoolAnnouncementsService } from './announcements/school-announcements.service.js';
+import { ParentPushController, ParentPushRegisterGuard, ParentPushUnregisterGuard } from './parent-push/parent-push.controller.js';
+import { ParentPushService } from './parent-push/parent-push.service.js';
+import { EXPO_PUSH_TRANSPORT, ExpoPushClient } from './parent-push/expo-push-client.js';
+import { PARENT_PUSH_WORKER_STORE, ParentPushScheduler, ParentPushWorker, ParentPushWorkerDatabase } from './parent-push/parent-push-worker.js';
 import { ParentProShopController, ParentProShopReadGuard } from './pro-shop/parent-pro-shop.controller.js';
 import { ParentProShopService } from './pro-shop/parent-pro-shop.service.js';
 import { ParentCheckoutCancelGuard, ParentCheckoutConfirmGuard, ParentCheckoutController, ParentCheckoutOrderGuard, ParentCheckoutStartGuard } from './family-checkout/parent-checkout.controller.js';
@@ -556,6 +560,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     FamilyMessagesInboxController,
     ParentSchoolAnnouncementsController,
     SchoolAnnouncementsController,
+    ParentPushController,
     ParentProShopController,
     ParentCheckoutController,
     SchoolConversationsController,
@@ -764,6 +769,15 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolAnnouncementsReadGuard,
     SchoolAnnouncementsPublishGuard,
     SchoolAnnouncementsWithdrawGuard,
+    ParentPushService,
+    ParentPushRegisterGuard,
+    ParentPushUnregisterGuard,
+    ExpoPushClient,
+    { provide: EXPO_PUSH_TRANSPORT, useExisting: ExpoPushClient },
+    ParentPushWorkerDatabase,
+    { provide: PARENT_PUSH_WORKER_STORE, useExisting: ParentPushWorkerDatabase },
+    ParentPushWorker,
+    ParentPushScheduler,
     ParentProShopService,
     ParentProShopReadGuard,
     ParentCheckoutService, ParentCheckoutOrderGuard, ParentCheckoutStartGuard, ParentCheckoutConfirmGuard, ParentCheckoutCancelGuard,

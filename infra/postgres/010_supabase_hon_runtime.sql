@@ -4783,3 +4783,23 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+-- 0601 parent announcement push: private helpers, three private tables; two runtime entry points (parent register/unregister phone).
+-- The four worker functions are granted to hon_communication_worker in 013, never to the runtime.
+DO $$ DECLARE r text; f text; t text; BEGIN
+  IF to_regprocedure('hon.record_parent_push_receipt(uuid,uuid,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0601 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.parent_push_token_ok(text)','hon.guard_parent_push_device()','hon.guard_parent_push_delivery()',
+    'hon.parent_push_principal_live_at(uuid,uuid,uuid)','hon.parent_push_scope(text)','hon.register_parent_push_device(text,jsonb,text,uuid,uuid)',
+    'hon.unregister_parent_push_device(text,jsonb,text,uuid,uuid)','hon.claim_parent_push_deliveries(integer,integer)','hon.record_parent_push_send(uuid,uuid,jsonb)',
+    'hon.claim_parent_push_receipts(integer,integer)','hon.record_parent_push_receipt(uuid,uuid,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['parent_push_devices','parent_push_fanouts','parent_push_deliveries'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.register_parent_push_device(text,jsonb,text,uuid,uuid),hon.unregister_parent_push_device(text,jsonb,text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
