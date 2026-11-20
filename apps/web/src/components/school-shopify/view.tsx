@@ -8,6 +8,7 @@ import { SHOPIFY_ADMIN_PAGES, money, shopifyAdminUrl, type ShopifyAdminPage } fr
 export { money, shopifyAdminUrl };
 import { Changes, DraftEditor, ProductEditor, changeFailure, changeOpen, type ProposeRequest } from './editor';
 import { MerchStudio, type BrandState } from './studio';
+import type { MerchAiApi, MerchAiScope } from './merch-ai-http';
 
 type T = (key: ShopifyKey, vars?: Record<string, string>) => string;
 export type OverviewState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; read: ShopifyOverview };
@@ -23,7 +24,7 @@ export type ShopifyViewProps = Readonly<{
   language: string; locale: string; waiting: boolean; concealed: boolean; hasSchool: boolean;
   overview: OverviewState; section: ShopifySection; catalog: ListState<ShopifyCatalog>; orders: ListState<ShopifyOrders>; shop: string; confirming: boolean; outcome: ShopifyOutcome; locked: boolean;
   changes?: ListState<ShopifyProductChanges> | undefined;
-  onPropose?: ((change: ProposeRequest) => void) | undefined; onApprove?: ((change: ShopifyProductChange) => void) | undefined;
+  onPropose?: ((change: ProposeRequest) => void | Promise<boolean>) | undefined; onApprove?: ((change: ShopifyProductChange) => void) | undefined;
   onCancelChange?: ((change: ShopifyProductChange) => void) | undefined; onAllowEditing?: (() => void) | undefined;
   /** SH-F1: the Shopify Payments snapshot (managers only) and the switch that asks Shopify for it. */
   finance?: ListState<ShopifyFinanceView> | undefined; onAllowFinance?: (() => void) | undefined;
@@ -34,6 +35,8 @@ export type ShopifyViewProps = Readonly<{
   onSection?: ((section: ShopifySection) => void) | undefined;
   /** Merch Studio: the school's name and saved branding, and where Creative Studio lives. */
   schoolName?: string | null | undefined; brand?: BrandState | undefined; creativeHref?: string | undefined;
+  /** CS-M2: asking Marcus for merch ideas, when the school scope is known. */
+  merchAi?: Readonly<{ api: MerchAiApi; scope: MerchAiScope }> | undefined;
 }>;
 
 const when = (locale: string, iso: string) => { try { return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso)); } catch { return iso; } };
@@ -163,7 +166,7 @@ export function matchesProduct(p: ShopifyProduct, query: string): boolean {
   return [p.title, p.productType, p.vendor, ...p.variants.flatMap(v => [v.title, v.sku])].some(x => typeof x === 'string' && x.toLowerCase().includes(q));
 }
 
-type Editing = Readonly<{ canEdit: boolean; open: ReadonlySet<string>; locked: boolean; onPropose: (r: ProposeRequest) => void; go: (s: ShopifySection) => void }>;
+type Editing = Readonly<{ canEdit: boolean; open: ReadonlySet<string>; locked: boolean; onPropose: (r: ProposeRequest) => void | Promise<boolean>; go: (s: ShopifySection) => void }>;
 function Products({ ctx, catalog, edit }: { ctx: Ctx; catalog: ListState<ShopifyCatalog>; edit: Editing }): React.ReactElement {
   const { t, locale } = ctx;
   const [query, setQuery] = useState(''), [status, setStatus] = useState<ProductFilter>('all'), [type, setType] = useState('');
@@ -504,7 +507,7 @@ export function ShopifyView(p: ShopifyViewProps): React.ReactElement {
     {section === 'overview' ? <Overview ctx={ctx} read={read} catalog={p.catalog} orders={p.orders} changes={changes} go={go} />
       : section === 'products' ? <Products ctx={ctx} catalog={p.catalog} edit={editing} />
       : section === 'studio' ? <MerchStudio ctx={ctx} language={p.language} school={p.schoolName ?? c.shopName ?? null} brand={p.brand ?? { state: 'NONE' }}
-        canEdit={editing.canEdit} locked={p.locked} onPropose={editing.onPropose} creativeHref={p.creativeHref ?? '/staff/creative-studio'} />
+        canEdit={editing.canEdit} locked={p.locked} onPropose={editing.onPropose} creativeHref={p.creativeHref ?? '/staff/creative-studio'} merchAi={c.status === 'CONNECTED' ? p.merchAi : undefined} />
       : section === 'changes' ? <Changes ctx={ctx} changes={changes} catalog={p.catalog.state === 'READY' ? p.catalog.value : null} canManage={read.canManage}
         connected={c.status === 'CONNECTED'} locked={p.locked} busy={p.locked && o?.action === 'approve' ? o.target ?? null : null} pending={pending}
         when={(iso) => when(p.locale, iso)} onApprove={p.onApprove} onCancel={p.onCancelChange} onAllowEditing={p.onAllowEditing} />

@@ -138,6 +138,26 @@ function api(route) {
       messages: [{ messageId: id(971), from: 'SCHOOL', mine: true, body: 'Welcome to the parent app!', sentAt: at(-day) }, { messageId: id(972), from: 'FAMILY', mine: false, body: 'Thanks! Is there class on Friday?', sentAt: at(-3600_000) }] }, meta: {} });
     if (path === `${prefix}/people`) return json(route, 200, { data: [['Avery', 'Sample', '+15555550101', 'avery@example.test'], ['Rowan', 'Example', null, 'rowan@example.test']]
       .map(([givenName, familyName, phoneE164, email], i) => ({ id: id(850 + i), givenName, familyName, email, phoneE164, version: 1, createdAt: iso() })), meta: { requestId: id(860), correlationId: id(860) } });
+    // Texts > History, Templates, Opted out (TE3b over 0585/0586): synthetic rows, newest first.
+    if (path === `${prefix}/communications/history`) return json(route, 200, { data: { nextCursor: null, messages: [
+      ['Avery Sample', '+15555550101', 'See you at the trial class on Thursday at 5 PM!', 'STAFF', 'DELIVERED', 'DELIVERED', 'Kim Placeholder', 1],
+      ['Rowan Example', null, 'Reminder: belt testing is this Saturday at 10 AM.', 'CAMPAIGN', 'FAILED', 'FAILED', null, 2],
+      ['Avery Sample', '+15555550101', 'Thanks for your message, a coach will text you back soon.', 'AUTOMATION', 'SENDING', 'IN_PROGRESS', null, 3],
+      ['Kim Placeholder', '+15555550103', 'Yes, Thursday works. See you then.', 'CONVERSATION', 'ACCEPTED', 'DELIVERED', 'Avery Sample', 4],
+    ].map(([personName, address, preview, origin, delivery, outcome, by, n]) => ({ messageId: id(990 - n), personId: id(850), personName, address, channel: 'SMS', subject: null, preview,
+      at: new Date(Date.parse(at(-n * 3600_000))).toISOString(), origin, delivery, outcome, by })) }, meta: {} });
+    if (path === `${prefix}/communications/opted-out`) return json(route, 200, { data: { nextCursor: null, contacts: [
+      ['Sample Parent', '+15555550110', 'RECIPIENT', 1], ['Example Guardian', '+15555550111', 'STAFF', 5]].map(([personName, address, source, n]) => ({ consentId: id(995 - n), personId: id(860 + n),
+      personName, address, channel: 'SMS', source, optedOutAt: new Date(Date.parse(at(-n * day))).toISOString(), at: new Date(Date.parse(at(-n * day))).toISOString() })) }, meta: {} });
+    if (path === `${prefix}/communications/templates` && method === 'GET') {
+      const status = new URL(route.request().url()).searchParams.get('status') ?? 'ACTIVE';
+      return json(route, 200, { data: { templates: status !== 'ACTIVE' ? [] : [
+        ['Class cancelled', 'Hi {{first_name}}, class is cancelled tonight because of the weather. See you next time!', 1],
+        ['Missed class', 'Hi {{first_name}}, we missed you at class this week. Reply here if you need a new time.', 2],
+        ['Trial reminder', 'Hi {{first_name}}, this is {{school_name}}. Your trial class is tomorrow. Wear comfortable clothes and bring water.', 3],
+      ].map(([name, body, n]) => ({ templateId: id(980 + n), channel: 'SMS', name, subject: null, body, status: 'ACTIVE', version: 1,
+        createdAt: new Date(Date.parse(at(-10 * day))).toISOString(), updatedAt: new Date(Date.parse(at(-n * day))).toISOString() })) }, meta: {} });
+    }
     if (path === `${prefix}/staff-roles/lists`) return json(route, 200, { data: { roles: [{ id: id(880), code: 'CUSTOM_FRONT_DESK', name: 'Front desk', version: 1, permissionCodes: ['school.view', 'crm.lead.read'] }], grants: [] }, meta: {} });
     if (path === `${prefix}/staff-roles/permissions`) return json(route, 200, { data: [['school.view', 'View the school', false], ['attendance.record', 'Record attendance', false], ['attendance.cards.manage', 'Choose how attendance cards look', true], ['crm.lead.read', 'Read leads', false], ['billing.refund.create', 'Create refunds', true]]
       .map(([code, description, sensitive]) => ({ code, description, sensitive })), meta: {} });
@@ -487,6 +507,45 @@ await check('Texts > Send: type a name, pick the contact, nothing sent before Se
   assert.equal(await page.getByRole('button', { name: 'Send', exact: true }).isDisabled(), true, 'no mobile number, no text');
   assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('communications/messages')), false);
   await shot(page, 'te3a-texts-send-desktop'); await ctx.close();
+});
+for (const mode of ['modern', 'big-button']) for (const size of ['desktop', 'phone']) await check(`Texts > History, Templates, Opted out (TE3b ${mode} ${size})`, async () => {
+  theme = mode;
+  let { ctx, page } = await open(viewports[size], '/staff/texts/history');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Text history', exact: true }).first().waitFor();
+  await page.getByRole('button', { name: /Rowan Example/ }).click();
+  await page.locator('[data-drawer]').getByText('No address on file').first().waitFor();
+  assert.equal(await page.locator('[data-message-history]').evaluate(el => /[0-9a-f]{8}-[0-9a-f]{4}/i.test(el.textContent ?? '')), false, 'no IDs shown');
+  if (size === 'phone') await noOverflow(page);
+  await shot(page, `te3b-texts-history-${mode}-${size}`); await ctx.close();
+  ({ ctx, page } = await open(viewports[size], '/staff/texts/templates'));
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Class cancelled' }).waitFor();
+  assert.equal(await page.getByRole('link', { name: 'Use in Send' }).first().getAttribute('href'), `/staff/texts/send?template=${id(981)}`);
+  if (size === 'phone') await noOverflow(page);
+  await shot(page, `te3b-texts-templates-${mode}-${size}`);
+  await page.getByRole('button', { name: 'New text template' }).click();
+  await page.locator('input[name="templateName"]').fill('Belt testing');
+  await page.locator('textarea[name="templateBody"]').fill('Hi {{first_name}}, belt testing is Saturday. {{nickname}}');
+  await page.getByText('Not a merge tag: {{nickname}}').waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Save template' }).isDisabled(), true, 'a stray tag cannot be saved');
+  await shot(page, `te3b-texts-template-editor-${mode}-${size}`); await ctx.close();
+  ({ ctx, page } = await open(viewports[size], '/staff/texts/opted-out'));
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByText('Replied STOP', { exact: true }).waitFor();
+  if (size === 'phone') await noOverflow(page);
+  await shot(page, `te3b-texts-opted-out-${mode}-${size}`); await ctx.close();
+  assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('/communications/')), false, 'nothing saved or sent');
+});
+await check('Texts > Send starts from a template picked on Templates (TE3b)', async () => {
+  theme = 'modern'; const { ctx, page } = await open(viewports.desktop, `/staff/texts/send?template=${id(981)}`);
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.locator('input[name="composeQuery"]').fill('Sample');
+  await page.getByRole('button', { name: /Avery Sample/ }).click();
+  await page.getByText('Hi Avery, class is cancelled tonight', { exact: false }).first().waitFor();
+  assert.equal(await page.locator('select[name="useTemplate"]').inputValue(), id(981));
+  assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('communications/messages')), false);
+  await shot(page, 'te3b-texts-send-from-template-desktop'); await ctx.close();
 });
 for (const mode of ['modern', 'classic', 'big-button']) for (const size of ['desktop', 'phone']) await check(`Staff opens on names; a name opens its card (${mode} ${size})`, async () => {
   theme = mode; const { ctx, page } = await open(viewports[size], '/staff/team/invitations');

@@ -6,14 +6,18 @@ import {
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * Paper import (0388): photos or scans read into a table that staff check, then sent to the existing staged import. Reads
- * send no Idempotency-Key; each command sends its own X-HON-Human-Command and (except the one reading per set) an
- * Idempotency-Key. The server strips image metadata, decides the AI spend, checks every cell and the permission.
+ * Paper import (0388, 0594): photos or scans read into a table that staff check, then sent to the existing staged import. Reads
+ * send no Idempotency-Key; each command sends its own X-HON-Human-Command and (except the one reading per set and typing
+ * the rows) an Idempotency-Key. The server strips image metadata, decides the AI spend, checks every cell and the permission.
  */
 export type PaperErrorKind =
   /** Session ended. */ 'SESSION'
   /** Not allowed for this staff member at this school. Nothing changed. */ | 'DENIED'
   /** HON reading is not available for this school right now (an AI pause or access). Nothing was read. */ | 'AI_BLOCKED'
+  /** HON reading needs the AI team (Complete) and AI permission. Nothing was read; typing the rows is open. */ | 'AI_FORBIDDEN'
+  /** Another staff member started HON's reading of this set. Typing the rows is open. */ | 'READING_OWNED'
+  /** HON is reading this set right now. */ | 'READING_BUSY'
+  /** HON's paid answer could not be saved: held for HQ, never sent again. Not retried. */ | 'READING_UNKNOWN'
   /** Not found, or the photos were deleted. */ | 'GONE'
   /** The set changed since it was read, or is past that step. Nothing changed. */ | 'CHANGED'
   /** The photo was not accepted (type, size, or not a real image). Nothing changed. */ | 'IMAGE'
@@ -60,12 +64,15 @@ async function exchange(path: string, signal: AbortSignal, owned: Owned, command
 
 /** What a refused answer means. Only these exact answers are definitive; anything else is UNKNOWN. */
 export function paperErrorFor(status: number, code: string | null): PaperError {
-  if (status === 403) return new PaperError(code === 'PAPER_IMPORT_AI_BLOCKED' ? 'AI_BLOCKED' : 'DENIED', code);
+  if (status === 403) return new PaperError(code === 'PAPER_IMPORT_AI_BLOCKED' ? 'AI_BLOCKED' : code === 'PAPER_IMPORT_AI_FORBIDDEN' ? 'AI_FORBIDDEN' : 'DENIED', code);
+  if (status === 503 && code === 'PAPER_IMPORT_READING_UNKNOWN') return new PaperError('READING_UNKNOWN', code);
   if (status === 404) return new PaperError('GONE', code);
   if (status === 429) return new PaperError('RATE', code);
   if (status === 400) return new PaperError(code === 'PAPER_IMPORT_IMAGE_REFUSED' ? 'IMAGE' : code === 'PAPER_IMPORT_TABLE_EMPTY' ? 'EMPTY' : 'INVALID', code);
   if (status === 409) {
     if (code === 'PAPER_IMPORT_PAGE_DUPLICATE') return new PaperError('DUPLICATE', code);
+    if (code === 'PAPER_IMPORT_READING_OWNED') return new PaperError('READING_OWNED', code);
+    if (code === 'PAPER_IMPORT_READING_BUSY') return new PaperError('READING_BUSY', code);
     if (code && ['VERSION_CONFLICT', 'PAPER_IMPORT_ALREADY_READ', 'PAPER_IMPORT_NOT_EDITABLE', 'PAPER_IMPORT_READING_STALE'].includes(code)) return new PaperError('CHANGED', code);
     if (code === 'IDEMPOTENCY_KEY_REUSED' || code === 'IDEMPOTENCY_KEY_REQUIRED') return new PaperError('INVALID', code);
   }
@@ -124,6 +131,11 @@ export const paperImportApi = {
   async read(scope: PaperScope, setId: string, expectedVersion: number, signal: AbortSignal, owned: Owned): Promise<PaperImportDetail> {
     const body = checked(() => validatePaperImportVersionInput({ expectedVersion }));
     return command(`${setPath(scope, setId)}/reading`, 'students.paper_import.reading', body, null, sameDetail(setId), signal, owned);
+  },
+  /** "Type the rows myself" (0594): no AI, nothing spent, no key; a repeat returns the set as it stands. */
+  async typeRows(scope: PaperScope, setId: string, expectedVersion: number, signal: AbortSignal, owned: Owned): Promise<PaperImportDetail> {
+    const body = checked(() => validatePaperImportVersionInput({ expectedVersion }));
+    return command(`${setPath(scope, setId)}/typed`, 'students.paper_import.typed', body, null, sameDetail(setId), signal, owned);
   },
   async save(scope: PaperScope, setId: string, kind: PaperImportKind, input: { expectedVersion: number; rows: string[][]; unsure: boolean[][] }, key: string, signal: AbortSignal, owned: Owned): Promise<PaperImportSummary> {
     const body = checked(() => validatePaperImportSaveInput(kind, input));

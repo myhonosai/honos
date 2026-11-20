@@ -41,6 +41,7 @@ const en = {
   filterPrograms: 'Programs', filterInstructors: 'Instructors', noInstructor: 'No instructor', filtersChosen: '{n} chosen',
   slotLabel: 'Add a class on {day} at {time}', resizeLabel: 'Change the length of {name}', booked: '{n} booked',
   dragHint: 'Click an empty time to add a class. Drag a class to move it, or drag its bottom edge to change its length. With a class selected, Alt+arrow keys move it and Alt+Shift+arrow keys change its length.',
+  tabSettings: 'Settings', closedDay: 'Closed: {label}', blockedAsk: '{date} is blocked out ({label}). Classes still run that day unless you cancel them. Continue?', blockedContinue: 'Continue', blockedBack: 'Go back',
   cannotManage: 'Your access at this school does not include adding or moving classes.',
 };
 export type CalendarKey = keyof typeof en;
@@ -86,6 +87,7 @@ const ko: Record<CalendarKey, string> = {
   filterPrograms: '프로그램', filterInstructors: '강사', noInstructor: '강사 없음', filtersChosen: '{n}개 선택',
   slotLabel: '{day} {time}에 수업 추가', resizeLabel: '{name} 길이 바꾸기', booked: '{n}명 예약',
   dragHint: '빈 시간을 눌러 수업을 추가하세요. 수업을 끌어 옮기거나 아래쪽 가장자리를 끌어 길이를 바꾸세요. 수업을 선택한 채로 Alt+화살표 키로 옮기고 Alt+Shift+화살표 키로 길이를 바꿉니다.',
+  tabSettings: '설정', closedDay: '휴무: {label}', blockedAsk: '{date}은(는) 휴무일입니다 ({label}). 취소하지 않는 한 그날 수업은 진행됩니다. 계속할까요?', blockedContinue: '계속', blockedBack: '돌아가기',
   cannotManage: '이 학교에서의 권한에는 수업 추가나 옮기기가 포함되어 있지 않습니다.',
 };
 const es: Record<CalendarKey, string> = {
@@ -130,6 +132,7 @@ const es: Record<CalendarKey, string> = {
   filterPrograms: 'Programas', filterInstructors: 'Instructores', noInstructor: 'Sin instructor', filtersChosen: '{n} elegidos',
   slotLabel: 'Añadir una clase el {day} a las {time}', resizeLabel: 'Cambiar la duración de {name}', booked: '{n} reservados',
   dragHint: 'Haga clic en una hora libre para añadir una clase. Arrastre una clase para moverla o su borde inferior para cambiar la duración. Con una clase seleccionada, Alt+flechas la mueven y Alt+Mayús+flechas cambian su duración.',
+  tabSettings: 'Configuración', closedDay: 'Cerrado: {label}', blockedAsk: '{date} está bloqueado ({label}). Las clases de ese día siguen en pie a menos que las cancele. ¿Continuar?', blockedContinue: 'Continuar', blockedBack: 'Volver',
   cannotManage: 'Su acceso en esta escuela no incluye añadir ni mover clases.',
 };
 export const CALENDAR_LANGUAGES = { en, ko, es } as const;

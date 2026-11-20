@@ -67,12 +67,15 @@ try{
   'begin_shopify_sync','rotate_shopify_credential','record_shopify_sync_page','finish_shopify_sync','disconnect_shopify',
   'read_shopify_product_changes','propose_shopify_product_change','cancel_shopify_product_change','approve_shopify_product_change',
   'rotate_shopify_change_credential','record_shopify_product_change_result','read_shopify_finance','record_shopify_finance',
-  'read_shopify_theme_workspace','begin_shopify_theme_work','rotate_shopify_theme_credential','finish_shopify_theme_work'];
+  'read_shopify_theme_workspace','begin_shopify_theme_work','rotate_shopify_theme_credential','finish_shopify_theme_work',
+  // 0596 Marcus merch ideas (CS-M2).
+  'begin_shopify_merch_ideas','plan_shopify_merch_ideas','prepare_shopify_merch_ideas','fail_shopify_merch_ideas','record_shopify_merch_ideas',
+  'read_shopify_merch_ideas','close_shopify_merch_ideas'];
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname LIKE '%shopify%'");
  for(const e of [...entries,'record_shopify_background_finance','shopify_apply_finance','shopify_finance_ok','shopify_finance_on_end'])assert(fns.some(f=>f.proname===e),e);
  for(const f of fns){assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entries.includes(f.proname),f.proname);
   assert.equal((await q("SELECT has_function_privilege('public',$1,'EXECUTE') ok",[f.oid]))[0].ok,false,f.proname);}
- pass('the finance snapshot is a forced-RLS private table; the runtime executes the 23 Shopify entry points and nothing else; the background write and helpers are closed to it and to PUBLIC');
+ pass('the finance snapshot is a forced-RLS private table; the runtime executes the 23 Shopify entry points (30 with the 0596 merch ideas) and nothing else; the background write and helpers are closed to it and to PUBLIC');
 
  // Fixture: two schools with paid access; manager, reader, other-school manager.
  const hq={subject:'shopify-hq-'+K()};const hqPrincipal=await human({externalSubject:hq.subject,email:K()+'@example.invalid'},'Shopify synthetic HQ');

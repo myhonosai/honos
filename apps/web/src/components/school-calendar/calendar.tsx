@@ -15,7 +15,8 @@ import { CardError, calendarCardsApi, type CalendarCardsApi } from './cards-http
 import { calendarText, type CalendarKey } from './copy';
 import { zonedInstant } from './drag';
 import { loadCalendarClasses } from './http';
-import { addDays, calendarRange, localMinutesOf, shiftAnchor, type CalendarView } from './range';
+import { addDays, calendarRange, closedDays, localDateOf, localMinutesOf, shiftAnchor, type CalendarView } from './range';
+import { calendarSettingsApi, type CalendarSettingsApi } from './settings-http';
 import { CalendarViewPane, type CalendarSelection, type CardsState, type ClassesState, type EventsState, type PendingMove } from './view';
 import styles from './school-calendar.module.css';
 
@@ -33,7 +34,8 @@ const signalFor = (abort: AbortController) => AbortSignal.any([abort.signal, Abo
  */
 type Pending = PendingMove & Readonly<{ startsAt: string; endsAt: string; version: number; name: string; booked: number; done?: boolean }>;
 type Creating = Readonly<{ date: string; minutes: number; key: string; busy: boolean; error: string | null; serial: number }>;
-type Message = Readonly<{ text: string; confirm?: boolean }>;
+/** `confirm` asks about moving a booked class; `ask` asks before adding or moving onto a closed day (0583). */
+type Message = Readonly<{ text: string; confirm?: boolean; ask?: () => void }>;
 const newKey = () => crypto.randomUUID();
 /** The next whole hour in school time, today; after 11 PM, 9 AM tomorrow. */
 export function nextWholeHour(localToday: string, nowMinutes: number): { date: string; minutes: number } {
@@ -41,8 +43,8 @@ export function nextWholeHour(localToday: string, nowMinutes: number): { date: s
   return next >= 24 * 60 ? { date: addDays(localToday, 1), minutes: 9 * 60 } : { date: localToday, minutes: next };
 }
 
-export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEventsApi, cardsApi = calendarCardsApi, initialView = 'week', onManageEvent, addSignal = 0 }: {
-  api?: RosterApi; events?: Pick<SchoolEventsApi, 'list'>; cardsApi?: CalendarCardsApi; initialView?: CalendarView; onManageEvent?: () => void;
+export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEventsApi, cardsApi = calendarCardsApi, blockOutsApi = calendarSettingsApi, initialView = 'week', onManageEvent, addSignal = 0 }: {
+  api?: RosterApi; events?: Pick<SchoolEventsApi, 'list'>; cardsApi?: CalendarCardsApi; blockOutsApi?: Pick<CalendarSettingsApi, 'blockOuts'>; initialView?: CalendarView; onManageEvent?: () => void;
   /** Each increase opens the create form at the next whole hour today ("Add a class"). */
   addSignal?: number;
 }): React.ReactElement {
@@ -61,6 +63,7 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
   const [programFilter, setProgramFilter] = useState<readonly string[]>([]);
   const [instructorFilter, setInstructorFilter] = useState<readonly string[]>([]);
   const [cards, setCards] = useState<CardsState>({ state: 'LOADING' });
+  const [closed, setClosed] = useState<ReadonlyMap<string, string>>(new Map());
   const [creating, setCreating] = useState<Creating | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [message, setMessage] = useState<Message | null>(null);
@@ -126,6 +129,17 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
     return () => abort.abort();
   }, [school, anchor, view, refresh, cardsApi]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Block-out dates (0583) for the same visible days. A school whose block-outs cannot be read shows no closed days.
+  useEffect(() => {
+    if (!scope || anchor === null) return;
+    const shown = privacy.current, abort = new AbortController(), range = calendarRange(view, anchor), last = addDays(range.end, -1);
+    const owned = () => mounted.current && shown === privacy.current && !abort.signal.aborted;
+    setClosed(new Map());
+    blockOutsApi.blockOuts(scope, range.start, last, signalFor(abort), owned).then(
+      (read) => { if (owned()) setClosed(closedDays(read.blockOuts, range.start, last)); }, () => { /* no closed days shown */ });
+    return () => abort.abort();
+  }, [school, anchor, view, refresh, blockOutsApi]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // A confirmed move keeps its ghost until the calendar has been read again, so the card never jumps back first.
   useEffect(() => { if (pending?.done && classes.state !== 'LOADING') setPending(null); }, [classes]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -151,11 +165,18 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
   const manage = cards.state === 'READY' && cards.canManage;
   const zone = classes.state === 'READY' ? classes.timezone : null;
   const errorText = (error: unknown) => t(`err${error instanceof CardError ? error.kind : 'UNKNOWN'}` as CalendarKey);
+  const dayName = (date: string) => new Date(`${date}T00:00:00Z`).toLocaleDateString(preferences.language, { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
+  /** On a closed day, asks first and runs `go` on Continue; otherwise runs it now. A block-out never refuses a class. */
+  const askIfClosed = (date: string, go: () => void) => {
+    const label = closed.get(date);
+    if (label === undefined) { go(); return; }
+    setMessage({ text: t('blockedAsk', { date: dayName(date), label }), ask: () => { setMessage(null); go(); } });
+  };
   const openCreate = useCallback((date: string, minutes: number) => {
     if (!manage) { setMessage({ text: t('cannotManage') }); return; }
     setSelected(null); setBooking(false); setMessage(null);
-    setCreating((c) => c?.busy ? c : { date, minutes, key: newKey(), busy: false, error: null, serial: (c?.serial ?? 0) + 1 });
-  }, [manage, preferences.language]); // eslint-disable-line react-hooks/exhaustive-deps
+    askIfClosed(date, () => setCreating((c) => c?.busy ? c : { date, minutes, key: newKey(), busy: false, error: null, serial: (c?.serial ?? 0) + 1 }));
+  }, [manage, closed, preferences.language]); // eslint-disable-line react-hooks/exhaustive-deps
   // "Add a class": waits for the calendar and card details, then opens the form at the next whole hour in school time.
   const handledSignal = useRef(0);
   useEffect(() => {
@@ -207,13 +228,20 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
     const startsAt = zonedInstant(date, start, classes.timezone), endsAt = zonedInstant(date, end, classes.timezone);
     if (!startsAt || !endsAt) { setMessage({ text: t('errGap') }); return; }
     const move: Pending = { sessionId, date, start, end, saving: false, startsAt, endsAt, version: card.version, name: session.name, booked: card.booked };
-    if (card.booked > 0) { setPending(move); setMessage({ text: t('moveConfirm', { n: String(card.booked), name: session.name }), confirm: true }); return; }
-    sendMove(move);
-  }, [classes, cards, pending, preferences.language, scope]); // eslint-disable-line react-hooks/exhaustive-deps
+    const onto = () => {
+      if (card.booked > 0) { setPending(move); setMessage({ text: t('moveConfirm', { n: String(card.booked), name: session.name }), confirm: true }); return; }
+      sendMove(move);
+    };
+    // Moving within the same closed day asks nothing new.
+    if (date !== localDateOf(session.startsAt, classes.timezone)) askIfClosed(date, onto); else onto();
+  }, [classes, cards, pending, closed, preferences.language, scope]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const messageBar = message ? <div className={styles.message} role={message.confirm ? 'alert' : 'status'} data-testid="calendar-message">
+  const messageBar = message ? <div className={styles.message} role={message.confirm || message.ask ? 'alert' : 'status'} data-testid="calendar-message">
     <span>{message.text}</span>
-    {message.confirm && pending && !pending.saving ? <span className={styles.messageActions}>
+    {message.ask ? <span className={styles.messageActions}>
+      <button type="button" className={styles.primary} onClick={message.ask} data-testid="calendar-blocked-continue">{t('blockedContinue')}</button>
+      <button type="button" className={styles.secondary} onClick={() => setMessage(null)}>{t('blockedBack')}</button>
+    </span> : message.confirm && pending && !pending.saving ? <span className={styles.messageActions}>
       <button type="button" className={styles.primary} onClick={() => sendMove(pending)}>{t('moveYes')}</button>
       <button type="button" className={styles.secondary} onClick={() => { setPending(null); setMessage(null); }}>{t('moveNo')}</button>
     </span> : pending?.saving ? null : <button type="button" className={styles.clearLink} onClick={() => setMessage(null)}>{t('dismiss')}</button>}
@@ -241,6 +269,6 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
       onView={onView} onShift={onShift} onToday={onToday} onSelect={onSelect} onDay={onDay} onRefresh={onRefresh} onManageEvent={onManageEvent}
       classFilter={classFilter} onClassFilter={setClassFilter} cards={cards} programFilter={programFilter} onProgramFilter={setProgramFilter}
       instructorFilter={instructorFilter} onInstructorFilter={setInstructorFilter} onCreateAt={manage ? openCreate : undefined} onDrop={manage ? onDrop : undefined}
-      pending={pending} createPanel={createPanel} message={messageBar}/>
+      pending={pending} createPanel={createPanel} message={messageBar} closed={closed}/>
   </div>;
 }

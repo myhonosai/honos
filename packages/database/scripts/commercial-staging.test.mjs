@@ -38,12 +38,12 @@ test('network target policy accepts only canonical loopback PostgreSQL, includin
   for (const args of [[443, 'example.test'], [5432, 'database.internal'], [{ port: 5432, host: '127.0.0.2' }], [{ path: '/tmp/other.sock' }], [{ port: 3000, host: 'localhost' }]]) assert(!postgresTarget(args));
 });
 test('entire reviewed migration chain and every 0181–0600 checksum are pinned', async () => {
-  const actual = await readMigrationEvidence(); assert.equal(actual.targets.length, 184); assert.equal(actual.entries.at(-1).file.slice(0, 4), '0600');
-  assert.equal(actual.entries.length, 356);
-  assert.deepEqual(actual.targets.slice(-5).map(t => t.file.slice(0, 4)), ['0574', '0576', '0581', '0597', '0600']);
+  const actual = await readMigrationEvidence(); assert.equal(actual.targets.length, 190); assert.equal(actual.entries.at(-1).file.slice(0, 4), '0600');
+  assert.equal(actual.entries.length, 362);
+  assert.deepEqual(actual.targets.slice(-5).map(t => t.file.slice(0, 4)), ['0594', '0596', '0597', '0598', '0600']);
   const changed = structuredClone(actual.entries); changed[0].sha256 = '0'.repeat(64);
   assert.throws(() => validateMigrationEvidence(changed, actual));
-  assert.throws(() => validateMigrationEvidence([...actual.entries, { file: '0598_unreviewed.sql', sha256: 'x' }], actual));
+  assert.throws(() => validateMigrationEvidence([...actual.entries, { file: '0601_unreviewed.sql', sha256: 'x' }], actual));
   assert.throws(() => validateMigrationEvidence([...actual.entries.slice(0, -1), { file: '0179_reserved.sql', sha256: 'x' }], actual));
 });
 test('canonical runtime ACL restores only the eight fixed 0230 schedule-billing procedures after the global SaaS revoke', async () => {

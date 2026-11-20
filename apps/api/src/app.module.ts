@@ -145,6 +145,10 @@ import { SchoolWebsiteService } from './website/school-website.service.js';
 import { SchoolWebsiteAiController } from './website/website-ai.controller.js';
 import { WebsiteAiService } from './website/website-ai.service.js';
 import { WEBSITE_PROVIDER_RUNTIME, OpenRouterWebsiteRuntime } from './ai/website-provider-runtime.js';
+import { MerchAiController } from './commerce/shopify/merch-ai.controller.js';
+import { MerchAiService } from './commerce/shopify/merch-ai.service.js';
+import { MERCH_PROVIDER_RUNTIME, OpenRouterMerchRuntime } from './commerce/shopify/merch-provider-runtime.js';
+import { PAPER_VISION_RUNTIME, OpenRouterPaperVisionRuntime } from './ai/paper-vision-runtime.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
 import { SchoolSupportController } from './support/school-support.controller.js';
@@ -207,7 +211,7 @@ import { ShopifyService } from './commerce/shopify/shopify.service.js';
 import { SHOPIFY_APP, shopifyAppFromEnvironment } from './commerce/shopify/shopify-adapter.js';
 import { ShopifyWebhookController } from './commerce/shopify/shopify-webhook.controller.js';
 import { SHOPIFY_WORKER_STORE, ShopifyBackgroundScheduler, ShopifyBackgroundSync, ShopifyWorkerDatabase } from './commerce/shopify/shopify-worker.js';
-import { SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard, SchoolCheckoutSettingsSaveHumanUiGuard } from './school-checkout/school-checkout-human-ui.guard.js';
+import { SchoolCheckoutOrdersReadHumanUiGuard, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard, SchoolCheckoutSettingsSaveHumanUiGuard } from './school-checkout/school-checkout-human-ui.guard.js';
 import { MayaAtRiskController, MayaAtRiskReadHumanUiGuard } from './maya/maya-at-risk.controller.js';
 import { MayaAtRiskService } from './maya/maya-at-risk.service.js';
 import { SchoolBrandingController } from './school-branding/school-branding.controller.js';
@@ -282,10 +286,16 @@ import { ParentSchoolAnnouncementsController, ParentSchoolAnnouncementsReadGuard
 import { SchoolAnnouncementsService } from './announcements/school-announcements.service.js';
 import { ParentProShopController, ParentProShopReadGuard } from './pro-shop/parent-pro-shop.controller.js';
 import { ParentProShopService } from './pro-shop/parent-pro-shop.service.js';
+import { ParentCheckoutCancelGuard, ParentCheckoutConfirmGuard, ParentCheckoutController, ParentCheckoutOrderGuard, ParentCheckoutStartGuard } from './family-checkout/parent-checkout.controller.js';
+import { ParentCheckoutService } from './family-checkout/parent-checkout.service.js';
 import { ConversationCreateLeadGuard, ConversationLinkGuard, ConversationMarkReadGuard, ConversationReadGuard, ConversationReplyGuard, ConversationUpdateGuard, SchoolConversationsController } from './conversations/school-conversations.controller.js';
 import { SchoolConversationsService } from './conversations/school-conversations.service.js';
 import { ContactEmailResendGuard, ContactHistoryReadGuard, ContactMessagesController } from './conversations/contact-messages.controller.js';
 import { ContactMessagesService } from './conversations/contact-messages.service.js';
+import { SchoolMessageHistoryReadGuard, SchoolMessagesController, SchoolOptedOutReadGuard } from './communication/school-messages.controller.js';
+import { SchoolMessagesService } from './communication/school-messages.service.js';
+import { SchoolMessageTemplatesController, SchoolTemplateSaveGuard, SchoolTemplateStatusGuard, SchoolTemplatesReadGuard } from './communication/school-message-templates.controller.js';
+import { SchoolMessageTemplatesService } from './communication/school-message-templates.service.js';
 import { ConversationAiController, ConversationAiFileGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard, ConversationAiKnowledgeGuard, ConversationAiProgramHqController, ConversationAiReadGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard } from './conversations/conversation-ai.controller.js';
 import { ConversationAiProgramService, ConversationAiService } from './conversations/conversation-ai.service.js';
 import { ParentMessageHistoryController, ParentMessageHistoryReadGuard } from './families/parent-message-history.controller.js';
@@ -325,6 +335,12 @@ import { ClassSeriesController } from './schedule/class-series.controller.js';
 import { CalendarCardsController } from './schedule/calendar-cards.controller.js';
 import { CalendarCardsService } from './schedule/calendar-cards.service.js';
 import { CalendarCardCreateHumanUiGuard, CalendarCardMoveHumanUiGuard, CalendarCardsReadHumanUiGuard } from './schedule/calendar-cards-human-ui.guard.js';
+import { CalendarSettingsController, PublicShareCalendarController } from './schedule/calendar-settings.controller.js';
+import { CalendarSettingsService } from './schedule/calendar-settings.service.js';
+import {
+  CalendarBlockOutAddHumanUiGuard, CalendarBlockOutRemoveHumanUiGuard, CalendarBlockOutsReadHumanUiGuard, CalendarSettingsReadHumanUiGuard,
+  CalendarShareSettingsSaveHumanUiGuard, ShareCalendarDeleteHumanUiGuard, ShareCalendarSaveHumanUiGuard,
+} from './schedule/calendar-settings-human-ui.guard.js';
 import { ClassSeriesService } from './schedule/class-series.service.js';
 import { PublicSchoolEventController, SchoolEventController } from './schedule/school-event.controller.js';
 import { SchoolEventService } from './schedule/school-event.service.js';
@@ -541,8 +557,11 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentSchoolAnnouncementsController,
     SchoolAnnouncementsController,
     ParentProShopController,
+    ParentCheckoutController,
     SchoolConversationsController,
     ContactMessagesController,
+    SchoolMessagesController,
+    SchoolMessageTemplatesController,
     ConversationAiController,
     ConversationAiProgramHqController,
     ParentMessageHistoryController,
@@ -561,6 +580,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSessionPagesController,
     ClassSeriesController,
     CalendarCardsController,
+    CalendarSettingsController,
+    PublicShareCalendarController,
     SchoolEventController,
     PublicSchoolEventController,
     BookingTypeController,
@@ -610,6 +631,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HistoryImportController,
     SchoolWebsiteController,
     SchoolWebsiteAiController,
+    MerchAiController,
     PublishedSchoolWebsiteController,
     SchoolOnboardingController,
     SchoolSupportController,
@@ -744,10 +766,18 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolAnnouncementsWithdrawGuard,
     ParentProShopService,
     ParentProShopReadGuard,
+    ParentCheckoutService, ParentCheckoutOrderGuard, ParentCheckoutStartGuard, ParentCheckoutConfirmGuard, ParentCheckoutCancelGuard,
     SchoolConversationsService,
     ContactMessagesService,
     ContactHistoryReadGuard,
     ContactEmailResendGuard,
+    SchoolMessagesService,
+    SchoolMessageTemplatesService,
+    SchoolMessageHistoryReadGuard,
+    SchoolTemplatesReadGuard,
+    SchoolTemplateSaveGuard,
+    SchoolTemplateStatusGuard,
+    SchoolOptedOutReadGuard,
     ConversationAiService,
     ConversationAiProgramService,
     ConversationAiReadGuard, ConversationAiKnowledgeGuard, ConversationAiFileGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard,
@@ -864,13 +894,17 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipPauseService,
     StudentImportService,
     PaperImportService,
-    // 0388: the stand-in reader is the only paper reader; a real vision provider needs owner approval.
+    // 0388: the stand-in reads only the built-in sample pages. 0594: HON reads real photos on the AI team's route; no call is
+    // made until HQ keeps a DOCUMENT_READING profile on an image model and the existing OpenRouter key and approval are set.
     { provide: PAPER_READER_RUNTIME, useFactory: () => new SyntheticPaperReader() },
+    { provide: PAPER_VISION_RUNTIME, useFactory: () => new OpenRouterPaperVisionRuntime() },
     BillingImportService,
     HistoryImportService,
     SchoolWebsiteService,
     WebsiteAiService,
     { provide: WEBSITE_PROVIDER_RUNTIME, useFactory: () => new OpenRouterWebsiteRuntime() },
+    MerchAiService,
+    { provide: MERCH_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime() },
     SchoolOnboardingService,
     SchoolSupportService,
     CustomToolService,
@@ -884,6 +918,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SocialPostDispatcher,
     ClassSeriesService,
     CalendarCardsService,
+    CalendarSettingsService,
     SchoolReportsService,
     SchoolContactsService,
     SchoolContactAdminService,
@@ -907,6 +942,13 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     CalendarCardsReadHumanUiGuard,
     CalendarCardCreateHumanUiGuard,
     CalendarCardMoveHumanUiGuard,
+    CalendarSettingsReadHumanUiGuard,
+    CalendarBlockOutsReadHumanUiGuard,
+    CalendarShareSettingsSaveHumanUiGuard,
+    CalendarBlockOutAddHumanUiGuard,
+    CalendarBlockOutRemoveHumanUiGuard,
+    ShareCalendarSaveHumanUiGuard,
+    ShareCalendarDeleteHumanUiGuard,
     ClassSeriesReviseHumanUiGuard,
     ClassSeriesOngoingHumanUiGuard,
     ClassSeriesTopUpHumanUiGuard,
@@ -928,7 +970,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPayMethodDefaultHumanUiGuard, SchoolPayMethodRemoveHumanUiGuard,
     SchoolPayAutopayReadHumanUiGuard, SchoolPayDiscountReadHumanUiGuard, SchoolPayDiscountSetHumanUiGuard, SchoolPayAutopayEnrollHumanUiGuard,
     SchoolPayAutopayMethodHumanUiGuard, SchoolPayAutopayStateHumanUiGuard, SchoolPayAutopayCancelHumanUiGuard, SchoolPayAutopayCycleHumanUiGuard,
-    SchoolCheckoutService, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard, SchoolCheckoutSettingsSaveHumanUiGuard,
+    SchoolCheckoutService, SchoolCheckoutOrdersReadHumanUiGuard, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard, SchoolCheckoutSettingsSaveHumanUiGuard,
     ShopifyService, ShopifyHumanGuard, { provide: SHOPIFY_APP, useFactory: () => shopifyAppFromEnvironment(process.env) },
     ShopifyWorkerDatabase, { provide: SHOPIFY_WORKER_STORE, useExisting: ShopifyWorkerDatabase }, ShopifyBackgroundSync, ShopifyBackgroundScheduler,
     MayaAtRiskService,

@@ -111,7 +111,7 @@ describe('school conversations screen', () => {
   it('is the first tab of Texts under Communication, and the old address redirects there', () => {
     const texts = SCHOOL_SHELL_NAV.find(item => item.key === 'messages')!;
     expect(texts.section).toBe('communication');
-    expect(texts.routes.map(r => r.href)).toEqual(['/staff/texts', '/staff/texts/send']);
+    expect(texts.routes.map(r => r.href)).toEqual(['/staff/texts', '/staff/texts/send', '/staff/texts/history', '/staff/texts/templates', '/staff/texts/opted-out']);
     expect(readFileSync(resolve('src/app/staff/conversations/page.tsx'), 'utf8')).toContain('redirect(`/staff/texts${movedQuery(await searchParams)}`)');
     expect(movedQuery({})).toBe('');
     expect(movedQuery({ conversation: 'abc', tag: ['a', 'b'], gone: undefined })).toBe('?conversation=abc&tag=a&tag=b');
