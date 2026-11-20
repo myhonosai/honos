@@ -191,4 +191,14 @@ BEGIN
 END;
 $$;
 
+-- 0601 parent announcement push: claim and record sends and Expo receipts (when applied). No table access.
+DO $$
+BEGIN
+  IF to_regprocedure('hon.record_parent_push_receipt(uuid,uuid,jsonb)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.claim_parent_push_deliveries(integer, integer), hon.record_parent_push_send(uuid, uuid, jsonb),
+      hon.claim_parent_push_receipts(integer, integer), hon.record_parent_push_receipt(uuid, uuid, jsonb) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 COMMIT;

@@ -359,6 +359,7 @@
     "0585_school_message_history.sql": "5c85915c11e07fc66563a8b617f9809f4340ed92fa8a2df141143834ee22036b",
     "0586_school_message_templates.sql": "d85d8ca8d6153a38a0cd0a04b73628f2cbac4cc7094de7678a50db4c24117e9b",
     "0594_paper_import_ai_reader.sql": "7a84df3e44906d28635eaf0889a1c133994e0201b805a7bb343a3ba4b2da99a9",
-    "0598_family_checkout_orders.sql": "a4debf59bcbf49c684c439e1bc427c6800a105b3f72a501a36d3d38fd9c0fb13"
+    "0598_family_checkout_orders.sql": "a4debf59bcbf49c684c439e1bc427c6800a105b3f72a501a36d3d38fd9c0fb13",
+    "0601_parent_announcement_push.sql": "199420cc54a86f7bcc8dc2d80e419053802d9e2acf3951826faa3910dd2cc23b"
   }
 }

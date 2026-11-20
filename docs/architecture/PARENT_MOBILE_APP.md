@@ -32,7 +32,7 @@ Legend: **Verified** = a parent-scoped endpoint + contract verifier + proofs on 
 | Parent payments / renewals / payment method | Absent / Blocked | School payment controllers are staff-only. Live money needs owner approval. |
 | Messages | Verified | `GET/POST /v1/parent/messages/school` (0330 two-way), `GET /v1/parent/messages` (history). |
 | Announcements | Partial | Knowledge feed `GET /v1/parent/schools/:s/families/:f/knowledge`; no announcement/targeting model for parents. |
-| Push notifications | Absent | No device-token table, no push delivery records. |
+| Push notifications | Built, off (0601) | `POST /v1/parent/push-devices` + `/unregister`; announcement fan-out and Expo sends by the communication worker only when `HON_PARENT_PUSH_APPROVED=true`. See [PARENT_ANNOUNCEMENT_PUSH.md](PARENT_ANNOUNCEMENT_PUSH.md). |
 | Documents | Verified | `GET /v1/parent/schools/:s/documents/publications`, ack POST, receipts. |
 | Membership agreement + photo | Partial (PR #460, GO, unmerged) | `GET /v1/parent/membership-agreement`, `POST .../sign`, `POST /v1/parent/person-photo/set|remove` (base64 JPEG ≤ 400 KB). |
 | Face check-in consent | Verified | `GET /v1/parent/face-check-in`, `POST sign|withdraw`. |
@@ -126,4 +126,4 @@ budget and server-side safety controls still apply. No real AI provider until Da
 
 Decided 2026-11-17: app id `com.myhonos.family`, store name "HON Family", test builds on app.myhonos.com, Eian
 with no per-family cap. Open owner decisions: branded-app pricing; whether VIEWER sees billing; makeup policy defaults
-(none assumed); push provider (Expo push service vs direct APNs/FCM).
+(none assumed). Push provider: Expo push service (0601, built, off until the owner approves sends).

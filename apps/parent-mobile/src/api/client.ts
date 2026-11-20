@@ -25,6 +25,10 @@ import {
 import { verifyParentSchoolAnnouncements, type ParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
 import { verifyParentProShop, type ParentProShop } from '@hon/contracts/parent-pro-shop';
 import {
+  validateRegisterParentPushDeviceInput, validateUnregisterParentPushDeviceInput, verifyParentPushDeviceReceipt, verifyParentPushUnregisterReceipt,
+  type ParentPushDeviceReceipt, type ParentPushPlatform, type ParentPushUnregisterReceipt,
+} from '@hon/contracts/parent-push';
+import {
   validateOpenParentCheckoutOrderInput, verifyParentCheckoutOrderResult, verifyParentCheckoutOrderStart, verifyParentCheckoutPages,
   type OpenParentCheckoutOrderInput, type ParentCheckoutOrderResult, type ParentCheckoutOrderStart, type ParentCheckoutPages,
 } from '@hon/contracts/family-checkout';
@@ -186,6 +190,14 @@ export function createParentApi(options: ParentApiOptions) {
     /** 0530: the family's open invoices the parent may pay on the school's own processor page (test mode only). */
     /** The school's live announcements (0576) for the one family this sign-in belongs to. No school or family id is sent. */
     announcements: (): Promise<ParentRead<ParentSchoolAnnouncements>> => get('/v1/parent/announcements', dataOf(verifyParentSchoolAnnouncements)),
+    /** 0601: this phone's Expo push token for announcement notifications. The server decides the person and school. */
+    registerPushDevice: (expoPushToken: string, platform: ParentPushPlatform, idempotencyKey: string): Promise<ParentWrite<ParentPushDeviceReceipt>> =>
+      post('/v1/parent/push-devices', 'parent.push_device.register', idempotencyKey, validateRegisterParentPushDeviceInput({ expoPushToken, platform }),
+        data => verifyParentPushDeviceReceipt(data, platform)),
+    /** 0601: stop notifications to this phone (sign out). */
+    unregisterPushDevice: (expoPushToken: string, idempotencyKey: string): Promise<ParentWrite<ParentPushUnregisterReceipt>> =>
+      post('/v1/parent/push-devices/unregister', 'parent.push_device.unregister', idempotencyKey, validateUnregisterParentPushDeviceInput({ expoPushToken }),
+        verifyParentPushUnregisterReceipt),
     /** The school's own Shopify products (0581); buying opens the school's store page. No school or family id is sent. */
     proShop: (): Promise<ParentRead<ParentProShop>> => get('/v1/parent/pro-shop', dataOf(verifyParentProShop)),
     /** 0598: the school's checkout pages the family can buy from, the family's children and latest orders. No school or family id is sent. */

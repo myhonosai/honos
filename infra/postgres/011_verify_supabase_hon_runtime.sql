@@ -5476,3 +5476,54 @@ DO $$ DECLARE f record; safe boolean; BEGIN
     RAISE EXCEPTION 'The family checkout order recorder must be a code-owned service with no authority'; END IF;
 END $$;
 -- End family checkout orders exact verification.
+-- Parent announcement push exact verification (0601): private token check, guards, live-person check and scope, two runtime entry points,
+-- four worker functions only the communication worker may run, and three private forced-RLS tables nobody else can touch.
+DO $$ DECLARE f record; safe boolean; t text; worker oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_communication_worker'); BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.parent_push_token_ok(text)',false,false,false,'search_path=pg_catalog','64cbc11052ab6aea74186b1cc9f1ddda87b6ce97d9687f2ac7aec64ba4cee53e'),
+('hon.guard_parent_push_device()',false,false,false,'search_path=pg_catalog, hon','9e4b082ee1cd84b0e6c0d641f47262f202bac913b1ac8191668231dcadaec68f'),
+('hon.guard_parent_push_delivery()',false,false,false,'search_path=pg_catalog, hon','f152460ff71f820c99aa5fd5945164ab8db93f4cd66cb685a3df269816f2939b'),
+('hon.parent_push_principal_live_at(uuid,uuid,uuid)',true,false,false,'search_path=pg_catalog, hon','12522dac7d3a7f73efa11a8ffb18e62b05daa24e957fd2cf55aa466c9f39287c'),
+('hon.parent_push_scope(text)',true,false,false,'search_path=pg_catalog, hon','cc23b80a7a54efa4359ef77b38469c30ca57e15d5e0959a456716b209f2db3da'),
+('hon.register_parent_push_device(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','8915741e9c7ef45d4ae8bc9ed811a5c1e08ba69a88f8abe8b726e785d07463e3'),
+('hon.unregister_parent_push_device(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','a6cdc2689ee4d07f94e7a6dd9d55ec756a8c542ad1be33d42116cf4fc63944bd'),
+('hon.claim_parent_push_deliveries(integer,integer)',true,false,true,'search_path=pg_catalog, hon','c39c6a3334e45bec14e3f8c928dd3938bdf8386b3c2a7b8a2465fe8e3f69f37d'),
+('hon.record_parent_push_send(uuid,uuid,jsonb)',true,false,true,'search_path=pg_catalog, hon','8afe507bc68fbc6ffb10914d177b1dd1c9c3da5d75c722af68212afc6a53b10f'),
+('hon.claim_parent_push_receipts(integer,integer)',true,false,true,'search_path=pg_catalog, hon','2e3117cf7b3871cc70474e3db0db52b46199050571971c53146ff74b09c8c4c5'),
+('hon.record_parent_push_receipt(uuid,uuid,jsonb)',true,false,true,'search_path=pg_catalog, hon','01287d5d3efbe246579bc5b8e0fe56e7d3d9ef0eac886ae79990ecddc80fcccf')) e(signature,definer,runtime_allowed,worker_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND NOT (a.privilege_type='EXECUTE' AND NOT a.is_grantable
+          AND ((a.grantee=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') AND f.runtime_allowed)
+            OR (a.grantee=worker AND f.worker_allowed))))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe parent push function: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['parent_push_devices','parent_push_fanouts','parent_push_deliveries'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES')
+      OR (worker IS NOT NULL AND (has_table_privilege(worker,'hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+        OR has_any_column_privilege(worker,'hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES'))) THEN
+      RAISE EXCEPTION 'Unsafe parent push table: %',t; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.parent_push_devices'::regclass AND NOT tgisinternal AND tgenabled='O'
+      AND ((tgname='parent_push_devices_guard' AND tgfoid='hon.guard_parent_push_device()'::regprocedure)
+        OR (tgname='parent_push_devices_no_truncate' AND tgfoid='hon.guard_membership_activation_evidence()'::regprocedure)))<>2
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.parent_push_devices'::regclass AND NOT tgisinternal)<>2 THEN
+    RAISE EXCEPTION 'hon.parent_push_devices must carry exactly its two guards'; END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.parent_push_deliveries'::regclass AND NOT tgisinternal AND tgenabled='O'
+      AND ((tgname='parent_push_deliveries_guard' AND tgfoid='hon.guard_parent_push_delivery()'::regprocedure)
+        OR (tgname='parent_push_deliveries_no_truncate' AND tgfoid='hon.guard_membership_activation_evidence()'::regprocedure)))<>2
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.parent_push_deliveries'::regclass AND NOT tgisinternal)<>2 THEN
+    RAISE EXCEPTION 'hon.parent_push_deliveries must carry exactly its two guards'; END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.parent_push_fanouts'::regclass AND NOT tgisinternal AND tgenabled='O'
+      AND tgfoid='hon.guard_membership_activation_evidence()'::regprocedure AND tgname IN ('parent_push_fanouts_immutable','parent_push_fanouts_no_truncate'))<>2
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.parent_push_fanouts'::regclass AND NOT tgisinternal)<>2 THEN
+    RAISE EXCEPTION 'hon.parent_push_fanouts must carry exactly its two guards'; END IF;
+END $$;
+-- End parent announcement push exact verification.

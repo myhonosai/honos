@@ -130,6 +130,9 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
 
   return {
     sampleMode: true,
+    // The made-up family never signs a phone up for notifications.
+    registerPushDevice: () => refused('PARENT_PUSH_FORBIDDEN'),
+    unregisterPushDevice: () => wrote({ unregistered: false }),
     journey: () => ok(verifyParentJourneyView(journeyRaw())),
     schoolTimeZone: () => Promise.resolve(ZONE),
     classBookings: () => ok(verifyParentClassBookingChoices(choicesRaw())),

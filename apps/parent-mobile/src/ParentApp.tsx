@@ -1,11 +1,12 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { NavigationContainer, useFocusEffect, useNavigation } from '@react-navigation/native';
+import { createNavigationContainerRef, NavigationContainer, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ParentApi } from './api/client';
 import type { SessionStore } from './session/session-store';
-import { FamilyProvider } from './family/family-data';
+import { FamilyProvider, useFamily } from './family/family-data';
+import { registerPhone, unregisterPhone, type PhonePush } from './push/push';
 import { HomeScreen } from './screens/HomeScreen';
 import { ScheduleScreen, SignInScreen } from './screens/OtherTabs';
 import { EianScreen } from './eian/EianScreen';
@@ -29,9 +30,11 @@ export interface ParentAppProps {
   newKey?: () => string;
   /** Test builds only: a made-up offline family to tap through before signing in. Never offered in store builds. */
   sampleApi?: () => ParentApi;
+  /** Announcement notifications on this phone (0601). Omitted where the phone cannot receive them. */
+  push?: PhonePush | null;
 }
 
-export function ParentApp({ api, session, now = () => new Date(), version = '0.1.0', onSignIn, newKey = missingKeySource, sampleApi }: ParentAppProps) {
+export function ParentApp({ api, session, now = () => new Date(), version = '0.1.0', onSignIn, newKey = missingKeySource, sampleApi, push }: ParentAppProps) {
   const [sample, setSample] = useState<ParentApi | null>(null);
   const [token, setToken] = useState<string | null | undefined>(undefined);
   useEffect(() => {
@@ -40,7 +43,18 @@ export function ParentApp({ api, session, now = () => new Date(), version = '0.1
     const off = session.subscribe(t => setToken(t));
     return () => { live = false; off(); };
   }, [session]);
-  const signOut = useCallback(() => { void session.clear(); }, [session]);
+  // Sign out first tells the server to stop notifications to this phone (best effort, a few seconds at most).
+  const signOut = useCallback(() => {
+    void (async () => { if (push) await unregisterPhone(api, push, newKey); await session.clear(); })();
+  }, [session, api, push, newKey]);
+  // Signed in for real (never the sample family): ask once per sign-in to show the school's announcements on this phone.
+  const signedIn = typeof token === 'string' && token.length > 0;
+  const latest = useRef({ api, newKey });
+  latest.current = { api, newKey };
+  useEffect(() => { if (signedIn && push) void registerPhone(latest.current.api, push, latest.current.newKey); }, [signedIn, token, push]);
+  // Tapping an announcement notification opens Home and reads the latest.
+  const [opened, setOpened] = useState(0);
+  useEffect(() => (signedIn && push ? push.onOpenAnnouncement(() => setOpened(n => n + 1)) : undefined), [signedIn, push]);
 
   return (
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
@@ -57,16 +71,23 @@ export function ParentApp({ api, session, now = () => new Date(), version = '0.1
         : (
           // Keyed by session so nothing from a previous sign-in survives into the next one.
           <FamilyProvider key={token} api={api} onSignedOut={signOut} now={now} newKey={newKey}>
-            <Tabs onSignOut={signOut} version={version} />
+            <Tabs onSignOut={signOut} version={version} opened={opened} />
           </FamilyProvider>
         )}
     </SafeAreaProvider>
   );
 }
 
-function Tabs({ onSignOut, version }: { onSignOut: () => void; version: string }) {
+function Tabs({ onSignOut, version, opened = 0 }: { onSignOut: () => void; version: string; opened?: number }) {
+  const navigation = useState(() => createNavigationContainerRef<Tabs>())[0];
+  const { refresh } = useFamily();
+  useEffect(() => {
+    if (!opened) return;
+    if (navigation.isReady()) navigation.navigate('Home');
+    refresh();
+  }, [opened, navigation, refresh]);
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigation}>
       <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={props => <TabBar {...props} />}>
         <Tab.Screen name="Home" children={() => <HomeFromTab />} />
         <Tab.Screen name="Schedule" component={ScheduleScreen} />
