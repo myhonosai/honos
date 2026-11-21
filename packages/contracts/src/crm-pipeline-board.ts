@@ -166,3 +166,35 @@ export function verifyCrmPipelineStagesReceipt(value: unknown, expected?: { pipe
   if (expected?.pipelineId && receipt.pipelineId !== expected.pipelineId) invalid();
   return receipt;
 }
+
+/**
+ * Ready-made martial-arts lead funnels a school adds as extra pipelines with one press. The server owns the stage list;
+ * owners rename or recolour afterwards in the stage editor. Each ends with one Won and one Lost stage.
+ */
+export const CRM_PIPELINE_TEMPLATE_CODES = ['KIDS_PROGRAM', 'ADULT_PROGRAM', 'EVENTS'] as const;
+export type CrmPipelineTemplateCode = typeof CRM_PIPELINE_TEMPLATE_CODES[number];
+export interface CrmPipelineTemplateStage { readonly name: string; readonly color: CrmStageColor; readonly terminalStatus?: 'WON' | 'LOST' }
+export interface CrmPipelineTemplate { readonly code: CrmPipelineTemplateCode; readonly name: string; readonly stages: readonly CrmPipelineTemplateStage[] }
+/** The most pipelines one school keeps; past it a template press is refused. */
+export const CRM_PIPELINE_MAX = 10;
+const stageOf = (name: string, color: CrmStageColor, terminalStatus?: 'WON' | 'LOST'): CrmPipelineTemplateStage =>
+  Object.freeze(terminalStatus ? { name, color, terminalStatus } : { name, color });
+export const CRM_PIPELINE_TEMPLATES: readonly CrmPipelineTemplate[] = Object.freeze([
+  Object.freeze({ code: 'KIDS_PROGRAM' as const, name: 'Kids program', stages: Object.freeze([
+    stageOf('New inquiry', 'BLUE'), stageOf('Contacted', 'SKY'), stageOf('Trial booked', 'AMBER'), stageOf('Trial done', 'VIOLET'),
+    stageOf('Enrolled', 'GREEN', 'WON'), stageOf('Not now', 'RED', 'LOST')]) }),
+  Object.freeze({ code: 'ADULT_PROGRAM' as const, name: 'Adult program', stages: Object.freeze([
+    stageOf('New inquiry', 'BLUE'), stageOf('Contacted', 'SKY'), stageOf('Intro class booked', 'AMBER'), stageOf('Intro class done', 'VIOLET'),
+    stageOf('Joined', 'GREEN', 'WON'), stageOf('Not now', 'RED', 'LOST')]) }),
+  Object.freeze({ code: 'EVENTS' as const, name: 'Birthday parties and events', stages: Object.freeze([
+    stageOf('New request', 'BLUE'), stageOf('Date offered', 'SKY'), stageOf('Deposit pending', 'AMBER'),
+    stageOf('Booked', 'GREEN', 'WON'), stageOf('Not now', 'RED', 'LOST')]) }),
+]);
+export function crmPipelineTemplate(code: string): CrmPipelineTemplate | undefined { return CRM_PIPELINE_TEMPLATES.find((t) => t.code === code); }
+/** The template command's whole body: exactly one known template code. */
+export function validateCrmPipelineTemplateInput(value: unknown): { template: CrmPipelineTemplateCode } {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).join(',') !== 'template') invalid();
+  const template = (value as { template: unknown }).template;
+  if (typeof template !== 'string' || !crmPipelineTemplate(template)) invalid();
+  return { template: template as CrmPipelineTemplateCode };
+}

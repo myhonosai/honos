@@ -14,7 +14,8 @@
 .shell p{color:var(--hon-text-muted)}
 .shell svg{flex-shrink:0}
 .sidebar{width:240px;position:fixed;inset:0 auto 0 0;display:flex;flex-direction:column;background:linear-gradient(160deg,#0a1627,#07101d);border-right:1px solid var(--hon-border);padding:28px 14px 16px;z-index:20;overflow-y:auto;overscroll-behavior:contain}
-.brand{display:block;padding:0 14px 25px}
+.brand{display:flex;align-items:center;gap:11px;padding:0 14px 25px}
+.brandMark{width:38px;height:38px;flex:none;display:block}
 .brand strong{display:block;font-size:27px;font-weight:800;letter-spacing:-.045em}
 .brand span{display:block;color:var(--hon-text-muted);font-size:10px;letter-spacing:.13em;text-transform:uppercase}
 .navigation{display:flex;flex-direction:column;gap:5px}

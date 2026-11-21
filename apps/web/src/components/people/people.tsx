@@ -248,7 +248,7 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   const membershipSlot = useCallback((m: MembershipItem) => selection ? <MembershipPanel key={`${lower(selection.schoolId)}:${m.membershipId}`} language={preferences.language}
     scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} item={m} onChanged={onMembershipChanged}/> : null,
   [selection?.organizationId, selection?.schoolId, preferences.language, onMembershipChanged]); // eslint-disable-line react-hooks/exhaustive-deps
-  // New membership and Renew (0531) at the top of the membership tab; the server decides who can have which plan.
+  // New membership and Renew (0624) at the top of the membership tab; the server decides who can have which plan.
   const membershipTools = useCallback((items: readonly MembershipItem[]) => selection && selectedId ? <NewMembershipTools key={`${lower(selection.schoolId)}:${selectedId}`}
     language={preferences.language} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId, personId: selectedId }} items={items}
     onChanged={onMembershipChanged}/> : null,

@@ -1,6 +1,7 @@
 import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Header, Headers, HttpCode, HttpStatus, NotFoundException, Param, ParseUUIDPipe, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Response } from 'express';
+import type { WalkInCardOutcome } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
@@ -145,7 +146,28 @@ export class PublicWalkInKioskController {
   async submit(@Body() input: unknown, @Headers('idempotency-key') key: string, @Res() res: Response) {
     const outcome = await this.kiosk.submit(input, key);
     if (outcome.result === 'RATE_LIMITED') res.setHeader('Retry-After', '3600');
-    const status = { RECORDED: 201, INVALID: 400, STALE: 409, CLOSED: 404, RATE_LIMITED: 429, UNAVAILABLE: 503 }[outcome.result];
+    const status = { RECORDED: 201, INVALID: 400, STALE: 409, CLASS_FULL: 409, CLOSED: 404, RATE_LIMITED: 429, UNAVAILABLE: 503 }[outcome.result];
+    return res.status(status).json(outcome);
+  }
+
+  /** 0533: show the card payment for the visit this tablet recorded (body {device, visit: its submit key, surface}). */
+  @Post('card-payment/start')
+  @Header('Cache-Control', 'private, no-store')
+  async cardStart(@Body() input: unknown, @Res() res: Response) { return this.cardAnswer(res, await this.kiosk.cardStart(input)); }
+
+  /** 0533: where that card payment stands (body {device, visit}). */
+  @Post('card-payment/status')
+  @Header('Cache-Control', 'private, no-store')
+  async cardStatus(@Body() input: unknown, @Res() res: Response) { return this.cardAnswer(res, await this.kiosk.cardStatus(input)); }
+
+  /** 0533: the visitor will pay at the desk instead (body {device, visit}). */
+  @Post('card-payment/cancel')
+  @Header('Cache-Control', 'private, no-store')
+  async cardCancel(@Body() input: unknown, @Res() res: Response) { return this.cardAnswer(res, await this.kiosk.cardCancel(input)); }
+
+  private cardAnswer(res: Response, outcome: WalkInCardOutcome) {
+    if (outcome.result === 'RATE_LIMITED') res.setHeader('Retry-After', '60');
+    const status = { INVALID: 400, CLOSED: 404, NOT_FOUND: 404, NOT_AVAILABLE: 422, RATE_LIMITED: 429, UNAVAILABLE: 503 }[outcome.result as string] ?? 200;
     return res.status(status).json(outcome);
   }
 }

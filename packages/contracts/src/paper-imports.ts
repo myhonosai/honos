@@ -1,7 +1,8 @@
 // Paper import (0388): photos or scans of student cards, contracts or attendance sheets. HON reads the pages into a
 // table with the columns of an existing import; staff check the table beside the photo, then send it to the existing
 // staged import (0226 students and guardians, 0333 attendance history), where every row is decided before anything is
-// saved. Only the stand-in reader (SYNTHETIC) exists: it never sends a page anywhere.
+// saved. Readers: AI_ROUTE (0594, HON on the AI team's provider, under the S4 spend controls), NONE (staff typed the rows,
+// no AI) and the stand-in SYNTHETIC, which reads only the built-in sample pages and never sends a page anywhere.
 import { STUDENT_IMPORT_FIELDS } from './student-imports.js';
 import { HISTORY_IMPORT_FIELDS } from './history-imports.js';
 
@@ -19,14 +20,27 @@ export const PAPER_IMPORT_MAX_CELL = 200;
 export const PAPER_IMPORT_RETENTION_DAYS = 30;
 
 export type PaperImportStatus = 'OPEN' | 'READ' | 'SENT' | 'DELETED';
-export type PaperImportReadOutcome = 'SAMPLE_READ' | 'NOT_READABLE';
+export type PaperImportReadOutcome = 'SAMPLE_READ' | 'NOT_READABLE' | 'AI_READ' | 'TYPED';
+export type PaperImportReader = 'SYNTHETIC' | 'AI_ROUTE' | 'NONE';
+const READER_OUTCOMES: Readonly<Record<PaperImportReader, readonly PaperImportReadOutcome[]>> = {
+  SYNTHETIC: ['SAMPLE_READ', 'NOT_READABLE'], AI_ROUTE: ['AI_READ', 'NOT_READABLE'], NONE: ['TYPED'],
+};
+/** HON's reading of a set on the AI route (0594): the shared text proposal's status and reason, never its content. */
+export const PAPER_READING_STATUSES = ['PENDING', 'CONFIGURATION_REQUIRED', 'BLOCKED', 'SENDING', 'UNKNOWN', 'FAILED', 'RESULT_RECORDED', 'RESULT_REJECTED', 'APPLIED', 'DISMISSED'] as const;
+export type PaperReadingStatus = typeof PAPER_READING_STATUSES[number];
+export const PAPER_READING_REASONS = ['CONFIGURATION_REQUIRED', 'NO_ELIGIBLE_ROUTE', 'CUSTOMER_BUDGET_EXCEEDED', 'AI_SPEND_STOPPED', 'UNSUPPORTED_PROVIDER',
+  'INVALID_REQUEST', 'PROVIDER_REJECTED', 'PROVIDER_UNKNOWN', 'ROUTE_STALE', 'RESULT_BUDGET_EXCEEDED', 'RESULT_INVALID', 'SUBJECT_STALE', 'GATE_CLOSED'] as const;
+export type PaperReadingReason = typeof PAPER_READING_REASONS[number];
+export interface PaperReadingState { status: PaperReadingStatus; reason: PaperReadingReason | null }
+/** The PAPER_READING kind row (0594): plan budgets and the most one reading may cost (micro-USD). */
+export const PAPER_READING_AI_LIMITS = { inputTokens: 40000, outputTokens: 16000, maxProviderCostMicrounits: 250000 } as const;
 export interface PaperImportSummary {
   id: string; kind: PaperImportKind; target: PaperImportTarget; version: number; status: PaperImportStatus; pageCount: number;
-  reader: 'SYNTHETIC' | null; readOutcome: PaperImportReadOutcome | null; sentBatchId: string | null;
+  reader: PaperImportReader | null; readOutcome: PaperImportReadOutcome | null; sentBatchId: string | null;
   createdAt: string; expiresAt: string; readAt: string | null; sentAt: string | null; deletedAt: string | null; deleteReason: 'STAFF' | 'EXPIRED' | null;
 }
 export interface PaperImportPageInfo { pageNo: number; mediaType: PaperImportMediaType; bytes: number; checksum: string }
-export interface PaperImportDetail { set: PaperImportSummary; columns: string[]; rows: string[][]; unsure: boolean[][]; pages: PaperImportPageInfo[] }
+export interface PaperImportDetail { set: PaperImportSummary; columns: string[]; rows: string[][]; unsure: boolean[][]; pages: PaperImportPageInfo[]; aiReading: PaperReadingState | null }
 export interface PaperImportList { sets: PaperImportSummary[]; maxPages: number; maxPageBytes: number; maxRows: number; retentionDays: number }
 export interface PaperImportPage { pageNo: number; mediaType: PaperImportMediaType; data: string }
 export interface PaperImportTable { rows: string[][]; unsure: boolean[][] }
@@ -98,7 +112,8 @@ export function verifyPaperImportSummary(value: unknown): PaperImportSummary {
   const v = record(value, ['id', 'kind', 'target', 'version', 'status', 'pageCount', 'reader', 'readOutcome', 'sentBatchId', 'createdAt', 'expiresAt', 'readAt', 'sentAt', 'deletedAt', 'deleteReason'], 'set');
   if (typeof v.id !== 'string' || !UUID.test(v.id) || !isPaperImportKind(v.kind) || v.target !== PAPER_IMPORT_TARGET[v.kind] || !count(v.version, 1, 999999999)
     || !['OPEN', 'READ', 'SENT', 'DELETED'].includes(v.status as string) || !count(v.pageCount, 0, PAPER_IMPORT_MAX_PAGES)
-    || (v.reader !== null && v.reader !== 'SYNTHETIC') || (v.readOutcome !== null && v.readOutcome !== 'SAMPLE_READ' && v.readOutcome !== 'NOT_READABLE')
+    || (v.reader !== null && !(Object.keys(READER_OUTCOMES).includes(v.reader as string)
+      && READER_OUTCOMES[v.reader as PaperImportReader].includes(v.readOutcome as PaperImportReadOutcome)))
     || (v.sentBatchId !== null && (typeof v.sentBatchId !== 'string' || !UUID.test(v.sentBatchId)))
     || !iso(v.createdAt) || !iso(v.expiresAt) || !iso(v.readAt, true) || !iso(v.sentAt, true) || !iso(v.deletedAt, true)
     || (v.deleteReason !== null && v.deleteReason !== 'STAFF' && v.deleteReason !== 'EXPIRED')
@@ -115,12 +130,16 @@ export function verifyPaperImportList(value: unknown): PaperImportList {
   return v as unknown as PaperImportList;
 }
 export function verifyPaperImportDetail(value: unknown): PaperImportDetail {
-  const v = record(value, ['set', 'columns', 'rows', 'unsure', 'pages'], 'detail');
+  const v = record(value, ['set', 'columns', 'rows', 'unsure', 'pages', 'aiReading'], 'detail');
   const set = verifyPaperImportSummary(v.set);
   const columns = paperImportColumns(set.kind);
   if (!Array.isArray(v.columns) || v.columns.join(',') !== columns.join(',') || !Array.isArray(v.pages) || v.pages.length !== set.pageCount) fail('detail');
   try { validatePaperImportTable(set.kind, v.rows, v.unsure); } catch { fail('table'); }
   if (set.status === 'DELETED' && ((v.rows as unknown[]).length || set.pageCount)) fail('detail');
+  if (v.aiReading !== null) {
+    const a = record(v.aiReading, ['status', 'reason'], 'reading');
+    if (!(PAPER_READING_STATUSES as readonly unknown[]).includes(a.status) || (a.reason !== null && !(PAPER_READING_REASONS as readonly unknown[]).includes(a.reason))) fail('reading');
+  }
   (v.pages as unknown[]).forEach((page, i) => {
     const p = record(page, ['pageNo', 'mediaType', 'bytes', 'checksum'], 'page');
     if (p.pageNo !== i + 1 || !(PAPER_IMPORT_MEDIA_TYPES as readonly unknown[]).includes(p.mediaType) || !count(p.bytes, 1, PAPER_IMPORT_MAX_PAGE_BYTES)
@@ -133,4 +152,32 @@ export function verifyPaperImportPage(value: unknown): PaperImportPage {
   if (!count(v.pageNo, 1, PAPER_IMPORT_MAX_PAGES) || !(PAPER_IMPORT_MEDIA_TYPES as readonly unknown[]).includes(v.mediaType)
     || typeof v.data !== 'string' || !v.data || v.data.length % 4 !== 0 || !BASE64.test(v.data)) fail('page image');
   return v as unknown as PaperImportPage;
+}
+
+/**
+ * The model's answer to a reading (0594), as the API keeps it: exactly {rows, unsure}, one array of cells per row in the
+ * column order of the kind, and a matching matrix of booleans. Each cell is trimmed and inner whitespace is joined to one
+ * space; a cell that is still not plain text of up to 200 characters is left blank and marked unsure (never shortened or
+ * guessed). Returns null when the answer is not that table at all, so the reading is recorded as not readable.
+ */
+export function parsePaperReadingAnswer(kind: PaperImportKind, value: unknown): PaperImportTable | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).sort().join(',') !== 'rows,unsure') return null;
+  const { rows, unsure } = value as { rows: unknown; unsure: unknown };
+  const width = paperImportColumns(kind).length;
+  if (!Array.isArray(rows) || !Array.isArray(unsure) || rows.length > PAPER_IMPORT_MAX_ROWS || unsure.length !== rows.length) return null;
+  const outRows: string[][] = [], outUnsure: boolean[][] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i], flags = unsure[i];
+    if (!Array.isArray(row) || row.length !== width || !Array.isArray(flags) || flags.length !== width || !flags.every((f) => typeof f === 'boolean')) return null;
+    const cells: string[] = [], marks: boolean[] = [];
+    for (let j = 0; j < width; j++) {
+      const raw = row[j];
+      if (typeof raw !== 'string') return null;
+      const cell = raw.replace(/\s+/g, ' ').trim();
+      const ok = isPaperImportCell(cell);
+      cells.push(ok ? cell : ''); marks.push(ok ? flags[j] as boolean : true);
+    }
+    if (cells.some((c) => c !== '')) { outRows.push(cells); outUnsure.push(marks); }
+  }
+  return validatePaperImportTable(kind, outRows, outUnsure);
 }

@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { SHOPIFY_SCOPES } from '@hon/contracts';
+import { SHOPIFY_SCOPES, SHOPIFY_STOREFRONT_METAFIELD, type ShopifyFinanceSnapshot, type ShopifyStorefrontSettings } from '@hon/contracts';
 import { SHOP_DOMAIN, signShopifyQuery } from './shopify-oauth.js';
 import { signShopifyWebhook } from './shopify-webhook.js';
 import { ephemeralShopifyVault, shopifyVaultFromEnvironment, type ShopifyVault } from './shopify-vault.js';
@@ -25,6 +25,9 @@ export interface ShopifyShopInfo { name: string; currency: string }
 export interface MirrorVariant {
   id: string; title: string; sku: string | null; barcode: string | null; price: string; compareAtPrice: string | null; unitCost: string | null;
   tracked: boolean; inventoryQuantity: number | null;
+  /** The third-party fulfilment service that stocks this variant (a print-on-demand provider, for example), null for the school's own
+   *  location. Left out when the read did not ask Shopify, so the mirror keeps what it had. */
+  fulfilledBy?: string | null;
 }
 export interface MirrorProduct {
   id: string; title: string; status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | 'UNLISTED'; vendor: string | null; productType: string | null; handle: string | null;
@@ -43,6 +46,7 @@ export interface MirrorOrder {
   sourceName: string | null; currency: string; subtotal: string; discounts: string; tax: string; total: string; lines: MirrorOrderLine[];
 }
 
+
 /** The Shopify operations SH1 uses. Callers pass HON's own values (a verified shop, a code from a verified redirect). */
 export interface ShopifyAdapter {
   readonly kind: 'SHOPIFY' | 'FAKE';
@@ -58,7 +62,38 @@ export interface ShopifyAdapter {
   createDraft(shop: string, accessToken: string, input: ShopifyDraftInput): Promise<{ productId: string; variantId: string }>;
   updateProduct(shop: string, accessToken: string, productId: string, fields: ShopifyProductFields): Promise<void>;
   updateVariants(shop: string, accessToken: string, productId: string, variants: readonly ShopifyVariantFields[], sku?: string | null): Promise<void>;
+  /** SH-F1 read: the Shopify Payments balance, the latest 20 payouts and the latest 50 balance transactions. Needs read_shopify_payments_accounts. */
+  finance(shop: string, accessToken: string): Promise<ShopifyFinanceSnapshot>;
+  /**
+   * TB2: the school's storefront settings as one app-data metafield on HON's own app installation, which HON's theme app
+   * extension reads. Idempotent: setting the same value again changes nothing. Needs no access scope.
+   */
+  setStorefrontSettings(shop: string, accessToken: string, settings: ShopifyStorefrontSettings): Promise<void>;
+  /**
+   * SH2 (0613): add `delta` to a variant's available count at the store's one own stock location (never a print
+   * provider's). `idempotencyKey` is sent as Shopify's own idempotency key, so the same key changes the count at most
+   * once however often it is sent. A change Shopify cannot take as it is comes back as REFUSED with the reason; a lost
+   * or failed call throws. Needs write_inventory.
+   */
+  adjustInventory(shop: string, accessToken: string, input: ShopifyInventoryAdjustment): Promise<ShopifyInventoryAnswer>;
+  /**
+   * SH2b (0614): the PAID order a print provider works from, for made-to-order items sold at the front desk. HON took
+   * the money at the desk and sends the customer nothing. The order carries the tag `hon-pos-<key>`; an order that
+   * already has it is answered instead of creating a second one. A refusal by Shopify's own rules is REFUSED; a lost
+   * or failed call throws. Needs write_orders (and read_orders to look for the tag).
+   */
+  createPosOrder(shop: string, accessToken: string, input: ShopifyPosOrderInput): Promise<ShopifyPosOrderAnswer>;
 }
+export interface ShopifyPosAddress { name: string; address1: string; address2: string | null; city: string; province: string | null; zip: string | null; country: string }
+export interface ShopifyPosOrderInput {
+  key: string; currency: string; note: string; shipTo: ShopifyPosAddress;
+  /** unitPrice is a decimal string in the store currency: what the desk charged for one. */
+  lines: readonly { variantId: string; quantity: number; unitPrice: string }[];
+}
+export type ShopifyPosOrderAnswer = { outcome: 'DONE'; orderId: string; orderName: string } | { outcome: 'REFUSED'; reason: 'SHOPIFY_REJECTED' };
+export interface ShopifyInventoryAdjustment { variantId: string; delta: number; idempotencyKey: string; reference: string }
+export type ShopifyInventoryRefusal = 'VARIANT_GONE' | 'NOT_TRACKED' | 'NO_LOCATION' | 'MULTIPLE_LOCATIONS' | 'SHOPIFY_REJECTED';
+export type ShopifyInventoryAnswer = { outcome: 'DONE' } | { outcome: 'REFUSED'; reason: ShopifyInventoryRefusal };
 
 /** The one HON Shopify app, as configured on this server. */
 export interface ShopifyApp {
@@ -130,6 +165,19 @@ function money(v: unknown): string {
   if (!MONEY.test(out)) bad();
   return out;
 }
+/** Shopify Payments money, which may be negative ("-41.9"); at most 4 decimals kept. */
+function signedMoney(v: unknown): string {
+  const t = typeof v === 'string' ? v : typeof v === 'number' && Number.isFinite(v) ? String(v) : null;
+  if (t === null) bad();
+  const m = /^(-?)(0|[1-9][0-9]{0,8})(?:\.([0-9]+))?$/.exec(t);
+  if (!m) bad();
+  return `${m[1]}${m[2]}${m[3] ? '.' + m[3].slice(0, 4) : ''}`;
+}
+function moneyV2(v: unknown): { amount: string; currency: string } {
+  const o = obj(v);
+  if (typeof o.currencyCode !== 'string' || !/^[A-Z]{3}$/.test(o.currencyCode)) bad();
+  return { amount: signedMoney(o.amount), currency: o.currencyCode };
+}
 function maybeMoney(v: unknown): string | null { return v === null || v === undefined ? null : money(v); }
 function instant(v: unknown): string {
   if (typeof v !== 'string' || v.length > 40) bad();
@@ -139,6 +187,20 @@ function instant(v: unknown): string {
 }
 function word(v: unknown): string | null { if (v === null || v === undefined) return null; if (typeof v !== 'string' || !STATUS_WORD.test(v)) bad(); return v; }
 function int(v: unknown, lo: number, hi: number): number { if (!Number.isInteger(v) || (v as number) < lo || (v as number) > hi) bad(); return v as number; }
+
+/** The first third-party fulfilment service among a variant's stock locations, by the name Shopify shows; null when the school's own
+ *  locations stock it. A name HON cannot keep (empty, too long) is treated as unknown rather than refusing the whole page. */
+export function fulfilledBy(levels: unknown): string | null {
+  const nodes = obj(levels).nodes;
+  if (!Array.isArray(nodes)) bad();
+  for (const n of nodes as unknown[]) {
+    const location = maybeObj(obj(n).location), service = location ? maybeObj(location.fulfillmentService) : null;
+    if (!service || service.type !== 'THIRD_PARTY') continue;
+    const name = cleanText(service.serviceName, 64);
+    if (name) return name;
+  }
+  return null;
+}
 
 /** Groups a flat variant list into products (variant order by Shopify position), at most 100 variants per product. */
 export function productsFromVariantNodes(nodes: unknown[]): MirrorProduct[] {
@@ -161,7 +223,8 @@ export function productsFromVariantNodes(nodes: unknown[]): MirrorProduct[] {
     product.variants.push({ id: gidNumber(v.id, 'ProductVariant'), title: cleanText(v.title) ?? 'Default', sku: cleanText(v.sku), barcode: cleanText(v.barcode),
       price: money(v.price), compareAtPrice: maybeMoney(v.compareAtPrice), unitCost: cost ? maybeMoney(cost.amount) : null,
       tracked: item ? item.tracked === true : false,
-      inventoryQuantity: v.inventoryQuantity === null || v.inventoryQuantity === undefined ? null : int(v.inventoryQuantity, -10_000_000, 10_000_000) });
+      inventoryQuantity: v.inventoryQuantity === null || v.inventoryQuantity === undefined ? null : int(v.inventoryQuantity, -10_000_000, 10_000_000),
+      ...(item && item.inventoryLevels !== undefined ? { fulfilledBy: fulfilledBy(item.inventoryLevels) } : {}) });
     product.positions.push(Number.isInteger(v.position) ? (v.position as number) : product.positions.length + 1);
   }
   return [...products.values()].map(({ positions, ...p }) => {
@@ -200,11 +263,11 @@ function tokensFrom(body: unknown, now: number): ShopifyTokens {
 // ---------------------------------------------------------------------------------------------------------------------
 
 const VARIANTS_QUERY = `query HonVariants($after: String) {
-  productVariants(first: 100, after: $after) {
+  productVariants(first: 50, after: $after) {
     pageInfo { hasNextPage endCursor }
     nodes {
       id title sku barcode price compareAtPrice inventoryQuantity position
-      inventoryItem { tracked unitCost { amount } }
+      inventoryItem { tracked unitCost { amount } inventoryLevels(first: 2) { nodes { location { fulfillmentService { serviceName type } } } } }
       product { id title status vendor productType handle featuredMedia { preview { image { url } } } }
     }
   }
@@ -223,6 +286,10 @@ const ORDERS_QUERY = `query HonOrders($after: String, $q: String) {
   }
 }`;
 const SHOP_QUERY = 'query HonShop { shop { name currencyCode } }';
+const FINANCE_QUERY = `query HonFinance { shopifyPaymentsAccount { activated balance { amount currencyCode }
+  payouts(first: 20, reverse: true) { nodes { id status transactionType issuedAt net { amount currencyCode } } }
+  balanceTransactions(first: 50, reverse: true) { nodes { id type test transactionDate amount { amount currencyCode }
+    fee { amount currencyCode } net { amount currencyCode } associatedPayout { id } } } } }`;
 const PRODUCT_FIELDS = `id title status vendor productType handle featuredMedia { preview { image { url } } }
     variants(first: 100) { nodes { id title sku barcode price compareAtPrice inventoryQuantity position inventoryItem { tracked unitCost { amount } } } }`;
 const PRODUCT_QUERY = `query HonProduct($id: ID!) { product(id: $id) { ${PRODUCT_FIELDS} } }`;
@@ -263,6 +330,95 @@ export function variantInputs(variants: readonly ShopifyVariantFields[], sku?: s
 }
 
 /** The Shopify Admin API through the HON app. Only called with a verified shop and a token HON holds. */
+/** shopifyPaymentsAccount as HON keeps it: ids, statuses, instants and amounts only. null or not activated -> payments off. */
+export function financeFromAccount(v: unknown): ShopifyFinanceSnapshot {
+  const a = maybeObj(v);
+  if (!a || a.activated !== true) return { paymentsActive: false, balances: [], payouts: [], transactions: [] };
+  const seen = new Set<string>();
+  const balances = list(a.balance).slice(0, 10).map(moneyV2).filter(b => !seen.has(b.currency) && !!seen.add(b.currency))
+    .map(b => ({ currency: b.currency, amount: b.amount }));
+  const payouts = list(obj(a.payouts).nodes).slice(0, 20).map(n => {
+    const p = obj(n), net = moneyV2(p.net);
+    const status = ['SCHEDULED', 'IN_TRANSIT', 'PAID', 'FAILED', 'CANCELED'].includes(p.status as string) ? p.status as ShopifyFinanceSnapshot['payouts'][number]['status'] : bad();
+    const direction: 'DEPOSIT' | 'WITHDRAWAL' = p.transactionType === 'DEPOSIT' || p.transactionType === 'WITHDRAWAL' ? p.transactionType : bad();
+    return { id: gidNumber(p.id, 'ShopifyPaymentsPayout'), status, direction, issuedAt: instant(p.issuedAt), currency: net.currency, net: net.amount };
+  });
+  const transactions = list(obj(a.balanceTransactions).nodes).slice(0, 50).map(n => {
+    const t = obj(n), amount = moneyV2(t.amount), fee = signedMoney(obj(t.fee).amount), net = signedMoney(obj(t.net).amount);
+    const type = word(t.type); if (type === null) bad();
+    if (typeof t.test !== 'boolean') bad();
+    const payout = maybeObj(t.associatedPayout);
+    return { id: gidNumber(t.id, 'ShopifyPaymentsBalanceTransaction'), type, at: instant(t.transactionDate), currency: amount.currency,
+      amount: amount.amount, fee, net, test: t.test, payoutId: payout && payout.id != null ? gidNumber(payout.id, 'ShopifyPaymentsPayout') : null };
+  });
+  if (new Set(payouts.map(p => p.id)).size !== payouts.length || new Set(transactions.map(t => t.id)).size !== transactions.length) bad();
+  return { paymentsActive: true, balances, payouts, transactions };
+}
+
+// ---- TB2 storefront settings (app-data metafield on HON's own app installation) ----
+const APP_INSTALLATION_QUERY = `query HonAppInstallation { currentAppInstallation { id } }`;
+const METAFIELDS_SET = `mutation HonStorefrontSettings($metafields: [MetafieldsSetInput!]!) {
+  metafieldsSet(metafields: $metafields) { metafields { namespace key } userErrors { field message } } }`;
+/** The metafield value: the settings as compact JSON, the keys in a fixed order. */
+export function storefrontValue(v: ShopifyStorefrontSettings): string {
+  return JSON.stringify({ primaryColor: v.primaryColor, accentColor: v.accentColor, sizeGuideTitle: v.sizeGuideTitle,
+    sizeGuideText: v.sizeGuideText, pickupNote: v.pickupNote });
+}
+
+// ---- SH2 inventory adjustment (a POS sale or a refund restock) ----
+const VARIANT_STOCK_QUERY = `query HonVariantStock($id: ID!) { productVariant(id: $id) { id inventoryItem { id tracked
+  inventoryLevels(first: 20) { nodes { location { id isActive fulfillmentService { type } } } } } } }`;
+const INVENTORY_ADJUST = `mutation HonPosStock($input: InventoryAdjustQuantitiesInput!, $key: String!) {
+  inventoryAdjustQuantities(input: $input) @idempotent(key: $key) { inventoryAdjustmentGroup { id } userErrors { field message } } }`;
+const POS_ORDER_FIND = `query HonPosOrderFind($query: String!) { orders(first: 1, query: $query) { nodes { id name } } }`;
+const POS_ORDER_CREATE = `mutation HonPosOrder($order: OrderCreateOrderInput!, $options: OrderCreateOptionsInput) {
+  orderCreate(order: $order, options: $options) { order { id name } userErrors { field message } } }`;
+const POS_ORDER_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** The tag that makes a front-desk order findable again after a lost answer. */
+export const posOrderTag = (key: string) => `hon-pos-${key}`;
+/** Shopify's order as HON keeps it: the numeric id and the name staff see (for example #1042). */
+function posOrderFrom(v: unknown): { orderId: string; orderName: string } {
+  const o = obj(v), name = cleanText(o.name, 40);
+  if (!name) bad();
+  return { orderId: gidNumber(o.id, 'Order'), orderName: name };
+}
+/** The exact orderCreate variables for a front-desk order: paid, no customer record, no email, inventory left alone. */
+export function posOrderVariables(input: ShopifyPosOrderInput): Record<string, unknown> {
+  if (!POS_ORDER_KEY.test(input.key) || !/^[A-Z]{3}$/.test(input.currency) || input.lines.length < 1 || input.lines.length > 50) bad();
+  const a = input.shipTo;
+  return {
+    order: {
+      currency: input.currency, financialStatus: 'PAID', note: input.note, tags: ['hon-pos', posOrderTag(input.key)],
+      lineItems: input.lines.map((l) => {
+        if (!/^[1-9][0-9]{0,17}$/.test(l.variantId) || !Number.isInteger(l.quantity) || l.quantity < 1 || l.quantity > 999 || !/^\d{1,9}(\.\d{1,2})?$/.test(l.unitPrice)) bad();
+        return { variantId: `gid://shopify/ProductVariant/${l.variantId}`, quantity: l.quantity, priceSet: { shopMoney: { amount: l.unitPrice, currencyCode: input.currency } } };
+      }),
+      shippingAddress: { lastName: a.name, address1: a.address1, ...(a.address2 ? { address2: a.address2 } : {}), city: a.city,
+        ...(a.province ? { provinceCode: a.province } : {}), ...(a.zip ? { zip: a.zip } : {}), countryCode: a.country },
+    },
+    options: { inventoryBehaviour: 'BYPASS', sendReceipt: false, sendFulfillmentReceipt: false },
+  };
+}
+/** Where HON may change a variant's count: its inventory item and the store's one own, active location stocking it. */
+export function ownStockLocation(variant: unknown): { inventoryItemId: string; locationId: string } | ShopifyInventoryRefusal {
+  if (variant === null || variant === undefined) return 'VARIANT_GONE';
+  const item = maybeObj(obj(variant).inventoryItem);
+  if (!item || typeof item.id !== 'string' || !/^gid:\/\/shopify\/InventoryItem\/[1-9][0-9]{0,17}$/.test(item.id)) return bad();
+  if (item.tracked !== true) return 'NOT_TRACKED';
+  const own: string[] = [];
+  for (const n of list(obj(item.inventoryLevels).nodes)) {
+    const location = maybeObj(obj(n).location);
+    if (!location || location.isActive === false) continue;
+    const service = maybeObj(location.fulfillmentService);
+    if (service && service.type === 'THIRD_PARTY') continue;
+    if (typeof location.id !== 'string' || !/^gid:\/\/shopify\/Location\/[1-9][0-9]{0,17}$/.test(location.id)) return bad();
+    own.push(location.id);
+  }
+  if (own.length === 0) return 'NO_LOCATION';
+  if (own.length > 1) return 'MULTIPLE_LOCATIONS';
+  return { inventoryItemId: item.id, locationId: own[0]! };
+}
+
 export class GraphqlShopifyAdapter implements ShopifyAdapter {
   readonly kind = 'SHOPIFY' as const;
   constructor(private readonly clientId: string, private readonly clientSecret: string, private readonly send: typeof fetch,
@@ -315,6 +471,39 @@ export class GraphqlShopifyAdapter implements ShopifyAdapter {
     const s = obj((await this.graphql(shop, accessToken, SHOP_QUERY, {})).shop);
     const currency = typeof s.currencyCode === 'string' && /^[A-Z]{3}$/.test(s.currencyCode) ? s.currencyCode : bad();
     return { name: cleanText(s.name, 120) ?? shop, currency };
+  }
+
+  async finance(shop: string, accessToken: string): Promise<ShopifyFinanceSnapshot> {
+    return financeFromAccount((await this.graphql(shop, accessToken, FINANCE_QUERY, {})).shopifyPaymentsAccount);
+  }
+
+  async setStorefrontSettings(shop: string, accessToken: string, settings: ShopifyStorefrontSettings): Promise<void> {
+    const installation = obj((await this.graphql(shop, accessToken, APP_INSTALLATION_QUERY, {})).currentAppInstallation);
+    if (typeof installation.id !== 'string' || !/^gid:\/\/shopify\/AppInstallation\/[1-9][0-9]{0,17}$/.test(installation.id)) bad();
+    const r = obj((await this.graphql(shop, accessToken, METAFIELDS_SET, { metafields: [{ ownerId: installation.id,
+      namespace: SHOPIFY_STOREFRONT_METAFIELD.namespace, key: SHOPIFY_STOREFRONT_METAFIELD.key, type: 'json', value: storefrontValue(settings) }] })).metafieldsSet);
+    if (list(r.userErrors).length) throw new ShopifyProviderError('REJECTED');
+    const set = list(r.metafields).map(obj);
+    if (set.length !== 1 || set[0]!.namespace !== SHOPIFY_STOREFRONT_METAFIELD.namespace || set[0]!.key !== SHOPIFY_STOREFRONT_METAFIELD.key) bad();
+  }
+
+  async adjustInventory(shop: string, accessToken: string, input: ShopifyInventoryAdjustment): Promise<ShopifyInventoryAnswer> {
+    if (!/^[1-9][0-9]{0,17}$/.test(input.variantId) || !Number.isInteger(input.delta) || input.delta === 0 || Math.abs(input.delta) > 999) bad();
+    const where = ownStockLocation((await this.graphql(shop, accessToken, VARIANT_STOCK_QUERY, { id: `gid://shopify/ProductVariant/${input.variantId}` })).productVariant);
+    if (typeof where === 'string') return { outcome: 'REFUSED', reason: where };
+    const r = obj((await this.graphql(shop, accessToken, INVENTORY_ADJUST, { key: input.idempotencyKey, input: { reason: 'correction', name: 'available',
+      referenceDocumentUri: input.reference, changes: [{ delta: input.delta, inventoryItemId: where.inventoryItemId, locationId: where.locationId, changeFromQuantity: null }] } })).inventoryAdjustQuantities);
+    if (list(r.userErrors).length) return { outcome: 'REFUSED', reason: 'SHOPIFY_REJECTED' };
+    return { outcome: 'DONE' };
+  }
+
+  async createPosOrder(shop: string, accessToken: string, input: ShopifyPosOrderInput): Promise<ShopifyPosOrderAnswer> {
+    const variables = posOrderVariables(input);
+    const found = list(obj((await this.graphql(shop, accessToken, POS_ORDER_FIND, { query: `tag:'${posOrderTag(input.key)}'` })).orders).nodes);
+    if (found.length) return { outcome: 'DONE', ...posOrderFrom(found[0]) };
+    const r = obj((await this.graphql(shop, accessToken, POS_ORDER_CREATE, variables)).orderCreate);
+    if (list(r.userErrors).length) return { outcome: 'REFUSED', reason: 'SHOPIFY_REJECTED' };
+    return { outcome: 'DONE', ...posOrderFrom(r.order) };
   }
 
   async catalog(shop: string, accessToken: string): Promise<{ products: MirrorProduct[]; complete: boolean }> {
@@ -390,7 +579,7 @@ export class FakeShopify implements ShopifyAdapter {
   writeFault: 'REJECT' | 'LOSE_ANSWER' | null = null;
   /** Test hook: what the store owner approves (the fake grants exactly this). */
   grantScopes: string | null = null;
-  private readonly stores = new Map<string, { products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string; rejected: boolean }>();
+  private readonly stores = new Map<string, { products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string; finance: ShopifyFinanceSnapshot; storefront: string | null; rejected: boolean }>();
   /** Calls the API made, for tests (no token values). */
   readonly calls: string[] = [];
   /** Test hook: the clock the fake uses. */
@@ -404,7 +593,7 @@ export class FakeShopify implements ShopifyAdapter {
     return s;
   }
   /** Test hook: replace a store's catalog or orders. */
-  setStore(shop: string, change: Partial<{ products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string }>): void { Object.assign(this.store(shop), change); }
+  setStore(shop: string, change: Partial<{ products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string; finance: ShopifyFinanceSnapshot }>): void { Object.assign(this.store(shop), change); }
   /** Test hook: every token of this shop is refused from now on (the owner uninstalled the app). */
   rejectTokens(shop: string, rejected = true): void { this.store(shop).rejected = rejected; }
 
@@ -464,6 +653,48 @@ export class FakeShopify implements ShopifyAdapter {
     this.calls.push('shopInfo:' + shop); this.check(shop, accessToken, 'access');
     const s = this.store(shop); return { name: s.name, currency: s.currency };
   }
+  async setStorefrontSettings(shop: string, accessToken: string, settings: ShopifyStorefrontSettings): Promise<void> {
+    await Promise.resolve();
+    this.calls.push('storefrontSettings:' + shop); this.check(shop, accessToken, 'access');
+    const value = storefrontValue(settings);
+    this.write(() => { this.store(shop).storefront = value; });
+  }
+  /** Front-desk orders the fake store holds, by their HON key (test hook: read them to see what was sent). */
+  readonly posOrders = new Map<string, { shop: string; orderId: string; orderName: string; input: ShopifyPosOrderInput }>();
+  async createPosOrder(shop: string, accessToken: string, input: ShopifyPosOrderInput): Promise<ShopifyPosOrderAnswer> {
+    await Promise.resolve();
+    this.calls.push('createPosOrder:' + shop); this.check(shop, accessToken, 'access', 'write_orders');
+    posOrderVariables(input);
+    const had = this.posOrders.get(input.key);
+    if (had) { this.writeFault = null; return { outcome: 'DONE', orderId: had.orderId, orderName: had.orderName }; }
+    const variants = this.store(shop).products.flatMap(p => p.variants);
+    if (input.lines.some(l => !variants.some(v => v.id === l.variantId))) { this.writeFault = null; return { outcome: 'REFUSED', reason: 'SHOPIFY_REJECTED' }; }
+    if (this.writeFault === 'REJECT') { this.writeFault = null; return { outcome: 'REFUSED', reason: 'SHOPIFY_REJECTED' }; }
+    return this.write(() => {
+      const made = { shop, orderId: String(this.nextId++), orderName: `#${1001 + this.posOrders.size}`, input };
+      this.posOrders.set(input.key, made);
+      return { outcome: 'DONE' as const, orderId: made.orderId, orderName: made.orderName };
+    });
+  }
+  private readonly adjusted = new Set<string>();
+  async adjustInventory(shop: string, accessToken: string, input: ShopifyInventoryAdjustment): Promise<ShopifyInventoryAnswer> {
+    await Promise.resolve();
+    this.calls.push('adjustInventory:' + shop); this.check(shop, accessToken, 'access', 'write_inventory');
+    const v = this.store(shop).products.flatMap(p => p.variants).find(x => x.id === input.variantId);
+    const refusal: ShopifyInventoryRefusal | null = !v ? 'VARIANT_GONE' : v.fulfilledBy ? 'NO_LOCATION' : !v.tracked || v.inventoryQuantity === null ? 'NOT_TRACKED' : null;
+    if (refusal) { this.writeFault = null; return { outcome: 'REFUSED', reason: refusal }; }
+    // Shopify applies one idempotency key at most once; a repeat answers as the first did.
+    this.write(() => { if (!this.adjusted.has(input.idempotencyKey)) { this.adjusted.add(input.idempotencyKey); v!.inventoryQuantity = v!.inventoryQuantity! + input.delta; } });
+    return { outcome: 'DONE' };
+  }
+  /** Test hook: the storefront settings metafield as the fake holds it (null before the first publish). */
+  storefrontSettings(shop: string): string | null { return this.store(shop).storefront; }
+
+  async finance(shop: string, accessToken: string): Promise<ShopifyFinanceSnapshot> {
+    // Shopify refuses this read when the store never granted the scope (a top-level ACCESS_DENIED error).
+    this.calls.push('finance:' + shop); this.check(shop, accessToken, 'access', 'read_shopify_payments_accounts');
+    return structuredClone(this.store(shop).finance);
+  }
   async catalog(shop: string, accessToken: string) {
     this.calls.push('catalog:' + shop); this.check(shop, accessToken, 'access');
     return { products: structuredClone(this.store(shop).products), complete: true };
@@ -520,9 +751,9 @@ export class FakeShopify implements ShopifyAdapter {
   }
 }
 
-function sampleStore(shop: string, now: number): { products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string } {
+function sampleStore(shop: string, now: number): { products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string; finance: ShopifyFinanceSnapshot; storefront: string | null } {
   const v = (id: string, title: string, sku: string, price: string, unitCost: string | null, qty: number | null): MirrorVariant =>
-    ({ id, title, sku, barcode: null, price, compareAtPrice: null, unitCost, tracked: qty !== null, inventoryQuantity: qty });
+    ({ id, title, sku, barcode: null, price, compareAtPrice: null, unitCost, tracked: qty !== null, inventoryQuantity: qty, fulfilledBy: sku.startsWith('HOOD') ? 'Sample Print Co' : null });
   const products: MirrorProduct[] = [
     { id: '9100000001', title: 'Student uniform', status: 'ACTIVE', vendor: 'HON Sample', productType: 'Uniform', handle: 'student-uniform', imageUrl: null,
       variants: [v('9200000011', 'Size 1', 'UNI-1', '65.00', '28.00', 8), v('9200000012', 'Size 2', 'UNI-2', '65.00', '28.00', 2), v('9200000013', 'Size 3', 'UNI-3', '70.00', '30.00', 0)] },
@@ -542,5 +773,13 @@ function sampleStore(shop: string, now: number): { products: MirrorProduct[]; or
     { id: '9300000003', name: '#1003', placedAt: day(40), cancelledAt: null, financialStatus: 'PAID', fulfillmentStatus: 'FULFILLED', sourceName: 'web', currency: 'USD',
       subtotal: '120.00', discounts: '0', tax: '0', total: '120.00', lines: [{ title: 'Sparring gear set', sku: 'SPAR-Y', variantId: '9200000021', quantity: 1, unitPrice: '120.00' }] },
   ];
-  return { products, orders, name: shop.split('.')[0]!.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '), currency: 'USD' };
+  const finance: ShopifyFinanceSnapshot = { paymentsActive: true, balances: [{ currency: 'USD', amount: '245.18' }],
+    payouts: [
+      { id: '9400000002', status: 'SCHEDULED', direction: 'DEPOSIT', issuedAt: day(0), currency: 'USD', net: '136.04' },
+      { id: '9400000001', status: 'PAID', direction: 'DEPOSIT', issuedAt: day(3), currency: 'USD', net: '128.31' }],
+    transactions: [
+      { id: '9450000003', type: 'CHARGE', at: day(2), currency: 'USD', amount: '140.73', fee: '4.38', net: '136.35', test: true, payoutId: '9400000002' },
+      { id: '9450000002', type: 'REFUND', at: day(4), currency: 'USD', amount: '-0.31', fee: '0', net: '-0.31', test: true, payoutId: '9400000002' },
+      { id: '9450000001', type: 'CHARGE', at: day(5), currency: 'USD', amount: '150.00', fee: '4.65', net: '145.35', test: true, payoutId: null }] };
+  return { products, orders, finance, storefront: null, name: shop.split('.')[0]!.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '), currency: 'USD' };
 }
