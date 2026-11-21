@@ -51,5 +51,5 @@
 .actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .hiddenInput { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 @media (max-width: 960px) { .editor { grid-template-columns: minmax(0, 1fr); } .newForm { grid-template-columns: minmax(0, 1fr); } }
-.editorRoot { display: grid; gap: 10px; min-width: 0; }
+.editorRoot { display: grid; gap: 10px; min-width: 0; color: #eaf4fb; }
 .srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
