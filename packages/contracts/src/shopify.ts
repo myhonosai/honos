@@ -126,7 +126,7 @@ export interface ShopifyOverview {
   schoolId: string; canManage: boolean; connectEnabled: boolean;
   /** SH1b: HON syncs on its own (Shopify change reports, plus a full sync every six hours). */
   autoSync: boolean; connection: ShopifyConnection | null;
-  counts: { products: number; variants: number; lowStock: number; orders: number } | null; summary: ShopifySummary | null;
+  counts: { products: number; variants: number; lowStock: number; provider: number; orders: number } | null; summary: ShopifySummary | null;
 }
 export function verifyShopifyOverview(v: unknown): ShopifyOverview {
   const o = closed(v, ['schoolId', 'canManage', 'connectEnabled', 'autoSync', 'connection', 'counts', 'summary'], true);
@@ -134,8 +134,8 @@ export function verifyShopifyOverview(v: unknown): ShopifyOverview {
   if ((connection === null) !== (o.counts === null) || (connection === null) !== (o.summary === null)) fail(true);
   let counts: ShopifyOverview['counts'] = null, summary: ShopifySummary | null = null;
   if (connection) {
-    const c = closed(o.counts, ['products', 'variants', 'lowStock', 'orders'], true);
-    counts = Object.freeze({ products: int(c.products, 0, 1e7), variants: int(c.variants, 0, 1e7), lowStock: int(c.lowStock, 0, 1e7), orders: int(c.orders, 0, 1e7) });
+    const c = closed(o.counts, ['products', 'variants', 'lowStock', 'provider', 'orders'], true);
+    counts = Object.freeze({ products: int(c.products, 0, 1e7), variants: int(c.variants, 0, 1e7), lowStock: int(c.lowStock, 0, 1e7), provider: int(c.provider, 0, 1e7), orders: int(c.orders, 0, 1e7) });
     const s = closed(o.summary, ['days', 'orders', 'sales', 'averageOrder', 'itemsSold', 'lineSales', 'coveredSales', 'estimatedGrossProfit', 'topProducts'], true);
     summary = Object.freeze({ days: int(s.days, 1, 366), orders: int(s.orders, 0, 1e7), sales: money(s.sales), averageOrder: money(s.averageOrder),
       itemsSold: int(s.itemsSold, 0, 1e9), lineSales: money(s.lineSales), coveredSales: money(s.coveredSales), estimatedGrossProfit: money(s.estimatedGrossProfit, true),
@@ -149,6 +149,8 @@ export function verifyShopifyOverview(v: unknown): ShopifyOverview {
 export interface ShopifyVariant {
   variantId: string; title: string; sku: string | null; barcode: string | null; price: number; compareAtPrice: number | null; unitCost: number | null;
   margin: number | null; marginPercent: number | null; tracked: boolean; inventoryQuantity: number | null; lowStock: boolean;
+  /** The third-party fulfilment service (a print-on-demand provider, for example) that stocks and ships this variant; null = the school. */
+  fulfilledBy: string | null;
 }
 export interface ShopifyProduct {
   productId: string; title: string; status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | 'UNLISTED'; vendor: string | null; productType: string | null; imageUrl: string | null;
@@ -164,11 +166,12 @@ export function verifyShopifyCatalog(v: unknown): ShopifyCatalog {
     return Object.freeze({ productId: shopifyId(x.productId), title: text(x.title, 255), status: oneOf(x.status, ['ACTIVE', 'DRAFT', 'ARCHIVED', 'UNLISTED'] as const),
       vendor: maybeText(x.vendor, 255), productType: maybeText(x.productType, 255), imageUrl: x.imageUrl as string | null,
       variants: Object.freeze(arr(x.variants, 100).map(w => {
-        const y = closed(w, ['variantId', 'title', 'sku', 'barcode', 'price', 'compareAtPrice', 'unitCost', 'margin', 'marginPercent', 'tracked', 'inventoryQuantity', 'lowStock'], true);
+        const y = closed(w, ['variantId', 'title', 'sku', 'barcode', 'price', 'compareAtPrice', 'unitCost', 'margin', 'marginPercent', 'tracked', 'inventoryQuantity', 'lowStock', 'fulfilledBy'], true);
+        if (y.fulfilledBy !== null && bool(y.lowStock)) fail(true);
         return Object.freeze({ variantId: shopifyId(y.variantId), title: text(y.title, 255), sku: maybeText(y.sku, 255), barcode: maybeText(y.barcode, 255),
           price: money(y.price), compareAtPrice: maybeMoney(y.compareAtPrice), unitCost: maybeMoney(y.unitCost), margin: maybeMoney(y.margin, true),
           marginPercent: y.marginPercent === null ? null : money(y.marginPercent, true), tracked: bool(y.tracked),
-          inventoryQuantity: maybeInt(y.inventoryQuantity, -10_000_000, 10_000_000), lowStock: bool(y.lowStock) });
+          inventoryQuantity: maybeInt(y.inventoryQuantity, -10_000_000, 10_000_000), lowStock: bool(y.lowStock), fulfilledBy: maybeText(y.fulfilledBy, 64) });
       })) });
   })) });
 }
