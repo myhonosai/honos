@@ -132,6 +132,37 @@ test('0405 GraphQL adapter: token form, retries, and errors that never carry Sho
   await assert.rejects(a.shopInfo('evil.com', 'shpat_1'), e => e.message === 'INVALID_RESPONSE');
 });
 
+test('catalog read: when Shopify refuses the stock-location part, the sync reads the catalog without it', async () => {
+  const sent = [], replies = [];
+  const send = async (url, init) => { sent.push(JSON.parse(init.body)); const r = replies.shift(); return new Response(JSON.stringify(r), { status: 200 }); };
+  const a = new adapter.GraphqlShopifyAdapter('cid', 'csecret', send, async () => undefined);
+  const node = (id, extra) => ({ id: `gid://shopify/ProductVariant/${id}`, title: 'Default Title', sku: null, barcode: null, price: '10.00', compareAtPrice: null,
+    inventoryQuantity: 3, position: 1, inventoryItem: { tracked: true, unitCost: null, ...extra },
+    product: { id: `gid://shopify/Product/${id}0`, title: 'Belt ' + id, status: 'ACTIVE', vendor: '', productType: '', handle: 'belt-' + id, featuredMedia: null } });
+  const denied = { errors: [{ message: 'Access denied for location field.', extensions: { code: 'ACCESS_DENIED' } }], data: { productVariants: null } };
+  // Page 1 refused, read again plain; page 2 stays plain.
+  replies.push(denied, { data: { productVariants: { pageInfo: { hasNextPage: true, endCursor: 'c1' }, nodes: [node(1, {})] } } },
+    { data: { productVariants: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [node(2, {})] } } });
+  const r = await a.catalog(SHOP, 'shpat_1');
+  assert.equal(r.complete, true);
+  assert.deepEqual(r.products.map(p => p.title), ['Belt 1', 'Belt 2']);
+  assert.equal('fulfilledBy' in r.products[0].variants[0], false, 'not asked, so the mirror keeps what it had');
+  assert.deepEqual(sent.map(b => [b.query.includes('inventoryLevels'), b.variables.after]), [[true, null], [false, null], [false, 'c1']]);
+  // The full read still names the fulfilment service when Shopify answers it.
+  sent.length = 0;
+  replies.push({ data: { productVariants: { pageInfo: { hasNextPage: false, endCursor: null },
+    nodes: [node(3, { inventoryLevels: { nodes: [{ location: { fulfillmentService: { serviceName: 'Sample Print Co', type: 'THIRD_PARTY' } } }] } })] } } });
+  assert.equal((await a.catalog(SHOP, 'shpat_1')).products[0].variants[0].fulfilledBy, 'Sample Print Co');
+  assert.equal(sent.length, 1);
+  // A plain read that is refused too fails the sync as before, and throttling is never treated as a refusal.
+  replies.push(denied, denied);
+  await assert.rejects(a.catalog(SHOP, 'shpat_1'), e => e.message === 'INVALID_RESPONSE');
+  const throttled = { errors: [{ message: 'Throttled', extensions: { code: 'THROTTLED' } }] };
+  sent.length = 0; replies.push(throttled, throttled, throttled, throttled);
+  await assert.rejects(a.catalog(SHOP, 'shpat_1'), e => e.message === 'RATE_LIMITED');
+  assert.equal(sent.every(b => b.query.includes('inventoryLevels')), true);
+});
+
 // ---- Service with the fake store and a stub database that records what it was given ----
 
 function stubDatabase() {
