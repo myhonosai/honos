@@ -281,7 +281,7 @@ async function api(route) {
   if (path === `${prefix}/billing/memberships`) { const answered = await membershipListApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.startsWith(`${prefix}/crm/leads`)) { const answered = await leadsApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.startsWith(`/api/v1/schools/${scope.schoolId}/champions/`)) { const answered = await championsApiRoute(route, path, method, url); if (answered !== null) return answered; }
-  if (path.includes('/people') || path.endsWith('/contacts')) { const answered = await peopleApiRoute(route, path, method, url); if (answered !== null) return answered; }
+  if (path.includes('/people') || path.includes('/contacts')) { const answered = await peopleApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path === `/api/v1/schools/${scope.schoolId}/creative-studio/generations`) {
     if (method === 'GET') return json(route, 200, { data: { provider: creative.provider, generations: creative.items, limit: 50 } });
     const request = route.request();
@@ -1156,7 +1156,7 @@ function resetPeople(over = {}) {
     version: 1, updatedAt: iso(-48), student: { birthDate: '2015-04-02', status: 'ACTIVE', version: 1 }, consents: { EMAIL: 'OPTED_IN', SMS: 'NOT_RECORDED' } }],
   [id(302), { personId: id(302), schoolId: scope.schoolId, givenName: 'Ben', familyName: 'Okafor', email: null, phoneE164: '+15555550102',
     version: 2, updatedAt: iso(-24), student: null, consents: { EMAIL: 'NOT_RECORDED', SMS: 'OPTED_OUT' } }]]);
-  Object.assign(ppl, { canEdit: true, posts: [], replies: [], byKey: new Map(), gate: null }, over);
+  Object.assign(ppl, { canEdit: true, posts: [], replies: [], byKey: new Map(), gate: null, cardOn: false }, over);
   // Contact consent records (0217 rule source): one row per recorded channel. puts/replies are the consent commands' own.
   ppl.consents = new Map([[id(301), new Map([['EMAIL', { channel: 'EMAIL', status: 'OPTED_IN', source: 'STAFF', capturedAt: '2026-10-01T16:00:00.000Z', version: 1, updatedAt: '2026-10-01T16:00:00.000Z' }]])],
     [id(302), new Map([['SMS', { channel: 'SMS', status: 'OPTED_OUT', source: 'PARENT', capturedAt: '2026-10-02T16:00:00.000Z', version: 1, updatedAt: '2026-10-02T16:00:00.000Z' }]])]]);
@@ -1212,6 +1212,17 @@ async function peopleApiRoute(route, path, method, url) {
     const items = [...ppl.records.values()].filter((r) => !q || [r.givenName, r.familyName, r.email, r.phoneE164].join(' ').toLowerCase().includes(q))
       .map((r) => ({ id: r.personId, givenName: r.givenName, familyName: r.familyName, email: r.email, phoneE164: r.phoneE164, version: r.version, createdAt: iso(-500) }));
     return json(route, 200, { data: items, meta: { requestId: id(900), correlationId: id(900) } });
+  }
+  // C2 (0522) contact card, served only when a check asks for it (cardOn); otherwise the card stays unavailable and the forms inline.
+  const cardRead = path.match(new RegExp(`^/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/contacts/([0-9a-f-]{36})$`));
+  if (cardRead && method === 'GET' && ppl.cardOn) {
+    const r = ppl.records.get(cardRead[1]);
+    if (!r) return json(route, 404, { code: 'PERSON_UNAVAILABLE' });
+    return json(route, 200, { data: { generatedAt: iso(0),
+      person: { personId: r.personId, version: r.version, givenName: r.givenName, familyName: r.familyName, email: r.email, phoneE164: r.phoneE164, createdAt: iso(-500) },
+      overview: { segment: r.student ? 'STUDENT' : 'OTHER', planName: null, programName: null, membershipEndsAt: null, ranks: [], openLead: false },
+      family: { allowed: false }, appointments: { allowed: false }, tasks: { allowed: false }, membership: { allowed: false }, billing: { allowed: true, open: [], invoices: [] },
+      messages: { allowed: false }, timeline: [] }, meta: { requestId: id(901), correlationId: id(901) } });
   }
   const read = path.match(new RegExp(`^/api/v1/school/schools/${scope.schoolId}/people/([0-9a-f-]{36})$`));
   if (read && method === 'GET') { ppl.recordReads = (ppl.recordReads ?? 0) + 1; const r = ppl.records.get(read[1]); return r ? json(route, 200, { data: pplRead(r) }) : json(route, 404, { code: 'PERSON_UNAVAILABLE' }); }
@@ -2312,6 +2323,39 @@ await check('People: consent, busy and version refusals say what to do; a new sa
   assert.equal(await section().locator('input[name="givenName"]').inputValue(), 'Anna', 'reload shows the saved record');
   await ctx.close();
 });
+for (const [name, viewport] of [['desktop-1440', { width: 1440, height: 900 }], ['phone-390', { width: 390, height: 844 }]]) {
+  await check(`People ${name}: Edit profile beside the name opens the edit forms in a pop-up; sections minimize`, async () => {
+    resetPeople({ cardOn: true });
+    const { ctx, page, section } = await peoplePage(viewport);
+    await open(section, 'Ana Rivera');
+    const edit = section().getByTestId('contact-edit-profile');
+    await edit.waitFor();
+    assert.equal(await section().locator('input[name="givenName"]').count(), 0, 'the forms are not on the page until Edit profile is pressed');
+    const fold = section().getByRole('button', { name: 'Details' });
+    assert.equal(await fold.getAttribute('aria-expanded'), 'true');
+    await fold.click();
+    assert.equal(await fold.getAttribute('aria-expanded'), 'false', 'Details minimizes');
+    assert.equal(await page.evaluate(() => localStorage.getItem('hon.people.folds.v1')), '{"overview-details":true}');
+    await fold.click();
+    assert.equal(await fold.getAttribute('aria-expanded'), 'true');
+    await edit.click();
+    const dialog = section().getByRole('dialog', { name: 'Edit profile' });
+    await dialog.waitFor();
+    assert.equal(await dialog.getByRole('button', { name: 'Close' }).evaluate((el) => el === document.activeElement), true, 'focus moves into the pop-up');
+    await noOverflow(page, `people-profile-popup-${name}`); await axe(page, `people-profile-popup-${name}`); await shot(page, `people-profile-popup-${name}`, true);
+    await dialog.locator('input[name="familyName"]').fill('Rivera-Lopez');
+    await dialog.getByRole('button', { name: 'Save changes' }).click();
+    await dialog.getByText('Saved. Changed: last name.').waitFor();
+    assert.equal(ppl.records.get(id(301)).familyName, 'Rivera-Lopez');
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'detached' });
+    assert.equal(await edit.evaluate((el) => el === document.activeElement), true, 'focus returns to Edit profile');
+    await edit.click(); await dialog.waitFor();
+    await dialog.getByRole('button', { name: 'Close' }).click();
+    await dialog.waitFor({ state: 'detached' });
+    await ctx.close();
+  });
+}
 const CONSENT_TEXT = { en: ['Contact consent', 'Record opt-out', 'Record opt-out now', 'Opt-out recorded for email.', 'Opted out'],
   ko: ['연락 동의', '수신 거부 기록', '지금 수신 거부 기록', '이메일 수신 거부가 기록되었습니다.', '수신 거부'] };
 for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko']]) {

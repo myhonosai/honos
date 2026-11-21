@@ -1,4 +1,4 @@
-import React, { useId } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import type { PersonRecord, SchoolContactCard, SchoolContactOptions } from '@hon/contracts';
 import { accountValue } from '../account-status/copy';
 import { peopleText, type PeopleKey } from './copy';
@@ -59,6 +59,13 @@ export function PeopleView(props: PeopleViewProps): React.ReactElement {
   const t: T = (key, vars) => peopleText(language, key, vars);
   const notice = waiting ? t('waiting') : concealed ? t('concealed') : !hasSchool ? t('noSchool') : null;
   const visible = notice === null;
+  // Edit profile pop-up (owner, 2026-11-21): the name, contact, consent and child-detail forms open from the button beside the
+  // name instead of sitting under the card. Without a readable card the forms stay inline, so editing never disappears.
+  const [profileFor, setProfileFor] = useState<string | null>(null);
+  const cardReady = props.card?.state === 'READY', cardLoading = props.card?.state === 'LOADING';
+  const profileOpen = !!selectedId && profileFor === selectedId && cardReady;
+  const canOpenProfile = !!selectedId && cardReady && props.record.state !== 'NONE';
+  const recordPanel = <RecordPanel {...props} t={t} onReload={onReload}/>;
   return <section className={styles.people} aria-labelledby="people-title" data-hon-native="">
     <header className={styles.head}>
       <div><h1 id="people-title">{t('title')}</h1><p className={styles.intro}>{t('intro')}</p></div>
@@ -72,12 +79,35 @@ export function PeopleView(props: PeopleViewProps): React.ReactElement {
       </article>
       <div className={styles.detail}>
         {props.actionNotice ? <p className={styles.notice} role="status" data-testid="contact-action-done">{props.actionNotice}</p> : null}
-        {props.card && selectedId ? <ContactCardTabs key={selectedId} language={language} card={props.card} initialTab={props.cardTab ?? 'overview'} membershipSlot={props.membershipSlot} membershipTools={props.membershipTools}/> : null}
+        {props.card && selectedId ? <ContactCardTabs key={selectedId} language={language} card={props.card} initialTab={props.cardTab ?? 'overview'} membershipSlot={props.membershipSlot} membershipTools={props.membershipTools}
+          onEditProfile={canOpenProfile ? () => setProfileFor(selectedId) : undefined}/> : null}
         {props.card?.state === 'READY' && props.actionsSlot ? props.actionsSlot(props.card.card) : null}
-        <RecordPanel {...props} t={t} onReload={onReload}/>
+        {props.record.state === 'NONE' || (!cardReady && !cardLoading) ? recordPanel : null}
+        {profileOpen ? <ProfileDialog t={t} onClose={() => setProfileFor(null)}>{recordPanel}</ProfileDialog> : null}
       </div>
     </div> : null}
   </section>;
+}
+
+/** A modal pop-up over the People page. Escape, the close button or a click outside closes it; focus returns to Edit profile. */
+function ProfileDialog({ t, onClose, children }: { t: T; onClose: () => void; children: React.ReactNode }): React.ReactElement {
+  const title = useId(), close = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    close.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('keydown', onKey); opener?.focus(); };
+  }, [onClose]);
+  return <div className={styles.backdrop} onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby={title} data-testid="contact-profile-dialog">
+      <header className={styles.dialogHead}>
+        <div><h2 id={title}>{t('profileTitle')}</h2><p className={styles.meta}>{t('profileIntro')}</p></div>
+        <button ref={close} type="button" className={styles.dialogClose} aria-label={t('profileClose')} onClick={onClose}>×</button>
+      </header>
+      {children}
+    </div>
+  </div>;
 }
 
 function RecordPanel(props: PeopleViewProps & { t: T }) {
