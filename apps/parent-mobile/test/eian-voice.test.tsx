@@ -103,6 +103,34 @@ describe('Eian voice', () => {
     expect(state.stops).toBeGreaterThan(stops);
   });
 
+  it('never reads an answer that arrives after the parent left Eian', async () => {
+    const { voice, state } = fakeVoice();
+    let release: (value: Awaited<ReturnType<ReturnType<typeof createSampleApi>['billing']>>) => void = () => {};
+    const sample = createSampleApi(now);
+    const billing = sample.billing;
+    const api = { ...sample, billing: () => new Promise<Awaited<ReturnType<typeof billing>>>(resolve => { release = resolve; }) };
+    await render(<ParentApp api={liveApi} session={signedOut} now={now} newKey={() => 'k'} sampleApi={() => api} voice={voice} />);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Try with a sample family' }));
+    await screen.findByRole('button', { name: 'Open Mia Sample journey' });
+    await fireEvent.press(screen.getByRole('tab', { name: 'Eian' }));
+    await screen.findByText(/next class is/);
+    await fireEvent.press(screen.getByRole('button', { name: 'Ask Eian by voice' }));
+    await act(async () => { state.on!.end({ kind: 'heard', text: 'Do we have any open invoices?' }); });
+    expect(await screen.findByText('Checking your school records…')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Home' }));
+    await act(async () => { release(await billing()); });
+    expect(state.spoken).toEqual([]);
+    // Coming back shows the answer, still silent until the parent asks for it.
+    await fireEvent.press(screen.getByRole('tab', { name: 'Eian' }));
+    expect(await screen.findByText('You have 1 open invoice:')).toBeTruthy();
+    expect(state.spoken).toEqual([]);
+  });
+
+  it('says in plain words that the spoken question may leave the phone', async () => {
+    await open(fakeVoice().voice);
+    expect(screen.getByText(/may send your spoken question off the phone to turn it into text\. HON gets only the text\./)).toBeTruthy();
+  });
+
   it('declares why the microphone is used', () => {
     const app = require('../app.json') as { expo: { plugins: unknown[] } };
     const plugin = app.expo.plugins.find(p => Array.isArray(p) && p[0] === 'expo-speech-recognition') as [string, Record<string, string>];

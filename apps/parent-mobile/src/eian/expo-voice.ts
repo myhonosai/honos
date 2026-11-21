@@ -4,6 +4,8 @@ import { ExpoSpeechRecognitionModule as Recognition } from 'expo-speech-recognit
 import type { EianVoice, HeardResult } from './voice';
 
 const LANGUAGE = 'en-US';
+/** If the phone never reports the end of listening, stop anyway so the microphone is not left open. */
+const LISTEN_LIMIT_MS = 20_000;
 
 /**
  * The phone's own voice and speech service for Eian. One short question per tap (not continuous), with the microphone
@@ -24,9 +26,11 @@ export function createExpoEianVoice(): EianVoice | null {
     listen(on) {
       let over = false, silent = false, started = false, text = '', failure: string | null = null;
       const subscriptions: { remove(): void }[] = [];
+      let limit: ReturnType<typeof setTimeout> | undefined;
       const finish = (result: HeardResult) => {
         if (over) return;
         over = true;
+        if (limit) clearTimeout(limit);
         subscriptions.forEach(s => s.remove());
         if (!silent) on.end(result);
       };
@@ -45,6 +49,11 @@ export function createExpoEianVoice(): EianVoice | null {
           finish({ kind: failure === 'not-allowed' ? 'denied' : failure === 'service-not-allowed' || failure === 'language-not-supported' ? 'unavailable' : 'nothing' });
         }));
         try { started = true; Recognition.start({ lang: LANGUAGE, interimResults: true, continuous: false, maxAlternatives: 1 }); } catch { finish({ kind: 'unavailable' }); }
+        limit = setTimeout(() => {
+          try { Recognition.abort(); } catch { /* already ended */ }
+          const heard = text.trim();
+          finish(heard ? { kind: 'heard', text: heard } : { kind: 'nothing' });
+        }, LISTEN_LIMIT_MS);
       })();
       return {
         stop() { if (over) return; if (started) { try { Recognition.stop(); } catch { finish({ kind: 'nothing' }); } } else finish({ kind: 'nothing' }); },

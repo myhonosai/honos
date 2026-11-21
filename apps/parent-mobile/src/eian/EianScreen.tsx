@@ -56,9 +56,12 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
   const hearing = useRef<{ stop(): void; cancel(): void } | null>(null);
   const canListen = useMemo(() => Boolean(voice?.canListen()), [voice]);
 
+  /** True only while this screen is the one showing, for a signed-in family. An answer that arrives later is not read. */
+  const live = useRef(false);
+  live.current = active && ready;
   const quiet = () => { voice?.stopSpeaking(); setReading(false); };
   const read = (reply: EianAnswer) => {
-    if (!voice) return;
+    if (!voice || !live.current) return;
     setReading(true);
     voice.speak(spokenText(reply), () => setReading(false));
   };
@@ -68,7 +71,7 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
     hearing.current?.cancel(); hearing.current = null; setListening(false);
     voice?.stopSpeaking(); setReading(false);
   }, [active, ready, voice]);
-  useEffect(() => () => { hearing.current?.cancel(); voice?.stopSpeaking(); }, [voice]);
+  useEffect(() => () => { live.current = false; hearing.current?.cancel(); voice?.stopSpeaking(); }, [voice]);
 
   useEffect(() => {
     if (!ready) { setAi(false); return; }
@@ -235,7 +238,7 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
         ? "Eian answers common family questions on your phone. Other questions are answered by AI from your school's records, and those answers are marked AI. Eian never pays, books or sends anything by itself."
         : "Eian understands common family questions and answers only from your school's records. It never pays, books or sends anything by itself."}</Text>
       {voice ? <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.sm }}>{canListen
-        ? "Voice uses your phone's own voice and speech service. The microphone is on only after you tap it, for one question at a time."
+        ? "The microphone is on only after you tap it, for one question at a time. Your phone's speech service (Apple or Google) may send your spoken question off the phone to turn it into text. HON gets only the text. Reading aloud uses your phone's own voice."
         : "Reading aloud uses your phone's own voice."}</Text> : null}
     </ScrollView>
   );

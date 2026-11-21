@@ -22,6 +22,8 @@ App only: no server change, no migration, no paid service, no new account.
   the question itself goes to HON. The screen says so in plain words.
 - The microphone permission is asked the first time the parent taps the button, with the stated reason. Refused or
   unavailable: a plain note, and typing keeps working. A phone with no speech service shows no microphone button.
+- An answer that arrives after the parent left Eian or signed out is never read aloud; it waits on the screen.
+- If the phone never reports the end of listening, the app closes the microphone itself after 20 seconds.
 - English (`en-US`) only in this slice.
 - Answers are read aloud in the room and can include names and invoice amounts; reading is always the parent's tap or
   the parent's own spoken question.

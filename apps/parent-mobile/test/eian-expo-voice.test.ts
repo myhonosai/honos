@@ -72,6 +72,18 @@ describe('phone voice for Eian', () => {
     expect(ended).toEqual([]);
   });
 
+  it('closes the microphone by itself if the phone never reports the end', async () => {
+    jest.useFakeTimers();
+    try {
+      const { ended } = listen();
+      await jest.advanceTimersByTimeAsync(0);
+      emit('result', { isFinal: false, results: [{ transcript: 'when is class' }] });
+      await jest.advanceTimersByTimeAsync(20_000);
+      expect(mockRecognition.abort).toHaveBeenCalledTimes(1);
+      expect(ended).toEqual([{ kind: 'heard', text: 'when is class' }]);
+    } finally { jest.useRealTimers(); }
+  });
+
   it('reads aloud with the phone voice and reports the end once', async () => {
     const done = jest.fn();
     createExpoEianVoice()!.speak('Hello there.', done);
