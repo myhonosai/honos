@@ -97,6 +97,7 @@
   .sale { position: static; }
 }
 @media print {
-  .tabs, .catalog, .list, .actions, .outcome, .sale { display: none !important; }
+  .tabs, .catalog, .list, .actions, .outcome, .sale, .pos [data-print="hide"] { display: none !important; }
   .pos { background: #fff; padding: 0; }
 }
+.tile[data-category="SHOPIFY"] { border-top-color: #95bf47; }

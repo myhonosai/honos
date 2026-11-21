@@ -30,4 +30,7 @@ export class SchoolPosController {
   record(@Req() r: HonRequest, @Body() b: unknown, @Headers('idempotency-key') k: string) { return this.pos.command(r, 'record', b, k).then(data => ({ data })); }
   @Post('school/pos/refunds') @HttpCode(200)
   refund(@Req() r: HonRequest, @Body() b: unknown, @Headers('idempotency-key') k: string) { return this.pos.command(r, 'refund', b, k).then(data => ({ data })); }
+  /** 0613: a manager sends the waiting and failed Shopify stock changes again. */
+  @Post('school/pos/shopify-stock') @HttpCode(200)
+  shopifyStock(@Req() r: HonRequest, @Body() b: unknown) { return this.pos.resendShopifyStock(r, b).then(data => ({ data })); }
 }

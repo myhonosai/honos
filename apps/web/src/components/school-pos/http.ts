@@ -1,6 +1,6 @@
 import {
   POS_HUMAN_COMMAND, accountClosed, accountUuid, validatePosDateRange, validatePosItemInput, validatePosItemResult, validatePosRead, validatePosRefundInput,
-  validatePosSale, validatePosSaleInput, validatePosSaleResult, validatePosSales, validatePosSettingsInput, validatePosSettingsResult, validatePosStockInput,
+  validatePosSale, validatePosSaleInput, validatePosSaleResult, validatePosSales, validatePosSettingsInput, validatePosSettingsResult, validatePosShopifyStockInput, validatePosStockInput,
   type PosItemInput, type PosItemResult, type PosRead, type PosRefundInput, type PosSale, type PosSaleInput, type PosSaleResult, type PosSales,
   type PosSettingsInput, type PosSettingsResult, type PosStockInput,
 } from '@hon/contracts';
@@ -95,6 +95,14 @@ export const posApi = {
     if (command.op === 'settings') return data(status, value, validatePosSettingsResult);
     if (command.op === 'item' || command.op === 'stock') return data(status, value, validatePosItemResult);
     return data(status, value, validatePosSaleResult);
+  },
+  /** 0613 (managers): send the Shopify stock changes that failed or still wait again; answers the fresh register read. Safe to repeat: Shopify applies each change once. */
+  async resendShopifyStock(schoolId: string, signal: AbortSignal, owned: Owned): Promise<PosRead> {
+    const s = school(schoolId);
+    const { status, value } = await exchange('/api/v1/school/pos/shopify-stock', signal, owned, { body: JSON.stringify(validatePosShopifyStockInput({ schoolId: s })), key: globalThis.crypto.randomUUID() });
+    const read = data(status, value, validatePosRead);
+    if (read.schoolId !== s) throw new PosError('UNKNOWN');
+    return read;
   },
 };
 export type PosApi = typeof posApi;

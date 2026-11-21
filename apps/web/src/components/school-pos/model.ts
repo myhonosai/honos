@@ -1,14 +1,16 @@
-import { computePosTotals, type PosCategory, type PosDiscount, type PosItem, type PosMethod, type PosSaleInput, type PosTotals } from '@hon/contracts';
+import { computePosTotals, type PosCategory, type PosDiscount, type PosItem, type PosMethod, type PosSaleInput, type PosShopifyItem, type PosTotals } from '@hon/contracts';
 
-/** Register cart and money helpers (0612). Pure: the screen and its tests share them. */
+/** Register cart and money helpers (0612; Shopify products 0613). Pure: the screen and its tests share them. */
 export type CartLine =
   | Readonly<{ kind: 'ITEM'; itemId: string; name: string; unitPriceMinor: number; taxable: boolean; quantity: number }>
-  | Readonly<{ kind: 'QUICK'; id: string; name: string; unitPriceMinor: number; taxable: false; quantity: number }>;
+  | Readonly<{ kind: 'QUICK'; id: string; name: string; unitPriceMinor: number; taxable: false; quantity: number }>
+  | Readonly<{ kind: 'SHOPIFY'; variantId: string; name: string; unitPriceMinor: number; taxable: true; quantity: number }>;
 export type Customer = Readonly<{ kind: 'WALK_IN'; name: string }> | Readonly<{ kind: 'PERSON'; personId: string; name: string }>;
 export type Cart = Readonly<{ lines: readonly CartLine[]; customer: Customer; discount: PosDiscount | null }>;
 export const EMPTY_CART: Cart = { lines: [], customer: { kind: 'WALK_IN', name: '' }, discount: null };
 
-const lineKey = (l: CartLine) => l.kind === 'ITEM' ? l.itemId : l.id;
+const shopifyKey = (variantId: string) => 'shopify:' + variantId;
+const lineKey = (l: CartLine) => l.kind === 'ITEM' ? l.itemId : l.kind === 'SHOPIFY' ? shopifyKey(l.variantId) : l.id;
 export { lineKey };
 
 /** Add one of an item, or one more of it when it is already in the cart. */
@@ -19,6 +21,13 @@ export function addItem(cart: Cart, item: PosItem): Cart {
   if (cart.lines.length >= 50) return cart;
   return { ...cart, lines: [...cart.lines, { kind: 'ITEM', itemId: item.itemId, name: item.name, unitPriceMinor: item.priceMinor, taxable: item.taxable, quantity: 1 }] };
 }
+/** Add one of a Shopify product (0613). The database prices it from the store's catalog; it is always taxed at the register rate. */
+export function addShopify(cart: Cart, item: PosShopifyItem): Cart {
+  const found = cart.lines.find(l => l.kind === 'SHOPIFY' && l.variantId === item.variantId);
+  if (found) return setQuantity(cart, shopifyKey(item.variantId), found.quantity + 1);
+  if (cart.lines.length >= 50) return cart;
+  return { ...cart, lines: [...cart.lines, { kind: 'SHOPIFY', variantId: item.variantId, name: item.name, unitPriceMinor: item.priceMinor, taxable: true, quantity: 1 }] };
+}
 export function addQuick(cart: Cart, id: string, name: string, amountMinor: number): Cart {
   if (cart.lines.length >= 50) return cart;
   return { ...cart, lines: [...cart.lines, { kind: 'QUICK', id, name, unitPriceMinor: amountMinor, taxable: false, quantity: 1 }] };
@@ -28,11 +37,12 @@ export function setQuantity(cart: Cart, key: string, quantity: number): Cart {
   const q = Math.min(999, Math.max(0, Math.trunc(quantity)));
   return { ...cart, lines: cart.lines.flatMap(l => lineKey(l) !== key ? [l] : q === 0 ? [] : [{ ...l, quantity: q }]) };
 }
-/** Take catalog changes into the cart: new prices and tax flags, archived items dropped. */
-export function refreshCart(cart: Cart, items: readonly PosItem[]): Cart {
-  const byId = new Map(items.filter(i => i.active).map(i => [i.itemId, i]));
+/** Take catalog changes into the cart: new prices and tax flags; archived items and Shopify products no longer for sale are dropped. */
+export function refreshCart(cart: Cart, items: readonly PosItem[], shopify: readonly PosShopifyItem[] = []): Cart {
+  const byId = new Map(items.filter(i => i.active).map(i => [i.itemId, i])), byVariant = new Map(shopify.map(v => [v.variantId, v]));
   return { ...cart, lines: cart.lines.flatMap((l): CartLine[] => {
     if (l.kind === 'QUICK') return [l];
+    if (l.kind === 'SHOPIFY') { const v = byVariant.get(l.variantId); return v ? [{ ...l, name: v.name, unitPriceMinor: v.priceMinor }] : []; }
     const i = byId.get(l.itemId); return i ? [{ ...l, name: i.name, unitPriceMinor: i.priceMinor, taxable: i.taxable }] : [];
   }) };
 }
@@ -44,7 +54,7 @@ export function saleInput(schoolId: string, cart: Cart, taxRateBps: number, meth
   const walk = cart.customer.kind === 'WALK_IN' ? cart.customer.name.trim() : '';
   return {
     schoolId, personId: cart.customer.kind === 'PERSON' ? cart.customer.personId : null, walkInName: walk ? walk.slice(0, 120) : null,
-    lines: cart.lines.map(l => l.kind === 'ITEM' ? { itemId: l.itemId, quantity: l.quantity } : { description: l.name, unitPriceMinor: l.unitPriceMinor, quantity: l.quantity }),
+    lines: cart.lines.map(l => l.kind === 'ITEM' ? { itemId: l.itemId, quantity: l.quantity } : l.kind === 'SHOPIFY' ? { shopifyVariantId: l.variantId, quantity: l.quantity } : { description: l.name, unitPriceMinor: l.unitPriceMinor, quantity: l.quantity }),
     discount: cart.discount, method, reference: reference.trim() ? reference.trim().slice(0, 120) : null, note: note.trim() ? note.trim().slice(0, 500) : null,
     expectedTotalMinor: cartTotals(cart, taxRateBps).totalMinor,
   };
@@ -80,7 +90,7 @@ export function changeDue(totalMinor: number, receivedMinor: number | null): num
   return receivedMinor === null || receivedMinor < totalMinor ? null : receivedMinor - totalMinor;
 }
 
-export const CATEGORY_LABEL: Record<PosCategory | 'QUICK', string> = {
-  TESTING: 'Testing & ranks', UNIFORMS: 'Uniforms', EQUIPMENT: 'Equipment', APPAREL: 'Apparel', EVENTS: 'Events', OTHER: 'Other', QUICK: 'Quick amount',
+export const CATEGORY_LABEL: Record<PosCategory | 'QUICK' | 'SHOPIFY', string> = {
+  TESTING: 'Testing & ranks', UNIFORMS: 'Uniforms', EQUIPMENT: 'Equipment', APPAREL: 'Apparel', EVENTS: 'Events', OTHER: 'Other', QUICK: 'Quick amount', SHOPIFY: 'Online store',
 };
 export const METHOD_LABEL: Record<PosMethod, string> = { CASH: 'Cash', CHECK: 'Check', CARD_TERMINAL: 'Card (our terminal)', OTHER: 'Other' };

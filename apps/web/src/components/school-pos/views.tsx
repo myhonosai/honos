@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { POS_CATEGORIES, POS_METHODS, type PosCategory, type PosItem, type PosItemInput, type PosMethod, type PosRead, type PosSale } from '@hon/contracts';
+import { POS_CATEGORIES, POS_METHODS, type PosCategory, type PosItem, type PosItemInput, type PosMethod, type PosRead, type PosSale, type PosShopify } from '@hon/contracts';
 import type { PersonSummary } from '../people/http';
 import type { PosCommand, PosErrorKind } from './http';
 import {
-  CATEGORY_LABEL, METHOD_LABEL, addItem, addQuick, bpsToPercent, cartTotals, changeDue, formatMoney, lineKey, minorToInput, parseMoney, percentToBps, setQuantity,
+  CATEGORY_LABEL, METHOD_LABEL, addItem, addQuick, addShopify, bpsToPercent, cartTotals, changeDue, formatMoney, lineKey, minorToInput, parseMoney, percentToBps, setQuantity,
   type Cart,
 } from './model';
 import type { SalesState } from './school-pos';
@@ -31,13 +31,42 @@ function OutcomeLine({ outcome, canRetry, onTryAgain }: { outcome: Outcome; canR
 const money = (read: PosRead, minor: number) => formatMoney(minor, read.settings.currency);
 const when = (iso: string) => new Date(iso).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 
+// ---------------- Shopify at the register (0613) ----------------
+export type StockSend = 'IDLE' | 'SENDING' | 'DONE' | 'LEFT' | 'DENIED' | 'FAILED';
+const SHOPIFY_NOTE: Partial<Record<PosShopify['state'], string>> = {
+  NEEDS_EDITING: 'Your Shopify store is connected for reading only, so its products are not sold here. Allow product editing on the Shopify page to sell them at the front desk.',
+  CURRENCY_MISMATCH: 'Your Shopify store uses a different currency than this register, so its products are not sold here.',
+};
+const SEND_TEXT: Record<Exclude<StockSend, 'IDLE'>, string> = {
+  SENDING: 'Sending to Shopify…', DONE: 'Shopify is up to date.', LEFT: 'Some changes still did not go through. Check the product in Shopify, then send again.',
+  DENIED: 'Only a manager can send these again.', FAILED: 'Shopify could not be reached. Try again in a moment.',
+};
+/** Sales are never held up by Shopify. This line says when Shopify's count is behind, and lets a manager send the changes again. */
+export function ShopifyStockLine({ read, send, onResend }: { read: PosRead; send: StockSend; onResend: () => void }): React.ReactElement | null {
+  const { waiting, failed } = read.shopify.unsent, n = waiting + failed;
+  if (n === 0) return send === 'DONE' ? <p className={styles.outcome} data-tone="ok" role="status">{SEND_TEXT.DONE}</p> : null;
+  return <p className={styles.alert} role="status">
+    <strong>Shopify stock is behind.</strong> {n} stock {n === 1 ? 'change has' : 'changes have'} not reached Shopify yet. The sales are saved here.
+    {' '}{send !== 'IDLE' && send !== 'DONE' ? SEND_TEXT[send] + ' ' : ''}
+    {read.canManage ? <button type="button" className={styles.secondary} disabled={send === 'SENDING'} onClick={onResend}>{send === 'SENDING' ? 'Sending…' : 'Send again'}</button>
+      : failed > 0 ? 'Ask a manager to send them again.' : 'They are sent again with the next sale.'}
+  </p>;
+}
+/** What happened to Shopify's count for one sale, shown under its receipt (not part of the printed receipt). */
+export function SaleShopifyNote({ sale }: { sale: PosSale }): React.ReactElement | null {
+  const { waiting, done, failed } = sale.shopifyStock;
+  if (waiting + done + failed === 0) return null;
+  return <p className={styles.meta} data-print="hide">{failed > 0 ? 'Shopify stock was not updated for this sale. A manager can send it again from the Register.'
+    : waiting > 0 ? 'Shopify stock for this sale is still being sent.' : 'Shopify stock is updated for this sale.'}</p>;
+}
+
 // ---------------- Register ----------------
-export function PosRegister({ read, cart, receipt, outcome, locked, canRetry, found, onCart, onSearchPeople, onClearFound, onNewSale, onPay, onTryAgain }: {
+export function PosRegister({ read, cart, receipt, outcome, locked, canRetry, found, stockSend = 'IDLE', onCart, onSearchPeople, onClearFound, onNewSale, onPay, onTryAgain, onResendStock = () => undefined }: {
   read: PosRead; cart: Cart; receipt: PosSale | null; outcome: Outcome; locked: boolean; canRetry: boolean; found: readonly PersonSummary[] | null;
   onCart: (c: Cart) => void; onSearchPeople: (q: string) => void; onClearFound: () => void; onNewSale: () => void;
-  onPay: (method: PosMethod, reference: string, note: string) => void; onTryAgain: () => void;
+  onPay: (method: PosMethod, reference: string, note: string) => void; onTryAgain: () => void; stockSend?: StockSend; onResendStock?: () => void;
 }): React.ReactElement {
-  const [search, setSearch] = useState(''), [category, setCategory] = useState<PosCategory | 'ALL'>('ALL');
+  const [search, setSearch] = useState(''), [category, setCategory] = useState<PosCategory | 'ALL' | 'SHOPIFY'>('ALL');
   const [quick, setQuick] = useState<{ name: string; amount: string } | null>(null);
   const [discount, setDiscount] = useState<{ kind: 'AMOUNT' | 'PERCENT'; value: string; reason: string } | null>(null);
   const [method, setMethod] = useState<PosMethod>('CASH'), [reference, setReference] = useState(''), [note, setNote] = useState(''), [cash, setCash] = useState('');
@@ -45,6 +74,10 @@ export function PosRegister({ read, cart, receipt, outcome, locked, canRetry, fo
   const cur = read.settings.currency;
   const items = useMemo(() => read.items.filter(i => i.active && (category === 'ALL' || i.category === category)
     && (!search.trim() || (i.name + ' ' + (i.sku ?? '')).toLowerCase().includes(search.trim().toLowerCase()))), [read.items, category, search]);
+  const store = read.shopify;
+  const shopItems = useMemo(() => category !== 'ALL' && category !== 'SHOPIFY' ? [] : store.items.filter(v => !search.trim()
+    || (v.name + ' ' + (v.sku ?? '')).toLowerCase().includes(search.trim().toLowerCase())), [store.items, category, search]);
+  const shopInCart = (variantId: string) => cart.lines.reduce((n, l) => n + (l.kind === 'SHOPIFY' && l.variantId === variantId ? l.quantity : 0), 0);
   const used = POS_CATEGORIES.filter(c => read.items.some(i => i.active && i.category === c));
   const totals = cartTotals(cart, read.settings.taxRateBps);
   const inCart = (id: string) => cart.lines.reduce((n, l) => n + (l.kind === 'ITEM' && l.itemId === id ? l.quantity : 0), 0);
@@ -52,6 +85,7 @@ export function PosRegister({ read, cart, receipt, outcome, locked, canRetry, fo
   if (receipt) return <div className={styles.registerDone}>
     <OutcomeLine outcome={outcome} canRetry={false} onTryAgain={onTryAgain}/>
     <Receipt read={read} sale={receipt}/>
+    <SaleShopifyNote sale={receipt}/>
     <div className={styles.actions}><button type="button" className={styles.primary} onClick={onNewSale}>New sale</button>
       <button type="button" className={styles.secondary} onClick={() => window.print()}>Print receipt</button></div>
   </div>;
@@ -67,6 +101,7 @@ export function PosRegister({ read, cart, receipt, outcome, locked, canRetry, fo
 
   return <div className={styles.register}>
     <section className={styles.catalog} aria-label="Products">
+      <ShopifyStockLine read={read} send={stockSend} onResend={onResendStock}/>
       <div className={styles.row}>
         <input className={styles.input} type="search" placeholder="Search products or SKU" aria-label="Search products" value={search} onChange={e => setSearch(e.target.value)}/>
         <button type="button" className={styles.secondary} disabled={locked} onClick={() => setQuick({ name: '', amount: '' })}>Quick amount</button>
@@ -79,9 +114,9 @@ export function PosRegister({ read, cart, receipt, outcome, locked, canRetry, fo
         <button type="button" className={styles.link} onClick={() => setQuick(null)}>Cancel</button>
       </div> : null}
       <div className={styles.chips} role="group" aria-label="Category">
-        {(['ALL', ...used] as const).map(c => <button key={c} type="button" className={styles.chip} aria-pressed={category === c} onClick={() => setCategory(c)}>{c === 'ALL' ? 'All' : CATEGORY_LABEL[c]}</button>)}
+        {(['ALL', ...used, ...(store.items.length ? ['SHOPIFY' as const] : [])] as const).map(c => <button key={c} type="button" className={styles.chip} aria-pressed={category === c} onClick={() => setCategory(c)}>{c === 'ALL' ? 'All' : CATEGORY_LABEL[c]}</button>)}
       </div>
-      {read.items.length === 0 ? <p className={styles.notice}>No products yet. {read.canManage ? 'Add them in Inventory.' : 'Ask a manager to add them in Inventory.'}</p> : null}
+      {read.items.length === 0 && store.items.length === 0 ? <p className={styles.notice}>No products yet. {read.canManage ? 'Add them in Inventory.' : 'Ask a manager to add them in Inventory.'}</p> : null}
       <ul className={styles.tiles}>
         {items.map(i => {
           const left = i.trackStock ? (i.stock ?? 0) - inCart(i.itemId) : null;
@@ -91,6 +126,19 @@ export function PosRegister({ read, cart, receipt, outcome, locked, canRetry, fo
           </button></li>;
         })}
       </ul>
+      {SHOPIFY_NOTE[store.state] ? <p className={styles.meta}>{SHOPIFY_NOTE[store.state]}</p> : null}
+      {shopItems.length ? <>
+        <h3 className={styles.label}>From your Shopify store{store.shopName ? `: ${store.shopName}` : ''}</h3>
+        <ul className={styles.tiles} aria-label="Shopify products">
+          {shopItems.map(v => {
+            const left = v.tracked ? (v.stock ?? 0) - shopInCart(v.variantId) : null;
+            return <li key={v.variantId}><button type="button" className={styles.tile} data-category="SHOPIFY" disabled={locked} onClick={() => onCart(addShopify(cart, v))}>
+              <strong>{v.name}</strong><span className={styles.price}>{money(read, v.priceMinor)}</span>
+              <small>{v.sku ?? CATEGORY_LABEL.SHOPIFY}{left !== null ? (left <= 0 ? ' · Shopify shows none left' : ` · ${left} in Shopify`) : ''}</small>
+            </button></li>;
+          })}
+        </ul>
+      </> : null}
     </section>
 
     <section className={styles.sale} aria-label="Sale">
@@ -234,6 +282,7 @@ export function PosHistory({ read, range, sales, selected, outcome, locked, canR
       <OutcomeLine outcome={outcome} canRetry={canRetry} onTryAgain={onTryAgain}/>
       {!selected ? <p className={styles.empty}>Pick a sale to see its receipt.</p> : <>
         <Receipt read={read} sale={selected}/>
+        <SaleShopifyNote sale={selected}/>
         <div className={styles.actions}>
           <button type="button" className={styles.secondary} onClick={() => window.print()}>Print</button>
           {read.canManage && left > 0 && !refund ? <button type="button" className={styles.secondary} disabled={locked} onClick={() => startRefund(selected)}>Refund</button> : null}
@@ -246,7 +295,7 @@ export function PosHistory({ read, range, sales, selected, outcome, locked, canR
             {POS_METHODS.map(m => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}</select></label>
           <label className={styles.label}>Reason (required)<input className={styles.input} maxLength={500} value={refund.reason} onChange={e => setRefund({ ...refund, reason: e.target.value })}/></label>
           {selected.lines.filter(l => l.stockTracked && l.restockedQuantity < l.quantity).map(l => <label key={l.lineId} className={styles.check}>
-            Put back on the shelf: {l.name}
+            Put back on the shelf{l.category === 'SHOPIFY' ? ' (Shopify count goes back up)' : ''}: {l.name}
             <input className={styles.small} type="number" min={0} max={l.quantity - l.restockedQuantity} value={refund.restock[l.lineId] ?? 0}
               onChange={e => setRefund({ ...refund, restock: { ...refund.restock, [l.lineId]: Math.max(0, Math.min(l.quantity - l.restockedQuantity, Math.trunc(Number(e.target.value) || 0))) } })}/>
           </label>)}

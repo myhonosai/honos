@@ -1,16 +1,18 @@
-import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, Inject, Injectable, NotFoundException, Optional, ServiceUnavailableException } from '@nestjs/common';
 import {
   accountUuid, validatePosDateRange, validatePosItemInput, validatePosItemResult, validatePosRead, validatePosRefundInput, validatePosSale,
-  validatePosSaleInput, validatePosSaleResult, validatePosSales, validatePosSettingsInput, validatePosSettingsResult, validatePosStockInput,
+  validatePosSaleInput, validatePosSaleResult, validatePosSales, validatePosSettingsInput, validatePosSettingsResult, validatePosShopifyStockInput, validatePosStockInput,
   type PosItemResult, type PosRead, type PosSale, type PosSaleResult, type PosSales, type PosSettingsResult,
 } from '@hon/contracts';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
+import { SHOPIFY_APP, type ShopifyApp } from '../commerce/shopify/shopify-adapter.js';
+import { begunPosStock, sendPosStock } from './pos-shopify-stock.js';
 
 const DETAIL: Record<string, string> = {
   POS_TOTAL_CHANGED: 'Prices or the tax rate changed. Check the new total and take payment again.',
   POS_OUT_OF_STOCK: 'Not enough in stock for one of the items. Update the stock count first.',
-  POS_ITEM_UNAVAILABLE: 'One of the items was removed from the catalog. Take it out of the cart.',
+  POS_ITEM_UNAVAILABLE: 'One of the items is no longer for sale here. Take it out of the cart.',
   POS_DISCOUNT_TOO_LARGE: 'The discount is more than the sale.',
   POS_REFUND_TOO_LARGE: 'That is more than is left to refund on this sale.',
   POS_RESTOCK_INVALID: 'Only items that were sold and counted in stock can go back on the shelf.',
@@ -61,7 +63,8 @@ const INPUT: Record<Command, (v: unknown) => { schoolId: string }> = {
  */
 @Injectable()
 export class SchoolPosService {
-  constructor(private readonly database: RuntimeDatabaseService) {}
+  constructor(private readonly database: RuntimeDatabaseService, @Optional() @Inject(SHOPIFY_APP) private readonly shopify: ShopifyApp | null = null,
+    @Optional() @Inject('SHOPIFY_CLOCK') private readonly now: () => number = Date.now) {}
 
   private school(v: unknown): string { try { return accountUuid(v).toLowerCase(); } catch { throw new BadRequestException({ code: 'POS_INVALID' }); } }
 
@@ -103,6 +106,34 @@ export class SchoolPosService {
     const raw = await this.call(op, [req.honIdentity!.externalSubject, JSON.stringify(input), k]);
     if (op === 'settings') return this.checked(validatePosSettingsResult, raw);
     if (op === 'item' || op === 'stock') return this.checked(validatePosItemResult, raw);
-    return this.checked(validatePosSaleResult, raw);
+    const out = this.checked(validatePosSaleResult, raw);
+    if (out.sale.shopifyStock.waiting === 0) return out;
+    // 0613: the sale or refund is recorded. Lowering (or restoring) Shopify's count is a follow-up that never fails it.
+    await this.sendShopifyStock(req.honIdentity!.externalSubject, input.schoolId, false);
+    try { return { sale: await this.sale(req, input.schoolId, out.sale.saleId), replayed: out.replayed }; } catch { return out; }
+  }
+
+  /**
+   * 0613: send the school's waiting Shopify stock changes (and, for a manager's "send again", the failed ones). Shopify
+   * problems are recorded on each change and never thrown; with no Shopify app on this server the changes simply wait.
+   */
+  private async sendShopifyStock(subject: string, schoolId: string, retryFailed: boolean): Promise<void> {
+    if (!this.shopify) { if (retryFailed) throw new ServiceUnavailableException({ code: 'POS_SHOPIFY_UNAVAILABLE', detail: 'Shopify is not set up on this server.' }); return; }
+    try {
+      const w = begunPosStock(await this.database.callSchoolPos('shopifyStockBegin', [subject, JSON.stringify({ schoolId, retryFailed })]));
+      if (!w) return;
+      await sendPosStock(this.shopify, this.now, w, {
+        rotate: b => this.database.callSchoolPos('shopifyStockRotate', [subject, JSON.stringify({ schoolId, ...b })]),
+        finish: (taskId, outcome, failureCode) => this.database.callSchoolPos('shopifyStockFinish', [subject, JSON.stringify({ schoolId, taskId, outcome, failureCode })]),
+      });
+    } catch (e) { if (retryFailed) translatePosError(e); }
+  }
+
+  /** 0613 (pos.manage): send again the Shopify stock changes that failed or still wait; answers the register read. */
+  async resendShopifyStock(req: HonRequest, body: unknown): Promise<PosRead> {
+    let input: { schoolId: string };
+    try { input = validatePosShopifyStockInput(body); } catch { throw new BadRequestException({ code: 'POS_INVALID' }); }
+    await this.sendShopifyStock(req.honIdentity!.externalSubject, input.schoolId, true);
+    return this.read(req, input.schoolId);
   }
 }

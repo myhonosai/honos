@@ -69,6 +69,8 @@ try{
   'read_shopify_product_changes','propose_shopify_product_change','cancel_shopify_product_change','approve_shopify_product_change',
   'rotate_shopify_change_credential','record_shopify_product_change_result','read_shopify_finance','record_shopify_finance',
   'read_shopify_storefront','save_shopify_storefront','begin_shopify_storefront_publish','rotate_shopify_storefront_credential','finish_shopify_storefront_publish',
+  // 0613 POS sells Shopify products (SH2).
+  'begin_pos_shopify_stock','rotate_pos_shopify_credential','finish_pos_shopify_stock',
   // 0596 Marcus merch ideas (CS-M2).
   'begin_shopify_merch_ideas','plan_shopify_merch_ideas','prepare_shopify_merch_ideas','fail_shopify_merch_ideas','record_shopify_merch_ideas',
   'read_shopify_merch_ideas','close_shopify_merch_ideas'];

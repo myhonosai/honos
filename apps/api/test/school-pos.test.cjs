@@ -66,3 +66,130 @@ test('a malformed database answer is never passed to the screen', async () => {
   const service = new SchoolPosService(fakeDatabase({ schoolId: randomUUID(), timezone: 'UTC', today: '2026-11-16', canManage: false, settings: { currency: 'USD', taxRateBps: 0, version: null }, items: [], todaySales: { count: 0, totalMinor: 0 } }));
   await assert.rejects(() => service.read(req, school), status(503, 'POS_UNAVAILABLE'));
 });
+
+// 0613: Shopify stock follow-up after a sale or refund. The real path is proven by test-pos-shopify-integrity.mjs.
+const { begunPosStock, sendPosStock, POS_STOCK_MAX_ATTEMPTS } = require('../dist/pos/pos-shopify-stock.js');
+const { ShopifyProviderError, ownStockLocation } = require('../dist/commerce/shopify/shopify-adapter.js');
+const { ShopifyVault } = require('../dist/commerce/shopify/shopify-vault.js');
+const vault = new ShopifyVault(Buffer.alloc(32, 7), 'test-key');
+const HOUR = 3600_000, T0 = Date.parse('2026-11-21T00:00:00.000Z');
+const iso = (ms) => new Date(ms).toISOString();
+function begun(tasks, o = {}) {
+  const connectionId = randomUUID(), shopDomain = 'proof-dojo.myshopify.com';
+  const pair = { accessToken: 'access-1', refreshToken: 'refresh-1', accessExpiresAt: iso(T0 + (o.accessIn ?? HOUR)), refreshExpiresAt: iso(T0 + (o.refreshIn ?? 24 * HOUR)) };
+  return { state: 'READY', connectionId, shopDomain, credential: { keyId: 'test-key', sealed: o.sealed ?? vault.seal({ connectionId, shopDomain }, pair), version: 3 },
+    tasks: tasks.map((t) => ({ taskId: randomUUID(), saleId: randomUUID(), variantId: '4001', change: -1, attempts: 1, ...t })) };
+}
+function stockApp(answer) {
+  const sent = [], refreshed = [];
+  return { sent, refreshed, vault, adapter: {
+    async adjustInventory(shop, token, input) { sent.push({ shop, token, ...input }); const r = typeof answer === 'function' ? answer(sent.length, input) : answer; if (r instanceof Error) throw r; return r; },
+    async refresh(shop, token) { refreshed.push(token); if (answer instanceof Error && answer.refreshFails) throw answer;
+      return { accessToken: 'access-2', refreshToken: 'refresh-2', accessExpiresAt: iso(T0 + HOUR), refreshExpiresAt: iso(T0 + 48 * HOUR), scope: 'write_inventory' }; },
+  } };
+}
+function steps() { const finished = [], rotated = []; return { finished, rotated, rotate: async (b) => { rotated.push(b); }, finish: async (taskId, outcome, code) => { finished.push([taskId, outcome, code]); } }; }
+
+test('only a READY answer with well-formed waiting changes is sent', () => {
+  const w = begun([{}]);
+  assert.equal(begunPosStock(w).tasks.length, 1);
+  for (const bad of [null, { ...w, state: 'NEEDS_EDITING' }, { ...w, tasks: [] }, { ...w, credential: null }, { ...w, tasks: [{ ...w.tasks[0], change: 0 }] },
+    { ...w, tasks: [{ ...w.tasks[0], variantId: 'gid://shopify/ProductVariant/1' }] }, { ...w, tasks: [{ ...w.tasks[0], taskId: 'x' }] },
+    { ...w, tasks: Array.from({ length: 21 }, () => w.tasks[0]) }]) assert.equal(begunPosStock(bad), null);
+});
+
+test('each change is one Shopify call keyed by its task id; a refusal is FAILED with its reason', async () => {
+  const w = begunPosStock(begun([{ change: -2 }, { variantId: '4002', change: 1 }]));
+  const app = stockApp((n) => n === 1 ? { outcome: 'DONE' } : { outcome: 'REFUSED', reason: 'MULTIPLE_LOCATIONS' }), s = steps();
+  await sendPosStock(app, () => T0, w, s);
+  assert.deepEqual(app.sent.map((x) => [x.token, x.variantId, x.delta, x.idempotencyKey, x.reference]),
+    w.tasks.map((t) => ['access-1', t.variantId, t.change, t.taskId, `honos://pos/sale/${t.saleId}`]));
+  assert.deepEqual(s.finished, [[w.tasks[0].taskId, 'DONE', null], [w.tasks[1].taskId, 'FAILED', 'MULTIPLE_LOCATIONS']]);
+  assert.equal(s.rotated.length, 0);
+});
+
+test('an uncertain answer waits until the attempt limit; a rejected token fails the rest without calling again', async () => {
+  const slow = begunPosStock(begun([{ attempts: 1 }, { attempts: POS_STOCK_MAX_ATTEMPTS }]));
+  const a = stockApp(new ShopifyProviderError('UNAVAILABLE')), s1 = steps();
+  await sendPosStock(a, () => T0, slow, s1);
+  assert.deepEqual(s1.finished.map((f) => f.slice(1)), [['RETRY', 'SHOPIFY_UNAVAILABLE'], ['FAILED', 'SHOPIFY_UNAVAILABLE']]);
+  const auth = begunPosStock(begun([{}, {}, {}]));
+  const b = stockApp((n) => n === 1 ? { outcome: 'DONE' } : new ShopifyProviderError('AUTH')), s2 = steps();
+  await sendPosStock(b, () => T0, auth, s2);
+  assert.equal(b.sent.length, 2);
+  assert.deepEqual(s2.finished.map((f) => f.slice(1)), [['DONE', null], ['FAILED', 'TOKEN_REJECTED'], ['FAILED', 'TOKEN_REJECTED']]);
+});
+
+test('an expiring token is refreshed and rotated before sending; an unreadable or expired credential sends nothing', async () => {
+  const w = begunPosStock(begun([{}], { accessIn: 60_000 }));
+  const app = stockApp({ outcome: 'DONE' }), s = steps();
+  await sendPosStock(app, () => T0, w, s);
+  assert.deepEqual(app.refreshed, ['refresh-1']);
+  assert.equal(s.rotated.length, 1);
+  assert.equal(s.rotated[0].expectedVersion, 3);
+  assert.equal(vault.open({ connectionId: w.connectionId, shopDomain: w.shopDomain }, 'test-key', s.rotated[0].credential.sealed).accessToken, 'access-2');
+  assert(!JSON.stringify(s.rotated).includes('access-2'));
+  assert.equal(app.sent[0].token, 'access-2');
+  const copied = begunPosStock({ ...begun([{}]), sealed: undefined, credential: { keyId: 'test-key', sealed: begun([{}]).credential.sealed, version: 1 } });
+  const c = stockApp({ outcome: 'DONE' }), s3 = steps();
+  await sendPosStock(c, () => T0, copied, s3);
+  assert.equal(c.sent.length, 0);
+  assert.deepEqual(s3.finished.map((f) => f.slice(1)), [['FAILED', 'CREDENTIAL_UNREADABLE']]);
+  const dead = begunPosStock(begun([{}], { accessIn: -HOUR, refreshIn: -1 }));
+  const d = stockApp({ outcome: 'DONE' }), s4 = steps();
+  await sendPosStock(d, () => T0, dead, s4);
+  assert.equal(d.sent.length + d.refreshed.length, 0);
+  assert.deepEqual(s4.finished.map((f) => f.slice(1)), [['FAILED', 'REFRESH_EXPIRED']]);
+});
+
+test('stock is changed only at the one active location the school runs itself', () => {
+  const level = (id, o = {}) => ({ location: { id: `gid://shopify/Location/${id}`, isActive: true, fulfillmentService: null, ...o } });
+  const variant = (levels, o = {}) => ({ inventoryItem: { id: 'gid://shopify/InventoryItem/77', tracked: true, inventoryLevels: { nodes: levels }, ...o } });
+  assert.equal(typeof ownStockLocation(variant([level(1)])), 'object');
+  assert.equal(ownStockLocation(null), 'VARIANT_GONE');
+  assert.equal(ownStockLocation(variant([level(1)], { tracked: false })), 'NOT_TRACKED');
+  assert.equal(ownStockLocation(variant([level(1), level(2)])), 'MULTIPLE_LOCATIONS');
+  assert.equal(ownStockLocation(variant([])), 'NO_LOCATION');
+});
+
+test('a recorded sale stays recorded when Shopify cannot be reached, and with no Shopify app the change simply waits', async () => {
+  const saleId = randomUUID();
+  const sale = { note: null, lines: [{ sku: 'BELT-W', name: 'Dojo gear - White belt', itemId: null, lineId: randomUUID(), taxable: true, category: 'SHOPIFY', quantity: 1,
+    stockTracked: true, lineTotalMinor: 1000, unitPriceMinor: 1000, shopifyVariantId: '4001', restockedQuantity: 0 }], method: 'CASH', saleId, soldAt: '2026-11-21T02:44:35.351Z',
+    soldBy: 'Cashier', status: 'PAID', refunds: [], currency: 'USD', customer: { name: null, personId: null }, discount: null, taxMinor: 0, firstItem: 'Dojo gear - White belt',
+    itemCount: 1, localDate: '2026-11-20', reference: null, schoolName: 'POS school', taxRateBps: 0, totalMinor: 1000, shopifyStock: { done: 0, failed: 0, waiting: 1 },
+    receiptNumber: 'POS-20261120-0002', refundedMinor: 0, subtotalMinor: 1000 };
+  const body = saleBody({ lines: [{ shopifyVariantId: '4001', quantity: 1 }] });
+  const db = fakeDatabase((op) => { if (op === 'record') return { sale, replayed: false }; throw new Error('database gone'); });
+  const out = await new SchoolPosService(db, { vault, adapter: {} }).command(req, 'record', body, randomUUID());
+  assert.equal(out.sale.saleId, saleId);
+  assert.deepEqual(db.calls.map((c) => c.op), ['record', 'shopifyStockBegin', 'sale']);
+  const alone = fakeDatabase((op) => { if (op === 'record') return { sale, replayed: false }; throw new Error('database gone'); });
+  await new SchoolPosService(alone).command(req, 'record', body, randomUUID());
+  assert.deepEqual(alone.calls.map((c) => c.op), ['record', 'sale']);
+  await assert.rejects(() => new SchoolPosService(alone).resendShopifyStock(req, { schoolId: school }), status(503, 'POS_SHOPIFY_UNAVAILABLE'));
+});
+
+test('Shopify gets one read and one idempotent inventoryAdjustQuantities per change; a provider location is never touched', async () => {
+  const { GraphqlShopifyAdapter } = require('../dist/commerce/shopify/shopify-adapter.js');
+  const sent = [];
+  const answer = (data) => async (url, init) => { sent.push({ url, body: JSON.parse(init.body) }); return new Response(JSON.stringify({ data: data(sent.length) }), { status: 200, headers: { 'Content-Type': 'application/json' } }); };
+  const level = (id, service = null) => ({ location: { id: `gid://shopify/Location/${id}`, isActive: true, fulfillmentService: service } });
+  const variant = (levels) => ({ productVariant: { id: 'gid://shopify/ProductVariant/4001', inventoryItem: { id: 'gid://shopify/InventoryItem/77', tracked: true, inventoryLevels: { nodes: levels } } } });
+  const input = { variantId: '4001', delta: -2, idempotencyKey: randomUUID(), reference: `honos://pos/sale/${randomUUID()}` };
+  const done = (n) => n === 1 ? variant([level(5), level(9, { type: 'THIRD_PARTY' })]) : { inventoryAdjustQuantities: { inventoryAdjustmentGroup: { id: 'gid://shopify/InventoryAdjustmentGroup/1' }, userErrors: [] } };
+  assert.deepEqual(await new GraphqlShopifyAdapter('client', 'secret', answer(done), async () => {}).adjustInventory('proof-dojo.myshopify.com', 'tok', input), { outcome: 'DONE' });
+  assert.equal(sent.length, 2);
+  assert.match(sent[1].body.query, /inventoryAdjustQuantities\(input: \$input\) @idempotent\(key: \$key\)/);
+  assert.deepEqual(sent[1].body.variables, { key: input.idempotencyKey, input: { reason: 'correction', name: 'available', referenceDocumentUri: input.reference,
+    changes: [{ delta: -2, inventoryItemId: 'gid://shopify/InventoryItem/77', locationId: 'gid://shopify/Location/5', changeFromQuantity: null }] } });
+  for (const [data, reason] of [[() => ({ productVariant: null }), 'VARIANT_GONE'], [() => variant([level(9, { type: 'THIRD_PARTY' })]), 'NO_LOCATION'], [() => variant([level(5), level(6)]), 'MULTIPLE_LOCATIONS']]) {
+    sent.length = 0;
+    assert.deepEqual(await new GraphqlShopifyAdapter('client', 'secret', answer(data), async () => {}).adjustInventory('proof-dojo.myshopify.com', 'tok', input), { outcome: 'REFUSED', reason });
+    assert.equal(sent.length, 1);
+  }
+  sent.length = 0;
+  const refused = (n) => n === 1 ? variant([level(5)]) : { inventoryAdjustQuantities: { inventoryAdjustmentGroup: null, userErrors: [{ field: ['input'], message: 'x' }] } };
+  assert.deepEqual(await new GraphqlShopifyAdapter('client', 'secret', answer(refused), async () => {}).adjustInventory('proof-dojo.myshopify.com', 'tok', input), { outcome: 'REFUSED', reason: 'SHOPIFY_REJECTED' });
+  await assert.rejects(new GraphqlShopifyAdapter('client', 'secret', answer(done), async () => {}).adjustInventory('proof-dojo.myshopify.com', 'tok', { ...input, delta: 0 }));
+});

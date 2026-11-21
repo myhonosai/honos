@@ -69,7 +69,17 @@ export interface ShopifyAdapter {
    * extension reads. Idempotent: setting the same value again changes nothing. Needs no access scope.
    */
   setStorefrontSettings(shop: string, accessToken: string, settings: ShopifyStorefrontSettings): Promise<void>;
+  /**
+   * SH2 (0613): add `delta` to a variant's available count at the store's one own stock location (never a print
+   * provider's). `idempotencyKey` is sent as Shopify's own idempotency key, so the same key changes the count at most
+   * once however often it is sent. A change Shopify cannot take as it is comes back as REFUSED with the reason; a lost
+   * or failed call throws. Needs write_inventory.
+   */
+  adjustInventory(shop: string, accessToken: string, input: ShopifyInventoryAdjustment): Promise<ShopifyInventoryAnswer>;
 }
+export interface ShopifyInventoryAdjustment { variantId: string; delta: number; idempotencyKey: string; reference: string }
+export type ShopifyInventoryRefusal = 'VARIANT_GONE' | 'NOT_TRACKED' | 'NO_LOCATION' | 'MULTIPLE_LOCATIONS' | 'SHOPIFY_REJECTED';
+export type ShopifyInventoryAnswer = { outcome: 'DONE' } | { outcome: 'REFUSED'; reason: ShopifyInventoryRefusal };
 
 /** The one HON Shopify app, as configured on this server. */
 export interface ShopifyApp {
@@ -341,6 +351,31 @@ export function storefrontValue(v: ShopifyStorefrontSettings): string {
     sizeGuideText: v.sizeGuideText, pickupNote: v.pickupNote });
 }
 
+// ---- SH2 inventory adjustment (a POS sale or a refund restock) ----
+const VARIANT_STOCK_QUERY = `query HonVariantStock($id: ID!) { productVariant(id: $id) { id inventoryItem { id tracked
+  inventoryLevels(first: 20) { nodes { location { id isActive fulfillmentService { type } } } } } } }`;
+const INVENTORY_ADJUST = `mutation HonPosStock($input: InventoryAdjustQuantitiesInput!, $key: String!) {
+  inventoryAdjustQuantities(input: $input) @idempotent(key: $key) { inventoryAdjustmentGroup { id } userErrors { field message } } }`;
+/** Where HON may change a variant's count: its inventory item and the store's one own, active location stocking it. */
+export function ownStockLocation(variant: unknown): { inventoryItemId: string; locationId: string } | ShopifyInventoryRefusal {
+  if (variant === null || variant === undefined) return 'VARIANT_GONE';
+  const item = maybeObj(obj(variant).inventoryItem);
+  if (!item || typeof item.id !== 'string' || !/^gid:\/\/shopify\/InventoryItem\/[1-9][0-9]{0,17}$/.test(item.id)) return bad();
+  if (item.tracked !== true) return 'NOT_TRACKED';
+  const own: string[] = [];
+  for (const n of list(obj(item.inventoryLevels).nodes)) {
+    const location = maybeObj(obj(n).location);
+    if (!location || location.isActive === false) continue;
+    const service = maybeObj(location.fulfillmentService);
+    if (service && service.type === 'THIRD_PARTY') continue;
+    if (typeof location.id !== 'string' || !/^gid:\/\/shopify\/Location\/[1-9][0-9]{0,17}$/.test(location.id)) return bad();
+    own.push(location.id);
+  }
+  if (own.length === 0) return 'NO_LOCATION';
+  if (own.length > 1) return 'MULTIPLE_LOCATIONS';
+  return { inventoryItemId: item.id, locationId: own[0]! };
+}
+
 export class GraphqlShopifyAdapter implements ShopifyAdapter {
   readonly kind = 'SHOPIFY' as const;
   constructor(private readonly clientId: string, private readonly clientSecret: string, private readonly send: typeof fetch,
@@ -407,6 +442,16 @@ export class GraphqlShopifyAdapter implements ShopifyAdapter {
     if (list(r.userErrors).length) throw new ShopifyProviderError('REJECTED');
     const set = list(r.metafields).map(obj);
     if (set.length !== 1 || set[0]!.namespace !== SHOPIFY_STOREFRONT_METAFIELD.namespace || set[0]!.key !== SHOPIFY_STOREFRONT_METAFIELD.key) bad();
+  }
+
+  async adjustInventory(shop: string, accessToken: string, input: ShopifyInventoryAdjustment): Promise<ShopifyInventoryAnswer> {
+    if (!/^[1-9][0-9]{0,17}$/.test(input.variantId) || !Number.isInteger(input.delta) || input.delta === 0 || Math.abs(input.delta) > 999) bad();
+    const where = ownStockLocation((await this.graphql(shop, accessToken, VARIANT_STOCK_QUERY, { id: `gid://shopify/ProductVariant/${input.variantId}` })).productVariant);
+    if (typeof where === 'string') return { outcome: 'REFUSED', reason: where };
+    const r = obj((await this.graphql(shop, accessToken, INVENTORY_ADJUST, { key: input.idempotencyKey, input: { reason: 'correction', name: 'available',
+      referenceDocumentUri: input.reference, changes: [{ delta: input.delta, inventoryItemId: where.inventoryItemId, locationId: where.locationId, changeFromQuantity: null }] } })).inventoryAdjustQuantities);
+    if (list(r.userErrors).length) return { outcome: 'REFUSED', reason: 'SHOPIFY_REJECTED' };
+    return { outcome: 'DONE' };
   }
 
   async catalog(shop: string, accessToken: string): Promise<{ products: MirrorProduct[]; complete: boolean }> {
@@ -561,6 +606,17 @@ export class FakeShopify implements ShopifyAdapter {
     this.calls.push('storefrontSettings:' + shop); this.check(shop, accessToken, 'access');
     const value = storefrontValue(settings);
     this.write(() => { this.store(shop).storefront = value; });
+  }
+  private readonly adjusted = new Set<string>();
+  async adjustInventory(shop: string, accessToken: string, input: ShopifyInventoryAdjustment): Promise<ShopifyInventoryAnswer> {
+    await Promise.resolve();
+    this.calls.push('adjustInventory:' + shop); this.check(shop, accessToken, 'access', 'write_inventory');
+    const v = this.store(shop).products.flatMap(p => p.variants).find(x => x.id === input.variantId);
+    const refusal: ShopifyInventoryRefusal | null = !v ? 'VARIANT_GONE' : v.fulfilledBy ? 'NO_LOCATION' : !v.tracked || v.inventoryQuantity === null ? 'NOT_TRACKED' : null;
+    if (refusal) { this.writeFault = null; return { outcome: 'REFUSED', reason: refusal }; }
+    // Shopify applies one idempotency key at most once; a repeat answers as the first did.
+    this.write(() => { if (!this.adjusted.has(input.idempotencyKey)) { this.adjusted.add(input.idempotencyKey); v!.inventoryQuantity = v!.inventoryQuantity! + input.delta; } });
+    return { outcome: 'DONE' };
   }
   /** Test hook: the storefront settings metafield as the fake holds it (null before the first publish). */
   storefrontSettings(shop: string): string | null { return this.store(shop).storefront; }
