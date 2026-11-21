@@ -64,9 +64,10 @@ BEGIN
 
   WITH keyed AS MATERIALIZED (
     SELECT k.*, CASE sort_by WHEN 'ENDS_SOONEST' THEN k.ends_at IS NULL WHEN 'BELT_HIGH' THEN k.belt_hi IS NULL WHEN 'BELT_LOW' THEN k.belt_lo IS NULL
-        WHEN 'AGE_YOUNGEST' THEN k.birth IS NULL WHEN 'AGE_OLDEST' THEN k.birth IS NULL ELSE false END AS s_missing,
+        WHEN 'AGE_YOUNGEST' THEN k.age IS NULL WHEN 'AGE_OLDEST' THEN k.age IS NULL ELSE false END AS s_missing,
       coalesce(CASE sort_by WHEN 'ENDS_SOONEST' THEN extract(epoch FROM k.ends_at) WHEN 'BELT_HIGH' THEN -k.belt_hi WHEN 'BELT_LOW' THEN k.belt_lo
-        WHEN 'AGE_YOUNGEST' THEN -(k.birth - date '1900-01-01') WHEN 'AGE_OLDEST' THEN (k.birth - date '1900-01-01')
+        WHEN 'AGE_YOUNGEST' THEN CASE WHEN k.age IS NOT NULL THEN -(k.birth - date '1900-01-01') END
+      WHEN 'AGE_OLDEST' THEN CASE WHEN k.age IS NOT NULL THEN (k.birth - date '1900-01-01') END
         WHEN 'NEWEST' THEN -extract(epoch FROM k.created_at) END, 0)::numeric AS s_key
     FROM (
       SELECT f.person_id, f.segment, f.membership_id, f.plan_id, f.plan_name, f.program_id, f.program_name, f.plan_code, f.ends_at,

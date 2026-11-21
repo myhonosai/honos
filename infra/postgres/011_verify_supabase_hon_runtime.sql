@@ -3803,7 +3803,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.require_school_contacts_actor(text)',true,false,'search_path=pg_catalog, hon','d428974c62fe5e652b4470356505c174fd3b6431a3f07dd753ef47f79b1107a4'),
 ('hon.school_contact_facts(uuid,uuid,timestamp with time zone)',true,false,'search_path=pg_catalog, hon','f481befbcea6c9e50078c3e0cddd8d26561814a339a7a8617152c109f0cd48dd'),
-('hon.read_school_contact_list(text,jsonb)',true,true,'search_path=pg_catalog, hon','b5e211a678a90cbb08140b44115f0b5ab3e6e49ae58a51f00d425ea9f798fec2')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+('hon.read_school_contact_list(text,jsonb)',true,true,'search_path=pg_catalog, hon','7ff8305d24fe486002a589ed74c51dc025a99ff496dccad39d7e29b9824554a9')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config] AND p.provolatile='s'
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash

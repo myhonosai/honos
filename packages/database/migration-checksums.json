@@ -376,6 +376,6 @@
     "0612_school_point_of_sale.sql": "fc275c993746230abda49d8c619b10916b52c8e6a25a7ec2c4511f814c59e1f2",
     "0613_pos_sells_shopify.sql": "0e455d550adea8b4e60f1ba108b10a2e0ee8dabdbc0a2142a4c669cc31c30b12",
     "0614_pos_shopify_orders.sql": "ba0b9b5bceb7d5926af3dfe88b683eb0ed73dd59c91c26a875a9cfd9aa0ee8e7",
-    "0623_school_contact_sort_filters.sql": "6eb4be67ea3cbec9285d2202cc1b2c2e0935b01eef637134e48ab48557038017"
+    "0623_school_contact_sort_filters.sql": "dff615a142e1a2da7f5eda6fa9ca79d0f18663ccf4cdbc2821e827076ccb8c0b"
   }
 }
