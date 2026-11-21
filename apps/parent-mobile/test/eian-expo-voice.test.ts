@@ -15,7 +15,10 @@ jest.mock('expo-speech-recognition', () => {
   });
   return { ExpoSpeechRecognitionModule: module };
 });
-jest.mock('expo-speech', () => ({ stop: jest.fn(async () => undefined), speak: jest.fn(), maxSpeechInputLength: 4000 }));
+jest.mock('expo-speech', () => ({ stop: jest.fn(async () => undefined), speak: jest.fn(), maxSpeechInputLength: 4000, VoiceQuality: { Default: 'Default', Enhanced: 'Enhanced' },
+  getAvailableVoicesAsync: jest.fn(async () => [
+    { identifier: 'ko-default', language: 'ko-KR', quality: 'Enhanced' }, { identifier: 'en-gb-enhanced', language: 'en-GB', quality: 'Enhanced' },
+    { identifier: 'en-us-default', language: 'en-US', quality: 'Default' }, { identifier: 'en-us-enhanced', language: 'en-US', quality: 'Enhanced' }]) }));
 const mockRecognition = (jest.requireMock('expo-speech-recognition') as { ExpoSpeechRecognitionModule: MockRecognition }).ExpoSpeechRecognitionModule;
 const mockSpeech = jest.requireMock('expo-speech') as { stop: jest.Mock; speak: jest.Mock };
 
@@ -23,7 +26,7 @@ const emit = (name: string, event?: unknown) => mockRecognition.listeners.get(na
 const tick = () => new Promise<void>(resolve => setImmediate(() => resolve()));
 function listen() {
   const partial: string[] = [], ended: HeardResult[] = [];
-  const handle = createExpoEianVoice()!.listen({ partial: t => partial.push(t), end: r => ended.push(r) });
+  const handle = createExpoEianVoice()!.listen({ partial: t => partial.push(t), end: r => ended.push(r) }, ['Mia', 'belt test']);
   return { handle, partial, ended };
 }
 
@@ -33,7 +36,7 @@ describe('phone voice for Eian', () => {
   it('hears one short question in English and never listens continuously', async () => {
     const { handle, partial, ended } = listen();
     await tick();
-    expect(mockRecognition.start).toHaveBeenCalledWith({ lang: 'en-US', interimResults: true, continuous: false, maxAlternatives: 1 });
+    expect(mockRecognition.start).toHaveBeenCalledWith({ lang: 'en-US', interimResults: true, continuous: false, maxAlternatives: 1, contextualStrings: ['Mia', 'belt test'] });
     emit('result', { isFinal: false, results: [{ transcript: 'when is' }] });
     emit('result', { isFinal: true, results: [{ transcript: ' when is the next belt test ' }] });
     handle.stop();
@@ -90,8 +93,13 @@ describe('phone voice for Eian', () => {
     await tick();
     expect(mockSpeech.stop).toHaveBeenCalled();
     const [text, options] = mockSpeech.speak.mock.calls[0];
-    expect([text, options.language]).toEqual(['Hello there.', 'en-US']);
+    expect([text, options.language, options.voice, options.pitch]).toEqual(['Hello there.', 'en-US', 'en-us-enhanced', 1.3]);
     options.onStopped(); options.onDone();
-    expect(done).toHaveBeenCalledTimes(1);
+    expect(done.mock.calls).toEqual([[false]]);
+    const finished = jest.fn();
+    createExpoEianVoice()!.speak('Again.', finished);
+    await tick();
+    mockSpeech.speak.mock.calls[1][1].onDone();
+    expect(finished.mock.calls).toEqual([[true]]);
   });
 });
