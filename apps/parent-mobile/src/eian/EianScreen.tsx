@@ -8,7 +8,7 @@ import { Button } from '../ui/parts';
 import { radius, space, TOUCH, type, useColors } from '../ui/theme';
 import { answer, classify, NEEDS, SUGGESTIONS, type EianAnswer, type EianFacts, type EianTab } from './eian-engine';
 import { askEianAi } from './eian-ai';
-import { EianVoiceContext, spokenText, VOICE_NOTE } from './voice';
+import { EianVoiceContext, KEEP_TALKING, spokenText, TALK_LIMIT, TALK_PAUSED, VOICE_NOTE, voiceHints } from './voice';
 import { EIAN_STYLES, eianImage, STYLE_LABEL, type EianMood, type EianStyle } from './avatar';
 
 type Turn = { id: number; question: string; reply: EianAnswer };
@@ -32,7 +32,9 @@ function greeting(now: Date, timeZone: string | null): string {
  * answers stay on the device. `focusTick` changes each time the tab gains focus, so the AI status is read again.
  *
  * Voice (when the phone supplies it): the microphone hears one question per tap and asks it exactly like a typed one;
- * an answer to a spoken question is read aloud, and any answer can be read aloud on request. Leaving the screen stops
+ * an answer to a spoken question is read aloud, and any answer can be read aloud on request. When a spoken answer has
+ * been read to the end the microphone opens again for a follow-up, so talking continues without tapping, until the
+ * parent goes quiet, taps stop, or has asked TALK_LIMIT questions in a row. Leaving the screen stops
  * both. `active` is false while another tab is showing.
  */
 export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, active = true }: { onNavigate: (tab: EianTab) => void; initialStyle?: EianStyle; focusTick?: number; active?: boolean }) {
@@ -60,10 +62,18 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
   const live = useRef(false);
   live.current = active && ready;
   const quiet = () => { voice?.stopSpeaking(); setReading(false); };
-  const read = (reply: EianAnswer) => {
+  /** Spoken questions in a row since the parent last tapped the microphone. */
+  const talks = useRef(0);
+  const listenAgain = useRef<() => void>(() => undefined);
+  const read = (reply: EianAnswer, thenListen = false) => {
     if (!voice || !live.current) return;
     setReading(true);
-    voice.speak(spokenText(reply), () => setReading(false));
+    voice.speak(spokenText(reply), finished => {
+      setReading(false);
+      if (!finished || !thenListen || !live.current) return;
+      if (talks.current >= TALK_LIMIT) { talks.current = 0; setVoiceNote(TALK_PAUSED); return; }
+      listenAgain.current();
+    });
   };
   // Nothing keeps listening or talking once the parent leaves Eian or signs out.
   useEffect(() => {
@@ -103,7 +113,7 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
         setTurns(t => [...t.slice(-9), { id: ++counter.current, question: q, reply: outcome.answer }]);
         setMood('speaking');
         setBusy(false);
-        if (spoken) read(outcome.answer);
+        if (spoken) read(outcome.answer, true);
         return;
       }
       if (outcome.aiOff) setAi(false);
@@ -118,14 +128,14 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
     setTurns(t => [...t.slice(-9), { id: ++counter.current, question: q, reply }]);
     setMood('speaking');
     setBusy(false);
-    if (spoken) read(reply);
+    if (spoken) read(reply, true);
   };
 
-  const listen = () => {
-    if (!voice || busy) return;
-    if (hearing.current) { hearing.current.stop(); return; }
+  const hints = useMemo(() => (state.status === 'ready' ? voiceHints(state.view.children.map(ch => ch.name)) : []), [state]);
+  const hear = (followUp: boolean) => {
+    if (!voice || !canListen || hearing.current || !live.current) return;
     quiet();
-    setVoiceNote(null);
+    setVoiceNote(followUp ? KEEP_TALKING : null);
     setDraft('');
     setListening(true);
     hearing.current = voice.listen({
@@ -133,10 +143,20 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
       end: result => {
         hearing.current = null;
         setListening(false);
-        if (result.kind === 'heard') void ask(result.text, true);
-        else { setDraft(''); setVoiceNote(VOICE_NOTE[result.kind]); }
+        if (result.kind === 'heard') { talks.current += 1; void ask(result.text, true); return; }
+        setDraft('');
+        talks.current = 0;
+        // Silence after an answer just ends the conversation; it is not a mistake to explain.
+        setVoiceNote(followUp && result.kind === 'nothing' ? null : VOICE_NOTE[result.kind]);
       },
-    });
+    }, hints);
+  };
+  listenAgain.current = () => hear(true);
+  const listen = () => {
+    if (!voice || busy) return;
+    talks.current = 0;
+    if (hearing.current) { hearing.current.stop(); return; }
+    hear(false);
   };
 
   if (state.status !== 'ready') {
@@ -238,7 +258,7 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
         ? "Eian answers common family questions on your phone. Other questions are answered by AI from your school's records, and those answers are marked AI. Eian never pays, books or sends anything by itself."
         : "Eian understands common family questions and answers only from your school's records. It never pays, books or sends anything by itself."}</Text>
       {voice ? <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.sm }}>{canListen
-        ? "The microphone is on only after you tap it, for one question at a time. Your phone's speech service (Apple or Google) may send your spoken question off the phone to turn it into text. HON gets only the text. Reading aloud uses your phone's own voice."
+        ? "The microphone opens when you tap it, and again after Eian answers a spoken question so you can keep talking. It closes when you go quiet, tap stop or leave Eian. Your phone's speech service (Apple or Google) may send your spoken question off the phone to turn it into text. HON gets only the text. Reading aloud uses your phone's own voice."
         : "Reading aloud uses your phone's own voice."}</Text> : null}
     </ScrollView>
   );

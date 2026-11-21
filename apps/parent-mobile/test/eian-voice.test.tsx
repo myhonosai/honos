@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { ParentApp } from '../src/ParentApp';
 import { createParentApi } from '../src/api/client';
 import { createSampleApi } from '../src/sample/sample-api';
-import { spokenText, VOICE_NOTE, type EianVoice, type HeardResult } from '../src/eian/voice';
+import { KEEP_TALKING, spokenText, TALK_LIMIT, TALK_PAUSED, VOICE_NOTE, voiceHints, type EianVoice, type HeardResult } from '../src/eian/voice';
 import { NOW } from './fixtures';
 
 const signedOut = { token: async () => null, clear: async () => {}, subscribe: () => () => {} };
@@ -11,13 +11,13 @@ const now = () => new Date(NOW);
 const liveApi = createParentApi({ baseUrl: 'https://api.example.test', getToken: async () => null, fetchImpl: jest.fn() });
 
 function fakeVoice(canListen = true) {
-  const state = { spoken: [] as string[], stops: 0, cancels: 0, listenStops: 0, done: null as null | (() => void),
+  const state = { spoken: [] as string[], stops: 0, cancels: 0, listenStops: 0, listens: 0, hints: [] as readonly string[], done: null as null | ((finished: boolean) => void),
     on: null as null | { partial(text: string): void; end(result: HeardResult): void } };
   const voice: EianVoice = {
     speak(text, onDone) { state.spoken.push(text); state.done = onDone; },
     stopSpeaking() { state.stops += 1; },
     canListen: () => canListen,
-    listen(on) { state.on = on; return { stop() { state.listenStops += 1; }, cancel() { state.cancels += 1; } }; },
+    listen(on, hints = []) { state.on = on; state.listens += 1; state.hints = hints; return { stop() { state.listenStops += 1; }, cancel() { state.cancels += 1; } }; },
   };
   return { voice, state };
 }
@@ -56,8 +56,57 @@ describe('Eian voice', () => {
     expect(state.spoken).toHaveLength(1);
     expect(state.spoken[0]).toMatch(/^You have 1 open invoice:/);
     expect(screen.getByRole('button', { name: 'Stop reading aloud' })).toBeTruthy();
-    await act(async () => { state.done!(); });
+    await act(async () => { state.done!(false); });
     expect(screen.getByRole('button', { name: "Read Eian's answer aloud" })).toBeTruthy();
+    expect(state.listens).toBe(1);
+  });
+
+  it('keeps the conversation going: the microphone reopens after a spoken answer is read to the end', async () => {
+    const { voice, state } = fakeVoice();
+    await open(voice);
+    await fireEvent.press(screen.getByRole('button', { name: 'Ask Eian by voice' }));
+    expect(state.hints).toEqual(expect.arrayContaining(['Mia Sample', 'Mia', 'belt test']));
+    await act(async () => { state.on!.end({ kind: 'heard', text: 'Do we have any open invoices?' }); });
+    await screen.findByText('You have 1 open invoice:');
+    await act(async () => { state.done!(true); });
+    expect(state.listens).toBe(2);
+    expect(screen.getByRole('button', { name: 'Stop listening' })).toBeTruthy();
+    expect(screen.getByText(KEEP_TALKING)).toBeTruthy();
+    // A follow-up is asked and answered aloud the same way.
+    await act(async () => { state.on!.end({ kind: 'heard', text: 'When is the next belt test?' }); });
+    await screen.findByText('Earlier');
+    expect(state.spoken).toHaveLength(2);
+    // Going quiet ends it without a complaint.
+    await act(async () => { state.done!(true); });
+    expect(state.listens).toBe(3);
+    await act(async () => { state.on!.end({ kind: 'nothing' }); });
+    expect(screen.queryByText(VOICE_NOTE.nothing)).toBeNull();
+    expect(screen.queryByText(KEEP_TALKING)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Ask Eian by voice' })).toBeTruthy();
+  });
+
+  it('does not reopen the microphone after a typed question, a stopped reading, or the talk limit', async () => {
+    const { voice, state } = fakeVoice();
+    await open(voice);
+    await fireEvent.press(screen.getByRole('button', { name: "Read Eian's answer aloud" }));
+    await act(async () => { state.done!(true); });
+    expect(state.listens).toBe(0);
+    await fireEvent.press(screen.getByRole('button', { name: 'Ask Eian by voice' }));
+    for (let turn = 1; turn <= TALK_LIMIT; turn += 1) {
+      await act(async () => { state.on!.end({ kind: 'heard', text: turn % 2 ? 'Do we have any open invoices?' : 'When is the next belt test?' }); });
+      await screen.findByRole('button', { name: 'Stop reading aloud' });
+      expect(state.spoken).toHaveLength(turn + 1);
+      await act(async () => { state.done!(true); });
+    }
+    expect(state.listens).toBe(TALK_LIMIT);
+    expect(screen.getByText(TALK_PAUSED)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ask Eian by voice' })).toBeTruthy();
+  });
+
+  it('gives the recognizer the family names and school words, bounded', () => {
+    expect(voiceHints(['Mia Sample', ' ', 'Mia Sample'])).toEqual(expect.arrayContaining(['Mia Sample', 'Mia', 'Eian', 'invoice']));
+    expect(voiceHints(Array.from({ length: 80 }, (_, i) => `Child${i} Family${i}`)).length).toBe(40);
+    expect(voiceHints(['x'.repeat(61)])).not.toContain('x'.repeat(61));
   });
 
   it('does not read a typed answer aloud until asked, and stops on request', async () => {
@@ -128,7 +177,7 @@ describe('Eian voice', () => {
 
   it('says in plain words that the spoken question may leave the phone', async () => {
     await open(fakeVoice().voice);
-    expect(screen.getByText(/may send your spoken question off the phone to turn it into text\. HON gets only the text\./)).toBeTruthy();
+    expect(screen.getByText(/again after Eian answers a spoken question so you can keep talking\..*may send your spoken question off the phone to turn it into text\. HON gets only the text\./)).toBeTruthy();
   });
 
   it('declares why the microphone is used', () => {
