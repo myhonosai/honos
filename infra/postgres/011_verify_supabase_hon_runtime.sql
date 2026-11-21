@@ -5875,3 +5875,20 @@ DO $$ DECLARE f record; safe boolean; BEGIN
     RAISE EXCEPTION 'hon.journey_recommendation_responses must keep its once-only indexes'; END IF;
 END $$;
 -- End journey recommendation responses exact verification.
+-- Parent app curriculum read exact verification (0610): the private child entries helper and two runtime entry points.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.curriculum_app_child_entries(uuid,uuid,uuid)',false,false,'450c5b748c2d87cdc3ee28b1277cdd2f656ea328044f95372abde1855c67918f'),
+('hon.read_parent_curriculum_app(text,uuid)',true,true,'6e9cf6695959c60fedd87ef70dcafcbde2ef51a79e005f6d0bb7f5229e295a88'),
+('hon.read_staff_parent_app_curriculum_preview(text,uuid)',true,true,'5ca6c27d9648f5d72d3d147ef019d1c98ff2f6348c922e8f781a219cde0c1820')) e(signature,definer,runtime_allowed,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe parent app curriculum read function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End parent app curriculum read exact verification.

@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "6388baa130a9d294f5bb3fa75e4e71e593f469b42b00dcc723f182d8493af4ff",
+  "chainSha256": "76764933eff767bd95f58df0df0bdd54fb8a5915382c0e5995bc29d5860ee445",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -793,6 +793,10 @@
     {
       "file": "0609_shopify_storefront_blocks.sql",
       "sha256": "d1bb88213a776c8c4013dc23d3784f54c5b5670aa1247373206970e96720848d"
+    },
+    {
+      "file": "0610_parent_app_curriculum_read.sql",
+      "sha256": "8e11ad3c74e636e32e3f5b15027896246b66e982f195c028a1fcc33769d67e74"
     },
     {
       "file": "0611_shopify_fulfilment_source.sql",
