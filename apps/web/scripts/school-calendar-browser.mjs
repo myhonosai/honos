@@ -29,7 +29,8 @@ const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const school = { organizationId: id(1), schoolId: id(2) };
 const prefix = `/api/v1/organizations/${school.organizationId}/schools/${school.schoolId}`;
 const report = { syntheticFixturesOnly: true, databaseAccess: false, providerCalls: false, checks: [], failures: [], screenshots: [], pageErrors: [], apiRequests: [] };
-const ZONE = 'America/Los_Angeles', TODAY = '2026-11-16';
+// The page's clock is fixed at 10:00 AM school time on TODAY, so "already passed" never depends on when the proof runs.
+const ZONE = 'America/Los_Angeles', TODAY = '2026-11-16', NOW = Date.parse('2026-11-16T18:00:00.000Z');
 let eventsDenied = false;
 
 // Classes in November and December 2026 (Pacific Standard Time, UTC-8), in start order.
@@ -77,6 +78,8 @@ function calendarCommand(route, path, body) {
     const seriesId = body.repeatWeekdays ? id(4300 + commands.length) : null, made = [];
     for (const d of dates) {
       const startsAt = pacific(d, hh * 60 + mm), sessionId = id(5000 + sessions.length);
+      // As the server does (0251 fill): a roster skips a time that has already passed.
+      if (body.repeatWeekdays && Date.parse(startsAt) <= NOW) continue;
       sessions.push({ sessionId, name: body.name, startsAt, endsAt: new Date(Date.parse(startsAt) + body.durationMinutes * 60_000).toISOString(), roomName: body.roomName ?? null,
         capacity: body.capacity, bookingPolicy: body.bookingPolicy, status: 'SCHEDULED', createdAt: '2026-11-16T00:00:00.000Z' });
       cardOf.set(sessionId, { version: 1, kind: body.kind, program: Object.values(programs).find((g) => g.programId === body.programId), seriesId,
@@ -245,6 +248,7 @@ async function open(viewport, path) {
     return route.continue();
   });
   const page = await ctx.newPage();
+  await page.clock.setFixedTime(NOW);
   page.on('pageerror', (error) => report.pageErrors.push(String(error)));
   await page.goto(`${origin}${path}`);
   return { ctx, page };
@@ -375,6 +379,29 @@ await check('Add a class makes a weekly roster from the calendar', async () => {
   await page.getByTestId('calendar-message').getByText(/Roster Teen Sparring created with \d+ classes\./).waitFor();
   assert.deepEqual(commands.at(-1).body.repeatWeekdays, [3, 6]);
   await cardButton(page, 'Teen Sparring', 'Saturday, November 21, 2026').waitFor();
+  await ctx.close();
+});
+await check('a roster started today at a time already past: the form says so, and the calendar goes to its first class', async () => {
+  const { ctx, page } = await open(viewports.desktop, '/staff/schedule');
+  await calendar(page).getByTestId('calendar-week').waitFor();
+  await page.getByTestId('calendar-add-class').click();
+  const form = page.getByTestId('calendar-create-form'); await form.waitFor();
+  await form.getByLabel('Title').fill('Morning test');
+  await form.getByLabel('Program').selectOption({ label: 'Kids Karate' });
+  await form.getByLabel('Date').fill(TODAY); await form.getByLabel('Start time').fill('09:00');
+  await form.getByTestId('calendar-create-past').getByText('9:00 AM today has already passed. Choose a later time.').waitFor();
+  await form.getByLabel('Repeats every week').check();
+  await form.getByTestId('calendar-create-past').getByText('9:00 AM today has already passed, so the first class will be on Monday, November 23.').waitFor();
+  await shot(page, 'calendar-roster-past-time-note-desktop-1440');
+  await form.getByRole('button', { name: 'Add to calendar' }).click();
+  await page.getByTestId('calendar-message').getByText(/Roster Morning test created with \d+ classes\. The first class is on Monday, November 23\./).waitFor();
+  assert.match(await page.getByTestId('calendar-range').innerText(), /Nov 23.*29, 2026/);
+  const fresh = cardButton(page, 'Morning test', 'Monday, November 23, 2026'); await fresh.waitFor();
+  assert.equal(await fresh.getAttribute('data-new'), 'true');
+  // The result line sits above the board, so it is seen without scrolling past the day.
+  const bar = await page.getByTestId('calendar-message').boundingBox(), board = await calendar(page).getByTestId('calendar-week').boundingBox();
+  assert.ok(bar.y < board.y, 'the result line is above the board');
+  await shot(page, 'calendar-roster-first-class-shown-desktop-1440');
   await ctx.close();
 });
 await check('drag a class to another day and time, drag its bottom edge, and use the keyboard', async () => {
