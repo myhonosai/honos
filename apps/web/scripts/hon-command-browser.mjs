@@ -2343,9 +2343,15 @@ for (const [name, viewport] of [['desktop-1440', { width: 1440, height: 900 }], 
     await dialog.waitFor();
     assert.equal(await dialog.getByRole('button', { name: 'Close' }).evaluate((el) => el === document.activeElement), true, 'focus moves into the pop-up');
     await shot(page, `people-profile-popup-${name}`); await noOverflow(page, `people-profile-popup-${name}`); await axe(page, `people-profile-popup-${name}`);
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await dialog.evaluate((el) => el.contains(document.activeElement)), true, 'Shift+Tab stays inside the pop-up');
+    for (let i = 0; i < 40; i++) await page.keyboard.press('Tab');
+    assert.equal(await dialog.evaluate((el) => el.contains(document.activeElement)), true, 'Tab stays inside the pop-up');
+    await dialog.locator('input[name="familyName"]').click();
     await dialog.locator('input[name="familyName"]').fill('Rivera-Lopez');
     await dialog.getByRole('button', { name: 'Save changes' }).click();
     await dialog.getByText('Saved. Changed: last name.').waitFor();
+    assert.equal(await dialog.getByRole('button', { name: 'Close' }).evaluate((el) => el === document.activeElement), false, 'the page re-rendering after the save does not pull focus back to Close');
     assert.equal(ppl.records.get(id(301)).familyName, 'Rivera-Lopez');
     await page.keyboard.press('Escape');
     await dialog.waitFor({ state: 'detached' });

@@ -75,7 +75,7 @@ function Body({ language, c, tab, t, slot, tools }: { language: string; c: Schoo
     case 'family':
       if (!c.family.allowed) return denied;
       if (!c.family.families.length) return none;
-      return <>{c.family.families.map(f => <Fold key={f.familyId} id="family" title={f.name} count={f.members.length}>
+      return <>{c.family.families.map(f => <Fold key={f.familyId} id={`family-${f.familyId}`} title={f.name} count={f.members.length}>
         <ul className={styles.plain}>{f.members.map(m => <li key={m.personId}>
           <strong>{m.givenName} {m.familyName}</strong> · {t(`role_${m.role}` as CardKey)}{m.billingContact ? ` · ${t('billingContact')}` : ''}</li>)}</ul></Fold>)}</>;
     case 'appointments':

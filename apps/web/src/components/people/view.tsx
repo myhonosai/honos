@@ -91,16 +91,27 @@ export function PeopleView(props: PeopleViewProps): React.ReactElement {
 
 /** A modal pop-up over the People page. Escape, the close button or a click outside closes it; focus returns to Edit profile. */
 function ProfileDialog({ t, onClose, children }: { t: T; onClose: () => void; children: React.ReactNode }): React.ReactElement {
-  const title = useId(), close = useRef<HTMLButtonElement>(null);
+  const title = useId(), close = useRef<HTMLButtonElement>(null), box = useRef<HTMLDivElement>(null), latest = useRef(onClose);
+  latest.current = onClose;
+  // Runs once per opening: a re-render while staff type never moves focus. Tab and Shift+Tab stay inside the pop-up.
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     close.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { latest.current(); return; }
+      if (e.key !== 'Tab' || !box.current) return;
+      const items = [...box.current.querySelectorAll<HTMLElement>('a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])')]
+        .filter(el => !el.hasAttribute('disabled') && el.getClientRects().length > 0);
+      const first = items[0], last = items[items.length - 1];
+      if (!first || !last) return;
+      if (e.shiftKey && (document.activeElement === first || !box.current.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (document.activeElement === last || !box.current.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
+    };
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('keydown', onKey); opener?.focus(); };
-  }, [onClose]);
+  }, []);
   return <div className={styles.backdrop} onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-    <div className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby={title} data-testid="contact-profile-dialog">
+    <div ref={box} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby={title} data-testid="contact-profile-dialog">
       <header className={styles.dialogHead}>
         <div><h2 id={title}>{t('profileTitle')}</h2><p className={styles.meta}>{t('profileIntro')}</p></div>
         <button ref={close} type="button" className={styles.dialogClose} aria-label={t('profileClose')} onClick={onClose}>×</button>
