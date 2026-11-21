@@ -5,7 +5,7 @@ or cycle based. If rank based, as rank changes, I need app to know and change wh
 know which cycle and cycle material is set either video or documents. And it would cycle through or pick by staff.
 This means HON OS needs a section for app control."
 
-Status: PCA-1 (0605) merged to main (#524); PCA-2 (0610) merged to main (#549); PCA-3 staff page on branch claude/project-thread-05np7o; PCA-4 not built yet. Migrations (coordinator, 2026-11-19): 0605 cycles + settings, 0610 parent read v2.
+Status: PCA-1 (0605) merged to main (#524); PCA-2 (0610) merged to main (#549); PCA-3 staff page merged to main (#554); PCA-4 app screen on branch claude/project-thread-05np7o. Migrations (coordinator, 2026-11-19): 0605 cycles + settings, 0610 parent read v2.
 
 ## 1. What already exists on main (cd2c33d)
 
@@ -208,3 +208,18 @@ Contracts in `packages/contracts/src/parent-app-curriculum.ts` with strict verif
 - Preview: students from the existing enrollments picker (filtered to the curriculum), then the 0610 staff preview read.
 - Below the preview the page mounts the shared `JourneyRecommendationsPanel` (0603, owned by the parent app thread) for the selected
   curriculum with its ranks in order; this page adds no recommendation logic of its own.
+
+## 14. PCA-4 as built (app screen)
+
+- More > Curriculum replaces the older "Learning library" list. Same More item, new title and blurb; no other screen or tab changes.
+- One read: `GET /v1/parent/curriculum-app` through `api.curriculumApp()`, verified by `verifyParentCurriculumApp` (closed objects, no ids,
+  https links on public hosts only). A failed read shows "unavailable" with Try again and never older data.
+- Per child (named when the family has more than one) and per curriculum: "Current rank: …" with the rank color, or
+  "Now: <cycle>, through <date>"; then "Next rank: …" or "Next: <cycle>, starts <date>" when the school shows it.
+- Sections in plain words: For this rank / This cycle, Earlier ranks to review, Coming next rank / Next cycle, For everyone.
+  Each item shows VIDEO, DOCUMENT or LINK, the title, the description and one button (Watch, Open document, Open link) that opens
+  the in-app browser. A section shows five items, then "Show all N".
+- The app never computes a rank or a cycle; dates are calendar dates from HON, formatted in UTC so the phone's time zone can't shift them.
+- The sample family has one rank-based and one cycle-based curriculum with invented material.
+- The staff page keeps its "Not in the app yet" notice until an app build with this screen is released to the stores; removing it is a
+  one-line follow-up tied to that release.
