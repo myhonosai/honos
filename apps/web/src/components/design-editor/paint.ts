@@ -1,5 +1,6 @@
 import type { CreativeDesignElement, CreativeDesignPage, CreativeDesignSize } from '@hon/contracts';
 import { FONT_STACKS, wrapText } from './model';
+import { QR_QUIET, qrModules } from './qr';
 
 /**
  * One painter for the editor canvas and for downloads, so what is on screen is what is exported. Units are the design's
@@ -13,12 +14,16 @@ export function fontFor(e: Extract<CreativeDesignElement, { kind: 'text' }>): st
   return `${e.italic ? 'italic ' : ''}${e.bold ? '700' : '400'} ${e.size}px ${FONT_STACKS[e.font]}`;
 }
 
-export function paintPage(ctx: Ctx, page: CreativeDesignPage, size: CreativeDesignSize, scale: number, images: ReadonlyMap<string, PhotoSource>): void {
+/**
+ * `bleed` (design units) paints that much extra on every side, for print: the page origin moves in by the bleed and the
+ * background fills the whole area, so items that run off the page edge carry on into the bleed.
+ */
+export function paintPage(ctx: Ctx, page: CreativeDesignPage, size: CreativeDesignSize, scale: number, images: ReadonlyMap<string, PhotoSource>, bleed = 0): void {
   ctx.save();
-  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  ctx.setTransform(scale, 0, 0, scale, bleed * scale, bleed * scale);
   ctx.globalAlpha = 1;
   ctx.fillStyle = page.background;
-  ctx.fillRect(0, 0, size.width, size.height);
+  ctx.fillRect(-bleed, -bleed, size.width + 2 * bleed, size.height + 2 * bleed);
   for (const e of page.elements) paintElement(ctx, e, images);
   ctx.restore();
 }
@@ -71,6 +76,20 @@ function paintElement(ctx: Ctx, e: CreativeDesignElement, images: ReadonlyMap<st
         if (pic > box) dh = e.w / pic; else dw = e.h * pic;
         ctx.drawImage(img, e.x + (e.w - dw) / 2, e.y + (e.h - dh) / 2, dw, dh);
       }
+      break;
+    }
+    case 'qr': {
+      // Square, centred in the box, with the quiet zone inside the square.
+      const side = Math.min(e.w, e.h), ox = e.x + (e.w - side) / 2, oy = e.y + (e.h - side) / 2;
+      if (e.background) { ctx.fillStyle = e.background; ctx.fillRect(ox, oy, side, side); }
+      const rows = qrModules(e.data);
+      if (!rows) break;
+      const unit = side / (rows.length + 2 * QR_QUIET);
+      ctx.fillStyle = e.color;
+      rows.forEach((row, y) => row.forEach((dark, x) => {
+        // A hair of overlap so neighbouring modules never show a seam.
+        if (dark) ctx.fillRect(ox + (x + QR_QUIET) * unit, oy + (y + QR_QUIET) * unit, unit + 0.02, unit + 0.02);
+      }));
       break;
     }
   }

@@ -16,7 +16,7 @@ export const FONT_STACKS: Readonly<Record<CreativeDesignFont, string>> = {
   MONO: '"Courier New", Courier, monospace',
 };
 
-export type AddKind = 'text' | 'rect' | 'ellipse' | 'line';
+export type AddKind = 'text' | 'rect' | 'ellipse' | 'line' | 'qr';
 type Box = { x: number; y: number; w: number; h: number };
 const round = (n: number) => Math.round(n * 100) / 100;
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
@@ -44,6 +44,10 @@ export function newElement(kind: AddKind, code: CreativeDesignSizeCode, id: stri
   if (kind === 'line') {
     const w = round(s.width * 0.6);
     return { ...base, kind, x: round((s.width - w) / 2), y: round(s.height / 2), w, h: 0, stroke: '#111111', strokeWidth: round(Math.max(1, short / 200)) };
+  }
+  if (kind === 'qr') {
+    const side = round(short / 4);
+    return { ...base, kind, x: round((s.width - side) / 2), y: round((s.height - side) / 2), w: side, h: side, data: text, color: '#000000', background: '#FFFFFF' };
   }
   const side = round(short / 3);
   const box = { x: round((s.width - side) / 2), y: round((s.height - side) / 2), w: side, h: side };

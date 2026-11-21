@@ -11,15 +11,23 @@ import {
   DesignsAccessError, DesignsRefusal, DesignsUnknown, addDesignPhoto, loadDesign, loadDesignPhoto, loadDesigns, saveDesign, setDesignStatus, type DesignsScope,
 } from './http';
 import { DesignEditor, type EditorApi } from './editor';
+import { NO_BRAND, TEMPLATE_IDS, TEMPLATE_NAMES, templateDocument, type Brand, type TemplateId } from './templates';
+import { brandingApi } from '../school-branding/http';
 import { designText, sizeMeasure, sizeName, type DesignKey } from './copy';
 import s from './design-editor.module.css';
 
 export type DesignsApi = EditorApi & Readonly<{
   list: (scope: DesignsScope, query: CreativeDesignsQuery, signal?: AbortSignal) => Promise<CreativeDesignList>;
   get: (scope: DesignsScope, designId: string, signal?: AbortSignal) => Promise<CreativeDesign>;
+  /** The school's accent color and contact line, when this person may read branding; otherwise nothing (never an error). */
+  brand?: (scope: DesignsScope, signal: AbortSignal, owned: () => boolean) => Promise<Brand>;
 }>;
 export const DESIGNS_API: DesignsApi = {
   list: loadDesigns, get: loadDesign, save: saveDesign, setStatus: setDesignStatus, addPhoto: addDesignPhoto, photo: loadDesignPhoto,
+  brand: async (scope, signal, owned) => {
+    const b = await brandingApi.read(scope, signal, owned);
+    return { accent: b.accentColor ? b.accentColor.toUpperCase() : null, contactLine: b.contactLine };
+  },
 };
 
 type Load = 'LOADING' | 'READY' | 'DENIED' | 'SESSION' | 'UNAVAILABLE';
@@ -39,10 +47,11 @@ export function refusalKey(error: unknown): DesignKey {
 }
 
 /** The create command a new design sends: the trimmed name and a blank page per side. Null while the name is not usable. */
-export function createInput(name: string, sizeCode: CreativeDesignSizeCode) {
+export function createInput(name: string, sizeCode: CreativeDesignSizeCode, template: TemplateId | null = null, language = 'en', brand: Brand = NO_BRAND) {
   const trimmed = name.trim();
   if (!creativeDesignNameOk(trimmed)) return null;
-  return { designId: null, expectedVersion: 0, name: trimmed, sizeCode, document: blankCreativeDesignDocument(sizeCode) };
+  return { designId: null, expectedVersion: 0, name: trimmed, sizeCode,
+    document: template ? templateDocument(template, sizeCode, language, brand) : blankCreativeDesignDocument(sizeCode) };
 }
 
 /**
@@ -64,14 +73,17 @@ export function Designs({ api = DESIGNS_API }: { api?: DesignsApi }): React.Reac
   const [open, setOpen] = useState<Open>({ state: 'NONE' });
   const [newName, setNewName] = useState('');
   const [newSize, setNewSize] = useState<CreativeDesignSizeCode>('FLYER_LETTER');
+  const [newTemplate, setNewTemplate] = useState<TemplateId | ''>('');
+  const [brand, setBrand] = useState<Brand>(NO_BRAND);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<DesignKey | null>(null);
   const generation = useRef(0);
+  const brandGeneration = useRef(0);
   const pending = useRef<{ fingerprint: string; key: string } | null>(null);
 
   useEffect(() => {
     const off = typeof window === 'undefined' ? () => {} : onShellPrivacyEvent(() => {
-      ++generation.current; pending.current = null; setItems([]); setOpen({ state: 'NONE' }); setNotice(null); setLoad('LOADING');
+      ++generation.current; pending.current = null; setItems([]); setOpen({ state: 'NONE' }); setNotice(null); ++brandGeneration.current; setBrand(NO_BRAND); setLoad('LOADING');
     });
     return () => { off(); ++generation.current; };
   }, []);
@@ -85,6 +97,16 @@ export function Designs({ api = DESIGNS_API }: { api?: DesignsApi }): React.Reac
     return () => abort.abort();
   }, [selection?.organizationId, selection?.schoolId, status, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Brand kit: best effort. Someone without branding access simply gets no school color or contact line.
+  useEffect(() => {
+    setBrand(NO_BRAND);
+    if (!scope || !api.brand) return;
+    const current = ++brandGeneration.current, abort = new AbortController();
+    const owned = () => current === brandGeneration.current && !abort.signal.aborted;
+    api.brand(scope, AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]), owned).then(b => { if (owned()) setBrand(b); }, () => {});
+    return () => abort.abort();
+  }, [selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const openDesign = useCallback((designId: string) => {
     if (!scope) return;
     const current = generation.current;
@@ -95,14 +117,15 @@ export function Designs({ api = DESIGNS_API }: { api?: DesignsApi }): React.Reac
   }, [api, scope?.organizationId, scope?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const create = async () => {
-    const input = createInput(newName || t('newNameDefault'), newSize);
+    const template = newTemplate || null;
+    const input = createInput(newName || (template ? t(TEMPLATE_NAMES[template]) : t('newNameDefault')), newSize, template, language, brand);
     if (!scope || !input || busy) return;
-    const fingerprint = JSON.stringify([scope.schoolId, input.name, input.sizeCode]);
+    const fingerprint = JSON.stringify([scope.schoolId, input.name, input.sizeCode, input.document]);
     if (pending.current?.fingerprint !== fingerprint) pending.current = { fingerprint, key: crypto.randomUUID() };
     setBusy(true); setNotice(null);
     try {
       const receipt = await api.save(scope, input, pending.current.key);
-      pending.current = null; setNewName('');
+      pending.current = null; setNewName(''); setNewTemplate('');
       setOpen({ state: 'READY', design: receipt.design });
     } catch (error) {
       if (!(error instanceof DesignsUnknown)) pending.current = null;
@@ -132,7 +155,7 @@ export function Designs({ api = DESIGNS_API }: { api?: DesignsApi }): React.Reac
     return (
       <div className={s.page}>
         <DesignEditor key={`${open.design.designId}:${open.design.version}`} scope={scope} design={open.design} language={language} api={api}
-          onBack={() => { setOpen({ state: 'NONE' }); setRefresh(n => n + 1); }} onReload={() => openDesign(open.design.designId)} />
+          onBack={() => { setOpen({ state: 'NONE' }); setRefresh(n => n + 1); }} onReload={() => openDesign(open.design.designId)} brand={brand} />
       </div>
     );
   }
@@ -162,6 +185,12 @@ export function Designs({ api = DESIGNS_API }: { api?: DesignsApi }): React.Reac
             <label className={s.field}>{t('newSize')}
               <select name="newDesignSize" value={newSize} onChange={event => setNewSize(event.target.value as CreativeDesignSizeCode)}>
                 {CREATIVE_DESIGN_SIZE_CODES.map(code => <option key={code} value={code}>{sizeName(language, code)} ({sizeMeasure(code)})</option>)}
+              </select>
+            </label>
+            <label className={s.field}>{t('startFrom')}
+              <select name="newDesignTemplate" value={newTemplate} onChange={event => setNewTemplate(event.target.value as TemplateId | '')}>
+                <option value="">{t('blank')}</option>
+                {TEMPLATE_IDS.map(id => <option key={id} value={id}>{t(TEMPLATE_NAMES[id])}</option>)}
               </select>
             </label>
             <button type="submit" className={s.button} disabled={busy}>{t('newCreate')}</button>

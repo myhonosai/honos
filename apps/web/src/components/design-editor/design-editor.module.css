@@ -14,7 +14,7 @@
 .secondary[aria-pressed="true"] { border-color: var(--hon-accent, #8de3d8); background: #173a4a; }
 .button:disabled, .secondary:disabled { opacity: .55; cursor: not-allowed; }
 .button:focus-visible, .secondary:focus-visible, .field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
-.newForm { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) auto; gap: 10px; align-items: end; }
+.newForm { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(0, 2fr) auto; gap: 10px; align-items: end; }
 .field { display: grid; gap: 4px; min-width: 0; font-size: 13px; font-weight: 700; }
 .field input, .field select, .field textarea { width: 100%; min-width: 0; box-sizing: border-box; min-height: 40px; padding: 6px 9px; border: 1px solid #3b5269; border-radius: 9px; background: #0a1625; color: #eef6fc; font: inherit; font-weight: 400; }
 .field input[type="color"] { padding: 2px; height: 40px; }
@@ -53,3 +53,8 @@
 @media (max-width: 960px) { .editor { grid-template-columns: minmax(0, 1fr); } .newForm { grid-template-columns: minmax(0, 1fr); } }
 .editorRoot { display: grid; gap: 10px; min-width: 0; color: #eaf4fb; }
 .srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.colorRow { display: flex; align-items: end; gap: 6px; min-width: 0; }
+.colorRow .field { flex: 1 1 auto; }
+.swatch { flex: 0 0 auto; width: 40px; height: 40px; border: 2px solid #ffffff; border-radius: 9px; cursor: pointer; box-shadow: 0 0 0 1px #3b5269; }
+.swatch:disabled { opacity: .5; cursor: default; }
+.swatch:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }

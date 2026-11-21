@@ -22,7 +22,7 @@ export const CREATIVE_DESIGN_SIZES: Readonly<Record<CreativeDesignSizeCode, Crea
 };
 export const CREATIVE_DESIGN_FONTS = ['SANS', 'SERIF', 'DISPLAY', 'ROUNDED', 'HANDWRITING', 'MONO'] as const;
 export type CreativeDesignFont = (typeof CREATIVE_DESIGN_FONTS)[number];
-export const CREATIVE_DESIGN_ELEMENT_KINDS = ['text', 'rect', 'ellipse', 'line', 'image'] as const;
+export const CREATIVE_DESIGN_ELEMENT_KINDS = ['text', 'rect', 'ellipse', 'line', 'image', 'qr'] as const;
 export type CreativeDesignElementKind = (typeof CREATIVE_DESIGN_ELEMENT_KINDS)[number];
 export const CREATIVE_DESIGN_STATUSES = ['ACTIVE', 'ARCHIVED'] as const;
 export type CreativeDesignStatus = (typeof CREATIVE_DESIGN_STATUSES)[number];
@@ -30,7 +30,7 @@ export const CREATIVE_DESIGN_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/we
 export type CreativeDesignPhotoType = (typeof CREATIVE_DESIGN_PHOTO_TYPES)[number];
 export const CREATIVE_DESIGN_LIMITS = {
   name: 80, text: 2000, elementsPerPage: 150, documentCharacters: 300_000, list: 1000, activeDesigns: 200, designs: 1000,
-  photoBytes: 1_400_000, photos: 300,
+  photoBytes: 1_400_000, photos: 300, qrData: 200,
 } as const;
 
 /** Same-origin browser command names (the X-HON-Human-Command header). */
@@ -46,7 +46,9 @@ export type CreativeDesignRect = Base & { kind: 'rect'; fill: string | null; str
 export type CreativeDesignEllipse = Base & { kind: 'ellipse'; fill: string | null; stroke: string | null; strokeWidth: number };
 export type CreativeDesignLine = Base & { kind: 'line'; stroke: string; strokeWidth: number };
 export type CreativeDesignImage = Base & { kind: 'image'; imageId: string; fit: 'cover' | 'contain' };
-export type CreativeDesignElement = CreativeDesignText | CreativeDesignRect | CreativeDesignEllipse | CreativeDesignLine | CreativeDesignImage;
+/** A QR code for a link or short text (D2): drawn square in its box, dark modules in `color` on `background` (or clear). */
+export type CreativeDesignQr = Base & { kind: 'qr'; data: string; color: string; background: string | null };
+export type CreativeDesignElement = CreativeDesignText | CreativeDesignRect | CreativeDesignEllipse | CreativeDesignLine | CreativeDesignImage | CreativeDesignQr;
 export interface CreativeDesignPage { background: string; elements: CreativeDesignElement[] }
 export interface CreativeDesignDocument { v: 1; pages: CreativeDesignPage[] }
 
@@ -74,6 +76,7 @@ const NAME_REFUSED = /[\u0000-\u001f\u007f​-‏‪-‮⁠-⁯﻿]/;
 const TEXT_REFUSED = /[\u0000-\u0009\u000b-\u001f\u007f‎‏‪-‮⁦-⁩﻿]/;
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 const SHA256 = /^[0-9a-f]{64}$/;
+const QR_DATA = /^[\x20-\x7e]+$/;
 
 /** Characters as the database counts them (code points, so an emoji is one). */
 const size = (text: string): number => [...text].length;
@@ -105,6 +108,10 @@ function colorOrNull(value: unknown): string | null { return value === null ? nu
 export function creativeDesignNameOk(value: unknown): value is string {
   return typeof value === 'string' && value.length >= 1 && size(value) <= CREATIVE_DESIGN_LIMITS.name && value.trim() === value && !NAME_REFUSED.test(value);
 }
+/** What a QR code holds: 1..200 printable ASCII characters (a link, or a short code). */
+export function creativeDesignQrDataOk(value: unknown): value is string {
+  return typeof value === 'string' && value.length >= 1 && value.length <= CREATIVE_DESIGN_LIMITS.qrData && QR_DATA.test(value);
+}
 export function creativeDesignTextOk(value: unknown): value is string {
   return typeof value === 'string' && value.length >= 1 && size(value) <= CREATIVE_DESIGN_LIMITS.text && !TEXT_REFUSED.test(value);
 }
@@ -116,6 +123,7 @@ const KIND_KEYS: Readonly<Record<CreativeDesignElementKind, readonly string[]>> 
   ellipse: ['fill', 'stroke', 'strokeWidth'],
   line: ['stroke', 'strokeWidth'],
   image: ['imageId', 'fit'],
+  qr: ['data', 'color', 'background'],
 };
 
 function element(value: unknown, page: CreativeDesignSize): CreativeDesignElement {
@@ -145,6 +153,9 @@ function element(value: unknown, page: CreativeDesignSize): CreativeDesignElemen
       return { ...base, kind, stroke: color(row.stroke), strokeWidth: num(row.strokeWidth, 0.5, 200) };
     case 'image':
       return { ...base, kind, imageId: uuid(row.imageId), fit: oneOf(row.fit, ['cover', 'contain'] as const) };
+    case 'qr':
+      if (!creativeDesignQrDataOk(row.data)) invalid();
+      return { ...base, kind, data: row.data, color: color(row.color), background: colorOrNull(row.background) };
   }
 }
 

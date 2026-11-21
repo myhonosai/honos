@@ -11,7 +11,7 @@ HON's own drag-and-drop editor inside Creative Studio. It does not embed or copy
 | Piece | What | Migration |
 | --- | --- | --- |
 | D1 | Saved designs per school, uploaded photos, the editor canvas (text, shapes, lines, photos, layers, undo, autosave) | 0617 |
-| D2 | Starter templates, brand kit (logo + colors), QR code, PNG and print PDF with bleed and trim marks | none planned |
+| D2 | Starter templates, brand kit (school color and contact line from 0285 branding), QR code, PNG and print PDF with bleed and trim marks | 0617 (QR element kind, added before merge) |
 | D3 | AI writing ("make me a flyer for...", rewrite, translate); off until text AI is switched on | later |
 | D4 | AI pictures (creative credits) and one-click resize; waits for C3/C4 storage and approval | later |
 | D5 | Send a design to a post, campaign or blast; same editor in HQ | later |
@@ -57,6 +57,7 @@ at most 150 elements a page. Every element has `id` (`[a-z0-9-]{1,40}`, unique i
 | ellipse | `fill`, `stroke`, `strokeWidth` |
 | line | `stroke` (color), `strokeWidth` (0.5-200); drawn from (x, y) to (x + w, y + h) |
 | image | `imageId` (a design photo of the same school), `fit` (cover or contain) |
+| qr | `data` (1-200 printable ASCII characters, usually a link), `color`, `background` (color or null); drawn square in its box, error correction M |
 
 Colors are `#RRGGBB`. The whole document is at most 300,000 characters as JSON. The database checks the same shape
 (`hon.creative_design_document_ok`) and that every `imageId` is a photo of the same school.
@@ -85,6 +86,18 @@ different input is refused.
 Designs are never deleted; each change is the next version under the exact expected version; an archived design must be
 restored before it changes. At most 200 active and 1,000 designs in all per school. Audit and outbox carry ids, size and
 version only, never the text or photos.
+
+## D2 (templates, brand kit, QR code, print PDF)
+
+- Starter templates are laid out in fractions of the page, so each one works on every size. They are built in the
+  browser and saved as an ordinary new design; nothing is stored for a template.
+- Brand kit: when the person can read the school's branding (0285, `school_branding.manage`), the editor offers the
+  school's accent color as a swatch and in templates, and an "add contact line" button. The logo is an outside https
+  link, so it is not drawn on the canvas (that would need an outside fetch); staff upload the logo as a photo instead.
+- QR codes are encoded in the browser with the `@zxing/library` encoder the app already ships (walk-in kiosk cards).
+- Print PDF (print sizes only): one page per side at 300 dpi, 0.125 in bleed on every edge, trim marks outside the bleed,
+  TrimBox and BleedBox set. Written by a small built-in PDF writer (one JPEG image and vector marks per page); no
+  outside service or new dependency.
 
 ## What stays off
 

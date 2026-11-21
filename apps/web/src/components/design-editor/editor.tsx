@@ -1,7 +1,7 @@
 'use client';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  CREATIVE_DESIGN_FONTS, CREATIVE_DESIGN_LIMITS, creativeDesignPhotoIds,
+  CREATIVE_DESIGN_FONTS, CREATIVE_DESIGN_LIMITS, creativeDesignPhotoIds, creativeDesignQrDataOk,
   type CreativeDesign, type CreativeDesignElement, type CreativeDesignPhotoReceipt, type CreativeDesignReceipt, type AddCreativeDesignPhotoInput,
   type CreativeDesignPhoto, type SaveCreativeDesignInput, type SetCreativeDesignStatusInput,
 } from '@hon/contracts';
@@ -11,6 +11,8 @@ import {
   type AddKind, type Handle, type History, type LayerMove,
 } from './model';
 import { exportScale, paintPage, type PhotoSource } from './paint';
+import { PRINT_BLEED, buildPrintPdf, type PdfImage } from './pdf';
+import { NO_BRAND, type Brand } from './templates';
 import { DesignSaver, type SaveState } from './saver';
 import { decodePhoto, preparePhoto } from './photos';
 import { DesignsAccessError, DesignsRefusal, DesignsUnknown, type DesignsScope } from './http';
@@ -46,24 +48,35 @@ export function saveStateText(language: string, state: SaveState): { text: strin
 
 /** The label a layer row shows: its kind, and the start of its words for text. */
 export function layerLabel(language: string, e: CreativeDesignElement): string {
-  const kind = designText(language, ({ text: 'kindText', rect: 'kindRect', ellipse: 'kindEllipse', line: 'kindLine', image: 'kindImage' } as const)[e.kind]);
+  const kind = designText(language, ({ text: 'kindText', rect: 'kindRect', ellipse: 'kindEllipse', line: 'kindLine', image: 'kindImage', qr: 'kindQr' } as const)[e.kind]);
   if (e.kind !== 'text') return kind;
   const words = e.text.replace(/\s+/g, ' ').trim();
   return words ? `${kind}: ${words.length > 28 ? words.slice(0, 27) + '…' : words}` : kind;
 }
 
 /** A file name for a download: the design name in plain letters, then the side. */
-export function downloadName(name: string, side: string): string {
+export function downloadName(name: string, side: string, extension: 'png' | 'pdf' = 'png'): string {
   const slug = name.normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 60).toLowerCase() || 'design';
-  return `${slug}${side ? '-' + side : ''}.png`;
+  return `${slug}${side ? '-' + side : ''}.${extension}`;
+}
+
+function saveFile(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+function canvasBlob(canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob | null> {
+  return new Promise(resolve => canvas.toBlob(resolve, type, quality));
 }
 
 /**
  * The canvas editor for one saved design. Everything drawn on screen and in a download comes from paint.ts. Edits go
  * through the undo history and are saved by DesignSaver; nothing here prints, sends or publishes.
  */
-export function DesignEditor({ scope, design: initial, language, api, onBack, onReload, onChanged }: {
+export function DesignEditor({ scope, design: initial, language, api, onBack, onReload, onChanged, brand = NO_BRAND }: {
   scope: DesignsScope; design: CreativeDesign; language: string; api: EditorApi; onBack: () => void; onReload: () => void; onChanged?: (design: CreativeDesign) => void;
+  brand?: Brand;
 }): React.ReactElement {
   const t = useCallback((key: DesignKey, vars?: Record<string, string>) => designText(language, key, vars), [language]);
   const size = sizeOf(initial.sizeCode);
@@ -75,7 +88,7 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
   const [saveState, setSaveState] = useState<SaveState>({ kind: 'SAVED' });
   const [notice, setNotice] = useState<Notice>(null);
   const [photos, setPhotos] = useState<ReadonlyMap<string, PhotoSource>>(new Map());
-  const [busy, setBusy] = useState<'PHOTO' | 'STATUS' | null>(null);
+  const [busy, setBusy] = useState<'PHOTO' | 'STATUS' | 'PDF' | null>(null);
   const [scale, setScale] = useState(0.5);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -148,10 +161,10 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
     if (element) edit(d => updateElement(d, pageIndex, initial.sizeCode, element.id, value), `${element.id}:${field}`);
   };
 
-  const add = (kind: AddKind) => {
+  const add = (kind: AddKind, words?: string) => {
     if (page.elements.length >= CREATIVE_DESIGN_LIMITS.elementsPerPage) { setNotice({ key: 'elementLimit', tone: 'warn' }); return; }
     const id = newElementId(doc);
-    edit(d => addElement(d, pageIndex, newElement(kind, initial.sizeCode, id, t('text'))));
+    edit(d => addElement(d, pageIndex, newElement(kind, initial.sizeCode, id, words ?? (kind === 'qr' ? 'https://' : t('text')))));
     setSelected(id);
   };
   const layer = (move: LayerMove) => { if (element) edit(d => moveLayer(d, pageIndex, element.id, move)); };
@@ -207,12 +220,29 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     paintPage(ctx, page, size, k, photos);
-    const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-    if (!blob) return;
-    const url = URL.createObjectURL(blob), a = document.createElement('a');
-    a.href = url; a.download = downloadName(name, size.sides > 1 ? (pageIndex === 0 ? 'front' : 'back') : '');
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    const blob = await canvasBlob(canvas, 'image/png');
+    if (blob) saveFile(blob, downloadName(name, size.sides > 1 ? (pageIndex === 0 ? 'front' : 'back') : ''));
+  };
+  // Every side, 300 dpi (capped at 8,000 pixels), with the bleed painted, as one print PDF.
+  const downloadPdf = async () => {
+    if (busy) return;
+    setBusy('PDF');
+    try {
+      const bleedSize = { ...size, width: size.width + 2 * PRINT_BLEED, height: size.height + 2 * PRINT_BLEED };
+      const k = exportScale(bleedSize), images: PdfImage[] = [];
+      for (const side of doc.pages) {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(bleedSize.width * k); canvas.height = Math.round(bleedSize.height * k);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        paintPage(ctx, side, size, k, photos, PRINT_BLEED);
+        const blob = await canvasBlob(canvas, 'image/jpeg', 0.92);
+        if (!blob) return;
+        images.push({ jpeg: new Uint8Array(await blob.arrayBuffer()), width: canvas.width, height: canvas.height });
+        canvas.width = 0; canvas.height = 0;
+      }
+      saveFile(new Blob([buildPrintPdf(size, images, name) as BlobPart], { type: 'application/pdf' }), downloadName(name, 'print', 'pdf'));
+    } finally { setBusy(null); }
   };
 
   // Pointer: select, move and resize. Coordinates are converted to design units.
@@ -291,6 +321,8 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
         <button type="button" className={s.secondary} disabled={!editable} onClick={() => add('rect')}>{t('addRect')}</button>
         <button type="button" className={s.secondary} disabled={!editable} onClick={() => add('ellipse')}>{t('addEllipse')}</button>
         <button type="button" className={s.secondary} disabled={!editable} onClick={() => add('line')}>{t('addLine')}</button>
+        <button type="button" className={s.secondary} disabled={!editable} onClick={() => add('qr')}>{t('addQr')}</button>
+        {brand.contactLine ? <button type="button" className={s.secondary} disabled={!editable} onClick={() => add('text', brand.contactLine!)}>{t('addContact')}</button> : null}
         <button type="button" className={s.secondary} disabled={!editable || busy !== null} onClick={() => fileRef.current?.click()}>{t('addPhoto')}</button>
         <input ref={fileRef} className={s.hiddenInput} type="file" accept="image/jpeg,image/png,image/webp" tabIndex={-1} aria-hidden="true"
           onChange={event => void pickPhoto(event.target.files?.[0])} />
@@ -298,6 +330,7 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
         <button type="button" className={s.secondary} disabled={!editable || history.past.length === 0} onClick={() => setHistory(undo)}>{t('undo')}</button>
         <button type="button" className={s.secondary} disabled={!editable || history.future.length === 0} onClick={() => setHistory(redo)}>{t('redo')}</button>
         <button type="button" className={s.button} onClick={() => void download()}>{t('download')}</button>
+        {size.medium === 'PRINT' ? <button type="button" className={s.button} disabled={busy !== null} onClick={() => void downloadPdf()}>{t('downloadPdf')}</button> : null}
       </div>
       {notice ? <p className={s.notice} data-tone={notice.tone === 'warn' ? 'warn' : undefined} role={notice.tone === 'warn' ? 'alert' : 'status'}>{t(notice.key)}</p> : null}
       {size.sides > 1 ? (
@@ -321,15 +354,14 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
           </div>
         </div>
         <aside className={s.side}>
-          {element ? <Properties element={element} language={language} editable={editable} patch={patch} layer={layer} remove={remove} duplicate={duplicate} />
+          {element ? <Properties element={element} language={language} editable={editable} patch={patch} layer={layer} remove={remove} duplicate={duplicate} swatch={brand.accent} />
             : (
               <section className={s.panel} aria-label={t('pageSettings')}>
                 <h2>{t('pageSettings')}</h2>
-                <label className={s.field}>{t('background')}
-                  <input type="color" value={page.background.toLowerCase()} disabled={!editable}
-                    onChange={event => { const c = normalizeColor(event.target.value); if (c) edit(d => setBackground(d, pageIndex, c), `bg:${pageIndex}`); }} />
-                </label>
+                <ColorField label={t('background')} value={page.background} disabled={!editable} swatch={brand.accent} swatchLabel={t('schoolColor')}
+                  onChange={c => edit(d => setBackground(d, pageIndex, c), `bg:${pageIndex}`)} />
                 <p className={s.meta}>{size.medium === 'PRINT' ? t('printNote', { size: sizeMeasure(initial.sizeCode) }) : t('screenNote', { size: sizeMeasure(initial.sizeCode) })}</p>
+                {size.medium === 'PRINT' ? <p className={s.meta}>{t('pdfNote')}</p> : null}
               </section>
             )}
           <section className={s.panel} aria-label={t('layers')}>
@@ -363,21 +395,48 @@ function NumberField({ label, value, step = 1, min, max, disabled, onChange }: {
   );
 }
 
-function ColorField({ label, value, disabled, onChange }: { label: string; value: string; disabled: boolean; onChange: (value: string) => void }): React.ReactElement {
+function ColorField({ label, value, disabled, onChange, swatch, swatchLabel }: {
+  label: string; value: string; disabled: boolean; onChange: (value: string) => void; swatch?: string | null; swatchLabel?: string;
+}): React.ReactElement {
+  const school = swatch ? normalizeColor(swatch) : null;
+  return (
+    <div className={s.colorRow}>
+      <label className={s.field}>{label}
+        <input type="color" value={value.toLowerCase()} disabled={disabled} onChange={event => { const c = normalizeColor(event.target.value); if (c) onChange(c); }} />
+      </label>
+      {school && swatchLabel ? (
+        <button type="button" className={s.swatch} disabled={disabled || school === value} title={swatchLabel} aria-label={`${swatchLabel} ${school}`}
+          style={{ background: school }} onClick={() => onChange(school)} />
+      ) : null}
+    </div>
+  );
+}
+
+/** The QR text box: typing keeps a local draft and only valid text (1-200 printable characters) reaches the design. */
+function QrDataField({ value, label, hint, disabled, onChange }: { value: string; label: string; hint: string; disabled: boolean; onChange: (value: string) => void }): React.ReactElement {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => { setDraft(value); }, [value]);
+  const ok = creativeDesignQrDataOk(draft);
   return (
     <label className={s.field}>{label}
-      <input type="color" value={value.toLowerCase()} disabled={disabled} onChange={event => { const c = normalizeColor(event.target.value); if (c) onChange(c); }} />
+      <input name="qrData" value={draft} maxLength={CREATIVE_DESIGN_LIMITS.qrData} disabled={disabled} aria-invalid={!ok || undefined} spellCheck={false}
+        onChange={event => { setDraft(event.target.value); if (creativeDesignQrDataOk(event.target.value)) onChange(event.target.value); }} />
+      <span className={s.meta}>{hint}</span>
     </label>
   );
 }
 
 /** The panel for the selected item: its own settings first, then place, size and layer order. */
-export function Properties({ element: e, language, editable, patch, layer, remove, duplicate }: {
+export function Properties({ element: e, language, editable, patch, layer, remove, duplicate, swatch = null }: {
   element: CreativeDesignElement; language: string; editable: boolean;
   patch: (field: string, value: Partial<CreativeDesignElement>) => void; layer: (move: LayerMove) => void; remove: () => void; duplicate: () => void;
+  swatch?: string | null;
 }): React.ReactElement {
   const t = (key: DesignKey) => designText(language, key);
   const off = !editable;
+  // A plain call, not a nested component, so React keeps the same input while a colour is dragged.
+  const color = (label: string, value: string, onChange: (value: string) => void) =>
+    <ColorField label={label} value={value} onChange={onChange} disabled={off} swatch={swatch} swatchLabel={t('schoolColor')} />;
   return (
     <section className={s.panel} aria-label={t('properties')}>
       <h2>{t('properties')}: {layerLabel(language, e).split(':')[0]}</h2>
@@ -395,7 +454,7 @@ export function Properties({ element: e, language, editable, patch, layer, remov
             <NumberField label={t('fontSize')} value={e.size} min={4} max={600} disabled={off} onChange={v => patch('size', { size: v })} />
           </div>
           <div className={s.pair}>
-            <ColorField label={t('color')} value={e.color} disabled={off} onChange={v => patch('color', { color: v })} />
+            {color(t('color'), e.color, v => patch('color', { color: v }))}
             <label className={s.field}>{t('align')}
               <select value={e.align} disabled={off} onChange={event => patch('align', { align: event.target.value as typeof e.align })}>
                 <option value="left">{t('alignLeft')}</option><option value="center">{t('alignCenter')}</option><option value="right">{t('alignRight')}</option>
@@ -412,11 +471,11 @@ export function Properties({ element: e, language, editable, patch, layer, remov
       {e.kind === 'rect' || e.kind === 'ellipse' ? (
         <>
           <div className={s.pair}>
-            {e.fill ? <ColorField label={t('fill')} value={e.fill} disabled={off} onChange={v => patch('fill', { fill: v })} /> : <span className={s.meta}>{t('noFill')}</span>}
+            {e.fill ? color(t('fill'), e.fill, v => patch('fill', { fill: v })) : <span className={s.meta}>{t('noFill')}</span>}
             <label className={s.check}><input type="checkbox" checked={e.fill === null} disabled={off} onChange={event => patch('fillOn', { fill: event.target.checked ? null : '#C8102E' })} />{t('noFill')}</label>
           </div>
           <div className={s.pair}>
-            {e.stroke ? <ColorField label={t('stroke')} value={e.stroke} disabled={off} onChange={v => patch('stroke', { stroke: v })} /> : <span className={s.meta}>{t('noStroke')}</span>}
+            {e.stroke ? color(t('stroke'), e.stroke, v => patch('stroke', { stroke: v })) : <span className={s.meta}>{t('noStroke')}</span>}
             <label className={s.check}><input type="checkbox" checked={e.stroke === null} disabled={off}
               onChange={event => patch('strokeOn', event.target.checked ? { stroke: null, strokeWidth: 0 } : { stroke: '#111111', strokeWidth: Math.max(1, e.strokeWidth) })} />{t('noStroke')}</label>
           </div>
@@ -426,9 +485,17 @@ export function Properties({ element: e, language, editable, patch, layer, remov
       ) : null}
       {e.kind === 'line' ? (
         <div className={s.pair}>
-          <ColorField label={t('color')} value={e.stroke} disabled={off} onChange={v => patch('stroke', { stroke: v })} />
+          {color(t('color'), e.stroke, v => patch('stroke', { stroke: v }))}
           <NumberField label={t('lineWidth')} value={e.strokeWidth} min={0.5} max={200} step={0.5} disabled={off} onChange={v => patch('strokeWidth', { strokeWidth: v })} />
         </div>
+      ) : null}
+      {e.kind === 'qr' ? (
+        <>
+          <QrDataField value={e.data} label={t('qrData')} hint={t('qrHint')} disabled={off} onChange={v => patch('data', { data: v })} />
+          {color(t('color'), e.color, v => patch('color', { color: v }))}
+          <label className={s.check}><input type="checkbox" checked={e.background !== null} disabled={off}
+            onChange={event => patch('qrBg', { background: event.target.checked ? '#FFFFFF' : null })} />{t('qrBackground')}</label>
+        </>
       ) : null}
       {e.kind === 'image' ? (
         <label className={s.field}>{t('fit')}

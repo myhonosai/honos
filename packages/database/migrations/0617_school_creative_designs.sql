@@ -92,7 +92,8 @@ BEGIN
         WHEN 'rect' THEN ARRAY['fill','radius','stroke','strokeWidth']
         WHEN 'ellipse' THEN ARRAY['fill','stroke','strokeWidth']
         WHEN 'line' THEN ARRAY['stroke','strokeWidth']
-        WHEN 'image' THEN ARRAY['fit','imageId'] END;
+        WHEN 'image' THEN ARRAY['fit','imageId']
+        WHEN 'qr' THEN ARRAY['background','color','data'] END;
       IF keys IS NULL OR array_length(keys,1)=9 THEN RETURN false; END IF;
       IF (SELECT array_agg(x ORDER BY x) FROM jsonb_object_keys(e) x) IS DISTINCT FROM (SELECT array_agg(x ORDER BY x) FROM unnest(keys) x)
         OR jsonb_typeof(e->'id') IS DISTINCT FROM 'string' OR e->>'id' !~ '^[a-z0-9-]{1,40}$' OR e->>'id'=ANY(ids)
@@ -115,6 +116,9 @@ BEGIN
           OR NOT hon.creative_design_num_ok(e->'strokeWidth',0,200) OR (k='rect' AND NOT hon.creative_design_num_ok(e->'radius',0,2000)) THEN RETURN false; END IF;
       ELSIF k='line' THEN
         IF NOT hon.creative_design_color_ok(e->'stroke',false) OR NOT hon.creative_design_num_ok(e->'strokeWidth',0.5,200) THEN RETURN false; END IF;
+      ELSIF k='qr' THEN
+        IF jsonb_typeof(e->'data') IS DISTINCT FROM 'string' OR length(e->>'data') NOT BETWEEN 1 AND 200 OR e->>'data' !~ '^[\x20-\x7e]+$'
+          OR NOT hon.creative_design_color_ok(e->'color',false) OR NOT hon.creative_design_color_ok(e->'background',true) THEN RETURN false; END IF;
       ELSE
         IF jsonb_typeof(e->'imageId') IS DISTINCT FROM 'string' OR e->>'imageId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
           OR jsonb_typeof(e->'fit') IS DISTINCT FROM 'string' OR e->>'fit' NOT IN ('cover','contain') THEN RETURN false; END IF;

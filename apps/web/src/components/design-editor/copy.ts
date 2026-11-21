@@ -24,6 +24,15 @@ const en = {
   refusedName: 'Another design already has that name.', refusedLimit: 'This school has reached the design limit. Archive one first.', refusedOther: 'That change was not saved.',
   printNote: 'Print size {size}. Downloads are 300 dpi.', screenNote: 'Screen size {size}.',
   units: 'Sizes are in points (72 per inch).', pixels: 'Sizes are in pixels.',
+  addQr: 'QR code', kindQr: 'QR code', qrData: 'Link or text in the code', qrHint: 'Up to 200 plain characters. Test-scan it with a phone before printing.', qrBackground: 'Light square behind the code',
+  downloadPdf: 'Download print PDF', pdfNote: 'Print PDF: 300 dpi with 1/8 inch bleed and trim marks.', schoolColor: 'School color', addContact: 'Contact line',
+  startFrom: 'Start from', blank: 'Blank page', tplTrial: 'Free trial class', tplOpenHouse: 'Open house', tplCamp: 'Summer camp', tplPromotion: 'Belt promotion', tplSchedule: 'Class schedule',
+  tTrialHead: 'FREE TRIAL CLASS', tTrialSub: 'Kids, teens and adults. No experience needed.', tTrialCta: 'Book your first class today',
+  tOpenHead: 'OPEN HOUSE', tOpenSub: 'Saturday, 10 AM to 2 PM', tOpenBody: 'Free mini classes · Meet the instructors · Family fun',
+  tCampHead: 'SUMMER CAMP', tCampSub: 'Ages 6 to 12 · Weekly sessions', tCampBody: 'Martial arts · Games · Confidence · Friends',
+  tPromoHead: 'BELT PROMOTION', tPromoSub: 'Congratulations to every student testing this month!', tPromoBody: 'Date · Time · Place',
+  tSchedHead: 'CLASS SCHEDULE', tSchedBody: 'Mon & Wed  4:30 PM  Little Dragons\nMon & Wed  5:30 PM  Kids\nTue & Thu  6:30 PM  Teens & Adults\nSaturday  10:00 AM  Open mat',
+  tContact: 'Your school · phone · website', tBack: 'Thank you for training with us!',
 };
 export type DesignKey = keyof typeof en;
 
@@ -51,6 +60,15 @@ const ko: Record<DesignKey, string> = {
   refusedName: '같은 이름의 디자인이 이미 있습니다.', refusedLimit: '이 학교의 디자인 한도에 도달했습니다. 먼저 하나를 보관하세요.', refusedOther: '변경 내용이 저장되지 않았습니다.',
   printNote: '인쇄 크기 {size}. 300dpi로 내려받습니다.', screenNote: '화면 크기 {size}.',
   units: '크기 단위는 포인트(1인치 = 72)입니다.', pixels: '크기 단위는 픽셀입니다.',
+  addQr: 'QR 코드', kindQr: 'QR 코드', qrData: '코드에 넣을 링크나 글', qrHint: '일반 문자 200자까지. 인쇄 전에 휴대폰으로 스캔해 보세요.', qrBackground: '코드 뒤 밝은 사각형',
+  downloadPdf: '인쇄용 PDF 내려받기', pdfNote: '인쇄용 PDF: 300dpi, 1/8인치 재단 여백과 재단선 포함.', schoolColor: '학교 색상', addContact: '연락처 줄',
+  startFrom: '시작 방법', blank: '빈 페이지', tplTrial: '무료 체험 수업', tplOpenHouse: '오픈 하우스', tplCamp: '여름 캠프', tplPromotion: '띠 승급', tplSchedule: '수업 시간표',
+  tTrialHead: '무료 체험 수업', tTrialSub: '어린이, 청소년, 성인. 경험이 없어도 됩니다.', tTrialCta: '오늘 첫 수업을 예약하세요',
+  tOpenHead: '오픈 하우스', tOpenSub: '토요일 오전 10시 ~ 오후 2시', tOpenBody: '무료 미니 수업 · 사범님 만나기 · 가족 행사',
+  tCampHead: '여름 캠프', tCampSub: '6~12세 · 주간 프로그램', tCampBody: '무술 · 게임 · 자신감 · 친구',
+  tPromoHead: '띠 승급 심사', tPromoSub: '이번 달 심사를 보는 모든 수련생을 축하합니다!', tPromoBody: '날짜 · 시간 · 장소',
+  tSchedHead: '수업 시간표', tSchedBody: '월·수  오후 4:30  리틀 드래곤\n월·수  오후 5:30  어린이\n화·목  오후 6:30  청소년·성인\n토요일  오전 10:00  자유 수련',
+  tContact: '학교 이름 · 전화 · 웹사이트', tBack: '함께 수련해 주셔서 감사합니다!',
 };
 const es: Record<DesignKey, string> = {
   title: 'Diseños', intro: 'Crea volantes, carteles, postales y publicaciones para tu escuela. Arrastra para mover, haz clic para cambiar y descarga al terminar.',
@@ -76,6 +94,15 @@ const es: Record<DesignKey, string> = {
   refusedName: 'Ya hay un diseño con ese nombre.', refusedLimit: 'Esta escuela llegó al límite de diseños. Archiva uno primero.', refusedOther: 'Ese cambio no se guardó.',
   printNote: 'Tamaño de impresión {size}. Las descargas son de 300 ppp.', screenNote: 'Tamaño de pantalla {size}.',
   units: 'Las medidas están en puntos (72 por pulgada).', pixels: 'Las medidas están en píxeles.',
+  addQr: 'Código QR', kindQr: 'Código QR', qrData: 'Enlace o texto del código', qrHint: 'Hasta 200 caracteres simples. Escanéalo con un teléfono antes de imprimir.', qrBackground: 'Cuadro claro detrás del código',
+  downloadPdf: 'Descargar PDF para imprenta', pdfNote: 'PDF para imprenta: 300 ppp con 1/8 de pulgada de sangrado y marcas de corte.', schoolColor: 'Color de la escuela', addContact: 'Línea de contacto',
+  startFrom: 'Empezar con', blank: 'Página en blanco', tplTrial: 'Clase de prueba gratis', tplOpenHouse: 'Puertas abiertas', tplCamp: 'Campamento de verano', tplPromotion: 'Promoción de cinturón', tplSchedule: 'Horario de clases',
+  tTrialHead: 'CLASE DE PRUEBA GRATIS', tTrialSub: 'Niños, adolescentes y adultos. No se necesita experiencia.', tTrialCta: 'Reserva tu primera clase hoy',
+  tOpenHead: 'PUERTAS ABIERTAS', tOpenSub: 'Sábado, de 10 AM a 2 PM', tOpenBody: 'Mini clases gratis · Conoce a los instructores · Diversión en familia',
+  tCampHead: 'CAMPAMENTO DE VERANO', tCampSub: 'De 6 a 12 años · Sesiones semanales', tCampBody: 'Artes marciales · Juegos · Confianza · Amigos',
+  tPromoHead: 'PROMOCIÓN DE CINTURÓN', tPromoSub: '¡Felicidades a todos los alumnos que presentan examen este mes!', tPromoBody: 'Fecha · Hora · Lugar',
+  tSchedHead: 'HORARIO DE CLASES', tSchedBody: 'Lun y Mié  4:30 PM  Pequeños dragones\nLun y Mié  5:30 PM  Niños\nMar y Jue  6:30 PM  Adolescentes y adultos\nSábado  10:00 AM  Práctica libre',
+  tContact: 'Tu escuela · teléfono · sitio web', tBack: '¡Gracias por entrenar con nosotros!',
 };
 const ALL: Record<string, Record<DesignKey, string>> = { en, ko, es };
 

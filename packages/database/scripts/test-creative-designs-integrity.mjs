@@ -135,7 +135,8 @@ try{
 
  // 3. Designs: create, read, change, exact replay and key reuse.
  const placed=doc([title(),{id:'hero',kind:'image',...el,y:200,w:540,h:360,imageId:photo.photoId,fit:'cover'},{id:'band',kind:'rect',...el,y:700,w:612,h:92,fill:'#000000',stroke:null,strokeWidth:0,radius:0},
-  {id:'rule',kind:'line',...el,y:120,w:540,h:0,stroke:'#C8102E',strokeWidth:3},{id:'dot',kind:'ellipse',...el,fill:null,stroke:'#FFFFFF',strokeWidth:4}]);
+  {id:'rule',kind:'line',...el,y:120,w:540,h:0,stroke:'#C8102E',strokeWidth:3},{id:'dot',kind:'ellipse',...el,fill:null,stroke:'#FFFFFF',strokeWidth:4},
+  {id:'qr',kind:'qr',...el,x:500,y:680,w:90,h:90,data:'https://example.test/trial?c=spring',color:'#000000',background:'#FFFFFF'}]);
  const key=K();r=ok(await save(a,draft({document:placed}),key));
  const flyer=C.verifyCreativeDesignReceipt({design:r.data,replayed:r.meta.replayed},{version:1,sizeCode:'FLYER_LETTER',status:'ACTIVE'}).design;
  assert.deepEqual(flyer.document,placed,'the document is stored exactly');
@@ -231,7 +232,10 @@ try{
   await assert.rejects(direct({request:rq,action:K()},call,[a.externalSubject,draft({name:'Delegated'}),'k1',rq,rq]),/CREATIVE_DESIGN_FORBIDDEN/,'an action request');
   await assert.rejects(direct({request:K()},call,[a.externalSubject,draft({name:'Wrong request'}),'k2',rq,rq]),/VALIDATION_FAILED/,'a request id that is not the session one');
   for(const body of [draft({name:'Dup',document:doc([title(),title()])}),draft({name:'Kind',document:doc([title({kind:'video'})])}),draft({name:'Color',document:doc([title({color:'#c8102e'})])}),
-   draft({name:'Sides',sizeCode:'POSTCARD_5X7'}),draft({name:'Range',document:doc([title({x:1e6})])}),draft({name:'Keys',document:doc([title({onclick:'x'})])}),{...draft(),extra:true}])
+   draft({name:'Sides',sizeCode:'POSTCARD_5X7'}),draft({name:'Range',document:doc([title({x:1e6})])}),draft({name:'Keys',document:doc([title({onclick:'x'})])}),{...draft(),extra:true},
+   draft({name:'QR long',document:doc([{id:'q',kind:'qr',...el,data:'x'.repeat(201),color:'#000000',background:null}])}),
+   draft({name:'QR text',document:doc([{id:'q',kind:'qr',...el,data:'caf\u00e9',color:'#000000',background:null}])}),
+   draft({name:'QR keys',document:doc([{id:'q',kind:'qr',...el,data:'ok',color:'#000000'}])})])
    await assert.rejects(direct({request:rq},call,[a.externalSubject,body,'k4',rq,rq]),/VALIDATION_FAILED/,'the database validates on its own: '+JSON.stringify(body).slice(0,60));
   await assert.rejects(direct({request:rq},"SELECT hon.add_school_creative_design_photo($1,$2::jsonb,$3,$4::uuid,$5::uuid) d",[a.externalSubject,{mediaType:'image/png',data:tagged.toString('base64')},'k5',rq,rq]),/CREATIVE_DESIGN_PHOTO_REFUSED/,'the database refuses metadata on its own');
   assert.equal((await direct({request:rq},call,[a.externalSubject,draft({name:'Direct ok'}),'k3',rq,rq])).d.design.name,'Direct ok','the right context writes');

@@ -23,6 +23,8 @@ import { Properties, downloadName, layerLabel, saveStateText } from '../src/comp
 import { Designs, createInput, refusalKey } from '../src/components/design-editor/designs';
 import { exportScale, paintPage } from '../src/components/design-editor/paint';
 import { SCHOOL_SHELL_NAV } from '../src/components/school-shell/catalog';
+import { TEMPLATE_IDS, templateDocument } from '../src/components/design-editor/templates';
+import { PRINT_BLEED, PRINT_MARGIN, buildPrintPdf, printBoxes, trimMarks } from '../src/components/design-editor/pdf';
 import { shellText } from '../src/components/school-shell/copy';
 
 const id = (n: string) => `${n.repeat(8)}-${n.repeat(4)}-4${n.repeat(3)}-8${n.repeat(3)}-${n.repeat(12)}`;
@@ -352,5 +354,107 @@ describe('design screens and copy', () => {
     const creative = SCHOOL_SHELL_NAV.find(item => item.key === 'creative')!;
     expect(creative.routes.map(r => r.href)).toEqual(['/staff/creative-studio', '/staff/creative-studio/designs']);
     for (const language of ['en', 'ko', 'es']) expect(shellText(language, 'routeDesigns')).toBeTruthy();
+  });
+});
+
+describe('design D2: QR codes, templates, brand kit and print PDF', () => {
+  it('accepts a QR element only with 1-200 printable characters, a colour and an optional background', () => {
+    const qr = (o: Record<string, unknown> = {}) => ({ ...newElement('qr', 'FLYER_LETTER', 'q', 'https://example.test/trial'), ...o }) as CreativeDesignElement;
+    const docWith = (e: CreativeDesignElement) => addElement(blankCreativeDesignDocument('FLYER_LETTER'), 0, e);
+    expect(() => valid(docWith(qr()))).not.toThrow();
+    expect(() => valid(docWith(qr({ background: null })))).not.toThrow();
+    for (const bad of [{ data: '' }, { data: 'x'.repeat(201) }, { data: 'café' }, { data: 'a\nb' }, { color: null }, { background: 'white' }])
+      expect(() => valid(docWith(qr(bad))), JSON.stringify(bad)).toThrow();
+  });
+
+  it('encodes QR codes that a reader decodes back to the same text', async () => {
+    const z = await import('@zxing/library');
+    const { qrModules, QR_QUIET } = await import('../src/components/design-editor/qr');
+    for (const data of ['https://example.test/trial?c=spring', 'HON', 'x'.repeat(200)]) {
+      const rows = qrModules(data)!;
+      const unit = 4, side = (rows.length + 2 * QR_QUIET) * unit, pixels = new Uint8ClampedArray(side * side).fill(255);
+      rows.forEach((row, y) => row.forEach((dark, x) => {
+        if (!dark) return;
+        for (let dy = 0; dy < unit; dy++) for (let dx = 0; dx < unit; dx++) pixels[((y + QR_QUIET) * unit + dy) * side + (x + QR_QUIET) * unit + dx] = 0;
+      }));
+      const bitmap = new z.BinaryBitmap(new z.HybridBinarizer(new z.RGBLuminanceSource(pixels, side, side)));
+      expect(new z.QRCodeReader().decode(bitmap).getText()).toBe(data);
+    }
+    expect(qrModules('')).toBeNull();
+    expect(qrModules('é')).toBeNull();
+  });
+
+  it('paints a QR code square in its box on its background, and paints the bleed for print', () => {
+    const calls: { op: string; args: unknown[] }[] = [];
+    const ctx = new Proxy({}, { get: (_t, prop) => (...args: unknown[]) => { calls.push({ op: String(prop), args }); }, set: () => true }) as unknown as CanvasRenderingContext2D;
+    let doc = blankCreativeDesignDocument('FLYER_LETTER');
+    doc = addElement(doc, 0, { ...newElement('qr', 'FLYER_LETTER', 'q', 'HON'), x: 100, y: 100, w: 200, h: 100 } as CreativeDesignElement);
+    paintPage(ctx, doc.pages[0]!, { code: 'FLYER_LETTER', medium: 'PRINT', width: 612, height: 792, sides: 1 }, 2, new Map(), 9);
+    expect(calls.find(c => c.op === 'setTransform')!.args).toEqual([2, 0, 0, 2, 18, 18]);
+    const fills = calls.filter(c => c.op === 'fillRect').map(c => c.args as number[]);
+    expect(fills[0]).toEqual([-9, -9, 630, 810]);
+    expect(fills[1]).toEqual([150, 100, 100, 100]);
+    const modules = fills.slice(2);
+    expect(modules.length).toBeGreaterThan(100);
+    for (const [x, y, w] of modules) { expect(x).toBeGreaterThanOrEqual(150); expect(x! + w!).toBeLessThanOrEqual(250.1); expect(y).toBeGreaterThanOrEqual(100); }
+  });
+
+  it('builds every template on every size in every language as a valid document, with the school color and contact line', () => {
+    for (const template of [null, ...TEMPLATE_IDS]) for (const code of CREATIVE_DESIGN_SIZE_CODES) for (const language of ['en', 'ko', 'es']) {
+      const doc = templateDocument(template, code, language, { accent: '#1F4E9C', contactLine: 'Sunrise Martial Arts · 555-0100' });
+      expect(() => valid(doc, code), `${template} ${code} ${language}`).not.toThrow();
+    }
+    const trial = templateDocument('trial', 'POSTCARD_4X6', 'en', { accent: '#1F4E9C', contactLine: 'Sunrise Martial Arts · 555-0100' });
+    expect(trial.pages).toHaveLength(2);
+    expect(JSON.stringify(trial)).toContain('Sunrise Martial Arts');
+    expect(trial.pages[0]!.elements.find(e => e.id === 'band')).toMatchObject({ fill: '#1F4E9C' });
+    const plain = templateDocument('openHouse', 'SOCIAL_SQUARE', 'ko');
+    expect(JSON.stringify(plain)).toContain('오픈 하우스');
+    expect(JSON.stringify(plain)).toContain('#C8102E');
+    expect(templateDocument(null, 'FLYER_HALF', 'en')).toEqual(blankCreativeDesignDocument('FLYER_HALF'));
+    expect(createInput('Trial', 'FLYER_LETTER', 'trial', 'es')?.document.pages[0]!.elements.length).toBeGreaterThan(3);
+  });
+
+  it('writes a print PDF with one page per side, bleed and trim boxes, trim marks outside the bleed, and a correct cross-reference table', () => {
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+    const size = { width: 432, height: 288 };
+    const pdf = buildPrintPdf(size, [{ jpeg, width: 1875, height: 1275 }, { jpeg, width: 1875, height: 1275 }], 'Open (house) é');
+    const text = Array.from(pdf, b => String.fromCharCode(b)).join('');
+    expect(text.startsWith('%PDF-1.4')).toBe(true);
+    expect(text).toContain('/Count 2');
+    const boxes = printBoxes(size), m = PRINT_MARGIN;
+    expect(boxes.trim).toEqual([m, m, m + 432, m + 288]);
+    expect(boxes.bleed).toEqual([m - PRINT_BLEED, m - PRINT_BLEED, m + 432 + PRINT_BLEED, m + 288 + PRINT_BLEED]);
+    expect(text).toContain(`/TrimBox [${m} ${m} ${m + 432} ${m + 288}]`);
+    expect(text).toContain('/Filter /DCTDecode /Length 4');
+    expect(text).toContain('/Title (Open \\(house\\) ?)');
+    // Every mark sits outside the bleed box.
+    const marks = trimMarks(size);
+    expect(marks).toHaveLength(8);
+    const [bx0, by0, bx1, by1] = boxes.bleed;
+    for (const [x0, y0, x1, y1] of marks) {
+      const outside = (x: number, y: number) => x <= bx0! || x >= bx1! || y <= by0! || y >= by1!;
+      expect(outside(x0!, y0!) && outside(x1!, y1!)).toBe(true);
+    }
+    // The xref offsets point at each object.
+    const xrefAt = Number(text.match(/startxref\n(\d+)/)![1]);
+    const lines = text.slice(xrefAt).split('\n');
+    const count = Number(lines[1]!.split(' ')[1]);
+    for (let i = 1; i < count; i++) expect(text.slice(Number(lines[2 + i]!.slice(0, 10)), Number(lines[2 + i]!.slice(0, 10)) + 12)).toMatch(new RegExp(`^${i} 0 obj`));
+    // Content streams declare their exact length.
+    for (const match of text.matchAll(/<< \/Length (\d+) >>\nstream\n/g)) {
+      const start = match.index! + match[0].length;
+      expect(text.slice(start + Number(match[1]), start + Number(match[1]) + 10)).toBe('endstream\n'.slice(0, 10));
+    }
+  });
+
+  it('shows QR settings and the school color swatch', () => {
+    const noop = () => {};
+    const html = renderToStaticMarkup(<Properties element={newElement('qr', 'FLYER_LETTER', 'q', 'https://example.test')} language="en" editable patch={noop} layer={noop} remove={noop} duplicate={noop} swatch="#1F4E9C" />);
+    expect(html).toContain('Link or text in the code');
+    expect(html).toContain('https://example.test');
+    expect(html).toContain('aria-label="School color #1F4E9C"');
+    expect(layerLabel('ko', newElement('qr', 'FLYER_LETTER', 'q', 'x'))).toBe('QR 코드');
+    expect(downloadName('Open house', 'print', 'pdf')).toBe('open-house-print.pdf');
   });
 });
