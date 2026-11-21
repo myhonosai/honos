@@ -16,37 +16,39 @@ import s from './parent-app-curriculum.module.css';
  * The page holds no authority: every read and command goes to the verified shell school and the API re-checks curriculum.manage.
  */
 export type MaterialTarget = { rankId: string | null; cycleId: string | null };
+/** Commands resolve true only when the server confirmed the change; forms keep what was typed until then. */
 export interface CurriculumActions {
-  saveSettings(c: StaffCurriculum, input: CurriculumAppSettingsInput): Promise<void>;
-  createCycle(c: StaffCurriculum, name: string): Promise<void>;
-  renameCycle(c: StaffCurriculum, cycleId: string, version: number, name: string): Promise<void>;
-  archiveCycle(c: StaffCurriculum, cycleId: string, version: number): Promise<void>;
-  switchCycle(c: StaffCurriculum, cycleId: string): Promise<void>;
-  orderCycles(c: StaffCurriculum, ids: string[]): Promise<void>;
-  addMaterial(c: StaffCurriculum, target: MaterialTarget, kind: CurriculumResourceRecord['kind'], url: string, title: string, description: string): Promise<void>;
-  editMaterial(r: CurriculumResourceRecord, title: string, description: string): Promise<void>;
-  archiveMaterial(r: CurriculumResourceRecord): Promise<void>;
+  saveSettings(c: StaffCurriculum, input: CurriculumAppSettingsInput): Promise<boolean>;
+  createCycle(c: StaffCurriculum, name: string): Promise<boolean>;
+  renameCycle(c: StaffCurriculum, cycleId: string, version: number, name: string): Promise<boolean>;
+  archiveCycle(c: StaffCurriculum, cycleId: string, version: number): Promise<boolean>;
+  switchCycle(c: StaffCurriculum, cycleId: string): Promise<boolean>;
+  orderCycles(c: StaffCurriculum, ids: string[]): Promise<boolean>;
+  addMaterial(c: StaffCurriculum, target: MaterialTarget, kind: CurriculumResourceRecord['kind'], url: string, title: string, description: string): Promise<boolean>;
+  editMaterial(r: CurriculumResourceRecord, title: string, description: string): Promise<boolean>;
+  archiveMaterial(r: CurriculumResourceRecord): Promise<boolean>;
   preview(studentId: string): Promise<CurriculumAppChild>;
 }
 
 export function StaffParentAppCurriculum(): React.ReactElement {
   const [view, setView] = useState<StaffView | null>(null), [selected, setSelected] = useState(''), [busy, setBusy] = useState(false);
   const [error, setError] = useState(''), [notice, setNotice] = useState(''), [loading, setLoading] = useState(true);
-  const school = useRef(''), gate = useRef(false), keys = useRef(new Map<string, string>());
+  const school = useRef(''), gate = useRef(false), reads = useRef(0), keys = useRef(new Map<string, string>());
   const shell = useShellSchoolInto((signedIn) => { school.current = signedIn.schoolId; void refresh(); });
 
   async function refresh() {
-    setLoading(true); setError('');
-    try { const next = await api.read(school.current); setView(next); setSelected((current) => next.curricula.some((c) => c.id === current) ? current : next.curricula[0]?.id ?? ''); }
-    catch (e) { setView(null); setError(e instanceof Error ? e.message : 'Curriculum is unavailable right now.'); }
-    finally { setLoading(false); }
+    const token = ++reads.current; setLoading(true); setError('');
+    // A read that a newer read or a confirmed command has overtaken is dropped, so it cannot put older data back.
+    try { const next = await api.read(school.current); if (token !== reads.current) return; setView(next); setSelected((current) => next.curricula.some((c) => c.id === current) ? current : next.curricula[0]?.id ?? ''); }
+    catch (e) { if (token !== reads.current) return; setView(null); setError(e instanceof Error ? e.message : 'Curriculum is unavailable right now.'); }
+    finally { if (token === reads.current) setLoading(false); }
   }
   /** One command at a time; a retry of the same change reuses its idempotency key until it is confirmed. */
-  async function run(fingerprint: string, work: (key: string) => Promise<string>) {
-    if (gate.current) return; gate.current = true; setBusy(true); setError(''); setNotice('');
+  async function run(fingerprint: string, work: (key: string) => Promise<string>): Promise<boolean> {
+    if (gate.current) return false; gate.current = true; setBusy(true); setError(''); setNotice('');
     const key = keys.current.get(fingerprint) ?? crypto.randomUUID(); keys.current.set(fingerprint, key);
-    try { setNotice(await work(key)); keys.current.delete(fingerprint); }
-    catch (e) { setError(e instanceof Error ? e.message : 'The change could not be confirmed. Refresh to check.'); }
+    try { const done = await work(key); ++reads.current; setLoading(false); setNotice(done); keys.current.delete(fingerprint); return true; }
+    catch (e) { setError(e instanceof Error ? e.message : 'The change could not be confirmed. Refresh to check.'); return false; }
     finally { gate.current = false; setBusy(false); }
   }
   const putApp = (state: CurriculumAppState) => setView((v) => v && { ...v, curricula: v.curricula.map((c) => c.id === state.curriculumId ? { ...c, app: state } : c) });
@@ -190,7 +192,7 @@ export function CyclePanel({ curriculum, busy, actions }: { curriculum: StaffCur
         <MaterialGroup curriculum={curriculum} target={{ rankId: null, cycleId: c.id }} items={materials.filter((r) => r.cycleId === c.id)} busy={busy} actions={actions} />
       </li>)}</ol>
       <form className={s.inline} onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const f = new FormData(e.currentTarget); const n = String(f.get('name') ?? '').trim();
-        if (isValidCurriculumCycleName(n)) { void actions.createCycle(curriculum, n); e.currentTarget.reset(); } }}>
+        const form = e.currentTarget; if (isValidCurriculumCycleName(n)) void actions.createCycle(curriculum, n).then((ok) => { if (ok) form.reset(); }); }}>
         <label className={s.label}>New cycle<input className={s.field} name="name" required maxLength={80} placeholder={`Cycle ${cycles.length + 1}`} /></label>
         <button className={s.button} disabled={busy}>Add cycle</button></form>
     </section>
@@ -237,7 +239,7 @@ export function MaterialGroup({ curriculum, target, items, busy, actions }: { cu
               : <button type="button" className={s.ghost} disabled={busy} onClick={() => setConfirm(r.id)}>Remove…</button>}</div></>}
     </li>)}</ul>
     {adding ? <form className={s.addForm} onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget);
-      void actions.addMaterial(curriculum, target, String(f.get('kind')) as CurriculumResourceRecord['kind'], String(f.get('url')).trim(), String(f.get('title')).trim(), String(f.get('description') ?? '').trim()); setAdding(false); }}>
+      void actions.addMaterial(curriculum, target, String(f.get('kind')) as CurriculumResourceRecord['kind'], String(f.get('url')).trim(), String(f.get('title')).trim(), String(f.get('description') ?? '').trim()).then((ok) => { if (ok) setAdding(false); }); }}>
       <fieldset disabled={busy} className={s.stack}>
         <div className={s.grid2}><label className={s.label}>Type<select className={s.field} name="kind" defaultValue="VIDEO">{CURRICULUM_RESOURCE_KINDS.map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select></label>
           <label className={s.label}>Title<input className={s.field} name="title" required maxLength={160} /></label></div>

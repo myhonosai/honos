@@ -177,6 +177,7 @@ function api(route) {
     if (path === `${prefix}/staff-roles/permissions`) return json(route, 200, { data: [['school.view', 'View the school', false], ['attendance.record', 'Record attendance', false], ['attendance.cards.manage', 'Choose how attendance cards look', true], ['crm.lead.read', 'Read leads', false], ['billing.refund.create', 'Create refunds', true]]
       .map(([code, description, sensitive]) => ({ code, description, sensitive })), meta: {} });
     // Parent app > Curriculum (0605/0610): one cycle-based and one rank-based synthetic curriculum.
+    if (method === 'POST' && /\/parent-app\/curriculum\/[0-9a-f-]{36}\/cycles$/.test(path)) return json(route, 409, { code: 'CYCLE_NAME_TAKEN' });
     if (path === `/api/v1/staff/schools/${scope.schoolId}/parent-app/curriculum`) return json(route, 200, { data: parentCurriculum(), meta: { requestId: id(990), correlationId: id(990), replayed: false } });
     if (path === `/api/v1/staff/schools/${scope.schoolId}/parent-app/curriculum/preview/${id(820)}`) return json(route, 200, { data: parentCurriculumPreview(), meta: { requestId: id(991), correlationId: id(991), replayed: false } });
     if (path === `${prefix}/journey-recommendations`) return json(route, 200, { data: { recommendations: [], programs: [], checkouts: [], events: [] }, meta: { requestId: id(992), correlationId: id(992), replayed: false } });
@@ -519,6 +520,7 @@ await check('Parent app is its own page laid out like the texts inbox (TE3a)', a
 });
 for (const size of ['desktop', 'phone']) await check(`Parent app > Curriculum: cycle-based and rank-based setup, preview (${size})`, async () => {
   theme = 'modern'; const { ctx, page } = await open(viewports[size], '/staff/parent-app/curriculum');
+  const posts = () => report.apiRequests.filter(r => r.startsWith('POST')).length, postsBefore = posts();
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
   await page.getByText('Now: Cycle 2: Kicks, through Sun, Nov 29.').waitFor();
   assert.ok(await page.getByText('Not in the app yet').count() >= 1, 'cycle and document material is labeled');
@@ -526,8 +528,12 @@ for (const size of ['desktop', 'phone']) await check(`Parent app > Curriculum: c
   await page.locator('[data-preview]').waitFor();
   assert.equal(await page.getByRole('combobox', { name: 'Student' }).inputValue(), id(980), 'the picked student stays selected');
   await page.getByText(/^No recommendations for .+ yet\.$/).waitFor();
-  assert.equal(report.apiRequests.some(r => r.startsWith('POST')), false, 'nothing saved by looking');
+  assert.equal(posts(), postsBefore, 'nothing saved by looking');
   await page.screenshot({ path: join(results, `pca3-cycle-${size}.png`), fullPage: true }); report.screenshots.push(`pca3-cycle-${size}.png`);
+  // A refused command keeps what was typed (review P3): the mock refuses every new cycle as a duplicate name.
+  await page.getByLabel('New cycle').fill('Cycle 2: Kicks'); await page.getByLabel('New cycle').press('Enter');
+  await page.getByRole('alert').filter({ hasText: 'already has that name' }).waitFor();
+  assert.equal(await page.getByLabel('New cycle').inputValue(), 'Cycle 2: Kicks', 'a refused cycle name stays in the field');
   await page.getByRole('button', { name: /Adult Karate/ }).click();
   await page.getByRole('heading', { name: 'Material by rank' }).waitFor();
   await page.screenshot({ path: join(results, `pca3-rank-${size}.png`), fullPage: true }); report.screenshots.push(`pca3-rank-${size}.png`);
