@@ -44,12 +44,17 @@ Releasing an app version is a change to the live app, so it is done by the app o
 
 First release: 2026-11-21, version `hon-os-3` (configuration identical to `hon-os-2`, plus the extension).
 
-Next release (prepared, not released): adds the webhook subscriptions and the optional scope
-`read_shopify_payments_accounts`. Expected summary: `access_scopes (updated)` and `webhooks (updated)`, the extension
+Next release (prepared, not released): adds the webhook subscriptions and the optional scopes
+`read_shopify_payments_accounts` (Allow finance) and `write_orders` (Allow orders: front-desk sales of made-to-order
+items create a paid order, migration 0614). Expected summary: `access_scopes (updated)` and `webhooks (updated)`, the extension
 unchanged, nothing `(removed)`. Before releasing it, HON's live API must already answer
 `POST https://app.myhonos.com/api/v1/commerce/webhooks/shopify` (an unsigned request gets 401), or Shopify will retry
 and eventually drop the subscriptions.
 The `orders/*` topics carry customer data: Shopify needs protected customer data access approved for the app in the
 Dev Dashboard (API access requests) first, or the deploy can refuse those subscriptions.
+The orders HON creates carry a shipping name and address. The app's protected customer data request covers Level 1
+only today; whether creating an order with an address needs the name and address fields approved too is not settled.
+Try Allow orders and one front-desk sale on the test store (development stores do not enforce the approval) and check
+the request in the Dev Dashboard before any real store uses it.
 
 HON's API needs the same Client ID as `SHOPIFY_API_KEY` to build the theme editor links; nothing else changes on HON's side.

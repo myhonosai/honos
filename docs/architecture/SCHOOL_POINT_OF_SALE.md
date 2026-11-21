@@ -125,7 +125,7 @@ front-desk sales; HON's History and report do.
 
 ### Known limits (0613)
 
-- No Shopify order, so Shopify analytics miss front-desk sales (waits for `write_orders` and the owner).
+- No Shopify order for items the school stocks itself, so Shopify analytics miss those front-desk sales. Made-to-order items do create one (0614, below).
 - A store with several own locations cannot be adjusted (the change fails with a clear reason). Location choice is a
   later setting.
 - No background worker: waiting changes move on the next sale or a manager's Send again.
@@ -134,3 +134,77 @@ front-desk sales; HON's History and report do.
 
 Proofs: `test-pos-shopify-integrity.mjs` (9 groups, signed HTTP against the scripted Shopify), `test-pos-integrity.mjs`
 (unchanged behaviour of 0612), API `school-pos.test.cjs`, web `school-pos-ui.test.tsx`.
+
+## Made-to-order items at the register (SH2b, migration 0614)
+
+Owner (David, 2026-11-21): many of the store's products are print-on-demand, so a front-desk sale of one must create a
+Shopify order or nothing gets made. Decision on shipping: **ask at each sale**, school pickup as the default.
+
+Items the school stocks itself keep the 0613 behaviour (stock is lowered, no order). This section is only about
+variants a print provider makes (PD1 `fulfilled_by`).
+
+### What staff see
+
+- **Shopify page, Settings**: a new button **Allow orders**. It reconnects the same store asking Shopify for
+  `write_orders` as well (and editing, which the register needs). Until a manager approves it, made-to-order items are
+  not listed at the register and one line says how to turn it on.
+- **Register**: made-to-order tiles show "Made to order by <provider>". They have no count and are never out of stock.
+- With one in the cart the sale panel asks **Made-to-order items ship to**: "The school (pickup)" or "The customer's
+  address". The school is the default and uses the address saved in Settings; if that address is not complete the
+  option is off and the customer's address is asked for. Payment waits until the address is complete.
+- **Receipt / History** (not printed): "Shopify order #1042 was created ... If you refund this sale, cancel that order
+  in Shopify too", or that it is still being sent, or that it was not created.
+- **Shopify is behind**: orders that did not reach Shopify are counted with the stock changes; a manager's **Send
+  again** sends both.
+
+### How it works
+
+1. `record_pos_sale` takes an optional `shipTo`: `{kind:'SCHOOL'}` or `{kind:'CUSTOMER', name, address1, address2,
+   city, province, zip, country}`. It is required exactly when the sale has a made-to-order line
+   (`POS_SHIP_TO_REQUIRED`), refused when it has none (`POS_INVALID`), and `SCHOOL` needs a complete
+   `hon.school_locations` address (`POS_SCHOOL_ADDRESS_MISSING`). The school address is copied at sale time.
+2. The sale writes one row in `hon.pos_shopify_orders` (one per sale, however many made-to-order lines). Made-to-order
+   lines never queue a stock change.
+3. After the sale answers, the API creates the order with the seller's own authority: `begin_pos_shopify_order` hands
+   the sealed credential and at most 5 waiting orders; `finish_pos_shopify_order` records each outcome.
+4. Shopify call: `orderCreate` with only the made-to-order lines at the price HON charged, `financialStatus: PAID`,
+   the shipping address, a note with the HON receipt number, tags `hon-pos` and `hon-pos-<order row id>`, and options
+   `inventoryBehaviour: BYPASS`, `sendReceipt: false`, `sendFulfillmentReceipt: false`. No customer record and no
+   email are sent.
+5. Not made twice: before creating, HON asks Shopify for an order with that row's tag and uses it if found. Because
+   Shopify's search can lag a few seconds, an order tried less than 60 seconds ago is left alone by the next sale. A
+   manager's Send again is not held back by the 60 seconds.
+6. Outcomes: DONE keeps Shopify's order id and name and **clears the address**. Shopify refusing the order or the
+   token is FAILED. Anything uncertain waits, up to 5 attempts, then FAILED. FAILED moves only on a manager's Send
+   again. Audit and outbox rows carry ids only, never the address.
+7. If the store takes the order permission back, nothing is sent, waiting orders keep waiting, and made-to-order items
+   leave the register.
+8. A refund in HON never cancels or refunds a Shopify order that already exists; the receipt note tells staff to
+   cancel it in Shopify.
+9. A sale refunded (in full or in part) **before** its order reached Shopify never gets one: the next send closes it as
+   `SALE_REFUNDED`, forgets the address, and it is not counted as unsent or picked up by Send again. Staff sell the
+   item again if the customer still wants it. A refund recorded in the same instant an order is being sent can still
+   lose that race; the receipt then shows the order number and the cancel note.
+
+### Known limits (0614)
+
+- The Shopify order holds only the made-to-order lines at HON's line prices. HON's sales tax, sale discount and any
+  shipping charge are not on it, so its total can differ from the HON receipt. HON's receipt is the record of what
+  was paid.
+- No shipping fee is added to the front-desk sale.
+- The customer gets no Shopify email; tracking is in the Shopify order.
+- Country is typed as two letters (for example US). No address lookup.
+- Refund does not cancel a Shopify order that was already created.
+- A manager's Send again skips the 60-second hold, so pressing it within Shopify's search lag of an order whose
+  answer was lost could create a duplicate. The order's tag makes one easy to spot in Shopify.
+- The address of an order that FAILED for another reason stays on its row until it is sent; a way to close such an
+  order without sending it is a later piece.
+- Open until tried on the test store: whether a managed-install store can grant `write_orders` through HON's
+  reconnect, and the exact behaviour of each print provider when an order is created through the API.
+- 0613, also true here: if a full catalog sync runs in the short window where a stock change's answer was lost, the
+  register can show that change twice until it settles.
+
+Proofs: `test-pos-shopify-orders-integrity.mjs` (9 groups, signed HTTP against the scripted Shopify), the two older POS
+proofs, API `school-pos.test.cjs`, web `school-pos-ui.test.tsx` and `school-shopify-finance.test.tsx`.
+- Open before a real store uses it: the app's protected customer data approval is Level 1; an order with a shipping
+  name and address may need the name and address fields approved as well (see shopify-app/README.md).

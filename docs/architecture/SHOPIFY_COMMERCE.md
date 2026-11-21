@@ -441,3 +441,14 @@ the mirror and queues one idempotent `inventoryAdjustQuantities` per counted lin
 Uses the existing `write_inventory` scope; **no new scope and no Shopify order** (owner decision 2026-11-21, "stock
 now, orders later"; orders need `write_orders`). New adapter call `adjustInventory`; new entry points
 `begin_pos_shopify_stock`, `rotate_pos_shopify_credential`, `finish_pos_shopify_stock`.
+
+## SH2b: made-to-order items sold at the front desk create a Shopify order (step 6; migration 0614)
+
+Full behaviour in [SCHOOL_POINT_OF_SALE.md](SCHOOL_POINT_OF_SALE.md#made-to-order-items-at-the-register-sh2b-migration-0614).
+In short: provider-made variants are sold at the register only when the store grants **`write_orders`** (new optional
+scope, asked for by the Allow orders button; `ShopifyConnection.ordersAllowed`). Each such sale creates one PAID order
+through `orderCreate`, tagged with the HON order row id so a lost answer is found again instead of made twice, shipped
+to the school or to an address staff type. New adapter call `createPosOrder`; new entry points
+`begin_pos_shopify_order`, `finish_pos_shopify_order`. Reconnecting the same store keeps `write_orders` once granted.
+The app's next version must list `write_orders` under `optional_scopes` (shopify-app/shopify.app.toml) and the owner
+releases it; until then Shopify will not offer the permission.

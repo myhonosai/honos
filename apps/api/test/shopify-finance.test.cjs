@@ -56,8 +56,12 @@ test('SH-F1 the snapshot and view contracts are closed', () => {
   assert.equal(contracts.verifyShopifyFinanceView({ ...view, financeAllowed: false, finance: null }).finance, null);
   // Connecting: Allow finance is a separate, optional, boolean switch next to Allow editing.
   const base = { schoolId: CONN, shopDomain: SHOP };
-  assert.deepEqual(contracts.validateShopifyConnectInput(base), { ...base, allowEditing: false, allowFinance: false });
-  assert.deepEqual(contracts.validateShopifyConnectInput({ ...base, allowEditing: true, allowFinance: true }), { ...base, allowEditing: true, allowFinance: true });
+  assert.deepEqual(contracts.validateShopifyConnectInput(base), { ...base, allowEditing: false, allowFinance: false, allowOrders: false });
+  assert.deepEqual(contracts.validateShopifyConnectInput({ ...base, allowEditing: true, allowFinance: true }), { ...base, allowEditing: true, allowFinance: true, allowOrders: false });
+  // 0614: Allow orders is the third optional switch.
+  assert.equal(contracts.validateShopifyConnectInput({ ...base, allowOrders: true }).allowOrders, true);
+  assert.throws(() => contracts.validateShopifyConnectInput({ ...base, allowOrders: 1 }), /SHOPIFY_INPUT_INVALID/);
+  assert.deepEqual([...contracts.SHOPIFY_ORDER_SCOPES], ['write_orders']);
   assert.throws(() => contracts.validateShopifyConnectInput({ ...base, allowFinance: 'yes' }), /SHOPIFY_INPUT_INVALID/);
   assert.throws(() => contracts.validateShopifyConnectInput({ ...base, allowPayouts: true }), /SHOPIFY_INPUT_INVALID/);
   assert.deepEqual([...contracts.SHOPIFY_FINANCE_SCOPES], ['read_shopify_payments_accounts']);

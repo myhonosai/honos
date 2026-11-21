@@ -16,7 +16,7 @@ export type OverviewState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { 
 export const SHOPIFY_SECTIONS = ['overview', 'products', 'studio', 'changes', 'orders', 'finance', 'theme', 'inventory', 'admin', 'settings'] as const;
 export type ShopifySection = typeof SHOPIFY_SECTIONS[number];
 export type ListState<T> = { state: 'LOADING' | 'UNAVAILABLE' } | { state: 'READY'; value: T };
-export type ShopifyAction = 'connect' | 'sync' | 'disconnect' | 'allowEditing' | 'allowFinance' | 'propose' | 'approve' | 'cancelChange';
+export type ShopifyAction = 'connect' | 'sync' | 'disconnect' | 'allowEditing' | 'allowFinance' | 'allowOrders' | 'propose' | 'approve' | 'cancelChange';
 /** `target` is the change a command was about; `change` is the server's verified answer for it. */
 export type ShopifyOutcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | ShopifyErrorKind; action: ShopifyAction; sync?: ShopifySyncResult; change?: ShopifyProductChange; target?: string }>;
 
@@ -27,7 +27,7 @@ export type ShopifyViewProps = Readonly<{
   onPropose?: ((change: ProposeRequest) => void | Promise<boolean>) | undefined; onApprove?: ((change: ShopifyProductChange) => void) | undefined;
   onCancelChange?: ((change: ShopifyProductChange) => void) | undefined; onAllowEditing?: (() => void) | undefined;
   /** SH-F1: the Shopify Payments snapshot (managers only) and the switch that asks Shopify for it. */
-  finance?: ListState<ShopifyFinanceView> | undefined; onAllowFinance?: (() => void) | undefined;
+  finance?: ListState<ShopifyFinanceView> | undefined; onAllowFinance?: (() => void) | undefined; onAllowOrders?: (() => void) | undefined;
   /** TB2: the storefront settings and theme editor links (managers only) and the last storefront command. */
   storefront?: StorefrontState | undefined; storefrontOutcome?: StorefrontOutcome | undefined; onStorefrontCommand?: ((c: StorefrontCommand) => void) | undefined;
   onRefresh?: (() => void) | undefined; onShop?: ((value: string) => void) | undefined; onConnect?: (() => void) | undefined;
@@ -448,10 +448,14 @@ function Settings({ p, t, read, c }: { p: ShopifyViewProps; t: T; read: ShopifyO
       <h2>{t('perm_title')}</h2>
       <ul className={styles.plainList}><li>{t('perm_read')}</li><li>{t('perm_orders')}</li>
         {edit?.editProducts && <li data-perm="products">{t('perm_editProducts')}</li>}{edit?.editCosts && <li data-perm="costs">{t('perm_editCosts')}</li>}
-        {p.finance?.state === 'READY' && p.finance.value.financeAllowed && <li data-perm="finance">{t('perm_finance')}</li>}</ul>
+        {p.finance?.state === 'READY' && p.finance.value.financeAllowed && <li data-perm="finance">{t('perm_finance')}</li>}
+        {c.ordersAllowed && <li data-perm="orders">{t('perm_createOrders')}</li>}</ul>
       <p className={styles.meta}>{t(edit?.editProducts ? 'perm_approval' : 'perm_noWrite')}</p>
       {edit && !(edit.editProducts && edit.editCosts) && read.canManage && c.status === 'CONNECTED' &&
         <div className={styles.row}><button type="button" className={styles.secondary} disabled={p.locked} onClick={p.onAllowEditing}>{p.locked && p.outcome?.action === 'allowEditing' ? t('connecting') : t('allowEditing')}</button></div>}
+      {!c.ordersAllowed && read.canManage && c.status === 'CONNECTED' && <>
+        <p className={styles.meta}>{t('allowOrdersHelp')}</p>
+        <div className={styles.row}><button type="button" className={styles.secondary} data-allow-orders disabled={p.locked} onClick={p.onAllowOrders}>{p.locked && p.outcome?.action === 'allowOrders' ? t('connecting') : t('allowOrders')}</button></div></>}
     </div>
   </div>;
 }

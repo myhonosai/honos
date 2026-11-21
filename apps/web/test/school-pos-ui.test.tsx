@@ -3,8 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { PosItem, PosRead, PosSale, PosShopify, PosShopifyItem } from '@hon/contracts';
 import { PosError, posApi, posErrorFor, keepPosForRetry } from '../src/components/school-pos/http';
-import { EMPTY_CART, addItem, addQuick, addShopify, cartTotals, changeDue, formatMoney, parseMoney, percentToBps, refreshCart, saleInput, setQuantity } from '../src/components/school-pos/model';
-import { PosHistory, PosInventory, PosRegister, Receipt, SaleShopifyNote, itemInput } from '../src/components/school-pos/views';
+import { EMPTY_CART, addItem, addQuick, addShopify, cartTotals, changeDue, formatMoney, parseMoney, percentToBps, refreshCart, saleInput, setQuantity, emptyShip, hasMadeToOrder, shipToInput } from '../src/components/school-pos/model';
+import { PosHistory, PosInventory, PosRegister, Receipt, SaleOrderNote, SaleShopifyNote, itemInput } from '../src/components/school-pos/views';
 import { id } from './account-status-fixtures';
 
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
@@ -17,16 +17,17 @@ const signal = () => new AbortController().signal;
 const fails = async (p: Promise<unknown>) => { try { await p; } catch (e) { return e as PosError; } throw new Error('expected a failure'); };
 const item = (n: number, o: Partial<PosItem> = {}): PosItem => ({ itemId: id(100 + n), name: 'Item ' + n, sku: null, category: 'UNIFORMS', priceMinor: 10000, taxable: true,
   trackStock: true, stock: 5, lowStockAt: 2, lowStock: false, active: true, version: 1, ...o });
-const NO_SHOP: PosShopify = { state: 'NOT_CONNECTED', shopName: null, items: [], unsent: { waiting: 0, failed: 0 } };
-const variant = (n: number, o: Partial<PosShopifyItem> = {}): PosShopifyItem => ({ variantId: String(7000 + n), productId: String(900 + n), name: 'Dojo tee - M', sku: 'TEE-M', priceMinor: 2500, tracked: true, stock: 3, imageUrl: null, ...o });
-const shop = (o: Partial<PosShopify> = {}): PosShopify => ({ state: 'READY', shopName: 'Synthetic Dojo Shop', items: [variant(1), variant(2, { name: 'Gift card', sku: null, tracked: false, stock: null })], unsent: { waiting: 0, failed: 0 }, ...o });
+const NO_MADE = { state: 'NONE' as const, pickup: false, unsent: { waiting: 0, failed: 0 } };
+const NO_SHOP: PosShopify = { state: 'NOT_CONNECTED', shopName: null, items: [], unsent: { waiting: 0, failed: 0 }, madeToOrder: NO_MADE };
+const variant = (n: number, o: Partial<PosShopifyItem> = {}): PosShopifyItem => ({ variantId: String(7000 + n), productId: String(900 + n), name: 'Dojo tee - M', sku: 'TEE-M', priceMinor: 2500, tracked: true, stock: 3, imageUrl: null, madeBy: null, ...o });
+const shop = (o: Partial<PosShopify> = {}): PosShopify => ({ state: 'READY', shopName: 'Synthetic Dojo Shop', items: [variant(1), variant(2, { name: 'Gift card', sku: null, tracked: false, stock: null })], unsent: { waiting: 0, failed: 0 }, madeToOrder: NO_MADE, ...o });
 const read = (o: Partial<PosRead> = {}): PosRead => ({ schoolId: school, timezone: 'America/Los_Angeles', today: '2026-11-16', canManage: true,
   settings: { currency: 'USD', taxRateBps: 825, version: 1 }, items: [item(1), item(2, { name: 'Belt test', category: 'TESTING', priceMinor: 7500, taxable: false, trackStock: false, stock: null, lowStockAt: null })],
   todaySales: { count: 2, totalMinor: 30000 }, shopify: NO_SHOP, ...o });
 const sale: PosSale = { saleId: id(300), receiptNumber: 'POS-20261116-0001', soldAt: '2026-11-16T18:00:00.000Z', localDate: '2026-11-16', customer: { personId: id(30), name: 'Mina Park' },
   firstItem: 'Item 1', itemCount: 2, currency: 'USD', totalMinor: 21650, refundedMinor: 0, method: 'CASH', status: 'PAID', schoolName: 'Synthetic Dojo', soldBy: 'Front desk',
-  lines: [{ lineId: id(301), itemId: id(101), name: 'Item 1', sku: null, category: 'UNIFORMS', unitPriceMinor: 10000, quantity: 2, lineTotalMinor: 20000, taxable: true, stockTracked: true, restockedQuantity: 0, shopifyVariantId: null }],
-  subtotalMinor: 20000, discount: null, taxRateBps: 825, taxMinor: 1650, reference: null, note: null, refunds: [], shopifyStock: { waiting: 0, done: 0, failed: 0 } };
+  lines: [{ lineId: id(301), itemId: id(101), name: 'Item 1', sku: null, category: 'UNIFORMS', unitPriceMinor: 10000, quantity: 2, lineTotalMinor: 20000, taxable: true, stockTracked: true, restockedQuantity: 0, shopifyVariantId: null, madeBy: null }],
+  subtotalMinor: 20000, discount: null, taxRateBps: 825, taxMinor: 1650, reference: null, note: null, refunds: [], shopifyStock: { waiting: 0, done: 0, failed: 0 }, shopifyOrder: null };
 
 it('builds the cart like the front desk does and sends the total the screen shows', () => {
   let cart = addItem(addItem(EMPTY_CART, item(1)), item(1));
@@ -166,4 +167,51 @@ it('shows what happened to Shopify stock under a receipt, on the register and in
   const history = renderToStaticMarkup(<PosHistory read={read()} range={null} sales={{ state: 'IDLE' }} selected={{ ...sold, shopifyStock: { waiting: 0, done: 1, failed: 0 } }} outcome={null} locked={false}
     canRetry={false} onRange={() => {}} onOpen={() => {}} onClose={() => {}} onRun={() => {}} onTryAgain={() => {}}/>);
   expect(history).toContain('2 × Dojo tee - M'); expect(history).toContain('Shopify stock is updated for this sale.');
+});
+
+it('sells a made-to-order Shopify item only with a place to ship it, and says what happened to the order', () => {
+  const hoodie = variant(3, { name: 'Dojo hoodie - L', sku: 'HOOD-L', priceMinor: 4000, tracked: false, stock: null, madeBy: 'Sample Print Co' });
+  const store = (o: Partial<PosShopify['madeToOrder']> = {}) => shop({ items: [variant(1), hoodie], madeToOrder: { state: 'READY', pickup: true, unsent: { waiting: 0, failed: 0 }, ...o } });
+  const cart = addShopify(addShopify(EMPTY_CART, variant(1)), hoodie);
+  expect(hasMadeToOrder(cart)).toBe(true); expect(hasMadeToOrder(addShopify(EMPTY_CART, variant(1)))).toBe(false);
+  // The address staff type: trimmed, country upper-cased, incomplete is not sent.
+  const typed = { ...emptyShip('CUSTOMER'), name: ' Sample  Parent ', address1: '12 Example Road', city: 'Springfield', province: 'IL', zip: '62701', country: 'us' };
+  const home = { kind: 'CUSTOMER', name: 'Sample Parent', address1: '12 Example Road', address2: null, city: 'Springfield', province: 'IL', zip: '62701', country: 'US' } as const;
+  expect(shipToInput(typed)).toEqual(home);
+  expect(shipToInput({ ...typed, city: ' ' })).toBeNull(); expect(shipToInput({ ...typed, country: 'USA' })).toBeNull();
+  expect(shipToInput(emptyShip('SCHOOL'))).toEqual({ kind: 'SCHOOL' });
+  // shipTo rides on the sale only when a made-to-order line is in the cart.
+  expect(saleInput(school, cart, 825, 'CASH', '', '', home).shipTo).toEqual(home);
+  expect('shipTo' in saleInput(school, addShopify(EMPTY_CART, variant(1)), 825, 'CASH', '', '', home)).toBe(false);
+  expect('shipTo' in saleInput(school, cart, 825, 'CASH', '', '')).toBe(false);
+  // A catalog refresh that no longer lists the hoodie (permission taken back) drops it from the cart.
+  expect(refreshCart(cart, [], [variant(1)]).lines).toHaveLength(1);
+  const noop = () => undefined;
+  const register = (r: PosRead, c = cart) => renderToStaticMarkup(<PosRegister read={r} cart={c} receipt={null} outcome={null} locked={false} canRetry={false} found={null}
+    onCart={noop} onSearchPeople={noop} onClearFound={noop} onNewSale={noop} onPay={noop} onTryAgain={noop}/>);
+  const pickup = register(read({ shopify: store() }));
+  expect(pickup).toContain('Made to order by Sample Print Co');
+  expect(pickup).toContain('Made-to-order items ship to');
+  expect(pickup).toMatch(/aria-checked="true"[^>]*>The school \(pickup\)/);
+  expect(pickup).not.toContain('Street address');
+  expect(pickup).toMatch(/<button type="button" class="[^"]*pay[^"]*">Take/);
+  // No saved school address: pickup is off, the customer's address is asked for, and payment waits for it.
+  const typedHome = register(read({ shopify: store({ pickup: false }) }));
+  expect(typedHome).toContain('School pickup needs the school&#x27;s full address.');
+  expect(typedHome).toContain('Street address');
+  expect(typedHome).toMatch(/<button type="button" class="[^"]*pay[^"]*" disabled="">Take/);
+  // A cart without a made-to-order line never asks.
+  expect(register(read({ shopify: store() }), addShopify(EMPTY_CART, variant(1)))).not.toContain('Made-to-order items ship to');
+  // Without the permission the register says how to turn it on.
+  expect(register(read({ shopify: shop({ madeToOrder: { state: 'NEEDS_PERMISSION', pickup: true, unsent: { waiting: 0, failed: 0 } } }) }), EMPTY_CART)).toContain('turn on Allow orders on the Shopify page');
+  // Orders that did not reach Shopify are counted with the stock changes.
+  const behind = register(read({ shopify: { ...store({ unsent: { waiting: 1, failed: 1 } }), unsent: { waiting: 1, failed: 0 } } }), EMPTY_CART);
+  expect(behind).toContain('1 stock change and 2 made-to-order orders have not reached Shopify yet.');
+  expect(register(read({ shopify: store({ unsent: { waiting: 0, failed: 1 } }) }), EMPTY_CART)).toContain('1 made-to-order order has not reached Shopify yet.');
+  const note = (o: PosSale['shopifyOrder']) => renderToStaticMarkup(<SaleOrderNote sale={{ ...sale, shopifyOrder: o }}/>);
+  expect(note(null)).toBe('');
+  expect(note({ status: 'DONE', shipTo: 'SCHOOL', name: '#1042', failureCode: null })).toContain('Shopify order #1042 was created for the made-to-order items. It ships to the school for pickup. If you refund this sale, cancel that order in Shopify too.');
+  expect(note({ status: 'WAITING', shipTo: 'CUSTOMER', name: null, failureCode: null })).toContain('still being sent. It ships to the customer.');
+  expect(note({ status: 'FAILED', shipTo: 'CUSTOMER', name: null, failureCode: 'SHOPIFY_REJECTED' })).toContain('was not created, so nothing is being made yet.');
+  expect(note({ status: 'FAILED', shipTo: 'CUSTOMER', name: null, failureCode: 'SALE_REFUNDED' })).toContain('because this sale was refunded before the order was sent');
 });

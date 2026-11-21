@@ -93,8 +93,10 @@ export const shopifyApi = {
     return out;
   },
   /** Starts a connection. The answer is Shopify's approval page (or, in development, HON's own return page). */
-  async connect(schoolId: string, shopDomain: string, signal: AbortSignal, owned: Owned, allowEditing = false, allowFinance = false): Promise<ShopifyConnectStart> {
-    const body = input(validateShopifyConnectInput, { schoolId: school(schoolId), shopDomain, allowEditing, allowFinance });
+  async connect(schoolId: string, shopDomain: string, signal: AbortSignal, owned: Owned, allowEditing = false, allowFinance = false, allowOrders = false): Promise<ShopifyConnectStart> {
+    // allowOrders (0614) is sent only when asked for, so the request is unchanged for everyone else.
+    const { allowOrders: orders, ...plain } = input(validateShopifyConnectInput, { schoolId: school(schoolId), shopDomain, allowEditing, allowFinance, allowOrders });
+    const body = orders ? { ...plain, allowOrders: true } : plain;
     const out = await answer('/api/v1/school/shopify/connect', signal, owned, verifyShopifyConnectStart, JSON.stringify(body));
     if (out.shopDomain !== body.shopDomain) throw new ShopifyError('UNKNOWN');
     const url = new URL(out.authorizeUrl);

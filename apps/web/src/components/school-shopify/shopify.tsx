@@ -194,20 +194,22 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
     setOutcome(next); setConfirming(false); setRefresh((n) => n + 1);
   }, [api, schoolId, overview]);
 
-  const onConnect = useCallback(async (action: 'connect' | 'allowEditing' | 'allowFinance' = 'connect') => {
+  const onConnect = useCallback(async (action: 'connect' | 'allowEditing' | 'allowFinance' | 'allowOrders' = 'connect') => {
     if (sending.current || !schoolId) return;
     // Allow editing / Allow finance reconnect the same store, asking Shopify for those permissions as well. Reconnecting
     // the same store keeps what it already allows (Shopify replaces the whole grant on each approval).
     const current = overview.state === 'READY' ? overview.read.connection?.shopDomain ?? '' : '';
     const domain = action === 'connect' ? shop.trim() : current;
     const same = !!current && (action !== 'connect' || shop.trim().toLowerCase().replace(/\.myshopify\.com$/, '') === current.replace(/\.myshopify\.com$/, ''));
-    const allowEditing = action === 'allowEditing' || (same && changes.state === 'READY' && changes.value.editProducts);
+    // Allow orders (0614) is for selling made-to-order items at the front desk, which also needs editing, so it asks for both.
+    const allowOrders = action === 'allowOrders' || (same && overview.state === 'READY' && overview.read.connection?.ordersAllowed === true);
+    const allowEditing = action === 'allowEditing' || action === 'allowOrders' || (same && changes.state === 'READY' && changes.value.editProducts);
     const allowFinance = action === 'allowFinance' || (same && finance.state === 'READY' && finance.value.financeAllowed);
     sending.current = true; const shown = privacy.current;
     setLocked(true); setOutcome({ kind: 'SENDING', action });
     try {
       // A new attempt each time: a lost answer only leaves an unused approval that expires in 10 minutes.
-      const r = await api.connect(schoolId, domain, AbortSignal.timeout(30000), () => mounted.current && shown === privacy.current, allowEditing, allowFinance);
+      const r = await api.connect(schoolId, domain, AbortSignal.timeout(30000), () => mounted.current && shown === privacy.current, allowEditing, allowFinance, allowOrders);
       sending.current = false;
       if (shown === privacy.current && mounted.current) navigate(r.authorizeUrl);
     } catch (error) {
@@ -224,7 +226,7 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
       onConnect={() => { void onConnect(); }} onSync={() => { void run('sync'); }} onConfirm={(open) => { if (!locked) { setConfirming(open); setOutcome(null); } }}
       onDisconnect={() => { void run('disconnect'); }} onSection={go}
       changes={changes} onPropose={onPropose} onApprove={onApprove} onCancelChange={onCancelChange} onAllowEditing={() => { void onConnect('allowEditing'); }}
-      finance={finance} onAllowFinance={() => { void onConnect('allowFinance'); }}
+      finance={finance} onAllowFinance={() => { void onConnect('allowFinance'); }} onAllowOrders={() => { void onConnect('allowOrders'); }}
       storefront={storefront} storefrontOutcome={storefrontOutcome} onStorefrontCommand={(c) => { void onStorefrontCommand(c); }}
       schoolName={shell.schoolName} brand={brand} merchAi={marcus} />
   </div>;

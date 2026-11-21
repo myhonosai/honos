@@ -155,7 +155,7 @@ test('stock is changed only at the one active location the school runs itself', 
 test('a recorded sale stays recorded when Shopify cannot be reached, and with no Shopify app the change simply waits', async () => {
   const saleId = randomUUID();
   const sale = { note: null, lines: [{ sku: 'BELT-W', name: 'Dojo gear - White belt', itemId: null, lineId: randomUUID(), taxable: true, category: 'SHOPIFY', quantity: 1,
-    stockTracked: true, lineTotalMinor: 1000, unitPriceMinor: 1000, shopifyVariantId: '4001', restockedQuantity: 0 }], method: 'CASH', saleId, soldAt: '2026-11-21T02:44:35.351Z',
+    stockTracked: true, lineTotalMinor: 1000, unitPriceMinor: 1000, shopifyVariantId: '4001', madeBy: null, restockedQuantity: 0 }], shopifyOrder: null, method: 'CASH', saleId, soldAt: '2026-11-21T02:44:35.351Z',
     soldBy: 'Cashier', status: 'PAID', refunds: [], currency: 'USD', customer: { name: null, personId: null }, discount: null, taxMinor: 0, firstItem: 'Dojo gear - White belt',
     itemCount: 1, localDate: '2026-11-20', reference: null, schoolName: 'POS school', taxRateBps: 0, totalMinor: 1000, shopifyStock: { done: 0, failed: 0, waiting: 1 },
     receiptNumber: 'POS-20261120-0002', refundedMinor: 0, subtotalMinor: 1000 };
@@ -163,7 +163,7 @@ test('a recorded sale stays recorded when Shopify cannot be reached, and with no
   const db = fakeDatabase((op) => { if (op === 'record') return { sale, replayed: false }; throw new Error('database gone'); });
   const out = await new SchoolPosService(db, { vault, adapter: {} }).command(req, 'record', body, randomUUID());
   assert.equal(out.sale.saleId, saleId);
-  assert.deepEqual(db.calls.map((c) => c.op), ['record', 'shopifyStockBegin', 'sale']);
+  assert.deepEqual(db.calls.map((c) => c.op), ['record', 'shopifyStockBegin', 'shopifyOrderBegin', 'sale']);
   const alone = fakeDatabase((op) => { if (op === 'record') return { sale, replayed: false }; throw new Error('database gone'); });
   await new SchoolPosService(alone).command(req, 'record', body, randomUUID());
   assert.deepEqual(alone.calls.map((c) => c.op), ['record', 'sale']);
@@ -192,4 +192,75 @@ test('Shopify gets one read and one idempotent inventoryAdjustQuantities per cha
   const refused = (n) => n === 1 ? variant([level(5)]) : { inventoryAdjustQuantities: { inventoryAdjustmentGroup: null, userErrors: [{ field: ['input'], message: 'x' }] } };
   assert.deepEqual(await new GraphqlShopifyAdapter('client', 'secret', answer(refused), async () => {}).adjustInventory('proof-dojo.myshopify.com', 'tok', input), { outcome: 'REFUSED', reason: 'SHOPIFY_REJECTED' });
   await assert.rejects(new GraphqlShopifyAdapter('client', 'secret', answer(done), async () => {}).adjustInventory('proof-dojo.myshopify.com', 'tok', { ...input, delta: 0 }));
+});
+
+// 0614: made-to-order items sold at the desk become one paid Shopify order.
+const { begunPosOrders, sendPosOrders, posOrderPrice } = require('../dist/pos/pos-shopify-order.js');
+const { posOrderVariables, posOrderTag } = require('../dist/commerce/shopify/shopify-adapter.js');
+const HOME = { name: 'Sample Parent', address1: '12 Example Road', address2: null, city: 'Springfield', province: 'IL', zip: '62701', country: 'US' };
+function begunOrders(orders, o = {}) {
+  const { tasks: _t, ...w } = begun([], o);
+  return { ...w, orders: orders.map((t) => ({ orderTaskId: randomUUID(), saleId: randomUUID(), attempts: 1, receiptNumber: 'POS-20261121-0001', currency: 'USD', shipTo: HOME,
+    lines: [{ variantId: '4003', quantity: 2, unitPriceMinor: 4000 }], ...t })) };
+}
+function orderApp(answer) {
+  const sent = [];
+  return { sent, vault, adapter: {
+    async createPosOrder(shop, token, input) { sent.push({ shop, token, ...input }); const r = typeof answer === 'function' ? answer(sent.length, input) : answer; if (r instanceof Error) throw r; return r; },
+    async refresh() { throw new Error('not expected'); } } };
+}
+function orderSteps() { const finished = []; return { finished, rotate: async () => {}, finish: async (id, outcome, code, order) => { finished.push([id, outcome, code, order]); } }; }
+
+test('only a READY answer with well-formed waiting orders is sent', () => {
+  const w = begunOrders([{}]);
+  assert.equal(begunPosOrders(w).orders.length, 1);
+  for (const bad of [null, { ...w, state: 'NEEDS_ORDERS' }, { ...w, orders: [] }, { ...w, credential: null }, { ...w, orders: [{ ...w.orders[0], shipTo: null }] },
+    { ...w, orders: [{ ...w.orders[0], shipTo: { ...HOME, country: 'usa' } }] }, { ...w, orders: [{ ...w.orders[0], lines: [] }] },
+    { ...w, orders: [{ ...w.orders[0], lines: [{ variantId: '4003', quantity: 0, unitPriceMinor: 1 }] }] }, { ...w, orders: [{ ...w.orders[0], orderTaskId: 'x' }] },
+    { ...w, orders: Array.from({ length: 6 }, () => w.orders[0]) }]) assert.equal(begunPosOrders(bad), null);
+  assert.equal(posOrderPrice(4000, 'USD'), '40.00'); assert.equal(posOrderPrice(5, 'USD'), '0.05'); assert.equal(posOrderPrice(15000, 'KRW'), '15000');
+});
+
+test('each waiting order is one Shopify order keyed by its row; a refusal is FAILED, an uncertain answer waits until the limit', async () => {
+  const w = begunPosOrders(begunOrders([{}, {}, { attempts: POS_STOCK_MAX_ATTEMPTS }]));
+  const app = orderApp((n) => n === 1 ? { outcome: 'DONE', orderId: '900', orderName: '#1001' } : n === 2 ? { outcome: 'REFUSED', reason: 'SHOPIFY_REJECTED' } : new ShopifyProviderError('UNAVAILABLE')), s = orderSteps();
+  await sendPosOrders(app, () => T0, w, s);
+  assert.deepEqual(app.sent[0], { shop: w.shopDomain, token: 'access-1', key: w.orders[0].orderTaskId, currency: 'USD', shipTo: HOME,
+    note: 'Paid at the front desk. HON receipt POS-20261121-0001.', lines: [{ variantId: '4003', quantity: 2, unitPrice: '40.00' }] });
+  assert.deepEqual(s.finished, [[w.orders[0].orderTaskId, 'DONE', null, { orderId: '900', orderName: '#1001' }], [w.orders[1].orderTaskId, 'FAILED', 'SHOPIFY_REJECTED', null],
+    [w.orders[2].orderTaskId, 'FAILED', 'SHOPIFY_UNAVAILABLE', null]]);
+  const again = begunPosOrders(begunOrders([{}, {}])), b = orderApp(new ShopifyProviderError('AUTH')), s2 = orderSteps();
+  await sendPosOrders(b, () => T0, again, s2);
+  assert.equal(b.sent.length, 1);
+  assert.deepEqual(s2.finished.map((f) => f.slice(1)), [['FAILED', 'TOKEN_REJECTED', null], ['FAILED', 'TOKEN_REJECTED', null]]);
+  const one = begunPosOrders(begunOrders([{}])), c = orderApp(new ShopifyProviderError('RATE_LIMITED')), s3 = orderSteps();
+  await sendPosOrders(c, () => T0, one, s3);
+  assert.deepEqual(s3.finished.map((f) => f.slice(1)), [['RETRY', 'SHOPIFY_RATE_LIMITED', null]]);
+  const broken = begunPosOrders(begunOrders([{}])), d = orderApp(new TypeError('bug')), s4 = orderSteps();
+  await assert.rejects(() => sendPosOrders(d, () => T0, broken, s4), TypeError);
+  assert.deepEqual(s4.finished.map((f) => f.slice(1)), [['RETRY', 'HON_SEND_FAILED', null]]);
+});
+
+test('Shopify is asked for the tag first and gets one paid orderCreate with no email and stock left alone', async () => {
+  const { GraphqlShopifyAdapter } = require('../dist/commerce/shopify/shopify-adapter.js');
+  const sent = [], key = randomUUID();
+  const answer = (data) => async (url, init) => { sent.push(JSON.parse(init.body)); return new Response(JSON.stringify({ data: data(sent.length) }), { status: 200, headers: { 'Content-Type': 'application/json' } }); };
+  const input = { key, currency: 'USD', note: 'Paid at the front desk. HON receipt POS-1.', shipTo: HOME, lines: [{ variantId: '4003', quantity: 2, unitPrice: '40.00' }] };
+  const adapter = (data) => new GraphqlShopifyAdapter('client', 'secret', answer(data), async () => {});
+  const made = (n) => n === 1 ? { orders: { nodes: [] } } : { orderCreate: { order: { id: 'gid://shopify/Order/900', name: '#1001' }, userErrors: [] } };
+  assert.deepEqual(await adapter(made).createPosOrder('proof-dojo.myshopify.com', 'tok', input), { outcome: 'DONE', orderId: '900', orderName: '#1001' });
+  assert.deepEqual(sent[0].variables, { query: `tag:'hon-pos-${key}'` });
+  assert.match(sent[1].query, /orderCreate\(order: \$order, options: \$options\)/);
+  assert.deepEqual(sent[1].variables, { order: { currency: 'USD', financialStatus: 'PAID', note: input.note, tags: ['hon-pos', posOrderTag(key)],
+    lineItems: [{ variantId: 'gid://shopify/ProductVariant/4003', quantity: 2, priceSet: { shopMoney: { amount: '40.00', currencyCode: 'USD' } } }],
+    shippingAddress: { lastName: 'Sample Parent', address1: '12 Example Road', city: 'Springfield', provinceCode: 'IL', zip: '62701', countryCode: 'US' } },
+    options: { inventoryBehaviour: 'BYPASS', sendReceipt: false, sendFulfillmentReceipt: false } });
+  assert(!JSON.stringify(sent[1].variables).match(/email|customer/i));
+  sent.length = 0;
+  assert.deepEqual(await adapter(() => ({ orders: { nodes: [{ id: 'gid://shopify/Order/900', name: '#1001' }] } })).createPosOrder('proof-dojo.myshopify.com', 'tok', input), { outcome: 'DONE', orderId: '900', orderName: '#1001' });
+  assert.equal(sent.length, 1);
+  sent.length = 0;
+  const refused = (n) => n === 1 ? { orders: { nodes: [] } } : { orderCreate: { order: null, userErrors: [{ field: ['order'], message: 'x' }] } };
+  assert.deepEqual(await adapter(refused).createPosOrder('proof-dojo.myshopify.com', 'tok', input), { outcome: 'REFUSED', reason: 'SHOPIFY_REJECTED' });
+  for (const bad of [{ key: 'x' }, { currency: 'usd' }, { lines: [] }, { lines: [{ variantId: '4003', quantity: 1, unitPrice: '4.005' }] }]) assert.throws(() => posOrderVariables({ ...input, ...bad }));
 });

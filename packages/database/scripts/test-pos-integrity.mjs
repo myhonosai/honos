@@ -66,7 +66,8 @@ try{
   assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[runtime.username,'hon.'+t,p]))[0].ok,false,t+' '+p);
  for(const t of posTables)assert.deepEqual((await q("SELECT relrowsecurity r,relforcerowsecurity f,(SELECT count(*) FROM pg_policy WHERE polrelid=c.oid)::int n FROM pg_class c WHERE oid=('hon.'||$1)::regclass",[t]))[0],{r:true,f:true,n:0});
  const entries=['read_pos','read_pos_sales','read_pos_sale','save_pos_settings','save_pos_item','adjust_pos_stock','record_pos_sale','refund_pos_sale',
-  'begin_pos_shopify_stock','rotate_pos_shopify_credential','finish_pos_shopify_stock']; // the last three are 0613 (test-pos-shopify-integrity.mjs)
+  'begin_pos_shopify_stock','rotate_pos_shopify_credential','finish_pos_shopify_stock', // 0613 (test-pos-shopify-integrity.mjs)
+  'begin_pos_shopify_order','finish_pos_shopify_order']; // 0614 (test-pos-shopify-orders-integrity.mjs)
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE 'pos\\_%' OR p.proname LIKE '%\\_pos' OR p.proname LIKE '%\\_pos\\_%')");
  for(const e of entries)assert(fns.some(f=>f.proname===e),e);
  for(const f of fns){assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entries.includes(f.proname),f.proname);
@@ -92,7 +93,7 @@ try{
 
  // 2. Empty register read, permissions and scope.
  const r0=ok(await read(cashier,A.schoolId));
- assert.deepEqual({...r0,today:'x'},{schoolId:A.schoolId,timezone:'America/Los_Angeles',today:'x',canManage:false,settings:{currency:'USD',taxRateBps:0,version:null},items:[],todaySales:{count:0,totalMinor:0},shopify:{state:'NOT_CONNECTED',shopName:null,items:[],unsent:{waiting:0,failed:0}}});
+ assert.deepEqual({...r0,today:'x'},{schoolId:A.schoolId,timezone:'America/Los_Angeles',today:'x',canManage:false,settings:{currency:'USD',taxRateBps:0,version:null},items:[],todaySales:{count:0,totalMinor:0},shopify:{state:'NOT_CONNECTED',shopName:null,items:[],unsent:{waiting:0,failed:0},madeToOrder:{state:'NONE',pickup:false,unsent:{waiting:0,failed:0}}}});
  assert.equal(ok(await read(manager,A.schoolId)).canManage,true);
  for(const who of [staff,outsider,managerB])await denied(()=>read(who,A.schoolId),403,'POS_FORBIDDEN');
  // Staff only: an HQ operator or a family-coded role holding pos.manage at this school is still refused.

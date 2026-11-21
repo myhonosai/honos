@@ -4,7 +4,7 @@ import {
 } from '@nestjs/common';
 import { configuredPublicOrigin } from '@hon/auth';
 import {
-  SHOPIFY_EDIT_SCOPES, SHOPIFY_FINANCE_SCOPES, SHOPIFY_STOREFRONT_BLOCKS, validateShopifyStorefrontPublish, validateShopifyStorefrontSave,
+  SHOPIFY_EDIT_SCOPES, SHOPIFY_FINANCE_SCOPES, SHOPIFY_ORDER_SCOPES, SHOPIFY_STOREFRONT_BLOCKS, validateShopifyStorefrontPublish, validateShopifyStorefrontSave,
   verifyShopifyStorefront, verifyShopifyStorefrontPublishResult, type ShopifyStorefront, type ShopifyStorefrontLinks, type ShopifyStorefrontPublishResult,
   type ShopifyStorefrontSettings, SHOPIFY_RETURN_PATH, verifyShopifyFinanceSnapshot, verifyShopifyFinanceView, type ShopifyFinanceView, validateShopifyChangeCommandInput, validateShopifyProposeInput, verifyShopifyChangeResult,
   verifyShopifyProductChange, verifyShopifyProductChanges, type ShopifyChangeResult, type ShopifyProductChanges, validateShopifyCompleteInput, validateShopifyConnectInput, validateShopifyDisconnectInput, validateShopifySyncInput,
@@ -153,9 +153,10 @@ export class ShopifyService {
     const r = raw as { shopDomain?: unknown; expiresAt?: unknown } | null;
     if (!r || r.shopDomain !== input.shopDomain) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
     const redirectUri = origin + SHOPIFY_RETURN_PATH;
-    // Allow editing (SH4a) and Allow finance (SH-F1) ask for their scopes too; connecting alone stays read-only.
+    // Allow editing (SH4a), Allow finance (SH-F1) and Allow orders (SH2b) ask for their scopes too; connecting alone stays read-only.
     // The storefront blocks (TB2) need no scope: HON writes only its own app-data metafield.
-    const scopes = [...app.scopes, ...(input.allowEditing ? SHOPIFY_EDIT_SCOPES : []), ...(input.allowFinance ? SHOPIFY_FINANCE_SCOPES : [])];
+    const scopes = [...app.scopes, ...(input.allowEditing ? SHOPIFY_EDIT_SCOPES : []), ...(input.allowFinance ? SHOPIFY_FINANCE_SCOPES : []),
+      ...(input.allowOrders ? SHOPIFY_ORDER_SCOPES : [])];
     const authorizeUrl = app.fake
       ? `${redirectUri}?${app.fake.approve(input.shopDomain, state, undefined, scopes)}`
       : shopifyAuthorizeUrl({ shop: input.shopDomain, clientId: app.clientId, scopes, redirectUri, state });
