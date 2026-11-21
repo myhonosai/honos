@@ -33,6 +33,7 @@ const en = {
   tPromoHead: 'BELT PROMOTION', tPromoSub: 'Congratulations to every student testing this month!', tPromoBody: 'Date · Time · Place',
   tSchedHead: 'CLASS SCHEDULE', tSchedBody: 'Mon & Wed  4:30 PM  Little Dragons\nMon & Wed  5:30 PM  Kids\nTue & Thu  6:30 PM  Teens & Adults\nSaturday  10:00 AM  Open mat',
   tContact: 'Your school · phone · website', tBack: 'Thank you for training with us!',
+  photosLoading: 'Photos are still loading. Try the download again in a moment.',
 };
 export type DesignKey = keyof typeof en;
 
@@ -69,6 +70,7 @@ const ko: Record<DesignKey, string> = {
   tPromoHead: '띠 승급 심사', tPromoSub: '이번 달 심사를 보는 모든 수련생을 축하합니다!', tPromoBody: '날짜 · 시간 · 장소',
   tSchedHead: '수업 시간표', tSchedBody: '월·수  오후 4:30  리틀 드래곤\n월·수  오후 5:30  어린이\n화·목  오후 6:30  청소년·성인\n토요일  오전 10:00  자유 수련',
   tContact: '학교 이름 · 전화 · 웹사이트', tBack: '함께 수련해 주셔서 감사합니다!',
+  photosLoading: '사진을 아직 불러오는 중입니다. 잠시 후 다시 내려받으세요.',
 };
 const es: Record<DesignKey, string> = {
   title: 'Diseños', intro: 'Crea volantes, carteles, postales y publicaciones para tu escuela. Arrastra para mover, haz clic para cambiar y descarga al terminar.',
@@ -103,6 +105,7 @@ const es: Record<DesignKey, string> = {
   tPromoHead: 'PROMOCIÓN DE CINTURÓN', tPromoSub: '¡Felicidades a todos los alumnos que presentan examen este mes!', tPromoBody: 'Fecha · Hora · Lugar',
   tSchedHead: 'HORARIO DE CLASES', tSchedBody: 'Lun y Mié  4:30 PM  Pequeños dragones\nLun y Mié  5:30 PM  Niños\nMar y Jue  6:30 PM  Adolescentes y adultos\nSábado  10:00 AM  Práctica libre',
   tContact: 'Tu escuela · teléfono · sitio web', tBack: '¡Gracias por entrenar con nosotros!',
+  photosLoading: 'Las fotos aún se están cargando. Intenta la descarga de nuevo en un momento.',
 };
 const ALL: Record<string, Record<DesignKey, string>> = { en, ko, es };
 

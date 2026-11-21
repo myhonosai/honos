@@ -458,3 +458,40 @@ describe('design D2: QR codes, templates, brand kit and print PDF', () => {
     expect(downloadName('Open house', 'print', 'pdf')).toBe('open-house-print.pdf');
   });
 });
+
+describe('design review fixes', () => {
+  const withText = (text: string) => addElement(blankCreativeDesignDocument('FLYER_LETTER'), 0, { ...newElement('text', 'FLYER_LETTER', 't'), text } as CreativeDesignElement);
+  it('never sends a document the server would refuse, and saves again once it is valid', async () => {
+    vi.useFakeTimers();
+    const states: string[] = [];
+    const save = vi.fn(async (input: { expectedVersion: number; document: CreativeDesignDocument }) => ({ design: designRow({ version: input.expectedVersion + 1, document: input.document }), replayed: false }));
+    const saver = new DesignSaver(designRow(), { save: save as never, onState: st => states.push(st.kind), newKey: () => 'k', delayMs: 1000 });
+    saver.change('Spring open house', withText(''));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(save).not.toHaveBeenCalled();
+    expect(states.at(-1)).toBe('REFUSED');
+    saver.change('Spring open house', withText('Back again'));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(states.at(-1)).toBe('SAVED');
+  });
+
+  it('saves a waiting change at once when the editor is left', async () => {
+    let release!: () => void;
+    const save = vi.fn((input: { expectedVersion: number; document: CreativeDesignDocument }) => new Promise<CreativeDesignReceipt>(resolve => {
+      release = () => resolve({ design: designRow({ version: input.expectedVersion + 1, document: input.document }), replayed: false }); }));
+    const saver = new DesignSaver(designRow(), { save: save as never, onState: () => {}, newKey: () => 'k', delayMs: 60000 });
+    saver.change('Spring open house', withText('Last change'));
+    let settled = false;
+    const done = saver.settle().then(() => { settled = true; });
+    await Promise.resolve();
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(false);
+    release(); await done;
+    expect(saver.unsaved).toBe(false);
+  });
+
+  it('refuses the C1 control characters in a name, as the database does', () => {
+    expect(createInput('Open\u0085house', 'FLYER_LETTER')).toBeNull();
+  });
+});

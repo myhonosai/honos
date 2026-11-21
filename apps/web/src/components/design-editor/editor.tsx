@@ -1,7 +1,7 @@
 'use client';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  CREATIVE_DESIGN_FONTS, CREATIVE_DESIGN_LIMITS, creativeDesignPhotoIds, creativeDesignQrDataOk,
+  CREATIVE_DESIGN_FONTS, CREATIVE_DESIGN_LIMITS, creativeDesignPhotoIds, creativeDesignQrDataOk, creativeDesignTextOk,
   type CreativeDesign, type CreativeDesignElement, type CreativeDesignPhotoReceipt, type CreativeDesignReceipt, type AddCreativeDesignPhotoInput,
   type CreativeDesignPhoto, type SaveCreativeDesignInput, type SetCreativeDesignStatusInput,
 } from '@hon/contracts';
@@ -90,6 +90,7 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
   const [photos, setPhotos] = useState<ReadonlyMap<string, PhotoSource>>(new Map());
   const [busy, setBusy] = useState<'PHOTO' | 'STATUS' | 'PDF' | null>(null);
   const [scale, setScale] = useState(0.5);
+  const [leaving, setLeaving] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -103,6 +104,11 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
   const element = findElement(doc, pageIndex, selected);
   const stopped = saveState.kind === 'CONFLICT' || saveState.kind === 'SESSION' || saveState.kind === 'READ_ONLY' || saveState.kind === 'ARCHIVED';
   const editable = design.status === 'ACTIVE' && !stopped;
+  // What is current when an awaited upload finishes (not what was current when the file was picked).
+  const live = useRef({ pageIndex, editable, doc });
+  live.current = { pageIndex, editable, doc };
+  const photoAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => photoAbort.current?.abort(), []);
 
   // One saver per opened design version line; it is replaced only when the editor is reopened.
   useEffect(() => {
@@ -132,17 +138,18 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
   }, [size.width, size.height]);
 
   // Load each photo the document places, once.
+  // A fetch in flight is not cancelled by later edits; only leaving the editor cancels it.
   useEffect(() => {
-    const abort = new AbortController();
+    photoAbort.current ??= new AbortController();
+    const signal = photoAbort.current.signal;
     for (const photoId of creativeDesignPhotoIds(doc)) {
       if (requested.current.has(photoId)) continue;
       requested.current.add(photoId);
-      api.photo(scope, photoId, abort.signal).then(p => decodePhoto(p.mediaType, p.data)).then(
-        bitmap => setPhotos(prev => new Map(prev).set(photoId, bitmap)),
+      api.photo(scope, photoId, signal).then(p => decodePhoto(p.mediaType, p.data)).then(
+        bitmap => { if (!signal.aborted) setPhotos(prev => new Map(prev).set(photoId, bitmap)); },
         () => { requested.current.delete(photoId); });
     }
-    return () => abort.abort();
-  }, [doc, api, scope]);
+  }, [doc]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Paint.
   useEffect(() => {
@@ -192,8 +199,12 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
       const decoded = await decodePhoto(prepared.mediaType, prepared.data);
       requested.current.add(receipt.photo.photoId);
       setPhotos(prev => new Map(prev).set(receipt.photo.photoId, decoded));
-      const id = newElementId(doc);
-      edit(d => addElement(d, pageIndex, newPhotoElement(initial.sizeCode, id, receipt.photo.photoId, prepared.width, prepared.height)));
+      const now = live.current;
+      if (!now.editable) { setNotice(null); return; }
+      const current = live.current.doc;
+      if ((current.pages[now.pageIndex]?.elements.length ?? 0) >= CREATIVE_DESIGN_LIMITS.elementsPerPage) { setNotice({ key: 'elementLimit', tone: 'warn' }); return; }
+      const id = newElementId(current);
+      setHistory(h => record(h, addElement(h.present, now.pageIndex, newPhotoElement(initial.sizeCode, id, receipt.photo.photoId, prepared.width, prepared.height))));
       setSelected(id); setNotice(null);
     } catch (error) {
       setNotice({ key: error instanceof DesignsRefusal && error.code === 'CREATIVE_DESIGN_PHOTO_LIMIT' ? 'photoLimit'
@@ -214,7 +225,21 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
     } finally { setBusy(null); }
   };
 
+  // Back saves what is waiting first (up to 10 seconds), so a change made just before leaving is not lost.
+  const leave = async () => {
+    setLeaving(true);
+    try { await Promise.race([saver.current?.settle() ?? Promise.resolve(), new Promise(resolve => setTimeout(resolve, 10000))]); }
+    finally { setLeaving(false); }
+    onBack();
+  };
+  /** Exports only once every placed photo has loaded, so a file never has a grey box where a photo belongs. */
+  const photosReady = () => {
+    const ready = creativeDesignPhotoIds(doc).every(id => photos.has(id));
+    if (!ready) setNotice({ key: 'photosLoading', tone: 'warn' });
+    return ready;
+  };
   const download = async () => {
+    if (!photosReady()) return;
     const k = exportScale(size), canvas = document.createElement('canvas');
     canvas.width = Math.round(size.width * k); canvas.height = Math.round(size.height * k);
     const ctx = canvas.getContext('2d');
@@ -225,7 +250,7 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
   };
   // Every side, 300 dpi (capped at 8,000 pixels), with the bleed painted, as one print PDF.
   const downloadPdf = async () => {
-    if (busy) return;
+    if (busy || !photosReady()) return;
     setBusy('PDF');
     try {
       const bleedSize = { ...size, width: size.width + 2 * PRINT_BLEED, height: size.height + 2 * PRINT_BLEED };
@@ -282,6 +307,7 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
 
   const onKey = (event: React.KeyboardEvent) => {
     const mod = event.metaKey || event.ctrlKey;
+    if (mod && (event.key.toLowerCase() === 'z' || event.key.toLowerCase() === 'y') && !editable) { event.preventDefault(); return; }
     if (mod && event.key.toLowerCase() === 'z') { event.preventDefault(); setHistory(h => event.shiftKey ? redo(h) : undo(h)); return; }
     if (mod && event.key.toLowerCase() === 'y') { event.preventDefault(); setHistory(redo); return; }
     if (event.key === 'Escape') { setSelected(null); return; }
@@ -304,7 +330,7 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
   return (
     <div className={s.editorRoot}>
       <div className={s.toolbar}>
-        <button type="button" className={s.secondary} onClick={() => { saver.current?.flush(); onBack(); }}>{t('back')}</button>
+        <button type="button" className={s.secondary} disabled={leaving} onClick={() => void leave()}>{t('back')}</button>
         <label className={`${s.field} ${s.nameInput}`}>
           <span className={s.srOnly}>{t('newName')}</span>
           <input name="designName" value={name} maxLength={CREATIVE_DESIGN_LIMITS.name} disabled={!editable} aria-invalid={saveState.kind === 'NAME' || undefined}
@@ -412,6 +438,16 @@ function ColorField({ label, value, disabled, onChange, swatch, swatchLabel }: {
   );
 }
 
+/** The words of a text item: an empty box or a stray control character stays in the box only, never in the design. */
+function DraftText({ value, disabled, onChange }: { value: string; disabled: boolean; onChange: (value: string) => void }): React.ReactElement {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => { setDraft(value); }, [value]);
+  return (
+    <textarea name="elementText" value={draft} maxLength={CREATIVE_DESIGN_LIMITS.text} disabled={disabled} aria-invalid={!creativeDesignTextOk(draft) || undefined}
+      onChange={event => { const v = event.target.value.replace(/\t/g, '    '); setDraft(v); if (creativeDesignTextOk(v)) onChange(v); }} />
+  );
+}
+
 /** The QR text box: typing keeps a local draft and only valid text (1-200 printable characters) reaches the design. */
 function QrDataField({ value, label, hint, disabled, onChange }: { value: string; label: string; hint: string; disabled: boolean; onChange: (value: string) => void }): React.ReactElement {
   const [draft, setDraft] = useState(value);
@@ -443,7 +479,7 @@ export function Properties({ element: e, language, editable, patch, layer, remov
       {e.kind === 'text' ? (
         <>
           <label className={s.field}>{t('text')}
-            <textarea name="elementText" value={e.text} maxLength={CREATIVE_DESIGN_LIMITS.text} disabled={off} onChange={event => patch('text', { text: event.target.value })} />
+            <DraftText value={e.text} disabled={off} onChange={v => patch('text', { text: v })} />
           </label>
           <div className={s.pair}>
             <label className={s.field}>{t('font')}

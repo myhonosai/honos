@@ -1,4 +1,4 @@
-import { creativeDesignNameOk, type CreativeDesign, type CreativeDesignDocument, type CreativeDesignReceipt, type SaveCreativeDesignInput } from '@hon/contracts';
+import { creativeDesignNameOk, validateSaveCreativeDesignInput, type CreativeDesign, type CreativeDesignDocument, type CreativeDesignReceipt, type SaveCreativeDesignInput } from '@hon/contracts';
 import { DesignsAccessError, DesignsRefusal, DesignsUnknown } from './http';
 
 /**
@@ -32,6 +32,7 @@ export class DesignSaver {
   private pending: Pending | null = null;
   private inflight = false;
   private timer: unknown = null;
+  private running: Promise<void> | null = null;
   private attempts = 0;
   private state: SaveState = { kind: 'SAVED' };
   private disposed = false;
@@ -65,6 +66,15 @@ export class DesignSaver {
   /** Save now (for example before leaving the editor). */
   flush(): void { if (!this.disposed && !STOPPED.has(this.state.kind)) this.schedule(0); }
   dispose(): void { this.disposed = true; this.cancelTimer(); }
+  /** Saves anything waiting now and resolves when no save is running (an unknown outcome resolves too; it keeps retrying). */
+  async settle(): Promise<void> {
+    if (this.disposed) return;
+    this.cancelTimer();
+    while (this.running) await this.running;
+    if (STOPPED.has(this.state.kind)) return;
+    this.running = this.run();
+    try { await this.running; } finally { this.running = null; }
+  }
 
   private set(state: SaveState): void {
     if (this.disposed) return;
@@ -73,7 +83,12 @@ export class DesignSaver {
   private cancelTimer(): void { if (this.timer !== null) { this.clearTimer(this.timer); this.timer = null; } }
   private schedule(ms: number): void {
     this.cancelTimer();
-    this.timer = this.setTimer(() => { this.timer = null; void this.run(); }, ms);
+    this.timer = this.setTimer(() => {
+      this.timer = null;
+      const run = this.run();
+      this.running = run;
+      void run.finally(() => { if (this.running === run) this.running = null; });
+    }, ms);
   }
 
   private async run(): Promise<void> {
@@ -82,8 +97,10 @@ export class DesignSaver {
       const { name, document } = this.latest, body = bodyOf(name, document);
       if (body === this.savedBody) { this.set({ kind: 'SAVED' }); return; }
       if (!creativeDesignNameOk(name)) { this.set({ kind: 'NAME' }); return; }
-      this.pending = { key: this.newKey(), body,
-        input: { designId: this.design.designId, expectedVersion: this.version, name, sizeCode: this.design.sizeCode, document } };
+      const input = { designId: this.design.designId, expectedVersion: this.version, name, sizeCode: this.design.sizeCode, document };
+      // Something the server would refuse is never sent (it would otherwise look like an unknown outcome and retry forever).
+      try { validateSaveCreativeDesignInput(input); } catch { this.set({ kind: 'REFUSED', code: 'VALIDATION_FAILED' }); return; }
+      this.pending = { key: this.newKey(), body, input };
     }
     const pending = this.pending;
     this.inflight = true;

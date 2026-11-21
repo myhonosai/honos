@@ -72,7 +72,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const COLOR = /^#[0-9A-F]{6}$/;
 const ELEMENT_ID = /^[a-z0-9-]{1,40}$/;
-const NAME_REFUSED = /[\u0000-\u001f\u007f​-‏‪-‮⁠-⁯﻿]/;
+const NAME_REFUSED = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁯﻿]/;
 const TEXT_REFUSED = /[\u0000-\u0009\u000b-\u001f\u007f‎‏‪-‮⁦-⁩﻿]/;
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 const SHA256 = /^[0-9a-f]{64}$/;

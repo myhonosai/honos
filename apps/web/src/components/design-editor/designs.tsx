@@ -1,5 +1,5 @@
 'use client';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CREATIVE_DESIGN_LIMITS, CREATIVE_DESIGN_SIZE_CODES, blankCreativeDesignDocument, creativeDesignNameOk,
   type CreativeDesign, type CreativeDesignList, type CreativeDesignSizeCode, type CreativeDesignStatus, type CreativeDesignSummary, type CreativeDesignsQuery,
@@ -65,7 +65,9 @@ export function Designs({ api = DESIGNS_API }: { api?: DesignsApi }): React.Reac
   const t = useCallback((key: DesignKey, vars?: Record<string, string>) => designText(language, key, vars), [language]);
   const shell = useSchoolShell();
   const selection = shell.phase === 'READY' ? shell.selection : null;
-  const scope: DesignsScope | null = selection ? { organizationId: selection.organizationId, schoolId: selection.schoolId } : null;
+  // One scope object per school, so the editor's effects do not restart on every render.
+  const scope: DesignsScope | null = useMemo(() => selection ? { organizationId: selection.organizationId, schoolId: selection.schoolId } : null,
+    [selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [load, setLoad] = useState<Load>('LOADING');
   const [items, setItems] = useState<CreativeDesignSummary[]>([]);
   const [status, setStatus] = useState<CreativeDesignStatus>('ACTIVE');
