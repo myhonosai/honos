@@ -1,5 +1,9 @@
 /** School shell copy. ko/es are typed against en, so a missing key fails `pnpm check`. */
 const en = {
+  searchPlaceholder: 'Search contacts, leads, pages…', searchOpen: 'Search everything', searchInput: 'Search contacts, leads, classes and pages', searchClose: 'Close search',
+  searchGroupPages: 'Pages', searchGroupContacts: 'Contacts', searchGroupLeads: 'Leads', searchGroupClasses: 'Classes', searchGroupPrograms: 'Programs', searchGroupCurricula: 'Curricula',
+  searchLoading: 'Searching…', searchNone: 'No matches', searchMore: 'Type 2 or more letters to search contacts and records too.', searchNoSchool: 'Contacts and records show once your school is verified.',
+  searchContactsFailed: 'Contacts could not be searched right now.', searchRecordsFailed: 'Leads and classes could not be searched right now.', searchHint: '↑↓ move · Enter open · Esc close', searchShortcut: 'Ctrl K',
   routeSettingsSummary: 'Summary',
   groupPeople: 'Students & families', groupStaff: 'Staff', groupLeads: 'Leads', groupMarketing: 'Marketing', groupSchedule: 'Schedule', groupAttendance: 'Attendance', groupCurriculum: 'Curriculum & testing', groupCommunity: 'Community', groupMemberships: 'Memberships', groupPayments: 'Payments', groupTeam: 'Team & approvals', groupSpecialists: 'Specialists', groupNav: 'Groups in this section', currentArea: 'You are in',
   brand: 'HON OS', brandTagline: 'For martial arts schools', skip: 'Skip to main content', primaryNav: 'School navigation', sectionNav: 'Pages in this section',
@@ -33,6 +37,10 @@ const en = {
 } as const;
 export type ShellKey = keyof typeof en;
 const ko: Record<ShellKey, string> = {
+  searchPlaceholder: '연락처, 문의, 페이지 검색…', searchOpen: '전체 검색', searchInput: '연락처, 문의, 수업, 페이지 검색', searchClose: '검색 닫기',
+  searchGroupPages: '페이지', searchGroupContacts: '연락처', searchGroupLeads: '문의', searchGroupClasses: '수업', searchGroupPrograms: '프로그램', searchGroupCurricula: '커리큘럼',
+  searchLoading: '검색 중…', searchNone: '결과 없음', searchMore: '두 글자 이상 입력하면 연락처와 기록도 검색합니다.', searchNoSchool: '도장이 확인되면 연락처와 기록이 표시됩니다.',
+  searchContactsFailed: '지금은 연락처를 검색할 수 없습니다.', searchRecordsFailed: '지금은 문의와 수업을 검색할 수 없습니다.', searchHint: '↑↓ 이동 · Enter 열기 · Esc 닫기', searchShortcut: 'Ctrl K',
   routeSettingsSummary: '요약',
   groupPeople: '학생 및 가족', groupStaff: '직원', groupLeads: '문의', groupMarketing: '마케팅', groupSchedule: '일정', groupAttendance: '출석', groupCurriculum: '커리큘럼 및 심사', groupCommunity: '커뮤니티', groupMemberships: '회원권', groupPayments: '결제', groupTeam: '팀 및 승인', groupSpecialists: '전문 AI', groupNav: '이 메뉴의 그룹', currentArea: '현재 위치',
   brand: 'HON OS', brandTagline: '무술 도장을 위한 운영 시스템', skip: '본문으로 건너뛰기', primaryNav: '도장 메뉴', sectionNav: '이 메뉴의 페이지',
@@ -65,6 +73,10 @@ const ko: Record<ShellKey, string> = {
   routeTeam: '팀 및 초대', routeRoles: '역할 및 권한', routeShifts: '근무 일정', routeHours: '근무 시간', routeAvailability: '근무 가능 시간', routeQualifications: '사범 자격', routeAccount: '계정 및 사용량', routeOwners: '도장 소유자', routeSubscription: 'HON 구독', routeLaunch: '도장 개설', routeFounderSetup: '창업 설정 가이드', routeWelcome: '환영 및 설정', routeHelp: 'HON에 도움 요청',
 };
 const es: Record<ShellKey, string> = {
+  searchPlaceholder: 'Buscar contactos, prospectos, páginas…', searchOpen: 'Buscar en todo', searchInput: 'Buscar contactos, prospectos, clases y páginas', searchClose: 'Cerrar búsqueda',
+  searchGroupPages: 'Páginas', searchGroupContacts: 'Contactos', searchGroupLeads: 'Prospectos', searchGroupClasses: 'Clases', searchGroupPrograms: 'Programas', searchGroupCurricula: 'Currículos',
+  searchLoading: 'Buscando…', searchNone: 'Sin resultados', searchMore: 'Escribe 2 o más letras para buscar también contactos y registros.', searchNoSchool: 'Los contactos y registros aparecen cuando se verifica tu escuela.',
+  searchContactsFailed: 'No se pudieron buscar contactos en este momento.', searchRecordsFailed: 'No se pudieron buscar prospectos y clases en este momento.', searchHint: '↑↓ mover · Enter abrir · Esc cerrar', searchShortcut: 'Ctrl K',
   routeSettingsSummary: 'Resumen',
   groupPeople: 'Alumnos y familias', groupStaff: 'Personal', groupLeads: 'Prospectos', groupMarketing: 'Marketing', groupSchedule: 'Horario', groupAttendance: 'Asistencia', groupCurriculum: 'Plan de estudios y exámenes', groupCommunity: 'Comunidad', groupMemberships: 'Membresías', groupPayments: 'Pagos', groupTeam: 'Equipo y aprobaciones', groupSpecialists: 'Especialistas', groupNav: 'Grupos de esta sección', currentArea: 'Estás en',
   brand: 'HON OS', brandTagline: 'Para escuelas de artes marciales', skip: 'Saltar al contenido principal', primaryNav: 'Navegación de la escuela', sectionNav: 'Páginas de esta sección',

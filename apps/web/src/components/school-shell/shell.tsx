@@ -21,6 +21,7 @@ import { SCHOOL_TOUR_OPEN_EVENT, markSchoolTourSeen } from './tour';
 import { SchoolShellProvider, type SchoolShellState } from './context';
 import { defaultArtStyle, isHonArtStyle, type HonArtStyle } from '../hon-command/roster';
 import { HON_DEMO_DATA_CHANGED_EVENT, demoDataApi } from '../school-demo-data/http';
+import { GlobalSearch } from './global-search';
 
 /** Per-viewer convenience only (never authority, never shared): the chosen AI team art style. */
 export const HON_ART_STYLE_STORAGE_KEY = 'hon.ai-team.art-style';
@@ -205,6 +206,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
     if (open) menuOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setMenuOpen(open);
   }, []);
+  const closeMenu = useCallback(() => { setMenuOpen(false); tour(null); }, [tour]);
 
   // Transitional: pages not yet migrated to the UI system may rely on the old light page
   // background. Give those (and only those) a light canvas so their text stays readable.
@@ -272,6 +274,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
 
   return <SchoolShellFrame path={path} language={preferences.language} phase={snapshot.phase} selection={snapshot.selection} schoolName={schoolName}
     choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility inShell />}
+    search={<GlobalSearch language={preferences.language} selection={snapshot.phase === 'READY' ? snapshot.selection : null} onOpening={closeMenu} />}
     tourStep={tourStep} onTour={tour} asleep={asleep} onWake={wake} demoLoaded={demoLoaded} onMode={chooseMode} onMenu={openMenu} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
     <SchoolShellProvider value={shared}>{children}</SchoolShellProvider>
   </SchoolShellFrame>;
