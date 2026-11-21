@@ -44,4 +44,10 @@ Releasing an app version is a change to the live app, so it is done by the app o
 
 First release: 2026-11-21, version `hon-os-3` (configuration identical to `hon-os-2`, plus the extension).
 
+Next release (prepared, not released): adds the webhook subscriptions and the optional scope
+`read_shopify_payments_accounts`. Expected summary: `access_scopes (updated)` and `webhooks (updated)`, the extension
+unchanged, nothing `(removed)`. Before releasing it, HON's live API must already answer
+`POST https://app.myhonos.com/api/v1/commerce/webhooks/shopify` (an unsigned request gets 401), or Shopify will retry
+and eventually drop the subscriptions.
+
 HON's API needs the same Client ID as `SHOPIFY_API_KEY` to build the theme editor links; nothing else changes on HON's side.

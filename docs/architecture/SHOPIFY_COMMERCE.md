@@ -128,13 +128,20 @@ links orders to HON contacts.
   [[webhooks.subscriptions]]
   topics = ["products/create", "products/update", "products/delete", "inventory_levels/update",
             "orders/create", "orders/updated", "orders/cancelled", "orders/delete", "app/uninstalled"]
-  uri = "https://<HON API host>/v1/commerce/webhooks/shopify"
+  uri = "https://app.myhonos.com/api/v1/commerce/webhooks/shopify"
 
   [[webhooks.subscriptions]]
   compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
-  uri = "https://<HON API host>/v1/commerce/webhooks/shopify"
+  uri = "https://app.myhonos.com/api/v1/commerce/webhooks/shopify"
   ```
 
+  The real file is `shopify-app/shopify.app.toml`. The API is a private service with no public URL, so the address is
+  the web app's `/api/v1/*` rewrite, which forwards the request to the API's `/v1/*` unchanged.
+
+  **Live state (2026-11-21):** the released app versions up to `hon-os-3` declare only `api_version`, with no
+  subscriptions, so no webhook reaches HON yet: an uninstall does not disconnect the store, changes wait for Sync now
+  or the six-hour background run, and the compliance topics do not arrive. The subscriptions take effect when the app
+  owner releases a version that includes them (see `shopify-app/README.md`).
 - Transport: mounted before the JSON parser so the exact bytes are kept; POST to that one path only, JSON, no query
   string, cookies, credentials or compression, at most 4 MiB.
 - Verification first: base64 HMAC-SHA256 of the raw body with the app's client secret (`X-Shopify-Hmac-SHA256`),
@@ -269,6 +276,17 @@ update and refuses delete and truncate. Audit and outbox evidence name the field
 Plain connect still asks only for read scopes. **Allow editing** reconnects the same store asking Shopify for
 `write_products` and `write_inventory` as well. The Shopify app version must list those scopes first (one-time step in
 the Dev Dashboard, owner action).
+
+**Live state (2026-11-21):** the app uses Shopify managed installation and lists the two write scopes as *required*
+(since `hon-os-2`), so Shopify asks every store for them at install. HON still treats a store as read-only until its
+owner presses Allow editing and the returned token carries the scopes.
+
+**Allow finance** needs `read_shopify_payments_accounts`. It is declared as an *optional* scope in
+`shopify-app/shopify.app.toml`; no released version lists it yet. Open question to settle on the test store once that
+version is released and SH-F1 is deployed: with managed installation Shopify documents a separate request address for
+optional scopes (`https://admin.shopify.com/store/{store}/oauth/install?client_id=...&optional_scopes=...`), while HON
+currently sends the owner through `/admin/oauth/authorize` with the scope in `scope=`. If Shopify does not grant the
+optional scope that way, Allow finance must use the request address first.
 
 ### Screens
 - Products: managers get **Edit** on each product and **New product**; a product with an open edit points to Changes.
