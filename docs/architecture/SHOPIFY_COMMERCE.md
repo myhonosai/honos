@@ -467,9 +467,15 @@ nothing in HON or Shopify, and the only actions on it are "mark as reviewed" and
 - **What Marcus sees** (`hon.shopify_review_facts`, built in the database, never by the browser). The closed brief (one
   focus of OVERVIEW, SALES, PRICING or STOCK, and an optional question of up to 300 characters), the school name, the
   store currency, and store totals only: the last 30 days (orders, sales, average order, items sold, sales with a known
-  cost, estimated gross profit, up to 8 top products), the catalog (active and made-to-order variant counts, variants
+  cost, estimated gross profit, up to 8 top products named by their catalog title, and a count of other items sold),
+  the catalog (active and made-to-order variant counts, variants
   without a cost, up to 12 low-stock items, up to 12 thinnest margins) and two front-desk counts (stock changes and
-  orders not yet sent to Shopify). No customer, order line, address, family or student data.
+  orders not yet sent to Shopify). No customer, address, family or student data. An order line's own title never
+  leaves the database, because a custom item's title is typed by the merchant and may name a person: a sold product is
+  named only when its line joins a mirrored variant, and every other line is only counted.
+- **Size.** The provider request is budgeted in bytes (prompt + facts + 128 must fit 9,000). Names are cut by bytes with
+  `hon.shopify_review_clip` (product 60, variant 40, school 120), never inside a character, so a store with Korean
+  names fits: the fullest store measures 6,533 bytes against 6,872 available.
 - **Flow.** The 0596 flow with its own entry points: `begin_shopify_commerce_review` (store must be CONNECTED) -> planning
   reference -> plan -> `prepare_shopify_commerce_review` (budget lock first; blocks `GATE_CLOSED` if the store
   disconnected since the start) -> one provider call -> `fail_...`, or `record_...` with usage and the validated answer.
@@ -485,6 +491,6 @@ nothing in HON or Shopify, and the only actions on it are "mark as reviewed" and
   AI notice. A lost answer keeps its key, so only the identical request is sent again.
 - **Known limits.** The numbers are what HON has synced, so a review is only as fresh as the last sync. Marcus cannot
   act on a recommendation: preparing price or product changes for approval is the next piece (CA2).
-- **Evidence.** `packages/database/scripts/test-shopify-commerce-review.mjs` (8 groups, fake provider, 0 network calls),
+- **Evidence.** `packages/database/scripts/test-shopify-commerce-review.mjs` (9 groups, fake provider, 0 network calls),
   `apps/api/test/commerce-review.test.cjs`, `apps/web/test/school-shopify-commerce-review.test.tsx`, and the 011 section
   "Shopify commerce review exact verification (0615)".

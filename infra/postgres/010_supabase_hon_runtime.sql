@@ -4982,7 +4982,7 @@ END $$;
 -- 0615 Commerce review (CA1): the COMMERCE_REVIEW kind on the shared AI text proposals; seven runtime entry points, every helper closed.
 DO $$ DECLARE r text; f regprocedure; BEGIN
   IF to_regprocedure('hon.begin_shopify_commerce_review(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0615 first'; END IF;
-  FOREACH f IN ARRAY ARRAY['hon.shopify_review_focuses()','hon.shopify_review_areas()','hon.shopify_review_brief_ok(jsonb)','hon.shopify_review_ok(jsonb)',
+  FOREACH f IN ARRAY ARRAY['hon.shopify_review_clip(text,integer)','hon.shopify_review_focuses()','hon.shopify_review_areas()','hon.shopify_review_brief_ok(jsonb)','hon.shopify_review_ok(jsonb)',
     'hon.shopify_review_facts(jsonb,uuid)','hon.shopify_review_view(uuid,uuid)']::regprocedure[] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;

@@ -27,7 +27,7 @@ test('the review runtime sends one fixed request with the COMMERCE_REVIEW prompt
   }
   // The merch runtime keeps its own prompt and budgets.
   let merchSent = 0; await assert.rejects(new OpenRouterMerchRuntime(env, async () => { merchSent++; }).generate(input), x => x.reason === 'INVALID_REQUEST'); assert.equal(merchSent, 0);
-  assert(Buffer.byteLength(COMMERCE_REVIEW_SYSTEM_PROMPT) < 2500, 'the prompt leaves room for about 6 KB of facts');
+  assert(Buffer.byteLength(COMMERCE_REVIEW_SYSTEM_PROMPT) < 2000, 'the prompt leaves 6,872 bytes for the facts (the database proof holds the fullest store under that)');
 });
 
 test('the review prompt forbids invented numbers and says the review changes nothing', () => {

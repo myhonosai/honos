@@ -76,7 +76,7 @@ async function makeOrg(label, currency = 'USD') {
     ($1,9300000003,$2,$3,'#1003',clock_timestamp()-interval '3 days',clock_timestamp()-interval '3 days',$4,999,0,0,999,$5),($1,9300000004,$2,$3,'#0900',clock_timestamp()-interval '45 days',NULL,$4,500,0,0,500,$5)`,
     [o.connection, o.id, o.school, currency, sync]);
   await admin.query(`INSERT INTO hon.shopify_order_lines(connection_id,order_shopify_id,line_no,title,variant_shopify_id,quantity,unit_price) VALUES
-    ($1,9300000001,1,'Student uniform',9200000001,2,40),($1,9300000002,1,'Student uniform',9200000002,1,40),($1,9300000002,2,'Black belt display',9200000003,1,120),
+    ($1,9300000001,1,'Student uniform',9200000001,2,40),($1,9300000001,2,'Custom patch for Pat Synthetic',NULL,1,0),($1,9300000002,1,'Student uniform',9200000002,1,40),($1,9300000002,2,'Black belt display',9200000003,1,120),
     ($1,9300000003,1,'Student uniform',9200000001,9,40),($1,9300000004,1,'Student uniform',9200000001,5,40)`, [o.connection]);
   await admin.query('COMMIT');
   return o;
@@ -111,7 +111,7 @@ try {
   // 1. Custody: the COMMERCE_REVIEW kind is fixed; the runtime executes exactly the seven entry points; nothing to PUBLIC.
   const entry = ['begin_shopify_commerce_review', 'plan_shopify_commerce_review', 'prepare_shopify_commerce_review', 'fail_shopify_commerce_review', 'record_shopify_commerce_review', 'read_shopify_commerce_reviews', 'close_shopify_commerce_review'];
   const fns = await rows("SELECT p.oid, p.proname, p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE '%shopify_review%' OR p.proname LIKE '%shopify_commerce_review%')");
-  assert.equal(fns.length, 13, fns.map((f) => f.proname).join(','));
+  assert.equal(fns.length, 14, fns.map((f) => f.proname).join(','));
   for (const f of fns) {
     assert.equal((await row("SELECT has_function_privilege($1,$2::oid,'EXECUTE') ok", [runtimeRole, f.oid])).ok, entry.includes(f.proname), f.proname);
     assert.equal((await row("SELECT coalesce(bool_or(a.grantee=0),false) pub FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=$1", [f.oid])).pub, false, f.proname);
@@ -144,13 +144,13 @@ try {
   assert.deepEqual(Object.keys(sent).sort(), ['brief', 'catalog', 'currency', 'frontDesk', 'last30Days', 'schoolName']);
   assert.deepEqual(sent.brief, brief); assert.equal(sent.schoolName, 'Synthetic Dojo'); assert.equal(sent.currency, 'USD');
   // Only the two open orders inside 30 days count: 80 + 160; 4 items; cost is known for the small uniform and the display.
-  assert.deepEqual(sent.last30Days, { orders: 2, sales: 240, averageOrder: 120, itemsSold: 4, lineSales: 240, salesWithKnownCost: 200, estimatedGrossProfit: 76,
-    topProducts: [{ title: 'Student uniform', quantity: 3, sales: 120 }, { title: 'Black belt display', quantity: 1, sales: 120 }] });
+  assert.deepEqual(sent.last30Days, { orders: 2, sales: 240, averageOrder: 120, itemsSold: 5, lineSales: 240, salesWithKnownCost: 200, estimatedGrossProfit: 76,
+    topProducts: [{ title: 'Student uniform', quantity: 3, sales: 120 }, { title: 'Black belt display', quantity: 1, sales: 120 }], otherItemsSold: 1 });
   assert.deepEqual(sent.catalog, { activeVariants: 3, madeToOrderVariants: 1, variantsWithoutCost: 1,
     lowStock: [{ product: 'Student uniform', variant: 'Small', quantity: 2 }],
     thinnestMargins: [{ product: 'Student uniform', variant: 'Small', price: 40, cost: 32, marginPercent: 20 }, { product: 'Black belt display', variant: 'Default', price: 120, cost: 60, marginPercent: 50 }] });
   assert.deepEqual(sent.frontDesk, { stockChangesNotSent: 0, ordersNotSent: 0 });
-  assert.equal(/Pat Synthetic|#100|Retired|example\.test/.test(fake.inputs[0].request), false, 'no order name, person or removed variant is sent');
+  assert.equal(/Pat Synthetic|#100|Retired|example\.test/.test(fake.inputs[0].request), false, 'no order name, person, custom line title or removed variant is sent');
   assert.equal(Buffer.byteLength(fake.inputs[0].request) < 6000, true);
   assert.deepEqual([fake.inputs[0].inputBudget, fake.inputs[0].outputBudget, fake.inputs[0].maxCostMicrounits, fake.inputs[0].modelId], [9000, 2500, 80000, 'approved/ca1-synthetic']);
   const r1 = await proposalRow(v1.id);
@@ -214,6 +214,33 @@ try {
   const by = usage.schools.find((s) => s.schoolId === a.school).byClass.AGENT_INFERENCE.byAgent;
   assert.equal(by.COMMERCE_REVIEW.credits, 10, JSON.stringify(by)); assert.equal(by.MARKETING, undefined); assert.equal(by.MERCH_IDEAS, undefined);
   pass('usage: the HQ per-school read attributes commerce reviews to COMMERCE_REVIEW');
+
+  // 6b. Size: the request is budgeted in bytes. A store with the longest three-byte (Korean) names and question still fits.
+  {
+    const k = await makeOrg('k');
+    await admin.query('BEGIN');
+    await admin.query("UPDATE hon.shopify_products SET title=repeat('가',200) || shopify_id::text WHERE connection_id=$1", [k.connection]);
+    await admin.query("UPDATE hon.shopify_variants SET title=repeat('나',200) WHERE connection_id=$1", [k.connection]);
+    await admin.query(`INSERT INTO hon.shopify_products(connection_id,shopify_id,organization_id,school_id,title,status,last_sync_id)
+      SELECT p.connection_id,9100000100+g,p.organization_id,p.school_id,repeat('다',200)||g::text,'ACTIVE',p.last_sync_id FROM hon.shopify_products p, generate_series(1,14) g WHERE p.connection_id=$1 AND p.shopify_id=9100000001`, [k.connection]);
+    await admin.query(`INSERT INTO hon.shopify_variants(connection_id,shopify_id,product_shopify_id,title,price,unit_cost,tracked,inventory_quantity,position,last_sync_id,fulfilled_by,removed)
+      SELECT v.connection_id,9200000100+g,9100000100+g,repeat('라',200),1234567.89,1234567.01,true,1,1,v.last_sync_id,NULL,false FROM hon.shopify_variants v, generate_series(1,14) g WHERE v.connection_id=$1 AND v.shopify_id=9200000001`, [k.connection]);
+    await admin.query(`INSERT INTO hon.shopify_order_lines(connection_id,order_shopify_id,line_no,title,variant_shopify_id,quantity,unit_price)
+      SELECT $1,9300000001,10+g,'x',9200000100+g,1000+g,1234567.89 FROM generate_series(1,14) g`, [k.connection]);
+    await admin.query("UPDATE hon.schools SET name=repeat('마',100) WHERE id=$1", [k.school]);
+    await admin.query('COMMIT');
+    assert.equal((await row("SELECT hon.shopify_review_clip('가나다',7) a, hon.shopify_review_clip('abc',2) b, hon.shopify_review_clip('가',2) c, hon.shopify_review_clip('abc',9) d")).a, '가나');
+    fake.answer = goodAnswer; const n = fake.calls;
+    const vk = await ai.request(ctx(k), { focus: 'OVERVIEW', question: '가'.repeat(300) });
+    assert.equal(vk.status, 'RESULT_RECORDED', JSON.stringify(vk)); assert.equal(fake.calls, n + 1);
+    const req = fake.inputs.at(-1).request, big = JSON.parse(req);
+    assert.equal(big.last30Days.topProducts.length, 8); assert.equal(big.catalog.lowStock.length, 12); assert.equal(big.catalog.thinnestMargins.length, 12);
+    assert.equal(Buffer.byteLength(big.catalog.lowStock[0].product) <= 60 && Buffer.byteLength(big.catalog.lowStock[0].variant) <= 40 && Buffer.byteLength(big.schoolName) <= 120, true);
+    assert.equal(req.includes('\ufffd'), false, 'no name is cut inside a character');
+    // The runtime sends only when prompt + request + 128 fits the 9,000 input budget; the prompt is kept under 2,000 bytes (API test).
+    assert.equal(Buffer.byteLength(req) <= 9000 - 128 - 2000, true, String(Buffer.byteLength(req)));
+    pass(`size: the fullest store with three-byte names and a 300-character question is ${Buffer.byteLength(req)} bytes, inside the input budget; names are cut by bytes, never inside a character`);
+  }
 
   // 7. Gates: store connected (start and final claim), Complete, Marcus, Shopify manage, an HQ pause, school isolation.
   const calls = fake.calls;

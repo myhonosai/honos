@@ -66,17 +66,26 @@ CREATE FUNCTION hon.shopify_review_ok(r jsonb) RETURNS boolean LANGUAGE sql IMMU
 $$;
 
 -- The facts Marcus sees: totals of the school's own store mirror. Titles are shortened; no person appears anywhere.
+-- The provider request is budgeted in bytes, so names are cut by bytes (a Korean title is three bytes a character), never mid-character.
+CREATE FUNCTION hon.shopify_review_clip(p_text text, p_bytes integer) RETURNS text LANGUAGE sql IMMUTABLE STRICT SET search_path=pg_catalog AS $$
+  SELECT CASE WHEN octet_length(p_text)<=p_bytes THEN p_text
+    ELSE (SELECT left(p_text,max(k)) FROM generate_series(0,least(char_length(p_text),p_bytes)) k WHERE octet_length(left(p_text,k))<=p_bytes) END
+$$;
+
 CREATE FUNCTION hon.shopify_review_facts(p_brief jsonb, p_connection uuid) RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
   WITH c AS (SELECT c.*, s.name school_name FROM hon.shopify_connections c JOIN hon.schools s ON s.id=c.school_id AND s.organization_id=c.organization_id
       WHERE c.id=p_connection AND c.school_id=hon.current_school_id() AND c.organization_id=hon.current_organization_id()),
     o AS (SELECT x.* FROM hon.shopify_orders x JOIN c ON c.id=x.connection_id WHERE x.placed_at>=clock_timestamp()-interval '30 days' AND x.cancelled_at IS NULL),
-    l AS (SELECT ol.title,ol.quantity,ol.unit_price,v.unit_cost FROM hon.shopify_order_lines ol JOIN o ON o.connection_id=ol.connection_id AND o.shopify_id=ol.order_shopify_id
-      LEFT JOIN hon.shopify_variants v ON v.connection_id=ol.connection_id AND v.shopify_id=ol.variant_shopify_id),
-    v AS (SELECT left(p.title,60) product, left(v.title,40) variant, v.price, v.unit_cost, v.tracked, v.inventory_quantity, v.fulfilled_by
+    -- A line's own title can be typed by the merchant (a custom item may name a person), so it never leaves the database:
+    -- a sold product is named only by its mirrored catalog title, and every other line is only counted.
+    l AS (SELECT p.title product,ol.quantity,ol.unit_price,v.unit_cost FROM hon.shopify_order_lines ol JOIN o ON o.connection_id=ol.connection_id AND o.shopify_id=ol.order_shopify_id
+      LEFT JOIN hon.shopify_variants v ON v.connection_id=ol.connection_id AND v.shopify_id=ol.variant_shopify_id
+      LEFT JOIN hon.shopify_products p ON p.connection_id=v.connection_id AND p.shopify_id=v.product_shopify_id),
+    v AS (SELECT hon.shopify_review_clip(p.title,60) product, hon.shopify_review_clip(v.title,40) variant, v.price, v.unit_cost, v.tracked, v.inventory_quantity, v.fulfilled_by
       FROM hon.shopify_variants v JOIN c ON c.id=v.connection_id
       JOIN hon.shopify_products p ON p.connection_id=v.connection_id AND p.shopify_id=v.product_shopify_id
       WHERE NOT v.removed AND NOT p.removed AND p.status='ACTIVE')
-  SELECT jsonb_build_object('brief',p_brief,'schoolName',left(c.school_name,120),'currency',c.currency,
+  SELECT jsonb_build_object('brief',p_brief,'schoolName',hon.shopify_review_clip(c.school_name,120),'currency',c.currency,
     'last30Days',jsonb_build_object(
       'orders',(SELECT count(*)::int FROM o),
       'sales',(SELECT round(coalesce(sum(total),0),2) FROM o),
@@ -86,8 +95,9 @@ CREATE FUNCTION hon.shopify_review_facts(p_brief jsonb, p_connection uuid) RETUR
       'salesWithKnownCost',(SELECT round(coalesce(sum(quantity*unit_price),0),2) FROM l WHERE unit_cost IS NOT NULL),
       'estimatedGrossProfit',(SELECT round(coalesce(sum(quantity*(unit_price-unit_cost)),0),2) FROM l WHERE unit_cost IS NOT NULL),
       'topProducts',(SELECT coalesce(jsonb_agg(t ORDER BY (t->>'quantity')::int DESC,t->>'title'),'[]'::jsonb) FROM (
-        SELECT jsonb_build_object('title',left(title,60),'quantity',sum(quantity)::int,'sales',round(sum(quantity*unit_price),2)) t
-        FROM l GROUP BY title ORDER BY sum(quantity) DESC,title LIMIT 8) x)),
+        SELECT jsonb_build_object('title',hon.shopify_review_clip(product,60),'quantity',sum(quantity)::int,'sales',round(sum(quantity*unit_price),2)) t
+        FROM l WHERE product IS NOT NULL GROUP BY product ORDER BY sum(quantity) DESC,product LIMIT 8) x),
+      'otherItemsSold',(SELECT coalesce(sum(quantity),0)::int FROM l WHERE product IS NULL)),
     'catalog',jsonb_build_object(
       'activeVariants',(SELECT count(*)::int FROM v),
       'madeToOrderVariants',(SELECT count(*)::int FROM v WHERE fulfilled_by IS NOT NULL),
@@ -207,7 +217,7 @@ END $$;
 
 -- Privileges: deny first, then exactly the seven entry points for the runtime role.
 DO $$ DECLARE r text; f regprocedure; BEGIN
-  FOREACH f IN ARRAY ARRAY['hon.shopify_review_focuses()','hon.shopify_review_areas()','hon.shopify_review_brief_ok(jsonb)','hon.shopify_review_ok(jsonb)',
+  FOREACH f IN ARRAY ARRAY['hon.shopify_review_clip(text,integer)','hon.shopify_review_focuses()','hon.shopify_review_areas()','hon.shopify_review_brief_ok(jsonb)','hon.shopify_review_ok(jsonb)',
     'hon.shopify_review_facts(jsonb,uuid)','hon.shopify_review_view(uuid,uuid)','hon.begin_shopify_commerce_review(text,jsonb,uuid)',
     'hon.plan_shopify_commerce_review(text,uuid)','hon.prepare_shopify_commerce_review(text,uuid,uuid,boolean)',
     'hon.fail_shopify_commerce_review(text,uuid,text,text)','hon.record_shopify_commerce_review(text,uuid,jsonb)',

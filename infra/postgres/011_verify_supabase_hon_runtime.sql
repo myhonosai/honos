@@ -6036,7 +6036,8 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.record_shopify_commerce_review(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','6bf77e8c7d32eea75e78a925d4c403a8bb55d2ce5e2ab30feac0eeae0063b9d3'),
 ('hon.shopify_review_areas()',false,false,'search_path=pg_catalog','2175abf1464e56c29e9a1b79b3f7f95b2bb15ab91510b822ad06a20e254f3667'),
 ('hon.shopify_review_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','7eab52876983ef55014744ccc6aa5920553aebee600da154058811b20a2b6083'),
-('hon.shopify_review_facts(jsonb,uuid)',true,false,'search_path=pg_catalog, hon','f648b8fe58a368613fd4fe4fd4682c957ad0ad5a6a78c28109f465aaaeb1b0af'),
+('hon.shopify_review_clip(text,integer)',false,false,'search_path=pg_catalog','b2e68069a2b7bebd740987d6827034655f18abf9149928ba0d80182f36494df6'),
+('hon.shopify_review_facts(jsonb,uuid)',true,false,'search_path=pg_catalog, hon','0b71890ef2058cf18c6db78707e9c0608238852dab51f72a53b361b23260b5bd'),
 ('hon.shopify_review_focuses()',false,false,'search_path=pg_catalog','c832069dfd117640f3162a865b3fe2fd1d4da174f5a80e7c409ccaef95b083aa'),
 ('hon.shopify_review_ok(jsonb)',false,false,'search_path=pg_catalog, hon','3528aa0f161df542c930134169755ad628cf7c8b3dbbc23423eb158bf54d56e9'),
 ('hon.shopify_review_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','cb82660a02435e83c6749f16060db7a81fb99839d3da037e612c8b50ac81f46f'))
