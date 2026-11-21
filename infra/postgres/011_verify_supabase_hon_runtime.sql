@@ -6022,3 +6022,39 @@ BEGIN
     RAISE EXCEPTION 'Point of sale Shopify order guard missing'; END IF;
 END $$;
 -- End point of sale Shopify orders exact verification.
+
+-- Shopify commerce review exact verification (0615): the COMMERCE_REVIEW kind row on the shared AI text proposals (0550), the
+-- closed brief and answer shapes, the private facts and view helpers, and the seven runtime entry points.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.begin_shopify_commerce_review(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','0d95960ec52dd5695c664e822d4f5dc651b42ba94d871771dec322203135fc71'),
+('hon.close_shopify_commerce_review(text,uuid,text)',true,true,'search_path=pg_catalog, hon','4618ff19142e10676a38aa91cf737c08c7954d90f68bacee033a6712482cf02a'),
+('hon.fail_shopify_commerce_review(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','aa598288f3c91b509926be2ea7698bcb689f0f91a4229aa5769e4704b131dafe'),
+('hon.plan_shopify_commerce_review(text,uuid)',true,true,'search_path=pg_catalog, hon','1f404ed988ef3a83d3fabd0da33229c0d2b4c7d5ce767a8e26a3d303a559e1b0'),
+('hon.prepare_shopify_commerce_review(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','47c66f31877189d243287e7a73b71db4ba0c44e9dc432b6c2f983940edbdcecf'),
+('hon.read_shopify_commerce_reviews(text,uuid)',true,true,'search_path=pg_catalog, hon','23fa6dfc69183f24fff889cdd2dffab8e11c5ecb8ec512006041c03f97b5a213'),
+('hon.record_shopify_commerce_review(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','6bf77e8c7d32eea75e78a925d4c403a8bb55d2ce5e2ab30feac0eeae0063b9d3'),
+('hon.shopify_review_areas()',false,false,'search_path=pg_catalog','2175abf1464e56c29e9a1b79b3f7f95b2bb15ab91510b822ad06a20e254f3667'),
+('hon.shopify_review_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','7eab52876983ef55014744ccc6aa5920553aebee600da154058811b20a2b6083'),
+('hon.shopify_review_clip(text,integer)',false,false,'search_path=pg_catalog','b2e68069a2b7bebd740987d6827034655f18abf9149928ba0d80182f36494df6'),
+('hon.shopify_review_facts(jsonb,uuid)',true,false,'search_path=pg_catalog, hon','0b71890ef2058cf18c6db78707e9c0608238852dab51f72a53b361b23260b5bd'),
+('hon.shopify_review_focuses()',false,false,'search_path=pg_catalog','c832069dfd117640f3162a865b3fe2fd1d4da174f5a80e7c409ccaef95b083aa'),
+('hon.shopify_review_ok(jsonb)',false,false,'search_path=pg_catalog, hon','3528aa0f161df542c930134169755ad628cf7c8b3dbbc23423eb158bf54d56e9'),
+('hon.shopify_review_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','cb82660a02435e83c6749f16060db7a81fb99839d3da037e612c8b50ac81f46f'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Shopify commerce review function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='COMMERCE_REVIEW' AND k.agent_key='marcus' AND k.task_class='DRAFT_MARKETING'
+      AND k.input_budget=9000 AND k.output_budget=2500 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SHOPIFY_STORE' AND k.usage_agent='COMMERCE_REVIEW') THEN
+    RAISE EXCEPTION 'Shopify commerce review kind row missing or changed';
+  END IF;
+END $$;
+-- End Shopify commerce review exact verification.
