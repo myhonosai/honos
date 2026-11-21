@@ -94,8 +94,12 @@ try{
   await admin.query(section.replaceAll('hon_runtime',runtime.username));
   for(const leak of [`GRANT EXECUTE ON FUNCTION hon.creative_design_document_ok(jsonb,text) TO ${runtime.username}`,`GRANT SELECT ON hon.school_creative_design_photos TO ${runtime.username}`]){
    await admin.query('BEGIN');
-   try{await admin.query(leak);await assert.rejects(admin.query(section.replaceAll('hon_runtime',runtime.username)),/Unsafe creative design/,leak);}finally{await admin.query('ROLLBACK');}}}
- pass('the runtime executes exactly the six entry points and has no table privilege; fourteen helpers are private; both tables have forced RLS; two staff-assignable permissions; the 011 section passes and catches a leaked helper or table grant');
+   try{await admin.query(leak);await assert.rejects(admin.query(section.replaceAll('hon_runtime',runtime.username)),/Unsafe creative design/,leak);}finally{await admin.query('ROLLBACK');}}
+  for(const [drift,why] of [["CREATE OR REPLACE FUNCTION hon.creative_design_size(p_code text,OUT width numeric,OUT height numeric,OUT sides integer) LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$ SELECT 1::numeric,1::numeric,1 $$",/function body\/posture drift/],
+    ['ALTER TABLE hon.school_creative_design_photos DISABLE TRIGGER guard',/guard missing/],["UPDATE hon.permissions SET is_sensitive=true WHERE code='creative.design.read'",/permissions missing or changed/]]){
+   await admin.query('BEGIN');
+   try{await admin.query(drift);await assert.rejects(admin.query(section.replaceAll('hon_runtime',runtime.username)),why,drift);}finally{await admin.query('ROLLBACK');}}}
+ pass('the runtime executes exactly the six entry points and has no table privilege; fourteen helpers are private; both tables have forced RLS; two staff-assignable permissions; the 011 section passes and catches a leaked helper or table grant, a changed function body, a disabled guard trigger and a changed permission');
 
  const module=await Test.createTestingModule({controllers:[DC.CreativeDesignsController],providers:[CreativeDesignsService,DC.CreativeDesignsReadGuard,DC.CreativeDesignSaveGuard,DC.CreativeDesignStatusGuard,DC.CreativeDesignPhotoGuard,HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
  app=module.createNestApplication({logger:false,bodyParser:false});app.use(json({limit:'2mb',strict:true}));app.setGlobalPrefix('v1');app.useGlobalPipes(new ValidationPipe({whitelist:true,forbidNonWhitelisted:true}));await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;
@@ -131,7 +135,12 @@ try{
  {const c=await register('gamma');await setAccess(c,'ACTIVE');
   await q("INSERT INTO hon.school_creative_design_photos(organization_id,school_id,media_type,content,checksum,created_by_principal_id) SELECT $1,$2,'image/png',$3,encode(sha256($3),'hex'),$4 FROM generate_series(1,300)",[c.org,c.school,png(),c.principal]);
   r=await addPhoto(c,{mediaType:'image/png',data:png().toString('base64')});assert.deepEqual([r.status,r.body.code],[413,'CREATIVE_DESIGN_PHOTO_LIMIT']);}
- pass('photos lose their metadata in the API and the table refuses any that remains; the bytes and checksum read back only at the same school; exact replay, key reuse and a type that does not match the bytes are refused; photos are never changed or deleted; 300 a school');
+ // Cap: 150,000,000 stored bytes per school, counted with the new photo.
+ {const c=await register('delta');await setAccess(c,'ACTIVE');const big=png([chunk('IDAT',Buffer.alloc(1_390_000))]);
+  await q("INSERT INTO hon.school_creative_design_photos(organization_id,school_id,media_type,content,checksum,created_by_principal_id) SELECT $1,$2,'image/png',$3,encode(sha256($3),'hex'),$4 FROM generate_series(1,107)",[c.org,c.school,big,c.principal]);
+  r=await addPhoto(c,{mediaType:'image/png',data:png().toString('base64')});assert.equal(r.status,200,'a small photo still fits');
+  r=await addPhoto(c,{mediaType:'image/png',data:big.toString('base64')});assert.deepEqual([r.status,r.body.code],[413,'CREATIVE_DESIGN_PHOTO_LIMIT'],'the byte cap');}
+ pass('photos lose their metadata in the API and the table refuses any that remains; the bytes and checksum read back only at the same school; exact replay, key reuse and a type that does not match the bytes are refused; photos are never changed or deleted; 300 photos and 150,000,000 bytes a school');
 
  // 3. Designs: create, read, change, exact replay and key reuse.
  const placed=doc([title(),{id:'hero',kind:'image',...el,y:200,w:540,h:360,imageId:photo.photoId,fit:'cover'},{id:'band',kind:'rect',...el,y:700,w:612,h:92,fill:'#000000',stroke:null,strokeWidth:0,radius:0},

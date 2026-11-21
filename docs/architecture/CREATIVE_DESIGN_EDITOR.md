@@ -66,7 +66,7 @@ Colors are `#RRGGBB`. The whole document is at most 300,000 characters as JSON. 
 
 Staff upload JPEG, PNG or WebP photos (at most 1,400,000 bytes each; the editor shrinks large photos first). The API removes
 image metadata with the 0388 stripper and the table refuses any image that still carries it. Photos are private to the
-school, never changed, at most 300 per school. Deleting photos is a later piece.
+school, never changed, at most 300 and 150,000,000 bytes per school. Deleting photos is a later piece.
 
 ### Commands
 

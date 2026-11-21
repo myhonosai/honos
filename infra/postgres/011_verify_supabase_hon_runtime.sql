@@ -6024,7 +6024,7 @@ END $$;
 -- End point of sale Shopify orders exact verification.
 
 -- Creative designs exact verification (D1 0617): six runtime entry points, fourteen private helpers, two forced-RLS tables.
-DO $$ DECLARE f text; t text;
+DO $$ DECLARE f text; t text; c text; d boolean; s text;
 BEGIN
   FOREACH f IN ARRAY ARRAY['hon.read_school_creative_designs(text,jsonb)','hon.read_school_creative_design(text,jsonb)',
       'hon.read_school_creative_design_photo(text,jsonb)','hon.save_school_creative_design(text,jsonb,text,uuid,uuid)',
@@ -6060,5 +6060,38 @@ BEGIN
       'school_creative_design_json','school_creative_design_photo_json','creative_design_command_begin','creative_design_room_check',
       'creative_design_command_finish'))<>20 THEN
     RAISE EXCEPTION 'Unexpected creative design overload'; END IF;
+  -- Fixed bodies, volatility, definer posture and search path for all twenty functions; the four triggers; the two permissions.
+  FOR f,t,c,d,s IN SELECT * FROM (VALUES
+    ('hon.add_school_creative_design_photo(text,jsonb,text,uuid,uuid)','c84a6898c76a425131a058a6d4d4b8c0','v',true,'search_path=pg_catalog, hon'),
+    ('hon.creative_design_color_ok(jsonb,boolean)','25562d81844c7b71eeb8ae2c8f5ff25b','i',false,'search_path=pg_catalog'),
+    ('hon.creative_design_command_begin(text,text,jsonb,text,uuid,uuid)','02101624f41d5a8b7d5ee847311f1969','v',true,'search_path=pg_catalog, hon'),
+    ('hon.creative_design_command_finish(uuid,text,text,uuid,integer,jsonb,jsonb,text,uuid,uuid,jsonb)','8865de247715009e8a7f5256c47c303b','v',true,'search_path=pg_catalog, hon'),
+    ('hon.creative_design_document_ok(jsonb,text)','be4157913744ee08dfb7585dc38433e0','i',false,'search_path=pg_catalog, hon'),
+    ('hon.creative_design_name_ok(text)','ffebbe46ce672527f3c5c739cf0ff358','i',false,'search_path=pg_catalog'),
+    ('hon.creative_design_num_ok(jsonb,numeric,numeric)','69805e649e72a08c1b5ecf39fdc38d3f','i',false,'search_path=pg_catalog'),
+    ('hon.creative_design_room_check(uuid,uuid,text,uuid,boolean)','189b08c18cb7903e8177f617ab98a80e','v',true,'search_path=pg_catalog, hon'),
+    ('hon.creative_design_size(text)','dcc839466a21d65e41b6e8f124010b6d','i',false,'search_path=pg_catalog'),
+    ('hon.guard_school_creative_design()','05cc55e1cf8b872f1a48e2fc2eeed81e','v',false,'search_path=pg_catalog, hon'),
+    ('hon.guard_school_creative_design_photo()','a3940619cea59da7fbcf99eb771b8ae4','v',false,'search_path=pg_catalog, hon'),
+    ('hon.read_school_creative_design(text,jsonb)','d946858e974190566327328a1708e5b4','v',true,'search_path=pg_catalog, hon'),
+    ('hon.read_school_creative_design_photo(text,jsonb)','6e6c19cd0e858c6f5c2ef12b088941c5','v',true,'search_path=pg_catalog, hon'),
+    ('hon.read_school_creative_designs(text,jsonb)','b6c79f7c6a964e0099e58365ec2eb061','v',true,'search_path=pg_catalog, hon'),
+    ('hon.require_creative_design_actor(text,text)','8c2642ff6ab201d18405d03043c6866c','v',true,'search_path=pg_catalog, hon'),
+    ('hon.save_school_creative_design(text,jsonb,text,uuid,uuid)','ee311fd597a5c17eb2a732ffed695017','v',true,'search_path=pg_catalog, hon'),
+    ('hon.school_creative_design_json(hon.school_creative_designs)','f8a29b526cc55f1fecfcbb2b17abd458','s',false,'search_path=pg_catalog, hon'),
+    ('hon.school_creative_design_photo_json(hon.school_creative_design_photos)','caa169fe20527e30a8285dac4bd3cdc6','s',false,'search_path=pg_catalog, hon'),
+    ('hon.school_creative_design_summary(hon.school_creative_designs)','489cf997497f758271af1931aa8b0120','s',false,'search_path=pg_catalog, hon'),
+    ('hon.set_school_creative_design_status(text,jsonb,text,uuid,uuid)','684236d0ef3c8aaebbf97983925f4f69','v',true,'search_path=pg_catalog, hon')) x(f,t,c,d,s) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND md5(p.prosrc)=t AND p.provolatile=c AND p.prosecdef=d
+        AND p.proconfig IS NOT DISTINCT FROM ARRAY[s]) THEN
+      RAISE EXCEPTION 'Creative design function body/posture drift: %',f; END IF;
+  END LOOP;
+  FOR t,f IN SELECT * FROM (VALUES ('school_creative_designs','hon.guard_school_creative_design()'),('school_creative_design_photos','hon.guard_school_creative_design_photo()')) x LOOP
+    IF (SELECT count(*) FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND tgfoid=f::regprocedure AND tgenabled='O' AND NOT tgisinternal
+        AND tgname IN ('guard','no_truncate'))<>2 THEN
+      RAISE EXCEPTION 'Creative design guard missing: %',t; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM hon.permissions WHERE code IN ('creative.design.read','creative.design.manage') AND NOT is_sensitive AND is_staff_assignable)<>2 THEN
+    RAISE EXCEPTION 'Creative design permissions missing or changed'; END IF;
 END $$;
 -- End creative designs exact verification.

@@ -15,7 +15,7 @@ BEGIN;
 --        replay, key reuse refused), audited with ids, size and version only, and emits one inert ids-only outbox event.
 --   DE4  Photos are JPEG, PNG or WebP, 1..1,400,000 bytes, with no metadata (the API strips it with the 0388 stripper and
 --        the table refuses any that remains, hon.paper_import_image_clean). Never changed or deleted here; at most 300 a
---        school. Reading one needs creative.design.read at that school.
+--        school and 150,000,000 stored bytes a school. Reading one needs creative.design.read at that school.
 --   DE5  Direct human only (HUMAN_USER, HUMAN_UI, no action request or delegation), live ESSENTIAL/CORE/COMPLETE access,
 --        active school and organization (0364 hon.conversation_staff_has); the actor is proved again after the locks and
 --        before returning. Forced RLS with no policies; the runtime gains only EXECUTE on six entry points.
@@ -432,7 +432,10 @@ BEGIN
     RAISE EXCEPTION 'CREATIVE_DESIGN_PHOTO_REFUSED' USING ERRCODE='22023'; END IF;
   SELECT b.actor,b.replay INTO actor,replay FROM hon.creative_design_command_begin(subject,'creative_design.photo',p,key,request,correlation) b;
   IF replay IS NOT NULL THEN RETURN jsonb_build_object('photo',replay,'replayed',true); END IF;
-  IF (SELECT count(*) FROM hon.school_creative_design_photos f WHERE f.organization_id=org AND f.school_id=school)>=300 THEN
+  -- Under the school lock: at most 300 photos and 150,000,000 stored bytes a school (there is no delete path yet).
+  IF (SELECT count(*) FROM hon.school_creative_design_photos f WHERE f.organization_id=org AND f.school_id=school)>=300
+    OR (SELECT coalesce(sum(octet_length(f.content)),0) FROM hon.school_creative_design_photos f WHERE f.organization_id=org AND f.school_id=school)
+       +octet_length(bytes)>150000000 THEN
     RAISE EXCEPTION 'CREATIVE_DESIGN_PHOTO_LIMIT' USING ERRCODE='54000'; END IF;
   INSERT INTO hon.school_creative_design_photos(organization_id,school_id,media_type,content,checksum,created_by_principal_id)
     VALUES(org,school,p->>'mediaType',bytes,encode(sha256(bytes),'hex'),actor) RETURNING * INTO x;

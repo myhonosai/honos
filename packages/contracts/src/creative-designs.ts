@@ -30,7 +30,7 @@ export const CREATIVE_DESIGN_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/we
 export type CreativeDesignPhotoType = (typeof CREATIVE_DESIGN_PHOTO_TYPES)[number];
 export const CREATIVE_DESIGN_LIMITS = {
   name: 80, text: 2000, elementsPerPage: 150, documentCharacters: 300_000, list: 1000, activeDesigns: 200, designs: 1000,
-  photoBytes: 1_400_000, photos: 300, qrData: 200,
+  photoBytes: 1_400_000, photos: 300, photoBytesPerSchool: 150_000_000, qrData: 200,
 } as const;
 
 /** Same-origin browser command names (the X-HON-Human-Command header). */
