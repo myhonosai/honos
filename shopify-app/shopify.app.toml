@@ -14,14 +14,29 @@ embedded = false
 
 [access_scopes]
 scopes = "read_inventory,read_orders,read_products,write_inventory,write_products"
-optional_scopes = [ ]
+# Asked for only when an owner presses Allow finance; a store can decline it. Shopify does not prompt anyone when this
+# list changes.
+optional_scopes = [ "read_shopify_payments_accounts" ]
 use_legacy_install_flow = false
 
 [auth]
 redirect_urls = [ "https://app.myhonos.com/staff/billing/shopify/return" ]
 
+# One endpoint for every store (SH1b). The API is a private service, so Shopify reaches it through the web app's
+# /api/v1 rewrite. HON verifies the signature before anything else and never stores the payload.
 [webhooks]
 api_version = "2026-10"
+
+  [[webhooks.subscriptions]]
+  topics = [
+    "products/create", "products/update", "products/delete", "inventory_levels/update",
+    "orders/create", "orders/updated", "orders/cancelled", "orders/delete", "app/uninstalled"
+  ]
+  uri = "https://app.myhonos.com/api/v1/commerce/webhooks/shopify"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+  uri = "https://app.myhonos.com/api/v1/commerce/webhooks/shopify"
 
 [build]
 include_config_on_deploy = true
