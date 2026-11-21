@@ -262,16 +262,20 @@ function tokensFrom(body: unknown, now: number): ShopifyTokens {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-const VARIANTS_QUERY = `query HonVariants($after: String) {
+const STOCK_LOCATIONS = ' inventoryLevels(first: 2) { nodes { location { fulfillmentService { serviceName type } } } }';
+const variantsQuery = (stockLocations: boolean) => `query HonVariants($after: String) {
   productVariants(first: 50, after: $after) {
     pageInfo { hasNextPage endCursor }
     nodes {
       id title sku barcode price compareAtPrice inventoryQuantity position
-      inventoryItem { tracked unitCost { amount } inventoryLevels(first: 2) { nodes { location { fulfillmentService { serviceName type } } } } }
+      inventoryItem { tracked unitCost { amount }${stockLocations ? STOCK_LOCATIONS : ''} }
       product { id title status vendor productType handle featuredMedia { preview { image { url } } } }
     }
   }
 }`;
+const VARIANTS_QUERY = variantsQuery(true);
+/** The catalog read without the stock locations: what the sync falls back to when Shopify refuses the full read. */
+const VARIANTS_PLAIN_QUERY = variantsQuery(false);
 const ORDERS_QUERY = `query HonOrders($after: String, $q: String) {
   orders(first: 10, after: $after, query: $q, sortKey: CREATED_AT, reverse: true) {
     pageInfo { hasNextPage endCursor }
@@ -508,9 +512,18 @@ export class GraphqlShopifyAdapter implements ShopifyAdapter {
 
   async catalog(shop: string, accessToken: string): Promise<{ products: MirrorProduct[]; complete: boolean }> {
     const nodes: unknown[] = [];
-    let after: string | null = null, complete = true;
+    let after: string | null = null, complete = true, query = VARIANTS_QUERY;
     for (;;) {
-      const page = obj((await this.graphql(shop, accessToken, VARIANTS_QUERY, { after })).productVariants);
+      let data: Record<string, unknown>;
+      try { data = await this.graphql(shop, accessToken, query, { after }); } catch (e) {
+        // Some stores refuse the stock-location part of the read (a location another app owns, for example), and Shopify
+        // then answers nothing for the whole page. The catalog matters more than who fulfils it: read the rest of this
+        // sync without that part. Variants then carry no fulfilledBy, so the mirror keeps what it had.
+        if (!(e instanceof ShopifyProviderError) || e.failure !== 'INVALID_RESPONSE' || query === VARIANTS_PLAIN_QUERY) throw e;
+        query = VARIANTS_PLAIN_QUERY;
+        continue;
+      }
+      const page = obj(data.productVariants);
       nodes.push(...list(page.nodes));
       const info = obj(page.pageInfo);
       if (info.hasNextPage !== true) break;
