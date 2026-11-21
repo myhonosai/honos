@@ -148,6 +148,7 @@ function Belts({ program, busy, actions }: { program: RankSetupProgram; busy: bo
   return <section className={s.panel} aria-labelledby={`belts-${program.id}`}>
     <h2 id={`belts-${program.id}`}>Belts, first to last</h2>
     {!program.ranks.length && <p className={s.muted}>No belts yet. Add the first belt a new student starts on, then the next one, and so on.</p>}
+    {program.ranks.length > 1 && <p className={s.muted}>Moving a belt up or down changes the order for everyone. Students keep the belt they have.</p>}
     <ol className={s.cards}>{program.ranks.map((k, i) => <li key={k.id}><Belt program={program} rank={k} index={i} last={i === program.ranks.length - 1} busy={busy} actions={actions} /></li>)}</ol>
     <form className={s.addForm} onSubmit={(e) => { e.preventDefault(); if (isValidRankSetupName(clean)) void actions.addRank(program, clean, color).then((ok) => { if (ok) setName(''); }); }}>
       <label className={s.label}>Next belt<input className={s.field} required maxLength={120} value={name} placeholder={program.ranks.length ? 'Yellow belt' : 'White belt'} onChange={(e) => setName(e.target.value)} /></label>
