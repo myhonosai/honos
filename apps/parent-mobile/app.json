@@ -39,6 +39,14 @@
         {
           "color": "#050A18"
         }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "HON Family uses the microphone only while you tap it to ask Eian a question by voice.",
+          "speechRecognitionPermission": "HON Family turns your spoken question for Eian into text.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox", "com.google.android.as"]
+        }
       ]
     ],
     "extra": {
