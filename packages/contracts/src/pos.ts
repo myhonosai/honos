@@ -88,12 +88,25 @@ export function validatePosStockInput(v: unknown): PosStockInput {
 
 /** A catalog item, a quick amount, or (0613) a variant of the school's connected Shopify store by its Shopify id. */
 export type PosSaleLineInput = { itemId: string; quantity: number } | { shopifyVariantId: string; quantity: number } | { description: string; unitPriceMinor: number; quantity: number };
+/** 0614: where a sale's made-to-order items go. SCHOOL is the school's saved address (pickup); CUSTOMER is typed at the desk. */
+export type PosShipTo = { kind: 'SCHOOL' }
+  | { kind: 'CUSTOMER'; name: string; address1: string; address2: string | null; city: string; province: string | null; zip: string | null; country: string };
+export function validatePosShipTo(v: unknown, response = false): PosShipTo {
+  if (v && typeof v === 'object' && (v as { kind?: unknown }).kind === 'SCHOOL') { closed(v, ['kind'], response); return { kind: 'SCHOOL' }; }
+  const o = closed(v, ['kind', 'name', 'address1', 'address2', 'city', 'province', 'zip', 'country'], response);
+  if (o.kind !== 'CUSTOMER' || typeof o.country !== 'string' || !/^[A-Z]{2}$/.test(o.country)) fail(response);
+  return { kind: 'CUSTOMER', name: text(o.name, 120, response), address1: text(o.address1, 120, response), address2: maybeText(o.address2, 120, response),
+    city: text(o.city, 80, response), province: maybeText(o.province, 40, response), zip: maybeText(o.zip, 20, response), country: o.country as string };
+}
 export interface PosSaleInput {
   schoolId: string; personId: string | null; walkInName: string | null; lines: PosSaleLineInput[]; discount: PosDiscount | null;
   method: PosMethod; reference: string | null; note: string | null; expectedTotalMinor: number;
+  /** 0614: present only when the sale has a made-to-order Shopify line. */
+  shipTo?: PosShipTo;
 }
 export function validatePosSaleInput(v: unknown): PosSaleInput {
-  const o = closed(v, ['schoolId', 'personId', 'walkInName', 'lines', 'discount', 'method', 'reference', 'note', 'expectedTotalMinor'], false);
+  const shipped = !!v && typeof v === 'object' && 'shipTo' in v;
+  const o = closed(v, ['schoolId', 'personId', 'walkInName', 'lines', 'discount', 'method', 'reference', 'note', 'expectedTotalMinor', ...(shipped ? ['shipTo'] : [])], false);
   const personId = maybeId(o.personId, false), walkInName = maybeText(o.walkInName, 120, false);
   if (personId && walkInName) fail(false);
   const raw = arr(o.lines, false); if (raw.length < 1 || raw.length > POS_MAX_LINES) fail(false);
@@ -109,7 +122,8 @@ export function validatePosSaleInput(v: unknown): PosSaleInput {
     discount = { kind, value: int(d.value, 1, kind === 'PERCENT' ? 100 : 100_000_000, false), reason: text(d.reason, 200, false) };
   }
   return Object.freeze({ schoolId: id(o.schoolId, false), personId, walkInName, lines, discount, method: oneOf(o.method, POS_METHODS, false),
-    reference: maybeText(o.reference, 120, false), note: maybeText(o.note, 500, false), expectedTotalMinor: int(o.expectedTotalMinor, 0, 200_000_000, false) });
+    reference: maybeText(o.reference, 120, false), note: maybeText(o.note, 500, false), expectedTotalMinor: int(o.expectedTotalMinor, 0, 200_000_000, false),
+    ...(shipped ? { shipTo: validatePosShipTo(o.shipTo) } : {}) });
 }
 
 export interface PosRefundInput { schoolId: string; saleId: string; amountMinor: number; method: PosMethod; reason: string; restock: { lineId: string; quantity: number }[] }
@@ -151,26 +165,34 @@ function settings(v: unknown): PosSettings {
     version: o.version === null ? null : int(o.version, 1, 999_999_999, true) });
 }
 /** 0613: a variant of the school's connected Shopify store that the register can sell. `stock` is null when Shopify does not count it. */
-export interface PosShopifyItem { variantId: string; productId: string; name: string; sku: string | null; priceMinor: number; tracked: boolean; stock: number | null; imageUrl: string | null }
+export interface PosShopifyItem { variantId: string; productId: string; name: string; sku: string | null; priceMinor: number; tracked: boolean; stock: number | null; imageUrl: string | null;
+  /** 0614: the print provider that makes and ships this item (never counted in stock), or null when the school stocks it. */
+  madeBy: string | null }
 export const POS_SHOPIFY_STATES = ['READY', 'NOT_CONNECTED', 'NEEDS_EDITING', 'CURRENCY_MISMATCH'] as const;
 export type PosShopifyState = typeof POS_SHOPIFY_STATES[number];
 /** Shopify at the register: READY with its sellable variants, or why not; and the stock changes Shopify has not taken yet. */
-export interface PosShopify { state: PosShopifyState; shopName: string | null; items: PosShopifyItem[]; unsent: { waiting: number; failed: number } }
+/** 0614: made-to-order items. READY: sold here; NEEDS_PERMISSION: the store has some but has not let HON create orders; NONE: nothing to say. */
+export const POS_MADE_TO_ORDER_STATES = ['READY', 'NEEDS_PERMISSION', 'NONE'] as const;
+export interface PosMadeToOrder { state: typeof POS_MADE_TO_ORDER_STATES[number]; /** The school has a saved address to ship to. */ pickup: boolean; unsent: { waiting: number; failed: number } }
+export interface PosShopify { state: PosShopifyState; shopName: string | null; items: PosShopifyItem[]; unsent: { waiting: number; failed: number }; madeToOrder: PosMadeToOrder }
 const SHOPIFY_IMAGE = /^https:\/\/[a-z0-9.-]+\.(shopify\.com|shopifycdn\.net)\/[^\s"'<>\\]*$/;
 function shopify(v: unknown): PosShopify {
-  const o = closed(v, ['state', 'shopName', 'items', 'unsent'], true), u = closed(o.unsent, ['waiting', 'failed'], true);
+  const o = closed(v, ['state', 'shopName', 'items', 'unsent', 'madeToOrder'], true), u = closed(o.unsent, ['waiting', 'failed'], true);
+  const m = closed(o.madeToOrder, ['state', 'pickup', 'unsent'], true), mu = closed(m.unsent, ['waiting', 'failed'], true);
+  const made = oneOf(m.state, POS_MADE_TO_ORDER_STATES, true);
   const state = oneOf(o.state, POS_SHOPIFY_STATES, true);
   const items = arr(o.items, true).map((i): PosShopifyItem => {
-    const x = closed(i, ['variantId', 'productId', 'name', 'sku', 'priceMinor', 'tracked', 'stock', 'imageUrl'], true);
-    const tracked = bool(x.tracked, true);
-    if (tracked === (x.stock === null)) fail(true);
+    const x = closed(i, ['variantId', 'productId', 'name', 'sku', 'priceMinor', 'tracked', 'stock', 'imageUrl', 'madeBy'], true);
+    const tracked = bool(x.tracked, true), madeBy = x.madeBy === null ? null : text(x.madeBy, 64, true);
+    if (tracked === (x.stock === null) || (madeBy !== null && (tracked || made !== 'READY'))) fail(true);
     if (x.imageUrl !== null && (typeof x.imageUrl !== 'string' || x.imageUrl.length > 2048 || !SHOPIFY_IMAGE.test(x.imageUrl))) fail(true);
     return { variantId: shopifyId(x.variantId, true), productId: shopifyId(x.productId, true), name: text(x.name, 80, true), sku: x.sku === null ? null : text(x.sku, 40, true),
-      priceMinor: int(x.priceMinor, 0, 10_000_000, true), tracked, stock: x.stock === null ? null : int(x.stock, -20_000_000, 20_000_000, true), imageUrl: x.imageUrl as string | null };
+      priceMinor: int(x.priceMinor, 0, 10_000_000, true), tracked, stock: x.stock === null ? null : int(x.stock, -20_000_000, 20_000_000, true), imageUrl: x.imageUrl as string | null, madeBy };
   });
   if (items.length > 2000 || (state !== 'READY' && items.length > 0)) fail(true);
   return { state, shopName: o.shopName === null ? null : text(o.shopName, 120, true), items,
-    unsent: { waiting: int(u.waiting, 0, 1_000_000_000, true), failed: int(u.failed, 0, 1_000_000_000, true) } };
+    unsent: { waiting: int(u.waiting, 0, 1_000_000_000, true), failed: int(u.failed, 0, 1_000_000_000, true) },
+    madeToOrder: { state: made, pickup: bool(m.pickup, true), unsent: { waiting: int(mu.waiting, 0, 1_000_000_000, true), failed: int(mu.failed, 0, 1_000_000_000, true) } } };
 }
 export interface PosRead {
   schoolId: string; timezone: string; today: string; canManage: boolean; settings: PosSettings; items: PosItem[];
@@ -205,7 +227,11 @@ export interface PosSaleLine {
   lineTotalMinor: number; taxable: boolean; stockTracked: boolean; restockedQuantity: number;
   /** 0613: the Shopify variant this line sold (category SHOPIFY), else null. */
   shopifyVariantId: string | null;
+  /** 0614: the provider that makes this line, or null. */
+  madeBy: string | null;
 }
+/** 0614: the Shopify order for a sale's made-to-order lines. name is Shopify's order name (for example #1042) once created. */
+export interface PosShopifyOrder { status: 'WAITING' | 'DONE' | 'FAILED'; shipTo: 'SCHOOL' | 'CUSTOMER'; name: string | null; failureCode: string | null }
 /** 0613: how this sale's changes to Shopify's counts stand. All zero when it sold no counted Shopify product. */
 export interface PosShopifyStock { waiting: number; done: number; failed: number }
 export interface PosRefund { refundId: string; refundedAt: string; amountMinor: number; method: PosMethod; reason: string; restocked: { lineId: string; quantity: number }[]; refundedBy: string | null }
@@ -213,20 +239,28 @@ export interface PosSale extends PosSaleSummary {
   schoolName: string; soldBy: string | null; lines: PosSaleLine[]; subtotalMinor: number;
   discount: { kind: 'AMOUNT' | 'PERCENT'; value: number; reason: string; amountMinor: number } | null;
   taxRateBps: number; taxMinor: number; reference: string | null; note: string | null; refunds: PosRefund[]; shopifyStock: PosShopifyStock;
+  shopifyOrder: PosShopifyOrder | null;
 }
 export function validatePosSale(v: unknown): PosSale {
-  const o = closed(v, [...SUMMARY_KEYS, 'schoolName', 'soldBy', 'lines', 'subtotalMinor', 'discount', 'taxRateBps', 'taxMinor', 'reference', 'note', 'refunds', 'shopifyStock'], true);
+  const o = closed(v, [...SUMMARY_KEYS, 'schoolName', 'soldBy', 'lines', 'subtotalMinor', 'discount', 'taxRateBps', 'taxMinor', 'reference', 'note', 'refunds', 'shopifyStock', 'shopifyOrder'], true);
   const lines = arr(o.lines, true).map((l): PosSaleLine => {
-    const x = closed(l, ['lineId', 'itemId', 'name', 'sku', 'category', 'unitPriceMinor', 'quantity', 'lineTotalMinor', 'taxable', 'stockTracked', 'restockedQuantity', 'shopifyVariantId'], true);
+    const x = closed(l, ['lineId', 'itemId', 'name', 'sku', 'category', 'unitPriceMinor', 'quantity', 'lineTotalMinor', 'taxable', 'stockTracked', 'restockedQuantity', 'shopifyVariantId', 'madeBy'], true);
     const category = oneOf(x.category, [...POS_CATEGORIES, 'QUICK', 'SHOPIFY'] as const, true);
-    if ((category === 'SHOPIFY') !== (x.shopifyVariantId !== null)) fail(true);
+    if ((category === 'SHOPIFY') !== (x.shopifyVariantId !== null) || (x.madeBy !== null && category !== 'SHOPIFY')) fail(true);
     return { lineId: id(x.lineId, true), itemId: maybeId(x.itemId, true), name: text(x.name, 80, true), sku: x.sku === null ? null : text(x.sku, 40, true),
-      category, shopifyVariantId: x.shopifyVariantId === null ? null : shopifyId(x.shopifyVariantId, true), unitPriceMinor: int(x.unitPriceMinor, 0, 10_000_000, true),
+      category, shopifyVariantId: x.shopifyVariantId === null ? null : shopifyId(x.shopifyVariantId, true), madeBy: x.madeBy === null ? null : text(x.madeBy, 64, true), unitPriceMinor: int(x.unitPriceMinor, 0, 10_000_000, true),
       quantity: int(x.quantity, 1, 999, true), lineTotalMinor: int(x.lineTotalMinor, 0, 2_147_483_647, true), taxable: bool(x.taxable, true),
       stockTracked: bool(x.stockTracked, true), restockedQuantity: int(x.restockedQuantity, 0, 999, true) };
   });
   if (lines.length < 1) fail(true);
   const ss = closed(o.shopifyStock, ['waiting', 'done', 'failed'], true);
+  let shopifyOrder: PosShopifyOrder | null = null;
+  if (o.shopifyOrder !== null) {
+    const so = closed(o.shopifyOrder, ['status', 'shipTo', 'name', 'failureCode'], true);
+    shopifyOrder = { status: oneOf(so.status, ['WAITING', 'DONE', 'FAILED'] as const, true), shipTo: oneOf(so.shipTo, ['SCHOOL', 'CUSTOMER'] as const, true),
+      name: so.name === null ? null : text(so.name, 40, true), failureCode: so.failureCode === null ? null : text(so.failureCode, 40, true) };
+  }
+  if ((shopifyOrder !== null) !== lines.some(l => l.madeBy !== null)) fail(true);
   let discount: PosSale['discount'] = null;
   if (o.discount !== null) { const d = closed(o.discount, ['kind', 'value', 'reason', 'amountMinor'], true);
     discount = { kind: oneOf(d.kind, ['AMOUNT', 'PERCENT'] as const, true), value: int(d.value, 1, 100_000_000, true), reason: text(d.reason, 200, true), amountMinor: int(d.amountMinor, 1, 100_000_000, true) }; }
@@ -239,7 +273,7 @@ export function validatePosSale(v: unknown): PosSale {
   return Object.freeze({ ...summaryFrom(o), schoolName: text(o.schoolName, 200, true), soldBy: o.soldBy === null ? null : text(o.soldBy, 120, true), lines,
     subtotalMinor: int(o.subtotalMinor, 0, 100_000_000, true), discount, taxRateBps: int(o.taxRateBps, 0, 2500, true), taxMinor: int(o.taxMinor, 0, 100_000_000, true),
     reference: maybeText(o.reference, 120, true), note: maybeText(o.note, 500, true), refunds,
-    shopifyStock: { waiting: int(ss.waiting, 0, 100_000, true), done: int(ss.done, 0, 100_000, true), failed: int(ss.failed, 0, 100_000, true) } });
+    shopifyStock: { waiting: int(ss.waiting, 0, 100_000, true), done: int(ss.done, 0, 100_000, true), failed: int(ss.failed, 0, 100_000, true) }, shopifyOrder });
 }
 
 export interface PosReport {

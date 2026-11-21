@@ -13,6 +13,8 @@ export const SHOPIFY_SCOPES = ['read_products', 'read_inventory', 'read_orders']
 export const SHOPIFY_EDIT_SCOPES = ['write_products', 'write_inventory'] as const;
 /** SH-F1: asked for only when the owner presses Allow finance. Reads the Shopify Payments balance, payouts and balance transactions. */
 export const SHOPIFY_FINANCE_SCOPES = ['read_shopify_payments_accounts'] as const;
+/** SH2b (0614): asked for only when the owner presses Allow orders. Lets the front desk create the Shopify order a print provider works from. */
+export const SHOPIFY_ORDER_SCOPES = ['write_orders'] as const;
 export const SHOPIFY_LOW_STOCK_AT = 3;
 export const SHOPIFY_CONNECTION_STATUSES = ['CONNECTED', 'NEEDS_RECONNECT', 'DISCONNECTED'] as const;
 export type ShopifyConnectionStatus = typeof SHOPIFY_CONNECTION_STATUSES[number];
@@ -72,17 +74,19 @@ function shop(v: unknown, response = true): string { if (typeof v !== 'string' |
 
 /**
  * allowEditing (SH4a): also ask Shopify for the edit scopes. allowFinance (SH-F1): also ask for the finance scope.
+ * allowOrders (SH2b): also ask for the scope that creates orders.
  * Absent means false.
  */
-export interface ShopifyConnectInput { schoolId: string; shopDomain: string; allowEditing: boolean; allowFinance: boolean }
+export interface ShopifyConnectInput { schoolId: string; shopDomain: string; allowEditing: boolean; allowFinance: boolean; allowOrders: boolean }
 export function validateShopifyConnectInput(v: unknown): ShopifyConnectInput {
   const has = (k: string) => !!v && typeof v === 'object' && !Array.isArray(v) && Object.hasOwn(v, k);
-  const editing = has('allowEditing'), finance = has('allowFinance');
-  const o = closed(v, ['schoolId', 'shopDomain', ...(editing ? ['allowEditing'] : []), ...(finance ? ['allowFinance'] : [])], false);
+  const editing = has('allowEditing'), finance = has('allowFinance'), orders = has('allowOrders');
+  const o = closed(v, ['schoolId', 'shopDomain', ...(editing ? ['allowEditing'] : []), ...(finance ? ['allowFinance'] : []), ...(orders ? ['allowOrders'] : [])], false);
   const domain = normalizeShopDomain(o.shopDomain);
-  if (!domain || (editing && typeof o.allowEditing !== 'boolean') || (finance && typeof o.allowFinance !== 'boolean')) fail(false);
+  if (!domain || (editing && typeof o.allowEditing !== 'boolean') || (finance && typeof o.allowFinance !== 'boolean')
+    || (orders && typeof o.allowOrders !== 'boolean')) fail(false);
   return Object.freeze({ schoolId: id(o.schoolId, false), shopDomain: domain, allowEditing: editing && o.allowEditing === true,
-    allowFinance: finance && o.allowFinance === true });
+    allowFinance: finance && o.allowFinance === true, allowOrders: orders && o.allowOrders === true });
 }
 /** The raw query string Shopify put on the return URL, without the leading `?`. */
 export interface ShopifyCompleteInput { schoolId: string; query: string }
@@ -107,15 +111,20 @@ export function validateShopifyDisconnectInput(v: unknown): ShopifyDisconnectInp
 export interface ShopifyConnection {
   connectionId: string; shopDomain: string; shopName: string | null; currency: string | null; status: ShopifyConnectionStatus; version: number;
   connectedAt: string; endedAt: string | null; lastSyncAt: string | null; lastSyncOutcome: ShopifySyncOutcome | null; syncRunning: boolean;
+  /** 0614: the store lets HON create orders (write_orders). False from a database before 0614. */
+  ordersAllowed: boolean;
 }
 export function verifyShopifyConnection(v: unknown): ShopifyConnection {
-  const o = closed(v, ['connectionId', 'shopDomain', 'shopName', 'currency', 'status', 'version', 'connectedAt', 'endedAt', 'lastSyncAt', 'lastSyncOutcome', 'syncRunning'], true);
+  const allowed = !!v && typeof v === 'object' && Object.hasOwn(v, 'ordersAllowed');
+  const o = closed(v, ['connectionId', 'shopDomain', 'shopName', 'currency', 'status', 'version', 'connectedAt', 'endedAt', 'lastSyncAt', 'lastSyncOutcome', 'syncRunning',
+    ...(allowed ? ['ordersAllowed'] : [])], true);
   const status = oneOf(o.status, SHOPIFY_CONNECTION_STATUSES);
   const endedAt = maybeIso(o.endedAt);
   if ((status === 'CONNECTED') !== (endedAt === null)) fail(true);
   return Object.freeze({ connectionId: id(o.connectionId, true), shopDomain: shop(o.shopDomain), shopName: maybeText(o.shopName, 120), currency: maybeCurrency(o.currency),
     status, version: int(o.version, 1, 1_000_000_000), connectedAt: iso(o.connectedAt), endedAt, lastSyncAt: maybeIso(o.lastSyncAt),
-    lastSyncOutcome: o.lastSyncOutcome === null ? null : oneOf(o.lastSyncOutcome, SHOPIFY_SYNC_OUTCOMES), syncRunning: bool(o.syncRunning) });
+    lastSyncOutcome: o.lastSyncOutcome === null ? null : oneOf(o.lastSyncOutcome, SHOPIFY_SYNC_OUTCOMES), syncRunning: bool(o.syncRunning),
+    ordersAllowed: allowed ? bool(o.ordersAllowed) : false });
 }
 
 export interface ShopifySummary {

@@ -76,7 +76,21 @@ export interface ShopifyAdapter {
    * or failed call throws. Needs write_inventory.
    */
   adjustInventory(shop: string, accessToken: string, input: ShopifyInventoryAdjustment): Promise<ShopifyInventoryAnswer>;
+  /**
+   * SH2b (0614): the PAID order a print provider works from, for made-to-order items sold at the front desk. HON took
+   * the money at the desk and sends the customer nothing. The order carries the tag `hon-pos-<key>`; an order that
+   * already has it is answered instead of creating a second one. A refusal by Shopify's own rules is REFUSED; a lost
+   * or failed call throws. Needs write_orders (and read_orders to look for the tag).
+   */
+  createPosOrder(shop: string, accessToken: string, input: ShopifyPosOrderInput): Promise<ShopifyPosOrderAnswer>;
 }
+export interface ShopifyPosAddress { name: string; address1: string; address2: string | null; city: string; province: string | null; zip: string | null; country: string }
+export interface ShopifyPosOrderInput {
+  key: string; currency: string; note: string; shipTo: ShopifyPosAddress;
+  /** unitPrice is a decimal string in the store currency: what the desk charged for one. */
+  lines: readonly { variantId: string; quantity: number; unitPrice: string }[];
+}
+export type ShopifyPosOrderAnswer = { outcome: 'DONE'; orderId: string; orderName: string } | { outcome: 'REFUSED'; reason: 'SHOPIFY_REJECTED' };
 export interface ShopifyInventoryAdjustment { variantId: string; delta: number; idempotencyKey: string; reference: string }
 export type ShopifyInventoryRefusal = 'VARIANT_GONE' | 'NOT_TRACKED' | 'NO_LOCATION' | 'MULTIPLE_LOCATIONS' | 'SHOPIFY_REJECTED';
 export type ShopifyInventoryAnswer = { outcome: 'DONE' } | { outcome: 'REFUSED'; reason: ShopifyInventoryRefusal };
@@ -356,6 +370,35 @@ const VARIANT_STOCK_QUERY = `query HonVariantStock($id: ID!) { productVariant(id
   inventoryLevels(first: 20) { nodes { location { id isActive fulfillmentService { type } } } } } } }`;
 const INVENTORY_ADJUST = `mutation HonPosStock($input: InventoryAdjustQuantitiesInput!, $key: String!) {
   inventoryAdjustQuantities(input: $input) @idempotent(key: $key) { inventoryAdjustmentGroup { id } userErrors { field message } } }`;
+const POS_ORDER_FIND = `query HonPosOrderFind($query: String!) { orders(first: 1, query: $query) { nodes { id name } } }`;
+const POS_ORDER_CREATE = `mutation HonPosOrder($order: OrderCreateOrderInput!, $options: OrderCreateOptionsInput) {
+  orderCreate(order: $order, options: $options) { order { id name } userErrors { field message } } }`;
+const POS_ORDER_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** The tag that makes a front-desk order findable again after a lost answer. */
+export const posOrderTag = (key: string) => `hon-pos-${key}`;
+/** Shopify's order as HON keeps it: the numeric id and the name staff see (for example #1042). */
+function posOrderFrom(v: unknown): { orderId: string; orderName: string } {
+  const o = obj(v), name = cleanText(o.name, 40);
+  if (!name) bad();
+  return { orderId: gidNumber(o.id, 'Order'), orderName: name };
+}
+/** The exact orderCreate variables for a front-desk order: paid, no customer record, no email, inventory left alone. */
+export function posOrderVariables(input: ShopifyPosOrderInput): Record<string, unknown> {
+  if (!POS_ORDER_KEY.test(input.key) || !/^[A-Z]{3}$/.test(input.currency) || input.lines.length < 1 || input.lines.length > 50) bad();
+  const a = input.shipTo;
+  return {
+    order: {
+      currency: input.currency, financialStatus: 'PAID', note: input.note, tags: ['hon-pos', posOrderTag(input.key)],
+      lineItems: input.lines.map((l) => {
+        if (!/^[1-9][0-9]{0,17}$/.test(l.variantId) || !Number.isInteger(l.quantity) || l.quantity < 1 || l.quantity > 999 || !/^\d{1,9}(\.\d{1,2})?$/.test(l.unitPrice)) bad();
+        return { variantId: `gid://shopify/ProductVariant/${l.variantId}`, quantity: l.quantity, priceSet: { shopMoney: { amount: l.unitPrice, currencyCode: input.currency } } };
+      }),
+      shippingAddress: { lastName: a.name, address1: a.address1, ...(a.address2 ? { address2: a.address2 } : {}), city: a.city,
+        ...(a.province ? { provinceCode: a.province } : {}), ...(a.zip ? { zip: a.zip } : {}), countryCode: a.country },
+    },
+    options: { inventoryBehaviour: 'BYPASS', sendReceipt: false, sendFulfillmentReceipt: false },
+  };
+}
 /** Where HON may change a variant's count: its inventory item and the store's one own, active location stocking it. */
 export function ownStockLocation(variant: unknown): { inventoryItemId: string; locationId: string } | ShopifyInventoryRefusal {
   if (variant === null || variant === undefined) return 'VARIANT_GONE';
@@ -452,6 +495,15 @@ export class GraphqlShopifyAdapter implements ShopifyAdapter {
       referenceDocumentUri: input.reference, changes: [{ delta: input.delta, inventoryItemId: where.inventoryItemId, locationId: where.locationId, changeFromQuantity: null }] } })).inventoryAdjustQuantities);
     if (list(r.userErrors).length) return { outcome: 'REFUSED', reason: 'SHOPIFY_REJECTED' };
     return { outcome: 'DONE' };
+  }
+
+  async createPosOrder(shop: string, accessToken: string, input: ShopifyPosOrderInput): Promise<ShopifyPosOrderAnswer> {
+    const variables = posOrderVariables(input);
+    const found = list(obj((await this.graphql(shop, accessToken, POS_ORDER_FIND, { query: `tag:'${posOrderTag(input.key)}'` })).orders).nodes);
+    if (found.length) return { outcome: 'DONE', ...posOrderFrom(found[0]) };
+    const r = obj((await this.graphql(shop, accessToken, POS_ORDER_CREATE, variables)).orderCreate);
+    if (list(r.userErrors).length) return { outcome: 'REFUSED', reason: 'SHOPIFY_REJECTED' };
+    return { outcome: 'DONE', ...posOrderFrom(r.order) };
   }
 
   async catalog(shop: string, accessToken: string): Promise<{ products: MirrorProduct[]; complete: boolean }> {
@@ -606,6 +658,23 @@ export class FakeShopify implements ShopifyAdapter {
     this.calls.push('storefrontSettings:' + shop); this.check(shop, accessToken, 'access');
     const value = storefrontValue(settings);
     this.write(() => { this.store(shop).storefront = value; });
+  }
+  /** Front-desk orders the fake store holds, by their HON key (test hook: read them to see what was sent). */
+  readonly posOrders = new Map<string, { shop: string; orderId: string; orderName: string; input: ShopifyPosOrderInput }>();
+  async createPosOrder(shop: string, accessToken: string, input: ShopifyPosOrderInput): Promise<ShopifyPosOrderAnswer> {
+    await Promise.resolve();
+    this.calls.push('createPosOrder:' + shop); this.check(shop, accessToken, 'access', 'write_orders');
+    posOrderVariables(input);
+    const had = this.posOrders.get(input.key);
+    if (had) { this.writeFault = null; return { outcome: 'DONE', orderId: had.orderId, orderName: had.orderName }; }
+    const variants = this.store(shop).products.flatMap(p => p.variants);
+    if (input.lines.some(l => !variants.some(v => v.id === l.variantId))) { this.writeFault = null; return { outcome: 'REFUSED', reason: 'SHOPIFY_REJECTED' }; }
+    if (this.writeFault === 'REJECT') { this.writeFault = null; return { outcome: 'REFUSED', reason: 'SHOPIFY_REJECTED' }; }
+    return this.write(() => {
+      const made = { shop, orderId: String(this.nextId++), orderName: `#${1001 + this.posOrders.size}`, input };
+      this.posOrders.set(input.key, made);
+      return { outcome: 'DONE' as const, orderId: made.orderId, orderName: made.orderName };
+    });
   }
   private readonly adjusted = new Set<string>();
   async adjustInventory(shop: string, accessToken: string, input: ShopifyInventoryAdjustment): Promise<ShopifyInventoryAnswer> {

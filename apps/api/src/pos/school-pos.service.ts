@@ -8,11 +8,14 @@ import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { SHOPIFY_APP, type ShopifyApp } from '../commerce/shopify/shopify-adapter.js';
 import { begunPosStock, sendPosStock } from './pos-shopify-stock.js';
+import { begunPosOrders, sendPosOrders } from './pos-shopify-order.js';
 
 const DETAIL: Record<string, string> = {
   POS_TOTAL_CHANGED: 'Prices or the tax rate changed. Check the new total and take payment again.',
   POS_OUT_OF_STOCK: 'Not enough in stock for one of the items. Update the stock count first.',
   POS_ITEM_UNAVAILABLE: 'One of the items is no longer for sale here. Take it out of the cart.',
+  POS_SHIP_TO_REQUIRED: 'Choose where the made-to-order items ship.',
+  POS_SCHOOL_ADDRESS_MISSING: 'The school has no saved address yet. Add it in Settings, or ship to the customer.',
   POS_DISCOUNT_TOO_LARGE: 'The discount is more than the sale.',
   POS_REFUND_TOO_LARGE: 'That is more than is left to refund on this sale.',
   POS_RESTOCK_INVALID: 'Only items that were sold and counted in stock can go back on the shelf.',
@@ -25,7 +28,7 @@ const DETAIL: Record<string, string> = {
   POS_SCHOOL_TIMEZONE_INVALID: 'Set the school time zone in Settings first.',
 };
 const STATUS: Record<string, number> = {
-  POS_INVALID: 400, POS_DISCOUNT_TOO_LARGE: 400, POS_REFUND_TOO_LARGE: 400, POS_RESTOCK_INVALID: 400, POS_STOCK_NOT_EMPTY: 400, POS_STOCK_NOT_TRACKED: 400,
+  POS_INVALID: 400, POS_DISCOUNT_TOO_LARGE: 400, POS_REFUND_TOO_LARGE: 400, POS_RESTOCK_INVALID: 400, POS_STOCK_NOT_EMPTY: 400, POS_STOCK_NOT_TRACKED: 400, POS_SHIP_TO_REQUIRED: 400, POS_SCHOOL_ADDRESS_MISSING: 400,
   POS_STOCK_OUT_OF_RANGE: 400, POS_CURRENCY_LOCKED: 400, POS_SCHOOL_TIMEZONE_INVALID: 400, POS_OUT_OF_STOCK: 409,
   POS_FORBIDDEN: 403, POS_NOT_FOUND: 404, POS_ITEM_UNAVAILABLE: 409, POS_TOTAL_CHANGED: 409, POS_VERSION_CONFLICT: 409, POS_KEY_REUSED: 409, POS_SKU_TAKEN: 409,
   POS_BUSY: 503,
@@ -107,7 +110,7 @@ export class SchoolPosService {
     if (op === 'settings') return this.checked(validatePosSettingsResult, raw);
     if (op === 'item' || op === 'stock') return this.checked(validatePosItemResult, raw);
     const out = this.checked(validatePosSaleResult, raw);
-    if (out.sale.shopifyStock.waiting === 0) return out;
+    if (out.sale.shopifyStock.waiting === 0 && out.sale.shopifyOrder?.status !== 'WAITING') return out;
     // 0613: the sale or refund is recorded. Lowering (or restoring) Shopify's count is a follow-up that never fails it.
     await this.sendShopifyStock(req.honIdentity!.externalSubject, input.schoolId, false);
     try { return { sale: await this.sale(req, input.schoolId, out.sale.saleId), replayed: out.replayed }; } catch { return out; }
@@ -121,10 +124,18 @@ export class SchoolPosService {
     if (!this.shopify) { if (retryFailed) throw new ServiceUnavailableException({ code: 'POS_SHOPIFY_UNAVAILABLE', detail: 'Shopify is not set up on this server.' }); return; }
     try {
       const w = begunPosStock(await this.database.callSchoolPos('shopifyStockBegin', [subject, JSON.stringify({ schoolId, retryFailed })]));
-      if (!w) return;
-      await sendPosStock(this.shopify, this.now, w, {
+      if (w) await sendPosStock(this.shopify, this.now, w, {
         rotate: b => this.database.callSchoolPos('shopifyStockRotate', [subject, JSON.stringify({ schoolId, ...b })]),
         finish: (taskId, outcome, failureCode) => this.database.callSchoolPos('shopifyStockFinish', [subject, JSON.stringify({ schoolId, taskId, outcome, failureCode })]),
+      });
+    } catch (e) { if (retryFailed) translatePosError(e); }
+    // 0614: the orders a print provider works from, after the stock changes and independent of them.
+    try {
+      const o = begunPosOrders(await this.database.callSchoolPos('shopifyOrderBegin', [subject, JSON.stringify({ schoolId, retryFailed })]));
+      if (o) await sendPosOrders(this.shopify, this.now, o, {
+        rotate: b => this.database.callSchoolPos('shopifyStockRotate', [subject, JSON.stringify({ schoolId, ...b })]),
+        finish: (orderTaskId, outcome, failureCode, order) => this.database.callSchoolPos('shopifyOrderFinish', [subject, JSON.stringify({ schoolId, orderTaskId, outcome, failureCode,
+          shopifyOrderId: order?.orderId ?? null, shopifyOrderName: order?.orderName ?? null })]),
       });
     } catch (e) { if (retryFailed) translatePosError(e); }
   }

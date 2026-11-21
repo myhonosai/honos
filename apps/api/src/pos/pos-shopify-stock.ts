@@ -31,6 +31,29 @@ export interface PosStockSteps {
 export const POS_STOCK_MAX_ATTEMPTS = 5;
 
 /**
+ * The store's access token for a POS follow-up (stock change or order), refreshed and rotated when it is about to
+ * expire. Tokens stay in memory. Answers how every waiting item must be settled when no token can be had.
+ */
+export async function posShopifyToken(app: ShopifyApp, now: () => number, w: Pick<BegunPosStock, 'connectionId' | 'shopDomain' | 'credential'>,
+  rotate: PosStockSteps['rotate']): Promise<{ token: string } | { outcome: PosStockOutcome; code: string }> {
+  const binding = { connectionId: w.connectionId, shopDomain: w.shopDomain };
+  let credential;
+  try { credential = app.vault.open(binding, w.credential.keyId, w.credential.sealed); } catch { return { outcome: 'FAILED', code: 'CREDENTIAL_UNREADABLE' }; }
+  try {
+    if (Date.parse(credential.accessExpiresAt) - now() >= SHOPIFY_REFRESH_MARGIN_MS) return { token: credential.accessToken };
+    if (Date.parse(credential.refreshExpiresAt) <= now()) return { outcome: 'FAILED', code: 'REFRESH_EXPIRED' };
+    const fresh = await app.adapter.refresh(w.shopDomain, credential.refreshToken);
+    const pair = { accessToken: fresh.accessToken, refreshToken: fresh.refreshToken, accessExpiresAt: fresh.accessExpiresAt, refreshExpiresAt: fresh.refreshExpiresAt };
+    await rotate({ expectedVersion: w.credential.version,
+      credential: { keyId: app.vault.keyId, sealed: app.vault.seal(binding, pair), accessExpiresAt: pair.accessExpiresAt, refreshExpiresAt: pair.refreshExpiresAt } });
+    return { token: pair.accessToken };
+  } catch (e) {
+    if (e instanceof ShopifyProviderError) return { outcome: e.failure === 'AUTH' || e.failure === 'REJECTED' ? 'FAILED' : 'RETRY', code: FAILURE_CODE[e.failure] };
+    throw e;
+  }
+}
+
+/**
  * Send the waiting changes, one Shopify call each, with the task id as Shopify's idempotency key: a change whose
  * answer was lost is simply sent again and Shopify applies it once. A change Shopify refuses, or a store that no longer
  * accepts HON's token, is FAILED (a manager sends it again after fixing the cause). Anything uncertain stays waiting
@@ -38,33 +61,21 @@ export const POS_STOCK_MAX_ATTEMPTS = 5;
  * recorded and must not look failed.
  */
 export async function sendPosStock(app: ShopifyApp, now: () => number, w: BegunPosStock, steps: PosStockSteps): Promise<void> {
-  const binding = { connectionId: w.connectionId, shopDomain: w.shopDomain }, shop = w.shopDomain;
+  const shop = w.shopDomain;
   const all = async (outcome: PosStockOutcome, code: string, from = 0) => { for (const t of w.tasks.slice(from)) await steps.finish(t.taskId, later(t, outcome), code); };
   const later = (t: PosStockTask, outcome: PosStockOutcome): PosStockOutcome => outcome === 'RETRY' && t.attempts >= POS_STOCK_MAX_ATTEMPTS ? 'FAILED' : outcome;
   const settle = (e: ShopifyProviderError): PosStockOutcome => e.failure === 'AUTH' || e.failure === 'REJECTED' ? 'FAILED' : 'RETRY';
-  let credential;
-  try { credential = app.vault.open(binding, w.credential.keyId, w.credential.sealed); } catch { return all('FAILED', 'CREDENTIAL_UNREADABLE'); }
-  let token = credential.accessToken;
-  try {
-    if (Date.parse(credential.accessExpiresAt) - now() < SHOPIFY_REFRESH_MARGIN_MS) {
-      if (Date.parse(credential.refreshExpiresAt) <= now()) return await all('FAILED', 'REFRESH_EXPIRED');
-      const fresh = await app.adapter.refresh(shop, credential.refreshToken);
-      const pair = { accessToken: fresh.accessToken, refreshToken: fresh.refreshToken, accessExpiresAt: fresh.accessExpiresAt, refreshExpiresAt: fresh.refreshExpiresAt };
-      await steps.rotate({ expectedVersion: w.credential.version,
-        credential: { keyId: app.vault.keyId, sealed: app.vault.seal(binding, pair), accessExpiresAt: pair.accessExpiresAt, refreshExpiresAt: pair.refreshExpiresAt } });
-      token = pair.accessToken;
-    }
-  } catch (e) {
-    if (e instanceof ShopifyProviderError) return all(settle(e), FAILURE_CODE[e.failure]);
-    throw e;
-  }
+  const opened = await posShopifyToken(app, now, w, steps.rotate);
+  if ('outcome' in opened) return all(opened.outcome, opened.code);
+  const token = opened.token;
   for (let i = 0; i < w.tasks.length; i++) {
     const t = w.tasks[i]!;
     try {
       const r = await app.adapter.adjustInventory(shop, token, { variantId: t.variantId, delta: t.change, idempotencyKey: t.taskId, reference: `honos://pos/sale/${t.saleId}` });
       await steps.finish(t.taskId, r.outcome === 'DONE' ? 'DONE' : 'FAILED', r.outcome === 'DONE' ? null : r.reason);
     } catch (e) {
-      if (!(e instanceof ShopifyProviderError)) throw e;
+      // Anything that is not Shopify's answer (a HON-side fault mid-send) must not leave the change waiting forever.
+      if (!(e instanceof ShopifyProviderError)) { await steps.finish(t.taskId, later(t, 'RETRY'), 'HON_SEND_FAILED').catch(() => undefined); throw e; }
       // A store that refuses the token refuses every change: settle the rest the same way without calling again.
       if (e.failure === 'AUTH') return all('FAILED', FAILURE_CODE.AUTH, i);
       await steps.finish(t.taskId, later(t, settle(e)), FAILURE_CODE[e.failure]);

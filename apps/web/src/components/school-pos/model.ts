@@ -1,10 +1,10 @@
-import { computePosTotals, type PosCategory, type PosDiscount, type PosItem, type PosMethod, type PosSaleInput, type PosShopifyItem, type PosTotals } from '@hon/contracts';
+import { computePosTotals, type PosCategory, type PosDiscount, type PosItem, type PosMethod, type PosSaleInput, type PosShipTo, type PosShopifyItem, type PosTotals } from '@hon/contracts';
 
-/** Register cart and money helpers (0612; Shopify products 0613). Pure: the screen and its tests share them. */
+/** Register cart and money helpers (0612; Shopify products 0613; made-to-order items 0614). Pure: the screen and its tests share them. */
 export type CartLine =
   | Readonly<{ kind: 'ITEM'; itemId: string; name: string; unitPriceMinor: number; taxable: boolean; quantity: number }>
   | Readonly<{ kind: 'QUICK'; id: string; name: string; unitPriceMinor: number; taxable: false; quantity: number }>
-  | Readonly<{ kind: 'SHOPIFY'; variantId: string; name: string; unitPriceMinor: number; taxable: true; quantity: number }>;
+  | Readonly<{ kind: 'SHOPIFY'; variantId: string; name: string; unitPriceMinor: number; taxable: true; quantity: number; madeBy: string | null }>;
 export type Customer = Readonly<{ kind: 'WALK_IN'; name: string }> | Readonly<{ kind: 'PERSON'; personId: string; name: string }>;
 export type Cart = Readonly<{ lines: readonly CartLine[]; customer: Customer; discount: PosDiscount | null }>;
 export const EMPTY_CART: Cart = { lines: [], customer: { kind: 'WALK_IN', name: '' }, discount: null };
@@ -26,7 +26,7 @@ export function addShopify(cart: Cart, item: PosShopifyItem): Cart {
   const found = cart.lines.find(l => l.kind === 'SHOPIFY' && l.variantId === item.variantId);
   if (found) return setQuantity(cart, shopifyKey(item.variantId), found.quantity + 1);
   if (cart.lines.length >= 50) return cart;
-  return { ...cart, lines: [...cart.lines, { kind: 'SHOPIFY', variantId: item.variantId, name: item.name, unitPriceMinor: item.priceMinor, taxable: true, quantity: 1 }] };
+  return { ...cart, lines: [...cart.lines, { kind: 'SHOPIFY', variantId: item.variantId, name: item.name, unitPriceMinor: item.priceMinor, taxable: true, quantity: 1, madeBy: item.madeBy }] };
 }
 export function addQuick(cart: Cart, id: string, name: string, amountMinor: number): Cart {
   if (cart.lines.length >= 50) return cart;
@@ -42,7 +42,7 @@ export function refreshCart(cart: Cart, items: readonly PosItem[], shopify: read
   const byId = new Map(items.filter(i => i.active).map(i => [i.itemId, i])), byVariant = new Map(shopify.map(v => [v.variantId, v]));
   return { ...cart, lines: cart.lines.flatMap((l): CartLine[] => {
     if (l.kind === 'QUICK') return [l];
-    if (l.kind === 'SHOPIFY') { const v = byVariant.get(l.variantId); return v ? [{ ...l, name: v.name, unitPriceMinor: v.priceMinor }] : []; }
+    if (l.kind === 'SHOPIFY') { const v = byVariant.get(l.variantId); return v ? [{ ...l, name: v.name, unitPriceMinor: v.priceMinor, madeBy: v.madeBy }] : []; }
     const i = byId.get(l.itemId); return i ? [{ ...l, name: i.name, unitPriceMinor: i.priceMinor, taxable: i.taxable }] : [];
   }) };
 }
@@ -50,14 +50,29 @@ export function cartTotals(cart: Cart, taxRateBps: number): PosTotals {
   return computePosTotals(cart.lines, cart.discount, taxRateBps);
 }
 /** The exact sale request the database will price again. */
-export function saleInput(schoolId: string, cart: Cart, taxRateBps: number, method: PosMethod, reference: string, note: string): PosSaleInput {
+export function saleInput(schoolId: string, cart: Cart, taxRateBps: number, method: PosMethod, reference: string, note: string, shipTo: PosShipTo | null = null): PosSaleInput {
   const walk = cart.customer.kind === 'WALK_IN' ? cart.customer.name.trim() : '';
   return {
     schoolId, personId: cart.customer.kind === 'PERSON' ? cart.customer.personId : null, walkInName: walk ? walk.slice(0, 120) : null,
     lines: cart.lines.map(l => l.kind === 'ITEM' ? { itemId: l.itemId, quantity: l.quantity } : l.kind === 'SHOPIFY' ? { shopifyVariantId: l.variantId, quantity: l.quantity } : { description: l.name, unitPriceMinor: l.unitPriceMinor, quantity: l.quantity }),
     discount: cart.discount, method, reference: reference.trim() ? reference.trim().slice(0, 120) : null, note: note.trim() ? note.trim().slice(0, 500) : null,
     expectedTotalMinor: cartTotals(cart, taxRateBps).totalMinor,
+    ...(hasMadeToOrder(cart) && shipTo ? { shipTo } : {}),
   };
+}
+
+/** 0614: a print provider makes and ships these, so the sale must say where they go. */
+export const hasMadeToOrder = (cart: Cart) => cart.lines.some(l => l.kind === 'SHOPIFY' && l.madeBy !== null);
+/** Where made-to-order items ship, as staff type it. */
+export type ShipDraft = Readonly<{ kind: 'SCHOOL' | 'CUSTOMER'; name: string; address1: string; address2: string; city: string; province: string; zip: string; country: string }>;
+export const emptyShip = (kind: ShipDraft['kind']): ShipDraft => ({ kind, name: '', address1: '', address2: '', city: '', province: '', zip: '', country: 'US' });
+/** The address the sale sends, or null while it is not complete. */
+export function shipToInput(d: ShipDraft): PosShipTo | null {
+  if (d.kind === 'SCHOOL') return { kind: 'SCHOOL' };
+  const t = (v: string, max: number) => v.trim().replace(/\s+/g, ' ').slice(0, max), country = d.country.trim().toUpperCase();
+  const name = t(d.name, 120), address1 = t(d.address1, 120), city = t(d.city, 80);
+  if (!name || !address1 || !city || !/^[A-Z]{2}$/.test(country)) return null;
+  return { kind: 'CUSTOMER', name, address1, address2: t(d.address2, 120) || null, city, province: t(d.province, 40) || null, zip: t(d.zip, 20) || null, country };
 }
 
 /** Fraction digits of a currency (USD 2, JPY/KRW 0). */

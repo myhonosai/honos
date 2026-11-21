@@ -251,6 +251,9 @@ const en = {
   tx_APPLICATION_FEE_REFUND: "Fee refund",
   tx_other: "Other",
   perm_finance: "Read the Shopify Payments balance, payouts and transactions.",
+  perm_createOrders: "Create a paid order when a made-to-order item is sold at the front desk, so your print provider makes and ships it.",
+  allowOrders: "Allow orders",
+  allowOrdersHelp: "Sell made-to-order items (the ones a print provider makes) at the front desk. Press Allow orders and approve it in Shopify. HON then creates a paid order in your store for each of those sales. It also turns on editing, which the front desk needs.",
   perm_approval: "Every change waits in Changes until someone who manages Shopify approves it.",
 };
 export type ShopifyKey = keyof typeof en;
@@ -506,6 +509,9 @@ const ko: Record<ShopifyKey, string> = {
   tx_APPLICATION_FEE_REFUND: "수수료 환불",
   tx_other: "기타",
   perm_finance: "Shopify Payments 잔액, 정산, 거래 읽기.",
+  perm_createOrders: "주문 제작 상품이 프런트 데스크에서 판매되면 결제 완료 주문을 만들어 인쇄 업체가 제작하고 배송하게 합니다.",
+  allowOrders: "주문 허용",
+  allowOrdersHelp: "주문 제작 상품(인쇄 업체가 만드는 상품)을 프런트 데스크에서 판매하세요. 주문 허용을 누르고 Shopify에서 승인하세요. 그러면 HON이 그런 판매마다 스토어에 결제 완료 주문을 만듭니다. 프런트 데스크에 필요한 편집도 함께 켜집니다.",
   perm_approval: "모든 변경은 Shopify 관리 권한이 있는 사람이 승인할 때까지 변경 사항에서 기다립니다.",
 };
 const es: Record<ShopifyKey, string> = {
@@ -760,6 +766,9 @@ const es: Record<ShopifyKey, string> = {
   tx_APPLICATION_FEE_REFUND: "Reembolso de comisión",
   tx_other: "Otro",
   perm_finance: "Leer el saldo, los pagos y las transacciones de Shopify Payments.",
+  perm_createOrders: "Crear un pedido pagado cuando se vende en recepción un artículo hecho bajo pedido, para que su proveedor de impresión lo fabrique y lo envíe.",
+  allowOrders: "Permitir pedidos",
+  allowOrdersHelp: "Venda en recepción artículos hechos bajo pedido (los que fabrica un proveedor de impresión). Pulse Permitir pedidos y apruébelo en Shopify. HON creará entonces un pedido pagado en su tienda por cada una de esas ventas. También activa la edición, que la recepción necesita.",
   perm_approval: "Cada cambio espera en Cambios hasta que alguien que administra Shopify lo apruebe.",
 };
 export const SHOPIFY_LANGUAGES = { en, ko, es } as const;

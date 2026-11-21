@@ -79,9 +79,9 @@ try{
  // 1. Runtime ACL of what 0613 adds.
  for(const p of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE'])assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[runtime.username,'hon.pos_shopify_stock_tasks',p]))[0].ok,false,p);
  assert.deepEqual((await q("SELECT relrowsecurity r,relforcerowsecurity f,(SELECT count(*) FROM pg_policy WHERE polrelid=c.oid)::int n FROM pg_class c WHERE oid='hon.pos_shopify_stock_tasks'::regclass"))[0],{r:true,f:true,n:0});
- const entries=['begin_pos_shopify_stock','rotate_pos_shopify_credential','finish_pos_shopify_stock'];
+ const entries=['begin_pos_shopify_stock','rotate_pos_shopify_credential','finish_pos_shopify_stock','begin_pos_shopify_order','finish_pos_shopify_order'];
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname LIKE '%pos\\_shopify%'");
- assert.equal(fns.length,8,fns.map(f=>f.proname).join());
+ assert.equal(fns.length,13,fns.map(f=>f.proname).join()); // 8 from 0613, 5 from 0614
  for(const f of fns){assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entries.includes(f.proname),f.proname);
   assert.equal((await q("SELECT has_function_privilege('public',$1,'EXECUTE') ok",[f.oid]))[0].ok,false,f.proname);}
  await assert.rejects(()=>restricted.query('SELECT * FROM hon.pos_shopify_stock_tasks'),e=>e.code==='42501');
@@ -100,7 +100,8 @@ try{
   {provide:RuntimeDatabaseService,useValue:database},{provide:SHOPIFY_APP,useValue:shopify},{provide:'SHOPIFY_CLOCK',useValue:()=>Date.now()+skew}]}).compile();
  app=module.createNestApplication({logger:false});app.setGlobalPrefix('v1');await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;
  ok(await saveSettings(manager,{schoolId:A.schoolId,expectedVersion:null,currency:'USD',taxRateBps:1000}));
- const NONE={state:'NOT_CONNECTED',shopName:null,items:[],unsent:{waiting:0,failed:0}};
+ const MTO={madeToOrder:{state:'NONE',pickup:false,unsent:{waiting:0,failed:0}}};
+ const NONE={state:'NOT_CONNECTED',shopName:null,items:[],unsent:{waiting:0,failed:0},...MTO};
  assert.deepEqual(ok(await read(cashier,A.schoolId)).shopify,NONE);
 
  // 2. Connect a store (read-only first, in another currency), mirror its catalog.
@@ -125,9 +126,9 @@ try{
  await denied(()=>sell(cashier,saleBody(A.schoolId,beltLine,{expectedTotalMinor:beltTotal(1)})),409,'POS_ITEM_UNAVAILABLE');
  await q("UPDATE hon.shopify_connections SET currency='USD',version=version+1 WHERE id=$1",[conn]);
  const r1=ok(await read(cashier,A.schoolId)).shopify;
- assert.deepEqual(r1,{state:'READY',shopName:'Proof Dojo',unsent:{waiting:0,failed:0},items:[
-  {variantId:STICKER,productId:'601',name:'Dojo gear - Sticker',sku:null,priceMinor:300,tracked:false,stock:null,imageUrl:null},
-  {variantId:BELT,productId:'601',name:'Dojo gear - White belt',sku:'BELT-W',priceMinor:1250,tracked:true,stock:5,imageUrl:null}]});
+ assert.deepEqual(r1,{state:'READY',shopName:'Proof Dojo',unsent:{waiting:0,failed:0},madeToOrder:{state:'NEEDS_PERMISSION',pickup:false,unsent:{waiting:0,failed:0}},items:[
+  {variantId:STICKER,productId:'601',name:'Dojo gear - Sticker',sku:null,priceMinor:300,tracked:false,stock:null,imageUrl:null,madeBy:null},
+  {variantId:BELT,productId:'601',name:'Dojo gear - White belt',sku:'BELT-W',priceMinor:1250,tracked:true,stock:5,imageUrl:null,madeBy:null}]});
  assert.deepEqual(ok(await read(managerB,B.schoolId)).shopify,NONE);
  pass('the register lists a connected store only when editing is allowed and the currency matches: ACTIVE products the school stocks itself, never a provider-made or draft one');
 

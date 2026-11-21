@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from 'react';
-import { POS_CATEGORIES, POS_METHODS, type PosCategory, type PosItem, type PosItemInput, type PosMethod, type PosRead, type PosSale, type PosShopify } from '@hon/contracts';
+import React, { useEffect, useMemo, useState } from 'react';
+import { POS_CATEGORIES, POS_METHODS, type PosCategory, type PosItem, type PosItemInput, type PosMethod, type PosRead, type PosSale, type PosShipTo, type PosShopify } from '@hon/contracts';
 import type { PersonSummary } from '../people/http';
 import type { PosCommand, PosErrorKind } from './http';
 import {
-  CATEGORY_LABEL, METHOD_LABEL, addItem, addQuick, addShopify, bpsToPercent, cartTotals, changeDue, formatMoney, lineKey, minorToInput, parseMoney, percentToBps, setQuantity,
+  CATEGORY_LABEL, METHOD_LABEL, addItem, addQuick, addShopify, bpsToPercent, cartTotals, changeDue, emptyShip, hasMadeToOrder, shipToInput, formatMoney, lineKey, minorToInput, parseMoney, percentToBps, setQuantity,
   type Cart,
 } from './model';
 import type { SalesState } from './school-pos';
@@ -43,10 +43,12 @@ const SEND_TEXT: Record<Exclude<StockSend, 'IDLE'>, string> = {
 };
 /** Sales are never held up by Shopify. This line says when Shopify's count is behind, and lets a manager send the changes again. */
 export function ShopifyStockLine({ read, send, onResend }: { read: PosRead; send: StockSend; onResend: () => void }): React.ReactElement | null {
-  const { waiting, failed } = read.shopify.unsent, n = waiting + failed;
+  const stock = read.shopify.unsent, orders = read.shopify.madeToOrder.unsent;
+  const s = stock.waiting + stock.failed, o = orders.waiting + orders.failed, n = s + o, failed = stock.failed + orders.failed;
   if (n === 0) return send === 'DONE' ? <p className={styles.outcome} data-tone="ok" role="status">{SEND_TEXT.DONE}</p> : null;
+  const stockText = `${s} stock ${s === 1 ? 'change' : 'changes'}`, orderText = `${o} made-to-order ${o === 1 ? 'order' : 'orders'}`;
   return <p className={styles.alert} role="status">
-    <strong>Shopify stock is behind.</strong> {n} stock {n === 1 ? 'change has' : 'changes have'} not reached Shopify yet. The sales are saved here.
+    <strong>{o > 0 ? 'Shopify is behind.' : 'Shopify stock is behind.'}</strong> {o === 0 ? stockText : s === 0 ? orderText : `${stockText} and ${orderText}`} {n === 1 ? 'has' : 'have'} not reached Shopify yet. The sales are saved here.
     {' '}{send !== 'IDLE' && send !== 'DONE' ? SEND_TEXT[send] + ' ' : ''}
     {read.canManage ? <button type="button" className={styles.secondary} disabled={send === 'SENDING'} onClick={onResend}>{send === 'SENDING' ? 'Sending…' : 'Send again'}</button>
       : failed > 0 ? 'Ask a manager to send them again.' : 'They are sent again with the next sale.'}
@@ -59,18 +61,32 @@ export function SaleShopifyNote({ sale }: { sale: PosSale }): React.ReactElement
   return <p className={styles.meta} data-print="hide">{failed > 0 ? 'Shopify stock was not updated for this sale. A manager can send it again from the Register.'
     : waiting > 0 ? 'Shopify stock for this sale is still being sent.' : 'Shopify stock is updated for this sale.'}</p>;
 }
+/** 0614: what happened to the Shopify order for a sale's made-to-order items (not part of the printed receipt). */
+export function SaleOrderNote({ sale }: { sale: PosSale }): React.ReactElement | null {
+  const o = sale.shopifyOrder;
+  if (!o) return null;
+  const where = o.shipTo === 'SCHOOL' ? 'It ships to the school for pickup.' : 'It ships to the customer.';
+  return <p className={styles.meta} data-print="hide">{o.status === 'DONE' ? `Shopify order ${o.name ?? ''} was created for the made-to-order items. ${where} If you refund this sale, cancel that order in Shopify too.`
+    : o.status === 'WAITING' ? `The Shopify order for the made-to-order items is still being sent. ${where}`
+      : 'The Shopify order for the made-to-order items was not created, so nothing is being made yet. A manager can send it again from the Register.'}</p>;
+}
+const MADE_NOTE = 'Some products in your Shopify store are made to order by a print provider. To sell them at the front desk, turn on Allow orders on the Shopify page.';
 
 // ---------------- Register ----------------
 export function PosRegister({ read, cart, receipt, outcome, locked, canRetry, found, stockSend = 'IDLE', onCart, onSearchPeople, onClearFound, onNewSale, onPay, onTryAgain, onResendStock = () => undefined }: {
   read: PosRead; cart: Cart; receipt: PosSale | null; outcome: Outcome; locked: boolean; canRetry: boolean; found: readonly PersonSummary[] | null;
   onCart: (c: Cart) => void; onSearchPeople: (q: string) => void; onClearFound: () => void; onNewSale: () => void;
-  onPay: (method: PosMethod, reference: string, note: string) => void; onTryAgain: () => void; stockSend?: StockSend; onResendStock?: () => void;
+  onPay: (method: PosMethod, reference: string, note: string, shipTo: PosShipTo | null) => void; onTryAgain: () => void; stockSend?: StockSend; onResendStock?: () => void;
 }): React.ReactElement {
   const [search, setSearch] = useState(''), [category, setCategory] = useState<PosCategory | 'ALL' | 'SHOPIFY'>('ALL');
   const [quick, setQuick] = useState<{ name: string; amount: string } | null>(null);
   const [discount, setDiscount] = useState<{ kind: 'AMOUNT' | 'PERCENT'; value: string; reason: string } | null>(null);
   const [method, setMethod] = useState<PosMethod>('CASH'), [reference, setReference] = useState(''), [note, setNote] = useState(''), [cash, setCash] = useState('');
   const [who, setWho] = useState('');
+  const made = read.shopify.madeToOrder, [ship, setShip] = useState(() => emptyShip(made.pickup ? 'SCHOOL' : 'CUSTOMER'));
+  // A typed address belongs to one sale: it goes when the receipt shows, and school pickup stays chosen only while the school can receive.
+  useEffect(() => { if (receipt) setShip(emptyShip(made.pickup ? 'SCHOOL' : 'CUSTOMER')); }, [receipt, made.pickup]);
+  useEffect(() => { if (!made.pickup) setShip(x => x.kind === 'SCHOOL' ? { ...x, kind: 'CUSTOMER' } : x); }, [made.pickup]);
   const cur = read.settings.currency;
   const items = useMemo(() => read.items.filter(i => i.active && (category === 'ALL' || i.category === category)
     && (!search.trim() || (i.name + ' ' + (i.sku ?? '')).toLowerCase().includes(search.trim().toLowerCase()))), [read.items, category, search]);
@@ -86,6 +102,7 @@ export function PosRegister({ read, cart, receipt, outcome, locked, canRetry, fo
     <OutcomeLine outcome={outcome} canRetry={false} onTryAgain={onTryAgain}/>
     <Receipt read={read} sale={receipt}/>
     <SaleShopifyNote sale={receipt}/>
+    <SaleOrderNote sale={receipt}/>
     <div className={styles.actions}><button type="button" className={styles.primary} onClick={onNewSale}>New sale</button>
       <button type="button" className={styles.secondary} onClick={() => window.print()}>Print receipt</button></div>
   </div>;
@@ -97,7 +114,10 @@ export function PosRegister({ read, cart, receipt, outcome, locked, canRetry, fo
     onCart({ ...cart, discount: { kind: discount.kind, value, reason: discount.reason.trim().slice(0, 200) } }); setDiscount(null);
   };
   const received = method === 'CASH' ? parseMoney(cash, cur) : null, change = changeDue(totals.totalMinor, received);
-  const canPay = !locked && cart.lines.length > 0 && totals.discountMinor <= totals.subtotalMinor;
+  const needsShip = hasMadeToOrder(cart), shipTo = needsShip ? shipToInput(ship) : null;
+  const canPay = !locked && cart.lines.length > 0 && totals.discountMinor <= totals.subtotalMinor && (!needsShip || shipTo !== null);
+  const shipField = (key: 'name' | 'address1' | 'address2' | 'city' | 'province' | 'zip' | 'country', label: string, max: number) =>
+    <input className={styles.input} aria-label={label} placeholder={label} maxLength={max} autoComplete="off" disabled={locked} value={ship[key]} onChange={e => setShip({ ...ship, [key]: e.target.value })}/>;
 
   return <div className={styles.register}>
     <section className={styles.catalog} aria-label="Products">
@@ -127,6 +147,7 @@ export function PosRegister({ read, cart, receipt, outcome, locked, canRetry, fo
         })}
       </ul>
       {SHOPIFY_NOTE[store.state] ? <p className={styles.meta}>{SHOPIFY_NOTE[store.state]}</p> : null}
+      {made.state === 'NEEDS_PERMISSION' ? <p className={styles.meta}>{MADE_NOTE}</p> : null}
       {shopItems.length ? <>
         <h3 className={styles.label}>From your Shopify store{store.shopName ? `: ${store.shopName}` : ''}</h3>
         <ul className={styles.tiles} aria-label="Shopify products">
@@ -134,7 +155,7 @@ export function PosRegister({ read, cart, receipt, outcome, locked, canRetry, fo
             const left = v.tracked ? (v.stock ?? 0) - shopInCart(v.variantId) : null;
             return <li key={v.variantId}><button type="button" className={styles.tile} data-category="SHOPIFY" disabled={locked} onClick={() => onCart(addShopify(cart, v))}>
               <strong>{v.name}</strong><span className={styles.price}>{money(read, v.priceMinor)}</span>
-              <small>{v.sku ?? CATEGORY_LABEL.SHOPIFY}{left !== null ? (left <= 0 ? ' · Shopify shows none left' : ` · ${left} in Shopify`) : ''}</small>
+              <small>{v.sku ?? CATEGORY_LABEL.SHOPIFY}{v.madeBy ? ` · Made to order by ${v.madeBy}` : ''}{left !== null ? (left <= 0 ? ' · Shopify shows none left' : ` · ${left} in Shopify`) : ''}</small>
             </button></li>;
           })}
         </ul>
@@ -163,7 +184,7 @@ export function PosRegister({ read, cart, receipt, outcome, locked, canRetry, fo
 
       {cart.lines.length === 0 ? <p className={styles.empty}>Tap a product or add a quick amount.</p> : <ul className={styles.lines}>
         {cart.lines.map(l => <li key={lineKey(l)} className={styles.line}>
-          <span className={styles.lineName}>{l.name}<small>{money(read, l.unitPriceMinor)} each</small></span>
+          <span className={styles.lineName}>{l.name}<small>{money(read, l.unitPriceMinor)} each{l.kind === 'SHOPIFY' && l.madeBy ? ' · Made to order' : ''}</small></span>
           <span className={styles.qty}>
             <button type="button" aria-label={`One less ${l.name}`} disabled={locked} onClick={() => onCart(setQuantity(cart, lineKey(l), l.quantity - 1))}>−</button>
             <span aria-label="Quantity">{l.quantity}</span>
@@ -183,6 +204,24 @@ export function PosRegister({ read, cart, receipt, outcome, locked, canRetry, fo
           <input className={styles.input} aria-label="Reason for the discount" placeholder="Reason (required)" maxLength={200} value={discount.reason} onChange={e => setDiscount({ ...discount, reason: e.target.value })}/>
           <button type="button" className={styles.primary} onClick={applyDiscount}>Apply</button><button type="button" className={styles.link} onClick={() => setDiscount(null)}>Cancel</button>
         </div> : <button type="button" className={styles.link} disabled={locked || cart.lines.length === 0} onClick={() => setDiscount({ kind: 'AMOUNT', value: '', reason: '' })}>Add a discount</button>}
+
+      {needsShip ? <div className={styles.field}>
+        <span className={styles.label}>Made-to-order items ship to</span>
+        <div className={styles.chips} role="radiogroup" aria-label="Made-to-order items ship to">
+          <button type="button" role="radio" aria-checked={ship.kind === 'SCHOOL'} className={styles.chip} disabled={locked || !made.pickup} onClick={() => setShip({ ...ship, kind: 'SCHOOL' })}>The school (pickup)</button>
+          <button type="button" role="radio" aria-checked={ship.kind === 'CUSTOMER'} className={styles.chip} disabled={locked} onClick={() => setShip({ ...ship, kind: 'CUSTOMER' })}>The customer's address</button>
+        </div>
+        {!made.pickup ? <p className={styles.meta}>School pickup needs the school's full address. {read.canManage ? 'Add it in Settings.' : 'Ask a manager to add it in Settings.'}</p> : null}
+        {ship.kind === 'CUSTOMER' ? <>
+          {shipField('name', 'Name on the package', 120)}
+          {shipField('address1', 'Street address', 120)}
+          {shipField('address2', 'Apartment, suite (optional)', 120)}
+          <div className={styles.row}>{shipField('city', 'City', 80)}{shipField('province', 'State or province', 40)}</div>
+          <div className={styles.row}>{shipField('zip', 'ZIP or postal code', 20)}{shipField('country', 'Country (2 letters, like US)', 2)}</div>
+          {shipTo === null ? <p className={styles.meta}>Fill in the name, street, city and country to take payment.</p> : null}
+        </> : <p className={styles.meta}>The print provider ships to the school. Tell the customer you will let them know when it arrives.</p>}
+        <p className={styles.meta}>Paying here creates a paid order in your Shopify store so the provider makes the item. Shipping is not added to this sale.</p>
+      </div> : null}
 
       <dl className={styles.totals}>
         <div><dt>Subtotal</dt><dd>{money(read, totals.subtotalMinor)}</dd></div>
@@ -204,7 +243,7 @@ export function PosRegister({ read, cart, receipt, outcome, locked, canRetry, fo
         <input className={styles.input} aria-label="Note" placeholder="Note (optional)" maxLength={500} value={note} onChange={e => setNote(e.target.value)}/>
       </div>
       <OutcomeLine outcome={outcome} canRetry={canRetry} onTryAgain={onTryAgain}/>
-      <button type="button" className={styles.pay} disabled={!canPay} onClick={() => onPay(method, method === 'CASH' ? '' : reference, note)}>
+      <button type="button" className={styles.pay} disabled={!canPay} onClick={() => onPay(method, method === 'CASH' ? '' : reference, note, shipTo)}>
         {locked ? 'Saving…' : `Take ${money(read, totals.totalMinor)}`}</button>
       <p className={styles.meta}>Today: {money(read, read.todaySales.totalMinor)} from {read.todaySales.count} {read.todaySales.count === 1 ? 'sale' : 'sales'}.</p>
     </section>
@@ -283,6 +322,7 @@ export function PosHistory({ read, range, sales, selected, outcome, locked, canR
       {!selected ? <p className={styles.empty}>Pick a sale to see its receipt.</p> : <>
         <Receipt read={read} sale={selected}/>
         <SaleShopifyNote sale={selected}/>
+        <SaleOrderNote sale={selected}/>
         <div className={styles.actions}>
           <button type="button" className={styles.secondary} onClick={() => window.print()}>Print</button>
           {read.canManage && left > 0 && !refund ? <button type="button" className={styles.secondary} disabled={locked} onClick={() => startRefund(selected)}>Refund</button> : null}

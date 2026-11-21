@@ -1,6 +1,6 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { PosItem, PosMethod, PosRead, PosSale, PosSales } from '@hon/contracts';
+import type { PosItem, PosMethod, PosRead, PosSale, PosSales, PosShipTo } from '@hon/contracts';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
@@ -119,13 +119,13 @@ export function SchoolPos({ api = posApi, people = peopleApi }: { api?: PosApi; 
     api.sale(schoolId, saleId, AbortSignal.timeout(15000), () => mounted.current && shown === privacy.current).then(
       (s) => { if (mounted.current && shown === privacy.current) setSelected(s); }, () => { if (mounted.current) setSelected(null); });
   }, [api, schoolId]);
-  // 0613: a manager sends the Shopify stock changes that did not go through again. Not a sale: nothing is kept for retry.
+  // 0613/0614: a manager sends the Shopify stock changes and made-to-order orders that did not go through again. Not a sale: nothing is kept for retry.
   const onResendStock = useCallback(() => {
     if (!schoolId || stockSend === 'SENDING') return;
     const shown = privacy.current, owned = () => mounted.current && shown === privacy.current;
     setStockSend('SENDING');
     api.resendShopifyStock(schoolId, AbortSignal.timeout(60000), owned).then(
-      (r) => { if (!owned()) return; setRead({ state: 'READY', read: r }); setCart(c => refreshCart(c, r.items, r.shopify.items)); setStockSend(r.shopify.unsent.waiting + r.shopify.unsent.failed === 0 ? 'DONE' : 'LEFT'); },
+      (r) => { if (!owned()) return; setRead({ state: 'READY', read: r }); setCart(c => refreshCart(c, r.items, r.shopify.items)); setStockSend(r.shopify.unsent.waiting + r.shopify.unsent.failed + r.shopify.madeToOrder.unsent.waiting + r.shopify.madeToOrder.unsent.failed === 0 ? 'DONE' : 'LEFT'); },
       (e) => { if (owned()) setStockSend(e instanceof PosError && e.kind === 'DENIED' ? 'DENIED' : 'FAILED'); });
   }, [api, schoolId, stockSend]);
   const onTab = (t: Tab) => { if (busy !== 'SENDING') { setTab(t); setOutcome(null); } };
@@ -143,7 +143,7 @@ export function SchoolPos({ api = posApi, people = peopleApi }: { api?: PosApi; 
     if (tab === 'INVENTORY') return <PosInventory read={ready} outcome={outcome} locked={locked} canRetry={busy === 'KEPT'} onRun={run} onTryAgain={() => void send()}/>;
     return <PosRegister read={ready} cart={cart} receipt={receipt} outcome={outcome} locked={locked} canRetry={busy === 'KEPT'} found={found}
       onCart={setCart} onSearchPeople={onSearchPeople} onClearFound={() => setFound(null)} onNewSale={() => { setReceipt(null); setOutcome(null); }} stockSend={stockSend} onResendStock={onResendStock}
-      onPay={(method: PosMethod, reference: string, note: string) => run({ op: 'sale', input: payInput(ready, cart, method, reference, note) })}
+      onPay={(method: PosMethod, reference: string, note: string, shipTo: PosShipTo | null) => run({ op: 'sale', input: payInput(ready, cart, method, reference, note, shipTo) })}
       onTryAgain={() => void send()}/>;
   })();
   const lowCount = ready ? ready.items.filter((i: PosItem) => i.active && i.lowStock).length : 0;
@@ -157,6 +157,6 @@ export function SchoolPos({ api = posApi, people = peopleApi }: { api?: PosApi; 
   </div>;
 }
 
-function payInput(read: PosRead, cart: Cart, method: PosMethod, reference: string, note: string) {
-  return saleInput(read.schoolId, cart, read.settings.taxRateBps, method, reference, note);
+function payInput(read: PosRead, cart: Cart, method: PosMethod, reference: string, note: string, shipTo: PosShipTo | null) {
+  return saleInput(read.schoolId, cart, read.settings.taxRateBps, method, reference, note, shipTo);
 }

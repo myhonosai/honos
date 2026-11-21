@@ -17,7 +17,7 @@ const stub = (response: Response) => { const f = vi.fn(async () => response); vi
 const signal = () => new AbortController().signal;
 const fails = async (p: Promise<unknown>) => { try { await p; } catch (e) { return e as ShopifyError; } throw new Error('expected a failure'); };
 const connection = (over: Partial<ShopifyConnection> = {}): ShopifyConnection => ({ connectionId: cid, shopDomain: SHOP, shopName: 'Synthetic Dojo Store', currency: 'USD',
-  status: 'CONNECTED', version: 2, connectedAt: at, endedAt: null, lastSyncAt: at, lastSyncOutcome: 'SUCCEEDED', syncRunning: false, ...over });
+  status: 'CONNECTED', version: 2, connectedAt: at, endedAt: null, lastSyncAt: at, lastSyncOutcome: 'SUCCEEDED', syncRunning: false, ordersAllowed: false, ...over });
 const overview = (over: Partial<ShopifyOverview> = {}): ShopifyOverview => ({ schoolId: school, canManage: true, connectEnabled: true, autoSync: false, connection: connection(),
   counts: { products: 0, variants: 0, lowStock: 0, provider: 0, orders: 0 },
   summary: { days: 30, orders: 0, sales: 0, averageOrder: 0, itemsSold: 0, lineSales: 0, coveredSales: 0, estimatedGrossProfit: 0, topProducts: [] }, ...over });
@@ -83,4 +83,18 @@ it('has every finance phrase in Korean and Spanish', () => {
   const keys = Object.keys(SHOPIFY_LANGUAGES.en).filter(k => /^(fin_|po_|tx_|nav_finance|perm_finance)/.test(k));
   expect(keys.length).toBeGreaterThan(30);
   for (const lang of ['ko', 'es'] as const) for (const k of keys) expect((SHOPIFY_LANGUAGES[lang] as Record<string, string>)[k], `${lang}.${k}`).toBeTruthy();
+});
+
+it('0614 Allow orders: asked for only by its button, shown as a permission once granted, and kept on later reconnects', async () => {
+  const g = stub(json({ data: { authorizeUrl: `https://${SHOP}/admin/oauth/authorize?client_id=x&state=y`, shopDomain: SHOP, expiresAt: at } }));
+  await shopifyApi.connect(school, SHOP, signal(), () => true, true, false, true);
+  expect(JSON.parse((g.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)).toEqual({ schoolId: school, shopDomain: SHOP, allowEditing: true, allowFinance: false, allowOrders: true });
+  const off = render({ section: 'settings' });
+  expect(off).toContain('data-allow-orders'); expect(off).toContain('Allow orders'); expect(off).not.toContain('data-perm="orders"');
+  const on = render({ section: 'settings', overview: { state: 'READY', read: overview({ connection: connection({ ordersAllowed: true }) }) } });
+  expect(on).toContain('data-perm="orders"'); expect(on).not.toContain('data-allow-orders');
+  // Someone who cannot manage Shopify, or a store that is not connected, is not offered the button.
+  expect(render({ section: 'settings', overview: { state: 'READY', read: overview({ canManage: false }) } })).not.toContain('data-allow-orders');
+  for (const language of ['ko', 'es'] as const) for (const k of ['allowOrders', 'allowOrdersHelp', 'perm_createOrders'] as const)
+    expect(SHOPIFY_LANGUAGES[language][k]).not.toBe(SHOPIFY_LANGUAGES.en[k]);
 });
