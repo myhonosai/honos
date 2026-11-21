@@ -4979,6 +4979,21 @@ BEGIN
   END IF;
 END $$;
 
+-- 0615 Commerce review (CA1): the COMMERCE_REVIEW kind on the shared AI text proposals; seven runtime entry points, every helper closed.
+DO $$ DECLARE r text; f regprocedure; BEGIN
+  IF to_regprocedure('hon.begin_shopify_commerce_review(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0615 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.shopify_review_clip(text,integer)','hon.shopify_review_focuses()','hon.shopify_review_areas()','hon.shopify_review_brief_ok(jsonb)','hon.shopify_review_ok(jsonb)',
+    'hon.shopify_review_facts(jsonb,uuid)','hon.shopify_review_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_shopify_commerce_review(text,jsonb,uuid), hon.plan_shopify_commerce_review(text,uuid),
+      hon.prepare_shopify_commerce_review(text,uuid,uuid,boolean), hon.fail_shopify_commerce_review(text,uuid,text,text),
+      hon.record_shopify_commerce_review(text,uuid,jsonb), hon.read_shopify_commerce_reviews(text,uuid), hon.close_shopify_commerce_review(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+
 -- 0617 Creative Studio design editor D1: six staff entry points (list, read, photo read, save, archive/restore, photo add).
 -- Both tables keep forced RLS with no runtime privilege; every helper stays migration-owner only.
 DO $$ DECLARE r text; f text; t text;

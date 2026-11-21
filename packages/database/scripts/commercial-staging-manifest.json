@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "0280630461f4589e4d8f4368a78ffcb7b0c490fe50140adbe5c4dbcd4b3f1e1c",
+  "chainSha256": "3e1a8b5f8d8feceefe3ba9b3608b696142583b0716712444d16e39d176f284fd",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -813,6 +813,10 @@
     {
       "file": "0614_pos_shopify_orders.sql",
       "sha256": "ba0b9b5bceb7d5926af3dfe88b683eb0ed73dd59c91c26a875a9cfd9aa0ee8e7"
+    },
+    {
+      "file": "0615_shopify_commerce_review.sql",
+      "sha256": "59cbacf8a419bb6d82794ba0978c37ca9d36d0400b42288fe654aad6a88fbbdd"
     },
     {
       "file": "0617_school_creative_designs.sql",
