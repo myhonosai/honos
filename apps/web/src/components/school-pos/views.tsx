@@ -68,6 +68,7 @@ export function SaleOrderNote({ sale }: { sale: PosSale }): React.ReactElement |
   const where = o.shipTo === 'SCHOOL' ? 'It ships to the school for pickup.' : 'It ships to the customer.';
   return <p className={styles.meta} data-print="hide">{o.status === 'DONE' ? `Shopify order ${o.name ?? ''} was created for the made-to-order items. ${where} If you refund this sale, cancel that order in Shopify too.`
     : o.status === 'WAITING' ? `The Shopify order for the made-to-order items is still being sent. ${where}`
+      : o.failureCode === 'SALE_REFUNDED' ? 'No Shopify order was created for the made-to-order items, because this sale was refunded before the order was sent. Nothing is being made.'
       : 'The Shopify order for the made-to-order items was not created, so nothing is being made yet. A manager can send it again from the Register.'}</p>;
 }
 const MADE_NOTE = 'Some products in your Shopify store are made to order by a print provider. To sell them at the front desk, turn on Allow orders on the Shopify page.';

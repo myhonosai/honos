@@ -230,8 +230,30 @@ try{
  await assert.rejects(()=>finish(cashier,fin),e=>e.code==='42501');
  pass('begin and finish are refused across schools, to sellers for a retry, with bad input and after a revoked grant; five uncertain tries end as FAILED');
 
+ // 8b. A sale refunded before its order reached Shopify never gets one: not on the refund's own send, the next sale, or Send again.
+ fake.writeFault='REJECT';
+ const sr=ok(await sell(manager,saleBody(A.schoolId,hoodie,{expectedTotalMinor:hoodieTotal,shipTo:HOME}))).sale;assert.equal(sr.shopifyOrder.status,'FAILED');
+ fake.writeFault='LOSE_ANSWER';
+ const sw=ok(await sell(manager,saleBody(A.schoolId,hoodie,{expectedTotalMinor:hoodieTotal,shipTo:HOME}))).sale;assert.equal(sw.shopifyOrder.status,'WAITING');
+ const ow=(await orders(sw.saleId))[0];fake.posOrders.delete(ow.id); // Shopify never got it
+ await q("UPDATE hon.pos_shopify_orders SET last_attempt_at=NULL WHERE id=$1",[ow.id]);
+ const sizeR=fake.posOrders.size,callsR=fake.calls.filter(c=>c.startsWith('createPosOrder')).length;
+ // Even a partial refund closes the waiting order instead of sending it.
+ const rw=ok(await refund(manager,{schoolId:A.schoolId,saleId:sw.saleId,amountMinor:100,method:'CASH',reason:'Changed mind',restock:[]})).sale;
+ assert.deepEqual(rw.shopifyOrder,{status:'FAILED',shipTo:'CUSTOMER',name:null,failureCode:'SALE_REFUNDED'});
+ ok(await refund(manager,{schoolId:A.schoolId,saleId:sr.saleId,amountMinor:hoodieTotal,method:'CASH',reason:'Changed mind',restock:[]}));
+ const afterR=ok(await resend(manager,A.schoolId)).shopify.madeToOrder.unsent; // sends o7 (FAILED at the cap) again; the refunded ones are neither sent nor counted
+ ok(await sell(manager,saleBody(A.schoolId,hoodie,{expectedTotalMinor:hoodieTotal,shipTo:HOME})));
+ for(const s of [sw,sr]){const o=(await orders(s.saleId))[0];assert.deepEqual([o.status,o.failure_code,o.ship_to,o.oid],['FAILED','SALE_REFUNDED',null,null]);}
+ assert.equal(fake.posOrders.size,sizeR+1); // only the new sale is new in Shopify (o7 was already there from its lost answer)
+ assert.equal(fake.calls.filter(c=>c.startsWith('createPosOrder')).length,callsR+2);
+ assert.deepEqual(afterR,{waiting:0,failed:0});
+ assert.deepEqual(ok(await sale(manager,A.schoolId,sr.saleId)).shopifyOrder,{status:'FAILED',shipTo:'CUSTOMER',name:null,failureCode:'SALE_REFUNDED'});
+ pass('a sale refunded before its order reached Shopify never gets one, on any later send; its address is forgotten and it leaves the unsent count');
+
  // 9. The store takes the order permission back: nothing is sent, nothing is lost.
- await q("UPDATE hon.pos_shopify_orders SET status='PENDING',settled_at=NULL,last_attempt_at=NULL WHERE id=$1",[o7.id]);
+ fake.writeFault='LOSE_ANSWER';
+ const s9=ok(await sell(manager,saleBody(A.schoolId,hoodie,{expectedTotalMinor:hoodieTotal,shipTo:HOME}))).sale,o9=(await orders(s9.saleId))[0];assert.equal(o9.status,'PENDING');
  await q("UPDATE hon.shopify_connections SET scopes=$2,version=version+1 WHERE id=$1",[conn,BASE.join()]);
  const c9=fake.calls.length,r9=ok(await resend(manager,A.schoolId)).shopify;
  assert.deepEqual(r9.madeToOrder,{state:'NEEDS_PERMISSION',pickup:true,unsent:{waiting:1,failed:0}});assert.deepEqual(r9.items.map(i=>i.variantId),[BELT]);assert.equal(fake.calls.length,c9);
@@ -241,8 +263,8 @@ try{
 
  // 10. Evidence: an order row keeps its identity, DONE is final, an address can only be cleared, nothing is deleted.
  for(const st of ["UPDATE hon.pos_shopify_orders SET status='PENDING',settled_at=NULL WHERE id='"+o1.id+"'","UPDATE hon.pos_shopify_orders SET shopify_order_name='#1' WHERE id='"+o1.id+"'",
-  "UPDATE hon.pos_shopify_orders SET sale_id='"+s2.saleId+"' WHERE id='"+o7.id+"'","UPDATE hon.pos_shopify_orders SET ship_kind='SCHOOL' WHERE id='"+o7.id+"'",
-  "UPDATE hon.pos_shopify_orders SET ship_to='{\"name\":\"x\"}' WHERE id='"+o7.id+"'","UPDATE hon.pos_shopify_orders SET attempts=0 WHERE id='"+o7.id+"'",
+  "UPDATE hon.pos_shopify_orders SET sale_id='"+s2.saleId+"' WHERE id='"+o9.id+"'","UPDATE hon.pos_shopify_orders SET ship_kind='SCHOOL' WHERE id='"+o9.id+"'",
+  "UPDATE hon.pos_shopify_orders SET ship_to='{\"name\":\"x\"}' WHERE id='"+o9.id+"'","UPDATE hon.pos_shopify_orders SET attempts=0 WHERE id='"+o9.id+"'",
   "DELETE FROM hon.pos_shopify_orders","TRUNCATE hon.pos_shopify_orders","UPDATE hon.pos_sale_lines SET made_by=NULL WHERE made_by IS NOT NULL",
   "INSERT INTO hon.pos_shopify_orders(organization_id,school_id,connection_id,sale_id,ship_kind,ship_to,created_by_principal_id) SELECT organization_id,school_id,connection_id,sale_id,ship_kind,'{}',created_by_principal_id FROM hon.pos_shopify_orders WHERE id='"+o1.id+"'"]){
   await admin.query('BEGIN');await assert.rejects(()=>admin.query(st),e=>['42501','23503','23505','23514','0A000'].includes(e.code),st);await admin.query('ROLLBACK');}

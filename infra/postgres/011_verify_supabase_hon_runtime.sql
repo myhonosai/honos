@@ -5914,7 +5914,7 @@ BEGIN
   END LOOP;
   -- Fixed bodies, search path and volatility for the entry points, the authority check and the evidence guard (0612; refund as replaced by 0613, read and sale by 0614).
   FOR f,t,c IN SELECT * FROM (VALUES
-    ('hon.read_pos(text,uuid)','7eb716ae087a863cba3d14bc39eb9c8c','s'),
+    ('hon.read_pos(text,uuid)','30418353e3a643057806870656d8af10','s'),
     ('hon.read_pos_sales(text,uuid,date,date)','f7f313cf6f4426fd3acae2e94f137dd4','s'),
     ('hon.read_pos_sale(text,uuid,uuid)','014b642fc8785f482c477c4fb3f8fbb5','s'),
     ('hon.save_pos_settings(text,jsonb,uuid)','d20a8db67825e726102b9d6a87fa76a6','v'),
@@ -6000,12 +6000,13 @@ BEGIN
       OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
     RAISE EXCEPTION 'Unsafe point of sale Shopify order guard'; END IF;
   FOR f,t,c,d IN SELECT * FROM (VALUES
-    ('hon.begin_pos_shopify_order(text,jsonb)','70836187464108091e0e4b43b3ea80aa','v',true),
+    ('hon.begin_pos_shopify_order(text,jsonb)','7f134ce7fbef271ba46f86c94f345af0','v',true),
     ('hon.finish_pos_shopify_order(text,jsonb)','b3c23b5a03a5e11bdf7952a99161600e','v',true),
     ('hon.pos_shopify_orders_ok(uuid)','886a387cf127d04240a08b597d28234a','s',false),
     ('hon.pos_ship_to_ok(jsonb)','8f987f0884d17664e919b666c29e24b4','i',false),
     ('hon.pos_school_ship_to(uuid)','7ac36e8534f8a586b5f57386a8b3df1d','s',false),
     ('hon.pos_shopify_order_json(uuid)','b65d444d621a517e620314794014e7c7','s',false),
+    ('hon.shopify_connection_json(hon.shopify_connections)','679de615ef04b57aa83cd5b0b9572e83','s',false),
     ('hon.guard_pos_shopify_order()','c32ab6bc3564de2a9966fb61250b2c14','v',false)) x LOOP
     IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND md5(p.prosrc)=t AND p.provolatile=c AND p.prosecdef=d
         AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']) THEN

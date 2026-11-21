@@ -179,7 +179,12 @@ variants a print provider makes (PD1 `fulfilled_by`).
    again. Audit and outbox rows carry ids only, never the address.
 7. If the store takes the order permission back, nothing is sent, waiting orders keep waiting, and made-to-order items
    leave the register.
-8. A refund in HON never cancels or refunds the Shopify order; the receipt note tells staff to cancel it in Shopify.
+8. A refund in HON never cancels or refunds a Shopify order that already exists; the receipt note tells staff to
+   cancel it in Shopify.
+9. A sale refunded (in full or in part) **before** its order reached Shopify never gets one: the next send closes it as
+   `SALE_REFUNDED`, forgets the address, and it is not counted as unsent or picked up by Send again. Staff sell the
+   item again if the customer still wants it. A refund recorded in the same instant an order is being sent can still
+   lose that race; the receipt then shows the order number and the cancel note.
 
 ### Known limits (0614)
 
@@ -189,7 +194,11 @@ variants a print provider makes (PD1 `fulfilled_by`).
 - No shipping fee is added to the front-desk sale.
 - The customer gets no Shopify email; tracking is in the Shopify order.
 - Country is typed as two letters (for example US). No address lookup.
-- Refund does not cancel the Shopify order.
+- Refund does not cancel a Shopify order that was already created.
+- A manager's Send again skips the 60-second hold, so pressing it within Shopify's search lag of an order whose
+  answer was lost could create a duplicate. The order's tag makes one easy to spot in Shopify.
+- The address of an order that FAILED for another reason stays on its row until it is sent; a way to close such an
+  order without sending it is a later piece.
 - Open until tried on the test store: whether a managed-install store can grant `write_orders` through HON's
   reconnect, and the exact behaviour of each print provider when an order is created through the API.
 - 0613, also true here: if a full catalog sync runs in the short window where a stock change's answer was lost, the

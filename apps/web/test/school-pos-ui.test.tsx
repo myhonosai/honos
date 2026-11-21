@@ -213,4 +213,5 @@ it('sells a made-to-order Shopify item only with a place to ship it, and says wh
   expect(note({ status: 'DONE', shipTo: 'SCHOOL', name: '#1042', failureCode: null })).toContain('Shopify order #1042 was created for the made-to-order items. It ships to the school for pickup. If you refund this sale, cancel that order in Shopify too.');
   expect(note({ status: 'WAITING', shipTo: 'CUSTOMER', name: null, failureCode: null })).toContain('still being sent. It ships to the customer.');
   expect(note({ status: 'FAILED', shipTo: 'CUSTOMER', name: null, failureCode: 'SHOPIFY_REJECTED' })).toContain('was not created, so nothing is being made yet.');
+  expect(note({ status: 'FAILED', shipTo: 'CUSTOMER', name: null, failureCode: 'SALE_REFUNDED' })).toContain('because this sale was refunded before the order was sent');
 });

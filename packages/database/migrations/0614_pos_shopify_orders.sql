@@ -42,7 +42,7 @@ CREATE TABLE hon.pos_shopify_orders (
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   last_attempt_at timestamptz, settled_at timestamptz,
   CHECK ((status='PENDING')=(settled_at IS NULL)),
-  CHECK ((status='DONE')=(shopify_order_id IS NOT NULL)), CHECK ((status='DONE')=(ship_to IS NULL)),
+  CHECK ((status='DONE')=(shopify_order_id IS NOT NULL)), CHECK (status<>'DONE' OR ship_to IS NULL), CHECK (status<>'PENDING' OR ship_to IS NOT NULL),
   CHECK (shopify_order_name IS NULL OR status='DONE'),
   CHECK (status<>'DONE' OR failure_code IS NULL), CHECK (status<>'FAILED' OR failure_code IS NOT NULL),
   FOREIGN KEY (sale_id,organization_id,school_id) REFERENCES hon.pos_sales(id,organization_id,school_id),
@@ -167,7 +167,8 @@ BEGIN
             WHERE v.connection_id=src.connection_id AND NOT v.removed AND NOT p.removed AND p.status='ACTIVE' AND v.fulfilled_by IS NOT NULL) THEN 'NEEDS_PERMISSION' ELSE 'NONE' END,
         'pickup',hon.pos_school_ship_to(p_school) IS NOT NULL,
         'unsent',(SELECT jsonb_build_object('waiting',count(*) FILTER (WHERE o.status='PENDING')::int,'failed',count(*) FILTER (WHERE o.status='FAILED')::int)
-          FROM hon.pos_shopify_orders o WHERE o.organization_id=v_org AND o.school_id=p_school AND o.status<>'DONE'))));
+          FROM hon.pos_shopify_orders o WHERE o.organization_id=v_org AND o.school_id=p_school AND o.status<>'DONE'
+            AND o.failure_code IS DISTINCT FROM 'SALE_REFUNDED'))));
 END $$;
 
 -- Input as 0613, plus optional shipTo ({kind:'SCHOOL'} or a customer address) when a made-to-order line is sold.
@@ -333,6 +334,11 @@ BEGIN
   ok:=src.state='READY' AND hon.pos_shopify_orders_ok(src.connection_id);
   v_state:=CASE WHEN ok THEN 'READY' WHEN src.state='READY' THEN 'NEEDS_ORDERS' ELSE src.state END;
   PERFORM 1 FROM hon.pos_shopify_orders WHERE organization_id=v_org AND school_id=v_school AND status<>'DONE' ORDER BY id FOR UPDATE;
+  -- A sale that was refunded before its order reached Shopify never gets one: the provider would make, ship and bill
+  -- an item nobody paid for. It is closed for good and its address is forgotten.
+  UPDATE hon.pos_shopify_orders o SET status='FAILED',failure_code='SALE_REFUNDED',settled_at=coalesce(o.settled_at,clock_timestamp()),ship_to=NULL
+    WHERE o.organization_id=v_org AND o.school_id=v_school AND o.status<>'DONE' AND o.ship_to IS NOT NULL
+      AND EXISTS(SELECT 1 FROM hon.pos_sales x WHERE x.id=o.sale_id AND x.refunded_minor>0);
   UPDATE hon.pos_shopify_orders SET status='FAILED',failure_code=CASE WHEN src.state='READY' THEN 'STORE_CHANGED' ELSE src.state END,settled_at=clock_timestamp()
     WHERE organization_id=v_org AND school_id=v_school AND status='PENDING' AND connection_id IS DISTINCT FROM src.connection_id;
   IF NOT ok THEN
@@ -342,7 +348,7 @@ BEGIN
   IF retry THEN
     -- A manager's "send again" is not held back by the 60 seconds: the lookup by tag still finds an order Shopify already has.
     UPDATE hon.pos_shopify_orders SET status='PENDING',settled_at=NULL,last_attempt_at=NULL
-      WHERE organization_id=v_org AND school_id=v_school AND status='FAILED' AND connection_id=src.connection_id;
+      WHERE organization_id=v_org AND school_id=v_school AND status='FAILED' AND connection_id=src.connection_id AND ship_to IS NOT NULL;
   END IF;
   WITH pick AS (SELECT id FROM hon.pos_shopify_orders WHERE organization_id=v_org AND school_id=v_school AND status='PENDING'
       AND (last_attempt_at IS NULL OR last_attempt_at<clock_timestamp()-interval '60 seconds') ORDER BY attempts,created_at,id LIMIT 5),
