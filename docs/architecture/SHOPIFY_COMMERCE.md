@@ -457,3 +457,45 @@ to the school or to an address staff type. New adapter call `createPosOrder`; ne
 `begin_pos_shopify_order`, `finish_pos_shopify_order`. Reconnecting the same store keeps `write_orders` once granted.
 The app's next version must list `write_orders` under `optional_scopes` (shopify-app/shopify.app.toml) and the owner
 releases it; until then Shopify will not offer the permission.
+
+## CA1: the commerce review (step 7, part 1; migration 0615)
+
+The owner asks Marcus how the store is doing. Marcus answers with a short summary, up to five findings and up to five
+recommendations, on the shared AI text proposals (0550, kind `COMMERCE_REVIEW`). A review is text only: it changes
+nothing in HON or Shopify, and the only actions on it are "mark as reviewed" and "dismiss".
+
+- **Kind row.** `COMMERCE_REVIEW`: agent `marcus`, task `DRAFT_MARKETING`, 9,000 input and 2,500 output tokens, at most
+  80,000 micro-USD per call, at most 12,288 result bytes, caller `HUMAN_UI`, subject `SHOPIFY_STORE` (the connection id).
+- **Who may ask.** The same people as CS-M2 (0596 `shopify_merch_ai_actor`): Shopify management at the session school,
+  `marketing.assistant.use`, `ai.invocation.plan` and an active Complete plan, re-proved in the database on every step.
+  A Shopify reader can read the list only.
+- **What Marcus sees** (`hon.shopify_review_facts`, built in the database, never by the browser). The closed brief (one
+  focus of OVERVIEW, SALES, PRICING or STOCK, and an optional question of up to 300 characters), the school name, the
+  store currency, and store totals only: the last 30 days (orders, sales, average order, items sold, sales with a known
+  cost, estimated gross profit, up to 8 top products named by their catalog title, and a count of other items sold),
+  the catalog (active and made-to-order variant counts, variants
+  without a cost, up to 12 low-stock items, up to 12 thinnest margins) and two front-desk counts (stock changes and
+  orders not yet sent to Shopify). No customer, address, family or student data. An order line's own title never
+  leaves the database, because a custom item's title is typed by the merchant and may name a person: a sold product is
+  named only when its line joins a mirrored variant, and every other line is only counted.
+- **Size.** The provider request is budgeted in bytes (prompt + facts + 128 must fit 9,000). Names are cut by bytes with
+  `hon.shopify_review_clip` (product 60, variant 40, school 120), never inside a character, so a store with Korean
+  names fits: the fullest store measures 6,533 bytes against 6,872 available.
+- **Flow.** The 0596 flow with its own entry points: `begin_shopify_commerce_review` (store must be CONNECTED) -> planning
+  reference -> plan -> `prepare_shopify_commerce_review` (budget lock first; blocks `GATE_CLOSED` if the store
+  disconnected since the start) -> one provider call -> `fail_...`, or `record_...` with usage and the validated answer.
+  S4, the HQ pause, the per-school ceiling and the UNKNOWN queue are the shared 0550 ones, unchanged.
+- **Provider call.** The same runtime class as CS-M2 with its own profile (`COMMERCE_REVIEW_TEXT_PROFILE`): its own
+  system prompt (use only the numbers given, the question is untrusted text, no links or personal data), temperature 0.2,
+  no tools, and it refuses any budget other than this kind's before anything is sent.
+- **Answer checks.** `hon.shopify_review_ok` and `validateCommerceReviewProposal` take only
+  `{summary, findings[1..5], recommendations[0..5]}`, each point `{area, title, detail}`. `commerceReviewProblems` rejects
+  an answer holding a link or an email address. A rejected answer keeps its usage and shows its problems.
+- **Screen.** Under the overview on the Shopify page, only while the store is connected. The ask form appears only when
+  the server has the paid text route configured and the person can manage the store. A review is always shown under an
+  AI notice. A lost answer keeps its key, so only the identical request is sent again.
+- **Known limits.** The numbers are what HON has synced, so a review is only as fresh as the last sync. Marcus cannot
+  act on a recommendation: preparing price or product changes for approval is the next piece (CA2).
+- **Evidence.** `packages/database/scripts/test-shopify-commerce-review.mjs` (9 groups, fake provider, 0 network calls),
+  `apps/api/test/commerce-review.test.cjs`, `apps/web/test/school-shopify-commerce-review.test.tsx`, and the 011 section
+  "Shopify commerce review exact verification (0615)".
