@@ -27,11 +27,21 @@ Shopify. Removing a block in the theme editor undoes it.
 
 Releasing an app version is a change to the live app, so it is done by the app owner, not by HON's agents or CI.
 
-1. Install the Shopify CLI (`npm install -g @shopify/cli`) and sign in to the Partner account that owns HON OS.
-2. In this folder run `shopify app config link` and choose the HON OS app. This fills in `client_id`.
+1. Install the Shopify CLI (`npm install -g @shopify/cli`). On Windows PowerShell use `shopify.cmd` in place of
+   `shopify`, because PowerShell blocks the `.ps1` launcher.
+2. In this folder run `shopify app config link`, sign in to the organization that owns HON OS and choose the HON OS
+   app. The CLI rewrites `shopify.app.toml` from the live app and drops the `[build]` line; put
+   `include_config_on_deploy = true` back (see the comment in that file for why `false` is dangerous).
 3. Optional, with a development store: `shopify app dev` and check the blocks in that store's theme editor.
-4. Run `shopify app deploy` and confirm. This creates and releases an app version that contains the extension.
-5. Shopify's network access declaration for apps with theme app extensions (required from 2026-12-01 for public apps)
-   is answered in the Partner Dashboard: this extension makes **no network requests**.
+4. Run `shopify app deploy --no-release`. Read the summary before confirming. The only acceptable changes are the
+   extension line (`+ hon-storefront (new)` or `(updated)`) and, at most, `access_scopes (updated)` when the scope
+   list is only re-ordered. Cancel if any configuration item shows `(removed)`.
+5. Open the new version in the Dev Dashboard (Versions) and compare it with the active version: name, URLs, scopes,
+   install flow, redirect URLs and webhook version must be the same.
+6. Release it: `shopify app release --version=<name>`, or the Release button on that version's page.
+7. Shopify's network access declaration for apps with theme app extensions (required from 2026-12-01 for public apps)
+   is answered in the dashboard: this extension makes **no network requests**.
+
+First release: 2026-11-21, version `hon-os-3` (configuration identical to `hon-os-2`, plus the extension).
 
 HON's API needs the same Client ID as `SHOPIFY_API_KEY` to build the theme editor links; nothing else changes on HON's side.
