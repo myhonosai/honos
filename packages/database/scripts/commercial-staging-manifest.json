@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "4f878813db3f9e4b8d89423b29f57218c704e5ba1b2ba854855e7c4cfa139d54",
+  "chainSha256": "b4d562bc0870995470e1d4b3633d3c62b5fc544d212e1767e35ec7895d2c49b7",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -817,6 +817,10 @@
     {
       "file": "0624_person_membership_from_plan.sql",
       "sha256": "7362638a07207f403ab148cfe070ba926fd475aa8425043520157f192060b9d1"
+    },
+    {
+      "file": "0625_person_profile_details.sql",
+      "sha256": "25f4eb888756cf6ff422c9d8e2dbbe8726cae4bea1dcf1b76f3c1c924b7da62b"
     }
   ]
 }

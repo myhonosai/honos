@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { accountUuid, validatePersonRecord, validatePersonRecordUpdateInput, validatePersonRecordUpdateResult, validateStudentBirthDateUpdateInput, validateStudentBirthDateUpdateResult } from '@hon/contracts';
+import { accountUuid, validatePersonDetails, validatePersonDetailsUpdateInput, validatePersonDetailsUpdateResult, validatePersonRecord, validatePersonRecordUpdateInput, validatePersonRecordUpdateResult, validateStudentBirthDateUpdateInput, validateStudentBirthDateUpdateResult } from '@hon/contracts';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
@@ -8,7 +8,7 @@ import { RuntimeDatabaseService } from '../foundation/runtime-database.service.j
 export class SchoolPersonRecordService {
   constructor(private readonly database: RuntimeDatabaseService) {}
 
-  private async run(operation: 'read'|'update'|'birthDate', args: (string|null)[]): Promise<unknown> {
+  private async run(operation: 'read'|'update'|'birthDate'|'detailsRead'|'details', args: (string|null)[]): Promise<unknown> {
     try { return await this.database.callSchoolPersonRecord(operation, args); }
     catch (e) {
       const { code, message } = e as { code?: string; message?: string };
@@ -34,6 +34,18 @@ export class SchoolPersonRecordService {
     let input;
     try { accountUuid(key); input = validatePersonRecordUpdateInput(raw); } catch { throw new BadRequestException({ code: 'PERSON_INPUT_INVALID' }); }
     return validatePersonRecordUpdateResult(await this.run('update', [req.honIdentity!.externalSubject, JSON.stringify(input), key as string]));
+  }
+
+  /** 0625: the extra profile details of one person (version 0 until first saved). */
+  async readDetails(req: HonRequest, schoolId: unknown, personId: unknown) {
+    try { accountUuid(schoolId); accountUuid(personId); } catch { throw new BadRequestException({ code: 'PERSON_INPUT_INVALID' }); }
+    return validatePersonDetails(await this.run('detailsRead', [req.honIdentity!.externalSubject, schoolId as string, personId as string]), personId as string);
+  }
+
+  async updateDetails(req: HonRequest, raw: unknown, key: unknown) {
+    let input;
+    try { accountUuid(key); input = validatePersonDetailsUpdateInput(raw); } catch { throw new BadRequestException({ code: 'PERSON_INPUT_INVALID' }); }
+    return validatePersonDetailsUpdateResult(await this.run('details', [req.honIdentity!.externalSubject, JSON.stringify(input), key as string]), input.personId);
   }
 
   async updateBirthDate(req: HonRequest, raw: unknown, key: unknown) {
