@@ -22,6 +22,7 @@ const load = (path) => import(pathToFileURL(resolve(repo, 'apps/api/dist', path)
 const { RuntimeDatabaseService } = await load('foundation/runtime-database.service.js');
 const { SchoolCheckoutService } = await load('school-checkout/school-checkout.service.js');
 const { PublicSchoolCheckoutService } = await load('school-checkout/public-school-checkout.js');
+const { SchoolPayOnceService } = await load('school-payments/school-pay-once.service.js');
 
 const admin = new pg.Client(targets.owner);
 await admin.connect();
@@ -39,7 +40,8 @@ const ok = (condition, message) => { checks += 1; assert.ok(condition, message);
 
 const db = new RuntimeDatabaseService();
 const staffApi = new SchoolCheckoutService(db);
-const publicApi = new PublicSchoolCheckoutService(db);
+// 0627 reads the school's processor to say whether a card can be taken; no processor is configured here.
+const publicApi = new PublicSchoolCheckoutService(db, new SchoolPayOnceService(db, new Map()));
 
 async function refused(run, status, code, label) {
   try { await run(); } catch (error) {
@@ -140,7 +142,8 @@ const context = async (actor, school = ids.school) => {
   return { ...own, principalType: 'HUMAN_USER', requestId: randomUUID(), correlationId: randomUUID(), idempotencyKey: '', source: 'HUMAN_UI', externalSubject: actor.subject };
 };
 const linkRows = () => sql('SELECT * FROM hon.school_checkout_links WHERE organization_id=ANY($1::uuid[]) ORDER BY checkout_id', [[ids.organization, ids.otherOrganization]]).then((r) => r.rows);
-const LEAK = /Secret staff question|Private receipt note|Private thank you|REVIEW_REQUIRED|collectionMethod|planId|capacity|organizationId|schoolId|checkoutId|@example\.test/;
+// 0627 shows the page's questions and thank-you text (the sign-up form); the receipt note stays private.
+const LEAK = /Private receipt note|REVIEW_REQUIRED|collectionMethod|planId|capacity|organizationId|schoolId|checkoutId|@example\.test/;
 
 try {
   await cleanup();
@@ -176,7 +179,9 @@ try {
   ok(month.priceMinor === null && month.recurringMinor === 22500 && month.installments === 12 && month.downPayment.amountMinor === 45000 && month.downPayment.label.en === 'First and last month'
     && month.placesLeft === null && month.inFamilyApp === false, 'monthly option with down payment, not sold in the app');
   ok(shown.addOns.length === 1 && shown.addOns[0].amountMinor === 2500 && shown.addOns[0].required === false, 'add-ons');
-  ok(!LEAK.test(JSON.stringify(shown)), 'no questions, receipt or thank-you text, collection method, plan, capacity, ids or emails');
+  ok(!LEAK.test(JSON.stringify(shown)), 'no receipt note, collection method, plan, capacity, ids or emails');
+  ok(shown.version >= 1 && shown.questions.some((q) => q.label.en === 'Secret staff question') && shown.thankYou?.en === 'Private thank you'
+    && shown.addOns[0].key === 'uniform' && shown.canPay === false && shown.testMode === true, '0627 sign-up form fields; no processor here, so no card');
   for (const [label, id] of [['draft', link(DRAFT)], ['archived', link(ARCHIVED)], ['unknown', 'a'.repeat(48)], ['malformed', 'x'], ['uppercase', link(LIVE).toUpperCase()], ['empty', '']]) {
     ok(await publicApi.page(id) === null, `${label} link shows nothing`);
   }
