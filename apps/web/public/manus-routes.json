@@ -417,6 +417,22 @@
       "title": "HON | Opted out of texts"
     },
     {
+      "path": "/staff/email",
+      "title": "HON | Send an email"
+    },
+    {
+      "path": "/staff/email/history",
+      "title": "HON | Email history"
+    },
+    {
+      "path": "/staff/email/templates",
+      "title": "HON | Email templates"
+    },
+    {
+      "path": "/staff/email/opted-out",
+      "title": "HON | Opted out of email"
+    },
+    {
       "path": "/staff/family-messages",
       "title": "HON | Parent app"
     },

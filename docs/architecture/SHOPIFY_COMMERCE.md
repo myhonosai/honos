@@ -419,6 +419,11 @@ about a provider's catalog, prices or delivery.
   single-query cost limit. The first service of type `THIRD_PARTY` gives the name (trimmed, at most 64 characters);
   otherwise the variant is the school's. Known limits: a provider ranked third or later among a variant's locations is
   missed, and a name HON cannot keep (empty after cleaning) leaves the variant shown as school stock. A single-product read-back and a product webhook do not ask, and leave the key out.
+  **Fallback (2026-11-21).** On the live test store the first sync with this read failed with `SHOPIFY_INVALID_RESPONSE` and
+  0 products in a quarter of a second, while the read without the stock locations had succeeded two days before. HON does
+  not keep Shopify's error text, so the exact refusal is not known. When a catalog page is refused that way, the adapter
+  now reads that page and the rest of the sync without the stock locations; those variants leave `fulfilledBy` out and the
+  mirror keeps what it had. A plain read that is refused too fails the sync as before.
 - **Store.** `hon.shopify_variants.fulfilled_by` (text, NULL = the school). `fulfilledBy` is an optional variant key in
   `hon.shopify_apply_page`, `hon.shopify_product_item_ok` and `hon.shopify_mirror_product`; a variant sent without the key
   keeps its value. `hon.shopify_fulfilled_by_ok(jsonb)` is the closed name check (no runtime grant).

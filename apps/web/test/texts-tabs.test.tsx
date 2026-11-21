@@ -260,3 +260,54 @@ describe('Texts menu and routes', () => {
     expect(readFileSync('src/app/staff/texts/send/page.tsx', 'utf8')).toContain('UUID.test(template)');
   });
 });
+
+describe('Email page (TE4)', () => {
+  it('lists sent emails with their subject, and asks history for EMAIL only', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(ok({ messages: [rowAt(1, { channel: 'EMAIL', address: 'ana@example.test', subject: 'Belt test Saturday' })], nextCursor: null }));
+    view = () => MessageHistory({ scope, channel: 'EMAIL', when }) as Element;
+    render(); await settle();
+    expect(fetched(fetcher)[0]!.path).toBe(`${base}/history?channel=EMAIL&range=DAYS_30`);
+    const tree = all();
+    expect(text(tree)).toContain('Belt test Saturday');
+    expect(tree.find(e => e.props.name === 'historySearch')!.props.placeholder).toBe('Name, email, subject or words');
+  });
+  it('lists contacts who opted out of email', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(ok({ contacts: [], nextCursor: null }));
+    view = () => OptedOutList({ scope, channel: 'EMAIL', when }) as Element;
+    render(); await settle();
+    expect(fetched(fetcher)[0]!.path).toBe(`${base}/opted-out?channel=EMAIL`);
+    expect(text(all())).toContain('Everyone with consent can get emails.');
+  });
+  it('saves an email template with its subject, and Use in Send opens Email > Send', async () => {
+    const saved = template('b', { channel: 'EMAIL', name: 'Welcome', subject: 'Welcome, {{first_name}}', body: 'Glad you joined.' });
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(ok({ templates: [template('a', { channel: 'EMAIL', subject: 'Belt test' })] })).mockResolvedValueOnce(ok(saved));
+    view = () => MessageTemplates({ scope, channel: 'EMAIL', when, useHref: t => `/staff/email?template=${t}` }) as Element;
+    render(); await settle();
+    expect(fetched(fetcher)[0]!.path).toBe(`${base}/templates?channel=EMAIL&status=ACTIVE`);
+    expect(all().find(e => e.type === 'a' && text(e.props.children) === 'Use in Send')!.props.href).toBe(`/staff/email?template=${id('a')}`);
+    named('newTemplate')!.props.onClick();
+    named('templateName')!.props.onChange({ target: { value: 'Welcome' } });
+    named('templateBody')!.props.onChange({ target: { value: 'Glad you joined.' } });
+    expect(named('saveTemplate')!.props.disabled).toBe(true);
+    named('templateSubject')!.props.onChange({ target: { value: 'Welcome, {{first_name}}' } });
+    all().find(e => e.props['data-template-editor'] === '')!.props.onSubmit({ preventDefault() {} }); await settle();
+    expect(JSON.parse(String(fetched(fetcher)[1]!.init.body))).toMatchObject({ channel: 'EMAIL', name: 'Welcome', subject: 'Welcome, {{first_name}}', body: 'Glad you joined.' });
+    expect(readFileSync('src/components/texts/texts-tabs.tsx', 'utf8')).toContain('useHref={id => `/staff/email?template=${encodeURIComponent(id)}`}');
+  });
+  it('the Email Send picker reads email templates', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(ok({ templates: [template('a', { channel: 'EMAIL', subject: 'Hello' })] }));
+    view = () => (TemplatePicker({ scope, channel: 'EMAIL', chosen: null, onChoose: () => {} }) ?? <i />) as Element;
+    render(); await settle();
+    expect(fetched(fetcher)[0]!.path).toBe(`${base}/templates?channel=EMAIL&status=ACTIVE`);
+    expect(named('useTemplate')).toBeDefined();
+  });
+  it('has its own menu entry with pages and manifest entries, and Send checks the template id', () => {
+    const email = SCHOOL_SHELL_NAV.find(entry => entry.key === 'email')!;
+    const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8')) as { routes: { path: string }[] };
+    for (const path of email.routes.map(r => r.href)) {
+      expect(manifest.routes.filter(r => r.path === path)).toHaveLength(1);
+      expect(existsSync(`src/app${path}/page.tsx`)).toBe(true);
+    }
+    expect(readFileSync('src/app/staff/email/page.tsx', 'utf8')).toContain('UUID.test(template)');
+  });
+});

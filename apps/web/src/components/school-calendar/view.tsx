@@ -48,6 +48,8 @@ export type CalendarViewProps = Readonly<{
   message?: React.ReactNode;
   /** 0583 block-out dates in view: school date -> label. Closed days are shaded and labelled; classes still show. */
   closed?: ReadonlyMap<string, string> | undefined;
+  /** The first class of what was just added: marked, so the page can scroll to it and it stands out. */
+  fresh?: string | null | undefined;
 }>;
 
 const day = (language: string, date: string, options: Intl.DateTimeFormatOptions) => new Date(`${date}T00:00:00Z`).toLocaleDateString(language, { ...options, timeZone: 'UTC' });
@@ -83,8 +85,9 @@ export function CalendarViewPane(p: CalendarViewProps): React.ReactElement {
       </div>
       <Notices {...p} t={t}/>
       {!loading ? <Filter {...p} t={t}/> : null}
-      <div className={styles.board}>{loading ? <p className={styles.meta} role="status">{t('loading')}</p> : p.anchor !== null ? <Board {...p} anchor={p.anchor} t={t}/> : null}</div>
+      {/* Above the board, so a result is seen without scrolling past the whole day. */}
       {p.message ? <div className={styles.messageBar}>{p.message}</div> : null}
+      <div className={styles.board}>{loading ? <p className={styles.meta} role="status">{t('loading')}</p> : p.anchor !== null ? <Board {...p} anchor={p.anchor} t={t}/> : null}</div>
       {p.createPanel ? <aside className={styles.drawer} aria-label={t('createTitle')} data-testid="calendar-create-drawer">
         <div className={styles.drawerHead}><button type="button" className={styles.secondary} onClick={() => p.onSelect?.(null)}>{t('close')}</button></div>
         {p.createPanel}
@@ -364,7 +367,7 @@ type ItemHandlers = {
   onPointerUp?: ((event: React.PointerEvent<HTMLButtonElement>) => void) | undefined; onPointerCancel?: (() => void) | undefined;
   onKeyDown?: ((event: React.KeyboardEvent<HTMLButtonElement>) => void) | undefined;
 };
-function Item({ item, zone, compact = false, selected, onSelect, language, t, cards, draggable, suppressClick, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onKeyDown }:
+function Item({ item, zone, compact = false, selected, onSelect, language, t, cards, fresh, draggable, suppressClick, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onKeyDown }:
   CalendarViewProps & ItemHandlers & { item: CalendarItem; zone: string; compact?: boolean; t: T }): React.ReactElement {
   if (item.kind === 'event') {
     const e = item.event, current = selected?.kind === 'event' && selected.id === e.eventId;
@@ -376,6 +379,7 @@ function Item({ item, zone, compact = false, selected, onSelect, language, t, ca
   const s = item.session, current = selected?.kind === 'class' && selected.id === s.sessionId;
   const card = cards?.state === 'READY' ? cards.byId.get(s.sessionId) : undefined;
   return <button type="button" className={styles.item} data-kind="class" data-card-kind={card?.kind ?? 'CLASS'} data-status={s.status} data-draggable={draggable ? 'true' : undefined}
+    data-new={fresh === s.sessionId ? 'true' : undefined}
     aria-current={current ? 'true' : undefined} aria-keyshortcuts={draggable ? 'Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight Alt+Shift+ArrowUp Alt+Shift+ArrowDown' : undefined}
     onClick={() => { if (suppressClick?.current) { suppressClick.current = false; return; } onSelect?.({ kind: 'class', id: s.sessionId }); }}
     onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerCancel} onKeyDown={onKeyDown}>
