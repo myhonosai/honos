@@ -605,6 +605,10 @@
       "title": "Private curriculum library"
     },
     {
+      "path": "/staff/curriculum/ranks",
+      "title": "HON | Rank setup"
+    },
+    {
       "path": "/staff/curriculum/progress",
       "title": "HON | Human Curriculum Progress"
     },

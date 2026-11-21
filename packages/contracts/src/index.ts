@@ -1166,6 +1166,7 @@ export * from './staff-time-clock.js';
 export * from './eian.js';
 export * from './parent-invoice-pay.js';
 export * from './parent-app-curriculum.js';
+export * from './rank-setup.js';
 export * from './school-announcements.js';
 export * from './parent-push.js';
 export * from './parent-pro-shop.js';

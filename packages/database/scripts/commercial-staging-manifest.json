@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "69cc0ed6020b55b96d89878c366dcf7d1ccf7d3e52ec4407a92ef7d25beea18f",
+  "chainSha256": "18bbff167f3de944709f21d055465e672b5f0ebcabc4f486ded03f63e5fa8f0d",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -813,6 +813,10 @@
     {
       "file": "0614_pos_shopify_orders.sql",
       "sha256": "ba0b9b5bceb7d5926af3dfe88b683eb0ed73dd59c91c26a875a9cfd9aa0ee8e7"
+    },
+    {
+      "file": "0622_rank_setup.sql",
+      "sha256": "4ca4aadd0e007cc426d3fe97bf16b585fbeecaad188055f611884350cb02949f"
     }
   ]
 }

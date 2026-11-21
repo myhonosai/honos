@@ -50,6 +50,16 @@ const snapshot = (scope) => ({
   paymentAttempts: { inRangeByState: { PENDING: 0, PROCESSING: 1, SUCCEEDED: 118, FAILED: 3, REQUIRES_ACTION: 0, UNKNOWN: 0, REFUNDED: 1 } },
 });
 
+// Rank setup (0622) synthetic fixtures: one program with three belts, two students. The mock keeps belts added in this run.
+const rsRank = (n, name, color, order, students, requirements = []) => ({ id: id(700 + n), name, color, order, version: 1, students, requirements });
+let rankSetupState = null;
+const rankSetup = () => rankSetupState ??= { programs: [{ id: id(690), name: 'Kids Taekwondo', version: 1, ranks: [
+  rsRank(1, 'White belt', '#FFFFFF', 1, 1, [{ id: id(721), code: 'FRONT_KICK', kind: 'TECHNIQUE', label: 'Front kick, both legs', description: '', required: true, version: 1 },
+    { id: id(722), code: 'RESPECT', kind: 'CHARACTER', label: 'Bows in and out of class', description: '', required: true, version: 1 }]),
+  rsRank(2, 'Yellow belt', '#FACC15', 2, 1, [{ id: id(723), code: 'TAEGEUK_1', kind: 'TECHNIQUE', label: 'Taegeuk 1', description: 'Whole form without help.', required: true, version: 1 }]),
+  rsRank(3, 'Orange belt', '#F97316', 3, 0)] }, { id: id(691), name: 'Adult Karate', version: 1, ranks: [] }],
+  students: [{ enrollmentId: id(731), programId: id(690), studentProfileId: id(741), givenName: 'Avery', familyName: 'Sample', currentRankId: id(701), version: 1 },
+    { enrollmentId: id(732), programId: id(690), studentProfileId: id(742), givenName: 'Rowan', familyName: 'Example', currentRankId: id(702), version: 1 }] };
 // Parent app > Curriculum synthetic fixtures (names and links are placeholders).
 const pcRes = (n, patch) => ({ id: id(1000 + n), curriculumId: id(960), rankId: null, cycleId: null, kind: 'VIDEO', url: `https://www.youtube.com/watch?v=sample${n}`, title: `Sample ${n}`, description: '', audience: 'PARENT', status: 'ACTIVE', version: 1, ...patch });
 const pcSettings = (patch) => ({ saved: true, version: 3, displayMode: 'CYCLE', showInApp: true, rankShowEarlier: false, rankShowNext: false, cycleRotation: 'AUTO', cycleAnchorDate: '2026-11-02', cycleLengthWeeks: 2, cycleShowNext: true, ...patch });
@@ -176,6 +186,13 @@ function api(route) {
     if (path === `${prefix}/staff-roles/lists`) return json(route, 200, { data: { roles: [{ id: id(880), code: 'CUSTOM_FRONT_DESK', name: 'Front desk', version: 1, permissionCodes: ['school.view', 'crm.lead.read'] }], grants: [] }, meta: {} });
     if (path === `${prefix}/staff-roles/permissions`) return json(route, 200, { data: [['school.view', 'View the school', false], ['attendance.record', 'Record attendance', false], ['attendance.cards.manage', 'Choose how attendance cards look', true], ['crm.lead.read', 'Read leads', false], ['billing.refund.create', 'Create refunds', true]]
       .map(([code, description, sensitive]) => ({ code, description, sensitive })), meta: {} });
+    // Rank setup (0622): read, and adding a belt appends it at the end.
+    if (path === `/api/v1/staff/schools/${scope.schoolId}/rank-setup`) return json(route, 200, { data: rankSetup(), meta: { requestId: id(750), correlationId: id(750), replayed: false } });
+    if (method === 'POST' && path === `/api/v1/staff/schools/${scope.schoolId}/rank-setup/programs/${id(690)}/ranks`) {
+      const body = JSON.parse(route.request().postData() ?? '{}'), p = rankSetup().programs[0];
+      p.ranks.push(rsRank(p.ranks.length + 10, body.name, body.color, p.ranks.length + 1, 0)); p.version += 1;
+      return json(route, 200, { data: p, meta: { requestId: id(751), correlationId: id(751), replayed: false } });
+    }
     // Parent app > Curriculum (0605/0610): one cycle-based and one rank-based synthetic curriculum.
     if (method === 'POST' && /\/parent-app\/curriculum\/[0-9a-f-]{36}\/cycles$/.test(path)) return json(route, 409, { code: 'CYCLE_NAME_TAKEN' });
     if (path === `/api/v1/staff/schools/${scope.schoolId}/parent-app/curriculum`) return json(route, 200, { data: parentCurriculum(), meta: { requestId: id(990), correlationId: id(990), replayed: false } });
@@ -184,6 +201,8 @@ function api(route) {
     if (path === `${prefix}/pickers/enrollments`) return json(route, 200, { data: [['Avery', 'Sample'], ['Rowan', 'Example']].map(([givenName, familyName], i) => ({ enrollmentId: id(980 + i),
       curriculumId: new URL(route.request().url()).searchParams.get('curriculumId') ?? id(960), curriculumName: 'Little Dragons', studentProfileId: id(820 + i), givenName, familyName, currentRankId: null, currentRankName: null, nextRankId: null, nextRankName: null, version: 1 })),
       meta: { requestId: id(985), correlationId: id(985), limit: 50 } });
+    if (path === `${prefix}/pickers/students`) return json(route, 200, { data: [['Kim', 'Placeholder', 743], ['Jordan', 'Sample', 744]].map(([givenName, familyName, n]) => ({ studentProfileId: id(n), givenName, familyName })),
+      meta: { requestId: id(745), correlationId: id(745), limit: 50 } });
     if (path === `${prefix}/pickers/staff`) return json(route, 200, { data: [['Avery Sample', 870], ['Rowan Example', 871], ['Kim Placeholder', 872]]
       .map(([displayName, n]) => ({ principalId: id(n), displayName })), meta: { requestId: id(875), correlationId: id(875), limit: 200 } });
     if (path === `${prefix}/pickers/testing-candidates`) return json(route, 200, { data: [['Avery', 'Sample', 'PASSED'], ['Rowan', 'Example', 'PASSED'], ['Kim', 'Placeholder', 'DEFERRED']]
@@ -517,6 +536,23 @@ await check('Parent app is its own page laid out like the texts inbox (TE3a)', a
   await page.getByText('Thanks! Is there class on Friday?').waitFor();
   assert.equal(await page.locator('[data-compose]').count(), 0, 'no composer on the parent app page');
   await shot(page, 'te3a-parent-app-desktop'); await ctx.close();
+});
+for (const size of ['desktop', 'phone']) await check(`Rank setup: belts in order, what each needs, students, add a belt (${size})`, async () => {
+  theme = 'modern'; rankSetupState = null; const { ctx, page } = await open(viewports[size], '/staff/curriculum/ranks');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Belts, first to last' }).waitFor();
+  await page.getByRole('button', { name: 'What this belt needs (2)' }).click();
+  await page.getByText('Bows in and out of class').waitFor();
+  assert.equal(await page.getByText(/[0-9a-f]{8}-[0-9a-f]{4}-/).count(), 0, 'no ids on the page');
+  await noOverflow(page);
+  await page.screenshot({ path: join(results, `rank-setup-${size}.png`), fullPage: true }); report.screenshots.push(`rank-setup-${size}.png`);
+  await page.getByRole('textbox', { name: 'Next belt' }).fill('Green belt'); await page.getByRole('button', { name: 'Green', exact: true }).last().click();
+  await page.getByRole('button', { name: 'Add belt' }).click();
+  await page.getByText('Added Green belt.').waitFor();
+  assert.equal(await page.getByRole('article', { name: 'Green belt' }).count(), 1, 'the new belt is listed last');
+  await page.getByRole('button', { name: /Adult Karate/ }).click();
+  await page.getByText('No belts yet.').waitFor();
+  await ctx.close();
 });
 for (const size of ['desktop', 'phone']) await check(`Parent app > Curriculum: cycle-based and rank-based setup, preview (${size})`, async () => {
   theme = 'modern'; const { ctx, page } = await open(viewports[size], '/staff/parent-app/curriculum');
