@@ -5892,3 +5892,58 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END LOOP;
 END $$;
 -- End parent app curriculum read exact verification.
+
+-- Point of Sale exact verification (0612)
+DO $$ DECLARE f text; t text; c text;
+  entry text[]:=ARRAY['hon.read_pos(text,uuid)','hon.read_pos_sales(text,uuid,date,date)','hon.read_pos_sale(text,uuid,uuid)',
+    'hon.save_pos_settings(text,jsonb,uuid)','hon.save_pos_item(text,jsonb,uuid)','hon.adjust_pos_stock(text,jsonb,uuid)',
+    'hon.record_pos_sale(text,jsonb,uuid)','hon.refund_pos_sale(text,jsonb,uuid)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe point of sale entry point: %',f; END IF;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='hon' AND (p.proname LIKE 'pos\_%' OR p.proname='guard_pos_evidence') LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe point of sale helper: %',f; END IF;
+  END LOOP;
+  -- Fixed bodies, search path and volatility for the entry points, the authority check and the evidence guard (0612).
+  FOR f,t,c IN SELECT * FROM (VALUES
+    ('hon.read_pos(text,uuid)','8ad099fd0074eb80c056356be67f9f86','s'),
+    ('hon.read_pos_sales(text,uuid,date,date)','f7f313cf6f4426fd3acae2e94f137dd4','s'),
+    ('hon.read_pos_sale(text,uuid,uuid)','014b642fc8785f482c477c4fb3f8fbb5','s'),
+    ('hon.save_pos_settings(text,jsonb,uuid)','d20a8db67825e726102b9d6a87fa76a6','v'),
+    ('hon.save_pos_item(text,jsonb,uuid)','d17777ebf701687429c64f99f0d4af9f','v'),
+    ('hon.adjust_pos_stock(text,jsonb,uuid)','cd3cb6a8cc2b3b80b1e96d1082a5445f','v'),
+    ('hon.record_pos_sale(text,jsonb,uuid)','d08b47c898d403780d8571a64e998fe6','v'),
+    ('hon.refund_pos_sale(text,jsonb,uuid)','653106945872cd8ddcf4951ba4f937fa','v'),
+    ('hon.pos_actor(text,uuid,boolean)','57d43091144edb5833fdec72a0e06b91','s'),
+    ('hon.pos_begin(text,text,jsonb,uuid,boolean)','4b4dc8ca1142e6c63b2b02a4ee7a4777','v'),
+    ('hon.pos_finish(text,boolean,uuid,uuid,uuid,text,uuid,text,text,uuid,integer,jsonb,jsonb,jsonb)','b31626085f6ac12a5b2f4bbb30f33244','v'),
+    ('hon.guard_pos_evidence()','8de6f1c6547c3a2a67ccd35150776925','v')) x LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND md5(p.prosrc)=t AND p.provolatile=c
+        AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND (f<>'hon.guard_pos_evidence()' OR NOT p.prosecdef)) THEN
+      RAISE EXCEPTION 'Point of sale function body/posture drift: %',f; END IF;
+  END LOOP;
+  -- Every POS table keeps its row guard and its truncate guard, enabled and calling the evidence guard.
+  FOREACH t IN ARRAY ARRAY['pos_settings','pos_items','pos_sales','pos_sale_lines','pos_refunds','pos_stock_moves','pos_requests'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND tgname=t||'_guard' AND tgfoid='hon.guard_pos_evidence()'::regprocedure AND tgenabled='O' AND NOT tgisinternal)
+      OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND tgname=t||'_no_truncate' AND tgfoid='hon.guard_pos_evidence()'::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Point of sale evidence guard missing: %',t; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['pos_settings','pos_items','pos_sales','pos_sale_lines','pos_refunds','pos_stock_moves','pos_requests'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe point of sale table: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End point of sale exact verification.

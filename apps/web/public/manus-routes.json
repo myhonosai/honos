@@ -357,6 +357,10 @@
       "title": "HON | Checkout orders"
     },
     {
+      "path": "/staff/billing/pos",
+      "title": "HON | Point of Sale"
+    },
+    {
       "path": "/staff/billing/saved-payment-methods",
       "title": "HON | Saved payment methods"
     },

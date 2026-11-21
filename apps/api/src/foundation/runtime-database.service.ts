@@ -1563,6 +1563,23 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return this.callFixedSubjectFunction(call,params,'PERSON_UNAVAILABLE');
   }
 
+  /** 0612 Point of Sale: fixed definer functions; the subject comes only from the signed HON session. */
+  async callSchoolPos(operation: 'read'|'sales'|'sale'|'settings'|'item'|'stock'|'record'|'refund', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      read: {sql: 'SELECT hon.read_pos($1,$2::uuid) data',arity:2,readOnly:true},
+      sales: {sql: 'SELECT hon.read_pos_sales($1,$2::uuid,$3::date,$4::date) data',arity:4,readOnly:true},
+      sale: {sql: 'SELECT hon.read_pos_sale($1,$2::uuid,$3::uuid) data',arity:3,readOnly:true},
+      settings: {sql: 'SELECT hon.save_pos_settings($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      item: {sql: 'SELECT hon.save_pos_item($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      stock: {sql: 'SELECT hon.adjust_pos_stock($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      record: {sql: 'SELECT hon.record_pos_sale($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      refund: {sql: 'SELECT hon.refund_pos_sale($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('POS_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call,params,'POS_UNAVAILABLE');
+  }
+
   /** 0390 contact photos: three fixed definer functions; the subject comes only from the signed HON session. */
   async callSchoolPersonPhoto(operation: 'read'|'set'|'remove', params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
