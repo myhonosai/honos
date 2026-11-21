@@ -28,7 +28,8 @@ store is the test store.
 | SH2 | POS sells Shopify variants when connected (database reprices from the mirror) and each sale is pushed to Shopify (order + inventory) through a queued job. Coordinated with the POS thread (0403). | No |
 | SH3 | Parent App and HON website buy through Shopify Checkout (Storefront cart → Shopify-hosted checkout); orders link back to the HON contact. | No |
 | SH4 | Commerce Workspace writes: create/edit products and prices, artwork upload, mockups, publish; AI descriptions/pricing/promotions by plan (fake AI until approved). | Paid AI |
-| SH5 | Print-on-demand providers. | Provider accounts |
+| **PD1 (0611)** | Print on demand, first piece: the sync reads who fulfils each variant (the school's own location or a third-party fulfilment service such as a print provider's Shopify app) and Commerce shows it. HON connects to no provider. | No |
+| SH5 | Print-on-demand providers: direct connections, where a provider's API is verified. | Provider accounts |
 | SH6 | Complete-plan commerce agent through the AI Action Engine (proposals, owner approval). | Paid AI |
 | Live | Create the HON Shopify Partner app, set its secrets on Render, connect the Ideal Martial Arts store. | **Yes** |
 
@@ -386,3 +387,29 @@ route; 0609 drops every 0600 table, trigger, helper and entry point (0600 itself
 3. Contract `autoSync` on the overview; the page line in en/ko/es.
 4. Grants: 010 (nothing for the runtime), 011 exact verification, 013 worker grants; verify-rls, staging pins,
    run-db-proofs.
+
+## PD1: who fulfils each product (0611)
+
+Commerce step 6, first print-on-demand piece. A school that sells made-to-order items installs the provider's own Shopify
+app (Printful and similar). Shopify then stocks those variants at that provider's **fulfilment service location**, and the
+provider makes and ships each order. HON reads that fact; it connects to no provider, sends no order and promises nothing
+about a provider's catalog, prices or delivery.
+
+- **Read.** The catalog sync asks for each variant's first two stock locations
+  (`inventoryItem.inventoryLevels(first: 2) { nodes { location { fulfillmentService { serviceName type } } } }`), which the
+  `read_inventory` scope HON already holds covers. The page size went from 100 to 50 variants to stay well inside Shopify's
+  single-query cost limit. The first service of type `THIRD_PARTY` gives the name (trimmed, at most 64 characters);
+  otherwise the variant is the school's. A single-product read-back and a product webhook do not ask, and leave the key out.
+- **Store.** `hon.shopify_variants.fulfilled_by` (text, NULL = the school). `fulfilledBy` is an optional variant key in
+  `hon.shopify_apply_page`, `hon.shopify_product_item_ok` and `hon.shopify_mirror_product`; a variant sent without the key
+  keeps its value. `hon.shopify_fulfilled_by_ok(jsonb)` is the closed name check (no runtime grant).
+- **Show.** `read_shopify_catalog` returns `fulfilledBy` per variant; `read_shopify` counts gain `provider`. A provider's
+  variant is never low stock (the school cannot restock it), in the flag and in the count; the contract refuses an answer
+  that says otherwise. Commerce shows "Made to order by <name>" in Products and Inventory, an Inventory list of those
+  items, and a count on the Overview when there is at least one.
+- **Not here.** Provider accounts or APIs, order routing, tracking events, product creation at a provider, and the other
+  fulfilment modes in the vision (bulk preorder, hybrid) are later pieces. No new scope, entry point, grant or table.
+
+Evidence: `apps/api/test/shopify.test.cjs` (PD1), `apps/web/test/school-shopify-ui.test.tsx` (PD1),
+`packages/database/scripts/test-shopify-commerce-integrity.mjs` (group 4), and the 011 section "Shopify fulfilment source
+exact verification (0611, PD1)".

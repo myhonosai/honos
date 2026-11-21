@@ -79,6 +79,7 @@ function Summary({ read, t, locale }: { read: ShopifyOverview; t: T; locale: str
         <div><dt>{t('products')}</dt><dd>{c.products}</dd></div>
         <div><dt>{t('variants')}</dt><dd>{c.variants}</dd></div>
         <div><dt>{t('lowStock')}</dt><dd data-low={c.lowStock > 0 ? 'true' : 'false'}>{c.lowStock}</dd></div>
+        {c.provider > 0 && <div><dt>{t('madeToOrder')}</dt><dd data-shopify-provider>{c.provider}</dd></div>}
         <div><dt>{t('ordersKept')}</dt><dd>{c.orders}</dd></div>
       </dl>
     </div>
@@ -193,7 +194,7 @@ function Products({ ctx, catalog, edit }: { ctx: Ctx; catalog: ListState<Shopify
     {edit.canEdit && editing === 'new' && <div className={styles.card}><DraftEditor ctx={ctx} locked={edit.locked} onPropose={edit.onPropose} onClose={() => setEditing(null)} /></div>}
     {all.length === 0 ? <p className={styles.meta}>{t('catalogEmpty')}</p> : shown.length === 0 ? <p className={styles.meta}>{t('noMatch')}</p>
       : <ul className={styles.items} data-shopify-catalog>{shown.map(p => {
-        const tracked = p.variants.filter(v => v.tracked), stock = tracked.reduce((a, v) => a + (v.inventoryQuantity ?? 0), 0);
+        const tracked = p.variants.filter(v => v.tracked && v.fulfilledBy === null), stock = tracked.reduce((a, v) => a + (v.inventoryQuantity ?? 0), 0);
         const margins = p.variants.map(v => v.marginPercent).filter((x): x is number => x !== null);
         const low = p.variants.some(v => v.lowStock);
         return <li key={p.productId} className={styles.item} data-product={p.productId}>
@@ -204,7 +205,7 @@ function Products({ ctx, catalog, edit }: { ctx: Ctx; catalog: ListState<Shopify
                 <span className={styles.meta}>{[p.productType, t('variantsCount', { n: String(p.variants.length) })].filter(Boolean).join(' · ')}</span></span>
               <span className={styles.itemFacts}>
                 <span>{range(ctx, p.variants.map(v => v.price))}</span>
-                <span className={styles.meta}>{tracked.length === 0 ? t('notTracked') : t('stockTotal', { n: String(stock) })}</span>
+                <span className={styles.meta}>{p.variants.every(v => v.fulfilledBy !== null) ? t('madeToOrder') : tracked.length === 0 ? t('notTracked') : t('stockTotal', { n: String(stock) })}</span>
                 {margins.length > 0 && <span className={styles.meta}>{t('marginShort', { n: `${Math.min(...margins)}%${Math.min(...margins) === Math.max(...margins) ? '' : `–${Math.max(...margins)}%`}` })}</span>}
               </span>
               <span className={styles.chips}>{p.status !== 'ACTIVE' && <span className={styles.chip} data-state={p.status}>{t(`status_${p.status}`)}</span>}
@@ -216,7 +217,7 @@ function Products({ ctx, catalog, edit }: { ctx: Ctx; catalog: ListState<Shopify
                 <tbody>{p.variants.map(v => <tr key={v.variantId} data-variant={v.variantId} data-low={v.lowStock ? 'true' : 'false'}>
                   <td>{v.title}</td><td>{v.sku ?? ''}</td><td>{m(v.price)}</td><td>{m(v.unitCost)}</td>
                   <td>{v.margin === null ? t('noCost') : `${m(v.margin)}${v.marginPercent === null ? '' : ` (${v.marginPercent}%)`}`}</td>
-                  <td>{!v.tracked ? <span className={styles.meta}>{t('notTracked')}</span> : <>{v.inventoryQuantity ?? 0}{v.lowStock && <span className={styles.chip} data-state="LOW">{t('low')}</span>}</>}</td>
+                  <td>{stockCell(t, v)}</td>
                 </tr>)}</tbody>
               </table></div>
               {edit.canEdit && editing === p.productId
@@ -289,7 +290,13 @@ function Orders({ ctx, orders }: { ctx: Ctx; orders: ListState<ShopifyOrders> })
   </div>;
 }
 
-type InventoryFilter = 'low' | 'tracked' | 'untracked';
+type InventoryFilter = 'low' | 'tracked' | 'untracked' | 'provider';
+/** Stock for one variant. A provider's variant (print on demand, for example) shows who makes it, never a count. */
+function stockCell(t: Ctx['t'], v: ShopifyCatalog['products'][number]['variants'][number]): React.ReactNode {
+  if (v.fulfilledBy !== null) return <span className={styles.chip} data-state="OPEN" data-fulfilled-by>{t('madeBy', { name: v.fulfilledBy })}</span>;
+  if (!v.tracked) return <span className={styles.meta}>{t('notTracked')}</span>;
+  return <>{v.inventoryQuantity ?? 0}{v.lowStock && <span className={styles.chip} data-state="LOW">{t('low')}</span>}</>;
+}
 /** Shopify forbids showing its admin inside another site, so each page opens in a new tab on this store. */
 export function AdminLinks({ ctx }: { ctx: Ctx }): React.ReactElement {
   const { t } = ctx;
@@ -309,32 +316,36 @@ function Inventory({ ctx, catalog }: { ctx: Ctx; catalog: ListState<ShopifyCatal
   const [filter, setFilter] = useState<InventoryFilter>('low');
   if (catalog.state !== 'READY') return <div className={styles.card} data-section="inventory">{pending(t, catalog)}</div>;
   const rows = catalog.value.products.flatMap(p => p.variants.map(v => ({ p, v })));
-  const tracked = rows.filter(r => r.v.tracked);
+  const provider = rows.filter(r => r.v.fulfilledBy !== null), own = rows.filter(r => r.v.fulfilledBy === null);
+  const tracked = own.filter(r => r.v.tracked);
   const units = tracked.reduce((a, r) => a + Math.max(0, r.v.inventoryQuantity ?? 0), 0);
   const costed = tracked.filter(r => r.v.unitCost !== null);
   const value = costed.reduce((a, r) => a + Math.max(0, r.v.inventoryQuantity ?? 0) * (r.v.unitCost ?? 0), 0);
   const costedUnits = costed.reduce((a, r) => a + Math.max(0, r.v.inventoryQuantity ?? 0), 0);
-  const shown = (filter === 'low' ? tracked.filter(r => r.v.lowStock) : filter === 'tracked' ? tracked : rows.filter(r => !r.v.tracked))
+  const shown = (filter === 'low' ? tracked.filter(r => r.v.lowStock) : filter === 'tracked' ? tracked : filter === 'provider' ? provider : own.filter(r => !r.v.tracked))
     .slice().sort((a, b) => (a.v.inventoryQuantity ?? 0) - (b.v.inventoryQuantity ?? 0) || a.p.title.localeCompare(b.p.title, locale));
   return <div className={styles.section} data-section="inventory">
     <div className={styles.card}>
       <dl className={styles.stats}>
         <div><dt>{t('unitsInStock')}</dt><dd>{units}</dd></div>
         <div><dt>{t('lowStock')}</dt><dd data-low={tracked.some(r => r.v.lowStock) ? 'true' : 'false'}>{tracked.filter(r => r.v.lowStock).length}</dd></div>
+        {provider.length > 0 && <div><dt>{t('madeToOrder')}</dt><dd data-shopify-provider>{provider.length}</dd></div>}
         <div><dt>{t('stockValue')}</dt><dd data-shopify-stock-value>{costedUnits > 0 ? money(locale, ctx.currency, value) : t('noCost')}</dd></div>
       </dl>
       <p className={styles.meta}>{costedUnits > 0 ? t('stockValueNote', { units: String(costedUnits), total: String(units) }) : t('profitNone')}</p>
       <Filters label={t('nav_inventory')} value={filter} onChange={setFilter}
-        options={[['low', t('if_low')], ['tracked', t('if_tracked')], ['untracked', t('if_untracked')]]} />
+        options={[['low', t('if_low')], ['tracked', t('if_tracked')], ['untracked', t('if_untracked')],
+          ...(provider.length > 0 ? [['provider', t('madeToOrder')] as [InventoryFilter, string]] : [])]} />
     </div>
     {shown.length === 0 ? <p className={styles.meta}>{filter === 'low' ? t('noLow') : t('noMatch')}</p>
       : <div className={styles.card}><div className={styles.tableWrap}><table className={styles.table} data-shopify-inventory>
         <thead><tr><th>{t('col_product')}</th><th>{t('col_variant')}</th><th>{t('col_sku')}</th><th>{t('col_stock')}</th></tr></thead>
         <tbody>{shown.map(({ p, v }) => <tr key={v.variantId} data-variant={v.variantId} data-low={v.lowStock ? 'true' : 'false'}>
           <td>{p.title}</td><td>{v.title}</td><td>{v.sku ?? ''}</td>
-          <td>{!v.tracked ? <span className={styles.meta}>{t('notTracked')}</span> : <>{v.inventoryQuantity ?? 0}{v.lowStock && <span className={styles.chip} data-state="LOW">{t('low')}</span>}</>}</td>
+          <td>{stockCell(t, v)}</td>
         </tr>)}</tbody>
-      </table></div>{filter === 'untracked' && <p className={styles.meta}>{t('untrackedNote')}</p>}</div>}
+      </table></div>{filter === 'untracked' && <p className={styles.meta}>{t('untrackedNote')}</p>}
+        {filter === 'provider' && <p className={styles.meta}>{t('providerNote')}</p>}</div>}
   </div>;
 }
 

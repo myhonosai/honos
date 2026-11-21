@@ -150,7 +150,7 @@ try{
 
  // 4. Reads: counts, 30-day summary (the 40-day-old order is outside it), margins, orders.
  const view=ok(await read(reader,A.schoolId));
- assert.deepEqual(view.counts,{products:3,variants:6,lowStock:2,orders:3});
+ assert.deepEqual(view.counts,{products:3,variants:6,lowStock:2,provider:1,orders:3});
  assert.deepEqual({...view.summary,topProducts:view.summary.topProducts.length},{days:30,orders:2,sales:290.73,averageOrder:145.37,itemsSold:4,lineSales:310,coveredSales:175,
   estimatedGrossProfit:99.75,topProducts:3});
  const catalog=ok(await read(reader,A.schoolId,'/catalog'));
@@ -159,6 +159,28 @@ try{
  assert.deepEqual(uni.map(v=>[v.sku,v.price,v.unitCost,v.margin,v.marginPercent,v.inventoryQuantity,v.lowStock]),
   [['UNI-1',65,28,37,56.9,8,false],['UNI-2',65,28,37,56.9,2,true],['UNI-3',70,30,40,57.1,0,true]]);
  assert.equal(catalog.products[0].variants[0].tracked,false);assert.equal(catalog.products[0].variants[0].lowStock,false);
+ // PD1 (0611): who fulfils each variant. The sample hoodie is stocked by a third-party service; school stock has none.
+ assert.equal(catalog.products[0].variants[0].fulfilledBy,'Sample Print Co');assert.deepEqual(uni.map(v=>v.fulfilledBy),[null,null,null]);
+ {const hood=(await q("SELECT v.connection_id,v.shopify_id,v.product_shopify_id FROM hon.shopify_variants v JOIN hon.shopify_connections c ON c.id=v.connection_id WHERE c.school_id=$1 AND c.status='CONNECTED' AND v.sku='HOOD-BK-M' AND NOT v.removed",[A.schoolId]))[0];
+  const item=by=>JSON.stringify({id:String(hood.product_shopify_id),title:'School hoodie',status:'ACTIVE',vendor:null,productType:'Apparel',handle:'school-hoodie',imageUrl:null,
+   variants:[{id:String(hood.shopify_id),title:'Black / M',sku:'HOOD-BK-M',barcode:null,price:'45.00',compareAtPrice:null,unitCost:'19.25',tracked:true,inventoryQuantity:0,...by}]});
+  const okItem=async by=>(await q('SELECT hon.shopify_product_item_ok($1::jsonb) ok',[item(by)]))[0].ok;
+  const by=async()=>(await q('SELECT fulfilled_by,tracked,inventory_quantity FROM hon.shopify_variants WHERE connection_id=$1 AND shopify_id=$2',[hood.connection_id,hood.shopify_id]))[0];
+  for(const bad of [{fulfilledBy:''},{fulfilledBy:' x'},{fulfilledBy:'x'.repeat(65)},{fulfilledBy:'a\nb'},{fulfilledBy:7},{madeBy:'x'}])assert.equal(await okItem(bad),false,JSON.stringify(bad));
+  for(const good of [{},{fulfilledBy:null},{fulfilledBy:'Printful'}])assert.equal(await okItem(good),true);
+  // A read-back that did not ask Shopify (no key) keeps the name; tracked stock at zero is still not low for a provider's variant.
+  await q('SELECT hon.shopify_mirror_product($1,$2::jsonb,gen_random_uuid())',[hood.connection_id,item({})]);
+  assert.deepEqual(await by(),{fulfilled_by:'Sample Print Co',tracked:true,inventory_quantity:0});
+  let again=ok(await read(reader,A.schoolId,'/catalog')).products[0].variants[0];
+  assert.deepEqual([again.fulfilledBy,again.tracked,again.lowStock],['Sample Print Co',true,false]);
+  assert.equal(ok(await read(reader,A.schoolId)).counts.lowStock,2);
+  // Shopify saying the school now stocks it clears the name, and the zero count becomes low stock.
+  await q('SELECT hon.shopify_mirror_product($1,$2::jsonb,gen_random_uuid())',[hood.connection_id,item({fulfilledBy:null})]);
+  again=ok(await read(reader,A.schoolId,'/catalog')).products[0].variants[0];
+  assert.deepEqual([again.fulfilledBy,again.lowStock],[null,true]);
+  assert.deepEqual(ok(await read(reader,A.schoolId)).counts,{products:3,variants:6,lowStock:3,provider:0,orders:3});
+  await q('SELECT hon.shopify_mirror_product($1,$2::jsonb,gen_random_uuid())',[hood.connection_id,item({fulfilledBy:'Sample Print Co',tracked:false,inventoryQuantity:null})]);
+  assert.deepEqual(await by(),{fulfilled_by:'Sample Print Co',tracked:false,inventory_quantity:null});}
  const orders=ok(await read(reader,A.schoolId,'/orders'));
  assert.deepEqual(orders.orders.map(o=>o.name),['#1001','#1002','#1003']);assert.equal(orders.orders[1].lines.length,2);
  for(const who of [staff,managerB])await denied(()=>read(who,A.schoolId,'/catalog'),403,'SHOPIFY_FORBIDDEN');

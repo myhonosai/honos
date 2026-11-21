@@ -25,6 +25,9 @@ export interface ShopifyShopInfo { name: string; currency: string }
 export interface MirrorVariant {
   id: string; title: string; sku: string | null; barcode: string | null; price: string; compareAtPrice: string | null; unitCost: string | null;
   tracked: boolean; inventoryQuantity: number | null;
+  /** The third-party fulfilment service that stocks this variant (a print-on-demand provider, for example), null for the school's own
+   *  location. Left out when the read did not ask Shopify, so the mirror keeps what it had. */
+  fulfilledBy?: string | null;
 }
 export interface MirrorProduct {
   id: string; title: string; status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | 'UNLISTED'; vendor: string | null; productType: string | null; handle: string | null;
@@ -161,6 +164,20 @@ function instant(v: unknown): string {
 function word(v: unknown): string | null { if (v === null || v === undefined) return null; if (typeof v !== 'string' || !STATUS_WORD.test(v)) bad(); return v; }
 function int(v: unknown, lo: number, hi: number): number { if (!Number.isInteger(v) || (v as number) < lo || (v as number) > hi) bad(); return v as number; }
 
+/** The first third-party fulfilment service among a variant's stock locations, by the name Shopify shows; null when the school's own
+ *  locations stock it. A name HON cannot keep (empty, too long) is treated as unknown rather than refusing the whole page. */
+export function fulfilledBy(levels: unknown): string | null {
+  const nodes = obj(levels).nodes;
+  if (!Array.isArray(nodes)) bad();
+  for (const n of nodes as unknown[]) {
+    const location = maybeObj(obj(n).location), service = location ? maybeObj(location.fulfillmentService) : null;
+    if (!service || service.type !== 'THIRD_PARTY') continue;
+    const name = cleanText(service.serviceName, 64);
+    if (name) return name;
+  }
+  return null;
+}
+
 /** Groups a flat variant list into products (variant order by Shopify position), at most 100 variants per product. */
 export function productsFromVariantNodes(nodes: unknown[]): MirrorProduct[] {
   const products = new Map<string, MirrorProduct & { positions: number[] }>();
@@ -182,7 +199,8 @@ export function productsFromVariantNodes(nodes: unknown[]): MirrorProduct[] {
     product.variants.push({ id: gidNumber(v.id, 'ProductVariant'), title: cleanText(v.title) ?? 'Default', sku: cleanText(v.sku), barcode: cleanText(v.barcode),
       price: money(v.price), compareAtPrice: maybeMoney(v.compareAtPrice), unitCost: cost ? maybeMoney(cost.amount) : null,
       tracked: item ? item.tracked === true : false,
-      inventoryQuantity: v.inventoryQuantity === null || v.inventoryQuantity === undefined ? null : int(v.inventoryQuantity, -10_000_000, 10_000_000) });
+      inventoryQuantity: v.inventoryQuantity === null || v.inventoryQuantity === undefined ? null : int(v.inventoryQuantity, -10_000_000, 10_000_000),
+      ...(item && item.inventoryLevels !== undefined ? { fulfilledBy: fulfilledBy(item.inventoryLevels) } : {}) });
     product.positions.push(Number.isInteger(v.position) ? (v.position as number) : product.positions.length + 1);
   }
   return [...products.values()].map(({ positions, ...p }) => {
@@ -221,11 +239,11 @@ function tokensFrom(body: unknown, now: number): ShopifyTokens {
 // ---------------------------------------------------------------------------------------------------------------------
 
 const VARIANTS_QUERY = `query HonVariants($after: String) {
-  productVariants(first: 100, after: $after) {
+  productVariants(first: 50, after: $after) {
     pageInfo { hasNextPage endCursor }
     nodes {
       id title sku barcode price compareAtPrice inventoryQuantity position
-      inventoryItem { tracked unitCost { amount } }
+      inventoryItem { tracked unitCost { amount } inventoryLevels(first: 2) { nodes { location { fulfillmentService { serviceName type } } } } }
       product { id title status vendor productType handle featuredMedia { preview { image { url } } } }
     }
   }
@@ -610,7 +628,7 @@ export class FakeShopify implements ShopifyAdapter {
 
 function sampleStore(shop: string, now: number): { products: MirrorProduct[]; orders: MirrorOrder[]; name: string; currency: string; finance: ShopifyFinanceSnapshot; storefront: string | null } {
   const v = (id: string, title: string, sku: string, price: string, unitCost: string | null, qty: number | null): MirrorVariant =>
-    ({ id, title, sku, barcode: null, price, compareAtPrice: null, unitCost, tracked: qty !== null, inventoryQuantity: qty });
+    ({ id, title, sku, barcode: null, price, compareAtPrice: null, unitCost, tracked: qty !== null, inventoryQuantity: qty, fulfilledBy: sku.startsWith('HOOD') ? 'Sample Print Co' : null });
   const products: MirrorProduct[] = [
     { id: '9100000001', title: 'Student uniform', status: 'ACTIVE', vendor: 'HON Sample', productType: 'Uniform', handle: 'student-uniform', imageUrl: null,
       variants: [v('9200000011', 'Size 1', 'UNI-1', '65.00', '28.00', 8), v('9200000012', 'Size 2', 'UNI-2', '65.00', '28.00', 2), v('9200000013', 'Size 3', 'UNI-3', '70.00', '30.00', 0)] },

@@ -370,6 +370,7 @@
     "0605_parent_app_curriculum_cycles.sql": "e9577f6b636a77715d9295978cd20ed969be590c8ed92418ab59f130255629f7",
     "0607_calendar_closed_days_families.sql": "6446819d8426932c8e8cc63db3f7b81c95173b18797531657a77b2d161183452",
     "0608_journey_recommendation_responses.sql": "5496f49cef59302da88dc267340983e766edd18bf236346dcfe3749820eab41e",
-    "0609_shopify_storefront_blocks.sql": "d1bb88213a776c8c4013dc23d3784f54c5b5670aa1247373206970e96720848d"
+    "0609_shopify_storefront_blocks.sql": "d1bb88213a776c8c4013dc23d3784f54c5b5670aa1247373206970e96720848d",
+    "0611_shopify_fulfilment_source.sql": "c9e27729de60777ba65deffed3923a3724f31f27dbd698b9f6acb418b94b03ad"
   }
 }

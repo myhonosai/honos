@@ -4909,7 +4909,7 @@ BEGIN
       ('hon.approve_shopify_product_change(text,jsonb)','1b46ea3b1d44f613fe3fe27b7e795795'),('hon.rotate_shopify_change_credential(text,jsonb)','43ecb7034d74235ae67c530b61143dc2'),
       ('hon.record_shopify_product_change_result(text,jsonb)','8b8c5c7310f9d03fe30049e8f33832f1'),('hon.guard_shopify_product_change()','1b6ee6dfb8d817c9b2163d6a4c6f9f94'),
       ('hon.shopify_locked_change(uuid,jsonb)','515c47ff8148c870ac6b23491497e2bc'),('hon.shopify_leased_change(uuid,uuid,jsonb,boolean)','bed71c1e6af57533ef99ecf1e0e73949'),
-      ('hon.shopify_change_matches(hon.shopify_product_changes,jsonb)','b8f15aa40311b3b02816b944f4cb0f74'),('hon.shopify_mirror_product(uuid,jsonb,uuid)','f36d0ce08c05f41ab6d39e59946f1281')) v LOOP
+      ('hon.shopify_change_matches(hon.shopify_product_changes,jsonb)','b8f15aa40311b3b02816b944f4cb0f74'),('hon.shopify_mirror_product(uuid,jsonb,uuid)','8d4eced3cba45ff543e20e4b4cd21349')) v LOOP
     IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM t THEN RAISE EXCEPTION 'Shopify product change function body drift: %',f; END IF;
   END LOOP;
   FOREACH f IN ARRAY entry LOOP
@@ -5607,6 +5607,38 @@ BEGIN
     RAISE EXCEPTION 'Shopify storefront triggers missing'; END IF;
 END $$;
 -- End Shopify storefront blocks exact verification.
+-- Shopify fulfilment source exact verification (0611, PD1): the variant column, the five replaced bodies (same owners and
+-- grants as before) and the closed name check.
+DO $$ DECLARE f text; t text; BEGIN
+  FOR f,t IN SELECT * FROM (VALUES
+    ('hon.read_shopify(text,uuid)','59c86c55bb79b7cc72c45897ad6fbd24'),
+    ('hon.read_shopify_catalog(text,uuid)','ff8903d4c5a8c5b4a6c782d581a9ac03'),
+    ('hon.shopify_apply_page(hon.shopify_syncs,text,jsonb)','2ffd726a505c3c3e53e7794d2dae2cb7'),
+    ('hon.shopify_fulfilled_by_ok(jsonb)','5e24ca2eccbdd2526bd3ca66bcacb4c7'),
+    ('hon.shopify_mirror_product(uuid,jsonb,uuid)','8d4eced3cba45ff543e20e4b4cd21349'),
+    ('hon.shopify_product_item_ok(jsonb)','7d19d001397ad8f916dab5e710e6d981')
+  ) v LOOP
+    IF (SELECT md5(prosrc) FROM pg_proc WHERE oid=f::regprocedure) IS DISTINCT FROM t THEN RAISE EXCEPTION 'Shopify fulfilment source function body drift: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.read_shopify(text,uuid)','hon.read_shopify_catalog(text,uuid)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe Shopify read entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.shopify_apply_page(hon.shopify_syncs,text,jsonb)','hon.shopify_fulfilled_by_ok(jsonb)',
+      'hon.shopify_mirror_product(uuid,jsonb,uuid)','hon.shopify_product_item_ok(jsonb)'] LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe Shopify fulfilment source helper: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='hon.shopify_variants'::regclass AND attname='fulfilled_by' AND atttypid='text'::regtype
+      AND NOT attnotnull AND NOT attisdropped)
+    OR has_any_column_privilege('hon_runtime','hon.shopify_variants','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe Shopify fulfilment source column'; END IF;
+END $$;
+-- End Shopify fulfilment source exact verification.
 -- Parent announcement push exact verification (0601): private token check, guards, live-person check and scope, two runtime entry points,
 -- four worker functions only the communication worker may run, and three private forced-RLS tables nobody else can touch.
 DO $$ DECLARE f record; safe boolean; t text; worker oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_communication_worker'); BEGIN
