@@ -6022,3 +6022,33 @@ BEGIN
     RAISE EXCEPTION 'Point of sale Shopify order guard missing'; END IF;
 END $$;
 -- End point of sale Shopify orders exact verification.
+
+-- Checkout page share links exact verification (0620): the link guard, the public page selector, two runtime entry points
+-- (staff issue, public read) and a private forced-RLS table the runtime can never touch directly.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_school_checkout_link()',false,false,'search_path=pg_catalog, hon','071402441db3e65d205c0be87068b7d33f91406ff6972b2f01c0ae1311b46438'),
+('hon.public_school_checkout(text)',true,false,'search_path=pg_catalog, hon','714c0b62124bdbf42e8aaddfd339411ea0f161c6be2fbd7ab7d1231bb7701ff0'),
+('hon.issue_school_checkout_links(text)',true,true,'search_path=pg_catalog, hon','146dfd67b4b4bf51555188fc805addfbdcfae316cea5769b47c77d59528da565'),
+('hon.read_public_school_checkout(text)',true,true,'search_path=pg_catalog, hon','e0e6102ec0c7841654e19b348db2e7581c520a9b8e328b7c4b2322383f8501a3')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe checkout page link function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.school_checkout_links'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.school_checkout_links'::regclass)
+    OR has_table_privilege('hon_runtime','hon.school_checkout_links','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.school_checkout_links','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe checkout page links table'; END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.school_checkout_links'::regclass AND NOT tgisinternal AND tgenabled='O'
+      AND ((tgname='school_checkout_links_guard' AND tgfoid='hon.guard_school_checkout_link()'::regprocedure)
+        OR (tgname='school_checkout_links_no_truncate' AND tgfoid='hon.guard_membership_activation_evidence()'::regprocedure)))<>2
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.school_checkout_links'::regclass AND NOT tgisinternal)<>2 THEN
+    RAISE EXCEPTION 'hon.school_checkout_links must carry exactly its two guards'; END IF;
+END $$;
+-- End checkout page share links exact verification.

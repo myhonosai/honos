@@ -229,6 +229,10 @@
       "title": "Book a time"
     },
     {
+      "path": "/checkout/:publicId",
+      "title": "Sign up"
+    },
+    {
       "path": "/calendars/:publicId",
       "title": "Class calendar"
     },

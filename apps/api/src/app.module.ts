@@ -207,13 +207,14 @@ import { SchoolPayChargeController } from './school-payments/school-pay-charge.c
 import { SchoolPayChargeService } from './school-payments/school-pay-charge.service.js';
 import { SchoolPayOnceService } from './school-payments/school-pay-once.service.js';
 import { SchoolCheckoutController } from './school-checkout/school-checkout.controller.js';
+import { PublicSchoolCheckoutController, PublicSchoolCheckoutService } from './school-checkout/public-school-checkout.js';
 import { SchoolCheckoutService } from './school-checkout/school-checkout.service.js';
 import { ShopifyController, ShopifyHumanGuard } from './commerce/shopify/shopify.controller.js';
 import { ShopifyService } from './commerce/shopify/shopify.service.js';
 import { SHOPIFY_APP, shopifyAppFromEnvironment } from './commerce/shopify/shopify-adapter.js';
 import { ShopifyWebhookController } from './commerce/shopify/shopify-webhook.controller.js';
 import { SHOPIFY_WORKER_STORE, ShopifyBackgroundScheduler, ShopifyBackgroundSync, ShopifyWorkerDatabase } from './commerce/shopify/shopify-worker.js';
-import { SchoolCheckoutOrdersReadHumanUiGuard, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard, SchoolCheckoutSettingsSaveHumanUiGuard } from './school-checkout/school-checkout-human-ui.guard.js';
+import { SchoolCheckoutLinksHumanUiGuard, SchoolCheckoutOrdersReadHumanUiGuard, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard, SchoolCheckoutSettingsSaveHumanUiGuard } from './school-checkout/school-checkout-human-ui.guard.js';
 import { MayaAtRiskController, MayaAtRiskReadHumanUiGuard } from './maya/maya-at-risk.controller.js';
 import { MayaAtRiskService } from './maya/maya-at-risk.service.js';
 import { SchoolBrandingController } from './school-branding/school-branding.controller.js';
@@ -671,6 +672,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPayAutopayController,
     SchoolPayChargeController,
     SchoolCheckoutController,
+    PublicSchoolCheckoutController,
     ShopifyController,
     ShopifyWebhookController,
     MayaAtRiskController,
@@ -1012,7 +1014,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPayMethodDefaultHumanUiGuard, SchoolPayMethodRemoveHumanUiGuard,
     SchoolPayAutopayReadHumanUiGuard, SchoolPayDiscountReadHumanUiGuard, SchoolPayDiscountSetHumanUiGuard, SchoolPayAutopayEnrollHumanUiGuard,
     SchoolPayAutopayMethodHumanUiGuard, SchoolPayAutopayStateHumanUiGuard, SchoolPayAutopayCancelHumanUiGuard, SchoolPayAutopayCycleHumanUiGuard,
-    SchoolCheckoutService, SchoolCheckoutOrdersReadHumanUiGuard, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard, SchoolCheckoutSettingsSaveHumanUiGuard,
+    SchoolCheckoutService, PublicSchoolCheckoutService, SchoolCheckoutLinksHumanUiGuard, SchoolCheckoutOrdersReadHumanUiGuard, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard, SchoolCheckoutSettingsSaveHumanUiGuard,
     ShopifyService, ShopifyHumanGuard, { provide: SHOPIFY_APP, useFactory: () => shopifyAppFromEnvironment(process.env) },
     ShopifyWorkerDatabase, { provide: SHOPIFY_WORKER_STORE, useExisting: ShopifyWorkerDatabase }, ShopifyBackgroundSync, ShopifyBackgroundScheduler,
     MayaAtRiskService,
