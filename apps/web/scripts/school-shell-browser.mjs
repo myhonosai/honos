@@ -207,6 +207,10 @@ function api(route) {
     if (path === `${prefix}/pickers/testing-candidates`) return json(route, 200, { data: [['Avery', 'Sample', 'PASSED'], ['Rowan', 'Example', 'PASSED'], ['Kim', 'Placeholder', 'DEFERRED']]
       .map(([givenName, familyName, result], i) => ({ candidateId: id(800 + i), version: 2, result, testingEventId: id(810), testingEventName: 'Synthetic spring test', startsAt: at(-day),
         studentProfileId: id(820 + i), givenName, familyName, curriculumName: 'Synthetic curriculum', targetRankId: id(830), targetRankName: 'Yellow belt' })), meta: { requestId: id(840), correlationId: id(840), limit: 50 } });
+    // Top-bar search (2026-11-21): the staff search read for leads and classes, synthetic rows only.
+    if (path === `${prefix}/search`) return json(route, 200, { data: { search: { organizationId: scope.organizationId, schoolId: scope.schoolId, results: [
+      { kind: 'LEAD', entityId: id(201), title: 'Avery Sample', subtitle: 'Open lead', route: `/staff/search/${scope.organizationId}/${scope.schoolId}/LEAD/${id(201)}` },
+      { kind: 'CLASS_SESSION', entityId: id(100), title: 'Little Tigers', subtitle: 'Scheduled class', route: `/staff/search/${scope.organizationId}/${scope.schoolId}/CLASS_SESSION/${id(100)}` }] } }, meta: {} });
     if (path === `${prefix}/reports/operations`) return json(route, 200, { data: { operationalSnapshot: snapshot(scope) }, meta: {} });
     if (path === `${prefix}/interface-theme`) {
       if (method === 'PUT') theme = JSON.parse(route.request().postData() ?? '{}').interfaceTheme ?? theme;
@@ -713,6 +717,56 @@ await check('multi-school staff choose a named school; the dashboard reloads for
   await page.waitForFunction(() => document.querySelector('[data-phase] strong')?.textContent === 'Synthetic South Academy');
   await shot(page, 'u1-school-chosen-desktop'); await ctx.close();
 });
+for (const [mode, size] of [['modern', 'desktop'], ['big-button', 'desktop'], ['modern', 'phone']]) {
+  await check(`a click outside the Menu box closes it (${mode} ${size})`, async () => {
+    theme = mode; multi = false; const { ctx, page } = await open(viewports[size], '/staff/work');
+    await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+    const opener = size === 'phone' ? page.locator('nav[aria-label="Quick navigation"] button[aria-expanded]') : page.locator('button[aria-label="Open navigation"]').or(page.locator('[data-nav-more]')).first();
+    if (size !== 'phone' && !(await opener.isVisible())) await page.evaluate(() => document.querySelector('[data-nav-more]')?.click()); else await opener.click();
+    await page.waitForSelector('[role="dialog"][aria-label="Menu"]');
+    await page.waitForTimeout(150); await shot(page, `gs-menu-open-${mode}-${size}`);
+    const box = await page.locator('[role="dialog"][aria-label="Menu"]').boundingBox();
+    // Beside the box when there is room, else below it.
+    const x = box.x > 40 ? box.x / 2 : box.x + box.width / 2, y = box.x > 40 ? box.y + 200 : box.y + box.height + 15;
+    await page.mouse.click(x, y);
+    await page.waitForSelector('[role="dialog"][aria-label="Menu"]', { state: 'detached' });
+    await page.getByText('Call back trial family').waitFor();
+    await ctx.close();
+  });
+}
+for (const [mode, size] of [['modern', 'desktop'], ['classic', 'desktop'], ['big-button', 'desktop'], ['modern', 'phone']]) {
+  await check(`top-bar search finds contacts, leads, classes and pages (${mode} ${size})`, async () => {
+    theme = mode; multi = false; const { ctx, page } = await open(viewports[size], '/staff/work');
+    await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+    await page.getByText('Call back trial family').waitFor();
+    await page.locator('[data-global-search-open]').click();
+    const input = page.getByRole('combobox', { name: 'Search contacts, leads, classes and pages' });
+    await input.waitFor();
+    await page.waitForTimeout(150); await shot(page, `gs-search-empty-${mode}-${size}`);
+    await input.fill('av');
+    await page.waitForSelector('[data-search-group="CONTACTS"] a');
+    await page.waitForSelector('[data-search-group="LEADS"] a');
+    assert.equal(await page.locator('[data-search-group="CONTACTS"] a').first().getAttribute('href'), `/staff/people?person=${id(850)}`);
+    await page.waitForTimeout(100); await shot(page, `gs-search-results-${mode}-${size}`);
+    await input.fill('invoi');
+    await page.waitForSelector('[data-search-group="PAGES"] a[href="/staff/billing/invoices"]');
+    await shot(page, `gs-search-pages-${mode}-${size}`);
+    await noOverflow(page);
+    // Esc closes and returns to the page; Ctrl+K opens again; a click outside closes.
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-global-search]', { state: 'detached' });
+    await page.keyboard.press('Control+k');
+    await input.waitFor();
+    await page.mouse.click(10, viewports[size].height - 10);
+    await page.waitForSelector('[data-global-search]', { state: 'detached' });
+    // Keyboard: arrows and Enter open the highlighted page.
+    await page.keyboard.press('Control+k'); await input.fill('planned abs');
+    await page.waitForSelector('[data-search-group="PAGES"] a');
+    await page.keyboard.press('ArrowDown');
+    await Promise.all([page.waitForURL(/\/staff\/attendance\/planned-absences/), page.keyboard.press('Enter')]);
+    await ctx.close();
+  });
+}
 await check('view switch saves the personal preference', async () => {
   theme = 'modern'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/work');
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
