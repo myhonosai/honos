@@ -49,5 +49,7 @@ Next release (prepared, not released): adds the webhook subscriptions and the op
 unchanged, nothing `(removed)`. Before releasing it, HON's live API must already answer
 `POST https://app.myhonos.com/api/v1/commerce/webhooks/shopify` (an unsigned request gets 401), or Shopify will retry
 and eventually drop the subscriptions.
+The `orders/*` topics carry customer data: Shopify needs protected customer data access approved for the app in the
+Dev Dashboard (API access requests) first, or the deploy can refuse those subscriptions.
 
 HON's API needs the same Client ID as `SHOPIFY_API_KEY` to build the theme editor links; nothing else changes on HON's side.
