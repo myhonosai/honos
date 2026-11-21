@@ -399,7 +399,8 @@ about a provider's catalog, prices or delivery.
   (`inventoryItem.inventoryLevels(first: 2) { nodes { location { fulfillmentService { serviceName type } } } }`), which the
   `read_inventory` scope HON already holds covers. The page size went from 100 to 50 variants to stay well inside Shopify's
   single-query cost limit. The first service of type `THIRD_PARTY` gives the name (trimmed, at most 64 characters);
-  otherwise the variant is the school's. A single-product read-back and a product webhook do not ask, and leave the key out.
+  otherwise the variant is the school's. Known limits: a provider ranked third or later among a variant's locations is
+  missed, and a name HON cannot keep (empty after cleaning) leaves the variant shown as school stock. A single-product read-back and a product webhook do not ask, and leave the key out.
 - **Store.** `hon.shopify_variants.fulfilled_by` (text, NULL = the school). `fulfilledBy` is an optional variant key in
   `hon.shopify_apply_page`, `hon.shopify_product_item_ok` and `hon.shopify_mirror_product`; a variant sent without the key
   keeps its value. `hon.shopify_fulfilled_by_ok(jsonb)` is the closed name check (no runtime grant).
