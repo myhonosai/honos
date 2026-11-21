@@ -2342,7 +2342,7 @@ for (const [name, viewport] of [['desktop-1440', { width: 1440, height: 900 }], 
     const dialog = section().getByRole('dialog', { name: 'Edit profile' });
     await dialog.waitFor();
     assert.equal(await dialog.getByRole('button', { name: 'Close' }).evaluate((el) => el === document.activeElement), true, 'focus moves into the pop-up');
-    await noOverflow(page, `people-profile-popup-${name}`); await axe(page, `people-profile-popup-${name}`); await shot(page, `people-profile-popup-${name}`, true);
+    await shot(page, `people-profile-popup-${name}`); await noOverflow(page, `people-profile-popup-${name}`); await axe(page, `people-profile-popup-${name}`);
     await dialog.locator('input[name="familyName"]').fill('Rivera-Lopez');
     await dialog.getByRole('button', { name: 'Save changes' }).click();
     await dialog.getByText('Saved. Changed: last name.').waitFor();
