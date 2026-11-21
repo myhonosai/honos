@@ -12,6 +12,7 @@ import { verifyParentBillingView, type ParentBillingView } from '@hon/contracts/
 import { verifyParentClassPassView, type ParentClassPassView } from '@hon/contracts/parent-classpass-view';
 import { verifyParentTestingStatusView, type ParentTestingStatusView } from '@hon/contracts/parent-testing-status';
 import { verifyParentCurriculumLibrary, type ParentCurriculumLibrary } from '@hon/contracts/curriculum-resource-library';
+import { verifyParentCurriculumApp, type ParentCurriculumApp } from '@hon/contracts/parent-app-curriculum';
 import {
   validateBookParentSchoolBookingTypeInput, validateBookParentSchoolEventSlotInput, validateCancelParentSchoolBookingInput,
   verifyParentSchoolBookingReceipt, verifyParentSchoolBookings,
@@ -264,6 +265,8 @@ export function createParentApi(options: ParentApiOptions) {
     classPass: (): Promise<ParentRead<ParentClassPassView>> => get('/v1/parent/classpass', dataOf(verifyParentClassPassView)),
     testingStatus: (): Promise<ParentRead<ParentTestingStatusView>> => get('/v1/parent/testing/status', dataOf(verifyParentTestingStatusView)),
     curriculumLibrary: (): Promise<ParentRead<ParentCurriculumLibrary>> => get('/v1/parent/curriculum-library', dataOf(verifyParentCurriculumLibrary)),
+    /** The Curriculum screen (0610): per child, the current rank or cycle and the material the school shares for it. No ids. */
+    curriculumApp: (): Promise<ParentRead<ParentCurriculumApp>> => get('/v1/parent/curriculum-app', dataOf(verifyParentCurriculumApp)),
     /** Whether Eian answers with the school's AI right now (AI) or only with guided answers (GUIDED), with a closed reason. */
     eianStatus: (): Promise<ParentRead<EianStatus>> => get('/v1/parent/eian/status', dataOf(verifyEianStatus)),
     /**

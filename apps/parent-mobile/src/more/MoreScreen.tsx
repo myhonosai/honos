@@ -10,6 +10,7 @@ import { Body, Button, Card, Loading, Pill, Section, StateMessage, Title, BackBu
 import { Icon, type IconName } from '../ui/icons';
 import { radius, space, TOUCH, type, useColors, EDGE, type Colors } from '../ui/theme';
 import { CheckoutArea } from './CheckoutArea';
+import { CurriculumArea } from './CurriculumArea';
 import { EventsArea } from './EventsArea';
 import { ProShopArea } from './ProShopArea';
 import { ReferArea } from './ReferArea';
@@ -23,7 +24,7 @@ const AREAS: { key: Area; title: string; blurb: string; icon: IconName; tone: To
   { key: 'passes', title: 'Class passes', blurb: 'Passes and uses left', icon: 'pass', tone: 'cyan' },
   { key: 'testing', title: 'Belt testing', blurb: 'Upcoming tests and results', icon: 'trophy', tone: 'sun' },
   { key: 'shop', title: 'Pro shop', blurb: 'Gear and uniforms from your school', icon: 'bag', tone: 'coral' },
-  { key: 'library', title: 'Learning library', blurb: 'Videos and links from your school', icon: 'book', tone: 'pink' },
+  { key: 'library', title: 'Curriculum', blurb: 'What your child is learning now', icon: 'book', tone: 'pink' },
   { key: 'refer', title: 'Refer a friend', blurb: 'Share your link and see your rewards', icon: 'gift', tone: 'sun' },
 ];
 type Tone = 'violet' | 'lime' | 'accent' | 'cyan' | 'sun' | 'coral' | 'pink';
@@ -62,7 +63,7 @@ export function MoreScreen({ onSignOut, version, openArea = null, openAt = 0 }: 
       <Title>{current ? current.title : 'Account'}</Title>
       {current ? (
         <View>
-          {area === 'events' ? <EventsArea /> : area === 'checkout' ? <CheckoutArea /> : area === 'billing' ? <BillingArea /> : area === 'passes' ? <PassesArea /> : area === 'testing' ? <TestingArea /> : area === 'shop' ? <ProShopArea /> : area === 'refer' ? <ReferArea /> : <LibraryArea />}
+          {area === 'events' ? <EventsArea /> : area === 'checkout' ? <CheckoutArea /> : area === 'billing' ? <BillingArea /> : area === 'passes' ? <PassesArea /> : area === 'testing' ? <TestingArea /> : area === 'shop' ? <ProShopArea /> : area === 'refer' ? <ReferArea /> : <CurriculumArea />}
         </View>
       ) : (
         <View style={{ marginTop: space.lg }}>
@@ -269,31 +270,6 @@ function TestingArea() {
         );
       })}
       <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.md }}>Results come from your school's records. Your instructor decides readiness for testing.</Text>
-    </View>
-  );
-}
-
-function LibraryArea() {
-  const { api } = useFamily();
-  const c = useColors();
-  const { read, reload } = useRead(api.curriculumLibrary);
-  if (!read) return <Loading label="Loading the learning library" />;
-  if (!read.ok) return <Unavailable what="The learning library" reload={reload} />;
-  const items = read.data.resources;
-  if (!items.length) return <Card style={{ marginTop: space.lg }}><Body muted>Your school has not shared any videos or links yet.</Body></Card>;
-  return (
-    <View style={{ marginTop: space.lg }}>
-      {items.map((r, i) => (
-        <Card key={`r-${i}`} label={`${r.title} for ${r.childDisplayName}`}>
-          <Text style={{ color: c.muted, fontSize: type.caption, fontWeight: '700' }}>{r.kind === 'VIDEO' ? 'VIDEO' : 'LINK'} · {r.childDisplayName.toUpperCase()}</Text>
-          <Text style={{ color: c.text, fontSize: type.title, fontWeight: '700', marginTop: space.xs }}>{r.title}</Text>
-          <Text style={{ color: c.muted }}>{r.curriculumName}{r.rankName ? ` · ${r.rankName}` : ''}</Text>
-          {r.description ? <View style={{ marginTop: space.sm }}><Body>{r.description}</Body></View> : null}
-          {/^https:\/\//.test(r.url) ? <View style={{ marginTop: space.md, alignSelf: 'flex-start' }}>
-            <Button kind="quiet" label={r.kind === 'VIDEO' ? 'Watch' : 'Open link'} accessibilityLabel={`Open ${r.title}`} onPress={() => { void WebBrowser.openBrowserAsync(r.url); }} />
-          </View> : null}
-        </Card>
-      ))}
     </View>
   );
 }

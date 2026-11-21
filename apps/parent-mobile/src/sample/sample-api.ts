@@ -6,6 +6,7 @@ import { verifyParentBillingView } from '@hon/contracts/parent-billing-view';
 import { verifyParentClassPassView } from '@hon/contracts/parent-classpass-view';
 import { verifyParentTestingStatusView } from '@hon/contracts/parent-testing-status';
 import { verifyParentCurriculumLibrary } from '@hon/contracts/curriculum-resource-library';
+import { verifyParentCurriculumApp } from '@hon/contracts/parent-app-curriculum';
 import { verifyParentSchoolBookingReceipt, verifyParentSchoolBookings, type ParentSchoolBooking } from '@hon/contracts/parent-school-bookings';
 import { verifyParentInvoicePayments } from '@hon/contracts/parent-invoice-pay';
 import { verifyParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
@@ -195,6 +196,23 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
     curriculumLibrary: () => ok(verifyParentCurriculumLibrary({ resources: [
       { title: 'Form 1 walkthrough', description: 'Practice the first form at home, step by step.', kind: 'VIDEO', url: 'https://www.myhonos.com/', curriculumName: 'Kids Program', rankName: 'Yellow Belt', childDisplayName: 'Mia Sample' },
       { title: 'Sparring safety basics', description: 'What to bring and how to stay safe.', kind: 'LINK', url: 'https://www.myhonos.com/', curriculumName: 'Junior Program', rankName: null, childDisplayName: 'Leo Sample' },
+    ] })),
+    // Sample curriculum: one rank-based program (Mia) and one cycle-based program (Leo). Invented, like the rest of the sample family.
+    curriculumApp: () => ok(verifyParentCurriculumApp({ children: [
+      { childDisplayName: 'Leo Sample', curricula: [{ curriculumName: 'Junior Program', mode: 'CYCLE', rank: null,
+        cycle: { name: 'Cycle 2: Kicks', startsOn: dayOf(-3), endsOn: dayOf(3), rotation: 'AUTO' }, next: { name: 'Cycle 3: Forms', startsOn: dayOf(4) },
+        sections: [
+          { label: 'CURRENT', items: [{ title: 'Front kick drill', description: 'Ten slow kicks on each leg.', kind: 'VIDEO', url: 'https://www.myhonos.com/' }] },
+          { label: 'ALL', items: [{ title: 'Sparring safety basics', description: 'What to bring and how to stay safe.', kind: 'LINK', url: 'https://www.myhonos.com/' }] },
+        ] }] },
+      { childDisplayName: 'Mia Sample', curricula: [{ curriculumName: 'Kids Program', mode: 'RANK', rank: { name: 'Yellow Belt', color: '#FFD400' }, cycle: null,
+        next: { name: 'Orange Belt', startsOn: null },
+        sections: [
+          { label: 'CURRENT', items: [
+            { title: 'Form 1 walkthrough', description: 'Practice the first form at home, step by step.', kind: 'VIDEO', url: 'https://www.myhonos.com/' },
+            { title: 'Yellow belt checklist', description: 'What your instructor looks for at this rank.', kind: 'DOCUMENT', url: 'https://www.myhonos.com/' }] },
+          { label: 'NEXT', items: [{ title: 'Orange belt preview', description: '', kind: 'VIDEO', url: 'https://www.myhonos.com/' }] },
+        ] }] },
     ] })),
     // The sample family never reaches HON's AI: Eian stays in guided mode and a question is refused locally.
     eianStatus: () => ok({ mode: 'GUIDED' as const, reason: 'NOT_INCLUDED' as const }),
