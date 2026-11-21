@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Text } from '../ui/text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,6 +8,7 @@ import { Button } from '../ui/parts';
 import { radius, space, TOUCH, type, useColors } from '../ui/theme';
 import { answer, classify, NEEDS, SUGGESTIONS, type EianAnswer, type EianFacts, type EianTab } from './eian-engine';
 import { askEianAi } from './eian-ai';
+import { EianVoiceContext, spokenText, VOICE_NOTE } from './voice';
 import { EIAN_STYLES, eianImage, STYLE_LABEL, type EianMood, type EianStyle } from './avatar';
 
 type Turn = { id: number; question: string; reply: EianAnswer };
@@ -29,8 +30,12 @@ function greeting(now: Date, timeZone: string | null): string {
  * books, sends or pays, and offers the normal screen instead, where the parent confirms. When HON says AI is on for this school, a question
  * the guided engine does not recognize goes to Eian AI (answered from the family's own records on the server); guided
  * answers stay on the device. `focusTick` changes each time the tab gains focus, so the AI status is read again.
+ *
+ * Voice (when the phone supplies it): the microphone hears one question per tap and asks it exactly like a typed one;
+ * an answer to a spoken question is read aloud, and any answer can be read aloud on request. Leaving the screen stops
+ * both. `active` is false while another tab is showing.
  */
-export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0 }: { onNavigate: (tab: EianTab) => void; initialStyle?: EianStyle; focusTick?: number }) {
+export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, active = true }: { onNavigate: (tab: EianTab) => void; initialStyle?: EianStyle; focusTick?: number; active?: boolean }) {
   const { api, now, state, newKey } = useFamily();
   const c = useColors();
   const insets = useSafeAreaInsets();
@@ -44,6 +49,29 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0 }
   /** The key of a question whose outcome is not known yet: the same question re-asks with it, never a fresh key. */
   const pending = useRef<{ question: string; key: string } | null>(null);
   const ready = state.status === 'ready';
+  const voice = useContext(EianVoiceContext);
+  const [listening, setListening] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [voiceNote, setVoiceNote] = useState<string | null>(null);
+  const hearing = useRef<{ stop(): void; cancel(): void } | null>(null);
+  const canListen = useMemo(() => Boolean(voice?.canListen()), [voice]);
+
+  /** True only while this screen is the one showing, for a signed-in family. An answer that arrives later is not read. */
+  const live = useRef(false);
+  live.current = active && ready;
+  const quiet = () => { voice?.stopSpeaking(); setReading(false); };
+  const read = (reply: EianAnswer) => {
+    if (!voice || !live.current) return;
+    setReading(true);
+    voice.speak(spokenText(reply), () => setReading(false));
+  };
+  // Nothing keeps listening or talking once the parent leaves Eian or signs out.
+  useEffect(() => {
+    if (active && ready) return;
+    hearing.current?.cancel(); hearing.current = null; setListening(false);
+    voice?.stopSpeaking(); setReading(false);
+  }, [active, ready, voice]);
+  useEffect(() => () => { live.current = false; hearing.current?.cancel(); voice?.stopSpeaking(); }, [voice]);
 
   useEffect(() => {
     if (!ready) { setAi(false); return; }
@@ -58,10 +86,12 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0 }
     return { intent: 'next-class', lines: [greeting(now(), state.timeZone), ...next.lines], source: next.source, action: next.action } as EianAnswer;
   }, [state, now]);
 
-  const ask = async (question: string) => {
+  const ask = async (question: string, spoken = false) => {
     const q = question.trim().slice(0, 300);
     if (!q || busy || state.status !== 'ready') return;
     setDraft('');
+    setVoiceNote(null);
+    quiet();
     setBusy(true);
     const intent = classify(q);
     if (intent === 'help' && ai) {
@@ -73,6 +103,7 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0 }
         setTurns(t => [...t.slice(-9), { id: ++counter.current, question: q, reply: outcome.answer }]);
         setMood('speaking');
         setBusy(false);
+        if (spoken) read(outcome.answer);
         return;
       }
       if (outcome.aiOff) setAi(false);
@@ -87,6 +118,25 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0 }
     setTurns(t => [...t.slice(-9), { id: ++counter.current, question: q, reply }]);
     setMood('speaking');
     setBusy(false);
+    if (spoken) read(reply);
+  };
+
+  const listen = () => {
+    if (!voice || busy) return;
+    if (hearing.current) { hearing.current.stop(); return; }
+    quiet();
+    setVoiceNote(null);
+    setDraft('');
+    setListening(true);
+    hearing.current = voice.listen({
+      partial: text => setDraft(text.slice(0, 300)),
+      end: result => {
+        hearing.current = null;
+        setListening(false);
+        if (result.kind === 'heard') void ask(result.text, true);
+        else { setDraft(''); setVoiceNote(VOICE_NOTE[result.kind]); }
+      },
+    });
   };
 
   if (state.status !== 'ready') {
@@ -115,6 +165,12 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0 }
               {speech.lines.map((line, i) => <Text key={i} style={{ color: c.text, fontSize: type.body, lineHeight: 22, fontWeight: i === 0 && !latest ? '700' : '400', marginTop: i ? space.xs : 0 }}>{line}</Text>)}
               {speech.source ? <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.sm }}>From: {speech.source}</Text> : null}
               {speech.action ? <View style={{ marginTop: space.md, alignSelf: 'flex-start' }}><Button kind="quiet" label={speech.action.label} onPress={() => onNavigate(speech.action!.tab)} /></View> : null}
+              {voice ? (
+                <Pressable accessibilityRole="button" accessibilityLabel={reading ? 'Stop reading aloud' : "Read Eian's answer aloud"} onPress={() => (reading ? quiet() : read(speech))} hitSlop={8}
+                  style={{ alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', marginTop: space.sm }}>
+                  <Text style={{ color: c.accent, fontSize: type.caption, fontWeight: '700' }}>{reading ? '■ Stop' : '▶ Read aloud'}</Text>
+                </Pressable>
+              ) : null}
             </View>
           )}
         </View>
@@ -134,11 +190,19 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0 }
       </View>
 
       <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.lg, alignItems: 'center' }}>
-        <TextInput accessibilityLabel="Ask Eian" value={draft} onChangeText={setDraft} maxLength={300} placeholder="Ask a question" placeholderTextColor={c.subtle}
-          onSubmitEditing={() => void ask(draft)} returnKeyType="send" editable={!busy}
+        <TextInput accessibilityLabel="Ask Eian" value={draft} onChangeText={setDraft} maxLength={300} placeholder={listening ? 'Listening…' : 'Ask a question'} placeholderTextColor={c.subtle}
+          onSubmitEditing={() => void ask(draft)} returnKeyType="send" editable={!busy && !listening}
           style={{ flex: 1, minWidth: 0, minHeight: TOUCH, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, color: c.text, paddingHorizontal: space.lg, fontSize: type.body }} />
+        {canListen ? (
+          <Pressable accessibilityRole="button" accessibilityLabel={listening ? 'Stop listening' : 'Ask Eian by voice'} accessibilityState={{ selected: listening, disabled: busy }} disabled={busy} onPress={listen}
+            style={({ pressed }) => ({ width: TOUCH, height: TOUCH, borderRadius: TOUCH / 2, alignItems: 'center', justifyContent: 'center', borderWidth: 2,
+              borderColor: listening ? c.accent : c.border, backgroundColor: listening ? c.accentSoft : c.surface, opacity: busy ? 0.5 : pressed ? 0.8 : 1 })}>
+            <Text style={{ color: c.accent, fontSize: 20, lineHeight: 24, fontWeight: '800' }}>{listening ? '■' : '🎤'}</Text>
+          </Pressable>
+        ) : null}
         <Button label="Ask" accessibilityLabel="Send question to Eian" onPress={() => void ask(draft)} />
       </View>
+      {voiceNote ? <Text accessibilityLiveRegion="polite" style={{ color: c.muted, fontSize: type.caption, marginTop: space.sm }}>{voiceNote}</Text> : null}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.md }}>
         {SUGGESTIONS.filter(s => !TILES.some(t => t.question === s)).map(s => (
           <Pressable key={s} accessibilityRole="button" accessibilityLabel={`Ask Eian: ${s}`} onPress={() => void ask(s)}
@@ -173,6 +237,9 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0 }
       <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.lg }}>{ai
         ? "Eian answers common family questions on your phone. Other questions are answered by AI from your school's records, and those answers are marked AI. Eian never pays, books or sends anything by itself."
         : "Eian understands common family questions and answers only from your school's records. It never pays, books or sends anything by itself."}</Text>
+      {voice ? <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.sm }}>{canListen
+        ? "The microphone is on only after you tap it, for one question at a time. Your phone's speech service (Apple or Google) may send your spoken question off the phone to turn it into text. HON gets only the text. Reading aloud uses your phone's own voice."
+        : "Reading aloud uses your phone's own voice."}</Text> : null}
     </ScrollView>
   );
 }

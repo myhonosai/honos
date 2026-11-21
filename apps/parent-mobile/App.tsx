@@ -11,6 +11,7 @@ import { signIn } from './src/session/sign-in';
 import { ParentApp } from './src/ParentApp';
 import { createSampleApi } from './src/sample/sample-api';
 import { createExpoPhonePush } from './src/push/expo-push';
+import { createExpoEianVoice } from './src/eian/expo-voice';
 import { useFonts, Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold, Nunito_800ExtraBold, Nunito_900Black } from '@expo-google-fonts/nunito';
 import { FontsReadyProvider } from './src/ui/text';
 
@@ -21,6 +22,7 @@ const WEB = process.env.EXPO_PUBLIC_HON_WEB_URL ?? '';
 const SAMPLE = process.env.EXPO_PUBLIC_HON_SAMPLE_MODE === '1';
 // Announcement notifications (0601): the phone registers on sign-in; nothing is sent until the school server is approved to send.
 const PUSH = createExpoPhonePush(appConfig.expo.extra.eas.projectId);
+const VOICE = createExpoEianVoice();
 
 function webOrigin(raw: string): string | null {
   try {
@@ -57,7 +59,7 @@ export default function App() {
   return (
     <FontsReadyProvider value={fontsLoaded}>
       <StatusBar style="auto" />
-      <ParentApp api={api} session={session} version={appConfig.expo.version} onSignIn={onSignIn} sampleApi={SAMPLE ? () => createSampleApi() : undefined} newKey={() => Crypto.randomUUID()} push={PUSH} />
+      <ParentApp api={api} session={session} version={appConfig.expo.version} onSignIn={onSignIn} sampleApi={SAMPLE ? () => createSampleApi() : undefined} newKey={() => Crypto.randomUUID()} push={PUSH} voice={VOICE} />
     </FontsReadyProvider>
   );
 }

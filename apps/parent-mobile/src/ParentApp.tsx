@@ -11,6 +11,7 @@ import { registerPhone, unregisterPhone, type PhonePush } from './push/push';
 import { HomeScreen } from './screens/HomeScreen';
 import { ScheduleScreen, SignInScreen } from './screens/OtherTabs';
 import { EianScreen } from './eian/EianScreen';
+import { EianVoiceContext, type EianVoice } from './eian/voice';
 import { MoreScreen, type Area as MoreArea } from './more/MoreScreen';
 import { MessagesScreen } from './messages/MessagesScreen';
 import { Loading } from './ui/parts';
@@ -35,9 +36,11 @@ export interface ParentAppProps {
   sampleApi?: () => ParentApi;
   /** Announcement notifications on this phone (0601). Omitted where the phone cannot receive them. */
   push?: PhonePush | null;
+  /** Eian's voice from the phone; without it Eian is text only. */
+  voice?: EianVoice | null;
 }
 
-export function ParentApp({ api, session, now = () => new Date(), version = '0.1.0', onSignIn, newKey = missingKeySource, sampleApi, push }: ParentAppProps) {
+export function ParentApp({ api, session, now = () => new Date(), version = '0.1.0', onSignIn, newKey = missingKeySource, sampleApi, push, voice = null }: ParentAppProps) {
   const [sample, setSample] = useState<ParentApi | null>(null);
   const [token, setToken] = useState<string | null | undefined>(undefined);
   useEffect(() => {
@@ -60,6 +63,7 @@ export function ParentApp({ api, session, now = () => new Date(), version = '0.1
   useEffect(() => (signedIn && push ? push.onOpenAnnouncement(() => setOpened(n => n + 1)) : undefined), [signedIn, push]);
 
   return (
+    <EianVoiceContext.Provider value={voice}>
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
       {token === undefined ? <Loading label="Starting HON" />
         : sample ? (
@@ -78,6 +82,7 @@ export function ParentApp({ api, session, now = () => new Date(), version = '0.1
           </FamilyProvider>
         )}
     </SafeAreaProvider>
+    </EianVoiceContext.Provider>
   );
 }
 
@@ -121,8 +126,9 @@ function missingKeySource(): string { throw new Error('No Idempotency-Key source
 function EianFromTab() {
   const navigation = useNavigation<{ navigate: (tab: keyof Tabs) => void }>();
   const [focusTick, setFocusTick] = useState(0);
-  useFocusEffect(useCallback(() => { setFocusTick(n => n + 1); }, []));
-  return <EianScreen onNavigate={tab => navigation.navigate(tab)} focusTick={focusTick} />;
+  const [active, setActive] = useState(false);
+  useFocusEffect(useCallback(() => { setFocusTick(n => n + 1); setActive(true); return () => setActive(false); }, []));
+  return <EianScreen onNavigate={tab => navigation.navigate(tab)} focusTick={focusTick} active={active} />;
 }
 
 function HomeFromTab() {
