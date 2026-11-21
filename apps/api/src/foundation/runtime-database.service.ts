@@ -1564,7 +1564,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
   }
 
   /** 0612 Point of Sale: fixed definer functions; the subject comes only from the signed HON session. */
-  async callSchoolPos(operation: 'read'|'sales'|'sale'|'settings'|'item'|'stock'|'record'|'refund', params: readonly (string|null)[]): Promise<unknown> {
+  async callSchoolPos(operation: 'read'|'sales'|'sale'|'settings'|'item'|'stock'|'record'|'refund'|'shopifyStockBegin'|'shopifyStockRotate'|'shopifyStockFinish', params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
       read: {sql: 'SELECT hon.read_pos($1,$2::uuid) data',arity:2,readOnly:true},
       sales: {sql: 'SELECT hon.read_pos_sales($1,$2::uuid,$3::date,$4::date) data',arity:4,readOnly:true},
@@ -1574,6 +1574,10 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       stock: {sql: 'SELECT hon.adjust_pos_stock($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
       record: {sql: 'SELECT hon.record_pos_sale($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
       refund: {sql: 'SELECT hon.refund_pos_sale($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      // 0613: the Shopify stock changes a sale or refund owes the school's store.
+      shopifyStockBegin: {sql: 'SELECT hon.begin_pos_shopify_stock($1,$2::jsonb) data',arity:2,readOnly:false},
+      shopifyStockRotate: {sql: 'SELECT hon.rotate_pos_shopify_credential($1,$2::jsonb) data',arity:2,readOnly:false},
+      shopifyStockFinish: {sql: 'SELECT hon.finish_pos_shopify_stock($1,$2::jsonb) data',arity:2,readOnly:false},
     } as const;
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('POS_UNAVAILABLE');

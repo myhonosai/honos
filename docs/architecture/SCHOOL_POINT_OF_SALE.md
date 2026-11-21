@@ -78,3 +78,59 @@ and amounts only (`pos.sale.recorded`, `pos.sale.refunded`, `pos.item.saved`, `p
 3. Web: `/staff/billing/pos` with Register / History / Inventory tabs, menu entry "Point of Sale" next to Checkout
    pages, UI test.
 4. Run focused tests, `pnpm check`, build; independent review; PR.
+
+## Shopify products at the register (SH2, migration 0613)
+
+Owner decision (David, 2026-11-21): "Stock now, orders later." A front-desk sale of a Shopify product lowers the count
+in Shopify right away. HON does **not** create a Shopify order: that needs a permission the app does not have
+(`write_orders`), so it waits for the owner's approval. Until then Shopify's own sales reports do not include
+front-desk sales; HON's History and report do.
+
+### What staff see
+
+- **Register**: under the school's own tiles, "From your Shopify store: <name>" lists the store's products. They show
+  only when the school's store is connected, allows editing (`write_inventory`), and uses the register's currency. If
+  not, one plain line says why (read-only connection, or a different currency) and nothing from Shopify is sold.
+- Listed: ACTIVE products the school stocks itself. Never drafts, archived or removed variants, or items a print
+  provider makes (PD1 `fulfilled_by`): a provider ships those to the buyer, the desk has nothing to hand over.
+- The tile shows Shopify's count ("3 in Shopify"). A Shopify line is **never refused for stock**: the mirror can be
+  behind the shelf, and the member is standing at the desk.
+- Shopify lines are taxed at the register rate (the mirror has no per-product tax flag; known limit).
+- **Receipt / History**: the line reads like any other. Under the receipt (not printed): whether Shopify's count was
+  updated, is still being sent, or was not updated.
+- **Shopify stock is behind**: when any change has not reached Shopify, the Register says how many. A manager
+  (`pos.manage`) gets **Send again**. Sales are never held up by Shopify.
+- **Refund**: "Put back on the shelf" for a Shopify line raises Shopify's count again.
+
+### How it works
+
+1. `record_pos_sale` accepts a third line shape `{shopifyVariantId, quantity}`. Name, SKU and price come from the mirror
+   of the school's CONNECTED store, inside the same transaction that prices the sale; the total-changed check covers a
+   Shopify price change. A variant that is not sellable answers `POS_ITEM_UNAVAILABLE` and nothing is written.
+2. Each counted Shopify line queues one row in `hon.pos_shopify_stock_tasks` (change = minus the quantity; a refund
+   restock queues plus the quantity). Rows are evidence: guarded, forced RLS, no client privilege.
+3. After the sale answers, the API sends the waiting changes with the seller's own authority
+   (`begin_pos_shopify_stock` hands the sealed credential and at most 20 changes; `finish_pos_shopify_stock` records
+   each outcome; `rotate_pos_shopify_credential` stores a refreshed token under the handed version). One Shopify call
+   per change: `inventoryAdjustQuantities` with `@idempotent(key: <task id>)`, so a change whose answer was lost is sent
+   again and Shopify applies it once.
+4. Where: the variant's one own, active location (not a fulfilment service). None or more than one is refused
+   (`NO_LOCATION`, `MULTIPLE_LOCATIONS`) rather than guessed.
+5. Outcomes: DONE (the mirror count moves with it); FAILED when Shopify refuses the change or the token; anything
+   uncertain stays waiting and is tried again with the next sale, up to 5 attempts, then FAILED. FAILED changes move
+   only when a manager presses Send again (`POST /v1/school/pos/shopify-stock`).
+6. The register's Shopify count is the mirror count plus the changes still waiting, so two sales in a row do not show
+   stale stock.
+7. A store disconnected while changes wait: the sale stays recorded; the changes are settled as FAILED.
+
+### Known limits (0613)
+
+- No Shopify order, so Shopify analytics miss front-desk sales (waits for `write_orders` and the owner).
+- A store with several own locations cannot be adjusted (the change fails with a clear reason). Location choice is a
+  later setting.
+- No background worker: waiting changes move on the next sale or a manager's Send again.
+- A rejected token fails the change but does not yet flip the connection to "Needs reconnect".
+- Shopify lines are always taxed at the register rate.
+
+Proofs: `test-pos-shopify-integrity.mjs` (9 groups, signed HTTP against the scripted Shopify), `test-pos-integrity.mjs`
+(unchanged behaviour of 0612), API `school-pos.test.cjs`, web `school-pos-ui.test.tsx`.

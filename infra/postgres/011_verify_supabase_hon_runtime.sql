@@ -5912,16 +5912,16 @@ BEGIN
         OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
       RAISE EXCEPTION 'Unsafe point of sale helper: %',f; END IF;
   END LOOP;
-  -- Fixed bodies, search path and volatility for the entry points, the authority check and the evidence guard (0612).
+  -- Fixed bodies, search path and volatility for the entry points, the authority check and the evidence guard (0612; read, sale and refund as replaced by 0613).
   FOR f,t,c IN SELECT * FROM (VALUES
-    ('hon.read_pos(text,uuid)','8ad099fd0074eb80c056356be67f9f86','s'),
+    ('hon.read_pos(text,uuid)','1a313ce74422460de62e4b6382cba43d','s'),
     ('hon.read_pos_sales(text,uuid,date,date)','f7f313cf6f4426fd3acae2e94f137dd4','s'),
     ('hon.read_pos_sale(text,uuid,uuid)','014b642fc8785f482c477c4fb3f8fbb5','s'),
     ('hon.save_pos_settings(text,jsonb,uuid)','d20a8db67825e726102b9d6a87fa76a6','v'),
     ('hon.save_pos_item(text,jsonb,uuid)','d17777ebf701687429c64f99f0d4af9f','v'),
     ('hon.adjust_pos_stock(text,jsonb,uuid)','cd3cb6a8cc2b3b80b1e96d1082a5445f','v'),
-    ('hon.record_pos_sale(text,jsonb,uuid)','d08b47c898d403780d8571a64e998fe6','v'),
-    ('hon.refund_pos_sale(text,jsonb,uuid)','653106945872cd8ddcf4951ba4f937fa','v'),
+    ('hon.record_pos_sale(text,jsonb,uuid)','2b3aad107cf4011c84c82dbfe244d868','v'),
+    ('hon.refund_pos_sale(text,jsonb,uuid)','28f35e89bcfa719735deb88667f492da','v'),
     ('hon.pos_actor(text,uuid,boolean)','57d43091144edb5833fdec72a0e06b91','s'),
     ('hon.pos_begin(text,text,jsonb,uuid,boolean)','4b4dc8ca1142e6c63b2b02a4ee7a4777','v'),
     ('hon.pos_finish(text,boolean,uuid,uuid,uuid,text,uuid,text,text,uuid,integer,jsonb,jsonb,jsonb)','b31626085f6ac12a5b2f4bbb30f33244','v'),
@@ -5947,3 +5947,41 @@ BEGIN
   END LOOP;
 END $$;
 -- End point of sale exact verification.
+
+-- Point of Sale sells Shopify products exact verification (0613)
+DO $$ DECLARE f text; t text; c text; d boolean;
+BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.begin_pos_shopify_stock(text,jsonb)','hon.rotate_pos_shopify_credential(text,jsonb)','hon.finish_pos_shopify_stock(text,jsonb)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe point of sale Shopify stock entry point: %',f; END IF;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.guard_pos_shopify_stock_task()'::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+    RAISE EXCEPTION 'Unsafe point of sale Shopify stock guard'; END IF;
+  FOR f,t,c,d IN SELECT * FROM (VALUES
+    ('hon.begin_pos_shopify_stock(text,jsonb)','530a08e72d6c82b4bd2551fe15ec8fac','v',true),
+    ('hon.rotate_pos_shopify_credential(text,jsonb)','b3b7a88d1bfb9f87cce958845031344a','v',true),
+    ('hon.finish_pos_shopify_stock(text,jsonb)','981da94f2c43499f4f3b1a047f6dc284','v',true),
+    ('hon.pos_sale_json(hon.pos_sales)','fab89ce185941fcb59791a07dc3a3fc0','s',false),
+    ('hon.pos_shopify_minor(numeric,text)','994396a441c8673b358ef5cbaea9e228','i',false),
+    ('hon.pos_shopify_source(uuid,text)','650e195141e3f0932e333a39a14f8f48','s',false),
+    ('hon.pos_shopify_stock_json(uuid)','a0373e2faad0411301d657e31fe50260','s',false),
+    ('hon.pos_shopify_line_name(text,text)','dfc3f5d05160f392a2aa635a066eba90','i',false),
+    ('hon.guard_pos_shopify_stock_task()','ee6d062f93f015e3e85beeb8f34bbfe4','v',false)) x LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND md5(p.prosrc)=t AND p.provolatile=c AND p.prosecdef=d
+        AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']) THEN
+      RAISE EXCEPTION 'Point of sale Shopify function body/posture drift: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.pos_shopify_stock_tasks'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.pos_shopify_stock_tasks'::regclass)
+    OR has_table_privilege('hon_runtime','hon.pos_shopify_stock_tasks','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.pos_shopify_stock_tasks','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe point of sale Shopify stock table';
+  END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.pos_shopify_stock_tasks'::regclass AND tgfoid='hon.guard_pos_shopify_stock_task()'::regprocedure AND tgenabled='O' AND NOT tgisinternal)<2 THEN
+    RAISE EXCEPTION 'Point of sale Shopify stock guard missing'; END IF;
+END $$;
+-- End point of sale sells Shopify products exact verification.

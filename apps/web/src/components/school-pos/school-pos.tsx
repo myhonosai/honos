@@ -7,7 +7,7 @@ import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from 
 import { peopleApi, type PersonSummary } from '../people/http';
 import { PosError, keepPosForRetry, posApi, type PosApi, type PosCommand } from './http';
 import { EMPTY_CART, refreshCart, saleInput, type Cart } from './model';
-import { PosHistory, PosInventory, PosRegister, type Outcome } from './views';
+import { PosHistory, PosInventory, PosRegister, type Outcome, type StockSend } from './views';
 import styles from './pos.module.css';
 
 export type ReadState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; read: PosRead };
@@ -37,10 +37,11 @@ export function SchoolPos({ api = posApi, people = peopleApi }: { api?: PosApi; 
   const [sales, setSales] = useState<SalesState>({ state: 'IDLE' });
   const [selected, setSelected] = useState<PosSale | null>(null);
   const [found, setFound] = useState<readonly PersonSummary[] | null>(null);
+  const [stockSend, setStockSend] = useState<StockSend>('IDLE');
   const gen = useRef(0), privacy = useRef(0), mounted = useRef(false), pending = useRef<Pending | null>(null), sending = useRef(false), lastSchool = useRef<string | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; gen.current++; privacy.current++; pending.current = null; }; }, []);
 
-  const forget = useCallback(() => { setCart(EMPTY_CART); setReceipt(null); setSelected(null); setFound(null); setOutcome(null); setRange(null); setSales({ state: 'IDLE' }); }, []);
+  const forget = useCallback(() => { setCart(EMPTY_CART); setReceipt(null); setSelected(null); setFound(null); setOutcome(null); setRange(null); setSales({ state: 'IDLE' }); setStockSend('IDLE'); }, []);
   useEffect(() => onShellPrivacyEvent((event) => {
     concealShellPrivateNow(); gen.current++; privacy.current++;
     setOutcome(null); setRead({ state: 'LOADING' });
@@ -59,7 +60,7 @@ export function SchoolPos({ api = posApi, people = peopleApi }: { api?: PosApi; 
     const owned = () => mounted.current && current === gen.current && shown === privacy.current;
     const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
     api.read(schoolId, signal, owned).then(
-      (r) => { if (!owned()) return; setRead({ state: 'READY', read: r }); setCart(c => refreshCart(c, r.items)); setRange(x => x ?? { from: r.today, to: r.today }); },
+      (r) => { if (!owned()) return; setRead({ state: 'READY', read: r }); setCart(c => refreshCart(c, r.items, r.shopify.items)); setRange(x => x ?? { from: r.today, to: r.today }); },
       (e) => { if (owned() && !abort.signal.aborted) setRead({ state: e instanceof PosError && e.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
     return () => abort.abort();
   }, [api, schoolId, refresh]);
@@ -118,6 +119,15 @@ export function SchoolPos({ api = posApi, people = peopleApi }: { api?: PosApi; 
     api.sale(schoolId, saleId, AbortSignal.timeout(15000), () => mounted.current && shown === privacy.current).then(
       (s) => { if (mounted.current && shown === privacy.current) setSelected(s); }, () => { if (mounted.current) setSelected(null); });
   }, [api, schoolId]);
+  // 0613: a manager sends the Shopify stock changes that did not go through again. Not a sale: nothing is kept for retry.
+  const onResendStock = useCallback(() => {
+    if (!schoolId || stockSend === 'SENDING') return;
+    const shown = privacy.current, owned = () => mounted.current && shown === privacy.current;
+    setStockSend('SENDING');
+    api.resendShopifyStock(schoolId, AbortSignal.timeout(60000), owned).then(
+      (r) => { if (!owned()) return; setRead({ state: 'READY', read: r }); setCart(c => refreshCart(c, r.items, r.shopify.items)); setStockSend(r.shopify.unsent.waiting + r.shopify.unsent.failed === 0 ? 'DONE' : 'LEFT'); },
+      (e) => { if (owned()) setStockSend(e instanceof PosError && e.kind === 'DENIED' ? 'DENIED' : 'FAILED'); });
+  }, [api, schoolId, stockSend]);
   const onTab = (t: Tab) => { if (busy !== 'SENDING') { setTab(t); setOutcome(null); } };
 
   const ready = read.state === 'READY' ? read.read : null;
@@ -132,7 +142,7 @@ export function SchoolPos({ api = posApi, people = peopleApi }: { api?: PosApi; 
       onRange={setRange} onOpen={onOpenSale} onClose={() => setSelected(null)} onRun={run} onTryAgain={() => void send()}/>;
     if (tab === 'INVENTORY') return <PosInventory read={ready} outcome={outcome} locked={locked} canRetry={busy === 'KEPT'} onRun={run} onTryAgain={() => void send()}/>;
     return <PosRegister read={ready} cart={cart} receipt={receipt} outcome={outcome} locked={locked} canRetry={busy === 'KEPT'} found={found}
-      onCart={setCart} onSearchPeople={onSearchPeople} onClearFound={() => setFound(null)} onNewSale={() => { setReceipt(null); setOutcome(null); }}
+      onCart={setCart} onSearchPeople={onSearchPeople} onClearFound={() => setFound(null)} onNewSale={() => { setReceipt(null); setOutcome(null); }} stockSend={stockSend} onResendStock={onResendStock}
       onPay={(method: PosMethod, reference: string, note: string) => run({ op: 'sale', input: payInput(ready, cart, method, reference, note) })}
       onTryAgain={() => void send()}/>;
   })();

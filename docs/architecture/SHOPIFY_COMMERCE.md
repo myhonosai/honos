@@ -414,3 +414,12 @@ about a provider's catalog, prices or delivery.
 Evidence: `apps/api/test/shopify.test.cjs` (PD1), `apps/web/test/school-shopify-ui.test.tsx` (PD1),
 `packages/database/scripts/test-shopify-commerce-integrity.mjs` (group 4), and the 011 section "Shopify fulfilment source
 exact verification (0611, PD1)".
+
+## SH2: the front desk sells Shopify products (step 6; migration 0613)
+
+Full behaviour in [SCHOOL_POINT_OF_SALE.md](SCHOOL_POINT_OF_SALE.md#shopify-products-at-the-register-sh2-migration-0613).
+In short: the POS register lists the connected store's own-stock ACTIVE products; a sale is priced by the database from
+the mirror and queues one idempotent `inventoryAdjustQuantities` per counted line (refund restock raises it again).
+Uses the existing `write_inventory` scope; **no new scope and no Shopify order** (owner decision 2026-11-21, "stock
+now, orders later"; orders need `write_orders`). New adapter call `adjustInventory`; new entry points
+`begin_pos_shopify_stock`, `rotate_pos_shopify_credential`, `finish_pos_shopify_stock`.

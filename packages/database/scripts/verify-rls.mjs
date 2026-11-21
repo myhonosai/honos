@@ -215,6 +215,7 @@ const expectedRlsTables = [
   'pos_refunds',
   'pos_stock_moves',
   'pos_requests',
+  'pos_shopify_stock_tasks',
   'school_locations',
   'school_location_versions',
   'school_demo_data_sets',
