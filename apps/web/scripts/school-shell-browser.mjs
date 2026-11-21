@@ -50,6 +50,21 @@ const snapshot = (scope) => ({
   paymentAttempts: { inRangeByState: { PENDING: 0, PROCESSING: 1, SUCCEEDED: 118, FAILED: 3, REQUIRES_ACTION: 0, UNKNOWN: 0, REFUNDED: 1 } },
 });
 
+// Parent app > Curriculum synthetic fixtures (names and links are placeholders).
+const pcRes = (n, patch) => ({ id: id(1000 + n), curriculumId: id(960), rankId: null, cycleId: null, kind: 'VIDEO', url: `https://www.youtube.com/watch?v=sample${n}`, title: `Sample ${n}`, description: '', audience: 'PARENT', status: 'ACTIVE', version: 1, ...patch });
+const pcSettings = (patch) => ({ saved: true, version: 3, displayMode: 'CYCLE', showInApp: true, rankShowEarlier: false, rankShowNext: false, cycleRotation: 'AUTO', cycleAnchorDate: '2026-11-02', cycleLengthWeeks: 2, cycleShowNext: true, ...patch });
+const parentCurriculum = () => ({ timeZone: 'America/Los_Angeles', curricula: [
+  { id: id(960), name: 'Little Dragons', modelCode: 'ROTATIONAL', lifecycle: 'PUBLISHED', ranks: [],
+    app: { curriculumId: id(960), settings: pcSettings({}), cycles: [['Cycle 1: Stances', 961], ['Cycle 2: Kicks', 962], ['Cycle 3: Forms', 963]].map(([name, n], i) => ({ id: id(n), name, position: i + 1, version: 1 })),
+      cycleState: { today: '2026-11-19', current: { id: id(962), name: 'Cycle 2: Kicks', startsOn: '2026-11-16', endsOn: '2026-11-29' }, next: { id: id(963), name: 'Cycle 3: Forms', startsOn: '2026-11-30' } } },
+    resources: [pcRes(1, { cycleId: id(962), title: 'Front kick drill', description: 'Practice 10 each side.' }), pcRes(2, { cycleId: id(962), kind: 'DOCUMENT', title: 'Kicks checklist', url: 'https://drive.google.com/file/d/sample2' }),
+      pcRes(3, { cycleId: id(961), title: 'Horse stance' }), pcRes(4, { kind: 'LINK', title: 'Student handbook', url: 'https://example.com/handbook' })] },
+  { id: id(970), name: 'Adult Karate', modelCode: 'LINEAR', lifecycle: 'PUBLISHED', ranks: [['White', '#FFFFFF', 971], ['Yellow', '#FFD400', 972], ['Orange', '#FF8A00', 973]].map(([name, color, n], i) => ({ id: id(n), name, color, order: i + 1 })),
+    app: { curriculumId: id(970), settings: pcSettings({ displayMode: 'RANK', cycleRotation: 'STAFF_PICK', cycleAnchorDate: null, cycleLengthWeeks: null, rankShowNext: true }), cycles: [], cycleState: { today: '2026-11-19', current: null, next: null } },
+    resources: [pcRes(5, { curriculumId: id(970), rankId: id(971), title: 'White belt form' })] }] });
+const parentCurriculumPreview = () => ({ childDisplayName: 'Avery Sample', curricula: [{ curriculumName: 'Little Dragons', mode: 'CYCLE', rank: null, cycle: { name: 'Cycle 2: Kicks', startsOn: '2026-11-16', endsOn: '2026-11-29', rotation: 'AUTO' },
+  next: { name: 'Cycle 3: Forms', startsOn: '2026-11-30' }, sections: [{ label: 'CURRENT', items: [{ title: 'Front kick drill', description: 'Practice 10 each side.', kind: 'VIDEO', url: 'https://www.youtube.com/watch?v=sample1' },
+    { title: 'Kicks checklist', description: '', kind: 'DOCUMENT', url: 'https://drive.google.com/file/d/sample2' }] }, { label: 'ALL', items: [{ title: 'Student handbook', description: '', kind: 'LINK', url: 'https://example.com/handbook' }] }] }] });
 const day = 86_400_000, at = (offset) => new Date(Date.parse(iso()) + offset).toISOString();
 const win = (count, from, to) => ({ availability: 'AVAILABLE', windowFrom: at(from), windowTo: at(to), count });
 const commandCenter = (scope) => ({
@@ -161,6 +176,14 @@ function api(route) {
     if (path === `${prefix}/staff-roles/lists`) return json(route, 200, { data: { roles: [{ id: id(880), code: 'CUSTOM_FRONT_DESK', name: 'Front desk', version: 1, permissionCodes: ['school.view', 'crm.lead.read'] }], grants: [] }, meta: {} });
     if (path === `${prefix}/staff-roles/permissions`) return json(route, 200, { data: [['school.view', 'View the school', false], ['attendance.record', 'Record attendance', false], ['attendance.cards.manage', 'Choose how attendance cards look', true], ['crm.lead.read', 'Read leads', false], ['billing.refund.create', 'Create refunds', true]]
       .map(([code, description, sensitive]) => ({ code, description, sensitive })), meta: {} });
+    // Parent app > Curriculum (0605/0610): one cycle-based and one rank-based synthetic curriculum.
+    if (method === 'POST' && /\/parent-app\/curriculum\/[0-9a-f-]{36}\/cycles$/.test(path)) return json(route, 409, { code: 'CYCLE_NAME_TAKEN' });
+    if (path === `/api/v1/staff/schools/${scope.schoolId}/parent-app/curriculum`) return json(route, 200, { data: parentCurriculum(), meta: { requestId: id(990), correlationId: id(990), replayed: false } });
+    if (path === `/api/v1/staff/schools/${scope.schoolId}/parent-app/curriculum/preview/${id(820)}`) return json(route, 200, { data: parentCurriculumPreview(), meta: { requestId: id(991), correlationId: id(991), replayed: false } });
+    if (path === `${prefix}/journey-recommendations`) return json(route, 200, { data: { recommendations: [], programs: [], checkouts: [], events: [] }, meta: { requestId: id(992), correlationId: id(992), replayed: false } });
+    if (path === `${prefix}/pickers/enrollments`) return json(route, 200, { data: [['Avery', 'Sample'], ['Rowan', 'Example']].map(([givenName, familyName], i) => ({ enrollmentId: id(980 + i),
+      curriculumId: new URL(route.request().url()).searchParams.get('curriculumId') ?? id(960), curriculumName: 'Little Dragons', studentProfileId: id(820 + i), givenName, familyName, currentRankId: null, currentRankName: null, nextRankId: null, nextRankName: null, version: 1 })),
+      meta: { requestId: id(985), correlationId: id(985), limit: 50 } });
     if (path === `${prefix}/pickers/staff`) return json(route, 200, { data: [['Avery Sample', 870], ['Rowan Example', 871], ['Kim Placeholder', 872]]
       .map(([displayName, n]) => ({ principalId: id(n), displayName })), meta: { requestId: id(875), correlationId: id(875), limit: 200 } });
     if (path === `${prefix}/pickers/testing-candidates`) return json(route, 200, { data: [['Avery', 'Sample', 'PASSED'], ['Rowan', 'Example', 'PASSED'], ['Kim', 'Placeholder', 'DEFERRED']]
@@ -494,6 +517,27 @@ await check('Parent app is its own page laid out like the texts inbox (TE3a)', a
   await page.getByText('Thanks! Is there class on Friday?').waitFor();
   assert.equal(await page.locator('[data-compose]').count(), 0, 'no composer on the parent app page');
   await shot(page, 'te3a-parent-app-desktop'); await ctx.close();
+});
+for (const size of ['desktop', 'phone']) await check(`Parent app > Curriculum: cycle-based and rank-based setup, preview (${size})`, async () => {
+  theme = 'modern'; const { ctx, page } = await open(viewports[size], '/staff/parent-app/curriculum');
+  const posts = () => report.apiRequests.filter(r => r.startsWith('POST')).length, postsBefore = posts();
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByText('Now: Cycle 2: Kicks, through Sun, Nov 29.').waitFor();
+  assert.ok(await page.getByText('Not in the app yet').count() >= 1, 'cycle and document material is labeled');
+  await page.getByRole('combobox', { name: 'Student' }).selectOption({ label: 'Avery Sample · Little Dragons · No rank yet' });
+  await page.locator('[data-preview]').waitFor();
+  assert.equal(await page.getByRole('combobox', { name: 'Student' }).inputValue(), id(980), 'the picked student stays selected');
+  await page.getByText(/^No recommendations for .+ yet\.$/).waitFor();
+  assert.equal(posts(), postsBefore, 'nothing saved by looking');
+  await page.screenshot({ path: join(results, `pca3-cycle-${size}.png`), fullPage: true }); report.screenshots.push(`pca3-cycle-${size}.png`);
+  // A refused command keeps what was typed (review P3): the mock refuses every new cycle as a duplicate name.
+  await page.getByLabel('New cycle').fill('Cycle 2: Kicks'); await page.getByLabel('New cycle').press('Enter');
+  await page.getByRole('alert').filter({ hasText: 'already has that name' }).waitFor();
+  assert.equal(await page.getByLabel('New cycle').inputValue(), 'Cycle 2: Kicks', 'a refused cycle name stays in the field');
+  await page.getByRole('button', { name: /Adult Karate/ }).click();
+  await page.getByRole('heading', { name: 'Material by rank' }).waitFor();
+  await page.screenshot({ path: join(results, `pca3-rank-${size}.png`), fullPage: true }); report.screenshots.push(`pca3-rank-${size}.png`);
+  await ctx.close();
 });
 await check('Texts > Send: type a name, pick the contact, nothing sent before Send (TE3a)', async () => {
   theme = 'modern'; const { ctx, page } = await open(viewports.desktop, '/staff/texts/send');

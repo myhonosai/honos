@@ -421,6 +421,10 @@
       "title": "HON | Announcements"
     },
     {
+      "path": "/staff/parent-app/curriculum",
+      "title": "HON | Parent app curriculum"
+    },
+    {
       "path": "/staff/conversations",
       "title": "HON | Conversations"
     },
