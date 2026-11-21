@@ -290,7 +290,9 @@ try {
   const elsewhere = await blockOut(ids.otherSchool, holidayDay);
   const nextDay = await blockOut(ids.school, (await sql("SELECT ($1::date+1)::text d", [holidayDay])).rows[0].d);
   ok((await offeredNow('choices with unrelated block-outs')).includes(holiday), 'another school closing that day, or this school closing the next day, hides nothing');
-  const closed = await blockOut(ids.school, (await sql("SELECT ($1::date-2)::text d", [holidayDay])).rows[0].d, holidayDay);
+  // The break starts one day before the holiday class: the open mat is 70 hours earlier, so two days earlier in school
+  // time whenever the run starts in the last two hours of the school's day, and a break of three days would hide it too.
+  const closed = await blockOut(ids.school, (await sql("SELECT ($1::date-1)::text d", [holidayDay])).rows[0].d, holidayDay);
   const hidden = await offeredNow('choices on a closed day');
   ok(!hidden.includes(holiday) && hidden.includes(S.optional), 'a class on a closed day is not offered; other classes still are');
   const closedBefore = (await sql("SELECT count(*)::int n FROM hon.class_bookings WHERE class_session_id=$1", [holiday])).rows[0].n;
