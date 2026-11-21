@@ -3,7 +3,7 @@ import { StaffFamilyInbox } from '../../../components/family-messages/staff-fami
 import { requireVerifiedWebSession } from '../../../server/require-web-session';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'HON | Family messages', referrer: 'no-referrer', robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: 'HON | Parent app', referrer: 'no-referrer', robots: { index: false, follow: false } };
 
 /** The family messages API decides every permission for the verified school; this page only asks. */
 export default async function FamilyMessagesPage() { await requireVerifiedWebSession(); return <StaffFamilyInbox />; }

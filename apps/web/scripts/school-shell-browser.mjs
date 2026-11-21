@@ -83,6 +83,32 @@ const leads = () => [['Avery', 'Sample', 1], ['Rowan', 'Example', 2], ['Kim', 'P
 const work = (scope) => ({ schoolId: scope.schoolId, principalId: id(500), canManage: true, canCreate: true, humanOnly: true, executionAllowed: false, queue: 'mine', status: 'ACTIVE',
   items: [{ title: 'Call back trial family', workItemId: id(601), version: 1, status: 'READY', priority: 'HIGH', dueAt: at(day), assigneeId: id(500) },
     { title: 'Order new belts for testing', workItemId: id(602), version: 1, status: 'WAITING', priority: 'NORMAL', dueAt: null, assigneeId: id(500) }], nextAfter: null });
+const textRows = () => [
+  { conversationId: id(901), channel: 'SMS', contactAddress: '+15555550101', contactName: 'Avery Sample', personId: id(850), leadId: id(201), leadStatus: 'OPEN', leadStage: 'Trial booked', status: 'OPEN', unread: 1,
+    tags: ['trial'], assignedTo: null, lastMessage: { direction: 'INBOUND', preview: 'Can we move the trial to Thursday?', mediaCount: 0, at: at(-1800_000) }, lastMessageAt: at(-1800_000), lastInboundAt: at(-1800_000), version: 3 },
+  { conversationId: id(902), channel: 'SMS', contactAddress: '+15555550199', contactName: null, personId: null, leadId: null, leadStatus: null, leadStage: null, status: 'OPEN', unread: 0,
+    tags: [], assignedTo: null, lastMessage: { direction: 'OUTBOUND', preview: 'Thanks for reaching out!', mediaCount: 0, at: at(-day) }, lastMessageAt: at(-day), lastInboundAt: at(-day - 60_000), version: 2 },
+];
+const textThread = () => [
+  { messageId: id(911), direction: 'INBOUND', author: 'CONTACT', staffName: null, body: 'Hi, is the kids class open on Tuesday?', mediaCount: 0, at: at(-day), delivery: null },
+  { messageId: id(912), direction: 'OUTBOUND', author: 'STAFF', staffName: 'Synthetic Owner', body: 'Yes! 4:30 PM. Want me to book a free trial?', mediaCount: 0, at: at(-day + 600_000), delivery: 'DELIVERED' },
+  { messageId: id(913), direction: 'INBOUND', author: 'CONTACT', staffName: null, body: 'Can we move the trial to Thursday?', mediaCount: 0, at: at(-1800_000), delivery: null },
+];
+// Corner HON pop-up (2026-11-19): two synthetic HON conversations, read-only.
+const honDetail = { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [] };
+const honConversations = [[901, 'Plan this week', 'What should I focus on this week?', 'Follow up the 5 new leads first, then confirm the 2 trials tomorrow.'],
+  [902, 'Belt testing', 'When is the next belt test?', 'One testing event is scheduled in the next 30 days.']].map(([n, title, question, answer]) => ({
+  id: id(n), title, createdAt: iso(), updatedAt: iso(), turnCount: 1, status: 'COMPLETED', turns: [
+    { turnId: id(n + 50), role: 'HUMAN', text: question, createdAt: iso(), status: 'COMPLETED', reason: null, references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null },
+    { turnId: id(n + 50), role: 'hon', text: answer, createdAt: iso(), status: 'COMPLETED', reason: null, references: { workItemId: id(n + 60), actionRequestId: null, invocationId: id(n + 70) }, replyDetail: honDetail }] }));
+function honApi(route, path, base) {
+  if (path === `${base}/readiness`) return json(route, 200, { data: { contract: true, providerRoute: true, entitlement: true, authorization: true, availableAgentKeys: [], honReply: true, businessPerformance: false, availableAnalystKeys: [], asOf: iso() }, meta: { requestId: 'r', correlationId: 'r' } });
+  if (path === `${base}/conversations`) return json(route, 200, { data: { items: honConversations.map(({ turns, ...rest }) => rest), nextCursor: null } });
+  const thread = honConversations.find((c) => path === `${base}/conversations/${c.id}`);
+  if (thread) return json(route, 200, { data: thread });
+  if (honConversations.some((c) => path === `${base}/conversations/${c.id}/orchestrations`)) return json(route, 200, { data: { items: [] } });
+  return json(route, 403, { code: 'FORBIDDEN' });
+}
 const json = (route, status, body) => route.fulfill({ status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }, body: JSON.stringify(body) });
 function api(route) {
   const url = new URL(route.request().url()), path = url.pathname, method = route.request().method();
@@ -96,12 +122,42 @@ function api(route) {
   if (path === '/api/v1/staff/work') return json(route, 200, { data: work(multi ? schoolB : schoolA) });
   for (const scope of [schoolA, schoolB]) {
     const prefix = `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}`;
+    if (path.startsWith(`${prefix}/hon/`)) return honApi(route, path, `${prefix}/hon`);
     if (path === `${prefix}/command-center`) return json(route, 200, { data: { commandCenter: commandCenter(scope) }, meta: {} });
     if (path === `${prefix}/ai/team/capabilities`) return readinessDenied ? json(route, 403, { code: 'AI_TEAM_READINESS_FORBIDDEN' }) : json(route, 200, { data: readiness(scope), meta: { requestId: 'r', correlationId: 'r' } });
     if (path === `${prefix}/crm/leads`) return leadsGate ? leadsGate.then(() => json(route, 200, { data: leads(), meta: {} })) : json(route, 200, { data: leads(), meta: {} });
     if (path === `${prefix}/schedule/sessions`) return json(route, 200, { data: sessions(), meta: { requestId: id(700), correlationId: id(700) } });
+    // Texts > Conversations (0364) and Parent app (0330): synthetic inboxes for the TE3a layout checks.
+    if (path === `${prefix}/conversations`) return json(route, 200, { data: { conversations: textRows(), nextCursor: null, unreadConversations: 1, canManage: true }, meta: {} });
+    if (path === `${prefix}/conversations/${id(901)}`) return json(route, 200, { data: { conversation: textRows()[0], contact: { person: { personId: id(850), givenName: 'Avery', familyName: 'Sample',
+      phone: '+15555550101', email: 'avery@example.test', smsConsent: 'OPTED_IN' }, lead: { leadId: id(201), status: 'OPEN', pipeline: 'Kids', stage: 'Trial booked', source: 'Website', createdAt: at(-2 * day) },
+      nextAppointment: null, peopleWithNumber: 1, schoolCanText: true }, messages: textThread(), hasOlder: false, canManage: true }, meta: {} });
+    if (path === `${prefix}/family-messages`) return json(route, 200, { data: { threads: [{ threadId: id(951), familyId: id(961), familyName: 'Sample family', lastMessageAt: at(-3600_000), lastFrom: 'FAMILY',
+      messageCount: 2, unreadCount: 1, version: 2 }, { threadId: id(952), familyId: id(962), familyName: 'Example family', lastMessageAt: at(-2 * day), lastFrom: 'SCHOOL', messageCount: 3, unreadCount: 0, version: 3 }], unreadThreads: 1 }, meta: {} });
+    if (path === `${prefix}/family-messages/${id(951)}`) return json(route, 200, { data: { threadId: id(951), familyId: id(961), familyName: 'Sample family', version: 2, unreadCount: 1,
+      messages: [{ messageId: id(971), from: 'SCHOOL', mine: true, body: 'Welcome to the parent app!', sentAt: at(-day) }, { messageId: id(972), from: 'FAMILY', mine: false, body: 'Thanks! Is there class on Friday?', sentAt: at(-3600_000) }] }, meta: {} });
     if (path === `${prefix}/people`) return json(route, 200, { data: [['Avery', 'Sample', '+15555550101', 'avery@example.test'], ['Rowan', 'Example', null, 'rowan@example.test']]
       .map(([givenName, familyName, phoneE164, email], i) => ({ id: id(850 + i), givenName, familyName, email, phoneE164, version: 1, createdAt: iso() })), meta: { requestId: id(860), correlationId: id(860) } });
+    // Texts > History, Templates, Opted out (TE3b over 0585/0586): synthetic rows, newest first.
+    if (path === `${prefix}/communications/history`) return json(route, 200, { data: { nextCursor: null, messages: [
+      ['Avery Sample', '+15555550101', 'See you at the trial class on Thursday at 5 PM!', 'STAFF', 'DELIVERED', 'DELIVERED', 'Kim Placeholder', 1],
+      ['Rowan Example', null, 'Reminder: belt testing is this Saturday at 10 AM.', 'CAMPAIGN', 'FAILED', 'FAILED', null, 2],
+      ['Avery Sample', '+15555550101', 'Thanks for your message, a coach will text you back soon.', 'AUTOMATION', 'SENDING', 'IN_PROGRESS', null, 3],
+      ['Kim Placeholder', '+15555550103', 'Yes, Thursday works. See you then.', 'CONVERSATION', 'ACCEPTED', 'DELIVERED', 'Avery Sample', 4],
+    ].map(([personName, address, preview, origin, delivery, outcome, by, n]) => ({ messageId: id(990 - n), personId: id(850), personName, address, channel: 'SMS', subject: null, preview,
+      at: new Date(Date.parse(at(-n * 3600_000))).toISOString(), origin, delivery, outcome, by })) }, meta: {} });
+    if (path === `${prefix}/communications/opted-out`) return json(route, 200, { data: { nextCursor: null, contacts: [
+      ['Sample Parent', '+15555550110', 'RECIPIENT', 1], ['Example Guardian', '+15555550111', 'STAFF', 5]].map(([personName, address, source, n]) => ({ consentId: id(995 - n), personId: id(860 + n),
+      personName, address, channel: 'SMS', source, optedOutAt: new Date(Date.parse(at(-n * day))).toISOString(), at: new Date(Date.parse(at(-n * day))).toISOString() })) }, meta: {} });
+    if (path === `${prefix}/communications/templates` && method === 'GET') {
+      const status = new URL(route.request().url()).searchParams.get('status') ?? 'ACTIVE';
+      return json(route, 200, { data: { templates: status !== 'ACTIVE' ? [] : [
+        ['Class cancelled', 'Hi {{first_name}}, class is cancelled tonight because of the weather. See you next time!', 1],
+        ['Missed class', 'Hi {{first_name}}, we missed you at class this week. Reply here if you need a new time.', 2],
+        ['Trial reminder', 'Hi {{first_name}}, this is {{school_name}}. Your trial class is tomorrow. Wear comfortable clothes and bring water.', 3],
+      ].map(([name, body, n]) => ({ templateId: id(980 + n), channel: 'SMS', name, subject: null, body, status: 'ACTIVE', version: 1,
+        createdAt: new Date(Date.parse(at(-10 * day))).toISOString(), updatedAt: new Date(Date.parse(at(-n * day))).toISOString() })) }, meta: {} });
+    }
     if (path === `${prefix}/staff-roles/lists`) return json(route, 200, { data: { roles: [{ id: id(880), code: 'CUSTOM_FRONT_DESK', name: 'Front desk', version: 1, permissionCodes: ['school.view', 'crm.lead.read'] }], grants: [] }, meta: {} });
     if (path === `${prefix}/staff-roles/permissions`) return json(route, 200, { data: [['school.view', 'View the school', false], ['attendance.record', 'Record attendance', false], ['attendance.cards.manage', 'Choose how attendance cards look', true], ['crm.lead.read', 'Read leads', false], ['billing.refund.create', 'Create refunds', true]]
       .map(([code, description, sensitive]) => ({ code, description, sensitive })), meta: {} });
@@ -136,6 +192,9 @@ async function open(viewport, path, { language, clock } = {}) {
     if (url.pathname.startsWith('/api/')) return api(route);
     return route.continue();
   });
+  // Voice is not part of this proof. Some headless Chromium builds terminate the page when the
+  // on-device speech recognition service is probed, so speech recognition is left out here.
+  await ctx.addInitScript(() => { for (const name of ['SpeechRecognition', 'webkitSpeechRecognition']) { try { Object.defineProperty(window, name, { value: undefined, configurable: true }); } catch { /* keep */ } } });
   const page = await ctx.newPage();
   if (clock) await page.clock.install();
   page.on('pageerror', (error) => report.pageErrors.push(String(error)));
@@ -143,7 +202,9 @@ async function open(viewport, path, { language, clock } = {}) {
   if (language) await page.evaluate((l) => { document.documentElement.lang = l; }, language);
   return { ctx, page };
 }
-async function check(name, work) { try { await work(); report.checks.push(name); } catch (error) { report.failures.push(`${name}: ${error instanceof Error ? error.message : String(error)}`); } }
+// Optional HON_SHELL_BROWSER_ONLY=<text>: run only the checks whose name contains it.
+const only = process.env.HON_SHELL_BROWSER_ONLY ?? null;
+async function check(name, work) { if (only && !name.includes(only)) return; try { await work(); report.checks.push(name); } catch (error) { report.failures.push(`${name}: ${error instanceof Error ? error.message : String(error)}`); } }
 async function shot(page, name) { await page.screenshot({ path: join(results, `${name}.png`) }); report.screenshots.push(`${name}.png`); }
 async function noOverflow(page) {
   const offenders = await page.evaluate(() => [...document.querySelectorAll('[data-hon-ui] *')]
@@ -190,7 +251,7 @@ await check('art style chip redraws the team without changing availability, and 
     await page.waitForTimeout(300); await shot(page, `u2-home-art-${style}-desktop`);
   }
   await page.reload(); await page.waitForSelector('[data-art="chibi"]');
-  assert.equal(await page.locator('a[href="/staff/hon"][class*="honLauncher"]').count(), 0, 'no corner HON on the dashboard');
+  assert.equal(await page.locator('[data-hon-corner]').count(), 0, 'no corner HON on the dashboard');
   // The HON workspace follows the same chosen style and shows the HON core orb.
   await page.goto(origin + '/staff/hon');
   await page.waitForSelector('img[src="/ai/chad-chibi.webp"]');
@@ -202,9 +263,52 @@ await check('art style chip redraws the team without changing availability, and 
 await check('HON waits in the corner on other pages', async () => {
   theme = 'classic'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/work');
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
-  assert.equal(await page.locator('a[href="/staff/hon"][class*="honLauncher"]').isVisible(), true);
+  assert.equal(await page.locator('button[data-hon-corner][aria-haspopup="dialog"]').isVisible(), true);
   await page.waitForTimeout(500); await shot(page, 'u2-hon-corner-classic-desktop'); await ctx.close();
 });
+for (const [mode, size] of [['modern', 'desktop'], ['classic', 'desktop'], ['big-button', 'desktop'], ['modern', 'phone']]) {
+  await check(`corner HON opens a pop-up over the page and expands to the same conversation (${mode} ${size})`, async () => {
+    theme = mode; multi = false; const { ctx, page } = await open(viewports[size], '/staff/work');
+    await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+    await page.getByText('Call back trial family').waitFor();
+    // Something the person was in the middle of on this page: scrolled and typed, never saved.
+    const field = page.locator('#hon-main input:not([type=hidden]):not([type=checkbox]):not([type=radio]), #hon-main textarea').locator('visible=true').first();
+    const typed = (await field.count()) ? 'Half-written note' : null;
+    if (typed) await field.fill(typed);
+    await page.evaluate(() => window.scrollTo(0, 200)); const scrolled = await page.evaluate(() => window.scrollY);
+    const corner = page.locator('button[data-hon-corner]');
+    await corner.click();
+    const dialog = page.getByRole('dialog', { name: 'HON' });
+    await dialog.waitFor();
+    assert.equal(new URL(page.url()).pathname, '/staff/work', 'opening HON never leaves the page');
+    assert.equal(await dialog.getAttribute('data-placement'), 'corner');
+    assert.equal(await corner.getAttribute('aria-expanded'), 'true');
+    await dialog.getByRole('button', { name: /Plan this week/ }).click();
+    await dialog.getByText('Follow up the 5 new leads first').waitFor();
+    await page.waitForTimeout(300); await shot(page, `p1-hon-popup-${mode}-${size}`);
+    // Close: the page is exactly as it was.
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'detached' });
+    assert.equal(new URL(page.url()).pathname, '/staff/work');
+    if (typed) assert.equal(await field.inputValue(), typed, 'unsaved typing on the page is kept');
+    assert.equal(await page.evaluate(() => window.scrollY), scrolled, 'scroll position is kept');
+    assert.equal(await page.evaluate(() => document.activeElement?.hasAttribute('data-hon-corner')), true, 'focus returns to the corner button');
+    // Reopen: the same conversation is still open.
+    await corner.click(); await dialog.waitFor();
+    await dialog.getByText('Follow up the 5 new leads first').waitFor();
+    // Expand: the full workspace opens the same conversation, with a way back to this page.
+    const expand = dialog.getByRole('link', { name: 'Full workspace' });
+    assert.equal(await expand.getAttribute('href'), '/staff/hon?return=%2Fstaff%2Fwork');
+    if (size === 'desktop') {
+      await expand.click(); await page.waitForURL('**/staff/hon?return=%2Fstaff%2Fwork');
+      await page.getByText('Follow up the 5 new leads first').waitFor();
+      assert.equal(await page.locator('[aria-current="true"]', { hasText: 'Plan this week' }).count() > 0, true, 'same conversation selected');
+      assert.equal(await page.getByRole('link', { name: 'Back to your page' }).getAttribute('href'), '/staff/work');
+      await page.waitForTimeout(300); await shot(page, `p1-hon-expanded-${mode}-${size}`);
+    }
+    await ctx.close();
+  });
+}
 await check('classic sidebar shows the owner menu headings with their pages, and the current page', async () => {
   theme = 'classic'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/billing/invoices');
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
@@ -220,7 +324,7 @@ await check('modern top bar shows the everyday pages and More', async () => {
   theme = 'modern'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/crm/follow-ups');
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
   const visible = await page.locator('nav[aria-label="School navigation"] a[data-nav]').evaluateAll((links) => links.filter((a) => a.offsetParent !== null).map((a) => a.dataset.nav));
-  assert.deepEqual(visible, ['home', 'conversationAi', 'classes', 'attendance', 'students', 'crm']);
+  assert.deepEqual(visible, ['home', 'classes', 'attendance', 'students', 'crm', 'messages']);
   await noOverflow(page); await shot(page, 'l1-topbar-modern-desktop'); await ctx.close();
 });
 for (const mode of ['modern', 'big-button']) await check(`${mode} menu panel lists every area`, async () => {
@@ -228,9 +332,9 @@ for (const mode of ['modern', 'big-button']) await check(`${mode} menu panel lis
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
   await page.getByRole('button', { name: 'Open navigation' }).click();
   const panel = page.getByRole('dialog', { name: 'Menu' }); await panel.waitFor();
-  // Owner menu (2026-11-16): eleven headings plus Settings; one card per page (25 pages, Shopify added under Finance).
+  // Owner menu (2026-11-16): eleven headings plus Settings; one card per page (27 pages: Shopify and Ads added, then Parent app split from Texts on 2026-11-19).
   assert.equal(await panel.locator('[data-menu-section]').count(), 12);
-  assert.equal(await panel.locator('[data-menu]').count(), 25);
+  assert.equal(await panel.locator('[data-menu]').count(), 27);
   await page.waitForTimeout(250); await axeScan(page, `menu-${mode}`); await shot(page, `u2-menu-${mode}-desktop`);
   await page.keyboard.press('Escape'); await panel.waitFor({ state: 'detached' }); await ctx.close();
 });
@@ -372,19 +476,76 @@ await check('Mass rank promotion opens on the graded students with one decision 
   assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('promotion-decision')), false);
   await shot(page, 'l3-mass-promotion-desktop'); await ctx.close();
 });
-await check('Texts & email opens with the composer: find a contact, Text or Email, nothing sent before Send', async () => {
+for (const mode of ['modern', 'big-button']) for (const size of ['desktop', 'phone']) await check(`Texts > Conversations: list, open a thread, contact details (${mode} ${size})`, async () => {
+  theme = mode; const { ctx, page } = await open(viewports[size], '/staff/texts');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('button', { name: /Avery Sample/ }).first().click();
+  await page.getByText('Can we move the trial to Thursday?').last().waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Apply' }).count(), 0, 'no Apply button');
+  assert.equal(await page.locator('[data-texts-conversations]').evaluate(el => /[0-9a-f]{8}-[0-9a-f]{4}/i.test(el.textContent ?? '')), false, 'no IDs shown');
+  assert.equal(report.apiRequests.some(r => r.startsWith('POST')), false);
+  await shot(page, `te3a-texts-conversations-${mode}-${size}`); await ctx.close();
+});
+await check('Parent app is its own page laid out like the texts inbox (TE3a)', async () => {
   theme = 'modern'; const { ctx, page } = await open(viewports.desktop, '/staff/family-messages');
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
-  await page.getByRole('heading', { name: 'New text or email' }).waitFor();
+  await page.getByRole('heading', { name: 'Parent app', exact: true }).first().waitFor();
+  await page.getByRole('button', { name: /Sample family/ }).click();
+  await page.getByText('Thanks! Is there class on Friday?').waitFor();
+  assert.equal(await page.locator('[data-compose]').count(), 0, 'no composer on the parent app page');
+  await shot(page, 'te3a-parent-app-desktop'); await ctx.close();
+});
+await check('Texts > Send: type a name, pick the contact, nothing sent before Send (TE3a)', async () => {
+  theme = 'modern'; const { ctx, page } = await open(viewports.desktop, '/staff/texts/send');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Send a text', exact: true }).first().waitFor();
   await page.locator('input[name="composeQuery"]').fill('Sample');
-  await page.getByRole('button', { name: 'Find' }).click();
-  await page.getByRole('button', { name: 'Rowan Example' }).click();
-  assert.equal(await page.locator('input[name="composeChannel"][value="SMS"]').isDisabled(), true, 'no mobile number, no text');
-  assert.equal(await page.locator('input[name="composeChannel"][value="EMAIL"]').isChecked(), true);
-  await page.locator('textarea[name="composeContent"]').fill('Synthetic message');
-  assert.equal(await page.getByRole('button', { name: 'Send', exact: true }).isDisabled(), true, 'needs the confirm');
+  await page.getByRole('button', { name: /Rowan Example/ }).click();
+  await page.getByText('No mobile number: this contact cannot get texts').waitFor();
+  await page.locator('textarea[name="composeContent"]').fill('Hi {{first_name}}');
+  await page.getByText('Hi Rowan', { exact: false }).first().waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Send', exact: true }).isDisabled(), true, 'no mobile number, no text');
   assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('communications/messages')), false);
-  await shot(page, 'l4-texts-email-desktop'); await ctx.close();
+  await shot(page, 'te3a-texts-send-desktop'); await ctx.close();
+});
+for (const mode of ['modern', 'big-button']) for (const size of ['desktop', 'phone']) await check(`Texts > History, Templates, Opted out (TE3b ${mode} ${size})`, async () => {
+  theme = mode;
+  let { ctx, page } = await open(viewports[size], '/staff/texts/history');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Text history', exact: true }).first().waitFor();
+  await page.getByRole('button', { name: /Rowan Example/ }).click();
+  await page.locator('[data-drawer]').getByText('No address on file').first().waitFor();
+  assert.equal(await page.locator('[data-message-history]').evaluate(el => /[0-9a-f]{8}-[0-9a-f]{4}/i.test(el.textContent ?? '')), false, 'no IDs shown');
+  if (size === 'phone') await noOverflow(page);
+  await shot(page, `te3b-texts-history-${mode}-${size}`); await ctx.close();
+  ({ ctx, page } = await open(viewports[size], '/staff/texts/templates'));
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Class cancelled' }).waitFor();
+  assert.equal(await page.getByRole('link', { name: 'Use in Send' }).first().getAttribute('href'), `/staff/texts/send?template=${id(981)}`);
+  if (size === 'phone') await noOverflow(page);
+  await shot(page, `te3b-texts-templates-${mode}-${size}`);
+  await page.getByRole('button', { name: 'New text template' }).click();
+  await page.locator('input[name="templateName"]').fill('Belt testing');
+  await page.locator('textarea[name="templateBody"]').fill('Hi {{first_name}}, belt testing is Saturday. {{nickname}}');
+  await page.getByText('Not a merge tag: {{nickname}}').waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Save template' }).isDisabled(), true, 'a stray tag cannot be saved');
+  await shot(page, `te3b-texts-template-editor-${mode}-${size}`); await ctx.close();
+  ({ ctx, page } = await open(viewports[size], '/staff/texts/opted-out'));
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByText('Replied STOP', { exact: true }).waitFor();
+  if (size === 'phone') await noOverflow(page);
+  await shot(page, `te3b-texts-opted-out-${mode}-${size}`); await ctx.close();
+  assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('/communications/')), false, 'nothing saved or sent');
+});
+await check('Texts > Send starts from a template picked on Templates (TE3b)', async () => {
+  theme = 'modern'; const { ctx, page } = await open(viewports.desktop, `/staff/texts/send?template=${id(981)}`);
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.locator('input[name="composeQuery"]').fill('Sample');
+  await page.getByRole('button', { name: /Avery Sample/ }).click();
+  await page.getByText('Hi Avery, class is cancelled tonight', { exact: false }).first().waitFor();
+  assert.equal(await page.locator('select[name="useTemplate"]').inputValue(), id(981));
+  assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('communications/messages')), false);
+  await shot(page, 'te3b-texts-send-from-template-desktop'); await ctx.close();
 });
 for (const mode of ['modern', 'classic', 'big-button']) for (const size of ['desktop', 'phone']) await check(`Staff opens on names; a name opens its card (${mode} ${size})`, async () => {
   theme = mode; const { ctx, page } = await open(viewports[size], '/staff/team/invitations');

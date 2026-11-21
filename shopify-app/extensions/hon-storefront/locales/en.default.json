@@ -1,0 +1,6 @@
+{
+  "blocks": {
+    "size_guide": { "default_title": "Size guide", "empty": "HON size guide: write it in HON (Shopify, Storefront) and press Publish." },
+    "pickup_note": { "empty": "HON pickup note: write it in HON (Shopify, Storefront) and press Publish." }
+  }
+}

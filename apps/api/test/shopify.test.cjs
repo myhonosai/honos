@@ -258,3 +258,28 @@ test('0405 the state the browser carries is 32 random bytes and the database see
   assert.match(state, /^[A-Za-z0-9_-]{43}$/);
   assert.equal(s.db.calls[0].params[2], createHash('sha256').update(state).digest('hex'));
 });
+
+test('PD1 (0611) who fulfils a variant: the first third-party service by name, null for the school, left out when not asked', () => {
+  const node = levels => ({ id: 'gid://shopify/ProductVariant/1', title: 'M', sku: 'S', barcode: null, price: '12.5', compareAtPrice: null, inventoryQuantity: 0, position: 1,
+    inventoryItem: { tracked: false, unitCost: null, ...(levels === undefined ? {} : { inventoryLevels: { nodes: levels } }) },
+    product: { id: 'gid://shopify/Product/1', title: 'Hoodie', status: 'ACTIVE', vendor: null, productType: null, handle: 'hoodie', featuredMedia: null } });
+  const by = levels => adapter.productsFromVariantNodes([node(levels)])[0].variants[0];
+  const level = service => ({ location: { fulfillmentService: service } });
+  assert.equal('fulfilledBy' in by(undefined), false, 'a read that did not ask leaves the key out, so the mirror keeps its value');
+  assert.equal(by([]).fulfilledBy, null);
+  assert.equal(by([level(null), { location: null }]).fulfilledBy, null, 'the school\'s own location');
+  assert.equal(by([level({ serviceName: 'Manual', type: 'MANUAL' }), level({ serviceName: 'Gift cards', type: 'GIFT_CARD' })]).fulfilledBy, null);
+  assert.equal(by([level(null), level({ serviceName: ' Printful\u0007 ', type: 'THIRD_PARTY' })]).fulfilledBy, 'Printful');
+  assert.equal(by([level({ serviceName: 'x'.repeat(90), type: 'THIRD_PARTY' })]).fulfilledBy.length, 64);
+  assert.equal(by([level({ serviceName: '  ', type: 'THIRD_PARTY' }), level({ serviceName: 'Second', type: 'THIRD_PARTY' })]).fulfilledBy, 'Second');
+  assert.throws(() => by('nope'), adapter.ShopifyProviderError);
+  assert.throws(() => by([level({ serviceName: 7, type: 'THIRD_PARTY' })]), adapter.ShopifyProviderError);
+  // The catalog contract: a provider's variant is never low stock, and the name is bounded.
+  const variant = over => ({ variantId: '9200000031', title: 'Black / M', sku: null, barcode: null, price: 45, compareAtPrice: null, unitCost: null, margin: null, marginPercent: null,
+    tracked: true, inventoryQuantity: 0, lowStock: false, fulfilledBy: 'Sample Print Co', ...over });
+  const catalog = over => contracts.verifyShopifyCatalog({ schoolId: '44444444-4444-4444-8444-444444444444', currency: 'USD', products: [{ productId: '9100000003', title: 'Hoodie', status: 'ACTIVE',
+    vendor: null, productType: null, imageUrl: null, variants: [variant(over)] }] });
+  assert.equal(catalog({}).products[0].variants[0].fulfilledBy, 'Sample Print Co');
+  assert.equal(catalog({ fulfilledBy: null, lowStock: true }).products[0].variants[0].lowStock, true);
+  for (const bad of [{ lowStock: true }, { fulfilledBy: 'x'.repeat(65) }, { fulfilledBy: undefined }]) assert.throws(() => catalog(bad), /SHOPIFY_RESPONSE_INVALID/);
+});

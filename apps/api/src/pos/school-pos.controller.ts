@@ -5,7 +5,7 @@ import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { SchoolPosService } from './school-pos.service.js';
 
-/** 0564: same-origin human browser requests only, with their own command header for writes; never cached. */
+/** 0612: same-origin human browser requests only, with their own command header for writes; never cached. */
 @Injectable()
 export class SchoolPosHumanGuard implements CanActivate {
   canActivate(c: ExecutionContext) { return assertSchoolAccountHumanRequest(c, POS_HUMAN_COMMAND); }

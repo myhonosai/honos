@@ -20,13 +20,13 @@ const fails = async (p: Promise<unknown>) => { try { await p; } catch (e) { retu
 const connection = (over: Partial<ShopifyConnection> = {}): ShopifyConnection => ({ connectionId: cid, shopDomain: SHOP, shopName: 'Synthetic Dojo Store', currency: 'USD',
   status: 'CONNECTED', version: 2, connectedAt: at, endedAt: null, lastSyncAt: at, lastSyncOutcome: 'SUCCEEDED', syncRunning: false, ...over });
 const overview = (over: Partial<ShopifyOverview> = {}): ShopifyOverview => ({ schoolId: school, canManage: true, connectEnabled: true, autoSync: false, connection: connection(),
-  counts: { products: 3, variants: 6, lowStock: 2, orders: 3 },
+  counts: { products: 3, variants: 6, lowStock: 2, provider: 0, orders: 3 },
   summary: { days: 30, orders: 2, sales: 290.73, averageOrder: 145.37, itemsSold: 4, lineSales: 310, coveredSales: 175, estimatedGrossProfit: 99.75,
     topProducts: [{ title: 'Student uniform', quantity: 2, sales: 130 }] }, ...over });
 const empty = (over: Partial<ShopifyOverview> = {}) => overview({ connection: null, counts: null, summary: null, ...over });
 const catalog = (): ShopifyCatalog => ({ schoolId: school, currency: 'USD', products: [{ productId: '9100000001', title: 'Student uniform', status: 'ACTIVE', vendor: null, productType: 'Uniform', imageUrl: null,
-  variants: [{ variantId: '9200000012', title: 'Size 2', sku: 'UNI-2', barcode: null, price: 65, compareAtPrice: null, unitCost: 28, margin: 37, marginPercent: 56.9, tracked: true, inventoryQuantity: 2, lowStock: true },
-    { variantId: '9200000013', title: 'Size 3', sku: 'UNI-3', barcode: null, price: 70, compareAtPrice: null, unitCost: null, margin: null, marginPercent: null, tracked: false, inventoryQuantity: null, lowStock: false }] }] });
+  variants: [{ variantId: '9200000012', title: 'Size 2', sku: 'UNI-2', barcode: null, price: 65, compareAtPrice: null, unitCost: 28, margin: 37, marginPercent: 56.9, tracked: true, inventoryQuantity: 2, lowStock: true, fulfilledBy: null },
+    { variantId: '9200000013', title: 'Size 3', sku: 'UNI-3', barcode: null, price: 70, compareAtPrice: null, unitCost: null, margin: null, marginPercent: null, tracked: false, inventoryQuantity: null, lowStock: false, fulfilledBy: null }] }] });
 const orders = (): ShopifyOrders => ({ schoolId: school, currency: 'USD', orders: [
   { orderId: '9300000001', name: '#1001', placedAt: at, cancelledAt: null, financialStatus: 'PAID', fulfillmentStatus: 'UNFULFILLED', sourceName: 'web', currency: 'USD',
     subtotal: 130, discounts: 10, tax: 9.6, total: 129.6, lines: [{ title: 'Student uniform', sku: 'UNI-2', variantId: '9200000012', quantity: 2, unitPrice: 65 }] },
@@ -51,7 +51,7 @@ it('reads with plain same-origin GETs and sends each command with the Shopify co
   const [cpath, cinit] = g.mock.calls[0] as unknown as [string, RequestInit];
   expect(cpath).toBe('/api/v1/school/shopify/connect');
   expect(cinit.headers).toMatchObject({ 'X-HON-Human-Command': 'school-shopify' });
-  expect(JSON.parse(cinit.body as string)).toEqual({ schoolId: school, shopDomain: SHOP, allowEditing: false });
+  expect(JSON.parse(cinit.body as string)).toEqual({ schoolId: school, shopDomain: SHOP, allowEditing: false, allowFinance: false });
   // Only Shopify's own approval page for that shop, or HON's own return page.
   stub(json({ data: { authorizeUrl: `https://other.myshopify.com/admin/oauth/authorize?x=1`, shopDomain: SHOP, expiresAt: at } }));
   expect((await fails(shopifyApi.connect(school, SHOP, signal(), () => true))).kind).toBe('UNKNOWN');
@@ -278,4 +278,20 @@ it('approval outcomes: saved, not saved, not sure (also when the answer was lost
   expect(view({ kind: 'EDIT_OFF', action: 'approve' })).toContain('Press Allow editing');
   expect(view({ kind: 'DONE', action: 'cancelChange', change: chg({ status: 'FAILED', failureCode: 'CLOSED_UNRESOLVED', version: 4 }) })).toContain('Edit closed.');
   expect(orderToFulfill({ ...orders().orders[0]!, financialStatus: 'REFUNDED' })).toBe(false);
+});
+
+it('PD1: a provider-fulfilled variant shows who makes it, is never low stock and has its own inventory list', () => {
+  const made = (): ShopifyCatalog => { const c = catalog(); return { ...c, products: [...c.products, { productId: '9100000003', title: 'School hoodie', status: 'ACTIVE', vendor: null,
+    productType: 'Apparel', imageUrl: null, variants: [{ variantId: '9200000031', title: 'Black / M', sku: 'HOOD-BK-M', barcode: null, price: 45, compareAtPrice: null, unitCost: 19.25,
+      margin: 25.75, marginPercent: 57.2, tracked: true, inventoryQuantity: 0, lowStock: false, fulfilledBy: 'Sample Print Co' }] }] }; };
+  const withProvider = (section: ShopifyViewProps['section']) => renderToStaticMarkup(<ShopifyView {...props({ section, catalog: { state: 'READY', value: made() },
+    overview: { state: 'READY', read: overview({ counts: { products: 4, variants: 7, lowStock: 2, provider: 1, orders: 3 } }) } })} />);
+  const products = withProvider('products');
+  expect(products).toContain('Made to order by Sample Print Co'); expect(products).toMatch(/School hoodie[\s\S]*?Made to order</);
+  const inv = withProvider('inventory');
+  expect(inv).toContain('data-shopify-provider="true">1<'); expect(inv).toContain('Counts 2 of 2 units'); expect(inv).not.toContain('HOOD-BK-M');
+  expect(withProvider('overview')).toContain('data-shopify-provider="true">1<');
+  // Without a provider the workspace looks as before.
+  expect(renderToStaticMarkup(<ShopifyView {...props({ section: 'inventory' })} />)).not.toContain('Made to order');
+  for (const language of ['ko', 'es']) expect(renderToStaticMarkup(<ShopifyView {...props({ language, section: 'products', catalog: { state: 'READY', value: made() } })} />)).toContain('Sample Print Co');
 });

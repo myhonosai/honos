@@ -1,3 +1,4 @@
+import type { ShopifyFinanceSnapshot } from '@hon/contracts';
 import { ShopifyProviderError, type MirrorOrder, type MirrorProduct, type ShopifyApp, type ShopifyFailure } from './shopify-adapter.js';
 
 export const FAILURE_CODE: Record<ShopifyFailure, string> = {
@@ -19,6 +20,8 @@ export interface SyncSteps<T> {
   rotate(body: { expectedVersion: number; credential: { keyId: string; sealed: string; accessExpiresAt: string; refreshExpiresAt: string } }): Promise<unknown>;
   page(body: { kind: 'PRODUCTS'; products: MirrorProduct[] } | { kind: 'ORDERS'; orders: MirrorOrder[] }): Promise<unknown>;
   finish(outcome: SyncOutcome, failureCode: string | null): Promise<T>;
+  /** SH-F1: the Shopify Payments snapshot. Optional; a run without it never reads finance. */
+  finance?(body: { finance: ShopifyFinanceSnapshot }): Promise<unknown>;
 }
 
 /** The begin answer, or null when it is not the shape HON expects. */
@@ -36,9 +39,22 @@ function chunks<T>(items: readonly T[]): T[][] {
 }
 
 /**
+ * SH-F1: reads Shopify Payments and records it. Finance never fails a sync: a store that did not grant the scope (Shopify
+ * answers ACCESS_DENIED), a rate limit, an outage or a HON refusal leaves the last snapshot as it was. Only a refused
+ * token still ends the run as NEEDS_RECONNECT, as any other read would.
+ */
+async function syncFinance(app: ShopifyApp, shop: string, token: string, record: (body: { finance: ShopifyFinanceSnapshot }) => Promise<unknown>): Promise<void> {
+  let finance: ShopifyFinanceSnapshot;
+  try { finance = await app.adapter.finance(shop, token); }
+  catch (e) { if (e instanceof ShopifyProviderError && e.failure === 'AUTH') throw e; return; }
+  await record({ finance }).catch(() => undefined);
+}
+
+/**
  * One sync, the same for Sync now and for the background worker: the sealed pair is opened, refreshed when it is
  * about to expire (rotated in the database under its version), then the catalog and the last 60 days of orders are
- * written in pages of 50. Shopify refusing the token ends the connection as NEEDS_RECONNECT, which destroys the stored
+ * written in pages of 50, then (SH-F1, when the run records finance) the Shopify Payments snapshot. Shopify refusing
+ * the token ends the connection as NEEDS_RECONNECT, which destroys the stored
  * pair. Tokens live only in memory here and never reach an error, a log or an answer. Nothing is written to Shopify.
  */
 export async function runShopifySync<T>(app: ShopifyApp, now: () => number, b: BegunSync, steps: SyncSteps<T>): Promise<T> {
@@ -60,6 +76,7 @@ export async function runShopifySync<T>(app: ShopifyApp, now: () => number, b: B
     const since = new Date(now() - SHOPIFY_ORDER_DAYS * 86_400_000).toISOString();
     const orders = await app.adapter.orders(b.shopDomain, token, since);
     for (const page of chunks<MirrorOrder>(orders.orders)) await steps.page({ kind: 'ORDERS', orders: page });
+    if (steps.finance) await syncFinance(app, b.shopDomain, token, steps.finance);
     if (!catalog.complete) return await steps.finish('FAILED', 'CATALOG_TOO_LARGE');
     if (!orders.complete) return await steps.finish('FAILED', 'ORDERS_TOO_MANY');
     return await steps.finish('SUCCEEDED', null);

@@ -28,7 +28,8 @@ store is the test store.
 | SH2 | POS sells Shopify variants when connected (database reprices from the mirror) and each sale is pushed to Shopify (order + inventory) through a queued job. Coordinated with the POS thread (0403). | No |
 | SH3 | Parent App and HON website buy through Shopify Checkout (Storefront cart → Shopify-hosted checkout); orders link back to the HON contact. | No |
 | SH4 | Commerce Workspace writes: create/edit products and prices, artwork upload, mockups, publish; AI descriptions/pricing/promotions by plan (fake AI until approved). | Paid AI |
-| SH5 | Print-on-demand providers. | Provider accounts |
+| **PD1 (0611)** | Print on demand, first piece: the sync reads who fulfils each variant (the school's own location or a third-party fulfilment service such as a print provider's Shopify app) and Commerce shows it. HON connects to no provider. | No |
+| SH5 | Print-on-demand providers: direct connections, where a provider's API is verified. | Provider accounts |
 | SH6 | Complete-plan commerce agent through the AI Action Engine (proposals, owner approval). | Paid AI |
 | Live | Create the HON Shopify Partner app, set its secrets on Render, connect the Ideal Martial Arts store. | **Yes** |
 
@@ -301,6 +302,67 @@ Commerce step 3 ("Creative Studio product drafts", vision section 7) in three pa
 3. **CS-M3.** Artwork and mockups from Creative Studio image generations attached as product media, once creative media
    storage (C3, PR #365) is merged; until then no generated image can become Shopify media.
 
+## CS-M2: Marcus merch ideas (step 3, part 2; migration 0596)
+
+Marcus writes up to three merch ideas from the owner's brief, on the shared AI text proposals (0550, kind `MERCH_IDEAS`).
+An idea is text only: using one opens the CS-M1 draft form, and Shopify changes only through an approved SH4a change.
+
+- **Kind row.** `MERCH_IDEAS`: agent `marcus`, task `DRAFT_MARKETING`, 6,000 input and 3,000 output tokens, at most
+  80,000 micro-USD per call, at most 12,288 result bytes, caller `HUMAN_UI`, subject `SHOPIFY_STORE` (the connection id).
+- **Who may ask.** Shopify management at the session school, `marketing.assistant.use`, `ai.invocation.plan` and an
+  active Complete plan, re-proved in the database on every step. A Shopify reader can read the list only.
+- **What Marcus sees.** The closed brief (one product kind, one to three looks, up to ten colors, up to 500 characters of
+  notes), the school name, the store currency, the saved brand color and up to 30 existing product titles. No customer,
+  order, family or student data.
+- **Flow.** begin (store must be CONNECTED) -> planning reference -> plan (marcus, DRAFT_MARKETING) -> prepare (budget lock
+  first; blocks `GATE_CLOSED` if the store disconnected since the start) -> one provider call -> fail, or record usage and
+  the validated answer in its own transaction. The S4 spend decision, HQ pause, per-school ceiling and UNKNOWN queue are
+  the shared 0550 ones; S4 itself is unchanged.
+- **Answer checks.** `hon.shopify_merch_ideas_ok` and `validateMerchAiProposal` take only `{summary, ideas[1..3]}`, each
+  idea `{style, title, description, productType, price, printNotes}`. `merchAiProblems` rejects a look that was not asked
+  for, a repeated look, a count that does not match the looks, and any price in a store that is not in US dollars (HON
+  never converts). A rejected answer keeps its usage and shows its problems, and can only be dismissed.
+- **Closing.** The requester marks ideas used (`APPLIED`) after sending one for approval, or dismisses them.
+- **Screen.** Merch Studio shows "Ask Marcus for ideas" only when the server has the paid text route configured and the
+  person can manage the store. Any refusal, failure, rejected answer or switched-off route falls back to the CS-M1
+  template ideas, labelled as templates. A lost answer keeps its key, so only the identical brief is sent again.
+- **Evidence.** `packages/database/scripts/test-shopify-merch-ai-ideas.mjs` (8 groups, fake provider, 0 network calls),
+  `apps/api/test/merch-ai.test.cjs`, `apps/web/test/school-shopify-merch-ai.test.tsx`, and the 011 section
+  "Shopify merch AI ideas exact verification (0596)".
+
+## TB2: storefront blocks through a theme app extension (step 4; migration 0609, retires TB1 0600)
+
+TB1 (0600, merged 2026-11-20, never deployed) copied the live theme and wrote ready-made changes to the copy, which needs
+`write_themes`. Shopify declined that scope for HON on 2026-11-20 and pointed to
+[theme app extensions](https://shopify.dev/docs/apps/build/online-store/theme-app-extensions). TB2 replaces TB1 with that
+route; 0609 drops every 0600 table, trigger, helper and entry point (0600 itself is unchanged).
+
+- **The extension.** `shopify-app/extensions/hon-storefront/`: app embed `school-colors` (head; the theme's button and
+  link color variables), app block `size-guide` (product template), app block `pickup-note` (cart) and app embed
+  `pickup-note-banner` (cart, for themes whose cart takes no app blocks). Each reads only the app-data metafield
+  `hon_storefront.settings` (JSON) on HON's app installation, escapes every value and re-checks colors as `#RRGGBB` in
+  Liquid. The extension makes no network requests. Releasing it (`shopify app deploy`) is an owner step in
+  `shopify-app/README.md`.
+- **Who.** Read, save and publish need `commerce.shopify.manage` at the session school, re-proved after each write.
+- **Settings.** `{primaryColor, accentColor|null, sizeGuideTitle|null, sizeGuideText|null, pickupNote|null}`: upper-case
+  `#RRGGBB`, title at most 60 characters (needs text), guide at most 2,000, note at most 500. Saved in
+  `hon.shopify_storefronts` (one row per CONNECTED store, versioned; `expectedVersion` null only for the first save).
+  Saving never reaches Shopify.
+- **Publish** (`POST /v1/school/shopify/storefront/publish {schoolId, settingsVersion}`). The version must be the saved
+  one. The database leases the store's publish for three minutes (one at a time, at most 100 a UTC day) and hands over
+  the settings and the sealed credential. The API sets the metafield with `metafieldsSet` on
+  `currentAppInstallation` (no access scope needed) and finishes under the lease: PUBLISHED (the leased version is live),
+  FAILED (refused, nothing written) or UNKNOWN (answer lost; publishing again settles it because the write is
+  idempotent). A lease that ends without a result reads and settles as UNKNOWN `LEASE_EXPIRED`.
+- **Placing blocks.** The read answers theme editor deep links (client id + block handle) that open the live theme in the
+  editor with the block added or the embed on; the owner previews and presses Save in Shopify, and removes a block there
+  to undo it. HON never reads or writes theme files.
+- **Not in TB2.** Changing the theme's own color settings, blocks in sections that take no app blocks, file diffs.
+  Connecting asks for no theme scope; the TB1 "Allow theme editing" switch is gone.
+- **Evidence.** `packages/database/scripts/test-shopify-storefront-integrity.mjs` (8 groups, fake Shopify, 0 network
+  calls), `apps/api/test/shopify-storefront.test.cjs`, `apps/web/test/school-shopify-storefront.test.tsx`, and the 011
+  section "Shopify storefront blocks exact verification (0609, TB2)".
+
 ## Plan (TDD)
 
 1. Migration 0405 + DB proof `test-shopify-commerce-integrity.mjs` over signed HTTP with the fake adapter: ACL/RLS,
@@ -325,3 +387,30 @@ Commerce step 3 ("Creative Studio product drafts", vision section 7) in three pa
 3. Contract `autoSync` on the overview; the page line in en/ko/es.
 4. Grants: 010 (nothing for the runtime), 011 exact verification, 013 worker grants; verify-rls, staging pins,
    run-db-proofs.
+
+## PD1: who fulfils each product (0611)
+
+Commerce step 6, first print-on-demand piece. A school that sells made-to-order items installs the provider's own Shopify
+app (Printful and similar). Shopify then stocks those variants at that provider's **fulfilment service location**, and the
+provider makes and ships each order. HON reads that fact; it connects to no provider, sends no order and promises nothing
+about a provider's catalog, prices or delivery.
+
+- **Read.** The catalog sync asks for each variant's first two stock locations
+  (`inventoryItem.inventoryLevels(first: 2) { nodes { location { fulfillmentService { serviceName type } } } }`), which the
+  `read_inventory` scope HON already holds covers. The page size went from 100 to 50 variants to stay well inside Shopify's
+  single-query cost limit. The first service of type `THIRD_PARTY` gives the name (trimmed, at most 64 characters);
+  otherwise the variant is the school's. Known limits: a provider ranked third or later among a variant's locations is
+  missed, and a name HON cannot keep (empty after cleaning) leaves the variant shown as school stock. A single-product read-back and a product webhook do not ask, and leave the key out.
+- **Store.** `hon.shopify_variants.fulfilled_by` (text, NULL = the school). `fulfilledBy` is an optional variant key in
+  `hon.shopify_apply_page`, `hon.shopify_product_item_ok` and `hon.shopify_mirror_product`; a variant sent without the key
+  keeps its value. `hon.shopify_fulfilled_by_ok(jsonb)` is the closed name check (no runtime grant).
+- **Show.** `read_shopify_catalog` returns `fulfilledBy` per variant; `read_shopify` counts gain `provider`. A provider's
+  variant is never low stock (the school cannot restock it), in the flag and in the count; the contract refuses an answer
+  that says otherwise. Commerce shows "Made to order by <name>" in Products and Inventory, an Inventory list of those
+  items, and a count on the Overview when there is at least one.
+- **Not here.** Provider accounts or APIs, order routing, tracking events, product creation at a provider, and the other
+  fulfilment modes in the vision (bulk preorder, hybrid) are later pieces. No new scope, entry point, grant or table.
+
+Evidence: `apps/api/test/shopify.test.cjs` (PD1), `apps/web/test/school-shopify-ui.test.tsx` (PD1),
+`packages/database/scripts/test-shopify-commerce-integrity.mjs` (group 4), and the 011 section "Shopify fulfilment source
+exact verification (0611, PD1)".

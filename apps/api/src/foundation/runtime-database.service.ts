@@ -252,6 +252,9 @@ const SAAS_BILLING_CALLS = {
   // T2c (0358): the HQ owner records what the school's Twilio subaccount shows for an unsettled order. Calls no provider.
   settleSchoolNumberOrder: { sql: 'SELECT hon.settle_school_number_order_from_hq($1,$2::uuid,$3,$4,$5::integer) AS data', arity: 5, readOnly: false },
   decideSchoolNumberOrder: { sql: 'SELECT hon.decide_school_number_order_from_hq($1,$2::uuid,$3,$4,$5::integer) AS data', arity: 5, readOnly: false },
+  // T3a (0553): HQ reads every school's A2P registrations; a human HQ owner approves or rejects one submission. Calls no provider.
+  readHqSchoolA2pRegistrations: { sql: 'SELECT hon.read_hq_school_a2p_registrations($1,$2) AS data', arity: 2, readOnly: true },
+  decideSchoolA2pRegistration: { sql: 'SELECT hon.decide_school_a2p_registration_from_hq($1,$2::uuid,$3,$4,$5::integer) AS data', arity: 5, readOnly: false },
   setSchoolTextSender: { sql: 'SELECT hon.set_school_text_sender_from_hq($1,$2::uuid,$3,$4,$5,$6::boolean,$7::integer) AS data', arity: 7, readOnly: false },
   // 0249: the HQ owner sets the school's forwarding phone and the missed-call text-back switch.
   setSchoolMissedCallSettings: { sql: 'SELECT hon.set_school_missed_call_settings_from_hq($1,$2::uuid,$3,$4::boolean,$5::integer) AS data', arity: 5, readOnly: false },
@@ -338,7 +341,8 @@ export type LanguageOperation = keyof typeof LANGUAGE_CALLS;
 export type SchoolOwnershipOperation = 'hqRead'|'setPrimary'|'ownerRead';
 
 export type ShopifyOperation = 'read'|'catalog'|'orders'|'start'|'claim'|'record'|'beginSync'|'rotate'|'page'|'finishSync'|'disconnect'
-  |'changes'|'propose'|'cancelChange'|'approveChange'|'rotateChange'|'recordChange';
+  |'changes'|'propose'|'cancelChange'|'approveChange'|'rotateChange'|'recordChange'|'finance'|'recordFinance'
+  |'storefront'|'saveStorefront'|'beginStorefront'|'rotateStorefront'|'finishStorefront';
 
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
@@ -663,6 +667,9 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT hon.read_walkin_card_provider($1) AS data',
       'SELECT hon.open_walkin_card_payment($1,$2) AS data',
       'SELECT hon.settle_walkin_card_payment($1,$2) AS data',
+      'SELECT hon.read_public_share_calendar($1) AS data',
+      'SELECT hon.read_public_referral($1) AS data',
+      'SELECT hon.submit_family_referral($1,$2::jsonb,$3) AS data',
     ].includes(statement)) throw new Error('Unknown public event call.');
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
@@ -716,6 +723,26 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       const result = await client.query<{ data: unknown }>(statement, values);
       await client.query('COMMIT');
       if (result.rows.length !== 1) throw new Error('Unverified parent invoice payment call.');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
+    finally { client.release(); }
+  }
+
+  /** 0598: the four fixed family checkout calls, each in its own short transaction (no tenant settings; the definer re-proves scope). */
+  async runParentCheckoutCall(statement: string, values: unknown[]): Promise<unknown> {
+    if (![
+      'SELECT hon.read_parent_checkout_pages($1::text) AS data',
+      'SELECT hon.open_parent_checkout_order($1::text,$2::jsonb,$3::text) AS data',
+      'SELECT hon.read_parent_checkout_order($1::text,$2::uuid) AS data',
+    ].includes(statement)) throw new Error('Unknown parent checkout call.');
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>(statement, values);
+      await client.query('COMMIT');
+      if (result.rows.length !== 1) throw new Error('Unverified parent checkout call.');
       return result.rows[0]!.data;
     } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
     finally { client.release(); }
@@ -1536,7 +1563,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return this.callFixedSubjectFunction(call,params,'PERSON_UNAVAILABLE');
   }
 
-  /** 0564 Point of Sale: fixed definer functions; the subject comes only from the signed HON session. */
+  /** 0612 Point of Sale: fixed definer functions; the subject comes only from the signed HON session. */
   async callSchoolPos(operation: 'read'|'sales'|'sale'|'settings'|'item'|'stock'|'record'|'refund', params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
       read: {sql: 'SELECT hon.read_pos($1,$2::uuid) data',arity:2,readOnly:true},
@@ -1586,6 +1613,15 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       approveChange: {sql: 'SELECT hon.approve_shopify_product_change($1,$2::jsonb) data',arity:2,readOnly:false},
       rotateChange: {sql: 'SELECT hon.rotate_shopify_change_credential($1,$2::jsonb) data',arity:2,readOnly:false},
       recordChange: {sql: 'SELECT hon.record_shopify_product_change_result($1,$2::jsonb) data',arity:2,readOnly:false},
+      // 0597 SH-F1 Shopify Payments snapshot.
+      finance: {sql: 'SELECT hon.read_shopify_finance($1,$2::uuid) data',arity:2,readOnly:true},
+      recordFinance: {sql: 'SELECT hon.record_shopify_finance($1,$2::jsonb) data',arity:2,readOnly:false},
+      // 0609 TB2 storefront blocks (HON writes only its own app-data metafield; no theme access).
+      storefront: {sql: 'SELECT hon.read_shopify_storefront($1,$2::uuid) data',arity:2,readOnly:true},
+      saveStorefront: {sql: 'SELECT hon.save_shopify_storefront($1,$2::jsonb) data',arity:2,readOnly:false},
+      beginStorefront: {sql: 'SELECT hon.begin_shopify_storefront_publish($1,$2::jsonb) data',arity:2,readOnly:false},
+      rotateStorefront: {sql: 'SELECT hon.rotate_shopify_storefront_credential($1,$2::jsonb) data',arity:2,readOnly:false},
+      finishStorefront: {sql: 'SELECT hon.finish_shopify_storefront_publish($1,$2::jsonb) data',arity:2,readOnly:false},
     } as const;
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('SHOPIFY_UNAVAILABLE');
