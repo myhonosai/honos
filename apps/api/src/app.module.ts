@@ -38,7 +38,7 @@ import { OwnerLaunchController } from './owner-launch/owner-launch.controller.js
 import { OwnerLaunchService } from './owner-launch/owner-launch.service.js';
 import { CurriculumLibraryService } from './curriculum/library.service.js';
 import { ParentAppCurriculumService } from './curriculum/parent-app-curriculum.service.js';
-import { StaffParentAppCurriculumController, ParentAppCurriculumHumanUiGuard } from './curriculum/parent-app-curriculum.controller.js';
+import { StaffParentAppCurriculumController, ParentCurriculumAppController, ParentAppCurriculumHumanUiGuard } from './curriculum/parent-app-curriculum.controller.js';
 import { StaffCurriculumLibraryController, ParentCurriculumLibraryController, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard } from './curriculum/library.controller.js';
 import { ParentClassPassViewController, ParentClassPassReadGuard } from './families/parent-classpass-view.controller.js';
 import { ParentClassPassViewService } from './families/parent-classpass-view.service.js';
@@ -523,7 +523,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
   imports: [ClassPassModule, KioskModule],
   controllers: [HonOsSignupController,HonOsTrialController,HonOsAdmissionHqController,SchoolOwnerInvitationController,SchoolOwnershipController,SchoolStaffInvitationController,SchoolFamilyAccessInvitationController,OwnerLaunchController,
     CurrentStaffReportingSchoolController,
-    StaffCurriculumLibraryController, ParentCurriculumLibraryController, StaffParentAppCurriculumController,
+    StaffCurriculumLibraryController, ParentCurriculumLibraryController, StaffParentAppCurriculumController, ParentCurriculumAppController,
     AchievementsController, ParentAchievementsController,
     TeachingStudioController,
     RetentionReviewController,
