@@ -14,7 +14,7 @@ let bestVoice: Promise<string | undefined> | undefined;
 function pickVoice(lang: string): Promise<string | undefined> {
   bestVoice ??= Speech.getAvailableVoicesAsync().then(voices => {
     const english = voices.filter(v => v.language?.toLowerCase().startsWith('en'));
-    const score = (v: (typeof voices)[number]) => (v.quality === Speech.VoiceQuality.Enhanced ? 2 : 0) + (v.language?.toLowerCase() === lang.toLowerCase() ? 1 : 0);
+    const score = (v: (typeof voices)[number]) => (v.language?.toLowerCase() === lang.toLowerCase() ? 2 : 0) + (v.quality === Speech.VoiceQuality.Enhanced ? 1 : 0);
     return english.sort((a, b) => score(b) - score(a))[0]?.identifier;
   }).catch(() => undefined);
   return bestVoice;

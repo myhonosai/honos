@@ -65,12 +65,16 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
   /** Spoken questions in a row since the parent last tapped the microphone. */
   const talks = useRef(0);
   const listenAgain = useRef<() => void>(() => undefined);
+  /** What is in the question box right now, for callbacks that outlive a render. */
+  const typed = useRef('');
+  typed.current = draft;
   const read = (reply: EianAnswer, thenListen = false) => {
     if (!voice || !live.current) return;
     setReading(true);
     voice.speak(spokenText(reply), finished => {
       setReading(false);
-      if (!finished || !thenListen || !live.current) return;
+      // A parent who started typing during the reading keeps their words; the microphone waits for a tap.
+      if (!finished || !thenListen || !live.current || typed.current.trim()) return;
       if (talks.current >= TALK_LIMIT) { talks.current = 0; setVoiceNote(TALK_PAUSED); return; }
       listenAgain.current();
     });
@@ -258,7 +262,7 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
         ? "Eian answers common family questions on your phone. Other questions are answered by AI from your school's records, and those answers are marked AI. Eian never pays, books or sends anything by itself."
         : "Eian understands common family questions and answers only from your school's records. It never pays, books or sends anything by itself."}</Text>
       {voice ? <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.sm }}>{canListen
-        ? "The microphone opens when you tap it, and again after Eian answers a spoken question so you can keep talking. It closes when you go quiet, tap stop or leave Eian. Your phone's speech service (Apple or Google) may send your spoken question off the phone to turn it into text. HON gets only the text. Reading aloud uses your phone's own voice."
+        ? "The microphone opens when you tap it, and again after Eian answers a spoken question so you can keep talking. It closes when you go quiet, tap stop or leave Eian. Your phone's speech service (Apple or Google) may send your spoken question off the phone to turn it into text. To hear names correctly, your children's names are also given to that speech service. HON gets only the text. Reading aloud uses your phone's own voice."
         : "Reading aloud uses your phone's own voice."}</Text> : null}
     </ScrollView>
   );

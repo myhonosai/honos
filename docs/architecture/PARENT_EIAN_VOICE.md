@@ -15,8 +15,9 @@ App only: no server change, no migration, no paid service, no new account.
   microphone opens again for a follow-up, with "I'm listening" shown. Silence simply ends it. It does not reopen after a
   typed question, after the parent stops the reading, or after 10 spoken questions in a row (then one tap continues).
 - **Listening hints.** The recognizer is given the children's names and school words (`voiceHints`, at most 40) so they
-  are heard correctly. They go only to the phone's own speech service, with the audio.
-- **Voice.** The phone's best English voice (enhanced quality when installed), raised in pitch because Eian is drawn as
+  are heard correctly. They go only to the phone's own speech service, with the audio, on every listen, and the screen
+  says so. A question typed during the reading is kept and the microphone does not reopen over it.
+- **Voice.** The phone's best English voice (the phone's own accent first, then enhanced quality when installed), raised in pitch because Eian is drawn as
   a young boy. Still a phone voice; a natural character voice needs a paid service and the owner's decision.
 - **Stops by itself.** Asking again, leaving the Eian tab, signing out or closing the screen cancels listening and stops
   reading. Nothing listens in the background and there is no wake word.

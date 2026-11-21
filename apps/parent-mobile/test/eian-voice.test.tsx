@@ -103,6 +103,18 @@ describe('Eian voice', () => {
     expect(screen.getByRole('button', { name: 'Ask Eian by voice' })).toBeTruthy();
   });
 
+  it('leaves a question typed during the reading alone instead of reopening the microphone', async () => {
+    const { voice, state } = fakeVoice();
+    await open(voice);
+    await fireEvent.press(screen.getByRole('button', { name: 'Ask Eian by voice' }));
+    await act(async () => { state.on!.end({ kind: 'heard', text: 'Do we have any open invoices?' }); });
+    await screen.findByText('You have 1 open invoice:');
+    await fireEvent.changeText(screen.getByLabelText('Ask Eian'), 'when is');
+    await act(async () => { state.done!(true); });
+    expect(state.listens).toBe(1);
+    expect(screen.getByLabelText('Ask Eian').props.value).toBe('when is');
+  });
+
   it('gives the recognizer the family names and school words, bounded', () => {
     expect(voiceHints(['Mia Sample', ' ', 'Mia Sample'])).toEqual(expect.arrayContaining(['Mia Sample', 'Mia', 'Eian', 'invoice']));
     expect(voiceHints(Array.from({ length: 80 }, (_, i) => `Child${i} Family${i}`)).length).toBe(40);
@@ -177,7 +189,7 @@ describe('Eian voice', () => {
 
   it('says in plain words that the spoken question may leave the phone', async () => {
     await open(fakeVoice().voice);
-    expect(screen.getByText(/again after Eian answers a spoken question so you can keep talking\..*may send your spoken question off the phone to turn it into text\. HON gets only the text\./)).toBeTruthy();
+    expect(screen.getByText(/again after Eian answers a spoken question so you can keep talking\..*may send your spoken question off the phone to turn it into text\. To hear names correctly, your children's names are also given to that speech service\. HON gets only the text\./)).toBeTruthy();
   });
 
   it('declares why the microphone is used', () => {
