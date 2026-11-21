@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  validateWalkInSettingsInput, WALKIN_DESK_METHODS, WALKIN_LIMITS, WALKIN_OFFER_KINDS,
+  isWalkInText, validateWalkInSettingsInput, WALKIN_DESK_METHODS, WALKIN_LIMITS, WALKIN_OFFER_KINDS,
   type WalkInDeskMethod, type WalkInOfferKind, type WalkInOverview, type WalkInSettings, type WalkInSettingsInput, type WalkInSettingsRead,
   type WalkInText, type WalkInVisit, type WalkInVisitDetail,
 } from '@hon/contracts';
@@ -46,7 +46,9 @@ export function priceMinor(value: string): number {
   return Number(whole) * 100 + Number(cents.padEnd(2, '0'));
 }
 const tidy = (t: WalkInText, multiline = false): WalkInText => {
-  const clean = (v: string | undefined) => (multiline ? (v ?? '').replace(/\r\n/g, '\n') : (v ?? '')).trim();
+  // A waiver pasted from a word processor often carries tabs or page breaks: tabs become spaces, other control characters go.
+  // eslint-disable-next-line no-control-regex
+  const clean = (v: string | undefined) => (multiline ? (v ?? '').replace(/\r\n?/g, '\n').replace(/\t/g, ' ').replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '') : (v ?? '')).trim();
   return { en: clean(t.en), ...(clean(t.ko) ? { ko: clean(t.ko) } : {}), ...(clean(t.es) ? { es: clean(t.es) } : {}) };
 };
 /** The save body for the draft; it throws when anything is not acceptable. The server checks it all again. */
@@ -57,6 +59,20 @@ export function settingsBody(draft: SettingsDraft, current: WalkInSettings | nul
     offers: draft.offers.map(o => ({ key: o.key, kind: o.kind, name: tidy(o.name), description: tidy(o.description), priceMinor: priceMinor(o.price),
       ...(o.kind === 'TRIAL' && o.programIds.length ? { programIds: [...o.programIds] } : {}) })),
   });
+}
+/** What still stops the settings from saving, in the owner's words (empty when the draft can be sent). */
+export function settingsProblems(draft: SettingsDraft, pipelineCount: number): WalkInKey[] {
+  const problems: WalkInKey[] = [];
+  const waiver = tidy(draft.waiver, true);
+  if (!waiver.en) problems.push('pWaiverMissing');
+  else if (!Object.values(waiver).every(v => isWalkInText(v, 0, WALKIN_LIMITS.waiver, true))) problems.push('pWaiverChars');
+  if (!pipelineCount) problems.push('pNoPipeline');
+  else if (!draft.pipelineId || !draft.pipelineStageId) problems.push('pPipeline');
+  if (draft.offers.some(o => !tidy(o.name).en)) problems.push('pOfferName');
+  const oneLine = [draft.thankYou, ...draft.offers.flatMap(o => [o.name, o.description])].map(x => tidy(x));
+  if (!oneLine.every(x => Object.values(x).every(v => isWalkInText(v, 0, 300)))) problems.push('pTextChars');
+  if (draft.offers.some(o => Number.isNaN(priceMinor(o.price)))) problems.push('pOfferPrice');
+  return problems;
 }
 export function nextOfferKey(offers: readonly OfferDraft[]): string {
   for (let n = 1; ; n += 1) if (!offers.some(o => o.key === `offer-${n}`)) return `offer-${n}`;
@@ -78,7 +94,7 @@ function TextFields({ t, label, value, onChange, multiline, max }: { t: T; label
 
 export type WalkInStaffViewProps = Readonly<{
   language: string; waiting: boolean; hasSchool: boolean; overview: Read<WalkInOverview>; settings: Read<WalkInSettingsRead> | null; draft: SettingsDraft | null;
-  detail: Read<WalkInVisitDetail> | null; outcome: Outcome; busy: boolean; label: string; hours: number; scope?: WalkInScope | null;
+  detail: Read<WalkInVisitDetail> | null; outcome: Outcome; busy: boolean; problems?: readonly WalkInKey[]; label: string; hours: number; scope?: WalkInScope | null;
   onLabel?: (v: string) => void; onHours?: (v: number) => void; onStart?: () => void; onEnd?: (deviceId: string, version: number) => void;
   onPaid?: (visitId: string, version: number, method: WalkInDeskMethod) => void; onOpen?: (visitId: string | null) => void; onDraft?: (d: SettingsDraft) => void;
   onSave?: () => void; onRefresh?: () => void;
@@ -94,11 +110,16 @@ export function WalkInStaffView(p: WalkInStaffViewProps): React.ReactElement {
     return <main className={styles.page}>{head}<p role={p.overview.state === 'LOADING' ? 'status' : 'alert'}>{t(p.overview.state === 'LOADING' ? 'loading' : p.overview.state === 'DENIED' ? 'denied' : 'unavailable')}</p></main>;
   }
   const o = p.overview.read;
-  const outcome = p.outcome && p.outcome.kind !== 'SENDING' ? <p className={styles.notice} role={p.outcome.kind === 'DONE' ? 'status' : 'alert'} data-testid="walkin-outcome">
-    {p.outcome.kind === 'DONE' ? t('saved') : p.outcome.kind === 'PAID_BY_CARD' ? t('paidByCard') : p.outcome.kind === 'SIGN_OUT_FAILED' ? t('signOutFailed') : p.outcome.kind === 'START_REPLAYED' ? t('startReplayed') : t(`o${p.outcome.kind}` as WalkInKey)}</p> : null;
+  const outcomeText = p.outcome && p.outcome.kind !== 'SENDING' ? (p.outcome.kind === 'DONE' ? t('saved') : p.outcome.kind === 'PAID_BY_CARD' ? t('paidByCard')
+    : p.outcome.kind === 'SIGN_OUT_FAILED' ? t('signOutFailed') : p.outcome.kind === 'START_REPLAYED' ? t('startReplayed') : t(`o${p.outcome.kind}` as WalkInKey)) : null;
+  const outcome = p.outcome && outcomeText ? <p className={styles.notice} role={p.outcome.kind === 'DONE' ? 'status' : 'alert'} data-testid="walkin-outcome">{outcomeText}</p> : null;
   const ready = o.configured && o.enabled;
   const start = <section className={styles.card} aria-labelledby="walkin-start"><h2 id="walkin-start">{t('startTitle')}</h2>
-    {!o.configured ? <p className={styles.meta}>{t('notSetUp')} {t(o.canManage ? 'notSetUpOwner' : 'notSetUpStaff')}</p> : !o.enabled ? <p className={styles.meta}>{t('isOff')}</p> : null}
+    {!o.configured && o.canManage ? <div className={styles.setup} data-testid="walkin-setup"><p><strong>{t('notSetUp')}</strong> {t('setupSteps')}</p>
+      <ol><li>{t('setupWaiver')}</li><li>{t('setupPipeline')}</li><li>{t('setupOffers')}</li><li>{t('setupSave')}</li></ol>
+      <a className={styles.buttonPrimary} href="#walkin-settings">{t('setupGo')}</a></div>
+      : !o.configured ? <p className={styles.meta}>{t('notSetUp')} {t('notSetUpStaff')}</p>
+      : !o.enabled ? <p className={styles.meta}>{t('isOff')} {o.canManage ? <a href="#walkin-settings">{t('turnOnGo')}</a> : null}</p> : null}
     <p className={styles.meta}>{t('startHelp')}</p>
     <div className={styles.form}>
       <label>{t('label')}<input value={p.label} maxLength={WALKIN_LIMITS.label} onChange={e => p.onLabel?.(e.target.value)}/></label>
@@ -151,6 +172,7 @@ export function WalkInStaffView(p: WalkInStaffViewProps): React.ReactElement {
         <TextFields t={t} label={t('sWaiver')} value={d.waiver} multiline max={WALKIN_LIMITS.waiver} onChange={waiver => set({ waiver })}/>
         <p className={styles.meta}>{t('sWaiverHelp')} {t('sWaiverChange')}</p>
         <label className={styles.checkRow}><input type="checkbox" checked={d.emergencyRequired} onChange={e => set({ emergencyRequired: e.target.checked })}/>{t('sEmergency')}</label>
+        {pipes.length ? null : <p className={styles.notice} role="alert" data-testid="walkin-no-pipeline">{t('pNoPipeline')} <a href="/staff/crm">{t('openLeads')}</a></p>}
         <div className={styles.row}>
           <label>{t('sPipeline')}<select value={d.pipelineId} onChange={e => set({ pipelineId: e.target.value, pipelineStageId: pipes.find(x => x.pipelineId === e.target.value)?.stages[0]?.stageId ?? '' })}>
             {pipes.map(x => <option key={x.pipelineId} value={x.pipelineId}>{x.name}</option>)}</select></label>
@@ -174,12 +196,16 @@ export function WalkInStaffView(p: WalkInStaffViewProps): React.ReactElement {
         {d.offers.length < WALKIN_LIMITS.offers ? <button type="button" className={styles.button} onClick={() => set({ offers: [...d.offers, { key: nextOfferKey(d.offers), kind: 'TRIAL', name: blank(), description: blank(), price: '0', programIds: [] }] })}>{t('sAddOffer')}</button> : null}
         </fieldset>
         <TextFields t={t} label={t('sThankYou')} value={d.thankYou} max={WALKIN_LIMITS.thankYou} onChange={thankYou => set({ thankYou })}/>
+        {p.problems?.length ? <div className={styles.notice} role="alert" data-testid="walkin-settings-problems"><p>{t('problemsTitle')}</p>
+          <ul>{p.problems.map(k => <li key={k}>{t(k)}</li>)}</ul></div> : null}
         <div className={styles.row}><button type="submit" className={styles.buttonPrimary} disabled={p.busy}>{p.busy ? t('saving') : t('save')}</button></div>
+        {/* The same answer beside Save, so an owner at the bottom of the page sees it (the top copy is the announced one). */}
+        {outcomeText ? <p className={styles.meta} aria-hidden="true" data-testid="walkin-settings-outcome">{outcomeText}</p> : null}
         <p className={styles.meta}>{t('olderTools')}: <a href="/staff/classpass">{t('classPassLink')}</a> · <a href="/staff/kiosk">{t('handoffLink')}</a></p>
       </form>;
     })()}</section>;
   return <main className={styles.page} data-testid="walkin-staff">{head}{outcome}
-    <div className={styles.cards}>{start}{tablets}</div>{detail}{visits}{settings}</main>;
+    <div className={styles.cards}>{start}{tablets}</div>{o.configured ? null : settings}{detail}{visits}{o.configured ? settings : null}</main>;
 }
 
 const readState = (error: unknown): { state: 'DENIED' | 'UNAVAILABLE' } => ({ state: error instanceof WalkInError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' });
@@ -197,6 +223,7 @@ export function WalkInKioskPage({ api = walkInApi, signOut = signOutThisBrowser 
   const [draft, setDraft] = useState<SettingsDraft | null>(null);
   const [detail, setDetail] = useState<Read<WalkInVisitDetail> | null>(null);
   const [outcome, setOutcome] = useState<Outcome>(null);
+  const [problems, setProblems] = useState<readonly WalkInKey[]>([]);
   const [label, setLabel] = useState('Front desk');
   const [hours, setHours] = useState(8);
   const [refresh, setRefresh] = useState(0);
@@ -255,7 +282,7 @@ export function WalkInKioskPage({ api = walkInApi, signOut = signOutThisBrowser 
   };
   const reload = () => setRefresh(n => n + 1);
   return <WalkInStaffView language={preferences.language} waiting={shell.phase !== 'READY' && shell.phase !== 'IDLE'} hasSchool={!!scope} overview={overview} settings={settings}
-    draft={draft} detail={detail} outcome={outcome} busy={outcome?.kind === 'SENDING'} label={label} hours={hours} scope={scope}
+    draft={draft} detail={detail} outcome={outcome} problems={problems} busy={outcome?.kind === 'SENDING'} label={label} hours={hours} scope={scope}
     onLabel={setLabel} onHours={setHours} onStart={() => { void onStart(); }} onRefresh={reload} onDraft={setDraft}
     onEnd={(deviceId, version) => { if (scope) void run(`end:${deviceId}:${version}`, (k, s, o) => api.end(scope, deviceId, version, k, s, o)).then(r => { if (r) reload(); }); }}
     onPaid={(visitId, version, method) => { if (scope) void run(`paid:${visitId}:${version}:${method}`, (k, s, o) => api.deskPaid(scope, visitId, { expectedVersion: version, method }, k, s, o)).then(r => {
@@ -271,6 +298,9 @@ export function WalkInKioskPage({ api = walkInApi, signOut = signOutThisBrowser 
     }}
     onSave={() => {
       if (!scope || !draft || settings?.state !== 'READY') return;
+      const found = settingsProblems(draft, settings.read.pipelines.length);
+      setProblems(found);
+      if (found.length) { setOutcome({ kind: 'INVALID' }); return; }
       let body: WalkInSettingsInput;
       try { body = settingsBody(draft, settings.read.settings); } catch { setOutcome({ kind: 'INVALID' }); return; }
       void run(`settings:${JSON.stringify(body)}`, (k, s, o) => api.saveSettings(scope, body, k, s, o)).then(r => {
