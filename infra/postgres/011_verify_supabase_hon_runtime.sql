@@ -6066,8 +6066,8 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
 ('hon.public_checkout_order_for(uuid,text)',true,false,'search_path=pg_catalog, hon','d6a61b464f2ca1d08f8033e5535813bd61dfa20bf7d7f715f5ad9647baf382cb'),
 ('hon.public_checkout_order_json(hon.public_checkout_orders)',true,false,'search_path=pg_catalog, hon','35147f8b5283000affa3129bf90ef18bf373b98895608b085c33f3d4dd87cd1b'),
 ('hon.settle_public_checkout_order()',true,false,'search_path=pg_catalog, hon','d12a22087e71a90c543ed99be34f1986ce82b0f37994094a0f37183d2231266b'),
-('hon.open_public_checkout_order(text,jsonb,text,boolean)',true,true,'search_path=pg_catalog, hon','38a30c9dd8251927b0cb91014b83a7ace54db7610ebc38ee9f3a6652bd208d1a'),
-('hon.read_public_checkout_order(text,text)',true,true,'search_path=pg_catalog, hon','16cd0fb94591a0b165225522bd3942f7ffe92d73c9acaccfbfce3e77a1b18511'),
+('hon.open_public_checkout_order(text,jsonb,text,boolean)',true,true,'search_path=pg_catalog, hon','3779ba47679df3638a3f7717313b3c9b6f6df2b5a855ba0e52219799c5b1377f'),
+('hon.read_public_checkout_order(text,text)',true,true,'search_path=pg_catalog, hon','c6fef10dc7405bce8f6191fc80b7f1ef320b14768af2f0cad29ec86b691deef1'),
 ('hon.read_school_public_checkout_orders(text)',true,true,'search_path=pg_catalog, hon','4fc82d6c9db853cbf4e302a9e4f14449312c06467d4ff24ba18145601498e8c0')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed

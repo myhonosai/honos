@@ -377,6 +377,6 @@
     "0613_pos_sells_shopify.sql": "0e455d550adea8b4e60f1ba108b10a2e0ee8dabdbc0a2142a4c669cc31c30b12",
     "0614_pos_shopify_orders.sql": "ba0b9b5bceb7d5926af3dfe88b683eb0ed73dd59c91c26a875a9cfd9aa0ee8e7",
     "0620_school_checkout_public_links.sql": "b7677ff0056b70a0a006761f0a293e153f27d43f7a37706d5e8a60b657cca832",
-    "0627_public_checkout_orders.sql": "aaaa99164bfaa133294bb3883175f372999f774b5984ca0939a71345c5b796d3"
+    "0627_public_checkout_orders.sql": "6c73bead610c6b342574f43981ff1db898972f79807d05f2fb66a37395fd44c8"
   }
 }

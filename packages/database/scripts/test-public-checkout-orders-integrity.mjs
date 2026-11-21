@@ -300,6 +300,24 @@ try {
   ok((await site.order(link[OPEN_HOUSE], freeOrder('RAE@example.test'))).result === 'RATE_LIMITED', 'the 6th for the same email (any case)');
   ok((await site.order(link[OPEN_HOUSE], freeOrder('other@example.test'))).result === 'ORDER', 'another email still can');
 
+  // 12b. Page counters never lock a buyer out of their own order: a known key is always answered and a replay is not counted.
+  const mine = freeOrder('lee@example.test');
+  ok((await site.order(link[OPEN_HOUSE], mine)).result === 'ORDER', 'a buyer places an order');
+  const house = (await one("SELECT checkout_id FROM hon.school_checkout_links WHERE public_id=$1", [link[OPEN_HOUSE]])).checkout_id;
+  const exhaust = (bucket, n) => sql(`INSERT INTO hon.public_checkout_rates(checkout_id,bucket,window_start,attempts) VALUES($1,$2,clock_timestamp(),$3)
+    ON CONFLICT(checkout_id,bucket) DO UPDATE SET window_start=clock_timestamp(),attempts=$3`, [house, bucket, n]);
+  await exhaust('LOOKUP_ATTEMPTS', 1200);
+  ok((await site.status(link[OPEN_HOUSE], { key: key() })).result === 'RATE_LIMITED', 'unknown keys run out of lookups');
+  ok((await site.status(link[OPEN_HOUSE], { key: mine.key })).result === 'ORDER', 'the buyer\'s own key still finds the order');
+  ok((await site.start(link[OPEN_HOUSE], { key: mine.key })).result === 'ORDER', 'and pay still answers');
+  ok((await one("SELECT attempts FROM hon.public_checkout_rates WHERE checkout_id=$1 AND bucket='LOOKUP_ATTEMPTS'", [house])).attempts === 1201, 'only the miss was counted');
+  await exhaust('ORDER_ATTEMPTS', 300);
+  ok((await site.order(link[OPEN_HOUSE], freeOrder('new@example.test'))).result === 'RATE_LIMITED', 'new orders run out of attempts');
+  ok((await site.order(link[OPEN_HOUSE], mine)).result === 'ORDER', 'the same key and order still replays');
+  ok((await site.order(link[OPEN_HOUSE], { key: key(), order: { ...mine.order, website: 'x' } })).result === 'INVALID', 'a malformed order is refused, not counted');
+  ok((await one("SELECT attempts FROM hon.public_checkout_rates WHERE checkout_id=$1 AND bucket='ORDER_ATTEMPTS'", [house])).attempts === 301, 'only the new order was counted');
+  await sql('DELETE FROM hon.public_checkout_rates WHERE checkout_id=$1', [house]);
+
   // 13. Staff (P7): school_checkout.manage reads the link orders with buyer, participants and answers; others are refused.
   const scope = await db.resolveAuthorizedScope(MANAGER.subject, ids.school, 'school_checkout.manage');
   const context = (subject, s) => ({ ...s, principalType: 'HUMAN_USER', requestId: randomUUID(), correlationId: randomUUID(), idempotencyKey: '', source: 'HUMAN_UI', externalSubject: subject });

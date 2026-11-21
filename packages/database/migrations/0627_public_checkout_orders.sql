@@ -16,7 +16,7 @@ BEGIN;
 --   P4  Places count PAID and payable OPEN orders of both kinds (0598 family_checkout_taken now sums both), under the page lock.
 --   P5  Settling is the 0598 rule in its own trigger: SUCCEEDED for the same amount makes the order PAID; FAILED, EXPIRED or
 --       CANCELED makes it CANCELED; a success for an order no longer OPEN is flagged for staff review. Nothing is refunded.
---   P6  Limits per page: 300 order attempts and 1200 key lookups per rolling hour; 5 placed orders per email per rolling
+--   P6  Limits per page: 300 well-formed new order attempts and 1200 unknown-key lookups per rolling hour (a known key is always answered); 5 placed orders per email per rolling
 --       hour (mistakes do not count); at most 500 placed orders per rolling day. Public answers carry results only (never PostgreSQL detail, names or emails).
 --   P7  Staff with school_checkout.manage read the school's latest 200 link orders (buyer, participants, answers, state).
 -- The runtime gains no table privilege; public writes run as a code-owned SYSTEM_SERVICE principal with no roles.
@@ -210,9 +210,7 @@ BEGIN
     RETURN jsonb_build_object('result','INVALID'); END IF;
   c:=hon.public_school_checkout(pid);
   IF c.id IS NULL OR NOT hon.public_checkout_intake_ok() THEN RETURN jsonb_build_object('result','INVALID'); END IF;
-  -- Shape first (P2): exactly these keys, sizes bounded; no write happens for a malformed request but the attempt counter.
-  DELETE FROM hon.public_checkout_rates WHERE checkout_id=c.id AND window_start<=clock_timestamp()-interval '1 hour';
-  IF NOT hon.take_public_checkout_rate(c.id,'ORDER_ATTEMPTS',300) THEN RETURN jsonb_build_object('result','RATE_LIMITED'); END IF;
+  -- Shape first (P2): exactly these keys, sizes bounded; nothing is written for a malformed request.
   IF jsonb_typeof(p) IS DISTINCT FROM 'object' OR octet_length(p::text)>16384
     OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p) k) IS DISTINCT FROM ARRAY['addOns','buyer','expectedVersion','optionKey','participants','waiverAccepted','website']
     OR jsonb_typeof(p->'website') IS DISTINCT FROM 'string' OR p->>'website'<>''
@@ -246,8 +244,18 @@ BEGIN
     RETURN jsonb_build_object('result',CASE WHEN prior.status='PAID' THEN 'PAID' ELSE 'OPEN' END,'orderId',prior.id,'amountMinor',prior.amount_minor,
       'currency',prior.currency,'replayed',true);
   END IF;
+  -- Only a well-formed new order counts toward the page's attempts (a malformed body or a replay does not).
+  DELETE FROM hon.public_checkout_rates WHERE checkout_id=c.id AND window_start<=clock_timestamp()-interval '1 hour';
+  IF NOT hon.take_public_checkout_rate(c.id,'ORDER_ATTEMPTS',300) THEN RETURN jsonb_build_object('result','RATE_LIMITED'); END IF;
   -- Lock order: page -> (0529) school -> connection -> payment, as 0598.
   SELECT * INTO c FROM hon.school_checkouts x WHERE x.id=c.id FOR UPDATE;
+  -- A same-key submit that won the lock first is replayed here rather than failing on the unique key.
+  SELECT * INTO prior FROM hon.public_checkout_orders x WHERE x.checkout_id=c.id AND x.key_hash=kh;
+  IF FOUND THEN
+    IF prior.payload_hash<>ph THEN RETURN jsonb_build_object('result','INVALID'); END IF;
+    RETURN jsonb_build_object('result',CASE WHEN prior.status='PAID' THEN 'PAID' ELSE 'OPEN' END,'orderId',prior.id,'amountMinor',prior.amount_minor,
+      'currency',prior.currency,'replayed',true);
+  END IF;
   -- The link is decided again after the lock, so a page taken down meanwhile cannot sell.
   IF (hon.public_school_checkout(pid)).id IS DISTINCT FROM c.id OR c.status<>'PUBLISHED' THEN RETURN jsonb_build_object('result','INVALID'); END IF;
   IF c.version<>(p->>'expectedVersion')::integer THEN RETURN jsonb_build_object('result','CHANGED'); END IF;
@@ -325,10 +333,13 @@ BEGIN
   SELECT c2.* INTO c FROM hon.school_checkout_links k JOIN hon.school_checkouts c2 ON c2.id=k.checkout_id AND c2.school_id=k.school_id
     AND c2.organization_id=k.organization_id WHERE k.public_id=pid;
   IF NOT FOUND THEN RETURN jsonb_build_object('result','INVALID'); END IF;
-  DELETE FROM hon.public_checkout_rates WHERE checkout_id=c.id AND window_start<=clock_timestamp()-interval '1 hour';
-  IF NOT hon.take_public_checkout_rate(c.id,'LOOKUP_ATTEMPTS',1200) THEN RETURN jsonb_build_object('result','RATE_LIMITED'); END IF;
+  -- A real key is always answered; only misses count, so guessing keys can never lock buyers out of their own order.
   o:=hon.public_checkout_order_for(c.id,key);
-  IF o.id IS NULL THEN RETURN jsonb_build_object('result','INVALID'); END IF;
+  IF o.id IS NULL THEN
+    DELETE FROM hon.public_checkout_rates WHERE checkout_id=c.id AND window_start<=clock_timestamp()-interval '1 hour';
+    IF NOT hon.take_public_checkout_rate(c.id,'LOOKUP_ATTEMPTS',1200) THEN RETURN jsonb_build_object('result','RATE_LIMITED'); END IF;
+    RETURN jsonb_build_object('result','INVALID');
+  END IF;
   SELECT * INTO x FROM hon.school_pay_once p WHERE p.organization_id=o.organization_id AND p.school_id=o.school_id AND p.source='CHECKOUT_PAGE'
     AND p.source_id=o.id ORDER BY p.created_at DESC,p.id DESC LIMIT 1;
   RETURN jsonb_build_object('result','FOUND','order',hon.public_checkout_order_json(o),'paymentId',x.id,'paymentState',x.state,
