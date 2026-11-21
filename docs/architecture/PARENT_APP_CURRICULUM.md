@@ -5,7 +5,7 @@ or cycle based. If rank based, as rank changes, I need app to know and change wh
 know which cycle and cycle material is set either video or documents. And it would cycle through or pick by staff.
 This means HON OS needs a section for app control."
 
-Status: PCA-1 (0605) merged to main (#524); PCA-2 (0610) on branch claude/project-thread-05np7o; PCA-3..4 not merged yet. Migrations (coordinator, 2026-11-19): 0605 cycles + settings, 0610 parent read v2.
+Status: PCA-1 (0605) merged to main (#524); PCA-2 (0610) merged to main (#549); PCA-3 staff page on branch claude/project-thread-05np7o; PCA-4 not built yet. Migrations (coordinator, 2026-11-19): 0605 cycles + settings, 0610 parent read v2.
 
 ## 1. What already exists on main (cd2c33d)
 
@@ -195,3 +195,16 @@ Contracts in `packages/contracts/src/parent-app-curriculum.ts` with strict verif
   needs saved settings (`SETTINGS_REQUIRED`); leaving AUTO keeps the cycle families see today; a first STAFF_PICK save
   or the first cycle added under STAFF_PICK becomes current; reorder takes the exact list of active cycles; active positions stay 1..n (archive renumbers, review P3).
 - Proof: `packages/database/scripts/test-parent-app-curriculum-integrity.mjs` (142 checks over signed HTTP).
+
+## 13. PCA-3 as built (staff page)
+
+- Route `/staff/parent-app/curriculum`, in the Parent app menu after Messages and Announcements. Component
+  `apps/web/src/components/parent-app-curriculum/` (`http.ts` same-origin calls, `view.ts` pure wording, page + CSS on `--hon-*` tokens).
+- The page never computes the current cycle; it words `cycleState` from the database.
+- Materials are always audience `PARENT` and go through the 0132 library routes (`curriculum-library` command header).
+- Until the app Curriculum screen (PCA-4) ships, a notice says documents and cycle material are not in the app yet, and each such
+  item carries a "Not in the app yet" badge (cycle_id set, or kind DOCUMENT).
+- Archive and switch use a second confirm click (no browser dialogs). Retries reuse the idempotency key until confirmed.
+- Preview: students from the existing enrollments picker (filtered to the curriculum), then the 0610 staff preview read.
+- Below the preview the page mounts the shared `JourneyRecommendationsPanel` (0603, owned by the parent app thread) for the selected
+  curriculum with its ranks in order; this page adds no recommendation logic of its own.
