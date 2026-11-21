@@ -131,7 +131,7 @@ describe('train AI screen', () => {
   it('asks for a school, then renders the screen shell without data or IDs', () => {
     expect(renderToStaticMarkup(<TrainAi />)).toContain('Choose a school to train its conversation AI.');
     const html = renderToStaticMarkup(<SchoolShellProvider value={{ ...NO_SCHOOL_SHELL, phase: 'READY', selection: scope, schoolName: 'Sunrise' }}><TrainAi /></SchoolShellProvider>);
-    expect(html).toContain('<h1>Train AI</h1>'); expect(html).toContain('aria-live="polite"'); expect(html).toContain('Nothing here calls an AI yet.');
+    expect(html).toContain('<h1>Conversation AI</h1>'); expect(html).toContain('aria-live="polite"');
     expect(html).not.toContain(A); expect(html).not.toContain(B);
     expect(renderToStaticMarkup(<HqConversationAiProgram />)).toContain('<h1>Conversation AI program</h1>');
   });
@@ -153,7 +153,7 @@ describe('train AI screen', () => {
     expect(manifest).toContain('"/staff/conversations/train-ai"'); expect(manifest).toContain('"/hq/conversation-ai"');
   });
   it('never stores, injects HTML or calls a provider from the browser', () => {
-    for (const file of ['train-ai.tsx', 'hq-program.tsx', 'http.ts']) {
+    for (const file of ['train-ai.tsx', 'hq-program.tsx', 'http.ts', 'setup-parts.tsx', 'setup-model.ts', 'setup-copy.ts']) {
       const source = readFileSync(resolve('src/components/conversation-ai', file), 'utf8');
       expect(source).not.toMatch(/localStorage|sessionStorage|dangerouslySetInnerHTML|innerHTML|twilio|openrouter|openai|anthropic|apiKey/i);
     }

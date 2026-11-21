@@ -1,8 +1,8 @@
 /**
- * School email and text blasts (BL1, migration 0536). Owner request (David, 2026-11-18): blasts with merge tags, a checkout
+ * School email and text blasts (BL1, migration 0621). Owner request (David, 2026-11-18): blasts with merge tags, a checkout
  * link and pictures or video. Piece 1: staff write one email or text, pick groups and tags, see the deduplicated count, and
  * send now or schedule. The database resolves the audience, fills the merge tags and queues one 0243 message per reachable
- * recipient (origin CAMPAIGN). Spec: docs/architecture/SCHOOL_BLASTS.md. validateSaveSchoolBlast mirrors the 0536 checks.
+ * recipient (origin CAMPAIGN). Spec: docs/architecture/SCHOOL_BLASTS.md. validateSaveSchoolBlast mirrors the 0621 checks.
  */
 
 export const SCHOOL_BLAST_CHANNELS = ['EMAIL', 'SMS'] as const;

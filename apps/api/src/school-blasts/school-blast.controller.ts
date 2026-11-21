@@ -16,7 +16,7 @@ function definedFields(input: object): Record<string, unknown> {
 }
 
 /**
- * 0536: school email and text blasts. Route identifiers are never authority: the boundary resolves the route scope from
+ * 0621: school email and text blasts. Route identifiers are never authority: the boundary resolves the route scope from
  * the verified session, and each protected database function re-proves the direct human subject and the live permission
  * (marketing.blast.read for reads, marketing.blast.send for save, send and cancel). Sending only queues 0243 messages.
  */

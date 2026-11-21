@@ -41,13 +41,14 @@ const REFUSALS: Record<string, string> = {
   PARENT_CLASS_BOOKING_FORBIDDEN: 'Your family access does not allow booking from the app.',
 };
 
-export type ActionOutcome = { kind: 'done'; message: string } | { kind: 'refused'; message: string } | { kind: 'unknown' } | { kind: 'session' };
+export type ActionOutcome = { kind: 'done'; message: string; confirmedBooking: boolean } | { kind: 'refused'; message: string } | { kind: 'unknown' } | { kind: 'session' };
 
 /** Turns a command result into what the parent is told. A waitlist place is never described as a booking. */
 export function describeOutcome(result: ParentWrite<{ booking: { status: string } }>, action: 'book' | 'cancel'): ActionOutcome {
   if (result.ok) {
-    if (action === 'cancel') return { kind: 'done', message: 'Booking cancelled.' };
-    return { kind: 'done', message: result.data.booking.status === 'WAITLISTED' ? 'Added to the waitlist. This is not a confirmed spot yet.' : 'Booked.' };
+    if (action === 'cancel') return { kind: 'done', message: 'Booking cancelled.', confirmedBooking: false };
+    const waitlisted = result.data.booking.status === 'WAITLISTED';
+    return { kind: 'done', message: waitlisted ? 'Added to the waitlist. This is not a confirmed spot yet.' : 'Booked.', confirmedBooking: !waitlisted };
   }
   if (result.state === 'unknown' || result.state === 'offline' || result.state === 'unavailable') return { kind: 'unknown' };
   if (result.state === 'refused') return { kind: 'refused', message: (result.code && REFUSALS[result.code]) ?? 'HON could not do this. Nothing was changed.' };

@@ -12,7 +12,7 @@ const READ_LIMITS = "SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='
 const WRITE_LIMITS = "SET LOCAL statement_timeout='30s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-// Exact 0536 error codes; every unknown database failure is unavailable, never success.
+// Exact 0621 error codes; every unknown database failure is unavailable, never success.
 const ERRORS: Record<string, { states: string[]; make: (code: string) => HttpException }> = {
   VALIDATION_FAILED: { states: ['22023'], make: code => new BadRequestException({ code }) },
   BLAST_TEXT_TOO_LONG: { states: ['22023'], make: code => new BadRequestException({ code, detail: 'A filled-in message is too long. Shorten the text.' }) },
@@ -42,7 +42,7 @@ function unverified(): never { throw new Error('Unverified school blast answer.'
 function invalidInput(): never { throw new BadRequestException({ code: 'VALIDATION_FAILED' }); }
 
 /**
- * 0536: school email and text blasts. Each read and command is one protected definer call that re-proves the direct human
+ * 0621: school email and text blasts. Each read and command is one protected definer call that re-proves the direct human
  * subject and the live permission. The database resolves the audience, fills merge tags and queues the 0243 messages; this
  * service never sees an address and never talks to a provider.
  */

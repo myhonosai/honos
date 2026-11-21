@@ -17,10 +17,11 @@ import { strokePath } from './signature-pad';
 import styles from './walk-in-kiosk.module.css';
 
 export type Read<T> = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; read: T };
-export type Outcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | 'SIGN_OUT_FAILED' | 'START_REPLAYED' | WalkInErrorKind }>;
+export type Outcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | 'SIGN_OUT_FAILED' | 'START_REPLAYED' | 'PAID_BY_CARD' | WalkInErrorKind }>;
 type T = (key: WalkInKey, vars?: Readonly<Record<string, string | number>>) => string;
 
-export type OfferDraft = Readonly<{ key: string; kind: WalkInOfferKind; name: WalkInText; description: WalkInText; price: string }>;
+/** programIds (0537): the programs whose next classes a trial offers; empty means a trial without a class to pick. */
+export type OfferDraft = Readonly<{ key: string; kind: WalkInOfferKind; name: WalkInText; description: WalkInText; price: string; programIds: readonly string[] }>;
 export type SettingsDraft = Readonly<{
   enabled: boolean; waiver: WalkInText; emergencyRequired: boolean; pipelineId: string; pipelineStageId: string; offers: readonly OfferDraft[]; thankYou: WalkInText;
 }>;
@@ -30,11 +31,11 @@ export function settingsDraft(read: WalkInSettingsRead): SettingsDraft {
   const s = read.settings, first = read.pipelines[0];
   if (!s) {
     return { enabled: true, waiver: blank(), emergencyRequired: false, pipelineId: first?.pipelineId ?? '', pipelineStageId: first?.stages[0]?.stageId ?? '',
-      offers: [{ key: 'free-trial', kind: 'TRIAL', name: blank('Free trial class'), description: blank(), price: '0' },
-        { key: 'day-pass', kind: 'DAY_PASS', name: blank('Day pass'), description: blank(), price: '25.00' }], thankYou: blank() };
+      offers: [{ key: 'free-trial', kind: 'TRIAL', name: blank('Free trial class'), description: blank(), price: '0', programIds: [] },
+        { key: 'day-pass', kind: 'DAY_PASS', name: blank('Day pass'), description: blank(), price: '25.00', programIds: [] }], thankYou: blank() };
   }
   return { enabled: s.enabled, waiver: full(s.waiver), emergencyRequired: s.emergencyRequired, pipelineId: s.pipelineId, pipelineStageId: s.pipelineStageId,
-    offers: s.offers.map(o => ({ key: o.key, kind: o.kind, name: full(o.name), description: full(o.description), price: (o.priceMinor / 100).toFixed(2) })),
+    offers: s.offers.map(o => ({ key: o.key, kind: o.kind, name: full(o.name), description: full(o.description), price: (o.priceMinor / 100).toFixed(2), programIds: o.programIds ?? [] })),
     thankYou: full(s.thankYou) };
 }
 /** Dollars as typed ("25", "25.5", "$25.00") to whole cents, or NaN. */
@@ -53,7 +54,8 @@ export function settingsBody(draft: SettingsDraft, current: WalkInSettings | nul
   return validateWalkInSettingsInput({
     expectedVersion: current?.version ?? 0, enabled: draft.enabled, waiver: tidy(draft.waiver, true), emergencyRequired: draft.emergencyRequired,
     pipelineId: draft.pipelineId, pipelineStageId: draft.pipelineStageId, thankYou: tidy(draft.thankYou),
-    offers: draft.offers.map(o => ({ key: o.key, kind: o.kind, name: tidy(o.name), description: tidy(o.description), priceMinor: priceMinor(o.price) })),
+    offers: draft.offers.map(o => ({ key: o.key, kind: o.kind, name: tidy(o.name), description: tidy(o.description), priceMinor: priceMinor(o.price),
+      ...(o.kind === 'TRIAL' && o.programIds.length ? { programIds: [...o.programIds] } : {}) })),
   });
 }
 export function nextOfferKey(offers: readonly OfferDraft[]): string {
@@ -93,7 +95,7 @@ export function WalkInStaffView(p: WalkInStaffViewProps): React.ReactElement {
   }
   const o = p.overview.read;
   const outcome = p.outcome && p.outcome.kind !== 'SENDING' ? <p className={styles.notice} role={p.outcome.kind === 'DONE' ? 'status' : 'alert'} data-testid="walkin-outcome">
-    {p.outcome.kind === 'DONE' ? t('saved') : p.outcome.kind === 'SIGN_OUT_FAILED' ? t('signOutFailed') : p.outcome.kind === 'START_REPLAYED' ? t('startReplayed') : t(`o${p.outcome.kind}` as WalkInKey)}</p> : null;
+    {p.outcome.kind === 'DONE' ? t('saved') : p.outcome.kind === 'PAID_BY_CARD' ? t('paidByCard') : p.outcome.kind === 'SIGN_OUT_FAILED' ? t('signOutFailed') : p.outcome.kind === 'START_REPLAYED' ? t('startReplayed') : t(`o${p.outcome.kind}` as WalkInKey)}</p> : null;
   const ready = o.configured && o.enabled;
   const start = <section className={styles.card} aria-labelledby="walkin-start"><h2 id="walkin-start">{t('startTitle')}</h2>
     {!o.configured ? <p className={styles.meta}>{t('notSetUp')} {t(o.canManage ? 'notSetUpOwner' : 'notSetUpStaff')}</p> : !o.enabled ? <p className={styles.meta}>{t('isOff')}</p> : null}
@@ -117,6 +119,8 @@ export function WalkInStaffView(p: WalkInStaffViewProps): React.ReactElement {
         <span className={tagFor(v)}>{t(`p${v.paymentState}` as WalkInKey)}</span></div>
       <p className={styles.meta}>{t(`k${v.offer.kind}` as WalkInKey)}: {v.offer.name} · {v.offer.priceMinor ? walkInPrice(p.language, v.offer.priceMinor) : t('pFREE')}
         {v.waiverSignedAt ? ` · ${t('waiverSigned', { at: when(p.language, v.waiverSignedAt) })}` : ''}</p>
+      {v.trialClass ? <p className={styles.meta} data-testid="walkin-trial-class">{t('trialClass', { name: v.trialClass.name, at: when(p.language, v.trialClass.startsAt) })}
+        {v.trialClass.status !== 'SCHEDULED' ? ` · ${t(`a${v.trialClass.status}` as WalkInKey)}` : ''}</p> : null}
       <p className={styles.meta}>{[v.contact.mobile, v.contact.email].filter(Boolean).join(' · ')}{v.marketingOptIn ? ` · ${t('optIn')}` : ''}</p>
       <div className={styles.row}>
         <a className={styles.button} href={leadHref(p.scope ?? null, v.leadId)}>{t('openLead')}</a>
@@ -139,7 +143,7 @@ export function WalkInStaffView(p: WalkInStaffViewProps): React.ReactElement {
       <button type="button" className={styles.button} onClick={() => p.onOpen?.(null)}>{t('closeWaiver')}</button></div></section> : null;
   const settings = !o.canManage ? null : <section className={styles.card} aria-labelledby="walkin-settings"><h2 id="walkin-settings">{t('settingsTitle')}</h2>
     {!p.settings || p.settings.state !== 'READY' || !p.draft ? <p role="status">{t(!p.settings || p.settings.state === 'LOADING' ? 'loading' : p.settings.state === 'DENIED' ? 'settingsOwnerOnly' : 'unavailable')}</p> : (() => {
-      const d = p.draft, set = (patch: Partial<SettingsDraft>) => p.onDraft?.({ ...d, ...patch }), pipes = p.settings.read.pipelines;
+      const d = p.draft, set = (patch: Partial<SettingsDraft>) => p.onDraft?.({ ...d, ...patch }), pipes = p.settings.read.pipelines, programs = p.settings.read.programs;
       const stages = pipes.find(x => x.pipelineId === d.pipelineId)?.stages ?? [];
       const offer = (i: number, patch: Partial<OfferDraft>) => set({ offers: d.offers.map((x, j) => j === i ? { ...x, ...patch } : x) });
       return <form className={styles.form} onSubmit={e => { e.preventDefault(); p.onSave?.(); }} data-testid="walkin-settings">
@@ -159,9 +163,15 @@ export function WalkInStaffView(p: WalkInStaffViewProps): React.ReactElement {
           <label>{t('sOfferKind')}<select value={x.kind} onChange={e => offer(i, { kind: e.target.value as WalkInOfferKind })}>{WALKIN_OFFER_KINDS.map(k => <option key={k} value={k}>{t(`k${k}` as WalkInKey)}</option>)}</select></label>
           <label>{t('sPrice')}<input inputMode="decimal" value={x.price} onChange={e => offer(i, { price: e.target.value })}/></label>
           <label>{t('sOfferDescription')}<input value={x.description.en} maxLength={WALKIN_LIMITS.offerDescription} onChange={e => offer(i, { description: { ...x.description, en: e.target.value } })}/></label>
+          {x.kind === 'TRIAL' && programs.length ? <fieldset className={styles.programs} data-testid="walkin-trial-programs"><legend>{t('sTrialPrograms')}</legend>
+            <p className={styles.meta}>{t('sTrialProgramsHelp')}</p>
+            {programs.map(g => <label key={g.programId} className={styles.checkRow}><input type="checkbox" checked={x.programIds.includes(g.programId)}
+              disabled={!x.programIds.includes(g.programId) && x.programIds.length >= WALKIN_LIMITS.trialPrograms}
+              onChange={e => offer(i, { programIds: e.target.checked ? [...x.programIds, g.programId] : x.programIds.filter(id => id !== g.programId) })}/><span>{g.name}</span></label>)}
+          </fieldset> : null}
           {d.offers.length > 1 ? <button type="button" className={styles.button} onClick={() => set({ offers: d.offers.filter((_, j) => j !== i) })}>{t('sRemove')}</button> : null}
         </div>)}
-        {d.offers.length < WALKIN_LIMITS.offers ? <button type="button" className={styles.button} onClick={() => set({ offers: [...d.offers, { key: nextOfferKey(d.offers), kind: 'TRIAL', name: blank(), description: blank(), price: '0' }] })}>{t('sAddOffer')}</button> : null}
+        {d.offers.length < WALKIN_LIMITS.offers ? <button type="button" className={styles.button} onClick={() => set({ offers: [...d.offers, { key: nextOfferKey(d.offers), kind: 'TRIAL', name: blank(), description: blank(), price: '0', programIds: [] }] })}>{t('sAddOffer')}</button> : null}
         </fieldset>
         <TextFields t={t} label={t('sThankYou')} value={d.thankYou} max={WALKIN_LIMITS.thankYou} onChange={thankYou => set({ thankYou })}/>
         <div className={styles.row}><button type="submit" className={styles.buttonPrimary} disabled={p.busy}>{p.busy ? t('saving') : t('save')}</button></div>
@@ -248,7 +258,11 @@ export function WalkInKioskPage({ api = walkInApi, signOut = signOutThisBrowser 
     draft={draft} detail={detail} outcome={outcome} busy={outcome?.kind === 'SENDING'} label={label} hours={hours} scope={scope}
     onLabel={setLabel} onHours={setHours} onStart={() => { void onStart(); }} onRefresh={reload} onDraft={setDraft}
     onEnd={(deviceId, version) => { if (scope) void run(`end:${deviceId}:${version}`, (k, s, o) => api.end(scope, deviceId, version, k, s, o)).then(r => { if (r) reload(); }); }}
-    onPaid={(visitId, version, method) => { if (scope) void run(`paid:${visitId}:${version}:${method}`, (k, s, o) => api.deskPaid(scope, visitId, { expectedVersion: version, method }, k, s, o)).then(r => { if (r) reload(); }); }}
+    onPaid={(visitId, version, method) => { if (scope) void run(`paid:${visitId}:${version}:${method}`, (k, s, o) => api.deskPaid(scope, visitId, { expectedVersion: version, method }, k, s, o)).then(r => {
+      // 0533: the visitor had already paid by card on the tablet. Nothing was recorded at the desk, so staff must hand back any money.
+      if (r?.visit.paymentState === 'PAID_CARD' && mounted.current) setOutcome({ kind: 'PAID_BY_CARD' });
+      if (r) reload();
+    }); }}
     onOpen={visitId => {
       if (!visitId || !scope) { setDetail(null); return; }
       setDetail({ state: 'LOADING' });

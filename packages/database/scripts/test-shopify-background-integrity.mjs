@@ -74,12 +74,20 @@ try{
   for(const p of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE'])assert.equal((await one('SELECT has_table_privilege($1,$2,$3) ok',[runtime.username,'hon.'+t,p])).ok,false,t+' '+p);
   assert.deepEqual(await one("SELECT relrowsecurity r,relforcerowsecurity f,(SELECT count(*) FROM pg_policy WHERE polrelid=c.oid)::int n FROM pg_class c WHERE oid=('hon.'||$1)::regclass",[t]),{r:true,f:true,n:0});
  }
- const workerFns=['record_shopify_webhook','claim_shopify_background_sync','rotate_shopify_background_credential','record_shopify_background_page','finish_shopify_background_sync'];
+ const workerFns=['record_shopify_webhook','claim_shopify_background_sync','rotate_shopify_background_credential','record_shopify_background_page','finish_shopify_background_sync','record_shopify_background_finance'];
  const runtimeEntry=['read_shopify','read_shopify_catalog','read_shopify_orders','start_shopify_connect','claim_shopify_connect','record_shopify_connection',
   'begin_shopify_sync','rotate_shopify_credential','record_shopify_sync_page','finish_shopify_sync','disconnect_shopify',
   // 0496 product changes (SH4a).
   'read_shopify_product_changes','propose_shopify_product_change','cancel_shopify_product_change','approve_shopify_product_change',
-  'rotate_shopify_change_credential','record_shopify_product_change_result'];
+  'rotate_shopify_change_credential','record_shopify_product_change_result','read_shopify_finance','record_shopify_finance',
+  'read_shopify_storefront','save_shopify_storefront','begin_shopify_storefront_publish','rotate_shopify_storefront_credential','finish_shopify_storefront_publish',
+  // 0613 POS sells Shopify products (SH2).
+  'begin_pos_shopify_stock','rotate_pos_shopify_credential','finish_pos_shopify_stock',
+  // 0614 POS Shopify orders for made-to-order items (SH2b).
+  'begin_pos_shopify_order','finish_pos_shopify_order',
+  // 0596 Marcus merch ideas (CS-M2).
+  'begin_shopify_merch_ideas','plan_shopify_merch_ideas','prepare_shopify_merch_ideas','fail_shopify_merch_ideas','record_shopify_merch_ideas',
+  'read_shopify_merch_ideas','close_shopify_merch_ideas'];
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname LIKE '%shopify%'");
  for(const f of workerFns)assert(fns.some(x=>x.proname===f),f);
  for(const f of fns){
@@ -181,6 +189,11 @@ try{
  await assert.rejects(()=>store.rotate({syncId:claimed.syncId,leaseToken:claimed.leaseToken,expectedVersion:claimed.credential.version+5,credential:{keyId:'fake-ephemeral',sealed:claimed.credential.sealed,
   accessExpiresAt:new Date(Date.now()+3600_000).toISOString(),refreshExpiresAt:new Date(Date.now()+86400_000).toISOString()}}),e=>e.message==='SHOPIFY_VERSION_CONFLICT');
  assert.deepEqual(await store.page({syncId:claimed.syncId,leaseToken:claimed.leaseToken,kind:'ORDERS',orders:[]}),{syncId:claimed.syncId,productsSeen:0,variantsSeen:0,ordersSeen:0});
+ // SH-F1 (0597): the worker records finance only under its lease, and only for a store that granted the finance scope.
+ const snap={paymentsActive:false,balances:[],payouts:[],transactions:[]};
+ await assert.rejects(()=>store.finance({syncId:claimed.syncId,leaseToken:K(),finance:snap}),e=>e.message==='SHOPIFY_SYNC_NOT_RUNNING');
+ await assert.rejects(()=>store.finance({syncId:claimed.syncId,leaseToken:claimed.leaseToken,finance:{...snap,extra:1}}),e=>e.message==='SHOPIFY_INVALID');
+ await assert.rejects(()=>store.finance({syncId:claimed.syncId,leaseToken:claimed.leaseToken,finance:snap}),e=>e.message==='SHOPIFY_FINANCE_NOT_ALLOWED');
  const f=await store.finish({syncId:claimed.syncId,leaseToken:claimed.leaseToken,outcome:'FAILED',failureCode:'SHOPIFY_UNAVAILABLE'});
  assert.deepEqual([f.outcome,f.failureCode,f.connectionStatus],['FAILED','SHOPIFY_UNAVAILABLE','CONNECTED']);
  await assert.rejects(()=>store.finish({syncId:claimed.syncId,leaseToken:claimed.leaseToken,outcome:'SUCCEEDED',failureCode:null}),e=>e.message==='SHOPIFY_SYNC_NOT_RUNNING');

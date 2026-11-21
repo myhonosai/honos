@@ -25,7 +25,7 @@ const set = (over: Record<string, unknown> = {}) => ({ id: setId, kind: 'STUDENT
 const read = { status: 'READ', version: 3, reader: 'SYNTHETIC', readOutcome: 'SAMPLE_READ', readAt: at };
 const page = { pageNo: 1, mediaType: 'image/png', bytes: 1200, checksum: 'a'.repeat(64) };
 const row = ['Mina', 'Park', '2015-03-02', '', '', 'Grace', 'Park', '', '+12135550142', ''];
-const detail = (over: Record<string, unknown> = {}, setOver: Record<string, unknown> = {}) => ({ set: set(setOver), columns: STUDENT_COLUMNS, rows: [], unsure: [], pages: [page], ...over });
+const detail = (over: Record<string, unknown> = {}, setOver: Record<string, unknown> = {}) => ({ set: set(setOver), columns: STUDENT_COLUMNS, rows: [], unsure: [], pages: [page], aiReading: null, ...over });
 const list = { sets: [set()], maxPages: 10, maxPageBytes: 1400000, maxRows: 200, retentionDays: 30 };
 
 it('reads as plain same-origin GETs with no key and no x-hon header, and accepts only the set asked for', async () => {
@@ -63,6 +63,13 @@ it('sends each command with its own name; the one reading per set has no key, ev
   [path, init] = s.mock.calls[0] as unknown as [string, RequestInit];
   expect(path.endsWith('/table')).toBe(true);
   expect(init.headers).toMatchObject({ 'X-HON-Human-Command': 'students.paper_import.save', 'Idempotency-Key': key });
+  const t = stub(json({ data: detail({}, { status: 'READ', version: 3, reader: 'NONE', readOutcome: 'TYPED', readAt: at }), meta }));
+  expect((await paperImportApi.typeRows(scope, setId, 2, signal(), () => true)).set.readOutcome).toBe('TYPED');
+  [path, init] = t.mock.calls[0] as unknown as [string, RequestInit];
+  expect(path).toBe(`/api/v1/organizations/${org}/schools/${school}/paper-imports/${setId}/typed`);
+  expect(init.headers).toMatchObject({ 'X-HON-Human-Command': 'students.paper_import.typed' });
+  expect(Object.keys(init.headers as object).some(k => /idempotency/i.test(k))).toBe(false);
+  expect(JSON.parse(init.body as string)).toEqual({ expectedVersion: 2 });
   const d = stub(json({ data: set({ status: 'DELETED', pageCount: 0, version: 5, deletedAt: at, deleteReason: 'STAFF' }), meta }));
   await paperImportApi.remove(scope, setId, key, signal(), () => true);
   expect(JSON.parse((d.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)).toEqual({});
@@ -83,6 +90,12 @@ it('maps refusals to definitive outcomes, including an AI pause, and keeps only 
   expect(paperErrorFor(409, 'PAPER_IMPORT_READING_STALE').kind).toBe('CHANGED');
   expect(paperErrorFor(409, 'PAPER_IMPORT_BUSY').kind).toBe('UNKNOWN');
   expect(paperErrorFor(500, null).kind).toBe('UNKNOWN');
+  expect(paperErrorFor(403, 'PAPER_IMPORT_AI_FORBIDDEN').kind).toBe('AI_FORBIDDEN');
+  expect(paperErrorFor(409, 'PAPER_IMPORT_READING_OWNED').kind).toBe('READING_OWNED');
+  expect(paperErrorFor(409, 'PAPER_IMPORT_READING_BUSY').kind).toBe('READING_BUSY');
+  expect(paperErrorFor(503, 'PAPER_IMPORT_READING_UNKNOWN').kind).toBe('READING_UNKNOWN');
+  expect(paperErrorFor(503, 'PAPER_IMPORT_UNAVAILABLE').kind).toBe('UNKNOWN');
+  expect(keepForRetry(new PaperError('READING_UNKNOWN'))).toBe(false);
   expect(keepForRetry(new PaperError('UNKNOWN'))).toBe(true);
   expect(keepForRetry(new PaperError('CHANGED'))).toBe(false);
   expect(cleanCell('  Mina\u0000  Park‮ ')).toBe('Mina Park');
@@ -104,7 +117,7 @@ it('shows nothing private before the school is verified, and the start card only
     expect(out).not.toContain('Your photo sets'); expect(out).not.toContain('What are you photographing?');
   }
   const home = html();
-  expect(home).toContain('What are you photographing?'); expect(home).toContain('HON can read only the sample pages for now.');
+  expect(home).toContain('What are you photographing?'); expect(home).toContain('HON reads your own photos when your school has the AI team');
   expect(home).toContain('Location and camera details are removed'); expect(home).toContain('erased the next time anyone at this school opens Import from photos');
   const denied = html({ list: { state: 'DENIED' } });
   expect(denied).toContain('You cannot import students at this school.'); expect(denied).not.toContain('What are you photographing?');
@@ -126,7 +139,28 @@ it('adds photos while open, then shows the photo beside an editable table with h
   const dirty = opened(d, { draft: { ...draft, dirty: true } });
   expect(dirty).toContain('You have changes that are not saved.'); expect(dirty).toMatch(/disabled=""[^>]*>Send to review/);
   const blank = opened(detail({ rows: [], unsure: [] }, { ...read, readOutcome: 'NOT_READABLE' }), { draft: { ...draft, rows: [row.map(() => '')], unsure: [row.map(() => false)] } });
-  expect(blank).toContain('HON can&#x27;t read photos yet.'); expect(blank).toMatch(/disabled=""[^>]*>Send to review/);
+  expect(blank).toContain('HON could not read these photos into the table.'); expect(blank).toMatch(/disabled=""[^>]*>Send to review/);
+  expect(opened(detail({ rows: [row], unsure }, { ...read, reader: 'AI_ROUTE', readOutcome: 'AI_READ' }), { draft })).toContain('HON leaves a cell empty rather than guess');
+  expect(opened(detail({}, { ...read, reader: 'NONE', readOutcome: 'TYPED' }), { draft: { ...draft, rows: [row.map(() => '')], unsure: [row.map(() => false)] } })).toContain('Type the rows from the photo into the table.');
+});
+
+it('offers Type the rows myself beside Read with HON, and says what HON\'s reading state means', () => {
+  const open = opened(detail());
+  expect(open).toMatch(/<button type="button"[^>]*>Type the rows myself<\/button>/); expect(open).not.toMatch(/disabled=""[^>]*>Type the rows myself/);
+  expect(open).not.toContain('data-testid="paper-import-ai-reading"');
+  expect(opened(detail({ pages: [] }, { pageCount: 0 }))).toMatch(/disabled=""[^>]*>Type the rows myself/);
+  const state = (status: string, reason: string | null = null) => opened(detail({ aiReading: { status, reason } }));
+  for (const [status, reason, text] of [['BLOCKED', 'NO_ELIGIBLE_ROUTE', 'not set up for this school yet'], ['CONFIGURATION_REQUIRED', 'CONFIGURATION_REQUIRED', 'not set up for this school yet'],
+    ['BLOCKED', 'AI_SPEND_STOPPED', 'AI limit is reached'], ['BLOCKED', 'CUSTOMER_BUDGET_EXCEEDED', 'AI limit is reached'], ['BLOCKED', 'SUBJECT_STALE', 'HON could not read these photos.']] as const) {
+    const out = state(status, reason);
+    expect(out).toContain(text); expect(out).toMatch(/>Read with HON<\/button>/); expect(out).toMatch(/>Type the rows myself<\/button>/);
+  }
+  const held = state('UNKNOWN', 'PROVIDER_UNKNOWN');
+  expect(held).toContain('held for HQ to check'); expect(held).not.toContain('>Read with HON</button>'); expect(held).not.toMatch(/disabled=""[^>]*>Type the rows myself/);
+  expect(state('FAILED', 'PROVIDER_REJECTED')).toContain('turned this reading down');
+  const busy = state('SENDING');
+  expect(busy).toContain('HON is reading these photos.'); expect(busy).toMatch(/disabled=""[^>]*>Type the rows myself/); expect(busy).not.toContain('>Read with HON</button>');
+  for (const kind of ['AI_FORBIDDEN', 'READING_OWNED', 'READING_BUSY', 'READING_UNKNOWN'] as const) expect(html({ outcome: { kind, action: 'read' } })).toMatch(/type the rows yourself|Wait a minute/);
 });
 
 it('says where a sent table went, what deleted or expired photos mean, and offers Try again only for a kept command', () => {
@@ -145,7 +179,7 @@ it('has every wording in English, Korean and Spanish, a Contacts route, and a ve
   expect(typeof mod.paperCopy).toBe('function');
   const keys = readFileSync('src/components/paper-import/copy.ts', 'utf8');
   expect(keys).toContain('const ko: Copy'); expect(keys).toContain('const es: Copy');
-  for (const language of ['en', 'ko', 'es']) for (const k of ['title', 'standIn', 'privacy', 'e_AI_BLOCKED', 'fld_guardianMobile', 'fld_attendedOn'] as const) expect(paperCopy(language)(k)).toBeTruthy();
+  for (const language of ['en', 'ko', 'es']) for (const k of ['title', 'standIn', 'privacy', 'e_AI_BLOCKED', 'fld_guardianMobile', 'fld_attendedOn', 'typeRows', 'outcome_AI_READ', 'outcome_TYPED', 'ai_UNKNOWN', 'e_READING_UNKNOWN'] as const) expect(paperCopy(language)(k)).toBeTruthy();
   expect(paperCopy('ko')('title')).toBe('사진으로 가져오기'); expect(paperCopy('es')('title')).toBe('Importar desde fotos');
   const students = SCHOOL_SHELL_NAV.find(g => g.key === 'students');
   expect(students?.routes.map(r => r.href)).toContain('/staff/migration/photos');

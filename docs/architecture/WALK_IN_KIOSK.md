@@ -110,15 +110,61 @@ TEST-mode processor connection, no HON fee, no card data at HON. Stripe only tod
   `PAID_CARD` instead (the desk receipt shows it). Desk paid is refused while a card payment is still clearing.
 - **Return without leaving the page:** EMBEDDED uses `redirect_on_completion=if_required` (card only never needs a
   redirect; agreed with the tuition thread), so the form's `onComplete` calls the status route in place (WK3b).
-- Environment: the Stripe TEST secret key the tuition adapter already uses, plus a `pk_test_` publishable key for
-  Stripe.js on the tablet (WK3b; the owner sets it, never in chat).
+- Environment: the Stripe TEST secret key the tuition adapter already uses (`HON_TUITION_STRIPE_TEST_SECRET_KEY`), plus a
+  Stripe test publishable key for Stripe.js on the tablet, `NEXT_PUBLIC_HON_TUITION_STRIPE_TEST_PUBLISHABLE_KEY` at web
+  build time. A publishable key is public by design; David provided the test one on 2026-11-19 and it is fixed in
+  `render.yaml` for hon-web (the Blueprint test allows only `pk_test_` there and no other Stripe value on either
+  service). Only `pk_test_` is accepted; without it the tablet offers only the phone QR and the desk. The form also needs
+  the API's `HON_TUITION_STRIPE_TEST_SECRET_KEY` from the **same** Stripe test account (set in the dashboard, never in Git).
+- **Tablet screens (WK3b):** after a `PAY_AT_DESK` visit is recorded, the tablet asks "How would you like to pay?" with
+  "Pay here with a card" (only with a test publishable key), "Pay on my phone" and "Pay at the front desk", and says it is
+  test mode. The form is Stripe's embedded Checkout loaded from `js.stripe.com/basil` (the server's API version) with the
+  school account; card details stay in Stripe's frame. The QR is drawn on the tablet (the existing `@zxing/library`
+  encoder, no new dependency) and the tablet asks the status route every 4 seconds. Only the server's `PAID` shows
+  "Paid"; a failed, expired or cancelled payment returns to the choices; "Pay at the front desk" cancels it. Paying
+  clears itself after 10 minutes untouched (typing happens inside Stripe's frame) and ends any open payment.
+- **Staff:** a desk payment refused because a card payment is open or clearing says so (`CARD_PENDING`); a desk
+  payment that finds the visitor already paid by card shows "already paid by card ... give back any money taken".
 
-### 3.4 Trial class pick
+### 3.4 Trial class pick (built in WK4, 0537)
 
-A trial offer can list the school's next scheduled class sessions (up to 14 days) whose program the owner ticked for
-trials, showing only class name, day and time and "spots open" (yes/no). Picking one schedules the trial through the
-existing CRM trial command path (`crm.trial.schedule`, 0107 shape) as the kiosk service principal, inside the visit
-transaction; a full class shows as unavailable.
+- **Settings (T1):** a TRIAL offer may name 1 to 10 of the school's programs (`programIds`; not cancelled, this school
+  only, checked in the database at save). The settings read lists the school's programs; the staff page shows them as
+  checkboxes on each trial offer. No programs ticked means a trial without a class to pick (as before).
+- **Tablet read (T1):** such an offer carries `classes`: up to 20 of those programs' sessions with status SCHEDULED that
+  start within the next 14 days and have not started, each `{sessionId, name, startsAt, endsAt, spotsOpen}`. Other
+  offers carry `classes: null`. No program id reaches the tablet. The screen shows class name, day and time and "Spots
+  open" or "Full"; the open-spot count is used only to grey out classes that cannot fit everyone on the visit.
+- **Submit (T2):** a visit for such an offer must name one of those classes (`trialSessionId`); any other offer takes
+  none (absent or null). The database locks the class row FOR UPDATE and answers **CLASS_FULL** (HTTP 409, nothing
+  written) when it is gone, cancelled, started, beyond 14 days, of another program or school, or lacks a seat for every
+  participant. The tablet then reloads the classes and the visitor picks again. Otherwise, in the same transaction, it
+  books the trial the way the CRM trial command does (0043): per-lead advisory lock, one SCHEDULED TRIAL
+  `crm_appointments` row at the class times with the class name as location, created by the kiosk service principal,
+  one `crm.trial.schedule` audit row and one identifier-only `crm.trial.scheduled` outbox event (with `classSessionId`
+  and `walkInVisitId`), so trial automations (0423) fire as for a staff-booked trial. The visit keeps
+  `trial_session_id` and `trial_appointment_id` (both or neither, trial offers only, never changed).
+- **Seats (T3):** taken = the class's BOOKED and CHECKED_IN bookings plus participants of kiosk visits whose trial is
+  SCHEDULED or COMPLETED; a cancelled trial frees its seats. Since 0538 every booking path uses this count (see 3.5).
+- **Read back (T4):** the RECORDED answer and the staff visit read carry `trialClass {sessionId,name,startsAt,endsAt,status}`
+  (status is the CRM trial's). The done screen names the class; the staff list shows it with the trial status.
+- **T5 (#492 review P3):** the desk path's card-paid audit row and event now carry the staff request's correlation id.
+
+### 3.5 Trial seats everywhere and no demo programs (built in WK5, 0538)
+
+From the #495 review P3s, before the pilot.
+
+- **Seats (P1):** the staff booking API, parent bookings (0329), ClassPass (0117) and owner-launch first-class bookings
+  (0137) now decide "is there a seat" with the 3.4 T3 count, so kiosk trial visitors hold seats against all of them and
+  a class is never overbooked between the kiosk and another path. Every path already locks the class session FOR UPDATE
+  before counting (the kiosk submit takes the same lock), so the lock order is unchanged. The staff API reads the count
+  through one new runtime entry point, `hon.read_class_session_seats_taken(session)`: a stable definer read that answers
+  only for a session of the current school and returns null otherwise (the API then answers 404). It writes nothing.
+- **Demo data (P2):** a trial offer can never name a demo program (0459 demo rows): the settings read leaves demo
+  programs out, the settings save refuses them, the tablet never lists a demo program's classes or a demo class, and a
+  demo class is refused at submit (CLASS_FULL, nothing written). So no kiosk visit can hold a demo class and block demo
+  removal. The migration refuses to run if saved settings already name a demo program.
+- Still open (follow-up, not pre-pilot): the staff class roster lists booked students only, not kiosk trial visitors.
 
 ## 4. Safety rules
 
@@ -137,8 +183,9 @@ transaction; a full class shows as unavailable.
 | WK1 | Kiosk settings, tablet sessions, intake + waiver + visit | 0414 | Tables, permissions, settings/offer/waiver versions, start/end tablet, public visit submit (FREE / PAY_AT_DESK), today's walk-ins, mark paid at desk, signed waiver read, DB proof, API, contracts. |
 | WK2 | Kiosk screens | — | Visitor flow (3 themes, EN/KO/ES, signature pad), staff kiosk page + settings, Classes tab change (old screens to Settings > Advanced). Browser screenshots at phone/tablet/desktop. |
 | WK3a | Card payment backend (sandbox) | 0533 | PAID_CARD, tablet start/status/cancel by visit key on the 0529 payment, desk paid ends any card payment first, DB proof with simulators, API, contracts. |
-| WK3b | Card form and phone QR screens | — | Stripe embedded form on the tablet, QR for the phone, waiting and result screens (3 themes, EN/KO/ES), `/kiosk/walk-in/paid`, embedded `redirect_on_completion=if_required`. |
-| WK4 | Trial class pick | maybe | Trial-eligible sessions read + CRM trial scheduling inside the visit. |
+| WK3b | Card form and phone QR screens (built) | — | Stripe embedded form on the tablet, QR for the phone, waiting and result screens (3 themes, EN/KO/ES), `/kiosk/walk-in/paid`, embedded `redirect_on_completion=if_required`. |
+| WK4 | Trial class pick (built) | 0537 | Trial offers name programs, tablet lists their next classes, visit books one (CLASS_FULL when full) and the CRM trial in the same transaction, staff program picker, class on done screen and staff list, DB proof, API, contracts. |
+| WK5 | Trial seats everywhere, no demo programs (built) | 0538 | Staff, parent, ClassPass and owner-launch bookings count kiosk trial seats (one scoped runtime seat read for the staff API), demo programs and classes never offered or accepted, migration preflight, DB proof. |
 
 ## 6. Open owner items
 

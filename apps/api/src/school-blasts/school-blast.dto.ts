@@ -1,6 +1,6 @@
 import { Allow } from 'class-validator';
 
-/** 0536 bodies. Every field is closed-validated by the shared contract validators in the service. */
+/** 0621 bodies. Every field is closed-validated by the shared contract validators in the service. */
 export class SaveSchoolBlastDto {
   @Allow() blastId?: unknown;
   @Allow() expectedVersion?: unknown;

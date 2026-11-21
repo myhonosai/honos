@@ -25,8 +25,8 @@ function draftOf(detail: PaperImportDetail): PaperDraft {
 }
 
 /**
- * Import from photos (0388). Staff photograph student cards, contracts or attendance sheets; HON reads the set once into a
- * table (only the stand-in reader for now); staff check every cell beside the photo, save, and send the table to the
+ * Import from photos (0388, 0594). Staff photograph student cards, contracts or attendance sheets; HON reads the set once into
+ * a table on the AI team's route (or staff type the rows themselves, with no AI); staff check every cell beside the photo, save, and send the table to the
  * existing import review, where nothing is added until each row is decided. Blur, a hidden tab, page hide, a school change
  * or a session end hide the page at once, retire every read, and drop the photos, the table and any kept command held in memory.
  */
@@ -132,6 +132,7 @@ export function PaperImport({ api = paperImportApi }: { api?: PaperImportApi }):
       const value = request.action === 'create' ? await api.create(request.scope, request.kind!, key, signal, owned)
         : request.action === 'page' ? await api.addPage(request.scope, id, body, key, signal, owned)
         : request.action === 'read' ? await api.read(request.scope, id, (body as { expectedVersion: number }).expectedVersion, signal, owned)
+        : request.action === 'type' ? await api.typeRows(request.scope, id, (body as { expectedVersion: number }).expectedVersion, signal, owned)
         : request.action === 'save' ? await api.save(request.scope, id, request.kind!, body, key, signal, owned)
         : request.action === 'send' ? await api.send(request.scope, id, (body as { expectedVersion: number }).expectedVersion, key, signal, owned)
         : await api.remove(request.scope, id, key, signal, owned);
@@ -147,7 +148,7 @@ export function PaperImport({ api = paperImportApi }: { api?: PaperImportApi }):
     if (result.ok) {
       const value = result.value;
       if (request.action === 'create' && 'id' in value) { forget(); setSelected(value.id); }
-      if (request.action === 'read' && 'set' in value) setDetail({ state: 'READY', detail: value });
+      if ((request.action === 'read' || request.action === 'type') && 'set' in value) setDetail({ state: 'READY', detail: value });
       if (request.action === 'save' && 'version' in value) {
         const saved = request.body as { rows: string[][]; unsure: boolean[][] };
         setDetail((d) => d.state === 'READY' && d.detail.set.id.toLowerCase() === value.id.toLowerCase() && value.version > d.detail.set.version
@@ -162,7 +163,7 @@ export function PaperImport({ api = paperImportApi }: { api?: PaperImportApi }):
 
   const start = useCallback((action: PaperAction, setId: string | null, kind: PaperImportKind | null, body: unknown): Promise<Result> => {
     if (pending.current || sending.current || !orgId || !schoolId) return Promise.resolve({ ok: false });
-    pending.current = { key: action === 'read' ? null : globalThis.crypto.randomUUID(), action, scope: { organizationId: orgId, schoolId }, setId, kind, body };
+    pending.current = { key: action === 'read' || action === 'type' ? null : globalThis.crypto.randomUUID(), action, scope: { organizationId: orgId, schoolId }, setId, kind, body };
     return send();
   }, [orgId, schoolId, send]);
   const idle = lock === 'NONE' && !uploading;
@@ -201,6 +202,7 @@ export function PaperImport({ api = paperImportApi }: { api?: PaperImportApi }):
   }, [idle]);
   const onStart = useCallback(() => { if (idle) void start('create', null, startKind, { kind: startKind }); }, [idle, start, startKind]);
   const onRead = useCallback(() => { if (idle && ready?.set.status === 'OPEN') void start('read', ready.set.id, null, { expectedVersion: ready.set.version }); }, [idle, ready, start]);
+  const onType = useCallback(() => { if (idle && ready?.set.status === 'OPEN') void start('type', ready.set.id, null, { expectedVersion: ready.set.version }); }, [idle, ready, start]);
   const onCell = useCallback((row: number, column: number, value: string) => {
     if (!idle) return;
     setDraft((d) => {
@@ -245,7 +247,7 @@ export function PaperImport({ api = paperImportApi }: { api?: PaperImportApi }):
       hasSchool={!!schoolId} list={list} selected={selected} detail={detail} draft={draft} images={byPage} viewing={viewing} startKind={startKind}
       confirmDelete={confirmDelete} outcome={outcome} locked={!idle} canRetry={lock === 'KEPT' && !uploading}
       onRefresh={onRefresh} onOpen={onOpen} onStartKind={(k) => { if (idle) setStartKind(k); }} onStart={onStart} onFiles={onFiles} onSample={onSample}
-      onView={setViewing} onRead={onRead} onCell={onCell} onAddRow={onAddRow} onRemoveRow={onRemoveRow} onSave={onSave} onSend={onSend}
+      onView={setViewing} onRead={onRead} onType={onType} onCell={onCell} onAddRow={onAddRow} onRemoveRow={onRemoveRow} onSave={onSave} onSend={onSend}
       onDelete={onDelete} onTryAgain={onTryAgain}/>
   </div>;
 }
