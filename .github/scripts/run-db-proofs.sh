@@ -164,6 +164,10 @@ proof crm-lead-close test-platform-least-privilege.mjs "Platform least privilege
 proof crm-lead-close test-migration-runner-safety.mjs "Migration tooling: single-runner lock, read-only db:status (current, divergent history), TLS refusal before connecting, atomic migration + ledger commit (ledger failure, runner lost mid-window, split-transaction file refused)"
 proof crm-lead-close test-restore-drill.mjs "Backup/restore drill: pg_dump, total loss, pg_restore, identical data/ledger/security posture, verifiers pass on the restored database"
 
+# Human action approvals (review P3: this proof existed but was not run in CI), including the [21] durable expiry case.
+setup action-approval HON_ACTION_APPROVAL_VALIDATION_TARGET hon_approval_validation HON_ACTION_APPROVAL_ENV_FILE
+proof action-approval test-action-approvals-integrity.mjs "Human action approvals: approval authority, idempotent decisions and execution claims, and an approval that expires before execution is durably EXPIRED with its audit and outbox rows while the caller still gets 409 (launch-readiness [21])"
+
 # Database TLS verification needs its own private TLS-only cluster (no fixture descriptor).
 echo "::group::Database TLS verification against a private TLS-only cluster (test-database-tls-verification.mjs)"
 "${clean_env[@]}" HON_DB_PROOFS_LOCAL=1 bash -c 'cd "$1" && node scripts/test-database-tls-verification.mjs' _ "$repo_root/packages/database"
