@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { MayaRenewalView, MayaRenewalWindow } from '@hon/contracts';
 import { MayaRenewalError, mayaRenewalApi as defaultApi, type MayaRenewalApi, type MayaRenewalErrorKind, type MayaRenewalScope } from './maya-renewal-http';
 import styles from './hon-command.module.css';
+import { AgentVoiceBar } from './agent-voice-bar';
 
 /**
  * P5 (0646): renewal prep with Maya. A staff member asks Maya to look over memberships ending in the next 30 or 60 days; Maya
@@ -110,6 +111,7 @@ export function MayaRenewalPanel({ scope, api = defaultApi }: { scope: MayaRenew
         {(['NEXT_30_DAYS', 'NEXT_60_DAYS'] as const).map((w) => <label key={w}><input type="radio" name="maya-window" checked={range === w} onChange={() => setRange(w)} /> {w === 'NEXT_30_DAYS' ? 'The next 30 days' : 'The next 60 days'}</label>)}
       </fieldset>
       <label>Anything Maya should know (optional)<textarea value={note} maxLength={300} rows={2} onChange={(e) => setNote(e.target.value)} placeholder="For example: summer break starts in three weeks" data-maya-note /></label>
+      <AgentVoiceBar agentKey="maya" name="Maya" value={note} max={300} onChange={setNote} answer={view?.summary ?? null} />
       <button type="submit" className={styles.primary} disabled={busy} data-maya-ask>{busy && !view ? 'Maya is looking…' : 'Ask Maya'}</button>
     </form> : null}
     {notice ? <div className={styles.note} role="alert" data-maya-notice={notice.kind}>
