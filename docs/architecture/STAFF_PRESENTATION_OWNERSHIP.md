@@ -20,7 +20,8 @@ A retired request's 401 still rejects as `DENIED` for its caller; it just never 
 `LocaleProvider` owns every read and command with one epoch. A newer read, a command, or a session end retires older
 work. On a session end the provider drops the remote view, any held command (the unknown-outcome retry), the school
 claims and every answer still out. A late receipt from before the session end is not applied and starts no follow-up
-read.
+read. A scope change or unmount retires the same way: it clears the busy flag and any held command, so the new scope
+reads at once and accepts a new command instead of staying blocked on a save it no longer owns.
 
 School-language precedence follows the verified school:
 

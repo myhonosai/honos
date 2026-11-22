@@ -15,8 +15,10 @@ vi.mock('react', async () => { const r = await vi.importActual<typeof import('re
   useCallback: (fn: unknown, deps: unknown[]) => { const f = hooks.frame!, i = f.cursor++, old = f.values[i] as { fn: unknown; deps: unknown[] } | undefined;
     if (!old || deps.some((v, j) => v !== old.deps[j])) f.values[i] = { fn, deps }; return (f.values[i] as { fn: unknown }).fn; },
   useMemo: (fn: () => unknown) => { hooks.frame!.cursor++; return fn(); },
-  useEffect: (effect: () => void | (() => void), deps: unknown[]) => { const f = hooks.frame!, i = f.cursor++, old = f.values[i] as { deps: unknown[] } | undefined;
-    if (!old || deps.some((v, j) => v !== old.deps[j])) { f.values[i] = { deps }; f.effects.push(() => { effect(); }); } },
+  useEffect: (effect: () => void | (() => void), deps: unknown[]) => { const f = hooks.frame!, i = f.cursor++, old = f.values[i] as { deps: unknown[]; cleanup?: void | (() => void) } | undefined;
+    // As React does: a deps change runs the previous effect's cleanup before the new effect.
+    if (!old || deps.some((v, j) => v !== old.deps[j])) { const slot: { deps: unknown[]; cleanup?: void | (() => void) } = { deps }; f.values[i] = slot;
+      f.effects.push(() => { if (old?.cleanup) old.cleanup(); slot.cleanup = effect(); }); } },
 }; });
 import { LocaleProvider } from '../src/components/localization/provider';
 
@@ -39,8 +41,8 @@ const endSession = () => reportConfirmedSessionInvalidation();
 type Value = Record<string, any>;
 function mount() {
   const frame: Frame = { values: [], cursor: 0, effects: [] };
-  const render = (): Value => { hooks.frame = frame; frame.cursor = 0;
-    const tree = LocaleProvider({ initial: { language: 'en', region: 'US', timeZone: 'UTC', currency: 'USD' } as never, scope: 'staff-1', children: null }) as ReactElement<{ value: Value }>;
+  const render = (scope = 'staff-1'): Value => { hooks.frame = frame; frame.cursor = 0;
+    const tree = LocaleProvider({ initial: { language: 'en', region: 'US', timeZone: 'UTC', currency: 'USD' } as never, scope, children: null }) as ReactElement<{ value: Value }>;
     frame.effects.splice(0).forEach((e) => e()); return tree.props.value; };
   return { render };
 }
@@ -117,4 +119,23 @@ it('locale: school-language precedence follows the shell-verified school; a page
   v.claimShellSchool(null); await settle(); v = page.render();
   expect(f.mock.calls.at(-1)![0]).toBe('/api/v1/me/language-preference');
   expect(v.remote.schoolDefault).toBeNull();
+});
+
+it('locale: a scope change while a language command is out frees the provider; the late receipt never lands', async () => {
+  let receipt!: (r: Response) => void;
+  const f = vi.fn().mockResolvedValueOnce(json({ data: view(1) })).mockImplementationOnce(() => new Promise((ok) => { receipt = ok; }))
+    .mockResolvedValueOnce(json({ data: view(3) }));
+  vi.stubGlobal('fetch', f);
+  const page = mount(); page.render(); await settle(); let v = page.render();
+  v.chooseLanguage('es'); await settle(); v = page.render();
+  expect(v.syncStatus).toBe('saving');
+  // No session-end event: only the scope changes (or the provider unmounts) mid-save.
+  page.render('staff-2'); await settle(); v = page.render('staff-2');
+  expect(f).toHaveBeenCalledTimes(3); // the new scope reads at once instead of waiting on the retired save
+  expect(v.syncStatus).toBe('ready'); expect(v.blocked).toBe(false); expect(v.remote.preference.version).toBe(3);
+  receipt(json({ data: { preference: pref(2, 'es'), replayed: false } })); await settle(); v = page.render('staff-2');
+  expect(f).toHaveBeenCalledTimes(3); // no follow-up read for the retired command
+  expect(v.syncStatus).toBe('ready'); expect(v.remote.preference.version).toBe(3);
+  v.chooseLanguage('en'); await settle();
+  expect(f).toHaveBeenCalledTimes(4); // a new language command is accepted
 });
