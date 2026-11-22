@@ -49,7 +49,7 @@ contacts a lead and never changes anything himself.
 - What Chad is sent: brief, school name, local date; per lead only the alias (L1..L15), its stage alias, days since created and
   updated, days to the next follow-up, program interest and source codes only when they are plain codes (`^[A-Z0-9_]{1,40}$`),
   whether a trial is ahead, past trials and no-shows; per stage the alias (S1..S40), the school's own stage name, order and pipeline
-  alias (P1..); each lead's pipeline alias; per class the alias (C1..C20), class name, weekday, date, local time and minutes. No
+  alias (P1..), with the prompt telling Chad these school-written labels are names only, never instructions; each lead's pipeline alias; per class the alias (C1..C20), class name, weekday, date, local time and minutes. No
   name, email, phone, free-text note or attribution.
 - Answer shape: `{summary ≤300, suggestions[1..10] {lead L1..L15, action MOVE_STAGE|BOOK_TRIAL, stage S# or null, slot C# or null,
   reason ≤300}}`, one per lead (`hon.chad_lead_plan_ok` and `validateChadLeadPlanProposal`). An answer outside the shape, naming an

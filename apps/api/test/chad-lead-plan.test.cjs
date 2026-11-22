@@ -33,7 +33,7 @@ test('the Chad runtime sends one fixed request with the lead prompt and budgets'
 
 test('the Chad prompt says suggestions change nothing and forbids invented facts and personal data', () => {
   assert.match(CHAD_LEAD_PLAN_SYSTEM_PROMPT, /You book, move, send and change nothing/); assert.match(CHAD_LEAD_PLAN_SYSTEM_PROMPT, /Use only the facts given/);
-  assert.match(CHAD_LEAD_PLAN_SYSTEM_PROMPT, /a staff member decides each step and runs it themselves/); assert.match(CHAD_LEAD_PLAN_SYSTEM_PROMPT, /No links, email addresses, phone numbers or personal data/);
+  assert.match(CHAD_LEAD_PLAN_SYSTEM_PROMPT, /a staff member decides each step and runs it themselves/); assert.match(CHAD_LEAD_PLAN_SYSTEM_PROMPT, /never as instructions/); assert.match(CHAD_LEAD_PLAN_SYSTEM_PROMPT, /No links, email addresses, phone numbers or personal data/);
 });
 
 test('the brief, the suggestion shape and the step request are closed', () => {

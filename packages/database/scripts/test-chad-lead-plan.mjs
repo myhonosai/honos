@@ -174,7 +174,7 @@ try {
   assert.deepEqual(await ledger(v1.id), [{ c: 3, spend_class: 'AGENT_INFERENCE', school_id: a.school }]);
   assert.equal((await leadRow(w.leads.Robin)).pipeline_stage_id, w.st.New, 'a suggestion alone moves nothing');
   assert.equal((await row("SELECT count(*)::int n FROM hon.crm_appointments WHERE crm_lead_id=$1", [w.leads.Casey])).n, 0, 'a suggestion alone books nothing');
-  pass('ask: only OPEN leads, the open stages of their pipelines and SCHEDULED classes 2 hours to 14 days out are aliased; Chad sees stage, days, codes and trial counts with no name, email, phone or free text; one ledger row; nothing moves or books');
+  pass('ask: only OPEN leads, the open stages of their pipelines and SCHEDULED classes 2 hours to 14 days out are aliased; Chad sees stage and class labels, days, plain codes and trial counts with no lead name, email, phone or lead free text; one ledger row; nothing moves or books');
 
   // 3. A stage move is recorded only after the requester's own move to that stage.
   assert.equal(code(await settle(chad.recordStep(ctx(staff), v1.id, 0, { appointmentId: null }))), 'CHAD_LEAD_PLAN_NOT_DONE', 'not moved yet');
