@@ -242,6 +242,21 @@ function api(route) {
     if (path === `${prefix}/search`) return json(route, 200, { data: { search: { organizationId: scope.organizationId, schoolId: scope.schoolId, results: [
       { kind: 'LEAD', entityId: id(201), title: 'Avery Sample', subtitle: 'Open lead', route: `/staff/search/${scope.organizationId}/${scope.schoolId}/LEAD/${id(201)}` },
       { kind: 'CLASS_SESSION', entityId: id(100), title: 'Little Tigers', subtitle: 'Scheduled class', route: `/staff/search/${scope.organizationId}/${scope.schoolId}/CLASS_SESSION/${id(100)}` }] } }, meta: {} });
+    // Plain curriculum pages (synthetic): videos and links, one student's belt, teaching studio, achievements.
+    if (path === `/api/v1/staff/schools/${scope.schoolId}/curriculum-library`) return json(route, 200, { data: { curricula: [{ id: id(960), name: 'Little Dragons', ranks: [{ id: id(661), name: 'White belt' }, { id: id(662), name: 'Yellow belt' }] }],
+      resources: [{ id: id(671), curriculumId: id(960), rankId: id(661), cycleId: null, kind: 'VIDEO', url: 'https://www.youtube.com/watch?v=sample1', title: 'Front kick drill', description: 'Ten kicks each side, slow then fast.', audience: 'PARENT', status: 'ACTIVE', version: 1 },
+        { id: id(672), curriculumId: id(960), rankId: null, cycleId: null, kind: 'LINK', url: 'https://example.com/stretching', title: 'Warm-up stretches', description: '', audience: 'STAFF', status: 'ACTIVE', version: 2 }] }, meta: { requestId: id(673), correlationId: id(673), replayed: false } });
+    if (path === `${prefix}/curricula/${id(960)}/enrollments/${id(980)}`) return json(route, 200, { data: { enrollment: { id: id(980), curriculumId: id(960), studentProfileId: id(820), currentRankId: id(661), version: 3, status: 'ACTIVE', enrolledAt: '2026-09-01T12:00:00.000000+00:00' },
+      requirements: [['Front kick, both legs', 'TECHNIQUE', 'MET', 681], ['Bows in and out of class', 'CHARACTER', 'PRACTICING', 682], ['Ten classes attended', 'ATTENDANCE', null, 683]].map(([label, kind, status, n]) => ({ id: id(n), rankId: id(661), code: `R_${n}`, kind,
+        definition: { label }, required: true, version: 1, progressVersion: status ? 2 : 0, status, recordedAt: status ? '2026-11-18T17:00:00.000000+00:00' : null })) }, meta: { requestId: id(684), correlationId: id(684), replayed: false } });
+    if (path === '/api/v1/staff/teaching-studio/access') return json(route, 200, { data: { canRead: true, canManageLessons: true, canManageResources: true, canRecordAssessments: true } });
+    if (path === '/api/v1/staff/teaching-studio/lessons') return json(route, 200, { data: { nextAfter: null, items: [{ id: id(691), version: 1, title: 'Kicks and stances', instructionalObjective: 'Students hold a front stance and kick with control.',
+      sections: [{ heading: 'Warm-up', content: 'Jog, stretch, five minutes.' }], durationMinutes: 45, status: 'PUBLISHED', targetCurriculumId: null, targetRankId: null, recordedAt: iso(), humanAuthoredOnly: true }] } });
+    if (path === '/api/v1/staff/teaching-studio/resources') return json(route, 200, { data: { nextAfter: null, items: [{ id: id(692), version: 1, title: 'Pad drill: double kicks', resourceType: 'DRILL', description: 'Partners hold pads at waist height.', status: 'ACTIVE', recordedAt: iso(), metadataOnly: true }] } });
+    if (path === '/api/v1/staff/students/achievements/access') return json(route, 200, { data: { canReadDefinitions: true, canManageDefinitions: true, canReadAwards: true, canRecordAwards: true } });
+    if (path === '/api/v1/staff/students/achievements/definitions') return json(route, 200, { data: { nextAfter: null, items: [
+      { id: id(693), version: 1, name: 'Best effort', description: 'Worked hard all class.', category: 'EFFORT', ageBand: 'CHILD', visualToken: null, status: 'ACTIVE' },
+      { id: id(694), version: 1, name: 'Perfect attendance', description: 'Came to every class this month.', category: 'EFFORT', ageBand: 'CHILD', visualToken: null, status: 'ACTIVE' }] } });
     if (path === `${prefix}/reports/operations`) return json(route, 200, { data: { operationalSnapshot: snapshot(scope) }, meta: {} });
     if (path === `${prefix}/interface-theme`) {
       if (method === 'PUT') theme = JSON.parse(route.request().postData() ?? '{}').interfaceTheme ?? theme;
@@ -660,6 +675,29 @@ for (const size of ['desktop', 'phone']) await check(`Parent app > Curriculum: c
   await page.getByRole('heading', { name: 'Material by rank' }).waitFor();
   await page.screenshot({ path: join(results, `pca3-rank-${size}.png`), fullPage: true }); report.screenshots.push(`pca3-rank-${size}.png`);
   await ctx.close();
+});
+for (const [path, heading, name] of [['/staff/curriculum/library', 'Videos and links', 'plain-library'], ['/staff/teaching-studio', 'Teaching studio', 'plain-teaching'], ['/staff/students/achievements', 'Achievements', 'plain-achievements']])
+  for (const size of ['desktop', 'phone']) await check(`Plain curriculum page: ${heading} (${size})`, async () => {
+    theme = 'modern'; const { ctx, page } = await open(viewports[size], path);
+    await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+    await page.getByRole('heading', { name: heading, exact: true, level: 1 }).waitFor();
+    if (name === 'plain-library') await page.getByText('Front kick drill').waitFor();
+    if (name === 'plain-teaching') await page.getByText('Kicks and stances').waitFor();
+    if (name === 'plain-achievements') await page.getByRole('heading', { name: 'Perfect attendance' }).waitFor();
+    assert.equal(await page.getByText(/UUID|[0-9a-f]{8}-[0-9a-f]{4}-/).count(), 0, 'no ids on the page');
+    await noOverflow(page);
+    await page.screenshot({ path: join(results, `${name}-${size}.png`), fullPage: true }); report.screenshots.push(`${name}-${size}.png`); await ctx.close();
+  });
+for (const size of ['desktop', 'phone']) await check(`Plain curriculum page: Curriculum progress (${size})`, async () => {
+  theme = 'modern'; const { ctx, page } = await open(viewports[size], '/staff/curriculum/progress');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('combobox', { name: 'Student' }).selectOption({ index: 1 });
+  await page.getByRole('button', { name: 'Show what their belt needs' }).click();
+  await page.getByText('Bows in and out of class').first().waitFor();
+  await page.getByText('Shown in class').first().waitFor({ state: 'attached' });
+  assert.equal(await page.getByText(/UUID|[0-9a-f]{8}-[0-9a-f]{4}-/).count(), 0, 'no ids on the page');
+  await noOverflow(page);
+  await page.screenshot({ path: join(results, `plain-progress-${size}.png`), fullPage: true }); report.screenshots.push(`plain-progress-${size}.png`); await ctx.close();
 });
 await check('Texts > Send: type a name, pick the contact, nothing sent before Send (TE3a)', async () => {
   theme = 'modern'; const { ctx, page } = await open(viewports.desktop, '/staff/texts/send');
