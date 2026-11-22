@@ -5164,6 +5164,6 @@ DO $$ DECLARE r text; f regprocedure; t text; BEGIN
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.set_chad_draft_send_plan(text,uuid,jsonb,text), hon.read_chad_draft_send(text,uuid), hon.cancel_chad_draft_send(text,uuid),
-      hon.transition_chad_follow_up_draft(uuid,text) TO hon_runtime;
+      hon.transition_chad_follow_up_draft(uuid,text), hon.read_chad_draft_send_for_review(uuid) TO hon_runtime;
   END IF;
 END $$;

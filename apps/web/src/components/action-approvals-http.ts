@@ -1,4 +1,5 @@
 import { ACTION_REVIEW_STATUSES, ACTION_REVIEW_UUID, actionReviewFingerprint, safeActionReviewPayload, validateHumanActionDecision, type ActionReviewItem, type ActionReviewQueue, type HumanActionReview, type HumanActionDecision, type HumanActionReceipt, type ActionReviewStatus } from '@hon/contracts';
+import { verifyChadSendView, type ChadSendView } from './chad-draft-send-http';
 const base='/api/v1/staff/action-center/approvals';
 export class ActionReviewAccessError extends Error {}
 function invalid():never { throw new Error('Unverified approval result. No decision or execution is assumed. Retry only the exact retained request or reload.'); }
@@ -50,4 +51,10 @@ export async function decideActionReview(school:string,id:string,input:HumanActi
   const v=await request(school,`/${id}/decision`,input,key);closed(v,['actionRequestId','status','actionCode','reviewedAt','payloadHash','policyVersion','executionTriggered']);time(v.reviewedAt);
   if(v.actionRequestId!==id || v.status!==input.decision || v.actionCode!==input.binding.actionCode || v.payloadHash!==input.binding.payloadHash || v.policyVersion!==input.binding.policyVersion || v.executionTriggered!==false) invalid();
   return v as unknown as HumanActionReceipt;
+}
+
+/** 0647: the send plan on a Chad draft under review, read through the approvals route (action.approve, no Chad access needed). */
+export async function readChadSendForReview(school:string,id:string,invocationId:string):Promise<ChadSendView> {
+  uuid(id);
+  return verifyChadSendView(await request(school,`/${id}/chad-send`),invocationId);
 }

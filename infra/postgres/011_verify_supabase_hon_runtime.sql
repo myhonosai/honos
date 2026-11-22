@@ -6417,9 +6417,10 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
 ('hon.cancel_chad_draft_send(text,uuid)',true,true,'search_path=pg_catalog, hon','4d399c86a2b65648a62c045e2e1f62e16d809cc3b4c3d5cc367df38d7829a0b8'),
 ('hon.chad_draft_send_view(uuid)',true,false,'search_path=pg_catalog, hon','6c7027683c02151c1b777d717c99ea205143df084ed1782d828cb043c919736d'),
 ('hon.guard_ai_draft_send_rows()',false,false,'search_path=pg_catalog, hon','6bbb67a3df181e7e8d4c1be17c44c5eb725cdfacd9f52c5a0ea343211ee8d2bb'),
+('hon.read_chad_draft_send_for_review(uuid)',true,true,'search_path=pg_catalog, hon','09d0023943dacfe373344656bb4ce18d4322fbec95d208fb3f36b8c2dc47af7d'),
 ('hon.read_chad_draft_send(text,uuid)',true,true,'search_path=pg_catalog, hon','bb422d037818d2d2b197dbbc2007a7515a8257e9ab682e544013784f350c49f7'),
 ('hon.set_chad_draft_send_plan(text,uuid,jsonb,text)',true,true,'search_path=pg_catalog, hon','f146c7bfede96ce3753edf30ea5d9264fa29d6385f8a1e6f0cbfe7ad132167cb'),
-('hon.transition_chad_follow_up_draft(uuid,text)',true,true,'search_path=pg_catalog, hon','cb64a2fa04f613d386a8bd1908612476fe8ee35665736a7acac44804b1966a86'))
+('hon.transition_chad_follow_up_draft(uuid,text)',true,true,'search_path=pg_catalog, hon','3ce82eaaf2aa4f3941452d507cc05e77fac9369429a7e50d508d8f81aa5ddde2'))
  e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed

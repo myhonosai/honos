@@ -12,6 +12,7 @@ export const CHAD_SEND_COPY = {
   intro: 'Pick how this message goes out once a teammate approves it. Nothing is sent before then.',
   none: 'Don’t send. Approval only records the decision.',
   noPlan: 'No send is set. Approving only records the decision.',
+  readFailed: 'HON could not load the send plan for this draft, so it cannot be approved here yet. Reload to try again.',
   outcome: {
     NO_CONSENT: 'Approved, but not sent: this contact has not agreed to messages on that channel.',
     NO_ADDRESS: 'Approved, but not sent: this contact has no address for that channel.',
@@ -38,21 +39,28 @@ export function chadSendSummary(view: ChadSendView | null): string {
   return `Once approved, this goes out as ${p.channel === 'EMAIL' ? 'an email' : 'a text message'} ${p.sendAt ? `on ${when(p.sendAt)}` : 'right away'}.`;
 }
 
-export function ChadDraftSendPlan({ invocationId, status, mine = true, api = defaultApi }: { invocationId: string; status: string; mine?: boolean; api?: ChadSendApi }): React.ReactElement | null {
+/** On the approvals screen (readOnly) the reviewer only reads the plan, and onRead tells the screen which plan version was shown
+ * (or that it could not be read), so the approval is bound to that version and is blocked while the plan is unknown. */
+export function ChadDraftSendPlan({ invocationId, status, mine = true, readOnly = false, onRead, api = defaultApi }: { invocationId: string; status: string; mine?: boolean; readOnly?: boolean;
+  onRead?: (view: ChadSendView | null) => void; api?: ChadSendApi }): React.ReactElement | null {
   const [view, setView] = useState<ChadSendView | null>(null);
   const [channel, setChannel] = useState<ChadSendChannel>('NONE');
   const [timing, setTiming] = useState<'NOW' | 'LATER'>('NOW');
   const [local, setLocal] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [readFailed, setReadFailed] = useState(false);
+  const report = useRef(onRead); report.current = onRead;
   const key = useRef<{ body: string; key: string } | null>(null);
   useEffect(() => {
     let live = true;
-    api.read(invocationId).then((v) => { if (!live) return; setView(v); if (v.plan) { setChannel(v.plan.channel); setTiming(v.plan.sendAt ? 'LATER' : 'NOW'); } }, () => { if (live) setView(null); });
+    setReadFailed(false); report.current?.(null);
+    api.read(invocationId).then((v) => { if (!live) return; setView(v); report.current?.(v); if (v.plan) { setChannel(v.plan.channel); setTiming(v.plan.sendAt ? 'LATER' : 'NOW'); } },
+      () => { if (live) { setView(null); setReadFailed(true); report.current?.(null); } });
     return () => { live = false; };
   }, [api, invocationId, status]);
   if (!['AWAITING_APPROVAL', 'APPROVED'].includes(status)) return null;
-  const editable = mine && status === 'AWAITING_APPROVAL' && !view?.send;
+  const editable = !readOnly && mine && status === 'AWAITING_APPROVAL' && !view?.send;
   const run = async (work: () => Promise<ChadSendView>) => {
     if (busy) return; setBusy(true); setError('');
     try { setView(await work()); } catch (e) { setError(e instanceof ChadSendError ? e.message : 'HON could not confirm this. Refresh to see what was saved.'); }
@@ -65,10 +73,10 @@ export function ChadDraftSendPlan({ invocationId, status, mine = true, api = def
     if (key.current?.body !== body) key.current = { body, key: globalThis.crypto.randomUUID() };
     return api.setPlan(invocationId, { channel, sendAt }, key.current.key);
   });
-  const canCancel = !!view?.send && view.send.outcome === 'QUEUED' && !view.send.cancelled && !view.send.delivery;
+  const canCancel = !readOnly && !!view?.send && view.send.outcome === 'QUEUED' && !view.send.cancelled && !view.send.delivery;
   return <section aria-labelledby={`send-${invocationId}`} data-chad-send={view?.send?.outcome ?? view?.plan?.channel ?? 'NONE'}>
     <h3 id={`send-${invocationId}`}>Send once approved</h3>
-    <p data-chad-send-summary>{chadSendSummary(view)}</p>
+    {readFailed ? <p role="alert" data-chad-send-read-failed>{CHAD_SEND_COPY.readFailed}</p> : <p data-chad-send-summary>{chadSendSummary(view)}</p>}
     {editable ? <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
       <p>{CHAD_SEND_COPY.intro}</p>
       <fieldset disabled={busy}><legend>How</legend>

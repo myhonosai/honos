@@ -67,3 +67,18 @@ it('renders nothing for a draft that is not awaiting approval or approved', () =
   expect(html).toContain('Don’t send. Approval only records the decision.');
   expect(renderToStaticMarkup(<ChadDraftSendPlan invocationId={ID} status="AWAITING_APPROVAL" mine={false} api={api} />)).not.toContain(CHAD_SEND_COPY.intro);
 });
+
+it('binds an approval to the send plan version it saw and reads the plan on the approvals route', async () => {
+  const { validateHumanActionDecision } = await import('@hon/contracts');
+  const binding = { actionRequestId: ID, actionCode: 'crm.follow_up_draft.propose', requestedByPrincipalId: WHO, payloadHash: 'a'.repeat(64), policyVersion: 1, approvalExpiresAt: at, effectiveAuthorityMode: 'CONFIRM' as const };
+  for (const sendPlanVersion of [null, 1, 1000]) expect(() => validateHumanActionDecision({ decision: 'APPROVED', binding, sendPlanVersion })).not.toThrow();
+  for (const sendPlanVersion of [0, 1001, 1.5, '1']) expect(() => validateHumanActionDecision({ decision: 'APPROVED', binding, sendPlanVersion })).toThrow();
+  const { readChadSendForReview } = await import('../src/components/action-approvals-http');
+  const fetchMock = vi.fn(async (_url: string) => json({ data: { invocationId: MSG, plan: { version: 2, channel: 'SMS', sendAt: null }, send: null } }));
+  vi.stubGlobal('fetch', fetchMock);
+  const school = '66666666-6666-4666-8666-666666666666';
+  expect((await readChadSendForReview(school, ID, MSG)).plan?.version).toBe(2);
+  expect(fetchMock.mock.calls[0]![0]).toBe(`/api/v1/staff/action-center/approvals/${school}/${ID}/chad-send`);
+  await expect(readChadSendForReview(school, ID, WHO)).rejects.toThrow();
+  expect(CHAD_SEND_COPY.readFailed).toMatch(/cannot be approved here yet/);
+});

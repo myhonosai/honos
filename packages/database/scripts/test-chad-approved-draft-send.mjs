@@ -79,7 +79,10 @@ async function consent(o, person, channel, value, by) {
     ON CONFLICT (person_id,channel) DO UPDATE SET status=EXCLUDED.status,version=hon.communication_consents.version+1,updated_at=now()`, [o.id, o.school, person, channel, value, by]);
 }
 const newDraft = async (st, lead) => { const v = await chad.submit(ctx(st), { leadId: lead.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' }); assert.equal(v.status, 'AWAITING_APPROVAL', JSON.stringify(v)); return v; };
-const approve = async (st, d, patch = {}) => { const review = await actions.getForReview(ctx(st), d.actionRequestId); return actions.decide(ctx(st), { actionRequestId: review.id, decision: 'APPROVED', binding: binding(review), ...patch }); };
+// The reviewer reads the send plan on the approvals route (as the approvals screen does) and the approval is bound to that version.
+const seenPlan = async (st, actionRequestId) => (await actions.chadSendForReview(ctx(st), actionRequestId)).plan?.version ?? null;
+const approve = async (st, d, patch = {}) => { const review = await actions.getForReview(ctx(st), d.actionRequestId);
+  return actions.decide(ctx(st), { actionRequestId: review.id, decision: 'APPROVED', binding: binding(review), sendPlanVersion: await seenPlan(st, review.id), ...patch }); };
 const sends = (id) => row('SELECT * FROM hon.ai_draft_sends WHERE source_id=$1', [id]);
 const messagesFor = (id) => rows("SELECT * FROM hon.communication_messages WHERE origin_kind='AI_APPROVED_DRAFT' AND origin_id=$1", [id]);
 
@@ -94,7 +97,7 @@ try {
     for (const priv of ['SELECT', 'INSERT', 'UPDATE', 'DELETE']) assert.equal((await row('SELECT has_table_privilege($1,$2,$3) ok', [runtimeRole, `hon.${t}`, priv])).ok, false, `${t} ${priv}`);
   }
   const expected = { 'hon.set_chad_draft_send_plan(text,uuid,jsonb,text)': true, 'hon.read_chad_draft_send(text,uuid)': true, 'hon.cancel_chad_draft_send(text,uuid)': true,
-    'hon.transition_chad_follow_up_draft(uuid,text)': true, 'hon.ai_draft_reachable(uuid,text)': false, 'hon.chad_draft_send_view(uuid)': false, 'hon.guard_ai_draft_send_rows()': false };
+    'hon.transition_chad_follow_up_draft(uuid,text)': true, 'hon.read_chad_draft_send_for_review(uuid)': true, 'hon.ai_draft_reachable(uuid,text)': false, 'hon.chad_draft_send_view(uuid)': false, 'hon.guard_ai_draft_send_rows()': false };
   for (const [f, ok] of Object.entries(expected)) {
     assert.equal((await row("SELECT has_function_privilege($1,$2::regprocedure,'EXECUTE') ok", [runtimeRole, f])).ok, ok, f);
     assert.equal((await row("SELECT coalesce(bool_or(a.grantee=0),false) pub FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=$1::regprocedure", [f])).pub, false, f);
@@ -162,7 +165,7 @@ try {
   }
   assert.equal(status(await settle(actions.decide(ctx(reviewer), { actionRequestId: reviewD2.id, decision: 'DENIED', binding: binding(reviewD2), approvalMethod: 'VOICE', voiceTurnId: K() }))), 400);
   const turn = K();
-  await actions.decide(ctx(reviewer), { actionRequestId: reviewD2.id, decision: 'APPROVED', binding: binding(reviewD2), approvalMethod: 'VOICE', voiceTurnId: turn });
+  await actions.decide(ctx(reviewer), { actionRequestId: reviewD2.id, decision: 'APPROVED', binding: binding(reviewD2), approvalMethod: 'VOICE', voiceTurnId: turn, sendPlanVersion: await seenPlan(reviewer, reviewD2.id) });
   const s2 = await sends(d2.id), [m2] = await messagesFor(d2.id);
   assert.deepEqual([s2.outcome, s2.approval_method, s2.voice_turn_id], ['QUEUED', 'VOICE', turn]);
   assert.ok(Math.abs(m2.scheduled_at.getTime() - Date.now()) < 60000, 'a plan with no time sends as soon as approved');
@@ -231,6 +234,28 @@ try {
   assert.equal(JSON.stringify(audit).includes('CAS1_DRAFT_TEXT'), false, 'audit never holds the message text');
   assert.equal(Number((await row('SELECT count(*) n FROM hon.communication_messages')).n) - sentBefore, 3, 'exactly three messages were ever queued (the cap and the opt-out queued nothing)');
   pass('isolation, evidence: another school sees nothing; plans never change and a send row changes only by one cancel; audit names the reviewer and method, never the text');
+
+  // 11. The approval is bound to the send plan the reviewer saw; a reviewer with only action.approve can read it.
+  const lead3 = await addLead(a, { email: 'third@example.test' });
+  await consent(a, lead3.person, 'EMAIL', 'OPTED_IN', reviewer.principal);
+  const approverOnly = await addStaff(a, 'approver', ['action.approve']);
+  const d8 = await newDraft(requester, lead3);
+  const r8 = await actions.getForReview(ctx(approverOnly), d8.actionRequestId);
+  assert.equal(await seenPlan(approverOnly, r8.id), null, 'no plan yet');
+  await chad.setSendPlan(ctx(requester), d8.id, { channel: 'EMAIL', sendAt: null });
+  const stale = await settle(actions.decide(ctx(approverOnly), { actionRequestId: r8.id, decision: 'APPROVED', binding: binding(r8), sendPlanVersion: null }));
+  assert.equal(stale.error?.getResponse?.().code, 'CHAD_SEND_PLAN_CHANGED', 'a plan added after the reviewer looked refuses the approval');
+  const blind = await settle(actions.decide(ctx(approverOnly), { actionRequestId: r8.id, decision: 'APPROVED', binding: binding(r8) }));
+  assert.equal(blind.error?.getResponse?.().code, 'CHAD_SEND_PLAN_CHANGED', 'a decision that did not say which plan it saw never queues a message');
+  assert.equal(status(await settle(chad.readSend(ctx(approverOnly), d8.id))), 403, 'the Chad route still needs Chad access');
+  assert.equal((await row('SELECT status FROM hon.chad_follow_up_invocations WHERE id=$1', [d8.id])).status, 'AWAITING_APPROVAL');
+  assert.equal((await messagesFor(d8.id)).length, 0);
+  await chad.setSendPlan(ctx(requester), d8.id, { channel: 'EMAIL', sendAt: null });
+  assert.equal(status(await settle(actions.decide(ctx(approverOnly), { actionRequestId: r8.id, decision: 'APPROVED', binding: binding(r8), sendPlanVersion: 1 }))), 409, 'version 1 was replaced by version 2');
+  await approve(approverOnly, d8);
+  assert.deepEqual([(await sends(d8.id)).outcome, (await sends(d8.id)).plan_version, (await messagesFor(d8.id)).length], ['QUEUED', 2, 1]);
+  assert.equal(status(await settle(actions.chadSendForReview(ctx(requester), d8.actionRequestId))), 403, 'the review read needs action.approve');
+  pass('binding: an approval names the plan version it saw; a plan added or changed after review, or no version with a plan, refuses the decision and sends nothing; a reviewer with only action.approve reads the plan on the approvals route');
 
   { const verify = await (await import('node:fs/promises')).readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
     const section = verify.split('-- Chad approved-draft send exact verification (0647)')[1]?.split('-- End Chad approved-draft send exact verification.')[0];
