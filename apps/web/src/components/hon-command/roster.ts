@@ -78,7 +78,7 @@ const DEFINITIONS: readonly Definition[] = [
     capabilities: [
       { label: 'Prepare a follow-up draft for a known CRM lead', state: 'AVAILABLE', href: '/staff/leads/assistant' },
       { label: 'Send or schedule an approved follow-up (you pick text or email and when; it goes out once a teammate approves)', state: 'AVAILABLE', href: '/staff/leads/assistant' },
-      { label: 'Book trials or change lead records', state: 'BACKEND_REQUIRED' },
+      { label: 'Next steps for open leads: move a lead along the pipeline or book a trial in a coming class, each run by you when you press it (Lead next steps with Chad, below)', state: 'AVAILABLE' },
     ],
     workflows: [
       { label: 'CRM leads', href: '/staff/crm/leads' },

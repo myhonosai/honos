@@ -5186,3 +5186,21 @@ DO $$ DECLARE r text; f regprocedure; t text; BEGIN
       hon.approve_maya_check_in_draft(text,uuid,jsonb,text,uuid,uuid), hon.cancel_maya_check_in_send(text,uuid), hon.close_maya_check_in_draft(text,uuid,text) TO hon_runtime;
   END IF;
 END $$;
+-- 0650 Chad lead next steps (P9): eight entry points; every helper closed, and no runtime access to the alias or applied tables.
+DO $$ DECLARE r text; f regprocedure; t text; BEGIN
+  IF to_regprocedure('hon.begin_chad_lead_plan(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0650 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.chad_lead_plan_brief_ok(jsonb)','hon.chad_lead_plan_ok(jsonb)','hon.chad_lead_plan_trial_ahead(uuid)',
+    'hon.chad_lead_plan_fix_refs(uuid,text)','hon.chad_lead_plan_facts(uuid,jsonb)','hon.chad_lead_plan_fits(uuid,jsonb)','hon.chad_lead_plan_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hon.chad_lead_plan_refs','hon.chad_lead_plan_applied'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_chad_lead_plan(text,jsonb,uuid), hon.plan_chad_lead_plan(text,uuid), hon.prepare_chad_lead_plan(text,uuid,uuid,boolean),
+      hon.fail_chad_lead_plan(text,uuid,text,text), hon.record_chad_lead_plan(text,uuid,jsonb), hon.read_chad_lead_plans(text,uuid),
+      hon.record_chad_lead_plan_step(text,uuid,integer,jsonb), hon.close_chad_lead_plan(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;

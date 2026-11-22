@@ -167,6 +167,9 @@ import { CLAIRE_KPI_PROVIDER_RUNTIME, CLAIRE_KPI_TEXT_PROFILE } from './claire-k
 import { MayaRenewalController } from './maya-renewal/maya-renewal.controller.js';
 import { MayaRenewalService } from './maya-renewal/maya-renewal.service.js';
 import { MAYA_RENEWAL_PROVIDER_RUNTIME, MAYA_RENEWAL_TEXT_PROFILE } from './maya-renewal/maya-renewal-provider.js';
+import { ChadLeadPlanController } from './chad-lead-plan/chad-lead-plan.controller.js';
+import { ChadLeadPlanService } from './chad-lead-plan/chad-lead-plan.service.js';
+import { CHAD_LEAD_PLAN_PROVIDER_RUNTIME, CHAD_LEAD_PLAN_TEXT_PROFILE } from './chad-lead-plan/chad-lead-plan-provider.js';
 import { MayaCheckInController } from './maya-check-in/maya-check-in.controller.js';
 import { MayaCheckInService } from './maya-check-in/maya-check-in.service.js';
 import { MAYA_CHECK_IN_PROVIDER_RUNTIME, MAYA_CHECK_IN_TEXT_PROFILE } from './maya-check-in/maya-check-in-provider.js';
@@ -683,6 +686,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MarcusReviewController,
     ClaireKpiController,
     MayaRenewalController,
+    ChadLeadPlanController,
     MayaCheckInController,
     PublishedSchoolWebsiteController,
     SchoolOnboardingController,
@@ -988,6 +992,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MarcusReviewService,
     ClaireKpiService,
     MayaRenewalService,
+    ChadLeadPlanService,
     MayaCheckInService,
     { provide: COMMERCE_REVIEW_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, COMMERCE_REVIEW_TEXT_PROFILE) },
     { provide: ALEX_PLAN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, ALEX_PLAN_TEXT_PROFILE) },
@@ -995,6 +1000,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     { provide: MARCUS_REVIEW_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, MARCUS_REVIEW_TEXT_PROFILE) },
     { provide: CLAIRE_KPI_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, CLAIRE_KPI_TEXT_PROFILE) },
     { provide: MAYA_RENEWAL_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, MAYA_RENEWAL_TEXT_PROFILE) },
+    { provide: CHAD_LEAD_PLAN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, CHAD_LEAD_PLAN_TEXT_PROFILE) },
     { provide: MAYA_CHECK_IN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, MAYA_CHECK_IN_TEXT_PROFILE) },
     SchoolOnboardingService,
     SchoolSupportService,
