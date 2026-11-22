@@ -64,7 +64,7 @@ test('SH-F1 the snapshot and view contracts are closed', () => {
   assert.deepEqual([...contracts.SHOPIFY_ORDER_SCOPES], ['write_orders']);
   assert.throws(() => contracts.validateShopifyConnectInput({ ...base, allowFinance: 'yes' }), /SHOPIFY_INPUT_INVALID/);
   assert.throws(() => contracts.validateShopifyConnectInput({ ...base, allowPayouts: true }), /SHOPIFY_INPUT_INVALID/);
-  assert.deepEqual([...contracts.SHOPIFY_FINANCE_SCOPES], ['read_shopify_payments_accounts']);
+  assert.deepEqual([...contracts.SHOPIFY_FINANCE_SCOPES], ['read_shopify_payments_accounts', 'read_shopify_payments_payouts']);
 });
 
 async function syncWith(scopes, setup = () => {}) {
@@ -104,4 +104,35 @@ test('SH-F1 the worker records finance only through its lease function', async (
   const store = new ShopifyWorkerSql(async (sql, values) => { seen.push([sql, values]); return [{ data: { ok: true } }]; });
   await store.finance({ syncId: 's', leaseToken: 'l', finance: { paymentsActive: false, balances: [], payouts: [], transactions: [] } });
   assert.deepEqual(seen.map(s => s[0]), ['SELECT hon.record_shopify_background_finance($1::jsonb) AS data']);
+});
+
+test('SH-F1 payouts refused (no read_shopify_payments_payouts): the balance and transactions are read without them', async () => {
+  const sent = [], replies = [];
+  const send = async (url, init) => { sent.push(JSON.parse(init.body).query); return new Response(JSON.stringify(replies.shift()), { status: 200 }); };
+  const a = new adapter.GraphqlShopifyAdapter('cid', 'csecret', send, () => undefined);
+  const denied = { errors: [{ message: 'Access denied for payouts field.', path: ['shopifyPaymentsAccount', 'payouts'], extensions: { code: 'ACCESS_DENIED' } }], data: null };
+  const { payouts, balanceTransactions, ...rest } = ACCOUNT;
+  const plain = { ...rest, balanceTransactions: { nodes: balanceTransactions.nodes.map(({ associatedPayout, ...t }) => t) } };
+  replies.push(denied, { data: { shopifyPaymentsAccount: plain } });
+  const f = await a.finance(SHOP, 'shpat_1');
+  assert.deepEqual(f.balances, [{ currency: 'USD', amount: '245.18' }, { currency: 'CAD', amount: '-3.5' }]);
+  assert.deepEqual(f.payouts, []);
+  assert.deepEqual(f.transactions.map(t => [t.id, t.payoutId]), [['854848137', null], ['854848138', null]]);
+  assert.deepEqual(sent.map(q => [q.includes('payouts('), q.includes('associatedPayout'), q.includes('balanceTransactions')]), [[true, true, true], [false, false, true]]);
+  contracts.verifyShopifyFinanceSnapshot(f);
+  // The full read is used as it is when Shopify answers it; a refused plain read is the failure.
+  sent.length = 0; replies.push({ data: { shopifyPaymentsAccount: ACCOUNT } });
+  assert.equal((await a.finance(SHOP, 'shpat_1')).payouts.length, 1);
+  assert.equal(sent.length, 1);
+  replies.push(denied, denied);
+  await assert.rejects(a.finance(SHOP, 'shpat_1'), e => e.message === 'INVALID_RESPONSE');
+});
+
+test('SH-F1 the fake store leaves payouts out for a store that granted only the accounts scope', async () => {
+  const recorded = [];
+  const r = await syncWith([...contracts.SHOPIFY_SCOPES, 'read_shopify_payments_accounts']);
+  recorded.push(...r.recorded);
+  assert.equal(recorded.length, 1);
+  assert.deepEqual(recorded[0].payouts, []);
+  assert.equal(recorded[0].transactions.every(t => t.payoutId === null), true);
 });

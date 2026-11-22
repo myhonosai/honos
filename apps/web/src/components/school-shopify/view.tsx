@@ -392,7 +392,10 @@ function Finance({ ctx, read, c, finance, locked, busy, onAllowFinance }: { ctx:
         </div>
         <div className={styles.card}>
           <h2>{t('fin_payouts')}</h2>
-          {snap.payouts.length === 0 ? <p className={styles.meta}>{t('fin_noPayouts')}</p>
+          {snap.payouts.length === 0 ? <><p className={styles.meta}>{t('fin_noPayouts')}</p>
+            {/* An empty list is also what a store without the payouts permission gets (the view cannot tell the two apart). */}
+            {snap.paymentsActive && c.status === 'CONNECTED' && <><p className={styles.meta}>{t('fin_payoutsHelp')}</p>
+              <div className={styles.row}><button type="button" className={styles.secondary} disabled={locked} onClick={onAllowFinance} data-action="allow-payouts">{busy ? t('connecting') : t('fin_allowPayouts')}</button></div></>}</>
             : <div className={styles.tableWrap}><table className={styles.table} data-shopify-payouts>
               <thead><tr><th>{t('col_date')}</th><th>{t('col_status')}</th><th>{t('fin_amount')}</th></tr></thead>
               <tbody>{snap.payouts.map(o => <tr key={o.id} data-payout={o.id}>
