@@ -5167,3 +5167,22 @@ DO $$ DECLARE r text; f regprocedure; t text; BEGIN
       hon.transition_chad_follow_up_draft(uuid,text), hon.read_chad_draft_send_for_review(uuid) TO hon_runtime;
   END IF;
 END $$;
+-- 0649 Maya check-in drafts (P8): nine entry points; every helper closed, and no runtime access to the target or send tables.
+DO $$ DECLARE r text; f regprocedure; t text; BEGIN
+  IF to_regprocedure('hon.begin_maya_check_in_draft(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0649 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.guard_maya_check_in_rows()','hon.maya_check_in_text_ok(text,integer)','hon.maya_check_in_line_ok(text,integer)',
+    'hon.maya_check_in_brief_ok(jsonb)','hon.maya_check_in_ok(jsonb,text)','hon.maya_check_in_reader(text)','hon.maya_check_in_actor(text)',
+    'hon.maya_check_in_at_risk_row(text,uuid)','hon.maya_check_in_recipient(uuid,text)','hon.maya_check_in_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hon.maya_check_in_targets','hon.maya_check_in_sends'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_maya_check_in_draft(text,jsonb,uuid), hon.plan_maya_check_in_draft(text,uuid), hon.prepare_maya_check_in_draft(text,uuid,uuid,boolean),
+      hon.fail_maya_check_in_draft(text,uuid,text,text), hon.record_maya_check_in_draft(text,uuid,jsonb), hon.read_maya_check_in_drafts(text,uuid),
+      hon.approve_maya_check_in_draft(text,uuid,jsonb,text,uuid,uuid), hon.cancel_maya_check_in_send(text,uuid), hon.close_maya_check_in_draft(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
