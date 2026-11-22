@@ -130,9 +130,9 @@ The mandatory release-checkout `db:check` and reviewed `db:status` preflight rem
 | Check | Evidence | Result | Who / date |
 |---|---|---|---|
 | Disposable restore drill (CI) | `test-restore-drill.mjs` in run-db-proofs | PASS locally and in CI (manual dispatch) 2026-10-28 | Claude |
-| Fresh-target restore drill (CI) | `test-restore-fresh-target-drill.mjs` in run-db-proofs | PASS locally 2026-11-22 (581 tables, 381 migrations, about 20 s) | Claude |
+| Fresh-target restore drill (CI) | `test-restore-fresh-target-drill.mjs` in run-db-proofs | PASS locally and in CI 2026-11-22 (#603; 581 tables, 381 migrations, about 20 s) | Claude |
 | Supabase plan, backup retention and PITR status recorded | Dashboard screenshot | NOT VERIFIED | Owner |
 | Production logical dump taken and encrypted off-site | File name + checksum | NOT VERIFIED | Owner |
 | Isolated restore of a production backup + §3 checks | Command output | NOT VERIFIED | Owner + Claude |
 | Measured RTO / RPO | Timestamps | NOT VERIFIED | Owner |
-| Rollback rehearsal on staging (deploy N+1, roll back to N) | Health checks | NOT VERIFIED (no hosting yet) | Owner |
+| Rollback rehearsal on staging (deploy N+1, roll back to N) | Render health checks (`/api/readiness` on hon-web, `/v1/health/ready` on hon-api) | NOT VERIFIED (Render hosting exists; no rehearsal recorded) | Owner |
