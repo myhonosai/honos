@@ -424,6 +424,10 @@ about a provider's catalog, prices or delivery.
   not keep Shopify's error text, so the exact refusal is not known. When a catalog page is refused that way, the adapter
   now reads that page and the rest of the sync without the stock locations; those variants leave `fulfilledBy` out and the
   mirror keeps what it had. A plain read that is refused too fails the sync as before.
+  **Refusal log.** A GraphQL answer Shopify refuses (not throttling) now leaves one log line:
+  `shopify_graphql_refused operation=<HON's operation name> errors=<n> [<CODE> at <field path> needs <scope names>; ...]`.
+  It never holds the shop, Shopify's message text, ids or values. A skipped finance read logs
+  `shopify_finance_skipped stage=read|record` with a one-word reason.
 - **Store.** `hon.shopify_variants.fulfilled_by` (text, NULL = the school). `fulfilledBy` is an optional variant key in
   `hon.shopify_apply_page`, `hon.shopify_product_item_ok` and `hon.shopify_mirror_product`; a variant sent without the key
   keeps its value. `hon.shopify_fulfilled_by_ok(jsonb)` is the closed name check (no runtime grant).
