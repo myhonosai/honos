@@ -242,7 +242,7 @@ export const HON_TEACHING_AI = {
   boundary: 'Kai will never mark student proficiency, promotions, testing results or curriculum completion. Those stay instructor decisions recorded in the existing workflows.',
   tools: [
     { label: 'Teaching Studio', href: '/staff/teaching-studio' },
-    { label: 'Curriculum library', href: '/staff/curriculum/library' },
+    { label: 'Videos and links', href: '/staff/curriculum/library' },
     { label: 'Curriculum progress', href: '/staff/curriculum/progress' },
     { label: 'Scheduled classes', href: '/staff/schedule/sessions' },
     { label: 'Teaching drafts', href: '/staff/teaching-assistant' },
