@@ -40,6 +40,17 @@ export class ShopifyController {
   storefront(@Req() r: HonRequest, @Param('schoolId') s: string) { return this.shopify.storefront(r, s).then(data => ({ data })); }
   @Post('school/shopify/storefront') @HttpCode(200)
   saveStorefront(@Req() r: HonRequest, @Body() b: unknown) { return this.shopify.saveStorefront(r, b).then(data => ({ data })); }
+  @Get('school/schools/:schoolId/shopify/store-request')
+  storeRequest(@Req() r: HonRequest, @Param('schoolId') s: string) { return this.shopify.storeRequest(r, s).then(data => ({ data })); }
+  @Post('school/shopify/store-request') @HttpCode(200)
+  requestStore(@Req() r: HonRequest, @Body() b: unknown) { return this.shopify.requestStore(r, b).then(data => ({ data })); }
+  @Post('school/shopify/store-request/cancel') @HttpCode(200)
+  cancelStoreRequest(@Req() r: HonRequest, @Body() b: unknown) { return this.shopify.cancelStoreRequest(r, b).then(data => ({ data })); }
+  /** HQ side of 0655: the same human-request rules; the database decides who is HQ. */
+  @Get('hq/shopify/store-requests')
+  hqStoreRequests(@Req() r: HonRequest) { return this.shopify.hqStoreRequests(r).then(data => ({ data })); }
+  @Post('hq/shopify/store-requests/settle') @HttpCode(200)
+  settleStoreRequest(@Req() r: HonRequest, @Body() b: unknown) { return this.shopify.settleStoreRequest(r, b).then(data => ({ data })); }
   @Post('school/shopify/storefront/publish') @HttpCode(200)
   publishStorefront(@Req() r: HonRequest, @Body() b: unknown) { return this.shopify.publishStorefront(r, b).then(data => ({ data })); }
   @Post('school/shopify/disconnect') @HttpCode(200)

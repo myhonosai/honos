@@ -18,7 +18,7 @@ const signal = () => new AbortController().signal;
 const fails = async (p: Promise<unknown>) => { try { await p; } catch (e) { return e as ShopifyError; } throw new Error('expected a failure'); };
 const connection = (over: Partial<ShopifyConnection> = {}): ShopifyConnection => ({ connectionId: cid, shopDomain: SHOP, shopName: 'Synthetic Dojo Store', currency: 'USD',
   status: 'CONNECTED', version: 2, connectedAt: at, endedAt: null, lastSyncAt: at, lastSyncOutcome: 'SUCCEEDED', syncRunning: false, ordersAllowed: false, ...over });
-const overview = (over: Partial<ShopifyOverview> = {}): ShopifyOverview => ({ schoolId: school, canManage: true, connectEnabled: true, autoSync: false, newStoreUrl: null, connection: connection(),
+const overview = (over: Partial<ShopifyOverview> = {}): ShopifyOverview => ({ schoolId: school, canManage: true, connectEnabled: true, autoSync: false, connection: connection(),
   counts: { products: 0, variants: 0, lowStock: 0, provider: 0, orders: 0 },
   summary: { days: 30, orders: 0, sales: 0, averageOrder: 0, itemsSold: 0, lineSales: 0, coveredSales: 0, estimatedGrossProfit: 0, topProducts: [] }, ...over });
 const view = (over: Partial<ShopifyFinanceView> = {}): ShopifyFinanceView => ({ schoolId: school, connected: true, financeAllowed: true, currency: 'USD',

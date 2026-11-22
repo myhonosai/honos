@@ -8,7 +8,8 @@ import {
   verifyShopifyStorefront, verifyShopifyStorefrontPublishResult, type ShopifyStorefront, type ShopifyStorefrontLinks, type ShopifyStorefrontPublishResult,
   type ShopifyStorefrontSettings, SHOPIFY_RETURN_PATH, verifyShopifyFinanceSnapshot, verifyShopifyFinanceView, type ShopifyFinanceView, validateShopifyChangeCommandInput, validateShopifyProposeInput, verifyShopifyChangeResult,
   verifyShopifyProductChange, verifyShopifyProductChanges, type ShopifyChangeResult, type ShopifyProductChanges, validateShopifyCompleteInput, validateShopifyConnectInput, validateShopifyDisconnectInput, validateShopifySyncInput,
-  verifyShopifyCatalog, verifyShopifyConnectResult, verifyShopifyConnectStart, shopifyNewStoreUrl, verifyShopifyDisconnectResult, verifyShopifyOrders, verifyShopifyOverview,
+  verifyShopifyCatalog, verifyShopifyConnectResult, verifyShopifyConnectStart, validateShopifyStoreRequestInput, validateShopifyStoreRequestCancel, validateHqShopifyStoreRequestSettle,
+  verifyShopifyStoreRequestView, verifyHqShopifyStoreRequest, verifyHqShopifyStoreRequests, type ShopifyStoreRequestView, type HqShopifyStoreRequest, type HqShopifyStoreRequests, verifyShopifyDisconnectResult, verifyShopifyOrders, verifyShopifyOverview,
   verifyShopifySyncResult,
   type ShopifyCatalog, type ShopifyConnectResult, type ShopifyConnectStart, type ShopifyDisconnectResult, type ShopifyOrders, type ShopifyOverview,
   type ShopifySyncResult,
@@ -44,6 +45,10 @@ const DETAIL: Record<string, string> = {
   SHOPIFY_STOREFRONT_BUSY: 'HON is already publishing this store\'s storefront settings. Wait a moment and try again.',
   SHOPIFY_STOREFRONT_NOT_LEASED: 'This publish is no longer running. Reload to see where it stands.',
   SHOPIFY_STOREFRONT_LIMIT: 'HON has published storefront settings 100 times for this store today. Try again tomorrow.',
+  SHOPIFY_STORE_REQUEST_CONNECTED: 'This school already has a Shopify store connected.',
+  SHOPIFY_STORE_REQUEST_OPEN: 'HON is already working on a shop for this school.',
+  SHOPIFY_STORE_REQUEST_SETTLED: 'This request is already closed. Reload to see where it stands.',
+  SHOPIFY_STORE_REQUEST_LIMIT: 'This school has asked five times in the last 30 days. Contact HON support.',
 };
 const STATUS: Record<string, number> = {
   SHOPIFY_INVALID: 400, SHOPIFY_CONNECT_STATE_INVALID: 400, SHOPIFY_CONNECT_STATE_EXPIRED: 400,
@@ -53,6 +58,7 @@ const STATUS: Record<string, number> = {
   SHOPIFY_EDIT_NOT_ALLOWED: 409, SHOPIFY_CHANGE_STALE: 409, SHOPIFY_CHANGE_OPEN: 409, SHOPIFY_CHANGE_NOT_PENDING: 409, SHOPIFY_CHANGE_NOT_LEASED: 409,
   SHOPIFY_CHANGE_ATTEMPTS: 409, SHOPIFY_TOO_MANY_DRAFTS: 409,
   SHOPIFY_STOREFRONT_BUSY: 409, SHOPIFY_STOREFRONT_NOT_LEASED: 409, SHOPIFY_STOREFRONT_LIMIT: 429,
+  SHOPIFY_STORE_REQUEST_CONNECTED: 409, SHOPIFY_STORE_REQUEST_OPEN: 409, SHOPIFY_STORE_REQUEST_SETTLED: 409, SHOPIFY_STORE_REQUEST_LIMIT: 429,
 };
 const STATES = ['22023', '42501', 'P0002', '40001', '23505', '55P03', '54000', '55000', '55006'];
 
@@ -117,8 +123,7 @@ export class ShopifyService {
   async overview(req: HonRequest, schoolId: unknown): Promise<ShopifyOverview> {
     const school = this.school(schoolId);
     const raw = await this.call('read', [this.subject(req), school]);
-    const out = this.checked(verifyShopifyOverview, raw && typeof raw === 'object' ? { ...(raw as object), connectEnabled: this.app !== null, autoSync: this.app !== null && shopifyBackgroundEnabled(process.env),
-      newStoreUrl: shopifyNewStoreUrl(process.env.HON_SHOPIFY_NEW_STORE_URL?.trim()) } : raw);
+    const out = this.checked(verifyShopifyOverview, raw && typeof raw === 'object' ? { ...(raw as object), connectEnabled: this.app !== null, autoSync: this.app !== null && shopifyBackgroundEnabled(process.env) } : raw);
     if (out.schoolId !== school) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
     return out;
   }
@@ -285,6 +290,35 @@ export class ShopifyService {
       },
     });
     return this.checked(verifyShopifyStorefrontPublishResult, { ...done, storefront: await this.storefront(req, input.schoolId) });
+  }
+
+  /** 0655 (commerce.shopify.manage): the school's latest "Make my shop" request. Nothing here calls Shopify. */
+  async storeRequest(req: HonRequest, schoolId: unknown): Promise<ShopifyStoreRequestView> {
+    const school = this.school(schoolId);
+    return this.storeRequestView(await this.call('storeRequest', [this.subject(req), school]), school);
+  }
+  async requestStore(req: HonRequest, body: unknown): Promise<ShopifyStoreRequestView> {
+    const input = this.input(validateShopifyStoreRequestInput, body);
+    return this.storeRequestView(await this.call('requestStore', [this.subject(req), JSON.stringify(input)]), input.schoolId);
+  }
+  async cancelStoreRequest(req: HonRequest, body: unknown): Promise<ShopifyStoreRequestView> {
+    const input = this.input(validateShopifyStoreRequestCancel, body);
+    return this.storeRequestView(await this.call('cancelStoreRequest', [this.subject(req), JSON.stringify(input)]), input.schoolId);
+  }
+  private storeRequestView(raw: unknown, school: string): ShopifyStoreRequestView {
+    const out = this.checked(verifyShopifyStoreRequestView, raw);
+    if (out.schoolId !== school) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
+    return out;
+  }
+  /** 0655 HQ side: the database decides who is HQ (owner, or an operator with hq.billing.manage). */
+  async hqStoreRequests(req: HonRequest): Promise<HqShopifyStoreRequests> {
+    return this.checked(verifyHqShopifyStoreRequests, await this.call('hqStoreRequests', [this.subject(req)]));
+  }
+  async settleStoreRequest(req: HonRequest, body: unknown): Promise<HqShopifyStoreRequest> {
+    const input = this.input(validateHqShopifyStoreRequestSettle, body);
+    const out = this.checked(verifyHqShopifyStoreRequest, await this.call('settleStoreRequest', [this.subject(req), JSON.stringify(input)]));
+    if (out.requestId !== input.requestId || out.status !== input.outcome) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
+    return out;
   }
 
   private storefrontView(raw: unknown, school: string): ShopifyStorefront {

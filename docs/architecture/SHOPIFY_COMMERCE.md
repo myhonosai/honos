@@ -530,13 +530,23 @@ nothing in HON or Shopify, and the only actions on it are "mark as reviewed" and
   `apps/api/test/commerce-review.test.cjs`, `apps/web/test/school-shopify-commerce-review.test.tsx`, and the 011 section
   "Shopify commerce review exact verification (0615)".
 
-## New-shop guide (schools with no Shopify store)
+## New shop: "Make my shop" requests (0655)
 
-Before a store is connected, a manager sees a "Set up your shop" guide above the connect form: start a store on Shopify, copy
-the `.myshopify.com` address, come back and connect, then fill the shop with Merch Studio. No app can create a Shopify store
-or accept Shopify's terms for a merchant, so the account is always made by the school on Shopify's own page.
+A school with no Shopify store asks HON to make one. No app can create a Shopify store or accept Shopify's terms for a
+merchant, and HON's Partner account earns only on stores HON creates (Partner Dashboard, Sales, Referrals, "Create a client
+transfer store"), so HON HQ creates the store by hand and transfers it to the school owner. Nothing in this slice calls Shopify.
 
-The guide's button opens `HON_SHOPIFY_NEW_STORE_URL` when hon-api has it (HON's own sign-up or referral link; https on
-`shopify.com`, a subdomain of it, or `shopify.pxf.io` only, otherwise ignored) and Shopify's public sign-up page when not. The
-link is HON-wide configuration, never school input, and reaches the page as `newStoreUrl` on the overview read. When HON's link
-is used the guide says HON may receive a referral fee. No migration; nothing is written.
+- **School side** (`commerce.shopify.manage` at the exact school; card above the connect form while the school has no store):
+  `GET school/schools/:id/shopify/store-request`, `POST school/shopify/store-request` `{schoolId, shopName, ownerEmail, note}`,
+  `POST school/shopify/store-request/cancel` `{schoolId, requestId}`. One open request per school, five in any thirty days,
+  never while a store is CONNECTED. The card shows the form, then "HON is making your shop", then "Your shop is ready" with
+  the steps (accept Shopify's email, set a password, pick a plan, come back and connect). The card says the owner pays
+  Shopify for the plan and that HON may receive a referral fee.
+- **HQ side** (HQ owner, or an HQ operator with `hq.billing.manage`; page `/hq/schools/shopify-stores`):
+  `GET hq/shopify/store-requests` (every open request oldest first, then the fifty most recently closed) and
+  `POST hq/shopify/store-requests/settle` `{requestId, expectedVersion, outcome: CREATED|DECLINED, shopDomain}`. CREATED needs
+  the new store's `myshopify.com` address; the school then sees it with a "Connect this store" button that fills the connect form.
+- **Data**: `hon.shopify_store_requests` (forced RLS, no policy, no runtime table privilege), five definer entry points.
+  The owner's email is the only personal detail; audit and outbox carry ids and statuses only. HQ's page hides when the tab
+  loses focus. Connecting is still the normal owner-approved OAuth flow; a CREATED request grants nothing by itself.
+- **Proof**: `test-shopify-store-request-integrity.mjs` (Champions Club fixture) and infra 011 "Shopify store requests".
