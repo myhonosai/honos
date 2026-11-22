@@ -17,7 +17,7 @@ const FAMILY_MOBILE_ROUTES = /^\/v1\/(?:parent|me|auth\/mobile)\//;
  * routes) stays browser-only. Identity only: every route still authorizes school, role and permission itself.
  */
 const STAFF_MOBILE_ROUTES: readonly RegExp[] = [
-  /^\/v1\/me\/[^/]/,
+  /^\/v1\/me\/language-preference$/,
   /^\/v1\/auth\/mobile\/[^/]/,
   /^\/v1\/staff\/current-reporting-school$/,
   /^\/v1\/staff\/reporting-schools$/,

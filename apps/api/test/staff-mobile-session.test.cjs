@@ -18,7 +18,7 @@ const status = (fn) => { try { fn(); return 200; } catch (e) { return e.getStatu
 const code = (fn) => { try { fn(); return null; } catch (e) { return e.getResponse?.().code ?? null; } };
 const bearer = (token) => ({ authorization: `Bearer ${token}` });
 
-const STAFF_ALLOWED = ['/v1/me/language-preference', '/v1/me/hq-contact', '/v1/auth/mobile/staff-session', '/v1/staff/current-reporting-school', '/v1/staff/reporting-schools', '/v1/staff/reporting-schools?x=1'];
+const STAFF_ALLOWED = ['/v1/me/language-preference', '/v1/auth/mobile/staff-session', '/v1/staff/current-reporting-school', '/v1/staff/reporting-schools', '/v1/staff/reporting-schools?x=1'];
 
 test('a staff bearer session authenticates the S0 allow-list on the MOBILE channel as the STAFF app', () => {
   for (const url of STAFF_ALLOWED) {
@@ -32,7 +32,7 @@ test('a staff bearer session authenticates the S0 allow-list on the MOBILE chann
 test('a staff session is refused on family, organization, HQ, other staff and look-alike routes', () => {
   for (const url of ['/v1/parent/journey', '/v1/parent/families', '/v1/organizations/o/schools/s/staff/time/clock', '/v1/hq/session', '/v1/hq/schools',
     '/v1/staff/teaching-assistant/x', '/v1/staff/voice/s', '/v1/staff/reporting-schoolsx', '/v1/staff/reporting-schools/x', '/v1/staff/current-reporting-school/x',
-    '/v1/staff', '/v1/me', '/v2/me/language-preference', '/v1//me/language-preference']) {
+    '/v1/staff', '/v1/me', '/v1/me/hq-contact', '/v1/me/hq-contact/phone', '/v1/me/language-preferencex', '/v2/me/language-preference', '/v1//me/language-preference']) {
     assert.equal(status(() => service.authenticate(req(bearer(staff), url))), 403, url);
     assert.equal(code(() => service.authenticate(req(bearer(staff), url))), 'MOBILE_SESSION_SCOPE', url);
   }
