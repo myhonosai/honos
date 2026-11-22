@@ -49,7 +49,7 @@ permission from the database on every call (forced RLS, existing guards). A pers
   - `GET /v1/staff/current-reporting-school`, `GET /v1/staff/reporting-schools` (which school the person works at)
   Everything else, including `/v1/parent/…`, every `/v1/organizations/…` route, `/v1/hq/…` and all other `/v1/staff/…`
   routes, is refused with 403 `MOBILE_SESSION_SCOPE`. Each later phase (S1 Today, S2 HON, …) adds its exact routes in
-  its own reviewed PR, with a test per route.
+  its own reviewed PR, with a test per route. S1 Today's routes: `STAFF_MOBILE_TODAY.md`.
 - The allow-list is matched on the URL path only (query ignored), anchored, segment-exact (no prefix tricks such as
   `/v1/staff/reporting-schoolsx`).
 

@@ -10,8 +10,12 @@ export async function verifyClassBookingLockSecurity(client, runtime = 'hon_runt
   const source = (await client.query("SELECT prosrc FROM pg_proc WHERE oid='hon.lock_class_booking_session(text,uuid)'::regprocedure")).rows[0].prosrc.replace(/--[^\n]*/g, '');
   if (!/FOR UPDATE OF s/i.test(source) || !/FOR phase IN 1\.\.2 LOOP/.test(source)) throw new Error('Session locking and post-wait authority checks required.');
   if (/\b(?:INSERT|UPDATE|DELETE|TRUNCATE|EXECUTE)\b/i.test(source.replace(/FOR UPDATE OF s/gi, ''))) throw new Error('Booking lock may not mutate or use dynamic SQL.');
+  // 0631 (launch-readiness P2): the lock refuses the same identity planes as 0147 discovery.
+  if (!/NOT EXISTS\(SELECT 1 FROM hon\.hq_operator_grants/.test(source) || !/NOT EXISTS\(SELECT 1 FROM hon\.family_access_grants/.test(source)
+    || (source.match(/\^\(PARENT\|GUARDIAN\|STUDENT\|FAMILY\|HQ\|HON_\|PLATFORM\|SYSTEM\)/g) ?? []).length !== 2
+    || !/x\.user_id=u\.id AND x\.is_active\)=1/.test(source)) throw new Error('Booking lock must refuse HQ, family, mixed-role and multi-principal identities.');
   for (const relation of source.matchAll(/hon\.([a-z_]+)/g)) {
-    if (!['current_organization_id', 'current_school_id', 'principals', 'users', 'organizations', 'schools', 'principal_role_grants', 'roles', 'role_permissions', 'organization_entitlements', 'class_sessions'].includes(relation[1])) throw new Error('Unexpected booking lock dependency: ' + relation[1]);
+    if (!['current_organization_id', 'current_school_id', 'principals', 'users', 'organizations', 'schools', 'principal_role_grants', 'roles', 'role_permissions', 'organization_entitlements', 'class_sessions', 'hq_operator_grants', 'family_access_grants'].includes(relation[1])) throw new Error('Unexpected booking lock dependency: ' + relation[1]);
   }
   const helper = (await client.query("SELECT prosrc FROM pg_proc WHERE oid='hon.require_classpass_read_actor(text)'::regprocedure")).rows[0].prosrc.replace(/--[^\n]*/g, '');
   if (/\b(?:INSERT|UPDATE|DELETE|TRUNCATE|EXECUTE)\b|FOR SHARE|FOR KEY SHARE/i.test(helper)) throw new Error('ClassPass read authorization must be read-only and lock-free.');
