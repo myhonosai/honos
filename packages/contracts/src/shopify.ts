@@ -138,9 +138,23 @@ export interface ShopifyOverview {
   /** SH1b: HON syncs on its own (Shopify change reports, plus a full sync every six hours). */
   autoSync: boolean; connection: ShopifyConnection | null;
   counts: { products: number; variants: number; lowStock: number; provider: number; orders: number } | null; summary: ShopifySummary | null;
+  /** HON's own Shopify sign-up link for a school with no store yet (set by HON, never by a school); null when HON has none. */
+  newStoreUrl: string | null;
+}
+/** A sign-up link is https on Shopify's own site or Shopify's partner link host, with no sign-in part, port or fragment. Anything else is null. */
+export function shopifyNewStoreUrl(v: unknown): string | null {
+  if (typeof v !== 'string' || v.length < 12 || v.length > 500 || v !== v.trim()) return null;
+  let u: URL; try { u = new URL(v); } catch { return null; }
+  const host = u.hostname.toLowerCase();
+  if (u.protocol !== 'https:' || u.username || u.password || u.port || u.hash) return null;
+  return host === 'shopify.com' || host.endsWith('.shopify.com') || host === 'shopify.pxf.io' ? u.toString() : null;
 }
 export function verifyShopifyOverview(v: unknown): ShopifyOverview {
-  const o = closed(v, ['schoolId', 'canManage', 'connectEnabled', 'autoSync', 'connection', 'counts', 'summary'], true);
+  // An API one release older does not send newStoreUrl yet: read that as "no link".
+  const base = ['schoolId', 'canManage', 'connectEnabled', 'autoSync', 'connection', 'counts', 'summary'];
+  const o = closed(v, v && typeof v === 'object' && Object.hasOwn(v, 'newStoreUrl') ? [...base, 'newStoreUrl'] : base, true);
+  const newStoreUrl = o.newStoreUrl === undefined || o.newStoreUrl === null ? null : shopifyNewStoreUrl(o.newStoreUrl);
+  if (o.newStoreUrl !== undefined && o.newStoreUrl !== null && newStoreUrl !== o.newStoreUrl) fail(true);
   const connection = o.connection === null ? null : verifyShopifyConnection(o.connection);
   if ((connection === null) !== (o.counts === null) || (connection === null) !== (o.summary === null)) fail(true);
   let counts: ShopifyOverview['counts'] = null, summary: ShopifySummary | null = null;
@@ -154,7 +168,7 @@ export function verifyShopifyOverview(v: unknown): ShopifyOverview {
         return Object.freeze({ title: text(x.title, 255), quantity: int(x.quantity, 0, 1e9), sales: money(x.sales) }); })) });
     if (summary.coveredSales > summary.lineSales) fail(true);
   }
-  return Object.freeze({ schoolId: id(o.schoolId, true), canManage: bool(o.canManage), connectEnabled: bool(o.connectEnabled), autoSync: bool(o.autoSync), connection, counts, summary });
+  return Object.freeze({ schoolId: id(o.schoolId, true), canManage: bool(o.canManage), connectEnabled: bool(o.connectEnabled), autoSync: bool(o.autoSync), connection, counts, summary, newStoreUrl });
 }
 
 export interface ShopifyVariant {

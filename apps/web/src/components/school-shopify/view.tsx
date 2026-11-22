@@ -488,6 +488,25 @@ function ConnectCard({ p, t, read, c }: { p: ShopifyViewProps; t: T; read: Shopi
   </div>;
 }
 
+/** Shopify's own sign-up page, used when HON has no link of its own. */
+export const SHOPIFY_SIGNUP_URL = 'https://www.shopify.com/free-trial';
+
+/** For a school with no Shopify store yet: the steps from nothing to a connected shop. Shopify makes the account; HON does the rest. */
+function NewShopGuide({ p, t, read }: { p: ShopifyViewProps; t: T; read: ShopifyOverview }): React.ReactElement {
+  return <div className={styles.card} data-shopify-new-shop>
+    <h2>{t('newShopTitle')}</h2>
+    <p className={styles.meta}>{t('newShopIntro')}</p>
+    <ol className={styles.plainList}>
+      <li><strong>{t('newShopStep1')}</strong> {p.schoolName ? t('newShopStep1Name', { school: p.schoolName }) : t('newShopStep1Help')}</li>
+      <li><strong>{t('newShopStep2')}</strong> {t('newShopStep2Help')}</li>
+      <li><strong>{t('newShopStep3')}</strong> {t('newShopStep3Help')}</li>
+      <li><strong>{t('newShopStep4')}</strong> {t('newShopStep4Help')}</li>
+    </ol>
+    <div className={styles.row}><a className={styles.primary} data-new-shop-start href={read.newStoreUrl ?? SHOPIFY_SIGNUP_URL} target="_blank" rel="noopener noreferrer">{t('newShopStart')}</a></div>
+    <p className={styles.meta}>{t('newShopYours')}{read.newStoreUrl ? ` ${t('newShopReferral')}` : ''}</p>
+  </div>;
+}
+
 /** Pure view of the server's verified answers: the Commerce Workspace once a store is linked, the connect card before. */
 export function ShopifyView(p: ShopifyViewProps): React.ReactElement {
   const t: T = (key, vars) => shopifyText(p.language, key, vars);
@@ -508,7 +527,8 @@ export function ShopifyView(p: ShopifyViewProps): React.ReactElement {
   else if (o && o.kind !== 'SENDING') message = t(o.action === 'approve' && o.kind === 'UNKNOWN' ? 'done_unknown' : `e_${o.kind}` as ShopifyKey);
   const good = o?.kind === 'DONE' && (o.action === 'disconnect' || o.sync?.outcome === 'SUCCEEDED' || o.action === 'propose' || o.action === 'cancelChange' || o.change?.status === 'APPLIED');
   const notice = message && <div className={`${styles.notice} ${good ? '' : styles.warn}`} role={good ? 'status' : 'alert'} data-shopify-outcome={o?.kind}><p>{message}</p></div>;
-  if (!c) return <section className={styles.page}>{head}{notice}<ConnectCard p={p} t={t} read={read} c={null} /></section>;
+  if (!c) return <section className={styles.page}>{head}{notice}
+    {read.canManage && read.connectEnabled && <NewShopGuide p={p} t={t} read={read} />}<ConnectCard p={p} t={t} read={read} c={null} /></section>;
   const ctx: Ctx = { t, locale: p.locale, domain: c.shopDomain, currency: c.currency };
   const go = (s: ShopifySection) => p.onSection?.(s);
   const section = p.section;
