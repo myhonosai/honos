@@ -414,7 +414,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
 
   /**
    * 0655: records one native app hand-off code as used. True the first time (app, jti) is seen, false for a replay.
-   * Any database failure rejects, so the caller issues no session and the app may try again.
+   * A refused code (22023) is false; any other database failure rejects, so the caller issues no session and the app may try again.
    */
   async redeemMobileHandoff(app: 'family' | 'staff', jti: string, expiresAt: Date): Promise<boolean> {
     await this.assertRuntimePosture();
@@ -427,6 +427,9 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       return result.rows[0]?.fresh === true;
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
+      // 22023: the database refused the code itself (for example it expired in its last second): a definite "no",
+      // not an outage, so the app is told to sign in again rather than to retry.
+      if ((error as { code?: unknown } | null)?.code === '22023') return false;
       throw error;
     } finally { client.release(); }
   }

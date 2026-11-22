@@ -130,3 +130,27 @@ test('parent class booking guards admit the native app and keep the extra browse
     assert.equal(status(() => book.canActivate(ctx(native('parent.class_booking.book', extra)))), 403, JSON.stringify(extra));
   }
 });
+
+test('runtime redeemMobileHandoff: true/false from the function, a refused code (22023) is false, an outage rejects', async () => {
+  const { RuntimeDatabaseService } = require('../dist/foundation/runtime-database.service.js');
+  const make = (answer) => {
+    const sent = [];
+    const db = Object.create(RuntimeDatabaseService.prototype);
+    db.assertRuntimePosture = async () => {};
+    db.getPool = () => ({ connect: async () => ({
+      query: async (sql, args) => { sent.push([sql, args]); if (sql.startsWith('SELECT hon.redeem_mobile_handoff')) return answer(); return { rows: [] }; },
+      release: () => {},
+    }) });
+    return { db, sent };
+  };
+  const at = new Date(Date.now() + 60_000), jti = '11111111-1111-4111-8111-111111111111';
+  const ok = make(() => ({ rows: [{ fresh: true }] }));
+  assert.equal(await ok.db.redeemMobileHandoff('family', jti, at), true);
+  assert.deepEqual(ok.sent.find(([sql]) => sql.startsWith('SELECT hon.redeem_mobile_handoff'))[1], ['family', jti, at.toISOString()]);
+  assert.ok(ok.sent.some(([sql]) => sql === 'COMMIT'));
+  assert.equal(await make(() => ({ rows: [{ fresh: false }] })).db.redeemMobileHandoff('staff', jti, at), false);
+  const refused = make(() => { throw Object.assign(new Error('MOBILE_HANDOFF_INVALID'), { code: '22023' }); });
+  assert.equal(await refused.db.redeemMobileHandoff('family', jti, at), false);
+  assert.ok(refused.sent.some(([sql]) => sql === 'ROLLBACK'));
+  await assert.rejects(make(() => { throw Object.assign(new Error('down'), { code: '57P01' }); }).db.redeemMobileHandoff('family', jti, at));
+});
