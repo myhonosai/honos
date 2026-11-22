@@ -23,3 +23,13 @@ Source: launch-readiness review pinned to main `0d476427`, finding **P2 — book
 ## Not changed
 
 Owner-launch first booking (`hon.book_owner_launch_first_class`, last replaced in 0538) still refuses only `CANCELLED` itself; it was not part of this finding. It now gets the BL2 identity rule through the lock. Parent booking (0329) has its own family-plane path and does not call this lock; the kiosk tablet does not call it either.
+
+## 0644 follow-up (launch-readiness P3)
+
+Migration `0644_booking_invoice_security_hygiene.sql` closes the two booking carries above and one invoice carry from 0630:
+
+- **H1** Owner-launch first booking now refuses a `COMPLETED` class with `OWNER_LAUNCH_BOOKING_UNAVAILABLE` (22023, the API answers 400 `BOOKING_NEEDS_STAFF`), matching BL4. The check sits after the idempotency lookup, so an exact retry of a booking made before the class finished still returns its stored receipt. `CANCELLED` is unchanged. The body is otherwise the 0538 body, and a new `011` section pins it.
+- **H2** The lock now accepts `schedule.booking.manage` only through a `hon.permissions` row that is staff assignable, the rule 0147 class discovery already applies. `class-booking-lock-security.mjs` requires that join and allows `permissions` as a dependency; the 0631 `011` section pins the new body.
+- **H3** The 0630 invoice INSERT guard trusted any superuser or BYPASSRLS writer, which on Supabase includes `service_role`. It now never trusts `service_role`, `anon`, `authenticated`, `authenticator`, `hon_runtime` or the three HON workers, whatever their attributes. The migration owner and definer functions it owns (autopay, balance import, demo data) are unchanged. The HON roles are written as one exact pattern so the body is identical in every environment.
+
+Proofs: the identity-plane proof refuses booking when the permission is not staff assignable (with the 0631 body it books); the owner-launch proof refuses a new booking into a `COMPLETED` class while the exact retry answers (with the 0538 body it books); `test-invoice-insert-guard-roles.mjs` builds its own private cluster with a BYPASSRLS `service_role` and shows the 0630 body letting it insert PAID and the 0644 body refusing it and every other untrusted role.
