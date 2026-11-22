@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { actionDefinition, authorizeAction, requiresApproval, validateApprovalBinding, type ActionRequestStatus } from '@hon/domain';
 import { ACTION_REVIEW_STATUSES, actionReviewFingerprint, safeActionReviewPayload, validateHumanActionDecision, type ActionAuthorityMode, type CommandContext, type HonTier, type ActionReviewContext, type HumanActionDecision, type HumanActionReview, type ActionReviewQueue, type HumanActionReceipt, type ActionReviewStatus } from '@hon/contracts';
@@ -219,6 +219,18 @@ export class ActionEngineService {
         normalizedPayload:safe ? r.normalized_payload : null,payloadVisibility:safe ? 'EXACT' : 'WITHHELD_UNSAFE',reviewerPrincipalId:context.principalId,reviewerPermission:'action.approve',
         delegatedByPrincipalId:r.delegated_by_principal_id,...state,reviewBlock:r.status==='AWAITING_APPROVAL' ? state.reviewBlock : 'PROPOSAL_ALREADY_RESOLVED',
         decisions:decisions.slice(0,50).map(d=>({...d,decidedAt:d.decidedAt.toISOString()})),decisionsTruncated:decisions.length>50,executionTriggered:false };
+    });
+  }
+
+  /** 0647: the send plan of the Chad draft bound to one action request, for a qualified reviewer (no Chad access needed). */
+  async chadSendForReview(context: ActionReviewContext, actionRequestId: string): Promise<unknown> {
+    this.assertHumanReview(context);
+    return this.database.withTenantTransaction(context, async client => {
+      const r=await this.reviewRequest(client,actionRequestId,false);
+      await this.lockReviewer(client,context,r.requested_by_principal_id);
+      if (r.action_code!=='crm.follow_up_draft.propose') throw new NotFoundException({code:'FOLLOW_UP_DRAFT_UNAVAILABLE'});
+      try { return (await client.query<{data:unknown}>('SELECT hon.read_chad_draft_send_for_review($1::uuid) data',[r.id])).rows[0]?.data; }
+      catch (error) { if ((error as {code?:string})?.code==='P0002') throw new NotFoundException({code:'FOLLOW_UP_DRAFT_UNAVAILABLE'}); throw error; }
     });
   }
 
@@ -572,8 +584,13 @@ export class ActionEngineService {
       // 0647, approving a Chad draft that carries the requester's send plan queues one message in the same transaction; the
       // 0243 delivery worker sends it with its own consent, quiet-hours and STOP checks. How it was approved is recorded.
       if (r.action_code==='crm.follow_up_draft.propose') {
-        await client.query("SELECT set_config('app.hon_approval_method',$1,true),set_config('app.hon_voice_turn_id',$2,true)",[input.approvalMethod ?? 'BUTTON',input.voiceTurnId ?? '']);
-        await client.query('SELECT hon.transition_chad_follow_up_draft($1::uuid,$2)',[r.id,input.decision]);
+        await client.query("SELECT set_config('app.hon_approval_method',$1,true),set_config('app.hon_voice_turn_id',$2,true),set_config('app.hon_send_plan_version',$3,true)",
+          [input.approvalMethod ?? 'BUTTON',input.voiceTurnId ?? '',input.sendPlanVersion === undefined ? '' : input.sendPlanVersion === null ? 'NONE' : String(input.sendPlanVersion)]);
+        try { await client.query('SELECT hon.transition_chad_follow_up_draft($1::uuid,$2)',[r.id,input.decision]); }
+        catch (error) {
+          if ((error as {message?:string})?.message==='CHAD_SEND_PLAN_CHANGED') throw new ConflictException({code:'CHAD_SEND_PLAN_CHANGED',detail:'The send plan changed after you opened this draft. Reload and review it again. Nothing was decided.'});
+          throw error;
+        }
       }
       const response:HumanActionReceipt={actionRequestId:r.id,status:input.decision,actionCode:r.action_code,reviewedAt:updated.updated_at.toISOString(),payloadHash:r.payload_hash,policyVersion:r.policy_version,executionTriggered:false};
       await client.query(`UPDATE hon.idempotency_records SET status='COMPLETED',response_status=200,response_body=$5::jsonb WHERE organization_id=$1 AND school_id=$2 AND principal_id=$3 AND idempotency_key=$4`,[context.organizationId,context.schoolId,context.principalId,context.idempotencyKey,JSON.stringify(response)]);

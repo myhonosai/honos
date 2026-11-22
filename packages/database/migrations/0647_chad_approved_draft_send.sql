@@ -173,7 +173,7 @@ END $$;
 -- S2. The 0108 body unchanged, then: on APPROVED with a current send plan, queue exactly one message (or record why not).
 CREATE OR REPLACE FUNCTION hon.transition_chad_follow_up_draft(p_action uuid,p_decision text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE i hon.chad_follow_up_invocations%ROWTYPE; plan hon.ai_draft_send_plans%ROWTYPE; d hon.chad_follow_up_drafts%ROWTYPE; reviewer uuid;
-  method text; turn uuid; reach text; msg uuid; at timestamptz;
+  method text; turn uuid; reach text; msg uuid; at timestamptz; has_plan boolean; seen text;
 BEGIN
  IF p_decision NOT IN('APPROVED','DENIED') OR NOT hon.human_action_reviewer() THEN RAISE EXCEPTION 'REVIEW_REQUIRED' USING ERRCODE='42501'; END IF;
  SELECT * INTO i FROM hon.chad_follow_up_invocations WHERE action_request_id=p_action AND organization_id=hon.current_organization_id() AND school_id=hon.current_school_id() FOR UPDATE;
@@ -183,7 +183,15 @@ BEGIN
  PERFORM hon.chad_follow_up_event(i.id,CASE WHEN p_decision='APPROVED' THEN 'chad.follow_up_draft.approved' ELSE 'chad.follow_up_draft.rejected' END);
  IF p_decision<>'APPROVED' THEN RETURN; END IF;
  SELECT * INTO plan FROM hon.ai_draft_send_plans WHERE source='CHAD_FOLLOW_UP' AND source_id=i.id ORDER BY version DESC LIMIT 1;
- IF NOT FOUND OR plan.channel='NONE' THEN RETURN; END IF;
+ has_plan := FOUND;
+ -- The approval is bound to the send plan the reviewer saw (app.hon_send_plan_version, set by the API for this decision only:
+ -- the plan version, NONE for no plan, or empty when the client sent none). A plan changed after review refuses the decision;
+ -- a decision that did not see a plan never queues a message.
+ seen := coalesce(current_setting('app.hon_send_plan_version',true),'');
+ IF (seen<>'' AND seen<>CASE WHEN has_plan THEN plan.version::text ELSE 'NONE' END) OR (seen='' AND has_plan AND plan.channel<>'NONE') THEN
+   RAISE EXCEPTION 'CHAD_SEND_PLAN_CHANGED' USING ERRCODE='40001';
+ END IF;
+ IF NOT has_plan OR plan.channel='NONE' THEN RETURN; END IF;
  SELECT ap.reviewer_principal_id INTO reviewer FROM hon.action_approvals ap WHERE ap.action_request_id=p_action AND ap.decision='APPROVED' ORDER BY ap.id LIMIT 1;
  method := coalesce(nullif(current_setting('app.hon_approval_method',true),''),'BUTTON');
  turn := nullif(current_setting('app.hon_voice_turn_id',true),'')::uuid;
@@ -223,6 +231,19 @@ BEGIN
   RETURN hon.chad_draft_send_view(p_invocation);
 END $$;
 
+-- The same view for the approvals screen: a qualified reviewer (0074 human_action_reviewer: direct human, action.approve at this
+-- school) reads the plan of the Chad draft bound to one action request, without needing Chad access.
+CREATE FUNCTION hon.read_chad_draft_send_for_review(p_action uuid) RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE inv uuid;
+BEGIN
+  IF NOT hon.human_action_reviewer() OR nullif(current_setting('app.hon_action_request_id',true),'') IS NOT NULL
+    OR nullif(current_setting('app.hon_delegated_by_principal_id',true),'') IS NOT NULL THEN RAISE EXCEPTION 'REVIEW_REQUIRED' USING ERRCODE='42501'; END IF;
+  SELECT i.id INTO inv FROM hon.chad_follow_up_invocations i WHERE i.action_request_id=p_action
+    AND i.organization_id=hon.current_organization_id() AND i.school_id=hon.current_school_id();
+  IF inv IS NULL THEN RAISE EXCEPTION 'CHAD_FOLLOW_UP_NOT_FOUND' USING ERRCODE='P0002'; END IF;
+  RETURN hon.chad_draft_send_view(inv);
+END $$;
+
 -- S4. Cancel a queued approved-draft message before the delivery worker has claimed it.
 CREATE FUNCTION hon.cancel_chad_draft_send(p_subject text, p_invocation uuid) RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid := hon.require_chad_follow_up_actor(p_subject); s hon.ai_draft_sends%ROWTYPE; i hon.chad_follow_up_invocations%ROWTYPE;
@@ -245,7 +266,7 @@ END $$;
 DO $$ DECLARE r text; f regprocedure; BEGIN
   FOREACH f IN ARRAY ARRAY['hon.guard_ai_draft_send_rows()','hon.ai_draft_reachable(uuid,text)','hon.chad_draft_send_view(uuid)',
     'hon.set_chad_draft_send_plan(text,uuid,jsonb,text)','hon.read_chad_draft_send(text,uuid)','hon.cancel_chad_draft_send(text,uuid)',
-    'hon.transition_chad_follow_up_draft(uuid,text)']::regprocedure[] LOOP
+    'hon.transition_chad_follow_up_draft(uuid,text)','hon.read_chad_draft_send_for_review(uuid)']::regprocedure[] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_communication_worker') LOOP
       EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
@@ -253,7 +274,7 @@ DO $$ DECLARE r text; f regprocedure; BEGIN
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.set_chad_draft_send_plan(text,uuid,jsonb,text), hon.read_chad_draft_send(text,uuid), hon.cancel_chad_draft_send(text,uuid),
-      hon.transition_chad_follow_up_draft(uuid,text) TO hon_runtime;
+      hon.transition_chad_follow_up_draft(uuid,text), hon.read_chad_draft_send_for_review(uuid) TO hon_runtime;
   END IF;
 END $$;
 

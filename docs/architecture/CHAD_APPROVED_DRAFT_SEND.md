@@ -17,6 +17,9 @@ Design notes: `/mnt/project-files/ai-agents-switch-on/P7_P8_SEND_APPROVED_DRAFTS
    queued by the reviewer, the draft's text (and subject for email).
 4. The existing delivery worker (0243/0248) sends it at its time with its own checks: consent and address again at send time
    (a contact who replied STOP after approval is suppressed), school status, quiet hours, sender readiness, retries.
+   The approval is **bound to the plan the reviewer saw**: the decide body carries `sendPlanVersion` (the plan version shown on the
+   review screen, or `null` for none). If the newest plan differs, or a plan that sends exists and the decision named no version,
+   the whole decision is refused with `CHAD_SEND_PLAN_CHANGED` (409) and nothing is decided or queued.
 5. Before the worker claims it, the requester or the approver may **cancel** it (message → CANCELLED).
 
 Nothing is sent without a plan and an approval. A draft with no plan behaves exactly as before 0647. A denial queues nothing.
@@ -28,8 +31,8 @@ Nothing is sent without a plan and an approval. A draft with no plan behaves exa
 (required for VOICE), `plan_version`, and `cancelled_by/at` (set once). Audit events `chad.follow_up_draft.send_plan_set`,
 `.send_queued` (actor = reviewer, with method) and `.send_cancelled`; none holds the message text.
 
-`approvalMethod` and `voiceTurnId` are optional fields on the ordinary decide body (`HumanActionDecision`). The action engine
-puts them in transaction-local settings (`app.hon_approval_method`, `app.hon_voice_turn_id`) just before the Chad transition.
+`approvalMethod`, `voiceTurnId` and `sendPlanVersion` are optional fields on the ordinary decide body (`HumanActionDecision`). The action engine
+puts them in transaction-local settings (`app.hon_approval_method`, `app.hon_voice_turn_id`, `app.hon_send_plan_version`) just before the Chad transition.
 VOICE needs a uuid `voiceTurnId` and decision APPROVED. **The voice turn id is evidence, not authority**: the decision is still
 the authenticated reviewer's own decide call with the exact review binding; the id records which voice exchange the reviewer's
 own client reports. Linking it to a stored transcript is follow-up work for the voice approval UI.
@@ -43,6 +46,7 @@ All under `staff/leads/assistant` (same guard and scope as Chad drafts):
 | `POST :id/send-plan` (Idempotency-Key) | requester, while AWAITING_APPROVAL | `{channel: 'SMS'\|'EMAIL'\|'NONE', sendAt: ISO-ms-UTC \| null}` |
 | `GET :id/send` | requester, the approver, or (while awaiting approval) anyone with `action.approve` | |
 | `POST :id/send/cancel` | requester or approver, before the worker claims it | `{}` |
+| `GET staff/action-center/approvals/:schoolId/:actionRequestId/chad-send` | a reviewer with `action.approve` (no Chad access needed) | |
 
 Errors: `CHAD_SEND_PLAN_INVALID` (400), `CHAD_SEND_PLAN_NO_CONSENT`, `CHAD_SEND_PLAN_NO_ADDRESS`, `CHAD_SEND_PLAN_CLOSED`,
 `CHAD_SEND_NOT_CANCELLABLE`, `IDEMPOTENCY_KEY_REUSED` (409), `FOLLOW_UP_DRAFT_UNAVAILABLE` (404).
@@ -60,7 +64,8 @@ Errors: `CHAD_SEND_PLAN_INVALID` (400), `CHAD_SEND_PLAN_NO_CONSENT`, `CHAD_SEND_
 ## Web
 
 - Chad workbench: "Send once approved" (how / when / save; after approval: what happened, cancel).
-- Approvals: for a Chad draft the plan is shown with the draft. A reviewer needs Chad access to read it.
+- Approvals: for a Chad draft the plan is shown with the draft, read through the approvals route (action.approve only). If it cannot
+  be read, the screen says so and Approve stays disabled; the decision carries the version shown.
 - Voice approval UI (saying "approve" / "send it") is not in this PR; the API accepts it. The HON Staff app thread owns staff-app voice.
 
 ## Proof

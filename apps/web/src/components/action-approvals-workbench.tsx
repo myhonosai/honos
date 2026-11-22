@@ -4,7 +4,8 @@ import { ChadDraftSendPlan } from './chad-draft-send-plan';
 import React, { useEffect, useRef, useState } from 'react';
 import { ACTION_REVIEW_STATUSES, actionReviewFingerprint, type HumanActionReview, type ActionReviewQueue, type HumanActionDecision, type ActionReviewStatus } from '@hon/contracts';
 import { DEFAULT_HON_INTERFACE_THEME, type HonInterfaceTheme } from '@hon/design-system';
-import { ActionReviewAccessError, loadActionReviews, readActionReview, decideActionReview } from './action-approvals-http';
+import { ActionReviewAccessError, loadActionReviews, readActionReview, decideActionReview, readChadSendForReview } from './action-approvals-http';
+import type { ChadSendApi, ChadSendView } from './chad-draft-send-http';
 import { InterfaceThemePicker } from './interface-theme-picker';
 import { loadInterfaceThemePreference, saveInterfaceThemePreference } from './interface-theme-preference';
 import styles from './action-approvals-workbench.module.css';
@@ -20,6 +21,11 @@ type RetryState = {
   fingerprint: string;
 };
 
+/** The approvals screen only reads a Chad send plan; it never changes or cancels one. */
+function chadReviewApi(school: string, id: string): ChadSendApi {
+  const refuse = () => Promise.reject(new Error('Read only on the approvals screen.'));
+  return { read: (invocationId) => readChadSendForReview(school, id, invocationId), setPlan: refuse, cancel: refuse };
+}
 function materialFields(payload: Record<string, unknown>, pattern: RegExp, prefix = ''): Array<[string, unknown]> {
   return Object.entries(payload).flatMap(([key, value]) => {
     const path = prefix ? `${prefix}.${key}` : key;
@@ -68,6 +74,7 @@ export function ActionApprovalsWorkbench(): React.ReactElement {
   const [status, setStatus] = useState<ActionReviewStatus | 'ALL'>('AWAITING_APPROVAL');
   const [queue, setQueue] = useState<ActionReviewQueue | null>(null);
   const [detail, setDetail] = useState<HumanActionReview | null>(null);
+  const [chadSend, setChadSend] = useState<{ loaded: boolean; view: ChadSendView | null }>({ loaded: false, view: null });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -185,6 +192,13 @@ export function ActionApprovalsWorkbench(): React.ReactElement {
     }
   }
 
+  const chad = detail?.actionCode === 'crm.follow_up_draft.propose';
+  const chadInvocation = chad && typeof detail?.normalizedPayload?.invocationId === 'string' ? detail.normalizedPayload.invocationId : null;
+  // One stable read-only api per reviewed draft, so the send plan is read once per open (not on every render).
+  const chadApiRef = useRef<{ key: string; api: ChadSendApi } | null>(null);
+  const chadKey = `${school}:${detail?.id ?? ''}`;
+  if (chadApiRef.current?.key !== chadKey) chadApiRef.current = { key: chadKey, api: chadReviewApi(school, detail?.id ?? '') };
+  const chadApi = chadApiRef.current.api;
   async function submit(schoolId: string, id: string, input: HumanActionDecision) {
     const fingerprint = actionReviewFingerprint({ school: schoolId, id, input });
     if (retry.current?.fingerprint !== fingerprint) retry.current = { school: schoolId, id, input: structuredClone(input), key: crypto.randomUUID(), fingerprint };
@@ -198,6 +212,7 @@ export function ActionApprovalsWorkbench(): React.ReactElement {
 
   async function decide(decision: 'APPROVED' | 'DENIED') {
     if (!detail || !confirmed || detail.reviewBlock || !detail.approvalExpiresAt) return;
+    if (chad && decision === 'APPROVED' && !chadSend.loaded) return;
     const input: HumanActionDecision = {
       decision,
       binding: {
@@ -210,6 +225,8 @@ export function ActionApprovalsWorkbench(): React.ReactElement {
         effectiveAuthorityMode: detail.effectiveAuthorityMode,
       },
       ...(reason ? { reason } : {}),
+      // A Chad draft's approval is bound to the send plan shown on this screen (its version, or null for none).
+      ...(chad ? { sendPlanVersion: chadSend.view?.plan?.version ?? null } : {}),
     };
     await run(() => submit(school, detail.id, input));
   }
@@ -228,8 +245,8 @@ export function ActionApprovalsWorkbench(): React.ReactElement {
       <details><summary>Technical details</summary><dl className={styles.facts}>{Object.entries({ Request: detail.id, 'Normalized payload SHA-256': detail.payloadHash, 'Required action permission': detail.requiredPermission, 'Reviewer permission': detail.reviewerPermission, 'Proposal policy version': detail.policyVersion, 'Current policy version': detail.currentPolicyVersion, 'Proposal authority': detail.effectiveAuthorityMode, 'Current authority': detail.currentAuthorityMode ?? 'Unavailable' }).map(([key, value]) => <React.Fragment key={key}><dt>{key}</dt><dd>{value}</dd></React.Fragment>)}</dl></details>
       {detail.reviewBlock && <p role="status" className={styles.error}>Decision blocked: {detail.reviewBlock}. Reload or obtain a new separately validated proposal; this payload cannot be edited here.</p>}
       {detail.normalizedPayload ? <><h3>Material exact values</h3>{([['Target / resource', /target|(?:Id$)|version/i], ['Amount / financial terms', /amount|currency|price|quantity/i], ['Recipient / audience', /recipient|contact|audience|destination/i], ['Content', /content|body|subject|text/i], ['Provider account', /provider.*account|account.*provider/i], ['Schedule', /schedule|followUp|scheduled|time|date/i]] as Array<[string, RegExp]>).map(([label, pattern]) => { const fields = materialFields(detail.normalizedPayload!, pattern); return <div key={label}><h4>{label}</h4>{fields.length ? fields.map(([path, value]) => <p key={path}><code>{path}</code>: <span className={styles.value}>{JSON.stringify(value)}</span></p>) : <p>No applicable field recorded in this proposal. Nothing is inferred.</p>}</div>; })}<h3>Full exact normalized payload · read only</h3><pre>{JSON.stringify(detail.normalizedPayload, null, 2)}</pre><p>Hash is independently verified in this browser over canonical JSON. This is the persisted intent, not an editable form or a provider credential.</p></> : <p>Entire payload withheld because it is unsafe or hash-invalid. No redacted substitute may be approved. No credential or failure/result blob is displayed.</p>}
-      {detail.actionCode === 'crm.follow_up_draft.propose' && typeof detail.normalizedPayload?.invocationId === 'string' ? <ChadDraftSendPlan invocationId={detail.normalizedPayload.invocationId} status={detail.status} mine={false} /> : null}<h3>Recorded decisions</h3>{detail.decisions.length ? detail.decisions.map((decision, index) => <p key={index}>{decision.decision} · {who(decision.reviewerPrincipalId, 'Another reviewer')}<br />{decision.decidedAt}</p>) : <p>No human decision recorded.</p>}{detail.decisionsTruncated && <p>First 50 records only; not a complete history.</p>}
-      <fieldset disabled={busy || !!detail.reviewBlock || detail.payloadVisibility !== 'EXACT'}><legend>Confirm the exact reviewed intent</legend><label>Optional human decision reason (no credentials)<textarea maxLength={1000} rows={3} value={reason} onChange={event => setReason(event.target.value)} /></label><label className={styles.check}><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />I reviewed these exact values, who asked and when it expires. Approval does not run it.</label><div className={styles.row}><button disabled={!confirmed} onClick={() => void decide('APPROVED')}>Approve exact proposal</button><button disabled={!confirmed} onClick={() => void decide('DENIED')}>Refuse exact proposal</button><button onClick={() => void open(detail.id)}>Reload current detail</button></div></fieldset>
+      {chad && chadInvocation ? <ChadDraftSendPlan invocationId={chadInvocation} status={detail.status} mine={false} readOnly api={chadApi} onRead={(view) => setChadSend({ loaded: view !== null, view })} /> : null}<h3>Recorded decisions</h3>{detail.decisions.length ? detail.decisions.map((decision, index) => <p key={index}>{decision.decision} · {who(decision.reviewerPrincipalId, 'Another reviewer')}<br />{decision.decidedAt}</p>) : <p>No human decision recorded.</p>}{detail.decisionsTruncated && <p>First 50 records only; not a complete history.</p>}
+      <fieldset disabled={busy || !!detail.reviewBlock || detail.payloadVisibility !== 'EXACT'}><legend>Confirm the exact reviewed intent</legend><label>Optional human decision reason (no credentials)<textarea maxLength={1000} rows={3} value={reason} onChange={event => setReason(event.target.value)} /></label><label className={styles.check}><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />I reviewed these exact values, who asked and when it expires. Approval does not run it.</label><div className={styles.row}><button disabled={!confirmed || (chad && !chadSend.loaded)} onClick={() => void decide('APPROVED')}>Approve exact proposal</button><button disabled={!confirmed} onClick={() => void decide('DENIED')}>Refuse exact proposal</button><button onClick={() => void open(detail.id)}>Reload current detail</button></div></fieldset>
     </section>}
   </main>;
 }
