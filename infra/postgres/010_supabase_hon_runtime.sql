@@ -4993,3 +4993,33 @@ DO $$ DECLARE r text; f regprocedure; BEGIN
       hon.record_shopify_commerce_review(text,uuid,jsonb), hon.read_shopify_commerce_reviews(text,uuid), hon.close_shopify_commerce_review(text,uuid,text) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0617 Creative Studio design editor D1: six staff entry points (list, read, photo read, save, archive/restore, photo add).
+-- Both tables keep forced RLS with no runtime privilege; every helper stays migration-owner only.
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.read_school_creative_designs(text,jsonb)','hon.read_school_creative_design(text,jsonb)',
+    'hon.read_school_creative_design_photo(text,jsonb)','hon.save_school_creative_design(text,jsonb,text,uuid,uuid)',
+    'hon.set_school_creative_design_status(text,jsonb,text,uuid,uuid)','hon.add_school_creative_design_photo(text,jsonb,text,uuid,uuid)'];
+BEGIN
+  IF to_regclass('hon.school_creative_designs') IS NULL OR to_regclass('hon.school_creative_design_photos') IS NULL THEN
+    RAISE EXCEPTION 'Apply migration 0617 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.school_creative_designs','hon.school_creative_design_photos'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.creative_design_size(text)','hon.creative_design_name_ok(text)','hon.creative_design_num_ok(jsonb,numeric,numeric)',
+      'hon.creative_design_color_ok(jsonb,boolean)','hon.creative_design_document_ok(jsonb,text)','hon.guard_school_creative_design()',
+      'hon.guard_school_creative_design_photo()','hon.require_creative_design_actor(text,text)',
+      'hon.school_creative_design_summary(hon.school_creative_designs)','hon.school_creative_design_json(hon.school_creative_designs)',
+      'hon.school_creative_design_photo_json(hon.school_creative_design_photos)','hon.creative_design_command_begin(text,text,jsonb,text,uuid,uuid)',
+      'hon.creative_design_room_check(uuid,uuid,text,uuid,boolean)',
+      'hon.creative_design_command_finish(uuid,text,text,uuid,integer,jsonb,jsonb,text,uuid,uuid,jsonb)']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;

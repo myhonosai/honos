@@ -315,6 +315,8 @@ import { SchoolMessageHistoryReadGuard, SchoolMessagesController, SchoolOptedOut
 import { SchoolMessagesService } from './communication/school-messages.service.js';
 import { SchoolMessageTemplatesController, SchoolTemplateSaveGuard, SchoolTemplateStatusGuard, SchoolTemplatesReadGuard } from './communication/school-message-templates.controller.js';
 import { SchoolMessageTemplatesService } from './communication/school-message-templates.service.js';
+import { CreativeDesignPhotoGuard, CreativeDesignSaveGuard, CreativeDesignStatusGuard, CreativeDesignsController, CreativeDesignsReadGuard } from './creative-studio/creative-designs.controller.js';
+import { CreativeDesignsService } from './creative-studio/creative-designs.service.js';
 import { ConversationAiController, ConversationAiFileGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard, ConversationAiKnowledgeGuard, ConversationAiProgramHqController, ConversationAiReadGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard } from './conversations/conversation-ai.controller.js';
 import { ConversationAiProgramService, ConversationAiService } from './conversations/conversation-ai.service.js';
 import { ParentMessageHistoryController, ParentMessageHistoryReadGuard } from './families/parent-message-history.controller.js';
@@ -586,6 +588,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ContactMessagesController,
     SchoolMessagesController,
     SchoolMessageTemplatesController,
+    CreativeDesignsController,
     ConversationAiController,
     ConversationAiProgramHqController,
     ParentMessageHistoryController,
@@ -818,6 +821,11 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ContactEmailResendGuard,
     SchoolMessagesService,
     SchoolMessageTemplatesService,
+    CreativeDesignsService,
+    CreativeDesignsReadGuard,
+    CreativeDesignSaveGuard,
+    CreativeDesignStatusGuard,
+    CreativeDesignPhotoGuard,
     SchoolMessageHistoryReadGuard,
     SchoolTemplatesReadGuard,
     SchoolTemplateSaveGuard,
