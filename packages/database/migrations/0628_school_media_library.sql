@@ -4,7 +4,7 @@ BEGIN;
 -- pictures, video as a link"; 2026-11-22 "Allow media storage" (photos and media in texts and blasts, small monthly
 -- storage cost). This piece stores pictures. Spec: docs/architecture/SCHOOL_MEDIA_LIBRARY.md.
 -- Rules:
---   M1  marketing.media.read (OWNER by default, staff-assignable) lists the school's pictures and opens one;
+--   M1  marketing.media.read (OWNER by default, staff-assignable) lists the school's pictures and its storage use;
 --       marketing.media.manage (sensitive, OWNER by default, staff-assignable) uploads, renames and deletes. Direct human
 --       only (HUMAN_USER, HUMAN_UI, no action request or delegation), active school and organization, live
 --       ESSENTIAL/CORE/COMPLETE access; the actor is proved again after the locks.
@@ -209,6 +209,16 @@ BEGIN
   RETURN result;
 END $$;
 
+-- A replayed upload start or delete answers with the picture as it is now, its fixed storage key and replayed=true.
+CREATE FUNCTION hon.school_media_current(org uuid,school uuid,prior jsonb) RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE a hon.school_media_assets;
+BEGIN
+  SELECT * INTO a FROM hon.school_media_assets x WHERE x.id=(prior->>'assetId')::uuid AND x.organization_id=org AND x.school_id=school;
+  IF NOT FOUND THEN RAISE EXCEPTION 'MEDIA_NOT_FOUND' USING ERRCODE='P0002'; END IF;
+  RETURN hon.school_media_json(a)||jsonb_build_object('objectKey',a.object_key,'replayed',true);
+END $$;
+
 -- The library: newest first (up to 500 PENDING or READY pictures) and the school's usage.
 CREATE FUNCTION hon.read_school_media(subject text) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
@@ -223,20 +233,8 @@ BEGIN
   RETURN result;
 END $$;
 
--- Staff preview: the storage key and type of one READY picture at the current school.
-CREATE FUNCTION hon.authorize_school_media_view(subject text,asset uuid) RETURNS jsonb
-LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-DECLARE org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); actor uuid; a hon.school_media_assets;
-BEGIN
-  actor:=hon.require_school_media_actor(subject,'marketing.media.read');
-  SELECT * INTO a FROM hon.school_media_assets x WHERE x.id=asset AND x.organization_id=org AND x.school_id=school AND x.state='READY';
-  IF NOT FOUND THEN RAISE EXCEPTION 'MEDIA_NOT_FOUND' USING ERRCODE='P0002'; END IF;
-  IF hon.require_school_media_actor(subject,'marketing.media.read') IS DISTINCT FROM actor THEN RAISE EXCEPTION 'SCHOOL_MEDIA_FORBIDDEN' USING ERRCODE='42501'; END IF;
-  RETURN jsonb_build_object('assetId',a.id,'objectKey',a.object_key,'mediaType',a.media_type);
-END $$;
-
 -- Step 1 of an upload: {title,mediaType,byteSize,sha256,width,height} becomes a PENDING picture with a fixed key, within
--- the school's caps. A replay returns the same picture (the API then stores the same bytes again and confirms).
+-- the school's caps. A replay answers with the picture as it is now, so the API stores bytes only while it is PENDING.
 CREATE FUNCTION hon.begin_school_media_upload(subject text,p jsonb,key text,request uuid,correlation uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); actor uuid; prior jsonb; a hon.school_media_assets; usage jsonb;
@@ -252,7 +250,7 @@ BEGIN
     OR jsonb_typeof(p->'height') IS DISTINCT FROM 'number' OR p->>'height' !~ '^[1-9][0-9]{0,4}$' OR (p->>'height')::integer>20000
     OR request IS NULL OR correlation IS NULL THEN RAISE EXCEPTION 'VALIDATION_FAILED' USING ERRCODE='22023'; END IF;
   prior:=hon.school_media_begin(subject,'begin_school_media_upload',p,key,actor);
-  IF prior IS NOT NULL THEN RETURN prior; END IF;
+  IF prior IS NOT NULL THEN RETURN hon.school_media_current(org,school,prior); END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended('hon.school_media:'||school::text,0));
   usage:=hon.school_media_usage(org,school);
   IF (usage->>'storedBytes')::bigint+(p->>'byteSize')::bigint>(usage->>'storedLimitBytes')::bigint THEN
@@ -306,7 +304,7 @@ BEGIN
     OR jsonb_typeof(p->'expectedVersion') IS DISTINCT FROM 'number' OR p->>'expectedVersion' !~ '^[1-9][0-9]{0,8}$'
     OR NOT hon.school_media_title_ok(p->'title') OR request IS NULL OR correlation IS NULL THEN RAISE EXCEPTION 'VALIDATION_FAILED' USING ERRCODE='22023'; END IF;
   prior:=hon.school_media_begin(subject,'rename_school_media',p,key,actor);
-  IF prior IS NOT NULL THEN RETURN prior; END IF;
+  IF prior IS NOT NULL THEN RETURN prior||jsonb_build_object('replayed',true); END IF;
   SELECT * INTO a FROM hon.school_media_assets x WHERE x.id=(p->>'assetId')::uuid AND x.organization_id=org AND x.school_id=school FOR UPDATE;
   IF NOT FOUND OR a.state NOT IN ('PENDING','READY') THEN RAISE EXCEPTION 'MEDIA_NOT_FOUND' USING ERRCODE='P0002'; END IF;
   IF a.version<>(p->>'expectedVersion')::integer THEN RAISE EXCEPTION 'VERSION_CONFLICT' USING ERRCODE='40001'; END IF;
@@ -329,7 +327,7 @@ BEGIN
     OR jsonb_typeof(p->'expectedVersion') IS DISTINCT FROM 'number' OR p->>'expectedVersion' !~ '^[1-9][0-9]{0,8}$'
     OR request IS NULL OR correlation IS NULL THEN RAISE EXCEPTION 'VALIDATION_FAILED' USING ERRCODE='22023'; END IF;
   prior:=hon.school_media_begin(subject,'delete_school_media',p,key,actor);
-  IF prior IS NOT NULL THEN RETURN prior; END IF;
+  IF prior IS NOT NULL THEN RETURN hon.school_media_current(org,school,prior); END IF;
   SELECT * INTO a FROM hon.school_media_assets x WHERE x.id=(p->>'assetId')::uuid AND x.organization_id=org AND x.school_id=school FOR UPDATE;
   IF NOT FOUND OR a.state NOT IN ('PENDING','READY') THEN RAISE EXCEPTION 'MEDIA_NOT_FOUND' USING ERRCODE='P0002'; END IF;
   IF a.version<>(p->>'expectedVersion')::integer THEN RAISE EXCEPTION 'VERSION_CONFLICT' USING ERRCODE='40001'; END IF;
@@ -368,13 +366,13 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 $$;
 
 DO $$ DECLARE r text; f text; t text;
-  entry text[]:=ARRAY['hon.read_school_media(text)','hon.authorize_school_media_view(text,uuid)',
+  entry text[]:=ARRAY['hon.read_school_media(text)',
     'hon.begin_school_media_upload(text,jsonb,text,uuid,uuid)','hon.finish_school_media_upload(text,jsonb,uuid,uuid)',
     'hon.rename_school_media(text,jsonb,text,uuid,uuid)','hon.delete_school_media(text,jsonb,text,uuid,uuid)',
     'hon.confirm_school_media_removed(text,uuid,uuid,uuid)','hon.resolve_school_media_link(text)'];
   helpers text[]:=ARRAY['hon.school_media_title_ok(jsonb)','hon.school_media_new_token()','hon.guard_school_media_asset()',
     'hon.require_school_media_actor(text,text)','hon.school_media_json(hon.school_media_assets)','hon.school_media_usage(uuid,uuid)',
-    'hon.school_media_begin(text,text,jsonb,text,uuid)','hon.school_media_finish(text,text,uuid,text,hon.school_media_assets,jsonb,uuid,uuid)'];
+    'hon.school_media_begin(text,text,jsonb,text,uuid)','hon.school_media_current(uuid,uuid,jsonb)','hon.school_media_finish(text,text,uuid,text,hon.school_media_assets,jsonb,uuid,uuid)'];
   tables text[]:=ARRAY['hon.school_media_assets'];
 BEGIN
   FOREACH t IN ARRAY tables LOOP

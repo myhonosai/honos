@@ -6273,3 +6273,38 @@ BEGIN
     RAISE EXCEPTION 'School blast permissions missing'; END IF;
 END $$;
 -- End school blasts exact verification.
+-- School media library exact verification (0628)
+DO $$ DECLARE f text; t text;
+  entry text[]:=ARRAY['hon.read_school_media(text)',
+    'hon.begin_school_media_upload(text,jsonb,text,uuid,uuid)','hon.finish_school_media_upload(text,jsonb,uuid,uuid)',
+    'hon.rename_school_media(text,jsonb,text,uuid,uuid)','hon.delete_school_media(text,jsonb,text,uuid,uuid)',
+    'hon.confirm_school_media_removed(text,uuid,uuid,uuid)','hon.resolve_school_media_link(text)'];
+  helpers text[]:=ARRAY['hon.school_media_title_ok(jsonb)','hon.school_media_new_token()','hon.guard_school_media_asset()',
+    'hon.require_school_media_actor(text,text)','hon.school_media_json(hon.school_media_assets)','hon.school_media_usage(uuid,uuid)',
+    'hon.school_media_begin(text,text,jsonb,text,uuid)','hon.school_media_current(uuid,uuid,jsonb)','hon.school_media_finish(text,text,uuid,text,hon.school_media_assets,jsonb,uuid,uuid)'];
+  tables text[]:=ARRAY['hon.school_media_assets'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe school media entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY helpers LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe school media helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY tables LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=t::regclass)
+      OR has_table_privilege('hon_runtime',t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime',t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe school media table: %',t; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM hon.permissions WHERE (code='marketing.media.read' AND NOT is_sensitive AND is_staff_assignable)
+      OR (code='marketing.media.manage' AND is_sensitive AND is_staff_assignable))<>2 THEN
+    RAISE EXCEPTION 'School media permissions missing'; END IF;
+END $$;
+-- End school media library exact verification.
