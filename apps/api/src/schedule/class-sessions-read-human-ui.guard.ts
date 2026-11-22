@@ -41,7 +41,15 @@ export class ClassSessionsReadHumanUiGuard implements CanActivate {
       const name = header.toLowerCase();
       return name.startsWith('x-hon-') && name !== 'x-hon-human-read';
     });
-    const authorityHeader = Object.keys(headers).some((header) => AUTHORITY_HEADERS.has(header.toLowerCase()));
+    // S1 HON Staff app (docs/architecture/STAFF_MOBILE_TODAY.md): a verified staff bearer is a native request, so it
+    // carries no browser metadata at all (no Origin, no Sec-Fetch-*) and its Authorization header is the bearer the
+    // identity guard already verified. Every other rule (GET only, exact read header, no other HON or authority header,
+    // the proxy host) is the browser rule. The family app never reaches here (its sessions stop at the route allow-list).
+    const staffApp = request.honChannel === 'MOBILE' && request.honMobileApp === 'STAFF';
+    const authorityHeader = Object.keys(headers).some((header) => {
+      const name = header.toLowerCase();
+      return AUTHORITY_HEADERS.has(name) && !(staffApp && name === 'authorization');
+    });
     const hasBody = request.body !== undefined && request.body !== null;
     if (hasSelector || hasBody || headers['transfer-encoding'] !== undefined
       || (headers['content-length'] !== undefined && headers['content-length'] !== '0')) {
@@ -50,6 +58,14 @@ export class ClassSessionsReadHumanUiGuard implements CanActivate {
     // Browsers omit Origin on same-origin GET (Fetch standard), so it is optional here but must match when
     // present; the forbidden Sec-Fetch-* metadata plus the custom read header (which forces a CORS preflight
     // Nest never grants) carry the same-origin proof. POST commands still require Origin.
+    if (staffApp) {
+      const browserMetadata = headers.origin !== undefined || Object.keys(headers).some((header) => header.toLowerCase().startsWith('sec-fetch-'));
+      if (request.method !== 'GET' || browserMetadata || !forwardedHostMatchesPublicOrigin(headers['x-forwarded-host'], origin)
+        || headers['x-hon-human-read'] !== 'class-sessions' || unexpectedHonHeader || authorityHeader) {
+        throw new ForbiddenException({ code: 'HUMAN_UI_REQUIRED' });
+      }
+      return true;
+    }
     if (request.method !== 'GET' || (headers.origin !== undefined && headers.origin !== origin)
       || !forwardedHostMatchesPublicOrigin(headers['x-forwarded-host'], origin)
       || headers['x-hon-human-read'] !== 'class-sessions'
