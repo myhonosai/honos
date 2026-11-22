@@ -164,6 +164,13 @@ proof crm-lead-close test-platform-least-privilege.mjs "Platform least privilege
 proof crm-lead-close test-migration-runner-safety.mjs "Migration tooling: single-runner lock, read-only db:status (current, divergent history), TLS refusal before connecting, atomic migration + ledger commit (ledger failure, runner lost mid-window, split-transaction file refused)"
 proof crm-lead-close test-restore-drill.mjs "Backup/restore drill: pg_dump, total loss, pg_restore, identical data/ledger/security posture, verifiers pass on the restored database"
 
+# Fresh-target restore (review [23]) builds and destroys its own two private clusters (no fixture descriptor).
+echo "::group::Fresh-target restore drill: runbook dump, roles and extensions first, one-transaction restore (test-restore-fresh-target-drill.mjs)"
+"${clean_env[@]}" bash -c 'cd "$1" && node scripts/test-restore-fresh-target-drill.mjs' _ "$repo_root/packages/database"
+echo "::endgroup::"
+passed=$((passed + 1))
+summary+=("| Fresh-target restore drill: production-shaped source with canonical 010/012/013/014, runbook \`--schema=hon\` dump, old order refused, 009 roles and source extensions first, one-transaction restore, identical data/ledger/ACLs/roles, 010 no-op, 011 read-only, new runtime password only | \`test-restore-fresh-target-drill.mjs\` | pass |")
+
 # Database TLS verification needs its own private TLS-only cluster (no fixture descriptor).
 echo "::group::Database TLS verification against a private TLS-only cluster (test-database-tls-verification.mjs)"
 "${clean_env[@]}" HON_DB_PROOFS_LOCAL=1 bash -c 'cd "$1" && node scripts/test-database-tls-verification.mjs' _ "$repo_root/packages/database"
