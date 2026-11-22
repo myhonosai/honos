@@ -23,7 +23,7 @@ what is launch-ready, or how HON is hosted. Facts that can drift carry the date 
 - **Deployed:** `bd8e1451` (database, `hon-api`, `hon-web`), database top 0632, as reported by the deploy thread on
   2026-11-22 06:10 UTC. Later merges (launch-readiness fixes #593 onward, including 0644) are **not** deployed yet.
 - **Launch readiness:** the external review of 2026-11-22 (pinned `0d476427`) found HON OS **not launch-ready**.
-  P1 and every P2 fix are merged; P3 carries #608 and #611 are merged, #612 (0645) waits for its queue turn; see the "Fix launch-readiness review blockers" project thread.
+  P1 and every P2 fix are merged. Of the P3 carries, #608 and #611 are merged and #612 (0645) waits for its queue turn. See the "Fix launch-readiness review blockers" project thread.
   Commercial activation (live payments, paid AI, payment-controlled access) stays **off** by design.
 
 ## Superseded statements

@@ -135,4 +135,4 @@ The mandatory release-checkout `db:check` and reviewed `db:status` preflight rem
 | Production logical dump taken and encrypted off-site | File name + checksum | NOT VERIFIED | Owner |
 | Isolated restore of a production backup + §3 checks | Command output | NOT VERIFIED | Owner + Claude |
 | Measured RTO / RPO | Timestamps | NOT VERIFIED | Owner |
-| Rollback rehearsal on staging (deploy N+1, roll back to N) | Render health checks (`/api/readiness` on hon-web, `/v1/health/ready` on hon-api) | NOT VERIFIED (Render hosting exists; no rehearsal recorded) | Owner |
+| Rollback rehearsal on staging (deploy N+1, roll back to N) | Render health check `/api/readiness` on hon-web, which probes hon-api `/v1/health/ready` | NOT VERIFIED (Render hosting exists; no rehearsal recorded) | Owner |
