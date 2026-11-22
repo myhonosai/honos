@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "da54807cf15f0cc7f15ea794de290f7bc56e47365eac735b204bcaa2e08e806d",
+  "chainSha256": "2d45d00aac7cbb42dd0bb0f13bd1aa64717447eb92efe83e5c58558146296503",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -881,6 +881,10 @@
     {
       "file": "0650_chad_lead_plan.sql",
       "sha256": "ffee9d0d50932243760ae91110facdeae3fdb99c547d9849551e570574bb0487"
+    },
+    {
+      "file": "0652_staff_agent_speech.sql",
+      "sha256": "fdb50164a94331c08a57e6e034953a3c4c5addc68c16d764c8705736f960d408"
     }
   ]
 }
