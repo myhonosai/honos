@@ -132,7 +132,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'ANSWERS',
     capabilities: [
       { label: 'Class schedule, capacity, instructor coverage and attendance analysis (Ask HON → Jordan)', state: 'AVAILABLE' },
-      { label: 'Operational task follow-through', state: 'BACKEND_REQUIRED' },
+      { label: 'Follow through on open and overdue team tasks (Follow through with Jordan, below)', state: 'AVAILABLE' },
     ],
     workflows: [
       { label: 'Class sessions', href: '/staff/schedule/sessions' },

@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "1e92cce9512b2bd45373632803ecdcb4f363c203c3cb2e83882bdf58fe9bf589",
+  "chainSha256": "af3dc7dd629f4f7a73da4c25399858c628971c8c27c6d3422e25ea5a9bba8503",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -841,6 +841,10 @@
     {
       "file": "0639_alex_delegation_plans.sql",
       "sha256": "16a0ef6be1c46733b17b66198911c87fc426253a4d32a9aa122d6be52072288d"
+    },
+    {
+      "file": "0640_jordan_follow_through.sql",
+      "sha256": "36153ab4e5c4cbc4046f25d1fdb03b008bc5c71b0e41def2aa482720213d795d"
     }
   ]
 }

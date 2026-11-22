@@ -142,6 +142,12 @@ describe('Plan with Alex in the team view', () => {
     const unverified = (await loaded({ resolveScope: vi.fn(async () => ({ state: 'MANUAL_ENTRY_REQUIRED' as const })) }, null)).snapshot;
     expect(view(unverified, 'team', 'alex')).not.toContain('id="alex-plan"');
   });
+
+  it('shows the Jordan follow-through panel only on Jordan, for a verified school', async () => {
+    const { snapshot } = await loaded();
+    expect(view(snapshot, 'team', 'jordan')).toContain('id="jordan-follow-up"');
+    expect(view(snapshot, 'team', 'alex')).not.toContain('id="jordan-follow-up"');
+  });
 });
 
 describe('HON command data layer', () => {

@@ -8,6 +8,7 @@ import type { HonCommandSnapshot, HonSection } from './hon-command-data';
 import { HON_CONVERSATION_BOUNDARY, honComposerEnabled } from './hon-conversation';
 import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, HON_RECOMMENDATION_AREAS, HON_TEACHING_AI, teachingAiPortrait, aiTeamPortrait, HON_CORE_SOURCE, approvalSourceLabel, honAgent, type HonCommandAgent } from './roster';
 import { AlexPlanPanel } from './alex-plan-panel';
+import { JordanFollowUpPanel } from './jordan-follow-up-panel';
 import styles from './hon-command.module.css';
 
 /** The existing requester-scoped reads return at most 20 records per source across all schools. */
@@ -212,6 +213,9 @@ function AgentDetail({ agent, snapshot, onBack }: { agent: HonCommandAgent; snap
     </ul>
     {agent.id === 'alex' && snapshot.scope.state === 'VERIFIED'
       ? <AlexPlanPanel scope={{ organizationId: snapshot.scope.organizationId, schoolId: snapshot.scope.schoolId }} />
+      : null}
+    {agent.id === 'jordan' && snapshot.scope.state === 'VERIFIED'
+      ? <JordanFollowUpPanel scope={{ organizationId: snapshot.scope.organizationId, schoolId: snapshot.scope.schoolId }} />
       : null}
     <h4>Related school workflows</h4>
     <p className={styles.meta}>Conventional workflows you run yourself. Opening one does not ask {agent.name} to do anything.</p>
