@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { verifyParentJourneyView } from '@hon/contracts/parent-journey-view';
 import { verifyParentClassBookingChoices } from '@hon/contracts/parent-class-booking';
 import { ParentApp } from '../src/ParentApp';
@@ -111,5 +111,70 @@ describe('booking from the Schedule tab', () => {
     expect(await screen.findByText(/see classes but not book them/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^Book / })).toBeNull();
     expect(screen.queryByRole('button', { name: /^Cancel / })).toBeNull();
+  });
+  describe('review [16]: the unconfirmed action outlives its screen', () => {
+    const lostThenReplayed = () => jest.fn()
+      .mockResolvedValueOnce({ ok: false, state: 'unknown' })
+      .mockResolvedValueOnce({ ok: true, replayed: true, data: { booking: booking({ sessionId: SESSION_1 }), spotsLeft: 2 } });
+
+    it('a failed re-read keeps the retry on screen, next to the unavailable notice, with the same key', async () => {
+      const bookClass = lostThenReplayed();
+      const classBookings = jest.fn().mockResolvedValueOnce(choices()).mockResolvedValueOnce({ ok: false, state: 'unavailable' }).mockResolvedValue(choices());
+      const api = fakeApi({ bookClass, classBookings });
+      await fireEvent.press(await openSchedule(api));
+      await fireEvent.press(screen.getByRole('button', { name: 'Confirm booking' }));
+      expect(await screen.findByText(/Booking from the app is not available right now/)).toBeTruthy();
+      expect(screen.getByText(/could not confirm this/)).toBeTruthy();
+      await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+      expect(bookClass).toHaveBeenCalledTimes(2);
+      expect(bookClass.mock.calls[1][1]).toBe(bookClass.mock.calls[0][1]);
+      expect(await screen.findByText('Booked.')).toBeTruthy();
+    });
+
+    it('the shared family refresh after another booking (which remounts this screen) keeps the unconfirmed action and its key', async () => {
+      const bookClass = lostThenReplayed();
+      const cancelBooking = jest.fn(async () => ({ ok: true, replayed: false, data: { booking: booking({ status: 'CANCELLED', canCancel: false, version: 2 }), spotsLeft: 6 } }));
+      // The refreshed family read answers only when the test says so, as a real network read would.
+      let answer!: () => void;
+      const journey = jest.fn()
+        .mockResolvedValueOnce({ ok: true, data: verifyParentJourneyView(journeyBody()) })
+        .mockImplementation(() => new Promise(ok => { answer = () => ok({ ok: true, data: verifyParentJourneyView(journeyBody()) }); }));
+      const api = fakeApi({ bookClass, cancelBooking, journey });
+      await fireEvent.press(await openSchedule(api));
+      await fireEvent.press(screen.getByRole('button', { name: 'Confirm booking' }));
+      await fireEvent.press(await screen.findByRole('button', { name: 'Close' }));
+      // A different, confirmed action refreshes the family read, which unmounts and remounts the booking screen.
+      await fireEvent.press(screen.getByRole('button', { name: 'Cancel Juniors for Test Child A' }));
+      await fireEvent.press(screen.getByRole('button', { name: 'Confirm cancel' }));
+      await waitFor(() => expect(journey).toHaveBeenCalledTimes(2));
+      expect(screen.queryByText('Book a class')).toBeNull();
+      await act(async () => { answer(); });
+      // The remounted screen opens straight on the held action, not on an empty list that invites a second press.
+      expect(await screen.findByText(/could not confirm this/)).toBeTruthy();
+      expect(screen.getByText('Book Little Dragons for Test Child A?')).toBeTruthy();
+      await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+      expect(bookClass).toHaveBeenCalledTimes(2);
+      expect(bookClass.mock.calls[1][1]).toBe(bookClass.mock.calls[0][1]);
+      // Confirmed: the held action is settled, so the next refresh shows the list with nothing left unconfirmed.
+      await waitFor(() => expect(journey).toHaveBeenCalledTimes(3));
+      await act(async () => { answer(); });
+      expect(await screen.findByText('Book a class')).toBeTruthy();
+      expect(screen.queryByText(/could not confirm this|is not confirmed yet/)).toBeNull();
+    });
+
+    it('Close only hides it: a "not confirmed yet" line brings back the same-key retry until HON answers', async () => {
+      const bookClass = lostThenReplayed();
+      const api = fakeApi({ bookClass });
+      await fireEvent.press(await openSchedule(api));
+      await fireEvent.press(screen.getByRole('button', { name: 'Confirm booking' }));
+      await fireEvent.press(await screen.findByRole('button', { name: 'Close' }));
+      expect(screen.getByText(/Booking Little Dragons for Test Child A is not confirmed yet/)).toBeTruthy();
+      await fireEvent.press(screen.getByRole('button', { name: 'Check again' }));
+      await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+      expect(await screen.findByText('Booked.')).toBeTruthy();
+      expect(bookClass.mock.calls[1][1]).toBe(bookClass.mock.calls[0][1]);
+      await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+      expect(screen.queryByText(/is not confirmed yet/)).toBeNull();
+    });
   });
 });

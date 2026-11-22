@@ -9,7 +9,7 @@ import { CommandCenterAccessError } from '../src/components/command-center-http'
 import { ActionReviewAccessError } from '../src/components/action-approvals-http';
 import { HonCommandController, initialHonCommandSnapshot, type HonCommandApi, type HonCommandSnapshot } from '../src/components/hon-command/hon-command-data';
 import { HON_CONVERSATION_BOUNDARY, HON_TURN_STATUSES, honComposerEnabled, honTurnStatusPresentation } from '../src/components/hon-command/hon-conversation';
-import { HonLauncher, HonPanel, HonTeamBand, honExpandHref } from '../src/components/hon-command/hon-command';
+import { HonCornerDock, HonLauncher, HonPanel, HonTeamBand, honExpandHref } from '../src/components/hon-command/hon-command';
 import { HonWorkspaceView, type HonTab } from '../src/components/hon-command/hon-workspace-view';
 import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, HON_TEACHING_AI, HON_TEACHING_AI_PORTRAITS, approvalSourceLabel, safeHonReturnPath, teachingAiPortrait } from '../src/components/hon-command/roster';
 
@@ -359,6 +359,25 @@ describe('HON integration boundaries', () => {
       expect(html).toContain('>Full workspace<');
       expect(html).toContain('aria-label="Close HON"');
       expect(renderToStaticMarkup(<HonPanel open onClose={() => {}} returnPath="/staff/crm/leads" />)).toContain('data-placement="side"');
+      expect(fetcher).not.toHaveBeenCalled();
+    } finally { fetcher.mockRestore(); }
+  });
+
+  it('docks the corner chat in the corner, not modal, with expand, minimize and close, and reads nothing until it opens', () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch');
+    try {
+      const html = renderToStaticMarkup(<HonCornerDock onMinimize={() => {}} onClose={() => {}} returnPath="/staff/crm/leads" />);
+      expect(html).toMatch(/<section[^>]*role="dialog"[^>]*aria-modal="false"/);
+      expect(html).toContain('data-hon-dock=""');
+      expect(html).toContain(`href="${honExpandHref('/staff/crm/leads', null).replaceAll('&', '&amp;')}"`);
+      expect(html).toContain('aria-label="Full workspace"');
+      expect(html).toContain('aria-label="Minimize HON"');
+      expect(html).toContain('aria-label="Close HON"');
+      // No dimming scrim: the page stays visible beside it.
+      expect(html).not.toContain('Close HON" tabindex="-1"');
+      expect(html).not.toContain('hidden=""');
+      expect(renderToStaticMarkup(<HonCornerDock hidden onMinimize={() => {}} onClose={() => {}} returnPath="/staff/crm/leads" />)).toMatch(/<section[^>]*hidden=""/);
+      expect(renderToStaticMarkup(<HonCornerDock closing onMinimize={() => {}} onClose={() => {}} returnPath="/staff/crm/leads" />)).toContain('data-closing="true"');
       expect(fetcher).not.toHaveBeenCalled();
     } finally { fetcher.mockRestore(); }
   });

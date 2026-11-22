@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { StaffApi, StaffFailureState, StaffSchool } from './api/client';
 import type { SessionStore } from './session/session-store';
+import { Today } from './Today';
 import { T } from './ui/theme';
 
 type SignInResult = 'signed-in' | 'cancelled' | 'failed';
@@ -11,6 +12,8 @@ export interface StaffAppProps {
   /** Absent when this build has no valid HON web address: the app then cannot sign in at all. */
   onSignIn?: () => Promise<SignInResult>;
   version: string;
+  /** A fresh idempotency key (a UUID) for each new command. */
+  newKey: () => string;
 }
 
 type View_ =
@@ -44,11 +47,11 @@ const FAILED: Record<Exclude<StaffFailureState, 'signed-out'>, { title: string; 
 };
 
 /**
- * S0b: sign in, find the school the person works at (choose when there are several), and a signed-in home. The
- * chosen school lives only in memory: it is where the app will look, never permission. Later phases add Today,
+ * S0b/S1: sign in, find the school the person works at (choose when there are several), and Today. The
+ * chosen school lives only in memory: it is where the app will look, never permission. Later phases add
  * People, HON (with Kai and the AI team), Texts and Me.
  */
-export function StaffApp({ api, session, onSignIn, version }: StaffAppProps) {
+export function StaffApp({ api, session, onSignIn, version, newKey }: StaffAppProps) {
   const [view, setView] = useState<View_>({ kind: 'loading' });
 
   const load = useCallback(async () => {
@@ -72,6 +75,7 @@ export function StaffApp({ api, session, onSignIn, version }: StaffAppProps) {
     else setView({ kind: 'signed-out', message: outcome === 'failed' ? 'Sign-in did not finish. Please try again.' : undefined });
   };
   const signOut = async () => { await session.clear(); setView({ kind: 'signed-out' }); };
+  const ended = useCallback(() => { void session.clear().then(() => setView({ kind: 'signed-out', message: 'Your session ended. Please sign in again.' })); }, [session]);
 
   let body: React.ReactNode;
   switch (view.kind) {
@@ -121,15 +125,12 @@ export function StaffApp({ api, session, onSignIn, version }: StaffAppProps) {
             <Image source={require('../assets/hon-mark.png')} style={s.mark} accessibilityLabel="HON" />
             {schools ? <Pill label="Switch school" onPress={() => setView({ kind: 'choose', schools })} /> : null}
           </View>
-          <Text style={s.kicker}>Signed in</Text>
+          <Text style={s.kicker}>Today</Text>
           <Text style={s.hero}>{view.school.schoolName ?? 'Your school'}</Text>
-          <View style={[s.warmCard, { backgroundColor: T.orbit.cyan }]}>
-            <Text style={s.warmTitle}>Coming next</Text>
-            <Text style={s.warmBody}>Today's classes, check-in, HON and Kai are coming in the next updates of this app.</Text>
-          </View>
+          <Today key={view.school.schoolId} api={api} school={view.school} newKey={newKey} onSignedOut={ended} />
           <View style={s.panel}>
             <Text style={s.panelTitle}>HON and your AI team</Text>
-            <Text style={s.panelBody}>Your owner chooses which AI team members you can use. They will appear here.</Text>
+            <Text style={s.panelBody}>HON, Kai and the AI team come in the next update. Your owner chooses which ones you can use.</Text>
           </View>
           <Button label="Sign out" quiet onPress={() => void signOut()} />
         </View>
@@ -165,9 +166,6 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: T.soft, borderRadius: 16, paddingVertical: 16, paddingHorizontal: 18 },
   rowText: { color: T.ink, fontSize: 17, fontWeight: '600', flexShrink: 1 },
   rowArrow: { color: T.muted, fontSize: 24 },
-  warmCard: { borderRadius: T.radius.card, padding: 22, gap: 8 },
-  warmTitle: { color: T.ink, fontFamily: T.serif, fontSize: 24 },
-  warmBody: { color: T.ink, fontFamily: T.serif, fontSize: 17, lineHeight: 24 },
   panel: { backgroundColor: T.panel, borderRadius: T.radius.card, padding: 22, gap: 8 },
   panelTitle: { color: T.panelText, fontSize: 18, fontWeight: '700' },
   panelBody: { color: T.panelMuted, fontSize: 15, lineHeight: 21 },

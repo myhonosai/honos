@@ -258,3 +258,67 @@ export function checkoutOptionDueTodayMinor(option: CheckoutOption): number {
   if (option.billing === 'ONE_TIME') return option.priceMinor ?? 0;
   return option.downPayment?.amountMinor ?? option.recurringMinor ?? 0;
 }
+
+// ---------- Share links and the public page (0620) ----------
+
+export const CHECKOUT_PUBLIC_ID = /^[a-f0-9]{48}$/;
+export interface CheckoutPageLink { pageId: string; publicId: string }
+export interface SchoolCheckoutLinks { links: CheckoutPageLink[] }
+/** Staff: every page's share link (0620 issue_school_checkout_links). */
+export function verifySchoolCheckoutLinks(value: unknown): SchoolCheckoutLinks {
+  const row = record(value, ['links']);
+  const links = list(row.links, CHECKOUT_LIMITS.pages).map(entry => {
+    const l = record(entry, ['pageId', 'publicId']);
+    return { pageId: matching(l.pageId, UUID), publicId: matching(l.publicId, CHECKOUT_PUBLIC_ID) };
+  });
+  distinct(links.map(l => l.pageId));
+  distinct(links.map(l => l.publicId));
+  return { links };
+}
+
+export interface PublicCheckoutOption {
+  key: string; label: CheckoutText; description: CheckoutText | null; billing: CheckoutBilling;
+  priceMinor: number | null; recurringMinor: number | null; installments: number | null;
+  downPayment: { amountMinor: number; label: CheckoutText } | null; additionalParticipantMinor: number | null;
+  mostPopular: boolean; placesLeft: number | null; inFamilyApp: boolean;
+}
+export interface PublicCheckoutPage {
+  publicId: string; schoolName: string; title: CheckoutText; description: CheckoutText | null; currency: string; maxParticipants: number;
+  blocks: CheckoutBlock[]; options: PublicCheckoutOption[]; addOns: { label: CheckoutText; amountMinor: number; required: boolean }[]; hasWaiver: boolean;
+}
+const MINOR = 99_999_999;
+/** Public: what one share link shows (0620 read_public_school_checkout). The link id must be the one asked for. */
+export function verifyPublicCheckoutPage(value: unknown, publicId: string): PublicCheckoutPage {
+  const row = record(value, ['publicId', 'schoolName', 'title', 'description', 'currency', 'maxParticipants', 'blocks', 'options', 'addOns', 'hasWaiver']);
+  if (row.publicId !== publicId || !CHECKOUT_PUBLIC_ID.test(publicId)) invalid();
+  if (typeof row.schoolName !== 'string' || row.schoolName.length < 1 || row.schoolName.length > 200 || CONTROL.test(row.schoolName)) invalid();
+  const currency = matching(row.currency, CURRENCY);
+  const blocks = list(row.blocks, CHECKOUT_LIMITS.blocks).map(entry => {
+    const b = record(entry, ['position', 'text']);
+    return { position: oneOf(b.position, CHECKOUT_BLOCK_POSITIONS), text: translated(b.text, 2000, true) };
+  });
+  const options = list(row.options, CHECKOUT_LIMITS.options).map(entry => {
+    const o = record(entry, ['key', 'label', 'description', 'billing', 'priceMinor', 'recurringMinor', 'installments', 'downPayment',
+      'additionalParticipantMinor', 'mostPopular', 'placesLeft', 'inFamilyApp']);
+    const billing = oneOf(o.billing, CHECKOUT_BILLING);
+    const option: PublicCheckoutOption = {
+      key: matching(o.key, KEY), label: translated(o.label, 80), description: nullable(o.description, v => translated(v, 1000, true)), billing,
+      priceMinor: nullable(o.priceMinor, v => count(v, 0, MINOR)), recurringMinor: nullable(o.recurringMinor, v => count(v, 1, MINOR)),
+      installments: nullable(o.installments, v => count(v, 0, 120)),
+      downPayment: nullable(o.downPayment, v => { const d = record(v, ['amountMinor', 'label']); return { amountMinor: count(d.amountMinor, 1, MINOR), label: translated(d.label, 80) }; }),
+      additionalParticipantMinor: nullable(o.additionalParticipantMinor, v => count(v, 0, MINOR)), mostPopular: bool(o.mostPopular),
+      placesLeft: nullable(o.placesLeft, v => count(v, 0, 100_000)), inFamilyApp: bool(o.inFamilyApp),
+    };
+    if (billing === 'ONE_TIME' ? option.priceMinor === null || option.recurringMinor !== null || option.installments !== null || option.downPayment !== null
+      : option.priceMinor !== null || option.recurringMinor === null || option.installments === null) invalid();
+    if (billing === 'MONTHLY' && option.inFamilyApp) invalid();
+    return option;
+  });
+  distinct(options.map(o => o.key));
+  const addOns = list(row.addOns, CHECKOUT_LIMITS.addOns).map(entry => {
+    const a = record(entry, ['label', 'amountMinor', 'required']);
+    return { label: translated(a.label, 80), amountMinor: count(a.amountMinor, 1, MINOR), required: bool(a.required) };
+  });
+  return { publicId, schoolName: row.schoolName, title: translated(row.title, 120), description: nullable(row.description, v => translated(v, 2000, true)),
+    currency, maxParticipants: count(row.maxParticipants, 1, CHECKOUT_LIMITS.participants), blocks, options, addOns, hasWaiver: bool(row.hasWaiver) };
+}

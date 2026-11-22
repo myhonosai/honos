@@ -342,7 +342,7 @@ await check('HON waits in the corner on other pages', async () => {
   assert.equal(await page.locator('button[data-hon-corner][aria-haspopup="dialog"]').isVisible(), true);
   await page.waitForTimeout(500); await shot(page, 'u2-hon-corner-classic-desktop'); await ctx.close();
 });
-for (const [mode, size] of [['modern', 'desktop'], ['classic', 'desktop'], ['big-button', 'desktop'], ['modern', 'phone']]) {
+for (const [mode, size] of [['modern', 'desktop'], ['classic', 'desktop'], ['big-button', 'desktop'], ['modern', 'phone'], ['big-button', 'phone']]) {
   await check(`corner HON opens a pop-up over the page and expands to the same conversation (${mode} ${size})`, async () => {
     theme = mode; multi = false; const { ctx, page } = await open(viewports[size], '/staff/work');
     await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
@@ -357,19 +357,38 @@ for (const [mode, size] of [['modern', 'desktop'], ['classic', 'desktop'], ['big
     const dialog = page.getByRole('dialog', { name: 'HON' });
     await dialog.waitFor();
     assert.equal(new URL(page.url()).pathname, '/staff/work', 'opening HON never leaves the page');
-    assert.equal(await dialog.getAttribute('data-placement'), 'corner');
-    assert.equal(await corner.getAttribute('aria-expanded'), 'true');
+    // Docked chat (owner 2026-11-22): not modal, anchored in the bottom-right corner where the orb was, never full screen.
+    assert.equal(await dialog.getAttribute('aria-modal'), 'false');
+    assert.equal(await corner.isVisible(), false, 'the orb steps aside while the chat is open');
+    await page.waitForTimeout(300);
+    const box = await dialog.boundingBox(), view = page.viewportSize();
+    assert.equal(view.width - (box.x + box.width) <= 24, true, 'docked at the right edge');
+    assert.equal(box.y >= 40 && view.height - (box.y + box.height) <= 100, true, 'docked at the bottom, page still visible above');
+    if (size === 'phone') { const bar = await page.locator('nav[aria-label="Quick navigation"]').boundingBox(); assert.equal(box.y + box.height <= bar.y, true, 'sits above the bottom bar'); }
+    await shot(page, `p1-hon-dock-empty-${mode}-${size}`);
+    await dialog.getByText(/Past conversations/).click();
     await dialog.getByRole('button', { name: /Plan this week/ }).click();
     await dialog.getByText('Follow up the 5 new leads first').waitFor();
+    await dialog.getByText(/Past conversations/).click();
+    await dialog.getByRole('textbox').fill('Half-typed question');
     await page.waitForTimeout(300); await shot(page, `p1-hon-popup-${mode}-${size}`);
-    // Close: the page is exactly as it was.
-    await page.keyboard.press('Escape');
-    await dialog.waitFor({ state: 'detached' });
+    // Minimize: it shrinks back into the corner orb and the page is exactly as it was.
+    await dialog.getByRole('button', { name: 'Minimize HON' }).click();
+    await dialog.waitFor({ state: 'hidden' });
+    assert.equal(await corner.isVisible(), true, 'the orb is back in the corner');
     assert.equal(new URL(page.url()).pathname, '/staff/work');
     if (typed) assert.equal(await field.inputValue(), typed, 'unsaved typing on the page is kept');
     assert.equal(await page.evaluate(() => window.scrollY), scrolled, 'scroll position is kept');
     assert.equal(await page.evaluate(() => document.activeElement?.hasAttribute('data-hon-corner')), true, 'focus returns to the corner button');
     // Reopen: the same conversation is still open.
+    await corner.click(); await dialog.waitFor();
+    await dialog.getByText('Follow up the 5 new leads first').waitFor();
+    assert.equal(await dialog.getByRole('textbox').inputValue(), 'Half-typed question', 'minimizing keeps a half-typed message');
+    // Escape minimizes too; Close ends the window, and the orb returns either way.
+    await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'hidden' });
+    await corner.click(); await dialog.waitFor();
+    await dialog.getByRole('button', { name: 'Close HON' }).click(); await dialog.waitFor({ state: 'detached' });
+    assert.equal(await corner.isVisible(), true);
     await corner.click(); await dialog.waitFor();
     await dialog.getByText('Follow up the 5 new leads first').waitFor();
     // Expand: the full workspace opens the same conversation, with a way back to this page.
@@ -383,6 +402,21 @@ for (const [mode, size] of [['modern', 'desktop'], ['classic', 'desktop'], ['big
       await page.waitForTimeout(300); await shot(page, `p1-hon-expanded-${mode}-${size}`);
     }
     await ctx.close();
+  });
+}
+for (const mode of ['modern', 'big-button']) {
+  await check(`corner HON phone bottom bar lines up icons and one-line labels (${mode})`, async () => {
+    theme = mode; multi = false; const { ctx, page } = await open(viewports.phone, '/staff/work');
+    await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+    const slots = await page.evaluate(() => [...document.querySelectorAll('nav[aria-label="Quick navigation"] > *')].map((slot) => {
+      const icon = slot.querySelector('svg').getBoundingClientRect(), label = slot.querySelector('span'), text = label.getBoundingClientRect();
+      return { name: label.textContent, iconTop: Math.round(icon.top), textTop: Math.round(text.top), lines: Math.round(text.height / parseFloat(getComputedStyle(label).lineHeight)), clipped: label.scrollWidth > label.clientWidth + 1 };
+    }));
+    assert.deepEqual(slots.map((slot) => slot.name), ['Dashboard', 'Contacts', 'Pipeline', 'Calendar', 'More']);
+    assert.equal(new Set(slots.map((slot) => slot.iconTop)).size, 1, `icons share one line: ${JSON.stringify(slots)}`);
+    assert.equal(new Set(slots.map((slot) => slot.textTop)).size, 1, `labels share one line: ${JSON.stringify(slots)}`);
+    assert.equal(slots.every((slot) => slot.lines === 1 && !slot.clipped), true, `one unclipped line each: ${JSON.stringify(slots)}`);
+    await page.waitForTimeout(300); await shot(page, `p1-bottom-bar-${mode}-phone`); await ctx.close();
   });
 }
 await check('classic sidebar shows the owner menu headings with their pages, and the current page', async () => {

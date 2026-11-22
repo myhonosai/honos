@@ -72,6 +72,10 @@ it('asks to allow finance, says when it was not read yet or Payments is off, and
   expect(render({ finance: { state: 'READY', value: view({ finance: null }) } })).toContain('data-shopify-finance="not-read"');
   const off = render({ finance: { state: 'READY', value: view({ finance: { paymentsActive: false, balances: [], payouts: [], transactions: [], readAt: at } }) } });
   expect(off).toContain('data-shopify-finance="payments-off"'); expect(off).toContain('Shopify Payments is not set up');
+  // An empty payouts list may mean the payouts permission is missing: the page offers to ask Shopify for it. Never when payouts are shown.
+  const noPayouts = render({ finance: { state: 'READY', value: view({ finance: { paymentsActive: true, balances: [{ currency: 'USD', amount: '245.18' }], payouts: [], transactions: [], readAt: at } }) } });
+  expect(noPayouts).toContain('No payouts yet.'); expect(noPayouts).toContain('data-action="allow-payouts"'); expect(noPayouts).toContain('>Allow payouts<');
+  expect(render()).not.toContain('data-action="allow-payouts"');
   const reader = render({ overview: { state: 'READY', read: overview({ canManage: false }) }, finance: undefined });
   expect(reader).toContain('Only someone who can manage Shopify'); expect(reader).not.toContain('$245.18');
   expect(render({ finance: { state: 'UNAVAILABLE' } })).toContain('This list could not be loaded.');

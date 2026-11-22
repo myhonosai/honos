@@ -6146,10 +6146,10 @@ DO $$ BEGIN
 END $$;
 -- End CRM trial authority hold exact verification.
 
--- Invoice INSERT status guard exact verification (0630, launch-readiness P2): private trigger function, one BEFORE INSERT trigger.
+-- Invoice INSERT status guard exact verification (0630, launch-readiness P2; body from 0644 H3, which never trusts platform API or HON runtime roles): private trigger function, one BEFORE INSERT trigger.
 DO $$ BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.guard_invoice_insert_status()'::regprocedure
-      AND NOT p.prosecdef AND p.provolatile='v' AND md5(p.prosrc)='73e23ca265c1e89c7da20de72440571a'
+      AND NOT p.prosecdef AND p.provolatile='v' AND md5(p.prosrc)='7bd30dd8c232c7c4a866364b4cd602f1'
       AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
       AND NOT has_function_privilege('hon_runtime',p.oid,'EXECUTE')
       AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner)) THEN
@@ -6161,19 +6161,119 @@ DO $$ BEGIN
 END $$;
 -- End invoice INSERT status guard exact verification.
 
--- Class booking lock identity plane exact verification (0631, launch-readiness P2): the 0631 body, unchanged posture and one overload.
+-- Class booking lock identity plane exact verification (0631, launch-readiness P2; body from 0644 H2, staff-assignable permission): the current body, unchanged posture and one overload.
 DO $$ BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid='hon.lock_class_booking_session(text,uuid)'::regprocedure
-      AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.provolatile='v' AND md5(p.prosrc)='7fbead308733263719dbf7f395464608'
+      AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.provolatile='v' AND md5(p.prosrc)='fd2083b92da789ee1f77f3320eb3a30b'
       AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
       AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
       AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
         WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
-    RAISE EXCEPTION 'Unsafe or pre-0631 class booking lock'; END IF;
+    RAISE EXCEPTION 'Unsafe or pre-0644 class booking lock'; END IF;
   IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname='lock_class_booking_session')<>1 THEN
     RAISE EXCEPTION 'Unexpected class booking lock overload'; END IF;
 END $$;
 -- End class booking lock identity plane exact verification.
+-- Class sessions function-only reads exact verification (0632, #177): no runtime SELECT on hon.class_sessions, two runtime reads, one private helper.
+DO $$ DECLARE f record; BEGIN
+  IF has_table_privilege('hon_runtime','hon.class_sessions','SELECT') OR has_any_column_privilege('hon_runtime','hon.class_sessions','SELECT')
+    OR NOT has_table_privilege('hon_runtime','hon.class_sessions','INSERT') THEN
+    RAISE EXCEPTION 'hon.class_sessions must be INSERT-only for the runtime (no table or column SELECT)'; END IF;
+  FOR f IN SELECT * FROM (VALUES
+    ('hon.require_class_sessions_human_read()',false,false,'s','2feaa0b10eff965b23ad924d24053946'),
+    ('hon.read_operations_report_session_counts(text,timestamptz,timestamptz)',true,true,'s','8ea9cc990b7c068bc99be462370f75d1'),
+    ('hon.read_parent_family_schedule(text,uuid,timestamptz,timestamptz)',true,true,'v','a59962d8713cd5785ec8823e3792aa49')
+  ) x(signature,definer,runtime_execute,volatility,body) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f.signature::regprocedure
+        AND p.prosecdef=f.definer AND (o.rolsuper OR o.rolbypassrls) AND p.provolatile::text=f.volatility AND md5(p.prosrc)=f.body
+        AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_execute
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (NOT f.runtime_execute OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')
+            OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe class sessions read function %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End class sessions function-only reads exact verification.
+-- Owner-launch first booking lifecycle exact verification (0644 H1, launch-readiness P3): the 0644 body (refuses COMPLETED classes after the exact replay), unchanged posture and one overload.
+DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid='hon.book_owner_launch_first_class(text,jsonb,text,uuid,uuid)'::regprocedure
+      AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.provolatile='v' AND md5(p.prosrc)='6e5f2c8926fa3a406aa9f4f2dbf3e2eb'
+      AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+    RAISE EXCEPTION 'Unsafe or pre-0644 owner-launch first booking'; END IF;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname='book_owner_launch_first_class')<>1 THEN
+    RAISE EXCEPTION 'Unexpected owner-launch first booking overload'; END IF;
+END $$;
+-- End owner-launch first booking lifecycle exact verification.
+
+-- Checkout page share links exact verification (0620): the link guard, the public page selector, two runtime entry points
+-- (staff issue, public read) and a private forced-RLS table the runtime can never touch directly.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_school_checkout_link()',false,false,'search_path=pg_catalog, hon','071402441db3e65d205c0be87068b7d33f91406ff6972b2f01c0ae1311b46438'),
+('hon.public_school_checkout(text)',true,false,'search_path=pg_catalog, hon','714c0b62124bdbf42e8aaddfd339411ea0f161c6be2fbd7ab7d1231bb7701ff0'),
+('hon.issue_school_checkout_links(text)',true,true,'search_path=pg_catalog, hon','146dfd67b4b4bf51555188fc805addfbdcfae316cea5769b47c77d59528da565'),
+('hon.read_public_school_checkout(text)',true,true,'search_path=pg_catalog, hon','e0e6102ec0c7841654e19b348db2e7581c520a9b8e328b7c4b2322383f8501a3')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe checkout page link function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.school_checkout_links'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.school_checkout_links'::regclass)
+    OR has_table_privilege('hon_runtime','hon.school_checkout_links','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.school_checkout_links','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe checkout page links table'; END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.school_checkout_links'::regclass AND NOT tgisinternal AND tgenabled='O'
+      AND ((tgname='school_checkout_links_guard' AND tgfoid='hon.guard_school_checkout_link()'::regprocedure)
+        OR (tgname='school_checkout_links_no_truncate' AND tgfoid='hon.guard_membership_activation_evidence()'::regprocedure)))<>2
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.school_checkout_links'::regclass AND NOT tgisinternal)<>2 THEN
+    RAISE EXCEPTION 'hon.school_checkout_links must carry exactly its two guards'; END IF;
+END $$;
+-- End checkout page share links exact verification.
+-- School blasts exact verification (0621)
+DO $$ DECLARE f text; t text;
+  entry text[]:=ARRAY['hon.save_school_blast(text,jsonb,text,uuid,uuid)','hon.send_school_blast(text,jsonb,text,uuid,uuid)',
+    'hon.cancel_school_blast(text,jsonb,text,uuid,uuid)','hon.read_school_blasts(text)','hon.read_school_blast(text,uuid)','hon.read_school_blast_audience(text,uuid)'];
+  helpers text[]:=ARRAY['hon.school_blast_text_ok(jsonb,integer,integer)','hon.school_blast_line_ok(jsonb,integer)','hon.school_blast_audience_ok(jsonb)',
+    'hon.guard_school_blast()','hon.require_school_blast_actor(text,text)','hon.school_blast_address(text,text,text)',
+    'hon.school_blast_resolve(uuid,uuid,text,jsonb)','hon.school_blast_render(text,text,text,text,text)','hon.school_blast_json(hon.school_blasts)',
+    'hon.school_blast_summary_json(hon.school_blasts)','hon.school_blast_begin(text,text,jsonb,text,uuid)',
+    'hon.school_blast_finish(text,text,uuid,text,hon.school_blasts,jsonb,uuid,uuid)'];
+  tables text[]:=ARRAY['hon.school_blasts','hon.school_blast_recipients'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe school blast entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY helpers LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe school blast helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY tables LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=t::regclass)
+      OR has_table_privilege('hon_runtime',t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime',t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe school blast table: %',t; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM hon.permissions WHERE (code='marketing.blast.read' AND NOT is_sensitive AND is_staff_assignable)
+      OR (code='marketing.blast.send' AND is_sensitive AND is_staff_assignable))<>2 THEN
+    RAISE EXCEPTION 'School blast permissions missing'; END IF;
+END $$;
+-- End school blasts exact verification.
+
 -- Rank setup exact verification (0622)
 DO $$ DECLARE f text; t text; c text; d boolean;
 BEGIN

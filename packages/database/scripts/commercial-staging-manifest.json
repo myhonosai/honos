@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "0fc444c1697d9f1816acf2840803dd7ae31cdd7ab118f7b8963ed2ac7e2a7cbb",
+  "chainSha256": "a5a9843b3daaa08fa3d5728a56e384a7a6a930821e9eb2a015f991b1e4146d22",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -823,6 +823,14 @@
       "sha256": "f22eec0a89f6f93c6848f6d88b544d77e453247e9700396f736a39a73c5fc139"
     },
     {
+      "file": "0620_school_checkout_public_links.sql",
+      "sha256": "c1cc459d28572039c8150eb3ea16881d325bebf64efdca528bd3b6e1434a4634"
+    },
+    {
+      "file": "0621_school_blasts.sql",
+      "sha256": "9ff3526327bdbd63aa232e46efc4d0356ab4e835f1333b1ff2927e60b7ad3738"
+    },
+    {
       "file": "0622_rank_setup.sql",
       "sha256": "36a16b58b9e9a3b90584973354e53f1a9d7721afb9915b80e1bd8b8a35b6e08c"
     },
@@ -837,6 +845,14 @@
     {
       "file": "0631_class_booking_lock_identity_plane.sql",
       "sha256": "400c232d2bb237049f31ecf359179f388d007f6f184545438017a6d644f4bbbe"
+    },
+    {
+      "file": "0632_class_sessions_function_only_reads.sql",
+      "sha256": "0479e70a542750964d31d4d21246dcfa0a7ac0fa1b6f4216cf7c984c22efae7e"
+    },
+    {
+      "file": "0644_booking_invoice_security_hygiene.sql",
+      "sha256": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7"
     }
   ]
 }
