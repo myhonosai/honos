@@ -56,6 +56,9 @@ import { HonReplyService } from './hon-conversation/hon-reply.service.js';
 import { EianController, EianAskGuard, EianReadGuard, EianSpeakGuard } from './eian/eian.controller.js';
 import { EianSpeechService, EIAN_SPEECH_COST_DELAYS, DEFAULT_COST_DELAYS_MS } from './eian/eian-speech.service.js';
 import { EIAN_SPEECH_RUNTIME, OpenRouterEianSpeechRuntime } from './eian/eian-speech-runtime.js';
+import { AgentSpeechController, AgentSpeechReadHumanUiGuard, AgentSpeechSpeakHumanUiGuard } from './agent-speech/agent-speech.controller.js';
+import { AgentSpeechService, AGENT_SPEECH_COST_DELAYS, DEFAULT_AGENT_SPEECH_COST_DELAYS_MS } from './agent-speech/agent-speech.service.js';
+import { AGENT_SPEECH_RUNTIME, OpenRouterAgentSpeechRuntime } from './agent-speech/agent-speech-runtime.js';
 import { EianService } from './eian/eian.service.js';
 import { ParentInvoicePayCancelGuard, ParentInvoicePayConfirmGuard, ParentInvoicePayController, ParentInvoicePayStartGuard } from './parent-pay/parent-invoice-pay.controller.js';
 import { ParentInvoicePayService } from './parent-pay/parent-invoice-pay.service.js';
@@ -688,6 +691,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MarcusReviewController,
     ClaireKpiController,
     MayaRenewalController,
+    AgentSpeechController,
     ChadLeadPlanController,
     MayaCheckInController,
     PublishedSchoolWebsiteController,
@@ -773,6 +777,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     // E-V2: Eian natural voice. Off until the key, the paid-call flag and HON_EIAN_NATURAL_VOICE_APPROVED are all set.
     { provide: EIAN_SPEECH_RUNTIME, useFactory: () => new OpenRouterEianSpeechRuntime() }, { provide: EIAN_SPEECH_COST_DELAYS, useValue: DEFAULT_COST_DELAYS_MS },
     EianSpeechService, EianSpeakGuard,
+    // 0652: staff agent natural voices. Off until the key, the paid-call flag and HON_AGENT_NATURAL_VOICE_APPROVED are all set.
+    { provide: AGENT_SPEECH_RUNTIME, useFactory: () => new OpenRouterAgentSpeechRuntime() }, { provide: AGENT_SPEECH_COST_DELAYS, useValue: DEFAULT_AGENT_SPEECH_COST_DELAYS_MS },
+    AgentSpeechService, AgentSpeechReadHumanUiGuard, AgentSpeechSpeakHumanUiGuard,
     ParentInvoicePayService, ParentInvoicePayStartGuard, ParentInvoicePayConfirmGuard, ParentInvoicePayCancelGuard,
     // CS1: no creative provider is connected; the synthetic runtime is test-only and never selected here.
     // C2: real adapters exist, but stay off until results can be copied into HON storage (C3).

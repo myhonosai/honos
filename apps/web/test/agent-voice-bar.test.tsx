@@ -26,9 +26,9 @@ it('offers Speak when the browser can listen and Hear only when there is an answ
 });
 
 it('is on every agent panel, and voice never presses the panel buttons', () => {
-  for (const [file, key] of [['alex-plan-panel', 'alex'], ['jordan-follow-up-panel', 'jordan'], ['marcus-review-panel', 'marcus'], ['claire-kpi-panel', 'claire'], ['maya-renewal-panel', 'maya']]) {
+  for (const [file, key] of [['alex-plan-panel', 'alex'], ['jordan-follow-up-panel', 'jordan'], ['marcus-review-panel', 'marcus'], ['claire-kpi-panel', 'claire'], ['maya-renewal-panel', 'maya'], ['chad-lead-plan-panel', 'chad']]) {
     const src = readFileSync(join(__dirname, `../src/components/hon-command/${file}.tsx`), 'utf8');
-    expect(src).toContain(`<AgentVoiceBar agentKey="${key}"`);
+    expect(src).toContain(`<AgentVoiceBar scope={scope} agentKey="${key}"`);
   }
   const bar = readFileSync(join(__dirname, '../src/components/hon-command/agent-voice-bar.tsx'), 'utf8');
   expect(bar).not.toMatch(/\.submit\(|requestSubmit\(|onApply|\.approve\(|decide\(/);

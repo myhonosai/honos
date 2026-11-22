@@ -169,7 +169,7 @@ export function ChadLeadPlanPanel({ scope, api = defaultApi, run = defaultStepRu
         {(['ALL_OPEN', 'NO_TRIAL_YET'] as const).map((f) => <label key={f}><input type="radio" name="chad-focus" checked={focus === f} onChange={() => setFocus(f)} /> {f === 'ALL_OPEN' ? 'All open leads' : 'Leads with no trial yet'}</label>)}
       </fieldset>
       <label>Anything Chad should know (optional)<textarea value={note} maxLength={300} rows={2} onChange={(e) => setNote(e.target.value)} placeholder="For example: we have space in the Saturday kids class" data-chad-note /></label>
-      <AgentVoiceBar agentKey="chad" name="Chad" value={note} max={300} onChange={setNote} answer={view?.summary ?? null} />
+      <AgentVoiceBar scope={scope} agentKey="chad" name="Chad" value={note} max={300} onChange={setNote} answer={view?.summary ?? null} />
       <button type="submit" className={styles.primary} disabled={busy} data-chad-ask>{chad.state === 'ON' && chad.busy ? 'Chad is looking…' : 'Ask Chad'}</button>
     </form> : null}
     {notice ? <div className={styles.note} role="alert" data-chad-notice={notice.kind}>

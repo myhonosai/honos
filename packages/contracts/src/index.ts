@@ -1173,6 +1173,7 @@ export * from './staff-shifts.js';
 export * from './staff-time-clock.js';
 export * from './eian.js';
 export * from './eian-speech.js';
+export * from './agent-speech.js';
 export * from './parent-invoice-pay.js';
 export * from './parent-app-curriculum.js';
 export * from './school-announcements.js';
