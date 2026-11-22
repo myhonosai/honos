@@ -16,12 +16,30 @@ const FAMILY_MOBILE_ROUTES = /^\/v1\/(?:parent|me|auth\/mobile)\//;
  * later phase adds its exact routes in its own reviewed PR. Everything else (organizations, HQ, parent, other staff
  * routes) stays browser-only. Identity only: every route still authorizes school, role and permission itself.
  */
-const STAFF_MOBILE_ROUTES: readonly RegExp[] = [
-  /^\/v1\/me\/language-preference$/,
-  /^\/v1\/auth\/mobile\/[^/]/,
-  /^\/v1\/staff\/current-reporting-school$/,
-  /^\/v1\/staff\/reporting-schools$/,
+const UUID = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+const SCHOOL = `/v1/organizations/${UUID}/schools/${UUID}`;
+const SESSION = `${SCHOOL}/schedule/sessions/${UUID}`;
+/** One allowed route: an anchored, segment-exact path and, from S1 on, the exact methods. No methods = S0 entry, any method. */
+interface StaffMobileRoute { readonly path: RegExp; readonly methods?: readonly string[] }
+const STAFF_MOBILE_ROUTES: readonly StaffMobileRoute[] = [
+  // S0: sign-in and which school the person works at.
+  { path: /^\/v1\/me\/language-preference$/ },
+  { path: /^\/v1\/auth\/mobile\/[^/]/ },
+  { path: /^\/v1\/staff\/current-reporting-school$/ },
+  { path: /^\/v1\/staff\/reporting-schools$/ },
+  // S1 Today (docs/architecture/STAFF_MOBILE_TODAY.md): the class list, one class roster, marking attendance, and the
+  // person's own time clock. Each route still resolves school and permission itself (schedule.session.read,
+  // attendance.record, staff.time.clock).
+  { path: new RegExp(`^${SCHOOL}/schedule/sessions/list$`), methods: ['GET'] },
+  { path: new RegExp(`^${SESSION}/roster$`), methods: ['GET'] },
+  { path: new RegExp(`^${SESSION}/attendance$`), methods: ['GET', 'POST'] },
+  { path: new RegExp(`^${SCHOOL}/staff/time/clock$`), methods: ['GET', 'POST'] },
+  // Find a student by name to mark one who is not on the roster (walk-in). The controller admits only for=attendance
+  // from the app (attendance.record); the other picker purposes stay web-only.
+  { path: new RegExp(`^${SCHOOL}/pickers/students$`), methods: ['GET'] },
 ];
+const staffRouteAllowed = (method: string, path: string) =>
+  STAFF_MOBILE_ROUTES.some(route => route.path.test(path) && (route.methods === undefined || route.methods.includes(method)));
 
 @Injectable()
 export class HonIdentityService {
@@ -55,7 +73,7 @@ export class HonIdentityService {
     if (channel === 'MOBILE') {
       const mobileApp: HonMobileApp = app === 'STAFF' ? 'STAFF' : 'FAMILY';
       const path = new URL(request.originalUrl ?? request.url ?? '/', 'http://hon.invalid').pathname;
-      const allowed = mobileApp === 'STAFF' ? STAFF_MOBILE_ROUTES.some(route => route.test(path)) : FAMILY_MOBILE_ROUTES.test(path);
+      const allowed = mobileApp === 'STAFF' ? staffRouteAllowed((request.method ?? '').toUpperCase(), path) : FAMILY_MOBILE_ROUTES.test(path);
       if (!allowed) throw new ForbiddenException({ code: 'MOBILE_SESSION_SCOPE', detail: mobileApp === 'STAFF' ? 'This route is not available to the HON Staff app yet.' : 'This route is not available to the HON Parent app.' });
       (request as HonRequest).honMobileApp = mobileApp;
     }
