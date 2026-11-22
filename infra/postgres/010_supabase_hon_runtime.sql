@@ -5053,3 +5053,21 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.read_parent_family_schedule(text,uuid,timestamptz,timestamptz) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0620 checkout page share links: one private table and two private helpers; two runtime entry points (staff issue, public read).
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.issue_school_checkout_links(text)','hon.read_public_school_checkout(text)'];
+BEGIN
+  IF to_regclass('hon.school_checkout_links') IS NULL THEN RAISE EXCEPTION 'Apply migration 0620 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_checkout_links FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.school_checkout_links FROM %I',r); END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_school_checkout_link()','hon.public_school_checkout(text)']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;

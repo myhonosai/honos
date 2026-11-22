@@ -219,6 +219,7 @@ const expectedRlsTables = [
   'pos_shopify_orders',
   'school_creative_designs',
   'school_creative_design_photos',
+  'school_checkout_links',
   'school_locations',
   'school_location_versions',
   'school_demo_data_sets',
