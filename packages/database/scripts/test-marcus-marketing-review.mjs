@@ -20,6 +20,7 @@ const { RuntimeDatabaseService } = await import('../../../apps/api/dist/foundati
 const { AiInvocationPlanService } = await import('../../../apps/api/dist/ai/ai-invocation-plan.service.js');
 const { MarcusReviewService } = await import('../../../apps/api/dist/marcus-review/marcus-review.service.js');
 const { MerchProviderRuntimeError } = await import('../../../apps/api/dist/commerce/shopify/merch-provider-runtime.js');
+const { validateAiSchoolUsageReport } = await import('../../contracts/dist/index.js');
 
 const admin = new pg.Client({ connectionString: ownerUrl, ssl: false });
 const row = async (sql, args = []) => (await admin.query(sql, args)).rows[0];
@@ -139,8 +140,8 @@ try {
   }
   const kind = await row("SELECT * FROM hon.ai_text_kinds WHERE kind='MARCUS_MARKETING_REVIEW'");
   assert.deepEqual([kind.agent_key, kind.task_class, kind.input_budget, kind.output_budget, Number(kind.max_cost_microunits), kind.max_result_bytes, kind.caller, kind.subject_type, kind.usage_agent],
-    ['marcus', 'DRAFT_MARKETING', 12000, 3000, 80000, 12288, 'HUMAN_UI', 'SCHOOL', 'MARKETING_REVIEW']);
-  pass('custody: MARCUS_MARKETING_REVIEW kind fixed (marcus, DRAFT_MARKETING, 12,000/3,000, 80,000 micro-USD, MARKETING_REVIEW), runtime executes exactly seven definer entry points, nothing to PUBLIC');
+    ['marcus', 'DRAFT_MARKETING', 12000, 3000, 80000, 12288, 'HUMAN_UI', 'SCHOOL', 'MARKETING']);
+  pass('custody: MARCUS_MARKETING_REVIEW kind fixed (marcus, DRAFT_MARKETING, 12,000/3,000, 80,000 micro-USD, MARKETING usage line), runtime executes exactly seven definer entry points, nothing to PUBLIC');
 
   await admin.query('BEGIN');
   await admin.query("INSERT INTO hon.hq_ai_provider_connections(provider_id,display_name,state,credential_secret_ref) VALUES('OPENROUTER','MR1 synthetic route','HEALTHY',$1) ON CONFLICT (provider_id) DO NOTHING", [`hon-secret:${K()}`]);
@@ -223,8 +224,9 @@ try {
   fake.mode = 'OK';
   const usage = (await row('SELECT hon.read_ai_school_usage_from_hq($1,$2::timestamptz,$3::timestamptz) r', [hq.subject, new Date(Date.now() - 86_400_000).toISOString(), new Date(Date.now() + 3_600_000).toISOString()])).r;
   const by = usage.schools.find((x) => x.schoolId === a.school).byClass.AGENT_INFERENCE.byAgent;
-  assert.ok(by.MARKETING_REVIEW?.credits > 0, JSON.stringify(by)); assert.equal(by.UNATTRIBUTED, undefined);
-  pass('unknown and usage: a lost outcome keeps its hold and appears in the HQ queue; the HQ per-school read attributes Marcus reviews to MARKETING_REVIEW');
+  assert.ok(by.MARKETING?.credits > 0, JSON.stringify(by)); assert.equal(by.UNATTRIBUTED, undefined);
+  validateAiSchoolUsageReport(usage); // the HQ per-school report must stay readable once a Marcus review exists
+  pass('unknown and usage: a lost outcome keeps its hold and appears in the HQ queue; the HQ per-school read attributes Marcus reviews to MARKETING and the contracts verifier accepts the report');
 
   // 5. Gates: Marcus's capability, campaign reading, AI planning, Complete; readers see only their own reviews; isolation.
   const calls = fake.calls;
