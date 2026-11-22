@@ -27,7 +27,7 @@ DO $$ BEGIN
 END $$;
 
 INSERT INTO hon.ai_text_kinds(kind,agent_key,task_class,input_budget,output_budget,max_cost_microunits,max_result_bytes,caller,subject_type,usage_agent)
-  VALUES ('MARCUS_MARKETING_REVIEW','marcus','DRAFT_MARKETING',12000,3000,80000,12288,'HUMAN_UI','SCHOOL','MARKETING_REVIEW');
+  VALUES ('MARCUS_MARKETING_REVIEW','marcus','DRAFT_MARKETING',12000,3000,80000,12288,'HUMAN_UI','SCHOOL','MARKETING');
 
 -- {period: LAST_30_DAYS | LAST_90_DAYS, question: '' or 1..300}.
 CREATE FUNCTION hon.marcus_review_brief_ok(p jsonb) RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,hon AS $$
