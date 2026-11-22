@@ -142,12 +142,9 @@ export interface ShopifyOverview {
   newStoreUrl: string | null;
 }
 /** A sign-up link is https on Shopify's own site or Shopify's partner link host, with no sign-in part, port or fragment. Anything else is null. */
+const NEW_STORE_URL = /^https:\/\/(?:(?:[a-z0-9-]{1,63}\.){0,3}shopify\.com|shopify\.pxf\.io)(?:\/[A-Za-z0-9._~%\/?&=+-]*)?$/;
 export function shopifyNewStoreUrl(v: unknown): string | null {
-  if (typeof v !== 'string' || v.length < 12 || v.length > 500 || v !== v.trim()) return null;
-  let u: URL; try { u = new URL(v); } catch { return null; }
-  const host = u.hostname.toLowerCase();
-  if (u.protocol !== 'https:' || u.username || u.password || u.port || u.hash) return null;
-  return host === 'shopify.com' || host.endsWith('.shopify.com') || host === 'shopify.pxf.io' ? u.toString() : null;
+  return typeof v === 'string' && v.length <= 500 && NEW_STORE_URL.test(v) ? v : null;
 }
 export function verifyShopifyOverview(v: unknown): ShopifyOverview {
   // An API one release older does not send newStoreUrl yet: read that as "no link".

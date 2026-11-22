@@ -536,7 +536,7 @@ Before a store is connected, a manager sees a "Set up your shop" guide above the
 the `.myshopify.com` address, come back and connect, then fill the shop with Merch Studio. No app can create a Shopify store
 or accept Shopify's terms for a merchant, so the account is always made by the school on Shopify's own page.
 
-The guide's button opens `HON_SHOPIFY_NEW_STORE_URL` when hon-api has it (HON's own sign-up or referral link; https on
+The guide's button opens `HON_SHOPIFY_NEW_STORE_URL` when hon-api has it (HON's Shopify Affiliate Program link, which keeps the school's free trial; https on
 `shopify.com`, a subdomain of it, or `shopify.pxf.io` only, otherwise ignored) and Shopify's public sign-up page when not. The
 link is HON-wide configuration, never school input, and reaches the page as `newStoreUrl` on the overview read. When HON's link
 is used the guide says HON may receive a referral fee. No migration; nothing is written.
