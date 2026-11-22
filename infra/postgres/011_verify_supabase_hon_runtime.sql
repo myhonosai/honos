@@ -6217,7 +6217,7 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
 ('hon.guard_alex_plan_rows()',false,false,'search_path=pg_catalog','60c2ac1f79fdd66d9c79e5d5afcbdbe6d0e3a368a4fc9e62b48cf513972189b4'),
 ('hon.plan_alex_plan(text,uuid)',true,true,'search_path=pg_catalog, hon','a794107e1e8f58044a6dbea8b9426f8f420ce1b94f76e3eaa72a1b2b4ad623c6'),
 ('hon.prepare_alex_plan(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','27b8323521edc2bf33bf62a56968f3fa26f9f8d8c34179aa5cfeb1e0a7e64c23'),
-('hon.read_alex_plans(text,uuid)',true,true,'search_path=pg_catalog, hon','46436f6c6499211686eefeada2c9088b6f1a25607c320cfdea1d42f39a425922'),
+('hon.read_alex_plans(text,uuid)',true,true,'search_path=pg_catalog, hon','78a11d2f2019fdee42f498953ac3823ca8cf3f34700c8e8d7ddd2542d7bdd93b'),
 ('hon.record_alex_plan(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','ae4c53483ce5cbb80ee45853885f931213d9c2f58f2e963a7adf29d3554243f3'))
  e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
