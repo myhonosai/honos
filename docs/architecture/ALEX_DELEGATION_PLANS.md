@@ -26,8 +26,9 @@ area only links the person to that specialist's existing workspace.
   line, 0328). No S4 function changes: the 0550 core and its triggers already cover every kind.
 - Who asks: a direct human (HUMAN_UI, no delegation, no action request) at the session school with `reporting.view` (Alex's
   capability, 0260), `work_item.create`, `ai.invocation.plan` and an active Complete entitlement. The per-staff agent switch
-  `ai.agent.alex.use` (0635) is enforced by the planner for every Alex call. Who reads: `reporting.view` at the school; the list
-  shows the school's newest 20 plans.
+  `ai.agent.alex.use` (0635) is enforced by the planner for every Alex call. Who reads: `reporting.view` at the school, and only
+  their own plans (newest 20); a reader who also manages the team's tasks (`work_item.manage`) sees every plan at the school.
+  A plan holds its requester's goal and the staff roster by name, and `reporting.view` alone is aggregate-only (0042).
 - Brief: `{goal: 1..500 safe characters, horizon: 'WEEK' | 'MONTH'}`.
 - Facts sent to the provider (at most ~10 KB): the brief, the school name, the local date, Alex's 0260 facts, and the staff list as
   aliases only: `[{ref: 'S1', role: 'Owner' | 'Manager' | 'Instructor' | 'Front desk' | 'Staff', openTasks: n}]` (at most 30, people who

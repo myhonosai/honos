@@ -113,7 +113,7 @@ try {
   const a = await makeOrg('a');
   const coach = await addStaff(a, 'coach', ['work_item.self_manage'], 'Jordan Synthcoach', '2 days');
   const desk = await addStaff(a, 'desk', ['work_item.self_manage'], 'Riley Synthdesk', '1 day');
-  await addStaff(a, 'parentish', ['reporting.view'], 'Not Staff Synthperson', '1 day');
+  const reporter = await addStaff(a, 'parentish', ['reporting.view'], 'Not Staff Synthperson', '1 day');
   fake.answer = goodAnswer;
   const c1 = ctx(a);
   const v1 = await alex.request(c1, brief);
@@ -142,6 +142,10 @@ try {
   // 3. Create: only the ticked tasks become 0084 work items created by the requester; aliases map to people; replay is exact.
   const coOwner = await addStaff(a, 'coowner', (await rows('SELECT code FROM hon.permissions')).map((p) => p.code), 'Casey Synthpartner', '1 day');
   assert.equal((await alex.read(readCtx(coOwner), v1.id)).mine, false);
+  // A reports-only reader never sees someone else's goal or the staff roster: not in the list, and not by id.
+  assert.deepEqual(await alex.list(readCtx(reporter)), []);
+  assert.equal((await settle(alex.read(readCtx(reporter), v1.id))).error?.getStatus(), 404);
+  assert.deepEqual((await alex.list(readCtx(coOwner))).map((x) => x.id), [v1.id], 'a team task manager sees every plan');
   assert.equal((await settle(alex.create(ctx(coOwner), v1.id, { tasks: [0] }))).error?.getStatus(), 404, 'only the requester creates');
   assert.equal(code(await settle(alex.create(ctx(a), v1.id, { tasks: [0, 0] }))), 'ALEX_PLAN_INVALID');
   assert.equal(code(await settle(alex.create(ctx(a), v1.id, { tasks: [5] }))), 'ALEX_PLAN_INVALID');
@@ -167,7 +171,7 @@ try {
   const coachQueue = await db.withTenantTransaction(ctx(coach), async (c) => { await c.query("SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)");
     return (await c.query("SELECT hon.read_human_work($1,NULL,'mine','ACTIVE',NULL,NULL) d", [coach.subject])).rows[0].d; });
   assert.deepEqual(coachQueue.items.map((i) => i.title), ['Call last month’s trial leads']);
-  pass('create: only the ticked tasks become human work items created by the requester, S2 is the coach, due 17:00 school time, "Suggested by Alex." appended, an exact retry replays, the plan is APPLIED and closed, the coach sees their task');
+  pass('create: a reports-only reader sees no one else\'s plan, a team task manager does; only the ticked tasks become human work items created by the requester, S2 is the coach, due 17:00 school time, "Suggested by Alex." appended, an exact retry replays, the plan is APPLIED and closed, the coach sees their task');
 
   // 4. Authority at create: a requester who may create tasks but not manage the team cannot give one to someone else; nothing is made.
   const lead = await addStaff(a, 'lead', ['reporting.view', 'ai.invocation.plan', 'work_item.create', 'work_item.self_manage'], 'Morgan Synthlead', '12 hours');

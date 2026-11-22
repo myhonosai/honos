@@ -236,18 +236,20 @@ BEGIN
   RETURN hon.alex_plan_view(p_id, actor) || jsonb_build_object('recorded',status);
 END $$;
 
--- The school's newest 20 plans for anyone with reporting.view, or one by id.
+-- The newest 20 plans, or one by id. A plan holds its requester's goal and the staff roster by name, so a reader sees only their
+-- own plans unless they manage the team's tasks (work_item.manage); reporting.view alone is aggregate-only (0042).
 CREATE FUNCTION hon.read_alex_plans(p_subject text, p_id uuid) RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid := hon.alex_plan_reader(p_subject); v jsonb;
+  team boolean := coalesce(hon.human_work_permission(actor,hon.current_organization_id(),hon.current_school_id(),'work_item.manage'),false);
 BEGIN
   IF p_id IS NOT NULL THEN
-    v := hon.alex_plan_view(p_id, actor);
+    v := CASE WHEN team OR EXISTS(SELECT 1 FROM hon.ai_text_proposals WHERE id=p_id AND requested_by=actor) THEN hon.alex_plan_view(p_id, actor) END;
     IF v IS NULL THEN RAISE EXCEPTION 'AI_TEXT_PROPOSAL_NOT_FOUND' USING ERRCODE='P0002'; END IF;
     RETURN v;
   END IF;
   RETURN coalesce((SELECT jsonb_agg(hon.alex_plan_view(x.id, actor) ORDER BY x.created_at DESC, x.id)
     FROM (SELECT id, created_at FROM hon.ai_text_proposals WHERE kind='ALEX_DELEGATION_PLAN' AND organization_id=hon.current_organization_id() AND school_id=hon.current_school_id()
-      ORDER BY created_at DESC, id LIMIT 20) x),'[]'::jsonb);
+      AND (team OR requested_by=actor) ORDER BY created_at DESC, id LIMIT 20) x),'[]'::jsonb);
 END $$;
 
 -- Create the ticked tasks as human work items, then close the plan APPLIED. The requester only, with current authority.
