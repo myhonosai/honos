@@ -34,3 +34,12 @@ Source: launch-readiness review pinned to main `0d476427`, finding [17] ("the sh
 - the path list is exact.
 
 Full web suite: 3661 tests passed. Web `tsc` is clean. The design-system `tsc` is clean, with three new translated strings in en, es and ko.
+
+## Overview read lifecycle (review [18], HQ shell part)
+
+The shell holds one overview read at a time. A newer access check ("Check access again", "Refresh HQ access") aborts
+the older read, and only the newest read's answer can land. A confirmed session end (`hon:session-invalidated`)
+aborts any read still out and retires the overview, the HON assistant, its draft and the menu; the shell shows
+"Sign in to verify HQ access" and opens no page, Support included, until a new check verifies a fresh overview. Late
+answers from before the session end are dropped. Proof: `apps/web/test/hq-shell-lifecycle.test.tsx` (three of its four
+cases fail on the earlier shell). The unreachable `forbidden` state was removed; a 403 is `limited`.

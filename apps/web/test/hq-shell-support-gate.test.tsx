@@ -5,7 +5,7 @@ import { HqOverviewAccessError } from '../src/components/hq-overview-http';
 // Review [17]: the shared HQ shell gated every page on the overview, so a current HQ support grant (which the support
 // API and SQL permit) could not open Support. A small hook runner drives the real shell and reads the tree it returns.
 type Frame = { values: unknown[]; cursor: number; effects: (() => void)[] };
-const hooks = vi.hoisted(() => ({ frame: null as Frame | null, path: '/hq/support', load: null as null | (() => Promise<unknown>) }));
+const hooks = vi.hoisted(() => ({ frame: null as Frame | null, path: '/hq/support', load: null as null | ((signal?: AbortSignal) => Promise<unknown>) }));
 vi.mock('react', async () => { const r = await vi.importActual<typeof import('react')>('react'); return { ...r,
   useState: (initial: unknown) => { const f = hooks.frame!, i = f.cursor++; if (!(i in f.values)) f.values[i] = typeof initial === 'function' ? (initial as () => unknown)() : initial;
     return [f.values[i], (v: unknown) => { f.values[i] = typeof v === 'function' ? (v as (old: unknown) => unknown)(f.values[i]) : v; }]; },
@@ -17,7 +17,7 @@ vi.mock('next/navigation', () => ({ usePathname: () => hooks.path }));
 vi.mock('next/link', () => ({ default: (props: Record<string, unknown>) => React.createElement('a', props) }));
 vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ t: (s: string) => s, text: (s: string) => s, number: String, money: String, date: String, formattingLocale: 'en' }) }));
 vi.mock('../src/components/hq-overview-http', async () => { const actual = await vi.importActual<typeof import('../src/components/hq-overview-http')>('../src/components/hq-overview-http');
-  return { ...actual, loadHqOverview: () => hooks.load!() }; });
+  return { ...actual, loadHqOverview: (signal?: AbortSignal) => hooks.load!(signal) }; });
 import { HqModernShell, hqPageAuthorizesItself } from '../src/components/hq-modern/shell';
 
 type Element = ReactElement<Record<string, any>>;
