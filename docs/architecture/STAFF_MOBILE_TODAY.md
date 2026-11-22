@@ -9,6 +9,8 @@ list with S0.**
 For the school the person chose at sign-in (memory only, never authority):
 1. Today's classes, from the school-local today, in start order (the existing forward-paging class list).
 2. Tap a class: its roster (booked and recorded students) and mark each one Present, Late, Excused or Absent.
+   **Add a student** (owner, 2026-11-22 04:16Z: "For roster, have way to add student by searching"): search the school's
+   active students by name and mark one present as a walk-in (a booking is never required to attend).
 3. My clock: clocked in or out right now, and a button to clock in or out.
 
 Nothing else: no booking, no class changes, no timesheet edits or approvals, no other person's clock.
@@ -24,8 +26,10 @@ ignored, matched case-sensitively (an upper-cased path fails closed).
 | GET | `/schedule/sessions/:session/roster` | `attendance.record` |
 | GET, POST | `/schedule/sessions/:session/attendance` | `attendance.record` |
 | GET, POST | `/staff/time/clock` | `staff.time.clock` (own clock only) |
+| GET | `/pickers/students?for=attendance&search=` | `attendance.record`; the controller refuses every other `for` from a native session (403 `MOBILE_SESSION_SCOPE`) |
 
-Still refused with 403 `MOBILE_SESSION_SCOPE`: every other method on these paths, timesheet weeks, entries and
+Still refused with 403 `MOBILE_SESSION_SCOPE`: every other method on these paths, the other pick lists (enrollments,
+staff, ranks, testing), timesheet weeks, entries and
 approvals, bookings, people, and every other organization, HQ and parent route. The family app reaches none of them.
 
 ## Transport guards

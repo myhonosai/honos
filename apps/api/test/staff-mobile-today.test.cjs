@@ -33,6 +33,7 @@ const ALLOWED = [
   ['POST', `${SCHOOL}/schedule/sessions/${C}/attendance`],
   ['GET', `${SCHOOL}/staff/time/clock`],
   ['POST', `${SCHOOL}/staff/time/clock`],
+  ['GET', `${SCHOOL}/pickers/students?for=attendance&search=ava`],
 ];
 
 test('a staff session reaches exactly the S1 Today routes with their methods, marked STAFF', () => {
@@ -55,6 +56,7 @@ test('other methods, look-alike paths, non-UUID segments and neighbouring routes
     ['GET', `${SCHOOL}/schedule/sessions/${C}%2Froster`], ['GET', `${SCHOOL}//schedule/sessions/list`], ['GET', `/v1/organizations/${O}/schools/${S}${SCHOOL}/staff/time/clock`],
     ['GET', `${SCHOOL}/people`], ['GET', `${SCHOOL}/schedule/sessions/${C}/bookings`], ['POST', `${SCHOOL}/schedule/sessions/${C}/bookings`],
     ['GET', `${SCHOOL.replace('/v1/', '/V1/')}/staff/time/clock`],
+    ['POST', `${SCHOOL}/pickers/students`], ['GET', `${SCHOOL}/pickers/students/x`], ['GET', `${SCHOOL}/pickers/enrollments`], ['GET', `${SCHOOL}/pickers/staff`], ['GET', `${SCHOOL}/pickers`],
   ];
   for (const [method, url] of refused) {
     assert.equal(status(() => service.authenticate(req(staff, url, method))), 403, `${method} ${url}`);
@@ -121,4 +123,25 @@ test('attendance mark and clock punch: the existing native command rule admits t
   assert.equal(status(() => new StaffTimeReadHumanUiGuard().canActivate(ctx({ method: 'GET', honChannel: 'MOBILE', headers: { authorization: `Bearer ${staff}`, 'x-hon-source': 'AUTOMATION' } }))), 403);
   // A punch is never accepted as a timesheet edit.
   assert.equal(status(() => new StaffTimeEntrySaveHumanUiGuard().canActivate(ctx(command('staff_time.punch')))), 403);
+});
+
+test('student look-up: the staff app may use only the attendance purpose; the web keeps every purpose', async () => {
+  const { SchoolPickersController } = require('../dist/school-pickers/school-pickers.js');
+  const scopes = [];
+  const database = { resolveAuthorizedScope: async (subject, schoolId, permission) => { scopes.push(permission); return { organizationId: O, schoolId: S, principalId: C }; } };
+  const rows = [{ studentProfileId: C, givenName: 'Ava', familyName: 'Sample' }];
+  const pickers = { students: async () => rows };
+  const controller = new SchoolPickersController(database, pickers);
+  const res = { setHeader() {} };
+  const staffReq = { honChannel: 'MOBILE', honMobileApp: 'STAFF', honIdentity: { externalSubject: identity.externalSubject } };
+  const ok = await controller.students(O, S, 'attendance', 'ava', staffReq, res);
+  assert.deepEqual(ok.data, rows);
+  assert.deepEqual(scopes, ['attendance.record']);
+  for (const purpose of ['teaching', 'achievements']) {
+    await assert.rejects(() => controller.students(O, S, purpose, 'ava', staffReq, res), (e) => e.getStatus() === 403 && e.getResponse().code === 'MOBILE_SESSION_SCOPE', purpose);
+  }
+  assert.equal(scopes.length, 1);
+  const web = await controller.students(O, S, 'teaching', undefined, { honChannel: 'WEB', honIdentity: { externalSubject: identity.externalSubject } }, res);
+  assert.deepEqual(web.data, rows);
+  assert.deepEqual(scopes, ['attendance.record', 'teaching.studio.read']);
 });

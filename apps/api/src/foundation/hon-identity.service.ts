@@ -34,6 +34,9 @@ const STAFF_MOBILE_ROUTES: readonly StaffMobileRoute[] = [
   { path: new RegExp(`^${SESSION}/roster$`), methods: ['GET'] },
   { path: new RegExp(`^${SESSION}/attendance$`), methods: ['GET', 'POST'] },
   { path: new RegExp(`^${SCHOOL}/staff/time/clock$`), methods: ['GET', 'POST'] },
+  // Find a student by name to mark one who is not on the roster (walk-in). The controller admits only for=attendance
+  // from the app (attendance.record); the other picker purposes stay web-only.
+  { path: new RegExp(`^${SCHOOL}/pickers/students$`), methods: ['GET'] },
 ];
 const staffRouteAllowed = (method: string, path: string) =>
   STAFF_MOBILE_ROUTES.some(route => route.path.test(path) && (route.methods === undefined || route.methods.includes(method)));
