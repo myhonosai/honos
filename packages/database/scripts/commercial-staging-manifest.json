@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "bd81907a769ba9ba1cf5583a49f1244a9f253893168d9b6984eb5f60da518564",
+  "chainSha256": "da54807cf15f0cc7f15ea794de290f7bc56e47365eac735b204bcaa2e08e806d",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -837,6 +837,10 @@
     {
       "file": "0632_class_sessions_function_only_reads.sql",
       "sha256": "0479e70a542750964d31d4d21246dcfa0a7ac0fa1b6f4216cf7c984c22efae7e"
+    },
+    {
+      "file": "0635_staff_ai_agent_switches.sql",
+      "sha256": "01835c17065d5e9a7a1d85b3e1d3dd3341b7d055e78e0a7c8a10577400d290fa"
     },
     {
       "file": "0638_eian_natural_voice.sql",

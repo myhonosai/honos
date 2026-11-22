@@ -121,6 +121,16 @@ export const PERMISSION_LABELS: Readonly<Record<string, string>> = {
   'action.approve': 'Approve AI team actions',
   'ai.team.configure': 'Set up the AI team',
   'ai.usage.read': 'See AI usage',
+  // 0635 agent switches: an agent also needs the permission it always needed (for example Marcus needs marketing).
+  'ai.agent.hon.use': 'Use HON',
+  'ai.agent.kai.use': 'Use Kai (teaching)',
+  'ai.agent.alex.use': 'Use Alex (management)',
+  'ai.agent.chad.use': 'Use Chad (lead follow-ups)',
+  'ai.agent.maya.use': 'Use Maya (at-risk students)',
+  'ai.agent.marcus.use': 'Use Marcus (marketing)',
+  'ai.agent.jordan.use': 'Use Jordan (operations)',
+  'ai.agent.claire.use': 'Use Claire (business performance)',
+  'ai.agent.lena.use': 'Use Lena (creative and commerce)',
 };
 export const labelOf = (p: AssignablePermission): string => PERMISSION_LABELS[p.code] ?? p.description;
 

@@ -382,6 +382,7 @@
     "0630_invoice_insert_status_guard.sql": "9177d2361c3a4a96916b8fa567e227655054094c5cd04e96a8c50be62f24aaec",
     "0631_class_booking_lock_identity_plane.sql": "400c232d2bb237049f31ecf359179f388d007f6f184545438017a6d644f4bbbe",
     "0632_class_sessions_function_only_reads.sql": "0479e70a542750964d31d4d21246dcfa0a7ac0fa1b6f4216cf7c984c22efae7e",
+    "0635_staff_ai_agent_switches.sql": "01835c17065d5e9a7a1d85b3e1d3dd3341b7d055e78e0a7c8a10577400d290fa",
     "0638_eian_natural_voice.sql": "2e2bead154d457670f92d225f44d0049b0d03e11ec86f996ed5e465bc162680d",
     "0639_alex_delegation_plans.sql": "16a0ef6be1c46733b17b66198911c87fc426253a4d32a9aa122d6be52072288d",
     "0640_jordan_follow_through.sql": "36153ab4e5c4cbc4046f25d1fdb03b008bc5c71b0e41def2aa482720213d795d",
