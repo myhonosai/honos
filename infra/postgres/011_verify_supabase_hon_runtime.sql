@@ -6317,7 +6317,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END LOOP;
   IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='MARCUS_MARKETING_REVIEW' AND k.agent_key='marcus' AND k.task_class='DRAFT_MARKETING'
       AND k.input_budget=12000 AND k.output_budget=3000 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
-      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='MARKETING_REVIEW') THEN
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='MARKETING') THEN
     RAISE EXCEPTION 'Marcus marketing review kind row missing or changed';
   END IF;
 END $$;
