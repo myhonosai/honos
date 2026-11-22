@@ -163,6 +163,24 @@ test('catalog read: when Shopify refuses the stock-location part, the sync reads
   assert.equal(sent.every(b => b.query.includes('inventoryLevels')), true);
 });
 
+test('refused GraphQL answers leave one log line with codes, field names and scope names only', async () => {
+  const notes = [], replies = [];
+  const send = async () => new Response(JSON.stringify(replies.shift()), { status: 200 });
+  const a = new adapter.GraphqlShopifyAdapter('cid', 'csecret', send, async () => undefined, line => notes.push(line));
+  replies.push({ errors: [{ message: 'Access denied for payouts field. Required access: `read_shopify_payments_payouts` access scope. Store secret-shop.myshopify.com id 12345',
+    path: ['shopifyPaymentsAccount', 'payouts', 0, 'gid://shopify/X/9'], extensions: { code: 'ACCESS_DENIED', requiredAccess: '`read_shopify_payments_payouts` access scope.' } },
+    { message: 'Something about 4111111111111111', extensions: { code: 'lower case' } }] });
+  await assert.rejects(a.finance(SHOP, 'shpat_1'), e => e.message === 'INVALID_RESPONSE');
+  assert.deepEqual(notes, ['shopify_graphql_refused operation=HonFinance errors=2 [ACCESS_DENIED at shopifyPaymentsAccount.payouts needs read_shopify_payments_payouts; NO_CODE]']);
+  for (const secret of ['secret-shop', '12345', '4111', 'shpat_1', 'gid:', SHOP]) assert.equal(notes[0].includes(secret), false);
+  // Throttling is not a refusal and is not logged.
+  const throttled = { errors: [{ message: 'Throttled', extensions: { code: 'THROTTLED' } }] };
+  notes.length = 0; replies.push(throttled, throttled, throttled, throttled);
+  await assert.rejects(a.finance(SHOP, 'shpat_1'), e => e.message === 'RATE_LIMITED');
+  assert.equal(notes.length, 0);
+  assert.equal(adapter.refusalNote('nonsense', [null, 'x']), 'shopify_graphql_refused operation=unknown errors=2 [NO_CODE; NO_CODE]');
+});
+
 // ---- Service with the fake store and a stub database that records what it was given ----
 
 function stubDatabase() {

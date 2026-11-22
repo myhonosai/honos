@@ -423,10 +423,30 @@ export function ownStockLocation(variant: unknown): { inventoryItemId: string; l
   return { inventoryItemId: item.id, locationId: own[0]! };
 }
 
+/**
+ * One log line for a GraphQL answer Shopify refused, so the cause can be found afterwards. It names HON's own operation
+ * and, per error, only Shopify's machine code, the field names on the error's path and any access scope names. Never the
+ * shop, the message text, ids or values: field names and scope names come from HON's query and Shopify's public schema.
+ */
+export function refusalNote(query: string, errors: readonly unknown[]): string {
+  const operation = /^(?:query|mutation) ([A-Za-z]{1,40})/.exec(query)?.[1] ?? 'unknown';
+  const parts = errors.slice(0, 5).map((e) => {
+    const rec = (v: unknown): Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
+    const o = rec(e), x = rec(o.extensions);
+    const code = typeof x.code === 'string' && /^[A-Z_]{1,40}$/.test(x.code) ? x.code : 'NO_CODE';
+    const path = Array.isArray(o.path) ? o.path.filter((s): s is string => typeof s === 'string' && /^[A-Za-z]{1,40}$/.test(s)).slice(0, 8).join('.') : '';
+    const scopes = [...new Set(`${typeof x.requiredAccess === 'string' ? x.requiredAccess : ''} ${typeof o.message === 'string' ? o.message : ''}`
+      .match(/\b(?:read|write)_[a-z_]{1,50}\b/g) ?? [])].slice(0, 6).join(',');
+    return `${code}${path ? ' at ' + path : ''}${scopes ? ' needs ' + scopes : ''}`;
+  });
+  return `shopify_graphql_refused operation=${operation} errors=${errors.length} [${parts.join('; ')}]`;
+}
+
 export class GraphqlShopifyAdapter implements ShopifyAdapter {
   readonly kind = 'SHOPIFY' as const;
   constructor(private readonly clientId: string, private readonly clientSecret: string, private readonly send: typeof fetch,
-    private readonly wait: (ms: number) => Promise<void> = ms => new Promise(r => setTimeout(r, ms))) {}
+    private readonly wait: (ms: number) => Promise<void> = ms => new Promise(r => setTimeout(r, ms)),
+    private readonly note: (line: string) => void = line => console.warn(line)) {}
 
   private async request(url: string, init: RequestInit): Promise<unknown> {
     for (let attempt = 0; ; attempt++) {
@@ -453,6 +473,7 @@ export class GraphqlShopifyAdapter implements ShopifyAdapter {
       if (Array.isArray(body.errors) && body.errors.length) {
         const throttled = body.errors.some(e => obj(e).extensions && obj(obj(e).extensions).code === 'THROTTLED');
         if (throttled && attempt < 3) { await this.wait(1000 * 2 ** attempt); continue; }
+        if (!throttled) this.note(refusalNote(query, body.errors));
         throw new ShopifyProviderError(throttled ? 'RATE_LIMITED' : 'INVALID_RESPONSE');
       }
       return obj(body.data);
