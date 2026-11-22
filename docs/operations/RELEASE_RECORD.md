@@ -11,8 +11,8 @@ what is launch-ready, or how HON is hosted. Facts that can drift carry the date 
 | Which migrations exist on `main` | `ls packages/database/migrations` and `pnpm db:check` (checksum-locked chain) |
 | Which migrations a database has | `pnpm db:status` against that database (read-only) |
 | What the hosting runs | `render.yaml` and `docs/operations/RENDER_DEPLOYMENT.md`; the deployed commit is the one shown on each Render service |
-| Health of a running stack | `GET /api/readiness` on `hon-web` (sign-in configured **and** private API + runtime database ready) |
-| Recovery | `docs/operations/BACKUP_RESTORE_AND_RECOVERY.md` (fresh-target restore proven by `test-restore-fresh-target-drill.mjs`) |
+| Health of a running stack | `GET /api/identity/readiness` on `hon-web` (sign-in configuration only). After #604 merges: `GET /api/readiness` (sign-in configured **and** private API + runtime database ready) |
+| Recovery | `docs/operations/BACKUP_RESTORE_AND_RECOVERY.md`. After #603 merges, its fresh-target restore steps are proven by `test-restore-fresh-target-drill.mjs` |
 
 ## Snapshot (checked 2026-11-22 08:20 UTC)
 
