@@ -5111,3 +5111,21 @@ DO $$ DECLARE r text; f regprocedure; BEGIN
       hon.close_marcus_review(text,uuid,text) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0643 Claire KPI report (P4): the CLAIRE_KPI_REPORT kind on the shared AI text proposals; seven runtime entry points,
+-- every helper closed, and no runtime access to the counted-numbers evidence table.
+DO $$ DECLARE r text; f regprocedure; BEGIN
+  IF to_regprocedure('hon.begin_claire_kpi_report(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0643 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.claire_kpi_codes()','hon.claire_kpi_brief_ok(jsonb)','hon.claire_kpi_ok(jsonb)','hon.claire_kpi_actor(text)',
+    'hon.claire_kpi_reader(text)','hon.claire_kpi_count(integer)','hon.claire_kpi_facts(text,uuid,jsonb)','hon.claire_kpi_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.claire_kpi_report_numbers FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.claire_kpi_report_numbers FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_claire_kpi_report(text,jsonb,uuid), hon.plan_claire_kpi_report(text,uuid), hon.prepare_claire_kpi_report(text,uuid,uuid,boolean),
+      hon.fail_claire_kpi_report(text,uuid,text,text), hon.record_claire_kpi_report(text,uuid,jsonb), hon.read_claire_kpi_reports(text,uuid),
+      hon.close_claire_kpi_report(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;

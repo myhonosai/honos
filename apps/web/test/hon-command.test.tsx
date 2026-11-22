@@ -149,6 +149,8 @@ describe('Plan with Alex in the team view', () => {
     expect(view(snapshot, 'team', 'alex')).not.toContain('id="jordan-follow-up"');
     expect(view(snapshot, 'team', 'marcus')).toContain('id="marcus-review"');
     expect(view(snapshot, 'team', 'jordan')).not.toContain('id="marcus-review"');
+    expect(view(snapshot, 'team', 'claire')).toContain('id="claire-kpi"');
+    expect(view(snapshot, 'team', 'marcus')).not.toContain('id="claire-kpi"');
   });
 });
 
