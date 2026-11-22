@@ -3,9 +3,11 @@ import { configuredPublicOrigin } from '@hon/auth';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { forwardedHostMatchesPublicOrigin } from './same-origin-proxy.js';
 
+// X-Forwarded-For/-Proto/-Port and X-Real-IP are not here: the hosting edge (Render) adds them to every browser request
+// and Next's rewrite passes them on, so refusing them refused every class read on the live app. Nothing reads them for
+// identity, tenant or authority. X-Forwarded-Host is checked exactly (same-origin-proxy.ts); Forwarded stays refused.
 const AUTHORITY_HEADERS = new Set([
-  'authorization', 'forwarded', 'x-forwarded-for', 'x-forwarded-port', 'x-forwarded-proto',
-  'x-real-ip', 'x-original-url', 'x-rewrite-url', 'x-subject', 'x-user-id', 'x-principal-id',
+  'authorization', 'forwarded', 'x-original-url', 'x-rewrite-url', 'x-subject', 'x-user-id', 'x-principal-id',
   'x-organization-id', 'x-school-id', 'x-role', 'x-tier', 'x-source',
   'x-delegated-by-principal-id', 'x-action-request-id', 'idempotency-key',
 ]);
