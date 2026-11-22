@@ -273,7 +273,6 @@ const expectedRlsTables = [
   'shopify_product_changes',
   'shopify_finance',
   'shopify_storefronts',
-  'shopify_store_requests',
   'school_websites',
   'school_website_versions',
   'school_website_requests',
