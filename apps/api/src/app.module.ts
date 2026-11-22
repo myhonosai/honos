@@ -164,6 +164,9 @@ import { MARCUS_REVIEW_PROVIDER_RUNTIME, MARCUS_REVIEW_TEXT_PROFILE } from './ma
 import { ClaireKpiController } from './claire-kpi/claire-kpi.controller.js';
 import { ClaireKpiService } from './claire-kpi/claire-kpi.service.js';
 import { CLAIRE_KPI_PROVIDER_RUNTIME, CLAIRE_KPI_TEXT_PROFILE } from './claire-kpi/claire-kpi-provider.js';
+import { MayaRenewalController } from './maya-renewal/maya-renewal.controller.js';
+import { MayaRenewalService } from './maya-renewal/maya-renewal.service.js';
+import { MAYA_RENEWAL_PROVIDER_RUNTIME, MAYA_RENEWAL_TEXT_PROFILE } from './maya-renewal/maya-renewal-provider.js';
 import { PAPER_VISION_RUNTIME, OpenRouterPaperVisionRuntime } from './ai/paper-vision-runtime.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
@@ -676,6 +679,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     JordanFollowUpController,
     MarcusReviewController,
     ClaireKpiController,
+    MayaRenewalController,
     PublishedSchoolWebsiteController,
     SchoolOnboardingController,
     SchoolSupportController,
@@ -979,11 +983,13 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     JordanFollowUpService,
     MarcusReviewService,
     ClaireKpiService,
+    MayaRenewalService,
     { provide: COMMERCE_REVIEW_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, COMMERCE_REVIEW_TEXT_PROFILE) },
     { provide: ALEX_PLAN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, ALEX_PLAN_TEXT_PROFILE) },
     { provide: JORDAN_FOLLOW_UP_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, JORDAN_FOLLOW_UP_TEXT_PROFILE) },
     { provide: MARCUS_REVIEW_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, MARCUS_REVIEW_TEXT_PROFILE) },
     { provide: CLAIRE_KPI_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, CLAIRE_KPI_TEXT_PROFILE) },
+    { provide: MAYA_RENEWAL_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, MAYA_RENEWAL_TEXT_PROFILE) },
     SchoolOnboardingService,
     SchoolSupportService,
     CustomToolService,

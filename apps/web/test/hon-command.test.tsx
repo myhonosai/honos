@@ -64,12 +64,12 @@ describe('HON command roster', () => {
     }
   });
 
-  it('shows Maya as answering with her at-risk list, never as planned or drafting', () => {
+  it('shows Maya as answering with her at-risk list and renewal prep, never as planned or drafting', () => {
     const maya = HON_COMMAND_ROSTER.find((agent) => agent.id === 'maya')!;
     expect(maya.availability).toBe('ANSWERS');
     expect(maya.draftWorkKey).toBeNull();
     expect(maya.workspace).toBeNull();
-    expect(maya.capabilities.filter((c) => c.state === 'AVAILABLE').map((c) => c.href)).toEqual(['/staff/retention/at-risk', '/staff/retention/at-risk']);
+    expect(maya.capabilities.filter((c) => c.state === 'AVAILABLE').map((c) => c.href)).toEqual(['/staff/retention/at-risk', '/staff/retention/at-risk', undefined]);
     expect(maya.workflows.map((w) => w.href)).toContain('/staff/retention/at-risk');
     expect(maya.approval).toMatch(/never sends/);
   });

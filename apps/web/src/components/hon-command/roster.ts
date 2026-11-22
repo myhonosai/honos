@@ -97,7 +97,7 @@ const DEFINITIONS: readonly Definition[] = [
       { label: 'At-risk students with reasons and one suggested next step (read only)', state: 'AVAILABLE', href: '/staff/retention/at-risk' },
       { label: 'Explain one at-risk student and suggest a check-in message you can send yourself (Ask Maya)', state: 'AVAILABLE', href: '/staff/retention/at-risk' },
       { label: 'Send, schedule or track outreach', state: 'BACKEND_REQUIRED' },
-      { label: 'Renewal preparation', state: 'BACKEND_REQUIRED' },
+      { label: 'Renewal prep: who to talk to first and what to say, opened as renewal reviews you tick (Renewal prep with Maya, below)', state: 'AVAILABLE' },
     ],
     workflows: [
       { label: 'At-risk students', href: '/staff/retention/at-risk' },

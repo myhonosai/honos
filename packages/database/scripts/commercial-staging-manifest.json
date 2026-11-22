@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "810801965f8a664dcb904c37d4b0465f9a8d011724cfa6b3677475aa20a80056",
+  "chainSha256": "00f8b4bbc31181d4e0ed901fca9a93e2522de37d1f2e56adf2616271c1d2e875",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -853,6 +853,10 @@
     {
       "file": "0643_claire_kpi_report.sql",
       "sha256": "1c73a358be6a451881cf5062cc8841558e86e3d0544b7f33bcd1548952c39fcf"
+    },
+    {
+      "file": "0646_maya_renewal_prep.sql",
+      "sha256": "9545d6adbd226e5e3f90e8c00367f9c549103b51ad2aad9093a04b7c261eeea0"
     }
   ]
 }

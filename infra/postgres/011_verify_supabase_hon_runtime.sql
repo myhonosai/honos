@@ -6364,3 +6364,48 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END IF;
 END $$;
 -- End Claire KPI report exact verification.
+
+-- Maya renewal prep exact verification (0646): the MAYA_RENEWAL_PREP kind row on the shared AI text proposals (0550), the
+-- closed brief and answer shapes, the private helpers, the eight runtime entry points and the closed evidence tables.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.apply_maya_renewal_preps(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','381cceb33f5b9ee2e0b8de06a1bbe41b664afcb333fe7ab40c64a6065f74a306'),
+('hon.begin_maya_renewal_prep(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','3c43136521e6037c5744d5628c358de5d69556232d1eef2cb8b1eeb57c524b2a'),
+('hon.close_maya_renewal_prep(text,uuid,text)',true,true,'search_path=pg_catalog, hon','32631fe9cc520e717d6bff69526b009ad82041efcbae5104d936971320e12699'),
+('hon.fail_maya_renewal_prep(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','e9829fd4e57970525b289dcf0e3cc04f4e29034245fd2672051b776c6bdbdddf'),
+('hon.maya_renewal_actor(text)',true,false,'search_path=pg_catalog, hon','3ed4b7dab927666f7fd9f9652592795ac682e4036c3cfcfe99b63e248bea4201'),
+('hon.maya_renewal_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','26df06331ef2328dd4024dbb52136813c981c81bbbc45c8ea79e67fe65bdbc9a'),
+('hon.maya_renewal_facts(text,uuid,jsonb)',true,false,'search_path=pg_catalog, hon','226865b50b6658ed8216fdd93bfec63cd5857741f7818444abd107d9408d4c06'),
+('hon.maya_renewal_fix_refs(uuid,text)',true,false,'search_path=pg_catalog, hon','50b42686f6d9cfea4bbde2712834a7a3bdfbd192b862109b50f553e0760a0a4e'),
+('hon.maya_renewal_ok(jsonb)',false,false,'search_path=pg_catalog, hon','d9ef19b4af02325cb2834db40cb49a1895f67919f47ddb1f7d8a4bafcfa3fe84'),
+('hon.maya_renewal_open_review(uuid)',true,false,'search_path=pg_catalog, hon','269b591fe0b745d4965bf672fb0dc69fbf0dfadf932a1dab0dd0f8508749d2d3'),
+('hon.maya_renewal_reader(text)',true,false,'search_path=pg_catalog, hon','793d832e85e4f0a10bead4244753e00af8babf82204e73675c0f87c63382551f'),
+('hon.maya_renewal_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','6229c4035c798f5e2ce05481a79fd77777fc4153fee5dfa9388fb4ee9fcccaa8'),
+('hon.plan_maya_renewal_prep(text,uuid)',true,true,'search_path=pg_catalog, hon','4193f12edfcdc50fc48e0913a82d38943de350a7d240b9d9e810181f6f80f239'),
+('hon.prepare_maya_renewal_prep(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','f7f1390539db71e0af34ef72786398074b51b4e44109365e0ffba41285d0e7d9'),
+('hon.read_maya_renewal_preps(text,uuid)',true,true,'search_path=pg_catalog, hon','03c79714a5fcda319e910874c23aea987f9531420f914d7c320053559a00ea27'),
+('hon.record_maya_renewal_prep(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','661f8416ce070e204de226ca065c592dbd304f3389c1897bd97c3148f81bd9c5'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Maya renewal prep function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='MAYA_RENEWAL_PREP' AND k.agent_key='maya' AND k.task_class='ANALYZE'
+      AND k.input_budget=12000 AND k.output_budget=3000 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='RETENTION') THEN
+    RAISE EXCEPTION 'Maya renewal prep kind row missing or changed';
+  END IF;
+  FOREACH t IN ARRAY ARRAY['hon.maya_renewal_refs','hon.maya_renewal_applied'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR has_table_privilege('hon_runtime',t,'SELECT') OR has_table_privilege('hon_runtime',t,'INSERT')
+      OR has_table_privilege('hon_runtime',t,'UPDATE') OR has_table_privilege('hon_runtime',t,'DELETE') THEN
+      RAISE EXCEPTION 'Maya renewal prep table % is not closed',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End Maya renewal prep exact verification.

@@ -11,6 +11,7 @@ import { AlexPlanPanel } from './alex-plan-panel';
 import { JordanFollowUpPanel } from './jordan-follow-up-panel';
 import { MarcusReviewPanel } from './marcus-review-panel';
 import { ClaireKpiPanel } from './claire-kpi-panel';
+import { MayaRenewalPanel } from './maya-renewal-panel';
 import styles from './hon-command.module.css';
 
 /** The existing requester-scoped reads return at most 20 records per source across all schools. */
@@ -224,6 +225,9 @@ function AgentDetail({ agent, snapshot, onBack }: { agent: HonCommandAgent; snap
       : null}
     {agent.id === 'claire' && snapshot.scope.state === 'VERIFIED'
       ? <ClaireKpiPanel scope={{ organizationId: snapshot.scope.organizationId, schoolId: snapshot.scope.schoolId }} />
+      : null}
+    {agent.id === 'maya' && snapshot.scope.state === 'VERIFIED'
+      ? <MayaRenewalPanel scope={{ organizationId: snapshot.scope.organizationId, schoolId: snapshot.scope.schoolId }} />
       : null}
     <h4>Related school workflows</h4>
     <p className={styles.meta}>Conventional workflows you run yourself. Opening one does not ask {agent.name} to do anything.</p>
