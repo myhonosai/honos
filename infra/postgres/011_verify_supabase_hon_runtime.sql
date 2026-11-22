@@ -3070,8 +3070,8 @@ DO $$ DECLARE f record; safe boolean; expected record; BEGIN
       RAISE EXCEPTION 'Missing tuition payment guard: %',expected.name; END IF;
   END LOOP;
   -- 0337 adds one more invoice guard (an open autopay charge holds its invoices), and 0530 one more (an open family
-  -- payment holds its invoice); each is verified in its own section.
-  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.invoices'::regclass AND NOT tgisinternal AND tgname NOT IN ('school_pay_charge_invoice_guard','parent_invoice_pay_invoice_guard'))<>1 THEN
+  -- payment holds its invoice), and 0630 one more (runtime INSERT only as DRAFT); each is verified in its own section.
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.invoices'::regclass AND NOT tgisinternal AND tgname NOT IN ('school_pay_charge_invoice_guard','parent_invoice_pay_invoice_guard','invoice_insert_status_guard'))<>1 THEN
     RAISE EXCEPTION 'hon.invoices must carry exactly the tuition payment status guard'; END IF;
   IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='billing.invoice.payment.record' AND is_sensitive AND is_staff_assignable) THEN
     RAISE EXCEPTION 'billing.invoice.payment.record must exist as a sensitive staff-assignable permission'; END IF;
@@ -6145,3 +6145,18 @@ DO $$ BEGIN
     RAISE EXCEPTION 'Unexpected CRM trial authority hold overload'; END IF;
 END $$;
 -- End CRM trial authority hold exact verification.
+
+-- Invoice INSERT status guard exact verification (0630, launch-readiness P2): private trigger function, one BEFORE INSERT trigger.
+DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.guard_invoice_insert_status()'::regprocedure
+      AND NOT p.prosecdef AND p.provolatile='v' AND md5(p.prosrc)='73e23ca265c1e89c7da20de72440571a'
+      AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+      AND NOT has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner)) THEN
+    RAISE EXCEPTION 'Unsafe invoice INSERT status guard function'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger t WHERE t.tgrelid='hon.invoices'::regclass AND t.tgname='invoice_insert_status_guard'
+      AND t.tgfoid='hon.guard_invoice_insert_status()'::regprocedure AND t.tgenabled='O' AND NOT t.tgisinternal
+      AND t.tgtype=7) THEN
+    RAISE EXCEPTION 'Missing or altered invoice INSERT status guard trigger'; END IF;
+END $$;
+-- End invoice INSERT status guard exact verification.

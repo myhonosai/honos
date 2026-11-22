@@ -378,6 +378,7 @@
     "0614_pos_shopify_orders.sql": "ba0b9b5bceb7d5926af3dfe88b683eb0ed73dd59c91c26a875a9cfd9aa0ee8e7",
     "0615_shopify_commerce_review.sql": "59cbacf8a419bb6d82794ba0978c37ca9d36d0400b42288fe654aad6a88fbbdd",
     "0617_school_creative_designs.sql": "f22eec0a89f6f93c6848f6d88b544d77e453247e9700396f736a39a73c5fc139",
-    "0629_crm_trial_authority_hold.sql": "0b0ec656de20f7a8a0884e47076fed742d109c562bc6c7b1b1564280c62d5043"
+    "0629_crm_trial_authority_hold.sql": "0b0ec656de20f7a8a0884e47076fed742d109c562bc6c7b1b1564280c62d5043",
+    "0630_invoice_insert_status_guard.sql": "9177d2361c3a4a96916b8fa567e227655054094c5cd04e96a8c50be62f24aaec"
   }
 }
