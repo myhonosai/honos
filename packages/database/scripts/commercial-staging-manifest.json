@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "af3dc7dd629f4f7a73da4c25399858c628971c8c27c6d3422e25ea5a9bba8503",
+  "chainSha256": "662b912865b4057c6cbeaa12c9fbd55326c0c81359e2b4029b46bbf5fcda1ae8",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -845,6 +845,10 @@
     {
       "file": "0640_jordan_follow_through.sql",
       "sha256": "36153ab4e5c4cbc4046f25d1fdb03b008bc5c71b0e41def2aa482720213d795d"
+    },
+    {
+      "file": "0644_booking_invoice_security_hygiene.sql",
+      "sha256": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7"
     }
   ]
 }
