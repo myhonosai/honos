@@ -6,7 +6,7 @@ import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
-import { AddLead } from '../leads/add-lead';
+import { AddLead, createLeadCreateCustody, type LeadCreateCustody } from '../leads/add-lead';
 import type { AddLeadApi } from '../leads/add-lead-http';
 import { LeadsError, leadsApi, type LeadsApi } from '../leads/http';
 import { pipelineText, type PipelineKey } from './copy';
@@ -59,14 +59,16 @@ export function LeadPipeline({ api = boardApi, leads = leadsApi, addLeadApi, clo
   const [templates, setTemplates] = useState<TemplateState>(null);
   const [setupRuns, setSetupRuns] = useState(0);
   const generation = useRef(0), trialGeneration = useRef(0), privacy = useRef(0), mounted = useRef(false), lastSchool = useRef<string | null>(null);
+  // The add-lead form's unanswered press lives here, above Close add and every remount of the form.
+  const addCustody = useRef<LeadCreateCustody>(createLeadCreateCustody()).current;
   const retainedClose = useRef<PreparedCrmLeadClose | null>(null), retainedSave = useRef<PreparedCommand | null>(null), setupKey = useRef<string | null>(null), retainedTemplate = useRef<PreparedCommand | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; privacy.current++; generation.current++; trialGeneration.current++; }; }, []);
 
   const reset = useCallback(() => {
-    retainedClose.current = null; retainedSave.current = null; setupKey.current = null; retainedTemplate.current = null;
+    retainedClose.current = null; retainedSave.current = null; setupKey.current = null; retainedTemplate.current = null; addCustody.current = null;
     setSetup({ state: 'IDLE' }); setPendingEdit(null); setTemplates(null);
     setClose(null); setEdit(null); setNotice(null); setMovingId(null); setFilters(FILTERS);
-  }, []);
+  }, [addCustody]);
   useEffect(() => onShellPrivacyEvent(() => {
     concealShellPrivateNow(); generation.current++; trialGeneration.current++; privacy.current++;
     setBoard({ state: 'LOADING' }); setTrials({ state: 'NONE' }); reset();
@@ -248,7 +250,7 @@ export function LeadPipeline({ api = boardApi, leads = leadsApi, addLeadApi, clo
     <PipelineView language={language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'} scope={scope}
       board={board} status={status} filters={filters} view={status === 'OPEN' ? view : 'LIST'} selectedId={selectedId} trials={trials}
       notice={notice} movingId={movingId} close={close} edit={edit} adding={adding} setup={setup} templates={templates} onTemplates={onTemplates} onTemplate={onTemplate}
-      addLead={scope ? <AddLead key={`${scope.schoolId.toLowerCase()}:${setupRuns}`} scope={scope} language={language} onAdded={onAdded} {...(addLeadApi ? { api: addLeadApi } : {})}/> : null}
+      addLead={scope ? <AddLead key={`${scope.schoolId.toLowerCase()}:${setupRuns}`} scope={scope} language={language} onAdded={onAdded} custody={addCustody} {...(addLeadApi ? { api: addLeadApi } : {})}/> : null}
       onStatus={onStatus} onFilters={setFilters} onView={setView} onPipeline={onPipeline} onOpen={onOpen} onMove={onMove}
       onAskClose={onAskClose} onCloseNote={(note) => setClose((now) => now ? { ...now, note } : now)} onConfirmClose={onConfirmClose} onCancelClose={onCancelClose}
       onEdit={onEdit} onDraft={onDraft} onSave={onSave} onAdd={setAdding} onRefresh={onRefresh} onReloadTrials={() => setTrialsRefresh((n) => n + 1)}/>
