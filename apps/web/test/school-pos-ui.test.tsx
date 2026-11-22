@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { PosItem, PosRead, PosSale, PosShopify, PosShopifyItem } from '@hon/contracts';
 import { PosError, posApi, posErrorFor, keepPosForRetry } from '../src/components/school-pos/http';
-import { EMPTY_CART, addItem, addQuick, addShopify, cartTotals, changeDue, formatMoney, parseMoney, percentToBps, refreshCart, saleInput, setQuantity, emptyShip, hasMadeToOrder, shipToInput } from '../src/components/school-pos/model';
+import { EMPTY_CART, addItem, addQuick, addShopify, cartTotals, changeDue, formatMoney, parseMoney, percentToBps, refreshCart, saleInput, setQuantity, customerQuery, emptyShip, hasMadeToOrder, shipToInput } from '../src/components/school-pos/model';
 import { PosHistory, PosInventory, PosRegister, Receipt, SaleOrderNote, SaleShopifyNote, itemInput } from '../src/components/school-pos/views';
 import { id } from './account-status-fixtures';
 
@@ -214,4 +214,10 @@ it('sells a made-to-order Shopify item only with a place to ship it, and says wh
   expect(note({ status: 'WAITING', shipTo: 'CUSTOMER', name: null, failureCode: null })).toContain('still being sent. It ships to the customer.');
   expect(note({ status: 'FAILED', shipTo: 'CUSTOMER', name: null, failureCode: 'SHOPIFY_REJECTED' })).toContain('was not created, so nothing is being made yet.');
   expect(note({ status: 'FAILED', shipTo: 'CUSTOMER', name: null, failureCode: 'SALE_REFUNDED' })).toContain('because this sale was refunded before the order was sent');
+});
+
+it('searches the customer box as the cashier types, from the second letter', () => {
+  expect([customerQuery(''), customerQuery(' d '), customerQuery(' da'), customerQuery('David Kim ')]).toEqual([null, null, 'da', 'David Kim']);
+  expect(customerQuery('x'.repeat(200))).toHaveLength(80);
+  expect(registerHtml(read())).toContain('Type a name, or leave empty for walk-in');
 });

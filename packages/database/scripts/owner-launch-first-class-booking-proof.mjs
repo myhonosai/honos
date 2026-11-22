@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 
 /** Called only inside the marked, descriptor-bound, network-disabled owner proof. */
 export async function proveOwnerLaunchFirstClassBooking({
@@ -152,6 +153,31 @@ export async function proveOwnerLaunchFirstClassBooking({
   } finally {
     await owner.query('UPDATE hon.class_sessions SET version=version-1 WHERE id=$1', [staleSession.id]);
   }
+  // 0644 H1: a COMPLETED class takes no new owner-launch booking (staff API parity), with nothing written, while
+  // the exact retry of a booking made before the class finished still returns its stored receipt.
+  const finishedSession = await createClass(program, 3);
+  const finishedAdult = await registerAdult(finishedSession);
+  const lateAdult = await registerAdult(finishedSession);
+  const finishedContext = context();
+  const beforeFinish = await book(finishedAdult, finishedSession, finishedContext);
+  assert.equal(beforeFinish.replayed, false);
+  await owner.query("UPDATE hon.class_sessions SET status='COMPLETED' WHERE id=$1", [finishedSession.id]);
+  try {
+    const exactRetry = await book(finishedAdult, finishedSession, finishedContext);
+    assert.equal(exactRetry.replayed, true);
+    assert.equal(exactRetry.receipt.bookingId, beforeFinish.receipt.bookingId);
+    await assert.rejects(() => book(lateAdult, finishedSession), status(400));
+    await assert.rejects(() => book(finishedAdult, finishedSession), status(400));
+    assert.equal((await owner.query('SELECT count(*)::int count FROM hon.class_bookings WHERE class_session_id=$1', [finishedSession.id])).rows[0].count, 1);
+  } finally {
+    await owner.query("UPDATE hon.class_sessions SET status='SCHEDULED' WHERE id=$1", [finishedSession.id]);
+  }
+  const verify = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
+  const section = verify.split('-- Owner-launch first booking lifecycle exact verification (0644')[1]?.split('-- End owner-launch first booking lifecycle exact verification.')[0];
+  assert(section, 'Missing the 0644 owner-launch 011 section');
+  await owner.query(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', 'hon_owner_launch_runtime'));
+  check();
+
   const receiptVersionContext = context();
   await assert.rejects(() => checked(() => raw(receiptVersionContext,
     'SELECT hon.book_owner_launch_first_class($1,$2::jsonb,$3,$4,$5)',

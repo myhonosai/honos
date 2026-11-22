@@ -287,8 +287,9 @@ scopes in `shopify-app/shopify.app.toml`, released in app version `hon-os-4` (20
 Seen on the test store on 2026-11-22 (refusal log): with `read_shopify_payments_accounts` alone Shopify answers the
 balance but refuses `shopifyPaymentsAccount.payouts` (ACCESS_DENIED), which failed the whole finance read. Payouts need
 `read_shopify_payments_payouts`. So Allow finance now asks for both scopes (the second is in the app file for the next
-app version, not released yet; until then Shopify's request page may not offer it), and the adapter reads finance
-without payouts and without each transaction's payout when Shopify refuses the full read. `financeAllowed` still means
+app file since app version `hon-os-5`, released 2026-11-22), and the adapter steps the finance read down when Shopify
+refuses it: without payouts and each transaction's payout, then (the test store refused `balanceTransactions` too once
+payouts were left out) the balance alone. `financeAllowed` still means
 the accounts scope. The Finance screen cannot tell "no payouts" from "payouts not allowed", so an empty payouts list
 shows an **Allow payouts** button that runs Allow finance again.
 The same log shows why the catalog read with stock locations is refused: it needs `read_locations`, which the app does
