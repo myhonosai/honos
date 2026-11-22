@@ -6146,10 +6146,10 @@ DO $$ BEGIN
 END $$;
 -- End CRM trial authority hold exact verification.
 
--- Invoice INSERT status guard exact verification (0630, launch-readiness P2): private trigger function, one BEFORE INSERT trigger.
+-- Invoice INSERT status guard exact verification (0630, launch-readiness P2; body from 0644 H3, which never trusts platform API or HON runtime roles): private trigger function, one BEFORE INSERT trigger.
 DO $$ BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.guard_invoice_insert_status()'::regprocedure
-      AND NOT p.prosecdef AND p.provolatile='v' AND md5(p.prosrc)='73e23ca265c1e89c7da20de72440571a'
+      AND NOT p.prosecdef AND p.provolatile='v' AND md5(p.prosrc)='7bd30dd8c232c7c4a866364b4cd602f1'
       AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
       AND NOT has_function_privilege('hon_runtime',p.oid,'EXECUTE')
       AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner)) THEN
@@ -6161,15 +6161,15 @@ DO $$ BEGIN
 END $$;
 -- End invoice INSERT status guard exact verification.
 
--- Class booking lock identity plane exact verification (0631, launch-readiness P2): the 0631 body, unchanged posture and one overload.
+-- Class booking lock identity plane exact verification (0631, launch-readiness P2; body from 0644 H2, staff-assignable permission): the current body, unchanged posture and one overload.
 DO $$ BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid='hon.lock_class_booking_session(text,uuid)'::regprocedure
-      AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.provolatile='v' AND md5(p.prosrc)='7fbead308733263719dbf7f395464608'
+      AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.provolatile='v' AND md5(p.prosrc)='fd2083b92da789ee1f77f3320eb3a30b'
       AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
       AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
       AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
         WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
-    RAISE EXCEPTION 'Unsafe or pre-0631 class booking lock'; END IF;
+    RAISE EXCEPTION 'Unsafe or pre-0644 class booking lock'; END IF;
   IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname='lock_class_booking_session')<>1 THEN
     RAISE EXCEPTION 'Unexpected class booking lock overload'; END IF;
 END $$;
@@ -6195,6 +6195,19 @@ DO $$ DECLARE f record; BEGIN
   END LOOP;
 END $$;
 -- End class sessions function-only reads exact verification.
+-- Owner-launch first booking lifecycle exact verification (0644 H1, launch-readiness P3): the 0644 body (refuses COMPLETED classes after the exact replay), unchanged posture and one overload.
+DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid='hon.book_owner_launch_first_class(text,jsonb,text,uuid,uuid)'::regprocedure
+      AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.provolatile='v' AND md5(p.prosrc)='6e5f2c8926fa3a406aa9f4f2dbf3e2eb'
+      AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+    RAISE EXCEPTION 'Unsafe or pre-0644 owner-launch first booking'; END IF;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname='book_owner_launch_first_class')<>1 THEN
+    RAISE EXCEPTION 'Unexpected owner-launch first booking overload'; END IF;
+END $$;
+-- End owner-launch first booking lifecycle exact verification.
 
 -- Alex delegation plans exact verification (0639): the ALEX_DELEGATION_PLAN kind row on the shared AI text proposals (0550),
 -- the closed brief and answer shapes, the private helpers, the eight runtime entry points and the two closed evidence tables.

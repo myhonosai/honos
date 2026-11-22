@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "1e92cce9512b2bd45373632803ecdcb4f363c203c3cb2e83882bdf58fe9bf589",
+  "chainSha256": "0f317fcb3f259b9510aee4ca53b54e362bc869a0d513794b62ca90f7800d3c5f",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -841,6 +841,10 @@
     {
       "file": "0639_alex_delegation_plans.sql",
       "sha256": "16a0ef6be1c46733b17b66198911c87fc426253a4d32a9aa122d6be52072288d"
+    },
+    {
+      "file": "0644_booking_invoice_security_hygiene.sql",
+      "sha256": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7"
     }
   ]
 }
