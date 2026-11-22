@@ -79,7 +79,7 @@ Migrations are forward-only. Every file is one `BEGIN … COMMIT` transaction, e
 
 ## 5. Failed deployment rollback
 
-There is no hosting configuration in the repository yet, so this is the procedure for whatever platform the owner chooses.
+Hosting is Render + Supabase Pro (`render.yaml`, `docs/operations/RENDER_DEPLOYMENT.md`, decided 2026-11-09); the steps below are platform-neutral and apply there.
 
 1. Each release is an immutable build of one git SHA. Record the SHA, the `db:status` result and the time.
 2. Order: **migrate first, then deploy the app.** Every migration must stay compatible with the *previous* app build (additive, expand/contract), so you can roll the app back without rolling the database back.
