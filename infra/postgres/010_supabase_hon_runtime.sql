@@ -5149,3 +5149,21 @@ DO $$ DECLARE r text; f regprocedure; t text; BEGIN
       hon.apply_maya_renewal_preps(text,uuid,jsonb,text,uuid,uuid), hon.close_maya_renewal_prep(text,uuid,text) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0647 Chad approved-draft send (P7): plan, read and cancel entry points; the approval transition stays a runtime entry point;
+-- every helper closed, and no runtime access to the plan or send evidence tables.
+DO $$ DECLARE r text; f regprocedure; t text; BEGIN
+  IF to_regprocedure('hon.set_chad_draft_send_plan(text,uuid,jsonb,text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0647 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.guard_ai_draft_send_rows()','hon.ai_draft_reachable(uuid,text)','hon.chad_draft_send_view(uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hon.ai_draft_send_plans','hon.ai_draft_sends'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.set_chad_draft_send_plan(text,uuid,jsonb,text), hon.read_chad_draft_send(text,uuid), hon.cancel_chad_draft_send(text,uuid),
+      hon.transition_chad_follow_up_draft(uuid,text) TO hon_runtime;
+  END IF;
+END $$;

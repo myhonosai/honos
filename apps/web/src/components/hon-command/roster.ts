@@ -77,7 +77,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'GOVERNED_DRAFTS',
     capabilities: [
       { label: 'Prepare a follow-up draft for a known CRM lead', state: 'AVAILABLE', href: '/staff/leads/assistant' },
-      { label: 'Send or schedule a follow-up message', state: 'BACKEND_REQUIRED' },
+      { label: 'Send or schedule an approved follow-up (you pick text or email and when; it goes out once a teammate approves)', state: 'AVAILABLE', href: '/staff/leads/assistant' },
       { label: 'Book trials or change lead records', state: 'BACKEND_REQUIRED' },
     ],
     workflows: [

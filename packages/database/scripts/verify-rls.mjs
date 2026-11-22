@@ -282,6 +282,8 @@ const expectedRlsTables = [
   'claire_kpi_report_numbers',
   'maya_renewal_refs',
   'maya_renewal_applied',
+  'ai_draft_send_plans',
+  'ai_draft_sends',
   'school_onboarding_profiles',
   'school_onboarding_requests',
   'school_support_requests',

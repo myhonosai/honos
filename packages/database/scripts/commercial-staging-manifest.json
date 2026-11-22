@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "00f8b4bbc31181d4e0ed901fca9a93e2522de37d1f2e56adf2616271c1d2e875",
+  "chainSha256": "9967980128e6d34f644dbe68c0f8d13352fcab6b12e172a96e83bf6f4bc73509",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -857,6 +857,10 @@
     {
       "file": "0646_maya_renewal_prep.sql",
       "sha256": "9545d6adbd226e5e3f90e8c00367f9c549103b51ad2aad9093a04b7c261eeea0"
+    },
+    {
+      "file": "0647_chad_approved_draft_send.sql",
+      "sha256": "73d0a97f187f70a3e2ca671aed7999a56963dc668a9ac02b5f4c2f269933ecb4"
     }
   ]
 }

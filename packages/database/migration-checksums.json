@@ -386,6 +386,7 @@
     "0640_jordan_follow_through.sql": "36153ab4e5c4cbc4046f25d1fdb03b008bc5c71b0e41def2aa482720213d795d",
     "0641_marcus_marketing_review.sql": "3a4e237735348b6cf8afab82331a54891aeadb8ccd8896c42d55e36fd3f63bbc",
     "0643_claire_kpi_report.sql": "1c73a358be6a451881cf5062cc8841558e86e3d0544b7f33bcd1548952c39fcf",
-    "0646_maya_renewal_prep.sql": "9545d6adbd226e5e3f90e8c00367f9c549103b51ad2aad9093a04b7c261eeea0"
+    "0646_maya_renewal_prep.sql": "9545d6adbd226e5e3f90e8c00367f9c549103b51ad2aad9093a04b7c261eeea0",
+    "0647_chad_approved_draft_send.sql": "73d0a97f187f70a3e2ca671aed7999a56963dc668a9ac02b5f4c2f269933ecb4"
   }
 }

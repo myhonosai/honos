@@ -6,6 +6,9 @@ export class ActionDecisionDto {
   @IsIn(['APPROVED', 'DENIED']) decision!: 'APPROVED' | 'DENIED';
   @Allow() binding!: ActionReviewBinding;
   @IsOptional() @IsString() @MaxLength(1000) reason?: string;
+  /** 0647: how an approval was given (BUTTON default, or VOICE with the voice turn id); validated exactly by the contracts. */
+  @IsOptional() @IsIn(['BUTTON', 'VOICE']) approvalMethod?: 'BUTTON' | 'VOICE';
+  @IsOptional() @IsString() @MaxLength(36) voiceTurnId?: string;
 }
 @Injectable()
 export class ActionReviewHumanUiGuard extends CurriculumHumanUiGuard {

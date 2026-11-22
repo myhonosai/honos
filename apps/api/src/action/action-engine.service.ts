@@ -568,9 +568,13 @@ export class ActionEngineService {
         VALUES($1::uuid,$2,$3,'action.request.decided',1,'ACTION_REQUEST',$4::uuid,2,$5::uuid,$6::uuid,$7::jsonb)`,[randomUUID(),context.organizationId,context.schoolId,r.id,context.correlationId,context.requestId,JSON.stringify(evidence)]);
       if (r.action_code==='marketing.draft.save' && input.decision==='DENIED') await client.query('SELECT hon.reject_marketing_draft($1::uuid)',[r.id]);
       if (r.action_code==='teaching.draft.save' && input.decision==='DENIED') await client.query('SELECT hon.reject_teaching_draft($1::uuid)',[r.id]);
-      // This only records a decision against immutable content. It never begins
-      // Action Engine execution, creates a communication, or changes a lead.
-      if (r.action_code==='crm.follow_up_draft.propose') await client.query('SELECT hon.transition_chad_follow_up_draft($1::uuid,$2)',[r.id,input.decision]);
+      // This records a decision against immutable content and never begins Action Engine execution or changes a lead. Since
+      // 0647, approving a Chad draft that carries the requester's send plan queues one message in the same transaction; the
+      // 0243 delivery worker sends it with its own consent, quiet-hours and STOP checks. How it was approved is recorded.
+      if (r.action_code==='crm.follow_up_draft.propose') {
+        await client.query("SELECT set_config('app.hon_approval_method',$1,true),set_config('app.hon_voice_turn_id',$2,true)",[input.approvalMethod ?? 'BUTTON',input.voiceTurnId ?? '']);
+        await client.query('SELECT hon.transition_chad_follow_up_draft($1::uuid,$2)',[r.id,input.decision]);
+      }
       const response:HumanActionReceipt={actionRequestId:r.id,status:input.decision,actionCode:r.action_code,reviewedAt:updated.updated_at.toISOString(),payloadHash:r.payload_hash,policyVersion:r.policy_version,executionTriggered:false};
       await client.query(`UPDATE hon.idempotency_records SET status='COMPLETED',response_status=200,response_body=$5::jsonb WHERE organization_id=$1 AND school_id=$2 AND principal_id=$3 AND idempotency_key=$4`,[context.organizationId,context.schoolId,context.principalId,context.idempotencyKey,JSON.stringify(response)]);
       return response;

@@ -6409,3 +6409,40 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
   END LOOP;
 END $$;
 -- End Maya renewal prep exact verification.
+-- Chad approved-draft send exact verification (0647): the plan/read/cancel entry points, the approval transition that queues one
+-- message, the closed helpers, the closed plan and send evidence tables with their guard triggers, and the message origin.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.ai_draft_reachable(uuid,text)',true,false,'search_path=pg_catalog, hon','0de6c26e8a8414882839b932fa82d75ec0fcb1468f95e8c1ea0573e4cb54c8a2'),
+('hon.cancel_chad_draft_send(text,uuid)',true,true,'search_path=pg_catalog, hon','4d399c86a2b65648a62c045e2e1f62e16d809cc3b4c3d5cc367df38d7829a0b8'),
+('hon.chad_draft_send_view(uuid)',true,false,'search_path=pg_catalog, hon','6c7027683c02151c1b777d717c99ea205143df084ed1782d828cb043c919736d'),
+('hon.guard_ai_draft_send_rows()',false,false,'search_path=pg_catalog, hon','6bbb67a3df181e7e8d4c1be17c44c5eb725cdfacd9f52c5a0ea343211ee8d2bb'),
+('hon.read_chad_draft_send(text,uuid)',true,true,'search_path=pg_catalog, hon','bb422d037818d2d2b197dbbc2007a7515a8257e9ab682e544013784f350c49f7'),
+('hon.set_chad_draft_send_plan(text,uuid,jsonb,text)',true,true,'search_path=pg_catalog, hon','f146c7bfede96ce3753edf30ea5d9264fa29d6385f8a1e6f0cbfe7ad132167cb'),
+('hon.transition_chad_follow_up_draft(uuid,text)',true,true,'search_path=pg_catalog, hon','cb64a2fa04f613d386a8bd1908612476fe8ee35665736a7acac44804b1966a86'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Chad approved-draft send function: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hon.ai_draft_send_plans','hon.ai_draft_sends'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=t::regclass)
+      OR has_table_privilege('hon_runtime',t,'SELECT') OR has_table_privilege('hon_runtime',t,'INSERT')
+      OR has_table_privilege('hon_runtime',t,'UPDATE') OR has_table_privilege('hon_runtime',t,'DELETE')
+      OR (SELECT count(*) FROM pg_trigger g WHERE g.tgrelid=t::regclass AND NOT g.tgisinternal AND g.tgenabled='O'
+        AND g.tgfoid='hon.guard_ai_draft_send_rows()'::regprocedure)<>2 THEN
+      RAISE EXCEPTION 'Chad approved-draft send table % is not closed',t;
+    END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.communication_messages'::regclass AND conname='communication_messages_origin_kind_check'
+      AND convalidated AND pg_get_constraintdef(oid) LIKE '%AI_APPROVED_DRAFT%') THEN
+    RAISE EXCEPTION 'Message origin AI_APPROVED_DRAFT missing';
+  END IF;
+END $$;
+-- End Chad approved-draft send exact verification.
