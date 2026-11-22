@@ -69,9 +69,10 @@ describe('HON command roster', () => {
     expect(maya.availability).toBe('ANSWERS');
     expect(maya.draftWorkKey).toBeNull();
     expect(maya.workspace).toBeNull();
-    expect(maya.capabilities.filter((c) => c.state === 'AVAILABLE').map((c) => c.href)).toEqual(['/staff/retention/at-risk', '/staff/retention/at-risk', undefined]);
+    expect(maya.capabilities.filter((c) => c.state === 'AVAILABLE').map((c) => c.href)).toEqual(['/staff/retention/at-risk', '/staff/retention/at-risk', '/staff/retention/at-risk', undefined]);
     expect(maya.workflows.map((w) => w.href)).toContain('/staff/retention/at-risk');
-    expect(maya.approval).toMatch(/never sends/);
+    expect(maya.approval).toMatch(/only after you approve it/);
+    expect(maya.approval).toMatch(/On her own she never sends/);
   });
 
   it('never maps the legacy claire draft key to Claire or to the teaching assistant from her card', () => {

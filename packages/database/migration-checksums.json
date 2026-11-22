@@ -388,6 +388,6 @@
     "0643_claire_kpi_report.sql": "1c73a358be6a451881cf5062cc8841558e86e3d0544b7f33bcd1548952c39fcf",
     "0646_maya_renewal_prep.sql": "9545d6adbd226e5e3f90e8c00367f9c549103b51ad2aad9093a04b7c261eeea0",
     "0647_chad_approved_draft_send.sql": "6402f9db63e16cd3e3b6bf835c4897afbd00cc503befe4aa6cd52de66f06f3a9",
-    "0649_maya_check_in_draft_send.sql": "983a03d12096dd81db3703d29a92accce632e43e99caf03c4c3c69fa7408d1b3"
+    "0649_maya_check_in_draft_send.sql": "195209e1a5305ab44e7767faf7dbd7235c04bc6797e4e4eb81bd4888e6929d90"
   }
 }

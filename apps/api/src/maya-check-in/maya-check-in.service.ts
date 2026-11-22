@@ -86,7 +86,7 @@ export class MayaCheckInService {
     if (!planId) {
       try {
         const planned = await this.plans.plan({ ...context, idempotencyKey: id }, ref.workItemId, { expectedVersion: ref.workVersion, expectedState: 'READY', agentKey: 'maya', modality: 'TEXT',
-          taskClass: 'DRAFT_FOLLOW_UP', inputBudget: MAYA_CHECK_IN_LIMITS.inputTokens, outputBudget: MAYA_CHECK_IN_LIMITS.outputTokens, maxProviderCostMicrounits: MAYA_CHECK_IN_LIMITS.maxProviderCostMicrounits });
+          taskClass: 'ANALYZE', inputBudget: MAYA_CHECK_IN_LIMITS.inputTokens, outputBudget: MAYA_CHECK_IN_LIMITS.outputTokens, maxProviderCostMicrounits: MAYA_CHECK_IN_LIMITS.maxProviderCostMicrounits });
         planId = planned.status === 'PLANNED' ? planned.plan.id : null;
       } catch (error) { return translate(error); }
     }

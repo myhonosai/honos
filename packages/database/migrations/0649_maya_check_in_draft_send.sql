@@ -41,7 +41,7 @@ DO $$ BEGIN
 END $$;
 
 INSERT INTO hon.ai_text_kinds(kind,agent_key,task_class,input_budget,output_budget,max_cost_microunits,max_result_bytes,caller,subject_type,usage_agent)
-  VALUES ('MAYA_CHECK_IN_DRAFT','maya','DRAFT_FOLLOW_UP',6000,2000,60000,8192,'HUMAN_UI','SCHOOL','RETENTION');
+  VALUES ('MAYA_CHECK_IN_DRAFT','maya','ANALYZE',6000,2000,60000,8192,'HUMAN_UI','SCHOOL','RETENTION');
 
 -- The student Maya wrote for, and the at-risk numbers she saw, fixed when asked.
 CREATE TABLE hon.maya_check_in_targets (
@@ -102,14 +102,14 @@ END $$;
 -- A message body: 1..n characters, lines allowed (at most one blank line in a row), no other control or invisible characters,
 -- no secrets, links or email addresses, and no space or line break at either end.
 CREATE FUNCTION hon.maya_check_in_text_ok(v text, n integer) RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,hon AS $$
-  SELECT v IS NOT NULL AND v=btrim(v,E' \t\n\r ') AND position(E'\n\n\n' IN v)=0 AND position(E'\r' IN v)=0
-    AND replace(v,E'\n','') !~ '[[:cntrl:]​-‏‪-‮⁠-⁯﻿]'
+  SELECT v IS NOT NULL AND v=btrim(v,E' \t\n\r\u00a0') AND position(E'\n\n\n' IN v)=0 AND position(E'\r' IN v)=0
+    AND replace(v,E'\n','') !~ '[[:cntrl:]\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]'
     AND hon.marketing_safe_text(replace(v,E'\n',' '),n)
     AND v !~* '(https?://|www\.|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})'
 $$;
 -- A one-line field ending in no Unicode edge space (the stricter of 0639 and 0080).
 CREATE FUNCTION hon.maya_check_in_line_ok(v text, n integer) RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,hon AS $$
-  SELECT hon.alex_plan_line_ok(v,n) AND v=btrim(v,E'                  　')
+  SELECT hon.alex_plan_line_ok(v,n) AND v=btrim(v,E' \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000')
     AND v !~* '(https?://|www\.|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})'
 $$;
 

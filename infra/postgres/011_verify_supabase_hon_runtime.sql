@@ -6460,11 +6460,11 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
 ('hon.maya_check_in_actor(text)',true,false,'search_path=pg_catalog, hon','b2a4b663d6b2fdb642de874c8c2ffd20f4044030c0e9e8f21933e8199439923c'),
 ('hon.maya_check_in_at_risk_row(text,uuid)',true,false,'search_path=pg_catalog, hon','8fca542d01446bd487737686e1972e1cf81349b7a90ee831e3c02d659efa98fd'),
 ('hon.maya_check_in_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','6bb1010760d5aaf80a0bc12c53899ced64423bd426b98fcd1a22e066c78d0d4f'),
-('hon.maya_check_in_line_ok(text,integer)',false,false,'search_path=pg_catalog, hon','644489b8276d0494a357d42af53ad722b611870a726e77490edb85a1cadc9ea8'),
+('hon.maya_check_in_line_ok(text,integer)',false,false,'search_path=pg_catalog, hon','f880816eaac6b43db7c9d8f828d52d938181084365368e77b231d7f66ecb49e8'),
 ('hon.maya_check_in_ok(jsonb,text)',false,false,'search_path=pg_catalog, hon','e4303630580f63bafe823229cdc3c6263ae30ba70f13c052d63153a196e2e174'),
 ('hon.maya_check_in_reader(text)',true,false,'search_path=pg_catalog, hon','d4ae80cd2f829677b5030ebde2361235c42cacc067e4cda2f21074c222a794fe'),
 ('hon.maya_check_in_recipient(uuid,text)',true,false,'search_path=pg_catalog, hon','88b9f3e004238666313f70a25da1c3d17f098b370a25925b5554d768d63482a7'),
-('hon.maya_check_in_text_ok(text,integer)',false,false,'search_path=pg_catalog, hon','9af8773e8d2e335fc53209ae0e7170eac9cf4a188decb1d8885671deb7f548c6'),
+('hon.maya_check_in_text_ok(text,integer)',false,false,'search_path=pg_catalog, hon','3268ff4cc006a90b58ca4da62caa43597df2ae29558d09dfbaef9ab4526d3877'),
 ('hon.maya_check_in_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','a8662bbe94fa0421845a5a525753b45463a8dbf99053afb144e82b2c549a1511'),
 ('hon.plan_maya_check_in_draft(text,uuid)',true,true,'search_path=pg_catalog, hon','51fe6925bfeb5036120b0bedee7e467a36126f5ba2bfab11ab4f526cc2e98ab3'),
 ('hon.prepare_maya_check_in_draft(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','b7c8a4842b1311aa713a4ab2de54aa277a77d633daa4a91df0f08a1ef3ad34c1'),
@@ -6480,7 +6480,7 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
     INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
     IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Maya check-in draft function: %',f.signature; END IF;
   END LOOP;
-  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='MAYA_CHECK_IN_DRAFT' AND k.agent_key='maya' AND k.task_class='DRAFT_FOLLOW_UP'
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='MAYA_CHECK_IN_DRAFT' AND k.agent_key='maya' AND k.task_class='ANALYZE'
       AND k.input_budget=6000 AND k.output_budget=2000 AND k.max_cost_microunits=60000 AND k.max_result_bytes=8192
       AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='RETENTION') THEN
     RAISE EXCEPTION 'Maya check-in draft kind row missing or changed';
