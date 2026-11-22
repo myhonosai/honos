@@ -17,7 +17,7 @@ The review is **text only**. Nothing is created, sent, published or spent, and t
 
 - Kind (0550): `MARCUS_MARKETING_REVIEW`, agent `marcus`, task class `DRAFT_MARKETING` (Marcus's existing planner class), budgets
   12,000 in / 3,000 out, max provider cost 80,000 micro-USD, result at most 12 KB, caller `HUMAN_UI`, subject `SCHOOL`, usage agent
-  `MARKETING_REVIEW` (its own HQ usage line). No S4 function changes. No new tables.
+  `MARKETING` (Marcus's existing HQ usage line, 0198/0328; it must be one of the contracts' `AI_USAGE_AGENTS`). No S4 function changes. No new tables.
 - Who asks: a direct human at the session school with `marketing.assistant.use` (Marcus, 0212), `marketing.campaign.read`,
   `ai.invocation.plan` and an active Complete entitlement. The per-staff agent switch `ai.agent.marcus.use` (0635) is enforced by the
   planner. Who reads: `marketing.campaign.read`, and only the reader's **own** reviews (a review holds that person's question).
@@ -47,6 +47,6 @@ The review is **text only**. Nothing is created, sent, published or spent, and t
 
 - DB proof `test-marcus-marketing-review.mjs` (MR1, 6 groups): custody, exact facts for 30 and 90 days (drafts and old campaigns
   out, no names, contacts or other school), nothing created or sent, marcus DRAFT_MARKETING plan and one ledger row, rejected
-  answers, dismiss, UNKNOWN hold and HQ queue, MARKETING_REVIEW usage, gates (Marcus, campaign reading, AI planning, Complete, own
+  answers, dismiss, UNKNOWN hold and HQ queue, MARKETING usage, gates (Marcus, campaign reading, AI planning, Complete, own
   reviews only), isolation, 011.
 - API unit test `marcus-review.test.cjs`, contracts validators, web test `marcus-review-ui.test.tsx`.

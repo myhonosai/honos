@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "ebf36b5e6c0647e9f43400de48dfb6b780f6c9a217bf6eb58fe1b115c5202e96",
+  "chainSha256": "301854e4e12810949ed256c1954743598fac09867bda890ed945ca57f09ff513",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -848,7 +848,7 @@
     },
     {
       "file": "0641_marcus_marketing_review.sql",
-      "sha256": "3a4e237735348b6cf8afab82331a54891aeadb8ccd8896c42d55e36fd3f63bbc"
+      "sha256": "971b5e84a572c2eb131a24541f097a127e8d0c33d8e2c64b4643ead0a6daeb47"
     }
   ]
 }
