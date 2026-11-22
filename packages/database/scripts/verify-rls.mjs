@@ -218,6 +218,8 @@ const expectedRlsTables = [
   'pos_shopify_stock_tasks',
   'pos_shopify_orders',
   'school_creative_designs',
+  'membership_plan_version_setups',
+  'membership_plan_payment_options',
   'school_creative_design_photos',
   'school_locations',
   'school_location_versions',

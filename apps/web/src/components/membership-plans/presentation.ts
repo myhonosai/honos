@@ -1,4 +1,4 @@
-import { MEMBERSHIP_PLAN_MAX_PRICE_MINOR, type MembershipPlanVersionSummary, type MembershipPlanBillingFrequency } from '@hon/contracts';
+import { MEMBERSHIP_PLAN_MAX_PRICE_MINOR, type MembershipPlanVersionSummary, type MembershipPlanBillingFrequency, type MembershipPaymentOption, type MembershipPaymentOptionFrequency } from '@hon/contracts';
 
 /** Presentation/input conversion only. No price, tax, schedule or invoice calculation. */
 export function currencyDigits(currency: string): number {
@@ -21,4 +21,20 @@ export function priceTextFromMinor(minor: number, currency: string): string {
 export const FREQUENCY_LABELS: Record<MembershipPlanBillingFrequency, string> = { WEEKLY: 'Weekly', MONTHLY: 'Monthly', ANNUAL: 'Annual', PAID_IN_FULL: 'Paid in full' };
 export function planTerm(plan: Pick<MembershipPlanVersionSummary, 'termKind' | 'termMonths'>): string {
   return plan.termKind === 'FIXED_MONTHS' ? `${plan.termMonths} months` : 'Open ended';
+}
+
+export const OPTION_FREQUENCY_LABELS: Record<MembershipPaymentOptionFrequency, string> = { WEEKLY: 'Weekly', MONTHLY: 'Monthly', QUARTERLY: 'Quarterly', ANNUAL: 'Annual', PAID_IN_FULL: 'Paid in full' };
+const PER: Record<MembershipPaymentOptionFrequency, string> = { WEEKLY: '/ week', MONTHLY: '/ month', QUARTERLY: '/ quarter', ANNUAL: '/ year', PAID_IN_FULL: 'paid in full' };
+/** "$149.00 / month · 6 payments · 6 months · $99.00 down" for one payment option. */
+export function optionSummary(option: Pick<MembershipPaymentOption, 'priceMinor' | 'billingFrequency' | 'payments' | 'termMonths' | 'downPaymentMinor'>, currency: string,
+  money: (minor: number, currency: string) => string): string {
+  const parts = [`${money(option.priceMinor, currency)} ${PER[option.billingFrequency]}`];
+  if (option.payments !== null) parts.push(`${option.payments} payment${option.payments === 1 ? '' : 's'}`);
+  parts.push(option.termMonths === null ? 'ongoing' : `${option.termMonths} months`);
+  if (option.downPaymentMinor !== null) parts.push(`${money(option.downPaymentMinor, currency)} down`);
+  return parts.join(' · ');
+}
+/** A permanent plan code suggested from the plan name: "Little Tigers 6 mo" -> "LITTLE-TIGERS-6-MO". */
+export function planCodeFromName(name: string): string {
+  return name.normalize('NFKD').toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
 }

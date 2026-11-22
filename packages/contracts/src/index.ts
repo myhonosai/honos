@@ -32,6 +32,7 @@ export * from './crm-lead-create.js';
 export * from './crm-lead-registration.js';
 export * from './crm-lead-registration-recovery.js';
 export * from './school-membership-plans.js';
+export * from './school-membership-plan-setup.js';
 export * from './crm-guardian-child-enrollment.js';
 export * from './membership-activation.js';
 export * from './crm-lead-memberships.js';

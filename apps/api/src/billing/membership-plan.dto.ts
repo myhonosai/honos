@@ -4,6 +4,8 @@ import {
   CRM_ADULT_MEMBERSHIP_DRAFT_FROM_PLAN_COMMAND, CRM_ADULT_MEMBERSHIP_DRAFT_UUID, CRM_ADULT_MEMBERSHIP_PLAN_OPTIONS_COMMAND, MEMBERSHIP_PLAN_CATALOG_READ_COMMAND,
   MEMBERSHIP_PLAN_CREATE_COMMAND, MEMBERSHIP_PLAN_REVISE_COMMAND, validateCreateMembershipPlanInput, validateCrmAdultMembershipDraftFromPlanInput,
   validateMembershipPlanReadInput, validateReviseMembershipPlanInput,
+  MEMBERSHIP_PLAN_SETUPS_READ_COMMAND, MEMBERSHIP_PLAN_CREATE_WITH_OPTIONS_COMMAND, MEMBERSHIP_PLAN_REVISE_WITH_OPTIONS_COMMAND,
+  validateCreateMembershipPlanWithOptionsInput, validateReviseMembershipPlanWithOptionsInput,
 } from '@hon/contracts';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { CurriculumHumanUiGuard } from '../curriculum/curriculum-human-ui.guard.js';
@@ -25,6 +27,20 @@ class MembershipPlanTermsDto {
 }
 export class CreateMembershipPlanDto extends MembershipPlanTermsDto { @Allow() declare planCode: string; }
 export class ReviseMembershipPlanDto extends MembershipPlanTermsDto { @Allow() declare expectedVersion: number; }
+/** 0642: a plan with its payment options (option 1 is the plan's own price, frequency and term). */
+class MembershipPlanSetupDto {
+  @Allow() declare displayName: string;
+  @Allow() declare description?: string | null;
+  @Allow() declare programId?: string | null;
+  @Allow() declare availability: string;
+  @Allow() declare currency: string;
+  @Allow() declare classesPerWeek?: number | null;
+  @Allow() declare features?: string[];
+  @Allow() declare paymentOptions: unknown[];
+  @Allow() declare confirmation: string;
+}
+export class CreateMembershipPlanWithOptionsDto extends MembershipPlanSetupDto { @Allow() declare planCode: string; }
+export class ReviseMembershipPlanWithOptionsDto extends MembershipPlanSetupDto { @Allow() declare expectedVersion: number; }
 export class CrmAdultMembershipDraftFromPlanDto {
   @Allow() declare studentProfileId: string;
   @Allow() declare membershipPlanId: string;
@@ -82,4 +98,20 @@ export class CrmAdultMembershipDraftFromPlanHumanUiGuard extends MembershipPlanC
   protected override readonly command = CRM_ADULT_MEMBERSHIP_DRAFT_FROM_PLAN_COMMAND;
   protected override readonly invalidCode = 'INVALID_CRM_ADULT_MEMBERSHIP_INPUT';
   protected override validate(value: unknown): void { validateCrmAdultMembershipDraftFromPlanInput(value); }
+}
+@Injectable()
+export class MembershipPlanSetupsHumanUiGuard extends MembershipPlanCreateHumanUiGuard {
+  protected override readonly command = MEMBERSHIP_PLAN_SETUPS_READ_COMMAND;
+  protected override readonly read = true;
+  protected override validate(value: unknown): void { validateMembershipPlanReadInput(value); }
+}
+@Injectable()
+export class MembershipPlanCreateWithOptionsHumanUiGuard extends MembershipPlanCreateHumanUiGuard {
+  protected override readonly command = MEMBERSHIP_PLAN_CREATE_WITH_OPTIONS_COMMAND;
+  protected override validate(value: unknown): void { validateCreateMembershipPlanWithOptionsInput(value); }
+}
+@Injectable()
+export class MembershipPlanReviseWithOptionsHumanUiGuard extends MembershipPlanCreateHumanUiGuard {
+  protected override readonly command = MEMBERSHIP_PLAN_REVISE_WITH_OPTIONS_COMMAND;
+  protected override validate(value: unknown): void { validateReviseMembershipPlanWithOptionsInput(value); }
 }

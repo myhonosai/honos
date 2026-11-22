@@ -5,17 +5,22 @@ import {
   verifyMembershipPlanCatalog, verifyMembershipPlanVersionSummary, verifyCrmAdultMembershipPlanOptions, verifyCrmAdultMembershipDraftFromPlan,
   type CreateMembershipPlanInput, type ReviseMembershipPlanInput, type CrmAdultMembershipDraftFromPlanInput,
   type MembershipPlanCatalog, type MembershipPlanVersionSummary, type CrmAdultMembershipPlanOptions, type CrmAdultMembershipDraftFromPlan,
+  MEMBERSHIP_PLAN_SETUPS_READ_COMMAND, MEMBERSHIP_PLAN_CREATE_WITH_OPTIONS_COMMAND, MEMBERSHIP_PLAN_REVISE_WITH_OPTIONS_COMMAND,
+  validateCreateMembershipPlanWithOptionsInput, validateReviseMembershipPlanWithOptionsInput, verifyMembershipPlanSetups, verifyMembershipPlanWithOptions,
+  type CreateMembershipPlanWithOptionsInput, type ReviseMembershipPlanWithOptionsInput, type MembershipPlanSetup, type MembershipPlanSetups,
 } from '@hon/contracts';
 
 export type PlanScope = Readonly<{ organizationId: string; schoolId: string }>;
-export type PlanRequest = Readonly<{ kind: 'create' | 'revise' | 'draft'; path: string; body: string; key: string }>;
+export type PlanRequest = Readonly<{ kind: 'create' | 'revise' | 'createOptions' | 'reviseOptions' | 'draft'; path: string; body: string; key: string }>;
 export type PlanResult = { kind: 'create' | 'revise'; plan: MembershipPlanVersionSummary; replayed: boolean }
+  | { kind: 'createOptions' | 'reviseOptions'; plan: MembershipPlanVersionSummary; setup: MembershipPlanSetup; replayed: boolean }
   | { kind: 'draft'; draft: CrmAdultMembershipDraftFromPlan; replayed: boolean };
 export class PlanAccessError extends Error {}
 export class PlanUnknownError extends Error {}
 export class PlanReadError extends Error {}
 export class PlanRejectedError extends Error { constructor(readonly code: string, readonly status: number, message: string) { super(message); } }
-const markers = { create: MEMBERSHIP_PLAN_CREATE_COMMAND, revise: MEMBERSHIP_PLAN_REVISE_COMMAND, draft: CRM_ADULT_MEMBERSHIP_DRAFT_FROM_PLAN_COMMAND };
+const markers = { create: MEMBERSHIP_PLAN_CREATE_COMMAND, revise: MEMBERSHIP_PLAN_REVISE_COMMAND, createOptions: MEMBERSHIP_PLAN_CREATE_WITH_OPTIONS_COMMAND,
+  reviseOptions: MEMBERSHIP_PLAN_REVISE_WITH_OPTIONS_COMMAND, draft: CRM_ADULT_MEMBERSHIP_DRAFT_FROM_PLAN_COMMAND };
 function invalid(): never { throw new Error('Unverified membership plan response.'); }
 function uuid(value: unknown): string { if (typeof value !== 'string' || !CRM_ADULT_MEMBERSHIP_DRAFT_UUID.test(value)) invalid(); return value.toLowerCase(); }
 function closed(value: unknown, keys: string[]): Record<string, unknown> {
@@ -31,6 +36,13 @@ export function createPlanRequest(s: PlanScope, input: CreateMembershipPlanInput
 export function revisePlanRequest(s: PlanScope, planId: string, input: ReviseMembershipPlanInput, key: string): PlanRequest {
   return Object.freeze({ kind: 'revise', path: `${root(s)}/membership-plans/${uuid(planId)}/revisions`, body: JSON.stringify(validateReviseMembershipPlanInput(input)), key: uuid(key) });
 }
+/** 0642: a plan with its payment options; option 1 becomes the plan's own price, frequency and term. */
+export function createPlanWithOptionsRequest(s: PlanScope, input: CreateMembershipPlanWithOptionsInput, key: string): PlanRequest {
+  return Object.freeze({ kind: 'createOptions', path: `${root(s)}/membership-plans/with-options`, body: JSON.stringify(validateCreateMembershipPlanWithOptionsInput(input)), key: uuid(key) });
+}
+export function revisePlanWithOptionsRequest(s: PlanScope, planId: string, input: ReviseMembershipPlanWithOptionsInput, key: string): PlanRequest {
+  return Object.freeze({ kind: 'reviseOptions', path: `${root(s)}/membership-plans/${uuid(planId)}/option-revisions`, body: JSON.stringify(validateReviseMembershipPlanWithOptionsInput(input)), key: uuid(key) });
+}
 export function draftFromPlanRequest(s: PlanScope, input: CrmAdultMembershipDraftFromPlanInput, key: string): PlanRequest {
   return Object.freeze({ kind: 'draft', path: `${root(s)}/crm-adult-membership-drafts/from-plan`, body: JSON.stringify(validateCrmAdultMembershipDraftFromPlanInput(input)), key: uuid(key) });
 }
@@ -41,6 +53,8 @@ function verifyRequest(request: PlanRequest): void {
   let expected: PlanRequest;
   if (request.kind === 'create') expected = createPlanRequest(scope, input, request.key);
   else if (request.kind === 'revise') { const plan = match[3]!.match(/^membership-plans\/([^/]+)\/revisions$/)?.[1]; if (!plan) invalid(); expected = revisePlanRequest(scope, plan, input, request.key); }
+  else if (request.kind === 'createOptions') expected = createPlanWithOptionsRequest(scope, input, request.key);
+  else if (request.kind === 'reviseOptions') { const plan = match[3]!.match(/^membership-plans\/([^/]+)\/option-revisions$/)?.[1]; if (!plan) invalid(); expected = revisePlanWithOptionsRequest(scope, plan, input, request.key); }
   else if (request.kind === 'draft') expected = draftFromPlanRequest(scope, input, request.key);
   else invalid();
   if (request.path !== expected.path || request.body !== expected.body || request.key !== expected.key) invalid();
@@ -78,6 +92,12 @@ export async function readPlanCatalog(scope: PlanScope, signal?: AbortSignal): P
   try { return verifyMembershipPlanCatalog((await exchange(path, MEMBERSHIP_PLAN_CATALOG_READ_COMMAND, JSON.stringify(validateMembershipPlanReadInput({})), undefined, signal)).data); }
   catch (e) { if (e instanceof PlanAccessError || e instanceof PlanRejectedError) throw e; throw new PlanReadError('The catalog could not be verified. Try loading it again.'); }
 }
+/** 0642: the payment options of every plan's current version. */
+export async function readPlanSetups(scope: PlanScope, signal?: AbortSignal): Promise<MembershipPlanSetups> {
+  const path = `${root(scope)}/membership-plans/setups`;
+  try { return verifyMembershipPlanSetups((await exchange(path, MEMBERSHIP_PLAN_SETUPS_READ_COMMAND, JSON.stringify(validateMembershipPlanReadInput({})), undefined, signal)).data); }
+  catch (e) { if (e instanceof PlanAccessError || e instanceof PlanRejectedError) throw e; throw new PlanReadError('Payment options could not be verified. Try loading them again.'); }
+}
 export async function readAdultPlanOptions(scope: PlanScope, signal?: AbortSignal): Promise<CrmAdultMembershipPlanOptions> {
   const path = `${root(scope)}/crm-adult-membership-drafts/plan-options`;
   try { return verifyCrmAdultMembershipPlanOptions((await exchange(path, CRM_ADULT_MEMBERSHIP_PLAN_OPTIONS_COMMAND, JSON.stringify(validateMembershipPlanReadInput({})), undefined, signal)).data); }
@@ -92,6 +112,16 @@ export async function sendPlanRequest(request: PlanRequest, signal?: AbortSignal
   try {
     const result = await exchange(request.path, markers[request.kind], request.body, request.key, signal), input = JSON.parse(request.body);
     if (request.kind === 'draft') return { kind: 'draft', draft: verifyCrmAdultMembershipDraftFromPlan(result.data, validateCrmAdultMembershipDraftFromPlanInput(input)), replayed: result.replayed };
+    if (request.kind === 'createOptions' || request.kind === 'reviseOptions') {
+      const { plan, setup } = verifyMembershipPlanWithOptions(result.data);
+      if (request.kind === 'createOptions' ? plan.planCode !== input.planCode || plan.version !== 1
+        : plan.planId !== request.path.split('/').at(-2) || plan.version !== input.expectedVersion + 1) invalid();
+      if (plan.displayName !== input.displayName || plan.availability !== input.availability || plan.currency !== input.currency
+        || plan.description !== (input.description ?? null) || plan.programId !== (input.programId ?? null) || setup.paymentOptions.length !== input.paymentOptions.length
+        || setup.paymentOptions.some((o, i) => o.label !== input.paymentOptions[i].label || o.priceMinor !== input.paymentOptions[i].priceMinor
+          || o.billingFrequency !== input.paymentOptions[i].billingFrequency)) invalid();
+      return { kind: request.kind, plan, setup, replayed: result.replayed };
+    }
     const plan = verifyMembershipPlanVersionSummary(result.data);
     if (request.kind === 'create' ? plan.planCode !== input.planCode || plan.version !== 1
       : plan.planId !== request.path.split('/').at(-2) || plan.version !== input.expectedVersion + 1) invalid();
