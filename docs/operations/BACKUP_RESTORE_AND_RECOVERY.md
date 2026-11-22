@@ -83,7 +83,7 @@ Hosting is Render + Supabase Pro (`render.yaml`, `docs/operations/RENDER_DEPLOYM
 
 1. Each release is an immutable build of one git SHA. Record the SHA, the `db:status` result and the time.
 2. Order: **migrate first, then deploy the app.** Every migration must stay compatible with the *previous* app build (additive, expand/contract), so you can roll the app back without rolling the database back.
-3. Health gate: the new instance must return 200 on `GET /v1/health/ready` before it takes traffic. The platform must keep old instances until then.
+3. Health gate: the new instance must return 200 on `GET /v1/health/ready` before it takes traffic. The platform must keep old instances until then. On Render the gate is the web health check `GET /api/readiness`, which asks the private API's `/v1/health/ready` (Render has no HTTP health check for private services). So a new web instance takes traffic only while the API and its database are ready, and during an API or database outage Render reports `hon-web` unhealthy too.
 4. Roll back the app by redeploying the previous SHA. That needs no database action, by rule 2.
 5. Roll back the database only by restoring (§4 last row) and only with owner approval, because restoring discards writes made after the restore point.
 6. Configuration rollback: the TLS and startup gate changes are configuration-only. Redeploy the previous SHA if a new gate refuses to start. The refusal message names the failing code.

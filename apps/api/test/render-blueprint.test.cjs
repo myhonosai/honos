@@ -97,9 +97,15 @@ test('builds use the CI Node pin, the locked pnpm and keep dev dependencies unde
   assert.equal(resolvedEnv(web).PORT, '3000', 'next start listens on 3000');
 });
 
-test('the web health check is the side-effect-free sign-in readiness route', () => {
-  assert.equal(web.healthCheckPath, '/api/identity/readiness');
-  assert.ok(existsSync(join(ROOT, 'apps', 'web', 'src', 'app', 'api', 'identity', 'readiness', 'route.ts')));
+test('the web health check covers sign-in configuration and the private API database path (review [24])', () => {
+  assert.equal(web.healthCheckPath, '/api/readiness');
+  const route = readFileSync(join(ROOT, 'apps', 'web', 'src', 'app', 'api', 'readiness', 'route.ts'), 'utf8');
+  assert.match(route, /authReadiness\(\)/);
+  assert.match(route, /probeApiReadiness\(\)/);
+  const probe = readFileSync(join(ROOT, 'apps', 'web', 'src', 'server', 'api-readiness.ts'), 'utf8');
+  assert.match(probe, /\/v1\/health\/ready/);
+  assert.match(probe, /redirect: 'error'/);
+  assert.ok(existsSync(join(ROOT, 'apps', 'web', 'src', 'app', 'api', 'identity', 'readiness', 'route.ts')), 'the identity-only readiness route stays for diagnostics');
 });
 
 test('no money, paid AI, messaging, development auth or migration credential is configured', () => {
