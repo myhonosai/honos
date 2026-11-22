@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { browserRecognition, browserSpeech, detectHonVoiceSupport, honAgentVoice, speakableText, type HonVoiceLang, type RecognitionAdapter, type SpeechAdapter } from './hon-voice';
+import { browserRecognition, browserSpeech, detectHonVoiceSupport, honAgentVoice, onDeviceSpeech, speakableText, type HonVoiceLang, type RecognitionAdapter, type SpeechAdapter } from './hon-voice';
 import styles from './hon-command.module.css';
 
 /**
@@ -32,16 +32,24 @@ export function AgentVoiceBar({ agentKey, name, value, max, onChange, answer = n
   const [tools, setTools] = useState<AgentVoiceDeps | null>(deps ?? null);
   const [state, setState] = useState<'IDLE' | 'LISTENING' | 'SPEAKING' | 'BLOCKED'>('IDLE');
   const [heard, setHeard] = useState('');
+  // Like the HON panel: when the browser can recognise speech on this device, audio stays on the device.
+  const [onDevice, setOnDevice] = useState(false);
   const stop = useRef<null | (() => void)>(null);
   const latest = useRef(value); latest.current = value;
   useEffect(() => { if (!deps) setTools(browserDeps()); }, [deps]);
+  useEffect(() => {
+    if (deps || typeof window === 'undefined') return;
+    let live = true;
+    void onDeviceSpeech(window as never, lang).then((status) => { if (live) setOnDevice(status === 'available'); }, () => undefined);
+    return () => { live = false; };
+  }, [deps, lang]);
   useEffect(() => () => { stop.current?.(); tools?.speech?.cancel(); }, [tools]);
   if (!tools || (!tools.recognition && !tools.speech)) return null;
 
   const listen = () => {
     if (!tools.recognition) return;
     tools.speech?.cancel(); setHeard(''); setState('LISTENING');
-    const session = tools.recognition.start({ lang, continuous: false, onDevice: false }, {
+    const session = tools.recognition.start({ lang, continuous: false, onDevice }, {
       onInterim: (text) => setHeard(text),
       onFinal: (text) => { setHeard(''); onChange(appendHeard(latest.current, text, max)); },
       onError: (error) => setState(error === 'not-allowed' || error === 'service-not-allowed' ? 'BLOCKED' : 'IDLE'),
