@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { StaffApi, StaffFailureState, StaffSchool } from './api/client';
 import type { SessionStore } from './session/session-store';
 import { T } from './ui/theme';
@@ -118,12 +118,12 @@ export function StaffApp({ api, session, onSignIn, version }: StaffAppProps) {
       body = (
         <View style={s.stack}>
           <View style={s.topRow}>
-            <View style={s.mark}><Text style={s.markText}>H</Text></View>
+            <Image source={require('../assets/hon-mark.png')} style={s.mark} accessibilityLabel="HON" />
             {schools ? <Pill label="Switch school" onPress={() => setView({ kind: 'choose', schools })} /> : null}
           </View>
           <Text style={s.kicker}>Signed in</Text>
           <Text style={s.hero}>{view.school.schoolName ?? 'Your school'}</Text>
-          <View style={[s.warmCard, { backgroundColor: T.warm.amber }]}>
+          <View style={[s.warmCard, { backgroundColor: T.orbit.cyan }]}>
             <Text style={s.warmTitle}>Coming next</Text>
             <Text style={s.warmBody}>Today's classes, check-in, HON and Kai are coming in the next updates of this app.</Text>
           </View>
@@ -150,8 +150,7 @@ const s = StyleSheet.create({
   stack: { gap: 16 },
   card: { backgroundColor: T.card, borderRadius: T.radius.card, padding: 22, gap: 14, borderWidth: 1, borderColor: T.line },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  mark: { width: 40, height: 40, borderRadius: 20, backgroundColor: T.pill, alignItems: 'center', justifyContent: 'center' },
-  markText: { color: T.pillText, fontFamily: T.serif, fontSize: 20 },
+  mark: { width: 44, height: 44 },
   kicker: { color: T.muted, fontSize: 13, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase', marginTop: 12 },
   hero: { color: T.ink, fontFamily: T.serif, fontSize: 34, lineHeight: 40 },
   title: { color: T.ink, fontFamily: T.serif, fontSize: 28, lineHeight: 34 },
@@ -171,6 +170,6 @@ const s = StyleSheet.create({
   warmBody: { color: T.ink, fontFamily: T.serif, fontSize: 17, lineHeight: 24 },
   panel: { backgroundColor: T.panel, borderRadius: T.radius.card, padding: 22, gap: 8 },
   panelTitle: { color: T.panelText, fontSize: 18, fontWeight: '700' },
-  panelBody: { color: '#CFCAC1', fontSize: 15, lineHeight: 21 },
+  panelBody: { color: T.panelMuted, fontSize: 15, lineHeight: 21 },
   version: { color: T.muted, fontSize: 12, textAlign: 'center', marginTop: 16 },
 });

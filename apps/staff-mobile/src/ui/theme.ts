@@ -1,24 +1,26 @@
 import { Platform } from 'react-native';
 
 /**
- * HON Staff look (owner, 2026-11-22: "use this design", the Atoms iOS app on Mobbin): warm paper background, serif
- * headlines, black pill buttons, white rounded cards with hairline borders, warm colour cards and a dark panel.
- * System serif only (Georgia on iOS, the platform serif on Android), so nothing is downloaded at launch.
+ * HON Staff look: the Atoms layout the owner picked (2026-11-22: serif headlines, pill buttons, big rounded cards, a
+ * dark panel) in the HON OS brand colours (owner, 2026-11-22: "use color pallets that goes with our brand"): the
+ * spirit-orbit swoosh colours around the navy HON orb (/mnt/project-files/brand/README.md). System serif only
+ * (Georgia on iOS, the platform serif on Android), so nothing is downloaded at launch.
  */
 export const T = {
-  paper: '#F7F4EF',
+  paper: '#F6F8FD',
   card: '#FFFFFF',
-  line: '#E8E3DA',
-  ink: '#1C1B19',
-  muted: '#6E6A63',
-  pill: '#1F1E1C',
+  line: '#E2E8F4',
+  ink: '#0B1B4D',
+  muted: '#55627D',
+  pill: '#0A1650',
   pillText: '#FFFFFF',
-  soft: '#ECE8E1',
-  panel: '#242321',
-  panelText: '#F7F4EF',
-  alert: '#B4471B',
-  /** Warm card colours, one per area (Today, People, HON, Kai, Texts). */
-  warm: { amber: '#FFC86B', orange: '#FF8A3D', magenta: '#D25CF0', sky: '#4CC9F0', green: '#7ADF6B' },
+  soft: '#EEF2FA',
+  panel: '#0A1650',
+  panelText: '#EEF3FF',
+  panelMuted: '#A9B8D6',
+  alert: '#B8243A',
+  /** Spirit-orbit colours, one per area (Today, People, HON, Kai, Texts). Text on them stays navy. */
+  orbit: { lime: '#9BE22B', blue: '#1F6BFF', cyan: '#22D3F2', coral: '#FF6A4D', coralSoft: '#FF7A55' },
   radius: { card: 22, pill: 999 },
   serif: Platform.select({ ios: 'Georgia', default: 'serif' }),
 } as const;
