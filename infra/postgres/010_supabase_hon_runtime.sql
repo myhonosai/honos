@@ -5113,3 +5113,19 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+
+-- 0655 native app sign-in codes are single use: the redemption ledger has no table privilege for anyone; hon_runtime may
+-- only EXECUTE hon.redeem_mobile_handoff.
+DO $$ DECLARE r text;
+BEGIN
+  IF to_regprocedure('hon.redeem_mobile_handoff(text,uuid,timestamptz)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0655 first'; END IF;
+  REVOKE ALL ON TABLE hon.mobile_handoff_redemptions FROM PUBLIC;
+  REVOKE ALL ON FUNCTION hon.redeem_mobile_handoff(text,uuid,timestamptz) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','authenticator','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.mobile_handoff_redemptions FROM %I',r);
+    EXECUTE format('REVOKE ALL ON FUNCTION hon.redeem_mobile_handoff(text,uuid,timestamptz) FROM %I',r);
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.redeem_mobile_handoff(text,uuid,timestamptz) TO hon_runtime;
+  END IF;
+END $$;

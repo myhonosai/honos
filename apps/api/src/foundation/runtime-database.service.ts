@@ -412,6 +412,28 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     } finally { client.release(); }
   }
 
+  /**
+   * 0655: records one native app hand-off code as used. True the first time (app, jti) is seen, false for a replay.
+   * A refused code (22023) is false; any other database failure rejects, so the caller issues no session and the app may try again.
+   */
+  async redeemMobileHandoff(app: 'family' | 'staff', jti: string, expiresAt: Date): Promise<boolean> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ fresh: boolean }>('SELECT hon.redeem_mobile_handoff($1,$2,$3) AS fresh', [app, jti, expiresAt.toISOString()]);
+      await client.query('COMMIT');
+      return result.rows[0]?.fresh === true;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      // 22023: the database refused the code itself (for example it expired in its last second): a definite "no",
+      // not an outage, so the app is told to sign in again rather than to retry.
+      if ((error as { code?: unknown } | null)?.code === '22023') return false;
+      throw error;
+    } finally { client.release(); }
+  }
+
   private async assertRuntimePosture(): Promise<void> {
     this.postureCheck ??= (async () => {
       const result = await this.getPool().query<{ rolsuper: boolean; rolbypassrls: boolean }>(

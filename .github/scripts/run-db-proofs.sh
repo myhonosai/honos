@@ -191,6 +191,13 @@ echo "::endgroup::"
 passed=$((passed + 1))
 summary+=("| Invoice INSERT guard roles (0644 H3): the 0630 body let a BYPASSRLS service_role insert PAID; with 0644 service_role, anon, authenticated, authenticator, hon_runtime and the three workers are refused PAID/ISSUED/VOID/UNCOLLECTIBLE even with BYPASSRLS and may insert DRAFT; the migration owner, superuser and owner definer functions unchanged | \`test-invoice-insert-guard-roles.mjs\` | pass |")
 
+# 0655 native app sign-in codes are single use: own private cluster, applies 0655 plus its 010/011 blocks verbatim.
+echo "::group::Mobile hand-off single use against a private cluster (test-mobile-handoff-single-use.mjs)"
+"${clean_env[@]}" bash -c 'cd "$1" && node scripts/test-mobile-handoff-single-use.mjs' _ "$repo_root/packages/database"
+echo "::endgroup::"
+passed=$((passed + 1))
+summary+=("| Mobile hand-off single use (0655): hon_runtime redeems a code once per app (replay false, concurrent pair exactly one true), malformed/expired input refused, expired rows pruned, no role has table access, only hon_runtime may EXECUTE, 011 exact verification passes and catches a grant or body drift | \`test-mobile-handoff-single-use.mjs\` | pass |")
+
 # Communication delivery (0243) has its own fixture with the canonical 013 worker login.
 setup communication-delivery HON_COMMUNICATION_DELIVERY_VALIDATION_TARGET hon_comm_delivery_validation HON_COMMUNICATION_DELIVERY_ENV_FILE
 proof communication-delivery test-communication-delivery-integrity.mjs "Communication delivery and receipts (0243): worker-only claim/lease/record functions, SMS quiet hours in school time, consent and address re-checked at send time, retry backoff and exhaustion, lease expiry and late results UNKNOWN (never retried), idempotent forward-only provider receipts, unsubscribe and spam report record OPTED_OUT/RECIPIENT, suspended school held, forced-RLS school read without address or provider IDs, dispatcher end to end through the fake provider; 0248 school senders and STOP/START/HELP; 0249 missed-call forwarding and one text-back per caller per day; 0250 Zernio Meta leads from HQ-mapped forms only"
