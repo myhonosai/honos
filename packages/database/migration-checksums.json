@@ -382,6 +382,7 @@
     "0630_invoice_insert_status_guard.sql": "9177d2361c3a4a96916b8fa567e227655054094c5cd04e96a8c50be62f24aaec",
     "0631_class_booking_lock_identity_plane.sql": "400c232d2bb237049f31ecf359179f388d007f6f184545438017a6d644f4bbbe",
     "0632_class_sessions_function_only_reads.sql": "0479e70a542750964d31d4d21246dcfa0a7ac0fa1b6f4216cf7c984c22efae7e",
+    "0644_booking_invoice_security_hygiene.sql": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7",
     "0637_creative_cost_basis.sql": "757d2a2d5cc37a46ec6a549b458e8d54796a46d6c1983b5fe1bf37d8b6d8197e"
   }
 }
