@@ -41,5 +41,7 @@ The shell holds one overview read at a time. A newer access check ("Check access
 the older read, and only the newest read's answer can land. A confirmed session end (`hon:session-invalidated`)
 aborts any read still out and retires the overview, the HON assistant, its draft and the menu; the shell shows
 "Sign in to verify HQ access" and opens no page, Support included, until a new check verifies a fresh overview. Late
-answers from before the session end are dropped. Proof: `apps/web/test/hq-shell-lifecycle.test.tsx` (three of its four
-cases fail on the earlier shell). The unreachable `forbidden` state was removed; a 403 is `limited`.
+answers from before the session end are dropped. Proof: `apps/web/test/hq-shell-lifecycle.test.tsx` (all four cases
+fail on the earlier shell). The unreachable `forbidden` state was removed; a 403 is `limited`. Because the whole page
+is retired, `apps/web/scripts/hq-school-create-browser.mjs` now expects the sign-in state after a session end or a
+creation 401, with the school directory unmounted (or still hidden and inert), instead of only hidden facts.
