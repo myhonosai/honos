@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "385aeb6aa79a97ac3cb6c9f2be8522b83dee8cb33f5bb80024dca4e88e0b20d8",
+  "chainSha256": "0b0f3a43fc4d95dc2a65cd71d0e3b58ab147510ff309641a5500dce447817b61",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -853,6 +853,10 @@
     {
       "file": "0643_claire_kpi_report.sql",
       "sha256": "1c73a358be6a451881cf5062cc8841558e86e3d0544b7f33bcd1548952c39fcf"
+    },
+    {
+      "file": "0644_booking_invoice_security_hygiene.sql",
+      "sha256": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7"
     }
   ]
 }

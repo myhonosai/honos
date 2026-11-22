@@ -11,7 +11,7 @@ startup gate and the shared OIDC/session validation.
 
 | Service | Type | Public? | Build | Start | Health |
 |---|---|---|---|---|---|
-| `hon-web` | web | yes (only entry point) | `pnpm --filter @hon/web build` | `next start` on `PORT=3000` | `GET /api/identity/readiness` |
+| `hon-web` | web | yes (only entry point) | `pnpm --filter @hon/web build` | `next start` on `PORT=3000` | `GET /api/readiness`: 200 only when sign-in is configured **and** `hon-api` answers `GET /v1/health/ready` (a verified runtime-database connection) over the private network; 2.5 s timeout, answers reused for 2 s, closed codes only (review [24]) |
 | `hon-api` | private service | no; reached by `hon-web` over Render's private network | `pnpm --filter @hon/api build` | `node dist/main.js` on `3001` | process exits before listening on bad config (no HTTP health check: Render supports those for web services only) |
 
 Both: region `virginia` (Supabase project is `us-east-1`), Node `22.23.4` (same pin as CI, verified at
