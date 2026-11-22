@@ -256,6 +256,8 @@ const en = {
   perm_createOrders: "Create a paid order when a made-to-order item is sold at the front desk, so your print provider makes and ships it.",
   allowOrders: "Allow orders",
   allowOrdersHelp: "Sell made-to-order items (the ones a print provider makes) at the front desk. Press Allow orders and approve it in Shopify. HON then creates a paid order in your store for each of those sales. It also turns on editing, which the front desk needs.",
+  allowStock: "Allow stock updates",
+  allowStockHelp: "When a front desk sale does not change the stock in Shopify, press Allow stock updates and approve it in Shopify. HON then sees which location holds the stock and updates the count after each sale. Pressing it again is safe.",
   perm_approval: "Every change waits in Changes until someone who manages Shopify approves it.",
 };
 export type ShopifyKey = keyof typeof en;
@@ -516,6 +518,8 @@ const ko: Record<ShopifyKey, string> = {
   perm_createOrders: "주문 제작 상품이 프런트 데스크에서 판매되면 결제 완료 주문을 만들어 인쇄 업체가 제작하고 배송하게 합니다.",
   allowOrders: "주문 허용",
   allowOrdersHelp: "주문 제작 상품(인쇄 업체가 만드는 상품)을 프런트 데스크에서 판매하세요. 주문 허용을 누르고 Shopify에서 승인하세요. 그러면 HON이 그런 판매마다 스토어에 결제 완료 주문을 만듭니다. 프런트 데스크에 필요한 편집도 함께 켜집니다.",
+  allowStock: "재고 업데이트 허용",
+  allowStockHelp: "프런트 데스크 판매 후 Shopify 재고가 바뀌지 않으면 재고 업데이트 허용을 누르고 Shopify에서 승인하세요. 그러면 HON이 재고가 있는 위치를 확인하고 판매할 때마다 수량을 업데이트합니다. 다시 눌러도 안전합니다.",
   perm_approval: "모든 변경은 Shopify 관리 권한이 있는 사람이 승인할 때까지 변경 사항에서 기다립니다.",
 };
 const es: Record<ShopifyKey, string> = {
@@ -775,6 +779,8 @@ const es: Record<ShopifyKey, string> = {
   perm_createOrders: "Crear un pedido pagado cuando se vende en recepción un artículo hecho bajo pedido, para que su proveedor de impresión lo fabrique y lo envíe.",
   allowOrders: "Permitir pedidos",
   allowOrdersHelp: "Venda en recepción artículos hechos bajo pedido (los que fabrica un proveedor de impresión). Pulse Permitir pedidos y apruébelo en Shopify. HON creará entonces un pedido pagado en su tienda por cada una de esas ventas. También activa la edición, que la recepción necesita.",
+  allowStock: "Permitir actualizar existencias",
+  allowStockHelp: "Si una venta en recepción no cambia las existencias en Shopify, pulse Permitir actualizar existencias y apruébelo en Shopify. HON verá qué ubicación tiene las existencias y actualizará la cantidad tras cada venta. Pulsarlo de nuevo no causa problemas.",
   perm_approval: "Cada cambio espera en Cambios hasta que alguien que administra Shopify lo apruebe.",
 };
 export const SHOPIFY_LANGUAGES = { en, ko, es } as const;

@@ -99,6 +99,9 @@ it('0614 Allow orders: asked for only by its button, shown as a permission once 
   expect(on).toContain('data-perm="orders"'); expect(on).not.toContain('data-allow-orders');
   // Someone who cannot manage Shopify, or a store that is not connected, is not offered the button.
   expect(render({ section: 'settings', overview: { state: 'READY', read: overview({ canManage: false }) } })).not.toContain('data-allow-orders');
-  for (const language of ['ko', 'es'] as const) for (const k of ['allowOrders', 'allowOrdersHelp', 'perm_createOrders'] as const)
+  // Allow stock updates (read_locations): HON keeps no flag for it, so a manager of a connected store is always offered it.
+  expect(off).toContain('data-allow-stock'); expect(on).toContain('data-allow-stock'); expect(on).toContain('Allow stock updates');
+  expect(render({ section: 'settings', overview: { state: 'READY', read: overview({ canManage: false }) } })).not.toContain('data-allow-stock');
+  for (const language of ['ko', 'es'] as const) for (const k of ['allowOrders', 'allowOrdersHelp', 'perm_createOrders', 'allowStock', 'allowStockHelp'] as const)
     expect(SHOPIFY_LANGUAGES[language][k]).not.toBe(SHOPIFY_LANGUAGES.en[k]);
 });

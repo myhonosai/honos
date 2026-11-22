@@ -9,7 +9,7 @@ import { brandingApi, type BrandingApi } from '../school-branding/http';
 import { merchAiApi, type MerchAiApi } from './merch-ai-http';
 import { reviewApi, type ReviewApi } from './review-http';
 import type { BrandState } from './studio';
-import { SHOPIFY_FINANCE_SCOPES, SHOPIFY_ORDER_SCOPES } from '@hon/contracts';
+import { SHOPIFY_FINANCE_SCOPES, SHOPIFY_ORDER_SCOPES, SHOPIFY_STOCK_SCOPES } from '@hon/contracts';
 import { rememberGrant, shopifyGrantUrl, takeGrant } from './grant';
 import type { ShopifyCatalog, ShopifyChangeResult, ShopifyFinanceView, ShopifyOrders, ShopifyProductChange, ShopifyProductChanges } from '@hon/contracts';
 import type { ProposeRequest } from './editor';
@@ -198,7 +198,7 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
     setOutcome(next); setConfirming(false); setRefresh((n) => n + 1);
   }, [api, schoolId, overview]);
 
-  const onConnect = useCallback(async (action: 'connect' | 'allowEditing' | 'allowFinance' | 'allowOrders' = 'connect', secondHop = false) => {
+  const onConnect = useCallback(async (action: 'connect' | 'allowEditing' | 'allowFinance' | 'allowOrders' | 'allowStock' = 'connect', secondHop = false) => {
     if (sending.current || !schoolId) return;
     // Allow editing / Allow finance reconnect the same store, asking Shopify for those permissions as well. Reconnecting
     // the same store keeps what it already allows (Shopify replaces the whole grant on each approval).
@@ -218,9 +218,11 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
       if (shown !== privacy.current || !mounted.current) return;
       // Allow finance / Allow orders are optional permissions: Shopify grants them on its own request page, which comes
       // back to this page; the effect below then makes the usual approval pass that records them (see grant.ts).
-      const optional = secondHop ? null : action === 'allowFinance' ? SHOPIFY_FINANCE_SCOPES : action === 'allowOrders' ? SHOPIFY_ORDER_SCOPES : null;
+      // Allow stock updates asks only for the store's locations; Allow orders asks for them too, so a front desk that sells both needs one press.
+      const optional = secondHop ? null : action === 'allowFinance' ? SHOPIFY_FINANCE_SCOPES : action === 'allowOrders' ? [...SHOPIFY_ORDER_SCOPES, ...SHOPIFY_STOCK_SCOPES]
+        : action === 'allowStock' ? SHOPIFY_STOCK_SCOPES : null;
       const grant = optional ? shopifyGrantUrl(r.authorizeUrl, r.shopDomain, optional) : null;
-      navigate(grant && (action === 'allowFinance' || action === 'allowOrders') && rememberGrant(action, schoolId, r.shopDomain) ? grant : r.authorizeUrl);
+      navigate(grant && (action === 'allowFinance' || action === 'allowOrders' || action === 'allowStock') && rememberGrant(action, schoolId, r.shopDomain) ? grant : r.authorizeUrl);
     } catch (error) {
       sending.current = false; setLocked(false);
       if (shown === privacy.current && mounted.current) setOutcome({ kind: kindOf(error), action });
@@ -245,7 +247,7 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
       onConnect={() => { void onConnect(); }} onSync={() => { void run('sync'); }} onConfirm={(open) => { if (!locked) { setConfirming(open); setOutcome(null); } }}
       onDisconnect={() => { void run('disconnect'); }} onSection={go}
       changes={changes} onPropose={onPropose} onApprove={onApprove} onCancelChange={onCancelChange} onAllowEditing={() => { void onConnect('allowEditing'); }}
-      finance={finance} onAllowFinance={() => { void onConnect('allowFinance'); }} onAllowOrders={() => { void onConnect('allowOrders'); }}
+      finance={finance} onAllowFinance={() => { void onConnect('allowFinance'); }} onAllowOrders={() => { void onConnect('allowOrders'); }} onAllowStock={() => { void onConnect('allowStock'); }}
       storefront={storefront} storefrontOutcome={storefrontOutcome} onStorefrontCommand={(c) => { void onStorefrontCommand(c); }}
       schoolName={shell.schoolName} brand={brand} merchAi={marcus} review={reviewer} />
   </div>;
